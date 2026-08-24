@@ -245,9 +245,12 @@ These rows no longer carry the legacy
 event name and source key:
 
 - **Codex** — `event: "ScreenStopProbe"`, `source: "probe:codex_screen"`. Fires
-  when an active Codex tab still shows `⚡` but its latest visible status is
-  `Worked for …` (completion) or the TUI interrupted marker, with an empty
-  composer and no visible prompt. It needs **two consecutive samples that agree
+  when an active Codex tab still shows `⚡` but its latest visible status is a
+  completion marker — `Worked for …` on older builds, or the `Completed` line
+  Codex 0.149.x draws between two horizontal rules — or the TUI interrupted
+  marker, with an empty composer and no visible prompt. The bare `Completed`
+  line is honoured **only** when framed by those rules; the word alone is
+  ordinary prose and is not evidence. It needs **two consecutive samples that agree
   on the same normalized screen fingerprint** — a completed-turn read makes the
   classification unambiguous but cannot answer whether the pane is still
   repainting, which is a different question and the one the second sample

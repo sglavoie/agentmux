@@ -10,6 +10,8 @@ package daemon
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -18,6 +20,26 @@ import (
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/screenstate"
 )
+
+// readCodexCapture returns one of internal/screenstate's real pane captures
+// verbatim.
+//
+// The captures are READ ACROSS the package boundary rather than copied here on
+// purpose. internal/screenstate/testdata is the repository's one corpus of
+// byte-for-byte `kitten @ get-text` output, and every other Codex screen in this
+// package is a hand-written const. A copy would drift the moment either side was
+// re-captured, and a drifted copy is exactly the failure the corpus exists to
+// prevent: the original bug survived a full suite because the committed "is
+// working" screens were hand-modelled rather than captured.
+func readCodexCapture(t *testing.T, name string) string {
+	t.Helper()
+	path := filepath.Join("..", "screenstate", "testdata", name)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read capture %s: %v", path, err)
+	}
+	return string(data)
+}
 
 // TestCodexIdleProbeSampleTiers pins the Codex rows of the sample table. Like
 // its Claude twin the counts are literals rather than derived from the
@@ -218,5 +240,116 @@ func TestProbeCodexScreenPrompts_SettlesOnceTheScreenStopsChanging(t *testing.T)
 	}
 	if got := countEventsNamed(t, h, 42, screenStopProbeEvent); got != 1 {
 		t.Fatalf("ScreenStopProbe rows = %d, want 1", got)
+	}
+}
+
+// TestProbeCodexCurrentCompletedScreenSettles drives the stop fallback end to
+// end with the screens the INSTALLED Codex actually renders.
+//
+// Every other Codex probe test in this package serves a hand-written const, so
+// the whole probe chain could stay green while being unreachable on a real
+// pane — which is precisely what happened: codex-cli 0.149.1's composer
+// placeholder was unrecognized, so its captures carried VetoComposerBusy and no
+// current screen could settle at any sample count. These subtests are the ones
+// that would have caught it, because their bytes come from the pane rather than
+// from an author's memory of it.
+//
+// The stabilization contract is asserted alongside recovery: the bolt must
+// still be held after the first agreeing frame and settle only on the last, so
+// the fixtures prove Layer B is live on Codex rather than bypassed.
+func TestProbeCodexCurrentCompletedScreenSettles(t *testing.T) {
+	captures := []struct {
+		name    string
+		fixture string
+	}{
+		{name: "framed completed marker", fixture: "codex_idle_completed_t0.txt"},
+		{name: "interruption with no background terminal", fixture: "codex_interrupted_no_background.txt"},
+	}
+	for _, tc := range captures {
+		t.Run(tc.name, func(t *testing.T) {
+			base := time.Now()
+			screen := readCodexCapture(t, tc.fixture)
+
+			fake := &fakeKittyClient{
+				windows: codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
+					Profile: "work",
+					Harness: harness.Codex,
+				}),
+				getText: map[string]string{kitty.MatchWindowByID(42): screen},
+			}
+			h := newTestHandler()
+			h.SetKittyClient(fake)
+			codexSeedActiveBolt(t, h, 42, "sess-current", base.Unix())
+
+			// Held on every pass but the last: the capture is settleable evidence,
+			// and the sample gate is what spends the extra tick on agreement.
+			for sample := 1; sample < codexIdleProbeTerminalRun; sample++ {
+				h.ProbeCodexScreenPrompts(base.Add(time.Duration(sample-1) * time.Second))
+				if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
+					t.Fatalf("effective after agreeing frame %d = %+v, want the bolt still held", sample, eff)
+				}
+			}
+			h.ProbeCodexScreenPrompts(base.Add(time.Duration(codexIdleProbeTerminalRun-1) * time.Second))
+
+			eff, _ := windowEffective(t, h, 42)
+			if eff.Icon != "stop" {
+				t.Fatalf("effective after %d agreeing current-version frames = %+v, want stop",
+					codexIdleProbeTerminalRun, eff)
+			}
+			if got := countEventsNamed(t, h, 42, screenStopProbeEvent); got != 1 {
+				t.Fatalf("ScreenStopProbe rows = %d, want 1", got)
+			}
+		})
+	}
+
+	// The control. A real working capture from the same build must NOT settle,
+	// however long the probe runs, so the subtests above are not passing because
+	// the classifier turned permissive.
+	t.Run("live working capture never settles", func(t *testing.T) {
+		base := time.Now()
+		fake := &fakeKittyClient{
+			windows: codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
+				Profile: "work",
+				Harness: harness.Codex,
+			}),
+			getText: map[string]string{
+				kitty.MatchWindowByID(42): readCodexCapture(t, "codex_working.txt"),
+			},
+		}
+		h := newTestHandler()
+		h.SetKittyClient(fake)
+		codexSeedActiveBolt(t, h, 42, "sess-working", base.Unix())
+
+		for sample := 0; sample < codexIdleProbeTerminalRun+2; sample++ {
+			h.ProbeCodexScreenPrompts(base.Add(time.Duration(sample) * time.Second))
+			if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
+				t.Fatalf("effective after working frame %d = %+v, want bolt", sample, eff)
+			}
+		}
+		assertNoProbeStopFact(t, h, 42)
+		if got := countEventsNamed(t, h, 42, screenStopProbeEvent); got != 0 {
+			t.Fatalf("ScreenStopProbe rows = %d, want 0 on a working pane", got)
+		}
+	})
+}
+
+// TestProbeCodexCurrentClearedScreenRecovers is the clear half of the same
+// contract. Codex emits no hook for an idle `/clear`, so the clear probe is the
+// only thing that takes a stopped pane's icon back to idle — and it, too, was
+// unreachable on the installed build for as long as the composer placeholder
+// was unknown.
+func TestProbeCodexCurrentClearedScreenRecovers(t *testing.T) {
+	cleared := readCodexCapture(t, "codex_cleared.txt")
+	if !screenstate.CodexScreenLooksCleared(cleared) {
+		t.Fatal("CodexScreenLooksCleared() = false: the clear probe's cheap first pass rejects a real cleared pane")
+	}
+	if !screenstate.ClassifyCodexClearScreen(cleared, cleared) {
+		t.Fatal("ClassifyCodexClearScreen() = false on a real cleared 0.149.1 pane")
+	}
+	for _, name := range []string{"codex_working.txt", "codex_idle_completed_t0.txt"} {
+		screen := readCodexCapture(t, name)
+		if screenstate.ClassifyCodexClearScreen(screen, screen) {
+			t.Errorf("ClassifyCodexClearScreen() = true on %s, want false", name)
+		}
 	}
 }

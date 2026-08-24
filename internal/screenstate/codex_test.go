@@ -464,11 +464,12 @@ func TestCodexLiveElapsedStatusLine(t *testing.T) {
 // line because every one of these patterns is line-anchored.
 func TestCodexStatusLineRegexesOverFixtures(t *testing.T) {
 	liveWork := map[string]bool{
-		"codex_working.txt":           true,
-		"codex_idle_completed_t0.txt": false,
-		"codex_idle_completed_t1.txt": false,
-		"codex_interrupted.txt":       false,
-		"codex_cleared.txt":           false,
+		"codex_working.txt":                   true,
+		"codex_idle_completed_t0.txt":         false,
+		"codex_idle_completed_t1.txt":         false,
+		"codex_interrupted.txt":               false,
+		"codex_cleared.txt":                   false,
+		"codex_interrupted_no_background.txt": false,
 	}
 	for name, want := range liveWork {
 		t.Run(name, func(t *testing.T) {
@@ -594,8 +595,12 @@ func TestCodexAdapterObservations(t *testing.T) {
 			state: Unknown,
 		},
 		{
+			// The composer IS recognized on a 0.149.1 screen now, so this working
+			// capture no longer carries VetoComposerBusy — and that is the point:
+			// the two live-work vetoes are what hold it, exactly as they must once
+			// the composer stops doing the job by accident.
 			name: "live capture", screen: "codex_working.txt", fixture: true,
-			state: Working, vetoes: VetoLiveStatusLine | VetoInterruptHint | VetoComposerBusy,
+			state: Working, vetoes: VetoLiveStatusLine | VetoInterruptHint,
 		},
 		{
 			// The footer reads "Press enter to confirm or esc to cancel", so both
@@ -652,10 +657,13 @@ func TestCodexTiersReachableToday(t *testing.T) {
 		codexCompletedThenPromptScreen, codexInterruptedThenPromptScreen, codexReportedClearedScreen,
 		codexClearedScreen, codexNonzeroContextScreen, codexEditApprovalScreen,
 		codexRenamedSpinnerTimerScreen, codexRenamedSpinnerHintScreen,
+		codexFramedCompletedScreen, codexUnframedCompletedScreen,
+		codexHalfFramedCompletedScreen, codexCompletedProseScreen,
 	}
 	for _, name := range []string{
 		"codex_working.txt", "codex_idle_completed_t0.txt", "codex_idle_completed_t1.txt",
-		"codex_interrupted.txt", "codex_cleared.txt", "codex_prompt_command_approval.txt",
+		"codex_interrupted.txt", "codex_interrupted_no_background.txt",
+		"codex_cleared.txt", "codex_prompt_command_approval.txt",
 	} {
 		screens = append(screens, readScreenFixture(t, name))
 	}
@@ -673,44 +681,163 @@ func TestCodexTiersReachableToday(t *testing.T) {
 	}
 }
 
-// TestCodexComposerPlaceholderIsNarrowAndFailsClosed keeps the accepted residual
-// brittleness visible.
+// TestCodexComposerPlaceholderIsNarrow pins the accepted residual brittleness
+// and, more importantly, the narrowness that pays for it.
 //
-// codexComposerLineRE hardcodes two dim placeholder strings because Kitty's
-// get-text drops the styling that would identify them structurally. codex-cli
-// 0.149.1 renders a THIRD — "Ask Codex to do anything" — so every session-2
-// capture currently fails the composer test. That is the accepted cost, and the
-// direction of the failure is the whole point: no composer means no settle,
-// which is a stuck ⚡ and never a false 🛑. Widening the list is deliberately
-// left to the session that also decides what Codex's "• Completed." marker
-// means.
-func TestCodexComposerPlaceholderIsNarrowAndFailsClosed(t *testing.T) {
+// codexComposerLineRE hardcodes the dim placeholder strings because Kitty's
+// get-text drops the styling that would identify them structurally. A build
+// shipping an unknown placeholder makes the composer unmatchable and withholds
+// settling — a stuck ⚡ and never a false 🛑, which is the direction this package
+// fails in by design.
+//
+// The rejects are the load-bearing half. Every one of them is a real chevron
+// line from a committed 0.149.1 capture; accepting arbitrary text after the
+// chevron would let an old transcript prompt satisfy the positional composer
+// scan and settle a pane mid-turn.
+func TestCodexComposerPlaceholderIsNarrow(t *testing.T) {
 	accepted := []string{
 		"› ",
 		"› Use /skills to list available skills",
 		"› Find and fix a bug in @filename",
+		"› Ask Codex to do anything",
 	}
 	for _, line := range accepted {
 		if !codexComposerLineRE.MatchString(line) {
 			t.Errorf("codexComposerLineRE did not match %q", line)
 		}
 	}
-	if codexComposerLineRE.MatchString("› Ask Codex to do anything") {
-		t.Fatal("codexComposerLineRE now matches codex-cli 0.149.1's placeholder: " +
-			"update this test and the fail-closed expectations below, which no longer hold")
+
+	rejected := []string{
+		"› Run the shell command: sleep 8",
+		"› Reply with just the word ok and do nothing else.",
+		"› Write a detailed 3000-word essay about the history of the number seven.",
+		"› Ask Codex to do anything you like",
+		"› 1. Yes, proceed (y)",
+	}
+	for _, line := range rejected {
+		if codexComposerLineRE.MatchString(line) {
+			t.Errorf("codexComposerLineRE matched arbitrary chevron text %q; the end anchor is gone", line)
+		}
+	}
+}
+
+// TestCodexCurrentScreenContract is the whole point of this repair: the screens
+// the INSTALLED Codex actually renders must drive the terminal and clear
+// recovery paths, not merely be committed as evidence that they do not.
+//
+// Every screen below is a byte-for-byte capture of a live codex-cli 0.149.1
+// pane. Before this change all of them carried VetoComposerBusy — the build's
+// "Ask Codex to do anything" placeholder was unknown — so the stop fallback and
+// the clear probe were unreachable on the only Codex version anyone here runs,
+// while docs/daemon.md and docs/operations.md described both as available.
+func TestCodexCurrentScreenContract(t *testing.T) {
+	cases := []struct {
+		name    string
+		fixture string
+		want    bool
+		state   State
+		tier    Tier
+		vetoes  Veto
+	}{
+		{
+			// The framed "• Completed." marker, with the composer below it.
+			name: "framed completed marker settles", fixture: "codex_idle_completed_t0.txt",
+			want: true, state: Terminal, tier: TierTerminalExplicit,
+		},
+		{
+			name: "the same pane 3s later still settles", fixture: "codex_idle_completed_t1.txt",
+			want: true, state: Terminal, tier: TierTerminalExplicit,
+		},
+		{
+			// Interruption recovery on a current pane with nothing left running.
+			name:    "current interruption with no background terminal settles",
+			fixture: "codex_interrupted_no_background.txt",
+			want:    true, state: Terminal, tier: TierTerminalExplicit,
+		},
+		{
+			// A live turn is still refused, and now on the strength of the two
+			// live-work vetoes alone rather than on an unreadable composer.
+			name: "live turn is still refused", fixture: "codex_working.txt",
+			state: Working, vetoes: VetoLiveStatusLine | VetoInterruptHint,
+		},
+		{
+			// NOT this repair group's to change. This capture reports "1 background
+			// terminal running"; it settles today because nothing vetoes that
+			// footer. Repair group codex-background-task-veto owns adding the veto,
+			// and this row is where its fix will show up.
+			name:    "current interruption with a background terminal settles today",
+			fixture: "codex_interrupted.txt",
+			want:    true, state: Terminal, tier: TierTerminalExplicit,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := codexObservation(t, readScreenFixture(t, tc.fixture))
+			if got.SettleableTerminal() != tc.want {
+				t.Fatalf("SettleableTerminal() = %v, want %v (state %s, vetoes %s)",
+					got.SettleableTerminal(), tc.want, got.State, got.Vetoes)
+			}
+			if got.State != tc.state {
+				t.Errorf("State = %s, want %s", got.State, tc.state)
+			}
+			if got.Tier != tc.tier {
+				t.Errorf("Tier = %s, want %s", got.Tier, tc.tier)
+			}
+			if got.Vetoes != tc.vetoes {
+				t.Errorf("Vetoes = %s, want %s", got.Vetoes, tc.vetoes)
+			}
+		})
 	}
 
-	// The consequence, asserted on the real captures rather than argued for: an
-	// idle 0.149.1 pane does not settle, and it does not falsely settle either.
-	for _, name := range []string{"codex_idle_completed_t0.txt", "codex_interrupted.txt", "codex_cleared.txt"} {
-		t.Run(name, func(t *testing.T) {
-			screen := readScreenFixture(t, name)
-			got := codexObservation(t, screen)
-			if got.SettleableTerminal() {
-				t.Fatalf("SettleableTerminal() = true, want the fail-closed answer (state %s)", got.State)
+	// Clear recovery on the current build. codex_cleared.txt is a real post-
+	// startup 0.149.1 screen; the clear probe reads the visible screen first and
+	// only then pays for the `--extent=all` scrollback read, so both halves are
+	// asserted.
+	t.Run("clear recovery on the current build", func(t *testing.T) {
+		cleared := readScreenFixture(t, "codex_cleared.txt")
+		if !CodexScreenLooksCleared(cleared) {
+			t.Fatal("CodexScreenLooksCleared() = false on a real cleared 0.149.1 screen")
+		}
+		if !ClassifyCodexClearScreen(cleared, cleared) {
+			t.Fatal("ClassifyCodexClearScreen() = false on a real cleared 0.149.1 screen")
+		}
+		// A working pane is not a cleared pane, so the assertion above is not
+		// passing on the widened composer alone.
+		working := readScreenFixture(t, "codex_working.txt")
+		if ClassifyCodexClearScreen(working, working) {
+			t.Fatal("ClassifyCodexClearScreen() = true on a working screen")
+		}
+	})
+}
+
+// TestCodexCompletedMarkerRequiresItsFrame pins the framing requirement in
+// isolation.
+//
+// "Completed." is one ordinary English word. Unlike "Worked for 1m 30s" it
+// carries no duration to anchor on, so on its own it is a marker any assistant
+// turn can print by accident — including one that is still running and merely
+// narrating a finished sub-step. The horizontal rules Codex draws around it are
+// the only thing that makes it harness-authored, and they are therefore
+// required, not decorative.
+func TestCodexCompletedMarkerRequiresItsFrame(t *testing.T) {
+	if !ClassifyCodexCompletedTurnScreen(codexFramedCompletedScreen) {
+		t.Fatal("ClassifyCodexCompletedTurnScreen() = false on the framed marker")
+	}
+	unframed := []struct {
+		name   string
+		screen string
+	}{
+		{"no rules at all", codexUnframedCompletedScreen},
+		{"only a rule above", codexHalfFramedCompletedScreen},
+		{"prose that merely says completed", codexCompletedProseScreen},
+	}
+	for _, tc := range unframed {
+		t.Run(tc.name, func(t *testing.T) {
+			if ClassifyCodexCompletedTurnScreen(tc.screen) {
+				t.Fatal("ClassifyCodexCompletedTurnScreen() = true without the harness frame")
 			}
-			if got.Vetoes&VetoComposerBusy == 0 {
-				t.Fatalf("Vetoes = %06b, want VetoComposerBusy — the unknown placeholder is what withholds settling", got.Vetoes)
+			if got := codexObservation(t, tc.screen); got.SettleableTerminal() {
+				t.Fatalf("SettleableTerminal() = true (state %s, vetoes %s)", got.State, got.Vetoes)
 			}
 		})
 	}
@@ -735,6 +862,60 @@ const codexRenamedSpinnerHintScreen = `
 • Cogitating · press ctrl+c to cancel
 
 › Use /skills to list available skills
+`
+
+// codexFramedCompletedScreen mirrors the framing in
+// testdata/codex_idle_completed_t0.txt at a width the test file can hold. The
+// three screens after it are the same bytes with the frame taken away, so
+// TestCodexCompletedMarkerRequiresItsFrame fails for the frame and nothing else.
+
+const codexCompletedFrameRule = `────────────────────────────────────────`
+
+const codexFramedCompletedScreen = `
+• Ran sleep 8
+  └ (no output)
+
+` + codexCompletedFrameRule + `
+
+• Completed.
+
+` + codexCompletedFrameRule + `
+
+› Ask Codex to do anything
+
+  gpt-5.6-sol high · /private/tmp/amx-fixture-capture · Context 2% used
+`
+
+const codexUnframedCompletedScreen = `
+• Ran sleep 8
+  └ (no output)
+
+• Completed.
+
+› Ask Codex to do anything
+
+  gpt-5.6-sol high · /private/tmp/amx-fixture-capture · Context 2% used
+`
+
+const codexHalfFramedCompletedScreen = `
+• Ran sleep 8
+  └ (no output)
+
+` + codexCompletedFrameRule + `
+
+• Completed.
+
+› Ask Codex to do anything
+
+  gpt-5.6-sol high · /private/tmp/amx-fixture-capture · Context 2% used
+`
+
+const codexCompletedProseScreen = `
+• The first migration completed.
+
+› Ask Codex to do anything
+
+  gpt-5.6-sol high · /private/tmp/amx-fixture-capture · Context 2% used
 `
 
 const codexComposerBeforeWorkedForScreen = `

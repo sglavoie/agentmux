@@ -3,6 +3,7 @@ package screenstate
 import (
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/sglavoie/agentmux/internal/harness"
 )
@@ -23,23 +24,43 @@ import (
 // output intentionally drops styling, so the placeholder is indistinguishable
 // from ordinary text and must be recognized explicitly. Keep this list narrow:
 // accepting arbitrary text after the chevron would let an old transcript prompt
-// satisfy the terminal-screen classifiers.
+// satisfy the terminal-screen classifiers. The whole line must be the chevron
+// plus one KNOWN placeholder and nothing else — that end anchor is what stops
+// "› Run the shell command: sleep 8" (a real transcript line in
+// testdata/codex_idle_completed_t0.txt) from reading as an empty composer.
 //
-// ACCEPTED RESIDUAL BRITTLENESS. A Codex build that ships a third placeholder
-// makes the composer unmatchable and withholds settling — a stuck ⚡, never a
-// false 🛑 — which is the direction this package fails in by design. That is
-// not hypothetical: codex-cli 0.149.1 says "Ask Codex to do anything", which is
-// not in this list, so the session-2 captures do not settle today.
-// TestCodexComposerPlaceholderIsNarrowAndFailsClosed pins both halves of that
-// statement so the cost stays visible instead of being rediscovered.
-var codexComposerLineRE = regexp.MustCompile(`(?m)^\s*(?:\x{203a}|>)\s*(?:(?:Use /skills to list available skills)|(?:Find and fix a bug in @filename))?\s*$`)
+// ACCEPTED RESIDUAL BRITTLENESS. A Codex build that ships an unknown
+// placeholder makes the composer unmatchable and withholds settling — a stuck
+// ⚡, never a false 🛑 — which is the direction this package fails in by design.
+// TestCodexCurrentScreenContract pins the currently installed placeholder, and
+// TestCodexComposerPlaceholderIsNarrow pins the narrowness that costs.
+var codexComposerLineRE = regexp.MustCompile(`(?m)^\s*(?:\x{203a}|>)\s*(?:` +
+	`(?:Use /skills to list available skills)|` +
+	`(?:Find and fix a bug in @filename)|` +
+	`(?:Ask Codex to do anything)` +
+	`)?\s*$`)
 var codexContextZeroLineRE = regexp.MustCompile(`(?i)\bcontext\b.*(?:^|[^0-9])0\s*%`)
 var codexLabeledTranscriptLineRE = regexp.MustCompile(`(?i)^\s*(?:user|codex|assistant|system)\s*:`)
 
 // codexWorkedForLineRE matches Codex's completed-turn status line ("Worked for
 // 1m 30s"). The trailing digit requirement anchors on a real duration so
 // transcript prose such as "worked for the previous release" cannot match.
+//
+// It matches nothing on a codex-cli 0.149.x screen: that build dropped the
+// line entirely in favour of the framed marker below. It is retained for older
+// Codex builds, which a user may still be running.
 var codexWorkedForLineRE = regexp.MustCompile(`(?i)^[^\p{L}\p{N}]*worked for\s+\d`)
+
+// codexCompletedMarkerLineRE matches codex-cli 0.149.x's end-of-turn marker
+// line. That build prints no duration at all: the whole line is a bullet glyph
+// and the single word "Completed", optionally with a period.
+//
+// A one-word marker is far weaker evidence than "Worked for 1m 30s" — an
+// assistant message reading "Completed." would satisfy it on its own — so it is
+// NEVER honoured by itself. codexCompletedMarkerAt additionally requires the
+// horizontal rules Codex draws above and below it, and that framing is what
+// separates the harness-authored marker from transcript prose.
+var codexCompletedMarkerLineRE = regexp.MustCompile(`(?i)^[^\p{L}\p{N}]*completed\.?\s*$`)
 
 // codexWorkingStatusLineRE matches Codex's in-progress status line ("Working
 // (5s • Esc to interrupt)"). A later match than the Worked-for line means the
@@ -168,11 +189,12 @@ func (codexAdapter) Classify(screen string) Observation {
 // decision stays with the two classifiers so the positional composer
 // requirement has exactly one implementation.
 func codexLatestStatusLine(screen string) (codexStatusKind, string) {
+	lines := strings.Split(screen, "\n")
 	kind := codexStatusNone
 	text := ""
-	for _, line := range strings.Split(screen, "\n") {
+	for i, line := range lines {
 		switch {
-		case codexWorkedForLineRE.MatchString(line), codexInterruptedLineRE.MatchString(line):
+		case codexTerminalMarkerAt(lines, i):
 			kind, text = codexStatusTerminal, line
 		case codexLineLooksLiveWork(line):
 			kind, text = codexStatusWorking, line
@@ -180,6 +202,72 @@ func codexLatestStatusLine(screen string) (codexStatusKind, string) {
 	}
 	return kind, text
 }
+
+// codexMarkerFunc reports whether line i of a screen is a particular
+// terminal-turn marker.
+//
+// The two turn classifiers take one of these rather than a bare *regexp
+// because codex-cli 0.149.x's "Completed" marker is not decidable from its own
+// line: it is one common word, and only the horizontal rules Codex draws around
+// it make it harness-authored evidence rather than assistant prose.
+type codexMarkerFunc func(lines []string, i int) bool
+
+// codexTerminalMarkerAt is the union of every terminal marker this file knows,
+// used by the diagnostic status-line scan. The settle decision still goes
+// through the two classifiers, which keep completed and interrupted apart.
+func codexTerminalMarkerAt(lines []string, i int) bool {
+	return codexCompletedTurnMarkerAt(lines, i) || codexInterruptedMarkerAt(lines, i)
+}
+
+// codexCompletedTurnMarkerAt accepts either completed-turn shape: the older
+// "Worked for N" status line or 0.149.x's framed "Completed" marker.
+func codexCompletedTurnMarkerAt(lines []string, i int) bool {
+	return codexWorkedForLineRE.MatchString(lines[i]) || codexCompletedMarkerAt(lines, i)
+}
+
+func codexInterruptedMarkerAt(lines []string, i int) bool {
+	return codexInterruptedLineRE.MatchString(lines[i])
+}
+
+// codexCompletedMarkerAt reports whether line i is 0.149.x's framed end-of-turn
+// marker: the bare "Completed" line WITH a horizontal rule above and below it.
+//
+// THE FRAMING IS THE EVIDENCE. Without it this marker is one ordinary English
+// word at the start of a bullet line, which any assistant turn can print. Do
+// not relax this to the line match alone.
+func codexCompletedMarkerAt(lines []string, i int) bool {
+	if !codexCompletedMarkerLineRE.MatchString(lines[i]) {
+		return false
+	}
+	return codexRuleBefore(lines, i, -1) && codexRuleBefore(lines, i, +1)
+}
+
+// codexRuleBefore walks away from line i in one direction and reports whether
+// the first non-blank line it meets is a horizontal rule. Codex separates the
+// marker from its rules with blank lines, so blanks are skipped; anything else
+// ends the walk and is the answer.
+func codexRuleBefore(lines []string, i, step int) bool {
+	for j := i + step; j >= 0 && j < len(lines); j += step {
+		if strings.TrimSpace(lines[j]) == "" {
+			continue
+		}
+		return codexLineIsHorizontalRule(lines[j])
+	}
+	return false
+}
+
+// codexLineIsHorizontalRule reports whether a line is nothing but a run of box
+// drawing horizontals. The length floor keeps a stray glyph from framing
+// anything; Codex draws these the full width of the pane.
+func codexLineIsHorizontalRule(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" || strings.Trim(trimmed, "─") != "" {
+		return false
+	}
+	return utf8.RuneCountInString(trimmed) >= codexHorizontalRuleMinimumWidth
+}
+
+const codexHorizontalRuleMinimumWidth = 8
 
 // codexLineLooksLiveWork reports whether one line is positive evidence of an
 // in-flight Codex turn.
@@ -199,12 +287,16 @@ func codexLineLooksLiveWork(line string) bool {
 //
 // It is deliberately conservative: false negatives are acceptable, false
 // positives are not. It returns true only when the screen is not a visible
-// prompt, the latest visible Codex status line is a completed "Worked for …"
-// line (with no later live-work line), and an empty composer prompt appears
-// after that status line. This mirrors the completed-turn state Codex leaves on
-// screen when the assistant finishes but no Stop hook arrives.
+// prompt, the latest visible Codex status line is a completed-turn marker (with
+// no later live-work line), and an empty composer prompt appears after that
+// marker. This mirrors the completed-turn state Codex leaves on screen when the
+// assistant finishes but no Stop hook arrives.
+//
+// Two marker shapes are accepted, because Codex changed the one it prints: the
+// older "Worked for 1m 30s" status line, and 0.149.x's framed "Completed"
+// marker. Every other gate is identical for both.
 func ClassifyCodexCompletedTurnScreen(screen string) bool {
-	return codexTerminalTurnScreen(screen, codexWorkedForLineRE)
+	return codexTerminalTurnScreen(screen, codexCompletedTurnMarkerAt)
 }
 
 // ClassifyCodexInterruptedTurnScreen reports whether a Codex screen scrape shows
@@ -218,7 +310,7 @@ func ClassifyCodexCompletedTurnScreen(screen string) bool {
 // marker. Codex leaves this state on screen after an interruption, and —
 // exactly the case native hooks miss — no Stop hook arrives.
 func ClassifyCodexInterruptedTurnScreen(screen string) bool {
-	return codexTerminalTurnScreen(screen, codexInterruptedLineRE)
+	return codexTerminalTurnScreen(screen, codexInterruptedMarkerAt)
 }
 
 // codexTerminalTurnScreen is the shared body of the two classifiers above: the
@@ -233,7 +325,7 @@ func ClassifyCodexInterruptedTurnScreen(screen string) bool {
 // The prompt classification is checked first, before any status-line work. That
 // ordering is what makes codexInterruptHintRE's overlap with Codex's
 // request_user_input footer free.
-func codexTerminalTurnScreen(screen string, markerRE *regexp.Regexp) bool {
+func codexTerminalTurnScreen(screen string, marker codexMarkerFunc) bool {
 	if _, ok := ClassifyCodexPrompt(screen); ok {
 		return false
 	}
@@ -243,7 +335,7 @@ func codexTerminalTurnScreen(screen string, markerRE *regexp.Regexp) bool {
 	latestStatusIsMarker := false
 	for i, line := range lines {
 		switch {
-		case markerRE.MatchString(line):
+		case marker(lines, i):
 			markerIdx = i
 			latestStatusIsMarker = true
 		case codexLineLooksLiveWork(line):

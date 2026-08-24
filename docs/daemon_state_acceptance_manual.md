@@ -99,7 +99,10 @@ a fixture/test, validated by the automated gate below):
 - Codex — the installed interrupted screen renders the dim composer placeholder
   `Find and fix a bug in @filename`; the composer/idle detection now tolerates it
   (`internal/screenstate/codex.go`, `codex_test.go`; the regex lived in
-  `internal/daemon/codex_prompt.go` when the drill ran).
+  `internal/daemon/codex_prompt.go` when the drill ran). Codex 0.149.x renamed
+  that placeholder to `Ask Codex to do anything`, which is now accepted
+  alongside it — the list is version-specific by design and an unknown
+  placeholder withholds settling rather than guessing.
 - Claude — the installed 2.1.195 empty composer contains a non-breaking space
   (`U+00A0`); the composer regex now matches it
   (`internal/screenstate/claude.go`, `claude_test.go`; the regex lived in
@@ -117,7 +120,11 @@ a fixture/test, validated by the automated gate below):
 **Dialect questions resolved** (carried open from sessions 3–7):
 
 - Codex interrupted-turn marker — `Conversation interrupted - tell the model
-  what to do differently` (installed 0.144.3), plus the dim placeholder above.
+  what to do differently` (installed 0.144.3, unchanged in 0.149.1), plus the
+  dim placeholder above.
+- Codex completed-turn marker — `Worked for Ns` up to 0.144.3; 0.149.x prints no
+  duration and instead frames a bare `Completed` line between two horizontal
+  rules. Both are recognized; the framed form is honoured only with its frame.
 - Claude interruption / empty composer — the installed 2.1.195 idle composer is
   a bare `❯` followed by `U+00A0` (no dim placeholder ghost text on normal
   completion); the `U+00A0` had been defeating the composer regex.
@@ -150,13 +157,36 @@ evidence. Run them against an installed build of 0.8.0 or newer:
    declines to settle, run the daemon at debug level and grep
    `screen stop probe: not settleable` for the named vetoes and the fingerprint.
 
-Known blocker for drill 3's recovery halves: `codexComposerLineRE` does not
-recognize codex-cli 0.149.1's `Ask Codex to do anything` composer placeholder,
-and 0.149.1 emits no `Worked for Ns` line (it renders `• Completed.` between two
-horizontal rules instead). A real 0.149.1 pane therefore cannot settle a
-synthetic stop at any sample count. Drill 3's *regression* half — a working
-Codex pane holds `⚡` — passes trivially and proves nothing new until the
-composer and completed-marker question is settled.
+Drill 3's blocker is CLEARED. It read: `codexComposerLineRE` did not recognize
+codex-cli 0.149.1's `Ask Codex to do anything` composer placeholder, and 0.149.1
+emits no `Worked for Ns` line, so a real 0.149.1 pane could not settle a
+synthetic stop at any sample count. Both halves are now supported
+(`internal/screenstate/codex.go`):
+
+- the composer placeholder list accepts `Ask Codex to do anything`, still as a
+  whole-line match against a known string — arbitrary text after the chevron is
+  rejected, because a transcript prompt line reading as an empty composer would
+  satisfy the positional composer scan mid-turn;
+- `codexCompletedMarkerLineRE` accepts 0.149.x's `Completed` marker, but only
+  when a horizontal rule stands above and below it. `Completed` alone is one
+  ordinary word with no duration to anchor on; the frame is what makes it
+  harness-authored.
+
+Every other gate is unchanged: the composer must still follow the marker, a
+later live-work line still clears it, a visible prompt still outranks it, and
+the settle still costs two samples agreeing on one screen fingerprint. Real
+captures now drive all three paths —
+`internal/screenstate/testdata/codex_idle_completed_t0.txt` (terminal),
+`codex_interrupted_no_background.txt` (interruption recovery, captured against
+codex-cli 0.149.1 with nothing left running) and `codex_cleared.txt` (clear
+recovery) — pinned by `TestCodexCurrentScreenContract`
+(`internal/screenstate/codex_test.go`) and `TestProbeCodexCurrentCompletedScreenSettles`
+(`internal/daemon/codex_idle_samples_test.go`).
+
+One known gap remains and belongs to repair group `codex-background-task-veto`,
+not here: `internal/screenstate/testdata/codex_interrupted.txt` reports
+`1 background terminal running` and nothing vetoes that footer, so such a pane
+settles today. Drill 3 is otherwise runnable as written.
 
 ## Session 4 regression drills
 

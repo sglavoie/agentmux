@@ -171,8 +171,13 @@ These are known gaps, not bugs. Nothing in the cockpit is waiting on them:
   intervention is required.
   Current releases also recover across daemon restarts on the next cleanup
   event. Both Codex and Claude also have a screen fallback that settles a stuck
-  bolt on `🛑` — Codex on a `Worked for …` or interrupted marker with an empty
-  composer, Claude on an idle composer or its interruption marker; look for
+  bolt on `🛑` — Codex on a completion marker (`Worked for …` on older builds,
+  or 0.149.x's `Completed` line framed by horizontal rules) or its interrupted
+  marker, in both cases with an empty composer below it; Claude on an idle
+  composer or its interruption marker. Codex's empty composer is recognized by
+  its dim placeholder text, which is version-specific: an unrecognized
+  placeholder means no settle at all, so a pane on a Codex build newer than this
+  one knows holds `⚡` rather than risking a false `🛑`. Look for
   `event: "ScreenStopProbe"` in `amx daemon export-events --window <id>` to
   confirm it fired, and read the row's `reason`, which names the evidence tier,
   the number of samples it required, and the screen fingerprint they agreed on.
