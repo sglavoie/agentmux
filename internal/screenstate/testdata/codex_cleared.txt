@@ -1,0 +1,21 @@
+╭──────────────────────────────────────────────────╮
+│ >_ OpenAI Codex (v0.149.1)                       │
+│                                                  │
+│ model:       gpt-5.6-sol high   /model to change │
+│ directory:   /private/tmp/amx-fixture-capture    │
+│ permissions: YOLO mode                           │
+╰──────────────────────────────────────────────────╯
+
+  Tip: New Use /fast to enable our fastest inference with increased plan usage.
+
+Token usage: total=14,469 input=14,200 (+ 70,400 cached) output=269 (reasoning 47)
+To continue this session, run codex resume 01a034ce-82a1-7d03-8722-0272bdf13f86
+
+⚠ MCP client for `node_repl` failed to start: MCP startup failed: No such file or directory (os error 2)
+
+⚠ MCP startup incomplete (failed: node_repl)
+ 
+ 
+› Ask Codex to do anything
+ 
+  gpt-5.6-sol high · /private/tmp/amx-fixture-capture · Context 0% used

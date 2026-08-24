@@ -1,7 +1,6 @@
 package daemon
 
 import (
-	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -146,80 +145,4 @@ func (h *Handler) applyCodexClearObservation(
 	// title cleanup, including when the stopped icon existed only in the Kitty
 	// snapshot and the in-process reducer was previously empty.
 	h.markWindowDirtyLocked(windowID)
-}
-
-// probeCodexIdleWindow recovers a Codex tab whose bolt icon is stuck on a
-// finished assistant turn — a normal completion or a user interruption — that
-// left no Stop hook behind. Codex is authoritative for its own screen, so the
-// daemon reads the completed/interrupted UI and settles the stale interactive
-// bolt through the race-safe authoritative-idle path.
-//
-// The reducer receipt sequence is captured before the cached Kitty snapshot and
-// revalidated under stateMu BEFORE the slow screen read: applyAuthoritativeIdle
-// rechecks it after the read, so any reducer event (a fresh prompt, activity, or
-// a native terminal hook) landing after capture discards the observation. The
-// synthetic stop is applied under the SourceProbe `codex_screen`
-// fact, never the legacy scalar machine: a live ASL lease, a higher-precedence
-// attention/error icon, a newer interactive bolt, or a pipe-mode/subagent fact
-// all still win at reduce time. The caller only invokes this for a `bolt` tab,
-// so protected on-screen icons never reach here in the first place.
-func (h *Handler) probeCodexIdleWindow(
-	now time.Time,
-	binding screenProbeBinding,
-	titleParts palette.TitleParts,
-	userVars kitty.UserVars,
-) {
-	source := SourceID{Kind: SourceProbe, Key: screenPromptProbeSource}
-	targetWindowID := binding.TargetWindowID
-
-	// Revalidate the snapshot receipt before the off-lock GetText. A window with no
-	// reducer facts (an unmanaged/foreground-only bolt) has no stale interactive
-	// work for the probe to settle, so bail without a screen read and drop any
-	// in-flight stabilization streak.
-	h.stateMu.Lock()
-	if !h.screenProbeBindingEligibilityCurrentLocked(binding, titleParts.State, func(icon string) bool {
-		return icon == "bolt"
-	}) {
-		h.stateMu.Unlock()
-		slog.Debug("codex stop probe: discarded stale snapshot", "source_window_id", binding.SourceWindowID,
-			"target_window_id", targetWindowID)
-		return
-	}
-	st, ok := h.windowStateLocked(targetWindowID)
-	if !ok || st.Reducer == nil {
-		h.clearIdleSampleLocked(idleSampleRef{windowID: targetWindowID, key: source.Key})
-		h.stateMu.Unlock()
-		return
-	}
-	h.stateMu.Unlock()
-
-	screen, err := h.kittyClient.GetText(kitty.MatchWindowByID(binding.SourceWindowID), "screen")
-	if err != nil {
-		slog.Debug("codex stop probe: get screen failed", "source_window_id", binding.SourceWindowID,
-			"target_window_id", targetWindowID, "err", err)
-		h.ClearIdleSample(targetWindowID, source)
-		return
-	}
-	if !ClassifyCodexCompletedTurnScreen(screen) && !ClassifyCodexInterruptedTurnScreen(screen) {
-		// Still working, a bare composer with no terminal marker, or unrelated
-		// output: reset the stabilization streak so a later transient idle frame
-		// cannot settle live work.
-		h.ClearIdleSample(targetWindowID, source)
-		return
-	}
-	h.applyAuthoritativeIdle(AuthoritativeIdle{
-		WindowID:        targetWindowID,
-		Source:          source,
-		Harness:         harness.Codex,
-		CapturedSeq:     binding.TargetReceipt,
-		ProbeBinding:    binding,
-		At:              now.Unix(),
-		RequiredSamples: 1,
-		SessionTitle:    titleParts.Base,
-		Account:         userVars.EffectiveProfile(),
-		PipeMode:        false,
-		Muted:           titleParts.Muted || userVars.Mute != "",
-		SourceEventID:   fmt.Sprintf("codex-screen-stop:%d:%d:%d", binding.SourceWindowID, targetWindowID, binding.TargetReceipt),
-		DiagnosticEvent: screenStopProbeEvent,
-	})
 }

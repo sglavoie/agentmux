@@ -372,8 +372,8 @@ func hasAcceptanceStage(records []diagnostics.TraceEnvelope, stage, outcome, rea
 }
 
 func TestReleaseDocumentationPinsVersionAndDiagnosticWorkflow(t *testing.T) {
-	if version != "0.7.0" {
-		t.Fatalf("version = %q, want 0.7.0", version)
+	if version != "0.8.0" {
+		t.Fatalf("version = %q, want 0.8.0", version)
 	}
 	for _, path := range []string{"../docs/daemon.md", "../docs/debugging.md", "../docs/acceptance.md"} {
 		data, err := os.ReadFile(path)

@@ -19,6 +19,42 @@ const (
 	screenPromptProbeSource = "codex_screen"
 )
 
+// codexScreenIdleSpec binds Codex into the shared screen idle probe body
+// (screen_idle_probe.go). Codex has no pane-title evidence, so sampleBump is
+// nil; the sample counts live in screen_idle_policy.go.
+//
+// Collapsing onto the shared body is what wires Codex up to Generation for the
+// first time. It stays inert while the Codex rows of the policy table are 1 —
+// a single sample is never compared against a predecessor — and goes live
+// unchanged when session 8 raises them.
+var codexScreenIdleSpec = screenIdleSpec{
+	harness:       harness.Codex,
+	sourceKey:     screenPromptProbeSource,
+	event:         screenStopProbeEvent,
+	eventIDPrefix: "codex-screen-stop",
+	sampleBump:    nil,
+	fields:        codexScreenIdleFields,
+}
+
+// codexScreenIdleFields reads the notification context straight off the title
+// and user vars. Unlike Claude, it needs no per-window merge here: the caller's
+// codexProbeTargetContext has already folded the target window's remembered
+// session title, profile, and mute flag into the values passed in. Pipe mode is
+// always false — Codex has no pipe-mode child to describe.
+func codexScreenIdleFields(
+	_ *WindowState,
+	_ screenProbeBinding,
+	titleParts palette.TitleParts,
+	userVars kitty.UserVars,
+) screenIdleFields {
+	return screenIdleFields{
+		sessionTitle: titleParts.Base,
+		account:      userVars.EffectiveProfile(),
+		pipeMode:     false,
+		muted:        titleParts.Muted || userVars.Mute != "",
+	}
+}
+
 // ProbeCodexScreenPrompts scans managed Codex windows and applies any visible
 // prompt found on the current screen. The screen is authoritative for Codex:
 // edit/request_user_input prompts can replace existing bolt/key guards with the
@@ -36,15 +72,20 @@ func (h *Handler) ProbeCodexScreenPrompts(now time.Time) {
 		slog.Debug("codex prompt probe: list windows failed", "err", err)
 		return
 	}
-	h.probeCodexScreenPromptsWithSnapshot(now, screenProbeSnapshot{windows: windows, reducerReceipts: reducerReceipts})
+	h.probeCodexScreenPromptsWithSnapshot(now, screenProbeSnapshot{windows: windows, reducerReceipts: reducerReceipts},
+		h.screenTextCacheFor())
 	h.renderSnapshot(windows)
 }
 
 func (h *Handler) ProbeCodexScreenPromptsWithSnapshot(now time.Time, windows []kitty.OSWindow) {
-	h.probeCodexScreenPromptsWithSnapshot(now, h.screenProbeSnapshotForWindows(windows))
+	h.probeCodexScreenPromptsWithSnapshot(now, h.screenProbeSnapshotForWindows(windows), h.screenTextCacheFor())
 }
 
-func (h *Handler) probeCodexScreenPromptsWithSnapshot(now time.Time, snapshot screenProbeSnapshot) {
+func (h *Handler) probeCodexScreenPromptsWithSnapshot(
+	now time.Time,
+	snapshot screenProbeSnapshot,
+	screens *screenTextCache,
+) {
 	bindings := h.screenProbeBindings(snapshot, harness.Codex)
 	bindings = append(bindings, h.screenProbeTerminalBindings(snapshot, harness.Codex, now.Unix())...)
 	for _, binding := range bindings {
@@ -52,7 +93,7 @@ func (h *Handler) probeCodexScreenPromptsWithSnapshot(now time.Time, snapshot sc
 		if !ok {
 			continue
 		}
-		h.probeCodexBinding(now, binding, palette.ParseTitleParts(tab.Title), target.UserVars)
+		h.probeCodexBinding(now, binding, palette.ParseTitleParts(tab.Title), target.UserVars, screens)
 	}
 
 	// Preserve the historical foreground fallback for a tab with no managed
@@ -76,7 +117,7 @@ func (h *Handler) probeCodexScreenPromptsWithSnapshot(now time.Time, snapshot sc
 				continue
 			}
 			binding.legacyDirectManaged = true
-			h.probeCodexBinding(now, binding, palette.ParseTitleParts(tab.Title), win.UserVars)
+			h.probeCodexBinding(now, binding, palette.ParseTitleParts(tab.Title), win.UserVars, screens)
 		}
 	}
 }
@@ -86,13 +127,14 @@ func (h *Handler) probeCodexBinding(
 	binding screenProbeBinding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
+	screens *screenTextCache,
 ) {
 	titleParts, userVars, ok := h.codexProbeTargetContext(binding, titleParts, userVars)
 	if !ok {
 		return
 	}
 	if titleParts.State == "stop" {
-		h.probeCodexClearWindow(now, binding, titleParts, userVars)
+		h.probeCodexClearWindow(now, binding, titleParts, userVars, screens)
 		return
 	}
 	if binding.terminalProducer {
@@ -103,11 +145,13 @@ func (h *Handler) probeCodexBinding(
 	if !codexPromptProbeCanOverwrite(titleParts.State) {
 		return
 	}
-	h.probeCodexWindow(now, binding, titleParts, userVars)
+	h.probeCodexWindow(now, binding, titleParts, userVars, screens)
 	// Prompt classification wins first. If it found no prompt and left the
 	// receipt current, the idle classifier may settle a genuinely finished bolt.
+	// Both read this tick's single capture, so the prompt scan and the terminal
+	// scan can never disagree about which frame they saw.
 	if titleParts.State == "bolt" {
-		h.probeCodexIdleWindow(now, binding, titleParts, userVars)
+		h.probeScreenIdle(now, codexScreenIdleSpec, binding, titleParts, userVars, "", screens)
 	}
 }
 

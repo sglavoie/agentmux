@@ -25,23 +25,58 @@ const (
 	// (claudeContextLimitFactSource) so a stuck-turn "stop" and a context-limit
 	// "error" never share one reducer fact.
 	claudeScreenStopProbeSource = "claude_screen"
-
-	// claudeIdleProbeRequiredSamples is the number of consecutive agreeing
-	// screen reads required before a composer-idle screen settles the stale
-	// interactive bolt. Claude's completed-turn screen is quieter than a running
-	// one, so two samples defend against a single transient frame. The
-	// interruption path is stronger evidence and settles immediately (one
-	// sample).
-	claudeIdleProbeRequiredSamples = 2
-
-	// claudeIdleProbeMarkerSamples stabilizes a screen whose pane title still
-	// carries a marker rune, over a description body or Claude's generic resting
-	// body alike. A marker is stale-tolerant evidence, not active-work evidence:
-	// Claude leaves the last frame behind after a turn. But a genuinely working
-	// turn publishes the same shape, so this class settles on a longer run (~8s at
-	// the 2s probe cadence) than a bare title.
-	claudeIdleProbeMarkerSamples = 4
 )
+
+// claudeScreenIdleSpec binds Claude into the shared screen idle probe body. The
+// sample counts it looks up live in screen_idle_policy.go.
+var claudeScreenIdleSpec = screenIdleSpec{
+	harness:       harness.Claude,
+	sourceKey:     claudeScreenStopProbeSource,
+	event:         screenStopProbeEvent,
+	eventIDPrefix: "claude-screen-stop",
+	sampleBump:    claudeIdleProbeTitleBump,
+	fields:        claudeScreenIdleFields,
+}
+
+// claudeIdleProbeTitleBump is the pane-title half of Claude's sample policy: a
+// title still carrying a work-marker rune lengthens the run of agreeing samples
+// the screen's own tier already bought.
+func claudeIdleProbeTitleBump(sourceWindowTitle string) int {
+	if claudeTitleHasMarker(sourceWindowTitle) {
+		return claudeIdleProbeMarkerSampleBump
+	}
+	return 0
+}
+
+// claudeScreenIdleFields reads the notification context off the target window
+// under stateMu. Claude carries pipe mode (a `claude -p` child's bolt is the
+// probe's to describe, not to invent) and only folds the tab title's mute flag
+// in for a direct session, where the tab title really does belong to the pane
+// being read.
+func claudeScreenIdleFields(
+	st *WindowState,
+	binding screenProbeBinding,
+	titleParts palette.TitleParts,
+	userVars kitty.UserVars,
+) screenIdleFields {
+	fields := screenIdleFields{
+		sessionTitle: titleParts.Base,
+		account:      userVars.EffectiveProfile(),
+		pipeMode:     st.LastPipeMode,
+		muted:        userVars.Mute != "",
+	}
+	if binding.SourceWindowID == binding.TargetWindowID {
+		fields.muted = fields.muted || titleParts.Muted
+	}
+	if st.LastSessionTitle != "" {
+		fields.sessionTitle = st.LastSessionTitle
+	}
+	if st.LastAccount != "" {
+		fields.account = st.LastAccount
+	}
+	fields.muted = fields.muted || st.Muted
+	return fields
+}
 
 // ProbeClaudeScreenStop scans managed Claude windows for a finished interactive
 // turn — a normal completion or a user interruption — whose native Stop hook
@@ -59,7 +94,8 @@ func (h *Handler) ProbeClaudeScreenStop(now time.Time) {
 		slog.Debug("claude stop probe: list windows failed", "err", err)
 		return
 	}
-	h.probeClaudeScreenStopWithSnapshot(now, screenProbeSnapshot{windows: windows, reducerReceipts: reducerReceipts})
+	h.probeClaudeScreenStopWithSnapshot(now, screenProbeSnapshot{windows: windows, reducerReceipts: reducerReceipts},
+		h.screenTextCacheFor())
 	h.renderSnapshot(windows)
 }
 
@@ -72,10 +108,17 @@ func (h *Handler) ProbeClaudeScreenStop(now time.Time) {
 // other visible state is either already terminal or a higher-precedence icon
 // the idle path must never downgrade.
 func (h *Handler) ProbeClaudeScreenStopWithSnapshot(now time.Time, windows []kitty.OSWindow) {
-	h.probeClaudeScreenStopWithSnapshot(now, h.screenProbeSnapshotForWindows(windows))
+	h.probeClaudeScreenStopWithSnapshot(now, h.screenProbeSnapshotForWindows(windows), h.screenTextCacheFor())
 }
 
-func (h *Handler) probeClaudeScreenStopWithSnapshot(now time.Time, snapshot screenProbeSnapshot) {
+// probeClaudeScreenStopWithSnapshot walks the Claude routes in one snapshot and
+// hands each to the shared screen idle probe body (screen_idle_probe.go). The
+// only Claude-specific step left here is the busy-title recovery below.
+func (h *Handler) probeClaudeScreenStopWithSnapshot(
+	now time.Time,
+	snapshot screenProbeSnapshot,
+	screens *screenTextCache,
+) {
 	for _, binding := range h.screenProbeBindings(snapshot, harness.Claude) {
 		_, tab, target, ok := kitty.FindWindowLocationByID(snapshot.windows, binding.TargetWindowID)
 		if !ok {
@@ -85,126 +128,25 @@ func (h *Handler) probeClaudeScreenStopWithSnapshot(now time.Time, snapshot scre
 		if !ok {
 			continue
 		}
-		h.probeClaudeIdleWindow(now, binding, palette.ParseTitleParts(tab.Title), target.UserVars, source.Title)
-	}
-}
+		titleParts := palette.ParseTitleParts(tab.Title)
 
-// probeClaudeIdleWindow recovers a Claude tab whose ⚡ is stuck on a finished
-// assistant turn — a normal completion or a user interruption — that left no
-// Stop hook behind. It mirrors probeCodexIdleWindow: the reducer receipt
-// sequence is captured before the cached Kitty snapshot and revalidated under
-// stateMu BEFORE the slow off-lock screen read, so a concurrent prompt (or any
-// reducer event) landing after capture discards the stale route/read; the synthetic stop is applied through the
-// race-safe authoritative-idle path under a distinct SourceProbe fact, so ASL
-// leases, subagents, pipe-mode children, and higher-precedence attention/error
-// icons all still win at reduce time.
-//
-// The interruption marker is stronger evidence than a bare idle composer, so it
-// settles immediately (one sample) while a plain composer-idle screen must agree
-// across two consecutive samples first. A pane title still carrying a marker
-// outranks both and requires the longer marker run.
-func (h *Handler) probeClaudeIdleWindow(
-	now time.Time,
-	binding screenProbeBinding,
-	titleParts palette.TitleParts,
-	userVars kitty.UserVars,
-	sourceWindowTitle string,
-) {
-	source := SourceID{Kind: SourceProbe, Key: claudeScreenStopProbeSource}
-	targetWindowID := binding.TargetWindowID
+		// A description title recovers a hook-missed empty tab to ⚡ before the
+		// bolt-only idle eligibility gate inside the shared body. The helper
+		// revalidates the exact snapshot binding and only mutates an empty reduced
+		// icon; terminal and higher-precedence states are never replaced.
+		//
+		// It deliberately does not veto the screen read that follows. Claude keeps
+		// a description title long after its turn ends, so a title that stopped the
+		// probe here would leave an idle pane permanently unable to settle. A
+		// committed promotion bumps ShadowSeq and so fails the eligibility check on
+		// this same tick; every other tick reads the screen, which is authoritative
+		// for whether a turn is actually running.
+		if claudeWindowTitleHasDescriptionMarker(source.Title) {
+			h.recoverClaudeBusyTitle(now, binding, titleParts, target.UserVars, source.Title)
+		}
 
-	// A description title recovers a hook-missed empty tab to ⚡ before the
-	// bolt-only idle eligibility gate below. The helper revalidates the exact
-	// snapshot binding and only mutates an empty reduced icon; terminal and
-	// higher-precedence states are never replaced.
-	//
-	// It deliberately does not veto the screen read that follows. Claude keeps a
-	// description title long after its turn ends, so a title that stopped the
-	// probe here would leave an idle pane permanently unable to settle. A
-	// committed promotion bumps ShadowSeq and so fails the eligibility check
-	// below on this same tick; every other tick reads the screen, which is
-	// authoritative for whether a turn is actually running.
-	if claudeWindowTitleHasDescriptionMarker(sourceWindowTitle) {
-		h.recoverClaudeBusyTitle(now, binding, titleParts, userVars, sourceWindowTitle)
+		h.probeScreenIdle(now, claudeScreenIdleSpec, binding, titleParts, target.UserVars, source.Title, screens)
 	}
-
-	// Revalidate the snapshot receipt before the off-lock GetText. A window with no
-	// reducer facts (an unmanaged/foreground-only bolt) has no stale interactive
-	// work for the probe to settle, so bail without a screen read and drop any
-	// in-flight stabilization streak.
-	h.stateMu.Lock()
-	if !h.screenProbeBindingEligibilityCurrentLocked(binding, titleParts.State, func(icon string) bool {
-		return icon == "bolt"
-	}) {
-		h.stateMu.Unlock()
-		slog.Debug("claude stop probe: discarded stale snapshot",
-			"source_window_id", binding.SourceWindowID, "target_window_id", targetWindowID)
-		return
-	}
-	st, ok := h.windowStateLocked(targetWindowID)
-	if !ok || st.Reducer == nil {
-		h.clearIdleSampleLocked(idleSampleRef{windowID: targetWindowID, key: source.Key})
-		h.stateMu.Unlock()
-		return
-	}
-	sessionTitle := titleParts.Base
-	account := userVars.EffectiveProfile()
-	pipeMode := st.LastPipeMode
-	muted := userVars.Mute != ""
-	if binding.SourceWindowID == targetWindowID {
-		muted = muted || titleParts.Muted
-	}
-	if st.LastSessionTitle != "" {
-		sessionTitle = st.LastSessionTitle
-	}
-	if st.LastAccount != "" {
-		account = st.LastAccount
-	}
-	muted = muted || st.Muted
-	h.stateMu.Unlock()
-
-	screen, err := h.kittyClient.GetText(kitty.MatchWindowByID(binding.SourceWindowID), "screen")
-	if err != nil {
-		slog.Debug("claude stop probe: get screen failed", "source_window_id", binding.SourceWindowID,
-			"target_window_id", targetWindowID, "err", err)
-		h.ClearIdleSample(targetWindowID, source)
-		return
-	}
-
-	interrupted := ClassifyClaudeInterruptedScreen(screen)
-	if !interrupted && !ClassifyClaudeIdleScreen(screen) {
-		// Still working, a queued-input composer, a blocking prompt, a
-		// context-limited screen, or unrelated output: reset the stabilization
-		// streak so a later transient idle frame cannot settle live work.
-		h.ClearIdleSample(targetWindowID, source)
-		return
-	}
-	required := claudeIdleProbeRequiredSamples
-	if interrupted {
-		required = 1
-	}
-	// A marker title deliberately overrides the interrupted fast path. A stale
-	// on-screen interruption marker from an earlier turn must not settle a
-	// genuinely working pane in one tick.
-	if claudeTitleHasMarker(sourceWindowTitle) {
-		required = claudeIdleProbeMarkerSamples
-	}
-
-	h.applyAuthoritativeIdle(AuthoritativeIdle{
-		WindowID:        targetWindowID,
-		Source:          source,
-		Harness:         harness.Claude,
-		CapturedSeq:     binding.TargetReceipt,
-		ProbeBinding:    binding,
-		At:              now.Unix(),
-		RequiredSamples: required,
-		SessionTitle:    sessionTitle,
-		Account:         account,
-		PipeMode:        pipeMode,
-		Muted:           muted,
-		SourceEventID:   fmt.Sprintf("claude-screen-stop:%d:%d:%d", binding.SourceWindowID, targetWindowID, binding.TargetReceipt),
-		DiagnosticEvent: screenStopProbeEvent,
-	})
 }
 
 // recoverClaudeBusyTitle promotes an empty managed Claude target to active from

@@ -54,6 +54,15 @@ type AuthoritativeIdle struct {
 	At              int64
 	RequiredSamples int
 
+	// EvidenceTier names the grade of evidence that bought RequiredSamples — a
+	// screenstate.Tier rendered by its String method. It is DIAGNOSTIC ONLY: no
+	// gate reads it, and a producer with no tier concept (the Copilot transcript
+	// probe) leaves it empty, which reads as "none" in the event ring. It exists
+	// because "why did this tab settle?" is otherwise answerable only from a
+	// debug-level log that is off by default, while the applied reason below is
+	// durable and visible through `amx daemon export-events`.
+	EvidenceTier string
+
 	SessionTitle  string
 	Account       string
 	PipeMode      bool
@@ -68,13 +77,18 @@ type AuthoritativeIdle struct {
 	// screen reads).
 	SessionID string
 
-	// Generation, when non-zero, is a monotonic fingerprint of the external
-	// evidence this observation was read from (e.g. a transcript's byte size).
-	// Consecutive stabilization samples must observe the SAME generation to
-	// accumulate: a probe source whose evidence advances on every new record (the
-	// Copilot transcript reader) therefore cannot reach its required-samples
-	// threshold across two DIFFERENT states, so a run of distinct intermediate
-	// terminals never settles. A zero generation disables the check.
+	// Generation, when non-zero, is an EQUALITY fingerprint of the external
+	// evidence this observation was read from. Consecutive stabilization samples
+	// must observe the SAME generation to accumulate, and
+	// recordIdleSampleWithGenerationLocked is the only consumer: it compares with
+	// != and never with <. Order is therefore never consulted, and a producer is
+	// free to emit an opaque hash (a Claude screen's normalized text) exactly as
+	// readily as a value that happens to be monotonic (a Copilot transcript's
+	// byte size). A probe source whose evidence changes on every new record can
+	// consequently not reach its required-samples threshold across two DIFFERENT
+	// states, so a run of distinct intermediate terminals never settles — and a
+	// pane still repainting an elapsed timer never settles at all. A zero
+	// generation disables the check.
 	Generation int64
 
 	// ConfirmStable, when non-nil, is called under stateMu immediately before the
@@ -355,10 +369,23 @@ func (h *Handler) applyAuthoritativeIdle(obs AuthoritativeIdle) bool {
 	if diagnosticEvent == "" {
 		diagnosticEvent = eventAuthoritativeIdle
 	}
+	// The reason pins WHY this settle was allowed into the durable per-window
+	// event ring, at zero cost and with no schema change: tier is the grade of
+	// evidence the screen produced, samples is the run length that grade bought,
+	// and generation is the evidence fingerprint every sample in that run had to
+	// agree on. Together they turn "the tab went 🛑" into a reading of the
+	// decision — a settle at samples=2 on a stable generation is the designed
+	// path, while an unexpected tier or a suspiciously low count names the fault
+	// directly. No consumer parses this string; it is read by humans through
+	// `amx daemon export-events`.
+	tier := obs.EvidenceTier
+	if tier == "" {
+		tier = "none"
+	}
 	h.appendWatchdogEventLocked(obs.WindowID, originWindowID, time.Unix(at, 0), diagnosticEvent, resultAction,
 		string(obs.Source.Kind)+":"+obs.Source.Key,
-		fmt.Sprintf("authoritative idle (%s) settled visible state %q→%q",
-			idleHarnessLabel(obs.Harness), before.Icon, effective.Icon))
+		fmt.Sprintf("authoritative idle (%s) settled visible state %q→%q (tier=%s samples=%d generation=%d)",
+			idleHarnessLabel(obs.Harness), before.Icon, effective.Icon, tier, required, obs.Generation))
 	if len(st.EventLog) > 0 && obs.TraceID != "" {
 		event := &st.EventLog[len(st.EventLog)-1]
 		event.TraceID = obs.TraceID

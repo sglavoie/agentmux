@@ -65,11 +65,12 @@ func TestProbeClaudeScreenStop_CompletedIdleStopsStuckBoltAfterTwoSamples(t *tes
 	}
 }
 
-// TestProbeClaudeScreenStop_InterruptedStopsStuckBoltImmediately proves the
-// interruption path is treated as immediate idle evidence: a single probe with
-// the interruption marker on screen settles the stale bolt, no second sample
-// required.
-func TestProbeClaudeScreenStop_InterruptedStopsStuckBoltImmediately(t *testing.T) {
+// TestProbeClaudeScreenStop_InterruptedStopsStuckBoltAfterTwoSamples proves the
+// interruption path settles the stale bolt — and that it does so on the same
+// stabilization run as any other idle screen. The marker used to settle on one
+// sample; a one-sample tier never compares the screen fingerprint, so a marker
+// left over from an earlier turn could settle a working pane in a single tick.
+func TestProbeClaudeScreenStop_InterruptedStopsStuckBoltAfterTwoSamples(t *testing.T) {
 	h := newTestHandler()
 	base := time.Now()
 	fake := &fakeKittyClient{
@@ -85,6 +86,14 @@ func TestProbeClaudeScreenStop_InterruptedStopsStuckBoltImmediately(t *testing.T
 	claudeSeedActiveBolt(t, h, 42, "sess-1", base.Unix())
 
 	h.ProbeClaudeScreenStop(base)
+	if got := len(fake.titleCalls()); got != 0 {
+		t.Fatalf("first-sample SetTabTitle calls = %d, want 0", got)
+	}
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
+		t.Fatalf("after one interrupted sample effective = %+v, want bolt", eff)
+	}
+
+	h.ProbeClaudeScreenStop(base.Add(2 * time.Second))
 
 	calls := fake.titleCalls()
 	if len(calls) != 1 {

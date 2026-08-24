@@ -233,22 +233,48 @@ whose `action` is the **actual reduced icon** (not the requested stop — a prob
 masked by a live ASL lease, a newer interactive `⚡`, or a higher-precedence
 attention/error icon records the icon that actually won), whose `source` is a
 distinct `probe:<harness>` key, and whose `reason` reads
-`authoritative idle (<harness>) settled visible state "…"→"…"`. These rows no
-longer carry the legacy `result_icon_state`/`current_icon_state` fields. The
-three are told apart by event name and source key:
+`authoritative idle (<harness>) settled visible state "…"→"…" (tier=<tier>
+samples=<n> generation=<fingerprint>)`. The suffix is diagnostics, not schema:
+`tier` is the grade of evidence the screen produced (`terminal_explicit`,
+`terminal_shape`, `quiescent`, or `none` for a producer with no tier concept),
+`samples` is the run length that grade required, and `generation` is the
+evidence fingerprint every sample in the run had to agree on. Nothing parses
+it — it is there so `amx daemon export-events` answers *why* a tab settled.
+These rows no longer carry the legacy
+`result_icon_state`/`current_icon_state` fields. The three are told apart by
+event name and source key:
 
 - **Codex** — `event: "ScreenStopProbe"`, `source: "probe:codex_screen"`. Fires
   when an active Codex tab still shows `⚡` but its latest visible status is
   `Worked for …` (completion) or the TUI interrupted marker, with an empty
-  composer and no visible prompt.
+  composer and no visible prompt. It needs **two consecutive samples that agree
+  on the same normalized screen fingerprint** — a completed-turn read makes the
+  classification unambiguous but cannot answer whether the pane is still
+  repainting, which is a different question and the one the second sample
+  settles.
 - **Claude** — `event: "ScreenStopProbe"`, `source: "probe:claude_screen"`
   (same event name as Codex, distinct source). Fires on a stuck Claude `⚡`
-  whose composer is idle (two consecutive samples), or that shows Claude's
-  interruption marker (one sample). The Kitty pane title never vetoes the screen
+  whose composer is idle, or that shows Claude's interruption marker. The
+  classification itself lives in `internal/screenstate`, which computes every
+  veto first and unconditionally — a live status line (progress ellipsis plus a
+  parenthesized elapsed timer), a background-task hint, a blocking prompt, a
+  context-limit marker, or a busy composer — and only then consults positive
+  terminal evidence. Every tier needs **at least two consecutive samples that
+  agree on the same normalized screen fingerprint**, so a pane still repainting
+  an elapsed timer can never settle regardless of what the classifiers
+  conclude — two is a floor rather than a fixed count, because below it the
+  fingerprint is never compared against anything and stabilization is inert.
+  Claude spends more samples on weaker evidence: **two** for positive terminal
+  evidence (an interruption marker, or a `<word> for <duration>` completion
+  line) and **three** for a quiescent screen — an empty composer with no
+  terminal marker at all, which is what Claude shows after `/clear`, after
+  `/compact`, at session start, and after a completion line has scrolled away.
+  The Kitty pane title never vetoes the screen
   read — Claude leaves a marker and its task description behind after a turn, so
   a title gate would strand idle panes on `⚡` forever. A title still carrying a
-  marker only lengthens stabilization to four consecutive samples, outranking the
-  interruption fast path. Native `Notification/idle_prompt` is the primary Claude
+  marker adds **one** sample on top of the screen's own tier, so the slowest
+  Claude path is four consecutive samples and the fastest is two. Native
+  `Notification/idle_prompt` is the primary Claude
   stop; this screen probe is the interruption/no-hook fallback. The positive half
   uses the same reducer source and records `event: "ScreenActiveProbe"` when a
   marker over a task description restores an empty managed Claude tab to `⚡`,
@@ -259,6 +285,19 @@ three are told apart by event name and source key:
   interactive session transcript's latest state-bearing event and settles only
   on a terminal record. Native `agentStop`/`sessionEnd` remain the primary
   Copilot stop.
+
+A pane that never stabilizes — a live progress bar, an animated plugin, a
+harness redrawing something on every frame — never reaches its required run and
+keeps `⚡`. That is the doctrine-sanctioned direction (a stale `⚡` is
+acceptable; a false `🛑` is not), and it is bounded on two sides. When a native
+terminal hook *was* received and is being held for probe confirmation, the hold
+rides to its deadline and **commits anyway** at `stop_confirm.timeout` (15s by
+default), so the fingerprint gate can never indefinitely suppress a real
+terminal stop. When there was no hook at all, only the watchdog clears the tab:
+`sweepStale` clears a stale window to the **empty** icon and never to `🛑`,
+firing its one-shot "Session idle" notification. With no `[defaults.watchdog]`
+threshold configured there is no such sweep, so an unstabilizable pane can hold
+`⚡` indefinitely.
 
 Codex exposes edit approvals and `request_user_input` waits through
 TUI/server-request flows. A native `PreToolUse(request_user_input)`, when

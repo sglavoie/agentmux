@@ -1,0 +1,29 @@
+│ directory:   /private/tmp/amx-fixture-capture    │
+│ permissions: YOLO mode                           │
+╰──────────────────────────────────────────────────╯
+
+  Tip: New Use /fast to enable our fastest inference with increased plan usage.
+
+⚠ MCP client for `node_repl` failed to start: MCP startup failed: No such file or directory (os error 2)
+
+• You have 1 usage limit reset available. Run /usage to use one.
+
+⚠ MCP startup incomplete (failed: node_repl)
+
+
+› Run the shell command: sleep 200
+
+
+• I’m running sleep 200 now and will wait for it to finish.
+
+• The command is still sleeping; I’m monitoring the running process.
+
+■ Conversation interrupted - tell the model what to do differently. Something went wrong? Hit `/feedback` to report the
+issue.
+ 
+  1 background terminal running · /ps to view · /stop to close
+ 
+ 
+› Ask Codex to do anything
+ 
+  gpt-5.6-sol high · /private/tmp/amx-fixture-capture · Context 2% used · weekly 100% left

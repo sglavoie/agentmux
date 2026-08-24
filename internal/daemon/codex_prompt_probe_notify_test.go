@@ -137,7 +137,7 @@ func TestProbeCodexScreenPrompts_DiscardsStaleMuteSnapshot(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
-			h.probeCodexScreenPromptsWithSnapshot(base.Add(time.Second), snapshot)
+			h.probeCodexScreenPromptsWithSnapshot(base.Add(time.Second), snapshot, h.screenTextCacheFor())
 		}()
 		<-entered
 

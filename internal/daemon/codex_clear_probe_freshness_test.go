@@ -50,7 +50,7 @@ func TestProbeCodexClearWindow_DiscardsSnapshotPredatingReducerEvent(t *testing.
 			reads := 0
 			fake.beforeGetText = func(string, string) { reads++ }
 			before := screenProbeMutationFingerprint(t, h, 42)
-			h.probeCodexScreenPromptsWithSnapshot(base.Add(time.Second), snapshot)
+			h.probeCodexScreenPromptsWithSnapshot(base.Add(time.Second), snapshot, h.screenTextCacheFor())
 
 			if reads != 0 {
 				t.Fatalf("GetText calls = %d, want 0 for stale stopped snapshot", reads)
@@ -229,7 +229,8 @@ func TestProbeCodexClearWindow_DiscardsObservationAfterConcurrentReducerEvent(t 
 				afterInjection = snapshot()
 			}
 
-			h.probeCodexClearWindow(time.Now(), directCodexProbeBinding(42, h.captureWindowReceipt(42), 0), parts, userVars)
+			h.probeCodexClearWindow(time.Now(), directCodexProbeBinding(42, h.captureWindowReceipt(42), 0), parts, userVars,
+				h.screenTextCacheFor())
 			defer h.cancelPendingNotification(42)
 
 			if !injected || reads != 2 {

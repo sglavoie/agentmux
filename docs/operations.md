@@ -170,11 +170,25 @@ These are known gaps, not bugs. Nothing in the cockpit is waiting on them:
   stale generic title clear on their own within about 8 seconds; no manual
   intervention is required.
   Current releases also recover across daemon restarts on the next cleanup
-  event. For Codex, a completed-turn screen fallback also settles a stuck bolt
-  on `🛑` when the tab shows `Worked for …` with an empty composer; look for
+  event. Both Codex and Claude also have a screen fallback that settles a stuck
+  bolt on `🛑` — Codex on a `Worked for …` or interrupted marker with an empty
+  composer, Claude on an idle composer or its interruption marker; look for
   `event: "ScreenStopProbe"` in `amx daemon export-events --window <id>` to
-  confirm it fired. In split panes, run the export against the managed
+  confirm it fired, and read the row's `reason`, which names the evidence tier,
+  the number of samples it required, and the screen fingerprint they agreed on.
+  In split panes, run the export against the managed
   tab-title owner because sibling panes do not drive screen-probe title changes.
+  **A bolt that never clears is expected on a pane that never stops
+  repainting** (a live progress bar, an animated plugin): every tier needs at
+  least two consecutive samples on the *same* normalized screen fingerprint, so
+  the fallback deliberately refuses rather than risk a false `🛑`. If a native
+  terminal hook did arrive it is only held, and commits anyway at
+  `[defaults.stop_confirm].timeout`. If none arrived, the watchdog is what ends
+  the bolt — and `sweepStale` clears a stale window to the **empty** icon, never
+  to `🛑`, so with no `[defaults.watchdog]` threshold configured such a pane can
+  hold `⚡` indefinitely. Run the daemon at debug level and grep
+  `screen stop probe: not settleable` to see the veto and fingerprint behind
+  each declined observation.
   For Copilot, also upgrade to version `1.0.45` or newer, because older
   releases had `agentStop` hook issues.
 - **`/clear` still shows a stop icon or stop notification**: inspect

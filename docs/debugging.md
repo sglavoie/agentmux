@@ -255,7 +255,16 @@ Claude observer receipts such as `InstructionsLoaded`, `CwdChanged`, and
 or response semantics Agent Mux does not own. Codex edit approvals and
 `request_user_input` waits are screen-authoritative: an early native tool-start
 receipt remains active, and the daemon's conservative Kitty-screen probe alone
-raises or retracts the visible question. Copilot
+raises or retracts the visible question. Conservative here is exact and applies
+to the stop fallback on both screen harnesses: the classifier computes every
+veto first and unconditionally and only then consults *positive* terminal
+evidence, and no tier may settle on fewer than two consecutive samples that
+agree on the same normalized screen fingerprint. Absence of a busy hint is
+never treated as evidence a turn ended, and a pane still repainting an elapsed
+timer cannot settle at all. A declined observation is logged at debug level as
+`screen stop probe: not settleable` with its named vetoes and fingerprint; an
+applied one records its tier, sample count, and generation in the `reason` of
+the durable `ScreenStopProbe` row. Copilot
 `notification.agent_idle` describes a background agent and does not stop the
 interactive session. Unknown future events are retained as rejected evidence
 without reducer mutation.

@@ -1,0 +1,29 @@
+│          /private/tmp/amx-fixture-capture          │                                                                     │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+❯ Use the Bash tool to run exactly: sleep 45                                                                                
+
+⏺ Bash(sleep 45)
+  ⎿  (No output)
+
+⏺ Done — sleep 45 ran and completed with no output.
+
+✻ Sautéed for 48s
+
+❯ Use the Write tool to create a file at /tmp/amx-fixture-capture/perm-demo.txt containing the single word hello            
+
+⏺ Write(/tmp/amx-fixture-capture/perm-demo.txt)
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Create file
+ ../../../tmp/amx-fixture-capture/perm-demo.txt
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+  1 hello
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ Do you want to create perm-demo.txt?                                                                          
+ ❯ 1. Yes
+   2. Yes, allow all edits during this session (shift+tab)
+   3. No
+
+ Esc to cancel · Tab to amend

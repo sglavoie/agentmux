@@ -1,0 +1,29 @@
+  below 15!/e (by
+  0.06), exactly
+  as the remainder
+  term predicts.
+
+✻ Worked for 41s
+
+❯ No tools. In    
+  your head,      
+  compute         
+  314159265 x     
+  271828182 by    
+  full long       
+  multiplication  
+  showing all     
+  nine partial    
+  products and    
+  the running     
+  sum, then cast  
+  out nines to    
+  verify.         
+
+✳ Zigzagging… 
+     47565 tokens
+──────────────────
+❯  
+──────────────────
+  27.3 max 5h 22…
+  ⏵⏵ bypass     ·

@@ -82,7 +82,7 @@ func TestProbeCodexScreenPrompts_RoutedPromptSurvivesUnrelatedTabPublication(t *
 			)
 		}
 	}
-	h.probeCodexScreenPromptsWithSnapshot(base.Add(2*time.Second), snapshot)
+	h.probeCodexScreenPromptsWithSnapshot(base.Add(2*time.Second), snapshot, h.screenTextCacheFor())
 
 	if !republished {
 		t.Fatal("earlier tab did not publish a competing snapshot")
@@ -143,7 +143,7 @@ func TestProbeCodexScreenPrompts_RoutedPromptSurvivesSiblingPaneChurn(t *testing
 			base.Add(time.Second),
 		)
 	}
-	h.probeCodexScreenPromptsWithSnapshot(base.Add(2*time.Second), snapshot)
+	h.probeCodexScreenPromptsWithSnapshot(base.Add(2*time.Second), snapshot, h.screenTextCacheFor())
 
 	if !republished {
 		t.Fatal("plain sibling pane did not publish a competing snapshot")
@@ -278,10 +278,20 @@ func TestProbeCodexScreenPrompts_RoutedIdleReadsProducerAndSettlesTarget(t *test
 			reads = append(reads, match)
 		}
 	}
-	h.ProbeCodexScreenPrompts(base.Add(time.Second))
+	probeCodexUntilSettled(t, h, base.Add(time.Second))
 
-	if len(reads) != 2 || reads[0] != kitty.MatchWindowByID(43) || reads[1] != kitty.MatchWindowByID(43) {
-		t.Fatalf("screen reads = %+v, want prompt+idle reads from routed producer pane 43", reads)
+	// One capture per tick, shared: the prompt classifier and the idle classifier
+	// both read that tick's single scrape of the routed producer pane, and
+	// neither ever touches the managed target pane 42. The stabilization run is
+	// what makes it more than one read here — the count still says exactly one
+	// per pass.
+	if len(reads) != codexIdleProbeTerminalRun {
+		t.Fatalf("screen reads = %+v, want one per probe pass over a run of %d", reads, codexIdleProbeTerminalRun)
+	}
+	for i, match := range reads {
+		if match != kitty.MatchWindowByID(43) {
+			t.Fatalf("screen read %d = %q, want routed producer pane 43", i, match)
+		}
 	}
 	if eff, visible := windowEffective(t, h, 42); eff.Icon != "stop" || visible != "stop" {
 		t.Fatalf("target effective = %+v visible %q, want stop/stop", eff, visible)

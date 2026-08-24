@@ -103,7 +103,7 @@ func TestProbeClaudeScreenStop_RestingBrailleDoesNotPromoteEmptyWindow(t *testin
 	}
 	h.SetKittyClient(fake)
 
-	for sample := 1; sample <= claudeIdleProbeMarkerSamples+2; sample++ {
+	for sample := 1; sample <= claudeIdleProbeLongestRun+2; sample++ {
 		h.ProbeClaudeScreenStop(base.Add(time.Duration(sample) * time.Second))
 		if got := countEventsNamed(t, h, 42, screenActiveProbeEvent); got != 0 {
 			t.Fatalf("ScreenActiveProbe rows after sample %d = %d, want 0", sample, got)

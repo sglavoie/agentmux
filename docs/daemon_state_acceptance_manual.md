@@ -59,6 +59,14 @@ from that session; probe provenance is from `amx daemon export-events --window
 | **Claude 92** | `UserPromptSubmit`→`bolt`, native `Stop`→`stop`; reprompt restored `bolt` | **Esc** during a real `sleep 30` tool turn returned to an empty composer containing `U+00A0` (non-breaking space) and emitted **no native `Stop`** | `ScreenStopProbe`, `source: probe:claude_screen`, `reason: authoritative idle (claude) settled visible state "bolt"→"stop"` | desired/live title converged to `stop`; `mismatch_count 0`, `render_failures 0` |
 | **Copilot 101** | cold start reproduced `userPromptSubmitted` **before** a late same-session `sessionStart(source:new)`; the new handler recorded that `sessionStart` as `action idle`, `preserves_icon true`, `result preserve`, `current bolt`, `reset_flow false`; the subsequent `agentStop(end_turn)` produced `stop`; a following reprompt restored `bolt` and converged to `stop` | a real `sleep 300` tool turn showed **remote `Esc` did not abort** installed Copilot 1.0.70 while a tool was running; **`Ctrl+C` did**. Transcript `~/.copilot/session-state/6f00b502-035c-4d9d-83b2-687f3eff69c6/events.jsonl` ends with `type: abort` / `reason: user_initiated`, **no native `agentStop`** | `TranscriptStopProbe`, `source: probe:copilot_transcript`, `reason: authoritative idle (copilot) settled visible state "bolt"→"stop"` | desired/live title matched; `mismatch_count 0`, `render_failures 0` |
 
+The three `reason` strings quoted above are verbatim from that 2026-07-13 run
+and are kept as the historical record. The applied reason has since gained a
+diagnostic suffix, so the current form of the Codex row's cell is
+`authoritative idle (codex) settled visible state "bolt"→"stop"
+(tier=terminal_explicit samples=2 generation=<fingerprint>)`, and the Claude and
+Copilot rows read the same way with their own tier, run length, and evidence
+fingerprint. Read a fresh drill against that shape, not the pre-suffix one.
+
 Protected / live-loop evidence (unmodified live ASL windows, observed but not
 disturbed): live window **11** retained its ASL lease with title `bolt+loop`,
 ASL heartbeat `result preserve`, two `pm:true` facts, desired/live agreement,
@@ -90,10 +98,12 @@ a fixture/test, validated by the automated gate below):
 
 - Codex — the installed interrupted screen renders the dim composer placeholder
   `Find and fix a bug in @filename`; the composer/idle detection now tolerates it
-  (`internal/daemon/codex_prompt.go`, `codex_prompt_test.go`).
+  (`internal/screenstate/codex.go`, `codex_test.go`; the regex lived in
+  `internal/daemon/codex_prompt.go` when the drill ran).
 - Claude — the installed 2.1.195 empty composer contains a non-breaking space
   (`U+00A0`); the composer regex now matches it
-  (`internal/daemon/claude_prompt.go`, `claude_prompt_test.go`).
+  (`internal/screenstate/claude.go`, `claude_test.go`; the regex lived in
+  `internal/daemon/claude_prompt.go` when the drill ran).
 - Copilot — a late same-session `sessionStart(source:new)` arriving after
   `userPromptSubmitted` no longer resets the interactive flow or drops the
   pending `bolt` (pinned by
@@ -113,6 +123,40 @@ a fixture/test, validated by the automated gate below):
   completion); the `U+00A0` had been defeating the composer regex.
 - Copilot user abort — `type: abort`, `data.reason: user_initiated`, with no
   native `agentStop`, re-confirmed live against 1.0.70.
+
+### Stabilized screen-probe drills — OPERATOR-PENDING (2026-08-24)
+
+The screen-probe stabilization work (positive terminal tiers plus a
+normalized-screen fingerprint fed to `AuthoritativeIdle.Generation`) is fully
+covered by the automated gate, but its four live drills have **not** been run
+against an installed binary. They are recorded here as operator work, not as
+evidence. Run them against an installed build of 0.8.0 or newer:
+
+1. **Regression.** Put a Claude pane mid-turn (`✽ …ing… (…)` visible, and *no*
+   `esc to interrupt`, which Claude 2.1.x no longer renders). `⚡` must hold for
+   30s. The pre-fix behaviour was `🛑` in 4–8s.
+2. **Recovery still works.** Esc a Claude turn → `🛑` within ~4s (the
+   two-sample explicit-marker tier at the 2s probe cadence). Finish a turn with
+   `Stop` hooks disabled → `🛑` within ~6s (the three-sample quiescent tier).
+   Claude's unmasked footer wall clock can add one further 2s tick when a minute
+   boundary lands mid-run; that is expected, not a failure.
+3. **Codex parity.** Both of the above against a Codex pane.
+4. **Read the decision.**
+   ```bash
+   amx daemon export-events --current-window --last 50 \
+     | jq '.events[] | select(.event=="ScreenStopProbe") | {at,action,source,reason}'
+   ```
+   Each `reason` must name `tier`, `samples`, and `generation`. For a pane that
+   declines to settle, run the daemon at debug level and grep
+   `screen stop probe: not settleable` for the named vetoes and the fingerprint.
+
+Known blocker for drill 3's recovery halves: `codexComposerLineRE` does not
+recognize codex-cli 0.149.1's `Ask Codex to do anything` composer placeholder,
+and 0.149.1 emits no `Worked for Ns` line (it renders `• Completed.` between two
+horizontal rules instead). A real 0.149.1 pane therefore cannot settle a
+synthetic stop at any sample count. Drill 3's *regression* half — a working
+Codex pane holds `⚡` — passes trivially and proves nothing new until the
+composer and completed-marker question is settled.
 
 ## Session 4 regression drills
 

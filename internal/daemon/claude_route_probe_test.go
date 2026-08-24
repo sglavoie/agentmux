@@ -72,7 +72,10 @@ func TestProbeClaudeScreenStop_RoutedProducerSettlesManagedTarget(t *testing.T) 
 			readMatch = match
 		}
 	}
+	// The routed producer's screen is unchanged between ticks, so its fingerprint
+	// holds steady and the two-sample stabilization run completes.
 	h.ProbeClaudeScreenStop(base.Add(time.Second))
+	h.ProbeClaudeScreenStop(base.Add(3 * time.Second))
 
 	if readMatch != kitty.MatchWindowByID(43) {
 		t.Fatalf("GetText match = %q, want routed producer pane 43", readMatch)
@@ -158,7 +161,11 @@ func TestProbeClaudeScreenStop_RoutedBusyTitleInvalidatesStaleIdleRead(t *testin
 		publishedBusy = true
 		h.publishSnapshot(busyWindows, base.Add(time.Second))
 	}
-	h.probeClaudeScreenStopWithSnapshot(base.Add(time.Second), staleSnapshot)
+	// Both ticks read the same interrupted screen, so only the busy-title
+	// publication invalidating the stale snapshot can stop the stabilization run
+	// from completing.
+	h.probeClaudeScreenStopWithSnapshot(base.Add(time.Second), staleSnapshot, h.screenTextCacheFor())
+	h.probeClaudeScreenStopWithSnapshot(base.Add(3*time.Second), staleSnapshot, h.screenTextCacheFor())
 
 	if !publishedBusy {
 		t.Fatal("stale idle probe never reached the injected screen read")
@@ -197,7 +204,7 @@ func TestProbeClaudeContextLimit_RoutedBindingSurvivesFocusAfterStaleReadIsDisca
 			h.publishSnapshot(newWindows, base.Add(time.Second))
 		}
 	}
-	h.probeClaudeContextLimitWithSnapshot(base.Add(time.Second), oldSnapshot)
+	h.probeClaudeContextLimitWithSnapshot(base.Add(time.Second), oldSnapshot, h.screenTextCacheFor())
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 		t.Fatalf("stale focus snapshot changed target to %+v, want bolt", eff)
 	}
@@ -207,7 +214,7 @@ func TestProbeClaudeContextLimit_RoutedBindingSurvivesFocusAfterStaleReadIsDisca
 	if !ready {
 		t.Fatal("new cached snapshot is not ready")
 	}
-	h.probeClaudeContextLimitWithSnapshot(base.Add(2*time.Second), newSnapshot)
+	h.probeClaudeContextLimitWithSnapshot(base.Add(2*time.Second), newSnapshot, h.screenTextCacheFor())
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "error" {
 		t.Fatalf("valid routed binding was lost after focus moved: %+v", eff)
 	}
@@ -252,7 +259,7 @@ func TestProbeClaudeContextLimit_RoutedSourceReceiptInvalidatesObservation(t *te
 			t.Fatalf("source receipt update rejected: %+v", resp)
 		}
 	}
-	h.probeClaudeContextLimitWithSnapshot(base.Add(time.Second), snapshot)
+	h.probeClaudeContextLimitWithSnapshot(base.Add(time.Second), snapshot, h.screenTextCacheFor())
 
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 		t.Fatalf("source-receipt-stale observation changed target to %+v, want bolt", eff)

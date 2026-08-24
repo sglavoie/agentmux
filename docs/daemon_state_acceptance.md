@@ -323,8 +323,8 @@ that never received a native terminal.
 
 | Scenario | Codex | Claude | Copilot |
 | --- | --- | --- | --- |
-| Normal turn completion | native `Stop` → held at `⚡` until probe-confirmed or the deadline → `🛑`; the confirming evidence is the same `Worked for …` + empty composer the `ScreenStopProbe` uses, released as `stop_confirmed_by: probe:codex_screen` | native `Stop` → held at `⚡` until probe-confirmed or the deadline → `🛑`; confirmed by the same idle composer (two samples) the `ScreenStopProbe` uses, released as `stop_confirmed_by: probe:claude_screen` | `agentStop`/`sessionEnd` → held at `⚡` until probe-confirmed or the deadline → `🛑`; confirmed by the same terminal transcript record the `TranscriptStopProbe` uses, released as `stop_confirmed_by: probe:copilot_transcript` |
-| Confirmed user interruption | `ScreenStopProbe` after the TUI interrupted marker + empty composer (one sample) → `🛑` | `ScreenStopProbe` after Claude's interruption marker (one sample) → `🛑` (no native `Stop` fires on interruption) | `TranscriptStopProbe` after a terminal/abort transcript record → `🛑` |
+| Normal turn completion | native `Stop` → held at `⚡` until probe-confirmed or the deadline → `🛑`; the confirming evidence is the same `Worked for …` + empty composer (two samples at the same screen fingerprint) the `ScreenStopProbe` uses, released as `stop_confirmed_by: probe:codex_screen` | native `Stop` → held at `⚡` until probe-confirmed or the deadline → `🛑`; confirmed by the same idle composer (two samples) the `ScreenStopProbe` uses, released as `stop_confirmed_by: probe:claude_screen` | `agentStop`/`sessionEnd` → held at `⚡` until probe-confirmed or the deadline → `🛑`; confirmed by the same terminal transcript record the `TranscriptStopProbe` uses, released as `stop_confirmed_by: probe:copilot_transcript` |
+| Confirmed user interruption | `ScreenStopProbe` after the TUI interrupted marker + empty composer (two samples at the same screen fingerprint) → `🛑` | `ScreenStopProbe` after Claude's interruption marker (two samples at the same screen fingerprint) → `🛑` (no native `Stop` fires on interruption) | `TranscriptStopProbe` after a terminal/abort transcript record → `🛑` |
 | Protected active states | `key`/`question`/`error`/`warning`/`subagent`/`compact`, pipe-mode `pm:true` facts, and live ASL leases are **never** downgraded by any stop fallback | same | same |
 | New prompt after stop | `UserPromptSubmit` → `⚡` (reducer recency supersedes the stop fact) | `UserPromptSubmit` → `⚡` | `userPromptSubmitted` → `⚡` |
 | Live ASL between turns | the loop lease masks `🛑` and shows `🔁`/its active/attention state; `🛑` appears only after `AgentSessionLoopFinished` | same | same |
@@ -367,8 +367,11 @@ means the native hook was lost.
 Every synthetic stop records its source (`probe:<harness>`) and the **actual
 reduced icon** in `action` (a masked probe records the icon that actually won),
 and its `reason` reads `authoritative idle (<harness>) settled visible state
-"…"→"…"`. A probe result is discarded if any reducer event lands between
-evidence capture and application.
+"…"→"…" (tier=<tier> samples=<n> generation=<fingerprint>)` — the grade of
+screen evidence, the run length that grade required, and the normalized screen
+fingerprint every sample in that run agreed on. The suffix is diagnostics only;
+the session-event shape and the `debug` schemas are unchanged. A probe result is
+discarded if any reducer event lands between evidence capture and application.
 
 ### Automated coverage
 

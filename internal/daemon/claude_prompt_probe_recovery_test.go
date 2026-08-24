@@ -159,7 +159,11 @@ func TestProbeClaudeScreenStop_ConcurrentPromptInvalidatesStopProbe(t *testing.T
 	}
 	h.SetKittyClient(fake)
 
+	// Two ticks: the interrupted screen would otherwise complete its stabilization
+	// run here, so the receipt guard — not the sample count — is what holds the
+	// bolt.
 	h.ProbeClaudeScreenStop(base)
+	h.ProbeClaudeScreenStop(base.Add(2 * time.Second))
 
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 		t.Fatalf("effective = %+v, want the newer bolt preserved against a stale stop probe", eff)
@@ -187,7 +191,11 @@ func TestProbeClaudeScreenStop_IgnoresNonClaudeManagedOwner(t *testing.T) {
 	h.SetKittyClient(fake)
 	claudeSeedActiveBolt(t, h, 42, "sess-1", base.Unix())
 
-	h.ProbeClaudeScreenStop(base)
+	// Enough ticks to complete the longest stabilization run: a Claude-owned tab
+	// showing this screen would have settled by now.
+	for sample := 0; sample < claudeIdleProbeLongestRun; sample++ {
+		h.ProbeClaudeScreenStop(base.Add(time.Duration(2*sample) * time.Second))
+	}
 
 	if got := len(fake.titleCalls()); got != 0 {
 		t.Fatalf("SetTabTitle calls = %d, want 0", got)

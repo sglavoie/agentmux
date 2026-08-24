@@ -36,7 +36,7 @@ func TestProbeCodexScreenPrompts_CompletedTurnStopsStuckBolt(t *testing.T) {
 	h.SetKittyClient(fake)
 	codexSeedActiveBolt(t, h, 42, "sess-1", base.Unix())
 
-	h.ProbeCodexScreenPrompts(base)
+	probeCodexUntilSettled(t, h, base)
 
 	calls := fake.titleCalls()
 	if len(calls) != 1 {
@@ -82,20 +82,34 @@ func TestProbeCodexScreenPrompts_CompletedTurnStopsStuckBolt(t *testing.T) {
 }
 
 // TestProbeCodexScreenPrompts_ConfirmsHeldStopInsteadOfSettling is the Codex
-// twin of the Claude confirmation test, and pins the per-harness difference that
-// matters: Codex owns its own screen, so one completed-turn read is the whole
-// sample requirement and the very first probe confirms the withheld stop.
+// twin of the Claude confirmation test, and pins the sample contract that now
+// governs both harnesses: a completed-turn read is not by itself the whole
+// sample requirement. Codex owning its own screen makes the CLASSIFICATION
+// unambiguous, but one frame cannot answer whether the pane is still
+// repainting, so the withheld stop is confirmed only once a full stabilization
+// run of agreeing screens has landed — never on the first probe pass.
 func TestProbeCodexScreenPrompts_ConfirmsHeldStopInsteadOfSettling(t *testing.T) {
 	h, _ := newTerminalHoldProbeHandler(t, harness.Codex, codexCompletedTurnScreen)
 	releaseHoldAtTestEnd(t, h, 42)
 	base := time.Now()
 	armTerminalHold(t, h)
 
-	h.ProbeCodexScreenPrompts(base)
+	// Confirmation sits behind the same sample gate a synthetic settle does, so
+	// every pass but the last leaves the hold unconfirmed.
+	for sample := 1; sample < codexIdleProbeTerminalRun; sample++ {
+		h.ProbeCodexScreenPrompts(base.Add(time.Duration(sample-1) * time.Second))
+		if pending, ok := terminalHoldPending(t, h, 42); !ok || pending.confirmed {
+			t.Fatalf("hold after completed-turn screen %d = confirmed %v/%v, want still unconfirmed",
+				sample, pending.confirmed, ok)
+		}
+	}
+
+	h.ProbeCodexScreenPrompts(base.Add(time.Duration(codexIdleProbeTerminalRun-1) * time.Second))
 
 	pending, ok := terminalHoldPending(t, h, 42)
 	if !ok || !pending.confirmed || pending.confirmedBy != StopConfirmedByCodexScreen {
-		t.Fatalf("hold after one completed-turn screen = %+v/%v, want confirmed by %s", pending, ok, StopConfirmedByCodexScreen)
+		t.Fatalf("hold after a full run of %d completed-turn screens = %+v/%v, want confirmed by %s",
+			codexIdleProbeTerminalRun, pending, ok, StopConfirmedByCodexScreen)
 	}
 	assertNoProbeStopFact(t, h, 42)
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
@@ -125,7 +139,7 @@ func TestProbeCodexScreenPrompts_InterruptedTurnStopsStuckBolt(t *testing.T) {
 	h.SetKittyClient(fake)
 	codexSeedActiveBolt(t, h, 42, "sess-1", base.Unix())
 
-	h.ProbeCodexScreenPrompts(base)
+	probeCodexUntilSettled(t, h, base)
 
 	calls := fake.titleCalls()
 	if len(calls) != 1 {
@@ -157,7 +171,10 @@ func TestProbeCodexScreenPrompts_ActiveWorkingTurnKeepsBolt(t *testing.T) {
 	h.SetKittyClient(fake)
 	codexSeedActiveBolt(t, h, 42, "sess-1", base.Unix())
 
-	h.ProbeCodexScreenPrompts(base)
+	// A whole run rather than a single pass: a negative test has to tick past the
+	// longest stabilization run, or a held ⚡ proves only that the run had not
+	// finished accumulating yet.
+	probeCodexUntilSettled(t, h, base)
 
 	if got := len(fake.titleCalls()); got != 0 {
 		t.Fatalf("SetTabTitle calls = %d, want 0", got)
@@ -190,7 +207,7 @@ func TestProbeCodexScreenPrompts_CompletedTurnForcesCodexForForeground(t *testin
 	// path settles.
 	codexSeedActiveBolt(t, h, 42, "sess-1", base.Unix())
 
-	h.ProbeCodexScreenPrompts(base)
+	probeCodexUntilSettled(t, h, base)
 
 	calls := fake.titleCalls()
 	if len(calls) != 1 {
@@ -233,7 +250,7 @@ func TestProbeCodexScreenPrompts_ManagedOwnerSuppressesUnmanagedCodexSiblingStop
 	h.SetKittyClient(fake)
 	h.guard.TryUpdate(43, "active", false)
 
-	h.ProbeCodexScreenPrompts(time.Unix(1_700_000_000, 0))
+	probeCodexUntilSettled(t, h, time.Unix(1_700_000_000, 0))
 
 	if got := len(fake.titleCalls()); got != 0 {
 		t.Fatalf("SetTabTitle calls = %d, want 0", got)
@@ -271,7 +288,7 @@ func TestProbeCodexScreenPrompts_ManagedNonCodexOwnerSuppressesUnmanagedCodexSib
 	h.SetKittyClient(fake)
 	h.guard.TryUpdate(43, "active", false)
 
-	h.ProbeCodexScreenPrompts(time.Unix(1_700_000_000, 0))
+	probeCodexUntilSettled(t, h, time.Unix(1_700_000_000, 0))
 
 	if got := len(fake.titleCalls()); got != 0 {
 		t.Fatalf("SetTabTitle calls = %d, want 0", got)

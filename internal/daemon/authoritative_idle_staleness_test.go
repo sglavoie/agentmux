@@ -174,16 +174,11 @@ func TestAuthoritativeIdleAdapters_DiscardStaleMuteSnapshot(t *testing.T) {
 				entered := make(chan struct{})
 				release := make(chan struct{})
 				switch harnessName {
-				case "codex":
-					reads := 0
-					fake.beforeGetText = func(string, string) {
-						reads++
-						if reads == 2 { // prompt classification first, idle evidence second
-							close(entered)
-							<-release
-						}
-					}
-				case "claude":
+				case "codex", "claude":
+					// Both harnesses take exactly one screen capture per probe
+					// tick now: the per-tick cache hands the same frame to
+					// Codex's prompt classifier and its idle classifier, so
+					// pausing the first read pauses all of the probe's I/O.
 					fake.beforeGetText = func(string, string) {
 						close(entered)
 						<-release
@@ -204,9 +199,9 @@ func TestAuthoritativeIdleAdapters_DiscardStaleMuteSnapshot(t *testing.T) {
 					defer close(done)
 					switch harnessName {
 					case "codex":
-						h.probeCodexScreenPromptsWithSnapshot(base.Add(time.Second), snapshot)
+						h.probeCodexScreenPromptsWithSnapshot(base.Add(time.Second), snapshot, h.screenTextCacheFor())
 					case "claude":
-						h.probeClaudeScreenStopWithSnapshot(base.Add(time.Second), snapshot)
+						h.probeClaudeScreenStopWithSnapshot(base.Add(time.Second), snapshot, h.screenTextCacheFor())
 					case "copilot":
 						h.probeCopilotTranscriptStopWithSnapshot(base.Add(time.Second), snapshot)
 					}

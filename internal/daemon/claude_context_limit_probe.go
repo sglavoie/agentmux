@@ -52,15 +52,20 @@ func (h *Handler) ProbeClaudeContextLimit(now time.Time) {
 		slog.Debug("claude context-limit probe: list windows failed", "err", err)
 		return
 	}
-	h.probeClaudeContextLimitWithSnapshot(now, screenProbeSnapshot{windows: windows, reducerReceipts: reducerReceipts})
+	h.probeClaudeContextLimitWithSnapshot(now, screenProbeSnapshot{windows: windows, reducerReceipts: reducerReceipts},
+		h.screenTextCacheFor())
 	h.renderSnapshot(windows)
 }
 
 func (h *Handler) ProbeClaudeContextLimitWithSnapshot(now time.Time, windows []kitty.OSWindow) {
-	h.probeClaudeContextLimitWithSnapshot(now, h.screenProbeSnapshotForWindows(windows))
+	h.probeClaudeContextLimitWithSnapshot(now, h.screenProbeSnapshotForWindows(windows), h.screenTextCacheFor())
 }
 
-func (h *Handler) probeClaudeContextLimitWithSnapshot(now time.Time, snapshot screenProbeSnapshot) {
+func (h *Handler) probeClaudeContextLimitWithSnapshot(
+	now time.Time,
+	snapshot screenProbeSnapshot,
+	screens *screenTextCache,
+) {
 	if !h.claudeContextLimitProbeEnabled {
 		return
 	}
@@ -69,7 +74,7 @@ func (h *Handler) probeClaudeContextLimitWithSnapshot(now time.Time, snapshot sc
 		if !ok {
 			continue
 		}
-		h.probeClaudeContextLimitWindow(now, binding, palette.ParseTitleParts(tab.Title), target.UserVars)
+		h.probeClaudeContextLimitWindow(now, binding, palette.ParseTitleParts(tab.Title), target.UserVars, screens)
 	}
 }
 
@@ -87,6 +92,7 @@ func (h *Handler) probeClaudeContextLimitWindow(
 	binding screenProbeBinding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
+	screens *screenTextCache,
 ) {
 	targetWindowID := binding.TargetWindowID
 	h.stateMu.Lock()
@@ -123,7 +129,10 @@ func (h *Handler) probeClaudeContextLimitWindow(
 	}
 	h.stateMu.Unlock()
 
-	screen, err := h.kittyClient.GetText(kitty.MatchWindowByID(binding.SourceWindowID), "screen")
+	// This tick's shared capture: the idle stop probe classifies the very same
+	// frame, so the context-limit banner and the idle composer can never be read
+	// from two different repaints of one pane.
+	screen, err := screens.screen(binding.SourceWindowID)
 	if err != nil {
 		slog.Debug("claude context-limit probe: get-text failed", "source_window_id", binding.SourceWindowID,
 			"target_window_id", targetWindowID, "err", err)

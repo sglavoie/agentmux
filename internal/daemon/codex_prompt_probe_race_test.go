@@ -51,22 +51,29 @@ func TestProbeCodexScreenPrompts_ConcurrentPromptInvalidatesStopProbe(t *testing
 	}
 	codexSeedActiveBolt(t, h, 42, "sess-1", base.Unix())
 
-	// The idle probe reads the screen on its own GetText call (the prompt probe
-	// reads first). Seeding a fresh prompt on that second read models a concurrent
-	// UserPromptSubmit landing after the probe captured the receipt sequence.
+	// The prompt classifier and the idle classifier share each tick's single
+	// screen capture, so there is exactly one GetText per pass to hang the
+	// injection on. Seeding a fresh prompt during it models a concurrent
+	// UserPromptSubmit landing after the probe captured the receipt sequence and
+	// before the idle evidence is applied — the receipt has already moved by the
+	// time the idle path rechecks it.
+	//
+	// It fires on EVERY read, not just the first: the probe drives a whole
+	// stabilization run below, and a run of agreeing completed-turn screens would
+	// otherwise settle on its last pass, leaving the receipt guard untested.
 	var screenReads int
 	fake.beforeGetText = func(match, extent string) {
 		if match != kitty.MatchWindowByID(42) || extent != "screen" {
 			return
 		}
 		screenReads++
-		if screenReads == 2 {
-			codexSeedActiveBolt(t, h, 42, "sess-1", base.Unix()+1)
-		}
+		codexSeedActiveBolt(t, h, 42, "sess-1", base.Unix()+int64(screenReads))
 	}
 	h.SetKittyClient(fake)
 
-	h.ProbeCodexScreenPrompts(base)
+	// A whole run, so the receipt guard — not an unfinished sample count — is
+	// what holds the bolt.
+	probeCodexUntilSettled(t, h, base)
 
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 		t.Fatalf("effective = %+v, want the newer bolt preserved against a stale stop probe", eff)

@@ -1,0 +1,29 @@
+
+╭─── Claude Code v2.1.231 ─────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting started                                            │
+│               Welcome back Sébastien!              │ Run /init to create a CLAUDE.md file with instructions for Claude   │
+│                                                    │ ─────────────────────────────────────────────────────────────────── │
+│                       ▐▛███▜▌                      │ What's new                                                          │
+│                      ▝▜█████▛▘                     │ Added PowerShell tool for Windows as an opt-in preview. Learn more… │
+│                        ▘▘ ▝▝                       │ Added `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL_SUPPORTS` env v… │
+│ Opus 5 with xhigh effort · Claude Max · Sébastien  │ Added `CLAUDE_STREAM_IDLE_TIMEOUT_MS` env var to configure the str… │
+│ Lavoie                                             │ /release-notes for more                                             │
+│          /private/tmp/amx-fixture-capture          │                                                                     │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+  
+
+❯ /clear                                                                                                                    
+
+
+
+
+
+
+                          
+
+                                                                                                                   0 tokens
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯  
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  27.4 max 5h 23/47 2pm 7d 5/20 aug30|1am | team 5h 21/47 2pm 7d 50/78 aug26|12am $2
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents

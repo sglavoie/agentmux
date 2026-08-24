@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const version = "0.7.0"
+const version = "0.8.0"
 
 var debug bool
 var dashboardSourceWindowID int

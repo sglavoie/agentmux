@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/internal/screenstate"
 )
 
 func (h *Handler) probeCodexWindow(
@@ -13,6 +14,7 @@ func (h *Handler) probeCodexWindow(
 	binding screenProbeBinding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
+	screens *screenTextCache,
 ) {
 	targetWindowID := binding.TargetWindowID
 	// The receipt was captured before the ListWindows call that produced the
@@ -29,7 +31,7 @@ func (h *Handler) probeCodexWindow(
 		return
 	}
 
-	screen, err := h.kittyClient.GetText(kitty.MatchWindowByID(binding.SourceWindowID), "screen")
+	screen, err := screens.screen(binding.SourceWindowID)
 	if err != nil {
 		slog.Debug("codex prompt probe: get-text failed", "source_window_id", binding.SourceWindowID,
 			"target_window_id", targetWindowID, "err", err)
@@ -153,6 +155,7 @@ func (h *Handler) probeCodexClearWindow(
 	binding screenProbeBinding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
+	screens *screenTextCache,
 ) {
 	targetWindowID := binding.TargetWindowID
 	// Bind the stale-stop eligibility from the cached title to its reducer
@@ -168,13 +171,13 @@ func (h *Handler) probeCodexClearWindow(
 		return
 	}
 
-	screen, err := h.kittyClient.GetText(kitty.MatchWindowByID(binding.SourceWindowID), "screen")
+	screen, err := screens.screen(binding.SourceWindowID)
 	if err != nil {
 		slog.Debug("codex clear probe: get screen failed", "source_window_id", binding.SourceWindowID,
 			"target_window_id", targetWindowID, "err", err)
 		return
 	}
-	if !codexScreenLooksCleared(screen) {
+	if !screenstate.CodexScreenLooksCleared(screen) {
 		return
 	}
 
@@ -184,7 +187,7 @@ func (h *Handler) probeCodexClearWindow(
 			"target_window_id", targetWindowID, "err", err)
 		return
 	}
-	if !ClassifyCodexClearScreen(screen, allText) {
+	if !screenstate.ClassifyCodexClearScreen(screen, allText) {
 		return
 	}
 	h.applyCodexClearObservation(now, binding, titleParts, userVars)

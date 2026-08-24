@@ -77,13 +77,20 @@ func (h *Handler) runScreenProbes(ctx context.Context) {
 }
 
 func (h *Handler) runScreenProbesWithSnapshot(now time.Time, snapshot screenProbeSnapshot) {
-	h.probeCodexScreenPromptsWithSnapshot(now, snapshot)
+	// One `--extent=screen` capture per source pane for the whole tick. Beyond
+	// halving Kitty round-trips for a Claude pane (two probes) and a bolted
+	// Codex pane (prompt then idle), this is what makes the probes below
+	// classify the SAME frame — closing the race where the context-limit veto
+	// inside the idle classifier was evaluated against a different capture than
+	// the one that decided the banner.
+	screens := newScreenTextCache(h.kittyClient)
+	h.probeCodexScreenPromptsWithSnapshot(now, snapshot, screens)
 	// Context-limit probing runs before the idle stop probe so a
 	// context-limited Claude tab is settled to the error state first; the idle
 	// classifier additionally bails on the context-limit marker, so the two
 	// never fight over the same tab.
-	h.probeClaudeContextLimitWithSnapshot(now, snapshot)
-	h.probeClaudeScreenStopWithSnapshot(now, snapshot)
+	h.probeClaudeContextLimitWithSnapshot(now, snapshot, screens)
+	h.probeClaudeScreenStopWithSnapshot(now, snapshot, screens)
 	// The Copilot transcript stop probe reads no screen: it consults the
 	// interactive session transcript's latest state-bearing event to recover a
 	// stuck ⚡ whose native agentStop/sessionEnd hook was lost.

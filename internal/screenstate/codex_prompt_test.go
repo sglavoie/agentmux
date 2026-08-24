@@ -1,15 +1,14 @@
-package daemon
+package screenstate
 
 import "testing"
 
-func TestClassifyCodexPromptScreen(t *testing.T) {
+func TestClassifyCodexPrompt(t *testing.T) {
 	cases := []struct {
-		name       string
-		screen     string
-		wantKind   CodexPromptKind
-		wantAction string
-		wantIcon   string
-		wantOK     bool
+		name     string
+		screen   string
+		fixture  string
+		wantKind CodexPromptKind
+		wantOK   bool
 	}{
 		{
 			name: "edit approval",
@@ -24,27 +23,20 @@ func TestClassifyCodexPromptScreen(t *testing.T) {
 
 Press enter to confirm
 `,
-			wantKind:   CodexPromptEditApproval,
-			wantAction: "elicitation",
-			wantIcon:   "question",
-			wantOK:     true,
+			wantKind: CodexPromptEditApproval,
+			wantOK:   true,
 		},
 		{
-			name: "command approval",
-			screen: `
-▌ Would you like to run the following command?
-
-  go test ./...
-
-› 1. Yes, run it
-  2. No
-
-Press enter to confirm
-`,
-			wantKind:   CodexPromptCommandApproval,
-			wantAction: "permission",
-			wantIcon:   "key",
-			wantOK:     true,
+			// The only kind session 2 could capture live: a real codex-cli
+			// 0.149.1 command-approval prompt, verbatim. The other four keep
+			// their inline screens, which are themselves committed real
+			// captures — driving Codex into each of those states on demand
+			// costs more than prompt classification (unchanged by this plan)
+			// is worth.
+			name:     "command approval",
+			fixture:  "codex_prompt_command_approval.txt",
+			wantKind: CodexPromptCommandApproval,
+			wantOK:   true,
 		},
 		{
 			name: "request user input",
@@ -58,10 +50,8 @@ Pick the deployment target.
 
 enter to submit answer
 `,
-			wantKind:   CodexPromptRequestUserInput,
-			wantAction: "elicitation",
-			wantIcon:   "question",
-			wantOK:     true,
+			wantKind: CodexPromptRequestUserInput,
+			wantOK:   true,
 		},
 		{
 			name: "request user input current pane options",
@@ -78,10 +68,8 @@ Type your answer (optional)
 Add notes
 Proceed
 `,
-			wantKind:   CodexPromptRequestUserInput,
-			wantAction: "elicitation",
-			wantIcon:   "question",
-			wantOK:     true,
+			wantKind: CodexPromptRequestUserInput,
+			wantOK:   true,
 		},
 		{
 			name: "request user input current pane freeform",
@@ -93,10 +81,8 @@ Add notes
 
 ⏎ to submit answer
 `,
-			wantKind:   CodexPromptRequestUserInput,
-			wantAction: "elicitation",
-			wantIcon:   "question",
-			wantOK:     true,
+			wantKind: CodexPromptRequestUserInput,
+			wantOK:   true,
 		},
 		{
 			name: "request user input numbered plan questions",
@@ -110,10 +96,8 @@ Should the plan cover only the nine formal FR findings, or also remediate the fo
 
 tab to add notes | enter to submit answer | ←/→ to navigate questions | esc to interrupt
 `,
-			wantKind:   CodexPromptRequestUserInput,
-			wantAction: "elicitation",
-			wantIcon:   "question",
-			wantOK:     true,
+			wantKind: CodexPromptRequestUserInput,
+			wantOK:   true,
 		},
 		{
 			name: "unanswered confirmation",
@@ -125,10 +109,8 @@ Codex is waiting for your answer before it continues.
 › 1. Continue
   2. Cancel
 `,
-			wantKind:   CodexPromptUnansweredConfirmation,
-			wantAction: "elicitation",
-			wantIcon:   "question",
-			wantOK:     true,
+			wantKind: CodexPromptUnansweredConfirmation,
+			wantOK:   true,
 		},
 		{
 			name: "permission grant",
@@ -142,10 +124,8 @@ Grant permission for Codex to run commands in this workspace?
 
 Press enter to confirm
 `,
-			wantKind:   CodexPromptPermissionGrant,
-			wantAction: "permission",
-			wantIcon:   "key",
-			wantOK:     true,
+			wantKind: CodexPromptPermissionGrant,
+			wantOK:   true,
 		},
 		{
 			name: "non-prompt transcript",
@@ -181,27 +161,31 @@ Type your answer in the issue template.
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, ok := ClassifyCodexPromptScreen(tc.screen)
+			screen := tc.screen
+			if tc.fixture != "" {
+				screen = readScreenFixture(t, tc.fixture)
+			}
+			got, ok := ClassifyCodexPrompt(screen)
 			if ok != tc.wantOK {
-				t.Fatalf("ok = %v, want %v; got %+v", ok, tc.wantOK, got)
+				t.Fatalf("ok = %v, want %v; got %q", ok, tc.wantOK, got)
 			}
 			if !tc.wantOK {
 				return
 			}
-			if got.Kind != tc.wantKind || got.Action != tc.wantAction || got.IconState != tc.wantIcon {
-				t.Fatalf("ClassifyCodexPromptScreen() = %+v, want kind=%q action=%q icon=%q", got, tc.wantKind, tc.wantAction, tc.wantIcon)
+			if got != tc.wantKind {
+				t.Fatalf("ClassifyCodexPrompt() = %q, want %q", got, tc.wantKind)
 			}
 		})
 	}
 }
 
-func TestClassifyCodexPromptScreen_RequiresFooterOrChoiceEvidence(t *testing.T) {
+func TestClassifyCodexPrompt_RequiresFooterOrChoiceEvidence(t *testing.T) {
 	promptWithoutFooter := `
 ▌ Would you like to run the following command?
 
   git status --short
 `
-	if got, ok := ClassifyCodexPromptScreen(promptWithoutFooter); ok {
-		t.Fatalf("ClassifyCodexPromptScreen() = (%+v, true), want no classification", got)
+	if got, ok := ClassifyCodexPrompt(promptWithoutFooter); ok {
+		t.Fatalf("ClassifyCodexPrompt() = (%q, true), want no classification", got)
 	}
 }
