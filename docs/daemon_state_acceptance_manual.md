@@ -183,10 +183,25 @@ recovery) — pinned by `TestCodexCurrentScreenContract`
 (`internal/screenstate/codex_test.go`) and `TestProbeCodexCurrentCompletedScreenSettles`
 (`internal/daemon/codex_idle_samples_test.go`).
 
-One known gap remains and belongs to repair group `codex-background-task-veto`,
-not here: `internal/screenstate/testdata/codex_interrupted.txt` reports
-`1 background terminal running` and nothing vetoes that footer, so such a pane
-settles today. Drill 3 is otherwise runnable as written.
+That gap is now CLOSED. `codexBackgroundTerminalFooterRE` maps Codex's
+`<n> background terminal(s) running` footer to `VetoBackgroundTask`, computed
+unconditionally alongside the other vetoes and independent of whether the
+composer placeholder is recognized. A pane whose model turn ended while a
+detached terminal it started is still running reports `background_task` and
+holds ⚡ until the footer disappears; the count anchor is what keeps transcript
+prose such as `Stopping all background terminals.` from vetoing anything.
+`internal/screenstate/testdata/codex_interrupted.txt` (interrupted with
+`1 background terminal running`) is the pinned refusal and
+`codex_interrupted_no_background.txt` the pinned settle, in
+`TestCodexBackgroundTerminalVeto` (`internal/screenstate/codex_test.go`) and
+`TestProbeCodexBackgroundTerminalNeverSettles`
+(`internal/daemon/codex_idle_samples_test.go`), which drives the hold-then-settle
+transition through the whole probe.
+
+When running drill 3 against Codex, start a background terminal (`sleep 200` in
+a shell tool call, `/ps` to confirm) and check the pane holds ⚡ with
+`background_task` among the named vetoes; `/stop` it and the pane must settle 🛑
+two agreeing samples later.
 
 ## Session 4 regression drills
 

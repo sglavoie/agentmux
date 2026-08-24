@@ -82,6 +82,26 @@ var codexInterruptHintRE = regexp.MustCompile(`(?i)\bto (?:interrupt|cancel)\b`)
 var codexLiveElapsedStatusLineRE = regexp.MustCompile(
 	`^[^\p{L}\p{N}]*\p{L}[\p{L}\p{M}]*\s*\(\s*\d+[hms]\b`)
 
+// codexBackgroundTerminalFooterRE matches Codex's running-background-work
+// footer ("1 background terminal running · /ps to view · /stop to close"). Codex
+// renders it both appended to a live "Working (…)" status line and on its own
+// line under a finished or interrupted turn — the second shape is the one that
+// matters, because there the model's turn really is over while a detached
+// process it started is not.
+//
+// THE COUNT IS THE ANCHOR, and it must be non-zero. Codex's own transcript prose
+// says things like "• Stopping all background terminals." (a real line in
+// testdata/codex_idle_completed_t0.txt); requiring "<n> background <noun>
+// running" is what keeps narration from pinning a pane at ⚡ forever.
+//
+// The noun is matched loosely on purpose. This is a ONE-WAY veto, so a rename
+// from "terminal" to "task" costing a false 🛑 over live background work is the
+// expensive failure; matching a synonym Codex does not use today costs nothing.
+// "task" is not speculative — it is what Claude's own background manager calls
+// these (see claude.go's "ctrl+b to" veto).
+var codexBackgroundTerminalFooterRE = regexp.MustCompile(
+	`(?i)\b[1-9]\d*\s+background\s+(?:terminal|task)s?\s+running\b`)
+
 // codexInterruptedLineRE matches Codex's TUI-generated interrupted-turn marker
 // ("⏹ Interrupted", "• Interrupted by user", "⚠ Conversation interrupted …").
 // Like codexWorkedForLineRE it anchors the keyword to the start of the status
@@ -145,6 +165,15 @@ func (codexAdapter) Classify(screen string) Observation {
 	if codexInterruptHintRE.MatchString(screen) {
 		vetoes |= VetoInterruptHint
 	}
+	// Independent of every other signal on this screen, and deliberately so. A
+	// running background terminal is the one case where Codex's terminal markers
+	// are HONEST and settling is still wrong: the model's turn genuinely ended,
+	// so the marker, the absence of a live status line and the empty composer all
+	// agree, and nothing else here would refuse. The footer is the only evidence
+	// that work the pane started is still going.
+	if codexBackgroundTerminalFooterRE.MatchString(screen) {
+		vetoes |= VetoBackgroundTask
+	}
 	if _, ok := ClassifyCodexPrompt(screen); ok {
 		vetoes |= VetoBlockingPrompt
 	}
@@ -164,7 +193,11 @@ func (codexAdapter) Classify(screen string) Observation {
 		// carries a working hint; "blocked" is the more actionable reading and
 		// neither one settles.
 		observation.State = Blocked
-	case vetoes&(VetoLiveStatusLine|VetoInterruptHint) != 0:
+	case vetoes&(VetoLiveStatusLine|VetoInterruptHint|VetoBackgroundTask) != 0:
+		// Working, not Unknown, and the background footer is why the distinction
+		// is worth stating: a pane whose model turn ended but whose background
+		// terminal is still running reads to an operator as ⚡ rather than 🛑,
+		// which is exactly the truth. Same grading as Claude's twin veto.
 		observation.State = Working
 	case vetoes != 0:
 		// Only VetoComposerBusy remains: queued input, a screen scrolled past

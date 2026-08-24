@@ -353,3 +353,96 @@ func TestProbeCodexCurrentClearedScreenRecovers(t *testing.T) {
 		}
 	}
 }
+
+// TestProbeCodexBackgroundTerminalNeverSettles drives the background-terminal
+// veto through the whole probe rather than through the classifier alone.
+//
+// The screenstate unit test proves the Observation is refused; this proves the
+// refusal survives every layer between the adapter and the tab icon — the sample
+// gate, the authoritative-idle streak, the renderer — and, just as importantly,
+// that the refusal RELEASES. A veto that held forever would trade the false 🛑
+// this repair removes for a permanent ⚡, which is the failure mode the whole
+// probe exists to prevent.
+//
+// Both screens are byte-for-byte captures of the same live codex-cli 0.149.1
+// pane, interrupted the same way. They differ in whether a `sleep 200` the model
+// started is still running, so the transition below is the real one an operator
+// sees when a background terminal exits.
+func TestProbeCodexBackgroundTerminalNeverSettles(t *testing.T) {
+	base := time.Now()
+	running := readCodexCapture(t, "codex_interrupted.txt")
+	finished := readCodexCapture(t, "codex_interrupted_no_background.txt")
+
+	// The premise, stated rather than assumed: the ONLY thing keeping the first
+	// capture from settling must be the background veto. Both screens are
+	// interrupted turns with a recognized marker and an accepted composer, so if
+	// the first ever starts failing for some other reason this test would keep
+	// passing while testing nothing.
+	adapter, ok := screenstate.For(harness.Codex)
+	if !ok {
+		t.Fatal("screenstate has no Codex adapter")
+	}
+	if got := adapter.Classify(running); got.Vetoes != screenstate.VetoBackgroundTask {
+		t.Fatalf("running capture vetoes = %s, want background_task alone", got.Vetoes)
+	}
+	if got := adapter.Classify(finished); !got.SettleableTerminal() {
+		t.Fatalf("finished capture is not settleable (state %s, vetoes %s); "+
+			"the second half of this test could never pass", got.State, got.Vetoes)
+	}
+
+	fake := &fakeKittyClient{
+		windows: codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
+			Profile: "work",
+			Harness: harness.Codex,
+		}),
+		getText: map[string]string{kitty.MatchWindowByID(42): running},
+	}
+	h := newTestHandler()
+	h.SetKittyClient(fake)
+	codexSeedActiveBolt(t, h, 42, "sess-background", base.Unix())
+
+	// Well past the sample requirement, and on an unchanging screen, so the
+	// generation gate is satisfied every tick and the veto is the only thing
+	// left refusing.
+	const holdTicks = 6
+	if holdTicks <= codexIdleProbeTerminalRun {
+		t.Fatalf("holdTicks = %d, want more than the %d-sample run so the gate is not what refuses",
+			holdTicks, codexIdleProbeTerminalRun)
+	}
+	for tick := 0; tick < holdTicks; tick++ {
+		h.ProbeCodexScreenPrompts(base.Add(time.Duration(tick) * time.Second))
+		if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
+			t.Fatalf("effective after tick %d over a running background terminal = %+v, want bolt",
+				tick, eff)
+		}
+	}
+	assertNoProbeStopFact(t, h, 42)
+	if got := countEventsNamed(t, h, 42, screenStopProbeEvent); got != 0 {
+		t.Fatalf("ScreenStopProbe rows = %d, want 0 while the footer is on screen", got)
+	}
+
+	// The background terminal exits and Codex drops the footer. The pane settles
+	// on the ordinary agreeing-sample schedule — no extra penalty for having been
+	// vetoed.
+	fake.mu.Lock()
+	fake.getText[kitty.MatchWindowByID(42)] = finished
+	fake.mu.Unlock()
+
+	after := base.Add(time.Duration(holdTicks) * time.Second)
+	for sample := 1; sample < codexIdleProbeTerminalRun; sample++ {
+		h.ProbeCodexScreenPrompts(after.Add(time.Duration(sample-1) * time.Second))
+		if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
+			t.Fatalf("effective after post-footer frame %d = %+v, want the bolt still held", sample, eff)
+		}
+	}
+	h.ProbeCodexScreenPrompts(after.Add(time.Duration(codexIdleProbeTerminalRun-1) * time.Second))
+
+	eff, _ := windowEffective(t, h, 42)
+	if eff.Icon != "stop" {
+		t.Fatalf("effective after %d agreeing footer-free frames = %+v, want stop",
+			codexIdleProbeTerminalRun, eff)
+	}
+	if got := countEventsNamed(t, h, 42, screenStopProbeEvent); got != 1 {
+		t.Fatalf("ScreenStopProbe rows = %d, want 1", got)
+	}
+}

@@ -250,7 +250,15 @@ event name and source key:
   Codex 0.149.x draws between two horizontal rules — or the TUI interrupted
   marker, with an empty composer and no visible prompt. The bare `Completed`
   line is honoured **only** when framed by those rules; the word alone is
-  ordinary prose and is not evidence. It needs **two consecutive samples that agree
+  ordinary prose and is not evidence. Codex's vetoes are computed first and
+  unconditionally, exactly as Claude's are: a live status line, a generic
+  `<key> to interrupt/cancel` hint, a blocking prompt, a busy or unrecognized
+  composer, and a **running background terminal** — Codex's
+  `<n> background terminal(s) running` footer, which is the one case where the
+  terminal marker is honest and settling is still wrong, since a detached
+  process the pane started is still going. That veto does not depend on the
+  composer being recognized, and its non-zero count is what keeps transcript
+  prose about background terminals from vetoing anything. It needs **two consecutive samples that agree
   on the same normalized screen fingerprint** — a completed-turn read makes the
   classification unambiguous but cannot answer whether the pane is still
   repainting, which is a different question and the one the second sample
