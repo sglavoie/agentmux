@@ -299,6 +299,12 @@ type Response struct {
 	// bridge is configured, because discovery reads ASL's durable state
 	// directly and can be failing while the bridge looks perfectly healthy.
 	ASLReconcile *ASLReconcileSnapshot `json:"asl_reconcile,omitempty"`
+	// ASLHookDelivery reports the inbound direction: how many lifecycle hooks
+	// were believed and how many were quarantined, under stable daemon-authored
+	// reasons. It is published alongside ASLReconcile because a pairing can be
+	// refusing every event while both the bridge and the sweep look healthy —
+	// the hook path answers OK to a producer it has declined to believe.
+	ASLHookDelivery *ASLHookDeliverySnapshot `json:"asl_hook_delivery,omitempty"`
 	// ASL is populated for the ASL message types.
 	ASL *ASLResponse `json:"asl_result,omitempty"`
 	// Ready reports whether the daemon completed its bounded initial restore

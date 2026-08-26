@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/aslcontract"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -69,7 +70,45 @@ func (h *Handler) handleHookEvent(req Request) Response {
 			ctx.req.Event = eventOrAction
 			h.appendSuppressedHookEvent(ctx.req, "", suppressionReasonInvalidPayload)
 		}
+		// Counted only for lifecycle boundaries. An unreadable harness payload
+		// is a Claude/Copilot/Codex problem, and folding it into the ASL
+		// delivery counters would make the pairing look broken by something it
+		// has no part in.
+		if isAgentSessionLoopHookEvent(eventOrAction) {
+			h.recordASLHookQuarantined(time.Now(), DecisionReasonInvalidPayload)
+		}
 		slog.Warn("hook event payload unreadable; rejecting delivery", "event", eventOrAction, "err", err)
+		return Response{OK: true}
+	}
+
+	// The compatibility gate runs before anything reads the payload, because a
+	// lifecycle event that fails it is not an event this build can place: its
+	// phase, run identity, and mailbox generation are the reducer's durable
+	// inputs, and half-reading them is worse than dropping the message.
+	if refusal := aslHookContractRefusal(eventOrAction, payload); refusal != "" {
+		ctx := h.resolveHookEventContext(req)
+		ctx.req.Event = eventOrAction
+		ctx.req.parseOutcome = ParseOutcomeDecoded
+		ctx.req.normalizationOutcome = NormalizationOutcomeQuarantined
+		incompatible := quarantine(eventOrAction, refusal)
+		ctx.req.normalized = &incompatible
+		ctx.req.routeDecision = routeDecisionRejected
+		chooseRoute(ctx.req.routeEvidence, routeDecisionRejected, refusal, nil)
+		if ctx.req.WindowID > 0 {
+			h.appendSuppressedHookEvent(ctx.req, "", refusal)
+		}
+		h.recordASLHookQuarantined(time.Now(), refusal)
+		// The offered version and identity go to the daemon log only: a hook
+		// producer chooses both, and the published reason may not become whatever
+		// it wanted an operator to read.
+		slog.Warn("agent-session-loop hook is not compatible with this build; quarantining",
+			"event", eventOrAction,
+			"reason", refusal,
+			"offered_schema_version", payload.SchemaVersion,
+			"offered_contract_set_id", payload.ContractSetID,
+			"expected_schema_version", aslHookSchemaVersion,
+			"expected_contract_set_id", aslcontract.ContractSetID,
+		)
 		return Response{OK: true}
 	}
 
@@ -109,6 +148,16 @@ func (h *Handler) handleHookEvent(req Request) Response {
 		h.appendSuppressedHookEvent(ctx.req, "", suppressionReasonUnknownEvent)
 		slog.Debug("hook event unknown, ignoring", "window_id", ctx.req.WindowID, "event", eventOrAction)
 		return Response{OK: true}
+	}
+
+	// Everything above this point is a way for a lifecycle payload not to be
+	// believed: undecodable, contract-refused, windowless, ignored for the
+	// harness, or unresolvable to an action. Past it the daemon has committed to
+	// placing the event, so this is where acceptance is counted — one line, for
+	// all sixteen boundaries, rather than at each dispatch below where a new
+	// branch could silently stop counting.
+	if isAgentSessionLoopHookEvent(eventOrAction) {
+		h.recordASLHookAccepted(time.Now())
 	}
 
 	if eventOrAction == agentSessionLoopMailboxQuestion {

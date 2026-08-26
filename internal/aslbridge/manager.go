@@ -29,6 +29,24 @@ var (
 	// ErrInvalidRequest means the caller's request was rejected before any
 	// bridge round trip.
 	ErrInvalidRequest = errors.New("asl bridge request is invalid")
+	// ErrContractSetMismatch means the bridge was built from a different corpus
+	// than this daemon vendors. Its text is the published reason verbatim and is
+	// deliberately a fixed string: a compatibility reason reaches an operator's
+	// screen, so interpolating the identifier the peer sent would turn a
+	// diagnostic into whatever that peer wanted to display. The offered value is
+	// recorded in the private daemon log instead, where child-authored text is
+	// already expected.
+	ErrContractSetMismatch = errors.New(
+		"asl bridge does not implement contract set " + ContractSetID)
+)
+
+// Reasons published when a grant is withdrawn without the child being lost.
+// They are daemon-authored constants, so they are stable across peers and carry
+// nothing a bridge could have chosen.
+const (
+	reasonHandshakeIncomplete = "mutations are disabled until session.handshake completes"
+	reasonHandshakeStale      = "mutations are disabled until a fresh snapshot is handshaked"
+	reasonAmbiguousOperation  = "mutations are disabled after an operation with an unknown outcome"
 )
 
 const maxReceipts = 64
@@ -38,13 +56,19 @@ const maxReceipts = 64
 // a missing or broken bridge is an unavailable optional integration, never a
 // reason for the daemon itself to be unready.
 type Status struct {
-	Mode             string   `json:"mode"`
-	Command          string   `json:"command,omitempty"`
-	Executable       string   `json:"executable,omitempty"`
+	Mode       string `json:"mode"`
+	Command    string `json:"command,omitempty"`
+	Executable string `json:"executable,omitempty"`
+	// ExecutableSource names how Executable was found: "configured" (the
+	// command carried a path), "sibling" (found beside the amx binary), or
+	// "path" (found on the daemon's inherited PATH). Only "configured"
+	// survives a change to the daemon's environment.
+	ExecutableSource string   `json:"executable_source,omitempty"`
 	Available        bool     `json:"available"`
 	MutationsEnabled bool     `json:"mutations_enabled"`
 	Protocol         int      `json:"protocol,omitempty"`
 	Version          string   `json:"version,omitempty"`
+	ContractSetID    string   `json:"contract_set_id,omitempty"`
 	Capabilities     []string `json:"capabilities,omitempty"`
 	// SnapshotAgeSeconds is nil when no snapshot is held at all, which is a
 	// different condition from a snapshot that is zero seconds old.
@@ -85,16 +109,23 @@ type Manager struct {
 	conn              *conn
 	hello             Hello
 	executable        string
+	executableSource  string
 	connected         bool
 	handshakeGen      uint64
 	snapshot          *Snapshot
 	snapshotGen       uint64
 	snapshotAt        time.Time
 	snapshotHandshake uint64
-	disconnectedAt    time.Time
-	restarts          int
-	reason            string
-	receipts          []Operation
+	// mutationsGranted and grantedDigest record what session.handshake actually
+	// authorized. The grant is against one digest, not against the session, so a
+	// snapshot that moves withdraws it until the next handshake re-earns it.
+	mutationsGranted bool
+	grantedDigest    string
+	handshakeID      string
+	disconnectedAt   time.Time
+	restarts         int
+	reason           string
+	receipts         []Operation
 
 	refresh   chan struct{}
 	cancel    context.CancelFunc
@@ -169,6 +200,7 @@ func (m *Manager) Close() {
 func (m *Manager) supervise(ctx context.Context) {
 	defer close(m.done)
 	attempt := 0
+	missingProbes := 0
 	for {
 		if ctx.Err() != nil {
 			return
@@ -179,10 +211,37 @@ func (m *Manager) supervise(ctx context.Context) {
 			return
 		}
 		m.setDisconnected(sanitizeReason(err))
-		// A missing executable is a configuration fact, not a crash: retrying it
-		// on a schedule would spin forever on every machine without ASL.
+		// A missing executable is a configuration fact, not a crash, so it never
+		// enters the crash backoff. In auto mode it is re-probed on its own slow
+		// schedule, because "ASL is not installed" is a condition that an
+		// install ends without anyone thinking to restart the daemon. In
+		// required mode it stays terminal: an operator who declared the
+		// integration mandatory is owed one clear, stable failure that
+		// `amx doctor --strict` reports and a retry loop cannot bury.
 		if errors.Is(err, exec.ErrNotFound) {
-			m.log.Info("daemon: asl bridge is not installed; integration stays unavailable", "command", m.command)
+			if m.mode != ModeAuto {
+				m.log.Info("daemon: asl bridge is not installed; integration stays unavailable", "command", m.command)
+				return
+			}
+			delay := missingProbeBackoffFor(missingProbes)
+			missingProbes++
+			m.log.Info("daemon: asl bridge is not installed; will re-probe",
+				"command", m.command, "delay", delay)
+			if !m.wait(ctx, delay) {
+				return
+			}
+			continue
+		}
+		missingProbes = 0
+		// A contract-set mismatch is a pairing fact, not a crash. Restarting a
+		// peer built from a different corpus produces the same refusal every
+		// time, so retrying it on a schedule would spin forever and bury the one
+		// message that says what to fix. The integration stays unavailable with
+		// that reason published until the operator pairs the two sides and
+		// restarts the daemon.
+		if errors.Is(err, ErrContractSetMismatch) {
+			m.log.Warn("daemon: asl bridge speaks a different contract set; integration stays unavailable",
+				"expected", ContractSetID, "command", m.command)
 			return
 		}
 		if connectedFor >= HealthyResetInterval {
@@ -251,18 +310,33 @@ func (m *Manager) runSession(ctx context.Context) (time.Duration, error) {
 		teardown()
 		return 0, fmt.Errorf("asl bridge: hello announced protocol %d, want %d", hello.Protocol, ProtocolVersion)
 	}
-	if !hasCapability(hello.Capabilities, MethodRunsSnapshot) {
+	// The identity check runs before anything is read from the child, because
+	// "before snapshots or mutations become available" is the whole point of
+	// naming the set in the server-first frame. The comparison is exact: the ID
+	// is a digest over ASL's corpus, so a near miss describes a different wire
+	// just as completely as a foreign prefix does.
+	if hello.ContractSetID != ContractSetID {
 		teardown()
-		return 0, errors.New("asl bridge: hello did not advertise runs.snapshot")
+		m.log.Warn("daemon: asl bridge advertised a foreign contract set",
+			"offered", hello.ContractSetID, "expected", ContractSetID)
+		return 0, ErrContractSetMismatch
+	}
+	for _, required := range []string{MethodSessionHandshake, MethodRunsSnapshot} {
+		if !hasCapability(hello.Capabilities, required) {
+			teardown()
+			return 0, fmt.Errorf("asl bridge: hello did not advertise %s", required)
+		}
 	}
 
 	connectedAt := m.now()
-	m.setConnected(child.Path, hello, c)
+	m.setConnected(child.Path, child.Source, hello, c)
 	m.log.Info("daemon: asl bridge connected",
-		"executable", child.Path, "asl_version", hello.ASLVersion, "capabilities", len(hello.Capabilities))
+		"executable", child.Path, "asl_version", hello.ASLVersion,
+		"contract_set_id", hello.ContractSetID, "capabilities", len(hello.Capabilities))
 
-	// The first snapshot is what re-enables actions: a fresh handshake alone
-	// proves the child is alive, not that the daemon can see current state.
+	// The first snapshot is what re-enables actions: a live connection alone
+	// proves the child is alive, not that the daemon can see current state, and
+	// the handshake that follows it is what authorizes acting on what it saw.
 	m.refreshSnapshot(ctx, c)
 
 	refreshDone := make(chan struct{})
@@ -292,20 +366,32 @@ func (m *Manager) refreshLoop(ctx context.Context, c *conn) {
 		case <-m.refresh:
 			m.refreshSnapshot(ctx, c)
 		case <-retry.C:
-			if !m.hasFreshSnapshot() {
+			if !m.mutationsEnabled() {
 				m.refreshSnapshot(ctx, c)
 			}
 		}
 	}
 }
 
-// hasFreshSnapshot reports whether the daemon holds a snapshot taken under the
-// current handshake. A connected child with none is the one state the refresh
-// loop cannot wait out, because no corpus change is owed to it.
-func (m *Manager) hasFreshSnapshot() bool {
+// mutationsEnabled reports whether the daemon currently holds a snapshot taken
+// under this connection and a handshake grant against that exact snapshot. A
+// connected child without both is the one state the refresh loop cannot wait
+// out, because no corpus change is owed to it: a first snapshot that never
+// arrived and a grant a moved digest withdrew are both re-earned by asking.
+func (m *Manager) mutationsEnabled() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.snapshot != nil && m.snapshotHandshake == m.handshakeGen
+	return m.mutationsEnabledLocked()
+}
+
+// failSession ends one session with a cause the manager decided. It withdraws
+// the grant before condemning the connection, because Status is read
+// continuously and supervision only clears the grant once teardown completes:
+// for the whole of that gap the capability block would otherwise keep promising
+// mutations over a connection the daemon has already given up on.
+func (m *Manager) failSession(c *conn, err error) {
+	m.revokeMutations(sanitizeReason(err))
+	c.fail(err)
 }
 
 func (m *Manager) refreshSnapshot(ctx context.Context, c *conn) {
@@ -319,11 +405,75 @@ func (m *Manager) refreshSnapshot(ctx context.Context, c *conn) {
 	var snapshot Snapshot
 	if err := json.Unmarshal(raw, &snapshot); err != nil {
 		// A response body the daemon cannot decode is the same class of
-		// failure as contamination: the child is not speaking protocol 1.
-		c.closeWith(contaminationError("snapshot result"))
+		// failure as contamination: the child is not speaking protocol 2.
+		m.failSession(c, contaminationError("snapshot result"))
+		return
+	}
+	// The snapshot restates the set it was built under, so a bridge that changed
+	// corpora without restarting cannot slip one past the hello check.
+	if snapshot.ContractSetID != ContractSetID {
+		m.log.Warn("daemon: asl snapshot named a foreign contract set",
+			"offered", snapshot.ContractSetID, "expected", ContractSetID)
+		m.failSession(c, ErrContractSetMismatch)
 		return
 	}
 	m.storeSnapshot(snapshot)
+	m.handshake(ctx, c, snapshot.Digest)
+}
+
+// handshake re-authorizes mutations against the digest just stored. It runs
+// after every refresh rather than once per session because the grant is against
+// one projection: the bridge accepts it only while it still holds that digest,
+// which is what stops an operator acting on a row that moved between the
+// projection and the click.
+func (m *Manager) handshake(ctx context.Context, c *conn, digest string) {
+	callCtx, cancel := context.WithTimeout(ctx, HandshakeTimeout)
+	raw, err := c.call(callCtx, MethodSessionHandshake, map[string]any{
+		"contract_set_id": ContractSetID,
+		"snapshot_digest": digest,
+	})
+	cancel()
+	if err != nil {
+		var refusal *Error
+		if errors.As(err, &refusal) && refusal.Code == CodeContractSetMismatch {
+			m.log.Warn("daemon: asl bridge refused the handshake as incompatible",
+				"expected", ContractSetID)
+			m.failSession(c, ErrContractSetMismatch)
+			return
+		}
+		m.log.Debug("daemon: asl handshake failed", "reason", sanitizeReason(err))
+		m.revokeMutations(reasonHandshakeIncomplete)
+		return
+	}
+	var result Handshake
+	if err := json.Unmarshal(raw, &result); err != nil {
+		m.failSession(c, contaminationError("session.handshake result"))
+		return
+	}
+	if result.ContractSetID != ContractSetID {
+		m.log.Warn("daemon: asl handshake echoed a foreign contract set",
+			"offered", result.ContractSetID, "expected", ContractSetID)
+		m.failSession(c, ErrContractSetMismatch)
+		return
+	}
+	if !result.MutationsEnabled || result.SnapshotDigest != digest {
+		// The corpus moved between the snapshot and the handshake. Reads keep
+		// working against what the daemon holds; acting on it does not, until a
+		// refresh catches up to the digest the bridge just named.
+		m.revokeMutations(reasonHandshakeStale)
+		m.requestRefresh()
+		return
+	}
+	m.grantMutations(digest, result.HandshakeID)
+}
+
+// requestRefresh asks the refresh loop for a new snapshot without blocking. A
+// full channel already means a refresh is pending, so dropping is correct.
+func (m *Manager) requestRefresh() {
+	select {
+	case m.refresh <- struct{}{}:
+	default:
+	}
 }
 
 // handleEvent runs on the reader goroutine and must never block: it records
@@ -331,10 +481,7 @@ func (m *Manager) refreshSnapshot(ctx context.Context, c *conn) {
 func (m *Manager) handleEvent(e event) {
 	switch e.Name {
 	case EventRunsChanged:
-		select {
-		case m.refresh <- struct{}{}:
-		default:
-		}
+		m.requestRefresh()
 	case EventOperationUpdated:
 		var op Operation
 		if err := json.Unmarshal(e.Data, &op); err != nil {

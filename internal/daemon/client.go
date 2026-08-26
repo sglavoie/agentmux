@@ -209,6 +209,13 @@ type Health struct {
 	// ASL is the optional agent-session-loop capability block. Nil means the
 	// daemon publishes no ASL integration at all.
 	ASL *aslbridge.Status
+	// ASLReconcile and ASLHookDelivery are the two directions of the pairing
+	// that survive a missing bridge: what the daemon can read from ASL's state
+	// root, and what ASL managed to push through the hook path. Both are nil
+	// against a daemon that predates them, which is why doctor reports their
+	// absence as an unknown rather than as a zero.
+	ASLReconcile    *ASLReconcileSnapshot
+	ASLHookDelivery *ASLHookDeliverySnapshot
 }
 
 // Health pings the daemon and returns its liveness, PID and uptime. Never
@@ -232,6 +239,9 @@ func (c *Client) healthBefore(deadline time.Time) Health {
 		Metrics:        resp.Metrics,
 		Notification:   resp.Notification,
 		ASL:            resp.ASLCapability,
+
+		ASLReconcile:    resp.ASLReconcile,
+		ASLHookDelivery: resp.ASLHookDelivery,
 	}
 }
 

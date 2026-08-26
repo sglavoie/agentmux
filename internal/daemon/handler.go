@@ -186,6 +186,11 @@ type Handler struct {
 	// by stateMu.
 	aslStateRootValue string
 	aslMetrics        aslReconcileMetrics
+	// aslDelivery counts lifecycle-hook ingestion outcomes. It is the inbound
+	// counterpart to aslMetrics: reconciliation says what the daemon can read
+	// from the state root, delivery says what ASL managed to push. Guarded by
+	// stateMu.
+	aslDelivery aslHookDeliveryMetrics
 	// aslProjectionCache lets the repeating sweep skip re-parsing state
 	// documents that have not changed since the last one. It is internally
 	// synchronized and is deliberately not guarded by stateMu, because
@@ -419,6 +424,11 @@ func (h *Handler) handleHealth() Response {
 	}
 	reconcile := h.ASLReconcileMetrics()
 	resp.ASLReconcile = &reconcile
+	// Published unconditionally, like reconciliation and unlike the capability
+	// block: the counters describe what arrived on the hook path, which has no
+	// bridge and exists whether or not one was ever configured.
+	delivery := h.ASLHookDeliveryMetrics()
+	resp.ASLHookDelivery = &delivery
 	return resp
 }
 

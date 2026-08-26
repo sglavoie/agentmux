@@ -10,9 +10,10 @@ import (
 )
 
 // BridgeArgs are the fixed arguments the daemon starts the bridge with. The
-// protocol number is pinned rather than negotiated so a newer ASL that speaks a
-// later protocol still serves this daemon protocol 1.
-var BridgeArgs = []string{"bridge", "serve", "--stdio", "--protocol", "1"}
+// protocol number is pinned rather than negotiated: a bridge that no longer
+// serves it exits before writing a byte of protocol, which is a clearer failure
+// than a session that starts and then cannot agree on anything.
+var BridgeArgs = []string{"bridge", "serve", "--stdio", "--protocol", "2"}
 
 // Child is one running bridge subprocess, described by the pipes and lifecycle
 // hooks the manager needs. Tests substitute a Launcher that returns in-process
@@ -20,7 +21,12 @@ var BridgeArgs = []string{"bridge", "serve", "--stdio", "--protocol", "1"}
 type Child struct {
 	// Path is the resolved executable, reported in status so an operator can
 	// see which ASL the daemon actually started.
-	Path   string
+	Path string
+	// Source names how Path was found (see the Source* constants). It is
+	// reported alongside Path because "found on the daemon's PATH" and
+	// "configured absolutely" are the same executable today and a different
+	// one after the next reboot, and only the second survives.
+	Source string
 	Stdin  io.WriteCloser
 	Stdout io.Reader
 	Stderr io.Reader
@@ -34,15 +40,20 @@ type Child struct {
 type Launcher func(ctx context.Context) (*Child, error)
 
 // execLauncher builds the production launcher for a command that is either a
-// PATH name or an executable path. Shell syntax never reaches this point:
+// bare name or an executable path. Shell syntax never reaches this point:
 // config validation rejects it, and the argv here is fixed, so the command is
 // executed directly rather than interpreted.
+//
+// Resolution runs on every launch rather than once at construction, so an `asl`
+// installed after the daemon started is found by the next restart attempt
+// instead of requiring the daemon to be restarted too.
 func execLauncher(command string) Launcher {
 	return func(ctx context.Context) (*Child, error) {
-		resolved, err := exec.LookPath(command)
+		resolution, err := ResolveCommand(command)
 		if err != nil {
-			return nil, fmt.Errorf("asl bridge: %w", err)
+			return nil, err
 		}
+		resolved := resolution.Executable
 		cmd := exec.Command(resolved, BridgeArgs...)
 		stdin, err := cmd.StdinPipe()
 		if err != nil {
@@ -61,6 +72,7 @@ func execLauncher(command string) Launcher {
 		}
 		return &Child{
 			Path:      resolved,
+			Source:    resolution.Source,
 			Stdin:     stdin,
 			Stdout:    stdout,
 			Stderr:    stderr,

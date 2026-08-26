@@ -70,7 +70,7 @@ amx tui-test run docs/tui-testing/scenarios/*.json
 
 ## agent-session-loop rollout
 
-The daemon speaks bridge protocol 1 to one `agent-session-loop` subprocess.
+The daemon speaks bridge protocol 2 to one `agent-session-loop` subprocess.
 **Release and install ASL first, then Agent Mux.** The bridge is the older,
 more widely installed half; upgrading it first means the new Agent Mux finds a
 bridge it can talk to on the first start. The reverse order is safe but inert:
@@ -85,6 +85,78 @@ unavailable integration to surface as a `amx doctor` finding, and
 The capability block is additive on the wire. An older `amx` ignores the `asl`
 key in a newer daemon's health response, and a newer `amx` against an older
 daemon prints `asl: unreported (older daemon)` instead of failing.
+
+### Pairing the two halves
+
+```bash
+amx config asl-sync --check   # full preflight, writes nothing
+amx config asl-sync           # pair, restart, and verify
+```
+
+Both halves usually install into `~/.local/bin`, both work from any terminal,
+and the daemon still reports `executable file not found in $PATH` — because it
+was never started from a terminal. It is spawned detached and inherits the
+login session's environment, not yours. `asl-sync` ends that class of failure by
+resolving the executable once and persisting the absolute path, after which no
+part of the running system depends on anyone's `PATH`.
+
+A bare `command` is resolved beside the `amx` binary first and only then on the
+daemon's own `PATH`, so a paired install is found without any environment at
+all. In auto mode a command that disappears — an upgrade in flight — is
+re-probed on a bounded backoff up to five minutes rather than treated as
+terminal; in required mode it is a strict-doctor failure, but never a reason for
+the core daemon to be unready.
+
+Pairing writes `command`, `state_root`, and `enabled = true` into
+`[defaults.asl]` as a surgical text edit: comments, key order, and blank lines
+survive, and re-running it produces byte-identical output. It writes
+`enabled = true` deliberately — an operator who ran the pairing command asked
+for the integration, and required mode is what makes an unavailable one visible
+to `amx doctor --strict`. Use `enabled = false` afterwards to turn it off.
+
+Everything that can be wrong is checked before anything is written: the
+executable, the contract set, the bridge protocol, the state root, live runs,
+migration readiness, and daemon reachability. `--check` stops exactly there.
+Past that point the sequence is migrate, replace the config atomically, restart,
+and verify against the running daemon — that it is ready, that its bridge is
+live and handshaked, and that it paired with the executable that was just
+persisted. Any failure restores the previous file and restarts the daemon onto
+it, so pairing ends with either a verified live bridge or the configuration you
+started with.
+
+**An active run is never migrated or stopped.** If any live run still carries
+state this build cannot pair with, the command refuses whole-root and names each
+one by pid, run ID, and plan directory. Migrating the corpus around a live run
+would leave the one process that is actually writing on the old schema. Let
+those runs finish, or stop them yourself, then re-run.
+
+### Diagnosing the integration
+
+`amx doctor` reports six pairing dimensions separately, because a single
+"unavailable" line was true for six unrelated conditions with six different
+fixes. Every non-ok answer carries the exact command that addresses it.
+
+| Dimension | What it answers |
+| --- | --- |
+| `shell_resolution` | Would the configured command resolve without an environment? A bare name warns even when your shell resolves it — the daemon does not have your shell. |
+| `daemon_resolution` | What the running daemon actually found. An executable found on an inherited `PATH` warns: it works today, and by accident. |
+| `contract` | Whether the bridge and the state root both name this build's contract set. A mismatch fails in every mode; it is terminal by construction. |
+| `projection` | What the reconciliation sweep could not read. Always a warning — one corrupt plan does not break the pairing. |
+| `freshness` | Whether the bridge snapshot or the sweep has gone stale. A stale bridge still serves reads, so nothing else looks wrong. |
+| `delivery` | Lifecycle hooks accepted versus quarantined. The hook path answers OK to every producer including the ones it refuses, so this is the only place a silently-refusing pairing shows up. |
+
+Reading them together is the point: `shell_resolution` ok plus
+`daemon_resolution` failed *is* the diagnosis, and neither line says it alone.
+Severity follows the mode — required fails, auto warns — except contract
+mismatch, which always fails, and projection errors, which always warn. Disabled
+mode and a machine with no ASL configured or installed report every dimension
+`not_applicable` and raise nothing.
+
+The report is `doctor --json` schema v2. `asl_unavailable` and `asl_read_only`
+keep their exact names and meanings; the six dimension findings
+(`asl_shell_resolution`, `asl_daemon_resolution`, `asl_contract_mismatch`,
+`asl_projection_errors`, `asl_bridge_stale`, `asl_hook_delivery`) are new, which
+is what the schema bump is for.
 
 ### Run presence is a paired cutover
 
@@ -277,9 +349,16 @@ These are known gaps, not bugs. Nothing in the cockpit is waiting on them:
   action outcomes, and a sanitized reason. `mode disabled` means
   `[defaults.asl] enabled = false`. A mode line with no executable means the
   configured `command` is not on the daemon's `PATH` — the daemon's environment,
-  not your shell's. A nonzero restart count with a reason means the bridge is
-  crashing; ASL's own stderr is captured in the daemon log, and the daemon
-  retries on a capped backoff without further action.
+  not your shell's; `amx config asl-sync` resolves it once and persists an
+  absolute path, which is the durable fix. A nonzero restart count with a reason
+  means the bridge is crashing; ASL's own stderr is captured in the daemon log,
+  and the daemon retries on a capped backoff without further action.
+- **Everything looks connected but nothing from a run shows up**: read the
+  `delivery` dimension in `amx doctor`. Lifecycle hooks are acknowledged whether
+  or not the daemon believed them, so a pairing quarantining every event is
+  indistinguishable from an idle one anywhere else. A nonzero quarantine count
+  with `contract_set_mismatch` or `schema_unsupported` means the two halves were
+  built from different corpora; `amx config asl-sync --check` compares them.
 - **The `A` view is stuck read-only / `[stale]`**: the bridge process is alive
   but its last snapshot aged out, so reads continue and every action refuses
   rather than sending a mutation with an unpredictable outcome. This clears

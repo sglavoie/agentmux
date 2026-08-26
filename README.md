@@ -32,7 +32,10 @@ The binary is **`amx`**.
 - `agent-session-loop` (optional) for the `A` cockpit view. Without it, Agent
   Mux behaves exactly as it did before the integration existed. Install or
   upgrade it *before* upgrading Agent Mux; a bridge that is missing or speaks
-  an older protocol is reported as unavailable, never driven.
+  an older protocol is reported as unavailable, never driven. Run
+  `amx config asl-sync` once after installing both halves: the daemon is spawned
+  detached and does not inherit your shell's `PATH`, so pairing resolves the
+  executable and persists an absolute path.
 
 Your `kitty.conf` must include:
 

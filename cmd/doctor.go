@@ -18,7 +18,15 @@ import (
 const doctorSuppressionWindow = 15 * time.Minute
 
 // doctorReportSchemaVersion versions the `amx doctor --json` payload.
-const doctorReportSchemaVersion = 1
+//
+// v2 adds `daemon.asl_reconcile`, `daemon.asl_hook_delivery`, and the
+// `asl_integration` block, and with it six new stable finding identifiers.
+// The bump is not for the added fields — those are additive — but for the
+// findings: a strict-mode consumer that treats every failure identifier it does
+// not recognize as fatal would start failing on conditions a v1 daemon never
+// reported. The two identifiers that predate it, `asl_unavailable` and
+// `asl_read_only`, keep their exact names and meanings.
+const doctorReportSchemaVersion = 2
 
 // exitHealthFailure is the strict-mode exit status when any failure-severity
 // finding is present (shared with `amx daemon audit`).
@@ -48,6 +56,10 @@ type doctorReport struct {
 	Daemon        doctorDaemonStatus `json:"daemon"`
 	CLIBuild      buildinfo.Info     `json:"cli_build"`
 	Findings      []doctorFinding    `json:"findings"`
+	// ASLIntegration answers the six pairing dimensions separately. It is
+	// always present, because "there is no integration configured" is one of
+	// the answers rather than a reason to omit the block.
+	ASLIntegration doctorASLIntegration `json:"asl_integration"`
 	// Healthy is true when no failure-severity finding is present; warnings
 	// and informational findings do not affect it.
 	Healthy bool `json:"healthy"`
@@ -63,6 +75,11 @@ type doctorDaemonStatus struct {
 	Metrics        *daemon.MetricsSnapshot        `json:"metrics,omitempty"`
 	Notification   *daemon.NotificationCapability `json:"notification,omitempty"`
 	ASL            *aslbridge.Status              `json:"asl,omitempty"`
+	// ASLReconcile and ASLHookDelivery are the two directions of the pairing
+	// that exist without a bridge. Both are omitted by a daemon that predates
+	// them, which the integration block reports as unknown rather than zero.
+	ASLReconcile    *daemon.ASLReconcileSnapshot    `json:"asl_reconcile,omitempty"`
+	ASLHookDelivery *daemon.ASLHookDeliverySnapshot `json:"asl_hook_delivery,omitempty"`
 }
 
 var doctorCmd = &cobra.Command{
@@ -119,6 +136,9 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		Metrics:        health.Metrics,
 		Notification:   health.Notification,
 		ASL:            health.ASL,
+
+		ASLReconcile:    health.ASLReconcile,
+		ASLHookDelivery: health.ASLHookDelivery,
 	}
 	if health.Alive {
 		if _, err := fmt.Fprintf(textOut, "daemon: running (pid %d, uptime %s)\n", health.PID, health.Uptime.Round(time.Second)); err != nil {
@@ -140,6 +160,13 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		if err := writeDoctorASLCapability(textOut, health.ASL, addFinding); err != nil {
 			return err
 		}
+	}
+	// The integration section runs whether or not the daemon answered: with the
+	// daemon down, shell resolution is still answerable and is often the thing
+	// the operator needs to see.
+	report.ASLIntegration = evaluateASLIntegration(gatherASLIntegrationInputs(health))
+	if err := writeDoctorASLIntegration(textOut, report.ASLIntegration, addFinding); err != nil {
+		return err
 	}
 
 	if err := writeDoctorSocketStatus(textOut, reportIssue("socket")); err != nil {

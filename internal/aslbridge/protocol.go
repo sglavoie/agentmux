@@ -1,8 +1,8 @@
-// Package aslbridge speaks protocol 1 of `asl bridge serve --stdio` from the
+// Package aslbridge speaks protocol 2 of `asl bridge serve --stdio` from the
 // Agent Mux daemon.
 //
 // The daemon owns exactly one bridge subprocess and is the only Go component
-// that speaks this protocol. Four properties are structural here, mirroring the
+// that speaks this protocol. Five properties are structural here, mirroring the
 // guarantees the Python side makes:
 //
 //   - Stdout is protocol-only. A frame that is not a well-formed protocol
@@ -13,6 +13,17 @@
 //     survives for a bounded window and is then removed.
 //   - The bridge is optional. Nothing in this package can delay or fail core
 //     daemon startup.
+//   - Compatibility is identity, not negotiation. The hello names one
+//     contract-set ID; a bridge naming any other one is refused outright, and
+//     there is no protocol-1 parser left to fall back to.
+//
+// The last property is why nothing here inspects a version number to decide how
+// much of a frame it understands. The daemon vendors ASL's corpus at
+// internal/aslcontract, compares the advertised ID against it exactly, and
+// takes no snapshot and permits no mutation until session.handshake has matched
+// that ID against a snapshot digest the bridge still holds. A partial match has
+// no meaning: the ID is a digest over the whole corpus, so it either describes
+// the wire this build implements or it does not.
 package aslbridge
 
 import (
@@ -20,13 +31,19 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/aslcontract"
 )
+
+// ContractSetID is the one contract set this daemon implements, vendored from
+// ASL rather than restated. Every comparison against it is exact.
+const ContractSetID = aslcontract.ContractSetID
 
 const (
 	// ProtocolVersion is the only bridge protocol this daemon speaks. The child
-	// is started with --protocol 1 and a hello announcing anything else is a
+	// is started with --protocol 2 and a hello announcing anything else is a
 	// child failure rather than the start of a negotiation.
-	ProtocolVersion = 1
+	ProtocolVersion = 2
 
 	// MaxFrameBytes mirrors the ceiling the bridge advertises. A frame ceiling
 	// only helps if both ends agree on it before parsing, so it is a constant
@@ -91,8 +108,36 @@ var restartBackoff = []time.Duration{
 	30 * time.Second,
 }
 
+// missingProbeBackoff is the schedule for re-probing an executable that was not
+// found, in auto mode only.
+//
+// A missing `asl` used to be terminal in every mode, which is right for the
+// condition it was named after — a machine that simply has no ASL — and wrong
+// for the one that actually happens: a paired install where ASL is upgraded, or
+// installed for the first time, while the daemon is already running. That
+// daemon then reports the integration unavailable until someone restarts it,
+// with a reason that describes a state which is no longer true.
+//
+// The schedule is short at first so an install completed seconds ago is picked
+// up promptly, and ends at a five-minute ceiling that repeats forever. Five
+// minutes is chosen to be far cheaper than the condition it is polling for: a
+// resolution attempt is a stat of one directory plus at most a PATH walk, so
+// even a machine that never installs ASL pays a negligible, bounded cost rather
+// than the unbounded spin the original terminal behaviour existed to prevent.
+var missingProbeBackoff = []time.Duration{
+	5 * time.Second,
+	15 * time.Second,
+	60 * time.Second,
+	MissingProbeCeiling,
+}
+
+// MissingProbeCeiling is the interval auto mode settles on when re-probing a
+// bridge executable that is still not installed.
+const MissingProbeCeiling = 5 * time.Minute
+
 // Protocol method names.
 const (
+	MethodSessionHandshake    = "session.handshake"
 	MethodRunsSnapshot        = "runs.snapshot"
 	MethodQuestionGet         = "question.get"
 	MethodQuestionReply       = "question.reply"
@@ -103,11 +148,25 @@ const (
 	MethodWorkbenchEnsure     = "workbench.ensure"
 )
 
-// Protocol event names.
+// Protocol event names. Protocol 2 publishes these separately from the method
+// list, so "can I call this?" and "will I be sent this?" are different
+// questions with different answers.
 const (
 	EventRunsChanged      = "runs.changed"
 	EventOperationUpdated = "operation.updated"
 )
+
+// MutationMethods is the subset of the methods that changes ASL state. The
+// bridge refuses every one of them until a handshake has matched, and the
+// daemon refuses to issue one until it holds that grant, so the gate is closed
+// from both ends rather than trusted to one.
+var MutationMethods = []string{
+	MethodQuestionReply,
+	MethodQuestionResolve,
+	MethodRunResume,
+	MethodRunStopAfterCurrent,
+	MethodRunAbort,
+}
 
 // Operation statuses. Accepted means durable in ASL's own records; every other
 // value is settled by ASL observing its own corpus.
@@ -143,6 +202,14 @@ const (
 	CodeEmptyText            = "empty-text"
 	CodeQuestionBodyTooLarge = "question-body-too-large"
 	CodeMissingQuestionBody  = "missing-question-body"
+	// CodeContractSetMismatch is never retryable: the offered set is not the one
+	// the peer implements, and no amount of reissuing changes which corpus each
+	// side was built from.
+	CodeContractSetMismatch = "contract-set-mismatch"
+	// CodeStaleSnapshot is retryable in the narrow sense that refreshing the
+	// snapshot and handshaking again is the fix. It never authorizes resending
+	// the refused mutation against the old digest.
+	CodeStaleSnapshot = "stale-snapshot"
 )
 
 // ErrorCodes is the declared order of the shared vocabulary. Every surface that
@@ -170,6 +237,8 @@ var ErrorCodes = []string{
 	CodeEmptyText,
 	CodeQuestionBodyTooLarge,
 	CodeMissingQuestionBody,
+	CodeContractSetMismatch,
+	CodeStaleSnapshot,
 }
 
 // Workbench deep-link focus keys.
@@ -239,13 +308,35 @@ func (e *Error) Error() string {
 	return e.Code + ": " + e.Message
 }
 
-// Hello is the server-first frame every session begins with.
+// Hello is the server-first frame every session begins with. It carries the
+// identity both ends must already share rather than an offer to negotiate one:
+// ContractSetID names the corpus the bridge was built from, and the protocol
+// and ASL versions describe the process serving it. There is no per-component
+// version list because the set behind the ID pins each component's schema
+// version, so one identifier is the whole answer.
 type Hello struct {
 	Protocol            int      `json:"protocol"`
 	ASLVersion          string   `json:"asl_version"`
+	ContractSetID       string   `json:"contract_set_id"`
 	Capabilities        []string `json:"capabilities"`
+	Events              []string `json:"events"`
+	MutationMethods     []string `json:"mutation_methods"`
+	HandshakeRequired   bool     `json:"handshake_required"`
 	MaxFrameBytes       int      `json:"max_frame_bytes"`
 	PollIntervalSeconds float64  `json:"poll_interval_seconds"`
+}
+
+// Handshake is session.handshake's result. MutationsEnabled is the bridge's
+// answer, not the daemon's request: it is true only when the offered contract
+// set matched exactly and the offered digest is one the bridge still holds, so
+// an operator can never act on a row that moved between the projection and the
+// click. SnapshotDigest always names the digest that is current on the bridge,
+// which is what a refused handshake refreshes towards.
+type Handshake struct {
+	ContractSetID    string `json:"contract_set_id"`
+	HandshakeID      string `json:"handshake_id"`
+	MutationsEnabled bool   `json:"mutations_enabled"`
+	SnapshotDigest   string `json:"snapshot_digest"`
 }
 
 // Window is the projected Kitty binding of one run.
@@ -317,8 +408,13 @@ type Projection struct {
 }
 
 // Snapshot is the deterministic projection of every active or actionable plan.
+// ContractSetID is inside the digested material rather than beside it, so a
+// snapshot cannot be quoted back under a different contract set than the one it
+// was built under.
 type Snapshot struct {
-	Protocol   int         `json:"protocol"`
+	Protocol      int    `json:"protocol"`
+	ContractSetID string `json:"contract_set_id"`
+
 	Rows       []Row       `json:"rows"`
 	RowCount   int         `json:"row_count"`
 	Warnings   []string    `json:"warnings"`
@@ -413,7 +509,11 @@ type frame struct {
 	Event               string          `json:"event"`
 	Data                json.RawMessage `json:"data"`
 	ASLVersion          string          `json:"asl_version"`
+	ContractSetID       string          `json:"contract_set_id"`
 	Capabilities        []string        `json:"capabilities"`
+	Events              []string        `json:"events"`
+	MutationMethods     []string        `json:"mutation_methods"`
+	HandshakeRequired   bool            `json:"handshake_required"`
 	MaxFrameBytes       int             `json:"max_frame_bytes"`
 	PollIntervalSeconds float64         `json:"poll_interval_seconds"`
 }
@@ -446,6 +546,18 @@ func backoffFor(attempt int) time.Duration {
 		return restartBackoff[len(restartBackoff)-1]
 	}
 	return restartBackoff[attempt]
+}
+
+// missingProbeBackoffFor returns the auto-mode delay before re-probe n
+// (zero-based) for an executable that was not found, saturating at the ceiling.
+func missingProbeBackoffFor(probes int) time.Duration {
+	if probes < 0 {
+		probes = 0
+	}
+	if probes >= len(missingProbeBackoff) {
+		return missingProbeBackoff[len(missingProbeBackoff)-1]
+	}
+	return missingProbeBackoff[probes]
 }
 
 func contaminationError(kind string) error {

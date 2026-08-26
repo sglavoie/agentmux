@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/sglavoie/agentmux/internal/atomicfile"
 )
 
 // WithExclusive obtains a blocking advisory lock at <path>.lock for the
@@ -43,46 +45,12 @@ func WithExclusive(path string, fn func() error) (retErr error) {
 // The unique temporary name avoids collisions with stale files from crashed
 // older writers. Syncing both the file and its parent directory makes the
 // replacement durable across a power loss on filesystems that support it.
-func WriteFileAtomic(path string, data []byte, perm os.FileMode) (retErr error) {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*.tmp")
-	if err != nil {
-		return err
-	}
-	tmpPath := tmp.Name()
-	defer func() {
-		if retErr != nil {
-			_ = os.Remove(tmpPath)
-		}
-	}()
-	if err := tmp.Chmod(perm); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		return err
-	}
-	dirFile, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	syncErr := dirFile.Sync()
-	closeErr := dirFile.Close()
-	return errors.Join(syncErr, closeErr)
+//
+// The mechanism now lives in internal/atomicfile, which authoritative source
+// artifacts use too. This remains the cache-facing name so callers keep reading
+// as cache code.
+func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
+	return atomicfile.Write(path, data, perm)
 }
 
 // Quarantine renames a corrupt metadata file beside its original using a

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -32,8 +33,12 @@ func resetDoctorTestState(t *testing.T) {
 	oldDiagnosticPaths := doctorDiagnosticPaths
 	oldJSON := doctorJSON
 	oldStrict := doctorStrict
+	oldLookPath := aslDoctorLookPath
+	oldASLStat := aslDoctorStat
 	oldOut := doctorCmd.OutOrStdout()
 	t.Cleanup(func() {
+		aslDoctorLookPath = oldLookPath
+		aslDoctorStat = oldASLStat
 		newDoctorDaemonClient = oldClient
 		newDoctorKitty = oldKitty
 		doctorLoadConfig = oldConfig
@@ -49,6 +54,11 @@ func resetDoctorTestState(t *testing.T) {
 	})
 	doctorJSON = false
 	doctorStrict = false
+	// The ASL integration section reads the environment doctor was started in.
+	// Pinned here so a machine that happens to have `asl` installed and one
+	// that does not produce the same report.
+	aslDoctorLookPath = func(string) (string, error) { return "", exec.ErrNotFound }
+	aslDoctorStat = func(string) error { return os.ErrNotExist }
 	diagnosticRoot := filepath.Join(t.TempDir(), "diagnostics")
 	doctorDiagnosticPaths = func() (diagnostics.Paths, error) {
 		return diagnostics.PathsForRoot(diagnosticRoot), nil
