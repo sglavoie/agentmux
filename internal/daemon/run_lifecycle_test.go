@@ -11,16 +11,66 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 )
 
-func waitForTestSocket(t *testing.T, socketPath string) {
+// testLivenessGrace bounds how long a lifecycle test waits for a signal the
+// daemon owns. It is a "this is wedged" detector, not a latency assertion:
+// startup, shutdown, and join signals are all published by the daemon itself,
+// so a healthy run reaches them immediately regardless of machine load and only
+// a genuine hang consumes the grace. Latency budgets live in
+// performance_test.go, where they are measured deliberately.
+const testLivenessGrace = 30 * time.Second
+
+// startPublishedDaemon runs the daemon and returns once it has completed its
+// own startup publication — the health round-trip that proves the socket is
+// bound, serving, and answered by this process. Waiting on that barrier instead
+// of polling for the socket file removes the window in which the socket exists
+// but the daemon is not yet answering, which is exactly the window contention
+// widens.
+//
+// The returned channel carries run's result, so shutdown assertions join an
+// owned completion signal rather than settling on a wall clock.
+func startPublishedDaemon(
+	t *testing.T,
+	ctx context.Context,
+	cfg *config.Config,
+	deps runDependencies,
+) chan error {
 	t.Helper()
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(socketPath); err == nil {
-			return
+
+	published := make(chan struct{})
+	inner := deps.afterStartupPublication
+	deps.afterStartupPublication = func() {
+		if inner != nil {
+			inner()
 		}
-		time.Sleep(10 * time.Millisecond)
+		close(published)
 	}
-	t.Fatalf("socket not created: %v", os.ErrNotExist)
+
+	runErr := make(chan error, 1)
+	go func() { runErr <- run(ctx, cfg, deps) }()
+
+	select {
+	case <-published:
+	case err := <-runErr:
+		t.Fatalf("Run returned before startup publication: %v", err)
+	case <-time.After(testLivenessGrace):
+		t.Fatal("Run did not complete startup publication")
+	}
+	return runErr
+}
+
+// waitForRunReturn joins the daemon's run goroutine. Returning from run means
+// every loop it owns has been joined, so callers may assert on post-shutdown
+// state without any settling delay.
+func waitForRunReturn(t *testing.T, runErr <-chan error) {
+	t.Helper()
+	select {
+	case err := <-runErr:
+		if err != nil {
+			t.Fatalf("Run returned error: %v", err)
+		}
+	case <-time.After(testLivenessGrace):
+		t.Fatal("Run did not return after shutdown")
+	}
 }
 
 // TestRun_RemovesSocketOnShutdown verifies daemon.Run's defer chain: when a
@@ -47,26 +97,12 @@ func TestRun_RemovesSocketOnShutdown(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Defaults.GuardDuration = 1
 
-	runErr := make(chan error, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	published := make(chan struct{})
-
-	go func() {
-		runErr <- run(ctx, cfg, runDependencies{
-			afterStartupPublication: func() { close(published) },
-		})
-	}()
 
 	// Socket creation precedes Serve and the startup health confirmation. Wait
 	// for the completed publication boundary before exercising shutdown.
-	select {
-	case <-published:
-	case err := <-runErr:
-		t.Fatalf("Run returned before startup publication: %v", err)
-	case <-time.After(3 * time.Second):
-		t.Fatal("Run did not complete startup publication")
-	}
+	runErr := startPublishedDaemon(t, ctx, cfg, runDependencies{})
 	if _, err := os.Stat(socketPath); err != nil {
 		t.Fatalf("published socket missing: %v", err)
 	}
@@ -81,14 +117,7 @@ func TestRun_RemovesSocketOnShutdown(t *testing.T) {
 		t.Fatalf("shutdown response: %+v", resp)
 	}
 
-	select {
-	case err := <-runErr:
-		if err != nil {
-			t.Fatalf("Run returned error: %v", err)
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("Run did not return after shutdown")
-	}
+	waitForRunReturn(t, runErr)
 
 	if _, err := os.Stat(socketPath); !os.IsNotExist(err) {
 		t.Fatalf("socket file should have been removed; stat err = %v", err)
@@ -123,7 +152,7 @@ func TestRun_ShutdownAcceptedDuringStartupReturnsCleanly(t *testing.T) {
 	case <-startupConfirmationPaused:
 	case err := <-runErr:
 		t.Fatalf("Run returned before startup confirmation: %v", err)
-	case <-time.After(3 * time.Second):
+	case <-time.After(testLivenessGrace):
 		t.Fatal("Run did not reach startup confirmation")
 	}
 
@@ -135,14 +164,7 @@ func TestRun_ShutdownAcceptedDuringStartupReturnsCleanly(t *testing.T) {
 		t.Fatalf("shutdown response during startup: %+v", resp)
 	}
 
-	select {
-	case err := <-runErr:
-		if err != nil {
-			t.Fatalf("Run returned error after accepting startup shutdown: %v", err)
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("Run did not return after accepting startup shutdown")
-	}
+	waitForRunReturn(t, runErr)
 	if _, err := os.Stat(SocketPath()); !os.IsNotExist(err) {
 		t.Fatalf("socket file should have been removed; stat err = %v", err)
 	}
@@ -158,21 +180,7 @@ func TestRun_TemporaryHomeCreatesNoDatabase(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	published := make(chan struct{})
-	runErr := make(chan error, 1)
-	go func() {
-		runErr <- run(ctx, &config.Config{}, runDependencies{
-			afterStartupPublication: func() { close(published) },
-		})
-	}()
-
-	select {
-	case <-published:
-	case err := <-runErr:
-		t.Fatalf("Run returned before startup publication: %v", err)
-	case <-time.After(3 * time.Second):
-		t.Fatal("Run did not complete startup publication")
-	}
+	runErr := startPublishedDaemon(t, ctx, &config.Config{}, runDependencies{})
 
 	dataDir := filepath.Join(home, ".local", "share", "agent-mux")
 	for _, name := range []string{
@@ -190,21 +198,13 @@ func TestRun_TemporaryHomeCreatesNoDatabase(t *testing.T) {
 		}
 	}
 
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), testLivenessGrace)
 	defer shutdownCancel()
 	if err := NewClientWithSocket(SocketPath()).ShutdownAndWait(shutdownCtx); err != nil {
 		cancel()
 		t.Fatalf("ShutdownAndWait: %v", err)
 	}
-	select {
-	case err := <-runErr:
-		if err != nil {
-			t.Fatalf("Run returned error: %v", err)
-		}
-	case <-time.After(3 * time.Second):
-		cancel()
-		t.Fatal("Run did not return after shutdown")
-	}
+	waitForRunReturn(t, runErr)
 }
 
 func TestRun_DuplicateStartExitsWithoutTouchingLiveSocket(t *testing.T) {
@@ -224,12 +224,13 @@ func TestRun_DuplicateStartExitsWithoutTouchingLiveSocket(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Defaults.GuardDuration = 1
 
-	runErr := make(chan error, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	go func() { runErr <- Run(ctx, cfg) }()
+	// The duplicate start must contend with a daemon that is already answering,
+	// not merely one whose socket file exists: the publication barrier is what
+	// makes "live" mean live.
+	runErr := startPublishedDaemon(t, ctx, cfg, runDependencies{})
 
-	waitForTestSocket(t, socketPath)
 	before, err := os.Stat(socketPath)
 	if err != nil {
 		t.Fatalf("stat live socket before duplicate start: %v", err)
@@ -262,17 +263,16 @@ func TestRun_DuplicateStartExitsWithoutTouchingLiveSocket(t *testing.T) {
 		t.Fatalf("shutdown response: %+v", resp)
 	}
 
-	select {
-	case err := <-runErr:
-		if err != nil {
-			t.Fatalf("original Run returned error: %v", err)
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("original Run did not return after shutdown")
-	}
+	waitForRunReturn(t, runErr)
 }
 
-func TestRun_BindsSocketWithHugeMalformedTranscriptIndex(t *testing.T) {
+// seedHugeMalformedTranscriptIndex points HOME at a fresh directory holding a
+// megabyte-scale malformed transcripts.json, and empties PATH so the unrelated
+// bounded Kitty snapshot fails immediately instead of spending its 400 ms
+// production budget. Startup behaviour then depends on transcript I/O alone.
+func seedHugeMalformedTranscriptIndex(t *testing.T) (home string, indexPath string) {
+	t.Helper()
+
 	dir, err := os.MkdirTemp("/tmp", "amx-run-huge-index-*")
 	if err != nil {
 		t.Fatalf("MkdirTemp: %v", err)
@@ -280,52 +280,39 @@ func TestRun_BindsSocketWithHugeMalformedTranscriptIndex(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 
 	t.Setenv("HOME", dir)
-	// This regression measures whether a huge malformed transcript index delays
-	// startup. Keep the unrelated bounded Kitty snapshot from consuming its
-	// 400 ms production budget: an empty tool path makes the initial snapshot
-	// fail immediately and leaves the 500 ms assertion focused on transcript I/O.
 	t.Setenv("PATH", t.TempDir())
 
-	socketPath := SocketPath()
-	indexPath := filepath.Join(dir, ".local", "share", "agent-mux", "transcripts.json")
+	indexPath = filepath.Join(dir, ".local", "share", "agent-mux", "transcripts.json")
 	if err := os.MkdirAll(filepath.Dir(indexPath), 0o755); err != nil {
 		t.Fatalf("MkdirAll(index dir): %v", err)
 	}
 	if err := os.WriteFile(indexPath, []byte(strings.Repeat("{malformed", 1024*1024)), 0o644); err != nil {
 		t.Fatalf("WriteFile(huge malformed index): %v", err)
 	}
+	return dir, indexPath
+}
+
+// TestRun_BindsSocketWithHugeMalformedTranscriptIndex pins the correctness half
+// of the huge-index regression: a corrupt megabyte-scale transcript cache must
+// not stop the daemon from reaching startup publication at all. How *fast* it
+// publishes is a latency question, and lives in
+// TestPerformance_StartupPublicationBudgetWithHugeMalformedIndex.
+func TestRun_BindsSocketWithHugeMalformedTranscriptIndex(t *testing.T) {
+	_, indexPath := seedHugeMalformedTranscriptIndex(t)
+	socketPath := SocketPath()
 
 	cfg := &config.Config{}
 	cfg.Defaults.GuardDuration = 1
 
 	ctx, cancel := context.WithCancel(context.Background())
-	runErr := make(chan error, 1)
-	published := make(chan struct{})
-	go func() {
-		runErr <- run(ctx, cfg, runDependencies{
-			afterStartupPublication: func() { close(published) },
-		})
-	}()
+	runErr := startPublishedDaemon(t, ctx, cfg, runDependencies{})
 
-	select {
-	case <-published:
-		if _, err := os.Stat(socketPath); err != nil {
-			cancel()
-			t.Fatalf("published daemon socket: %v", err)
-		}
+	if _, err := os.Stat(socketPath); err != nil {
 		cancel()
-		select {
-		case err := <-runErr:
-			if err != nil {
-				t.Fatalf("Run returned error: %v", err)
-			}
-		case <-time.After(3 * time.Second):
-			t.Fatal("Run did not return after cancel")
-		}
-	case <-time.After(500 * time.Millisecond):
-		cancel()
-		t.Fatalf("daemon not published promptly with huge malformed transcripts.json at %s", indexPath)
+		t.Fatalf("published daemon socket with malformed index at %s: %v", indexPath, err)
 	}
+	cancel()
+	waitForRunReturn(t, runErr)
 }
 
 func TestRun_StaleSocketIsNotRemovedWhenLockHeld(t *testing.T) {
@@ -387,26 +374,11 @@ func TestRun_RemovesSocketOnCtxCancel(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Defaults.GuardDuration = 1
 
-	runErr := make(chan error, 1)
 	ctx, cancel := context.WithCancel(context.Background())
-
-	go func() { runErr <- Run(ctx, cfg) }()
-
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(socketPath); err == nil {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	runErr := startPublishedDaemon(t, ctx, cfg, runDependencies{})
 
 	cancel()
-
-	select {
-	case <-runErr:
-	case <-time.After(3 * time.Second):
-		t.Fatal("Run did not return after ctx cancellation")
-	}
+	waitForRunReturn(t, runErr)
 
 	if _, err := os.Stat(socketPath); !os.IsNotExist(err) {
 		t.Fatalf("socket file should have been removed after ctx cancel; stat err = %v", err)

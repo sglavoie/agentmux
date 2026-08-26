@@ -38,6 +38,72 @@ tui-scenarios:
 asl-integration:
     AMX_ASL_INTEGRATION=1 go test -count=1 -run TestInstalledBridge ./internal/aslbridge
 
+# Daemon lifecycle scenarios whose determinism this repository stresses:
+# startup publication, owned-loop shutdown drain, and the concurrent handler
+# state paths. Extend this pattern as new fault scenarios land.
+stress_scenarios := "TestRun_|TestServer_|TestHandler_Concurrent"
+
+# Reliability stress gate. Repeats the daemon lifecycle scenarios in isolation,
+# then again as concurrent shards while the full suite loads the machine, then
+# measures the latency budgets on a quiet machine.
+#
+# The correctness scenarios synchronize on signals the daemon publishes, so
+# contention must not change their outcome; the latency budgets are measured
+# separately and deliberately, because contention legitimately changes those.
+reliability-stress reps="20" shards="4":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    log_dir="$(mktemp -d)"
+    trap 'rm -rf "$log_dir"' EXIT
+
+    echo "== isolated repetitions (x{{ reps }}) =="
+    go test -count={{ reps }} -run '{{ stress_scenarios }}' ./internal/daemon
+
+    echo "== isolated repetitions under -race (x{{ reps }}) =="
+    go test -race -count={{ reps }} -run '{{ stress_scenarios }}' ./internal/daemon
+
+    # The full suite runs here to saturate the machine, and this gate judges only
+    # the daemon scenarios racing against it. `just test` is the suite's own gate
+    # and runs it unloaded. Its outcome is still reported rather than swallowed: a
+    # regression that only the loaded run reveals should be visible here even
+    # though it does not fail this recipe.
+    echo "== {{ shards }} concurrent shards (x{{ reps }}) under full-suite load =="
+    go test -count=1 ./... > "$log_dir/suite.log" 2>&1 &
+    suite_pid=$!
+    shard_pids=()
+    for shard in $(seq 1 {{ shards }}); do
+        go test -count={{ reps }} -run '{{ stress_scenarios }}' ./internal/daemon \
+            > "$log_dir/shard-$shard.log" 2>&1 &
+        shard_pids+=("$!")
+    done
+    failed=0
+    for pid in "${shard_pids[@]}"; do
+        wait "$pid" || failed=1
+    done
+    suite_status=0
+    wait "$suite_pid" || suite_status=$?
+    if [ "$failed" -ne 0 ]; then
+        for log in "$log_dir"/*.log; do
+            echo "--- $log"
+            cat "$log"
+        done
+        exit 1
+    fi
+    if [ "$suite_status" -ne 0 ]; then
+        echo "-- background load suite exited $suite_status (reported, not gated):"
+        tail -n 40 "$log_dir/suite.log"
+        echo "-- gate on it with: just test"
+    fi
+
+    # Budgets last and alone: everything above has finished, so the machine is
+    # quiet and a measured overrun means the daemon got slower, not that the
+    # stress run was still competing with itself.
+    echo "== latency budgets (quiet machine) =="
+    AMX_PERF_TESTS=1 go test -count=1 -run 'TestPerformance_' ./internal/daemon
+
+    echo "reliability-stress: ok"
+
 # Product acceptance without the optional linter dependency.
 acceptance: test race-core vet tui-scenarios
 

@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
 )
@@ -86,11 +86,63 @@ func TestHandler_ConcurrentStateUpdatesDifferentWindows(t *testing.T) {
 	}
 }
 
+// daemonOwnedGoroutines lists the goroutine entry points run owns for the
+// lifetime of a daemon: its five loops, the serve goroutine and the connection
+// handlers it spawns, and the diagnostic journal maintenance loop. Naming them
+// is what makes the drain assertion diagnostic — a failure says which loop
+// outlived Run instead of reporting an arithmetic drift in a global count.
+var daemonOwnedGoroutines = []string{
+	"daemon.(*Handler).runMaintenance",
+	"daemon.(*Handler).runWatchdog",
+	"daemon.(*Handler).runHarnessProcessLifecycle",
+	"daemon.(*Handler).runRenderWorker",
+	"daemon.(*Handler).runScreenProbes",
+	"daemon.(*Server).Serve",
+	"daemon.(*Server).handleConn",
+	"daemon.(*lifecycleRecorder).runJournalMaintenance",
+}
+
+// assertNoDaemonGoroutines fails with the offending stacks if any goroutine
+// owned by run is still alive. It is called only after run has returned, which
+// — because run joins every loop it starts before returning — makes the check
+// a statement about ownership rather than a race against the scheduler.
+func assertNoDaemonGoroutines(t *testing.T) {
+	t.Helper()
+
+	buf := make([]byte, 1<<16)
+	for {
+		n := runtime.Stack(buf, true)
+		if n < len(buf) {
+			buf = buf[:n]
+			break
+		}
+		buf = make([]byte, 2*len(buf))
+	}
+
+	var leaked []string
+	for _, stack := range strings.Split(string(buf), "\n\n") {
+		for _, owned := range daemonOwnedGoroutines {
+			if strings.Contains(stack, owned) {
+				leaked = append(leaked, stack)
+				break
+			}
+		}
+	}
+	if len(leaked) > 0 {
+		t.Fatalf("daemon-owned goroutines outlived Run:\n\n%s", strings.Join(leaked, "\n\n"))
+	}
+}
+
 // TestServer_GoroutinesDrainAfterShutdownRequest verifies that a daemon brought
-// up via Run and shut down via TypeShutdown leaves no lingering goroutines.
-// The combined property under test: handler goroutine, server watchdog,
-// notifier timer/dispatch goroutines all exit cleanly when ctx is cancelled
-// after the shutdown handler runs.
+// up via Run and shut down via TypeShutdown leaves no lingering goroutines. The
+// combined property under test: the five handler loops, the serve goroutine and
+// its connection handlers, and the journal maintenance loop all exit before Run
+// returns.
+//
+// Both boundaries are signals the daemon owns. Startup waits on the publication
+// barrier rather than on the socket file appearing, and the drain assertion runs
+// the instant Run returns — Run joins its loop group, so there is nothing left
+// to settle for and no wall-clock window for contention to widen.
 func TestServer_GoroutinesDrainAfterShutdownRequest(t *testing.T) {
 	dir, err := os.MkdirTemp("/tmp", "amx-drain-*")
 	if err != nil {
@@ -105,46 +157,25 @@ func TestServer_GoroutinesDrainAfterShutdownRequest(t *testing.T) {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 
-	baseline := runtime.NumGoroutine()
-
 	cfg := &config.Config{}
 	cfg.Defaults.GuardDuration = 1
 
-	runErr := make(chan error, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-
-	go func() { runErr <- Run(ctx, cfg) }()
-
-	// Wait for socket.
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(socketPath); err == nil {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	runErr := startPublishedDaemon(t, ctx, cfg, runDependencies{})
 
 	c := NewClientWithSocket(socketPath)
 	for i := 0; i < 5; i++ {
-		_, _ = c.Send(Request{Type: TypeStateUpdate, WindowID: i + 1, Action: "active"})
-	}
-	_, _ = c.Send(Request{Type: TypeShutdown})
-
-	select {
-	case <-runErr:
-	case <-time.After(3 * time.Second):
-		t.Fatal("Run did not return after shutdown")
-	}
-
-	// Give any straggler goroutines a moment to fully wind down.
-	deadline = time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		runtime.GC()
-		if runtime.NumGoroutine() <= baseline+2 {
-			return
+		if _, err := c.Send(Request{Type: TypeStateUpdate, WindowID: i + 1, Action: "active"}); err != nil {
+			t.Fatalf("state update %d: %v", i+1, err)
 		}
-		time.Sleep(20 * time.Millisecond)
 	}
-	t.Fatalf("goroutine count did not return to baseline: baseline=%d, final=%d", baseline, runtime.NumGoroutine())
+	if resp, err := c.Send(Request{Type: TypeShutdown}); err != nil {
+		t.Fatalf("shutdown Send: %v", err)
+	} else if !resp.OK {
+		t.Fatalf("shutdown response: %+v", resp)
+	}
+
+	waitForRunReturn(t, runErr)
+	assertNoDaemonGoroutines(t)
 }

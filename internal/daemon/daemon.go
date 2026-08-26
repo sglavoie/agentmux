@@ -197,18 +197,30 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	// writer), and the screen probes. A slow Kitty write, process-table query, or
 	// wedged screen read stalls only its own loop — never snapshot publication,
 	// watchdog expiry, or event ingestion.
-	go handler.runMaintenance(ctx)
-	go handler.runWatchdog(ctx)
-	go handler.runHarnessProcessLifecycle(ctx)
-	renderWorkerDone := make(chan struct{})
-	go func() {
-		handler.runRenderWorker(ctx)
+	//
+	// Every loop is owned: run tracks all of them in one wait group and joins
+	// that group before returning. A returned Run therefore means the daemon's
+	// own goroutines have exited, not merely that cancellation was signalled —
+	// which is what lets shutdown tests assert on a join instead of settling on
+	// a wall clock.
+	var loops sync.WaitGroup
+	startLoop := func(loop func(context.Context)) {
+		loops.Add(1)
+		go func() {
+			defer loops.Done()
+			loop(ctx)
+		}()
+	}
+	startLoop(handler.runMaintenance)
+	startLoop(handler.runWatchdog)
+	startLoop(handler.runHarnessProcessLifecycle)
+	startLoop(func(loopCtx context.Context) {
+		handler.runRenderWorker(loopCtx)
 		if deps.afterRenderWorkerShutdown != nil {
 			deps.afterRenderWorkerShutdown()
 		}
-		close(renderWorkerDone)
-	}()
-	go handler.runScreenProbes(ctx)
+	})
+	startLoop(handler.runScreenProbes)
 	// The ASL bridge is started only here, after the socket is published and
 	// the core loops are running, so a missing, slow, or wedged ASL can never
 	// delay Agent Mux startup or affect readiness.
@@ -221,25 +233,51 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	defer aslManager.Close()
 	slog.Info("daemon: ready", "socket", socketPath)
 	recorder.record("daemon.ready", "success", "maintenance_loops_started", nil)
-	waitForRenderWorker := func() {
+	// waitForLoops cancels every loop and joins the group. The budget is a
+	// safety valve, not a schedule: a loop wedged inside an in-flight Kitty
+	// round-trip must not hold the process open forever, so an exceeded budget
+	// is reported and shutdown continues.
+	waitForLoops := func() {
 		cancel()
-		<-renderWorkerDone
+		drained := make(chan struct{})
+		go func() {
+			loops.Wait()
+			close(drained)
+		}()
+		select {
+		case <-drained:
+		case <-time.After(shutdownDrainBudget):
+			slog.Warn("daemon: shutdown drain budget elapsed with loops still running", "budget", shutdownDrainBudget)
+		}
 	}
 
 	for {
 		select {
 		case err := <-serveErr:
-			waitForRenderWorker()
+			waitForLoops()
 			return err
 
 		case <-ctx.Done():
 			slog.Info("daemon: shutting down")
 			recordShutdown("context_cancelled")
-			waitForRenderWorker()
+			waitForLoops()
+			// Close is idempotent (the deferred Close observes closeOnce). Closing
+			// here rather than only on the way out makes the serve goroutine's exit
+			// an owned join too: Serve drains its in-flight handlers and returns
+			// before run does.
+			server.Close()
+			<-serveErr
 			return nil
 		}
 	}
 }
+
+// shutdownDrainBudget bounds how long run waits for its own loops to exit
+// after cancellation before giving up and letting the process finish shutting
+// down. Loops select on ctx.Done at the top of every iteration, so a healthy
+// daemon drains immediately; the budget only covers a tick already parked in a
+// wedged external call.
+const shutdownDrainBudget = 5 * time.Second
 
 func confirmDaemonServing(ctx context.Context, socketPath string) error {
 	probeCtx, cancel := context.WithTimeout(ctx, normalAckBudget)
