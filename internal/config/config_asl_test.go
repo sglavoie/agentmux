@@ -49,6 +49,52 @@ func TestASLCommandDefaultsAndOverride(t *testing.T) {
 	}
 }
 
+func TestASLStateRootParsesAndDefaultsToEmpty(t *testing.T) {
+	cfg, err := parseConfig([]byte(""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Empty means "derive it the way ASL does". Baking the derived path into
+	// the parsed config would freeze a value pairing is supposed to own.
+	if cfg.Defaults.ASL.StateRoot != "" {
+		t.Fatalf("state_root default = %q, want empty", cfg.Defaults.ASL.StateRoot)
+	}
+
+	cfg, err = parseConfig([]byte("[defaults.asl]\nstate_root = \"/srv/asl/state\"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Defaults.ASL.StateRoot != "/srv/asl/state" {
+		t.Fatalf("state_root = %q", cfg.Defaults.ASL.StateRoot)
+	}
+}
+
+func TestASLStateRootAcceptsAbsoluteAndHomeRelativePaths(t *testing.T) {
+	for _, root := range []string{"/srv/asl/state", "~/.local/state/agent-session-loop", ""} {
+		cfg := &Config{Defaults: Defaults{ASL: ASLConfig{StateRoot: root}}}
+		if err := Validate(cfg); err != nil {
+			t.Errorf("state_root %q was rejected: %v", root, err)
+		}
+	}
+}
+
+// A relative state root would resolve against the daemon's working directory
+// rather than the operator's, so it would silently report no runs at all
+// instead of failing. Reject it where the operator can still see why.
+func TestASLStateRootRejectsRelativePaths(t *testing.T) {
+	for _, root := range []string{"state", "./state", "../asl/state"} {
+		cfg := &Config{Defaults: Defaults{ASL: ASLConfig{StateRoot: root}}}
+		err := Validate(cfg)
+		if err == nil {
+			t.Errorf("state_root %q was accepted", root)
+			continue
+		}
+		if !strings.Contains(err.Error(), "defaults.asl.state_root") {
+			t.Errorf("state_root %q: validation error missing the key name: %v", root, err)
+		}
+	}
+}
+
 func TestASLCommandRejectsShellSyntax(t *testing.T) {
 	for _, command := range []string{
 		"asl && rm -rf /",

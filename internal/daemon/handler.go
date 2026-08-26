@@ -167,13 +167,30 @@ type Handler struct {
 	// newer (empty) state with a stale candidate set.
 	activeLoopCacheGen uint64
 
-	// aslMissStreak counts, per window lease, how many consecutive successful
-	// discoveries missed the lease's run. Reconciliation releases the lease at
-	// aslMissingRunThreshold; a discovery failure leaves the counters (and the
-	// leases) untouched. lastASLReconcileAt gates the periodic reconciliation
-	// cadence. Both guarded by stateMu.
+	// aslMissStreak counts, per window lease, how many consecutive discoveries
+	// positively confirmed the lease's run absent. Reconciliation releases the
+	// lease at aslMissingRunThreshold; indeterminate evidence neither advances
+	// nor resets a counter, and a discovery failure leaves the counters (and
+	// the leases) untouched. lastASLReconcileAt gates the periodic
+	// reconciliation cadence. Both guarded by stateMu.
 	aslMissStreak      map[aslLeaseRef]int
 	lastASLReconcileAt time.Time
+	// aslRunPosition records, per run ID, the furthest projection generation
+	// and lifecycle source sequence reconciliation has folded in. Both counters
+	// are monotonic at the source, so an observation that goes backwards on
+	// either is a stale read and is rejected rather than applied. Guarded by
+	// stateMu.
+	aslRunPosition map[string]aslRunPosition
+	// aslStateRootValue is the canonical agent-session-loop state root, and
+	// aslMetrics the reconciliation counters surfaced in health. Both guarded
+	// by stateMu.
+	aslStateRootValue string
+	aslMetrics        aslReconcileMetrics
+	// aslProjectionCache lets the repeating sweep skip re-parsing state
+	// documents that have not changed since the last one. It is internally
+	// synchronized and is deliberately not guarded by stateMu, because
+	// discovery runs outside it.
+	aslProjectionCache *agentloop.ProjectionCache
 	// aslSupervisorTargets retains the small fixed-size lease path for each
 	// discovered live ASL run. The two-second maintenance pass refreshes only
 	// these registered targets instead of rescanning the complete ASL state
@@ -319,6 +336,8 @@ func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 		stopConfirmEnabled:             true,
 		copilotLifecycleReader:         transcript.ReadCopilotLifecycle,
 		aslMissStreak:                  make(map[aslLeaseRef]int),
+		aslRunPosition:                 make(map[string]aslRunPosition),
+		aslProjectionCache:             agentloop.NewProjectionCache(),
 		aslSupervisorTargets:           make(map[aslLeaseRef]aslSupervisorTarget),
 		aslSupervisorProjections:       make(map[aslLeaseRef]agentloop.SupervisorQuestionProjection),
 		aslSupervisorClosureCutoffs:    make(map[aslLeaseRef]uint64),
@@ -398,6 +417,8 @@ func (h *Handler) handleHealth() Response {
 		status := bridge.Status()
 		resp.ASLCapability = &status
 	}
+	reconcile := h.ASLReconcileMetrics()
+	resp.ASLReconcile = &reconcile
 	return resp
 }
 

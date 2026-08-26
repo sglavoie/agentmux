@@ -107,16 +107,37 @@ func hookEventWindows(tabTitle string, windows []kitty.Window) []kitty.OSWindow 
 	}}
 }
 
+// stubDaemonLoopDiscover makes every sweep report candidates as present runs of
+// an otherwise healthy state root. Tests that need confirmed-absent or
+// indeterminate evidence build a DiscoveryResult directly with
+// stubDaemonDiscoverPlans.
 func stubDaemonLoopDiscover(t *testing.T, candidates []agentloop.Candidate, err error) {
 	t.Helper()
-	old := daemonLoopDiscover
-	daemonLoopDiscover = func(agentloop.DiscoverOptions) ([]agentloop.Candidate, error) {
-		out := make([]agentloop.Candidate, len(candidates))
-		copy(out, candidates)
+	result := agentloop.DiscoveryResult{StateRoot: "/state", RootPresent: true}
+	for _, candidate := range candidates {
+		result.Observations = append(result.Observations, agentloop.PlanObservation{
+			StateDir:  candidate.StateDir,
+			PlanDir:   candidate.PlanDir,
+			RunID:     candidate.RunID,
+			Presence:  agentloop.PresencePresent,
+			Reason:    agentloop.ReasonLiveProcess,
+			Candidate: candidate,
+		})
+	}
+	stubDaemonDiscoverPlans(t, result, err)
+}
+
+// stubDaemonDiscoverPlans replaces the discovery seam with a fixed sweep.
+func stubDaemonDiscoverPlans(t *testing.T, result agentloop.DiscoveryResult, err error) {
+	t.Helper()
+	old := daemonLoopDiscoverPlans
+	daemonLoopDiscoverPlans = func(agentloop.DiscoverOptions) (agentloop.DiscoveryResult, error) {
+		out := result
+		out.Observations = append([]agentloop.PlanObservation(nil), result.Observations...)
 		return out, err
 	}
 	t.Cleanup(func() {
-		daemonLoopDiscover = old
+		daemonLoopDiscoverPlans = old
 	})
 }
 

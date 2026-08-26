@@ -21,12 +21,12 @@ import (
 func stubLoopDiscovery(t *testing.T) *bool {
 	t.Helper()
 	called := false
-	old := daemonLoopDiscover
-	daemonLoopDiscover = func(agentloop.DiscoverOptions) ([]agentloop.Candidate, error) {
+	old := daemonLoopDiscoverPlans
+	daemonLoopDiscoverPlans = func(agentloop.DiscoverOptions) (agentloop.DiscoveryResult, error) {
 		called = true
-		return nil, nil
+		return agentloop.DiscoveryResult{RootPresent: true}, nil
 	}
-	t.Cleanup(func() { daemonLoopDiscover = old })
+	t.Cleanup(func() { daemonLoopDiscoverPlans = old })
 	return &called
 }
 

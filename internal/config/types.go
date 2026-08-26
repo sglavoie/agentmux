@@ -73,6 +73,13 @@ type Defaults struct {
 type ASLConfig struct {
 	Enabled *bool  `toml:"enabled"`
 	Command string `toml:"command"`
+	// StateRoot is the canonical directory agent-session-loop persists run
+	// state under. Discovery reads the projection from there, so a value that
+	// disagrees with ASL's own makes every run look absent rather than
+	// producing a visible error. It is left empty by default and derived from
+	// XDG at read time; pairing records the peer's actual root here so the two
+	// sides cannot silently drift apart.
+	StateRoot string `toml:"state_root"`
 }
 
 // ASLModeValue reports the tri-state as one of "auto", "required", or

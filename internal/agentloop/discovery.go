@@ -1,20 +1,16 @@
 package agentloop
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 )
 
 const (
 	appName       = "agent-session-loop"
-	lockFileName  = "lock.json"
 	stateFileName = "state.json"
 	maxIntValue   = int(^uint(0) >> 1)
 )
@@ -22,59 +18,85 @@ const (
 // PIDChecker reports whether a process id still represents a running process.
 type PIDChecker func(pid int) bool
 
-// Run phases derived from persisted loop state. The string values match the
-// daemon reducer's ASL phase vocabulary so a discovered candidate's phase can
-// seed a lease without translation.
+// Run phases as published by agent-session-loop's projection. The string values
+// match the daemon reducer's ASL phase vocabulary so a discovered candidate's
+// phase can seed a lease without translation.
 const (
+	PhaseStarting     = "starting"     // run alive, before its first turn
 	PhaseTurn         = "turn"         // a session turn is executing
 	PhaseVerification = "verification" // a verification pass is running
 	PhaseBetween      = "between"      // run alive, idle between turns
 	PhaseWaiting      = "waiting"      // run alive, blocked on a mailbox reply
 	PhasePaused       = "paused"       // run paused awaiting a human
+	PhaseFinished     = "finished"     // run over
 )
 
 // DiscoverOptions controls active loop discovery. Empty fields use production
-// defaults, while tests can inject a state root and PID checker.
+// defaults, while tests can inject a state root, PID checker, and birth probe.
 type DiscoverOptions struct {
 	StateRoot  string
 	PIDRunning PIDChecker
+	// ProcessBirth resolves published PIDs to their birth tokens. Nil uses the
+	// real `ps` probe.
+	ProcessBirth ProcessBirthLookup
 	// IncludePaused also returns paused runs. A pause finalizes the loop
-	// process (the lock PID dies and run_finished_at is written), so paused
-	// runs are invisible to the default liveness checks even though they are
-	// still awaiting a human. Only reconciliation opts in: routing and loop
-	// marker consumers must keep seeing live processes only.
+	// process, so paused runs hold no PID even though they are still awaiting a
+	// human. Only reconciliation opts in: routing and loop marker consumers
+	// must keep seeing live processes only.
 	IncludePaused bool
+	// Cache memoizes projection decodes across sweeps. Nil reads through, which
+	// is what a one-shot caller wants; a repeating caller should hold one, since
+	// the state documents the projection is nested in are orders of magnitude
+	// larger than the projection itself.
+	Cache *ProjectionCache
 }
 
-// Candidate is one active agent-session-loop run discovered from state files.
+// Candidate is one present agent-session-loop run, projected from the atomic
+// `agent_mux` block ASL publishes. Every field comes from that block; AgentMux
+// reads nothing else out of ASL's state, and holds no parser for state that
+// does not carry it.
 type Candidate struct {
 	PlanDir  string
 	StateDir string
+	// CWD is the run's workspace root. It is empty for a plan that has no
+	// workspace, which the projection spells as null rather than as a guess.
 	CWD      string
 	Harness  string
 	WindowID int
 	PID      int
+	// StartToken is the birth time of PID, which is what distinguishes the loop
+	// process from whatever else the kernel may later hand that PID to.
+	StartToken string
 
-	LockCreatedAt    time.Time
-	LockCreatedAtRaw string
-	RunStartedAt     time.Time
-	RunStartedAtRaw  string
+	RunID string
+	// ContractSetID is the ASL/AgentMux contract set this run publishes under,
+	// retained so a compatibility problem can be reported with the peer's own
+	// identifier rather than as a generic parse failure.
+	ContractSetID  string
+	RegistryDigest string
 
-	RunID         string
-	ActiveSession int
-	ActiveTurn    int
+	// Phase is the run's lifecycle phase, Paused a convenience for the resting
+	// phase that still holds a lease. SessionID and TurnIndex locate the run
+	// inside its plan (TurnIndex is -1 when no turn is in flight), and
+	// QuestionID names the mailbox question a waiting run is blocked on. The
+	// question body never appears: the projection does not carry it.
+	Phase      string
+	Paused     bool
+	SessionID  string
+	TurnIndex  int
+	QuestionID string
 
-	// Phase is the run's derived lifecycle phase (PhaseTurn, PhaseVerification,
-	// PhaseBetween, PhaseWaiting, or PhasePaused). ActiveVerification reports whether a
-	// verification pass is in flight, Paused whether the run is paused awaiting
-	// a human, and HeartbeatAt the most recent liveness signal persisted by the
-	// run (the active turn's last heartbeat, or the verification's current
-	// check start). HeartbeatAtRaw preserves the unparsed timestamp.
-	Phase              string
-	ActiveVerification bool
-	Paused             bool
-	HeartbeatAt        time.Time
-	HeartbeatAtRaw     string
+	// SourceSequence and Generation order evidence against itself.
+	// SourceSequence counts lifecycle notifications, Generation counts durable
+	// state transitions; neither derives from the other, so a run whose hooks
+	// were all dropped still advances its generation.
+	SourceSequence uint64
+	Generation     uint64
+
+	RunStartedAt    time.Time
+	RunStartedAtRaw string
+	UpdatedAt       time.Time
+	UpdatedAtRaw    string
 }
 
 // PlanState is the durable workspace association retained for a plan after
@@ -93,7 +115,9 @@ type WorkspaceTarget struct {
 	WindowID int
 }
 
-// DefaultStateRoot mirrors agent-session-loop's operational state location.
+// DefaultStateRoot mirrors agent-session-loop's operational state location. It
+// is the fallback for a deployment that has not recorded a canonical state root
+// in configuration; pairing persists one so the two sides cannot drift.
 func DefaultStateRoot() string {
 	var base string
 	if xdg := os.Getenv("XDG_STATE_HOME"); xdg != "" {
@@ -111,97 +135,77 @@ func DefaultStateRoot() string {
 	return filepath.Clean(root)
 }
 
-// LookupPlanState reads the durable state for one exact plan directory. A
-// missing state file or a valid state without cwd returns found=false. The
-// state-directory hash and embedded plan_dir must both match so callers never
-// classify a plan from unrelated or relocated state.
-func LookupPlanState(planDir, stateRoot string) (state PlanState, found bool, err error) {
+// StateDirFor returns the state directory agent-session-loop uses for planDir
+// under stateRoot.
+func StateDirFor(planDir, stateRoot string) (string, error) {
 	canonicalPlan, err := CanonicalizePath(planDir)
 	if err != nil {
-		return PlanState{}, false, fmt.Errorf("agentloop: resolving plan directory %s: %w", planDir, err)
+		return "", fmt.Errorf("agentloop: resolving plan directory %s: %w", planDir, err)
 	}
 	if canonicalPlan == "" {
-		return PlanState{}, false, errors.New("agentloop: plan directory is empty")
+		return "", errors.New("agentloop: plan directory is empty")
 	}
 	if stateRoot == "" {
 		stateRoot = DefaultStateRoot()
 	}
 	canonicalRoot, err := CanonicalizePath(stateRoot)
 	if err != nil {
-		return PlanState{}, false, fmt.Errorf("agentloop: resolving state root %s: %w", stateRoot, err)
+		return "", fmt.Errorf("agentloop: resolving state root %s: %w", stateRoot, err)
 	}
-	stateDir := filepath.Join(canonicalRoot, pathSHA256(canonicalPlan))
+	return filepath.Join(canonicalRoot, pathSHA256(canonicalPlan)), nil
+}
+
+// LookupPlanState reads the durable workspace association for one exact plan
+// directory. A plan with no projection, or a projection with no workspace root,
+// returns found=false so callers fall through to their own metadata rather than
+// inheriting an association from unrelated state. The embedded plan_dir must
+// match, so relocated or copied state never classifies a plan it does not
+// describe.
+func LookupPlanState(planDir, stateRoot string) (state PlanState, found bool, err error) {
+	canonicalPlan, err := CanonicalizePath(planDir)
+	if err != nil {
+		return PlanState{}, false, fmt.Errorf("agentloop: resolving plan directory %s: %w", planDir, err)
+	}
+	stateDir, err := StateDirFor(planDir, stateRoot)
+	if err != nil {
+		return PlanState{}, false, err
+	}
 	statePath := filepath.Join(stateDir, stateFileName)
-	data, err := os.ReadFile(statePath)
-	if errors.Is(err, fs.ErrNotExist) {
-		return PlanState{}, false, nil
-	}
+	projection, err := ReadProjection(statePath)
 	if err != nil {
-		return PlanState{}, false, fmt.Errorf("agentloop: reading plan state %s: %w", statePath, err)
+		switch ProjectionReason(err) {
+		case ReasonUnreadableState, ReasonMissingProjection:
+			// No usable state for this plan is an ordinary answer, not a fault.
+			return PlanState{}, false, nil
+		default:
+			return PlanState{}, false, fmt.Errorf("agentloop: reading plan state %s: %w", statePath, err)
+		}
 	}
-	var persisted stateFile
-	if err := json.Unmarshal(data, &persisted); err != nil {
-		return PlanState{}, false, fmt.Errorf("agentloop: decoding plan state %s: %w", statePath, err)
-	}
-	if strings.TrimSpace(persisted.PlanDir) == "" {
-		return PlanState{}, false, fmt.Errorf("agentloop: plan state %s has no plan_dir", statePath)
-	}
-	statePlan, err := CanonicalizePath(persisted.PlanDir)
+	statePlan, err := CanonicalizePath(projection.PlanDir)
 	if err != nil || statePlan != canonicalPlan {
-		return PlanState{}, false, fmt.Errorf("agentloop: plan state %s belongs to %q, not %q", statePath, persisted.PlanDir, canonicalPlan)
+		return PlanState{}, false, fmt.Errorf("agentloop: plan state %s belongs to %q, not %q", statePath, projection.PlanDir, canonicalPlan)
 	}
-	if strings.TrimSpace(persisted.CWD) == "" {
+	if projection.WorkspaceRoot == "" {
 		return PlanState{}, false, nil
 	}
-	cwd, err := CanonicalizePath(persisted.CWD)
+	cwd, err := CanonicalizePath(projection.WorkspaceRoot)
 	if err != nil {
-		return PlanState{}, false, fmt.Errorf("agentloop: resolving plan state cwd %s: %w", persisted.CWD, err)
+		return PlanState{}, false, fmt.Errorf("agentloop: resolving plan state workspace root %s: %w", projection.WorkspaceRoot, err)
 	}
 	return PlanState{PlanDir: canonicalPlan, StateDir: stateDir, CWD: cwd}, true, nil
 }
 
-// Discover scans the configured state root and returns active candidates sorted
-// newest-first. Per-run malformed or stale state is skipped so one bad state
-// directory does not hide other active loops.
+// Discover scans the configured state root and returns present candidates
+// sorted newest-first. It is the presence-only view of DiscoverPlans, for
+// callers that act on runs rather than reason about leases; a caller that must
+// distinguish "gone" from "could not tell" has to use DiscoverPlans, because
+// that distinction is exactly what this return type cannot express.
 func Discover(opts DiscoverOptions) ([]Candidate, error) {
-	root := opts.StateRoot
-	if root == "" {
-		root = DefaultStateRoot()
-	}
-	canonicalRoot, err := CanonicalizePath(root)
+	result, err := DiscoverPlans(opts)
 	if err != nil {
-		return nil, fmt.Errorf("agentloop: resolving state root %s: %w", root, err)
+		return nil, err
 	}
-
-	entries, err := os.ReadDir(canonicalRoot)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("agentloop: reading state root %s: %w", canonicalRoot, err)
-	}
-
-	pidRunning := opts.PIDRunning
-	if pidRunning == nil {
-		pidRunning = IsPIDRunning
-	}
-
-	candidates := make([]Candidate, 0, len(entries))
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		stateDir, err := CanonicalizePath(filepath.Join(canonicalRoot, entry.Name()))
-		if err != nil {
-			continue
-		}
-		candidate, ok := readCandidate(stateDir, pidRunning, opts.IncludePaused)
-		if ok {
-			candidates = append(candidates, candidate)
-		}
-	}
-	SortCandidates(candidates)
-	return candidates, nil
+	return result.Candidates(opts.IncludePaused), nil
 }
 
 // SortCandidates orders candidates newest-first with deterministic tie breaks.
@@ -211,8 +215,8 @@ func SortCandidates(candidates []Candidate) {
 		if !a.RunStartedAt.Equal(b.RunStartedAt) {
 			return a.RunStartedAt.After(b.RunStartedAt)
 		}
-		if !a.LockCreatedAt.Equal(b.LockCreatedAt) {
-			return a.LockCreatedAt.After(b.LockCreatedAt)
+		if !a.UpdatedAt.Equal(b.UpdatedAt) {
+			return a.UpdatedAt.After(b.UpdatedAt)
 		}
 		return a.PlanDir < b.PlanDir
 	})
@@ -228,33 +232,21 @@ func MatchingCWD(candidates []Candidate, selectedDir string) ([]Candidate, error
 	if err != nil {
 		return nil, fmt.Errorf("agentloop: resolving selected directory %s: %w", selectedDir, err)
 	}
-
-	matches := make([]Candidate, 0, len(candidates))
-	for _, candidate := range candidates {
-		if candidate.CWD == "" {
-			continue
-		}
-		cwd, err := CanonicalizePath(candidate.CWD)
-		if err != nil {
-			continue
-		}
-		if cwd == selectedCanonical {
-			matches = append(matches, candidate)
-		}
-	}
-	return matches, nil
+	return matchingCanonicalCWD(candidates, selectedCanonical), nil
 }
 
 // MatchingWorkspace returns loop candidates for target's workspace, preferring
 // candidates with target's harness when present. If a different same-workspace
 // harness has an open target, that harness owns the loop marker; otherwise the
-// function falls back to CWD-only workspace matching for legacy state.
+// function falls back to CWD-only workspace matching.
 //
 // Candidate WindowID is treated as authoritative only when it identifies a
 // managed window in openTargets. A candidate whose WindowID points outside the
 // managed set (for example, an ASL pane nested inside a managed tab) is still
 // eligible for CWD/harness fallback so the loop marker reaches the managed
-// session that owns the workspace.
+// session that owns the workspace. This is Kitty window topology, not ASL
+// contract compatibility: the projection legitimately carries a null window ID,
+// and dropping the fallback would strand split-tab routing.
 func MatchingWorkspace(candidates []Candidate, target WorkspaceTarget, openTargets []WorkspaceTarget) ([]Candidate, error) {
 	workspaceCandidates := candidates
 	if target.WindowID > 0 {

@@ -87,6 +87,14 @@ confirm_destructive = false
 [defaults.asl]
 # enabled = true
 # command = "asl"
+#
+# state_root is where ASL keeps its per-plan state, which is where Agent Mux
+# reads run presence from. Leave it unset unless ASL has been moved off its
+# default location: the default is derived the same way ASL derives it, and
+# pairing records the canonical value here. It must be absolute or start with
+# "~" — a relative path would resolve against the daemon's working directory
+# rather than yours, and Agent Mux would simply report no runs.
+# state_root = "~/.local/state/agent-session-loop"
 
 # Preview pane shown by the `p` keybinding. Direction chooses a side-by-side
 # split ("horizontal") or stacked split ("vertical"). Ratio is the fraction of

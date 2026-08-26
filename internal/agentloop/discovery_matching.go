@@ -6,26 +6,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/harness"
 )
 
-// heartbeatTimestamp picks the freshest liveness timestamp the run persists:
-// the active turn's per-heartbeat stamp, else the verification's per-heartbeat
-// stamp (persisted by newer loops), else the verification's current check
-// start, else the verification start.
-func heartbeatTimestamp(state stateFile) string {
-	if state.ActiveTurn != nil && strings.TrimSpace(state.ActiveTurn.LastHeartbeatAt) != "" {
-		return state.ActiveTurn.LastHeartbeatAt
-	}
-	if state.ActiveVerification != nil {
-		if raw := strings.TrimSpace(state.ActiveVerification.LastHeartbeatAt); raw != "" {
-			return raw
-		}
-		if raw := strings.TrimSpace(state.ActiveVerification.CurrentCheckStartedAt); raw != "" {
-			return raw
-		}
-		return strings.TrimSpace(state.ActiveVerification.StartedAt)
-	}
-	return ""
-}
-
 func matchingWindow(candidates []Candidate, windowID int) []Candidate {
 	matches := make([]Candidate, 0, len(candidates))
 	for _, candidate := range candidates {
@@ -117,15 +97,6 @@ func workspaceHasOpenCandidateHarness(candidates []Candidate, selectedCanonical 
 		}
 	}
 	return false
-}
-
-func effectiveHarness(state stateFile) string {
-	if state.ActiveTurn != nil {
-		if h := normalizeKnownHarness(state.ActiveTurn.Harness); h != "" {
-			return h
-		}
-	}
-	return normalizeKnownHarness(state.Harness)
 }
 
 func normalizeKnownHarness(raw string) string {

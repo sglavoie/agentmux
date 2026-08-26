@@ -77,16 +77,57 @@ bridge it can talk to on the first start. The reverse order is safe but inert:
 an ASL that predates the bridge is reported as unavailable and the cockpit is
 read-only until it is upgraded.
 
-There is no migration. Omitting `[defaults.asl]` entirely is auto mode: the
-daemon probes once, stays quiet when ASL is absent, and every pre-existing
-Agent Mux behavior — including the `🔁` loop marker and ASL lease handling,
-which read loop state from disk and do not use the bridge — is unchanged. Set
-`enabled = true` only when you want an unavailable integration to surface as a
-`amx doctor` finding, and `enabled = false` to never start the subprocess.
+Omitting `[defaults.asl]` entirely is auto mode: the daemon probes once and
+stays quiet when ASL is absent. Set `enabled = true` only when you want an
+unavailable integration to surface as a `amx doctor` finding, and
+`enabled = false` to never start the subprocess.
 
 The capability block is additive on the wire. An older `amx` ignores the `asl`
 key in a newer daemon's health response, and a newer `amx` against an older
 daemon prints `asl: unreported (older daemon)` instead of failing.
+
+### Run presence is a paired cutover
+
+The `🔁` loop marker and ASL lease handling do not use the bridge. They read
+one atomic `agent_mux` projection that ASL publishes inside its own state, and
+nothing else in that state is interpreted — the loop's turn, verification,
+pause, and lock bookkeeping are private to ASL. This is a hard paired cutover:
+Agent Mux keeps no parser for state that predates the projection.
+
+An unpaired half does not fail loudly, and it does not fail destructively
+either. State with no projection Agent Mux can read is classified
+*indeterminate*, which means:
+
+- existing leases are preserved — an unpaired upgrade cannot retire a healthy
+  run's `🔁` or duplicate its work;
+- no new runs are picked up from disk until the loop restarts under a version
+  that publishes the projection;
+- `amx daemon health --json` reports the reason under `asl_reconcile`
+  (`missing_projections`, `unsupported_contracts`, `invalid_projections`).
+
+Live hook events are unaffected throughout, so a run started after both halves
+are upgraded still renders immediately.
+
+Reconciliation sweeps the state root at daemon startup and every ten seconds.
+A run confirmed gone — ASL recorded it finished, or the process it named has
+exited — is retired after two consecutive confirmations, so presence is
+restored and confirmed absence retired well inside thirty seconds. Evidence
+that establishes nothing never counts toward that, in either direction.
+
+The startup sweep runs on the first maintenance tick rather than inside the
+bounded initial snapshot, and it is deliberately not part of what `amx daemon
+health` calls readiness. The projection is small, but it is nested in a state
+document that carries the whole run's history, so a sweep parses everything
+every plan has ever accumulated — on a machine with hundreds of plans that is
+tens of megabytes. Unchanged documents are reused between sweeps, which keeps
+the steady-state cost to one stat per plan; only the first sweep after a daemon
+start pays the full parse. Startup presence therefore lands within a tick of
+the first render, not before it.
+
+Set `state_root` under `[defaults.asl]` only if ASL's state has been moved off
+its default location. It must be absolute or start with `~`; a relative path is
+rejected at load rather than resolved against the daemon's working directory,
+where it would silently find no runs.
 
 ### Deferred
 

@@ -1,9 +1,7 @@
 package daemon
 
 import (
-	"encoding/json"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 
@@ -30,7 +28,21 @@ const (
 	agentSessionLoopFinished              = "AgentSessionLoopFinished"
 )
 
-var daemonLoopDiscover = agentloop.Discover
+// daemonLoopDiscoverPlans is the tri-state discovery seam reconciliation uses:
+// it needs to tell "gone" from "could not tell". daemonLoopDiscover is the
+// presence-only view for routing and marker consumers, which act on runs that
+// exist and have nothing to do when evidence is missing. Both are variables so
+// tests can inject state without a filesystem.
+var (
+	daemonLoopDiscoverPlans = agentloop.DiscoverPlans
+	daemonLoopDiscover      = func(opts agentloop.DiscoverOptions) ([]agentloop.Candidate, error) {
+		result, err := daemonLoopDiscoverPlans(opts)
+		if err != nil {
+			return nil, err
+		}
+		return result.Candidates(opts.IncludePaused), nil
+	}
+)
 
 type loopLifecycleTarget struct {
 	windowID  int
@@ -279,36 +291,29 @@ func loopPayloadWorkspaceTarget(payload hookevent.HookPayload) agentloop.Workspa
 	return agentloop.WorkspaceTarget{CWD: cwd, Harness: harnessName, WindowID: windowID}
 }
 
-type loopStateWorkspace struct {
-	CWD           string `json:"cwd"`
-	Harness       string `json:"harness"`
-	KittyWindowID int    `json:"kitty_window_id"`
-	ActiveTurn    *struct {
-		Harness string `json:"harness"`
-	} `json:"active_turn"`
-}
-
+// readLoopStateWorkspace fills gaps in a hook payload from the run's own
+// durable state.
+//
+// It reads the atomic `agent_mux` projection and nothing else. The loop's
+// top-level bookkeeping — cwd, active_turn, and the rest — is private to ASL,
+// and this used to be a second, independently drifting parser of it. The
+// projection's workspace root is the run's directory for a workspace plan; a
+// plan without a workspace publishes none, and the caller then routes on window
+// ID alone rather than borrowing some other plan's directory.
 func readLoopStateWorkspace(statePath string) (cwd string, harnessName string, windowID int, ok bool) {
-	data, err := os.ReadFile(strings.TrimSpace(statePath))
+	projection, err := agentloop.ReadProjection(strings.TrimSpace(statePath))
 	if err != nil {
-		slog.Debug("loop state payload read failed", "state_path", statePath, "err", err)
+		slog.Debug("loop state projection unavailable",
+			"state_path", statePath,
+			"reason", agentloop.ProjectionReason(err),
+			"err", err,
+		)
 		return "", "", 0, false
 	}
-	var state loopStateWorkspace
-	if err := json.Unmarshal(data, &state); err != nil {
-		slog.Debug("loop state payload decode failed", "state_path", statePath, "err", err)
-		return "", "", 0, false
+	if projection.KittyWindowID > 0 {
+		windowID = projection.KittyWindowID
 	}
-	harnessName = normalizeKnownLoopHarness(state.Harness)
-	if state.ActiveTurn != nil {
-		if activeHarness := normalizeKnownLoopHarness(state.ActiveTurn.Harness); activeHarness != "" {
-			harnessName = activeHarness
-		}
-	}
-	if state.KittyWindowID > 0 {
-		windowID = state.KittyWindowID
-	}
-	return strings.TrimSpace(state.CWD), harnessName, windowID, true
+	return projection.WorkspaceRoot, normalizeKnownLoopHarness(projection.Harness), windowID, true
 }
 
 func normalizeKnownLoopHarness(raw string) string {

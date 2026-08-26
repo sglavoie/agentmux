@@ -125,17 +125,28 @@ func validateDefaults(d *Defaults) []string {
 const aslShellMetacharacters = "|&;<>()$`\\\"'\n\t*?[]#"
 
 func validateASL(a *ASLConfig) []string {
+	var errs []string
+	// An empty state root is the supported default (derive it from XDG). A
+	// relative one is not: the daemon's working directory is not the operator's,
+	// so it would resolve somewhere neither side intended and simply report no
+	// runs. Reject it here rather than let it degrade silently.
+	if root := strings.TrimSpace(a.StateRoot); root != "" {
+		if !filepath.IsAbs(root) && !strings.HasPrefix(root, "~") {
+			errs = append(errs, "defaults.asl.state_root must be an absolute path or start with ~")
+		}
+	}
+
 	command := strings.TrimSpace(a.Command)
 	if command == "" {
-		return nil
+		return errs
 	}
 	if strings.ContainsAny(command, aslShellMetacharacters) {
-		return []string{"defaults.asl.command must be a plain executable name or path, without shell syntax"}
+		return append(errs, "defaults.asl.command must be a plain executable name or path, without shell syntax")
 	}
 	if strings.Contains(command, " ") && !isExecutableFile(command) {
-		return []string{"defaults.asl.command must not contain arguments; the daemon supplies them"}
+		return append(errs, "defaults.asl.command must not contain arguments; the daemon supplies them")
 	}
-	return nil
+	return errs
 }
 
 // isExecutableFile reports whether command is an existing absolute path to an

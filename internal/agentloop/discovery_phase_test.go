@@ -1,264 +1,315 @@
 package agentloop
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 )
 
-// seedLoopState writes a lock + state pair from raw state fields so phase
-// tests can exercise shapes loopSeed does not model (verification, pause,
-// non-integer session labels).
-func seedLoopState(t *testing.T, stateRoot, planDir string, pid int, state map[string]any) string {
-	t.Helper()
-	if err := os.MkdirAll(planDir, 0o755); err != nil {
-		t.Fatal(err)
+// The projection states the phase outright. Discovery no longer derives it from
+// heartbeats, active-turn markers, or waiting flags, so every phase ASL can
+// publish must survive the round trip verbatim.
+func TestDiscoverCarriesEveryLivePhaseVerbatim(t *testing.T) {
+	for _, phase := range []string{PhaseStarting, PhaseTurn, PhaseVerification, PhaseBetween, PhaseWaiting} {
+		t.Run(phase, func(t *testing.T) {
+			root := t.TempDir()
+			planDir := filepath.Join(t.TempDir(), "plan")
+			seedProjection(t, root, planDir, projectionSeed{Phase: phase, QuestionID: "q-9"})
+
+			result, err := DiscoverPlans(DiscoverOptions{
+				StateRoot:    root,
+				PIDRunning:   livePIDs,
+				ProcessBirth: matchingBirth(),
+			})
+			if err != nil {
+				t.Fatalf("DiscoverPlans: %v", err)
+			}
+			observation := observationFor(t, result, root, planDir)
+			if observation.Presence != PresencePresent || observation.Reason != ReasonLiveProcess {
+				t.Fatalf("observation = %+v, want present/%s", observation, ReasonLiveProcess)
+			}
+			if observation.Candidate.Phase != phase || observation.Candidate.Paused {
+				t.Fatalf("candidate phase = %q paused=%v, want %q unpaused", observation.Candidate.Phase, observation.Candidate.Paused, phase)
+			}
+		})
 	}
-	stateDir := stateDirForPlan(t, stateRoot, planDir)
-	if err := os.MkdirAll(stateDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeJSON(t, filepath.Join(stateDir, lockFileName), map[string]any{
-		"pid":        pid,
-		"plan_dir":   canonical(t, planDir),
-		"created_at": "2026-07-10T13:00:00+00:00",
-	})
-	state["plan_dir"] = canonical(t, planDir)
-	writeJSON(t, filepath.Join(stateDir, stateFileName), state)
-	return stateDir
 }
 
-func TestDiscoverTurnPhaseWithHeartbeat(t *testing.T) {
+// A pause finalizes the loop process, so a paused run has no PID to check and is
+// still holding its position. Requiring liveness here would retire the lease of
+// every run that is waiting on a human.
+func TestDiscoverPausedRunIsPresentWithoutAProcess(t *testing.T) {
 	root := t.TempDir()
 	planDir := filepath.Join(t.TempDir(), "plan")
-	heartbeat := "2026-07-10T13:10:30.123456+00:00"
-	seedLoopState(t, root, planDir, 123, map[string]any{
-		"run_id":         "run-turn",
-		"run_started_at": "2026-07-10T13:05:00+00:00",
-		"active_turn": map[string]any{
-			"session":           4,
-			"turn_index":        2,
-			"last_heartbeat_at": heartbeat,
+	seedProjection(t, root, planDir, projectionSeed{Phase: PhasePaused, RunID: "run-paused"})
+
+	result, err := DiscoverPlans(DiscoverOptions{
+		StateRoot:  root,
+		PIDRunning: deadPIDs,
+		// A paused plan publishes no process, so nothing should ever be probed.
+		ProcessBirth: func(pids []int) (map[int]string, bool) {
+			if len(pids) != 0 {
+				t.Errorf("probed %v for a paused plan, want no probe", pids)
+			}
+			return nil, true
 		},
 	})
-
-	got, err := Discover(DiscoverOptions{StateRoot: root, PIDRunning: func(int) bool { return true }})
 	if err != nil {
-		t.Fatalf("Discover: %v", err)
+		t.Fatalf("DiscoverPlans: %v", err)
 	}
-	if len(got) != 1 {
-		t.Fatalf("len(candidates) = %d, want 1", len(got))
+	observation := observationFor(t, result, root, planDir)
+	if observation.Presence != PresencePresent || observation.Reason != ReasonPaused {
+		t.Fatalf("observation = %+v, want present/%s", observation, ReasonPaused)
 	}
-	c := got[0]
-	if c.Phase != PhaseTurn || c.ActiveVerification || c.Paused {
-		t.Errorf("phase = %q verification=%v paused=%v; want turn/false/false", c.Phase, c.ActiveVerification, c.Paused)
-	}
-	if c.HeartbeatAtRaw != heartbeat || c.HeartbeatAt.IsZero() {
-		t.Errorf("heartbeat = %q/%v, want parsed %q", c.HeartbeatAtRaw, c.HeartbeatAt, heartbeat)
-	}
-	if c.RunID != "run-turn" {
-		t.Errorf("RunID = %q, want run-turn", c.RunID)
+	if !observation.Candidate.Paused || observation.Candidate.PID != 0 {
+		t.Fatalf("candidate = %+v, want paused with no PID", observation.Candidate)
 	}
 }
 
-func TestDiscoverVerificationPhaseUsesCheckStart(t *testing.T) {
+// Reconciliation must see paused runs (their leases are still owed); routing and
+// the loop markers must not (there is no process to route to).
+func TestCandidatesFilterPausedRunsOnDemand(t *testing.T) {
+	root := t.TempDir()
+	base := t.TempDir()
+	seedProjection(t, root, filepath.Join(base, "live"), projectionSeed{RunID: "run-live", PID: 11})
+	seedProjection(t, root, filepath.Join(base, "held"), projectionSeed{RunID: "run-held", Phase: PhasePaused})
+
+	result, err := DiscoverPlans(DiscoverOptions{
+		StateRoot:    root,
+		PIDRunning:   livePIDs,
+		ProcessBirth: matchingBirth(),
+	})
+	if err != nil {
+		t.Fatalf("DiscoverPlans: %v", err)
+	}
+	if got := len(result.Candidates(true)); got != 2 {
+		t.Fatalf("Candidates(true) = %d, want 2", got)
+	}
+	excluded := result.Candidates(false)
+	if len(excluded) != 1 || excluded[0].RunID != "run-live" {
+		t.Fatalf("Candidates(false) = %+v, want only run-live", excluded)
+	}
+}
+
+// A finished run is the authoritative absence: it survives a daemon restart and
+// a missed hook alike, and it does not depend on catching the process gone.
+func TestDiscoverFinishedRunIsConfirmedAbsent(t *testing.T) {
 	root := t.TempDir()
 	planDir := filepath.Join(t.TempDir(), "plan")
-	checkStarted := "2026-07-10T13:20:00+00:00"
-	seedLoopState(t, root, planDir, 123, map[string]any{
-		"run_id":         "run-verify",
-		"run_started_at": "2026-07-10T13:05:00+00:00",
-		"active_verification": map[string]any{
-			"session":                  8,
-			"turn_index":               3,
-			"started_at":               "2026-07-10T13:19:00+00:00",
-			"current_check_started_at": checkStarted,
+	seedProjection(t, root, planDir, projectionSeed{
+		Phase:      PhaseFinished,
+		RunID:      "run-done",
+		FinishedAt: "2026-07-10T13:20:00+00:00",
+	})
+
+	result, err := DiscoverPlans(DiscoverOptions{
+		StateRoot:    root,
+		PIDRunning:   livePIDs,
+		ProcessBirth: matchingBirth(),
+	})
+	if err != nil {
+		t.Fatalf("DiscoverPlans: %v", err)
+	}
+	observation := observationFor(t, result, root, planDir)
+	if observation.Presence != PresenceConfirmedAbsent || observation.Reason != ReasonFinished {
+		t.Fatalf("observation = %+v, want confirmed absent/%s", observation, ReasonFinished)
+	}
+	if len(result.Candidates(true)) != 0 {
+		t.Fatalf("candidates = %+v, want none", result.Candidates(true))
+	}
+}
+
+func TestDiscoverExitedProcessIsConfirmedAbsent(t *testing.T) {
+	root := t.TempDir()
+	planDir := filepath.Join(t.TempDir(), "plan")
+	seedProjection(t, root, planDir, projectionSeed{RunID: "run-gone", PID: 4242})
+
+	result, err := DiscoverPlans(DiscoverOptions{
+		StateRoot:    root,
+		PIDRunning:   deadPIDs,
+		ProcessBirth: staticBirth(nil),
+	})
+	if err != nil {
+		t.Fatalf("DiscoverPlans: %v", err)
+	}
+	observation := observationFor(t, result, root, planDir)
+	if observation.Presence != PresenceConfirmedAbsent || observation.Reason != ReasonProcessExited {
+		t.Fatalf("observation = %+v, want confirmed absent/%s", observation, ReasonProcessExited)
+	}
+}
+
+// PID reuse is the case a liveness check alone gets exactly backwards: the PID
+// is running, so a naive scan calls the run present and routes mutations into an
+// unrelated process. The start token catches it, and the answer is
+// indeterminate — a recycled PID says nothing about where the original run went.
+func TestDiscoverRecycledPIDIsIndeterminate(t *testing.T) {
+	root := t.TempDir()
+	planDir := filepath.Join(t.TempDir(), "plan")
+	seedProjection(t, root, planDir, projectionSeed{RunID: "run-recycled", PID: 4242})
+
+	result, err := DiscoverPlans(DiscoverOptions{
+		StateRoot:    root,
+		PIDRunning:   livePIDs,
+		ProcessBirth: staticBirth(map[int]string{4242: "Sat Jul 11 09:00:00 2026"}),
+	})
+	if err != nil {
+		t.Fatalf("DiscoverPlans: %v", err)
+	}
+	observation := observationFor(t, result, root, planDir)
+	if observation.Presence != PresenceIndeterminate || observation.Reason != ReasonProcessReplaced {
+		t.Fatalf("observation = %+v, want indeterminate/%s", observation, ReasonProcessReplaced)
+	}
+	if len(result.Candidates(true)) != 0 {
+		t.Fatalf("candidates = %+v, want none", result.Candidates(true))
+	}
+}
+
+// ASL renders the start token with its own inherited locale and zone. The same
+// process observed from a daemon in another zone renders as a whole-hour offset
+// of the same instant, which is a rendering difference rather than PID reuse.
+func TestDiscoverToleratesTimezoneRenderedStartTokens(t *testing.T) {
+	root := t.TempDir()
+	planDir := filepath.Join(t.TempDir(), "plan")
+	seedProjection(t, root, planDir, projectionSeed{
+		RunID:      "run-zoned",
+		PID:        4242,
+		StartToken: "Fri Jul 10 13:05:00 2026",
+	})
+
+	result, err := DiscoverPlans(DiscoverOptions{
+		StateRoot:  root,
+		PIDRunning: livePIDs,
+		// Same instant, rendered four hours away.
+		ProcessBirth: staticBirth(map[int]string{4242: "Fri Jul 10 09:05:00 2026"}),
+	})
+	if err != nil {
+		t.Fatalf("DiscoverPlans: %v", err)
+	}
+	observation := observationFor(t, result, root, planDir)
+	if observation.Presence != PresencePresent || observation.Reason != ReasonLiveProcess {
+		t.Fatalf("observation = %+v, want present/%s", observation, ReasonLiveProcess)
+	}
+}
+
+// Whitespace padding is a `ps` formatting artifact, not an identity difference.
+func TestDiscoverToleratesStartTokenWhitespace(t *testing.T) {
+	root := t.TempDir()
+	planDir := filepath.Join(t.TempDir(), "plan")
+	seedProjection(t, root, planDir, projectionSeed{PID: 4242, StartToken: "Fri Jul  4 09:05:00 2026"})
+
+	result, err := DiscoverPlans(DiscoverOptions{
+		StateRoot:    root,
+		PIDRunning:   livePIDs,
+		ProcessBirth: staticBirth(map[int]string{4242: "Fri Jul 4 09:05:00 2026"}),
+	})
+	if err != nil {
+		t.Fatalf("DiscoverPlans: %v", err)
+	}
+	observation := observationFor(t, result, root, planDir)
+	if observation.Presence != PresencePresent {
+		t.Fatalf("observation = %+v, want present", observation)
+	}
+}
+
+// When the probe itself fails, a running PID is not enough to claim identity and
+// not enough to claim absence.
+func TestDiscoverUnprobedProcessIsIndeterminate(t *testing.T) {
+	root := t.TempDir()
+	planDir := filepath.Join(t.TempDir(), "plan")
+	seedProjection(t, root, planDir, projectionSeed{PID: 4242})
+
+	result, err := DiscoverPlans(DiscoverOptions{
+		StateRoot:    root,
+		PIDRunning:   livePIDs,
+		ProcessBirth: func([]int) (map[int]string, bool) { return nil, false },
+	})
+	if err != nil {
+		t.Fatalf("DiscoverPlans: %v", err)
+	}
+	observation := observationFor(t, result, root, planDir)
+	if observation.Presence != PresenceIndeterminate || observation.Reason != ReasonProcessUnverified {
+		t.Fatalf("observation = %+v, want indeterminate/%s", observation, ReasonProcessUnverified)
+	}
+}
+
+// ASL publishes a null process when it cannot establish its own birth, and the
+// state migration tool writes the same shape. Neither attests liveness, and
+// neither is a corrupt document.
+func TestDiscoverLivePhaseWithoutAProcessIsIndeterminate(t *testing.T) {
+	root := t.TempDir()
+	planDir := filepath.Join(t.TempDir(), "plan")
+	seedProjection(t, root, planDir, projectionSeed{Phase: PhaseTurn, NoProcess: true})
+
+	result, err := DiscoverPlans(DiscoverOptions{
+		StateRoot:    root,
+		PIDRunning:   livePIDs,
+		ProcessBirth: matchingBirth(),
+	})
+	if err != nil {
+		t.Fatalf("DiscoverPlans: %v", err)
+	}
+	observation := observationFor(t, result, root, planDir)
+	if observation.Presence != PresenceIndeterminate || observation.Reason != ReasonProcessUnverified {
+		t.Fatalf("observation = %+v, want indeterminate/%s", observation, ReasonProcessUnverified)
+	}
+}
+
+// The whole sweep authenticates against one observation of the process table,
+// so plan count does not multiply subprocess cost at the ten-second cadence.
+func TestDiscoverProbesProcessBirthOnce(t *testing.T) {
+	root := t.TempDir()
+	base := t.TempDir()
+	seedProjection(t, root, filepath.Join(base, "a"), projectionSeed{RunID: "run-a", PID: 11})
+	seedProjection(t, root, filepath.Join(base, "b"), projectionSeed{RunID: "run-b", PID: 12})
+	seedProjection(t, root, filepath.Join(base, "c"), projectionSeed{RunID: "run-c", Phase: PhasePaused})
+
+	probes := 0
+	var probed []int
+	result, err := DiscoverPlans(DiscoverOptions{
+		StateRoot:  root,
+		PIDRunning: livePIDs,
+		ProcessBirth: func(pids []int) (map[int]string, bool) {
+			probes++
+			probed = append(probed, pids...)
+			tokens := make(map[int]string, len(pids))
+			for _, pid := range pids {
+				tokens[pid] = testStartToken
+			}
+			return tokens, true
 		},
 	})
-
-	got, err := Discover(DiscoverOptions{StateRoot: root, PIDRunning: func(int) bool { return true }})
 	if err != nil {
-		t.Fatalf("Discover: %v", err)
+		t.Fatalf("DiscoverPlans: %v", err)
 	}
-	if len(got) != 1 {
-		t.Fatalf("len(candidates) = %d, want 1", len(got))
+	if probes != 1 {
+		t.Fatalf("probes = %d, want 1", probes)
 	}
-	c := got[0]
-	if c.Phase != PhaseVerification || !c.ActiveVerification {
-		t.Errorf("phase = %q verification=%v; want verification/true", c.Phase, c.ActiveVerification)
+	if len(probed) != 2 {
+		t.Fatalf("probed = %v, want the two live PIDs only", probed)
 	}
-	if c.HeartbeatAtRaw != checkStarted {
-		t.Errorf("heartbeat = %q, want current check start %q", c.HeartbeatAtRaw, checkStarted)
+	if present, _, _ := result.Counts(); present != 3 {
+		t.Fatalf("present = %d, want 3", present)
 	}
 }
 
-func TestDiscoverVerificationPhasePrefersLastHeartbeat(t *testing.T) {
+func TestPresenceByRunIDCollapsesConflictingDuplicates(t *testing.T) {
 	root := t.TempDir()
-	planDir := filepath.Join(t.TempDir(), "plan")
-	lastHeartbeat := "2026-07-10T13:21:30+00:00"
-	seedLoopState(t, root, planDir, 123, map[string]any{
-		"run_id":         "run-verify-hb",
-		"run_started_at": "2026-07-10T13:05:00+00:00",
-		"active_verification": map[string]any{
-			"session":                  8,
-			"turn_index":               3,
-			"started_at":               "2026-07-10T13:19:00+00:00",
-			"current_check_started_at": "2026-07-10T13:20:00+00:00",
-			"last_heartbeat_at":        lastHeartbeat,
-		},
+	base := t.TempDir()
+	seedProjection(t, root, filepath.Join(base, "one"), projectionSeed{RunID: "run-dup", PID: 11})
+	seedProjection(t, root, filepath.Join(base, "two"), projectionSeed{RunID: "run-dup", Phase: PhaseFinished})
+
+	result, err := DiscoverPlans(DiscoverOptions{
+		StateRoot:    root,
+		PIDRunning:   livePIDs,
+		ProcessBirth: matchingBirth(),
 	})
-
-	got, err := Discover(DiscoverOptions{StateRoot: root, PIDRunning: func(int) bool { return true }})
 	if err != nil {
-		t.Fatalf("Discover: %v", err)
+		t.Fatalf("DiscoverPlans: %v", err)
 	}
-	if len(got) != 1 {
-		t.Fatalf("len(candidates) = %d, want 1", len(got))
+	observation, ok := result.PresenceByRunID()["run-dup"]
+	if !ok {
+		t.Fatal("run-dup missing from PresenceByRunID")
 	}
-	c := got[0]
-	if c.Phase != PhaseVerification || !c.ActiveVerification {
-		t.Errorf("phase = %q verification=%v; want verification/true", c.Phase, c.ActiveVerification)
-	}
-	if c.HeartbeatAtRaw != lastHeartbeat || c.HeartbeatAt.IsZero() {
-		t.Errorf("heartbeat = %q/%v, want verification last heartbeat %q", c.HeartbeatAtRaw, c.HeartbeatAt, lastHeartbeat)
-	}
-}
-
-func TestDiscoverBetweenPhaseWithoutActiveTurn(t *testing.T) {
-	root := t.TempDir()
-	planDir := filepath.Join(t.TempDir(), "plan")
-	seedLoopState(t, root, planDir, 123, map[string]any{
-		"run_id":         "run-between",
-		"run_started_at": "2026-07-10T13:05:00+00:00",
-	})
-
-	got, err := Discover(DiscoverOptions{StateRoot: root, PIDRunning: func(int) bool { return true }})
-	if err != nil {
-		t.Fatalf("Discover: %v", err)
-	}
-	if len(got) != 1 || got[0].Phase != PhaseBetween {
-		t.Fatalf("candidates = %+v; want one between-phase candidate", got)
-	}
-	if !got[0].HeartbeatAt.IsZero() || got[0].HeartbeatAtRaw != "" {
-		t.Errorf("heartbeat = %q/%v, want empty between turns", got[0].HeartbeatAtRaw, got[0].HeartbeatAt)
-	}
-}
-
-// A live waiting_for_reply marker means the run is blocked on a supervisor
-// answer between turns. Unlike a pause the process stays alive, so the run is
-// visible to default discovery and reconciliation can re-assert ❓ after a
-// daemon restart.
-func TestDiscoverWaitingPhaseFromWaitingForReply(t *testing.T) {
-	root := t.TempDir()
-	planDir := filepath.Join(t.TempDir(), "plan")
-	seedLoopState(t, root, planDir, 123, map[string]any{
-		"run_id":         "run-waiting",
-		"run_started_at": "2026-07-10T13:05:00+00:00",
-		"waiting_for_reply": map[string]any{
-			"question_id":   "q-1",
-			"started_at":    "2026-07-10T13:25:00+00:00",
-			"hard_deadline": "2026-07-10T14:25:00+00:00",
-		},
-	})
-
-	got, err := Discover(DiscoverOptions{StateRoot: root, PIDRunning: func(int) bool { return true }})
-	if err != nil {
-		t.Fatalf("Discover: %v", err)
-	}
-	if len(got) != 1 || got[0].Phase != PhaseWaiting {
-		t.Fatalf("candidates = %+v; want one waiting-phase candidate", got)
-	}
-	if got[0].Paused {
-		t.Errorf("paused = true; want false (a wait is nonterminal)")
-	}
-}
-
-// Executing work outranks a waiting marker a racing writer has not yet cleared:
-// a resumed turn must never be reported as still blocked on a reply.
-func TestDiscoverActiveTurnOutranksStaleWaitingMarker(t *testing.T) {
-	root := t.TempDir()
-	planDir := filepath.Join(t.TempDir(), "plan")
-	seedLoopState(t, root, planDir, 123, map[string]any{
-		"run_id":         "run-resumed",
-		"run_started_at": "2026-07-10T13:05:00+00:00",
-		"active_turn": map[string]any{
-			"session":    4,
-			"turn_index": 3,
-		},
-		"waiting_for_reply": map[string]any{"question_id": "q-1"},
-	})
-
-	got, err := Discover(DiscoverOptions{StateRoot: root, PIDRunning: func(int) bool { return true }})
-	if err != nil {
-		t.Fatalf("Discover: %v", err)
-	}
-	if len(got) != 1 || got[0].Phase != PhaseTurn {
-		t.Fatalf("candidates = %+v; want the executing turn to win", got)
-	}
-}
-
-// A pause finalizes the loop process: the PID dies and run_finished_at is
-// written. Default discovery must keep hiding it (routing and loop markers
-// require live processes); IncludePaused exposes it for reconciliation.
-func TestDiscoverPausedRunOnlyWhenIncluded(t *testing.T) {
-	root := t.TempDir()
-	planDir := filepath.Join(t.TempDir(), "plan")
-	seedLoopState(t, root, planDir, 999, map[string]any{
-		"run_id":          "run-paused",
-		"run_started_at":  "2026-07-10T13:05:00+00:00",
-		"run_finished_at": "2026-07-10T13:30:00+00:00",
-		"paused":          true,
-		"pause_reason":    "verify-failed",
-	})
-	deadPID := func(int) bool { return false }
-
-	got, err := Discover(DiscoverOptions{StateRoot: root, PIDRunning: deadPID})
-	if err != nil {
-		t.Fatalf("Discover: %v", err)
-	}
-	if len(got) != 0 {
-		t.Fatalf("default discovery = %+v; want paused run hidden", got)
-	}
-
-	got, err = Discover(DiscoverOptions{StateRoot: root, PIDRunning: deadPID, IncludePaused: true})
-	if err != nil {
-		t.Fatalf("Discover(IncludePaused): %v", err)
-	}
-	if len(got) != 1 {
-		t.Fatalf("len(candidates) = %d, want 1 paused candidate", len(got))
-	}
-	c := got[0]
-	if c.Phase != PhasePaused || !c.Paused {
-		t.Errorf("phase = %q paused=%v; want paused/true", c.Phase, c.Paused)
-	}
-	if c.RunID != "run-paused" {
-		t.Errorf("RunID = %q, want run-paused", c.RunID)
-	}
-}
-
-// A dotted session label ("33.3" for an inserted sub-session) must not fail
-// the whole state decode — dropping a live run from discovery would let
-// reconciliation revoke a healthy lease.
-func TestDiscoverToleratesNonIntegerSessionLabel(t *testing.T) {
-	root := t.TempDir()
-	planDir := filepath.Join(t.TempDir(), "plan")
-	seedLoopState(t, root, planDir, 123, map[string]any{
-		"run_id":         "run-dotted",
-		"run_started_at": "2026-07-10T13:05:00+00:00",
-		"active_turn": map[string]any{
-			"session":    "33.3",
-			"turn_index": 2,
-		},
-	})
-
-	got, err := Discover(DiscoverOptions{StateRoot: root, PIDRunning: func(int) bool { return true }})
-	if err != nil {
-		t.Fatalf("Discover: %v", err)
-	}
-	if len(got) != 1 {
-		t.Fatalf("len(candidates) = %d, want 1 (dotted session must not drop the run)", len(got))
-	}
-	if got[0].Phase != PhaseTurn || got[0].ActiveSession != 0 || got[0].ActiveTurn != 2 {
-		t.Errorf("candidate = %+v; want turn phase, session degraded to 0, turn 2", got[0])
+	if observation.Presence != PresenceIndeterminate {
+		t.Fatalf("presence = %q, want indeterminate: a duplicate run ID is itself a reason not to assert absence", observation.Presence)
 	}
 }

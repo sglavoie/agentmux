@@ -88,6 +88,10 @@ func TestRefreshReclassifiesMetadataOnlyChangesAndPreservesLastGood(t *testing.T
 	assertPlanProject(t, idx, planDir, secondDir, "Second", []string{"Second"})
 }
 
+// writePlanState seeds the ASL state file for planDir. The workspace comes from
+// the nested `agent_mux` projection: the surrounding state document is ASL's
+// private bookkeeping and is deliberately never read, so the decoy `cwd` below
+// must not reach the index.
 func writePlanState(t *testing.T, stateRoot, planDir, cwd string) {
 	t.Helper()
 	canonical, err := agentloop.CanonicalizePath(planDir)
@@ -99,7 +103,30 @@ func writePlanState(t *testing.T, stateRoot, planDir, cwd string) {
 	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writePlanJSON(t, filepath.Join(stateDir, "state.json"), map[string]any{"plan_dir": canonical, "cwd": cwd})
+	writePlanJSON(t, filepath.Join(stateDir, "state.json"), map[string]any{
+		"plan_dir": canonical,
+		"cwd":      "/ignored/legacy/cwd",
+		"agent_mux": map[string]any{
+			"schema_version":            1,
+			"contract_set_id":           "asl-amx-1.09f9ea5c5ceaa6cd",
+			"run_id":                    "run-plan",
+			"plan_dir":                  canonical,
+			"workspace_root":            cwd,
+			"registry_digest":           nil,
+			"harness":                   "claude",
+			"kitty_window_id":           nil,
+			"phase":                     "turn",
+			"session_id":                nil,
+			"turn_index":                nil,
+			"question_id":               nil,
+			"lifecycle_source_sequence": 0,
+			"projection_generation":     1,
+			"process":                   nil,
+			"started_at":                "2026-07-10T13:05:00+00:00",
+			"updated_at":                "2026-07-10T13:10:00+00:00",
+			"finished_at":               nil,
+		},
+	})
 }
 
 func writePlanJSON(t *testing.T, path string, payload any) {

@@ -293,6 +293,12 @@ type Response struct {
 	// omitted entirely by daemons built without the integration configured, and
 	// its unavailability never affects Ready.
 	ASLCapability *aslbridge.Status `json:"asl,omitempty"`
+	// ASLReconcile reports projection-discovery health: how far behind the
+	// reconciliation cadence has fallen and how many plans the last sweep could
+	// not classify. Unlike ASLCapability it is published whether or not a
+	// bridge is configured, because discovery reads ASL's durable state
+	// directly and can be failing while the bridge looks perfectly healthy.
+	ASLReconcile *ASLReconcileSnapshot `json:"asl_reconcile,omitempty"`
 	// ASL is populated for the ASL message types.
 	ASL *ASLResponse `json:"asl_result,omitempty"`
 	// Ready reports whether the daemon completed its bounded initial restore

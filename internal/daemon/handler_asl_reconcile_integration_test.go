@@ -141,17 +141,17 @@ func TestReconcileMissStreakResetsWhenRunReappears(t *testing.T) {
 func TestMaybeReconcileHonorsInterval(t *testing.T) {
 	h, windows, _ := reconcileTestFixture(t)
 	calls := 0
-	old := daemonLoopDiscover
-	daemonLoopDiscover = func(agentloop.DiscoverOptions) ([]agentloop.Candidate, error) {
+	old := daemonLoopDiscoverPlans
+	daemonLoopDiscoverPlans = func(agentloop.DiscoverOptions) (agentloop.DiscoveryResult, error) {
 		calls++
-		return nil, nil
+		return agentloop.DiscoveryResult{RootPresent: true}, nil
 	}
-	t.Cleanup(func() { daemonLoopDiscover = old })
+	t.Cleanup(func() { daemonLoopDiscoverPlans = old })
 
 	now := time.Now()
 	h.maybeReconcileASLLeases(now, windows)
 	h.maybeReconcileASLLeases(now.Add(2*time.Second), windows)
-	h.maybeReconcileASLLeases(now.Add(10*time.Second), windows)
+	h.maybeReconcileASLLeases(now.Add(aslReconcileInterval-time.Millisecond), windows)
 	if calls != 1 {
 		t.Fatalf("discovery calls within interval = %d, want 1 (startup only)", calls)
 	}

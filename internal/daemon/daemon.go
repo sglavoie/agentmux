@@ -125,6 +125,10 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 		cfg.Defaults.StopConfirm.Enabled == nil || *cfg.Defaults.StopConfirm.Enabled,
 	)
 	handler.SetCopilotTranscriptHomes(copilotProfileHomes(cfg), config.ExpandTilde(harness.DefaultHomeDir(harness.Copilot)))
+	// The canonical ASL state root must be installed before the maintenance loop
+	// starts, since its first tick performs the startup reconciliation. The
+	// bridge itself starts much later; discovery does not depend on it.
+	handler.SetASLStateRoot(cfg.Defaults.ASL.StateRoot)
 	// The shadow reducer mirrors the same projections the legacy paths already
 	// consume: guard_duration for the legacy trailing-event grace and the
 	// watchdog thresholds for active-class staleness.

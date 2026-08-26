@@ -162,6 +162,15 @@ func (h *Handler) restoreStateFromKitty(now time.Time) (bool, error) {
 	// snapshot the moment restore finishes.
 	h.publishSnapshotWithReceipts(windows, reducerReceipts, now)
 	h.restoreFromUserVars(windows, now)
+	// ASL reconciliation deliberately does NOT run here. Restore rebuilds leases
+	// from Kitty user vars, which record what was true when the daemon stopped,
+	// so the first render can be stale by up to one maintenance tick — but a
+	// sweep costs one full parse of every plan's state document, work that grows
+	// with the operator's plan history and has been measured in the hundreds of
+	// milliseconds. Inside this bounded budget that turns a long history into a
+	// permanently degraded startup, which loses far more than two seconds of
+	// staleness: MarkReady never fires and the durable restore never lands. The
+	// first maintenance tick reconciles instead, within renderInterval of here.
 	h.renderSnapshot(windows)
 	return true, nil
 }
@@ -210,8 +219,10 @@ func (h *Handler) runSnapshotTickWithReceipts(now time.Time, windows []kitty.OSW
 	// instead of rewriting activity timestamps after tick gaps.
 	h.publishSnapshotWithReceipts(windows, reducerReceipts, now)
 	h.pruneClosedWindows(now, liveWindowIDs(windows))
-	// First tick doubles as the startup reconciliation; afterwards the interval
-	// gate keeps it to every aslReconcileInterval.
+	// This is the startup reconciliation as well as the periodic one: the
+	// interval gate has never run when the daemon comes up, so the first tick
+	// always sweeps, and every aslReconcileInterval thereafter. Startup restore
+	// stays out of it so a large plan history cannot delay readiness.
 	h.maybeReconcileASLLeases(now, windows)
 	// Registered ASL runs expose a fixed-size, text-free supervisor projection.
 	// Refresh it every maintenance tick so a mailbox question and a supervisor

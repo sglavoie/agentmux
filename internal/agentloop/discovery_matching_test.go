@@ -277,10 +277,10 @@ func TestMatchingWorkspaceLegacyNoWindowIDStillFallsBack(t *testing.T) {
 func TestSortCandidatesNewestFirstWithTieBreaks(t *testing.T) {
 	base := time.Date(2026, 6, 4, 12, 0, 0, 0, time.UTC)
 	candidates := []Candidate{
-		{PlanDir: "/plans/a", RunStartedAt: base, LockCreatedAt: base},
-		{PlanDir: "/plans/newest", RunStartedAt: base.Add(2 * time.Minute), LockCreatedAt: base},
-		{PlanDir: "/plans/lock-newer", RunStartedAt: base, LockCreatedAt: base.Add(time.Minute)},
-		{PlanDir: "/plans/0", RunStartedAt: base, LockCreatedAt: base},
+		{PlanDir: "/plans/a", RunStartedAt: base, UpdatedAt: base},
+		{PlanDir: "/plans/newest", RunStartedAt: base.Add(2 * time.Minute), UpdatedAt: base},
+		{PlanDir: "/plans/fresher", RunStartedAt: base, UpdatedAt: base.Add(time.Minute)},
+		{PlanDir: "/plans/0", RunStartedAt: base, UpdatedAt: base},
 	}
 
 	SortCandidates(candidates)
@@ -290,7 +290,7 @@ func TestSortCandidatesNewestFirstWithTieBreaks(t *testing.T) {
 		candidates[2].PlanDir,
 		candidates[3].PlanDir,
 	}
-	want := []string{"/plans/newest", "/plans/lock-newer", "/plans/0", "/plans/a"}
+	want := []string{"/plans/newest", "/plans/fresher", "/plans/0", "/plans/a"}
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("order = %#v, want %#v", got, want)
