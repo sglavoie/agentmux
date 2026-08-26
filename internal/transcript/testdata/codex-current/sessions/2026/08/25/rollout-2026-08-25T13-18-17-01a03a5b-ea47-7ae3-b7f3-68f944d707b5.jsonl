@@ -1,0 +1,10 @@
+{"timestamp":"2026-08-25T19:18:40.000Z","type":"session_meta","payload":{"id":"01a03a5b-ea47-7ae3-b7f3-68f944d707b5","timestamp":"2026-08-25T19:18:39.000Z","cwd":"/Users/dev/projects/current","originator":"codex-tui","cli_version":"0.149.0"}}
+{"timestamp":"2026-08-25T19:18:40.500Z","type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"AGENTS injected instruction must never be indexed"}]}}
+{"timestamp":"2026-08-25T19:18:40.600Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<environment_context>injected environment must never be indexed</environment_context>"}]}}
+{"timestamp":"2026-08-25T19:18:40.700Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"response-only duplicate must never be indexed"}]}}
+{"timestamp":"2026-08-25T19:18:41.000Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","id":"user-1","content":[{"type":"text","text":"Review which previous features should be added back"},{"type":"skill","name":"plan-ideal"},{"type":"local_image","path":"/tmp/mockup.png"},{"type":"text","text":"and restore the best ones."},{"type":"text","text":""}]}}}
+{"timestamp":"2026-08-25T19:18:41.500Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"Reasoning","id":"reasoning-1","summary_text":[]}}}
+this line is malformed and must be skipped
+{"timestamp":"2026-08-25T19:18:42.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"I will compare the retired features with the current design."}]}}
+{"timestamp":"2026-08-25T19:18:43.000Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"AgentMessage","id":"assistant-duplicate","content":[{"type":"Text","text":"This completed item is not a user turn."}]}}}
+{"timestamp":"2026-08-25T19:18:44.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"truncated partial line

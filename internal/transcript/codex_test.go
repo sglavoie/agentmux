@@ -3,11 +3,13 @@ package transcript
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
 
 const codexFixtureRoot = "testdata/codex"
+const currentCodexFixtureRoot = "testdata/codex-current"
 
 func TestCodexReader_Discover(t *testing.T) {
 	r := NewCodexReader()
@@ -109,6 +111,73 @@ func TestCodexReader_ReadMessages(t *testing.T) {
 	}
 	if msgs[5].Role != "assistant" || msgs[5].Text != "Done. See the diff above." {
 		t.Errorf("msg[5] = %+v", msgs[5])
+	}
+}
+
+func TestCodexReader_CurrentUserMessageEvents(t *testing.T) {
+	r := NewCodexReader()
+	metas, err := r.Discover(currentCodexFixtureRoot, DiscoverOptions{})
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if len(metas) != 1 {
+		t.Fatalf("got %d sessions, want 1", len(metas))
+	}
+
+	meta := metas[0]
+	const wantUser = "Review which previous features should be added back\nand restore the best ones."
+	if meta.ID != "01a03a5b-ea47-7ae3-b7f3-68f944d707b5" {
+		t.Errorf("ID = %q", meta.ID)
+	}
+	if meta.Snippet != "Review which previous features should be added back and restore the best ones." {
+		t.Errorf("Snippet = %q", meta.Snippet)
+	}
+	if meta.MessageCount != 2 {
+		t.Errorf("MessageCount = %d, want one user plus one assistant", meta.MessageCount)
+	}
+	if !strings.Contains(meta.SearchText, strings.ToLower(wantUser)) {
+		t.Errorf("SearchText does not contain clean user text: %q", meta.SearchText)
+	}
+	for _, excluded := range []string{"agents injected", "environment must never", "response-only duplicate", "plan-ideal", "mockup.png", "completed item is not a user"} {
+		if strings.Contains(meta.SearchText, excluded) {
+			t.Errorf("SearchText contains excluded %q: %q", excluded, meta.SearchText)
+		}
+	}
+
+	path := filepath.Join(currentCodexFixtureRoot, "sessions", "2026", "08", "25",
+		"rollout-2026-08-25T13-18-17-01a03a5b-ea47-7ae3-b7f3-68f944d707b5.jsonl")
+	msgs, err := r.ReadMessages(path)
+	if err != nil {
+		t.Fatalf("ReadMessages: %v", err)
+	}
+	if len(msgs) != 2 {
+		t.Fatalf("got %d messages, want 2: %+v", len(msgs), msgs)
+	}
+	if msgs[0].Role != "user" || msgs[0].Text != wantUser {
+		t.Errorf("msg[0] = %+v", msgs[0])
+	}
+	wantUserTime, _ := time.Parse(time.RFC3339Nano, "2026-08-25T19:18:41.000Z")
+	if !msgs[0].Timestamp.Equal(wantUserTime) {
+		t.Errorf("msg[0].Timestamp = %v, want %v", msgs[0].Timestamp, wantUserTime)
+	}
+	if msgs[1].Role != "assistant" || msgs[1].Text != "I will compare the retired features with the current design." {
+		t.Errorf("msg[1] = %+v", msgs[1])
+	}
+}
+
+func TestCleanCodexUserMessageRecognizesEmptyTurns(t *testing.T) {
+	text, ok := cleanCodexUserMessage(codexEventMsgPayload{
+		Type: "item_completed",
+		Item: &codexCompletedItem{Type: "UserMessage"},
+	})
+	if !ok || text != "" {
+		t.Fatalf("cleanCodexUserMessage empty turn = %q, %t; want empty, true", text, ok)
+	}
+	if text, ok := cleanCodexUserMessage(codexEventMsgPayload{
+		Type: "item_completed",
+		Item: &codexCompletedItem{Type: "AgentMessage", Content: []codexContentBlock{{Type: "text", Text: "ignored"}}},
+	}); ok || text != "" {
+		t.Fatalf("cleanCodexUserMessage unrelated item = %q, %t; want empty, false", text, ok)
 	}
 }
 

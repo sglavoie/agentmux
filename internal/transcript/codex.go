@@ -71,8 +71,18 @@ type codexContentBlock struct {
 // promoted into the conversation transcript; the rest (task_started,
 // task_completed, ...) are ignored.
 type codexEventMsgPayload struct {
-	Type    string `json:"type"`
-	Message string `json:"message"`
+	Type    string              `json:"type"`
+	Message string              `json:"message"`
+	Item    *codexCompletedItem `json:"item"`
+}
+
+// codexCompletedItem is the nested item carried by Codex 0.148+
+// event_msg/item_completed records. Only UserMessage items are conversation
+// input; the other completed item types describe assistant output, reasoning,
+// and tool activity already represented elsewhere in the rollout.
+type codexCompletedItem struct {
+	Type    string              `json:"type"`
+	Content []codexContentBlock `json:"content"`
 }
 
 // Discover walks <homeDir>/sessions/YYYY/MM/DD/ and returns one SessionMeta
@@ -134,8 +144,8 @@ func (r CodexReader) Discover(homeDir string, opts DiscoverOptions) ([]SessionMe
 // ReadMessages decodes a single transcript into role-tagged Message entries
 // suitable for display and substring search. Non-conversation records
 // (session_meta, turn_context, reasoning, task_started, ...) are skipped.
-// User turns are taken from event_msg/user_message (the canonical, clean
-// copy) so the auto-injected developer prompt and <environment_context>
+// User turns are taken from the canonical, clean event_msg user records so the
+// auto-injected developer prompt and <environment_context> response_item
 // records do not pollute the transcript.
 func (r CodexReader) ReadMessages(path string) ([]Message, error) {
 	f, err := os.Open(path)
@@ -165,8 +175,8 @@ func (r CodexReader) ReadMessages(path string) ([]Message, error) {
 			if err := json.Unmarshal(env.Payload, &p); err != nil {
 				continue
 			}
-			if p.Type == "user_message" && p.Message != "" {
-				msgs = append(msgs, Message{Role: "user", Text: p.Message, Timestamp: ts})
+			if text, user := cleanCodexUserMessage(p); user && text != "" {
+				msgs = append(msgs, Message{Role: "user", Text: text, Timestamp: ts})
 			}
 		case "response_item":
 			var p codexResponseItemPayload
@@ -257,12 +267,12 @@ func (r CodexReader) parseFile(path string, info os.FileInfo) (SessionMeta, erro
 			if err := json.Unmarshal(env.Payload, &p); err != nil {
 				continue
 			}
-			if p.Type == "user_message" {
+			if text, user := cleanCodexUserMessage(p); user {
 				meta.MessageCount++
-				if meta.Snippet == "" && p.Message != "" {
-					meta.Snippet = truncateSnippet(p.Message)
+				if meta.Snippet == "" && text != "" {
+					meta.Snippet = truncateSnippet(text)
 				}
-				appendSearchText(&searchBuf, p.Message)
+				appendSearchText(&searchBuf, text)
 			}
 		case "response_item":
 			var p codexResponseItemPayload
@@ -298,6 +308,35 @@ func (r CodexReader) parseFile(path string, info os.FileInfo) (SessionMeta, erro
 	}
 
 	return meta, nil
+}
+
+// cleanCodexUserMessage extracts the canonical user turn from both rollout
+// generations. The boolean distinguishes a recognized empty user event from an
+// unrelated event so metadata counting stays compatible with legacy files.
+// response_item user messages deliberately never reach this function: those
+// records can contain injected AGENTS and environment context.
+func cleanCodexUserMessage(p codexEventMsgPayload) (string, bool) {
+	switch p.Type {
+	case "user_message":
+		return p.Message, true
+	case "item_completed":
+		if p.Item == nil || p.Item.Type != "UserMessage" {
+			return "", false
+		}
+		var sb strings.Builder
+		for _, block := range p.Item.Content {
+			if block.Type != "text" || block.Text == "" {
+				continue
+			}
+			if sb.Len() > 0 {
+				sb.WriteByte('\n')
+			}
+			sb.WriteString(block.Text)
+		}
+		return sb.String(), true
+	default:
+		return "", false
+	}
 }
 
 // flattenCodexContent reduces an assistant message's content array to a

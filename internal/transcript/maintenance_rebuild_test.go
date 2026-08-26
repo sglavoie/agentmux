@@ -1,6 +1,7 @@
 package transcript
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -96,6 +97,82 @@ func TestRebuildReparsesCachedTranscriptsBeforeResettingSidecars(t *testing.T) {
 	}
 	if got, err := idx.ReadSearchText(IndexKey(harness.Claude, "session")); err != nil || got != "rebuilt needle" {
 		t.Fatalf("rebuilt sidecar = %q, %v", got, err)
+	}
+}
+
+func TestRebuildRepairsBlankCachedCurrentCodexTranscript(t *testing.T) {
+	tmp := t.TempDir()
+	home := filepath.Join(tmp, "codex-home")
+	sourcePath := filepath.Join(home, "sessions", "2026", "08", "25",
+		"rollout-2026-08-25T13-18-17-01a03a5b-ea47-7ae3-b7f3-68f944d707b5.jsonl")
+	fixturePath := filepath.Join(currentCodexFixtureRoot, "sessions", "2026", "08", "25",
+		"rollout-2026-08-25T13-18-17-01a03a5b-ea47-7ae3-b7f3-68f944d707b5.jsonl")
+	source, err := os.ReadFile(fixturePath)
+	if err != nil {
+		t.Fatalf("ReadFile fixture: %v", err)
+	}
+	info := writeTranscript(t, sourcePath, string(source))
+	before, err := os.ReadFile(sourcePath)
+	if err != nil {
+		t.Fatalf("ReadFile source before rebuild: %v", err)
+	}
+
+	cachePath := filepath.Join(tmp, "transcripts.json")
+	key := IndexKey(harness.Codex, "01a03a5b-ea47-7ae3-b7f3-68f944d707b5")
+	blank := SessionMeta{
+		ID: "01a03a5b-ea47-7ae3-b7f3-68f944d707b5", Harness: harness.Codex,
+		Path: sourcePath, FileSize: info.Size(), FileModTime: info.ModTime(),
+	}
+	cache, err := json.Marshal(indexFile{Entries: map[string]SessionMeta{key: blank}})
+	if err != nil {
+		t.Fatalf("Marshal cache: %v", err)
+	}
+	if err := os.WriteFile(cachePath, cache, 0o644); err != nil {
+		t.Fatalf("WriteFile cache: %v", err)
+	}
+
+	cfg := &config.Config{Profiles: []config.Account{{
+		Name: "work", Harness: harness.Codex, HomeDir: home,
+	}}}
+	readers := map[string]Reader{harness.Codex: NewCodexReader()}
+	idx, err := LoadIndexAt(cachePath)
+	if err != nil {
+		t.Fatalf("LoadIndexAt: %v", err)
+	}
+	if err := idx.Refresh(cfg, readers); err != nil {
+		t.Fatalf("Refresh unchanged cache: %v", err)
+	}
+	if got, ok := idx.Get(key); !ok || got.MessageCount != 0 || got.Snippet != "" {
+		t.Fatalf("ordinary refresh changed blank cached entry: %+v, found=%t", got, ok)
+	}
+
+	if _, err := Rebuild(cachePath, cfg, readers, false); err != nil {
+		t.Fatalf("Rebuild: %v", err)
+	}
+	rebuilt, err := LoadIndexAt(cachePath)
+	if err != nil {
+		t.Fatalf("LoadIndexAt rebuilt cache: %v", err)
+	}
+	meta, ok := rebuilt.Get(key)
+	if !ok {
+		t.Fatal("rebuilt Codex entry is missing")
+	}
+	if meta.MessageCount != 2 || meta.Snippet != "Review which previous features should be added back and restore the best ones." {
+		t.Fatalf("rebuilt metadata = %+v", meta)
+	}
+	searchText, err := rebuilt.ReadSearchText(key)
+	if err != nil {
+		t.Fatalf("ReadSearchText: %v", err)
+	}
+	if !strings.Contains(searchText, "review which previous features") || strings.Contains(searchText, "agents injected") {
+		t.Fatalf("rebuilt search sidecar = %q", searchText)
+	}
+	after, err := os.ReadFile(sourcePath)
+	if err != nil {
+		t.Fatalf("ReadFile source after rebuild: %v", err)
+	}
+	if string(after) != string(before) {
+		t.Fatal("rebuild modified the authoritative Codex JSONL")
 	}
 }
 

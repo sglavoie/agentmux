@@ -337,6 +337,7 @@ Maintenance commands:
 ```bash
 amx transcripts status
 amx transcripts compact
+amx transcripts rebuild
 amx transcripts rebuild --all
 ```
 
@@ -345,9 +346,12 @@ orphan-sidecar usage. `compact` takes the transcript cache lock, migrates any
 legacy inline search text, persists metadata, and then removes only regular
 hash-named sidecars that are no longer referenced by a cache key. It preserves
 referenced sidecars, transcript source files, temporary files, symlinks,
-directories, and unrelated artifacts. `rebuild --all` is the complete reset:
-it reparses every discoverable source transcript and recreates the entire
-disposable sidecar store. Normal refreshes never compact orphan sidecars.
+directories, and unrelated artifacts. `rebuild` reparses source transcripts in
+the configured scan window and recreates the disposable sidecar store; run it
+after installing an Agent Mux transcript-parser upgrade so unchanged cached
+files are parsed with the new reader. Add `--all` only for a full backfill of
+discoverable history that ignores the configured scan age. Normal refreshes never
+compact orphan sidecars.
 
 Retention is controlled by `[defaults.session_archive] keep_days` (default
 30). Refresh and prune operations hide cache entries older than `keep_days`;
