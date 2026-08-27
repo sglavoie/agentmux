@@ -235,6 +235,14 @@ These properties make the record admissible as acceptance evidence:
   would leave both tags backed by evidence that is unsigned or that predates
   them. Either failure retracts both tags by the same compare-and-delete instead.
   Release tags therefore never outlive the record that describes them.
+- A retracted attempt is recorded as `"result": "not-released"` rather than
+  `"passed"`, and `Evidence.Passed()` reports false for any record carrying a
+  `"tag_failure"` block at all. A run that returns an error, prints what it took
+  back, and releases nothing cannot leave behind a record whose single most-read
+  field says the pair passed. The two incomplete outcomes stay distinguishable:
+  `"partial"` means a ref survives and the next attempt is refused until it is
+  cleared, `"not-released"` means nothing survives and the run can simply be
+  repeated.
 - `just crash-restart` counts the scenarios that actually executed and
   `just cockpit-smoke` fails rather than skips when Kitty is absent. Both close
   the gap where a gate reports a boundary as exercised that was never touched.
@@ -252,12 +260,16 @@ record agree afterwards, and
 the rollback and runs the recovery command the record names.
 `TestFinalEvidenceSigningFailureRollsBackPairTags` fails only the signature over
 the tagged bytes — every step passes and both tags are genuinely written first —
-and asserts the refs, the persisted record, the detached signature, the returned
-error, and the progress the command prints all agree that the pair is untagged;
+and asserts the refs, the persisted record down to its `"result"`, the detached
+signature, the returned error, and the progress the command prints all agree
+that the pair is untagged and not released;
 `TestFinalEvidenceWriteFailureRollsBackPairTags` does the same for the rewrite
-that never reaches disk. The summary's half of that agreement is
-`cmd.TestReleaseGateSummaryDoesNotSayTaggedWhenTheTagsWereTakenBack`: a passing
-run whose tags were retracted must not print the word an operator scans for.
+that never reaches disk, where the account of the retraction is the one thing
+that cannot be persisted. The summary's half of that agreement is
+`cmd.TestReleaseGateSummaryDoesNotSayTaggedWhenTheTagsWereTakenBack`: a run
+whose tags were retracted must not print the word an operator scans for, must
+lead with `(not-released)` rather than `(passed)`, and must say the same thing
+in the JSON a script reads as in the summary a person reads.
 `TestUnreadableCreatedTagDoesNotOfferNameOnlyDeletion` fails the read-back of a
 tag that was really written, so one ref is identified and rolls back while the
 other is stranded without an object; it asserts the run runs no

@@ -372,10 +372,14 @@ Then check the record itself: `"result": "passed"`, `"schema_version": 1`,
 the tags, and the artifact hashes match what is installed (`amx --version`
 reports the installed binary's own hash).
 
-`"result"` has a third value. `"partial"` means the gate passed but pair tagging
-broke midway and left a tag behind in one repository — see
-[Tags](#tags). It is not a release, and the record says so in the one field
-every consumer already reads.
+`"result"` has two values beyond `"passed"` and `"failed"`, and both mean a
+tagging attempt did not complete — see [Tags](#tags). `"partial"` means it left
+a tag behind in one repository, which somebody has to clear. `"not-released"`
+means it was taken back in full: every step passed, the pair was asked to be
+tagged, and neither repository carries the tag. Neither is a release, and the
+record says so in the one field every consumer already reads — including a
+consumer written before these values existed, which reads anything other than
+`"passed"` as not passed.
 
 ### Tags
 
@@ -425,6 +429,16 @@ disk stays the pre-tag one, which names no tags and is therefore still true of
 the repositories, and the returned error names both failures. The refs are gone
 either way: a retracted claim beside an out-of-date record is recoverable, a
 live claim beside one is not.
+
+**A retracted attempt is not a passed run**, whether the tags went back because
+the second one could not be written or because the record that vouches for them
+could not be published. The result becomes `"not-released"`, `"tags"` stays
+empty, and `"tag_failure"` lists both refs under `"rolled_back"` with the cause
+that stopped the attempt. The summary leads with that outcome — `pair <id>
+(not-released)` — and the command exits non-zero, so the record, the operator's
+screen, and the exit status say the same thing. There is nothing to clean up:
+fix the cause and re-run. This is what separates it from `"partial"`, where a
+ref is still out there and the next attempt is refused until it is gone.
 
 When a removal itself fails, the leftover ref is not left silent:
 

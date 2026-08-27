@@ -93,6 +93,23 @@ const (
 // existed.
 const StatusPartial = "partial"
 
+// StatusNotReleased is the other whole-run result a tagging attempt can end on:
+// every step passed, the tags were asked for, something after them failed, and
+// the compensation took every ref back. Nothing survives for anyone to clear.
+//
+// It is not `passed`, because a run asked to release a pair and released
+// nothing did not do what it was asked; the record has to qualify the outcome,
+// and a result that says `passed` beside a `tag_failure` block is two statements
+// that disagree. It is not `failed` either, because that is the gate's own
+// verdict on the pair and every planned step here passed -- a reader would go
+// looking for the step that broke and find none. And it is not `partial`,
+// because that value's entire purpose is to say a ref was left behind: an
+// operator who reads it goes and clears one, and here there is nothing to clear.
+//
+// Like StatusPartial it is safe for a consumer written before it existed, which
+// reads any value other than `passed` as not passed.
+const StatusNotReleased = "not-released"
+
 // Phase names, in execution order.
 const (
 	PhaseSource      = "source"
@@ -386,8 +403,16 @@ type Evidence struct {
 
 // Passed reports whether the pair was released: every planned step ran and
 // passed, and nothing afterwards left the pair in a state the record has to
-// qualify. StatusPartial is deliberately not passed.
-func (e *Evidence) Passed() bool { return e.Result == StatusPassed }
+// qualify. StatusPartial and StatusNotReleased are deliberately not passed.
+//
+// The second condition is checked rather than trusted. Every path that
+// qualifies a tagging attempt already downgrades the result, so the two can only
+// disagree if a later one forgets to -- and the cost of that omission is a
+// record whose own account of an incomplete tagging attempt is overruled by the
+// single field most consumers read. A tag_failure is the record qualifying its
+// outcome; there is no reading under which such a record describes a released
+// pair.
+func (e *Evidence) Passed() bool { return e.Result == StatusPassed && e.TagFailure == nil }
 
 // Plan returns the ordered command list for a gate run over the two named
 // checkouts.

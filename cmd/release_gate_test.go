@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -281,18 +282,27 @@ func TestReleaseGateSurfacesAStrandedPairTag(t *testing.T) {
 // TestReleaseGateSummaryDoesNotSayTaggedWhenTheTagsWereTakenBack is the CLI half
 // of `release.TestFinalEvidenceSigningFailureRollsBackPairTags`.
 //
-// That run passes every step and really does write both pair tags, so the
-// summary carries `(passed)` and reads almost exactly like a release. The one
-// thing that must differ is the word an operator scans for: the tags were
-// retracted because the record that vouches for them could not be signed, and a
-// summary that still printed "tagged" would report a release that no longer
-// exists in either repository.
+// That run passes every step and really does write both pair tags, so its
+// summary reads almost exactly like a release. Two things must differ: the word
+// an operator scans for -- the tags were retracted because the record that
+// vouches for them could not be signed, and a summary that still printed
+// "tagged" would report a release that no longer exists in either repository --
+// and the outcome on the first line, which is the only part a reader takes in
+// before deciding whether to read the rest.
+//
+// Both output modes are rendered from the same record, so both are checked
+// here. The human summary and the JSON a script consumes must not be able to
+// disagree about whether the pair was released.
 func TestReleaseGateSummaryDoesNotSayTaggedWhenTheTagsWereTakenBack(t *testing.T) {
 	pairID := "amx-asl-1.0123456789abcdef"
+	cause := "release: the record that vouches for the pair tags could not be published: " +
+		"release: signing evidence exited 255: sign_and_send_pubkey: signing failed"
 	ev := &release.Evidence{
 		SchemaVersion: release.SchemaVersion,
 		PairID:        pairID,
-		Result:        release.StatusPassed,
+		// The gate itself passed and both tags were written; the result is what
+		// the retraction left behind, and it is not `passed`.
+		Result: release.StatusNotReleased,
 		Repositories: []release.RepoEvidence{
 			{Repo: "agentmux", Revision: "aaaaaaaaaaaaaaaaaaaa", Clean: true},
 			{Repo: "asl", Revision: "bbbbbbbbbbbbbbbbbbbb", Clean: true},
@@ -305,19 +315,15 @@ func TestReleaseGateSummaryDoesNotSayTaggedWhenTheTagsWereTakenBack(t *testing.T
 			Path:      release.SignaturePath("/evidence/" + pairID + ".json"),
 		},
 		TagFailure: &release.TagFailure{
-			Error: "release: the record that vouches for the pair tags could not be published: " +
-				"release: signing evidence exited 255: sign_and_send_pubkey: signing failed",
+			Error:      cause,
 			RolledBack: []release.TagEvidence{{Repo: "asl", Tag: pairID}, {Repo: "agentmux", Tag: pairID}},
 		},
 	}
-
-	var out strings.Builder
-	cmd := &cobra.Command{}
-	cmd.SetOut(&out)
-	if err := writeReleaseGateResult(cmd, ev); err != nil {
-		t.Fatalf("rendering the summary: %v", err)
+	if ev.Passed() {
+		t.Fatal("the record the summary is rendered from reads as a passed release")
 	}
-	summary := out.String()
+
+	summary := renderReleaseGateResult(t, ev, false)
 
 	for _, line := range strings.Split(summary, "\n") {
 		if strings.Contains(line, "  tagged ") {
@@ -325,6 +331,7 @@ func TestReleaseGateSummaryDoesNotSayTaggedWhenTheTagsWereTakenBack(t *testing.T
 		}
 	}
 	for _, want := range []string{
+		"pair " + pairID + " (" + release.StatusNotReleased + ")",
 		"tagging did not complete",
 		"vouches for the pair tags",
 		"rolled back asl " + pairID,
@@ -334,12 +341,61 @@ func TestReleaseGateSummaryDoesNotSayTaggedWhenTheTagsWereTakenBack(t *testing.T
 			t.Errorf("summary does not contain %q:\n%s", want, summary)
 		}
 	}
+	// The outcome line is what a reader scanning the top of a long summary
+	// takes away, so it must not carry the word a release carries.
+	if strings.Contains(summary, "("+release.StatusPassed+")") {
+		t.Errorf("summary reports a run that released nothing as passed:\n%s", summary)
+	}
 	// Nothing was left behind, so the operator is asked to do nothing.
 	for _, absent := range []string{"STRANDED", "clear it with"} {
 		if strings.Contains(summary, absent) {
 			t.Errorf("summary asks the operator to clean up after a completed rollback:\n%s", summary)
 		}
 	}
+
+	// The JSON surface is the record itself, so what a script reads has to be
+	// the same outcome the operator was shown and the same one the command
+	// exited on: not released, no tags, both refs accounted for as taken back.
+	var decoded release.Evidence
+	document := renderReleaseGateResult(t, ev, true)
+	if err := json.Unmarshal([]byte(document), &decoded); err != nil {
+		t.Fatalf("decoding the JSON summary: %v\n%s", err, document)
+	}
+	if decoded.Result != release.StatusNotReleased || decoded.Passed() {
+		t.Errorf("JSON result = %q, want %q", decoded.Result, release.StatusNotReleased)
+	}
+	if len(decoded.Tags) != 0 {
+		t.Errorf("JSON tags = %+v, want none: neither repository carries the pair tag", decoded.Tags)
+	}
+	failure := decoded.TagFailure
+	if failure == nil {
+		t.Fatal("the JSON record says nothing about the tagging attempt it took back")
+	}
+	if failure.Error != cause {
+		t.Errorf("JSON tag_failure.error = %q, want the returned error's cause %q", failure.Error, cause)
+	}
+	if len(failure.RolledBack) != 2 || len(failure.Stranded) != 0 {
+		t.Errorf("JSON rolled_back = %+v, stranded = %+v, want both tags rolled back and none stranded",
+			failure.RolledBack, failure.Stranded)
+	}
+}
+
+// renderReleaseGateResult runs the command's own result writer in one of its two
+// output modes. The mode is a package-level flag rather than a parameter, so it
+// is set and restored here instead of in every caller.
+func renderReleaseGateResult(t *testing.T, ev *release.Evidence, asJSON bool) string {
+	t.Helper()
+	previous := releaseGateJSON
+	releaseGateJSON = asJSON
+	t.Cleanup(func() { releaseGateJSON = previous })
+
+	var out strings.Builder
+	cmd := &cobra.Command{}
+	cmd.SetOut(&out)
+	if err := writeReleaseGateResult(cmd, ev); err != nil {
+		t.Fatalf("rendering the result: %v", err)
+	}
+	return out.String()
 }
 
 // TestReleaseGateSummaryOffersNoDeletionForAnUnidentifiedTag is the CLI half of

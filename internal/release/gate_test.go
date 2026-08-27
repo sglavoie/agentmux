@@ -817,8 +817,14 @@ func TestSecondRepositoryTagFailureLeavesNoPairTag(t *testing.T) {
 	if len(ev.Tags) != 0 {
 		t.Errorf("tags = %+v, want none: neither repository is tagged", ev.Tags)
 	}
-	if ev.Result != StatusPassed {
-		t.Errorf("result = %q, want %q: the gate itself passed and the pair is simply untagged", ev.Result, StatusPassed)
+	// Every step passed, and the pair was still not released: the result says
+	// so rather than leaving the tagging failure to a field a result-only
+	// consumer never reads. Nothing was left behind, so it is not `partial`.
+	if ev.Result != StatusNotReleased {
+		t.Errorf("result = %q, want %q: the run was asked to tag a pair and tagged neither repository", ev.Result, StatusNotReleased)
+	}
+	if ev.Passed() {
+		t.Error("a tagging attempt that was taken back in full reads as a released pair")
 	}
 	stored, loadErr := LoadEvidence(EvidencePath(f.evidenceDir, ev.PairID))
 	if loadErr != nil {
@@ -827,8 +833,8 @@ func TestSecondRepositoryTagFailureLeavesNoPairTag(t *testing.T) {
 	if len(stored.Tags) != 0 {
 		t.Errorf("persisted tags = %+v, want none: the record must not name a tag that is not there", stored.Tags)
 	}
-	if stored.Result != StatusPassed {
-		t.Errorf("persisted result = %q, want %q", stored.Result, StatusPassed)
+	if stored.Result != StatusNotReleased || stored.Passed() {
+		t.Errorf("persisted result = %q, want %q", stored.Result, StatusNotReleased)
 	}
 	failure := stored.TagFailure
 	if failure == nil {
@@ -946,8 +952,10 @@ func TestUnremovablePairTagIsRecordedAsRecoverablePartialState(t *testing.T) {
 // So the last publication is part of the transaction, not a postscript to it.
 // This test fails exactly one thing -- the signature over the tagged bytes --
 // and then asserts the five statements about that run all agree: the refs, the
-// persisted record, the detached signature, the returned error, and what the
-// operator was told while it happened.
+// persisted record down to the result field a consumer reads on its own, the
+// detached signature, the returned error, and what the operator was told while
+// it happened. A run that returns an error and retracts both tags may not
+// persist a record that says it passed.
 func TestFinalEvidenceSigningFailureRollsBackPairTags(t *testing.T) {
 	f := newFixture(t)
 
@@ -1039,8 +1047,16 @@ func TestFinalEvidenceSigningFailureRollsBackPairTags(t *testing.T) {
 	if len(ev.Tags) != 0 || len(stored.Tags) != 0 {
 		t.Errorf("tags = %+v (persisted %+v), want none: neither repository is tagged", ev.Tags, stored.Tags)
 	}
-	if stored.Result != StatusPassed {
-		t.Errorf("persisted result = %q, want %q: the gate passed and the pair is simply untagged", stored.Result, StatusPassed)
+	// The result is the field a consumer reads without opening anything else,
+	// so it has to carry the same outcome the error does. `passed` here would
+	// hand a script a released pair that exists in neither repository; `partial`
+	// would send an operator looking for a ref to clear that is not there.
+	if stored.Result != StatusNotReleased || ev.Result != stored.Result {
+		t.Errorf("result = %q (persisted %q), want %q: the tags this run wrote were taken back",
+			ev.Result, stored.Result, StatusNotReleased)
+	}
+	if ev.Passed() || stored.Passed() {
+		t.Error("a run that retracted both pair tags reads as a passed release")
 	}
 	failure := stored.TagFailure
 	if failure == nil {
@@ -1153,17 +1169,29 @@ func TestFinalEvidenceWriteFailureRollsBackPairTags(t *testing.T) {
 	if ev.TagFailure == nil || len(ev.TagFailure.RolledBack) != 2 {
 		t.Errorf("tag_failure = %+v, want both tags recorded as rolled back", ev.TagFailure)
 	}
+	// The record the caller is handed carries the retraction, so it carries the
+	// outcome too -- including for the summary the command prints, which is
+	// rendered from this and not from the file that could not be written.
+	if ev.Result != StatusNotReleased || ev.Passed() {
+		t.Errorf("result = %q, want %q: both tags were taken back", ev.Result, StatusNotReleased)
+	}
 
 	_ = os.Chmod(f.evidenceDir, 0o700)
 
 	// What is on disk is the record from before the tags: it names none, which
-	// is now true, and its signature still covers its own bytes.
+	// is now true, and its signature still covers its own bytes. It is also the
+	// one case where the file cannot carry the retraction -- writing is what
+	// failed -- so it still reads as the passing untagged run it describes,
+	// which is true of both repositories now that the refs are gone.
 	stored, loadErr := LoadEvidence(EvidencePath(f.evidenceDir, ev.PairID))
 	if loadErr != nil {
 		t.Fatalf("reading back the evidence record: %v", loadErr)
 	}
 	if len(stored.Tags) != 0 {
 		t.Errorf("persisted tags = %+v, want none: no tag survives this run", stored.Tags)
+	}
+	if stored.TagFailure != nil {
+		t.Errorf("persisted tag_failure = %+v, want none: the account of the retraction is what could not be written", stored.TagFailure)
 	}
 	if !stored.Signature.Signed {
 		t.Errorf("persisted signature = %+v, want the pre-tag signature left intact: signing never ran again", stored.Signature)

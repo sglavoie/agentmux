@@ -241,8 +241,15 @@ func (g *gate) createTag(ctx context.Context, repo, root, name, message string) 
 // A fully rolled-back attempt is an untagged pair: fix the cause and re-run. A
 // stranded ref has to be removed first -- the gate refuses to re-tag a pair that
 // already carries its tag -- so the record names it and carries the exact command
-// that clears it, and the run's result stops being `passed` so nothing downstream
-// can read a half-tagged pair as a release.
+// that clears it.
+//
+// Neither of them is a release, so neither leaves the result at `passed`. The
+// distinction survives in the result itself -- StatusPartial when a ref is
+// still out there, StatusNotReleased when nothing is -- and in the RolledBack
+// and Stranded lists that say which refs went which way. A run that returns an
+// error, records a tagging failure, and still persists `"result": "passed"`
+// would be three statements about one outcome that do not agree, and the field
+// a result-only consumer reads would be the one that is wrong.
 func (g *gate) abandonTags(ctx context.Context, ev *Evidence, created []createdTag, cause error) error {
 	failure := &TagFailure{Error: cause.Error()}
 	var rollbackErrs []error
@@ -276,6 +283,7 @@ func (g *gate) abandonTags(ctx context.Context, ev *Evidence, created []createdT
 	ev.Tags = nil
 	ev.TagFailure = failure
 	if len(failure.Stranded) == 0 {
+		ev.Result = StatusNotReleased
 		return fmt.Errorf("%w; no repository was left carrying the pair tag", cause)
 	}
 	failure.RollbackError = errors.Join(rollbackErrs...).Error()
