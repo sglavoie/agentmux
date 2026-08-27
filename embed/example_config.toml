@@ -63,7 +63,7 @@ confirm_destructive = false
 # separate user assets and are never removed by cache maintenance.
 
 # Optional agent-session-loop (ASL) integration. The daemon starts
-# `<command> bridge serve --stdio --protocol 1` after its own socket is
+# `<command> bridge serve --stdio --protocol 2` after its own socket is
 # published, so a missing or slow ASL never delays Agent Mux.
 #
 # Omitting `enabled` probes for ASL and stays quiet when it is absent. Setting
