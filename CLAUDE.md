@@ -26,7 +26,16 @@ just test
 just acceptance   # tests, core race suites, vet, every TUI scenario
 just check        # acceptance plus golangci-lint
 just install-restart-smoke
+just crash-restart   # fault injection and restart equivalence, under -race
+just cockpit-smoke   # real Kitty + installed pair; fails rather than skips
 ```
+
+Releases of the Agent Mux / agent-session-loop pair go through
+`just paired-release-gate asl_root=… signing_key=…`, which runs both
+repositories' gates, installs the pair (ASL first), restarts the real daemon,
+drives a real Kitty smoke, and writes a signed evidence record. The gate lives
+in `internal/release` and is tested in isolation; see
+`docs/operations.md#paired-releases`.
 
 Use `amx doctor --strict`, `amx transcripts status`, and `amx --version` when
 validating an installed artifact. The CLI and daemon build identities must
@@ -83,6 +92,11 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   native logs, temporary raw captures, and bounded diagnostic storage.
 - `internal/debugger`: offline-first status, query, explanation, bundle, and
   replay services shared by debug, doctor, and hook-status surfaces.
+- `internal/release`: the paired ASL/Agent Mux release gate — ordered step plan,
+  artifact hashing, deterministic signed evidence records, and annotated pair
+  tags. Every external command goes through an injectable runner and time comes
+  from an injectable clock, which is what keeps the gate testable without
+  touching the live installation.
 - `tui`: live-session dashboard, specialized transcript/plan search, and
   deterministic in-process scenario harness.
 
@@ -140,7 +154,10 @@ version but intentionally includes health fields directly. The `debug` report
 families likewise emit command-specific reports directly rather than using the
 common `data` wrapper: `status`, `tail`, `explain`, and `bundle` use schema v2,
 while `probe`, `capture`, and `replay` remain on schema v1. `debug tail
---follow --json` emits one schema-v2 record wrapper per JSON line.
+--follow --json` emits one schema-v2 record wrapper per JSON line. The hidden
+`release-gate --json` likewise emits its evidence record directly: the record is
+the release artifact and carries its own `schema_version`, so wrapping it would
+put a second, unrelated version number in front of the one that governs it.
 
 When adding a command:
 

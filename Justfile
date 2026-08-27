@@ -38,6 +38,49 @@ tui-scenarios:
 asl-integration:
     AMX_ASL_INTEGRATION=1 go test -count=1 -run TestInstalledBridge ./internal/aslbridge
 
+# Compare the vendored compatibility corpus against the canonical one in an ASL
+# checkout. `just test` already proves the vendored bytes and the pinned
+# ContractSetID agree with each other; what it cannot see is whether that
+# agreed-upon copy is still the one ASL publishes. This recipe closes that gap
+# offline, without needing an installed `asl` the way `asl-integration` does.
+#
+# The byte comparison is the whole check, and it is enough: ContractSetID is
+# derived from the vendored bytes by contract_test.go, so identical bytes imply
+# an identical ID. manifest.json is compared too -- it is excluded from the
+# digest, so a manifest that drifted while the schemas did not is invisible to
+# every digest check and visible only here.
+#
+# `just` passes everything after the recipe name positionally, so a caller who
+# writes the documented `asl_root=/path/to/scripts` form hands the recipe that
+# whole string. The prefix is stripped here rather than refused, so the named
+# and bare forms both work and neither silently checks the wrong directory.
+asl-contract-sync asl_root:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    asl_root_arg="{{ asl_root }}"
+    asl_root="${asl_root_arg#asl_root=}"
+    canonical="$asl_root/tests/fixtures/agent_mux_contract"
+    vendored="{{ root }}/internal/aslcontract/corpus"
+
+    if [ ! -d "$canonical" ]; then
+        echo "no ASL corpus at $canonical" >&2
+        echo "pass the ASL checkout: just asl-contract-sync asl_root=/path/to/scripts" >&2
+        exit 1
+    fi
+
+
+    # README.md is Agent Mux's own note about why the copy exists; it is not
+    # part of the contract and ASL does not publish one.
+    if ! diff -ru --exclude=README.md "$canonical" "$vendored"; then
+        echo >&2
+        echo "vendored corpus has drifted from ASL's canonical corpus" >&2
+        echo "re-vendor it, then rerun: just test" >&2
+        exit 1
+    fi
+
+    echo "asl-contract-sync: vendored corpus matches $canonical"
+
 # Daemon lifecycle scenarios whose determinism this repository stresses:
 # startup publication, owned-loop shutdown drain, and the concurrent handler
 # state paths. Extend this pattern as new fault scenarios land.
@@ -103,6 +146,149 @@ reliability-stress reps="20" shards="4":
     AMX_PERF_TESTS=1 go test -count=1 -run 'TestPerformance_' ./internal/daemon
 
     echo "reliability-stress: ok"
+
+# The daemon scenarios that assert state survives a crash, a restart, or a
+# degraded start. Kept separate from stress_scenarios: those repeat healthy
+# lifecycle paths to shake out ordering races, while these inject a fault and
+# assert the observable state afterwards.
+crash_restart_scenarios := "TestFault|TestFuzzReducerRestartEquivalence|TestTraceReplayRestartEquivalence|TestShadowReducerSurvivesRestart|TestInteractiveOwnershipSurvivesRestart"
+
+# Crash, restart, and degraded-start gate. Runs the fault-injection and
+# restart-equivalence scenarios under the race detector.
+#
+# The count guard is the point of the shell wrapper. `go test -run PATTERN`
+# exits 0 when the pattern matches nothing, so a renamed test silently converts
+# this gate into a green step that checked nothing -- the exact failure mode a
+# release gate must not have. The floor is deliberately below the current count
+# so deleting one scenario does not break the build, and far enough above zero
+# that a pattern which stopped matching fails here.
+crash-restart:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    log="$(mktemp)"
+    trap 'rm -f "$log"' EXIT
+
+    go test -race -count=1 -v -run '{{ crash_restart_scenarios }}' ./internal/daemon 2>&1 | tee "$log"
+
+    if grep -q "no tests to run" "$log"; then
+        echo >&2
+        echo "crash-restart matched no tests: the -run pattern is stale" >&2
+        exit 1
+    fi
+
+    # Subtest lines are indented, so this counts top-level scenarios only.
+    passed=$(grep -c '^--- PASS' "$log" || true)
+    if [ "$passed" -lt 12 ]; then
+        echo >&2
+        echo "crash-restart ran only $passed top-level scenarios (expected at least 12)" >&2
+        echo "update crash_restart_scenarios if a scenario was intentionally renamed" >&2
+        exit 1
+    fi
+
+    echo "crash-restart: ok ($passed scenarios)"
+
+# Real-Kitty cockpit smoke over the *installed* pair. Read-only: it observes,
+# it never mutates a session, a plan, or config.toml.
+#
+# Everything else in this repository simulates the terminal. This recipe is the
+# one place a real `kitten @` round trip, a real daemon, and a real ASL pairing
+# preflight are all required at once, which is why it belongs to the release
+# gate rather than to `just check`. It fails rather than skips: a cockpit smoke
+# that quietly passes because Kitty was absent is worse than no smoke.
+#
+# Scope note, so the evidence is not read as more than it is: this half proves
+# the cockpit observes a live Kitty window through the daemon. The intervention
+# half -- fetching a question body, refusing a stale token, accepting a mutation
+# and getting a body-free receipt -- is proven against the installed ASL wrapper
+# by `just asl-integration`, which the release gate runs separately.
+cockpit-smoke:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    amx="{{ prefix_bin }}/amx"
+
+    if [ ! -x "$amx" ]; then
+        echo "no installed amx at $amx; run just install-restart-smoke first" >&2
+        exit 1
+    fi
+
+    if [ -z "${KITTY_WINDOW_ID:-}" ]; then
+        echo "KITTY_WINDOW_ID is unset: run the cockpit smoke from a Kitty window" >&2
+        exit 1
+    fi
+
+    echo "== kitty =="
+    kitty --version
+    kitten @ ls > /dev/null
+    echo "kitten @ ls: ok"
+
+    echo "== daemon =="
+    "$amx" daemon status | grep -q '^ready: true' || {
+        echo "daemon is not ready" >&2
+        "$amx" daemon status >&2
+        exit 1
+    }
+    "$amx" daemon status
+
+    # Proves the daemon is reducing facts for this real window, not merely
+    # answering its socket.
+    echo "== live window events =="
+    "$amx" daemon export-events --current-window --last 50 > /dev/null
+    echo "export-events --current-window: ok"
+
+    echo "== invariants =="
+    "$amx" doctor --strict
+
+    echo "== asl pairing preflight =="
+    "$amx" config asl-sync --check
+
+    echo "cockpit-smoke: ok"
+
+# Run the paired agent-session-loop / Agent Mux release gate.
+#
+#   just paired-release-gate asl_root=~/scripts signing_key=~/.ssh/amx_release
+#   just paired-release-gate asl_root=~/scripts signing_key=~/.ssh/amx_release tag=yes
+#
+# The gate itself lives in internal/release and is documented there; this recipe
+# only translates the `key=value` invocation into flags. As with
+# asl-contract-sync, `just` hands everything after the recipe name to the recipe
+# positionally, so the prefixes are stripped here rather than refused.
+#
+# This has real side effects. It installs both programs, restarts the running
+# daemon, and (with tag=yes) writes annotated tags into both repositories.
+paired-release-gate asl_root signing_key="" tag="no":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    asl_root="{{ asl_root }}"
+    signing_key="{{ signing_key }}"
+    tag="{{ tag }}"
+
+    # A caller who omits asl_root and passes only signing_key would otherwise
+    # have the key silently interpreted as a checkout path.
+    case "$asl_root" in
+        signing_key=*|tag=*)
+            echo "first argument must be the ASL checkout: asl_root=/path/to/scripts" >&2
+            exit 1
+            ;;
+    esac
+    asl_root="${asl_root#asl_root=}"
+    signing_key="${signing_key#signing_key=}"
+    tag="${tag#tag=}"
+
+    args=(release-gate --asl-root "$asl_root" --amx-root "{{ root }}")
+    if [ -n "$signing_key" ]; then
+        args+=(--signing-key "$signing_key")
+    else
+        echo "warning: no signing_key given; the evidence record will be unsigned" >&2
+        echo "warning: an unsigned record is a rehearsal, not a release" >&2
+    fi
+    case "$tag" in
+        yes|true|1) args+=(--tag) ;;
+    esac
+
+    go run . "${args[@]}"
 
 # Product acceptance without the optional linter dependency.
 acceptance: test race-core vet tui-scenarios

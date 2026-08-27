@@ -27,6 +27,31 @@ scenario. `just check` adds the repository linter and is the final local/CI
 gate. The end-to-end coverage map is documented in
 [`docs/acceptance.md`](acceptance.md).
 
+Three gates sit outside `just check` because each needs something a hermetic
+suite does not have:
+
+| Recipe | Needs | Answers |
+| --- | --- | --- |
+| `just crash-restart` | nothing | Does state survive a crash, a restart, or a degraded start? Fault injection plus restart-equivalence replay, under `-race`. |
+| `just reliability-stress` | a quiet machine | Do the daemon lifecycle scenarios still hold under repetition and contention, and are the latency budgets met? |
+| `just cockpit-smoke` | a real Kitty window and an installed pair | Does the cockpit observe a live window through the real daemon? |
+
+`crash-restart` counts the scenarios that ran and fails if the count collapses.
+`go test -run PATTERN` exits 0 when the pattern matches nothing, so a renamed
+scenario would otherwise turn the gate into a green step that checked nothing.
+
+`cockpit-smoke` is read-only and fails rather than skips. It requires
+`KITTY_WINDOW_ID`, a working `kitten @ ls`, a ready daemon, live
+`export-events` for the current window, strict doctor, and a clean
+`config asl-sync --check`. A smoke that passes because Kitty was absent reports
+a boundary as exercised that was never touched.
+
+CI runs `linux-portable`, `macos-full`, and `cross-repository-contract`
+(`.github/workflows/check.yml`). The macOS lane speaks for a release; the Linux
+lane is deliberately partial. Neither lane runs `cockpit-smoke` — no hosted
+runner has a real Kitty — so that boundary is exercised only by an operator, in
+`just paired-release-gate`.
+
 `just asl-integration` is separate and opt-in. Every other recipe is hermetic
 and needs no `agent-session-loop` installed; this one launches the real bridge
 against a throwaway plan and state root and checks the handshake, capabilities,
@@ -213,6 +238,201 @@ These are known gaps, not bugs. Nothing in the cockpit is waiting on them:
   as an Agent Mux queue.
 - **Model and profile brokering.** ASL chooses its own harness and model;
   Agent Mux profiles do not override what a run launches.
+
+## Paired releases
+
+Agent Mux and agent-session-loop are released as a pair. Neither is correct
+alone: ASL owns the compatibility corpus and the bridge protocol, Agent Mux
+vendors the corpus and speaks the protocol, and a release that ships one side
+against an untested peer is the failure the whole contract-set mechanism exists
+to prevent. `just paired-release-gate` is the procedure that makes a pair
+releasable, and its signed evidence record is what says it was.
+
+```bash
+just paired-release-gate asl_root=~/scripts signing_key=~/.ssh/amx_release
+just paired-release-gate asl_root=~/scripts signing_key=~/.ssh/amx_release tag=yes
+```
+
+Run it from a Kitty window, on the machine the pair is installed on. It has real
+side effects: it installs both programs, restarts the running daemon, and with
+`tag=yes` writes annotated tags into both repositories. Omitting `signing_key`
+is allowed and produces an unsigned record — a rehearsal, not a release.
+
+As with `just asl-contract-sync`, `just` hands everything after the recipe name
+to the recipe positionally, so `asl_root=` and `signing_key=` are stripped by the
+recipe rather than parsed by `just`. Bare paths work too.
+
+### What the gate runs
+
+The order is the argument, not an implementation detail. A step that fails stops
+the run; everything after it is recorded as `not-run` rather than omitted, so a
+truncated gate can never read as a complete one.
+
+| Phase | Steps | Why here |
+| --- | --- | --- |
+| `source` | both revisions, both working trees | A release built from an unrecorded tree is unreproducible. Uncommitted changes stop the run before anything else executes. |
+| `environment` | `sw_vers`, `kitty --version`, `asl harness-compat --json` | Seconds, not minutes. A missing Kitty or an unsupported harness should not surface after a twenty-minute stress run. No model is used and no provider is contacted. |
+| `build` | `just build`, then hash the artifacts | The artifact exists before anything claims to have tested it. |
+| `verify` | `just check`; ASL `test-all` and `lint`; `asl-contract-sync`; `asl-integration`; `crash-restart`; both `reliability-stress` gates | Cheapest gate first, the long stress and crash/restart runs last, so an ordinary regression fails fast. |
+| `install` | ASL `just all`, ASL `just verify-asl-install`, Agent Mux `just install-restart-smoke` | **ASL first, then Agent Mux.** The Agent Mux install restarts the daemon, and a daemon restarted against a stale ASL proves nothing about the pair. |
+| `smoke` | `just cockpit-smoke` | Against the installation the previous phase just produced, in a real Kitty window. |
+
+Three artifact hashes are recorded: the built `amx` binary, the ASL wrapper, and
+a digest over ASL's Python sources. The source-tree digest exists because ASL
+ships as Python — there is no compiled artifact whose hash pins the code that
+will run, and hashing only the wrapper would pin a twenty-line launcher while
+the program it launches changed underneath it. Paths participate in the digest,
+so a renamed module changes it.
+
+**The gate does not prove intervention through Kitty.** `cockpit-smoke` proves
+the cockpit observes a live window through the real daemon. Fetching a question
+body, refusing a stale token, accepting a mutation, and receiving a body-free
+receipt are proven against the installed ASL wrapper by `just asl-integration`,
+which the gate runs separately in the verify phase. The two halves are recorded
+as two steps because they are two claims.
+
+### Active runs
+
+`cockpit-smoke` ends with `amx config asl-sync --check`, which is the full
+pairing preflight and writes nothing. **An active run is never migrated or
+stopped.** If a live run still carries state this build cannot pair with, the
+preflight refuses whole-root and names each run by pid, run ID, and plan
+directory, and the gate fails on that step. Let those runs finish, or stop them
+yourself, then re-run the gate. Do not work around it by pairing anyway:
+migrating the corpus around a live run leaves the one process that is actually
+writing on the old schema.
+
+The gate never runs `amx config asl-sync` itself. Persisting a new executable
+path and restarting onto it is an operator decision, and it is the one step in a
+release that should be taken deliberately after reading the preflight.
+
+### The evidence record
+
+Every run writes `<pair-id>.json` under the evidence directory —
+`[defaults.release] evidence_dir`, `--evidence-dir`, or
+`~/.local/share/agent-mux/release-evidence` — with a detached `<pair-id>.json.sig`
+beside it. The record names the two revisions, the three artifact hashes, the
+contract set ID and the manifest SHA-256, the OS/Kitty/Go/harness versions, and
+every command with its exit code, status, and duration.
+
+The pair ID is `amx-asl-1.` plus the first sixteen hex characters of
+`sha256(agentmux_revision \n asl_revision \n contract_set_id \n)`. Nothing
+environmental goes in, so two operators releasing the same revisions arrive at
+the same ID — which is what lets a tag in either repository be correlated with a
+record.
+
+The encoding is deterministic: every collection is an ordered list rather than a
+map, so re-encoding the same run is byte-identical. The values that legitimately
+differ between two runs of the same revisions are the timestamp and the measured
+durations. Output is captured only for a failed step; a passing gate's record
+would otherwise carry megabytes of test output that no consumer reads.
+
+A failed run is still written and still signed. The signature attests that this
+gate produced this record; `"result"` is what says whether the pair passed. **A
+verifier must check both.**
+
+### Verifying a release record
+
+```bash
+ssh-keygen -Y verify \
+  -f ~/.config/agent-mux/allowed_signers \
+  -I release@example.com \
+  -n agentmux-asl-release \
+  -s ~/.local/share/agent-mux/release-evidence/amx-asl-1.<id>.json.sig \
+  < ~/.local/share/agent-mux/release-evidence/amx-asl-1.<id>.json
+```
+
+The `allowed_signers` file is one line per trusted key:
+`release@example.com ssh-ed25519 AAAA...`.
+
+The namespace is not decoration. A signature made under
+`agentmux-asl-release` verifies only when the verifier names that same
+namespace, so a release key that also signs commits or Git objects cannot have
+one of those signatures replayed as a release approval. Verifying without `-n`,
+or with a different namespace, fails — that is the point.
+
+Then check the record itself: `"result": "passed"`, `"schema_version": 1`, the
+revisions match the tags, and the artifact hashes match what is installed
+(`amx --version` reports the installed binary's own hash).
+
+### Tags
+
+`tag=yes` writes the same annotated tag name — the pair ID — into both
+repositories, carrying the pair ID, the manifest SHA-256, the contract set, both
+revisions, the artifact hashes, and the evidence file name. Either repository
+alone then answers "what was this released with".
+
+The gate refuses to re-tag a pair that already carries its tag, and it checks
+for that **before** writing or signing anything, so a refusal cannot leave a
+signed record describing tags that say something else. It also refuses to
+overwrite an existing evidence record unless `--force` is passed.
+
+### Rolling back
+
+Rollback is the install phase in reverse, in the reverse order — Agent Mux
+first, then ASL — because the constraint is unchanged: never leave a daemon
+running against a peer it was not tested with.
+
+1. Check out the previous pair's revisions in both repositories. The tags name
+   them; the evidence record for that pair confirms them.
+2. `just install-restart-smoke` in Agent Mux. This rebuilds, installs
+   atomically, restarts the daemon, and gates on strict doctor.
+3. `just all` in the ASL checkout, then `just verify-asl-install`.
+4. `amx config asl-sync --check`, then `amx config asl-sync` if the resolved
+   path changed. Pairing is transactional: any failure after the write restores
+   the previous configuration and restarts the daemon onto it.
+5. `just cockpit-smoke`.
+
+There is no state migration to undo. The contract set is checked, not converted,
+and `asl-sync` refuses rather than migrating around a live run — so a rollback
+that lands on a contract set the state root does not name will say so instead of
+half-working.
+
+### Maintenance installation
+
+Reinstalling the current pair — after a Go toolchain upgrade, a Homebrew Kitty
+update, or a machine restore — does not need the full gate. It needs the install
+phase and the smoke:
+
+```bash
+just verify-asl-install        # in the ASL checkout
+just install-restart-smoke     # in the Agent Mux checkout
+just cockpit-smoke
+amx doctor --strict
+amx config hooks-status
+```
+
+This deliberately produces no evidence record. The record is a statement about a
+*pair of source revisions*, and reinstalling the same revisions does not create
+a new pair. If the revisions changed at all, run the gate.
+
+### Harness compatibility policy
+
+ASL owns the policy and Agent Mux records its verdict. `asl harness-compat`
+classifies each installed harness against a pinned window per harness:
+
+- **supported** — inside the tested window.
+- **unknown** — outside it, or unreadable. This *warns*. A new upstream release
+  is news, not a broken build, and blocking on it would mean every harness
+  update breaks every user until someone moves a pin.
+- **incompatible** — explicitly known-bad. This *blocks*.
+
+The probe uses no model and contacts no provider: the only subprocess it builds
+is `<executable> --version`, and ASL's own test pins that argv. The gate records
+the verdict for all three harnesses in the evidence record's `environment`
+block, so a release can be traced to the harness versions it was actually
+exercised against. ASL's scheduled `harness-compatibility.yml` workflow keeps
+the pinned window honest between releases.
+
+### Continuously testing the gate itself
+
+A gate whose logic is only exercised during a release is a gate that is
+discovered to be broken during a release. `go test ./internal/release` runs the
+entire procedure against a stand-in world: two throwaway Git repositories, an
+ephemeral SSH key, a fake `just`, a fake `kitty`, and a fake ASL wrapper, all
+under `t.TempDir()`. Git and `ssh-keygen` are real — the signature the test
+produces is verified with the same command this document gives an operator — and
+nothing in it touches the live installation.
 
 ## Troubleshooting
 

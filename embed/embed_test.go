@@ -66,6 +66,9 @@ type exampleConfig struct {
 			Enabled *bool  `toml:"enabled"`
 			Command string `toml:"command"`
 		} `toml:"asl"`
+		Release struct {
+			EvidenceDir string `toml:"evidence_dir"`
+		} `toml:"release"`
 	}
 	HarnessEmojis map[string]string `toml:"harness_emojis"`
 	HarnessColors map[string]string `toml:"harness_colors"`

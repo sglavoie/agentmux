@@ -350,6 +350,35 @@ request, or source-event ID from `tail`.
 | Notification suppression | `daemon.notification.decision` or `daemon.notification.focus` suppressed with `muted`, `pipe_mode`, `config_disabled`, `cooldown`, `backend_unavailable`, `focus_unavailable`, `focus_target_missing`, `focus_target_stale`, `unsupported_action`, `interaction_timeout`, or dismissal; `daemon.notification.dispatch` cancelled with `daemon_shutdown`; explanation `notification_suppression` | Run `amx daemon status` and `amx doctor` for Alerter capability failures. For focus failures, verify the originating Kitty socket and window still exist. Change notification policy only if the suppression was unintended |
 | Quota exhaustion | Capture/native status reports the bounded quota and denied or pruned write | Stop/purge capture or reduce retention; active native launches remain protected |
 | Restart recovery | Daemon lifecycle boundary plus restored reducer facts and later render generation | Compare CLI/daemon build, then replay the journal or bundle offline |
+| Failed paired release gate | `<pair-id>.json` in the evidence directory: the failing step's `exit_code` and `output_tail`, with every later step recorded `not-run` | Read the record, not the terminal scrollback. See below |
+
+## Diagnosing a failed paired release gate
+
+The gate stops at the first failing step and writes its record anyway, so the
+record is the diagnosis rather than a summary of one. Read it before rerunning
+anything:
+
+```bash
+jq '.result, (.steps[] | select(.status != "passed") | {name, exit_code, output_tail})' \
+  ~/.local/share/agent-mux/release-evidence/amx-asl-1.<id>.json
+```
+
+The step names map to what to look at next:
+
+| Failing step | What it means | First response |
+| --- | --- | --- |
+| (no steps ran, a repository is `clean: false`) | A working tree had uncommitted changes | Commit or stash; `dirty` in the record names the paths |
+| `kitty-version`, `cockpit-smoke` | No real Kitty, no `KITTY_WINDOW_ID`, or remote control is off | Run the gate from a Kitty window with `allow_remote_control` enabled |
+| `harness-compat` | A harness is outside the pinned window or unreadable | `asl harness-compat --json`; `unknown` warns, `incompatible` blocks |
+| `contract-sync` | The vendored corpus drifted from ASL's canonical one | Re-vendor `internal/aslcontract/corpus`, then `just test` |
+| `paired-integration` | The installed `asl` is missing or speaks a different protocol | `amx config asl-sync --check`, then the ASL dimension table above |
+| `crash-restart` | A fault or restart-equivalence scenario regressed, **or** the `-run` pattern went stale | The recipe reports which; a stale pattern says so explicitly |
+| `amx-stress`, `asl-stress` | Contention changed a correctness outcome, or a latency budget was missed | Rerun on a quiet machine; the budgets are measured unloaded on purpose |
+| `amx-install-restart` | The daemon never reached `ready: true`, or strict doctor found an invariant failure | `amx daemon status`, then `amx doctor --strict` |
+| `cockpit-smoke` at `asl-sync --check` | A live run carries state this build cannot pair with | Let the named runs finish; never migrate around a live run |
+
+A failed record is signed like a passing one. The signature says the gate
+produced it; `"result"` says whether the pair passed. Check both.
 
 ## Automated and provider smoke boundaries
 

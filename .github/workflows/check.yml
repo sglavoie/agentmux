@@ -6,12 +6,26 @@ on:
   pull_request:
     branches: [main]
 
+# Three lanes with different authority.
+#
+#   `linux-portable` is cheap and deliberately partial: build, vet, gofmt and
+#   golangci-lint hold on any platform, and so does the unit suite, because
+#   every Kitty boundary in this repository is behind a seam the tests drive
+#   with a fake `kitten` on PATH rather than a real terminal.
+#
+#   `macos-full` is the lane that speaks for a release. It runs `just check` --
+#   the full suite, the race-detector core, vet, and every committed TUI
+#   scenario -- on the platform Agent Mux is developed, installed, and released
+#   against.
+#
+#   `cross-repository-contract` answers the one question neither of the other
+#   two can: whether the vendored ASL compatibility corpus is still the corpus
+#   ASL publishes. A copy that agrees with itself is exactly what that check
+#   exists to catch.
 jobs:
-  check:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
+  linux-portable:
+    name: Linux (portable)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
@@ -46,3 +60,80 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: latest
+
+  macos-full:
+    name: macOS (full)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install just
+        uses: extractions/setup-just@v4
+
+      # `just acceptance` is `test race-core vet tui-scenarios`. No Kitty is
+      # installed on this runner and none is needed: the acceptance suites
+      # stage their own `kitten` script and `kitty.json` fixture on PATH, and
+      # the TUI scenarios run the dashboard in-process against recorded state.
+      # The boundaries a real terminal owns are simulated here and exercised for
+      # real only by `just install-restart-smoke` and the paired release gate,
+      # both of which run on an operator's machine.
+      - name: Acceptance
+        run: just acceptance
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+
+  cross-repository-contract:
+    name: Cross-repository contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install just
+        uses: extractions/setup-just@v4
+
+      # The offline half: contract_test.go recomputes every file digest against
+      # the vendored manifest and re-derives ContractSetID from the corpus
+      # bytes, so a vendored file edited on this side fails here.
+      - name: Vendored corpus is self-consistent
+        run: go test -count=1 ./internal/aslcontract
+
+      # The cross-repository half. A fork's pull request has no access to the
+      # secret, so the checkout is conditional -- but a skip is recorded rather
+      # than swallowed, and the final step turns a skip on a trusted event into
+      # a failure. A silent skip would report a synchronized pair that was never
+      # actually compared.
+      - name: Check out agent-session-loop
+        id: asl
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: actions/checkout@v6
+        with:
+          repository: sglavoie/scripts
+          token: ${{ secrets.ASL_REPO_TOKEN }}
+          path: .asl-checkout
+
+      - name: Vendored corpus matches ASL's canonical corpus
+        if: ${{ steps.asl.outcome == 'success' }}
+        run: just asl-contract-sync "asl_root=$GITHUB_WORKSPACE/.asl-checkout"
+
+      - name: Refuse an unverified pair on a trusted event
+        if: ${{ steps.asl.outcome != 'success' && github.event_name != 'pull_request' }}
+        run: |
+          echo "the ASL checkout did not run, so the vendored corpus was never" >&2
+          echo "compared against the canonical one. Set the ASL_REPO_TOKEN" >&2
+          echo "secret, or fix the checkout; do not merge on this result." >&2
+          exit 1

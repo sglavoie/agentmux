@@ -79,6 +79,37 @@ It also disables Kitty tab bell markers and audible bells for any Kitty
 instance that includes the snippet, so Agent Mux's tab icons remain the
 attention signal.
 
+### Upgrading the pair
+
+Agent Mux and `agent-session-loop` are released as a pair, and the install order
+is part of the contract: **ASL first, then Agent Mux**. The Agent Mux install
+restarts the daemon, and a daemon restarted against a stale ASL says nothing
+about whether the two halves agree.
+
+```bash
+just verify-asl-install        # in the ASL checkout, after installing it
+just install-restart-smoke     # in this checkout
+just cockpit-smoke             # from a Kitty window
+amx config asl-sync --check
+```
+
+`install-restart-smoke` stages the binary beside its destination and renames it
+into place, so there is no window where `amx` is absent or half-copied, and a
+running daemon keeps its already-open executable. It then restarts the daemon,
+waits for `ready: true`, and gates on `amx doctor --strict`, which verifies that
+the CLI and the daemon are the same artifact by hash and revision.
+
+A pairing preflight refuses whole-root if a live run still carries state the new
+build cannot pair with, naming each run. Let those runs finish rather than
+migrating around them.
+
+Cutting an actual release — as opposed to reinstalling one — runs
+`just paired-release-gate asl_root=… signing_key=…`, which performs all of the
+above plus both full suites and produces a signed evidence record and annotated
+tags in both repositories. See
+[Paired releases](docs/operations.md#paired-releases) for the procedure, the
+evidence schema, how to verify a record's signature, and how to roll back.
+
 ## Harness profiles
 
 A profile name is a unique launch identity, not a display label. Each project

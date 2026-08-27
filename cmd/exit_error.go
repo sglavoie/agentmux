@@ -3,15 +3,19 @@ package cmd
 import "fmt"
 
 // Exit status codes for the amx CLI. Public commands surface any failure as the
-// generic status 1 through Execute; the hidden tui-test harness distinguishes a
-// genuine scenario regression from a bad invocation so automation can branch on
-// the process exit code alone.
+// generic status 1 through Execute; the hidden harnesses (tui-test,
+// release-gate) distinguish a genuine regression from a bad invocation so
+// automation can branch on the process exit code alone.
 const (
-	// exitScenarioFailure marks a harness run that executed cleanly but had at
-	// least one failing assertion or detected layout issue (a real regression).
+	// exitScenarioFailure marks a harness run that executed cleanly but reached
+	// a negative verdict: a failing TUI assertion or detected layout issue, or a
+	// release gate whose pair did not pass. The harness did its job; the subject
+	// failed.
 	exitScenarioFailure = 2
 	// exitInvalidInput marks a bad invocation: an unknown fixture, an unreadable
-	// or malformed scenario, or an isolated-config staging failure.
+	// or malformed scenario, an isolated-config staging failure, or a release
+	// gate pointed at a missing checkout, an unreadable signing key, or a pair
+	// that is already tagged.
 	exitInvalidInput = 3
 )
 

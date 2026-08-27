@@ -64,6 +64,18 @@ type Defaults struct {
 	Editor               string               `toml:"editor"`          // overrides $VISUAL/$EDITOR for the `O` keybinding (Open in editor)
 	PlansDirectory       string               `toml:"plans_directory"` // root for the `P` keybinding's plans index; defaults to ~/.local/share/agent-plans
 	ASL                  ASLConfig            `toml:"asl"`             // optional agent-session-loop bridge integration
+	Release              ReleaseConfig        `toml:"release"`         // paired ASL/Agent Mux release gate
+}
+
+// ReleaseConfig configures the paired release gate. It is operator tooling, not
+// a runtime feature: nothing in the daemon, the dashboard, or any session path
+// reads it, and an installation that never cuts a release can leave it unset.
+type ReleaseConfig struct {
+	// EvidenceDir is where signed release records are stored. Empty derives
+	// ~/.local/share/agent-mux/release-evidence at use time rather than being
+	// filled in on load, so a record's location is decided by the machine that
+	// runs the gate rather than by whichever machine last wrote the config.
+	EvidenceDir string `toml:"evidence_dir"`
 }
 
 // ASLConfig controls the optional agent-session-loop bridge. Enabled is a

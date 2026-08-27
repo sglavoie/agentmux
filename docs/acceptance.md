@@ -187,6 +187,42 @@ Record `just acceptance`, optional `just check`, installed daemon/doctor/session
 smoke, cache population, and the post-smoke filesystem inventory in the release
 handoff.
 
+### Paired release evidence
+
+For a release of the Agent Mux / agent-session-loop pair, the handoff above is
+produced mechanically instead. `just paired-release-gate asl_root=… signing_key=…`
+runs both repositories' full gates, the crash/restart and reliability-stress
+gates, the paired bridge integration against the installed wrapper, the staged
+install in the documented order (ASL first), a real daemon restart, and a real
+Kitty cockpit smoke — then writes a signed JSON record naming both revisions,
+the artifact hashes, the contract set and manifest SHA-256, the OS/Kitty/harness
+versions, and every command with its result and duration. The procedure, the
+evidence schema, the verification command, tagging, rollback, and maintenance
+installation are documented in
+[Paired releases](operations.md#paired-releases).
+
+Two properties make the record admissible as acceptance evidence:
+
+- A step that never ran is recorded as `not-run` rather than omitted, so a
+  truncated gate cannot read as a complete one.
+- `just crash-restart` counts the scenarios that actually executed and
+  `just cockpit-smoke` fails rather than skips when Kitty is absent. Both close
+  the gap where a gate reports a boundary as exercised that was never touched.
+
+The gate's own logic is covered by `go test ./internal/release`, which runs the
+whole procedure against throwaway repositories, an ephemeral SSH key, and fake
+`just`/`kitty`/ASL executables — with real Git and real `ssh-keygen`, so
+revision reading, annotated tagging, and namespace-scoped signature
+verification are genuinely exercised without touching the live installation.
+
+CI coverage is three lanes in `.github/workflows/check.yml`: `linux-portable`
+(build, unit suite, vet, gofmt, lint), `macos-full` (`just acceptance` plus
+lint, on the release platform), and `cross-repository-contract` (the vendored
+corpus is self-consistent, and byte-identical to ASL's canonical corpus). The
+cross-repository job records a skipped ASL checkout and fails on a trusted
+event rather than reporting a pair it never compared. No hosted runner has a
+real Kitty, so `cockpit-smoke` is operator-only by construction.
+
 ### Dashboard run timer
 
 Automated coverage stops at the daemon boundary and the hermetic TUI scenarios,

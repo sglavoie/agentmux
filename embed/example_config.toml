@@ -96,6 +96,16 @@ confirm_destructive = false
 # rather than yours, and Agent Mux would simply report no runs.
 # state_root = "~/.local/state/agent-session-loop"
 
+# Where the paired release gate stores its signed evidence records. This is
+# release-operator tooling: nothing in the daemon, the dashboard, or any session
+# path reads it, and an installation that never cuts a release can ignore it.
+#
+# Leave it unset to use ~/.local/share/agent-mux/release-evidence, beside the
+# caches and handoffs. Each run writes <pair-id>.json plus a detached
+# <pair-id>.json.sig; see docs/operations.md for how to verify one.
+[defaults.release]
+# evidence_dir = "~/.local/share/agent-mux/release-evidence"
+
 # Preview pane shown by the `p` keybinding. Direction chooses a side-by-side
 # split ("horizontal") or stacked split ("vertical"). Ratio is the fraction of
 # the terminal given to the preview. Refresh is in milliseconds while the
