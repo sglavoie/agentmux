@@ -33,7 +33,8 @@ amx debug replay agent-mux-debug.tar.gz
 
 Bundle creation gathers the same read-only live health evidence as `status`
 plus a doctor snapshot, so it may contact the daemon and Kitty. It does not
-mutate either one.
+mutate either one. Add `--include-asl` when the failure crosses into
+agent-session-loop; see [Bundle modes and sharing](#bundle-modes-and-sharing).
 
 `replay` is strictly offline. It accepts an immutable journal directory, debug
 bundle, or `export-events` file and reconstructs routing, reducer decisions,
@@ -239,6 +240,31 @@ source.
 `--mode forensic` includes broader scrubbed diagnostic text but is explicitly
 `LOCAL ONLY`. It is not a less-redacted sharing mode. Raw captures and raw
 native logs are still excluded. Never share a forensic bundle.
+
+`--include-asl` adds the agent-session-loop half of the causal path. It runs
+`asl diagnostics export --agent-mux` and stores the result as
+`asl-export.json`, then joins it against this bundle's own journal window as
+`asl-correlation.json`: run ID, lifecycle source-event ID, request ID and
+operation ID, projection generation and contract-set ID, delivery outcomes,
+bridge receipts, reconciliation decisions, daemon journal entries, bounded
+assurance summaries, and both sides' build identity *and* binary hash.
+
+That export is the only ASL data any bundle reads. `state.json`,
+`events.jsonl`, and `mailbox.jsonl` are ASL's private formats, and
+`manifest.json` records their exclusion explicitly. The export carries no
+question body, reply text, prompt, model output, raw bridge stderr, secret, or
+unbounded verification output; what it withholds appears as counts, SHA-256
+digests, and named reasons in its `omissions` ledger, beside a
+`redaction_policy` that states the rule for each excluded field. AgentMux
+decodes it into typed values, so a field a newer ASL adds is dropped at the
+boundary rather than published unreviewed.
+
+Bundle creation never depends on any of it succeeding. If ASL, AgentMux's
+bridge, or Kitty is unavailable — or ASL predates the subcommand, is disabled
+in `[defaults.asl]`, hangs, exceeds the read ceiling, or emits something
+unreadable — `asl-export.json` is absent and both `manifest.json` and
+`asl-correlation.json` name the reason. Repeated capture over frozen inputs is
+byte-identical in either mode.
 
 ## Event contracts and intentional exclusions
 

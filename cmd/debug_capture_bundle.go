@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +12,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/internal/aslcontract"
+	"github.com/sglavoie/agentmux/internal/aslexport"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/debugger"
@@ -28,9 +33,22 @@ var (
 	debugBundleMode       string
 	debugBundleOutput     string
 	debugBundleJSON       bool
+	debugBundleIncludeASL bool
 	debugInputInteractive = func(reader io.Reader) bool {
 		file, ok := reader.(*os.File)
 		return ok && isTerminalInput(file)
+	}
+	// debugBundleASLFetch is the subprocess seam for the ASL side. Bundle
+	// creation must stay exercisable with no ASL installed, and every degraded
+	// path is a documented outcome rather than an error, so the fetch is
+	// replaceable in tests.
+	debugBundleASLFetch   = aslexport.Fetch
+	debugBundleASLResolve = func(command string) (string, error) {
+		resolution, err := aslbridge.ResolveCommand(command)
+		if err != nil {
+			return "", err
+		}
+		return resolution.Executable, nil
 	}
 )
 
@@ -83,6 +101,8 @@ func init() {
 	debugBundleCmd.Flags().StringVar(&debugBundleMode, "mode", string(debugger.BundleModeShare), "redaction mode: share or forensic")
 	debugBundleCmd.Flags().StringVarP(&debugBundleOutput, "output", "o", "", "output .tar.gz path")
 	debugBundleCmd.Flags().BoolVar(&debugBundleJSON, "json", false, "write schema-versioned JSON")
+	debugBundleCmd.Flags().BoolVar(&debugBundleIncludeASL, "include-asl", false,
+		"include agent-session-loop's public sanitized diagnostics export and correlate it with this bundle's journal window")
 	debugCmd.AddCommand(debugCaptureCmd, debugBundleCmd)
 }
 
@@ -224,6 +244,9 @@ func runDebugBundle(cmd *cobra.Command, _ []string) error {
 		Paths: paths, OutputPath: debugBundleOutput, Mode: debugger.BundleMode(strings.ToLower(strings.TrimSpace(debugBundleMode))),
 		Selector: selector, Now: now, Journal: journal, Config: cfg, ConfigError: configErr,
 		Status: &status, Doctor: doctor, Build: buildinfo.Current(), NativeSessions: status.Native.Sessions,
+		ASL:              fetchASLExportForBundle(cmd.Context(), cfg, selector),
+		ASLRequested:     debugBundleIncludeASL,
+		ASLContractSetID: aslcontract.ContractSetID,
 	})
 	if err != nil {
 		return err
@@ -239,6 +262,64 @@ func runDebugBundle(cmd *cobra.Command, _ []string) error {
 		_, err = fmt.Fprintln(cmd.OutOrStdout(), result.Manifest.Warning)
 	}
 	return err
+}
+
+// fetchASLExportForBundle obtains the ASL half of the causal path.
+//
+// It never returns an error. A bundle is most valuable exactly when the other
+// half of the pairing is broken, so every way this can fail — not requested,
+// turned off, not installed, too old, hung, unreadable — resolves to an
+// availability the bundle records and explains. The only thing that would make
+// a bundle worse is refusing to write one.
+//
+// The export is read through ASL's public sanitized command. AgentMux does not
+// parse state.json, events.jsonl or mailbox.jsonl for diagnostics, so no bundle
+// can carry a question body, a reply, or a prompt that ASL declined to publish.
+func fetchASLExportForBundle(ctx context.Context, cfg *config.Config, selector debugger.Selector) aslexport.Result {
+	if !debugBundleIncludeASL {
+		return aslexport.Result{Availability: aslexport.Availability{Reason: aslexport.ReasonNotRequested}}
+	}
+	settings := config.ASLConfig{}
+	if cfg != nil {
+		settings = cfg.Defaults.ASL
+	}
+	if settings.ASLModeValue() == "disabled" {
+		return aslexport.Result{Availability: aslexport.Availability{
+			Reason: aslexport.ReasonDisabled,
+			Detail: "[defaults.asl] enabled = false",
+		}}
+	}
+	command := strings.TrimSpace(settings.Command)
+	if command == "" {
+		command = "asl"
+	}
+	executable, err := debugBundleASLResolve(command)
+	if err != nil {
+		return aslexport.Result{Availability: aslexport.Availability{
+			Reason: aslexport.ReasonNotFound,
+			Detail: err.Error(),
+		}}
+	}
+	stateRoot := strings.TrimSpace(settings.StateRoot)
+	if stateRoot == "" {
+		// The unpaired default. Passing it explicitly rather than letting ASL
+		// choose keeps the bundle's evidence tied to the root AgentMux itself
+		// watches, which is the root the rest of the bundle describes.
+		stateRoot = agentloop.DefaultStateRoot()
+	}
+	result, err := debugBundleASLFetch(ctx, aslexport.Options{
+		Executable:    executable,
+		StateRoot:     stateRoot,
+		RunID:         strings.TrimSpace(selector.ASLRunID),
+		ContractSetID: aslcontract.ContractSetID,
+	})
+	if err != nil {
+		return aslexport.Result{Availability: aslexport.Availability{
+			Reason: aslexport.ReasonFailed,
+			Detail: err.Error(),
+		}}
+	}
+	return result
 }
 
 func collectDoctorSnapshotForBundle(command *cobra.Command) any {

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/aslexport"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
@@ -36,6 +37,25 @@ type BundleOptions struct {
 	Doctor         any
 	Build          buildinfo.Info
 	NativeSessions []NativeSession
+
+	// ASL carries the result of reading agent-session-loop's public sanitized
+	// diagnostics export. It is a Result rather than a Document because the
+	// unavailable cases are evidence too: a bundle captured while ASL is absent,
+	// too old, or hung must still say so, in the manifest, with a reason.
+	//
+	// The bundle never reads ASL's own state files. Everything on that side
+	// arrives through this one value, which is what keeps AgentMux from becoming
+	// a second consumer of a private format.
+	ASL aslexport.Result
+
+	// ASLRequested distinguishes "--include-asl was not passed" from "it was
+	// passed and ASL had nothing to say". Both produce no export; only one is a
+	// problem worth looking at.
+	ASLRequested bool
+
+	// ASLContractSetID is the contract set this build implements, compared
+	// against the export's. Empty skips the comparison.
+	ASLContractSetID string
 }
 
 type BundleManifestEntry struct {
@@ -220,6 +240,42 @@ func CreateBundle(ctx context.Context, options BundleOptions) (BundleResult, err
 	if err := addJSON("asl-records.json", "applicable diagnostic journal records", "ASL/run filter and structured redaction", asl); err != nil {
 		return BundleResult{}, err
 	}
+
+	// The ASL half of the causal path. Both members are always accounted for:
+	// when the export is unavailable the member is absent and the manifest
+	// carries the named reason, so a reader can distinguish "ASL was not asked",
+	// "ASL is too old", and "ASL was asked and failed" without guessing.
+	aslAvailability := options.ASL.Availability
+	if !options.ASLRequested && aslAvailability.Reason == "" {
+		aslAvailability = aslexport.Availability{Reason: aslexport.ReasonNotRequested}
+	}
+	if options.ASL.Document != nil {
+		if err := addJSON("asl-export.json", "agent-session-loop public sanitized diagnostics export",
+			"typed decode of ASL's bounded control-plane export and structured redaction",
+			options.ASL.Document); err != nil {
+			return BundleResult{}, err
+		}
+		manifest.Truncated = manifest.Truncated || options.ASL.Document.Truncated
+	} else {
+		manifest.Entries = append(manifest.Entries, BundleManifestEntry{
+			Member: "asl-export.json", Source: "agent-session-loop public sanitized diagnostics export",
+			Decision: "unavailable", Reason: aslUnavailableReason(aslAvailability),
+		})
+	}
+	correlation := buildASLCorrelation(
+		aslexport.Result{Availability: aslAvailability, Document: options.ASL.Document, Bytes: options.ASL.Bytes},
+		records, options.ASLContractSetID, options.Build,
+	)
+	if err := addJSON("asl-correlation.json", "cross-system causal correlation",
+		"derived join over this bundle's own journal window and the ASL export", correlation); err != nil {
+		return BundleResult{}, err
+	}
+	manifest.Truncated = manifest.Truncated || correlation.Truncated
+	manifest.Entries = append(manifest.Entries, BundleManifestEntry{
+		Member: "(none)", Source: "agent-session-loop internal state files",
+		Decision: "dropped",
+		Reason:   "state.json, events.jsonl and mailbox.jsonl are private formats; only the public sanitized export is read",
+	})
 	explanation, explainErr := ExplainRecords(ExplainOptions{
 		Selector: options.Selector, Recent: 10, Now: options.Now,
 		GraphDepth: DefaultExplainGraphDepth, MaxNodes: DefaultExplainMaxNodes, MaxEdges: DefaultExplainMaxEdges,

@@ -207,9 +207,6 @@ These are known gaps, not bugs. Nothing in the cockpit is waiting on them:
 
 - **Plans readiness and launch.** Agent Mux does not evaluate whether a plan is
   ready to run, and does not start runs. Use `asl prepare` and `asl run`.
-- **Unified diagnostics bundle.** `amx debug bundle` carries the ASL capability
-  block via `doctor.json` only. ASL's own diagnostics are not collected into
-  the same archive.
 - **Worktree-registry binding.** Runs are matched to managed worktrees by
   canonicalized workspace path, not by a shared registry identity.
 - **Assurance inbox.** Verification findings are visible in the Workbench, not
@@ -386,6 +383,49 @@ These are known gaps, not bugs. Nothing in the cockpit is waiting on them:
   request counts, and action outcome counts. It carries no plan path, run ID,
   question ID, question or reply text, and no Workbench token; bridge-supplied
   failure messages are reduced to their stable error code before publication.
+- **A failure crosses both halves of the pairing**: run
+  `amx debug bundle --include-asl`. The bundle then also carries
+  `asl-export.json` — the verbatim document from `asl diagnostics export
+  --agent-mux` — and `asl-correlation.json`, which joins it against the same
+  journal window the rest of the bundle describes.
+
+  The correlation is what makes one archive explain one causal path. Per run it
+  reports the plan digest (`sha256(plan_dir)`, the one correlation key that
+  survives share-mode path aliasing), both acceptance counters
+  (`projection_generation` and `lifecycle_source_sequence` — a stalled cockpit
+  is usually one of them frozen, and which one names the failing half), the
+  bridge operation IDs and mailbox closure IDs ASL durably observed, its
+  assurance verdict as a state and an issue count, and one `deliveries` entry
+  per lifecycle notification carrying ASL's own outcome beside the number of
+  journal records AgentMux holds under the same request ID. A delivery with
+  `matched: false` and an ASL status of `accepted` is the asymmetry worth
+  opening a bundle for: ASL believes it delivered, and this bundle's journal
+  window has no record of receiving. `contract_set` reports both halves'
+  contract set identity and whether they agree, and `builds` reports both
+  versions *and* both binary hashes, because the interesting failure is the one
+  where the versions match and the behavior does not. `notes` carries stable
+  codes (`asl-export-unavailable`, `contract-set-disagreement`,
+  `compare-binary-hashes`, `correlation-capped`, `unmatched-deliveries`) that
+  survive share-mode redaction.
+
+  AgentMux reads nothing but that public export. `state.json`, `events.jsonl`
+  and `mailbox.jsonl` are ASL's private formats and no bundle parses them, which
+  is recorded as an explicit exclusion in `manifest.json`. The export carries no
+  question body, reply text, prompt, model output or raw bridge stderr, and it
+  ships its own `redaction_policy` and `omissions` ledger — counts and SHA-256
+  digests with a named reason — so a reader can tell withheld material from
+  material that was never there. The decode is typed, so a newer ASL cannot add
+  a field that lands in an AgentMux bundle unreviewed.
+
+  Nothing about this can fail a bundle. If ASL is not installed, is older than
+  the subcommand, is turned off in `[defaults.asl]`, hangs, or emits something
+  unreadable, `asl-export.json` is simply absent and `manifest.json` and
+  `asl-correlation.json` both name the reason (`executable-not-found`,
+  `export-unsupported`, `disabled`, `timeout`, `oversize`, `malformed`,
+  `unsupported-schema`, `foreign-contract-set`, `export-failed`). A bundle
+  captured while the other half is broken is the bundle that matters most.
+  Repeated capture over frozen inputs is byte-identical, so two bundles taken
+  the same way can be compared directly.
 - **Copilot profile is unauthenticated**: run `copilot login` with the matching
   `COPILOT_HOME`.
 - **Kitty control fails**: confirm `allow_remote_control yes` and the `listen_on`

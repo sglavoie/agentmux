@@ -67,6 +67,19 @@ var (
 		effective_before effective_after result_icon_state config_dir routed_profile producer_config_dir
 		trace_ids request_ids journal_detail
 		earliest_observed_at promoted_spool_files_read delivery_failures latest_at
+		acknowledged agent_mux agent_mux_event agrees artifact_count asl asl_acknowledged asl_attempts asl_limits
+		asl_omissions asl_status assurance assurance_state attempt_count available bridge_protocol builds
+		by_action by_kind by_name by_status closure_id closure_ids command_id completed_at contract_set
+		contract_set_id control control_records counts created_at deliveries deliveries_matched deliveries_total
+		deliveries_unmatched delivery_records detail digest duration_seconds eligible error_classification events
+		export_digest exported field final_status hook_schema_version issue_count issue_ids journal_outcomes
+		journal_records journal_records_joined journal_stages lifecycle_source_sequence matched max_control_records
+		max_delivery_records max_export_bytes max_log_lines max_receipt_records max_runs new_issue_count note_chars
+		notes ok omissions operation_ids phase plan_digest plans_scanned product projection projection_generation
+		projection_schema_version projection_status question_id queue_command reason_code receipt_records receipts
+		recurring_issue_count redaction_policy rejected runs runs_correlated runs_exported runs_matched
+		runs_without_journal scanned section seq session sha256 state state_available state_reason state_root_present
+		state_schema_version stop_after_current text_chars total total_sessions turn_index updated_at
 	`)
 )
 
@@ -310,7 +323,18 @@ func isShareStringField(key string) bool {
 		"format", "member", "decision", "availability", "go_version", "version", "revision", "reasons", "journal_snapshot_scope",
 		"process_harness", "process_observation", "process_mode", "terminal_hook_evidence", "last_process_exit_reason",
 		"last_process_exit_observation", "before_icon", "after_icon", "before_source_kind", "after_source_kind",
-		"journal_detail":
+		"journal_detail",
+		// Closed enums published by the ASL diagnostics export and by the
+		// cross-system correlation derived from it. Each is a fixed vocabulary
+		// on both sides of the pairing, and each is still gated on the safe
+		// token shape and the secret markers below.
+		"code", "reason_code", "agent_mux_event", "asl_status", "final_status", "error_classification",
+		"assurance_state", "projection_status", "phase", "state", "product", "queue_command", "field", "section",
+		"journal_stages",
+		// Content digests. A digest of withheld material is not the material,
+		// and keeping it verbatim is what makes the omission ledger and the
+		// byte-identical-capture claim checkable from a shared bundle.
+		"sha256", "digest", "export_digest":
 		return true
 	default:
 		return false
