@@ -91,7 +91,10 @@ func (g *gate) writeEvidence(ev *Evidence) error {
 	return nil
 }
 
-// sign produces the detached SSH signature over the record's bytes.
+// sign produces the detached SSH signature over the record's bytes, fulfilling
+// the signature the record already declares. It is the second half of publish:
+// the metadata is written first so that the bytes being signed describe the
+// signature that covers them.
 //
 // `ssh-keygen -Y sign` writes <file>.sig next to the file and refuses to
 // overwrite nothing else, so the signature is removed first: a stale signature
@@ -102,12 +105,11 @@ func (g *gate) writeEvidence(ev *Evidence) error {
 // namespace, so a release key that is also used to sign commits or Git objects
 // cannot have one of those signatures replayed as a release approval.
 func (g *gate) sign(ctx context.Context, ev *Evidence) error {
-	if g.opts.SigningKey == "" {
-		ev.Signature = Signature{Signed: false, Namespace: g.opts.Namespace}
+	if !ev.Signature.Signed {
 		g.logf("evidence is unsigned (no signing key given)")
 		return nil
 	}
-	sigPath := SignaturePath(ev.Path)
+	sigPath := ev.Signature.Path
 	if err := os.Remove(sigPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("release: clearing previous signature: %w", err)
 	}
@@ -126,12 +128,6 @@ func (g *gate) sign(ctx context.Context, ev *Evidence) error {
 	}
 	if _, err := os.Stat(sigPath); err != nil {
 		return fmt.Errorf("release: ssh-keygen reported success but wrote no signature at %s", sigPath)
-	}
-	ev.Signature = Signature{
-		Signed:    true,
-		Namespace: g.opts.Namespace,
-		Path:      sigPath,
-		KeyPath:   g.opts.SigningKey,
 	}
 	g.logf("signature %s", sigPath)
 	return nil

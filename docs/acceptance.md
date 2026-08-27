@@ -201,10 +201,14 @@ evidence schema, the verification command, tagging, rollback, and maintenance
 installation are documented in
 [Paired releases](operations.md#paired-releases).
 
-Two properties make the record admissible as acceptance evidence:
+Three properties make the record admissible as acceptance evidence:
 
 - A step that never ran is recorded as `not-run` rather than omitted, so a
   truncated gate cannot read as a complete one.
+- The persisted record declares its own signature — signed or not, the
+  namespace, the key, and the detached signature's path — and it declares it
+  before `ssh-keygen` runs, so the claim is inside the signed bytes. A record
+  that reads as unsigned was not signed, regardless of what sits beside it.
 - `just crash-restart` counts the scenarios that actually executed and
   `just cockpit-smoke` fails rather than skips when Kitty is absent. Both close
   the gap where a gate reports a boundary as exercised that was never touched.

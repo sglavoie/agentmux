@@ -462,6 +462,122 @@ func TestGateStopsAtTheFirstFailingStep(t *testing.T) {
 	verifySignature(t, VerifyCommand(f.publicKey, "release@test", ev.Path), ev.Path)
 }
 
+// TestSignedUntaggedEvidencePersistsSignedMetadata covers the run that produces
+// no second write: signing without tags.
+//
+// The record is the release artifact, and the copy on disk is the only one that
+// outlives the process. A run that signed but persisted `"signed": false` would
+// leave a record that reads as a rehearsal while a detached signature verifies
+// against exactly those bytes -- so the persisted metadata is checked against
+// the returned result, and the signature is checked against the final bytes
+// rather than against whatever the record said at some earlier moment.
+//
+// Both outcomes are exercised. A failed gate is signed too (the signature
+// attests provenance, `result` attests approval), and it is the outcome an
+// operator is most likely to be reading a record for.
+func TestSignedUntaggedEvidencePersistsSignedMetadata(t *testing.T) {
+	cases := []struct {
+		name       string
+		failRecipe string
+		wantResult string
+	}{
+		{name: "passing", wantResult: StatusPassed},
+		{name: "failing", failRecipe: "test-all", wantResult: StatusFailed},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t)
+			if tc.failRecipe != "" {
+				t.Setenv("FAKE_JUST_FAIL", tc.failRecipe)
+			}
+
+			opts := f.options()
+			opts.Tag = false
+			ev, err := Run(context.Background(), opts)
+			if tc.wantResult == StatusPassed {
+				if err != nil {
+					t.Fatalf("gate failed: %v", err)
+				}
+			} else if !errors.Is(err, ErrGateFailed) {
+				t.Fatalf("err = %v, want ErrGateFailed", err)
+			}
+			if ev.Result != tc.wantResult {
+				t.Fatalf("result = %q, want %q", ev.Result, tc.wantResult)
+			}
+			if len(ev.Tags) != 0 {
+				t.Fatalf("tags = %+v, want none: this test covers the untagged run", ev.Tags)
+			}
+
+			stored, err := LoadEvidence(EvidencePath(f.evidenceDir, ev.PairID))
+			if err != nil {
+				t.Fatalf("reading back the evidence record: %v", err)
+			}
+			if stored.Result != tc.wantResult {
+				t.Errorf("stored result = %q, want %q", stored.Result, tc.wantResult)
+			}
+
+			// The persisted metadata is the claim a later reader acts on, so it
+			// must say what the returned result says -- not a pre-signature
+			// version of it.
+			if stored.Signature != ev.Signature {
+				t.Errorf("persisted signature %+v disagrees with the returned one %+v", stored.Signature, ev.Signature)
+			}
+			want := Signature{
+				Signed:    true,
+				Namespace: SigningNamespace,
+				Path:      SignaturePath(stored.Path),
+				KeyPath:   f.signingKey,
+			}
+			if stored.Signature != want {
+				t.Errorf("persisted signature = %+v, want %+v", stored.Signature, want)
+			}
+			if _, statErr := os.Stat(stored.Signature.Path); statErr != nil {
+				t.Errorf("the record names a signature that is not there: %v", statErr)
+			}
+
+			// And the signature has to cover the bytes that carry that metadata,
+			// not an earlier revision of the record.
+			verifySignature(t, VerifyCommand(f.publicKey, "release@test", stored.Path), stored.Path)
+		})
+	}
+}
+
+// TestSigningFailureLeavesNoOverstatedRecord is the other side of declaring the
+// signature before it exists: when `ssh-keygen` fails, the record must not be
+// left claiming a signature that was never produced.
+func TestSigningFailureLeavesNoOverstatedRecord(t *testing.T) {
+	f := newFixture(t)
+	// A signing key that exists (newGate insists on that) but that ssh-keygen
+	// cannot sign with.
+	broken := filepath.Join(t.TempDir(), "broken_key")
+	writeFile(t, broken, "not a private key\n")
+
+	opts := f.options()
+	opts.SigningKey = broken
+	ev, err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("the gate reported success with an unusable signing key")
+	}
+	if !strings.Contains(err.Error(), "signing evidence") {
+		t.Errorf("err = %v, want the signing failure named", err)
+	}
+
+	stored, loadErr := LoadEvidence(EvidencePath(f.evidenceDir, ev.PairID))
+	if loadErr != nil {
+		t.Fatalf("reading back the evidence record: %v", loadErr)
+	}
+	if stored.Signature.Signed {
+		t.Errorf("persisted signature = %+v, want the record restated as unsigned", stored.Signature)
+	}
+	if stored.Signature.Namespace != SigningNamespace {
+		t.Errorf("namespace = %q, want %q even when unsigned", stored.Signature.Namespace, SigningNamespace)
+	}
+	if _, statErr := os.Stat(SignaturePath(stored.Path)); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("a signature file exists beside a record that could not be signed: %v", statErr)
+	}
+}
+
 func TestGateRefusesToOverwriteAnExistingRecord(t *testing.T) {
 	f := newFixture(t)
 
@@ -471,9 +587,14 @@ func TestGateRefusesToOverwriteAnExistingRecord(t *testing.T) {
 	}
 	stamp := modTime(t, first.Path)
 
-	_, err = Run(context.Background(), f.options())
+	refused, err := Run(context.Background(), f.options())
 	if err == nil {
 		t.Fatal("a second run silently replaced the first record")
+	}
+	// The refused run wrote nothing, so its record must not name the first
+	// release's evidence file or claim its signature.
+	if refused.Path != "" || refused.Signature.Signed {
+		t.Errorf("refused run reports evidence %q and signature %+v it did not write", refused.Path, refused.Signature)
 	}
 	if errors.Is(err, ErrGateFailed) {
 		t.Errorf("err = %v, want an invocation refusal rather than a gate failure", err)

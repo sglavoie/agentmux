@@ -331,6 +331,12 @@ A failed run is still written and still signed. The signature attests that this
 gate produced this record; `"result"` is what says whether the pair passed. **A
 verifier must check both.**
 
+The record describes its own signature. `"signature"` names whether the run
+signed, under which namespace, with which key, and where the detached signature
+was written — and it is written *before* `ssh-keygen` runs, so those bytes are
+inside what the signature covers. A record that says `"signed": false` was not
+signed by the run that produced it, whatever sits beside it on disk.
+
 ### Verifying a release record
 
 ```bash
@@ -351,9 +357,10 @@ namespace, so a release key that also signs commits or Git objects cannot have
 one of those signatures replayed as a release approval. Verifying without `-n`,
 or with a different namespace, fails — that is the point.
 
-Then check the record itself: `"result": "passed"`, `"schema_version": 1`, the
-revisions match the tags, and the artifact hashes match what is installed
-(`amx --version` reports the installed binary's own hash).
+Then check the record itself: `"result": "passed"`, `"schema_version": 1`,
+`"signature": {"signed": true, ...}` naming this namespace, the revisions match
+the tags, and the artifact hashes match what is installed (`amx --version`
+reports the installed binary's own hash).
 
 ### Tags
 

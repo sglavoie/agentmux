@@ -521,36 +521,83 @@ func (g *gate) execute(ctx context.Context) (*Evidence, error) {
 	return ev, nil
 }
 
-// finish writes the record, signs it, and -- only for a passing run -- writes
-// the annotated pair tags. Writing happens before signing and tagging so a
-// failure in either still leaves the record on disk.
+// finish publishes the record and -- only for a passing run -- writes the
+// annotated pair tags. Writing happens before signing and tagging so a failure
+// in either still leaves the record on disk.
 func (g *gate) finish(ctx context.Context, ev *Evidence) error {
 	if ev.Result == StatusPassed && g.opts.Tag {
 		if err := g.checkTagsAbsent(ctx, ev.PairID); err != nil {
 			return err
 		}
 	}
-	if err := g.writeEvidence(ev); err != nil {
-		return err
-	}
-	if err := g.sign(ctx, ev); err != nil {
+	if err := g.publish(ctx, ev); err != nil {
 		return err
 	}
 	if ev.Result == StatusPassed && g.opts.Tag {
 		if err := g.writeTags(ctx, ev); err != nil {
 			return err
 		}
-		// The tag list is part of the record, so the record is rewritten and
-		// re-signed once the tags exist. Signing a record that named tags which
-		// were never written would be worse than not naming them at all.
-		if err := g.writeEvidence(ev); err != nil {
-			return err
-		}
-		if err := g.sign(ctx, ev); err != nil {
+		// The tag list is part of the record, so the record is republished once
+		// the tags exist. Signing a record that named tags which were never
+		// written would be worse than not naming them at all.
+		if err := g.publish(ctx, ev); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// publish declares the signature the record is about to carry, writes the
+// record, and then produces that signature over the bytes just written.
+//
+// The declaration has to come first. `ssh-keygen -Y sign` signs a file, so the
+// signature covers whatever the record said at write time. Filling the metadata
+// in afterwards would leave the only durable statement about a signed release
+// declaring itself unsigned -- with a detached signature that verifies against
+// exactly those bytes, which is worse than an unsigned record because it reads
+// as one while being provably a release.
+//
+// Nothing in the metadata depends on the signing run: the namespace, the key,
+// and both paths are known before `ssh-keygen` is invoked. So declaring it up
+// front costs nothing and is what makes a persisted record self-describing.
+func (g *gate) publish(ctx context.Context, ev *Evidence) error {
+	priorPath, priorSignature := ev.Path, ev.Signature
+	ev.Path = EvidencePath(g.opts.EvidenceDir, ev.PairID)
+	ev.Signature = g.declaredSignature(ev)
+	if err := g.writeEvidence(ev); err != nil {
+		// A write that did not happen leaves nothing to describe. The caller
+		// still receives this record, and a run refused because the pair is
+		// already recorded would otherwise report the previous release's
+		// evidence file and signature as its own.
+		ev.Path, ev.Signature = priorPath, priorSignature
+		return err
+	}
+	if err := g.sign(ctx, ev); err != nil {
+		// The record on disk now declares a signature that does not exist.
+		// Restating it as unsigned is best effort -- the signing error is what
+		// the operator acts on -- but leaving the overstatement behind would
+		// hand the next reader a record claiming more than the run achieved.
+		ev.Signature = Signature{Signed: false, Namespace: g.opts.Namespace}
+		if rewriteErr := g.writeEvidence(ev); rewriteErr != nil {
+			return errors.Join(err, rewriteErr)
+		}
+		return err
+	}
+	return nil
+}
+
+// declaredSignature is the signature metadata the record will carry, computed
+// before the signature exists. Signing is on exactly when a key was named.
+func (g *gate) declaredSignature(ev *Evidence) Signature {
+	if g.opts.SigningKey == "" {
+		return Signature{Signed: false, Namespace: g.opts.Namespace}
+	}
+	return Signature{
+		Signed:    true,
+		Namespace: g.opts.Namespace,
+		Path:      SignaturePath(ev.Path),
+		KeyPath:   g.opts.SigningKey,
+	}
 }
 
 // absorb reads the output of the steps whose output the record needs. Every
