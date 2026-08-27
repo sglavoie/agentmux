@@ -174,6 +174,14 @@ func writeReleaseGateResult(cmd *cobra.Command, ev *release.Evidence) error {
 // verbatim so the action does not require reading the evidence file first --
 // though the file has them too, which is what makes the state recoverable after
 // this terminal is closed.
+//
+// The two kinds of leftover ref are printed differently on purpose. "clear it
+// with" introduces a compare-and-delete the operator can paste unread: it is
+// bound to the object this run created, so the worst it can do is refuse. A ref
+// the run could not identify gets no such line -- it gets the read-only
+// inspection and the thing that has to be established first, because a command
+// under "clear it with" that deleted by name would be exactly as pasteable and
+// would take whatever now sits under that name.
 func writeReleaseGateTagFailure(out io.Writer, failure *release.TagFailure) {
 	if failure == nil {
 		return
@@ -190,6 +198,13 @@ func writeReleaseGateTagFailure(out io.Writer, failure *release.TagFailure) {
 	}
 	for _, command := range failure.Recovery {
 		_, _ = fmt.Fprintf(out, "  clear it with: %s\n", command)
+	}
+	for _, tag := range failure.Unidentified {
+		_, _ = fmt.Fprintf(out, "  UNIDENTIFIED %s %s: %s\n", tag.Repo, tag.Tag, tag.Reason)
+		for _, command := range tag.Inspect {
+			_, _ = fmt.Fprintf(out, "  inspect it with: %s\n", command)
+		}
+		_, _ = fmt.Fprintf(out, "  before removing it: %s\n", tag.Requirement)
 	}
 }
 

@@ -434,7 +434,8 @@ When a removal itself fails, the leftover ref is not left silent:
 - `"tags"` stays empty, because it means "this pair is tagged" and a pair tagged
   on one side is not;
 - `"tag_failure"` names the cause, the stranded repository and tag, why the
-  removal failed, and the exact command that clears it;
+  removal failed, and — for every stranded tag whose object this run
+  established — the exact command that clears it, in `"recovery"`;
 - the command is printed too, and it is printed even under `--json`, because it
   is the one gate outcome that left durable state outside the evidence
   directory.
@@ -443,6 +444,32 @@ Run that command, then re-run the gate. Nothing else has to be undone — the
 evidence record for a `partial` run is a truthful account of an unreleased pair,
 and the retry writes its own. The re-tag refusal is what stops a retry from
 proceeding around a ref still sitting there.
+
+**A stranded tag the run could not identify gets no command.** The gate reads the
+object back immediately after writing the tag, and when that read fails the ref
+is real but nameless: a tag exists under that name, and the run does not know
+that the object under it is the one it wrote. Every removal the gate performs or
+publishes is a compare-and-delete against that object, so there is no safe
+removal to offer — and `git tag -d <pair-id>` is not a substitute, because it
+deletes whatever answers to the name today, which is exactly what the
+compare-and-delete exists to refuse.
+
+Such a tag is listed in `"stranded"` like any other, and additionally in
+`"unidentified"`, which carries why no object is known, read-only `"inspect"`
+commands that report what the ref points at and what that object says about
+itself, and a `"requirement"`: what must be established before anything is
+deleted, and the shape of the deletion once it has been. The summary prints it
+as `UNIDENTIFIED`, `inspect it with:`, and `before removing it:` — deliberately
+not the `clear it with:` wording that marks a command as ready to paste. Nothing
+published for an unidentified tag is executable as a deletion, so an operator or
+script that runs every command in the record deletes nothing.
+
+Clearing one is manual by design. Run the inspection, read the annotation — this
+run's tag carries `paired release <pair-id>` and names its evidence file — and
+only if it is this run's tag, remove it by the object id the inspection printed,
+with `git -C <root> update-ref -d refs/tags/<pair-id> <oid>`. If the annotation
+says something else, the ref is somebody else's and the gate was right not to
+touch it. Then re-run the gate.
 
 ### Rolling back
 

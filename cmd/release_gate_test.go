@@ -342,6 +342,76 @@ func TestReleaseGateSummaryDoesNotSayTaggedWhenTheTagsWereTakenBack(t *testing.T
 	}
 }
 
+// TestReleaseGateSummaryOffersNoDeletionForAnUnidentifiedTag is the CLI half of
+// `release.TestUnreadableCreatedTagDoesNotOfferNameOnlyDeletion`.
+//
+// The library refuses to put a name-only deletion in the record; this is the
+// second place that refusal has to hold, because the summary is what an operator
+// actually reads and pastes. A stranded tag whose object the run established
+// prints a command to run, and one whose object it never established must print
+// something an operator cannot mistake for that command -- so the two are checked
+// side by side in a single failure, which is the arrangement that would tempt a
+// renderer to treat them alike.
+func TestReleaseGateSummaryOffersNoDeletionForAnUnidentifiedTag(t *testing.T) {
+	pairID := "amx-asl-1.0123456789abcdef"
+	ref := "refs/tags/" + pairID
+	var out strings.Builder
+	writeReleaseGateTagFailure(&out, &release.TagFailure{
+		Error:         "release: reading back the tag just written to asl: exited 128",
+		Stranded:      []release.TagEvidence{{Repo: "agentmux", Tag: pairID}, {Repo: "asl", Tag: pairID}},
+		RollbackError: "release: the tag written to asl was never identified",
+		Recovery:      []string{"git -C /src/agentmux update-ref -d " + ref + " abc123"},
+		Unidentified: []release.UnidentifiedTag{{
+			Repo:   "asl",
+			Tag:    pairID,
+			Reason: "release: the tag written to asl was never identified, so removing it could delete a ref this run did not create",
+			Inspect: []string{
+				"git -C /src/asl rev-parse " + ref,
+				"git -C /src/asl cat-file -p " + ref,
+			},
+			Requirement: "confirm the object under " + ref + " in /src/asl is this run's annotated tag -- " +
+				"its message reads `paired release " + pairID + "` -- then remove it by object with " +
+				"`git -C /src/asl update-ref -d " + ref + " <the object id the inspection printed>`, never by name",
+		}},
+	})
+	summary := out.String()
+
+	// The identified tag still gets the pasteable compare-and-delete.
+	for _, want := range []string{
+		"STRANDED agentmux " + pairID,
+		"clear it with: git -C /src/agentmux update-ref -d " + ref + " abc123",
+	} {
+		if !strings.Contains(summary, want) {
+			t.Errorf("summary does not contain %q:\n%s", want, summary)
+		}
+	}
+	// The unidentified one gets an inspection and a precondition, under wording
+	// that does not read as something to run and be done with.
+	for _, want := range []string{
+		"UNIDENTIFIED asl " + pairID,
+		"never identified",
+		"inspect it with: git -C /src/asl rev-parse " + ref,
+		"inspect it with: git -C /src/asl cat-file -p " + ref,
+		"before removing it: ",
+		"never by name",
+	} {
+		if !strings.Contains(summary, want) {
+			t.Errorf("summary does not contain %q:\n%s", want, summary)
+		}
+	}
+	// The unidentified tag is never offered under the wording that means
+	// "pasteable, and then you are finished".
+	for _, line := range strings.Split(summary, "\n") {
+		if strings.Contains(line, "clear it with") && strings.Contains(line, "/src/asl") {
+			t.Errorf("an unidentified tag is offered as a ready-to-run removal: %q", line)
+		}
+	}
+	// And under no wording at all does a deletion by name appear.
+	if strings.Contains(summary, "tag -d") {
+		t.Errorf("the summary publishes a deletion by name:\n%s", summary)
+	}
+}
+
 // TestReleaseEvidenceDefaultsUnderTheDataDirectory keeps release records beside
 // the caches, handoffs, and worktrees rather than in a location invented for
 // this feature.

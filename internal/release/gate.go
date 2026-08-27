@@ -314,11 +314,52 @@ type TagFailure struct {
 	Stranded []TagEvidence `json:"stranded,omitempty"`
 	// RollbackError is why the removal failed, when one did.
 	RollbackError string `json:"rollback_error,omitempty"`
-	// Recovery is one command per stranded tag, in the same order, that returns
-	// the repository to its untagged state. It names the object as well as the
-	// ref, so running it late cannot delete a tag somebody else has since put
-	// under that name.
+	// Recovery is a command per stranded tag whose object this run identified,
+	// in the same order those tags appear in Stranded. It names the object as
+	// well as the ref, so running it late cannot delete a tag somebody else has
+	// since put under that name -- which is the only reason it is safe to
+	// publish an executable deletion at all.
+	//
+	// A stranded tag this run could not identify has no entry here. It is listed
+	// in Unidentified instead, because the gate has no command it can honestly
+	// tell an operator to run against it.
 	Recovery []string `json:"recovery,omitempty"`
+	// Unidentified lists stranded tags whose object this run never established.
+	// They also appear in Stranded; this is the account of why no deletion is
+	// offered for them.
+	Unidentified []UnidentifiedTag `json:"unidentified,omitempty"`
+}
+
+// UnidentifiedTag is a ref this run created, could not identify, and therefore
+// could not offer to remove.
+//
+// It exists because the alternative is worse than saying nothing. The gate reads
+// the object back immediately after writing the tag, and when that read fails the
+// ref is real but nameless: the run knows a tag exists under this name and does
+// not know that the object under it is the one it wrote. Every safe removal the
+// gate performs is a compare-and-delete against that object, so without it there
+// is no safe removal to publish -- and publishing `git tag -d <name>` instead
+// would hand an operator a command that deletes whatever now answers to the name,
+// which is precisely the outcome the compare-and-delete exists to refuse.
+//
+// So this carries the non-destructive inspection that establishes what is
+// actually there, plus the judgement the gate cannot make on the operator's
+// behalf. Nothing in it is executable as a deletion, and a consumer that runs
+// every command the record publishes deletes nothing it should not.
+type UnidentifiedTag struct {
+	Repo string `json:"repo"`
+	Tag  string `json:"tag"`
+	// Reason is why this run has no object to compare against.
+	Reason string `json:"reason"`
+	// Inspect are commands that report what the ref points at now and what that
+	// object says about itself. They are read-only: running them, twice or a
+	// year later, changes nothing.
+	Inspect []string `json:"inspect"`
+	// Requirement is what an operator must establish before deleting anything,
+	// and the shape of the deletion once they have. It names an object the
+	// inspection supplies rather than a placeholder the gate could fill in,
+	// because the gate filling it in is exactly what it cannot do.
+	Requirement string `json:"requirement"`
 }
 
 // Evidence is the complete release record.

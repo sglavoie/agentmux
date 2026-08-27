@@ -201,7 +201,7 @@ evidence schema, the verification command, tagging, rollback, and maintenance
 installation are documented in
 [Paired releases](operations.md#paired-releases).
 
-Five properties make the record admissible as acceptance evidence:
+These properties make the record admissible as acceptance evidence:
 
 - A step that never ran is recorded as `not-run` rather than omitted, so a
   truncated gate cannot read as a complete one.
@@ -221,6 +221,14 @@ Five properties make the record admissible as acceptance evidence:
   naming the stranded ref and the exact command that clears it. A pair tagged on
   one side can therefore never be read as a released pair, by a consumer of the
   record or by a reader of either repository's tags.
+- Every deletion the record publishes is bound to an object. When the read-back
+  after a tag write fails, the run knows a ref exists and does not know what is
+  under it, so it publishes no command for that ref: it goes into
+  `"unidentified"` with read-only inspection commands and the requirement an
+  operator must satisfy first, and never `git tag -d <pair-id>`, which would
+  delete whatever answers to the name later. Running every command in a record,
+  or every command the summary prints, therefore deletes nothing that this run
+  did not verifiably create.
 - The transaction covers the record that vouches for the tags, not only the two
   refs. The rewrite that names the tags and the signature over it are the last
   steps, and re-signing removes the previous signature first, so a failure there
@@ -250,6 +258,17 @@ error, and the progress the command prints all agree that the pair is untagged;
 that never reaches disk. The summary's half of that agreement is
 `cmd.TestReleaseGateSummaryDoesNotSayTaggedWhenTheTagsWereTakenBack`: a passing
 run whose tags were retracted must not print the word an operator scans for.
+`TestUnreadableCreatedTagDoesNotOfferNameOnlyDeletion` fails the read-back of a
+tag that was really written, so one ref is identified and rolls back while the
+other is stranded without an object; it asserts the run runs no
+`git tag -d`, that the substring `tag -d` appears nowhere in the record bytes,
+the progress output, or the returned error, and — after planting a replacement
+ref under the stranded name — that executing every command the record publishes
+leaves that replacement intact.
+`cmd.TestReleaseGateSummaryOffersNoDeletionForAnUnidentifiedTag` is the summary's
+half: the identified tag keeps its pasteable `clear it with:` command and the
+unidentified one gets `UNIDENTIFIED`, `inspect it with:`, and
+`before removing it:` instead.
 
 CI coverage is three lanes in `.github/workflows/check.yml`: `linux-portable`
 (build, unit suite, vet, gofmt, lint), `macos-full` (`just acceptance` plus

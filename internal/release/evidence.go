@@ -253,9 +253,20 @@ func (g *gate) abandonTags(ctx context.Context, ev *Evidence, created []createdT
 		record := TagEvidence{Repo: tag.repo, Tag: tag.name}
 		if err := g.removeTag(ctx, tag); err != nil {
 			failure.Stranded = append(failure.Stranded, record)
-			failure.Recovery = append(failure.Recovery, recoveryCommand(tag))
 			rollbackErrs = append(rollbackErrs, err)
 			g.logf("STRANDED %s %s: %v", tag.repo, tag.name, err)
+			// A ref whose object this run never established gets an inspection
+			// rather than a command. See UnidentifiedTag: the only deletion the
+			// gate could spell out for it is one by name, and that is the one
+			// deletion it must never publish.
+			if tag.oid == "" {
+				unidentified := unidentifiedTag(ev, tag, err)
+				failure.Unidentified = append(failure.Unidentified, unidentified)
+				g.logf("UNIDENTIFIED %s %s: no deletion command is offered; inspect with: %s",
+					tag.repo, tag.name, strings.Join(unidentified.Inspect, "; "))
+				continue
+			}
+			failure.Recovery = append(failure.Recovery, recoveryCommand(tag))
 			continue
 		}
 		failure.RolledBack = append(failure.RolledBack, record)
@@ -271,7 +282,7 @@ func (g *gate) abandonTags(ctx context.Context, ev *Evidence, created []createdT
 	ev.Result = StatusPartial
 	return fmt.Errorf("%w: %w; %s still carries %s and must be cleared before another attempt: %s",
 		ErrPartialTagging, cause, strandedRepos(failure.Stranded), ev.PairID,
-		strings.Join(failure.Recovery, "; "))
+		recoveryGuidance(failure))
 }
 
 // removeTag deletes a ref this run created, and only while it is still exactly
@@ -302,11 +313,61 @@ func (g *gate) removeTag(ctx context.Context, tag createdTag) error {
 // goes into the record and not only into the error, because the process that
 // printed the error is gone by the time anyone reads the record -- and the
 // record is what a later reader has to be able to act on.
+//
+// It is the same compare-and-delete removeTag uses, and for the same reason: an
+// instruction that outlives the run has more time to go stale than the run did,
+// so binding the deletion to the object matters more here, not less. A tag with
+// no object has no recovery command at all -- see unidentifiedTag.
 func recoveryCommand(tag createdTag) string {
-	if tag.oid == "" {
-		return fmt.Sprintf("git -C %s tag -d %s", tag.root, tag.name)
-	}
 	return fmt.Sprintf("git -C %s update-ref -d refs/tags/%s %s", tag.root, tag.name, tag.oid)
+}
+
+// unidentifiedTag is the account of a stranded ref this run cannot name an
+// object for.
+//
+// The gate could reach for `git rev-parse` again here and delete whatever came
+// back. It deliberately does not: a second read by name is the same read that
+// already failed, and trusting it would make the compare-and-delete a formality
+// -- comparing the ref against a value derived from the ref. Identity that would
+// actually be trustworthy has to come from the object's own contents, and the
+// only reader who can judge that is a person looking at the annotation this run
+// wrote. So the record asks for that judgement instead of faking it.
+//
+// What it publishes is therefore two read-only commands and a requirement. The
+// requirement names the deletion's shape but not a runnable instance of it,
+// because the object id belongs in it and the gate does not have one.
+func unidentifiedTag(ev *Evidence, tag createdTag, cause error) UnidentifiedTag {
+	ref := "refs/tags/" + tag.name
+	return UnidentifiedTag{
+		Repo:   tag.repo,
+		Tag:    tag.name,
+		Reason: cause.Error(),
+		Inspect: []string{
+			fmt.Sprintf("git -C %s rev-parse %s", tag.root, ref),
+			fmt.Sprintf("git -C %s cat-file -p %s", tag.root, ref),
+		},
+		Requirement: fmt.Sprintf(
+			"confirm the object under %s in %s is this run's annotated tag -- its message reads `paired release %s` and names evidence %s -- then remove it by object with `git -C %s update-ref -d %s <the object id the inspection printed>`, never by name",
+			ref, tag.root, ev.PairID, filepath.Base(ev.Path), tag.root, ref),
+	}
+}
+
+// recoveryGuidance is what the returned error tells an operator to do about
+// every ref this run could not take back.
+//
+// The two kinds do not compose into one list of commands, so they are not
+// presented as one: an identified tag contributes the command that clears it,
+// and an unidentified one contributes what has to be established before anything
+// is deleted. Flattening the second into the first is how a name-only deletion
+// would get published in the first place.
+func recoveryGuidance(failure *TagFailure) string {
+	parts := make([]string, 0, len(failure.Recovery)+len(failure.Unidentified))
+	parts = append(parts, failure.Recovery...)
+	for _, tag := range failure.Unidentified {
+		parts = append(parts, fmt.Sprintf("in %s no deletion command can be offered -- %s; %s",
+			tag.Repo, tag.Reason, tag.Requirement))
+	}
+	return strings.Join(parts, "; ")
 }
 
 func strandedRepos(stranded []TagEvidence) string {
