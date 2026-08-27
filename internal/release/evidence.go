@@ -52,35 +52,13 @@ func SignaturePath(evidencePath string) string { return evidencePath + ".sig" }
 // order on every machine, and the only values that legitimately vary between two
 // runs of the same revisions are the timestamp and the measured durations.
 func (g *gate) writeEvidence(ev *Evidence) error {
-	if err := os.MkdirAll(g.opts.EvidenceDir, 0o700); err != nil {
-		return fmt.Errorf("release: creating evidence directory: %w", err)
-	}
-	path := EvidencePath(g.opts.EvidenceDir, ev.PairID)
-
-	// A record already on disk for this pair was produced by an earlier run and
-	// may carry a signature. Replacing it silently would destroy the only
-	// durable statement about a release that has possibly already shipped. The
-	// guard applies to the first write only: a tagging run rewrites its own
-	// record in place to add the tag list, and that is not an overwrite of
-	// somebody else's evidence.
-	if !g.opts.Overwrite && !g.published {
-		if _, err := os.Stat(path); err == nil {
-			return fmt.Errorf("release: evidence for %s already exists at %s; move it aside or pass --force", ev.PairID, path)
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("release: checking existing evidence: %w", err)
-		}
-	}
-	ev.Path = path
-
-	data, err := json.MarshalIndent(ev, "", "  ")
+	path, err := g.prepareEvidencePath(ev)
 	if err != nil {
-		return fmt.Errorf("release: encoding evidence: %w", err)
+		return err
 	}
-	data = append(data, '\n')
-
-	staging := path + ".staging"
-	if err := os.WriteFile(staging, data, 0o600); err != nil {
-		return fmt.Errorf("release: writing evidence: %w", err)
+	staging, err := stageEvidence(path, ev)
+	if err != nil {
+		return err
 	}
 	if err := os.Rename(staging, path); err != nil {
 		_ = os.Remove(staging)
@@ -91,31 +69,157 @@ func (g *gate) writeEvidence(ev *Evidence) error {
 	return nil
 }
 
-// retractSuperseded invalidates the record this run already published, once the
-// run knows that record no longer describes what happened.
+// writeSignedEvidence publishes a record together with the signature that covers
+// it, and does it in one step that cannot half-succeed.
 //
-// It exists for one narrow state, and it is the last thing standing in it. The
-// pre-tag record is on disk saying the run passed; both refs have since been
-// taken back; and every attempt to publish that account has failed. Publication
-// writes a sibling staging file and renames it, so an evidence directory that
-// cannot be written to at all defeats it -- and what survives is a signed record
-// reading `"result": "passed"`, with no tag_failure, for a release that exists
-// in neither repository. That record is all a later reader has, and
-// Evidence.Passed() returns true for it.
+// This is how a release claim becomes durable. Ordinary publication writes the
+// record and then signs what it wrote, which is right for every record that
+// describes something already true -- a failed gate, a retracted attempt -- and
+// wrong for the one record whose bytes are themselves the claim. Between that
+// write and its signature the pair tags are backed by a durable
+// `"result": "passed"` file with no signature beside it, and everything that
+// could take that back -- restating the record, rolling the refs back, recording
+// having done so -- needs the evidence medium the signature failure may itself
+// have been a symptom of.
+//
+// So nothing here touches the published path until every step that can fail has
+// already succeeded. The record is rendered into a sibling staging file, signed
+// there -- `ssh-keygen -Y sign` writes its detached signature beside whatever
+// file it is given -- and only then moved into place. What remains are two
+// renames within one directory.
+//
+// The signature is moved first. A failure between the two leaves the previous
+// record standing beside a signature that does not cover it, which verifies
+// nothing and claims nothing; the other order would leave the release claim
+// itself durable and unvouched for, which is the state this exists to prevent.
+//
+// Signing is unconditional: the only caller is a tagging run, and a tagging run
+// without a signing key is refused before the gate reads anything. See
+// ErrUnsignedTag.
+//
+// The metadata this fills in is unwound on every failure, because the record is
+// still handed to the caller and rendered as the run's summary. A publication
+// that did not happen must not leave the returned evidence naming a signature
+// file that is not there. There are five ways to fail here and the unwinding is
+// the same for all of them, so it is deferred rather than repeated -- the next
+// early return added below inherits it instead of quietly not doing it.
+func (g *gate) writeSignedEvidence(ctx context.Context, ev *Evidence) (err error) {
+	priorPath, priorSignature := ev.Path, ev.Signature
+	defer func() {
+		if err != nil {
+			ev.Path, ev.Signature = priorPath, priorSignature
+		}
+	}()
+
+	path, err := g.prepareEvidencePath(ev)
+	if err != nil {
+		return err
+	}
+	ev.Signature = Signature{
+		Signed:    true,
+		Namespace: g.opts.Namespace,
+		Path:      SignaturePath(path),
+		KeyPath:   g.opts.SigningKey,
+	}
+
+	staging, err := stageEvidence(path, ev)
+	if err != nil {
+		return err
+	}
+	// Both removals are no-ops once the corresponding rename has landed.
+	defer func() {
+		_ = os.Remove(staging)
+		_ = os.Remove(SignaturePath(staging))
+	}()
+
+	if err = g.signPath(ctx, staging); err != nil {
+		return err
+	}
+	if err = os.Rename(SignaturePath(staging), SignaturePath(path)); err != nil {
+		return fmt.Errorf("release: publishing the release signature: %w", err)
+	}
+	if err = os.Rename(staging, path); err != nil {
+		return fmt.Errorf("release: publishing evidence: %w", err)
+	}
+	g.published = true
+	g.logf("evidence %s", path)
+	g.logf("signature %s", SignaturePath(path))
+	return nil
+}
+
+// prepareEvidencePath resolves where this pair's record belongs, makes sure the
+// directory exists, and refuses to displace evidence this run did not write.
+//
+// A record already on disk for this pair was produced by an earlier run and may
+// carry a signature. Replacing it silently would destroy the only durable
+// statement about a release that has possibly already shipped. The guard applies
+// to the first write only: a tagging run replaces its own record to record what
+// tagging did, and that is not an overwrite of somebody else's evidence.
+func (g *gate) prepareEvidencePath(ev *Evidence) (string, error) {
+	if err := os.MkdirAll(g.opts.EvidenceDir, 0o700); err != nil {
+		return "", fmt.Errorf("release: creating evidence directory: %w", err)
+	}
+	path := EvidencePath(g.opts.EvidenceDir, ev.PairID)
+	if !g.opts.Overwrite && !g.published {
+		if _, err := os.Stat(path); err == nil {
+			return "", fmt.Errorf("release: evidence for %s already exists at %s; move it aside or pass --force", ev.PairID, path)
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("release: checking existing evidence: %w", err)
+		}
+	}
+	ev.Path = path
+	return path, nil
+}
+
+// stageEvidence renders the record beside where it will be published. The
+// staging file is a sibling rather than a temporary elsewhere, because the
+// publication is a rename and a rename cannot cross filesystems.
+func stageEvidence(path string, ev *Evidence) (string, error) {
+	data, err := json.MarshalIndent(ev, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("release: encoding evidence: %w", err)
+	}
+	data = append(data, '\n')
+
+	staging := path + ".staging"
+	if err := os.WriteFile(staging, data, 0o600); err != nil {
+		return "", fmt.Errorf("release: writing evidence: %w", err)
+	}
+	return staging, nil
+}
+
+// retractSuperseded replaces the record this run already published, once the run
+// knows that record no longer describes what happened.
+//
+// It exists for one narrow state. Both refs have since been taken back, every
+// attempt to publish that account has failed, and what is on disk is the
+// provisional pre-tag record. Publication writes a sibling staging file and
+// renames it, so an evidence directory that cannot be written to at all defeats
+// it. What survives is therefore a record saying a tagging attempt was under way
+// -- which is not a release claim, does not satisfy Evidence.Passed(), and
+// carries no signature anyone could replay as one -- but which also names no
+// refs, no cause, and nothing an operator can act on.
 //
 // So the retraction creates nothing. It rewrites the file this run already owns,
 // in place, which needs write permission on that file rather than on the
 // directory holding it -- exactly the permission the failed publication did not
-// need and this one does not lack. Losing atomicity is the price and it is the
+// need and this one may not lack. Losing atomicity is the price and it is the
 // right way round here: an interrupted rewrite leaves a truncated record that no
-// longer parses, and unreadable evidence is not a release claim, while the
-// bytes it replaces are.
+// longer parses, and unreadable evidence is not a release claim either.
 //
-// The signature declaration goes with it. The detached signature beside the
-// record covers the superseded bytes, so a record that still declared itself
+// This is an improvement on the durable state and never the thing that makes it
+// safe. Nothing above depends on it succeeding, which is the point: the medium
+// it writes to is the one that just failed, and a recovery that has to assume
+// its own precondition is not a recovery. When it cannot land, the provisional
+// record stands and says less than the truth rather than more.
+//
+// The signature declaration goes with it. Any detached signature beside the
+// record covers bytes that are gone, so a record that still declared itself
 // signed would be pointing at a signature that cannot verify it -- and the
 // signature file itself is discarded for the same reason sign removes a stale
-// one before writing a new one.
+// one before writing a new one. That discard is attempted even when the rewrite
+// fails: the two are independent hazards, and skipping the second because the
+// first broke is how a stale signature outlives the bytes it covered.
 func (g *gate) retractSuperseded(ev *Evidence) error {
 	// Only a record this run wrote may be rewritten. Without this, a run refused
 	// for being about to overwrite a previous release's evidence would answer
@@ -133,6 +237,12 @@ func (g *gate) retractSuperseded(ev *Evidence) error {
 
 	ev.Path = path
 	ev.Signature = Signature{Signed: false, Namespace: g.opts.Namespace}
+	rewriteErr := g.rewriteInPlace(path, ev)
+	return errors.Join(rewriteErr, discardSignature(SignaturePath(path)))
+}
+
+// rewriteInPlace renders the record over the file it already occupies.
+func (g *gate) rewriteInPlace(path string, ev *Evidence) error {
 	data, err := json.MarshalIndent(ev, "", "  ")
 	if err != nil {
 		return fmt.Errorf("release: encoding the retracted evidence: %w", err)
@@ -142,9 +252,6 @@ func (g *gate) retractSuperseded(ev *Evidence) error {
 		return fmt.Errorf("release: retracting the superseded evidence at %s: %w", path, err)
 	}
 	g.logf("retracted superseded evidence %s", path)
-	if err := discardSignature(SignaturePath(path)); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -189,20 +296,46 @@ func discardSignature(sigPath string) error {
 // the metadata is written first so that the bytes being signed describe the
 // signature that covers them.
 //
-// `ssh-keygen -Y sign` writes <file>.sig next to the file and refuses to
-// overwrite nothing else, so the signature is removed first: a stale signature
-// left beside a rewritten record is the one outcome worse than an unsigned one.
+// Not every record declares one, and the two reasons are worth telling apart in
+// the log. A run given no signing key produces unsigned evidence throughout and
+// the operator chose that. A tagging run's provisional record is unsigned
+// because it is not a release claim yet, and the signature arrives later with
+// the record that is -- so reporting the first reason there would describe a
+// misconfiguration that does not exist. See gate.declaredSignature.
+func (g *gate) sign(ctx context.Context, ev *Evidence) error {
+	if !ev.Signature.Signed {
+		if g.opts.SigningKey == "" {
+			g.logf("evidence is unsigned (no signing key given)")
+		} else {
+			g.logf("evidence is unsigned (the pair is not tagged yet)")
+		}
+		return nil
+	}
+	if err := g.signPath(ctx, ev.Path); err != nil {
+		return err
+	}
+	g.logf("signature %s", ev.Signature.Path)
+	return nil
+}
+
+// signPath runs `ssh-keygen -Y sign` over one file and confirms the detached
+// signature landed beside it. It signs whatever path it is given, which is what
+// lets writeSignedEvidence sign a staging file rather than the published record.
+//
+// `ssh-keygen -Y sign` writes <file>.sig next to the file and overwrites nothing
+// else, so any existing signature is removed first: a stale signature left
+// beside a rewritten record is the one outcome worse than an unsigned one.
 //
 // The namespace is not decoration. A signature made under
 // "agentmux-asl-release" verifies only when the verifier names that same
 // namespace, so a release key that is also used to sign commits or Git objects
 // cannot have one of those signatures replayed as a release approval.
-func (g *gate) sign(ctx context.Context, ev *Evidence) error {
-	if !ev.Signature.Signed {
-		g.logf("evidence is unsigned (no signing key given)")
-		return nil
-	}
-	sigPath := ev.Signature.Path
+//
+// Success is not taken on the exit status alone. The signature is the artifact
+// the caller is about to publish or rename, so its absence has to be an error
+// here rather than a missing file discovered by whoever verifies the release.
+func (g *gate) signPath(ctx context.Context, path string) error {
+	sigPath := SignaturePath(path)
 	if err := os.Remove(sigPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("release: clearing previous signature: %w", err)
 	}
@@ -210,7 +343,7 @@ func (g *gate) sign(ctx context.Context, ev *Evidence) error {
 		"ssh-keygen", "-Y", "sign",
 		"-f", g.opts.SigningKey,
 		"-n", g.opts.Namespace,
-		ev.Path,
+		path,
 	}
 	output, code, err := g.run(ctx, g.opts.EvidenceDir, argv)
 	if err != nil {
@@ -222,7 +355,6 @@ func (g *gate) sign(ctx context.Context, ev *Evidence) error {
 	if _, err := os.Stat(sigPath); err != nil {
 		return fmt.Errorf("release: ssh-keygen reported success but wrote no signature at %s", sigPath)
 	}
-	g.logf("signature %s", sigPath)
 	return nil
 }
 

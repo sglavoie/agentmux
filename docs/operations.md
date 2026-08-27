@@ -372,14 +372,25 @@ Then check the record itself: `"result": "passed"`, `"schema_version": 1`,
 the tags, and the artifact hashes match what is installed (`amx --version`
 reports the installed binary's own hash).
 
-`"result"` has two values beyond `"passed"` and `"failed"`, and both mean a
-tagging attempt did not complete — see [Tags](#tags). `"partial"` means it left
-a tag behind in one repository, which somebody has to clear. `"not-released"`
-means it was taken back in full: every step passed, the pair was asked to be
-tagged, and neither repository carries the tag. Neither is a release, and the
-record says so in the one field every consumer already reads — including a
-consumer written before these values existed, which reads anything other than
-`"passed"` as not passed.
+`"result"` has three values beyond `"passed"` and `"failed"`, and all three mean
+a tagging attempt did not complete — see [Tags](#tags). `"partial"` means it
+left a tag behind in one repository, which somebody has to clear.
+`"not-released"` means it was taken back in full: every step passed, the pair
+was asked to be tagged, and neither repository carries the tag. `"tagging"`
+means the attempt never got far enough to say: it is what a tagging run writes
+before its first ref exists, so it is what survives a run that was interrupted
+or that could not publish its outcome at all. None of the three is a release,
+and the record says so in the one field every consumer already reads —
+including a consumer written before these values existed, which reads anything
+other than `"passed"` as not passed.
+
+A `"tagging"` record is the one to check the repositories against. It reports
+that a run was in flight and nothing more: no tags, no cause, and no signature.
+Look for the pair ID in both repositories' tags. Neither carries it in the
+ordinary case, and the fix is to re-run with `--force`. If one or both do, the
+run died between writing a ref and recording it; clear the pair tag with
+`git update-ref -d refs/tags/<pair-id> <oid>` in each repository that has it,
+then re-run.
 
 ### Tags
 
@@ -413,31 +424,41 @@ The removal is a compare-and-delete —
 this run created. A ref that has since been moved or replaced is left alone, and
 a tag that predates the run is never a candidate at all.
 
-**Both refs existing is not yet a release.** After tagging, the record is
-rewritten to name the tags and re-signed over those bytes — and signing removes
-the previous detached signature before it starts. Until that republication
-lands, the tags are backed by the record written before they existed: one that
-names no tags, and, mid-re-sign, one with no signature beside it at all. So the
-republication is part of the same transaction. If the rewrite cannot be written,
-or the signature over it cannot be produced, both tags are removed by the same
-compare-and-delete and the run reports what it took back. Durable release tags
-are never left standing next to evidence that is unsigned or that predates them.
+**Both refs existing is not yet a release.** A tagging run publishes twice. The
+first record goes out before the first ref is written, says `"result":
+"tagging"`, and is deliberately unsigned. The release claim — the record naming
+both tags, and the signature over exactly those bytes — is the second
+publication, and it is a single all-or-nothing step: the record is rendered and
+signed beside where it will live, and only then are the signature and the record
+moved into place. There is no moment at which a `"passed"` record exists without
+the signature that covers it, and no moment at which a stale signature sits
+beside a record it does not describe.
 
-The account of that retraction is then published in turn. When publication
-itself is what failed, that write can fail too — and the record then left on
-disk is not neutral. It is the pre-tag one, which says `"result": "passed"`,
-carries no `"tag_failure"`, and is signed. It names no tags, but the field every
-consumer reads reports a release that neither repository carries.
+That ordering is what makes the failure case safe rather than merely recoverable.
+Between the two publications the pair is in the one state the gate cannot make
+atomic: refs in two independent repositories, and a record on disk that predates
+them. If the final publication cannot be written or cannot be signed, both tags
+are removed by the same compare-and-delete and the run reports what it took
+back — and what outlives the process is the provisional record. It is not a
+release claim, `Passed()` is false for it, and there is no signature anyone can
+verify against it. Durable release tags are never left standing next to evidence
+that predates them, and evidence that predates them never reads as a release.
 
-So the gate does not leave it there. It **retracts the superseded record in
-place**: it rewrites the file it already owns with the same `"not-released"`
-account, and discards the detached signature beside it, which covered the bytes
-that were just replaced. Publication writes a sibling staging file and renames
-it, so it needs to write the evidence *directory*; the retraction needs to write
-only that one *file*, which is why it can still land when publication cannot.
-What it gives up is atomicity — an interrupted retraction leaves a record that
-no longer parses, and unreadable evidence is not a release claim, while the
-bytes it replaces are.
+The account of that retraction is then published in turn, so the file says which
+refs went back and why rather than only that something was attempted. When
+publication itself is what failed, that write can fail too. So the gate also
+**retracts the superseded record in place**: it rewrites the file it already
+owns with the same `"not-released"` account and discards any detached signature
+beside it. Publication writes a sibling staging file and renames it, so it needs
+to write the evidence *directory*; the retraction needs to write only that one
+*file*, which is why it can still land when publication cannot. What it gives up
+is atomicity — an interrupted retraction leaves a record that no longer parses,
+and unreadable evidence is not a release claim either.
+
+Neither of those writes is load-bearing. Both go to the medium that just failed,
+and a recovery that assumes its own precondition is not one. They improve the
+durable state; the guarantee comes from the provisional record, which is already
+safe when they both fail.
 
 The returned error still names the publication failure, because a retraction is
 not a success: it means the account of the run could only be written by giving

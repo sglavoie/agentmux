@@ -230,11 +230,13 @@ These properties make the record admissible as acceptance evidence:
   or every command the summary prints, therefore deletes nothing that this run
   did not verifiably create.
 - The transaction covers the record that vouches for the tags, not only the two
-  refs. The rewrite that names the tags and the signature over it are the last
-  steps, and re-signing removes the previous signature first, so a failure there
-  would leave both tags backed by evidence that is unsigned or that predates
-  them. Either failure retracts both tags by the same compare-and-delete instead.
-  Release tags therefore never outlive the record that describes them.
+  refs. A tagging run publishes an unsigned `"result": "tagging"` record before
+  its first ref exists, and the release claim is the last step: the record naming
+  both tags and the signature over exactly those bytes are staged together and
+  moved into place as one all-or-nothing publication. A failure to write it or to
+  sign it retracts both tags by the same compare-and-delete. Release tags
+  therefore never outlive the record that describes them, and no record reads as
+  a release before the refs it names exist.
 - A retracted attempt is recorded as `"result": "not-released"` rather than
   `"passed"`, and `Evidence.Passed()` reports false for any record carrying a
   `"tag_failure"` block at all. A run that returns an error, prints what it took
@@ -243,13 +245,15 @@ These properties make the record admissible as acceptance evidence:
   `"partial"` means a ref survives and the next attempt is refused until it is
   cleared, `"not-released"` means nothing survives and the run can simply be
   repeated.
-- That holds even when the retraction cannot be published, which is the case
-  where the evidence directory itself is what failed. The record already on disk
-  is the signed pre-tag one that reads as passed, so the gate rewrites that file
-  in place — the one write that needs no directory entry created or removed —
-  and discards the signature that covered the bytes it replaced. No durable
-  record of a retracted attempt reads as passed, satisfies `Evidence.Passed()`,
-  or still verifies.
+- That holds when no account of the retraction can be written at all, which is
+  the case where the evidence medium itself is what failed. Ordinary publication
+  needs the evidence directory; the gate also rewrites the record it already owns
+  in place, which needs only that one file. Neither is load-bearing: when both
+  fail, what survives is the provisional `"tagging"` record written before the
+  first ref existed, which names no release and has no signature beside it. No
+  durable record of a retracted attempt reads as passed, satisfies
+  `Evidence.Passed()`, or still verifies — and that does not depend on the
+  medium that just failed becoming writable again.
 - `just crash-restart` counts the scenarios that actually executed and
   `just cockpit-smoke` fails rather than skips when Kitty is absent. Both close
   the gap where a gate reports a boundary as exercised that was never touched.
@@ -270,12 +274,15 @@ the tagged bytes — every step passes and both tags are genuinely written first
 and asserts the refs, the persisted record down to its `"result"`, the detached
 signature, the returned error, and the progress the command prints all agree
 that the pair is untagged and not released;
-`TestFinalEvidenceWriteFailureRollsBackPairTags` does the same for the rewrite
-that never reaches disk, where publishing the account of the retraction fails
-too and the record already on disk is the signed pre-tag one claiming the run
-passed: the superseded record is rewritten in place and its signature discarded,
-so the durable `"result"`, `Evidence.Passed()`, and `ssh-keygen -Y verify` agree
-with the refs that nothing was released. The summary's half of that agreement is
+`TestFinalEvidenceWriteFailureRollsBackPairTags` does the same for the
+publication that never reaches disk, and asks it twice by sealing the evidence
+medium with real filesystem permissions: once with the directory unwritable, so
+the account of the retraction is rewritten into the record in place, and once
+with the record unwritable as well, so no write of any kind can land after
+tagging and the durable state is the provisional `"tagging"` record alone. In
+both the durable `"result"`, `Evidence.Passed()`, and `ssh-keygen -Y verify`
+agree with the refs that nothing was released. The summary's half of that
+agreement is
 `cmd.TestReleaseGateSummaryDoesNotSayTaggedWhenTheTagsWereTakenBack`: a run
 whose tags were retracted must not print the word an operator scans for, must
 lead with `(not-released)` rather than `(passed)`, and must say the same thing

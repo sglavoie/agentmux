@@ -110,6 +110,31 @@ const StatusPartial = "partial"
 // reads any value other than `passed` as not passed.
 const StatusNotReleased = "not-released"
 
+// StatusTagging is the result a tagging run's record carries while the release
+// it describes is still being assembled. It is written before the first ref
+// exists and replaced by the finished account, so it is the value that survives
+// a tagging run that was interrupted or that could never publish its outcome.
+//
+// It exists because the alternative is a record that overstates itself for a
+// window the gate cannot shorten to nothing. A tagging run's record used to be
+// published as `passed` before either tag was written, on the reasoning that
+// every planned step really had passed -- and then rewritten afterwards to say
+// what tagging did. Everything between those two writes was a durable, signed
+// `"result": "passed"` file for a release that did not exist yet and might
+// never. Recovering from that depends on rewriting the record later, which
+// depends on the evidence medium still being writable, which is exactly the
+// thing that fails on the paths where the guarantee is needed.
+//
+// So the claim is not made until it is true. The pre-tag record says a tagging
+// attempt is under way and declares itself unsigned; nothing about it is
+// admissible as a release, and no signature is produced that could later be
+// replayed as one. `passed` is written once -- together with the signature over
+// it -- only after both refs exist. See gate.finish and gate.writeSignedEvidence.
+//
+// Like StatusPartial and StatusNotReleased it is safe for a consumer written
+// before it existed, which reads any value other than `passed` as not passed.
+const StatusTagging = "tagging"
+
 // Phase names, in execution order.
 const (
 	PhaseSource      = "source"
@@ -403,7 +428,8 @@ type Evidence struct {
 
 // Passed reports whether the pair was released: every planned step ran and
 // passed, and nothing afterwards left the pair in a state the record has to
-// qualify. StatusPartial and StatusNotReleased are deliberately not passed.
+// qualify. StatusPartial, StatusNotReleased and StatusTagging are deliberately
+// not passed.
 //
 // The second condition is checked rather than trusted. Every path that
 // qualifies a tagging attempt already downgrades the result, so the two can only
@@ -670,60 +696,93 @@ func (g *gate) execute(ctx context.Context) (*Evidence, error) {
 // combination before the gate runs at all, so the tags this writes always
 // accompany a record that is being signed.
 //
-// The record is republished after tagging whatever tagging did. On success it
-// gains the tag list, because signing a record that named tags which were never
-// written would be worse than not naming them at all. On failure it gains the
-// account of what was rolled back or left behind -- and that account is worth
-// nothing if it only ever existed in the memory of a process that is about to
-// exit.
+// A run that is not tagging is done in one publication: nothing follows that
+// could contradict the record, so `passed` is the truth at the moment it is
+// written.
 //
-// That second publication is also the last thing standing between two written
-// refs and a release claim nobody can check, so it is part of the transaction
-// rather than a postscript to it. Until it lands, the tags are backed by the
-// record written before they existed: one that names no tags and whose
-// signature, if the run made one, covers those pre-tag bytes. If it cannot
-// land, the tags go back -- see abandonUnvouchedTags.
+// A tagging run is not. Its verdict is provisional until both refs exist and
+// the record that names them has been made durable, so the record it publishes
+// first says exactly that -- StatusTagging, unsigned -- and the release claim is
+// written once, afterwards, in the single step that also produces the signature
+// over it. See writeSignedEvidence.
+//
+// The order matters more than it looks. Between the two publications the pair is
+// in the one state this gate cannot make atomic: refs written into two
+// independent repositories with a record on disk that predates them. What that
+// durable record says is therefore the whole question, because every recovery
+// from here -- rolling the refs back, publishing the account of having done so --
+// can itself fail on the same medium that just failed. It says a tagging attempt
+// is under way, which is true no matter which of the following steps breaks, and
+// it carries no signature that could be replayed as a release approval.
 func (g *gate) finish(ctx context.Context, ev *Evidence) error {
 	tagging := ev.Result == StatusPassed && g.opts.Tag
-	if tagging {
-		if err := g.checkTagsAbsent(ctx, ev.PairID); err != nil {
-			return err
-		}
+	if !tagging {
+		return g.publish(ctx, ev)
 	}
-	if err := g.publish(ctx, ev); err != nil {
+	if err := g.checkTagsAbsent(ctx, ev.PairID); err != nil {
 		return err
 	}
-	if !tagging {
-		return nil
+	if err := g.publishProvisional(ctx, ev); err != nil {
+		// Nothing was tagged and nothing durable claims otherwise, but the
+		// record is still returned and rendered as the run's summary, so it may
+		// not keep the provisional result: StatusTagging describes a run that
+		// got as far as writing refs, and this one never reached the first one.
+		ev.Result = StatusNotReleased
+		return err
 	}
 
 	created, tagErr := g.writeTags(ctx, ev)
 	if tagErr != nil {
 		// writeTags has already undone what it could and recorded what it could
-		// not. Publishing is what makes that account outlive this process.
+		// not, and downgraded the result out of StatusTagging accordingly.
+		// Publishing is what makes that account outlive this process.
 		if err := g.publishRetraction(ctx, ev); err != nil {
 			return errors.Join(tagErr, err)
 		}
 		return tagErr
 	}
-	if err := g.publish(ctx, ev); err != nil {
+
+	// Both refs exist, so the run has done everything a release requires and the
+	// record may finally say so. This is the only place StatusPassed becomes
+	// durable for a tagging run.
+	ev.Result = StatusPassed
+	if err := g.writeSignedEvidence(ctx, ev); err != nil {
 		return g.abandonUnvouchedTags(ctx, ev, created, err)
 	}
 	return nil
+}
+
+// publishProvisional writes the record that stands while the pair tags are being
+// written, and makes sure nothing beside it says more than it does.
+//
+// The record itself is downgraded to StatusTagging first, which is what makes
+// declaredSignature withhold the signature: signing this would produce a
+// verifiable statement about a release that has not happened, and the whole
+// point of the provisional record is that it makes no claim to be one.
+//
+// The stale signature is a separate hazard. A `--force` run replaces a previous
+// release's record, and that release's detached signature is still sitting in
+// the directory covering bytes this write has just superseded. Removing it here
+// costs nothing and closes the only window in which a record for this pair could
+// be found next to a signature it does not describe.
+func (g *gate) publishProvisional(ctx context.Context, ev *Evidence) error {
+	ev.Result = StatusTagging
+	if err := g.publish(ctx, ev); err != nil {
+		return err
+	}
+	return discardSignature(SignaturePath(ev.Path))
 }
 
 // abandonUnvouchedTags removes pair tags whose own evidence could not be
 // finalized, and then records having done so.
 //
 // The failure this compensates for is narrow and entirely durable. Both refs
-// exist; the record that describes them does not. Either the rewrite that adds
-// the tag list never reached disk -- leaving the pre-tag record, which names no
-// tags at all -- or it did and the signature over those bytes could not be
-// produced, in which case publish has already restated the record as unsigned
-// and removed the previous signature. Both outcomes are the same claim: durable
-// release tags standing next to evidence that does not vouch for them. A reader
-// of either repository alone sees a release; a reader of the record sees a
-// rehearsal or a run that was never tagged.
+// exist; the record that describes them does not. Whatever broke -- the write,
+// the signature, or the rename that would have published either -- the release
+// publication is all-or-nothing, so what is on disk is still the provisional
+// pre-tag record: unsigned, and saying a tagging attempt is under way. A reader
+// of either repository alone sees a release; a reader of the record sees an
+// attempt that never finished.
 //
 // So the refs are retracted, using the same compare-and-delete transaction a
 // failed second tag write uses, and for the same reason: only what this run
@@ -732,12 +791,12 @@ func (g *gate) finish(ctx context.Context, ev *Evidence) error {
 //
 // The account is then published in turn, which cannot be assumed to work -- the
 // thing that just failed is publication. It is attempted anyway, and when it
-// fails the superseded record is retracted instead, because the record left on
-// disk is not neutral: it is the pre-tag one, which says the run passed. See
+// fails the provisional record is upgraded in place instead, so the file says
+// what happened rather than only that something was attempted. See
 // publishRetraction. Both errors are returned together rather than the second
-// hiding the first. The tags are gone either way, which is the property that
-// matters: the durable claim is retracted before the record that would have had
-// to explain it is given up on.
+// hiding the first. None of that is load-bearing for the release claim: the
+// refs are gone, and the record that outlives this process never said the pair
+// passed.
 func (g *gate) abandonUnvouchedTags(ctx context.Context, ev *Evidence, created []createdTag, cause error) error {
 	abandonErr := g.abandonTags(ctx, ev, created,
 		fmt.Errorf("release: the record that vouches for the pair tags could not be published: %w", cause))
@@ -753,11 +812,13 @@ func (g *gate) abandonUnvouchedTags(ctx context.Context, ev *Evidence, created [
 //
 // Every caller is compensating for a tagging attempt that did not complete, so
 // the record in memory now says `not-released` or `partial` while the one on
-// disk still says `passed`: it was published before the tags existed, and
-// nothing has replaced it. Ordinary publication is the way to replace it. When
-// that fails -- and on the path this exists for, a failed publication is exactly
-// what is being compensated for -- the stale record is not left to speak for the
-// run. It is retracted in place. See gate.retractSuperseded.
+// disk is the provisional pre-tag one, which says only that a tagging attempt
+// was under way. That is already safe -- it is not a release claim and carries
+// no signature -- but it is not the truth either: it names no refs, no cause,
+// and nothing an operator can act on. Ordinary publication is how it is
+// replaced. When that fails -- and on the path this exists for, a failed
+// publication is exactly what is being compensated for -- the superseded record
+// is upgraded in place instead. See gate.retractSuperseded.
 //
 // The publication error is still what the caller reports. A retraction is not a
 // success: it means the account of what happened could only be written by giving
@@ -814,9 +875,16 @@ func (g *gate) publish(ctx context.Context, ev *Evidence) error {
 }
 
 // declaredSignature is the signature metadata the record will carry, computed
-// before the signature exists. Signing is on exactly when a key was named.
+// before the signature exists. Signing is on exactly when a key was named and
+// the record is making a statement worth signing.
+//
+// A provisional record is not. Its whole purpose is to occupy the evidence path
+// while a tagging attempt is in flight without asserting anything about it, and
+// a signature over those bytes would be a verifiable artifact for a release that
+// has not happened -- one that survives on disk precisely when the run cannot
+// come back to replace it.
 func (g *gate) declaredSignature(ev *Evidence) Signature {
-	if g.opts.SigningKey == "" {
+	if g.opts.SigningKey == "" || ev.Result == StatusTagging {
 		return Signature{Signed: false, Namespace: g.opts.Namespace}
 	}
 	return Signature{
