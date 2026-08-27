@@ -18,31 +18,41 @@ func renderFooter(m Model) string {
 	case ModeSearch:
 		lines = nonEmptyFooterLines(
 			footerLine(m.width, " · ", "filter: @profile", "!state", "word", "\\@/\\! literal"),
-			footerLine(m.width, "  ", "enter: apply", "esc: cancel"),
+			footerStyledLine(m.width, "  ", renderFooterBinding("enter", "apply"), renderFooterBinding("esc", "cancel")),
 		)
 	case ModeConfirm:
-		lines = nonEmptyFooterLines(footerLine(m.width, "   ", "[y]es", "[n]o", "[esc] cancel"))
+		lines = nonEmptyFooterLines(footerStyledLine(m.width, "   ",
+			renderFooterBindingWithLabel("[y]", "", "es", styleFooter),
+			renderFooterBindingWithLabel("[n]", "", "o", styleFooter),
+			renderFooterBinding("[esc]", "cancel"),
+		))
 	case ModePicker:
 		lines = nonEmptyFooterLines(
-			footerLine(m.width, "  ", "space: toggle", "enter: launch", "f: profile", "P: pin", "s: sessions", "C: profile", "o: open dirs", "O: open in editor", "p: preview", "esc: clear/exit"),
-			footerLine(m.width, "  ", "DSL: @profile, word", "j/k: up/down", "g/G: top/bottom"),
+			footerStyledLine(m.width, "  ",
+				renderFooterBinding("space", "toggle"), renderFooterBinding("enter", "launch"),
+				renderFooterBinding("f", "profile"), renderFooterBinding("P", "pin"),
+				renderFooterBinding("s", "sessions"), renderFooterBinding("C", "profile"),
+				renderFooterBinding("o", "open dirs"), renderFooterBinding("O", "open in editor"),
+				renderFooterBinding("p", "preview"), renderFooterBinding("esc", "clear/exit"),
+			),
+			footerStyledLine(m.width, "  ", styleFooter.Render("DSL: @profile, word"), renderFooterBinding("j/k", "up/down"), renderFooterBinding("g/G", "top/bottom")),
 		)
 	case ModeConfigPicker:
 		lines = nonEmptyFooterLines(
-			footerLine(m.width, "  ", "enter: select", "esc/q: cancel"),
-			footerLine(m.width, "  ", "j/k: up/down"),
+			footerStyledLine(m.width, "  ", renderFooterBinding("enter", "select"), renderFooterBinding("esc/q", "cancel")),
+			footerStyledLine(m.width, "  ", renderFooterBinding("j/k", "up/down")),
 		)
 	case ModeLiveSessionPicker:
 		lines = nonEmptyFooterLines(
-			footerLine(m.width, "  ", "enter: focus", "esc/q: cancel"),
-			footerLine(m.width, "  ", "j/k: up/down"),
+			footerStyledLine(m.width, "  ", renderFooterBinding("enter", "focus"), renderFooterBinding("esc/q", "cancel")),
+			footerStyledLine(m.width, "  ", renderFooterBinding("j/k", "up/down")),
 		)
 	case ModeHelp:
-		lines = nonEmptyFooterLines(footerLine(m.width, "  ", "j/k: up/down", "g/G: top/bottom", "esc/?/q: close help"))
+		lines = nonEmptyFooterLines(footerStyledLine(m.width, "  ", renderFooterBinding("j/k", "up/down"), renderFooterBinding("g/G", "top/bottom"), renderFooterBinding("esc/?/q", "close help")))
 	case ModeActions:
-		lines = nonEmptyFooterLines(footerLine(m.width, "  ", "<key>: run action", "esc/q: back"))
+		lines = nonEmptyFooterLines(footerStyledLine(m.width, "  ", renderFooterBinding("<key>", "run action"), renderFooterBinding("esc/q", "back")))
 	case ModeCommandPalette:
-		lines = nonEmptyFooterLines(footerLine(m.width, " · ", "↑/↓ or ctrl+j/k or ctrl+n/p move", "enter run", "esc close", "ctrl+c quit"))
+		lines = nonEmptyFooterLines(footerStyledLine(m.width, " · ", renderFooterBinding("↑/↓ or ctrl+j/k or ctrl+n/p", "move"), renderFooterBinding("enter", "run"), renderFooterBinding("esc", "close"), renderFooterBinding("ctrl+c", "quit")))
 	case ModeDetail:
 		// Inner box footer already carries the scroll position and detail
 		// keymap; the outer hint area stays blank so the dimmed dashboard
@@ -50,8 +60,8 @@ func renderFooter(m Model) string {
 		lines = nil
 	case ModeChipPicker:
 		lines = nonEmptyFooterLines(
-			footerLine(m.width, "  ", "enter: select", "esc/q: cancel"),
-			footerLine(m.width, "  ", "/: search", "j/k: up/down", "g/G: top/bottom", "pgup/pgdn: page"),
+			footerStyledLine(m.width, "  ", renderFooterBinding("enter", "select"), renderFooterBinding("esc/q", "cancel")),
+			footerStyledLine(m.width, "  ", renderFooterBinding("/", "search"), renderFooterBinding("j/k", "up/down"), renderFooterBinding("g/G", "top/bottom"), renderFooterBinding("pgup/pgdn", "page")),
 		)
 	case ModeSessionSearch:
 		lines = footerHintLines(m, sessionSearchFooterPalette, footerHintMaxLines)
@@ -68,12 +78,12 @@ func renderFooter(m Model) string {
 	case ModeASLResponse:
 		lines = footerHintLines(m, aslResponseFooterPalette, footerHintMaxLines)
 	case ModeMessageDetail:
-		lines = nonEmptyFooterLines(footerLine(m.width, " · ", "j/k scroll", "g/G top/bottom", "esc/q/enter close"))
+		lines = nonEmptyFooterLines(footerStyledLine(m.width, " · ", renderFooterBinding("j/k", "scroll"), renderFooterBinding("g/G", "top/bottom"), renderFooterBinding("esc/q/enter", "close")))
 	case ModeDeleteChoice:
 		lines = nonEmptyFooterLines(footerLineFromTokens(m.width, " · ",
-			footerRenderedToken(styleFooter.Render("[i] index only")),
-			footerRenderedToken(styleError.Render("[f] also delete file")),
-			footerRenderedToken(styleFooter.Render("[esc] cancel")),
+			footerBindingToken("[i]", "index only"),
+			footerCustomBindingToken("[f]", " ", "also delete file", styleError),
+			footerBindingToken("[esc]", "cancel"),
 		))
 	default: // ModeList
 		position := ""
@@ -166,9 +176,16 @@ func listModeFooterLines(m Model, position string) []string {
 		if m.pendingJumpDir == -1 {
 			arrow = "prev"
 		}
-		return listFooterLines(m, footerLine(m.width, "  ",
-			fmt.Sprintf("jump %s: p)perm", arrow),
-			"e)fail", "a)active", "q)question", "s)stop", "c)compact", "b)sub", "]]/[[)attention", "(esc cancels)",
+		return listFooterLines(m, footerStyledLine(m.width, "  ",
+			styleFooter.Render(fmt.Sprintf("jump %s: ", arrow))+renderFooterBindingWithLabel("p", "", ")perm", styleFooter),
+			renderFooterBindingWithLabel("e", "", ")fail", styleFooter),
+			renderFooterBindingWithLabel("a", "", ")active", styleFooter),
+			renderFooterBindingWithLabel("q", "", ")question", styleFooter),
+			renderFooterBindingWithLabel("s", "", ")stop", styleFooter),
+			renderFooterBindingWithLabel("c", "", ")compact", styleFooter),
+			renderFooterBindingWithLabel("b", "", ")sub", styleFooter),
+			renderFooterBindingWithLabel("]]/[[", "", ")attention", styleFooter),
+			styleFooter.Render("(")+renderFooterBindingWithLabel("esc", "", " cancels)", styleFooter),
 		))
 	case m.previewEnabled:
 		// In preview mode the only binding shown is `p: hide preview`,
@@ -181,22 +198,22 @@ func listModeFooterLines(m Model, position string) []string {
 
 func listFooterNavTokens(m Model) []string {
 	navTokens := []string{
-		"j/k: up/down",
-		"]/[: jump-chord",
-		"}/{: nav+focus",
-		"enter: focus",
-		"a: actions",
-		"/: filter",
-		"?: help",
-		"q: quit",
-		"p: preview",
+		renderFooterBinding("j/k", "up/down"),
+		renderFooterBinding("]/[", "jump-chord"),
+		renderFooterBinding("}/{", "nav+focus"),
+		renderFooterBinding("enter", "focus"),
+		renderFooterBinding("a", "actions"),
+		renderFooterBinding("/", "filter"),
+		renderFooterBinding("?", "help"),
+		renderFooterBinding("q", "quit"),
+		renderFooterBinding("p", "preview"),
 	}
 	if !m.activeFilter.IsEmpty() {
-		navTokens = append(navTokens, "esc: clear filters")
+		navTokens = append(navTokens, renderFooterBinding("esc", "clear filters"))
 		if n := len(m.activeFilter.Components()); n > 0 {
 			navTokens = append(navTokens,
-				fmt.Sprintf("1-%d: remove chip", n),
-				"tab: focus next",
+				renderFooterBinding(fmt.Sprintf("1-%d", n), "remove chip"),
+				renderFooterBinding("tab", "focus next"),
 			)
 		}
 	}
@@ -273,8 +290,7 @@ func listFooterLine2WithPosition(m Model, navFragments []string, position string
 		})
 	}
 
-	for i, f := range navFragments {
-		rendered := styleFooter.Render(f)
+	for i, rendered := range navFragments {
 		tok := footerToken{
 			rendered: rendered,
 			width:    displayStyledWidth(rendered),

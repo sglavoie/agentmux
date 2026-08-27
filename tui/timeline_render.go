@@ -223,8 +223,16 @@ func renderTimeline(m Model) string {
 	}
 	sb.WriteByte('\n')
 
-	hints := "t: flat list · ↑/↓ scroll · enter: fold · z/Z collapse/expand · s: suppressed · T: timestamps · esc close"
-	sb.WriteString(styleDim.Render(hints))
+	hints := joinFooterBindings(" · ",
+		renderFooterBinding("t", "flat list"),
+		renderFooterBinding("↑/↓", "scroll"),
+		renderFooterBinding("enter", "fold"),
+		renderFooterBinding("z/Z", "collapse/expand"),
+		renderFooterBinding("s", "suppressed"),
+		renderFooterBinding("T", "timestamps"),
+		renderFooterBinding("esc", "close"),
+	)
+	sb.WriteString(hints)
 	sb.WriteByte('\n')
 
 	return styleOverlayBox.Width(innerWidth).Render(strings.TrimRight(sb.String(), "\n"))

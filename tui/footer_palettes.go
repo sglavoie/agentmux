@@ -266,15 +266,14 @@ func footerHintBlock(m Model, entries []footerEntry, truncated bool) string {
 
 	tokens := make([]footerToken, 0, len(entries)+1)
 	for _, e := range entries {
-		text := e.key + " " + e.label
-		rendered := styleFooter.Render(text)
-		if !e.availFn(m) {
-			rendered = styleFooterUnavailable.Render(text)
+		if e.availFn(m) {
+			tokens = append(tokens, footerBindingToken(e.key, e.label))
+		} else {
+			tokens = append(tokens, footerUnavailableBindingToken(e.key, e.label))
 		}
-		tokens = append(tokens, footerRenderedToken(rendered))
 	}
 	if truncated {
-		tokens = append(tokens, footerRenderedToken(styleFooter.Render(footerHintMore)))
+		tokens = append(tokens, footerBindingToken("?", "more"))
 	}
 	for i := 0; i < len(tokens)-1; i++ {
 		tokens[i].sep = sep

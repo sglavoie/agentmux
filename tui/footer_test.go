@@ -120,7 +120,7 @@ func TestListFooterHasNoSpacerAndZebraRowsSpanViewport(t *testing.T) {
 	if !strings.Contains(plainLines[1], "O open in editor · f profile") {
 		t.Fatalf("expected actions to reflow across the former section boundary, got %q", plainLines[1])
 	}
-	if !strings.Contains(plainLines[2], "j/k: up/down") {
+	if !strings.Contains(plainLines[2], "j/k up/down") {
 		t.Fatalf("expected navigation immediately after actions, got %q", plainLines[2])
 	}
 

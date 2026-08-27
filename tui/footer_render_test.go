@@ -73,7 +73,7 @@ func TestRootRenderPinsStatusBarToFinalRow(t *testing.T) {
 	}
 
 	footerLine := lines[len(lines)-2]
-	for _, want := range []string{"j/k: up/down", "q: quit", "p: preview"} {
+	for _, want := range []string{"j/k up/down", "q quit", "p preview"} {
 		if !strings.Contains(footerLine, want) {
 			t.Fatalf("footer line above status missing %q: %q", want, footerLine)
 		}
@@ -114,7 +114,7 @@ func TestRootRenderListPreviewSuppressesFooterButKeepsStatusBar(t *testing.T) {
 	if !strings.Contains(last, "Sessions: 3 running") {
 		t.Fatalf("final row = %q, want list status", last)
 	}
-	if strings.Contains(out, "q: quit") || strings.Contains(out, "j/k: up/down") {
+	if strings.Contains(out, "q quit") || strings.Contains(out, "j/k up/down") {
 		t.Fatalf("normal footer hints should be suppressed while preview is on:\n%s", out)
 	}
 	if !strings.Contains(out, "p: hide preview") {
@@ -165,11 +165,7 @@ func TestListFooterActionsZeroWidth(t *testing.T) {
 func TestListFooterLine2WrapsNarrow(t *testing.T) {
 	const width = 40
 	m := Model{width: width}
-	nav := []string{
-		"j/k: up/down", "]/[: jump-chord", "}/{: nav+focus",
-		"enter: focus", "a: actions", "/: filter",
-		"?: help", "q: quit", "p: preview",
-	}
+	nav := listFooterNavTokens(m)
 	out := listFooterLine2(m, nav)
 	if strings.Count(out, "\n") < 1 {
 		t.Fatalf("expected line2 to wrap at width %d, got single line:\n%s", width, out)
@@ -185,7 +181,7 @@ func TestListFooterLine2WrapsNarrow(t *testing.T) {
 // unwrapped line for line 2.
 func TestListFooterLine2ZeroWidth(t *testing.T) {
 	m := Model{}
-	nav := []string{"j/k: up/down", "enter: focus", "q: quit"}
+	nav := []string{renderFooterBinding("j/k", "up/down"), renderFooterBinding("enter", "focus"), renderFooterBinding("q", "quit")}
 	out := listFooterLine2(m, nav)
 	if strings.Contains(out, "\n") {
 		t.Errorf("expected single line at zero width, got:\n%s", out)

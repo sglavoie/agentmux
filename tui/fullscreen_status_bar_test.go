@@ -141,7 +141,7 @@ func TestSessionSearchOverlaysReserveStickyStatusBar(t *testing.T) {
 				chipPickerOptions: []string{"", "api", "web"},
 			},
 			status: "Choose project",
-			footer: "/: search",
+			footer: "/ search",
 		},
 		{
 			name: "delete choice",

@@ -258,13 +258,13 @@ func TestFooterChangesWithMode(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.width, m.height = 120, 40
 
-	listFooter := renderFooter(m)
-	if !strings.Contains(listFooter, "/: filter") {
+	listFooter := stripAnsi(renderFooter(m))
+	if !strings.Contains(listFooter, "/ filter") {
 		t.Errorf("list footer missing unified filter hint, got:\n%s", listFooter)
 	}
 	m.mode = ModeSearch
-	searchFooter := renderFooter(m)
-	if !strings.Contains(searchFooter, "enter: apply") {
+	searchFooter := stripAnsi(renderFooter(m))
+	if !strings.Contains(searchFooter, "enter apply") {
 		t.Errorf("filter footer missing apply hint, got:\n%s", searchFooter)
 	}
 	if !strings.Contains(searchFooter, "@profile") {

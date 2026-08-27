@@ -94,19 +94,19 @@ func TestPickerFooterShowsFilterControls(t *testing.T) {
 	if strings.Contains(footer, "press / to filter") {
 		t.Errorf("picker footer should not duplicate the header filter hint, got:\n%s", footer)
 	}
-	if strings.Contains(footer, "/: filter") {
+	if strings.Contains(footer, "/ filter") {
 		t.Errorf("picker footer should not duplicate the header filter key, got:\n%s", footer)
 	}
 	if !strings.Contains(footer, "DSL: @profile, word") {
 		t.Errorf("expected picker footer to retain DSL hint, got:\n%s", footer)
 	}
-	if !strings.Contains(footer, "f: profile") {
+	if !strings.Contains(footer, "f profile") {
 		t.Errorf("expected picker footer to advertise profile cycling, got:\n%s", footer)
 	}
-	if !strings.Contains(footer, "esc: clear/exit") {
+	if !strings.Contains(footer, "esc clear/exit") {
 		t.Errorf("expected picker footer to advertise esc behavior, got:\n%s", footer)
 	}
-	if !strings.Contains(footer, "g/G: top/bottom") {
+	if !strings.Contains(footer, "g/G top/bottom") {
 		t.Errorf("expected picker footer to advertise boundary navigation, got:\n%s", footer)
 	}
 }

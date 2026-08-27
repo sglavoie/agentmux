@@ -415,8 +415,12 @@ func commandPaletteHintLine(width int, above, below bool) string {
 	if middleWidth < 0 {
 		middleWidth = 0
 	}
-	middle := displayTruncate("↑/↓ move · enter run · esc close", middleWidth, "…")
-	return left + displayPadRight(middle, middleWidth) + right
+	middle := joinFooterBindings(" · ", renderFooterBinding("↑/↓", "move"), renderFooterBinding("enter", "run"), renderFooterBinding("esc", "close"))
+	middle = displayStyledTruncate(middle, middleWidth, "…")
+	if padding := middleWidth - displayStyledWidth(middle); padding > 0 {
+		middle += strings.Repeat(" ", padding)
+	}
+	return styleFooter.Render(left) + middle + styleFooter.Render(right)
 }
 
 func renderCommandPaletteRow(m Model, row commandPaletteDisplayRow, width int) string {
@@ -471,7 +475,7 @@ func renderCommandPalette(m Model) string {
 		lines = append(lines, renderCommandPaletteRow(m, row, width))
 	}
 	if showHint {
-		lines = append(lines, styleDim.Render(commandPaletteHintLine(width, offset > 0, end < len(layout.rows))))
+		lines = append(lines, commandPaletteHintLine(width, offset > 0, end < len(layout.rows)))
 	}
 	return strings.Join(lines, "\n")
 }

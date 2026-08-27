@@ -226,7 +226,7 @@ func (m colorPickerModel) View() tea.View {
 		sb.WriteString(styleError.Render(m.err.Error()) + "\n")
 	}
 
-	sb.WriteString(styleDim.Render("j/k navigate · enter apply · esc cancel") + "\n")
+	sb.WriteString(joinFooterBindings(" · ", renderFooterBinding("j/k", "navigate"), renderFooterBinding("enter", "apply"), renderFooterBinding("esc", "cancel")) + "\n")
 
 	return tea.NewView(sb.String())
 }

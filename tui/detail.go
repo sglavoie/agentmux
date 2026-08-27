@@ -323,8 +323,14 @@ func detailFooter(m Model, total, visible int) string {
 		}
 		pos = fmt.Sprintf("%d–%d of %d", start, end, total)
 	}
-	hints := "t: timeline · ↑/↓ scroll · pgup/pgdn page · g/G top/bottom · d/esc close"
-	return styleDim.Render(pos + "   " + hints)
+	hints := joinFooterBindings(" · ",
+		renderFooterBinding("t", "timeline"),
+		renderFooterBinding("↑/↓", "scroll"),
+		renderFooterBinding("pgup/pgdn", "page"),
+		renderFooterBinding("g/G", "top/bottom"),
+		renderFooterBinding("d/esc", "close"),
+	)
+	return styleFooter.Render(pos+"   ") + hints
 }
 
 // renderDetail renders the per-session hook event detail pane. The layout

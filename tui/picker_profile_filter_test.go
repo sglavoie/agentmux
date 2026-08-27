@@ -167,7 +167,7 @@ func TestPickerProfileIndicatorAndEntryReset(t *testing.T) {
 		t.Fatalf("initial picker header missing All profile indicator:\n%s", out)
 	}
 	footer := stripAnsi(renderFooter(m))
-	if !strings.Contains(footer, "f: profile") {
+	if !strings.Contains(footer, "f profile") {
 		t.Fatalf("picker footer missing profile-cycle binding:\n%s", footer)
 	}
 

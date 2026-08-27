@@ -57,7 +57,7 @@ func (m keybindingsModel) View() tea.View {
 
 	sb.WriteByte('\n')
 	sb.WriteString(styleDim.Render(divider) + "\n")
-	sb.WriteString(styleDim.Render("  press any key to close") + "\n")
+	sb.WriteString("  " + styleFooter.Render("press ") + renderFooterBindingWithLabel("any key", " ", "to close", styleFooter) + "\n")
 
 	return tea.NewView(sb.String())
 }

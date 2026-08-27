@@ -8,12 +8,15 @@ import (
 const footerStripeBackgroundHex = "#2b2b2b"
 
 var (
-	styleSelected = lipgloss.NewStyle().Bold(true).Reverse(true)
-	styleError    = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
-	styleDim      = lipgloss.NewStyle().Faint(true)
-	styleSearch   = lipgloss.NewStyle().Bold(true)
-	styleFooter   = lipgloss.NewStyle().Faint(true)
-	styleHeader   = lipgloss.NewStyle().Bold(true)
+	styleSelected  = lipgloss.NewStyle().Bold(true).Reverse(true)
+	styleError     = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
+	styleDim       = lipgloss.NewStyle().Faint(true)
+	styleSearch    = lipgloss.NewStyle().Bold(true)
+	styleFooter    = lipgloss.NewStyle().Faint(true)
+	styleHeader    = lipgloss.NewStyle().Bold(true)
+	styleFooterKey = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#4ec9b0")).
+			Bold(true)
 
 	// styleOverlayBox wraps overlay popups (chip picker, delete-choice
 	// prompt) in a rounded border with the de-facto accent teal. Padding
@@ -28,7 +31,10 @@ var (
 	// styleFooterUnavailable renders actions that do not apply to the current
 	// cursor row. The dim grey foreground keeps the key visible while signaling
 	// that pressing it would be a no-op.
-	styleFooterUnavailable = lipgloss.NewStyle().Foreground(lipgloss.Color("#5a5a5a"))
+	styleFooterUnavailable    = lipgloss.NewStyle().Foreground(lipgloss.Color("#5a5a5a"))
+	styleFooterUnavailableKey = lipgloss.NewStyle().
+					Foreground(lipgloss.Color("#5a5a5a")).
+					Bold(true)
 
 	styleAttentionRow = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
 

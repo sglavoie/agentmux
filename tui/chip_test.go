@@ -324,10 +324,10 @@ func TestFooterShowsChipHintsWhenFiltered(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.activeFilter = Parse("api @work")
 	footer := stripAnsi(renderFooter(m))
-	if !strings.Contains(footer, "1-2: remove chip") {
+	if !strings.Contains(footer, "1-2 remove chip") {
 		t.Errorf("expected chip count hint, got:\n%s", footer)
 	}
-	if !strings.Contains(footer, "tab: focus next") {
+	if !strings.Contains(footer, "tab focus next") {
 		t.Errorf("expected tab hint, got:\n%s", footer)
 	}
 }

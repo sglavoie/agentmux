@@ -33,7 +33,8 @@ func renderActions(m Model, descWidth int) string {
 		sb.WriteByte('\n')
 	}
 	sb.WriteByte('\n')
-	sb.WriteString(styleDim.Render("press a key to run · esc/q to back out") + "\n")
+	sb.WriteString(styleFooter.Render("press ") + renderFooterBindingWithLabel("a key", " ", "to run", styleFooter) +
+		styleFooter.Render(" · ") + renderFooterBinding("esc/q", "to back out") + "\n")
 	return sb.String()
 }
 
@@ -109,7 +110,9 @@ func renderActionsWindow(m Model, descWidth int) string {
 		sb.WriteString(styleDim.Render("  ▼"))
 	}
 	sb.WriteByte('\n')
-	sb.WriteString(styleDim.Render("press a key to run · j/k scroll · esc/q to back out") + "\n")
+	sb.WriteString(styleFooter.Render("press ") + renderFooterBindingWithLabel("a key", " ", "to run", styleFooter) +
+		styleFooter.Render(" · ") + renderFooterBinding("j/k", "scroll") +
+		styleFooter.Render(" · ") + renderFooterBinding("esc/q", "to back out") + "\n")
 	return sb.String()
 }
 

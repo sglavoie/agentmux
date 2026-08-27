@@ -89,16 +89,11 @@ func listFooterSectionsLine(m Model, sections []string) string {
 			continue
 		}
 		for i, e := range entries {
-			text := e.key + " " + e.label
-			var rendered string
+			var tok footerToken
 			if e.availFn(m) {
-				rendered = styleFooter.Render(text)
+				tok = footerBindingToken(e.key, e.label)
 			} else {
-				rendered = styleFooterUnavailable.Render(text)
-			}
-			tok := footerToken{
-				rendered: rendered,
-				width:    displayStyledWidth(rendered),
+				tok = footerUnavailableBindingToken(e.key, e.label)
 			}
 			if i < len(entries)-1 || hasLaterEntries(sections, sec) {
 				tok.sep = innerSep

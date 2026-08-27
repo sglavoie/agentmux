@@ -60,7 +60,7 @@ func TestPickerPinToggleReordersPersistsAndRenders(t *testing.T) {
 		t.Fatalf("pinned api row has no pin marker: %q", apiRow)
 	}
 	footer := stripAnsi(renderFooter(m))
-	if !strings.Contains(footer, "P: pin") {
+	if !strings.Contains(footer, "P pin") {
 		t.Fatalf("launcher footer has no pin binding: %q", footer)
 	}
 

@@ -288,11 +288,11 @@ func TestPickerOpenDoneMsgStaysOpenOnError(t *testing.T) {
 func TestFooterPickerOpenEditorHint(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModePicker
-	footer := renderFooter(m)
-	if !strings.Contains(footer, "O: open in editor") {
+	footer := stripAnsi(renderFooter(m))
+	if !strings.Contains(footer, "O open in editor") {
 		t.Errorf("picker footer missing open in editor hint, got:\n%s", footer)
 	}
-	if !strings.Contains(footer, "o: open dirs") {
+	if !strings.Contains(footer, "o open dirs") {
 		t.Errorf("picker footer missing open dir hint, got:\n%s", footer)
 	}
 }
@@ -337,8 +337,8 @@ func TestFooterListHintIncludesPeek(t *testing.T) {
 func TestFooterPickerOpenDirHint(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModePicker
-	footer := renderFooter(m)
-	if !strings.Contains(footer, "o: open dirs") {
+	footer := stripAnsi(renderFooter(m))
+	if !strings.Contains(footer, "o open dirs") {
 		t.Errorf("picker footer missing open dir hint, got:\n%s", footer)
 	}
 }

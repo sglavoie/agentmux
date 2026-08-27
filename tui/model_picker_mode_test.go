@@ -98,7 +98,7 @@ func TestBuildPickerRunning(t *testing.T) {
 func TestFooterConfirmHint(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeConfirm
-	footer := renderFooter(m)
+	footer := stripAnsi(renderFooter(m))
 	if !strings.Contains(footer, "[y]es") {
 		t.Errorf("confirm footer missing [y]es hint, got:\n%s", footer)
 	}
@@ -110,11 +110,11 @@ func TestFooterConfirmHint(t *testing.T) {
 func TestFooterPickerHint(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModePicker
-	footer := renderFooter(m)
-	if !strings.Contains(footer, "space: toggle") {
+	footer := stripAnsi(renderFooter(m))
+	if !strings.Contains(footer, "space toggle") {
 		t.Errorf("picker footer missing space hint, got:\n%s", footer)
 	}
-	if !strings.Contains(footer, "s: sessions") {
+	if !strings.Contains(footer, "s sessions") {
 		t.Errorf("picker footer missing project sessions hint, got:\n%s", footer)
 	}
 }
@@ -150,7 +150,7 @@ func TestFooterIncludesDirectKeys(t *testing.T) {
 			t.Errorf("expected action %q in continuous footer flow", frag)
 		}
 	}
-	if !strings.Contains(lines[1], "j/k: up/down") {
+	if !strings.Contains(lines[1], "j/k up/down") {
 		t.Error("expected navigation immediately after the action flow")
 	}
 	if strings.Contains(footer, "a: more actions") {
@@ -166,14 +166,14 @@ func TestFooterIncludesDirectKeys(t *testing.T) {
 func TestFooterEscHintShownWhenFiltered(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.activeFilter = Parse("test")
-	footer := renderFooter(m)
-	if !strings.Contains(footer, "esc: clear filters") {
+	footer := stripAnsi(renderFooter(m))
+	if !strings.Contains(footer, "esc clear filters") {
 		t.Errorf("expected esc hint when filters active, got:\n%s", footer)
 	}
 
 	m2 := loadSessions(testModel(), makeSessions())
-	footer2 := renderFooter(m2)
-	if strings.Contains(footer2, "esc: clear filters") {
+	footer2 := stripAnsi(renderFooter(m2))
+	if strings.Contains(footer2, "esc clear filters") {
 		t.Errorf("esc hint should not appear without active filters, got:\n%s", footer2)
 	}
 }
@@ -298,11 +298,11 @@ func TestConfigPickerDifferentAccountEmitsCmd(t *testing.T) {
 func TestFooterConfigPickerHint(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeConfigPicker
-	footer := renderFooter(m)
-	if !strings.Contains(footer, "enter: select") {
+	footer := stripAnsi(renderFooter(m))
+	if !strings.Contains(footer, "enter select") {
 		t.Errorf("config picker footer missing select hint, got:\n%s", footer)
 	}
-	if !strings.Contains(footer, "esc/q: cancel") {
+	if !strings.Contains(footer, "esc/q cancel") {
 		t.Errorf("config picker footer missing cancel hint, got:\n%s", footer)
 	}
 }

@@ -225,7 +225,7 @@ func TestChipPickerSearchFooterAdvertisedForAllKinds(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			m := enterChipPickerForTest(t, chipPickerSearchModel(t), tc.key, tc.kind)
 			footer := stripAnsi(renderFooter(m))
-			if !strings.Contains(footer, "/: search") {
+			if !strings.Contains(footer, "/ search") {
 				t.Fatalf("%s picker footer did not advertise search: %q", tc.name, footer)
 			}
 		})
