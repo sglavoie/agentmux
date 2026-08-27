@@ -108,7 +108,7 @@ func writePlanState(t *testing.T, stateRoot, planDir, cwd string) {
 		"cwd":      "/ignored/legacy/cwd",
 		"agent_mux": map[string]any{
 			"schema_version":            1,
-			"contract_set_id":           "asl-amx-1.09f9ea5c5ceaa6cd",
+			"contract_set_id":           agentloop.ContractSetID,
 			"run_id":                    "run-plan",
 			"plan_dir":                  canonical,
 			"workspace_root":            cwd,

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/aslcontract"
 )
 
 // TestFaultDroppedASLFinishRepairedByReconciliation drops a run's finish event
@@ -35,7 +36,9 @@ func TestFaultDroppedASLFinishRepairedByReconciliation(t *testing.T) {
 		WindowID: 42,
 		Event:    "AgentSessionLoopTurnStarted",
 		PayloadJSON: fmt.Sprintf(
-			`{"source":"agent_session_loop","cwd":%q,"harness":"claude","run_id":"run-lost"}`, projectDir),
+			`{"schema_version":%d,"contract_set_id":%q,"source":"agent_session_loop",`+
+				`"cwd":%q,"harness":"claude","run_id":"run-lost"}`,
+			aslHookSchemaVersion, aslcontract.ContractSetID, projectDir),
 	})
 	if !resp.OK {
 		t.Fatalf("turn started = %+v", resp)

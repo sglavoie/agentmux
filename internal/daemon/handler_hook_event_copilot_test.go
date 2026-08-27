@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/aslcontract"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -87,8 +88,19 @@ func TestHandler_HookEventClaudePermissionRequestSurfacesKey(t *testing.T) {
 	}
 }
 
+// hookPayloadJSON encodes a hook payload the way its producer would send it.
+//
+// An agent-session-loop payload is stamped with the compatibility block ASL puts
+// on every lifecycle boundary, because that is part of what the producer sends
+// rather than something the test is asserting. `source` is the discriminator the
+// contract itself uses: it is a const in the schema, so a lifecycle payload
+// without it is not one. Tests that exercise the gate build their own JSON.
 func hookPayloadJSON(t *testing.T, payload hookevent.HookPayload) string {
 	t.Helper()
+	if payload.Source == aslHookSource {
+		payload.SchemaVersion = aslHookSchemaVersion
+		payload.ContractSetID = aslcontract.ContractSetID
+	}
 	data, err := json.Marshal(payload)
 	if err != nil {
 		t.Fatalf("marshal hook payload: %v", err)

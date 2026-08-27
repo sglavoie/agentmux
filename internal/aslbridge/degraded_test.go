@@ -19,18 +19,16 @@ func scriptedBridge(t *testing.T, reply func(f *fakeBridge, req map[string]any))
 	t.Helper()
 	return newFakeBridge(t, func(f *fakeBridge) {
 		f.hello()
-		for {
-			select {
-			case req := <-f.requests:
-				if req["method"] == MethodRunsSnapshot {
-					f.respond(req["id"].(string), emptySnapshot())
-					continue
-				}
-				reply(f, req)
-			case <-f.exited:
+		serveRequests(f, func(req map[string]any) {
+			if f.answerHandshake(req) {
 				return
 			}
-		}
+			if reqMethod(req) == MethodRunsSnapshot {
+				f.respond(reqID(req), emptySnapshot())
+				return
+			}
+			reply(f, req)
+		})
 	})
 }
 
@@ -158,18 +156,16 @@ func TestASlowFirstProjectionStillEnablesMutations(t *testing.T) {
 	}
 	fake := newFakeBridge(t, func(f *fakeBridge) {
 		f.hello()
-		for {
-			select {
-			case req := <-f.requests:
-				if req["method"] != MethodRunsSnapshot {
-					continue
-				}
-				time.Sleep(slower)
-				f.respond(req["id"].(string), emptySnapshot())
-			case <-f.exited:
+		serveRequests(f, func(req map[string]any) {
+			if f.answerHandshake(req) {
 				return
 			}
-		}
+			if reqMethod(req) != MethodRunsSnapshot {
+				return
+			}
+			time.Sleep(slower)
+			f.respond(reqID(req), emptySnapshot())
+		})
 	})
 	m := startManager(t, Options{Mode: ModeAuto, Command: "asl", Launcher: fake.launcher()})
 
@@ -185,23 +181,21 @@ func TestADroppedFirstSnapshotIsRetriedWithoutACorpusChange(t *testing.T) {
 	var attempts atomic.Int32
 	fake := newFakeBridge(t, func(f *fakeBridge) {
 		f.hello()
-		for {
-			select {
-			case req := <-f.requests:
-				if req["method"] != MethodRunsSnapshot {
-					continue
-				}
-				if attempts.Add(1) == 1 {
-					f.refuse(req["id"].(string), Error{
-						Code: CodeInternalError, Message: "the projection raised",
-					})
-					continue
-				}
-				f.respond(req["id"].(string), emptySnapshot())
-			case <-f.exited:
+		serveRequests(f, func(req map[string]any) {
+			if f.answerHandshake(req) {
 				return
 			}
-		}
+			if reqMethod(req) != MethodRunsSnapshot {
+				return
+			}
+			if attempts.Add(1) == 1 {
+				f.refuse(reqID(req), Error{
+					Code: CodeInternalError, Message: "the projection raised",
+				})
+				return
+			}
+			f.respond(reqID(req), emptySnapshot())
+		})
 	})
 	m := startManager(t, Options{Mode: ModeAuto, Command: "asl", Launcher: fake.launcher()})
 

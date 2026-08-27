@@ -165,7 +165,7 @@ func (h *Handler) appendSuppressedHookEvent(req Request, action, suppressionReas
 	event.RouteEvidence = ensureDirectRouteEvidence(req)
 	event.EffectiveBefore = &effective
 	event.EffectiveAfter = &effective
-	if suppressionReason == DecisionReasonInvalidPayload {
+	if isQuarantineReason(suppressionReason) {
 		event.ReducerDecision = DecisionQuarantined
 		event.Quarantined = true
 		event.IdentityConfidence = IdentityConfidenceInvalid

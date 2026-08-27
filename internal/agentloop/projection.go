@@ -23,6 +23,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/aslcontract"
 )
 
 const (
@@ -30,12 +32,19 @@ const (
 	projectionKey = "agent_mux"
 	// ProjectionSchema is the only `agent_mux` schema version this build reads.
 	ProjectionSchema = 1
-	// ContractSetPrefix is the contract-set family AgentMux speaks. The full ID
-	// also carries a digest over ASL's fixture corpus; matching the family (and
-	// the schema version inside the block) is what this build requires, because
-	// the corpus is not vendored here yet and a fixture-only edit must not read
-	// as an incompatible peer.
-	ContractSetPrefix = "asl-amx-1."
+	// ContractSetID is the one contract set this build reads a projection under.
+	//
+	// It used to be a family prefix, because AgentMux held no copy of ASL's
+	// corpus and so could not tell a fixture-only edit from an incompatible
+	// peer. It now vendors that corpus at internal/aslcontract, so the digest is
+	// checkable and the family match is not: two builds inside the family whose
+	// digests differ disagree about the wire, which is the whole reason the ID
+	// carries a digest at all.
+	ContractSetID = aslcontract.ContractSetID
+
+	// ContractSetPrefix remains the family every well-formed ID carries. It is
+	// used only to describe a mismatch, never to accept one.
+	ContractSetPrefix = aslcontract.Prefix
 
 	maxRunIDChars         = 128
 	maxSessionIDChars     = 64
@@ -251,9 +260,12 @@ func DecodeProjection(raw []byte) (Projection, error) {
 	if err != nil {
 		return Projection{}, projectionErrorf(ReasonUnsupportedContract, "%v", err)
 	}
-	if !strings.HasPrefix(contractSetID, ContractSetPrefix) {
+	// Exact, not prefix. A peer built from a different corpus is incompatible
+	// even inside the family, and the result is still indeterminate rather than
+	// absent: an unpaired ASL must never look like a run that ended.
+	if contractSetID != ContractSetID {
 		return Projection{}, projectionErrorf(ReasonUnsupportedContract,
-			"contract set %q is outside the %q family", contractSetID, ContractSetPrefix)
+			"contract set %q is not %q", contractSetID, ContractSetID)
 	}
 
 	if err := requireExactMembers(members); err != nil {

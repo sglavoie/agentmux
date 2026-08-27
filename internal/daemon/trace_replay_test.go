@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/aslcontract"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -303,8 +304,14 @@ func aslPl(projectDir, runID string, seq int, extra string) string {
 	return aslPlForHarness(projectDir, "claude", runID, seq, extra)
 }
 
+// aslPlForHarness stamps the schema-2 compatibility block every lifecycle
+// payload carries. A trace without it would be quarantined at the gate, so this
+// is not decoration: it is the difference between replaying ASL's wire and
+// replaying a producer this build refuses.
 func aslPlForHarness(projectDir, harnessName, runID string, seq int, extra string) string {
-	body := fmt.Sprintf(`"source":"agent_session_loop","cwd":%q,"harness":%q,"run_id":%q`, projectDir, harnessName, runID)
+	body := fmt.Sprintf(
+		`"schema_version":%d,"contract_set_id":%q,"source":"agent_session_loop","cwd":%q,"harness":%q,"run_id":%q`,
+		aslHookSchemaVersion, aslcontract.ContractSetID, projectDir, harnessName, runID)
 	if extra != "" {
 		body += "," + extra
 	}

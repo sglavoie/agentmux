@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -105,11 +106,15 @@ func TestHandshakePublishesAvailabilityAndMutations(t *testing.T) {
 	}
 }
 
+// Protocol 1 is retired. There is no parser left for it, so a bridge still
+// serving it fails at the frame version rather than being read as far as its
+// contract-set ID.
 func TestHelloProtocolMismatchIsChildFailure(t *testing.T) {
 	fake := newFakeBridge(t, func(f *fakeBridge) {
 		f.writeFrame(map[string]any{
-			"type": "hello", "protocol": 2, "asl_version": "9.9.9",
-			"capabilities": []string{MethodRunsSnapshot},
+			"type": "hello", "protocol": 1, "asl_version": "9.9.9",
+			"contract_set_id": ContractSetID,
+			"capabilities":    []string{MethodSessionHandshake, MethodRunsSnapshot},
 		})
 		<-f.exited
 	})
@@ -122,7 +127,7 @@ func TestHelloProtocolMismatchIsChildFailure(t *testing.T) {
 
 func TestHelloWithoutSnapshotCapabilityIsChildFailure(t *testing.T) {
 	fake := newFakeBridge(t, func(f *fakeBridge) {
-		f.hello(MethodQuestionGet)
+		f.hello(MethodSessionHandshake, MethodQuestionGet)
 		<-f.exited
 	})
 	m := startManager(t, Options{
@@ -130,6 +135,52 @@ func TestHelloWithoutSnapshotCapabilityIsChildFailure(t *testing.T) {
 		Sleep: func(context.Context, time.Duration) bool { return false },
 	})
 	waitForReason(t, m, "runs.snapshot")
+}
+
+// A bridge that cannot handshake can never grant mutations, so the session is
+// ended at the hello rather than published as a permanently read-only one.
+func TestHelloWithoutHandshakeCapabilityIsChildFailure(t *testing.T) {
+	fake := newFakeBridge(t, func(f *fakeBridge) {
+		f.hello(MethodRunsSnapshot, MethodQuestionGet)
+		<-f.exited
+	})
+	m := startManager(t, Options{
+		Mode: ModeAuto, Command: "asl", Launcher: fake.launcher(),
+		Sleep: func(context.Context, time.Duration) bool { return false },
+	})
+	waitForReason(t, m, MethodSessionHandshake)
+}
+
+// A foreign contract set is terminal, not transient: the same pairing
+// reproduces it forever, so supervision stops rather than backing off, and the
+// published reason names only this build's own ID.
+func TestAForeignContractSetEndsSupervision(t *testing.T) {
+	var starts atomic.Int32
+	fake := newFakeBridge(t, func(f *fakeBridge) {
+		f.helloAs("asl-amx-1.ffffffffffffffff")
+		<-f.exited
+	})
+	m := startManager(t, Options{
+		Mode: ModeAuto, Command: "asl",
+		Launcher: func(ctx context.Context) (*Child, error) {
+			starts.Add(1)
+			return fake.launcher()(ctx)
+		},
+		Sleep: func(context.Context, time.Duration) bool { return false },
+	})
+
+	waitForReason(t, m, ContractSetID)
+	if got := m.Status().Reason; strings.Contains(got, "ffffffffffffffff") {
+		t.Errorf("reason %q quotes the identity the peer offered", got)
+	}
+	// Give a restart every chance to happen before asserting none did.
+	time.Sleep(50 * time.Millisecond)
+	if got := starts.Load(); got != 1 {
+		t.Errorf("the daemon started %d children for a terminal mismatch, want 1", got)
+	}
+	if m.Status().MutationsEnabled {
+		t.Error("a foreign contract set left mutations enabled")
+	}
 }
 
 func TestResponseBeforeHelloIsChildFailure(t *testing.T) {

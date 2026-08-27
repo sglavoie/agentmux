@@ -14,6 +14,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/aslcontract"
 )
 
 // This file is the only place Agent Mux talks to a real agent-session-loop. It
@@ -230,9 +232,14 @@ func rowFor(t *testing.T, snapshot Snapshot, planDir string) Row {
 	return Row{}
 }
 
-// TestInstalledBridgeServesProtocolOne is the whole opt-in gate: one manager,
+// TestInstalledBridgeServesTheContractSet is the whole opt-in gate: one manager,
 // one real child, and every shape the daemon depends on checked against it.
-func TestInstalledBridgeServesProtocolOne(t *testing.T) {
+//
+// It is also the live half of the vendoring check. internal/aslcontract proves
+// offline that the vendored copy agrees with itself; only a running ASL can
+// prove the copy is still the one ASL publishes, and it does so by naming the
+// same contract-set ID the vendored bytes derive.
+func TestInstalledBridgeServesTheContractSet(t *testing.T) {
 	executable := requireIntegration(t)
 	corpus := buildCorpus(t)
 
@@ -262,22 +269,7 @@ func TestInstalledBridgeServesProtocolOne(t *testing.T) {
 	if status.Executable != executable {
 		t.Errorf("status executable = %q, want %q", status.Executable, executable)
 	}
-	for _, required := range []string{
-		MethodRunsSnapshot, MethodQuestionGet, MethodQuestionReply, MethodQuestionResolve,
-		MethodRunResume, MethodRunStopAfterCurrent, MethodRunAbort, MethodWorkbenchEnsure,
-		EventRunsChanged, EventOperationUpdated,
-	} {
-		if !hasCapability(status.Capabilities, required) {
-			t.Errorf("installed bridge does not advertise %s", required)
-		}
-	}
-	// The checked-in wire fixtures are only worth decoding if they still
-	// describe the ASL that is actually installed, so this gate is where a
-	// fixture set that has fallen behind the bridge is caught.
-	if fmt.Sprint(status.Capabilities) != fmt.Sprint(loadManifest(t).Capabilities) {
-		t.Errorf("installed capabilities = %v, fixtures pin %v",
-			status.Capabilities, loadManifest(t).Capabilities)
-	}
+	assertInstalledBridgeNamesTheVendoredCorpus(t, manager, status)
 
 	snapshot, meta, err := manager.Snapshot()
 	if err != nil {
@@ -288,6 +280,11 @@ func TestInstalledBridgeServesProtocolOne(t *testing.T) {
 	}
 	if snapshot.Protocol != ProtocolVersion || snapshot.Digest == "" {
 		t.Fatalf("snapshot = protocol %d digest %q", snapshot.Protocol, snapshot.Digest)
+	}
+	// The identity travels inside the projection, so the snapshot the daemon
+	// acted on cannot have been built under a different set than the hello named.
+	if snapshot.ContractSetID != ContractSetID {
+		t.Errorf("snapshot contract_set_id = %q, want %q", snapshot.ContractSetID, ContractSetID)
 	}
 	if snapshot.RowCount != len(snapshot.Rows) {
 		t.Errorf("row_count = %d, rows = %d", snapshot.RowCount, len(snapshot.Rows))
@@ -324,6 +321,101 @@ func TestInstalledBridgeServesProtocolOne(t *testing.T) {
 	manager.Close()
 	if code := exitCode.Load(); code != 0 {
 		t.Errorf("bridge exited with %d after stdin close, want a clean 0", code)
+	}
+}
+
+// assertInstalledBridgeNamesTheVendoredCorpus is the cross-repository half of
+// the byte-identity gate.
+//
+// Offline, internal/aslcontract re-derives the contract-set ID from the copy it
+// embeds, which catches a vendored file edited on this side. That check cannot
+// catch the opposite drift: a copy that is internally consistent but older than
+// what ASL now publishes passes it. Here the installed bridge names its own ID,
+// derived from its own corpus, so the two failures are separated — a locally
+// edited fixture fails `just check`, and a stale copy fails here.
+func assertInstalledBridgeNamesTheVendoredCorpus(t *testing.T, manager *Manager, status Status) {
+	t.Helper()
+	derived, err := aslcontract.DerivedContractSetID()
+	if err != nil {
+		t.Fatalf("derive the vendored contract set: %v", err)
+	}
+	if derived != ContractSetID {
+		t.Fatalf("vendored corpus derives %q, this build pins %q", derived, ContractSetID)
+	}
+	if status.ContractSetID != derived {
+		t.Fatalf("installed bridge serves %q, the vendored corpus derives %q",
+			status.ContractSetID, derived)
+	}
+	assertTheDigestSpansEveryComponent(t)
+
+	manifest, err := aslcontract.ReadManifest()
+	if err != nil {
+		t.Fatalf("read the vendored manifest: %v", err)
+	}
+	set, err := manifest.Current()
+	if err != nil {
+		t.Fatalf("current contract set: %v", err)
+	}
+
+	manager.mu.Lock()
+	hello := manager.hello
+	manager.mu.Unlock()
+
+	// Protocol 2 publishes three closed lists rather than one mixed one, so
+	// "can I call this?", "will I be sent this?", and "does this need a
+	// handshake?" are separately answerable. Each is checked whole and in order.
+	for _, check := range []struct {
+		what   string
+		served []string
+		pinned []string
+	}{
+		{"methods", status.Capabilities, set.Capabilities.BridgeMethods},
+		{"events", hello.Events, set.Capabilities.BridgeEvents},
+		{"mutation methods", hello.MutationMethods, set.Capabilities.BridgeMutationMethods},
+	} {
+		if fmt.Sprint(check.served) != fmt.Sprint(check.pinned) {
+			t.Errorf("installed %s = %v, the vendored corpus pins %v",
+				check.what, check.served, check.pinned)
+		}
+	}
+	if !hello.HandshakeRequired {
+		t.Error("the installed bridge does not require a handshake")
+	}
+}
+
+// assertTheDigestSpansEveryComponent is what lets one equality above stand for
+// all three contracts.
+//
+// The bridge is the only component with a live connection to check, but the
+// contract-set ID is a digest over the whole corpus — bridge frames, lifecycle
+// payloads, and projection documents alike. So an installed ASL that names the
+// vendored ID has thereby agreed to the lifecycle-hook fixtures byte for byte,
+// even though no hook is piped anywhere in this test. That inference only holds
+// while every component's fixtures are inside the digested material, which is
+// what this checks.
+func assertTheDigestSpansEveryComponent(t *testing.T) {
+	t.Helper()
+	files, err := aslcontract.CorpusFiles()
+	if err != nil {
+		t.Fatalf("list the vendored corpus: %v", err)
+	}
+	for _, component := range []string{
+		aslcontract.FixturesBridgeProtocol,
+		aslcontract.FixturesLifecycleHook,
+		aslcontract.FixturesProjection,
+	} {
+		prefix := "fixtures/" + component + "/"
+		found := false
+		for _, file := range files {
+			if strings.HasPrefix(file, prefix) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("no %s fixture is inside the digested corpus; the served ID does not vouch for it",
+				component)
+		}
 	}
 }
 

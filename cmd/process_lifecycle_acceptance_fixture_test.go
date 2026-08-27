@@ -263,6 +263,7 @@ func (f *processLifecycleAcceptanceFixture) sendHook(
 	for key, value := range extra {
 		payload[key] = value
 	}
+	stampASLContract(f.t, payload)
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		f.t.Fatal(err)

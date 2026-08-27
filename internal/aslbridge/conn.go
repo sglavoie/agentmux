@@ -185,7 +185,11 @@ func (c *conn) readLoop(stdout io.Reader) {
 				c.helloCh <- Hello{
 					Protocol:            f.Protocol,
 					ASLVersion:          f.ASLVersion,
+					ContractSetID:       f.ContractSetID,
 					Capabilities:        f.Capabilities,
+					Events:              f.Events,
+					MutationMethods:     f.MutationMethods,
+					HandshakeRequired:   f.HandshakeRequired,
 					MaxFrameBytes:       f.MaxFrameBytes,
 					PollIntervalSeconds: f.PollIntervalSeconds,
 				}
@@ -268,15 +272,30 @@ func (c *conn) err() error {
 	return errConnClosed
 }
 
+// fail ends the session with a cause the manager decided rather than the reader
+// did. Closing stdin is the load-bearing half: closeWith alone only poisons this
+// side, and the faults the manager detects — a foreign contract set, a result it
+// cannot decode — are all things a child considers itself healthy after. Such a
+// child writes nothing further and never closes stdout, so without the
+// end-of-stream signal the reader stays parked and supervision waits forever for
+// an exit that is not coming.
+func (c *conn) fail(err error) {
+	c.closeWith(err)
+	_ = c.stdin.Close()
+}
+
 // shutdown closes stdin, which is the bridge's own end-of-stream signal. It
 // deliberately does not wait for the reader: the reader is parked in a blocking
 // read on the child's stdout, and a child that is mid-projection writes nothing
 // and reads nothing for as long as that projection takes. Joining here would
 // make every teardown cost a whole projection and defeat the grace period
 // entirely. Callers terminate the child first, then awaitReader.
+//
+// It routes through fail so an earlier cause is preserved: closeWith keeps the
+// first error, which is what stops a teardown from relabelling the mismatch that
+// triggered it as a plain exit.
 func (c *conn) shutdown() {
-	c.closeWith(errConnClosed)
-	_ = c.stdin.Close()
+	c.fail(errConnClosed)
 }
 
 // awaitReader joins the reader goroutine, which returns once the child's stdout

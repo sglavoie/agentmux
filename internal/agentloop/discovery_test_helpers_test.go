@@ -7,11 +7,10 @@ import (
 	"testing"
 )
 
-// testContractSetID is the contract set ASL currently publishes. Tests assert
-// against the family prefix rather than this exact value wherever the assertion
-// is about compatibility, so refreshing the fixture corpus does not turn every
-// discovery test red.
-const testContractSetID = "asl-amx-1.09f9ea5c5ceaa6cd"
+// testContractSetID is the contract set this build reads. It is the vendored
+// constant rather than a literal: matching is exact now, so a test that spelled
+// its own ID would seed projections this build must refuse.
+const testContractSetID = ContractSetID
 
 const testStartToken = "Fri Jul 10 13:05:00 2026"
 

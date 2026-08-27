@@ -80,6 +80,10 @@ var aslStaleCodes = map[string]bool{
 	"question-mismatch":    true,
 	"run-mismatch":         true,
 	"not-paused":           true,
+	// The projection the operator acted on has been superseded. That is the same
+	// situation as a stale token seen one level up — the target moved, nothing was
+	// applied — so it closes the form and refreshes rather than reporting a fault.
+	"stale-snapshot": true,
 }
 
 var aslErrorCodes = map[string]bool{
@@ -96,6 +100,10 @@ var aslErrorCodes = map[string]bool{
 	"internal-error":          true,
 	"mutation-failed":         true,
 	"workbench-unavailable":   true,
+	// Not stale: a refresh cannot fix it. The two sides were built from different
+	// contract sets, so the same pairing reproduces this forever and the operator
+	// needs the sentence to point at the install rather than at the run.
+	"contract-set-mismatch": true,
 }
 
 // aslErrorCode recovers the bridge refusal code from a daemon error. The daemon
@@ -142,6 +150,11 @@ func aslRefusalText(err error) string {
 		return "the daemon refused the request as malformed"
 	case "unknown-method", "unsupported-protocol":
 		return "this agent-session-loop build does not support this action"
+	case "contract-set-mismatch":
+		// No identifier is quoted. Both are build constants an operator cannot act
+		// on, and one of them is the peer's, which makes it text this side did not
+		// author. The daemon log carries both.
+		return "agent mux and agent-session-loop were built from different contract sets: update the older one"
 	case "malformed-json", "frame-too-large", "internal-error":
 		return "agent-session-loop reported an internal error"
 	default:

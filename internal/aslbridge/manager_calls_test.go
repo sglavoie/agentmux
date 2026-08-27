@@ -16,22 +16,20 @@ func TestActionIsSentExactlyOnceOnRefusal(t *testing.T) {
 	var mu sync.Mutex
 	fake := newFakeBridge(t, func(f *fakeBridge) {
 		f.hello()
-		for {
-			select {
-			case req := <-f.requests:
-				switch req["method"] {
-				case MethodRunsSnapshot:
-					f.respond(req["id"].(string), emptySnapshot())
-				case MethodRunAbort:
-					mu.Lock()
-					aborts++
-					mu.Unlock()
-					f.refuse(req["id"].(string), Error{Code: "stale-action-token", Message: "token for plan /home/op/x is stale"})
-				}
-			case <-f.exited:
+		serveRequests(f, func(req map[string]any) {
+			if f.answerHandshake(req) {
 				return
 			}
-		}
+			switch reqMethod(req) {
+			case MethodRunsSnapshot:
+				f.respond(reqID(req), emptySnapshot())
+			case MethodRunAbort:
+				mu.Lock()
+				aborts++
+				mu.Unlock()
+				f.refuse(reqID(req), Error{Code: "stale-action-token", Message: "token for plan /home/op/x is stale"})
+			}
+		})
 	})
 	m := startManager(t, Options{Mode: ModeAuto, Command: "asl", Launcher: fake.launcher()})
 	waitFor(t, "mutations enabled", func() bool { return m.Status().MutationsEnabled })
@@ -126,22 +124,20 @@ func TestQuestionBodyIsFetchedAndNeverRetained(t *testing.T) {
 	const body = "Should I delete the production bucket?"
 	fake := newFakeBridge(t, func(f *fakeBridge) {
 		f.hello()
-		for {
-			select {
-			case req := <-f.requests:
-				switch req["method"] {
-				case MethodRunsSnapshot:
-					f.respond(req["id"].(string), emptySnapshot())
-				case MethodQuestionGet:
-					f.respond(req["id"].(string), map[string]any{
-						"plan_dir": "/p", "question_id": "q1", "body": body, "body_bytes": len(body),
-						"action_token": "tok",
-					})
-				}
-			case <-f.exited:
+		serveRequests(f, func(req map[string]any) {
+			if f.answerHandshake(req) {
 				return
 			}
-		}
+			switch reqMethod(req) {
+			case MethodRunsSnapshot:
+				f.respond(reqID(req), emptySnapshot())
+			case MethodQuestionGet:
+				f.respond(reqID(req), map[string]any{
+					"plan_dir": "/p", "question_id": "q1", "body": body, "body_bytes": len(body),
+					"action_token": "tok",
+				})
+			}
+		})
 	})
 	m := startManager(t, Options{Mode: ModeAuto, Command: "asl", Launcher: fake.launcher()})
 	waitFor(t, "mutations enabled", func() bool { return m.Status().MutationsEnabled })
@@ -158,7 +154,7 @@ func TestQuestionBodyIsFetchedAndNeverRetained(t *testing.T) {
 	}
 	for method := range m.Metrics().RequestsByMethod {
 		switch method {
-		case MethodRunsSnapshot, MethodQuestionGet:
+		case MethodSessionHandshake, MethodRunsSnapshot, MethodQuestionGet:
 		default:
 			t.Fatalf("metrics recorded an unexpected method key %q", method)
 		}

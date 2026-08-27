@@ -9,6 +9,7 @@ package aslbridge
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -35,7 +36,7 @@ func (m *Manager) QuestionBody(ctx context.Context, req QuestionRequest) (Questi
 	}
 	var body QuestionBody
 	if err := json.Unmarshal(raw, &body); err != nil {
-		c.closeWith(contaminationError("question.get result"))
+		m.failSession(c, contaminationError("question.get result"))
 		return QuestionBody{}, ErrUnavailable
 	}
 	return body, nil
@@ -65,7 +66,7 @@ func (m *Manager) Workbench(ctx context.Context, req WorkbenchRequest) (Workbenc
 	}
 	var link WorkbenchLink
 	if err := json.Unmarshal(raw, &link); err != nil {
-		c.closeWith(contaminationError("workbench.ensure result"))
+		m.failSession(c, contaminationError("workbench.ensure result"))
 		return WorkbenchLink{}, ErrUnavailable
 	}
 	return link, nil
@@ -90,15 +91,44 @@ func (m *Manager) Act(ctx context.Context, req ActionRequest) (Operation, error)
 	defer cancel()
 	raw, err := c.call(callCtx, req.Method, params)
 	if err != nil {
+		m.classifyActionFailure(err)
 		return Operation{}, err
 	}
 	var op Operation
 	if err := json.Unmarshal(raw, &op); err != nil {
-		c.closeWith(contaminationError(req.Method + " result"))
+		// ASL answered and the daemon cannot read the answer, so whether the
+		// mutation landed is unknown. That is the ambiguous case, not a refusal.
+		m.revokeMutations(reasonAmbiguousOperation)
+		m.failSession(c, contaminationError(req.Method + " result"))
 		return Operation{}, ErrUnavailable
 	}
 	m.recordReceipt(op)
 	return op, nil
+}
+
+// classifyActionFailure decides what a failed mutation costs the grant.
+//
+// A typed refusal is a definite outcome: ASL decided, wrote nothing, and said
+// why. Anything else — a timeout, a lost child, a frame the daemon could not
+// correlate — leaves the daemon unable to say whether ASL applied the request.
+// The mutation is never retried either way, so the safe response to not knowing
+// is to stop acting until a fresh snapshot and handshake re-establish what is
+// true, rather than to let an operator issue a second action against state the
+// daemon can no longer vouch for.
+func (m *Manager) classifyActionFailure(err error) {
+	var refusal *Error
+	if !errors.As(err, &refusal) {
+		m.revokeMutations(reasonAmbiguousOperation)
+		m.requestRefresh()
+		return
+	}
+	switch refusal.Code {
+	case CodeStaleSnapshot, CodeContractSetMismatch:
+		// The bridge just told the daemon its grant is no longer good. Believe it
+		// rather than waiting for the next poll to notice.
+		m.revokeMutations(reasonHandshakeStale)
+		m.requestRefresh()
+	}
 }
 
 func actionParams(req ActionRequest) (map[string]any, error) {

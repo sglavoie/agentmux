@@ -11,6 +11,14 @@ import (
 // source selection. Unknown fields and bulk prompt/tool/transcript content are
 // never copied into it.
 type compactPayload struct {
+	// The compatibility block survives compaction. An agent-session-loop payload
+	// is capped well below the size that triggers this path, so in practice it is
+	// never compacted — but the daemon refuses a lifecycle event whose contract
+	// identity is absent, and a forwarding step that silently stripped it would
+	// turn a size limit into a compatibility failure.
+	SchemaVersion int    `json:"schema_version,omitempty"`
+	ContractSetID string `json:"contract_set_id,omitempty"`
+
 	HookEventName    string `json:"hook_event_name,omitempty"`
 	NotificationType string `json:"notification_type,omitempty"`
 	StopReason       string `json:"stop_reason,omitempty"`
@@ -44,6 +52,8 @@ type compactPayload struct {
 // either harness dialect.
 func CompactHookPayload(payload HookPayload) ([]byte, error) {
 	compact := compactPayload{
+		SchemaVersion:    payload.SchemaVersion,
+		ContractSetID:    payload.ContractSetID,
 		HookEventName:    payload.HookEventName,
 		NotificationType: payload.EffectiveNotificationType(),
 		StopReason:       payload.EffectiveStopReason(),

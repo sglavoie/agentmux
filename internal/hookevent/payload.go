@@ -31,6 +31,15 @@ const maxQuestionPreviewRunes = 160
 // HookPayload captures the hook fields Agent Mux currently needs for icon logic
 // and debug traces. Unknown fields are ignored.
 type HookPayload struct {
+	// SchemaVersion and ContractSetID are the agent-session-loop compatibility
+	// block. Harness hooks never carry them and are not asked to: they are what a
+	// lifecycle payload presents so a consumer can decide whether it understands
+	// the message before it reads the rest. Both are zero-valued for every other
+	// producer, and the gate that requires them is scoped to the lifecycle
+	// vocabulary for exactly that reason.
+	SchemaVersion int    `json:"schema_version"`
+	ContractSetID string `json:"contract_set_id"`
+
 	HookEventName         string `json:"hook_event_name"`
 	NotificationType      string `json:"notification_type"`
 	NotificationTypeCamel string `json:"notificationType"`

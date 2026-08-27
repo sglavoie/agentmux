@@ -109,15 +109,28 @@ func (f *fakeBridge) writeFrame(v any) {
 	f.writeLine(string(data))
 }
 
+// hello emits the server-first frame with this build's contract set. Tests that
+// need a foreign identity use helloAs.
 func (f *fakeBridge) hello(capabilities ...string) {
+	f.helloAs(ContractSetID, capabilities...)
+}
+
+func (f *fakeBridge) helloAs(contractSetID string, capabilities ...string) {
 	if len(capabilities) == 0 {
-		capabilities = []string{MethodRunsSnapshot, MethodQuestionGet, MethodQuestionReply, MethodWorkbenchEnsure}
+		capabilities = []string{
+			MethodSessionHandshake, MethodRunsSnapshot, MethodQuestionGet,
+			MethodQuestionReply, MethodWorkbenchEnsure,
+		}
 	}
 	f.writeFrame(map[string]any{
 		"type":                  "hello",
 		"protocol":              ProtocolVersion,
 		"asl_version":           "9.9.9",
+		"contract_set_id":       contractSetID,
 		"capabilities":          capabilities,
+		"events":                []string{EventRunsChanged, EventOperationUpdated},
+		"mutation_methods":      MutationMethods,
+		"handshake_required":    true,
 		"max_frame_bytes":       MaxFrameBytes,
 		"poll_interval_seconds": 1.0,
 	})
@@ -178,25 +191,85 @@ func (f *fakeBridge) terminate() error {
 	return nil
 }
 
-// emptySnapshot is the minimal well-formed runs.snapshot result.
+// emptySnapshot is the minimal well-formed runs.snapshot result. The identity
+// travels inside the snapshot rather than beside it, so a projection cannot be
+// quoted back under a contract set it was not built under.
 func emptySnapshot() map[string]any {
-	return map[string]any{"protocol": ProtocolVersion, "rows": []any{}, "row_count": 0, "digest": "d0"}
+	return snapshotWithDigest("d0")
 }
 
-// serveSnapshots answers every runs.snapshot request until the daemon closes
-// stdin. It is the "healthy bridge" script.
+func snapshotWithDigest(digest string) map[string]any {
+	return map[string]any{
+		"protocol":        ProtocolVersion,
+		"contract_set_id": ContractSetID,
+		"rows":            []any{},
+		"row_count":       0,
+		"digest":          digest,
+	}
+}
+
+// grantFor is the handshake result a bridge returns when the offered set matched
+// and it still holds the offered digest.
+func grantFor(digest string) map[string]any {
+	return map[string]any{
+		"contract_set_id":   ContractSetID,
+		"handshake_id":      "hs-" + digest,
+		"mutations_enabled": true,
+		"snapshot_digest":   digest,
+	}
+}
+
+// serveSnapshots answers every snapshot and handshake request until the daemon
+// closes stdin. It is the "healthy bridge" script: it grants mutations against
+// whatever digest the daemon offers, which is always the one it just served.
 func serveSnapshots(f *fakeBridge) {
 	f.hello()
+	serveRequests(f, func(req map[string]any) {
+		if f.answerHandshake(req) {
+			return
+		}
+		if reqMethod(req) == MethodRunsSnapshot {
+			f.respond(reqID(req), emptySnapshot())
+		}
+	})
+}
+
+// serveRequests dispatches every inbound request to handle until the daemon
+// closes stdin, so a script that answers more than one method does not repeat
+// the select-on-exit shape.
+func serveRequests(f *fakeBridge, handle func(req map[string]any)) {
 	for {
 		select {
 		case req := <-f.requests:
-			if req["method"] == MethodRunsSnapshot {
-				f.respond(req["id"].(string), emptySnapshot())
-			}
+			handle(req)
 		case <-f.exited:
 			return
 		}
 	}
+}
+
+// answerHandshake grants mutations against the digest the daemon offered and
+// reports whether the request was a handshake at all. Every script that wants a
+// mutable manager calls it first: the daemon takes no snapshot as permission to
+// act, so a script that only answered runs.snapshot would leave it read-only.
+func (f *fakeBridge) answerHandshake(req map[string]any) bool {
+	if reqMethod(req) != MethodSessionHandshake {
+		return false
+	}
+	params, _ := req["params"].(map[string]any)
+	digest, _ := params["snapshot_digest"].(string)
+	f.respond(reqID(req), grantFor(digest))
+	return true
+}
+
+func reqMethod(req map[string]any) string {
+	method, _ := req["method"].(string)
+	return method
+}
+
+func reqID(req map[string]any) string {
+	id, _ := req["id"].(string)
+	return id
 }
 
 func discardLogger() *slog.Logger {

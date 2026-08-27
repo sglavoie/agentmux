@@ -68,7 +68,17 @@ func TestAcceptanceDiagnosticPipeline(t *testing.T) {
 		return health.Alive && health.Ready
 	})
 
-	aslPayload := `{"run_id":"acceptance-run","cwd":"/workspace","harness":"claude","source_sequence":"2","source_event_id":"acceptance-run:2"}`
+	// The compatibility block is what makes this an agent-session-loop payload
+	// rather than one the daemon quarantines. Without it the pipeline under test
+	// would still produce an explanation — of the refusal, not of the delivery.
+	aslPayload := string(mustJSON(t, stampASLContract(t, map[string]any{
+		"source":          aslAcceptanceSource,
+		"run_id":          "acceptance-run",
+		"cwd":             "/workspace",
+		"harness":         "claude",
+		"source_sequence": "2",
+		"source_event_id": "acceptance-run:2",
+	})))
 	accepted := runAcceptanceHookCommand(t, "AgentSessionLoopTurnStarted", "acceptance-asl-request", aslPayload)
 	if accepted.Status != indicator.DeliveryAccepted || !accepted.Successful() {
 		t.Fatalf("ASL delivery = %+v, want accepted", accepted)
