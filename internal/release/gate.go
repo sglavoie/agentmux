@@ -108,6 +108,16 @@ const (
 // different operator responses and different process exit codes.
 var ErrGateFailed = errors.New("paired release gate failed")
 
+// ErrUnsignedTag reports a tagging run that named no signing key.
+//
+// The pair tag is the durable claim that a release happened, and the evidence
+// record's signature is the only thing that makes that claim checkable. A run
+// without a key writes a record marked unsigned -- a rehearsal -- and a
+// rehearsal that could still write the tags would produce release provenance no
+// one can verify, indistinguishable in either repository from the real thing.
+// So the two are bound together here rather than left to operator discipline.
+var ErrUnsignedTag = errors.New("release: tagging requires a signing key: an unsigned run is a rehearsal and never writes release tags")
+
 // aslWrapperPath is the ASL entry point inside an ASL checkout, relative to its
 // root. The wrapper resolves the repository root from its own location, so the
 // copy in the checkout and the stowed symlink both execute this checkout's
@@ -138,7 +148,8 @@ type Options struct {
 
 	// SigningKey is the SSH private key used for `ssh-keygen -Y sign`. When it
 	// is empty the gate still runs and still writes evidence, but the record is
-	// marked unsigned. An unsigned record is a rehearsal, not a release.
+	// marked unsigned. An unsigned record is a rehearsal, not a release, and a
+	// rehearsal may not tag: Tag without a key is refused outright.
 	SigningKey string
 
 	// EvidenceDir is where the record and its signature are written. Empty
@@ -152,7 +163,8 @@ type Options struct {
 
 	// Tag writes the annotated pair tag into both repositories after a passing
 	// run. It is off by default: tagging is the one gate side effect that
-	// changes history, and it should be asked for.
+	// changes history, and it should be asked for. It requires SigningKey --
+	// see ErrUnsignedTag.
 	Tag bool
 
 	// Overwrite permits replacing an existing evidence record for the same pair
@@ -356,6 +368,15 @@ func Run(ctx context.Context, opts Options) (*Evidence, error) {
 }
 
 func newGate(opts Options) (*gate, error) {
+	// This is the first thing checked, ahead of resolving roots and ahead of
+	// every default, because it is the only refusal that has to happen before
+	// the gate has read anything at all: a run that cannot legitimately tag
+	// must not run the steps, write a record, or read either repository's refs
+	// on its way to discovering that.
+	if opts.Tag && strings.TrimSpace(opts.SigningKey) == "" {
+		return nil, ErrUnsignedTag
+	}
+
 	if opts.Run == nil {
 		opts.Run = ExecRunner
 	}
@@ -524,6 +545,10 @@ func (g *gate) execute(ctx context.Context) (*Evidence, error) {
 // finish publishes the record and -- only for a passing run -- writes the
 // annotated pair tags. Writing happens before signing and tagging so a failure
 // in either still leaves the record on disk.
+//
+// Tagging is reachable only when a signing key was named: newGate refuses the
+// combination before the gate runs at all, so the tags this writes always
+// accompany a record that is being signed.
 func (g *gate) finish(ctx context.Context, ev *Evidence) error {
 	if ev.Result == StatusPassed && g.opts.Tag {
 		if err := g.checkTagsAbsent(ctx, ev.PairID); err != nil {

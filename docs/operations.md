@@ -258,9 +258,19 @@ side effects: it installs both programs, restarts the running daemon, and with
 `tag=yes` writes annotated tags into both repositories. Omitting `signing_key`
 is allowed and produces an unsigned record — a rehearsal, not a release.
 
+**`tag=yes` requires `signing_key`.** A rehearsal may run the whole procedure
+and keep its unsigned record, but it may not tag: the pair tags are the durable
+claim that a release happened, and the record's signature is the only thing that
+makes that claim checkable. The recipe refuses the combination before starting
+the toolchain and the gate refuses it again before reading anything, so no step
+runs, no record is written, and neither repository's refs are touched.
+
 As with `just asl-contract-sync`, `just` hands everything after the recipe name
 to the recipe positionally, so `asl_root=` and `signing_key=` are stripped by the
-recipe rather than parsed by `just`. Bare paths work too.
+recipe rather than parsed by `just`. Bare paths work too. Because the arguments
+are positional, `tag=` has to come third: `asl_root=… tag=yes` puts `tag=yes` in
+the signing-key slot, and the recipe refuses that rather than reading it as a key
+path and quietly dropping the tag request.
 
 ### What the gate runs
 
@@ -368,6 +378,13 @@ reports the installed binary's own hash).
 repositories, carrying the pair ID, the manifest SHA-256, the contract set, both
 revisions, the artifact hashes, and the evidence file name. Either repository
 alone then answers "what was this released with".
+
+Tagging requires a signing key. The tags are indistinguishable between a real
+release and a rehearsal, so the thing that separates them has to be the record
+they point at — and an unsigned record proves nothing about who produced it.
+`--tag` without `--signing-key` is refused as an invocation error before the
+gate reads a revision, so an unsigned run can never reach the tagging step at
+all.
 
 The gate refuses to re-tag a pair that already carries its tag, and it checks
 for that **before** writing or signing anything, so a refusal cannot leave a

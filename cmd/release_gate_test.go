@@ -179,6 +179,46 @@ func TestJustPairedReleaseGatePassesTheCheckoutThrough(t *testing.T) {
 	}
 }
 
+// TestJustPairedReleaseGateRefusesTagWithoutSigningKey is the recipe half of the
+// invariant `release.TestTaggingRequiresSigningKey` pins in the library: the
+// pair tags are the durable claim that a release happened, so a rehearsal must
+// not be able to write them. The gate refuses the combination itself; the recipe
+// refuses it first, before the Go toolchain is even started, because this is the
+// one operator mistake whose cost is a tag that cannot be un-pushed.
+func TestJustPairedReleaseGateRefusesTagWithoutSigningKey(t *testing.T) {
+	recipe := justfileParameterizedRecipe(t, readJustfile(t), "paired-release-gate")
+
+	// The tag decision has to be made before the signing decision, or the
+	// refusal cannot see that tagging was asked for.
+	if !strings.Contains(recipe, "tag_requested") {
+		t.Errorf("paired-release-gate does not decide tagging before it decides signing:\n%s", recipe)
+	}
+	if !strings.Contains(recipe, "tag=yes requires signing_key") {
+		t.Errorf("paired-release-gate does not refuse tag=yes without a signing key:\n%s", recipe)
+	}
+	// `just` fills the parameters positionally, so `asl_root=… tag=yes` lands
+	// "tag=yes" in the signing_key slot. Left alone that is the worst outcome
+	// available: the tag request is silently dropped and the run is refused for
+	// an unreadable key instead.
+	if !strings.Contains(recipe, "asl_root=*|tag=*") {
+		t.Errorf("paired-release-gate does not reject a tag= argument in the signing_key slot:\n%s", recipe)
+	}
+	// The refusal must precede the invocation, not annotate it.
+	refusal := strings.Index(recipe, "tag=yes requires signing_key")
+	invocation := strings.Index(recipe, "go run .")
+	if invocation < 0 {
+		t.Fatalf("paired-release-gate no longer invokes the gate:\n%s", recipe)
+	}
+	if refusal > invocation {
+		t.Errorf("paired-release-gate refuses an unsigned tagging run only after invoking the gate:\n%s", recipe)
+	}
+	// And the library must agree, so the recipe is a courtesy rather than the
+	// only thing standing between a rehearsal and a release tag.
+	if !strings.Contains(release.ErrUnsignedTag.Error(), "signing key") {
+		t.Errorf("release.ErrUnsignedTag = %v; the recipe mirrors a refusal that no longer names the prerequisite", release.ErrUnsignedTag)
+	}
+}
+
 // TestReleaseEvidenceDefaultsUnderTheDataDirectory keeps release records beside
 // the caches, handoffs, and worktrees rather than in a location invented for
 // this feature.

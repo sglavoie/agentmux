@@ -257,6 +257,12 @@ cockpit-smoke:
 #
 # This has real side effects. It installs both programs, restarts the running
 # daemon, and (with tag=yes) writes annotated tags into both repositories.
+#
+# tag=yes requires signing_key. An unsigned run is a rehearsal, and the pair
+# tags are the durable claim that a release happened -- a rehearsal that could
+# write them would leave release provenance nobody can verify. The gate refuses
+# the combination itself; the recipe refuses it first so the operator hears it
+# immediately rather than after the toolchain starts.
 paired-release-gate asl_root signing_key="" tag="no":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -273,20 +279,39 @@ paired-release-gate asl_root signing_key="" tag="no":
             exit 1
             ;;
     esac
+    # And a caller who omits signing_key and passes only tag would otherwise
+    # have "tag=yes" read as a key path -- which the gate then refuses for the
+    # wrong reason, after silently dropping the tag request the operator made.
+    case "$signing_key" in
+        asl_root=*|tag=*)
+            echo "second argument must be the signing key: signing_key=/path/to/key" >&2
+            echo "to rehearse without one, pass an empty signing_key= before tag=" >&2
+            exit 1
+            ;;
+    esac
     asl_root="${asl_root#asl_root=}"
     signing_key="${signing_key#signing_key=}"
     tag="${tag#tag=}"
 
+    tag_requested=no
+    case "$tag" in
+        yes|true|1) tag_requested=yes ;;
+    esac
+
     args=(release-gate --asl-root "$asl_root" --amx-root "{{ root }}")
     if [ -n "$signing_key" ]; then
         args+=(--signing-key "$signing_key")
+    elif [ "$tag_requested" = yes ]; then
+        echo "refusing: tag=yes requires signing_key=/path/to/key" >&2
+        echo "an unsigned record is a rehearsal, not a release, and a rehearsal does not tag" >&2
+        exit 1
     else
         echo "warning: no signing_key given; the evidence record will be unsigned" >&2
         echo "warning: an unsigned record is a rehearsal, not a release" >&2
     fi
-    case "$tag" in
-        yes|true|1) args+=(--tag) ;;
-    esac
+    if [ "$tag_requested" = yes ]; then
+        args+=(--tag)
+    fi
 
     go run . "${args[@]}"
 

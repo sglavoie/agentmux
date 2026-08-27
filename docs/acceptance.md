@@ -201,7 +201,7 @@ evidence schema, the verification command, tagging, rollback, and maintenance
 installation are documented in
 [Paired releases](operations.md#paired-releases).
 
-Three properties make the record admissible as acceptance evidence:
+Four properties make the record admissible as acceptance evidence:
 
 - A step that never ran is recorded as `not-run` rather than omitted, so a
   truncated gate cannot read as a complete one.
@@ -209,6 +209,11 @@ Three properties make the record admissible as acceptance evidence:
   namespace, the key, and the detached signature's path — and it declares it
   before `ssh-keygen` runs, so the claim is inside the signed bytes. A record
   that reads as unsigned was not signed, regardless of what sits beside it.
+- A run that names no signing key cannot tag. `tag=yes`/`--tag` without a key is
+  refused before any step runs, any record is written, or either repository's
+  refs are read, so the pair tags that identify a release can only ever have
+  been produced alongside a signed record. The rehearsal itself stays
+  available — it just leaves evidence rather than history.
 - `just crash-restart` counts the scenarios that actually executed and
   `just cockpit-smoke` fails rather than skips when Kitty is absent. Both close
   the gap where a gate reports a boundary as exercised that was never touched.

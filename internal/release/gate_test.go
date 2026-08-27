@@ -667,6 +667,79 @@ func TestGateLeavesAnUnsignedRecordWhenNoKeyIsGiven(t *testing.T) {
 	}
 }
 
+// TestTaggingRequiresSigningKey is the invariant that keeps a rehearsal from
+// manufacturing release provenance.
+//
+// The pair tag is what either repository alone answers "was this released" with,
+// and the evidence signature is the only thing that makes that answer checkable.
+// An unsigned run that could still tag would write exactly the same two refs as
+// a real release, backed by a record marked `"signed": false` -- so the refusal
+// has to come before the gate does anything at all, not after a twenty-minute
+// procedure that has already installed both programs.
+func TestTaggingRequiresSigningKey(t *testing.T) {
+	f := newFixture(t)
+	log := filepath.Join(t.TempDir(), "recipes.log")
+	t.Setenv("FAKE_JUST_LOG", log)
+
+	opts := f.options()
+	opts.SigningKey = ""
+	opts.Tag = true
+
+	ev, err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("the gate accepted a tagging run with no signing key")
+	}
+	if !errors.Is(err, ErrUnsignedTag) {
+		t.Errorf("err = %v, want ErrUnsignedTag", err)
+	}
+	if errors.Is(err, ErrGateFailed) {
+		t.Errorf("err = %v, want an invocation refusal rather than a gate failure", err)
+	}
+	if !strings.Contains(err.Error(), "signing key") {
+		t.Errorf("err = %v, want the refusal to name what is missing", err)
+	}
+	// No record could honestly be written for a run that never ran, and the
+	// caller must not be handed a half-built one to print.
+	if ev != nil {
+		t.Errorf("refused run returned evidence %+v", ev)
+	}
+
+	// The three things the refusal has to precede: the steps, the evidence, and
+	// either repository's refs.
+	if executed, readErr := os.ReadFile(log); readErr == nil {
+		t.Errorf("the refused run executed recipes:\n%s", executed)
+	}
+	if entries, statErr := os.ReadDir(f.evidenceDir); statErr == nil && len(entries) > 0 {
+		t.Errorf("the refused run wrote %d evidence file(s)", len(entries))
+	} else if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("reading the evidence directory: %v", statErr)
+	}
+	for _, root := range []string{f.agentMuxRoot, f.aslRoot} {
+		if tags := strings.Fields(run(t, root, "git", "tag", "-l")); len(tags) != 0 {
+			t.Errorf("%s carries tags %v after a refused run", root, tags)
+		}
+	}
+
+	// The rehearsal itself stays available: it is only the tags that a run
+	// without a key may not produce.
+	rehearsal := f.options()
+	rehearsal.SigningKey = ""
+	rehearsal.Tag = false
+	unsigned, err := Run(context.Background(), rehearsal)
+	if err != nil {
+		t.Fatalf("unsigned untagged rehearsal failed: %v", err)
+	}
+	if unsigned.Signature.Signed {
+		t.Error("a rehearsal reported itself as signed")
+	}
+	if len(unsigned.Tags) != 0 {
+		t.Errorf("a rehearsal wrote tags %+v", unsigned.Tags)
+	}
+	if _, statErr := os.Stat(unsigned.Path); statErr != nil {
+		t.Errorf("the rehearsal left no evidence record: %v", statErr)
+	}
+}
+
 func TestGateRefusesADirectoryThatIsNotAnASLCheckout(t *testing.T) {
 	f := newFixture(t)
 	opts := f.options()
