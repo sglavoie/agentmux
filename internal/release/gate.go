@@ -778,11 +778,13 @@ func (g *gate) publishProvisional(ctx context.Context, ev *Evidence) error {
 //
 // The failure this compensates for is narrow and entirely durable. Both refs
 // exist; the record that describes them does not. Whatever broke -- the write,
-// the signature, or the rename that would have published either -- the release
-// publication is all-or-nothing, so what is on disk is still the provisional
-// pre-tag record: unsigned, and saying a tagging attempt is under way. A reader
-// of either repository alone sees a release; a reader of the record sees an
-// attempt that never finished.
+// the signature, or either of the two renames that publish them -- the canonical
+// path still holds the provisional pre-tag record, saying a tagging attempt is
+// under way and satisfying Passed() no more than it did before. If the signature
+// rename landed and the record rename did not, that signature is sitting beside
+// it, but it covers bytes that were never published and so verifies nothing that
+// is there. A reader of either repository alone sees a release; a reader of the
+// record sees an attempt that never finished.
 //
 // So the refs are retracted, using the same compare-and-delete transaction a
 // failed second tag write uses, and for the same reason: only what this run

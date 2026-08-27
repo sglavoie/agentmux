@@ -70,7 +70,8 @@ func (g *gate) writeEvidence(ev *Evidence) error {
 }
 
 // writeSignedEvidence publishes a record together with the signature that covers
-// it, and does it in one step that cannot half-succeed.
+// it, ordered so that the only state a failure between the two can leave behind
+// is one that claims nothing.
 //
 // This is how a release claim becomes durable. Ordinary publication writes the
 // record and then signs what it wrote, which is right for every record that
@@ -86,12 +87,16 @@ func (g *gate) writeEvidence(ev *Evidence) error {
 // already succeeded. The record is rendered into a sibling staging file, signed
 // there -- `ssh-keygen -Y sign` writes its detached signature beside whatever
 // file it is given -- and only then moved into place. What remains are two
-// renames within one directory.
+// renames within one directory, and those two are not atomic together.
 //
-// The signature is moved first. A failure between the two leaves the previous
-// record standing beside a signature that does not cover it, which verifies
-// nothing and claims nothing; the other order would leave the release claim
-// itself durable and unvouched for, which is the state this exists to prevent.
+// So the order is what carries the guarantee, and the guarantee is directional
+// rather than all-or-nothing. The signature is moved first and the record
+// second. A failure or a crash between them leaves the previous record -- the
+// provisional `"result": "tagging"` one -- standing beside a signature that does
+// not cover it, which verifies nothing and claims nothing, and which the next
+// attempt replaces. What cannot happen is the other half: a canonical
+// `"result": "passed"` record is never visible without the signature covering it
+// already beside it, which is the state this exists to prevent.
 //
 // Signing is unconditional: the only caller is a tagging run, and a tagging run
 // without a signing key is refused before the gate reads anything. See

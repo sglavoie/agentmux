@@ -232,8 +232,13 @@ These properties make the record admissible as acceptance evidence:
 - The transaction covers the record that vouches for the tags, not only the two
   refs. A tagging run publishes an unsigned `"result": "tagging"` record before
   its first ref exists, and the release claim is the last step: the record naming
-  both tags and the signature over exactly those bytes are staged together and
-  moved into place as one all-or-nothing publication. A failure to write it or to
+  both tags and the signature over exactly those bytes are staged and signed
+  together, then moved into place by two ordered renames — the signature first,
+  the record second. That pair is not atomic, and the invariant is directional
+  rather than all-or-nothing: a crash between the renames may leave the canonical
+  record provisional beside a signature that does not verify it, which is
+  admissible because it names no release, but a canonical `"passed"` record is
+  never visible without the signature covering it. A failure to write it or to
   sign it retracts both tags by the same compare-and-delete. Release tags
   therefore never outlive the record that describes them, and no record reads as
   a release before the refs it names exist.

@@ -428,14 +428,22 @@ a tag that predates the run is never a candidate at all.
 first record goes out before the first ref is written, says `"result":
 "tagging"`, and is deliberately unsigned. The release claim — the record naming
 both tags, and the signature over exactly those bytes — is the second
-publication, and it is a single all-or-nothing step: the record is rendered and
-signed beside where it will live, and only then are the signature and the record
-moved into place. There is no moment at which a `"passed"` record exists without
-the signature that covers it, and no moment at which a stale signature sits
-beside a record it does not describe.
+publication: the record is rendered and signed beside where it will live, and
+only then are the signature and the record moved into place, in that order.
 
-That ordering is what makes the failure case safe rather than merely recoverable.
-Between the two publications the pair is in the one state the gate cannot make
+Those are two ordered renames rather than one atomic step, and the order they
+happen in is what bounds the damage. A crash or a failure between them leaves
+the provisional `"tagging"` record standing beside a signature that does not
+cover it — a signature that verifies nothing, next to a record that claims
+nothing, which the next attempt replaces. The guarantee is directional: a
+`"passed"` record never becomes visible at the canonical path without the
+signature covering it already there beside it. An operator who finds a signature
+next to a `"tagging"` record has found an interrupted publication, not a
+released pair.
+
+Publishing the provisional record before the first ref is written is what makes
+the failure case safe rather than merely recoverable. Between the two
+publications the pair is in the one state the gate cannot make
 atomic: refs in two independent repositories, and a record on disk that predates
 them. If the final publication cannot be written or cannot be signed, both tags
 are removed by the same compare-and-delete and the run reports what it took
