@@ -409,7 +409,24 @@ The removal is a compare-and-delete —
 this run created. A ref that has since been moved or replaced is left alone, and
 a tag that predates the run is never a candidate at all.
 
-When the removal itself fails, the leftover ref is not left silent:
+**Both refs existing is not yet a release.** After tagging, the record is
+rewritten to name the tags and re-signed over those bytes — and signing removes
+the previous detached signature before it starts. Until that republication
+lands, the tags are backed by the record written before they existed: one that
+names no tags, and, mid-re-sign, one with no signature beside it at all. So the
+republication is part of the same transaction. If the rewrite cannot be written,
+or the signature over it cannot be produced, both tags are removed by the same
+compare-and-delete and the run reports what it took back. Durable release tags
+are never left standing next to evidence that is unsigned or that predates them.
+
+The account of that retraction is then published in turn. When publication
+itself is what failed, that write can fail too — in which case the record on
+disk stays the pre-tag one, which names no tags and is therefore still true of
+the repositories, and the returned error names both failures. The refs are gone
+either way: a retracted claim beside an out-of-date record is recoverable, a
+live claim beside one is not.
+
+When a removal itself fails, the leftover ref is not left silent:
 
 - the run's result becomes `"partial"`, never `"passed"`, so no reader — including
   one written before this state existed — can take a half-tagged pair for a

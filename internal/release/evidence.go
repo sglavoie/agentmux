@@ -183,7 +183,14 @@ type createdTag struct {
 // Only when the rollback itself cannot complete is a ref left behind, and then
 // it is recorded on the evidence record as an explicitly partial, explicitly
 // recoverable state. See abandonTags.
-func (g *gate) writeTags(ctx context.Context, ev *Evidence) error {
+//
+// The refs it created are returned so the caller can take them back too. Both
+// tags existing is not yet a release: the record that vouches for them is
+// published afterwards, and a failure there leaves exactly the state this
+// transaction exists to prevent. See gate.abandonUnvouchedTags. The returned
+// slice is meaningful only alongside a nil error -- a failed attempt has
+// already been abandoned and accounted for here.
+func (g *gate) writeTags(ctx context.Context, ev *Evidence) ([]createdTag, error) {
 	message := tagMessage(ev)
 	var created []createdTag
 	for _, repo := range []string{AgentMuxRepo, ASLRepo} {
@@ -192,7 +199,7 @@ func (g *gate) writeTags(ctx context.Context, ev *Evidence) error {
 			created = append(created, *tag)
 		}
 		if err != nil {
-			return g.abandonTags(ctx, ev, created, err)
+			return nil, g.abandonTags(ctx, ev, created, err)
 		}
 	}
 	// The record gains the tag list only once both refs exist. Naming a tag the
@@ -201,7 +208,7 @@ func (g *gate) writeTags(ctx context.Context, ev *Evidence) error {
 	for _, tag := range created {
 		ev.Tags = append(ev.Tags, TagEvidence{Repo: tag.repo, Tag: tag.name})
 	}
-	return nil
+	return created, nil
 }
 
 // createTag writes one annotated tag and reads back the object it produced.

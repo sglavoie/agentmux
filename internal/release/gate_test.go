@@ -932,12 +932,263 @@ func TestUnremovablePairTagIsRecordedAsRecoverablePartialState(t *testing.T) {
 	}
 }
 
+// TestFinalEvidenceSigningFailureRollsBackPairTags covers the window that opens
+// only after the transaction above has already succeeded.
+//
+// Both tags are written, and then the record is republished to name them and
+// signed again over those bytes. Signing removes the previous detached
+// signature first, so from the moment the re-sign starts the pair tags are
+// backed by nothing: if it fails, publish restates the record as unsigned and
+// there is no `.sig` beside it any more. Two durable release tags then stand
+// next to a record that explicitly says it is a rehearsal -- and the tags are
+// what a reader of either repository alone sees.
+//
+// So the last publication is part of the transaction, not a postscript to it.
+// This test fails exactly one thing -- the signature over the tagged bytes --
+// and then asserts the five statements about that run all agree: the refs, the
+// persisted record, the detached signature, the returned error, and what the
+// operator was told while it happened.
+func TestFinalEvidenceSigningFailureRollsBackPairTags(t *testing.T) {
+	f := newFixture(t)
+
+	// A tag that predates the run, in both repositories. The rollback must
+	// remove what this invocation created and nothing else.
+	for _, root := range []string{f.agentMuxRoot, f.aslRoot} {
+		run(t, root, "git", "tag", "-a", "v0.0.1", "-m", "an earlier release")
+	}
+
+	// Progress is where the operator reads a run as it happens: the release-gate
+	// command wires it to its own stderr, so these lines are the CLI's output.
+	var progress strings.Builder
+
+	opts := f.options()
+	opts.Tag = true
+	opts.Progress = &progress
+	var commands [][]string
+	signings := 0
+	opts.Run = func(ctx context.Context, dir string, argv []string) (string, int, error) {
+		commands = append(commands, argv)
+		// Only the second signature fails -- the one over the tagged bytes. The
+		// pre-tag signature and the one over the final account are produced by
+		// the real ssh-keygen, so this isolates the window the fix is about
+		// instead of disabling signing for the whole run.
+		if isSSHKeygenSign(argv) {
+			signings++
+			if signings == 2 {
+				return "sign_and_send_pubkey: signing failed for ED25519 key", 255, nil
+			}
+		}
+		return ExecRunner(ctx, dir, argv)
+	}
+
+	ev, err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("the gate reported success despite failing to sign the record that vouches for the tags")
+	}
+	if ev == nil {
+		t.Fatal("no evidence was returned for a run that got as far as tagging")
+	}
+	// The returned error names what broke and what it cost, and it is neither a
+	// gate result (every step passed) nor a partial state (the refs are gone).
+	if errors.Is(err, ErrGateFailed) {
+		t.Errorf("err = %v, want a publication failure rather than a gate result: every step passed", err)
+	}
+	if errors.Is(err, ErrPartialTagging) {
+		t.Errorf("err = %v, want no partial state: both rollbacks succeeded", err)
+	}
+	for _, want := range []string{"signing evidence", "vouches for the pair tags", "no repository was left carrying the pair tag"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("err = %v, want it to name %q", err, want)
+		}
+	}
+
+	// The refs are the claim, so they are checked directly. Only the tag that
+	// predates the run survives, in both repositories.
+	for _, root := range []string{f.agentMuxRoot, f.aslRoot} {
+		tags := strings.Fields(run(t, root, "git", "tag", "-l"))
+		if len(tags) != 1 || tags[0] != "v0.0.1" {
+			t.Errorf("%s has tags %v, want only the pre-existing v0.0.1", root, tags)
+		}
+	}
+
+	// Both refs really were created and then removed by object, not by name:
+	// two annotated-tag writes and two compare-and-deletes.
+	if creates := commandsMatching(commands, isGitTagCreate); len(creates) != 2 {
+		t.Fatalf("annotated tag writes = %v, want one per repository", creates)
+	}
+	deletes := commandsMatching(commands, isGitUpdateRef)
+	if len(deletes) != 2 {
+		t.Fatalf("update-ref invocations = %v, want one rollback per repository", deletes)
+	}
+	for _, argv := range deletes {
+		wantPrefix := []string{"git", "update-ref", "-d", "refs/tags/" + ev.PairID}
+		if len(argv) != 5 || strings.Join(argv[:4], " ") != strings.Join(wantPrefix, " ") {
+			t.Fatalf("rollback command = %v, want %v <oid>", argv, wantPrefix)
+		}
+		if oid := argv[4]; len(oid) < 40 || strings.ContainsAny(oid, " \t") {
+			t.Errorf("rollback named %q as the expected object, want the created tag's object id", oid)
+		}
+	}
+
+	// The persisted record is what a later reader acts on, so it is read back
+	// rather than trusted from memory -- and it must agree with the refs.
+	stored, loadErr := LoadEvidence(EvidencePath(f.evidenceDir, ev.PairID))
+	if loadErr != nil {
+		t.Fatalf("reading back the evidence record: %v", loadErr)
+	}
+	if len(ev.Tags) != 0 || len(stored.Tags) != 0 {
+		t.Errorf("tags = %+v (persisted %+v), want none: neither repository is tagged", ev.Tags, stored.Tags)
+	}
+	if stored.Result != StatusPassed {
+		t.Errorf("persisted result = %q, want %q: the gate passed and the pair is simply untagged", stored.Result, StatusPassed)
+	}
+	failure := stored.TagFailure
+	if failure == nil {
+		t.Fatal("the persisted record says nothing about the tagging attempt it took back")
+	}
+	if !strings.Contains(failure.Error, "signing evidence") || !strings.Contains(failure.Error, "vouches for the pair tags") {
+		t.Errorf("recorded cause = %q, want the unpublishable record named as the reason", failure.Error)
+	}
+	if len(failure.Stranded) != 0 || failure.RollbackError != "" {
+		t.Errorf("stranded = %+v, rollback_error = %q, want neither for rollbacks that worked", failure.Stranded, failure.RollbackError)
+	}
+	// Reverse order: the repository tagged last is released first.
+	wantRolledBack := []TagEvidence{{Repo: ASLRepo, Tag: ev.PairID}, {Repo: AgentMuxRepo, Tag: ev.PairID}}
+	if len(failure.RolledBack) != 2 || failure.RolledBack[0] != wantRolledBack[0] || failure.RolledBack[1] != wantRolledBack[1] {
+		t.Errorf("rolled_back = %+v, want %+v", failure.RolledBack, wantRolledBack)
+	}
+
+	// The detached signature state agrees too: the record declares a signature,
+	// it is there, and it covers the final bytes rather than the pre-tag ones
+	// the failed attempt superseded.
+	if signings != 3 {
+		t.Fatalf("ssh-keygen sign invocations = %d, want the pre-tag signature, the failed one, and one over the final account", signings)
+	}
+	if stored.Signature != ev.Signature {
+		t.Errorf("persisted signature %+v disagrees with the returned one %+v", stored.Signature, ev.Signature)
+	}
+	if !stored.Signature.Signed {
+		t.Fatalf("persisted signature = %+v, want the final account signed: only the middle attempt failed", stored.Signature)
+	}
+	if _, statErr := os.Stat(stored.Signature.Path); statErr != nil {
+		t.Fatalf("the record names a signature that is not there: %v", statErr)
+	}
+	verifySignature(t, VerifyCommand(f.publicKey, "release@test", stored.Path), stored.Path)
+
+	// And the operator watching the run was told the same story the record
+	// tells, in the order it happened.
+	summary := progress.String()
+	for _, want := range []string{
+		"tagged " + AgentMuxRepo + " " + ev.PairID,
+		"tagged " + ASLRepo + " " + ev.PairID,
+		"rolled back " + ASLRepo + " " + ev.PairID,
+		"rolled back " + AgentMuxRepo + " " + ev.PairID,
+	} {
+		if !strings.Contains(summary, want) {
+			t.Errorf("progress output does not report %q:\n%s", want, summary)
+		}
+	}
+	if strings.Contains(summary, "STRANDED") {
+		t.Errorf("progress output reports a stranded ref for a run that left none:\n%s", summary)
+	}
+}
+
+// TestFinalEvidenceWriteFailureRollsBackPairTags is the other half of the same
+// window: the rewrite that would have added the tag list never reaches disk.
+//
+// Nothing is unsigned here -- the pre-tag record and its signature are intact
+// and verify. That is exactly the problem: they describe a run that tagged
+// nothing, and both refs exist. Stale evidence backing durable tags is the same
+// false claim an unsigned one makes, so it gets the same answer.
+//
+// It is also the case where the compensation cannot be recorded, because writing
+// is what failed. The tags still go: a retracted claim with an out-of-date
+// record beats a live claim with the same record.
+func TestFinalEvidenceWriteFailureRollsBackPairTags(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("the injected write failure is a directory permission, which root ignores")
+	}
+	f := newFixture(t)
+
+	opts := f.options()
+	opts.Tag = true
+	opts.Run = func(ctx context.Context, dir string, argv []string) (string, int, error) {
+		output, code, err := ExecRunner(ctx, dir, argv)
+		// The moment both refs exist and the record still predates them: take
+		// the evidence directory away so the rewrite that names them cannot
+		// land. Nothing else in the run writes there.
+		if dir == f.aslRoot && isGitTagCreate(argv) && err == nil && code == 0 {
+			if chmodErr := os.Chmod(f.evidenceDir, 0o500); chmodErr != nil {
+				t.Errorf("sealing the evidence directory: %v", chmodErr)
+			}
+		}
+		return output, code, err
+	}
+	t.Cleanup(func() { _ = os.Chmod(f.evidenceDir, 0o700) })
+
+	ev, err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("the gate reported success despite failing to publish the record that names the tags")
+	}
+	if ev == nil {
+		t.Fatal("no evidence was returned for a run that got as far as tagging")
+	}
+	if !strings.Contains(err.Error(), "writing evidence") {
+		t.Errorf("err = %v, want the write failure named", err)
+	}
+	if !strings.Contains(err.Error(), "no repository was left carrying the pair tag") {
+		t.Errorf("err = %v, want the retraction reported to the operator", err)
+	}
+
+	// The claim is retracted even though the account of retracting it could not
+	// be written.
+	for _, root := range []string{f.agentMuxRoot, f.aslRoot} {
+		if tags := strings.Fields(run(t, root, "git", "tag", "-l")); len(tags) != 0 {
+			t.Errorf("%s has tags %v after an unpublishable tagging attempt, want none", root, tags)
+		}
+	}
+	if len(ev.Tags) != 0 {
+		t.Errorf("tags = %+v, want none", ev.Tags)
+	}
+	if ev.TagFailure == nil || len(ev.TagFailure.RolledBack) != 2 {
+		t.Errorf("tag_failure = %+v, want both tags recorded as rolled back", ev.TagFailure)
+	}
+
+	_ = os.Chmod(f.evidenceDir, 0o700)
+
+	// What is on disk is the record from before the tags: it names none, which
+	// is now true, and its signature still covers its own bytes.
+	stored, loadErr := LoadEvidence(EvidencePath(f.evidenceDir, ev.PairID))
+	if loadErr != nil {
+		t.Fatalf("reading back the evidence record: %v", loadErr)
+	}
+	if len(stored.Tags) != 0 {
+		t.Errorf("persisted tags = %+v, want none: no tag survives this run", stored.Tags)
+	}
+	if !stored.Signature.Signed {
+		t.Errorf("persisted signature = %+v, want the pre-tag signature left intact: signing never ran again", stored.Signature)
+	}
+	verifySignature(t, VerifyCommand(f.publicKey, "release@test", stored.Path), stored.Path)
+}
+
 // isGitTagCreate identifies the annotated-tag write, and only that: the gate
 // also runs `git rev-parse refs/tags/...` and `git tag -l` against the same
 // repositories, and an injected failure that caught those would be testing
 // something else.
 func isGitTagCreate(argv []string) bool {
 	return len(argv) > 2 && argv[0] == "git" && argv[1] == "tag" && argv[2] == "-a"
+}
+
+func isGitUpdateRef(argv []string) bool {
+	return len(argv) > 1 && argv[0] == "git" && argv[1] == "update-ref"
+}
+
+// isSSHKeygenSign identifies the signing invocation. `ssh-keygen` is also the
+// command the fixture mints its key with, and the gate never runs that one, but
+// matching on the subcommand keeps the injection about signing rather than about
+// the executable's name.
+func isSSHKeygenSign(argv []string) bool {
+	return len(argv) > 2 && argv[0] == "ssh-keygen" && argv[1] == "-Y" && argv[2] == "sign"
 }
 
 func commandsMatching(commands [][]string, pred func([]string) bool) [][]string {

@@ -610,6 +610,13 @@ func (g *gate) execute(ctx context.Context) (*Evidence, error) {
 // account of what was rolled back or left behind -- and that account is worth
 // nothing if it only ever existed in the memory of a process that is about to
 // exit.
+//
+// That second publication is also the last thing standing between two written
+// refs and a release claim nobody can check, so it is part of the transaction
+// rather than a postscript to it. Until it lands, the tags are backed by the
+// record written before they existed: one that names no tags and whose
+// signature, if the run made one, covers those pre-tag bytes. If it cannot
+// land, the tags go back -- see abandonUnvouchedTags.
 func (g *gate) finish(ctx context.Context, ev *Evidence) error {
 	tagging := ev.Result == StatusPassed && g.opts.Tag
 	if tagging {
@@ -624,11 +631,54 @@ func (g *gate) finish(ctx context.Context, ev *Evidence) error {
 		return nil
 	}
 
-	tagErr := g.writeTags(ctx, ev)
-	if err := g.publish(ctx, ev); err != nil {
-		return errors.Join(tagErr, err)
+	created, tagErr := g.writeTags(ctx, ev)
+	if tagErr != nil {
+		// writeTags has already undone what it could and recorded what it could
+		// not. Publishing is what makes that account outlive this process.
+		if err := g.publish(ctx, ev); err != nil {
+			return errors.Join(tagErr, err)
+		}
+		return tagErr
 	}
-	return tagErr
+	if err := g.publish(ctx, ev); err != nil {
+		return g.abandonUnvouchedTags(ctx, ev, created, err)
+	}
+	return nil
+}
+
+// abandonUnvouchedTags removes pair tags whose own evidence could not be
+// finalized, and then records having done so.
+//
+// The failure this compensates for is narrow and entirely durable. Both refs
+// exist; the record that describes them does not. Either the rewrite that adds
+// the tag list never reached disk -- leaving the pre-tag record, which names no
+// tags at all -- or it did and the signature over those bytes could not be
+// produced, in which case publish has already restated the record as unsigned
+// and removed the previous signature. Both outcomes are the same claim: durable
+// release tags standing next to evidence that does not vouch for them. A reader
+// of either repository alone sees a release; a reader of the record sees a
+// rehearsal or a run that was never tagged.
+//
+// So the refs are retracted, using the same compare-and-delete transaction a
+// failed second tag write uses, and for the same reason: only what this run
+// created may be deleted. A ref that cannot be retracted becomes the recorded,
+// recoverable partial state.
+//
+// The account is then published in turn, which is a best effort by construction
+// -- the thing that just failed is publication. It is attempted anyway because a
+// record that cannot be improved is still better than one that is silently
+// wrong, and because the write failure and the signing failure differ here: a
+// signing failure leaves publication itself working. When it fails too, both
+// errors are returned together rather than the second hiding the first. The tags
+// are gone either way, which is the property that matters: the durable claim is
+// retracted before the record that would have had to explain it is given up on.
+func (g *gate) abandonUnvouchedTags(ctx context.Context, ev *Evidence, created []createdTag, cause error) error {
+	abandonErr := g.abandonTags(ctx, ev, created,
+		fmt.Errorf("release: the record that vouches for the pair tags could not be published: %w", cause))
+	if err := g.publish(ctx, ev); err != nil {
+		return errors.Join(abandonErr, err)
+	}
+	return abandonErr
 }
 
 // publish declares the signature the record is about to carry, writes the

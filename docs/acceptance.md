@@ -221,6 +221,12 @@ Five properties make the record admissible as acceptance evidence:
   naming the stranded ref and the exact command that clears it. A pair tagged on
   one side can therefore never be read as a released pair, by a consumer of the
   record or by a reader of either repository's tags.
+- The transaction covers the record that vouches for the tags, not only the two
+  refs. The rewrite that names the tags and the signature over it are the last
+  steps, and re-signing removes the previous signature first, so a failure there
+  would leave both tags backed by evidence that is unsigned or that predates
+  them. Either failure retracts both tags by the same compare-and-delete instead.
+  Release tags therefore never outlive the record that describes them.
 - `just crash-restart` counts the scenarios that actually executed and
   `just cockpit-smoke` fails rather than skips when Kitty is absent. Both close
   the gap where a gate reports a boundary as exercised that was never touched.
@@ -236,6 +242,14 @@ fails the second repository's tag write and asserts the refs and the persisted
 record agree afterwards, and
 `TestUnremovablePairTagIsRecordedAsRecoverablePartialState` additionally fails
 the rollback and runs the recovery command the record names.
+`TestFinalEvidenceSigningFailureRollsBackPairTags` fails only the signature over
+the tagged bytes — every step passes and both tags are genuinely written first —
+and asserts the refs, the persisted record, the detached signature, the returned
+error, and the progress the command prints all agree that the pair is untagged;
+`TestFinalEvidenceWriteFailureRollsBackPairTags` does the same for the rewrite
+that never reaches disk. The summary's half of that agreement is
+`cmd.TestReleaseGateSummaryDoesNotSayTaggedWhenTheTagsWereTakenBack`: a passing
+run whose tags were retracted must not print the word an operator scans for.
 
 CI coverage is three lanes in `.github/workflows/check.yml`: `linux-portable`
 (build, unit suite, vet, gofmt, lint), `macos-full` (`just acceptance` plus

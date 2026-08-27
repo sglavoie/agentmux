@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/release"
+	"github.com/spf13/cobra"
 )
 
 // The gate's behaviour is tested in internal/release against a stand-in world.
@@ -274,6 +275,70 @@ func TestReleaseGateSurfacesAStrandedPairTag(t *testing.T) {
 	writeReleaseGateTagFailure(&out, nil)
 	if out.Len() != 0 {
 		t.Errorf("a successful run reports a tagging failure:\n%s", out.String())
+	}
+}
+
+// TestReleaseGateSummaryDoesNotSayTaggedWhenTheTagsWereTakenBack is the CLI half
+// of `release.TestFinalEvidenceSigningFailureRollsBackPairTags`.
+//
+// That run passes every step and really does write both pair tags, so the
+// summary carries `(passed)` and reads almost exactly like a release. The one
+// thing that must differ is the word an operator scans for: the tags were
+// retracted because the record that vouches for them could not be signed, and a
+// summary that still printed "tagged" would report a release that no longer
+// exists in either repository.
+func TestReleaseGateSummaryDoesNotSayTaggedWhenTheTagsWereTakenBack(t *testing.T) {
+	pairID := "amx-asl-1.0123456789abcdef"
+	ev := &release.Evidence{
+		SchemaVersion: release.SchemaVersion,
+		PairID:        pairID,
+		Result:        release.StatusPassed,
+		Repositories: []release.RepoEvidence{
+			{Repo: "agentmux", Revision: "aaaaaaaaaaaaaaaaaaaa", Clean: true},
+			{Repo: "asl", Revision: "bbbbbbbbbbbbbbbbbbbb", Clean: true},
+		},
+		Steps: []release.StepResult{{Name: "cockpit-smoke", Status: release.StatusPassed, DurationMS: 1000}},
+		Path:  "/evidence/" + pairID + ".json",
+		Signature: release.Signature{
+			Signed:    true,
+			Namespace: release.SigningNamespace,
+			Path:      release.SignaturePath("/evidence/" + pairID + ".json"),
+		},
+		TagFailure: &release.TagFailure{
+			Error: "release: the record that vouches for the pair tags could not be published: " +
+				"release: signing evidence exited 255: sign_and_send_pubkey: signing failed",
+			RolledBack: []release.TagEvidence{{Repo: "asl", Tag: pairID}, {Repo: "agentmux", Tag: pairID}},
+		},
+	}
+
+	var out strings.Builder
+	cmd := &cobra.Command{}
+	cmd.SetOut(&out)
+	if err := writeReleaseGateResult(cmd, ev); err != nil {
+		t.Fatalf("rendering the summary: %v", err)
+	}
+	summary := out.String()
+
+	for _, line := range strings.Split(summary, "\n") {
+		if strings.Contains(line, "  tagged ") {
+			t.Errorf("a run whose tags were rolled back reports them as written: %q", line)
+		}
+	}
+	for _, want := range []string{
+		"tagging did not complete",
+		"vouches for the pair tags",
+		"rolled back asl " + pairID,
+		"rolled back agentmux " + pairID,
+	} {
+		if !strings.Contains(summary, want) {
+			t.Errorf("summary does not contain %q:\n%s", want, summary)
+		}
+	}
+	// Nothing was left behind, so the operator is asked to do nothing.
+	for _, absent := range []string{"STRANDED", "clear it with"} {
+		if strings.Contains(summary, absent) {
+			t.Errorf("summary asks the operator to clean up after a completed rollback:\n%s", summary)
+		}
 	}
 }
 
