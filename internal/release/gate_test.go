@@ -740,6 +740,216 @@ func TestTaggingRequiresSigningKey(t *testing.T) {
 	}
 }
 
+// TestSecondRepositoryTagFailureLeavesNoPairTag is the pair-tag transaction.
+//
+// The two tags are written one after the other into two independent
+// repositories, so the second write is the one that can fail with the first
+// already durable. What that used to leave behind was the worst possible state:
+// Agent Mux carrying a release tag, ASL carrying nothing, and an evidence record
+// written before either tag existed that therefore names neither. Anyone reading
+// the tagged repository alone would have read a release.
+//
+// So the failure has to take the first tag back, and the refs plus the persisted
+// record have to agree afterwards.
+func TestSecondRepositoryTagFailureLeavesNoPairTag(t *testing.T) {
+	f := newFixture(t)
+
+	// An unrelated tag that predates the run, in both repositories. The rollback
+	// must not touch it: it deletes what this invocation created, not what it
+	// finds under a name.
+	for _, root := range []string{f.agentMuxRoot, f.aslRoot} {
+		run(t, root, "git", "tag", "-a", "v0.0.1", "-m", "an earlier release")
+	}
+
+	opts := f.options()
+	opts.Tag = true
+	var commands [][]string
+	opts.Run = func(ctx context.Context, dir string, argv []string) (string, int, error) {
+		commands = append(commands, argv)
+		if dir == f.aslRoot && isGitTagCreate(argv) {
+			return "fatal: injected second-repository tag failure", 128, nil
+		}
+		return ExecRunner(ctx, dir, argv)
+	}
+
+	ev, err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("the gate reported success despite failing to tag the second repository")
+	}
+	if errors.Is(err, ErrGateFailed) {
+		t.Errorf("err = %v, want a tagging failure rather than a gate result: every step passed", err)
+	}
+	if errors.Is(err, ErrPartialTagging) {
+		t.Errorf("err = %v, want no partial state: the rollback succeeded", err)
+	}
+	if !strings.Contains(err.Error(), "injected second-repository tag failure") {
+		t.Errorf("err = %v, want the underlying failure named", err)
+	}
+	if ev == nil {
+		t.Fatal("no evidence was returned for a run that got as far as tagging")
+	}
+
+	// The refs are the claim, so they are checked first and directly.
+	for _, root := range []string{f.agentMuxRoot, f.aslRoot} {
+		tags := strings.Fields(run(t, root, "git", "tag", "-l"))
+		if len(tags) != 1 || tags[0] != "v0.0.1" {
+			t.Errorf("%s has tags %v, want only the pre-existing v0.0.1", root, tags)
+		}
+	}
+
+	// The rollback is a compare-and-delete against the object the run created,
+	// not a delete by name.
+	deletes := commandsMatching(commands, func(argv []string) bool {
+		return len(argv) > 1 && argv[0] == "git" && argv[1] == "update-ref"
+	})
+	if len(deletes) != 1 {
+		t.Fatalf("update-ref invocations = %v, want exactly one rollback", deletes)
+	}
+	wantPrefix := []string{"git", "update-ref", "-d", "refs/tags/" + ev.PairID}
+	if len(deletes[0]) != 5 || strings.Join(deletes[0][:4], " ") != strings.Join(wantPrefix, " ") {
+		t.Fatalf("rollback command = %v, want %v <oid>", deletes[0], wantPrefix)
+	}
+	if oid := deletes[0][4]; len(oid) < 40 || strings.ContainsAny(oid, " \t") {
+		t.Errorf("rollback named %q as the expected object, want the created tag's object id", oid)
+	}
+
+	// The record and the refs have to say the same thing, in memory and on disk.
+	if len(ev.Tags) != 0 {
+		t.Errorf("tags = %+v, want none: neither repository is tagged", ev.Tags)
+	}
+	if ev.Result != StatusPassed {
+		t.Errorf("result = %q, want %q: the gate itself passed and the pair is simply untagged", ev.Result, StatusPassed)
+	}
+	stored, loadErr := LoadEvidence(EvidencePath(f.evidenceDir, ev.PairID))
+	if loadErr != nil {
+		t.Fatalf("reading back the evidence record: %v", loadErr)
+	}
+	if len(stored.Tags) != 0 {
+		t.Errorf("persisted tags = %+v, want none: the record must not name a tag that is not there", stored.Tags)
+	}
+	if stored.Result != StatusPassed {
+		t.Errorf("persisted result = %q, want %q", stored.Result, StatusPassed)
+	}
+	failure := stored.TagFailure
+	if failure == nil {
+		t.Fatal("the persisted record says nothing about the tagging attempt that failed")
+	}
+	if !strings.Contains(failure.Error, "injected second-repository tag failure") {
+		t.Errorf("recorded cause = %q, want the underlying failure", failure.Error)
+	}
+	if len(failure.Stranded) != 0 {
+		t.Errorf("stranded = %+v, want none", failure.Stranded)
+	}
+	if failure.RollbackError != "" {
+		t.Errorf("rollback_error = %q, want empty for a rollback that worked", failure.RollbackError)
+	}
+	want := []TagEvidence{{Repo: AgentMuxRepo, Tag: ev.PairID}}
+	if len(failure.RolledBack) != 1 || failure.RolledBack[0] != want[0] {
+		t.Errorf("rolled_back = %+v, want %+v", failure.RolledBack, want)
+	}
+
+	// And the record on disk is the final one: the signature covers the bytes
+	// that carry this account, not the pre-tagging revision of them.
+	verifySignature(t, VerifyCommand(f.publicKey, "release@test", stored.Path), stored.Path)
+}
+
+// TestUnremovablePairTagIsRecordedAsRecoverablePartialState covers the case the
+// transaction cannot make disappear: the second tag fails and the first one
+// cannot be deleted either.
+//
+// Nothing here can restore the pair, so the requirement changes shape. The
+// leftover ref must be impossible to read as a release, and the record must
+// carry enough to clear it after the process that printed the error is gone --
+// which the test proves by running the recorded recovery command and watching
+// the ref go away.
+func TestUnremovablePairTagIsRecordedAsRecoverablePartialState(t *testing.T) {
+	f := newFixture(t)
+
+	opts := f.options()
+	opts.Tag = true
+	opts.Run = func(ctx context.Context, dir string, argv []string) (string, int, error) {
+		if dir == f.aslRoot && isGitTagCreate(argv) {
+			return "fatal: injected second-repository tag failure", 128, nil
+		}
+		if len(argv) > 1 && argv[0] == "git" && argv[1] == "update-ref" {
+			return "fatal: injected rollback failure", 128, nil
+		}
+		return ExecRunner(ctx, dir, argv)
+	}
+
+	ev, err := Run(context.Background(), opts)
+	if !errors.Is(err, ErrPartialTagging) {
+		t.Fatalf("err = %v, want ErrPartialTagging", err)
+	}
+	if !strings.Contains(err.Error(), AgentMuxRepo) || !strings.Contains(err.Error(), ev.PairID) {
+		t.Errorf("err = %v, want the stranded repository and tag named", err)
+	}
+
+	// The ref really is still there -- this is the state the record has to
+	// describe, not a hypothetical one.
+	if tags := strings.Fields(run(t, f.agentMuxRoot, "git", "tag", "-l")); len(tags) != 1 || tags[0] != ev.PairID {
+		t.Fatalf("agentmux tags = %v, want the stranded pair tag", tags)
+	}
+	if tags := strings.Fields(run(t, f.aslRoot, "git", "tag", "-l")); len(tags) != 0 {
+		t.Fatalf("asl tags = %v, want none", tags)
+	}
+
+	stored, loadErr := LoadEvidence(EvidencePath(f.evidenceDir, ev.PairID))
+	if loadErr != nil {
+		t.Fatalf("reading back the evidence record: %v", loadErr)
+	}
+	// Unmistakable: not passed, and not carrying a tag list.
+	if stored.Result != StatusPartial {
+		t.Errorf("persisted result = %q, want %q", stored.Result, StatusPartial)
+	}
+	if stored.Passed() {
+		t.Error("a half-tagged pair reads as a passed release")
+	}
+	if len(stored.Tags) != 0 {
+		t.Errorf("persisted tags = %+v, want none: a pair tagged on one side is not a tagged pair", stored.Tags)
+	}
+	failure := stored.TagFailure
+	if failure == nil {
+		t.Fatal("the persisted record does not describe the partial state it left behind")
+	}
+	want := TagEvidence{Repo: AgentMuxRepo, Tag: ev.PairID}
+	if len(failure.Stranded) != 1 || failure.Stranded[0] != want {
+		t.Fatalf("stranded = %+v, want %+v", failure.Stranded, want)
+	}
+	if !strings.Contains(failure.RollbackError, "injected rollback failure") {
+		t.Errorf("rollback_error = %q, want the removal failure named", failure.RollbackError)
+	}
+	if len(failure.Recovery) != 1 {
+		t.Fatalf("recovery = %v, want one command per stranded tag", failure.Recovery)
+	}
+	verifySignature(t, VerifyCommand(f.publicKey, "release@test", stored.Path), stored.Path)
+
+	// The recorded command is the recovery, so it is run rather than pattern
+	// matched. A recovery instruction that does not work is worse than none.
+	run(t, "", strings.Fields(failure.Recovery[0])...)
+	if tags := strings.Fields(run(t, f.agentMuxRoot, "git", "tag", "-l")); len(tags) != 0 {
+		t.Errorf("agentmux tags = %v after the recorded recovery, want none", tags)
+	}
+}
+
+// isGitTagCreate identifies the annotated-tag write, and only that: the gate
+// also runs `git rev-parse refs/tags/...` and `git tag -l` against the same
+// repositories, and an injected failure that caught those would be testing
+// something else.
+func isGitTagCreate(argv []string) bool {
+	return len(argv) > 2 && argv[0] == "git" && argv[1] == "tag" && argv[2] == "-a"
+}
+
+func commandsMatching(commands [][]string, pred func([]string) bool) [][]string {
+	var matched [][]string
+	for _, argv := range commands {
+		if pred(argv) {
+			matched = append(matched, argv)
+		}
+	}
+	return matched
+}
+
 func TestGateRefusesADirectoryThatIsNotAnASLCheckout(t *testing.T) {
 	f := newFixture(t)
 	opts := f.options()

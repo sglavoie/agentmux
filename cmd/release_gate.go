@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -90,6 +91,14 @@ func runReleaseGate(cmd *cobra.Command) error {
 	if errors.Is(runErr, release.ErrGateFailed) {
 		return &ExitError{Code: exitScenarioFailure, Err: runErr, Quiet: releaseGateJSON}
 	}
+	// A stranded pair tag is also a gate result rather than a bad invocation --
+	// re-running unchanged will not help until the ref is cleared. It is never
+	// quiet, even under --json: it is the one outcome that left durable state
+	// outside the evidence directory, and it must not be reduced to an exit code
+	// a script might ignore.
+	if errors.Is(runErr, release.ErrPartialTagging) {
+		return &ExitError{Code: exitScenarioFailure, Err: runErr}
+	}
 	return &ExitError{Code: exitInvalidInput, Err: runErr}
 }
 
@@ -154,7 +163,34 @@ func writeReleaseGateResult(cmd *cobra.Command, ev *release.Evidence) error {
 	for _, tag := range ev.Tags {
 		_, _ = fmt.Fprintf(out, "  tagged %s %s\n", tag.Repo, tag.Tag)
 	}
+	writeReleaseGateTagFailure(out, ev.TagFailure)
 	return nil
+}
+
+// writeReleaseGateTagFailure prints an incomplete tagging attempt.
+//
+// A rolled-back attempt is reported for completeness; a stranded tag is reported
+// because the operator has to act on it. The recovery commands are printed
+// verbatim so the action does not require reading the evidence file first --
+// though the file has them too, which is what makes the state recoverable after
+// this terminal is closed.
+func writeReleaseGateTagFailure(out io.Writer, failure *release.TagFailure) {
+	if failure == nil {
+		return
+	}
+	_, _ = fmt.Fprintf(out, "  tagging did not complete: %s\n", failure.Error)
+	for _, tag := range failure.RolledBack {
+		_, _ = fmt.Fprintf(out, "  rolled back %s %s\n", tag.Repo, tag.Tag)
+	}
+	for _, tag := range failure.Stranded {
+		_, _ = fmt.Fprintf(out, "  STRANDED %s %s (this pair is not released)\n", tag.Repo, tag.Tag)
+	}
+	if failure.RollbackError != "" {
+		_, _ = fmt.Fprintf(out, "  rollback failed: %s\n", failure.RollbackError)
+	}
+	for _, command := range failure.Recovery {
+		_, _ = fmt.Fprintf(out, "  clear it with: %s\n", command)
+	}
 }
 
 func shortRevision(rev string) string {

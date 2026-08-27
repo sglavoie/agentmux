@@ -153,28 +153,161 @@ func (g *gate) checkTagsAbsent(ctx context.Context, pairID string) error {
 	return nil
 }
 
+// createdTag is a ref this invocation wrote, remembered precisely enough to be
+// taken back. The object ID is the whole point: a rollback that deletes by name
+// removes whatever now answers to that name, while one that deletes by object
+// removes only what this run produced.
+type createdTag struct {
+	repo string
+	root string
+	name string
+	// oid is the tag object the creation produced, or empty when it could not
+	// be read back. An unidentified tag is never deleted.
+	oid string
+}
+
 // writeTags records the pair in both repositories with an annotated tag.
 //
 // Both tags carry the same name and the same message, so either repository
 // alone answers "what was this released with": the peer revision, the contract
 // set, the manifest hash the corpus was verified against, and the evidence file
 // that proves the gate ran.
+//
+// The two writes are one transaction. Git has no cross-repository commit, so it
+// is built here: every tag this run creates is remembered with the object it
+// produced, and a failure on the second write takes the first one back before
+// returning. A pair tagged in one repository only is worse than an untagged
+// pair -- it is a release claim that the peer contradicts, standing next to
+// evidence written before either tag existed.
+//
+// Only when the rollback itself cannot complete is a ref left behind, and then
+// it is recorded on the evidence record as an explicitly partial, explicitly
+// recoverable state. See abandonTags.
 func (g *gate) writeTags(ctx context.Context, ev *Evidence) error {
 	message := tagMessage(ev)
+	var created []createdTag
 	for _, repo := range []string{AgentMuxRepo, ASLRepo} {
-		root := g.rootFor(repo)
-		argv := []string{"git", "tag", "-a", ev.PairID, "-m", message}
-		output, code, err := g.run(ctx, root, argv)
+		tag, err := g.createTag(ctx, repo, g.rootFor(repo), ev.PairID, message)
+		if tag != nil {
+			created = append(created, *tag)
+		}
 		if err != nil {
-			return fmt.Errorf("release: tagging %s: %w", repo, err)
+			return g.abandonTags(ctx, ev, created, err)
 		}
-		if code != 0 {
-			return fmt.Errorf("release: tagging %s exited %d: %s", repo, code, strings.TrimSpace(output))
-		}
-		ev.Tags = append(ev.Tags, TagEvidence{Repo: repo, Tag: ev.PairID})
-		g.logf("tagged %s %s", repo, ev.PairID)
+	}
+	// The record gains the tag list only once both refs exist. Naming a tag the
+	// peer does not have is the exact confusion this transaction exists to
+	// prevent, and a half-filled list would put it in the record too.
+	for _, tag := range created {
+		ev.Tags = append(ev.Tags, TagEvidence{Repo: tag.repo, Tag: tag.name})
 	}
 	return nil
+}
+
+// createTag writes one annotated tag and reads back the object it produced.
+//
+// The read-back is not a paranoid double check. It is what makes the tag
+// removable later under a compare-and-delete, so a tag that cannot be identified
+// is a tag that cannot be taken back safely -- which makes a failed read-back a
+// failed creation. It is still returned, because the ref exists and the caller
+// has to account for it rather than forget it.
+func (g *gate) createTag(ctx context.Context, repo, root, name, message string) (*createdTag, error) {
+	output, code, err := g.run(ctx, root, []string{"git", "tag", "-a", name, "-m", message})
+	if err != nil {
+		return nil, fmt.Errorf("release: tagging %s: %w", repo, err)
+	}
+	if code != 0 {
+		return nil, fmt.Errorf("release: tagging %s exited %d: %s", repo, code, strings.TrimSpace(output))
+	}
+	oid, err := g.git(ctx, root, "rev-parse", "refs/tags/"+name)
+	if err != nil {
+		return &createdTag{repo: repo, root: root, name: name},
+			fmt.Errorf("release: reading back the tag just written to %s: %w", repo, err)
+	}
+	g.logf("tagged %s %s", repo, name)
+	return &createdTag{repo: repo, root: root, name: name, oid: firstLine(oid)}, nil
+}
+
+// abandonTags undoes what this run wrote and records whatever it could not undo.
+//
+// The two outcomes are kept distinct because the operator's next action differs.
+// A fully rolled-back attempt is an untagged pair: fix the cause and re-run. A
+// stranded ref has to be removed first -- the gate refuses to re-tag a pair that
+// already carries its tag -- so the record names it and carries the exact command
+// that clears it, and the run's result stops being `passed` so nothing downstream
+// can read a half-tagged pair as a release.
+func (g *gate) abandonTags(ctx context.Context, ev *Evidence, created []createdTag, cause error) error {
+	failure := &TagFailure{Error: cause.Error()}
+	var rollbackErrs []error
+	// Reverse order: the repository tagged last is released first, so the
+	// undo mirrors the do.
+	for i := len(created) - 1; i >= 0; i-- {
+		tag := created[i]
+		record := TagEvidence{Repo: tag.repo, Tag: tag.name}
+		if err := g.removeTag(ctx, tag); err != nil {
+			failure.Stranded = append(failure.Stranded, record)
+			failure.Recovery = append(failure.Recovery, recoveryCommand(tag))
+			rollbackErrs = append(rollbackErrs, err)
+			g.logf("STRANDED %s %s: %v", tag.repo, tag.name, err)
+			continue
+		}
+		failure.RolledBack = append(failure.RolledBack, record)
+		g.logf("rolled back %s %s", tag.repo, tag.name)
+	}
+
+	ev.Tags = nil
+	ev.TagFailure = failure
+	if len(failure.Stranded) == 0 {
+		return fmt.Errorf("%w; no repository was left carrying the pair tag", cause)
+	}
+	failure.RollbackError = errors.Join(rollbackErrs...).Error()
+	ev.Result = StatusPartial
+	return fmt.Errorf("%w: %w; %s still carries %s and must be cleared before another attempt: %s",
+		ErrPartialTagging, cause, strandedRepos(failure.Stranded), ev.PairID,
+		strings.Join(failure.Recovery, "; "))
+}
+
+// removeTag deletes a ref this run created, and only while it is still exactly
+// what this run created.
+//
+// `git update-ref -d <ref> <oid>` is a compare-and-delete: it refuses when the
+// ref does not currently point at <oid>. That is the entire safety argument for
+// the rollback. `git tag -d` would remove whatever now sits under the name,
+// which for a name the gate verified absent minutes ago is almost always the tag
+// it wrote -- but "almost always" is not a property a tool that deletes refs
+// should rely on when the alternative costs one argument.
+func (g *gate) removeTag(ctx context.Context, tag createdTag) error {
+	if tag.oid == "" {
+		return fmt.Errorf("release: the tag written to %s was never identified, so removing it could delete a ref this run did not create", tag.repo)
+	}
+	argv := []string{"git", "update-ref", "-d", "refs/tags/" + tag.name, tag.oid}
+	output, code, err := g.run(ctx, tag.root, argv)
+	if err != nil {
+		return fmt.Errorf("release: removing tag %s from %s: %w", tag.name, tag.repo, err)
+	}
+	if code != 0 {
+		return fmt.Errorf("release: removing tag %s from %s exited %d: %s", tag.name, tag.repo, code, strings.TrimSpace(output))
+	}
+	return nil
+}
+
+// recoveryCommand is what an operator runs by hand to clear a stranded tag. It
+// goes into the record and not only into the error, because the process that
+// printed the error is gone by the time anyone reads the record -- and the
+// record is what a later reader has to be able to act on.
+func recoveryCommand(tag createdTag) string {
+	if tag.oid == "" {
+		return fmt.Sprintf("git -C %s tag -d %s", tag.root, tag.name)
+	}
+	return fmt.Sprintf("git -C %s update-ref -d refs/tags/%s %s", tag.root, tag.name, tag.oid)
+}
+
+func strandedRepos(stranded []TagEvidence) string {
+	names := make([]string, 0, len(stranded))
+	for _, tag := range stranded {
+		names = append(names, tag.Repo)
+	}
+	return strings.Join(names, ", ")
 }
 
 // tagMessage is the annotated tag body. It is plain "key: value" lines so it

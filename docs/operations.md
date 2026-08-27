@@ -372,6 +372,11 @@ Then check the record itself: `"result": "passed"`, `"schema_version": 1`,
 the tags, and the artifact hashes match what is installed (`amx --version`
 reports the installed binary's own hash).
 
+`"result"` has a third value. `"partial"` means the gate passed but pair tagging
+broke midway and left a tag behind in one repository — see
+[Tags](#tags). It is not a release, and the record says so in the one field
+every consumer already reads.
+
 ### Tags
 
 `tag=yes` writes the same annotated tag name — the pair ID — into both
@@ -390,6 +395,37 @@ The gate refuses to re-tag a pair that already carries its tag, and it checks
 for that **before** writing or signing anything, so a refusal cannot leave a
 signed record describing tags that say something else. It also refuses to
 overwrite an existing evidence record unless `--force` is passed.
+
+**The two tags are one transaction.** They are written one after the other into
+two independent repositories, and Git has no cross-repository commit, so the
+atomicity is the gate's own: it remembers the object each tag creation produced,
+and a failure on the second write removes the first before returning. A pair
+tagged on one side only would be worse than an untagged pair — a release claim
+the peer contradicts, next to a record written before either tag existed and
+therefore naming neither.
+
+The removal is a compare-and-delete —
+`git update-ref -d refs/tags/<pair-id> <oid>` — so it clears only the object
+this run created. A ref that has since been moved or replaced is left alone, and
+a tag that predates the run is never a candidate at all.
+
+When the removal itself fails, the leftover ref is not left silent:
+
+- the run's result becomes `"partial"`, never `"passed"`, so no reader — including
+  one written before this state existed — can take a half-tagged pair for a
+  released one;
+- `"tags"` stays empty, because it means "this pair is tagged" and a pair tagged
+  on one side is not;
+- `"tag_failure"` names the cause, the stranded repository and tag, why the
+  removal failed, and the exact command that clears it;
+- the command is printed too, and it is printed even under `--json`, because it
+  is the one gate outcome that left durable state outside the evidence
+  directory.
+
+Run that command, then re-run the gate. Nothing else has to be undone — the
+evidence record for a `partial` run is a truthful account of an unreleased pair,
+and the retry writes its own. The re-tag refusal is what stops a retry from
+proceeding around a ref still sitting there.
 
 ### Rolling back
 

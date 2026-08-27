@@ -82,6 +82,17 @@ const (
 	StatusNotRun = "not-run"
 )
 
+// StatusPartial is a whole-run result and never a step status: the gate passed,
+// pair tagging then broke midway, and the ref it had already written could not
+// be taken back. One repository is left carrying a tag the other does not have.
+//
+// It is a distinct value rather than a flag beside `"result": "passed"` because
+// every consumer that only knows the old vocabulary still reads it as "not
+// passed", which is the property that matters. A half-tagged pair must never be
+// mistaken for a released one, including by a reader written before this state
+// existed.
+const StatusPartial = "partial"
+
 // Phase names, in execution order.
 const (
 	PhaseSource      = "source"
@@ -117,6 +128,16 @@ var ErrGateFailed = errors.New("paired release gate failed")
 // one can verify, indistinguishable in either repository from the real thing.
 // So the two are bound together here rather than left to operator discipline.
 var ErrUnsignedTag = errors.New("release: tagging requires a signing key: an unsigned run is a rehearsal and never writes release tags")
+
+// ErrPartialTagging reports the one outcome the pair-tag transaction cannot
+// prevent: a tag was created in one repository, the peer's creation failed, and
+// the first tag could not be removed either.
+//
+// It is a sentinel because it is the only gate outcome that leaves durable state
+// behind for a human to clear. Everything else either happened or did not; this
+// one demands an action before the pair can be attempted again, and the evidence
+// record carries the exact command.
+var ErrPartialTagging = errors.New("release: pair tagging left a repository tagged")
 
 // aslWrapperPath is the ASL entry point inside an ASL checkout, relative to its
 // root. The wrapper resolves the repository root from its own location, so the
@@ -274,6 +295,32 @@ type TagEvidence struct {
 	Tag  string `json:"tag"`
 }
 
+// TagFailure is the account of a pair-tagging attempt that did not complete.
+//
+// Tagging writes two refs in two repositories and is therefore the only part of
+// the gate that can be half-done. Both outcomes are recorded because they call
+// for different actions: RolledBack means the pair is untagged and the attempt
+// can simply be repeated, while Stranded means a ref survives that will block
+// the next attempt until somebody removes it.
+type TagFailure struct {
+	// Error is why the attempt stopped.
+	Error string `json:"error"`
+	// RolledBack lists tags this run created and then removed. They are absent
+	// from Evidence.Tags because they no longer exist.
+	RolledBack []TagEvidence `json:"rolled_back,omitempty"`
+	// Stranded lists tags this run created and could not remove. They are absent
+	// from Evidence.Tags too: that field means "this pair is tagged", and a pair
+	// tagged on one side is not.
+	Stranded []TagEvidence `json:"stranded,omitempty"`
+	// RollbackError is why the removal failed, when one did.
+	RollbackError string `json:"rollback_error,omitempty"`
+	// Recovery is one command per stranded tag, in the same order, that returns
+	// the repository to its untagged state. It names the object as well as the
+	// ref, so running it late cannot delete a tag somebody else has since put
+	// under that name.
+	Recovery []string `json:"recovery,omitempty"`
+}
+
 // Evidence is the complete release record.
 type Evidence struct {
 	SchemaVersion int              `json:"schema_version"`
@@ -287,12 +334,18 @@ type Evidence struct {
 	Steps         []StepResult     `json:"steps"`
 	Signature     Signature        `json:"signature"`
 	Tags          []TagEvidence    `json:"tags,omitempty"`
+	// TagFailure describes a tagging attempt that did not complete. It is
+	// present only when one did not, and it is never populated at the same time
+	// as Tags.
+	TagFailure *TagFailure `json:"tag_failure,omitempty"`
 	// Path is where the record was written. It is not part of the signed
 	// content's meaning, but it is what an operator needs to verify it.
 	Path string `json:"path,omitempty"`
 }
 
-// Passed reports whether every planned step ran and passed.
+// Passed reports whether the pair was released: every planned step ran and
+// passed, and nothing afterwards left the pair in a state the record has to
+// qualify. StatusPartial is deliberately not passed.
 func (e *Evidence) Passed() bool { return e.Result == StatusPassed }
 
 // Plan returns the ordered command list for a gate run over the two named
@@ -356,9 +409,10 @@ type gate struct {
 //
 // It returns the evidence record in every case where a record could be built at
 // all, including failures: a failed gate's record is the most useful artifact it
-// produces. The error distinguishes the two failure kinds -- ErrGateFailed for a
-// pair that did not pass, anything else for an invocation the gate could not
-// carry out.
+// produces. The error says which kind of failure it was -- ErrGateFailed for a
+// pair that did not pass, ErrPartialTagging for a pair whose tagging left a ref
+// behind that a human must clear, anything else for an invocation the gate could
+// not carry out.
 func Run(ctx context.Context, opts Options) (*Evidence, error) {
 	g, err := newGate(opts)
 	if err != nil {
@@ -549,8 +603,16 @@ func (g *gate) execute(ctx context.Context) (*Evidence, error) {
 // Tagging is reachable only when a signing key was named: newGate refuses the
 // combination before the gate runs at all, so the tags this writes always
 // accompany a record that is being signed.
+//
+// The record is republished after tagging whatever tagging did. On success it
+// gains the tag list, because signing a record that named tags which were never
+// written would be worse than not naming them at all. On failure it gains the
+// account of what was rolled back or left behind -- and that account is worth
+// nothing if it only ever existed in the memory of a process that is about to
+// exit.
 func (g *gate) finish(ctx context.Context, ev *Evidence) error {
-	if ev.Result == StatusPassed && g.opts.Tag {
+	tagging := ev.Result == StatusPassed && g.opts.Tag
+	if tagging {
 		if err := g.checkTagsAbsent(ctx, ev.PairID); err != nil {
 			return err
 		}
@@ -558,18 +620,15 @@ func (g *gate) finish(ctx context.Context, ev *Evidence) error {
 	if err := g.publish(ctx, ev); err != nil {
 		return err
 	}
-	if ev.Result == StatusPassed && g.opts.Tag {
-		if err := g.writeTags(ctx, ev); err != nil {
-			return err
-		}
-		// The tag list is part of the record, so the record is republished once
-		// the tags exist. Signing a record that named tags which were never
-		// written would be worse than not naming them at all.
-		if err := g.publish(ctx, ev); err != nil {
-			return err
-		}
+	if !tagging {
+		return nil
 	}
-	return nil
+
+	tagErr := g.writeTags(ctx, ev)
+	if err := g.publish(ctx, ev); err != nil {
+		return errors.Join(tagErr, err)
+	}
+	return tagErr
 }
 
 // publish declares the signature the record is about to carry, writes the

@@ -9,8 +9,9 @@ import "fmt"
 const (
 	// exitScenarioFailure marks a harness run that executed cleanly but reached
 	// a negative verdict: a failing TUI assertion or detected layout issue, or a
-	// release gate whose pair did not pass. The harness did its job; the subject
-	// failed.
+	// release gate whose pair did not pass -- including one whose tagging left a
+	// ref behind that has to be cleared before another attempt. The harness did
+	// its job; the subject failed.
 	exitScenarioFailure = 2
 	// exitInvalidInput marks a bad invocation: an unknown fixture, an unreadable
 	// or malformed scenario, an isolated-config staging failure, or a release

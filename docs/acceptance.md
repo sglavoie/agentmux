@@ -201,7 +201,7 @@ evidence schema, the verification command, tagging, rollback, and maintenance
 installation are documented in
 [Paired releases](operations.md#paired-releases).
 
-Four properties make the record admissible as acceptance evidence:
+Five properties make the record admissible as acceptance evidence:
 
 - A step that never ran is recorded as `not-run` rather than omitted, so a
   truncated gate cannot read as a complete one.
@@ -214,6 +214,13 @@ Four properties make the record admissible as acceptance evidence:
   refs are read, so the pair tags that identify a release can only ever have
   been produced alongside a signed record. The rehearsal itself stays
   available — it just leaves evidence rather than history.
+- The two pair tags are one transaction. A failure on the second repository's
+  tag removes the first — by object, so only what this run created is deleted —
+  and if that removal also fails, the leftover ref is recorded as
+  `"result": "partial"` with an empty `"tags"` list and a `"tag_failure"` block
+  naming the stranded ref and the exact command that clears it. A pair tagged on
+  one side can therefore never be read as a released pair, by a consumer of the
+  record or by a reader of either repository's tags.
 - `just crash-restart` counts the scenarios that actually executed and
   `just cockpit-smoke` fails rather than skips when Kitty is absent. Both close
   the gap where a gate reports a boundary as exercised that was never touched.
@@ -221,8 +228,14 @@ Four properties make the record admissible as acceptance evidence:
 The gate's own logic is covered by `go test ./internal/release`, which runs the
 whole procedure against throwaway repositories, an ephemeral SSH key, and fake
 `just`/`kitty`/ASL executables — with real Git and real `ssh-keygen`, so
-revision reading, annotated tagging, and namespace-scoped signature
-verification are genuinely exercised without touching the live installation.
+revision reading, annotated tagging, compare-and-delete tag rollback, and
+namespace-scoped signature verification are genuinely exercised without touching
+the live installation. Failures that cannot be provoked otherwise are injected
+through the same command seam: `TestSecondRepositoryTagFailureLeavesNoPairTag`
+fails the second repository's tag write and asserts the refs and the persisted
+record agree afterwards, and
+`TestUnremovablePairTagIsRecordedAsRecoverablePartialState` additionally fails
+the rollback and runs the recovery command the record names.
 
 CI coverage is three lanes in `.github/workflows/check.yml`: `linux-portable`
 (build, unit suite, vet, gofmt, lint), `macos-full` (`just acceptance` plus

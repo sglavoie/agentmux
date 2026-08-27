@@ -219,6 +219,64 @@ func TestJustPairedReleaseGateRefusesTagWithoutSigningKey(t *testing.T) {
 	}
 }
 
+// TestReleaseGateSurfacesAStrandedPairTag guards the half of "durably record and
+// surface" that the evidence file cannot cover.
+//
+// A stranded tag is the one gate outcome that leaves state outside the evidence
+// directory, in a repository the operator will go on using. The record names it,
+// but a record nobody opens is not a surface, so the summary has to name it too
+// -- and it has to carry the command rather than tell the reader to go find it.
+func TestReleaseGateSurfacesAStrandedPairTag(t *testing.T) {
+	var out strings.Builder
+	writeReleaseGateTagFailure(&out, &release.TagFailure{
+		Error:         "release: tagging asl exited 128: fatal: cannot lock ref",
+		Stranded:      []release.TagEvidence{{Repo: "agentmux", Tag: "amx-asl-1.0123456789abcdef"}},
+		RollbackError: "release: removing tag amx-asl-1.0123456789abcdef from agentmux exited 1",
+		Recovery:      []string{"git -C /src/agentmux update-ref -d refs/tags/amx-asl-1.0123456789abcdef abc123"},
+	})
+	summary := out.String()
+
+	for _, want := range []string{
+		"STRANDED agentmux amx-asl-1.0123456789abcdef",
+		"this pair is not released",
+		"cannot lock ref",
+		"git -C /src/agentmux update-ref -d refs/tags/amx-asl-1.0123456789abcdef abc123",
+	} {
+		if !strings.Contains(summary, want) {
+			t.Errorf("summary does not contain %q:\n%s", want, summary)
+		}
+	}
+	// "tagged" is what a released pair prints. A half-tagged one must not borrow
+	// the word an operator scans for.
+	for _, line := range strings.Split(summary, "\n") {
+		if strings.Contains(line, "  tagged ") {
+			t.Errorf("a stranded tag is reported with the released-pair wording: %q", line)
+		}
+	}
+
+	// A completed rollback says so and offers nothing to run, because there is
+	// nothing left to clear.
+	out.Reset()
+	writeReleaseGateTagFailure(&out, &release.TagFailure{
+		Error:      "release: tagging asl exited 128",
+		RolledBack: []release.TagEvidence{{Repo: "agentmux", Tag: "amx-asl-1.0123456789abcdef"}},
+	})
+	rolled := out.String()
+	if !strings.Contains(rolled, "rolled back agentmux") {
+		t.Errorf("a rolled-back attempt is not reported:\n%s", rolled)
+	}
+	if strings.Contains(rolled, "STRANDED") || strings.Contains(rolled, "clear it with") {
+		t.Errorf("a rolled-back attempt asks the operator to clean up after it:\n%s", rolled)
+	}
+
+	// And a run that tagged cleanly prints none of this.
+	out.Reset()
+	writeReleaseGateTagFailure(&out, nil)
+	if out.Len() != 0 {
+		t.Errorf("a successful run reports a tagging failure:\n%s", out.String())
+	}
+}
+
 // TestReleaseEvidenceDefaultsUnderTheDataDirectory keeps release records beside
 // the caches, handoffs, and worktrees rather than in a location invented for
 // this feature.
