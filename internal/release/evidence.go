@@ -91,6 +91,99 @@ func (g *gate) writeEvidence(ev *Evidence) error {
 	return nil
 }
 
+// retractSuperseded invalidates the record this run already published, once the
+// run knows that record no longer describes what happened.
+//
+// It exists for one narrow state, and it is the last thing standing in it. The
+// pre-tag record is on disk saying the run passed; both refs have since been
+// taken back; and every attempt to publish that account has failed. Publication
+// writes a sibling staging file and renames it, so an evidence directory that
+// cannot be written to at all defeats it -- and what survives is a signed record
+// reading `"result": "passed"`, with no tag_failure, for a release that exists
+// in neither repository. That record is all a later reader has, and
+// Evidence.Passed() returns true for it.
+//
+// So the retraction creates nothing. It rewrites the file this run already owns,
+// in place, which needs write permission on that file rather than on the
+// directory holding it -- exactly the permission the failed publication did not
+// need and this one does not lack. Losing atomicity is the price and it is the
+// right way round here: an interrupted rewrite leaves a truncated record that no
+// longer parses, and unreadable evidence is not a release claim, while the
+// bytes it replaces are.
+//
+// The signature declaration goes with it. The detached signature beside the
+// record covers the superseded bytes, so a record that still declared itself
+// signed would be pointing at a signature that cannot verify it -- and the
+// signature file itself is discarded for the same reason sign removes a stale
+// one before writing a new one.
+func (g *gate) retractSuperseded(ev *Evidence) error {
+	// Only a record this run wrote may be rewritten. Without this, a run refused
+	// for being about to overwrite a previous release's evidence would answer
+	// that refusal by overwriting it non-atomically instead.
+	if !g.published {
+		return nil
+	}
+	path := EvidencePath(g.opts.EvidenceDir, ev.PairID)
+	if _, err := os.Stat(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("release: checking the superseded evidence: %w", err)
+	}
+
+	ev.Path = path
+	ev.Signature = Signature{Signed: false, Namespace: g.opts.Namespace}
+	data, err := json.MarshalIndent(ev, "", "  ")
+	if err != nil {
+		return fmt.Errorf("release: encoding the retracted evidence: %w", err)
+	}
+	data = append(data, '\n')
+	if err := writeFileInPlace(path, data); err != nil {
+		return fmt.Errorf("release: retracting the superseded evidence at %s: %w", path, err)
+	}
+	g.logf("retracted superseded evidence %s", path)
+	if err := discardSignature(SignaturePath(path)); err != nil {
+		return err
+	}
+	return nil
+}
+
+// writeFileInPlace truncates an existing file and writes over it. It is the
+// deliberate opposite of the staging-and-rename writeEvidence performs: no entry
+// is created or removed in the containing directory, so it works where that
+// cannot.
+func writeFileInPlace(path string, data []byte) error {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		return err
+	}
+	return file.Close()
+}
+
+// discardSignature takes away a detached signature that no longer covers the
+// record beside it.
+//
+// Removing it is the honest outcome and is tried first. Removal edits the
+// directory, though, and a retraction is reached precisely when the directory
+// could not be edited, so the fallback truncates the signature in place: an
+// empty file verifies nothing, which is the only property being asked for here.
+func discardSignature(sigPath string) error {
+	if err := os.Remove(sigPath); err == nil || errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err := os.Truncate(sigPath, 0); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("release: discarding the superseded signature at %s: %w", sigPath, err)
+	}
+	return nil
+}
+
 // sign produces the detached SSH signature over the record's bytes, fulfilling
 // the signature the record already declares. It is the second half of publish:
 // the metadata is written first so that the bytes being signed describe the

@@ -424,11 +424,27 @@ compare-and-delete and the run reports what it took back. Durable release tags
 are never left standing next to evidence that is unsigned or that predates them.
 
 The account of that retraction is then published in turn. When publication
-itself is what failed, that write can fail too — in which case the record on
-disk stays the pre-tag one, which names no tags and is therefore still true of
-the repositories, and the returned error names both failures. The refs are gone
-either way: a retracted claim beside an out-of-date record is recoverable, a
-live claim beside one is not.
+itself is what failed, that write can fail too — and the record then left on
+disk is not neutral. It is the pre-tag one, which says `"result": "passed"`,
+carries no `"tag_failure"`, and is signed. It names no tags, but the field every
+consumer reads reports a release that neither repository carries.
+
+So the gate does not leave it there. It **retracts the superseded record in
+place**: it rewrites the file it already owns with the same `"not-released"`
+account, and discards the detached signature beside it, which covered the bytes
+that were just replaced. Publication writes a sibling staging file and renames
+it, so it needs to write the evidence *directory*; the retraction needs to write
+only that one *file*, which is why it can still land when publication cannot.
+What it gives up is atomicity — an interrupted retraction leaves a record that
+no longer parses, and unreadable evidence is not a release claim, while the
+bytes it replaces are.
+
+The returned error still names the publication failure, because a retraction is
+not a success: it means the account of the run could only be written by giving
+up the guarantee an ordinary publication provides. What it buys is that all of
+it agrees — the refs are gone, the record says the pair was not released and
+which refs went back, `"signature"` reads `{"signed": false}`, and no signature
+on disk verifies the record beside it.
 
 **A retracted attempt is not a passed run**, whether the tags went back because
 the second one could not be written or because the record that vouches for them

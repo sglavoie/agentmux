@@ -701,7 +701,7 @@ func (g *gate) finish(ctx context.Context, ev *Evidence) error {
 	if tagErr != nil {
 		// writeTags has already undone what it could and recorded what it could
 		// not. Publishing is what makes that account outlive this process.
-		if err := g.publish(ctx, ev); err != nil {
+		if err := g.publishRetraction(ctx, ev); err != nil {
 			return errors.Join(tagErr, err)
 		}
 		return tagErr
@@ -730,21 +730,48 @@ func (g *gate) finish(ctx context.Context, ev *Evidence) error {
 // created may be deleted. A ref that cannot be retracted becomes the recorded,
 // recoverable partial state.
 //
-// The account is then published in turn, which is a best effort by construction
-// -- the thing that just failed is publication. It is attempted anyway because a
-// record that cannot be improved is still better than one that is silently
-// wrong, and because the write failure and the signing failure differ here: a
-// signing failure leaves publication itself working. When it fails too, both
-// errors are returned together rather than the second hiding the first. The tags
-// are gone either way, which is the property that matters: the durable claim is
-// retracted before the record that would have had to explain it is given up on.
+// The account is then published in turn, which cannot be assumed to work -- the
+// thing that just failed is publication. It is attempted anyway, and when it
+// fails the superseded record is retracted instead, because the record left on
+// disk is not neutral: it is the pre-tag one, which says the run passed. See
+// publishRetraction. Both errors are returned together rather than the second
+// hiding the first. The tags are gone either way, which is the property that
+// matters: the durable claim is retracted before the record that would have had
+// to explain it is given up on.
 func (g *gate) abandonUnvouchedTags(ctx context.Context, ev *Evidence, created []createdTag, cause error) error {
 	abandonErr := g.abandonTags(ctx, ev, created,
 		fmt.Errorf("release: the record that vouches for the pair tags could not be published: %w", cause))
-	if err := g.publish(ctx, ev); err != nil {
+	if err := g.publishRetraction(ctx, ev); err != nil {
 		return errors.Join(abandonErr, err)
 	}
 	return abandonErr
+}
+
+// publishRetraction publishes a record that has just been downgraded out of
+// `passed`, and makes sure the downgrade is durable even when publishing it is
+// not.
+//
+// Every caller is compensating for a tagging attempt that did not complete, so
+// the record in memory now says `not-released` or `partial` while the one on
+// disk still says `passed`: it was published before the tags existed, and
+// nothing has replaced it. Ordinary publication is the way to replace it. When
+// that fails -- and on the path this exists for, a failed publication is exactly
+// what is being compensated for -- the stale record is not left to speak for the
+// run. It is retracted in place. See gate.retractSuperseded.
+//
+// The publication error is still what the caller reports. A retraction is not a
+// success: it means the account of what happened could only be written by giving
+// up the guarantees publication provides, and the operator is owed the reason
+// the ordinary write failed.
+func (g *gate) publishRetraction(ctx context.Context, ev *Evidence) error {
+	publishErr := g.publish(ctx, ev)
+	if publishErr == nil {
+		return nil
+	}
+	if retractErr := g.retractSuperseded(ev); retractErr != nil {
+		return errors.Join(publishErr, retractErr)
+	}
+	return publishErr
 }
 
 // publish declares the signature the record is about to carry, writes the

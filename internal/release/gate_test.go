@@ -1113,21 +1113,36 @@ func TestFinalEvidenceSigningFailureRollsBackPairTags(t *testing.T) {
 // window: the rewrite that would have added the tag list never reaches disk.
 //
 // Nothing is unsigned here -- the pre-tag record and its signature are intact
-// and verify. That is exactly the problem: they describe a run that tagged
-// nothing, and both refs exist. Stale evidence backing durable tags is the same
-// false claim an unsigned one makes, so it gets the same answer.
+// and verify. That is exactly the problem: they describe a run that passed and
+// tagged nothing, while both refs exist. Stale evidence backing durable tags is
+// the same false claim an unsigned one makes, so it gets the same answer and the
+// refs go back.
 //
-// It is also the case where the compensation cannot be recorded, because writing
-// is what failed. The tags still go: a retracted claim with an out-of-date
-// record beats a live claim with the same record.
+// It is also the case where the compensating account cannot be published either,
+// because writing through the evidence directory is what failed. That is not a
+// reason to leave the superseded record speaking for the run: a signed
+// `"result": "passed"` file for a release that exists in neither repository is
+// the worst artifact this gate can produce, and it is the one an operator or a
+// script finds later. So the record this run already owns is retracted in place
+// and its signature discarded.
+//
+// The whole point is that every statement about this run then agrees, so all of
+// them are asserted: both repositories' refs, the durable result and what
+// Evidence.Passed() makes of it, the returned record, the signature on disk, the
+// returned error, and what the operator was told while it happened.
 func TestFinalEvidenceWriteFailureRollsBackPairTags(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("the injected write failure is a directory permission, which root ignores")
 	}
 	f := newFixture(t)
 
+	// Progress is the operator's view of the run: release-gate wires it to its
+	// own stderr, so these lines are CLI output.
+	var progress strings.Builder
+
 	opts := f.options()
 	opts.Tag = true
+	opts.Progress = &progress
 	opts.Run = func(ctx context.Context, dir string, argv []string) (string, int, error) {
 		output, code, err := ExecRunner(ctx, dir, argv)
 		// The moment both refs exist and the record still predates them: take
@@ -1155,9 +1170,12 @@ func TestFinalEvidenceWriteFailureRollsBackPairTags(t *testing.T) {
 	if !strings.Contains(err.Error(), "no repository was left carrying the pair tag") {
 		t.Errorf("err = %v, want the retraction reported to the operator", err)
 	}
+	if errors.Is(err, ErrPartialTagging) {
+		t.Errorf("err = %v, want no partial state: both rollbacks succeeded", err)
+	}
 
 	// The claim is retracted even though the account of retracting it could not
-	// be written.
+	// be published.
 	for _, root := range []string{f.agentMuxRoot, f.aslRoot} {
 		if tags := strings.Fields(run(t, root, "git", "tag", "-l")); len(tags) != 0 {
 			t.Errorf("%s has tags %v after an unpublishable tagging attempt, want none", root, tags)
@@ -1171,18 +1189,18 @@ func TestFinalEvidenceWriteFailureRollsBackPairTags(t *testing.T) {
 	}
 	// The record the caller is handed carries the retraction, so it carries the
 	// outcome too -- including for the summary the command prints, which is
-	// rendered from this and not from the file that could not be written.
+	// rendered from this and not from the file.
 	if ev.Result != StatusNotReleased || ev.Passed() {
 		t.Errorf("result = %q, want %q: both tags were taken back", ev.Result, StatusNotReleased)
 	}
 
 	_ = os.Chmod(f.evidenceDir, 0o700)
 
-	// What is on disk is the record from before the tags: it names none, which
-	// is now true, and its signature still covers its own bytes. It is also the
-	// one case where the file cannot carry the retraction -- writing is what
-	// failed -- so it still reads as the passing untagged run it describes,
-	// which is true of both repositories now that the refs are gone.
+	// The file is the only thing that outlives the process, so it is read back
+	// rather than trusted from memory. The record that was on disk when the
+	// write failed said the run passed and named no tags; leaving it there would
+	// leave the single field a consumer reads reporting a release that neither
+	// repository carries.
 	stored, loadErr := LoadEvidence(EvidencePath(f.evidenceDir, ev.PairID))
 	if loadErr != nil {
 		t.Fatalf("reading back the evidence record: %v", loadErr)
@@ -1190,13 +1208,58 @@ func TestFinalEvidenceWriteFailureRollsBackPairTags(t *testing.T) {
 	if len(stored.Tags) != 0 {
 		t.Errorf("persisted tags = %+v, want none: no tag survives this run", stored.Tags)
 	}
-	if stored.TagFailure != nil {
-		t.Errorf("persisted tag_failure = %+v, want none: the account of the retraction is what could not be written", stored.TagFailure)
+	if stored.Result != StatusNotReleased || ev.Result != stored.Result {
+		t.Errorf("result = %q (persisted %q), want %q: the tags this run wrote were taken back",
+			ev.Result, stored.Result, StatusNotReleased)
 	}
-	if !stored.Signature.Signed {
-		t.Errorf("persisted signature = %+v, want the pre-tag signature left intact: signing never ran again", stored.Signature)
+	if stored.Passed() {
+		t.Error("the record left on disk by a run that released nothing reads as a passed release")
 	}
-	verifySignature(t, VerifyCommand(f.publicKey, "release@test", stored.Path), stored.Path)
+	failure := stored.TagFailure
+	if failure == nil {
+		t.Fatal("the persisted record says nothing about the tagging attempt it took back")
+	}
+	if !strings.Contains(failure.Error, "writing evidence") || !strings.Contains(failure.Error, "vouches for the pair tags") {
+		t.Errorf("recorded cause = %q, want the unpublishable record named as the reason", failure.Error)
+	}
+	if len(failure.Stranded) != 0 || failure.RollbackError != "" {
+		t.Errorf("stranded = %+v, rollback_error = %q, want neither for rollbacks that worked", failure.Stranded, failure.RollbackError)
+	}
+	// Reverse order: the repository tagged last is released first.
+	wantRolledBack := []TagEvidence{{Repo: ASLRepo, Tag: ev.PairID}, {Repo: AgentMuxRepo, Tag: ev.PairID}}
+	if len(failure.RolledBack) != 2 || failure.RolledBack[0] != wantRolledBack[0] || failure.RolledBack[1] != wantRolledBack[1] {
+		t.Errorf("rolled_back = %+v, want %+v", failure.RolledBack, wantRolledBack)
+	}
+
+	// The signature state agrees with the bytes. The detached signature that is
+	// on disk covers the record this run superseded, so the retracted record
+	// declares itself unsigned -- and the signature must not still verify
+	// anything, because what it vouched for was a release.
+	if stored.Signature != ev.Signature {
+		t.Errorf("persisted signature %+v disagrees with the returned one %+v", stored.Signature, ev.Signature)
+	}
+	if stored.Signature.Signed {
+		t.Errorf("persisted signature = %+v, want unsigned: the signature beside it covers the superseded bytes", stored.Signature)
+	}
+	requireNoValidSignature(t, VerifyCommand(f.publicKey, "release@test", stored.Path), stored.Path)
+
+	// And the operator watching the run was told the same story, in the order it
+	// happened: both tags written, both taken back, nothing left behind.
+	summary := progress.String()
+	for _, want := range []string{
+		"tagged " + AgentMuxRepo + " " + ev.PairID,
+		"tagged " + ASLRepo + " " + ev.PairID,
+		"rolled back " + ASLRepo + " " + ev.PairID,
+		"rolled back " + AgentMuxRepo + " " + ev.PairID,
+		"retracted superseded evidence " + stored.Path,
+	} {
+		if !strings.Contains(summary, want) {
+			t.Errorf("progress output does not report %q:\n%s", want, summary)
+		}
+	}
+	if strings.Contains(summary, "STRANDED") {
+		t.Errorf("progress output reports a stranded ref for a run that left none:\n%s", summary)
+	}
 }
 
 // TestUnreadableCreatedTagDoesNotOfferNameOnlyDeletion covers the one leftover
@@ -1475,6 +1538,26 @@ func verifySignature(t *testing.T, argv []string, evidencePath string) {
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("`%s` failed: %v\n%s", strings.Join(argv, " "), err, out)
+	}
+}
+
+// requireNoValidSignature is verifySignature's opposite, and it runs the same
+// command an operator would rather than inspecting the filesystem: a retracted
+// record is only really retracted if `ssh-keygen -Y verify` refuses the bytes
+// that are on disk now. Whether the signature file was removed or emptied is an
+// implementation detail; being unable to vouch for the record is not.
+func requireNoValidSignature(t *testing.T, argv []string, evidencePath string) {
+	t.Helper()
+	data, err := os.ReadFile(evidencePath)
+	if err != nil {
+		t.Fatalf("read evidence for verification: %v", err)
+	}
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Stdin = strings.NewReader(string(data))
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("`%s` still vouches for a record whose release was retracted:\n%s",
+			strings.Join(argv, " "), out)
 	}
 }
 
