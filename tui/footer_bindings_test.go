@@ -107,7 +107,7 @@ func TestModalAndStandaloneHintRowsUseFooterBindings(t *testing.T) {
 		{name: "delete choice", view: renderDeleteChoice(Model{deleteTarget: &target}), key: "[i]"},
 		{name: "color picker", view: newColorPickerModel(ColorPickerContext{DefaultColor: "blue"}).View().Content, key: "j/k"},
 		{name: "icon picker", view: (iconPickerModel{items: []iconPickerItem{{name: "codex", emoji: "📟"}}}).View().Content, key: "j/k"},
-		{name: "keybinding reference", view: (keybindingsModel{}).View().Content, key: "any key"},
+		{name: "keybinding reference", view: (keybindingsModel{}).View().Content, key: "j/k"},
 	}
 
 	for _, tc := range cases {
