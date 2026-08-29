@@ -324,7 +324,13 @@ func (r *blockingAcceptanceReader) Harness() string { return harness.Claude }
 func (r *blockingAcceptanceReader) Discover(string, transcript.DiscoverOptions) ([]transcript.SessionMeta, error) {
 	r.once.Do(func() { close(r.started) })
 	<-r.release
-	return append([]transcript.SessionMeta(nil), r.metas...), r.discoverErr
+	metas := append([]transcript.SessionMeta(nil), r.metas...)
+	for i := range metas {
+		if metas[i].SessionClass == "" {
+			metas[i].SessionClass = transcript.SessionClassMain
+		}
+	}
+	return metas, r.discoverErr
 }
 
 func (*blockingAcceptanceReader) ReadMessages(string) ([]transcript.Message, error) {

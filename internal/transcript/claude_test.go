@@ -33,6 +33,9 @@ func TestClaudeReader_Discover(t *testing.T) {
 	if foo.Harness != "claude" {
 		t.Errorf("foo.Harness = %q", foo.Harness)
 	}
+	if foo.SessionClass != SessionClassUnknown {
+		t.Errorf("foo.SessionClass = %q, want unknown for legacy marker-free fixture", foo.SessionClass)
+	}
 	if foo.CWD != "/Users/dev/projects/foo" {
 		t.Errorf("foo.CWD = %q", foo.CWD)
 	}

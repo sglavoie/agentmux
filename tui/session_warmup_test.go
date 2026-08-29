@@ -17,6 +17,12 @@ import (
 
 func writeDefaultTranscriptIndex(t *testing.T, home string, entries map[string]transcript.SessionMeta) {
 	t.Helper()
+	for key, meta := range entries {
+		if meta.SessionClass == "" {
+			meta.SessionClass = transcript.SessionClassMain
+			entries[key] = meta
+		}
+	}
 	path := defaultTranscriptIndexPath(home)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("mkdir index dir: %v", err)

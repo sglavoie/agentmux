@@ -9,26 +9,38 @@ import (
 	"time"
 )
 
+// SessionClass records whether a transcript is known to be a human-started
+// interactive session. The empty value is reserved for legacy cache entries
+// that have not completed the one-time classification migration.
+type SessionClass string
+
+const (
+	SessionClassMain      SessionClass = "main"
+	SessionClassAutomated SessionClass = "automated"
+	SessionClassUnknown   SessionClass = "unknown"
+)
+
 // SessionMeta describes a single discovered transcript. It is the cacheable
 // per-session metadata used by the index, search, and TUI layers. The
 // HiddenFromIndex flag is set by retention pruning (or per-session deletion
 // from the TUI) and is preserved across rescans so old sessions do not
 // resurrect when the underlying file is still present.
 type SessionMeta struct {
-	ID           string    `json:"id"`
-	Harness      string    `json:"harness"`
-	Profile      string    `json:"profile"`
-	Profiles     []string  `json:"profiles,omitempty"`
-	Project      string    `json:"project"`
-	Projects     []string  `json:"projects,omitempty"`
-	CWD          string    `json:"cwd"`
-	StartedAt    time.Time `json:"started_at"`
-	LastAt       time.Time `json:"last_at"`
-	Path         string    `json:"path"`
-	FileSize     int64     `json:"file_size"`
-	FileModTime  time.Time `json:"file_mod_time"`
-	MessageCount int       `json:"message_count"`
-	Snippet      string    `json:"snippet"`
+	ID           string       `json:"id"`
+	Harness      string       `json:"harness"`
+	Profile      string       `json:"profile"`
+	Profiles     []string     `json:"profiles,omitempty"`
+	Project      string       `json:"project"`
+	Projects     []string     `json:"projects,omitempty"`
+	CWD          string       `json:"cwd"`
+	StartedAt    time.Time    `json:"started_at"`
+	LastAt       time.Time    `json:"last_at"`
+	Path         string       `json:"path"`
+	FileSize     int64        `json:"file_size"`
+	FileModTime  time.Time    `json:"file_mod_time"`
+	MessageCount int          `json:"message_count"`
+	Snippet      string       `json:"snippet"`
+	SessionClass SessionClass `json:"session_class,omitempty"`
 	// SearchText is the lowercased concatenation of every message body
 	// in the transcript, joined by '\n', persisted so substring search
 	// can run entirely against the in-memory index without reopening
@@ -204,6 +216,13 @@ type Reader interface {
 	Harness() string
 	Discover(homeDir string, opts DiscoverOptions) ([]SessionMeta, error)
 	ReadMessages(path string) ([]Message, error)
+}
+
+// sessionClassifier is implemented by built-in readers so Refresh can
+// classify legacy cached entries without rebuilding their message metadata or
+// search sidecars.
+type sessionClassifier interface {
+	ClassifySession(path string) (SessionClass, error)
 }
 
 // snippetMaxLen caps the per-session snippet length stored in the index.

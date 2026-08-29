@@ -36,14 +36,18 @@ const claudeMaxLineBytes = 16 << 20 // 16 MiB
 // and per-message decoding. Every field is optional; the reader inspects
 // whichever values are present on a given line.
 type claudeRecord struct {
-	Type      string          `json:"type"`
-	Timestamp string          `json:"timestamp"`
-	CWD       string          `json:"cwd"`
-	SessionID string          `json:"sessionId"`
-	IsMeta    bool            `json:"isMeta"`
-	Message   *claudeMessage  `json:"message"`
-	Summary   string          `json:"summary"`
-	Content   json.RawMessage `json:"content"`
+	Type         string          `json:"type"`
+	Timestamp    string          `json:"timestamp"`
+	CWD          string          `json:"cwd"`
+	SessionID    string          `json:"sessionId"`
+	IsMeta       bool            `json:"isMeta"`
+	IsSidechain  bool            `json:"isSidechain"`
+	AgentID      string          `json:"agentId"`
+	Entrypoint   string          `json:"entrypoint"`
+	PromptSource string          `json:"promptSource"`
+	Message      *claudeMessage  `json:"message"`
+	Summary      string          `json:"summary"`
+	Content      json.RawMessage `json:"content"`
 }
 
 type claudeMessage struct {
@@ -143,6 +147,35 @@ func (r ClaudeReader) ReadMessages(path string) ([]Message, error) {
 	return msgs, nil
 }
 
+// ClassifySession scans Claude's lightweight record envelopes without
+// decoding message bodies. Automated evidence has precedence over recognized
+// interactive CLI/typed prompt markers.
+func (r ClaudeReader) ClassifySession(path string) (SessionClass, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return SessionClassUnknown, err
+	}
+	defer func() { _ = f.Close() }()
+
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 64*1024), claudeMaxLineBytes)
+	evidence := sessionClassEvidence{}
+	for scanner.Scan() {
+		var rec claudeRecord
+		if json.Unmarshal(scanner.Bytes(), &rec) != nil {
+			continue
+		}
+		observeClaudeRecord(&evidence, rec)
+		if class := evidence.class(); class != SessionClassUnknown {
+			return class, nil
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return SessionClassUnknown, err
+	}
+	return evidence.class(), nil
+}
+
 // parseFile streams one transcript end to end to produce SessionMeta. The
 // loop tracks first/last timestamp, message count, snippet, and CWD — all
 // using whatever subset of fields each line happens to carry.
@@ -164,12 +197,14 @@ func (r ClaudeReader) parseFile(path string, info os.FileInfo, encodedDir string
 		FileModTime: info.ModTime(),
 	}
 	var searchBuf strings.Builder
+	classEvidence := sessionClassEvidence{}
 
 	for scanner.Scan() {
 		var rec claudeRecord
 		if err := json.Unmarshal(scanner.Bytes(), &rec); err != nil {
 			continue
 		}
+		observeClaudeRecord(&classEvidence, rec)
 		if meta.CWD == "" && rec.CWD != "" {
 			meta.CWD = rec.CWD
 		}
@@ -195,6 +230,7 @@ func (r ClaudeReader) parseFile(path string, info os.FileInfo, encodedDir string
 		}
 	}
 	meta.SearchText = searchBuf.String()
+	meta.SessionClass = classEvidence.class()
 
 	// Last-resort CWD: decode the project dir name. Claude encodes the
 	// absolute path by replacing path separators with '-', which is lossy

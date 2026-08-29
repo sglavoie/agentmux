@@ -212,6 +212,20 @@ func (r CopilotReader) ReadMessages(path string) ([]Message, error) {
 	return msgs, nil
 }
 
+// ClassifySession verifies the indexed top-level Copilot conversation is
+// readable. Copilot embeds subagent events in this parent event stream rather
+// than creating separate transcript rows.
+func (r CopilotReader) ClassifySession(path string) (SessionClass, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return SessionClassUnknown, err
+	}
+	if err := f.Close(); err != nil {
+		return SessionClassUnknown, err
+	}
+	return SessionClassMain, nil
+}
+
 // parseFile streams one transcript end to end to produce SessionMeta. The
 // loop tracks first/last timestamp, message count, snippet, cwd, and id —
 // using whichever subset of fields each line happens to carry.
@@ -226,11 +240,12 @@ func (r CopilotReader) parseFile(path string, info os.FileInfo, dirName string) 
 	scanner.Buffer(make([]byte, 64*1024), copilotMaxLineBytes)
 
 	meta := SessionMeta{
-		Harness:     harness.Copilot,
-		ID:          dirName,
-		Path:        path,
-		FileSize:    info.Size(),
-		FileModTime: info.ModTime(),
+		Harness:      harness.Copilot,
+		SessionClass: SessionClassMain,
+		ID:           dirName,
+		Path:         path,
+		FileSize:     info.Size(),
+		FileModTime:  info.ModTime(),
 	}
 	var searchBuf strings.Builder
 

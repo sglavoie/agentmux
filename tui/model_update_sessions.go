@@ -188,7 +188,7 @@ func (m Model) handleSessionCacheLoadDone(msg sessionCacheLoadDoneMsg) (tea.Mode
 	if !m.sessionRefreshInFlight {
 		m.sessionRefreshInFlight = true
 		warmSeq := msg.seq
-		warmQuery := transcript.Query{}
+		warmQuery := transcript.Query{MainOnly: true}
 		if !publishCachedResults {
 			if m.activeRootMode() == ModeSessionSearch {
 				warmSeq = m.sessionSearchSeq

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -39,7 +40,7 @@ func sessionCacheLoadCmd(seq int) tea.Cmd {
 		if idx == nil {
 			return sessionCacheLoadDoneMsg{seq: seq, loadErr: loadErr}
 		}
-		results, searchErr := transcript.Search(idx, readers, transcript.Query{})
+		results, searchErr := transcript.Search(idx, readers, transcript.Query{MainOnly: true})
 		return sessionCacheLoadDoneMsg{
 			seq:       seq,
 			idx:       idx,
@@ -56,7 +57,9 @@ func loadTranscriptCache() (*transcript.Index, map[string]transcript.Reader, err
 	if idx == nil {
 		return nil, nil, err
 	}
-	return idx, buildTranscriptReaders(), err
+	readers := buildTranscriptReaders()
+	migrateErr := idx.MigrateSessionClasses(readers)
+	return idx, readers, errors.Join(err, migrateErr)
 }
 
 func sessionQueryIsEmpty(q transcript.Query) bool {
@@ -148,10 +151,11 @@ func refreshAndPruneSessions(idx *transcript.Index, cfg *config.Config, readers 
 // transcript.Query value the search engine consumes.
 func (m Model) currentSessionQuery() transcript.Query {
 	return transcript.Query{
-		Text:    m.sessionQuery,
-		Harness: m.filterHarness,
-		Profile: m.filterProfile,
-		Project: m.filterProject,
+		Text:     m.sessionQuery,
+		Harness:  m.filterHarness,
+		Profile:  m.filterProfile,
+		Project:  m.filterProject,
+		MainOnly: true,
 	}
 }
 

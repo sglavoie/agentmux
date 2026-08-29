@@ -46,7 +46,8 @@ func newHermeticUITestSnapshot(parent string) (hermeticUITestSnapshot, string, e
 	transcriptMeta := transcript.SessionMeta{
 		ID: "fixture-conversation", Harness: "claude", Profile: "work", Profiles: []string{"work"},
 		Project: "api", CWD: filepath.Join(root, "projects", "api"),
-		StartedAt: now.Add(-time.Hour), LastAt: now,
+		SessionClass: transcript.SessionClassMain,
+		StartedAt:    now.Add(-time.Hour), LastAt: now,
 		Path:         filepath.Join(root, "transcripts", "fixture.jsonl"),
 		MessageCount: 2, Snippet: "deterministic transcript fixture",
 	}
@@ -91,7 +92,7 @@ func newHermeticUITestSnapshot(parent string) (hermeticUITestSnapshot, string, e
 		return hermeticUITestSnapshot{}, "", fmt.Errorf("uitest: indexing plan fixture: %w", err)
 	}
 
-	results, searchErr := transcript.Search(transcriptIndex, readers, transcript.Query{})
+	results, searchErr := transcript.Search(transcriptIndex, readers, transcript.Query{MainOnly: true})
 	if searchErr != nil {
 		return hermeticUITestSnapshot{}, "", fmt.Errorf("uitest: loading transcript fixture: %w", searchErr)
 	}

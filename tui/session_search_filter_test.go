@@ -22,6 +22,12 @@ import (
 // exporting the transcript package's private state.
 func writeTranscriptIndex(t *testing.T, entries map[string]transcript.SessionMeta) *transcript.Index {
 	t.Helper()
+	for key, meta := range entries {
+		if meta.SessionClass == "" {
+			meta.SessionClass = transcript.SessionClassMain
+			entries[key] = meta
+		}
+	}
 	dir := t.TempDir()
 	path := filepath.Join(dir, "transcripts.json")
 	type indexFile struct {
@@ -49,7 +55,13 @@ type sessionSearchTestReader struct {
 func (r sessionSearchTestReader) Harness() string { return r.harness }
 func (r sessionSearchTestReader) Discover(homeDir string, opts transcript.DiscoverOptions) ([]transcript.SessionMeta, error) {
 	if r.discover != nil {
-		return r.discover(homeDir, opts)
+		metas, err := r.discover(homeDir, opts)
+		for i := range metas {
+			if metas[i].SessionClass == "" {
+				metas[i].SessionClass = transcript.SessionClassMain
+			}
+		}
+		return metas, err
 	}
 	return nil, nil
 }
@@ -99,6 +111,23 @@ func sessionSearchFilterModel(t *testing.T) Model {
 		},
 	}
 	return m
+}
+
+func TestCurrentSessionQueryAlwaysRequestsMainSessions(t *testing.T) {
+	m := Model{
+		sessionQuery:  "needle",
+		filterHarness: []string{harness.Claude},
+		filterProfile: []string{"work"},
+		filterProject: []string{"api"},
+	}
+	q := m.currentSessionQuery()
+	if !q.MainOnly {
+		t.Fatal("TUI session query did not enable the main-only filter")
+	}
+	if q.Text != "needle" || !reflect.DeepEqual(q.Harness, m.filterHarness) ||
+		!reflect.DeepEqual(q.Profile, m.filterProfile) || !reflect.DeepEqual(q.Project, m.filterProject) {
+		t.Fatalf("main-only query lost existing filters: %+v", q)
+	}
 }
 
 // drainCmd executes a tea.Cmd and returns the resulting message. Batched

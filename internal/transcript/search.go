@@ -10,13 +10,15 @@ import (
 )
 
 // Query describes a search request against the transcript index. Empty
-// slices mean "no filter on that dimension". An empty Text returns the
-// filtered metadata with no message-level content scan.
+// slices mean "no filter on that dimension". MainOnly excludes automated,
+// unknown, and unmigrated legacy entries. An empty Text returns the filtered
+// metadata with no message-level content scan.
 type Query struct {
-	Text    string
-	Harness []string
-	Profile []string
-	Project []string
+	Text     string
+	Harness  []string
+	Profile  []string
+	Project  []string
+	MainOnly bool
 }
 
 // Result is one matching session. Matches counts the total number of
@@ -45,9 +47,10 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 		return nil, errors.New("transcript: Search requires a non-nil index")
 	}
 	metas := idx.List(ListFilter{
-		Harness: q.Harness,
-		Profile: q.Profile,
-		Project: q.Project,
+		Harness:  q.Harness,
+		Profile:  q.Profile,
+		Project:  q.Project,
+		MainOnly: q.MainOnly,
 	})
 
 	needle := strings.ToLower(strings.TrimSpace(q.Text))

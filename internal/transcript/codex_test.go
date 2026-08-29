@@ -28,6 +28,9 @@ func TestCodexReader_Discover(t *testing.T) {
 	if m.Harness != "codex" {
 		t.Errorf("Harness = %q", m.Harness)
 	}
+	if m.SessionClass != SessionClassMain {
+		t.Errorf("SessionClass = %q, want main", m.SessionClass)
+	}
 	if m.CWD != "/Users/dev/projects/foo" {
 		t.Errorf("CWD = %q", m.CWD)
 	}

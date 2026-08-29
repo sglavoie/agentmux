@@ -46,9 +46,11 @@ type codexEnvelope struct {
 
 // codexSessionMetaPayload is the payload of the first record of every file.
 type codexSessionMetaPayload struct {
-	ID        string `json:"id"`
-	Timestamp string `json:"timestamp"`
-	CWD       string `json:"cwd"`
+	ID         string          `json:"id"`
+	Timestamp  string          `json:"timestamp"`
+	CWD        string          `json:"cwd"`
+	Originator string          `json:"originator"`
+	Source     json.RawMessage `json:"source"`
 }
 
 // codexResponseItemPayload covers the four response_item flavours used:
@@ -213,6 +215,37 @@ func (r CodexReader) ReadMessages(path string) ([]Message, error) {
 	return msgs, nil
 }
 
+// ClassifySession inspects only Codex session metadata. Native subagents,
+// non-interactive exec sessions, and ASL workers are automated; a recognized
+// interactive thread/origin marker is required for main.
+func (r CodexReader) ClassifySession(path string) (SessionClass, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return SessionClassUnknown, err
+	}
+	defer func() { _ = f.Close() }()
+
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 64*1024), codexMaxLineBytes)
+	evidence := sessionClassEvidence{}
+	for scanner.Scan() {
+		var env codexEnvelope
+		if json.Unmarshal(scanner.Bytes(), &env) != nil || env.Type != "session_meta" {
+			continue
+		}
+		var payload codexSessionMetaPayload
+		if json.Unmarshal(env.Payload, &payload) != nil {
+			continue
+		}
+		observeCodexSessionMeta(&evidence, payload.Originator, payload.Source)
+		return evidence.class(), nil
+	}
+	if err := scanner.Err(); err != nil {
+		return SessionClassUnknown, err
+	}
+	return evidence.class(), nil
+}
+
 // parseFile streams one transcript end to end to produce SessionMeta. The
 // loop tracks first/last timestamp, message count, snippet, cwd, and id —
 // using whichever subset of fields each line happens to carry.
@@ -233,6 +266,7 @@ func (r CodexReader) parseFile(path string, info os.FileInfo) (SessionMeta, erro
 		FileModTime: info.ModTime(),
 	}
 	var searchBuf strings.Builder
+	classEvidence := sessionClassEvidence{}
 
 	for scanner.Scan() {
 		var env codexEnvelope
@@ -257,6 +291,7 @@ func (r CodexReader) parseFile(path string, info os.FileInfo) (SessionMeta, erro
 			if meta.CWD == "" && p.CWD != "" {
 				meta.CWD = p.CWD
 			}
+			observeCodexSessionMeta(&classEvidence, p.Originator, p.Source)
 			// Prefer the session_meta inner timestamp (session start) over
 			// the envelope timestamp (line write time) when both exist.
 			if ts, ok := parseCodexTimestamp(p.Timestamp); ok {
@@ -300,6 +335,7 @@ func (r CodexReader) parseFile(path string, info os.FileInfo) (SessionMeta, erro
 		}
 	}
 	meta.SearchText = searchBuf.String()
+	meta.SessionClass = classEvidence.class()
 
 	// Fallback id: extract the UUID tail from the filename if no
 	// session_meta record was found (corrupt or pre-session_meta vintage).

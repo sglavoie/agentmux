@@ -160,6 +160,71 @@ func (i *Index) saveFilesystem() error {
 	})
 }
 
+// MigrateSessionClasses classifies legacy cache entries whose persisted class
+// is absent. It reads only their source metadata, preserves all cached
+// transcript/search fields, and persists unknown for missing, unreadable, or
+// unsupported sources so the migration runs at most once per entry.
+func (i *Index) MigrateSessionClasses(readers map[string]Reader) error {
+	snapshot, loadWarning := i.filesystemSnapshot()
+	legacyClasses := classifyLegacySessionEntries(snapshot, readers)
+	if len(legacyClasses) == 0 {
+		return loadWarning
+	}
+
+	var mergeWarning error
+	lockErr := cachefile.WithExclusive(i.path, func() error {
+		i.mu.Lock()
+		defer i.mu.Unlock()
+		canPersist, reloadWarning := i.reloadFilesystemLocked()
+		if !canPersist {
+			return reloadWarning
+		}
+		mergeWarning = errors.Join(mergeWarning, reloadWarning)
+		applyLegacySessionClasses(i, legacyClasses)
+		if !i.filesystemDirty {
+			return nil
+		}
+		persistWarning, persistErr := i.persistFilesystemLocked()
+		mergeWarning = errors.Join(mergeWarning, persistWarning, persistErr)
+		return nil
+	})
+	return errors.Join(loadWarning, mergeWarning, lockErr)
+}
+
+func classifyLegacySessionEntries(snapshot map[string]SessionMeta, readers map[string]Reader) map[string]SessionClass {
+	legacyClasses := make(map[string]SessionClass)
+	for key, meta := range snapshot {
+		if meta.SessionClass != "" {
+			continue
+		}
+		class := SessionClassUnknown
+		if classifier, ok := readers[meta.Harness].(sessionClassifier); ok && meta.Path != "" {
+			classified, err := classifier.ClassifySession(meta.Path)
+			if err != nil {
+				slog.Debug("transcript.index: legacy classification failed", "path", meta.Path, "err", err)
+			} else {
+				class = normalizedSessionClass(classified)
+			}
+		}
+		meta.SessionClass = class
+		snapshot[key] = meta
+		legacyClasses[key] = class
+	}
+	return legacyClasses
+}
+
+func applyLegacySessionClasses(i *Index, legacyClasses map[string]SessionClass) {
+	for key, class := range legacyClasses {
+		meta, exists := i.entries[key]
+		if !exists || meta.SessionClass != "" {
+			continue
+		}
+		meta.SessionClass = class
+		i.entries[key] = meta
+		i.filesystemDirty = true
+	}
+}
+
 type filesystemCompactResult struct {
 	LegacyFields             int
 	RemovedOrphanSidecars    int
@@ -313,6 +378,11 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 	}
 
 	snapshot, loadWarning := i.filesystemSnapshot()
+	// A missing class identifies a legacy cache entry. Classify those sources
+	// directly, independent of the normal discovery cutoff, and retain all
+	// cached transcript/search metadata. Explicit unknown is persisted so an
+	// unreadable or ambiguous source is not retried on every refresh.
+	legacyClasses := classifyLegacySessionEntries(snapshot, readers)
 	byPath := make(map[string]SessionMeta, len(snapshot))
 	for _, meta := range snapshot {
 		if meta.Path != "" {
@@ -357,6 +427,7 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 		}
 		// Readers may return useful discoveries with an error. Keep them.
 		for _, meta := range metas {
+			meta.SessionClass = normalizedSessionClass(meta.SessionClass)
 			meta.Profiles = append([]string(nil), group.profiles...)
 			meta = classifySessionProject(meta, cfg, projectResolver)
 			discovered = append(discovered, meta)
@@ -372,6 +443,7 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 			return reloadWarning
 		}
 		mergeWarning = errors.Join(mergeWarning, reloadWarning)
+		applyLegacySessionClasses(i, legacyClasses)
 		if rebuildSidecars {
 			if err := removeTranscriptSearchStore(i.SearchStoreDir()); err != nil {
 				return fmt.Errorf("removing transcript search sidecars: %w", err)
