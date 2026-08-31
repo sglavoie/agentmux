@@ -66,6 +66,11 @@ const (
 // no policy — which clause is consulted when, and in what combination, stays in
 // the functions below.
 type codexClauses struct {
+	// set is the pattern set these clauses came from, retained for the
+	// whole-screen clauses that are evaluated through Patterns.Match rather
+	// than as a compiled regex — the prompt clauses in codex_prompt.go, whose
+	// groups have no single compiled form to hoist.
+	set               Patterns
 	composerLineRE    *regexp.Regexp
 	placeholders      []string
 	contextZeroRE     *regexp.Regexp
@@ -80,6 +85,7 @@ type codexClauses struct {
 
 func codexClausesFor(patterns Patterns) codexClauses {
 	return codexClauses{
+		set:               patterns,
 		composerLineRE:    patterns.Regexp(codexClauseComposerLine),
 		placeholders:      patterns.Phrases(codexClauseComposerPlaceholder),
 		contextZeroRE:     patterns.Regexp(codexClauseContextZeroLine),
@@ -182,7 +188,11 @@ func (a codexAdapter) Classify(screen string) Observation {
 	if patterns.Match(codexClauseBackgroundFooter, screen, lower) {
 		vetoes |= VetoBackgroundTask
 	}
-	if _, ok := ClassifyCodexPrompt(screen); ok {
+	// The adapter's own pattern set and its already-folded screen, rather than
+	// the package-level ClassifyCodexPrompt: an adapter pinned to a set must
+	// classify prompts against that set too, and the fold is not worth making
+	// twice.
+	if _, ok := classifyCodexPrompt(patterns, screen, lower); ok {
 		vetoes |= VetoBlockingPrompt
 	}
 	if !clauses.screenHasComposerLine(screen) {
@@ -428,7 +438,15 @@ func ClassifyCodexInterruptedTurnScreen(screen string) bool {
 // ordering is what makes interrupt_hint's overlap with Codex's
 // request_user_input footer free.
 func codexTerminalTurnScreen(c codexClauses, screen string, marker codexMarkerFunc) bool {
-	if _, ok := ClassifyCodexPrompt(screen); ok {
+	// The prompt test is NEGATIVE here — it is the refusal that keeps a pane
+	// waiting on the user from being reported as a finished turn — so an
+	// incomplete prompt clause set is refused outright rather than settling
+	// with a blinded test. Same reasoning as screenLooksCleared's
+	// labeled_transcript_line guard.
+	if !codexPromptClausesDefined(c.set) {
+		return false
+	}
+	if _, ok := classifyCodexPrompt(c.set, screen, strings.ToLower(screen)); ok {
 		return false
 	}
 
@@ -494,13 +512,18 @@ func (c codexClauses) screenLooksCleared(screen string) bool {
 	if c.labeledRE == nil {
 		return false
 	}
+	// The prompt test below is negative in exactly the same way; refuse rather
+	// than let a blinded one clear a pane that is waiting on the user.
+	if !codexPromptClausesDefined(c.set) {
+		return false
+	}
 	if !c.screenHasComposerLine(screen) {
 		return false
 	}
 	if !c.textHasContextZero(screen) {
 		return false
 	}
-	if _, ok := ClassifyCodexPrompt(screen); ok {
+	if _, ok := classifyCodexPrompt(c.set, screen, strings.ToLower(screen)); ok {
 		return false
 	}
 	return !c.textHasTranscriptMarkers(screen)
@@ -510,7 +533,7 @@ func (c codexClauses) scrollbackLooksCleared(allText string) bool {
 	if strings.TrimSpace(allText) == "" {
 		return false
 	}
-	if _, ok := ClassifyCodexPrompt(allText); ok {
+	if _, ok := classifyCodexPrompt(c.set, allText, strings.ToLower(allText)); ok {
 		return false
 	}
 

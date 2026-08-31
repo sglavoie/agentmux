@@ -110,6 +110,17 @@ background_terminal_footer = '(?i)\b[1-9]\d*\s+background\s+(?:terminal|task)s?\
 # match.
 interrupted_line = '(?i)^[^\p{L}\p{N}]*(?:conversation\s+)?interrupted\b'
 
+# prompt_choice_line matches a selected numbered choice in a Codex prompt
+# ("› 1. Yes, apply these edits"). It is the fallback half of the visible-choice
+# gate: a prompt whose footer wording changed is still recognizable by the
+# chevron-plus-number list it renders.
+#
+# It is the only prompt clause that is a regex rather than a phrase list,
+# because it keys on the SHAPE of a choice line and on no English at all —
+# which is exactly why it survives a footer rewording. The (?m) flag is
+# load-bearing: the anchors must apply per line of the whole screen.
+prompt_choice_line = '(?m)^\s*(?:\x{203a}|>)\s*\d+\.'
+
 [phrases]
 
 # The dim placeholders codex-cli renders in an EMPTY composer. Unlike every
@@ -132,3 +143,128 @@ composer_placeholder = [
     "find and fix a bug in @filename",
     "ask codex to do anything",
 ]
+
+# ---------------------------------------------------------------------------
+# Prompt classification (codex_prompt.go).
+#
+# These clauses name the user-blocking prompts Codex's TUI renders. WHICH kind
+# wins when several match is Go's — the switch in ClassifyCodexPrompt tests
+# edit-approval before request-input before unanswered-confirmation before
+# command-approval before permission-grant, and several of the lists below
+# deliberately overlap, so nothing here may be read as an order. Rearranging
+# this file cannot change which kind a screen classifies as.
+#
+# The visible-choice gate is Go's too: ClassifyCodexPrompt refuses to name a
+# kind at all unless prompt_choice_footer or prompt_choice_line matched first,
+# so old transcript text quoting prompt wording cannot manufacture a waiting
+# state. That gate is control flow, not copy.
+# ---------------------------------------------------------------------------
+
+# prompt_choice_footer is the footer hint Codex prints under an ANSWERABLE
+# prompt. Together with prompt_choice_line it is the evidence that the prompt is
+# live rather than quoted: a transcript can repeat a question, but the footer
+# and the selected choice line are drawn by the TUI for the prompt it is waiting
+# on right now.
+#
+# "enter to submit answer" is a superstring of "to submit answer" and therefore
+# redundant for matching. It is kept as its own entry because it is the exact
+# string codex-cli prints, and a user narrowing this list by deleting the loose
+# variant should not silently lose the precise one too.
+prompt_choice_footer = [
+    "press enter to confirm",
+    "enter to submit answer",
+    "to submit answer",
+    "to submit all",
+    "to navigate questions",
+    "change question",
+    "submit with unanswered questions",
+]
+
+# prompt_edit_approval is Codex's "apply these edits?" prompt. Both the plural
+# and singular spellings are listed for the same reason as above: the singular
+# is a prefix of the plural and so matches both, but writing only the singular
+# would read as a typo the next time someone edits this list.
+prompt_edit_approval = [
+    "would you like to make the following edits",
+    "would you like to make the following edit",
+]
+
+# prompt_unanswered_confirmation is Codex's confirm-before-continuing prompt.
+prompt_unanswered_confirmation = ["unanswered confirmation"]
+
+# prompt_command_approval is Codex's run-this-command prompt, across the
+# wordings different codex-cli builds have used for it.
+prompt_command_approval = [
+    "would you like to run the following command",
+    "approve command",
+    "command approval",
+]
+
+# --- permission_grant: the `allow AND permission` conjunction ---
+#
+# The three lists below exist only to be combined by group.prompt_permission_*.
+# The conjunction is why: "allow" on its own is far too common a word to read as
+# a permission prompt — a transcript quoting "allow the build to finish" would
+# match — so it counts only when the screen also says "permission". Splitting
+# the two halves into named lists is what lets that AND live in [group] instead
+# of in Go, which is the point of the group schema.
+
+# The unambiguous namings of the prompt. Either alone is enough.
+prompt_permission_named = ["permission grant", "grant permission"]
+# The weak halves of the conjunction. NEITHER is sufficient alone; see
+# group.prompt_permission_allow_conjunction.
+prompt_permission_allow = ["allow"]
+prompt_permission_keyword = ["permission"]
+
+# --- request_user_input: the (nav || submit) && pane-action shape ---
+#
+# codex-cli 0.134.0 moved its question UI into a bottom pane that no single
+# substring identifies: the pane's own wording ("Add notes", "Proceed") appears
+# in ordinary prose, and its navigation hints appear under other prompts too.
+# Requiring one of each — a way to move between questions or submit an answer,
+# AND an action the request pane itself offers — is what separates the live pane
+# from a transcript that happens to use those words. See
+# group.prompt_request_pane_footer.
+
+# The unambiguous namings. Either alone is enough, without any pane action:
+# "request_user_input" is the tool name Codex prints, and the unanswered-
+# questions warning is only ever drawn by the pane.
+prompt_request_user_input_named = [
+    "request_user_input",
+    "submit with unanswered questions",
+]
+# One of these two buckets must appear...
+prompt_question_navigation = ["to navigate questions", "change question"]
+prompt_answer_submission = ["to submit answer", "to submit all"]
+# ...alongside one of these, for the pane to be considered visible.
+prompt_request_pane_action = [
+    "add notes",
+    "type your answer",
+    "select an option to add notes",
+    "none of the above",
+    "proceed",
+]
+
+[group]
+
+# prompt_permission_allow_conjunction is codex_prompt.go's `allow AND
+# permission` test, as data. An `all` list with no `any` is a plain AND.
+[group.prompt_permission_allow_conjunction]
+all = ["prompt_permission_allow", "prompt_permission_keyword"]
+
+# prompt_permission_grant is the clause ClassifyCodexPrompt reads: either
+# naming, or the conjunction. An `any` list with no `all` is a plain OR.
+[group.prompt_permission_grant]
+any = ["prompt_permission_named", "prompt_permission_allow_conjunction"]
+
+# prompt_request_pane_footer is the three-bucket shape:
+# (navigation || submission) && pane action. The single-entry `all` is the
+# conjunct that must always hold; the `any` is the disjunction it is ANDed with.
+[group.prompt_request_pane_footer]
+all = ["prompt_request_pane_action"]
+any = ["prompt_question_navigation", "prompt_answer_submission"]
+
+# prompt_request_user_input is the clause ClassifyCodexPrompt reads: either
+# naming short-circuits, otherwise the pane footer must be visible.
+[group.prompt_request_user_input]
+any = ["prompt_request_user_input_named", "prompt_request_pane_footer"]

@@ -42,6 +42,13 @@ func TestEmbeddedPatternsDefineEveryAdapterClause(t *testing.T) {
 			codexClauseLiveElapsed,
 			codexClauseBackgroundFooter,
 			codexClauseInterruptedLine,
+			codexClausePromptChoiceLine,
+			codexClausePromptChoiceFooter,
+			codexClausePromptEditApproval,
+			codexClausePromptRequestUserInput,
+			codexClausePromptUnanswered,
+			codexClausePromptCommandApproval,
+			codexClausePromptPermissionGrant,
 		},
 	}
 	for harnessName, clauses := range cases {

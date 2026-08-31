@@ -1,7 +1,6 @@
 package screenstate
 
 import (
-	"regexp"
 	"strings"
 )
 
@@ -16,6 +15,12 @@ import (
 
 // CodexPromptKind identifies the user-blocking Codex TUI prompt visible in a
 // Kitty screen scrape.
+//
+// These five constants stay Go constants and are deliberately NOT data. They
+// are an API contract, re-exported by internal/daemon/codex_prompt.go, which
+// maps each kind to a prompt action and an icon; a kind a user could invent in
+// a pattern file would arrive at that mapping with nowhere to go. The pattern
+// file names the copy that identifies a kind, never the set of kinds.
 type CodexPromptKind string
 
 const (
@@ -26,66 +31,126 @@ const (
 	CodexPromptPermissionGrant        CodexPromptKind = "permission_grant"
 )
 
-var codexChoiceLineRE = regexp.MustCompile(`(?m)^\s*(?:\x{203a}|>)\s*\d+\.`)
+// The prompt UI copy lives in patterns_codex.toml alongside the screen clauses,
+// loaded by patterns.go and overridable per user. The clause names below are
+// the contract between that file and this one; each is documented at its
+// definition site there.
+//
+// Two of these are [group] clauses rather than flat lists, and they are the
+// reason the group schema exists at all:
+//
+//   - prompt_permission_grant carries the `allow AND permission` conjunction
+//     that used to be written inline here, so "allow" alone can never read as a
+//     permission prompt.
+//   - prompt_request_user_input carries the three-bucket
+//     `(navigation || submission) && pane action` shape that codex-cli
+//     0.134.0's bottom-pane question UI needs, because no single substring
+//     identifies it.
+//
+// Expressing both as groups is what keeps them user-repairable: a Codex build
+// that reworded one bucket is a phrase-list edit, not a build.
+//
+// FAIL-CLOSED ORIENTATION. A clause the installed set does not define reports
+// no match, and every prompt clause therefore fails toward "no prompt is
+// visible". That direction is NOT self-evidently safe here, so it is spelled
+// out:
+//
+//   - In Classify, an undetected prompt withholds VetoBlockingPrompt, so a pane
+//     genuinely waiting on the user could settle. This is the same category of
+//     failure as labeled_transcript_line's — a NEGATIVE test whose absence
+//     removes a refusal rather than weakening a positive claim.
+//   - The settle paths therefore refuse outright when the prompt clauses are
+//     incomplete rather than classifying with a blinded prompt test; see
+//     codexPromptClausesDefined and its two call sites in codex.go. Classify
+//     itself cannot refuse — inventing a Blocked pane out of a missing clause
+//     would be a visible lie — so it degrades, and the settle refusal is what
+//     keeps that degradation from producing a false stop transition.
+const (
+	codexClausePromptChoiceLine       = "prompt_choice_line"
+	codexClausePromptChoiceFooter     = "prompt_choice_footer"
+	codexClausePromptEditApproval     = "prompt_edit_approval"
+	codexClausePromptRequestUserInput = "prompt_request_user_input"
+	codexClausePromptUnanswered       = "prompt_unanswered_confirmation"
+	codexClausePromptCommandApproval  = "prompt_command_approval"
+	codexClausePromptPermissionGrant  = "prompt_permission_grant"
+)
 
-// ClassifyCodexPrompt classifies a visible Codex prompt from screen text.
+// codexPromptClauseNames is every clause the prompt classifier reads, for the
+// completeness check the settle paths make. The kind clauses are included and
+// not just the two gate clauses: a missing kind clause blinds exactly one
+// prompt kind, which is a pane that waits forever on that one prompt while
+// every other prompt still refuses correctly — the hardest failure of the set
+// to diagnose from the outside.
+var codexPromptClauseNames = []string{
+	codexClausePromptChoiceLine,
+	codexClausePromptChoiceFooter,
+	codexClausePromptEditApproval,
+	codexClausePromptRequestUserInput,
+	codexClausePromptUnanswered,
+	codexClausePromptCommandApproval,
+	codexClausePromptPermissionGrant,
+}
+
+// codexPromptClausesDefined reports whether a pattern set defines every clause
+// the prompt classifier reads. See the fail-closed note above.
+func codexPromptClausesDefined(patterns Patterns) bool {
+	for _, name := range codexPromptClauseNames {
+		if !patterns.Has(name) {
+			return false
+		}
+	}
+	return true
+}
+
+// ClassifyCodexPrompt classifies a visible Codex prompt from screen text,
+// against the installed Codex pattern set.
 //
 // It intentionally requires prompt footer or choice evidence so old transcript
 // text containing prompt wording does not create a synthetic waiting state.
 func ClassifyCodexPrompt(screen string) (CodexPromptKind, bool) {
-	if !codexPromptHasVisibleChoice(screen) {
+	return classifyCodexPrompt(codexPatterns(), screen, strings.ToLower(screen))
+}
+
+// classifyCodexPrompt is the body, taking the pattern set and the screen's
+// lowercase fold from the caller. Both are parameters because every in-package
+// caller has already resolved a set and folded the screen once for its own
+// clauses, and prompt classification must not repeat either.
+//
+// THE SHAPE OF THIS FUNCTION IS THE POLICY, and none of it is expressible in a
+// pattern file: the visible-choice gate runs before any kind is considered, and
+// the kinds are tested in a fixed order because their clauses overlap — a
+// request-input pane also carries submit wording, and a permission prompt also
+// carries choice wording. Reordering the file cannot reorder these arms.
+func classifyCodexPrompt(patterns Patterns, raw, lower string) (CodexPromptKind, bool) {
+	if !codexPromptHasVisibleChoice(patterns, raw, lower) {
 		return "", false
 	}
 
-	lower := strings.ToLower(screen)
 	switch {
-	case strings.Contains(lower, "would you like to make the following edits") ||
-		strings.Contains(lower, "would you like to make the following edit"):
+	case patterns.Match(codexClausePromptEditApproval, raw, lower):
 		return CodexPromptEditApproval, true
-	case codexPromptLooksLikeRequestUserInput(lower):
+	case patterns.Match(codexClausePromptRequestUserInput, raw, lower):
 		return CodexPromptRequestUserInput, true
-	case strings.Contains(lower, "unanswered confirmation"):
+	case patterns.Match(codexClausePromptUnanswered, raw, lower):
 		return CodexPromptUnansweredConfirmation, true
-	case strings.Contains(lower, "would you like to run the following command") ||
-		strings.Contains(lower, "approve command") ||
-		strings.Contains(lower, "command approval"):
+	case patterns.Match(codexClausePromptCommandApproval, raw, lower):
 		return CodexPromptCommandApproval, true
-	case strings.Contains(lower, "permission grant") ||
-		strings.Contains(lower, "grant permission") ||
-		(strings.Contains(lower, "allow") && strings.Contains(lower, "permission")):
+	case patterns.Match(codexClausePromptPermissionGrant, raw, lower):
 		return CodexPromptPermissionGrant, true
 	default:
 		return "", false
 	}
 }
 
-func codexPromptHasVisibleChoice(screen string) bool {
-	lower := strings.ToLower(screen)
-	return strings.Contains(lower, "press enter to confirm") ||
-		strings.Contains(lower, "enter to submit answer") ||
-		strings.Contains(lower, "to submit answer") ||
-		strings.Contains(lower, "to submit all") ||
-		strings.Contains(lower, "to navigate questions") ||
-		strings.Contains(lower, "change question") ||
-		strings.Contains(lower, "submit with unanswered questions") ||
-		codexChoiceLineRE.MatchString(screen)
-}
-
-func codexPromptLooksLikeRequestUserInput(lower string) bool {
-	if strings.Contains(lower, "request_user_input") ||
-		strings.Contains(lower, "submit with unanswered questions") {
-		return true
-	}
-
-	hasQuestionNavigation := strings.Contains(lower, "to navigate questions") ||
-		strings.Contains(lower, "change question")
-	hasAnswerSubmission := strings.Contains(lower, "to submit answer") ||
-		strings.Contains(lower, "to submit all")
-	hasRequestPaneAction := strings.Contains(lower, "add notes") ||
-		strings.Contains(lower, "type your answer") ||
-		strings.Contains(lower, "select an option to add notes") ||
-		strings.Contains(lower, "none of the above") ||
-		strings.Contains(lower, "proceed")
-
-	return (hasQuestionNavigation || hasAnswerSubmission) && hasRequestPaneAction
+// codexPromptHasVisibleChoice reports whether the screen carries evidence that
+// a prompt is being drawn right now, rather than quoted in scrollback.
+//
+// The disjunction stays in Go rather than becoming a two-ref [group], following
+// claude.go's blocking-prompt gate: this is the gate ClassifyCodexPrompt runs
+// BEFORE anything else, and which evidence satisfies a gate is control flow.
+// The two clauses are independent on purpose — the footer is wording Codex may
+// reword, the choice line is a shape it is unlikely to abandon.
+func codexPromptHasVisibleChoice(patterns Patterns, raw, lower string) bool {
+	return patterns.Match(codexClausePromptChoiceFooter, raw, lower) ||
+		patterns.Match(codexClausePromptChoiceLine, raw, lower)
 }
