@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -47,8 +46,9 @@ const (
 	maxGroupDepth = 16
 	// patternsDirName is the subdirectory of the config dir holding overrides.
 	patternsDirName = "screenstate"
-	// embeddedPatternsDir is the package-relative directory embed.go binds.
-	embeddedPatternsDir = "patterns"
+	// embeddedPatternPrefix is the filename prefix embed.go binds; the harness
+	// name is what follows it, before the .toml suffix.
+	embeddedPatternPrefix = "patterns_"
 	// SourceEmbedded is Patterns.Source for a set that came from the binary.
 	SourceEmbedded = "embedded"
 )
@@ -344,7 +344,7 @@ func loadEmbedded() (map[string]Patterns, []LoadWarning) {
 	sets := make(map[string]Patterns)
 	var warnings []LoadWarning
 
-	entries, err := fs.ReadDir(defaultPatternFiles, embeddedPatternsDir)
+	entries, err := fs.ReadDir(defaultPatternFiles, ".")
 	if err != nil {
 		return sets, append(warnings, LoadWarning{
 			Kind:   WarnEmbeddedInvalid,
@@ -352,11 +352,13 @@ func loadEmbedded() (map[string]Patterns, []LoadWarning) {
 		})
 	}
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".toml") {
+		if entry.IsDir() ||
+			!strings.HasPrefix(entry.Name(), embeddedPatternPrefix) ||
+			!strings.HasSuffix(entry.Name(), ".toml") {
 			continue
 		}
-		name := strings.TrimSuffix(entry.Name(), ".toml")
-		data, err := fs.ReadFile(defaultPatternFiles, path.Join(embeddedPatternsDir, entry.Name()))
+		name := strings.TrimSuffix(strings.TrimPrefix(entry.Name(), embeddedPatternPrefix), ".toml")
+		data, err := fs.ReadFile(defaultPatternFiles, entry.Name())
 		if err != nil {
 			warnings = append(warnings, LoadWarning{
 				Kind:    WarnEmbeddedInvalid,

@@ -17,45 +17,26 @@ import (
 // settle a truly idle screen) are acceptable, false positives (settling a live
 // or blocked session) are not.
 
-// claudeComposerLineRE matches Claude's framed empty composer: the ❯ prompt
-// indicator followed by only horizontal whitespace, tolerating the input box's
-// leading and trailing vertical edges (│/┃). Claude 2.1.195 emits a non-breaking
-// space after ❯; Kitty preserves it in get-text output, so it is included
-// explicitly. A composer holding queued input has text after ❯ and cannot match,
-// so a user still typing is never read as idle.
-var claudeComposerLineRE = regexp.MustCompile(`(?m)^[\t \x{00a0}]*(?:[│┃][\t \x{00a0}]*)?\x{276f}[\t \x{00a0}]*(?:[│┃][\t \x{00a0}]*)?$`)
-
-// claudeChoiceLineRE matches a selected menu option in a Claude prompt
-// ("❯ 1. Yes, proceed"). It requires the ❯ selection indicator so a plain
-// transcript numbered list ("1. First point") cannot be mistaken for an open
-// choice prompt.
-var claudeChoiceLineRE = regexp.MustCompile(`(?m)^\s*(?:[│┃]\s*)?\x{276f}\s*\d+\.\s`)
-
-// claudeInterruptedLineRE matches Claude's generated interruption marker
-// ("⎿ Interrupted by user", "[Request interrupted by user]", "Interrupted ·
-// …"). Like the Codex analog it anchors the keyword to the start of the status
-// line (after any bracket/box/glyph decoration) so transcript prose that merely
-// narrates an interruption cannot match.
-var claudeInterruptedLineRE = regexp.MustCompile(`(?i)^[^\p{L}\p{N}]*(?:request\s+)?interrupted\b`)
-
-// The leading glyph is deliberately NOT matched: live captures show it cycling
-// ✽ U+273D, ● U+25CF, ✳ U+2733 and a bare · U+00B7 within a SINGLE turn, and ·
-// is also Claude's separator and footer glyph. [^\p{L}\p{N}]* skips whatever
-// decoration is present and cannot skip past a letter or digit, so the match
-// still anchors on the line's first word. The gerund is not matched (Claude
-// randomizes it) and "esc to interrupt" is not required (2.1.x dropped it —
-// that removal is this whole bug). The ellipsis plus the parenthesized LIVE
-// elapsed timer, on the same line, is the discriminator.
-var claudeWorkingStatusLineRE = regexp.MustCompile(
-	`^[^\p{L}\p{N}]*\p{L}[\p{L}\p{M}]*\x{2026}\s*\(\s*\d+[hms]\b`)
-
-// Past-tense analog of codexWorkedForLineRE. Claude randomizes the verb, so
-// only the SHAPE is pinned: one leading word, " for ", a duration, END OF LINE.
-// The end anchor is what makes this safe as positive evidence — without it,
-// "Waited for 3s (see above)" matches, and so does the "thought for 5s" segment
-// inside a working line's parentheses.
-var claudeCompletedStatusLineRE = regexp.MustCompile(
-	`^[^\p{L}\p{N}]*\p{L}[\p{L}\p{M}]*\s+for\s+(?:\d+[hms]\s*)+$`)
+// The UI copy this adapter keys on lives in patterns_claude.toml, loaded by
+// patterns.go and overridable per user. The clause names below are the contract
+// between that file and this one; each is documented at its definition site,
+// where the failures it was tuned against are recorded.
+//
+// A clause the installed set does not define reports no match, which is the
+// fail-closed direction for every use here: a missing composer clause vetoes
+// with VetoComposerBusy, and a missing status-line clause leaves the kind
+// claudeStatusNone. An override written against an older release therefore
+// degrades to "cannot read this screen" rather than to "this screen is idle".
+const (
+	claudeClauseComposerLine   = "composer_line"
+	claudeClauseChoiceLine     = "choice_line"
+	claudeClauseInterrupted    = "interrupted_status_line"
+	claudeClauseWorking        = "working_status_line"
+	claudeClauseCompleted      = "completed_status_line"
+	claudeClauseInterruptHint  = "interrupt_hint"
+	claudeClauseBackgroundTask = "background_task"
+	claudeClauseBlockingPrompt = "blocking_prompt"
+)
 
 // claudeStatusKind is which of Claude's three recognized status-line shapes a
 // single line is, if any.
@@ -69,10 +50,27 @@ const (
 )
 
 // claudeAdapter is the Claude Code screen adapter.
-type claudeAdapter struct{}
+type claudeAdapter struct {
+	// Patterns pins this adapter to one pattern set. The registered adapter
+	// leaves it zero and resolves the installed set per Classify instead:
+	// the adapters map is built at package init and read lock-free by For(),
+	// so a set captured into it would be the embedded default forever and
+	// Load's override would have no effect. Tests set it to classify against
+	// a pattern set without installing one globally.
+	Patterns Patterns
+}
 
 // Harness returns Claude's canonical harness name.
 func (claudeAdapter) Harness() string { return harness.Claude }
+
+// patterns resolves the pattern set this Classify call reads.
+func (a claudeAdapter) patterns() Patterns {
+	if a.Patterns.harness != "" {
+		return a.Patterns
+	}
+	set, _ := PatternsFor(harness.Claude)
+	return set
+}
 
 // Classify reads a Claude screen capture.
 //
@@ -85,8 +83,9 @@ func (claudeAdapter) Harness() string { return harness.Claude }
 // Reversing those two steps settles a working pane, because Claude's live
 // status line embeds a past-tense duration fragment ("· thought for 5s") that
 // the finished-line shape would otherwise match.
-func (claudeAdapter) Classify(screen string) Observation {
-	kind, statusLine := claudeLatestStatusLine(screen)
+func (a claudeAdapter) Classify(screen string) Observation {
+	patterns := a.patterns()
+	kind, statusLine := claudeLatestStatusLine(patterns, screen)
 
 	var vetoes Veto
 	lower := strings.ToLower(screen)
@@ -98,19 +97,19 @@ func (claudeAdapter) Classify(screen string) Observation {
 	// working signal — but it is still emitted by older builds and, in the
 	// ctrl+b form, by a live Bash tool run, and a one-way veto costs nothing to
 	// keep.
-	if strings.Contains(lower, "esc to interrupt") {
+	if patterns.Match(claudeClauseInterruptHint, screen, lower) {
 		vetoes |= VetoInterruptHint
 	}
-	if strings.Contains(lower, "ctrl+b to") {
+	if patterns.Match(claudeClauseBackgroundTask, screen, lower) {
 		vetoes |= VetoBackgroundTask
 	}
-	if claudeScreenHasBlockingPrompt(lower, screen) {
+	if claudeScreenHasBlockingPrompt(patterns, lower, screen) {
 		vetoes |= VetoBlockingPrompt
 	}
 	if contextlimit.ScreenShowsMarker(screen) {
 		vetoes |= VetoContextLimit
 	}
-	if !claudeComposerLineRE.MatchString(screen) {
+	if !patterns.Match(claudeClauseComposerLine, screen, lower) {
 		vetoes |= VetoComposerBusy
 	}
 
@@ -158,7 +157,15 @@ func (claudeAdapter) Classify(screen string) Observation {
 //
 // The three regexes all use a bare ^ rather than (?m), so this must feed them
 // one line at a time.
-func claudeLatestStatusLine(screen string) (claudeStatusKind, string) {
+//
+// The three clauses are resolved once, outside the loop, because they are the
+// same regexes for every line — externalizing them must not turn a per-screen
+// scan into a per-line map lookup.
+func claudeLatestStatusLine(patterns Patterns, screen string) (claudeStatusKind, string) {
+	working := patterns.Regexp(claudeClauseWorking)
+	completed := patterns.Regexp(claudeClauseCompleted)
+	interrupted := patterns.Regexp(claudeClauseInterrupted)
+
 	kind := claudeStatusNone
 	text := ""
 	for _, line := range strings.Split(screen, "\n") {
@@ -166,15 +173,22 @@ func claudeLatestStatusLine(screen string) (claudeStatusKind, string) {
 		// Working is tested first so that a screen shape not yet seen in a live
 		// capture — a working line that somehow also satisfied one of the
 		// terminal shapes — resolves to the safe answer.
-		case claudeWorkingStatusLineRE.MatchString(line):
+		case matchesLine(working, line):
 			kind, text = claudeStatusWorking, line
-		case claudeCompletedStatusLineRE.MatchString(line):
+		case matchesLine(completed, line):
 			kind, text = claudeStatusCompleted, line
-		case claudeInterruptedLineRE.MatchString(line):
+		case matchesLine(interrupted, line):
 			kind, text = claudeStatusInterrupted, line
 		}
 	}
 	return kind, text
+}
+
+// matchesLine is MatchString for a clause that may be absent from the installed
+// pattern set. A missing clause matches nothing rather than panicking on the
+// probe path.
+func matchesLine(re *regexp.Regexp, line string) bool {
+	return re != nil && re.MatchString(line)
 }
 
 // claudeScreenHasBlockingPrompt reports whether the screen shows a Claude
@@ -182,18 +196,12 @@ func claudeLatestStatusLine(screen string) (claudeStatusKind, string) {
 // normally paints these as key/question, but the screen read is a second line
 // of defense so a stuck bolt with a visible prompt is never settled to stop.
 //
-// The six phrases are English-only and exhaustive by construction; they are
-// kept in this one place so that limitation has a single home. lower is passed
-// in because the caller already folded the screen once.
-func claudeScreenHasBlockingPrompt(lower, screen string) bool {
-	switch {
-	case strings.Contains(lower, "do you want to proceed"),
-		strings.Contains(lower, "do you want to make this edit"),
-		strings.Contains(lower, "do you want to create"),
-		strings.Contains(lower, "do you want to allow"),
-		strings.Contains(lower, "do you trust"),
-		strings.Contains(lower, "would you like to"):
-		return true
-	}
-	return claudeChoiceLineRE.MatchString(screen)
+// The phrase list is English-only and exhaustive by construction; it lives in
+// patterns_claude.toml so that limitation has a single home a user can widen
+// without a build. The disjunction with the choice-line shape stays here: which
+// clauses combine, and how, is Go's. lower is passed in because the caller
+// already folded the screen once.
+func claudeScreenHasBlockingPrompt(patterns Patterns, lower, screen string) bool {
+	return patterns.Match(claudeClauseBlockingPrompt, screen, lower) ||
+		patterns.Match(claudeClauseChoiceLine, screen, lower)
 }

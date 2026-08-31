@@ -1,0 +1,81 @@
+# Default Claude Code screen patterns.
+#
+# Only UI COPY lives here. Evaluation order, positional requirements and the
+# veto-first contract stay in Go (see claude.go) — a pattern file must never be
+# able to imply when a clause is consulted. In particular, the order of the
+# three status-line regexes below says nothing: claudeLatestStatusLine tests
+# working first, on purpose, and that ordering is Go's.
+#
+# Clause names live in one namespace shared by [regex], [phrases] and [group],
+# so a [group] ref may name any of the three.
+#
+# Phrases match a lowercase fold of the screen and must therefore be written
+# lowercase; regexes match the capture as read.
+
+harness = "claude"
+
+[regex]
+
+# composer_line matches Claude's framed empty composer: the ❯ prompt
+# indicator followed by only horizontal whitespace, tolerating the input box's
+# leading and trailing vertical edges (│/┃). Claude 2.1.195 emits a non-breaking
+# space after ❯; Kitty preserves it in get-text output, so it is included
+# explicitly. A composer holding queued input has text after ❯ and cannot match,
+# so a user still typing is never read as idle.
+composer_line = '(?m)^[\t \x{00a0}]*(?:[│┃][\t \x{00a0}]*)?\x{276f}[\t \x{00a0}]*(?:[│┃][\t \x{00a0}]*)?$'
+
+# choice_line matches a selected menu option in a Claude prompt
+# ("❯ 1. Yes, proceed"). It requires the ❯ selection indicator so a plain
+# transcript numbered list ("1. First point") cannot be mistaken for an open
+# choice prompt.
+choice_line = '(?m)^\s*(?:[│┃]\s*)?\x{276f}\s*\d+\.\s'
+
+# interrupted_status_line matches Claude's generated interruption marker
+# ("⎿ Interrupted by user", "[Request interrupted by user]", "Interrupted ·
+# …"). Like the Codex analog it anchors the keyword to the start of the status
+# line (after any bracket/box/glyph decoration) so transcript prose that merely
+# narrates an interruption cannot match.
+interrupted_status_line = '(?i)^[^\p{L}\p{N}]*(?:request\s+)?interrupted\b'
+
+# working_status_line is the live-turn discriminator.
+#
+# The leading glyph is deliberately NOT matched: live captures show it cycling
+# ✽ U+273D, ● U+25CF, ✳ U+2733 and a bare · U+00B7 within a SINGLE turn, and ·
+# is also Claude's separator and footer glyph. [^\p{L}\p{N}]* skips whatever
+# decoration is present and cannot skip past a letter or digit, so the match
+# still anchors on the line's first word. The gerund is not matched (Claude
+# randomizes it) and "esc to interrupt" is not required (2.1.x dropped it —
+# that removal is this whole bug). The ellipsis plus the parenthesized LIVE
+# elapsed timer, on the same line, is the discriminator.
+working_status_line = '^[^\p{L}\p{N}]*\p{L}[\p{L}\p{M}]*\x{2026}\s*\(\s*\d+[hms]\b'
+
+# completed_status_line is the past-tense analog of codex's worked-for line.
+# Claude randomizes the verb, so only the SHAPE is pinned: one leading word,
+# " for ", a duration, END OF LINE. The end anchor is what makes this safe as
+# positive evidence — without it, "Waited for 3s (see above)" matches, and so
+# does the "thought for 5s" segment inside a working line's parentheses.
+completed_status_line = '^[^\p{L}\p{N}]*\p{L}[\p{L}\p{M}]*\s+for\s+(?:\d+[hms]\s*)+$'
+
+[phrases]
+
+# Legacy backstop only. Claude Code 2.1.x no longer renders "esc to interrupt"
+# during a tool-free turn, so this can no longer be the primary working signal —
+# but it is still emitted by older builds and a one-way veto costs nothing.
+interrupt_hint = ["esc to interrupt"]
+
+# The ctrl+b form is rendered by a live Bash tool run.
+background_task = ["ctrl+b to"]
+
+# Claude permission, elicitation, and other user-blocking choice prompts. The
+# hook path normally paints these as key/question; the screen read is a second
+# line of defence so a stuck bolt with a visible prompt is never settled to
+# stop. These are English-only and exhaustive by construction, which is exactly
+# the limitation a user override exists to lift.
+blocking_prompt = [
+    "do you want to proceed",
+    "do you want to make this edit",
+    "do you want to create",
+    "do you want to allow",
+    "do you trust",
+    "would you like to",
+]
