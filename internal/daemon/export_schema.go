@@ -4,7 +4,7 @@ package daemon
 // field projection rather than a reuse of the current structs, so a field added
 // to the current schema can never leak into older output through a shared
 // nested type. This file holds the dispatch, the projection rules shared by all
-// compatibility schemas, and the v11/v10 shapes; v9 and v8 live in
+// compatibility schemas, and the v11/v10 shapes; v12, v9 and v8 live in
 // export_schema_legacy.go.
 
 import (
@@ -14,14 +14,16 @@ import (
 )
 
 // ProjectExportEventsPayload returns the requested public wire schema. Schemas
-// 8, 9, 10, and 11 are explicit field projections so fields added to the current
-// schema can never leak into compatibility output through shared nested
+// 8, 9, 10, 11, and 12 are explicit field projections so fields added to the
+// current schema can never leak into compatibility output through shared nested
 // structs.
 func ProjectExportEventsPayload(payload ExportEventsPayload, schema int) (any, error) {
 	switch schema {
 	case EventsExportSchemaVersion:
 		payload.SchemaVersion = EventsExportSchemaVersion
 		return payload, nil
+	case EventsExportSchemaV12:
+		return projectExportEventsPayloadV12(payload), nil
 	case EventsExportSchemaV11:
 		return projectExportEventsPayloadV11(payload), nil
 	case EventsExportSchemaV10:
@@ -31,7 +33,7 @@ func ProjectExportEventsPayload(payload ExportEventsPayload, schema int) (any, e
 	case EventsExportSchemaV8:
 		return projectExportEventsPayloadV8(payload), nil
 	default:
-		return nil, fmt.Errorf("unsupported export schema %d (want 8, 9, 10, 11, or 12)", schema)
+		return nil, fmt.Errorf("unsupported export schema %d (want 8, 9, 10, 11, 12, or 13)", schema)
 	}
 }
 
@@ -83,9 +85,11 @@ type exportWindowV11 struct {
 	Durable  WindowDebugDurable   `json:"durable"`
 	Renderer WindowDebugRenderer  `json:"renderer"`
 	Shadow   windowDebugShadowV11 `json:"shadow"`
-	Watchdog WindowDebugWatchdog  `json:"watchdog"`
-	Live     WindowLiveMetadata   `json:"live"`
-	Events   []SessionEvent       `json:"events"`
+	// The watchdog is pinned to the v12 shape: schema v13 added decline
+	// counters, which a v11 consumer has never seen.
+	Watchdog windowDebugWatchdogV12 `json:"watchdog"`
+	Live     WindowLiveMetadata     `json:"live"`
+	Events   []SessionEvent         `json:"events"`
 }
 
 // windowDebugShadowV11 pins the schema-v11 shadow shape: everything the current
@@ -118,9 +122,10 @@ type exportWindowV10 struct {
 	Durable  WindowDebugDurable   `json:"durable"`
 	Renderer WindowDebugRenderer  `json:"renderer"`
 	Shadow   windowDebugShadowV10 `json:"shadow"`
-	Watchdog WindowDebugWatchdog  `json:"watchdog"`
-	Live     WindowLiveMetadata   `json:"live"`
-	Events   []sessionEventV10    `json:"events"`
+	// Pinned to the v12 watchdog shape for the same reason as exportWindowV11.
+	Watchdog windowDebugWatchdogV12 `json:"watchdog"`
+	Live     WindowLiveMetadata     `json:"live"`
+	Events   []sessionEventV10      `json:"events"`
 }
 
 // windowDebugShadowV10 pins the schema-v10 shadow shape: everything the current
@@ -168,7 +173,7 @@ func projectExportEventsPayloadV11(payload ExportEventsPayload) exportEventsPayl
 		out.Windows = append(out.Windows, exportWindowV11{
 			WindowID: window.WindowID, Stats: window.Stats, Durable: window.Durable,
 			Renderer: window.Renderer, Shadow: projectWindowDebugShadowV11(window.Shadow),
-			Watchdog: window.Watchdog, Live: window.Live, Events: window.Events,
+			Watchdog: projectWindowDebugWatchdogV12(window.Watchdog), Live: window.Live, Events: window.Events,
 		})
 	}
 	return out
@@ -195,7 +200,7 @@ func projectExportEventsPayloadV10(payload ExportEventsPayload) exportEventsPayl
 		out.Windows = append(out.Windows, exportWindowV10{
 			WindowID: window.WindowID, Stats: projectCompatibilityWindowDebugStats(window.Stats), Durable: window.Durable,
 			Renderer: window.Renderer, Shadow: projectWindowDebugShadowV10(window.Shadow),
-			Watchdog: window.Watchdog, Live: window.Live, Events: events,
+			Watchdog: projectWindowDebugWatchdogV12(window.Watchdog), Live: window.Live, Events: events,
 		})
 	}
 	return out

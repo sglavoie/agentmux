@@ -152,7 +152,17 @@ func (h *Handler) probeScreenIdleWindow(
 		// classifier that has stopped matching a redesigned harness UI is a
 		// counter someone can read rather than a debug line someone has to be
 		// tailing at the right moment.
-		decline := h.RecordScreenProbeDecline(targetWindowID, source, obs.Fingerprint)
+		// The same three values the log line below prints are also handed to the
+		// recorder, which publishes them on the window's export metadata: a
+		// classifier that stopped matching a redesigned harness UI is then a
+		// counter plus the exact copy it refused, rather than a debug line
+		// someone has to be tailing at the right moment.
+		decline := h.RecordScreenProbeDecline(targetWindowID, source, ScreenDeclineEvidence{
+			Fingerprint: obs.Fingerprint,
+			Vetoes:      obs.Vetoes.String(),
+			StatusLine:  obs.StatusLine,
+			At:          now.Unix(),
+		})
 		slog.Debug("screen stop probe: not settleable", "harness", spec.harness,
 			"target_window_id", targetWindowID,
 			"source_window_id", binding.SourceWindowID,

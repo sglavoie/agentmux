@@ -1,12 +1,85 @@
 package daemon
 
-// The schema-v9 and schema-v8 wire shapes and their projections. Each newer
-// event shape embeds the one below it, so the pinned structs here also define
-// what every later compatibility projection inherits: changing a field in this
-// file changes v10 and v11 output too. The dispatch and the shared
+// The schema-v12, schema-v9, and schema-v8 wire shapes and their projections.
+// Each newer event shape embeds the one below it, so the pinned structs here
+// also define what every later compatibility projection inherits: changing a
+// field in this file changes v10 and v11 output too. The dispatch and the shared
 // compatibility rules live in export_schema.go.
 
 import "github.com/sglavoie/agentmux/internal/buildinfo"
+
+type exportEventsPayloadV12 struct {
+	SchemaVersion int                  `json:"schema_version"`
+	ExportedAt    int64                `json:"exported_at"`
+	Daemon        ExportDaemonMetadata `json:"daemon"`
+	CLIBuild      *buildinfo.Info      `json:"cli_build,omitempty"`
+	Windows       []exportWindowV12    `json:"windows"`
+}
+
+// exportWindowV12 is the current window shape with the watchdog pinned. Schema
+// v13 changed only the watchdog, so every other section is still the live type.
+type exportWindowV12 struct {
+	WindowID int                    `json:"window_id"`
+	Stats    WindowDebugStats       `json:"stats"`
+	Durable  WindowDebugDurable     `json:"durable"`
+	Renderer WindowDebugRenderer    `json:"renderer"`
+	Shadow   WindowDebugShadow      `json:"shadow"`
+	Watchdog windowDebugWatchdogV12 `json:"watchdog"`
+	Live     WindowLiveMetadata     `json:"live"`
+	Events   []SessionEvent         `json:"events"`
+}
+
+// windowDebugWatchdogV12 pins every watchdog field through schema v12: the v13
+// screen-probe decline counters are deliberately absent. The v11 and v10
+// projections use it too — they carried the watchdog as the live struct because
+// nothing had changed it since v9, and this is the change that makes pinning it
+// necessary for all three.
+type windowDebugWatchdogV12 struct {
+	LastEvent                  string `json:"last_event,omitempty"`
+	LastReason                 string `json:"last_reason,omitempty"`
+	LastAt                     int64  `json:"last_at,omitempty"`
+	SourceExpiries             int    `json:"source_expiries,omitempty"`
+	StaleSweeps                int    `json:"stale_sweeps,omitempty"`
+	Reconciles                 int    `json:"reconciles,omitempty"`
+	ProcessExits               int    `json:"process_exits,omitempty"`
+	LastProcessExitReason      string `json:"last_process_exit_reason,omitempty"`
+	LastProcessExitObservation string `json:"last_process_exit_observation,omitempty"`
+	LastProcessExitAt          int64  `json:"last_process_exit_at,omitempty"`
+	ClosedAt                   int64  `json:"closed_at,omitempty"`
+}
+
+func projectExportEventsPayloadV12(payload ExportEventsPayload) exportEventsPayloadV12 {
+	out := exportEventsPayloadV12{
+		SchemaVersion: EventsExportSchemaV12,
+		ExportedAt:    payload.ExportedAt,
+		Daemon:        payload.Daemon,
+		CLIBuild:      payload.CLIBuild,
+	}
+	if payload.Windows != nil {
+		out.Windows = make([]exportWindowV12, 0, len(payload.Windows))
+	}
+	for _, window := range payload.Windows {
+		out.Windows = append(out.Windows, exportWindowV12{
+			WindowID: window.WindowID, Stats: window.Stats, Durable: window.Durable,
+			Renderer: window.Renderer, Shadow: window.Shadow,
+			Watchdog: projectWindowDebugWatchdogV12(window.Watchdog),
+			Live:     window.Live, Events: window.Events,
+		})
+	}
+	return out
+}
+
+func projectWindowDebugWatchdogV12(watchdog WindowDebugWatchdog) windowDebugWatchdogV12 {
+	return windowDebugWatchdogV12{
+		LastEvent: watchdog.LastEvent, LastReason: watchdog.LastReason, LastAt: watchdog.LastAt,
+		SourceExpiries: watchdog.SourceExpiries, StaleSweeps: watchdog.StaleSweeps,
+		Reconciles: watchdog.Reconciles, ProcessExits: watchdog.ProcessExits,
+		LastProcessExitReason:      watchdog.LastProcessExitReason,
+		LastProcessExitObservation: watchdog.LastProcessExitObservation,
+		LastProcessExitAt:          watchdog.LastProcessExitAt,
+		ClosedAt:                   watchdog.ClosedAt,
+	}
+}
 
 type exportEventsPayloadV9 struct {
 	SchemaVersion int                  `json:"schema_version"`

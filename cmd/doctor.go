@@ -19,6 +19,11 @@ const doctorSuppressionWindow = 15 * time.Minute
 
 // doctorReportSchemaVersion versions the `amx doctor --json` payload.
 //
+// v3 adds the `screenstate_persistent_decline` finding, raised when the screen
+// classifier has refused the same unchanging frame on a live ⚡ window long
+// enough that a harness UI change is the only ordinary explanation. Its
+// severity is failure, which is exactly the case the policy below bumps for.
+//
 // v2 adds `daemon.asl_reconcile`, `daemon.asl_hook_delivery`, and the
 // `asl_integration` block, and with it six new stable finding identifiers.
 // The bump is not for the added fields — those are additive — but for the
@@ -26,7 +31,7 @@ const doctorSuppressionWindow = 15 * time.Minute
 // not recognize as fatal would start failing on conditions a v1 daemon never
 // reported. The two identifiers that predate it, `asl_unavailable` and
 // `asl_read_only`, keep their exact names and meanings.
-const doctorReportSchemaVersion = 2
+const doctorReportSchemaVersion = 3
 
 // exitHealthFailure is the strict-mode exit status when any failure-severity
 // finding is present (shared with `amx daemon audit`).

@@ -123,7 +123,12 @@ The hermetic process-exit fixture and optional installed drill are documented in
 
 ## Investigating hook event flow
 
-`amx daemon export-events` writes a schema v12 JSON snapshot for investigation.
+`amx daemon export-events` writes a schema v13 JSON snapshot for investigation.
+Version 13 adds the screen classifier's live decline counters under
+`watchdog.screen_declines`: one entry per probe source that currently holds a
+streak, carrying the streak, whether the declined frame's fingerprint is stable,
+the veto set, and the status line that caused the refusal. Windows whose probe
+settles or was never eligible carry no entry at all, which is the ordinary case.
 Version 12 establishes the compatibility boundary for the shadow's
 `busy_since_at` busy-stretch anchor. Version 11 adds bounded terminal-stop-hold evidence: synthetic
 `TerminalStopHold` events, the per-event `stop_hold_outcome`,
@@ -137,10 +142,12 @@ trace/request/source-event identities, sanitized reducer
 inputs and outcomes, routing evidence, request-scoped saturation, bounded
 render generations, notification dispositions, and child-probe links. Raw
 payloads, prompts, tool arguments, and transcript text are not included.
-Pass `--schema 11` for the pre-busy-anchor contract, `--schema 10` for the
+Pass `--schema 12` for the pre-decline-counter contract, `--schema 11` for the
+pre-busy-anchor contract, `--schema 10` for the
 pre-stop-hold contract, `--schema 9` for the previous complete causal contract,
-or `--schema 8` for the pre-causal contract. All four are explicit compatibility
-projections: schema 11 cannot expose the v12 busy-stretch anchor, schema 10
+or `--schema 8` for the pre-causal contract. All five are explicit compatibility
+projections: schema 12 and every schema below it cannot expose the v13 decline
+counters, schema 11 cannot expose the v12 busy-stretch anchor, schema 10
 cannot expose v11 stop-hold fields and drops `TerminalStopHold` rows entirely,
 schema 9 cannot expose v10 process fields, and schema 8 cannot expose v9 or v10
 fields.
@@ -151,7 +158,7 @@ acknowledgement timestamp `shadow.facts[].aa` for acknowledged facts. Version 7
 retains every v6 field and adds the interactive-ownership `pm` flag to
 pipe-mode source facts (`shadow.facts[].pm`) plus the reducer-wide causal order
 `o` used to compare equal-timestamp facts across sources (`shadow.facts[].o`).
-Each schema-v12 `shadow.facts[]` entry serializes the reducer's
+Each schema-v13 `shadow.facts[]` entry serializes the reducer's
 `SourceFactSnapshot` directly, so it uses that type's
 compact wire keys — `k` (source kind), `y` (source key), `i` (icon), `o`
 (source-independent causal application order), `ow` (producer pane), `aa`
@@ -178,7 +185,7 @@ window can be inspected without paired map lookups:
 
 ```json
 {
-  "schema_version": 12,
+  "schema_version": 13,
   "daemon": { "pid": 1234, "uptime_seconds": 97, "ready": true, "build": { ... }, "metrics": { ... } },
   "cli_build": { ... },
   "windows": [
@@ -188,7 +195,7 @@ window can be inspected without paired map lookups:
       "durable": { ... },
       "renderer": { "desired_icon": "bolt", "state_set": true, "render_failures": 0, "queued_gen": 7, "rendered_gen": 7, "generations": [ { "generation": 7, "source_event_ids": ["run-1:2"], "stage": "rendered", "outcome": "success" } ] },
       "shadow": { "effective_icon": "bolt", "effective_looping": true, "busy_since_at": 1700000000, "facts": [ { "k": "harness", "y": "claude:sess-pipe", "i": "bolt", "o": 10, "ow": 91, "ph": "claude", "pp": 4321, "pt": "Mon Jul 13 10:11:12 2026", "pm": true }, { "k": "harness", "y": "claude:sess-1", "i": "bolt", "o": 11, "ow": 42, "ph": "claude", "pp": 4322, "pt": "Mon Jul 13 10:15:20 2026" }, { "k": "harness", "y": "claude:sess-old", "i": "bolt", "o": 9, "ak": true, "aa": 1700000000, "ow": 91 } ] },
-      "watchdog": { "last_event": "HarnessProcessExited", "last_reason": "pipe_process_exited", "process_exits": 1, "last_process_exit_reason": "pipe_process_exited", "last_process_exit_observation": "missing" },
+      "watchdog": { "last_event": "HarnessProcessExited", "last_reason": "pipe_process_exited", "process_exits": 1, "last_process_exit_reason": "pipe_process_exited", "last_process_exit_observation": "missing", "screen_declines": [ { "source": "codex_screen_prompt", "streak": 61, "stable_fingerprint": true, "fingerprint": 4369, "vetoes": "working_status_line", "status_line": "Working (12s · esc to interrupt)", "at": 1700000000 } ] },
       "live": { "found": true, ... },
       "events": [ { "at": 1700000001, "event": "Stop", "action": "stop", "result_icon_state": "stop", "trace_id": "…", "request_id": "…", "source_event_id": "run-1:2", "parse_outcome": "decoded", "normalization_outcome": "normalized", "source_kind": "harness", "source_key": "claude:sess-1", "route_decision": "owner", "origin_window_id": 91, "reducer_decision": "applied", "render_generation": 7, "render_outcome": "success" } ]
     }

@@ -32,6 +32,19 @@ func screenDeclineState(t *testing.T, h *Handler, windowID int, source SourceID)
 	return streak, fingerprint, present
 }
 
+// declineEvidence is the ordinary shape of one declined frame: a fingerprint
+// plus the diagnostic context the export publishes. Tests that only care about
+// the counter still hand over a veto set and a status line, because a recorder
+// that dropped them would otherwise pass.
+func declineEvidence(fingerprint int64) ScreenDeclineEvidence {
+	return ScreenDeclineEvidence{
+		Fingerprint: fingerprint,
+		Vetoes:      "working_status_line",
+		StatusLine:  "Working (12s · esc to interrupt)",
+		At:          1700000000,
+	}
+}
+
 // TestRecordScreenDeclineLockedStreakAndStability walks the counter through
 // every transition it has. It runs against a bare Handler literal on purpose:
 // that is the nil-map case the write-site guards exist for, and the pattern
@@ -45,7 +58,7 @@ func TestRecordScreenDeclineLockedStreakAndStability(t *testing.T) {
 		t.Helper()
 		h.stateMu.Lock()
 		defer h.stateMu.Unlock()
-		return h.recordScreenDeclineLocked(ref, fingerprint)
+		return h.recordScreenDeclineLocked(ref, ScreenDeclineEvidence{Fingerprint: fingerprint})
 	}
 
 	steps := []struct {
@@ -111,7 +124,7 @@ func TestRecordScreenProbeDeclineResetsIdleSampleAtomically(t *testing.T) {
 	}
 	h.stateMu.Unlock()
 
-	got := h.RecordScreenProbeDecline(7, source, 0x1111)
+	got := h.RecordScreenProbeDecline(7, source, declineEvidence(0x1111))
 	if got.Streak != 1 || got.StableFingerprint {
 		t.Fatalf("first decline = %+v, want streak 1 and an unstable fingerprint", got)
 	}
@@ -125,7 +138,7 @@ func TestRecordScreenProbeDeclineResetsIdleSampleAtomically(t *testing.T) {
 			idleStreak, idlePresent, genPresent)
 	}
 
-	if got := h.RecordScreenProbeDecline(7, source, 0x1111); got.Streak != 2 || !got.StableFingerprint {
+	if got := h.RecordScreenProbeDecline(7, source, declineEvidence(0x1111)); got.Streak != 2 || !got.StableFingerprint {
 		t.Fatalf("second decline on the same screen = %+v, want streak 2 and a stable fingerprint", got)
 	}
 
@@ -135,7 +148,7 @@ func TestRecordScreenProbeDeclineResetsIdleSampleAtomically(t *testing.T) {
 	if _, _, present := screenDeclineState(t, h, 7, source); present {
 		t.Fatalf("ClearScreenProbeDecline left a streak behind")
 	}
-	if got := h.RecordScreenProbeDecline(7, source, 0x1111); got.Streak != 1 || got.StableFingerprint {
+	if got := h.RecordScreenProbeDecline(7, source, declineEvidence(0x1111)); got.Streak != 1 || got.StableFingerprint {
 		t.Fatalf("decline after clear = %+v, want streak 1 and an unstable fingerprint", got)
 	}
 }
@@ -148,12 +161,12 @@ func TestScreenProbeDeclineStreaksDoNotCollide(t *testing.T) {
 	codex := SourceID{Kind: SourceProbe, Key: screenPromptProbeSource}
 	claude := SourceID{Kind: SourceProbe, Key: claudeScreenStopProbeSource}
 
-	h.RecordScreenProbeDecline(7, codex, 0x1111)
-	h.RecordScreenProbeDecline(7, codex, 0x1111)
-	if got := h.RecordScreenProbeDecline(7, claude, 0x9999); got.Streak != 1 {
+	h.RecordScreenProbeDecline(7, codex, declineEvidence(0x1111))
+	h.RecordScreenProbeDecline(7, codex, declineEvidence(0x1111))
+	if got := h.RecordScreenProbeDecline(7, claude, declineEvidence(0x9999)); got.Streak != 1 {
 		t.Fatalf("claude streak on the same window = %d, want its own count of 1", got.Streak)
 	}
-	if got := h.RecordScreenProbeDecline(8, codex, 0x1111); got.Streak != 1 {
+	if got := h.RecordScreenProbeDecline(8, codex, declineEvidence(0x1111)); got.Streak != 1 {
 		t.Fatalf("codex streak on a second window = %d, want its own count of 1", got.Streak)
 	}
 	if streak, _, _ := screenDeclineState(t, h, 7, codex); streak != 2 {
@@ -171,9 +184,9 @@ func TestScreenProbeDeclineStreakPurgedOnWindowClose(t *testing.T) {
 	idleSeedHarness(t, h, 7, "cur-7", "active", time.Now().Unix())
 	idleSeedHarness(t, h, 8, "cur-8", "active", time.Now().Unix())
 
-	h.RecordScreenProbeDecline(7, source, 0x1111)
-	h.RecordScreenProbeDecline(7, source, 0x1111)
-	h.RecordScreenProbeDecline(8, source, 0x2222)
+	h.RecordScreenProbeDecline(7, source, declineEvidence(0x1111))
+	h.RecordScreenProbeDecline(7, source, declineEvidence(0x1111))
+	h.RecordScreenProbeDecline(8, source, declineEvidence(0x2222))
 
 	// Kitty still reports window 8, so only window 7's streak goes.
 	h.pruneClosedWindows(time.Now(), map[int]bool{8: true})

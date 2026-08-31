@@ -273,36 +273,63 @@ type ScreenDeclineObservation struct {
 	StableFingerprint bool
 }
 
+// ScreenDeclineEvidence is one declined frame's diagnostic context, recorded
+// alongside the streak it extends. Fingerprint is a decision input — it decides
+// whether the streak continues or restarts — while Vetoes, StatusLine and At
+// exist purely to be published: they are what tells an operator WHICH harness
+// copy the classifier stopped matching, which a bare counter cannot.
+type ScreenDeclineEvidence struct {
+	// Fingerprint is the normalized-screen fingerprint of the declined frame,
+	// the same value the stabilization gate would have compared.
+	Fingerprint int64
+	// Vetoes is screenstate.Veto.String() for the frame: the named reasons Layer
+	// A refused, already rendered by the caller so this package never has to
+	// know the bitset's spelling.
+	Vetoes string
+	// StatusLine is the harness status line the frame carried, empty when the
+	// classifier found none.
+	StatusLine string
+	// At is when the decline was observed (unix seconds).
+	At int64
+}
+
 // recordScreenDeclineLocked credits one declined settle for the ref against the
 // fingerprint the frame carried, and returns the resulting decline state. A
 // fingerprint that differs from the one the streak is accumulating against
 // restarts the streak before this decline is counted, so the streak only ever
-// measures repeated refusals of the same screen. Callers hold stateMu.
-func (h *Handler) recordScreenDeclineLocked(ref idleSampleRef, fingerprint int64) ScreenDeclineObservation {
+// measures repeated refusals of the same screen. The frame's remaining evidence
+// is retained for export. Callers hold stateMu.
+func (h *Handler) recordScreenDeclineLocked(ref idleSampleRef, evidence ScreenDeclineEvidence) ScreenDeclineObservation {
 	if h.screenProbeDeclineStreak == nil {
 		h.screenProbeDeclineStreak = make(map[idleSampleRef]int)
 	}
 	if h.screenProbeDeclineFingerprint == nil {
 		h.screenProbeDeclineFingerprint = make(map[idleSampleRef]int64)
 	}
-	if prev, ok := h.screenProbeDeclineFingerprint[ref]; !ok || prev != fingerprint {
+	if h.screenProbeDeclineEvidence == nil {
+		h.screenProbeDeclineEvidence = make(map[idleSampleRef]ScreenDeclineEvidence)
+	}
+	if prev, ok := h.screenProbeDeclineFingerprint[ref]; !ok || prev != evidence.Fingerprint {
 		delete(h.screenProbeDeclineStreak, ref)
-		h.screenProbeDeclineFingerprint[ref] = fingerprint
+		h.screenProbeDeclineFingerprint[ref] = evidence.Fingerprint
 	}
 	h.screenProbeDeclineStreak[ref]++
+	h.screenProbeDeclineEvidence[ref] = evidence
 	streak := h.screenProbeDeclineStreak[ref]
 	return ScreenDeclineObservation{
 		Streak:            streak,
-		Fingerprint:       fingerprint,
-		StableFingerprint: fingerprint != 0 && streak > 1,
+		Fingerprint:       evidence.Fingerprint,
+		StableFingerprint: evidence.Fingerprint != 0 && streak > 1,
 	}
 }
 
-// clearScreenDeclineLocked drops a probe source's decline streak and the
-// fingerprint it was accumulating against. Callers hold stateMu.
+// clearScreenDeclineLocked drops a probe source's decline streak, the
+// fingerprint it was accumulating against, and the evidence of the frame that
+// last extended it. Callers hold stateMu.
 func (h *Handler) clearScreenDeclineLocked(ref idleSampleRef) {
 	delete(h.screenProbeDeclineStreak, ref)
 	delete(h.screenProbeDeclineFingerprint, ref)
+	delete(h.screenProbeDeclineEvidence, ref)
 }
 
 // RecordScreenProbeDecline resets a probe source's stabilization streak AND
@@ -311,13 +338,19 @@ func (h *Handler) clearScreenDeclineLocked(ref idleSampleRef) {
 // behaviour ClearIdleSample already performed on this path, the credit is the
 // diagnostic record of why, and taking the lock twice would leave a window in
 // which the streak is cleared but the decline that cleared it is not yet
-// counted. Safe to call off the state lock.
-func (h *Handler) RecordScreenProbeDecline(windowID int, source SourceID, fingerprint int64) ScreenDeclineObservation {
+// counted. The window's export metadata is republished in the same critical
+// section, so the counter a diagnostic surface reads can never describe a
+// different frame than the one just credited.
+//
+// Safe to call off the state lock.
+func (h *Handler) RecordScreenProbeDecline(windowID int, source SourceID, evidence ScreenDeclineEvidence) ScreenDeclineObservation {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	ref := idleSampleRef{windowID: windowID, key: source.Key}
 	h.clearIdleSampleLocked(ref)
-	return h.recordScreenDeclineLocked(ref, fingerprint)
+	decline := h.recordScreenDeclineLocked(ref, evidence)
+	h.syncScreenDeclineMetadataLocked(windowID)
+	return decline
 }
 
 // ClearScreenProbeDecline drops a probe source's decline streak. Callers use it
@@ -328,6 +361,7 @@ func (h *Handler) ClearScreenProbeDecline(windowID int, source SourceID) {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	h.clearScreenDeclineLocked(idleSampleRef{windowID: windowID, key: source.Key})
+	h.syncScreenDeclineMetadataLocked(windowID)
 }
 
 // applyAuthoritativeIdle atomically folds one idle observation into a window's

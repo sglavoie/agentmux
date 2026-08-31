@@ -42,7 +42,20 @@ const (
 	checkAcknowledgedPressure     = "acknowledged_fact_pressure"
 	checkMalformedProcessIdentity = "malformed_process_identity"
 	checkStopHoldStuck            = "stop_hold_stuck"
+	checkScreenPersistentDecline  = "screenstate_persistent_decline"
 )
+
+// screenDeclinePersistentStreak is how many consecutive refusals of the SAME
+// unchanging screen turn a screen-probe decline streak into a health failure.
+// The probe ticks every renderInterval (2s), so this is two minutes.
+//
+// The conjunction is what makes it safe: a pane doing real work repaints its
+// elapsed timer, which changes the fingerprint and restarts the streak at one,
+// so no amount of legitimate activity can reach this. A streak this long with a
+// stable fingerprint means the screen went quiet and the classifier vetoed it
+// anyway while the tab kept showing ⚡ — the exact signature of a harness UI
+// change the compiled-in patterns no longer match.
+const screenDeclinePersistentStreak = 60
 
 const (
 	ownerMismatchBurstCount          = 3
@@ -246,6 +259,30 @@ func evaluateDaemonInvariants(snapshot daemon.EventsExport, health daemon.Health
 					"terminal stop held for %ds, past %dx the %ds stop_confirm timeout; the window still shows icon %q",
 					armedFor, stopHoldStuckTimeoutMultiple, timeout, desired)
 			}
+		}
+
+		// A screen classifier that has stopped matching its harness's UI leaves
+		// the tab holding ⚡ forever and reports nothing: the patterns simply
+		// never fire. The decline counter is the daemon watching itself refuse,
+		// and only the streak-plus-stable-fingerprint conjunction is evidence —
+		// see screenDeclinePersistentStreak. The vetoes and status line are
+		// carried into the message because they are what an operator diffs
+		// against the shipped patterns to find the copy that changed.
+		for _, decline := range meta.Watchdog.ScreenDeclines {
+			if !decline.StableFingerprint || decline.Streak < screenDeclinePersistentStreak {
+				continue
+			}
+			statusLine := decline.StatusLine
+			if strings.TrimSpace(statusLine) == "" {
+				statusLine = "(none)"
+			}
+			vetoes := decline.Vetoes
+			if strings.TrimSpace(vetoes) == "" {
+				vetoes = "(none)"
+			}
+			add(severityFailure, checkScreenPersistentDecline, id,
+				"screen probe %q declined the same unchanging screen %d consecutive times (threshold %d); vetoes=%s status line=%q — the classifier may no longer match this harness's UI",
+				decline.Source, decline.Streak, screenDeclinePersistentStreak, vetoes, statusLine)
 		}
 
 		// Post-cutover the reducer's effective state IS the visible state; a

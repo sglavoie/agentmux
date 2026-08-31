@@ -242,6 +242,15 @@ type Handler struct {
 	// the same unchanging screen this many times". Guarded by stateMu.
 	screenProbeDeclineFingerprint map[idleSampleRef]int64
 
+	// screenProbeDeclineEvidence records the diagnostic context of the frame
+	// that last extended each decline streak: the named vetoes and the status
+	// line the classifier read. It is deliberately separate from
+	// screenProbeDeclineFingerprint even though both describe the same frame —
+	// the fingerprint is a decision input (it restarts the streak), this is pure
+	// post-mortem text that is published and never read back. Guarded by
+	// stateMu.
+	screenProbeDeclineEvidence map[idleSampleRef]ScreenDeclineEvidence
+
 	// reducerCfg holds the deterministic thresholds handed to each window's
 	// shadow reducer. Set once at startup from [defaults.watchdog] and
 	// guard_duration (SetReducerConfig); the zero value disables the reducer's
@@ -377,6 +386,7 @@ func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 		idleSampleGen:                  make(map[idleSampleRef]int64),
 		screenProbeDeclineStreak:       make(map[idleSampleRef]int),
 		screenProbeDeclineFingerprint:  make(map[idleSampleRef]int64),
+		screenProbeDeclineEvidence:     make(map[idleSampleRef]ScreenDeclineEvidence),
 		lastSeenEventAt:                make(map[string]time.Time),
 		notifiedHookSilence:            make(map[string]bool),
 		hookSilenceIdle:                make(map[string]*accountIdle),

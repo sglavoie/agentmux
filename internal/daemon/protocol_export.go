@@ -13,7 +13,12 @@ type EventsExport struct {
 }
 
 // EventsExportSchemaVersion is the current JSON schema version emitted by
-// `amx daemon export-events`. Version 12 adds the shadow's busy-stretch anchor
+// `amx daemon export-events`. Version 13 adds the watchdog's screen-probe
+// decline counters: per probe source, how many consecutive frames the screen
+// classifier refused to grade as a settleable terminal, whether those refusals
+// carried a stable fingerprint, and the vetoes and status line of the frame
+// that last extended the streak.
+// Version 12 adds the shadow's busy-stretch anchor
 // used to diagnose how long a window has remained active. Version 11 adds
 // bounded terminal-stop-hold evidence: synthetic `TerminalStopHold` rows,
 // per-event hold outcome, waited duration, and confirming evidence, plus the
@@ -32,7 +37,8 @@ type EventsExport struct {
 // readiness, build identity, and request metrics (queue saturation and
 // latency).
 const (
-	EventsExportSchemaVersion = 12
+	EventsExportSchemaVersion = 13
+	EventsExportSchemaV12     = 12
 	EventsExportSchemaV11     = 11
 	EventsExportSchemaV10     = 10
 	EventsExportSchemaV9      = 9

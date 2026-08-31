@@ -62,9 +62,10 @@ func writeDoctorNotificationCapability(out io.Writer, capability *daemon.Notific
 // pattern override the daemon could not use. It is WARNING severity on
 // purpose: the daemon kept classifying with the embedded default, so this is
 // degraded-but-working and must not trip `--strict` on its own. That severity
-// choice is also why doctorReportSchemaVersion stays at 2 — see the policy
-// comment on that constant, which bumps for new failure identifiers because a
-// strict consumer treats an unknown failure as fatal.
+// choice is also why this identifier required no doctorReportSchemaVersion bump
+// of its own — see the policy comment on that constant, which bumps for new
+// failure identifiers because a strict consumer treats an unknown failure as
+// fatal.
 const checkScreenPatternOverrideInvalid = "screenstate_override_invalid"
 
 // writeDoctorScreenPatterns reports which UI-copy pattern set the classifier is

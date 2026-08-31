@@ -69,7 +69,7 @@ func stopHoldExportJSON(t *testing.T, schema int) map[string]any {
 }
 
 func TestProjectExportEventsPayloadV12RoundTripsStopHoldFields(t *testing.T) {
-	raw := stopHoldExportJSON(t, EventsExportSchemaVersion)
+	raw := stopHoldExportJSON(t, EventsExportSchemaV12)
 	if got := int(raw["schema_version"].(float64)); got != 12 {
 		t.Fatalf("schema_version = %d; want 12", got)
 	}
@@ -115,7 +115,7 @@ func TestProjectExportEventsPayloadV11IdentityProjection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ProjectExportEventsPayload(v11): %v", err)
 	}
-	projectedV12, err := ProjectExportEventsPayload(payload, EventsExportSchemaVersion)
+	projectedV12, err := ProjectExportEventsPayload(payload, EventsExportSchemaV12)
 	if err != nil {
 		t.Fatalf("ProjectExportEventsPayload(v12): %v", err)
 	}

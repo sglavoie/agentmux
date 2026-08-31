@@ -63,6 +63,44 @@ type WindowDebugWatchdog struct {
 	// garbage-collected and this metadata is retained (bounded) for
 	// post-mortem export only. Tombstones never count as renderer drift.
 	ClosedAt int64 `json:"closed_at,omitempty"`
+	// ScreenDeclines publishes the screen classifier's live decline counters for
+	// this window, one entry per probe source that currently holds a streak.
+	// Empty (and so omitted) for every window whose probe either settled or was
+	// never eligible, which is the ordinary case.
+	ScreenDeclines []ScreenDeclineSnapshot `json:"screen_declines,omitempty"`
+}
+
+// ScreenDeclineSnapshot is one screen-probe source's current decline streak
+// plus the evidence from the frame that last extended it. It is the exported
+// half of the daemon's answer to the question the classifier cannot answer for
+// itself: a harness that redesigns its TUI does not report the change, it just
+// stops matching, and the tab holds ⚡ forever. A long streak carried by a
+// STABLE fingerprint is that failure's signature — the screen went quiet and
+// Layer A vetoed it anyway — so Streak and StableFingerprint are only ever
+// meaningful together.
+type ScreenDeclineSnapshot struct {
+	// Source is the SourceProbe key the streak is keyed by (one per harness
+	// probe), so a window that somehow carries both never reports a merged
+	// count.
+	Source string `json:"source"`
+	// Streak counts consecutive declines of the SAME screen; it restarts at one
+	// whenever the fingerprint changes.
+	Streak int `json:"streak"`
+	// StableFingerprint reports whether the streak has now refused the same
+	// unchanging screen at least twice. A repainting pane is healthy live work
+	// and never reaches it.
+	StableFingerprint bool `json:"stable_fingerprint,omitempty"`
+	// Fingerprint is the normalized-screen hash the streak accumulates against.
+	Fingerprint int64 `json:"fingerprint,omitempty"`
+	// Vetoes is screenstate.Veto.String() for the last declined frame: the named
+	// reasons Layer A refused, not a bitset.
+	Vetoes string `json:"vetoes,omitempty"`
+	// StatusLine is the harness status line the last declined frame carried. It
+	// is what an operator diffs against the shipped patterns to see which copy
+	// changed.
+	StatusLine string `json:"status_line,omitempty"`
+	// At is when the last decline was credited (unix seconds).
+	At int64 `json:"at,omitempty"`
 }
 
 // WindowDebugShadow reports the shadow reducer's view of a window: its current

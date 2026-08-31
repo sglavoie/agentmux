@@ -79,6 +79,11 @@ func (h *Handler) pruneClosedWindows(now time.Time, liveIDs map[int]bool) {
 			delete(h.screenProbeDeclineFingerprint, ref)
 		}
 	}
+	for ref := range h.screenProbeDeclineEvidence {
+		if _, ok := closed[ref.windowID]; ok {
+			delete(h.screenProbeDeclineEvidence, ref)
+		}
+	}
 	// A tombstoned ID that Kitty reports live again is a reused window, not a
 	// closed one: resurrect it so its diagnostics resume live and it can count
 	// as renderer drift again.
@@ -122,6 +127,10 @@ func (h *Handler) recordWindowClosedLocked(windowID int, now time.Time) {
 	meta.Watchdog.LastReason = "window no longer reported by kitty; live state garbage-collected"
 	meta.Watchdog.LastAt = now.Unix()
 	meta.Watchdog.ClosedAt = now.Unix()
+	// The live decline maps are purged for this window in the same critical
+	// section, so a retained streak here would be a count the daemon can no
+	// longer explain, advance, or clear.
+	meta.Watchdog.ScreenDeclines = nil
 	h.windowMetadata[windowID] = meta
 	if h.windowTombstones == nil {
 		h.windowTombstones = make(map[int]time.Time)

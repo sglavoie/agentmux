@@ -143,6 +143,10 @@ func cloneWindowDebugMetadata(in WindowDebugMetadata) WindowDebugMetadata {
 		out.Shadow.Mismatches = make([]ShadowMismatch, len(in.Shadow.Mismatches))
 		copy(out.Shadow.Mismatches, in.Shadow.Mismatches)
 	}
+	if in.Watchdog.ScreenDeclines != nil {
+		out.Watchdog.ScreenDeclines = make([]ScreenDeclineSnapshot, len(in.Watchdog.ScreenDeclines))
+		copy(out.Watchdog.ScreenDeclines, in.Watchdog.ScreenDeclines)
+	}
 	out.Renderer.Generations = cloneRenderGenerationTraces(in.Renderer.Generations)
 	return out
 }

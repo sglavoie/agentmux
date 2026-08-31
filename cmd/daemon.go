@@ -426,8 +426,9 @@ complete causal shape, or --schema 8 for pre-causal consumers.`,
 			daemonExportEventsSchema != daemon.EventsExportSchemaV9 &&
 			daemonExportEventsSchema != daemon.EventsExportSchemaV10 &&
 			daemonExportEventsSchema != daemon.EventsExportSchemaV11 &&
+			daemonExportEventsSchema != daemon.EventsExportSchemaV12 &&
 			daemonExportEventsSchema != daemon.EventsExportSchemaVersion {
-			return fmt.Errorf("--schema must be 8, 9, 10, 11, or 12")
+			return fmt.Errorf("--schema must be 8, 9, 10, 11, 12, or 13")
 		}
 		requestedWindowID, err := resolveDaemonExportWindowID(cmd)
 		if err != nil {
@@ -488,7 +489,7 @@ func init() {
 	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsLast, "last", 0, "Keep only the last N events per exported window (0 = no limit)")
 	daemonExportEventsCmd.Flags().StringVar(&daemonExportEventsOutput, "output", "", "Write JSON to this file instead of stdout")
 	daemonExportEventsCmd.Flags().BoolVar(&daemonExportEventsPretty, "pretty", true, "Pretty-print JSON with 2-space indent")
-	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsSchema, "schema", daemon.EventsExportSchemaVersion, "Export schema version (8, 9, 10, 11, or 12)")
+	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsSchema, "schema", daemon.EventsExportSchemaVersion, "Export schema version (8, 9, 10, 11, 12, or 13)")
 
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd, daemonRestartCmd, daemonExportEventsCmd)
 }

@@ -267,8 +267,14 @@ func TestDoctorJSONEmitsStructuredReport(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatalf("output is not a single JSON report: %v\n%s", err, out.String())
 	}
-	if report.SchemaVersion != doctorReportSchemaVersion || report.Healthy {
-		t.Fatalf("report = schema %d healthy %t; want schema %d healthy=false", report.SchemaVersion, report.Healthy, doctorReportSchemaVersion)
+	// Pinned to a literal, not the constant: the wire version is a consumer
+	// contract, so a bump has to be a deliberate edit here. v3 arrived with the
+	// screenstate_persistent_decline failure identifier.
+	if report.SchemaVersion != 3 || report.Healthy {
+		t.Fatalf("report = schema %d healthy %t; want schema 3 healthy=false", report.SchemaVersion, report.Healthy)
+	}
+	if doctorReportSchemaVersion != report.SchemaVersion {
+		t.Fatalf("doctorReportSchemaVersion = %d; the emitted report must carry the constant", doctorReportSchemaVersion)
 	}
 	if !report.Daemon.Alive || !report.Daemon.Ready || report.Daemon.PID != 77 {
 		t.Fatalf("report.Daemon = %+v", report.Daemon)
