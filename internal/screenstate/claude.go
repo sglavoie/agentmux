@@ -65,7 +65,7 @@ func (claudeAdapter) Harness() string { return harness.Claude }
 
 // patterns resolves the pattern set this Classify call reads.
 func (a claudeAdapter) patterns() Patterns {
-	if a.Patterns.harness != "" {
+	if a.Patterns.Harness() != "" {
 		return a.Patterns
 	}
 	set, _ := PatternsFor(harness.Claude)

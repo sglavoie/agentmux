@@ -134,7 +134,7 @@ func (codexAdapter) Harness() string { return harness.Codex }
 
 // patterns resolves the pattern set this Classify call reads.
 func (a codexAdapter) patterns() Patterns {
-	if a.Patterns.harness != "" {
+	if a.Patterns.Harness() != "" {
 		return a.Patterns
 	}
 	return codexPatterns()

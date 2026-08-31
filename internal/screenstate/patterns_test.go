@@ -5,16 +5,23 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/contextlimit"
 )
 
 // restorePatterns snapshots the installed sets so a test that calls Load — which
-// mutates a package global by design — cannot leak into the next one.
+// mutates a package global by design — cannot leak into the next one. Load also
+// installs contextlimit's set in that package, so the snapshot spans both.
 func restorePatterns(t *testing.T) {
 	t.Helper()
 	patternsMu.RLock()
 	saved := patternSets
 	patternsMu.RUnlock()
-	t.Cleanup(func() { install(saved) })
+	savedContextLimit := contextlimit.InstalledPatterns()
+	t.Cleanup(func() {
+		install(saved)
+		contextlimit.InstallPatterns(savedContextLimit)
+	})
 }
 
 // writeOverride writes a screenstate override into a fresh config dir and
@@ -189,7 +196,12 @@ func TestDecodePatternsRejectsEmptyRequiredFields(t *testing.T) {
 // extraction sessions must be able to express: `allow AND permission`
 // (codex_prompt.go:55), `(nav || submit) && paneAction` (codex_prompt.go:90),
 // and the context-limit marker's nested three-group conditional
-// (contextlimit/marker.go:19-32).
+// (contextlimit.hasMarker).
+//
+// The third shape is expressible here but is NOT how contextlimit ships: that
+// conditional early-returns, which no all/any group can say, so session 5 kept
+// the shape in Go and externalized only the copy. This case stays as the
+// schema's proof that a three-group nest resolves.
 func TestPatternsMatchCoversAdapterBooleanShapes(t *testing.T) {
 	set, err := decodePatterns([]byte(`
 harness = "claude"
@@ -383,12 +395,12 @@ blocking_prompt = ["do you want to yodel"]
 	// Whole-file replacement, never a merge: nothing from the embedded default
 	// survives alongside the override.
 	embedded, _ := loadEmbedded()
-	for _, name := range sortedKeys(embedded["claude"].regexes) {
+	for _, name := range embedded["claude"].RegexNames() {
 		if set.Has(name) {
 			t.Fatalf("clause %q leaked from the embedded default; override must replace, not merge", name)
 		}
 	}
-	if len(set.regexes) != 0 || len(set.groups) != 0 || len(set.phrases) != 1 {
+	if len(set.RegexNames()) != 0 || len(set.GroupNames()) != 0 || len(set.PhraseNames()) != 1 {
 		t.Fatalf("installed set holds clauses the override did not declare: %+v", set)
 	}
 	if codex, ok := PatternsFor("codex"); !ok || codex.Source() != SourceEmbedded {

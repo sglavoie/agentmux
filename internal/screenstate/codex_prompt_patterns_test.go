@@ -1,7 +1,6 @@
 package screenstate
 
 import (
-	"regexp"
 	"strings"
 	"testing"
 )
@@ -105,27 +104,5 @@ func TestCodexPromptClausesGateTheSettlePaths(t *testing.T) {
 // withoutClause copies a pattern set with one clause removed, standing in for a
 // user override written against a different release.
 func withoutClause(patterns Patterns, name string) Patterns {
-	copied := Patterns{
-		harness: patterns.harness,
-		source:  patterns.source,
-		regexes: make(map[string]*regexp.Regexp, len(patterns.regexes)),
-		phrases: make(map[string][]string, len(patterns.phrases)),
-		groups:  make(map[string]Group, len(patterns.groups)),
-	}
-	for key, value := range patterns.regexes {
-		if key != name {
-			copied.regexes[key] = value
-		}
-	}
-	for key, value := range patterns.phrases {
-		if key != name {
-			copied.phrases[key] = value
-		}
-	}
-	for key, value := range patterns.groups {
-		if key != name {
-			copied.groups[key] = value
-		}
-	}
-	return copied
+	return patterns.Without(name)
 }

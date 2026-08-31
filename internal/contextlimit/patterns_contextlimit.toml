@@ -1,0 +1,87 @@
+# Default Claude Code context-limit patterns.
+#
+# This is Claude UI copy, but it lives here rather than in
+# internal/screenstate/patterns_claude.toml because internal/screenstate
+# imports THIS package (claude.go, for the context-limit veto) and Go forbids
+# the cycle that reading it from there would need. The package boundary is what
+# decides the file's home; the override still lives beside the screenstate ones,
+# at <config>/screenstate/contextlimit.toml, because a user reasoning about
+# "what the screen classifier matches" does not care which Go package the copy
+# happens to sit in.
+#
+# Only UI COPY lives here. The structure around it stays in marker.go and is
+# NOT expressible in this file:
+#
+#   - the nested conditional in hasMarker ("context limit reached" present but
+#     no /compact is an immediate NO, not one disjunct of an OR),
+#   - the 14-rune box-drawing set and the 80% density ratio,
+#   - maxScreenMarkerLines, maxTrailingStatusLines and the wrap-window search.
+#
+# Reordering or renaming the sections below therefore cannot change when a
+# clause is consulted, only what it matches.
+#
+# Phrases are matched with a plain substring search and must be written
+# lowercase; see marker.go for which of the two texts each list is searched in.
+
+harness = "contextlimit"
+
+[phrases]
+
+# --- The banner itself -------------------------------------------------------
+#
+# These five lists are searched in hasMarker's whitespace-collapsed, lowercased
+# form of the screen tail, so a banner that Claude wrapped across several
+# columns still reads as one string.
+
+# The current release's headline. Its presence alone is NOT the banner: Claude
+# prints it in other, recoverable situations too, so hasMarker demands the
+# recovery hint alongside it and answers NO outright when the headline is
+# present without one.
+limit_reached_banner = ["context limit reached"]
+
+# The older headline, in both renderings seen in the wild.
+window_full_banner = ["context window is full", "context window full"]
+
+# The recovery hint, whole. Matching it is sufficient on its own after a
+# window-full headline.
+compact_or_clear_hint = ["/compact or /clear"]
+
+# The recovery hint's parts, for a screen that wrapped between them. All three
+# are required together (see hasMarker) precisely because "/compact" alone is
+# ordinary help text — a session that merely mentions the command must not be
+# read as a session that hit the limit.
+compact_command = ["/compact"]
+clear_command = ["/clear"]
+continue_hint = ["continue"]
+
+# --- Input-box, status and hint chrome ---------------------------------------
+#
+# These four lists are matched against a single trimmed screen line, so that
+# the trailing UI can be skipped when assembling the tail the banner is looked
+# for in. They are searched CASE-SENSITIVELY, because that line has not been
+# folded at the point the chrome test runs; the lists are lowercase because the
+# loader requires it, which is also how Claude renders every one of them.
+#
+# A phrase that fails to match here leaves a chrome line in the tail, which can
+# only dilute the marker window — the conservative direction, and the one
+# isUIChromeLine's doc comment asks for.
+
+# First non-whitespace rune of an input-box edge or the prompt indicator. This
+# is a set of single runes compared against the line's first rune, not a
+# substring search: adding a word here does nothing.
+chrome_prompt_rune = ["│", "╭", "╰", "❯"]
+
+# The current mode hint, e.g. "⏸ plan mode on (shift+tab to cycle)".
+chrome_mode_hint = ["(shift+tab to cycle)"]
+
+# The legacy footer hint, "? for shortcuts". The prefix and the phrase are
+# separate lists because marker.go requires the first as a PREFIX and the
+# second as a substring; a bare "?" anywhere in a chat line is not chrome.
+chrome_shortcut_prefix = ["?"]
+chrome_shortcut_hint = ["for shortcuts"]
+
+# The legacy footer's model label. Deliberately conservative belt-and-braces:
+# it is the one chrome phrase that could plausibly appear in chat text, and the
+# cost of skipping one extra trailing line is lower than the cost of failing to
+# skip the footer.
+chrome_footer_label = ["model:"]
