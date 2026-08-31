@@ -17,99 +17,88 @@ import (
 // Codex was already the stronger of the two harnesses — it has always demanded
 // a POSITIVE terminal marker rather than settling on the absence of a scary
 // one — so the port preserves its shape rather than rewriting it. Two
-// word-independent vetoes are added on top; see codexInterruptHintRE and
-// codexLiveElapsedStatusLineRE.
+// word-independent vetoes are added on top; see the live_elapsed_status_line
+// and interrupt_hint clauses.
 
-// Codex renders the empty composer with a dim placeholder. Kitty's get-text
-// output intentionally drops styling, so the placeholder is indistinguishable
-// from ordinary text and must be recognized explicitly. Keep this list narrow:
-// accepting arbitrary text after the chevron would let an old transcript prompt
-// satisfy the terminal-screen classifiers. The whole line must be the chevron
-// plus one KNOWN placeholder and nothing else — that end anchor is what stops
-// "› Run the shell command: sleep 8" (a real transcript line in
-// testdata/codex_idle_completed_t0.txt) from reading as an empty composer.
+// The UI copy this adapter keys on lives in patterns_codex.toml, loaded by
+// patterns.go and overridable per user. The clause names below are the contract
+// between that file and this one; each is documented at its definition site
+// there, where the failures it was tuned against are recorded.
 //
-// ACCEPTED RESIDUAL BRITTLENESS. A Codex build that ships an unknown
-// placeholder makes the composer unmatchable and withholds settling — a stuck
-// ⚡, never a false 🛑 — which is the direction this package fails in by design.
-// TestCodexCurrentScreenContract pins the currently installed placeholder, and
-// TestCodexComposerPlaceholderIsNarrow pins the narrowness that costs.
-var codexComposerLineRE = regexp.MustCompile(`(?m)^\s*(?:\x{203a}|>)\s*(?:` +
-	`(?:Use /skills to list available skills)|` +
-	`(?:Find and fix a bug in @filename)|` +
-	`(?:Ask Codex to do anything)` +
-	`)?\s*$`)
-var codexContextZeroLineRE = regexp.MustCompile(`(?i)\bcontext\b.*(?:^|[^0-9])0\s*%`)
-var codexLabeledTranscriptLineRE = regexp.MustCompile(`(?i)^\s*(?:user|codex|assistant|system)\s*:`)
-
-// codexWorkedForLineRE matches Codex's completed-turn status line ("Worked for
-// 1m 30s"). The trailing digit requirement anchors on a real duration so
-// transcript prose such as "worked for the previous release" cannot match.
+// FAIL-CLOSED ORIENTATION, checked clause by clause. A clause the installed set
+// does not define reports no match, and for Codex that lands as follows:
 //
-// It matches nothing on a codex-cli 0.149.x screen: that build dropped the
-// line entirely in favour of the framed marker below. It is retained for older
-// Codex builds, which a user may still be running.
-var codexWorkedForLineRE = regexp.MustCompile(`(?i)^[^\p{L}\p{N}]*worked for\s+\d`)
+//   - composer_line / composer_placeholder missing: the composer is unmatchable,
+//     so Classify raises VetoComposerBusy and both turn classifiers refuse.
+//     Withholds settling.
+//   - worked_for_line, completed_marker_line, interrupted_line missing: no
+//     positive terminal marker, so nothing settles. Withholds settling.
+//   - context_zero_line missing: CodexScreenLooksCleared cannot find its
+//     positive evidence and returns false. Withholds the clear transition.
+//   - working_status_line, live_elapsed_status_line, interrupt_hint,
+//     background_terminal_footer missing: these are ONE-WAY vetoes, so a missing
+//     one weakens the refusal rather than inventing one. They sit alongside each
+//     other precisely so no single clause is load-bearing.
+//   - labeled_transcript_line missing: this one is the exception — it is a
+//     NEGATIVE test, and dropping it would make a transcript-bearing scrollback
+//     look cleared. CodexScreenLooksCleared therefore refuses outright when the
+//     clause is absent rather than classifying with a weakened test.
+const (
+	codexClauseComposerLine        = "composer_line"
+	codexClauseComposerPlaceholder = "composer_placeholder"
+	codexClauseContextZeroLine     = "context_zero_line"
+	codexClauseLabeledTranscript   = "labeled_transcript_line"
+	codexClauseWorkedForLine       = "worked_for_line"
+	codexClauseCompletedMarker     = "completed_marker_line"
+	codexClauseWorkingStatusLine   = "working_status_line"
+	codexClauseInterruptHint       = "interrupt_hint"
+	codexClauseLiveElapsed         = "live_elapsed_status_line"
+	codexClauseBackgroundFooter    = "background_terminal_footer"
+	codexClauseInterruptedLine     = "interrupted_line"
+)
 
-// codexCompletedMarkerLineRE matches codex-cli 0.149.x's end-of-turn marker
-// line. That build prints no duration at all: the whole line is a bullet glyph
-// and the single word "Completed", optionally with a period.
+// codexClauses is one pattern set resolved to the compiled clauses this file
+// scans with.
 //
-// A one-word marker is far weaker evidence than "Worked for 1m 30s" — an
-// assistant message reading "Completed." would satisfy it on its own — so it is
-// NEVER honoured by itself. codexCompletedMarkerAt additionally requires the
-// horizontal rules Codex draws above and below it, and that framing is what
-// separates the harness-authored marker from transcript prose.
-var codexCompletedMarkerLineRE = regexp.MustCompile(`(?i)^[^\p{L}\p{N}]*completed\.?\s*$`)
+// Every classifier here walks a screen line by line, so the clause lookups are
+// hoisted out of those loops exactly once per screen: externalizing the
+// patterns must not turn a per-screen scan into a per-line map lookup. It holds
+// no policy — which clause is consulted when, and in what combination, stays in
+// the functions below.
+type codexClauses struct {
+	composerLineRE    *regexp.Regexp
+	placeholders      []string
+	contextZeroRE     *regexp.Regexp
+	labeledRE         *regexp.Regexp
+	workedForRE       *regexp.Regexp
+	completedMarkerRE *regexp.Regexp
+	workingRE         *regexp.Regexp
+	interruptHintRE   *regexp.Regexp
+	liveElapsedRE     *regexp.Regexp
+	interruptedRE     *regexp.Regexp
+}
 
-// codexWorkingStatusLineRE matches Codex's in-progress status line ("Working
-// (5s • Esc to interrupt)"). A later match than the Worked-for line means the
-// turn is still active, so the completed-turn classifier bails.
-var codexWorkingStatusLineRE = regexp.MustCompile(`(?i)^[^\p{L}\p{N}]*working\b`)
+func codexClausesFor(patterns Patterns) codexClauses {
+	return codexClauses{
+		composerLineRE:    patterns.Regexp(codexClauseComposerLine),
+		placeholders:      patterns.Phrases(codexClauseComposerPlaceholder),
+		contextZeroRE:     patterns.Regexp(codexClauseContextZeroLine),
+		labeledRE:         patterns.Regexp(codexClauseLabeledTranscript),
+		workedForRE:       patterns.Regexp(codexClauseWorkedForLine),
+		completedMarkerRE: patterns.Regexp(codexClauseCompletedMarker),
+		workingRE:         patterns.Regexp(codexClauseWorkingStatusLine),
+		interruptHintRE:   patterns.Regexp(codexClauseInterruptHint),
+		liveElapsedRE:     patterns.Regexp(codexClauseLiveElapsed),
+		interruptedRE:     patterns.Regexp(codexClauseInterruptedLine),
+	}
+}
 
-// Generic in-flight interrupt hint, whatever key it names. Codex's
-// request_user_input footer also contains it, but that screen is rejected by
-// the prompt classifier before this veto is consulted, so the overlap is free.
-var codexInterruptHintRE = regexp.MustCompile(`(?i)\bto (?:interrupt|cancel)\b`)
-
-// Word-independent twin of codexWorkingStatusLineRE: a renamed spinner still
-// ticks a timer, and a ticking timer is by definition not a finished turn.
-// "Worked for 1m 30s" has no parentheses and cannot match.
-//
-// Do NOT promote this to a shared helper: it also matches a parenthesised
-// elapsed time on a Claude working line, which is harmless only because this
-// file is Codex-only.
-var codexLiveElapsedStatusLineRE = regexp.MustCompile(
-	`^[^\p{L}\p{N}]*\p{L}[\p{L}\p{M}]*\s*\(\s*\d+[hms]\b`)
-
-// codexBackgroundTerminalFooterRE matches Codex's running-background-work
-// footer ("1 background terminal running · /ps to view · /stop to close"). Codex
-// renders it both appended to a live "Working (…)" status line and on its own
-// line under a finished or interrupted turn — the second shape is the one that
-// matters, because there the model's turn really is over while a detached
-// process it started is not.
-//
-// THE COUNT IS THE ANCHOR, and it must be non-zero. Codex's own transcript prose
-// says things like "• Stopping all background terminals." (a real line in
-// testdata/codex_idle_completed_t0.txt); requiring "<n> background <noun>
-// running" is what keeps narration from pinning a pane at ⚡ forever.
-//
-// The noun is matched loosely on purpose. This is a ONE-WAY veto, so a rename
-// from "terminal" to "task" costing a false 🛑 over live background work is the
-// expensive failure; matching a synonym Codex does not use today costs nothing.
-// "task" is not speculative — it is what Claude's own background manager calls
-// these (see claude.go's "ctrl+b to" veto).
-var codexBackgroundTerminalFooterRE = regexp.MustCompile(
-	`(?i)\b[1-9]\d*\s+background\s+(?:terminal|task)s?\s+running\b`)
-
-// codexInterruptedLineRE matches Codex's TUI-generated interrupted-turn marker
-// ("⏹ Interrupted", "• Interrupted by user", "⚠ Conversation interrupted …").
-// Like codexWorkedForLineRE it anchors the keyword to the start of the status
-// line (after any bullet/warning-glyph decoration) so transcript prose that
-// merely narrates an interruption — or Codex's own "Working (… Esc to
-// interrupt)" spinner, which begins with "Working" and never with "interrupted"
-// — cannot match.
-var codexInterruptedLineRE = regexp.MustCompile(`(?i)^[^\p{L}\p{N}]*(?:conversation\s+)?interrupted\b`)
+// codexPatterns is the installed Codex pattern set, for the package-level
+// classifiers that are called without an adapter.
+func codexPatterns() Patterns {
+	set, _ := PatternsFor(harness.Codex)
+	return set
+}
 
 // codexStatusKind is which of Codex's recognized status-line shapes a single
 // line is, if any. Unlike Claude's three kinds the two terminal markers collapse
@@ -124,10 +113,26 @@ const (
 )
 
 // codexAdapter is the Codex screen adapter.
-type codexAdapter struct{}
+type codexAdapter struct {
+	// Patterns pins this adapter to one pattern set. The registered adapter
+	// leaves it zero and resolves the installed set per Classify instead:
+	// the adapters map is built at package init and read lock-free by For(),
+	// so a set captured into it would be the embedded default forever and
+	// Load's override would have no effect. Tests set it to classify against
+	// a pattern set without installing one globally.
+	Patterns Patterns
+}
 
 // Harness returns Codex's canonical harness name.
 func (codexAdapter) Harness() string { return harness.Codex }
+
+// patterns resolves the pattern set this Classify call reads.
+func (a codexAdapter) patterns() Patterns {
+	if a.Patterns.harness != "" {
+		return a.Patterns
+	}
+	return codexPatterns()
+}
 
 // Classify reads a Codex screen capture.
 //
@@ -135,8 +140,8 @@ func (codexAdapter) Harness() string { return harness.Codex }
 // computed first and unconditionally, and positive terminal evidence is
 // consulted only on a veto-free screen.
 //
-// TIERS. Both Codex terminal markers — codexWorkedForLineRE and
-// codexInterruptedLineRE — are literal, word-anchored and written by the
+// TIERS. Both Codex terminal markers — the worked-for line and the
+// interrupted-turn marker — are literal, word-anchored and written by the
 // harness itself, so both are TierTerminalExplicit. TierTerminalShape and
 // TierQuiescent are UNREACHABLE for Codex today, for two separate reasons:
 //
@@ -152,8 +157,11 @@ func (codexAdapter) Harness() string { return harness.Codex }
 // probe's policy table has no row for falls to Go's zero value, which
 // applyAuthoritativeIdle floors to one sample — silently below the two samples
 // Layer B needs to be anything at all.
-func (codexAdapter) Classify(screen string) Observation {
-	kind, statusLine := codexLatestStatusLine(screen)
+func (a codexAdapter) Classify(screen string) Observation {
+	patterns := a.patterns()
+	clauses := codexClausesFor(patterns)
+	lower := strings.ToLower(screen)
+	kind, statusLine := clauses.latestStatusLine(screen)
 
 	var vetoes Veto
 	if kind == codexStatusWorking {
@@ -162,7 +170,7 @@ func (codexAdapter) Classify(screen string) Observation {
 	// Unlike Claude, Codex still renders this hint on every live turn, so it is
 	// genuinely useful here rather than a legacy backstop. It remains a one-way
 	// veto: its absence is not evidence a turn ended.
-	if codexInterruptHintRE.MatchString(screen) {
+	if patterns.Match(codexClauseInterruptHint, screen, lower) {
 		vetoes |= VetoInterruptHint
 	}
 	// Independent of every other signal on this screen, and deliberately so. A
@@ -171,13 +179,13 @@ func (codexAdapter) Classify(screen string) Observation {
 	// so the marker, the absence of a live status line and the empty composer all
 	// agree, and nothing else here would refuse. The footer is the only evidence
 	// that work the pane started is still going.
-	if codexBackgroundTerminalFooterRE.MatchString(screen) {
+	if patterns.Match(codexClauseBackgroundFooter, screen, lower) {
 		vetoes |= VetoBackgroundTask
 	}
 	if _, ok := ClassifyCodexPrompt(screen); ok {
 		vetoes |= VetoBlockingPrompt
 	}
-	if !codexComposerLineRE.MatchString(screen) {
+	if !clauses.screenHasComposerLine(screen) {
 		vetoes |= VetoComposerBusy
 	}
 
@@ -204,7 +212,8 @@ func (codexAdapter) Classify(screen string) Observation {
 		// its composer, or a placeholder this file does not know. None of them
 		// says anything about the turn, so the fail-closed default stands.
 		observation.State = Unknown
-	case ClassifyCodexCompletedTurnScreen(screen) || ClassifyCodexInterruptedTurnScreen(screen):
+	case codexTerminalTurnScreen(clauses, screen, codexClauses.completedTurnMarkerAt) ||
+		codexTerminalTurnScreen(clauses, screen, codexClauses.interruptedMarkerAt):
 		observation.State = Terminal
 		observation.Tier = TierTerminalExplicit
 	default:
@@ -216,20 +225,65 @@ func (codexAdapter) Classify(screen string) Observation {
 	return observation
 }
 
-// codexLatestStatusLine scans every line and returns the LAST recognized status
+// composerLine reports whether one line is an EMPTY Codex composer.
+//
+// The regex clause matches any chevron line and captures whatever follows it;
+// the decision about that remainder is here, in Go, and it is an EQUALITY test
+// against the known placeholders rather than the substring search a phrase list
+// normally gets. That end anchor is what stops "› Run the shell command: sleep
+// 8" (a real transcript line in testdata/codex_idle_completed_t0.txt) from
+// reading as an empty composer, and it must not become a prefix or contains
+// test. The placeholders are compared folded because the pattern loader
+// requires phrase lists to be lowercase.
+func (c codexClauses) composerLine(line string) bool {
+	if c.composerLineRE == nil {
+		return false
+	}
+	match := c.composerLineRE.FindStringSubmatch(line)
+	if match == nil {
+		return false
+	}
+	rest := ""
+	if len(match) > 1 {
+		// Trimmed with regexp's own \s class, so the clause's trailing capture
+		// behaves exactly as the inline `\s*$` anchor it replaced.
+		rest = strings.TrimRight(match[1], "\t\n\f\r ")
+	}
+	if rest == "" {
+		return true
+	}
+	rest = strings.ToLower(rest)
+	for _, placeholder := range c.placeholders {
+		if rest == placeholder {
+			return true
+		}
+	}
+	return false
+}
+
+func (c codexClauses) screenHasComposerLine(screen string) bool {
+	for _, line := range strings.Split(screen, "\n") {
+		if c.composerLine(line) {
+			return true
+		}
+	}
+	return false
+}
+
+// latestStatusLine scans every line and returns the LAST recognized status
 // line's kind and text, mirroring the classifiers' latest-status-line-wins scan
 // below. It exists for the veto and for Observation.StatusLine; the settle
-// decision stays with the two classifiers so the positional composer
+// decision stays with codexTerminalTurnScreen so the positional composer
 // requirement has exactly one implementation.
-func codexLatestStatusLine(screen string) (codexStatusKind, string) {
+func (c codexClauses) latestStatusLine(screen string) (codexStatusKind, string) {
 	lines := strings.Split(screen, "\n")
 	kind := codexStatusNone
 	text := ""
 	for i, line := range lines {
 		switch {
-		case codexTerminalMarkerAt(lines, i):
+		case c.terminalMarkerAt(lines, i):
 			kind, text = codexStatusTerminal, line
-		case codexLineLooksLiveWork(line):
+		case c.liveWork(line):
 			kind, text = codexStatusWorking, line
 		}
 	}
@@ -239,37 +293,38 @@ func codexLatestStatusLine(screen string) (codexStatusKind, string) {
 // codexMarkerFunc reports whether line i of a screen is a particular
 // terminal-turn marker.
 //
-// The two turn classifiers take one of these rather than a bare *regexp
+// The two turn classifiers take one of these rather than a bare clause name
 // because codex-cli 0.149.x's "Completed" marker is not decidable from its own
 // line: it is one common word, and only the horizontal rules Codex draws around
 // it make it harness-authored evidence rather than assistant prose.
-type codexMarkerFunc func(lines []string, i int) bool
+type codexMarkerFunc func(c codexClauses, lines []string, i int) bool
 
-// codexTerminalMarkerAt is the union of every terminal marker this file knows,
+// terminalMarkerAt is the union of every terminal marker this file knows,
 // used by the diagnostic status-line scan. The settle decision still goes
 // through the two classifiers, which keep completed and interrupted apart.
-func codexTerminalMarkerAt(lines []string, i int) bool {
-	return codexCompletedTurnMarkerAt(lines, i) || codexInterruptedMarkerAt(lines, i)
+func (c codexClauses) terminalMarkerAt(lines []string, i int) bool {
+	return c.completedTurnMarkerAt(lines, i) || c.interruptedMarkerAt(lines, i)
 }
 
-// codexCompletedTurnMarkerAt accepts either completed-turn shape: the older
+// completedTurnMarkerAt accepts either completed-turn shape: the older
 // "Worked for N" status line or 0.149.x's framed "Completed" marker.
-func codexCompletedTurnMarkerAt(lines []string, i int) bool {
-	return codexWorkedForLineRE.MatchString(lines[i]) || codexCompletedMarkerAt(lines, i)
+func (c codexClauses) completedTurnMarkerAt(lines []string, i int) bool {
+	return matchesLine(c.workedForRE, lines[i]) || c.completedMarkerAt(lines, i)
 }
 
-func codexInterruptedMarkerAt(lines []string, i int) bool {
-	return codexInterruptedLineRE.MatchString(lines[i])
+func (c codexClauses) interruptedMarkerAt(lines []string, i int) bool {
+	return matchesLine(c.interruptedRE, lines[i])
 }
 
-// codexCompletedMarkerAt reports whether line i is 0.149.x's framed end-of-turn
+// completedMarkerAt reports whether line i is 0.149.x's framed end-of-turn
 // marker: the bare "Completed" line WITH a horizontal rule above and below it.
 //
-// THE FRAMING IS THE EVIDENCE. Without it this marker is one ordinary English
-// word at the start of a bullet line, which any assistant turn can print. Do
-// not relax this to the line match alone.
-func codexCompletedMarkerAt(lines []string, i int) bool {
-	if !codexCompletedMarkerLineRE.MatchString(lines[i]) {
+// THE FRAMING IS THE EVIDENCE, and it is structure rather than UI copy, so it
+// stays in Go where a pattern override cannot reach it. Without the framing this
+// marker is one ordinary English word at the start of a bullet line, which any
+// assistant turn can print. Do not relax this to the line match alone.
+func (c codexClauses) completedMarkerAt(lines []string, i int) bool {
+	if !matchesLine(c.completedMarkerRE, lines[i]) {
 		return false
 	}
 	return codexRuleBefore(lines, i, -1) && codexRuleBefore(lines, i, +1)
@@ -279,6 +334,9 @@ func codexCompletedMarkerAt(lines []string, i int) bool {
 // the first non-blank line it meets is a horizontal rule. Codex separates the
 // marker from its rules with blank lines, so blanks are skipped; anything else
 // ends the walk and is the answer.
+//
+// Structure, not UI copy: this is the framing half of completedMarkerAt's
+// evidence and is deliberately not externalized.
 func codexRuleBefore(lines []string, i, step int) bool {
 	for j := i + step; j >= 0 && j < len(lines); j += step {
 		if strings.TrimSpace(lines[j]) == "" {
@@ -292,6 +350,10 @@ func codexRuleBefore(lines []string, i, step int) bool {
 // codexLineIsHorizontalRule reports whether a line is nothing but a run of box
 // drawing horizontals. The length floor keeps a stray glyph from framing
 // anything; Codex draws these the full width of the pane.
+//
+// The glyph and the floor stay in Go: they are the shape of the frame Codex
+// draws, not words it prints, and a user override that widened either would
+// weaken completedMarkerAt's only defence against transcript prose.
 func codexLineIsHorizontalRule(line string) bool {
 	trimmed := strings.TrimSpace(line)
 	if trimmed == "" || strings.Trim(trimmed, "─") != "" {
@@ -300,19 +362,23 @@ func codexLineIsHorizontalRule(line string) bool {
 	return utf8.RuneCountInString(trimmed) >= codexHorizontalRuleMinimumWidth
 }
 
+// codexHorizontalRuleMinimumWidth is a structural tunable, not UI copy: it
+// bounds a glyph run rather than naming anything Codex says, so it stays in Go.
 const codexHorizontalRuleMinimumWidth = 8
 
-// codexLineLooksLiveWork reports whether one line is positive evidence of an
-// in-flight Codex turn.
+// liveWork reports whether one line is positive evidence of an in-flight Codex
+// turn.
 //
-// The two word-independent patterns sit alongside the word-dependent
-// codexWorkingStatusLineRE rather than replacing it, so renaming the spinner
-// cannot silently disable the classifier: a renamed spinner still ticks a timer
-// and still names a key to interrupt, and either one is enough.
-func codexLineLooksLiveWork(line string) bool {
-	return codexWorkingStatusLineRE.MatchString(line) ||
-		codexLiveElapsedStatusLineRE.MatchString(line) ||
-		codexInterruptHintRE.MatchString(line)
+// The two word-independent clauses sit alongside the word-dependent
+// working_status_line rather than replacing it, so renaming the spinner cannot
+// silently disable the classifier: a renamed spinner still ticks a timer and
+// still names a key to interrupt, and either one is enough. Which of the three
+// are consulted, and that ANY of them suffices, is Go's — a pattern file cannot
+// collapse them.
+func (c codexClauses) liveWork(line string) bool {
+	return matchesLine(c.workingRE, line) ||
+		matchesLine(c.liveElapsedRE, line) ||
+		matchesLine(c.interruptHintRE, line)
 }
 
 // ClassifyCodexCompletedTurnScreen reports whether a Codex screen scrape shows a
@@ -329,7 +395,8 @@ func codexLineLooksLiveWork(line string) bool {
 // older "Worked for 1m 30s" status line, and 0.149.x's framed "Completed"
 // marker. Every other gate is identical for both.
 func ClassifyCodexCompletedTurnScreen(screen string) bool {
-	return codexTerminalTurnScreen(screen, codexCompletedTurnMarkerAt)
+	return codexTerminalTurnScreen(
+		codexClausesFor(codexPatterns()), screen, codexClauses.completedTurnMarkerAt)
 }
 
 // ClassifyCodexInterruptedTurnScreen reports whether a Codex screen scrape shows
@@ -343,22 +410,24 @@ func ClassifyCodexCompletedTurnScreen(screen string) bool {
 // marker. Codex leaves this state on screen after an interruption, and —
 // exactly the case native hooks miss — no Stop hook arrives.
 func ClassifyCodexInterruptedTurnScreen(screen string) bool {
-	return codexTerminalTurnScreen(screen, codexInterruptedMarkerAt)
+	return codexTerminalTurnScreen(
+		codexClausesFor(codexPatterns()), screen, codexClauses.interruptedMarkerAt)
 }
 
 // codexTerminalTurnScreen is the shared body of the two classifiers above: the
 // only difference between them was which terminal marker they scanned for.
 //
-// THE POSITIONAL REQUIREMENT IS LOAD-BEARING. The composer scan starts at
-// markerIdx+1, not at zero: "an empty composer somewhere on screen" is
-// satisfied by a composer rendered ABOVE a status line that is still running,
-// which is precisely the screen this classifier must refuse. Do not relax the
-// starting index to a whole-screen match.
+// THE POSITIONAL REQUIREMENT IS LOAD-BEARING, and it is structure rather than UI
+// copy, so no pattern file can express or relax it. The composer scan starts at
+// markerIdx+1, not at zero: "an empty composer somewhere on screen" is satisfied
+// by a composer rendered ABOVE a status line that is still running, which is
+// precisely the screen this classifier must refuse. Do not relax the starting
+// index to a whole-screen match.
 //
 // The prompt classification is checked first, before any status-line work. That
-// ordering is what makes codexInterruptHintRE's overlap with Codex's
+// ordering is what makes interrupt_hint's overlap with Codex's
 // request_user_input footer free.
-func codexTerminalTurnScreen(screen string, marker codexMarkerFunc) bool {
+func codexTerminalTurnScreen(c codexClauses, screen string, marker codexMarkerFunc) bool {
 	if _, ok := ClassifyCodexPrompt(screen); ok {
 		return false
 	}
@@ -368,10 +437,10 @@ func codexTerminalTurnScreen(screen string, marker codexMarkerFunc) bool {
 	latestStatusIsMarker := false
 	for i, line := range lines {
 		switch {
-		case marker(lines, i):
+		case marker(c, lines, i):
 			markerIdx = i
 			latestStatusIsMarker = true
-		case codexLineLooksLiveWork(line):
+		case c.liveWork(line):
 			latestStatusIsMarker = false
 		}
 	}
@@ -380,7 +449,7 @@ func codexTerminalTurnScreen(screen string, marker codexMarkerFunc) bool {
 	}
 
 	for i := markerIdx + 1; i < len(lines); i++ {
-		if codexComposerLineRE.MatchString(lines[i]) {
+		if c.composerLine(lines[i]) {
 			return true
 		}
 	}
@@ -402,10 +471,11 @@ func codexTerminalTurnScreen(screen string, marker codexMarkerFunc) bool {
 // stabilization sample gate — it feeds the clear probe, not the stop probe — so
 // it grades no tier.
 func ClassifyCodexClearScreen(screen, allText string) bool {
-	if !CodexScreenLooksCleared(screen) {
+	clauses := codexClausesFor(codexPatterns())
+	if !clauses.screenLooksCleared(screen) {
 		return false
 	}
-	return codexScrollbackLooksCleared(allText)
+	return clauses.scrollbackLooksCleared(allText)
 }
 
 // CodexScreenLooksCleared reports whether the CURRENT screen alone looks
@@ -413,19 +483,30 @@ func ClassifyCodexClearScreen(screen, allText string) bool {
 // to decide whether the second, more expensive `--extent=all` read is worth
 // making at all.
 func CodexScreenLooksCleared(screen string) bool {
-	if !codexComposerLineRE.MatchString(screen) {
+	return codexClausesFor(codexPatterns()).screenLooksCleared(screen)
+}
+
+func (c codexClauses) screenLooksCleared(screen string) bool {
+	// labeled_transcript_line is the one Codex clause whose absence would fail
+	// OPEN: it is a NEGATIVE test, so losing it makes a transcript-bearing
+	// screen look cleared rather than merely unreadable. Refuse instead of
+	// classifying with a weakened transcript test.
+	if c.labeledRE == nil {
 		return false
 	}
-	if !codexTextHasContextZero(screen) {
+	if !c.screenHasComposerLine(screen) {
+		return false
+	}
+	if !c.textHasContextZero(screen) {
 		return false
 	}
 	if _, ok := ClassifyCodexPrompt(screen); ok {
 		return false
 	}
-	return !codexTextHasTranscriptMarkers(screen)
+	return !c.textHasTranscriptMarkers(screen)
 }
 
-func codexScrollbackLooksCleared(allText string) bool {
+func (c codexClauses) scrollbackLooksCleared(allText string) bool {
 	if strings.TrimSpace(allText) == "" {
 		return false
 	}
@@ -439,59 +520,67 @@ func codexScrollbackLooksCleared(allText string) bool {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		if codexComposerLineRE.MatchString(line) {
+		if c.composerLine(line) {
 			hasComposer = true
 			continue
 		}
-		if codexLineLooksTranscriptMarker(line) {
+		if c.transcriptMarker(line) {
 			return false
 		}
-		if codexContextZeroLineRE.MatchString(line) {
+		if matchesLine(c.contextZeroRE, line) {
 			hasContextZero = true
 		}
 	}
 	return hasComposer && hasContextZero
 }
 
-func codexTextHasContextZero(text string) bool {
+func (c codexClauses) textHasContextZero(text string) bool {
 	for _, line := range strings.Split(text, "\n") {
-		if codexContextZeroLineRE.MatchString(line) {
+		if matchesLine(c.contextZeroRE, line) {
 			return true
 		}
 	}
 	return false
 }
 
-func codexTextHasTranscriptMarkers(text string) bool {
+func (c codexClauses) textHasTranscriptMarkers(text string) bool {
 	for _, line := range strings.Split(text, "\n") {
-		if codexLineLooksTranscriptMarker(line) {
+		if c.transcriptMarker(line) {
 			return true
 		}
 	}
 	return false
 }
 
-func codexLineLooksTranscriptMarker(line string) bool {
+// transcriptMarker reports whether a line is evidence of transcript content.
+//
+// The prefix glyph sets below stay in Go on purpose: they are the SHAPE of
+// Codex's transcript decoration — bullets, quote bars and tree branches — rather
+// than words Codex prints, and this is a negative test, so a user override that
+// dropped one would make a transcript-bearing screen look cleared. Only the
+// labelled-turn clause and the composer, which are copy, come from the pattern
+// file.
+func (c codexClauses) transcriptMarker(line string) bool {
 	trimmed := strings.TrimSpace(line)
 	lower := strings.ToLower(trimmed)
 	switch {
 	case trimmed == "":
 		return false
-	case codexComposerLineRE.MatchString(line):
+	case c.composerLine(line):
 		return false
 	case codexLineLooksChrome(trimmed):
 		return false
-	case strings.HasPrefix(trimmed, "\u203a") || strings.HasPrefix(trimmed, ">"):
+	case strings.HasPrefix(trimmed, "›") || strings.HasPrefix(trimmed, ">"):
 		return true
-	case strings.HasPrefix(trimmed, "\u2022") || strings.HasPrefix(trimmed, "\u25e6"):
+	case strings.HasPrefix(trimmed, "•") || strings.HasPrefix(trimmed, "◦"):
 		return true
-	case strings.HasPrefix(trimmed, "\u258c"):
+	case strings.HasPrefix(trimmed, "▌"):
 		return true
-	case strings.HasPrefix(trimmed, "\u2514") || strings.HasPrefix(trimmed, "\u251c"):
+	case strings.HasPrefix(trimmed, "└") || strings.HasPrefix(trimmed, "├"):
 		return true
-	case strings.HasPrefix(trimmed, "\u2502"):
+	case strings.HasPrefix(trimmed, "│"):
 		return true
-	case codexLabeledTranscriptLineRE.MatchString(trimmed):
+	case matchesLine(c.labeledRE, trimmed):
 		return true
 	case strings.HasPrefix(lower, "ran ") || strings.HasPrefix(lower, "explored"):
 		return true
@@ -500,12 +589,15 @@ func codexLineLooksTranscriptMarker(line string) bool {
 	}
 }
 
+// codexLineLooksChrome recognizes Codex's box frame. The glyph set is
+// structural — the frame Codex draws around its composer, not copy it writes —
+// so it stays in Go alongside codexLineIsHorizontalRule.
 func codexLineLooksChrome(trimmed string) bool {
 	if strings.Trim(trimmed, "\u2500") == "" {
 		return true
 	}
-	if strings.Trim(trimmed, "\u2500\u2502\u256d\u256e\u2570\u256f") == "" {
+	if strings.Trim(trimmed, "─│╭╮╰╯") == "" {
 		return true
 	}
-	return strings.HasPrefix(trimmed, "\u2502") && strings.HasSuffix(trimmed, "\u2502")
+	return strings.HasPrefix(trimmed, "│") && strings.HasSuffix(trimmed, "│")
 }

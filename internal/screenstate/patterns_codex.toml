@@ -2,11 +2,133 @@
 #
 # Only UI COPY lives here. Evaluation order, positional requirements and the
 # veto-first contract stay in Go (see codex.go and codex_prompt.go) — a pattern
-# file must never be able to imply when a clause is consulted.
+# file must never be able to imply when a clause is consulted. In particular:
+# the horizontal-rule framing that makes `completed_marker_line` trustworthy,
+# the requirement that the composer appear AFTER the terminal marker, and the
+# latest-status-line-wins scan are all Go's, and none of them can be expressed
+# here.
 #
 # Clause names live in one namespace shared by [regex], [phrases] and [group],
 # so a [group] ref may name any of the three.
 #
-# This file is the schema skeleton; the extracted Codex clauses land here.
+# Phrases match a lowercase fold and must therefore be written lowercase;
+# regexes match the capture as read.
 
 harness = "codex"
+
+[regex]
+
+# composer_line matches a Codex composer line and CAPTURES whatever follows the
+# chevron; codexClauses.composerLine then requires that remainder to be empty or
+# to equal one entry of composer_placeholder exactly. The split exists so the
+# placeholders can be a first-class list a user extends without rewriting a
+# regex; the "equal exactly" half is the end anchor this pattern used to carry
+# inline, and it is Go's.
+#
+# Codex renders the empty composer with a dim placeholder. Kitty's get-text
+# output intentionally drops styling, so the placeholder is indistinguishable
+# from ordinary text and must be recognized explicitly. A composer holding
+# queued input has text after the chevron that is not a known placeholder and
+# cannot match, so a user still typing is never read as idle.
+composer_line = '^\s*(?:\x{203a}|>)\s*(.*)$'
+
+# context_zero_line matches Codex's footer reporting an empty context window
+# ("Context 0% used"), the positive half of the cleared-screen evidence.
+context_zero_line = '(?i)\bcontext\b.*(?:^|[^0-9])0\s*%'
+
+# labeled_transcript_line matches an explicitly labelled transcript turn
+# ("user:", "codex:"). It is one of the negative tests that keeps a stopped
+# session's scrollback from reading as freshly cleared.
+labeled_transcript_line = '(?i)^\s*(?:user|codex|assistant|system)\s*:'
+
+# worked_for_line matches Codex's completed-turn status line ("Worked for
+# 1m 30s"). The trailing digit requirement anchors on a real duration so
+# transcript prose such as "worked for the previous release" cannot match.
+#
+# It matches nothing on a codex-cli 0.149.x screen: that build dropped the
+# line entirely in favour of the framed marker below. It is retained for older
+# Codex builds, which a user may still be running.
+worked_for_line = '(?i)^[^\p{L}\p{N}]*worked for\s+\d'
+
+# completed_marker_line matches codex-cli 0.149.x's end-of-turn marker line.
+# That build prints no duration at all: the whole line is a bullet glyph and the
+# single word "Completed", optionally with a period.
+#
+# A one-word marker is far weaker evidence than "Worked for 1m 30s" — an
+# assistant message reading "Completed." would satisfy it on its own — so it is
+# NEVER honoured by itself. codexClauses.completedMarkerAt additionally requires
+# the horizontal rules Codex draws above and below it, and that framing, which
+# stays in Go, is what separates the harness-authored marker from transcript
+# prose.
+completed_marker_line = '(?i)^[^\p{L}\p{N}]*completed\.?\s*$'
+
+# working_status_line matches Codex's in-progress status line ("Working
+# (5s • Esc to interrupt)"). A later match than the worked-for line means the
+# turn is still active, so the completed-turn classifier bails.
+working_status_line = '(?i)^[^\p{L}\p{N}]*working\b'
+
+# interrupt_hint is the generic in-flight interrupt hint, whatever key it names.
+# Codex's request_user_input footer also contains it, but that screen is
+# rejected by the prompt classifier before this veto is consulted, so the
+# overlap is free.
+interrupt_hint = '(?i)\bto (?:interrupt|cancel)\b'
+
+# live_elapsed_status_line is the word-independent twin of working_status_line:
+# a renamed spinner still ticks a timer, and a ticking timer is by definition
+# not a finished turn. "Worked for 1m 30s" has no parentheses and cannot match.
+#
+# Do NOT copy this into patterns_claude.toml: it also matches a parenthesised
+# elapsed time on a Claude working line, which is harmless only because this
+# file is Codex-only.
+live_elapsed_status_line = '^[^\p{L}\p{N}]*\p{L}[\p{L}\p{M}]*\s*\(\s*\d+[hms]\b'
+
+# background_terminal_footer matches Codex's running-background-work footer
+# ("1 background terminal running · /ps to view · /stop to close"). Codex
+# renders it both appended to a live "Working (…)" status line and on its own
+# line under a finished or interrupted turn — the second shape is the one that
+# matters, because there the model's turn really is over while a detached
+# process it started is not.
+#
+# THE COUNT IS THE ANCHOR, and it must be non-zero. Codex's own transcript prose
+# says things like "• Stopping all background terminals." (a real line in
+# testdata/codex_idle_completed_t0.txt); requiring "<n> background <noun>
+# running" is what keeps narration from pinning a pane at ⚡ forever.
+#
+# The noun is matched loosely on purpose. This is a ONE-WAY veto, so a rename
+# from "terminal" to "task" costing a false 🛑 over live background work is the
+# expensive failure; matching a synonym Codex does not use today costs nothing.
+# "task" is not speculative — it is what Claude's own background manager calls
+# these (see patterns_claude.toml's background_task).
+background_terminal_footer = '(?i)\b[1-9]\d*\s+background\s+(?:terminal|task)s?\s+running\b'
+
+# interrupted_line matches Codex's TUI-generated interrupted-turn marker
+# ("⏹ Interrupted", "• Interrupted by user", "⚠ Conversation interrupted …").
+# Like worked_for_line it anchors the keyword to the start of the status line
+# (after any bullet/warning-glyph decoration) so transcript prose that merely
+# narrates an interruption — or Codex's own "Working (… Esc to interrupt)"
+# spinner, which begins with "Working" and never with "interrupted" — cannot
+# match.
+interrupted_line = '(?i)^[^\p{L}\p{N}]*(?:conversation\s+)?interrupted\b'
+
+[phrases]
+
+# The dim placeholders codex-cli renders in an EMPTY composer. Unlike every
+# other phrase list in this directory these are compared for EQUALITY against
+# the text after the chevron, not searched for as substrings — see
+# codexClauses.composerLine. Keep the list narrow: accepting arbitrary text
+# after the chevron would let an old transcript prompt satisfy the
+# terminal-screen classifiers, which is exactly what the end anchor prevents
+# ("› Run the shell command: sleep 8" is a real line in
+# testdata/codex_idle_completed_t0.txt).
+#
+# ACCEPTED RESIDUAL BRITTLENESS. A Codex build that ships an unknown placeholder
+# makes the composer unmatchable and withholds settling — a stuck ⚡, never a
+# false 🛑 — which is the direction this package fails in by design. This list
+# is the one place a user can repair that without a build.
+# TestCodexCurrentScreenContract pins the currently installed placeholder, and
+# TestCodexComposerPlaceholderIsNarrow pins the narrowness that costs.
+composer_placeholder = [
+    "use /skills to list available skills",
+    "find and fix a bug in @filename",
+    "ask codex to do anything",
+]
