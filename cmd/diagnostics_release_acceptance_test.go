@@ -392,7 +392,7 @@ func TestReleaseDocumentationPinsVersionAndDiagnosticWorkflow(t *testing.T) {
 		}
 		text := string(data)
 		for _, required := range []string{
-			"amx debug status", "amx debug explain", "amx debug bundle", "schema v12",
+			"amx debug status", "amx debug explain", "amx debug bundle", "schema v13",
 			"schema v2", "journal_snapshot", "event-time", "--graph-depth",
 			"notification_failure", "v1 and v2", "causal-record wrappers",
 		} {

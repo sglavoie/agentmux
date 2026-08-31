@@ -74,8 +74,9 @@ candidate artifact, start a scoped diagnostic capture, and run a non-committing
 5. Exiting one interactive session for each installed harness synthesizes a
    silent clean stop only when its native terminal hook is absent.
 6. `amx doctor --strict`, `amx debug status`, the lifecycle tail, explanation,
-   and schema-v12 export are clean. Retain schema 11, schema 9, and schema 8
-   exports proving the compatibility projections exclude their later fields.
+   and schema-v13 export are clean. Retain schema 12, schema 11, schema 9, and
+   schema 8 exports proving the compatibility projections exclude their later
+   fields.
 
 Use the commands in [Debugging event delivery](debugging.md#tracing-a-harness-process-exit)
 to preserve the exact settlement and renderer trace. Do not modify the `spec`

@@ -153,10 +153,10 @@ func TestCrossHarnessDiagnosticDocumentation(t *testing.T) {
 func extractSchemaV10ExampleFacts(t *testing.T, guide string) []map[string]json.RawMessage {
 	t.Helper()
 
-	marker := "\"schema_version\": 12"
+	marker := "\"schema_version\": 13"
 	start := strings.Index(guide, marker)
 	if start < 0 {
-		t.Fatalf("daemon guide missing schema_version 12 example")
+		t.Fatalf("daemon guide missing schema_version 13 example")
 	}
 	rest := guide[start:]
 	idx := strings.Index(rest, "\"facts\"")
