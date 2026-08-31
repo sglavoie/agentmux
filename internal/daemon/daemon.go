@@ -17,6 +17,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/screenstate"
 )
 
 // Run starts the daemon, blocks until it shuts down, and cleans up the socket.
@@ -125,6 +126,15 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 		cfg.Defaults.StopConfirm.Enabled == nil || *cfg.Defaults.StopConfirm.Enabled,
 	)
 	handler.SetCopilotTranscriptHomes(copilotProfileHomes(cfg), config.ExpandTilde(harness.DefaultHomeDir(harness.Copilot)))
+	// Screen-pattern sets are a package-level registry read lock-free by every
+	// probe goroutine, so the load must happen here on the startup goroutine —
+	// ahead of restoreStateFromKittyBounded below and well ahead of
+	// runScreenProbes. It never fails: a missing, unreadable or invalid override
+	// degrades to the embedded default and comes back as warnings, which the
+	// health response carries and `amx doctor` turns into a finding. Reporting
+	// them here as log lines only would make a stale override invisible to
+	// anyone not reading the daemon log at startup.
+	handler.SetScreenPatterns(screenstate.Load(config.DefaultConfigDir()))
 	// The canonical ASL state root must be installed before the maintenance loop
 	// starts, since its first tick performs the startup reconciliation. The
 	// bridge itself starts much later; discovery does not depend on it.

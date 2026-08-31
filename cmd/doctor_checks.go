@@ -11,6 +11,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/screenstate"
 )
 
 func writeDoctorNotificationCapability(out io.Writer, capability *daemon.NotificationCapability, addFinding func(string, string, string, ...any)) error {
@@ -53,6 +54,84 @@ func writeDoctorNotificationCapability(out io.Writer, capability *daemon.Notific
 	}
 	if capability.Enabled && (!capability.Available || !capability.Interactive) {
 		addFinding(severityFailure, "notifications_unavailable", "interactive notifications are enabled but unavailable: %s", capability.Reason)
+	}
+	return nil
+}
+
+// checkScreenPatternOverrideInvalid is the stable identifier for a screen
+// pattern override the daemon could not use. It is WARNING severity on
+// purpose: the daemon kept classifying with the embedded default, so this is
+// degraded-but-working and must not trip `--strict` on its own. That severity
+// choice is also why doctorReportSchemaVersion stays at 2 — see the policy
+// comment on that constant, which bumps for new failure identifiers because a
+// strict consumer treats an unknown failure as fatal.
+const checkScreenPatternOverrideInvalid = "screenstate_override_invalid"
+
+// writeDoctorScreenPatterns reports which UI-copy pattern set the classifier is
+// actually running per pattern set, and raises a warning for any override the
+// daemon declined. The active source matters on its own: a stale override that
+// still parses is the most likely explanation for a classifier that silently
+// stopped matching, and it is invisible everywhere else.
+//
+// A pattern set's name is not always a harness — internal/contextlimit owns one
+// under the name "contextlimit" — so this reports "pattern sets" rather than
+// claiming each name is a harness.
+func writeDoctorScreenPatterns(out io.Writer, patterns *daemon.ScreenPatternsSnapshot, addFinding func(string, string, string, ...any)) error {
+	if patterns == nil {
+		_, err := fmt.Fprintln(out, "screen patterns: unreported (older daemon; restart required)")
+		return err
+	}
+	if len(patterns.Sources) == 0 {
+		if _, err := fmt.Fprintln(out, "screen patterns: none installed"); err != nil {
+			return err
+		}
+	} else {
+		names := make([]string, 0, len(patterns.Sources))
+		for name := range patterns.Sources {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		if _, err := fmt.Fprintln(out, "screen patterns:"); err != nil {
+			return err
+		}
+		for _, name := range names {
+			source := patterns.Sources[name]
+			// Anything that is not the embedded default is a file on disk, so
+			// print the path: "override" alone would leave the operator hunting
+			// for which file is in force.
+			if source == screenstate.SourceEmbedded {
+				if _, err := fmt.Fprintf(out, "- %s: embedded\n", name); err != nil {
+					return err
+				}
+				continue
+			}
+			if _, err := fmt.Fprintf(out, "- %s: override (%s)\n", name, source); err != nil {
+				return err
+			}
+		}
+	}
+	for _, warning := range patterns.Warnings {
+		// override_applied is not a problem — it is the source line above, said
+		// again as an event. Every other kind means the daemon fell back to the
+		// embedded copy for a reason the operator needs to fix.
+		if warning.Kind == string(screenstate.WarnOverrideApplied) {
+			continue
+		}
+		detail := warning.Kind
+		if warning.Harness != "" {
+			detail += " for " + warning.Harness
+		}
+		if warning.Path != "" {
+			detail += " at " + warning.Path
+		}
+		if warning.Detail != "" {
+			detail += ": " + warning.Detail
+		}
+		if _, err := fmt.Fprintf(out, "- pattern load warning: %s\n", detail); err != nil {
+			return err
+		}
+		addFinding(severityWarning, checkScreenPatternOverrideInvalid,
+			"screen pattern override was not applied; embedded patterns are in force (%s)", detail)
 	}
 	return nil
 }

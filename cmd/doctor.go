@@ -80,6 +80,10 @@ type doctorDaemonStatus struct {
 	// them, which the integration block reports as unknown rather than zero.
 	ASLReconcile    *daemon.ASLReconcileSnapshot    `json:"asl_reconcile,omitempty"`
 	ASLHookDelivery *daemon.ASLHookDeliverySnapshot `json:"asl_hook_delivery,omitempty"`
+	// ScreenPatterns reports the classifier's installed UI-copy pattern sources
+	// and the warnings the startup load produced. Omitted by a daemon that
+	// predates the block.
+	ScreenPatterns *daemon.ScreenPatternsSnapshot `json:"screen_patterns,omitempty"`
 }
 
 var doctorCmd = &cobra.Command{
@@ -139,6 +143,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 
 		ASLReconcile:    health.ASLReconcile,
 		ASLHookDelivery: health.ASLHookDelivery,
+		ScreenPatterns:  health.ScreenPatterns,
 	}
 	if health.Alive {
 		if _, err := fmt.Fprintf(textOut, "daemon: running (pid %d, uptime %s)\n", health.PID, health.Uptime.Round(time.Second)); err != nil {
@@ -158,6 +163,12 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 		if err := writeDoctorASLCapability(textOut, health.ASL, addFinding); err != nil {
+			return err
+		}
+		// Only meaningful from a live daemon: the sources reported here are what
+		// the RUNNING process loaded at startup, which is precisely what a
+		// re-read of the config directory by this CLI would fail to show.
+		if err := writeDoctorScreenPatterns(textOut, health.ScreenPatterns, addFinding); err != nil {
 			return err
 		}
 	}

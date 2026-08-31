@@ -257,6 +257,15 @@ type Handler struct {
 	copilotTranscriptHomes []string
 	copilotDefaultHome     string
 
+	// screenPatterns records what screenstate.Load did at startup: which source
+	// each pattern set came from and every warning the load produced. Set once
+	// on the startup goroutine (SetScreenPatterns) before the probe loop starts
+	// and never mutated afterward, so handleHealth reads it without a lock —
+	// the same convention as copilotTranscriptHomes above. Nil means the load
+	// never ran (a hand-built Handler in a test), which health reports as an
+	// absent block rather than as an empty one.
+	screenPatterns *ScreenPatternsSnapshot
+
 	// copilotLifecycleReader reads a resolved Copilot transcript's terminal
 	// evidence for the transcript stop probe. Defaults to
 	// transcript.ReadCopilotLifecycle (NewHandler); tests inject a reader to
@@ -429,6 +438,13 @@ func (h *Handler) handleHealth() Response {
 	// bridge and exists whether or not one was ever configured.
 	delivery := h.ASLHookDeliveryMetrics()
 	resp.ASLHookDelivery = &delivery
+	// Published only when the startup load actually ran, so a client can tell a
+	// daemon that predates the block (or a hand-built Handler) apart from one
+	// that loaded no patterns at all.
+	if h.screenPatterns != nil {
+		patterns := *h.screenPatterns
+		resp.ScreenPatterns = &patterns
+	}
 	return resp
 }
 

@@ -305,6 +305,10 @@ type Response struct {
 	// refusing every event while both the bridge and the sweep look healthy —
 	// the hook path answers OK to a producer it has declined to believe.
 	ASLHookDelivery *ASLHookDeliverySnapshot `json:"asl_hook_delivery,omitempty"`
+	// ScreenPatterns reports what the startup screen-pattern load installed and
+	// what went wrong doing it. It is omitted by daemons that predate the block,
+	// which doctor reports as "unknown" rather than as "no override".
+	ScreenPatterns *ScreenPatternsSnapshot `json:"screen_patterns,omitempty"`
 	// ASL is populated for the ASL message types.
 	ASL *ASLResponse `json:"asl_result,omitempty"`
 	// Ready reports whether the daemon completed its bounded initial restore

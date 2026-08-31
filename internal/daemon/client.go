@@ -216,6 +216,10 @@ type Health struct {
 	// absence as an unknown rather than as a zero.
 	ASLReconcile    *ASLReconcileSnapshot
 	ASLHookDelivery *ASLHookDeliverySnapshot
+	// ScreenPatterns is the startup screen-pattern load result: the active
+	// source per pattern set plus every load warning. Nil against a daemon that
+	// predates the block.
+	ScreenPatterns *ScreenPatternsSnapshot
 }
 
 // Health pings the daemon and returns its liveness, PID and uptime. Never
@@ -242,6 +246,7 @@ func (c *Client) healthBefore(deadline time.Time) Health {
 
 		ASLReconcile:    resp.ASLReconcile,
 		ASLHookDelivery: resp.ASLHookDelivery,
+		ScreenPatterns:  resp.ScreenPatterns,
 	}
 }
 
