@@ -224,6 +224,24 @@ type Handler struct {
 	// converge across two distinct intermediate terminals. Guarded by stateMu.
 	idleSampleGen map[idleSampleRef]int64
 
+	// screenProbeDeclineStreak counts, per window probe source, how many
+	// consecutive screen frames the classifier refused to grade as a settleable
+	// terminal. A pane that is genuinely working declines on every tick, so the
+	// count on its own is not a health signal — screenProbeDeclineFingerprint is
+	// what turns it into one. Cleared by a successful settle and dropped when the
+	// window closes. Guarded by stateMu.
+	screenProbeDeclineStreak map[idleSampleRef]int
+
+	// screenProbeDeclineFingerprint records the normalized-screen fingerprint the
+	// current decline streak is accumulating against. It is the machine-readable
+	// half of the rationale spelled out at screen_idle_probe.go's decline site:
+	// consecutive declines carrying the SAME fingerprint mean the screen is quiet
+	// and Layer A vetoed it anyway, while a changing one means the pane is
+	// repainting. A decline observing a different fingerprint restarts the streak
+	// at one, so a streak above one means exactly "the classifier has now refused
+	// the same unchanging screen this many times". Guarded by stateMu.
+	screenProbeDeclineFingerprint map[idleSampleRef]int64
+
 	// reducerCfg holds the deterministic thresholds handed to each window's
 	// shadow reducer. Set once at startup from [defaults.watchdog] and
 	// guard_duration (SetReducerConfig); the zero value disables the reducer's
@@ -357,6 +375,8 @@ func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 		aslSupervisorClosureCutoffs:    make(map[aslLeaseRef]uint64),
 		idleSampleStreak:               make(map[idleSampleRef]int),
 		idleSampleGen:                  make(map[idleSampleRef]int64),
+		screenProbeDeclineStreak:       make(map[idleSampleRef]int),
+		screenProbeDeclineFingerprint:  make(map[idleSampleRef]int64),
 		lastSeenEventAt:                make(map[string]time.Time),
 		notifiedHookSilence:            make(map[string]bool),
 		hookSilenceIdle:                make(map[string]*accountIdle),

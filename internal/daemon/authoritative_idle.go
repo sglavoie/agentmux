@@ -248,6 +248,88 @@ func (h *Handler) ClearIdleSample(windowID int, source SourceID) {
 	h.clearIdleSampleLocked(idleSampleRef{windowID: windowID, key: source.Key})
 }
 
+// ScreenDeclineObservation is one credited declined settle: the screen probe
+// classified a frame and Layer A refused to call it a settleable terminal.
+type ScreenDeclineObservation struct {
+	// Streak is how many consecutive declines this probe source has now been
+	// credited with, including the one just recorded. It restarts at one
+	// whenever the observed fingerprint differs from the streak's.
+	Streak int
+
+	// Fingerprint is the normalized-screen fingerprint the streak is
+	// accumulating against — the same value the stabilization gate would have
+	// compared had the frame been settleable.
+	Fingerprint int64
+
+	// StableFingerprint reports whether the classifier has now declined the SAME
+	// unchanging screen at least twice. This is the discriminator the decline
+	// site's comment describes in prose: false means the pane is repainting,
+	// which is what ordinary live work looks like, while true means the screen
+	// went quiet and Layer A vetoed it anyway — the shape a classifier that has
+	// stopped matching a redesigned harness UI takes. A zero fingerprint is
+	// never stable, because the fail-closed zero Observation carries no hash at
+	// all; that mirrors how recordIdleSampleWithGenerationLocked treats a zero
+	// generation.
+	StableFingerprint bool
+}
+
+// recordScreenDeclineLocked credits one declined settle for the ref against the
+// fingerprint the frame carried, and returns the resulting decline state. A
+// fingerprint that differs from the one the streak is accumulating against
+// restarts the streak before this decline is counted, so the streak only ever
+// measures repeated refusals of the same screen. Callers hold stateMu.
+func (h *Handler) recordScreenDeclineLocked(ref idleSampleRef, fingerprint int64) ScreenDeclineObservation {
+	if h.screenProbeDeclineStreak == nil {
+		h.screenProbeDeclineStreak = make(map[idleSampleRef]int)
+	}
+	if h.screenProbeDeclineFingerprint == nil {
+		h.screenProbeDeclineFingerprint = make(map[idleSampleRef]int64)
+	}
+	if prev, ok := h.screenProbeDeclineFingerprint[ref]; !ok || prev != fingerprint {
+		delete(h.screenProbeDeclineStreak, ref)
+		h.screenProbeDeclineFingerprint[ref] = fingerprint
+	}
+	h.screenProbeDeclineStreak[ref]++
+	streak := h.screenProbeDeclineStreak[ref]
+	return ScreenDeclineObservation{
+		Streak:            streak,
+		Fingerprint:       fingerprint,
+		StableFingerprint: fingerprint != 0 && streak > 1,
+	}
+}
+
+// clearScreenDeclineLocked drops a probe source's decline streak and the
+// fingerprint it was accumulating against. Callers hold stateMu.
+func (h *Handler) clearScreenDeclineLocked(ref idleSampleRef) {
+	delete(h.screenProbeDeclineStreak, ref)
+	delete(h.screenProbeDeclineFingerprint, ref)
+}
+
+// RecordScreenProbeDecline resets a probe source's stabilization streak AND
+// credits one decline against the frame's fingerprint, both under a single
+// stateMu acquisition. The two belong together: the reset is the safety
+// behaviour ClearIdleSample already performed on this path, the credit is the
+// diagnostic record of why, and taking the lock twice would leave a window in
+// which the streak is cleared but the decline that cleared it is not yet
+// counted. Safe to call off the state lock.
+func (h *Handler) RecordScreenProbeDecline(windowID int, source SourceID, fingerprint int64) ScreenDeclineObservation {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	ref := idleSampleRef{windowID: windowID, key: source.Key}
+	h.clearIdleSampleLocked(ref)
+	return h.recordScreenDeclineLocked(ref, fingerprint)
+}
+
+// ClearScreenProbeDecline drops a probe source's decline streak. Callers use it
+// after a settle actually lands: reaching a terminal screen is the classifier
+// proving it can still grade this pane, which is precisely the condition the
+// streak exists to detect the absence of. Safe to call off the state lock.
+func (h *Handler) ClearScreenProbeDecline(windowID int, source SourceID) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.clearScreenDeclineLocked(idleSampleRef{windowID: windowID, key: source.Key})
+}
+
 // applyAuthoritativeIdle atomically folds one idle observation into a window's
 // reducer under stateMu and publishes the reduced result. It reports whether a
 // synthetic stop was actually applied (false when the observation was discarded

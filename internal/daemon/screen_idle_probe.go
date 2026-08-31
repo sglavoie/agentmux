@@ -145,13 +145,22 @@ func (h *Handler) probeScreenIdleWindow(
 		// value the stabilization gate would have compared: two consecutive
 		// declines carrying the SAME fingerprint mean the screen is quiet and
 		// Layer A vetoed it, while a changing one means the pane is repainting.
+		//
+		// RecordScreenProbeDecline performs that same stabilization reset and,
+		// in the one lock acquisition, credits the decline against the frame's
+		// fingerprint — which is the paragraph above made machine-readable, so a
+		// classifier that has stopped matching a redesigned harness UI is a
+		// counter someone can read rather than a debug line someone has to be
+		// tailing at the right moment.
+		decline := h.RecordScreenProbeDecline(targetWindowID, source, obs.Fingerprint)
 		slog.Debug("screen stop probe: not settleable", "harness", spec.harness,
 			"target_window_id", targetWindowID,
 			"source_window_id", binding.SourceWindowID,
 			"state", obs.State.String(), "tier", obs.Tier.String(),
 			"vetoes", obs.Vetoes.String(), "fingerprint", obs.Fingerprint,
+			"decline_streak", decline.Streak,
+			"stable_fingerprint", decline.StableFingerprint,
 			"status_line", obs.StatusLine)
-		h.ClearIdleSample(targetWindowID, source)
 		return
 	}
 	// The tier decides the run length; the pane title only lengthens it. An
@@ -164,7 +173,7 @@ func (h *Handler) probeScreenIdleWindow(
 		bump = spec.sampleBump(sourceWindowTitle)
 	}
 
-	h.applyAuthoritativeIdle(AuthoritativeIdle{
+	settled := h.applyAuthoritativeIdle(AuthoritativeIdle{
 		WindowID:     targetWindowID,
 		Source:       source,
 		Harness:      spec.harness,
@@ -184,14 +193,26 @@ func (h *Handler) probeScreenIdleWindow(
 		// and is never read back as a decision input.
 		EvidenceTier: obs.Tier.String(),
 		Generation:   obs.Fingerprint,
-		SessionTitle:    fields.sessionTitle,
-		Account:         fields.account,
-		PipeMode:        fields.pipeMode,
-		Muted:           fields.muted,
+		SessionTitle: fields.sessionTitle,
+		Account:      fields.account,
+		PipeMode:     fields.pipeMode,
+		Muted:        fields.muted,
 		SourceEventID: fmt.Sprintf("%s:%d:%d:%d", spec.eventIDPrefix,
 			binding.SourceWindowID, targetWindowID, binding.TargetReceipt),
 		DiagnosticEvent: spec.event,
 	})
+	if settled {
+		// A settle that actually landed is the classifier proving it can still
+		// carry this pane all the way to a terminal screen, so whatever declines
+		// preceded it were the ordinary cost of a turn rather than evidence of a
+		// classifier that stopped matching. Merely reaching this branch is NOT
+		// enough: a settleable frame that is still stabilizing has proven
+		// nothing yet, and applyAuthoritativeIdle is the only thing that knows
+		// which of the two happened. The second stateMu acquisition is safe
+		// because the streak is diagnostic — nothing reads it to make a
+		// transition decision.
+		h.ClearScreenProbeDecline(targetWindowID, source)
+	}
 }
 
 // classifyScreenState resolves a harness adapter and classifies one capture. A

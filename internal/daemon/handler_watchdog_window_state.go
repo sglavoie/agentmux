@@ -62,6 +62,23 @@ func (h *Handler) pruneClosedWindows(now time.Time, liveIDs map[int]bool) {
 			delete(h.idleSampleGen, ref)
 		}
 	}
+	// Screen-probe decline streaks have the same property for the same reason:
+	// a closed pane will never be classified again, so a streak left behind
+	// would be a permanently frozen count that no later frame can ever advance
+	// or clear. No sweep beyond this one is needed — unlike aslMissStreak, whose
+	// leases can vanish while their window lives, a decline ref is keyed by
+	// window and a fixed probe source key, so window closure is the only way an
+	// entry can become unreachable.
+	for ref := range h.screenProbeDeclineStreak {
+		if _, ok := closed[ref.windowID]; ok {
+			delete(h.screenProbeDeclineStreak, ref)
+		}
+	}
+	for ref := range h.screenProbeDeclineFingerprint {
+		if _, ok := closed[ref.windowID]; ok {
+			delete(h.screenProbeDeclineFingerprint, ref)
+		}
+	}
 	// A tombstoned ID that Kitty reports live again is a reused window, not a
 	// closed one: resurrect it so its diagnostics resume live and it can count
 	// as renderer drift again.
