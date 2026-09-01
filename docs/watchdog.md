@@ -188,6 +188,51 @@ default and is reported rather than crashing the daemon. A daemon that refused
 to start over a typo in a pattern file would be worse than one classifying with
 the shipped copy.
 
+### Required clauses
+
+A clause the installed set does not define simply never matches. For most
+clauses that is a safe way to degrade — it costs the classifier one piece of
+positive evidence, and the pane holds ⚡ a little longer than it needed to.
+
+For some clauses it is the opposite. The classifier settles a pane only when
+**no veto fired**, so a clause that is the sole source of a veto is a *refusal*:
+drop it and the veto silently cannot fire, the screen looks quiet, and a running
+turn settles to a false stop. `claude.toml`'s `working_status_line` is the
+sharpest case — without it, a live turn on a framed empty composer reads as
+quiescent.
+
+So an override must define every clause that carries a refusal, and the loader
+checks that before installing the file. This is separate from parsing: a file
+can be perfectly well-formed TOML with a perfectly valid regex and still be
+rejected here. The check covers three things:
+
+- **presence** — the clause is defined at all;
+- **section** — it is defined where the classifier reads it. A clause moved from
+  `[regex]` to `[phrases]` resolves to nothing, so `working_status_line` as a
+  phrase list is rejected exactly like a missing one;
+- **capture groups** — for the one clause read positionally. `codex.toml`'s
+  `composer_line` must keep its capture group, because the classifier reads
+  submatch 1 as the composer's remainder; without the group every matching line
+  hands it an empty remainder and any chevron-prefixed transcript line reads as
+  an idle composer.
+
+The required set is deliberately a *subset* of the clauses each adapter reads,
+not all of them. Clauses that only grade a settle that already survived every
+veto — Claude's `completed_status_line` and `interrupted_status_line`, Codex's
+`worked_for_line`, `completed_marker_line`, `interrupted_line` and
+`composer_placeholder`, and `contextlimit`'s `chrome_*` lists — stay optional,
+because losing one makes the probe demand *more* stabilization evidence rather
+than less. An override written against an older release therefore still loads,
+as long as it kept the refusals.
+
+Rejection is reported as `screenstate_override_invalid`, and the detail names
+each missing clause and what its absence would cost. The embedded set stays in
+force, so the daemon comes up classifying with the shipped copy.
+
+The shipped files are held to the same contract, in tests and at load time, so a
+clause renamed on only one side of the pair fails the build rather than shipping
+a classifier that quietly cannot refuse.
+
 ### What doctor reports
 
 `amx doctor` prints the active source for every installed pattern set:
@@ -203,11 +248,11 @@ A valid override is the supported configuration and raises nothing — the sourc
 line is the report. Two findings can appear:
 
 - **`screenstate_override_invalid`** (warning). An override file exists but was
-  not used: unreadable, undecodable, failed validation, or the config directory
-  could not be resolved at all. The daemon kept the embedded default, so this is
-  degraded-but-working and does not fail `--strict` on its own. The finding
-  names the file and the exact parse or validation error; fix or remove the file
-  and run `amx daemon restart`.
+  not used: unreadable, undecodable, missing a required clause (above), or the
+  config directory could not be resolved at all. The daemon kept the embedded
+  default, so this is degraded-but-working and does not fail `--strict` on its
+  own. The finding names the file and the exact parse or validation error; fix
+  or remove the file and run `amx daemon restart`.
 - **`screenstate_persistent_decline`** (failure). The classifier has refused the
   *same unchanging screen* on a live window 60 consecutive probe ticks in a row
   — two minutes at the 2-second probe cadence. This one does fail `--strict`.

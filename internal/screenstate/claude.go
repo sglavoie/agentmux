@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/contextlimit"
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/patternset"
 )
 
 // This file classifies a Claude Code screen scrape. Native hooks are primary,
@@ -22,11 +23,18 @@ import (
 // between that file and this one; each is documented at its definition site,
 // where the failures it was tuned against are recorded.
 //
-// A clause the installed set does not define reports no match, which is the
-// fail-closed direction for every use here: a missing composer clause vetoes
-// with VetoComposerBusy, and a missing status-line clause leaves the kind
-// claudeStatusNone. An override written against an older release therefore
-// degrades to "cannot read this screen" rather than to "this screen is idle".
+// FAIL-CLOSED ORIENTATION, and where it does NOT hold. A clause the installed
+// set does not define reports no match. For the composer clause that direction
+// is safe on its own — a missing one vetoes with VetoComposerBusy — but for
+// every clause that FEEDS a veto it is the wrong way round: no match means no
+// veto, and a screen with no vetoes is exactly the screen this adapter settles.
+// working_status_line is the sharpest case, being the only source of
+// VetoLiveStatusLine: drop it and a live turn on a framed empty composer
+// classifies Terminal/TierQuiescent and stops a running pane.
+//
+// So absence is not left to degrade gracefully here. claudeRequirements below
+// names every such clause, and both the loader and the settle path in Classify
+// refuse rather than classify with a veto they cannot compute.
 const (
 	claudeClauseComposerLine   = "composer_line"
 	claudeClauseChoiceLine     = "choice_line"
@@ -37,6 +45,56 @@ const (
 	claudeClauseBackgroundTask = "background_task"
 	claudeClauseBlockingPrompt = "blocking_prompt"
 )
+
+// claudeRequirements is the subset of the clauses above whose absence is not
+// merely a lost check but a lost REFUSAL. Every one of them is the sole source
+// of a veto, so a set missing one classifies a screen that should never settle
+// as a quiet one — the failure mode a pattern override can otherwise introduce
+// silently, because the file still parses and the daemon still starts.
+//
+// The three clauses NOT listed are deliberate. completed_status_line and
+// interrupted_status_line only GRADE a settle that has already survived every
+// veto: losing one drops the observation to TierQuiescent, the weakest tier,
+// which makes the probe spend more stabilization samples rather than fewer.
+// composer_placeholder has no Claude analog. An override written against an
+// older release therefore still loads as long as it kept the refusals.
+//
+// Two things consume this list. patterns.go refuses to INSTALL an override that
+// does not satisfy it, which is where a real user's mistake is caught; Classify
+// refuses to SETTLE against a set that does not satisfy it, which covers every
+// other way a set can reach an adapter — a pinned test set, a future caller, a
+// contract that drifts from the loader.
+var claudeRequirements = patternset.Requirements{
+	{
+		Name: claudeClauseWorking, Kind: patternset.RegexClause,
+		Reason: "it is the only source of the live-status veto, so without it a running turn " +
+			"on an empty composer reads as quiescent and settles to a false stop",
+	},
+	{
+		Name: claudeClauseComposerLine, Kind: patternset.AnyClause,
+		Reason: "it is the only evidence a pane is sitting at a ready prompt; without it every " +
+			"screen is composer_busy and the pane strands on its current icon forever",
+	},
+	{
+		Name: claudeClauseChoiceLine, Kind: patternset.AnyClause,
+		Reason: "it is half the blocking-prompt veto, and the half that survives a reworded prompt",
+	},
+	{
+		Name: claudeClauseBlockingPrompt, Kind: patternset.AnyClause,
+		Reason: "it is the other half of the blocking-prompt veto; without both, a pane waiting " +
+			"on a permission answer can settle",
+	},
+	{
+		Name: claudeClauseInterruptHint, Kind: patternset.AnyClause,
+		Reason: "it is the only source of the interrupt-hint veto, the legacy backstop for builds " +
+			"whose live turn has no status line at all",
+	},
+	{
+		Name: claudeClauseBackgroundTask, Kind: patternset.AnyClause,
+		Reason: "it is the only source of the background-task veto, which is the sole evidence " +
+			"that an idle-looking pane still owns running work",
+	},
+}
 
 // claudeStatusKind is which of Claude's three recognized status-line shapes a
 // single line is, if any.
@@ -131,6 +189,21 @@ func (a claudeAdapter) Classify(screen string) Observation {
 		// Only VetoComposerBusy remains: queued input, or a screen scrolled
 		// past its composer entirely. Neither says anything about the turn, so
 		// the fail-closed default stands.
+		observation.State = Unknown
+	case !claudeRequirements.Satisfied(patterns):
+		// Veto-free, but only because this pattern set cannot compute some of
+		// the vetoes. That is not the same fact and must not be reported as one:
+		// an empty veto set from an incomplete set is silence, not evidence.
+		//
+		// Refusing here rather than in the veto block is deliberate, and matches
+		// codexTerminalTurnScreen's prompt-clause guard: Classify may not invent
+		// a Working or Blocked pane out of a clause it cannot read — that would
+		// be a visible lie about the screen — but it may decline to conclude,
+		// and declining is what stops the degradation from settling a live turn.
+		//
+		// The loader normally makes this unreachable in production by refusing
+		// the override outright. It stays because an Adapter is a public seam:
+		// nothing forces a pattern set to have come through Load.
 		observation.State = Unknown
 	default:
 		observation.State = Terminal

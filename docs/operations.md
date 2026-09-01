@@ -628,7 +628,7 @@ they answer different questions:
 
 | Finding | Severity | What it means | What fixes it |
 | --- | --- | --- | --- |
-| `screenstate_override_invalid` | warning | An override file exists but the daemon declined it — unreadable, undecodable, failed validation, or no absolute config directory could be resolved. The embedded default is in use. | Read the finding's parse or validation detail, correct or delete the named file, then `amx daemon restart`. |
+| `screenstate_override_invalid` | warning | An override file exists but the daemon declined it — unreadable, undecodable, missing a clause the classifier requires, or no absolute config directory could be resolved. The embedded default is in use. | Read the finding's parse or validation detail, correct or delete the named file, then `amx daemon restart`. |
 | `screenstate_persistent_decline` | failure | The classifier refused the same unchanging screen 60 consecutive probe ticks — two minutes at the 2-second cadence — on a live window that is still showing an active icon. | Diff the reported status line against the shipped pattern file, install a corrected override, `amx daemon restart`. |
 
 The severities are deliberately different, for the same reason the six ASL
@@ -636,7 +636,13 @@ dimensions are reported separately: they are not two grades of one problem.
 `screenstate_override_invalid` is degraded-but-working — the daemon kept
 classifying with the shipped copy, nothing is stuck, and failing `--strict` over
 a typo in an optional file would make the strict gate useless. It fires once per
-declined file, so four broken overrides produce four findings.
+declined file, so four broken overrides produce four findings. The most valuable
+case it covers is the quiet one: an override that parses cleanly but has dropped
+a clause the classifier needs in order to refuse. That file would otherwise
+install silently and settle live panes, so the loader rejects it and this warning
+is the only thing that says why — see
+[Required clauses](watchdog.md#required-clauses) for which clauses are mandatory
+and which an older override may safely omit.
 `screenstate_persistent_decline` is the opposite: a window is stuck right now
 and no other signal in the system says so, which is precisely what `--strict`
 exists to catch. It exits 2.
@@ -698,6 +704,14 @@ duration. That is deliberate: it is precisely what makes a 60-tick threshold
 safe rather than merely long. `composer_line` is the clause whose failure
 produces a permanently vetoed *quiet* screen, which is the fault this finding
 names.
+
+Note that this drill *keeps* `working_status_line` and makes `composer_line`
+unmatchable, which is why it still works: the loader's required-clause check
+tests that a clause is present and in the right section, not that it matches
+anything. Deleting `working_status_line` outright is refused at load and the
+override never installs, but an unmatchable one is indistinguishable from copy
+the harness stopped emitting — and that is the failure mode this drill and the
+decline finding exist to expose.
 
 ## Troubleshooting
 

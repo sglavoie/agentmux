@@ -10,6 +10,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/contextlimit"
+	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/patternset"
 )
 
@@ -200,6 +201,15 @@ func Load(dir string) []LoadWarning {
 			continue
 		}
 		override, err := decodePatterns(data, name)
+		if err == nil {
+			// Syntax is not enough. A file that decodes can still be missing a
+			// clause that is the sole source of a veto, and installing it would
+			// delete that refusal with nothing red anywhere: the daemon starts,
+			// doctor reports a valid override, and the classifier settles panes
+			// that are still working. requirementsFor is where each pattern set
+			// says which of its clauses are refusals rather than claims.
+			err = requirementsFor(name).Validate(override)
+		}
 		if err != nil {
 			warnings = append(warnings, LoadWarning{
 				Kind:    WarnOverrideInvalid,
@@ -275,6 +285,13 @@ func loadEmbedded() (map[string]Patterns, []LoadWarning) {
 			continue
 		}
 		set, err := decodePatterns(data, name)
+		if err == nil {
+			// Held to the same semantic contract as an override. A shipped file
+			// that lost a required clause to a rename is a build-time bug, and
+			// the alternative to failing here is shipping a release whose
+			// classifier quietly cannot refuse.
+			err = requirementsFor(name).Validate(set)
+		}
 		if err != nil {
 			warnings = append(warnings, LoadWarning{
 				Kind:    WarnEmbeddedInvalid,
@@ -289,6 +306,9 @@ func loadEmbedded() (map[string]Patterns, []LoadWarning) {
 	// contextlimit ships its pattern file with the code that reads it, so its
 	// embedded default is decoded there and joined here for override handling.
 	set, err := contextlimit.EmbeddedPatterns()
+	if err == nil {
+		err = requirementsFor(contextlimit.PatternsName).Validate(set)
+	}
 	if err != nil {
 		warnings = append(warnings, LoadWarning{
 			Kind:    WarnEmbeddedInvalid,
@@ -300,6 +320,33 @@ func loadEmbedded() (map[string]Patterns, []LoadWarning) {
 	}
 
 	return sets, warnings
+}
+
+// requirementsFor returns the semantic contract a pattern set must satisfy
+// before it is installed: which of its clauses are REFUSALS, whose absence
+// deletes the only reason a screen would not settle, rather than claims whose
+// absence merely withholds a conclusion.
+//
+// Decode cannot answer this and must not try. The schema is generic — it knows
+// about regexes, phrase lists and groups — while which clause carries which
+// veto is knowledge that belongs to the package that reads it. So each owner
+// declares its own list and this function is the only place they are collected.
+//
+// A set with no declared requirements is accepted as-is. That is the honest
+// answer for a pattern set nobody has audited rather than a silent pass: adding
+// a harness means adding its adapter to the adapters map, and the requirements
+// list belongs in the same review as the fail-closed analysis that produces it.
+func requirementsFor(name string) patternset.Requirements {
+	switch name {
+	case harness.Claude:
+		return claudeRequirements
+	case harness.Codex:
+		return codexRequirements
+	case contextlimit.PatternsName:
+		return contextlimit.Requirements()
+	default:
+		return nil
+	}
 }
 
 // decodePatterns is patternset.Decode under this package's old name, kept so

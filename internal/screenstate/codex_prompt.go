@@ -2,6 +2,8 @@ package screenstate
 
 import (
 	"strings"
+
+	"github.com/sglavoie/agentmux/internal/patternset"
 )
 
 // This file classifies the user-blocking prompts Codex's TUI renders. It is the
@@ -91,8 +93,60 @@ var codexPromptClauseNames = []string{
 	codexClausePromptPermissionGrant,
 }
 
+// codexPromptRequirements is codexPromptClauseNames as a loader-enforceable
+// contract: every prompt clause is mandatory in a Codex override, for exactly
+// the reason the fail-closed note above gives. It is folded into
+// codexRequirements in codex.go.
+//
+// Every entry is AnyClause because the prompt classifier reads all of them
+// through Patterns.Match, which handles a regex, a phrase list or a group
+// alike — two of them ship AS groups, and a user is free to turn a flat list
+// into a group or the reverse.
+//
+// The reasons are per-clause rather than shared because they are not the same
+// failure: the two gate clauses blind prompt detection wholesale, while a kind
+// clause blinds exactly one prompt kind and leaves the rest working, which is
+// the harder of the two to diagnose from the outside.
+var codexPromptRequirements = patternset.Requirements{
+	{
+		Name: codexClausePromptChoiceLine, Kind: patternset.AnyClause,
+		Reason: "it is half the visible-choice gate every prompt kind runs through, and the half " +
+			"that is a shape rather than wording",
+	},
+	{
+		Name: codexClausePromptChoiceFooter, Kind: patternset.AnyClause,
+		Reason: "it is the other half of the visible-choice gate; without both, no prompt is ever " +
+			"detected and a pane waiting on the user can settle",
+	},
+	{
+		Name: codexClausePromptEditApproval, Kind: patternset.AnyClause,
+		Reason: "without it an edit-approval prompt is invisible to the settle paths",
+	},
+	{
+		Name: codexClausePromptRequestUserInput, Kind: patternset.AnyClause,
+		Reason: "without it a bottom-pane question is invisible to the settle paths",
+	},
+	{
+		Name: codexClausePromptUnanswered, Kind: patternset.AnyClause,
+		Reason: "without it an unanswered confirmation is invisible to the settle paths",
+	},
+	{
+		Name: codexClausePromptCommandApproval, Kind: patternset.AnyClause,
+		Reason: "without it a command-approval prompt is invisible to the settle paths",
+	},
+	{
+		Name: codexClausePromptPermissionGrant, Kind: patternset.AnyClause,
+		Reason: "without it a permission-grant prompt is invisible to the settle paths",
+	},
+}
+
 // codexPromptClausesDefined reports whether a pattern set defines every clause
 // the prompt classifier reads. See the fail-closed note above.
+//
+// The loader now refuses an override that fails codexPromptRequirements, which
+// covers the same ground for anything that came through Load. This stays as the
+// settle paths' own guard, because a pattern set can reach an adapter without
+// having been loaded — a pinned test set is the everyday case.
 func codexPromptClausesDefined(patterns Patterns) bool {
 	for _, name := range codexPromptClauseNames {
 		if !patterns.Has(name) {

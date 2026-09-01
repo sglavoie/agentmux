@@ -65,13 +65,22 @@ func startDaemonWithScreenPatternOverride(t *testing.T, name, contents string) H
 	return health
 }
 
-// validClaudeOverride is a well-formed replacement pattern file. It is
-// deliberately tiny: this test asserts that the loader accepted it and that the
-// daemon came up, not that the classifier still classifies well with it.
+// validClaudeOverride is a replacement pattern file the daemon will install:
+// every clause screenstate requires of a Claude set, and nothing more. It is as
+// small as an installable override can be, because these tests assert that the
+// loader accepted it and that the daemon came up, not that the classifier still
+// classifies well with it.
 const validClaudeOverride = `harness = "claude"
 
 [regex]
 composer_line = '^\s*[│┃]\s*>'
+choice_line = '(?m)^\s*>\s*\d+\.\s'
+working_status_line = '\x{2026}\s*\(\s*\d+[hms]\b'
+
+[phrases]
+interrupt_hint = ["esc to interrupt"]
+background_task = ["ctrl+b to"]
+blocking_prompt = ["do you want to"]
 `
 
 // brokenClaudeOverride fails regex compilation, which is the most likely way a
@@ -80,6 +89,17 @@ const brokenClaudeOverride = `harness = "claude"
 
 [regex]
 composer_line = '^\s*(unclosed'
+`
+
+// incompleteClaudeOverride is the file validClaudeOverride used to be, and the
+// reason this pair now differs: it is syntactically perfect and semantically
+// unusable. Its one clause is real, so it decodes, installs a Claude set with no
+// working_status_line, and thereby deletes the only source of the live-status
+// veto — leaving a classifier that reads a running turn as a finished one.
+const incompleteClaudeOverride = `harness = "claude"
+
+[regex]
+composer_line = '^\s*[│┃]\s*>'
 `
 
 func TestRun_ScreenPatternsCleanStartWithNoOverride(t *testing.T) {
@@ -148,6 +168,56 @@ func TestRun_ScreenPatternsCleanStartWithBrokenOverrideWarns(t *testing.T) {
 	}
 	if set, ok := screenstate.PatternsFor("claude"); !ok || set.Source() != screenstate.SourceEmbedded {
 		t.Errorf("installed claude source = %q (found=%t); want the embedded default", set.Source(), ok)
+	}
+}
+
+// TestRun_ScreenPatternsRejectsSemanticallyIncompleteOverride is the startup
+// half of the guard internal/screenstate pins in the adapter: a real daemon
+// boot, through the real config directory, must not silently apply an override
+// that parses but cannot compute a veto.
+//
+// It is written as a near-copy of the broken-override test on purpose. The two
+// files differ in exactly one way — one fails to compile, one compiles fine —
+// and the whole point of this repair is that the daemon must treat them the
+// same. Any assertion that held for the broken file and stops holding for this
+// one is the regression.
+func TestRun_ScreenPatternsRejectsSemanticallyIncompleteOverride(t *testing.T) {
+	health := startDaemonWithScreenPatternOverride(t, "claude", incompleteClaudeOverride)
+	if health.ScreenPatterns == nil {
+		t.Fatal("health does not carry the screen-pattern load")
+	}
+	if got := health.ScreenPatterns.Sources["claude"]; got != screenstate.SourceEmbedded {
+		t.Errorf("source[claude] = %q; an incomplete override must leave the embedded copy "+
+			"in force, not install a set that cannot veto", got)
+	}
+	if len(health.ScreenPatterns.Warnings) != 1 {
+		t.Fatalf("warnings = %+v; want exactly one", health.ScreenPatterns.Warnings)
+	}
+	warning := health.ScreenPatterns.Warnings[0]
+	// override_invalid rather than a new kind: the operator remedy is identical
+	// (fix the file or delete it), the degradation is identical, and the kind
+	// strings are a doctor JSON contract, so a new one would be a consumer break
+	// bought for no diagnostic gain. The Detail is where the difference lives.
+	if warning.Kind != string(screenstate.WarnOverrideInvalid) {
+		t.Errorf("kind = %q; want %q", warning.Kind, screenstate.WarnOverrideInvalid)
+	}
+	if warning.Harness != "claude" {
+		t.Errorf("harness = %q; want claude", warning.Harness)
+	}
+	if !strings.HasSuffix(warning.Path, filepath.Join("screenstate", "claude.toml")) {
+		t.Errorf("path = %q; want the override file", warning.Path)
+	}
+	// A compile error points at a line; this one cannot, so the detail must name
+	// the clause and say what it costs or the operator has nothing to act on.
+	for _, want := range []string{"working_status_line", "veto"} {
+		if !strings.Contains(warning.Detail, want) {
+			t.Errorf("detail = %q; want it to mention %q", warning.Detail, want)
+		}
+	}
+	// And the registry the probe goroutines actually read, not just the report.
+	if set, ok := screenstate.PatternsFor("claude"); !ok || set.Source() != screenstate.SourceEmbedded {
+		t.Errorf("installed claude source = %q (found=%t); want the embedded default",
+			set.Source(), ok)
 	}
 }
 
