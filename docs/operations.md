@@ -177,11 +177,12 @@ mismatch, which always fails, and projection errors, which always warn. Disabled
 mode and a machine with no ASL configured or installed report every dimension
 `not_applicable` and raise nothing.
 
-The report is `doctor --json` schema v2. `asl_unavailable` and `asl_read_only`
-keep their exact names and meanings; the six dimension findings
+These dimensions arrived in `doctor --json` schema v2. `asl_unavailable` and
+`asl_read_only` keep their exact names and meanings; the six dimension findings
 (`asl_shell_resolution`, `asl_daemon_resolution`, `asl_contract_mismatch`,
 `asl_projection_errors`, `asl_bridge_stale`, `asl_hook_delivery`) are new, which
-is what the schema bump is for.
+is what that schema bump was for. The report is at v3 today; see
+[Screen classifier health](#screen-classifier-health) for what v3 added.
 
 ### Run presence is a paired cutover
 
@@ -597,6 +598,107 @@ under `t.TempDir()`. Git and `ssh-keygen` are real — the signature the test
 produces is verified with the same command this document gives an operator — and
 nothing in it touches the live installation.
 
+## Screen classifier health
+
+The screen classifier decides whether a pane is still working by matching the
+harness's own UI copy. That copy is data — embedded in the binary, overridable
+per pattern set from `~/.config/agent-mux/screenstate/<name>.toml`, installed
+once at daemon startup, reloaded only by `amx daemon restart`. The file format,
+the four ways a clause is consumed, and the editing procedure are documented in
+[Screen classifier patterns](watchdog.md#screen-classifier-patterns); this
+section is the operator's half.
+
+`amx doctor` always prints which set each pattern came from, because a stale
+override that still parses is the most likely explanation for a classifier that
+silently stopped matching and is invisible everywhere else:
+
+```text
+screen patterns:
+- claude: override (/Users/you/.config/agent-mux/screenstate/claude.toml)
+- codex: embedded
+- contextlimit: embedded
+```
+
+A daemon that predates the block prints
+`screen patterns: unreported (older daemon; restart required)` and raises
+nothing, rather than claiming the embedded default it cannot actually confirm.
+A valid override raises nothing either: it is the supported configuration, and
+the source line above is the whole report. Two finding identifiers exist, and
+they answer different questions:
+
+| Finding | Severity | What it means | What fixes it |
+| --- | --- | --- | --- |
+| `screenstate_override_invalid` | warning | An override file exists but the daemon declined it — unreadable, undecodable, failed validation, or no absolute config directory could be resolved. The embedded default is in use. | Read the finding's parse or validation detail, correct or delete the named file, then `amx daemon restart`. |
+| `screenstate_persistent_decline` | failure | The classifier refused the same unchanging screen 60 consecutive probe ticks — two minutes at the 2-second cadence — on a live window that is still showing an active icon. | Diff the reported status line against the shipped pattern file, install a corrected override, `amx daemon restart`. |
+
+The severities are deliberately different, for the same reason the six ASL
+dimensions are reported separately: they are not two grades of one problem.
+`screenstate_override_invalid` is degraded-but-working — the daemon kept
+classifying with the shipped copy, nothing is stuck, and failing `--strict` over
+a typo in an optional file would make the strict gate useless. It fires once per
+declined file, so four broken overrides produce four findings.
+`screenstate_persistent_decline` is the opposite: a window is stuck right now
+and no other signal in the system says so, which is precisely what `--strict`
+exists to catch. It exits 2.
+
+The two are also independent. A persistent decline with every set reporting
+`embedded` means the *shipped* patterns no longer match the harness — an upgrade
+of the harness, not a mistake by the operator — and the override is the stopgap
+while the shipped file is corrected.
+
+Trusting the failure finding rests on the conjunction behind it: a pane doing
+real work repaints its elapsed-time counter, the screen fingerprint changes, and
+the streak restarts at one. Legitimate activity cannot reach the threshold at
+any duration. The finding carries the probe source, the streak, the veto set,
+and the status line the classifier saw; the last two are the diagnosis. Tombstoned
+windows are exempt, the streak clears on a real settle and on window closure,
+and it deliberately survives a reducer-driven idle-evidence reset, which proves
+nothing about whether the classifier works.
+
+Both findings reach `amx debug bundle` with no extra step, because the bundle
+re-runs doctor and embeds `doctor.json`.
+
+### Drilling the decline signal
+
+No automated test can prove the signal fires against a real harness, so this is
+the operator drill. Run it on a scratch session, never on live work.
+
+1. Copy `internal/screenstate/patterns_claude.toml` to
+   `~/.config/agent-mux/screenstate/claude.toml` and replace `composer_line`
+   with a valid regex that cannot match, e.g.
+   `'^AMX_NEVER_MATCHES_\x{0000}$'`. Run `amx daemon restart` and confirm
+   `amx doctor` reports `claude: override (…)`.
+2. Launch one scratch Claude session, send it a prompt long enough to still be
+   running after a few seconds, then press Esc to interrupt it. Claude fires no
+   `Stop` hook after a user interruption, so the tab is left holding ⚡ with a
+   quiet screen — which is the exact stuck-bolt case the probe exists to
+   recover, and the only way to hold ⚡ long enough to reach the threshold.
+   Clear the composer so the pane would genuinely settle under the shipped
+   patterns.
+3. Wait about two minutes, then read
+   `amx daemon export-events --window <id>`. The window's
+   `watchdog.screen_declines` entry should show a streak past 60,
+   `stable_fingerprint: true`, and `vetoes: "composer_busy"`.
+4. `amx doctor --strict` now raises `screenstate_persistent_decline` naming that
+   window, and exits 2.
+5. Delete the override, `amx daemon restart`, and the pane settles to 🛑 on the
+   next probe tick with both findings gone. Do this even if the drill failed
+   earlier: a broken override left installed degrades every Claude pane.
+
+**Break `composer_line`, not `working_status_line`.** Breaking the working
+status line produces the opposite failure and cannot raise this finding.
+`working_status_line` is the only source of `VetoLiveStatusLine`, so an
+unmatchable one leaves a live turn on a framed empty composer with no veto at
+all: the classifier reads it as quiescent and *settles a running turn* — a false
+🛑, not a held ⚡. And where some other veto does fire during a live turn, the
+decline is recorded against an unstable fingerprint, because the screen
+fingerprint hashes the elapsed timer the pane repaints every tick. The finding
+requires a stable fingerprint, so a working pane can never raise it at any
+duration. That is deliberate: it is precisely what makes a 60-tick threshold
+safe rather than merely long. `composer_line` is the clause whose failure
+produces a permanently vetoed *quiet* screen, which is the fault this finding
+names.
+
 ## Troubleshooting
 
 - **Icons, hooks, or cached transcript data look wrong**: run `amx debug status`
@@ -622,7 +724,11 @@ nothing in it touches the live installation.
   scan. Their event window is 15 minutes. `stop_hold_stuck` warns when a
   terminal stop has been withheld for more than twice the configured
   `[defaults.stop_confirm]` timeout — the window is showing an active icon for
-  a 🛑 that is past every release path.
+  a 🛑 that is past every release path. `screenstate_persistent_decline` fails
+  when the screen classifier has refused the same unchanging frame for two
+  minutes, and `screenstate_override_invalid` warns when a pattern override was
+  declined; both are covered in
+  [Screen classifier health](#screen-classifier-health).
 - **Suspected intermittent state bugs**: preserve a causal snapshot with
   `amx debug bundle --mode share`, validate it with `amx debug replay`, then run
   `amx daemon audit --duration 10m --json`. It samples the invariants every
@@ -686,7 +792,11 @@ nothing in it touches the live installation.
   to `🛑`, so with no `[defaults.watchdog]` threshold configured such a pane can
   hold `⚡` indefinitely. Run the daemon at debug level and grep
   `screen stop probe: not settleable` to see the veto and fingerprint behind
-  each declined observation.
+  each declined observation; that line also carries `decline_streak` and
+  `stable_fingerprint`. A bolt that never clears on a pane that has genuinely
+  gone quiet is the other case, and it is the one `amx doctor --strict` names:
+  see `screenstate_persistent_decline` under
+  [Screen classifier health](#screen-classifier-health).
   For Copilot, also upgrade to version `1.0.45` or newer, because older
   releases had `agentStop` hook issues.
 - **`/clear` still shows a stop icon or stop notification**: inspect

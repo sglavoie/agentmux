@@ -60,6 +60,20 @@ replacement. Daemon startup intentionally avoids transcript maintenance; use
 the `amx transcripts ...` commands or the dashboard search path for transcript
 storage work.
 
+Startup also installs the screen classifier's UI-copy patterns, once, on the
+startup goroutine before any probe goroutine can read them. Each pattern set
+starts from the copy embedded in the binary and is replaced wholesale by
+`~/.config/agent-mux/screenstate/<name>.toml` when that file exists and
+validates. The load never fails the daemon: an unreadable, undecodable or
+invalid override keeps the embedded default and is reported instead, as the
+`screenstate_override_invalid` doctor finding. Because the install is one-shot
+and there is no file watcher, editing a pattern file takes effect on
+`amx daemon restart`. The health response carries the resulting per-set active
+source and warnings, which is where `amx doctor` reads them from; a daemon
+predating the block reports nothing and `amx doctor` says so rather than
+claiming the embedded default. See
+[Screen classifier patterns](watchdog.md#screen-classifier-patterns).
+
 The daemon is the only writer for state icons and the `🔁` loop marker. Its
 state lives in each Kitty window's `amx_state` user var, so a restart restores
 the intended state and the renderer converges the live title on its next pass.

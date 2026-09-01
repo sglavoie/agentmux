@@ -101,6 +101,12 @@ func TestDebugJSONCommandSurfaceIsVersioned(t *testing.T) {
 	// beside the stable `hook_delivery_failures` warning finding, and the
 	// bundle v2 `doctor.json` member gained the optional `daemon.asl`
 	// capability block, which a daemon without the integration omits entirely.
+	//
+	// Not in this ledger: `daemon.screen_patterns` on doctor v3. It is an
+	// additive field, but it arrived alongside a new failure-severity finding
+	// that bumped the doctor report version anyway, so it belongs to that
+	// version's history rather than here. This ledger records fields that
+	// shipped WITHOUT a bump; adding versioned ones would make it a changelog.
 	schemas := []struct {
 		name          string
 		version, want int
@@ -117,5 +123,68 @@ func TestDebugJSONCommandSurfaceIsVersioned(t *testing.T) {
 		if schema.version != schema.want {
 			t.Errorf("unexpected debug %s JSON schema version %d; want %d", schema.name, schema.version, schema.want)
 		}
+	}
+}
+
+// `amx doctor` gets its own audit rather than joining one of the families
+// above, because it is not part of any of them: it is a single top-level leaf
+// whose payload is a versioned diagnostic report, not the shared schema-v1
+// envelope, and whose report deliberately carries health fields at the top
+// level instead of under `data`. So none of the three envelope assertions
+// applies to it and the debug-family assertion is about a different version
+// namespace entirely.
+//
+// What is worth auditing here is what doctor's consumers actually branch on:
+// the report version, and the stable finding identifiers. A finding identifier
+// is the contract — `amx doctor --strict` exits nonzero on any
+// failure-severity finding, so a consumer that treats an unrecognized failure
+// identifier as fatal is behaving correctly, which is exactly why adding one
+// bumps the report version.
+//
+// Not audited here: `daemon audit` and `release-gate`, which also declare
+// --json and are absent from every audit in this file. Both are recorded as
+// follow-ups rather than fixed alongside doctor.
+func TestDoctorJSONCommandSurfaceIsVersioned(t *testing.T) {
+	commands := []*cobra.Command{doctorCmd}
+	for _, command := range commands {
+		if command.Flags().Lookup("json") == nil {
+			t.Errorf("%s does not declare --json", command.CommandPath())
+		}
+		// --strict is half the contract: it is what turns a failure-severity
+		// finding into a process exit status a script can branch on.
+		if command.Flags().Lookup("strict") == nil {
+			t.Errorf("%s does not declare --strict", command.CommandPath())
+		}
+	}
+
+	// v3 is the screen-classifier bump: `screenstate_persistent_decline` is a
+	// new failure identifier. `screenstate_override_invalid` shipped in the
+	// same work at warning severity and required no bump of its own.
+	if doctorReportSchemaVersion != 3 {
+		t.Fatalf("unexpected doctor JSON schema version %d; want 3", doctorReportSchemaVersion)
+	}
+
+	// Every stable finding identifier a doctor report can carry. Adding one is
+	// a contract decision; a duplicate would make two unrelated conditions
+	// indistinguishable to a consumer that branches on `check`.
+	checks := []string{
+		checkASLActiveState, checkSubagentVisibility, checkActiveAfterTerminal,
+		checkShadowCurrentMismatch, checkQueueSaturation,
+		checkRenderGenerationDrift, checkRenderCausalBound, checkBuildMismatch,
+		checkHarnessDrift, checkClosedTombstone, checkAcknowledgedState,
+		checkOwnerMismatchPrompt, checkOwnerMismatchBurst,
+		checkUnknownProducerFact, checkAcknowledgedPressure,
+		checkMalformedProcessIdentity, checkStopHoldStuck,
+		checkScreenPersistentDecline, checkScreenPatternOverrideInvalid,
+	}
+	seen := make(map[string]bool, len(checks))
+	for _, check := range checks {
+		if check == "" {
+			t.Error("an empty doctor finding identifier is not a contract")
+		}
+		if seen[check] {
+			t.Errorf("duplicate doctor finding identifier %q", check)
+		}
+		seen[check] = true
 	}
 }

@@ -172,6 +172,26 @@ timeout = 15
 # the stop hook lands. Default: true.
 # enabled = true
 
+# Screen classifier patterns are NOT configured here. The harness UI copy the
+# idle probe matches on (status lines, interrupt hints, composer placeholders,
+# the context-limit banner) ships embedded in the binary and is overridden per
+# pattern set by dropping a file in a sibling directory of this one:
+#
+#   ~/.config/agent-mux/screenstate/claude.toml
+#   ~/.config/agent-mux/screenstate/codex.toml
+#   ~/.config/agent-mux/screenstate/contextlimit.toml
+#
+# An override REPLACES the embedded set rather than merging into it, so start
+# from the shipped copy (internal/screenstate/patterns_<name>.toml and
+# internal/contextlimit/patterns_contextlimit.toml in the source tree) and edit
+# the whole file. A file that cannot be read or validated is skipped, the
+# embedded default is kept, and `amx doctor` reports it as
+# `screenstate_override_invalid`. Patterns are loaded once at daemon startup, so
+# run `amx daemon restart` after editing. `amx doctor` prints the active source
+# for every pattern set; see docs/watchdog.md for the file format and for
+# `screenstate_persistent_decline`, the strict-doctor failure raised when the
+# classifier stops matching a harness's UI entirely.
+
 # Session archive: retention policy for the searchable filesystem transcript
 # cache. Refresh/prune operations hide entries older than keep_days; harness
 # transcript files on disk are left intact. Set keep_days to 0 to use the

@@ -139,3 +139,105 @@ armed, and a new prompt or any other sign the harness is still working drops
 the held stop rather than painting it. `amx daemon export-events` records each
 hold as a `TerminalStopHold` event with its `stop_hold_outcome`, and a released
 stop carries `stop_hold_waited_ms` plus the `stop_confirmed_by` evidence.
+
+## Screen classifier patterns
+
+The idle probe that confirms a held stop reads the pane's screen and decides
+whether the harness is still working. That decision is made by matching the
+harness's own UI copy — status lines, interrupt hints, composer placeholders,
+the context-limit banner. Harnesses redesign those strings without warning, and
+when they do the classifier stops matching and the affected tab holds ⚡ until
+the watchdog's stale threshold clears it.
+
+The UI copy is therefore data, not compiled-in constants. Each pattern set
+ships embedded in the binary and can be replaced from:
+
+```text
+~/.config/agent-mux/screenstate/<name>.toml
+```
+
+`<name>` is the pattern set, which is usually a harness (`claude.toml`,
+`codex.toml`) but not always: `contextlimit.toml` holds the copy for the
+context-limit banner, which is shared rather than owned by one adapter. Each
+file must declare its own name at the top, e.g. `harness = "claude"`.
+
+An override **replaces** the embedded set; it is never merged into it. Half one
+release's UI copy and half another's is a classifier that vetoes nothing and
+settles a live pane, which is a worse failure than either set alone. So copy the
+shipped file, edit it, and keep the whole thing. The shipped files live in the
+source tree as `internal/screenstate/patterns_<name>.toml` and
+`internal/contextlimit/patterns_contextlimit.toml`, and each documents its
+clauses at the definition site.
+
+Patterns are loaded once, on the startup goroutine, before any probe runs. There
+is no file watcher and no config-reload path, so **reloading means
+`amx daemon restart`**.
+
+A clause is consumed in one of four ways, and the difference matters when
+editing:
+
+| Section | How it matches |
+| --- | --- |
+| `[regex]` | Compiled and matched per line. Write the source as a TOML literal string (single quotes) so backslashes reach the compiler unmangled. |
+| `[phrases]` | Substring search against the case-folded screen. Entries must be lowercase; the loader rejects a file that mixes case. |
+| `[group]` | `all` (every ref matches) plus `any` (at least one ref matches) over other clause names. Either half may be used alone. This is how the two Codex prompt conjunctions are expressed. |
+| Special cases | `composer_placeholder` is compared for **equality** against the composer's captured remainder, so adding a substring to it does nothing. The `contextlimit` `chrome_*` lists are matched **case-sensitively** against the unfolded line, and `chrome_prompt_rune` is a rune set, so an entry longer than one rune can never match. |
+
+Nothing bad happens if a load fails: every failure degrades to the embedded
+default and is reported rather than crashing the daemon. A daemon that refused
+to start over a typo in a pattern file would be worse than one classifying with
+the shipped copy.
+
+### What doctor reports
+
+`amx doctor` prints the active source for every installed pattern set:
+
+```text
+screen patterns:
+- claude: override (/Users/you/.config/agent-mux/screenstate/claude.toml)
+- codex: embedded
+- contextlimit: embedded
+```
+
+A valid override is the supported configuration and raises nothing — the source
+line is the report. Two findings can appear:
+
+- **`screenstate_override_invalid`** (warning). An override file exists but was
+  not used: unreadable, undecodable, failed validation, or the config directory
+  could not be resolved at all. The daemon kept the embedded default, so this is
+  degraded-but-working and does not fail `--strict` on its own. The finding
+  names the file and the exact parse or validation error; fix or remove the file
+  and run `amx daemon restart`.
+- **`screenstate_persistent_decline`** (failure). The classifier has refused the
+  *same unchanging screen* on a live window 60 consecutive probe ticks in a row
+  — two minutes at the 2-second probe cadence. This one does fail `--strict`.
+
+### Responding to a persistent decline
+
+A persistent decline is the failure this whole mechanism exists to make visible:
+the patterns no longer match the harness's UI, so the pane will hold ⚡
+indefinitely and nothing else in the system will say why.
+
+The conjunction is what makes it trustworthy. A pane doing real work repaints
+its elapsed-time counter on every frame, which changes the screen fingerprint
+and restarts the streak at one, so no amount of legitimate activity can reach
+the threshold. A long streak against a *stable* fingerprint means the screen
+went quiet and the classifier vetoed it anyway.
+
+The finding carries the probe source, the streak, the veto set, and the status
+line the classifier saw. Those last two are the diagnosis: diff the reported
+status line against the corresponding clause in the shipped pattern file and the
+copy that changed is usually obvious. Then:
+
+1. Copy the shipped `patterns_<harness>.toml` to
+   `~/.config/agent-mux/screenstate/<harness>.toml`.
+2. Edit the clause the reported status line no longer matches.
+3. `amx daemon restart`, and confirm `amx doctor` now reports `override` as that
+   set's active source.
+4. Confirm the tab settles. The streak clears on a real settle and on window
+   closure; it deliberately survives a reducer-driven idle-evidence reset,
+   because that proves nothing about whether the classifier works.
+
+An override is a stopgap that keeps one machine working; the fix belongs in the
+shipped pattern file. `amx debug bundle` embeds the doctor report, so a bundle
+carries both findings without any extra step.
