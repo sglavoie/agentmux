@@ -67,11 +67,11 @@ type ASLReconcileSnapshot struct {
 	// computed at read time rather than stored, because a daemon that has
 	// stopped reconciling stops updating stored values too — the useful signal
 	// is precisely the one a stalled writer could not have written.
-	LagSeconds     float64 `json:"lag_seconds"`
-	MaxGapSeconds  float64 `json:"max_gap_seconds"`
+	LagSeconds      float64 `json:"lag_seconds"`
+	MaxGapSeconds   float64 `json:"max_gap_seconds"`
 	IntervalSeconds float64 `json:"interval_seconds"`
-	Sweeps         uint64  `json:"sweeps"`
-	SweepErrors    uint64  `json:"sweep_errors"`
+	Sweeps          uint64  `json:"sweeps"`
+	SweepErrors     uint64  `json:"sweep_errors"`
 
 	PlansPresent       int `json:"plans_present"`
 	PlansAbsent        int `json:"plans_confirmed_absent"`

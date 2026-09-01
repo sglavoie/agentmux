@@ -35,7 +35,7 @@ Releases of the Agent Mux / agent-session-loop pair go through
 repositories' gates, installs the pair (ASL first), restarts the real daemon,
 drives a real Kitty smoke, and writes a signed evidence record. The gate lives
 in `internal/release` and is tested in isolation; see
-`docs/operations.md#paired-releases`.
+`docs/paired-releases.md`.
 
 Use `amx doctor --strict`, `amx transcripts status`, and `amx --version` when
 validating an installed artifact. The CLI and daemon build identities must

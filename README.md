@@ -107,7 +107,7 @@ Cutting an actual release — as opposed to reinstalling one — runs
 `just paired-release-gate asl_root=… signing_key=…`, which performs all of the
 above plus both full suites and produces a signed evidence record and annotated
 tags in both repositories. See
-[Paired releases](docs/operations.md#paired-releases) for the procedure, the
+[Paired releases](docs/paired-releases.md) for the procedure, the
 evidence schema, how to verify a record's signature, and how to roll back.
 
 ## Harness profiles
@@ -152,4 +152,9 @@ The detailed guides are organized by operational area:
 - [Harness hook setup and event contracts](docs/hooks.md)
 - [Daemon lifecycle, routing, diagnostics, and privacy](docs/daemon.md)
 - [Watchdog, tab icons, and stop confirmation](docs/watchdog.md)
-- [Configuration commands, development, testing, and troubleshooting](docs/operations.md)
+- [Configuration commands and the operator index](docs/operations.md)
+- [Build and test](docs/testing.md)
+- [agent-session-loop rollout](docs/asl-integration.md)
+- [Paired releases](docs/paired-releases.md)
+- [Screen classifier health](docs/screen-classifier-health.md)
+- [Troubleshooting](docs/troubleshooting.md)

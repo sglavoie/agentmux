@@ -106,7 +106,7 @@ func TestDaemonGuideSchemaV10FactKeys(t *testing.T) {
 
 func TestCrossHarnessDiagnosticDocumentation(t *testing.T) {
 	var guides strings.Builder
-	for _, path := range []string{"../docs/hooks.md", "../docs/daemon.md", "../docs/operations.md"} {
+	for _, path := range []string{"../docs/hooks.md", "../docs/daemon.md", "../docs/operations.md", "../docs/troubleshooting.md"} {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatalf("ReadFile(%s): %v", path, err)

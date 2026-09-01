@@ -178,7 +178,7 @@ Start with `amx doctor --strict`, whose `asl:` line reports mode, executable,
 version, protocol, snapshot age, restart count, action outcomes, and the current
 reason. `amx daemon status` prints the same line. If the bridge is missing or
 too old, install or upgrade `agent-session-loop` first, then restart the daemon.
-`docs/operations.md` covers the individual failures.
+`docs/troubleshooting.md` covers the individual failures.
 
 ## Launcher
 
