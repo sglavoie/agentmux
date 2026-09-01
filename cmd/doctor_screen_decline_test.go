@@ -191,6 +191,40 @@ func TestDoctorStaysCleanOnBenignScreenDeclines(t *testing.T) {
 	}
 }
 
+// TestDoctorIgnoresLiveClearWithStaleDeclineExport is the stale-export half of
+// the recovery case, and the one the daemon's own retraction cannot cover: the
+// operator cleared the pane, but the export doctor read still carries the
+// threshold decline AND says ⚡ in both the renderer's desired icon and the
+// reducer's effective icon. Only the live Kitty title has caught up.
+//
+// A found live window with no state icon is exactly that clear, so it is the
+// freshest reading of the three and the finding must retract on it alone.
+// TestDoctorIgnoresRecoveredPersistentScreenDecline's clear case empties the
+// exported icons too, so it never puts a live clear against a stale bolt.
+//
+// Renderer drift is the correct reading of that disagreement and is expected
+// here, so this asserts only that the decline finding is gone.
+func TestDoctorIgnoresLiveClearWithStaleDeclineExport(t *testing.T) {
+	setUpStuckScreenDeclineFixture(t,
+		stuckScreenDeclineSnapshot(screenDeclinePersistentStreak+5),
+		screenDeclineWindowsShowing(""))
+	doctorJSON = true
+	doctorStrict = true
+
+	var out bytes.Buffer
+	doctorCmd.SetOut(&out)
+	err := runDoctor(doctorCmd, nil)
+	_ = err // the stale bolt against a cleared tab is renderer drift, not this finding
+
+	var report doctorReport
+	if jsonErr := json.Unmarshal(out.Bytes(), &report); jsonErr != nil {
+		t.Fatalf("output is not a single JSON report: %v\n%s", jsonErr, out.String())
+	}
+	if found := findingsByCheck(report.Findings, checkScreenPersistentDecline); len(found) != 0 {
+		t.Fatalf("cleared window still reported as persistently declining: %+v", found)
+	}
+}
+
 // TestDoctorJSONReportsPersistentScreenDecline pins the JSON half of the
 // contract: the stable identifier, the failure severity that drives strict
 // exit, and the window attribution a consumer routes on.

@@ -423,7 +423,14 @@ func screenDeclineStillCurrent(meta daemon.WindowDebugMetadata, liveByID map[int
 	if meta.Shadow.EffectiveGen > 0 {
 		icons = append(icons, meta.Shadow.EffectiveIcon)
 	}
-	if joined && live.IconState != "" {
+	// A found live window always contributes its icon, including the empty one.
+	// Found already separates "Kitty has no such window" from "the tab is
+	// there", so an empty state on a tab that exists is not a missing reading —
+	// it is the clear/reset itself, and it is the only reading of the three that
+	// cannot be stale. Skipping it would let an export captured before the
+	// daemon republished keep the finding alive off its own two bolt values
+	// after the operator has already cleared the pane.
+	if joined {
 		icons = append(icons, live.IconState)
 	}
 	// No reported icon at all is not evidence of a stuck ⚡; a decline streak
