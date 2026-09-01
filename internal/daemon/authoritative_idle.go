@@ -332,6 +332,50 @@ func (h *Handler) clearScreenDeclineLocked(ref idleSampleRef) {
 	delete(h.screenProbeDeclineEvidence, ref)
 }
 
+// retractScreenDeclinesLocked drops every screen-probe decline streak recorded
+// for a window and republishes its export metadata, so a retained streak can
+// never outlive the condition it describes. It is a no-op for the overwhelming
+// majority of windows, which hold no streak at all. Callers hold stateMu.
+//
+// A decline streak is a LIVE counter — "the classifier is refusing this screen
+// right now" — and never a history: the durable per-window event ring is where
+// history lives. That distinction is the whole reason this exists. The screen
+// probe only runs while the window's reduced icon is ⚡, so the moment a native
+// stop, a blocking prompt, or a clear/reset moves the window off it the probe
+// stops being called and can no longer retract anything itself; without an
+// explicit retraction the last streak would be frozen into the export forever
+// and `amx doctor` would keep failing screenstate_persistent_decline for a
+// window that already recovered.
+func (h *Handler) retractScreenDeclinesLocked(windowID int) {
+	if len(h.screenProbeDeclineStreak) == 0 {
+		return
+	}
+	retracted := false
+	for ref := range h.screenProbeDeclineStreak {
+		if ref.windowID != windowID {
+			continue
+		}
+		h.clearScreenDeclineLocked(ref)
+		retracted = true
+	}
+	if retracted {
+		h.syncScreenDeclineMetadataLocked(windowID)
+	}
+}
+
+// retractScreenDeclinesForIconLocked keeps the decline streaks of a window
+// consistent with its visible icon. It is written as an idempotent invariant of
+// that icon rather than as a transition rule — the same shape, and for the same
+// reason, as stampBusySinceLocked: every publication of the reduced state
+// reasserts it, so no caller has to know what the previous icon was or which of
+// the many paths into the reducer it came from. Callers hold stateMu.
+func (h *Handler) retractScreenDeclinesForIconLocked(windowID int, icon string) {
+	if ScreenProbeEligibleIcon(icon) {
+		return
+	}
+	h.retractScreenDeclinesLocked(windowID)
+}
+
 // RecordScreenProbeDecline resets a probe source's stabilization streak AND
 // credits one decline against the frame's fingerprint, both under a single
 // stateMu acquisition. The two belong together: the reset is the safety

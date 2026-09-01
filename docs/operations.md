@@ -661,6 +661,15 @@ windows are exempt, the streak clears on a real settle and on window closure,
 and it deliberately survives a reducer-driven idle-evidence reset, which proves
 nothing about whether the classifier works.
 
+The finding is a claim about the window *right now*, so it retracts as soon as
+that claim stops holding. The probe only classifies a ⚡ window, so anything
+that moves the icon — a late native stop, a terminal error, a blocking prompt,
+`/clear` or F8 — ends the streak the moment the new state is published, and
+doctor independently withholds the finding for a window that is no longer a live
+⚡ so that a snapshot captured just before the retraction, or emitted by an older
+daemon, cannot fail `--strict` for a pane that already recovered. Historical
+decline evidence in the per-window event ring is unaffected either way.
+
 Both findings reach `amx debug bundle` with no extra step, because the bundle
 re-runs doctor and embeds `doctor.json`.
 

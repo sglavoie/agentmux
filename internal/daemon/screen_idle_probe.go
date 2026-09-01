@@ -66,6 +66,20 @@ type screenIdleFields struct {
 	muted        bool
 }
 
+// ScreenProbeEligibleIcon reports whether a window's reduced icon is the ⚡ the
+// screen idle probe is eligible to classify. Every other icon means the probe
+// does not run: a native stop, a blocking prompt, an error, or a clear/reset
+// moves the window off ⚡ and the classifier stops being asked anything about
+// it.
+//
+// It is EXPORTED because `amx doctor` gates screenstate_persistent_decline on
+// exactly this predicate — a decline streak is only current health while the
+// probe would still run — and a private copy of the string "bolt" in cmd would
+// be free to drift away from the gate it is supposed to mirror.
+func ScreenProbeEligibleIcon(icon string) bool {
+	return icon == "bolt"
+}
+
 // probeScreenIdle runs the whole shared probe for one binding: the pre-read
 // eligibility gate, this tick's cached screen capture, and the classification
 // body below. It is the only entry point production uses.
@@ -86,9 +100,13 @@ func (h *Handler) probeScreenIdle(
 	// work for the probe to settle, so bail without a screen read and drop any
 	// in-flight stabilization streak.
 	h.stateMu.Lock()
-	if !h.screenProbeBindingEligibilityCurrentLocked(binding, titleParts.State, func(icon string) bool {
-		return icon == "bolt"
-	}) {
+	if !h.screenProbeBindingEligibilityCurrentLocked(binding, titleParts.State, ScreenProbeEligibleIcon) {
+		// The probe no longer owns this window: the route moved, the receipt
+		// advanced, the pane was recreated, or the reduced icon left ⚡. Whatever
+		// the classifier was refusing, it is not refusing it for this binding any
+		// more — so the decline streak stops being a live counter here rather
+		// than being frozen at whatever it reached.
+		h.retractScreenDeclinesLocked(targetWindowID)
 		h.stateMu.Unlock()
 		slog.Debug("screen stop probe: discarded stale snapshot", "harness", spec.harness,
 			"source_window_id", binding.SourceWindowID, "target_window_id", targetWindowID)
@@ -97,6 +115,7 @@ func (h *Handler) probeScreenIdle(
 	st, ok := h.windowStateLocked(targetWindowID)
 	if !ok || st.Reducer == nil {
 		h.clearIdleSampleLocked(idleSampleRef{windowID: targetWindowID, key: source.Key})
+		h.retractScreenDeclinesLocked(targetWindowID)
 		h.stateMu.Unlock()
 		return
 	}

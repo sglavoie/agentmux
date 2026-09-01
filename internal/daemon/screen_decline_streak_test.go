@@ -249,3 +249,159 @@ func TestProbeCodexScreenDeclineStreakThroughTheProbe(t *testing.T) {
 		t.Fatalf("settle left a decline streak behind: streak=%d fingerprint=%d", streak, fingerprint)
 	}
 }
+
+// declineRunPastDoctorThreshold is a run of declines long enough that `amx
+// doctor` would raise screenstate_persistent_decline on the window. The
+// threshold itself is cmd/invariants.go's screenDeclinePersistentStreak, which
+// this package cannot import — cmd imports daemon, never the reverse — so it is
+// restated here rather than derived. The exact value does not matter to these
+// tests; what matters is that the streak they retract is one a health surface
+// would already be failing on, because a retraction that only works below the
+// threshold would fix nothing.
+const declineRunPastDoctorThreshold = 61
+
+// seedStuckCodexDeclineStreak drives the real probe against a static working
+// frame until the window carries a threshold-length stable decline streak, and
+// returns the fake and the timestamp one tick past the run. It asserts the setup
+// it produced, so a caller that goes on to check a retraction can trust that
+// there was something to retract.
+func seedStuckCodexDeclineStreak(t *testing.T, h *Handler, windowID int, session string, base time.Time) (*fakeKittyClient, time.Time) {
+	t.Helper()
+	fake := &fakeKittyClient{
+		windows: codexProbeWindows(windowID, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
+			Profile: "work",
+			Harness: harness.Codex,
+		}),
+		getText: map[string]string{kitty.MatchWindowByID(windowID): codexWorkingTurnScreen},
+	}
+	h.SetKittyClient(fake)
+	codexSeedActiveBolt(t, h, windowID, session, base.Unix())
+
+	for tick := 0; tick < declineRunPastDoctorThreshold; tick++ {
+		h.ProbeCodexScreenPrompts(base.Add(time.Duration(tick) * time.Second))
+	}
+	source := SourceID{Kind: SourceProbe, Key: screenPromptProbeSource}
+	streak, fingerprint, present := screenDeclineState(t, h, windowID, source)
+	if !present || streak != declineRunPastDoctorThreshold || fingerprint == 0 {
+		t.Fatalf("seeded decline streak = %d (fingerprint=%d present=%t), want %d on a stable fingerprint",
+			streak, fingerprint, present, declineRunPastDoctorThreshold)
+	}
+	published := exportedScreenDeclines(t, h, windowID)
+	if len(published) != 1 || published[0].Streak != declineRunPastDoctorThreshold || !published[0].StableFingerprint {
+		t.Fatalf("seeded published declines = %+v, want one stable threshold streak", published)
+	}
+	if eff, _ := windowEffective(t, h, windowID); eff.Icon != "bolt" {
+		t.Fatalf("seeded effective = %+v, want the stuck bolt the finding describes", eff)
+	}
+	return fake, base.Add(declineRunPastDoctorThreshold * time.Second)
+}
+
+// assertScreenDeclinesRetracted checks BOTH halves of a retraction: the live map
+// the probe reads and the export snapshot doctor reads. A retraction that
+// cleared only the map would leave the stale streak published forever, which is
+// the exact failure mode these tests exist for.
+func assertScreenDeclinesRetracted(t *testing.T, h *Handler, windowID int) {
+	t.Helper()
+	source := SourceID{Kind: SourceProbe, Key: screenPromptProbeSource}
+	if streak, fingerprint, present := screenDeclineState(t, h, windowID, source); present {
+		t.Fatalf("decline streak survived: streak=%d fingerprint=%d", streak, fingerprint)
+	}
+	if got := exportedScreenDeclines(t, h, windowID); len(got) != 0 {
+		t.Fatalf("export still publishes declines: %+v", got)
+	}
+}
+
+// TestScreenDeclineRetractedWhenProbeBecomesIneligible is the lifecycle half of
+// the decline signal. The streak is a LIVE counter — "the classifier is refusing
+// this screen right now" — but the screen probe only runs while the window shows
+// ⚡, so every recovery that does not go through a settle leaves the probe with
+// no further chance to retract anything: a native Stop hook, an error, or a
+// /clear moves the window off ⚡ and the probe simply stops being called. Without
+// an explicit retraction the last streak freezes into the export and `amx
+// doctor` keeps failing screenstate_persistent_decline for a window that already
+// recovered.
+func TestScreenDeclineRetractedWhenProbeBecomesIneligible(t *testing.T) {
+	// Each case is a transition away from ⚡ that the screen probe itself can
+	// never observe, because the probe is not eligible for the icon it leaves
+	// behind.
+	const session = "sess-stuck"
+	transitions := []struct {
+		name     string
+		inject   func(t *testing.T, h *Handler, at time.Time)
+		wantIcon string
+	}{
+		{
+			// The native Stop hook the probe exists to compensate for, arriving
+			// after all: the classifier was never fixed, but this window is no
+			// longer stuck and no longer has anything to report.
+			name: "native stop",
+			inject: func(t *testing.T, h *Handler, at time.Time) {
+				codexInjectSessionEvent(t, h, 42, session, "stop", "Stop", at.Unix())
+			},
+			wantIcon: "stop",
+		},
+		{
+			// A failed turn: a different terminal icon, equally not a ⚡.
+			name: "terminal error",
+			inject: func(t *testing.T, h *Handler, at time.Time) {
+				codexInjectSessionEvent(t, h, 42, session, "stop_failure", "Stop", at.Unix())
+			},
+			wantIcon: "error",
+		},
+		{
+			// A /clear flow owns the window's cleared state and leaves it with no
+			// icon at all.
+			name: "user clear",
+			inject: func(t *testing.T, h *Handler, _ time.Time) {
+				if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "user_clear"}); !resp.OK {
+					t.Fatalf("inject user_clear rejected: %+v", resp)
+				}
+			},
+			wantIcon: "",
+		},
+	}
+	for _, tc := range transitions {
+		t.Run(tc.name, func(t *testing.T) {
+			base := time.Now()
+			h := newTestHandler()
+			_, next := seedStuckCodexDeclineStreak(t, h, 42, session, base)
+
+			tc.inject(t, h, next)
+			if eff, _ := windowEffective(t, h, 42); eff.Icon != tc.wantIcon {
+				t.Fatalf("effective after %s = %+v, want icon %q", tc.name, eff, tc.wantIcon)
+			}
+			assertScreenDeclinesRetracted(t, h, 42)
+
+			// The retraction must also be durable against the probe's own next
+			// pass: the tab title in the Kitty fake is still ⚡, so the probe is
+			// still entered, and a recorder that credited a decline for a window
+			// the reducer has already recovered would resurrect the streak.
+			h.ProbeCodexScreenPrompts(next)
+			assertScreenDeclinesRetracted(t, h, 42)
+		})
+	}
+
+	// The remaining ineligibility is not an icon change at all: the binding the
+	// streak was accumulated under goes stale (the route moved, the pane was
+	// recreated, or a reducer event advanced the receipt between snapshot capture
+	// and the pre-read recheck). The window is still a ⚡, but this probe no
+	// longer owns it, so the streak it banked is no longer anyone's live counter.
+	t.Run("stale binding", func(t *testing.T) {
+		base := time.Now()
+		h := newTestHandler()
+		_, next := seedStuckCodexDeclineStreak(t, h, 42, "sess-stale", base)
+
+		h.stateMu.Lock()
+		receipt := h.store[42].ShadowSeq
+		h.stateMu.Unlock()
+
+		stale := directCodexProbeBinding(42, receipt+1, 0)
+		h.probeScreenIdle(next, codexScreenIdleSpec, stale,
+			palette.TitleParts{State: "bolt"}, kitty.UserVars{Harness: harness.Codex}, "", h.screenTextCacheFor())
+
+		if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
+			t.Fatalf("effective after a stale-binding probe = %+v, want the ⚡ untouched", eff)
+		}
+		assertScreenDeclinesRetracted(t, h, 42)
+	})
+}

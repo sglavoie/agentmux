@@ -268,8 +268,17 @@ func evaluateDaemonInvariants(snapshot daemon.EventsExport, health daemon.Health
 		// see screenDeclinePersistentStreak. The vetoes and status line are
 		// carried into the message because they are what an operator diffs
 		// against the shipped patterns to find the copy that changed.
+		//
+		// The finding is a statement about the window's CURRENT health, so it is
+		// gated on the window still being the stuck ⚡ the streak describes. The
+		// daemon retracts a streak itself when the window moves off ⚡, but this
+		// gate is not merely a second copy of that: a doctor run reads one export
+		// snapshot, which may have been captured before the retraction or emitted
+		// by a daemon predating it, and the retained evidence must not fail
+		// strict doctor for a window that has already recovered.
+		stuckOnScreen := screenDeclineStillCurrent(meta, liveByID, id)
 		for _, decline := range meta.Watchdog.ScreenDeclines {
-			if !decline.StableFingerprint || decline.Streak < screenDeclinePersistentStreak {
+			if !stuckOnScreen || !decline.StableFingerprint || decline.Streak < screenDeclinePersistentStreak {
 				continue
 			}
 			statusLine := decline.StatusLine
@@ -374,6 +383,60 @@ func evaluateDaemonInvariants(snapshot daemon.EventsExport, health daemon.Health
 	}
 
 	return findings
+}
+
+// screenDeclineStillCurrent reports whether a window's retained screen-probe
+// decline evidence still describes its health RIGHT NOW, which is the only
+// thing screenstate_persistent_decline claims. The streak means "the classifier
+// is refusing this pane's screen and the tab is stuck on ⚡"; the moment either
+// half stops being true the failure has to retract, even though the evidence
+// that produced it is legitimately retained.
+//
+// Two conditions, in the order they can go wrong:
+//
+//  1. The window is still live. A closed window is already exempt one level up
+//     as a tombstone, but a window Kitty no longer reports at all is equally not
+//     a pane anyone is looking at. When Kitty was unreachable the live join never
+//     ran (liveByID is nil), and suppressing the finding for the whole report
+//     would hide the fault it exists for, so the export's own view stands alone.
+//
+//  2. The screen probe is still eligible for it. The probe classifies a window
+//     only while its reduced icon is the ⚡ daemon.ScreenProbeEligibleIcon names,
+//     so a native stop, a blocking prompt, an error, or a clear/reset recovers
+//     the window by taking it out of the probe's reach entirely — and the probe
+//     then has no further tick in which to notice. Every icon the export reports
+//     for the window is checked rather than one chosen field: the renderer's
+//     intent, the reducer's authoritative answer, and the live tab title are
+//     three views of the same window, and a window that is genuinely still stuck
+//     shows ⚡ in all of them.
+func screenDeclineStillCurrent(meta daemon.WindowDebugMetadata, liveByID map[int]daemon.WindowLiveMetadata, id int) bool {
+	live, joined := daemon.WindowLiveMetadata{}, liveByID != nil
+	if joined {
+		if live = liveByID[id]; !live.Found {
+			return false
+		}
+	}
+	icons := make([]string, 0, 3)
+	if meta.Renderer.StateSet || meta.Renderer.DesiredIcon != "" {
+		icons = append(icons, meta.Renderer.DesiredIcon)
+	}
+	if meta.Shadow.EffectiveGen > 0 {
+		icons = append(icons, meta.Shadow.EffectiveIcon)
+	}
+	if joined && live.IconState != "" {
+		icons = append(icons, live.IconState)
+	}
+	// No reported icon at all is not evidence of a stuck ⚡; a decline streak
+	// with nothing to attribute it to is stale by definition.
+	if len(icons) == 0 {
+		return false
+	}
+	for _, icon := range icons {
+		if !daemon.ScreenProbeEligibleIcon(icon) {
+			return false
+		}
+	}
+	return true
 }
 
 func isPromptSessionEvent(event daemon.SessionEvent) bool {

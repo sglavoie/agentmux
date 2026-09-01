@@ -308,6 +308,10 @@ func (h *Handler) publishEffectiveLocked(windowID int, st *WindowState, effectiv
 	meta.Shadow.EffectiveGen = st.EffectiveGen
 	h.windowMetadata[windowID] = meta
 	stampBusySinceLocked(st, effective.Icon, time.Now())
+	// The screen idle probe only classifies a ⚡ window, so a decline streak
+	// stops describing anything the instant the reduced icon leaves it. This runs
+	// AFTER the metadata write above because it republishes the same entry.
+	h.retractScreenDeclinesForIconLocked(windowID, effective.Icon)
 }
 
 // stampBusySinceLocked maintains the busy-stretch anchor as an idempotent
