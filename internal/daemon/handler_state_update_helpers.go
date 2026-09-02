@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 )
 
 const (
@@ -29,7 +30,7 @@ func (h *Handler) lastKnownState(windowID int) (action, iconState string) {
 	h.stateMu.Lock()
 	if st, ok := h.windowStateLocked(windowID); ok {
 		action = st.LastAction
-		iconState = desiredIconForState(st)
+		iconState = rendering.DesiredIcon(st)
 	}
 	h.stateMu.Unlock()
 	return action, iconState

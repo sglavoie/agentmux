@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -170,9 +171,9 @@ func TestMaintenanceTick_RestoresAmxStateBeforeReadyAndLateStartupCannotRollBack
 	if after != restored {
 		t.Fatal("late startup restore replaced the in-process state, rolling back the newer hook")
 	}
-	if after.LastAction != "permission" || desiredIconForState(after) != "key" {
+	if after.LastAction != "permission" || rendering.DesiredIcon(after) != "key" {
 		t.Fatalf("late startup restore rolled back hook state: action=%q desired=%q, want permission/key",
-			after.LastAction, desiredIconForState(after))
+			after.LastAction, rendering.DesiredIcon(after))
 	}
 }
 

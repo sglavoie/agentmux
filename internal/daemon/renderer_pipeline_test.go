@@ -159,7 +159,7 @@ func TestRendererGenerationRevalidationRequeuesSupersededWindow(t *testing.T) {
 	if h.renderGenerationCurrent(42, 1) {
 		t.Fatalf("superseded generation passed revalidation")
 	}
-	if h.renderQueue.empty() {
+	if h.renderQueue.Empty() {
 		t.Fatalf("superseded revalidation did not requeue the window")
 	}
 	if !h.renderGenerationCurrent(42, 2) {
@@ -262,11 +262,11 @@ func TestRendererActivityOnlyEventsBatchPersistence(t *testing.T) {
 	if !resp.OK {
 		t.Fatalf("first state update failed: %v", resp.Error)
 	}
-	if h.renderQueue.empty() {
+	if h.renderQueue.Empty() {
 		t.Fatalf("visual change was not queued for immediate render")
 	}
 	h.renderSnapshot(fake.windows)
-	if !h.renderQueue.empty() {
+	if !h.renderQueue.Empty() {
 		t.Fatalf("render pass left the queue non-empty")
 	}
 	persistsAfterFirst := len(fake.userVarsCalls())
@@ -283,7 +283,7 @@ func TestRendererActivityOnlyEventsBatchPersistence(t *testing.T) {
 	if !dirty {
 		t.Fatalf("activity-only event did not mark durable state dirty")
 	}
-	if !h.renderQueue.empty() {
+	if !h.renderQueue.Empty() {
 		t.Fatalf("activity-only event queued an immediate render")
 	}
 	if got := len(fake.userVarsCalls()); got != persistsAfterFirst {
@@ -292,7 +292,7 @@ func TestRendererActivityOnlyEventsBatchPersistence(t *testing.T) {
 
 	// The maintenance flush batches the pending persistence into the queue.
 	h.enqueueSnapshotCandidates(fake.windows)
-	if h.renderQueue.empty() {
+	if h.renderQueue.Empty() {
 		t.Fatalf("maintenance flush did not queue the batched persistence")
 	}
 	h.drainRenderQueueWith(fake.windows)

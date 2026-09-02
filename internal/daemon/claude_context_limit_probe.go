@@ -38,7 +38,7 @@ const (
 // gate, so the broader filter cannot trigger false positives.
 //
 // The icon swap is deduped per stall episode by contextLimitNotified so we
-// don't churn the tab title on every probe cycle (the shared renderInterval
+// don't churn the tab title on every probe cycle (the shared rendering.Interval
 // ticker driving runScreenProbes). The flag is cleared by an
 // "active"-class event re-entering the window (S3) or when the window closes.
 func (h *Handler) ProbeClaudeContextLimit(now time.Time) {

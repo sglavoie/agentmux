@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
@@ -110,7 +111,7 @@ func (h *Handler) refreshHeldStopRequestLocked(req protocol.Request) protocol.Re
 	if st.LastAccount != "" {
 		req.Account = st.LastAccount
 	}
-	req.CurrentIconState = desiredIconForState(st)
+	req.CurrentIconState = rendering.DesiredIcon(st)
 	return req
 }
 
@@ -163,7 +164,7 @@ func (h *Handler) appendStopHoldEvent(req protocol.Request, outcome protocol.Sto
 	h.touchWindowMetadataLocked(req)
 	st := h.ensureWindowStateLocked(req.WindowID)
 	effective := effectiveStateEvidence(st.Effective)
-	event := suppressedSessionEvent(req, req.Action, reason, desiredIconForState(st))
+	event := suppressedSessionEvent(req, req.Action, reason, rendering.DesiredIcon(st))
 	event.Event = protocol.EventTerminalStopHold
 	event.StopHoldOutcome = outcome
 	event.StopHoldWaitedMs = int(waited.Milliseconds())

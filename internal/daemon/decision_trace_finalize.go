@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
@@ -70,7 +71,7 @@ func (h *Handler) finalizeBypassedStateUpdate(req protocol.Request, outcome appl
 	st := h.ensureWindowStateLocked(req.WindowID)
 	event := eventByReferenceLocked(st, req.EventRef)
 	if event == nil {
-		fallback := sessionEventFromRequest(req, outcome.reduceAction, protocol.IconStatePreserve, desiredIconForState(st))
+		fallback := sessionEventFromRequest(req, outcome.reduceAction, protocol.IconStatePreserve, rendering.DesiredIcon(st))
 		fallback.Suppressed = true
 		fallback.SuppressionReason = outcome.skipReason
 		appended := h.appendEventLocked(req.WindowID, fallback)
@@ -156,7 +157,7 @@ func (h *Handler) finalizeReducerDecisionLocked(
 	st := h.ensureWindowStateLocked(req.WindowID)
 	event := eventByReferenceLocked(st, req.EventRef)
 	if event == nil {
-		fallback := sessionEventFromRequest(req, n.Action, protocol.IconStatePreserve, desiredIconForState(st))
+		fallback := sessionEventFromRequest(req, n.Action, protocol.IconStatePreserve, rendering.DesiredIcon(st))
 		appended := h.appendEventLocked(req.WindowID, fallback)
 		event = eventByReferenceLocked(st, req.EventRef)
 		if event == nil {

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -41,8 +42,8 @@ func TestUserVarV1IgnoresBusySinceAndSelfHealsOnRestore(t *testing.T) {
 	if !ok {
 		t.Fatalf("restored state missing")
 	}
-	if desiredIconForState(st) != "bolt" {
-		t.Fatalf("restored icon = %q, want bolt", desiredIconForState(st))
+	if rendering.DesiredIcon(st) != "bolt" {
+		t.Fatalf("restored icon = %q, want bolt", rendering.DesiredIcon(st))
 	}
 	if !st.BusySince.After(now.Add(-time.Second)) {
 		t.Fatalf("anchor = %v; want it self-healed to restore time, not the payload's stale value", st.BusySince)

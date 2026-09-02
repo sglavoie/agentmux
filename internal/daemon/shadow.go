@@ -18,6 +18,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
@@ -191,7 +192,7 @@ func (h *Handler) reduceStateUpdate(req protocol.Request, outcome applyOutcome, 
 
 	// Capture the legacy render decision before overwriting it: divergence is
 	// exported as evidence for retiring the legacy scalar machine.
-	legacyIcon := desiredIconForState(st)
+	legacyIcon := rendering.DesiredIcon(st)
 	legacyLooping := st.Looping
 
 	changed := effective != st.Effective

@@ -183,7 +183,7 @@ func TestPruneClosedWindows_CreatesTombstoneAndPurgesLiveState(t *testing.T) {
 			replyCutoffs,
 		)
 	}
-	if !h.renderQueue.empty() {
+	if !h.renderQueue.Empty() {
 		t.Fatalf("queued render for closed window not cancelled")
 	}
 	if !hasMeta {

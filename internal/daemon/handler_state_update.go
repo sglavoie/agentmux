@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
@@ -115,7 +116,7 @@ func (h *Handler) applyStateUpdate(req protocol.Request) (protocol.Response, app
 	// Capture the visible state before any mutation so the final dirty mark
 	// can distinguish a visual change (immediate render) from activity-only
 	// bookkeeping (batched persistence).
-	visualIconBefore := desiredIconForState(st)
+	visualIconBefore := rendering.DesiredIcon(st)
 	visualLoopingBefore := st.Looping
 	if req.Account != "" {
 		st.LastAccount = req.Account
@@ -435,7 +436,7 @@ func (h *Handler) applyStateUpdate(req protocol.Request) (protocol.Response, app
 	h.syncRendererMetadataLocked(req.WindowID)
 	// Visual changes render immediately; everything else is batched
 	// persistence flushed by the next maintenance tick.
-	if st := h.ensureWindowStateLocked(req.WindowID); desiredIconForState(st) != visualIconBefore || st.Looping != visualLoopingBefore {
+	if st := h.ensureWindowStateLocked(req.WindowID); rendering.DesiredIcon(st) != visualIconBefore || st.Looping != visualLoopingBefore {
 		h.markWindowDirtyLocked(req.WindowID)
 	} else {
 		h.markWindowActivityDirtyLocked(req.WindowID)
@@ -476,7 +477,7 @@ func (h *Handler) handleLoopMarkerStateUpdate(req protocol.Request) protocol.Res
 		st.Looping = false
 		st.LoopingSet = true
 	}
-	h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, req.Action, protocol.IconStatePreserve, desiredIconForState(st)))
+	h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, req.Action, protocol.IconStatePreserve, rendering.DesiredIcon(st)))
 	h.linkRequestRenderGenerationLocked(req, st.Seq+1)
 	h.syncRendererMetadataLocked(req.WindowID)
 	// A heartbeat that leaves the marker as-is is activity bookkeeping; only a

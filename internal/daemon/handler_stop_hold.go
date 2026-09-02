@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
 
@@ -40,7 +41,7 @@ const (
 // gate once its quiet period has elapsed. It tracks the screen-probe cadence so
 // a confirmation is acted on within one probe cycle instead of riding to the
 // deadline.
-const stopHoldRetryInterval = renderInterval
+const stopHoldRetryInterval = rendering.Interval
 
 // pendingStopHold is one stop the handler is withholding from the reducer.
 // quietUntil and deadline are the two halves of the terminal class's release

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -32,7 +33,7 @@ func windowEffective(t *testing.T, h *Handler, windowID int) (state.EffectiveSta
 	if !ok {
 		t.Fatalf("window %d has no state", windowID)
 	}
-	return st.Effective, desiredIconForState(st)
+	return st.Effective, rendering.DesiredIcon(st)
 }
 
 func TestShadowReducerAgreesWithLegacyOnBasicFlow(t *testing.T) {

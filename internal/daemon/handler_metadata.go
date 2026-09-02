@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
 
@@ -56,7 +57,7 @@ func (h *Handler) syncRendererMetadataLocked(windowID int) {
 		return
 	}
 	meta := h.windowMetadata[windowID]
-	meta.Renderer.DesiredIcon = desiredIconForState(st)
+	meta.Renderer.DesiredIcon = rendering.DesiredIcon(st)
 	meta.Renderer.StateSet = st.StateSet
 	meta.Renderer.Looping = st.Looping
 	meta.Renderer.LoopingSet = st.LoopingSet
@@ -72,7 +73,7 @@ func (h *Handler) syncRendererMetadataLocked(windowID int) {
 		meta.Renderer.DirtySince = st.DirtySince.Unix()
 	}
 	meta.Renderer.LastRenderLatencyMs = st.LastRenderLatency.Milliseconds()
-	meta.Renderer.Generations = cloneRenderGenerationTraces(st.RenderGenerations)
+	meta.Renderer.Generations = rendering.CloneTraces(st.RenderGenerations)
 	meta.Renderer.KittyListenOn = h.kittySockets[windowID]
 	if meta.Renderer.KittyListenOn == "" {
 		meta.Renderer.KittyListenOn = h.lastKittyListenOn

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -191,15 +192,15 @@ func TestRestoreFromUserVarsRepublishesReducedStateAfterTombstoneExpiry(t *testi
 	if agedSt == nil || freshSt == nil {
 		t.Fatalf("restored state missing: aged=%v fresh=%v", agedSt, freshSt)
 	}
-	if !agedSt.StateSet || agedSt.DesiredIcon != "" || desiredIconForState(agedSt) != "" {
+	if !agedSt.StateSet || agedSt.DesiredIcon != "" || rendering.DesiredIcon(agedSt) != "" {
 		t.Fatalf("aged restore = StateSet=%v DesiredIcon=%q desired=%q, want authoritative empty icon",
-			agedSt.StateSet, agedSt.DesiredIcon, desiredIconForState(agedSt))
+			agedSt.StateSet, agedSt.DesiredIcon, rendering.DesiredIcon(agedSt))
 	}
 	if len(agedSt.Reducer.Facts()) != 0 {
 		t.Fatalf("aged restore kept facts %+v, want compacted empty", agedSt.Reducer.Facts())
 	}
-	if freshSt.DesiredIcon != "stop" || desiredIconForState(freshSt) != "stop" {
-		t.Fatalf("fresh restore desired = %q/%q, want stop", freshSt.DesiredIcon, desiredIconForState(freshSt))
+	if freshSt.DesiredIcon != "stop" || rendering.DesiredIcon(freshSt) != "stop" {
+		t.Fatalf("fresh restore desired = %q/%q, want stop", freshSt.DesiredIcon, rendering.DesiredIcon(freshSt))
 	}
 
 	// The shadow metadata must be stamped at restore exactly as a live
@@ -258,8 +259,8 @@ func TestRestoreFromUserVarsKeepsLivePersistedBusySince(t *testing.T) {
 	if !ok {
 		t.Fatalf("restored state missing")
 	}
-	if desiredIconForState(st) != "bolt" {
-		t.Fatalf("restored icon = %q, want the still-busy bolt", desiredIconForState(st))
+	if rendering.DesiredIcon(st) != "bolt" {
+		t.Fatalf("restored icon = %q, want the still-busy bolt", rendering.DesiredIcon(st))
 	}
 	if !st.BusySince.Equal(anchor) {
 		t.Fatalf("anchor = %v; want the persisted %v", st.BusySince, anchor)
@@ -309,9 +310,9 @@ func TestRestoreFromUserVarsStampsBusySinceForFactlessPayloads(t *testing.T) {
 	if busySt.Reducer != nil || stoppedSt.Reducer != nil {
 		t.Fatalf("payloads were not fact-less: busy=%v stopped=%v", busySt.Reducer, stoppedSt.Reducer)
 	}
-	if desiredIconForState(busySt) != "bolt" || desiredIconForState(stoppedSt) != "stop" {
+	if rendering.DesiredIcon(busySt) != "bolt" || rendering.DesiredIcon(stoppedSt) != "stop" {
 		t.Fatalf("restored icons = %q/%q, want bolt/stop",
-			desiredIconForState(busySt), desiredIconForState(stoppedSt))
+			rendering.DesiredIcon(busySt), rendering.DesiredIcon(stoppedSt))
 	}
 	if !busySt.BusySince.Equal(now) {
 		t.Fatalf("busy anchor = %v; want it self-healed to the restore instant %v", busySt.BusySince, now)

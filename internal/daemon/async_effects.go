@@ -8,96 +8,10 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
-
-const maxRenderGenerationTraces = 16
-
-const (
-	renderStageDirty     = "dirty"
-	renderStageQueued    = "queued"
-	renderStageAttempted = "attempted"
-	renderStagePersisted = "persisted"
-	renderStageRendered  = "rendered"
-	renderStageFailed    = "failed"
-)
-
-func cloneRenderGenerationTrace(in protocol.RenderGenerationTrace) protocol.RenderGenerationTrace {
-	out := in
-	out.SourceGenerations = append([]uint64(nil), in.SourceGenerations...)
-	out.TraceIDs = append([]string(nil), in.TraceIDs...)
-	out.RequestIDs = append([]string(nil), in.RequestIDs...)
-	out.SourceEventIDs = append([]string(nil), in.SourceEventIDs...)
-	return out
-}
-
-func cloneRenderGenerationTraces(in []protocol.RenderGenerationTrace) []protocol.RenderGenerationTrace {
-	out := make([]protocol.RenderGenerationTrace, len(in))
-	for i := range in {
-		out[i] = cloneRenderGenerationTrace(in[i])
-	}
-	return out
-}
-
-func appendBoundedUnique(values []string, value string) []string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return values
-	}
-	for _, existing := range values {
-		if existing == value {
-			return values
-		}
-	}
-	values = append(values, value)
-	if len(values) > protocol.MaxRenderCausalIDs {
-		values = append([]string(nil), values[len(values)-protocol.MaxRenderCausalIDs:]...)
-	}
-	return values
-}
-
-func appendBoundedUniqueGeneration(values []uint64, value uint64) []uint64 {
-	if value == 0 {
-		return values
-	}
-	for _, existing := range values {
-		if existing == value {
-			return values
-		}
-	}
-	values = append(values, value)
-	if len(values) > protocol.MaxRenderCausalIDs {
-		values = append([]uint64(nil), values[len(values)-protocol.MaxRenderCausalIDs:]...)
-	}
-	return values
-}
-
-func renderGenerationTerminal(trace protocol.RenderGenerationTrace) bool {
-	// Failed generations remain retryable. Their durable failure row stays in
-	// the journal, while the in-memory generation can advance through a later
-	// queued/attempted/successful retry without creating a duplicate generation.
-	return trace.Stage == renderStageRendered
-}
-
-func renderGenerationLocked(st *state.WindowState, generation uint64) *protocol.RenderGenerationTrace {
-	for i := range st.RenderGenerations {
-		if st.RenderGenerations[i].Generation == generation {
-			return &st.RenderGenerations[i]
-		}
-	}
-	st.RenderGenerations = append(st.RenderGenerations, protocol.RenderGenerationTrace{
-		Generation:        generation,
-		SourceGenerations: []uint64{generation},
-		Stage:             renderStageDirty,
-		Outcome:           "pending",
-		UpdatedAt:         time.Now().UnixNano(),
-	})
-	if len(st.RenderGenerations) > maxRenderGenerationTraces {
-		st.RenderGenerations = append([]protocol.RenderGenerationTrace(nil), st.RenderGenerations[len(st.RenderGenerations)-maxRenderGenerationTraces:]...)
-	}
-	return &st.RenderGenerations[len(st.RenderGenerations)-1]
-}
 
 // linkRequestRenderGenerationLocked associates the exact event row for req
 // with the next state generation before markWindow*DirtyLocked increments Seq.
@@ -124,29 +38,8 @@ func (h *Handler) linkSessionEventRenderGenerationLocked(
 	if event != nil {
 		event.RenderGeneration = generation
 	}
-	trace := renderGenerationLocked(st, generation)
-	trace.SourceGenerations = appendBoundedUniqueGeneration(trace.SourceGenerations, generation)
-	trace.TraceIDs = appendBoundedUnique(trace.TraceIDs, traceID)
-	trace.RequestIDs = appendBoundedUnique(trace.RequestIDs, requestID)
-	trace.SourceEventIDs = appendBoundedUnique(trace.SourceEventIDs, sourceEventID)
-	trace.UpdatedAt = time.Now().UnixNano()
+	rendering.LinkCausalIDs(st, generation, traceID, requestID, sourceEventID)
 	h.syncRendererMetadataLocked(windowID)
-}
-
-func mergeRenderGeneration(dst *protocol.RenderGenerationTrace, src protocol.RenderGenerationTrace) {
-	for _, generation := range src.SourceGenerations {
-		dst.SourceGenerations = appendBoundedUniqueGeneration(dst.SourceGenerations, generation)
-	}
-	dst.SourceGenerations = appendBoundedUniqueGeneration(dst.SourceGenerations, src.Generation)
-	for _, id := range src.TraceIDs {
-		dst.TraceIDs = appendBoundedUnique(dst.TraceIDs, id)
-	}
-	for _, id := range src.RequestIDs {
-		dst.RequestIDs = appendBoundedUnique(dst.RequestIDs, id)
-	}
-	for _, id := range src.SourceEventIDs {
-		dst.SourceEventIDs = appendBoundedUnique(dst.SourceEventIDs, id)
-	}
 }
 
 func (h *Handler) markRenderStageLocked(windowID int, generation uint64, stage, outcome, reason string, coalesce bool) protocol.RenderGenerationTrace {
@@ -154,37 +47,12 @@ func (h *Handler) markRenderStageLocked(windowID int, generation uint64, stage, 
 	if !ok || generation == 0 {
 		return protocol.RenderGenerationTrace{}
 	}
-	if coalesce {
-		target := protocol.RenderGenerationTrace{
-			Generation: generation,
-			Stage:      renderStageDirty, Outcome: "pending",
-		}
-		kept := make([]protocol.RenderGenerationTrace, 0, len(st.RenderGenerations)+1)
-		for _, existing := range st.RenderGenerations {
-			if existing.Generation <= generation && !renderGenerationTerminal(existing) {
-				mergeRenderGeneration(&target, existing)
-				continue
-			}
-			kept = append(kept, existing)
-		}
-		target.SourceGenerations = appendBoundedUniqueGeneration(target.SourceGenerations, generation)
-		kept = append(kept, target)
-		st.RenderGenerations = kept
-	}
-	trace := renderGenerationLocked(st, generation)
-	trace.Stage = stage
-	trace.Outcome = outcome
-	trace.Reason = reason
-	trace.UpdatedAt = time.Now().UnixNano()
-	if len(st.RenderGenerations) > maxRenderGenerationTraces {
-		st.RenderGenerations = append([]protocol.RenderGenerationTrace(nil), st.RenderGenerations[len(st.RenderGenerations)-maxRenderGenerationTraces:]...)
-		trace = &st.RenderGenerations[len(st.RenderGenerations)-1]
-	}
-	if stage == renderStageRendered || stage == renderStageFailed {
-		h.finishRenderEventsLocked(st, *trace)
+	trace := rendering.MarkStage(st, generation, stage, outcome, reason, coalesce)
+	if rendering.StageCompletes(stage) {
+		h.finishRenderEventsLocked(st, trace)
 	}
 	h.syncRendererMetadataLocked(windowID)
-	return cloneRenderGenerationTrace(*trace)
+	return trace
 }
 
 func (h *Handler) finishRenderEventsLocked(st *state.WindowState, trace protocol.RenderGenerationTrace) {
@@ -242,7 +110,7 @@ func (h *Handler) recordRenderGeneration(trace protocol.RenderGenerationTrace, w
 	envelope.Reason = trace.Reason
 	envelope.Evidence = map[string]string{
 		"generation":         fmt.Sprint(trace.Generation),
-		"source_generations": formatUint64List(trace.SourceGenerations),
+		"source_generations": rendering.FormatSourceGenerations(trace.SourceGenerations),
 		"trace_ids":          strings.Join(trace.TraceIDs, ","),
 		"request_ids":        strings.Join(trace.RequestIDs, ","),
 		"source_event_ids":   strings.Join(trace.SourceEventIDs, ","),
@@ -256,15 +124,7 @@ func (h *Handler) recordRenderGenerationBounded(trace protocol.RenderGenerationT
 	if h == nil || h.decisionJournal == nil || trace.Generation == 0 {
 		return
 	}
-	h.recordRenderGeneration(cloneRenderGenerationTrace(trace), windowID)
-}
-
-func formatUint64List(values []uint64) string {
-	parts := make([]string, 0, len(values))
-	for _, value := range values {
-		parts = append(parts, fmt.Sprint(value))
-	}
-	return strings.Join(parts, ",")
+	h.recordRenderGeneration(rendering.CloneTrace(trace), windowID)
 }
 
 func notificationTraceFromRequest(req protocol.Request) notification.NotificationTrace {
@@ -377,7 +237,7 @@ func (h *Handler) linkProbeChild(parentTraceID, childTraceID string, windowIDs [
 			if st.EventLog[i].TraceID != parentTraceID {
 				continue
 			}
-			st.EventLog[i].ProbeTraceIDs = appendBoundedUnique(st.EventLog[i].ProbeTraceIDs, childTraceID)
+			st.EventLog[i].ProbeTraceIDs = rendering.AppendCausalID(st.EventLog[i].ProbeTraceIDs, childTraceID)
 			break
 		}
 	}

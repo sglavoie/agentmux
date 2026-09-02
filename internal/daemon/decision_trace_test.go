@@ -8,6 +8,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
@@ -266,7 +267,7 @@ func TestDuplicateReplayClearsDownstreamCausalityWithoutReducerMutation(t *testi
 	server.handler.stateMu.Lock()
 	poisoned := &server.handler.ensureWindowStateLocked(42).EventLog[0]
 	poisoned.RenderGeneration = 41
-	poisoned.RenderOutcome = renderStageRendered
+	poisoned.RenderOutcome = rendering.StageRendered
 	poisoned.RenderReason = "original-render"
 	poisoned.NotificationTrace = "original-notification"
 	poisoned.NotificationOutcome = "sent"
@@ -284,7 +285,7 @@ func TestDuplicateReplayClearsDownstreamCausalityWithoutReducerMutation(t *testi
 	st := server.handler.ensureWindowStateLocked(42)
 	server.handler.finishRenderEventsLocked(st, protocol.RenderGenerationTrace{
 		Generation: 42,
-		Stage:      renderStageRendered,
+		Stage:      rendering.StageRendered,
 		Reason:     "later-request-render",
 		RequestIDs: []string{request.RequestID},
 	})

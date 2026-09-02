@@ -199,7 +199,7 @@ func TestRendererStaleSeqDoesNotClearDirty(t *testing.T) {
 	if persisted != 1 {
 		t.Fatalf("PersistedGen = %d, want 1", persisted)
 	}
-	if h.renderQueue.empty() {
+	if h.renderQueue.Empty() {
 		t.Fatalf("superseded persist did not requeue the window")
 	}
 }

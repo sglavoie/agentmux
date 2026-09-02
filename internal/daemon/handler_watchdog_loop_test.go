@@ -13,6 +13,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -401,7 +402,7 @@ func TestSweepStale_StampsShadowMetadata(t *testing.T) {
 		synctest.Wait()
 
 		h.stateMu.Lock()
-		desired := desiredIconForState(h.store[42])
+		desired := rendering.DesiredIcon(h.store[42])
 		meta := h.windowMetadata[42]
 		h.stateMu.Unlock()
 		if meta.Shadow.EffectiveIcon != desired {

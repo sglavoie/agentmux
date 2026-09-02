@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -228,7 +229,7 @@ func (h *Handler) activeLoopCandidates() ([]agentloop.Candidate, error) {
 	now := time.Now()
 
 	h.stateMu.Lock()
-	if h.activeLoopCacheValid && !h.activeLoopCacheAt.IsZero() && now.Sub(h.activeLoopCacheAt) <= renderInterval {
+	if h.activeLoopCacheValid && !h.activeLoopCacheAt.IsZero() && now.Sub(h.activeLoopCacheAt) <= rendering.Interval {
 		cached := make([]agentloop.Candidate, len(h.activeLoopCache))
 		copy(cached, h.activeLoopCache)
 		h.stateMu.Unlock()
@@ -248,7 +249,7 @@ func (h *Handler) activeLoopCandidates() ([]agentloop.Candidate, error) {
 	// Publish only when no invalidation happened while the scan was in flight. A
 	// generation bump means the active set changed mid-scan, so this slice is
 	// already stale; caching it would mask the newer state until the next
-	// renderInterval. The caller still gets the freshly scanned candidates.
+	// rendering.Interval. The caller still gets the freshly scanned candidates.
 	if h.activeLoopCacheGen == gen {
 		h.activeLoopCache = candidates
 		h.activeLoopCacheAt = now

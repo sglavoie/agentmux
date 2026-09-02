@@ -44,7 +44,7 @@ func TestReduceStateUpdate_SuppressedMutationMarksActivityDirty(t *testing.T) {
 	st.DirtySince = time.Time{}
 	seqBeforeSuppression := st.Seq
 	h.stateMu.Unlock()
-	h.renderQueue.purge(42)
+	h.renderQueue.Purge(42)
 
 	trailing := protocol.NormalizedEvent{
 		Source: src, Action: "active", Seq: 7, TurnID: "t1", At: now.Add(time.Second).Unix(), Event: "PostToolBatch",
@@ -73,7 +73,7 @@ func TestReduceStateUpdate_SuppressedMutationMarksActivityDirty(t *testing.T) {
 		t.Fatalf("suppressed mutation durability = dirty %v seq %d, want dirty true seq %d",
 			dirtyAfterSuppression, seqAfterSuppression, seqBeforeSuppression+1)
 	}
-	if !h.renderQueue.empty() {
+	if !h.renderQueue.Empty() {
 		t.Fatal("fact-only suppressed mutation forced an immediate render")
 	}
 
@@ -123,7 +123,7 @@ func TestReduceStateUpdate_SuppressedMutationMarksActivityDirty(t *testing.T) {
 			shadowSeqBefore := st.ShadowSeq
 			factsBefore := st.Reducer.Facts()
 			h.stateMu.Unlock()
-			h.renderQueue.purge(42)
+			h.renderQueue.Purge(42)
 
 			event := tt.event
 			h.reduceStateUpdate(protocol.Request{
@@ -146,7 +146,7 @@ func TestReduceStateUpdate_SuppressedMutationMarksActivityDirty(t *testing.T) {
 				t.Fatalf("mutation-free decision changed durable state: dirty=%v seq=%d/%d shadow_seq=%d/%d facts=%+v/%+v",
 					dirty, seqAfter, seqBefore, shadowSeqAfter, shadowSeqBefore, factsAfter, factsBefore)
 			}
-			if !h.renderQueue.empty() {
+			if !h.renderQueue.Empty() {
 				t.Fatal("mutation-free decision entered the render queue")
 			}
 		})

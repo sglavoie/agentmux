@@ -49,7 +49,7 @@ const (
 
 // screenDeclinePersistentStreak is how many consecutive refusals of the SAME
 // unchanging screen turn a screen-probe decline streak into a health failure.
-// The probe ticks every renderInterval (2s), so this is two minutes.
+// The probe ticks every rendering.Interval (2s), so this is two minutes.
 //
 // The conjunction is what makes it safe: a pane doing real work repaints its
 // elapsed timer, which changes the fingerprint and restarts the streak at one,

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
@@ -14,7 +15,7 @@ func TestASLSupervisorMailboxReplyClearsMatchingProbeImmediately(t *testing.T) {
 	h, target, now := supervisorQuestionFixture(t, nil)
 	applySupervisorStop(h, now)
 	h.acceptASLSupervisorProjection(now, target, supervisorProjection(now, 7))
-	h.renderQueue = newRenderQueue()
+	h.renderQueue = rendering.NewQueue()
 
 	deliverSupervisorMailboxReply(
 		t,
@@ -28,7 +29,7 @@ func TestASLSupervisorMailboxReplyClearsMatchingProbeImmediately(t *testing.T) {
 	if got := h.Handle(protocol.Request{Type: protocol.TypeStateQuery}).States[42]; got.IconState != "bolt" || !got.Looping {
 		t.Fatalf("dashboard snapshot after reply = %+v; want bolt + loop", got)
 	}
-	if h.renderQueue.empty() {
+	if h.renderQueue.Empty() {
 		t.Fatal("matching mailbox reply did not queue Kitty title reconciliation")
 	}
 	h.stateMu.Lock()

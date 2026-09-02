@@ -27,15 +27,9 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/daemon/state"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
-)
-
-const (
-	renderInterval          = 2 * time.Second
-	renderDebounce          = 50 * time.Millisecond
-	renderWarnAfterFailures = 3
 )
 
 type socketScopedKittyClient interface {
@@ -43,7 +37,7 @@ type socketScopedKittyClient interface {
 }
 
 func (h *Handler) runMaintenance(ctx context.Context) {
-	ticker := time.NewTicker(renderInterval)
+	ticker := time.NewTicker(rendering.Interval)
 	defer ticker.Stop()
 	for {
 		select {
@@ -62,7 +56,7 @@ func (h *Handler) runMaintenance(ctx context.Context) {
 // round-trips that must never delay snapshot maintenance or rendering; a wedged
 // screen read or transcript read simply stalls this loop until it returns.
 func (h *Handler) runScreenProbes(ctx context.Context) {
-	ticker := time.NewTicker(renderInterval)
+	ticker := time.NewTicker(rendering.Interval)
 	defer ticker.Stop()
 	for {
 		select {
@@ -172,7 +166,8 @@ func (h *Handler) restoreStateFromKitty(now time.Time) (bool, error) {
 	// milliseconds. Inside this bounded budget that turns a long history into a
 	// permanently degraded startup, which loses far more than two seconds of
 	// staleness: MarkReady never fires and the durable restore never lands. The
-	// first maintenance tick reconciles instead, within renderInterval of here.
+	// first maintenance tick reconciles instead, within rendering.Interval of
+	// here.
 	h.renderSnapshot(windows)
 	return true, nil
 }
@@ -305,50 +300,20 @@ func (h *Handler) enqueueSnapshotCandidates(windows []kitty.OSWindow) {
 			if !ok {
 				continue
 			}
-			if desiredTabTitleLocked(tab, st) != tab.Title {
+			if rendering.DesiredTabTitle(tab, st) != tab.Title {
 				h.enqueueRenderLocked(owner.ID, st)
 			}
 		}
 	}
 }
 
+// renderTitleOwnerLocked resolves the tab's title owner against the windows
+// this daemon actually tracks. Callers hold stateMu.
 func (h *Handler) renderTitleOwnerLocked(tab *kitty.Tab) (*kitty.Window, bool) {
-	if owner, ok := kitty.FindTabTitleOwner(tab); ok {
-		return owner, true
-	}
-	if tab == nil {
-		return nil, false
-	}
-	var fallback *kitty.Window
-	for i := range tab.Windows {
-		win := &tab.Windows[i]
-		if _, ok := h.windowStateLocked(win.ID); !ok {
-			continue
-		}
-		if fallback == nil {
-			fallback = win
-		}
-		if win.IsActive {
-			return win, true
-		}
-	}
-	if fallback == nil {
-		return nil, false
-	}
-	return fallback, true
-}
-
-func desiredIconForState(st *state.WindowState) string {
-	if st == nil {
-		return ""
-	}
-	// Once a state decision has been recorded (StateSet), DesiredIcon is
-	// authoritative even when empty — the reducer may legitimately clear an
-	// icon while the legacy LastAction scalar still holds a stale value.
-	if st.StateSet || st.DesiredIcon != "" || st.LastAction == "" {
-		return st.DesiredIcon
-	}
-	return protocol.IconState(st.LastAction)
+	return rendering.TitleOwner(tab, func(windowID int) bool {
+		_, ok := h.windowStateLocked(windowID)
+		return ok
+	})
 }
 
 func (h *Handler) kittyClientForList() kittyTitleClient {

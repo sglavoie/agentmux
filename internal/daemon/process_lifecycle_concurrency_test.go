@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -85,7 +86,7 @@ func TestProcessLifecycleRestoredV4StateSettlesOnFirstPass(t *testing.T) {
 	h.restoreFromUserVars([]kitty.OSWindow{{ID: 1, Tabs: []kitty.Tab{{ID: 2, Windows: []kitty.Window{{
 		ID: 42, UserVars: kitty.UserVars{Profile: "work", Harness: "claude", AMXState: encoded},
 	}}}}}}, time.Now())
-	h.renderQueue = newRenderQueue()
+	h.renderQueue = rendering.NewQueue()
 	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing}})
 
 	if committed := h.processLifecycleTick(context.Background(), time.Now()); committed != 1 {

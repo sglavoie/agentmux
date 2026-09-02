@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -158,7 +159,7 @@ func (h *Handler) appendSuppressedHookEvent(req protocol.Request, action, suppre
 		delete(h.notifiedHookSilence, accountKey)
 	}
 	effective := effectiveStateEvidence(st.Effective)
-	event := suppressedSessionEvent(req, action, suppressionReason, desiredIconForState(st))
+	event := suppressedSessionEvent(req, action, suppressionReason, rendering.DesiredIcon(st))
 	event.DecisionReason = suppressionReason
 	event.ReducerDecision = protocol.DecisionSuppressed
 	event.ReducerReason = suppressionReason

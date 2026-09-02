@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -129,7 +130,7 @@ func (h *Handler) restoreFromUserVars(windows []kitty.OSWindow, now time.Time) {
 					slog.Warn("renderer: discarded invalid restored state", "window_id", win.ID, "err", err)
 					continue
 				}
-				if desired := desiredIconForState(&st); desired != palette.ParseTitleParts(tab.Title).State {
+				if desired := rendering.DesiredIcon(&st); desired != palette.ParseTitleParts(tab.Title).State {
 					slog.Warn("renderer: restored state differs from live title", "window_id", win.ID, "desired_icon", desired, "title_icon", palette.ParseTitleParts(tab.Title).State)
 				}
 				if st.GuardExpiresAt.IsZero() || !st.GuardExpiresAt.After(now) {
@@ -171,7 +172,7 @@ func (h *Handler) restoreFromUserVars(windows []kitty.OSWindow, now time.Time) {
 				// against the icon this window actually restored with: a
 				// pre-upgrade payload self-heals to now and a persisted anchor
 				// that restored onto a non-active icon is dropped.
-				stampBusySinceLocked(&st, desiredIconForState(&st), now)
+				stampBusySinceLocked(&st, rendering.DesiredIcon(&st), now)
 				h.store[win.ID] = &st
 				h.syncRendererMetadataLocked(win.ID)
 			}

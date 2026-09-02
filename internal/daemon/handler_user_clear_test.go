@@ -214,7 +214,7 @@ func TestHandler_UserClearOwnerlessTabWithGlyphClearsSource(t *testing.T) {
 	if st == nil || st.DesiredIcon != "" || !st.StateSet || !st.Dirty {
 		t.Fatalf("source state = %+v; want an explicit empty state queued for rendering", st)
 	}
-	if h.renderQueue.empty() {
+	if h.renderQueue.Empty() {
 		t.Fatal("ownerless visible-icon clear was not queued immediately")
 	}
 	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})

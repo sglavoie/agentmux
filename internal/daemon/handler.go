@@ -9,6 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -78,7 +79,7 @@ type Handler struct {
 
 	// renderQueue is the latest-generation per-window render queue consumed by
 	// the render worker (renderqueue.go), the daemon's single Kitty writer.
-	renderQueue *renderQueue
+	renderQueue *rendering.Queue
 
 	// processInspector observes the validated PID/start-token fingerprints
 	// retained by reducer facts. The lifecycle loop always calls it off stateMu;
@@ -154,7 +155,7 @@ type Handler struct {
 	// activeLoopCache memoizes agent-session-loop discovery for the ASL
 	// sibling-pane routing exception (handler_asl_routing.go). Discovery scans
 	// on-disk loop state, so a hook burst from the same pane must not rescan on
-	// every event. Entries are valid for at most renderInterval and are
+	// every event. Entries are valid for at most rendering.Interval and are
 	// invalidated whenever a loop lifecycle event (started, turn started,
 	// finished) changes the active set. The cache is rebuilt lazily, including
 	// after a daemon restart, and is never persisted in amx_state. Guarded by
@@ -370,7 +371,7 @@ func NewHandler(guard *StateGuard, notifier *notification.Notifier) *Handler {
 		perAccountHookSilence:          make(map[string]time.Duration),
 		store:                          make(map[int]*state.WindowState),
 		pendingStopHolds:               make(map[int]pendingStopHold),
-		renderQueue:                    newRenderQueue(),
+		renderQueue:                    rendering.NewQueue(),
 		processInspector:               newPSHarnessProcessInspector(),
 		kittySockets:                   make(map[int]string),
 		claudeContextLimitProbeEnabled: true,

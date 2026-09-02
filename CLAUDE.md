@@ -102,6 +102,13 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   debounce, cooldown), click-to-focus, and the disposition vocabulary. Like
   protocol and state it must never import the daemon root; the daemon drives it
   through the `Notifier` seams rather than reaching into its state.
+- `internal/daemon/rendering`: the daemon's status presentation — the icon the
+  effective state paints, the tab-title text that carries it, the tab's title
+  owner, the latest-generation render queue, the presentation cadence, and the
+  bounded render-generation traces exported as the renderer's display model. It
+  is domain-specific, not a formatting utility package: it must never import the
+  daemon root, and it performs no Kitty, IPC, or journal I/O — the daemon root
+  keeps the render loops and every Kitty write.
 - `internal/diagnostics`: private fail-open causal journals, operational and
   native logs, temporary raw captures, and bounded diagnostic storage.
 - `internal/debugger`: offline-first status, query, explanation, bundle, and

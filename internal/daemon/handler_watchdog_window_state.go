@@ -99,7 +99,7 @@ func (h *Handler) pruneClosedWindows(now time.Time, liveIDs map[int]bool) {
 		// bookkeeping already tolerates the deleted state. Persist the pending
 		// queued-stage trace only after both stateMu and the queue mutex are free.
 		if h.renderQueue != nil {
-			if trace, purged := h.renderQueue.purge(id); purged {
+			if trace, purged := h.renderQueue.Purge(id); purged {
 				h.recordRenderGenerationBounded(trace, id)
 			}
 		}

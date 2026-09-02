@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"golang.org/x/sys/unix"
@@ -154,7 +155,7 @@ func TestRenderQueuePurgePersistsQueuedStageTrace(t *testing.T) {
 	}
 
 	h.pruneClosedWindows(time.Now(), map[int]bool{})
-	if !h.renderQueue.empty() {
+	if !h.renderQueue.Empty() {
 		t.Fatal("purged render remained pending")
 	}
 
@@ -194,7 +195,7 @@ func TestRenderWorkerShutdownPersistsQueuedStageTraces(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	h.runRenderWorker(ctx)
-	if !h.renderQueue.empty() {
+	if !h.renderQueue.Empty() {
 		t.Fatal("shutdown-discarded renders remained pending")
 	}
 
@@ -238,7 +239,7 @@ func TestRendererCoalescesBoundedCausalIDsAndPersistsFailure(t *testing.T) {
 		t.Fatalf("render generations = %+v; want one coalesced generation", renderer.Generations)
 	}
 	generation := renderer.Generations[0]
-	if generation.Stage != renderStageRendered || generation.Outcome != "success" {
+	if generation.Stage != rendering.StageRendered || generation.Outcome != "success" {
 		t.Fatalf("coalesced generation = %+v; want rendered success", generation)
 	}
 	if len(generation.TraceIDs) != 2 || len(generation.RequestIDs) != 2 ||
@@ -246,7 +247,7 @@ func TestRendererCoalescesBoundedCausalIDsAndPersistsFailure(t *testing.T) {
 		t.Fatalf("coalesced causal IDs = %+v", generation)
 	}
 	for _, event := range export.EventsByWindow[42] {
-		if event.RenderGeneration != generation.Generation || event.RenderOutcome != renderStageRendered {
+		if event.RenderGeneration != generation.Generation || event.RenderOutcome != rendering.StageRendered {
 			t.Fatalf("event did not reach terminal coalesced render: %+v (generation %+v)", event, generation)
 		}
 	}
@@ -301,7 +302,7 @@ func TestRendererCoalescesBoundedCausalIDsAndPersistsFailure(t *testing.T) {
 	for _, item := range recovered.Generations {
 		if item.Generation == recovered.RenderedGen {
 			matching++
-			if item.Stage != renderStageRendered || item.Outcome != "success" {
+			if item.Stage != rendering.StageRendered || item.Outcome != "success" {
 				t.Fatalf("retried generation did not converge: %+v", item)
 			}
 		}

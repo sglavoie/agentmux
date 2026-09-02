@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 )
 
 func (h *Handler) handleStateQuery() protocol.Response {
@@ -13,7 +14,7 @@ func (h *Handler) handleStateQuery() protocol.Response {
 	snapshot := make(map[int]int64, len(h.store))
 	for id, st := range h.store {
 		state := protocol.WindowStateSnapshot{
-			IconState:   desiredIconForState(st),
+			IconState:   rendering.DesiredIcon(st),
 			Looping:     st.Looping,
 			LastAction:  st.LastAction,
 			GuardAction: st.GuardAction,
@@ -151,7 +152,7 @@ func cloneWindowDebugMetadata(in protocol.WindowDebugMetadata) protocol.WindowDe
 		out.Watchdog.ScreenDeclines = make([]protocol.ScreenDeclineSnapshot, len(in.Watchdog.ScreenDeclines))
 		copy(out.Watchdog.ScreenDeclines, in.Watchdog.ScreenDeclines)
 	}
-	out.Renderer.Generations = cloneRenderGenerationTraces(in.Renderer.Generations)
+	out.Renderer.Generations = rendering.CloneTraces(in.Renderer.Generations)
 	return out
 }
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/aslcontract"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -463,5 +464,5 @@ func (h *Handler) ownerlessSourceHasClearableState(windowID int, liveIcon string
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	st, ok := h.windowStateLocked(windowID)
-	return ok && desiredIconForState(st) != ""
+	return ok && rendering.DesiredIcon(st) != ""
 }
