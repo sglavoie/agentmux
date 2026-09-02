@@ -191,13 +191,13 @@ func TestProbeCodexScreenPrompt_DiscardsObservationAfterConcurrentReducerEvent(t
 				// No reducer mutation: the discarded prompt left no probe fact and
 				// did not acknowledge the session's own fact.
 				h.stateMu.Lock()
-				probeFact := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource}]
-				sessionFact := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:sess-1"}]
+				probeFact := factOf(h.store[42].Reducer, protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource})
+				sessionFact := factOf(h.store[42].Reducer, protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:sess-1"})
 				h.stateMu.Unlock()
 				if probeFact != nil {
 					t.Fatalf("discarded observation left a probe fact: %+v", probeFact)
 				}
-				if sessionFact == nil || sessionFact.acked != tc.wantSessionAcked {
+				if sessionFact == nil || sessionFact.Acked != tc.wantSessionAcked {
 					t.Fatalf("session fact = %+v, want acked=%v (only the concurrent event may retire it)",
 						sessionFact, tc.wantSessionAcked)
 				}

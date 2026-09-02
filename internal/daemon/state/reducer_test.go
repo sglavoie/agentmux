@@ -1,4 +1,4 @@
-package daemon
+package state
 
 import (
 	"testing"
@@ -43,8 +43,8 @@ func TestReducerActionIconMapping(t *testing.T) {
 		"nonsense":     "",
 	}
 	for action, want := range cases {
-		if got := reducerActionIcon(action); got != want {
-			t.Errorf("reducerActionIcon(%q) = %q; want %q", action, got, want)
+		if got := ActionIcon(action); got != want {
+			t.Errorf("ActionIcon(%q) = %q; want %q", action, got, want)
 		}
 	}
 }

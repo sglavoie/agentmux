@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 // TestReduceStateUpdate_SuppressedMutationMarksActivityDirty pins the durable
@@ -79,7 +80,7 @@ func TestReduceStateUpdate_SuppressedMutationMarksActivityDirty(t *testing.T) {
 	// The maintenance-flush payload restores the advanced cutoff. A replay
 	// between the persisted terminal (seq 5) and consumed trailing event (seq 7)
 	// is now rejected even though its new turn would otherwise revive the bolt.
-	var restored WindowState
+	var restored state.WindowState
 	if err := restored.UnmarshalUserVar(encoded); err != nil {
 		t.Fatalf("UnmarshalUserVar() error: %v", err)
 	}
@@ -106,7 +107,7 @@ func TestReduceStateUpdate_SuppressedMutationMarksActivityDirty(t *testing.T) {
 			Source: src, Action: "active", Seq: 6, TurnID: "t1", At: now.Add(time.Second).Unix(), Event: "PostToolBatch",
 		}, want: protocol.DecisionReordered},
 		{name: "quarantined", event: protocol.NormalizedEvent{
-			Source: protocol.SourceID{Kind: SourceInvalid, Key: InvalidPayloadReason}, Seq: 7, Event: "Stop", Reason: InvalidPayloadReason,
+			Source: protocol.SourceID{Kind: protocol.SourceInvalid, Key: InvalidPayloadReason}, Seq: 7, Event: "Stop", Reason: InvalidPayloadReason,
 		}, want: protocol.DecisionQuarantined},
 		{name: "ignored", event: protocol.NormalizedEvent{
 			Seq: 7, Event: "InstructionsLoaded", Reason: reasonIgnoredEvent,

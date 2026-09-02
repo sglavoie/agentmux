@@ -8,10 +8,11 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 func TestShadowReducerRetentionRetiresCompletedSubagentsAfterStragglerWindow(t *testing.T) {
-	r := NewReducer(ReducerConfig{})
+	r := state.NewReducer(state.ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-1"}, Action: "subagent", Seq: 1, TurnID: "t1", At: 100})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-1"}, Action: "stop", Seq: 2, TurnID: "t1", At: 110})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-2"}, Action: "stop_failure", Seq: 1, TurnID: "t1", At: 120})
@@ -28,7 +29,7 @@ func TestShadowReducerRetentionRetiresCompletedSubagentsAfterStragglerWindow(t *
 
 	// Past the window the completed identity is forgotten; the sticky failure
 	// remains until acknowledged.
-	if removed := r.Compact(110 + subagentStopRetentionSeconds); removed != 1 {
+	if removed := r.Compact(110 + state.SubagentStopRetentionSeconds); removed != 1 {
 		t.Fatalf("Compact past straggler window removed %d facts, want the completed subagent only", removed)
 	}
 	facts := r.Facts()
@@ -39,7 +40,7 @@ func TestShadowReducerRetentionRetiresCompletedSubagentsAfterStragglerWindow(t *
 
 func TestShadowReducerRetentionExpiresTerminalFactsAfterAcknowledgement(t *testing.T) {
 	src := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}
-	r := NewReducer(ReducerConfig{})
+	r := state.NewReducer(state.ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{Source: src, Action: "stop", Seq: 1, TurnID: "t1", At: 100})
 
 	// Fresh, unacknowledged terminal facts persist inside the retention window.
@@ -58,14 +59,14 @@ func TestShadowReducerRetentionExpiresTerminalFactsAfterAcknowledgement(t *testi
 
 func TestShadowReducerRetentionExpiresTerminalFactsAfterTombstoneWindow(t *testing.T) {
 	src := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}
-	r := NewReducer(ReducerConfig{})
+	r := state.NewReducer(state.ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{Source: src, Action: "stop", Seq: 1, TurnID: "t1", At: 100})
-	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseTurn, RunID: "run-1", Seq: 1, At: 100})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: state.ASLPhaseTurn, RunID: "run-1", Seq: 1, At: 100})
 
-	if removed := r.Compact(100 + tombstoneRetentionSeconds - 1); removed != 0 {
+	if removed := r.Compact(100 + state.TombstoneRetentionSeconds - 1); removed != 0 {
 		t.Fatalf("tombstone expired early: removed %d", removed)
 	}
-	if removed := r.Compact(100 + tombstoneRetentionSeconds); removed != 1 {
+	if removed := r.Compact(100 + state.TombstoneRetentionSeconds); removed != 1 {
 		t.Fatalf("tombstone not expired at retention: removed %d", removed)
 	}
 	// Non-terminal facts (the live ASL turn) are never compacted.
@@ -77,14 +78,14 @@ func TestShadowReducerRetentionExpiresTerminalFactsAfterTombstoneWindow(t *testi
 
 func TestShadowReducerRetentionExpiresAckedNonTerminalFactsAfterWindow(t *testing.T) {
 	src := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}
-	r := NewReducer(ReducerConfig{})
+	r := state.NewReducer(state.ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{Source: src, Action: "active", Seq: 5, At: 100})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceProbe, Key: "user"}, Action: "user_clear", Seq: 6, At: 101})
 
 	if facts := r.Facts(); len(facts) != 1 || facts[0].AckedAt != 101 {
 		t.Fatalf("acknowledgement timestamp = %+v; want 101", facts)
 	}
-	if removed := r.Compact(101 + acknowledgedFactRetentionSeconds - 1); removed != 0 {
+	if removed := r.Compact(101 + state.AcknowledgedFactRetentionSeconds - 1); removed != 0 {
 		t.Fatalf("acked non-terminal fact compacted early: removed %d", removed)
 	}
 	// The retained fact still guards sequence monotonicity: replaying the old
@@ -92,27 +93,27 @@ func TestShadowReducerRetentionExpiresAckedNonTerminalFactsAfterWindow(t *testin
 	if dec := r.Apply(protocol.ReducerEvent{Source: src, Action: "active", Seq: 5, At: 100}); dec != protocol.DecisionDuplicate {
 		t.Fatalf("replayed event decision = %s, want duplicate", dec)
 	}
-	if removed := r.Compact(101 + acknowledgedFactRetentionSeconds); removed != 1 {
+	if removed := r.Compact(101 + state.AcknowledgedFactRetentionSeconds); removed != 1 {
 		t.Fatalf("acked non-terminal fact survived retention boundary: removed %d", removed)
 	}
 }
 
 func TestShadowReducerRetentionCapsNewestAcknowledgedFactsDeterministically(t *testing.T) {
-	r := NewReducer(ReducerConfig{})
-	for i := 0; i < maxAcknowledgedFacts+6; i++ {
+	r := state.NewReducer(state.ReducerConfig{})
+	for i := 0; i < state.MaxAcknowledgedFacts+6; i++ {
 		r.Apply(protocol.ReducerEvent{
 			Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: fmt.Sprintf("claude:%02d", i)},
 			Action: "active", Seq: 1, At: int64(100 + i),
 		})
 	}
-	r.Apply(protocol.ReducerEvent{Source: userActionSource(), Action: "user_clear", Seq: 1, At: 1000})
+	r.Apply(protocol.ReducerEvent{Source: protocol.UserActionSource(), Action: "user_clear", Seq: 1, At: 1000})
 
 	if removed := r.Compact(1001); removed != 6 {
 		t.Fatalf("Compact cap removed %d facts, want 6", removed)
 	}
 	facts := r.Facts()
-	if len(facts) != maxAcknowledgedFacts {
-		t.Fatalf("retained facts = %d, want %d", len(facts), maxAcknowledgedFacts)
+	if len(facts) != state.MaxAcknowledgedFacts {
+		t.Fatalf("retained facts = %d, want %d", len(facts), state.MaxAcknowledgedFacts)
 	}
 	for i, fact := range facts {
 		want := fmt.Sprintf("claude:%02d", i+6)
@@ -123,8 +124,8 @@ func TestShadowReducerRetentionCapsNewestAcknowledgedFactsDeterministically(t *t
 }
 
 func TestShadowReducerRetentionUsesSourceIdentityAsFinalEvictionTieBreak(t *testing.T) {
-	facts := make([]protocol.SourceFactSnapshot, 0, maxAcknowledgedFacts+2)
-	for i := 0; i < maxAcknowledgedFacts+1; i++ {
+	facts := make([]protocol.SourceFactSnapshot, 0, state.MaxAcknowledgedFacts+2)
+	for i := 0; i < state.MaxAcknowledgedFacts+1; i++ {
 		facts = append(facts, protocol.SourceFactSnapshot{
 			Kind: protocol.SourceProbe, Key: fmt.Sprintf("probe:%02d", i), Action: "active", Icon: "bolt",
 			Seq: 1, CausalOrder: 1, At: 100, Acked: true, AckedAt: 200,
@@ -134,7 +135,7 @@ func TestShadowReducerRetentionUsesSourceIdentityAsFinalEvictionTieBreak(t *test
 		Kind: protocol.SourceHarness, Key: "claude:first", Action: "active", Icon: "bolt",
 		Seq: 1, CausalOrder: 1, At: 100, Acked: true, AckedAt: 200,
 	})
-	r := NewReducer(ReducerConfig{})
+	r := state.NewReducer(state.ReducerConfig{})
 	r.Restore(facts)
 
 	if removed := r.Compact(201); removed != 2 {
@@ -147,13 +148,13 @@ func TestShadowReducerRetentionUsesSourceIdentityAsFinalEvictionTieBreak(t *test
 }
 
 func TestShadowReducerRetentionPreservesUnackedFactsAndLiveASLLeases(t *testing.T) {
-	r := NewReducer(ReducerConfig{})
+	r := state.NewReducer(state.ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:acked"}, Action: "active", Seq: 1, At: 100})
-	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: 100})
-	r.Apply(protocol.ReducerEvent{Source: userActionSource(), Action: "user_clear", Seq: 1, At: 101})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: state.ASLPhaseBetween, RunID: "run-1", Seq: 1, At: 100})
+	r.Apply(protocol.ReducerEvent{Source: protocol.UserActionSource(), Action: "user_clear", Seq: 1, At: 101})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:live"}, Action: "active", Seq: 1, At: 102})
 
-	if removed := r.Compact(101 + acknowledgedFactRetentionSeconds); removed != 1 {
+	if removed := r.Compact(101 + state.AcknowledgedFactRetentionSeconds); removed != 1 {
 		t.Fatalf("Compact removed %d facts, want only expired acknowledged harness fact", removed)
 	}
 	retained := r.Facts()

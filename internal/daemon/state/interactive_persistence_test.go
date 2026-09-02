@@ -1,4 +1,4 @@
-package daemon
+package state
 
 import (
 	"strings"
@@ -300,7 +300,7 @@ func TestMergeDisjointHonorsSupersessionCutoffs(t *testing.T) {
 	t.Run("user_clear acknowledges every older fact but preserves a live lease", func(t *testing.T) {
 		r := NewReducer(zeroCfg)
 		// In-process user_clear at t=200 records the clear cutoff (creates no fact).
-		r.Apply(protocol.ReducerEvent{Source: userActionSource(), Action: "user_clear", Seq: 9, At: 200})
+		r.Apply(protocol.ReducerEvent{Source: protocol.UserActionSource(), Action: "user_clear", Seq: 9, At: 200})
 		imports := []protocol.SourceFactSnapshot{
 			snapshot(protocol.SourceHarness, "claude:old", "bolt", 1, 100),                                      // acked
 			snapshot(protocol.SourceSubagent, "a1", "subagent", 1, 100),                                         // acked

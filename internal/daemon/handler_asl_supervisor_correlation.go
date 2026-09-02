@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 func (h *Handler) correlateASLSupervisorQuestion(windowID int, now time.Time) {
@@ -44,12 +45,12 @@ func (h *Handler) applyASLSupervisorQuestionLocked(
 		return nil
 	}
 	stop, ok := latestInteractiveSupervisorFact(st.Reducer, now.Unix())
-	if !ok || !stop.terminated || stop.action != "stop" {
+	if !ok || !stop.Terminated || stop.Action != "stop" {
 		return nil
 	}
-	terminalAt := stop.terminalAt
+	terminalAt := stop.TerminalAt
 	if terminalAt == 0 {
-		terminalAt = stop.at
+		terminalAt = stop.At
 	}
 	if terminalAt < projection.LatestQuestionCreatedAt.Unix() {
 		return nil
@@ -64,10 +65,10 @@ func (h *Handler) applyASLSupervisorQuestionLocked(
 			projection.LatestQuestionID,
 		),
 		firstNonEmpty(
-			harnessFromSourceKey(stop.source.Key, stop.sessionID),
+			state.HarnessFromSourceKey(stop.Key, stop.SessionID),
 			st.LastHarness,
 		),
-		stop.sessionID,
+		stop.SessionID,
 		false,
 		fmt.Sprintf(
 			"clean supervisor stop correlated with %d unanswered ASL mailbox question(s), latest id %s",
@@ -127,7 +128,7 @@ func (h *Handler) applyASLSupervisorQuestionEvidenceLocked(
 	)
 
 	if effective.Icon != "question" ||
-		!h.shouldNotifySourceEventLocked(st, sourceEventID) {
+		!st.MarkSourceEventNotified(sourceEventID) {
 		return nil
 	}
 	return &aslSupervisorNotification{
@@ -142,25 +143,17 @@ func (h *Handler) applyASLSupervisorQuestionEvidenceLocked(
 	}
 }
 
-func latestInteractiveSupervisorFact(r *Reducer, now int64) (*sourceFact, bool) {
-	var current *sourceFact
-	for _, fact := range r.facts {
-		identifiedHarness := fact.source.Kind == protocol.SourceHarness &&
-			fact.sessionID != "" &&
-			harnessFromSourceKey(fact.source.Key, fact.sessionID) != ""
-		authoritativeStopProbe := fact.source.Kind == protocol.SourceProbe &&
-			fact.terminated &&
-			fact.action == "stop" &&
-			isAuthoritativeSupervisorStopProbe(fact.source.Key)
-		eligibleSource := identifiedHarness || authoritativeStopProbe
-		if !eligibleSource || fact.pipeMode || !conversationFactLive(fact, now) {
-			continue
-		}
-		if current == nil || moreRecent(fact, current) {
-			current = fact
-		}
-	}
-	return current, current != nil
+func latestInteractiveSupervisorFact(r *state.Reducer, now int64) (protocol.SourceFactSnapshot, bool) {
+	return r.LatestLiveFact(now, func(fact protocol.SourceFactSnapshot) bool {
+		identifiedHarness := fact.Kind == protocol.SourceHarness &&
+			fact.SessionID != "" &&
+			state.HarnessFromSourceKey(fact.Key, fact.SessionID) != ""
+		authoritativeStopProbe := fact.Kind == protocol.SourceProbe &&
+			fact.Terminated &&
+			fact.Action == "stop" &&
+			isAuthoritativeSupervisorStopProbe(fact.Key)
+		return (identifiedHarness || authoritativeStopProbe) && !fact.PipeMode
+	})
 }
 
 func isAuthoritativeSupervisorStopProbe(key string) bool {
@@ -212,7 +205,7 @@ func (h *Handler) clearASLSupervisorQuestionLocked(
 		return
 	}
 	source := aslSupervisorQuestionSource(runID)
-	if !st.Reducer.canRetract(source) {
+	if !st.Reducer.CanRetract(source) {
 		return
 	}
 	before := st.Reducer.Reduce(now.Unix())
@@ -249,8 +242,8 @@ func (h *Handler) finishASLSupervisorQuestion(windowID int, runID string, now ti
 	delete(h.aslSupervisorClosureCutoffs, ref)
 	seq := uint64(0)
 	if st, ok := h.windowStateLocked(windowID); ok && st.Reducer != nil {
-		if fact := st.Reducer.facts[aslSupervisorQuestionSource(runID)]; fact != nil {
-			seq = fact.seq + 1
+		if fact, known := st.Reducer.Fact(aslSupervisorQuestionSource(runID)); known {
+			seq = fact.Seq + 1
 		}
 	}
 	h.clearASLSupervisorQuestionLocked(

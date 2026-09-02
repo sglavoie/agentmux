@@ -86,12 +86,17 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
 - `internal/handoff`: bounded deterministic pack creation, private artifacts,
   and cross-harness launch workflow.
 - `internal/worktree`: bounded managed Git worktree creation and cleanup.
-- `internal/daemon`: IPC, reducer facts, durable Kitty state, live activity evidence,
-  diagnostics, and the single renderer writer.
+- `internal/daemon`: IPC, event ingestion and routing, process inspection, live
+  activity evidence, diagnostics, and the single renderer writer.
 - `internal/daemon/protocol`: the daemon wire contract — request/response model,
   command names, durable and exported envelopes, and the serialization
   vocabularies. It holds shapes and pure projections only, and must never import
   the daemon root.
+- `internal/daemon/state`: the side-effect-free fact reducer and the durable
+  per-window state — source facts, effective-state reduction, retention, and the
+  amx_state user-var schema with its version migrations. Like protocol it must
+  never import the daemon root, and it performs no Kitty, IPC, or notification
+  I/O of its own.
 - `internal/diagnostics`: private fail-open causal journals, operational and
   native logs, temporary raw captures, and bounded diagnostic storage.
 - `internal/debugger`: offline-first status, query, explanation, bundle, and

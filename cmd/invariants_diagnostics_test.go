@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 func TestInvariantUnknownProducerFactWarnings(t *testing.T) {
@@ -147,7 +148,7 @@ func TestInvariantAcknowledgedFactPressureExclusions(t *testing.T) {
 
 func TestInvariantShadowCurrentMismatch(t *testing.T) {
 	harnessFact := protocol.SourceFactSnapshot{Kind: protocol.SourceHarness, Key: "s", Action: "active", Icon: "bolt"}
-	aslFact := protocol.SourceFactSnapshot{Kind: protocol.SourceASL, Key: "run", Phase: daemon.ASLPhaseBetween, LeaseLive: true}
+	aslFact := protocol.SourceFactSnapshot{Kind: protocol.SourceASL, Key: "run", Phase: state.ASLPhaseBetween, LeaseLive: true}
 	cases := []struct {
 		name string
 		meta protocol.WindowDebugMetadata
@@ -276,7 +277,7 @@ func TestInvariantTombstonesAndAckedFactsAreInformational(t *testing.T) {
 			Watchdog: protocol.WindowDebugWatchdog{ClosedAt: invariantNow.Add(-time.Hour).Unix()},
 			Renderer: protocol.WindowDebugRenderer{DesiredIcon: "", StateSet: true},
 			Shadow: protocol.WindowDebugShadow{EffectiveGen: 1, Facts: []protocol.SourceFactSnapshot{{
-				Kind: protocol.SourceASL, Key: "run", Phase: daemon.ASLPhaseTurn, LeaseLive: true,
+				Kind: protocol.SourceASL, Key: "run", Phase: state.ASLPhaseTurn, LeaseLive: true,
 			}}},
 		},
 		8: {

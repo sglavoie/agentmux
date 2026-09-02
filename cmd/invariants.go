@@ -16,6 +16,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 const (
@@ -171,7 +172,7 @@ func evaluateDaemonInvariants(snapshot protocol.EventsExport, health daemon.Heal
 			if fact.Kind != protocol.SourceASL || fact.Acked || !fact.LeaseLive {
 				continue
 			}
-			if fact.Phase != daemon.ASLPhaseTurn && fact.Phase != daemon.ASLPhaseVerification {
+			if fact.Phase != state.ASLPhaseTurn && fact.Phase != state.ASLPhaseVerification {
 				continue
 			}
 			if desired == "" || desired == "stop" {

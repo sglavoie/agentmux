@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 // applyOutcome carries what the legacy state machine decided about a request
@@ -142,19 +143,19 @@ func (h *Handler) applyStateUpdate(req protocol.Request) (protocol.Response, app
 	st = h.ensureWindowStateLocked(req.WindowID)
 	copilotPermissionState := st.CopilotToolPermissionState
 	if shouldResetCopilotToolPermissionState(req) {
-		st.CopilotToolPermissionState = copilotToolPermissionNone
-		copilotPermissionState = copilotToolPermissionNone
+		st.CopilotToolPermissionState = state.CopilotToolPermissionNone
+		copilotPermissionState = state.CopilotToolPermissionNone
 	}
 	if isCopilotElicitationPrompt(req) ||
-		(copilotPermissionState == copilotToolPermissionPending && isCopilotPermissionPromptNotification(req)) {
-		st.CopilotToolPermissionState = copilotToolPermissionNone
-		copilotPermissionState = copilotToolPermissionNone
-	} else if copilotPermissionState == copilotToolPermissionPending &&
+		(copilotPermissionState == state.CopilotToolPermissionPending && isCopilotPermissionPromptNotification(req)) {
+		st.CopilotToolPermissionState = state.CopilotToolPermissionNone
+		copilotPermissionState = state.CopilotToolPermissionNone
+	} else if copilotPermissionState == state.CopilotToolPermissionPending &&
 		shouldConfirmCopilotAutoApprovedToolPermission(req) {
-		st.CopilotToolPermissionState = copilotToolPermissionAutoApproved
-		copilotPermissionState = copilotToolPermissionAutoApproved
+		st.CopilotToolPermissionState = state.CopilotToolPermissionAutoApproved
+		copilotPermissionState = state.CopilotToolPermissionAutoApproved
 	}
-	priorAutoApprovedToolPrompt := copilotPermissionState == copilotToolPermissionAutoApproved
+	priorAutoApprovedToolPrompt := copilotPermissionState == state.CopilotToolPermissionAutoApproved
 	h.stateMu.Unlock()
 	syntheticStop := shouldSynthesizeCopilotCompactStop(req, prevAction)
 	if syntheticStop {
@@ -227,11 +228,11 @@ func (h *Handler) applyStateUpdate(req protocol.Request) (protocol.Response, app
 		h.stateMu.Lock()
 		st := h.ensureWindowStateLocked(req.WindowID)
 		if req.Action == "clear" || req.Action == "user_clear" {
-			st.CopilotToolPermissionState = copilotToolPermissionNone
+			st.CopilotToolPermissionState = state.CopilotToolPermissionNone
 		}
 		st.SubagentCount = 0
 		if req.Action != "user_clear" {
-			st.PendingReset = resetFlowNone
+			st.PendingReset = state.ResetFlowNone
 		}
 		st.NotifiedStale = false
 		st.ContextLimitNotified = false
@@ -308,10 +309,10 @@ func (h *Handler) applyStateUpdate(req protocol.Request) (protocol.Response, app
 		st.LastActiveEvent = req.Event
 	}
 	if isCopilotAutoApprovedPerm {
-		st.CopilotToolPermissionState = copilotToolPermissionAutoApproved
+		st.CopilotToolPermissionState = state.CopilotToolPermissionAutoApproved
 	} else if effective == "permission" && isCopilotRequest(req) &&
 		isCopilotPermissionPromptNotification(req) {
-		st.CopilotToolPermissionState = copilotToolPermissionNone
+		st.CopilotToolPermissionState = state.CopilotToolPermissionNone
 	}
 	// Record the last substantive action so idle/clear can detect a stale bolt
 	// even after the state guard has expired. Preserve-current events keep the

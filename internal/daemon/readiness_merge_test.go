@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -26,11 +27,11 @@ func TestMaintenanceTick_MergesPersistedFactsWithHookState(t *testing.T) {
 	// "active" fact, a live between-turns ASL lease, and an OLDER legacy
 	// window-keyed fact that collides with the source the degraded-window hook
 	// will create.
-	r := NewReducer(ReducerConfig{})
+	r := state.NewReducer(state.ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 1, At: now.Unix(), HarnessProcess: process})
-	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: now.Unix()})
-	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceLegacy, Key: windowKey(42)}, Action: "active", Seq: 1, At: now.Add(-time.Minute).Unix()})
-	encoded, err := WindowState{
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: state.ASLPhaseBetween, RunID: "run-1", Seq: 1, At: now.Unix()})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceLegacy, Key: protocol.WindowKey(42)}, Action: "active", Seq: 1, At: now.Add(-time.Minute).Unix()})
+	encoded, err := state.WindowState{
 		LastAction: "active",
 		Reducer:    r,
 		Effective:  r.Reduce(now.Unix()),
@@ -108,7 +109,7 @@ func TestMaintenanceTick_MergesPersistedFactsWithHookState(t *testing.T) {
 
 	legacyFact := func(facts []protocol.SourceFactSnapshot) *protocol.SourceFactSnapshot {
 		for i := range facts {
-			if facts[i].Kind == protocol.SourceLegacy && facts[i].Key == windowKey(42) {
+			if facts[i].Kind == protocol.SourceLegacy && facts[i].Key == protocol.WindowKey(42) {
 				return &facts[i]
 			}
 		}
@@ -191,14 +192,14 @@ func TestMaintenanceTick_MergesAcknowledgedPersistedFactsWithHookState(t *testin
 	// Persisted /clear state for window 42: an interactive harness "active" fact
 	// and a live between-turns ASL lease, both acknowledged by a user_clear that
 	// preserved the loop lease. The harness fact's Seq 5 is the persisted cutoff.
-	r := NewReducer(ReducerConfig{})
+	r := state.NewReducer(state.ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 5, At: now.Unix()})
-	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: now.Unix()})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: state.ASLPhaseBetween, RunID: "run-1", Seq: 1, At: now.Unix()})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceProbe, Key: "user"}, Action: "user_clear", Seq: 0, At: now.Unix()})
 	if eff := r.Reduce(now.Unix()); eff.Icon != "" || !eff.Looping {
 		t.Fatalf("persisted /clear Reduce = %+v; want icon-less with a live lease", eff)
 	}
-	encoded, err := WindowState{
+	encoded, err := state.WindowState{
 		LastAction: "clear",
 		Reducer:    r,
 		Effective:  r.Reduce(now.Unix()),
@@ -351,9 +352,9 @@ func TestMaintenanceTick_MergesAcknowledgedPersistedFactsWithHookState(t *testin
 // encodeMergeWindow builds the single-window OSWindow list a degraded-startup
 // merge test serves from its gated Kitty client: window 42 (Kitty ID) carries
 // r's durable facts encoded as amx_state.
-func encodeMergeWindow(t *testing.T, r *Reducer, shadowSeq uint64, now time.Time) []kitty.OSWindow {
+func encodeMergeWindow(t *testing.T, r *state.Reducer, shadowSeq uint64, now time.Time) []kitty.OSWindow {
 	t.Helper()
-	encoded, err := WindowState{Reducer: r, Effective: r.Reduce(now.Unix()), ShadowSeq: shadowSeq}.MarshalUserVar()
+	encoded, err := state.WindowState{Reducer: r, Effective: r.Reduce(now.Unix()), ShadowSeq: shadowSeq}.MarshalUserVar()
 	if err != nil {
 		t.Fatalf("MarshalUserVar() error: %v", err)
 	}

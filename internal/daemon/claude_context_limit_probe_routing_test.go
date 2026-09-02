@@ -236,7 +236,7 @@ func TestProbeClaudeContextLimit_DiscardsObservationAfterConcurrentReducerEvent(
 				// No reducer mutation: the discarded banner left no probe fact and
 				// never marked the stall episode as handled.
 				h.stateMu.Lock()
-				probeFact := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceProbe, Key: claudeContextLimitFactSource}]
+				probeFact := factOf(h.store[42].Reducer, protocol.SourceID{Kind: protocol.SourceProbe, Key: claudeContextLimitFactSource})
 				notified := h.store[42].ContextLimitNotified
 				h.stateMu.Unlock()
 				if probeFact != nil {

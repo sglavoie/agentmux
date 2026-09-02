@@ -13,6 +13,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
 
@@ -37,7 +38,7 @@ func seedReducerFact(h *Handler, windowID int, now time.Time, events ...protocol
 	h.stateMu.Lock()
 	st := h.ensureWindowStateLocked(windowID)
 	if st.Reducer == nil {
-		st.Reducer = NewReducer(h.reducerCfg)
+		st.Reducer = state.NewReducer(h.reducerCfg)
 	}
 	for _, ev := range events {
 		st.Reducer.Apply(ev)
@@ -46,7 +47,7 @@ func seedReducerFact(h *Handler, windowID int, now time.Time, events ...protocol
 	h.stateMu.Unlock()
 }
 
-func effectiveState(h *Handler, windowID int) EffectiveState {
+func effectiveState(h *Handler, windowID int) state.EffectiveState {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	return h.store[windowID].Effective
@@ -152,7 +153,7 @@ func TestSweepStale_CompactsAcknowledgedFactsWithoutStaleThresholds(t *testing.T
 
 	h.stateMu.Lock()
 	st := h.ensureWindowStateLocked(42)
-	st.Reducer = NewReducer(h.reducerCfg)
+	st.Reducer = state.NewReducer(h.reducerCfg)
 	st.Reducer.Restore([]protocol.SourceFactSnapshot{{
 		Kind: protocol.SourceHarness, Key: "codex:old", Action: "active", Icon: "bolt",
 		Seq: 7, CausalOrder: 7, At: base.Unix(), Acked: true, AckedAt: base.Unix(),
@@ -163,7 +164,7 @@ func TestSweepStale_CompactsAcknowledgedFactsWithoutStaleThresholds(t *testing.T
 	st.DirtySince = time.Time{}
 	h.stateMu.Unlock()
 
-	changed := h.SweepStaleWithSnapshot(base.Add(time.Duration(acknowledgedFactRetentionSeconds)*time.Second), nil)
+	changed := h.SweepStaleWithSnapshot(base.Add(time.Duration(state.AcknowledgedFactRetentionSeconds)*time.Second), nil)
 	if !changed {
 		t.Fatal("retention-only watchdog pass reported no change")
 	}
@@ -270,7 +271,7 @@ func TestWatchdogStale_ASLExecutingLeaseProtectsBolt(t *testing.T) {
 	seedReducerFact(h, 42, base,
 		protocol.ReducerEvent{
 			Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"},
-			Seq:    1, At: base.Unix(), RunID: "run-1", Phase: ASLPhaseTurn,
+			Seq:    1, At: base.Unix(), RunID: "run-1", Phase: state.ASLPhaseTurn,
 		},
 		protocol.ReducerEvent{
 			Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "main"},

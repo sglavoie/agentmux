@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/contextlimit"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -209,7 +210,7 @@ func (h *Handler) recordClaudeContextLimitProbeStateLocked(
 	userVars kitty.UserVars,
 	legacyDirectManaged bool,
 	originWindowID int,
-) (before, effective EffectiveState, account string) {
+) (before, effective state.EffectiveState, account string) {
 	st := h.ensureWindowStateLocked(windowID)
 	before = st.Effective
 	st.Activity = now
@@ -240,7 +241,7 @@ func (h *Handler) recordClaudeContextLimitProbeStateLocked(
 	// keeps DesiredIcon, Looping, Effective, and the exported Shadow effective
 	// fields consistent with the authoritative reducer.
 	if st.Reducer == nil {
-		st.Reducer = NewReducer(h.reducerCfg)
+		st.Reducer = state.NewReducer(h.reducerCfg)
 	}
 	st.ShadowSeq++
 	st.Reducer.Apply(protocol.ReducerEvent{

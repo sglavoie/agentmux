@@ -2,14 +2,7 @@ package daemon
 
 import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-)
-
-type resetFlowState uint8
-
-const (
-	resetFlowNone resetFlowState = iota
-	resetFlowRequested
-	resetFlowClearing
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 func isResetCleanupAction(action string) bool {
@@ -21,8 +14,8 @@ func isResetCleanupAction(action string) bool {
 	}
 }
 
-func shouldClearPendingReset(req protocol.Request, state resetFlowState) bool {
-	if state == resetFlowNone || req.ResetFlow {
+func shouldClearPendingReset(req protocol.Request, flow state.ResetFlowState) bool {
+	if flow == state.ResetFlowNone || req.ResetFlow {
 		return false
 	}
 	if req.IsPrompt {
@@ -31,7 +24,7 @@ func shouldClearPendingReset(req protocol.Request, state resetFlowState) bool {
 	if isResetCleanupAction(req.Action) {
 		return false
 	}
-	return state != resetFlowRequested || req.Action != "active"
+	return flow != state.ResetFlowRequested || req.Action != "active"
 }
 
 // applyResetFlowLocked maintains the short-lived per-window reset marker and
@@ -39,18 +32,18 @@ func shouldClearPendingReset(req protocol.Request, state resetFlowState) bool {
 // not surface during /clear, /reset, or /new flows. Caller must hold stateMu.
 func (h *Handler) applyResetFlowLocked(req protocol.Request) protocol.Request {
 	st := h.ensureWindowStateLocked(req.WindowID)
-	state := st.PendingReset
+	flow := st.PendingReset
 	if req.ResetFlow {
-		if req.IsPrompt || state == resetFlowNone {
-			state = resetFlowRequested
+		if req.IsPrompt || flow == state.ResetFlowNone {
+			flow = state.ResetFlowRequested
 		}
-		st.PendingReset = state
-	} else if shouldClearPendingReset(req, state) {
-		state = resetFlowNone
-		st.PendingReset = resetFlowNone
+		st.PendingReset = flow
+	} else if shouldClearPendingReset(req, flow) {
+		flow = state.ResetFlowNone
+		st.PendingReset = state.ResetFlowNone
 	}
 
-	if state == resetFlowNone || !isResetCleanupAction(req.Action) {
+	if flow == state.ResetFlowNone || !isResetCleanupAction(req.Action) {
 		return req
 	}
 
@@ -59,12 +52,12 @@ func (h *Handler) applyResetFlowLocked(req protocol.Request) protocol.Request {
 	req.ResetFlow = true
 	switch originalAction {
 	case "user_clear":
-		st.PendingReset = resetFlowNone
+		st.PendingReset = state.ResetFlowNone
 	default:
 		// Keep the clearing marker through later idle/sessionStart/notification
 		// noise from the same reset flow; the next non-reset prompt or activity
 		// will clear it via shouldClearPendingReset.
-		st.PendingReset = resetFlowClearing
+		st.PendingReset = state.ResetFlowClearing
 	}
 	return req
 }

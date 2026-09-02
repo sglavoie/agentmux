@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 // handleSubagentStateUpdate applies subagent reference counting and Copilot's
@@ -123,7 +124,7 @@ func (h *Handler) handleSubagentStateUpdate(req protocol.Request, currentIconSta
 		h.stateMu.Lock()
 		now := time.Now()
 		st := h.ensureWindowStateLocked(req.WindowID)
-		st.CopilotToolPermissionState = copilotToolPermissionPending
+		st.CopilotToolPermissionState = state.CopilotToolPermissionPending
 		st.Activity = now
 		st.LastSessionTitle = req.SessionTitle
 		st.LastPipeMode = req.PipeMode

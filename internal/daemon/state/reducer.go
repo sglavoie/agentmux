@@ -1,4 +1,4 @@
-package daemon
+package state
 
 import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -123,10 +123,10 @@ func (r *Reducer) resolve(ev protocol.ReducerEvent) (action, icon string, leaseL
 			// supervisor probe owns the human-actionable question icon.
 			return "idle", "", true
 		case ASLPhasePaused:
-			return ev.Action, reducerActionIcon(ev.Action), true
+			return ev.Action, ActionIcon(ev.Action), true
 		case ASLPhaseFinished:
 			return "stop", "stop", false
 		}
 	}
-	return ev.Action, reducerActionIcon(ev.Action), false
+	return ev.Action, ActionIcon(ev.Action), false
 }

@@ -1,4 +1,4 @@
-package daemon
+package state
 
 // Seeded reducer fuzz. Every test derives its event traces from a fixed set of
 // seeds through math/rand, so a failure reproduces deterministically: rerun the
@@ -158,7 +158,7 @@ func TestFuzzReducerTerminalCrossSourceIsolation(t *testing.T) {
 		trace := newFuzzGen(seed).trace(fuzzTraceLen, false)
 		r := NewReducer(fuzzCfgs["production"])
 		for i, ev := range trace {
-			terminal := isTerminalAction(ev.Action) || ev.Phase == ASLPhaseFinished
+			terminal := protocol.IsTerminalAction(ev.Action) || ev.Phase == ASLPhaseFinished
 			if !terminal || ev.EndsSession {
 				r.Apply(ev)
 				continue

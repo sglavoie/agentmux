@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -212,7 +213,7 @@ func TestProbeCodexClearWindow_CancelsDeferredStopGenerationSafely(t *testing.T)
 		if stillPending {
 			t.Fatal("receipt-valid Codex clear left the older deferred Stop pending")
 		}
-		if st == nil || st.PendingReset != resetFlowNone || st.Effective.Icon != "" {
+		if st == nil || st.PendingReset != state.ResetFlowNone || st.Effective.Icon != "" {
 			t.Fatalf("state after clear = %+v, want cleared reducer and reset flow", st)
 		}
 		beforeTimer := screenProbeMutationFingerprint(t, h, 42)
@@ -354,7 +355,7 @@ func TestCodexClearDeferredStopClaimRace(t *testing.T) {
 		close(resume)
 		t.Fatal("receipt-valid Codex clear left the claimed deferred Stop addressable")
 	}
-	if st == nil || st.PendingReset != resetFlowNone || st.Effective.Icon != "" {
+	if st == nil || st.PendingReset != state.ResetFlowNone || st.Effective.Icon != "" {
 		close(resume)
 		t.Fatalf("state after clear = %+v, want cleared reducer and reset flow", st)
 	}

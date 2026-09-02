@@ -1,4 +1,4 @@
-package daemon
+package state
 
 import (
 	"testing"
@@ -77,7 +77,7 @@ func TestReducerSubagentSessionScopedClear(t *testing.T) {
 // agent contribution in the window (legacy terminal self-heal).
 func TestReducerSubagentSessionEndWithoutIDClearsAllAgents(t *testing.T) {
 	r := NewReducer(zeroCfg)
-	bucket := protocol.SourceID{Kind: protocol.SourceLegacy, Key: legacySubagentBucketKey("win:1")}
+	bucket := protocol.SourceID{Kind: protocol.SourceLegacy, Key: protocol.LegacySubagentBucketKey("win:1")}
 
 	r.Apply(protocol.ReducerEvent{Source: subagentSource("a1"), Action: "subagent", SessionID: "s1", Seq: 1, At: 10})
 	r.Apply(protocol.ReducerEvent{Source: bucket, Action: "subagent", SubagentDelta: 1, Seq: 1, At: 11})
@@ -93,7 +93,7 @@ func TestReducerSubagentSessionEndWithoutIDClearsAllAgents(t *testing.T) {
 // even while a sibling is still running.
 func TestReducerLegacySubagentMultiset(t *testing.T) {
 	r := NewReducer(zeroCfg)
-	bucket := protocol.SourceID{Kind: protocol.SourceLegacy, Key: legacySubagentBucketKey("s1")}
+	bucket := protocol.SourceID{Kind: protocol.SourceLegacy, Key: protocol.LegacySubagentBucketKey("s1")}
 
 	// Balanced: two starts need two stops before 🤖 clears.
 	r.Apply(protocol.ReducerEvent{Source: bucket, Action: "subagent", SubagentDelta: 1, Seq: 1, At: 10})
@@ -139,7 +139,7 @@ func TestReducerLegacySubagentMultiset(t *testing.T) {
 // remaining identity-less agent count.
 func TestReducerSubagentAggregationSurvivesSnapshotRestore(t *testing.T) {
 	r := NewReducer(zeroCfg)
-	bucket := protocol.SourceID{Kind: protocol.SourceLegacy, Key: legacySubagentBucketKey("s2")}
+	bucket := protocol.SourceID{Kind: protocol.SourceLegacy, Key: protocol.LegacySubagentBucketKey("s2")}
 	r.Apply(protocol.ReducerEvent{Source: subagentSource("a1"), Action: "subagent", SessionID: "s1", Seq: 1, At: 10})
 	r.Apply(protocol.ReducerEvent{Source: bucket, Action: "subagent", SubagentDelta: 1, Seq: 1, At: 11})
 	r.Apply(protocol.ReducerEvent{Source: bucket, Action: "subagent", SubagentDelta: 1, Seq: 2, At: 12})

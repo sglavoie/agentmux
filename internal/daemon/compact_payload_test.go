@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -26,17 +27,17 @@ func TestCompactHarnessSourcesRemainDistinctAndStopOwnSession(t *testing.T) {
 	if claudeActive.Source != claudeSource || codexActive.Source != codexSource || claudeActive.Source == codexActive.Source {
 		t.Fatalf("compact sources collapsed: claude=%+v codex=%+v", claudeActive.Source, codexActive.Source)
 	}
-	r := NewReducer(ReducerConfig{})
+	r := state.NewReducer(state.ReducerConfig{})
 	r.ApplyNormalized(claudeActive)
 	r.ApplyNormalized(codexActive)
 	r.ApplyNormalized(claudeStop)
 
-	claudeFact := r.facts[claudeSource]
-	codexFact := r.facts[codexSource]
-	if claudeFact == nil || claudeFact.action != "stop" || !claudeFact.terminated {
+	claudeFact := factOf(r, claudeSource)
+	codexFact := factOf(r, codexSource)
+	if claudeFact == nil || claudeFact.Action != "stop" || !claudeFact.Terminated {
 		t.Fatalf("Claude stop did not terminate its compact source: %+v", claudeFact)
 	}
-	if codexFact == nil || codexFact.action != "active" || codexFact.acked || codexFact.terminated {
+	if codexFact == nil || codexFact.Action != "active" || codexFact.Acked || codexFact.Terminated {
 		t.Fatalf("Claude stop mutated the distinct Codex source: %+v", codexFact)
 	}
 }
@@ -54,8 +55,8 @@ func TestMalformedCompactRequestCannotMutateReducerState(t *testing.T) {
 	}
 
 	h.stateMu.Lock()
-	before := *h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:session-1"}]
-	beforeCount := len(h.store[42].Reducer.facts)
+	before := *factOf(h.store[42].Reducer, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:session-1"})
+	beforeCount := len(h.store[42].Reducer.Facts())
 	h.stateMu.Unlock()
 
 	resp := h.Handle(protocol.Request{
@@ -67,8 +68,8 @@ func TestMalformedCompactRequestCannotMutateReducerState(t *testing.T) {
 	}
 
 	h.stateMu.Lock()
-	after := *h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:session-1"}]
-	afterCount := len(h.store[42].Reducer.facts)
+	after := *factOf(h.store[42].Reducer, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:session-1"})
+	afterCount := len(h.store[42].Reducer.Facts())
 	h.stateMu.Unlock()
 	if afterCount != beforeCount || after != before {
 		t.Fatalf("malformed compact request mutated reducer facts: before=%+v after=%+v counts=%d/%d", before, after, beforeCount, afterCount)

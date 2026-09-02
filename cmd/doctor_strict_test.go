@@ -15,6 +15,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
@@ -71,7 +72,7 @@ func violatingDoctorSnapshot(now time.Time) protocol.EventsExport {
 				Renderer: protocol.WindowDebugRenderer{DesiredIcon: "", StateSet: false},
 				Shadow: protocol.WindowDebugShadow{EffectiveGen: 1, Facts: []protocol.SourceFactSnapshot{{
 					Kind: protocol.SourceASL, Key: "run-1", RunID: "run-1",
-					Phase: daemon.ASLPhaseTurn, LeaseLive: true, At: now.Unix(),
+					Phase: state.ASLPhaseTurn, LeaseLive: true, At: now.Unix(),
 				}}},
 			},
 		},

@@ -1,6 +1,8 @@
 package daemon
 
-import "sync"
+import (
+	"sync"
+)
 
 // This file models the daemon's explicit startup readiness. The daemon takes
 // one bounded initial Kitty snapshot and restores durable state BEFORE binding

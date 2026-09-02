@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -13,7 +14,7 @@ func TestRestoreFromUserVarsRestoresStateAndFutureGuard(t *testing.T) {
 	h := newTestHandler()
 	now := time.Now()
 	guardExpiry := now.Add(time.Minute)
-	encoded, err := WindowState{
+	encoded, err := state.WindowState{
 		Activity:       now.Add(-time.Minute),
 		LastAction:     "permission",
 		LastAccount:    "work",
@@ -52,7 +53,7 @@ func TestRestoreFromUserVarsRestoresStateAndFutureGuard(t *testing.T) {
 func TestRestoreFromUserVarsSkipsExpiredGuardAndUnmanagedWindows(t *testing.T) {
 	h := newTestHandler()
 	now := time.Now()
-	encoded, err := WindowState{
+	encoded, err := state.WindowState{
 		LastAction:     "active",
 		GuardAction:    "active",
 		GuardExpiresAt: now.Add(-time.Second),
@@ -87,14 +88,14 @@ func TestRestoreFromUserVarsSkipsExpiredGuardAndUnmanagedWindows(t *testing.T) {
 
 func TestRestoreFromUserVarsRestoresReducerFactsLeasesAndGeneration(t *testing.T) {
 	h := newTestHandler()
-	cfg := ReducerConfig{GuardDuration: 3, StaleActive: 600}
+	cfg := state.ReducerConfig{GuardDuration: 3, StaleActive: 600}
 	h.SetReducerConfig(cfg)
 	now := time.Now()
 
-	r := NewReducer(ReducerConfig{})
+	r := state.NewReducer(state.ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 2, TurnID: "t1", At: now.Unix()})
-	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: now.Unix()})
-	encoded, err := WindowState{
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: state.ASLPhaseBetween, RunID: "run-1", Seq: 1, At: now.Unix()})
+	encoded, err := state.WindowState{
 		LastAction:   "active",
 		Reducer:      r,
 		Effective:    r.Reduce(now.Unix()),
@@ -136,8 +137,8 @@ func TestRestoreFromUserVarsRestoresReducerFactsLeasesAndGeneration(t *testing.T
 	if eff := st.Reducer.Reduce(now.Unix()); eff.Icon != "bolt" || !eff.Looping {
 		t.Fatalf("restored Reduce = %+v, want bolt with live lease", eff)
 	}
-	if st.Reducer.cfg != cfg {
-		t.Fatalf("restored reducer cfg = %+v, want daemon thresholds %+v", st.Reducer.cfg, cfg)
+	if st.Reducer.Config() != cfg {
+		t.Fatalf("restored reducer cfg = %+v, want daemon thresholds %+v", st.Reducer.Config(), cfg)
 	}
 }
 
@@ -155,12 +156,12 @@ func TestRestoreFromUserVarsRepublishesReducedStateAfterTombstoneExpiry(t *testi
 	now := time.Now()
 
 	encode := func(stopAt time.Time) string {
-		r := NewReducer(ReducerConfig{})
+		r := state.NewReducer(state.ReducerConfig{})
 		r.Apply(protocol.ReducerEvent{
 			Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"},
 			Action: "stop", Seq: 1, At: stopAt.Unix(),
 		})
-		encoded, err := WindowState{
+		encoded, err := state.WindowState{
 			LastAction: "stop",
 			Reducer:    r,
 			Effective:  r.Reduce(stopAt.Unix()),
@@ -171,7 +172,7 @@ func TestRestoreFromUserVarsRepublishesReducedStateAfterTombstoneExpiry(t *testi
 		}
 		return encoded
 	}
-	aged := encode(now.Add(-time.Duration(tombstoneRetentionSeconds+60) * time.Second))
+	aged := encode(now.Add(-time.Duration(state.TombstoneRetentionSeconds+60) * time.Second))
 	fresh := encode(now.Add(-time.Minute))
 
 	h.restoreFromUserVars([]kitty.OSWindow{{
@@ -226,12 +227,12 @@ func TestRestoreFromUserVarsKeepsLivePersistedBusySince(t *testing.T) {
 	now := time.Now()
 	anchor := now.Add(-7 * time.Minute).Truncate(time.Second)
 
-	r := NewReducer(ReducerConfig{})
+	r := state.NewReducer(state.ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{
 		Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"},
 		Action: "active", Seq: 1, At: now.Add(-time.Minute).Unix(),
 	})
-	encoded, err := WindowState{
+	encoded, err := state.WindowState{
 		LastAction: "active",
 		Reducer:    r,
 		Effective:  r.Reduce(now.Unix()),
@@ -274,7 +275,7 @@ func TestRestoreFromUserVarsStampsBusySinceForFactlessPayloads(t *testing.T) {
 	h := newTestHandler()
 	now := time.Now()
 
-	encode := func(state WindowState) string {
+	encode := func(state state.WindowState) string {
 		encoded, err := state.MarshalUserVar()
 		if err != nil {
 			t.Fatalf("MarshalUserVar() error: %v", err)
@@ -283,8 +284,8 @@ func TestRestoreFromUserVarsStampsBusySinceForFactlessPayloads(t *testing.T) {
 	}
 	// Window 42 is a pre-upgrade busy payload (no persisted anchor); window 43
 	// carries an anchor that its icon no longer justifies.
-	busy := encode(WindowState{LastAction: "active", Activity: now.Add(-time.Minute)})
-	stopped := encode(WindowState{
+	busy := encode(state.WindowState{LastAction: "active", Activity: now.Add(-time.Minute)})
+	stopped := encode(state.WindowState{
 		LastAction: "stop",
 		Activity:   now.Add(-time.Minute),
 		BusySince:  now.Add(-time.Hour).Truncate(time.Second),
@@ -322,7 +323,7 @@ func TestRestoreFromUserVarsStampsBusySinceForFactlessPayloads(t *testing.T) {
 
 func TestRestoreFromUserVarsMigratesV1PayloadToSyntheticLegacySource(t *testing.T) {
 	h := newTestHandler()
-	cfg := ReducerConfig{GuardDuration: 7}
+	cfg := state.ReducerConfig{GuardDuration: 7}
 	h.SetReducerConfig(cfg)
 	now := time.Now()
 
@@ -364,16 +365,16 @@ func TestRestoreFromUserVarsMigratesV1PayloadToSyntheticLegacySource(t *testing.
 	// Migrated facts are re-keyed onto the window's live legacy key so
 	// post-restart events from the same window collide with the restored fact
 	// (same-source terminal suppression, lease release).
-	if facts[1].Kind != protocol.SourceLegacy || facts[1].Key != windowKey(42) || !facts[1].Terminated {
+	if facts[1].Kind != protocol.SourceLegacy || facts[1].Key != protocol.WindowKey(42) || !facts[1].Terminated {
 		t.Fatalf("legacy migrated fact = %+v", facts[1])
 	}
-	if facts[0].Kind != protocol.SourceASL || facts[0].Key != windowKey(42) || !facts[0].LeaseLive {
+	if facts[0].Kind != protocol.SourceASL || facts[0].Key != protocol.WindowKey(42) || !facts[0].LeaseLive {
 		t.Fatalf("ASL migrated fact = %+v", facts[0])
 	}
 	if st.Effective.Icon != "" || !st.Effective.Looping {
 		t.Fatalf("migrated effective = %+v, want lease-suppressed icon + looping", st.Effective)
 	}
-	if st.Reducer.cfg != cfg {
-		t.Fatalf("migrated reducer cfg = %+v, want daemon thresholds %+v", st.Reducer.cfg, cfg)
+	if st.Reducer.Config() != cfg {
+		t.Fatalf("migrated reducer cfg = %+v, want daemon thresholds %+v", st.Reducer.Config(), cfg)
 	}
 }

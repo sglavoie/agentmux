@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -25,10 +26,10 @@ func ensureRequestTraceID(req protocol.Request) protocol.Request {
 	return req
 }
 
-func effectiveStateEvidence(state EffectiveState) protocol.EffectiveStateEvidence {
+func effectiveStateEvidence(effective state.EffectiveState) protocol.EffectiveStateEvidence {
 	return protocol.EffectiveStateEvidence{
-		Icon: state.Icon, Looping: state.Looping,
-		SourceKind: string(state.Source.Kind), SourceKey: state.Source.Key,
+		Icon: effective.Icon, Looping: effective.Looping,
+		SourceKind: string(effective.Source.Kind), SourceKey: effective.Source.Key,
 	}
 }
 
@@ -161,7 +162,7 @@ func identityConfidenceFor(n protocol.NormalizedEvent) string {
 	switch n.Source.Kind {
 	case "":
 		return protocol.IdentityConfidenceUnresolved
-	case SourceInvalid:
+	case protocol.SourceInvalid:
 		return protocol.IdentityConfidenceInvalid
 	case protocol.SourceLegacy:
 		return protocol.IdentityConfidenceLegacySynthesized

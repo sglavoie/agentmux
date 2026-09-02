@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 // maxShadowMismatches bounds the per-window mismatch ring kept for export.
@@ -58,11 +59,11 @@ func reduceNormalizedForRequest(req protocol.Request, outcome applyOutcome) (pro
 			return protocol.NormalizedEvent{}, false, "", untrustedFallback
 		}
 		n := protocol.NormalizedEvent{
-			Source: protocol.SourceID{Kind: protocol.SourceASL, Key: windowKey(req.WindowID)},
+			Source: protocol.SourceID{Kind: protocol.SourceASL, Key: protocol.WindowKey(req.WindowID)},
 			Event:  req.Event,
 			Phase:  phase,
 		}
-		if phase == ASLPhasePaused {
+		if phase == state.ASLPhasePaused {
 			n.Action = aslPausedAttentionAction(req.Reason)
 		}
 		return n, true, protocol.IdentityConfidenceDaemon, untrustedFallback
@@ -80,7 +81,7 @@ func reduceNormalizedForRequest(req protocol.Request, outcome applyOutcome) (pro
 	// the plain window source can never overwrite the 🤖 they contribute.
 	if action == "subagent" || isSubagentStopEvent(req.Event) {
 		n := protocol.NormalizedEvent{
-			Source: protocol.SourceID{Kind: protocol.SourceLegacy, Key: legacySubagentBucketKey(windowKey(req.WindowID))},
+			Source: protocol.SourceID{Kind: protocol.SourceLegacy, Key: protocol.LegacySubagentBucketKey(protocol.WindowKey(req.WindowID))},
 			Event:  req.Event,
 		}
 		if action == "subagent" {
@@ -102,14 +103,14 @@ func reduceNormalizedForRequest(req protocol.Request, outcome applyOutcome) (pro
 		return n, true, confidence, untrustedFallback
 	}
 	n := protocol.NormalizedEvent{
-		Source: protocol.SourceID{Kind: protocol.SourceLegacy, Key: windowKey(req.WindowID)},
+		Source: protocol.SourceID{Kind: protocol.SourceLegacy, Key: protocol.WindowKey(req.WindowID)},
 		Action: action,
 		Event:  req.Event,
 		Prompt: req.IsPrompt,
 		// Identity-less clients have no session boundary: mirror the legacy
 		// machine's terminal self-heal by letting any terminal action end the
 		// window's sessions, so lost subagent stops cannot strand 🤖.
-		EndsSession: isTerminalAction(action),
+		EndsSession: protocol.IsTerminalAction(action),
 	}
 	confidence := protocol.IdentityConfidenceLegacySynthesized
 	if untrustedFallback {
@@ -138,12 +139,12 @@ func (h *Handler) reduceStateUpdate(req protocol.Request, outcome applyOutcome, 
 	h.stateMu.Lock()
 	st := h.ensureWindowStateLocked(req.WindowID)
 	if st.Reducer == nil {
-		st.Reducer = NewReducer(h.reducerCfg)
+		st.Reducer = state.NewReducer(h.reducerCfg)
 	}
 	// A real hook/ASL event is the only evidence that re-arms one-shot busy-body
 	// promotion. The probe applies its own fact directly through st.Reducer.Apply
 	// and never reaches here, so it cannot re-arm itself.
-	st.promotedBusyBody = ""
+	st.ClearPromotedBusyBody()
 	effectiveBefore := st.Effective
 	// Today's harness payloads carry no source_sequence; assign the window's
 	// receipt sequence so per-source monotonicity (duplicate/reorder handling)
@@ -236,7 +237,7 @@ func (h *Handler) reduceStateUpdate(req protocol.Request, outcome applyOutcome, 
 	// is not logged: the legacy path already appended its own allowed event
 	// with the same preserved outcome.
 	if decision == protocol.DecisionApplied && notifyableActions[outcome.notifyAction] &&
-		h.shouldNotifySourceEventLocked(st, n.SourceEventID) {
+		st.MarkSourceEventNotified(n.SourceEventID) {
 		notify = true
 	}
 	// Persist reducer changes with the next render pass. A suppressed decision
@@ -293,7 +294,7 @@ func (h *Handler) reduceStateUpdate(req protocol.Request, outcome applyOutcome, 
 // doctor/audit failure until the window's next real event (observed live
 // twice: restored windows after a restart, and watchdog-expired windows
 // during the 30-minute monitored audit). Callers hold stateMu.
-func (h *Handler) publishEffectiveLocked(windowID int, st *WindowState, effective EffectiveState) {
+func (h *Handler) publishEffectiveLocked(windowID int, st *state.WindowState, effective state.EffectiveState) {
 	if effective != st.Effective {
 		st.Effective = effective
 		st.EffectiveGen++
@@ -325,7 +326,7 @@ func (h *Handler) publishEffectiveLocked(windowID int, st *WindowState, effectiv
 // restored anchor survives its first republish because it is non-zero.
 // Reading the clock under stateMu matches markWindowStateDirtyLocked.
 // Callers hold stateMu.
-func stampBusySinceLocked(st *WindowState, icon string, now time.Time) {
+func stampBusySinceLocked(st *state.WindowState, icon string, now time.Time) {
 	switch icon {
 	case "bolt", "subagent", "compact":
 		if st.BusySince.IsZero() {
@@ -334,32 +335,4 @@ func stampBusySinceLocked(st *WindowState, icon string, now time.Time) {
 	default:
 		st.BusySince = time.Time{}
 	}
-}
-
-// maxNotifiedSourceEvents bounds the per-window ring of upstream source event
-// IDs that already produced a notification decision.
-const maxNotifiedSourceEvents = 64
-
-// shouldNotifySourceEventLocked reports whether a notification decision for
-// this upstream source event ID has not been made yet, and records it. Events
-// without an upstream ID are never deduplicated here (the notifier's own
-// per-action cooldown still applies). Callers hold stateMu.
-func (h *Handler) shouldNotifySourceEventLocked(st *WindowState, sourceEventID string) bool {
-	if sourceEventID == "" {
-		return true
-	}
-	if _, seen := st.notifiedSourceEvents[sourceEventID]; seen {
-		return false
-	}
-	if st.notifiedSourceEvents == nil {
-		st.notifiedSourceEvents = make(map[string]struct{}, maxNotifiedSourceEvents)
-	}
-	st.notifiedSourceEvents[sourceEventID] = struct{}{}
-	st.notifiedSourceOrder = append(st.notifiedSourceOrder, sourceEventID)
-	if len(st.notifiedSourceOrder) > maxNotifiedSourceEvents {
-		oldest := st.notifiedSourceOrder[0]
-		st.notifiedSourceOrder = st.notifiedSourceOrder[1:]
-		delete(st.notifiedSourceEvents, oldest)
-	}
-	return true
 }

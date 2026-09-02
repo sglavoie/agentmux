@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
 
@@ -20,7 +21,7 @@ func (h *Handler) effectiveStateForTrace(windowID int) protocol.EffectiveStateEv
 	return protocol.EffectiveStateEvidence{}
 }
 
-func eventByReferenceLocked(st *WindowState, ref *protocol.SessionEventReference) *protocol.SessionEvent {
+func eventByReferenceLocked(st *state.WindowState, ref *protocol.SessionEventReference) *protocol.SessionEvent {
 	if st == nil || ref == nil || ref.DaemonSeq == 0 {
 		return nil
 	}
@@ -111,7 +112,7 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func suppressionReasonForReducer(trace ReducerTrace, outcome applyOutcome) string {
+func suppressionReasonForReducer(trace state.ReducerTrace, outcome applyOutcome) string {
 	switch trace.Decision {
 	case protocol.DecisionDuplicate:
 		return protocol.DecisionReasonDuplicateSequence
@@ -146,8 +147,8 @@ func suppressionReasonForReducer(trace ReducerTrace, outcome applyOutcome) strin
 func (h *Handler) finalizeReducerDecisionLocked(
 	req protocol.Request,
 	n protocol.NormalizedEvent,
-	trace ReducerTrace,
-	before, after EffectiveState,
+	trace state.ReducerTrace,
+	before, after state.EffectiveState,
 	identityConfidence string,
 	usedFallbackIdentity bool,
 	outcome applyOutcome,

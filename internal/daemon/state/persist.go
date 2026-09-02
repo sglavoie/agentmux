@@ -1,4 +1,4 @@
-package daemon
+package state
 
 // This file is the reducer's persistence seam. The fact map itself stays
 // unexported; schema-v4 user-var serialization and startup restoration go
@@ -12,27 +12,76 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
-// tombstoneRetentionSeconds bounds how long an unacknowledged terminal fact is
+// TombstoneRetentionSeconds bounds how long an unacknowledged terminal fact is
 // retained after termination. Terminal suppression only matters for trailing
 // events shortly after a stop, so an hour comfortably covers every real burst
 // while keeping the persisted amx_state payload from accreting dead sources.
-const tombstoneRetentionSeconds int64 = 3600
+// The retention policy is exported because it is a persistence contract: daemon
+// behaviour that outlives a fact (restore, staleness, straggler absorption) is
+// only meaningful relative to these bounds.
+const TombstoneRetentionSeconds int64 = 3600
 
-// acknowledgedFactRetentionSeconds and maxAcknowledgedFacts bound withdrawn
+// AcknowledgedFactRetentionSeconds and MaxAcknowledgedFacts bound withdrawn
 // nonterminal source cutoffs. Keeping a recent tail still absorbs ordinary
 // duplicate/reordered deliveries, while old sessions cannot grow amx_state
 // without limit.
 const (
-	acknowledgedFactRetentionSeconds int64 = 3600
-	maxAcknowledgedFacts             int   = 64
+	AcknowledgedFactRetentionSeconds int64 = 3600
+	MaxAcknowledgedFacts             int   = 64
 )
 
-// subagentStopRetentionSeconds bounds how long a completed subagent's
+// SubagentStopRetentionSeconds bounds how long a completed subagent's
 // icon-less tombstone is retained. Within the window, duplicate stops and a
 // start arriving after its own stop (reordered delivery) collapse onto the
 // terminated fact instead of resurrecting 🤖; afterwards the identity is
 // forgotten — a finished agent produces no further real events.
-const subagentStopRetentionSeconds int64 = 300
+const SubagentStopRetentionSeconds int64 = 300
+
+// snapshot projects one live fact onto its exported, durable view.
+func (f *sourceFact) snapshot() protocol.SourceFactSnapshot {
+	return protocol.SourceFactSnapshot{
+		Kind:                     f.source.Kind,
+		Key:                      f.source.Key,
+		Action:                   f.action,
+		Icon:                     f.icon,
+		Seq:                      f.seq,
+		CausalOrder:              f.causalOrder,
+		TurnID:                   f.turnID,
+		At:                       f.at,
+		Acked:                    f.acked,
+		AckedAt:                  f.ackedAt,
+		OriginWindowID:           f.originWindowID,
+		ToolUse:                  f.toolUse,
+		HarnessProcessHarness:    f.harnessProcess.Harness,
+		HarnessProcessPID:        f.harnessProcess.PID,
+		HarnessProcessStartToken: f.harnessProcess.StartToken,
+		PipeMode:                 f.pipeMode,
+		SessionID:                f.sessionID,
+		Agents:                   f.agents,
+		RunID:                    f.runID,
+		Phase:                    f.phase,
+		LeaseLive:                f.leaseLive,
+		Terminated:               f.terminated,
+		TerminalTurn:             f.terminalTurn,
+		TerminalToolUse:          f.terminalToolUse,
+		TerminalAt:               f.terminalAt,
+	}
+}
+
+// Fact returns one source's snapshot and whether the reducer knows the source
+// at all. A known-but-withdrawn source still reports ok: callers that reason
+// about acknowledgement or sequence continuity need the withdrawn entry, which
+// Facts deliberately omits.
+func (r *Reducer) Fact(source protocol.SourceID) (protocol.SourceFactSnapshot, bool) {
+	if r == nil {
+		return protocol.SourceFactSnapshot{}, false
+	}
+	f := r.facts[source]
+	if f == nil {
+		return protocol.SourceFactSnapshot{}, false
+	}
+	return f.snapshot(), true
+}
 
 // Facts returns a deterministic snapshot of every set fact, ordered by source
 // kind then key so serialized payloads are stable across runs.
@@ -42,33 +91,7 @@ func (r *Reducer) Facts() []protocol.SourceFactSnapshot {
 		if !f.set {
 			continue
 		}
-		out = append(out, protocol.SourceFactSnapshot{
-			Kind:                     f.source.Kind,
-			Key:                      f.source.Key,
-			Action:                   f.action,
-			Icon:                     f.icon,
-			Seq:                      f.seq,
-			CausalOrder:              f.causalOrder,
-			TurnID:                   f.turnID,
-			At:                       f.at,
-			Acked:                    f.acked,
-			AckedAt:                  f.ackedAt,
-			OriginWindowID:           f.originWindowID,
-			ToolUse:                  f.toolUse,
-			HarnessProcessHarness:    f.harnessProcess.Harness,
-			HarnessProcessPID:        f.harnessProcess.PID,
-			HarnessProcessStartToken: f.harnessProcess.StartToken,
-			PipeMode:                 f.pipeMode,
-			SessionID:                f.sessionID,
-			Agents:                   f.agents,
-			RunID:                    f.runID,
-			Phase:                    f.phase,
-			LeaseLive:                f.leaseLive,
-			Terminated:               f.terminated,
-			TerminalTurn:             f.terminalTurn,
-			TerminalToolUse:          f.terminalToolUse,
-			TerminalAt:               f.terminalAt,
-		})
+		out = append(out, f.snapshot())
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Kind != out[j].Kind {
@@ -87,7 +110,7 @@ func (r *Reducer) Restore(facts []protocol.SourceFactSnapshot) {
 	r.nextCausalOrder = 0
 	r.mergeCausalFloor = 0
 	for _, s := range facts {
-		if s.Kind == "" || s.Kind == SourceInvalid {
+		if s.Kind == "" || s.Kind == protocol.SourceInvalid {
 			continue
 		}
 		f := sourceFactFromSnapshot(s)
@@ -142,7 +165,7 @@ func (r *Reducer) MergeDisjoint(facts []protocol.SourceFactSnapshot) int {
 	candidates := make([]protocol.SourceFactSnapshot, 0, len(facts))
 	importedMax := r.mergeCausalFloor
 	for _, s := range facts {
-		if s.Kind == "" || s.Kind == SourceInvalid {
+		if s.Kind == "" || s.Kind == protocol.SourceInvalid {
 			continue
 		}
 		if s.CausalOrder > importedMax {

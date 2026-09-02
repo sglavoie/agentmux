@@ -1,4 +1,4 @@
-package daemon
+package state
 
 import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"

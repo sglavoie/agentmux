@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -55,7 +56,7 @@ func claudeIdleProbeTitleBump(sourceWindowTitle string) int {
 // in for a direct session, where the tab title really does belong to the pane
 // being read.
 func claudeScreenIdleFields(
-	st *WindowState,
+	st *state.WindowState,
 	binding screenProbeBinding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
@@ -183,7 +184,7 @@ func (h *Handler) recoverClaudeBusyTitle(
 		currentIcon = st.Effective.Icon
 		// Reset flows own their transient empty state until their cleanup event
 		// commits; the next snapshot tick may recover normally once the flow ends.
-		if st.PendingReset != resetFlowNone {
+		if st.PendingReset != state.ResetFlowNone {
 			return
 		}
 	}
@@ -194,14 +195,14 @@ func (h *Handler) recoverClaudeBusyTitle(
 	// one-shot is keyed on the body alone: a raw-title key re-arms itself whenever
 	// the frozen frame differs over the same description.
 	promotedBody, _ := claudeTitleMarkerBody(sourceWindowTitle)
-	if ok && st != nil && st.promotedBusyBody == promotedBody {
+	if ok && st != nil && st.PromotedBusyBody() == promotedBody {
 		return
 	}
 
 	st = h.ensureWindowStateLocked(targetWindowID)
 	before := st.Effective
 	if st.Reducer == nil {
-		st.Reducer = NewReducer(h.reducerCfg)
+		st.Reducer = state.NewReducer(h.reducerCfg)
 	}
 
 	nextSeq := st.ShadowSeq + 1
@@ -236,7 +237,7 @@ func (h *Handler) recoverClaudeBusyTitle(
 	st.LastAction = "active"
 	st.LastActiveEvent = screenActiveProbeEvent
 	st.NotifiedStale = false
-	st.promotedBusyBody = promotedBody
+	st.SetPromotedBusyBody(promotedBody)
 
 	st.Reducer.Compact(now.Unix())
 	effective := st.Reducer.Reduce(now.Unix())

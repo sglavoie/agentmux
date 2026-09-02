@@ -8,6 +8,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 // TestAcceptanceHarnessProcessLifecyclePipeline crosses the production Unix
@@ -207,7 +208,7 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 		// No native terminal ever reached these windows, held or applied, so a
 		// synthesized stop must keep reporting the hook as absent.
 		exit, _ := lifecycleAcceptanceExit(settled.EventsByWindow[expected.windowID], expected.identity.PID)
-		if exit.Reason != daemon.HarnessProcessExitReasonInteractive || exit.ProcessMode != "interactive" ||
+		if exit.Reason != state.HarnessProcessExitReasonInteractive || exit.ProcessMode != "interactive" ||
 			exit.SynthesizedStop == nil || !*exit.SynthesizedStop || exit.TerminalHookEvidence != "absent" ||
 			settled.WindowMetadata[expected.windowID].Shadow.EffectiveIcon != "stop" {
 			t.Fatalf("interactive exit for %s = %+v meta=%+v", expected.identity.Harness, exit, settled.WindowMetadata[expected.windowID].Shadow)
@@ -228,7 +229,7 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 	// the proof that the native terminal hook was received, so the exit reports it
 	// observed even though the exit synthesized the stop itself.
 	stopHoldExit, _ := lifecycleAcceptanceExit(settled.EventsByWindow[lifecycleStopHoldWindow], stopHoldProcess.PID)
-	if stopHoldExit.Reason != daemon.HarnessProcessExitReasonInteractive || stopHoldExit.SynthesizedStop == nil ||
+	if stopHoldExit.Reason != state.HarnessProcessExitReasonInteractive || stopHoldExit.SynthesizedStop == nil ||
 		!*stopHoldExit.SynthesizedStop || stopHoldExit.TerminalHookEvidence != "observed" ||
 		settled.WindowMetadata[lifecycleStopHoldWindow].Shadow.EffectiveIcon != "stop" {
 		t.Fatalf("held-stop process exit = %+v shadow=%+v", stopHoldExit, settled.WindowMetadata[lifecycleStopHoldWindow].Shadow)
@@ -244,7 +245,7 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 	}
 
 	resetExit, _ := lifecycleAcceptanceExit(settled.EventsByWindow[lifecycleResetWindow], resetProcess.PID)
-	if resetExit.Reason != daemon.HarnessProcessExitReasonReset || resetExit.SynthesizedStop == nil || *resetExit.SynthesizedStop ||
+	if resetExit.Reason != state.HarnessProcessExitReasonReset || resetExit.SynthesizedStop == nil || *resetExit.SynthesizedStop ||
 		settled.WindowMetadata[lifecycleResetWindow].Shadow.EffectiveIcon != "" {
 		t.Fatalf("reset process exit = %+v shadow=%+v", resetExit, settled.WindowMetadata[lifecycleResetWindow].Shadow)
 	}
@@ -300,7 +301,7 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 		return ok && lifecycleAcceptanceRenderComplete(export.WindowMetadata[lifecycleRestartWindow], exit.RenderGeneration)
 	})
 	restartExit, _ := lifecycleAcceptanceExit(restarted.EventsByWindow[lifecycleRestartWindow], restoredPipe.PID)
-	if restartExit.Reason != daemon.HarnessProcessExitReasonPipe || restartExit.TerminalHookEvidence != "absent" ||
+	if restartExit.Reason != state.HarnessProcessExitReasonPipe || restartExit.TerminalHookEvidence != "absent" ||
 		restarted.WindowMetadata[lifecycleRestartWindow].Shadow.EffectiveIcon != "" ||
 		!lifecycleAcceptanceRenderComplete(restarted.WindowMetadata[lifecycleRestartWindow], restartExit.RenderGeneration) {
 		t.Fatalf("restart settlement = %+v metadata=%+v", restartExit, restarted.WindowMetadata[lifecycleRestartWindow])

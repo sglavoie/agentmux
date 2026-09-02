@@ -1,4 +1,4 @@
-package daemon
+package state
 
 // Seeded reducer fuzz. Every test derives its event traces from a fixed set of
 // seeds through math/rand, so a failure reproduces deterministically: rerun the
@@ -50,8 +50,8 @@ var fuzzSources = struct {
 	harness:  protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:sess-0001"},
 	agents:   []protocol.SourceID{{Kind: protocol.SourceSubagent, Key: "agent-a"}, {Kind: protocol.SourceSubagent, Key: "agent-b"}},
 	runs:     []protocol.SourceID{{Kind: protocol.SourceASL, Key: "run-1"}, {Kind: protocol.SourceASL, Key: "run-2"}},
-	bucket:   protocol.SourceID{Kind: protocol.SourceLegacy, Key: legacySubagentBucketKey("sess-0001")},
-	probe:    ProbeSource(),
+	bucket:   protocol.SourceID{Kind: protocol.SourceLegacy, Key: protocol.LegacySubagentBucketKey("sess-0001")},
+	probe:    protocol.ProbeSource(),
 	userSrc:  protocol.SourceID{Kind: protocol.SourceProbe, Key: "user"},
 	session:  "sess-0001",
 	runNames: []string{"run-1", "run-2"},
@@ -358,13 +358,37 @@ func TestFuzzReducerRestartEquivalenceEveryPrefix(t *testing.T) {
 // between every real event. They must be no-ops: identical facts, identical
 // outcome, and no invalid-kind fact may ever appear.
 func TestFuzzReducerUnknownAndMalformedEventsPreserveState(t *testing.T) {
+	// The two non-deliverable shapes exactly as the daemon's hook normalization
+	// emits them: a quarantined payload carries the synthetic invalid source and
+	// a forced-empty action, while an unrecognized or intentionally ignored event
+	// keeps its own source but resolves to no action and no ASL phase. That
+	// normalization really produces these shapes for these payloads is pinned by
+	// the daemon package's normalize tests; what this fuzz asserts is the other
+	// half — that neither shape can move a fact.
+	quarantined := func(event, reason string) protocol.NormalizedEvent {
+		return protocol.NormalizedEvent{
+			Source:  protocol.SourceID{Kind: protocol.SourceInvalid, Key: protocol.WindowKey(42)},
+			Event:   event,
+			At:      1710000000,
+			Invalid: true,
+			Reason:  reason,
+		}
+	}
+	inert := func(event, reason string) protocol.NormalizedEvent {
+		return protocol.NormalizedEvent{
+			Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: protocol.WindowKey(42)},
+			Event:  event,
+			At:     1710000000,
+			Reason: reason,
+		}
+	}
 	junk := []protocol.NormalizedEvent{
-		NormalizedFromHook("Stop", "claude", `{"source_sequence":"not-a-number"}`, 42, false),
-		NormalizedFromHook("PreToolUse", "claude", `{"emitted_time":"NaN"}`, 42, false),
-		NormalizedFromHook("Stop", "claude", `{"broken json`, 42, false),
-		NormalizedFromHook("TotallyUnknownEvent", "claude", `{}`, 42, false),
-		NormalizedFromHook("InstructionsLoaded", "claude", `{}`, 42, false),
-		NormalizedFromHook("AgentSessionLoopFinished", "claude", `{"run_id":"run-1","source_sequence":"boom"}`, 42, false),
+		quarantined("Stop", `invalid_payload: source_sequence "not-a-number"`),
+		quarantined("PreToolUse", `invalid_payload: emitted_time "NaN"`),
+		quarantined("Stop", "invalid_payload: unexpected end of JSON input"),
+		inert("TotallyUnknownEvent", "unknown_event"),
+		inert("InstructionsLoaded", "ignored_event"),
+		quarantined("AgentSessionLoopFinished", `invalid_payload: source_sequence "boom"`),
 	}
 	for i, n := range junk {
 		if n.Deliverable() {
@@ -395,7 +419,7 @@ func TestFuzzReducerUnknownAndMalformedEventsPreserveState(t *testing.T) {
 			t.Fatalf("seed=%d: reduce diverged under junk events: got %+v want %+v", seed, got, want)
 		}
 		for _, f := range noisy.Facts() {
-			if f.Kind == SourceInvalid {
+			if f.Kind == protocol.SourceInvalid {
 				t.Fatalf("seed=%d: invalid-kind fact reached the fact map: %+v", seed, f)
 			}
 		}

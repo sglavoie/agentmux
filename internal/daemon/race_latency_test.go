@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -62,7 +63,7 @@ func TestRaceInjectedLatencyHookBurstsConverge(t *testing.T) {
 
 	h := newTestHandler()
 	h.SetStopConfirm(0, 0, false) // pin the immediate-stop path, not the confirmed-idle hold
-	h.SetReducerConfig(ReducerConfig{GuardDuration: 1})
+	h.SetReducerConfig(state.ReducerConfig{GuardDuration: 1})
 	windowIDs := []int{1, 2, 3, 4}
 	fake := &fakeKittyClient{windows: raceLatencyWindows(windowIDs)}
 	fake.beforeListWindows = func() { time.Sleep(raceKittyLatency) }

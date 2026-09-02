@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -23,7 +24,7 @@ func shadowMeta(t *testing.T, h *Handler, windowID int) protocol.WindowDebugShad
 	return cloneWindowDebugMetadata(h.windowMetadata[windowID]).Shadow
 }
 
-func windowEffective(t *testing.T, h *Handler, windowID int) (EffectiveState, string) {
+func windowEffective(t *testing.T, h *Handler, windowID int) (state.EffectiveState, string) {
 	t.Helper()
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
@@ -131,7 +132,7 @@ func TestReducerSameTurnTrailingCompletionStaysSuppressed(t *testing.T) {
 func TestShadowReducerTracksASLLoopLease(t *testing.T) {
 	h := newTestHandler()
 
-	started := protocol.NormalizedEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Event: agentSessionLoopStarted}
+	started := protocol.NormalizedEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: state.ASLPhaseBetween, RunID: "run-1", Event: agentSessionLoopStarted}
 	h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 9, Action: "loop_marker", Event: agentSessionLoopStarted, Normalized: &started})
 
 	eff, legacyIcon := windowEffective(t, h, 9)
@@ -142,7 +143,7 @@ func TestShadowReducerTracksASLLoopLease(t *testing.T) {
 		t.Fatalf("loop start diverged from legacy marker: %+v", meta)
 	}
 
-	finished := protocol.NormalizedEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseFinished, RunID: "run-1", Event: agentSessionLoopFinished}
+	finished := protocol.NormalizedEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: state.ASLPhaseFinished, RunID: "run-1", Event: agentSessionLoopFinished}
 	h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 9, Action: "loop_marker", Event: agentSessionLoopFinished, Normalized: &finished})
 
 	eff, legacyIcon = windowEffective(t, h, 9)
@@ -183,7 +184,7 @@ func TestShadowReducerAssignsReceiptSequenceForSequencelessEvents(t *testing.T) 
 
 func TestShadowReducerSurvivesRestartViaUserVar(t *testing.T) {
 	h1 := newTestHandler()
-	h1.SetReducerConfig(ReducerConfig{GuardDuration: 5})
+	h1.SetReducerConfig(state.ReducerConfig{GuardDuration: 5})
 	src := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}
 	perm := protocol.NormalizedEvent{Source: src, Action: "permission", Seq: 4, TurnID: "t1", At: 200, Event: "PermissionRequest"}
 	h1.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "permission", Event: "PermissionRequest", Normalized: &perm})
@@ -198,7 +199,7 @@ func TestShadowReducerSurvivesRestartViaUserVar(t *testing.T) {
 	}
 
 	h2 := newTestHandler()
-	h2.SetReducerConfig(ReducerConfig{GuardDuration: 5})
+	h2.SetReducerConfig(state.ReducerConfig{GuardDuration: 5})
 	h2.restoreFromUserVars([]kitty.OSWindow{{
 		Tabs: []kitty.Tab{{
 			Windows: []kitty.Window{{
@@ -220,8 +221,8 @@ func TestShadowReducerSurvivesRestartViaUserVar(t *testing.T) {
 	if st.Reducer == nil {
 		t.Fatalf("restored state has no reducer")
 	}
-	if st.Reducer.cfg != (ReducerConfig{GuardDuration: 5}) {
-		t.Fatalf("restored reducer cfg = %+v, want daemon thresholds re-bound", st.Reducer.cfg)
+	if st.Reducer.Config() != (state.ReducerConfig{GuardDuration: 5}) {
+		t.Fatalf("restored reducer cfg = %+v, want daemon thresholds re-bound", st.Reducer.Config())
 	}
 	if eff := st.Reducer.Reduce(201); eff != wantEffective {
 		t.Fatalf("restored Reduce = %+v, want %+v", eff, wantEffective)

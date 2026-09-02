@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/state"
+
 	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -42,7 +44,7 @@ var codexScreenIdleSpec = screenIdleSpec{
 // session title, profile, and mute flag into the values passed in. Pipe mode is
 // always false — Codex has no pipe-mode child to describe.
 func codexScreenIdleFields(
-	_ *WindowState,
+	_ *state.WindowState,
 	_ screenProbeBinding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,

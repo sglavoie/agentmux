@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 func TestProjectExportEventsPayloadV8RemovesSchemaV9CausalFields(t *testing.T) {
@@ -96,7 +97,7 @@ func TestProjectExportEventsPayloadV9PreservesCausalShapeWithoutProcessFields(t 
 				WithdrawnFacts: processLifecycleTestIntPointer(1), TerminalHookEvidence: processTerminalHookEvidenceAbsent,
 			}},
 			Watchdog: protocol.WindowDebugWatchdog{
-				ProcessExits: 1, LastProcessExitReason: HarnessProcessExitReasonInteractive,
+				ProcessExits: 1, LastProcessExitReason: state.HarnessProcessExitReasonInteractive,
 				LastProcessExitObservation: string(HarnessProcessMissing), LastProcessExitAt: 2,
 			},
 		}},
@@ -159,11 +160,11 @@ func TestProjectExportEventsPayloadV10IncludesProcessFields(t *testing.T) {
 			HarnessProcessStartToken: "Mon Jul 13 10:11:12 2026",
 		}}},
 		Watchdog: protocol.WindowDebugWatchdog{
-			ProcessExits: 1, LastProcessExitReason: HarnessProcessExitReasonPipe,
+			ProcessExits: 1, LastProcessExitReason: state.HarnessProcessExitReasonPipe,
 			LastProcessExitObservation: string(HarnessProcessReplacedInstance), LastProcessExitAt: 2,
 		},
 		Events: []protocol.SessionEvent{{
-			At: 2, Event: protocol.EventHarnessProcessExited, Action: "idle", Reason: HarnessProcessExitReasonPipe,
+			At: 2, Event: protocol.EventHarnessProcessExited, Action: "idle", Reason: state.HarnessProcessExitReasonPipe,
 			ProcessHarness: "claude", ProcessPID: 4321, ProcessStartToken: "Mon Jul 13 10:11:12 2026",
 			ProcessObservation: string(HarnessProcessReplacedInstance), ProcessMode: "pipe", WithdrawnFacts: processLifecycleTestIntPointer(1),
 			TerminalHookEvidence: processTerminalHookEvidenceAbsent,
@@ -195,7 +196,7 @@ func TestProjectExportEventsPayloadV10IncludesProcessFields(t *testing.T) {
 		t.Fatalf("schema v10 event process fields = %v", event)
 	}
 	watchdog := window["watchdog"].(map[string]any)
-	if int(watchdog["process_exits"].(float64)) != 1 || watchdog["last_process_exit_reason"] != HarnessProcessExitReasonPipe {
+	if int(watchdog["process_exits"].(float64)) != 1 || watchdog["last_process_exit_reason"] != state.HarnessProcessExitReasonPipe {
 		t.Fatalf("schema v10 watchdog process fields = %v", watchdog)
 	}
 }

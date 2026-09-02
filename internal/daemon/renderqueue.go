@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -174,7 +175,7 @@ func (q *renderQueue) empty() bool {
 
 // enqueueRenderLocked queues a window for rendering. The queued-stage trace is
 // persisted by the render drainer after stateMu has been released.
-func (h *Handler) enqueueRenderLocked(windowID int, st *WindowState) {
+func (h *Handler) enqueueRenderLocked(windowID int, st *state.WindowState) {
 	if st == nil {
 		return
 	}
@@ -363,7 +364,7 @@ func (h *Handler) renderQueuedWindow(windowID int, windows []kitty.OSWindow) {
 // desiredTabTitleLocked computes the tab title the renderer wants for the
 // owning window's state, preserving every foreign segment (base, star, mute)
 // from the live title. Callers hold stateMu.
-func desiredTabTitleLocked(tab *kitty.Tab, st *WindowState) string {
+func desiredTabTitleLocked(tab *kitty.Tab, st *state.WindowState) string {
 	parts := palette.ParseTitleParts(tab.Title)
 	parts.State = desiredIconForState(st)
 	if st.LoopingSet || st.Looping {
@@ -470,7 +471,7 @@ func (h *Handler) finishTitle(windowID int, seq uint64, dirtySince time.Time, re
 	h.recordRenderGenerationBounded(trace, windowID)
 }
 
-func (h *Handler) warnRenderFailureLocked(windowID int, st *WindowState, renderErr error) {
+func (h *Handler) warnRenderFailureLocked(windowID int, st *state.WindowState, renderErr error) {
 	if st.RenderFailures >= renderWarnAfterFailures && st.RenderFailures%renderWarnAfterFailures == 0 {
 		slog.Warn("renderer: kitty write failed",
 			"window_id", windowID,

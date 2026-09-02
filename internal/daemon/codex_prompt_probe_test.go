@@ -180,11 +180,11 @@ func TestProbeCodexScreenPrompts_RequestUserInputOnlyWhileVisibleWithoutPostTool
 		t.Fatalf("answered prompt guard = %q, want cleared", got)
 	}
 	h.stateMu.Lock()
-	probeFact := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource}]
+	probeFact := factOf(h.store[42].Reducer, protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource})
 	lastAction := h.store[42].LastAction
 	durableAction := h.windowMetadata[42].Durable.LastAction
 	h.stateMu.Unlock()
-	if probeFact != nil && probeFact.icon != "" {
+	if probeFact != nil && probeFact.Icon != "" {
 		t.Fatalf("answered prompt retained visible screen contribution: %+v", probeFact)
 	}
 	if lastAction != "active" || durableAction != "active" {

@@ -6,17 +6,18 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
 
-func (h *Handler) ensureWindowStateLocked(windowID int) *WindowState {
+func (h *Handler) ensureWindowStateLocked(windowID int) *state.WindowState {
 	if h.store == nil {
-		h.store = make(map[int]*WindowState)
+		h.store = make(map[int]*state.WindowState)
 	}
 	st := h.store[windowID]
 	if st == nil {
-		st = &WindowState{}
+		st = &state.WindowState{}
 		h.store[windowID] = st
 		// A window ID coming back to life (Kitty ID reuse, or an event racing
 		// the close) is no longer a tombstone; its diagnostics resume live.
@@ -25,7 +26,7 @@ func (h *Handler) ensureWindowStateLocked(windowID int) *WindowState {
 	return st
 }
 
-func (h *Handler) windowStateLocked(windowID int) (*WindowState, bool) {
+func (h *Handler) windowStateLocked(windowID int) (*state.WindowState, bool) {
 	st, ok := h.store[windowID]
 	return st, ok
 }
@@ -45,7 +46,7 @@ func (h *Handler) markWindowActivityDirtyLocked(windowID int) {
 	h.markWindowStateDirtyLocked(windowID)
 }
 
-func (h *Handler) markWindowStateDirtyLocked(windowID int) *WindowState {
+func (h *Handler) markWindowStateDirtyLocked(windowID int) *state.WindowState {
 	st := h.ensureWindowStateLocked(windowID)
 	if !st.Dirty {
 		st.DirtySince = time.Now()
@@ -123,7 +124,7 @@ func (h *Handler) restoreFromUserVars(windows []kitty.OSWindow, now time.Time) {
 				if strings.TrimSpace(win.UserVars.AMXState) == "" {
 					continue
 				}
-				var st WindowState
+				var st state.WindowState
 				if err := st.UnmarshalUserVar(win.UserVars.AMXState); err != nil {
 					slog.Warn("renderer: discarded invalid restored state", "window_id", win.ID, "err", err)
 					continue
@@ -148,10 +149,7 @@ func (h *Handler) restoreFromUserVars(windows []kitty.OSWindow, now time.Time) {
 					// post-restart events collide with the restored fact
 					// (same-source terminal suppression, ASL lease release).
 					st.Reducer.SetConfig(h.reducerCfg)
-					if st.Reducer.RekeyMigratedFacts(win.ID) &&
-						st.Effective.Source.Key == legacyV1MigrationKey {
-						st.Effective.Source.Key = windowKey(win.ID)
-					}
+					st.RekeyMigratedFacts(win.ID)
 					// Republish from the reducer so the restored visible state
 					// is the reduced state, not the legacy scalar. Without
 					// this, a window whose persisted terminal fact aged past
@@ -191,14 +189,14 @@ func (h *Handler) restoreFromUserVars(windows []kitty.OSWindow, now time.Time) {
 // same-source, or a malformed payload) leaves the window exactly as the hook
 // left it, which keeps the operation idempotent across repeated maintenance
 // ticks and a late-completing startup restore. Callers hold stateMu.
-func (h *Handler) mergePersistedFactsLocked(windowID int, st *WindowState, win kitty.Window, now time.Time) {
+func (h *Handler) mergePersistedFactsLocked(windowID int, st *state.WindowState, win kitty.Window, now time.Time) {
 	if win.UserVars.EffectiveProfile() == "" && win.UserVars.EffectiveHarness() == "" {
 		return
 	}
 	if strings.TrimSpace(win.UserVars.AMXState) == "" {
 		return
 	}
-	var persisted WindowState
+	var persisted state.WindowState
 	if err := persisted.UnmarshalUserVar(win.UserVars.AMXState); err != nil {
 		slog.Warn("renderer: discarded invalid restored state on merge", "window_id", windowID, "err", err)
 		return
@@ -211,7 +209,7 @@ func (h *Handler) mergePersistedFactsLocked(windowID int, st *WindowState, win k
 		return
 	}
 	if st.Reducer == nil {
-		st.Reducer = NewReducer(h.reducerCfg)
+		st.Reducer = state.NewReducer(h.reducerCfg)
 	}
 	if st.Reducer.MergeDisjoint(facts) == 0 {
 		return
@@ -221,9 +219,7 @@ func (h *Handler) mergePersistedFactsLocked(windowID int, st *WindowState, win k
 	// the window's live key so post-restart events collide with them exactly as a
 	// full restore would.
 	st.Reducer.SetConfig(h.reducerCfg)
-	if st.Reducer.RekeyMigratedFacts(windowID) && st.Effective.Source.Key == legacyV1MigrationKey {
-		st.Effective.Source.Key = windowKey(windowID)
-	}
+	st.RekeyMigratedFacts(windowID)
 	st.Reducer.Compact(now.Unix())
 	// A nonzero merge imported disjoint facts — a real reducer mutation — so
 	// advance the window-wide receipt generation at least once, independently of

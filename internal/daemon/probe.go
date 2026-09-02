@@ -117,7 +117,7 @@ func (h *Handler) runContextLimitProbe(p contextLimitProbe) {
 		// The promotion is daemon-synthesized, so its shadow fact is attributed
 		// to the probe source rather than the harness session.
 		normalized := protocol.NormalizedEvent{
-			Source:         ProbeSource(),
+			Source:         protocol.ProbeSource(),
 			Action:         "stop_failure",
 			Event:          p.event,
 			OriginWindowID: p.sourceWindowID,

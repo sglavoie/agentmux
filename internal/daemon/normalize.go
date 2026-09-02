@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
@@ -38,11 +39,6 @@ const (
 	reasonIgnoredEvent = "ignored_event"
 )
 
-// SourceInvalid is the synthetic source kind stamped onto a quarantined event's
-// trace. It is never stored as a live fact; it exists only so audit traces can
-// attribute the drop. It is intentionally outside the five real SourceKinds.
-const SourceInvalid protocol.SourceKind = "invalid_payload"
-
 // normalizedFromHookRequest centralizes request validation and process-identity
 // stamping for every hook-routing path. NormalizedFromHook stays pure and
 // transport-agnostic for reducer tests and replay; this seam adds a complete
@@ -59,11 +55,11 @@ func normalizedFromHookRequest(event string, req protocol.Request, windowID int)
 }
 
 // quarantine builds an inert, invalid event carrying the given reason. Its
-// Action is empty and its source kind is the synthetic SourceInvalid so it can
-// never be mistaken for a live fact.
+// Action is empty and its source kind is the synthetic protocol.SourceInvalid
+// so it can never be mistaken for a live fact.
 func quarantine(event, reason string) protocol.NormalizedEvent {
 	return protocol.NormalizedEvent{
-		Source:  protocol.SourceID{Kind: SourceInvalid, Key: InvalidPayloadReason},
+		Source:  protocol.SourceID{Kind: protocol.SourceInvalid, Key: InvalidPayloadReason},
 		Event:   event,
 		Invalid: true,
 		Reason:  reason,
@@ -178,7 +174,7 @@ func normalizeASLEvent(event string, payload hookevent.HookPayload, windowID int
 	runID := payload.EffectiveRunID()
 	key := runID
 	if key == "" {
-		key = windowKey(windowID)
+		key = protocol.WindowKey(windowID)
 	}
 	action := ""
 	if event == agentSessionLoopPaused {
@@ -211,22 +207,22 @@ func normalizeASLEvent(event string, payload hookevent.HookPayload, windowID int
 func aslPhaseForEvent(event string) string {
 	switch event {
 	case agentSessionLoopStarted:
-		return ASLPhaseBetween
+		return state.ASLPhaseBetween
 	case agentSessionLoopTurnStarted, agentSessionLoopTurnHeartbeat,
 		agentSessionLoopTurnHangSuspected, agentSessionLoopTurnHangCleared:
-		return ASLPhaseTurn
+		return state.ASLPhaseTurn
 	case agentSessionLoopTurnFinished, agentSessionLoopVerificationFinished:
-		return ASLPhaseBetween
+		return state.ASLPhaseBetween
 	case agentSessionLoopVerificationStarted, agentSessionLoopVerificationHeartbeat:
-		return ASLPhaseVerification
+		return state.ASLPhaseVerification
 	case agentSessionLoopWaitStarted:
-		return ASLPhaseWaiting
+		return state.ASLPhaseWaiting
 	case agentSessionLoopWaitEnded:
-		return ASLPhaseBetween
+		return state.ASLPhaseBetween
 	case agentSessionLoopPaused:
-		return ASLPhasePaused
+		return state.ASLPhasePaused
 	case agentSessionLoopFinished:
-		return ASLPhaseFinished
+		return state.ASLPhaseFinished
 	default:
 		return ""
 	}
@@ -259,35 +255,20 @@ func aslPausedAttentionAction(reason string) string {
 func normalizeSource(event, harnessName, action string, payload hookevent.HookPayload, windowID int) protocol.SourceID {
 	switch {
 	case action == "user_clear":
-		return userActionSource()
+		return protocol.UserActionSource()
 	case harness.NormalizeKnown(harnessName) == "":
 		// Missing and unsupported producers must not acquire a harness identity
 		// from payload session data or from configuration's default-to-Claude
 		// normalization. Keep them in the legacy per-window bucket.
-		return protocol.SourceID{Kind: protocol.SourceLegacy, Key: windowKey(windowID)}
+		return protocol.SourceID{Kind: protocol.SourceLegacy, Key: protocol.WindowKey(windowID)}
 	case isSubagentEvent(event):
 		if agentID := payload.EffectiveAgentID(); agentID != "" {
 			return protocol.SourceID{Kind: protocol.SourceSubagent, Key: agentID}
 		}
-		return protocol.SourceID{Kind: protocol.SourceLegacy, Key: legacySubagentBucketKey(sessionOrWindowKey(payload, windowID))}
+		return protocol.SourceID{Kind: protocol.SourceLegacy, Key: protocol.LegacySubagentBucketKey(sessionOrWindowKey(payload, windowID))}
 	default:
 		return protocol.SourceID{Kind: protocol.SourceHarness, Key: harnessSourceKey(harnessName, payload, windowID)}
 	}
-}
-
-// userActionSource is the explicit synthetic source for window-level user
-// actions (F8 user_clear). The reducer ignores the source on a user_clear, so
-// this only labels the audit trace; it deliberately reuses SourceProbe (the
-// daemon-originated, non-harness bucket) with a distinct key.
-func userActionSource() protocol.SourceID {
-	return protocol.SourceID{Kind: protocol.SourceProbe, Key: "user"}
-}
-
-// ProbeSource is the explicit synthetic source for the hook-path context-limit
-// probe (runContextLimitProbe), which attributes its daemon-synthesized
-// stop_failure promotions to the probe rather than to the harness session.
-func ProbeSource() protocol.SourceID {
-	return protocol.SourceID{Kind: protocol.SourceProbe, Key: "context_limit"}
 }
 
 // harnessSourceKey builds "harness:session" when a session id is present, and
@@ -298,7 +279,7 @@ func harnessSourceKey(harnessName string, payload hookevent.HookPayload, windowI
 			return known + ":" + sid
 		}
 	}
-	return windowKey(windowID)
+	return protocol.WindowKey(windowID)
 }
 
 // sessionOrWindowKey returns the session id when present, else the window key.
@@ -306,26 +287,7 @@ func sessionOrWindowKey(payload hookevent.HookPayload, windowID int) string {
 	if sid := payload.EffectiveSessionID(); sid != "" {
 		return sid
 	}
-	return windowKey(windowID)
-}
-
-func windowKey(windowID int) string { return "win:" + strconv.Itoa(windowID) }
-
-// legacySubagentBucketPrefix marks a legacy-kind source as an identity-less
-// subagent multiset bucket (as opposed to a plain per-window legacy fact),
-// so session-end clearing can find the buckets without a separate registry.
-const legacySubagentBucketPrefix = "session:"
-
-// legacySubagentBucketKey builds the legacy multiset bucket key for a session
-// (or window fallback) identity.
-func legacySubagentBucketKey(sessionOrWindow string) string {
-	return legacySubagentBucketPrefix + sessionOrWindow
-}
-
-// isLegacySubagentBucket reports whether a legacy-kind source key names an
-// identity-less subagent multiset bucket.
-func isLegacySubagentBucket(key string) bool {
-	return strings.HasPrefix(key, legacySubagentBucketPrefix)
+	return protocol.WindowKey(windowID)
 }
 
 // isSubagentEvent reports whether the event describes a subagent lifecycle

@@ -1,4 +1,4 @@
-package daemon
+package state
 
 import (
 	"testing"
@@ -45,7 +45,7 @@ func TestReducerAcknowledgementPathsStampAndClearAckedAt(t *testing.T) {
 		source := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}
 		r := NewReducer(ReducerConfig{})
 		r.Apply(protocol.ReducerEvent{Source: source, Action: "active", Seq: 1, At: 100})
-		r.Apply(protocol.ReducerEvent{Source: userActionSource(), Action: "user_clear", Seq: 1, At: 300})
+		r.Apply(protocol.ReducerEvent{Source: protocol.UserActionSource(), Action: "user_clear", Seq: 1, At: 300})
 		requireFactAcknowledgement(t, r, source, true, 300)
 	})
 
@@ -73,7 +73,7 @@ func TestReducerAcknowledgementPathsStampAndClearAckedAt(t *testing.T) {
 func TestReducerMergeCutoffsStampAckedAt(t *testing.T) {
 	t.Run("user clear cutoff", func(t *testing.T) {
 		r := NewReducer(ReducerConfig{})
-		r.Apply(protocol.ReducerEvent{Source: userActionSource(), Action: "user_clear", Seq: 1, At: 600})
+		r.Apply(protocol.ReducerEvent{Source: protocol.UserActionSource(), Action: "user_clear", Seq: 1, At: 600})
 		source := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:old"}
 		r.MergeDisjoint([]protocol.SourceFactSnapshot{{
 			Kind: source.Kind, Key: source.Key, Action: "active", Icon: "bolt", Seq: 1, At: 100,

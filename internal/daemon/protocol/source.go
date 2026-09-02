@@ -1,5 +1,11 @@
 package protocol
 
+import (
+	"sort"
+	"strconv"
+	"strings"
+)
+
 // SourceKind categorizes the origin of a fact. Identity matters for terminal
 // suppression: identified sources suppress only their own same-turn trailing
 // events, while a legacy source falls back to the guard_duration grace window.
@@ -19,12 +25,72 @@ const (
 	SourceLegacy SourceKind = "legacy"
 )
 
+// SourceInvalid is the synthetic source kind stamped onto a quarantined event's
+// trace. It is never stored as a live fact; it exists only so audit traces can
+// attribute the drop, and so the persistence seam can refuse to restore one. It
+// is intentionally outside the five real SourceKinds.
+const SourceInvalid SourceKind = "invalid_payload"
+
 // SourceID uniquely identifies a fact producer within one window. Kind plus Key
 // is the map key, so two subagents (distinct Keys) are distinct sources while a
 // duplicate start for the same agent id collapses onto one fact.
 type SourceID struct {
 	Kind SourceKind
 	Key  string
+}
+
+// WindowKey is the per-window fallback source key, used whenever a producer
+// carries no session or run identity of its own. Event normalization stamps it
+// and the state package rekeys migrated facts onto it, so the construction rule
+// lives beside SourceID rather than in either consumer.
+func WindowKey(windowID int) string { return "win:" + strconv.Itoa(windowID) }
+
+// SourceIDLess is the total order over source identities: kind first, then key.
+// Every ordered source slice the daemon emits — settlement receipts, lifecycle
+// evidence — uses it, so the ordering is part of the wire contract rather than
+// an implementation detail of any one producer.
+func SourceIDLess(a, b SourceID) bool {
+	if a.Kind != b.Kind {
+		return a.Kind < b.Kind
+	}
+	return a.Key < b.Key
+}
+
+// SortSourceIDs sorts ids in place under SourceIDLess.
+func SortSourceIDs(ids []SourceID) {
+	sort.Slice(ids, func(i, j int) bool { return SourceIDLess(ids[i], ids[j]) })
+}
+
+// UserActionSource is the explicit synthetic source for window-level user
+// actions (F8 user_clear). The reducer ignores the source on a user_clear, so
+// this only labels the audit trace; it deliberately reuses SourceProbe (the
+// daemon-originated, non-harness bucket) with a distinct key.
+func UserActionSource() SourceID {
+	return SourceID{Kind: SourceProbe, Key: "user"}
+}
+
+// ProbeSource is the explicit synthetic source for the hook-path context-limit
+// probe, which attributes its daemon-synthesized stop_failure promotions to the
+// probe rather than to the harness session.
+func ProbeSource() SourceID {
+	return SourceID{Kind: SourceProbe, Key: "context_limit"}
+}
+
+// legacySubagentBucketPrefix marks a legacy-kind source as an identity-less
+// subagent multiset bucket (as opposed to a plain per-window legacy fact),
+// so session-end clearing can find the buckets without a separate registry.
+const legacySubagentBucketPrefix = "session:"
+
+// LegacySubagentBucketKey builds the legacy multiset bucket key for a session
+// (or window fallback) identity.
+func LegacySubagentBucketKey(sessionOrWindow string) string {
+	return legacySubagentBucketPrefix + sessionOrWindow
+}
+
+// IsLegacySubagentBucket reports whether a legacy-kind source key names an
+// identity-less subagent multiset bucket.
+func IsLegacySubagentBucket(key string) bool {
+	return strings.HasPrefix(key, legacySubagentBucketPrefix)
 }
 
 // reducerIconPrecedence encodes the target icon precedence from the plan. It is

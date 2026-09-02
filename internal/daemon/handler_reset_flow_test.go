@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 func TestHandler_ClaudeResetFlowUsesUserClear(t *testing.T) {
@@ -177,7 +178,7 @@ func TestHandler_ResetFlowDoesNotLeakIntoLaterTurn(t *testing.T) {
 	}
 
 	h.stateMu.Lock()
-	if h.store[42].PendingReset != resetFlowNone {
+	if h.store[42].PendingReset != state.ResetFlowNone {
 		h.stateMu.Unlock()
 		t.Fatal("pendingReset marker should be cleared once the next normal turn begins")
 	}

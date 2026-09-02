@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 // busySince reads the window's busy-stretch anchor.
@@ -34,7 +35,7 @@ func busySince(t *testing.T, h *Handler, windowID int) time.Time {
 func publishIcon(h *Handler, windowID int, icon string) {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	h.publishEffectiveLocked(windowID, h.ensureWindowStateLocked(windowID), EffectiveState{Icon: icon})
+	h.publishEffectiveLocked(windowID, h.ensureWindowStateLocked(windowID), state.EffectiveState{Icon: icon})
 }
 
 func TestBusySinceStampedOnActiveClassEntry(t *testing.T) {

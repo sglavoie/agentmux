@@ -22,6 +22,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/aslcontract"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -331,7 +332,7 @@ func newReplayHandler(t *testing.T, harnessName, projectDir string) (*Handler, [
 
 	h := newTestHandler()
 	h.SetStopConfirm(0, 0, false) // terminal stops paint immediately, no confirmed-idle hold
-	h.SetReducerConfig(ReducerConfig{GuardDuration: 1})
+	h.SetReducerConfig(state.ReducerConfig{GuardDuration: 1})
 	h.probeRunner = func(fn func()) { fn() } // context-limit probes run inline
 	windows := hookEventWindows(
 		palette.BuildTitleParts(palette.TitleParts{Base: "api"}),

@@ -73,14 +73,6 @@ func isCopilotTrailingAutoApprovedToolPermission(req protocol.Request, priorAuto
 	return priorAutoApproved && isCopilotAutoApprovedToolPermission(req)
 }
 
-type copilotToolPermissionState uint8
-
-const (
-	copilotToolPermissionNone copilotToolPermissionState = iota
-	copilotToolPermissionPending
-	copilotToolPermissionAutoApproved
-)
-
 func shouldResetCopilotToolPermissionState(req protocol.Request) bool {
 	if !isCopilotRequest(req) {
 		return false

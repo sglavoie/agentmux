@@ -15,6 +15,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -143,7 +144,7 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	// The shadow reducer mirrors the same projections the legacy paths already
 	// consume: guard_duration for the legacy trailing-event grace and the
 	// watchdog thresholds for active-class staleness.
-	handler.SetReducerConfig(ReducerConfig{
+	handler.SetReducerConfig(state.ReducerConfig{
 		GuardDuration: int64(cfg.Defaults.GuardDuration),
 		StaleActive:   int64(cfg.Defaults.Watchdog.Active),
 		StaleSubagent: int64(cfg.Defaults.Watchdog.Subagent),

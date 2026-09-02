@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
 
@@ -89,7 +90,7 @@ func TestNormalizeHarnessSourceKeys(t *testing.T) {
 			payload:    `{"run_id":"run-42"}`,
 			windowID:   51,
 			wantSource: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-42"},
-			wantPhase:  ASLPhaseTurn,
+			wantPhase:  state.ASLPhaseTurn,
 		},
 		{
 			name:       "asl without run id falls back to window bucket",
@@ -98,7 +99,7 @@ func TestNormalizeHarnessSourceKeys(t *testing.T) {
 			payload:    `{}`,
 			windowID:   51,
 			wantSource: protocol.SourceID{Kind: protocol.SourceASL, Key: "win:51"},
-			wantPhase:  ASLPhaseBetween,
+			wantPhase:  state.ASLPhaseBetween,
 		},
 		{
 			name:       "asl finished maps to finished phase",
@@ -107,7 +108,7 @@ func TestNormalizeHarnessSourceKeys(t *testing.T) {
 			payload:    `{"run_id":"run-42"}`,
 			windowID:   51,
 			wantSource: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-42"},
-			wantPhase:  ASLPhaseFinished,
+			wantPhase:  state.ASLPhaseFinished,
 		},
 		{
 			name:       "user_clear carries synthetic source",
@@ -249,15 +250,15 @@ func TestNormalizeQuarantinesMalformed(t *testing.T) {
 			if !n.Invalid {
 				t.Fatalf("event = %+v, want quarantined", n)
 			}
-			if n.Source.Kind != SourceInvalid {
-				t.Errorf("source kind = %q, want %q", n.Source.Kind, SourceInvalid)
+			if n.Source.Kind != protocol.SourceInvalid {
+				t.Errorf("source kind = %q, want %q", n.Source.Kind, protocol.SourceInvalid)
 			}
 			if n.Deliverable() {
 				t.Fatal("quarantined event must not be deliverable")
 			}
 
 			// A quarantined terminal-looking event must not paint any icon.
-			r := NewReducer(zeroCfg)
+			r := state.NewReducer(zeroCfg)
 			r.ApplyNormalized(n)
 			if got := r.Reduce(1000); got.Icon != "" {
 				t.Fatalf("quarantined event produced icon %q; want empty", got.Icon)
@@ -291,7 +292,7 @@ func TestNormalizeUnknownAndIgnoredAreInert(t *testing.T) {
 	}
 
 	// Neither can dislodge a live fact.
-	r := NewReducer(zeroCfg)
+	r := state.NewReducer(zeroCfg)
 	r.Apply(protocol.ReducerEvent{Source: harnessSource(), Action: "permission", Seq: 1, At: 10})
 	r.ApplyNormalized(unknown)
 	r.ApplyNormalized(ignored)
@@ -312,7 +313,7 @@ func TestNormalizeCannotProduceTerminalState(t *testing.T) {
 	events := []string{"NopeEvent", "AlsoUnknown", "Stop???"}
 	for _, ev := range events {
 		for _, p := range hostile {
-			r := NewReducer(zeroCfg)
+			r := state.NewReducer(zeroCfg)
 			r.ApplyNormalized(NormalizedFromHook(ev, "claude", p, 51, false))
 			got := r.Reduce(1000)
 			if got.Icon == "stop" || got.Icon == "error" {
@@ -329,8 +330,8 @@ func TestNormalizeWaitEventCarriesNoQuestionText(t *testing.T) {
 	const secret = "why did the deployment fail on shard 7"
 	n := NormalizedFromHook("AgentSessionLoopWaitStarted", "claude",
 		`{"run_id":"r1","question_id":"q1","question_preview":"`+secret+`"}`, 51, false)
-	if n.Phase != ASLPhaseWaiting {
-		t.Fatalf("phase = %q, want %q", n.Phase, ASLPhaseWaiting)
+	if n.Phase != state.ASLPhaseWaiting {
+		t.Fatalf("phase = %q, want %q", n.Phase, state.ASLPhaseWaiting)
 	}
 	v := reflect.ValueOf(n)
 	for i := 0; i < v.NumField(); i++ {
@@ -352,7 +353,7 @@ func TestNormalizedApplyFeedsReducer(t *testing.T) {
 	if !n.Deliverable() {
 		t.Fatalf("expected deliverable event, got %+v", n)
 	}
-	r := NewReducer(zeroCfg)
+	r := state.NewReducer(zeroCfg)
 	r.ApplyNormalized(n)
 	got := r.Reduce(1700000001)
 	if got.Icon != "key" {
@@ -366,8 +367,8 @@ func TestNormalizedApplyFeedsReducer(t *testing.T) {
 // TestProbeSourceIsSynthetic pins the explicit synthetic probe source key used
 // by the daemon-side context-limit probe path.
 func TestProbeSourceIsSynthetic(t *testing.T) {
-	if got := ProbeSource(); got != (protocol.SourceID{Kind: protocol.SourceProbe, Key: "context_limit"}) {
-		t.Fatalf("ProbeSource() = %+v", got)
+	if got := protocol.ProbeSource(); got != (protocol.SourceID{Kind: protocol.SourceProbe, Key: "context_limit"}) {
+		t.Fatalf("protocol.ProbeSource() = %+v", got)
 	}
 }
 

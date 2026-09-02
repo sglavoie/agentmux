@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -246,9 +247,9 @@ func TestSweepStale_IgnoresWaitingASLRun(t *testing.T) {
 		st.Activity = now.Add(-2 * time.Hour)
 		st.LastAction = ""
 		st.LastSessionTitle = "W:api"
-		st.Reducer = NewReducer(h.reducerCfg)
+		st.Reducer = state.NewReducer(h.reducerCfg)
 		st.Reducer.Apply(protocol.ReducerEvent{
-			Source: aslSource("run-A"), RunID: "run-A", Phase: ASLPhaseWaiting,
+			Source: aslSource("run-A"), RunID: "run-A", Phase: state.ASLPhaseWaiting,
 			Seq: 1, At: now.Add(-2 * time.Hour).Unix(),
 		})
 		h.stateMu.Unlock()

@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -89,8 +90,8 @@ func TestProbeCodexClearWindow_DiscardsObservationAfterConcurrentReducerEvent(t 
 		lastSessionTitle    string
 		lastAccount         string
 		guard               string
-		pendingReset        resetFlowState
-		permissionState     copilotToolPermissionState
+		pendingReset        state.ResetFlowState
+		permissionState     state.CopilotToolPermissionState
 		dirty               bool
 		muted               bool
 		renderPending       bool
@@ -173,8 +174,8 @@ func TestProbeCodexClearWindow_DiscardsObservationAfterConcurrentReducerEvent(t 
 				got.dirty = st.Dirty
 				got.muted = st.Muted
 				if st.Reducer != nil {
-					got.reducerTraceCount = len(st.Reducer.traces)
-					got.factCount = len(st.Reducer.facts)
+					got.reducerTraceCount = len(st.Reducer.Traces())
+					got.factCount = len(st.Reducer.Facts())
 				}
 				meta := h.windowMetadata[42]
 				got.durableActivityAt = meta.Durable.ActivityAt
@@ -248,10 +249,10 @@ func TestProbeCodexClearWindow_DiscardsObservationAfterConcurrentReducerEvent(t 
 			}
 
 			h.stateMu.Lock()
-			fact := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:sess-new"}]
+			fact := factOf(h.store[42].Reducer, protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:sess-new"})
 			events := append([]protocol.SessionEvent(nil), h.store[42].EventLog...)
 			h.stateMu.Unlock()
-			if fact == nil || fact.acked {
+			if fact == nil || fact.Acked {
 				t.Fatalf("concurrent fact = %+v, want live and unacknowledged", fact)
 			}
 			for _, ev := range events {

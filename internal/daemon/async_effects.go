@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
@@ -78,7 +79,7 @@ func renderGenerationTerminal(trace protocol.RenderGenerationTrace) bool {
 	return trace.Stage == renderStageRendered
 }
 
-func renderGenerationLocked(st *WindowState, generation uint64) *protocol.RenderGenerationTrace {
+func renderGenerationLocked(st *state.WindowState, generation uint64) *protocol.RenderGenerationTrace {
 	for i := range st.RenderGenerations {
 		if st.RenderGenerations[i].Generation == generation {
 			return &st.RenderGenerations[i]
@@ -111,7 +112,7 @@ func (h *Handler) linkRequestRenderGenerationLocked(req protocol.Request, genera
 
 func (h *Handler) linkSessionEventRenderGenerationLocked(
 	windowID int,
-	st *WindowState,
+	st *state.WindowState,
 	event *protocol.SessionEvent,
 	traceID, requestID, sourceEventID string,
 	generation uint64,
@@ -185,7 +186,7 @@ func (h *Handler) markRenderStageLocked(windowID int, generation uint64, stage, 
 	return cloneRenderGenerationTrace(*trace)
 }
 
-func (h *Handler) finishRenderEventsLocked(st *WindowState, trace protocol.RenderGenerationTrace) {
+func (h *Handler) finishRenderEventsLocked(st *state.WindowState, trace protocol.RenderGenerationTrace) {
 	if st == nil {
 		return
 	}

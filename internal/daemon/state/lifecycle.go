@@ -1,4 +1,4 @@
-package daemon
+package state
 
 import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -10,7 +10,7 @@ import (
 // will never emit a follow-up of its own. Non-terminal facts are untouched:
 // concurrent attention icons keep their plan precedence over new activity.
 func (r *Reducer) supersede(applied *sourceFact, ev protocol.ReducerEvent, action, icon string) {
-	if !ev.Prompt || isTerminalAction(action) {
+	if !ev.Prompt || protocol.IsTerminalAction(action) {
 		return
 	}
 	// Record the prompt so a later MergeDisjoint acknowledges any older persisted
@@ -44,7 +44,7 @@ func (r *Reducer) supersede(applied *sourceFact, ev protocol.ReducerEvent, actio
 // untouched.
 func (r *Reducer) supersedeInteractiveActive(applied *sourceFact, ev protocol.ReducerEvent, action string) {
 	harnessBoundary := applied.source.Kind == protocol.SourceHarness && !applied.pipeMode &&
-		(ev.Prompt || isTerminalAction(action))
+		(ev.Prompt || protocol.IsTerminalAction(action))
 	aslBoundary := applied.source.Kind == protocol.SourceASL && ev.Phase == ASLPhaseFinished
 	if !harnessBoundary && !aslBoundary {
 		return
@@ -141,8 +141,11 @@ func (r *Reducer) LoopStateKnown() bool {
 	return false
 }
 
-// canRetract reports whether Retract would withdraw a live contribution.
-func (r *Reducer) canRetract(source protocol.SourceID) bool {
+// CanRetract reports whether Retract would withdraw a live contribution. Probe
+// and supervisor retractions consult it before doing the surrounding work a
+// retraction implies (guard clearing, projection bookkeeping), which Retract's
+// own return value comes too late to gate.
+func (r *Reducer) CanRetract(source protocol.SourceID) bool {
 	f := r.facts[source]
 	return f != nil && f.set && !f.terminated && f.icon != "" && !f.acked
 }

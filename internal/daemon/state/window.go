@@ -1,4 +1,4 @@
-package daemon
+package state
 
 import (
 	"encoding/json"
@@ -17,9 +17,9 @@ type WindowState struct {
 	LastAccount                string
 	LastHarness                string
 	LastActiveEvent            string
-	CopilotToolPermissionState copilotToolPermissionState
+	CopilotToolPermissionState CopilotToolPermissionState
 	SubagentCount              int
-	PendingReset               resetFlowState
+	PendingReset               ResetFlowState
 	NotifiedStale              bool
 	ContextLimitNotified       bool
 	LastSessionTitle           string
@@ -153,13 +153,13 @@ type windowStateUserVar struct {
 	Action                     string                     `json:"a,omitempty"`
 	GuardAction                string                     `json:"g,omitempty"`
 	GuardExpiresAt             int64                      `json:"gx,omitempty"`
-	CopilotToolPermissionState copilotToolPermissionState `json:"cp,omitempty"`
+	CopilotToolPermissionState CopilotToolPermissionState `json:"cp,omitempty"`
 	SubagentCount              int                        `json:"sc,omitempty"`
 	LastActiveEvent            string                     `json:"lae,omitempty"`
 	Looping                    bool                       `json:"l,omitempty"`
 	NotifiedStale              bool                       `json:"ns,omitempty"`
 	ContextLimitNotified       bool                       `json:"cln,omitempty"`
-	PendingReset               resetFlowState             `json:"pr,omitempty"`
+	PendingReset               ResetFlowState             `json:"pr,omitempty"`
 	PipeMode                   bool                       `json:"pm,omitempty"`
 	Account                    string                     `json:"acct,omitempty"`
 	Harness                    string                     `json:"h,omitempty"`
@@ -309,6 +309,20 @@ func (s *WindowState) UnmarshalUserVar(value string) error {
 // reducer is created with zero thresholds; the restore path re-binds the
 // daemon's configured ReducerConfig afterward (restoreFromUserVars), since a
 // deserializer has no access to the owning Handler.
+// RekeyMigratedFacts moves the window's v1-migrated facts onto its live
+// per-window key, including the effective state's own source when that is what
+// the migration produced. Keeping the two in one call is what stops a restored
+// window from publishing an effective source no fact still owns.
+func (s *WindowState) RekeyMigratedFacts(windowID int) bool {
+	if s.Reducer == nil || !s.Reducer.RekeyMigratedFacts(windowID) {
+		return false
+	}
+	if s.Effective.Source.Key == legacyV1MigrationKey {
+		s.Effective.Source.Key = protocol.WindowKey(windowID)
+	}
+	return true
+}
+
 func (s *WindowState) restoreReducerV2(uv windowStateUserVar) {
 	if len(uv.Facts) > 0 {
 		facts := uv.Facts
@@ -357,11 +371,11 @@ func (s *WindowState) migrateReducerV1(uv windowStateUserVar) {
 			Kind:   protocol.SourceLegacy,
 			Key:    legacyV1MigrationKey,
 			Action: uv.Action,
-			Icon:   reducerActionIcon(uv.Action),
+			Icon:   ActionIcon(uv.Action),
 			Seq:    1,
 			At:     uv.LastEventAt,
 		}
-		if isTerminalAction(uv.Action) {
+		if protocol.IsTerminalAction(uv.Action) {
 			fact.Terminated = true
 			fact.TerminalAt = uv.LastEventAt
 		}
@@ -386,7 +400,7 @@ func (s *WindowState) migrateReducerV1(uv windowStateUserVar) {
 	s.Reducer = r
 	s.ShadowSeq = 1
 	s.Effective = EffectiveState{Looping: uv.Looping}
-	if icon := reducerActionIcon(uv.Action); icon != "" {
+	if icon := ActionIcon(uv.Action); icon != "" {
 		s.Effective.Icon = icon
 		s.Effective.Source = protocol.SourceID{Kind: protocol.SourceLegacy, Key: legacyV1MigrationKey}
 	}

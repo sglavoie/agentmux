@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -337,7 +338,7 @@ func (h *Handler) renderTitleOwnerLocked(tab *kitty.Tab) (*kitty.Window, bool) {
 	return fallback, true
 }
 
-func desiredIconForState(st *WindowState) string {
+func desiredIconForState(st *state.WindowState) string {
 	if st == nil {
 		return ""
 	}

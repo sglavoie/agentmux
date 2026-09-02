@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 const (
@@ -54,7 +55,7 @@ type processLifecycleDiagnostic struct {
 	observation          HarnessProcessInspection
 	mode                 string
 	terminalHookEvidence string
-	result               HarnessProcessExitResult
+	result               state.HarnessProcessExitResult
 	sources              []protocol.ProcessLifecycleSourceEvidence
 	renderGeneration     uint64
 	sessionID            string
@@ -147,9 +148,9 @@ func (h *Handler) processLifecycleTick(ctx context.Context, observedAt time.Time
 		}
 
 		before := st.Effective
-		result := st.Reducer.SettleHarnessProcessExit(candidate.identity, observedAt.Unix(), HarnessProcessExitOptions{
+		result := st.Reducer.SettleHarnessProcessExit(candidate.identity, observedAt.Unix(), state.HarnessProcessExitOptions{
 			PipeMode:  candidate.pipeMode,
-			ClearOnly: st.PendingReset != resetFlowNone,
+			ClearOnly: st.PendingReset != state.ResetFlowNone,
 		})
 		if !result.Changed {
 			continue

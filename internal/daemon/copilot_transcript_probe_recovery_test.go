@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
@@ -183,15 +184,15 @@ func TestProbeCopilotTranscriptStop_PostStatAppendSelfHealsSyntheticStop(t *test
 	// The reducer facts reflect the recovery: the probe's synthetic stop is
 	// withdrawn (acked) and the interactive session is reinstated (live).
 	h.stateMu.Lock()
-	interactive := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "copilot:sess-1"}]
-	probe := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceProbe, Key: copilotTranscriptStopProbeSource}]
+	interactive := factOf(h.store[42].Reducer, protocol.SourceID{Kind: protocol.SourceHarness, Key: "copilot:sess-1"})
+	probe := factOf(h.store[42].Reducer, protocol.SourceID{Kind: protocol.SourceProbe, Key: copilotTranscriptStopProbeSource})
 	h.stateMu.Unlock()
-	if interactive == nil || interactive.acked {
+	if interactive == nil || interactive.Acked {
 		t.Fatalf("interactive fact not reinstated after recovery: %+v", interactive)
 	}
 	// The withdrawn probe stop is an acked tombstone; Compact may already have
 	// pruned it. Either way it must not survive as a live terminal.
-	if probe != nil && !probe.acked {
+	if probe != nil && !probe.Acked {
 		t.Fatalf("probe stop fact not withdrawn after recovery: %+v", probe)
 	}
 
@@ -263,7 +264,7 @@ func TestProbeCopilotTranscriptStop_ActiveASLLeaseMasksStop(t *testing.T) {
 	// A live ASL turn lease: it contributes bolt + a loop lease that masks stop.
 	aslEv := protocol.NormalizedEvent{
 		Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"},
-		Phase:  ASLPhaseTurn,
+		Phase:  state.ASLPhaseTurn,
 		RunID:  "run-1",
 		At:     base.Unix(),
 		Event:  agentSessionLoopTurnStarted,

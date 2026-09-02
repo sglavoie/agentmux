@@ -8,6 +8,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hooks"
@@ -68,7 +69,7 @@ func TestExplanationClassifiesEveryInstrumentedBoundary(t *testing.T) {
 }
 
 func TestExplanationClassifiesProcessExitRecoveryWithoutOverridingRendererFailures(t *testing.T) {
-	lifecycle := explanationRecord("daemon.process_lifecycle", "settled", daemon.HarnessProcessExitReasonInteractive)
+	lifecycle := explanationRecord("daemon.process_lifecycle", "settled", state.HarnessProcessExitReasonInteractive)
 	lifecycle.RequestID = ""
 	lifecycle.Evidence = map[string]string{
 		"event": protocol.EventHarnessProcessExited, "terminal_hook_evidence": "absent",

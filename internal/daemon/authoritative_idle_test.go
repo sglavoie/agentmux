@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 // TestAuthoritativeIdleSettlesStaleInteractiveBolt is the core done-when: an
@@ -32,9 +33,9 @@ func TestAuthoritativeIdleSettlesStaleInteractiveBolt(t *testing.T) {
 		t.Fatalf("effective = %+v visible %q, want stop/stop", eff, visible)
 	}
 	h.stateMu.Lock()
-	old := h.store[7].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:old"}]
+	old := factOf(h.store[7].Reducer, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:old"})
 	h.stateMu.Unlock()
-	if old == nil || !old.acked {
+	if old == nil || !old.Acked {
 		t.Fatalf("older interactive bolt was not retired: %+v", old)
 	}
 }
@@ -47,7 +48,7 @@ func TestAuthoritativeIdleBlockedByResetFlow(t *testing.T) {
 	idleSeedHarness(t, h, 7, "cur", "active", base)
 
 	h.stateMu.Lock()
-	h.store[7].PendingReset = resetFlowRequested
+	h.store[7].PendingReset = state.ResetFlowRequested
 	h.stateMu.Unlock()
 
 	obs := AuthoritativeIdle{
@@ -138,7 +139,7 @@ func TestAuthoritativeIdlePreservesProtectedAndBackgroundState(t *testing.T) {
 		h := newTestHandler()
 		base := time.Now().Unix()
 		idleSeedHarness(t, h, 7, "old", "active", base)
-		lease := protocol.NormalizedEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", At: base, Event: agentSessionLoopStarted}
+		lease := protocol.NormalizedEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: state.ASLPhaseBetween, RunID: "run-1", At: base, Event: agentSessionLoopStarted}
 		h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "loop_marker", Event: agentSessionLoopStarted, Normalized: &lease})
 
 		obs := AuthoritativeIdle{WindowID: 7, Source: AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
@@ -166,9 +167,9 @@ func TestAuthoritativeIdlePreservesProtectedAndBackgroundState(t *testing.T) {
 			t.Fatalf("effective = %+v, want the permission prompt preserved", eff)
 		}
 		h.stateMu.Lock()
-		perm := h.store[7].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:perm"}]
+		perm := factOf(h.store[7].Reducer, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:perm"})
 		h.stateMu.Unlock()
-		if perm == nil || perm.acked {
+		if perm == nil || perm.Acked {
 			t.Fatalf("permission fact was retired: %+v", perm)
 		}
 	})
@@ -187,9 +188,9 @@ func TestAuthoritativeIdlePreservesProtectedAndBackgroundState(t *testing.T) {
 			t.Fatalf("effective = %+v, want the pipe-mode bolt preserved", eff)
 		}
 		h.stateMu.Lock()
-		pf := h.store[7].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:pipe"}]
+		pf := factOf(h.store[7].Reducer, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:pipe"})
 		h.stateMu.Unlock()
-		if pf == nil || pf.acked {
+		if pf == nil || pf.Acked {
 			t.Fatalf("pipe-mode fact was retired: %+v", pf)
 		}
 	})

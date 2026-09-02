@@ -61,9 +61,9 @@ func TestProbeCodexScreenPrompts_CompletedTurnStopsStuckBolt(t *testing.T) {
 
 	// The stale interactive bolt fact was retired, so it can no longer mask 🛑.
 	h.stateMu.Lock()
-	old := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:sess-1"}]
+	old := factOf(h.store[42].Reducer, protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:sess-1"})
 	h.stateMu.Unlock()
-	if old == nil || !old.acked {
+	if old == nil || !old.Acked {
 		t.Fatalf("stale interactive bolt was not retired: %+v", old)
 	}
 

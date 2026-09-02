@@ -8,6 +8,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 func TestHandler_StateUpdateAllowed(t *testing.T) {
@@ -169,7 +170,7 @@ func TestHandler_CleanupUsesRestoredDaemonState(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newTestHandler()
 			h.stateMu.Lock()
-			h.store[1] = &WindowState{LastAction: actionForIconStateForTest(tc.current), DesiredIcon: tc.current}
+			h.store[1] = &state.WindowState{LastAction: actionForIconStateForTest(tc.current), DesiredIcon: tc.current}
 			h.stateMu.Unlock()
 			resp := h.Handle(protocol.Request{
 				Type:     protocol.TypeStateUpdate,

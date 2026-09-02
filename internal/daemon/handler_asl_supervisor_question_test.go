@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
 
@@ -36,11 +37,11 @@ func supervisorQuestionFixture(t *testing.T, notifier *Notifier) (*Handler, aslS
 	st.LastSessionTitle = "W:api"
 	st.LastAccount = "work"
 	st.LastHarness = "codex"
-	st.Reducer = NewReducer(ReducerConfig{})
+	st.Reducer = state.NewReducer(state.ReducerConfig{})
 	st.Reducer.Apply(protocol.ReducerEvent{
 		Source: protocol.SourceID{Kind: protocol.SourceASL, Key: supervisorRunID},
 		RunID:  supervisorRunID,
-		Phase:  ASLPhaseTurn,
+		Phase:  state.ASLPhaseTurn,
 		Seq:    1,
 		At:     now.Add(-10 * time.Second).Unix(),
 	})
@@ -92,7 +93,7 @@ func applySupervisorStop(h *Handler, now time.Time) {
 	h.reduceStateUpdate(req, applyOutcome{}, protocol.Response{OK: true}, now)
 }
 
-func supervisorVisibleState(t *testing.T, h *Handler) EffectiveState {
+func supervisorVisibleState(t *testing.T, h *Handler) state.EffectiveState {
 	t.Helper()
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
@@ -400,7 +401,7 @@ func TestASLSupervisorQuestionSurvivesHeartbeatAndClearsOnReply(t *testing.T) {
 	st.Reducer.Apply(protocol.ReducerEvent{
 		Source: protocol.SourceID{Kind: protocol.SourceASL, Key: supervisorRunID},
 		RunID:  supervisorRunID,
-		Phase:  ASLPhaseTurn,
+		Phase:  state.ASLPhaseTurn,
 		Seq:    2,
 		At:     now.Add(time.Second).Unix(),
 	})

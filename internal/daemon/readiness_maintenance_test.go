@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -64,9 +65,9 @@ func TestMaintenanceTick_RestoresAmxStateBeforeReadyAndLateStartupCannotRollBack
 	now := time.Now()
 
 	// Durable state for one managed window: a live harness "active" fact.
-	r := NewReducer(ReducerConfig{})
+	r := state.NewReducer(state.ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 1, At: now.Unix()})
-	encoded, err := WindowState{
+	encoded, err := state.WindowState{
 		LastAction: "active",
 		Reducer:    r,
 		Effective:  r.Reduce(now.Unix()),
@@ -215,10 +216,10 @@ func TestMaintenanceTick_RestoresAfterImmediateStartupListError(t *testing.T) {
 
 	// Persisted multi-source durable state for window 42: an interactive harness
 	// "active" fact plus a live between-turns ASL lease.
-	r := NewReducer(ReducerConfig{})
+	r := state.NewReducer(state.ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 1, At: now.Unix()})
-	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: now.Unix()})
-	encoded, err := WindowState{
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: state.ASLPhaseBetween, RunID: "run-1", Seq: 1, At: now.Unix()})
+	encoded, err := state.WindowState{
 		LastAction: "active",
 		Reducer:    r,
 		Effective:  r.Reduce(now.Unix()),
@@ -312,11 +313,11 @@ func TestRenderWorkerDoesNotOverwriteUnrestoredFactsAfterDegradedStartup(t *test
 	// plus an acknowledged interactive cutoff and acknowledged live ASL lease.
 	// The clear makes the latter two facts invisible but still semantically
 	// durable: the harness Seq rejects old replays and LeaseLive supplies 🔁.
-	r := NewReducer(ReducerConfig{})
-	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceLegacy, Key: windowKey(42)}, Action: "active", Seq: 9, At: now.Add(-time.Minute).Unix()})
+	r := state.NewReducer(state.ReducerConfig{})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceLegacy, Key: protocol.WindowKey(42)}, Action: "active", Seq: 9, At: now.Add(-time.Minute).Unix()})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 7, At: now.Add(-time.Minute).Unix()})
-	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 3, At: now.Add(-time.Minute).Unix()})
-	r.Apply(protocol.ReducerEvent{Source: userActionSource(), Action: "user_clear", At: now.Add(-time.Second).Unix()})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: state.ASLPhaseBetween, RunID: "run-1", Seq: 3, At: now.Add(-time.Minute).Unix()})
+	r.Apply(protocol.ReducerEvent{Source: protocol.UserActionSource(), Action: "user_clear", At: now.Add(-time.Second).Unix()})
 	windows := encodeMergeWindow(t, r, 9, now)
 
 	client := &fakeKittyClient{
@@ -361,7 +362,7 @@ func TestRenderWorkerDoesNotOverwriteUnrestoredFactsAfterDegradedStartup(t *test
 	if writtenPayload == "" {
 		t.Fatal("first degraded render wrote an empty amx_state")
 	}
-	var written WindowState
+	var written state.WindowState
 	if err := written.UnmarshalUserVar(writtenPayload); err != nil {
 		t.Fatalf("decode first degraded render: %v", err)
 	}
@@ -370,7 +371,7 @@ func TestRenderWorkerDoesNotOverwriteUnrestoredFactsAfterDegradedStartup(t *test
 	}
 
 	facts := written.Reducer.Facts()
-	legacy := mergedFactBySource(facts, protocol.SourceID{Kind: protocol.SourceLegacy, Key: windowKey(42)})
+	legacy := mergedFactBySource(facts, protocol.SourceID{Kind: protocol.SourceLegacy, Key: protocol.WindowKey(42)})
 	if legacy == nil || legacy.Action != "permission" || legacy.Icon != "key" || legacy.Acked {
 		t.Fatalf("same-source hook fact lost authority in first write: %+v", legacy)
 	}
@@ -407,7 +408,7 @@ func TestRenderWorkerDoesNotOverwriteUnrestoredFactsAfterDegradedStartup(t *test
 	if len(afterFacts) != beforeCount {
 		t.Fatalf("repeated restore changed fact count %d -> %d", beforeCount, len(afterFacts))
 	}
-	if got := mergedFactBySource(afterFacts, protocol.SourceID{Kind: protocol.SourceLegacy, Key: windowKey(42)}); got == nil || got.Action != "permission" {
+	if got := mergedFactBySource(afterFacts, protocol.SourceID{Kind: protocol.SourceLegacy, Key: protocol.WindowKey(42)}); got == nil || got.Action != "permission" {
 		t.Fatalf("repeated restore rolled back same-source hook fact: %+v", got)
 	}
 	if got := mergedFactBySource(afterFacts, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}); got == nil || !got.Acked || got.Seq != 7 {

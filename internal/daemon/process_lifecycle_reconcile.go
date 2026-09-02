@@ -5,13 +5,14 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 func lifecycleParentFact(fact protocol.SourceFactSnapshot) bool {
 	if fact.Kind == protocol.SourceHarness {
 		return true
 	}
-	return fact.Kind == protocol.SourceLegacy && !isLegacySubagentBucket(fact.Key)
+	return fact.Kind == protocol.SourceLegacy && !protocol.IsLegacySubagentBucket(fact.Key)
 }
 
 func lifecycleActiveSubagent(fact protocol.SourceFactSnapshot) bool {
@@ -19,7 +20,7 @@ func lifecycleActiveSubagent(fact protocol.SourceFactSnapshot) bool {
 	case protocol.SourceSubagent:
 		return fact.Icon == "subagent"
 	case protocol.SourceLegacy:
-		return isLegacySubagentBucket(fact.Key) && (fact.Agents > 0 || fact.Icon == "subagent")
+		return protocol.IsLegacySubagentBucket(fact.Key) && (fact.Agents > 0 || fact.Icon == "subagent")
 	default:
 		return false
 	}
@@ -35,7 +36,7 @@ func lifecycleFactMoreRecent(left, right protocol.SourceFactSnapshot) bool {
 	if left.Source() == right.Source() {
 		return left.Seq > right.Seq
 	}
-	return sourceIDLess(right.Source(), left.Source())
+	return protocol.SourceIDLess(right.Source(), left.Source())
 }
 
 func deduplicatedLifecycleIdentities(candidates []processLifecycleCandidate) []protocol.HarnessProcessIdentity {
@@ -62,7 +63,7 @@ func deduplicatedLifecycleIdentities(candidates []processLifecycleCandidate) []p
 
 func processLifecycleCandidateCurrent(
 	candidate processLifecycleCandidate,
-	reset resetFlowState,
+	reset state.ResetFlowState,
 	allFacts []protocol.SourceFactSnapshot,
 ) bool {
 	current := make(map[protocol.SourceID]protocol.SourceFactSnapshot, len(allFacts))
@@ -93,7 +94,7 @@ func processLifecycleCandidateCurrent(
 			return false
 		}
 	}
-	pipeMode, consistent := lifecycleGroupPipeMode(group)
+	pipeMode, consistent := state.LifecycleGroupPipeMode(group)
 	return consistent && pipeMode == candidate.pipeMode &&
 		lifecycleGroupCanChange(reset, candidate.identity, pipeMode, group, allFacts)
 }
@@ -104,8 +105,8 @@ func processLifecycleCandidateCurrent(
 // Callers hold stateMu.
 func (h *Handler) syncLegacyLifecycleWinnerLocked(
 	windowID int,
-	st *WindowState,
-	effective EffectiveState,
+	st *state.WindowState,
+	effective state.EffectiveState,
 	at time.Time,
 ) {
 	facts := st.Reducer.Facts()
@@ -128,15 +129,13 @@ func (h *Handler) syncLegacyLifecycleWinnerLocked(
 	st.LastActiveEvent = ""
 	st.SubagentCount = lifecycleActiveSubagentCount(facts)
 	if action == "permission" && winningHarness == "copilot" {
-		st.CopilotToolPermissionState = copilotToolPermissionPending
+		st.CopilotToolPermissionState = state.CopilotToolPermissionPending
 	} else {
-		st.CopilotToolPermissionState = copilotToolPermissionNone
+		st.CopilotToolPermissionState = state.CopilotToolPermissionNone
 	}
 	st.Activity = at
 	st.NotifiedStale = false
-	st.watchdogSeeded = false
-	st.watchdogIdle = 0
-	st.watchdogFactIdle = nil
+	st.ResetIdleAccounting()
 
 	if h.guard != nil {
 		h.guard.Clear(windowID)

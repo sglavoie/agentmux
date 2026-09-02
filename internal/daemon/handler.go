@@ -8,6 +8,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/transcript"
@@ -119,7 +120,7 @@ type Handler struct {
 	// windowMetadata. Per-window state lives under store so handlers mutate a
 	// single WindowState entry instead of a set of parallel maps.
 	stateMu sync.Mutex
-	store   map[int]*WindowState
+	store   map[int]*state.WindowState
 
 	// resetStopCommitMu linearizes a claimed held Stop's final state
 	// application with events that supersede it. Callers acquire it before
@@ -256,7 +257,7 @@ type Handler struct {
 	// guard_duration (SetReducerConfig); the zero value disables the reducer's
 	// staleness self-heals and legacy grace, which is what unit tests want.
 	// Guarded by stateMu (per-window reducers are only touched under it).
-	reducerCfg ReducerConfig
+	reducerCfg state.ReducerConfig
 
 	// claudeContextLimitProbeEnabled gates ProbeClaudeContextLimit. Set from
 	// [defaults.watchdog].claude_context_limit_probe at daemon startup.
@@ -354,7 +355,7 @@ const maxEventsPerWindow = 5000
 // guard semantics and reducer suppression agree; daemon.Run overrides the
 // full threshold set via SetReducerConfig.
 func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
-	var cfg ReducerConfig
+	var cfg state.ReducerConfig
 	if guard != nil {
 		cfg.GuardDuration = int64(guard.duration / time.Second)
 	}
@@ -366,7 +367,7 @@ func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 		staleThresholds:                make(map[string]time.Duration),
 		perAccountThresholds:           make(map[string]map[string]time.Duration),
 		perAccountHookSilence:          make(map[string]time.Duration),
-		store:                          make(map[int]*WindowState),
+		store:                          make(map[int]*state.WindowState),
 		pendingStopHolds:               make(map[int]pendingStopHold),
 		renderQueue:                    newRenderQueue(),
 		processInspector:               newPSHarnessProcessInspector(),

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
@@ -139,7 +140,7 @@ func appendRoutingJournalEvidence(out map[string]string, evidence *protocol.Rout
 	}
 }
 
-func stableReducerReason(trace ReducerTrace) string {
+func stableReducerReason(trace state.ReducerTrace) string {
 	if trace.Reason == "" {
 		return string(trace.Decision)
 	}

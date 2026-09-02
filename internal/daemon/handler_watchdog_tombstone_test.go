@@ -14,6 +14,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -48,7 +49,7 @@ func TestWatchdogTick_DelayedRenderDoesNotDelayExpiry(t *testing.T) {
 	st.LastAction = "active"
 	st.LastSessionTitle = "W:api"
 	st.Activity = base
-	st.Reducer = NewReducer(h.reducerCfg)
+	st.Reducer = state.NewReducer(h.reducerCfg)
 	st.Reducer.Apply(protocol.ReducerEvent{
 		Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "main"},
 		Action: "active", Seq: 1, At: base.Unix(),

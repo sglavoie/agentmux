@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
@@ -51,7 +51,7 @@ type replayDecision struct {
 	sessionID        string
 	endsSession      bool
 	subagentDelta    int
-	cfg              daemon.ReducerConfig
+	cfg              state.ReducerConfig
 	recordedDecision protocol.ReducerDecision
 	recordedReason   string
 	recordedBefore   *ReplayState
@@ -112,7 +112,7 @@ func decodeReplayDecision(record replayRecord) replayDecision {
 	d.pipeMode = parseBool(evidence["replay.pipe_mode"])
 	d.endsSession = parseBool(evidence["replay.ends_session"])
 	d.subagentDelta = parseInt(evidence["replay.subagent_delta"])
-	d.cfg = daemon.ReducerConfig{
+	d.cfg = state.ReducerConfig{
 		GuardDuration: parseInt64(evidence["replay.guard_duration"]),
 		StaleActive:   parseInt64(evidence["replay.stale_active"]),
 		StaleSubagent: parseInt64(evidence["replay.stale_subagent"]),
@@ -142,18 +142,18 @@ func inferReplayInput(decision *replayDecision) {
 		decision.prompt = true
 	case "agentsessionloopstarted", "agentsessionloopturnfinished",
 		"agentsessionloopverificationfinished", "agentsessionloopwaitended":
-		decision.phase = daemon.ASLPhaseBetween
+		decision.phase = state.ASLPhaseBetween
 	case "agentsessionloopwaitstarted":
-		decision.phase = daemon.ASLPhaseWaiting
+		decision.phase = state.ASLPhaseWaiting
 	case "agentsessionloopturnstarted", "agentsessionloopturnheartbeat",
 		"agentsessionloopturnhangsuspected", "agentsessionloopturnhangcleared":
-		decision.phase = daemon.ASLPhaseTurn
+		decision.phase = state.ASLPhaseTurn
 	case "agentsessionloopverificationstarted", "agentsessionloopverificationheartbeat":
-		decision.phase = daemon.ASLPhaseVerification
+		decision.phase = state.ASLPhaseVerification
 	case "agentsessionlooppaused":
-		decision.phase = daemon.ASLPhasePaused
+		decision.phase = state.ASLPhasePaused
 	case "agentsessionloopfinished":
-		decision.phase = daemon.ASLPhaseFinished
+		decision.phase = state.ASLPhaseFinished
 	case "sessionend":
 		decision.endsSession = true
 	}
@@ -414,7 +414,7 @@ func replayRecordMatches(record replayRecord, selector Selector) bool {
 	return stringInOrEmpty(selector.Stages, record.stage) && stringInOrEmpty(selector.Outcomes, record.outcome)
 }
 
-func stableReplayReason(trace daemon.ReducerTrace) string {
+func stableReplayReason(trace state.ReducerTrace) string {
 	if trace.Reason == "" {
 		return string(trace.Decision)
 	}
@@ -438,8 +438,8 @@ func stableReplayReason(trace daemon.ReducerTrace) string {
 	}
 }
 
-func stateFromEffective(state daemon.EffectiveState) ReplayState {
-	return ReplayState{Icon: state.Icon, Looping: state.Looping, SourceKind: string(state.Source.Kind), SourceKey: state.Source.Key}
+func stateFromEffective(effective state.EffectiveState) ReplayState {
+	return ReplayState{Icon: effective.Icon, Looping: effective.Looping, SourceKind: string(effective.Source.Kind), SourceKey: effective.Source.Key}
 }
 
 func equalReplayState(left, right ReplayState) bool {

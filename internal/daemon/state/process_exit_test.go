@@ -1,4 +1,4 @@
-package daemon
+package state
 
 import (
 	"reflect"
@@ -101,7 +101,7 @@ func TestReducerSuppressedModeFlipUsesReplacementProcessExitPolicy(t *testing.T)
 	}
 
 	facts := r.Facts()
-	pipeMode, consistent := lifecycleGroupPipeMode(facts)
+	pipeMode, consistent := LifecycleGroupPipeMode(facts)
 	if !consistent || !pipeMode {
 		t.Fatalf("replacement process lifecycle mode = (%v, %v), want (true, true); facts=%+v", pipeMode, consistent, facts)
 	}
@@ -307,7 +307,7 @@ func TestReducerInteractiveProcessExitChoosesNewestParentAndClearsItsAgents(t *t
 
 	currentAgent := processReducerEvent(protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-current"}, "subagent", 1, 210, "current", false, protocol.HarnessProcessIdentity{})
 	oldAgent := processReducerEvent(protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-old"}, "subagent", 1, 211, "old", false, testInteractiveProcess)
-	currentBucket := processReducerEvent(protocol.SourceID{Kind: protocol.SourceLegacy, Key: legacySubagentBucketKey("current")}, "subagent", 1, 212, "current", false, protocol.HarnessProcessIdentity{})
+	currentBucket := processReducerEvent(protocol.SourceID{Kind: protocol.SourceLegacy, Key: protocol.LegacySubagentBucketKey("current")}, "subagent", 1, 212, "current", false, protocol.HarnessProcessIdentity{})
 	currentBucket.SubagentDelta = 1
 	for _, ev := range []protocol.ReducerEvent{currentAgent, oldAgent, currentBucket} {
 		r.Apply(ev)
@@ -352,7 +352,7 @@ func TestReducerInteractiveProcessExitClearsSubagentsInDeterministicOrder(t *tes
 		processReducerEvent(protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-alpha"}, "subagent", 1, 111, "current", false, protocol.HarnessProcessIdentity{}),
 		processReducerEvent(protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-mike"}, "subagent", 1, 112, "current", false, protocol.HarnessProcessIdentity{}),
 		processReducerEvent(protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-bravo"}, "subagent", 1, 113, "current", false, protocol.HarnessProcessIdentity{}),
-		processReducerEvent(protocol.SourceID{Kind: protocol.SourceLegacy, Key: legacySubagentBucketKey("current")}, "subagent", 1, 114, "current", false, protocol.HarnessProcessIdentity{}),
+		processReducerEvent(protocol.SourceID{Kind: protocol.SourceLegacy, Key: protocol.LegacySubagentBucketKey("current")}, "subagent", 1, 114, "current", false, protocol.HarnessProcessIdentity{}),
 	}
 	agents[len(agents)-1].SubagentDelta = 1
 
@@ -387,7 +387,7 @@ func TestReducerInteractiveProcessExitWithoutSessionClearsExactProcessAgents(t *
 	r := NewReducer(zeroCfg)
 	parent := processReducerEvent(protocol.SourceID{Kind: protocol.SourceLegacy, Key: "win:42"}, "active", 1, 100, "", false, testInteractiveProcess)
 	exactAgent := processReducerEvent(protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-exact"}, "subagent", 1, 101, "unknown", false, testInteractiveProcess)
-	exactBucket := processReducerEvent(protocol.SourceID{Kind: protocol.SourceLegacy, Key: legacySubagentBucketKey("win:42")}, "subagent", 1, 102, "", false, testInteractiveProcess)
+	exactBucket := processReducerEvent(protocol.SourceID{Kind: protocol.SourceLegacy, Key: protocol.LegacySubagentBucketKey("win:42")}, "subagent", 1, 102, "", false, testInteractiveProcess)
 	exactBucket.SubagentDelta = 1
 	otherProcess := testInteractiveProcess
 	otherProcess.PID++

@@ -11,6 +11,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -152,8 +153,8 @@ func (h *Handler) acceptASLSupervisorProjection(
 
 	previous := h.aslSupervisorProjections[ref]
 	if st, ok := h.windowStateLocked(target.windowID); ok && st.Reducer != nil {
-		fact := st.Reducer.facts[aslSupervisorQuestionSource(target.candidate.RunID)]
-		if fact != nil && fact.acked &&
+		fact, known := st.Reducer.Fact(aslSupervisorQuestionSource(target.candidate.RunID))
+		if known && fact.Acked &&
 			previous.LatestQuestionID == projection.LatestQuestionID {
 			// F8 dismisses the current open set. Lease heartbeats and unrelated
 			// mailbox records may advance ProjectionSeq, but only a different latest
@@ -258,7 +259,7 @@ func (h *Handler) handleASLSupervisorMailboxQuestion(
 		}
 		st := h.ensureWindowStateLocked(target.windowID)
 		if st.Reducer == nil {
-			st.Reducer = NewReducer(h.reducerCfg)
+			st.Reducer = state.NewReducer(h.reducerCfg)
 		}
 		if st.LastSessionTitle == "" {
 			st.LastSessionTitle = parts.Base
@@ -271,7 +272,7 @@ func (h *Handler) handleASLSupervisorMailboxQuestion(
 		}
 		h.registerASLSupervisorTargetLocked(target)
 		previous := h.aslSupervisorProjections[ref]
-		if fact := st.Reducer.facts[aslSupervisorQuestionSource(runID)]; fact != nil && fact.acked &&
+		if fact, known := st.Reducer.Fact(aslSupervisorQuestionSource(runID)); known && fact.Acked &&
 			previous.LatestQuestionID == projection.LatestQuestionID {
 			h.aslSupervisorProjections[ref] = projection
 			h.stateMu.Unlock()

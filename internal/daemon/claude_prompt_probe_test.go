@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -317,7 +318,7 @@ func TestProbeClaudeScreenStop_BusyPaneTitleRecoversAfterUserClearPreservingLoop
 	st.ShadowSeq++
 	if decision := st.Reducer.Apply(protocol.ReducerEvent{
 		Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"},
-		RunID:  "run-1", Phase: ASLPhaseBetween, Seq: 1, At: base.Unix(),
+		RunID:  "run-1", Phase: state.ASLPhaseBetween, Seq: 1, At: base.Unix(),
 	}); decision != protocol.DecisionApplied {
 		h.stateMu.Unlock()
 		t.Fatalf("seed ASL lease decision = %q, want applied", decision)

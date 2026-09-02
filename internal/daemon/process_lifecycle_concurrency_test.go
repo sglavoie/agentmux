@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -69,9 +70,9 @@ func TestProcessLifecycleLateNativeStopWinsAndSettlementIsIdempotent(t *testing.
 
 func TestProcessLifecycleRestoredV4StateSettlesOnFirstPass(t *testing.T) {
 	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5801, StartToken: "Thu Jul 16 10:20:30 2026"}
-	r := NewReducer(zeroCfg)
+	r := state.NewReducer(zeroCfg)
 	r.Apply(processReducerEvent(protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:restored"}, "active", 1, time.Now().Unix(), "restored", false, identity))
-	persisted := WindowState{
+	persisted := state.WindowState{
 		Activity: time.Now(), LastAction: "active", LastHarness: "claude", LastAccount: "work",
 		LastSessionTitle: "W:api", DesiredIcon: "bolt", StateSet: true,
 		Reducer: r, Effective: r.Reduce(time.Now().Unix()), ShadowSeq: 1,

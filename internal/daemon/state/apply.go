@@ -1,4 +1,4 @@
-package daemon
+package state
 
 import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -103,7 +103,7 @@ func (r *Reducer) Apply(ev protocol.ReducerEvent) protocol.ReducerDecision {
 			agents = 0
 		}
 		f.agents = agents
-		if !isTerminalAction(action) && agents > 0 {
+		if !protocol.IsTerminalAction(action) && agents > 0 {
 			action, icon = "subagent", "subagent"
 		}
 	}
@@ -136,7 +136,7 @@ func (r *Reducer) Apply(ev protocol.ReducerEvent) protocol.ReducerDecision {
 		return protocol.DecisionSuppressed
 	}
 
-	if f.terminated && !isTerminalAction(action) && icon != "" && r.suppressed(f, ev) {
+	if f.terminated && !protocol.IsTerminalAction(action) && icon != "" && r.suppressed(f, ev) {
 		// Advance the sequence so this event is not reprocessed, but keep the
 		// terminal fact: trailing activity must not reassert the icon.
 		f.seq = ev.Seq
@@ -172,7 +172,7 @@ func (r *Reducer) Apply(ev protocol.ReducerEvent) protocol.ReducerDecision {
 		f.phase = ev.Phase
 		f.leaseLive = leaseLive
 	}
-	if isTerminalAction(action) {
+	if protocol.IsTerminalAction(action) {
 		f.terminated = true
 		f.terminalTurn = ev.TurnID
 		f.terminalToolUse = f.toolUse
@@ -231,10 +231,10 @@ func (r *Reducer) clearSessionAgents(sessionID string, at int64) int {
 			f.terminalAt = at
 			cleared++
 		case protocol.SourceLegacy:
-			if !isLegacySubagentBucket(id.Key) {
+			if !protocol.IsLegacySubagentBucket(id.Key) {
 				continue
 			}
-			if sessionID != "" && id.Key != legacySubagentBucketKey(sessionID) {
+			if sessionID != "" && id.Key != protocol.LegacySubagentBucketKey(sessionID) {
 				continue
 			}
 			if f.agents == 0 && f.icon == "" {

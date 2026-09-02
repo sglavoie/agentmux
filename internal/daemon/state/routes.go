@@ -1,4 +1,4 @@
-package daemon
+package state
 
 import (
 	"github.com/sglavoie/agentmux/internal/conversation"
@@ -36,7 +36,7 @@ func (r *Reducer) CurrentLiveProducerRoute(producerHarness string, targetWindowI
 		if fact.source.Kind != protocol.SourceHarness || !fact.set || fact.acked || fact.terminated || fact.pipeMode {
 			continue
 		}
-		candidate, ok := conversation.New(harnessFromSourceKey(fact.source.Key, fact.sessionID), fact.sessionID)
+		candidate, ok := conversation.New(HarnessFromSourceKey(fact.source.Key, fact.sessionID), fact.sessionID)
 		if !ok || candidate.Harness != producerHarness || fact.source.Key != candidate.Harness+":"+candidate.SessionID {
 			continue
 		}
@@ -87,7 +87,7 @@ func (r *Reducer) CurrentTerminalProducerRoute(producerHarness string, targetWin
 		if fact.source.Kind != protocol.SourceHarness || !conversationFactLive(fact, now) || !fact.terminated || fact.pipeMode {
 			continue
 		}
-		candidate, ok := conversation.New(harnessFromSourceKey(fact.source.Key, fact.sessionID), fact.sessionID)
+		candidate, ok := conversation.New(HarnessFromSourceKey(fact.source.Key, fact.sessionID), fact.sessionID)
 		if !ok || candidate.Harness != producerHarness || fact.source.Key != candidate.Harness+":"+candidate.SessionID {
 			continue
 		}

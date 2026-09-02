@@ -1,4 +1,4 @@
-package daemon
+package state
 
 import (
 	"reflect"
@@ -18,9 +18,9 @@ func TestWindowStateUserVarRoundTrip(t *testing.T) {
 		LastAccount:                "work",
 		LastHarness:                "codex",
 		LastActiveEvent:            "PreToolUse",
-		CopilotToolPermissionState: copilotToolPermissionAutoApproved,
+		CopilotToolPermissionState: CopilotToolPermissionAutoApproved,
 		SubagentCount:              2,
-		PendingReset:               resetFlowClearing,
+		PendingReset:               ResetFlowClearing,
 		NotifiedStale:              true,
 		ContextLimitNotified:       true,
 		LastPipeMode:               true,

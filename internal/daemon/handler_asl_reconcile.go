@@ -28,6 +28,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -215,7 +216,7 @@ func (h *Handler) reconcileASLDiscovery(now time.Time, windows []kitty.OSWindow,
 				At:             now.Unix(),
 				OriginWindowID: fact.OriginWindowID,
 				RunID:          fact.RunID,
-				Phase:          ASLPhaseFinished,
+				Phase:          state.ASLPhaseFinished,
 			})
 			changedWindows[windowID] = true
 			h.aslMetrics.retiredLeases++
@@ -339,7 +340,7 @@ func (h *Handler) acceptASLObservationLocked(runID string, generation, sequence 
 func (h *Handler) seedASLLeaseLocked(now time.Time, seed aslSeed) bool {
 	st := h.ensureWindowStateLocked(seed.windowID)
 	if st.Reducer == nil {
-		st.Reducer = NewReducer(h.reducerCfg)
+		st.Reducer = state.NewReducer(h.reducerCfg)
 	}
 	exists, live := st.Reducer.LeaseState(seed.key)
 	if live || exists {
@@ -386,14 +387,14 @@ func (h *Handler) seedASLLeaseLocked(now time.Time, seed aslSeed) bool {
 func aslPhaseForDiscovered(phase string) string {
 	switch phase {
 	case agentloop.PhaseTurn:
-		return ASLPhaseTurn
+		return state.ASLPhaseTurn
 	case agentloop.PhaseVerification:
-		return ASLPhaseVerification
+		return state.ASLPhaseVerification
 	case agentloop.PhaseWaiting:
-		return ASLPhaseWaiting
+		return state.ASLPhaseWaiting
 	case agentloop.PhasePaused:
-		return ASLPhasePaused
+		return state.ASLPhasePaused
 	default:
-		return ASLPhaseBetween
+		return state.ASLPhaseBetween
 	}
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -35,7 +36,7 @@ func TestHandler_ActiveSuppressedWithinTerminalGrace(t *testing.T) {
 				h := NewHandler(guard, notifier)
 
 				h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: terminal})
-				wantIcon := reducerActionIcon(terminal)
+				wantIcon := state.ActionIcon(terminal)
 
 				// Non-prompt active within the grace must not revive the bolt.
 				resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active"})

@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 // The Handler request surface: dispatch, health, and the notification helpers
@@ -103,7 +104,7 @@ func (h *Handler) setMetricsSource(fn func() protocol.MetricsSnapshot) {
 	h.metricsFn = fn
 }
 
-func (h *Handler) SetReducerConfig(cfg ReducerConfig) {
+func (h *Handler) SetReducerConfig(cfg state.ReducerConfig) {
 	h.stateMu.Lock()
 	h.reducerCfg = cfg
 	for _, st := range h.store {

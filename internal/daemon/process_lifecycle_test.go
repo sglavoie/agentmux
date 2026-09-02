@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
@@ -88,7 +89,7 @@ func applyLifecycleEvent(
 	}
 }
 
-func lifecycleEvents(st *WindowState) []protocol.SessionEvent {
+func lifecycleEvents(st *state.WindowState) []protocol.SessionEvent {
 	if st == nil {
 		return nil
 	}
@@ -216,7 +217,7 @@ func TestProcessLifecycleSettlementPublishesSafeDiagnosticEvidenceOnce(t *testin
 		t.Fatalf("lifecycle events = %+v, want one", events)
 	}
 	event := events[0]
-	if event.Event != protocol.EventHarnessProcessExited || event.Reason != HarnessProcessExitReasonInteractive ||
+	if event.Event != protocol.EventHarnessProcessExited || event.Reason != state.HarnessProcessExitReasonInteractive ||
 		event.ProcessHarness != identity.Harness || event.ProcessPID != identity.PID ||
 		event.ProcessStartToken != identity.StartToken || event.ProcessObservation != string(HarnessProcessMissing) ||
 		event.ProcessMode != "interactive" || event.SourceKind != string(protocol.SourceHarness) ||
@@ -229,7 +230,7 @@ func TestProcessLifecycleSettlementPublishesSafeDiagnosticEvidenceOnce(t *testin
 		event.EffectiveAfter == nil || event.EffectiveAfter.Icon != "stop" || len(event.ProcessSources) != 1 {
 		t.Fatalf("process lifecycle event = %+v", event)
 	}
-	if meta.Watchdog.ProcessExits != 1 || meta.Watchdog.LastProcessExitReason != HarnessProcessExitReasonInteractive ||
+	if meta.Watchdog.ProcessExits != 1 || meta.Watchdog.LastProcessExitReason != state.HarnessProcessExitReasonInteractive ||
 		meta.Watchdog.LastProcessExitObservation != string(HarnessProcessMissing) ||
 		meta.Watchdog.LastProcessExitAt != observedAt.Unix() || meta.Renderer.QueuedGen != event.RenderGeneration ||
 		len(meta.Renderer.Generations) == 0 || meta.Renderer.Generations[len(meta.Renderer.Generations)-1].Generation != event.RenderGeneration {
@@ -244,7 +245,7 @@ func TestProcessLifecycleSettlementPublishesSafeDiagnosticEvidenceOnce(t *testin
 		t.Fatalf("journal records = %+v, want one committed settlement", records)
 	}
 	record := records[0]
-	if record.Outcome != "settled" || record.Reason != HarnessProcessExitReasonInteractive ||
+	if record.Outcome != "settled" || record.Reason != state.HarnessProcessExitReasonInteractive ||
 		record.Evidence["event"] != protocol.EventHarnessProcessExited || record.Evidence["process_start_token"] != identity.StartToken ||
 		record.Evidence["terminal_hook_evidence"] != processTerminalHookEvidenceAbsent ||
 		record.Evidence["render_generation"] == "" || record.Evidence["before_icon"] != "bolt" ||
@@ -359,7 +360,7 @@ func TestProcessLifecycleResetClearsWithoutSynthesizingStop(t *testing.T) {
 	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5401, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
 	h.stateMu.Lock()
-	h.store[42].PendingReset = resetFlowClearing
+	h.store[42].PendingReset = state.ResetFlowClearing
 	h.stateMu.Unlock()
 	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing}})
 
@@ -370,7 +371,7 @@ func TestProcessLifecycleResetClearsWithoutSynthesizingStop(t *testing.T) {
 	defer h.stateMu.Unlock()
 	st := h.store[42]
 	events := lifecycleEvents(st)
-	if st.PendingReset != resetFlowClearing || st.Effective.Icon != "" || st.LastAction != "" {
+	if st.PendingReset != state.ResetFlowClearing || st.Effective.Icon != "" || st.LastAction != "" {
 		t.Fatalf("reset state = %+v", st)
 	}
 	if len(events) != 1 || events[0].Action != "idle" || events[0].Reason == "" {
@@ -385,7 +386,7 @@ func TestProcessLifecycleLeavesASLFactUntouched(t *testing.T) {
 	aslSource := protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}
 	h.stateMu.Lock()
 	st := h.store[42]
-	st.Reducer.Apply(protocol.ReducerEvent{Source: aslSource, RunID: "run-1", Phase: ASLPhaseBetween, Seq: 1, At: time.Now().Unix()})
+	st.Reducer.Apply(protocol.ReducerEvent{Source: aslSource, RunID: "run-1", Phase: state.ASLPhaseBetween, Seq: 1, At: time.Now().Unix()})
 	st.ShadowSeq++
 	h.publishEffectiveLocked(42, st, st.Reducer.Reduce(time.Now().Unix()))
 	before := factSnapshotBySource(st.Reducer.Facts(), aslSource)

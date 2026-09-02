@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
@@ -106,29 +107,14 @@ func ordinaryLifecycleSource(kind protocol.SourceKind) bool {
 	}
 }
 
-func lifecycleGroupPipeMode(facts []protocol.SourceFactSnapshot) (bool, bool) {
-	if len(facts) == 0 {
-		return false, false
-	}
-	pipeMode := facts[0].PipeMode
-	for _, fact := range facts[1:] {
-		if fact.PipeMode != pipeMode {
-			// One OS process cannot change invocation mode. Treat an internally
-			// inconsistent restored group as untrackable rather than guessing.
-			return false, false
-		}
-	}
-	return pipeMode, true
-}
-
 func lifecycleGroupCanChange(
-	reset resetFlowState,
+	reset state.ResetFlowState,
 	identity protocol.HarnessProcessIdentity,
 	pipeMode bool,
 	group []protocol.SourceFactSnapshot,
 	allFacts []protocol.SourceFactSnapshot,
 ) bool {
-	if reset != resetFlowNone {
+	if reset != state.ResetFlowNone {
 		return len(group) > 0
 	}
 	if pipeMode {
@@ -178,7 +164,7 @@ func lifecycleGroupCanChange(
 		}
 		if sessionID != "" {
 			if (fact.Kind == protocol.SourceSubagent && fact.SessionID == sessionID) ||
-				(fact.Kind == protocol.SourceLegacy && fact.Key == legacySubagentBucketKey(sessionID)) {
+				(fact.Kind == protocol.SourceLegacy && fact.Key == protocol.LegacySubagentBucketKey(sessionID)) {
 				return true
 			}
 			continue

@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
 
@@ -291,7 +292,7 @@ func (h *Handler) applyAuthoritativeIdle(obs AuthoritativeIdle) bool {
 	// A /clear, /reset, or /new flow owns the window's cleared-state semantics;
 	// a synthetic stop must never surface during one. Leave the streak intact —
 	// the reset cleanup clears it through the normal activity path once it lands.
-	if st.PendingReset != resetFlowNone {
+	if st.PendingReset != state.ResetFlowNone {
 		h.stateMu.Unlock()
 		return false
 	}
@@ -408,7 +409,7 @@ func (h *Handler) applyAuthoritativeIdle(obs AuthoritativeIdle) bool {
 	// visible icon actually becomes stop. A masked or unchanged reduction never
 	// notifies, and a retried upstream event notifies at most once.
 	notify := effective.Icon == "stop" && before.Icon != "stop" &&
-		h.shouldNotifySourceEventLocked(st, obs.SourceEventID)
+		st.MarkSourceEventNotified(obs.SourceEventID)
 	title, account, pipe := obs.SessionTitle, obs.Account, obs.PipeMode
 	h.stateMu.Unlock()
 

@@ -58,9 +58,9 @@ func TestHandler_UnmanagedRouteCrossHarnessMatrix(t *testing.T) {
 				h.stateMu.Lock()
 				st := h.store[42]
 				meta := h.windowMetadata[42]
-				var fact *sourceFact
+				var fact *protocol.SourceFactSnapshot
 				if st != nil && st.Reducer != nil {
-					fact = st.Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: producerHarness + ":" + sessionID}]
+					fact = factOf(st.Reducer, protocol.SourceID{Kind: protocol.SourceHarness, Key: producerHarness + ":" + sessionID})
 				}
 				h.stateMu.Unlock()
 				if st == nil || st.DesiredIcon != "bolt" {
@@ -69,7 +69,7 @@ func TestHandler_UnmanagedRouteCrossHarnessMatrix(t *testing.T) {
 				if meta.Durable.Harness != ownerHarness {
 					t.Fatalf("durable harness = %q; want managed owner %q", meta.Durable.Harness, ownerHarness)
 				}
-				if fact == nil || fact.originWindowID != 43 || fact.sessionID != sessionID {
+				if fact == nil || fact.OriginWindowID != 43 || fact.SessionID != sessionID {
 					t.Fatalf("routed fact = %+v; want session %q from origin 43", fact, sessionID)
 				}
 			})
@@ -151,12 +151,12 @@ func TestHandler_UnmanagedPromptTakeoverAndStickyTerminal(t *testing.T) {
 	}
 	h.stateMu.Lock()
 	meta := h.windowMetadata[42]
-	fact := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:claude-session"}]
+	fact := factOf(h.store[42].Reducer, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:claude-session"})
 	h.stateMu.Unlock()
 	if meta.Durable.Harness != harness.Codex {
 		t.Fatalf("durable harness = %q; want codex", meta.Durable.Harness)
 	}
-	if fact == nil || !fact.terminated || fact.originWindowID != 43 {
+	if fact == nil || !fact.Terminated || fact.OriginWindowID != 43 {
 		t.Fatalf("terminal fact = %+v; want terminated origin 43", fact)
 	}
 

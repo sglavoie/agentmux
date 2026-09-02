@@ -205,6 +205,13 @@ func ActionPriority(action string) (int, bool) {
 	return p, ok
 }
 
+// IsTerminalAction reports whether an action ends the current turn's activity.
+// stop and stop_failure both terminate; stop_failure is additionally sticky
+// (only a user_clear or a new turn dislodges it).
+func IsTerminalAction(action string) bool {
+	return action == "stop" || action == "stop_failure"
+}
+
 // IconState returns the icon state name for an action.
 func IconState(action string) string {
 	return actionIconState[action]

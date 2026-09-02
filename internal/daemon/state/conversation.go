@@ -1,4 +1,4 @@
-package daemon
+package state
 
 import (
 	"github.com/sglavoie/agentmux/internal/conversation"
@@ -44,7 +44,7 @@ func (r *Reducer) currentConversation(now int64, interactiveOnly bool) (conversa
 		if interactiveOnly && fact.pipeMode {
 			continue
 		}
-		candidate, ok := conversation.New(harnessFromSourceKey(fact.source.Key, fact.sessionID), fact.sessionID)
+		candidate, ok := conversation.New(HarnessFromSourceKey(fact.source.Key, fact.sessionID), fact.sessionID)
 		if !ok || fact.source.Key != candidate.Harness+":"+candidate.SessionID {
 			continue
 		}
@@ -75,13 +75,46 @@ func conversationFactLive(fact *sourceFact, now int64) bool {
 	// Keep a clean terminal fact only through the same retention interval used
 	// by Compact. A sticky failure remains current until it is acknowledged or
 	// replaced by a newer parent fact.
-	if fact.terminated && fact.icon != "error" && tombstoneRetentionSeconds > 0 && now-fact.terminalAt >= tombstoneRetentionSeconds {
+	if fact.terminated && fact.icon != "error" && TombstoneRetentionSeconds > 0 && now-fact.terminalAt >= TombstoneRetentionSeconds {
 		return false
 	}
 	return true
 }
 
-func harnessFromSourceKey(key, sessionID string) string {
+// LatestLiveFact returns the most recent still-live fact accepted by eligible,
+// under the reducer's own recency ordering. It is the read seam for daemon-side
+// correlation rules that must reason about "the newest fact that still describes
+// this conversation" without the fact map — or the tombstone retention policy
+// that decides liveness — leaking out of this package. A nil predicate accepts
+// every live fact.
+func (r *Reducer) LatestLiveFact(
+	now int64,
+	eligible func(protocol.SourceFactSnapshot) bool,
+) (protocol.SourceFactSnapshot, bool) {
+	if r == nil {
+		return protocol.SourceFactSnapshot{}, false
+	}
+	var current *sourceFact
+	for _, fact := range r.facts {
+		if !conversationFactLive(fact, now) {
+			continue
+		}
+		if eligible != nil && !eligible(fact.snapshot()) {
+			continue
+		}
+		if current == nil || moreRecent(fact, current) {
+			current = fact
+		}
+	}
+	if current == nil {
+		return protocol.SourceFactSnapshot{}, false
+	}
+	return current.snapshot(), true
+}
+
+// HarnessFromSourceKey recovers the harness name from a "harness:session"
+// source key, returning "" when the key does not carry that session suffix.
+func HarnessFromSourceKey(key, sessionID string) string {
 	suffix := ":" + sessionID
 	if sessionID == "" || len(key) <= len(suffix) || key[len(key)-len(suffix):] != suffix {
 		return ""

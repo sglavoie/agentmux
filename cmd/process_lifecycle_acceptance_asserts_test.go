@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 func lifecycleAcceptanceIdentity(harnessName string, pid int) protocol.HarnessProcessIdentity {
@@ -76,7 +77,7 @@ func assertLifecycleAcceptancePipeResult(
 		t.Fatalf("window %d has no exit for %+v", windowID, identity)
 	}
 	meta := export.WindowMetadata[windowID]
-	if exit.Reason != daemon.HarnessProcessExitReasonPipe || exit.ProcessMode != "pipe" ||
+	if exit.Reason != state.HarnessProcessExitReasonPipe || exit.ProcessMode != "pipe" ||
 		exit.ProcessHarness != identity.Harness || exit.ProcessStartToken != identity.StartToken ||
 		exit.ProcessObservation != string(wantObservation) || exit.WithdrawnFacts == nil || *exit.WithdrawnFacts < 1 ||
 		exit.SynthesizedStop == nil || *exit.SynthesizedStop || meta.Shadow.EffectiveIcon != wantIcon ||

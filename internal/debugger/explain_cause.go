@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
@@ -74,7 +74,7 @@ func processLifecycleRecoverySummary(record diagnostics.TraceEnvelope) (string, 
 		return "", false
 	}
 	switch record.Reason {
-	case daemon.HarnessProcessExitReasonPipe, daemon.HarnessProcessExitReasonInteractive, daemon.HarnessProcessExitReasonReset:
+	case state.HarnessProcessExitReasonPipe, state.HarnessProcessExitReasonInteractive, state.HarnessProcessExitReasonReset:
 	default:
 		return "", false
 	}

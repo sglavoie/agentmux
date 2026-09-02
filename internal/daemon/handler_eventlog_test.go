@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 // TestHandler_EventLog_PreservedAcrossStaleSweep verifies that SweepStale leaves
@@ -116,12 +117,12 @@ func TestHandler_PruneClosedWindows_DropsAllLivePerWindowMaps(t *testing.T) {
 			h.ensureWindowStateLocked(id).LastAction = "active"
 			h.ensureWindowStateLocked(id).LastAccount = "work"
 			h.ensureWindowStateLocked(id).LastActiveEvent = "PreToolUse"
-			h.ensureWindowStateLocked(id).CopilotToolPermissionState = copilotToolPermissionAutoApproved
+			h.ensureWindowStateLocked(id).CopilotToolPermissionState = state.CopilotToolPermissionAutoApproved
 			h.ensureWindowStateLocked(id).SubagentCount = 1
 			h.ensureWindowStateLocked(id).NotifiedStale = true
 			h.ensureWindowStateLocked(id).LastSessionTitle = "W:foo"
 			h.ensureWindowStateLocked(id).LastPipeMode = false
-			h.ensureWindowStateLocked(id).PendingReset = resetFlowRequested
+			h.ensureWindowStateLocked(id).PendingReset = state.ResetFlowRequested
 			h.ensureWindowStateLocked(id).EventLog = []protocol.SessionEvent{{At: now.Unix(), Event: "PreToolUse", Action: "active"}}
 			h.windowMetadata[id] = protocol.WindowDebugMetadata{Durable: protocol.WindowDebugDurable{SessionTitle: "W:foo"}}
 		}
@@ -139,9 +140,9 @@ func TestHandler_PruneClosedWindows_DropsAllLivePerWindowMaps(t *testing.T) {
 			t.Fatalf("store[1] dropped; want preserved (live window)")
 		}
 		if st1.Activity.IsZero() || st1.LastAction == "" || st1.LastAccount == "" ||
-			st1.LastActiveEvent == "" || st1.CopilotToolPermissionState == copilotToolPermissionNone ||
+			st1.LastActiveEvent == "" || st1.CopilotToolPermissionState == state.CopilotToolPermissionNone ||
 			st1.SubagentCount == 0 || !st1.NotifiedStale || st1.LastSessionTitle == "" ||
-			st1.PendingReset == resetFlowNone || len(st1.EventLog) == 0 {
+			st1.PendingReset == state.ResetFlowNone || len(st1.EventLog) == 0 {
 			t.Errorf("store[1] = %+v; want all seeded live fields preserved", st1)
 		}
 		if _, ok := h.windowMetadata[1]; !ok {

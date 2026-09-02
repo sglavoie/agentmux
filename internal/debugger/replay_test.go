@@ -23,13 +23,13 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
-	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
 type replayFixture struct {
-	reducer   *daemon.Reducer
+	reducer   *state.Reducer
 	journal   *diagnostics.Journal
 	windowID  int
 	daemonSeq uint64
@@ -43,7 +43,7 @@ func newReplayFixture(t *testing.T) (*replayFixture, diagnostics.Paths) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &replayFixture{reducer: daemon.NewReducer(daemon.ReducerConfig{GuardDuration: 5}), journal: journal, windowID: 42}, paths
+	return &replayFixture{reducer: state.NewReducer(state.ReducerConfig{GuardDuration: 5}), journal: journal, windowID: 42}, paths
 }
 
 func (fixture *replayFixture) appendDecision(t *testing.T, traceID, requestID, event string, input protocol.ReducerEvent, fallback bool, renderGeneration uint64) diagnostics.TraceEnvelope {
@@ -186,11 +186,11 @@ func TestReplayGoldenJournalCoversOrderingRestartsFallbackASLAndCoalescing(t *te
 	fixture.daemonSeq = 0 // a new daemon restored the same durable reducer facts
 	fixture.appendDecision(t, "trace-asl-turn", "request-asl-turn", "AgentSessionLoopTurnStarted", protocol.ReducerEvent{
 		Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Seq: 1, At: 103,
-		OriginWindowID: 42, RunID: "run-1", Phase: daemon.ASLPhaseTurn,
+		OriginWindowID: 42, RunID: "run-1", Phase: state.ASLPhaseTurn,
 	}, false, 0)
 	fixture.appendDecision(t, "trace-asl-finish", "request-asl-finish", "AgentSessionLoopFinished", protocol.ReducerEvent{
 		Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Seq: 2, At: 104,
-		OriginWindowID: 42, RunID: "run-1", Phase: daemon.ASLPhaseFinished,
+		OriginWindowID: 42, RunID: "run-1", Phase: state.ASLPhaseFinished,
 	}, false, 0)
 	fixture.appendDecision(t, "trace-reset", "request-reset", "SessionEnd", protocol.ReducerEvent{
 		Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:session-1"}, Action: "user_clear", Seq: 3,
@@ -267,7 +267,7 @@ func TestReplayASLRecordsExtractedFromV2Bundle(t *testing.T) {
 	fixture, paths := newReplayFixture(t)
 	fixture.appendDecision(t, "trace-asl-standalone", "request-asl-standalone", "AgentSessionLoopTurnStarted", protocol.ReducerEvent{
 		Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-standalone"}, Seq: 1, At: 200,
-		OriginWindowID: 42, RunID: "run-standalone", Phase: daemon.ASLPhaseTurn,
+		OriginWindowID: 42, RunID: "run-standalone", Phase: state.ASLPhaseTurn,
 	}, false, 0)
 	fixture.appendDecision(t, "trace-unrelated", "request-unrelated", "UserPromptSubmit", protocol.ReducerEvent{
 		Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:unrelated"}, Action: "active", Seq: 1,

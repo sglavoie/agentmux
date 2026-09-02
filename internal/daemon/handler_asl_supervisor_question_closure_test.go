@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
 
@@ -163,7 +164,7 @@ func TestASLSupervisorMailboxReplyLeavesRunnerWaitingLoopBare(t *testing.T) {
 	st.Reducer.Apply(protocol.ReducerEvent{
 		Source: protocol.SourceID{Kind: protocol.SourceASL, Key: supervisorRunID},
 		RunID:  supervisorRunID,
-		Phase:  ASLPhaseWaiting,
+		Phase:  state.ASLPhaseWaiting,
 		Seq:    2,
 		At:     now.Unix(),
 	})

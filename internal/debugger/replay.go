@@ -1,7 +1,7 @@
 package debugger
 
 // This file intentionally contains no daemon client or Kitty dependency.
-// Replay reads immutable diagnostic artifacts and drives only daemon.Reducer,
+// Replay reads immutable diagnostic artifacts and drives only state.Reducer,
 // whose inputs and clock are explicit and side-effect free.
 
 import (
@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 const (
@@ -219,7 +219,7 @@ func Replay(ctx context.Context, inputPath string, options ReplayOptions) (Repla
 }
 
 func replayDecisions(report *ReplayReport, decisions []replayDecision) {
-	reducers := make(map[string]*daemon.Reducer)
+	reducers := make(map[string]*state.Reducer)
 	effectiveByWindow := make(map[string]ReplayState)
 	lastDaemonSeq := make(map[string]uint64)
 	restartGeneration := make(map[string]int)
@@ -236,7 +236,7 @@ func replayDecisions(report *ReplayReport, decisions []replayDecision) {
 		}
 		reducer := reducers[windowID]
 		if reducer == nil {
-			reducer = daemon.NewReducer(decision.cfg)
+			reducer = state.NewReducer(decision.cfg)
 			reducers[windowID] = reducer
 		}
 		reducer.SetConfig(decision.cfg)

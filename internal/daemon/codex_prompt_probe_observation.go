@@ -127,7 +127,7 @@ func (h *Handler) retractCodexPromptObservation(now time.Time, binding screenPro
 		return
 	}
 	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource}
-	if !st.Reducer.canRetract(source) {
+	if !st.Reducer.CanRetract(source) {
 		return
 	}
 	nextSeq := st.ShadowSeq + 1

@@ -1,4 +1,4 @@
-package daemon
+package state
 
 import (
 	"sort"
@@ -22,6 +22,26 @@ const (
 type HarnessProcessExitOptions struct {
 	PipeMode  bool
 	ClearOnly bool
+}
+
+// LifecycleGroupPipeMode reports the invocation mode a group of facts agrees on,
+// and whether the group is internally consistent at all. It is the pure
+// projection that supplies HarnessProcessExitOptions.PipeMode, which is why it
+// lives beside the settlement policy rather than with the process inspector that
+// discovers the exits.
+func LifecycleGroupPipeMode(facts []protocol.SourceFactSnapshot) (bool, bool) {
+	if len(facts) == 0 {
+		return false, false
+	}
+	pipeMode := facts[0].PipeMode
+	for _, fact := range facts[1:] {
+		if fact.PipeMode != pipeMode {
+			// One OS process cannot change invocation mode. Treat an internally
+			// inconsistent restored group as untrackable rather than guessing.
+			return false, false
+		}
+	}
+	return pipeMode, true
 }
 
 // HarnessProcessExitResult describes one atomic reducer settlement. SourceID
@@ -88,8 +108,8 @@ func (r *Reducer) SettleHarnessProcessExit(
 		r.settleInteractiveProcessExit(identity, matched, at, &result)
 	}
 
-	sortSourceIDs(result.WithdrawnSources)
-	sortSourceIDs(result.ClearedSubagentSources)
+	protocol.SortSourceIDs(result.WithdrawnSources)
+	protocol.SortSourceIDs(result.ClearedSubagentSources)
 	result.WithdrawnFacts = len(result.WithdrawnSources)
 	result.ClearedSubagents = len(result.ClearedSubagentSources)
 	result.Changed = result.SynthesizedStop || result.WithdrawnFacts > 0 || result.ClearedSubagents > 0
@@ -125,7 +145,7 @@ func (r *Reducer) processFacts(identity protocol.HarnessProcessIdentity) []*sour
 		matched = append(matched, f)
 	}
 	sort.Slice(matched, func(i, j int) bool {
-		return sourceIDLess(matched[i].source, matched[j].source)
+		return protocol.SourceIDLess(matched[i].source, matched[j].source)
 	})
 	return matched
 }
@@ -210,7 +230,7 @@ func processParentFact(f *sourceFact) bool {
 	if f.source.Kind == protocol.SourceHarness {
 		return true
 	}
-	return f.source.Kind == protocol.SourceLegacy && !isLegacySubagentBucket(f.source.Key)
+	return f.source.Kind == protocol.SourceLegacy && !protocol.IsLegacySubagentBucket(f.source.Key)
 }
 
 // clearProcessSubagents clears active subagents for the selected parent
@@ -233,7 +253,7 @@ func (r *Reducer) clearProcessSubagents(
 					continue
 				}
 			case protocol.SourceLegacy:
-				if f.source.Key != legacySubagentBucketKey(sessionID) {
+				if f.source.Key != protocol.LegacySubagentBucketKey(sessionID) {
 					continue
 				}
 			}
@@ -243,7 +263,7 @@ func (r *Reducer) clearProcessSubagents(
 		candidates = append(candidates, f)
 	}
 	sort.Slice(candidates, func(i, j int) bool {
-		return sourceIDLess(candidates[i].source, candidates[j].source)
+		return protocol.SourceIDLess(candidates[i].source, candidates[j].source)
 	})
 
 	cleared := make([]protocol.SourceID, 0, len(candidates))
@@ -273,7 +293,7 @@ func activeSubagentFact(f *sourceFact) bool {
 	case protocol.SourceSubagent:
 		return f.icon == "subagent"
 	case protocol.SourceLegacy:
-		return isLegacySubagentBucket(f.source.Key) && (f.agents > 0 || f.icon == "subagent")
+		return protocol.IsLegacySubagentBucket(f.source.Key) && (f.agents > 0 || f.icon == "subagent")
 	default:
 		return false
 	}
@@ -300,15 +320,4 @@ func processSettlementTime(at int64, f *sourceFact) int64 {
 		}
 	}
 	return 1
-}
-
-func sortSourceIDs(ids []protocol.SourceID) {
-	sort.Slice(ids, func(i, j int) bool { return sourceIDLess(ids[i], ids[j]) })
-}
-
-func sourceIDLess(a, b protocol.SourceID) bool {
-	if a.Kind != b.Kind {
-		return a.Kind < b.Kind
-	}
-	return a.Key < b.Key
 }

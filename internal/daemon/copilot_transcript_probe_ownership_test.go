@@ -57,17 +57,17 @@ func TestProbeCopilotTranscriptStop_PrefersInteractiveOverPipeChild(t *testing.T
 	settleCopilotTurnEndProbe(h, base)
 
 	h.stateMu.Lock()
-	interactive := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "copilot:sess-interactive"}]
-	pipe := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "copilot:sess-pipe"}]
+	interactive := factOf(h.store[42].Reducer, protocol.SourceID{Kind: protocol.SourceHarness, Key: "copilot:sess-interactive"})
+	pipe := factOf(h.store[42].Reducer, protocol.SourceID{Kind: protocol.SourceHarness, Key: "copilot:sess-pipe"})
 	h.stateMu.Unlock()
 	// The interactive session's terminal transcript was the one resolved, so its
 	// stale bolt was retired.
-	if interactive == nil || !interactive.acked {
+	if interactive == nil || !interactive.Acked {
 		t.Fatalf("interactive fact not retired (wrong session resolved?): %+v", interactive)
 	}
 	// The protected pipe-mode child fact is never masked by interactive
 	// supersession and keeps the tab non-stopped.
-	if pipe == nil || pipe.acked {
+	if pipe == nil || pipe.Acked {
 		t.Fatalf("pipe-mode child fact was retired, want preserved: %+v", pipe)
 	}
 	if eff, visible := windowEffective(t, h, 42); visible == "stop" || eff.Icon == "stop" {
@@ -118,7 +118,7 @@ func TestProbeCopilotTranscriptStop_PipeOnlyChildNeverProbed(t *testing.T) {
 	}
 	// No synthetic transcript-probe stop fact was created or refreshed.
 	h.stateMu.Lock()
-	probe := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceProbe, Key: copilotTranscriptStopProbeSource}]
+	probe := factOf(h.store[42].Reducer, protocol.SourceID{Kind: protocol.SourceProbe, Key: copilotTranscriptStopProbeSource})
 	h.stateMu.Unlock()
 	if probe != nil {
 		t.Fatalf("transcript-probe stop fact created for a pipe-only child: %+v", probe)
@@ -156,9 +156,9 @@ func TestProbeCopilotTranscriptStop_MaskingPipeChildPreservesParentMemoAndRecove
 	assertProbeMemo := func(want string) {
 		t.Helper()
 		h.stateMu.Lock()
-		probe := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceProbe, Key: copilotTranscriptStopProbeSource}]
+		probe := factOf(h.store[42].Reducer, protocol.SourceID{Kind: protocol.SourceProbe, Key: copilotTranscriptStopProbeSource})
 		h.stateMu.Unlock()
-		if probe == nil || probe.sessionID != want {
+		if probe == nil || probe.SessionID != want {
 			t.Fatalf("probe stop memo = %+v, want sessionID %q", probe, want)
 		}
 	}
@@ -189,7 +189,8 @@ func TestProbeCopilotTranscriptStop_MaskingPipeChildPreservesParentMemoAndRecove
 	// the sole visible contribution again, so the tab reverts to 🛑.
 	h.stateMu.Lock()
 	st := h.store[42]
-	st.Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "copilot:sess-pipe"}].acknowledge(base.Unix())
+	pipeSource := protocol.SourceID{Kind: protocol.SourceHarness, Key: "copilot:sess-pipe"}
+	st.Reducer.ExpireFact(pipeSource, factOf(st.Reducer, pipeSource).Seq, base.Unix())
 	st.ShadowSeq++
 	st.Reducer.Compact(base.Unix())
 	h.publishEffectiveLocked(42, st, st.Reducer.Reduce(base.Unix()))
@@ -211,9 +212,9 @@ func TestProbeCopilotTranscriptStop_MaskingPipeChildPreservesParentMemoAndRecove
 		t.Fatalf("effective = %+v visible %q, want the interactive parent's bolt reinstated", eff, visible)
 	}
 	h.stateMu.Lock()
-	interactive := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "copilot:sess-interactive"}]
+	interactive := factOf(h.store[42].Reducer, protocol.SourceID{Kind: protocol.SourceHarness, Key: "copilot:sess-interactive"})
 	h.stateMu.Unlock()
-	if interactive == nil || interactive.acked {
+	if interactive == nil || interactive.Acked {
 		t.Fatalf("interactive parent not reinstated by recovery: %+v", interactive)
 	}
 }

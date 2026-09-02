@@ -15,6 +15,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 var invariantNow = time.Unix(1_700_000_000, 0)
@@ -121,14 +122,14 @@ func TestInvariantASLActiveWorkMustBeVisible(t *testing.T) {
 		desired string
 		want    bool
 	}{
-		{"turn showing empty fails", daemon.ASLPhaseTurn, "", true},
-		{"verification showing stop fails", daemon.ASLPhaseVerification, "stop", true},
-		{"turn showing bolt passes", daemon.ASLPhaseTurn, "bolt", false},
-		{"between showing empty passes", daemon.ASLPhaseBetween, "", false},
-		{"paused showing empty passes", daemon.ASLPhasePaused, "", false},
+		{"turn showing empty fails", state.ASLPhaseTurn, "", true},
+		{"verification showing stop fails", state.ASLPhaseVerification, "stop", true},
+		{"turn showing bolt passes", state.ASLPhaseTurn, "bolt", false},
+		{"between showing empty passes", state.ASLPhaseBetween, "", false},
+		{"paused showing empty passes", state.ASLPhasePaused, "", false},
 		// A waiting run is blocked on a human, not executing: the active-work
 		// invariant deliberately says nothing about what it renders.
-		{"waiting showing empty passes", daemon.ASLPhaseWaiting, "", false},
+		{"waiting showing empty passes", state.ASLPhaseWaiting, "", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

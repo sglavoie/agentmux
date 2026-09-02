@@ -1,4 +1,4 @@
-package daemon
+package state
 
 // This file is the reducer's persistence seam. The fact map itself stays
 // unexported; schema-v4 user-var serialization and startup restoration go
@@ -127,6 +127,10 @@ func restoredHarnessProcessIdentity(s protocol.SourceFactSnapshot) protocol.Harn
 // daemon's configured thresholds afterward.
 func (r *Reducer) SetConfig(cfg ReducerConfig) { r.cfg = cfg }
 
+// Config returns the thresholds currently bound to the reducer, so a caller
+// that re-binds them (the restore path) can prove the binding took.
+func (r *Reducer) Config() ReducerConfig { return r.cfg }
+
 // RekeyMigratedFacts moves facts persisted under the v1 migration key onto the
 // window's live per-window key. Deserialization does not know the window ID,
 // but live unstamped events key by window — without the rekey a migrated
@@ -144,7 +148,7 @@ func (r *Reducer) RekeyMigratedFacts(windowID int) bool {
 		if f == nil {
 			continue
 		}
-		to := protocol.SourceID{Kind: kind, Key: windowKey(windowID)}
+		to := protocol.SourceID{Kind: kind, Key: protocol.WindowKey(windowID)}
 		if existing := r.facts[to]; existing != nil && existing.seq >= f.seq {
 			delete(r.facts, from)
 			continue
@@ -224,10 +228,10 @@ func (r *Reducer) Compact(now int64) int {
 			// Acknowledged tombstone.
 		case id.Kind == protocol.SourceSubagent && f.icon != "error":
 			// Completed subagent: hold through the straggler window, then drop.
-			if now-f.terminalAt < subagentStopRetentionSeconds {
+			if now-f.terminalAt < SubagentStopRetentionSeconds {
 				continue
 			}
-		case f.icon != "error" && tombstoneRetentionSeconds > 0 && now-f.terminalAt >= tombstoneRetentionSeconds:
+		case f.icon != "error" && TombstoneRetentionSeconds > 0 && now-f.terminalAt >= TombstoneRetentionSeconds:
 			// Expired tombstone (sticky failures are exempt).
 		default:
 			continue
@@ -238,8 +242,8 @@ func (r *Reducer) Compact(now int64) int {
 
 	retained := candidates[:0]
 	for _, candidate := range candidates {
-		if acknowledgedFactRetentionSeconds > 0 &&
-			now-candidate.f.ackedAt >= acknowledgedFactRetentionSeconds {
+		if AcknowledgedFactRetentionSeconds > 0 &&
+			now-candidate.f.ackedAt >= AcknowledgedFactRetentionSeconds {
 			delete(r.facts, candidate.id)
 			removed++
 			continue
@@ -259,7 +263,7 @@ func (r *Reducer) Compact(now int64) int {
 		}
 		return left.id.Key < right.id.Key
 	})
-	for len(retained) > maxAcknowledgedFacts {
+	for len(retained) > MaxAcknowledgedFacts {
 		delete(r.facts, retained[0].id)
 		retained = retained[1:]
 		removed++

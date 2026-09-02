@@ -8,11 +8,12 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 func TestReducerCurrentConversationUsesNewestLiveParentHarnessFact(t *testing.T) {
-	r := NewReducer(ReducerConfig{})
+	r := state.NewReducer(state.ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{
 		Source:    protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:parent-1"},
 		Action:    "active",
@@ -54,7 +55,7 @@ func TestReducerCurrentConversationUsesNewestLiveParentHarnessFact(t *testing.T)
 
 func TestReducerCurrentConversationRejectsExpiredAndMalformedFacts(t *testing.T) {
 	t.Run("expired terminal", func(t *testing.T) {
-		r := NewReducer(ReducerConfig{})
+		r := state.NewReducer(state.ReducerConfig{})
 		r.Apply(protocol.ReducerEvent{
 			Source:    protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:old"},
 			Action:    "stop",
@@ -62,13 +63,13 @@ func TestReducerCurrentConversationRejectsExpiredAndMalformedFacts(t *testing.T)
 			Seq:       1,
 			At:        10,
 		})
-		if got, ok := r.CurrentConversation(10 + tombstoneRetentionSeconds); ok {
+		if got, ok := r.CurrentConversation(10 + state.TombstoneRetentionSeconds); ok {
 			t.Fatalf("expired terminal fact produced %+v", got)
 		}
 	})
 
 	t.Run("source key must agree with fact", func(t *testing.T) {
-		r := NewReducer(ReducerConfig{})
+		r := state.NewReducer(state.ReducerConfig{})
 		r.Apply(protocol.ReducerEvent{
 			Source:    protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:one"},
 			Action:    "active",
@@ -84,7 +85,7 @@ func TestReducerCurrentConversationRejectsExpiredAndMalformedFacts(t *testing.T)
 
 func TestConversationSurvivesDurableStateAndDaemonRestore(t *testing.T) {
 	now := time.Now()
-	r := NewReducer(ReducerConfig{})
+	r := state.NewReducer(state.ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{
 		Source:    protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:thread-7"},
 		Action:    "active",
@@ -92,7 +93,7 @@ func TestConversationSurvivesDurableStateAndDaemonRestore(t *testing.T) {
 		Seq:       1,
 		At:        now.Unix(),
 	})
-	encoded, err := (WindowState{Reducer: r}).MarshalUserVar()
+	encoded, err := (state.WindowState{Reducer: r}).MarshalUserVar()
 	if err != nil {
 		t.Fatalf("MarshalUserVar: %v", err)
 	}
@@ -100,7 +101,7 @@ func TestConversationSurvivesDurableStateAndDaemonRestore(t *testing.T) {
 		t.Fatalf("durable state omitted conversation identity: %s", encoded)
 	}
 
-	var restored WindowState
+	var restored state.WindowState
 	if err := restored.UnmarshalUserVar(encoded); err != nil {
 		t.Fatalf("UnmarshalUserVar: %v", err)
 	}
@@ -121,7 +122,7 @@ func TestConversationSurvivesDurableStateAndDaemonRestore(t *testing.T) {
 }
 
 func TestConversationProjectionNeverTrustsDurableCacheWithoutFacts(t *testing.T) {
-	var state WindowState
+	var state state.WindowState
 	if err := state.UnmarshalUserVar(`{"v":2,"c":{"harness":"claude","session_id":"stale"}}`); err != nil {
 		t.Fatalf("UnmarshalUserVar: %v", err)
 	}

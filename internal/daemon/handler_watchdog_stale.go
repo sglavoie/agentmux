@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -92,15 +93,14 @@ func (h *Handler) sweepStale(now time.Time, _ []kitty.OSWindow, credit time.Dura
 		windowStale := false
 		if staleThresholdsEnabled && (action == "active" || action == "subagent" || action == "compact") {
 			if threshold := h.resolveThreshold(account, action); threshold > 0 {
-				idle := advanceWindowIdle(st, now, credit, gapTick)
+				idle := st.AdvanceIdle(now, credit, gapTick)
 				// An authoritative ASL turn or verification lease is live
 				// evidence the loop is still working this window; the bolt is
 				// not cleared out from under it.
 				windowStale = idle >= threshold && (action != "active" || !aslExecuting)
 			}
 		} else if staleThresholdsEnabled {
-			st.watchdogSeeded = false
-			st.watchdogIdle = 0
+			st.ResetIdle()
 		}
 
 		switch {
@@ -117,7 +117,7 @@ func (h *Handler) sweepStale(now time.Time, _ []kitty.OSWindow, credit time.Dura
 			// detail-pane history survives until the Kitty window closes.
 			st.LastAction = ""
 			st.LastActiveEvent = ""
-			st.CopilotToolPermissionState = copilotToolPermissionNone
+			st.CopilotToolPermissionState = state.CopilotToolPermissionNone
 			st.SubagentCount = 0
 			st.DesiredIcon = ""
 			st.StateSet = true
@@ -135,7 +135,7 @@ func (h *Handler) sweepStale(now time.Time, _ []kitty.OSWindow, credit time.Dura
 				st.BusySince = time.Time{}
 			}
 			h.appendWatchdogEventLocked(windowID, windowID, now, eventWatchdogStale, "stale", "",
-				"no activity for "+st.watchdogIdle.Truncate(time.Second).String()+
+				"no activity for "+st.IdleDuration().Truncate(time.Second).String()+
 					" (threshold "+h.resolveThreshold(account, action).String()+")")
 			h.syncRendererMetadataLocked(windowID)
 			h.markWindowDirtyLocked(windowID)
@@ -201,7 +201,7 @@ func staleActionForIcon(icon string) string {
 // keep a healthy run's fact fresh); it then loses ⚡ but keeps 🔁 — only a
 // finish event or two-miss reconciliation releases the lease. Callers hold
 // stateMu.
-func (h *Handler) expireStaleFactsLocked(windowID int, st *WindowState, now time.Time, credit time.Duration, gapTick bool) (expired int, aslExecuting bool) {
+func (h *Handler) expireStaleFactsLocked(windowID int, st *state.WindowState, now time.Time, credit time.Duration, gapTick bool) (expired int, aslExecuting bool) {
 	if st.Reducer == nil {
 		return 0, false
 	}
@@ -220,10 +220,10 @@ func (h *Handler) expireStaleFactsLocked(windowID int, st *WindowState, now time
 		}
 		seen[src] = true
 		threshold := h.resolveThreshold(st.LastAccount, action)
-		idle := advanceFactIdle(st, fact, now, credit, gapTick)
+		idle := st.AdvanceFactIdle(fact, now, credit, gapTick)
 		factStale := threshold > 0 && idle >= threshold
 		if fact.Kind == protocol.SourceASL && fact.LeaseLive && !factStale &&
-			(fact.Phase == ASLPhaseTurn || fact.Phase == ASLPhaseVerification) {
+			(fact.Phase == state.ASLPhaseTurn || fact.Phase == state.ASLPhaseVerification) {
 			aslExecuting = true
 		}
 		if factStale {
@@ -233,11 +233,7 @@ func (h *Handler) expireStaleFactsLocked(windowID int, st *WindowState, now time
 	// Accumulators for facts that no longer contribute an active-class icon
 	// (retired, acked, or advanced to another state) are dropped so the map
 	// cannot grow with dead sources.
-	for src := range st.watchdogFactIdle {
-		if !seen[src] {
-			delete(st.watchdogFactIdle, src)
-		}
-	}
+	st.RetainFactIdle(seen)
 	for _, p := range expiries {
 		if aslExecuting && p.fact.Icon == "bolt" && p.fact.Kind != protocol.SourceASL {
 			continue
@@ -245,7 +241,7 @@ func (h *Handler) expireStaleFactsLocked(windowID int, st *WindowState, now time
 		if !st.Reducer.ExpireFact(p.fact.Source(), p.fact.Seq, now.Unix()) {
 			continue
 		}
-		delete(st.watchdogFactIdle, p.fact.Source())
+		st.ForgetFactIdle(p.fact.Source())
 		expired++
 		h.appendWatchdogEventLocked(windowID, p.fact.OriginWindowID, now, eventSourceExpired, p.fact.Action,
 			string(p.fact.Kind)+":"+p.fact.Key,

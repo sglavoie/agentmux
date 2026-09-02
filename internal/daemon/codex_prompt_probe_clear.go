@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -94,7 +95,7 @@ func (h *Handler) applyCodexClearObservation(
 	h.touchWindowMetadataLocked(req)
 	st := h.ensureWindowStateLocked(windowID)
 	st.Muted = titleParts.Muted || userVars.Mute != ""
-	st.CopilotToolPermissionState = copilotToolPermissionNone
+	st.CopilotToolPermissionState = state.CopilotToolPermissionNone
 	st.SubagentCount = 0
 	st.NotifiedStale = false
 	st.ContextLimitNotified = false
@@ -121,11 +122,11 @@ func (h *Handler) applyCodexClearObservation(
 	}
 
 	if st.Reducer == nil {
-		st.Reducer = NewReducer(h.reducerCfg)
+		st.Reducer = state.NewReducer(h.reducerCfg)
 	}
 	st.ShadowSeq++
 	st.Reducer.Apply(protocol.ReducerEvent{
-		Source: userActionSource(),
+		Source: protocol.UserActionSource(),
 		Action: "user_clear",
 		Seq:    st.ShadowSeq,
 		At:     now.Unix(),

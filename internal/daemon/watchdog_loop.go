@@ -14,8 +14,6 @@ import (
 	"context"
 	"log/slog"
 	"time"
-
-	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 const (
@@ -33,14 +31,6 @@ const (
 type accountIdle struct {
 	anchor time.Time
 	idle   time.Duration
-}
-
-// factIdle is the watchdog's per-fact idle accumulation entry. seq/at pin the
-// fact revision the accumulation belongs to; any advance resets it.
-type factIdle struct {
-	seq  uint64
-	at   int64
-	idle time.Duration
 }
 
 // runWatchdog drives staleness evaluation every watchdogInterval. Elapsed time
@@ -103,51 +93,4 @@ func (h *Handler) refreshAfterGap(now time.Time) {
 	}
 	h.publishSnapshotWithReceipts(windows, reducerReceipts, now)
 	h.ReconcileASLLeases(now, windows)
-}
-
-// advanceWindowIdle advances a window's scalar idle accumulator and returns
-// the accumulated idle duration. The accumulation is anchored to the window's
-// Activity timestamp: fresh activity re-anchors and reseeds. A first
-// observation seeds from the entry's wall-clock age — a one-shot sweep over
-// pre-aged state (tests, a restart restoring an old bolt) expires it
-// immediately — except on a gap tick, where wall age is exactly the evidence
-// that cannot be trusted. Callers hold stateMu.
-func advanceWindowIdle(st *WindowState, now time.Time, credit time.Duration, gapTick bool) time.Duration {
-	if !st.watchdogSeeded || !st.Activity.Equal(st.watchdogAnchor) {
-		st.watchdogSeeded = true
-		st.watchdogAnchor = st.Activity
-		st.watchdogIdle = 0
-		if !gapTick {
-			if age := now.Sub(st.Activity); age > 0 {
-				st.watchdogIdle = age
-			}
-		}
-		return st.watchdogIdle
-	}
-	st.watchdogIdle += credit
-	return st.watchdogIdle
-}
-
-// advanceFactIdle advances one source fact's idle accumulator, with the same
-// seeding rules as advanceWindowIdle. Any fact advance (new sequence or
-// emitted timestamp — e.g. an ASL heartbeat) resets the accumulation. Callers
-// hold stateMu.
-func advanceFactIdle(st *WindowState, fact protocol.SourceFactSnapshot, now time.Time, credit time.Duration, gapTick bool) time.Duration {
-	if st.watchdogFactIdle == nil {
-		st.watchdogFactIdle = make(map[protocol.SourceID]*factIdle)
-	}
-	src := fact.Source()
-	entry := st.watchdogFactIdle[src]
-	if entry == nil || entry.seq != fact.Seq || entry.at != fact.At {
-		entry = &factIdle{seq: fact.Seq, at: fact.At}
-		if !gapTick {
-			if age := now.Unix() - fact.At; age > 0 {
-				entry.idle = time.Duration(age) * time.Second
-			}
-		}
-		st.watchdogFactIdle[src] = entry
-		return entry.idle
-	}
-	entry.idle += credit
-	return entry.idle
 }

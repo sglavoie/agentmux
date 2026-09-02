@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -219,7 +220,7 @@ func TestFaultCrashBetweenPersistAndTitleRestoresDesiredState(t *testing.T) {
 // accumulated state.
 func TestFaultDegradedStartupStillAppliesEvents(t *testing.T) {
 	h := newTestHandler()
-	h.SetReducerConfig(ReducerConfig{GuardDuration: 1})
+	h.SetReducerConfig(state.ReducerConfig{GuardDuration: 1})
 	release := make(chan struct{})
 	var releaseOnce sync.Once
 	fake := &fakeKittyClient{windows: fakeOSWindowsWithTab(42, "W:api")}
@@ -263,11 +264,11 @@ func TestFaultDegradedStartupStillAppliesEvents(t *testing.T) {
 // while their valid siblings survive, and the healthy window is untouched.
 func TestFaultMalformedPersistedStateIsolatedPerWindow(t *testing.T) {
 	h := newTestHandler()
-	h.SetReducerConfig(ReducerConfig{GuardDuration: 1})
+	h.SetReducerConfig(state.ReducerConfig{GuardDuration: 1})
 
-	valid := NewReducer(ReducerConfig{})
+	valid := state.NewReducer(state.ReducerConfig{})
 	valid.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "permission", Seq: 3, At: time.Now().Unix()})
-	healthy, err := WindowState{LastAction: "permission", Reducer: valid, Effective: valid.Reduce(time.Now().Unix())}.MarshalUserVar()
+	healthy, err := state.WindowState{LastAction: "permission", Reducer: valid, Effective: valid.Reduce(time.Now().Unix())}.MarshalUserVar()
 	if err != nil {
 		t.Fatalf("MarshalUserVar: %v", err)
 	}

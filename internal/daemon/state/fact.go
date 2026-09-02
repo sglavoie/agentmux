@@ -1,13 +1,14 @@
-package daemon
+package state
 
 import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
-// reducerActionIcon maps an action to its icon state under the reducer. It
-// mirrors protocol.IconState for real states but omits the loop_marker preserve
-// hack — the reducer models the loop as a lease, not an icon action.
-func reducerActionIcon(action string) string {
+// ActionIcon maps an action to its icon state under the reducer. It mirrors
+// protocol.IconState for real states but omits the loop_marker preserve hack —
+// the reducer models the loop as a lease, not an icon action, so this is the
+// projection any caller reasoning about a reducer outcome must use.
+func ActionIcon(action string) string {
 	switch action {
 	case "active":
 		return "bolt"
@@ -28,13 +29,6 @@ func reducerActionIcon(action string) string {
 	default: // idle, clear, user_clear, unknown
 		return ""
 	}
-}
-
-// isTerminalAction reports whether an action ends the current turn's activity.
-// stop and stop_failure both terminate; stop_failure is additionally sticky
-// (only a user_clear or a new turn dislodges it).
-func isTerminalAction(action string) bool {
-	return action == "stop" || action == "stop_failure"
 }
 
 // sourceFact is one source's last-known state inside a Reducer.

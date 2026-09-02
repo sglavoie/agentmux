@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -23,7 +24,7 @@ func (h *Handler) recordCodexPromptProbeStateLocked(
 	classification CodexPromptClassification,
 	defaultCodexOwnership bool,
 	originWindowID int,
-) (before, effective EffectiveState) {
+) (before, effective state.EffectiveState) {
 	st := h.ensureWindowStateLocked(windowID)
 	before = st.Effective
 	st.Activity = now
@@ -53,7 +54,7 @@ func (h *Handler) recordCodexPromptProbeStateLocked(
 	// fires on states it may overwrite), so the event is marked as a prompt —
 	// it recovers a terminal fact the same way the legacy prompt bypass did.
 	if st.Reducer == nil {
-		st.Reducer = NewReducer(h.reducerCfg)
+		st.Reducer = state.NewReducer(h.reducerCfg)
 	}
 	st.ShadowSeq++
 	st.Reducer.Apply(protocol.ReducerEvent{

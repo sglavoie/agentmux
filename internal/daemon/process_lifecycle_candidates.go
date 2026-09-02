@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 // collectProcessLifecycleCandidates snapshots only ordinary, unacknowledged
@@ -37,7 +38,7 @@ func (h *Handler) collectProcessLifecycleCandidates() []processLifecycleCandidat
 			groups[identity] = append(groups[identity], fact)
 		}
 		for identity, facts := range groups {
-			pipeMode, consistent := lifecycleGroupPipeMode(facts)
+			pipeMode, consistent := state.LifecycleGroupPipeMode(facts)
 			if !consistent || !lifecycleGroupCanChange(st.PendingReset, identity, pipeMode, facts, allFacts) {
 				continue
 			}
@@ -49,7 +50,7 @@ func (h *Handler) collectProcessLifecycleCandidates() []processLifecycleCandidat
 				})
 			}
 			sort.Slice(factReceipts, func(i, j int) bool {
-				return sourceIDLess(factReceipts[i].source, factReceipts[j].source)
+				return protocol.SourceIDLess(factReceipts[i].source, factReceipts[j].source)
 			})
 			candidates = append(candidates, processLifecycleCandidate{
 				windowID: windowID, receipt: st.ShadowSeq, identity: identity,
@@ -84,7 +85,7 @@ func (h *Handler) appendProcessLifecycleEventLocked(
 	identity protocol.HarnessProcessIdentity,
 	pipeMode bool,
 	terminalHookEvidence string,
-	result HarnessProcessExitResult,
+	result state.HarnessProcessExitResult,
 	sources []protocol.ProcessLifecycleSourceEvidence,
 	primary protocol.ProcessLifecycleSourceEvidence,
 	renderGeneration uint64,
@@ -129,7 +130,7 @@ func processLifecycleMode(pipeMode bool) string {
 
 func processLifecycleSources(
 	candidate processLifecycleCandidate,
-	result HarnessProcessExitResult,
+	result state.HarnessProcessExitResult,
 	facts []protocol.SourceFactSnapshot,
 ) ([]protocol.ProcessLifecycleSourceEvidence, protocol.ProcessLifecycleSourceEvidence, string) {
 	factBySource := make(map[protocol.SourceID]protocol.SourceFactSnapshot, len(facts))
@@ -166,7 +167,7 @@ func processLifecycleSources(
 	for source := range affected {
 		ids = append(ids, source)
 	}
-	sortSourceIDs(ids)
+	protocol.SortSourceIDs(ids)
 	sources := make([]protocol.ProcessLifecycleSourceEvidence, 0, len(ids))
 	sessionID := ""
 	for _, source := range ids {
