@@ -12,6 +12,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/process"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hooks"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -19,7 +20,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
-var spawnDaemonDetached = daemon.SpawnDetached
+var spawnDaemonDetached = process.SpawnDetached
 
 // sharedActionRegistry is intentionally package-level and stateless.  It
 // gives direct keyboard paths the same handlers as the actions overlay and

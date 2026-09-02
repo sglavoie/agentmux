@@ -145,6 +145,21 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   stays in the root, which owns the reducer, the renderer, the notifier, and
   every harness probe adapter. Process launch and control belong to
   `internal/daemon/process`, not here.
+- `internal/daemon/process`: the daemon's own life as an operating-system
+  process — how a new daemon is launched (`amx daemon start` in a fresh session
+  with the platform detach attributes), how it is cut loose from the terminal
+  that launched it (stdio redirected into the private bootstrap log, and the
+  `AMX_DAEMON_DETACHED`/`AMX_DAEMON_LAUNCH_ID`/`AMX_DAEMON_BOOTSTRAP_LOG` launch
+  handshake the child reads back), how exactly one daemon is allowed to own a
+  socket (the flock single-instance lock and the client-side auto-start lock),
+  and when a running daemon has been superseded by a newer `amx` binary. It is
+  the counterpart of `internal/daemon/probes`: probes observes processes the
+  daemon did not start, this package starts and owns the one it did. Like
+  protocol, state, rendering, events, activity, and probes it must never import
+  the daemon root, and it holds no IPC transport and no process-table
+  inspection — the retry/deadline path around a spawn stays with the client, and
+  reconciling an observed harness exit into window state stays in the root with
+  the reducer.
 - `internal/diagnostics`: private fail-open causal journals, operational and
   native logs, temporary raw captures, and bounded diagnostic storage.
 - `internal/debugger`: offline-first status, query, explanation, bundle, and

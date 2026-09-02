@@ -16,6 +16,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
+	"github.com/sglavoie/agentmux/internal/daemon/process"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
@@ -44,17 +45,17 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 		return fmt.Errorf("daemon: creating socket directory: %w", err)
 	}
 
-	slog.Info("daemon: acquiring single-instance lock", "socket", socketPath, "lock", daemonLockPath(socketPath))
-	lockFile, err := acquireDaemonLock(socketPath)
+	slog.Info("daemon: acquiring single-instance lock", "socket", socketPath, "lock", process.DaemonLockPath(socketPath))
+	lockFile, err := process.AcquireDaemonLock(socketPath)
 	if err != nil {
-		if errors.Is(err, errDaemonAlreadyRunning) {
-			slog.Info("daemon: duplicate start exiting", "socket", socketPath, "lock", daemonLockPath(socketPath))
+		if errors.Is(err, process.ErrDaemonAlreadyRunning) {
+			slog.Info("daemon: duplicate start exiting", "socket", socketPath, "lock", process.DaemonLockPath(socketPath))
 			return nil
 		}
-		return fmt.Errorf("daemon: acquiring lock %s: %w", daemonLockPath(socketPath), err)
+		return fmt.Errorf("daemon: acquiring lock %s: %w", process.DaemonLockPath(socketPath), err)
 	}
-	defer releaseDaemonLock(socketPath, lockFile)
-	slog.Info("daemon: acquired single-instance lock", "socket", socketPath, "lock", daemonLockPath(socketPath))
+	defer process.ReleaseDaemonLock(socketPath, lockFile)
+	slog.Info("daemon: acquired single-instance lock", "socket", socketPath, "lock", process.DaemonLockPath(socketPath))
 
 	recorder, recorderErr := newLifecycleRecorder(cfg)
 	if recorderErr != nil {

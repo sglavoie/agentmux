@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/process"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
@@ -57,7 +58,7 @@ func newLifecycleRecorder(cfg *config.Config) (*lifecycleRecorder, error) {
 		return nil, err
 	}
 	seed := diagnostics.NewEnvelope("daemon.lifecycle")
-	runID := os.Getenv(daemonLaunchIDEnv)
+	runID := os.Getenv(process.LaunchIDEnv)
 	if runID == "" {
 		runID = fmt.Sprintf("daemon-%d-%d", os.Getpid(), time.Now().UnixNano())
 	}

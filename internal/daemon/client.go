@@ -15,6 +15,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/daemon/process"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -81,7 +82,7 @@ var sendDeadline = normalAckBudget
 var autoStartDeadline = coldStartBudget
 
 var autoStartRetryDelay = 50 * time.Millisecond
-var spawnDetached = SpawnDetached
+var spawnDetached = process.SpawnDetached
 
 const restartSocketPollCount = 20
 
@@ -249,21 +250,6 @@ func (c *Client) healthBefore(deadline time.Time) Health {
 		ASLHookDelivery: resp.ASLHookDelivery,
 		ScreenPatterns:  resp.ScreenPatterns,
 	}
-}
-
-func daemonSocketOlderThanBinary(socketPath, amxBin string) bool {
-	if amxBin == "" {
-		return false
-	}
-	socketInfo, err := os.Stat(socketPath)
-	if err != nil {
-		return false
-	}
-	binInfo, err := os.Stat(amxBin)
-	if err != nil {
-		return false
-	}
-	return binInfo.ModTime().After(socketInfo.ModTime())
 }
 
 // ShutdownAndWait asks a live daemon to stop and waits until its original

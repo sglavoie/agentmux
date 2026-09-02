@@ -7,13 +7,8 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/process"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
-)
-
-const (
-	daemonDetachedEnv  = "AMX_DAEMON_DETACHED"
-	daemonLaunchIDEnv  = "AMX_DAEMON_LAUNCH_ID"
-	daemonBootstrapEnv = "AMX_DAEMON_BOOTSTRAP_LOG"
 )
 
 // NewOperationalLogger returns the durable structured daemon logger. A
@@ -42,8 +37,8 @@ func NewOperationalLogger(cfg config.DiagnosticsConfig, debug, foreground bool) 
 	handler := slog.NewJSONHandler(output, &slog.HandlerOptions{Level: level, AddSource: debug})
 	logger := slog.New(handler).With(
 		"component", "daemon",
-		"launch_id", os.Getenv(daemonLaunchIDEnv),
-		"bootstrap_log", os.Getenv(daemonBootstrapEnv),
+		"launch_id", os.Getenv(process.LaunchIDEnv),
+		"bootstrap_log", os.Getenv(process.BootstrapEnv),
 		"build", buildinfo.Current(),
 	)
 	return logger, writer, paths.DaemonDir, nil

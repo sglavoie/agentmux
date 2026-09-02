@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/process"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -123,7 +124,7 @@ func TestRun_RemovesSocketOnShutdown(t *testing.T) {
 	if _, err := os.Stat(socketPath); !os.IsNotExist(err) {
 		t.Fatalf("socket file should have been removed; stat err = %v", err)
 	}
-	if _, err := os.Stat(daemonLockPath(socketPath)); !os.IsNotExist(err) {
+	if _, err := os.Stat(process.DaemonLockPath(socketPath)); !os.IsNotExist(err) {
 		t.Fatalf("lock file should have been removed; stat err = %v", err)
 	}
 }
@@ -334,11 +335,11 @@ func TestRun_StaleSocketIsNotRemovedWhenLockHeld(t *testing.T) {
 		t.Fatalf("seed socket placeholder: %v", err)
 	}
 
-	lockFile, err := acquireDaemonLock(socketPath)
+	lockFile, err := process.AcquireDaemonLock(socketPath)
 	if err != nil {
 		t.Fatalf("acquire daemon lock: %v", err)
 	}
-	defer releaseDaemonLock(socketPath, lockFile)
+	defer process.ReleaseDaemonLock(socketPath, lockFile)
 
 	cfg := &config.Config{}
 	cfg.Defaults.GuardDuration = 1

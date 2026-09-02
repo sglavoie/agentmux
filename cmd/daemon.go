@@ -17,6 +17,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/process"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	ccerrors "github.com/sglavoie/agentmux/internal/errors"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -42,7 +43,7 @@ var daemonStartCmd = &cobra.Command{
 		logger, closer, logDir, err := daemon.NewOperationalLogger(
 			cfg.Defaults.Diagnostics,
 			debugEnabled(),
-			os.Getenv("AMX_DAEMON_DETACHED") != "1",
+			os.Getenv(process.DetachedEnv) != "1",
 		)
 		if err != nil {
 			return fmt.Errorf("initializing daemon logging: %w", err)

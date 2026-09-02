@@ -5,13 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
-	"strconv"
-	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/process"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
 type observedRequestSender struct {
@@ -92,14 +89,14 @@ func (c *Client) SendWithAutoStartObserved(req protocol.Request, amxBin string, 
 	var autoStartLock *os.File
 	defer func() {
 		if autoStartLock != nil {
-			releaseAutoStartLock(autoStartLock)
+			process.ReleaseAutoStartLock(autoStartLock)
 		}
 	}()
 
-	if daemonSocketOlderThanBinary(c.socketPath, amxBin) {
-		lock, lockErr := acquireAutoStartLock(c.socketPath)
+	if process.SocketOlderThanBinary(c.socketPath, amxBin) {
+		lock, lockErr := process.AcquireAutoStartLock(c.socketPath)
 		if lockErr != nil {
-			if !errors.Is(lockErr, errAutoStartInProgress) {
+			if !errors.Is(lockErr, process.ErrAutoStartInProgress) {
 				return protocol.Response{}, fmt.Errorf("daemon auto-start lock failed: %w", lockErr)
 			}
 			observeDeliveryStage(observer, DeliveryStageDaemonAutostart, "waiting", "another_client_starting", time.Now())
@@ -144,9 +141,9 @@ func (c *Client) SendWithAutoStartObserved(req protocol.Request, amxBin string, 
 	// spawnDetached and fall straight into the retry loop instead.
 	if !restarted {
 		if autoStartLock == nil {
-			lock, lockErr := acquireAutoStartLock(c.socketPath)
+			lock, lockErr := process.AcquireAutoStartLock(c.socketPath)
 			if lockErr != nil {
-				if !errors.Is(lockErr, errAutoStartInProgress) {
+				if !errors.Is(lockErr, process.ErrAutoStartInProgress) {
 					return protocol.Response{}, fmt.Errorf("daemon auto-start lock failed: %w", lockErr)
 				}
 			} else {
@@ -196,55 +193,4 @@ func (c *Client) ExportEvents(windowID int) (protocol.EventsExport, error) {
 		EventsByWindow: resp.EventsByWindow,
 		WindowMetadata: resp.WindowMetadata,
 	}, nil
-}
-
-// SpawnDetached starts `amxBin daemon start` in a new session. Stdio is
-// detached from the caller and inherited by a private bootstrap log when the
-// diagnostics directory is available. Diagnostics setup is fail-open: if the
-// private log cannot be created, the daemon is still started with nil stdio.
-func SpawnDetached(amxBin string) error {
-	cmd := exec.Command(amxBin, "daemon", "start")
-	cmd.SysProcAttr = detachSysProcAttr()
-
-	var bootstrap *os.File
-	if paths, err := diagnostics.DefaultPaths(); err == nil {
-		launchID := strconv.Itoa(os.Getpid()) + "-" + strconv.FormatInt(time.Now().UnixNano(), 10)
-		if file, bootstrapPath, openErr := diagnostics.OpenBootstrapLog(paths, launchID); openErr == nil {
-			bootstrap = file
-			cmd.Stdout = bootstrap
-			cmd.Stderr = bootstrap
-			cmd.Env = environmentWithOverrides(os.Environ(),
-				daemonDetachedEnv+"=1",
-				daemonLaunchIDEnv+"="+launchID,
-				daemonBootstrapEnv+"="+bootstrapPath,
-			)
-		}
-	}
-	if err := cmd.Start(); err != nil {
-		if bootstrap != nil {
-			return errors.Join(err, bootstrap.Close())
-		}
-		return err
-	}
-	_ = cmd.Process.Release()
-	if bootstrap != nil {
-		_ = bootstrap.Close()
-	}
-	return nil
-}
-
-func environmentWithOverrides(base []string, overrides ...string) []string {
-	keys := make(map[string]bool, len(overrides))
-	for _, override := range overrides {
-		key, _, _ := strings.Cut(override, "=")
-		keys[key] = true
-	}
-	result := make([]string, 0, len(base)+len(overrides))
-	for _, entry := range base {
-		key, _, _ := strings.Cut(entry, "=")
-		if !keys[key] {
-			result = append(result, entry)
-		}
-	}
-	return append(result, overrides...)
 }
