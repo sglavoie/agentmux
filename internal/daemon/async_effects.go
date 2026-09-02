@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/eventlog"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
@@ -21,7 +22,7 @@ func (h *Handler) linkRequestRenderGenerationLocked(req protocol.Request, genera
 		return
 	}
 	st := h.ensureWindowStateLocked(req.WindowID)
-	event := eventByReferenceLocked(st, req.EventRef)
+	event := eventlog.ByReference(st, req.EventRef)
 	h.linkSessionEventRenderGenerationLocked(req.WindowID, st, event, req.TraceID, req.RequestID, req.SourceEventID, generation)
 }
 
@@ -49,45 +50,10 @@ func (h *Handler) markRenderStageLocked(windowID int, generation uint64, stage, 
 	}
 	trace := rendering.MarkStage(st, generation, stage, outcome, reason, coalesce)
 	if rendering.StageCompletes(stage) {
-		h.finishRenderEventsLocked(st, trace)
+		eventlog.FinishRender(st, trace)
 	}
 	h.syncRendererMetadataLocked(windowID)
 	return trace
-}
-
-func (h *Handler) finishRenderEventsLocked(st *state.WindowState, trace protocol.RenderGenerationTrace) {
-	if st == nil {
-		return
-	}
-	traceIDs := make(map[string]struct{}, len(trace.TraceIDs))
-	requestIDs := make(map[string]struct{}, len(trace.RequestIDs))
-	for _, id := range trace.TraceIDs {
-		traceIDs[id] = struct{}{}
-	}
-	for _, id := range trace.RequestIDs {
-		requestIDs[id] = struct{}{}
-	}
-	for i := range st.EventLog {
-		event := &st.EventLog[i]
-		// Delivery retries retain their logical request ID for correlation, but
-		// the replay row did not cause the original request's render. Do not let
-		// request-ID matching manufacture downstream causality for that row.
-		if isDuplicateReplay(event) {
-			continue
-		}
-		_, traceMatch := traceIDs[event.TraceID]
-		_, requestMatch := requestIDs[event.RequestID]
-		if !traceMatch && !requestMatch {
-			continue
-		}
-		event.RenderGeneration = trace.Generation
-		event.RenderOutcome = trace.Stage
-		event.RenderReason = trace.Reason
-	}
-}
-
-func isDuplicateReplay(event *protocol.SessionEvent) bool {
-	return event != nil && event.ReducerDecision == protocol.DecisionDuplicate && event.DecisionReason == protocol.DecisionReasonRequestReplayed
 }
 
 func (h *Handler) recordRenderGeneration(trace protocol.RenderGenerationTrace, windowID int) {
@@ -161,7 +127,7 @@ func (h *Handler) recordNotificationDisposition(disposition notification.Notific
 			h.notificationEffectOrder = append(h.notificationEffectOrder, key)
 		}
 		h.notificationEffects[key] = disposition
-		if len(h.notificationEffectOrder) > maxEventsPerWindow {
+		if len(h.notificationEffectOrder) > eventlog.MaxEventsPerWindow {
 			oldest := h.notificationEffectOrder[0]
 			h.notificationEffectOrder = append([]string(nil), h.notificationEffectOrder[1:]...)
 			delete(h.notificationEffects, oldest)
@@ -205,7 +171,7 @@ func (h *Handler) enrichNotificationEvent(windowID int, event protocol.SessionEv
 	// replay row did not cause the original request's notification. Mirror the
 	// render-completion exclusion so export-time enrichment cannot manufacture
 	// downstream notification causality for that row.
-	if isDuplicateReplay(&event) {
+	if eventlog.IsDuplicateReplay(&event) {
 		return event
 	}
 	h.asyncMu.Lock()
@@ -230,16 +196,7 @@ func (h *Handler) linkProbeChild(parentTraceID, childTraceID string, windowIDs [
 		if !ok {
 			continue
 		}
-		for i := len(st.EventLog) - 1; i >= 0; i-- {
-			if isDuplicateReplay(&st.EventLog[i]) {
-				continue
-			}
-			if st.EventLog[i].TraceID != parentTraceID {
-				continue
-			}
-			st.EventLog[i].ProbeTraceIDs = rendering.AppendCausalID(st.EventLog[i].ProbeTraceIDs, childTraceID)
-			break
-		}
+		eventlog.LinkProbeTrace(st, parentTraceID, childTraceID)
 	}
 	h.stateMu.Unlock()
 }

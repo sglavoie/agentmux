@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/eventlog"
 	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
@@ -21,18 +22,6 @@ func (h *Handler) effectiveStateForTrace(windowID int) protocol.EffectiveStateEv
 		return events.EffectiveStateEvidence(st.Effective)
 	}
 	return protocol.EffectiveStateEvidence{}
-}
-
-func eventByReferenceLocked(st *state.WindowState, ref *protocol.SessionEventReference) *protocol.SessionEvent {
-	if st == nil || ref == nil || ref.DaemonSeq == 0 {
-		return nil
-	}
-	for i := len(st.EventLog) - 1; i >= 0; i-- {
-		if st.EventLog[i].DaemonSeq == ref.DaemonSeq {
-			return &st.EventLog[i]
-		}
-	}
-	return nil
 }
 
 func ensureDirectRouteEvidence(req protocol.Request) *protocol.RoutingEvidence {
@@ -70,13 +59,13 @@ func (h *Handler) finalizeBypassedStateUpdate(req protocol.Request, outcome appl
 	}
 	h.stateMu.Lock()
 	st := h.ensureWindowStateLocked(req.WindowID)
-	event := eventByReferenceLocked(st, req.EventRef)
+	event := eventlog.ByReference(st, req.EventRef)
 	if event == nil {
 		fallback := events.SessionEventFromRequest(req, outcome.reduceAction, protocol.IconStatePreserve, rendering.DesiredIcon(st))
 		fallback.Suppressed = true
 		fallback.SuppressionReason = outcome.skipReason
 		appended := h.appendEventLocked(req.WindowID, fallback)
-		event = eventByReferenceLocked(st, req.EventRef)
+		event = eventlog.ByReference(st, req.EventRef)
 		if event == nil {
 			event = &appended
 		}
@@ -121,13 +110,13 @@ func suppressionReasonForReducer(trace state.ReducerTrace, outcome applyOutcome)
 	case protocol.DecisionReordered:
 		return protocol.DecisionReasonReorderedSequence
 	case protocol.DecisionQuarantined:
-		reason := stableReducerReason(trace)
+		reason := eventlog.StableReducerReason(trace)
 		if strings.HasPrefix(reason, protocol.DecisionReasonInvalidPayload) {
 			return protocol.DecisionReasonInvalidPayload
 		}
 		return reason
 	case protocol.DecisionSuppressed:
-		stable := stableReducerReason(trace)
+		stable := eventlog.StableReducerReason(trace)
 		switch stable {
 		case protocol.DecisionReasonTerminalTurnSuppression, protocol.DecisionReasonTerminalGraceSuppression:
 			return protocol.DecisionReasonActiveAfterTerminal
@@ -156,11 +145,11 @@ func (h *Handler) finalizeReducerDecisionLocked(
 	outcome applyOutcome,
 ) protocol.SessionEvent {
 	st := h.ensureWindowStateLocked(req.WindowID)
-	event := eventByReferenceLocked(st, req.EventRef)
+	event := eventlog.ByReference(st, req.EventRef)
 	if event == nil {
 		fallback := events.SessionEventFromRequest(req, n.Action, protocol.IconStatePreserve, rendering.DesiredIcon(st))
 		appended := h.appendEventLocked(req.WindowID, fallback)
-		event = eventByReferenceLocked(st, req.EventRef)
+		event = eventlog.ByReference(st, req.EventRef)
 		if event == nil {
 			event = &appended
 		}
@@ -174,10 +163,7 @@ func (h *Handler) finalizeReducerDecisionLocked(
 	}
 	if event.Suppressed && !wasSuppressed && event.SuppressionReason != "" {
 		meta := h.windowMetadata[req.WindowID]
-		if meta.Stats.SuppressionReasons == nil {
-			meta.Stats.SuppressionReasons = make(map[string]int)
-		}
-		meta.Stats.SuppressionReasons[event.SuppressionReason]++
+		eventlog.RecordSuppression(&meta.Stats, event.SuppressionReason)
 		h.windowMetadata[req.WindowID] = meta
 	}
 
@@ -223,7 +209,7 @@ func (h *Handler) finalizeReducerDecisionLocked(
 		StaleCompact: h.reducerCfg.StaleCompact,
 	}
 	event.ReducerDecision = trace.Decision
-	event.ReducerReason = stableReducerReason(trace)
+	event.ReducerReason = eventlog.StableReducerReason(trace)
 	event.DecisionReason = event.ReducerReason
 	if usedFallbackIdentity {
 		event.DecisionReason = protocol.DecisionReasonUntrustedIdentityFallback
@@ -267,11 +253,8 @@ func (h *Handler) recordDuplicateDelivery(req protocol.Request, ack *protocol.De
 	h.stateMu.Lock()
 	st := h.ensureWindowStateLocked(windowID)
 	var event protocol.SessionEvent
-	for i := len(st.EventLog) - 1; i >= 0; i-- {
-		if st.EventLog[i].RequestID == req.RequestID && req.RequestID != "" {
-			event = events.CloneSessionEvent(st.EventLog[i])
-			break
-		}
+	if prior := eventlog.ByRequestID(st, req.RequestID); prior != nil {
+		event = events.CloneSessionEvent(*prior)
 	}
 	if event.Event == "" {
 		event = protocol.SessionEvent{

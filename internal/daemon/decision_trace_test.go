@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/daemon/eventlog"
 	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -284,7 +285,7 @@ func TestDuplicateReplayClearsDownstreamCausalityWithoutReducerMutation(t *testi
 	}
 	server.handler.stateMu.Lock()
 	st := server.handler.ensureWindowStateLocked(42)
-	server.handler.finishRenderEventsLocked(st, protocol.RenderGenerationTrace{
+	eventlog.FinishRender(st, protocol.RenderGenerationTrace{
 		Generation: 42,
 		Stage:      rendering.StageRendered,
 		Reason:     "later-request-render",

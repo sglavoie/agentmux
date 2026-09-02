@@ -8,6 +8,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/asl"
+	"github.com/sglavoie/agentmux/internal/daemon/eventlog"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -72,7 +73,7 @@ type Handler struct {
 	// every event appended to a per-window ring so exports can totally order
 	// receipts across windows. Guarded by stateMu; restarts from zero with the
 	// daemon (receipt order is a process-lifetime notion).
-	eventSeq uint64
+	eventSeq eventlog.Sequence
 
 	// kittyClient is used by the stale sweep to clear stranded tab-title icons.
 	// Injected by daemon.Run; nil in unit tests that don't exercise the
@@ -310,10 +311,6 @@ type Handler struct {
 	// so this is a defence-in-depth guard rather than a correctness fix.
 	shutdownOnce sync.Once
 }
-
-// maxEventsPerWindow caps the per-window ring buffer used by handleSessionDetail.
-// At ~50 windows × ~200 B/event, the upper bound stays around ~5 MB worst case.
-const maxEventsPerWindow = 5000
 
 // NewHandler creates a Handler with the given guard and notifier. The
 // reducer's trailing-event grace defaults to the guard duration so legacy

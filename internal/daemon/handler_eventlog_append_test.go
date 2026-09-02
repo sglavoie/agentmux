@@ -3,6 +3,7 @@ package daemon
 import (
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/daemon/eventlog"
 	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
@@ -324,13 +325,13 @@ func TestHandler_EventLog_RewrittenResetStopCarriesResetFlow(t *testing.T) {
 	}
 }
 
-// TestHandler_EventLog_TrimsAtMax pushes maxEventsPerWindow + 5 events through
-// the allowed path and asserts the buffer retains exactly maxEventsPerWindow
-// (oldest dropped from the front).
+// TestHandler_EventLog_TrimsAtMax pushes eventlog.MaxEventsPerWindow + 5 events
+// through the allowed path and asserts the buffer retains exactly
+// eventlog.MaxEventsPerWindow (oldest dropped from the front).
 func TestHandler_EventLog_TrimsAtMax(t *testing.T) {
 	h := newTestHandler()
 
-	total := maxEventsPerWindow + 5
+	total := eventlog.MaxEventsPerWindow + 5
 	for i := 0; i < total; i++ {
 		h.Handle(protocol.Request{
 			Type:     protocol.TypeStateUpdate,
@@ -345,8 +346,8 @@ func TestHandler_EventLog_TrimsAtMax(t *testing.T) {
 	if !resp.OK {
 		t.Fatalf("session detail: want OK=true, got %+v", resp)
 	}
-	if len(resp.Events) != maxEventsPerWindow {
-		t.Fatalf("events = %d; want %d", len(resp.Events), maxEventsPerWindow)
+	if len(resp.Events) != eventlog.MaxEventsPerWindow {
+		t.Fatalf("events = %d; want %d", len(resp.Events), eventlog.MaxEventsPerWindow)
 	}
 }
 
@@ -377,7 +378,7 @@ func TestHandler_EventLog_PreservedAcrossTerminalActions(t *testing.T) {
 }
 
 // TestHandler_EventLog_CapAt5000 hard-codes the 5000-event cap so a future
-// change to maxEventsPerWindow trips this assertion and forces an explicit
+// change to eventlog.MaxEventsPerWindow trips this assertion and forces an explicit
 // decision about whether the contract still holds.
 func TestHandler_EventLog_CapAt5000(t *testing.T) {
 	h := newTestHandler()

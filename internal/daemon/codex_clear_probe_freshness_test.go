@@ -165,7 +165,7 @@ func TestProbeCodexClearWindow_DiscardsObservationAfterConcurrentReducerEvent(t 
 				got.stateSeq = st.Seq
 				got.queuedGen = st.QueuedGen
 				got.effectiveGen = st.EffectiveGen
-				got.eventSeq = h.eventSeq
+				got.eventSeq = h.eventSeq.Value()
 				got.eventCount = len(st.EventLog)
 				got.effectiveIcon = st.Effective.Icon
 				got.lastSessionTitle = st.LastSessionTitle

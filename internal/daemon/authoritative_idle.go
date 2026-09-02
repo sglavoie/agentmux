@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
+	"github.com/sglavoie/agentmux/internal/daemon/eventlog"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -342,8 +343,7 @@ func (h *Handler) applyAuthoritativeIdle(obs AuthoritativeIdle) bool {
 		string(obs.Source.Kind)+":"+obs.Source.Key,
 		fmt.Sprintf("authoritative idle (%s) settled visible state %q→%q (tier=%s samples=%d generation=%d)",
 			activity.IdleHarnessLabel(obs.Harness), before.Icon, effective.Icon, tier, required, obs.Generation))
-	if len(st.EventLog) > 0 && obs.TraceID != "" {
-		event := &st.EventLog[len(st.EventLog)-1]
+	if event := eventlog.Latest(st); event != nil && obs.TraceID != "" {
 		event.TraceID = obs.TraceID
 		event.SourceEventID = obs.SourceEventID
 		event.ProducerHarness = obs.Harness

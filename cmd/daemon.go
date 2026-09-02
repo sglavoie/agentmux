@@ -17,6 +17,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/eventlog"
 	"github.com/sglavoie/agentmux/internal/daemon/process"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	ccerrors "github.com/sglavoie/agentmux/internal/errors"
@@ -331,15 +332,6 @@ func daemonExportLiveMetadata(osWindows []kitty.OSWindow, snapshot protocol.Even
 	return out
 }
 
-func daemonExportTrimEvents(events []protocol.SessionEvent, last int) []protocol.SessionEvent {
-	if last > 0 && len(events) > last {
-		events = events[len(events)-last:]
-	}
-	out := make([]protocol.SessionEvent, len(events))
-	copy(out, events)
-	return out
-}
-
 func buildDaemonExportPayload(snapshot protocol.EventsExport, health daemon.Health, osWindows []kitty.OSWindow, requestedWindowID int, last int, exportedAt time.Time) protocol.ExportEventsPayload {
 	liveByID := daemonExportLiveMetadata(osWindows, snapshot, requestedWindowID)
 	ids := daemonExportWindowIDs(snapshot, requestedWindowID)
@@ -358,7 +350,7 @@ func buildDaemonExportPayload(snapshot protocol.EventsExport, health daemon.Heal
 			window.Watchdog = durable.Watchdog
 		}
 		if events, ok := snapshot.EventsByWindow[id]; ok {
-			window.Events = daemonExportTrimEvents(events, last)
+			window.Events = eventlog.TrimLast(events, last)
 		}
 		windows = append(windows, window)
 	}

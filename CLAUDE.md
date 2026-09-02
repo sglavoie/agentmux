@@ -178,6 +178,22 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   stay in the root. Generic hook decoding likewise stays in
   `internal/daemon/events`, which normalizes an ASL lifecycle event alongside
   every other hook.
+- `internal/daemon/eventlog`: the daemon's record of what happened — the
+  bounded per-window ring of accepted, suppressed, and daemon-synthesized
+  rows, the global monotonic receipt cursor that totally orders them and the
+  reference/request lookups that read a row back by it, the durable per-window
+  counters and the deep-copied read projections served to session detail and
+  event export, the render-completion and probe-trace correlation stamped back
+  onto the rows that caused them, and the `daemon.decision` journal record —
+  with its `replay.*` and `route.*` evidence — that outlives the ring and that
+  `internal/debugger` decodes offline. The boundary is the row, not the
+  decision: like protocol, state, rendering, events, activity, probes, process,
+  and asl it must never import the daemon root, and it performs no Kitty, IPC,
+  or journal I/O — it builds the record the root appends, and every reducer,
+  renderer, and notifier mutation under stateMu stays in the root. It
+  deliberately does not absorb the tail, cursor, and replay services in
+  `internal/debugger`, which read immutable diagnostics artifacts with no
+  daemon running.
 - `internal/diagnostics`: private fail-open causal journals, operational and
   native logs, temporary raw captures, and bounded diagnostic storage.
 - `internal/debugger`: offline-first status, query, explanation, bundle, and

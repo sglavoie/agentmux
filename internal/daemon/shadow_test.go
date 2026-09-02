@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/eventlog"
 	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
@@ -23,7 +24,7 @@ func shadowMeta(t *testing.T, h *Handler, windowID int) protocol.WindowDebugShad
 	t.Helper()
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	return cloneWindowDebugMetadata(h.windowMetadata[windowID]).Shadow
+	return eventlog.CloneWindowMetadata(h.windowMetadata[windowID]).Shadow
 }
 
 func windowEffective(t *testing.T, h *Handler, windowID int) (state.EffectiveState, string) {

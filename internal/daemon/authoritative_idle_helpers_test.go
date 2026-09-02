@@ -45,7 +45,7 @@ func screenProbeMutationFingerprint(t *testing.T, h *Handler, windowID int) stri
 	got := fingerprint{
 		WindowState: windowState,
 		Events:      append([]protocol.SessionEvent(nil), st.EventLog...),
-		EventSeq:    h.eventSeq,
+		EventSeq:    h.eventSeq.Value(),
 		Metadata:    h.windowMetadata[windowID],
 	}
 	for i, ref := range refs {

@@ -1,53 +1,26 @@
 package daemon
 
 import (
-	"time"
-
+	"github.com/sglavoie/agentmux/internal/daemon/eventlog"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
 
-// appendEventLocked records an event into the per-window ring buffer. The
-// caller must hold stateMu. Older entries are dropped from the front once the
-// slice would exceed maxEventsPerWindow. Every appended event is stamped with
-// the daemon's global receipt sequence and, when the producer did not set one,
-// a nanosecond receipt time — so exports can totally order receipts across
-// windows regardless of which path appended them.
+// appendEventLocked records an event into the per-window ring buffer and
+// credits it to the window's durable export counters. The caller must hold
+// stateMu, which is also what guards the receipt cursor the row is stamped
+// with.
 func (h *Handler) appendEventLocked(windowID int, event protocol.SessionEvent) protocol.SessionEvent {
 	st := h.ensureWindowStateLocked(windowID)
 
-	h.eventSeq++
-	event.DaemonSeq = h.eventSeq
-	if event.EventRef != nil {
-		event.EventRef.DaemonSeq = event.DaemonSeq
-		event.EventRef = nil
-	}
-	if event.ReceivedAtNs == 0 {
-		event.ReceivedAtNs = time.Now().UnixNano()
-	}
+	appended := eventlog.Append(st, &h.eventSeq, event)
 
 	meta := h.windowMetadata[windowID]
-	meta.Stats.EventCount++
-	if meta.Stats.FirstEventAt == 0 {
-		meta.Stats.FirstEventAt = event.At
-	}
-	meta.Stats.LastEventAt = event.At
-	if event.Suppressed && event.SuppressionReason != "" {
-		if meta.Stats.SuppressionReasons == nil {
-			meta.Stats.SuppressionReasons = make(map[string]int)
-		}
-		meta.Stats.SuppressionReasons[event.SuppressionReason]++
-	}
+	eventlog.RecordEvent(&meta.Stats, appended)
 	h.windowMetadata[windowID] = meta
 
-	buf := st.EventLog
-	buf = append(buf, event)
-	if len(buf) > maxEventsPerWindow {
-		buf = buf[len(buf)-maxEventsPerWindow:]
-	}
-	st.EventLog = buf
-	return event
+	return appended
 }
 
 func (h *Handler) syncRendererMetadataLocked(windowID int) {

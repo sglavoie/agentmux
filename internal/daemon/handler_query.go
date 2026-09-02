@@ -3,7 +3,7 @@ package daemon
 import (
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon/events"
+	"github.com/sglavoie/agentmux/internal/daemon/eventlog"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 )
@@ -59,16 +59,18 @@ func (h *Handler) handleStateQuery() protocol.Response {
 // distinguish "no daemon error" from "no events yet" without a nil check.
 func (h *Handler) handleSessionDetail(req protocol.Request) protocol.Response {
 	h.stateMu.Lock()
-	var src []protocol.SessionEvent
-	if st, ok := h.windowStateLocked(req.WindowID); ok {
-		src = st.EventLog
-	}
-	detail := make([]protocol.SessionEvent, len(src))
-	for i := range src {
-		detail[i] = h.enrichNotificationEvent(req.WindowID, events.CloneSessionEvent(src[i]))
-	}
+	st, _ := h.windowStateLocked(req.WindowID)
+	detail := eventlog.Detail(st, h.notificationEnricherLocked(req.WindowID))
 	h.stateMu.Unlock()
 	return protocol.Response{OK: true, Events: detail}
+}
+
+// notificationEnricherLocked returns the per-window enrichment the event-log
+// projections apply to each exported copy. Callers hold stateMu.
+func (h *Handler) notificationEnricherLocked(windowID int) func(protocol.SessionEvent) protocol.SessionEvent {
+	return func(event protocol.SessionEvent) protocol.SessionEvent {
+		return h.enrichNotificationEvent(windowID, event)
+	}
 }
 
 // handleEventsExport returns a deep copy of the requested window's event ring
@@ -82,14 +84,10 @@ func (h *Handler) handleEventsExport(req protocol.Request) protocol.Response {
 	meta := make(map[int]protocol.WindowDebugMetadata)
 	if req.WindowID != 0 {
 		if st, ok := h.windowStateLocked(req.WindowID); ok && len(st.EventLog) > 0 {
-			cp := make([]protocol.SessionEvent, len(st.EventLog))
-			for i := range st.EventLog {
-				cp[i] = h.enrichNotificationEvent(req.WindowID, events.CloneSessionEvent(st.EventLog[i]))
-			}
-			out[req.WindowID] = cp
+			out[req.WindowID] = eventlog.Detail(st, h.notificationEnricherLocked(req.WindowID))
 		}
 		if snapshot, ok := h.windowMetadata[req.WindowID]; ok {
-			meta[req.WindowID] = h.exportEnrichLocked(req.WindowID, cloneWindowDebugMetadata(snapshot))
+			meta[req.WindowID] = h.exportEnrichLocked(req.WindowID, eventlog.CloneWindowMetadata(snapshot))
 		}
 	} else {
 		out = make(map[int][]protocol.SessionEvent, len(h.store))
@@ -97,15 +95,11 @@ func (h *Handler) handleEventsExport(req protocol.Request) protocol.Response {
 			if len(st.EventLog) == 0 {
 				continue
 			}
-			cp := make([]protocol.SessionEvent, len(st.EventLog))
-			for i := range st.EventLog {
-				cp[i] = h.enrichNotificationEvent(id, events.CloneSessionEvent(st.EventLog[i]))
-			}
-			out[id] = cp
+			out[id] = eventlog.Detail(st, h.notificationEnricherLocked(id))
 		}
 		meta = make(map[int]protocol.WindowDebugMetadata, len(h.windowMetadata))
 		for id, snapshot := range h.windowMetadata {
-			meta[id] = h.exportEnrichLocked(id, cloneWindowDebugMetadata(snapshot))
+			meta[id] = h.exportEnrichLocked(id, eventlog.CloneWindowMetadata(snapshot))
 		}
 	}
 	h.stateMu.Unlock()
@@ -135,26 +129,6 @@ func (h *Handler) exportEnrichLocked(windowID int, meta protocol.WindowDebugMeta
 		meta.Shadow.BusySinceAt = st.BusySince.Unix()
 	}
 	return meta
-}
-
-func cloneWindowDebugMetadata(in protocol.WindowDebugMetadata) protocol.WindowDebugMetadata {
-	out := in
-	if in.Stats.SuppressionReasons != nil {
-		out.Stats.SuppressionReasons = make(map[string]int, len(in.Stats.SuppressionReasons))
-		for reason, count := range in.Stats.SuppressionReasons {
-			out.Stats.SuppressionReasons[reason] = count
-		}
-	}
-	if in.Shadow.Mismatches != nil {
-		out.Shadow.Mismatches = make([]protocol.ShadowMismatch, len(in.Shadow.Mismatches))
-		copy(out.Shadow.Mismatches, in.Shadow.Mismatches)
-	}
-	if in.Watchdog.ScreenDeclines != nil {
-		out.Watchdog.ScreenDeclines = make([]protocol.ScreenDeclineSnapshot, len(in.Watchdog.ScreenDeclines))
-		copy(out.Watchdog.ScreenDeclines, in.Watchdog.ScreenDeclines)
-	}
-	out.Renderer.Generations = rendering.CloneTraces(in.Renderer.Generations)
-	return out
 }
 
 // SetReducerConfig installs the shadow reducer thresholds. Existing per-window
