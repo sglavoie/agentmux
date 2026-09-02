@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/plans"
+	"github.com/sglavoie/agentmux/tui/commands"
 	tuiplans "github.com/sglavoie/agentmux/tui/plans"
 )
 
@@ -114,7 +115,7 @@ func (m Model) handlePlanViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if path == "" {
 			return m, nil
 		}
-		return m, copyTextCmd(path)
+		return m, commands.CopyText(path)
 	case keySlash:
 		// Return to the picker with the editable text query active so the
 		// user can refine the query without re-traversing the navigation
@@ -128,7 +129,7 @@ func (m Model) handlePlanViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.planViewerCursor >= len(m.planViewerLines) {
 			return m, nil
 		}
-		return m, copyTextCmd(m.planViewerLines[m.planViewerCursor])
+		return m, commands.CopyText(m.planViewerLines[m.planViewerCursor])
 	case keyPlanOpenEditor:
 		if m.viewerPlan == nil {
 			return m, nil

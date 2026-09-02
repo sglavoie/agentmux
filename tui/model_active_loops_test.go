@@ -10,15 +10,16 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 func stubActiveLoopDiscover(t *testing.T, candidates []agentloop.Candidate, err error) {
 	t.Helper()
-	old := activeLoopDiscover
-	activeLoopDiscover = func(agentloop.DiscoverOptions) ([]agentloop.Candidate, error) {
+	old := commands.ActiveLoopDiscover
+	commands.ActiveLoopDiscover = func(agentloop.DiscoverOptions) ([]agentloop.Candidate, error) {
 		return candidates, err
 	}
-	t.Cleanup(func() { activeLoopDiscover = old })
+	t.Cleanup(func() { commands.ActiveLoopDiscover = old })
 }
 
 func topLevelBatchCmds(t *testing.T, cmd tea.Cmd) []tea.Cmd {
@@ -51,9 +52,9 @@ func TestInitSchedulesActiveLoopRefresh(t *testing.T) {
 	if len(cmds) < 2 {
 		t.Fatalf("init batch command count = %d, want at least 2", len(cmds))
 	}
-	msg, ok := cmds[1]().(activeLoopsMsg)
+	msg, ok := cmds[1]().(commands.ActiveLoopsMsg)
 	if !ok {
-		t.Fatalf("init command produced %T, want activeLoopsMsg", msg)
+		t.Fatalf("init command produced %T, want commands.ActiveLoopsMsg", msg)
 	}
 	updated, _ := m.Update(msg)
 	if got := updated.(Model).activeLoopCandidates; !reflect.DeepEqual(got, []agentloop.Candidate{candidate}) {
@@ -67,7 +68,7 @@ func TestTickRefreshesActiveLoops(t *testing.T) {
 
 	m := testModel()
 	m.activeLoopRefreshSeq = 7
-	updated, cmd := m.Update(tickMsg{})
+	updated, cmd := m.Update(commands.TickMsg{})
 	got := updated.(Model)
 	if got.activeLoopRefreshSeq != 8 {
 		t.Fatalf("activeLoopRefreshSeq = %d, want 8", got.activeLoopRefreshSeq)
@@ -76,9 +77,9 @@ func TestTickRefreshesActiveLoops(t *testing.T) {
 	if len(cmds) < 2 {
 		t.Fatalf("tick batch command count = %d, want at least 2", len(cmds))
 	}
-	msg, ok := cmds[1]().(activeLoopsMsg)
+	msg, ok := cmds[1]().(commands.ActiveLoopsMsg)
 	if !ok {
-		t.Fatalf("tick command produced %T, want activeLoopsMsg", msg)
+		t.Fatalf("tick command produced %T, want commands.ActiveLoopsMsg", msg)
 	}
 	updated, _ = got.Update(msg)
 	if candidates := updated.(Model).activeLoopCandidates; !reflect.DeepEqual(candidates, []agentloop.Candidate{candidate}) {
@@ -91,7 +92,7 @@ func TestActiveLoopRefreshStoresCandidatesWithoutTitleWrite(t *testing.T) {
 	m := testModel()
 	m.activeLoopRefreshSeq = 4
 
-	updated, cmd := m.Update(activeLoopsMsg{seq: 4, candidates: candidates})
+	updated, cmd := m.Update(commands.ActiveLoopsMsg{Seq: 4, Candidates: candidates})
 	got := updated.(Model)
 	if !reflect.DeepEqual(got.activeLoopCandidates, candidates) {
 		t.Fatalf("active loops = %#v, want %#v", got.activeLoopCandidates, candidates)
@@ -106,7 +107,7 @@ func TestActiveLoopRefreshClearsStaleCandidates(t *testing.T) {
 	m.activeLoopRefreshSeq = 4
 	m.activeLoopCandidates = []agentloop.Candidate{{PlanDir: "/plans/stale", CWD: "/work/stale"}}
 
-	updated, cmd := m.Update(activeLoopsMsg{seq: 4})
+	updated, cmd := m.Update(commands.ActiveLoopsMsg{Seq: 4})
 	if got := updated.(Model).activeLoopCandidates; len(got) != 0 {
 		t.Fatalf("active loops = %#v, want empty", got)
 	}
@@ -121,7 +122,7 @@ func TestActiveLoopRefreshDropsStaleSequence(t *testing.T) {
 	m.activeLoopRefreshSeq = 6
 	m.activeLoopCandidates = []agentloop.Candidate{current}
 
-	updated, cmd := m.Update(activeLoopsMsg{seq: 5, candidates: []agentloop.Candidate{{PlanDir: "/plans/older", CWD: "/work/older"}}})
+	updated, cmd := m.Update(commands.ActiveLoopsMsg{Seq: 5, Candidates: []agentloop.Candidate{{PlanDir: "/plans/older", CWD: "/work/older"}}})
 	got := updated.(Model)
 	if !reflect.DeepEqual(got.activeLoopCandidates, []agentloop.Candidate{current}) {
 		t.Fatalf("active loops = %#v, want current candidate preserved", got.activeLoopCandidates)

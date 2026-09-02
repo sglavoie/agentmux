@@ -5,6 +5,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/tui/asl"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -231,7 +232,7 @@ func aslFocusAvailable(m Model) bool {
 
 func aslWorkbenchAvailable(m Model) bool {
 	row, ok := m.selectedASLRow()
-	return ok && row.PlanDir != "" && openBrowserSupported()
+	return ok && row.PlanDir != "" && commands.BrowserSupported()
 }
 
 // footerHintLines renders entries into physical footer rows, wrapped to

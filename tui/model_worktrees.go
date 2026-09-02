@@ -13,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/actions"
+	"github.com/sglavoie/agentmux/tui/commands"
 	tuiworktrees "github.com/sglavoie/agentmux/tui/worktrees"
 )
 
@@ -31,7 +32,7 @@ type worktreeActionDoneMsg struct {
 
 func worktreeListCmd(m Model, seq int) tea.Cmd {
 	return func() tea.Msg {
-		result, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{
+		result, err := commands.Registry.Execute(context.Background(), actions.Dependencies{
 			Kitty:  m.client,
 			Config: m.cfg,
 		}, actions.WorktreeList, actions.Request{})
@@ -176,7 +177,7 @@ func (m Model) handleWorktreesKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.openSelectedWorktree(actions.WorktreeEditor)
 	case keyCopyPath:
 		if path := selectedWorktreePath(m); path != "" {
-			return m, copyTextCmd(path)
+			return m, commands.CopyText(path)
 		}
 		return m, nil
 	case keyD:

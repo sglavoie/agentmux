@@ -6,13 +6,14 @@ import (
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	tuiplans "github.com/sglavoie/agentmux/tui/plans"
 )
 
-// handleSessionsMsg processes a sessionsMsg: rebuilds the session list,
+// handleSessionsMsg processes a commands.SessionsMsg: rebuilds the session list,
 // restores the cursor position, and clamps scroll offsets.
-func (m Model) handleSessionsMsg(msg sessionsMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleSessionsMsg(msg commands.SessionsMsg) (tea.Model, tea.Cmd) {
 	m.err = nil
 	// Capture the prior cursor's row identity before the list is
 	// rebuilt so we can restore it post-refresh. Empty list → no
@@ -21,24 +22,24 @@ func (m Model) handleSessionsMsg(msg sessionsMsg) (tea.Model, tea.Cmd) {
 	if len(m.filtered) > 0 && m.cursor >= 0 && m.cursor < len(m.filtered) {
 		prior = dashboard.CaptureCursorIdentity(m.filtered[m.cursor])
 	}
-	m.lastActivity = msg.activity
-	m.watchdog = msg.watchdog
-	m.sessions = msg.sessions
+	m.lastActivity = msg.Activity
+	m.watchdog = msg.Watchdog
+	m.sessions = msg.Sessions
 	m.recordTransitions()
 	m.filtered = dashboard.ApplyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
 	m.sortFiltered()
 	m.cursor = dashboard.RestoreCursorByIdentity(m.filtered, prior, m.lastActivity, m.idleThreshold)
-	selectionIsNew := msg.selectionToken == "" || msg.selectionToken != m.lastSelectionRequestToken
-	if msg.selectionTabID > 0 && selectionIsNew {
+	selectionIsNew := msg.SelectionToken == "" || msg.SelectionToken != m.lastSelectionRequestToken
+	if msg.SelectionTabID > 0 && selectionIsNew {
 		for i, running := range m.filtered {
-			if running.TabID == msg.selectionTabID {
+			if running.TabID == msg.SelectionTabID {
 				m.cursor = i
 				break
 			}
 		}
 	}
-	if msg.selectionToken != "" {
-		m.lastSelectionRequestToken = msg.selectionToken
+	if msg.SelectionToken != "" {
+		m.lastSelectionRequestToken = msg.SelectionToken
 	}
 	clampListOffset(&m)
 	scrollListToCursor(&m)
@@ -49,99 +50,99 @@ func (m Model) handleSessionsMsg(msg sessionsMsg) (tea.Model, tea.Cmd) {
 // in-flight refreshes are ignored so a slow discovery cannot restore stale
 // candidates after a newer refresh has already completed. Tab loop markers
 // are rendered by the daemon; these candidates remain for detail views only.
-func (m Model) handleActiveLoopsMsg(msg activeLoopsMsg) (tea.Model, tea.Cmd) {
-	if msg.seq != m.activeLoopRefreshSeq {
+func (m Model) handleActiveLoopsMsg(msg commands.ActiveLoopsMsg) (tea.Model, tea.Cmd) {
+	if msg.Seq != m.activeLoopRefreshSeq {
 		return m, nil
 	}
-	m.activeLoopRefreshErr = msg.err
-	if msg.err != nil {
+	m.activeLoopRefreshErr = msg.Err
+	if msg.Err != nil {
 		return m, nil
 	}
-	m.activeLoopCandidates = append([]agentloop.Candidate(nil), msg.candidates...)
+	m.activeLoopCandidates = append([]agentloop.Candidate(nil), msg.Candidates...)
 	return m, nil
 }
 
-// handleActionDone processes an actionDoneMsg: records any action error and
+// handleActionDone processes an commands.ActionDoneMsg: records any action error and
 // triggers an immediate session refresh so the list reflects the new state.
-func (m Model) handleActionDone(msg actionDoneMsg) (tea.Model, tea.Cmd) {
-	m.actionErr = msg.err
+func (m Model) handleActionDone(msg commands.ActionDoneMsg) (tea.Model, tea.Cmd) {
+	m.actionErr = msg.Err
 	// Trigger a refresh so the list reflects the new state.
-	return m, fetchCmd(m.client, m.cfg, m.sortMode)
+	return m, commands.Fetch(m.client, m.cfg, m.sortMode)
 }
 
-// handleCopyDone processes a copyDoneMsg without refreshing live sessions.
+// handleCopyDone processes a commands.CopyDoneMsg without refreshing live sessions.
 // Copy errors are rendered as toasts so they remain visible inside full
 // transcript and plan viewer layouts.
-func (m Model) handleCopyDone(msg copyDoneMsg) (tea.Model, tea.Cmd) {
-	if msg.err == nil {
+func (m Model) handleCopyDone(msg commands.CopyDoneMsg) (tea.Model, tea.Cmd) {
+	if msg.Err == nil {
 		return m, nil
 	}
-	if c := m.pushToast(Toast{Severity: toastError, Text: "copy: " + msg.err.Error()}); c != nil {
+	if c := m.pushToast(Toast{Severity: toastError, Text: "copy: " + msg.Err.Error()}); c != nil {
 		return m, c
 	}
 	return m, nil
 }
 
-// handleResortDone processes a resortDoneMsg: records any error, pushes a
+// handleResortDone processes a commands.ResortDoneMsg: records any error, pushes a
 // success or failure toast, and triggers a session refresh.
-func (m Model) handleResortDone(msg resortDoneMsg) (tea.Model, tea.Cmd) {
-	m.actionErr = msg.err
+func (m Model) handleResortDone(msg commands.ResortDoneMsg) (tea.Model, tea.Cmd) {
+	m.actionErr = msg.Err
 	var cmds []tea.Cmd
 	var t Toast
-	if msg.err != nil {
-		t = Toast{Severity: toastError, Text: "Resort failed: " + msg.err.Error()}
+	if msg.Err != nil {
+		t = Toast{Severity: toastError, Text: "Resort failed: " + msg.Err.Error()}
 	} else {
 		t = Toast{Severity: toastSuccess, Text: "Tabs resorted"}
 	}
 	if c := m.pushToast(t); c != nil {
 		cmds = append(cmds, c)
 	}
-	cmds = append(cmds, fetchCmd(m.client, m.cfg, m.sortMode))
+	cmds = append(cmds, commands.Fetch(m.client, m.cfg, m.sortMode))
 	return m, tea.Batch(cmds...)
 }
 
-// handlePickerOpenDone processes a single or aggregate pickerOpenDoneMsg:
+// handlePickerOpenDone processes a single or aggregate commands.PickerOpenDoneMsg:
 // quits on success or surfaces the error in the header and triggers a refresh
 // on failure.
-func (m Model) handlePickerOpenDone(msg pickerOpenDoneMsg) (tea.Model, tea.Cmd) {
-	if msg.err != nil {
-		m.actionErr = msg.err
-		return m, fetchCmd(m.client, m.cfg, m.sortMode)
+func (m Model) handlePickerOpenDone(msg commands.PickerOpenDoneMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		m.actionErr = msg.Err
+		return m, commands.Fetch(m.client, m.cfg, m.sortMode)
 	}
 	return m, tea.Quit
 }
 
-// handleFocusDone processes a focusDoneMsg: quits on success or records the
+// handleFocusDone processes a commands.FocusDoneMsg: quits on success or records the
 // error.
-func (m Model) handleFocusDone(msg focusDoneMsg) (tea.Model, tea.Cmd) {
-	if msg.err != nil {
-		m.actionErr = msg.err
+func (m Model) handleFocusDone(msg commands.FocusDoneMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		m.actionErr = msg.Err
 		return m, nil
 	}
 	return m, tea.Quit
 }
 
-// handlePeekDone processes a peekDoneMsg: records any error from the overlay
+// handlePeekDone processes a commands.PeekDoneMsg: records any error from the overlay
 // pager launch.
-func (m Model) handlePeekDone(msg peekDoneMsg) (tea.Model, tea.Cmd) {
-	if msg.err != nil {
-		m.actionErr = msg.err
+func (m Model) handlePeekDone(msg commands.PeekDoneMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		m.actionErr = msg.Err
 	}
 	return m, nil
 }
 
-// handleDetailEvents processes a detailEventsMsg: updates the detail pane
+// handleDetailEvents processes a commands.DetailEventsMsg: updates the detail pane
 // event list, dropping stale responses from a previous mode or window.
-func (m Model) handleDetailEvents(msg detailEventsMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleDetailEvents(msg commands.DetailEventsMsg) (tea.Model, tea.Cmd) {
 	// Stale responses (mode changed or different window than the one
 	// currently shown in the pane) are dropped silently so a slow
 	// daemon roundtrip cannot overwrite a fresh request's loading
 	// state or repopulate the pane after the user closed it.
-	if m.mode != ModeDetail || msg.windowID != m.detailWindowID {
+	if m.mode != ModeDetail || msg.WindowID != m.detailWindowID {
 		return m, nil
 	}
-	m.detailEvents = msg.events
-	m.detailErr = msg.err
+	m.detailEvents = msg.Events
+	m.detailErr = msg.Err
 	m.detailLoading = false
 	// A refresh that shrinks the event ring (daemon GC, or an empty
 	// reply) can leave detailScroll above the new maxOffset. The

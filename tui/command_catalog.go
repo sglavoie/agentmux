@@ -1,222 +1,82 @@
 package tui
 
+// This file is the seam between the root Bubble Tea model and the command
+// vocabulary in tui/commands. The command type, its identities, its groups, its
+// availability verdicts, and the model-free gates all live in the leaf; what
+// remains here is what a verdict rests on in *this* model — the selection
+// snapshot, the configured-project lookup, the notification guard, the preview
+// fit, and the undo stack — plus the one entry whose execution is pure model
+// mutation.
+
 import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
-// commandID is a stable, internal identity for a dashboard command. IDs are
-// deliberately independent from titles so dynamic labels and copy edits do not
-// disturb selection or tests.
-type commandID string
-
-const (
-	commandFocusSession       commandID = "session.focus"
-	commandPeekScrollback     commandID = "session.peek-scrollback"
-	commandRestartSession     commandID = "session.restart"
-	commandOverrideProfile    commandID = "session.override-profile"
-	commandLaunchAnother      commandID = "session.launch-another"
-	commandClearStatus        commandID = "session.clear-status"
-	commandCloseSession       commandID = "session.close"
-	commandOpenDirectory      commandID = "session.open-directory"
-	commandOpenEditor         commandID = "session.open-editor"
-	commandCopyTitle          commandID = "session.copy-title"
-	commandToggleLock         commandID = "session.toggle-lock"
-	commandToggleMute         commandID = "session.toggle-mute"
-	commandSearchProject      commandID = "session.search-project-history"
-	commandShowDetails        commandID = "session.show-details"
-	commandShowTimeline       commandID = "session.show-timeline"
-	commandFilterSessions     commandID = "explore.filter-sessions"
-	commandCycleProfileFilter commandID = "explore.cycle-profile-filter"
-	commandClearFilters       commandID = "explore.clear-filters"
-	commandOpenLauncher       commandID = "explore.open-launcher"
-	commandSearchAllSessions  commandID = "explore.search-session-history"
-	commandSearchPlans        commandID = "explore.search-plans"
-	commandManageWorktrees    commandID = "explore.manage-worktrees"
-	commandShowRuns           commandID = "explore.show-runs"
-	commandTogglePreview      commandID = "explore.toggle-preview"
-	commandResortTabs         commandID = "app.resort-tabs"
-	commandUndoClose          commandID = "app.undo-close"
-	commandDismissDeprecation commandID = "app.dismiss-deprecation"
-	commandShowKeyboardHelp   commandID = "app.show-keyboard-shortcuts"
-	commandQuit               commandID = "app.quit"
-)
-
-// commandGroup is both the grouping identity and the user-facing group label.
-type commandGroup string
-
-const (
-	commandGroupSession commandGroup = "Session"
-	commandGroupExplore commandGroup = "Explore"
-	commandGroupApp     commandGroup = "App"
-)
-
-// commandContext captures the dashboard row a command should target. The
-// value is copied when the context is created so a background refresh or live
-// cursor move cannot retarget a command before it executes.
-type commandContext struct {
-	target    session.RunningSession
-	hasTarget bool
-}
-
 // captureCommandContext snapshots the current dashboard selection. It is safe
 // for an empty list and for transiently invalid cursor values.
-func captureCommandContext(m Model) commandContext {
+func captureCommandContext(m Model) commands.Context {
 	if m.cursor < 0 || m.cursor >= len(m.filtered) {
-		return commandContext{}
+		return commands.Context{}
 	}
-	return commandContext{target: m.filtered[m.cursor], hasTarget: true}
+	return commands.Context{Target: m.filtered[m.cursor], HasTarget: true}
 }
 
-// commandAvailability carries both the controller decision and the inline
-// reason rendered for disabled commands.
-type commandAvailability struct {
-	available bool
-	reason    string
+func sessionCommandAvailability(_ Model, ctx commands.Context) commands.Availability {
+	return commands.SessionAvailability(ctx)
 }
 
-type commandTitle func(Model, commandContext) string
-type commandVisibility func(Model, commandContext) bool
-type commandAvailabilityFunc func(Model, commandContext) commandAvailability
-type commandExecution func(Model, commandContext) (Model, tea.Cmd)
-
-// command describes one entry in the dashboard command palette. shortcut is
-// display-only: palette input never dispatches the dashboard key directly.
-type command struct {
-	id           commandID
-	group        commandGroup
-	title        commandTitle
-	description  string
-	aliases      []string
-	shortcut     string
-	visible      commandVisibility
-	availability commandAvailabilityFunc
-	execute      commandExecution
+func unlockedSessionCommandAvailability(_ Model, ctx commands.Context) commands.Availability {
+	return commands.UnlockedSessionAvailability(ctx)
 }
 
-func staticCommandTitle(title string) commandTitle {
-	return func(Model, commandContext) string { return title }
+func peekCommandAvailability(_ Model, ctx commands.Context) commands.Availability {
+	return commands.PeekAvailability(ctx)
 }
 
-func (c command) displayTitle(m Model, ctx commandContext) string {
-	return c.title(m, ctx)
+func configuredProjectCommandAvailability(m Model, ctx commands.Context) commands.Availability {
+	return commands.ConfiguredProjectAvailability(m.cfg, ctx)
 }
 
-func (c command) isVisible(m Model, ctx commandContext) bool {
-	return c.visible == nil || c.visible(m, ctx)
-}
-
-func (c command) availabilityFor(m Model, ctx commandContext) commandAvailability {
-	if c.availability == nil {
-		return commandAvailability{available: true}
-	}
-	return c.availability(m, ctx)
-}
-
-// run applies the visibility and availability gates before execution. This is
-// the single safe entry point for the palette controller: hidden and disabled
-// commands are guaranteed to be no-ops.
-func (c command) run(m Model, ctx commandContext) (Model, tea.Cmd) {
-	if !c.isVisible(m, ctx) || !c.availabilityFor(m, ctx).available {
-		return m, nil
-	}
-	return c.execute(m, ctx)
-}
-
-const (
-	commandReasonNoSession       = "no selected session"
-	commandReasonLocked          = "session is locked"
-	commandReasonPeekInactive    = "session is not active"
-	commandReasonStatusNotClear  = "session has no clearable status"
-	commandReasonNoProject       = "project is not configured"
-	commandReasonPreviewTooSmall = "terminal is too small for preview"
-	commandReasonNothingToUndo   = "nothing to undo"
-)
-
-func availableCommand() commandAvailability {
-	return commandAvailability{available: true}
-}
-
-func unavailableCommand(reason string) commandAvailability {
-	return commandAvailability{reason: reason}
-}
-
-func sessionCommandAvailability(_ Model, ctx commandContext) commandAvailability {
-	if !ctx.hasTarget {
-		return unavailableCommand(commandReasonNoSession)
-	}
-	return availableCommand()
-}
-
-func unlockedSessionCommandAvailability(m Model, ctx commandContext) commandAvailability {
-	if availability := sessionCommandAvailability(m, ctx); !availability.available {
+func clearStatusCommandAvailability(m Model, ctx commands.Context) commands.Availability {
+	if availability := commands.SessionAvailability(ctx); !availability.Available {
 		return availability
 	}
-	if ctx.target.Locked {
-		return unavailableCommand(commandReasonLocked)
+	if dashboard.StateGroup(ctx.Target, m.lastActivity, m.idleThreshold) != 0 {
+		return commands.Unavailable(commands.ReasonStatusNotClear)
 	}
-	return availableCommand()
+	return commands.Available()
 }
 
-func peekCommandAvailability(m Model, ctx commandContext) commandAvailability {
-	if availability := sessionCommandAvailability(m, ctx); !availability.available {
-		return availability
-	}
-	if ctx.target.State != "bolt" {
-		return unavailableCommand(commandReasonPeekInactive)
-	}
-	return availableCommand()
-}
-
-func clearStatusCommandAvailability(m Model, ctx commandContext) commandAvailability {
-	if availability := sessionCommandAvailability(m, ctx); !availability.available {
-		return availability
-	}
-	if dashboard.StateGroup(ctx.target, m.lastActivity, m.idleThreshold) != 0 {
-		return unavailableCommand(commandReasonStatusNotClear)
-	}
-	return availableCommand()
-}
-
-func configuredProjectCommandAvailability(m Model, ctx commandContext) commandAvailability {
-	if availability := sessionCommandAvailability(m, ctx); !availability.available {
-		return availability
-	}
-	if _, ok := findConfigSession(m.cfg, ctx.target.EffectiveProfile(), ctx.target.EffectiveProject()); !ok {
-		return unavailableCommand(commandReasonNoProject)
-	}
-	return availableCommand()
-}
-
-func previewCommandAvailability(m Model, _ commandContext) commandAvailability {
+func previewCommandAvailability(m Model, _ commands.Context) commands.Availability {
 	// Hiding an already-enabled preview must remain possible even after a
 	// terminal resize makes the viewport too small to enable it again.
 	if m.previewEnabled {
-		return availableCommand()
+		return commands.Available()
 	}
 	if m.cfg == nil {
-		return unavailableCommand(commandReasonPreviewTooSmall)
+		return commands.Unavailable(commands.ReasonPreviewTooSmall)
 	}
 	cfg := m.cfg.Defaults.Preview
 	if !previewFits(m.width, m.height, dashboardPreviewEnableFooterLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
-		return unavailableCommand(commandReasonPreviewTooSmall)
+		return commands.Unavailable(commands.ReasonPreviewTooSmall)
 	}
-	return availableCommand()
+	return commands.Available()
 }
 
-func undoCommandAvailability(m Model, _ commandContext) commandAvailability {
+func undoCommandAvailability(m Model, _ commands.Context) commands.Availability {
 	if len(m.activeUndoEntries()) == 0 {
-		return unavailableCommand(commandReasonNothingToUndo)
+		return commands.Unavailable(commands.ReasonNothingToUndo)
 	}
-	return availableCommand()
+	return commands.Available()
 }
 
-// commandCatalog returns the complete dashboard command inventory in display
-// order. It intentionally has no key-handler or renderer integration yet.
-func openLauncherCommand(m Model, _ commandContext) (Model, tea.Cmd) {
+// openLauncherCommand is pure model mutation, so it stays with the root rather
+// than moving into the leaf alongside the vocabulary it is registered under.
+func openLauncherCommand(m Model, _ commands.Context) (Model, tea.Cmd) {
 	var sessions []config.Session
 	if m.cfg != nil {
 		sessions = m.cfg.Sessions

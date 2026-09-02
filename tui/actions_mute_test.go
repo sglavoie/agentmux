@@ -8,9 +8,10 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
-// TestToggleMuteCmdSetsUserVarAndPushesTitle verifies that toggleMuteCmd both
+// TestToggleMuteCmdSetsUserVarAndPushesTitle verifies that commands.ToggleMute both
 // flips the cc_mute user var on the anchor window and pushes a refreshed tab
 // title that contains the 🔇 glyph. Without the title push, downstream
 // rewrite paths only preserve a 🔇 that is already present, so the glyph
@@ -32,15 +33,15 @@ func TestToggleMuteCmdSetsUserVarAndPushesTitle(t *testing.T) {
 		Starred: true,
 	}
 
-	cmd := toggleMuteCmd(client, rs)
+	cmd := commands.ToggleMute(client, rs)
 	msg := cmd()
 
-	done, ok := msg.(actionDoneMsg)
+	done, ok := msg.(commands.ActionDoneMsg)
 	if !ok {
-		t.Fatalf("expected actionDoneMsg, got %T", msg)
+		t.Fatalf("expected commands.ActionDoneMsg, got %T", msg)
 	}
-	if done.err != nil {
-		t.Fatalf("toggleMuteCmd returned error: %v", done.err)
+	if done.Err != nil {
+		t.Fatalf("toggleMuteCmd returned error: %v", done.Err)
 	}
 	if len(runner.Calls) != 2 {
 		t.Fatalf("expected 2 kitten calls (set-user-vars, set-tab-title), got %d: %+v", len(runner.Calls), runner.Calls)
@@ -96,15 +97,15 @@ func TestToggleMuteCmdUnmuteStripsGlyph(t *testing.T) {
 		Muted:    true,
 	}
 
-	cmd := toggleMuteCmd(client, rs)
+	cmd := commands.ToggleMute(client, rs)
 	msg := cmd()
 
-	done, ok := msg.(actionDoneMsg)
+	done, ok := msg.(commands.ActionDoneMsg)
 	if !ok {
-		t.Fatalf("expected actionDoneMsg, got %T", msg)
+		t.Fatalf("expected commands.ActionDoneMsg, got %T", msg)
 	}
-	if done.err != nil {
-		t.Fatalf("toggleMuteCmd returned error: %v", done.err)
+	if done.Err != nil {
+		t.Fatalf("toggleMuteCmd returned error: %v", done.Err)
 	}
 	if len(runner.Calls) != 2 {
 		t.Fatalf("expected 2 kitten calls, got %d: %+v", len(runner.Calls), runner.Calls)
@@ -139,7 +140,7 @@ func TestFindAccountByNameCaseInsensitive(t *testing.T) {
 		{Name: "personal"},
 	}
 	for _, name := range []string{"work", "Work", "WORK"} {
-		got, ok := findAccountByName(accounts, name)
+		got, ok := commands.FindAccountByName(accounts, name)
 		if !ok {
 			t.Errorf("findAccountByName(%q): not found", name)
 			continue
@@ -148,7 +149,7 @@ func TestFindAccountByNameCaseInsensitive(t *testing.T) {
 			t.Errorf("findAccountByName(%q): resolved to %q, want %q", name, got.Name, "work")
 		}
 	}
-	if _, ok := findAccountByName(accounts, "unknown"); ok {
+	if _, ok := commands.FindAccountByName(accounts, "unknown"); ok {
 		t.Error("findAccountByName(unknown): unexpectedly found")
 	}
 }

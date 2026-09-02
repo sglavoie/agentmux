@@ -5,6 +5,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 // viewerMessagesLoadedMsg carries the result of an async ReadMessages call.
@@ -130,14 +131,14 @@ func (m Model) handleSessionViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if path == "" {
 			return m, nil
 		}
-		return m, copyTextCmd(path)
+		return m, commands.CopyText(path)
 	case keyY:
 		if len(m.viewerMessages) == 0 ||
 			m.viewerCursor < 0 ||
 			m.viewerCursor >= len(m.viewerMessages) {
 			return m, nil
 		}
-		return m, copyTextCmd(m.viewerMessages[m.viewerCursor].Text)
+		return m, commands.CopyText(m.viewerMessages[m.viewerCursor].Text)
 	case keyEnter:
 		if len(m.viewerMessages) == 0 ||
 			m.viewerCursor < 0 ||
@@ -171,7 +172,7 @@ func (m Model) handleSessionViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.viewerSession == nil || m.viewerSession.ID == "" {
 			return m, nil
 		}
-		return m, copyTextCmd(m.viewerSession.ID)
+		return m, commands.CopyText(m.viewerSession.ID)
 	}
 	return m, nil
 }

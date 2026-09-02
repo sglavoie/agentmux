@@ -29,10 +29,9 @@ var (
 			BorderForeground(lipgloss.Color("#4ec9b0")).
 			Padding(0, 1)
 
-	// styleFooterUnavailable renders actions that do not apply to the current
+	// styleFooterUnavailableKey renders actions that do not apply to the current
 	// cursor row. The dim grey foreground keeps the key visible while signaling
 	// that pressing it would be a no-op.
-	styleFooterUnavailable    = lipgloss.NewStyle().Foreground(lipgloss.Color("#5a5a5a"))
 	styleFooterUnavailableKey = lipgloss.NewStyle().
 					Foreground(lipgloss.Color("#5a5a5a")).
 					Bold(true)

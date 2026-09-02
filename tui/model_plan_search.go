@@ -9,6 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/commands"
 	tuiplans "github.com/sglavoie/agentmux/tui/plans"
 )
 
@@ -189,7 +190,7 @@ func (m Model) handlePlanSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		if path == "" {
 			return m, nil
 		}
-		return m, copyTextCmd(path)
+		return m, commands.CopyText(path)
 	case keyCtrlD:
 		step := halfPageStep(planSearchVisibleHeight(m))
 		m.planCursor = clamp(m.planCursor+step, 0, len(m.planResults)-1)

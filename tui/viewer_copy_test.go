@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 func runViewerCopyCmd(t *testing.T, cmd tea.Cmd) string {
@@ -14,21 +15,21 @@ func runViewerCopyCmd(t *testing.T, cmd tea.Cmd) string {
 		t.Fatal("copy command is nil")
 	}
 
-	prev := copyToClipboard
+	prev := commands.CopyToClipboard
 	var copied []string
-	copyToClipboard = func(text string) error {
+	commands.CopyToClipboard = func(text string) error {
 		copied = append(copied, text)
 		return nil
 	}
-	t.Cleanup(func() { copyToClipboard = prev })
+	t.Cleanup(func() { commands.CopyToClipboard = prev })
 
 	msg := cmd()
-	done, ok := msg.(copyDoneMsg)
+	done, ok := msg.(commands.CopyDoneMsg)
 	if !ok {
-		t.Fatalf("copy command returned %T, want copyDoneMsg", msg)
+		t.Fatalf("copy command returned %T, want commands.CopyDoneMsg", msg)
 	}
-	if done.err != nil {
-		t.Fatalf("copy command err = %v, want nil", done.err)
+	if done.Err != nil {
+		t.Fatalf("copy command err = %v, want nil", done.Err)
 	}
 	if len(copied) != 1 {
 		t.Fatalf("copy calls = %d, want 1", len(copied))

@@ -11,22 +11,23 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 // restartWithAccountCmd closes and relaunches a session under a different account.
 func (m Model) restartWithAccountCmd(acc config.Account) tea.Cmd {
-	sess := dashboardSessionTemplate(m.cfg, m.targetSession)
+	sess := commands.DashboardSessionTemplate(m.cfg, m.targetSession)
 	return func() (msg tea.Msg) {
 		defer func() {
 			if r := recover(); r != nil {
-				msg = actionDoneMsg{err: fmt.Errorf("panic in restartWithAccount: %v", r)}
+				msg = commands.ActionDoneMsg{Err: fmt.Errorf("panic in restartWithAccount: %v", r)}
 			}
 		}()
-		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Kitty: m.client, Config: m.cfg}, actions.Restart, actions.Request{
+		_, err := commands.Registry.Execute(context.Background(), actions.Dependencies{Kitty: m.client, Config: m.cfg}, actions.Restart, actions.Request{
 			Session: &m.targetSession, Project: &sess, Parameters: map[string]string{"profile": acc.Name}, Confirmed: true,
 		})
-		return actionDoneMsg{err: err}
+		return commands.ActionDoneMsg{Err: err}
 	}
 }
 
@@ -61,7 +62,7 @@ func (m *Model) launchBatchCmd(todo []launch.Queued, quitOnSuccess bool) tea.Cmd
 		sess := q.Session
 		title := q.Title
 		launchCmds = append(launchCmds, func() tea.Msg {
-			_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Kitty: m.client, Config: m.cfg}, actions.Launch, actions.Request{Project: &sess})
+			_, err := commands.Registry.Execute(context.Background(), actions.Dependencies{Kitty: m.client, Config: m.cfg}, actions.Launch, actions.Request{Project: &sess})
 			return launchProgressMsg{batchID: batchID, total: total, title: title, err: err}
 		})
 	}
@@ -73,8 +74,8 @@ func (m *Model) launchBatchCmd(todo []launch.Queued, quitOnSuccess bool) tea.Cmd
 }
 
 func (m *Model) dashboardLaunchWithAccountCmd(acc config.Account) tea.Cmd {
-	sess := dashboardSessionTemplate(m.cfg, m.targetSession)
-	sess = sessionWithProfile(sess, acc.Name)
+	sess := commands.DashboardSessionTemplate(m.cfg, m.targetSession)
+	sess = commands.SessionWithProfile(sess, acc.Name)
 	return m.launchBatchCmd([]launch.Queued{{
 		Session: sess,
 		Title:   configSessionDisplayTitle(sess),
@@ -97,7 +98,7 @@ func (m Model) handleLaunchProgress(msg launchProgressMsg) (tea.Model, tea.Cmd) 
 	if msg.batchID != m.launchBatchID {
 		// Stale launch from a prior batch; ignore so we don't clobber a
 		// fresh batch's toast.
-		return m, fetchCmd(m.client, m.cfg, m.sortMode)
+		return m, commands.Fetch(m.client, m.cfg, m.sortMode)
 	}
 	m.launchBatchDone++
 	var cmds []tea.Cmd
@@ -130,7 +131,7 @@ func (m Model) handleLaunchProgress(msg launchProgressMsg) (tea.Model, tea.Cmd) 
 	if batchDone && m.launchBatchErrors == 0 && m.launchBatchQuitOnSuccess {
 		cmds = append(cmds, tea.Quit)
 	} else {
-		cmds = append(cmds, fetchCmd(m.client, m.cfg, m.sortMode))
+		cmds = append(cmds, commands.Fetch(m.client, m.cfg, m.sortMode))
 	}
 	return m, tea.Batch(cmds...)
 }
@@ -147,12 +148,12 @@ func pickerOpenCmd(m Model, targets []config.Session) tea.Cmd {
 		errs := make([]error, 0)
 		for i := range targets {
 			sess := targets[i]
-			_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Kitty: m.client, Config: m.cfg}, actions.OpenDirectory, actions.Request{Project: &sess})
+			_, err := commands.Registry.Execute(context.Background(), actions.Dependencies{Kitty: m.client, Config: m.cfg}, actions.OpenDirectory, actions.Request{Project: &sess})
 			if err != nil {
 				errs = append(errs, fmt.Errorf("%s: %w", configSessionDisplayTitle(sess), err))
 			}
 		}
-		return pickerOpenDoneMsg{err: errors.Join(errs...)}
+		return commands.PickerOpenDoneMsg{Err: errors.Join(errs...)}
 	}
 }
 

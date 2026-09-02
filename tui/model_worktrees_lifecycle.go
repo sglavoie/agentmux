@@ -15,6 +15,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/actions"
+	"github.com/sglavoie/agentmux/tui/commands"
 	tuiworktrees "github.com/sglavoie/agentmux/tui/worktrees"
 )
 
@@ -36,7 +37,7 @@ func worktreeLifecycleActionCmd(m Model, action actions.ID, request actions.Requ
 		readers = buildTranscriptReaders()
 	}
 	return func() tea.Msg {
-		result, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{
+		result, err := commands.Registry.Execute(context.Background(), actions.Dependencies{
 			Kitty: m.client, Config: m.cfg, Readers: readers,
 		}, action, request)
 		return worktreeActionDoneMsg{action: action, result: result, err: err}
@@ -57,7 +58,7 @@ func (m Model) reopenWorktreeWithParameters(parameters map[string]string) (tea.M
 		return m, nil
 	}
 	request := actions.Request{Worktree: &m.worktreeActionTarget.Entry, Parameters: parameters}
-	availability := sharedActionRegistry.Availability(actions.Dependencies{Config: m.cfg}, actions.WorktreeReopen, request)
+	availability := commands.Registry.Availability(actions.Dependencies{Config: m.cfg}, actions.WorktreeReopen, request)
 	if !availability.Available {
 		m.actionErr = &actions.Error{Code: "unavailable", Action: actions.WorktreeReopen, Message: availability.Reason}
 		m.worktreeActionTarget = nil
@@ -87,7 +88,7 @@ func (m Model) beginWorktreeRemove(deleteBranch bool) (tea.Model, tea.Cmd) {
 		}
 	}
 	request := actions.Request{Worktree: &entry.Entry, Parameters: parameters}
-	availability := sharedActionRegistry.Availability(actions.Dependencies{Config: m.cfg}, actions.WorktreeRemove, request)
+	availability := commands.Registry.Availability(actions.Dependencies{Config: m.cfg}, actions.WorktreeRemove, request)
 	if !availability.Available {
 		return m.worktreeDisabledToast(availability.Reason)
 	}
@@ -111,7 +112,7 @@ func (m Model) beginWorktreeForget() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	request := actions.Request{Worktree: &entry.Entry}
-	availability := sharedActionRegistry.Availability(actions.Dependencies{Config: m.cfg}, actions.WorktreeForget, request)
+	availability := commands.Registry.Availability(actions.Dependencies{Config: m.cfg}, actions.WorktreeForget, request)
 	if !availability.Available {
 		return m.worktreeDisabledToast(availability.Reason)
 	}

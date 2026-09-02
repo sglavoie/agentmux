@@ -289,7 +289,7 @@ func TestSpaceInListFocuses(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	_, cmd := m.Update(keyPress(" "))
 	if cmd == nil {
-		t.Fatal("space on a non-empty list must return focusCmd")
+		t.Fatal("space on a non-empty list must return commands.Focus")
 	}
 }
 

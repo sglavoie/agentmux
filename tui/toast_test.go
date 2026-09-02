@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
@@ -183,7 +184,7 @@ func TestLaunchProgressFinalIsSuccess(t *testing.T) {
 
 func TestResortDoneUsesStatusBarToast(t *testing.T) {
 	m := testModel()
-	updated, cmd := m.Update(resortDoneMsg{})
+	updated, cmd := m.Update(commands.ResortDoneMsg{})
 	m = updated.(Model)
 	if cmd == nil {
 		t.Fatal("expected resort completion to return refresh/tick command")
@@ -193,7 +194,7 @@ func TestResortDoneUsesStatusBarToast(t *testing.T) {
 
 func TestCopyDoneErrorUsesStatusBarToast(t *testing.T) {
 	m := testModel()
-	updated, cmd := m.Update(copyDoneMsg{err: errors.New("clipboard unavailable")})
+	updated, cmd := m.Update(commands.CopyDoneMsg{Err: errors.New("clipboard unavailable")})
 	m = updated.(Model)
 	if cmd == nil {
 		t.Fatal("expected copy error to arm toast tick")

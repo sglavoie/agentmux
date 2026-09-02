@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/asl"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 func aslRunsDriver(t *testing.T) (*UITestDriver, *UITestKittyClient) {
@@ -111,7 +112,7 @@ func TestASLRunsEntryAndExitLeaveDashboardUntouched(t *testing.T) {
 func TestASLRunsCommandPaletteEntryOpensTheView(t *testing.T) {
 	d, _ := aslRunsDriver(t)
 	m := d.Model()
-	updated, cmd := commandByID(t, commandShowRuns).run(m, captureCommandContext(m))
+	updated, cmd := commandByID(t, commands.ShowRuns).Run(m, captureCommandContext(m))
 	m = updated
 	if m.mode != ModeASLRuns {
 		t.Fatalf("palette command left mode at %v, want ModeASLRuns", m.mode)
@@ -430,7 +431,7 @@ func TestASLWorkbenchFailureStaysGenericAndLeaksNothing(t *testing.T) {
 
 func TestOpenBrowserURLRefusesNonHTTPSchemes(t *testing.T) {
 	for _, raw := range []string{"file:///etc/passwd", "javascript:alert(1)", "", "https://", "not a url"} {
-		err := openBrowserURL(raw)
+		err := commands.OpenBrowserURL(raw)
 		if err == nil {
 			t.Fatalf("openBrowserURL(%q) accepted the input", raw)
 		}

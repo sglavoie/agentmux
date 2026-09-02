@@ -17,6 +17,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/launch"
 )
 
@@ -254,12 +255,12 @@ func runViewerActionCmd(t *testing.T, cmd tea.Cmd) {
 		t.Fatal("action command is nil")
 	}
 	msg := cmd()
-	done, ok := msg.(actionDoneMsg)
+	done, ok := msg.(commands.ActionDoneMsg)
 	if !ok {
-		t.Fatalf("action command returned %T, want actionDoneMsg", msg)
+		t.Fatalf("action command returned %T, want commands.ActionDoneMsg", msg)
 	}
-	if done.err != nil {
-		t.Fatalf("action failed: %v", done.err)
+	if done.Err != nil {
+		t.Fatalf("action failed: %v", done.Err)
 	}
 }
 

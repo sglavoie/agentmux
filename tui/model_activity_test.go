@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/launch"
 )
@@ -18,13 +19,13 @@ func TestSessionsMsgStoresActivity(t *testing.T) {
 	m := testModel()
 	now := time.Now()
 	activity := map[int]time.Time{42: now}
-	updated, _ := m.Update(sessionsMsg{
-		sessions: makeSessions(),
-		activity: activity,
+	updated, _ := m.Update(commands.SessionsMsg{
+		Sessions: makeSessions(),
+		Activity: activity,
 	})
 	m2 := updated.(Model)
 	if m2.lastActivity == nil {
-		t.Fatal("expected lastActivity to be set after sessionsMsg")
+		t.Fatal("expected lastActivity to be set after commands.SessionsMsg")
 	}
 	if !m2.lastActivity[42].Equal(now) {
 		t.Errorf("expected activity[42]=%v, got %v", now, m2.lastActivity[42])
@@ -32,20 +33,20 @@ func TestSessionsMsgStoresActivity(t *testing.T) {
 }
 
 // TestSessionsMsgStoresWatchdog asserts that the watchdog snapshot rides on
-// sessionsMsg alongside the existing activity map and is stored on the model
+// commands.SessionsMsg alongside the existing activity map and is stored on the model
 // for the next render pass to consume.
 func TestSessionsMsgStoresWatchdog(t *testing.T) {
 	m := testModel()
 	wd := map[int]protocol.WatchdogState{
 		7: {LastAction: "active", LastEventAt: time.Now().Unix(), ThresholdSec: 600},
 	}
-	updated, _ := m.Update(sessionsMsg{
-		sessions: makeSessions(),
-		watchdog: wd,
+	updated, _ := m.Update(commands.SessionsMsg{
+		Sessions: makeSessions(),
+		Watchdog: wd,
 	})
 	m2 := updated.(Model)
 	if m2.watchdog == nil {
-		t.Fatal("expected watchdog to be set after sessionsMsg")
+		t.Fatal("expected watchdog to be set after commands.SessionsMsg")
 	}
 	got, ok := m2.watchdog[7]
 	if !ok {
@@ -182,24 +183,24 @@ func TestPickerProfileOverride_Persists(t *testing.T) {
 func TestClearStatusCmdUsesDaemonWithoutWritingTabTitle(t *testing.T) {
 	runner := kitty.NewMockRunner(nil)
 	client := kitty.NewClientWithSocket(runner, "")
-	oldDaemonRequest := daemonRequest
+	oldDaemonRequest := commands.DaemonRequest
 	var gotRequest protocol.Request
-	daemonRequest = func(req protocol.Request) (protocol.Response, error) {
+	commands.DaemonRequest = func(req protocol.Request) (protocol.Response, error) {
 		gotRequest = req
 		return protocol.Response{OK: true}, nil
 	}
-	t.Cleanup(func() { daemonRequest = oldDaemonRequest })
+	t.Cleanup(func() { commands.DaemonRequest = oldDaemonRequest })
 
 	target := session.RunningSession{
 		TabID: 7, WindowID: 99, Base: "🦊api", State: "bolt", Account: "work", Starred: true, Muted: true, Looping: true,
 	}
-	msg := clearStatusCmd(client, target)()
-	done, ok := msg.(actionDoneMsg)
+	msg := commands.ClearStatus(client, target)()
+	done, ok := msg.(commands.ActionDoneMsg)
 	if !ok {
-		t.Fatalf("expected actionDoneMsg, got %T", msg)
+		t.Fatalf("expected commands.ActionDoneMsg, got %T", msg)
 	}
-	if done.err != nil {
-		t.Errorf("expected nil error from mock Kitty client, got %v", done.err)
+	if done.Err != nil {
+		t.Errorf("expected nil error from mock Kitty client, got %v", done.Err)
 	}
 	if len(runner.Calls) != 0 {
 		t.Errorf("clear must not write Kitty titles, got calls: %v", runner.Calls)

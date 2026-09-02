@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
@@ -55,7 +56,7 @@ var listFooterPalette = []footerEntry{
 			return false
 		}
 		s := m.filtered[m.cursor]
-		_, ok := findConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject())
+		_, ok := commands.FindConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject())
 		return ok
 	}, 0},
 	{"O", "open in editor", footerSectionRow, func(m Model) bool {
@@ -63,7 +64,7 @@ var listFooterPalette = []footerEntry{
 			return false
 		}
 		s := m.filtered[m.cursor]
-		_, ok := findConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject())
+		_, ok := commands.FindConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject())
 		return ok
 	}, 0},
 	{"f", "profile", footerSectionLaunch, func(Model) bool { return true }, 0},

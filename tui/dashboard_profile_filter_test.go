@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
@@ -128,7 +129,7 @@ func TestDashboardProfileCycleUsesLatestRunningProfiles(t *testing.T) {
 		t.Fatalf("setup profile = %q, want personal", m.activeFilter.Account)
 	}
 
-	updated, _ := m.Update(sessionsMsg{sessions: []session.RunningSession{
+	updated, _ := m.Update(commands.SessionsMsg{Sessions: []session.RunningSession{
 		{Base: "work", Profile: "work"},
 	}})
 	m = updated.(Model)

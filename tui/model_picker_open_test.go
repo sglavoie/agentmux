@@ -10,6 +10,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 // ---- Picker open directory tests ----
@@ -106,12 +107,12 @@ func TestPickerOKeyOpensAllSelectedProjectsIncludingFilteredRows(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("o returned nil cmd for selected projects")
 	}
-	done, ok := cmd().(pickerOpenDoneMsg)
+	done, ok := cmd().(commands.PickerOpenDoneMsg)
 	if !ok {
-		t.Fatalf("o cmd returned %T, want pickerOpenDoneMsg", done)
+		t.Fatalf("o cmd returned %T, want commands.PickerOpenDoneMsg", done)
 	}
-	if done.err != nil {
-		t.Fatalf("opening selected projects: %v", done.err)
+	if done.Err != nil {
+		t.Fatalf("opening selected projects: %v", done.Err)
 	}
 
 	gotDirs := make([]string, 0, len(client.launched))
@@ -160,12 +161,12 @@ func TestPickerOKeyWithoutSelectionOpensHighlightedProject(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("o returned nil cmd for highlighted fallback")
 	}
-	done, ok := cmd().(pickerOpenDoneMsg)
+	done, ok := cmd().(commands.PickerOpenDoneMsg)
 	if !ok {
-		t.Fatalf("o cmd returned %T, want pickerOpenDoneMsg", done)
+		t.Fatalf("o cmd returned %T, want commands.PickerOpenDoneMsg", done)
 	}
-	if done.err != nil {
-		t.Fatalf("opening highlighted project: %v", done.err)
+	if done.Err != nil {
+		t.Fatalf("opening highlighted project: %v", done.Err)
 	}
 	if len(client.launched) != 1 || client.launched[0].Directory != "/projects/backend" {
 		t.Fatalf("opened tabs = %+v, want only highlighted backend", client.launched)
@@ -189,16 +190,16 @@ func TestPickerOKeyBatchContinuesAfterPartialFailureAndAggregatesErrors(t *testi
 	if cmd == nil {
 		t.Fatal("o returned nil cmd for selected projects")
 	}
-	done, ok := cmd().(pickerOpenDoneMsg)
+	done, ok := cmd().(commands.PickerOpenDoneMsg)
 	if !ok {
-		t.Fatalf("o cmd returned %T, want pickerOpenDoneMsg", done)
+		t.Fatalf("o cmd returned %T, want commands.PickerOpenDoneMsg", done)
 	}
-	if done.err == nil {
+	if done.Err == nil {
 		t.Fatal("batch error = nil, want aggregate error")
 	}
 	for _, want := range []string{"api: ", "api launch failed", "backend: ", "backend launch failed"} {
-		if !strings.Contains(done.err.Error(), want) {
-			t.Errorf("batch error %q missing %q", done.err, want)
+		if !strings.Contains(done.Err.Error(), want) {
+			t.Errorf("batch error %q missing %q", done.Err, want)
 		}
 	}
 	if got := len(client.launched); got != 3 {
@@ -257,7 +258,7 @@ func TestPickerOpenEditorKeyEmptyIsNoOp(t *testing.T) {
 
 func TestPickerOpenDoneMsgQuitsOnSuccess(t *testing.T) {
 	m := testModel()
-	_, cmd := m.Update(pickerOpenDoneMsg{err: nil})
+	_, cmd := m.Update(commands.PickerOpenDoneMsg{Err: nil})
 	if cmd == nil {
 		t.Fatal("expected non-nil cmd on success")
 	}
@@ -269,14 +270,14 @@ func TestPickerOpenDoneMsgQuitsOnSuccess(t *testing.T) {
 
 func TestPickerOpenDoneMsgStaysOpenOnError(t *testing.T) {
 	m := testModel()
-	updated, cmd := m.Update(pickerOpenDoneMsg{err: errors.New("kitten exploded")})
+	updated, cmd := m.Update(commands.PickerOpenDoneMsg{Err: errors.New("kitten exploded")})
 	if updated.(Model).actionErr == nil {
 		t.Fatal("expected actionErr set on error")
 	}
 	if cmd == nil {
-		t.Fatal("expected non-nil cmd (fetchCmd) on error")
+		t.Fatal("expected non-nil cmd (commands.Fetch) on error")
 	}
-	// fetchCmd would emit sessionsMsg or errMsg; it must not be tea.Quit.
+	// commands.Fetch would emit commands.SessionsMsg or commands.ErrMsg; it must not be tea.Quit.
 	// Invoking it requires a live Kitty client, so we only assert by type
 	// of cmd indirectly: invoke and confirm we did NOT get a QuitMsg.
 	msg := cmd()
@@ -317,9 +318,9 @@ func TestEKeyEmptyListIsNoOp(t *testing.T) {
 
 func TestPeekDoneMsgErrorSetsActionErr(t *testing.T) {
 	m := testModel()
-	updated, _ := m.Update(peekDoneMsg{err: errors.New("window gone")})
+	updated, _ := m.Update(commands.PeekDoneMsg{Err: errors.New("window gone")})
 	if updated.(Model).actionErr == nil {
-		t.Fatal("expected actionErr set after peekDoneMsg with error")
+		t.Fatal("expected actionErr set after commands.PeekDoneMsg with error")
 	}
 }
 

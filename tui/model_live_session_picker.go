@@ -8,6 +8,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/launch"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
@@ -94,7 +95,7 @@ func (m Model) handleLiveSessionPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.C
 		m.livePickerCandidates = nil
 		m.livePickerTitle = ""
 		if purpose == LivePickerASLFocus {
-			return m, focusCmd(m.client, chosen.TabID)
+			return m, commands.Focus(m.client, chosen.TabID)
 		}
 		return m.reopenWorktreeWithParameters(map[string]string{"session": chosen.ID})
 	}

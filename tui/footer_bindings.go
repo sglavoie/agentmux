@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"strings"
-
 	"charm.land/lipgloss/v2"
 )
 
@@ -37,17 +35,4 @@ func footerUnavailableBindingToken(key, description string) footerToken {
 
 func footerCustomBindingToken(key, gap, label string, labelStyle lipgloss.Style) footerToken {
 	return footerRenderedToken(renderFooterBindingWithLabel(key, gap, label, labelStyle))
-}
-
-// joinFooterBindings joins already-rendered binding segments without adding
-// an indent or wrapping. Fixed-width modal and standalone footer rows use it;
-// root footers continue through footerLineFromTokens and wrapFooterLine.
-func joinFooterBindings(separator string, rendered ...string) string {
-	kept := make([]string, 0, len(rendered))
-	for _, item := range rendered {
-		if item != "" {
-			kept = append(kept, item)
-		}
-	}
-	return strings.Join(kept, styleFooter.Render(separator))
 }

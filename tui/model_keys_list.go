@@ -5,6 +5,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/tui/asl"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
@@ -126,9 +127,9 @@ func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.confirmReturnMode = ModeList
 		switch m.confirmAction {
 		case "close":
-			return m, closeCmd(m.client, m.targetSession.TabID)
+			return m, commands.Close(m.client, m.targetSession.TabID)
 		case "restart":
-			return m, restartCmd(m.client, m.targetSession, m.cfg)
+			return m, commands.Restart(m.client, m.targetSession, m.cfg)
 		case "fork worktree":
 			if m.isolatedForkConversation == nil {
 				return m, nil

@@ -6,6 +6,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 // testModel returns a Model with a minimal config and mock client.
@@ -26,7 +27,7 @@ func testModel() Model {
 // loadSessions feeds a set of RunningSession values into the model
 // as if they came from a Kitty query.
 func loadSessions(m Model, sessions []session.RunningSession) Model {
-	updated, _ := m.Update(sessionsMsg{sessions: sessions})
+	updated, _ := m.Update(commands.SessionsMsg{Sessions: sessions})
 	return updated.(Model)
 }
 

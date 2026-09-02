@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"unicode/utf8"
 
 	"github.com/sglavoie/agentmux/internal/session"
 )
@@ -51,7 +50,7 @@ func TestActionAvailabilityActiveRow(t *testing.T) {
 	m = openActionsOverlay(t, m)
 	avail := map[string]bool{}
 	for _, a := range actionsFor(m) {
-		avail[a.keyMatch] = a.available(m)
+		avail[a.KeyMatch] = a.Available(m)
 	}
 	want := map[string]bool{
 		keyEnter: true, keyE: true, keyR: true, keyC: true,
@@ -74,7 +73,7 @@ func TestActionAvailabilityAttentionRow(t *testing.T) {
 	m = openActionsOverlay(t, m)
 	avail := map[string]bool{}
 	for _, a := range actionsFor(m) {
-		avail[a.keyMatch] = a.available(m)
+		avail[a.KeyMatch] = a.Available(m)
 	}
 	if avail[keyE] != false {
 		t.Errorf("attention row: peek should be unavailable")
@@ -99,7 +98,7 @@ func TestActionAvailabilityIdleRow(t *testing.T) {
 	m = openActionsOverlay(t, m)
 	avail := map[string]bool{}
 	for _, a := range actionsFor(m) {
-		avail[a.keyMatch] = a.available(m)
+		avail[a.KeyMatch] = a.Available(m)
 	}
 	if avail[keyE] != false {
 		t.Errorf("idle row: peek should be unavailable")
@@ -122,7 +121,7 @@ func TestActionAvailabilityUnlockedRow(t *testing.T) {
 	m = openActionsOverlay(t, m)
 	avail := map[string]bool{}
 	for _, a := range actionsFor(m) {
-		avail[a.keyMatch] = a.available(m)
+		avail[a.KeyMatch] = a.Available(m)
 	}
 	want := map[string]bool{
 		keyR: true, keyClose: true, keyC: true, keyDashboardLaunch: true, keyLock: true,
@@ -152,9 +151,9 @@ func TestActionAvailabilityMuteAlwaysOn(t *testing.T) {
 			m = openActionsOverlay(t, m)
 			found := false
 			for _, a := range actionsFor(m) {
-				if a.keyMatch == keyM {
+				if a.KeyMatch == keyM {
 					found = true
-					if !a.available(m) {
+					if !a.Available(m) {
 						t.Errorf("mute action: expected available on %s row, got false", tc.name)
 					}
 				}
@@ -176,7 +175,7 @@ func TestActionAvailabilityLockedRow(t *testing.T) {
 	m = openActionsOverlay(t, m)
 	avail := map[string]bool{}
 	for _, a := range actionsFor(m) {
-		avail[a.keyMatch] = a.available(m)
+		avail[a.KeyMatch] = a.Available(m)
 	}
 	want := map[string]bool{
 		keyR: false, keyClose: false, keyC: false, keyDashboardLaunch: true, keyLock: true,
@@ -222,7 +221,7 @@ func TestOpenDirActionUnavailableWithoutConfig(t *testing.T) {
 	})
 	m = openActionsOverlay(t, m)
 	for _, a := range actionsFor(m) {
-		if a.keyMatch == keyO && a.available(m) {
+		if a.KeyMatch == keyO && a.Available(m) {
 			t.Errorf("expected open dir unavailable without matching config session")
 		}
 	}
@@ -245,25 +244,5 @@ func TestActionsOverlayQReturnsToList(t *testing.T) {
 	m = pressKey(m, "q")
 	if m.mode != ModeList {
 		t.Fatalf("expected ModeList after q in overlay, got %d", m.mode)
-	}
-}
-
-// TestWrapTextHardBreakIsRuneSafe pins that hard-breaking a word longer
-// than the wrap width never slices mid-rune: every emitted line must be
-// valid UTF-8 and joining the lines must reproduce the original word.
-// Before the fix, word[:width] cut by byte and garbled multi-byte words.
-func TestWrapTextHardBreakIsRuneSafe(t *testing.T) {
-	word := "ééééééé" // 7 runes, 14 bytes — forces hard breaks at width 5
-	lines := wrapText(word, 5)
-	if len(lines) < 2 {
-		t.Fatalf("expected the word to hard-break into multiple lines, got %q", lines)
-	}
-	for _, line := range lines {
-		if !utf8.ValidString(line) {
-			t.Errorf("wrapText emitted invalid UTF-8 line %q", line)
-		}
-	}
-	if got := strings.Join(lines, ""); got != word {
-		t.Errorf("wrapText mangled the word: joined lines %q, want %q", got, word)
 	}
 }

@@ -3,63 +3,49 @@ package tui
 import (
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sglavoie/agentmux/internal/clipboard"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/launch"
 )
 
-var copyToClipboard = clipboard.Copy
-
-// action describes one entry in the per-row actions overlay. keyDisplay is
-// what the user sees in the overlay (e.g. "⏎"); keyMatch is the literal
-// msg.String() value the handler compares against (e.g. "enter").
-type action struct {
-	keyDisplay  string
-	keyMatch    string
-	label       string
-	description string
-	available   func(m Model) bool
-	run         func(m Model) (Model, tea.Cmd)
-}
-
 // actionsFor returns the ordered list of actions exposed in the overlay for
 // the current target row (m.targetSession). The availability functions take
 // the model so they can read live state (lastActivity, idle threshold, etc.).
-func actionsFor(_ Model) []action {
-	return []action{
+func actionsFor(_ Model) []commands.Action[Model] {
+	return []commands.Action[Model]{
 		{
-			keyDisplay:  "⏎",
-			keyMatch:    keyEnter,
-			label:       "focus tab",
-			description: "jump to the session's Kitty tab",
-			available:   func(Model) bool { return true },
-			run: func(m Model) (Model, tea.Cmd) {
-				cmd := focusCmd(m.client, m.targetSession.TabID)
+			KeyDisplay:  "⏎",
+			KeyMatch:    keyEnter,
+			Label:       "focus tab",
+			Description: "jump to the session's Kitty tab",
+			Available:   func(Model) bool { return true },
+			Run: func(m Model) (Model, tea.Cmd) {
+				cmd := commands.Focus(m.client, m.targetSession.TabID)
 				m.exitActionsMode()
 				return m, cmd
 			},
 		},
 		{
-			keyDisplay:  "e",
-			keyMatch:    keyE,
-			label:       "peek scrollback",
-			description: "open the session's scrollback in an overlay pager",
-			available: func(m Model) bool {
+			KeyDisplay:  "e",
+			KeyMatch:    keyE,
+			Label:       "peek scrollback",
+			Description: "open the session's scrollback in an overlay pager",
+			Available: func(m Model) bool {
 				return m.targetSession.State == "bolt"
 			},
-			run: func(m Model) (Model, tea.Cmd) {
-				cmd := peekCmd(m.client, m.targetSession.WindowID)
+			Run: func(m Model) (Model, tea.Cmd) {
+				cmd := commands.Peek(m.client, m.targetSession.WindowID)
 				m.exitActionsMode()
 				return m, cmd
 			},
 		},
 		{
-			keyDisplay:  "r",
-			keyMatch:    keyR,
-			label:       "restart",
-			description: "close and relaunch the session",
-			available:   func(m Model) bool { return !m.targetSession.Locked },
-			run: func(m Model) (Model, tea.Cmd) {
+			KeyDisplay:  "r",
+			KeyMatch:    keyR,
+			Label:       "restart",
+			Description: "close and relaunch the session",
+			Available:   func(m Model) bool { return !m.targetSession.Locked },
+			Run: func(m Model) (Model, tea.Cmd) {
 				m.actionErr = nil
 				if m.cfg.Defaults.ConfirmDestructive {
 					m.confirmAction = "restart"
@@ -75,12 +61,12 @@ func actionsFor(_ Model) []action {
 			},
 		},
 		{
-			keyDisplay:  "c",
-			keyMatch:    keyC,
-			label:       "override profile",
-			description: "restart under a different harness profile",
-			available:   func(m Model) bool { return !m.targetSession.Locked },
-			run: func(m Model) (Model, tea.Cmd) {
+			KeyDisplay:  "c",
+			KeyMatch:    keyC,
+			Label:       "override profile",
+			Description: "restart under a different harness profile",
+			Available:   func(m Model) bool { return !m.targetSession.Locked },
+			Run: func(m Model) (Model, tea.Cmd) {
 				m.configPickerAccounts = m.cfg.Accounts
 				m.configPickerCurrent = m.targetSession.EffectiveProfile()
 				m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
@@ -94,12 +80,12 @@ func actionsFor(_ Model) []action {
 			},
 		},
 		{
-			keyDisplay:  "C",
-			keyMatch:    keyDashboardLaunch,
-			label:       "launch new",
-			description: "pick a profile and launch another session from this row",
-			available:   func(Model) bool { return true },
-			run: func(m Model) (Model, tea.Cmd) {
+			KeyDisplay:  "C",
+			KeyMatch:    keyDashboardLaunch,
+			Label:       "launch new",
+			Description: "pick a profile and launch another session from this row",
+			Available:   func(Model) bool { return true },
+			Run: func(m Model) (Model, tea.Cmd) {
 				m.configPickerAccounts = m.cfg.Accounts
 				m.configPickerCurrent = m.targetSession.EffectiveProfile()
 				m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
@@ -113,14 +99,14 @@ func actionsFor(_ Model) []action {
 			},
 		},
 		{
-			keyDisplay:  "x",
-			keyMatch:    keyClearStatus,
-			label:       "clear icon",
-			description: "drop the attention/key/stop badge on the tab title",
-			available: func(m Model) bool {
+			KeyDisplay:  "x",
+			KeyMatch:    keyClearStatus,
+			Label:       "clear icon",
+			Description: "drop the attention/key/stop badge on the tab title",
+			Available: func(m Model) bool {
 				return dashboard.StateGroup(m.targetSession, m.lastActivity, m.idleThreshold) == 0
 			},
-			run: func(m Model) (Model, tea.Cmd) {
+			Run: func(m Model) (Model, tea.Cmd) {
 				cmd := m.clearStatusCmd(m.targetSession)
 				m.actionErr = nil
 				m.exitActionsMode()
@@ -128,12 +114,12 @@ func actionsFor(_ Model) []action {
 			},
 		},
 		{
-			keyDisplay:  "X",
-			keyMatch:    keyClose,
-			label:       "close",
-			description: "exit the Claude process; transcript persists",
-			available:   func(m Model) bool { return !m.targetSession.Locked },
-			run: func(m Model) (Model, tea.Cmd) {
+			KeyDisplay:  "X",
+			KeyMatch:    keyClose,
+			Label:       "close",
+			Description: "exit the Claude process; transcript persists",
+			Available:   func(m Model) bool { return !m.targetSession.Locked },
+			Run: func(m Model) (Model, tea.Cmd) {
 				m.actionErr = nil
 				if m.cfg.Defaults.ConfirmDestructive {
 					m.confirmAction = "close"
@@ -149,73 +135,73 @@ func actionsFor(_ Model) []action {
 			},
 		},
 		{
-			keyDisplay:  "o",
-			keyMatch:    keyO,
-			label:       "open dir in shell",
-			description: "spawn a plain shell tab at the session's directory",
-			available: func(m Model) bool {
-				_, ok := findConfigSession(m.cfg, m.targetSession.EffectiveProfile(), m.targetSession.EffectiveProject())
+			KeyDisplay:  "o",
+			KeyMatch:    keyO,
+			Label:       "open dir in shell",
+			Description: "spawn a plain shell tab at the session's directory",
+			Available: func(m Model) bool {
+				_, ok := commands.FindConfigSession(m.cfg, m.targetSession.EffectiveProfile(), m.targetSession.EffectiveProject())
 				return ok
 			},
-			run: func(m Model) (Model, tea.Cmd) {
-				cs, ok := findConfigSession(m.cfg, m.targetSession.EffectiveProfile(), m.targetSession.EffectiveProject())
+			Run: func(m Model) (Model, tea.Cmd) {
+				cs, ok := commands.FindConfigSession(m.cfg, m.targetSession.EffectiveProfile(), m.targetSession.EffectiveProject())
 				m.exitActionsMode()
 				if !ok {
 					return m, nil
 				}
-				return m, openDirActionCmd(m, cs)
+				return m, commands.OpenDirectory(m.client, m.cfg, cs)
 			},
 		},
 		{
-			keyDisplay:  "O",
-			keyMatch:    keyOpenEditor,
-			label:       "open in editor",
-			description: "open the project directory in $VISUAL/$EDITOR (or defaults.editor)",
-			available: func(m Model) bool {
-				_, ok := findConfigSession(m.cfg, m.targetSession.EffectiveProfile(), m.targetSession.EffectiveProject())
+			KeyDisplay:  "O",
+			KeyMatch:    keyOpenEditor,
+			Label:       "open in editor",
+			Description: "open the project directory in $VISUAL/$EDITOR (or defaults.editor)",
+			Available: func(m Model) bool {
+				_, ok := commands.FindConfigSession(m.cfg, m.targetSession.EffectiveProfile(), m.targetSession.EffectiveProject())
 				return ok
 			},
-			run: func(m Model) (Model, tea.Cmd) {
-				cs, ok := findConfigSession(m.cfg, m.targetSession.EffectiveProfile(), m.targetSession.EffectiveProject())
+			Run: func(m Model) (Model, tea.Cmd) {
+				cs, ok := commands.FindConfigSession(m.cfg, m.targetSession.EffectiveProfile(), m.targetSession.EffectiveProject())
 				m.exitActionsMode()
 				if !ok {
 					return m, nil
 				}
-				return m, openInEditorActionCmd(m, cs)
+				return m, commands.OpenInEditor(m.client, m.cfg, cs)
 			},
 		},
 		{
-			keyDisplay:  "y",
-			keyMatch:    keyY,
-			label:       "copy title",
-			description: "copy the session title to the system clipboard",
-			available:   func(Model) bool { return true },
-			run: func(m Model) (Model, tea.Cmd) {
+			KeyDisplay:  "y",
+			KeyMatch:    keyY,
+			Label:       "copy title",
+			Description: "copy the session title to the system clipboard",
+			Available:   func(Model) bool { return true },
+			Run: func(m Model) (Model, tea.Cmd) {
 				title := dashboard.SessionDisplayTitle(m.targetSession)
 				m.exitActionsMode()
-				return m, copyTitleCmd(title)
+				return m, commands.CopyTitle(title)
 			},
 		},
 		{
-			keyDisplay:  "L",
-			keyMatch:    keyLock,
-			label:       "lock/unlock",
-			description: "toggle session lock (prevents close/restart/override)",
-			available:   func(Model) bool { return true },
-			run: func(m Model) (Model, tea.Cmd) {
+			KeyDisplay:  "L",
+			KeyMatch:    keyLock,
+			Label:       "lock/unlock",
+			Description: "toggle session lock (prevents close/restart/override)",
+			Available:   func(Model) bool { return true },
+			Run: func(m Model) (Model, tea.Cmd) {
 				m.exitActionsMode()
-				return m, toggleLockCmd(m.client, m.targetSession)
+				return m, commands.ToggleLock(m.client, m.targetSession)
 			},
 		},
 		{
-			keyDisplay:  "m",
-			keyMatch:    keyM,
-			label:       "mute/unmute",
-			description: "toggle session mute (suppresses macOS notifications)",
-			available:   func(Model) bool { return true },
-			run: func(m Model) (Model, tea.Cmd) {
+			KeyDisplay:  "m",
+			KeyMatch:    keyM,
+			Label:       "mute/unmute",
+			Description: "toggle session mute (suppresses macOS notifications)",
+			Available:   func(Model) bool { return true },
+			Run: func(m Model) (Model, tea.Cmd) {
 				m.exitActionsMode()
-				return m, toggleMuteCmd(m.client, m.targetSession)
+				return m, commands.ToggleMute(m.client, m.targetSession)
 			},
 		},
 	}

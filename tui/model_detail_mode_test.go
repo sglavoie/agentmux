@@ -8,6 +8,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 // detailSessions builds three sessions with non-zero WindowIDs so detail
@@ -85,10 +86,10 @@ func TestDetailEventsMsgPopulatesEvents(t *testing.T) {
 		{At: 1, Event: "PreToolUse", Action: "active", ToolName: "Bash"},
 		{At: 2, Event: "PostToolUse", Action: "active", ToolName: "Bash"},
 	}
-	updated, _ := m.Update(detailEventsMsg{windowID: m.detailWindowID, events: events})
+	updated, _ := m.Update(commands.DetailEventsMsg{WindowID: m.detailWindowID, Events: events})
 	got := updated.(Model)
 	if got.detailLoading {
-		t.Fatal("expected detailLoading=false after detailEventsMsg")
+		t.Fatal("expected detailLoading=false after commands.DetailEventsMsg")
 	}
 	if len(got.detailEvents) != 2 {
 		t.Fatalf("expected 2 events stored, got %d", len(got.detailEvents))
@@ -105,9 +106,9 @@ func TestDetailEventsMsgStaleIsIgnored(t *testing.T) {
 		m = mm.(Model)
 	}
 
-	stale := detailEventsMsg{
-		windowID: m.detailWindowID + 9999, // mismatched
-		events:   []protocol.SessionEvent{{At: 1, Event: "PreToolUse", Action: "active"}},
+	stale := commands.DetailEventsMsg{
+		WindowID: m.detailWindowID + 9999, // mismatched
+		Events:   []protocol.SessionEvent{{At: 1, Event: "PreToolUse", Action: "active"}},
 	}
 	updated, _ := m.Update(stale)
 	got := updated.(Model)
@@ -126,9 +127,9 @@ func TestDetailEventsMsgErrorPropagates(t *testing.T) {
 		m = mm.(Model)
 	}
 
-	updated, _ := m.Update(detailEventsMsg{
-		windowID: m.detailWindowID,
-		err:      errors.New("daemon offline"),
+	updated, _ := m.Update(commands.DetailEventsMsg{
+		WindowID: m.detailWindowID,
+		Err:      errors.New("daemon offline"),
 	})
 	got := updated.(Model)
 	if got.detailLoading {
@@ -279,7 +280,7 @@ func TestTickInDetailModePreservesPaneState(t *testing.T) {
 	}
 	targetID := m.detailWindowID
 
-	updated, cmd := m.Update(tickMsg{})
+	updated, cmd := m.Update(commands.TickMsg{})
 	got := updated.(Model)
 	if got.mode != ModeDetail {
 		t.Fatalf("expected mode to remain ModeDetail after tick, got %d", got.mode)
@@ -288,7 +289,7 @@ func TestTickInDetailModePreservesPaneState(t *testing.T) {
 		t.Fatalf("expected detailWindowID preserved across tick, got %d (want %d)", got.detailWindowID, targetID)
 	}
 	if cmd == nil {
-		t.Fatal("expected non-nil cmd from tickMsg in ModeDetail")
+		t.Fatal("expected non-nil cmd from commands.TickMsg in ModeDetail")
 	}
 }
 
@@ -311,7 +312,7 @@ func TestDetailEventsMsgClampsScrollOnShrink(t *testing.T) {
 
 	// Now deliver a tiny event ring — the daemon GC'd most entries.
 	small := makeEvents(2)
-	updated, _ := m.Update(detailEventsMsg{windowID: m.detailWindowID, events: small})
+	updated, _ := m.Update(commands.DetailEventsMsg{WindowID: m.detailWindowID, Events: small})
 	got := updated.(Model)
 
 	total, vis := detailScrollBounds(got, detailVisibleHeight(got))
@@ -336,9 +337,9 @@ func TestDetailEventsMsgIgnoredOutsideDetailMode(t *testing.T) {
 	m.detailWindowID = m.filtered[m.cursor].WindowID
 	// Mode intentionally stays ModeList — exercises the new m.mode guard.
 
-	updated, _ := m.Update(detailEventsMsg{
-		windowID: m.detailWindowID,
-		events:   []protocol.SessionEvent{{At: 1, Event: "PreToolUse", Action: "active"}},
+	updated, _ := m.Update(commands.DetailEventsMsg{
+		WindowID: m.detailWindowID,
+		Events:   []protocol.SessionEvent{{At: 1, Event: "PreToolUse", Action: "active"}},
 	})
 	got := updated.(Model)
 	if len(got.detailEvents) != 0 {

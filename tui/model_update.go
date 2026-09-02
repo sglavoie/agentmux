@@ -13,6 +13,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 // NewModel creates a dashboard model.
@@ -55,7 +56,7 @@ func newModel(cfg *config.Config, client kitty.KittyClient, sourceWindowID int, 
 		sortMode:              sort,
 		attentionStates:       attn,
 		backgroundCommands:    defaultModelBackgroundCommands(),
-		daemonCommand:         daemonRequest,
+		daemonCommand:         commands.DaemonRequest,
 		now:                   time.Now,
 		idleThreshold:         idle,
 		focusedChipIdx:        -1,
@@ -72,7 +73,7 @@ func (m Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{
 		m.runInitialFetchCmd(m.initialSourceWindowID),
 		m.runActiveLoopRefreshCmd(m.activeLoopRefreshSeq),
-		tickCmd(m.interval),
+		commands.Tick(m.interval),
 		m.runHealthCmd(true, true),
 		startupSessionWarmupCmd(m.sessionSearchSeq),
 	}
@@ -86,10 +87,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		return m.handleWindowSize(msg)
 
-	case tickMsg:
+	case commands.TickMsg:
 		return m.handleTick(msg)
 
-	case healthMsg:
+	case commands.HealthMsg:
 		return m.handleHealth(msg)
 
 	case previewTickMsg:
@@ -98,23 +99,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case previewContentMsg:
 		return m.handlePreviewContent(msg)
 
-	case sessionsMsg:
+	case commands.SessionsMsg:
 		return m.handleSessionsMsg(msg)
 
-	case activeLoopsMsg:
+	case commands.ActiveLoopsMsg:
 		return m.handleActiveLoopsMsg(msg)
 
-	case errMsg:
-		m.err = msg.err
+	case commands.ErrMsg:
+		m.err = msg.Err
 		return m, nil
 
-	case actionDoneMsg:
+	case commands.ActionDoneMsg:
 		return m.handleActionDone(msg)
 
-	case copyDoneMsg:
+	case commands.CopyDoneMsg:
 		return m.handleCopyDone(msg)
 
-	case resortDoneMsg:
+	case commands.ResortDoneMsg:
 		return m.handleResortDone(msg)
 
 	case launchProgressMsg:
@@ -124,16 +125,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sweepUndo()
 		return m, m.sweepToasts()
 
-	case pickerOpenDoneMsg:
+	case commands.PickerOpenDoneMsg:
 		return m.handlePickerOpenDone(msg)
 
-	case focusDoneMsg:
+	case commands.FocusDoneMsg:
 		return m.handleFocusDone(msg)
 
-	case peekDoneMsg:
+	case commands.PeekDoneMsg:
 		return m.handlePeekDone(msg)
 
-	case detailEventsMsg:
+	case commands.DetailEventsMsg:
 		return m.handleDetailEvents(msg)
 
 	case sessionCacheLoadStartedMsg:

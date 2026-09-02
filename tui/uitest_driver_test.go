@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/sglavoie/agentmux/tui/commands"
 	tuiworktrees "github.com/sglavoie/agentmux/tui/worktrees"
 )
 
@@ -150,7 +151,7 @@ func TestUITestDriverKeyRejectsBadSpec(t *testing.T) {
 // TestUITestDriverFlattenCmds verifies slice-shaped batch messages are expanded
 // into their component commands and non-slice messages are left alone.
 func TestUITestDriverFlattenCmds(t *testing.T) {
-	leaf := func() tea.Msg { return tickMsg{} }
+	leaf := func() tea.Msg { return commands.TickMsg{} }
 	batch := tea.Batch(leaf, leaf)
 	if batch == nil {
 		t.Fatal("expected a non-nil batch command")
@@ -163,7 +164,7 @@ func TestUITestDriverFlattenCmds(t *testing.T) {
 		t.Fatalf("expected 2 component commands, got %d", len(cmds))
 	}
 
-	if _, ok := uitestFlattenCmds(tickMsg{}); ok {
+	if _, ok := uitestFlattenCmds(commands.TickMsg{}); ok {
 		t.Fatal("expected a plain message not to be treated as a batch")
 	}
 }
@@ -174,7 +175,7 @@ func TestUITestDriverSkipsTimersBeforeLaunch(t *testing.T) {
 	d := NewUITestDriverModel(testModelWithSessions(), UITestSize{Width: 80, Height: 24})
 	cleanupUITestDriver(t, d)
 
-	fast := func() tea.Msg { return tickMsg{} }
+	fast := func() tea.Msg { return commands.TickMsg{} }
 	if msg, ran, err := d.runCommand(fast); err != nil || !ran || msg == nil {
 		t.Fatalf("expected fast command to return a message, got ran=%v msg=%v err=%v", ran, msg, err)
 	}
@@ -182,7 +183,7 @@ func TestUITestDriverSkipsTimersBeforeLaunch(t *testing.T) {
 	started := false
 	timer := tea.Tick(time.Hour, func(time.Time) tea.Msg {
 		started = true
-		return tickMsg{}
+		return commands.TickMsg{}
 	})
 	if msg, ran, err := d.runCommand(timer); err != nil || ran || msg != nil {
 		t.Fatalf("timer command = ran=%v msg=%v err=%v, want skipped", ran, msg, err)

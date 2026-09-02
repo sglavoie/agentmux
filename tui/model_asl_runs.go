@@ -8,6 +8,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/tui/asl"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 // aslSnapshotLoadedMsg carries one polled ASL projection. seq is compared
@@ -48,7 +49,7 @@ func aslWorkbenchCmd(rowID, planDir, focus string) tea.Cmd {
 		if err != nil {
 			return aslWorkbenchDoneMsg{rowID: rowID, focus: focus, err: errASLWorkbenchOpen}
 		}
-		if openBrowserURL(link.URL) != nil {
+		if commands.OpenBrowserURL(link.URL) != nil {
 			return aslWorkbenchDoneMsg{rowID: rowID, focus: focus, err: errASLWorkbenchOpen}
 		}
 		return aslWorkbenchDoneMsg{rowID: rowID, focus: focus}
@@ -171,7 +172,7 @@ func (m Model) handleASLRunsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.confirmASLControl(aslbridge.MethodRunAbort)
 	case keyCopyPath:
 		if row, ok := m.selectedASLRow(); ok && row.WorkspaceRoot != "" {
-			return m, copyTextCmd(row.WorkspaceRoot)
+			return m, commands.CopyText(row.WorkspaceRoot)
 		}
 		return m, nil
 	case keyJ, keyDown:
@@ -213,7 +214,7 @@ func (m Model) focusSelectedASLRun() (tea.Model, tea.Cmd) {
 	}
 	if bound, found := asl.ExactBinding(row, m.sessions); found {
 		m.aslErr = nil
-		return m, focusCmd(m.client, bound.TabID)
+		return m, commands.Focus(m.client, bound.TabID)
 	}
 	candidates := asl.FallbackCandidates(row, m.sessions)
 	switch len(candidates) {
@@ -222,7 +223,7 @@ func (m Model) focusSelectedASLRun() (tea.Model, tea.Cmd) {
 		return m, nil
 	case 1:
 		m.aslErr = nil
-		return m, focusCmd(m.client, candidates[0].TabID)
+		return m, commands.Focus(m.client, candidates[0].TabID)
 	default:
 		m.aslErr = nil
 		m.aslFocusTarget = row.RowID
@@ -243,7 +244,7 @@ func (m Model) openSelectedASLWorkbench() (tea.Model, tea.Cmd) {
 		m.aslErr = errors.New("workbench unavailable: this run reports no plan directory")
 		return m, nil
 	}
-	if !openBrowserSupported() {
+	if !commands.BrowserSupported() {
 		m.aslErr = errors.New("workbench unavailable: no supported URL opener on this platform")
 		return m, nil
 	}

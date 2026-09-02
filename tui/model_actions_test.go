@@ -65,7 +65,7 @@ func TestEnterFocusesTab(t *testing.T) {
 		t.Fatalf("expected ModeList after enter, got %d", m2.mode)
 	}
 	if cmd == nil {
-		t.Fatal("expected non-nil focusCmd after enter")
+		t.Fatal("expected non-nil commands.Focus after enter")
 	}
 }
 
@@ -91,7 +91,7 @@ func TestSpaceFocusesTab(t *testing.T) {
 		t.Fatalf("expected ModeList after space, got %d", updated.(Model).mode)
 	}
 	if cmd == nil {
-		t.Fatal("expected non-nil focusCmd after space")
+		t.Fatal("expected non-nil commands.Focus after space")
 	}
 }
 

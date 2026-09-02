@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
@@ -39,9 +40,9 @@ type undoEntry struct {
 // still fires but the toast omits the undo affordance.
 func (m *Model) closeWithToast(rs session.RunningSession) tea.Cmd {
 	snapshot := session.SessionFromRunning(rs)
-	acc, hasAcc := findAccountByName(m.cfg.Accounts, rs.EffectiveProfile())
+	acc, hasAcc := commands.FindAccountByName(m.cfg.Accounts, rs.EffectiveProfile())
 
-	cmds := []tea.Cmd{closeCmd(m.client, rs.TabID)}
+	cmds := []tea.Cmd{commands.Close(m.client, rs.TabID)}
 
 	if !hasAcc {
 		text := fmt.Sprintf("closed %s", dashboard.SessionDisplayTitle(rs))
@@ -72,7 +73,7 @@ func (m *Model) closeWithToast(rs session.RunningSession) tea.Cmd {
 // confirmation toast. Restart is not undoable in this flow because Restart
 // is internally close+launch — there is no separate state to roll back.
 func (m *Model) restartWithToast(rs session.RunningSession) tea.Cmd {
-	cmds := []tea.Cmd{restartCmd(m.client, rs, m.cfg)}
+	cmds := []tea.Cmd{commands.Restart(m.client, rs, m.cfg)}
 	text := fmt.Sprintf("restarted %s", dashboard.SessionDisplayTitle(rs))
 	if c := m.pushToast(Toast{Severity: toastInfo, Text: text}); c != nil {
 		cmds = append(cmds, c)
@@ -164,8 +165,8 @@ func (m *Model) undoLastCmd() tea.Cmd {
 	cfg := m.cfg
 	client := m.client
 	launch := func() tea.Msg {
-		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Kitty: client, Config: cfg}, actions.Launch, actions.Request{Project: &sess})
-		return actionDoneMsg{err: err}
+		_, err := commands.Registry.Execute(context.Background(), actions.Dependencies{Kitty: client, Config: cfg}, actions.Launch, actions.Request{Project: &sess})
+		return commands.ActionDoneMsg{Err: err}
 	}
 
 	cmds := []tea.Cmd{launch}

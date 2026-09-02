@@ -7,23 +7,24 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 func TestHealthCmd_StartsDaemonWhenDead(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	oldSpawn := spawnDaemonDetached
+	oldSpawn := commands.SpawnDaemonDetached
 	spawned := ""
-	spawnDaemonDetached = func(amxBin string) error {
+	commands.SpawnDaemonDetached = func(amxBin string) error {
 		spawned = amxBin
 		return nil
 	}
-	t.Cleanup(func() { spawnDaemonDetached = oldSpawn })
+	t.Cleanup(func() { commands.SpawnDaemonDetached = oldSpawn })
 
-	msg, ok := healthCmd(&config.Config{}, "/tmp/amx", true, false)().(healthMsg)
+	msg, ok := commands.Health(&config.Config{}, "/tmp/amx", true, false)().(commands.HealthMsg)
 	if !ok {
 		t.Fatal("healthCmd returned an unexpected message type")
 	}
-	if msg.daemonAlive {
+	if msg.DaemonAlive {
 		t.Fatal("daemonAlive = true, want false before the detached daemon is ready")
 	}
 	if spawned != "/tmp/amx" {
@@ -42,7 +43,7 @@ func TestApplyDaemonStatesStampsBusySince(t *testing.T) {
 		{WindowID: 2},
 		{WindowID: 3, State: "bolt", Looping: true, BusySince: anchor},
 	}
-	applyDaemonStates(sessions, map[int]protocol.WindowStateSnapshot{
+	commands.ApplyDaemonStates(sessions, map[int]protocol.WindowStateSnapshot{
 		1: {IconState: "bolt", BusySinceAt: anchor.Unix()},
 		2: {IconState: "key"},
 	})

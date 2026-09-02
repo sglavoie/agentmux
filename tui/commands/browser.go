@@ -1,4 +1,4 @@
-package tui
+package commands
 
 import (
 	"errors"
@@ -8,10 +8,10 @@ import (
 	"strings"
 )
 
-// openBrowserSupported reports whether this platform has a URL opener the
+// BrowserSupported reports whether this platform has a URL opener the
 // dashboard is willing to use. Callers check it before offering an action so a
 // deep link is disabled up front instead of failing after the link is minted.
-func openBrowserSupported() bool {
+func BrowserSupported() bool {
 	switch runtime.GOOS {
 	case "darwin":
 		return true
@@ -22,11 +22,11 @@ func openBrowserSupported() bool {
 	}
 }
 
-// openBrowserURL hands one http or https URL to the platform opener as a single
+// OpenBrowserURL hands one http or https URL to the platform opener as a single
 // argv element. No shell is involved, so a URL containing shell metacharacters
 // is data rather than syntax. The error deliberately excludes the URL because
 // callers pass tokenized links.
-func openBrowserURL(raw string) error {
+func OpenBrowserURL(raw string) error {
 	parsed, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
 		return errors.New("refusing to open a non-http(s) URL")

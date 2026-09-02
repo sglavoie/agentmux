@@ -5,6 +5,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 // modelBackgroundCommands contains the long-running environment-facing
@@ -32,11 +33,11 @@ type modelBackgroundCommands struct {
 func defaultModelBackgroundCommands() modelBackgroundCommands {
 	return modelBackgroundCommands{
 		initialFetch: func(m Model, sourceWindowID int) tea.Cmd {
-			return initialFetchCmd(m.client, m.cfg, m.sortMode, sourceWindowID)
+			return commands.InitialFetch(m.client, m.cfg, m.sortMode, sourceWindowID)
 		},
-		activeLoops: activeLoopRefreshCmd,
+		activeLoops: commands.ActiveLoopRefresh,
 		health: func(m Model, checkDaemon, checkHooks bool) tea.Cmd {
-			return healthCmd(m.cfg, m.amxBin, checkDaemon, checkHooks)
+			return commands.Health(m.cfg, m.amxBin, checkDaemon, checkHooks)
 		},
 		detail: sessionDetailCmd,
 		worktrees: func(m Model, seq int) tea.Cmd {

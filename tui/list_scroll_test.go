@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
@@ -86,7 +87,7 @@ func TestListChromeLines_HealthHintsAddHeaderLines(t *testing.T) {
 	now := time.Now()
 	m.daemonAlive = false
 	m.daemonHealthCheckedAt = now
-	m.hookHealth = HookHealth{Drifted: []string{"work"}}
+	m.hookHealth = commands.HookHealth{Drifted: []string{"work"}}
 	m.hookHealthCheckedAt = now
 
 	got := listChromeLines(m)
@@ -98,7 +99,7 @@ func TestListChromeLines_HealthHintsAddHeaderLines(t *testing.T) {
 	}
 
 	m.daemonAlive = true
-	m.hookHealth = HookHealth{InSync: []string{"work"}}
+	m.hookHealth = commands.HookHealth{InSync: []string{"work"}}
 	if got := listChromeLines(m); got != base {
 		t.Errorf("healthy pips should not reserve hint lines: got %d want %d", got, base)
 	}

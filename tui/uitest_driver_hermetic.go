@@ -22,6 +22,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 // uitestFrozenNow is the instant every harness run renders against. A
@@ -108,16 +109,16 @@ func hermeticInitialFetch(states map[int]protocol.WindowStateSnapshot, watchdog 
 		return func() tea.Msg {
 			windows, err := m.client.ListWindows()
 			if err != nil {
-				return errMsg{err: err}
+				return commands.ErrMsg{Err: err}
 			}
 			sessions, _ := session.ListFromOSWindowsWithConfig(windows, m.cfg)
 			if states != nil {
-				applyDaemonStates(sessions, states)
+				commands.ApplyDaemonStates(sessions, states)
 			}
-			return sessionsMsg{
-				sessions: session.SortRunning(sessions, m.sortMode),
-				watchdog: watchdog,
-				states:   states,
+			return commands.SessionsMsg{
+				Sessions: session.SortRunning(sessions, m.sortMode),
+				Watchdog: watchdog,
+				States:   states,
 			}
 		}
 	}
@@ -127,14 +128,14 @@ func hermeticModelBackgroundCommands() modelBackgroundCommands {
 	return modelBackgroundCommands{
 		initialFetch: hermeticInitialFetch(nil, nil),
 		activeLoops: func(seq int) tea.Cmd {
-			return func() tea.Msg { return activeLoopsMsg{seq: seq} }
+			return func() tea.Msg { return commands.ActiveLoopsMsg{Seq: seq} }
 		},
 		health: func(_ Model, checkDaemon, checkHooks bool) tea.Cmd {
-			return func() tea.Msg { return healthMsg{daemonChecked: checkDaemon, hookChecked: checkHooks} }
+			return func() tea.Msg { return commands.HealthMsg{DaemonChecked: checkDaemon, HookChecked: checkHooks} }
 		},
 		detail: func(windowID int) tea.Cmd {
 			return func() tea.Msg {
-				return detailEventsMsg{windowID: windowID, err: errors.New("uitest: live daemon access is disabled")}
+				return commands.DetailEventsMsg{WindowID: windowID, Err: errors.New("uitest: live daemon access is disabled")}
 			}
 		},
 		worktrees: func(_ Model, seq int) tea.Cmd {
@@ -199,7 +200,7 @@ func NewUITestConfigDriver(root, srcConfigPath string, windows []kitty.OSWindow,
 // loadSessionsFrom populates the model's session list the way the production
 // fetch command does, but synchronously: it enumerates managed sessions from
 // client + cfg, overlays the caller's daemon-owned state, and feeds the result
-// through Model.Update as a sessionsMsg. This lets a fixture- or config-backed
+// through Model.Update as a commands.SessionsMsg. This lets a fixture- or config-backed
 // driver start with a populated list without running the refresh ticker, and
 // keeps that first list identical to what a later tick's hermetic initial fetch
 // would produce. A query error leaves the model with an empty list rather than
@@ -210,11 +211,11 @@ func (d *UITestDriver) loadSessionsFrom(client kitty.KittyClient, cfg *config.Co
 		return
 	}
 	if states != nil {
-		applyDaemonStates(sessions, states)
+		commands.ApplyDaemonStates(sessions, states)
 	}
-	d.recordErr(d.dispatch(sessionsMsg{
-		sessions: session.SortRunning(sessions, d.model.sortMode),
-		watchdog: watchdog,
-		states:   states,
+	d.recordErr(d.dispatch(commands.SessionsMsg{
+		Sessions: session.SortRunning(sessions, d.model.sortMode),
+		Watchdog: watchdog,
+		States:   states,
 	}))
 }

@@ -26,6 +26,7 @@ import (
 	"sync"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 const (
@@ -206,7 +207,7 @@ func (d *UITestDriver) Resize(width, height int) {
 	d.recordErr(d.applySize(UITestSize{Width: width, Height: height}))
 }
 
-// Tick advances the model's timer count times by injecting tickMsg values, so
+// Tick advances the model's timer count times by injecting commands.TickMsg values, so
 // scenarios can exercise deterministic refresh flows. A non-positive count is
 // treated as one tick.
 func (d *UITestDriver) Tick(count int) {
@@ -214,7 +215,7 @@ func (d *UITestDriver) Tick(count int) {
 		count = 1
 	}
 	for i := 0; i < count; i++ {
-		d.recordErr(d.dispatch(tickMsg{}))
+		d.recordErr(d.dispatch(commands.TickMsg{}))
 	}
 }
 

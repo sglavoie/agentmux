@@ -7,12 +7,13 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
-func commandResultIDs(results []command) []commandID {
-	ids := make([]commandID, len(results))
+func commandResultIDs(results []commands.Command[Model]) []commands.ID {
+	ids := make([]commands.ID, len(results))
 	for i, result := range results {
-		ids[i] = result.id
+		ids[i] = result.ID
 	}
 	return ids
 }
@@ -23,7 +24,7 @@ func assertCommandPaletteCleared(t *testing.T, m Model) {
 		t.Fatalf("palette state not cleared: query=%q results=%d cursor=%d offset=%d",
 			m.commandQuery, len(m.commandResults), m.commandCursor, m.commandOffset)
 	}
-	if m.commandContext.hasTarget || m.commandContext.target.TabID != 0 {
+	if m.commandContext.HasTarget || m.commandContext.Target.TabID != 0 {
 		t.Fatalf("palette context not cleared: %+v", m.commandContext)
 	}
 }
@@ -35,13 +36,13 @@ func TestModeCommandPaletteIsAppended(t *testing.T) {
 }
 
 func TestCommandMatchesQueryAcrossEveryField(t *testing.T) {
-	candidate := command{
-		id:          "test.command",
-		group:       commandGroupSession,
-		title:       staticCommandTitle("Alpha Action"),
-		description: "Performs a Beta operation.",
-		aliases:     []string{"Gamma helper"},
-		shortcut:    "ctrl+x",
+	candidate := commands.Command[Model]{
+		ID:          "test.command",
+		Group:       commands.GroupSession,
+		Title:       commands.StaticTitle[Model]("Alpha Action"),
+		Description: "Performs a Beta operation.",
+		Aliases:     []string{"Gamma helper"},
+		Shortcut:    "ctrl+x",
 	}
 
 	for _, query := range []string{
@@ -54,12 +55,12 @@ func TestCommandMatchesQueryAcrossEveryField(t *testing.T) {
 		"",
 	} {
 		t.Run(query, func(t *testing.T) {
-			if !commandMatchesQuery(candidate, Model{}, commandContext{}, query) {
+			if !commands.MatchesQuery(candidate, Model{}, commands.Context{}, query) {
 				t.Fatalf("query %q should match all of its tokens", query)
 			}
 		})
 	}
-	if commandMatchesQuery(candidate, Model{}, commandContext{}, "alpha missing") {
+	if commands.MatchesQuery(candidate, Model{}, commands.Context{}, "alpha missing") {
 		t.Fatal("AND matching accepted a query with one missing token")
 	}
 }
@@ -68,27 +69,27 @@ func TestCommandPaletteResultsPreserveCatalogAndGroupOrder(t *testing.T) {
 	m := testModelWithSessions()
 	ctx := captureCommandContext(m)
 
-	results := commandPaletteResults(commandCatalog(), m, ctx, "HISTORY")
-	want := []commandID{commandSearchProject, commandSearchAllSessions, commandSearchPlans}
+	results := commands.PaletteResults(commandCatalog(), m, ctx, "HISTORY")
+	want := []commands.ID{commands.SearchProject, commands.SearchAllSessions, commands.SearchPlans}
 	if got := commandResultIDs(results); !reflect.DeepEqual(got, want) {
 		t.Fatalf("history result IDs = %v, want %v", got, want)
 	}
-	if results[0].group != commandGroupSession || results[1].group != commandGroupExplore || results[2].group != commandGroupExplore {
-		t.Fatalf("history result groups lost catalog order: %v, %v, %v", results[0].group, results[1].group, results[2].group)
+	if results[0].Group != commands.GroupSession || results[1].Group != commands.GroupExplore || results[2].Group != commands.GroupExplore {
+		t.Fatalf("history result groups lost catalog order: %v, %v, %v", results[0].Group, results[1].Group, results[2].Group)
 	}
 
-	results = commandPaletteResults(commandCatalog(), m, ctx, "no-command-can-match-this")
+	results = commands.PaletteResults(commandCatalog(), m, ctx, "no-command-can-match-this")
 	if len(results) != 0 {
 		t.Fatalf("impossible query returned %d results", len(results))
 	}
 
-	results = commandPaletteResults(commandCatalog(), m, ctx, "")
+	results = commands.PaletteResults(commandCatalog(), m, ctx, "")
 	if len(results) != 27 {
 		t.Fatalf("clean empty query returned %d visible commands, want 27", len(results))
 	}
 	for _, result := range results {
-		if result.id == commandClearFilters || result.id == commandDismissDeprecation {
-			t.Fatalf("conditionally hidden command %q leaked into results", result.id)
+		if result.ID == commands.ClearFilters || result.ID == commands.DismissDeprecation {
+			t.Fatalf("conditionally hidden command %q leaked into results", result.ID)
 		}
 	}
 }
@@ -100,10 +101,10 @@ func TestOpenCommandPaletteResetsStateAndCapturesTarget(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{target})
 	m.pendingJumpDir = 1
 	m.commandQuery = "stale"
-	m.commandResults = []command{{id: "stale"}}
+	m.commandResults = []commands.Command[Model]{{ID: "stale"}}
 	m.commandCursor = 9
 	m.commandOffset = 4
-	m.commandContext = commandContext{target: session.RunningSession{TabID: 99}, hasTarget: true}
+	m.commandContext = commands.Context{Target: session.RunningSession{TabID: 99}, HasTarget: true}
 
 	m.openCommandPalette()
 
@@ -116,10 +117,10 @@ func TestOpenCommandPaletteResetsStateAndCapturesTarget(t *testing.T) {
 	if m.commandQuery != "" || m.commandOffset != 0 {
 		t.Fatalf("entry state = query %q offset %d, want reset", m.commandQuery, m.commandOffset)
 	}
-	if !m.commandContext.hasTarget || m.commandContext.target.TabID != target.TabID {
+	if !m.commandContext.HasTarget || m.commandContext.Target.TabID != target.TabID {
 		t.Fatalf("captured context = %+v, want tab %d", m.commandContext, target.TabID)
 	}
-	if len(m.commandResults) == 0 || m.commandResults[m.commandCursor].id != commandFocusSession {
+	if len(m.commandResults) == 0 || m.commandResults[m.commandCursor].ID != commands.FocusSession {
 		t.Fatalf("initial selection = cursor %d IDs %v, want focus command", m.commandCursor, commandResultIDs(m.commandResults))
 	}
 }
@@ -127,21 +128,21 @@ func TestOpenCommandPaletteResetsStateAndCapturesTarget(t *testing.T) {
 func TestOpenCommandPaletteSelectsFirstAvailableOrDisabledResult(t *testing.T) {
 	m := testModelWithSessions()
 	m.openCommandPalette()
-	if got := m.commandResults[m.commandCursor].id; got != commandFilterSessions {
-		t.Fatalf("empty-list initial selection = %q, want first available %q", got, commandFilterSessions)
+	if got := m.commandResults[m.commandCursor].ID; got != commands.FilterSessions {
+		t.Fatalf("empty-list initial selection = %q, want first available %q", got, commands.FilterSessions)
 	}
 	for i := 0; i < m.commandCursor; i++ {
-		if m.commandResults[i].availabilityFor(m, m.commandContext).available {
-			t.Fatalf("result %d (%q) before cursor is unexpectedly available", i, m.commandResults[i].id)
+		if m.commandResults[i].AvailabilityFor(m, m.commandContext).Available {
+			t.Fatalf("result %d (%q) before cursor is unexpectedly available", i, m.commandResults[i].ID)
 		}
 	}
 
 	updated, _ := m.Update(tea.KeyPressMsg(tea.Key{Code: 'r', Text: "confirm relaunching"}))
 	m = updated.(Model)
-	if len(m.commandResults) != 1 || m.commandResults[0].id != commandRestartSession {
+	if len(m.commandResults) != 1 || m.commandResults[0].ID != commands.RestartSession {
 		t.Fatalf("restart-specific results = %v, want restart only", commandResultIDs(m.commandResults))
 	}
-	if m.commandCursor != 0 || m.commandResults[0].availabilityFor(m, m.commandContext).available {
+	if m.commandCursor != 0 || m.commandResults[0].AvailabilityFor(m, m.commandContext).Available {
 		t.Fatalf("all-disabled results should select first disabled row: cursor=%d", m.commandCursor)
 	}
 }
@@ -184,8 +185,8 @@ func TestCommandPaletteNavigationClampsAndVisitsDisabledRows(t *testing.T) {
 	updated, _ := m.Update(tea.KeyPressMsg(tea.Key{Code: 's', Text: "search"}))
 	m = updated.(Model)
 
-	if got := commandResultIDs(m.commandResults); !reflect.DeepEqual(got, []commandID{
-		commandSearchProject, commandFilterSessions, commandSearchAllSessions, commandSearchPlans,
+	if got := commandResultIDs(m.commandResults); !reflect.DeepEqual(got, []commands.ID{
+		commands.SearchProject, commands.FilterSessions, commands.SearchAllSessions, commands.SearchPlans,
 	}) {
 		t.Fatalf("search result IDs = %v", got)
 	}
@@ -194,7 +195,7 @@ func TestCommandPaletteNavigationClampsAndVisitsDisabledRows(t *testing.T) {
 	}
 
 	m = pressKey(m, keyUp)
-	if m.commandCursor != 0 || m.commandResults[0].availabilityFor(m, m.commandContext).available {
+	if m.commandCursor != 0 || m.commandResults[0].AvailabilityFor(m, m.commandContext).Available {
 		t.Fatalf("Up did not visit disabled first row: cursor=%d", m.commandCursor)
 	}
 	m = pressKey(m, keyUp)
@@ -286,7 +287,7 @@ func TestCommandPaletteExecutionUsesCapturedTargetAndClearsBeforeTransition(t *t
 	replacement := session.RunningSession{
 		TabID: 8, WindowID: 80, Base: "backend", Project: "backend", Profile: "work", State: "bolt",
 	}
-	updated, _ = m.Update(sessionsMsg{sessions: []session.RunningSession{replacement}})
+	updated, _ = m.Update(commands.SessionsMsg{Sessions: []session.RunningSession{replacement}})
 	m = updated.(Model)
 	if m.filtered[0].TabID != replacement.TabID {
 		t.Fatalf("background refresh did not replace live row: %+v", m.filtered)
@@ -320,7 +321,7 @@ func TestCommandPaletteEscClearsTransientStateAndPreservesDashboardSelection(t *
 	assertCommandPaletteCleared(t, m)
 
 	m.openCommandPalette()
-	if m.commandQuery != "" || m.commandCursor != 0 || m.commandContext.target.TabID != m.filtered[1].TabID {
+	if m.commandQuery != "" || m.commandCursor != 0 || m.commandContext.Target.TabID != m.filtered[1].TabID {
 		t.Fatalf("reopen did not start fresh: query=%q cursor=%d context=%+v", m.commandQuery, m.commandCursor, m.commandContext)
 	}
 }
@@ -334,7 +335,7 @@ func TestColonOpensCommandPaletteFromDashboard(t *testing.T) {
 	if cmd != nil || m.mode != ModeCommandPalette {
 		t.Fatalf("colon did not open palette: mode=%v cmd=%v", m.mode, cmd)
 	}
-	if !m.commandContext.hasTarget || m.commandContext.target.TabID != wantTabID {
+	if !m.commandContext.HasTarget || m.commandContext.Target.TabID != wantTabID {
 		t.Fatalf("captured target = %+v, want tab %d", m.commandContext, wantTabID)
 	}
 }

@@ -4,18 +4,19 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
-// handleTick processes a tickMsg: sweeps stale transition pulses, schedules
+// handleTick processes a commands.TickMsg: sweeps stale transition pulses, schedules
 // the next session/active-loop fetches and tick, and conditionally fires a health check.
-func (m Model) handleTick(msg tickMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleTick(msg commands.TickMsg) (tea.Model, tea.Cmd) {
 	_ = msg
 	m.sweepRecentTransitions()
 	m.activeLoopRefreshSeq++
 	cmds := []tea.Cmd{
 		m.runInitialFetchCmd(0),
 		m.runActiveLoopRefreshCmd(m.activeLoopRefreshSeq),
-		tickCmd(m.interval),
+		commands.Tick(m.interval),
 	}
 	now := time.Now()
 	checkDaemon := now.Sub(m.daemonHealthCheckedAt) >= daemonHealthInterval
@@ -37,17 +38,17 @@ func (m Model) handleTick(msg tickMsg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// handleHealth processes a healthMsg: updates the daemon-alive flag and/or
+// handleHealth processes a commands.HealthMsg: updates the daemon-alive flag and/or
 // hook health summary, gated by which checks were actually run.
-func (m Model) handleHealth(msg healthMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleHealth(msg commands.HealthMsg) (tea.Model, tea.Cmd) {
 	now := time.Now()
-	if msg.daemonChecked {
-		m.daemonAlive = msg.daemonAlive
+	if msg.DaemonChecked {
+		m.daemonAlive = msg.DaemonAlive
 		m.daemonHealthCheckedAt = now
 	}
-	if msg.hookChecked {
-		m.hookHealth = msg.hookSummary
-		m.hookHealthErr = msg.hookErr
+	if msg.HookChecked {
+		m.hookHealth = msg.HookSummary
+		m.hookHealthErr = msg.HookErr
 		m.hookHealthCheckedAt = now
 	}
 	return m, nil

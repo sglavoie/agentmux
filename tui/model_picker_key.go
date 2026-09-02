@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/launch"
 )
 
@@ -200,8 +201,8 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			origIdx := m.pickerFilteredIdx[m.pickerCursor]
 			sess := m.pickerSessionWithResolvedProfile(origIdx)
 			return m, func() tea.Msg {
-				_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Kitty: m.client, Config: m.cfg}, actions.OpenEditor, actions.Request{Project: &sess})
-				return pickerOpenDoneMsg{err: err}
+				_, err := commands.Registry.Execute(context.Background(), actions.Dependencies{Kitty: m.client, Config: m.cfg}, actions.OpenEditor, actions.Request{Project: &sess})
+				return commands.PickerOpenDoneMsg{Err: err}
 			}
 		}
 		return m, nil

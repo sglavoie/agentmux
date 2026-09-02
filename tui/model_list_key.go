@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/launch"
 )
@@ -105,7 +106,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.cursor = next
 			scrollListToCursor(&m)
 			s := m.filtered[m.cursor]
-			cmds := []tea.Cmd{focusCmd(m.client, s.TabID)}
+			cmds := []tea.Cmd{commands.Focus(m.client, s.TabID)}
 			if cmd := m.refreshPreviewForCursor(); cmd != nil {
 				cmds = append(cmds, cmd)
 			}
@@ -119,7 +120,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.cursor = prev
 			scrollListToCursor(&m)
 			s := m.filtered[m.cursor]
-			cmds := []tea.Cmd{focusCmd(m.client, s.TabID)}
+			cmds := []tea.Cmd{commands.Focus(m.client, s.TabID)}
 			if cmd := m.refreshPreviewForCursor(); cmd != nil {
 				cmds = append(cmds, cmd)
 			}
@@ -203,12 +204,12 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if len(m.filtered) > 0 {
-			return m, focusCmd(m.client, m.filtered[m.cursor].TabID)
+			return m, commands.Focus(m.client, m.filtered[m.cursor].TabID)
 		}
 
 	case keySpace:
 		if len(m.filtered) > 0 {
-			return m, focusCmd(m.client, m.filtered[m.cursor].TabID)
+			return m, commands.Focus(m.client, m.filtered[m.cursor].TabID)
 		}
 
 	case keyTab:
@@ -257,7 +258,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case keyResort:
 		// Resort is a global, top-level action.
 		m.actionErr = nil
-		cmds := []tea.Cmd{resortCmd(m.client, m.sortMode)}
+		cmds := []tea.Cmd{commands.Resort(m.client, m.sortMode)}
 		if c := m.pushToast(Toast{
 			Severity: toastInfo,
 			Text:     "Resorting tabs…",
@@ -282,7 +283,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		case keyE:
 			if len(m.filtered) > 0 {
 				s := m.filtered[m.cursor]
-				return m, peekCmd(m.client, s.WindowID)
+				return m, commands.Peek(m.client, s.WindowID)
 			}
 			return m, nil
 		case keyR:
@@ -362,33 +363,33 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			if len(m.filtered) > 0 {
 				s := m.filtered[m.cursor]
 				m.actionErr = nil
-				return m, toggleLockCmd(m.client, s)
+				return m, commands.ToggleLock(m.client, s)
 			}
 			return m, nil
 		case keyM:
 			if len(m.filtered) > 0 {
 				s := m.filtered[m.cursor]
 				m.actionErr = nil
-				return m, toggleMuteCmd(m.client, s)
+				return m, commands.ToggleMute(m.client, s)
 			}
 			return m, nil
 		case keyO:
 			if len(m.filtered) > 0 {
 				s := m.filtered[m.cursor]
-				if cs, ok := findConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject()); ok {
+				if cs, ok := commands.FindConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject()); ok {
 					m.targetSession = s
 					m.actionErr = nil
-					return m, openDirActionCmd(m, cs)
+					return m, commands.OpenDirectory(m.client, m.cfg, cs)
 				}
 			}
 			return m, nil
 		case keyOpenEditor:
 			if len(m.filtered) > 0 {
 				s := m.filtered[m.cursor]
-				if cs, ok := findConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject()); ok {
+				if cs, ok := commands.FindConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject()); ok {
 					m.targetSession = s
 					m.actionErr = nil
-					return m, openInEditorActionCmd(m, cs)
+					return m, commands.OpenInEditor(m.client, m.cfg, cs)
 				}
 			}
 			return m, nil
@@ -396,7 +397,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			if len(m.filtered) > 0 {
 				title := dashboard.SessionDisplayTitle(m.filtered[m.cursor])
 				m.actionErr = nil
-				return m, copyTitleCmd(title)
+				return m, commands.CopyTitle(title)
 			}
 			return m, nil
 		case keySessionSearch:

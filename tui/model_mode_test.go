@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
@@ -225,12 +226,12 @@ func TestSearchCombinedWithAccountFilter(t *testing.T) {
 
 func TestTickTriggersRefetch(t *testing.T) {
 	m := testModel()
-	updated, cmd := m.Update(tickMsg{})
+	updated, cmd := m.Update(commands.TickMsg{})
 	if updated.(Model).err != nil {
 		t.Fatal("unexpected error after tick")
 	}
 	if cmd == nil {
-		t.Fatal("expected non-nil cmd after tickMsg (should re-schedule fetch + tick)")
+		t.Fatal("expected non-nil cmd after commands.TickMsg (should re-schedule fetch + tick)")
 	}
 }
 
@@ -238,19 +239,19 @@ func TestTickTriggersRefetch(t *testing.T) {
 
 func TestErrMsgSetsErr(t *testing.T) {
 	m := testModel()
-	updated, _ := m.Update(errMsg{err: errors.New("kitty offline")})
+	updated, _ := m.Update(commands.ErrMsg{Err: errors.New("kitty offline")})
 	if updated.(Model).err == nil {
-		t.Fatal("expected err to be set after errMsg")
+		t.Fatal("expected err to be set after commands.ErrMsg")
 	}
 }
 
 func TestSessionsMsgClearsErr(t *testing.T) {
 	m := testModel()
-	updated, _ := m.Update(errMsg{err: errors.New("kitty offline")})
+	updated, _ := m.Update(commands.ErrMsg{Err: errors.New("kitty offline")})
 	m = updated.(Model)
 	m = loadSessions(m, makeSessions())
 	if m.err != nil {
-		t.Fatalf("expected err cleared after sessionsMsg, got %v", m.err)
+		t.Fatalf("expected err cleared after commands.SessionsMsg, got %v", m.err)
 	}
 }
 

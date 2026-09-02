@@ -102,7 +102,7 @@ func TestModalAndStandaloneHintRowsUseFooterBindings(t *testing.T) {
 		key  string
 	}{
 		{name: "actions", view: renderActions(Model{}, 46), key: "a key"},
-		{name: "command palette", view: commandPaletteHintLine(80, false, false), key: "enter"},
+		{name: "command palette", view: renderCommandPalette(commandPaletteTestModel(100, 40)), key: "enter"},
 		{name: "detail", view: detailFooter(Model{}, 10, 10), key: "t"},
 		{name: "timeline", view: renderTimeline(Model{width: 100, height: 30}), key: "t"},
 		{name: "delete choice", view: renderDeleteChoice(Model{deleteTarget: &target}), key: "[i]"},
@@ -114,9 +114,5 @@ func TestModalAndStandaloneHintRowsUseFooterBindings(t *testing.T) {
 				t.Fatalf("hint row does not accent key %q:\n%s", tc.key, tc.view)
 			}
 		})
-	}
-
-	if got := commandPaletteHintLine(0, false, false); got != "" {
-		t.Fatalf("zero-width command-palette hint = %q, want empty fallback", got)
 	}
 }

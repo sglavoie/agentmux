@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 // TestRenderDeprecationBannerShownWhenDeprecationsPresent verifies the
@@ -73,7 +74,7 @@ func TestRenderHealthPipsShowsBothPips(t *testing.T) {
 		width:                 80,
 		daemonAlive:           true,
 		daemonHealthCheckedAt: time.Now(),
-		hookHealth:            HookHealth{InSync: []string{"work"}},
+		hookHealth:            commands.HookHealth{InSync: []string{"work"}},
 		hookHealthCheckedAt:   time.Now(),
 	}
 	out := stripAnsi(renderHealthPips(m))
@@ -97,7 +98,7 @@ func TestRenderHealthHintsShownWhenDegraded(t *testing.T) {
 		width:                 80,
 		daemonAlive:           false,
 		daemonHealthCheckedAt: now,
-		hookHealth:            HookHealth{Drifted: []string{"work"}},
+		hookHealth:            commands.HookHealth{Drifted: []string{"work"}},
 		hookHealthCheckedAt:   now,
 	}
 	out := stripAnsi(renderHealthHints(m))
@@ -112,7 +113,7 @@ func TestRenderHealthHintsShownWhenDegraded(t *testing.T) {
 		width:                 80,
 		daemonAlive:           true,
 		daemonHealthCheckedAt: now,
-		hookHealth:            HookHealth{InSync: []string{"work"}},
+		hookHealth:            commands.HookHealth{InSync: []string{"work"}},
 		hookHealthCheckedAt:   now,
 	}
 	if got := renderHealthHints(healthy); got != "" {

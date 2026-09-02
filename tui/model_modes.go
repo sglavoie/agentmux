@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/launch"
 )
 
@@ -166,13 +167,13 @@ func (m Model) handleActionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	for _, a := range actionsFor(m) {
-		if s != a.keyMatch {
+		if s != a.KeyMatch {
 			continue
 		}
-		if !a.available(m) {
+		if !a.Available(m) {
 			return m, nil
 		}
-		next, cmd := a.run(m)
+		next, cmd := a.Run(m)
 		next.actionsOffset = 0
 		return next, cmd
 	}
@@ -353,9 +354,9 @@ func sessionDetailCmd(windowID int) tea.Cmd {
 			WindowID: windowID,
 		})
 		if err != nil {
-			return detailEventsMsg{windowID: windowID, err: err}
+			return commands.DetailEventsMsg{WindowID: windowID, Err: err}
 		}
-		return detailEventsMsg{windowID: windowID, events: resp.Events}
+		return commands.DetailEventsMsg{WindowID: windowID, Events: resp.Events}
 	}
 }
 

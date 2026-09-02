@@ -195,7 +195,7 @@ func TestEnterOnFocusedChipRemoves(t *testing.T) {
 	m = pressKey(m, "tab") // focus first chip (/api)
 	updated, cmd := m.Update(keyPress("enter"))
 	if cmd != nil {
-		t.Errorf("expected no focusCmd when removing chip, got non-nil cmd")
+		t.Errorf("expected no commands.Focus when removing chip, got non-nil cmd")
 	}
 	m = updated.(Model)
 	if len(m.activeFilter.Substrings) != 0 {
@@ -221,7 +221,7 @@ func TestEnterWithoutFocusedChipFocusesTab(t *testing.T) {
 		t.Fatalf("expected ModeList after enter, got %d", m2.mode)
 	}
 	if cmd == nil {
-		t.Fatal("expected non-nil focusCmd after enter")
+		t.Fatal("expected non-nil commands.Focus after enter")
 	}
 }
 

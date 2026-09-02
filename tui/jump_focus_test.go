@@ -67,7 +67,7 @@ func anyFocusTabCall(runner *kitty.MockRunner) bool {
 }
 
 // TestJumpForwardWithFocus verifies `}` advances the cursor to the next
-// attention row and dispatches focusCmd for that row's TabID.
+// attention row and dispatches commands.Focus for that row's TabID.
 func TestJumpForwardWithFocus(t *testing.T) {
 	rows := []session.RunningSession{
 		{TabID: 100, Base: "idle-a", State: ""},

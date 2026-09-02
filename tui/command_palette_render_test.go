@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -18,10 +19,10 @@ func commandPaletteTestModel(width, height int) Model {
 	return m
 }
 
-func commandPaletteLayoutText(palette commandPaletteLayout) string {
-	lines := make([]string, len(palette.rows))
-	for i, row := range palette.rows {
-		lines[i] = row.text
+func commandPaletteLayoutText(palette commands.PaletteLayout) string {
+	lines := make([]string, len(palette.Rows))
+	for i, row := range palette.Rows {
+		lines[i] = row.Text
 	}
 	return strings.Join(lines, "\n")
 }
@@ -29,16 +30,16 @@ func commandPaletteLayoutText(palette commandPaletteLayout) string {
 func assertCommandPaletteSelectionVisible(t *testing.T, m Model) {
 	t.Helper()
 	palette, visible := commandPaletteScrollBounds(m)
-	if m.commandCursor < 0 || m.commandCursor >= len(palette.spans) {
-		t.Fatalf("cursor %d outside %d command spans", m.commandCursor, len(palette.spans))
+	if m.commandCursor < 0 || m.commandCursor >= len(palette.Spans) {
+		t.Fatalf("cursor %d outside %d command spans", m.commandCursor, len(palette.Spans))
 	}
-	span := palette.spans[m.commandCursor]
-	if span.end-span.start > visible {
-		t.Fatalf("test viewport holds %d rows but selected command needs %d", visible, span.end-span.start)
+	span := palette.Spans[m.commandCursor]
+	if span.End-span.Start > visible {
+		t.Fatalf("test viewport holds %d rows but selected command needs %d", visible, span.End-span.Start)
 	}
-	if span.start < m.commandOffset || span.end > m.commandOffset+visible {
+	if span.Start < m.commandOffset || span.End > m.commandOffset+visible {
 		t.Fatalf("selected span [%d,%d) outside window [%d,%d)",
-			span.start, span.end, m.commandOffset, m.commandOffset+visible)
+			span.Start, span.End, m.commandOffset, m.commandOffset+visible)
 	}
 }
 
@@ -48,8 +49,8 @@ func TestCommandPaletteFullAndFilteredLayouts(t *testing.T) {
 	text := commandPaletteLayoutText(palette)
 	for _, group := range []string{"Session", "Explore", "App"} {
 		count := 0
-		for _, row := range palette.rows {
-			if row.groupHeader && row.text == group {
+		for _, row := range palette.Rows {
+			if row.GroupHeader && row.Text == group {
 				count++
 			}
 		}
@@ -82,7 +83,7 @@ func TestCommandPaletteRendersContextDisabledNoResultsAndNoSession(t *testing.T)
 	m.commandQuery = "restart"
 	m.recomputeCommandPaletteResults()
 	out := stripAnsi(renderCommandPalette(m))
-	for _, want := range []string{"Command Palette", "Session: api", ":restart" + commandPaletteCursorGlyph, "Restart Session", commandReasonLocked} {
+	for _, want := range []string{"Command Palette", "Session: api", ":restart" + commands.PaletteCursorGlyph, "Restart Session", commands.ReasonLocked} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("locked palette missing %q:\n%s", want, out)
 		}
@@ -101,7 +102,7 @@ func TestCommandPaletteRendersContextDisabledNoResultsAndNoSession(t *testing.T)
 	empty.commandQuery = "restart"
 	empty.recomputeCommandPaletteResults()
 	out = stripAnsi(renderCommandPalette(empty))
-	for _, want := range []string{"Session: none", commandReasonNoSession} {
+	for _, want := range []string{"Session: none", commands.ReasonNoSession} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("no-session palette missing %q:\n%s", want, out)
 		}
@@ -114,20 +115,20 @@ func TestCommandPaletteShortcutAlignmentAndWrappedDetail(t *testing.T) {
 	m.recomputeCommandPaletteResults()
 	width := commandPaletteContentWidth(m)
 	palette := commandPaletteResultLayout(m, width)
-	span := palette.spans[0]
-	if span.end-span.start < 3 {
-		t.Fatalf("narrow command span has %d rows, want wrapped title plus detail rows", span.end-span.start)
+	span := palette.Spans[0]
+	if span.End-span.Start < 3 {
+		t.Fatalf("narrow command span has %d rows, want wrapped title plus detail rows", span.End-span.Start)
 	}
-	title := palette.rows[span.start].text
+	title := palette.Rows[span.Start].Text
 	if layout.Width(title) != width {
 		t.Fatalf("title row width = %d, want right-aligned width %d: %q", layout.Width(title), width, title)
 	}
 	if !strings.HasSuffix(title, keyR) {
 		t.Fatalf("title row shortcut is not right-aligned: %q", title)
 	}
-	for _, row := range palette.rows {
-		if got := layout.Width(row.text); got > width {
-			t.Fatalf("display row width = %d, limit %d: %q", got, width, row.text)
+	for _, row := range palette.Rows {
+		if got := layout.Width(row.Text); got > width {
+			t.Fatalf("display row width = %d, limit %d: %q", got, width, row.Text)
 		}
 	}
 
@@ -139,7 +140,7 @@ func TestCommandPaletteShortcutAlignmentAndWrappedDetail(t *testing.T) {
 	m.recomputeCommandPaletteResults()
 	palette = commandPaletteResultLayout(m, commandPaletteContentWidth(m))
 	detail := commandPaletteLayoutText(palette)
-	for _, want := range []string{"unavailable:", commandReasonLocked} {
+	for _, want := range []string{"unavailable:", commands.ReasonLocked} {
 		if !strings.Contains(detail, want) {
 			t.Fatalf("wrapped disabled detail missing %q:\n%s", want, detail)
 		}
@@ -160,7 +161,7 @@ func TestCommandPaletteWrappedRowScrollingAndResizeClamping(t *testing.T) {
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 42, Height: 20})
 	m = updated.(Model)
 	palette, visible := commandPaletteScrollBounds(m)
-	maxOffset := max(len(palette.rows)-visible, 0)
+	maxOffset := max(len(palette.Rows)-visible, 0)
 	if m.commandOffset < 0 || m.commandOffset > maxOffset {
 		t.Fatalf("resize left offset %d outside [0,%d]", m.commandOffset, maxOffset)
 	}
@@ -168,7 +169,7 @@ func TestCommandPaletteWrappedRowScrollingAndResizeClamping(t *testing.T) {
 
 	updated, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'q', Text: "quit"}))
 	m = updated.(Model)
-	if m.commandOffset != 0 || len(m.commandResults) != 1 || m.commandResults[0].id != commandQuit {
+	if m.commandOffset != 0 || len(m.commandResults) != 1 || m.commandResults[0].ID != commands.Quit {
 		t.Fatalf("query change did not reset/clamp results: offset=%d ids=%v", m.commandOffset, commandResultIDs(m.commandResults))
 	}
 	assertCommandPaletteSelectionVisible(t, m)

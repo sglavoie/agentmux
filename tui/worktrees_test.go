@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/actions"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/layout"
 	tuiworktrees "github.com/sglavoie/agentmux/tui/worktrees"
 )
@@ -228,10 +229,10 @@ func TestWorktreeShellEditorAndCopyActions(t *testing.T) {
 		t.Fatalf("LaunchTab calls = %d, want shell + editor", got)
 	}
 
-	oldCopy := copyToClipboard
-	t.Cleanup(func() { copyToClipboard = oldCopy })
+	oldCopy := commands.CopyToClipboard
+	t.Cleanup(func() { commands.CopyToClipboard = oldCopy })
 	var copied string
-	copyToClipboard = func(value string) error { copied = value; return nil }
+	commands.CopyToClipboard = func(value string) error { copied = value; return nil }
 	updated, cmd := m.Update(keyPress("Y"))
 	m = updated.(Model)
 	if cmd == nil {
@@ -329,7 +330,7 @@ func TestDashboardAndCommandPaletteEnterWorktreesWithLifecycleControls(t *testin
 	m.openCommandPalette()
 	m.commandQuery = "manage worktrees"
 	m.recomputeCommandPaletteResults()
-	if len(m.commandResults) != 1 || m.commandResults[0].id != commandManageWorktrees {
+	if len(m.commandResults) != 1 || m.commandResults[0].ID != commands.ManageWorktrees {
 		t.Fatalf("palette results = %v", commandResultIDs(m.commandResults))
 	}
 	updated, cmd = m.Update(keyPress("enter"))

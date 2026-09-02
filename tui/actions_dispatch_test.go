@@ -176,7 +176,7 @@ func TestOpenInEditorActionUnavailableWithoutConfig(t *testing.T) {
 	})
 	m = openActionsOverlay(t, m)
 	for _, a := range actionsFor(m) {
-		if a.keyMatch == keyOpenEditor && a.available(m) {
+		if a.KeyMatch == keyOpenEditor && a.Available(m) {
 			t.Errorf("expected open-in-editor unavailable without matching config session")
 		}
 	}

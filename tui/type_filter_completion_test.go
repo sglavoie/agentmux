@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 // ---- Completion popup from explicit dashboard search ----
@@ -49,7 +51,7 @@ func TestRenderHeaderShowsFilterHintBeforeHealthPips(t *testing.T) {
 	m.width = 100
 	m.daemonAlive = true
 	m.daemonHealthCheckedAt = time.Now()
-	m.hookHealth = HookHealth{InSync: []string{"work"}}
+	m.hookHealth = commands.HookHealth{InSync: []string{"work"}}
 	m.hookHealthCheckedAt = time.Now()
 
 	firstLine := strings.Split(stripAnsi(renderHeader(m)), "\n")[0]

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -170,7 +171,7 @@ func TestPickerProfileIndicatorAndEntryReset(t *testing.T) {
 
 	m.mode = ModeList
 	m.pickerProfileFilter = "stale"
-	got, _ := openLauncherCommand(m, commandContext{})
+	got, _ := openLauncherCommand(m, commands.Context{})
 	if got.pickerProfileFilter != "" {
 		t.Fatalf("command palette reopened launcher with profile filter %q, want all", got.pickerProfileFilter)
 	}

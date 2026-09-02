@@ -17,6 +17,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 func TestAcceptanceMalformedPlanCacheRebuildsWithoutDatabase(t *testing.T) {
@@ -287,12 +288,12 @@ func TestAcceptancePastSessionsSharedProjectAliasContinuesAndForksInAliasContext
 			if cmd == nil || got.mode != ModeSessionSearch {
 				t.Fatalf("%s = mode %v cmd %T, want continuity command in Past Sessions", key, got.mode, cmd)
 			}
-			done, ok := cmd().(actionDoneMsg)
+			done, ok := cmd().(commands.ActionDoneMsg)
 			if !ok {
 				t.Fatalf("%s command produced unexpected message", key)
 			}
-			if done.err != nil {
-				t.Fatalf("%s action failed: %v", key, done.err)
+			if done.Err != nil {
+				t.Fatalf("%s action failed: %v", key, done.Err)
 			}
 			launches := client.CallsFor("LaunchTab")
 			if len(launches) != 1 || launches[0].Opts == nil {

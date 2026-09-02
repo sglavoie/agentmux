@@ -8,21 +8,22 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
-func commandByID(t *testing.T, id commandID) command {
+func commandByID(t *testing.T, id commands.ID) commands.Command[Model] {
 	t.Helper()
 	for _, candidate := range commandCatalog() {
-		if candidate.id == id {
+		if candidate.ID == id {
 			return candidate
 		}
 	}
 	t.Fatalf("command %q not found", id)
-	return command{}
+	return commands.Command[Model]{}
 }
 
-func commandTestModel(target session.RunningSession) (Model, commandContext, *UITestKittyClient) {
+func commandTestModel(target session.RunningSession) (Model, commands.Context, *UITestKittyClient) {
 	client := NewUITestKittyClient(nil)
 	m := testModelWithSessions()
 	m.client = client
@@ -41,42 +42,42 @@ func commandTestModel(target session.RunningSession) (Model, commandContext, *UI
 
 func TestCommandCatalogStableInventory(t *testing.T) {
 	type expectedCommand struct {
-		id       commandID
-		group    commandGroup
+		id       commands.ID
+		group    commands.Group
 		title    string
 		aliases  []string
 		shortcut string
 	}
 	want := []expectedCommand{
-		{commandFocusSession, commandGroupSession, "Focus Selected Session", []string{"jump", "tab"}, "enter / space"},
-		{commandPeekScrollback, commandGroupSession, "Peek Scrollback", []string{"pager", "scrollback"}, "e"},
-		{commandRestartSession, commandGroupSession, "Restart Session", []string{"relaunch"}, "r"},
-		{commandOverrideProfile, commandGroupSession, "Override Profile", []string{"account", "profile"}, "c"},
-		{commandLaunchAnother, commandGroupSession, "Launch Another Session", []string{"duplicate", "new"}, "C"},
-		{commandClearStatus, commandGroupSession, "Clear Status Icon", []string{"attention", "badge", "icon"}, "x"},
-		{commandCloseSession, commandGroupSession, "Close Session", []string{"exit", "kill"}, "X"},
-		{commandOpenDirectory, commandGroupSession, "Open Directory in Shell", []string{"directory", "shell", "terminal"}, "o"},
-		{commandOpenEditor, commandGroupSession, "Open in Editor", []string{"directory", "edit"}, "O"},
-		{commandCopyTitle, commandGroupSession, "Copy Session Title", []string{"clipboard", "yank"}, "y"},
-		{commandToggleLock, commandGroupSession, "Lock Session", []string{"protect", "unlock"}, "L"},
-		{commandToggleMute, commandGroupSession, "Mute Session", []string{"notifications", "unmute"}, "m"},
-		{commandSearchProject, commandGroupSession, "Search This Project's Past Sessions", []string{"history", "project", "transcripts"}, "s"},
-		{commandShowDetails, commandGroupSession, "Show Session Details", []string{"events", "hooks"}, "d"},
-		{commandShowTimeline, commandGroupSession, "Show Session Timeline", []string{"events", "phases"}, "T"},
-		{commandFilterSessions, commandGroupExplore, "Filter Sessions", []string{"find", "search"}, "/"},
-		{commandCycleProfileFilter, commandGroupExplore, "Cycle Profile Filter", []string{"account", "filter", "running"}, "f"},
-		{commandClearFilters, commandGroupExplore, "Clear Filters", []string{"chips", "reset"}, "esc"},
-		{commandOpenLauncher, commandGroupExplore, "Open Launcher", []string{"launch", "projects"}, "l"},
-		{commandSearchAllSessions, commandGroupExplore, "Search All Past Sessions", []string{"history", "transcripts"}, "S"},
-		{commandSearchPlans, commandGroupExplore, "Search Plans", []string{"agent plans", "history"}, "P"},
-		{commandManageWorktrees, commandGroupExplore, "Manage Worktrees", []string{"git", "branches", "inventory"}, "W"},
-		{commandShowRuns, commandGroupExplore, "Show Runs", []string{"asl", "loop", "needs action"}, "A"},
-		{commandTogglePreview, commandGroupExplore, "Show Preview", []string{"hide", "pane", "scrollback"}, "p"},
-		{commandResortTabs, commandGroupApp, "Resort Tabs", []string{"reorder", "tabs"}, "R"},
-		{commandUndoClose, commandGroupApp, "Undo Last Close", []string{"restore", "reopen"}, "u"},
-		{commandDismissDeprecation, commandGroupApp, "Dismiss Deprecation Warning", []string{"banner", "warning"}, "d"},
-		{commandShowKeyboardHelp, commandGroupApp, "Show Keyboard Shortcuts", []string{"help", "keys"}, "?"},
-		{commandQuit, commandGroupApp, "Quit", []string{"close app", "exit"}, "q / ctrl+c"},
+		{commands.FocusSession, commands.GroupSession, "Focus Selected Session", []string{"jump", "tab"}, "enter / space"},
+		{commands.PeekScrollback, commands.GroupSession, "Peek Scrollback", []string{"pager", "scrollback"}, "e"},
+		{commands.RestartSession, commands.GroupSession, "Restart Session", []string{"relaunch"}, "r"},
+		{commands.OverrideProfile, commands.GroupSession, "Override Profile", []string{"account", "profile"}, "c"},
+		{commands.LaunchAnother, commands.GroupSession, "Launch Another Session", []string{"duplicate", "new"}, "C"},
+		{commands.ClearStatusIcon, commands.GroupSession, "Clear Status Icon", []string{"attention", "badge", "icon"}, "x"},
+		{commands.CloseSession, commands.GroupSession, "Close Session", []string{"exit", "kill"}, "X"},
+		{commands.OpenDirectoryID, commands.GroupSession, "Open Directory in Shell", []string{"directory", "shell", "terminal"}, "o"},
+		{commands.OpenEditorID, commands.GroupSession, "Open in Editor", []string{"directory", "edit"}, "O"},
+		{commands.CopyTitleID, commands.GroupSession, "Copy Session Title", []string{"clipboard", "yank"}, "y"},
+		{commands.ToggleLockID, commands.GroupSession, "Lock Session", []string{"protect", "unlock"}, "L"},
+		{commands.ToggleMuteID, commands.GroupSession, "Mute Session", []string{"notifications", "unmute"}, "m"},
+		{commands.SearchProject, commands.GroupSession, "Search This Project's Past Sessions", []string{"history", "project", "transcripts"}, "s"},
+		{commands.ShowDetails, commands.GroupSession, "Show Session Details", []string{"events", "hooks"}, "d"},
+		{commands.ShowTimeline, commands.GroupSession, "Show Session Timeline", []string{"events", "phases"}, "T"},
+		{commands.FilterSessions, commands.GroupExplore, "Filter Sessions", []string{"find", "search"}, "/"},
+		{commands.CycleProfileFilter, commands.GroupExplore, "Cycle Profile Filter", []string{"account", "filter", "running"}, "f"},
+		{commands.ClearFilters, commands.GroupExplore, "Clear Filters", []string{"chips", "reset"}, "esc"},
+		{commands.OpenLauncher, commands.GroupExplore, "Open Launcher", []string{"launch", "projects"}, "l"},
+		{commands.SearchAllSessions, commands.GroupExplore, "Search All Past Sessions", []string{"history", "transcripts"}, "S"},
+		{commands.SearchPlans, commands.GroupExplore, "Search Plans", []string{"agent plans", "history"}, "P"},
+		{commands.ManageWorktrees, commands.GroupExplore, "Manage Worktrees", []string{"git", "branches", "inventory"}, "W"},
+		{commands.ShowRuns, commands.GroupExplore, "Show Runs", []string{"asl", "loop", "needs action"}, "A"},
+		{commands.TogglePreview, commands.GroupExplore, "Show Preview", []string{"hide", "pane", "scrollback"}, "p"},
+		{commands.ResortTabs, commands.GroupApp, "Resort Tabs", []string{"reorder", "tabs"}, "R"},
+		{commands.UndoClose, commands.GroupApp, "Undo Last Close", []string{"restore", "reopen"}, "u"},
+		{commands.DismissDeprecation, commands.GroupApp, "Dismiss Deprecation Warning", []string{"banner", "warning"}, "d"},
+		{commands.ShowKeyboardHelp, commands.GroupApp, "Show Keyboard Shortcuts", []string{"help", "keys"}, "?"},
+		{commands.Quit, commands.GroupApp, "Quit", []string{"close app", "exit"}, "q / ctrl+c"},
 	}
 
 	m, ctx, _ := commandTestModel(session.RunningSession{
@@ -86,39 +87,39 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 	if len(got) != len(want) {
 		t.Fatalf("catalog has %d commands, want %d", len(got), len(want))
 	}
-	seen := make(map[commandID]bool, len(got))
+	seen := make(map[commands.ID]bool, len(got))
 	for i, candidate := range got {
 		expected := want[i]
-		if candidate.id != expected.id || candidate.group != expected.group {
-			t.Errorf("command[%d] identity = (%q, %q), want (%q, %q)", i, candidate.id, candidate.group, expected.id, expected.group)
+		if candidate.ID != expected.id || candidate.Group != expected.group {
+			t.Errorf("command[%d] identity = (%q, %q), want (%q, %q)", i, candidate.ID, candidate.Group, expected.id, expected.group)
 		}
-		if title := candidate.displayTitle(m, ctx); title != expected.title {
+		if title := candidate.DisplayTitle(m, ctx); title != expected.title {
 			t.Errorf("command[%d] title = %q, want %q", i, title, expected.title)
 		}
-		if !reflect.DeepEqual(candidate.aliases, expected.aliases) {
-			t.Errorf("command[%d] aliases = %v, want %v", i, candidate.aliases, expected.aliases)
+		if !reflect.DeepEqual(candidate.Aliases, expected.aliases) {
+			t.Errorf("command[%d] aliases = %v, want %v", i, candidate.Aliases, expected.aliases)
 		}
-		if candidate.shortcut != expected.shortcut {
-			t.Errorf("command[%d] shortcut = %q, want %q", i, candidate.shortcut, expected.shortcut)
+		if candidate.Shortcut != expected.shortcut {
+			t.Errorf("command[%d] shortcut = %q, want %q", i, candidate.Shortcut, expected.shortcut)
 		}
-		if strings.TrimSpace(candidate.description) == "" {
-			t.Errorf("command[%d] %q has no description", i, candidate.id)
+		if strings.TrimSpace(candidate.Description) == "" {
+			t.Errorf("command[%d] %q has no description", i, candidate.ID)
 		}
-		if candidate.execute == nil {
-			t.Errorf("command[%d] %q has no execution function", i, candidate.id)
+		if candidate.Execute == nil {
+			t.Errorf("command[%d] %q has no execution function", i, candidate.ID)
 		}
-		if seen[candidate.id] {
-			t.Errorf("duplicate command ID %q", candidate.id)
+		if seen[candidate.ID] {
+			t.Errorf("duplicate command ID %q", candidate.ID)
 		}
-		seen[candidate.id] = true
+		seen[candidate.ID] = true
 	}
 
 	// Group contiguity is part of stable catalog order, not a renderer concern.
-	wantGroups := []commandGroup{commandGroupSession, commandGroupExplore, commandGroupApp}
-	var gotGroups []commandGroup
+	wantGroups := []commands.Group{commands.GroupSession, commands.GroupExplore, commands.GroupApp}
+	var gotGroups []commands.Group
 	for _, candidate := range got {
-		if len(gotGroups) == 0 || gotGroups[len(gotGroups)-1] != candidate.group {
-			gotGroups = append(gotGroups, candidate.group)
+		if len(gotGroups) == 0 || gotGroups[len(gotGroups)-1] != candidate.Group {
+			gotGroups = append(gotGroups, candidate.Group)
 		}
 	}
 	if !reflect.DeepEqual(gotGroups, wantGroups) {
@@ -127,36 +128,36 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 }
 
 func TestCommandCatalogDashboardShortcutBindings(t *testing.T) {
-	want := map[commandID]string{
-		commandFocusSession:       keyEnter + " / " + keySpace,
-		commandPeekScrollback:     keyE,
-		commandRestartSession:     keyR,
-		commandOverrideProfile:    keyC,
-		commandLaunchAnother:      keyDashboardLaunch,
-		commandClearStatus:        keyClearStatus,
-		commandCloseSession:       keyClose,
-		commandOpenDirectory:      keyO,
-		commandOpenEditor:         keyOpenEditor,
-		commandCopyTitle:          keyY,
-		commandToggleLock:         keyLock,
-		commandToggleMute:         keyM,
-		commandSearchProject:      keyProjectSessionSearch,
-		commandShowDetails:        keyD,
-		commandShowTimeline:       keyOpenTimeline,
-		commandFilterSessions:     keySlash,
-		commandCycleProfileFilter: keyF,
-		commandClearFilters:       keyEsc,
-		commandOpenLauncher:       keyL,
-		commandSearchAllSessions:  keySessionSearch,
-		commandSearchPlans:        keyPlanSearch,
-		commandManageWorktrees:    keyWorktrees,
-		commandShowRuns:           keyASLRuns,
-		commandTogglePreview:      keyTogglePreview,
-		commandResortTabs:         keyResort,
-		commandUndoClose:          keyU,
-		commandDismissDeprecation: keyD,
-		commandShowKeyboardHelp:   keyQuestion,
-		commandQuit:               keyQ + " / " + keyCtrlC,
+	want := map[commands.ID]string{
+		commands.FocusSession:       keyEnter + " / " + keySpace,
+		commands.PeekScrollback:     keyE,
+		commands.RestartSession:     keyR,
+		commands.OverrideProfile:    keyC,
+		commands.LaunchAnother:      keyDashboardLaunch,
+		commands.ClearStatusIcon:    keyClearStatus,
+		commands.CloseSession:       keyClose,
+		commands.OpenDirectoryID:    keyO,
+		commands.OpenEditorID:       keyOpenEditor,
+		commands.CopyTitleID:        keyY,
+		commands.ToggleLockID:       keyLock,
+		commands.ToggleMuteID:       keyM,
+		commands.SearchProject:      keyProjectSessionSearch,
+		commands.ShowDetails:        keyD,
+		commands.ShowTimeline:       keyOpenTimeline,
+		commands.FilterSessions:     keySlash,
+		commands.CycleProfileFilter: keyF,
+		commands.ClearFilters:       keyEsc,
+		commands.OpenLauncher:       keyL,
+		commands.SearchAllSessions:  keySessionSearch,
+		commands.SearchPlans:        keyPlanSearch,
+		commands.ManageWorktrees:    keyWorktrees,
+		commands.ShowRuns:           keyASLRuns,
+		commands.TogglePreview:      keyTogglePreview,
+		commands.ResortTabs:         keyResort,
+		commands.UndoClose:          keyU,
+		commands.DismissDeprecation: keyD,
+		commands.ShowKeyboardHelp:   keyQuestion,
+		commands.Quit:               keyQ + " / " + keyCtrlC,
 	}
 
 	catalog := commandCatalog()
@@ -164,19 +165,19 @@ func TestCommandCatalogDashboardShortcutBindings(t *testing.T) {
 		t.Fatalf("catalog has %d commands, shortcut map has %d", len(catalog), len(want))
 	}
 
-	seen := make(map[commandID]bool, len(catalog))
-	byShortcut := make(map[string][]commandID, len(catalog))
+	seen := make(map[commands.ID]bool, len(catalog))
+	byShortcut := make(map[string][]commands.ID, len(catalog))
 	for _, candidate := range catalog {
-		shortcut, ok := want[candidate.id]
+		shortcut, ok := want[candidate.ID]
 		if !ok {
-			t.Errorf("command %q has no dashboard shortcut mapping", candidate.id)
+			t.Errorf("command %q has no dashboard shortcut mapping", candidate.ID)
 			continue
 		}
-		seen[candidate.id] = true
-		if candidate.shortcut != shortcut {
-			t.Errorf("command %q shortcut = %q, want dashboard binding %q", candidate.id, candidate.shortcut, shortcut)
+		seen[candidate.ID] = true
+		if candidate.Shortcut != shortcut {
+			t.Errorf("command %q shortcut = %q, want dashboard binding %q", candidate.ID, candidate.Shortcut, shortcut)
 		}
-		byShortcut[candidate.shortcut] = append(byShortcut[candidate.shortcut], candidate.id)
+		byShortcut[candidate.Shortcut] = append(byShortcut[candidate.Shortcut], candidate.ID)
 	}
 	for id := range want {
 		if !seen[id] {
@@ -184,8 +185,8 @@ func TestCommandCatalogDashboardShortcutBindings(t *testing.T) {
 		}
 	}
 
-	allowedShared := map[string][]commandID{
-		keyD: {commandShowDetails, commandDismissDeprecation},
+	allowedShared := map[string][]commands.ID{
+		keyD: {commands.ShowDetails, commands.DismissDeprecation},
 	}
 	for shortcut, ids := range byShortcut {
 		if len(ids) < 2 {
@@ -202,19 +203,19 @@ func TestCommandCatalogDynamicTitles(t *testing.T) {
 		TabID: 1, WindowID: 101, Base: "api", Project: "api", Profile: "work",
 	})
 	cases := []struct {
-		id   commandID
-		edit func(*Model, *commandContext)
+		id   commands.ID
+		edit func(*Model, *commands.Context)
 		want string
 	}{
-		{commandToggleLock, func(_ *Model, ctx *commandContext) { ctx.target.Locked = true }, "Unlock Session"},
-		{commandToggleMute, func(_ *Model, ctx *commandContext) { ctx.target.Muted = true }, "Unmute Session"},
-		{commandTogglePreview, func(m *Model, _ *commandContext) { m.previewEnabled = true }, "Hide Preview"},
+		{commands.ToggleLockID, func(_ *Model, ctx *commands.Context) { ctx.Target.Locked = true }, "Unlock Session"},
+		{commands.ToggleMuteID, func(_ *Model, ctx *commands.Context) { ctx.Target.Muted = true }, "Unmute Session"},
+		{commands.TogglePreview, func(m *Model, _ *commands.Context) { m.previewEnabled = true }, "Hide Preview"},
 	}
 	for _, tc := range cases {
 		t.Run(string(tc.id), func(t *testing.T) {
 			gotModel, gotCtx := m, ctx
 			tc.edit(&gotModel, &gotCtx)
-			if got := commandByID(t, tc.id).displayTitle(gotModel, gotCtx); got != tc.want {
+			if got := commandByID(t, tc.id).DisplayTitle(gotModel, gotCtx); got != tc.want {
 				t.Fatalf("title = %q, want %q", got, tc.want)
 			}
 		})
@@ -226,37 +227,37 @@ func TestCommandCatalogAvailability(t *testing.T) {
 		m := testModelWithSessions()
 		ctx := captureCommandContext(m)
 		for _, candidate := range commandCatalog()[:15] {
-			availability := candidate.availabilityFor(m, ctx)
-			if availability.available || availability.reason != commandReasonNoSession {
-				t.Errorf("%q availability = %+v, want disabled with %q", candidate.id, availability, commandReasonNoSession)
+			availability := candidate.AvailabilityFor(m, ctx)
+			if availability.Available || availability.Reason != commands.ReasonNoSession {
+				t.Errorf("%q availability = %+v, want disabled with %q", candidate.ID, availability, commands.ReasonNoSession)
 			}
 		}
 	})
 
 	type availabilityCase struct {
 		name   string
-		id     commandID
+		id     commands.ID
 		target session.RunningSession
 		setup  func(*Model)
-		want   commandAvailability
+		want   commands.Availability
 	}
 	base := session.RunningSession{TabID: 1, WindowID: 101, Base: "api", Project: "api", Profile: "work"}
 	cases := []availabilityCase{
-		{"peek active", commandPeekScrollback, withCommandState(base, "bolt"), nil, availableCommand()},
-		{"peek idle", commandPeekScrollback, base, nil, unavailableCommand(commandReasonPeekInactive)},
-		{"restart locked", commandRestartSession, withCommandLock(base), nil, unavailableCommand(commandReasonLocked)},
-		{"override locked", commandOverrideProfile, withCommandLock(base), nil, unavailableCommand(commandReasonLocked)},
-		{"close locked", commandCloseSession, withCommandLock(base), nil, unavailableCommand(commandReasonLocked)},
-		{"clear attention", commandClearStatus, withCommandState(base, "key"), nil, availableCommand()},
-		{"clear active", commandClearStatus, withCommandState(base, "bolt"), nil, unavailableCommand(commandReasonStatusNotClear)},
-		{"clear idle", commandClearStatus, base, func(m *Model) {
+		{"peek active", commands.PeekScrollback, withCommandState(base, "bolt"), nil, commands.Available()},
+		{"peek idle", commands.PeekScrollback, base, nil, commands.Unavailable(commands.ReasonPeekInactive)},
+		{"restart locked", commands.RestartSession, withCommandLock(base), nil, commands.Unavailable(commands.ReasonLocked)},
+		{"override locked", commands.OverrideProfile, withCommandLock(base), nil, commands.Unavailable(commands.ReasonLocked)},
+		{"close locked", commands.CloseSession, withCommandLock(base), nil, commands.Unavailable(commands.ReasonLocked)},
+		{"clear attention", commands.ClearStatusIcon, withCommandState(base, "key"), nil, commands.Available()},
+		{"clear active", commands.ClearStatusIcon, withCommandState(base, "bolt"), nil, commands.Unavailable(commands.ReasonStatusNotClear)},
+		{"clear idle", commands.ClearStatusIcon, base, func(m *Model) {
 			m.idleThreshold = time.Second
 			m.lastActivity = map[int]time.Time{101: time.Now().Add(-time.Minute)}
-		}, unavailableCommand(commandReasonStatusNotClear)},
-		{"configured directory", commandOpenDirectory, base, nil, availableCommand()},
-		{"configured editor", commandOpenEditor, base, nil, availableCommand()},
-		{"orphan directory", commandOpenDirectory, withCommandProject(base, "orphan"), nil, unavailableCommand(commandReasonNoProject)},
-		{"orphan editor", commandOpenEditor, withCommandProject(base, "orphan"), nil, unavailableCommand(commandReasonNoProject)},
+		}, commands.Unavailable(commands.ReasonStatusNotClear)},
+		{"configured directory", commands.OpenDirectoryID, base, nil, commands.Available()},
+		{"configured editor", commands.OpenEditorID, base, nil, commands.Available()},
+		{"orphan directory", commands.OpenDirectoryID, withCommandProject(base, "orphan"), nil, commands.Unavailable(commands.ReasonNoProject)},
+		{"orphan editor", commands.OpenEditorID, withCommandProject(base, "orphan"), nil, commands.Unavailable(commands.ReasonNoProject)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -264,7 +265,7 @@ func TestCommandCatalogAvailability(t *testing.T) {
 			if tc.setup != nil {
 				tc.setup(&m)
 			}
-			if got := commandByID(t, tc.id).availabilityFor(m, ctx); got != tc.want {
+			if got := commandByID(t, tc.id).AvailabilityFor(m, ctx); got != tc.want {
 				t.Fatalf("availability = %+v, want %+v", got, tc.want)
 			}
 		})
@@ -273,25 +274,25 @@ func TestCommandCatalogAvailability(t *testing.T) {
 	t.Run("narrow preview can still be hidden", func(t *testing.T) {
 		m, ctx, _ := commandTestModel(base)
 		m.width = 80
-		preview := commandByID(t, commandTogglePreview)
-		if got := preview.availabilityFor(m, ctx); got != unavailableCommand(commandReasonPreviewTooSmall) {
+		preview := commandByID(t, commands.TogglePreview)
+		if got := preview.AvailabilityFor(m, ctx); got != commands.Unavailable(commands.ReasonPreviewTooSmall) {
 			t.Fatalf("narrow preview availability = %+v", got)
 		}
 		m.previewEnabled = true
-		if got := preview.availabilityFor(m, ctx); got != availableCommand() {
+		if got := preview.AvailabilityFor(m, ctx); got != commands.Available() {
 			t.Fatalf("enabled narrow preview availability = %+v", got)
 		}
 	})
 
 	t.Run("undo requires a live deadline", func(t *testing.T) {
 		m, ctx, _ := commandTestModel(base)
-		undo := commandByID(t, commandUndoClose)
+		undo := commandByID(t, commands.UndoClose)
 		m.pendingUndo = []undoEntry{{deadline: time.Now().Add(-time.Second)}}
-		if got := undo.availabilityFor(m, ctx); got != unavailableCommand(commandReasonNothingToUndo) {
+		if got := undo.AvailabilityFor(m, ctx); got != commands.Unavailable(commands.ReasonNothingToUndo) {
 			t.Fatalf("expired undo availability = %+v", got)
 		}
 		m.pendingUndo = []undoEntry{{deadline: time.Now().Add(time.Minute)}}
-		if got := undo.availabilityFor(m, ctx); got != availableCommand() {
+		if got := undo.AvailabilityFor(m, ctx); got != commands.Available() {
 			t.Fatalf("live undo availability = %+v", got)
 		}
 	})
@@ -300,32 +301,32 @@ func TestCommandCatalogAvailability(t *testing.T) {
 func TestCommandCatalogConditionalVisibility(t *testing.T) {
 	target := session.RunningSession{TabID: 1, WindowID: 101, Base: "api", Project: "api", Profile: "work"}
 	m, ctx, _ := commandTestModel(target)
-	clear := commandByID(t, commandClearFilters)
-	dismiss := commandByID(t, commandDismissDeprecation)
+	clear := commandByID(t, commands.ClearFilters)
+	dismiss := commandByID(t, commands.DismissDeprecation)
 
-	if clear.isVisible(m, ctx) {
+	if clear.IsVisible(m, ctx) {
 		t.Fatal("clear filters should be hidden without an active filter")
 	}
 	m.activeFilter = dashboard.Parse("api")
-	if !clear.isVisible(m, ctx) {
+	if !clear.IsVisible(m, ctx) {
 		t.Fatal("clear filters should be visible with an active filter")
 	}
-	if dismiss.isVisible(m, ctx) {
+	if dismiss.IsVisible(m, ctx) {
 		t.Fatal("dismiss warning should be hidden without a banner")
 	}
 	m.deprecations = []config.Deprecation{{Key: "old", Replacement: "new"}}
-	if !dismiss.isVisible(m, ctx) {
+	if !dismiss.IsVisible(m, ctx) {
 		t.Fatal("dismiss warning should be visible with a banner")
 	}
 	m.deprecationDismissed = true
-	if dismiss.isVisible(m, ctx) {
+	if dismiss.IsVisible(m, ctx) {
 		t.Fatal("dismiss warning should be hidden after dismissal")
 	}
 
 	visible := 0
 	clean, cleanCtx, _ := commandTestModel(target)
 	for _, candidate := range commandCatalog() {
-		if candidate.isVisible(clean, cleanCtx) {
+		if candidate.IsVisible(clean, cleanCtx) {
 			visible++
 		}
 	}

@@ -21,6 +21,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
 	"github.com/sglavoie/agentmux/tui/asl"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/launch"
 )
@@ -71,10 +72,10 @@ type Model struct {
 	// dashboard row selected at entry so refreshes cannot retarget an action.
 	// commandResults preserves catalog/group order after query filtering.
 	commandQuery   string
-	commandResults []command
+	commandResults []commands.Command[Model]
 	commandCursor  int
 	commandOffset  int
-	commandContext commandContext
+	commandContext commands.Context
 
 	// running-session filter (profile + state DSL)
 	filterText     string               // live input while in ModeSearch
@@ -169,12 +170,12 @@ type Model struct {
 
 	// health pip + deprecation banner bookkeeping. daemonAlive and
 	// hookHealth are refreshed at the daemonHealthInterval /
-	// hookHealthInterval cadences via healthCmd; deprecations is captured
+	// hookHealthInterval cadences via a health command; deprecations is captured
 	// once at startup from cfg.Deprecations.
 	amxBin                string
 	daemonAlive           bool
 	daemonHealthCheckedAt time.Time
-	hookHealth            HookHealth
+	hookHealth            commands.HookHealth
 	hookHealthErr         error
 	hookHealthCheckedAt   time.Time
 	deprecations          []config.Deprecation
