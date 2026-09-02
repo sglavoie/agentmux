@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -95,9 +95,9 @@ func TestSourceTreeHasNoRetiredPlatformStacks(t *testing.T) {
 	}
 }
 
-func healthyTestHealth(build buildinfo.Info) daemon.Health {
+func healthyTestHealth(build buildinfo.Info) ipc.Health {
 	b := build
-	return daemon.Health{Alive: true, Ready: true, Build: &b, Metrics: &protocol.MetricsSnapshot{}}
+	return ipc.Health{Alive: true, Ready: true, Build: &b, Metrics: &protocol.MetricsSnapshot{}}
 }
 
 func findingsByCheck(findings []doctorFinding, check string) []doctorFinding {

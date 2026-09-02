@@ -1,4 +1,4 @@
-package daemon
+package ipc
 
 // The client half of the ASL request surface: request construction and the
 // socket deadlines, over the transport the daemon client already owns. Decoding

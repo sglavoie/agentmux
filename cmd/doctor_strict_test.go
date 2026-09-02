@@ -13,7 +13,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
@@ -21,7 +21,7 @@ import (
 
 // setUpDoctorFixture installs a healthy socket/binary/config environment plus
 // the given daemon snapshot, returning the shared "now" used by the fakes.
-func setUpDoctorFixture(t *testing.T, health daemon.Health, snapshot protocol.EventsExport) time.Time {
+func setUpDoctorFixture(t *testing.T, health ipc.Health, snapshot protocol.EventsExport) time.Time {
 	t.Helper()
 	resetDoctorTestState(t)
 	now := time.Unix(1_700_000_000, 0)
@@ -101,7 +101,7 @@ func ownerMismatchDoctorSnapshot(now time.Time) protocol.EventsExport {
 
 func TestDoctorStrictExitsNonzeroOnHealthFailures(t *testing.T) {
 	build := doctorTestBuild
-	health := daemon.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build}
+	health := ipc.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build}
 	setUpDoctorFixture(t, health, violatingDoctorSnapshot(doctorNow()))
 	doctorStrict = true
 
@@ -130,7 +130,7 @@ func TestDoctorStrictExitsNonzeroOnHealthFailures(t *testing.T) {
 
 func TestDoctorStrictPassesOnCleanDeployment(t *testing.T) {
 	build := doctorTestBuild
-	health := daemon.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build}
+	health := ipc.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build}
 	setUpDoctorFixture(t, health, protocol.EventsExport{})
 	doctorStrict = true
 
@@ -149,7 +149,7 @@ func TestDoctorStrictFailsWhenInteractiveNotificationsUnavailable(t *testing.T) 
 	capability := protocol.NotificationCapability{
 		Enabled: true, Backend: "alerter", Reason: "not_found",
 	}
-	health := daemon.Health{
+	health := ipc.Health{
 		Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build,
 		Notification: &capability,
 	}
@@ -177,7 +177,7 @@ func TestDoctorStrictFailsWhenInteractiveNotificationsUnavailable(t *testing.T) 
 
 func TestDoctorStrictStaysGreenOnDeliveryFailureWarning(t *testing.T) {
 	build := doctorTestBuild
-	health := daemon.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build}
+	health := ipc.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build}
 	now := setUpDoctorFixture(t, health, protocol.EventsExport{})
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	paths, err := diagnostics.DefaultPaths()
@@ -216,7 +216,7 @@ func TestDoctorStrictStaysGreenOnDeliveryFailureWarning(t *testing.T) {
 
 func TestDoctorOwnerMismatchTraceRendersSharedFindingsAndFailsStrict(t *testing.T) {
 	build := doctorTestBuild
-	health := daemon.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build}
+	health := ipc.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build}
 	now := time.Unix(1_700_000_000, 0)
 	setUpDoctorFixture(t, health, ownerMismatchDoctorSnapshot(now))
 	doctorStrict = true
@@ -245,7 +245,7 @@ func TestDoctorOwnerMismatchTraceRendersSharedFindingsAndFailsStrict(t *testing.
 
 func TestDoctorJSONEmitsStructuredReport(t *testing.T) {
 	build := doctorTestBuild
-	health := daemon.Health{
+	health := ipc.Health{
 		Alive: true, Ready: true, PID: 77, Uptime: 3 * time.Minute, Build: &build,
 		Metrics: &protocol.MetricsSnapshot{Accepted: 9},
 	}
@@ -304,7 +304,7 @@ func TestDoctorJSONEmitsStructuredReport(t *testing.T) {
 
 func TestDoctorJSONOwnerMismatchTraceMatchesTextSeverityAndWindow(t *testing.T) {
 	build := doctorTestBuild
-	health := daemon.Health{Alive: true, Ready: true, PID: 77, Uptime: time.Minute, Build: &build}
+	health := ipc.Health{Alive: true, Ready: true, PID: 77, Uptime: time.Minute, Build: &build}
 	now := time.Unix(1_700_000_000, 0)
 	setUpDoctorFixture(t, health, ownerMismatchDoctorSnapshot(now))
 	doctorJSON = true

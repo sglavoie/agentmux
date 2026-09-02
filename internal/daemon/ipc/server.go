@@ -1,4 +1,4 @@
-package daemon
+package ipc
 
 import (
 	"bufio"
@@ -40,12 +40,30 @@ const badPayloadLogInterval = 100
 // It leaves a margin over the hook client's 250ms per-exchange deadline.
 var connDeadline = time.Second
 
-// Server listens on a Unix domain socket and dispatches requests to a Handler.
-// Each connection carries exactly one request/response pair.
+// RequestHandler is the daemon-side application a Server dispatches to. The
+// transport owns framing, deduplication, ingress ordering and the wire
+// acknowledgement stamp; everything a request MEANS belongs to the handler.
+//
+// The three methods are the whole coupling between transport and application:
+// Handle applies one request, SetMetricsSource lets a health response carry the
+// transport's own request-outcome counters, and RecordDuplicateDelivery lets
+// the handler journal an IPC retry that the dedupe cache answered without
+// re-applying. Nothing else about the daemon's state is visible from here,
+// which is what keeps this package off its parent.
+type RequestHandler interface {
+	Handle(protocol.Request) protocol.Response
+	SetMetricsSource(func() protocol.MetricsSnapshot)
+	RecordDuplicateDelivery(protocol.Request, *protocol.DeliveryAcknowledgement)
+}
+
+// Server listens on a Unix domain socket and dispatches requests to a
+// RequestHandler. Each connection carries exactly one request/response pair:
+// there is no multiplexing and no subscription channel, so a client that wants
+// a second answer opens a second connection.
 type Server struct {
-	handler     *Handler
+	handler     RequestHandler
 	ln          net.Listener
-	metrics     Metrics
+	metrics     requestMetrics
 	dedupe      *dedupeCache
 	ingress     *ingressQueue
 	badPayloads atomic.Uint64
@@ -71,7 +89,7 @@ type Server struct {
 
 // NewServer creates a Server bound to socketPath.
 // A pre-existing stale socket file is removed, but non-socket files are left intact.
-func NewServer(socketPath string, handler *Handler) (*Server, error) {
+func NewServer(socketPath string, handler RequestHandler) (*Server, error) {
 	// Remove stale sockets, but do not unlink arbitrary files if the configured
 	// path is wrong.
 	if info, err := os.Lstat(socketPath); err == nil {
@@ -103,7 +121,7 @@ func NewServer(socketPath string, handler *Handler) (*Server, error) {
 	s.ingress = newIngressQueue(s.handler.Handle, &s.metrics)
 	// Health responses report the server's request-outcome counters (queue
 	// saturation, queue latency) so diagnostics can see them over IPC.
-	handler.setMetricsSource(s.metrics.Snapshot)
+	handler.SetMetricsSource(s.metrics.Snapshot)
 	return s, nil
 }
 
@@ -274,7 +292,7 @@ func (s *Server) serveConn(r io.Reader, w io.Writer) {
 		resp.Delivery.SourceEventID = req.SourceEventID
 		resp.Delivery.Attempt = req.Attempt
 		if resp.Delivery.Status == protocol.DeliveryAcknowledgementDuplicate {
-			s.handler.recordDuplicateDelivery(req, resp.Delivery)
+			s.handler.RecordDuplicateDelivery(req, resp.Delivery)
 		}
 	}
 	writeResponse(w, resp)

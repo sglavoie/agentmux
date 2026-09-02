@@ -10,7 +10,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/hooks"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -26,7 +26,7 @@ var statusJournalSnapshot = func(ctx context.Context, journal *diagnostics.Journ
 }
 
 type DaemonHealthClient interface {
-	Health() daemon.Health
+	Health() ipc.Health
 }
 
 type KittyWindowLister interface {
@@ -106,7 +106,7 @@ func CollectStatus(ctx context.Context, options StatusOptions) (StatusReport, er
 	}
 
 	if options.Daemon == nil {
-		options.Daemon = daemon.NewClient()
+		options.Daemon = ipc.NewClient()
 	}
 	health := options.Daemon.Health()
 	report.Daemon = DaemonReport{

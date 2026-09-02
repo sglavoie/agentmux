@@ -11,14 +11,18 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
-// newTestServerWithRef starts a real Server over a Unix socket and returns both
-// the socket path and the *Server so a test can inspect Metrics after a round
-// trip. Mirrors startTestServer but exposes the server handle.
-func newTestServerWithRef(t *testing.T) (string, *Server) {
+// newTestServerWithRef starts a real Server over a Unix socket and returns the
+// socket path, the *ipc.Server so a test can inspect transport Metrics after a
+// round trip, and the *Handler so it can inspect the state the round trip
+// produced. The handler is returned rather than reached for through the server
+// because the transport deliberately knows its application only as an
+// ipc.RequestHandler. Mirrors startTestServer but exposes both handles.
+func newTestServerWithRef(t *testing.T) (string, *ipc.Server, *Handler) {
 	t.Helper()
 	dir, err := os.MkdirTemp("/tmp", "amx-dedupe-*")
 	if err != nil {
@@ -33,7 +37,7 @@ func newTestServerWithRef(t *testing.T) (string, *Server) {
 	})
 	handler := NewHandler(guard, notifier)
 
-	server, err := NewServer(socketPath, handler)
+	server, err := ipc.NewServer(socketPath, handler)
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
 	}
@@ -43,11 +47,11 @@ func newTestServerWithRef(t *testing.T) (string, *Server) {
 		cancel()
 		_ = os.RemoveAll(dir)
 	})
-	return socketPath, server
+	return socketPath, server, handler
 }
 
 // windowEventCount returns how many events the daemon recorded for windowID.
-func windowEventCount(t *testing.T, c *Client, windowID int) int {
+func windowEventCount(t *testing.T, c *ipc.Client, windowID int) int {
 	t.Helper()
 	resp, err := c.Send(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: windowID})
 	if err != nil {
@@ -60,8 +64,8 @@ func windowEventCount(t *testing.T, c *Client, windowID int) int {
 // event carried by one request ID is applied exactly once across concurrent
 // duplicates and a later ambiguous-timeout retry.
 func TestIPC_DedupeAppliesEventOnce(t *testing.T) {
-	sock, server := newTestServerWithRef(t)
-	c := NewClientWithSocket(sock)
+	sock, server, _ := newTestServerWithRef(t)
+	c := ipc.NewClientWithSocket(sock)
 
 	const windowID = 5
 	req := protocol.Request{
@@ -124,8 +128,8 @@ func TestIPC_DedupeAppliesEventOnce(t *testing.T) {
 // request ID: a new logical event with a fresh ID applies again, and a legacy
 // (no-ID) request always applies.
 func TestIPC_DistinctRequestIDsEachApply(t *testing.T) {
-	sock, server := newTestServerWithRef(t)
-	c := NewClientWithSocket(sock)
+	sock, server, _ := newTestServerWithRef(t)
+	c := ipc.NewClientWithSocket(sock)
 
 	const windowID = 6
 	base := protocol.Request{Type: protocol.TypeStateUpdate, WindowID: windowID, Action: "active", Event: "PreToolUse"}
@@ -164,7 +168,7 @@ func TestIPC_DistinctRequestIDsEachApply(t *testing.T) {
 // TestIPC_RejectedMetricCountsBadPayload confirms malformed input increments the
 // rejected metric rather than any dedupe bucket.
 func TestIPC_RejectedMetricCountsBadPayload(t *testing.T) {
-	sock, server := newTestServerWithRef(t)
+	sock, server, _ := newTestServerWithRef(t)
 
 	conn, err := net.Dial("unix", sock)
 	if err != nil {

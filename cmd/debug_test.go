@@ -15,16 +15,16 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
-type debugTestDaemon struct{ health daemon.Health }
+type debugTestDaemon struct{ health ipc.Health }
 
-func (d debugTestDaemon) Health() daemon.Health { return d.health }
+func (d debugTestDaemon) Health() ipc.Health { return d.health }
 
 type debugTestKitty struct{ err error }
 
@@ -44,8 +44,8 @@ func (w *cancelBuffer) Write(data []byte) (int, error) {
 	return written, err
 }
 
-func (debugTestProbe) SendWithAutoStartObserved(request protocol.Request, _ string, observer daemon.DeliveryObserver) (protocol.Response, error) {
-	observer(daemon.DeliveryStageEvent{Stage: daemon.DeliveryStageIPCAttempt, Attempt: 1, Outcome: "success"})
+func (debugTestProbe) SendWithAutoStartObserved(request protocol.Request, _ string, observer ipc.DeliveryObserver) (protocol.Response, error) {
+	observer(ipc.DeliveryStageEvent{Stage: ipc.DeliveryStageIPCAttempt, Attempt: 1, Outcome: "success"})
 	return protocol.Response{OK: true, Delivery: &protocol.DeliveryAcknowledgement{
 		SchemaVersion: protocol.DeliveryAcknowledgementSchemaVersion,
 		Status:        protocol.DeliveryAcknowledgementAccepted, Reason: "routing_discovered",

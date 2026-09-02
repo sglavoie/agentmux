@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -16,7 +16,7 @@ const ProbeSchemaVersion = 1
 const ProbeScope = "This validates AgentMux client-to-daemon delivery and routing without changing reducer, renderer, or notification state; it does not prove that a harness invoked its hook."
 
 type ProbeClient interface {
-	SendWithAutoStartObserved(protocol.Request, string, daemon.DeliveryObserver) (protocol.Response, error)
+	SendWithAutoStartObserved(protocol.Request, string, ipc.DeliveryObserver) (protocol.Response, error)
 }
 
 type ProbeOptions struct {
@@ -79,7 +79,7 @@ func Probe(client ProbeClient, options ProbeOptions) ProbeReport {
 		ProducerHarness: report.Harness, Harness: report.Harness,
 		TraceID: report.TraceID, RequestID: report.RequestID,
 	}
-	response, err := client.SendWithAutoStartObserved(request, options.AMXBin, func(event daemon.DeliveryStageEvent) {
+	response, err := client.SendWithAutoStartObserved(request, options.AMXBin, func(event ipc.DeliveryStageEvent) {
 		report.Stages = append(report.Stages, ProbeStage{
 			Stage: event.Stage, Attempt: event.Attempt, Outcome: event.Outcome,
 			Reason: event.Reason, LatencyMS: event.LatencyMS,

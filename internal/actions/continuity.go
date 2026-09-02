@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -31,7 +31,7 @@ func continueConversation(deps Dependencies, meta transcript.SessionMeta) (Resul
 	}
 	requestDaemon := deps.Daemon
 	if requestDaemon == nil {
-		requestDaemon = func(req protocol.Request) (protocol.Response, error) { return daemon.NewClient().Send(req) }
+		requestDaemon = func(req protocol.Request) (protocol.Response, error) { return ipc.NewClient().Send(req) }
 	}
 	response, err := requestDaemon(protocol.Request{Type: protocol.TypeStateQuery})
 	if err != nil {

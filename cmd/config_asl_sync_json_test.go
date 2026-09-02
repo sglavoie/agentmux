@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 )
 
 // The JSON surface of `amx config asl-sync`: the codes a failure carries, the
@@ -112,7 +112,7 @@ func TestJSONFailuresCarryDistinctCodes(t *testing.T) {
 func TestAJSONRollbackEmitsTheReportAlongsideTheFailure(t *testing.T) {
 	fixture := setUpASLSync(t, "[defaults]\n", healthySurvey())
 	configASLSyncJSON = true
-	fixture.daemon.afterRestart = &daemon.Health{Alive: true, Ready: true}
+	fixture.daemon.afterRestart = &ipc.Health{Alive: true, Ready: true}
 
 	if err := runConfigASLSync(configASLSyncCmd); err == nil {
 		t.Fatal("runConfigASLSync() = nil, want a verification failure")
@@ -216,7 +216,7 @@ func TestACompatibleCorpusIsNeverMigrated(t *testing.T) {
 // — so reachability is recorded rather than required.
 func TestPairingProceedsWithADeadDaemon(t *testing.T) {
 	fixture := setUpASLSync(t, "[defaults]\n", healthySurvey())
-	fixture.daemon.health = daemon.Health{}
+	fixture.daemon.health = ipc.Health{}
 
 	if err := runConfigASLSync(configASLSyncCmd); err != nil {
 		t.Fatalf("runConfigASLSync() = %v", err)

@@ -1,4 +1,4 @@
-package daemon
+package ipc
 
 // This file serializes state-changing ingress through one bounded single-
 // consumer queue. Without it, N concurrent connection goroutines contend on the
@@ -40,19 +40,19 @@ type queueItem struct {
 type ingressQueue struct {
 	ch      chan queueItem
 	handle  func(protocol.Request) protocol.Response
-	metrics *Metrics
+	metrics *requestMetrics
 	done    chan struct{}
 }
 
 // newIngressQueue creates the queue at the production capacity and starts its
 // single consumer. Call stop to drain and shut it down.
-func newIngressQueue(handle func(protocol.Request) protocol.Response, metrics *Metrics) *ingressQueue {
+func newIngressQueue(handle func(protocol.Request) protocol.Response, metrics *requestMetrics) *ingressQueue {
 	return newIngressQueueCap(handle, metrics, ingressQueueCapacity)
 }
 
 // newIngressQueueCap is newIngressQueue with an explicit capacity, so tests can
 // force saturation without enqueuing thousands of items.
-func newIngressQueueCap(handle func(protocol.Request) protocol.Response, metrics *Metrics, capacity int) *ingressQueue {
+func newIngressQueueCap(handle func(protocol.Request) protocol.Response, metrics *requestMetrics, capacity int) *ingressQueue {
 	q := &ingressQueue{
 		ch:      make(chan queueItem, capacity),
 		handle:  handle,

@@ -107,10 +107,11 @@ func (h *Handler) SetASLBridge(bridge asl.Bridge) {
 	h.aslBridge.Install(bridge)
 }
 
-// setMetricsSource installs the server's metrics snapshot function so health
-// responses carry request-outcome counters. Called by NewServer before the
-// socket accepts connections.
-func (h *Handler) setMetricsSource(fn func() protocol.MetricsSnapshot) {
+// SetMetricsSource installs the server's metrics snapshot function so health
+// responses carry request-outcome counters. Called by ipc.NewServer before the
+// socket accepts connections; it is part of the ipc.RequestHandler contract,
+// which is why it is exported.
+func (h *Handler) SetMetricsSource(fn func() protocol.MetricsSnapshot) {
 	h.metricsFn = fn
 }
 

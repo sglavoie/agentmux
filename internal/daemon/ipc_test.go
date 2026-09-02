@@ -11,6 +11,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
@@ -31,7 +32,7 @@ func startTestServer(t *testing.T) string {
 	})
 	handler := NewHandler(guard, notifier)
 
-	server, err := NewServer(socketPath, handler)
+	server, err := ipc.NewServer(socketPath, handler)
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
 	}
@@ -48,7 +49,7 @@ func startTestServer(t *testing.T) string {
 
 func TestIPC_StateUpdate(t *testing.T) {
 	sock := startTestServer(t)
-	c := NewClientWithSocket(sock)
+	c := ipc.NewClientWithSocket(sock)
 
 	resp, err := c.Send(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active"})
 	if err != nil {
@@ -61,7 +62,7 @@ func TestIPC_StateUpdate(t *testing.T) {
 
 func TestIPC_StateQuery(t *testing.T) {
 	sock := startTestServer(t)
-	c := NewClientWithSocket(sock)
+	c := ipc.NewClientWithSocket(sock)
 
 	resp, err := c.Send(protocol.Request{Type: protocol.TypeStateQuery})
 	if err != nil {
@@ -74,7 +75,7 @@ func TestIPC_StateQuery(t *testing.T) {
 
 func TestIPC_EventsExportWindowFilter(t *testing.T) {
 	sock := startTestServer(t)
-	c := NewClientWithSocket(sock)
+	c := ipc.NewClientWithSocket(sock)
 
 	if _, err := c.Send(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse", SessionTitle: "W:one"}); err != nil {
 		t.Fatalf("window 1 update: %v", err)
@@ -109,7 +110,7 @@ func TestIPC_EventsExportWindowFilter(t *testing.T) {
 
 func TestIPC_JSONRoundTrip(t *testing.T) {
 	sock := startTestServer(t)
-	c := NewClientWithSocket(sock)
+	c := ipc.NewClientWithSocket(sock)
 
 	// Guard blocks lower-priority update across round-trips.
 	if _, err := c.Send(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 2, Action: "failure"}); err != nil {
@@ -126,7 +127,7 @@ func TestIPC_JSONRoundTrip(t *testing.T) {
 
 func TestIPC_PromptBypassesStopGuard(t *testing.T) {
 	sock := startTestServer(t)
-	c := NewClientWithSocket(sock)
+	c := ipc.NewClientWithSocket(sock)
 
 	if _, err := c.Send(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 3, Action: "stop"}); err != nil {
 		t.Fatalf("Send stop: %v", err)
@@ -142,7 +143,7 @@ func TestIPC_PromptBypassesStopGuard(t *testing.T) {
 
 func TestIPC_ConcurrentUpdates(t *testing.T) {
 	sock := startTestServer(t)
-	c := NewClientWithSocket(sock)
+	c := ipc.NewClientWithSocket(sock)
 
 	done := make(chan error, 10)
 	for i := 0; i < 10; i++ {
@@ -204,7 +205,7 @@ func TestIPC_StateQueryWatchdogRoundtrip(t *testing.T) {
 		"compact":  30 * time.Second,
 	}, nil)
 
-	server, err := NewServer(socketPath, handler)
+	server, err := ipc.NewServer(socketPath, handler)
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
 	}
@@ -212,7 +213,7 @@ func TestIPC_StateQueryWatchdogRoundtrip(t *testing.T) {
 	defer cancel()
 	go func() { _ = server.Serve(ctx) }()
 
-	c := NewClientWithSocket(socketPath)
+	c := ipc.NewClientWithSocket(socketPath)
 
 	if _, err := c.Send(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Account: "personal"}); err != nil {
 		t.Fatalf("state_update: %v", err)
@@ -262,7 +263,7 @@ func TestIPC_ShutdownRequest(t *testing.T) {
 	})
 	handler := NewHandler(guard, notifier)
 
-	server, err := NewServer(socketPath, handler)
+	server, err := ipc.NewServer(socketPath, handler)
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
 	}
@@ -271,7 +272,7 @@ func TestIPC_ShutdownRequest(t *testing.T) {
 	defer cancel()
 	go func() { _ = server.Serve(ctx) }()
 
-	c := NewClientWithSocket(socketPath)
+	c := ipc.NewClientWithSocket(socketPath)
 	resp, err := c.Send(protocol.Request{Type: protocol.TypeStateQuery})
 	if err != nil || !resp.OK {
 		t.Fatalf("query failed: err=%v resp=%+v", err, resp)

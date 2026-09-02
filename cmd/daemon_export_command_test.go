@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -20,7 +20,7 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV10Payload(t *testing.T) 
 	daemonBuild := buildinfo.Info{Version: "9.9.9", Revision: "abc123", GoVersion: "go1.99", BinaryHash: "feedface"}
 	metrics := protocol.MetricsSnapshot{Accepted: 7, QueueFull: 0, QueueLastWaitNs: 1500}
 	client := &fakeDaemonExportClient{
-		health: daemon.Health{
+		health: ipc.Health{
 			Alive: true, PID: 4321, Uptime: 2 * time.Minute, Ready: true,
 			Build: &daemonBuild, Metrics: &metrics,
 		},
@@ -233,7 +233,7 @@ func TestDaemonExportEventsCommand_SingleWindowUsesFilteredExportShape(t *testin
 	resetDaemonExportTestState(t)
 
 	client := &fakeDaemonExportClient{
-		health: daemon.Health{Alive: true, PID: 99, Uptime: 5 * time.Second},
+		health: ipc.Health{Alive: true, PID: 99, Uptime: 5 * time.Second},
 		export: func(windowID int) (protocol.EventsExport, error) {
 			if windowID != 42 {
 				return protocol.EventsExport{}, fmt.Errorf("windowID = %d; want 42", windowID)
@@ -313,7 +313,7 @@ func TestDaemonExportEventsCommand_SingleWindowKeepsEmptyEventsArray(t *testing.
 	resetDaemonExportTestState(t)
 
 	client := &fakeDaemonExportClient{
-		health: daemon.Health{Alive: true, PID: 1, Uptime: time.Second},
+		health: ipc.Health{Alive: true, PID: 1, Uptime: time.Second},
 		export: func(windowID int) (protocol.EventsExport, error) {
 			if windowID != 42 {
 				return protocol.EventsExport{}, fmt.Errorf("windowID = %d; want 42", windowID)
@@ -369,7 +369,7 @@ func TestDaemonExportEventsCommand_SingleWindowKeepsEmptyEventsArray(t *testing.
 func TestDaemonExportEventsCommandSchema8ProjectsCausalFields(t *testing.T) {
 	resetDaemonExportTestState(t)
 	client := &fakeDaemonExportClient{
-		health: daemon.Health{Alive: true},
+		health: ipc.Health{Alive: true},
 		export: func(int) (protocol.EventsExport, error) {
 			return protocol.EventsExport{
 				EventsByWindow: map[int][]protocol.SessionEvent{42: {{
@@ -426,7 +426,7 @@ func TestDaemonExportEventsCommandSchema8ProjectsCausalFields(t *testing.T) {
 func TestDaemonExportEventsCommandSchema9PreservesCausalFieldsWithoutProcessIdentity(t *testing.T) {
 	resetDaemonExportTestState(t)
 	client := &fakeDaemonExportClient{
-		health: daemon.Health{Alive: true},
+		health: ipc.Health{Alive: true},
 		export: func(int) (protocol.EventsExport, error) {
 			return protocol.EventsExport{
 				EventsByWindow: map[int][]protocol.SessionEvent{42: {{

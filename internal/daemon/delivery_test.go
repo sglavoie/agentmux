@@ -76,25 +76,3 @@ func TestHookDeliveryRejectsMissingWindow(t *testing.T) {
 		t.Fatalf("missing-window delivery mutated state: store=%d metadata=%d", len(h.store), len(h.windowMetadata))
 	}
 }
-
-func TestDedupeReplayHasExplicitDuplicateAcknowledgement(t *testing.T) {
-	var metrics Metrics
-	cache := newDedupeCache(&metrics)
-	compute := func() protocol.Response {
-		return protocol.Response{OK: true, Delivery: &protocol.DeliveryAcknowledgement{
-			SchemaVersion: protocol.DeliveryAcknowledgementSchemaVersion,
-			Status:        protocol.DeliveryAcknowledgementAccepted,
-			Reason:        "accepted",
-		}}
-	}
-
-	first := cache.do("request-1", compute)
-	duplicate := cache.do("request-1", compute)
-	if first.Delivery == nil || first.Delivery.Status != protocol.DeliveryAcknowledgementAccepted {
-		t.Fatalf("first acknowledgement = %+v", first.Delivery)
-	}
-	if duplicate.Delivery == nil || duplicate.Delivery.Status != protocol.DeliveryAcknowledgementDuplicate ||
-		duplicate.Delivery.Reason != "request_replayed" {
-		t.Fatalf("duplicate acknowledgement = %+v", duplicate.Delivery)
-	}
-}

@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -77,7 +77,7 @@ func screenDeclineWindowsShowing(icon string) []kitty.OSWindow {
 func setUpStuckScreenDeclineFixture(t *testing.T, snapshot protocol.EventsExport, windows []kitty.OSWindow) {
 	t.Helper()
 	build := doctorTestBuild
-	health := daemon.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build}
+	health := ipc.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build}
 	setUpDoctorFixture(t, health, snapshot)
 	newDoctorKitty = func() kittyWindowLister { return fakeKittyWindowLister{windows: windows} }
 }

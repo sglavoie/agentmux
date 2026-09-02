@@ -7,16 +7,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/screenstate"
 )
 
 // doctorScreenPatternHealth builds a live-daemon health response carrying the
 // given screen-pattern load result.
-func doctorScreenPatternHealth(patterns *protocol.ScreenPatternsSnapshot) daemon.Health {
+func doctorScreenPatternHealth(patterns *protocol.ScreenPatternsSnapshot) ipc.Health {
 	build := doctorTestBuild
-	return daemon.Health{
+	return ipc.Health{
 		Alive: true, Ready: true, PID: 1, Uptime: time.Minute,
 		Build:          &build,
 		ScreenPatterns: patterns,
@@ -184,7 +184,7 @@ func TestDoctorScreenPatternWarningKindsAllRaiseTheOverrideFinding(t *testing.T)
 // patterns are embedded — the distinction an operator needs after an upgrade.
 func TestDoctorReportsUnknownScreenPatternsForOlderDaemon(t *testing.T) {
 	build := doctorTestBuild
-	health := daemon.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build}
+	health := ipc.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build}
 	setUpDoctorFixture(t, health, protocol.EventsExport{})
 	doctorStrict = true
 

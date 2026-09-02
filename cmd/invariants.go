@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
-	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -101,7 +101,7 @@ type doctorFinding struct {
 // checks are skipped). Tombstoned windows are reported as informational and
 // exempt from failure checks: their live state was garbage-collected and the
 // retained metadata is post-mortem evidence, not a running session.
-func evaluateDaemonInvariants(snapshot protocol.EventsExport, health daemon.Health, cliBuild buildinfo.Info, liveByID map[int]protocol.WindowLiveMetadata, now time.Time) []doctorFinding {
+func evaluateDaemonInvariants(snapshot protocol.EventsExport, health ipc.Health, cliBuild buildinfo.Info, liveByID map[int]protocol.WindowLiveMetadata, now time.Time) []doctorFinding {
 	findings := make([]doctorFinding, 0)
 	add := func(severity, check string, windowID int, format string, args ...any) {
 		findings = append(findings, doctorFinding{

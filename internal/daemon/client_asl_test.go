@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/asl"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 )
 
 // startASLTestServer publishes a daemon socket backed by the given bridge, so
@@ -23,7 +24,7 @@ func startASLTestServer(t *testing.T, bridge asl.Bridge) string {
 	if bridge != nil {
 		handler.SetASLBridge(bridge)
 	}
-	server, err := NewServer(socketPath, handler)
+	server, err := ipc.NewServer(socketPath, handler)
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
 	}
@@ -47,7 +48,7 @@ func TestClientASLRoundTrip(t *testing.T) {
 		operation: aslbridge.Operation{OperationID: "op2", Status: aslbridge.OperationAccepted},
 		link:      aslbridge.WorkbenchLink{PlanDir: "/p", URL: "http://127.0.0.1:8765/plans/p"},
 	}
-	client := NewClientWithSocket(startASLTestServer(t, bridge))
+	client := ipc.NewClientWithSocket(startASLTestServer(t, bridge))
 
 	snapshot, meta, receipts, status, err := client.ASLSnapshot()
 	if err != nil {
@@ -96,7 +97,7 @@ func TestClientASLReportsRefusals(t *testing.T) {
 		status: aslbridge.Status{Mode: string(aslbridge.ModeAuto)},
 		err:    aslbridge.ErrUnavailable,
 	}
-	client := NewClientWithSocket(startASLTestServer(t, bridge))
+	client := ipc.NewClientWithSocket(startASLTestServer(t, bridge))
 
 	if _, _, _, _, err := client.ASLSnapshot(); err == nil || !strings.Contains(err.Error(), "unavailable") {
 		t.Fatalf("ASLSnapshot error = %v, want the daemon's refusal", err)

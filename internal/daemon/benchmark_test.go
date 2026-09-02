@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -28,7 +29,7 @@ func BenchmarkRun_StartupAndShutdown(b *testing.B) {
 			if err := os.Setenv("HOME", dir); err != nil {
 				b.Fatalf("Setenv: %v", err)
 			}
-			socketPath := SocketPath()
+			socketPath := ipc.SocketPath()
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -46,7 +47,7 @@ func BenchmarkRun_StartupAndShutdown(b *testing.B) {
 				time.Sleep(time.Millisecond)
 			}
 
-			c := NewClientWithSocket(socketPath)
+			c := ipc.NewClientWithSocket(socketPath)
 			resp, err := c.Send(protocol.Request{Type: protocol.TypeShutdown})
 			if err != nil {
 				b.Fatalf("shutdown Send: %v", err)

@@ -11,7 +11,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/process"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hooks"
@@ -30,7 +30,7 @@ var sharedActionRegistry = actions.DefaultRegistry()
 // daemonRequest is a narrow seam around the IPC client so fetch and clear
 // behavior can be tested without connecting to an operator's daemon.
 var daemonRequest = func(req protocol.Request) (protocol.Response, error) {
-	return daemon.NewClient().Send(req)
+	return ipc.NewClient().Send(req)
 }
 
 // healthCmd refreshes the daemon and/or hook health cached on the model.
@@ -42,7 +42,7 @@ func healthCmd(cfg *config.Config, amxBin string, checkDaemon, checkHooks bool) 
 	return func() tea.Msg {
 		msg := healthMsg{daemonChecked: checkDaemon, hookChecked: checkHooks}
 		if checkDaemon {
-			h := daemon.NewClient().Health()
+			h := ipc.NewClient().Health()
 			msg.daemonAlive = h.Alive
 			if !h.Alive {
 				if err := spawnDaemonDetached(amxBin); err != nil {

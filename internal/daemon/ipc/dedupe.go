@@ -1,4 +1,4 @@
-package daemon
+package ipc
 
 import (
 	"sync"
@@ -20,11 +20,16 @@ const dedupeMaxEntries = 10000
 // and its request ID becomes eligible for reprocessing.
 const dedupeTTL = 15 * time.Minute
 
-// Metrics counts dedupe-layer outcomes. Every request lands in exactly one of
-// the accepted/duplicate/rejected/queueFull buckets; expiredDedupe is a
+// requestMetrics counts dedupe-layer outcomes. Every request lands in exactly
+// one of the accepted/duplicate/rejected/queueFull buckets; expiredDedupe is a
 // supplementary counter of stale entries reclaimed by the TTL. All fields are
 // updated atomically and read as a consistent-enough snapshot via Snapshot.
-type Metrics struct {
+//
+// The type stays unexported: nothing outside this package holds one. The
+// transport publishes its counters as a protocol.MetricsSnapshot, through
+// Server.Metrics for a direct caller and through RequestHandler.SetMetricsSource
+// for the health response.
+type requestMetrics struct {
 	accepted      atomic.Uint64
 	duplicate     atomic.Uint64
 	rejected      atomic.Uint64
@@ -37,7 +42,7 @@ type Metrics struct {
 }
 
 // observeQueueWait records one ingress-queue wait (enqueue → consumer pickup).
-func (m *Metrics) observeQueueWait(wait time.Duration) {
+func (m *requestMetrics) observeQueueWait(wait time.Duration) {
 	ns := wait.Nanoseconds()
 	m.lastQueueWaitNs.Store(ns)
 	for {
@@ -49,7 +54,7 @@ func (m *Metrics) observeQueueWait(wait time.Duration) {
 }
 
 // Snapshot returns the current counter values.
-func (m *Metrics) Snapshot() protocol.MetricsSnapshot {
+func (m *requestMetrics) Snapshot() protocol.MetricsSnapshot {
 	return protocol.MetricsSnapshot{
 		Accepted:        m.accepted.Load(),
 		Duplicate:       m.duplicate.Load(),
@@ -80,7 +85,7 @@ func (e *dedupeEntry) expired(now time.Time, ttl time.Duration) bool {
 // concurrent duplicates block until it finishes and reuse its response, and a
 // later retry within the TTL replays the cached response without re-applying.
 type dedupeCache struct {
-	metrics     *Metrics
+	metrics     *requestMetrics
 	ttl         time.Duration
 	max         int
 	waitTimeout time.Duration
@@ -92,7 +97,7 @@ type dedupeCache struct {
 
 // newDedupeCache returns a cache with the production bounds, recording outcomes
 // into metrics.
-func newDedupeCache(metrics *Metrics) *dedupeCache {
+func newDedupeCache(metrics *requestMetrics) *dedupeCache {
 	return &dedupeCache{
 		metrics:     metrics,
 		ttl:         dedupeTTL,

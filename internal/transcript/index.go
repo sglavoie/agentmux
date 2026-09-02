@@ -17,7 +17,7 @@ import (
 )
 
 // IndexPath returns the on-disk JSON path for the searchable session
-// transcript index. It mirrors daemon.SocketPath's HOME-fallback so the
+// transcript index. It mirrors ipc.SocketPath's HOME-fallback so the
 // index lands under the same directory tree as the daemon socket on a
 // normal install, and under os.TempDir/agent-mux when HOME is empty
 // (test environments, broken setups).

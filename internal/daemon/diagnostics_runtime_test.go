@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/process"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
@@ -81,7 +82,7 @@ func TestRunRecordsLifecycleAndJournalMaintenance(t *testing.T) {
 	}
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer shutdownCancel()
-	if err := NewClientWithSocket(SocketPath()).ShutdownAndWait(shutdownCtx); err != nil {
+	if err := ipc.NewClientWithSocket(ipc.SocketPath()).ShutdownAndWait(shutdownCtx); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -140,14 +141,14 @@ func TestDuplicateDaemonDoesNotRunStartupJournalMaintenance(t *testing.T) {
 	if err := os.WriteFile(spoolPath, append(record, '\n'), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Dir(SocketPath()), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(ipc.SocketPath()), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	lock, err := process.AcquireDaemonLock(SocketPath())
+	lock, err := process.AcquireDaemonLock(ipc.SocketPath())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer process.ReleaseDaemonLock(SocketPath(), lock)
+	defer process.ReleaseDaemonLock(ipc.SocketPath(), lock)
 	cfg := &config.Config{Defaults: config.Defaults{Diagnostics: config.DiagnosticsConfig{
 		JournalEnabled: boolPointer(true), JournalKeepDays: 14, JournalMaxMiB: 32,
 	}}}
@@ -222,7 +223,7 @@ func TestActiveDaemonPromotesSpoolAtStartup(t *testing.T) {
 	}
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer shutdownCancel()
-	if err := NewClientWithSocket(SocketPath()).ShutdownAndWait(shutdownCtx); err != nil {
+	if err := ipc.NewClientWithSocket(ipc.SocketPath()).ShutdownAndWait(shutdownCtx); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -267,7 +268,7 @@ func TestRunShutdownPersistsQueuedStageRows(t *testing.T) {
 	go func() {
 		runErr <- run(ctx, cfg, runDependencies{
 			afterStartupPublication: func() {
-				resp, sendErr := NewClientWithSocket(SocketPath()).Send(protocol.Request{
+				resp, sendErr := ipc.NewClientWithSocket(ipc.SocketPath()).Send(protocol.Request{
 					Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Event: "UserPromptSubmit",
 					TraceID: traceID, RequestID: "request-run-render-shutdown",
 				})

@@ -8,6 +8,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/daemon/eventlog"
 	"github.com/sglavoie/agentmux/internal/daemon/events"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
@@ -255,8 +256,8 @@ func TestDecisionTraceRecordsRejectedOwnerAlternative(t *testing.T) {
 }
 
 func TestDuplicateReplayClearsDownstreamCausalityWithoutReducerMutation(t *testing.T) {
-	sock, server := newTestServerWithRef(t)
-	client := NewClientWithSocket(sock)
+	sock, _, handler := newTestServerWithRef(t)
+	client := ipc.NewClientWithSocket(sock)
 	payload := hookPayloadJSON(t, hookevent.HookPayload{SessionID: "session-1"})
 	request := protocol.Request{
 		Type: protocol.TypeHookEvent, WindowID: 42, Event: "PreToolUse", Harness: harness.Claude,
@@ -266,8 +267,8 @@ func TestDuplicateReplayClearsDownstreamCausalityWithoutReducerMutation(t *testi
 	if err != nil || first.Delivery == nil || first.Delivery.Status != protocol.DeliveryAcknowledgementAccepted {
 		t.Fatalf("first response = %+v, err = %v", first, err)
 	}
-	server.handler.stateMu.Lock()
-	poisoned := &server.handler.ensureWindowStateLocked(42).EventLog[0]
+	handler.stateMu.Lock()
+	poisoned := &handler.ensureWindowStateLocked(42).EventLog[0]
 	poisoned.RenderGeneration = 41
 	poisoned.RenderOutcome = rendering.StageRendered
 	poisoned.RenderReason = "original-render"
@@ -275,7 +276,7 @@ func TestDuplicateReplayClearsDownstreamCausalityWithoutReducerMutation(t *testi
 	poisoned.NotificationOutcome = "sent"
 	poisoned.NotificationReason = "original-notification-reason"
 	poisoned.ProbeTraceIDs = []string{"original-probe"}
-	server.handler.stateMu.Unlock()
+	handler.stateMu.Unlock()
 
 	request.TraceID = "trace-retry"
 	request.Attempt = 2
@@ -283,15 +284,15 @@ func TestDuplicateReplayClearsDownstreamCausalityWithoutReducerMutation(t *testi
 	if err != nil || retry.Delivery == nil || retry.Delivery.Status != protocol.DeliveryAcknowledgementDuplicate {
 		t.Fatalf("retry response = %+v, err = %v", retry, err)
 	}
-	server.handler.stateMu.Lock()
-	st := server.handler.ensureWindowStateLocked(42)
+	handler.stateMu.Lock()
+	st := handler.ensureWindowStateLocked(42)
 	eventlog.FinishRender(st, protocol.RenderGenerationTrace{
 		Generation: 42,
 		Stage:      rendering.StageRendered,
 		Reason:     "later-request-render",
 		RequestIDs: []string{request.RequestID},
 	})
-	server.handler.stateMu.Unlock()
+	handler.stateMu.Unlock()
 
 	detail, err := client.Send(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if err != nil || len(detail.Events) != 2 {
@@ -313,8 +314,8 @@ func TestDuplicateReplayClearsDownstreamCausalityWithoutReducerMutation(t *testi
 }
 
 func TestDuplicateReplayExportOmitsNotificationCausality(t *testing.T) {
-	sock, server := newTestServerWithRef(t)
-	client := NewClientWithSocket(sock)
+	sock, _, handler := newTestServerWithRef(t)
+	client := ipc.NewClientWithSocket(sock)
 	request := protocol.Request{
 		Type: protocol.TypeHookEvent, WindowID: 42, Event: "PreToolUse", Harness: harness.Claude,
 		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{SessionID: "session-1"}),
@@ -325,7 +326,7 @@ func TestDuplicateReplayExportOmitsNotificationCausality(t *testing.T) {
 		t.Fatalf("first response = %+v, err = %v", first, err)
 	}
 
-	server.handler.recordNotificationDisposition(notification.NotificationDisposition{
+	handler.recordNotificationDisposition(notification.NotificationDisposition{
 		Trace: notification.NotificationTrace{
 			TraceID: request.TraceID, RequestID: request.RequestID,
 		},
@@ -365,8 +366,8 @@ func TestDuplicateReplayExportOmitsNotificationCausality(t *testing.T) {
 }
 
 func TestProbeLinkSkipsDuplicateReplayRows(t *testing.T) {
-	sock, server := newTestServerWithRef(t)
-	client := NewClientWithSocket(sock)
+	sock, _, handler := newTestServerWithRef(t)
+	client := ipc.NewClientWithSocket(sock)
 	request := protocol.Request{
 		Type: protocol.TypeHookEvent, WindowID: 42, Event: "PreToolUse", Harness: harness.Claude,
 		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{SessionID: "session-1"}),
@@ -383,7 +384,7 @@ func TestProbeLinkSkipsDuplicateReplayRows(t *testing.T) {
 		t.Fatalf("retry response = %+v, err = %v", retry, err)
 	}
 
-	server.handler.linkProbeChild(request.TraceID, "probe-child", []int{request.WindowID})
+	handler.linkProbeChild(request.TraceID, "probe-child", []int{request.WindowID})
 	detail, err := client.Send(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: request.WindowID})
 	if err != nil || len(detail.Events) != 2 {
 		t.Fatalf("detail = %+v, err = %v", detail, err)

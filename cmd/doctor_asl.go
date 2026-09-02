@@ -31,7 +31,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -135,7 +135,7 @@ type aslIntegrationInputs struct {
 // The mode is taken from the running daemon when it publishes one and from
 // config otherwise, in that order: the daemon's mode is the one currently in
 // force, and a config edit that has not been restarted into is not yet true.
-func gatherASLIntegrationInputs(health daemon.Health) aslIntegrationInputs {
+func gatherASLIntegrationInputs(health ipc.Health) aslIntegrationInputs {
 	in := aslIntegrationInputs{
 		DaemonAlive: health.Alive,
 		Status:      health.ASL,

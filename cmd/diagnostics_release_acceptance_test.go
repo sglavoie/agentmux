@@ -14,6 +14,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
@@ -65,7 +66,7 @@ func TestAcceptanceDiagnosticPipeline(t *testing.T) {
 		}
 	})
 	waitForAcceptance(t, "daemon readiness", func() bool {
-		health := daemon.NewClient().Health()
+		health := ipc.NewClient().Health()
 		return health.Alive && health.Ready
 	})
 
@@ -109,7 +110,7 @@ func TestAcceptanceDiagnosticPipeline(t *testing.T) {
 			t.Fatalf("large %s delivery = %+v, want accepted", name, result)
 		}
 	}
-	client := daemon.NewClient()
+	client := ipc.NewClient()
 	var exported protocol.EventsExport
 	waitForAcceptance(t, "large-payload reducer source isolation", func() bool {
 		var exportErr error

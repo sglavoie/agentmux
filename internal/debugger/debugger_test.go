@@ -12,16 +12,16 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
-type testHealthClient struct{ health daemon.Health }
+type testHealthClient struct{ health ipc.Health }
 
-func (c testHealthClient) Health() daemon.Health { return c.health }
+func (c testHealthClient) Health() ipc.Health { return c.health }
 
 type testKittyClient struct {
 	windows []kitty.OSWindow
@@ -34,9 +34,9 @@ type testProbeClient struct {
 	request protocol.Request
 }
 
-func (c *testProbeClient) SendWithAutoStartObserved(request protocol.Request, _ string, observer daemon.DeliveryObserver) (protocol.Response, error) {
+func (c *testProbeClient) SendWithAutoStartObserved(request protocol.Request, _ string, observer ipc.DeliveryObserver) (protocol.Response, error) {
 	c.request = request
-	observer(daemon.DeliveryStageEvent{Stage: daemon.DeliveryStageIPCAttempt, Attempt: 1, Outcome: "success", Reason: "acknowledged", LatencyMS: 1.25})
+	observer(ipc.DeliveryStageEvent{Stage: ipc.DeliveryStageIPCAttempt, Attempt: 1, Outcome: "success", Reason: "acknowledged", LatencyMS: 1.25})
 	return protocol.Response{OK: true, Delivery: &protocol.DeliveryAcknowledgement{
 		SchemaVersion: protocol.DeliveryAcknowledgementSchemaVersion,
 		Status:        protocol.DeliveryAcknowledgementAccepted, Reason: "routing_discovered",
@@ -357,7 +357,7 @@ func TestInspectNativeFindsManagedAndUnmanagedSessions(t *testing.T) {
 func TestProbeReportsEveryObservedTransportStageAndScope(t *testing.T) {
 	client := &testProbeClient{}
 	report := Probe(client, ProbeOptions{WindowID: 43, Harness: "Claude", RequestID: "request-1", TraceID: "trace-1", AMXBin: "/tmp/amx"})
-	if !report.Success || len(report.Stages) != 2 || report.Stages[0].Stage != daemon.DeliveryStageIPCAttempt || report.Stages[1].Stage != "daemon_acknowledgement" {
+	if !report.Success || len(report.Stages) != 2 || report.Stages[0].Stage != ipc.DeliveryStageIPCAttempt || report.Stages[1].Stage != "daemon_acknowledgement" {
 		t.Fatalf("probe report = %+v", report)
 	}
 	if client.request.Type != protocol.TypeDiagnosticProbe || client.request.WindowID != 43 || client.request.RequestID != "request-1" {

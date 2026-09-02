@@ -9,7 +9,7 @@ import (
 	"unicode"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -63,7 +63,7 @@ func (r DeliveryResult) Successful() bool {
 }
 
 type observedDaemonClient interface {
-	SendWithAutoStartObserved(protocol.Request, string, daemon.DeliveryObserver) (protocol.Response, error)
+	SendWithAutoStartObserved(protocol.Request, string, ipc.DeliveryObserver) (protocol.Response, error)
 }
 
 type deliveryRecorder struct {
@@ -385,7 +385,7 @@ func deliverPayloadWithDeps(
 		ResetFlow:         resetFlow,
 	}
 
-	observer := func(stage daemon.DeliveryStageEvent) {
+	observer := func(stage ipc.DeliveryStageEvent) {
 		recorder.record("hook."+stage.Stage, stage.Outcome, stage.Reason, map[string]string{
 			"attempt": fmt.Sprint(stage.Attempt),
 		}, stage.LatencyMS)
@@ -401,8 +401,8 @@ func deliverPayloadWithDeps(
 		if err != nil {
 			outcome, reason = "error", err.Error()
 		}
-		observer(daemon.DeliveryStageEvent{
-			Stage: daemon.DeliveryStageIPCAttempt, Attempt: 1,
+		observer(ipc.DeliveryStageEvent{
+			Stage: ipc.DeliveryStageIPCAttempt, Attempt: 1,
 			Outcome: outcome, Reason: reason,
 			LatencyMS: float64(time.Since(attemptStarted)) / float64(time.Millisecond),
 		})

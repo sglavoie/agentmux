@@ -11,7 +11,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/aslbridge"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -42,14 +42,14 @@ var errASLWorkbenchOpen = errors.New("could not open the Workbench link")
 
 func aslSnapshotCmd(seq int) tea.Cmd {
 	return func() tea.Msg {
-		snapshot, meta, receipts, status, err := daemon.NewClient().ASLSnapshot()
+		snapshot, meta, receipts, status, err := ipc.NewClient().ASLSnapshot()
 		return aslSnapshotLoadedMsg{seq: seq, snapshot: snapshot, meta: meta, receipts: receipts, status: status, err: err}
 	}
 }
 
 func aslWorkbenchCmd(rowID, planDir, focus string) tea.Cmd {
 	return func() tea.Msg {
-		link, err := daemon.NewClient().ASLWorkbench(aslbridge.WorkbenchRequest{PlanDir: planDir, Focus: focus})
+		link, err := ipc.NewClient().ASLWorkbench(aslbridge.WorkbenchRequest{PlanDir: planDir, Focus: focus})
 		if err != nil {
 			return aslWorkbenchDoneMsg{rowID: rowID, focus: focus, err: errASLWorkbenchOpen}
 		}

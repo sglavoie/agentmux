@@ -36,7 +36,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/atomicfile"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 )
 
 // aslSyncProbeTimeout bounds one pairing survey. The survey walks every plan in
@@ -163,14 +163,14 @@ var (
 	aslSyncConfigPath = config.DefaultConfigPath
 	aslSyncResolve    = aslbridge.ResolveCommand
 	aslSyncProbe      = runASLPairingProbe
-	newASLSyncDaemon  = func() aslSyncDaemon { return daemon.NewClient() }
+	newASLSyncDaemon  = func() aslSyncDaemon { return ipc.NewClient() }
 	aslSyncExecutable = os.Executable
 	aslSyncSleep      = time.Sleep
 	aslSyncNow        = time.Now
 )
 
 type aslSyncDaemon interface {
-	Health() daemon.Health
+	Health() ipc.Health
 	RestartDetached(amxBin string) error
 }
 

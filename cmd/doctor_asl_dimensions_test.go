@@ -8,7 +8,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/aslcontract"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -172,7 +172,7 @@ func TestTheRunningDaemonsModeOverridesTheConfiguredOne(t *testing.T) {
 		cfg.Defaults.ASL.Command = "/opt/asl/bin/asl"
 		return cfg, nil
 	}
-	in := gatherASLIntegrationInputs(daemon.Health{
+	in := gatherASLIntegrationInputs(ipc.Health{
 		Alive: true,
 		ASL:   &aslbridge.Status{Mode: string(aslbridge.ModeAuto)},
 	})
@@ -193,7 +193,7 @@ func TestAnUnreadableConfigMakesShellResolutionUnknown(t *testing.T) {
 	resetDoctorTestState(t)
 	doctorLoadConfig = func() (*config.Config, error) { return nil, errors.New("toml: line 4: expected key") }
 
-	in := gatherASLIntegrationInputs(daemon.Health{Alive: true})
+	in := gatherASLIntegrationInputs(ipc.Health{Alive: true})
 	dim := dimension(t, evaluateASLIntegration(in), aslDimensionShellResolution)
 	if dim.Status != aslStatusUnknown || !strings.Contains(dim.Detail, "expected key") {
 		t.Errorf("shell_resolution = %s (%s), want unknown carrying the parse error", dim.Status, dim.Detail)

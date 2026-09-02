@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -190,8 +191,8 @@ func TestRaceInjectedLatencyHookBurstsConverge(t *testing.T) {
 // observable, and the metrics must attribute exactly one accept per logical
 // request.
 func TestRaceConcurrentRetriesEachLogicalRequestAppliesOnce(t *testing.T) {
-	sock, server := newTestServerWithRef(t)
-	c := NewClientWithSocket(sock)
+	sock, server, handler := newTestServerWithRef(t)
+	c := ipc.NewClientWithSocket(sock)
 
 	const pairs = 10
 	const retriesPerRequest = 4
@@ -225,9 +226,9 @@ func TestRaceConcurrentRetriesEachLogicalRequestAppliesOnce(t *testing.T) {
 	}
 	wg.Wait()
 
-	server.handler.stateMu.Lock()
-	count := server.handler.store[9].SubagentCount
-	server.handler.stateMu.Unlock()
+	handler.stateMu.Lock()
+	count := handler.store[9].SubagentCount
+	handler.stateMu.Unlock()
 	if count != 0 {
 		t.Fatalf("SubagentCount = %d after balanced retried pairs; want 0 (each applied once)", count)
 	}

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/process"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
@@ -91,7 +92,7 @@ func TestRun_RemovesSocketOnShutdown(t *testing.T) {
 	// Use a custom socket path inside our temp dir.
 	t.Setenv("HOME", dir)
 
-	socketPath := SocketPath()
+	socketPath := ipc.SocketPath()
 	if err := os.MkdirAll(filepath.Dir(socketPath), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
@@ -110,7 +111,7 @@ func TestRun_RemovesSocketOnShutdown(t *testing.T) {
 	}
 
 	// Send shutdown request via real socket round-trip.
-	c := NewClientWithSocket(socketPath)
+	c := ipc.NewClientWithSocket(socketPath)
 	resp, err := c.Send(protocol.Request{Type: protocol.TypeShutdown})
 	if err != nil {
 		t.Fatalf("shutdown Send: %v", err)
@@ -158,7 +159,7 @@ func TestRun_ShutdownAcceptedDuringStartupReturnsCleanly(t *testing.T) {
 		t.Fatal("Run did not reach startup confirmation")
 	}
 
-	resp, err := NewClientWithSocket(SocketPath()).Send(protocol.Request{Type: protocol.TypeShutdown})
+	resp, err := ipc.NewClientWithSocket(ipc.SocketPath()).Send(protocol.Request{Type: protocol.TypeShutdown})
 	if err != nil {
 		t.Fatalf("shutdown Send during startup: %v", err)
 	}
@@ -167,7 +168,7 @@ func TestRun_ShutdownAcceptedDuringStartupReturnsCleanly(t *testing.T) {
 	}
 
 	waitForRunReturn(t, runErr)
-	if _, err := os.Stat(SocketPath()); !os.IsNotExist(err) {
+	if _, err := os.Stat(ipc.SocketPath()); !os.IsNotExist(err) {
 		t.Fatalf("socket file should have been removed; stat err = %v", err)
 	}
 }
@@ -202,7 +203,7 @@ func TestRun_TemporaryHomeCreatesNoDatabase(t *testing.T) {
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), testLivenessGrace)
 	defer shutdownCancel()
-	if err := NewClientWithSocket(SocketPath()).ShutdownAndWait(shutdownCtx); err != nil {
+	if err := ipc.NewClientWithSocket(ipc.SocketPath()).ShutdownAndWait(shutdownCtx); err != nil {
 		cancel()
 		t.Fatalf("ShutdownAndWait: %v", err)
 	}
@@ -218,7 +219,7 @@ func TestRun_DuplicateStartExitsWithoutTouchingLiveSocket(t *testing.T) {
 
 	t.Setenv("HOME", dir)
 
-	socketPath := SocketPath()
+	socketPath := ipc.SocketPath()
 	if err := os.MkdirAll(filepath.Dir(socketPath), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
@@ -250,7 +251,7 @@ func TestRun_DuplicateStartExitsWithoutTouchingLiveSocket(t *testing.T) {
 		t.Fatal("duplicate Run replaced the live daemon socket")
 	}
 
-	c := NewClientWithSocket(socketPath)
+	c := ipc.NewClientWithSocket(socketPath)
 	resp, err := c.Send(protocol.Request{Type: protocol.TypeHealth})
 	if err != nil {
 		t.Fatalf("live daemon not reachable after duplicate start: %v", err)
@@ -301,7 +302,7 @@ func seedHugeMalformedTranscriptIndex(t *testing.T) (home string, indexPath stri
 // TestPerformance_StartupPublicationBudgetWithHugeMalformedIndex.
 func TestRun_BindsSocketWithHugeMalformedTranscriptIndex(t *testing.T) {
 	_, indexPath := seedHugeMalformedTranscriptIndex(t)
-	socketPath := SocketPath()
+	socketPath := ipc.SocketPath()
 
 	cfg := &config.Config{}
 	cfg.Defaults.GuardDuration = 1
@@ -326,7 +327,7 @@ func TestRun_StaleSocketIsNotRemovedWhenLockHeld(t *testing.T) {
 
 	t.Setenv("HOME", dir)
 
-	socketPath := SocketPath()
+	socketPath := ipc.SocketPath()
 	if err := os.MkdirAll(filepath.Dir(socketPath), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
@@ -368,7 +369,7 @@ func TestRun_RemovesSocketOnCtxCancel(t *testing.T) {
 
 	t.Setenv("HOME", dir)
 
-	socketPath := SocketPath()
+	socketPath := ipc.SocketPath()
 	if err := os.MkdirAll(filepath.Dir(socketPath), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}

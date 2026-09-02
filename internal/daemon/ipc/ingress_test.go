@@ -1,4 +1,4 @@
-package daemon
+package ipc
 
 import (
 	"sync"
@@ -89,7 +89,7 @@ func TestIngressQueue_FullDegradesInlineAndCountsQueueFull(t *testing.T) {
 		return protocol.Response{OK: true}
 	}
 
-	var metrics Metrics
+	var metrics requestMetrics
 	q := newIngressQueueCap(handle, &metrics, 1)
 	t.Cleanup(func() {
 		releaseAll()
@@ -140,5 +140,19 @@ func TestIngressQueue_FullDegradesInlineAndCountsQueueFull(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("overflow submit never returned; queue-full request was dropped")
+	}
+}
+
+// TestMetricsObserveQueueWait covers the queue-latency counters directly.
+func TestMetricsObserveQueueWait(t *testing.T) {
+	var m requestMetrics
+	m.observeQueueWait(5 * time.Millisecond)
+	m.observeQueueWait(2 * time.Millisecond)
+	snap := m.Snapshot()
+	if snap.QueueLastWaitNs != (2 * time.Millisecond).Nanoseconds() {
+		t.Fatalf("QueueLastWaitNs = %d; want the most recent observation", snap.QueueLastWaitNs)
+	}
+	if snap.QueueMaxWaitNs != (5 * time.Millisecond).Nanoseconds() {
+		t.Fatalf("QueueMaxWaitNs = %d; want the lifetime maximum", snap.QueueMaxWaitNs)
 	}
 }

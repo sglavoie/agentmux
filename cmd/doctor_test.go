@@ -13,7 +13,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -97,7 +97,7 @@ func TestDoctorReportsDaemonRendererHookAndSuppressionHealth(t *testing.T) {
 	doctorCLIBuild = func() buildinfo.Info { return build }
 	newDoctorDaemonClient = func() daemonExportClient {
 		return &fakeDaemonExportClient{
-			health: daemon.Health{Alive: true, PID: 4242, Uptime: 2 * time.Minute, Ready: true, Build: &build, Notification: &doctorTestNotification},
+			health: ipc.Health{Alive: true, PID: 4242, Uptime: 2 * time.Minute, Ready: true, Build: &build, Notification: &doctorTestNotification},
 			export: func(int) (protocol.EventsExport, error) {
 				return protocol.EventsExport{
 					EventsByWindow: map[int][]protocol.SessionEvent{42: {{

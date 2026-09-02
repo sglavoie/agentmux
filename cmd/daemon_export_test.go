@@ -8,13 +8,13 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 type fakeDaemonExportClient struct {
-	health daemon.Health
+	health ipc.Health
 	calls  []int
 	export func(windowID int) (protocol.EventsExport, error)
 }
@@ -27,7 +27,7 @@ func (f *fakeDaemonExportClient) ExportEvents(windowID int) (protocol.EventsExpo
 	return f.export(windowID)
 }
 
-func (f *fakeDaemonExportClient) Health() daemon.Health {
+func (f *fakeDaemonExportClient) Health() ipc.Health {
 	return f.health
 }
 
@@ -171,12 +171,12 @@ func TestDaemonStatusCommandWritesToCommandOutput(t *testing.T) {
 	}
 	cases := []struct {
 		name   string
-		health daemon.Health
+		health ipc.Health
 		want   string
 	}{
 		{
 			name:   "running ready with build",
-			health: daemon.Health{Alive: true, Ready: true, Build: &build, Notification: &notification},
+			health: ipc.Health{Alive: true, Ready: true, Build: &build, Notification: &notification},
 			want: "daemon: running (/tmp/amx.sock)\n" +
 				"ready: true\n" +
 				"build: " + build.String() + "\n" +
@@ -184,14 +184,14 @@ func TestDaemonStatusCommandWritesToCommandOutput(t *testing.T) {
 		},
 		{
 			name:   "running degraded",
-			health: daemon.Health{Alive: true, Ready: false, DegradedReason: "initial snapshot timed out"},
+			health: ipc.Health{Alive: true, Ready: false, DegradedReason: "initial snapshot timed out"},
 			want: "daemon: running (/tmp/amx.sock)\n" +
 				"ready: false (initial snapshot timed out)\n" +
 				"notifications: unknown (restart older daemon)\n",
 		},
 		{
 			name: "notifications unavailable without degrading daemon",
-			health: daemon.Health{Alive: true, Ready: true, Notification: &protocol.NotificationCapability{
+			health: ipc.Health{Alive: true, Ready: true, Notification: &protocol.NotificationCapability{
 				Enabled: true, Backend: "alerter", Reason: "not_found",
 			}},
 			want: "daemon: running (/tmp/amx.sock)\n" +
@@ -366,7 +366,7 @@ func TestDaemonExportEventsCommand_ErrorMessageReflectsDaemonState(t *testing.T)
 			resetDaemonExportTestState(t)
 
 			client := &fakeDaemonExportClient{
-				health: daemon.Health{Alive: tc.alive, PID: 1, Uptime: time.Second},
+				health: ipc.Health{Alive: tc.alive, PID: 1, Uptime: time.Second},
 				export: func(windowID int) (protocol.EventsExport, error) {
 					return protocol.EventsExport{}, tc.exportErr
 				},

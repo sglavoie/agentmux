@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -17,7 +17,7 @@ func TestAcceptanceDoctorDoesNotCreateRetiredDatabaseState(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	build := doctorTestBuild
-	setUpDoctorFixture(t, daemon.Health{
+	setUpDoctorFixture(t, ipc.Health{
 		Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build,
 	}, protocol.EventsExport{})
 	doctorStrict = true

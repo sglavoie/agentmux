@@ -35,14 +35,6 @@ func baseDeliveryAcknowledgement(req protocol.Request, status, reason string) *p
 	}
 }
 
-func cloneDeliveryAcknowledgement(ack *protocol.DeliveryAcknowledgement) *protocol.DeliveryAcknowledgement {
-	if ack == nil {
-		return nil
-	}
-	copy := *ack
-	return &copy
-}
-
 // attachHookDeliveryAcknowledgement enriches the legacy hook response with a
 // stable acknowledgement and side-effect-free routing identity. It runs after
 // the handler so accepted legacy behavior is unchanged.

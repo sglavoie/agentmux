@@ -16,6 +16,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -214,7 +215,7 @@ func (f *processLifecycleAcceptanceFixture) startDaemon() {
 	f.done = make(chan error, 1)
 	go func() { f.done <- daemon.Run(ctx, f.cfg) }()
 	waitForAcceptance(f.t, "process lifecycle daemon readiness", func() bool {
-		health := daemon.NewClient().Health()
+		health := ipc.NewClient().Health()
 		return health.Alive && health.Ready
 	})
 }
@@ -283,7 +284,7 @@ func (f *processLifecycleAcceptanceFixture) sendHook(
 		TraceID:     fmt.Sprintf("lifecycle-trace-%d", f.requestSeq),
 		PayloadSize: int64(len(encoded)), PayloadEncoding: "json",
 	}
-	client := daemon.NewClient()
+	client := ipc.NewClient()
 	deadline := time.Now().Add(lifecycleHookRetryBudget)
 	var resp protocol.Response
 	// Package-level load can exceed the production acknowledgement budget even
@@ -381,7 +382,7 @@ func (f *processLifecycleAcceptanceFixture) waitForExport(
 	f.t.Helper()
 	var last protocol.EventsExport
 	waitForAcceptance(f.t, description, func() bool {
-		export, err := daemon.NewClient().ExportEvents(0)
+		export, err := ipc.NewClient().ExportEvents(0)
 		if err != nil {
 			return false
 		}

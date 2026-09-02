@@ -17,22 +17,22 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/aslcontract"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 )
 
 // fakeASLSyncDaemon records restarts and serves a scripted sequence of health
 // readings, so a rollback's second restart is observable rather than inferred.
 type fakeASLSyncDaemon struct {
-	health   daemon.Health
+	health   ipc.Health
 	restarts []string
 	// afterRestart replaces health once RestartDetached succeeds, which is how
 	// the real sequence behaves: the verification wait reads a different daemon
 	// than the preflight did.
-	afterRestart *daemon.Health
+	afterRestart *ipc.Health
 	restartErr   error
 }
 
-func (f *fakeASLSyncDaemon) Health() daemon.Health { return f.health }
+func (f *fakeASLSyncDaemon) Health() ipc.Health { return f.health }
 
 func (f *fakeASLSyncDaemon) RestartDetached(amxBin string) error {
 	f.restarts = append(f.restarts, amxBin)
@@ -64,8 +64,8 @@ func healthySurvey() aslPairingReport {
 }
 
 // pairedHealth is what a daemon that actually completed the pairing reports.
-func pairedHealth(executable string) daemon.Health {
-	return daemon.Health{
+func pairedHealth(executable string) ipc.Health {
+	return ipc.Health{
 		Alive: true, Ready: true, PID: 42,
 		ASL: &aslbridge.Status{
 			Mode:             string(aslbridge.ModeRequired),
@@ -106,7 +106,7 @@ func setUpASLSync(t *testing.T, initialConfig string, survey aslPairingReport) *
 
 	fixture := &aslSyncFixture{
 		configPath: filepath.Join(t.TempDir(), "config.toml"),
-		daemon:     &fakeASLSyncDaemon{health: daemon.Health{Alive: true, Ready: true, PID: 7}},
+		daemon:     &fakeASLSyncDaemon{health: ipc.Health{Alive: true, Ready: true, PID: 7}},
 		out:        &bytes.Buffer{},
 	}
 	if initialConfig != "" {
@@ -114,7 +114,7 @@ func setUpASLSync(t *testing.T, initialConfig string, survey aslPairingReport) *
 			t.Fatalf("seed config: %v", err)
 		}
 	}
-	fixture.daemon.afterRestart = &daemon.Health{}
+	fixture.daemon.afterRestart = &ipc.Health{}
 	*fixture.daemon.afterRestart = pairedHealth(survey.Executable)
 
 	aslSyncConfigPath = func() string { return fixture.configPath }
@@ -326,7 +326,7 @@ func TestVerificationFailureRestoresThePreviousConfigAndRestarts(t *testing.T) {
 	original := "[defaults.asl]\ncommand = \"asl\"\n"
 	fixture := setUpASLSync(t, original, healthySurvey())
 	// The restarted daemon comes up, but without a bridge.
-	fixture.daemon.afterRestart = &daemon.Health{
+	fixture.daemon.afterRestart = &ipc.Health{
 		Alive: true, Ready: true,
 		ASL: &aslbridge.Status{Mode: string(aslbridge.ModeRequired), Reason: "asl bridge: connection refused"},
 	}
@@ -355,7 +355,7 @@ func TestVerificationFailureRestoresThePreviousConfigAndRestarts(t *testing.T) {
 func TestADaemonThatPairedWithAnotherExecutableIsRolledBack(t *testing.T) {
 	original := "[defaults]\n"
 	fixture := setUpASLSync(t, original, healthySurvey())
-	fixture.daemon.afterRestart = &daemon.Health{}
+	fixture.daemon.afterRestart = &ipc.Health{}
 	*fixture.daemon.afterRestart = pairedHealth("/usr/local/bin/asl")
 
 	err := runConfigASLSync(configASLSyncCmd)
@@ -370,7 +370,7 @@ func TestADaemonThatPairedWithAnotherExecutableIsRolledBack(t *testing.T) {
 // A config that did not exist before must not exist after a rollback either.
 func TestARollbackRemovesAConfigItCreated(t *testing.T) {
 	fixture := setUpASLSync(t, "", healthySurvey())
-	fixture.daemon.afterRestart = &daemon.Health{Alive: true, Ready: true}
+	fixture.daemon.afterRestart = &ipc.Health{Alive: true, Ready: true}
 
 	if err := runConfigASLSync(configASLSyncCmd); err == nil {
 		t.Fatal("runConfigASLSync() = nil, want a verification failure")

@@ -234,11 +234,11 @@ func (h *Handler) finalizeReducerDecisionLocked(
 	return events.CloneSessionEvent(*event)
 }
 
-// recordDuplicateDelivery appends a non-mutating causal row for an IPC retry
+// RecordDuplicateDelivery appends a non-mutating causal row for an IPC retry
 // that the dedupe cache replayed before reducer admission. It clones the
 // original sanitized decision evidence when available, then stamps the current
 // trace/attempt identity and an unchanged before/after state.
-func (h *Handler) recordDuplicateDelivery(req protocol.Request, ack *protocol.DeliveryAcknowledgement) {
+func (h *Handler) RecordDuplicateDelivery(req protocol.Request, ack *protocol.DeliveryAcknowledgement) {
 	if h == nil || ack == nil || ack.Status != protocol.DeliveryAcknowledgementDuplicate {
 		return
 	}

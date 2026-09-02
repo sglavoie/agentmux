@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -250,13 +250,13 @@ func TestInvariantBuildMismatch(t *testing.T) {
 	other.BinaryHash = "hash-b"
 	cases := []struct {
 		name   string
-		health daemon.Health
+		health ipc.Health
 		want   bool
 	}{
 		{"same artifact passes", healthyTestHealth(doctorTestBuild), false},
 		{"different hash fails", healthyTestHealth(other), true},
-		{"missing daemon build identity fails", daemon.Health{Alive: true, Ready: true}, true},
-		{"dead daemon skips the check", daemon.Health{}, false},
+		{"missing daemon build identity fails", ipc.Health{Alive: true, Ready: true}, true},
+		{"dead daemon skips the check", ipc.Health{}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
@@ -47,7 +47,7 @@ func Run(event string, windowID int, producerHarness, amxBin string) error {
 // trace/request identity is allocated before stdin is read, so even unreadable
 // input can be correlated with a durable final result.
 func Deliver(event string, windowID int, producerHarness, amxBin string, options DeliveryOptions) DeliveryResult {
-	return deliverFromStdinWithDeps(event, windowID, producerHarness, amxBin, options, os.Stdin, daemon.NewClient())
+	return deliverFromStdinWithDeps(event, windowID, producerHarness, amxBin, options, os.Stdin, ipc.NewClient())
 }
 
 func deliverFromStdinWithDeps(

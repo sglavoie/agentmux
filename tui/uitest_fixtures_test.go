@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/plans"
@@ -233,7 +233,7 @@ func TestUITestConfigDriverIsolatesUserPaths(t *testing.T) {
 		"overrides":  ovPath,
 		"plans":      plans.IndexPath(),
 		"transcript": transcript.IndexPath(),
-		"daemon":     daemon.SocketPath(),
+		"daemon":     ipc.SocketPath(),
 	} {
 		if !strings.HasPrefix(got, env.Home) {
 			t.Fatalf("%s path %q escaped staged HOME %q", label, got, env.Home)

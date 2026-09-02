@@ -9,7 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -39,11 +39,11 @@ const doctorReportSchemaVersion = 3
 const exitHealthFailure = 2
 
 var (
-	newDoctorDaemonClient = func() daemonExportClient { return daemon.NewClient() }
+	newDoctorDaemonClient = func() daemonExportClient { return ipc.NewClient() }
 	newDoctorKitty        = func() kittyWindowLister { return kitty.NewClient(kitty.NewRealRunner()) }
 	doctorLoadConfig      = loadRunnableConfig
 	doctorExecutable      = os.Executable
-	doctorSocketPath      = daemon.SocketPath
+	doctorSocketPath      = ipc.SocketPath
 	doctorStat            = os.Stat
 	doctorNow             = time.Now
 	doctorCLIBuild        = buildinfo.Current

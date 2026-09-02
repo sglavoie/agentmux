@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/screenstate"
 )
 
@@ -26,7 +27,7 @@ func restoreEmbeddedScreenPatterns(t *testing.T) {
 // startDaemonWithScreenPatternOverride starts a daemon whose config directory
 // is a fresh temporary HOME, optionally writing an override file first, and
 // returns the health response the running daemon publishes.
-func startDaemonWithScreenPatternOverride(t *testing.T, name, contents string) Health {
+func startDaemonWithScreenPatternOverride(t *testing.T, name, contents string) ipc.Health {
 	t.Helper()
 	restoreEmbeddedScreenPatterns(t)
 
@@ -51,14 +52,14 @@ func startDaemonWithScreenPatternOverride(t *testing.T, name, contents string) H
 	t.Cleanup(cancel)
 	runErr := startPublishedDaemon(t, ctx, &config.Config{}, runDependencies{})
 
-	health := NewClientWithSocket(SocketPath()).Health()
+	health := ipc.NewClientWithSocket(ipc.SocketPath()).Health()
 	if !health.Alive {
 		t.Fatal("daemon did not answer health after startup publication")
 	}
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), testLivenessGrace)
 	defer shutdownCancel()
-	if err := NewClientWithSocket(SocketPath()).ShutdownAndWait(shutdownCtx); err != nil {
+	if err := ipc.NewClientWithSocket(ipc.SocketPath()).ShutdownAndWait(shutdownCtx); err != nil {
 		cancel()
 		t.Fatalf("ShutdownAndWait: %v", err)
 	}

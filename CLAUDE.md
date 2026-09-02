@@ -194,6 +194,24 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   deliberately does not absorb the tail, cursor, and replay services in
   `internal/debugger`, which read immutable diagnostics artifacts with no
   daemon running.
+- `internal/daemon/ipc`: how a request reaches the daemon and how an answer
+  gets back — the Unix-socket server with its owner-only 0600 bind and
+  drain-on-close lifecycle, the newline-delimited JSON framing with its request
+  and response size ceilings and bad-payload throttling, the bounded
+  single-consumer ingress queue that serializes application and degrades inline
+  under saturation, the request-ID dedupe cache that makes a retried delivery
+  at-most-once, the transport's own request-outcome and queue-latency counters,
+  and the whole client side: the socket path, the send deadlines, daemon
+  auto-start and restart, and the typed health, event-export, and ASL calls. A
+  connection carries exactly one request/response pair; there is no
+  multiplexing and no subscription channel, so a second answer means a second
+  connection. It sees its application only as the three-method `RequestHandler`
+  seam, which is what keeps it — like protocol, state, rendering, events,
+  activity, probes, process, asl, and eventlog — from ever importing the daemon
+  root. It dispatches a request to the application and routes it onto the
+  serialized or the inline path; naming the concrete behavior a request type
+  means — and every reducer, renderer, and notifier mutation under stateMu —
+  stays in the root, which implements `RequestHandler`.
 - `internal/diagnostics`: private fail-open causal journals, operational and
   native logs, temporary raw captures, and bounded diagnostic storage.
 - `internal/debugger`: offline-first status, query, explanation, bundle, and

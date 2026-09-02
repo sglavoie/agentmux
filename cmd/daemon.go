@@ -18,6 +18,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/daemon/eventlog"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/process"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	ccerrors "github.com/sglavoie/agentmux/internal/errors"
@@ -239,9 +240,9 @@ var (
 	daemonExportEventsOutput        string
 	daemonExportEventsPretty        bool
 	daemonExportEventsSchema        int
-	daemonSocketPath                = daemon.SocketPath
-	newDaemonLifecycleClient        = func() daemonLifecycleClient { return daemon.NewClient() }
-	newDaemonExportClient           = func() daemonExportClient { return daemon.NewClient() }
+	daemonSocketPath                = ipc.SocketPath
+	newDaemonLifecycleClient        = func() daemonLifecycleClient { return ipc.NewClient() }
+	newDaemonExportClient           = func() daemonExportClient { return ipc.NewClient() }
 	newDaemonExportKitty            = func() kittyWindowLister { return kitty.NewClient(kitty.NewRealRunner()) }
 	daemonExportNow                 = time.Now
 )
@@ -253,7 +254,7 @@ type daemonLifecycleClient interface {
 
 type daemonExportClient interface {
 	ExportEvents(windowID int) (protocol.EventsExport, error)
-	Health() daemon.Health
+	Health() ipc.Health
 }
 
 type kittyWindowLister interface {
@@ -332,7 +333,7 @@ func daemonExportLiveMetadata(osWindows []kitty.OSWindow, snapshot protocol.Even
 	return out
 }
 
-func buildDaemonExportPayload(snapshot protocol.EventsExport, health daemon.Health, osWindows []kitty.OSWindow, requestedWindowID int, last int, exportedAt time.Time) protocol.ExportEventsPayload {
+func buildDaemonExportPayload(snapshot protocol.EventsExport, health ipc.Health, osWindows []kitty.OSWindow, requestedWindowID int, last int, exportedAt time.Time) protocol.ExportEventsPayload {
 	liveByID := daemonExportLiveMetadata(osWindows, snapshot, requestedWindowID)
 	ids := daemonExportWindowIDs(snapshot, requestedWindowID)
 	windows := make([]protocol.ExportWindow, 0, len(ids))

@@ -10,7 +10,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/aslcontract"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -107,7 +107,7 @@ func TestTheTextSectionNamesEveryDimensionAndItsRemediation(t *testing.T) {
 // End to end: the report is schema v2 and carries the block, and a required
 // integration the daemon cannot reach fails `--strict`.
 func TestStrictDoctorFailsForAnUnavailableRequiredIntegration(t *testing.T) {
-	setUpDoctorFixture(t, daemon.Health{
+	setUpDoctorFixture(t, ipc.Health{
 		Alive: true, Ready: true, PID: 1,
 		ASL: &aslbridge.Status{
 			Mode:      string(aslbridge.ModeRequired),
@@ -155,7 +155,7 @@ func TestStrictDoctorFailsForAnUnavailableRequiredIntegration(t *testing.T) {
 
 // A read-only bridge keeps its own identifier and its own meaning.
 func TestTheReadOnlyFindingIsPreserved(t *testing.T) {
-	setUpDoctorFixture(t, daemon.Health{
+	setUpDoctorFixture(t, ipc.Health{
 		Alive: true, Ready: true, PID: 1,
 		ASL: &aslbridge.Status{
 			Mode:             string(aslbridge.ModeAuto),

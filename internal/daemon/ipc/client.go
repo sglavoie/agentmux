@@ -1,4 +1,4 @@
-package daemon
+package ipc
 
 import (
 	"bufio"
@@ -57,7 +57,11 @@ func NewClientWithSocket(path string) *Client {
 // guards against a wedged daemon. autoStartDeadline bounds the full hook-client
 // path, including a cold daemon start and retry, so a hook never delays its
 // harness beyond the two-second cold-start budget.
-const normalAckBudget = 250 * time.Millisecond
+//
+// NormalAckBudget is exported for one caller: the daemon's startup publication
+// probe, which dials its own freshly bound socket and must not wait longer for
+// its own health answer than a hook client would.
+const NormalAckBudget = 250 * time.Millisecond
 const coldStartBudget = 2 * time.Second
 
 const (
@@ -78,7 +82,7 @@ type DeliveryStageEvent struct {
 
 type DeliveryObserver func(DeliveryStageEvent)
 
-var sendDeadline = normalAckBudget
+var sendDeadline = NormalAckBudget
 var autoStartDeadline = coldStartBudget
 
 var autoStartRetryDelay = 50 * time.Millisecond
@@ -119,10 +123,15 @@ func (c *Client) sendWithDeadline(req protocol.Request, timeout time.Duration) (
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	return c.sendWithContext(ctx, req)
+	return c.SendWithContext(ctx, req)
 }
 
-func (c *Client) sendWithContext(ctx context.Context, req protocol.Request) (protocol.Response, error) {
+// SendWithContext sends req under an explicit context rather than one of the
+// package's own deadlines. Send and ShutdownAndWait use it internally; it is
+// exported for the daemon's startup publication probe, which already owns a
+// cancellable startup context and must abandon the probe the moment startup is
+// cancelled rather than after a fixed budget.
+func (c *Client) SendWithContext(ctx context.Context, req protocol.Request) (protocol.Response, error) {
 	if ctx == nil {
 		return protocol.Response{}, errors.New("daemon request context is nil")
 	}
@@ -269,7 +278,7 @@ func (c *Client) ShutdownAndWait(ctx context.Context) error {
 	if statErr != nil && !os.IsNotExist(statErr) {
 		return fmt.Errorf("inspecting daemon socket before shutdown: %w", statErr)
 	}
-	resp, err := c.sendWithContext(ctx, protocol.Request{Type: protocol.TypeShutdown})
+	resp, err := c.SendWithContext(ctx, protocol.Request{Type: protocol.TypeShutdown})
 	if err != nil {
 		if os.IsNotExist(statErr) || daemonConnectionRefused(err) {
 			return nil

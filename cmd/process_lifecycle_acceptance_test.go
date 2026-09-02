@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
@@ -265,7 +265,7 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 	})
 	fixture.releaseProcessBlock()
 	time.Sleep(100 * time.Millisecond)
-	beforeFreshPass, err := daemon.NewClient().ExportEvents(lifecycleNativeAfterWindow)
+	beforeFreshPass, err := ipc.NewClient().ExportEvents(lifecycleNativeAfterWindow)
 	if err != nil {
 		t.Fatal(err)
 	}

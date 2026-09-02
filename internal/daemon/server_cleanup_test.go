@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -153,7 +154,7 @@ func TestServer_GoroutinesDrainAfterShutdownRequest(t *testing.T) {
 
 	t.Setenv("HOME", dir)
 
-	socketPath := SocketPath()
+	socketPath := ipc.SocketPath()
 	if err := os.MkdirAll(filepath.Dir(socketPath), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
@@ -165,7 +166,7 @@ func TestServer_GoroutinesDrainAfterShutdownRequest(t *testing.T) {
 	t.Cleanup(cancel)
 	runErr := startPublishedDaemon(t, ctx, cfg, runDependencies{})
 
-	c := NewClientWithSocket(socketPath)
+	c := ipc.NewClientWithSocket(socketPath)
 	for i := 0; i < 5; i++ {
 		if _, err := c.Send(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: i + 1, Action: "active"}); err != nil {
 			t.Fatalf("state update %d: %v", i+1, err)

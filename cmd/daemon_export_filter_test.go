@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -18,7 +18,7 @@ func TestDaemonExportEventsCommand_CurrentWindowResolvesKittyEnv(t *testing.T) {
 	t.Setenv("KITTY_WINDOW_ID", "77")
 
 	client := &fakeDaemonExportClient{
-		health: daemon.Health{Alive: true, PID: 7, Uptime: 7 * time.Second},
+		health: ipc.Health{Alive: true, PID: 7, Uptime: 7 * time.Second},
 		export: func(windowID int) (protocol.EventsExport, error) {
 			if windowID != 77 {
 				return protocol.EventsExport{}, fmt.Errorf("windowID = %d; want 77", windowID)
@@ -74,7 +74,7 @@ func TestDaemonExportEventsCommand_OutputExpandsTilde(t *testing.T) {
 	t.Setenv("HOME", tempHome)
 
 	client := &fakeDaemonExportClient{
-		health: daemon.Health{Alive: true, PID: 1, Uptime: time.Second},
+		health: ipc.Health{Alive: true, PID: 1, Uptime: time.Second},
 		export: func(windowID int) (protocol.EventsExport, error) {
 			return protocol.EventsExport{}, nil
 		},
@@ -117,7 +117,7 @@ func TestDaemonExportEventsCommand_LastTrimsPerWindowEvents(t *testing.T) {
 	resetDaemonExportTestState(t)
 
 	client := &fakeDaemonExportClient{
-		health: daemon.Health{Alive: true, PID: 42, Uptime: 42 * time.Second},
+		health: ipc.Health{Alive: true, PID: 42, Uptime: 42 * time.Second},
 		export: func(windowID int) (protocol.EventsExport, error) {
 			if windowID != 0 {
 				return protocol.EventsExport{}, fmt.Errorf("windowID = %d; want 0", windowID)

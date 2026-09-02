@@ -18,7 +18,7 @@ func TestHealthCarriesBuildIdentityAndMetrics(t *testing.T) {
 	h := NewHandler(activity.NewStateGuard(time.Second), nil)
 	build := buildinfo.Info{Version: "9.9.9", Revision: "abc", BinaryHash: "hash-x"}
 	h.SetBuildInfo(build)
-	h.setMetricsSource(func() protocol.MetricsSnapshot {
+	h.SetMetricsSource(func() protocol.MetricsSnapshot {
 		return protocol.MetricsSnapshot{Accepted: 5, QueueFull: 1, QueueLastWaitNs: 250}
 	})
 
@@ -128,19 +128,5 @@ func TestEventsExportStampsV6EventAndFactFields(t *testing.T) {
 	fact := meta.Shadow.Facts[0]
 	if fact.Kind != protocol.SourceHarness || fact.Key != "sess-1" || fact.Action != "stop" || fact.Seq != 10 {
 		t.Fatalf("exported fact = %+v; want the harness stop fact at seq 10", fact)
-	}
-}
-
-// TestMetricsObserveQueueWait covers the queue-latency counters directly.
-func TestMetricsObserveQueueWait(t *testing.T) {
-	var m Metrics
-	m.observeQueueWait(5 * time.Millisecond)
-	m.observeQueueWait(2 * time.Millisecond)
-	snap := m.Snapshot()
-	if snap.QueueLastWaitNs != (2 * time.Millisecond).Nanoseconds() {
-		t.Fatalf("QueueLastWaitNs = %d; want the most recent observation", snap.QueueLastWaitNs)
-	}
-	if snap.QueueMaxWaitNs != (5 * time.Millisecond).Nanoseconds() {
-		t.Fatalf("QueueMaxWaitNs = %d; want the lifetime maximum", snap.QueueMaxWaitNs)
 	}
 }

@@ -1,4 +1,4 @@
-package daemon
+package ipc
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ import (
 // invariant: many concurrent callers sharing one request ID run the underlying
 // work a single time and every caller observes the same response.
 func TestDedupeCache_ConcurrentDuplicatesRunOnce(t *testing.T) {
-	var m Metrics
+	var m requestMetrics
 	c := newDedupeCache(&m)
 
 	var computeCount atomic.Int64
@@ -59,7 +59,7 @@ func TestDedupeCache_ConcurrentDuplicatesRunOnce(t *testing.T) {
 // ambiguous-timeout resend) replays the cached response without re-running the
 // work.
 func TestDedupeCache_CompletedReplayWithinTTL(t *testing.T) {
-	var m Metrics
+	var m requestMetrics
 	c := newDedupeCache(&m)
 
 	var computeCount atomic.Int64
@@ -86,7 +86,7 @@ func TestDedupeCache_CompletedReplayWithinTTL(t *testing.T) {
 // TestDedupeCache_LegacyNotDeduplicated verifies an empty request ID always
 // runs and is never deduplicated.
 func TestDedupeCache_LegacyNotDeduplicated(t *testing.T) {
-	var m Metrics
+	var m requestMetrics
 	c := newDedupeCache(&m)
 
 	var computeCount atomic.Int64
@@ -107,7 +107,7 @@ func TestDedupeCache_LegacyNotDeduplicated(t *testing.T) {
 // TestDedupeCache_ExpiredEntryReadmits proves an entry older than the TTL is
 // reclaimed and its request ID becomes eligible for reprocessing.
 func TestDedupeCache_ExpiredEntryReadmits(t *testing.T) {
-	var m Metrics
+	var m requestMetrics
 	c := newDedupeCache(&m)
 	now := time.Unix(1_000_000, 0)
 	c.now = func() time.Time { return now }
@@ -136,7 +136,7 @@ func TestDedupeCache_ExpiredEntryReadmits(t *testing.T) {
 // request is still processed (never dropped) but is admitted without a cache
 // entry, surfaced through the queue-full metric.
 func TestDedupeCache_QueueFullDegradesButRuns(t *testing.T) {
-	var m Metrics
+	var m requestMetrics
 	c := newDedupeCache(&m)
 	c.max = 2
 
@@ -173,7 +173,7 @@ func TestDedupeCache_QueueFullDegradesButRuns(t *testing.T) {
 // TestDedupeCache_InFlightWaitTimesOut proves a duplicate that waits on a stuck
 // in-flight original is bounded by waitTimeout instead of hanging forever.
 func TestDedupeCache_InFlightWaitTimesOut(t *testing.T) {
-	var m Metrics
+	var m requestMetrics
 	c := newDedupeCache(&m)
 	c.waitTimeout = 30 * time.Millisecond
 
@@ -196,4 +196,26 @@ func TestDedupeCache_InFlightWaitTimesOut(t *testing.T) {
 		t.Fatalf("timed-out duplicate = %+v; want OK=false", got)
 	}
 	close(release)
+}
+
+func TestDedupeReplayHasExplicitDuplicateAcknowledgement(t *testing.T) {
+	var metrics requestMetrics
+	cache := newDedupeCache(&metrics)
+	compute := func() protocol.Response {
+		return protocol.Response{OK: true, Delivery: &protocol.DeliveryAcknowledgement{
+			SchemaVersion: protocol.DeliveryAcknowledgementSchemaVersion,
+			Status:        protocol.DeliveryAcknowledgementAccepted,
+			Reason:        "accepted",
+		}}
+	}
+
+	first := cache.do("request-1", compute)
+	duplicate := cache.do("request-1", compute)
+	if first.Delivery == nil || first.Delivery.Status != protocol.DeliveryAcknowledgementAccepted {
+		t.Fatalf("first acknowledgement = %+v", first.Delivery)
+	}
+	if duplicate.Delivery == nil || duplicate.Delivery.Status != protocol.DeliveryAcknowledgementDuplicate ||
+		duplicate.Delivery.Reason != "request_replayed" {
+		t.Fatalf("duplicate acknowledgement = %+v", duplicate.Delivery)
+	}
 }

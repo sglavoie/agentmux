@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -121,7 +122,7 @@ func TestPerformance_ShutdownJoinBudget(t *testing.T) {
 	t.Cleanup(cancel)
 	runErr := startPublishedDaemon(t, ctx, cfg, runDependencies{})
 
-	c := NewClientWithSocket(SocketPath())
+	c := ipc.NewClientWithSocket(ipc.SocketPath())
 	for i := 0; i < 5; i++ {
 		if _, err := c.Send(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: i + 1, Action: "active"}); err != nil {
 			t.Fatalf("state update %d: %v", i+1, err)

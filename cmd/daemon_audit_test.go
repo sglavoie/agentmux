@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -49,7 +49,7 @@ func TestDaemonAuditSamplesOnCadenceAndExitsNonzeroOnViolations(t *testing.T) {
 	doctorCLIBuild = func() buildinfo.Info { return build }
 	newDoctorDaemonClient = func() daemonExportClient {
 		return &fakeDaemonExportClient{
-			health: daemon.Health{Alive: true, Ready: true, Build: &build},
+			health: ipc.Health{Alive: true, Ready: true, Build: &build},
 			export: func(int) (protocol.EventsExport, error) {
 				return violatingDoctorSnapshot(start), nil
 			},
@@ -93,7 +93,7 @@ func TestDaemonAuditCleanRunExitsZeroAndJSONReports(t *testing.T) {
 	doctorCLIBuild = func() buildinfo.Info { return build }
 	newDoctorDaemonClient = func() daemonExportClient {
 		return &fakeDaemonExportClient{
-			health: daemon.Health{Alive: true, Ready: true, Build: &build},
+			health: ipc.Health{Alive: true, Ready: true, Build: &build},
 			export: func(int) (protocol.EventsExport, error) { return protocol.EventsExport{}, nil },
 		}
 	}
@@ -125,7 +125,7 @@ func TestDaemonAuditOwnerMismatchTraceUsesSharedFindingsAndFails(t *testing.T) {
 	doctorCLIBuild = func() buildinfo.Info { return build }
 	newDoctorDaemonClient = func() daemonExportClient {
 		return &fakeDaemonExportClient{
-			health: daemon.Health{Alive: true, Ready: true, Build: &build},
+			health: ipc.Health{Alive: true, Ready: true, Build: &build},
 			export: func(int) (protocol.EventsExport, error) {
 				return ownerMismatchDoctorSnapshot(start), nil
 			},
@@ -165,7 +165,7 @@ func TestDaemonAuditUnreachableDaemonIsAViolation(t *testing.T) {
 	auditJSON = false
 
 	newDoctorDaemonClient = func() daemonExportClient {
-		return &fakeDaemonExportClient{health: daemon.Health{}}
+		return &fakeDaemonExportClient{health: ipc.Health{}}
 	}
 	newDoctorKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
 

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -19,9 +19,9 @@ var (
 	debugPaths       = diagnostics.DefaultPaths
 	debugExecutable  = os.Executable
 	debugNow         = time.Now
-	debugDaemon      = func() debugger.DaemonHealthClient { return daemon.NewClient() }
+	debugDaemon      = func() debugger.DaemonHealthClient { return ipc.NewClient() }
 	debugKitty       = func() debugger.KittyWindowLister { return kitty.NewClient(kitty.NewRealRunner()) }
-	debugProbeClient = func() debugger.ProbeClient { return daemon.NewClient() }
+	debugProbeClient = func() debugger.ProbeClient { return ipc.NewClient() }
 	debugNewJournal  = diagnostics.NewJournal
 )
 

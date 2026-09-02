@@ -12,7 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 )
 
 // aslQuestionLoadedMsg carries one deliberately fetched question body. The body
@@ -38,7 +38,7 @@ type aslActionDoneMsg struct {
 
 func aslQuestionCmd(seq int, planDir, questionID string) tea.Cmd {
 	return func() tea.Msg {
-		body, err := daemon.NewClient().ASLQuestionBody(aslbridge.QuestionRequest{
+		body, err := ipc.NewClient().ASLQuestionBody(aslbridge.QuestionRequest{
 			PlanDir:    planDir,
 			QuestionID: questionID,
 		})
@@ -48,7 +48,7 @@ func aslQuestionCmd(seq int, planDir, questionID string) tea.Cmd {
 
 func aslActionCmd(seq int, control bool, rowID string, req aslbridge.ActionRequest) tea.Cmd {
 	return func() tea.Msg {
-		op, err := daemon.NewClient().ASLAct(req)
+		op, err := ipc.NewClient().ASLAct(req)
 		return aslActionDoneMsg{
 			seq: seq, control: control, rowID: rowID, method: req.Method,
 			operationID: req.OperationID, status: op.Status, err: err,

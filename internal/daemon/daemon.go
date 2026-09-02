@@ -15,6 +15,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/process"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -40,7 +41,7 @@ type runDependencies struct {
 }
 
 func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr error) {
-	socketPath := SocketPath()
+	socketPath := ipc.SocketPath()
 	if err := os.MkdirAll(filepath.Dir(socketPath), 0o755); err != nil {
 		return fmt.Errorf("daemon: creating socket directory: %w", err)
 	}
@@ -168,7 +169,7 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 		recorder.record("daemon.snapshot", "degraded", reason, nil)
 	}
 
-	server, err := NewServer(socketPath, handler)
+	server, err := ipc.NewServer(socketPath, handler)
 	if err != nil {
 		return fmt.Errorf("daemon: binding socket %s: %w", socketPath, err)
 	}
@@ -299,9 +300,9 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 const shutdownDrainBudget = 5 * time.Second
 
 func confirmDaemonServing(ctx context.Context, socketPath string) error {
-	probeCtx, cancel := context.WithTimeout(ctx, normalAckBudget)
+	probeCtx, cancel := context.WithTimeout(ctx, ipc.NormalAckBudget)
 	defer cancel()
-	resp, err := NewClientWithSocket(socketPath).sendWithContext(probeCtx, protocol.Request{Type: protocol.TypeHealth})
+	resp, err := ipc.NewClientWithSocket(socketPath).SendWithContext(probeCtx, protocol.Request{Type: protocol.TypeHealth})
 	if err != nil {
 		return err
 	}
@@ -325,7 +326,7 @@ func newDaemonKittyClient(runner kitty.CommandRunner) *kitty.SubprocessClient {
 
 // Ping checks whether the daemon is reachable on the default socket.
 func Ping() error {
-	c := NewClient()
+	c := ipc.NewClient()
 	_, err := c.Send(protocol.Request{Type: protocol.TypeStateQuery})
 	return err
 }
