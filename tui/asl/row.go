@@ -16,10 +16,10 @@ import (
 	tuiworktrees "github.com/sglavoie/agentmux/tui/worktrees"
 )
 
-// FormatRow renders one run. A wide row carries session/phase, harness, and
+// formatRow renders one run. A wide row carries session/phase, harness, and
 // workspace inline; a narrow one keeps state, label, age, and the reason the
 // row is listed, and leaves the rest to the detail panel.
-func FormatRow(row aslbridge.Row, width int, wide bool, now time.Time) string {
+func formatRow(row aslbridge.Row, width int, wide bool, now time.Time) string {
 	if width <= 0 {
 		width = 120
 	}

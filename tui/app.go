@@ -1,9 +1,14 @@
 // Package tui hosts the live-session dashboard: the Bubble Tea model, the
 // theme its views render through, and the update/view wiring that turns key
 // presses into session actions. Domain leaves under tui/ own the vocabulary
-// the model renders — sizing and compositing in tui/layout, user
-// customization in tui/customization, plan rows in tui/plans, worktree rows
-// in tui/worktrees — while what a keystroke DOES to the model stays here.
+// the model renders — sizing and compositing in tui/layout, session rows and
+// the filter DSL in tui/dashboard, event and transcript history in
+// tui/history, the launcher in tui/launch, plan rows in tui/plans, worktree
+// rows in tui/worktrees, the ASL Runs surface in tui/asl, and command and
+// key-action definitions in tui/commands — while what a keystroke DOES to the
+// model stays here. Each leaf takes an explicit Input value rather than the
+// model, so no leaf imports this package. tui/customization is a sibling
+// rather than a leaf: cmd launches its overlays as their own programs.
 package tui
 
 import (

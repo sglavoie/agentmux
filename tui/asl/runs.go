@@ -92,7 +92,7 @@ func (in RunsInput) renderRunList(height int) string {
 		sb.WriteByte('\n')
 	}
 	for i := window.Start; i < window.End; i++ {
-		line := FormatRow(in.Rows[i], in.Width, in.wide(), now)
+		line := formatRow(in.Rows[i], in.Width, in.wide(), now)
 		if i == in.Cursor {
 			line = renderSelectedRow(line)
 		}

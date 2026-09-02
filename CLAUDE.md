@@ -228,8 +228,56 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   tags. Every external command goes through an injectable runner and time comes
   from an injectable clock, which is what keeps the gate testable without
   touching the live installation.
-- `tui`: live-session dashboard, specialized transcript/plan search, and
-  deterministic in-process scenario harness.
+- `tui`: the Bubble Tea program itself — the `Model`, the mode dispatcher, every
+  key handler, every `tea.Cmd` and `tea.Msg`, the shared theme, one projection
+  seam file per leaf (`dashboard_view.go`, `history_view.go`, `launch_view.go`,
+  `plans_view.go`, `worktrees_view.go`, `asl_view.go`,
+  `command_palette_view.go`), and the deterministic in-process uitest harness
+  that `cmd/tuitest.go` drives. It is the only package in the TUI tree that
+  names `Model`: the nine leaves below take explicit `*Input` values and return
+  strings, so vocabulary and pure rendering move out while what-a-keypress-*does*
+  stays in. The uitest files cannot become a child package because `cmd` reaches
+  them through the root. The whole TUI tree — root included — depends on
+  `internal/daemon/ipc`, `internal/daemon/process`, and
+  `internal/daemon/protocol` only; `internal/daemon` itself is not in its
+  transitive imports at all.
+- `tui/layout`: terminal geometry, and nothing else — the visible-window slice
+  of a flat list, wrap/clamp width math, grapheme-aware display width,
+  truncation and padding, and the overlay compositor that splices a popup into
+  a base view. It is the one leaf every other leaf imports and the only package
+  in the repository's TUI tree with no in-repo dependency whatsoever.
+- `tui/dashboard`: the live-session list — the filter DSL with its removable
+  chips and completion menu, row/title/activity formatting, group borders and
+  the state gloss, cursor restoration across a rebuilt list, pagination, the
+  preview pane, and profile/harness color assignment (which `history`, `launch`,
+  and the root all read).
+- `tui/history`: the two histories that exist here — the per-session event
+  detail overlay with its phase timeline, and Past Sessions transcript history
+  (search rows, the transcript viewer, the full-message overlay, the delete
+  prompt). There is no archive/restore flow.
+- `tui/launch`: the launcher list and its preview, filter/profile-cycle/pin
+  controls, the profile-override overlay, persisted launcher preferences, the
+  `ConfigPickerPurpose` vocabulary, and launch batch targets and progress
+  wording. The root keeps the `tea.Cmd` builders that actually launch.
+- `tui/plans`: the Plans browser — listing and sort order, search result rows,
+  and the viewer's wrapped rows with their source-line mapping.
+- `tui/worktrees`: managed-worktree rows — state classification and badges,
+  compact age, source labels, filter, sort, and durable mutation summaries.
+- `tui/asl`: the ASL Runs surface — run rows and their sort, exact and fallback
+  session binding, the fixed refusal sentences mapped from bridge codes, the
+  bounded operation-receipt history, and the response form's state with its
+  `String`/`GoString` redaction contract, which is load-bearing because the
+  fields are exported.
+- `tui/commands`: command and key-action definitions, parameterized over the
+  root model with generics (`Command[M]`, `Action[M]`) so the leaf never names
+  `Model` yet the palette can still ask a live model whether a command is
+  visible and available — availability is re-derived at render time, not frozen
+  when the palette opens. It also owns the dashboard refresh command cycle and
+  the package-level seams root tests swap (`Registry`, `DaemonRequest`,
+  `SpawnDaemonDetached`, `CopyToClipboard`, `ActiveLoopDiscover`).
+- `tui/customization`: the standalone color, icon, and keybinding overlays, each
+  its own Bubble Tea program. It is a sibling of the root rather than one of its
+  leaves: `cmd` launches it directly and root `tui` does not import it.
 
 ### Identity and safety rules
 

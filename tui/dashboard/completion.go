@@ -13,10 +13,10 @@ import (
 // closes it by assigning Completion{}.
 type Completion struct {
 	Visible     bool
-	Sigil       byte
+	sigil       byte
 	Prefix      string
-	ReplaceFrom int
-	ReplaceTo   int
+	replaceFrom int
+	replaceTo   int
 	Candidates  []string
 	Selected    int
 }
@@ -96,10 +96,10 @@ func (c *Completion) Recompute(text string, cfg *config.Config) {
 		return
 	}
 	c.Visible = true
-	c.Sigil = sigil
+	c.sigil = sigil
 	c.Prefix = prefix
-	c.ReplaceFrom = from
-	c.ReplaceTo = to
+	c.replaceFrom = from
+	c.replaceTo = to
 	c.Candidates = filtered
 	if c.Selected < 0 || c.Selected >= len(filtered) {
 		c.Selected = 0
@@ -122,9 +122,9 @@ func (c *Completion) Insert(buf *string) {
 	if !c.Visible || len(c.Candidates) == 0 {
 		return
 	}
-	inserted := string(c.Sigil) + c.Candidates[c.Selected] + " "
+	inserted := string(c.sigil) + c.Candidates[c.Selected] + " "
 	s := *buf
-	*buf = s[:c.ReplaceFrom] + inserted + s[c.ReplaceTo:]
+	*buf = s[:c.replaceFrom] + inserted + s[c.replaceTo:]
 	*c = Completion{}
 }
 
@@ -146,7 +146,7 @@ func RenderCompletion(c Completion) string {
 	}
 	var sb strings.Builder
 	for i := start; i < end; i++ {
-		body := "  " + string(c.Sigil) + c.Candidates[i] + "  "
+		body := "  " + string(c.sigil) + c.Candidates[i] + "  "
 		if i == c.Selected {
 			sb.WriteString(renderSelectedRow(body))
 		} else {

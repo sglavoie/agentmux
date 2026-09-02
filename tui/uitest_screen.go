@@ -98,7 +98,7 @@ func normalizeUITestScreen(raw string, size UITestSize) UITestScreen {
 // AMX-specific modal-fit detection. The screen-level checks in uitest_screen.go
 // (line width, invalid UTF-8, screen height) are necessary but not sufficient:
 // model_preview.go's render() composites overlay popups into the dashboard /
-// session-search body via layout.ComposeOverlay, which right-clips wide popup columns
+// session-search body via layout.CenterOverlay, which right-clips wide popup columns
 // and drops popup rows past the body area. A modal whose natural content is
 // wider or taller than the space it is given therefore renders as a *clean*
 // root screen even though content was squeezed, reflowed, or dropped. That is
@@ -181,7 +181,7 @@ func detectModalFitIssues(m Model) []UITestLayoutIssue {
 	natural.height = uitestModalNaturalSize
 	naturalW := layout.PopupWidth(render(natural))
 
-	// Live geometry: exactly what layout.ComposeOverlay splices into the body area.
+	// Live geometry: exactly what layout.CenterOverlay splices into the body area.
 	live := render(m)
 	realW := layout.PopupWidth(live)
 	realH := popupLineCount(live)

@@ -25,11 +25,11 @@ func NextSortMode(mode planindex.SortMode) planindex.SortMode {
 	}
 }
 
-// ProjectLabel returns the project a plan belongs to for display in the Plans
+// projectLabel returns the project a plan belongs to for display in the Plans
 // list and viewer header. A plan whose metadata names no project falls back to
 // its first discovered project name, then to "Unknown", so a row never renders
 // an empty column.
-func ProjectLabel(meta planindex.PlanMeta) string {
+func projectLabel(meta planindex.PlanMeta) string {
 	if meta.Project != "" {
 		return meta.Project
 	}

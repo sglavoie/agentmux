@@ -203,7 +203,7 @@ func FormatRow(res planindex.Result, maxWidth int) string {
 		matchFrag = "  " + styleSearch.Render(fmt.Sprintf("(%d match%s)", res.Matches, matchPlural(res.Matches)))
 	}
 
-	project := ProjectLabel(res.Meta)
+	project := projectLabel(res.Meta)
 	projectFrag := styleChip.Render("[" + project + "]")
 	if len(res.Meta.ProjectNames()) == 0 {
 		projectFrag = styleDim.Render("[" + project + "]")

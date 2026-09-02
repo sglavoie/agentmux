@@ -73,7 +73,7 @@ func (in ViewerInput) Render() string {
 			name = "(unnamed)"
 		}
 		header = fmt.Sprintf("Plan: %s  [project: %s]  (%d file%s)",
-			layout.RenderTitleIcon(name), ProjectLabel(*in.Plan), len(in.Plan.Files), plural(len(in.Plan.Files)))
+			layout.RenderTitleIcon(name), projectLabel(*in.Plan), len(in.Plan.Files), plural(len(in.Plan.Files)))
 	}
 	if in.Loading {
 		header += "  " + styleDim.Render("(loading…)")

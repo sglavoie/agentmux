@@ -22,11 +22,11 @@ import (
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
-// FormatRow renders one worktree as a fixed-column row: project, branch,
+// formatRow renders one worktree as a fixed-column row: project, branch,
 // profile/harness identity, age, and state badges, truncated to width. Empty
 // fields fall back to a parenthesized placeholder so the columns never
 // collapse and misalign the rows below.
-func FormatRow(entry actions.WorktreeView, width int) string {
+func formatRow(entry actions.WorktreeView, width int) string {
 	width = layout.WrapWidth(width)
 	project := strings.TrimSpace(entry.ProjectLabel)
 	if project == "" {

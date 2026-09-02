@@ -139,7 +139,7 @@ func (in ListInput) RenderList(height int) string {
 		sb.WriteByte('\n')
 	}
 	for i := window.Start; i < window.End; i++ {
-		line := FormatRow(in.Filtered[i], in.Width)
+		line := formatRow(in.Filtered[i], in.Width)
 		if i == in.Cursor {
 			line = renderSelectedRow(line)
 		}

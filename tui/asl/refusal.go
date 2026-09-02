@@ -108,10 +108,10 @@ var errorCodes = map[string]bool{
 	"contract-set-mismatch": true,
 }
 
-// ErrorCode recovers the bridge refusal code from a daemon error. The daemon
+// errorCode recovers the bridge refusal code from a daemon error. The daemon
 // flattens a typed bridge error to "<code>: <message>", so the code is the only
 // machine-readable part that survives the IPC boundary.
-func ErrorCode(err error) string {
+func errorCode(err error) string {
 	if err == nil {
 		return ""
 	}
@@ -128,7 +128,7 @@ func ErrorCode(err error) string {
 
 // StaleTarget reports whether a refusal means the run moved under the operator.
 func StaleTarget(err error) bool {
-	return staleCodes[ErrorCode(err)]
+	return staleCodes[errorCode(err)]
 }
 
 // RefusalText maps a refusal to a fixed operator-facing sentence. The bridge's
@@ -136,7 +136,7 @@ func StaleTarget(err error) bool {
 // structurally impossible for question or answer text to reach an error string,
 // a status line, or a toast.
 func RefusalText(err error) string {
-	switch ErrorCode(err) {
+	switch errorCode(err) {
 	case "empty-text":
 		return "the answer is empty: type a reply before submitting"
 	case "question-body-too-large":

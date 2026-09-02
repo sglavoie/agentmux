@@ -20,7 +20,7 @@ import (
 // cheaper to duplicate than a theme edge into a layout leaf.
 var dimStyle = lipgloss.NewStyle().Faint(true)
 
-// ComposeOverlay splices popup lines into base content at (startCol, startRow).
+// composeOverlay splices popup lines into base content at (startCol, startRow).
 // base and popup are pre-rendered strings; baseWidth/baseHeight describe the
 // area available for compositing. When dim is true the base is dimmed first so
 // it visually recedes behind the popup.
@@ -28,7 +28,7 @@ var dimStyle = lipgloss.NewStyle().Faint(true)
 // The popup is right-clipped at baseWidth when its width plus startCol would
 // exceed the base area. Rows beyond baseHeight are dropped. An empty popup
 // returns the normalized, possibly dimmed base.
-func ComposeOverlay(base, popup string, baseWidth, baseHeight, startCol, startRow int, dim bool) string {
+func composeOverlay(base, popup string, baseWidth, baseHeight, startCol, startRow int, dim bool) string {
 	if dim {
 		base = dimContent(base)
 	}
@@ -66,7 +66,7 @@ func ComposeOverlay(base, popup string, baseWidth, baseHeight, startCol, startRo
 }
 
 // CenterOverlay computes (startCol, startRow) so the popup is centered in the
-// (baseWidth, baseHeight) area, then delegates to ComposeOverlay.
+// (baseWidth, baseHeight) area, then delegates to composeOverlay.
 func CenterOverlay(base, popup string, baseWidth, baseHeight int, dim bool) string {
 	popupW := PopupWidth(popup)
 	popupH := 0
@@ -75,7 +75,7 @@ func CenterOverlay(base, popup string, baseWidth, baseHeight int, dim bool) stri
 	}
 	startCol := max((baseWidth-popupW)/2, 0)
 	startRow := max((baseHeight-popupH)/2, 0)
-	return ComposeOverlay(base, popup, baseWidth, baseHeight, startCol, startRow, dim)
+	return composeOverlay(base, popup, baseWidth, baseHeight, startCol, startRow, dim)
 }
 
 // TopCenterOverlay horizontally centers the popup but anchors it near the top
@@ -93,7 +93,7 @@ func TopCenterOverlay(base, popup string, baseWidth, baseHeight int, dim bool) s
 	if baseHeight <= 1 || popupH >= baseHeight {
 		startRow = 0
 	}
-	return ComposeOverlay(base, popup, baseWidth, baseHeight, startCol, startRow, dim)
+	return composeOverlay(base, popup, baseWidth, baseHeight, startCol, startRow, dim)
 }
 
 // PopupWidth returns the widest rendered line in popup, accounting for ANSI
