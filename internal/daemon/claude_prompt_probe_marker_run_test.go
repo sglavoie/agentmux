@@ -50,7 +50,7 @@ func TestClaudeIdleProbeSampleTiers(t *testing.T) {
 					tc.tier, tc.hasMarker, got, tc.want)
 			}
 			// The Layer B invariant: at one sample the screen fingerprint in
-			// AuthoritativeIdle.Generation is never compared against a second
+			// authoritativeIdle.Generation is never compared against a second
 			// observation, so a tier below the floor would opt out of
 			// stabilization entirely — the exact hole this plan closes.
 			if got < 2 {

@@ -51,14 +51,6 @@ func (r *callRecorder) snapshot() []notifyCall {
 	return out
 }
 
-// setClickResult controls the interaction returned by the recorder's dispatch
-// stub so focus tests can simulate the user clicking the notification body.
-func (r *callRecorder) setClickResult(v bool) {
-	r.mu.Lock()
-	r.clickResult = v
-	r.mu.Unlock()
-}
-
 func newTestNotifier(cfg *config.NotificationConfig) (*notification.Notifier, *callRecorder) {
 	n := notification.NewNotifier(cfg)
 	rec := &callRecorder{}

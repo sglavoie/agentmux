@@ -35,7 +35,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
-// AuthoritativeIdle is one piece of external idle evidence for a managed
+// authoritativeIdle is one piece of external idle evidence for a managed
 // window. WindowID names the tab; Source is the daemon probe source the
 // synthetic stop is attributed to (a SourceProbe fact, deliberately distinct
 // from the harness session's own source and the legacy scalar bucket); Harness
@@ -46,7 +46,7 @@ import (
 // stabilized idle observations must agree before the stop is applied (values
 // below 1 are treated as 1). The remaining fields carry the notification
 // context used only when the reduced state actually transitions to stop.
-type AuthoritativeIdle struct {
+type authoritativeIdle struct {
 	WindowID    int
 	Source      protocol.SourceID
 	Harness     string
@@ -188,7 +188,7 @@ func (h *Handler) clearIdleSamplesForWindowLocked(windowID int) {
 // RecordIdleSample credits one stabilized idle observation for the window's
 // probe source and returns the new consecutive-sample count. Screen adapters
 // that require stabilized evidence call it each poll and compare the count
-// against their required sample threshold before emitting an AuthoritativeIdle.
+// against their required sample threshold before emitting an authoritativeIdle.
 // Safe to call off the state lock.
 func (h *Handler) RecordIdleSample(windowID int, source protocol.SourceID) int {
 	h.stateMu.Lock()
@@ -212,7 +212,7 @@ func (h *Handler) ClearIdleSample(windowID int, source protocol.SourceID) {
 // existing probe fact). Adapters call it each time they observe a stabilized
 // idle screen; the required-samples gate and the captured-sequence check make
 // repeated safe calls idempotent.
-func (h *Handler) applyAuthoritativeIdle(obs AuthoritativeIdle) bool {
+func (h *Handler) applyAuthoritativeIdle(obs authoritativeIdle) bool {
 	if obs.WindowID <= 0 {
 		return false
 	}

@@ -22,7 +22,7 @@ func TestAuthoritativeIdleDiscardedWhenSequenceMoved(t *testing.T) {
 	// A newer prompt/activity lands after the evidence was captured.
 	idleSeedHarness(t, h, 7, "cur", "active", base+1)
 
-	obs := AuthoritativeIdle{
+	obs := authoritativeIdle{
 		WindowID:        7,
 		Source:          activity.AuthoritativeIdleSource("claude"),
 		Harness:         "claude",
@@ -68,7 +68,7 @@ func TestAuthoritativeIdleDiscardedWhenLowerExplicitSequenceLands(t *testing.T) 
 		t.Fatalf("receipt generation = %d, want it advanced past the captured %d after the accepted mutation", moved, captured)
 	}
 
-	obs := AuthoritativeIdle{
+	obs := authoritativeIdle{
 		WindowID:        7,
 		Source:          activity.AuthoritativeIdleSource("claude"),
 		Harness:         "claude",
@@ -110,7 +110,7 @@ func TestAuthoritativeIdleDiscardedWhenWatchdogExpiryLands(t *testing.T) {
 		t.Fatalf("receipt generation = %d, want it advanced past the captured %d after watchdog expiry", moved, captured)
 	}
 
-	obs := AuthoritativeIdle{
+	obs := authoritativeIdle{
 		WindowID:        7,
 		Source:          activity.AuthoritativeIdleSource("claude"),
 		Harness:         "claude",
@@ -159,7 +159,7 @@ func TestAuthoritativeIdleDiscardedWhenPersistedMergeLands(t *testing.T) {
 		t.Fatalf("disjoint persisted ASL lease not merged: exists=%v live=%v (maxSeq %d)", exists, live, merged)
 	}
 
-	obs := AuthoritativeIdle{
+	obs := authoritativeIdle{
 		WindowID:        42,
 		Source:          activity.AuthoritativeIdleSource("claude"),
 		Harness:         "claude",
@@ -200,7 +200,7 @@ func TestAuthoritativeIdleDiscardedWhenASLLeaseSeedLands(t *testing.T) {
 		t.Fatalf("receipt generation = %d, want it advanced past the captured %d after a first-time ASL seed", moved, captured)
 	}
 
-	obs := AuthoritativeIdle{
+	obs := authoritativeIdle{
 		WindowID:        7,
 		Source:          activity.AuthoritativeIdleSource("claude"),
 		Harness:         "claude",

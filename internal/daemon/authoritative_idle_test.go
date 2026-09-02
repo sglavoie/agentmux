@@ -20,7 +20,7 @@ func TestAuthoritativeIdleSettlesStaleInteractiveBolt(t *testing.T) {
 	base := time.Now().Unix()
 	idleSeedHarness(t, h, 7, "old", "active", base)
 
-	obs := AuthoritativeIdle{
+	obs := authoritativeIdle{
 		WindowID:        7,
 		Source:          activity.AuthoritativeIdleSource("claude"),
 		Harness:         "claude",
@@ -53,7 +53,7 @@ func TestAuthoritativeIdleBlockedByResetFlow(t *testing.T) {
 	h.store[7].PendingReset = state.ResetFlowRequested
 	h.stateMu.Unlock()
 
-	obs := AuthoritativeIdle{
+	obs := authoritativeIdle{
 		WindowID:        7,
 		Source:          activity.AuthoritativeIdleSource("claude"),
 		Harness:         "claude",
@@ -78,7 +78,7 @@ func TestAuthoritativeIdleRequiresConsecutiveSamples(t *testing.T) {
 	idleSeedHarness(t, h, 7, "old", "active", base)
 
 	captured := idleShadowSeq(t, h, 7)
-	obs := AuthoritativeIdle{
+	obs := authoritativeIdle{
 		WindowID:        7,
 		Source:          activity.AuthoritativeIdleSource("claude"),
 		Harness:         "claude",
@@ -112,7 +112,7 @@ func TestAuthoritativeIdleStreakClearedByActivity(t *testing.T) {
 	idleSeedHarness(t, h, 7, "cur", "active", base)
 
 	captured := idleShadowSeq(t, h, 7)
-	obs := AuthoritativeIdle{
+	obs := authoritativeIdle{
 		WindowID:        7,
 		Source:          activity.AuthoritativeIdleSource("claude"),
 		Harness:         "claude",
@@ -144,7 +144,7 @@ func TestAuthoritativeIdlePreservesProtectedAndBackgroundState(t *testing.T) {
 		lease := protocol.NormalizedEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: state.ASLPhaseBetween, RunID: "run-1", At: base, Event: events.AgentSessionLoopStarted}
 		h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "loop_marker", Event: events.AgentSessionLoopStarted, Normalized: &lease})
 
-		obs := AuthoritativeIdle{WindowID: 7, Source: activity.AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
+		obs := authoritativeIdle{WindowID: 7, Source: activity.AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
 		if !h.applyAuthoritativeIdle(obs) {
 			t.Fatalf("observation not applied")
 		}
@@ -160,7 +160,7 @@ func TestAuthoritativeIdlePreservesProtectedAndBackgroundState(t *testing.T) {
 		idleSeedHarness(t, h, 7, "old", "active", base)
 		idleSeedHarness(t, h, 7, "perm", "permission", base+1)
 
-		obs := AuthoritativeIdle{WindowID: 7, Source: activity.AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
+		obs := authoritativeIdle{WindowID: 7, Source: activity.AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
 		if !h.applyAuthoritativeIdle(obs) {
 			t.Fatalf("observation not applied")
 		}
@@ -182,7 +182,7 @@ func TestAuthoritativeIdlePreservesProtectedAndBackgroundState(t *testing.T) {
 		pipe := protocol.NormalizedEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:pipe"}, Action: "active", SessionID: "pipe", PipeMode: true, At: base, Event: "Evt"}
 		h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "active", Event: "Evt", Normalized: &pipe})
 
-		obs := AuthoritativeIdle{WindowID: 7, Source: activity.AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
+		obs := authoritativeIdle{WindowID: 7, Source: activity.AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
 		if !h.applyAuthoritativeIdle(obs) {
 			t.Fatalf("observation not applied")
 		}
@@ -204,7 +204,7 @@ func TestAuthoritativeIdlePreservesProtectedAndBackgroundState(t *testing.T) {
 		sa := protocol.NormalizedEvent{Source: protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-1"}, Action: "subagent", At: base + 1, Event: "SubagentStart"}
 		h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "subagent", Event: "SubagentStart", Normalized: &sa})
 
-		obs := AuthoritativeIdle{WindowID: 7, Source: activity.AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
+		obs := authoritativeIdle{WindowID: 7, Source: activity.AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
 		if !h.applyAuthoritativeIdle(obs) {
 			t.Fatalf("observation not applied")
 		}
@@ -226,7 +226,7 @@ func TestAuthoritativeIdleRecordsRenderGeneration(t *testing.T) {
 	genBefore := h.store[7].EffectiveGen
 	h.stateMu.Unlock()
 
-	obs := AuthoritativeIdle{WindowID: 7, Source: activity.AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
+	obs := authoritativeIdle{WindowID: 7, Source: activity.AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
 	if !h.applyAuthoritativeIdle(obs) {
 		t.Fatalf("observation not applied")
 	}
@@ -259,7 +259,7 @@ func TestAuthoritativeIdleNotifiesOnTransitionOnlyAndDedupes(t *testing.T) {
 			tick += 10
 			idleSeedHarness(t, h, 7, "cur", "active", base+tick)
 			tick += 10
-			obs := AuthoritativeIdle{
+			obs := authoritativeIdle{
 				WindowID:      7,
 				Source:        activity.AuthoritativeIdleSource("claude"),
 				Harness:       "claude",
@@ -298,7 +298,7 @@ func TestAuthoritativeIdleNotifiesOnTransitionOnlyAndDedupes(t *testing.T) {
 // window (no reducer facts) is dropped without panicking.
 func TestAuthoritativeIdleNoWindowIsNoop(t *testing.T) {
 	h := newTestHandler()
-	obs := AuthoritativeIdle{WindowID: 99, Source: activity.AuthoritativeIdleSource("claude"), CapturedSeq: 0, At: time.Now().Unix(), RequiredSamples: 1}
+	obs := authoritativeIdle{WindowID: 99, Source: activity.AuthoritativeIdleSource("claude"), CapturedSeq: 0, At: time.Now().Unix(), RequiredSamples: 1}
 	if h.applyAuthoritativeIdle(obs) {
 		t.Fatalf("observation for an unknown window was applied")
 	}

@@ -86,8 +86,15 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
 - `internal/handoff`: bounded deterministic pack creation, private artifacts,
   and cross-harness launch workflow.
 - `internal/worktree`: bounded managed Git worktree creation and cleanup.
-- `internal/daemon`: IPC, event ingestion and routing, process inspection, live
-  activity evidence, diagnostics, and the single renderer writer.
+- `internal/daemon`: the orchestration root — daemon construction and lifecycle,
+  the sweep/probe/render schedules, reconciliation coordination, and the public
+  entry points `Run`, `NewOperationalLogger`, and `NewHandler`/`Handler`. It owns
+  the one thing none of its children may: the `Handler` itself, and with it
+  `stateMu`, every reducer mutation taken under it, the single renderer writer,
+  and every Kitty and IPC call the daemon makes. Its children hold vocabulary,
+  pure projections, and caller-locked trackers; the root decides what an
+  observation *does* to a window. It imports all eleven daemon subpackages and
+  none of them imports it back, which is what keeps the graph acyclic.
 - `internal/daemon/protocol`: the daemon wire contract — request/response model,
   command names, durable and exported envelopes, and the serialization
   vocabularies. It holds shapes and pure projections only, and must never import

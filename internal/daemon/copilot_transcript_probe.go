@@ -63,17 +63,13 @@ func (h *Handler) ProbeCopilotTranscriptStop(now time.Time) {
 	h.renderSnapshot(windows)
 }
 
-// ProbeCopilotTranscriptStopWithSnapshot runs the Copilot transcript stop probe
+// probeCopilotTranscriptStopWithSnapshot runs the Copilot transcript stop probe
 // against an already-published Kitty snapshot. Direct sessions retain the
 // Copilot title-owner rule; borrowed sessions follow their exact producer route
 // to the managed target. Only a target whose reduced icon is a stuck ⚡ or this
 // probe's recoverable synthetic 🛑 is considered. Unlike the Codex/Claude probes
 // this reads no screen — the authoritative evidence is the matching producer
 // session's transcript.
-func (h *Handler) ProbeCopilotTranscriptStopWithSnapshot(now time.Time, windows []kitty.OSWindow) {
-	h.probeCopilotTranscriptStopWithSnapshot(now, h.screenProbeSnapshotForWindows(windows))
-}
-
 func (h *Handler) probeCopilotTranscriptStopWithSnapshot(now time.Time, snapshot probes.Snapshot) {
 	for _, binding := range h.copilotTranscriptProbeBindings(now, snapshot) {
 		_, tab, target, ok := kitty.FindWindowLocationByID(snapshot.Windows(), binding.TargetWindowID)
@@ -365,7 +361,7 @@ func (h *Handler) probeCopilotTranscriptWindow(
 		}
 	}
 
-	applied := h.applyAuthoritativeIdle(AuthoritativeIdle{
+	applied := h.applyAuthoritativeIdle(authoritativeIdle{
 		WindowID:        windowID,
 		Source:          source,
 		Harness:         harness.Copilot,

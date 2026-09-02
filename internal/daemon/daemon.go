@@ -324,13 +324,6 @@ func newDaemonKittyClient(runner kitty.CommandRunner) *kitty.SubprocessClient {
 	return kitty.NewClientWithSocket(runner, kitty.NormalizedListenAddressFromEnv())
 }
 
-// Ping checks whether the daemon is reachable on the default socket.
-func Ping() error {
-	c := ipc.NewClient()
-	_, err := c.Send(protocol.Request{Type: protocol.TypeStateQuery})
-	return err
-}
-
 // buildStaleThresholds projects cfg.Defaults.Watchdog and each per-profile
 // watchdog override into the (global, perAccount) maps consumed by
 // Handler.SetStaleThresholds. Per-profile entries are keyed by lowercased

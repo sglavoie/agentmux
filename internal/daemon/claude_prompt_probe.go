@@ -103,21 +103,16 @@ func (h *Handler) ProbeClaudeScreenStop(now time.Time) {
 	h.renderSnapshot(windows)
 }
 
-// ProbeClaudeScreenStopWithSnapshot runs the Claude idle stop probe against an
-// already-published Kitty snapshot. Direct sessions retain the managed
-// title-owner selection; a borrowed session follows its live reducer binding to
-// read the unmanaged producer pane and apply the result to the managed target.
-// A busy Claude pane title can also restore an empty target to ⚡. Otherwise,
-// only a target whose current reduced icon is a stuck ⚡ is considered: any
-// other visible state is either already terminal or a higher-precedence icon
-// the idle path must never downgrade.
-func (h *Handler) ProbeClaudeScreenStopWithSnapshot(now time.Time, windows []kitty.OSWindow) {
-	h.probeClaudeScreenStopWithSnapshot(now, h.screenProbeSnapshotForWindows(windows), h.screenTextCacheFor())
-}
-
 // probeClaudeScreenStopWithSnapshot walks the Claude routes in one snapshot and
 // hands each to the shared screen idle probe body (screen_idle_probe.go). The
 // only Claude-specific step left here is the busy-title recovery below.
+//
+// Direct sessions retain the managed title-owner selection; a borrowed session
+// follows its live reducer binding to read the unmanaged producer pane and apply
+// the result to the managed target. A busy Claude pane title can also restore an
+// empty target to ⚡. Otherwise, only a target whose current reduced icon is a
+// stuck ⚡ is considered: any other visible state is either already terminal or a
+// higher-precedence icon the idle path must never downgrade.
 func (h *Handler) probeClaudeScreenStopWithSnapshot(
 	now time.Time,
 	snapshot probes.Snapshot,

@@ -65,7 +65,7 @@ func TestCodexIdleProbeSampleTiers(t *testing.T) {
 				t.Fatalf("activity.RequiredIdleSamples(codex, %v) = %d, want %d", tc.tier, got, tc.want)
 			}
 			// The Layer B invariant: below two samples the fingerprint in
-			// AuthoritativeIdle.Generation is never compared against a second
+			// authoritativeIdle.Generation is never compared against a second
 			// observation, so the row would opt out of stabilization entirely.
 			if got < activity.IdleMinimumSamples {
 				t.Fatalf("activity.RequiredIdleSamples(codex, %v) = %d, want at least the floor of %d",

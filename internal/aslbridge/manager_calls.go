@@ -99,7 +99,7 @@ func (m *Manager) Act(ctx context.Context, req ActionRequest) (Operation, error)
 		// ASL answered and the daemon cannot read the answer, so whether the
 		// mutation landed is unknown. That is the ambiguous case, not a refusal.
 		m.revokeMutations(reasonAmbiguousOperation)
-		m.failSession(c, contaminationError(req.Method + " result"))
+		m.failSession(c, contaminationError(req.Method+" result"))
 		return Operation{}, ErrUnavailable
 	}
 	m.recordReceipt(op)

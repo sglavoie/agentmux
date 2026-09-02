@@ -27,9 +27,3 @@ func (h *Handler) SetScreenPatterns(warnings []screenstate.LoadWarning) {
 	}
 	h.screenPatterns = snapshot
 }
-
-// ScreenPatterns returns the recorded startup load, or nil when Load never ran
-// for this Handler.
-func (h *Handler) ScreenPatterns() *protocol.ScreenPatternsSnapshot {
-	return h.screenPatterns
-}

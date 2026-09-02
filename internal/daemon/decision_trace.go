@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
+	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
 
@@ -302,4 +304,21 @@ func (h *Handler) RecordDuplicateDelivery(req protocol.Request, ack *protocol.De
 	event = h.appendEventLocked(windowID, event)
 	h.stateMu.Unlock()
 	h.recordDecisionEvent(event)
+}
+
+func (h *Handler) setDecisionJournal(journal *diagnostics.Journal) {
+	h.decisionJournal = journal
+}
+
+// recordDecisionEvent persists one finalized row into the causal journal. The
+// record shape is eventlog's; the fail-open bounded append is the daemon's, so
+// a slow or unwritable journal can never hold up the hook path.
+func (h *Handler) recordDecisionEvent(event protocol.SessionEvent) {
+	if h == nil || h.decisionJournal == nil {
+		return
+	}
+	envelope := eventlog.DecisionEnvelope(event)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	h.decisionJournal.TryAppend(ctx, envelope)
 }

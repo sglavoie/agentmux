@@ -9,8 +9,10 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
+	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/palette"
 )
 
 type hookEventContext struct {
@@ -456,4 +458,207 @@ func (h *Handler) ownerlessSourceHasClearableState(windowID int, liveIcon string
 	defer h.stateMu.Unlock()
 	st, ok := h.windowStateLocked(windowID)
 	return ok && rendering.DesiredIcon(st) != ""
+}
+
+func (h *Handler) resolveHookEventContext(req protocol.Request) hookEventContext {
+	producerProvided := strings.TrimSpace(req.Harness) != ""
+	req.Harness = harness.NormalizeKnown(req.Harness)
+	// With no managed snapshot target, a stamped producer is also the best
+	// durable identity for the source pane. A managed source overrides this
+	// below, and an unmanaged routed source receives its selected target's
+	// metadata when the routed request is built.
+	req.TargetHarness = req.Harness
+	req.TargetHarnessSet = true
+	req.RouteEvidence = events.NewRoutingEvidence(req.WindowID)
+	ctx := hookEventContext{req: req}
+	if ctx.req.WindowID <= 0 {
+		return ctx
+	}
+	if h.kittyClient == nil {
+		ctx.req.RouteEvidence.LookupOutcome = events.RouteLookupRequestOnly
+		return ctx
+	}
+	// Route against the last published snapshot instead of a live ListWindows.
+	// A slow or wedged Kitty must never delay hook acknowledgement, so the
+	// maintenance loop is the only lister. A cold cache (no snapshot published
+	// yet — the daemon started degraded and has not reconciled) is treated like
+	// an unreadable tab so a user_clear falls back to the source pane rather
+	// than silently dropping.
+	windows, _, ready := h.cachedSnapshot()
+	if !ready {
+		slog.Debug("hook event snapshot cache cold; routing from request only", "window_id", ctx.req.WindowID)
+		ctx.lookupFailed = true
+		ctx.req.RouteEvidence.LookupOutcome = events.RouteLookupSnapshotUnavailable
+		return ctx
+	}
+	ctx.req.RouteEvidence.SnapshotReady = true
+	ctx.windows = windows
+	tab, win, found := kitty.FindTabByWindowID(windows, ctx.req.WindowID)
+	if !found {
+		ctx.req.RouteEvidence.LookupOutcome = events.RouteLookupSourceNotFound
+		return ctx
+	}
+	ctx.req.RouteEvidence.LookupOutcome = events.RouteLookupSourceFound
+	ctx.req.RouteEvidence.SourceMatched = true
+	ctx.tab = tab
+	ctx.win = win
+	if owner, ok := kitty.FindTabTitleOwner(tab); ok {
+		ctx.owner = owner
+	}
+	events.PopulateRoutingCandidates(ctx.req.RouteEvidence, tab, win, ctx.owner)
+	parts := palette.ParseTitleParts(tab.Title)
+	ctx.req.SessionTitle = parts.Base
+	ctx.req.CurrentIconState = parts.State
+	if ctx.owner != nil && ctx.owner.ID != ctx.req.WindowID &&
+		(win.UserVars.EffectiveProfile() != "" || win.UserVars.EffectiveHarness() != "") {
+		// The shared title reflects the active managed owner, not this managed
+		// pane. Seed its legacy compatibility path from its own reduced state so
+		// another pane's attention/terminal icon cannot guard-block the update.
+		_, ctx.req.CurrentIconState = h.lastKnownState(ctx.req.WindowID)
+	}
+	ctx.req.Account = win.UserVars.EffectiveProfile()
+	if managedHarness := harness.NormalizeKnown(win.UserVars.EffectiveHarness()); managedHarness != "" {
+		ctx.req.TargetHarness = managedHarness
+	} else if ctx.owner != nil && win.UserVars.EffectiveProfile() == "" && win.UserVars.EffectiveHarness() == "" {
+		// This is an unmanaged source inside a managed tab. Do not let a
+		// suppressed event stamp producer identity as durable target metadata;
+		// an accepted route will supply the selected managed target explicitly.
+		ctx.req.TargetHarness = ""
+	}
+	if !producerProvided {
+		// Legacy unstamped hooks can infer a producer only from the actual source
+		// pane, and only when that pane names a supported managed harness.
+		ctx.req.Harness = ctx.req.TargetHarness
+	}
+	// Record the mute state on ctx rather than mutating the daemon store here:
+	// context resolution must stay side-effect free so a no-op path (F8 on an
+	// icon-free ownerless tab) never creates durable renderer state for the
+	// source pane.
+	// The path that updates the source window records it via setMutedFromSnapshot.
+	ctx.muted = parts.Muted || win.UserVars.Mute != ""
+	return ctx
+}
+
+func shouldResolveUnmanagedHookRoute(eventOrAction string, ctx hookEventContext) bool {
+	if events.IsAgentSessionLoopEvent(eventOrAction) {
+		return false
+	}
+	if ctx.win == nil || ctx.owner == nil || ctx.owner.ID == ctx.req.WindowID {
+		return false
+	}
+	return ctx.win.UserVars.EffectiveProfile() == "" && ctx.win.UserVars.EffectiveHarness() == ""
+}
+
+func (h *Handler) appendSuppressedHookEvent(req protocol.Request, action, suppressionReason string) {
+	if req.WindowID <= 0 {
+		return
+	}
+	h.stateMu.Lock()
+	h.touchWindowMetadataLocked(req)
+	h.rememberKittySocketLocked(req.WindowID, req.KittyListenOn)
+	st := h.ensureWindowStateLocked(req.WindowID)
+	if req.Account != "" {
+		st.LastAccount = req.Account
+		accountKey := strings.ToLower(req.Account)
+		h.lastSeenEventAt[accountKey] = time.Now()
+		delete(h.notifiedHookSilence, accountKey)
+	}
+	effective := events.EffectiveStateEvidence(st.Effective)
+	event := events.SuppressedSessionEvent(req, action, suppressionReason, rendering.DesiredIcon(st))
+	event.DecisionReason = suppressionReason
+	event.ReducerDecision = protocol.DecisionSuppressed
+	event.ReducerReason = suppressionReason
+	event.ReducerInputAction = action
+	event.RouteEvidence = ensureDirectRouteEvidence(req)
+	event.EffectiveBefore = &effective
+	event.EffectiveAfter = &effective
+	if events.IsQuarantineReason(suppressionReason) {
+		event.ReducerDecision = protocol.DecisionQuarantined
+		event.Quarantined = true
+		event.IdentityConfidence = protocol.IdentityConfidenceInvalid
+	}
+	event = h.appendEventLocked(req.WindowID, event)
+	h.stateMu.Unlock()
+	h.recordDecisionEvent(event)
+}
+
+// rememberedManagedHookTarget searches only the source tab's managed reducers
+// for an exact live producer/session/origin binding. The returned match count
+// makes ambiguity fail closed instead of silently moving one session between
+// managed panes.
+func (h *Handler) rememberedManagedHookTarget(ctx hookEventContext, normalized protocol.NormalizedEvent) (loopLifecycleTarget, int) {
+	producerHarness := harness.NormalizeKnown(ctx.req.Harness)
+	if ctx.tab == nil || producerHarness == "" || normalized.SessionID == "" ||
+		normalized.OriginWindowID <= 0 {
+		return loopLifecycleTarget{}, 0
+	}
+	// Route identity is the parent producer/session tuple even when the current
+	// event is sourced from a subagent fact. The parent harness fact established
+	// by the prompt keeps every child event on the same managed reducer.
+	parentSource := protocol.SourceID{Kind: protocol.SourceHarness, Key: producerHarness + ":" + normalized.SessionID}
+
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+
+	var target loopLifecycleTarget
+	matches := 0
+	for i := range ctx.tab.Windows {
+		win := &ctx.tab.Windows[i]
+		if win.UserVars.EffectiveProfile() == "" && win.UserVars.EffectiveHarness() == "" {
+			continue
+		}
+		st, ok := h.windowStateLocked(win.ID)
+		if !ok || st.Reducer == nil || !st.Reducer.HasLiveOriginRoute(
+			parentSource, normalized.SessionID, normalized.OriginWindowID,
+		) {
+			continue
+		}
+		matches++
+		target = managedHookTarget(ctx.tab, win)
+	}
+	return target, matches
+}
+
+func managedHookTarget(tab *kitty.Tab, win *kitty.Window) loopLifecycleTarget {
+	if win == nil {
+		return loopLifecycleTarget{}
+	}
+	return loopLifecycleTarget{windowID: win.ID, tab: tab, win: win}
+}
+
+func (h *Handler) suppressOwnerMismatch(ctx hookEventContext, eventOrAction, action string) {
+	ctx.req.Event = eventOrAction
+	ctx.req.RouteDecision = events.RouteDecisionRejected
+	events.ChooseRoute(ctx.req.RouteEvidence, events.RouteDecisionRejected, protocol.DecisionReasonOwnerMismatch, nil)
+	if ctx.owner != nil {
+		ctx.req.RouteEvidence.RejectedAlternatives = append(ctx.req.RouteEvidence.RejectedAlternatives,
+			protocol.RejectedRouteEvidence{WindowID: ctx.owner.ID, Reason: protocol.DecisionReasonOwnerMismatch})
+	}
+	h.appendSuppressedHookEvent(ctx.req, action, suppressionReasonOwnerMismatch)
+	if ctx.owner != nil {
+		slog.Debug("hook event ignored: unmanaged pane is not authorized to borrow the tab title owner",
+			"window_id", ctx.req.WindowID,
+			"owner_window_id", ctx.owner.ID,
+			"event", eventOrAction,
+		)
+	}
+}
+
+// suppressUnmanagedPipeSource records a non-interactive harness run in an
+// unmanaged pane. It is deliberately distinct from owner_mismatch: this is the
+// expected, benign outcome of a background subprocess and must not feed the
+// owner_mismatch_* doctor findings.
+func (h *Handler) suppressUnmanagedPipeSource(ctx hookEventContext, eventOrAction, action string) {
+	ctx.req.Event = eventOrAction
+	ctx.req.RouteDecision = events.RouteDecisionRejected
+	events.ChooseRoute(ctx.req.RouteEvidence, events.RouteDecisionRejected, protocol.DecisionReasonUnmanagedPipeSource, nil)
+	if ctx.owner != nil {
+		ctx.req.RouteEvidence.RejectedAlternatives = append(ctx.req.RouteEvidence.RejectedAlternatives,
+			protocol.RejectedRouteEvidence{WindowID: ctx.owner.ID, Reason: protocol.DecisionReasonUnmanagedPipeSource})
+	}
+	h.appendSuppressedHookEvent(ctx.req, action, suppressionReasonUnmanagedPipeSource)
+	slog.Debug("hook event ignored: non-interactive harness run in an unmanaged pane",
+		"window_id", ctx.req.WindowID,
+		"event", eventOrAction,
+	)
 }

@@ -201,7 +201,7 @@ type Handler struct {
 
 	// idleSamples counts, per window probe source, how many consecutive
 	// stabilized idle screen samples an adapter has observed before an
-	// AuthoritativeIdle may settle stale interactive work, together with the
+	// authoritativeIdle may settle stale interactive work, together with the
 	// evidence generation each streak is pinned to. Screen adapters that require
 	// stabilized evidence (Codex/Claude reads) accumulate here; a streak is
 	// cleared after activity, a classifier failure, a protected-state change, or
