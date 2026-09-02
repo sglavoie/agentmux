@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -20,8 +21,8 @@ func (h *Handler) correlateASLSupervisorQuestion(windowID int, now time.Time) {
 		if !ok {
 			continue
 		}
-		if notification := h.applyASLSupervisorQuestionLocked(now, target, projection); notification != nil {
-			notifications = append(notifications, *notification)
+		if pending := h.applyASLSupervisorQuestionLocked(now, target, projection); pending != nil {
+			notifications = append(notifications, *pending)
 		}
 	}
 	h.stateMu.Unlock()
@@ -165,25 +166,25 @@ func isAuthoritativeSupervisorStopProbe(key string) bool {
 	}
 }
 
-func (h *Handler) dispatchASLSupervisorNotification(notification *aslSupervisorNotification) {
-	if notification == nil {
+func (h *Handler) dispatchASLSupervisorNotification(pending *aslSupervisorNotification) {
+	if pending == nil {
 		return
 	}
-	if notification.bypassCooldown && h.notifier != nil {
-		h.notifier.ResetActionCooldown(notification.windowID, "elicitation")
+	if pending.bypassCooldown && h.notifier != nil {
+		h.notifier.ResetActionCooldown(pending.windowID, "elicitation")
 	}
 	h.maybeNotifyTraced(
-		notification.windowID,
-		notification.sessionTitle,
-		notification.account,
+		pending.windowID,
+		pending.sessionTitle,
+		pending.account,
 		"elicitation",
 		false,
-		NotificationTrace{
-			SourceEventID: notification.sourceEventID,
-			Harness:       notification.harness,
-			Profile:       notification.account,
-			SessionID:     notification.sessionID,
-			RunID:         notification.runID,
+		notification.NotificationTrace{
+			SourceEventID: pending.sourceEventID,
+			Harness:       pending.harness,
+			Profile:       pending.account,
+			SessionID:     pending.sessionID,
+			RunID:         pending.runID,
 		},
 	)
 }

@@ -1,4 +1,4 @@
-package daemon
+package notification
 
 // The gates that apply to every notifyable action alike: pipe mode, the config
 // flag, the per-window mute closure, the per-window cooldown, and the list of

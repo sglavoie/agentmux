@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -25,12 +26,12 @@ func TestHandler_CopilotAutoApprovedPermissionSuppressesNotification(t *testing.
 	synctest.Test(t, func(t *testing.T) {
 		guard := NewStateGuard(time.Hour)
 		cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 100}
-		notifier := NewNotifier(cfg)
+		notifier := notification.NewNotifier(cfg)
 		var calls []string
-		notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (dispatchResult, error) {
+		notifier.SetBackend(func(_ context.Context, _ int, _, _, subtitle string) (bool, error) {
 			calls = append(calls, subtitle)
-			return deliveredResult(interactionUnavailable), nil
-		}
+			return false, nil
+		})
 		h := NewHandler(guard, notifier)
 
 		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "preToolUse"})
@@ -54,12 +55,12 @@ func TestHandler_CopilotLatePermissionPromptAfterAutoApprovedToolPreservesBolt(t
 	synctest.Test(t, func(t *testing.T) {
 		guard := NewStateGuard(time.Hour)
 		cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 100}
-		notifier := NewNotifier(cfg)
+		notifier := notification.NewNotifier(cfg)
 		var calls []string
-		notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (dispatchResult, error) {
+		notifier.SetBackend(func(_ context.Context, _ int, _, _, subtitle string) (bool, error) {
 			calls = append(calls, subtitle)
-			return deliveredResult(interactionUnavailable), nil
-		}
+			return false, nil
+		})
 		h := NewHandler(guard, notifier)
 
 		h.Handle(protocol.Request{
@@ -168,15 +169,15 @@ func TestHandler_PermissionCancelledByTerminalAction(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		guard := NewStateGuard(time.Hour)
 		cfg := &config.NotificationConfig{Permission: true, Stop: true, PermissionDebounceMs: 100}
-		notifier := NewNotifier(cfg)
+		notifier := notification.NewNotifier(cfg)
 		var mu sync.Mutex
 		var calls []string
-		notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (dispatchResult, error) {
+		notifier.SetBackend(func(_ context.Context, _ int, _, _, subtitle string) (bool, error) {
 			mu.Lock()
 			calls = append(calls, subtitle)
 			mu.Unlock()
-			return deliveredResult(interactionUnavailable), nil
-		}
+			return false, nil
+		})
 		h := NewHandler(guard, notifier)
 
 		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "permission"})
@@ -203,15 +204,15 @@ func TestHandler_PermissionNotificationFiresWhenGuardBlocks(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		guard := NewStateGuard(time.Hour)
 		cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 50}
-		notifier := NewNotifier(cfg)
+		notifier := notification.NewNotifier(cfg)
 		var mu sync.Mutex
 		var calls []string
-		notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (dispatchResult, error) {
+		notifier.SetBackend(func(_ context.Context, _ int, _, _, subtitle string) (bool, error) {
 			mu.Lock()
 			calls = append(calls, subtitle)
 			mu.Unlock()
-			return deliveredResult(interactionUnavailable), nil
-		}
+			return false, nil
+		})
 		h := NewHandler(guard, notifier)
 
 		// Prime with failure so the guard sits at priority 4.

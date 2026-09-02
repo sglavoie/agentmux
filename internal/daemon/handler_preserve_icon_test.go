@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -35,10 +36,10 @@ func TestHandler_PreserveCurrentRestoresPreviousState(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			guard := NewStateGuard(50 * time.Millisecond)
-			notifier := NewNotifier(&config.NotificationConfig{})
-			notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (dispatchResult, error) {
-				return deliveredResult(interactionUnavailable), nil
-			}
+			notifier := notification.NewNotifier(&config.NotificationConfig{})
+			notifier.SetBackend(func(_ context.Context, _ int, _, _, _ string) (bool, error) {
+				return false, nil
+			})
 			h := NewHandler(guard, notifier)
 
 			resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: tc.prevAction})
@@ -80,15 +81,15 @@ func TestHandler_ChildCompleteEventsDoNotNotifyStop(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				guard := NewStateGuard(time.Hour)
 				cfg := &config.NotificationConfig{Stop: true}
-				notifier := NewNotifier(cfg)
+				notifier := notification.NewNotifier(cfg)
 				var mu sync.Mutex
 				var calls []string
-				notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (dispatchResult, error) {
+				notifier.SetBackend(func(_ context.Context, _ int, _, _, subtitle string) (bool, error) {
 					mu.Lock()
 					calls = append(calls, subtitle)
 					mu.Unlock()
-					return deliveredResult(interactionUnavailable), nil
-				}
+					return false, nil
+				})
 				h := NewHandler(guard, notifier)
 
 				tc.seed(h)

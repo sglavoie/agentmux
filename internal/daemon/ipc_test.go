@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -23,10 +24,10 @@ func startTestServer(t *testing.T) string {
 	socketPath := filepath.Join(dir, "d.sock")
 
 	guard := NewStateGuard(time.Hour)
-	notifier := NewNotifier(&config.NotificationConfig{})
-	notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (dispatchResult, error) {
-		return deliveredResult(interactionUnavailable), nil
-	}
+	notifier := notification.NewNotifier(&config.NotificationConfig{})
+	notifier.SetBackend(func(_ context.Context, _ int, _, _, _ string) (bool, error) {
+		return false, nil
+	})
 	handler := NewHandler(guard, notifier)
 
 	server, err := NewServer(socketPath, handler)
@@ -191,10 +192,10 @@ func TestIPC_StateQueryWatchdogRoundtrip(t *testing.T) {
 	socketPath := filepath.Join(dir, "d.sock")
 
 	guard := NewStateGuard(time.Hour)
-	notifier := NewNotifier(&config.NotificationConfig{})
-	notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (dispatchResult, error) {
-		return deliveredResult(interactionUnavailable), nil
-	}
+	notifier := notification.NewNotifier(&config.NotificationConfig{})
+	notifier.SetBackend(func(_ context.Context, _ int, _, _, _ string) (bool, error) {
+		return false, nil
+	})
 	handler := NewHandler(guard, notifier)
 	handler.SetStaleThresholds(map[string]time.Duration{
 		"active":   10 * time.Minute,
@@ -254,10 +255,10 @@ func TestIPC_ShutdownRequest(t *testing.T) {
 	// the server to come up and respond to queries — idle test is covered at
 	// the unit level via daemon_test.go).
 	guard := NewStateGuard(time.Hour)
-	notifier := NewNotifier(&config.NotificationConfig{})
-	notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (dispatchResult, error) {
-		return deliveredResult(interactionUnavailable), nil
-	}
+	notifier := notification.NewNotifier(&config.NotificationConfig{})
+	notifier.SetBackend(func(_ context.Context, _ int, _, _, _ string) (bool, error) {
+		return false, nil
+	})
 	handler := NewHandler(guard, notifier)
 
 	server, err := NewServer(socketPath, handler)

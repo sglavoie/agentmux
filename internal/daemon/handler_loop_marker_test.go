@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -129,15 +130,15 @@ func TestHandler_LoopMarkerAppendsRingBufferEntry(t *testing.T) {
 // and permission events. The marker is silent by design.
 func TestHandler_LoopMarkerSuppressesNotifications(t *testing.T) {
 	cfg := &config.NotificationConfig{Stop: true, Permission: true}
-	notifier := NewNotifier(cfg)
+	notifier := notification.NewNotifier(cfg)
 	var mu sync.Mutex
 	var calls []string
-	notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (dispatchResult, error) {
+	notifier.SetBackend(func(_ context.Context, _ int, _, _, subtitle string) (bool, error) {
 		mu.Lock()
 		calls = append(calls, subtitle)
 		mu.Unlock()
-		return deliveredResult(interactionUnavailable), nil
-	}
+		return false, nil
+	})
 	h := NewHandler(NewStateGuard(time.Hour), notifier)
 
 	resp := h.Handle(protocol.Request{

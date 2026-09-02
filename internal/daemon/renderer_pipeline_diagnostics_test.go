@@ -212,7 +212,7 @@ func TestRenderWorkerShutdownPersistsQueuedStageTraces(t *testing.T) {
 }
 
 func TestRendererCoalescesBoundedCausalIDsAndPersistsFailure(t *testing.T) {
-	h := newTestHandler()
+	h, notifyCfg := newTestHandlerWithNotificationConfig()
 	fake := &fakeKittyClient{}
 	h.SetKittyClient(fake)
 	fake.windows = fakeOSWindowsWithTab(42, "W:api")
@@ -275,7 +275,7 @@ func TestRendererCoalescesBoundedCausalIDsAndPersistsFailure(t *testing.T) {
 		t.Fatalf("coalesced primary IDs = %s/%s, want first coalesced trace/request", coalesced.TraceID, coalesced.RequestID)
 	}
 	disableStopFailure := false
-	h.notifier.cfg.StopFailure = &disableStopFailure
+	notifyCfg.StopFailure = &disableStopFailure
 	fake.mu.Lock()
 	fake.setUserVarsErr = errors.New("kitty unavailable")
 	fake.mu.Unlock()

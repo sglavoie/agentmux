@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -25,10 +26,10 @@ func newTestServerWithRef(t *testing.T) (string, *Server) {
 	socketPath := filepath.Join(dir, "d.sock")
 
 	guard := NewStateGuard(time.Hour)
-	notifier := NewNotifier(&config.NotificationConfig{})
-	notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (dispatchResult, error) {
-		return deliveredResult(interactionUnavailable), nil
-	}
+	notifier := notification.NewNotifier(&config.NotificationConfig{})
+	notifier.SetBackend(func(_ context.Context, _ int, _, _, _ string) (bool, error) {
+		return false, nil
+	})
 	handler := NewHandler(guard, notifier)
 
 	server, err := NewServer(socketPath, handler)

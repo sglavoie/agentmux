@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
@@ -28,7 +29,7 @@ type kittyTitleClient interface {
 // Handler processes daemon requests.
 type Handler struct {
 	guard    *StateGuard
-	notifier *Notifier
+	notifier *notification.Notifier
 	// decisionJournal receives complete sanitized core decision records after
 	// the in-memory SessionEvent has been finalized. Nil keeps diagnostics
 	// disabled and every write remains fail-open.
@@ -39,7 +40,7 @@ type Handler struct {
 	captureMaintenanceMu     sync.Mutex
 	lastCaptureMaintenanceAt time.Time
 	asyncMu                  sync.Mutex
-	notificationEffects      map[string]NotificationDisposition
+	notificationEffects      map[string]notification.NotificationDisposition
 	notificationEffectOrder  []string
 
 	// startedAt records the daemon start time so health queries can report
@@ -354,7 +355,7 @@ const maxEventsPerWindow = 5000
 // reducer's trailing-event grace defaults to the guard duration so legacy
 // guard semantics and reducer suppression agree; daemon.Run overrides the
 // full threshold set via SetReducerConfig.
-func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
+func NewHandler(guard *StateGuard, notifier *notification.Notifier) *Handler {
 	var cfg state.ReducerConfig
 	if guard != nil {
 		cfg.GuardDuration = int64(guard.duration / time.Second)
@@ -393,7 +394,7 @@ func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 		hookSilenceIdle:                make(map[string]*accountIdle),
 		windowMetadata:                 make(map[int]protocol.WindowDebugMetadata),
 		windowTombstones:               make(map[int]time.Time),
-		notificationEffects:            make(map[string]NotificationDisposition),
+		notificationEffects:            make(map[string]notification.NotificationDisposition),
 	}
 	if notifier != nil {
 		notifier.SetObserver(h.recordNotificationDispositionBounded)

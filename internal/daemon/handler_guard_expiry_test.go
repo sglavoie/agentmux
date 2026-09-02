@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -29,10 +30,10 @@ func TestHandler_ActiveSuppressedWithinTerminalGrace(t *testing.T) {
 		t.Run(terminal, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				guard := NewStateGuard(time.Hour) // grace mirrors the guard: 3600s
-				notifier := NewNotifier(&config.NotificationConfig{})
-				notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (dispatchResult, error) {
-					return deliveredResult(interactionUnavailable), nil
-				}
+				notifier := notification.NewNotifier(&config.NotificationConfig{})
+				notifier.SetBackend(func(_ context.Context, _ int, _, _, _ string) (bool, error) {
+					return false, nil
+				})
 				h := NewHandler(guard, notifier)
 
 				h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: terminal})
@@ -79,10 +80,10 @@ func TestHandler_ActiveSelfHealsAfterTerminalGraceExpiry(t *testing.T) {
 		t.Run(terminal, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				guard := NewStateGuard(time.Second) // grace mirrors the guard: 1s
-				notifier := NewNotifier(&config.NotificationConfig{})
-				notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (dispatchResult, error) {
-					return deliveredResult(interactionUnavailable), nil
-				}
+				notifier := notification.NewNotifier(&config.NotificationConfig{})
+				notifier.SetBackend(func(_ context.Context, _ int, _, _, _ string) (bool, error) {
+					return false, nil
+				})
 				h := NewHandler(guard, notifier)
 
 				h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: terminal})

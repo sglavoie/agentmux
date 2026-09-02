@@ -1,4 +1,4 @@
-package daemon
+package notification
 
 // Permission debouncing state and logic for the Notifier.
 
@@ -49,6 +49,24 @@ func (n *Notifier) cancelPendingLocked(windowID int, reason string) (Notificatio
 		return NotificationDisposition{Trace: pending.trace, WindowID: windowID, Action: "permission", Stage: "decision", Outcome: "cancelled", Reason: reason}, true
 	}
 	return NotificationDisposition{}, false
+}
+
+// CancelPendingDisposition removes any pending permission notification for
+// windowID and returns its disposition without invoking the observer. The
+// daemon's process-exit and codex clear paths hold their own locks while they
+// decide to cancel, so they publish the disposition later via EmitDisposition.
+func (n *Notifier) CancelPendingDisposition(windowID int) (NotificationDisposition, bool) {
+	return n.cancelPending(windowID)
+}
+
+// HasPending reports whether a debounced permission notification is still
+// scheduled for windowID. It is the read half of the bookkeeping PurgeWindow
+// releases when Kitty stops reporting a window.
+func (n *Notifier) HasPending(windowID int) bool {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	_, ok := n.pending[windowID]
+	return ok
 }
 
 // cancelPending removes any pending permission notification for windowID and

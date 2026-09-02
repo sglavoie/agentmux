@@ -1,52 +1,14 @@
-package daemon
+package notification
 
 import (
 	"context"
-	"errors"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
-
-func TestNotificationDispatchFailurePersistsTerminalJournalOutcome(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		n := NewNotifier(&config.NotificationConfig{Stop: true})
-		n.dispatch = func(context.Context, int, string, string, string) (dispatchResult, error) {
-			return dispatchResult{}, errors.New("backend unavailable")
-		}
-		h := NewHandler(NewStateGuard(time.Hour), n)
-		journal, err := diagnostics.NewJournal(diagnostics.PathsForRoot(t.TempDir()), diagnostics.JournalOptions{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		h.setDecisionJournal(journal)
-
-		h.maybeNotifyTraced(42, "W:api", "work", "stop", false, NotificationTrace{
-			TraceID: "trace-notify-fail", RequestID: "request-notify-fail",
-		})
-		synctest.Wait()
-
-		records, err := journal.Read(context.Background(), diagnostics.Selector{
-			TraceID: "trace-notify-fail", Stages: []string{"daemon.notification.dispatch"},
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		found := false
-		for _, record := range records {
-			if record.Outcome == "failed" && record.Reason == "send_failed" {
-				found = true
-			}
-		}
-		if !found {
-			t.Fatalf("journal lacks terminal notification failure: %+v", records)
-		}
-	})
-}
 
 func TestAlerterArgs_UsesDoubleDashFlags(t *testing.T) {
 	got := alerterArgs("W:api", "Session stopped")

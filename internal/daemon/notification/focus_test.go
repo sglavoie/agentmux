@@ -1,4 +1,4 @@
-package daemon
+package notification
 
 import (
 	"context"
@@ -51,6 +51,11 @@ func (f *fakeFocusClient) snapshot() ([]string, []string) {
 	windows := append([]string(nil), f.windows...)
 	return tabs, windows
 }
+
+// syntheticProfileWindowID stands in for the daemon's hook-silence dedup key.
+// Real Kitty window IDs are positive, so the watchdog derives a negative
+// synthetic ID per profile; the notifier must never treat one as a pane.
+const syntheticProfileWindowID = -424242
 
 func focusTestWindows(ids ...int) []kitty.OSWindow {
 	windows := make([]kitty.Window, 0, len(ids))
@@ -147,8 +152,7 @@ func TestNotifier_FocusOnClick_HookSilenceIsInformational(t *testing.T) {
 		n.SetFocus(focus)
 		calls.setClickResult(true)
 
-		synthID := hookSilenceWindowID("work")
-		n.MaybeNotify(synthID, "work", "work", "hook_silence", false)
+		n.MaybeNotify(syntheticProfileWindowID, "work", "work", "hook_silence", false)
 		synctest.Wait()
 
 		tabs, windows := focus.snapshot()

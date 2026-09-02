@@ -1,4 +1,4 @@
-package daemon
+package notification
 
 // Strict interactive macOS notifications via Alerter 26.x or newer.
 
@@ -86,6 +86,34 @@ func deliveredResult(interaction interactionOutcome) dispatchResult {
 // dispatchers. The Alerter backend ignores them; click focus uses the
 // socket-aware NotificationTarget retained by Notifier.runDispatch.
 type dispatchFn func(ctx context.Context, windowID int, account, title, subtitle string) (dispatchResult, error)
+
+// Backend shows one notification and reports whether the user clicked it. A
+// non-nil error means delivery itself failed; a nil error means the
+// notification was shown and `clicked` is its terminal interaction.
+type Backend func(ctx context.Context, windowID int, account, title, subtitle string) (clicked bool, err error)
+
+// SetBackend replaces the Alerter backend selected at construction. It is the
+// seam the daemon's handler, probe, and lifecycle tests use to observe
+// notification decisions without spawning a real macOS alert; a nil backend
+// makes the notifier behave as if no compatible Alerter were installed.
+func (n *Notifier) SetBackend(backend Backend) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if backend == nil {
+		n.dispatch = nil
+		return
+	}
+	n.dispatch = func(ctx context.Context, windowID int, account, title, subtitle string) (dispatchResult, error) {
+		clicked, err := backend(ctx, windowID, account, title, subtitle)
+		if err != nil {
+			return dispatchResult{}, err
+		}
+		if clicked {
+			return deliveredResult(interactionClicked), nil
+		}
+		return deliveredResult(interactionUnavailable), nil
+	}
+}
 
 // dispatcher bundles a backend's dispatch function with the timeout the
 // runDispatch goroutine should use. Bundling avoids a mismatch where the

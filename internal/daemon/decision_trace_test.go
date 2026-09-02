@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -321,8 +322,8 @@ func TestDuplicateReplayExportOmitsNotificationCausality(t *testing.T) {
 		t.Fatalf("first response = %+v, err = %v", first, err)
 	}
 
-	server.handler.recordNotificationDisposition(NotificationDisposition{
-		Trace: NotificationTrace{
+	server.handler.recordNotificationDisposition(notification.NotificationDisposition{
+		Trace: notification.NotificationTrace{
 			TraceID: request.TraceID, RequestID: request.RequestID,
 		},
 		WindowID: request.WindowID,

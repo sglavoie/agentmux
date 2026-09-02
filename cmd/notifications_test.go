@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -29,8 +29,8 @@ func TestNotificationsTestCommandConfirmsDelivery(t *testing.T) {
 	notificationsLoadConfig = func() (*config.Config, error) {
 		return &config.Config{}, nil
 	}
-	notificationsTestDelivery = func(context.Context, *config.NotificationConfig) (daemon.NotificationDeliveryTestResult, error) {
-		return daemon.NotificationDeliveryTestResult{
+	notificationsTestDelivery = func(context.Context, *config.NotificationConfig) (notification.NotificationDeliveryTestResult, error) {
+		return notification.NotificationDeliveryTestResult{
 			Capability:  protocol.NotificationCapability{Backend: "alerter", Available: true, Interactive: true},
 			Interaction: "interaction_timeout",
 		}, nil
@@ -50,8 +50,8 @@ func TestNotificationsTestCommandConfirmsDelivery(t *testing.T) {
 func TestNotificationsTestCommandExplainsUnconfirmedDelivery(t *testing.T) {
 	resetNotificationsTestState(t)
 	notificationsLoadConfig = func() (*config.Config, error) { return &config.Config{}, nil }
-	notificationsTestDelivery = func(context.Context, *config.NotificationConfig) (daemon.NotificationDeliveryTestResult, error) {
-		return daemon.NotificationDeliveryTestResult{}, daemon.ErrNotificationDeliveryUnconfirmed
+	notificationsTestDelivery = func(context.Context, *config.NotificationConfig) (notification.NotificationDeliveryTestResult, error) {
+		return notification.NotificationDeliveryTestResult{}, notification.ErrNotificationDeliveryUnconfirmed
 	}
 	var out bytes.Buffer
 	notificationsTestCmd.SetOut(&out)
@@ -71,8 +71,8 @@ func TestNotificationsTestCommandReturnsBackendFailure(t *testing.T) {
 	resetNotificationsTestState(t)
 	notificationsLoadConfig = func() (*config.Config, error) { return &config.Config{}, nil }
 	wantErr := errors.New("notification backend unavailable (not_found)")
-	notificationsTestDelivery = func(context.Context, *config.NotificationConfig) (daemon.NotificationDeliveryTestResult, error) {
-		return daemon.NotificationDeliveryTestResult{}, wantErr
+	notificationsTestDelivery = func(context.Context, *config.NotificationConfig) (notification.NotificationDeliveryTestResult, error) {
+		return notification.NotificationDeliveryTestResult{}, wantErr
 	}
 
 	if err := notificationsTestCmd.RunE(notificationsTestCmd, nil); !errors.Is(err, wantErr) {

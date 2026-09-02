@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -32,10 +33,10 @@ func TestHealthCarriesBuildIdentityAndMetrics(t *testing.T) {
 }
 
 func TestHealthCarriesNotificationCapabilityWithoutDegradingReadiness(t *testing.T) {
-	n := NewNotifier(&config.NotificationConfig{Stop: true})
-	n.capability = protocol.NotificationCapability{
+	n := notification.NewNotifier(&config.NotificationConfig{Stop: true})
+	n.SetCapability(protocol.NotificationCapability{
 		Enabled: true, Backend: "alerter", Reason: "not_found",
-	}
+	})
 	h := NewHandler(NewStateGuard(time.Second), n)
 	h.MarkReady()
 

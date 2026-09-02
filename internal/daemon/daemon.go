@@ -14,6 +14,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
@@ -87,7 +88,7 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 
 	guardDur := time.Duration(cfg.Defaults.GuardDuration) * time.Second
 	guard := NewStateGuard(guardDur)
-	notifier := NewNotifier(&cfg.Defaults.Notifications)
+	notifier := notification.NewNotifier(&cfg.Defaults.Notifications)
 	handler := NewHandler(guard, notifier)
 	if recorder != nil {
 		handler.setDecisionJournal(recorder.journal)
@@ -114,7 +115,7 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	// ListWindows, which a wedged Kitty could hang on before the bounded restore
 	// even runs. The bounded restore below is the authoritative initial snapshot.
 	handler.useKittyClient(kittyClient)
-	notifier.SetFocus(newKittyNotificationFocus(kittyClient))
+	notifier.SetFocus(notification.NewKittyFocus(kittyClient))
 	global, perAccount := buildStaleThresholds(cfg)
 	handler.SetStaleThresholds(global, perAccount)
 	hsGlobal, hsPerAccount := buildHookSilenceThresholds(cfg)

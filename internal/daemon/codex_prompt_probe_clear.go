@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -58,7 +59,7 @@ func (h *Handler) applyCodexClearObservation(
 	// paused before this boundary remains cancelable below; a callback that
 	// already crossed it applies first and advances the receipt before this
 	// observation can recheck freshness.
-	var pendingDisposition NotificationDisposition
+	var pendingDisposition notification.NotificationDisposition
 	var pendingCancelled bool
 	var supersededHold pendingStopHold
 	var supersededHoldDropped bool
@@ -68,7 +69,7 @@ func (h *Handler) applyCodexClearObservation(
 		h.stateMu.Unlock()
 		h.resetStopCommitMu.Unlock()
 		if pendingCancelled {
-			h.notifier.emitDisposition(pendingDisposition)
+			h.notifier.EmitDisposition(pendingDisposition)
 		}
 		if supersededHoldDropped {
 			h.recordSupersededStopHold(supersededHold)
@@ -118,7 +119,7 @@ func (h *Handler) applyCodexClearObservation(
 	// later event cannot be cleared after it has advanced the reducer receipt.
 	h.guard.TryUpdate(windowID, "user_clear", false)
 	if h.notifier != nil {
-		pendingDisposition, pendingCancelled = h.notifier.cancelPending(windowID)
+		pendingDisposition, pendingCancelled = h.notifier.CancelPendingDisposition(windowID)
 	}
 
 	if st.Reducer == nil {

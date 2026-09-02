@@ -58,9 +58,7 @@ func screenProbeMutationFingerprint(t *testing.T, h *Handler, windowID int) stri
 	got.RenderPending = h.renderQueue.pending[windowID]
 	h.renderQueue.mu.Unlock()
 	if h.notifier != nil {
-		h.notifier.mu.Lock()
-		_, got.PendingNotification = h.notifier.pending[windowID]
-		h.notifier.mu.Unlock()
+		got.PendingNotification = h.notifier.HasPending(windowID)
 	}
 
 	encoded, err := json.Marshal(got)

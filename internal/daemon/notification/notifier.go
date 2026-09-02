@@ -1,4 +1,4 @@
-package daemon
+package notification
 
 // Notification backends and click-to-focus contract.
 //
@@ -28,6 +28,13 @@ var notifyableActions = map[string]bool{
 	"elicitation":  true,
 	"stale":        true,
 	"hook_silence": true,
+}
+
+// IsNotifyableAction reports whether an action may produce a macOS
+// notification at all. The daemon's shadow path consults it before it bothers
+// building a notification target for an applied decision.
+func IsNotifyableAction(action string) bool {
+	return notifyableActions[action]
 }
 
 // notificationLabels maps action names to human-readable notification titles.
@@ -83,10 +90,10 @@ type NotificationDisposition struct {
 	ObservedAt time.Time
 }
 
-// focusClient scopes every read/write to the notification's captured socket.
+// FocusClient scopes every read/write to the notification's captured socket.
 // The production adapter wraps kitty.SubprocessClient; tests record the socket
 // directly without implementing unrelated Kitty operations.
-type focusClient interface {
+type FocusClient interface {
 	ListWindows(socket string) ([]kitty.OSWindow, error)
 	FocusTab(socket, matchExpr string) error
 	FocusWindow(socket, matchExpr string) error
@@ -96,7 +103,10 @@ type kittyNotificationFocus struct {
 	client *kitty.SubprocessClient
 }
 
-func newKittyNotificationFocus(client *kitty.SubprocessClient) *kittyNotificationFocus {
+// NewKittyFocus adapts the daemon's Kitty client to the focus contract a
+// clicked notification needs. The adapter itself stays unexported: the daemon
+// only ever hands the result straight to SetFocus.
+func NewKittyFocus(client *kitty.SubprocessClient) FocusClient {
 	return &kittyNotificationFocus{client: client}
 }
 
@@ -131,7 +141,7 @@ type Notifier struct {
 	now             func() time.Time // injectable for tests
 	dispatch        dispatchFn       // nil when compatible Alerter is unavailable; injectable for tests
 	capability      protocol.NotificationCapability
-	focus           focusClient     // optional; nil when the daemon has no Kitty client wired
+	focus           FocusClient     // optional; nil when the daemon has no Kitty client wired
 	isMuted         func(int) bool  // optional; nil treats every window as unmuted (tests + pre-wire)
 	ctx             context.Context // parent ctx for dispatch goroutines; defaults to Background until SetParentContext
 }
@@ -160,10 +170,20 @@ func (n *Notifier) Capability() protocol.NotificationCapability {
 	return n.capability
 }
 
+// SetCapability overrides the backend capability resolved at construction. It
+// is the seam the daemon's health tests use to assert that an unavailable
+// Alerter is reported without degrading readiness, which cannot be staged
+// through NewNotifier because the real probe inspects the host.
+func (n *Notifier) SetCapability(capability protocol.NotificationCapability) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.capability = capability
+}
+
 // SetFocus installs the Kitty client used to surface the originating
 // tab/window when a notification is clicked. Wiring is optional — tests
 // that omit it keep the focus path inert.
-func (n *Notifier) SetFocus(f focusClient) {
+func (n *Notifier) SetFocus(f FocusClient) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.focus = f
@@ -179,10 +199,10 @@ func (n *Notifier) SetIsMuted(fn func(int) bool) {
 	n.isMuted = fn
 }
 
-// IsMuted reports whether the configured isMuted closure marks windowID as
+// mutedWindow reports whether the configured isMuted closure marks windowID as
 // muted. Returns false when no closure is installed so tests and unwired
 // pre-Run code paths behave identically to "not muted".
-func (n *Notifier) IsMuted(windowID int) bool {
+func (n *Notifier) mutedWindow(windowID int) bool {
 	n.mu.Lock()
 	fn := n.isMuted
 	n.mu.Unlock()
@@ -210,6 +230,13 @@ func (n *Notifier) SetObserver(observer func(NotificationDisposition)) {
 	n.observerMu.Lock()
 	n.observer = observer
 	n.observerMu.Unlock()
+}
+
+// EmitDisposition reports one disposition to the installed observer. Callers
+// that cancelled a pending notification under a lock of their own use it to
+// publish that outcome once their lock is free.
+func (n *Notifier) EmitDisposition(disposition NotificationDisposition) {
+	n.emitDisposition(disposition)
 }
 
 func (n *Notifier) emitDisposition(disposition NotificationDisposition) {

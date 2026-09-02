@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
@@ -266,30 +267,30 @@ func formatUint64List(values []uint64) string {
 	return strings.Join(parts, ",")
 }
 
-func notificationTraceFromRequest(req protocol.Request) NotificationTrace {
-	return NotificationTrace{
+func notificationTraceFromRequest(req protocol.Request) notification.NotificationTrace {
+	return notification.NotificationTrace{
 		TraceID: req.TraceID, RequestID: req.RequestID,
 		SourceEventID: req.SourceEventID, Harness: req.Harness,
 		Profile: req.Account,
 	}
 }
 
-func notificationTraceFromEvent(event protocol.SessionEvent) NotificationTrace {
-	return NotificationTrace{
+func notificationTraceFromEvent(event protocol.SessionEvent) notification.NotificationTrace {
+	return notification.NotificationTrace{
 		TraceID: event.TraceID, RequestID: event.RequestID,
 		SourceEventID: event.SourceEventID, Harness: event.ProducerHarness,
 		Profile: event.Profile, SessionID: event.SessionID, RunID: event.RunID,
 	}
 }
 
-func (h *Handler) recordNotificationDispositionBounded(disposition NotificationDisposition) {
+func (h *Handler) recordNotificationDispositionBounded(disposition notification.NotificationDisposition) {
 	if h == nil {
 		return
 	}
 	h.recordNotificationDisposition(disposition)
 }
 
-func (h *Handler) recordNotificationDisposition(disposition NotificationDisposition) {
+func (h *Handler) recordNotificationDisposition(disposition notification.NotificationDisposition) {
 	if h == nil {
 		return
 	}

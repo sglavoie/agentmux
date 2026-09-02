@@ -1,4 +1,4 @@
-package daemon
+package notification
 
 // Per-action notification behaviour: which actions notify at all, what text
 // they carry, and the config flag and pipe-mode gate each one answers to. Stop

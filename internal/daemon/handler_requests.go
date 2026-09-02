@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -142,15 +143,15 @@ func (h *Handler) maybeNotify(windowID int, sessionTitle, account, action string
 	h.notifier.MaybeNotifyTarget(h.notificationTarget(windowID, account), sessionTitle, action, pipeMode)
 }
 
-func (h *Handler) maybeNotifyTraced(windowID int, sessionTitle, account, action string, pipeMode bool, trace NotificationTrace) {
+func (h *Handler) maybeNotifyTraced(windowID int, sessionTitle, account, action string, pipeMode bool, trace notification.NotificationTrace) {
 	if h.notifier == nil {
 		return
 	}
 	h.notifier.MaybeNotifyTracedTarget(h.notificationTarget(windowID, account), sessionTitle, action, pipeMode, trace)
 }
 
-func (h *Handler) notificationTarget(windowID int, account string) NotificationTarget {
-	target := NotificationTarget{WindowID: windowID, Account: account, Navigable: windowID > 0}
+func (h *Handler) notificationTarget(windowID int, account string) notification.NotificationTarget {
+	target := notification.NotificationTarget{WindowID: windowID, Account: account, Navigable: windowID > 0}
 	if windowID <= 0 {
 		return target
 	}

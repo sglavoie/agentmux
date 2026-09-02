@@ -1,4 +1,4 @@
-package daemon
+package notification
 
 // Notification backends and click-to-focus contract.
 //
@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -58,7 +59,9 @@ func (n *Notifier) MaybeNotifyTracedTarget(target NotificationTarget, sessionTit
 	if trace.TraceID == "" {
 		trace.TraceID = diagnostics.NewTraceID()
 	}
-	trace.Profile = firstNonEmpty(trace.Profile, account)
+	if trace.Profile == "" {
+		trace.Profile = account
+	}
 	emit := func(stage, outcome, reason string) {
 		n.emitDisposition(NotificationDisposition{
 			Trace: trace, WindowID: windowID, Action: action,
@@ -69,7 +72,7 @@ func (n *Notifier) MaybeNotifyTracedTarget(target NotificationTarget, sessionTit
 		emit("decision", "suppressed", "pipe_mode")
 		return
 	}
-	if n.IsMuted(windowID) {
+	if n.mutedWindow(windowID) {
 		emit("decision", "suppressed", "muted")
 		return
 	}
@@ -92,7 +95,7 @@ func (n *Notifier) MaybeNotifyTracedTarget(target NotificationTarget, sessionTit
 	// Production wires focus before accepting requests. The focusAvailable
 	// guard preserves isolated reducer tests whose intentionally incomplete
 	// handler topology has no Kitty client at all.
-	if target.Navigable && focusAvailable && !isReusableKittySocket(target.KittyListenOn) {
+	if target.Navigable && focusAvailable && !kitty.IsReusableListenAddress(target.KittyListenOn) {
 		emit("decision", "suppressed", "focus_unavailable")
 		return
 	}
@@ -211,7 +214,7 @@ func (n *Notifier) runDispatch(target NotificationTarget, title, subtitle, actio
 		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "suppressed", Reason: "focus_unavailable"})
 		return
 	}
-	if !isReusableKittySocket(target.KittyListenOn) {
+	if !kitty.IsReusableListenAddress(target.KittyListenOn) {
 		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "suppressed", Reason: "focus_unavailable"})
 		return
 	}
@@ -233,7 +236,7 @@ func (n *Notifier) runDispatch(target NotificationTarget, title, subtitle, actio
 
 var errFocusTargetStale = errors.New("notification focus target is no longer live")
 
-func (n *Notifier) focusForClick(focus focusClient, target NotificationTarget) error {
+func (n *Notifier) focusForClick(focus FocusClient, target NotificationTarget) error {
 	windowID := target.WindowID
 	windows, err := focus.ListWindows(target.KittyListenOn)
 	if err != nil {
@@ -272,6 +275,24 @@ func (n *Notifier) actionEnabled(action string) bool {
 		return n.cfg.HookSilence == nil || *n.cfg.HookSilence
 	}
 	return false
+}
+
+// MarkNotified records a dispatched notification for (windowID, action) at
+// `at`, starting its cooldown. It is the write half of the cooldown
+// bookkeeping PurgeWindow releases when Kitty stops reporting a window.
+func (n *Notifier) MarkNotified(windowID int, action string, at time.Time) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.last[notifyKey{windowID: windowID, action: action}] = at
+}
+
+// HasCooldown reports whether a cooldown entry is recorded for
+// (windowID, action), regardless of whether it has already elapsed.
+func (n *Notifier) HasCooldown(windowID int, action string) bool {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	_, ok := n.last[notifyKey{windowID: windowID, action: action}]
+	return ok
 }
 
 // ResetCooldown clears all per-action cooldowns for windowID (for testing).

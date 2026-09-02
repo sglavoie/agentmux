@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"log/slog"
 	"strings"
 	"time"
@@ -104,7 +105,7 @@ func (h *Handler) sweepHookSilence(now time.Time, windows []kitty.OSWindow, cred
 
 	for _, s := range silent {
 		if h.notifier != nil {
-			h.notifier.MaybeNotifyTarget(NotificationTarget{
+			h.notifier.MaybeNotifyTarget(notification.NotificationTarget{
 				WindowID: hookSilenceWindowID(s.account), Account: s.account,
 			}, s.account, "hook_silence", false)
 		}

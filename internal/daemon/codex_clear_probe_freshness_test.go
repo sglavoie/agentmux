@@ -187,9 +187,7 @@ func TestProbeCodexClearWindow_DiscardsObservationAfterConcurrentReducerEvent(t 
 				h.renderQueue.mu.Lock()
 				got.renderPending = h.renderQueue.pending[42]
 				h.renderQueue.mu.Unlock()
-				notifier.mu.Lock()
-				_, got.pendingNotification = notifier.pending[42]
-				notifier.mu.Unlock()
+				got.pendingNotification = notifier.HasPending(42)
 				return got
 			}
 

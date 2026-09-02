@@ -37,9 +37,9 @@ func (b *blockingProbeKittyClient) GetText(matchExpr, extent string) (string, er
 // immediately while GetText is still parked, and the error promotion lands only
 // after the read completes.
 func TestHandler_HookEventSlowProbeDoesNotDelayAck(t *testing.T) {
-	h := newTestHandler()
+	h, notifyCfg := newTestHandlerWithNotificationConfig()
 	disableStopFailure := false
-	h.notifier.cfg.StopFailure = &disableStopFailure
+	notifyCfg.StopFailure = &disableStopFailure
 	journal, err := diagnostics.NewJournal(diagnostics.PathsForRoot(t.TempDir()), diagnostics.JournalOptions{})
 	if err != nil {
 		t.Fatal(err)

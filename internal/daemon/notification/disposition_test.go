@@ -1,4 +1,4 @@
-package daemon
+package notification
 
 // Disposition reporting: every notification decision — scheduled, dispatched,
 // or suppressed with a named reason — is reported to the observer carrying the

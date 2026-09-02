@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -236,7 +237,7 @@ func (h *Handler) reduceStateUpdate(req protocol.Request, outcome applyOutcome, 
 	// reason so the event still appears exactly once. Idle/clear preservation
 	// is not logged: the legacy path already appended its own allowed event
 	// with the same preserved outcome.
-	if decision == protocol.DecisionApplied && notifyableActions[outcome.notifyAction] &&
+	if decision == protocol.DecisionApplied && notification.IsNotifyableAction(outcome.notifyAction) &&
 		st.MarkSourceEventNotified(n.SourceEventID) {
 		notify = true
 	}

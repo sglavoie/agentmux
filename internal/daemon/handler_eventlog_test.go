@@ -5,6 +5,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -170,25 +171,32 @@ func TestHandler_PruneClosedWindows_DropsAllLivePerWindowMaps(t *testing.T) {
 // the daemon's lifetime.
 func TestHandler_PruneClosedWindows_PurgesNotifierState(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		h, fake, _ := newSweepTestHandler(10 * time.Minute)
+		guard := NewStateGuard(time.Hour)
+		// A 24h debounce keeps the scheduled permission timer from firing
+		// during the test, so the assertions observe whether PurgeWindow
+		// cancelled and removed it rather than whether it elapsed.
+		notifier, _ := newTestNotifier(&config.NotificationConfig{
+			Permission: true, PermissionDebounceMs: int((24 * time.Hour).Milliseconds()),
+		})
+		h := NewHandler(guard, notifier)
+		fake := &fakeKittyClient{}
+		h.SetKittyClient(fake)
+		h.SetStaleThresholds(map[string]time.Duration{
+			"active":   10 * time.Minute,
+			"subagent": 10 * time.Minute,
+			"compact":  10 * time.Minute,
+		}, nil)
 		fake.mu.Lock()
 		fake.windows = fakeOSWindowsWithTab(1, "W:live")
 		fake.mu.Unlock()
 
-		// Seed cooldown entries for both windows and a pending permission for
-		// the soon-to-be-closed window.
-		h.notifier.mu.Lock()
-		h.notifier.last[notifyKey{windowID: 1, action: "stop"}] = time.Now()
-		h.notifier.last[notifyKey{windowID: 2, action: "stop"}] = time.Now()
-		h.notifier.last[notifyKey{windowID: 2, action: "permission"}] = time.Now()
-		// A real-looking pending entry: a timer that will never fire during
-		// the test (24h horizon) so we can observe whether PurgeWindow
-		// cancelled and removed it.
-		h.notifier.nextPendingSeq++
-		seq := h.notifier.nextPendingSeq
-		entry := pendingNotification{seq: seq, timer: time.AfterFunc(24*time.Hour, func() {})}
-		h.notifier.pending[2] = entry
-		h.notifier.mu.Unlock()
+		// Schedule a real pending permission for the soon-to-be-closed window,
+		// then seed cooldown entries for both windows. The pending entry has to
+		// come first: a recorded permission cooldown would suppress it.
+		h.notifier.MaybeNotify(2, "W:dead", "", "permission", false)
+		h.notifier.MarkNotified(1, "stop", time.Now())
+		h.notifier.MarkNotified(2, "stop", time.Now())
+		h.notifier.MarkNotified(2, "permission", time.Now())
 
 		// Seed an eventLog entry for window 2 so pruneClosedWindows sees it as
 		// a candidate to GC.
@@ -199,19 +207,17 @@ func TestHandler_PruneClosedWindows_PurgesNotifierState(t *testing.T) {
 		h.SweepStale(time.Now())
 		synctest.Wait()
 
-		h.notifier.mu.Lock()
-		defer h.notifier.mu.Unlock()
-		if _, ok := h.notifier.last[notifyKey{windowID: 1, action: "stop"}]; !ok {
-			t.Errorf("notifier.last for live window 1 dropped; want preserved")
+		if !h.notifier.HasCooldown(1, "stop") {
+			t.Errorf("notifier cooldown for live window 1 dropped; want preserved")
 		}
-		if _, ok := h.notifier.last[notifyKey{windowID: 2, action: "stop"}]; ok {
-			t.Errorf("notifier.last[w2:stop] retained; want dropped (closed window)")
+		if h.notifier.HasCooldown(2, "stop") {
+			t.Errorf("notifier cooldown w2:stop retained; want dropped (closed window)")
 		}
-		if _, ok := h.notifier.last[notifyKey{windowID: 2, action: "permission"}]; ok {
-			t.Errorf("notifier.last[w2:permission] retained; want dropped (closed window)")
+		if h.notifier.HasCooldown(2, "permission") {
+			t.Errorf("notifier cooldown w2:permission retained; want dropped (closed window)")
 		}
-		if _, ok := h.notifier.pending[2]; ok {
-			t.Errorf("notifier.pending[2] retained; want cancelled (closed window)")
+		if h.notifier.HasPending(2) {
+			t.Errorf("notifier pending permission for window 2 retained; want cancelled (closed window)")
 		}
 	})
 }

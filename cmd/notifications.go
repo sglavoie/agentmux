@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +27,7 @@ var notificationsTestCmd = &cobra.Command{
 		}
 
 		result, err := notificationsTestDelivery(commandContext(cmd), &cfg.Defaults.Notifications)
-		if errors.Is(err, daemon.ErrNotificationDeliveryUnconfirmed) {
+		if errors.Is(err, notification.ErrNotificationDeliveryUnconfirmed) {
 			return errors.New("notification delivery could not be confirmed; in System Settings → Notifications → alerter, enable notifications and select Banners or Alerts, then turn off Focus and run `amx notifications test` again")
 		}
 		if err != nil {
@@ -40,7 +40,7 @@ var notificationsTestCmd = &cobra.Command{
 
 var (
 	notificationsLoadConfig   = loadRunnableConfig
-	notificationsTestDelivery = daemon.TestNotificationDelivery
+	notificationsTestDelivery = notification.TestNotificationDelivery
 )
 
 func init() {

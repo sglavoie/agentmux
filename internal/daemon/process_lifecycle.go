@@ -11,6 +11,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -45,7 +46,7 @@ type processLifecycleCandidate struct {
 }
 
 type pendingLifecycleNotificationDisposition struct {
-	disposition NotificationDisposition
+	disposition notification.NotificationDisposition
 	cancelled   bool
 }
 
@@ -171,7 +172,7 @@ func (h *Handler) processLifecycleTick(ctx context.Context, observedAt time.Time
 		h.clearIdleSamplesForWindowLocked(candidate.windowID)
 
 		if h.notifier != nil {
-			disposition, cancelled := h.notifier.cancelPending(candidate.windowID)
+			disposition, cancelled := h.notifier.CancelPendingDisposition(candidate.windowID)
 			pendingDispositions = append(pendingDispositions, pendingLifecycleNotificationDisposition{
 				disposition: disposition,
 				cancelled:   cancelled,
@@ -225,7 +226,7 @@ func (h *Handler) processLifecycleTick(ctx context.Context, observedAt time.Time
 	// handler state. Emit cancellation dispositions only after stateMu is free.
 	for _, pending := range pendingDispositions {
 		if pending.cancelled {
-			h.notifier.emitDisposition(pending.disposition)
+			h.notifier.EmitDisposition(pending.disposition)
 		}
 	}
 	for _, dropped := range bypassedHolds {

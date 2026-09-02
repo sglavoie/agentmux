@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -20,7 +21,7 @@ type notifyCall struct {
 // callRecorder is a thread-safe collector for dispatcher invocations. The
 // notify dispatch runs in its own goroutine, so every read from the test
 // must hold the same mutex as the write — otherwise the race detector flags
-// it. Both notify_test.go and handler_test.go use this helper to avoid
+// it. Handler-level tests in this package use this helper to avoid
 // hand-rolling per-test mutex bookkeeping.
 type callRecorder struct {
 	mu          sync.Mutex
@@ -57,10 +58,10 @@ func (r *callRecorder) setClickResult(v bool) {
 	r.mu.Unlock()
 }
 
-func newTestNotifier(cfg *config.NotificationConfig) (*Notifier, *callRecorder) {
-	n := NewNotifier(cfg)
+func newTestNotifier(cfg *config.NotificationConfig) (*notification.Notifier, *callRecorder) {
+	n := notification.NewNotifier(cfg)
 	rec := &callRecorder{}
-	n.dispatch = func(_ context.Context, windowID int, account, title, subtitle string) (dispatchResult, error) {
+	n.SetBackend(func(_ context.Context, windowID int, account, title, subtitle string) (bool, error) {
 		rec.mu.Lock()
 		clicked := rec.clickResult
 		rec.mu.Unlock()
@@ -72,20 +73,29 @@ func newTestNotifier(cfg *config.NotificationConfig) (*Notifier, *callRecorder) 
 			clicked:  clicked,
 		})
 		if clicked {
-			return deliveredResult(interactionClicked), nil
+			return true, nil
 		}
-		return deliveredResult(interactionUnavailable), nil
-	}
+		return false, nil
+	})
 	return n, rec
 }
 
 func newTestHandler() *Handler {
+	h, _ := newTestHandlerWithNotificationConfig()
+	return h
+}
+
+// newTestHandlerWithNotificationConfig is newTestHandler for tests that need to
+// toggle a notification setting mid-test. The notifier keeps the returned
+// pointer, so a later write to it is observed by the next dispatch decision.
+func newTestHandlerWithNotificationConfig() (*Handler, *config.NotificationConfig) {
 	guard := NewStateGuard(time.Hour)
-	notifier := NewNotifier(&config.NotificationConfig{})
-	notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (dispatchResult, error) {
-		return deliveredResult(interactionUnavailable), nil
-	}
-	return NewHandler(guard, notifier)
+	cfg := &config.NotificationConfig{}
+	notifier := notification.NewNotifier(cfg)
+	notifier.SetBackend(func(_ context.Context, _ int, _, _, _ string) (bool, error) {
+		return false, nil
+	})
+	return NewHandler(guard, notifier), cfg
 }
 
 // newSweepTestHandler builds a Handler wired with a notifier that records

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/hookevent"
@@ -96,16 +97,16 @@ func TestProbeCodexScreenPrompts_ClearScreenKeepsStopWithTranscriptScrollback(t 
 }
 
 func TestCodexClearProbeDoesNotJournalUnderStateLock(t *testing.T) {
-	notifier := NewNotifier(&config.NotificationConfig{
+	notifier := notification.NewNotifier(&config.NotificationConfig{
 		Permission:           true,
 		PermissionDebounceMs: 60_000,
 	})
 	h := NewHandler(NewStateGuard(time.Hour), notifier)
-	notifier.MaybeNotifyTraced(42, "W:api", "work", "permission", false, NotificationTrace{
+	notifier.MaybeNotifyTraced(42, "W:api", "work", "permission", false, notification.NotificationTrace{
 		TraceID: "trace-codex-clear-pending",
 	})
 
-	observerStarted := make(chan NotificationDisposition, 1)
+	observerStarted := make(chan notification.NotificationDisposition, 1)
 	releaseObserver := make(chan struct{})
 	released := false
 	defer func() {
@@ -113,7 +114,7 @@ func TestCodexClearProbeDoesNotJournalUnderStateLock(t *testing.T) {
 			close(releaseObserver)
 		}
 	}()
-	notifier.SetObserver(func(disposition NotificationDisposition) {
+	notifier.SetObserver(func(disposition notification.NotificationDisposition) {
 		observerStarted <- disposition
 		<-releaseObserver
 	})

@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -424,7 +425,7 @@ func (h *Handler) applyAuthoritativeIdle(obs AuthoritativeIdle) bool {
 		notify = false
 	}
 	if notify {
-		h.maybeNotifyTraced(obs.WindowID, title, account, "stop", pipe, NotificationTrace{
+		h.maybeNotifyTraced(obs.WindowID, title, account, "stop", pipe, notification.NotificationTrace{
 			TraceID: obs.TraceID, SourceEventID: obs.SourceEventID,
 			Harness: obs.Harness, Profile: account, SessionID: obs.SessionID,
 		})

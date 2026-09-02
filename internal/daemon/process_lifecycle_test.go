@@ -306,10 +306,7 @@ func TestProcessLifecycleCancelsPendingPermissionNotification(t *testing.T) {
 	h := NewHandler(NewStateGuard(time.Hour), notifier)
 	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5251, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "permission", 1, false)
-	notifier.mu.Lock()
-	_, pendingBefore := notifier.pending[42]
-	notifier.mu.Unlock()
-	if !pendingBefore {
+	if !notifier.HasPending(42) {
 		t.Fatal("permission event did not schedule pending notification")
 	}
 	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing}})
@@ -317,10 +314,7 @@ func TestProcessLifecycleCancelsPendingPermissionNotification(t *testing.T) {
 	if committed := h.processLifecycleTick(context.Background(), time.Now()); committed != 1 {
 		t.Fatalf("committed = %d, want 1", committed)
 	}
-	notifier.mu.Lock()
-	_, pendingAfter := notifier.pending[42]
-	notifier.mu.Unlock()
-	if pendingAfter {
+	if notifier.HasPending(42) {
 		t.Fatal("exited process left a pending permission notification")
 	}
 	if calls.len() != 0 {

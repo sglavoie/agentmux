@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/hookevent"
@@ -19,7 +20,7 @@ const (
 	supervisorQuestionID = "00000000-0000-0000-0000-000000000011"
 )
 
-func supervisorQuestionFixture(t *testing.T, notifier *Notifier) (*Handler, aslSupervisorTarget, time.Time) {
+func supervisorQuestionFixture(t *testing.T, notifier *notification.Notifier) (*Handler, aslSupervisorTarget, time.Time) {
 	t.Helper()
 	now := time.Now().UTC().Truncate(time.Second)
 	h := NewHandler(NewStateGuard(time.Hour), notifier)
