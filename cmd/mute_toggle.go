@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"os"
-	"strconv"
-
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -30,19 +28,8 @@ func init() {
 }
 
 func runMuteToggle(_ *cobra.Command, _ []string) error {
-	return muteToggle(kitty.NewClient(kitty.NewRealRunner()),
-		resolveWindowID(muteToggleWindowID))
-}
-
-func resolveWindowID(flag int) int {
-	if flag != 0 {
-		return flag
-	}
-	if s := os.Getenv("KITTY_WINDOW_ID"); s != "" {
-		id, _ := strconv.Atoi(s)
-		return id
-	}
-	return 0
+	return muteToggle(cli.NewKittyClient(),
+		cli.WindowIDOrEnv(muteToggleWindowID))
 }
 
 func muteToggle(client kitty.KittyClient, windowID int) error {

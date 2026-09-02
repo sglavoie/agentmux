@@ -72,8 +72,25 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
 
 ### Main packages
 
-- `cmd`: Cobra surfaces, common schema-v1 JSON envelopes, safe selector errors,
-  doctor/transcript maintenance, and hidden TUI scenario commands.
+- `cmd`: Cobra surfaces, command flag parsing and text output, safe selector
+  errors, doctor/transcript maintenance, and hidden TUI scenario commands.
+- `internal/cli`: the shared bootstrap every command family runs before it does
+  its own job — how a failure becomes a process exit status (the `ExitError`
+  quiet-exit contract and the nonzero status vocabulary), how a command answers
+  a machine caller (the common schema-v1 envelope, the structured error payload,
+  and its candidate/parameter help shapes), how a command assembles the runtime
+  it acts on (the validated configuration, the Kitty client and the window the
+  CLI was invoked from, and the daemon export-client seam), and how the process
+  coordinates with itself (the `--debug`/`AMX_DEBUG` verbosity policy with the
+  logger it installs, and locating the running `amx` binary that hook commands
+  write and daemon start/restart re-execs). Command-specific flag parsing,
+  command construction, and command-specific output stay in the command
+  packages: this is not a helpers bag, and an identifier belongs here only when
+  more than one command family needs it or when it is the vocabulary that makes
+  such a contract nameable. It must never import a `cmd` package, and it reaches
+  the daemon through `internal/daemon/ipc` only — the transport, auto-start, and
+  detached-spawn policies themselves stay in `internal/daemon/ipc` and
+  `internal/daemon/process`.
 - `internal/actions`: shared typed action registry used by CLI and TUI.
 - `internal/conversation`: canonical `(harness, session_id)` identity.
 - `internal/session`: Kitty-backed lifecycle, exact live-owner resolution, and

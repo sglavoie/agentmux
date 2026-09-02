@@ -3,8 +3,8 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	ccerrors "github.com/sglavoie/agentmux/internal/errors"
 	"github.com/sglavoie/agentmux/internal/indicator"
 	"github.com/spf13/cobra"
@@ -36,11 +36,11 @@ For hooks running inside Kitty, KITTY_WINDOW_ID must be set in the environment
 (provided automatically by harness hooks), or supplied via --window-id.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		amxBin, err := os.Executable()
+		// Non-fatal: on failure AmxBinary yields the bare command name and the
+		// hook proceeds without a resolvable auto-start binary.
+		amxBin, err := cli.AmxBinary()
 		if err != nil {
-			ccerrors.Print(fmt.Errorf("resolving amx binary: %w", err))
-			// Non-fatal: proceed without auto-start.
-			amxBin = "amx"
+			ccerrors.Print(err)
 		}
 		result := runHookIndicator(args[0], hookWindowID, hookHarness, amxBin, indicator.DeliveryOptions{
 			RequestID: hookRequestID,
@@ -55,7 +55,7 @@ For hooks running inside Kitty, KITTY_WINDOW_ID must be set in the environment
 			if result.Retryable {
 				code = 75
 			}
-			return &ExitError{
+			return &cli.ExitError{
 				Code:  code,
 				Err:   fmt.Errorf("hook delivery %s: %s", result.Status, result.Reason),
 				Quiet: hookJSON,

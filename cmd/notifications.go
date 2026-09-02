@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/spf13/cobra"
 )
@@ -39,7 +40,7 @@ var notificationsTestCmd = &cobra.Command{
 }
 
 var (
-	notificationsLoadConfig   = loadRunnableConfig
+	notificationsLoadConfig   = cli.LoadRunnableConfig
 	notificationsTestDelivery = notification.TestNotificationDelivery
 )
 

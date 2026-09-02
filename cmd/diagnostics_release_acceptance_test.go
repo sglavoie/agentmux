@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
@@ -190,7 +191,7 @@ func TestAcceptanceDiagnosticPipeline(t *testing.T) {
 	eventsBeforeOverLimit := len(beforeOverLimit.EventsByWindow[42])
 	overLimitPayload := acceptancePaddedPayload(t, (1<<20)+1, map[string]any{"session_id": "must-not-reach-daemon"})
 	strictResult, strictErr := runAcceptanceHookCommandMode(t, "PreToolUse", "acceptance-over-limit-strict", "claude", overLimitPayload, true)
-	var exitErr *ExitError
+	var exitErr *cli.ExitError
 	if !errors.As(strictErr, &exitErr) || exitErr.Code != 2 || strictResult.Status != indicator.DeliveryPermanentFailure || strictResult.Reason != "payload_oversized" {
 		t.Fatalf("strict over-limit result = %+v error=%#v, want permanent failure exit 2", strictResult, strictErr)
 	}

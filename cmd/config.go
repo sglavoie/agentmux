@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/debugger"
 	ccerrors "github.com/sglavoie/agentmux/internal/errors"
@@ -171,7 +172,7 @@ var configValidateCmd = &cobra.Command{
 	Use:   "validate",
 	Short: "Validate config.toml and project directories",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := loadRunnableConfig()
+		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {
 			ccerrors.Print(err)
 			return err
@@ -226,14 +227,14 @@ var configHooksSyncCmd = &cobra.Command{
 	Short: "Sync Agent Mux hooks for configured harness profiles",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := loadRunnableConfig()
+		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {
 			ccerrors.Print(err)
 			return err
 		}
-		bin, err := os.Executable()
+		bin, err := cli.AmxBinary()
 		if err != nil {
-			return fmt.Errorf("resolving amx binary: %w", err)
+			return err
 		}
 		filter := ""
 		if len(args) > 0 {
@@ -275,14 +276,14 @@ var configHooksStatusCmd = &cobra.Command{
 	Use:   "hooks-status",
 	Short: "Show hook sync and activation status per profile",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := loadRunnableConfig()
+		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {
 			ccerrors.Print(err)
 			return err
 		}
-		bin, err := os.Executable()
+		bin, err := cli.AmxBinary()
 		if err != nil {
-			return fmt.Errorf("resolving amx binary: %w", err)
+			return err
 		}
 		report := debugger.InspectHooks(cfg, bin, time.Now())
 		out := cmd.OutOrStdout()

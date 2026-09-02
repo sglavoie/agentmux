@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	ccerrors "github.com/sglavoie/agentmux/internal/errors"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -10,8 +11,8 @@ import (
 )
 
 var (
-	resortLoadConfig = loadRunnableConfig
-	resortNewClient  = func() kitty.KittyClient { return kitty.NewClient(kitty.NewRealRunner()) }
+	resortLoadConfig = cli.LoadRunnableConfig
+	resortNewClient  = func() kitty.KittyClient { return cli.NewKittyClient() }
 	resortSessions   = session.Resort
 )
 

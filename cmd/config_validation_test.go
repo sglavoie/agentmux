@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/cli"
 )
 
 func TestConfigValidateCommandWritesToCommandOutput(t *testing.T) {
@@ -124,14 +126,14 @@ func TestLoadRunnableConfigRejectsDuplicateProfiles(t *testing.T) {
 	}
 	t.Setenv("amx_CONFIG", path)
 
-	_, err := loadRunnableConfig()
+	_, err := cli.LoadRunnableConfig()
 	if err == nil {
-		t.Fatal("loadRunnableConfig error = nil; want duplicate profile validation error")
+		t.Fatal("cli.LoadRunnableConfig error = nil; want duplicate profile validation error")
 	}
 	msg := err.Error()
 	for _, want := range []string{"duplicate profile name", "unique launch ID", "vta-claude", "vta-codex"} {
 		if !strings.Contains(msg, want) {
-			t.Fatalf("loadRunnableConfig error missing %q:\n%s", want, msg)
+			t.Fatalf("cli.LoadRunnableConfig error missing %q:\n%s", want, msg)
 		}
 	}
 }

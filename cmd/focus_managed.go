@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/spf13/cobra"
@@ -45,10 +46,10 @@ func init() {
 
 func runFocusManaged(windowID, direction int) error {
 	if windowID == 0 {
-		windowID = windowIDFromEnv()
+		windowID = cli.WindowIDFromEnv()
 	}
 
-	client := kitty.NewClient(kitty.NewRealRunner())
+	client := cli.NewKittyClient()
 	return focusManagedTab(client, windowID, direction)
 }
 

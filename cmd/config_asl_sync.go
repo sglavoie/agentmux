@@ -31,12 +31,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
-
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/atomicfile"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
+	"github.com/spf13/cobra"
 )
 
 // aslSyncProbeTimeout bounds one pairing survey. The survey walks every plan in
@@ -230,7 +230,7 @@ func runConfigASLSync(cmd *cobra.Command) error {
 
 	resolution, err := aslSyncResolve(candidate)
 	if err != nil {
-		return commandFailure(cmd, jsonOut, codeASLNotFound, fmt.Errorf(
+		return cli.CommandFailure(cmd, jsonOut, codeASLNotFound, fmt.Errorf(
 			"%w\nremediation: install agent-session-loop, or pass --command with the path to its executable", err))
 	}
 	report.Executable = resolution.Executable
@@ -242,17 +242,17 @@ func runConfigASLSync(cmd *cobra.Command) error {
 	// move between them.
 	survey, err := aslSyncProbe(context.Background(), resolution.Executable, false, aslSyncProbeTimeout)
 	if err != nil {
-		return commandFailure(cmd, jsonOut, codeASLProbeFailed, fmt.Errorf(
+		return cli.CommandFailure(cmd, jsonOut, codeASLProbeFailed, fmt.Errorf(
 			"%s could not be surveyed: %w\nremediation: run `%s agent-mux pairing` directly to see why",
 			resolution.Executable, err, resolution.Executable))
 	}
 	applySurveyToReport(&report, survey)
 
 	if err := checkASLContract(survey); err != nil {
-		return commandFailure(cmd, jsonOut, codeASLContractMismatch, err)
+		return cli.CommandFailure(cmd, jsonOut, codeASLContractMismatch, err)
 	}
 	if !survey.StateRootPresent && survey.Reason == "state-root-error" {
-		return commandFailure(cmd, jsonOut, codeASLStateRoot, fmt.Errorf(
+		return cli.CommandFailure(cmd, jsonOut, codeASLStateRoot, fmt.Errorf(
 			"the agent-session-loop state root %s is unusable: %s\nremediation: fix its permissions, or point ASL at a readable root, then re-run",
 			survey.StateRoot, survey.Error))
 	}
@@ -262,7 +262,7 @@ func runConfigASLSync(cmd *cobra.Command) error {
 	// is stopped. Stopping a run to complete a pairing is never this command's
 	// decision.
 	if len(survey.ActiveIncompatibleRuns) > 0 {
-		return commandFailure(cmd, jsonOut, codeASLActiveRuns, errors.New(activeRunRefusal(survey)))
+		return cli.CommandFailure(cmd, jsonOut, codeASLActiveRuns, errors.New(activeRunRefusal(survey)))
 	}
 
 	// Preflight step 6: the daemon. Reachability is recorded rather than
@@ -279,7 +279,7 @@ func runConfigASLSync(cmd *cobra.Command) error {
 	// Past here the command mutates. Everything it changes is captured first.
 	previous, previousExisted, err := readConfigBytes(report.ConfigPath)
 	if err != nil {
-		return commandFailure(cmd, jsonOut, codeASLConfigWrite, err)
+		return cli.CommandFailure(cmd, jsonOut, codeASLConfigWrite, err)
 	}
 	updated, err := config.ApplyASLPairing(previous, config.ASLPairing{
 		Command:   resolution.Executable,
@@ -289,34 +289,34 @@ func runConfigASLSync(cmd *cobra.Command) error {
 	if err != nil {
 		var ambiguous *config.ErrASLTableAmbiguous
 		if errors.As(err, &ambiguous) {
-			return commandFailure(cmd, jsonOut, codeASLConfigAmbiguous, fmt.Errorf(
+			return cli.CommandFailure(cmd, jsonOut, codeASLConfigAmbiguous, fmt.Errorf(
 				"%w\nremediation: %s", err, ambiguous.Remediation))
 		}
-		return commandFailure(cmd, jsonOut, codeASLConfigWrite, err)
+		return cli.CommandFailure(cmd, jsonOut, codeASLConfigWrite, err)
 	}
 
 	if report.Migratable > 0 {
 		migrated, err := aslSyncProbe(context.Background(), resolution.Executable, true, aslSyncMigrateTimeout)
 		if err != nil {
-			return commandFailure(cmd, jsonOut, codeASLMigrationFailed, fmt.Errorf(
+			return cli.CommandFailure(cmd, jsonOut, codeASLMigrationFailed, fmt.Errorf(
 				"migrating agent-session-loop run state failed: %w\nremediation: config.toml is unchanged; re-run once the state root is writable", err))
 		}
 		if !migrated.OK {
-			return commandFailure(cmd, jsonOut, codeASLMigrationFailed, fmt.Errorf(
+			return cli.CommandFailure(cmd, jsonOut, codeASLMigrationFailed, fmt.Errorf(
 				"migrating agent-session-loop run state failed (%s): %s\nremediation: config.toml is unchanged",
 				migrated.Reason, migrated.Error))
 		}
 		// The migration pass is also a fresh survey, so a run that started
 		// during it is caught here rather than after the config is replaced.
 		if len(migrated.ActiveIncompatibleRuns) > 0 {
-			return commandFailure(cmd, jsonOut, codeASLActiveRuns, errors.New(activeRunRefusal(migrated)))
+			return cli.CommandFailure(cmd, jsonOut, codeASLActiveRuns, errors.New(activeRunRefusal(migrated)))
 		}
 		applySurveyToReport(&report, migrated)
 		report.Migrated = len(migrated.Migrations)
 	}
 
 	if err := atomicfile.Replace(report.ConfigPath, updated, 0o644); err != nil {
-		return commandFailure(cmd, jsonOut, codeASLConfigWrite, fmt.Errorf(
+		return cli.CommandFailure(cmd, jsonOut, codeASLConfigWrite, fmt.Errorf(
 			"replacing %s: %w", report.ConfigPath, err))
 	}
 	report.Applied = true

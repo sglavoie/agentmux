@@ -12,6 +12,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -81,7 +82,7 @@ func TestWorktreeCLITextAndJSONContracts(t *testing.T) {
 			SchemaVersion int             `json:"schema_version"`
 			Data          json.RawMessage `json:"data"`
 		}
-		if err := json.Unmarshal(out.Bytes(), &envelope); err != nil || envelope.SchemaVersion != JSONSchemaVersion || len(envelope.Data) == 0 {
+		if err := json.Unmarshal(out.Bytes(), &envelope); err != nil || envelope.SchemaVersion != cli.JSONSchemaVersion || len(envelope.Data) == 0 {
 			t.Fatalf("%s JSON = %q envelope=%+v err=%v", tc.command.Name(), out.String(), envelope, err)
 		}
 	}
@@ -299,13 +300,13 @@ func resetWorktreeCommandsTestState(t *testing.T) (*commandWorktreeManager, *ses
 	return manager, client
 }
 
-func decodeWorktreeJSONError(t *testing.T, body []byte, err error) JSONErrorEnvelope {
+func decodeWorktreeJSONError(t *testing.T, body []byte, err error) cli.JSONErrorEnvelope {
 	t.Helper()
-	var exitErr *ExitError
+	var exitErr *cli.ExitError
 	if !errors.As(err, &exitErr) || !exitErr.Quiet {
-		t.Fatalf("error = %#v, want quiet ExitError", err)
+		t.Fatalf("error = %#v, want quiet cli.ExitError", err)
 	}
-	var payload JSONErrorEnvelope
+	var payload cli.JSONErrorEnvelope
 	if decodeErr := json.Unmarshal(body, &payload); decodeErr != nil {
 		t.Fatalf("JSON error = %v\n%s", decodeErr, string(body))
 	}
@@ -316,7 +317,7 @@ func worktreeCommandExitStatus(err error) int {
 	if err == nil {
 		return 0
 	}
-	var exitErr *ExitError
+	var exitErr *cli.ExitError
 	if errors.As(err, &exitErr) {
 		return exitErr.Code
 	}

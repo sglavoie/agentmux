@@ -1,0 +1,24 @@
+package cli
+
+import (
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+)
+
+// DaemonExportClient is the daemon connection the investigation surfaces share:
+// `amx daemon export-events`, `amx doctor`, and `amx daemon audit` all want the
+// same two answers — the durable event snapshot and the daemon's health — and
+// all three swap the client for a fixture in their tests. Command families that
+// need a different slice of the daemon declare their own narrower contract
+// rather than widening this one.
+type DaemonExportClient interface {
+	ExportEvents(windowID int) (protocol.EventsExport, error)
+	Health() ipc.Health
+}
+
+// NewDaemonExportClient dials the running daemon. The client applies the
+// transport's own connect and auto-start policy; nothing about that policy is
+// re-decided per command family, which is why the construction lives here.
+func NewDaemonExportClient() DaemonExportClient {
+	return ipc.NewClient()
+}

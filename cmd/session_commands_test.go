@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/handoff"
@@ -174,7 +175,7 @@ func TestSessionListRefreshesFilesystemIndexAndEmitsTextAndJSON(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
 		t.Fatalf("JSON = %v\n%s", err, out.String())
 	}
-	if payload.SchemaVersion != JSONSchemaVersion || len(payload.Data.Sessions) != 1 || payload.Data.Sessions[0].ID != meta.ID {
+	if payload.SchemaVersion != cli.JSONSchemaVersion || len(payload.Data.Sessions) != 1 || payload.Data.Sessions[0].ID != meta.ID {
 		t.Fatalf("payload = %+v", payload)
 	}
 	view := payload.Data.Sessions[0]
@@ -257,7 +258,7 @@ func TestSessionContinueCLIUsesExactNativeInvocation(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
 		t.Fatalf("JSON = %v\n%s", err, out.String())
 	}
-	if payload.SchemaVersion != JSONSchemaVersion || payload.Data.Action != "session.continue" || payload.Data.Data["continuation"] != "resumed" {
+	if payload.SchemaVersion != cli.JSONSchemaVersion || payload.Data.Action != "session.continue" || payload.Data.Data["continuation"] != "resumed" {
 		t.Fatalf("payload = %+v", payload)
 	}
 	if discoverCalls != 1 {

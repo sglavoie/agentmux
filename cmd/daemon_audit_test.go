@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
@@ -47,7 +48,7 @@ func TestDaemonAuditSamplesOnCadenceAndExitsNonzeroOnViolations(t *testing.T) {
 
 	build := doctorTestBuild
 	doctorCLIBuild = func() buildinfo.Info { return build }
-	newDoctorDaemonClient = func() daemonExportClient {
+	newDoctorDaemonClient = func() cli.DaemonExportClient {
 		return &fakeDaemonExportClient{
 			health: ipc.Health{Alive: true, Ready: true, Build: &build},
 			export: func(int) (protocol.EventsExport, error) {
@@ -55,18 +56,18 @@ func TestDaemonAuditSamplesOnCadenceAndExitsNonzeroOnViolations(t *testing.T) {
 			},
 		}
 	}
-	newDoctorKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
+	newDoctorKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
 
 	var out bytes.Buffer
 	daemonAuditCmd.SetOut(&out)
 	err := runDaemonAudit(daemonAuditCmd, nil)
 
-	var exitErr *ExitError
+	var exitErr *cli.ExitError
 	if !errors.As(err, &exitErr) {
-		t.Fatalf("err = %v; want *ExitError", err)
+		t.Fatalf("err = %v; want *cli.ExitError", err)
 	}
-	if exitErr.Code != exitHealthFailure {
-		t.Fatalf("exit code = %d; want %d", exitErr.Code, exitHealthFailure)
+	if exitErr.Code != cli.ExitHealthFailure {
+		t.Fatalf("exit code = %d; want %d", exitErr.Code, cli.ExitHealthFailure)
 	}
 	got := out.String()
 	// 4s at a 2s cadence: samples at t+0, t+2, t+4.
@@ -91,13 +92,13 @@ func TestDaemonAuditCleanRunExitsZeroAndJSONReports(t *testing.T) {
 
 	build := doctorTestBuild
 	doctorCLIBuild = func() buildinfo.Info { return build }
-	newDoctorDaemonClient = func() daemonExportClient {
+	newDoctorDaemonClient = func() cli.DaemonExportClient {
 		return &fakeDaemonExportClient{
 			health: ipc.Health{Alive: true, Ready: true, Build: &build},
 			export: func(int) (protocol.EventsExport, error) { return protocol.EventsExport{}, nil },
 		}
 	}
-	newDoctorKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
+	newDoctorKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
 
 	var out bytes.Buffer
 	daemonAuditCmd.SetOut(&out)
@@ -123,7 +124,7 @@ func TestDaemonAuditOwnerMismatchTraceUsesSharedFindingsAndFails(t *testing.T) {
 
 	build := doctorTestBuild
 	doctorCLIBuild = func() buildinfo.Info { return build }
-	newDoctorDaemonClient = func() daemonExportClient {
+	newDoctorDaemonClient = func() cli.DaemonExportClient {
 		return &fakeDaemonExportClient{
 			health: ipc.Health{Alive: true, Ready: true, Build: &build},
 			export: func(int) (protocol.EventsExport, error) {
@@ -131,13 +132,13 @@ func TestDaemonAuditOwnerMismatchTraceUsesSharedFindingsAndFails(t *testing.T) {
 			},
 		}
 	}
-	newDoctorKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
+	newDoctorKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
 
 	var out bytes.Buffer
 	daemonAuditCmd.SetOut(&out)
 	err := runDaemonAudit(daemonAuditCmd, nil)
-	var exitErr *ExitError
-	if !errors.As(err, &exitErr) || exitErr.Code != exitHealthFailure || !exitErr.Quiet {
+	var exitErr *cli.ExitError
+	if !errors.As(err, &exitErr) || exitErr.Code != cli.ExitHealthFailure || !exitErr.Quiet {
 		t.Fatalf("err = %+v; want quiet JSON audit health failure", err)
 	}
 
@@ -164,18 +165,18 @@ func TestDaemonAuditUnreachableDaemonIsAViolation(t *testing.T) {
 	auditDuration = 2 * time.Second
 	auditJSON = false
 
-	newDoctorDaemonClient = func() daemonExportClient {
+	newDoctorDaemonClient = func() cli.DaemonExportClient {
 		return &fakeDaemonExportClient{health: ipc.Health{}}
 	}
-	newDoctorKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
+	newDoctorKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
 
 	var out bytes.Buffer
 	daemonAuditCmd.SetOut(&out)
 	err := runDaemonAudit(daemonAuditCmd, nil)
 
-	var exitErr *ExitError
+	var exitErr *cli.ExitError
 	if !errors.As(err, &exitErr) {
-		t.Fatalf("err = %v; want *ExitError", err)
+		t.Fatalf("err = %v; want *cli.ExitError", err)
 	}
 	if !strings.Contains(out.String(), "[daemon_unreachable]") {
 		t.Errorf("output missing daemon_unreachable finding:\n%s", out.String())

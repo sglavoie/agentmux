@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"encoding/json"
@@ -12,8 +12,11 @@ import (
 // payloads may grow additively while this value remains stable for v1 clients.
 const JSONSchemaVersion = 1
 
-// JSONEnvelope wraps successful non-interactive command output.
-type JSONEnvelope struct {
+// jsonEnvelope wraps successful non-interactive command output. Unlike the
+// error envelope it is unexported: `Data any` makes it useless as a decode
+// target, so every consumer decodes the schema-v1 success shape into a struct
+// carrying its own command payload type instead.
+type jsonEnvelope struct {
 	SchemaVersion int `json:"schema_version"`
 	Data          any `json:"data"`
 }
@@ -22,12 +25,6 @@ type JSONEnvelope struct {
 type JSONErrorEnvelope struct {
 	SchemaVersion int       `json:"schema_version"`
 	Error         JSONError `json:"error"`
-}
-
-// Selector records a user-provided entity selector.  Commands use it instead
-// of silently preferring one possible title/path match.
-type Selector struct {
-	Value string `json:"value"`
 }
 
 // Candidate is a safe, deterministic summary for an ambiguous selector.
@@ -53,13 +50,16 @@ type JSONError struct {
 	Parameters []ParameterHelp `json:"parameters,omitempty"`
 }
 
-func writeJSON(cmd *cobra.Command, data any) error {
+// WriteJSON emits the schema-v1 data envelope on the command's stdout.
+func WriteJSON(cmd *cobra.Command, data any) error {
 	encoder := json.NewEncoder(cmd.OutOrStdout())
 	encoder.SetEscapeHTML(false)
-	return encoder.Encode(JSONEnvelope{SchemaVersion: JSONSchemaVersion, Data: data})
+	return encoder.Encode(jsonEnvelope{SchemaVersion: JSONSchemaVersion, Data: data})
 }
 
-func writeJSONError(cmd *cobra.Command, payload JSONError) error {
+// WriteJSONError emits the common structured error envelope and returns the
+// quiet nonzero exit that keeps Execute from appending a redundant stderr line.
+func WriteJSONError(cmd *cobra.Command, payload JSONError) error {
 	encoder := json.NewEncoder(cmd.OutOrStdout())
 	encoder.SetEscapeHTML(false)
 	if err := encoder.Encode(JSONErrorEnvelope{SchemaVersion: JSONSchemaVersion, Error: payload}); err != nil {
@@ -68,18 +68,20 @@ func writeJSONError(cmd *cobra.Command, payload JSONError) error {
 	return &ExitError{Code: 1, Err: errors.New(payload.Message), Quiet: true}
 }
 
-// writeJSONPartial emits the normal schema-v1 data envelope for work that
+// WriteJSONPartial emits the normal schema-v1 data envelope for work that
 // completed durably before a later step failed. The quiet nonzero exit status
 // lets scripts distinguish a launch failure without throwing away the
 // finalized artifact path carried in data.
-func writeJSONPartial(cmd *cobra.Command, data any, err error) error {
-	if writeErr := writeJSON(cmd, data); writeErr != nil {
+func WriteJSONPartial(cmd *cobra.Command, data any, err error) error {
+	if writeErr := WriteJSON(cmd, data); writeErr != nil {
 		return writeErr
 	}
 	return &ExitError{Code: 1, Err: err, Quiet: true}
 }
 
-func commandFailure(cmd *cobra.Command, jsonOutput bool, code string, err error) error {
+// CommandFailure maps a command failure onto the caller's chosen output mode:
+// the bare error for text callers, the structured envelope for JSON callers.
+func CommandFailure(cmd *cobra.Command, jsonOutput bool, code string, err error) error {
 	if !jsonOutput {
 		return err
 	}
@@ -87,15 +89,18 @@ func commandFailure(cmd *cobra.Command, jsonOutput bool, code string, err error)
 	if err != nil {
 		message = err.Error()
 	}
-	return writeJSONError(cmd, JSONError{Code: code, Message: message})
+	return WriteJSONError(cmd, JSONError{Code: code, Message: message})
 }
 
-func missingParameter(cmd *cobra.Command, jsonOutput bool, name, description string) error {
+// MissingParameter reports required input that the invocation did not supply,
+// carrying the parameter description so a JSON caller can recover without an
+// interactive prompt.
+func MissingParameter(cmd *cobra.Command, jsonOutput bool, name, description string) error {
 	message := fmt.Sprintf("%s is required", name)
 	if !jsonOutput {
 		return errors.New(message)
 	}
-	return writeJSONError(cmd, JSONError{
+	return WriteJSONError(cmd, JSONError{
 		Code: "missing_parameter", Message: message,
 		Parameters: []ParameterHelp{{Name: name, Description: description, Required: true}},
 	})

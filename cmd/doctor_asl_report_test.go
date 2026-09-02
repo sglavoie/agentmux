@@ -10,6 +10,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/aslcontract"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
@@ -123,9 +124,9 @@ func TestStrictDoctorFailsForAnUnavailableRequiredIntegration(t *testing.T) {
 	if err == nil {
 		t.Fatal("runDoctor() = nil, want a strict failure")
 	}
-	var exit *ExitError
-	if !errors.As(err, &exit) || exit.Code != exitHealthFailure {
-		t.Fatalf("err = %v, want exit %d", err, exitHealthFailure)
+	var exit *cli.ExitError
+	if !errors.As(err, &exit) || exit.Code != cli.ExitHealthFailure {
+		t.Fatalf("err = %v, want exit %d", err, cli.ExitHealthFailure)
 	}
 
 	var report doctorReport

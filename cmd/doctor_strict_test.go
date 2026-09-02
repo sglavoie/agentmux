@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -47,13 +48,13 @@ func setUpDoctorFixture(t *testing.T, health ipc.Health, snapshot protocol.Event
 		health.Notification = &capability
 	}
 	doctorCLIBuild = func() buildinfo.Info { return build }
-	newDoctorDaemonClient = func() daemonExportClient {
+	newDoctorDaemonClient = func() cli.DaemonExportClient {
 		return &fakeDaemonExportClient{
 			health: health,
 			export: func(int) (protocol.EventsExport, error) { return snapshot, nil },
 		}
 	}
-	newDoctorKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
+	newDoctorKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
 	doctorLoadConfig = func() (*config.Config, error) { return &config.Config{}, nil }
 	doctorExecutable = func() (string, error) { return binary, nil }
 	doctorSocketPath = func() string { return socket }
@@ -109,12 +110,12 @@ func TestDoctorStrictExitsNonzeroOnHealthFailures(t *testing.T) {
 	doctorCmd.SetOut(&out)
 	err := runDoctor(doctorCmd, nil)
 
-	var exitErr *ExitError
+	var exitErr *cli.ExitError
 	if !errors.As(err, &exitErr) {
-		t.Fatalf("err = %v; want *ExitError", err)
+		t.Fatalf("err = %v; want *cli.ExitError", err)
 	}
-	if exitErr.Code != exitHealthFailure || exitErr.Quiet {
-		t.Fatalf("ExitError = %+v; want code %d, not quiet", exitErr, exitHealthFailure)
+	if exitErr.Code != cli.ExitHealthFailure || exitErr.Quiet {
+		t.Fatalf("cli.ExitError = %+v; want code %d, not quiet", exitErr, cli.ExitHealthFailure)
 	}
 	got := out.String()
 	for _, want := range []string{
@@ -160,8 +161,8 @@ func TestDoctorStrictFailsWhenInteractiveNotificationsUnavailable(t *testing.T) 
 	doctorCmd.SetOut(&out)
 	err := runDoctor(doctorCmd, nil)
 
-	var exitErr *ExitError
-	if !errors.As(err, &exitErr) || exitErr.Code != exitHealthFailure {
+	var exitErr *cli.ExitError
+	if !errors.As(err, &exitErr) || exitErr.Code != cli.ExitHealthFailure {
 		t.Fatalf("err = %+v; want strict health failure", err)
 	}
 	got := out.String()
@@ -225,8 +226,8 @@ func TestDoctorOwnerMismatchTraceRendersSharedFindingsAndFailsStrict(t *testing.
 	doctorCmd.SetOut(&out)
 	err := runDoctor(doctorCmd, nil)
 
-	var exitErr *ExitError
-	if !errors.As(err, &exitErr) || exitErr.Code != exitHealthFailure || exitErr.Quiet {
+	var exitErr *cli.ExitError
+	if !errors.As(err, &exitErr) || exitErr.Code != cli.ExitHealthFailure || exitErr.Quiet {
 		t.Fatalf("err = %+v; want visible strict health failure", err)
 	}
 	got := out.String()
@@ -257,9 +258,9 @@ func TestDoctorJSONEmitsStructuredReport(t *testing.T) {
 	doctorCmd.SetOut(&out)
 	err := runDoctor(doctorCmd, nil)
 
-	var exitErr *ExitError
+	var exitErr *cli.ExitError
 	if !errors.As(err, &exitErr) {
-		t.Fatalf("err = %v; want *ExitError", err)
+		t.Fatalf("err = %v; want *cli.ExitError", err)
 	}
 	if !exitErr.Quiet {
 		t.Fatalf("JSON strict exit must be quiet (complete JSON already on stdout): %+v", exitErr)
@@ -313,8 +314,8 @@ func TestDoctorJSONOwnerMismatchTraceMatchesTextSeverityAndWindow(t *testing.T) 
 	var out bytes.Buffer
 	doctorCmd.SetOut(&out)
 	err := runDoctor(doctorCmd, nil)
-	var exitErr *ExitError
-	if !errors.As(err, &exitErr) || exitErr.Code != exitHealthFailure || !exitErr.Quiet {
+	var exitErr *cli.ExitError
+	if !errors.As(err, &exitErr) || exitErr.Code != cli.ExitHealthFailure || !exitErr.Quiet {
 		t.Fatalf("err = %+v; want quiet JSON strict health failure", err)
 	}
 

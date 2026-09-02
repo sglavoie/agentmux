@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/spf13/cobra"
-
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/spf13/cobra"
 )
 
 // auditSampleInterval is the fixed cadence between invariant samples.
@@ -52,7 +52,7 @@ generations must not drift, queues must not saturate, and the daemon must run
 the same artifact as this CLI). Any failure
 observed in any sample makes the command exit nonzero.`,
 	Args: cobra.NoArgs,
-	// A violation exit is a structured result (ExitError), not a usage problem;
+	// A violation exit is a structured result (cli.ExitError), not a usage problem;
 	// Execute owns the stderr line and process status.
 	SilenceErrors: true,
 	SilenceUsage:  true,
@@ -141,8 +141,8 @@ func runDaemonAudit(cmd *cobra.Command, _ []string) error {
 	}
 
 	if failures > 0 {
-		return &ExitError{
-			Code:  exitHealthFailure,
+		return &cli.ExitError{
+			Code:  cli.ExitHealthFailure,
 			Err:   fmt.Errorf("audit: %d invariant violation(s) detected", failures),
 			Quiet: auditJSON,
 		}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -99,8 +100,8 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV10Payload(t *testing.T) 
 		},
 	}
 
-	newDaemonExportClient = func() daemonExportClient { return client }
-	newDaemonExportKitty = func() kittyWindowLister {
+	newDaemonExportClient = func() cli.DaemonExportClient { return client }
+	newDaemonExportKitty = func() cli.KittyWindowLister {
 		return fakeKittyWindowLister{
 			windows: []kitty.OSWindow{{
 				ID: 900,
@@ -256,8 +257,8 @@ func TestDaemonExportEventsCommand_SingleWindowUsesFilteredExportShape(t *testin
 		},
 	}
 
-	newDaemonExportClient = func() daemonExportClient { return client }
-	newDaemonExportKitty = func() kittyWindowLister {
+	newDaemonExportClient = func() cli.DaemonExportClient { return client }
+	newDaemonExportKitty = func() cli.KittyWindowLister {
 		return fakeKittyWindowLister{
 			windows: []kitty.OSWindow{{
 				ID: 5,
@@ -322,8 +323,8 @@ func TestDaemonExportEventsCommand_SingleWindowKeepsEmptyEventsArray(t *testing.
 		},
 	}
 
-	newDaemonExportClient = func() daemonExportClient { return client }
-	newDaemonExportKitty = func() kittyWindowLister {
+	newDaemonExportClient = func() cli.DaemonExportClient { return client }
+	newDaemonExportKitty = func() cli.KittyWindowLister {
 		return fakeKittyWindowLister{
 			windows: []kitty.OSWindow{{
 				ID: 5,
@@ -389,8 +390,8 @@ func TestDaemonExportEventsCommandSchema8ProjectsCausalFields(t *testing.T) {
 			}, nil
 		},
 	}
-	newDaemonExportClient = func() daemonExportClient { return client }
-	newDaemonExportKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
+	newDaemonExportClient = func() cli.DaemonExportClient { return client }
+	newDaemonExportKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
 	daemonExportEventsSchema = protocol.EventsExportSchemaV8
 	daemonExportEventsPretty = false
 	daemonExportEventsWindow = 42
@@ -446,8 +447,8 @@ func TestDaemonExportEventsCommandSchema9PreservesCausalFieldsWithoutProcessIden
 			}, nil
 		},
 	}
-	newDaemonExportClient = func() daemonExportClient { return client }
-	newDaemonExportKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
+	newDaemonExportClient = func() cli.DaemonExportClient { return client }
+	newDaemonExportKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
 	daemonExportEventsSchema = protocol.EventsExportSchemaV9
 	daemonExportEventsPretty = false
 	daemonExportEventsWindow = 42

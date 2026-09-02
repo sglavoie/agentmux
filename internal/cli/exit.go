@@ -1,23 +1,29 @@
-package cmd
+package cli
 
 import "fmt"
 
 // Exit status codes for the amx CLI. Public commands surface any failure as the
-// generic status 1 through Execute; the hidden harnesses (tui-test,
-// release-gate) distinguish a genuine regression from a bad invocation so
-// automation can branch on the process exit code alone.
+// generic status 1 through the root command's Execute; the diagnostic surfaces
+// and the hidden harnesses (tui-test, release-gate) distinguish a genuine
+// regression from a bad invocation so automation can branch on the process exit
+// code alone.
 const (
-	// exitScenarioFailure marks a harness run that executed cleanly but reached
+	// ExitScenarioFailure marks a harness run that executed cleanly but reached
 	// a negative verdict: a failing TUI assertion or detected layout issue, or a
 	// release gate whose pair did not pass -- including one whose tagging left a
 	// ref behind that has to be cleared before another attempt. The harness did
 	// its job; the subject failed.
-	exitScenarioFailure = 2
-	// exitInvalidInput marks a bad invocation: an unknown fixture, an unreadable
+	ExitScenarioFailure = 2
+	// ExitInvalidInput marks a bad invocation: an unknown fixture, an unreadable
 	// or malformed scenario, an isolated-config staging failure, or a release
 	// gate pointed at a missing checkout, an unreadable signing key, or a pair
 	// that is already tagged.
-	exitInvalidInput = 3
+	ExitInvalidInput = 3
+	// ExitHealthFailure is the strict-mode exit status when any
+	// failure-severity finding is present. It is shared by `amx doctor
+	// --strict`, `amx daemon audit`, and `amx debug probe`, which is why it
+	// lives beside the harness codes rather than with any one of them.
+	ExitHealthFailure = 2
 )
 
 // ExitError carries an explicit process status code out of a Cobra RunE so

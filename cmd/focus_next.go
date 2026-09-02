@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"os"
-	"strconv"
-
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/spf13/cobra"
@@ -37,14 +35,9 @@ var attentionStates = map[string]bool{
 }
 
 func runFocusNext(_ *cobra.Command, _ []string) error {
-	windowID := focusNextWindowID
-	if windowID == 0 {
-		if s := os.Getenv("KITTY_WINDOW_ID"); s != "" {
-			windowID, _ = strconv.Atoi(s)
-		}
-	}
+	windowID := cli.WindowIDOrEnv(focusNextWindowID)
 
-	client := kitty.NewClient(kitty.NewRealRunner())
+	client := cli.NewKittyClient()
 	osWindows, err := client.ListWindows()
 	if err != nil {
 		return err

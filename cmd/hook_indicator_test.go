@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/indicator"
 )
 
@@ -81,9 +82,9 @@ func TestHookIndicatorStrictJSONMapsDeliveryExitCodes(t *testing.T) {
 			var output bytes.Buffer
 			hookIndicatorCmd.SetOut(&output)
 			err := hookIndicatorCmd.RunE(hookIndicatorCmd, []string{"Stop"})
-			var exitErr *ExitError
+			var exitErr *cli.ExitError
 			if !errors.As(err, &exitErr) || exitErr.Code != tc.code || !exitErr.Quiet {
-				t.Fatalf("RunE error = %#v; want quiet ExitError code %d", err, tc.code)
+				t.Fatalf("RunE error = %#v; want quiet cli.ExitError code %d", err, tc.code)
 			}
 			if output.Len() == 0 || !bytes.Contains(output.Bytes(), []byte(`"status"`)) {
 				t.Fatalf("JSON output = %q", output.String())

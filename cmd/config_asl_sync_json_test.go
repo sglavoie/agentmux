@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 )
 
@@ -94,8 +95,8 @@ func TestJSONFailuresCarryDistinctCodes(t *testing.T) {
 			if err := json.Unmarshal(fixture.out.Bytes(), &envelope); err != nil {
 				t.Fatalf("decode %q: %v", fixture.out, err)
 			}
-			if envelope.SchemaVersion != JSONSchemaVersion {
-				t.Errorf("schema_version = %d, want %d", envelope.SchemaVersion, JSONSchemaVersion)
+			if envelope.SchemaVersion != cli.JSONSchemaVersion {
+				t.Errorf("schema_version = %d, want %d", envelope.SchemaVersion, cli.JSONSchemaVersion)
 			}
 			if envelope.Error.Code != tc.code {
 				t.Errorf("code = %q, want %q", envelope.Error.Code, tc.code)

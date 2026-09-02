@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
@@ -31,8 +32,8 @@ func TestDaemonExportEventsCommand_CurrentWindowResolvesKittyEnv(t *testing.T) {
 		},
 	}
 
-	newDaemonExportClient = func() daemonExportClient { return client }
-	newDaemonExportKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
+	newDaemonExportClient = func() cli.DaemonExportClient { return client }
+	newDaemonExportKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
 	daemonExportNow = func() time.Time { return time.Unix(700, 0) }
 	daemonExportEventsWindow = 0
 	daemonExportEventsCurrentWindow = true
@@ -80,8 +81,8 @@ func TestDaemonExportEventsCommand_OutputExpandsTilde(t *testing.T) {
 		},
 	}
 
-	newDaemonExportClient = func() daemonExportClient { return client }
-	newDaemonExportKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
+	newDaemonExportClient = func() cli.DaemonExportClient { return client }
+	newDaemonExportKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
 	daemonExportNow = func() time.Time { return time.Unix(100, 0) }
 	daemonExportEventsWindow = 0
 	daemonExportEventsCurrentWindow = false
@@ -142,8 +143,8 @@ func TestDaemonExportEventsCommand_LastTrimsPerWindowEvents(t *testing.T) {
 		},
 	}
 
-	newDaemonExportClient = func() daemonExportClient { return client }
-	newDaemonExportKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
+	newDaemonExportClient = func() cli.DaemonExportClient { return client }
+	newDaemonExportKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
 	daemonExportNow = func() time.Time { return time.Unix(100, 0) }
 	daemonExportEventsWindow = 0
 	daemonExportEventsCurrentWindow = false

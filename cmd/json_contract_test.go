@@ -3,6 +3,7 @@ package cmd
 import (
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/spf13/cobra"
 )
@@ -20,8 +21,8 @@ func TestSessionJSONCommandSurfaceIsVersioned(t *testing.T) {
 			t.Errorf("%s does not declare --json", command.CommandPath())
 		}
 	}
-	if JSONSchemaVersion != 1 {
-		t.Fatalf("unexpected JSON schema version %d", JSONSchemaVersion)
+	if cli.JSONSchemaVersion != 1 {
+		t.Fatalf("unexpected JSON schema version %d", cli.JSONSchemaVersion)
 	}
 }
 
@@ -38,8 +39,8 @@ func TestWorktreeJSONCommandSurfaceIsVersioned(t *testing.T) {
 			t.Errorf("%s does not declare --json", command.CommandPath())
 		}
 	}
-	if JSONSchemaVersion != 1 {
-		t.Fatalf("unexpected JSON schema version %d", JSONSchemaVersion)
+	if cli.JSONSchemaVersion != 1 {
+		t.Fatalf("unexpected JSON schema version %d", cli.JSONSchemaVersion)
 	}
 }
 
@@ -54,8 +55,8 @@ func TestConfigJSONCommandSurfaceIsVersioned(t *testing.T) {
 			t.Errorf("%s does not declare --json", command.CommandPath())
 		}
 	}
-	if JSONSchemaVersion != 1 {
-		t.Fatalf("unexpected JSON schema version %d", JSONSchemaVersion)
+	if cli.JSONSchemaVersion != 1 {
+		t.Fatalf("unexpected JSON schema version %d", cli.JSONSchemaVersion)
 	}
 	// Each code names a distinct condition with a distinct remediation. Adding
 	// one is additive; changing or removing one breaks a script that branches

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/actions"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
@@ -23,11 +24,11 @@ import (
 // Dependency seams keep the filesystem-backed commands testable without a
 // real user config, Kitty instance, or daemon.
 var (
-	sessionCommandsLoadConfig       = loadRunnableConfig
+	sessionCommandsLoadConfig       = cli.LoadRunnableConfig
 	sessionCommandsLoadSessionIndex = transcript.LoadIndexAt
 	sessionCommandsSessionIndexPath = transcript.IndexPath
 	sessionCommandsSessionReaders   = transcriptReaders
-	sessionCommandsNewKitty         = func() kitty.KittyClient { return kitty.NewClient(kitty.NewRealRunner()) }
+	sessionCommandsNewKitty         = func() kitty.KittyClient { return cli.NewKittyClient() }
 	sessionCommandsDaemon           = func(req protocol.Request) (protocol.Response, error) { return ipc.NewClient().Send(req) }
 	sessionCommandsNewHandoff       = func() handoff.Runner { return handoff.NewWorkflow() }
 	sessionCommandsNewWorktree      = func() worktree.Runner { return worktree.NewWorkflow() }
@@ -45,15 +46,15 @@ var sessionListCmd = &cobra.Command{
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		cfg, err := sessionCommandsLoadConfig()
 		if err != nil {
-			return commandFailure(cmd, jsonOutput, "config_error", err)
+			return cli.CommandFailure(cmd, jsonOutput, "config_error", err)
 		}
 		idx, err := loadRefreshedSessionIndex(cfg, sessionCommandsSessionReaders())
 		if err != nil {
-			return commandFailure(cmd, jsonOutput, "session_index_unavailable", err)
+			return cli.CommandFailure(cmd, jsonOutput, "session_index_unavailable", err)
 		}
 		views := sessionViews(idx.List(transcript.ListFilter{}))
 		if jsonOutput {
-			return writeJSON(cmd, sessionListData{Sessions: views})
+			return cli.WriteJSON(cmd, sessionListData{Sessions: views})
 		}
 		for _, item := range views {
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\t%s\n", item.Harness, item.Profile, item.Project, formatTime(item.LastAt), item.ID)
@@ -78,14 +79,14 @@ var sessionForkWorktreeCmd = &cobra.Command{
 		}
 		cfg, err := sessionCommandsLoadConfig()
 		if err != nil {
-			return commandFailure(cmd, jsonOutput, "config_error", err)
+			return cli.CommandFailure(cmd, jsonOutput, "config_error", err)
 		}
 		meta, err := resolveIndexedConversation(cfg, sessionCommandsSessionReaders(), identity)
 		if err != nil {
-			return commandFailure(cmd, jsonOutput, "session_index_unavailable", err)
+			return cli.CommandFailure(cmd, jsonOutput, "session_index_unavailable", err)
 		}
 		if meta == nil {
-			return commandFailure(cmd, jsonOutput, "not_found", fmt.Errorf("indexed conversation %s:%s was not found", identity.Harness, identity.SessionID))
+			return cli.CommandFailure(cmd, jsonOutput, "not_found", fmt.Errorf("indexed conversation %s:%s was not found", identity.Harness, identity.SessionID))
 		}
 		parameters := map[string]string{}
 		if allowDirty {
@@ -104,32 +105,32 @@ var sessionHandoffCmd = &cobra.Command{
 		noLaunch, _ := cmd.Flags().GetBool("no-launch")
 		profile, _ := cmd.Flags().GetString("profile")
 		if edit && jsonOutput {
-			return commandFailure(cmd, jsonOutput, "invalid_options", errors.New("--edit cannot be used with --json"))
+			return cli.CommandFailure(cmd, jsonOutput, "invalid_options", errors.New("--edit cannot be used with --json"))
 		}
 		if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
-			return missingParameter(cmd, jsonOutput, "conversation", "indexed conversation as <harness>:<session-id>")
+			return cli.MissingParameter(cmd, jsonOutput, "conversation", "indexed conversation as <harness>:<session-id>")
 		}
 		if len(args) != 1 {
-			return commandFailure(cmd, jsonOutput, "invalid_arguments", errors.New("session handoff accepts exactly one conversation selector"))
+			return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", errors.New("session handoff accepts exactly one conversation selector"))
 		}
 		if strings.TrimSpace(profile) == "" {
-			return missingParameter(cmd, jsonOutput, "profile", "target configured profile")
+			return cli.MissingParameter(cmd, jsonOutput, "profile", "target configured profile")
 		}
 		identity, ok := parseConversationSelector(args[0])
 		if !ok {
-			return commandFailure(cmd, jsonOutput, "invalid_selector", errors.New("conversation must be formatted as <harness>:<session-id>"))
+			return cli.CommandFailure(cmd, jsonOutput, "invalid_selector", errors.New("conversation must be formatted as <harness>:<session-id>"))
 		}
 		cfg, err := sessionCommandsLoadConfig()
 		if err != nil {
-			return commandFailure(cmd, jsonOutput, "config_error", err)
+			return cli.CommandFailure(cmd, jsonOutput, "config_error", err)
 		}
 		readers := sessionCommandsSessionReaders()
 		meta, err := resolveIndexedConversation(cfg, readers, identity)
 		if err != nil {
-			return commandFailure(cmd, jsonOutput, "session_index_unavailable", err)
+			return cli.CommandFailure(cmd, jsonOutput, "session_index_unavailable", err)
 		}
 		if meta == nil {
-			return commandFailure(cmd, jsonOutput, "not_found", fmt.Errorf("indexed conversation %s:%s was not found", identity.Harness, identity.SessionID))
+			return cli.CommandFailure(cmd, jsonOutput, "not_found", fmt.Errorf("indexed conversation %s:%s was not found", identity.Harness, identity.SessionID))
 		}
 		parameters := map[string]string{"profile": profile}
 		if edit {
@@ -154,14 +155,14 @@ func newConversationActionCommand(name string, actionID actions.ID, short string
 			}
 			cfg, err := sessionCommandsLoadConfig()
 			if err != nil {
-				return commandFailure(cmd, jsonOutput, "config_error", err)
+				return cli.CommandFailure(cmd, jsonOutput, "config_error", err)
 			}
 			meta, err := resolveIndexedConversation(cfg, sessionCommandsSessionReaders(), identity)
 			if err != nil {
-				return commandFailure(cmd, jsonOutput, "session_index_unavailable", err)
+				return cli.CommandFailure(cmd, jsonOutput, "session_index_unavailable", err)
 			}
 			if meta == nil {
-				return commandFailure(cmd, jsonOutput, "not_found", fmt.Errorf("indexed conversation %s:%s was not found", identity.Harness, identity.SessionID))
+				return cli.CommandFailure(cmd, jsonOutput, "not_found", fmt.Errorf("indexed conversation %s:%s was not found", identity.Harness, identity.SessionID))
 			}
 			return executeSessionAction(cmd, jsonOutput, cfg, actionID, actions.Request{Conversation: meta})
 		},
@@ -170,17 +171,17 @@ func newConversationActionCommand(name string, actionID actions.ID, short string
 
 func conversationIdentityFromArgs(cmd *cobra.Command, jsonOutput bool, name string, args []string) (conversation.Identity, error) {
 	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
-		return conversation.Identity{}, missingParameter(cmd, jsonOutput, "harness", "source harness (claude, codex, or copilot)")
+		return conversation.Identity{}, cli.MissingParameter(cmd, jsonOutput, "harness", "source harness (claude, codex, or copilot)")
 	}
 	if len(args) == 1 || strings.TrimSpace(args[1]) == "" {
-		return conversation.Identity{}, missingParameter(cmd, jsonOutput, "session-id", "indexed conversation session ID")
+		return conversation.Identity{}, cli.MissingParameter(cmd, jsonOutput, "session-id", "indexed conversation session ID")
 	}
 	if len(args) != 2 {
-		return conversation.Identity{}, commandFailure(cmd, jsonOutput, "invalid_arguments", fmt.Errorf("session %s accepts exactly a harness and session ID", name))
+		return conversation.Identity{}, cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", fmt.Errorf("session %s accepts exactly a harness and session ID", name))
 	}
 	identity, ok := conversation.New(args[0], args[1])
 	if !ok {
-		return conversation.Identity{}, commandFailure(cmd, jsonOutput, "invalid_selector", errors.New("harness and session-id must be non-empty"))
+		return conversation.Identity{}, cli.CommandFailure(cmd, jsonOutput, "invalid_selector", errors.New("harness and session-id must be non-empty"))
 	}
 	return identity, nil
 }
@@ -226,7 +227,7 @@ func executeSessionActionWithDependencies(cmd *cobra.Command, jsonOutput bool, d
 		return sessionActionCommandError(cmd, jsonOutput, result, err)
 	}
 	if jsonOutput {
-		return writeJSON(cmd, sessionActionData{Action: result.Action, Changed: result.Changed, Message: result.Message, Data: result.Data})
+		return cli.WriteJSON(cmd, sessionActionData{Action: result.Action, Changed: result.Changed, Message: result.Message, Data: result.Data})
 	}
 	if result.Message != "" {
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), result.Message)
@@ -238,7 +239,7 @@ func sessionActionCommandError(cmd *cobra.Command, jsonOutput bool, result actio
 	var partial *actions.PartialResultError
 	if errors.As(err, &partial) {
 		if jsonOutput {
-			return writeJSONPartial(cmd, sessionActionData{Action: result.Action, Changed: result.Changed, Message: result.Message, Data: result.Data}, partial)
+			return cli.WriteJSONPartial(cmd, sessionActionData{Action: result.Action, Changed: result.Changed, Message: result.Message, Data: result.Data}, partial)
 		}
 		if result.Message != "" {
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), result.Message)
@@ -250,9 +251,9 @@ func sessionActionCommandError(cmd *cobra.Command, jsonOutput bool, result actio
 	}
 	var actionErr *actions.Error
 	if errors.As(err, &actionErr) {
-		return writeJSONError(cmd, JSONError{Code: actionErr.Code, Message: actionErr.Message})
+		return cli.WriteJSONError(cmd, cli.JSONError{Code: actionErr.Code, Message: actionErr.Message})
 	}
-	return commandFailure(cmd, true, "action_failed", err)
+	return cli.CommandFailure(cmd, true, "action_failed", err)
 }
 
 func parseConversationSelector(value string) (conversation.Identity, bool) {

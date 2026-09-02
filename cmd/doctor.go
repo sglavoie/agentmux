@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
@@ -34,14 +35,10 @@ const doctorSuppressionWindow = 15 * time.Minute
 // `asl_read_only`, keep their exact names and meanings.
 const doctorReportSchemaVersion = 3
 
-// exitHealthFailure is the strict-mode exit status when any failure-severity
-// finding is present (shared with `amx daemon audit`).
-const exitHealthFailure = 2
-
 var (
-	newDoctorDaemonClient = func() daemonExportClient { return ipc.NewClient() }
-	newDoctorKitty        = func() kittyWindowLister { return kitty.NewClient(kitty.NewRealRunner()) }
-	doctorLoadConfig      = loadRunnableConfig
+	newDoctorDaemonClient = cli.NewDaemonExportClient
+	newDoctorKitty        = func() cli.KittyWindowLister { return cli.NewKittyClient() }
+	doctorLoadConfig      = cli.LoadRunnableConfig
 	doctorExecutable      = os.Executable
 	doctorSocketPath      = ipc.SocketPath
 	doctorStat            = os.Stat
@@ -96,7 +93,7 @@ var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Diagnose daemon, Kitty, hook, renderer, and invariant health",
 	Args:  cobra.NoArgs,
-	// A strict-mode health failure is a structured result (ExitError), not a
+	// A strict-mode health failure is a structured result (cli.ExitError), not a
 	// usage problem; Execute owns the stderr line and process status.
 	SilenceErrors: true,
 	SilenceUsage:  true,
@@ -275,8 +272,8 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	}
 
 	if doctorStrict && failures > 0 {
-		return &ExitError{
-			Code:  exitHealthFailure,
+		return &cli.ExitError{
+			Code:  cli.ExitHealthFailure,
 			Err:   fmt.Errorf("doctor: %d health failure(s) detected", failures),
 			Quiet: doctorJSON,
 		}

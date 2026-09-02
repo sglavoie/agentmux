@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/release"
 	"github.com/spf13/cobra"
@@ -60,7 +61,7 @@ var releaseGateCmd = &cobra.Command{
 func runReleaseGate(cmd *cobra.Command) error {
 	evidenceDir, err := releaseGateEvidenceDirectory()
 	if err != nil {
-		return &ExitError{Code: exitInvalidInput, Err: err}
+		return &cli.ExitError{Code: cli.ExitInvalidInput, Err: err}
 	}
 
 	opts := release.Options{
@@ -77,7 +78,7 @@ func runReleaseGate(cmd *cobra.Command) error {
 
 	ev, runErr := release.Run(cmd.Context(), opts)
 	if ev == nil {
-		return &ExitError{Code: exitInvalidInput, Err: runErr}
+		return &cli.ExitError{Code: cli.ExitInvalidInput, Err: runErr}
 	}
 
 	if err := writeReleaseGateResult(cmd, ev); err != nil {
@@ -89,7 +90,7 @@ func runReleaseGate(cmd *cobra.Command) error {
 	// A pair that did not pass is a gate result, not a bad invocation: the
 	// record was written and the exit code says which of the two happened.
 	if errors.Is(runErr, release.ErrGateFailed) {
-		return &ExitError{Code: exitScenarioFailure, Err: runErr, Quiet: releaseGateJSON}
+		return &cli.ExitError{Code: cli.ExitScenarioFailure, Err: runErr, Quiet: releaseGateJSON}
 	}
 	// A stranded pair tag is also a gate result rather than a bad invocation --
 	// re-running unchanged will not help until the ref is cleared. It is never
@@ -97,9 +98,9 @@ func runReleaseGate(cmd *cobra.Command) error {
 	// outside the evidence directory, and it must not be reduced to an exit code
 	// a script might ignore.
 	if errors.Is(runErr, release.ErrPartialTagging) {
-		return &ExitError{Code: exitScenarioFailure, Err: runErr}
+		return &cli.ExitError{Code: cli.ExitScenarioFailure, Err: runErr}
 	}
-	return &ExitError{Code: exitInvalidInput, Err: runErr}
+	return &cli.ExitError{Code: cli.ExitInvalidInput, Err: runErr}
 }
 
 // releaseGateEvidenceDirectory resolves where the record is written. The flag
@@ -130,7 +131,7 @@ func writeReleaseGateResult(cmd *cobra.Command, ev *release.Evidence) error {
 	if releaseGateJSON {
 		data, err := json.MarshalIndent(ev, "", "  ")
 		if err != nil {
-			return &ExitError{Code: exitInvalidInput, Err: fmt.Errorf("release-gate: encoding result: %w", err)}
+			return &cli.ExitError{Code: cli.ExitInvalidInput, Err: fmt.Errorf("release-gate: encoding result: %w", err)}
 		}
 		if _, err := out.Write(append(data, '\n')); err != nil {
 			return err

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/tui/customization"
@@ -12,7 +13,7 @@ import (
 
 var (
 	newIconPickerClient = func() kitty.KittyClient {
-		return kitty.NewClient(kitty.NewRealRunner())
+		return cli.NewKittyClient()
 	}
 	loadIconPickerConfig = config.LoadDefault
 	runIconPickerOverlay = customization.RunIconOverlay
@@ -28,7 +29,7 @@ var iconPickerCmd = &cobra.Command{
 			return nil
 		}
 
-		windowID := windowIDFromEnv()
+		windowID := cli.WindowIDFromEnv()
 		osWindows, err := client.ListWindows()
 		if err != nil {
 			return fmt.Errorf("list Kitty windows: %w", err)
@@ -58,7 +59,7 @@ func focusExistingIconPicker(client kitty.KittyClient) bool {
 	if err != nil {
 		return false
 	}
-	loc, found := kitty.FindIconPickerWindow(osWindows, windowIDFromEnv())
+	loc, found := kitty.FindIconPickerWindow(osWindows, cli.WindowIDFromEnv())
 	if !found {
 		return false
 	}

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 )
 
@@ -49,7 +50,7 @@ func TestDaemonStatusRendersASLCapability(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			resetDaemonStatusTestState(t)
 			health := ipc.Health{Alive: true, Ready: true, ASL: tc.asl}
-			newDaemonExportClient = func() daemonExportClient {
+			newDaemonExportClient = func() cli.DaemonExportClient {
 				return &fakeDaemonExportClient{health: health}
 			}
 			daemonSocketPath = func() string { return "/tmp/amx.sock" }

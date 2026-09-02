@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/tui/customization"
@@ -15,12 +16,12 @@ var colorPickerCmd = &cobra.Command{
 	Use:   "color-picker",
 	Short: "Set the current tab's color (overlay picker)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := kitty.NewClient(kitty.NewRealRunner())
+		client := cli.NewKittyClient()
 		if focusExistingColorPicker(client) {
 			return nil
 		}
 
-		windowID := windowIDFromEnv()
+		windowID := cli.WindowIDFromEnv()
 		osWindows, err := client.ListWindows()
 		if err != nil {
 			return err
@@ -41,7 +42,7 @@ func focusExistingColorPicker(client kitty.KittyClient) bool {
 	if err != nil {
 		return false
 	}
-	loc, found := kitty.FindColorPickerWindow(osWindows, windowIDFromEnv())
+	loc, found := kitty.FindColorPickerWindow(osWindows, cli.WindowIDFromEnv())
 	if !found {
 		return false
 	}

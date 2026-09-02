@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -207,7 +208,7 @@ func TestDaemonStatusCommandWritesToCommandOutput(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			resetDaemonStatusTestState(t)
 			health := tc.health
-			newDaemonExportClient = func() daemonExportClient {
+			newDaemonExportClient = func() cli.DaemonExportClient {
 				return &fakeDaemonExportClient{health: health}
 			}
 			daemonSocketPath = func() string { return "/tmp/amx.sock" }
@@ -371,8 +372,8 @@ func TestDaemonExportEventsCommand_ErrorMessageReflectsDaemonState(t *testing.T)
 					return protocol.EventsExport{}, tc.exportErr
 				},
 			}
-			newDaemonExportClient = func() daemonExportClient { return client }
-			newDaemonExportKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
+			newDaemonExportClient = func() cli.DaemonExportClient { return client }
+			newDaemonExportKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
 			daemonExportNow = func() time.Time { return time.Unix(0, 0) }
 			daemonExportEventsWindow = 0
 			daemonExportEventsCurrentWindow = false

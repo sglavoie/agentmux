@@ -17,6 +17,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/aslcontract"
 	"github.com/sglavoie/agentmux/internal/aslexport"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
@@ -129,7 +130,7 @@ func runDebugCaptureStart(cmd *cobra.Command, _ []string) error {
 	}
 	windowID := selector.WindowID
 	if windowID == 0 && selector.Harness == "" {
-		windowID = windowIDFromEnv()
+		windowID = cli.WindowIDFromEnv()
 	}
 	authorized := debugCaptureYes
 	if !authorized {

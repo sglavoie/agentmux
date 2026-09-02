@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/tui"
 	"github.com/spf13/cobra"
 )
@@ -78,28 +79,28 @@ var tuiTestFixtureCmd = &cobra.Command{
 
 // runTUITestScenarios loads and runs each scenario file in order, collecting a
 // structured result per file. A load, validation, staging, or action error is a
-// bad invocation (exitInvalidInput); a clean run with a failing assertion is a
-// scenario regression (exitScenarioFailure). Output is emitted before the
+// bad invocation (cli.ExitInvalidInput); a clean run with a failing assertion is a
+// scenario regression (cli.ExitScenarioFailure). Output is emitted before the
 // failure exit so the results are always visible.
 func runTUITestScenarios(cmd *cobra.Command, args []string) error {
 	paths, err := tuiTestScenarioPaths(args)
 	if err != nil {
-		return &ExitError{Code: exitInvalidInput, Err: err}
+		return &cli.ExitError{Code: cli.ExitInvalidInput, Err: err}
 	}
 	results := make([]tui.UITestScenarioResult, 0, len(paths))
 	for _, path := range paths {
 		sc, err := tui.LoadUITestScenario(path)
 		if err != nil {
-			return &ExitError{Code: exitInvalidInput, Err: err}
+			return &cli.ExitError{Code: cli.ExitInvalidInput, Err: err}
 		}
 		env, cleanup, err := tuiTestScenarioEnv(sc)
 		if err != nil {
-			return &ExitError{Code: exitInvalidInput, Err: err}
+			return &cli.ExitError{Code: cli.ExitInvalidInput, Err: err}
 		}
 		res, err := tui.RunUITestScenario(sc, env)
 		cleanup()
 		if err != nil {
-			return &ExitError{Code: exitInvalidInput, Err: err}
+			return &cli.ExitError{Code: cli.ExitInvalidInput, Err: err}
 		}
 		results = append(results, res)
 	}
@@ -113,7 +114,7 @@ func runTUITestScenarios(cmd *cobra.Command, args []string) error {
 	}
 
 	if tuiTestScenariosFailed(results) {
-		return &ExitError{Code: exitScenarioFailure, Quiet: true}
+		return &cli.ExitError{Code: cli.ExitScenarioFailure, Quiet: true}
 	}
 	return nil
 }
@@ -167,7 +168,7 @@ func runTUITestFixture(cmd *cobra.Command, name string) error {
 
 	obs, err := tui.RunUITestFixture(name, opts, actions)
 	if err != nil {
-		return &ExitError{Code: exitInvalidInput, Err: err}
+		return &cli.ExitError{Code: cli.ExitInvalidInput, Err: err}
 	}
 
 	if tuiTestJSON {
@@ -179,7 +180,7 @@ func runTUITestFixture(cmd *cobra.Command, name string) error {
 	}
 
 	if tuiTestObservationsHaveIssues(obs) {
-		return &ExitError{Code: exitScenarioFailure, Quiet: true}
+		return &cli.ExitError{Code: cli.ExitScenarioFailure, Quiet: true}
 	}
 	return nil
 }
@@ -309,7 +310,7 @@ func init() {
 	tuiTestFixtureCmd.Flags().StringArrayVar(&tuiTestKeys, "key", nil, "a key to press (repeatable, applied in order)")
 	// Cobra checks the executed leaf command (not the parent) before printing an
 	// error/usage line, so silence each subcommand too. Execute owns all
-	// harness error reporting and exit-code mapping via ExitError.
+	// harness error reporting and exit-code mapping via cli.ExitError.
 	for _, sub := range []*cobra.Command{tuiTestListFixturesCmd, tuiTestRunCmd, tuiTestFixtureCmd} {
 		sub.SilenceErrors = true
 		sub.SilenceUsage = true

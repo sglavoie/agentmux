@@ -15,6 +15,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/daemon/eventlog"
@@ -37,14 +38,14 @@ var daemonStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start the daemon (blocks until shutdown)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := loadRunnableConfig()
+		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {
 			ccerrors.Print(err)
 			return err
 		}
 		logger, closer, logDir, err := daemon.NewOperationalLogger(
 			cfg.Defaults.Diagnostics,
-			debugEnabled(),
+			cli.DebugEnabled(),
 			os.Getenv(process.DetachedEnv) != "1",
 		)
 		if err != nil {
@@ -221,14 +222,13 @@ var daemonRestartCmd = &cobra.Command{
 	Short: "Restart the daemon detached in the background",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c := newDaemonLifecycleClient()
-		amxBin, err := os.Executable()
-		if err != nil {
-			amxBin = "amx"
-		}
+		// A daemon that cannot be located re-execs by name off PATH; the
+		// resolution failure is not itself a reason to refuse the restart.
+		amxBin, _ := cli.AmxBinary()
 		if err := c.RestartDetached(amxBin); err != nil {
 			return err
 		}
-		_, err = fmt.Fprintln(cmd.OutOrStdout(), "daemon restarted")
+		_, err := fmt.Fprintln(cmd.OutOrStdout(), "daemon restarted")
 		return err
 	},
 }
@@ -242,23 +242,14 @@ var (
 	daemonExportEventsSchema        int
 	daemonSocketPath                = ipc.SocketPath
 	newDaemonLifecycleClient        = func() daemonLifecycleClient { return ipc.NewClient() }
-	newDaemonExportClient           = func() daemonExportClient { return ipc.NewClient() }
-	newDaemonExportKitty            = func() kittyWindowLister { return kitty.NewClient(kitty.NewRealRunner()) }
+	newDaemonExportClient           = cli.NewDaemonExportClient
+	newDaemonExportKitty            = func() cli.KittyWindowLister { return cli.NewKittyClient() }
 	daemonExportNow                 = time.Now
 )
 
 type daemonLifecycleClient interface {
 	Send(protocol.Request) (protocol.Response, error)
 	RestartDetached(amxBin string) error
-}
-
-type daemonExportClient interface {
-	ExportEvents(windowID int) (protocol.EventsExport, error)
-	Health() ipc.Health
-}
-
-type kittyWindowLister interface {
-	ListWindows() ([]kitty.OSWindow, error)
 }
 
 func daemonExportWindowIDs(snapshot protocol.EventsExport, requestedWindowID int) []int {
@@ -373,7 +364,7 @@ func buildDaemonExportPayload(snapshot protocol.EventsExport, health ipc.Health,
 }
 
 func daemonExportCurrentWindowID() (int, error) {
-	s := os.Getenv("KITTY_WINDOW_ID")
+	s := os.Getenv(cli.WindowIDEnv)
 	if s == "" {
 		return 0, fmt.Errorf("--current-window requires KITTY_WINDOW_ID to be set")
 	}

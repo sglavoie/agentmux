@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
-
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/aslcontract"
+	"github.com/sglavoie/agentmux/internal/cli"
+	"github.com/spf13/cobra"
 )
 
 // aslSyncFailure carries a structured code alongside a failure that still has a
@@ -147,12 +147,12 @@ func emitASLSyncReport(cmd *cobra.Command, jsonOut bool, report aslSyncReport, f
 		if failure != nil {
 			// The report is durable evidence of a mutation that happened and was
 			// undone, so it is emitted rather than replaced by the error alone.
-			if err := writeJSON(cmd, report); err != nil {
+			if err := cli.WriteJSON(cmd, report); err != nil {
 				return err
 			}
-			return &ExitError{Code: 1, Err: failure.err, Quiet: true}
+			return &cli.ExitError{Code: 1, Err: failure.err, Quiet: true}
 		}
-		return writeJSON(cmd, report)
+		return cli.WriteJSON(cmd, report)
 	}
 	if err := writeASLSyncText(cmd.OutOrStdout(), report); err != nil {
 		return err

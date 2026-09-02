@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/actions"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -49,7 +50,7 @@ func TestSessionForkCLIUsesPortableCopilotHandoff(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
 		t.Fatalf("JSON = %v\n%s", err, out.String())
 	}
-	if payload.SchemaVersion != JSONSchemaVersion || payload.Data.Data["continuation"] != "portable_fork" || payload.Data.Data["fork_kind"] != "portable" {
+	if payload.SchemaVersion != cli.JSONSchemaVersion || payload.Data.Data["continuation"] != "portable_fork" || payload.Data.Data["fork_kind"] != "portable" {
 		t.Fatalf("payload = %+v", payload)
 	}
 	if len(runner.requests) != 1 || runner.requests[0].TargetProfile != "work" {
@@ -121,7 +122,7 @@ func TestSessionForkWorktreeCLIRequiresConfirmationAndPassesDirtyOverride(t *tes
 	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
 		t.Fatalf("JSON = %v\n%s", err, out.String())
 	}
-	if payload.SchemaVersion != JSONSchemaVersion || payload.Data.Action != actions.ForkWorktree || payload.Data.Data["fork_kind"] != "isolated" {
+	if payload.SchemaVersion != cli.JSONSchemaVersion || payload.Data.Action != actions.ForkWorktree || payload.Data.Data["fork_kind"] != "isolated" {
 		t.Fatalf("payload = %+v", payload)
 	}
 }
@@ -189,9 +190,9 @@ func TestSessionHandoffCLICreateOnlyAndPartialJSON(t *testing.T) {
 	}
 	out.Reset()
 	err := sessionHandoffCmd.RunE(sessionHandoffCmd, []string{harness.Claude + ":" + meta.ID})
-	var exitErr *ExitError
+	var exitErr *cli.ExitError
 	if !errors.As(err, &exitErr) || !exitErr.Quiet || exitErr.Code != 1 {
-		t.Fatalf("partial handoff error = %#v, want quiet nonzero ExitError", err)
+		t.Fatalf("partial handoff error = %#v, want quiet nonzero cli.ExitError", err)
 	}
 	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
 		t.Fatalf("partial JSON = %v\n%s", err, out.String())
@@ -218,7 +219,7 @@ func TestSessionHandoffCLIRejectsEditJSON(t *testing.T) {
 	if err == nil {
 		t.Fatal("--edit --json succeeded")
 	}
-	var payload JSONErrorEnvelope
+	var payload cli.JSONErrorEnvelope
 	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
 		t.Fatalf("JSON = %v\n%s", err, out.String())
 	}
@@ -264,15 +265,15 @@ func assertSessionCommandJSONError(t *testing.T, command *cobra.Command, args []
 	t.Helper()
 	out.Reset()
 	err := command.RunE(command, args)
-	var exitErr *ExitError
+	var exitErr *cli.ExitError
 	if !errors.As(err, &exitErr) || !exitErr.Quiet {
-		t.Fatalf("error = %#v, want quiet structured ExitError", err)
+		t.Fatalf("error = %#v, want quiet structured cli.ExitError", err)
 	}
-	var payload JSONErrorEnvelope
+	var payload cli.JSONErrorEnvelope
 	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
 		t.Fatalf("JSON = %v\n%s", err, out.String())
 	}
-	if payload.SchemaVersion != JSONSchemaVersion || payload.Error.Code != wantCode {
+	if payload.SchemaVersion != cli.JSONSchemaVersion || payload.Error.Code != wantCode {
 		t.Fatalf("payload = %+v, want code %q", payload, wantCode)
 	}
 }

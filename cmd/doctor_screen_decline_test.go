@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -79,7 +80,7 @@ func setUpStuckScreenDeclineFixture(t *testing.T, snapshot protocol.EventsExport
 	build := doctorTestBuild
 	health := ipc.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build}
 	setUpDoctorFixture(t, health, snapshot)
-	newDoctorKitty = func() kittyWindowLister { return fakeKittyWindowLister{windows: windows} }
+	newDoctorKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{windows: windows} }
 }
 
 func TestDoctorStrictFailsOnPersistentScreenDecline(t *testing.T) {
@@ -90,8 +91,8 @@ func TestDoctorStrictFailsOnPersistentScreenDecline(t *testing.T) {
 	doctorCmd.SetOut(&out)
 	err := runDoctor(doctorCmd, nil)
 
-	var exitErr *ExitError
-	if !errors.As(err, &exitErr) || exitErr.Code != exitHealthFailure {
+	var exitErr *cli.ExitError
+	if !errors.As(err, &exitErr) || exitErr.Code != cli.ExitHealthFailure {
 		t.Fatalf("err = %+v; want strict health failure", err)
 	}
 	got := out.String()
@@ -238,8 +239,8 @@ func TestDoctorJSONReportsPersistentScreenDecline(t *testing.T) {
 	doctorCmd.SetOut(&out)
 	err := runDoctor(doctorCmd, nil)
 
-	var exitErr *ExitError
-	if !errors.As(err, &exitErr) || exitErr.Code != exitHealthFailure || !exitErr.Quiet {
+	var exitErr *cli.ExitError
+	if !errors.As(err, &exitErr) || exitErr.Code != cli.ExitHealthFailure || !exitErr.Quiet {
 		t.Fatalf("err = %+v; want quiet JSON strict health failure", err)
 	}
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -16,9 +17,9 @@ import (
 )
 
 var (
-	worktreeCommandsLoadConfig   = loadRunnableConfig
+	worktreeCommandsLoadConfig   = cli.LoadRunnableConfig
 	worktreeCommandsNewManager   = func() actions.WorktreeLifecycle { return worktree.NewManager() }
-	worktreeCommandsNewKitty     = func() kitty.KittyClient { return kitty.NewClient(kitty.NewRealRunner()) }
+	worktreeCommandsNewKitty     = func() kitty.KittyClient { return cli.NewKittyClient() }
 	worktreeCommandsLiveSessions = func(client kitty.KittyClient, cfg *config.Config) ([]session.RunningSession, error) {
 		running, _, err := session.ListWithConfig(client, cfg)
 		return running, err
@@ -41,7 +42,7 @@ var worktreeListCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		if len(args) != 0 {
-			return commandFailure(cmd, jsonOutput, "invalid_arguments", errors.New("worktree list accepts no arguments"))
+			return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", errors.New("worktree list accepts no arguments"))
 		}
 		result, err := executeWorktreeAction(cmd, actions.WorktreeList, actions.Request{})
 		if err != nil {
@@ -50,7 +51,7 @@ var worktreeListCmd = &cobra.Command{
 		views, _ := result.Data["worktrees"].([]actions.WorktreeView)
 		warnings, _ := result.Data["warnings"].([]string)
 		if jsonOutput {
-			return writeJSON(cmd, worktreeListData{Worktrees: nonNilWorktreeViews(views), Warnings: nonNilStrings(warnings)})
+			return cli.WriteJSON(cmd, worktreeListData{Worktrees: nonNilWorktreeViews(views), Warnings: nonNilStrings(warnings)})
 		}
 		for _, view := range views {
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\t%s\n", view.ID, displayWorktreeProject(view), view.Branch, worktreeState(view), view.Path)
@@ -134,7 +135,7 @@ func newWorktreeSelectorCommand(name string, actionID actions.ID, short string) 
 				view, _ := result.Data["worktree"].(actions.WorktreeView)
 				warnings, _ := result.Data["warnings"].([]string)
 				if jsonOutput {
-					return writeJSON(cmd, worktreeShowData{Worktree: view, Warnings: nonNilStrings(warnings)})
+					return cli.WriteJSON(cmd, worktreeShowData{Worktree: view, Warnings: nonNilStrings(warnings)})
 				}
 				printWorktree(cmd, view)
 				writeWorktreeWarnings(cmd, warnings)
@@ -173,7 +174,7 @@ func runWorktreeMutationCommand(cmd *cobra.Command, jsonOutput bool, actionID ac
 func writeWorktreeActionResult(cmd *cobra.Command, jsonOutput bool, result actions.Result) error {
 	data := worktreeActionData{Action: result.Action, Changed: result.Changed, Message: result.Message, Data: result.Data}
 	if jsonOutput {
-		return writeJSON(cmd, data)
+		return cli.WriteJSON(cmd, data)
 	}
 	if result.Message != "" {
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), result.Message)
@@ -186,7 +187,7 @@ func worktreeCommandError(cmd *cobra.Command, jsonOutput bool, result actions.Re
 	if errors.As(err, &partial) {
 		data := worktreeActionData{Action: result.Action, Changed: result.Changed, Message: result.Message, Data: result.Data}
 		if jsonOutput {
-			return writeJSONPartial(cmd, data, partial)
+			return cli.WriteJSONPartial(cmd, data, partial)
 		}
 		if result.Message != "" {
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), result.Message)
@@ -198,25 +199,25 @@ func worktreeCommandError(cmd *cobra.Command, jsonOutput bool, result actions.Re
 		if !jsonOutput {
 			return actionErr
 		}
-		candidates := make([]Candidate, 0, len(actionErr.Candidates))
+		candidates := make([]cli.Candidate, 0, len(actionErr.Candidates))
 		for _, candidate := range actionErr.Candidates {
-			candidates = append(candidates, Candidate{ID: candidate.ID, DisplayName: candidate.DisplayName, CanonicalPath: candidate.CanonicalPath})
+			candidates = append(candidates, cli.Candidate{ID: candidate.ID, DisplayName: candidate.DisplayName, CanonicalPath: candidate.CanonicalPath})
 		}
-		parameters := make([]ParameterHelp, 0, len(actionErr.MissingParameters))
+		parameters := make([]cli.ParameterHelp, 0, len(actionErr.MissingParameters))
 		for _, parameter := range actionErr.MissingParameters {
-			parameters = append(parameters, ParameterHelp{Name: parameter.Name, Description: parameter.Description, Required: parameter.Required})
+			parameters = append(parameters, cli.ParameterHelp{Name: parameter.Name, Description: parameter.Description, Required: parameter.Required})
 		}
-		return writeJSONError(cmd, JSONError{Code: actionErr.Code, Message: actionErr.Message, Candidates: candidates, Parameters: parameters})
+		return cli.WriteJSONError(cmd, cli.JSONError{Code: actionErr.Code, Message: actionErr.Message, Candidates: candidates, Parameters: parameters})
 	}
-	return commandFailure(cmd, jsonOutput, "action_failed", err)
+	return cli.CommandFailure(cmd, jsonOutput, "action_failed", err)
 }
 
 func worktreeSelectorFromArgs(cmd *cobra.Command, jsonOutput bool, name string, args []string) (string, error) {
 	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
-		return "", missingParameter(cmd, jsonOutput, "selector", "stable ID, unique ID prefix, branch, or canonical path")
+		return "", cli.MissingParameter(cmd, jsonOutput, "selector", "stable ID, unique ID prefix, branch, or canonical path")
 	}
 	if len(args) != 1 {
-		return "", commandFailure(cmd, jsonOutput, "invalid_arguments", fmt.Errorf("worktree %s accepts exactly one selector", name))
+		return "", cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", fmt.Errorf("worktree %s accepts exactly one selector", name))
 	}
 	return args[0], nil
 }

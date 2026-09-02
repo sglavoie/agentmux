@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/tui"
 )
 
@@ -184,16 +185,16 @@ func TestTUITestFixturePartialSizeUsesFixtureDefault(t *testing.T) {
 	}
 }
 
-// asExitError extracts an *ExitError from a Cobra error chain, failing the test
+// asExitError extracts an *cli.ExitError from a Cobra error chain, failing the test
 // when the error is missing or of the wrong type.
-func asExitError(t *testing.T, err error) *ExitError {
+func asExitError(t *testing.T, err error) *cli.ExitError {
 	t.Helper()
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
-	var ee *ExitError
+	var ee *cli.ExitError
 	if !errors.As(err, &ee) {
-		t.Fatalf("expected *ExitError, got %T: %v", err, err)
+		t.Fatalf("expected *cli.ExitError, got %T: %v", err, err)
 	}
 	return ee
 }
@@ -210,8 +211,8 @@ func TestExitCodeScenarioFailure(t *testing.T) {
 
 	stdout, stderr, err := runRootArgs(t, "tui-test", "run", path, "--json")
 	ee := asExitError(t, err)
-	if ee.Code != exitScenarioFailure {
-		t.Errorf("scenario failure should exit %d, got %d", exitScenarioFailure, ee.Code)
+	if ee.Code != cli.ExitScenarioFailure {
+		t.Errorf("scenario failure should exit %d, got %d", cli.ExitScenarioFailure, ee.Code)
 	}
 	if !ee.Quiet {
 		t.Errorf("scenario failure that already printed JSON should be Quiet")
@@ -231,8 +232,8 @@ func TestExitCodeInvalidScenarioFile(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "does-not-exist.json")
 	_, _, err := runRootArgs(t, "tui-test", "run", missing, "--json")
 	ee := asExitError(t, err)
-	if ee.Code != exitInvalidInput {
-		t.Errorf("missing scenario file should exit %d, got %d", exitInvalidInput, ee.Code)
+	if ee.Code != cli.ExitInvalidInput {
+		t.Errorf("missing scenario file should exit %d, got %d", cli.ExitInvalidInput, ee.Code)
 	}
 	if ee.Quiet {
 		t.Errorf("an invalid-input error should not be Quiet so Execute prints the reason")
@@ -242,13 +243,13 @@ func TestExitCodeInvalidScenarioFile(t *testing.T) {
 func TestExitCodeUnknownFixture(t *testing.T) {
 	_, _, err := runRootArgs(t, "tui-test", "fixture", "no-such-fixture", "--json")
 	ee := asExitError(t, err)
-	if ee.Code != exitInvalidInput {
-		t.Errorf("unknown fixture should exit %d, got %d", exitInvalidInput, ee.Code)
+	if ee.Code != cli.ExitInvalidInput {
+		t.Errorf("unknown fixture should exit %d, got %d", cli.ExitInvalidInput, ee.Code)
 	}
 }
 
 func TestExitCodeDistinguishesFailureFromInvalid(t *testing.T) {
-	if exitScenarioFailure == exitInvalidInput {
+	if cli.ExitScenarioFailure == cli.ExitInvalidInput {
 		t.Fatal("scenario failure and invalid input must use distinct exit codes")
 	}
 }
@@ -337,8 +338,8 @@ func TestTUITestRunExpandsScenarioGlob(t *testing.T) {
 	// running zero scenarios and exiting clean.
 	_, _, err = runRootArgs(t, "tui-test", "run",
 		filepath.Join(t.TempDir(), "*.json"), "--json")
-	if ee := asExitError(t, err); ee.Code != exitInvalidInput {
-		t.Errorf("unmatched pattern should exit %d, got %d", exitInvalidInput, ee.Code)
+	if ee := asExitError(t, err); ee.Code != cli.ExitInvalidInput {
+		t.Errorf("unmatched pattern should exit %d, got %d", cli.ExitInvalidInput, ee.Code)
 	}
 }
 
@@ -351,8 +352,8 @@ func TestTUITestActionsOverlayWidthRegression(t *testing.T) {
 	stdout, _, err := runRootArgs(t, "tui-test", "fixture", "actions",
 		"--width", "80", "--height", "24", "--key", "a", "--json")
 	ee := asExitError(t, err)
-	if ee.Code != exitScenarioFailure {
-		t.Errorf("narrow actions overlay should exit %d, got %d", exitScenarioFailure, ee.Code)
+	if ee.Code != cli.ExitScenarioFailure {
+		t.Errorf("narrow actions overlay should exit %d, got %d", cli.ExitScenarioFailure, ee.Code)
 	}
 	if !strings.Contains(stdout, string(tui.UITestIssueModalWidthOverflow)) {
 		t.Errorf("expected %s in narrow-run JSON, got %q", tui.UITestIssueModalWidthOverflow, stdout)
@@ -372,8 +373,8 @@ func TestTUITestConfigPickerWidthRegression(t *testing.T) {
 	_, _, err := runRootArgs(t, "tui-test", "fixture", "wide_profiles",
 		"--width", "120", "--height", "40", "--key", "C", "--json")
 	ee := asExitError(t, err)
-	if ee.Code != exitScenarioFailure {
-		t.Errorf("narrow config picker should exit %d, got %d", exitScenarioFailure, ee.Code)
+	if ee.Code != cli.ExitScenarioFailure {
+		t.Errorf("narrow config picker should exit %d, got %d", cli.ExitScenarioFailure, ee.Code)
 	}
 
 	if _, stderr, err := runRootArgs(t, "tui-test", "fixture", "wide_profiles",

@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/spf13/cobra"
@@ -12,7 +13,7 @@ var (
 	transcriptsRebuildAll bool
 
 	transcriptsIndexPath  = transcript.IndexPath
-	transcriptsLoadConfig = loadRunnableConfig
+	transcriptsLoadConfig = cli.LoadRunnableConfig
 	transcriptsReaders    = transcriptReaders
 )
 

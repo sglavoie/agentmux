@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -95,7 +96,7 @@ func TestDoctorReportsDaemonRendererHookAndSuppressionHealth(t *testing.T) {
 
 	build := doctorTestBuild
 	doctorCLIBuild = func() buildinfo.Info { return build }
-	newDoctorDaemonClient = func() daemonExportClient {
+	newDoctorDaemonClient = func() cli.DaemonExportClient {
 		return &fakeDaemonExportClient{
 			health: ipc.Health{Alive: true, PID: 4242, Uptime: 2 * time.Minute, Ready: true, Build: &build, Notification: &doctorTestNotification},
 			export: func(int) (protocol.EventsExport, error) {
@@ -110,7 +111,7 @@ func TestDoctorReportsDaemonRendererHookAndSuppressionHealth(t *testing.T) {
 			},
 		}
 	}
-	newDoctorKitty = func() kittyWindowLister {
+	newDoctorKitty = func() cli.KittyWindowLister {
 		return fakeKittyWindowLister{windows: []kitty.OSWindow{{
 			Tabs: []kitty.Tab{{
 				Title: "⚡api",

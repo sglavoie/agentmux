@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/tui/customization"
 	"github.com/spf13/cobra"
@@ -13,7 +14,7 @@ var keybindingsCmd = &cobra.Command{
 	Use:   "keybindings",
 	Short: "Show the Kitty keybinding reference as an overlay",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := kitty.NewClient(kitty.NewRealRunner())
+		client := cli.NewKittyClient()
 		if focusExistingKeybindings(client) {
 			return nil
 		}
@@ -26,7 +27,7 @@ func focusExistingKeybindings(client kitty.KittyClient) bool {
 	if err != nil {
 		return false
 	}
-	loc, found := kitty.FindKeybindingsWindow(osWindows, windowIDFromEnv())
+	loc, found := kitty.FindKeybindingsWindow(osWindows, cli.WindowIDFromEnv())
 	if !found {
 		return false
 	}

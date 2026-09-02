@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
@@ -89,7 +90,7 @@ func runDebugProbe(cmd *cobra.Command, _ []string) error {
 	}
 	windowID := selector.WindowID
 	if windowID == 0 {
-		windowID = windowIDFromEnv()
+		windowID = cli.WindowIDFromEnv()
 	}
 	bin, _ := debugExecutable()
 	report := debugger.Probe(debugProbeClient(), debugger.ProbeOptions{
@@ -128,7 +129,7 @@ func runDebugProbe(cmd *cobra.Command, _ []string) error {
 		}
 	}
 	if !report.Success {
-		return &ExitError{Code: exitHealthFailure, Err: errors.New(report.Error), Quiet: debugProbeJSON}
+		return &cli.ExitError{Code: cli.ExitHealthFailure, Err: errors.New(report.Error), Quiet: debugProbeJSON}
 	}
 	return nil
 }
