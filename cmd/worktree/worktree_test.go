@@ -1,4 +1,4 @@
-package cmd
+package worktree
 
 import (
 	"bytes"
@@ -225,17 +225,11 @@ func TestWorktreeCLIMapsCandidatesConfirmationsAndParameters(t *testing.T) {
 	}
 }
 
+// The half of this assertion that named rootCmd moved into
+// TestCommandFamiliesAreRegisteredUnderRoot in cmd/root_test.go: proving the
+// family is reachable as `amx worktree` is only true once root has registered
+// it, and asserting that against a locally built parent would be tautological.
 func TestWorktreeCLIHelpIsRegistered(t *testing.T) {
-	found := false
-	for _, command := range rootCmd.Commands() {
-		if command.Name() == "worktree" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatal("root command has no worktree command")
-	}
 	for _, name := range []string{"list", "show", "reopen", "shell", "edit", "remove", "forget"} {
 		if command, _, err := worktreeCmd.Find([]string{name}); err != nil || command == nil || command.Name() != name {
 			t.Fatalf("worktree %s registration: command=%v err=%v", name, command, err)
@@ -243,7 +237,7 @@ func TestWorktreeCLIHelpIsRegistered(t *testing.T) {
 	}
 }
 
-func resetWorktreeCommandsTestState(t *testing.T) (*commandWorktreeManager, *sessionCommandKitty) {
+func resetWorktreeCommandsTestState(t *testing.T) (*commandWorktreeManager, *worktreeCommandKitty) {
 	t.Helper()
 	oldLoadConfig := worktreeCommandsLoadConfig
 	oldNewManager := worktreeCommandsNewManager
@@ -284,7 +278,7 @@ func resetWorktreeCommandsTestState(t *testing.T) (*commandWorktreeManager, *ses
 		Exists: true, GitAvailable: true, StatusAvailable: true, Registered: true, Actionable: true,
 	}
 	manager := &commandWorktreeManager{entries: []worktree.Entry{entry}}
-	client := &sessionCommandKitty{}
+	client := &worktreeCommandKitty{}
 	cfg := &config.Config{
 		Defaults: config.Defaults{Editor: "true"},
 		Accounts: []config.Account{{Name: "work", Harness: harness.Claude, Color: "blue"}},

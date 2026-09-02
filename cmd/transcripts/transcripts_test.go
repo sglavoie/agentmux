@@ -1,4 +1,4 @@
-package cmd
+package transcripts
 
 import (
 	"bytes"

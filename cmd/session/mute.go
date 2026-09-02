@@ -1,4 +1,4 @@
-package cmd
+package session
 
 import (
 	"github.com/sglavoie/agentmux/internal/cli"
@@ -7,6 +7,10 @@ import (
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/spf13/cobra"
 )
+
+// MuteToggleCommand returns the root-level mute-toggle leaf so the root command
+// can register it.
+func MuteToggleCommand() *cobra.Command { return muteToggleCmd }
 
 var muteToggleWindowID int
 
@@ -22,7 +26,6 @@ not a managed Agent Mux session, the command is a silent no-op.`,
 }
 
 func init() {
-	rootCmd.AddCommand(muteToggleCmd)
 	muteToggleCmd.Flags().IntVar(&muteToggleWindowID, "window-id", 0,
 		"Kitty window ID of the target tab (defaults to $KITTY_WINDOW_ID)")
 }

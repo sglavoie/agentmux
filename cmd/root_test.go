@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/sglavoie/agentmux/cmd/session"
 )
 
 // runRootArgs drives rootCmd exactly like the real binary (so subcommand and
@@ -47,6 +49,29 @@ func TestRootHelp(t *testing.T) {
 	}
 }
 
+// Root is now assembly only, so "did every family reach the user" is the one
+// thing that can silently break here: a child package can register its own
+// leaves perfectly and still be invisible if root forgets to add it. This is
+// the single root-owned registration test for that, rather than one file per
+// family.
+func TestCommandFamiliesAreRegisteredUnderRoot(t *testing.T) {
+	registered := make(map[string]bool)
+	for _, command := range rootCmd.Commands() {
+		registered[command.Name()] = true
+	}
+	for _, name := range []string{
+		"color-picker", "config", "daemon", "debug", "doctor",
+		"focus-next", "focus-next-managed", "focus-prev-managed",
+		"hook-indicator", "icon-picker", "keybindings", "mute-toggle",
+		"notifications", "release-gate", "resort", "session", "transcripts",
+		"tui-test", "worktree",
+	} {
+		if !registered[name] {
+			t.Errorf("root command %q is not registered", name)
+		}
+	}
+}
+
 func TestRemovedCommandsAreNotRegistered(t *testing.T) {
 	rootNames := make(map[string]bool)
 	for _, command := range rootCmd.Commands() {
@@ -58,7 +83,7 @@ func TestRemovedCommandsAreNotRegistered(t *testing.T) {
 		}
 	}
 	sessionNames := make(map[string]bool)
-	for _, command := range sessionCmd.Commands() {
+	for _, command := range session.Command().Commands() {
 		sessionNames[command.Name()] = true
 	}
 	for _, removed := range []string{"launch", "focus"} {

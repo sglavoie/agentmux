@@ -1,4 +1,12 @@
-package cmd
+// Package worktree holds the `amx worktree` command family: listing managed
+// Agent Mux Git worktrees, showing one, reopening it as a live session, opening
+// a shell or the configured editor in it, and the two bounded destructive
+// leaves — removing a clean inactive worktree and forgetting stale metadata.
+//
+// A file in this package may name the imported internal/worktree package
+// unqualified as `worktree`: a package's own name is not in scope inside its
+// files.
+package worktree
 
 import (
 	"errors"
@@ -28,8 +36,12 @@ var (
 		return agentloop.Discover(agentloop.DiscoverOptions{})
 	}
 	worktreeCommandsTranscriptIndex = transcript.LoadIndex
-	worktreeCommandsReaders         = transcriptReaders
+	worktreeCommandsReaders         = cli.TranscriptReaders
 )
+
+// Command returns the `worktree` command tree so the root command can register
+// it. Root assembly is the only consumer.
+func Command() *cobra.Command { return worktreeCmd }
 
 var worktreeCmd = &cobra.Command{
 	Use:   "worktree",
@@ -160,7 +172,7 @@ func executeWorktreeAction(cmd *cobra.Command, actionID actions.ID, request acti
 		ActiveLoops:     worktreeCommandsActiveLoops,
 		TranscriptIndex: worktreeCommandsTranscriptIndex,
 	}
-	return actions.DefaultRegistry().Execute(commandContext(cmd), deps, actionID, request)
+	return actions.DefaultRegistry().Execute(cli.CommandContext(cmd), deps, actionID, request)
 }
 
 func runWorktreeMutationCommand(cmd *cobra.Command, jsonOutput bool, actionID actions.ID, request actions.Request) error {

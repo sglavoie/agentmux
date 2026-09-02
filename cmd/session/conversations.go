@@ -1,7 +1,6 @@
-package cmd
+package session
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -27,17 +26,12 @@ var (
 	sessionCommandsLoadConfig       = cli.LoadRunnableConfig
 	sessionCommandsLoadSessionIndex = transcript.LoadIndexAt
 	sessionCommandsSessionIndexPath = transcript.IndexPath
-	sessionCommandsSessionReaders   = transcriptReaders
+	sessionCommandsSessionReaders   = cli.TranscriptReaders
 	sessionCommandsNewKitty         = func() kitty.KittyClient { return cli.NewKittyClient() }
 	sessionCommandsDaemon           = func(req protocol.Request) (protocol.Response, error) { return ipc.NewClient().Send(req) }
 	sessionCommandsNewHandoff       = func() handoff.Runner { return handoff.NewWorkflow() }
 	sessionCommandsNewWorktree      = func() worktree.Runner { return worktree.NewWorkflow() }
 )
-
-var sessionCmd = &cobra.Command{
-	Use:   "session",
-	Short: "List, continue, fork, and hand off conversations",
-}
 
 var sessionListCmd = &cobra.Command{
 	Use:   "list",
@@ -216,13 +210,10 @@ func resolveIndexedConversation(cfg *config.Config, readers map[string]transcrip
 }
 
 func executeSessionAction(cmd *cobra.Command, jsonOutput bool, cfg *config.Config, actionID actions.ID, request actions.Request) error {
-	return executeSessionActionWithDependencies(cmd, jsonOutput, actions.Dependencies{
+	deps := actions.Dependencies{
 		Kitty: sessionCommandsNewKitty(), Config: cfg, Readers: sessionCommandsSessionReaders(), Daemon: sessionCommandsDaemon, Handoff: sessionCommandsNewHandoff(), Worktree: sessionCommandsNewWorktree(),
-	}, actionID, request)
-}
-
-func executeSessionActionWithDependencies(cmd *cobra.Command, jsonOutput bool, deps actions.Dependencies, actionID actions.ID, request actions.Request) error {
-	result, err := actions.DefaultRegistry().Execute(commandContext(cmd), deps, actionID, request)
+	}
+	result, err := actions.DefaultRegistry().Execute(cli.CommandContext(cmd), deps, actionID, request)
 	if err != nil {
 		return sessionActionCommandError(cmd, jsonOutput, result, err)
 	}
@@ -262,13 +253,6 @@ func parseConversationSelector(value string) (conversation.Identity, bool) {
 		return conversation.Identity{}, false
 	}
 	return conversation.New(harnessName, sessionID)
-}
-
-func commandContext(cmd *cobra.Command) context.Context {
-	if cmd != nil && cmd.Context() != nil {
-		return cmd.Context()
-	}
-	return context.Background()
 }
 
 type sessionListData struct {
@@ -312,18 +296,4 @@ func formatTime(value time.Time) string {
 		return "-"
 	}
 	return value.Local().Format(time.RFC3339)
-}
-
-func init() {
-	sessionListCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
-	sessionContinueCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
-	sessionForkCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
-	sessionForkWorktreeCmd.Flags().Bool("allow-dirty", false, "allow a dirty source; uncommitted changes are not copied")
-	sessionForkWorktreeCmd.Flags().Bool("yes", false, "confirm creating the isolated fork")
-	sessionForkWorktreeCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
-	sessionHandoffCmd.Flags().String("profile", "", "target configured profile")
-	sessionHandoffCmd.Flags().Bool("edit", false, "edit the generated handoff before launch")
-	sessionHandoffCmd.Flags().Bool("no-launch", false, "finalize the handoff without launching a target")
-	sessionHandoffCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
-	sessionCmd.AddCommand(sessionListCmd, sessionContinueCmd, sessionForkCmd, sessionForkWorktreeCmd, sessionHandoffCmd)
 }

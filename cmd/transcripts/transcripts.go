@@ -1,10 +1,15 @@
-package cmd
+// Package transcripts holds the `amx transcripts` command family: the
+// maintenance surface for the disposable transcript metadata cache and its
+// search sidecars. Its three leaves report what the store currently holds
+// (status), migrate legacy search text and drop orphan sidecars (compact), and
+// reparse every discoverable source transcript from the configured profiles
+// (rebuild). The source transcript files themselves are never rewritten.
+package transcripts
 
 import (
 	"fmt"
 
 	"github.com/sglavoie/agentmux/internal/cli"
-	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/spf13/cobra"
 )
@@ -14,8 +19,12 @@ var (
 
 	transcriptsIndexPath  = transcript.IndexPath
 	transcriptsLoadConfig = cli.LoadRunnableConfig
-	transcriptsReaders    = transcriptReaders
+	transcriptsReaders    = cli.TranscriptReaders
 )
+
+// Command returns the `transcripts` command tree so the root command can
+// register it. Root assembly is the only consumer.
+func Command() *cobra.Command { return transcriptsCmd }
 
 var transcriptsCmd = &cobra.Command{
 	Use:   "transcripts",
@@ -104,14 +113,6 @@ func printTranscriptStatus(cmd *cobra.Command, status transcript.StoreStatus) {
 func printTranscriptWarnings(cmd *cobra.Command, warnings []string) {
 	for _, warning := range warnings {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "warning: %s\n", warning)
-	}
-}
-
-func transcriptReaders() map[string]transcript.Reader {
-	return map[string]transcript.Reader{
-		harness.Claude:  transcript.NewClaudeReader(),
-		harness.Copilot: transcript.NewCopilotReader(),
-		harness.Codex:   transcript.NewCodexReader(),
 	}
 }
 

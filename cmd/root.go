@@ -1,3 +1,9 @@
+// Package cmd is the root of the amx CLI and nothing more: the root command
+// itself, the artifact version it reports, the exit-status mapping Execute
+// applies, and the assembly that registers every command family's leaves under
+// it. Every user-facing command lives in a child package; this package owns no
+// command behavior of its own, which is why it is the one package in the cmd
+// tree that no other cmd package may import.
 package cmd
 
 import (
@@ -10,8 +16,12 @@ import (
 	"github.com/sglavoie/agentmux/cmd/dashboard"
 	"github.com/sglavoie/agentmux/cmd/debug"
 	"github.com/sglavoie/agentmux/cmd/hooks"
+	"github.com/sglavoie/agentmux/cmd/notifications"
 	"github.com/sglavoie/agentmux/cmd/release"
+	"github.com/sglavoie/agentmux/cmd/session"
+	"github.com/sglavoie/agentmux/cmd/transcripts"
 	"github.com/sglavoie/agentmux/cmd/tuitest"
+	"github.com/sglavoie/agentmux/cmd/worktree"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/spf13/cobra"
@@ -58,5 +68,5 @@ func init() {
 	rootCmd.Version = buildinfo.Current().String()
 	rootCmd.PersistentFlags().BoolVar(&cli.DebugFlag, "debug", false, "enable verbose debug output")
 	rootCmd.Flags().IntVar(&dashboardSourceWindowID, "window-id", 0, "Kitty window ID whose tab should be selected initially")
-	rootCmd.AddCommand(dashboard.ColorPickerCommand(), config.Command(), daemon.Command(), debug.Command(), debug.DoctorCommand(), hooks.IndicatorCommand(), dashboard.IconPickerCommand(), dashboard.KeybindingsCommand(), notificationsCmd, release.Command(), resortCmd, sessionCmd, transcriptsCmd, tuitest.Command(), worktreeCmd)
+	rootCmd.AddCommand(dashboard.ColorPickerCommand(), config.Command(), daemon.Command(), debug.Command(), debug.DoctorCommand(), session.FocusNextCommand(), session.FocusNextManagedCommand(), session.FocusPrevManagedCommand(), hooks.IndicatorCommand(), dashboard.IconPickerCommand(), dashboard.KeybindingsCommand(), session.MuteToggleCommand(), notifications.Command(), release.Command(), session.ResortCommand(), session.Command(), transcripts.Command(), tuitest.Command(), worktree.Command())
 }

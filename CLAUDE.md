@@ -72,11 +72,17 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
 
 ### Main packages
 
-- `cmd`: the root command and the command families that have not yet been split
-  out — `rootCmd` itself with `Execute`'s exit mapping, the session, worktree,
-  transcripts, notifications, and Kitty tab-control leaves, and the assembly
-  that registers every child package's commands. It is the only package in the
-  `cmd` tree that any other `cmd` package may not import.
+- `cmd`: the root of the CLI and nothing more — `rootCmd` itself, the artifact
+  version it reports, `Execute`'s exit mapping, and the assembly that registers
+  every command family's leaves under it. It owns no command behavior: every
+  user-facing command lives in a child package, which is what lets it remain the
+  only package in the `cmd` tree that any other `cmd` package may not import.
+  Because assembly is all it does, "did every family reach the user" is the one
+  regression it can hide, so `TestCommandFamiliesAreRegisteredUnderRoot` in
+  `cmd/root_test.go` is the single root-owned registration assertion rather than
+  one such file per family. Cross-family acceptance tests that name no command
+  symbol (process lifecycle, diagnostics release, the ASL contract) also stay
+  here.
 - `cmd/daemon`: the `amx daemon` family — the always-on local daemon seen from
   the CLI side. It owns the daemon's lifecycle as a command (`start`, which
   blocks and is the process the detached launch re-execs, plus `stop` and
@@ -114,6 +120,31 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   (`ExportWindowIDs`, `ExportLiveMetadata`, `ASLStatusLine`) that doctor and the
   daemon command family must agree on, so a doctor cannot report drift that
   `daemon export-events` does not see.
+- `cmd/session`: the command surfaces that act on a conversation or on the Kitty
+  tab carrying one — the same domain seen from two distances. The `amx session`
+  family works on conversation identity (list, continue, fork, fork-worktree,
+  handoff) and always resolves an exact `(harness, session_id)` before it acts;
+  the root-level tab controls work on the live instance instead
+  (`focus-prev-managed`, `focus-next-managed`, `focus-next`, `mute-toggle`,
+  `resort`). Both halves reduce to "which session, and what happens to it". Like
+  `cmd/daemon`, a file here may name the imported `internal/session` package
+  unqualified as `session`.
+- `cmd/worktree`: the `amx worktree` family — listing managed Agent Mux Git
+  worktrees, showing one, reopening it as a live session, opening a shell or the
+  configured editor in it, and the two bounded destructive leaves (`remove` a
+  clean inactive worktree, `forget` stale metadata). The bounded creation and
+  cleanup themselves stay in `internal/worktree`; this is the command surface
+  over them, and it may likewise name that import unqualified as `worktree`.
+- `cmd/transcripts`: the `amx transcripts` family — the maintenance surface for
+  the disposable transcript metadata cache and its search sidecars. Its three
+  leaves report what the store holds (`status`), migrate legacy search text and
+  drop orphan sidecars (`compact`), and reparse every discoverable source
+  transcript from the configured profiles (`rebuild`). The source transcript
+  files themselves are never rewritten.
+- `cmd/notifications`: the `amx notifications` family — the operator-facing
+  surface that sends a real notification through the configured backend and
+  reports whether delivery could be confirmed, so a silent daemon can be told
+  apart from a muted operating system.
 - `cmd/release` and `cmd/tuitest`: the two hidden operator/developer commands.
   `release-gate` drives the paired release procedure in `internal/release`;
   `tui-test` drives the in-process TUI scenario harness in `tui`.
@@ -123,7 +154,9 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   a machine caller (the common schema-v1 envelope, the structured error payload,
   and its candidate/parameter help shapes), how a command assembles the runtime
   it acts on (the validated configuration, the Kitty client and the window the
-  CLI was invoked from, and the daemon export-client seam), and how the process
+  CLI was invoked from, the daemon export-client seam, the harness transcript
+  readers it discovers sources with, and the context its work runs under), and
+  how the process
   coordinates with itself (the `--debug`/`AMX_DEBUG` verbosity policy with the
   logger it installs, and locating the running `amx` binary that hook commands
   write and daemon start/restart re-execs). Command-specific flag parsing,

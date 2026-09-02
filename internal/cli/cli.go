@@ -8,7 +8,9 @@
 //     envelope (json.go);
 //   - how a command assembles the runtime it acts on — the validated
 //     configuration (config.go), the Kitty client and the window the CLI was
-//     invoked from (kitty.go), and the daemon connection (daemon.go);
+//     invoked from (kitty.go), the daemon connection (daemon.go), the harness
+//     transcript readers it discovers sources with (transcripts.go), and the
+//     context its work runs under (context.go);
 //   - how the process coordinates with itself — the debug verbosity policy and
 //     the logger it installs (logging.go), and locating the running amx binary
 //     that hook commands write and daemon start/restart re-execs (binary.go).

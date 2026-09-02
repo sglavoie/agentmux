@@ -1,4 +1,4 @@
-package cmd
+package session
 
 import (
 	"fmt"
@@ -9,6 +9,10 @@ import (
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/spf13/cobra"
 )
+
+// ResortCommand returns the root-level resort leaf so the root command can
+// register it.
+func ResortCommand() *cobra.Command { return resortCmd }
 
 var (
 	resortLoadConfig = cli.LoadRunnableConfig
