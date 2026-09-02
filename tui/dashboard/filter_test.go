@@ -1,4 +1,4 @@
-package tui
+package dashboard
 
 import (
 	"reflect"
@@ -102,7 +102,7 @@ func TestParseEscapesHarnessSigil(t *testing.T) {
 // filter.
 func TestSerializeFilter_EscapesHarnessLeadingPercent(t *testing.T) {
 	f := Filter{Substrings: []string{"%opt", "plain"}}
-	out := serializeFilter(f)
+	out := SerializeFilter(f)
 	reparsed := Parse(out)
 	if !reflect.DeepEqual(reparsed.Substrings, []string{"%opt", "plain"}) {
 		t.Errorf("round-trip lost %%-prefixed substring: serialized=%q reparsed=%+v", out, reparsed)

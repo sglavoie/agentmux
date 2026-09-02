@@ -1,0 +1,77 @@
+package dashboard
+
+import (
+	"time"
+
+	"github.com/sglavoie/agentmux/internal/session"
+)
+
+// ScrollInput is the subset of ListInput that the scroll math reads. The line
+// cost of a windowed walk depends only on the row set, the facts that decide
+// each row's state group, and whether the renderer is drawing group chrome —
+// not on the terminal size or on anything else the Model carries.
+//
+// The root owns the chrome budget (header, legend, chips, footer, preview
+// pane) that turns a terminal height into a row budget; this type answers the
+// question the root cannot: how many lines the rows themselves cost.
+type ScrollInput struct {
+	Rows          []session.RunningSession
+	LastActivity  map[int]time.Time
+	IdleThreshold time.Duration
+	// MultiGroup mirrors CountGroups(Rows, ...) > 1. It is passed rather than
+	// derived so a caller that already computed it for the renderer charges
+	// the same chrome the renderer will actually draw.
+	MultiGroup bool
+}
+
+// LineCost returns the number of rendered lines from offset through cursor
+// inclusive, matching the RenderList walk. When MultiGroup is true a
+// group-label line precedes the first row and every subsequent row whose group
+// differs from the previous one; subsequent visible group labels also get a
+// blank separator line. The walk initializes prevGroup to -1 to match
+// RenderList, so the row at offset always emits a label when MultiGroup is
+// true.
+func (in ScrollInput) LineCost(offset, cursor int) int {
+	if offset > cursor || offset < 0 || cursor >= len(in.Rows) {
+		return 0
+	}
+	cost := 0
+	prevGroup := -1
+	for i := offset; i <= cursor; i++ {
+		if in.MultiGroup {
+			g := StateGroup(in.Rows[i], in.LastActivity, in.IdleThreshold)
+			if g != prevGroup {
+				if prevGroup != -1 {
+					cost++ // blank separator before a subsequent group
+				}
+				cost++ // group label
+				prevGroup = g
+			}
+		}
+		cost++ // row line
+	}
+	return cost
+}
+
+// CursorFits reports whether RenderList can emit the cursor row from the given
+// offset inside a pane of the given height. The pane height is not all row
+// budget: RenderList spends one line on ▲ when offset > 0 and one line on ▼
+// when rows remain below the cursor. Those indicator lines must be reserved
+// during scroll calculations, otherwise the caller can select a row that the
+// renderer drops while making space for the scroll markers.
+func (in ScrollInput) CursorFits(offset, cursor, height int) bool {
+	if offset < 0 || offset > cursor || cursor >= len(in.Rows) {
+		return false
+	}
+	budget := height
+	if offset > 0 {
+		budget--
+	}
+	if cursor < len(in.Rows)-1 {
+		budget--
+	}
+	if budget < 0 {
+		return false
+	}
+	return in.LineCost(offset, cursor) <= budget
+}

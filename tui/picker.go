@@ -10,6 +10,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -128,8 +129,8 @@ func renderPickerList(m Model, height int) string {
 		return sb.String()
 	}
 
-	acctColor := buildProfileColorMap(m)
-	harnessColor := buildHarnessColorMap(m)
+	acctColor := dashboard.ProfileColorMap(m.cfg)
+	harnessColor := dashboard.HarnessColorMap(m.cfg)
 
 	// Pre-pass: compute column widths over the filtered set so the harness
 	// cell and state-flag columns line up vertically. The checkbox prefix
@@ -299,7 +300,7 @@ func renderPickerPreview(m Model, origIdx, width, height int) string {
 	}
 	sess := m.pickerSessionWithResolvedProfile(origIdx)
 	defaultProfile := m.pickerSessions[origIdx].EffectiveProfile()
-	acctColor := buildProfileColorMap(m)
+	acctColor := dashboard.ProfileColorMap(m.cfg)
 
 	lines := make([]string, 0, height)
 	header := accountStyle(acctColor[defaultProfile]).Render(

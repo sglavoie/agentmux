@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -233,7 +234,7 @@ func renderSplit(m Model) string {
 	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
 		sess = m.filtered[m.cursor]
 	}
-	acctColor := buildProfileColorMap(m)
+	acctColor := dashboard.ProfileColorMap(m.cfg)
 
 	if cfg.Direction == "vertical" {
 		previewHeight := int(float64(paneHeight) * cfg.Ratio)
@@ -264,7 +265,7 @@ func renderSplit(m Model) string {
 	// preview; fall back to the full-width plain list instead (mirrors the
 	// paneHeight<4 || m.width<20 guard above). The plain list is itself clamped
 	// to m.width by renderListAt's safety truncation.
-	if listWidth < minListRowWidth() {
+	if listWidth < dashboard.MinRowWidth() {
 		return renderList(m)
 	}
 	listView := renderListAt(m, listWidth, paneHeight)

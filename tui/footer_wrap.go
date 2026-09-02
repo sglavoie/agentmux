@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 
+	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -46,7 +47,7 @@ var listFooterPalette = []footerEntry{
 		if !hasRow(m) {
 			return false
 		}
-		return stateGroup(m.filtered[m.cursor], m.lastActivity, m.idleThreshold) == 0
+		return dashboard.StateGroup(m.filtered[m.cursor], m.lastActivity, m.idleThreshold) == 0
 	}, 0},
 	{"X", "close", footerSectionRow, hasRow, 0},
 	{"o", "open dir", footerSectionRow, func(m Model) bool {

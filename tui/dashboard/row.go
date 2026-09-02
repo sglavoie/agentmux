@@ -1,4 +1,4 @@
-package tui
+package dashboard
 
 import (
 	"fmt"
@@ -10,6 +10,35 @@ import (
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/layout"
+)
+
+const (
+	titleColWidth = 20
+	dirMaxWidth   = 40
+
+	// lockColumnWidth is the visual width reserved for the per-row lock
+	// indicator (🔒 = 2 cells, or 2 spaces when unlocked) prepended to every
+	// row so columns stay aligned regardless of which rows in the view are
+	// locked.
+	lockColumnWidth = 2
+
+	// muteColumnWidth is the visual width reserved for the per-row mute
+	// indicator (🔇 = 2 cells, or 2 spaces when unmuted) rendered alongside
+	// the lock column so rows stay aligned regardless of which sessions in
+	// the view are muted.
+	muteColumnWidth = 2
+
+	// minimumTabNumberColumnWidth fits a one-digit tab number, a colon, and
+	// one trailing space (for example, "1: "). Wider result sets expand this
+	// column dynamically so multi-digit numbers remain aligned.
+	minimumTabNumberColumnWidth = 3
+
+	// harnessColWidth is the visual width reserved for the harness cell.
+	// Sized to fit the widest possible text — a 2-cell emoji + a 1-cell
+	// space + a 7-cell label (`copilot`) — so rows stay aligned regardless of
+	// which harness (or none) a session uses and regardless of the configured
+	// emoji's cell width.
+	harnessColWidth = 10
 )
 
 // harnessLabel returns the lowercase harness display name used in the
@@ -26,7 +55,22 @@ func harnessLabel(h string) string {
 	return ""
 }
 
-// formatRow formats a single session row.
+// MinRowWidth is the narrowest width at which FormatRow can lay out its
+// fixed columns before the directory column: tab number + lock + mute + state
+// icon + a space + the "[X]" account badge + a space + the harness cell + a
+// space + the title column + the two separator spaces that precede the
+// directory. The dynamic columns (loop, activity, pulse, group border) are
+// excluded because they are only reserved when a row needs them. Below this
+// floor the row can no longer shrink, so the list renderer clamps it and the
+// root's split view falls back to the plain full-width list.
+func MinRowWidth() int {
+	return minimumTabNumberColumnWidth + lockColumnWidth + muteColumnWidth + layout.IconCellWidth + 1 + // tab + lock + mute + icon + space
+		3 + 1 + // "[X]" badge + space
+		harnessColWidth + 1 + // harness cell + space
+		titleColWidth + 2 // title + separators before dir
+}
+
+// FormatRow formats a single session row.
 // Format: tab_number | [loop] | state_icon | account_prefix | <emoji> harness | title | [activity] | directory
 // tabNumberCell is a fixed-width, pre-rendered cell such as "1: " or
 // " 1: ". It is blank-padded when the tab number is unavailable.
@@ -41,22 +85,7 @@ func harnessLabel(h string) string {
 // foreground for that cell. When the configured emoji is empty, the cell
 // collapses to just "<label>" so unconfigured users don't see a stray leading
 // space.
-// minListRowWidth is the narrowest width at which formatRow can lay out its
-// fixed columns before the directory column: tab number + lock + mute + state icon + a
-// space + the "[X]" account badge + a space + the harness cell + a space +
-// the title column + the two separator spaces that precede the directory.
-// The dynamic columns (loop, activity, pulse, group border) are excluded because
-// they are only reserved when a row needs them. Below this floor the row can
-// no longer shrink, so renderListAt clamps it and renderSplit falls back to
-// the plain full-width list.
-func minListRowWidth() int {
-	return minimumTabNumberColumnWidth + lockColumnWidth + muteColumnWidth + layout.IconCellWidth + 1 + // tab + lock + mute + icon + space
-		3 + 1 + // "[X]" badge + space
-		harnessColWidth + 1 + // harness cell + space
-		titleColWidth + 2 // title + separators before dir
-}
-
-func formatRow(s session.RunningSession, acctColor, harnessColor map[string]string, cfg *config.Config, width int, tabNumberCell, activeLoopCell, activityCell string) string {
+func FormatRow(s session.RunningSession, acctColor, harnessColor map[string]string, cfg *config.Config, width int, tabNumberCell, activeLoopCell, activityCell string) string {
 	// Lock indicator column. Always reserved (2 cells) so column alignment is
 	// stable; only filled when the session is locked.
 	lockCol := "  "
@@ -93,7 +122,7 @@ func formatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 	// badge. The badge letter and harness label still reflect the running
 	// profile/harness. Falls back to the running account color when the project
 	// is not configured (orphan tab).
-	identityColor := projectIdentityColor(s, acctColor, cfg)
+	identityColor := ProjectIdentityColor(s, acctColor, cfg)
 	style := accountStyle(identityColor)
 
 	badge := style.Render("[" + acctBadge + "]")
@@ -125,7 +154,7 @@ func formatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 	// other regardless of whether the source glyph measures as 1 or 2 cells.
 	// Truncated to titleColWidth (grapheme-atomic) and right-padded to fill the
 	// column.
-	titleText := layout.RenderTitleIcon(runningSessionDisplayTitle(s))
+	titleText := layout.RenderTitleIcon(SessionDisplayTitle(s))
 	titleText = layout.Truncate(titleText, titleColWidth, "…")
 	paddedTitle := layout.PadRight(titleText, titleColWidth)
 	title := accountStyle(identityColor).Render(paddedTitle)
@@ -150,10 +179,10 @@ func formatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 	return tabNumberCell + lockCol + muteCol + activeLoopCell + iconCol + " " + badge + " " + harnessCell + " " + title + "  " + activityCell + dir
 }
 
-// tabNumberColumnWidth returns a stable width for every row in the current
+// TabNumberColumnWidth returns a stable width for every row in the current
 // filtered result set: the widest decimal tab number plus ':' and one trailing
 // space. One digit is reserved even when all rows lack a known number.
-func tabNumberColumnWidth(sessions []session.RunningSession) int {
+func TabNumberColumnWidth(sessions []session.RunningSession) int {
 	digits := 1
 	for _, s := range sessions {
 		if s.TabNumber <= 0 {
@@ -166,9 +195,9 @@ func tabNumberColumnWidth(sessions []session.RunningSession) int {
 	return digits + 2
 }
 
-// renderTabNumberCell right-aligns a known tab number within the dashboard's
+// RenderTabNumberCell right-aligns a known tab number within the dashboard's
 // shared number column. Unknown numbers render as spaces to preserve alignment.
-func renderTabNumberCell(tabNumber, width int) string {
+func RenderTabNumberCell(tabNumber, width int) string {
 	if width < minimumTabNumberColumnWidth {
 		width = minimumTabNumberColumnWidth
 	}

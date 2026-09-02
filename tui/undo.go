@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
 // undoCloseToastID is the addressable id shared by every close-with-undo
@@ -43,7 +44,7 @@ func (m *Model) closeWithToast(rs session.RunningSession) tea.Cmd {
 	cmds := []tea.Cmd{closeCmd(m.client, rs.TabID)}
 
 	if !hasAcc {
-		text := fmt.Sprintf("closed %s", runningSessionDisplayTitle(rs))
+		text := fmt.Sprintf("closed %s", dashboard.SessionDisplayTitle(rs))
 		if c := m.pushToast(Toast{Severity: toastInfo, Text: text}); c != nil {
 			cmds = append(cmds, c)
 		}
@@ -54,7 +55,7 @@ func (m *Model) closeWithToast(rs session.RunningSession) tea.Cmd {
 		snapshot: snapshot,
 		account:  acc,
 		deadline: time.Now().Add(undoWindow),
-		label:    runningSessionDisplayTitle(rs),
+		label:    dashboard.SessionDisplayTitle(rs),
 	})
 
 	if c := m.replaceToastByID(undoCloseToastID, Toast{
@@ -72,7 +73,7 @@ func (m *Model) closeWithToast(rs session.RunningSession) tea.Cmd {
 // is internally close+launch — there is no separate state to roll back.
 func (m *Model) restartWithToast(rs session.RunningSession) tea.Cmd {
 	cmds := []tea.Cmd{restartCmd(m.client, rs, m.cfg)}
-	text := fmt.Sprintf("restarted %s", runningSessionDisplayTitle(rs))
+	text := fmt.Sprintf("restarted %s", dashboard.SessionDisplayTitle(rs))
 	if c := m.pushToast(Toast{Severity: toastInfo, Text: text}); c != nil {
 		cmds = append(cmds, c)
 	}

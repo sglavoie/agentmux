@@ -20,6 +20,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
 // Model is the root Bubble Tea model for the dashboard.
@@ -74,11 +75,11 @@ type Model struct {
 	commandContext commandContext
 
 	// running-session filter (profile + state DSL)
-	filterText     string          // live input while in ModeSearch
-	activeFilter   Filter          // committed filter applied to filtered
-	savedFilter    Filter          // snapshot taken on enter; restored on Esc
-	focusedChipIdx int             // -1 when no chip focused; otherwise index into Components()
-	completion     completionState // sigil-aware popup state for ModeSearch
+	filterText     string               // live input while in ModeSearch
+	activeFilter   dashboard.Filter     // committed filter applied to filtered
+	savedFilter    dashboard.Filter     // snapshot taken on enter; restored on Esc
+	focusedChipIdx int                  // -1 when no chip focused; otherwise index into Components()
+	completion     dashboard.Completion // sigil-aware popup state for ModeSearch
 
 	// terminal dimensions
 	width  int

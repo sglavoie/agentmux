@@ -9,6 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -52,8 +53,8 @@ func renderPreview(width, height int, sess session.RunningSession, text, errText
 	// One-line header with project-identity-colored title. Pictographic
 	// titles reserve the fixed 2-cell title-icon column so emoji-prefixed
 	// projects align with each other across surfaces.
-	colorName := projectIdentityColor(sess, acctColor, cfg)
-	title := layout.Truncate(layout.RenderTitleIcon(runningSessionDisplayTitle(sess)), width, "…")
+	colorName := dashboard.ProjectIdentityColor(sess, acctColor, cfg)
+	title := layout.Truncate(layout.RenderTitleIcon(dashboard.SessionDisplayTitle(sess)), width, "…")
 	header := accountStyle(colorName).Render(title)
 
 	body := previewBody(width, height-1, sess, text, errText)

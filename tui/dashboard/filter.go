@@ -1,4 +1,4 @@
-package tui
+package dashboard
 
 import (
 	"strings"
@@ -38,7 +38,7 @@ func Parse(input string) Filter {
 			// Backslash-escape lets the user type a literal leading sigil
 			// (e.g. "\%opt" matches a title containing "%opt"). The
 			// supported set tracks the sigil set parsed below — escaping
-			// %, @, and ! all need to round-trip through serializeFilter.
+			// %, @, and ! all need to round-trip through SerializeFilter.
 			f.Substrings = append(f.Substrings, tok[1:])
 		case tok == "@" || tok == "!" || tok == "%":
 			// Lone marker — lenient: ignore.
@@ -62,7 +62,7 @@ func (f Filter) IsEmpty() bool {
 
 // Match reports whether a session passes the filter. lastActivity and idle
 // are used only for the !active / !idle state aliases, which require
-// stateGroup classification.
+// StateGroup classification.
 func (f Filter) Match(s session.RunningSession, lastActivity map[int]time.Time, idle time.Duration) bool {
 	profile := s.EffectiveProfile()
 	if f.Account != "" && !strings.EqualFold(profile, f.Account) {
@@ -75,7 +75,7 @@ func (f Filter) Match(s session.RunningSession, lastActivity map[int]time.Time, 
 		return false
 	}
 	if len(f.Substrings) > 0 {
-		title := strings.ToLower(runningSessionDisplayTitle(s))
+		title := strings.ToLower(SessionDisplayTitle(s))
 		dir := strings.ToLower(s.Directory)
 		acct := strings.ToLower(profile)
 		for _, sub := range f.Substrings {
@@ -90,82 +90,12 @@ func (f Filter) Match(s session.RunningSession, lastActivity map[int]time.Time, 
 	return true
 }
 
-// chipKind classifies a removable filter chip rendered above the list.
-type chipKind int
-
-const (
-	chipSubstring chipKind = iota
-	chipAccount
-	chipHarness
-	chipState
-)
-
-// chipComponent is one removable chip extracted from a Filter. The label
-// includes a leading sigil (`/`, `@`, `!`) so chips read like the DSL the
-// user typed.
-type chipComponent struct {
-	kind  chipKind
-	label string // sigil + value, e.g. "/api", "@work", "!key"
-	raw   string // value without the sigil, e.g. "api", "work", "key"
-}
-
-// Components returns the ordered chip list backing the filter: substrings
-// first (in token order), then account, then state. Removal keys (1..N) map
-// onto this order so the indices are stable as long as Components and
-// RemoveComponent are kept in sync.
-func (f Filter) Components() []chipComponent {
-	var out []chipComponent
-	for _, s := range f.Substrings {
-		out = append(out, chipComponent{kind: chipSubstring, label: "/" + s, raw: s})
-	}
-	if f.Account != "" {
-		out = append(out, chipComponent{kind: chipAccount, label: "@" + f.Account, raw: f.Account})
-	}
-	if f.Harness != "" {
-		out = append(out, chipComponent{kind: chipHarness, label: "%" + f.Harness, raw: f.Harness})
-	}
-	if f.State != "" {
-		out = append(out, chipComponent{kind: chipState, label: "!" + f.State, raw: f.State})
-	}
-	return out
-}
-
-// RemoveComponent returns a new Filter with the component at idx removed.
-// Indices match the order returned by Components. An out-of-range idx is a
-// no-op (returns the original filter unchanged).
-func (f Filter) RemoveComponent(idx int) Filter {
-	comps := f.Components()
-	if idx < 0 || idx >= len(comps) {
-		return f
-	}
-	out := Filter{
-		Substrings: append([]string(nil), f.Substrings...),
-		Account:    f.Account,
-		Harness:    f.Harness,
-		State:      f.State,
-	}
-	target := comps[idx]
-	switch target.kind {
-	case chipSubstring:
-		// Substrings sit at positions 0..len(Substrings)-1 in Components,
-		// so idx is a direct slice index.
-		out.Substrings = append(out.Substrings[:idx], out.Substrings[idx+1:]...)
-	case chipAccount:
-		out.Account = ""
-	case chipHarness:
-		out.Harness = ""
-	case chipState:
-		out.State = ""
-	}
-	out.Raw = serializeFilter(out)
-	return out
-}
-
-// serializeFilter rebuilds a DSL string from a Filter so its Raw stays in
-// sync after components are removed. Bare substrings that would otherwise
-// be misparsed as @account / %harness / !state get an escape prefix; the
-// escape set must mirror the sigil set Parse recognizes.
-func serializeFilter(f Filter) string {
+// SerializeFilter rebuilds a DSL string from a Filter so its Raw stays in
+// sync after components are removed or a component is swapped in place. Bare
+// substrings that would otherwise be misparsed as @account / %harness /
+// !state get an escape prefix; the escape set must mirror the sigil set
+// Parse recognizes.
+func SerializeFilter(f Filter) string {
 	var parts []string
 	for _, s := range f.Substrings {
 		if len(s) > 0 && (s[0] == '@' || s[0] == '!' || s[0] == '%') {
@@ -218,17 +148,33 @@ func TokenAtCaret(input string, caretPos int) (sigil byte, prefix string, replac
 }
 
 // matchState applies the !<state> filter, including the active/idle aliases
-// that fan out to stateGroup buckets.
+// that fan out to StateGroup buckets.
 func matchState(s session.RunningSession, state string, lastActivity map[int]time.Time, idle time.Duration) bool {
 	switch strings.ToLower(state) {
 	case "active":
-		return stateGroup(s, lastActivity, idle) == 1
+		return StateGroup(s, lastActivity, idle) == 1
 	case "idle":
-		return stateGroup(s, lastActivity, idle) == 2
+		return StateGroup(s, lastActivity, idle) == 2
 	case "bolt", "key", "stop", "warning", "error", "subagent", "compact", "question":
 		return s.State == strings.ToLower(state)
 	}
 	// Unknown state name — lenient: pass everything through so the user can
 	// see they have a typo without the list going eerily empty.
 	return true
+}
+
+// ApplyFilter returns the sessions that pass f.
+func ApplyFilter(sessions []session.RunningSession, f Filter, lastActivity map[int]time.Time, idle time.Duration) []session.RunningSession {
+	if f.IsEmpty() {
+		out := make([]session.RunningSession, len(sessions))
+		copy(out, sessions)
+		return out
+	}
+	var out []session.RunningSession
+	for _, s := range sessions {
+		if f.Match(s, lastActivity, idle) {
+			out = append(out, s)
+		}
+	}
+	return out
 }

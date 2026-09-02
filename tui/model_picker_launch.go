@@ -14,6 +14,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
 // restartWithAccountCmd closes and relaunches a session under a different account.
@@ -207,7 +208,7 @@ func applyPickerFilter(sessions []config.Session, query string) []int {
 		}
 		return out
 	}
-	f := Parse(query)
+	f := dashboard.Parse(query)
 	for i, cs := range sessions {
 		synthetic := session.RunningSession{
 			Base:      configSessionDisplayTitle(cs),

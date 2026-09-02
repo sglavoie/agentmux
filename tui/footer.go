@@ -5,7 +5,9 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
+
 	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -314,7 +316,7 @@ func listFooterLine2Leads(m Model) (string, string) {
 	indent := "  "
 	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
 		s := m.filtered[m.cursor]
-		if g := StateGloss(s.State); g != "" {
+		if g := dashboard.StateGloss(s.State); g != "" {
 			icon := palette.StateIcon(s.State)
 			glossText := layout.PadIconCell(icon) + " " + g
 			lead := indent + stateAccentStyle(s.State).Render(glossText) + styleFooter.Render(" — ")

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/actions"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -25,7 +26,7 @@ const (
 // The footer (rendered separately) carries the y/n/esc affordances.
 func renderConfirm(m Model) string {
 	var verb string
-	title := runningSessionDisplayTitle(m.targetSession)
+	title := dashboard.SessionDisplayTitle(m.targetSession)
 	switch m.confirmAction {
 	case "close":
 		verb = "Close"

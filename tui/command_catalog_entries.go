@@ -4,6 +4,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
 func commandCatalog() []command {
@@ -155,7 +157,7 @@ func commandCatalog() []command {
 			availability: sessionCommandAvailability,
 			execute: func(m Model, ctx commandContext) (Model, tea.Cmd) {
 				m.actionErr = nil
-				return m, copyTitleCmd(runningSessionDisplayTitle(ctx.target))
+				return m, copyTitleCmd(dashboard.SessionDisplayTitle(ctx.target))
 			},
 		},
 		{
@@ -250,7 +252,7 @@ func commandCatalog() []command {
 			aliases:     []string{"chips", "reset"}, shortcut: keyEsc,
 			visible: func(m Model, _ commandContext) bool { return !m.activeFilter.IsEmpty() },
 			execute: func(m Model, _ commandContext) (Model, tea.Cmd) {
-				m.applyFilterChange(Filter{})
+				m.applyFilterChange(dashboard.Filter{})
 				return m, nil
 			},
 		},

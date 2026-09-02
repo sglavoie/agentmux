@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
 // chordModel builds a Model wired to the standard mock client and seeds the
@@ -220,7 +221,7 @@ func TestChordEscCancels(t *testing.T) {
 	}
 	m := chordModel(rows, 0)
 	// Apply an active filter so we can prove Esc didn't also clear it.
-	m.activeFilter = Parse("@work")
+	m.activeFilter = dashboard.Parse("@work")
 
 	updated, _ := m.Update(keyPress("]"))
 	updated, _ = updated.(Model).Update(keyPress("esc"))

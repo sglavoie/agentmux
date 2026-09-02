@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -154,7 +155,7 @@ func TestRootFootersHaveZebraRows(t *testing.T) {
 			m: Model{
 				mode:         ModeList,
 				width:        72,
-				activeFilter: Filter{Substrings: []string{"api"}},
+				activeFilter: dashboard.Filter{Substrings: []string{"api"}},
 			},
 		},
 	}

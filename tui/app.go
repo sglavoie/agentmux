@@ -8,6 +8,7 @@ package tui
 
 import (
 	tea "charm.land/bubbletea/v2"
+
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )

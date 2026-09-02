@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
 func visibleDashboardBases(m Model) []string {
@@ -25,7 +26,7 @@ func TestDashboardProfileCycleFiltersRunningProfilesAndWraps(t *testing.T) {
 	}
 	m := loadSessions(testModel(), running)
 
-	if got := dashboardSessionProfiles(m.sessions); !slices.Equal(got, []string{"personal", "Work"}) {
+	if got := dashboard.SessionProfiles(m.sessions); !slices.Equal(got, []string{"personal", "Work"}) {
 		t.Fatalf("running profile cycle = %v, want [personal Work]", got)
 	}
 
@@ -66,7 +67,7 @@ func TestDashboardProfileCycleCombinesWithOtherFilterComponents(t *testing.T) {
 		{Base: "api-active", Profile: "personal", Harness: "claude", State: "bolt"},
 	}
 	m := loadSessions(testModel(), running)
-	m.applyFilterChange(Parse("api %claude !key"))
+	m.applyFilterChange(dashboard.Parse("api %claude !key"))
 
 	m = pressKey(m, "f")
 	if got := m.activeFilter; !slices.Equal(got.Substrings, []string{"api"}) ||
@@ -102,15 +103,15 @@ func TestDashboardProfileCycleHandlesMissingAndEmptyProfileSets(t *testing.T) {
 		{Base: "work", Profile: "work"},
 		{Base: "personal", Profile: "personal"},
 	}
-	if got := nextDashboardProfileFilter(running, "gone"); got != "personal" {
+	if got := dashboard.NextProfileFilter(running, "gone"); got != "personal" {
 		t.Fatalf("missing current profile advanced to %q, want personal", got)
 	}
-	if got := nextDashboardProfileFilter(nil, "gone"); got != "" {
+	if got := dashboard.NextProfileFilter(nil, "gone"); got != "" {
 		t.Fatalf("empty profile set advanced to %q, want all", got)
 	}
 
 	m := loadSessions(testModel(), nil)
-	m.applyFilterChange(Parse("api @gone !key"))
+	m.applyFilterChange(dashboard.Parse("api @gone !key"))
 	m = pressKey(m, "f")
 	if m.activeFilter.Account != "" || m.activeFilter.Raw != "api !key" {
 		t.Fatalf("empty cycle did not clear only profile: %+v", m.activeFilter)

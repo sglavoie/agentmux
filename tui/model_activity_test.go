@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
 func TestSessionsMsgStoresActivity(t *testing.T) {
@@ -61,7 +62,7 @@ func TestSessionsMsgNilActivityClassifiesAsActive(t *testing.T) {
 		{TabID: 1, WindowID: 1, Base: "fresh", Account: "work", State: ""},
 	}
 	m = loadSessions(m, sessions)
-	if g := stateGroup(m.filtered[0], m.lastActivity, m.idleThreshold); g != 1 {
+	if g := dashboard.StateGroup(m.filtered[0], m.lastActivity, m.idleThreshold); g != 1 {
 		t.Errorf("expected fresh empty-state session to be Active (1), got %d", g)
 	}
 }
@@ -74,7 +75,7 @@ func TestSessionsMsgStaleActivityFlipsToIdle(t *testing.T) {
 	// Force a tight threshold and a stale timestamp.
 	m.idleThreshold = time.Second
 	m.lastActivity = map[int]time.Time{9: time.Now().Add(-time.Hour)}
-	if g := stateGroup(m.filtered[0], m.lastActivity, m.idleThreshold); g != 2 {
+	if g := dashboard.StateGroup(m.filtered[0], m.lastActivity, m.idleThreshold); g != 2 {
 		t.Errorf("expected stale empty-state session to be Idle (2), got %d", g)
 	}
 }

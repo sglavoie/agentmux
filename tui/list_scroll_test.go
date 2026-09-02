@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
 // scrollModel returns a baseline Model parked in ModeList with a generous
@@ -42,7 +43,7 @@ func TestListFooterBudgetMatchesRenderedRowsAcrossStates(t *testing.T) {
 	base.filtered = makeRowsForScroll(20)
 
 	filtered := base
-	filtered.activeFilter = Filter{Substrings: []string{"api"}}
+	filtered.activeFilter = dashboard.Filter{Substrings: []string{"api"}}
 	jump := base
 	jump.pendingJumpDir = 1
 
@@ -117,7 +118,7 @@ func TestListChromeLines_LegendDroppedBelowLegendMinHeight(t *testing.T) {
 func TestListChromeLines_ChipsAddOneLine(t *testing.T) {
 	m := scrollModel()
 	base := listChromeLines(m)
-	m.activeFilter = Filter{Substrings: []string{"api"}}
+	m.activeFilter = dashboard.Filter{Substrings: []string{"api"}}
 	got := listChromeLines(m)
 	if got != base+1 {
 		t.Errorf("with chips: got %d want %d", got, base+1)
@@ -293,7 +294,7 @@ func TestScrollListToCursor_GroupLabelChargedCorrectly(t *testing.T) {
 	}
 	m.lastActivity = map[int]time.Time{}
 
-	if g := countGroups(m.filtered, m.lastActivity, m.idleThreshold); g <= 1 {
+	if g := dashboard.CountGroups(m.filtered, m.lastActivity, m.idleThreshold); g <= 1 {
 		t.Fatalf("test fixture must span multiple groups: countGroups=%d", g)
 	}
 
@@ -365,7 +366,7 @@ func TestScrollListToCursor_PreviewEnabledKeepsCursorVisible(t *testing.T) {
 	}
 	m.lastActivity = map[int]time.Time{}
 
-	if g := countGroups(m.filtered, m.lastActivity, m.idleThreshold); g <= 1 {
+	if g := dashboard.CountGroups(m.filtered, m.lastActivity, m.idleThreshold); g <= 1 {
 		t.Fatalf("test fixture must span multiple groups: countGroups=%d", g)
 	}
 

@@ -4,39 +4,9 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
-
-const (
-	titleColWidth = 20
-	dirMaxWidth   = 40
-
-	// groupBorderGlyph is the 1-cell left border drawn for each row of a group.
-	groupBorderGlyph = "▌"
-	// groupBorderWidth is the visual width consumed by the border + trailing space.
-	groupBorderWidth = 2
-)
-
-// stateGlosses maps the state name (as emitted by stateGroup/StateIcon) to a
-// short human-readable meaning shown in the footer when the cursor sits on a
-// row of that state. Idle/empty states have no entry: their gloss is the
-// absence of an icon, which is gloss enough.
-var stateGlosses = map[string]string{
-	"bolt":     "active",
-	"stop":     "stopped",
-	"key":      "needs permission",
-	"warning":  "last tool failed",
-	"error":    "stopped with failure",
-	"subagent": "subagent running",
-	"compact":  "compacting context",
-	"question": "awaiting response",
-}
-
-// StateGloss returns the human-readable meaning for a state name, or "" if
-// the state has no gloss (idle / unknown).
-func StateGloss(state string) string {
-	return stateGlosses[state]
-}
 
 // renderHeader renders the dashboard title line. Active filters are surfaced
 // as chips below the header via renderChips, so this line carries the title,
@@ -176,75 +146,10 @@ func renderInlineFilter(m Model) string {
 	return "\n"
 }
 
-// renderChips renders the filter chip row(s) for the current activeFilter,
-// or "" when the filter is empty (so the area collapses with no blank line).
-// Chips wrap to a second line when the running width would exceed the
-// terminal width.
-func renderChips(m Model, width int) string {
-	if m.activeFilter.IsEmpty() {
-		return ""
-	}
-	comps := m.activeFilter.Components()
-	acctColor := buildProfileColorMap(m)
-
-	const chipSep = "  "
-	sepW := layout.StyledWidth(chipSep)
-
-	var lines []string
-	var line strings.Builder
-	lineW := 0
-	for i, c := range comps {
-		chip := renderChip(c, acctColor, i == m.focusedChipIdx)
-		// A single chip whose label exceeds the terminal is never split by the
-		// wrap loop below, so clamp it to width first (mirrors the guard in
-		// renderSessionSearchChips at session_search.go).
-		if width > 0 {
-			chip = layout.StyledTruncate(chip, width, "…")
-		}
-		chipW := layout.StyledWidth(chip)
-		add := chipW
-		if line.Len() > 0 {
-			add += sepW
-		}
-		if width > 0 && line.Len() > 0 && lineW+add > width {
-			lines = append(lines, line.String())
-			line.Reset()
-			lineW = 0
-			add = chipW
-		}
-		if line.Len() > 0 {
-			line.WriteString(chipSep)
-		}
-		line.WriteString(chip)
-		lineW += add
-	}
-	if line.Len() > 0 {
-		lines = append(lines, line.String())
-	}
-	return strings.Join(lines, "\n") + "\n"
-}
-
-// renderChip renders a single chip body. The leading ▌ glyph and trailing
-// ✕ remove icon share the chip's color so the entire chip reads as one unit.
-// Focused chips wrap the ✕ in brackets — Postel's Law: chip focus is also
-// signaled by the underline overlay in chipStyle, but the bracketed glyph
-// makes the affordance unmistakable.
-func renderChip(c chipComponent, acctColor map[string]string, focused bool) string {
-	suffix := " ✕"
-	if focused {
-		suffix = " [✕]"
-	}
-	return chipStyle(c, acctColor, focused).Render("▌" + c.label + suffix)
-}
-
 // legendMinHeight is the minimum terminal height (rows) required to render
 // the state legend strip. Below this the line is omitted silently to leave
 // space for sessions.
 const legendMinHeight = 20
-
-// legendStates lists the state names rendered in the legend strip, in the
-// order they appear. Mirrors stateGlosses; idle/unknown states have no entry.
-var legendStates = []string{"bolt", "stop", "key", "warning", "error"}
 
 // renderLegend returns the icon→meaning legend strip drawn above the list.
 // Returns "" when the terminal is too short to spare a line, when the model
@@ -255,8 +160,8 @@ func renderLegend(m Model) string {
 		return ""
 	}
 	var tokens []footerToken
-	for _, state := range legendStates {
-		gloss := StateGloss(state)
+	for _, state := range dashboard.LegendStates {
+		gloss := dashboard.StateGloss(state)
 		if gloss == "" {
 			continue
 		}

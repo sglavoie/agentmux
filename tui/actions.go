@@ -4,6 +4,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/clipboard"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
 var copyToClipboard = clipboard.Copy
@@ -116,7 +117,7 @@ func actionsFor(_ Model) []action {
 			label:       "clear icon",
 			description: "drop the attention/key/stop badge on the tab title",
 			available: func(m Model) bool {
-				return stateGroup(m.targetSession, m.lastActivity, m.idleThreshold) == 0
+				return dashboard.StateGroup(m.targetSession, m.lastActivity, m.idleThreshold) == 0
 			},
 			run: func(m Model) (Model, tea.Cmd) {
 				cmd := m.clearStatusCmd(m.targetSession)
@@ -189,7 +190,7 @@ func actionsFor(_ Model) []action {
 			description: "copy the session title to the system clipboard",
 			available:   func(Model) bool { return true },
 			run: func(m Model) (Model, tea.Cmd) {
-				title := runningSessionDisplayTitle(m.targetSession)
+				title := dashboard.SessionDisplayTitle(m.targetSession)
 				m.exitActionsMode()
 				return m, copyTitleCmd(title)
 			},

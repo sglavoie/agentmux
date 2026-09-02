@@ -4,9 +4,11 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
 // TestUpdateUnknownMsgIsNoop verifies the Update switch's terminal default
@@ -165,8 +167,8 @@ func TestHandleListKeyTabCyclesChips(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	// Apply a filter with three components directly so the chip focus path is
 	// independent of search input details.
-	m.activeFilter = Parse("api @work !bolt")
-	m.filtered = applyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
+	m.activeFilter = dashboard.Parse("api @work !bolt")
+	m.filtered = dashboard.ApplyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
 	if got := len(m.activeFilter.Components()); got != 3 {
 		t.Fatalf("expected 3 chips, got %d (raw=%q)", got, m.activeFilter.Raw)
 	}

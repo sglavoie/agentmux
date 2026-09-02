@@ -4,6 +4,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
 // handleKey dispatches key events by current mode.
@@ -84,7 +85,7 @@ func (m Model) handleSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// Cancel: restore the snapshot taken on entry and recompute.
 		m.activeFilter = m.savedFilter
 		m.filterText = m.savedFilter.Raw
-		m.filtered = applyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
+		m.filtered = dashboard.ApplyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
 		m.sortFiltered()
 		m.cursor = 0
 		m.focusedChipIdx = -1

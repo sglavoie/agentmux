@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 
+	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -11,7 +12,7 @@ func renderConfigPicker(m Model) string {
 	var sb strings.Builder
 	purpose := m.activeConfigPickerPurpose()
 	header := purpose.header()
-	title := runningSessionDisplayTitle(m.targetSession)
+	title := dashboard.SessionDisplayTitle(m.targetSession)
 	if purpose == ConfigPickerWorktreeReopen && m.worktreeActionTarget != nil {
 		title = worktreeConfirmationTitle(m.worktreeActionTarget)
 	}
@@ -26,7 +27,7 @@ func renderConfigPicker(m Model) string {
 			maxHarness = h
 		}
 	}
-	harnessColor := buildHarnessColorMap(m)
+	harnessColor := dashboard.HarnessColorMap(m.cfg)
 	for i, acc := range m.configPickerAccounts {
 		namePad := maxName - layout.Width(acc.Name)
 		if namePad < 0 {

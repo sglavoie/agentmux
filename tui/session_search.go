@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -159,7 +160,7 @@ func renderSessionSearchList(m Model, height int) string {
 		maxWidth = 120
 	}
 
-	acctColor := buildProfileColorMap(m)
+	acctColor := dashboard.ProfileColorMap(m.cfg)
 
 	for i := window.Start; i < window.End; i++ {
 		res := m.sessionResults[i]

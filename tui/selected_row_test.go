@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -106,8 +107,8 @@ func renderedLineContaining(t *testing.T, rendered, visible string) string {
 // renderSelectedRow instead of directly nesting the reverse style around it.
 func TestSelectableListFamiliesUseNormalizedRenderer(t *testing.T) {
 	files := []string{
-		"asl_runs.go", "chip_picker.go", "command_palette.go", "completion.go",
-		"config_picker.go", "list_rows.go", "model_live_session_picker.go",
+		"asl_runs.go", "chip_picker.go", "command_palette.go",
+		"config_picker.go", "model_live_session_picker.go",
 		"picker.go", "plan_search.go", "plan_view.go", "session_search.go",
 		"session_view.go", "worktrees.go",
 	}

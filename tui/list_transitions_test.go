@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
 // TestRecordTransitionsFirstRefreshNoPulse asserts that the very first
@@ -167,8 +168,8 @@ func TestRenderListPulseColumnAppearsOnTransition(t *testing.T) {
 	// Every line of the pulsing render must be exactly pulseColumnWidth
 	// wider than (or shifted from) the baseline — verify by checking the
 	// pulse glyph appears on the row whose WindowID == 1.
-	if !strings.Contains(with, groupBorderGlyph) {
-		t.Errorf("expected pulse glyph %q in pulsing render; got %q", groupBorderGlyph, with)
+	if !strings.Contains(with, dashboard.GroupBorderGlyph) {
+		t.Errorf("expected pulse glyph %q in pulsing render; got %q", dashboard.GroupBorderGlyph, with)
 	}
 }
 
@@ -185,14 +186,14 @@ func TestRenderListNoPulseColumnByDefault(t *testing.T) {
 	}
 	m.filtered = m.sessions
 	out := renderList(m)
-	if anyRowHasActivePulse(m) {
+	if m.hasActivePulse(1) {
 		t.Fatalf("baseline model should have no active pulse; got %v", m.recentTransitions)
 	}
 	// The row should not begin with the pulse-spacer (two leading spaces
 	// from the pulse column). Since there's a single group, the row also
 	// has no group border — so the row starts directly with formatRow.
 	plain := stripAnsi(out)
-	if strings.HasPrefix(plain, "  "+groupBorderGlyph) {
+	if strings.HasPrefix(plain, "  "+dashboard.GroupBorderGlyph) {
 		t.Errorf("unexpected pulse column when no pulse active; got %q", plain)
 	}
 }

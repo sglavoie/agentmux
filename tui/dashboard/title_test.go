@@ -1,4 +1,4 @@
-package tui
+package dashboard
 
 import (
 	"testing"
@@ -8,7 +8,7 @@ import (
 
 func TestRunningSessionDisplayTitleStripsLegacyPrefix(t *testing.T) {
 	sess := session.RunningSession{Base: "W:api", Account: "work"}
-	if got := runningSessionDisplayTitle(sess); got != "api" {
-		t.Fatalf("runningSessionDisplayTitle() = %q, want %q", got, "api")
+	if got := SessionDisplayTitle(sess); got != "api" {
+		t.Fatalf("SessionDisplayTitle() = %q, want %q", got, "api")
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
 // TestPickerRowHarnessColor verifies that the picker row renders the project
@@ -258,7 +259,7 @@ func TestFormatRowOverrideSplitsColor(t *testing.T) {
 	yellowHex := yellow.ForegroundHex()
 	purpleHex := purple.ForegroundHex()
 
-	row := formatRow(s, acctColor, map[string]string{"claude": "purple"}, cfg, 120, "", "", "")
+	row := dashboard.FormatRow(s, acctColor, map[string]string{"claude": "purple"}, cfg, 120, "", "", "")
 
 	if indexColoredSegment(row, yellowHex, "api") < 0 {
 		t.Errorf("expected title 'api' to render in the project default profile color (%s, yellow); row:\n%q", yellowHex, row)
@@ -352,7 +353,7 @@ func TestFormatRowProfileColor(t *testing.T) {
 	yellowHex := yellow.ForegroundHex()
 	blueHex := blue.ForegroundHex()
 
-	row := formatRow(s, acctColor, map[string]string{"claude": "blue"}, cfg, 120, "", "", "")
+	row := dashboard.FormatRow(s, acctColor, map[string]string{"claude": "blue"}, cfg, 120, "", "", "")
 
 	if indexColoredSegment(row, yellowHex, "api") < 0 {
 		t.Errorf("expected title 'api' wrapped in yellow (%s); row:\n%q", yellowHex, row)

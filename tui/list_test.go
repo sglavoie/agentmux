@@ -11,6 +11,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -114,9 +115,9 @@ func TestStateGroupClassification(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			s := session.RunningSession{State: tc.state, WindowID: tc.windowID}
-			got := stateGroup(s, tc.activity, threshold)
+			got := dashboard.StateGroup(s, tc.activity, threshold)
 			if got != tc.want {
-				t.Errorf("stateGroup(%q, win=%d) = %d, want %d", tc.state, tc.windowID, got, tc.want)
+				t.Errorf("dashboard.StateGroup(%q, win=%d) = %d, want %d", tc.state, tc.windowID, got, tc.want)
 			}
 		})
 	}
@@ -127,7 +128,7 @@ func TestStateGroupZeroThreshold(t *testing.T) {
 	// with any activity record should still classify as Active.
 	s := session.RunningSession{State: "", WindowID: 1}
 	activity := map[int]time.Time{1: time.Now().Add(-time.Hour)}
-	got := stateGroup(s, activity, 0)
+	got := dashboard.StateGroup(s, activity, 0)
 	if got != 1 {
 		t.Errorf("expected Active (1) with zero threshold, got %d", got)
 	}
@@ -186,7 +187,7 @@ func TestRenderListEmptyHeroFilteredOut(t *testing.T) {
 		width:        60,
 		sessions:     []session.RunningSession{{Base: "x", State: "bolt"}},
 		filtered:     nil,
-		activeFilter: Parse("nomatch"),
+		activeFilter: dashboard.Parse("nomatch"),
 	}
 	out := stripAnsi(renderList(m))
 	if !strings.Contains(out, "No sessions match the active filter.") {
@@ -217,8 +218,8 @@ func TestRenderListMixedGroupBorders(t *testing.T) {
 	if !strings.Contains(out, "Active (1)") {
 		t.Errorf("expected active label; got %q", out)
 	}
-	if !strings.Contains(out, groupBorderGlyph) {
-		t.Errorf("expected border glyph %q in output %q", groupBorderGlyph, out)
+	if !strings.Contains(out, dashboard.GroupBorderGlyph) {
+		t.Errorf("expected border glyph %q in output %q", dashboard.GroupBorderGlyph, out)
 	}
 }
 
@@ -239,7 +240,7 @@ func TestRenderListSingleGroupNoBorder(t *testing.T) {
 	if strings.Contains(out, "Active (") {
 		t.Errorf("single-group list should not render label; got %q", out)
 	}
-	if strings.Contains(out, groupBorderGlyph) {
+	if strings.Contains(out, dashboard.GroupBorderGlyph) {
 		t.Errorf("single-group list should not render border; got %q", out)
 	}
 }
@@ -254,8 +255,8 @@ func TestRenderListSingleGroupNoBorder(t *testing.T) {
 func TestFormatRowWarningIconAlignment(t *testing.T) {
 	sBolt := session.RunningSession{State: "bolt", Account: "p", Base: "api"}
 	sWarn := session.RunningSession{State: "warning", Account: "p", Base: "api"}
-	rowBolt := formatRow(sBolt, nil, nil, nil, 0, "", "", "")
-	rowWarn := formatRow(sWarn, nil, nil, nil, 0, "", "", "")
+	rowBolt := dashboard.FormatRow(sBolt, nil, nil, nil, 0, "", "", "")
+	rowWarn := dashboard.FormatRow(sWarn, nil, nil, nil, 0, "", "", "")
 
 	iBoltBadge := idxBadge(rowBolt)
 	iWarnBadge := idxBadge(rowWarn)
@@ -304,10 +305,10 @@ func TestFormatRowHarnessBadge(t *testing.T) {
 	sCopilot := session.RunningSession{Base: "api", Account: "work", Harness: "copilot"}
 	sNone := session.RunningSession{Base: "api", Account: "work", Harness: ""}
 
-	rowClaude := stripAnsi(formatRow(sClaude, nil, nil, cfg, 0, "", "", ""))
-	rowCodex := stripAnsi(formatRow(sCodex, nil, nil, cfg, 0, "", "", ""))
-	rowCopilot := stripAnsi(formatRow(sCopilot, nil, nil, cfg, 0, "", "", ""))
-	rowNone := stripAnsi(formatRow(sNone, nil, nil, cfg, 0, "", "", ""))
+	rowClaude := stripAnsi(dashboard.FormatRow(sClaude, nil, nil, cfg, 0, "", "", ""))
+	rowCodex := stripAnsi(dashboard.FormatRow(sCodex, nil, nil, cfg, 0, "", "", ""))
+	rowCopilot := stripAnsi(dashboard.FormatRow(sCopilot, nil, nil, cfg, 0, "", "", ""))
+	rowNone := stripAnsi(dashboard.FormatRow(sNone, nil, nil, cfg, 0, "", "", ""))
 
 	if !strings.Contains(rowClaude, "🐱 claude") {
 		t.Errorf("expected '🤖 claude' cell for claude harness; got %q", rowClaude)
@@ -357,7 +358,7 @@ func TestFormatRowAcctBadgeUnicode(t *testing.T) {
 	}
 	for _, tc := range cases {
 		s := session.RunningSession{Base: "x", Account: tc.account}
-		row := stripAnsi(formatRow(s, nil, nil, nil, 0, "", "", ""))
+		row := stripAnsi(dashboard.FormatRow(s, nil, nil, nil, 0, "", "", ""))
 		if !strings.Contains(row, tc.want) {
 			t.Errorf("account %q: row %q does not contain expected badge %q", tc.account, row, tc.want)
 		}
@@ -388,7 +389,7 @@ func TestFormatRowEmojiTitleColumnAlignment(t *testing.T) {
 	var dirOffset int
 	for i, title := range titles {
 		s := session.RunningSession{Base: title, Account: "work", Directory: dirText}
-		row := stripAnsi(formatRow(s, nil, nil, nil, 120, "", "", ""))
+		row := stripAnsi(dashboard.FormatRow(s, nil, nil, nil, 120, "", "", ""))
 		if !utf8.ValidString(row) {
 			t.Fatalf("title %q produced invalid UTF-8 row: %q", title, row)
 		}
@@ -421,7 +422,7 @@ func TestFormatRowEmojiTitleColumnAlignment(t *testing.T) {
 	first := true
 	for title, body := range emojiBodies {
 		s := session.RunningSession{Base: title, Account: "work", Directory: dirText}
-		row := stripAnsi(formatRow(s, nil, nil, nil, 120, "", "", ""))
+		row := stripAnsi(dashboard.FormatRow(s, nil, nil, nil, 120, "", "", ""))
 		idx := strings.Index(row, body)
 		if idx < 0 {
 			t.Fatalf("title body %q not found in row for title %q: %q", body, title, row)
@@ -442,7 +443,7 @@ func TestFormatRowEmojiTitleColumnAlignment(t *testing.T) {
 	// emoji-prefixed bodies above so users still see the bullet as a narrow
 	// marker rather than a chunky icon.
 	sBullet := session.RunningSession{Base: "•dotfiles", Account: "work", Directory: dirText}
-	rowBullet := stripAnsi(formatRow(sBullet, nil, nil, nil, 120, "", "", ""))
+	rowBullet := stripAnsi(dashboard.FormatRow(sBullet, nil, nil, nil, 120, "", "", ""))
 	bulletBody := strings.Index(rowBullet, "dotfiles")
 	if bulletBody < 0 {
 		t.Fatalf("bullet-prefixed title body not found in row: %q", rowBullet)
@@ -460,8 +461,8 @@ func TestRenderLegendVisible(t *testing.T) {
 	if !strings.Contains(out, "icons:") {
 		t.Errorf("expected legend prefix; got %q", out)
 	}
-	for _, state := range legendStates {
-		gloss := StateGloss(state)
+	for _, state := range dashboard.LegendStates {
+		gloss := dashboard.StateGloss(state)
 		if gloss == "" {
 			continue
 		}

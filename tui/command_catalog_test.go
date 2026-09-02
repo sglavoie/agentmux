@@ -8,6 +8,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
 func commandByID(t *testing.T, id commandID) command {
@@ -305,7 +306,7 @@ func TestCommandCatalogConditionalVisibility(t *testing.T) {
 	if clear.isVisible(m, ctx) {
 		t.Fatal("clear filters should be hidden without an active filter")
 	}
-	m.activeFilter = Parse("api")
+	m.activeFilter = dashboard.Parse("api")
 	if !clear.isVisible(m, ctx) {
 		t.Fatal("clear filters should be visible with an active filter")
 	}

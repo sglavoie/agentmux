@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -388,7 +390,7 @@ func commandPaletteContextLine(m Model) string {
 	if !m.commandContext.hasTarget {
 		return "Session: none · session commands are disabled"
 	}
-	title := runningSessionDisplayTitle(m.commandContext.target)
+	title := dashboard.SessionDisplayTitle(m.commandContext.target)
 	profile := m.commandContext.target.EffectiveProfile()
 	if profile == "" {
 		return "Session: " + title

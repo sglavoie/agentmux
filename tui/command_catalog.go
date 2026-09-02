@@ -5,6 +5,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
 // commandID is a stable, internal identity for a dashboard command. IDs are
@@ -174,7 +175,7 @@ func clearStatusCommandAvailability(m Model, ctx commandContext) commandAvailabi
 	if availability := sessionCommandAvailability(m, ctx); !availability.available {
 		return availability
 	}
-	if stateGroup(ctx.target, m.lastActivity, m.idleThreshold) != 0 {
+	if dashboard.StateGroup(ctx.target, m.lastActivity, m.idleThreshold) != 0 {
 		return unavailableCommand(commandReasonStatusNotClear)
 	}
 	return availableCommand()

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -29,7 +30,7 @@ func renderActions(m Model, descWidth int) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(styleHeader.Render("Actions for "+layout.RenderTitleIcon(runningSessionDisplayTitle(m.targetSession))) + "\n\n")
+	sb.WriteString(styleHeader.Render("Actions for "+layout.RenderTitleIcon(dashboard.SessionDisplayTitle(m.targetSession))) + "\n\n")
 	for _, line := range actionBodyLines(m, descWidth) {
 		sb.WriteString(line)
 		sb.WriteByte('\n')
@@ -99,7 +100,7 @@ func renderActionsWindow(m Model, descWidth int) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(styleHeader.Render("Actions for "+layout.RenderTitleIcon(runningSessionDisplayTitle(m.targetSession))) + "\n\n")
+	sb.WriteString(styleHeader.Render("Actions for "+layout.RenderTitleIcon(dashboard.SessionDisplayTitle(m.targetSession))) + "\n\n")
 	if offset > 0 {
 		sb.WriteString(styleDim.Render("  ▲"))
 	}

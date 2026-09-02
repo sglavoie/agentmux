@@ -4,7 +4,16 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/sglavoie/agentmux/tui/dashboard"
 )
+
+// clearJumpChord resets any in-flight bracket-key chord. Callers invoke this
+// before transitioning away from ModeList so the footer hint disappears and
+// the next return to ModeList starts in a clean state.
+func (m *Model) clearJumpChord() {
+	m.pendingJumpDir = 0
+}
 
 func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.snapshotSeenStates()
@@ -21,8 +30,8 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if key == keyEsc {
 			return m, nil
 		}
-		if matcher := chordStateMatcher(key); matcher != nil {
-			if next := findNextMatching(m.filtered, m.cursor, dir, matcher); next >= 0 {
+		if matcher := dashboard.ChordStateMatcher(key); matcher != nil {
+			if next := dashboard.FindNextMatching(m.filtered, m.cursor, dir, matcher); next >= 0 {
 				m.cursor = next
 				scrollListToCursor(&m)
 				if cmd := m.refreshPreviewForCursor(); cmd != nil {
@@ -57,8 +66,8 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.pendingJumpDir == +1 {
 			// Double-tap ]]: perform the attention-set jump.
 			m.pendingJumpDir = 0
-			attn := isAttentionStateFor(m.attentionStates)
-			if next := findNextMatching(m.filtered, m.cursor, +1, attn); next >= 0 {
+			attn := dashboard.AttentionMatcher(m.attentionStates)
+			if next := dashboard.FindNextMatching(m.filtered, m.cursor, +1, attn); next >= 0 {
 				m.cursor = next
 				scrollListToCursor(&m)
 				if cmd := m.refreshPreviewForCursor(); cmd != nil {
@@ -75,8 +84,8 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.pendingJumpDir == -1 {
 			// Double-tap [[: perform the attention-set jump backward.
 			m.pendingJumpDir = 0
-			attn := isAttentionStateFor(m.attentionStates)
-			if prev := findNextMatching(m.filtered, m.cursor, -1, attn); prev >= 0 {
+			attn := dashboard.AttentionMatcher(m.attentionStates)
+			if prev := dashboard.FindNextMatching(m.filtered, m.cursor, -1, attn); prev >= 0 {
 				m.cursor = prev
 				scrollListToCursor(&m)
 				if cmd := m.refreshPreviewForCursor(); cmd != nil {
@@ -90,8 +99,8 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case keyJumpAttentionNextFocus:
-		attn := isAttentionStateFor(m.attentionStates)
-		if next := findNextMatching(m.filtered, m.cursor, +1, attn); next >= 0 {
+		attn := dashboard.AttentionMatcher(m.attentionStates)
+		if next := dashboard.FindNextMatching(m.filtered, m.cursor, +1, attn); next >= 0 {
 			m.cursor = next
 			scrollListToCursor(&m)
 			s := m.filtered[m.cursor]
@@ -104,8 +113,8 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case keyJumpAttentionPrevFocus:
-		attn := isAttentionStateFor(m.attentionStates)
-		if prev := findNextMatching(m.filtered, m.cursor, -1, attn); prev >= 0 {
+		attn := dashboard.AttentionMatcher(m.attentionStates)
+		if prev := dashboard.FindNextMatching(m.filtered, m.cursor, -1, attn); prev >= 0 {
 			m.cursor = prev
 			scrollListToCursor(&m)
 			s := m.filtered[m.cursor]
@@ -224,7 +233,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case keyEsc:
 		// Clear active filter and any chip focus so a single esc returns the
 		// user to a clean list.
-		m.applyFilterChange(Filter{})
+		m.applyFilterChange(dashboard.Filter{})
 
 	case keyQuestion:
 		m.openHelp(ModeList)
@@ -341,7 +350,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		case keyClearStatus:
 			if len(m.filtered) > 0 {
 				m.targetSession = m.filtered[m.cursor]
-				if stateGroup(m.targetSession, m.lastActivity, m.idleThreshold) != 0 {
+				if dashboard.StateGroup(m.targetSession, m.lastActivity, m.idleThreshold) != 0 {
 					return m, nil
 				}
 				m.actionErr = nil
@@ -384,7 +393,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case keyY:
 			if len(m.filtered) > 0 {
-				title := runningSessionDisplayTitle(m.filtered[m.cursor])
+				title := dashboard.SessionDisplayTitle(m.filtered[m.cursor])
 				m.actionErr = nil
 				return m, copyTitleCmd(title)
 			}

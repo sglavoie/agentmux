@@ -2,6 +2,7 @@ package tui
 
 import (
 	"charm.land/lipgloss/v2"
+
 	"github.com/sglavoie/agentmux/internal/palette"
 )
 
@@ -38,12 +39,6 @@ var (
 
 	styleAttentionRow = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
 
-	// styleAgeWarning colors the per-row activity cell when a sweep-eligible
-	// session has been silent for ≥ 80% of its resolved threshold. Reuses
-	// the attention amber so the cue reads as "approaching stale" without
-	// the full alarm weight of styleError.
-	styleAgeWarning = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
-
 	// Per-state accent styles used by the footer gloss. bolt picks up the
 	// success/active teal; stop/key/warning reuse the attention orange; terminal
 	// error stays on the stronger red accent.
@@ -52,16 +47,6 @@ var (
 	styleStateKey     = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
 	styleStateWarning = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
 	styleStateError   = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
-
-	styleGroupBorderAttention = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
-	styleGroupBorderActive    = lipgloss.NewStyle()
-	styleGroupBorderIdle      = lipgloss.NewStyle().Faint(true)
-
-	styleGroupLabelAttention = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00")).Bold(true)
-	styleGroupLabelActive    = lipgloss.NewStyle().Bold(true)
-	styleGroupLabelIdle      = lipgloss.NewStyle().Faint(true).Bold(true)
-
-	styleEmptyHero = lipgloss.NewStyle().Bold(true)
 
 	// styleChip is the neutral base for substring chips. Account chips use
 	// accountStyle(colorName) on top; state chips with attention semantics
@@ -96,11 +81,6 @@ var (
 	stylePipErr  = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
 	styleBanner  = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00")).Bold(true)
 
-	// Completion popup styles. Selected rows use renderSelectedRow so they
-	// share the same normalized highlight as every other selectable list;
-	// non-selected rows stay dim so the menu reads as auxiliary UI.
-	styleCompletionPopup = lipgloss.NewStyle().Faint(true)
-
 	// Detail-pane styles (ModeDetail). detailRowStyle is intentionally
 	// neutral so row text inherits the terminal's default foreground;
 	// keeping the call site explicit makes it easy to recolor every row
@@ -123,33 +103,6 @@ var (
 	styleTimelineTool     = lipgloss.NewStyle().Foreground(lipgloss.Color("#4ec9b0"))
 	styleTimelineExpanded = lipgloss.NewStyle().Faint(true).Italic(true)
 )
-
-// chipStyle returns the rendering style for a chip, layering the focus
-// underline on top of the kind-specific base color when applicable.
-func chipStyle(c chipComponent, acctColor map[string]string, focused bool) lipgloss.Style {
-	var base lipgloss.Style
-	switch c.kind {
-	case chipAccount:
-		base = accountStyle(acctColor[c.raw])
-	case chipState:
-		switch c.raw {
-		case "key", "stop":
-			base = styleAttentionRow
-		case "warning":
-			base = styleStateWarning
-		case "error":
-			base = styleStateError
-		default:
-			base = styleChip
-		}
-	default:
-		base = styleChip
-	}
-	if focused {
-		base = base.Underline(true)
-	}
-	return base
-}
 
 // stateAccentStyle returns the per-state foreground style used to color the
 // gloss text in the footer. Unknown / idle states fall back to the dim footer

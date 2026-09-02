@@ -9,6 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -216,7 +217,7 @@ func detailHeader(m Model) string {
 	if r, sz := utf8.DecodeRuneInString(s.Account); sz > 0 && r != utf8.RuneError {
 		acctBadge = strings.ToUpper(string(r))
 	}
-	colorName := projectIdentityColor(s, buildProfileColorMap(m), m.cfg)
+	colorName := dashboard.ProjectIdentityColor(s, dashboard.ProfileColorMap(m.cfg), m.cfg)
 	badge := accountStyle(colorName).Render("[" + acctBadge + "]")
 
 	icon := ""
@@ -224,7 +225,7 @@ func detailHeader(m Model) string {
 		icon = palette.StateIcon(s.State) + " "
 	}
 
-	line1 := fmt.Sprintf("%s %s%s — window %d", badge, icon, layout.RenderTitleIcon(runningSessionDisplayTitle(s)), s.WindowID)
+	line1 := fmt.Sprintf("%s %s%s — window %d", badge, icon, layout.RenderTitleIcon(dashboard.SessionDisplayTitle(s)), s.WindowID)
 
 	state := s.State
 	if state == "" {
@@ -232,7 +233,7 @@ func detailHeader(m Model) string {
 	}
 	meta := []string{fmt.Sprintf("state=%s", state)}
 	if ws, found := m.watchdog[s.WindowID]; found && ws.LastAction != "" {
-		meta = append(meta, fmt.Sprintf("age=%s", formatAge(ws, time.Now())))
+		meta = append(meta, fmt.Sprintf("age=%s", dashboard.FormatAge(ws, time.Now())))
 	}
 	meta = append(meta, fmt.Sprintf("%d events", len(m.detailEvents)))
 	if n := len(m.detailEvents); n > 0 && isTerminalAction(m.detailEvents[n-1].Action) {

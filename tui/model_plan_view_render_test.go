@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	runewidth "github.com/mattn/go-runewidth"
+
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 

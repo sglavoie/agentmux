@@ -1,6 +1,9 @@
 package tui
 
-import "github.com/sglavoie/agentmux/tui/layout"
+import (
+	"github.com/sglavoie/agentmux/tui/dashboard"
+	"github.com/sglavoie/agentmux/tui/layout"
+)
 
 // listMinVisible is the floor on the visible row budget for the session list.
 // Even on very short terminals we keep at least this many rows visible so the
@@ -175,7 +178,7 @@ func scrollListToCursor(m *Model) {
 	}
 
 	visible := listVisibleHeight(*m)
-	multiGroup := countGroups(m.filtered, m.lastActivity, m.idleThreshold) > 1
+	multiGroup := dashboard.CountGroups(m.filtered, m.lastActivity, m.idleThreshold) > 1
 
 	// Advance offset row-by-row until the cumulative line cost from offset
 	// through cursor fits within the visible budget. Stops when cursor and
@@ -199,51 +202,15 @@ func scrollListToCursor(m *Model) {
 // listCursorFitsWindow reports whether renderListAt can emit the cursor row
 // from the given offset inside the full list pane height. The pane height is
 // not all row budget: renderListAt spends one line on ▲ when offset > 0 and
-// one line on ▼ when rows remain below the cursor. Those indicator lines must
-// be reserved during scroll calculations, otherwise the model can select a
-// row that the renderer drops while making space for the scroll markers.
+// one line on ▼ when rows remain below the cursor, and the dashboard reserves
+// those indicator lines so the model cannot select a row that the renderer
+// drops while making space for the scroll markers.
 func listCursorFitsWindow(m *Model, offset, height int, multiGroup bool) bool {
-	if offset < 0 || offset > m.cursor || m.cursor >= len(m.filtered) {
-		return false
-	}
-	budget := height
-	if offset > 0 {
-		budget--
-	}
-	if m.cursor < len(m.filtered)-1 {
-		budget--
-	}
-	if budget < 0 {
-		return false
-	}
-	return listLineCost(m, offset, m.cursor, multiGroup) <= budget
+	return dashboardScrollInput(m, multiGroup).CursorFits(offset, m.cursor, height)
 }
 
 // listLineCost returns the number of rendered lines from offset through
-// cursor inclusive, matching the renderListAt walk. When multiGroup is true a
-// group-label line precedes the first row and every subsequent row whose
-// group differs from the previous one; subsequent visible group labels also
-// get a blank separator line. The walk initializes prevGroup to -1 to match
-// renderListAt, so the row at offset always emits a label when multiGroup is
-// true.
+// cursor inclusive, matching the renderListAt walk.
 func listLineCost(m *Model, offset, cursor int, multiGroup bool) int {
-	if offset > cursor || offset < 0 || cursor >= len(m.filtered) {
-		return 0
-	}
-	cost := 0
-	prevGroup := -1
-	for i := offset; i <= cursor; i++ {
-		if multiGroup {
-			g := stateGroup(m.filtered[i], m.lastActivity, m.idleThreshold)
-			if g != prevGroup {
-				if prevGroup != -1 {
-					cost++ // blank separator before a subsequent group
-				}
-				cost++ // group label
-				prevGroup = g
-			}
-		}
-		cost++ // row line
-	}
-	return cost
+	return dashboardScrollInput(m, multiGroup).LineCost(offset, cursor)
 }

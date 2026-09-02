@@ -13,6 +13,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
 func TestCommandRunRejectsDisabledAndHiddenCommands(t *testing.T) {
@@ -253,7 +254,7 @@ func TestCommandExploreAndAppExecution(t *testing.T) {
 			t.Fatalf("filter result: mode=%v text=%q cmd=%v", got.mode, got.filterText, cmd != nil)
 		}
 		got.mode = ModeList
-		got.activeFilter = Parse("api")
+		got.activeFilter = dashboard.Parse("api")
 		got.filtered = got.sessions
 		got, cmd = commandByID(t, commandClearFilters).run(got, ctx)
 		if !got.activeFilter.IsEmpty() || got.cursor != 0 || cmd != nil {

@@ -7,7 +7,9 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
 func TestPushToastAppendsNewestOnTop(t *testing.T) {
@@ -234,7 +236,7 @@ func TestRestoreCursorPreservesPriorBase(t *testing.T) {
 		{TabID: 1, Base: "api", Account: "work", State: ""},
 		{TabID: 2, Base: "db", Account: "work", State: ""},
 	}
-	i := restoreCursor(sessions, "db", nil, 0)
+	i := dashboard.RestoreCursor(sessions, "db", nil, 0)
 	if i != 1 {
 		t.Errorf("expected cursor on db (index 1), got %d", i)
 	}
@@ -247,7 +249,7 @@ func TestRestoreCursorFallsBackToAttentionRow(t *testing.T) {
 		{TabID: 3, Base: "stopped", Account: "work", State: "stop"},
 	}
 	// Prior row was deleted; should pick the first attention row.
-	i := restoreCursor(sessions, "missing", nil, 0)
+	i := dashboard.RestoreCursor(sessions, "missing", nil, 0)
 	if i != 1 {
 		t.Errorf("expected fallback to first attention row (index 1), got %d", i)
 	}
@@ -258,14 +260,14 @@ func TestRestoreCursorDefaultsToZero(t *testing.T) {
 		{TabID: 1, Base: "a", Account: "work", State: "bolt"},
 		{TabID: 2, Base: "b", Account: "work", State: ""},
 	}
-	i := restoreCursor(sessions, "ghost", nil, 0)
+	i := dashboard.RestoreCursor(sessions, "ghost", nil, 0)
 	if i != 0 {
 		t.Errorf("expected default to 0 when no attention row, got %d", i)
 	}
 }
 
 func TestRestoreCursorEmptyListReturnsZero(t *testing.T) {
-	if got := restoreCursor(nil, "anything", nil, 0); got != 0 {
+	if got := dashboard.RestoreCursor(nil, "anything", nil, 0); got != 0 {
 		t.Errorf("expected 0 for empty list, got %d", got)
 	}
 }

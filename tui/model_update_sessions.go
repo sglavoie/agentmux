@@ -6,6 +6,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 	tuiplans "github.com/sglavoie/agentmux/tui/plans"
 )
 
@@ -16,17 +17,17 @@ func (m Model) handleSessionsMsg(msg sessionsMsg) (tea.Model, tea.Cmd) {
 	// Capture the prior cursor's row identity before the list is
 	// rebuilt so we can restore it post-refresh. Empty list → no
 	// prior selection to preserve.
-	var prior cursorIdentity
+	var prior dashboard.CursorIdentity
 	if len(m.filtered) > 0 && m.cursor >= 0 && m.cursor < len(m.filtered) {
-		prior = captureCursorIdentity(m.filtered[m.cursor])
+		prior = dashboard.CaptureCursorIdentity(m.filtered[m.cursor])
 	}
 	m.lastActivity = msg.activity
 	m.watchdog = msg.watchdog
 	m.sessions = msg.sessions
 	m.recordTransitions()
-	m.filtered = applyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
+	m.filtered = dashboard.ApplyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
 	m.sortFiltered()
-	m.cursor = restoreCursorByIdentity(m.filtered, prior, m.lastActivity, m.idleThreshold)
+	m.cursor = dashboard.RestoreCursorByIdentity(m.filtered, prior, m.lastActivity, m.idleThreshold)
 	selectionIsNew := msg.selectionToken == "" || msg.selectionToken != m.lastSelectionRequestToken
 	if msg.selectionTabID > 0 && selectionIsNew {
 		for i, running := range m.filtered {

@@ -7,6 +7,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
 func TestLKeyOpensPicker(t *testing.T) {
@@ -165,7 +166,7 @@ func TestFooterIncludesDirectKeys(t *testing.T) {
 
 func TestFooterEscHintShownWhenFiltered(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m.activeFilter = Parse("test")
+	m.activeFilter = dashboard.Parse("test")
 	footer := stripAnsi(renderFooter(m))
 	if !strings.Contains(footer, "esc clear filters") {
 		t.Errorf("expected esc hint when filters active, got:\n%s", footer)
