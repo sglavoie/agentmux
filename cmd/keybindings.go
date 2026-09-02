@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/tui"
+	"github.com/sglavoie/agentmux/tui/customization"
 	"github.com/spf13/cobra"
 )
 
@@ -17,7 +17,7 @@ var keybindingsCmd = &cobra.Command{
 		if focusExistingKeybindings(client) {
 			return nil
 		}
-		return tui.RunKeybindingsOverlay()
+		return customization.RunKeybindingsOverlay()
 	},
 }
 

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 type statusSeverity int
@@ -357,10 +358,10 @@ func fitStatusBarText(text string, width int) string {
 	if width <= 0 {
 		return text
 	}
-	if displayWidth(text) > width {
-		text = displayTruncate(text, width, "...")
+	if layout.Width(text) > width {
+		text = layout.Truncate(text, width, "...")
 	}
-	return displayPadRight(text, width)
+	return layout.PadRight(text, width)
 }
 
 func oneLineStatusText(text string) string {

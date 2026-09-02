@@ -6,6 +6,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/transcript"
+	tuiplans "github.com/sglavoie/agentmux/tui/plans"
 )
 
 func planSearchNavModel(total, height int) Model {
@@ -175,7 +176,7 @@ func TestPlanViewerLessKeysScrollWrappedRows(t *testing.T) {
 		t.Fatalf("setup: wrapped plan rows = %d, want at least 4", len(rows))
 	}
 	visible := planViewerVisibleHeight(base)
-	wantHalf := halfPageStep(planViewerPageStep(len(rows), 0, visible))
+	wantHalf := halfPageStep(tuiplans.PageStep(len(rows), 0, visible))
 
 	m := pressKey(base, "ctrl+d")
 	if m.planViewerCursor != 0 {

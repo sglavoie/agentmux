@@ -1,4 +1,4 @@
-package tui
+package layout
 
 import (
 	"strings"
@@ -6,6 +6,15 @@ import (
 	"unicode/utf8"
 
 	"charm.land/lipgloss/v2"
+)
+
+// styleSelected and styleDim mirror the two root TUI styles these tests
+// originally rendered through. Layout owns no theme, so the tests carry the
+// styles they need to prove that ANSI attributes never count toward cell
+// width or survive a cut.
+var (
+	styleSelected = lipgloss.NewStyle().Bold(true).Reverse(true)
+	styleDim      = lipgloss.NewStyle().Faint(true)
 )
 
 // TestDisplayWidthBasic exercises the centralized cell-width helper on
@@ -40,8 +49,8 @@ func TestDisplayWidthBasic(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := displayWidth(c.in); got != c.want {
-				t.Errorf("displayWidth(%q) = %d, want %d", c.in, got, c.want)
+			if got := Width(c.in); got != c.want {
+				t.Errorf("Width(%q) = %d, want %d", c.in, got, c.want)
 			}
 		})
 	}
@@ -56,42 +65,42 @@ func TestStyledDisplayWidthStripsAnsi(t *testing.T) {
 	if styled == plain {
 		t.Fatalf("lipgloss did not produce ANSI-styled output for %q", plain)
 	}
-	if got, want := displayStyledWidth(styled), len(plain); got != want {
-		t.Errorf("displayStyledWidth(styled) = %d, want %d (styled=%q)", got, want, styled)
+	if got, want := StyledWidth(styled), len(plain); got != want {
+		t.Errorf("StyledWidth(styled) = %d, want %d (styled=%q)", got, want, styled)
 	}
-	if got := displayStyledWidth("plain"); got != 5 {
-		t.Errorf("displayStyledWidth(plain) = %d, want 5", got)
+	if got := StyledWidth("plain"); got != 5 {
+		t.Errorf("StyledWidth(plain) = %d, want 5", got)
 	}
 	// Embedded raw CSI sequence around an emoji — visible width must
 	// match the underlying glyph.
 	raw := "\x1b[31m⚡\x1b[0m"
-	if got := displayStyledWidth(raw); got != 2 {
-		t.Errorf("displayStyledWidth(raw ANSI ⚡) = %d, want 2", got)
+	if got := StyledWidth(raw); got != 2 {
+		t.Errorf("StyledWidth(raw ANSI ⚡) = %d, want 2", got)
 	}
 }
 
 func TestDisplayStyledTruncatePreservesAnsi(t *testing.T) {
 	styled := styleDim.Render("label: abcdef")
-	got := displayStyledTruncate(styled, 8, "…")
+	got := StyledTruncate(styled, 8, "…")
 	if !utf8.ValidString(got) {
-		t.Fatalf("displayStyledTruncate produced invalid UTF-8: %q", got)
+		t.Fatalf("StyledTruncate produced invalid UTF-8: %q", got)
 	}
 	if plain := stripAnsi(got); plain != "label: …" {
-		t.Fatalf("displayStyledTruncate visible text = %q, want %q (raw=%q)", plain, "label: …", got)
+		t.Fatalf("StyledTruncate visible text = %q, want %q (raw=%q)", plain, "label: …", got)
 	}
-	if w := displayStyledWidth(got); w != 8 {
-		t.Fatalf("displayStyledTruncate visible width = %d, want 8 (raw=%q)", w, got)
+	if w := StyledWidth(got); w != 8 {
+		t.Fatalf("StyledTruncate visible width = %d, want 8 (raw=%q)", w, got)
 	}
 	if !strings.Contains(got, "\x1b[") {
-		t.Fatalf("displayStyledTruncate should preserve ANSI styling, got %q", got)
+		t.Fatalf("StyledTruncate should preserve ANSI styling, got %q", got)
 	}
 	if reset := lastANSIResetIndex(got); reset < strings.LastIndex(got, "…") {
-		t.Fatalf("displayStyledTruncate should preserve a reset after the tail, got %q", got)
+		t.Fatalf("StyledTruncate should preserve a reset after the tail, got %q", got)
 	}
 
-	untruncated := displayStyledTruncate(styled, 80, "…")
+	untruncated := StyledTruncate(styled, 80, "…")
 	if untruncated != styled {
-		t.Fatalf("displayStyledTruncate under budget = %q, want original %q", untruncated, styled)
+		t.Fatalf("StyledTruncate under budget = %q, want original %q", untruncated, styled)
 	}
 }
 
@@ -134,12 +143,12 @@ func TestDisplayTruncateKeepsClusters(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := displayTruncate(c.in, c.max, c.tail)
+			got := Truncate(c.in, c.max, c.tail)
 			if got != c.want {
-				t.Errorf("displayTruncate(%q, %d, %q) = %q, want %q", c.in, c.max, c.tail, got, c.want)
+				t.Errorf("Truncate(%q, %d, %q) = %q, want %q", c.in, c.max, c.tail, got, c.want)
 			}
-			if w := displayWidth(got); c.max > 0 && w > c.max {
-				t.Errorf("displayTruncate(%q, %d, %q) result %q exceeds max width: %d", c.in, c.max, c.tail, got, w)
+			if w := Width(got); c.max > 0 && w > c.max {
+				t.Errorf("Truncate(%q, %d, %q) result %q exceeds max width: %d", c.in, c.max, c.tail, got, w)
 			}
 		})
 	}
@@ -165,9 +174,9 @@ func TestDisplayTruncateLeftBehavior(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := displayTruncateLeft(c.in, c.max, c.prefix)
+			got := TruncateLeft(c.in, c.max, c.prefix)
 			if got != c.want {
-				t.Errorf("displayTruncateLeft(%q, %d, %q) = %q, want %q", c.in, c.max, c.prefix, got, c.want)
+				t.Errorf("TruncateLeft(%q, %d, %q) = %q, want %q", c.in, c.max, c.prefix, got, c.want)
 			}
 		})
 	}
@@ -178,38 +187,38 @@ func TestDisplayTruncateLeftBehavior(t *testing.T) {
 // arithmetic embedded throughout list/picker render paths.
 func TestDisplayPadWidthHelpers(t *testing.T) {
 	t.Run("pad-right-ascii", func(t *testing.T) {
-		got := displayPadRight("hi", 5)
+		got := PadRight("hi", 5)
 		if got != "hi   " {
-			t.Errorf("displayPadRight ascii = %q, want %q", got, "hi   ")
+			t.Errorf("PadRight ascii = %q, want %q", got, "hi   ")
 		}
-		if w := displayWidth(got); w != 5 {
-			t.Errorf("displayPadRight resulting width = %d, want 5", w)
+		if w := Width(got); w != 5 {
+			t.Errorf("PadRight resulting width = %d, want 5", w)
 		}
 	})
 	t.Run("pad-right-emoji", func(t *testing.T) {
 		// 🐱 is 2 cells; padding to 4 should add exactly 2 spaces.
-		got := displayPadRight("🐱", 4)
+		got := PadRight("🐱", 4)
 		if got != "🐱  " {
-			t.Errorf("displayPadRight emoji = %q, want %q", got, "🐱  ")
+			t.Errorf("PadRight emoji = %q, want %q", got, "🐱  ")
 		}
 	})
 	t.Run("pad-right-already-wide", func(t *testing.T) {
-		got := displayPadRight("hello", 3)
+		got := PadRight("hello", 3)
 		if got != "hello" {
-			t.Errorf("displayPadRight returned %q for already-wide input, want unchanged", got)
+			t.Errorf("PadRight returned %q for already-wide input, want unchanged", got)
 		}
 	})
 	t.Run("pad-left-ascii", func(t *testing.T) {
-		got := displayPadLeft("hi", 5)
+		got := PadLeft("hi", 5)
 		if got != "   hi" {
-			t.Errorf("displayPadLeft ascii = %q, want %q", got, "   hi")
+			t.Errorf("PadLeft ascii = %q, want %q", got, "   hi")
 		}
 	})
 	t.Run("pad-left-cjk", func(t *testing.T) {
 		// "中" is 2 cells; padding to 4 should add exactly 2 spaces.
-		got := displayPadLeft("中", 4)
+		got := PadLeft("中", 4)
 		if got != "  中" {
-			t.Errorf("displayPadLeft cjk = %q, want %q", got, "  中")
+			t.Errorf("PadLeft cjk = %q, want %q", got, "  中")
 		}
 	})
 }
@@ -218,25 +227,25 @@ func TestDisplayPadWidthHelpers(t *testing.T) {
 // must measure styled output by its visible width, not its byte length.
 func TestDisplayCenterWidth(t *testing.T) {
 	t.Run("centers-ascii", func(t *testing.T) {
-		got := displayCenter("hi", 6)
+		got := Center("hi", 6)
 		if got != "  hi" {
-			t.Errorf("displayCenter ascii = %q, want %q", got, "  hi")
+			t.Errorf("Center ascii = %q, want %q", got, "  hi")
 		}
 	})
 	t.Run("centers-styled", func(t *testing.T) {
 		styled := lipgloss.NewStyle().Bold(true).Render("hi")
-		got := displayCenter(styled, 6)
+		got := Center(styled, 6)
 		if !strings.HasPrefix(got, "  ") {
-			t.Errorf("displayCenter styled = %q, expected 2 leading spaces", got)
+			t.Errorf("Center styled = %q, expected 2 leading spaces", got)
 		}
 		if !strings.HasSuffix(got, styled) {
-			t.Errorf("displayCenter styled = %q, expected to end with styled content", got)
+			t.Errorf("Center styled = %q, expected to end with styled content", got)
 		}
 	})
 	t.Run("no-pad-when-saturated", func(t *testing.T) {
-		got := displayCenter("hello", 3)
+		got := Center("hello", 3)
 		if got != "hello" {
-			t.Errorf("displayCenter saturated = %q, want unchanged", got)
+			t.Errorf("Center saturated = %q, want unchanged", got)
 		}
 	})
 }
@@ -262,12 +271,12 @@ func TestTitleCellIconPadding(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := displayPadIconCell(c.in)
+			got := PadIconCell(c.in)
 			if got != c.want {
-				t.Errorf("displayPadIconCell(%q) = %q, want %q", c.in, got, c.want)
+				t.Errorf("PadIconCell(%q) = %q, want %q", c.in, got, c.want)
 			}
-			if w := displayWidth(got); w != titleIconCell() {
-				t.Errorf("displayPadIconCell(%q) cell width = %d, want %d", c.in, w, titleIconCell())
+			if w := Width(got); w != iconCell() {
+				t.Errorf("PadIconCell(%q) cell width = %d, want %d", c.in, w, iconCell())
 			}
 		})
 	}
@@ -299,8 +308,8 @@ func TestTitleCellIsLeadingIcon(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := displayIsTitleIcon(c.in); got != c.want {
-				t.Errorf("displayIsTitleIcon(%q) = %v, want %v", c.in, got, c.want)
+			if got := isTitleIcon(c.in); got != c.want {
+				t.Errorf("isTitleIcon(%q) = %v, want %v", c.in, got, c.want)
 			}
 		})
 	}
@@ -313,49 +322,49 @@ func TestTitleCellIsLeadingIcon(t *testing.T) {
 func TestTitleCellRenderPadsIconColumn(t *testing.T) {
 	t.Run("warn-vs-padded", func(t *testing.T) {
 		const title = "⚠️ api"
-		got := displayRenderTitleIcon(title)
+		got := RenderTitleIcon(title)
 		want := "⚠️  api"
 		if got != want {
-			t.Errorf("displayRenderTitleIcon(%q) = %q, want %q", title, got, want)
+			t.Errorf("RenderTitleIcon(%q) = %q, want %q", title, got, want)
 		}
-		if w := displayWidth(got); w != displayWidth(want) {
-			t.Errorf("rendered width = %d, want %d", w, displayWidth(want))
+		if w := Width(got); w != Width(want) {
+			t.Errorf("rendered width = %d, want %d", w, Width(want))
 		}
 	})
 	t.Run("bolt-unchanged", func(t *testing.T) {
 		const title = "⚡cli"
-		got := displayRenderTitleIcon(title)
+		got := RenderTitleIcon(title)
 		if got != title {
-			t.Errorf("displayRenderTitleIcon(%q) = %q, want unchanged", title, got)
+			t.Errorf("RenderTitleIcon(%q) = %q, want unchanged", title, got)
 		}
 	})
 	t.Run("speak-unchanged", func(t *testing.T) {
 		const title = "🗣commscoach"
-		got := displayRenderTitleIcon(title)
+		got := RenderTitleIcon(title)
 		if got != title {
-			t.Errorf("displayRenderTitleIcon(%q) = %q, want unchanged", title, got)
+			t.Errorf("RenderTitleIcon(%q) = %q, want unchanged", title, got)
 		}
 	})
 	t.Run("rainbow-padded", func(t *testing.T) {
 		title := "\U0001f3f3️‍\U0001f308 flag"
-		got := displayRenderTitleIcon(title)
+		got := RenderTitleIcon(title)
 		want := "\U0001f3f3️‍\U0001f308  flag"
 		if got != want {
-			t.Errorf("displayRenderTitleIcon(rainbow) = %q, want %q", got, want)
+			t.Errorf("RenderTitleIcon(rainbow) = %q, want %q", got, want)
 		}
 	})
 	t.Run("ascii-unchanged", func(t *testing.T) {
 		const title = "agentmux"
-		got := displayRenderTitleIcon(title)
+		got := RenderTitleIcon(title)
 		if got != title {
-			t.Errorf("displayRenderTitleIcon(%q) = %q, want unchanged", title, got)
+			t.Errorf("RenderTitleIcon(%q) = %q, want unchanged", title, got)
 		}
 	})
 	t.Run("bullet-unchanged", func(t *testing.T) {
 		const title = "• status"
-		got := displayRenderTitleIcon(title)
+		got := RenderTitleIcon(title)
 		if got != title {
-			t.Errorf("displayRenderTitleIcon(%q) = %q, want unchanged", title, got)
+			t.Errorf("RenderTitleIcon(%q) = %q, want unchanged", title, got)
 		}
 	})
 }

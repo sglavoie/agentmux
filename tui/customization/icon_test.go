@@ -1,4 +1,4 @@
-package tui
+package customization
 
 import (
 	"errors"
@@ -71,7 +71,7 @@ func iconPickerKey(key string) tea.KeyPressMsg {
 	}
 }
 
-func mustIconPickerModel(t *testing.T, ctx IconPickerContext) iconPickerModel {
+func mustIconPickerModel(t *testing.T, ctx IconContext) iconPickerModel {
 	t.Helper()
 	m, err := newIconPickerModel(ctx)
 	if err != nil {
@@ -81,7 +81,7 @@ func mustIconPickerModel(t *testing.T, ctx IconPickerContext) iconPickerModel {
 }
 
 func TestIconPickerRowsUseStableHarnessOrderAndOmitMissing(t *testing.T) {
-	m := mustIconPickerModel(t, IconPickerContext{HarnessEmojis: map[string]string{
+	m := mustIconPickerModel(t, IconContext{HarnessEmojis: map[string]string{
 		"codex":   "📟",
 		"unknown": "🛸",
 		"claude":  "⭕",
@@ -98,7 +98,7 @@ func TestIconPickerRowsUseStableHarnessOrderAndOmitMissing(t *testing.T) {
 
 func TestIconPickerInitialCursorUsesExistingBadgeOrFirstRow(t *testing.T) {
 	emojis := map[string]string{"claude": "⭕", "copilot": "🚁", "codex": "📟"}
-	withBadge := mustIconPickerModel(t, IconPickerContext{
+	withBadge := mustIconPickerModel(t, IconContext{
 		CurrentTitle:  palette.BuildTitle("🚁project", "bolt", true),
 		HarnessEmojis: emojis,
 	})
@@ -106,7 +106,7 @@ func TestIconPickerInitialCursorUsesExistingBadgeOrFirstRow(t *testing.T) {
 		t.Fatalf("badge cursor = %d, want 1", withBadge.cursor)
 	}
 
-	withoutBadge := mustIconPickerModel(t, IconPickerContext{
+	withoutBadge := mustIconPickerModel(t, IconContext{
 		CurrentTitle:  "🛸project",
 		HarnessEmojis: emojis,
 	})
@@ -117,7 +117,7 @@ func TestIconPickerInitialCursorUsesExistingBadgeOrFirstRow(t *testing.T) {
 
 func TestIconPickerNavigationWrapsAndCancellationDoesNotWrite(t *testing.T) {
 	client := &fakeIconPickerClient{}
-	ctx := IconPickerContext{
+	ctx := IconContext{
 		Client:        client,
 		HarnessEmojis: map[string]string{"claude": "⭕", "copilot": "🚁", "codex": "📟"},
 	}
@@ -157,7 +157,7 @@ func TestIconPickerNavigationWrapsAndCancellationDoesNotWrite(t *testing.T) {
 
 func TestIconPickerAppliesToPlainUnmanagedTitle(t *testing.T) {
 	client := &fakeIconPickerClient{}
-	m := mustIconPickerModel(t, IconPickerContext{
+	m := mustIconPickerModel(t, IconContext{
 		Client:        client,
 		TabID:         42,
 		CurrentTitle:  "shell",
@@ -186,7 +186,7 @@ func TestIconPickerSwitchingAndRepeatSelectionDoNotAccumulatePrefixes(t *testing
 	title := "project"
 
 	for _, cursor := range []int{0, 2, 2, 1, 0} {
-		m := mustIconPickerModel(t, IconPickerContext{
+		m := mustIconPickerModel(t, IconContext{
 			Client:        client,
 			TabID:         7,
 			CurrentTitle:  title,
@@ -220,7 +220,7 @@ func TestIconPickerPreservesAllPaletteManagedTitleSegments(t *testing.T) {
 		Muted:   true,
 		Looping: true,
 	})
-	m := mustIconPickerModel(t, IconPickerContext{
+	m := mustIconPickerModel(t, IconContext{
 		Client:        client,
 		TabID:         8,
 		CurrentTitle:  input,
@@ -256,7 +256,7 @@ func TestIconPickerApplyRefreshesStaleTitleBeforeWriting(t *testing.T) {
 	client := &fakeIconPickerClient{windows: []kitty.OSWindow{{
 		Tabs: []kitty.Tab{{ID: 8, Title: liveTitle}},
 	}}}
-	m := mustIconPickerModel(t, IconPickerContext{
+	m := mustIconPickerModel(t, IconContext{
 		Client:        client,
 		TabID:         8,
 		CurrentTitle:  launchTitle,
@@ -287,7 +287,7 @@ func TestIconPickerApplyRefreshFailureFallsBackToLastKnownTitle(t *testing.T) {
 		State:   "active",
 		Starred: true,
 	})
-	m := mustIconPickerModel(t, IconPickerContext{
+	m := mustIconPickerModel(t, IconContext{
 		Client:        client,
 		TabID:         8,
 		CurrentTitle:  lastKnownTitle,
@@ -326,7 +326,7 @@ func TestIconPickerPrefixOrderingHandlesOverlapsAndDuplicatesDeterministically(t
 
 func TestIconPickerPreservesUnrecognizedLeadingGlyph(t *testing.T) {
 	client := &fakeIconPickerClient{}
-	m := mustIconPickerModel(t, IconPickerContext{
+	m := mustIconPickerModel(t, IconContext{
 		Client:        client,
 		CurrentTitle:  "🛸project",
 		HarnessEmojis: map[string]string{"codex": "📟"},
@@ -340,7 +340,7 @@ func TestIconPickerPreservesUnrecognizedLeadingGlyph(t *testing.T) {
 
 func TestIconPickerRejectsEmptyConfiguration(t *testing.T) {
 	for _, emojis := range []map[string]string{nil, {}, {"claude": "", "unknown": "🛸"}} {
-		if _, err := newIconPickerModel(IconPickerContext{HarnessEmojis: emojis}); !errors.Is(err, errNoHarnessIcons) {
+		if _, err := newIconPickerModel(IconContext{HarnessEmojis: emojis}); !errors.Is(err, errNoHarnessIcons) {
 			t.Errorf("newIconPickerModel(%#v) error = %v, want %v", emojis, err, errNoHarnessIcons)
 		}
 	}
@@ -348,7 +348,7 @@ func TestIconPickerRejectsEmptyConfiguration(t *testing.T) {
 
 func TestIconPickerWriteFailureStaysVisibleAndCanRetry(t *testing.T) {
 	client := &fakeIconPickerClient{titleErr: errors.New("Kitty unavailable")}
-	m := mustIconPickerModel(t, IconPickerContext{
+	m := mustIconPickerModel(t, IconContext{
 		Client:        client,
 		TabID:         9,
 		CurrentTitle:  "project",

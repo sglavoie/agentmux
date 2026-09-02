@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // Per-mode footer palettes for the Past Sessions and Plans views. Each palette
@@ -262,7 +263,7 @@ func footerHintLines(m Model, entries []footerEntry, maxLines int) []string {
 // listFooterSectionsLine, returning the newline-joined physical rows.
 func footerHintBlock(m Model, entries []footerEntry, truncated bool) string {
 	sep := styleFooter.Render(footerHintSeparator)
-	sepW := displayStyledWidth(sep)
+	sepW := layout.StyledWidth(sep)
 
 	tokens := make([]footerToken, 0, len(entries)+1)
 	for _, e := range entries {

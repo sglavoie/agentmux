@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // TestRenderDeprecationBannerShownWhenDeprecationsPresent verifies the
@@ -180,7 +181,7 @@ func TestFormatRunElapsedBoundaries(t *testing.T) {
 			if got != tc.want {
 				t.Errorf("formatRunElapsed(%s) = %q, want %q", tc.elapsed, got, tc.want)
 			}
-			if w := displayWidth(got); w > runTimerMaxCells {
+			if w := layout.Width(got); w > runTimerMaxCells {
 				t.Errorf("formatRunElapsed(%s) = %q occupies %d cells, want at most %d", tc.elapsed, got, w, runTimerMaxCells)
 			}
 		})
@@ -192,7 +193,7 @@ func TestFormatRunElapsedBoundaries(t *testing.T) {
 	// The named cases only sample the bands; sweep the whole range so no
 	// future band boundary can reintroduce an unbounded leading count.
 	for elapsed := time.Second; elapsed < 1<<20*time.Hour; elapsed = elapsed*3/2 + time.Second {
-		if w := displayWidth(formatRunElapsed(now.Add(-elapsed), now)); w > runTimerMaxCells {
+		if w := layout.Width(formatRunElapsed(now.Add(-elapsed), now)); w > runTimerMaxCells {
 			t.Fatalf("formatRunElapsed(%s) = %q occupies %d cells, want at most %d", elapsed, formatRunElapsed(now.Add(-elapsed), now), w, runTimerMaxCells)
 		}
 	}
@@ -383,7 +384,7 @@ func TestRenderListActivityColumnSharedWidthAcrossRows(t *testing.T) {
 	}
 	m.filtered = m.sessions
 
-	if got, want := activityColumnWidth(m, now), displayWidth("12h07 "+ageWarningGlyph)+1; got != want {
+	if got, want := activityColumnWidth(m, now), layout.Width("12h07 "+ageWarningGlyph)+1; got != want {
 		t.Fatalf("activityColumnWidth = %d, want %d (the widest cell of the pass plus its trailing space)", got, want)
 	}
 
@@ -410,7 +411,7 @@ func TestRenderListActivityColumnSharedWidthAcrossRows(t *testing.T) {
 		if busyDir < 0 || dir < 0 {
 			t.Fatalf("directory column missing: busy=%q %s=%q", busy, row.name, row.line)
 		}
-		if got, want := displayWidth(row.line[:dir]), displayWidth(busy[:busyDir]); got != want {
+		if got, want := layout.Width(row.line[:dir]), layout.Width(busy[:busyDir]); got != want {
 			t.Errorf("directory starts at cell %d on the %s row and %d on the busy row; the activity column must share one width", got, row.name, want)
 		}
 	}

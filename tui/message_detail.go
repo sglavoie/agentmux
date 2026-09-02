@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // messageDetailChrome is the number of vertical lines the message-detail
@@ -43,7 +44,7 @@ func messageDetailBodyLines(m Model) []string {
 		}
 		wrapped := wrapStyle.Render(p)
 		for _, line := range strings.Split(wrapped, "\n") {
-			lines = append(lines, displayWrapHard(line, maxWidth)...)
+			lines = append(lines, layout.WrapHard(line, maxWidth)...)
 		}
 	}
 	return lines

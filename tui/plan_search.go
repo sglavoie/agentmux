@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/plans"
+	"github.com/sglavoie/agentmux/tui/layout"
+	tuiplans "github.com/sglavoie/agentmux/tui/plans"
 )
 
 // planSearchVisibleHeight returns the number of result rows that fit in the
@@ -22,28 +24,15 @@ func planSearchVisibleHeight(m Model) int {
 }
 
 func planSearchErrorLines(m Model) int {
-	width := planViewerWrapWidth(m.width)
+	width := layout.WrapWidth(m.width)
 	n := 0
 	if err := m.planRefreshErr; err != nil {
-		n += len(displayWrapHard("refresh error: "+err.Error(), width))
+		n += len(layout.WrapHard("refresh error: "+err.Error(), width))
 	}
 	if err := m.planSearchErr; err != nil {
-		n += len(displayWrapHard("search error: "+err.Error(), width))
+		n += len(layout.WrapHard("search error: "+err.Error(), width))
 	}
 	return n
-}
-
-// planSortLabel returns the short label rendered in the Plans header to
-// signal which ordering is active. Kept distinct from the SortMode
-// constants so the on-screen labels can evolve without touching the
-// internal type.
-func planSortLabel(mode plans.SortMode) string {
-	switch mode {
-	case plans.SortByModTime:
-		return "recent"
-	default:
-		return "matches"
-	}
 }
 
 // renderPlanSearch renders the plan browser: header, project chip, query bar,
@@ -57,9 +46,9 @@ func renderPlanSearch(m Model) string {
 		header += "  " + styleDim.Render("(scanning…)")
 	} else {
 		header += "  " + styleDim.Render(fmt.Sprintf("[%d result%s · sort: %s]",
-			count, plural(count), planSortLabel(m.planSortMode)))
+			count, plural(count), tuiplans.SortLabel(m.planSortMode)))
 	}
-	sb.WriteString(clampSearchLine(styleHeader.Render(header), m.width))
+	sb.WriteString(layout.ClampLine(styleHeader.Render(header), m.width))
 	sb.WriteByte('\n')
 	sb.WriteString(renderPlanProjectChip(m))
 	sb.WriteByte('\n')
@@ -73,7 +62,7 @@ func renderPlanSearch(m Model) string {
 	default:
 		queryBar = styleDim.Render("press / to search plan content")
 	}
-	sb.WriteString(clampSearchLine(queryBar, m.width))
+	sb.WriteString(layout.ClampLine(queryBar, m.width))
 	sb.WriteByte('\n')
 	if row := renderPathRow("plan path", selectedPlanSearchPath(m), m.width); row != "" {
 		sb.WriteString(row)
@@ -81,14 +70,14 @@ func renderPlanSearch(m Model) string {
 	}
 	sb.WriteByte('\n')
 
-	wrapWidth := planViewerWrapWidth(m.width)
+	wrapWidth := layout.WrapWidth(m.width)
 	if err := m.planRefreshErr; err != nil {
-		for _, line := range displayWrapHard("refresh error: "+err.Error(), wrapWidth) {
+		for _, line := range layout.WrapHard("refresh error: "+err.Error(), wrapWidth) {
 			sb.WriteString(styleError.Render(line) + "\n")
 		}
 	}
 	if err := m.planSearchErr; err != nil {
-		for _, line := range displayWrapHard("search error: "+err.Error(), wrapWidth) {
+		for _, line := range layout.WrapHard("search error: "+err.Error(), wrapWidth) {
 			sb.WriteString(styleError.Render(line) + "\n")
 		}
 	}
@@ -119,7 +108,7 @@ func renderPlanProjectChip(m Model) string {
 	} else {
 		chip = styleDim.Render(chip)
 	}
-	return clampSearchLine("  "+chip, m.width)
+	return layout.ClampLine("  "+chip, m.width)
 }
 
 // renderPlanSearchList renders the scrollable results list. height is the
@@ -139,9 +128,9 @@ func renderPlanSearchList(m Model, height int) string {
 		return sb.String()
 	}
 
-	window := flatListWindowFor(total, m.planOffset, height)
+	window := layout.ListWindowFor(total, m.planOffset, height)
 
-	if window.showTop {
+	if window.ShowTop {
 		sb.WriteString(styleDim.Render("  ▲"))
 		sb.WriteByte('\n')
 	}
@@ -151,7 +140,7 @@ func renderPlanSearchList(m Model, height int) string {
 		maxWidth = 120
 	}
 
-	for i := window.start; i < window.end; i++ {
+	for i := window.Start; i < window.End; i++ {
 		res := m.planResults[i]
 		line := formatPlanRow(res, maxWidth)
 		if i == m.planCursor {
@@ -162,7 +151,7 @@ func renderPlanSearchList(m Model, height int) string {
 		sb.WriteByte('\n')
 	}
 
-	if window.showBottom {
+	if window.ShowBottom {
 		sb.WriteString(styleDim.Render("  ▼"))
 		sb.WriteByte('\n')
 	}
@@ -185,7 +174,7 @@ func formatPlanRow(res plans.Result, maxWidth int) string {
 		matchFrag = "  " + styleSearch.Render(fmt.Sprintf("(%d match%s)", res.Matches, matchPlural(res.Matches)))
 	}
 
-	project := planProjectLabel(res.Meta)
+	project := tuiplans.ProjectLabel(res.Meta)
 	projectFrag := styleChip.Render("[" + project + "]")
 	if len(res.Meta.ProjectNames()) == 0 {
 		projectFrag = styleDim.Render("[" + project + "]")
@@ -198,17 +187,7 @@ func formatPlanRow(res plans.Result, maxWidth int) string {
 		preview = ""
 	}
 	if preview != "" {
-		body += "  " + styleDim.Render(displayTruncate(preview, maxRunes(maxWidth-displayStyledWidth(body)-2), "…"))
+		body += "  " + styleDim.Render(layout.Truncate(preview, maxRunes(maxWidth-layout.StyledWidth(body)-2), "…"))
 	}
-	return displayStyledTruncate(body, maxWidth, "…")
-}
-
-func planProjectLabel(meta plans.PlanMeta) string {
-	if meta.Project != "" {
-		return meta.Project
-	}
-	if projects := meta.ProjectNames(); len(projects) > 0 {
-		return projects[0]
-	}
-	return "Unknown"
+	return layout.StyledTruncate(body, maxWidth, "…")
 }

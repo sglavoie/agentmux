@@ -1,5 +1,7 @@
 package tui
 
+import "github.com/sglavoie/agentmux/tui/layout"
+
 // listMinVisible is the floor on the visible row budget for the session list.
 // Even on very short terminals we keep at least this many rows visible so the
 // pane remains useful. Mirrors detailMinVisible.
@@ -41,7 +43,7 @@ func chromeAboveListLines(m Model) int {
 }
 
 func legendLineCount(m Model) int {
-	return len(rootSectionLines(renderLegend(m)))
+	return len(layout.SectionLines(renderLegend(m)))
 }
 
 // healthHintLines mirrors renderHealthHints' line count without rendering

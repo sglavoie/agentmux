@@ -62,7 +62,7 @@ func TestNormalizeUITestScreenStripsAnsiAndMeasures(t *testing.T) {
 }
 
 // TestNormalizeUITestScreenEmojiWidth confirms wide glyphs are measured by
-// display cells via the shared displayWidth helper, not by rune count.
+// display cells via the shared layout.Width helper, not by rune count.
 func TestNormalizeUITestScreenEmojiWidth(t *testing.T) {
 	screen := NormalizeUITestScreen("⚡bolt", UITestSize{Width: 80, Height: 24})
 	// ⚡ is 2 cells + "bolt" (4) = 6.

@@ -9,6 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // previewTickMsg is sent by the preview ticker while preview is enabled.
@@ -52,7 +53,7 @@ func renderPreview(width, height int, sess session.RunningSession, text, errText
 	// titles reserve the fixed 2-cell title-icon column so emoji-prefixed
 	// projects align with each other across surfaces.
 	colorName := projectIdentityColor(sess, acctColor, cfg)
-	title := displayTruncate(displayRenderTitleIcon(runningSessionDisplayTitle(sess)), width, "…")
+	title := layout.Truncate(layout.RenderTitleIcon(runningSessionDisplayTitle(sess)), width, "…")
 	header := accountStyle(colorName).Render(title)
 
 	body := previewBody(width, height-1, sess, text, errText)
@@ -67,11 +68,11 @@ func previewBody(width, height int, sess session.RunningSession, text, errText s
 	var lines []string
 	switch {
 	case errText != "":
-		lines = []string{styleError.Render(displayTruncate("error: "+errText, width, "…"))}
+		lines = []string{styleError.Render(layout.Truncate("error: "+errText, width, "…"))}
 	case sess.WindowID == 0:
-		lines = []string{styleDim.Render(displayTruncate("(session not running)", width, "…"))}
+		lines = []string{styleDim.Render(layout.Truncate("(session not running)", width, "…"))}
 	case text == "":
-		lines = []string{styleDim.Render(displayTruncate("(loading…)", width, "…"))}
+		lines = []string{styleDim.Render(layout.Truncate("(loading…)", width, "…"))}
 	default:
 		raw := strings.Split(strings.TrimRight(text, "\n"), "\n")
 		// Take the last `height` lines.
@@ -80,7 +81,7 @@ func previewBody(width, height int, sess session.RunningSession, text, errText s
 		}
 		lines = make([]string, len(raw))
 		for i, ln := range raw {
-			lines[i] = displayTruncate(ln, width, "…")
+			lines[i] = layout.Truncate(ln, width, "…")
 		}
 	}
 	// Pad up to height.

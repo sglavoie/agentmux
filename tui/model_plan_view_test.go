@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/plans"
+	tuiplans "github.com/sglavoie/agentmux/tui/plans"
 )
 
 // planViewTestModel returns a Model in ModePlanView with a viewerPlan
@@ -210,7 +211,7 @@ func TestPlanViewerMatchJumpScrollsToFirstWrappedRow(t *testing.T) {
 	m.jumpToNextPlanMatch(1)
 
 	rows := planViewerRows(m)
-	wantScroll := planViewerFirstRowForLine(rows, 2)
+	wantScroll := tuiplans.FirstRowForLine(rows, 2)
 	if wantScroll < 0 {
 		t.Fatalf("setup: no wrapped row found for source line 2: %#v", rows)
 	}
@@ -251,7 +252,7 @@ func TestPlanViewerNavigationEmptyAndInvalidSelectionsClampSafely(t *testing.T) 
 	if m.planViewerCursor != 1 {
 		t.Fatalf("high cursor = %d, want clamped to last logical line 1", m.planViewerCursor)
 	}
-	if m.planViewerScroll > planViewerMaxScrollOffset(len(planViewerRows(m)), planViewerVisibleHeight(m)) {
+	if m.planViewerScroll > tuiplans.MaxScrollOffset(len(planViewerRows(m)), planViewerVisibleHeight(m)) {
 		t.Fatalf("high scroll = %d exceeds wrapped-row bounds", m.planViewerScroll)
 	}
 

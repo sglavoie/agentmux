@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // renderList renders the session list for the current model state at the
@@ -185,10 +186,10 @@ func renderListAt(m Model, width, height int) string {
 		// Safety clamp at the render boundary. formatRow has a fixed-column
 		// floor (minListRowWidth) it cannot shrink below, so when the pane is
 		// narrower than that floor the composed row would otherwise draw past
-		// the terminal edge. displayStyledTruncate is ANSI-aware and keeps the
+		// the terminal edge. layout.StyledTruncate is ANSI-aware and keeps the
 		// trailing style resets intact after the visible cut.
 		if width > 0 {
-			styledRow = displayStyledTruncate(styledRow, width, "…")
+			styledRow = layout.StyledTruncate(styledRow, width, "…")
 		}
 		sb.WriteString(styledRow)
 		sb.WriteByte('\n')
@@ -281,7 +282,7 @@ func anyVisibleRowHasActiveLoop(m Model, startIdx, endIdx int) bool {
 // cannot positively identify keeps the marker it already had.
 func renderLoopCellFor(m Model, s session.RunningSession) string {
 	if marker, ok := aslMarkerFor(m, s); ok {
-		return displayPadRight(marker, activeLoopColumnWidth)
+		return layout.PadRight(marker, activeLoopColumnWidth)
 	}
 	return renderActiveLoopCell(s.Looping)
 }
@@ -290,7 +291,7 @@ func renderActiveLoopCell(active bool) string {
 	if !active {
 		return strings.Repeat(" ", activeLoopColumnWidth)
 	}
-	return displayPadRight("🔁", activeLoopColumnWidth)
+	return layout.PadRight("🔁", activeLoopColumnWidth)
 }
 
 // anyRowHasActivity reports whether any filtered row is running a busy
@@ -385,10 +386,10 @@ func activityCellText(s session.RunningSession, ws protocol.WatchdogState, now t
 // space. Mirrors tabNumberColumnWidth — one scan per render pass, so the
 // column cannot jitter between rows of the same frame.
 func activityColumnWidth(m Model, now time.Time) int {
-	widest := displayWidth("—")
+	widest := layout.Width("—")
 	for _, s := range m.filtered {
 		text, _ := activityCellText(s, m.watchdog[s.WindowID], now)
-		if w := displayWidth(text); w > widest {
+		if w := layout.Width(text); w > widest {
 			widest = w
 		}
 	}
@@ -401,7 +402,7 @@ func activityColumnWidth(m Model, now time.Time) int {
 // appended and the whole cell styled in styleAgeWarning.
 func renderActivityCell(s session.RunningSession, ws protocol.WatchdogState, now time.Time, width int) string {
 	text, warning := activityCellText(s, ws, now)
-	pad := width - 1 - displayWidth(text)
+	pad := width - 1 - layout.Width(text)
 	if pad < 0 {
 		pad = 0
 	}
@@ -439,13 +440,13 @@ func renderEmptyHero(m Model, width int) string {
 	}
 
 	if width <= 0 {
-		width = displayStyledWidth(title)
-		if w := displayStyledWidth(hint); w > width {
+		width = layout.StyledWidth(title)
+		if w := layout.StyledWidth(hint); w > width {
 			width = w
 		}
 	}
-	titleLine := displayCenter(styleEmptyHero.Render(title), width)
-	hintLine := displayCenter(styleDim.Render(hint), width)
+	titleLine := layout.Center(styleEmptyHero.Render(title), width)
+	hintLine := layout.Center(styleDim.Render(hint), width)
 	return titleLine + "\n\n" + hintLine + "\n"
 }
 

@@ -3,6 +3,8 @@ package tui
 import (
 	"fmt"
 	"strings"
+
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // aslResponseInnerWidth is the widest the response form draws. It is clamped to
@@ -39,7 +41,7 @@ func renderASLResponse(m Model, width int) string {
 
 	sb.WriteString(styleHeader.Render(aslResponseTitle(state)))
 	sb.WriteByte('\n')
-	for _, line := range displayWrapHard(aslResponseMetaLine(state), width) {
+	for _, line := range layout.WrapHard(aslResponseMetaLine(state), width) {
 		sb.WriteString(styleDim.Render(line))
 		sb.WriteByte('\n')
 	}
@@ -113,7 +115,7 @@ func aslResponseBodyBlock(state aslResponseState, width int) []string {
 			wrapped = append(wrapped, "")
 			continue
 		}
-		wrapped = append(wrapped, displayWrapHard(line, width)...)
+		wrapped = append(wrapped, layout.WrapHard(line, width)...)
 	}
 	if len(wrapped) > aslResponseBodyLines {
 		wrapped = wrapped[:aslResponseBodyLines]
@@ -136,7 +138,7 @@ func aslResponseEditorBlock(state aslResponseState, width int) []string {
 			lines = append(lines, "")
 			continue
 		}
-		lines = append(lines, displayWrapHard(line, width)...)
+		lines = append(lines, layout.WrapHard(line, width)...)
 	}
 	if len(lines) == 0 {
 		lines = []string{""}
@@ -173,7 +175,7 @@ func aslResponseStatusLines(state aslResponseState, width int) []string {
 		out = append(out, styleDim.Render("status: "+state.status))
 	}
 	if state.notice != "" {
-		for _, line := range displayWrapHard(state.notice, width) {
+		for _, line := range layout.WrapHard(state.notice, width) {
 			out = append(out, styleStateWarning.Render(line))
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // commandMatchesQuery applies case-insensitive AND matching to whitespace-
@@ -189,18 +190,18 @@ func commandPaletteTitleLine(title, shortcut string, width int) string {
 	if width < 1 {
 		return ""
 	}
-	shortcut = displayTruncate(shortcut, width, "…")
-	shortcutWidth := displayWidth(shortcut)
+	shortcut = layout.Truncate(shortcut, width, "…")
+	shortcutWidth := layout.Width(shortcut)
 	if shortcutWidth >= width {
-		return displayPadLeft(shortcut, width)
+		return layout.PadLeft(shortcut, width)
 	}
 
 	titleBudget := width - shortcutWidth - 2
 	if titleBudget < 1 {
-		return displayPadLeft(shortcut, width)
+		return layout.PadLeft(shortcut, width)
 	}
-	title = displayTruncate(title, titleBudget, "…")
-	return displayPadRight(title, width-shortcutWidth) + shortcut
+	title = layout.Truncate(title, titleBudget, "…")
+	return layout.PadRight(title, width-shortcutWidth) + shortcut
 }
 
 func commandPaletteWrappedText(text string, width int) []string {
@@ -213,7 +214,7 @@ func commandPaletteWrappedText(text string, width int) []string {
 	}
 	var rows []string
 	for _, line := range logical {
-		rows = append(rows, displayWrapHard(line, width)...)
+		rows = append(rows, layout.WrapHard(line, width)...)
 	}
 	return rows
 }
@@ -223,7 +224,7 @@ func commandPaletteWrappedText(text string, width int) []string {
 // least one matching result belongs to that group. Command spans exclude the
 // group header so selection visibility can keep the full command together.
 func commandPaletteResultLayout(m Model, width int) commandPaletteLayout {
-	layout := commandPaletteLayout{
+	palette := commandPaletteLayout{
 		spans: make([]commandPaletteCommandSpan, len(m.commandResults)),
 	}
 	if len(m.commandResults) == 0 {
@@ -232,15 +233,15 @@ func commandPaletteResultLayout(m Model, width int) commandPaletteLayout {
 			message = fmt.Sprintf("No commands match %q.", m.commandQuery)
 		}
 		for _, line := range commandPaletteWrappedText(message, width) {
-			layout.rows = append(layout.rows, commandPaletteDisplayRow{text: line, commandIndex: -1})
+			palette.rows = append(palette.rows, commandPaletteDisplayRow{text: line, commandIndex: -1})
 		}
-		return layout
+		return palette
 	}
 
 	var previousGroup commandGroup
 	for i, candidate := range m.commandResults {
 		if i == 0 || candidate.group != previousGroup {
-			layout.rows = append(layout.rows, commandPaletteDisplayRow{
+			palette.rows = append(palette.rows, commandPaletteDisplayRow{
 				text:         string(candidate.group),
 				commandIndex: -1,
 				groupHeader:  true,
@@ -248,9 +249,9 @@ func commandPaletteResultLayout(m Model, width int) commandPaletteLayout {
 			previousGroup = candidate.group
 		}
 
-		start := len(layout.rows)
+		start := len(palette.rows)
 		title := candidate.displayTitle(m, m.commandContext)
-		layout.rows = append(layout.rows, commandPaletteDisplayRow{
+		palette.rows = append(palette.rows, commandPaletteDisplayRow{
 			text:         commandPaletteTitleLine(title, candidate.shortcut, width),
 			commandIndex: i,
 		})
@@ -261,20 +262,20 @@ func commandPaletteResultLayout(m Model, width int) commandPaletteLayout {
 			detail += " — unavailable: " + availability.reason
 		}
 		indent := "  "
-		wrapWidth := width - displayWidth(indent)
+		wrapWidth := width - layout.Width(indent)
 		if wrapWidth < 1 {
 			indent = ""
 			wrapWidth = width
 		}
 		for _, line := range commandPaletteWrappedText(detail, wrapWidth) {
-			layout.rows = append(layout.rows, commandPaletteDisplayRow{
-				text:         displayTruncate(indent+line, width, "…"),
+			palette.rows = append(palette.rows, commandPaletteDisplayRow{
+				text:         layout.Truncate(indent+line, width, "…"),
 				commandIndex: i,
 			})
 		}
-		layout.spans[i] = commandPaletteCommandSpan{start: start, end: len(layout.rows)}
+		palette.spans[i] = commandPaletteCommandSpan{start: start, end: len(palette.rows)}
 	}
-	return layout
+	return palette
 }
 
 func commandPaletteInnerFit(m Model) int {
@@ -332,18 +333,18 @@ func commandPaletteVisibleHeight(m Model, total int) int {
 	return visible
 }
 
-func commandPaletteScrollBounds(m Model) (layout commandPaletteLayout, visible int) {
-	layout = commandPaletteResultLayout(m, commandPaletteContentWidth(m))
-	visible = commandPaletteVisibleHeight(m, len(layout.rows))
-	return layout, visible
+func commandPaletteScrollBounds(m Model) (palette commandPaletteLayout, visible int) {
+	palette = commandPaletteResultLayout(m, commandPaletteContentWidth(m))
+	visible = commandPaletteVisibleHeight(m, len(palette.rows))
+	return palette, visible
 }
 
 func clampCommandPaletteOffset(m *Model) {
 	if m.mode != ModeCommandPalette {
 		return
 	}
-	layout, visible := commandPaletteScrollBounds(*m)
-	maxOffset := len(layout.rows) - visible
+	palette, visible := commandPaletteScrollBounds(*m)
+	maxOffset := len(palette.rows) - visible
 	if maxOffset < 0 {
 		maxOffset = 0
 	}
@@ -357,15 +358,15 @@ func scrollCommandPaletteToCursor(m *Model) {
 	if m.mode != ModeCommandPalette {
 		return
 	}
-	layout, visible := commandPaletteScrollBounds(*m)
-	if len(layout.rows) == 0 || visible <= 0 || m.commandCursor < 0 || m.commandCursor >= len(layout.spans) {
+	palette, visible := commandPaletteScrollBounds(*m)
+	if len(palette.rows) == 0 || visible <= 0 || m.commandCursor < 0 || m.commandCursor >= len(palette.spans) {
 		m.commandOffset = 0
 		return
 	}
 
-	span := layout.spans[m.commandCursor]
+	span := palette.spans[m.commandCursor]
 	start := span.start
-	if start > 0 && layout.rows[start-1].groupHeader && span.end-(start-1) <= visible {
+	if start > 0 && palette.rows[start-1].groupHeader && span.end-(start-1) <= visible {
 		start--
 	}
 	if span.end-span.start > visible {
@@ -396,7 +397,7 @@ func commandPaletteContextLine(m Model) string {
 }
 
 func commandPaletteInputLine(m Model, width int) string {
-	return displayTruncateLeft(":"+m.commandQuery+commandPaletteCursorGlyph, width, "…")
+	return layout.TruncateLeft(":"+m.commandQuery+commandPaletteCursorGlyph, width, "…")
 }
 
 func commandPaletteHintLine(width int, above, below bool) string {
@@ -411,25 +412,25 @@ func commandPaletteHintLine(width int, above, below bool) string {
 	if below {
 		right = " ▼"
 	}
-	middleWidth := width - displayWidth(left) - displayWidth(right)
+	middleWidth := width - layout.Width(left) - layout.Width(right)
 	if middleWidth < 0 {
 		middleWidth = 0
 	}
 	middle := joinFooterBindings(" · ", renderFooterBinding("↑/↓", "move"), renderFooterBinding("enter", "run"), renderFooterBinding("esc", "close"))
-	middle = displayStyledTruncate(middle, middleWidth, "…")
-	if padding := middleWidth - displayStyledWidth(middle); padding > 0 {
+	middle = layout.StyledTruncate(middle, middleWidth, "…")
+	if padding := middleWidth - layout.StyledWidth(middle); padding > 0 {
 		middle += strings.Repeat(" ", padding)
 	}
 	return styleFooter.Render(left) + middle + styleFooter.Render(right)
 }
 
 func renderCommandPaletteRow(m Model, row commandPaletteDisplayRow, width int) string {
-	text := displayTruncate(row.text, width, "…")
+	text := layout.Truncate(row.text, width, "…")
 	if row.groupHeader {
 		return styleHeader.Render(text)
 	}
 	if row.commandIndex == m.commandCursor && row.commandIndex >= 0 {
-		return renderSelectedRow(displayPadRight(text, width))
+		return renderSelectedRow(layout.PadRight(text, width))
 	}
 	if row.commandIndex >= 0 {
 		availability := m.commandResults[row.commandIndex].availabilityFor(m, m.commandContext)
@@ -446,18 +447,18 @@ func renderCommandPaletteRow(m Model, row commandPaletteDisplayRow, width int) s
 // split by command-index-based scrolling.
 func renderCommandPalette(m Model) string {
 	width := commandPaletteContentWidth(m)
-	layout, visible := commandPaletteScrollBounds(m)
-	maxOffset := len(layout.rows) - visible
+	palette, visible := commandPaletteScrollBounds(m)
+	maxOffset := len(palette.rows) - visible
 	if maxOffset < 0 {
 		maxOffset = 0
 	}
 	offset := clamp(m.commandOffset, 0, maxOffset)
-	end := min(offset+visible, len(layout.rows))
+	end := min(offset+visible, len(palette.rows))
 
 	topRows, showHint := commandPaletteChromeRows(m)
 	top := []string{
-		styleHeader.Render(displayTruncate("Command Palette", width, "…")),
-		styleDim.Render(displayTruncate(commandPaletteContextLine(m), width, "…")),
+		styleHeader.Render(layout.Truncate("Command Palette", width, "…")),
+		styleDim.Render(layout.Truncate(commandPaletteContextLine(m), width, "…")),
 		styleSearch.Render(commandPaletteInputLine(m, width)),
 	}
 	switch topRows {
@@ -471,11 +472,11 @@ func renderCommandPalette(m Model) string {
 
 	lines := make([]string, 0, len(top)+visible+1)
 	lines = append(lines, top...)
-	for _, row := range layout.rows[offset:end] {
+	for _, row := range palette.rows[offset:end] {
 		lines = append(lines, renderCommandPaletteRow(m, row, width))
 	}
 	if showHint {
-		lines = append(lines, commandPaletteHintLine(width, offset > 0, end < len(layout.rows)))
+		lines = append(lines, commandPaletteHintLine(width, offset > 0, end < len(palette.rows)))
 	}
 	return strings.Join(lines, "\n")
 }

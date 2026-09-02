@@ -8,6 +8,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/actions"
+	"github.com/sglavoie/agentmux/tui/layout"
+	tuiworktrees "github.com/sglavoie/agentmux/tui/worktrees"
 )
 
 func worktreeTestModel() Model {
@@ -117,7 +119,7 @@ func TestWorktreeAttentionOrderingAndWhitespaceANDFilter(t *testing.T) {
 	m := enterLoadedWorktrees(t, worktreeTestModel())
 	classes := make([]string, len(m.worktreeEntries))
 	for i, entry := range m.worktreeEntries {
-		classes[i] = worktreeStateLabels(entry)[0]
+		classes[i] = tuiworktrees.StateLabels(entry)[0]
 	}
 	if got := strings.Join(classes, ","); got != "metadata_invalid,missing,valid,valid,valid,valid" {
 		t.Fatalf("attention classes = %s", got)
@@ -202,7 +204,7 @@ func TestWorktreeShellEditorAndCopyActions(t *testing.T) {
 	m := NewModel(fx.Config, client)
 	m.width, m.height = 120, 30
 	m.mode = ModeWorktrees
-	m.worktreeEntries = sortWorktreeViews(fx.Worktrees)
+	m.worktreeEntries = tuiworktrees.SortViews(fx.Worktrees)
 	m.worktreeFiltered = append([]actions.WorktreeView(nil), m.worktreeEntries...)
 	for i, entry := range m.worktreeFiltered {
 		if entry.ID == "wt-clean" {
@@ -274,7 +276,7 @@ func TestWorktreeRenderingStatusFooterHelpAndWidths(t *testing.T) {
 				t.Errorf("%dx%d rendered %d lines", width, height, len(lines))
 			}
 			for i, line := range lines {
-				if got := displayWidth(line); got > width {
+				if got := layout.Width(line); got > width {
 					t.Errorf("%dx%d line %d width %d: %q", width, height, i, got, line)
 				}
 			}
@@ -293,7 +295,7 @@ func TestWorktreeRenderingStatusFooterHelpAndWidths(t *testing.T) {
 	}
 	locked := m.worktreeEntries[len(m.worktreeEntries)-1]
 	locked.Locked = true
-	if !strings.Contains(worktreeBadgeText(locked), "locked") {
+	if !strings.Contains(tuiworktrees.BadgeText(locked), "locked") {
 		t.Fatal("locked badge missing")
 	}
 	if status := stripAnsi(renderStatusBar(m)); !strings.Contains(status, "Worktrees: 6 managed") {

@@ -1,3 +1,9 @@
+// Package tui hosts the live-session dashboard: the Bubble Tea model, the
+// theme its views render through, and the update/view wiring that turns key
+// presses into session actions. Domain leaves under tui/ own the vocabulary
+// the model renders — sizing and compositing in tui/layout, user
+// customization in tui/customization, plan rows in tui/plans, worktree rows
+// in tui/worktrees — while what a keystroke DOES to the model stays here.
 package tui
 
 import (

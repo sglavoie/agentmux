@@ -9,12 +9,11 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/actions"
-	"github.com/sglavoie/agentmux/internal/worktree"
+	tuiworktrees "github.com/sglavoie/agentmux/tui/worktrees"
 )
 
 type worktreesLoadedMsg struct {
@@ -89,41 +88,15 @@ func (m Model) handleWorktreesLoaded(msg worktreesLoadedMsg) (tea.Model, tea.Cmd
 	}
 	m.worktreeErr = nil
 	m.worktreeWarnings = append([]string(nil), msg.warnings...)
-	m.worktreeEntries = sortWorktreeViews(msg.entries)
+	m.worktreeEntries = tuiworktrees.SortViews(msg.entries)
 	m.reapplyWorktreeFilter()
 	return m, nil
-}
-
-func sortWorktreeViews(views []actions.WorktreeView) []actions.WorktreeView {
-	if len(views) < 2 {
-		return append([]actions.WorktreeView(nil), views...)
-	}
-	byKey := make(map[string][]actions.WorktreeView, len(views))
-	entries := make([]worktree.Entry, 0, len(views))
-	for _, view := range views {
-		key := worktreeViewKey(view)
-		byKey[key] = append(byKey[key], view)
-		entries = append(entries, view.Entry)
-	}
-	worktree.SortEntries(entries)
-	ordered := make([]actions.WorktreeView, 0, len(views))
-	for _, entry := range entries {
-		key := entry.ID + "\x00" + entry.Path
-		bucket := byKey[key]
-		ordered = append(ordered, bucket[0])
-		byKey[key] = bucket[1:]
-	}
-	return ordered
-}
-
-func worktreeViewKey(view actions.WorktreeView) string {
-	return view.ID + "\x00" + view.Path
 }
 
 func (m *Model) reapplyWorktreeFilter() {
 	filtered := make([]actions.WorktreeView, 0, len(m.worktreeEntries))
 	for _, entry := range m.worktreeEntries {
-		if worktreeMatchesFilter(entry, m.worktreeFilter) {
+		if tuiworktrees.MatchesFilter(entry, m.worktreeFilter) {
 			filtered = append(filtered, entry)
 		}
 	}
@@ -149,53 +122,6 @@ func (m *Model) restoreWorktreeSelection() {
 		m.worktreeOffset = 0
 	}
 	scrollWorktreesToCursor(m)
-}
-
-func worktreeMatchesFilter(entry actions.WorktreeView, query string) bool {
-	state := strings.Join(worktreeStateLabels(entry), " ")
-	haystack := strings.ToLower(strings.Join([]string{
-		entry.ID, entry.ProjectLabel, entry.Branch, entry.Path,
-		entry.Profile, entry.Harness, string(entry.Classification), state,
-	}, "\n"))
-	for _, token := range strings.Fields(strings.ToLower(query)) {
-		if !strings.Contains(haystack, token) {
-			return false
-		}
-	}
-	return true
-}
-
-func worktreeStateLabels(entry actions.WorktreeView) []string {
-	labels := []string{string(entry.Classification)}
-	switch {
-	case !entry.Exists || entry.Classification == worktree.ClassificationMissing:
-		labels = append(labels, "missing")
-	case entry.Classification == worktree.ClassificationMetadataInvalid ||
-		entry.Classification == worktree.ClassificationGitUnavailable ||
-		!entry.GitAvailable || !entry.StatusAvailable:
-		labels = append(labels, "invalid")
-	}
-	if entry.Usage.Live || len(entry.LiveSessions) > 0 {
-		labels = append(labels, "live")
-	}
-	if entry.Usage.Looping || entry.LoopCount > 0 {
-		labels = append(labels, "looping")
-	}
-	if entry.Dirty {
-		labels = append(labels, "dirty")
-	} else if entry.Exists && entry.StatusAvailable {
-		labels = append(labels, "clean")
-	}
-	if entry.Locked {
-		labels = append(labels, "locked")
-	}
-	if entry.ReachableFromSource != nil && *entry.ReachableFromSource {
-		labels = append(labels, "merged")
-	}
-	if len(entry.Warnings) > 0 {
-		labels = append(labels, "warning")
-	}
-	return labels
 }
 
 func (m Model) handleWorktreesKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {

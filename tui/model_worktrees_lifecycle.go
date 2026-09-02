@@ -10,13 +10,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/actions"
-	"github.com/sglavoie/agentmux/internal/worktree"
+	tuiworktrees "github.com/sglavoie/agentmux/tui/worktrees"
 )
 
 func (m Model) openSelectedWorktree(action actions.ID) (tea.Model, tea.Cmd) {
@@ -96,7 +95,7 @@ func (m Model) beginWorktreeRemove(deleteBranch bool) (tea.Model, tea.Cmd) {
 	m.confirmReturnMode = ModeWorktrees
 	if deleteBranch {
 		m.confirmAction = "worktree delete branch"
-		m.confirmConsequence = fmt.Sprintf("Deletes branch %q only after Git proves it is merged into recorded target %q.", entry.Branch, displayWorktreeSource(entry))
+		m.confirmConsequence = fmt.Sprintf("Deletes branch %q only after Git proves it is merged into recorded target %q.", entry.Branch, tuiworktrees.SourceLabel(entry))
 	} else {
 		m.confirmAction = "worktree remove"
 		m.confirmConsequence = fmt.Sprintf("Removes the checkout and metadata; branch %q is retained.", entry.Branch)
@@ -129,13 +128,6 @@ func (m Model) worktreeDisabledToast(reason string) (tea.Model, tea.Cmd) {
 	m.actionErr = nil
 	cmd := m.pushToast(Toast{Severity: toastWarning, Text: "Unavailable: " + reason})
 	return m, cmd
-}
-
-func displayWorktreeSource(entry actions.WorktreeView) string {
-	if strings.TrimSpace(entry.SourceBranch) == "" {
-		return "(unknown)"
-	}
-	return entry.SourceBranch
 }
 
 func (m Model) confirmedWorktreeMutation(deleteBranch bool) (tea.Model, tea.Cmd) {
@@ -216,7 +208,7 @@ func (m Model) handleWorktreeMutationDone(msg worktreeActionDoneMsg) (tea.Model,
 		var partial *actions.PartialResultError
 		if errors.As(msg.err, &partial) {
 			m.actionErr = nil
-			text := "Partial cleanup: " + worktreeMutationSummary(msg.result) + "; recovery required: " + msg.err.Error()
+			text := "Partial cleanup: " + tuiworktrees.MutationSummary(msg.result) + "; recovery required: " + msg.err.Error()
 			return m.refreshWorktreesWithToast(Toast{Severity: toastWarning, Text: text})
 		}
 		m.actionErr = msg.err
@@ -229,27 +221,6 @@ func (m Model) handleWorktreeMutationDone(msg worktreeActionDoneMsg) (tea.Model,
 		text = "Worktree lifecycle action completed"
 	}
 	return m.refreshWorktreesWithToast(Toast{Severity: toastSuccess, Text: text})
-}
-
-func worktreeMutationSummary(result actions.Result) string {
-	mutation, ok := result.Data["mutation"].(worktree.MutationResult)
-	if !ok {
-		return "durable state changed"
-	}
-	var steps []string
-	if mutation.CheckoutRemoved {
-		steps = append(steps, "checkout removed")
-	}
-	if mutation.BranchDeleted {
-		steps = append(steps, "branch deleted")
-	}
-	if mutation.MetadataForgotten {
-		steps = append(steps, "metadata forgotten")
-	}
-	if len(steps) == 0 {
-		return "no durable step reported"
-	}
-	return strings.Join(steps, ", ")
 }
 
 func (m Model) refreshWorktreesWithToast(toast Toast) (tea.Model, tea.Cmd) {

@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // ParseUITestSize parses a "WIDTHxHEIGHT" terminal size spec (e.g. "80x24").
@@ -31,7 +32,7 @@ func ParseUITestSize(spec string) (UITestSize, error) {
 // NormalizeUITestScreen turns a raw rendered view into a normalized, JSON-ready
 // observation. It strips ANSI escape sequences, measures each line by display
 // cells (so emoji, wide glyphs, and combining marks match production rendering
-// via displayWidth), flags invalid UTF-8, and records root-level width/height
+// via layout.Width), flags invalid UTF-8, and records root-level width/height
 // overflow for the declared terminal size.
 //
 // It deliberately does not inspect modal geometry: screen-wide width and height
@@ -64,7 +65,7 @@ func NormalizeUITestScreen(raw string, size UITestSize) UITestScreen {
 		}
 		line := ansi.Strip(rawLine)
 		lines[i] = line
-		w := displayWidth(line)
+		w := layout.Width(line)
 		if w > screen.Width {
 			screen.Width = w
 		}

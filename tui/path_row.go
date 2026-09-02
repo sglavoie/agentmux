@@ -2,6 +2,8 @@ package tui
 
 import (
 	"strings"
+
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 func renderPathRow(label, path string, maxWidth int) string {
@@ -13,7 +15,7 @@ func renderPathRow(label, path string, maxWidth int) string {
 		maxWidth = 120
 	}
 	row := "  " + label + ": " + path
-	return styleDim.Render(displayTruncate(row, maxWidth, "…"))
+	return styleDim.Render(layout.Truncate(row, maxWidth, "…"))
 }
 
 func pathRowLines(path string) int {

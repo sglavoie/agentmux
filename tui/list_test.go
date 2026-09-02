@@ -11,6 +11,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 func TestStateGroupClassification(t *testing.T) {
@@ -395,7 +396,7 @@ func TestFormatRowEmojiTitleColumnAlignment(t *testing.T) {
 		if idx < 0 {
 			t.Fatalf("directory %q not found in row for title %q: %q", dirText, title, row)
 		}
-		offset := displayWidth(row[:idx])
+		offset := layout.Width(row[:idx])
 		if i == 0 {
 			dirOffset = offset
 			continue
@@ -425,7 +426,7 @@ func TestFormatRowEmojiTitleColumnAlignment(t *testing.T) {
 		if idx < 0 {
 			t.Fatalf("title body %q not found in row for title %q: %q", body, title, row)
 		}
-		offset := displayWidth(row[:idx])
+		offset := layout.Width(row[:idx])
 		if first {
 			bodyOffset = offset
 			first = false
@@ -446,7 +447,7 @@ func TestFormatRowEmojiTitleColumnAlignment(t *testing.T) {
 	if bulletBody < 0 {
 		t.Fatalf("bullet-prefixed title body not found in row: %q", rowBullet)
 	}
-	if got := displayWidth(rowBullet[:bulletBody]); got != bodyOffset-1 {
+	if got := layout.Width(rowBullet[:bulletBody]); got != bodyOffset-1 {
 		t.Errorf("bullet-prefixed body offset = %d, want %d (one cell before emoji bodies; row=%q)", got, bodyOffset-1, rowBullet)
 	}
 }

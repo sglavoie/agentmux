@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // View renders the full dashboard.
@@ -37,7 +38,7 @@ func (m Model) render() string {
 	case ModeLiveSessionPicker:
 		base := rootBaseView(m)
 		popup := renderLiveSessionPickerBox(m)
-		sb.WriteString(centerOverlay(base, popup, m.width, rootBodyHeight(m), true))
+		sb.WriteString(layout.CenterOverlay(base, popup, m.width, rootBodyHeight(m), true))
 	case ModePlanSearch:
 		// Plan search owns its full layout — like ModeSessionSearch, the
 		// dashboard list must not render underneath.
@@ -68,7 +69,7 @@ func (m Model) render() string {
 			popup = renderDeleteChoiceBox(m)
 		}
 		overlayH := rootBodyHeight(m)
-		sb.WriteString(centerOverlay(base, popup, m.width, overlayH, true))
+		sb.WriteString(layout.CenterOverlay(base, popup, m.width, overlayH, true))
 	case ModeActions, ModeConfirm, ModeConfigPicker, ModeHelp, ModeDetail, ModeCommandPalette, ModeASLResponse:
 		var base string
 		switch {
@@ -100,9 +101,9 @@ func (m Model) render() string {
 		if m.mode == ModeConfigPicker {
 			// Top-anchored so the modal doesn't jump when the harness-switch
 			// warning is appended/removed.
-			sb.WriteString(topCenterOverlay(base, popup, m.width, overlayH, true))
+			sb.WriteString(layout.TopCenterOverlay(base, popup, m.width, overlayH, true))
 		} else {
-			sb.WriteString(centerOverlay(base, popup, m.width, overlayH, true))
+			sb.WriteString(layout.CenterOverlay(base, popup, m.width, overlayH, true))
 		}
 	default:
 		// Header area varies by mode; list is always shown below.
@@ -143,7 +144,7 @@ func rootBaseView(m Model) string {
 }
 
 func composeRootView(body string, m Model) string {
-	bodyLines := rootSectionLines(body)
+	bodyLines := layout.SectionLines(body)
 	footerLines := rootFooterLines(m)
 	status := renderStatusBar(m)
 
@@ -189,15 +190,7 @@ func rootBodyHeight(m Model) int {
 }
 
 func rootFooterLines(m Model) []string {
-	return rootSectionLines(renderFooter(m))
-}
-
-func rootSectionLines(section string) []string {
-	section = strings.TrimRight(section, "\n")
-	if section == "" {
-		return nil
-	}
-	return strings.Split(section, "\n")
+	return layout.SectionLines(renderFooter(m))
 }
 
 // renderDashboard emits the canonical ModeList layout — header, deprecation

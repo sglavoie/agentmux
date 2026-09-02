@@ -11,6 +11,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // assertVisibleWidthAtMost fails when any line in output exceeds maxWidth
@@ -19,7 +20,7 @@ import (
 func assertVisibleWidthAtMost(t *testing.T, output string, maxWidth int) {
 	t.Helper()
 	for i, line := range strings.Split(output, "\n") {
-		if w := displayStyledWidth(line); w > maxWidth {
+		if w := layout.StyledWidth(line); w > maxWidth {
 			t.Fatalf("line %d visible width = %d > max %d: %q", i, w, maxWidth, line)
 		}
 	}
@@ -57,7 +58,7 @@ func TestFormatSessionRowNarrowWidthStaysWithinBounds(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			meta := narrowFixtureMeta(tc.project, tc.preview)
 			row := formatSessionRow(transcript.Result{Meta: meta, Preview: tc.preview, Matches: tc.matches}, map[string]string{}, tc.width)
-			if w := displayStyledWidth(row); w > tc.width {
+			if w := layout.StyledWidth(row); w > tc.width {
 				t.Fatalf("formatSessionRow visible width = %d > max %d: %q", w, tc.width, row)
 			}
 		})
@@ -109,7 +110,7 @@ func TestFormatPlanRowNarrowWidthStaysWithinBounds(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			row := formatPlanRow(tc.planRes, tc.width)
-			if w := displayStyledWidth(row); w > tc.width {
+			if w := layout.StyledWidth(row); w > tc.width {
 				t.Fatalf("formatPlanRow visible width = %d > max %d: %q", w, tc.width, row)
 			}
 		})
@@ -132,6 +133,19 @@ func TestSearchRowsStyledTruncationPreservesAnsi(t *testing.T) {
 	assertStyledTruncatedLine(t, "plan row", planRow, 24)
 }
 
+// lastANSIResetIndex reports where the final SGR reset sits in a rendered
+// line. It is a private copy of the helper that moved with the display-width
+// tests into tui/layout: the assertion below is about the root's own styled
+// rendering, and one three-line test helper is cheaper to duplicate than an
+// exported test seam on a layout leaf.
+func lastANSIResetIndex(s string) int {
+	reset := strings.LastIndex(s, "\x1b[m")
+	if alt := strings.LastIndex(s, "\x1b[0m"); alt > reset {
+		reset = alt
+	}
+	return reset
+}
+
 func assertStyledTruncatedLine(t *testing.T, label, line string, maxWidth int) {
 	t.Helper()
 	if !utf8.ValidString(line) {
@@ -140,7 +154,7 @@ func assertStyledTruncatedLine(t *testing.T, label, line string, maxWidth int) {
 	if !strings.Contains(line, "\x1b[") {
 		t.Fatalf("%s should preserve ANSI styling, got %q", label, line)
 	}
-	if w := displayStyledWidth(line); w > maxWidth {
+	if w := layout.StyledWidth(line); w > maxWidth {
 		t.Fatalf("%s visible width = %d > max %d: %q", label, w, maxWidth, line)
 	}
 	if !strings.Contains(stripAnsi(line), "…") {

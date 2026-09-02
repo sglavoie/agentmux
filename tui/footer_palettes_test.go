@@ -3,6 +3,8 @@ package tui
 import (
 	"strings"
 	"testing"
+
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // hintTestPalette exercises the truncation engine with known priorities:
@@ -99,7 +101,7 @@ func TestFooterHintLinesDropsHighestPriorityFirst(t *testing.T) {
 	if len(full) != 1 {
 		t.Fatalf("wide render = %d rows, want 1:\n%s", len(full), hintText(full))
 	}
-	fullWidth := displayStyledWidth(full[0])
+	fullWidth := layout.StyledWidth(full[0])
 
 	lines := footerHintLines(Model{width: fullWidth - 1}, hintTestPalette, 1)
 	if len(lines) != 1 {

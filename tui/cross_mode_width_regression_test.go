@@ -12,6 +12,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // emojiTitleFixture is the canonical project-icon set the Sessions 1-7
@@ -24,7 +25,7 @@ import (
 var emojiTitleFixture = []struct {
 	title        string // raw title as written by the user
 	body         string // body after the leading grapheme
-	wantsIconPad bool   // displayRenderTitleIcon must add a space for this icon
+	wantsIconPad bool   // layout.RenderTitleIcon must add a space for this icon
 	leadingGlyph string // the leading grapheme (for prefix assertions)
 }{
 	{title: "🐱amX", body: "amX", wantsIconPad: false, leadingGlyph: "🐱"},
@@ -37,30 +38,30 @@ var emojiTitleFixture = []struct {
 	{title: "PlainAscii", body: "PlainAscii", wantsIconPad: false, leadingGlyph: ""},
 }
 
-// TestCrossModeEmojiTitleIconColumn locks in that displayRenderTitleIcon
+// TestCrossModeEmojiTitleIconColumn locks in that layout.RenderTitleIcon
 // has consistent behavior on every fixture title. This is the foundation
 // the subsequent cross-mode surface tests rely on — if the helper itself
 // drifts, every surface visibly breaks alignment.
 func TestCrossModeEmojiTitleIconColumn(t *testing.T) {
 	for _, tc := range emojiTitleFixture {
 		t.Run(tc.title, func(t *testing.T) {
-			rendered := displayRenderTitleIcon(tc.title)
+			rendered := layout.RenderTitleIcon(tc.title)
 			if !utf8.ValidString(rendered) {
-				t.Fatalf("displayRenderTitleIcon produced invalid UTF-8 for %q: %q", tc.title, rendered)
+				t.Fatalf("layout.RenderTitleIcon produced invalid UTF-8 for %q: %q", tc.title, rendered)
 			}
 			if tc.wantsIconPad {
 				wantPrefix := tc.leadingGlyph + " " + tc.body
 				if rendered != wantPrefix {
-					t.Fatalf("displayRenderTitleIcon(%q) = %q, want %q (narrow pictograph must pad to 2-cell column)",
+					t.Fatalf("layout.RenderTitleIcon(%q) = %q, want %q (narrow pictograph must pad to 2-cell column)",
 						tc.title, rendered, wantPrefix)
 				}
-				if w := displayWidth(rendered); w != displayWidth(tc.body)+2 {
+				if w := layout.Width(rendered); w != layout.Width(tc.body)+2 {
 					t.Fatalf("padded width = %d, want body-width + 2 (got %q)", w, rendered)
 				}
 				return
 			}
 			if rendered != tc.title {
-				t.Fatalf("displayRenderTitleIcon(%q) = %q, want unchanged (no-pad branch)",
+				t.Fatalf("layout.RenderTitleIcon(%q) = %q, want unchanged (no-pad branch)",
 					tc.title, rendered)
 			}
 		})
@@ -103,7 +104,7 @@ func TestCrossModeDashboardListWidthAcrossFixture(t *testing.T) {
 
 			rendered := stripAnsi(renderList(m))
 			for i, line := range strings.Split(rendered, "\n") {
-				if w := displayStyledWidth(line); w > width {
+				if w := layout.StyledWidth(line); w > width {
 					t.Fatalf("list line %d width %d > viewport %d: %q", i, w, width, line)
 				}
 				if !utf8.ValidString(line) {
@@ -143,7 +144,7 @@ func TestCrossModePickerWidthAcrossFixture(t *testing.T) {
 
 			rendered := stripAnsi(renderPickerList(m, 0))
 			for i, line := range strings.Split(rendered, "\n") {
-				if w := displayStyledWidth(line); w > width {
+				if w := layout.StyledWidth(line); w > width {
 					t.Fatalf("picker line %d width %d > viewport %d: %q", i, w, width, line)
 				}
 				if !utf8.ValidString(line) {
@@ -186,7 +187,7 @@ func TestCrossModeSessionSearchWidthAcrossFixture(t *testing.T) {
 			}
 			rendered := stripAnsi(renderSessionSearch(m))
 			for i, line := range strings.Split(rendered, "\n") {
-				if w := displayStyledWidth(line); w > width {
+				if w := layout.StyledWidth(line); w > width {
 					t.Fatalf("session-search line %d width %d > viewport %d: %q", i, w, width, line)
 				}
 				if !utf8.ValidString(line) {
@@ -329,7 +330,7 @@ func TestCrossModeFooterAndStatusBarWidthAcrossFixture(t *testing.T) {
 				if !utf8.ValidString(line) {
 					t.Fatalf("root render line %d invalid UTF-8: %q", i, line)
 				}
-				w := displayStyledWidth(line)
+				w := layout.StyledWidth(line)
 				if i == len(lines)-1 {
 					// The status bar is padded to exactly the viewport width.
 					if w != width {

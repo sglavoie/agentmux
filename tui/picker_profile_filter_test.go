@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 func visiblePickerTitles(m Model) []string {
@@ -195,7 +196,7 @@ func TestPickerProfileIndicatorDoesNotOverflowNarrowHeader(t *testing.T) {
 	m := pickerModel(t)
 	m.width = 20
 	first := strings.SplitN(renderPicker(m), "\n", 2)[0]
-	if got := displayStyledWidth(first); got > m.width {
+	if got := layout.StyledWidth(first); got > m.width {
 		t.Fatalf("narrow picker header width = %d, want <= %d: %q", got, m.width, stripAnsi(first))
 	}
 }

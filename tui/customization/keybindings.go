@@ -1,4 +1,4 @@
-package tui
+package customization
 
 import (
 	"strings"
@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/kittykeys"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // keybindingsModel is a minimal Bubble Tea model for the keybindings overlay.
@@ -106,7 +107,7 @@ func (m keybindingsModel) bodyRows() []string {
 				continue
 			}
 			key := a.Key
-			padding := 16 - displayWidth(key)
+			padding := 16 - layout.Width(key)
 			if padding < 1 {
 				padding = 1
 			}
@@ -117,7 +118,7 @@ func (m keybindingsModel) bodyRows() []string {
 
 	rows := make([]string, 0, len(logical))
 	for _, line := range logical {
-		rows = append(rows, displayStyledWrapHard(line, width)...)
+		rows = append(rows, layout.StyledWrapHard(line, width)...)
 	}
 	return rows
 }
@@ -134,7 +135,7 @@ func (m keybindingsModel) View() tea.View {
 	}
 	divider := strings.Repeat("─", dividerWidth)
 
-	title := displayTruncate("Keybinding Reference", width, "…")
+	title := layout.Truncate("Keybinding Reference", width, "…")
 	sb.WriteString(styleHeader.Render(title) + "\n")
 	sb.WriteString(styleDim.Render(divider) + "\n")
 
@@ -161,7 +162,7 @@ func (m keybindingsModel) View() tea.View {
 
 	sb.WriteString(styleDim.Render(divider) + "\n")
 	footer := joinFooterBindings(" · ", renderFooterBinding("j/k", "scroll"), renderFooterBinding("g/G", "top/bottom"), renderFooterBinding("q/esc", "close"))
-	sb.WriteString(displayStyledTruncate(footer, width, "…") + "\n")
+	sb.WriteString(layout.StyledTruncate(footer, width, "…") + "\n")
 
 	return tea.NewView(sb.String())
 }

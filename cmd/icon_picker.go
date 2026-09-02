@@ -6,7 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/tui"
+	"github.com/sglavoie/agentmux/tui/customization"
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +15,7 @@ var (
 		return kitty.NewClient(kitty.NewRealRunner())
 	}
 	loadIconPickerConfig = config.LoadDefault
-	runIconPickerOverlay = tui.RunIconPickerOverlay
+	runIconPickerOverlay = customization.RunIconOverlay
 )
 
 var iconPickerCmd = &cobra.Command{
@@ -44,7 +44,7 @@ var iconPickerCmd = &cobra.Command{
 			return fmt.Errorf("load Agent Mux config: %w", err)
 		}
 
-		return runIconPickerOverlay(tui.IconPickerContext{
+		return runIconPickerOverlay(customization.IconContext{
 			Client:        client,
 			TabID:         tab.ID,
 			CurrentTitle:  tab.Title,

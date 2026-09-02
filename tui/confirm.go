@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/actions"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // Consequence strings shown on line 2 of the confirm overlay so the user
@@ -52,7 +53,7 @@ func renderConfirm(m Model) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(styleHeader.Render(fmt.Sprintf("%s %q?", verb, displayRenderTitleIcon(title))))
+	sb.WriteString(styleHeader.Render(fmt.Sprintf("%s %q?", verb, layout.RenderTitleIcon(title))))
 	sb.WriteByte('\n')
 	if m.confirmConsequence != "" {
 		sb.WriteString(styleDim.Render(m.confirmConsequence))

@@ -7,7 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/tui"
+	"github.com/sglavoie/agentmux/tui/customization"
 	"github.com/spf13/cobra"
 )
 
@@ -32,7 +32,7 @@ var colorPickerCmd = &cobra.Command{
 		}
 
 		ctx := resolveColorPickerContext(client, tab, windowID)
-		return tui.RunColorPickerOverlay(ctx)
+		return customization.RunColorOverlay(ctx)
 	},
 }
 
@@ -53,8 +53,8 @@ func focusExistingColorPicker(client kitty.KittyClient) bool {
 	return true
 }
 
-func resolveColorPickerContext(client kitty.KittyClient, tab *kitty.Tab, overlayWindowID int) tui.ColorPickerContext {
-	ctx := tui.ColorPickerContext{
+func resolveColorPickerContext(client kitty.KittyClient, tab *kitty.Tab, overlayWindowID int) customization.ColorContext {
+	ctx := customization.ColorContext{
 		Client:       client,
 		TabID:        tab.ID,
 		DefaultColor: "gray",

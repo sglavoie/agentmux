@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // transcriptDeleteDoneMsg returns the result of a delete-prompt mutation to
@@ -200,7 +201,7 @@ func deleteTargetLabel(t transcript.SessionMeta) string {
 	if proj == "" {
 		proj = t.ID
 	}
-	return fmt.Sprintf("%q", displayRenderTitleIcon(proj))
+	return fmt.Sprintf("%q", layout.RenderTitleIcon(proj))
 }
 
 func deleteTargetDetail(t transcript.SessionMeta) string {

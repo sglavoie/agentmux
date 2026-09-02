@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // phaseTermLine renders the closing "└─" line for a phase, styled by the
@@ -144,7 +146,7 @@ func renderTimelineLines(
 			dur := phase.phaseDuration()
 			suffix := " " + dur + " gap"
 			prefix := "  ·  Idle "
-			dashW := width - displayWidth(prefix) - displayWidth(suffix)
+			dashW := width - layout.Width(prefix) - layout.Width(suffix)
 			if dashW < 0 {
 				dashW = 0
 			}
@@ -158,7 +160,7 @@ func renderTimelineLines(
 			const sepLabel = " /compact "
 			prefix := "  ────"
 			suffix := "──── " + ts
-			dashW := width - displayWidth(prefix) - displayWidth(sepLabel) - displayWidth(suffix)
+			dashW := width - layout.Width(prefix) - layout.Width(sepLabel) - layout.Width(suffix)
 			if dashW < 0 {
 				dashW = 0
 			}

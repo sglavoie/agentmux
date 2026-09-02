@@ -9,6 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/transcript"
+	tuiplans "github.com/sglavoie/agentmux/tui/plans"
 )
 
 func TestWindowSizeMsg_ResizeKeepsSessionSearchCursorVisible(t *testing.T) {
@@ -90,7 +91,7 @@ func TestWindowSizeMsg_ResizeClampsPlanViewerVisualScroll(t *testing.T) {
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 8})
 	m = updated.(Model)
 
-	maxScroll := planViewerMaxScrollOffset(len(planViewerRows(m)), planViewerVisibleHeight(m))
+	maxScroll := tuiplans.MaxScrollOffset(len(planViewerRows(m)), planViewerVisibleHeight(m))
 	if m.planViewerScroll > maxScroll {
 		t.Fatalf("plan viewer scroll = %d, want <= wrapped-row max %d", m.planViewerScroll, maxScroll)
 	}

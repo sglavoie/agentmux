@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // actionDescIndent is the column at which wrapped description text must
@@ -27,7 +29,7 @@ func renderActions(m Model, descWidth int) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(styleHeader.Render("Actions for "+displayRenderTitleIcon(runningSessionDisplayTitle(m.targetSession))) + "\n\n")
+	sb.WriteString(styleHeader.Render("Actions for "+layout.RenderTitleIcon(runningSessionDisplayTitle(m.targetSession))) + "\n\n")
 	for _, line := range actionBodyLines(m, descWidth) {
 		sb.WriteString(line)
 		sb.WriteByte('\n')
@@ -97,7 +99,7 @@ func renderActionsWindow(m Model, descWidth int) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(styleHeader.Render("Actions for "+displayRenderTitleIcon(runningSessionDisplayTitle(m.targetSession))) + "\n\n")
+	sb.WriteString(styleHeader.Render("Actions for "+layout.RenderTitleIcon(runningSessionDisplayTitle(m.targetSession))) + "\n\n")
 	if offset > 0 {
 		sb.WriteString(styleDim.Render("  ▲"))
 	}
@@ -239,7 +241,7 @@ func actionsBoxWidth(m Model) int {
 	frameWidth := styleOverlayBox.GetHorizontalFrameSize()
 	content := strings.TrimRight(renderActions(m, naturalActionsDescWidth(m)), "\n")
 	boxWidth := 70
-	if contentWidth := popupWidth(content) + frameWidth; contentWidth > boxWidth {
+	if contentWidth := layout.PopupWidth(content) + frameWidth; contentWidth > boxWidth {
 		boxWidth = contentWidth
 	}
 	if avail := m.width - 4; avail < boxWidth {
@@ -262,7 +264,7 @@ func actionsBoxDescWidth(m Model) int {
 func naturalActionsDescWidth(m Model) int {
 	width := 1
 	for _, a := range actionsFor(m) {
-		if w := displayWidth(a.description); w > width {
+		if w := layout.Width(a.description); w > width {
 			width = w
 		}
 	}

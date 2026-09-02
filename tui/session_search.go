@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // sessionSearchVisibleHeight returns the number of result rows that fit in
@@ -57,7 +58,7 @@ func renderSessionSearch(m Model) string {
 	if len(states) > 0 {
 		header += "  (" + strings.Join(states, ", ") + ")"
 	}
-	sb.WriteString(clampSearchLine(styleHeader.Render(header), m.width))
+	sb.WriteString(layout.ClampLine(styleHeader.Render(header), m.width))
 	sb.WriteByte('\n')
 
 	sb.WriteString(renderSessionSearchChips(m))
@@ -72,7 +73,7 @@ func renderSessionSearch(m Model) string {
 	default:
 		queryBar = styleDim.Render("press / to search · enter view · c continue · f fork · w worktree fork · H handoff · E edit handoff")
 	}
-	sb.WriteString(clampSearchLine(queryBar, m.width))
+	sb.WriteString(layout.ClampLine(queryBar, m.width))
 	sb.WriteByte('\n')
 
 	if row := renderPathRow("session path", selectedSessionSearchPath(m), m.width); row != "" {
@@ -91,17 +92,6 @@ func renderSessionSearch(m Model) string {
 	height := sessionSearchVisibleHeight(m)
 	sb.WriteString(renderSessionSearchList(m, height))
 	return sb.String()
-}
-
-// clampSearchLine hard-clamps a single composed (styled) line to width so the
-// search-mode header, hint, and query bar cannot overflow narrow terminals.
-// Mirrors the per-line chip clamp; a non-positive width (pre-resize) is a
-// no-op.
-func clampSearchLine(line string, width int) string {
-	if width <= 0 {
-		return line
-	}
-	return displayStyledTruncate(line, width, "…")
 }
 
 // renderSessionSearchChips returns a one-line summary of the active chip
@@ -126,7 +116,7 @@ func renderSessionSearchChips(m Model) string {
 	}
 	chips := "  " + strings.Join(parts, "   ")
 	if m.width > 0 {
-		chips = displayStyledTruncate(chips, m.width, "…")
+		chips = layout.StyledTruncate(chips, m.width, "…")
 	}
 	return chips
 }
@@ -157,9 +147,9 @@ func renderSessionSearchList(m Model, height int) string {
 		return sb.String()
 	}
 
-	window := flatListWindowFor(total, m.sessionOffset, height)
+	window := layout.ListWindowFor(total, m.sessionOffset, height)
 
-	if window.showTop {
+	if window.ShowTop {
 		sb.WriteString(styleDim.Render("  ▲"))
 		sb.WriteByte('\n')
 	}
@@ -171,7 +161,7 @@ func renderSessionSearchList(m Model, height int) string {
 
 	acctColor := buildProfileColorMap(m)
 
-	for i := window.start; i < window.end; i++ {
+	for i := window.Start; i < window.End; i++ {
 		res := m.sessionResults[i]
 		res.Meta = m.contextualSessionMeta(res.Meta)
 		line := formatSessionRow(res, acctColor, maxWidth)
@@ -183,72 +173,12 @@ func renderSessionSearchList(m Model, height int) string {
 		sb.WriteByte('\n')
 	}
 
-	if window.showBottom {
+	if window.ShowBottom {
 		sb.WriteString(styleDim.Render("  ▼"))
 		sb.WriteByte('\n')
 	}
 
 	return sb.String()
-}
-
-type flatListWindow struct {
-	start      int
-	end        int
-	showTop    bool
-	showBottom bool
-}
-
-func flatListWindowFor(total, offset, height int) flatListWindow {
-	window := flatListWindow{start: 0, end: total}
-	if total <= 0 {
-		window.end = 0
-		return window
-	}
-	if height <= 0 {
-		return window
-	}
-
-	if offset < 0 {
-		offset = 0
-	}
-	if offset > total {
-		offset = total
-	}
-	window.start = offset
-
-	if height == 1 {
-		window.end = window.start + 1
-		if window.end > total {
-			window.end = total
-		}
-		return window
-	}
-
-	budget := height
-	if window.start > 0 {
-		window.showTop = true
-		budget--
-	}
-	if budget < 0 {
-		budget = 0
-	}
-	window.end = window.start + budget
-	if window.end > total {
-		window.end = total
-	}
-	if window.end < total {
-		window.showBottom = true
-		if budget > 1 {
-			budget--
-		} else {
-			window.showBottom = false
-		}
-		window.end = window.start + budget
-		if window.end > total {
-			window.end = total
-		}
-	}
-	return window
 }
 
 func sessionLoadingLabel(m Model) string {
@@ -276,7 +206,7 @@ func formatSessionRow(res transcript.Result, acctColor map[string]string, maxWid
 	if project == "" {
 		project = "(unknown)"
 	}
-	project = displayRenderTitleIcon(project)
+	project = layout.RenderTitleIcon(project)
 	profile := res.Meta.DisplayProfile()
 	tag := sessionProfileTag(res.Meta)
 	tagColored := accountStyle(acctColor[profile]).Render(tag)
@@ -294,9 +224,9 @@ func formatSessionRow(res transcript.Result, acctColor map[string]string, maxWid
 	head := fmt.Sprintf("  %s  %s  ", when, project)
 	body := head + tagColored + matchFrag
 	if preview != "" {
-		body += "  " + styleDim.Render(displayTruncate(preview, maxRunes(maxWidth-displayStyledWidth(body)-2), "…"))
+		body += "  " + styleDim.Render(layout.Truncate(preview, maxRunes(maxWidth-layout.StyledWidth(body)-2), "…"))
 	}
-	return displayStyledTruncate(body, maxWidth, "…")
+	return layout.StyledTruncate(body, maxWidth, "…")
 }
 
 func sessionProfileTag(meta transcript.SessionMeta) string {

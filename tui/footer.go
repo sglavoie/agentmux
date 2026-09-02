@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 var footerStripeBackgroundANSI = ansi.Style{}.
@@ -131,7 +132,7 @@ func footerLineFromTokens(maxWidth int, separator string, tokens ...footerToken)
 		return ""
 	}
 	sep := styleFooter.Render(separator)
-	sepW := displayStyledWidth(sep)
+	sepW := layout.StyledWidth(sep)
 	for i := 0; i < len(tokens)-1; i++ {
 		tokens[i].sep = sep
 		tokens[i].sepWidth = sepW
@@ -142,7 +143,7 @@ func footerLineFromTokens(maxWidth int, separator string, tokens ...footerToken)
 func footerRenderedToken(rendered string) footerToken {
 	return footerToken{
 		rendered: rendered,
-		width:    displayStyledWidth(rendered),
+		width:    layout.StyledWidth(rendered),
 	}
 }
 
@@ -245,7 +246,7 @@ func renderFooterStripeRow(row string, maxWidth int) string {
 	sb.WriteString(background)
 	sb.WriteString(strings.ReplaceAll(row, ansi.ResetStyle, ansi.ResetStyle+background))
 	if maxWidth > 0 {
-		if padding := maxWidth - displayStyledWidth(row); padding > 0 {
+		if padding := maxWidth - layout.StyledWidth(row); padding > 0 {
 			sb.WriteString(strings.Repeat(" ", padding))
 		}
 	}
@@ -273,18 +274,18 @@ func listFooterLine2(m Model, navFragments []string) string {
 
 func listFooterLine2WithPosition(m Model, navFragments []string, position string) string {
 	sep := styleFooter.Render("  ")
-	sepW := displayStyledWidth(sep)
+	sepW := layout.StyledWidth(sep)
 
 	tokens := make([]footerToken, 0, len(navFragments)+1)
 	if position != "" {
 		// The position fragment sits before the nav hints with a wider
 		// three-space gap so the eye chunks it as a separate group.
 		gap := styleFooter.Render("   ")
-		gapW := displayStyledWidth(gap)
+		gapW := layout.StyledWidth(gap)
 		posRendered := styleFooter.Render(position)
 		tokens = append(tokens, footerToken{
 			rendered: posRendered,
-			width:    displayStyledWidth(posRendered),
+			width:    layout.StyledWidth(posRendered),
 			sep:      gap,
 			sepWidth: gapW,
 		})
@@ -293,7 +294,7 @@ func listFooterLine2WithPosition(m Model, navFragments []string, position string
 	for i, rendered := range navFragments {
 		tok := footerToken{
 			rendered: rendered,
-			width:    displayStyledWidth(rendered),
+			width:    layout.StyledWidth(rendered),
 		}
 		if i < len(navFragments)-1 {
 			tok.sep = sep
@@ -315,7 +316,7 @@ func listFooterLine2Leads(m Model) (string, string) {
 		s := m.filtered[m.cursor]
 		if g := StateGloss(s.State); g != "" {
 			icon := palette.StateIcon(s.State)
-			glossText := displayPadIconCell(icon) + " " + g
+			glossText := layout.PadIconCell(icon) + " " + g
 			lead := indent + stateAccentStyle(s.State).Render(glossText) + styleFooter.Render(" — ")
 			return lead, indent
 		}

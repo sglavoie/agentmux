@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/plans"
+	tuiplans "github.com/sglavoie/agentmux/tui/plans"
 )
 
 // planFilesLoadedMsg carries the result of an async file-read pass. seq
@@ -169,7 +170,7 @@ func movePlanViewerRows(m *Model, visible, direction int, half bool) {
 		return
 	}
 	clampPlanViewerScroll(m)
-	step := planViewerPageStep(total, m.planViewerScroll, visible)
+	step := tuiplans.PageStep(total, m.planViewerScroll, visible)
 	if half {
 		step = halfPageStep(step)
 	}
@@ -178,7 +179,7 @@ func movePlanViewerRows(m *Model, visible, direction int, half bool) {
 	if m.planViewerScroll < 0 || m.planViewerScroll >= total {
 		return
 	}
-	sourceLine := rows[m.planViewerScroll].sourceLine
+	sourceLine := rows[m.planViewerScroll].SourceLine
 	if sourceLine >= 0 && sourceLine < len(m.planViewerLines) {
 		m.planViewerCursor = sourceLine
 	}
@@ -207,24 +208,6 @@ func readPlanFilesCmd(seq int, meta plans.PlanMeta) tea.Cmd {
 		}
 		return planFilesLoadedMsg{seq: seq, lines: lines}
 	}
-}
-
-// computePlanViewerMatches scans lines for a case-insensitive substring
-// of query and returns the indices of matching lines. Returns nil when
-// query is empty so n/N have no effect.
-func computePlanViewerMatches(lines []string, query string) []int {
-	q := strings.TrimSpace(query)
-	if q == "" {
-		return nil
-	}
-	needle := strings.ToLower(q)
-	var matches []int
-	for i, line := range lines {
-		if strings.Contains(strings.ToLower(line), needle) {
-			matches = append(matches, i)
-		}
-	}
-	return matches
 }
 
 // planViewerVisibleHeight returns the number of body rows that fit in the
@@ -278,7 +261,7 @@ func scrollPlanViewerToCursor(m *Model) {
 	if m.planViewerCursor >= totalLines {
 		m.planViewerCursor = totalLines - 1
 	}
-	cursorRow := planViewerFirstRowForLine(rows, m.planViewerCursor)
+	cursorRow := tuiplans.FirstRowForLine(rows, m.planViewerCursor)
 	if cursorRow < 0 {
 		cursorRow = 0
 	}
@@ -310,7 +293,7 @@ func scrollPlanViewerToCursor(m *Model) {
 func clampPlanViewerScroll(m *Model) {
 	total := len(planViewerRows(*m))
 	visible := planViewerScrollHeight(*m)
-	maxOffset := planViewerMaxScrollOffset(total, visible)
+	maxOffset := tuiplans.MaxScrollOffset(total, visible)
 	if m.planViewerScroll > maxOffset {
 		m.planViewerScroll = maxOffset
 	}

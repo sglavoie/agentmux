@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // helpMinVisible is the floor on the visible content window. Even on
@@ -278,7 +280,7 @@ func helpWrappedContentLines(m Model) []string {
 	width := helpContentWidth(m)
 	var out []string
 	for _, line := range helpContentLines() {
-		out = append(out, displayStyledWrapHard(line, width)...)
+		out = append(out, layout.StyledWrapHard(line, width)...)
 	}
 	return out
 }

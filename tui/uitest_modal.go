@@ -3,7 +3,7 @@ package tui
 // AMX-specific modal-fit detection. The screen-level checks in uitest_screen.go
 // (line width, invalid UTF-8, screen height) are necessary but not sufficient:
 // model_preview.go's render() composites overlay popups into the dashboard /
-// session-search body via composeOverlay, which right-clips wide popup columns
+// session-search body via layout.ComposeOverlay, which right-clips wide popup columns
 // and drops popup rows past the body area. A modal whose natural content is
 // wider or taller than the space it is given therefore renders as a *clean*
 // root screen even though content was squeezed, reflowed, or dropped. That is
@@ -19,6 +19,8 @@ package tui
 import (
 	"fmt"
 	"strings"
+
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // uitestModalNaturalSize is the viewport the natural-size probe renders at. It
@@ -30,8 +32,8 @@ const uitestModalNaturalSize = 10000
 // modalBoxRenderer returns the production renderer for a bounded-popup modal
 // mode, or nil when the mode is not composited as a clipped overlay box. The
 // covered modes match model_preview.go's render() dispatch: every mode there
-// whose popup is spliced into a base view via centerOverlay or
-// topCenterOverlay. ModeMessageDetail is intentionally excluded — it renders as
+// whose popup is spliced into a base view via layout.CenterOverlay or
+// layout.TopCenterOverlay. ModeMessageDetail is intentionally excluded — it renders as
 // a full-height view (renderMessageDetail), not a bounded box, so its overflow
 // is already caught by the screen-level height/width checks.
 func modalBoxRenderer(mode Mode) func(Model) string {
@@ -62,8 +64,8 @@ func modalBoxRenderer(mode Mode) func(Model) string {
 }
 
 // modalIsTopAnchored reports whether a modal mode is placed one row from the top
-// of the body area (topCenterOverlay) rather than vertically centered
-// (centerOverlay). Only the config picker is top-anchored; see model_preview.go.
+// of the body area (layout.TopCenterOverlay) rather than vertically centered
+// (layout.CenterOverlay). Only the config picker is top-anchored; see model_preview.go.
 func modalIsTopAnchored(mode Mode) bool {
 	return mode == ModeConfigPicker
 }
@@ -89,11 +91,11 @@ func detectModalFitIssues(m Model) []UITestLayoutIssue {
 	natural := m
 	natural.width = uitestModalNaturalSize
 	natural.height = uitestModalNaturalSize
-	naturalW := popupWidth(render(natural))
+	naturalW := layout.PopupWidth(render(natural))
 
-	// Live geometry: exactly what composeOverlay splices into the body area.
+	// Live geometry: exactly what layout.ComposeOverlay splices into the body area.
 	live := render(m)
-	realW := popupWidth(live)
+	realW := layout.PopupWidth(live)
 	realH := popupLineCount(live)
 
 	mode := uitestModeName(m.mode)
@@ -113,7 +115,7 @@ func detectModalFitIssues(m Model) []UITestLayoutIssue {
 		return issues
 	}
 
-	// Placement mirrors centerOverlay / topCenterOverlay in overlay.go so the
+	// Placement mirrors layout.CenterOverlay / layout.TopCenterOverlay in overlay.go so the
 	// clip decision matches production compositing.
 	startRow := (availH - realH) / 2
 	if modalIsTopAnchored(m.mode) {
@@ -156,7 +158,7 @@ func modalUsesResponsiveWidth(mode Mode) bool {
 }
 
 // popupLineCount returns the number of rows a popup box occupies, matching the
-// popup height centerOverlay/topCenterOverlay compute (strings.Count + 1 for a
+// popup height layout.CenterOverlay/layout.TopCenterOverlay compute (strings.Count + 1 for a
 // non-empty popup). An empty popup is zero rows.
 func popupLineCount(popup string) int {
 	if popup == "" {

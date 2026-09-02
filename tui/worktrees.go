@@ -3,10 +3,9 @@ package tui
 import (
 	"fmt"
 	"strings"
-	"time"
 
-	"github.com/sglavoie/agentmux/internal/actions"
-	"github.com/sglavoie/agentmux/internal/worktree"
+	"github.com/sglavoie/agentmux/tui/layout"
+	tuiworktrees "github.com/sglavoie/agentmux/tui/worktrees"
 )
 
 func worktreeVisibleHeight(m Model) int {
@@ -22,13 +21,13 @@ func worktreeVisibleHeight(m Model) int {
 }
 
 func worktreeNoticeLines(m Model) int {
-	width := planViewerWrapWidth(m.width)
+	width := layout.WrapWidth(m.width)
 	lines := 0
 	if m.worktreeErr != nil {
-		lines += len(displayWrapHard("refresh error: "+m.worktreeErr.Error(), width))
+		lines += len(layout.WrapHard("refresh error: "+m.worktreeErr.Error(), width))
 	}
 	for _, warning := range m.worktreeWarnings {
-		lines += len(displayWrapHard("warning: "+warning, width))
+		lines += len(layout.WrapHard("warning: "+warning, width))
 	}
 	return lines
 }
@@ -43,7 +42,7 @@ func renderWorktrees(m Model) string {
 	} else {
 		header += "  " + styleDim.Render(fmt.Sprintf("[%d/%d visible]", len(m.worktreeFiltered), len(m.worktreeEntries)))
 	}
-	sb.WriteString(clampSearchLine(styleHeader.Render(header), m.width))
+	sb.WriteString(layout.ClampLine(styleHeader.Render(header), m.width))
 	sb.WriteByte('\n')
 
 	var filter string
@@ -55,7 +54,7 @@ func renderWorktrees(m Model) string {
 	default:
 		filter = styleDim.Render("press / to filter worktrees")
 	}
-	sb.WriteString(clampSearchLine(filter, m.width))
+	sb.WriteString(layout.ClampLine(filter, m.width))
 	sb.WriteByte('\n')
 	if row := renderPathRow("worktree path", selectedWorktreePath(m), m.width); row != "" {
 		sb.WriteString(row)
@@ -63,15 +62,15 @@ func renderWorktrees(m Model) string {
 	}
 	sb.WriteByte('\n')
 
-	width := planViewerWrapWidth(m.width)
+	width := layout.WrapWidth(m.width)
 	if m.worktreeErr != nil {
-		for _, line := range displayWrapHard("refresh error: "+m.worktreeErr.Error(), width) {
+		for _, line := range layout.WrapHard("refresh error: "+m.worktreeErr.Error(), width) {
 			sb.WriteString(styleError.Render(line))
 			sb.WriteByte('\n')
 		}
 	}
 	for _, warning := range sortStrings(m.worktreeWarnings) {
-		for _, line := range displayWrapHard("warning: "+warning, width) {
+		for _, line := range layout.WrapHard("warning: "+warning, width) {
 			sb.WriteString(styleStateWarning.Render(line))
 			sb.WriteByte('\n')
 		}
@@ -92,82 +91,23 @@ func renderWorktreeList(m Model, height int) string {
 		return styleDim.Render("  (no managed worktrees)") + "\n"
 	}
 
-	window := flatListWindowFor(len(m.worktreeFiltered), m.worktreeOffset, height)
+	window := layout.ListWindowFor(len(m.worktreeFiltered), m.worktreeOffset, height)
 	var sb strings.Builder
-	if window.showTop {
+	if window.ShowTop {
 		sb.WriteString(styleDim.Render("  ▲"))
 		sb.WriteByte('\n')
 	}
-	for i := window.start; i < window.end; i++ {
-		line := formatWorktreeRow(m.worktreeFiltered[i], m.width)
+	for i := window.Start; i < window.End; i++ {
+		line := tuiworktrees.FormatRow(m.worktreeFiltered[i], m.width)
 		if i == m.worktreeCursor {
 			line = renderSelectedRow(line)
 		}
 		sb.WriteString(line)
 		sb.WriteByte('\n')
 	}
-	if window.showBottom {
+	if window.ShowBottom {
 		sb.WriteString(styleDim.Render("  ▼"))
 		sb.WriteByte('\n')
 	}
 	return sb.String()
-}
-
-func formatWorktreeRow(entry actions.WorktreeView, width int) string {
-	if width <= 0 {
-		width = 120
-	}
-	project := strings.TrimSpace(entry.ProjectLabel)
-	if project == "" {
-		project = "(unknown project)"
-	}
-	branch := strings.TrimSpace(entry.Branch)
-	if branch == "" {
-		branch = "(no branch)"
-	}
-	identity := entry.Profile
-	if entry.Harness != "" {
-		if identity != "" {
-			identity += "/"
-		}
-		identity += entry.Harness
-	}
-	if identity == "" {
-		identity = "unknown profile"
-	}
-	age := compactWorktreeAge(entry.CreatedAt, time.Now())
-	badges := worktreeBadgeText(entry)
-	row := fmt.Sprintf("  %-18s  %-24s  %-18s  %6s  %s", project, branch, identity, age, badges)
-	return displayStyledTruncate(row, width, "…")
-}
-
-func compactWorktreeAge(created, now time.Time) string {
-	if created.IsZero() {
-		return "?"
-	}
-	d := now.Sub(created)
-	if d < 0 {
-		d = 0
-	}
-	switch {
-	case d < time.Minute:
-		return "now"
-	case d < time.Hour:
-		return fmt.Sprintf("%dm", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh", int(d.Hours()))
-	default:
-		return fmt.Sprintf("%dd", int(d.Hours()/24))
-	}
-}
-
-func worktreeBadgeText(entry actions.WorktreeView) string {
-	labels := worktreeStateLabels(entry)
-	if len(labels) > 0 && labels[0] == string(worktree.ClassificationValid) {
-		labels = labels[1:]
-	}
-	if len(labels) == 0 {
-		labels = []string{"clean"}
-	}
-	return "[" + strings.Join(labels, "][") + "]"
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // TestListFooterPaletteOrder asserts that the palette is rendered in its
@@ -195,7 +196,7 @@ func assertZebraFooterRows(t *testing.T, rendered string, width int) {
 			if !strings.HasPrefix(line, background) {
 				t.Errorf("row %d should start with zebra background", i)
 			}
-			if got := displayStyledWidth(line); got != width {
+			if got := layout.StyledWidth(line); got != width {
 				t.Errorf("striped row %d width = %d, want full viewport width %d", i, got, width)
 			}
 			if !strings.Contains(line, ansi.ResetStyle+background) {

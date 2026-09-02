@@ -1,6 +1,10 @@
 package tui
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/sglavoie/agentmux/tui/layout"
+)
 
 // chipPickerVisibleHeight returns the number of option rows that fit in the
 // overlay. Capped at 12 so the owning search backdrop rendered beneath the
@@ -63,14 +67,14 @@ func renderChipPicker(m Model) string {
 	current := currentChipValue(m)
 	height := chipPickerVisibleHeight(m)
 
-	window := flatListWindowFor(total, m.chipPickerOffset, height)
+	window := layout.ListWindowFor(total, m.chipPickerOffset, height)
 
-	if window.showTop {
+	if window.ShowTop {
 		sb.WriteString(styleDim.Render("  ▲"))
 		sb.WriteByte('\n')
 	}
 
-	for i := window.start; i < window.end; i++ {
+	for i := window.Start; i < window.End; i++ {
 		opt := m.chipPickerOptions[i]
 		label := chipPickerOptionLabel(opt)
 		if opt == "" {
@@ -88,7 +92,7 @@ func renderChipPicker(m Model) string {
 		sb.WriteByte('\n')
 	}
 
-	if window.showBottom {
+	if window.ShowBottom {
 		sb.WriteString(styleDim.Render("  ▼"))
 		sb.WriteByte('\n')
 	}

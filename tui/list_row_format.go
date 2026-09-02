@@ -9,6 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // harnessLabel returns the lowercase harness display name used in the
@@ -49,7 +50,7 @@ func harnessLabel(h string) string {
 // no longer shrink, so renderListAt clamps it and renderSplit falls back to
 // the plain full-width list.
 func minListRowWidth() int {
-	return minimumTabNumberColumnWidth + lockColumnWidth + muteColumnWidth + titleIconCellWidth + 1 + // tab + lock + mute + icon + space
+	return minimumTabNumberColumnWidth + lockColumnWidth + muteColumnWidth + layout.IconCellWidth + 1 + // tab + lock + mute + icon + space
 		3 + 1 + // "[X]" badge + space
 		harnessColWidth + 1 + // harness cell + space
 		titleColWidth + 2 // title + separators before dir
@@ -60,24 +61,24 @@ func formatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 	// stable; only filled when the session is locked.
 	lockCol := "  "
 	if s.Locked {
-		lockCol = displayPadRight(palette.LockIcon(), lockColumnWidth)
+		lockCol = layout.PadRight(palette.LockIcon(), lockColumnWidth)
 	}
 
 	// Mute indicator column. Always reserved (2 cells) so column alignment is
 	// stable; only filled when the session is muted.
 	muteCol := "  "
 	if s.Muted {
-		muteCol = displayPadRight(palette.MuteIcon(), muteColumnWidth)
+		muteCol = layout.PadRight(palette.MuteIcon(), muteColumnWidth)
 	}
 
-	// State icon at the start for instant scanning. displayPadIconCell pads
+	// State icon at the start for instant scanning. layout.PadIconCell pads
 	// the empty-state placeholder to the same 2-cell column reserved for
 	// glyph rows.
 	icon := ""
 	if s.State != "" {
 		icon = palette.StateIcon(s.State)
 	}
-	iconCol := displayPadIconCell(icon)
+	iconCol := layout.PadIconCell(icon)
 
 	// Account prefix badge (first rune of account, uppercased). Use the first
 	// rune rather than the first byte so a multibyte account name produces a
@@ -110,7 +111,7 @@ func formatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 		if emoji != "" {
 			text = emoji + " " + label
 		}
-		pad := harnessColWidth - displayWidth(text)
+		pad := harnessColWidth - layout.Width(text)
 		if pad < 0 {
 			pad = 0
 		}
@@ -124,16 +125,16 @@ func formatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 	// other regardless of whether the source glyph measures as 1 or 2 cells.
 	// Truncated to titleColWidth (grapheme-atomic) and right-padded to fill the
 	// column.
-	titleText := displayRenderTitleIcon(runningSessionDisplayTitle(s))
-	titleText = displayTruncate(titleText, titleColWidth, "…")
-	paddedTitle := displayPadRight(titleText, titleColWidth)
+	titleText := layout.RenderTitleIcon(runningSessionDisplayTitle(s))
+	titleText = layout.Truncate(titleText, titleColWidth, "…")
+	paddedTitle := layout.PadRight(titleText, titleColWidth)
 	title := accountStyle(identityColor).Render(paddedTitle)
 
 	// Directory: truncated.
 	dir := s.Directory
 	maxDir := dirMaxWidth
 	if width > 0 {
-		used := displayWidth(tabNumberCell) + lockColumnWidth + muteColumnWidth + displayWidth(activeLoopCell) + 3 + 4 + harnessColWidth + 1 + titleColWidth + 3 + displayWidth(activityCell)
+		used := layout.Width(tabNumberCell) + lockColumnWidth + muteColumnWidth + layout.Width(activeLoopCell) + 3 + 4 + harnessColWidth + 1 + titleColWidth + 3 + layout.Width(activityCell)
 		// tab number + lock (2) + mute (2) + optional loop + icon+space (3) + "[X] " badge (4)
 		//   + harness (10) + space (1) + title (20) + separators before dir (3)
 		//   + optional activity cell, whose width is set per render pass.
@@ -143,7 +144,7 @@ func formatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 		}
 		maxDir = available
 	}
-	dir = displayTruncateLeft(dir, maxDir, "…")
+	dir = layout.TruncateLeft(dir, maxDir, "…")
 	dir = styleDim.Render(dir)
 
 	return tabNumberCell + lockCol + muteCol + activeLoopCell + iconCol + " " + badge + " " + harnessCell + " " + title + "  " + activityCell + dir

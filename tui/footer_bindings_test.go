@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 func TestFooterBindingStyles(t *testing.T) {
@@ -35,7 +36,7 @@ func TestFooterBindingStyles(t *testing.T) {
 		"unavailable": unavailable,
 		"destructive": destructive,
 	} {
-		if got, want := displayStyledWidth(rendered), displayWidth(stripAnsi(rendered)); got != want {
+		if got, want := layout.StyledWidth(rendered), layout.Width(stripAnsi(rendered)); got != want {
 			t.Fatalf("%s binding width = %d, want visible width %d", name, got, want)
 		}
 	}
@@ -105,9 +106,6 @@ func TestModalAndStandaloneHintRowsUseFooterBindings(t *testing.T) {
 		{name: "detail", view: detailFooter(Model{}, 10, 10), key: "t"},
 		{name: "timeline", view: renderTimeline(Model{width: 100, height: 30}), key: "t"},
 		{name: "delete choice", view: renderDeleteChoice(Model{deleteTarget: &target}), key: "[i]"},
-		{name: "color picker", view: newColorPickerModel(ColorPickerContext{DefaultColor: "blue"}).View().Content, key: "j/k"},
-		{name: "icon picker", view: (iconPickerModel{items: []iconPickerItem{{name: "codex", emoji: "📟"}}}).View().Content, key: "j/k"},
-		{name: "keybinding reference", view: (keybindingsModel{}).View().Content, key: "j/k"},
 	}
 
 	for _, tc := range cases {

@@ -6,6 +6,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/transcript"
+	tuiplans "github.com/sglavoie/agentmux/tui/plans"
 )
 
 // handleSessionsMsg processes a sessionsMsg: rebuilds the session list,
@@ -424,7 +425,7 @@ func (m Model) handlePlanFilesLoaded(msg planFilesLoadedMsg) (tea.Model, tea.Cmd
 	m.planViewerLoading = false
 	m.planViewerLoadErr = msg.err
 	m.planViewerLines = msg.lines
-	m.planViewerMatchLines = computePlanViewerMatches(m.planViewerLines, m.planQuery)
+	m.planViewerMatchLines = tuiplans.ViewerMatches(m.planViewerLines, m.planQuery)
 	m.planViewerMatchIdx = 0
 	m.planViewerScroll = 0
 	m.planViewerCursor = 0

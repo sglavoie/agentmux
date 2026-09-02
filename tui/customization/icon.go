@@ -1,4 +1,4 @@
-package tui
+package customization
 
 import (
 	"errors"
@@ -13,8 +13,8 @@ import (
 	"github.com/sglavoie/agentmux/internal/palette"
 )
 
-// IconPickerContext holds the inputs needed by the harness icon picker overlay.
-type IconPickerContext struct {
+// IconContext holds the inputs needed by the harness icon picker overlay.
+type IconContext struct {
 	Client        kitty.KittyClient
 	TabID         int
 	CurrentTitle  string
@@ -27,7 +27,7 @@ type iconPickerItem struct {
 }
 
 type iconPickerModel struct {
-	ctx     IconPickerContext
+	ctx     IconContext
 	cursor  int
 	items   []iconPickerItem
 	err     error
@@ -36,7 +36,7 @@ type iconPickerModel struct {
 
 var errNoHarnessIcons = errors.New("no harness icons configured in [harness_emojis]")
 
-func newIconPickerModel(ctx IconPickerContext) (iconPickerModel, error) {
+func newIconPickerModel(ctx IconContext) (iconPickerModel, error) {
 	items := make([]iconPickerItem, 0, len(harness.Names()))
 	for _, name := range harness.Names() {
 		emoji := ctx.HarnessEmojis[name]
@@ -174,9 +174,9 @@ func (m iconPickerModel) View() tea.View {
 	return tea.NewView(sb.String())
 }
 
-// RunIconPickerOverlay renders the harness icon picker and blocks until the
+// RunIconOverlay renders the harness icon picker and blocks until the
 // user dismisses it. It is designed to run inside a Kitty overlay window.
-func RunIconPickerOverlay(ctx IconPickerContext) error {
+func RunIconOverlay(ctx IconContext) error {
 	model, err := newIconPickerModel(ctx)
 	if err != nil {
 		return err

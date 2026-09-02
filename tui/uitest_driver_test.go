@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	tuiworktrees "github.com/sglavoie/agentmux/tui/worktrees"
 )
 
 func cleanupUITestDriver(t testing.TB, d *UITestDriver) {
@@ -66,7 +67,7 @@ func TestUITestDriverWorktreeOpenUsesHermeticActionSeam(t *testing.T) {
 	cleanupUITestDriver(t, d)
 
 	d.model.mode = ModeWorktrees
-	d.model.worktreeFiltered = sortWorktreeViews(fx.Worktrees)
+	d.model.worktreeFiltered = tuiworktrees.SortViews(fx.Worktrees)
 	found := false
 	for i, entry := range d.model.worktreeFiltered {
 		if entry.ID == "wt-clean" {

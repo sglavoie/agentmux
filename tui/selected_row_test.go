@@ -12,6 +12,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 func TestRenderSelectedRowNormalizesNestedANSI(t *testing.T) {
@@ -28,7 +29,7 @@ func TestRenderSelectedRowNormalizesNestedANSI(t *testing.T) {
 	if visible := stripAnsi(got); visible != plain {
 		t.Fatalf("selected visible content = %q, want %q", visible, plain)
 	}
-	if gotWidth, wantWidth := displayStyledWidth(got), displayWidth(plain); gotWidth != wantWidth {
+	if gotWidth, wantWidth := layout.StyledWidth(got), layout.Width(plain); gotWidth != wantWidth {
 		t.Fatalf("selected width = %d, want %d", gotWidth, wantWidth)
 	}
 	if sequences := strings.Count(got, "\x1b["); sequences != 2 {
@@ -105,10 +106,10 @@ func renderedLineContaining(t *testing.T, rendered, visible string) string {
 // renderSelectedRow instead of directly nesting the reverse style around it.
 func TestSelectableListFamiliesUseNormalizedRenderer(t *testing.T) {
 	files := []string{
-		"asl_runs.go", "chip_picker.go", "color_picker_app.go",
-		"command_palette.go", "completion.go", "config_picker.go", "icon_picker_app.go",
-		"list_rows.go", "model_live_session_picker.go", "picker.go", "plan_search.go",
-		"plan_view.go", "session_search.go", "session_view.go", "worktrees.go",
+		"asl_runs.go", "chip_picker.go", "command_palette.go", "completion.go",
+		"config_picker.go", "list_rows.go", "model_live_session_picker.go",
+		"picker.go", "plan_search.go", "plan_view.go", "session_search.go",
+		"session_view.go", "worktrees.go",
 	}
 	for _, name := range files {
 		t.Run(name, func(t *testing.T) {

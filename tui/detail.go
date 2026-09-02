@@ -9,6 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // detailMinVisible is the floor on the visible body height. Even on very
@@ -145,7 +146,7 @@ func isTerminalAction(action string) bool {
 // session ended in the most-recent-first event list.
 func sessionEndedSeparator(width int) string {
 	const label = " session ended "
-	labelW := displayWidth(label)
+	labelW := layout.Width(label)
 	if width <= labelW {
 		return styleDim.Render(strings.TrimSpace(label))
 	}
@@ -194,7 +195,7 @@ func padRight(s string, width int) string {
 	if width <= 0 {
 		return ""
 	}
-	return displayPadRight(displayTruncate(s, width, "…"), width)
+	return layout.PadRight(layout.Truncate(s, width, "…"), width)
 }
 
 // detailHeader renders the two-line pane header: badge + state icon +
@@ -223,7 +224,7 @@ func detailHeader(m Model) string {
 		icon = palette.StateIcon(s.State) + " "
 	}
 
-	line1 := fmt.Sprintf("%s %s%s — window %d", badge, icon, displayRenderTitleIcon(runningSessionDisplayTitle(s)), s.WindowID)
+	line1 := fmt.Sprintf("%s %s%s — window %d", badge, icon, layout.RenderTitleIcon(runningSessionDisplayTitle(s)), s.WindowID)
 
 	state := s.State
 	if state == "" {
@@ -297,7 +298,7 @@ func detailRow(ev protocol.SessionEvent, now time.Time, width int) string {
 	}
 	detailStr := ""
 	if toolWidth > 0 {
-		detailStr = displayTruncate(strings.Join(details, " · "), toolWidth, "…")
+		detailStr = layout.Truncate(strings.Join(details, " · "), toolWidth, "…")
 	}
 
 	gap := strings.Repeat(" ", detailColumnGap)

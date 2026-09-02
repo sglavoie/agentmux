@@ -2,6 +2,8 @@ package tui
 
 import (
 	"strings"
+
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // renderConfigPicker renders the profile picker overlay for restart/launch overrides.
@@ -17,22 +19,22 @@ func renderConfigPicker(m Model) string {
 
 	maxName, maxHarness := 0, 0
 	for _, acc := range m.configPickerAccounts {
-		if n := displayWidth(acc.Name); n > maxName {
+		if n := layout.Width(acc.Name); n > maxName {
 			maxName = n
 		}
-		if h := displayWidth(harnessDisplayText(m.cfg, acc.EffectiveHarness())); h > maxHarness {
+		if h := layout.Width(harnessDisplayText(m.cfg, acc.EffectiveHarness())); h > maxHarness {
 			maxHarness = h
 		}
 	}
 	harnessColor := buildHarnessColorMap(m)
 	for i, acc := range m.configPickerAccounts {
-		namePad := maxName - displayWidth(acc.Name)
+		namePad := maxName - layout.Width(acc.Name)
 		if namePad < 0 {
 			namePad = 0
 		}
 		name := accountStyle(acc.Color).Render(acc.Name) + strings.Repeat(" ", namePad)
 		harnessText := harnessDisplayText(m.cfg, acc.EffectiveHarness())
-		pad := maxHarness - displayWidth(harnessText)
+		pad := maxHarness - layout.Width(harnessText)
 		if pad < 0 {
 			pad = 0
 		}
@@ -70,7 +72,7 @@ func renderConfigPicker(m Model) string {
 func renderConfigPickerBox(m Model) string {
 	content := strings.TrimRight(renderConfigPicker(m), "\n")
 	boxWidth := 60
-	if contentWidth := popupWidth(content) + styleOverlayBox.GetHorizontalFrameSize(); contentWidth > boxWidth {
+	if contentWidth := layout.PopupWidth(content) + styleOverlayBox.GetHorizontalFrameSize(); contentWidth > boxWidth {
 		boxWidth = contentWidth
 	}
 	if avail := m.width - 4; avail < boxWidth {

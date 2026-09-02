@@ -1,6 +1,10 @@
 package tui
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/sglavoie/agentmux/tui/layout"
+)
 
 type footerEntry struct {
 	key      string
@@ -80,7 +84,7 @@ func listFooterActions(m Model) string {
 func listFooterSectionsLine(m Model, sections []string) string {
 	const indent = "  "
 	innerSep := styleFooter.Render(" · ")
-	innerSepW := displayStyledWidth(innerSep)
+	innerSepW := layout.StyledWidth(innerSep)
 
 	var tokens []footerToken
 	for _, sec := range sections {
@@ -123,7 +127,7 @@ func hasLaterEntries(sections []string, current string) bool {
 
 // footerToken pairs a styled rendered string with its visible width and an
 // optional separator that follows it within a section. Pre-measuring with
-// displayStyledWidth lets us account for ANSI styling correctly.
+// layout.StyledWidth lets us account for ANSI styling correctly.
 type footerToken struct {
 	rendered string
 	width    int
@@ -157,8 +161,8 @@ func wrapFooterLine(firstLineLead, continuationIndent string, tokens []footerTok
 		return sb.String()
 	}
 
-	leadW := displayStyledWidth(firstLineLead)
-	contW := displayStyledWidth(continuationIndent)
+	leadW := layout.StyledWidth(firstLineLead)
+	contW := layout.StyledWidth(continuationIndent)
 
 	var lines []string
 	var cur strings.Builder
@@ -200,7 +204,7 @@ func wrapFooterLine(firstLineLead, continuationIndent string, tokens []footerTok
 	// wrap loop above, so truncate every emitted display line to maxWidth.
 	// Mirrors the per-row/per-line safety clamp in list_rows.go and picker.go.
 	for i, line := range lines {
-		lines[i] = displayStyledTruncate(line, maxWidth, "…")
+		lines[i] = layout.StyledTruncate(line, maxWidth, "…")
 	}
 	return strings.Join(lines, "\n")
 }

@@ -1,4 +1,14 @@
-package tui
+// Package customization owns the three things a user can change about how
+// Agent Mux looks in Kitty, and the overlays that let them change it: the
+// color a tab is painted, the harness icon a tab title carries, and the
+// keybinding reference that documents what the rest of the keys do.
+//
+// Each overlay is a standalone Bubble Tea program that owns its own Kitty
+// overlay window, so the package holds the full model/update/view for each
+// one and applies the result through the Kitty client on its context. It must
+// not import the root tui package: the dashboard opens these overlays as
+// separate windows rather than compositing them into its own view.
+package customization
 
 import (
 	"fmt"
@@ -9,10 +19,11 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
-// ColorPickerContext holds the inputs needed by the color picker overlay.
-type ColorPickerContext struct {
+// ColorContext holds the inputs needed by the color picker overlay.
+type ColorContext struct {
 	Client       kitty.KittyClient
 	TabID        int
 	WindowID     int
@@ -26,7 +37,7 @@ type colorPickerItem struct {
 }
 
 type colorPickerModel struct {
-	ctx     ColorPickerContext
+	ctx     ColorContext
 	cursor  int
 	offset  int
 	items   []colorPickerItem
@@ -40,7 +51,7 @@ var colorPickerOrder = []string{
 	"teal", "pink", "yellow", "gray", "cyan",
 }
 
-func newColorPickerModel(ctx ColorPickerContext) colorPickerModel {
+func newColorPickerModel(ctx ColorContext) colorPickerModel {
 	items := make([]colorPickerItem, 0, len(colorPickerOrder)+1)
 	initialCursor := 0
 	for i, name := range colorPickerOrder {
@@ -168,7 +179,7 @@ func (m colorPickerModel) View() tea.View {
 
 	maxNameLen := 0
 	for _, name := range colorPickerOrder {
-		if w := displayWidth(name); w > maxNameLen {
+		if w := layout.Width(name); w > maxNameLen {
 			maxNameLen = w
 		}
 	}
@@ -191,7 +202,7 @@ func (m colorPickerModel) View() tea.View {
 		suffix := ""
 		c, err := palette.Lookup(item.name)
 		if err == nil {
-			padded := displayPadRight(item.name, maxNameLen)
+			padded := layout.PadRight(item.name, maxNameLen)
 			colorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(c.ForegroundHex()))
 			label := fmt.Sprintf("%s  %s  %s", prefix, item.emoji, colorStyle.Render(padded))
 			if item.name == m.ctx.DefaultColor {
@@ -231,9 +242,9 @@ func (m colorPickerModel) View() tea.View {
 	return tea.NewView(sb.String())
 }
 
-// RunColorPickerOverlay renders the color picker and blocks until the user
+// RunColorOverlay renders the color picker and blocks until the user
 // dismisses it. Designed to run inside a Kitty overlay window.
-func RunColorPickerOverlay(ctx ColorPickerContext) error {
+func RunColorOverlay(ctx ColorContext) error {
 	p := tea.NewProgram(newColorPickerModel(ctx), tea.WithoutSignalHandler())
 	_, err := p.Run()
 	return err

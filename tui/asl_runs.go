@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/tui/layout"
+	tuiworktrees "github.com/sglavoie/agentmux/tui/worktrees"
 )
 
 // aslWideThreshold is the terminal width at or above which the Runs list shows
@@ -88,16 +90,16 @@ func aslVisibleHeight(m Model) int {
 }
 
 func aslNoticeLines(m Model) int {
-	width := planViewerWrapWidth(m.width)
+	width := layout.WrapWidth(m.width)
 	lines := 0
 	if banner := aslBannerText(m); banner != "" {
-		lines += len(displayWrapHard(banner, width))
+		lines += len(layout.WrapHard(banner, width))
 	}
 	if m.aslErr != nil {
-		lines += len(displayWrapHard(m.aslErr.Error(), width))
+		lines += len(layout.WrapHard(m.aslErr.Error(), width))
 	}
 	if m.aslNotice != "" {
-		lines += len(displayWrapHard(m.aslNotice, width))
+		lines += len(layout.WrapHard(m.aslNotice, width))
 	}
 	lines += len(aslOperationLines(m))
 	return lines
@@ -126,37 +128,37 @@ func aslBannerText(m Model) string {
 
 func renderASLRuns(m Model) string {
 	var sb strings.Builder
-	sb.WriteString(clampSearchLine(styleHeader.Render(aslHeaderText(m)), m.width))
+	sb.WriteString(layout.ClampLine(styleHeader.Render(aslHeaderText(m)), m.width))
 	sb.WriteByte('\n')
 	sb.WriteByte('\n')
 
-	width := planViewerWrapWidth(m.width)
+	width := layout.WrapWidth(m.width)
 	if banner := aslBannerText(m); banner != "" {
-		for _, line := range displayWrapHard(banner, width) {
+		for _, line := range layout.WrapHard(banner, width) {
 			sb.WriteString(styleBanner.Render(line))
 			sb.WriteByte('\n')
 		}
 	}
 	if m.aslErr != nil {
-		for _, line := range displayWrapHard(m.aslErr.Error(), width) {
+		for _, line := range layout.WrapHard(m.aslErr.Error(), width) {
 			sb.WriteString(styleError.Render(line))
 			sb.WriteByte('\n')
 		}
 	}
 	if m.aslNotice != "" {
-		for _, line := range displayWrapHard(m.aslNotice, width) {
+		for _, line := range layout.WrapHard(m.aslNotice, width) {
 			sb.WriteString(styleStateWarning.Render(line))
 			sb.WriteByte('\n')
 		}
 	}
 	for _, line := range aslOperationLines(m) {
-		sb.WriteString(clampSearchLine(styleDim.Render(line), m.width))
+		sb.WriteString(layout.ClampLine(styleDim.Render(line), m.width))
 		sb.WriteByte('\n')
 	}
 
 	sb.WriteString(renderASLRunList(m, aslVisibleHeight(m)))
 	for _, line := range aslDetailPanel(m) {
-		sb.WriteString(clampSearchLine(line, m.width))
+		sb.WriteString(layout.ClampLine(line, m.width))
 		sb.WriteByte('\n')
 	}
 	return sb.String()
@@ -193,13 +195,13 @@ func renderASLRunList(m Model, height int) string {
 		return styleDim.Render("  (no active or actionable runs)") + "\n"
 	}
 
-	window := flatListWindowFor(len(m.aslRows), m.aslOffset, height)
+	window := layout.ListWindowFor(len(m.aslRows), m.aslOffset, height)
 	var sb strings.Builder
-	if window.showTop {
+	if window.ShowTop {
 		sb.WriteString(styleDim.Render("  ▲"))
 		sb.WriteByte('\n')
 	}
-	for i := window.start; i < window.end; i++ {
+	for i := window.Start; i < window.End; i++ {
 		line := formatASLRow(m.aslRows[i], m.width, aslWide(m))
 		if i == m.aslCursor {
 			line = renderSelectedRow(line)
@@ -207,7 +209,7 @@ func renderASLRunList(m Model, height int) string {
 		sb.WriteString(line)
 		sb.WriteByte('\n')
 	}
-	if window.showBottom {
+	if window.ShowBottom {
 		sb.WriteString(styleDim.Render("  ▼"))
 		sb.WriteByte('\n')
 	}
@@ -222,7 +224,7 @@ func renderASLUnavailable(m Model) string {
 	sb.WriteString(styleDim.Render("  (agent-session-loop is unavailable)"))
 	sb.WriteByte('\n')
 	if reason := strings.TrimSpace(m.aslStatus.Reason); reason != "" {
-		sb.WriteString(clampSearchLine(styleDim.Render("  "+reason), m.width))
+		sb.WriteString(layout.ClampLine(styleDim.Render("  "+reason), m.width))
 		sb.WriteByte('\n')
 	}
 	return sb.String()
@@ -234,7 +236,7 @@ func formatASLRow(row aslbridge.Row, width int, wide bool) string {
 	}
 	state := aslStateText(row)
 	label := aslRowLabel(row)
-	age := compactWorktreeAge(aslActivityTime(row), time.Now())
+	age := tuiworktrees.CompactAge(aslActivityTime(row), time.Now())
 	var line string
 	if wide {
 		line = fmt.Sprintf("  %s  %s  %s  %s  %5s  %s",
@@ -243,14 +245,14 @@ func formatASLRow(row aslbridge.Row, width int, wide bool) string {
 	} else {
 		line = fmt.Sprintf("  %s  %s  %5s  %s", aslCell(state, 18), aslCell(label, 16), age, aslReasonText(row))
 	}
-	return displayStyledTruncate(line, width, "…")
+	return layout.StyledTruncate(line, width, "…")
 }
 
 // aslCell keeps a column exactly one width wide. Padding alone is not enough:
 // an over-long session ID would otherwise push every later column out of
 // alignment for that row only.
 func aslCell(value string, width int) string {
-	return displayPadRight(displayTruncate(value, width, "…"), width)
+	return layout.PadRight(layout.Truncate(value, width, "…"), width)
 }
 
 // aslStateText marks needs-action rows so the group boundary stays legible

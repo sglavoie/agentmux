@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 func TestPickerDSLAccountFilter(t *testing.T) {
@@ -215,7 +216,7 @@ func TestPickerRowEmojiTitleColumnAlignment(t *testing.T) {
 		if idx < 0 {
 			t.Fatalf("harness cell %q not found in row for title %q: %q", harnessCellText, title, row)
 		}
-		offset := displayWidth(row[:idx])
+		offset := layout.Width(row[:idx])
 		if first {
 			harnessOffset = offset
 			first = false
@@ -243,7 +244,7 @@ func TestPickerRowEmojiTitleColumnAlignment(t *testing.T) {
 		if idx < 0 {
 			t.Fatalf("title body %q not found in picker row for title %q: %q", body, title, row)
 		}
-		offset := displayWidth(row[:idx])
+		offset := layout.Width(row[:idx])
 		if first {
 			bodyOffset = offset
 			first = false
@@ -261,7 +262,7 @@ func TestPickerRowEmojiTitleColumnAlignment(t *testing.T) {
 	if bulletBody < 0 {
 		t.Fatalf("bullet-prefixed body not found in picker row: %q", bulletRow)
 	}
-	if got := displayWidth(bulletRow[:bulletBody]); got != bodyOffset-1 {
+	if got := layout.Width(bulletRow[:bulletBody]); got != bodyOffset-1 {
 		t.Errorf("picker bullet-prefixed body offset = %d, want %d (one cell before emoji bodies; row=%q)", got, bodyOffset-1, bulletRow)
 	}
 }

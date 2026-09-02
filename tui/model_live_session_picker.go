@@ -8,6 +8,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // openLiveSessionPicker raises the shared ambiguity picker. The caller supplies
@@ -129,12 +130,12 @@ func renderLiveSessionPicker(m Model) string {
 	if contentWidth < 1 {
 		contentWidth = 1
 	}
-	window := flatListWindowFor(len(m.livePickerCandidates), m.livePickerOffset, livePickerVisibleRows(m))
-	if window.showTop {
+	window := layout.ListWindowFor(len(m.livePickerCandidates), m.livePickerOffset, livePickerVisibleRows(m))
+	if window.ShowTop {
 		sb.WriteString(styleDim.Render("  ▲ more sessions"))
 		sb.WriteByte('\n')
 	}
-	for index := window.start; index < window.end; index++ {
+	for index := window.Start; index < window.End; index++ {
 		candidate := m.livePickerCandidates[index]
 		line := formatLiveSessionCandidate(candidate, contentWidth)
 		if index == m.livePickerCursor {
@@ -143,7 +144,7 @@ func renderLiveSessionPicker(m Model) string {
 		sb.WriteString(line)
 		sb.WriteByte('\n')
 	}
-	if window.showBottom {
+	if window.ShowBottom {
 		sb.WriteString(styleDim.Render("  ▼ more sessions"))
 		sb.WriteByte('\n')
 	}
@@ -175,12 +176,12 @@ func formatLiveSessionCandidate(candidate actions.WorktreeLiveSession, width int
 	if candidate.HarnessSessionID != "" {
 		line += "  native " + candidate.HarnessSessionID
 	}
-	return displayStyledTruncate(line, width, "…")
+	return layout.StyledTruncate(line, width, "…")
 }
 
 func renderLiveSessionPickerBox(m Model) string {
 	content := strings.TrimRight(renderLiveSessionPicker(m), "\n")
-	boxWidth := popupWidth(content) + styleOverlayBox.GetHorizontalFrameSize()
+	boxWidth := layout.PopupWidth(content) + styleOverlayBox.GetHorizontalFrameSize()
 	if boxWidth < 64 {
 		boxWidth = 64
 	}

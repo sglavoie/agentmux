@@ -8,10 +8,11 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // TestDetailHeaderPadsEmojiTitleIconColumn locks in that the detail
-// overlay header routes the project title through displayRenderTitleIcon
+// overlay header routes the project title through layout.RenderTitleIcon
 // so a leading pictograph occupies the 2-cell title-icon column without
 // gaining a phantom space.
 func TestDetailHeaderPadsEmojiTitleIconColumn(t *testing.T) {
@@ -36,8 +37,8 @@ func TestPadRightAtomicOnEmojiCluster(t *testing.T) {
 	// "Ab🐱" is 4 cells (A, b, 🐱=2). Width 3 must drop the cat and
 	// land at "Ab…" — never "Ab" + half an emoji.
 	got := padRight("Ab🐱", 3)
-	if displayWidth(got) != 3 {
-		t.Fatalf("padRight visible width = %d, want 3 (got %q)", displayWidth(got), got)
+	if layout.Width(got) != 3 {
+		t.Fatalf("padRight visible width = %d, want 3 (got %q)", layout.Width(got), got)
 	}
 	if got != "Ab…" {
 		t.Errorf("padRight emoji-truncate = %q, want %q", got, "Ab…")
@@ -45,8 +46,8 @@ func TestPadRightAtomicOnEmojiCluster(t *testing.T) {
 
 	// Width 4 fits the cat exactly with no tail.
 	full := padRight("Ab🐱", 4)
-	if displayWidth(full) != 4 {
-		t.Fatalf("padRight visible width = %d, want 4 (got %q)", displayWidth(full), full)
+	if layout.Width(full) != 4 {
+		t.Fatalf("padRight visible width = %d, want 4 (got %q)", layout.Width(full), full)
 	}
 	if full != "Ab🐱" {
 		t.Errorf("padRight at exact width = %q, want %q", full, "Ab🐱")
@@ -55,13 +56,13 @@ func TestPadRightAtomicOnEmojiCluster(t *testing.T) {
 
 // TestSessionEndedSeparatorMeasuresLabel verifies the centered separator
 // pads to exactly the requested width by measuring the label through
-// displayWidth (not runewidth.StringWidth) — both report the same width
+// layout.Width (not runewidth.StringWidth) — both report the same width
 // for an ASCII label, so the regression value is keeping the result
 // pinned to the requested column budget.
 func TestSessionEndedSeparatorMeasuresLabel(t *testing.T) {
 	out := stripAnsi(sessionEndedSeparator(40))
-	if displayWidth(out) != 40 {
-		t.Errorf("sessionEndedSeparator(40) width = %d, want 40 (got %q)", displayWidth(out), out)
+	if layout.Width(out) != 40 {
+		t.Errorf("sessionEndedSeparator(40) width = %d, want 40 (got %q)", layout.Width(out), out)
 	}
 	if !strings.Contains(out, "session ended") {
 		t.Errorf("expected label in separator, got %q", out)
@@ -87,7 +88,7 @@ func TestTimelineGapDashesGraphemeAware(t *testing.T) {
 			continue
 		}
 		gotGap = true
-		if w := displayWidth(plain); w != 60 {
+		if w := layout.Width(plain); w != 60 {
 			t.Errorf("gap line width = %d, want 60 (line=%q)", w, plain)
 		}
 	}
@@ -113,50 +114,12 @@ func TestTimelineSeparatorWidthGraphemeAware(t *testing.T) {
 			continue
 		}
 		gotSep = true
-		if w := displayWidth(plain); w != 60 {
+		if w := layout.Width(plain); w != 60 {
 			t.Errorf("separator line width = %d, want 60 (line=%q)", w, plain)
 		}
 	}
 	if !gotSep {
 		t.Fatalf("expected at least one /compact line in: %v", lines)
-	}
-}
-
-// TestPopupWidthEmojiGraphemeAware locks in that popupWidth measures
-// emoji popups via displayStyledWidth so wide glyphs count for their
-// full cell width (2), not their byte length.
-func TestPopupWidthEmojiGraphemeAware(t *testing.T) {
-	popup := "🐱🐱\n🐱"
-	// Two cats per line == 4 cells; tallest line == 4.
-	if got := popupWidth(popup); got != 4 {
-		t.Errorf("popupWidth(emoji) = %d, want 4", got)
-	}
-	// Styled emoji must still measure as 2 cells.
-	styled := styleSelected.Render("⚡")
-	if got := popupWidth(styled); got != 2 {
-		t.Errorf("popupWidth(styled ⚡) = %d, want 2", got)
-	}
-}
-
-// TestComposeOverlayPreservesEmojiAtBoundary verifies the overlay
-// splicing path measures both popup and base lines through grapheme-
-// aware width so a wide emoji at the popup boundary survives the slice
-// without losing or duplicating cells.
-func TestComposeOverlayPreservesEmojiAtBoundary(t *testing.T) {
-	// 10-wide base, popup carries a single cat (2 cells) starting at col 4.
-	base := makeBase(10, 3)
-	popup := "🐱"
-	got := composeOverlay(base, popup, 10, 3, 4, 1, false)
-	lines := strings.Split(got, "\n")
-	if len(lines) != 3 {
-		t.Fatalf("expected 3 lines; got %d (%q)", len(lines), got)
-	}
-	plain := stripAnsi(lines[1])
-	if displayWidth(plain) != 10 {
-		t.Errorf("row 1 width after emoji overlay = %d, want 10 (line=%q)", displayWidth(plain), plain)
-	}
-	if !strings.Contains(plain, "🐱") {
-		t.Errorf("row 1 should contain emoji from popup, got %q", plain)
 	}
 }
 
@@ -176,7 +139,7 @@ func TestActionsHeaderPadsEmojiTitleIcon(t *testing.T) {
 
 // TestConfirmHeaderPadsEmojiTitleIcon mirrors the detail test for the
 // confirm overlay: the project title in the y/n header should route
-// through displayRenderTitleIcon so leading pictographs use the title-icon
+// through layout.RenderTitleIcon so leading pictographs use the title-icon
 // width policy.
 func TestConfirmHeaderPadsEmojiTitleIcon(t *testing.T) {
 	m := Model{

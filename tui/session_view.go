@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // sessionViewVisibleHeight returns the number of viewer rows that fit in the
@@ -50,7 +51,7 @@ func renderSessionView(m Model) string {
 		if project == "" {
 			project = "(unknown)"
 		}
-		header = fmt.Sprintf("Transcript: %s  %s", displayRenderTitleIcon(project), sessionProfileTag(*m.viewerSession))
+		header = fmt.Sprintf("Transcript: %s  %s", layout.RenderTitleIcon(project), sessionProfileTag(*m.viewerSession))
 	}
 	if m.viewerLoading {
 		header += "  " + styleDim.Render("(loading…)")
@@ -91,9 +92,9 @@ func renderSessionViewBody(m Model, height int) string {
 		return sb.String()
 	}
 
-	window := flatListWindowFor(total, m.viewerScroll, height)
+	window := layout.ListWindowFor(total, m.viewerScroll, height)
 
-	if window.showTop {
+	if window.ShowTop {
 		sb.WriteString(styleDim.Render("  ▲"))
 		sb.WriteByte('\n')
 	}
@@ -109,7 +110,7 @@ func renderSessionViewBody(m Model, height int) string {
 	}
 	cursorLine := m.viewerCursor
 
-	for i := window.start; i < window.end; i++ {
+	for i := window.Start; i < window.End; i++ {
 		line := formatViewerLine(m.viewerMessages[i], maxWidth)
 		switch {
 		case i == cursorLine:
@@ -122,7 +123,7 @@ func renderSessionViewBody(m Model, height int) string {
 		sb.WriteByte('\n')
 	}
 
-	if window.showBottom {
+	if window.ShowBottom {
 		sb.WriteString(styleDim.Render("  ▼"))
 		sb.WriteByte('\n')
 	}
@@ -155,7 +156,7 @@ func formatViewerLine(msg transcript.Message, maxWidth int) string {
 	roleTag := fmt.Sprintf("[%s] ", role)
 	full := prefix + roleTag + body
 
-	full = displayTruncate(full, maxRunes(maxWidth), "…")
+	full = layout.Truncate(full, maxRunes(maxWidth), "…")
 
 	switch role {
 	case "assistant":

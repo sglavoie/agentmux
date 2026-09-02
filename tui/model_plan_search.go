@@ -9,6 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/session"
+	tuiplans "github.com/sglavoie/agentmux/tui/plans"
 )
 
 // planEditorErrMsg surfaces an OpenPathInEditor failure back to the model so
@@ -222,7 +223,7 @@ func (m Model) handlePlanSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		}
 		return m.enterPlanView(m.planResults[m.planCursor].Meta)
 	case keySortPlan:
-		m.planSortMode = nextPlanSortMode(m.planSortMode)
+		m.planSortMode = tuiplans.NextSortMode(m.planSortMode)
 		var anchor string
 		if m.planCursor >= 0 && m.planCursor < len(m.planResults) {
 			anchor = m.planResults[m.planCursor].Meta.DirPath
@@ -241,17 +242,6 @@ func (m Model) handlePlanSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		return m, nil
 	}
 	return m, nil
-}
-
-// nextPlanSortMode advances mode through the cycle:
-// SortByMatches → SortByModTime → SortByMatches.
-func nextPlanSortMode(mode plans.SortMode) plans.SortMode {
-	switch mode {
-	case plans.SortByMatches:
-		return plans.SortByModTime
-	default:
-		return plans.SortByMatches
-	}
 }
 
 // dispatchPlanSearch returns a tea.Cmd that fires after the debounce

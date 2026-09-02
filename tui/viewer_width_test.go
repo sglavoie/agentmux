@@ -6,6 +6,8 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/layout"
+	tuiplans "github.com/sglavoie/agentmux/tui/plans"
 )
 
 func TestFormatViewerLineUsesDisplayTruncate(t *testing.T) {
@@ -13,7 +15,7 @@ func TestFormatViewerLineUsesDisplayTruncate(t *testing.T) {
 	for _, width := range []int{20, 40, 80} {
 		t.Run("width-"+itoa(width), func(t *testing.T) {
 			line := formatViewerLine(msg, width)
-			if w := displayStyledWidth(line); w > maxRunes(width) {
+			if w := layout.StyledWidth(line); w > maxRunes(width) {
 				t.Fatalf("formatViewerLine visible width = %d > %d: %q", w, maxRunes(width), line)
 			}
 			if !strings.Contains(stripAnsi(line), "…") {
@@ -35,7 +37,7 @@ func TestFormatViewerLineGraphemeAtomicOnEmoji(t *testing.T) {
 	if !strings.HasSuffix(line, "…") {
 		t.Fatalf("expected ellipsis at end, got %q", line)
 	}
-	if w := displayWidth(line); w > maxRunes(12) {
+	if w := layout.Width(line); w > maxRunes(12) {
 		t.Fatalf("truncated line width = %d, want <= %d: %q", w, maxRunes(12), line)
 	}
 }
@@ -97,10 +99,10 @@ func TestPlanViewerRowsForWidthGraphemeWrap(t *testing.T) {
 	// measured through the centralized helper, must stay within the wrap
 	// budget.
 	const width = 8
-	rows := planViewerRowsForWidth([]string{"🗣🗣🗣🗣🗣 mixed ascii"}, width)
+	rows := tuiplans.ViewerRows([]string{"🗣🗣🗣🗣🗣 mixed ascii"}, width)
 	for i, r := range rows {
-		if w := displayWidth(r.text); w > width {
-			t.Fatalf("row %d visible width = %d > %d: %q", i, w, width, r.text)
+		if w := layout.Width(r.Text); w > width {
+			t.Fatalf("row %d visible width = %d > %d: %q", i, w, width, r.Text)
 		}
 	}
 }
@@ -108,7 +110,7 @@ func TestPlanViewerRowsForWidthGraphemeWrap(t *testing.T) {
 func TestMessageDetailBodyLinesGraphemeSafe(t *testing.T) {
 	// Wrapping inside the message detail overlay must keep grapheme
 	// clusters whole; the resulting body lines must not exceed the
-	// requested width when measured through displayStyledWidth.
+	// requested width when measured through layout.StyledWidth.
 	m := Model{
 		mode:             ModeMessageDetail,
 		width:            12,
@@ -123,7 +125,7 @@ func TestMessageDetailBodyLinesGraphemeSafe(t *testing.T) {
 		t.Fatal("expected wrapped body lines, got none")
 	}
 	for i, line := range lines {
-		if w := displayStyledWidth(line); w > m.width {
+		if w := layout.StyledWidth(line); w > m.width {
 			t.Fatalf("body line %d visible width = %d > %d: %q", i, w, m.width, line)
 		}
 	}

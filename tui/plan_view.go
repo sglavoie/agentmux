@@ -3,6 +3,9 @@ package tui
 import (
 	"fmt"
 	"strings"
+
+	"github.com/sglavoie/agentmux/tui/layout"
+	tuiplans "github.com/sglavoie/agentmux/tui/plans"
 )
 
 // renderPlanView renders the full ModePlanView layout: a one-line header
@@ -17,7 +20,7 @@ func renderPlanView(m Model) string {
 			name = "(unnamed)"
 		}
 		header = fmt.Sprintf("Plan: %s  [project: %s]  (%d file%s)",
-			displayRenderTitleIcon(name), planProjectLabel(*m.viewerPlan), len(m.viewerPlan.Files), plural(len(m.viewerPlan.Files)))
+			layout.RenderTitleIcon(name), tuiplans.ProjectLabel(*m.viewerPlan), len(m.viewerPlan.Files), plural(len(m.viewerPlan.Files)))
 	}
 	if m.planViewerLoading {
 		header += "  " + styleDim.Render("(loading…)")
@@ -27,7 +30,7 @@ func renderPlanView(m Model) string {
 	}
 	renderedHeader := styleHeader.Render(header)
 	if m.width > 0 {
-		renderedHeader = displayStyledTruncate(renderedHeader, m.width, "…")
+		renderedHeader = layout.StyledTruncate(renderedHeader, m.width, "…")
 	}
 	sb.WriteString(renderedHeader)
 	sb.WriteByte('\n')
@@ -38,7 +41,7 @@ func renderPlanView(m Model) string {
 	sb.WriteByte('\n')
 
 	if err := m.planViewerLoadErr; err != nil {
-		for _, line := range displayWrapHard("read error: "+err.Error(), planViewerWrapWidth(m.width)) {
+		for _, line := range layout.WrapHard("read error: "+err.Error(), layout.WrapWidth(m.width)) {
 			sb.WriteString(styleError.Render(line))
 			sb.WriteByte('\n')
 		}
@@ -68,24 +71,24 @@ func renderPlanViewBody(m Model, height int) string {
 		return sb.String()
 	}
 
-	window := planViewerRowWindowFor(total, m.planViewerScroll, height)
+	window := layout.ListWindowFor(total, m.planViewerScroll, height)
 
-	if window.showTop {
+	if window.ShowTop {
 		sb.WriteString(styleDim.Render("  ▲"))
 		sb.WriteByte('\n')
 	}
 
 	cursorLine := m.planViewerCursor
 
-	for i := window.start; i < window.end; i++ {
+	for i := window.Start; i < window.End; i++ {
 		row := rows[i]
-		line := row.text
+		line := row.Text
 		switch {
-		case row.sourceLine == cursorLine:
+		case row.SourceLine == cursorLine:
 			sb.WriteString(renderSelectedRow(line))
-		case row.isMatch(m.planViewerMatchLines):
+		case row.IsMatch(m.planViewerMatchLines):
 			sb.WriteString(styleSearch.Render(line))
-		case row.isSeparator(m.planViewerLines):
+		case row.IsSeparator(m.planViewerLines):
 			sb.WriteString(styleDim.Render(line))
 		default:
 			sb.WriteString(line)
@@ -93,7 +96,7 @@ func renderPlanViewBody(m Model, height int) string {
 		sb.WriteByte('\n')
 	}
 
-	if window.showBottom {
+	if window.ShowBottom {
 		sb.WriteString(styleDim.Render("  ▼"))
 		sb.WriteByte('\n')
 	}

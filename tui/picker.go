@@ -10,6 +10,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // pickerRunningPeekLines caps the scrollback tail rendered below the
@@ -133,17 +134,17 @@ func renderPickerList(m Model, height int) string {
 	// Pre-pass: compute column widths over the filtered set so the harness
 	// cell and state-flag columns line up vertically. The checkbox prefix
 	// ("[ ] " / "[*] ") is always 4 cells wide and the fixed pin cell plus
-	// trailing space is titleIconCellWidth+1 cells.
+	// trailing space is layout.IconCellWidth+1 cells.
 	titleColW := 0
 	harnessColW := 0
 	for _, origIdx := range m.pickerFilteredIdx {
 		sess := m.pickerSessionWithResolvedProfile(origIdx)
-		w := 4 + titleIconCellWidth + 1 + displayWidth(displayRenderTitleIcon(configSessionDisplayTitle(sess)))
+		w := 4 + layout.IconCellWidth + 1 + layout.Width(layout.RenderTitleIcon(configSessionDisplayTitle(sess)))
 		if w > titleColW {
 			titleColW = w
 		}
 		if acc, ok := findAccountByName(m.cfg.Accounts, sess.EffectiveProfile()); ok {
-			hw := displayWidth(pickerHarnessCellText(m.cfg, acc))
+			hw := layout.Width(pickerHarnessCellText(m.cfg, acc))
 			if hw > harnessColW {
 				harnessColW = hw
 			}
@@ -213,11 +214,11 @@ func renderPickerList(m Model, height int) string {
 		if m.pickerPinned[origIdx] {
 			pinIcon = "📌"
 		}
-		prefix += displayPadRight(pinIcon, titleIconCellWidth) + " "
+		prefix += layout.PadRight(pinIcon, layout.IconCellWidth) + " "
 
-		title := displayRenderTitleIcon(configSessionDisplayTitle(sess))
+		title := layout.RenderTitleIcon(configSessionDisplayTitle(sess))
 		coloredTitle := accountStyle(acctColor[defaultProfile]).Render(title)
-		titlePad := titleColW - (4 + titleIconCellWidth + 1 + displayWidth(title))
+		titlePad := titleColW - (4 + layout.IconCellWidth + 1 + layout.Width(title))
 		if titlePad < 0 {
 			titlePad = 0
 		}
@@ -225,7 +226,7 @@ func renderPickerList(m Model, height int) string {
 		var harnessCell string
 		if acc, ok := findAccountByName(m.cfg.Accounts, sess.EffectiveProfile()); ok {
 			text := pickerHarnessCellText(m.cfg, acc)
-			pad := harnessColW - displayWidth(text)
+			pad := harnessColW - layout.Width(text)
 			if pad < 0 {
 				pad = 0
 			}
@@ -251,7 +252,7 @@ func renderPickerList(m Model, height int) string {
 		// (built by concatenation with content-derived column widths) can draw
 		// past the terminal edge and corrupt the layout.
 		if m.width > 0 {
-			line = displayStyledTruncate(line, m.width, "…")
+			line = layout.StyledTruncate(line, m.width, "…")
 		}
 
 		if i == m.pickerCursor {
@@ -272,8 +273,8 @@ func renderPickerList(m Model, height int) string {
 
 func renderPickerHeader(m Model, header string) string {
 	left := styleHeader.Render(header)
-	if m.width > 0 && displayStyledWidth(left) > m.width {
-		return displayStyledTruncate(left, m.width, "…") + "\n"
+	if m.width > 0 && layout.StyledWidth(left) > m.width {
+		return layout.StyledTruncate(left, m.width, "…") + "\n"
 	}
 	right := ""
 	if !m.pickerSearchMode && m.pickerFilter == "" {
@@ -282,7 +283,7 @@ func renderPickerHeader(m Model, header string) string {
 	if right == "" || m.width <= 0 {
 		return left + "\n"
 	}
-	pad := m.width - displayStyledWidth(left) - displayStyledWidth(right)
+	pad := m.width - layout.StyledWidth(left) - layout.StyledWidth(right)
 	if pad < 1 {
 		return left + "\n"
 	}
@@ -302,7 +303,7 @@ func renderPickerPreview(m Model, origIdx, width, height int) string {
 
 	lines := make([]string, 0, height)
 	header := accountStyle(acctColor[defaultProfile]).Render(
-		displayTruncate(displayRenderTitleIcon(configSessionDisplayTitle(sess)), width, "…"),
+		layout.Truncate(layout.RenderTitleIcon(configSessionDisplayTitle(sess)), width, "…"),
 	)
 	lines = append(lines, header)
 
@@ -311,7 +312,7 @@ func renderPickerPreview(m Model, origIdx, width, height int) string {
 			return
 		}
 		body := styleDim.Render(label+": ") + value
-		lines = append(lines, displayStyledTruncate(body, width, "…"))
+		lines = append(lines, layout.StyledTruncate(body, width, "…"))
 	}
 	addField("title", sess.Title)
 	addField("dir", sess.Directory)
@@ -371,7 +372,7 @@ func pickerScrollbackTail(text, errText string, height, width int) []string {
 		return nil
 	}
 	if errText != "" {
-		return []string{styleError.Render(displayTruncate("error: "+errText, width, "…"))}
+		return []string{styleError.Render(layout.Truncate("error: "+errText, width, "…"))}
 	}
 	if text == "" {
 		return []string{styleDim.Render("(loading…)")}
@@ -382,7 +383,7 @@ func pickerScrollbackTail(text, errText string, height, width int) []string {
 	}
 	out := make([]string, len(raw))
 	for i, ln := range raw {
-		out[i] = displayTruncate(ln, width, "…")
+		out[i] = layout.Truncate(ln, width, "…")
 	}
 	return out
 }

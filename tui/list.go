@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 const (
@@ -59,7 +60,7 @@ func renderHeader(m Model) string {
 	right := strings.Join(rightParts, styleFooter.Render("   "))
 
 	if right != "" && m.width > 0 {
-		pad := m.width - displayStyledWidth(left) - displayStyledWidth(right)
+		pad := m.width - layout.StyledWidth(left) - layout.StyledWidth(right)
 		if pad < 1 {
 			pad = 1
 		}
@@ -68,7 +69,7 @@ func renderHeader(m Model) string {
 		// health pips exceed the terminal even with the pad collapsed to 1, so
 		// truncate the composed row to m.width. Mirrors the per-line clamp in
 		// footer.go and the per-row clamp in list_rows.go.
-		line = displayStyledTruncate(line, m.width, "…")
+		line = layout.StyledTruncate(line, m.width, "…")
 		out := line + "\n"
 		if hint := renderHealthHints(m); hint != "" {
 			out += hint
@@ -130,7 +131,7 @@ func renderHealthHints(m Model) string {
 	for _, h := range hints {
 		styled := styleFooter.Render(h)
 		if m.width > 0 {
-			pad := m.width - displayStyledWidth(styled)
+			pad := m.width - layout.StyledWidth(styled)
 			if pad < 0 {
 				pad = 0
 			}
@@ -187,7 +188,7 @@ func renderChips(m Model, width int) string {
 	acctColor := buildProfileColorMap(m)
 
 	const chipSep = "  "
-	sepW := displayStyledWidth(chipSep)
+	sepW := layout.StyledWidth(chipSep)
 
 	var lines []string
 	var line strings.Builder
@@ -198,9 +199,9 @@ func renderChips(m Model, width int) string {
 		// wrap loop below, so clamp it to width first (mirrors the guard in
 		// renderSessionSearchChips at session_search.go).
 		if width > 0 {
-			chip = displayStyledTruncate(chip, width, "…")
+			chip = layout.StyledTruncate(chip, width, "…")
 		}
-		chipW := displayStyledWidth(chip)
+		chipW := layout.StyledWidth(chip)
 		add := chipW
 		if line.Len() > 0 {
 			add += sepW
@@ -263,14 +264,14 @@ func renderLegend(m Model) string {
 		if icon == "" {
 			continue
 		}
-		token := displayPadIconCell(icon) + " " + gloss
+		token := layout.PadIconCell(icon) + " " + gloss
 		tokens = append(tokens, footerRenderedToken(stateAccentStyle(state).Render(token)))
 	}
 	if len(tokens) == 0 {
 		return ""
 	}
 	sep := styleFooter.Render("   ")
-	sepW := displayStyledWidth(sep)
+	sepW := layout.StyledWidth(sep)
 	for i := 0; i < len(tokens)-1; i++ {
 		tokens[i].sep = sep
 		tokens[i].sepWidth = sepW

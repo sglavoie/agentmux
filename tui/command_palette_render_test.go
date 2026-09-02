@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 func commandPaletteTestModel(width, height int) Model {
@@ -17,9 +18,9 @@ func commandPaletteTestModel(width, height int) Model {
 	return m
 }
 
-func commandPaletteLayoutText(layout commandPaletteLayout) string {
-	lines := make([]string, len(layout.rows))
-	for i, row := range layout.rows {
+func commandPaletteLayoutText(palette commandPaletteLayout) string {
+	lines := make([]string, len(palette.rows))
+	for i, row := range palette.rows {
 		lines[i] = row.text
 	}
 	return strings.Join(lines, "\n")
@@ -27,11 +28,11 @@ func commandPaletteLayoutText(layout commandPaletteLayout) string {
 
 func assertCommandPaletteSelectionVisible(t *testing.T, m Model) {
 	t.Helper()
-	layout, visible := commandPaletteScrollBounds(m)
-	if m.commandCursor < 0 || m.commandCursor >= len(layout.spans) {
-		t.Fatalf("cursor %d outside %d command spans", m.commandCursor, len(layout.spans))
+	palette, visible := commandPaletteScrollBounds(m)
+	if m.commandCursor < 0 || m.commandCursor >= len(palette.spans) {
+		t.Fatalf("cursor %d outside %d command spans", m.commandCursor, len(palette.spans))
 	}
-	span := layout.spans[m.commandCursor]
+	span := palette.spans[m.commandCursor]
 	if span.end-span.start > visible {
 		t.Fatalf("test viewport holds %d rows but selected command needs %d", visible, span.end-span.start)
 	}
@@ -43,11 +44,11 @@ func assertCommandPaletteSelectionVisible(t *testing.T, m Model) {
 
 func TestCommandPaletteFullAndFilteredLayouts(t *testing.T) {
 	m := commandPaletteTestModel(100, 40)
-	layout := commandPaletteResultLayout(m, commandPaletteContentWidth(m))
-	text := commandPaletteLayoutText(layout)
+	palette := commandPaletteResultLayout(m, commandPaletteContentWidth(m))
+	text := commandPaletteLayoutText(palette)
 	for _, group := range []string{"Session", "Explore", "App"} {
 		count := 0
-		for _, row := range layout.rows {
+		for _, row := range palette.rows {
 			if row.groupHeader && row.text == group {
 				count++
 			}
@@ -59,8 +60,8 @@ func TestCommandPaletteFullAndFilteredLayouts(t *testing.T) {
 
 	m.commandQuery = "quit"
 	m.recomputeCommandPaletteResults()
-	layout = commandPaletteResultLayout(m, commandPaletteContentWidth(m))
-	text = commandPaletteLayoutText(layout)
+	palette = commandPaletteResultLayout(m, commandPaletteContentWidth(m))
+	text = commandPaletteLayoutText(palette)
 	if !strings.Contains(text, "App") || !strings.Contains(text, "Quit") {
 		t.Fatalf("filtered layout missing App/Quit:\n%s", text)
 	}
@@ -112,20 +113,20 @@ func TestCommandPaletteShortcutAlignmentAndWrappedDetail(t *testing.T) {
 	m.commandQuery = "restart"
 	m.recomputeCommandPaletteResults()
 	width := commandPaletteContentWidth(m)
-	layout := commandPaletteResultLayout(m, width)
-	span := layout.spans[0]
+	palette := commandPaletteResultLayout(m, width)
+	span := palette.spans[0]
 	if span.end-span.start < 3 {
 		t.Fatalf("narrow command span has %d rows, want wrapped title plus detail rows", span.end-span.start)
 	}
-	title := layout.rows[span.start].text
-	if displayWidth(title) != width {
-		t.Fatalf("title row width = %d, want right-aligned width %d: %q", displayWidth(title), width, title)
+	title := palette.rows[span.start].text
+	if layout.Width(title) != width {
+		t.Fatalf("title row width = %d, want right-aligned width %d: %q", layout.Width(title), width, title)
 	}
 	if !strings.HasSuffix(title, keyR) {
 		t.Fatalf("title row shortcut is not right-aligned: %q", title)
 	}
-	for _, row := range layout.rows {
-		if got := displayWidth(row.text); got > width {
+	for _, row := range palette.rows {
+		if got := layout.Width(row.text); got > width {
 			t.Fatalf("display row width = %d, limit %d: %q", got, width, row.text)
 		}
 	}
@@ -136,8 +137,8 @@ func TestCommandPaletteShortcutAlignmentAndWrappedDetail(t *testing.T) {
 	m.openCommandPalette()
 	m.commandQuery = "restart"
 	m.recomputeCommandPaletteResults()
-	layout = commandPaletteResultLayout(m, commandPaletteContentWidth(m))
-	detail := commandPaletteLayoutText(layout)
+	palette = commandPaletteResultLayout(m, commandPaletteContentWidth(m))
+	detail := commandPaletteLayoutText(palette)
 	for _, want := range []string{"unavailable:", commandReasonLocked} {
 		if !strings.Contains(detail, want) {
 			t.Fatalf("wrapped disabled detail missing %q:\n%s", want, detail)
@@ -158,8 +159,8 @@ func TestCommandPaletteWrappedRowScrollingAndResizeClamping(t *testing.T) {
 	m.commandOffset = 10_000
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 42, Height: 20})
 	m = updated.(Model)
-	layout, visible := commandPaletteScrollBounds(m)
-	maxOffset := max(len(layout.rows)-visible, 0)
+	palette, visible := commandPaletteScrollBounds(m)
+	maxOffset := max(len(palette.rows)-visible, 0)
 	if m.commandOffset < 0 || m.commandOffset > maxOffset {
 		t.Fatalf("resize left offset %d outside [0,%d]", m.commandOffset, maxOffset)
 	}

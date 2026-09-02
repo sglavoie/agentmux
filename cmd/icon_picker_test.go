@@ -7,7 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/tui"
+	"github.com/sglavoie/agentmux/tui/customization"
 )
 
 type iconPickerCommandClient struct {
@@ -74,8 +74,8 @@ func TestIconPickerCommandTargetsUnmanagedTabWithoutUserVarWrites(t *testing.T) 
 		return &config.Config{HarnessEmojis: emojis}, nil
 	}
 
-	var got tui.IconPickerContext
-	runIconPickerOverlay = func(ctx tui.IconPickerContext) error {
+	var got customization.IconContext
+	runIconPickerOverlay = func(ctx customization.IconContext) error {
 		got = ctx
 		return nil
 	}
@@ -111,7 +111,7 @@ func TestIconPickerCommandFocusesExistingOverlay(t *testing.T) {
 		t.Fatal("config should not load when an icon picker is already open")
 		return nil, nil
 	}
-	runIconPickerOverlay = func(tui.IconPickerContext) error {
+	runIconPickerOverlay = func(customization.IconContext) error {
 		t.Fatal("overlay should not launch when an icon picker is already open")
 		return nil
 	}
@@ -165,7 +165,7 @@ func TestIconPickerCommandReturnsDescriptiveErrors(t *testing.T) {
 		}}}}}
 		newIconPickerClient = func() kitty.KittyClient { return client }
 		loadIconPickerConfig = func() (*config.Config, error) { return &config.Config{}, nil }
-		runIconPickerOverlay = tui.RunIconPickerOverlay
+		runIconPickerOverlay = customization.RunIconOverlay
 
 		err := iconPickerCmd.RunE(iconPickerCmd, nil)
 		if err == nil || !strings.Contains(err.Error(), "no harness icons configured in [harness_emojis]") {

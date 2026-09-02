@@ -1,10 +1,11 @@
-package tui
+package customization
 
 import (
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 func TestKeybindingsViewIncludesHarnessIconPicker(t *testing.T) {
@@ -110,7 +111,7 @@ func TestKeybindingsBodyWrapsBeforeCalculatingBounds(t *testing.T) {
 		t.Fatalf("narrow max offset = %d, want more than wide max offset %d", narrow.maxOffset(), wide.maxOffset())
 	}
 	for _, row := range narrow.bodyRows() {
-		if got := displayStyledWidth(row); got > narrow.width {
+		if got := layout.StyledWidth(row); got > narrow.width {
 			t.Fatalf("wrapped row width = %d, want <= %d: %q", got, narrow.width, stripAnsi(row))
 		}
 	}

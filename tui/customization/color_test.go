@@ -1,4 +1,4 @@
-package tui
+package customization
 
 import (
 	"testing"
@@ -62,7 +62,7 @@ func cpKeyPress(key string) tea.KeyPressMsg {
 }
 
 func TestColorPicker_InitialCursorPosition(t *testing.T) {
-	m := newColorPickerModel(ColorPickerContext{DefaultColor: "red"})
+	m := newColorPickerModel(ColorContext{DefaultColor: "red"})
 	wantIdx := -1
 	for i, name := range colorPickerOrder {
 		if name == "red" {
@@ -76,14 +76,14 @@ func TestColorPicker_InitialCursorPosition(t *testing.T) {
 }
 
 func TestColorPicker_InitialCursorDefaultUnknown(t *testing.T) {
-	m := newColorPickerModel(ColorPickerContext{DefaultColor: "nonexistent"})
+	m := newColorPickerModel(ColorContext{DefaultColor: "nonexistent"})
 	if m.cursor != 0 {
 		t.Errorf("cursor = %d, want 0 for unknown default", m.cursor)
 	}
 }
 
 func TestColorPicker_NavigationWraps(t *testing.T) {
-	m := newColorPickerModel(ColorPickerContext{DefaultColor: "green"})
+	m := newColorPickerModel(ColorContext{DefaultColor: "green"})
 	if m.cursor != 0 {
 		t.Fatalf("expected cursor at 0 (green), got %d", m.cursor)
 	}
@@ -105,7 +105,7 @@ func TestColorPicker_NavigationWraps(t *testing.T) {
 
 func TestColorPicker_EnterAppliesColor(t *testing.T) {
 	client := &fakeColorPickerClient{}
-	m := newColorPickerModel(ColorPickerContext{
+	m := newColorPickerModel(ColorContext{
 		Client:       client,
 		TabID:        42,
 		WindowID:     100,
@@ -160,7 +160,7 @@ func TestColorPicker_EnterAppliesColor(t *testing.T) {
 
 func TestColorPicker_EnterOnResetAppliesDefault(t *testing.T) {
 	client := &fakeColorPickerClient{}
-	m := newColorPickerModel(ColorPickerContext{
+	m := newColorPickerModel(ColorContext{
 		Client:       client,
 		TabID:        42,
 		WindowID:     100,
@@ -193,7 +193,7 @@ func TestColorPicker_EnterOnResetAppliesDefault(t *testing.T) {
 
 func TestColorPicker_EscCancels(t *testing.T) {
 	client := &fakeColorPickerClient{}
-	m := newColorPickerModel(ColorPickerContext{
+	m := newColorPickerModel(ColorContext{
 		Client:       client,
 		TabID:        42,
 		WindowID:     100,
@@ -214,7 +214,7 @@ func TestColorPicker_EscCancels(t *testing.T) {
 
 func TestColorPicker_UnmanagedNoUserVars(t *testing.T) {
 	client := &fakeColorPickerClient{}
-	m := newColorPickerModel(ColorPickerContext{
+	m := newColorPickerModel(ColorContext{
 		Client:       client,
 		TabID:        42,
 		WindowID:     0, // unmanaged
@@ -234,7 +234,7 @@ func TestColorPicker_UnmanagedNoUserVars(t *testing.T) {
 
 func TestColorPicker_ManagedSetUserVars(t *testing.T) {
 	client := &fakeColorPickerClient{}
-	m := newColorPickerModel(ColorPickerContext{
+	m := newColorPickerModel(ColorContext{
 		Client:       client,
 		TabID:        42,
 		WindowID:     77, // managed
