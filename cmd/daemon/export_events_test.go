@@ -1,4 +1,4 @@
-package cmd
+package daemon
 
 import (
 	"bytes"
@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -44,36 +43,6 @@ func (f fakeKittyWindowLister) ListWindows() ([]kitty.OSWindow, error) {
 	return f.windows, nil
 }
 
-type fakeDaemonLifecycleClient struct {
-	sendResp     protocol.Response
-	sendErr      error
-	sendCalls    []protocol.Request
-	restartErr   error
-	restartCalls []string
-}
-
-func (f *fakeDaemonLifecycleClient) Send(req protocol.Request) (protocol.Response, error) {
-	f.sendCalls = append(f.sendCalls, req)
-	return f.sendResp, f.sendErr
-}
-
-func (f *fakeDaemonLifecycleClient) RestartDetached(amxBin string) error {
-	f.restartCalls = append(f.restartCalls, amxBin)
-	return f.restartErr
-}
-
-func resetDaemonLifecycleTestState(t *testing.T) {
-	t.Helper()
-	oldClient := newDaemonLifecycleClient
-	oldStopOut := daemonStopCmd.OutOrStdout()
-	oldRestartOut := daemonRestartCmd.OutOrStdout()
-	t.Cleanup(func() {
-		newDaemonLifecycleClient = oldClient
-		daemonStopCmd.SetOut(oldStopOut)
-		daemonRestartCmd.SetOut(oldRestartOut)
-	})
-}
-
 func resetDaemonExportTestState(t *testing.T) {
 	t.Helper()
 	oldClient := newDaemonExportClient
@@ -101,46 +70,6 @@ func resetDaemonExportTestState(t *testing.T) {
 	})
 }
 
-func TestDaemonStopCommandWritesToCommandOutput(t *testing.T) {
-	resetDaemonLifecycleTestState(t)
-	client := &fakeDaemonLifecycleClient{
-		sendResp: protocol.Response{OK: true},
-	}
-	newDaemonLifecycleClient = func() daemonLifecycleClient { return client }
-
-	var out bytes.Buffer
-	daemonStopCmd.SetOut(&out)
-
-	if err := daemonStopCmd.RunE(daemonStopCmd, nil); err != nil {
-		t.Fatalf("RunE: %v", err)
-	}
-	if got, want := out.String(), "daemon stopped\n"; got != want {
-		t.Fatalf("output = %q; want %q", got, want)
-	}
-	if len(client.sendCalls) != 1 || client.sendCalls[0].Type != protocol.TypeShutdown {
-		t.Fatalf("Send calls = %+v; want one shutdown request", client.sendCalls)
-	}
-}
-
-func TestDaemonRestartCommandWritesToCommandOutput(t *testing.T) {
-	resetDaemonLifecycleTestState(t)
-	client := &fakeDaemonLifecycleClient{}
-	newDaemonLifecycleClient = func() daemonLifecycleClient { return client }
-
-	var out bytes.Buffer
-	daemonRestartCmd.SetOut(&out)
-
-	if err := daemonRestartCmd.RunE(daemonRestartCmd, nil); err != nil {
-		t.Fatalf("RunE: %v", err)
-	}
-	if got, want := out.String(), "daemon restarted\n"; got != want {
-		t.Fatalf("output = %q; want %q", got, want)
-	}
-	if len(client.restartCalls) != 1 || client.restartCalls[0] == "" {
-		t.Fatalf("RestartDetached calls = %+v; want one non-empty binary path", client.restartCalls)
-	}
-}
-
 func findExportWindow(t *testing.T, payload protocol.ExportEventsPayload, id int) protocol.ExportWindow {
 	t.Helper()
 	for _, window := range payload.Windows {
@@ -150,90 +79,6 @@ func findExportWindow(t *testing.T, payload protocol.ExportEventsPayload, id int
 	}
 	t.Fatalf("window %d missing from payload: %+v", id, payload.Windows)
 	return protocol.ExportWindow{}
-}
-
-func resetDaemonStatusTestState(t *testing.T) {
-	t.Helper()
-	oldClient := newDaemonExportClient
-	oldSocketPath := daemonSocketPath
-	oldOut := daemonStatusCmd.OutOrStdout()
-	t.Cleanup(func() {
-		newDaemonExportClient = oldClient
-		daemonSocketPath = oldSocketPath
-		daemonStatusCmd.SetOut(oldOut)
-	})
-}
-
-func TestDaemonStatusCommandWritesToCommandOutput(t *testing.T) {
-	build := buildinfo.Info{Version: "9.9.9", Revision: "0123456789abcdef", GoVersion: "go1.99"}
-	notification := protocol.NotificationCapability{
-		Enabled: true, Available: true, Interactive: true, Backend: "alerter",
-		Executable: "/opt/homebrew/bin/alerter", Version: "26.5",
-	}
-	cases := []struct {
-		name   string
-		health ipc.Health
-		want   string
-	}{
-		{
-			name:   "running ready with build",
-			health: ipc.Health{Alive: true, Ready: true, Build: &build, Notification: &notification},
-			want: "daemon: running (/tmp/amx.sock)\n" +
-				"ready: true\n" +
-				"build: " + build.String() + "\n" +
-				"notifications: ready (alerter 26.5 at /opt/homebrew/bin/alerter)\n",
-		},
-		{
-			name:   "running degraded",
-			health: ipc.Health{Alive: true, Ready: false, DegradedReason: "initial snapshot timed out"},
-			want: "daemon: running (/tmp/amx.sock)\n" +
-				"ready: false (initial snapshot timed out)\n" +
-				"notifications: unknown (restart older daemon)\n",
-		},
-		{
-			name: "notifications unavailable without degrading daemon",
-			health: ipc.Health{Alive: true, Ready: true, Notification: &protocol.NotificationCapability{
-				Enabled: true, Backend: "alerter", Reason: "not_found",
-			}},
-			want: "daemon: running (/tmp/amx.sock)\n" +
-				"ready: true\n" +
-				"notifications: unavailable (alerter; not_found)\n",
-		},
-		{
-			name: "not running",
-			want: "daemon: not running (/tmp/amx.sock)\n",
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			resetDaemonStatusTestState(t)
-			health := tc.health
-			newDaemonExportClient = func() cli.DaemonExportClient {
-				return &fakeDaemonExportClient{health: health}
-			}
-			daemonSocketPath = func() string { return "/tmp/amx.sock" }
-
-			var out bytes.Buffer
-			daemonStatusCmd.SetOut(&out)
-
-			if err := daemonStatusCmd.RunE(daemonStatusCmd, nil); err != nil {
-				t.Fatalf("RunE: %v", err)
-			}
-			if got := out.String(); got != tc.want {
-				t.Fatalf("output = %q; want %q", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestDaemonExportEventsCommandRejectsPositionalArgs(t *testing.T) {
-	err := daemonExportEventsCmd.Args(daemonExportEventsCmd, []string{"events.json"})
-	if err == nil {
-		t.Fatal("Args error = nil; want positional argument error")
-	}
-	if got := err.Error(); !strings.Contains(got, `unknown command "events.json" for "amx daemon export-events"`) {
-		t.Fatalf("Args error = %q; want unknown positional argument error", got)
-	}
 }
 
 func TestDaemonExportEventsCommandRejectsUnsupportedSchema(t *testing.T) {

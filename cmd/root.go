@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/sglavoie/agentmux/cmd/config"
+	"github.com/sglavoie/agentmux/cmd/daemon"
 	"github.com/sglavoie/agentmux/cmd/dashboard"
 	"github.com/sglavoie/agentmux/cmd/debug"
 	"github.com/sglavoie/agentmux/cmd/hooks"
@@ -57,5 +58,5 @@ func init() {
 	rootCmd.Version = buildinfo.Current().String()
 	rootCmd.PersistentFlags().BoolVar(&cli.DebugFlag, "debug", false, "enable verbose debug output")
 	rootCmd.Flags().IntVar(&dashboardSourceWindowID, "window-id", 0, "Kitty window ID whose tab should be selected initially")
-	rootCmd.AddCommand(dashboard.ColorPickerCommand(), config.Command(), daemonCmd, debug.Command(), debug.DoctorCommand(), hooks.IndicatorCommand(), dashboard.IconPickerCommand(), dashboard.KeybindingsCommand(), notificationsCmd, release.Command(), resortCmd, sessionCmd, transcriptsCmd, tuitest.Command(), worktreeCmd)
+	rootCmd.AddCommand(dashboard.ColorPickerCommand(), config.Command(), daemon.Command(), debug.Command(), debug.DoctorCommand(), hooks.IndicatorCommand(), dashboard.IconPickerCommand(), dashboard.KeybindingsCommand(), notificationsCmd, release.Command(), resortCmd, sessionCmd, transcriptsCmd, tuitest.Command(), worktreeCmd)
 }

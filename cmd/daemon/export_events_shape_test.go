@@ -1,4 +1,4 @@
-package cmd
+package daemon
 
 import (
 	"encoding/json"
@@ -20,9 +20,9 @@ import (
 // key spelling in the documentation snippet, letting the example drift to keys
 // that amx daemon export-events cannot emit.
 func TestDaemonGuideSchemaV10FactKeys(t *testing.T) {
-	data, err := os.ReadFile("../docs/daemon.md")
+	data, err := os.ReadFile("../../docs/daemon.md")
 	if err != nil {
-		t.Fatalf("ReadFile(../docs/daemon.md): %v", err)
+		t.Fatalf("ReadFile(../../docs/daemon.md): %v", err)
 	}
 
 	guide := string(data)
@@ -106,7 +106,7 @@ func TestDaemonGuideSchemaV10FactKeys(t *testing.T) {
 
 func TestCrossHarnessDiagnosticDocumentation(t *testing.T) {
 	var guides strings.Builder
-	for _, path := range []string{"../docs/hooks.md", "../docs/daemon.md", "../docs/operations.md", "../docs/troubleshooting.md"} {
+	for _, path := range []string{"../../docs/hooks.md", "../../docs/daemon.md", "../../docs/operations.md", "../../docs/troubleshooting.md"} {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatalf("ReadFile(%s): %v", path, err)
@@ -129,9 +129,9 @@ func TestCrossHarnessDiagnosticDocumentation(t *testing.T) {
 		}
 	}
 
-	acceptanceData, err := os.ReadFile("../docs/daemon_state_acceptance.md")
+	acceptanceData, err := os.ReadFile("../../docs/daemon_state_acceptance.md")
 	if err != nil {
-		t.Fatalf("ReadFile(../docs/daemon_state_acceptance.md): %v", err)
+		t.Fatalf("ReadFile(../../docs/daemon_state_acceptance.md): %v", err)
 	}
 	acceptance := string(acceptanceData)
 	for _, want := range []string{

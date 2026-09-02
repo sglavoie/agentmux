@@ -73,10 +73,23 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
 ### Main packages
 
 - `cmd`: the root command and the command families that have not yet been split
-  out — `rootCmd` itself with `Execute`'s exit mapping, the daemon, session,
-  worktree, transcripts, notifications, and Kitty tab-control leaves, and the
-  assembly that registers every child package's commands. It is the only package
-  in the `cmd` tree that any other `cmd` package may not import.
+  out — `rootCmd` itself with `Execute`'s exit mapping, the session, worktree,
+  transcripts, notifications, and Kitty tab-control leaves, and the assembly
+  that registers every child package's commands. It is the only package in the
+  `cmd` tree that any other `cmd` package may not import.
+- `cmd/daemon`: the `amx daemon` family — the always-on local daemon seen from
+  the CLI side. It owns the daemon's lifecycle as a command (`start`, which
+  blocks and is the process the detached launch re-execs, plus `stop` and
+  `restart` over the lifecycle client seam), the `status` readiness/build/
+  notification/ASL line, and `export-events`, the investigation snapshot with
+  its window resolution, per-window trimming, and schema projection. `audit` is
+  registered here but implemented in `cmd/debug`, whose invariant evaluator it
+  shares. The family exports exactly one identifier, `Command`, so no daemon
+  internal is re-exported through the CLI; everything it needs from the daemon
+  it takes from `internal/daemon`, `internal/daemon/ipc`,
+  `internal/daemon/eventlog`, and `internal/daemon/protocol`. A file here may
+  name the imported `internal/daemon` package unqualified as `daemon`, because
+  a package's own name is not in scope inside its files.
 - `cmd/dashboard`: the interactive surfaces `amx` opens inside Kitty — the
   live-session dashboard, which is what a bare `amx` runs rather than a
   subcommand of its own, and the color, harness-icon, and keybinding overlays.

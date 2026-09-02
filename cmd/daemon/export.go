@@ -1,167 +1,22 @@
-package cmd
+package daemon
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
-	"os/signal"
 	"strconv"
-	"syscall"
 	"time"
 
 	"github.com/sglavoie/agentmux/cmd/debug"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/daemon/eventlog"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
-	"github.com/sglavoie/agentmux/internal/daemon/process"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	ccerrors "github.com/sglavoie/agentmux/internal/errors"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/spf13/cobra"
 )
-
-var daemonCmd = &cobra.Command{
-	Use:   "daemon",
-	Short: "Manage the amx daemon",
-}
-
-var daemonStartCmd = &cobra.Command{
-	Use:   "start",
-	Short: "Start the daemon (blocks until shutdown)",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := cli.LoadRunnableConfig()
-		if err != nil {
-			ccerrors.Print(err)
-			return err
-		}
-		logger, closer, logDir, err := daemon.NewOperationalLogger(
-			cfg.Defaults.Diagnostics,
-			cli.DebugEnabled(),
-			os.Getenv(process.DetachedEnv) != "1",
-		)
-		if err != nil {
-			return fmt.Errorf("initializing daemon logging: %w", err)
-		}
-		previousLogger := slog.Default()
-		slog.SetDefault(logger)
-		defer func() {
-			slog.SetDefault(previousLogger)
-			_ = closer.Close()
-		}()
-		slog.Info("daemon: structured logging initialized", "directory", logDir)
-
-		ctx, cancel := signal.NotifyContext(context.Background(),
-			os.Interrupt, syscall.SIGTERM)
-		defer cancel()
-
-		err = daemon.Run(ctx, cfg)
-		if err != nil {
-			slog.Error("daemon: stopped with failure", "error", err)
-		}
-		return err
-	},
-}
-
-var daemonStopCmd = &cobra.Command{
-	Use:   "stop",
-	Short: "Stop the running daemon",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		c := newDaemonLifecycleClient()
-		resp, err := c.Send(protocol.Request{Type: protocol.TypeShutdown})
-		if err != nil {
-			return fmt.Errorf("daemon not running: %w", err)
-		}
-		if !resp.OK {
-			return fmt.Errorf("daemon error: %s", resp.Error)
-		}
-		_, err = fmt.Fprintln(cmd.OutOrStdout(), "daemon stopped")
-		return err
-	},
-}
-
-var daemonStatusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Show daemon status, readiness, and build identity",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		out := cmd.OutOrStdout()
-		health := newDaemonExportClient().Health()
-		if !health.Alive {
-			_, err := fmt.Fprintf(out, "daemon: not running (%s)\n", daemonSocketPath())
-			return err
-		}
-		if _, err := fmt.Fprintf(out, "daemon: running (%s)\n", daemonSocketPath()); err != nil {
-			return err
-		}
-		readiness := "true"
-		if !health.Ready {
-			readiness = "false"
-			if health.DegradedReason != "" {
-				readiness += " (" + health.DegradedReason + ")"
-			}
-		}
-		if _, err := fmt.Fprintf(out, "ready: %s\n", readiness); err != nil {
-			return err
-		}
-		if health.Build != nil {
-			if _, err := fmt.Fprintf(out, "build: %s\n", health.Build.String()); err != nil {
-				return err
-			}
-		}
-		if health.Notification == nil {
-			if _, err := fmt.Fprintln(out, "notifications: unknown (restart older daemon)"); err != nil {
-				return err
-			}
-		} else {
-			n := health.Notification
-			state := "unavailable"
-			if !n.Enabled {
-				state = "disabled"
-			} else if n.Available && n.Interactive {
-				state = "ready"
-			}
-			detail := n.Backend
-			if n.Version != "" {
-				detail += " " + n.Version
-			}
-			if n.Executable != "" {
-				detail += " at " + n.Executable
-			}
-			if n.Reason != "" && n.Reason != "disabled" {
-				detail += "; " + n.Reason
-			}
-			if _, err := fmt.Fprintf(out, "notifications: %s (%s)\n", state, detail); err != nil {
-				return err
-			}
-		}
-		if health.ASL != nil {
-			if _, err := fmt.Fprintf(out, "asl: %s\n", debug.ASLStatusLine(health.ASL)); err != nil {
-				return err
-			}
-		}
-		return nil
-	},
-}
-
-var daemonRestartCmd = &cobra.Command{
-	Use:   "restart",
-	Short: "Restart the daemon detached in the background",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		c := newDaemonLifecycleClient()
-		// A daemon that cannot be located re-execs by name off PATH; the
-		// resolution failure is not itself a reason to refuse the restart.
-		amxBin, _ := cli.AmxBinary()
-		if err := c.RestartDetached(amxBin); err != nil {
-			return err
-		}
-		_, err := fmt.Fprintln(cmd.OutOrStdout(), "daemon restarted")
-		return err
-	},
-}
 
 var (
 	daemonExportEventsWindow        int
@@ -170,17 +25,12 @@ var (
 	daemonExportEventsOutput        string
 	daemonExportEventsPretty        bool
 	daemonExportEventsSchema        int
-	daemonSocketPath                = ipc.SocketPath
-	newDaemonLifecycleClient        = func() daemonLifecycleClient { return ipc.NewClient() }
-	newDaemonExportClient           = cli.NewDaemonExportClient
-	newDaemonExportKitty            = func() cli.KittyWindowLister { return cli.NewKittyClient() }
-	daemonExportNow                 = time.Now
+	// newDaemonExportClient is also how `daemon status` reads health: the
+	// export client is this family's one daemon-query seam.
+	newDaemonExportClient = cli.NewDaemonExportClient
+	newDaemonExportKitty  = func() cli.KittyWindowLister { return cli.NewKittyClient() }
+	daemonExportNow       = time.Now
 )
-
-type daemonLifecycleClient interface {
-	Send(protocol.Request) (protocol.Response, error)
-	RestartDetached(amxBin string) error
-}
 
 func buildDaemonExportPayload(snapshot protocol.EventsExport, health ipc.Health, osWindows []kitty.OSWindow, requestedWindowID int, last int, exportedAt time.Time) protocol.ExportEventsPayload {
 	liveByID := debug.ExportLiveMetadata(osWindows, snapshot, requestedWindowID)
@@ -325,16 +175,4 @@ complete causal shape, or --schema 8 for pre-causal consumers.`,
 		// user's home directory.
 		return os.WriteFile(config.ExpandTilde(daemonExportEventsOutput), data, 0o600)
 	},
-}
-
-func init() {
-	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsWindow, "window", 0, "Restrict export to a single Kitty window ID")
-	daemonExportEventsCmd.Flags().BoolVar(&daemonExportEventsCurrentWindow, "current-window", false, "Resolve the target window from $KITTY_WINDOW_ID")
-	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsLast, "last", 0, "Keep only the last N events per exported window (0 = no limit)")
-	daemonExportEventsCmd.Flags().StringVar(&daemonExportEventsOutput, "output", "", "Write JSON to this file instead of stdout")
-	daemonExportEventsCmd.Flags().BoolVar(&daemonExportEventsPretty, "pretty", true, "Pretty-print JSON with 2-space indent")
-	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsSchema, "schema", protocol.EventsExportSchemaVersion, "Export schema version (8, 9, 10, 11, 12, or 13)")
-
-	daemonCmd.AddCommand(debug.AuditCommand())
-	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd, daemonRestartCmd, daemonExportEventsCmd)
 }
