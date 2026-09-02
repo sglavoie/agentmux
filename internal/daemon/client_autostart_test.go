@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func TestClient_SendWithAutoStart_RestartsDaemonWhenBinaryIsNewer(t *testing.T) {
@@ -25,18 +27,18 @@ func TestClient_SendWithAutoStart_RestartsDaemonWhenBinaryIsNewer(t *testing.T) 
 		t.Fatalf("WriteFile(binary): %v", err)
 	}
 
-	oldRequests := make(chan Request, 4)
-	newRequests := make(chan Request, 2)
+	oldRequests := make(chan protocol.Request, 4)
+	newRequests := make(chan protocol.Request, 2)
 
-	oldStop := startTestDaemonServer(t, socketPath, func(req Request) (Response, bool) {
+	oldStop := startTestDaemonServer(t, socketPath, func(req protocol.Request) (protocol.Response, bool) {
 		oldRequests <- req
 		switch req.Type {
-		case TypeHealth:
-			return Response{OK: true, PID: 1234, UptimeSeconds: 3600}, true
-		case TypeShutdown:
-			return Response{OK: true}, false
+		case protocol.TypeHealth:
+			return protocol.Response{OK: true, PID: 1234, UptimeSeconds: 3600}, true
+		case protocol.TypeShutdown:
+			return protocol.Response{OK: true}, false
 		default:
-			return Response{OK: true, Allowed: true, IconState: "old"}, true
+			return protocol.Response{OK: true, Allowed: true, IconState: "old"}, true
 		}
 	})
 	t.Cleanup(oldStop)
@@ -66,9 +68,9 @@ func TestClient_SendWithAutoStart_RestartsDaemonWhenBinaryIsNewer(t *testing.T) 
 		if path != amxBin {
 			t.Fatalf("spawn path = %q, want %q", path, amxBin)
 		}
-		newStop = startTestDaemonServer(t, socketPath, func(req Request) (Response, bool) {
+		newStop = startTestDaemonServer(t, socketPath, func(req protocol.Request) (protocol.Response, bool) {
 			newRequests <- req
-			return Response{OK: true, Allowed: true, IconState: "bolt"}, true
+			return protocol.Response{OK: true, Allowed: true, IconState: "bolt"}, true
 		})
 		return nil
 	}
@@ -80,8 +82,8 @@ func TestClient_SendWithAutoStart_RestartsDaemonWhenBinaryIsNewer(t *testing.T) 
 	})
 
 	c := NewClientWithSocket(socketPath)
-	resp, err := c.SendWithAutoStart(Request{
-		Type:     TypeStateUpdate,
+	resp, err := c.SendWithAutoStart(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 7,
 		Action:   "active",
 	}, amxBin)
@@ -95,7 +97,7 @@ func TestClient_SendWithAutoStart_RestartsDaemonWhenBinaryIsNewer(t *testing.T) 
 		t.Fatalf("spawn calls = %d, want 1", spawnCalls)
 	}
 
-	var seen []MessageType
+	var seen []protocol.MessageType
 	for i := 0; i < 2; i++ {
 		select {
 		case req := <-oldRequests:
@@ -104,13 +106,13 @@ func TestClient_SendWithAutoStart_RestartsDaemonWhenBinaryIsNewer(t *testing.T) 
 			t.Fatalf("timed out waiting for old daemon requests; got %v", seen)
 		}
 	}
-	if len(seen) != 2 || seen[0] != TypeHealth || seen[1] != TypeShutdown {
+	if len(seen) != 2 || seen[0] != protocol.TypeHealth || seen[1] != protocol.TypeShutdown {
 		t.Fatalf("old daemon requests = %v, want [health shutdown]", seen)
 	}
 
 	select {
 	case req := <-newRequests:
-		if req.Type != TypeStateUpdate || req.Action != "active" || req.WindowID != 7 {
+		if req.Type != protocol.TypeStateUpdate || req.Action != "active" || req.WindowID != 7 {
 			t.Fatalf("new daemon request = %+v, want state update", req)
 		}
 	case <-time.After(2 * time.Second):
@@ -141,14 +143,14 @@ func TestClient_SendWithAutoStart_NoDoubleSpawnAfterRestart(t *testing.T) {
 		t.Fatalf("WriteFile(binary): %v", err)
 	}
 
-	oldStop := startTestDaemonServer(t, socketPath, func(req Request) (Response, bool) {
+	oldStop := startTestDaemonServer(t, socketPath, func(req protocol.Request) (protocol.Response, bool) {
 		switch req.Type {
-		case TypeHealth:
-			return Response{OK: true, PID: 1234, UptimeSeconds: 3600}, true
-		case TypeShutdown:
-			return Response{OK: true}, false
+		case protocol.TypeHealth:
+			return protocol.Response{OK: true, PID: 1234, UptimeSeconds: 3600}, true
+		case protocol.TypeShutdown:
+			return protocol.Response{OK: true}, false
 		default:
-			return Response{OK: true}, true
+			return protocol.Response{OK: true}, true
 		}
 	})
 	t.Cleanup(oldStop)
@@ -187,8 +189,8 @@ func TestClient_SendWithAutoStart_NoDoubleSpawnAfterRestart(t *testing.T) {
 		// would spawnDetached again here and the counter would tick to 2.
 		go func() {
 			time.Sleep(50 * time.Millisecond)
-			stop := startTestDaemonServer(t, socketPath, func(req Request) (Response, bool) {
-				return Response{OK: true, Allowed: true, IconState: "bolt"}, true
+			stop := startTestDaemonServer(t, socketPath, func(req protocol.Request) (protocol.Response, bool) {
+				return protocol.Response{OK: true, Allowed: true, IconState: "bolt"}, true
 			})
 			spawnMu.Lock()
 			newStop = stop
@@ -207,8 +209,8 @@ func TestClient_SendWithAutoStart_NoDoubleSpawnAfterRestart(t *testing.T) {
 	})
 
 	c := NewClientWithSocket(socketPath)
-	resp, err := c.SendWithAutoStart(Request{
-		Type:     TypeStateUpdate,
+	resp, err := c.SendWithAutoStart(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 9,
 		Action:   "active",
 	}, amxBin)
@@ -256,8 +258,8 @@ func TestClient_SendWithAutoStart_BurstSpawnsOnce(t *testing.T) {
 			t.Errorf("spawn path = %q, want %q", path, amxBin)
 		}
 		time.Sleep(30 * time.Millisecond)
-		stop = startTestDaemonServer(t, socketPath, func(req Request) (Response, bool) {
-			return Response{OK: true, Allowed: true, IconState: "bolt"}, true
+		stop = startTestDaemonServer(t, socketPath, func(req protocol.Request) (protocol.Response, bool) {
+			return protocol.Response{OK: true, Allowed: true, IconState: "bolt"}, true
 		})
 		return nil
 	}
@@ -276,8 +278,8 @@ func TestClient_SendWithAutoStart_BurstSpawnsOnce(t *testing.T) {
 		go func(windowID int) {
 			defer wg.Done()
 			c := NewClientWithSocket(socketPath)
-			resp, err := c.SendWithAutoStart(Request{
-				Type:     TypeStateUpdate,
+			resp, err := c.SendWithAutoStart(protocol.Request{
+				Type:     protocol.TypeStateUpdate,
 				WindowID: windowID,
 				Action:   "active",
 			}, amxBin)
@@ -327,7 +329,7 @@ func TestClient_SendWithAutoStart_RetryReusesRequestID(t *testing.T) {
 	autoStartRetryDelay = 20 * time.Millisecond
 	t.Cleanup(func() { autoStartRetryDelay = prevRetryDelay })
 
-	seen := make(chan Request, 4)
+	seen := make(chan protocol.Request, 4)
 	var stageMu sync.Mutex
 	var stages []DeliveryStageEvent
 	var stop func()
@@ -337,9 +339,9 @@ func TestClient_SendWithAutoStart_RetryReusesRequestID(t *testing.T) {
 		// refused; only after this spawn brings up the recorder does the retry
 		// succeed. The recorder captures the request ID it receives.
 		time.Sleep(30 * time.Millisecond)
-		stop = startTestDaemonServer(t, socketPath, func(req Request) (Response, bool) {
+		stop = startTestDaemonServer(t, socketPath, func(req protocol.Request) (protocol.Response, bool) {
 			seen <- req
-			return Response{OK: true, Allowed: true, IconState: "bolt"}, true
+			return protocol.Response{OK: true, Allowed: true, IconState: "bolt"}, true
 		})
 		return nil
 	}
@@ -351,12 +353,12 @@ func TestClient_SendWithAutoStart_RetryReusesRequestID(t *testing.T) {
 	})
 
 	c := NewClientWithSocket(socketPath)
-	resp, err := c.SendWithAutoStartObserved(Request{
-		Type:      TypeStateUpdate,
+	resp, err := c.SendWithAutoStartObserved(protocol.Request{
+		Type:      protocol.TypeStateUpdate,
 		RequestID: "stable-id-123",
 		WindowID:  4,
 		Action:    "active",
-		HarnessProcess: &HarnessProcessIdentity{
+		HarnessProcess: &protocol.HarnessProcessIdentity{
 			Harness: "claude", PID: 4242, StartToken: "Thu Jul 16 10:20:30 2026",
 		},
 	}, amxBin, func(stage DeliveryStageEvent) {
@@ -378,7 +380,7 @@ func TestClient_SendWithAutoStart_RetryReusesRequestID(t *testing.T) {
 		if got.Attempt <= 1 {
 			t.Fatalf("daemon saw attempt %d, want a retry attempt greater than 1", got.Attempt)
 		}
-		if got.HarnessProcess == nil || *got.HarnessProcess != (HarnessProcessIdentity{
+		if got.HarnessProcess == nil || *got.HarnessProcess != (protocol.HarnessProcessIdentity{
 			Harness: "claude", PID: 4242, StartToken: "Thu Jul 16 10:20:30 2026",
 		}) {
 			t.Fatalf("daemon saw process identity %+v, want retry payload unchanged", got.HarnessProcess)
@@ -404,7 +406,7 @@ func TestClient_SendWithAutoStart_RetryReusesRequestID(t *testing.T) {
 	}
 }
 
-func startTestDaemonServer(t *testing.T, socketPath string, handler func(Request) (Response, bool)) func() {
+func startTestDaemonServer(t *testing.T, socketPath string, handler func(protocol.Request) (protocol.Response, bool)) func() {
 	t.Helper()
 
 	_ = os.Remove(socketPath)
@@ -434,7 +436,7 @@ func startTestDaemonServer(t *testing.T, socketPath string, handler func(Request
 				if !scanner.Scan() {
 					return
 				}
-				var req Request
+				var req protocol.Request
 				if err := json.Unmarshal(scanner.Bytes(), &req); err != nil {
 					t.Errorf("unmarshal request: %v", err)
 					return

@@ -5,17 +5,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 type fakeDaemonClient struct {
-	reqs  []daemon.Request
-	resp  daemon.Response
+	reqs  []protocol.Request
+	resp  protocol.Response
 	err   error
 	calls int
 }
 
-func (f *fakeDaemonClient) SendWithAutoStart(req daemon.Request, _ string) (daemon.Response, error) {
+func (f *fakeDaemonClient) SendWithAutoStart(req protocol.Request, _ string) (protocol.Response, error) {
 	f.calls++
 	f.reqs = append(f.reqs, req)
 	return f.resp, f.err
@@ -35,7 +35,7 @@ func TestRunWithDeps_DropsUnavailableDaemonEventWithinBudget(t *testing.T) {
 	if client.calls != 1 {
 		t.Fatalf("daemon calls = %d, want 1", client.calls)
 	}
-	if got := client.reqs[0]; got.Type != daemon.TypeHookEvent || got.WindowID != 42 || got.Event != "Stop" || got.Harness != "claude" || got.PayloadJSON != `{"reason":"end_turn"}` || !got.PipeMode {
+	if got := client.reqs[0]; got.Type != protocol.TypeHookEvent || got.WindowID != 42 || got.Event != "Stop" || got.Harness != "claude" || got.PayloadJSON != `{"reason":"end_turn"}` || !got.PipeMode {
 		t.Fatalf("hook request = %+v, want TypeHookEvent with raw payload", got)
 	}
 }
@@ -155,7 +155,7 @@ func TestNewRequestID_UniqueAndWellFormed(t *testing.T) {
 
 func TestRunWithDeps_DaemonRejectionStillExitsZero(t *testing.T) {
 	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
-	client := &fakeDaemonClient{resp: daemon.Response{OK: false, Error: "bad event"}}
+	client := &fakeDaemonClient{resp: protocol.Response{OK: false, Error: "bad event"}}
 
 	if err := runWithDeps("Stop", 42, "", "/tmp/amx", `{}`, false, client); err != nil {
 		t.Fatalf("runWithDeps() error = %v, want nil", err)

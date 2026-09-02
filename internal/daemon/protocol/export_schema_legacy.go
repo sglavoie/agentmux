@@ -1,4 +1,4 @@
-package daemon
+package protocol
 
 // The schema-v12, schema-v9, and schema-v8 wire shapes and their projections.
 // Each newer event shape embeds the one below it, so the pinned structs here

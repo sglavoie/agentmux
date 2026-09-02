@@ -14,6 +14,8 @@ import (
 	"context"
 	"log/slog"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 const (
@@ -130,9 +132,9 @@ func advanceWindowIdle(st *WindowState, now time.Time, credit time.Duration, gap
 // seeding rules as advanceWindowIdle. Any fact advance (new sequence or
 // emitted timestamp — e.g. an ASL heartbeat) resets the accumulation. Callers
 // hold stateMu.
-func advanceFactIdle(st *WindowState, fact SourceFactSnapshot, now time.Time, credit time.Duration, gapTick bool) time.Duration {
+func advanceFactIdle(st *WindowState, fact protocol.SourceFactSnapshot, now time.Time, credit time.Duration, gapTick bool) time.Duration {
 	if st.watchdogFactIdle == nil {
-		st.watchdogFactIdle = make(map[SourceID]*factIdle)
+		st.watchdogFactIdle = make(map[protocol.SourceID]*factIdle)
 	}
 	src := fact.Source()
 	entry := st.watchdogFactIdle[src]

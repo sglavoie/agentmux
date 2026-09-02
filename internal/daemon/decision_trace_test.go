@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
@@ -24,20 +25,20 @@ func TestHookDecisionTraceCorrelatesRoutingNormalizationAndReducer(t *testing.T)
 		SessionID: "session-1", TurnID: "turn-1", SourceSequence: "7",
 		SourceEventID: "source-7", ToolUseID: "tool-7", Prompt: "TOP SECRET PROMPT",
 	}
-	resp := h.Handle(Request{
-		Type: TypeHookEvent, WindowID: 43, Event: "UserPromptSubmit",
+	resp := h.Handle(protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 43, Event: "UserPromptSubmit",
 		ProducerHarness: harness.Claude, Harness: harness.Claude,
 		ProducerConfigDir: "/Users/dev/.claude-personal",
 		PayloadJSON:       hookPayloadJSON(t, payload),
 		TraceID:           "trace-7", RequestID: "request-7", SourceEventID: "source-7", Attempt: 2,
 		PayloadSize: 123, PayloadHMAC: "hmac:local", PayloadEncoding: "json",
-		saturationReason: "dedupe_cache",
+		SaturationReason: "dedupe_cache",
 	})
 	if !resp.OK {
 		t.Fatalf("hook response = %+v", resp)
 	}
 
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) != 1 {
 		t.Fatalf("events = %+v; want one", detail.Events)
 	}
@@ -48,10 +49,10 @@ func TestHookDecisionTraceCorrelatesRoutingNormalizationAndReducer(t *testing.T)
 		event.PayloadSize != 123 || event.PayloadHMAC != "hmac:local" || event.PayloadEncoding != "json" {
 		t.Fatalf("correlation = %+v", event)
 	}
-	if event.ParseOutcome != ParseOutcomeDecoded ||
-		event.NormalizationOutcome != NormalizationOutcomeNormalized ||
-		event.IdentityConfidence != IdentityConfidenceDeclared ||
-		event.ReducerDecision != DecisionApplied || event.ReducerInputAction != "active" {
+	if event.ParseOutcome != protocol.ParseOutcomeDecoded ||
+		event.NormalizationOutcome != protocol.NormalizationOutcomeNormalized ||
+		event.IdentityConfidence != protocol.IdentityConfidenceDeclared ||
+		event.ReducerDecision != protocol.DecisionApplied || event.ReducerInputAction != "active" {
 		t.Fatalf("decision = %+v", event)
 	}
 	if event.EffectiveBefore == nil || event.EffectiveAfter == nil ||
@@ -60,7 +61,7 @@ func TestHookDecisionTraceCorrelatesRoutingNormalizationAndReducer(t *testing.T)
 	}
 	if event.ProducerHarness != harness.Claude || event.TargetHarness != harness.Codex ||
 		event.Profile != "managed" || event.SessionID != "session-1" ||
-		event.SourceKind != string(SourceHarness) || event.SourceKey != "claude:session-1" || event.SourceSeq != 7 {
+		event.SourceKind != string(protocol.SourceHarness) || event.SourceKey != "claude:session-1" || event.SourceSeq != 7 {
 		t.Fatalf("source/target evidence = %+v", event)
 	}
 	if event.ProducerConfigDir != "/Users/dev/.claude-personal" {
@@ -95,7 +96,7 @@ func TestHookDecisionTraceCorrelatesRoutingNormalizationAndReducer(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if decision.Outcome != string(DecisionApplied) ||
+	if decision.Outcome != string(protocol.DecisionApplied) ||
 		decision.Evidence["daemon_sequence"] == "" || decision.Evidence["render_generation"] == "" ||
 		decision.Evidence["turn_id"] != "turn-1" || decision.Evidence["tool_use_id"] != "tool-7" ||
 		decision.Evidence["replay.version"] != "1" || decision.Evidence["replay.emitted_at"] == "" ||
@@ -110,23 +111,23 @@ func TestHookDecisionTraceCorrelatesRoutingNormalizationAndReducer(t *testing.T)
 func TestHookDecisionTraceDistinguishesQuarantineAndUntrustedFallback(t *testing.T) {
 	t.Run("unreadable payload is quarantined without reduction", func(t *testing.T) {
 		h := newTestHandler()
-		resp := h.Handle(Request{
-			Type: TypeHookEvent, WindowID: 42, Event: "PreToolUse",
+		resp := h.Handle(protocol.Request{
+			Type: protocol.TypeHookEvent, WindowID: 42, Event: "PreToolUse",
 			Harness: harness.Claude, PayloadJSON: `{bad json`,
 			TraceID: "trace-invalid", RequestID: "request-invalid",
 		})
 		if !resp.OK {
 			t.Fatalf("response = %+v", resp)
 		}
-		detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+		detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 		if len(detail.Events) != 1 {
 			t.Fatalf("events = %+v", detail.Events)
 		}
 		event := detail.Events[0]
-		if !event.Quarantined || event.ReducerDecision != DecisionQuarantined ||
-			event.ParseOutcome != ParseOutcomeInvalid ||
-			event.NormalizationOutcome != NormalizationOutcomeQuarantined ||
-			event.IdentityConfidence != IdentityConfidenceInvalid {
+		if !event.Quarantined || event.ReducerDecision != protocol.DecisionQuarantined ||
+			event.ParseOutcome != protocol.ParseOutcomeInvalid ||
+			event.NormalizationOutcome != protocol.NormalizationOutcomeQuarantined ||
+			event.IdentityConfidence != protocol.IdentityConfidenceInvalid {
 			t.Fatalf("quarantined event = %+v", event)
 		}
 		h.stateMu.Lock()
@@ -140,24 +141,24 @@ func TestHookDecisionTraceDistinguishesQuarantineAndUntrustedFallback(t *testing
 	t.Run("malformed identity uses explicit legacy fallback", func(t *testing.T) {
 		h := newTestHandler()
 		payload := hookevent.HookPayload{SessionID: "session-1", SourceSequence: "not-a-number"}
-		resp := h.Handle(Request{
-			Type: TypeHookEvent, WindowID: 42, Event: "PreToolUse",
+		resp := h.Handle(protocol.Request{
+			Type: protocol.TypeHookEvent, WindowID: 42, Event: "PreToolUse",
 			Harness: harness.Claude, PayloadJSON: hookPayloadJSON(t, payload),
 			TraceID: "trace-fallback", RequestID: "request-fallback",
 		})
 		if !resp.OK {
 			t.Fatalf("response = %+v", resp)
 		}
-		detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+		detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 		if len(detail.Events) != 1 {
 			t.Fatalf("events = %+v", detail.Events)
 		}
 		event := detail.Events[0]
 		if !event.Quarantined || !event.UsedFallbackIdentity ||
-			event.NormalizationOutcome != NormalizationOutcomeUntrustedFallback ||
-			event.IdentityConfidence != IdentityConfidenceUntrustedFallback ||
-			event.SourceKind != string(SourceLegacy) || event.ReducerDecision != DecisionApplied ||
-			event.DecisionReason != DecisionReasonUntrustedIdentityFallback ||
+			event.NormalizationOutcome != protocol.NormalizationOutcomeUntrustedFallback ||
+			event.IdentityConfidence != protocol.IdentityConfidenceUntrustedFallback ||
+			event.SourceKind != string(protocol.SourceLegacy) || event.ReducerDecision != protocol.DecisionApplied ||
+			event.DecisionReason != protocol.DecisionReasonUntrustedIdentityFallback ||
 			event.EffectiveAfter == nil || event.EffectiveAfter.Icon != "bolt" {
 			t.Fatalf("fallback event = %+v", event)
 		}
@@ -166,55 +167,55 @@ func TestHookDecisionTraceDistinguishesQuarantineAndUntrustedFallback(t *testing
 
 func TestHookDecisionTraceRecordsResetRewrite(t *testing.T) {
 	h := newTestHandler()
-	resp := h.Handle(Request{
-		Type: TypeHookEvent, WindowID: 42, Event: "SessionEnd", Harness: harness.Claude,
+	resp := h.Handle(protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 42, Event: "SessionEnd", Harness: harness.Claude,
 		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{SessionID: "session-1", Reason: "clear"}),
 	})
 	if !resp.OK {
 		t.Fatalf("response = %+v", resp)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) != 1 {
 		t.Fatalf("events = %+v", detail.Events)
 	}
 	event := detail.Events[0]
 	if event.TraceID == "" || event.Action != "user_clear" || event.ReducerInputAction != "user_clear" ||
-		event.NormalizationOutcome != NormalizationOutcomeReducerRewrite ||
-		event.ReducerDecision != DecisionAcknowledged {
+		event.NormalizationOutcome != protocol.NormalizationOutcomeReducerRewrite ||
+		event.ReducerDecision != protocol.DecisionAcknowledged {
 		t.Fatalf("reset trace = %+v", event)
 	}
 }
 
 func TestDecisionTraceDistinguishesReducerDuplicateAndReorder(t *testing.T) {
 	h := newTestHandler()
-	source := SourceID{Kind: SourceHarness, Key: "claude:session-1"}
+	source := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:session-1"}
 	apply := func(traceID string, seq uint64) {
-		normalized := NormalizedEvent{
+		normalized := protocol.NormalizedEvent{
 			Source: source, Action: "active", Seq: seq, Event: "PreToolUse",
 			SessionID: "session-1", OriginWindowID: 42,
 		}
-		h.handleStateUpdate(Request{
-			Type: TypeStateUpdate, WindowID: 42, Action: "active", Event: "PreToolUse",
-			Harness: harness.Claude, TraceID: traceID, normalized: &normalized,
+		h.handleStateUpdate(protocol.Request{
+			Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Event: "PreToolUse",
+			Harness: harness.Claude, TraceID: traceID, Normalized: &normalized,
 		})
 	}
 	apply("trace-new", 2)
 	apply("trace-duplicate", 2)
 	apply("trace-reordered", 1)
 
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) != 3 {
 		t.Fatalf("events = %+v", detail.Events)
 	}
 	duplicate, reordered := detail.Events[1], detail.Events[2]
-	if duplicate.ReducerDecision != DecisionDuplicate ||
-		duplicate.DecisionReason != DecisionReasonDuplicateSequence ||
-		duplicate.SuppressionReason != DecisionReasonDuplicateSequence {
+	if duplicate.ReducerDecision != protocol.DecisionDuplicate ||
+		duplicate.DecisionReason != protocol.DecisionReasonDuplicateSequence ||
+		duplicate.SuppressionReason != protocol.DecisionReasonDuplicateSequence {
 		t.Fatalf("duplicate = %+v", duplicate)
 	}
-	if reordered.ReducerDecision != DecisionReordered ||
-		reordered.DecisionReason != DecisionReasonReorderedSequence ||
-		reordered.SuppressionReason != DecisionReasonReorderedSequence {
+	if reordered.ReducerDecision != protocol.DecisionReordered ||
+		reordered.DecisionReason != protocol.DecisionReasonReorderedSequence ||
+		reordered.SuppressionReason != protocol.DecisionReasonReorderedSequence {
 		t.Fatalf("reordered = %+v", reordered)
 	}
 	if duplicate.EffectiveBefore == nil || duplicate.EffectiveAfter == nil ||
@@ -229,19 +230,19 @@ func TestDecisionTraceRecordsRejectedOwnerAlternative(t *testing.T) {
 	stubDaemonLoopDiscover(t, nil, nil)
 	h := newTestHandler()
 	h.SetKittyClient(&fakeKittyClient{windows: unmanagedRouteWindows("api", harness.Codex, false)})
-	resp := h.Handle(Request{
-		Type: TypeHookEvent, WindowID: 43, Event: "PreToolUse", Harness: harness.Claude,
+	resp := h.Handle(protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 43, Event: "PreToolUse", Harness: harness.Claude,
 		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{SessionID: "session-1"}),
 	})
 	if !resp.OK {
 		t.Fatalf("response = %+v", resp)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})
 	if len(detail.Events) != 1 {
 		t.Fatalf("events = %+v", detail.Events)
 	}
 	event := detail.Events[0]
-	if event.ReducerDecision != DecisionSuppressed || event.DecisionReason != DecisionReasonOwnerMismatch ||
+	if event.ReducerDecision != protocol.DecisionSuppressed || event.DecisionReason != protocol.DecisionReasonOwnerMismatch ||
 		event.RouteDecision != routeDecisionRejected || event.RouteEvidence == nil ||
 		event.RouteEvidence.ChosenRoute != routeDecisionRejected || len(event.RouteEvidence.RejectedAlternatives) == 0 ||
 		event.RouteEvidence.RejectedAlternatives[len(event.RouteEvidence.RejectedAlternatives)-1].WindowID != 42 {
@@ -253,12 +254,12 @@ func TestDuplicateReplayClearsDownstreamCausalityWithoutReducerMutation(t *testi
 	sock, server := newTestServerWithRef(t)
 	client := NewClientWithSocket(sock)
 	payload := hookPayloadJSON(t, hookevent.HookPayload{SessionID: "session-1"})
-	request := Request{
-		Type: TypeHookEvent, WindowID: 42, Event: "PreToolUse", Harness: harness.Claude,
+	request := protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 42, Event: "PreToolUse", Harness: harness.Claude,
 		PayloadJSON: payload, RequestID: "logical-hook-1", TraceID: "trace-original", Attempt: 1,
 	}
 	first, err := client.Send(request)
-	if err != nil || first.Delivery == nil || first.Delivery.Status != DeliveryAcknowledgementAccepted {
+	if err != nil || first.Delivery == nil || first.Delivery.Status != protocol.DeliveryAcknowledgementAccepted {
 		t.Fatalf("first response = %+v, err = %v", first, err)
 	}
 	server.handler.stateMu.Lock()
@@ -275,12 +276,12 @@ func TestDuplicateReplayClearsDownstreamCausalityWithoutReducerMutation(t *testi
 	request.TraceID = "trace-retry"
 	request.Attempt = 2
 	retry, err := client.Send(request)
-	if err != nil || retry.Delivery == nil || retry.Delivery.Status != DeliveryAcknowledgementDuplicate {
+	if err != nil || retry.Delivery == nil || retry.Delivery.Status != protocol.DeliveryAcknowledgementDuplicate {
 		t.Fatalf("retry response = %+v, err = %v", retry, err)
 	}
 	server.handler.stateMu.Lock()
 	st := server.handler.ensureWindowStateLocked(42)
-	server.handler.finishRenderEventsLocked(st, RenderGenerationTrace{
+	server.handler.finishRenderEventsLocked(st, protocol.RenderGenerationTrace{
 		Generation: 42,
 		Stage:      renderStageRendered,
 		Reason:     "later-request-render",
@@ -288,14 +289,14 @@ func TestDuplicateReplayClearsDownstreamCausalityWithoutReducerMutation(t *testi
 	})
 	server.handler.stateMu.Unlock()
 
-	detail, err := client.Send(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail, err := client.Send(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if err != nil || len(detail.Events) != 2 {
 		t.Fatalf("detail = %+v, err = %v", detail, err)
 	}
 	original, duplicate := detail.Events[0], detail.Events[1]
-	if original.ReducerDecision != DecisionApplied || duplicate.ReducerDecision != DecisionDuplicate ||
+	if original.ReducerDecision != protocol.DecisionApplied || duplicate.ReducerDecision != protocol.DecisionDuplicate ||
 		duplicate.TraceID != "trace-retry" || duplicate.Attempt != 2 ||
-		duplicate.SuppressionReason != DecisionReasonRequestReplayed ||
+		duplicate.SuppressionReason != protocol.DecisionReasonRequestReplayed ||
 		duplicate.EffectiveBefore == nil || duplicate.EffectiveAfter == nil ||
 		*duplicate.EffectiveBefore != *duplicate.EffectiveAfter {
 		t.Fatalf("original/duplicate = %+v / %+v", original, duplicate)
@@ -310,13 +311,13 @@ func TestDuplicateReplayClearsDownstreamCausalityWithoutReducerMutation(t *testi
 func TestDuplicateReplayExportOmitsNotificationCausality(t *testing.T) {
 	sock, server := newTestServerWithRef(t)
 	client := NewClientWithSocket(sock)
-	request := Request{
-		Type: TypeHookEvent, WindowID: 42, Event: "PreToolUse", Harness: harness.Claude,
+	request := protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 42, Event: "PreToolUse", Harness: harness.Claude,
 		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{SessionID: "session-1"}),
 		RequestID:   "logical-hook-1", TraceID: "trace-shared", Attempt: 1,
 	}
 	first, err := client.Send(request)
-	if err != nil || first.Delivery == nil || first.Delivery.Status != DeliveryAcknowledgementAccepted {
+	if err != nil || first.Delivery == nil || first.Delivery.Status != protocol.DeliveryAcknowledgementAccepted {
 		t.Fatalf("first response = %+v, err = %v", first, err)
 	}
 
@@ -333,11 +334,11 @@ func TestDuplicateReplayExportOmitsNotificationCausality(t *testing.T) {
 
 	request.Attempt = 2
 	retry, err := client.Send(request)
-	if err != nil || retry.Delivery == nil || retry.Delivery.Status != DeliveryAcknowledgementDuplicate {
+	if err != nil || retry.Delivery == nil || retry.Delivery.Status != protocol.DeliveryAcknowledgementDuplicate {
 		t.Fatalf("retry response = %+v, err = %v", retry, err)
 	}
 
-	exported, err := client.Send(Request{Type: TypeEventsExport, WindowID: 42})
+	exported, err := client.Send(protocol.Request{Type: protocol.TypeEventsExport, WindowID: 42})
 	if err != nil {
 		t.Fatalf("events export: %v", err)
 	}
@@ -350,8 +351,8 @@ func TestDuplicateReplayExportOmitsNotificationCausality(t *testing.T) {
 		original.NotificationReason != "send_success" {
 		t.Fatalf("original notification disposition = %+v", original)
 	}
-	if duplicate.TraceID != request.TraceID || duplicate.ReducerDecision != DecisionDuplicate ||
-		duplicate.DecisionReason != DecisionReasonRequestReplayed {
+	if duplicate.TraceID != request.TraceID || duplicate.ReducerDecision != protocol.DecisionDuplicate ||
+		duplicate.DecisionReason != protocol.DecisionReasonRequestReplayed {
 		t.Fatalf("duplicate decision = %+v", duplicate)
 	}
 	if duplicate.NotificationTrace != "" || duplicate.NotificationOutcome != "" || duplicate.NotificationReason != "" {
@@ -362,34 +363,34 @@ func TestDuplicateReplayExportOmitsNotificationCausality(t *testing.T) {
 func TestProbeLinkSkipsDuplicateReplayRows(t *testing.T) {
 	sock, server := newTestServerWithRef(t)
 	client := NewClientWithSocket(sock)
-	request := Request{
-		Type: TypeHookEvent, WindowID: 42, Event: "PreToolUse", Harness: harness.Claude,
+	request := protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 42, Event: "PreToolUse", Harness: harness.Claude,
 		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{SessionID: "session-1"}),
 		RequestID:   "logical-hook-1", TraceID: "trace-shared", Attempt: 1,
 	}
 	first, err := client.Send(request)
-	if err != nil || first.Delivery == nil || first.Delivery.Status != DeliveryAcknowledgementAccepted {
+	if err != nil || first.Delivery == nil || first.Delivery.Status != protocol.DeliveryAcknowledgementAccepted {
 		t.Fatalf("first response = %+v, err = %v", first, err)
 	}
 
 	request.Attempt = 2
 	retry, err := client.Send(request)
-	if err != nil || retry.Delivery == nil || retry.Delivery.Status != DeliveryAcknowledgementDuplicate {
+	if err != nil || retry.Delivery == nil || retry.Delivery.Status != protocol.DeliveryAcknowledgementDuplicate {
 		t.Fatalf("retry response = %+v, err = %v", retry, err)
 	}
 
 	server.handler.linkProbeChild(request.TraceID, "probe-child", []int{request.WindowID})
-	detail, err := client.Send(Request{Type: TypeSessionDetail, WindowID: request.WindowID})
+	detail, err := client.Send(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: request.WindowID})
 	if err != nil || len(detail.Events) != 2 {
 		t.Fatalf("detail = %+v, err = %v", detail, err)
 	}
 	original, duplicate := detail.Events[0], detail.Events[1]
-	if original.TraceID != request.TraceID || original.ReducerDecision != DecisionApplied ||
+	if original.TraceID != request.TraceID || original.ReducerDecision != protocol.DecisionApplied ||
 		len(original.ProbeTraceIDs) != 1 || original.ProbeTraceIDs[0] != "probe-child" {
 		t.Fatalf("original probe causality = %+v", original)
 	}
-	if duplicate.TraceID != request.TraceID || duplicate.ReducerDecision != DecisionDuplicate ||
-		duplicate.DecisionReason != DecisionReasonRequestReplayed {
+	if duplicate.TraceID != request.TraceID || duplicate.ReducerDecision != protocol.DecisionDuplicate ||
+		duplicate.DecisionReason != protocol.DecisionReasonRequestReplayed {
 		t.Fatalf("duplicate decision = %+v", duplicate)
 	}
 	if len(duplicate.ProbeTraceIDs) != 0 {

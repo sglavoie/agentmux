@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestDaemonGuideSchemaV10FactKeys pins the schema-v10 export-events example
@@ -49,7 +49,7 @@ func TestDaemonGuideSchemaV10FactKeys(t *testing.T) {
 				t.Fatalf("daemon guide schema-v10 fact object missing compact key %q: %v", need, fact)
 			}
 		}
-		var snap daemon.SourceFactSnapshot
+		var snap protocol.SourceFactSnapshot
 		blob, err := json.Marshal(fact)
 		if err != nil {
 			t.Fatalf("re-marshal example fact: %v", err)
@@ -199,7 +199,7 @@ func extractSchemaV10ExampleFacts(t *testing.T, guide string) []map[string]json.
 // daemon.SourceFactSnapshot.
 func sourceFactSnapshotWireTags() map[string]bool {
 	tags := map[string]bool{}
-	rt := reflect.TypeOf(daemon.SourceFactSnapshot{})
+	rt := reflect.TypeOf(protocol.SourceFactSnapshot{})
 	for i := 0; i < rt.NumField(); i++ {
 		tag := rt.Field(i).Tag.Get("json")
 		if tag == "" || tag == "-" {

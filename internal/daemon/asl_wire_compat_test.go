@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // The ASL block was added to an already-shipped health response, so the two
@@ -18,18 +19,18 @@ import (
 // integration knew about. It carries no `asl` key at all, which is exactly what
 // an older `amx` decoding a newer daemon's reply sees.
 type preASLHealthResponse struct {
-	OK             bool             `json:"ok"`
-	PID            int              `json:"pid,omitempty"`
-	UptimeSeconds  int64            `json:"uptime_seconds,omitempty"`
-	Build          *buildinfo.Info  `json:"build,omitempty"`
-	Metrics        *MetricsSnapshot `json:"metrics,omitempty"`
-	Ready          bool             `json:"ready"`
-	DegradedReason string           `json:"degraded_reason,omitempty"`
+	OK             bool                      `json:"ok"`
+	PID            int                       `json:"pid,omitempty"`
+	UptimeSeconds  int64                     `json:"uptime_seconds,omitempty"`
+	Build          *buildinfo.Info           `json:"build,omitempty"`
+	Metrics        *protocol.MetricsSnapshot `json:"metrics,omitempty"`
+	Ready          bool                      `json:"ready"`
+	DegradedReason string                    `json:"degraded_reason,omitempty"`
 }
 
 func TestOlderClientStillReadsAHealthResponseCarryingASL(t *testing.T) {
 	age := int64(7)
-	encoded, err := json.Marshal(Response{
+	encoded, err := json.Marshal(protocol.Response{
 		OK: true, PID: 4242, UptimeSeconds: 90, Ready: true,
 		ASLCapability: &aslbridge.Status{
 			Mode: string(aslbridge.ModeAuto), Command: "asl", Available: true,
@@ -57,7 +58,7 @@ func TestNewerClientReadsAnOlderDaemonHealthResponse(t *testing.T) {
 	// Captured shape of a daemon built before the integration existed.
 	const older = `{"ok":true,"pid":91,"uptime_seconds":120,"ready":true}`
 
-	var resp Response
+	var resp protocol.Response
 	if err := json.Unmarshal([]byte(older), &resp); err != nil {
 		t.Fatalf("decoding an older daemon's health response: %v", err)
 	}

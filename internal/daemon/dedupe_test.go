@@ -6,6 +6,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestDedupeCache_ConcurrentDuplicatesRunOnce is the core exactly-once
@@ -17,7 +19,7 @@ func TestDedupeCache_ConcurrentDuplicatesRunOnce(t *testing.T) {
 
 	var computeCount atomic.Int64
 	const callers = 64
-	responses := make([]Response, callers)
+	responses := make([]protocol.Response, callers)
 	var wg sync.WaitGroup
 	start := make(chan struct{})
 	for i := 0; i < callers; i++ {
@@ -25,11 +27,11 @@ func TestDedupeCache_ConcurrentDuplicatesRunOnce(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 			<-start
-			responses[idx] = c.do("req-1", func() Response {
+			responses[idx] = c.do("req-1", func() protocol.Response {
 				computeCount.Add(1)
 				// Hold long enough that later callers arrive while in-flight.
 				time.Sleep(20 * time.Millisecond)
-				return Response{OK: true, IconState: "bolt"}
+				return protocol.Response{OK: true, IconState: "bolt"}
 			})
 		}(i)
 	}
@@ -61,9 +63,9 @@ func TestDedupeCache_CompletedReplayWithinTTL(t *testing.T) {
 	c := newDedupeCache(&m)
 
 	var computeCount atomic.Int64
-	run := func() Response {
+	run := func() protocol.Response {
 		n := computeCount.Add(1)
-		return Response{OK: true, IconState: fmt.Sprintf("run-%d", n)}
+		return protocol.Response{OK: true, IconState: fmt.Sprintf("run-%d", n)}
 	}
 
 	first := c.do("req-1", run)
@@ -88,7 +90,7 @@ func TestDedupeCache_LegacyNotDeduplicated(t *testing.T) {
 	c := newDedupeCache(&m)
 
 	var computeCount atomic.Int64
-	run := func() Response { computeCount.Add(1); return Response{OK: true} }
+	run := func() protocol.Response { computeCount.Add(1); return protocol.Response{OK: true} }
 
 	c.do("", run)
 	c.do("", run)
@@ -111,7 +113,7 @@ func TestDedupeCache_ExpiredEntryReadmits(t *testing.T) {
 	c.now = func() time.Time { return now }
 
 	var computeCount atomic.Int64
-	run := func() Response { computeCount.Add(1); return Response{OK: true} }
+	run := func() protocol.Response { computeCount.Add(1); return protocol.Response{OK: true} }
 
 	c.do("req-1", run)
 	// Advance past the TTL so the completed entry expires.
@@ -138,12 +140,12 @@ func TestDedupeCache_QueueFullDegradesButRuns(t *testing.T) {
 	c := newDedupeCache(&m)
 	c.max = 2
 
-	run := func() Response { return Response{OK: true} }
+	run := func() protocol.Response { return protocol.Response{OK: true} }
 	c.do("a", run)
 	c.do("b", run)
 	// Cache now holds two non-expired completed entries.
 	observedSaturation := false
-	c.doObserved("c", func(saturated bool) Response {
+	c.doObserved("c", func(saturated bool) protocol.Response {
 		observedSaturation = saturated
 		return run()
 	})
@@ -161,8 +163,8 @@ func TestDedupeCache_QueueFullDegradesButRuns(t *testing.T) {
 	// A saturated request is not cached, so a retry of "c" runs again rather
 	// than replaying — confirming the degradation is real.
 	var cRuns atomic.Int64
-	c.do("c", func() Response { cRuns.Add(1); return Response{OK: true} })
-	c.do("c", func() Response { cRuns.Add(1); return Response{OK: true} })
+	c.do("c", func() protocol.Response { cRuns.Add(1); return protocol.Response{OK: true} })
+	c.do("c", func() protocol.Response { cRuns.Add(1); return protocol.Response{OK: true} })
 	if cRuns.Load() != 2 {
 		t.Errorf("uncached 'c' ran %d times; want 2 (no replay when queue-full)", cRuns.Load())
 	}
@@ -178,17 +180,17 @@ func TestDedupeCache_InFlightWaitTimesOut(t *testing.T) {
 	release := make(chan struct{})
 	started := make(chan struct{})
 	go func() {
-		c.do("req-1", func() Response {
+		c.do("req-1", func() protocol.Response {
 			close(started)
 			<-release // block well past waitTimeout
-			return Response{OK: true, IconState: "bolt"}
+			return protocol.Response{OK: true, IconState: "bolt"}
 		})
 	}()
 	<-started
 
-	got := c.do("req-1", func() Response {
+	got := c.do("req-1", func() protocol.Response {
 		t.Error("duplicate must not run its own compute")
-		return Response{}
+		return protocol.Response{}
 	})
 	if got.OK {
 		t.Fatalf("timed-out duplicate = %+v; want OK=false", got)

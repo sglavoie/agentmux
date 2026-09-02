@@ -5,11 +5,13 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func TestHandler_StateQuery(t *testing.T) {
 	h := newTestHandler()
-	resp := h.Handle(Request{Type: TypeStateQuery})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateQuery})
 	if !resp.OK {
 		t.Fatalf("want ok=true for state_query, got %+v", resp)
 	}
@@ -23,10 +25,10 @@ func TestHandler_StateQuery(t *testing.T) {
 
 func TestHandler_StateQueryReturnsActivity(t *testing.T) {
 	h := newTestHandler()
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 7, Action: "active"})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 9, Action: "permission"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "active"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 9, Action: "permission"})
 
-	resp := h.Handle(Request{Type: TypeStateQuery})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateQuery})
 	if !resp.OK {
 		t.Fatalf("want ok=true, got %+v", resp)
 	}
@@ -40,12 +42,12 @@ func TestHandler_StateQueryReturnsActivity(t *testing.T) {
 
 func TestHandler_StateQueryReturnsDaemonStateSnapshot(t *testing.T) {
 	h := newTestHandler()
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 7, Action: "permission"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "permission"})
 	h.stateMu.Lock()
 	h.store[7].Looping = true
 	h.stateMu.Unlock()
 
-	resp := h.Handle(Request{Type: TypeStateQuery})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateQuery})
 	got, ok := resp.States[7]
 	if !ok {
 		t.Fatalf("state query omitted window 7: %+v", resp.States)
@@ -57,15 +59,15 @@ func TestHandler_StateQueryReturnsDaemonStateSnapshot(t *testing.T) {
 
 func TestHandler_StateQueryReportsBusySinceAndOmitsItWhenIdle(t *testing.T) {
 	h := newTestHandler()
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 7, Action: "active", IsPrompt: true})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 9, Action: "permission"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "active", IsPrompt: true})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 9, Action: "permission"})
 
 	anchor := busySince(t, h, 7)
 	if anchor.IsZero() {
 		t.Fatal("active window has no anchor to report")
 	}
 
-	resp := h.Handle(Request{Type: TypeStateQuery})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateQuery})
 	busy, ok := resp.States[7]
 	if !ok {
 		t.Fatalf("state query omitted window 7: %+v", resp.States)
@@ -92,9 +94,9 @@ func TestHandler_StateQueryReportsBusySinceAndOmitsItWhenIdle(t *testing.T) {
 
 func TestHandler_PromptBypassesStopGuard(t *testing.T) {
 	h := newTestHandler()
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "stop"})
 
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", IsPrompt: true})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", IsPrompt: true})
 	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
 		t.Fatalf("want {ok:true, allowed:true, icon_state:bolt} for prompt bypass, got %+v", resp)
 	}
@@ -105,7 +107,7 @@ func TestHandler_Shutdown(t *testing.T) {
 	called := make(chan struct{}, 1)
 	h.onShutdown = func() { called <- struct{}{} }
 
-	resp := h.Handle(Request{Type: TypeShutdown})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeShutdown})
 	if !resp.OK {
 		t.Fatalf("want ok=true for shutdown, got %+v", resp)
 	}

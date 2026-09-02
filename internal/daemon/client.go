@@ -15,6 +15,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // SocketPath returns the Unix socket path for the daemon. If the user's home
@@ -107,25 +108,25 @@ var exportDeadline = 5 * time.Second
 
 // Send sends req to the daemon and returns the response.
 // Returns an error if the daemon is not reachable.
-func (c *Client) Send(req Request) (Response, error) {
+func (c *Client) Send(req protocol.Request) (protocol.Response, error) {
 	return c.sendWithDeadline(req, sendDeadline)
 }
 
-func (c *Client) sendWithDeadline(req Request, timeout time.Duration) (Response, error) {
+func (c *Client) sendWithDeadline(req protocol.Request, timeout time.Duration) (protocol.Response, error) {
 	if timeout <= 0 {
-		return Response{}, errors.New("daemon request deadline elapsed")
+		return protocol.Response{}, errors.New("daemon request deadline elapsed")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	return c.sendWithContext(ctx, req)
 }
 
-func (c *Client) sendWithContext(ctx context.Context, req Request) (Response, error) {
+func (c *Client) sendWithContext(ctx context.Context, req protocol.Request) (protocol.Response, error) {
 	if ctx == nil {
-		return Response{}, errors.New("daemon request context is nil")
+		return protocol.Response{}, errors.New("daemon request context is nil")
 	}
 	if err := ctx.Err(); err != nil {
-		return Response{}, err
+		return protocol.Response{}, err
 	}
 	dialContext := c.dialContext
 	if dialContext == nil {
@@ -133,7 +134,7 @@ func (c *Client) sendWithContext(ctx context.Context, req Request) (Response, er
 	}
 	conn, err := dialContext(ctx, "unix", c.socketPath)
 	if err != nil {
-		return Response{}, fmt.Errorf("connecting to daemon: %w", err)
+		return protocol.Response{}, fmt.Errorf("connecting to daemon: %w", err)
 	}
 	defer func() { _ = conn.Close() }()
 
@@ -148,43 +149,43 @@ func (c *Client) sendWithContext(ctx context.Context, req Request) (Response, er
 
 	data, err := json.Marshal(req)
 	if err != nil {
-		return Response{}, fmt.Errorf("encoding request: %w", err)
+		return protocol.Response{}, fmt.Errorf("encoding request: %w", err)
 	}
 	data = append(data, '\n')
 	if _, err := conn.Write(data); err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return Response{}, ctxErr
+			return protocol.Response{}, ctxErr
 		}
-		return Response{}, fmt.Errorf("sending request: %w", err)
+		return protocol.Response{}, fmt.Errorf("sending request: %w", err)
 	}
 
-	var resp Response
+	var resp protocol.Response
 	scanner := bufio.NewScanner(conn)
 	scanner.Buffer(make([]byte, 0, 64*1024), maxResponseBytes)
 	if !scanner.Scan() {
 		if err := scanner.Err(); err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
-				return Response{}, ctxErr
+				return protocol.Response{}, ctxErr
 			}
 			if errors.Is(err, bufio.ErrTooLong) {
-				return Response{}, fmt.Errorf("daemon response exceeds %d bytes", maxResponseBytes)
+				return protocol.Response{}, fmt.Errorf("daemon response exceeds %d bytes", maxResponseBytes)
 			}
-			return Response{}, fmt.Errorf("reading response: %w", err)
+			return protocol.Response{}, fmt.Errorf("reading response: %w", err)
 		}
-		return Response{}, fmt.Errorf("daemon closed connection without responding")
+		return protocol.Response{}, fmt.Errorf("daemon closed connection without responding")
 	}
 	if err := json.Unmarshal(scanner.Bytes(), &resp); err != nil {
-		return Response{}, fmt.Errorf("decoding response: %w", err)
+		return protocol.Response{}, fmt.Errorf("decoding response: %w", err)
 	}
 	return resp, nil
 }
 
-func (c *Client) sendBefore(req Request, deadline time.Time) (Response, error) {
+func (c *Client) sendBefore(req protocol.Request, deadline time.Time) (protocol.Response, error) {
 	timeout := sendDeadline
 	if !deadline.IsZero() {
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
-			return Response{}, errors.New("daemon auto-start deadline elapsed")
+			return protocol.Response{}, errors.New("daemon auto-start deadline elapsed")
 		}
 		if remaining < timeout {
 			timeout = remaining
@@ -204,8 +205,8 @@ type Health struct {
 	Ready          bool
 	DegradedReason string
 	Build          *buildinfo.Info
-	Metrics        *MetricsSnapshot
-	Notification   *NotificationCapability
+	Metrics        *protocol.MetricsSnapshot
+	Notification   *protocol.NotificationCapability
 	// ASL is the optional agent-session-loop capability block. Nil means the
 	// daemon publishes no ASL integration at all.
 	ASL *aslbridge.Status
@@ -214,12 +215,12 @@ type Health struct {
 	// root, and what ASL managed to push through the hook path. Both are nil
 	// against a daemon that predates them, which is why doctor reports their
 	// absence as an unknown rather than as a zero.
-	ASLReconcile    *ASLReconcileSnapshot
-	ASLHookDelivery *ASLHookDeliverySnapshot
+	ASLReconcile    *protocol.ASLReconcileSnapshot
+	ASLHookDelivery *protocol.ASLHookDeliverySnapshot
 	// ScreenPatterns is the startup screen-pattern load result: the active
 	// source per pattern set plus every load warning. Nil against a daemon that
 	// predates the block.
-	ScreenPatterns *ScreenPatternsSnapshot
+	ScreenPatterns *protocol.ScreenPatternsSnapshot
 }
 
 // Health pings the daemon and returns its liveness, PID and uptime. Never
@@ -229,7 +230,7 @@ func (c *Client) Health() Health {
 }
 
 func (c *Client) healthBefore(deadline time.Time) Health {
-	resp, err := c.sendBefore(Request{Type: TypeHealth}, deadline)
+	resp, err := c.sendBefore(protocol.Request{Type: protocol.TypeHealth}, deadline)
 	if err != nil || !resp.OK {
 		return Health{}
 	}
@@ -282,7 +283,7 @@ func (c *Client) ShutdownAndWait(ctx context.Context) error {
 	if statErr != nil && !os.IsNotExist(statErr) {
 		return fmt.Errorf("inspecting daemon socket before shutdown: %w", statErr)
 	}
-	resp, err := c.sendWithContext(ctx, Request{Type: TypeShutdown})
+	resp, err := c.sendWithContext(ctx, protocol.Request{Type: protocol.TypeShutdown})
 	if err != nil {
 		if os.IsNotExist(statErr) || daemonConnectionRefused(err) {
 			return nil

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -33,8 +34,8 @@ func TestHandler_UnmanagedRouteCrossHarnessMatrix(t *testing.T) {
 				h.SetKittyClient(&fakeKittyClient{windows: unmanagedRouteWindows("api", ownerHarness, true)})
 				sessionID := fmt.Sprintf("%s-on-%s", producerHarness, ownerHarness)
 
-				resp := h.Handle(Request{
-					Type:        TypeHookEvent,
+				resp := h.Handle(protocol.Request{
+					Type:        protocol.TypeHookEvent,
 					WindowID:    43,
 					Event:       "UserPromptSubmit",
 					Harness:     producerHarness,
@@ -44,13 +45,13 @@ func TestHandler_UnmanagedRouteCrossHarnessMatrix(t *testing.T) {
 					t.Fatalf("hook response = %+v", resp)
 				}
 
-				detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+				detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 				if len(detail.Events) != 1 {
 					t.Fatalf("target events = %+v; want one", detail.Events)
 				}
 				event := detail.Events[0]
 				if event.Suppressed || event.RouteDecision != routeDecisionOwner ||
-					event.SourceKind != string(SourceHarness) || event.SourceKey != producerHarness+":"+sessionID {
+					event.SourceKind != string(protocol.SourceHarness) || event.SourceKey != producerHarness+":"+sessionID {
 					t.Fatalf("routed event = %+v", event)
 				}
 
@@ -59,7 +60,7 @@ func TestHandler_UnmanagedRouteCrossHarnessMatrix(t *testing.T) {
 				meta := h.windowMetadata[42]
 				var fact *sourceFact
 				if st != nil && st.Reducer != nil {
-					fact = st.Reducer.facts[SourceID{Kind: SourceHarness, Key: producerHarness + ":" + sessionID}]
+					fact = st.Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: producerHarness + ":" + sessionID}]
 				}
 				h.stateMu.Unlock()
 				if st == nil || st.DesiredIcon != "bolt" {
@@ -80,8 +81,8 @@ func TestHandler_ActiveUnmanagedNonPromptEstablishesRoute(t *testing.T) {
 	h := newTestHandler()
 	h.SetKittyClient(&fakeKittyClient{windows: unmanagedRouteWindows("api", harness.Codex, true)})
 
-	resp := h.Handle(Request{
-		Type:        TypeHookEvent,
+	resp := h.Handle(protocol.Request{
+		Type:        protocol.TypeHookEvent,
 		WindowID:    43,
 		Event:       "PreToolUse",
 		Harness:     harness.Claude,
@@ -90,7 +91,7 @@ func TestHandler_ActiveUnmanagedNonPromptEstablishesRoute(t *testing.T) {
 	if !resp.OK {
 		t.Fatalf("hook response = %+v", resp)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) != 1 || detail.Events[0].Suppressed ||
 		detail.Events[0].SourceKey != "claude:active-claude" || detail.Events[0].RouteDecision != routeDecisionOwner {
 		t.Fatalf("target events = %+v; want active unmanaged Claude route", detail.Events)
@@ -111,14 +112,14 @@ func TestHandler_UnmanagedPromptTakeoverAndStickyTerminal(t *testing.T) {
 
 	// The cached snapshot still says the managed pane is active, but the prompt
 	// itself proves the user focused the unmanaged source.
-	if resp := h.Handle(Request{
-		Type: TypeHookEvent, WindowID: 43, Event: "UserPromptSubmit", Harness: harness.Claude,
+	if resp := h.Handle(protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 43, Event: "UserPromptSubmit", Harness: harness.Claude,
 		PayloadJSON: hookPayloadJSON(t, payload),
 	}); !resp.OK {
 		t.Fatalf("prompt response = %+v", resp)
 	}
-	if resp := h.Handle(Request{
-		Type: TypeHookEvent, WindowID: 43, Event: "PreToolUse", Harness: harness.Claude,
+	if resp := h.Handle(protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 43, Event: "PreToolUse", Harness: harness.Claude,
 		PayloadJSON: hookPayloadJSON(t, payload),
 	}); !resp.OK {
 		t.Fatalf("tool response = %+v", resp)
@@ -132,25 +133,25 @@ func TestHandler_UnmanagedPromptTakeoverAndStickyTerminal(t *testing.T) {
 		{ID: 43, IsActive: false},
 	}), time.Now())
 	payload.NotificationType = "idle_prompt"
-	if resp := h.Handle(Request{
-		Type: TypeHookEvent, WindowID: 43, Event: "Notification", Harness: harness.Claude,
+	if resp := h.Handle(protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 43, Event: "Notification", Harness: harness.Claude,
 		PayloadJSON: hookPayloadJSON(t, payload),
 	}); !resp.OK {
 		t.Fatalf("terminal response = %+v", resp)
 	}
 
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) != 3 || detail.Events[1].Suppressed || detail.Events[1].Action != "active" ||
 		detail.Events[2].Suppressed || detail.Events[2].Action != "stop" ||
 		detail.Events[2].RouteDecision != routeDecisionOwner {
 		t.Fatalf("target events = %+v; want routed Claude terminal", detail.Events)
 	}
-	if other := h.Handle(Request{Type: TypeSessionDetail, WindowID: 44}); len(other.Events) != 0 {
+	if other := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 44}); len(other.Events) != 0 {
 		t.Fatalf("new title owner events = %+v; terminal must stay on original target", other.Events)
 	}
 	h.stateMu.Lock()
 	meta := h.windowMetadata[42]
-	fact := h.store[42].Reducer.facts[SourceID{Kind: SourceHarness, Key: "claude:claude-session"}]
+	fact := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:claude-session"}]
 	h.stateMu.Unlock()
 	if meta.Durable.Harness != harness.Codex {
 		t.Fatalf("durable harness = %q; want codex", meta.Durable.Harness)
@@ -161,13 +162,13 @@ func TestHandler_UnmanagedPromptTakeoverAndStickyTerminal(t *testing.T) {
 
 	// Terminal application closes the ordinary route. Inactive trailing work is
 	// diagnosed on the source and cannot inherit the old target binding.
-	if resp := h.Handle(Request{
-		Type: TypeHookEvent, WindowID: 43, Event: "PostToolUse", Harness: harness.Claude,
+	if resp := h.Handle(protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 43, Event: "PostToolUse", Harness: harness.Claude,
 		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{SessionID: "claude-session"}),
 	}); !resp.OK {
 		t.Fatalf("trailing response = %+v", resp)
 	}
-	sourceDetail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	sourceDetail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})
 	if len(sourceDetail.Events) != 1 || !sourceDetail.Events[0].Suppressed ||
 		sourceDetail.Events[0].SuppressionReason != suppressionReasonOwnerMismatch {
 		t.Fatalf("source events = %+v; want closed-route owner_mismatch", sourceDetail.Events)
@@ -183,8 +184,8 @@ func TestHandler_PipeModeUnmanagedSourceDoesNotBorrowOwner(t *testing.T) {
 	h := newTestHandler()
 	h.SetKittyClient(&fakeKittyClient{windows: unmanagedRouteWindows("api", harness.Codex, true)})
 
-	resp := h.Handle(Request{
-		Type:        TypeHookEvent,
+	resp := h.Handle(protocol.Request{
+		Type:        protocol.TypeHookEvent,
 		WindowID:    43,
 		Event:       "UserPromptSubmit",
 		Harness:     harness.Claude,
@@ -195,7 +196,7 @@ func TestHandler_PipeModeUnmanagedSourceDoesNotBorrowOwner(t *testing.T) {
 		t.Fatalf("hook response = %+v", resp)
 	}
 
-	if owner := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}); len(owner.Events) != 0 {
+	if owner := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42}); len(owner.Events) != 0 {
 		t.Fatalf("owner events = %+v; want the pipe run kept off the managed session", owner.Events)
 	}
 	h.stateMu.Lock()
@@ -205,7 +206,7 @@ func TestHandler_PipeModeUnmanagedSourceDoesNotBorrowOwner(t *testing.T) {
 		t.Fatalf("owner icon = %q; want no icon from a background pipe run", ownerState.DesiredIcon)
 	}
 
-	source := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	source := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})
 	if len(source.Events) != 1 || !source.Events[0].Suppressed ||
 		source.Events[0].SuppressionReason != suppressionReasonUnmanagedPipeSource {
 		t.Fatalf("source events = %+v; want unmanaged_pipe_source suppression", source.Events)
@@ -213,8 +214,8 @@ func TestHandler_PipeModeUnmanagedSourceDoesNotBorrowOwner(t *testing.T) {
 
 	// Regression guard: the same pane running interactively still borrows the
 	// owner exactly as before.
-	if resp := h.Handle(Request{
-		Type:        TypeHookEvent,
+	if resp := h.Handle(protocol.Request{
+		Type:        protocol.TypeHookEvent,
 		WindowID:    43,
 		Event:       "UserPromptSubmit",
 		Harness:     harness.Claude,
@@ -222,7 +223,7 @@ func TestHandler_PipeModeUnmanagedSourceDoesNotBorrowOwner(t *testing.T) {
 	}); !resp.OK {
 		t.Fatalf("interactive hook response = %+v", resp)
 	}
-	owner := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	owner := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(owner.Events) != 1 || owner.Events[0].Suppressed ||
 		owner.Events[0].RouteDecision != routeDecisionOwner ||
 		owner.Events[0].SourceKey != "claude:interactive-run" {
@@ -241,8 +242,8 @@ func TestHandler_PipeModeUnmanagedSourceRoutesWithExactLoopCandidate(t *testing.
 	h := newTestHandler()
 	h.SetKittyClient(&fakeKittyClient{windows: aslSiblingWindows("api", projectDir, 42, 43)})
 
-	resp := h.Handle(Request{
-		Type:        TypeHookEvent,
+	resp := h.Handle(protocol.Request{
+		Type:        protocol.TypeHookEvent,
 		WindowID:    43,
 		Event:       "UserPromptSubmit",
 		Harness:     harness.Claude,
@@ -253,7 +254,7 @@ func TestHandler_PipeModeUnmanagedSourceRoutesWithExactLoopCandidate(t *testing.
 		t.Fatalf("hook response = %+v", resp)
 	}
 
-	owner := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	owner := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(owner.Events) != 1 || owner.Events[0].Suppressed ||
 		owner.Events[0].RouteDecision != routeDecisionOwner ||
 		owner.Events[0].SourceKey != "claude:loop-run" {
@@ -276,8 +277,8 @@ func TestHandler_PipeModeOwnerlessTabStrandsNoIcon(t *testing.T) {
 	// The prompt is what strands the icon: ungated it sets a durable bolt that
 	// the pipe run's own Stop then declines to retire.
 	for _, event := range []string{"UserPromptSubmit", "Stop"} {
-		if resp := h.Handle(Request{
-			Type:        TypeHookEvent,
+		if resp := h.Handle(protocol.Request{
+			Type:        protocol.TypeHookEvent,
 			WindowID:    43,
 			Event:       event,
 			Harness:     harness.Claude,
@@ -297,7 +298,7 @@ func TestHandler_PipeModeOwnerlessTabStrandsNoIcon(t *testing.T) {
 	if calls := fake.titleCalls(); len(calls) != 0 {
 		t.Fatalf("SetTabTitle calls = %+v; want none", calls)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})
 	if len(detail.Events) != 2 {
 		t.Fatalf("source events = %+v; want both events recorded as suppressed", detail.Events)
 	}
@@ -318,8 +319,8 @@ func TestHandler_PipeModeOwnerlessTabStillMarksLoop(t *testing.T) {
 		{ID: 43, IsActive: true},
 	})})
 
-	resp := h.Handle(Request{
-		Type:     TypeHookEvent,
+	resp := h.Handle(protocol.Request{
+		Type:     protocol.TypeHookEvent,
 		WindowID: 43,
 		Event:    "AgentSessionLoopStarted",
 		PipeMode: true,
@@ -350,13 +351,13 @@ func TestHandler_ManagedNonOwnerPersistsWithoutRenderingUntilFocused(t *testing.
 	h := newTestHandler()
 	h.SetKittyClient(fake)
 
-	if resp := h.Handle(Request{
-		Type: TypeHookEvent, WindowID: 43, Event: "PreToolUse", Harness: harness.Codex,
+	if resp := h.Handle(protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 43, Event: "PreToolUse", Harness: harness.Codex,
 		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{SessionID: "managed-two"}),
 	}); !resp.OK {
 		t.Fatalf("hook response = %+v", resp)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})
 	if len(detail.Events) != 1 || detail.Events[0].Suppressed || detail.Events[0].CurrentIconState != "" {
 		t.Fatalf("managed non-owner events = %+v; want its own empty -> bolt transition", detail.Events)
 	}
@@ -384,15 +385,15 @@ func TestHandler_OwnerlessStampedCodexKeepsCodexIdentity(t *testing.T) {
 	h := newTestHandler()
 	h.SetKittyClient(&fakeKittyClient{windows: hookEventWindows("scratch", []kitty.Window{{ID: 43, IsActive: true}})})
 
-	if resp := h.Handle(Request{
-		Type: TypeHookEvent, WindowID: 43, Event: "UserPromptSubmit", Harness: harness.Codex,
+	if resp := h.Handle(protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 43, Event: "UserPromptSubmit", Harness: harness.Codex,
 		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{SessionID: "ownerless"}),
 	}); !resp.OK {
 		t.Fatalf("hook response = %+v", resp)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})
 	if len(detail.Events) != 1 || detail.Events[0].SourceKey != "codex:ownerless" ||
-		!strings.EqualFold(detail.Events[0].SourceKind, string(SourceHarness)) {
+		!strings.EqualFold(detail.Events[0].SourceKind, string(protocol.SourceHarness)) {
 		t.Fatalf("events = %+v; want ownerless Codex source", detail.Events)
 	}
 	h.stateMu.Lock()

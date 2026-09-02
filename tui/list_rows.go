@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -309,7 +309,7 @@ func anyRowHasActivity(m Model) bool {
 // formatAge returns the detail pane's age label for a single watchdog entry:
 // `—` for an entry with no LastAction, otherwise the coarsely rounded time
 // since the last hook event (`<n>m` under one hour, `<n>h` beyond).
-func formatAge(ws daemon.WatchdogState, now time.Time) string {
+func formatAge(ws protocol.WatchdogState, now time.Time) string {
 	if ws.LastAction == "" {
 		return "—"
 	}
@@ -367,7 +367,7 @@ func formatRunElapsed(busySince, now time.Time) string {
 // timer: the reducer is authoritative for what the row displays, so a row
 // whose legacy LastAction scalar has diverged from the reduced icon must not
 // render a bare `— ⏳`.
-func activityCellText(s session.RunningSession, ws daemon.WatchdogState, now time.Time) (text string, warning bool) {
+func activityCellText(s session.RunningSession, ws protocol.WatchdogState, now time.Time) (text string, warning bool) {
 	text = formatRunElapsed(s.BusySince, now)
 	if s.BusySince.IsZero() || ws.LastAction == "" || ws.ThresholdSec <= 0 {
 		return text, false
@@ -399,7 +399,7 @@ func activityColumnWidth(m Model, now time.Time) int {
 // space is part of the cell so callers can concatenate it before the
 // directory without an extra separator. Warning rows get the warning glyph
 // appended and the whole cell styled in styleAgeWarning.
-func renderActivityCell(s session.RunningSession, ws daemon.WatchdogState, now time.Time, width int) string {
+func renderActivityCell(s session.RunningSession, ws protocol.WatchdogState, now time.Time, width int) string {
 	text, warning := activityCellText(s, ws, now)
 	pad := width - 1 - displayWidth(text)
 	if pad < 0 {

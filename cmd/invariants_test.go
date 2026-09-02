@@ -14,6 +14,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 var invariantNow = time.Unix(1_700_000_000, 0)
@@ -95,7 +96,7 @@ func TestSourceTreeHasNoRetiredPlatformStacks(t *testing.T) {
 
 func healthyTestHealth(build buildinfo.Info) daemon.Health {
 	b := build
-	return daemon.Health{Alive: true, Ready: true, Build: &b, Metrics: &daemon.MetricsSnapshot{}}
+	return daemon.Health{Alive: true, Ready: true, Build: &b, Metrics: &protocol.MetricsSnapshot{}}
 }
 
 func findingsByCheck(findings []doctorFinding, check string) []doctorFinding {
@@ -109,9 +110,9 @@ func findingsByCheck(findings []doctorFinding, check string) []doctorFinding {
 }
 
 func TestInvariantASLActiveWorkMustBeVisible(t *testing.T) {
-	aslFact := func(phase string) daemon.SourceFactSnapshot {
-		return daemon.SourceFactSnapshot{
-			Kind: daemon.SourceASL, Key: "run-1", RunID: "run-1", Phase: phase, LeaseLive: phase != "finished",
+	aslFact := func(phase string) protocol.SourceFactSnapshot {
+		return protocol.SourceFactSnapshot{
+			Kind: protocol.SourceASL, Key: "run-1", RunID: "run-1", Phase: phase, LeaseLive: phase != "finished",
 		}
 	}
 	cases := []struct {
@@ -131,12 +132,12 @@ func TestInvariantASLActiveWorkMustBeVisible(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			snapshot := daemon.EventsExport{WindowMetadata: map[int]daemon.WindowDebugMetadata{
+			snapshot := protocol.EventsExport{WindowMetadata: map[int]protocol.WindowDebugMetadata{
 				7: {
-					Renderer: daemon.WindowDebugRenderer{DesiredIcon: tc.desired, StateSet: true},
-					Shadow: daemon.WindowDebugShadow{
+					Renderer: protocol.WindowDebugRenderer{DesiredIcon: tc.desired, StateSet: true},
+					Shadow: protocol.WindowDebugShadow{
 						EffectiveIcon: tc.desired, EffectiveGen: 1,
-						Facts: []daemon.SourceFactSnapshot{aslFact(tc.phase)},
+						Facts: []protocol.SourceFactSnapshot{aslFact(tc.phase)},
 					},
 				},
 			}}
@@ -150,15 +151,15 @@ func TestInvariantASLActiveWorkMustBeVisible(t *testing.T) {
 }
 
 func TestInvariantLiveSubagentNeedsRobotOrHigherAttention(t *testing.T) {
-	subagentFact := daemon.SourceFactSnapshot{
-		Kind: daemon.SourceSubagent, Key: "agent-1", Action: "subagent", Icon: "subagent",
+	subagentFact := protocol.SourceFactSnapshot{
+		Kind: protocol.SourceSubagent, Key: "agent-1", Action: "subagent", Icon: "subagent",
 	}
-	legacyBucket := daemon.SourceFactSnapshot{
-		Kind: daemon.SourceLegacy, Key: "win:7:agents", Agents: 2, Action: "subagent", Icon: "subagent",
+	legacyBucket := protocol.SourceFactSnapshot{
+		Kind: protocol.SourceLegacy, Key: "win:7:agents", Agents: 2, Action: "subagent", Icon: "subagent",
 	}
 	cases := []struct {
 		name    string
-		fact    daemon.SourceFactSnapshot
+		fact    protocol.SourceFactSnapshot
 		desired string
 		want    bool
 	}{
@@ -170,12 +171,12 @@ func TestInvariantLiveSubagentNeedsRobotOrHigherAttention(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			snapshot := daemon.EventsExport{WindowMetadata: map[int]daemon.WindowDebugMetadata{
+			snapshot := protocol.EventsExport{WindowMetadata: map[int]protocol.WindowDebugMetadata{
 				7: {
-					Renderer: daemon.WindowDebugRenderer{DesiredIcon: tc.desired, StateSet: true},
-					Shadow: daemon.WindowDebugShadow{
+					Renderer: protocol.WindowDebugRenderer{DesiredIcon: tc.desired, StateSet: true},
+					Shadow: protocol.WindowDebugShadow{
 						EffectiveIcon: tc.desired, EffectiveGen: 1,
-						Facts: []daemon.SourceFactSnapshot{tc.fact},
+						Facts: []protocol.SourceFactSnapshot{tc.fact},
 					},
 				},
 			}}
@@ -189,25 +190,25 @@ func TestInvariantLiveSubagentNeedsRobotOrHigherAttention(t *testing.T) {
 }
 
 func TestInvariantRepeatedActiveAfterTerminalSuppressions(t *testing.T) {
-	event := func(at int64) daemon.SessionEvent {
-		return daemon.SessionEvent{At: at, Suppressed: true, SuppressionReason: "active_after_terminal"}
+	event := func(at int64) protocol.SessionEvent {
+		return protocol.SessionEvent{At: at, Suppressed: true, SuppressionReason: "active_after_terminal"}
 	}
 	recent := invariantNow.Add(-time.Minute).Unix()
 	stale := invariantNow.Add(-2 * activeAfterTerminalGracePeriod).Unix()
 	cases := []struct {
 		name   string
-		events []daemon.SessionEvent
+		events []protocol.SessionEvent
 		want   bool
 	}{
-		{"three recent fail", []daemon.SessionEvent{event(recent), event(recent), event(recent)}, true},
-		{"two recent pass", []daemon.SessionEvent{event(recent), event(recent)}, false},
-		{"three outside grace pass", []daemon.SessionEvent{event(stale), event(stale), event(stale)}, false},
+		{"three recent fail", []protocol.SessionEvent{event(recent), event(recent), event(recent)}, true},
+		{"two recent pass", []protocol.SessionEvent{event(recent), event(recent)}, false},
+		{"three outside grace pass", []protocol.SessionEvent{event(stale), event(stale), event(stale)}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			snapshot := daemon.EventsExport{
-				EventsByWindow: map[int][]daemon.SessionEvent{7: tc.events},
-				WindowMetadata: map[int]daemon.WindowDebugMetadata{7: {}},
+			snapshot := protocol.EventsExport{
+				EventsByWindow: map[int][]protocol.SessionEvent{7: tc.events},
+				WindowMetadata: map[int]protocol.WindowDebugMetadata{7: {}},
 			}
 			findings := evaluateDaemonInvariants(snapshot, healthyTestHealth(doctorTestBuild), doctorTestBuild, nil, invariantNow)
 			got := findingsByCheck(findings, checkActiveAfterTerminal)
@@ -225,9 +226,9 @@ func TestInvariantRepeatedActiveAfterTerminalSuppressions(t *testing.T) {
 // healthy verdict must not move.
 func TestInvariantStopHoldStuckWarnsPastTwiceTheTimeout(t *testing.T) {
 	const timeout = 15 * time.Second
-	hold := func(armedAgo time.Duration, class string) *daemon.PendingTerminalStop {
+	hold := func(armedAgo time.Duration, class string) *protocol.PendingTerminalStop {
 		armedAt := invariantNow.Add(-armedAgo)
-		return &daemon.PendingTerminalStop{
+		return &protocol.PendingTerminalStop{
 			ArmedAt:    armedAt.Unix(),
 			QuietUntil: armedAt.Add(6 * time.Second).Unix(),
 			Deadline:   armedAt.Add(timeout).Unix(),
@@ -236,22 +237,22 @@ func TestInvariantStopHoldStuckWarnsPastTwiceTheTimeout(t *testing.T) {
 	}
 	cases := []struct {
 		name string
-		hold *daemon.PendingTerminalStop
+		hold *protocol.PendingTerminalStop
 		want bool
 	}{
 		{"no hold passes", nil, false},
-		{"inside the deadline passes", hold(10*time.Second, daemon.StopHoldClassTerminal), false},
-		{"past the deadline but inside twice the timeout passes", hold(20*time.Second, daemon.StopHoldClassTerminal), false},
-		{"exactly twice the timeout passes", hold(2*timeout, daemon.StopHoldClassTerminal), false},
-		{"past twice the timeout warns", hold(2*timeout+time.Second, daemon.StopHoldClassTerminal), true},
-		{"reset class is never stuck", hold(time.Hour, daemon.StopHoldClassReset), false},
+		{"inside the deadline passes", hold(10*time.Second, protocol.StopHoldClassTerminal), false},
+		{"past the deadline but inside twice the timeout passes", hold(20*time.Second, protocol.StopHoldClassTerminal), false},
+		{"exactly twice the timeout passes", hold(2*timeout, protocol.StopHoldClassTerminal), false},
+		{"past twice the timeout warns", hold(2*timeout+time.Second, protocol.StopHoldClassTerminal), true},
+		{"reset class is never stuck", hold(time.Hour, protocol.StopHoldClassReset), false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			snapshot := daemon.EventsExport{WindowMetadata: map[int]daemon.WindowDebugMetadata{
+			snapshot := protocol.EventsExport{WindowMetadata: map[int]protocol.WindowDebugMetadata{
 				7: {
-					Renderer: daemon.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true},
-					Shadow: daemon.WindowDebugShadow{
+					Renderer: protocol.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true},
+					Shadow: protocol.WindowDebugShadow{
 						EffectiveIcon: "bolt", EffectiveGen: 1, PendingTerminalStop: tc.hold,
 					},
 				},
@@ -273,21 +274,21 @@ func TestInvariantStopHoldStuckWarnsPastTwiceTheTimeout(t *testing.T) {
 
 func TestInvariantOrderBookOwnerMismatchBurstIsStructured(t *testing.T) {
 	recent := invariantNow.Add(-time.Minute).Unix()
-	events := make([]daemon.SessionEvent, 0, 19)
-	events = append(events, daemon.SessionEvent{
+	events := make([]protocol.SessionEvent, 0, 19)
+	events = append(events, protocol.SessionEvent{
 		At: recent, Event: "UserPromptSubmit", Action: "active",
 		Suppressed: true, SuppressionReason: "owner_mismatch",
 	})
 	for i := 0; i < 18; i++ {
-		events = append(events, daemon.SessionEvent{
+		events = append(events, protocol.SessionEvent{
 			At: recent, Event: "PreToolUse", Action: "active",
 			Suppressed: true, SuppressionReason: "owner_mismatch",
 		})
 	}
-	snapshot := daemon.EventsExport{
-		EventsByWindow: map[int][]daemon.SessionEvent{7: events},
-		WindowMetadata: map[int]daemon.WindowDebugMetadata{7: {
-			Durable: daemon.WindowDebugDurable{SessionTitle: "OrderBook"},
+	snapshot := protocol.EventsExport{
+		EventsByWindow: map[int][]protocol.SessionEvent{7: events},
+		WindowMetadata: map[int]protocol.WindowDebugMetadata{7: {
+			Durable: protocol.WindowDebugDurable{SessionTitle: "OrderBook"},
 		}},
 	}
 
@@ -305,8 +306,8 @@ func TestInvariantOrderBookOwnerMismatchBurstIsStructured(t *testing.T) {
 }
 
 func TestInvariantOwnerMismatchWindowAndRoutingBoundaries(t *testing.T) {
-	mismatch := func(at int64, event string) daemon.SessionEvent {
-		return daemon.SessionEvent{
+	mismatch := func(at int64, event string) protocol.SessionEvent {
+		return protocol.SessionEvent{
 			At: at, Event: event, Suppressed: true, SuppressionReason: "owner_mismatch",
 		}
 	}
@@ -315,25 +316,25 @@ func TestInvariantOwnerMismatchWindowAndRoutingBoundaries(t *testing.T) {
 	stale := cutoff - 1
 	cases := []struct {
 		name       string
-		events     []daemon.SessionEvent
+		events     []protocol.SessionEvent
 		wantPrompt bool
 		wantBurst  bool
 	}{
-		{"one recent Claude prompt fails", []daemon.SessionEvent{mismatch(recent, "UserPromptSubmit")}, true, false},
-		{"one recent Copilot prompt fails", []daemon.SessionEvent{mismatch(recent, "userPromptSubmitted")}, true, false},
-		{"prompt exactly at cutoff fails", []daemon.SessionEvent{mismatch(cutoff, "UserPromptSubmit")}, true, false},
-		{"prompt before cutoff passes", []daemon.SessionEvent{mismatch(stale, "UserPromptSubmit")}, false, false},
-		{"two recent non-prompts pass", []daemon.SessionEvent{mismatch(recent, "PreToolUse"), mismatch(recent, "PostToolUse")}, false, false},
-		{"three recent non-prompts warn", []daemon.SessionEvent{mismatch(recent, "PreToolUse"), mismatch(recent, "PostToolUse"), mismatch(recent, "Stop")}, false, true},
-		{"three stale non-prompts pass", []daemon.SessionEvent{mismatch(stale, "PreToolUse"), mismatch(stale, "PostToolUse"), mismatch(stale, "Stop")}, false, false},
-		{"other suppression reason passes", []daemon.SessionEvent{{At: recent, Event: "UserPromptSubmit", Suppressed: true, SuppressionReason: "guard_blocked"}}, false, false},
-		{"correct owner route passes", []daemon.SessionEvent{{At: recent, Event: "UserPromptSubmit", RouteDecision: "owner", OriginWindowID: 91}}, false, false},
+		{"one recent Claude prompt fails", []protocol.SessionEvent{mismatch(recent, "UserPromptSubmit")}, true, false},
+		{"one recent Copilot prompt fails", []protocol.SessionEvent{mismatch(recent, "userPromptSubmitted")}, true, false},
+		{"prompt exactly at cutoff fails", []protocol.SessionEvent{mismatch(cutoff, "UserPromptSubmit")}, true, false},
+		{"prompt before cutoff passes", []protocol.SessionEvent{mismatch(stale, "UserPromptSubmit")}, false, false},
+		{"two recent non-prompts pass", []protocol.SessionEvent{mismatch(recent, "PreToolUse"), mismatch(recent, "PostToolUse")}, false, false},
+		{"three recent non-prompts warn", []protocol.SessionEvent{mismatch(recent, "PreToolUse"), mismatch(recent, "PostToolUse"), mismatch(recent, "Stop")}, false, true},
+		{"three stale non-prompts pass", []protocol.SessionEvent{mismatch(stale, "PreToolUse"), mismatch(stale, "PostToolUse"), mismatch(stale, "Stop")}, false, false},
+		{"other suppression reason passes", []protocol.SessionEvent{{At: recent, Event: "UserPromptSubmit", Suppressed: true, SuppressionReason: "guard_blocked"}}, false, false},
+		{"correct owner route passes", []protocol.SessionEvent{{At: recent, Event: "UserPromptSubmit", RouteDecision: "owner", OriginWindowID: 91}}, false, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			snapshot := daemon.EventsExport{
-				EventsByWindow: map[int][]daemon.SessionEvent{7: tc.events},
-				WindowMetadata: map[int]daemon.WindowDebugMetadata{7: {}},
+			snapshot := protocol.EventsExport{
+				EventsByWindow: map[int][]protocol.SessionEvent{7: tc.events},
+				WindowMetadata: map[int]protocol.WindowDebugMetadata{7: {}},
 			}
 			findings := evaluateDaemonInvariants(snapshot, healthyTestHealth(doctorTestBuild), doctorTestBuild, nil, invariantNow)
 			if got := len(findingsByCheck(findings, checkOwnerMismatchPrompt)) > 0; got != tc.wantPrompt {

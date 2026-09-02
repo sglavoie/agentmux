@@ -3,11 +3,11 @@ package tui
 import (
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // groupIntoPhases walks events (oldest-first) and groups them into timeline phases.
-func groupIntoPhases(events []daemon.SessionEvent) []timelinePhase {
+func groupIntoPhases(events []protocol.SessionEvent) []timelinePhase {
 	if len(events) == 0 {
 		return []timelinePhase{{kind: "preamble"}}
 	}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -33,11 +34,11 @@ func TestHandler_ActiveSuppressedWithinTerminalGrace(t *testing.T) {
 				}
 				h := NewHandler(guard, notifier)
 
-				h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: terminal})
+				h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: terminal})
 				wantIcon := reducerActionIcon(terminal)
 
 				// Non-prompt active within the grace must not revive the bolt.
-				resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
+				resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active"})
 				if !resp.OK {
 					t.Fatalf("non-prompt active after %s: %+v", terminal, resp)
 				}
@@ -46,7 +47,7 @@ func TestHandler_ActiveSuppressedWithinTerminalGrace(t *testing.T) {
 				}
 
 				// A follow-up idle must also preserve the terminal icon.
-				h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "idle"})
+				h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "idle"})
 				if eff, icon := windowEffective(t, h, 1); eff.Icon != wantIcon || icon != wantIcon {
 					t.Fatalf("visible state after idle = %+v/%q, want %q", eff, icon, wantIcon)
 				}
@@ -56,7 +57,7 @@ func TestHandler_ActiveSuppressedWithinTerminalGrace(t *testing.T) {
 				// only the authoritative visible state is asserted here — for
 				// stop_failure the legacy response still reports blocked while
 				// the reducer applies the recovery.
-				resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", IsPrompt: true})
+				resp = h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", IsPrompt: true})
 				if !resp.OK {
 					t.Fatalf("prompt active after %s: %+v", terminal, resp)
 				}
@@ -83,10 +84,10 @@ func TestHandler_ActiveSelfHealsAfterTerminalGraceExpiry(t *testing.T) {
 				}
 				h := NewHandler(guard, notifier)
 
-				h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: terminal})
+				h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: terminal})
 				time.Sleep(2 * time.Second) // let both the guard and the grace expire
 
-				resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
+				resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active"})
 				if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
 					t.Fatalf("post-grace active after %s: want icon_state=bolt, got %+v", terminal, resp)
 				}
@@ -122,12 +123,12 @@ func TestHandler_RestoredStopSuppressesTrailingActiveWithinGrace(t *testing.T) {
 	h := newTestHandler() // 1h guard → 3600s grace
 	restoreV1State(t, h, 1, "stop", time.Now())
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active"})
 	if eff, icon := windowEffective(t, h, 1); eff.Icon != "stop" || icon != "stop" {
 		t.Fatalf("visible state after restored-stop active = %+v/%q, want stop", eff, icon)
 	}
 
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", IsPrompt: true})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", IsPrompt: true})
 	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
 		t.Fatalf("prompt active with restored stop: want icon_state=bolt, got %+v", resp)
 	}
@@ -140,8 +141,8 @@ func TestHandler_ActiveAllowedByCurrentWarningIconAfterDaemonRestart(t *testing.
 	h := newTestHandler()
 	restoreV1State(t, h, 1, "failure", time.Now())
 
-	resp := h.Handle(Request{
-		Type:     TypeStateUpdate,
+	resp := h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Action:   "active",
 	})
@@ -161,18 +162,18 @@ func TestHandler_RestoredErrorStaysStickyUntilPromptRecovery(t *testing.T) {
 	h := newTestHandler()
 	restoreV1State(t, h, 1, "stop_failure", time.Now())
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active"})
 	if eff, icon := windowEffective(t, h, 1); eff.Icon != "error" || icon != "error" {
 		t.Fatalf("visible state after restored-error active = %+v/%q, want error", eff, icon)
 	}
 
 	// An idle sweep must not clear the sticky failure either.
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "idle"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "idle"})
 	if eff, icon := windowEffective(t, h, 1); eff.Icon != "error" || icon != "error" {
 		t.Fatalf("visible state after idle = %+v/%q, want error", eff, icon)
 	}
 
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", IsPrompt: true})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", IsPrompt: true})
 	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
 		t.Fatalf("prompt active with restored error: want icon_state=bolt, got %+v", resp)
 	}

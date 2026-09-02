@@ -9,7 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
 
@@ -52,7 +52,7 @@ func TestRenderDetailEmpty(t *testing.T) {
 
 func TestRenderDetailPopulatedMostRecentFirst(t *testing.T) {
 	m := detailModel(t)
-	m.detailEvents = []daemon.SessionEvent{
+	m.detailEvents = []protocol.SessionEvent{
 		{At: 100, Event: "SessionStart", Action: "active"},
 		{At: 200, Event: "PreToolUse", Action: "active", ToolName: "Bash"},
 		{At: 300, Event: "Stop", Action: "stop"},
@@ -88,7 +88,7 @@ func TestRenderDetailPopulatedMostRecentFirst(t *testing.T) {
 
 func TestRenderDetailSuppressedRow(t *testing.T) {
 	m := detailModel(t)
-	m.detailEvents = []daemon.SessionEvent{
+	m.detailEvents = []protocol.SessionEvent{
 		{At: 100, Event: "Stop", Action: "stop", Suppressed: true},
 	}
 
@@ -101,7 +101,7 @@ func TestRenderDetailSuppressedRow(t *testing.T) {
 
 func TestRenderDetailToolNameVisible(t *testing.T) {
 	m := detailModel(t)
-	m.detailEvents = []daemon.SessionEvent{
+	m.detailEvents = []protocol.SessionEvent{
 		{At: 100, Event: "PreToolUse", Action: "active", ToolName: "Bash"},
 	}
 
@@ -128,10 +128,10 @@ func TestRenderDetailError(t *testing.T) {
 
 // makeEvents returns n synthetic events with increasing timestamps so the
 // most-recent-first display has a stable order across the scroll tests.
-func makeEvents(n int) []daemon.SessionEvent {
-	out := make([]daemon.SessionEvent, n)
+func makeEvents(n int) []protocol.SessionEvent {
+	out := make([]protocol.SessionEvent, n)
 	for i := 0; i < n; i++ {
-		out[i] = daemon.SessionEvent{
+		out[i] = protocol.SessionEvent{
 			At:     int64(i),
 			Event:  "PreToolUse",
 			Action: "active",
@@ -216,7 +216,7 @@ func TestFormatRelativeAge(t *testing.T) {
 }
 
 func TestDetailRowShowsCompactTraceAndDecisiveReason(t *testing.T) {
-	event := daemon.SessionEvent{
+	event := protocol.SessionEvent{
 		At: time.Unix(100, 0).Unix(), Event: "PostToolUse", Action: "active",
 		ToolName: "Bash", TraceID: "1234567890abcdef", DecisionReason: "accepted",
 	}
@@ -229,7 +229,7 @@ func TestDetailRowShowsCompactTraceAndDecisiveReason(t *testing.T) {
 }
 
 func TestDetailRowShowsASLQuestionPreview(t *testing.T) {
-	event := daemon.SessionEvent{
+	event := protocol.SessionEvent{
 		At: time.Unix(100, 0).Unix(), Event: "AgentSessionLoopWaitStarted", Action: "elicitation",
 		QuestionPreview: "Should the shim keep the narrow branch?",
 	}
@@ -256,7 +256,7 @@ func TestDetailRowRendersSanitizedQuestionPreview(t *testing.T) {
 		t.Fatalf("DecodeHookPayload error: %v", err)
 	}
 
-	event := daemon.SessionEvent{
+	event := protocol.SessionEvent{
 		At: time.Unix(100, 0).Unix(), Event: "AgentSessionLoopWaitStarted", Action: "elicitation",
 		QuestionPreview: payload.QuestionPreview,
 	}
@@ -273,7 +273,7 @@ func TestDetailRowRendersSanitizedQuestionPreview(t *testing.T) {
 // the producer omits the key whenever the question carries no text, and
 // payload compaction drops it above 256 KiB.
 func TestDetailRowOmitsEmptyQuestionPreview(t *testing.T) {
-	event := daemon.SessionEvent{
+	event := protocol.SessionEvent{
 		At: time.Unix(100, 0).Unix(), Event: "AgentSessionLoopWaitStarted", Action: "elicitation",
 	}
 	row := stripAnsi(detailRow(event, time.Unix(101, 0), 120))
@@ -339,7 +339,7 @@ func TestDetailPageScrollKeys(t *testing.T) {
 
 func TestRenderDetail_HeaderShowsSessionEnded(t *testing.T) {
 	m := detailModel(t)
-	m.detailEvents = []daemon.SessionEvent{
+	m.detailEvents = []protocol.SessionEvent{
 		{At: 100, Event: "SessionStart", Action: "active"},
 		{At: 200, Event: "Stop", Action: "stop"},
 	}
@@ -353,7 +353,7 @@ func TestRenderDetail_HeaderShowsSessionEnded(t *testing.T) {
 
 func TestRenderDetail_SessionEndedSeparatorRendered(t *testing.T) {
 	m := detailModel(t)
-	m.detailEvents = []daemon.SessionEvent{
+	m.detailEvents = []protocol.SessionEvent{
 		{At: 100, Event: "SessionStart", Action: "active"},
 		{At: 200, Event: "PreToolUse", Action: "active", ToolName: "Bash"},
 		{At: 300, Event: "Stop", Action: "stop"},
@@ -379,7 +379,7 @@ func TestRenderDetail_SessionEndedSeparatorRendered(t *testing.T) {
 
 func TestRenderDetail_NoSeparatorForActiveSession(t *testing.T) {
 	m := detailModel(t)
-	m.detailEvents = []daemon.SessionEvent{
+	m.detailEvents = []protocol.SessionEvent{
 		{At: 100, Event: "SessionStart", Action: "active"},
 		{At: 200, Event: "PreToolUse", Action: "active", ToolName: "Bash"},
 	}
@@ -393,7 +393,7 @@ func TestRenderDetail_NoSeparatorForActiveSession(t *testing.T) {
 
 func TestRenderDetail_FailureDoesNotMarkSessionEnded(t *testing.T) {
 	m := detailModel(t)
-	m.detailEvents = []daemon.SessionEvent{
+	m.detailEvents = []protocol.SessionEvent{
 		{At: 100, Event: "SessionStart", Action: "active"},
 		{At: 200, Event: "PostToolUseFailure", Action: "failure", ToolName: "Bash"},
 	}

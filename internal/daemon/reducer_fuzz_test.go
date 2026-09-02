@@ -24,6 +24,8 @@ import (
 	"math/rand"
 	"reflect"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // fuzzSeeds is the fixed seed set. Each seed yields one deterministic trace per
@@ -36,26 +38,26 @@ const fuzzTraceLen = 48
 
 // fuzzSources is the source pool the generator draws from.
 var fuzzSources = struct {
-	harness  SourceID
-	agents   []SourceID
-	runs     []SourceID
-	bucket   SourceID
-	probe    SourceID
-	userSrc  SourceID
+	harness  protocol.SourceID
+	agents   []protocol.SourceID
+	runs     []protocol.SourceID
+	bucket   protocol.SourceID
+	probe    protocol.SourceID
+	userSrc  protocol.SourceID
 	session  string
 	runNames []string
 }{
-	harness:  SourceID{Kind: SourceHarness, Key: "claude:sess-0001"},
-	agents:   []SourceID{{Kind: SourceSubagent, Key: "agent-a"}, {Kind: SourceSubagent, Key: "agent-b"}},
-	runs:     []SourceID{{Kind: SourceASL, Key: "run-1"}, {Kind: SourceASL, Key: "run-2"}},
-	bucket:   SourceID{Kind: SourceLegacy, Key: legacySubagentBucketKey("sess-0001")},
+	harness:  protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:sess-0001"},
+	agents:   []protocol.SourceID{{Kind: protocol.SourceSubagent, Key: "agent-a"}, {Kind: protocol.SourceSubagent, Key: "agent-b"}},
+	runs:     []protocol.SourceID{{Kind: protocol.SourceASL, Key: "run-1"}, {Kind: protocol.SourceASL, Key: "run-2"}},
+	bucket:   protocol.SourceID{Kind: protocol.SourceLegacy, Key: legacySubagentBucketKey("sess-0001")},
 	probe:    ProbeSource(),
-	userSrc:  SourceID{Kind: SourceProbe, Key: "user"},
+	userSrc:  protocol.SourceID{Kind: protocol.SourceProbe, Key: "user"},
 	session:  "sess-0001",
 	runNames: []string{"run-1", "run-2"},
 }
 
-var fuzzHarnessProcess = HarnessProcessIdentity{
+var fuzzHarnessProcess = protocol.HarnessProcessIdentity{
 	Harness: "claude", PID: 5001, StartToken: "Thu Jul 16 10:30:30 2026",
 }
 
@@ -65,7 +67,7 @@ var fuzzHarnessProcess = HarnessProcessIdentity{
 // trace is redelivered out of order (reordered events).
 type fuzzGen struct {
 	rng   *rand.Rand
-	seqs  map[SourceID]uint64
+	seqs  map[protocol.SourceID]uint64
 	clock int64
 	turn  int
 }
@@ -73,12 +75,12 @@ type fuzzGen struct {
 func newFuzzGen(seed int64) *fuzzGen {
 	return &fuzzGen{
 		rng:   rand.New(rand.NewSource(seed)),
-		seqs:  make(map[SourceID]uint64),
+		seqs:  make(map[protocol.SourceID]uint64),
 		clock: 1_000_000,
 	}
 }
 
-func (g *fuzzGen) nextSeq(src SourceID) uint64 {
+func (g *fuzzGen) nextSeq(src protocol.SourceID) uint64 {
 	g.seqs[src] += 1 + uint64(g.rng.Intn(3)) // gaps model dropped deliveries
 	return g.seqs[src]
 }
@@ -94,8 +96,8 @@ func (g *fuzzGen) nextAt() int64 {
 // trace generates n events. allowUserClear gates the window-level user_clear
 // (excluded from duplicate-injection variants: user_clear is deliberately not
 // sequence-protected — its at-most-once guarantee is the IPC dedupe layer's).
-func (g *fuzzGen) trace(n int, allowUserClear bool) []ReducerEvent {
-	events := make([]ReducerEvent, 0, n)
+func (g *fuzzGen) trace(n int, allowUserClear bool) []protocol.ReducerEvent {
+	events := make([]protocol.ReducerEvent, 0, n)
 	for len(events) < n {
 		ev := g.next(allowUserClear)
 		events = append(events, ev)
@@ -107,7 +109,7 @@ func (g *fuzzGen) trace(n int, allowUserClear bool) []ReducerEvent {
 	return events[:n]
 }
 
-func (g *fuzzGen) next(allowUserClear bool) ReducerEvent {
+func (g *fuzzGen) next(allowUserClear bool) protocol.ReducerEvent {
 	roll := g.rng.Intn(100)
 	switch {
 	case roll < 35:
@@ -121,7 +123,7 @@ func (g *fuzzGen) next(allowUserClear bool) ReducerEvent {
 	case roll < 92 || !allowUserClear:
 		return g.probeEvent()
 	default:
-		return ReducerEvent{
+		return protocol.ReducerEvent{
 			Source: fuzzSources.userSrc,
 			Action: "user_clear",
 			Seq:    g.nextSeq(fuzzSources.userSrc),
@@ -130,10 +132,10 @@ func (g *fuzzGen) next(allowUserClear bool) ReducerEvent {
 	}
 }
 
-func (g *fuzzGen) harnessEvent() ReducerEvent {
+func (g *fuzzGen) harnessEvent() protocol.ReducerEvent {
 	actions := []string{"active", "active", "compact", "stop", "permission", "elicitation", "failure", "stop_failure", "idle"}
 	action := actions[g.rng.Intn(len(actions))]
-	ev := ReducerEvent{
+	ev := protocol.ReducerEvent{
 		Source:    fuzzSources.harness,
 		Action:    action,
 		Seq:       g.nextSeq(fuzzSources.harness),
@@ -160,7 +162,7 @@ func (g *fuzzGen) harnessEvent() ReducerEvent {
 	return ev
 }
 
-func (g *fuzzGen) subagentEvent() ReducerEvent {
+func (g *fuzzGen) subagentEvent() protocol.ReducerEvent {
 	src := fuzzSources.agents[g.rng.Intn(len(fuzzSources.agents))]
 	action := "subagent"
 	switch g.rng.Intn(4) {
@@ -169,7 +171,7 @@ func (g *fuzzGen) subagentEvent() ReducerEvent {
 	case 1:
 		action = "stop_failure" // failure-carrying stop: sticky error
 	}
-	ev := ReducerEvent{
+	ev := protocol.ReducerEvent{
 		Source:    src,
 		Action:    action,
 		Seq:       g.nextSeq(src),
@@ -182,12 +184,12 @@ func (g *fuzzGen) subagentEvent() ReducerEvent {
 	return ev
 }
 
-func (g *fuzzGen) aslEvent() ReducerEvent {
+func (g *fuzzGen) aslEvent() protocol.ReducerEvent {
 	i := g.rng.Intn(len(fuzzSources.runs))
 	src := fuzzSources.runs[i]
 	phases := []string{ASLPhaseTurn, ASLPhaseVerification, ASLPhaseBetween, ASLPhaseWaiting, ASLPhasePaused, ASLPhaseFinished}
 	phase := phases[g.rng.Intn(len(phases))]
-	ev := ReducerEvent{
+	ev := protocol.ReducerEvent{
 		Source: src,
 		Seq:    g.nextSeq(src),
 		At:     g.nextAt(),
@@ -209,14 +211,14 @@ func (g *fuzzGen) aslEvent() ReducerEvent {
 	return ev
 }
 
-func (g *fuzzGen) bucketEvent() ReducerEvent {
+func (g *fuzzGen) bucketEvent() protocol.ReducerEvent {
 	delta := 1
 	action := "subagent"
 	if g.rng.Intn(2) == 0 {
 		delta = -1
 		action = "idle" // identity-less clean stop normalizes to idle
 	}
-	ev := ReducerEvent{
+	ev := protocol.ReducerEvent{
 		Source:        fuzzSources.bucket,
 		Action:        action,
 		Seq:           g.nextSeq(fuzzSources.bucket),
@@ -230,12 +232,12 @@ func (g *fuzzGen) bucketEvent() ReducerEvent {
 	return ev
 }
 
-func (g *fuzzGen) probeEvent() ReducerEvent {
+func (g *fuzzGen) probeEvent() protocol.ReducerEvent {
 	action := "stop_failure"
 	if g.rng.Intn(2) == 0 {
 		action = "permission"
 	}
-	return ReducerEvent{
+	return protocol.ReducerEvent{
 		Source: fuzzSources.probe,
 		Action: action,
 		Seq:    g.nextSeq(fuzzSources.probe),
@@ -356,7 +358,7 @@ func TestFuzzReducerRestartEquivalenceEveryPrefix(t *testing.T) {
 // between every real event. They must be no-ops: identical facts, identical
 // outcome, and no invalid-kind fact may ever appear.
 func TestFuzzReducerUnknownAndMalformedEventsPreserveState(t *testing.T) {
-	junk := []NormalizedEvent{
+	junk := []protocol.NormalizedEvent{
 		NormalizedFromHook("Stop", "claude", `{"source_sequence":"not-a-number"}`, 42, false),
 		NormalizedFromHook("PreToolUse", "claude", `{"emitted_time":"NaN"}`, 42, false),
 		NormalizedFromHook("Stop", "claude", `{"broken json`, 42, false),
@@ -379,7 +381,7 @@ func TestFuzzReducerUnknownAndMalformedEventsPreserveState(t *testing.T) {
 		noisy := NewReducer(fuzzCfgs["production"])
 		for _, ev := range trace {
 			base.Apply(ev)
-			if d := noisy.ApplyNormalized(junk[rng.Intn(len(junk))]); d != DecisionQuarantined {
+			if d := noisy.ApplyNormalized(junk[rng.Intn(len(junk))]); d != protocol.DecisionQuarantined {
 				t.Fatalf("seed=%d: junk decision = %q, want quarantined", seed, d)
 			}
 			noisy.Apply(ev)

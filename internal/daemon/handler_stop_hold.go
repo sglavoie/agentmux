@@ -3,6 +3,7 @@ package daemon
 import (
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
 
@@ -51,15 +52,15 @@ type pendingStopHold struct {
 	seq         uint64
 	claimed     bool
 	class       stopHoldClass
-	req         Request
+	req         protocol.Request
 	armedAt     time.Time
 	quietUntil  time.Time
 	deadline    time.Time
 	confirmed   bool
-	confirmedBy StopConfirmedBy
+	confirmedBy protocol.StopConfirmedBy
 }
 
-func (h *Handler) holdStopForConfirmation(req Request, payload hookevent.HookPayload) bool {
+func (h *Handler) holdStopForConfirmation(req protocol.Request, payload hookevent.HookPayload) bool {
 	if req.Action != "stop" {
 		return false
 	}
@@ -141,7 +142,7 @@ func (h *Handler) holdStopForConfirmation(req Request, payload hookevent.HookPay
 	h.stateMu.Unlock()
 
 	if class == stopHoldClassTerminal && !rearm {
-		h.appendStopHoldEvent(req, StopHoldOutcomeHeld, 0)
+		h.appendStopHoldEvent(req, protocol.StopHoldOutcomeHeld, 0)
 	}
 	return true
 }
@@ -196,7 +197,7 @@ func (h *Handler) rearmStopHoldForConfirmation(windowID int, seq uint64) bool {
 // result: the tab stays ⚡ until the commit lands, so the probe keeps observing
 // the same idle evidence and must keep being told the held stop owns it.
 // Callers hold stateMu.
-func (h *Handler) confirmStopHoldLocked(windowID int, source SourceID) bool {
+func (h *Handler) confirmStopHoldLocked(windowID int, source protocol.SourceID) bool {
 	pending, ok := h.pendingStopHolds[windowID]
 	if !ok || pending.class != stopHoldClassTerminal {
 		return false
@@ -214,8 +215,8 @@ func (h *Handler) confirmStopHoldLocked(windowID int, source SourceID) bool {
 // terminal stop. The three idle probe source keys are exactly the three probe
 // members of the StopConfirmedBy vocabulary, so a released stop keeps the
 // documented `probe:<harness>` provenance.
-func stopConfirmedByProbe(source SourceID) StopConfirmedBy {
-	return StopConfirmedBy(string(source.Kind) + ":" + source.Key)
+func stopConfirmedByProbe(source protocol.SourceID) protocol.StopConfirmedBy {
+	return protocol.StopConfirmedBy(string(source.Kind) + ":" + source.Key)
 }
 
 // cancelStopHold drops any stop still waiting on the hold timer for windowID.
@@ -260,8 +261,8 @@ func (h *Handler) cancelStopHoldLocked(windowID int) (pendingStopHold, bool) {
 // order, and pass the window's pre-settlement facts.
 func (h *Handler) cancelStopHoldForProcessExitLocked(
 	windowID int,
-	identity HarnessProcessIdentity,
-	facts []SourceFactSnapshot,
+	identity protocol.HarnessProcessIdentity,
+	facts []protocol.SourceFactSnapshot,
 ) (pendingStopHold, bool) {
 	pending, ok := h.pendingStopHolds[windowID]
 	if !ok {
@@ -281,24 +282,24 @@ func (h *Handler) cancelStopHoldForProcessExitLocked(
 // than about the window. A stop whose producer cannot be identified either way
 // keeps waiting on its own gate: converging at the deadline is correct, while
 // attributing it to whichever process happened to exit is not.
-func heldStopProcessOwner(pending pendingStopHold, facts []SourceFactSnapshot) (HarnessProcessIdentity, bool) {
-	if pending.req.normalized == nil {
-		return HarnessProcessIdentity{}, false
+func heldStopProcessOwner(pending pendingStopHold, facts []protocol.SourceFactSnapshot) (protocol.HarnessProcessIdentity, bool) {
+	if pending.req.Normalized == nil {
+		return protocol.HarnessProcessIdentity{}, false
 	}
-	if identity, ok := canonicalHarnessProcessIdentity(pending.req.normalized.HarnessProcess); ok {
+	if identity, ok := protocol.CanonicalHarnessProcessIdentity(pending.req.Normalized.HarnessProcess); ok {
 		return identity, true
 	}
 	for _, fact := range facts {
-		if fact.Source() != pending.req.normalized.Source {
+		if fact.Source() != pending.req.Normalized.Source {
 			continue
 		}
-		return canonicalHarnessProcessIdentity(HarnessProcessIdentity{
+		return protocol.CanonicalHarnessProcessIdentity(protocol.HarnessProcessIdentity{
 			Harness:    fact.HarnessProcessHarness,
 			PID:        fact.HarnessProcessPID,
 			StartToken: fact.HarnessProcessStartToken,
 		})
 	}
-	return HarnessProcessIdentity{}, false
+	return protocol.HarnessProcessIdentity{}, false
 }
 
 // recordSupersededStopHold writes the diagnostic row for a terminal hold a
@@ -309,7 +310,7 @@ func (h *Handler) recordSupersededStopHold(pending pendingStopHold) {
 	if pending.class != stopHoldClassTerminal {
 		return
 	}
-	h.appendStopHoldEvent(pending.req, StopHoldOutcomeSuperseded, time.Since(pending.armedAt))
+	h.appendStopHoldEvent(pending.req, protocol.StopHoldOutcomeSuperseded, time.Since(pending.armedAt))
 }
 
 // recordBypassedStopHold writes the diagnostic row for a terminal hold that a
@@ -320,5 +321,5 @@ func (h *Handler) recordBypassedStopHold(pending pendingStopHold) {
 	if pending.class != stopHoldClassTerminal {
 		return
 	}
-	h.appendStopHoldEvent(pending.req, StopHoldOutcomeBypassed, time.Since(pending.armedAt))
+	h.appendStopHoldEvent(pending.req, protocol.StopHoldOutcomeBypassed, time.Since(pending.armedAt))
 }

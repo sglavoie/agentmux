@@ -14,6 +14,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -296,7 +297,7 @@ const shutdownDrainBudget = 5 * time.Second
 func confirmDaemonServing(ctx context.Context, socketPath string) error {
 	probeCtx, cancel := context.WithTimeout(ctx, normalAckBudget)
 	defer cancel()
-	resp, err := NewClientWithSocket(socketPath).sendWithContext(probeCtx, Request{Type: TypeHealth})
+	resp, err := NewClientWithSocket(socketPath).sendWithContext(probeCtx, protocol.Request{Type: protocol.TypeHealth})
 	if err != nil {
 		return err
 	}
@@ -321,7 +322,7 @@ func newDaemonKittyClient(runner kitty.CommandRunner) *kitty.SubprocessClient {
 // Ping checks whether the daemon is reachable on the default socket.
 func Ping() error {
 	c := NewClient()
-	_, err := c.Send(Request{Type: TypeStateQuery})
+	_, err := c.Send(protocol.Request{Type: protocol.TypeStateQuery})
 	return err
 }
 

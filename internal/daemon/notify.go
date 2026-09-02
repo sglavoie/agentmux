@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -129,7 +130,7 @@ type Notifier struct {
 	cfg             *config.NotificationConfig
 	now             func() time.Time // injectable for tests
 	dispatch        dispatchFn       // nil when compatible Alerter is unavailable; injectable for tests
-	capability      NotificationCapability
+	capability      protocol.NotificationCapability
 	focus           focusClient     // optional; nil when the daemon has no Kitty client wired
 	isMuted         func(int) bool  // optional; nil treats every window as unmuted (tests + pre-wire)
 	ctx             context.Context // parent ctx for dispatch goroutines; defaults to Background until SetParentContext
@@ -153,7 +154,7 @@ func NewNotifier(cfg *config.NotificationConfig) *Notifier {
 
 // Capability returns the immutable backend capability selected at daemon
 // startup. The value is copied so callers cannot mutate notifier state.
-func (n *Notifier) Capability() NotificationCapability {
+func (n *Notifier) Capability() protocol.NotificationCapability {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	return n.capability

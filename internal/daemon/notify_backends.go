@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // alerterProtocolTimeout is sent to alerter so a notification that receives
@@ -43,24 +44,11 @@ const minimumAlerterMajor = 26
 // the same result.
 var ErrNotificationDeliveryUnconfirmed = errors.New("notification delivery could not be confirmed")
 
-// NotificationCapability is the daemon-start snapshot of native notification
-// support. It is exported through health so operators can distinguish a ready
-// daemon from an unavailable optional notification dependency.
-type NotificationCapability struct {
-	Enabled     bool   `json:"enabled"`
-	Available   bool   `json:"available"`
-	Interactive bool   `json:"interactive"`
-	Backend     string `json:"backend"`
-	Executable  string `json:"executable,omitempty"`
-	Version     string `json:"version,omitempty"`
-	Reason      string `json:"reason,omitempty"`
-}
-
 // NotificationDeliveryTestResult describes a successful visible delivery
 // probe. Interaction is Alerter's terminal result (for example, "clicked" or
 // "interaction_timeout").
 type NotificationDeliveryTestResult struct {
-	Capability  NotificationCapability
+	Capability  protocol.NotificationCapability
 	Interaction string
 }
 
@@ -105,7 +93,7 @@ type dispatchFn func(ctx context.Context, windowID int, account, title, subtitle
 type dispatcher struct {
 	fn         dispatchFn
 	timeout    time.Duration
-	capability NotificationCapability
+	capability protocol.NotificationCapability
 }
 
 type alerterResolver struct {
@@ -143,8 +131,8 @@ func selectDispatcher(cfg *config.NotificationConfig) dispatcher {
 	}
 }
 
-func resolveAlerter(cfg *config.NotificationConfig, resolver alerterResolver) NotificationCapability {
-	capability := NotificationCapability{Enabled: notificationsEnabled(cfg), Backend: "alerter"}
+func resolveAlerter(cfg *config.NotificationConfig, resolver alerterResolver) protocol.NotificationCapability {
+	capability := protocol.NotificationCapability{Enabled: notificationsEnabled(cfg), Backend: "alerter"}
 	if !capability.Enabled {
 		capability.Backend = "none"
 		capability.Reason = "disabled"

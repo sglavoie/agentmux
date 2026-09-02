@@ -10,7 +10,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
 
@@ -39,11 +39,11 @@ type HarnessProcessDiscovery struct {
 
 // Identity returns a fresh transport value only when the discovery contains
 // the complete process fingerprint required for lifecycle tracking.
-func (d HarnessProcessDiscovery) Identity() *daemon.HarnessProcessIdentity {
+func (d HarnessProcessDiscovery) Identity() *protocol.HarnessProcessIdentity {
 	if !d.Trackable {
 		return nil
 	}
-	return &daemon.HarnessProcessIdentity{
+	return &protocol.HarnessProcessIdentity{
 		Harness:    d.Harness,
 		PID:        d.PID,
 		StartToken: d.StartToken,

@@ -14,6 +14,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/indicator"
@@ -109,7 +110,7 @@ func TestAcceptanceDiagnosticPipeline(t *testing.T) {
 		}
 	}
 	client := daemon.NewClient()
-	var exported daemon.EventsExport
+	var exported protocol.EventsExport
 	waitForAcceptance(t, "large-payload reducer source isolation", func() bool {
 		var exportErr error
 		exported, exportErr = client.ExportEvents(42)
@@ -344,10 +345,10 @@ func acceptancePaddedPayload(t *testing.T, paddingBytes int, fields map[string]a
 	return string(encoded)
 }
 
-func acceptanceFactsByKey(facts []daemon.SourceFactSnapshot) map[string]daemon.SourceFactSnapshot {
-	result := make(map[string]daemon.SourceFactSnapshot, len(facts))
+func acceptanceFactsByKey(facts []protocol.SourceFactSnapshot) map[string]protocol.SourceFactSnapshot {
+	result := make(map[string]protocol.SourceFactSnapshot, len(facts))
 	for _, fact := range facts {
-		if fact.Kind == daemon.SourceHarness {
+		if fact.Kind == protocol.SourceHarness {
 			result[fact.Key] = fact
 		}
 	}

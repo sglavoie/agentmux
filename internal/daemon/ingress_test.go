@@ -5,6 +5,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestIngressQueue_SerializesApplication proves the single consumer never runs
@@ -15,7 +17,7 @@ func TestIngressQueue_SerializesApplication(t *testing.T) {
 	var maxObserved atomic.Int32
 	var applied atomic.Int32
 
-	handle := func(_ Request) Response {
+	handle := func(_ protocol.Request) protocol.Response {
 		n := inFlight.Add(1)
 		for {
 			old := maxObserved.Load()
@@ -27,7 +29,7 @@ func TestIngressQueue_SerializesApplication(t *testing.T) {
 		time.Sleep(time.Millisecond)
 		applied.Add(1)
 		inFlight.Add(-1)
-		return Response{OK: true}
+		return protocol.Response{OK: true}
 	}
 
 	q := newIngressQueue(handle, nil)
@@ -39,7 +41,7 @@ func TestIngressQueue_SerializesApplication(t *testing.T) {
 	for i := 0; i < submitters; i++ {
 		go func() {
 			defer wg.Done()
-			if resp := q.submit(Request{Type: TypeStateUpdate}); !resp.OK {
+			if resp := q.submit(protocol.Request{Type: protocol.TypeStateUpdate}); !resp.OK {
 				t.Errorf("submit response = %+v; want ok", resp)
 			}
 		}()
@@ -58,13 +60,13 @@ func TestIngressQueue_SerializesApplication(t *testing.T) {
 // actual response — proving acknowledgement waits until the reducer has applied
 // the event, not merely until it was enqueued.
 func TestIngressQueue_AckWaitsForReduction(t *testing.T) {
-	handle := func(req Request) Response {
-		return Response{OK: true, IconState: req.Action}
+	handle := func(req protocol.Request) protocol.Response {
+		return protocol.Response{OK: true, IconState: req.Action}
 	}
 	q := newIngressQueue(handle, nil)
 	t.Cleanup(q.stop)
 
-	resp := q.submit(Request{Type: TypeStateUpdate, Action: "bolt"})
+	resp := q.submit(protocol.Request{Type: protocol.TypeStateUpdate, Action: "bolt"})
 	if !resp.OK || resp.IconState != "bolt" {
 		t.Fatalf("submit response = %+v; want the reduced result", resp)
 	}
@@ -80,11 +82,11 @@ func TestIngressQueue_FullDegradesInlineAndCountsQueueFull(t *testing.T) {
 	var releaseOnce sync.Once
 	releaseAll := func() { releaseOnce.Do(func() { close(release) }) }
 
-	handle := func(req Request) Response {
-		saturation <- req.saturationReason
+	handle := func(req protocol.Request) protocol.Response {
+		saturation <- req.SaturationReason
 		entered <- struct{}{}
 		<-release
-		return Response{OK: true}
+		return protocol.Response{OK: true}
 	}
 
 	var metrics Metrics
@@ -96,18 +98,18 @@ func TestIngressQueue_FullDegradesInlineAndCountsQueueFull(t *testing.T) {
 
 	// item1: the consumer picks it up and parks inside handle. Once it signals
 	// entry, the buffer is empty and the consumer is not receiving.
-	go q.submit(Request{Type: TypeStateUpdate})
+	go q.submit(protocol.Request{Type: protocol.TypeStateUpdate})
 	<-entered
 	<-saturation
 
 	// Fill the single buffer slot directly and deterministically.
-	q.ch <- queueItem{req: Request{Type: TypeStateUpdate}, result: make(chan Response, 1)}
+	q.ch <- queueItem{req: protocol.Request{Type: protocol.TypeStateUpdate}, result: make(chan protocol.Response, 1)}
 
 	// item3: the buffer is now full and the consumer is parked, so this submit
 	// cannot enqueue. It must process inline and count queueFull (which is bumped
 	// before handle runs), then park on release itself.
-	overflow := make(chan Response, 1)
-	go func() { overflow <- q.submit(Request{Type: TypeStateUpdate}) }()
+	overflow := make(chan protocol.Response, 1)
+	go func() { overflow <- q.submit(protocol.Request{Type: protocol.TypeStateUpdate}) }()
 
 	deadline := time.Now().Add(2 * time.Second)
 	for metrics.queueFull.Load() == 0 {

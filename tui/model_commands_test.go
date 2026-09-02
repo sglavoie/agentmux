@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -42,7 +42,7 @@ func TestApplyDaemonStatesStampsBusySince(t *testing.T) {
 		{WindowID: 2},
 		{WindowID: 3, State: "bolt", Looping: true, BusySince: anchor},
 	}
-	applyDaemonStates(sessions, map[int]daemon.WindowStateSnapshot{
+	applyDaemonStates(sessions, map[int]protocol.WindowStateSnapshot{
 		1: {IconState: "bolt", BusySinceAt: anchor.Unix()},
 		2: {IconState: "key"},
 	})

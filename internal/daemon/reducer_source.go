@@ -1,53 +1,11 @@
 package daemon
 
-// SourceKind categorizes the origin of a fact. Identity matters for terminal
-// suppression: identified sources suppress only their own same-turn trailing
-// events, while a legacy source falls back to the guard_duration grace window.
-type SourceKind string
-
-const (
-	// SourceHarness is the managed harness session (Claude/Codex/Copilot).
-	SourceHarness SourceKind = "harness"
-	// SourceSubagent is one spawned subagent, keyed by its agent id.
-	SourceSubagent SourceKind = "subagent"
-	// SourceASL is one agent-session-loop run, keyed by its run id.
-	SourceASL SourceKind = "asl"
-	// SourceProbe is a daemon-side screen probe (e.g. context-limit banner).
-	SourceProbe SourceKind = "probe"
-	// SourceLegacy is an unidentified pre-identity client. It carries no turn or
-	// source key, so terminal suppression degrades to a guard_duration grace.
-	SourceLegacy SourceKind = "legacy"
+import (
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
-// SourceID uniquely identifies a fact producer within one window. Kind plus Key
-// is the map key, so two subagents (distinct Keys) are distinct sources while a
-// duplicate start for the same agent id collapses onto one fact.
-type SourceID struct {
-	Kind SourceKind
-	Key  string
-}
-
-// reducerIconPrecedence encodes the target icon precedence from the plan. It is
-// intentionally distinct from actionPriority (the legacy guard order): here a
-// recoverable warning outranks a subagent, permission and question share a tier,
-// and stop sits just above idle. Higher wins; ties break on recency (emitted
-// time, then source-independent causal application order).
-//
-//	error > (key | question) > warning > subagent > compact > bolt > stop > idle
-var reducerIconPrecedence = map[string]int{
-	"":         0,
-	"stop":     1,
-	"bolt":     2,
-	"compact":  3,
-	"subagent": 4,
-	"warning":  5,
-	"key":      6,
-	"question": 6,
-	"error":    7,
-}
-
 // reducerActionIcon maps an action to its icon state under the reducer. It
-// mirrors actionIconState for real states but omits the loop_marker preserve
+// mirrors protocol.IconState for real states but omits the loop_marker preserve
 // hack — the reducer models the loop as a lease, not an icon action.
 func reducerActionIcon(action string) string {
 	switch action {
@@ -81,7 +39,7 @@ func isTerminalAction(action string) bool {
 
 // sourceFact is one source's last-known state inside a Reducer.
 type sourceFact struct {
-	source SourceID
+	source protocol.SourceID
 	set    bool
 	action string
 	icon   string
@@ -109,7 +67,7 @@ type sourceFact struct {
 	pipeMode bool
 	// harnessProcess ties this fact to the exact OS process that emitted it.
 	// The zero value means the source has no safely attributable process.
-	harnessProcess HarnessProcessIdentity
+	harnessProcess protocol.HarnessProcessIdentity
 
 	// sessionID is the parent harness session this fact belongs to (subagent
 	// facts group by it); agents is the balanced identity-less agent multiset
@@ -149,7 +107,7 @@ type supersessionMark struct {
 	set    bool
 	at     int64
 	seq    uint64
-	source SourceID
+	source protocol.SourceID
 }
 
 // acknowledge marks a fact as withdrawn at a deterministic event time. Live
@@ -182,7 +140,7 @@ func (f *sourceFact) reactivate() {
 // happen in application order on one serialized reducer, so a same-timestamp
 // transition from a different source is later work and advances the mark; the
 // per-source sequence breaks a tie only within the same source.
-func (m *supersessionMark) record(source SourceID, at int64, seq uint64) {
+func (m *supersessionMark) record(source protocol.SourceID, at int64, seq uint64) {
 	if !m.set || at > m.at || (at == m.at && (source != m.source || seq > m.seq)) {
 		m.set, m.at, m.seq, m.source = true, at, seq, source
 	}

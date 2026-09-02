@@ -15,6 +15,8 @@ package daemon
 import (
 	"log/slog"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // maxShadowMismatches bounds the per-window mismatch ring kept for export.
@@ -32,9 +34,9 @@ const maxShadowMismatches = 50
 // loses its icon. A loop_marker without a stamp synthesizes a window-keyed
 // ASL lease event from the lifecycle event name so legacy loop clients keep
 // their 🔁.
-func reduceNormalizedForRequest(req Request, outcome applyOutcome) (NormalizedEvent, bool, string, bool) {
-	if req.normalized != nil && !req.normalized.Invalid {
-		n := *req.normalized
+func reduceNormalizedForRequest(req protocol.Request, outcome applyOutcome) (protocol.NormalizedEvent, bool, string, bool) {
+	if req.Normalized != nil && !req.Normalized.Invalid {
+		n := *req.Normalized
 		// The legacy machine may have rewritten the action after the stamp was
 		// taken (reset-flow stops become user_clear; copilot compact idles
 		// become synthetic stops). Fold what actually happened. ASL phase
@@ -44,41 +46,41 @@ func reduceNormalizedForRequest(req Request, outcome applyOutcome) (NormalizedEv
 		// machine's "active" repaint must not undo that.
 		if outcome.reduceAction != "" && n.Phase == "" && n.Action != "" &&
 			n.Action != outcome.reduceAction &&
-			n.Source.Kind != SourceSubagent && n.SubagentDelta == 0 {
+			n.Source.Kind != protocol.SourceSubagent && n.SubagentDelta == 0 {
 			n.Action = outcome.reduceAction
 		}
 		return n, true, identityConfidenceFor(n), false
 	}
-	untrustedFallback := req.normalized != nil && req.normalized.Invalid
+	untrustedFallback := req.Normalized != nil && req.Normalized.Invalid
 	if req.Action == "loop_marker" {
 		phase := aslPhaseForEvent(req.Event)
 		if phase == "" {
-			return NormalizedEvent{}, false, "", untrustedFallback
+			return protocol.NormalizedEvent{}, false, "", untrustedFallback
 		}
-		n := NormalizedEvent{
-			Source: SourceID{Kind: SourceASL, Key: windowKey(req.WindowID)},
+		n := protocol.NormalizedEvent{
+			Source: protocol.SourceID{Kind: protocol.SourceASL, Key: windowKey(req.WindowID)},
 			Event:  req.Event,
 			Phase:  phase,
 		}
 		if phase == ASLPhasePaused {
 			n.Action = aslPausedAttentionAction(req.Reason)
 		}
-		return n, true, IdentityConfidenceDaemon, untrustedFallback
+		return n, true, protocol.IdentityConfidenceDaemon, untrustedFallback
 	}
 	action := outcome.reduceAction
 	if action == "" {
 		action = req.Action
 	}
 	if action == "" {
-		return NormalizedEvent{}, false, "", untrustedFallback
+		return protocol.NormalizedEvent{}, false, "", untrustedFallback
 	}
 	// Un-stamped subagent lifecycle requests (legacy state_update clients,
 	// direct calls) carry no agent or session identity; aggregate them as a
 	// balanced multiset on the window's legacy bucket so parent activity on
 	// the plain window source can never overwrite the 🤖 they contribute.
 	if action == "subagent" || isSubagentStopEvent(req.Event) {
-		n := NormalizedEvent{
-			Source: SourceID{Kind: SourceLegacy, Key: legacySubagentBucketKey(windowKey(req.WindowID))},
+		n := protocol.NormalizedEvent{
+			Source: protocol.SourceID{Kind: protocol.SourceLegacy, Key: legacySubagentBucketKey(windowKey(req.WindowID))},
 			Event:  req.Event,
 		}
 		if action == "subagent" {
@@ -93,14 +95,14 @@ func reduceNormalizedForRequest(req Request, outcome applyOutcome) (NormalizedEv
 				n.Action = "idle"
 			}
 		}
-		confidence := IdentityConfidenceLegacySynthesized
+		confidence := protocol.IdentityConfidenceLegacySynthesized
 		if untrustedFallback {
-			confidence = IdentityConfidenceUntrustedFallback
+			confidence = protocol.IdentityConfidenceUntrustedFallback
 		}
 		return n, true, confidence, untrustedFallback
 	}
-	n := NormalizedEvent{
-		Source: SourceID{Kind: SourceLegacy, Key: windowKey(req.WindowID)},
+	n := protocol.NormalizedEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceLegacy, Key: windowKey(req.WindowID)},
 		Action: action,
 		Event:  req.Event,
 		Prompt: req.IsPrompt,
@@ -109,9 +111,9 @@ func reduceNormalizedForRequest(req Request, outcome applyOutcome) (NormalizedEv
 		// window's sessions, so lost subagent stops cannot strand 🤖.
 		EndsSession: isTerminalAction(action),
 	}
-	confidence := IdentityConfidenceLegacySynthesized
+	confidence := protocol.IdentityConfidenceLegacySynthesized
 	if untrustedFallback {
-		confidence = IdentityConfidenceUntrustedFallback
+		confidence = protocol.IdentityConfidenceUntrustedFallback
 	}
 	return n, true, confidence, untrustedFallback
 }
@@ -120,7 +122,7 @@ func reduceNormalizedForRequest(req Request, outcome applyOutcome) (NormalizedEv
 // publishes the reduced effective state as the authoritative visible state.
 // It also generates the notification decision for the transition and records
 // any divergence from the legacy outcome for export.
-func (h *Handler) reduceStateUpdate(req Request, outcome applyOutcome, resp Response, now time.Time) {
+func (h *Handler) reduceStateUpdate(req protocol.Request, outcome applyOutcome, resp protocol.Response, now time.Time) {
 	if req.WindowID <= 0 {
 		return
 	}
@@ -160,7 +162,7 @@ func (h *Handler) reduceStateUpdate(req Request, outcome applyOutcome, resp Resp
 
 	decision := st.Reducer.ApplyNormalized(n)
 	reducerTrace, _ := st.Reducer.LatestTrace()
-	reducerMutated := decision == DecisionApplied || decision == DecisionAcknowledged || decision == DecisionSuppressed
+	reducerMutated := decision == protocol.DecisionApplied || decision == protocol.DecisionAcknowledged || decision == protocol.DecisionSuppressed
 	// ShadowSeq is the window-wide receipt generation applyAuthoritativeIdle
 	// captures before a slow off-lock screen/transcript read and re-checks under
 	// the lock: any reducer mutation since capture must bump it so a stale idle
@@ -200,7 +202,7 @@ func (h *Handler) reduceStateUpdate(req Request, outcome applyOutcome, resp Resp
 
 	if effective.Icon != legacyIcon || st.Looping != legacyLooping {
 		meta.Shadow.MismatchCount++
-		meta.Shadow.Mismatches = append(meta.Shadow.Mismatches, ShadowMismatch{
+		meta.Shadow.Mismatches = append(meta.Shadow.Mismatches, protocol.ShadowMismatch{
 			At:            now.Unix(),
 			Event:         n.Event,
 			Action:        n.Action,
@@ -233,7 +235,7 @@ func (h *Handler) reduceStateUpdate(req Request, outcome applyOutcome, resp Resp
 	// reason so the event still appears exactly once. Idle/clear preservation
 	// is not logged: the legacy path already appended its own allowed event
 	// with the same preserved outcome.
-	if decision == DecisionApplied && notifyableActions[outcome.notifyAction] &&
+	if decision == protocol.DecisionApplied && notifyableActions[outcome.notifyAction] &&
 		h.shouldNotifySourceEventLocked(st, n.SourceEventID) {
 		notify = true
 	}
@@ -257,7 +259,7 @@ func (h *Handler) reduceStateUpdate(req Request, outcome applyOutcome, resp Resp
 	// clear) resets any in-flight idle-sample stabilization for the window: the
 	// screen has changed, so an adapter's consecutive-idle streak must restart
 	// from zero rather than settle stale work over the fresh state.
-	if decision == DecisionApplied || decision == DecisionAcknowledged {
+	if decision == protocol.DecisionApplied || decision == protocol.DecisionAcknowledged {
 		h.clearIdleSamplesForWindowLocked(req.WindowID)
 	}
 	completedEvent := h.finalizeReducerDecisionLocked(
@@ -268,13 +270,13 @@ func (h *Handler) reduceStateUpdate(req Request, outcome applyOutcome, resp Resp
 	h.recordDecisionEvent(completedEvent)
 
 	switch {
-	case decision == DecisionAcknowledged:
+	case decision == protocol.DecisionAcknowledged:
 		h.cancelPendingNotification(req.WindowID)
 	case notify:
 		h.maybeNotifyTraced(req.WindowID, req.SessionTitle, req.Account, outcome.notifyAction, req.PipeMode, notificationTraceFromEvent(completedEvent))
 	}
-	if decision == DecisionApplied &&
-		(n.Source.Kind == SourceHarness || n.Source.Kind == SourceLegacy) &&
+	if decision == protocol.DecisionApplied &&
+		(n.Source.Kind == protocol.SourceHarness || n.Source.Kind == protocol.SourceLegacy) &&
 		n.Action == "stop" && !n.PipeMode {
 		h.correlateASLSupervisorQuestion(req.WindowID, now)
 	}

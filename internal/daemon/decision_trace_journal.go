@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
@@ -14,7 +15,7 @@ func (h *Handler) setDecisionJournal(journal *diagnostics.Journal) {
 	h.decisionJournal = journal
 }
 
-func (h *Handler) recordDecisionEvent(event SessionEvent) {
+func (h *Handler) recordDecisionEvent(event protocol.SessionEvent) {
 	if h == nil || h.decisionJournal == nil {
 		return
 	}
@@ -65,7 +66,7 @@ func (h *Handler) recordDecisionEvent(event SessionEvent) {
 	h.decisionJournal.TryAppend(ctx, envelope)
 }
 
-func appendReplayJournalEvidence(out map[string]string, event SessionEvent) {
+func appendReplayJournalEvidence(out map[string]string, event protocol.SessionEvent) {
 	if out == nil {
 		return
 	}
@@ -87,7 +88,7 @@ func appendReplayJournalEvidence(out map[string]string, event SessionEvent) {
 	}
 }
 
-func appendReplayStateEvidence(out map[string]string, prefix string, evidence *EffectiveStateEvidence) {
+func appendReplayStateEvidence(out map[string]string, prefix string, evidence *protocol.EffectiveStateEvidence) {
 	if evidence == nil {
 		return
 	}
@@ -97,11 +98,11 @@ func appendReplayStateEvidence(out map[string]string, prefix string, evidence *E
 	out["replay."+prefix+"_source_key"] = evidence.SourceKey
 }
 
-func eventSaturationReason(event SessionEvent) string {
+func eventSaturationReason(event protocol.SessionEvent) string {
 	return event.SaturationReason
 }
 
-func formatEffectiveEvidence(evidence *EffectiveStateEvidence) string {
+func formatEffectiveEvidence(evidence *protocol.EffectiveStateEvidence) string {
 	if evidence == nil {
 		return ""
 	}
@@ -109,7 +110,7 @@ func formatEffectiveEvidence(evidence *EffectiveStateEvidence) string {
 	return string(data)
 }
 
-func appendRoutingJournalEvidence(out map[string]string, evidence *RoutingEvidence) {
+func appendRoutingJournalEvidence(out map[string]string, evidence *protocol.RoutingEvidence) {
 	if evidence == nil {
 		return
 	}
@@ -144,23 +145,23 @@ func stableReducerReason(trace ReducerTrace) string {
 	}
 	switch trace.Reason {
 	case "duplicate sequence":
-		return DecisionReasonDuplicateSequence
+		return protocol.DecisionReasonDuplicateSequence
 	case "older sequence arrived after a newer one":
-		return DecisionReasonReorderedSequence
+		return protocol.DecisionReasonReorderedSequence
 	case "idle preserves attention/terminal icon":
-		return DecisionReasonIdlePreservesTerminal
+		return protocol.DecisionReasonIdlePreservesTerminal
 	case "same identified turn after terminal":
-		return DecisionReasonTerminalTurnSuppression
+		return protocol.DecisionReasonTerminalTurnSuppression
 	case "stopped subagent never restarts", "same-source same-tool terminal suppression", "same-source same-turn terminal suppression":
-		return DecisionReasonTerminalTurnSuppression
+		return protocol.DecisionReasonTerminalTurnSuppression
 	case "legacy terminal grace window":
-		return DecisionReasonTerminalGraceSuppression
+		return protocol.DecisionReasonTerminalGraceSuppression
 	case "terminal trailing-event grace":
-		return DecisionReasonTerminalGraceSuppression
+		return protocol.DecisionReasonTerminalGraceSuppression
 	case "user acknowledged visible facts; ASL leases preserved":
-		return DecisionReasonUserAcknowledged
+		return protocol.DecisionReasonUserAcknowledged
 	case "session end cleared its remaining subagent facts":
-		return DecisionReasonSessionAgentsCleared
+		return protocol.DecisionReasonSessionAgentsCleared
 	default:
 		return strings.TrimSpace(trace.Reason)
 	}

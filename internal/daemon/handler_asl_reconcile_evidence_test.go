@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // planCandidate is a discovered run bound to a specific plan's state directory,
@@ -311,7 +312,7 @@ func TestHealthReportsASLReconciliationMetrics(t *testing.T) {
 	), nil)
 	h.ReconcileASLLeases(now, windows)
 
-	resp := h.Handle(Request{Type: TypeHealth})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHealth})
 	if !resp.OK {
 		t.Fatalf("health response = %+v", resp)
 	}

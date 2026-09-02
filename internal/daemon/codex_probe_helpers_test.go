@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/screenstate"
@@ -51,14 +52,14 @@ func probeCodexUntilSettled(t *testing.T, h *Handler, base time.Time) time.Time 
 // is in flight.
 func codexInjectSessionEvent(t *testing.T, h *Handler, windowID int, session, action, event string, at int64) {
 	t.Helper()
-	ev := NormalizedEvent{
-		Source:    SourceID{Kind: SourceHarness, Key: "codex:" + session},
+	ev := protocol.NormalizedEvent{
+		Source:    protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:" + session},
 		Action:    action,
 		SessionID: session,
 		At:        at,
 		Event:     event,
 	}
-	resp := h.handleStateUpdate(Request{Type: TypeStateUpdate, WindowID: windowID, Action: action, Event: event, normalized: &ev})
+	resp := h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: windowID, Action: action, Event: event, Normalized: &ev})
 	if !resp.OK {
 		t.Fatalf("inject codex %s rejected: %+v", action, resp)
 	}
@@ -71,14 +72,14 @@ func codexInjectSessionEvent(t *testing.T, h *Handler, windowID int, session, ac
 // fake observes, and returns the resulting receipt sequence.
 func codexSeedActiveBolt(t *testing.T, h *Handler, windowID int, session string, at int64) uint64 {
 	t.Helper()
-	ev := NormalizedEvent{
-		Source:    SourceID{Kind: SourceHarness, Key: "codex:" + session},
+	ev := protocol.NormalizedEvent{
+		Source:    protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:" + session},
 		Action:    "active",
 		SessionID: session,
 		At:        at,
 		Event:     "UserPromptSubmit",
 	}
-	resp := h.handleStateUpdate(Request{Type: TypeStateUpdate, WindowID: windowID, Action: "active", Event: "UserPromptSubmit", normalized: &ev})
+	resp := h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: windowID, Action: "active", Event: "UserPromptSubmit", Normalized: &ev})
 	if !resp.OK {
 		t.Fatalf("seed codex active %q rejected: %+v", session, resp)
 	}
@@ -107,13 +108,13 @@ func directCodexProbeBinding(windowID int, receipt, snapshotGen uint64) screenPr
 }
 
 // lastEventNamed returns the most recent event with the given name.
-func lastEventNamed(events []SessionEvent, name string) (SessionEvent, bool) {
+func lastEventNamed(events []protocol.SessionEvent, name string) (protocol.SessionEvent, bool) {
 	for i := len(events) - 1; i >= 0; i-- {
 		if events[i].Event == name {
 			return events[i], true
 		}
 	}
-	return SessionEvent{}, false
+	return protocol.SessionEvent{}, false
 }
 
 func codexProbeForegroundWindows(windowID int, tabTitle string, foregroundCmdline []string) []kitty.OSWindow {

@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // ASLBridge is the daemon's view of the optional agent-session-loop
@@ -49,17 +50,17 @@ func (h *Handler) aslStatus() aslbridge.Status {
 // aslFailure builds a refusal that still carries the capability block, so a
 // client can tell "ASL is off" from "ASL is momentarily unavailable" without a
 // second request. Retryable is true only for transient unavailability.
-func (h *Handler) aslFailure(err error) Response {
+func (h *Handler) aslFailure(err error) protocol.Response {
 	status := h.aslStatus()
-	return Response{
+	return protocol.Response{
 		OK:        false,
 		Error:     err.Error(),
 		Retryable: errors.Is(err, aslbridge.ErrUnavailable) || errors.Is(err, aslbridge.ErrMutationsDisabled),
-		ASL:       &ASLResponse{Status: status},
+		ASL:       &protocol.ASLResponse{Status: status},
 	}
 }
 
-func (h *Handler) handleASLSnapshot() Response {
+func (h *Handler) handleASLSnapshot() protocol.Response {
 	bridge := h.asl()
 	if bridge == nil {
 		return h.aslFailure(aslbridge.ErrDisabled)
@@ -68,7 +69,7 @@ func (h *Handler) handleASLSnapshot() Response {
 	if err != nil {
 		return h.aslFailure(err)
 	}
-	return Response{OK: true, ASL: &ASLResponse{
+	return protocol.Response{OK: true, ASL: &protocol.ASLResponse{
 		Status:   bridge.Status(),
 		Snapshot: &snapshot,
 		Meta:     &meta,
@@ -76,7 +77,7 @@ func (h *Handler) handleASLSnapshot() Response {
 	}}
 }
 
-func (h *Handler) handleASLQuestion(req Request) Response {
+func (h *Handler) handleASLQuestion(req protocol.Request) protocol.Response {
 	bridge := h.asl()
 	if bridge == nil {
 		return h.aslFailure(aslbridge.ErrDisabled)
@@ -94,10 +95,10 @@ func (h *Handler) handleASLQuestion(req Request) Response {
 	if err != nil {
 		return h.aslFailure(err)
 	}
-	return Response{OK: true, ASL: &ASLResponse{Status: bridge.Status(), Question: &body}}
+	return protocol.Response{OK: true, ASL: &protocol.ASLResponse{Status: bridge.Status(), Question: &body}}
 }
 
-func (h *Handler) handleASLAction(req Request) Response {
+func (h *Handler) handleASLAction(req protocol.Request) protocol.Response {
 	bridge := h.asl()
 	if bridge == nil {
 		return h.aslFailure(aslbridge.ErrDisabled)
@@ -125,10 +126,10 @@ func (h *Handler) handleASLAction(req Request) Response {
 	if err != nil {
 		return h.aslFailure(err)
 	}
-	return Response{OK: true, ASL: &ASLResponse{Status: bridge.Status(), Operation: &op}}
+	return protocol.Response{OK: true, ASL: &protocol.ASLResponse{Status: bridge.Status(), Operation: &op}}
 }
 
-func (h *Handler) handleASLWorkbench(req Request) Response {
+func (h *Handler) handleASLWorkbench(req protocol.Request) protocol.Response {
 	bridge := h.asl()
 	if bridge == nil {
 		return h.aslFailure(aslbridge.ErrDisabled)
@@ -146,5 +147,5 @@ func (h *Handler) handleASLWorkbench(req Request) Response {
 	if err != nil {
 		return h.aslFailure(err)
 	}
-	return Response{OK: true, ASL: &ASLResponse{Status: bridge.Status(), Workbench: &link}}
+	return protocol.Response{OK: true, ASL: &protocol.ASLResponse{Status: bridge.Status(), Workbench: &link}}
 }

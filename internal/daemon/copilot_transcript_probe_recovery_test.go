@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
@@ -36,7 +37,7 @@ func TestProbeCopilotTranscriptStop_ConcurrentPromptInvalidatesStopProbe(t *test
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 		t.Fatalf("effective = %+v, want the newer bolt preserved against a stale stop probe", eff)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if ev, ok := lastEventNamed(resp.Events, copilotTranscriptStopProbeEvent); ok {
 		t.Fatalf("TranscriptStopProbe row recorded despite a concurrent prompt: %+v", ev)
 	}
@@ -79,7 +80,7 @@ func TestProbeCopilotTranscriptStop_IntermediateTurnEndDoesNotFalseStop(t *testi
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 		t.Fatalf("effective = %+v, want bolt preserved across an intermediate turn_end", eff)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if ev, ok := lastEventNamed(resp.Events, copilotTranscriptStopProbeEvent); ok {
 		t.Fatalf("TranscriptStopProbe row recorded for an intermediate turn_end: %+v", ev)
 	}
@@ -128,7 +129,7 @@ func TestProbeCopilotTranscriptStop_TurnEndAppendedBeforeApplyKeepsBolt(t *testi
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 		t.Fatalf("effective = %+v, want bolt preserved against a transcript append before apply", eff)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if ev, ok := lastEventNamed(resp.Events, copilotTranscriptStopProbeEvent); ok {
 		t.Fatalf("TranscriptStopProbe row recorded despite a transcript append before apply: %+v", ev)
 	}
@@ -182,8 +183,8 @@ func TestProbeCopilotTranscriptStop_PostStatAppendSelfHealsSyntheticStop(t *test
 	// The reducer facts reflect the recovery: the probe's synthetic stop is
 	// withdrawn (acked) and the interactive session is reinstated (live).
 	h.stateMu.Lock()
-	interactive := h.store[42].Reducer.facts[SourceID{Kind: SourceHarness, Key: "copilot:sess-1"}]
-	probe := h.store[42].Reducer.facts[SourceID{Kind: SourceProbe, Key: copilotTranscriptStopProbeSource}]
+	interactive := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "copilot:sess-1"}]
+	probe := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceProbe, Key: copilotTranscriptStopProbeSource}]
 	h.stateMu.Unlock()
 	if interactive == nil || interactive.acked {
 		t.Fatalf("interactive fact not reinstated after recovery: %+v", interactive)
@@ -195,7 +196,7 @@ func TestProbeCopilotTranscriptStop_PostStatAppendSelfHealsSyntheticStop(t *test
 	}
 
 	// A provenance row records the ACTUAL reduced result (bolt), never a stop.
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	ev, ok := lastEventNamed(resp.Events, copilotTranscriptStopProbeEvent)
 	if !ok || ev.Action == "stop" {
 		t.Fatalf("recovery provenance row = %+v ok=%v, want a non-stop reduced action", ev, ok)
@@ -222,14 +223,14 @@ func TestProbeCopilotTranscriptStop_RecoveryNeverReopensNativeStop(t *testing.T)
 	base := time.Now()
 
 	// A native agentStop terminal fact owns the 🛑 — not the transcript probe.
-	ev := NormalizedEvent{
-		Source:    SourceID{Kind: SourceHarness, Key: "copilot:sess-1"},
+	ev := protocol.NormalizedEvent{
+		Source:    protocol.SourceID{Kind: protocol.SourceHarness, Key: "copilot:sess-1"},
 		Action:    "stop",
 		SessionID: "sess-1",
 		At:        base.Unix(),
 		Event:     "agentStop",
 	}
-	resp := h.handleStateUpdate(Request{Type: TypeStateUpdate, WindowID: 42, Action: "stop", Event: "agentStop", normalized: &ev})
+	resp := h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "stop", Event: "agentStop", Normalized: &ev})
 	if !resp.OK {
 		t.Fatalf("seed native stop rejected: %+v", resp)
 	}
@@ -260,14 +261,14 @@ func TestProbeCopilotTranscriptStop_ActiveASLLeaseMasksStop(t *testing.T) {
 	copilotSeedActiveBolt(t, h, 42, "sess-1", base.Unix())
 
 	// A live ASL turn lease: it contributes bolt + a loop lease that masks stop.
-	aslEv := NormalizedEvent{
-		Source: SourceID{Kind: SourceASL, Key: "run-1"},
+	aslEv := protocol.NormalizedEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"},
 		Phase:  ASLPhaseTurn,
 		RunID:  "run-1",
 		At:     base.Unix(),
 		Event:  agentSessionLoopTurnStarted,
 	}
-	h.handleStateUpdate(Request{Type: TypeStateUpdate, WindowID: 42, Action: "loop_marker", Event: agentSessionLoopTurnStarted, normalized: &aslEv})
+	h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "loop_marker", Event: agentSessionLoopTurnStarted, Normalized: &aslEv})
 
 	settleCopilotTurnEndProbe(h, base)
 
@@ -278,7 +279,7 @@ func TestProbeCopilotTranscriptStop_ActiveASLLeaseMasksStop(t *testing.T) {
 	if !eff.Looping {
 		t.Fatalf("effective = %+v, want the ASL loop lease preserved", eff)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if ev, ok := lastEventNamed(resp.Events, copilotTranscriptStopProbeEvent); ok && ev.Action == "stop" {
 		t.Fatalf("TranscriptStopProbe recorded a false stop under a live ASL lease: %+v", ev)
 	}

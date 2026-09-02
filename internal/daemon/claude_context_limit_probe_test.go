@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -69,7 +70,7 @@ func TestProbeClaudeContextLimit_BoltSwapsToError(t *testing.T) {
 		t.Fatalf("SetTabTitle title = %q, want %q", calls[0].title, want)
 	}
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(resp.Events) != 1 {
 		t.Fatalf("events = %d, want 1", len(resp.Events))
 	}
@@ -137,7 +138,7 @@ func TestProbeClaudeContextLimit_PublishesReducerErrorAndPreservesItAcrossIdle(t
 	now := time.Unix(1_700_000_000, 0)
 	h.ProbeClaudeContextLimit(now)
 
-	probeSource := SourceID{Kind: SourceProbe, Key: claudeContextLimitFactSource}
+	probeSource := protocol.SourceID{Kind: protocol.SourceProbe, Key: claudeContextLimitFactSource}
 
 	h.stateMu.Lock()
 	st := h.store[42]
@@ -162,7 +163,7 @@ func TestProbeClaudeContextLimit_PublishesReducerErrorAndPreservesItAcrossIdle(t
 	}
 
 	// A passive idle from another source must not withdraw the probe-owned error.
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "idle", Harness: "claude"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "idle", Harness: "claude"})
 	if !resp.OK {
 		t.Fatalf("idle state update failed: %s", resp.Error)
 	}
@@ -175,7 +176,7 @@ func TestProbeClaudeContextLimit_PublishesReducerErrorAndPreservesItAcrossIdle(t
 	}
 
 	// An explicit user acknowledgement clears the sticky error.
-	resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "user_clear", Harness: "claude"})
+	resp = h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "user_clear", Harness: "claude"})
 	if !resp.OK {
 		t.Fatalf("user_clear state update failed: %s", resp.Error)
 	}
@@ -188,8 +189,8 @@ func TestProbeClaudeContextLimit_PublishesReducerErrorAndPreservesItAcrossIdle(t
 
 	// A new prompt on the sibling window is authoritative recovery: it
 	// acknowledges the sticky error and the session's ⚡ returns.
-	resp = h.Handle(Request{
-		Type:         TypeStateUpdate,
+	resp = h.Handle(protocol.Request{
+		Type:         protocol.TypeStateUpdate,
 		WindowID:     43,
 		Action:       "active",
 		Event:        "UserPromptSubmit",
@@ -232,7 +233,7 @@ func TestProbeClaudeContextLimit_EmptyStateSwapsToError(t *testing.T) {
 		t.Fatalf("SetTabTitle title = %q, want %q", calls[0].title, want)
 	}
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(resp.Events) != 1 {
 		t.Fatalf("events = %d, want 1", len(resp.Events))
 	}
@@ -348,10 +349,10 @@ func TestProbeClaudeContextLimit_SplitTabOwnerStillDetectsContextLimit(t *testin
 		t.Fatalf("SetTabTitle title = %q, want %q", calls[0].title, want)
 	}
 
-	if resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}); len(resp.Events) != 1 {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42}); len(resp.Events) != 1 {
 		t.Fatalf("owner events = %d, want 1", len(resp.Events))
 	}
-	if resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43}); len(resp.Events) != 0 {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43}); len(resp.Events) != 0 {
 		t.Fatalf("non-owner events = %d, want 0", len(resp.Events))
 	}
 }

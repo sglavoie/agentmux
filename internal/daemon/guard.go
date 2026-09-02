@@ -3,6 +3,8 @@ package daemon
 import (
 	"sync"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // guardEntry holds the active guard state for one Kitty window.
@@ -121,14 +123,14 @@ func (g *StateGuard) TryUpdate(windowID int, action string, isPrompt bool) (allo
 			// same numeric priority, but must not downgrade the sticky error icon
 			// to a transient warning before the user explicitly clears it.
 			return false, ""
-		case Priority(action) < entry.priority:
+		case protocol.Priority(action) < entry.priority:
 			return false, ""
 		}
 	}
 
 	g.entries[windowID] = &guardEntry{
 		action:    action,
-		priority:  Priority(action),
+		priority:  protocol.Priority(action),
 		expiresAt: now.Add(g.duration),
 	}
 	return true, action
@@ -163,7 +165,7 @@ func (g *StateGuard) Restore(windowID int, action string, expiresAt time.Time) {
 	if action == "" || time.Now().After(expiresAt) {
 		return
 	}
-	priority, ok := actionPriority[action]
+	priority, ok := protocol.ActionPriority(action)
 	if !ok {
 		return
 	}

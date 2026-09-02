@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
@@ -103,15 +104,15 @@ func classifyFailureRecord(record diagnostics.TraceEnvelope) (string, string, bo
 		return CauseProducerAbsence, "A record explicitly proves that the producer did not invoke the hook.", true
 	case reason == "outside_kitty":
 		return CauseOutsideKitty, "The hook ran outside Kitty, so no Agent Mux window identity was available.", true
-	case strings.HasPrefix(reason, daemon.DecisionReasonInvalidPayload) || normalization == daemon.NormalizationOutcomeQuarantined && strings.Contains(reason, "invalid"):
+	case strings.HasPrefix(reason, protocol.DecisionReasonInvalidPayload) || normalization == protocol.NormalizationOutcomeQuarantined && strings.Contains(reason, "invalid"):
 		return CauseInvalidPayload, "The recorded payload failed validation and was not admitted as trusted input.", true
 	case saturation != "" || strings.Contains(reason, "saturat") || strings.Contains(stage, "saturat") || evidencePositive(record.Evidence["queue_full"]):
 		return CauseSaturation, "A bounded delivery component recorded saturation for this request.", true
-	case reason == daemon.DecisionReasonRequestReplayed || reason == daemon.DecisionReasonDuplicateSequence || reason == daemon.DecisionReasonReorderedSequence || outcome == "duplicate" || outcome == "reordered":
+	case reason == protocol.DecisionReasonRequestReplayed || reason == protocol.DecisionReasonDuplicateSequence || reason == protocol.DecisionReasonReorderedSequence || outcome == "duplicate" || outcome == "reordered":
 		return CauseDuplicate, "The request or source sequence was recorded as a duplicate or replay.", true
-	case reason == daemon.DecisionReasonOwnerMismatch:
+	case reason == protocol.DecisionReasonOwnerMismatch:
 		return CauseOwnerMismatch, "Routing rejected the event because the producer did not match the managed title owner.", true
-	case outcome == "quarantined" || strings.Contains(normalization, "quarantined") || reason == daemon.DecisionReasonUntrustedIdentityFallback:
+	case outcome == "quarantined" || strings.Contains(normalization, "quarantined") || reason == protocol.DecisionReasonUntrustedIdentityFallback:
 		return CauseQuarantine, "The daemon quarantined the event or used an explicitly untrusted compatibility identity.", true
 	case strings.HasPrefix(stage, "daemon.renderer.") && (strings.HasSuffix(stage, ".failed") || outcome == "failed" || outcome == "error"):
 		return CauseRenderFailure, "The renderer recorded a terminal failure for the causal generation.", true

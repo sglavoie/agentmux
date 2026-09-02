@@ -5,6 +5,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -36,10 +37,10 @@ func TestProbeClaudeContextLimit_SplitTabNonOwnerCannotOverwriteManagedOwner(t *
 	if got := len(fake.titleCalls()); got != 0 {
 		t.Fatalf("SetTabTitle calls = %d, want 0", got)
 	}
-	if resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}); len(resp.Events) != 0 {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42}); len(resp.Events) != 0 {
 		t.Fatalf("owner events = %d, want 0", len(resp.Events))
 	}
-	if resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43}); len(resp.Events) != 0 {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43}); len(resp.Events) != 0 {
 		t.Fatalf("non-owner events = %d, want 0", len(resp.Events))
 	}
 }
@@ -63,7 +64,7 @@ func TestProbeClaudeContextLimit_UnmanagedClaudeForegroundNoOp(t *testing.T) {
 	if got := len(fake.titleCalls()); got != 0 {
 		t.Fatalf("SetTabTitle calls = %d, want 0", got)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(resp.Events) != 0 {
 		t.Fatalf("events = %d, want 0", len(resp.Events))
 	}
@@ -100,7 +101,7 @@ func TestProbeClaudeContextLimit_DedupesWithinEpisode(t *testing.T) {
 	if got := len(fake.titleCalls()); got != 1 {
 		t.Fatalf("SetTabTitle calls = %d, want 1 (dedup should skip the second call)", got)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(resp.Events) != 1 {
 		t.Fatalf("events = %d, want 1 (dedup should skip the second event)", len(resp.Events))
 	}
@@ -149,7 +150,7 @@ func TestProbeClaudeContextLimit_DiscardsObservationAfterConcurrentReducerEvent(
 		name string
 		// inject is the concurrent state update landed while the probe's screen
 		// read (which shows the context-limit banner) is in flight.
-		inject Request
+		inject protocol.Request
 		// wantIcon is the concurrent event's reduced icon, which must survive.
 		wantIcon string
 		// wantGuard is the concurrent event's guard entry, which the discarded
@@ -165,28 +166,28 @@ func TestProbeClaudeContextLimit_DiscardsObservationAfterConcurrentReducerEvent(
 	}{
 		{
 			name:              "prompt",
-			inject:            Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Event: "UserPromptSubmit", IsPrompt: true, Harness: "claude"},
+			inject:            protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Event: "UserPromptSubmit", IsPrompt: true, Harness: "claude"},
 			wantIcon:          "bolt",
 			wantGuard:         "active",
 			checkNoErrorTitle: true,
 		},
 		{
 			name:              "terminal",
-			inject:            Request{Type: TypeStateUpdate, WindowID: 42, Action: "stop", Event: "Stop", Harness: "claude"},
+			inject:            protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "stop", Event: "Stop", Harness: "claude"},
 			wantIcon:          "stop",
 			wantGuard:         "stop",
 			checkNoErrorTitle: true,
 		},
 		{
 			name:           "error",
-			inject:         Request{Type: TypeStateUpdate, WindowID: 42, Action: "stop_failure", Event: "Stop", Harness: "claude"},
+			inject:         protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "stop_failure", Event: "Stop", Harness: "claude"},
 			wantIcon:       "error",
 			wantGuard:      "stop_failure",
 			wantDispatches: 1,
 		},
 		{
 			name:              "clear",
-			inject:            Request{Type: TypeStateUpdate, WindowID: 42, Action: "user_clear", Harness: "claude"},
+			inject:            protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "user_clear", Harness: "claude"},
 			wantIcon:          "",
 			wantGuard:         "",
 			checkNoErrorTitle: true,
@@ -205,7 +206,7 @@ func TestProbeClaudeContextLimit_DiscardsObservationAfterConcurrentReducerEvent(
 				}
 				// Seed a live interactive bolt so the window has reducer state and
 				// a nonzero receipt before the probe captures it.
-				seed := h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Event: "UserPromptSubmit", IsPrompt: true, Harness: "claude", SessionTitle: "api"})
+				seed := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Event: "UserPromptSubmit", IsPrompt: true, Harness: "claude", SessionTitle: "api"})
 				if !seed.OK {
 					t.Fatalf("seed active rejected: %+v", seed)
 				}
@@ -235,7 +236,7 @@ func TestProbeClaudeContextLimit_DiscardsObservationAfterConcurrentReducerEvent(
 				// No reducer mutation: the discarded banner left no probe fact and
 				// never marked the stall episode as handled.
 				h.stateMu.Lock()
-				probeFact := h.store[42].Reducer.facts[SourceID{Kind: SourceProbe, Key: claudeContextLimitFactSource}]
+				probeFact := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceProbe, Key: claudeContextLimitFactSource}]
 				notified := h.store[42].ContextLimitNotified
 				h.stateMu.Unlock()
 				if probeFact != nil {
@@ -249,7 +250,7 @@ func TestProbeClaudeContextLimit_DiscardsObservationAfterConcurrentReducerEvent(
 					t.Fatalf("guard.Current = %q, want %q", got, tc.wantGuard)
 				}
 				// No audit mutation: no ScreenContextLimitProbe row at all.
-				resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+				resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 				for _, ev := range resp.Events {
 					if ev.Event == claudeContextLimitProbeEvent {
 						t.Fatalf("discarded observation recorded an audit row: %+v", ev)

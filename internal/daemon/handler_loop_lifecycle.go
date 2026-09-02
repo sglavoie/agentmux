@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -55,7 +56,7 @@ func (h *Handler) handleLoopLifecycleHookEvent(
 	eventOrAction string,
 	action string,
 	payload hookevent.HookPayload,
-	baseReq Request,
+	baseReq protocol.Request,
 	windows []kitty.OSWindow,
 ) bool {
 	targets, openTargets := loopLifecycleTargets(windows, payload)
@@ -79,7 +80,7 @@ func (h *Handler) handleLoopLifecycleTarget(
 	eventOrAction string,
 	action string,
 	payload hookevent.HookPayload,
-	baseReq Request,
+	baseReq protocol.Request,
 	target loopLifecycleTarget,
 	openTargets []agentloop.WorkspaceTarget,
 ) {
@@ -111,15 +112,15 @@ func (h *Handler) handleLoopLifecycleTarget(
 		baseReq.KittyListenOn,
 	)
 	propagateIngressTrace(&req, baseReq)
-	if req.routeEvidence == nil {
-		req.routeEvidence = newRoutingEvidence(baseReq.WindowID)
+	if req.RouteEvidence == nil {
+		req.RouteEvidence = newRoutingEvidence(baseReq.WindowID)
 	}
-	req.routeEvidence.ConsideredWindows = nil
-	req.routeEvidence.RejectedAlternatives = nil
-	req.routeEvidence.ASLMatches = 1
-	populateRoutingCandidates(req.routeEvidence, target.tab, routingWindowByID(target.tab, baseReq.WindowID), target.win)
-	chooseRoute(req.routeEvidence, routeDecisionOwner, "asl_workspace", target.win)
-	req.routeDecision = routeDecisionOwner
+	req.RouteEvidence.ConsideredWindows = nil
+	req.RouteEvidence.RejectedAlternatives = nil
+	req.RouteEvidence.ASLMatches = 1
+	populateRoutingCandidates(req.RouteEvidence, target.tab, routingWindowByID(target.tab, baseReq.WindowID), target.win)
+	chooseRoute(req.RouteEvidence, routeDecisionOwner, "asl_workspace", target.win)
+	req.RouteDecision = routeDecisionOwner
 	// The fact lands on the managed target but retains the pane identified by
 	// the request/payload as its origin for route-aware probes and diagnostics.
 	originWindowID := baseReq.WindowID
@@ -127,8 +128,8 @@ func (h *Handler) handleLoopLifecycleTarget(
 		originWindowID = payloadWindowID
 	}
 	normalized := normalizedFromHookRequest(eventOrAction, baseReq, originWindowID)
-	req.normalized = &normalized
-	req.normalizationOutcome = normalizationOutcomeFor(normalized)
+	req.Normalized = &normalized
+	req.NormalizationOutcome = normalizationOutcomeFor(normalized)
 	resp := h.handleStateUpdate(req)
 	if !resp.OK {
 		slog.Debug("loop lifecycle target state update failed",

@@ -3,6 +3,7 @@ package daemon
 import (
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -55,8 +56,8 @@ func (h *Handler) recordCodexPromptProbeStateLocked(
 		st.Reducer = NewReducer(h.reducerCfg)
 	}
 	st.ShadowSeq++
-	st.Reducer.Apply(ReducerEvent{
-		Source:         SourceID{Kind: SourceProbe, Key: screenPromptProbeSource},
+	st.Reducer.Apply(protocol.ReducerEvent{
+		Source:         protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource},
 		Action:         classification.Action,
 		Seq:            st.ShadowSeq,
 		At:             now.Unix(),
@@ -137,8 +138,8 @@ func codexPromptProbeEventRow(
 	resultIconState string,
 	suppressed bool,
 	originWindowID int,
-) SessionEvent {
-	ev := SessionEvent{
+) protocol.SessionEvent {
+	ev := protocol.SessionEvent{
 		At:               now.Unix(),
 		Event:            screenPromptProbeEvent,
 		Action:           classification.Action,

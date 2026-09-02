@@ -4,6 +4,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
 
@@ -13,14 +14,14 @@ import (
 // the daemon's global receipt sequence and, when the producer did not set one,
 // a nanosecond receipt time — so exports can totally order receipts across
 // windows regardless of which path appended them.
-func (h *Handler) appendEventLocked(windowID int, event SessionEvent) SessionEvent {
+func (h *Handler) appendEventLocked(windowID int, event protocol.SessionEvent) protocol.SessionEvent {
 	st := h.ensureWindowStateLocked(windowID)
 
 	h.eventSeq++
 	event.DaemonSeq = h.eventSeq
-	if event.eventRef != nil {
-		event.eventRef.daemonSeq = event.DaemonSeq
-		event.eventRef = nil
+	if event.EventRef != nil {
+		event.EventRef.DaemonSeq = event.DaemonSeq
+		event.EventRef = nil
 	}
 	if event.ReceivedAtNs == 0 {
 		event.ReceivedAtNs = time.Now().UnixNano()
@@ -95,14 +96,14 @@ func (h *Handler) syncScreenDeclineMetadataLocked(windowID int) {
 		// for a window the daemon has no other reason to export.
 		return
 	}
-	declines := make([]ScreenDeclineSnapshot, 0, 1)
+	declines := make([]protocol.ScreenDeclineSnapshot, 0, 1)
 	for ref, streak := range h.screenProbeDeclineStreak {
 		if ref.windowID != windowID || streak <= 0 {
 			continue
 		}
 		evidence := h.screenProbeDeclineEvidence[ref]
 		fingerprint := h.screenProbeDeclineFingerprint[ref]
-		declines = append(declines, ScreenDeclineSnapshot{
+		declines = append(declines, protocol.ScreenDeclineSnapshot{
 			Source: ref.key,
 			Streak: streak,
 			// Recomputed from the stored streak and fingerprint rather than
@@ -128,7 +129,7 @@ func (h *Handler) syncScreenDeclineMetadataLocked(windowID int) {
 	h.windowMetadata[windowID] = meta
 }
 
-func (h *Handler) touchWindowMetadataLocked(req Request) {
+func (h *Handler) touchWindowMetadataLocked(req protocol.Request) {
 	st := h.ensureWindowStateLocked(req.WindowID)
 	meta := h.windowMetadata[req.WindowID]
 	if req.SessionTitle != "" {
@@ -137,8 +138,8 @@ func (h *Handler) touchWindowMetadataLocked(req Request) {
 	if req.Account != "" {
 		meta.Durable.Profile = req.Account
 	}
-	targetHarness := req.targetHarness
-	if !req.targetHarnessSet {
+	targetHarness := req.TargetHarness
+	if !req.TargetHarnessSet {
 		// Backward compatibility for direct state_update clients, which predate
 		// the producer/target split and use Harness for both roles.
 		targetHarness = req.Harness

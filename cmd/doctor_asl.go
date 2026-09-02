@@ -32,6 +32,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // Dimension names. They are JSON consumer contracts.
@@ -121,8 +122,8 @@ type aslIntegrationInputs struct {
 	Configured bool
 
 	Status    *aslbridge.Status
-	Reconcile *daemon.ASLReconcileSnapshot
-	Delivery  *daemon.ASLHookDeliverySnapshot
+	Reconcile *protocol.ASLReconcileSnapshot
+	Delivery  *protocol.ASLHookDeliverySnapshot
 	// DaemonAlive gates every daemon-sourced dimension: against a dead daemon
 	// they are unknown, not failing.
 	DaemonAlive bool

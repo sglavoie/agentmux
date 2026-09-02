@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
@@ -15,7 +16,7 @@ const ProbeSchemaVersion = 1
 const ProbeScope = "This validates AgentMux client-to-daemon delivery and routing without changing reducer, renderer, or notification state; it does not prove that a harness invoked its hook."
 
 type ProbeClient interface {
-	SendWithAutoStartObserved(daemon.Request, string, daemon.DeliveryObserver) (daemon.Response, error)
+	SendWithAutoStartObserved(protocol.Request, string, daemon.DeliveryObserver) (protocol.Response, error)
 }
 
 type ProbeOptions struct {
@@ -35,17 +36,17 @@ type ProbeStage struct {
 }
 
 type ProbeReport struct {
-	SchemaVersion int                             `json:"schema_version"`
-	GeneratedAt   time.Time                       `json:"generated_at"`
-	WindowID      int                             `json:"window_id"`
-	Harness       string                          `json:"harness,omitempty"`
-	TraceID       string                          `json:"trace_id"`
-	RequestID     string                          `json:"request_id"`
-	Success       bool                            `json:"success"`
-	Stages        []ProbeStage                    `json:"stages"`
-	Delivery      *daemon.DeliveryAcknowledgement `json:"delivery,omitempty"`
-	Error         string                          `json:"error,omitempty"`
-	Scope         string                          `json:"scope"`
+	SchemaVersion int                               `json:"schema_version"`
+	GeneratedAt   time.Time                         `json:"generated_at"`
+	WindowID      int                               `json:"window_id"`
+	Harness       string                            `json:"harness,omitempty"`
+	TraceID       string                            `json:"trace_id"`
+	RequestID     string                            `json:"request_id"`
+	Success       bool                              `json:"success"`
+	Stages        []ProbeStage                      `json:"stages"`
+	Delivery      *protocol.DeliveryAcknowledgement `json:"delivery,omitempty"`
+	Error         string                            `json:"error,omitempty"`
+	Scope         string                            `json:"scope"`
 }
 
 // Probe exercises the real bounded transport and daemon routing path using the
@@ -73,8 +74,8 @@ func Probe(client ProbeClient, options ProbeOptions) ProbeReport {
 		report.Error = "a positive Kitty window ID is required"
 		return report
 	}
-	request := daemon.Request{
-		Type: daemon.TypeDiagnosticProbe, WindowID: report.WindowID,
+	request := protocol.Request{
+		Type: protocol.TypeDiagnosticProbe, WindowID: report.WindowID,
 		ProducerHarness: report.Harness, Harness: report.Harness,
 		TraceID: report.TraceID, RequestID: report.RequestID,
 	}
@@ -103,7 +104,7 @@ func Probe(client ProbeClient, options ProbeOptions) ProbeReport {
 		}
 	}
 	report.Stages = append(report.Stages, ProbeStage{Stage: "daemon_acknowledgement", Outcome: outcome, Reason: reason})
-	report.Success = response.OK && response.Delivery != nil && response.Delivery.Status == daemon.DeliveryAcknowledgementAccepted
+	report.Success = response.OK && response.Delivery != nil && response.Delivery.Status == protocol.DeliveryAcknowledgementAccepted
 	if !report.Success {
 		report.Error = response.Error
 		if report.Error == "" {

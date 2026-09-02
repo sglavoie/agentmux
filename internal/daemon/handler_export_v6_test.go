@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestHealthCarriesBuildIdentityAndMetrics verifies TypeHealth reports the
@@ -14,11 +15,11 @@ func TestHealthCarriesBuildIdentityAndMetrics(t *testing.T) {
 	h := NewHandler(NewStateGuard(time.Second), nil)
 	build := buildinfo.Info{Version: "9.9.9", Revision: "abc", BinaryHash: "hash-x"}
 	h.SetBuildInfo(build)
-	h.setMetricsSource(func() MetricsSnapshot {
-		return MetricsSnapshot{Accepted: 5, QueueFull: 1, QueueLastWaitNs: 250}
+	h.setMetricsSource(func() protocol.MetricsSnapshot {
+		return protocol.MetricsSnapshot{Accepted: 5, QueueFull: 1, QueueLastWaitNs: 250}
 	})
 
-	resp := h.Handle(Request{Type: TypeHealth})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHealth})
 	if !resp.OK {
 		t.Fatalf("health response not OK: %+v", resp)
 	}
@@ -32,13 +33,13 @@ func TestHealthCarriesBuildIdentityAndMetrics(t *testing.T) {
 
 func TestHealthCarriesNotificationCapabilityWithoutDegradingReadiness(t *testing.T) {
 	n := NewNotifier(&config.NotificationConfig{Stop: true})
-	n.capability = NotificationCapability{
+	n.capability = protocol.NotificationCapability{
 		Enabled: true, Backend: "alerter", Reason: "not_found",
 	}
 	h := NewHandler(NewStateGuard(time.Second), n)
 	h.MarkReady()
 
-	resp := h.Handle(Request{Type: TypeHealth})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHealth})
 	if !resp.Ready {
 		t.Fatal("missing Alerter must not degrade daemon readiness")
 	}
@@ -51,7 +52,7 @@ func TestHealthCarriesNotificationCapabilityWithoutDegradingReadiness(t *testing
 // server or startup stamp (unit-test topology, legacy daemons).
 func TestHealthWithoutBuildOrMetricsOmitsThem(t *testing.T) {
 	h := NewHandler(NewStateGuard(time.Second), nil)
-	resp := h.Handle(Request{Type: TypeHealth})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHealth})
 	if resp.Build != nil || resp.Metrics != nil {
 		t.Fatalf("resp = build %+v metrics %+v; want both nil", resp.Build, resp.Metrics)
 	}
@@ -63,19 +64,19 @@ func TestHealthWithoutBuildOrMetricsOmitsThem(t *testing.T) {
 func TestEventsExportStampsV6EventAndFactFields(t *testing.T) {
 	h := NewHandler(NewStateGuard(time.Second), nil)
 
-	req := Request{
-		Type:     TypeStateUpdate,
+	req := protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 5,
 		Action:   "active",
 		Event:    "PreToolUse",
 	}
-	req.normalized = &NormalizedEvent{
-		Source: SourceID{Kind: SourceHarness, Key: "sess-1"},
+	req.Normalized = &protocol.NormalizedEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "sess-1"},
 		Action: "active",
 		Event:  "PreToolUse",
 		Seq:    9,
 	}
-	req.routeDecision = routeDecisionSource
+	req.RouteDecision = routeDecisionSource
 	before := time.Now().UnixNano()
 	if resp := h.Handle(req); !resp.OK {
 		t.Fatalf("state update failed: %+v", resp)
@@ -84,18 +85,18 @@ func TestEventsExportStampsV6EventAndFactFields(t *testing.T) {
 	stop := req
 	stop.Action = "stop"
 	stop.Event = "Stop"
-	stop.normalized = &NormalizedEvent{
-		Source: SourceID{Kind: SourceHarness, Key: "sess-1"},
+	stop.Normalized = &protocol.NormalizedEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "sess-1"},
 		Action: "stop",
 		Event:  "Stop",
 		Seq:    10,
 	}
-	stop.routeDecision = routeDecisionOwner
+	stop.RouteDecision = routeDecisionOwner
 	if resp := h.Handle(stop); !resp.OK {
 		t.Fatalf("stop update failed: %+v", resp)
 	}
 
-	export := h.Handle(Request{Type: TypeEventsExport, WindowID: 5})
+	export := h.Handle(protocol.Request{Type: protocol.TypeEventsExport, WindowID: 5})
 	events := export.EventsByWindow[5]
 	if len(events) != 2 {
 		t.Fatalf("len(events) = %d; want 2 (%+v)", len(events), events)
@@ -107,7 +108,7 @@ func TestEventsExportStampsV6EventAndFactFields(t *testing.T) {
 	if first.ReceivedAtNs < before {
 		t.Fatalf("ReceivedAtNs = %d; want >= %d", first.ReceivedAtNs, before)
 	}
-	if first.SourceKind != string(SourceHarness) || first.SourceKey != "sess-1" || first.SourceSeq != 9 {
+	if first.SourceKind != string(protocol.SourceHarness) || first.SourceKey != "sess-1" || first.SourceSeq != 9 {
 		t.Fatalf("first event identity = %q/%q/%d; want harness/sess-1/9", first.SourceKind, first.SourceKey, first.SourceSeq)
 	}
 	if first.RouteDecision != routeDecisionSource || second.RouteDecision != routeDecisionOwner {
@@ -122,7 +123,7 @@ func TestEventsExportStampsV6EventAndFactFields(t *testing.T) {
 		t.Fatalf("shadow facts missing from export: %+v", meta.Shadow)
 	}
 	fact := meta.Shadow.Facts[0]
-	if fact.Kind != SourceHarness || fact.Key != "sess-1" || fact.Action != "stop" || fact.Seq != 10 {
+	if fact.Kind != protocol.SourceHarness || fact.Key != "sess-1" || fact.Action != "stop" || fact.Seq != 10 {
 		t.Fatalf("exported fact = %+v; want the harness stop fact at seq 10", fact)
 	}
 }

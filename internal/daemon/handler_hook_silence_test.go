@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -77,7 +78,7 @@ func TestSweepHookSilence_LatchClearsOnFreshEventThenReFires(t *testing.T) {
 		}
 
 		// Fresh event for "work" — S5 invariant: re-arms the latch.
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
+		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
 
 		h.stateMu.Lock()
 		_, latched := h.notifiedHookSilence["work"]
@@ -111,8 +112,8 @@ func TestSweepHookSilence_SuppressedEventCountsAsFresh(t *testing.T) {
 		h, fake, rec := newHookSilenceTestHandler(1*time.Hour, nil)
 		fake.windows = fakeWindowsForAccount("work")
 
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "stop", Account: "work"})
+		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
+		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "stop", Account: "work"})
 
 		now := time.Now()
 		h.stateMu.Lock()
@@ -120,8 +121,8 @@ func TestSweepHookSilence_SuppressedEventCountsAsFresh(t *testing.T) {
 		delete(h.notifiedHookSilence, "work")
 		h.stateMu.Unlock()
 
-		resp := h.Handle(Request{
-			Type:     TypeStateUpdate,
+		resp := h.Handle(protocol.Request{
+			Type:     protocol.TypeStateUpdate,
 			WindowID: 42,
 			Action:   "active",
 			Event:    "PostToolUse",
@@ -366,7 +367,7 @@ func TestSweepHookSilence_AccountKeyCaseInsensitive(t *testing.T) {
 		now := time.Now()
 		// Hook payload arrived with mixed-case "Work" — seeded via Handle so the
 		// real code path normalizes the key.
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "Work"})
+		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Account: "Work"})
 
 		h.stateMu.Lock()
 		// Backdate the event so the threshold trips.
@@ -386,7 +387,7 @@ func TestSweepHookSilence_AccountKeyCaseInsensitive(t *testing.T) {
 
 		// Latch must be keyed by the lowercased account too so a fresh event
 		// (in either case) clears it.
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "WORK"})
+		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Account: "WORK"})
 		h.stateMu.Lock()
 		_, latched := h.notifiedHookSilence["work"]
 		h.stateMu.Unlock()

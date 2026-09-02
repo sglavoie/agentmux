@@ -3,6 +3,8 @@ package daemon
 import (
 	"os"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestHandler_Health verifies that TypeHealth returns the daemon's PID and a
@@ -10,7 +12,7 @@ import (
 // the very first health probe must report uptime >= 0 (never negative).
 func TestHandler_Health(t *testing.T) {
 	h := newTestHandler()
-	resp := h.Handle(Request{Type: TypeHealth})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHealth})
 	if !resp.OK {
 		t.Fatalf("want ok=true, got %+v", resp)
 	}

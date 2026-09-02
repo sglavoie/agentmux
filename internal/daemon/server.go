@@ -13,6 +13,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // maxPayloadLogLen caps the number of payload bytes recorded in error logs to
@@ -105,7 +107,7 @@ func NewServer(socketPath string, handler *Handler) (*Server, error) {
 }
 
 // Metrics returns a snapshot of the server's request-outcome counters.
-func (s *Server) Metrics() MetricsSnapshot {
+func (s *Server) Metrics() protocol.MetricsSnapshot {
 	return s.metrics.Snapshot()
 }
 
@@ -210,7 +212,7 @@ func (s *Server) handleConn(conn net.Conn) {
 // serveConn processes a single request/response pair on rw. It is split out
 // from handleConn so tests can drive it with fake readers and writers.
 func (s *Server) serveConn(r io.Reader, w io.Writer) {
-	var req Request
+	var req protocol.Request
 	scanner := bufio.NewScanner(r)
 	// Raise the scan buffer ceiling above bufio's 64 KiB default so larger
 	// hook payloads (e.g. long notification messages) do not silently fail
@@ -222,7 +224,7 @@ func (s *Server) serveConn(r io.Reader, w io.Writer) {
 				count := s.badPayloads.Add(1)
 				s.metrics.rejected.Add(1)
 				slog.Warn("daemon: request payload exceeds limit", "limit", maxRequestPayloadBytes, "bad_payload_count", count)
-				writeResponse(w, Response{OK: false, Error: "request payload exceeds limit"})
+				writeResponse(w, protocol.Response{OK: false, Error: "request payload exceeds limit"})
 				return
 			}
 			slog.Warn("daemon: read failed", "err", err)
@@ -237,7 +239,7 @@ func (s *Server) serveConn(r io.Reader, w io.Writer) {
 		if count%badPayloadLogInterval == 0 {
 			slog.Info("daemon: cumulative malformed payloads received", "count", count)
 		}
-		writeResponse(w, Response{OK: false, Error: "invalid JSON"})
+		writeResponse(w, protocol.Response{OK: false, Error: "invalid JSON"})
 		return
 	}
 	req = ensureRequestTraceID(req)
@@ -247,11 +249,11 @@ func (s *Server) serveConn(r io.Reader, w io.Writer) {
 	// response instead of mutating the icon a second time. Legacy requests
 	// (empty ID) flow straight through. Deduplication happens BEFORE queue
 	// admission so a resend never consumes a second reducer slot.
-	var resp Response
+	var resp protocol.Response
 	if serializedRequest(req.Type) {
-		resp = s.dedupe.doObserved(req.RequestID, func(saturated bool) Response {
+		resp = s.dedupe.doObserved(req.RequestID, func(saturated bool) protocol.Response {
 			if saturated {
-				req.saturationReason = appendSaturationReason(req.saturationReason, "dedupe_cache")
+				req.SaturationReason = appendSaturationReason(req.SaturationReason, "dedupe_cache")
 			}
 			return s.process(req)
 		})
@@ -270,7 +272,7 @@ func (s *Server) serveConn(r io.Reader, w io.Writer) {
 		resp.Delivery.RequestID = req.RequestID
 		resp.Delivery.SourceEventID = req.SourceEventID
 		resp.Delivery.Attempt = req.Attempt
-		if resp.Delivery.Status == DeliveryAcknowledgementDuplicate {
+		if resp.Delivery.Status == protocol.DeliveryAcknowledgementDuplicate {
 			s.handler.recordDuplicateDelivery(req, resp.Delivery)
 		}
 	}
@@ -282,14 +284,14 @@ func (s *Server) serveConn(r io.Reader, w io.Writer) {
 // connection scheduling; read-only and control requests run inline so a query is
 // never serialized behind a burst of hook events. Acknowledgement returns as
 // soon as the reducer has applied the event — rendering happens asynchronously.
-func (s *Server) process(req Request) Response {
+func (s *Server) process(req protocol.Request) protocol.Response {
 	if s.ingress != nil && serializedRequest(req.Type) {
 		return s.ingress.submit(req)
 	}
 	return s.handler.Handle(req)
 }
 
-func writeResponse(w io.Writer, resp Response) {
+func writeResponse(w io.Writer, resp protocol.Response) {
 	data, err := json.Marshal(resp)
 	if err != nil {
 		slog.Warn("daemon: response marshal failed", "err", err)

@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func TestWindowStateUserVarRoundTrip(t *testing.T) {
@@ -22,7 +24,7 @@ func TestWindowStateUserVarRoundTrip(t *testing.T) {
 		NotifiedStale:              true,
 		ContextLimitNotified:       true,
 		LastPipeMode:               true,
-		EventLog: []SessionEvent{
+		EventLog: []protocol.SessionEvent{
 			{At: activity.Unix(), Event: "PreToolUse", Action: "active"},
 		},
 		Looping:         true,

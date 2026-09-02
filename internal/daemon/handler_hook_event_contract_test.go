@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslcontract"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -312,8 +313,8 @@ func TestAnIncompatibleLifecycleHookIsQuarantinedWithoutReduction(t *testing.T) 
 		t.Run(tc.name, func(t *testing.T) {
 			h, projectDir := gateTestHandler(t)
 
-			resp := h.Handle(Request{
-				Type:        TypeHookEvent,
+			resp := h.Handle(protocol.Request{
+				Type:        protocol.TypeHookEvent,
 				WindowID:    42,
 				Event:       agentSessionLoopTurnStarted,
 				PayloadJSON: lifecyclePayloadJSON(t, tc.schemaVersion, tc.contractSetID, projectDir),
@@ -325,14 +326,14 @@ func TestAnIncompatibleLifecycleHookIsQuarantinedWithoutReduction(t *testing.T) 
 				t.Fatalf("response = %+v, want an acknowledged refusal", resp)
 			}
 
-			detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+			detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 			if len(detail.Events) != 1 {
 				t.Fatalf("events = %+v, want the single quarantined event", detail.Events)
 			}
 			event := detail.Events[0]
-			if !event.Quarantined || event.ReducerDecision != DecisionQuarantined ||
-				event.IdentityConfidence != IdentityConfidenceInvalid ||
-				event.NormalizationOutcome != NormalizationOutcomeQuarantined {
+			if !event.Quarantined || event.ReducerDecision != protocol.DecisionQuarantined ||
+				event.IdentityConfidence != protocol.IdentityConfidenceInvalid ||
+				event.NormalizationOutcome != protocol.NormalizationOutcomeQuarantined {
 				t.Errorf("event = %+v, want a quarantined record", event)
 			}
 			if event.DecisionReason != tc.want || event.ReducerReason != tc.want {
@@ -412,18 +413,18 @@ func TestHarnessHooksAreUnaffectedByTheLifecycleGate(t *testing.T) {
 		t.Fatalf("a harness hook was gated: %s", refusal)
 	}
 
-	resp := h.Handle(Request{
-		Type: TypeHookEvent, WindowID: 42, Event: "UserPromptSubmit",
+	resp := h.Handle(protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 42, Event: "UserPromptSubmit",
 		Harness: harness.Claude, PayloadJSON: hookPayloadJSON(t, payload),
 	})
 	if !resp.OK {
 		t.Fatalf("response = %+v", resp)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) != 1 {
 		t.Fatalf("events = %+v", detail.Events)
 	}
-	if event := detail.Events[0]; event.Quarantined || event.ReducerDecision == DecisionQuarantined {
+	if event := detail.Events[0]; event.Quarantined || event.ReducerDecision == protocol.DecisionQuarantined {
 		t.Errorf("harness event = %+v, want an ordinary reduction", event)
 	}
 	h.stateMu.Lock()

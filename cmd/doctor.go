@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/spf13/cobra"
@@ -71,24 +72,24 @@ type doctorReport struct {
 }
 
 type doctorDaemonStatus struct {
-	Alive          bool                           `json:"alive"`
-	Ready          bool                           `json:"ready"`
-	DegradedReason string                         `json:"degraded_reason,omitempty"`
-	PID            int                            `json:"pid,omitempty"`
-	UptimeSeconds  int64                          `json:"uptime_seconds,omitempty"`
-	Build          *buildinfo.Info                `json:"build,omitempty"`
-	Metrics        *daemon.MetricsSnapshot        `json:"metrics,omitempty"`
-	Notification   *daemon.NotificationCapability `json:"notification,omitempty"`
-	ASL            *aslbridge.Status              `json:"asl,omitempty"`
+	Alive          bool                             `json:"alive"`
+	Ready          bool                             `json:"ready"`
+	DegradedReason string                           `json:"degraded_reason,omitempty"`
+	PID            int                              `json:"pid,omitempty"`
+	UptimeSeconds  int64                            `json:"uptime_seconds,omitempty"`
+	Build          *buildinfo.Info                  `json:"build,omitempty"`
+	Metrics        *protocol.MetricsSnapshot        `json:"metrics,omitempty"`
+	Notification   *protocol.NotificationCapability `json:"notification,omitempty"`
+	ASL            *aslbridge.Status                `json:"asl,omitempty"`
 	// ASLReconcile and ASLHookDelivery are the two directions of the pairing
 	// that exist without a bridge. Both are omitted by a daemon that predates
 	// them, which the integration block reports as unknown rather than zero.
-	ASLReconcile    *daemon.ASLReconcileSnapshot    `json:"asl_reconcile,omitempty"`
-	ASLHookDelivery *daemon.ASLHookDeliverySnapshot `json:"asl_hook_delivery,omitempty"`
+	ASLReconcile    *protocol.ASLReconcileSnapshot    `json:"asl_reconcile,omitempty"`
+	ASLHookDelivery *protocol.ASLHookDeliverySnapshot `json:"asl_hook_delivery,omitempty"`
 	// ScreenPatterns reports the classifier's installed UI-copy pattern sources
 	// and the warnings the startup load produced. Omitted by a daemon that
 	// predates the block.
-	ScreenPatterns *daemon.ScreenPatternsSnapshot `json:"screen_patterns,omitempty"`
+	ScreenPatterns *protocol.ScreenPatternsSnapshot `json:"screen_patterns,omitempty"`
 }
 
 var doctorCmd = &cobra.Command{
@@ -190,7 +191,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	}
 
 	var (
-		snapshot daemon.EventsExport
+		snapshot protocol.EventsExport
 		windows  []kitty.OSWindow
 		kittyOK  bool
 	)
@@ -232,7 +233,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	var liveByID map[int]daemon.WindowLiveMetadata
+	var liveByID map[int]protocol.WindowLiveMetadata
 	if kittyOK {
 		liveByID = daemonExportLiveMetadata(windows, snapshot, 0)
 	}

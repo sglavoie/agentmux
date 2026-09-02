@@ -88,6 +88,10 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
 - `internal/worktree`: bounded managed Git worktree creation and cleanup.
 - `internal/daemon`: IPC, reducer facts, durable Kitty state, live activity evidence,
   diagnostics, and the single renderer writer.
+- `internal/daemon/protocol`: the daemon wire contract — request/response model,
+  command names, durable and exported envelopes, and the serialization
+  vocabularies. It holds shapes and pure projections only, and must never import
+  the daemon root.
 - `internal/diagnostics`: private fail-open causal journals, operational and
   native logs, temporary raw captures, and bounded diagnostic storage.
 - `internal/debugger`: offline-first status, query, explanation, bundle, and

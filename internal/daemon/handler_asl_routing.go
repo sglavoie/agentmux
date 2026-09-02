@@ -53,8 +53,8 @@ func (h *Handler) tryRouteActiveLoopSiblingHook(ctx hookEventContext, eventOrAct
 	if !ok {
 		return false
 	}
-	ctx.req.routeEvidence.ASLMatches = 1
-	ctx.req.routeEvidence.SelectionReason = "asl"
+	ctx.req.RouteEvidence.ASLMatches = 1
+	ctx.req.RouteEvidence.SelectionReason = "asl"
 	// Exact ASL evidence may supply the producer for legacy unstamped hooks. It
 	// never comes from the managed target, so cross-harness routing retains the
 	// loop candidate's event dialect and source identity.
@@ -202,14 +202,14 @@ func (h *Handler) routeUnmanagedHookTarget(
 	// target: a routed sibling hook advances the owner's fact map, exactly as
 	// its legacy transition advances the owner's state machine.
 	normalized := normalizedFromHookRequest(eventOrAction, ctx.req, ctx.req.WindowID)
-	stateReq.normalized = &normalized
-	stateReq.routeDecision = routeDecisionOwner
-	stateReq.normalizationOutcome = normalizationOutcomeFor(normalized)
-	selectionReason := ctx.req.routeEvidence.SelectionReason
+	stateReq.Normalized = &normalized
+	stateReq.RouteDecision = routeDecisionOwner
+	stateReq.NormalizationOutcome = normalizationOutcomeFor(normalized)
+	selectionReason := ctx.req.RouteEvidence.SelectionReason
 	if selectionReason == "" {
 		selectionReason = "owner"
 	}
-	chooseRoute(stateReq.routeEvidence, routeDecisionOwner, selectionReason, target.win)
+	chooseRoute(stateReq.RouteEvidence, routeDecisionOwner, selectionReason, target.win)
 	if h.holdStopForConfirmation(stateReq, payload) {
 		return probeTarget
 	}

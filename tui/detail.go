@@ -6,7 +6,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 )
@@ -245,7 +245,7 @@ func detailHeader(m Model) string {
 // a marker glyph. The flexible detail column exposes tool, the ASL question
 // preview, compact trace ID, and the decisive reason without disturbing the
 // fixed event/action columns.
-func detailRow(ev daemon.SessionEvent, now time.Time, width int) string {
+func detailRow(ev protocol.SessionEvent, now time.Time, width int) string {
 	timeCell := padRight(formatRelativeAge(time.Unix(ev.At, 0), now), detailColTime)
 	eventCell := padRight(ev.Event, detailColEvent)
 	actionCell := padRight(ev.Action, detailColAction)
@@ -376,7 +376,7 @@ func renderDetail(m Model) string {
 	// Most-recent-first: the daemon serves events oldest-first, so we walk
 	// the slice in reverse for display. detailScroll is then a count of
 	// rows skipped from the top of the reversed view.
-	reversed := make([]daemon.SessionEvent, total)
+	reversed := make([]protocol.SessionEvent, total)
 	for i, ev := range m.detailEvents {
 		reversed[total-1-i] = ev
 	}

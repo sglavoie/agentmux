@@ -6,11 +6,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func TestServer_HandlesPartialWrites(t *testing.T) {
 	w := &slowWriter{chunk: 1}
-	resp := Response{OK: true, IconState: "bolt", Allowed: true}
+	resp := protocol.Response{OK: true, IconState: "bolt", Allowed: true}
 
 	writeResponse(w, resp)
 
@@ -19,7 +21,7 @@ func TestServer_HandlesPartialWrites(t *testing.T) {
 		t.Fatalf("expected trailing newline, got: %q", out)
 	}
 	trimmed := strings.TrimRight(out, "\n")
-	var decoded Response
+	var decoded protocol.Response
 	if err := json.Unmarshal([]byte(trimmed), &decoded); err != nil {
 		t.Fatalf("response not valid JSON after partial writes: %v (raw: %q)", err, out)
 	}

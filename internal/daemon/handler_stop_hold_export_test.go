@@ -7,12 +7,14 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
-func stopHoldExportPayload() ExportEventsPayload {
-	return ExportEventsPayload{Windows: []ExportWindow{{
+func stopHoldExportPayload() protocol.ExportEventsPayload {
+	return protocol.ExportEventsPayload{Windows: []protocol.ExportWindow{{
 		WindowID: 3,
-		Stats: WindowDebugStats{
+		Stats: protocol.WindowDebugStats{
 			EventCount: 2,
 			SuppressionReasons: map[string]int{
 				suppressionReasonGuardBlocked:           1,
@@ -21,31 +23,31 @@ func stopHoldExportPayload() ExportEventsPayload {
 				suppressionReasonTerminalStopBypassed:   4,
 			},
 		},
-		Shadow: WindowDebugShadow{
+		Shadow: protocol.WindowDebugShadow{
 			EffectiveIcon:    "bolt",
 			EffectiveLooping: true,
 			EffectiveGen:     7,
 			MismatchCount:    1,
 			BusySinceAt:      90,
-			Mismatches: []ShadowMismatch{{
+			Mismatches: []protocol.ShadowMismatch{{
 				At: 99, Event: "PreToolUse", Action: "active", LegacyIcon: "", ShadowIcon: "bolt",
 			}},
-			Facts: []SourceFactSnapshot{{
-				Kind: SourceHarness, Key: "claude:session", Action: "active", Icon: "bolt", Seq: 7,
+			Facts: []protocol.SourceFactSnapshot{{
+				Kind: protocol.SourceHarness, Key: "claude:session", Action: "active", Icon: "bolt", Seq: 7,
 			}},
-			PendingTerminalStop: &PendingTerminalStop{
-				ArmedAt: 100, QuietUntil: 102, Deadline: 108, Confirmed: true, Class: StopHoldClassTerminal,
+			PendingTerminalStop: &protocol.PendingTerminalStop{
+				ArmedAt: 100, QuietUntil: 102, Deadline: 108, Confirmed: true, Class: protocol.StopHoldClassTerminal,
 			},
 		},
-		Events: []SessionEvent{
+		Events: []protocol.SessionEvent{
 			{
-				At: 100, Event: EventTerminalStopHold, Action: "stop",
-				StopHoldOutcome: StopHoldOutcomeHeld,
+				At: 100, Event: protocol.EventTerminalStopHold, Action: "stop",
+				StopHoldOutcome: protocol.StopHoldOutcomeHeld,
 			},
 			{
 				At: 103, Event: "Stop", Action: "stop",
-				StopHoldOutcome: StopHoldOutcomeConfirmed, StopHoldWaitedMs: 1400,
-				StopConfirmedBy: StopConfirmedByClaudeScreen,
+				StopHoldOutcome: protocol.StopHoldOutcomeConfirmed, StopHoldWaitedMs: 1400,
+				StopConfirmedBy: protocol.StopConfirmedByClaudeScreen,
 			},
 		},
 	}}}
@@ -53,7 +55,7 @@ func stopHoldExportPayload() ExportEventsPayload {
 
 func stopHoldExportJSON(t *testing.T, schema int) map[string]any {
 	t.Helper()
-	projected, err := ProjectExportEventsPayload(stopHoldExportPayload(), schema)
+	projected, err := protocol.ProjectExportEventsPayload(stopHoldExportPayload(), schema)
 	if err != nil {
 		t.Fatalf("ProjectExportEventsPayload(%d): %v", schema, err)
 	}
@@ -69,7 +71,7 @@ func stopHoldExportJSON(t *testing.T, schema int) map[string]any {
 }
 
 func TestProjectExportEventsPayloadV12RoundTripsStopHoldFields(t *testing.T) {
-	raw := stopHoldExportJSON(t, EventsExportSchemaV12)
+	raw := stopHoldExportJSON(t, protocol.EventsExportSchemaV12)
 	if got := int(raw["schema_version"].(float64)); got != 12 {
 		t.Fatalf("schema_version = %d; want 12", got)
 	}
@@ -80,7 +82,7 @@ func TestProjectExportEventsPayloadV12RoundTripsStopHoldFields(t *testing.T) {
 	}
 	if int(pending["armed_at"].(float64)) != 100 || int(pending["quiet_until"].(float64)) != 102 ||
 		int(pending["deadline"].(float64)) != 108 || pending["confirmed"] != true ||
-		pending["class"] != StopHoldClassTerminal {
+		pending["class"] != protocol.StopHoldClassTerminal {
 		t.Fatalf("schema v12 pending_terminal_stop = %v", pending)
 	}
 	events := window["events"].([]any)
@@ -88,13 +90,13 @@ func TestProjectExportEventsPayloadV12RoundTripsStopHoldFields(t *testing.T) {
 		t.Fatalf("schema v12 events = %d; want 2", len(events))
 	}
 	held := events[0].(map[string]any)
-	if held["event"] != EventTerminalStopHold || held["stop_hold_outcome"] != string(StopHoldOutcomeHeld) {
+	if held["event"] != protocol.EventTerminalStopHold || held["stop_hold_outcome"] != string(protocol.StopHoldOutcomeHeld) {
 		t.Fatalf("schema v12 hold row = %v", held)
 	}
 	confirmed := events[1].(map[string]any)
-	if confirmed["stop_hold_outcome"] != string(StopHoldOutcomeConfirmed) ||
+	if confirmed["stop_hold_outcome"] != string(protocol.StopHoldOutcomeConfirmed) ||
 		int(confirmed["stop_hold_waited_ms"].(float64)) != 1400 ||
-		confirmed["stop_confirmed_by"] != string(StopConfirmedByClaudeScreen) {
+		confirmed["stop_confirmed_by"] != string(protocol.StopConfirmedByClaudeScreen) {
 		t.Fatalf("schema v12 confirmed row = %v", confirmed)
 	}
 	reasons := window["stats"].(map[string]any)["suppression_reasons"].(map[string]any)
@@ -111,11 +113,11 @@ func TestProjectExportEventsPayloadV12RoundTripsStopHoldFields(t *testing.T) {
 
 func TestProjectExportEventsPayloadV11IdentityProjection(t *testing.T) {
 	payload := stopHoldExportPayload()
-	projectedV11, err := ProjectExportEventsPayload(payload, EventsExportSchemaV11)
+	projectedV11, err := protocol.ProjectExportEventsPayload(payload, protocol.EventsExportSchemaV11)
 	if err != nil {
 		t.Fatalf("ProjectExportEventsPayload(v11): %v", err)
 	}
-	projectedV12, err := ProjectExportEventsPayload(payload, EventsExportSchemaV12)
+	projectedV12, err := protocol.ProjectExportEventsPayload(payload, protocol.EventsExportSchemaV12)
 	if err != nil {
 		t.Fatalf("ProjectExportEventsPayload(v12): %v", err)
 	}
@@ -159,7 +161,7 @@ func TestProjectExportEventsPayloadV11IdentityProjection(t *testing.T) {
 	}
 	if int(pending["armed_at"].(float64)) != 100 || int(pending["quiet_until"].(float64)) != 102 ||
 		int(pending["deadline"].(float64)) != 108 || pending["confirmed"] != true ||
-		pending["class"] != StopHoldClassTerminal {
+		pending["class"] != protocol.StopHoldClassTerminal {
 		t.Fatalf("schema v11 pending_terminal_stop = %v", pending)
 	}
 	events := window["events"].([]any)
@@ -167,13 +169,13 @@ func TestProjectExportEventsPayloadV11IdentityProjection(t *testing.T) {
 		t.Fatalf("schema v11 events = %d; want 2", len(events))
 	}
 	held := events[0].(map[string]any)
-	if held["event"] != EventTerminalStopHold || held["stop_hold_outcome"] != string(StopHoldOutcomeHeld) {
+	if held["event"] != protocol.EventTerminalStopHold || held["stop_hold_outcome"] != string(protocol.StopHoldOutcomeHeld) {
 		t.Fatalf("schema v11 hold row = %v", held)
 	}
 	confirmed := events[1].(map[string]any)
-	if confirmed["stop_hold_outcome"] != string(StopHoldOutcomeConfirmed) ||
+	if confirmed["stop_hold_outcome"] != string(protocol.StopHoldOutcomeConfirmed) ||
 		int(confirmed["stop_hold_waited_ms"].(float64)) != 1400 ||
-		confirmed["stop_confirmed_by"] != string(StopConfirmedByClaudeScreen) {
+		confirmed["stop_confirmed_by"] != string(protocol.StopConfirmedByClaudeScreen) {
 		t.Fatalf("schema v11 confirmed row = %v", confirmed)
 	}
 	reasons := window["stats"].(map[string]any)["suppression_reasons"].(map[string]any)
@@ -191,7 +193,7 @@ func TestProjectExportEventsPayloadV11IdentityProjection(t *testing.T) {
 
 func TestHandler_ExportProjectsBusySinceAndOmitsItWhenIdle(t *testing.T) {
 	h := newTestHandler()
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Event: "PreToolUse", SessionTitle: "W:api"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Event: "PreToolUse", SessionTitle: "W:api"})
 
 	h.stateMu.Lock()
 	anchor := h.store[42].BusySince
@@ -200,13 +202,13 @@ func TestHandler_ExportProjectsBusySinceAndOmitsItWhenIdle(t *testing.T) {
 		t.Fatal("active window has a zero busy anchor")
 	}
 
-	resp := h.Handle(Request{Type: TypeEventsExport, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeEventsExport, WindowID: 42})
 	if got := resp.WindowMetadata[42].Shadow.BusySinceAt; got != anchor.Unix() {
 		t.Fatalf("busy_since_at = %d; want anchor %d", got, anchor.Unix())
 	}
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "stop", Event: "Stop", SessionTitle: "W:api"})
-	resp = h.Handle(Request{Type: TypeEventsExport, WindowID: 42})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "stop", Event: "Stop", SessionTitle: "W:api"})
+	resp = h.Handle(protocol.Request{Type: protocol.TypeEventsExport, WindowID: 42})
 	encoded, err := json.Marshal(resp.WindowMetadata[42].Shadow)
 	if err != nil {
 		t.Fatalf("Marshal(idle shadow): %v", err)
@@ -217,7 +219,7 @@ func TestHandler_ExportProjectsBusySinceAndOmitsItWhenIdle(t *testing.T) {
 }
 
 func TestProjectExportEventsPayloadV10OmitsStopHoldDiagnostics(t *testing.T) {
-	raw := stopHoldExportJSON(t, EventsExportSchemaV10)
+	raw := stopHoldExportJSON(t, protocol.EventsExportSchemaV10)
 	if got := int(raw["schema_version"].(float64)); got != 10 {
 		t.Fatalf("schema_version = %d; want 10", got)
 	}
@@ -230,7 +232,7 @@ func TestProjectExportEventsPayloadV10OmitsStopHoldDiagnostics(t *testing.T) {
 		t.Fatalf("schema v10 events = %d; want 1 (TerminalStopHold must be dropped)", len(events))
 	}
 	event := events[0].(map[string]any)
-	if event["event"] == EventTerminalStopHold {
+	if event["event"] == protocol.EventTerminalStopHold {
 		t.Fatalf("schema v10 kept the synthetic hold row: %v", event)
 	}
 	for _, key := range []string{"stop_hold_outcome", "stop_hold_waited_ms", "stop_confirmed_by"} {
@@ -246,9 +248,9 @@ func TestProjectExportEventsPayloadV10OmitsStopHoldDiagnostics(t *testing.T) {
 		name   string
 		schema int
 	}{
-		{"v10", EventsExportSchemaV10},
-		{"v9", EventsExportSchemaV9},
-		{"v8", EventsExportSchemaV8},
+		{"v10", protocol.EventsExportSchemaV10},
+		{"v9", protocol.EventsExportSchemaV9},
+		{"v8", protocol.EventsExportSchemaV8},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			stats := stopHoldExportJSON(t, tc.schema)["windows"].([]any)[0].(map[string]any)["stats"].(map[string]any)
@@ -279,7 +281,7 @@ func TestHandler_ExportProjectsLiveTerminalStopHold(t *testing.T) {
 		h, _ := newTerminalHoldTestHandler(t)
 		armTerminalHold(t, h)
 
-		resp := h.Handle(Request{Type: TypeEventsExport, WindowID: 42})
+		resp := h.Handle(protocol.Request{Type: protocol.TypeEventsExport, WindowID: 42})
 		if !resp.OK {
 			t.Fatalf("events export: want OK=true, got %+v", resp)
 		}
@@ -288,8 +290,8 @@ func TestHandler_ExportProjectsLiveTerminalStopHold(t *testing.T) {
 			t.Fatalf("export lost the live terminal hold: %+v", resp.WindowMetadata[42].Shadow)
 		}
 		armed := time.Now()
-		if held.Class != StopHoldClassTerminal || held.Confirmed {
-			t.Fatalf("exported hold = %+v, want an unconfirmed %s hold", held, StopHoldClassTerminal)
+		if held.Class != protocol.StopHoldClassTerminal || held.Confirmed {
+			t.Fatalf("exported hold = %+v, want an unconfirmed %s hold", held, protocol.StopHoldClassTerminal)
 		}
 		if held.ArmedAt != armed.Unix() ||
 			held.QuietUntil != armed.Add(terminalHoldTestDelay).Unix() ||
@@ -301,7 +303,7 @@ func TestHandler_ExportProjectsLiveTerminalStopHold(t *testing.T) {
 		time.Sleep(terminalHoldTestTimeout + time.Second)
 		synctest.Wait()
 
-		resp = h.Handle(Request{Type: TypeEventsExport, WindowID: 42})
+		resp = h.Handle(protocol.Request{Type: protocol.TypeEventsExport, WindowID: 42})
 		if released := resp.WindowMetadata[42].Shadow.PendingTerminalStop; released != nil {
 			t.Fatalf("export kept a released hold: %+v", released)
 		}
@@ -310,8 +312,8 @@ func TestHandler_ExportProjectsLiveTerminalStopHold(t *testing.T) {
 
 func TestHandler_AppendStopHoldEventRecordsSuppressedRow(t *testing.T) {
 	h := newTestHandler()
-	req := Request{
-		Type:         TypeStateUpdate,
+	req := protocol.Request{
+		Type:         protocol.TypeStateUpdate,
 		WindowID:     4,
 		Harness:      "claude",
 		Action:       "stop",
@@ -319,9 +321,9 @@ func TestHandler_AppendStopHoldEventRecordsSuppressedRow(t *testing.T) {
 		SessionTitle: "W:api",
 		Account:      "work",
 	}
-	h.appendStopHoldEvent(req, StopHoldOutcomeHeld, 1500*time.Millisecond)
+	h.appendStopHoldEvent(req, protocol.StopHoldOutcomeHeld, 1500*time.Millisecond)
 
-	resp := h.Handle(Request{Type: TypeEventsExport, WindowID: 4})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeEventsExport, WindowID: 4})
 	if !resp.OK {
 		t.Fatalf("events export: want OK=true, got %+v", resp)
 	}
@@ -330,22 +332,22 @@ func TestHandler_AppendStopHoldEventRecordsSuppressedRow(t *testing.T) {
 		t.Fatalf("events = %d; want 1 (%+v)", len(events), events)
 	}
 	ev := events[0]
-	if ev.Event != EventTerminalStopHold {
-		t.Fatalf("event = %q; want %q", ev.Event, EventTerminalStopHold)
+	if ev.Event != protocol.EventTerminalStopHold {
+		t.Fatalf("event = %q; want %q", ev.Event, protocol.EventTerminalStopHold)
 	}
-	if ev.StopHoldOutcome != StopHoldOutcomeHeld {
-		t.Fatalf("stop_hold_outcome = %q; want %q", ev.StopHoldOutcome, StopHoldOutcomeHeld)
+	if ev.StopHoldOutcome != protocol.StopHoldOutcomeHeld {
+		t.Fatalf("stop_hold_outcome = %q; want %q", ev.StopHoldOutcome, protocol.StopHoldOutcomeHeld)
 	}
 	if ev.StopHoldWaitedMs != 1500 {
 		t.Fatalf("stop_hold_waited_ms = %d; want 1500", ev.StopHoldWaitedMs)
 	}
-	if ev.DecisionReason != DecisionReasonTerminalStopHeld || ev.ReducerReason != DecisionReasonTerminalStopHeld {
-		t.Fatalf("reason = %q/%q; want %q", ev.DecisionReason, ev.ReducerReason, DecisionReasonTerminalStopHeld)
+	if ev.DecisionReason != protocol.DecisionReasonTerminalStopHeld || ev.ReducerReason != protocol.DecisionReasonTerminalStopHeld {
+		t.Fatalf("reason = %q/%q; want %q", ev.DecisionReason, ev.ReducerReason, protocol.DecisionReasonTerminalStopHeld)
 	}
-	if ev.ReducerDecision != DecisionSuppressed {
-		t.Fatalf("reducer_decision = %q; want %q", ev.ReducerDecision, DecisionSuppressed)
+	if ev.ReducerDecision != protocol.DecisionSuppressed {
+		t.Fatalf("reducer_decision = %q; want %q", ev.ReducerDecision, protocol.DecisionSuppressed)
 	}
-	if reason, ok := stopHoldDecisionReason(StopHoldOutcomeConfirmed); ok {
+	if reason, ok := stopHoldDecisionReason(protocol.StopHoldOutcomeConfirmed); ok {
 		t.Fatalf("confirmed outcome produced a hold row reason %q", reason)
 	}
 	if got := resp.WindowMetadata[4].Stats.SuppressionReasons[suppressionReasonTerminalStopHeld]; got != 1 {
@@ -359,18 +361,18 @@ func TestHandler_AppendStopHoldEventRecordsSuppressedRow(t *testing.T) {
 // stop the hold commits and must not also produce a row.
 func TestStopHoldDecisionReasonCoversHoldEndingOutcomes(t *testing.T) {
 	for _, tc := range []struct {
-		outcome StopHoldOutcome
+		outcome protocol.StopHoldOutcome
 		want    string
 	}{
-		{StopHoldOutcomeSuperseded, suppressionReasonTerminalStopSuperseded},
-		{StopHoldOutcomeBypassed, suppressionReasonTerminalStopBypassed},
+		{protocol.StopHoldOutcomeSuperseded, suppressionReasonTerminalStopSuperseded},
+		{protocol.StopHoldOutcomeBypassed, suppressionReasonTerminalStopBypassed},
 	} {
 		reason, ok := stopHoldDecisionReason(tc.outcome)
 		if !ok || reason != tc.want {
 			t.Fatalf("stopHoldDecisionReason(%q) = %q, %v; want %q", tc.outcome, reason, ok, tc.want)
 		}
 	}
-	for _, outcome := range []StopHoldOutcome{StopHoldOutcomeConfirmed, StopHoldOutcomeDeadline} {
+	for _, outcome := range []protocol.StopHoldOutcome{protocol.StopHoldOutcomeConfirmed, protocol.StopHoldOutcomeDeadline} {
 		if _, ok := stopHoldDecisionReason(outcome); ok {
 			t.Fatalf("release outcome %q must not produce its own hold row", outcome)
 		}

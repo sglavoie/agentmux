@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -14,9 +15,9 @@ import (
 //
 // Behavior is gated on at least one configured threshold (global or
 // per-account) being > 0. The "stale" action is daemon-internal: it never
-// crosses the IPC wire and is not present in actionPriority or
-// actionIconState. The notifier is the only subsystem that recognizes it as
-// an action name.
+// crosses the IPC wire and is not present in protocol.ActionPriority or
+// protocol.IconState. The notifier is the only subsystem that recognizes it
+// as an action name.
 func (h *Handler) SweepStale(now time.Time) {
 	var windows []kitty.OSWindow
 	// Prune eventLog entries for windows that Kitty no longer reports as live.
@@ -205,12 +206,12 @@ func (h *Handler) expireStaleFactsLocked(windowID int, st *WindowState, now time
 		return 0, false
 	}
 	type pendingExpiry struct {
-		fact      SourceFactSnapshot
+		fact      protocol.SourceFactSnapshot
 		threshold time.Duration
 		idle      time.Duration
 	}
 	var expiries []pendingExpiry
-	seen := make(map[SourceID]bool)
+	seen := make(map[protocol.SourceID]bool)
 	for _, fact := range st.Reducer.Facts() {
 		src := fact.Source()
 		action := staleActionForIcon(fact.Icon)
@@ -221,7 +222,7 @@ func (h *Handler) expireStaleFactsLocked(windowID int, st *WindowState, now time
 		threshold := h.resolveThreshold(st.LastAccount, action)
 		idle := advanceFactIdle(st, fact, now, credit, gapTick)
 		factStale := threshold > 0 && idle >= threshold
-		if fact.Kind == SourceASL && fact.LeaseLive && !factStale &&
+		if fact.Kind == protocol.SourceASL && fact.LeaseLive && !factStale &&
 			(fact.Phase == ASLPhaseTurn || fact.Phase == ASLPhaseVerification) {
 			aslExecuting = true
 		}
@@ -238,7 +239,7 @@ func (h *Handler) expireStaleFactsLocked(windowID int, st *WindowState, now time
 		}
 	}
 	for _, p := range expiries {
-		if aslExecuting && p.fact.Icon == "bolt" && p.fact.Kind != SourceASL {
+		if aslExecuting && p.fact.Icon == "bolt" && p.fact.Kind != protocol.SourceASL {
 			continue
 		}
 		if !st.Reducer.ExpireFact(p.fact.Source(), p.fact.Seq, now.Unix()) {

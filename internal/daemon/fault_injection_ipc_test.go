@@ -15,6 +15,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestFaultResponseLossRetryAppliesOnce reproduces the ambiguous-timeout
@@ -24,8 +26,8 @@ import (
 func TestFaultResponseLossRetryAppliesOnce(t *testing.T) {
 	sock, server := newTestServerWithRef(t)
 
-	req := Request{
-		Type:      TypeStateUpdate,
+	req := protocol.Request{
+		Type:      protocol.TypeStateUpdate,
 		RequestID: "lost-response-1",
 		WindowID:  7,
 		Action:    "subagent",
@@ -39,7 +41,7 @@ func TestFaultResponseLossRetryAppliesOnce(t *testing.T) {
 		t.Fatalf("dial: %v", err)
 	}
 	data := fmt.Sprintf(`{"type":%q,"request_id":%q,"window_id":7,"action":"subagent","event":"SubagentStart"}`+"\n",
-		TypeStateUpdate, req.RequestID)
+		protocol.TypeStateUpdate, req.RequestID)
 	if _, err := conn.Write([]byte(data)); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -84,10 +86,10 @@ func TestFaultQueuePressureNeverDropsEvents(t *testing.T) {
 	var applied atomic.Int32
 	gate := make(chan struct{})
 	var gateOnce sync.Once
-	handle := func(_ Request) Response {
+	handle := func(_ protocol.Request) protocol.Response {
 		<-gate
 		applied.Add(1)
-		return Response{OK: true}
+		return protocol.Response{OK: true}
 	}
 	var metrics Metrics
 	q := newIngressQueueCap(handle, &metrics, 2)
@@ -102,7 +104,7 @@ func TestFaultQueuePressureNeverDropsEvents(t *testing.T) {
 	for i := 0; i < submitters; i++ {
 		go func() {
 			defer wg.Done()
-			if resp := q.submit(Request{Type: TypeStateUpdate}); !resp.OK {
+			if resp := q.submit(protocol.Request{Type: protocol.TypeStateUpdate}); !resp.OK {
 				t.Errorf("submit under pressure = %+v; want ok", resp)
 			}
 		}()

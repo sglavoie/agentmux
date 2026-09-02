@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func startTestServer(t *testing.T) string {
@@ -47,7 +48,7 @@ func TestIPC_StateUpdate(t *testing.T) {
 	sock := startTestServer(t)
 	c := NewClientWithSocket(sock)
 
-	resp, err := c.Send(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
+	resp, err := c.Send(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active"})
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -60,7 +61,7 @@ func TestIPC_StateQuery(t *testing.T) {
 	sock := startTestServer(t)
 	c := NewClientWithSocket(sock)
 
-	resp, err := c.Send(Request{Type: TypeStateQuery})
+	resp, err := c.Send(protocol.Request{Type: protocol.TypeStateQuery})
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -73,13 +74,13 @@ func TestIPC_EventsExportWindowFilter(t *testing.T) {
 	sock := startTestServer(t)
 	c := NewClientWithSocket(sock)
 
-	if _, err := c.Send(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse", SessionTitle: "W:one"}); err != nil {
+	if _, err := c.Send(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse", SessionTitle: "W:one"}); err != nil {
 		t.Fatalf("window 1 update: %v", err)
 	}
-	if _, err := c.Send(Request{Type: TypeStateUpdate, WindowID: 2, Action: "active", Event: "PreToolUse", SessionTitle: "W:two", Account: "work", Harness: "copilot"}); err != nil {
+	if _, err := c.Send(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 2, Action: "active", Event: "PreToolUse", SessionTitle: "W:two", Account: "work", Harness: "copilot"}); err != nil {
 		t.Fatalf("window 2 active: %v", err)
 	}
-	if _, err := c.Send(Request{Type: TypeStateUpdate, WindowID: 2, Action: "stop", Event: "Stop", SessionTitle: "W:two", Account: "work", Harness: "copilot"}); err != nil {
+	if _, err := c.Send(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 2, Action: "stop", Event: "Stop", SessionTitle: "W:two", Account: "work", Harness: "copilot"}); err != nil {
 		t.Fatalf("window 2 stop: %v", err)
 	}
 
@@ -109,10 +110,10 @@ func TestIPC_JSONRoundTrip(t *testing.T) {
 	c := NewClientWithSocket(sock)
 
 	// Guard blocks lower-priority update across round-trips.
-	if _, err := c.Send(Request{Type: TypeStateUpdate, WindowID: 2, Action: "failure"}); err != nil {
+	if _, err := c.Send(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 2, Action: "failure"}); err != nil {
 		t.Fatalf("Send failure: %v", err)
 	}
-	resp, err := c.Send(Request{Type: TypeStateUpdate, WindowID: 2, Action: "permission"})
+	resp, err := c.Send(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 2, Action: "permission"})
 	if err != nil {
 		t.Fatalf("Send permission: %v", err)
 	}
@@ -125,10 +126,10 @@ func TestIPC_PromptBypassesStopGuard(t *testing.T) {
 	sock := startTestServer(t)
 	c := NewClientWithSocket(sock)
 
-	if _, err := c.Send(Request{Type: TypeStateUpdate, WindowID: 3, Action: "stop"}); err != nil {
+	if _, err := c.Send(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 3, Action: "stop"}); err != nil {
 		t.Fatalf("Send stop: %v", err)
 	}
-	resp, err := c.Send(Request{Type: TypeStateUpdate, WindowID: 3, Action: "active", IsPrompt: true})
+	resp, err := c.Send(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 3, Action: "active", IsPrompt: true})
 	if err != nil {
 		t.Fatalf("Send active+UserPromptSubmit: %v", err)
 	}
@@ -145,7 +146,7 @@ func TestIPC_ConcurrentUpdates(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		windowID := i + 1
 		go func() {
-			_, err := c.Send(Request{Type: TypeStateUpdate, WindowID: windowID, Action: "active"})
+			_, err := c.Send(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: windowID, Action: "active"})
 			done <- err
 		}()
 	}
@@ -168,7 +169,7 @@ func TestIPC_InvalidJSON(t *testing.T) {
 
 	buf := make([]byte, 256)
 	n, _ := conn.Read(buf)
-	var resp Response
+	var resp protocol.Response
 	if jsonErr := json.Unmarshal(buf[:n], &resp); jsonErr != nil {
 		t.Fatalf("response not valid JSON: %v", jsonErr)
 	}
@@ -211,11 +212,11 @@ func TestIPC_StateQueryWatchdogRoundtrip(t *testing.T) {
 
 	c := NewClientWithSocket(socketPath)
 
-	if _, err := c.Send(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "personal"}); err != nil {
+	if _, err := c.Send(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Account: "personal"}); err != nil {
 		t.Fatalf("state_update: %v", err)
 	}
 
-	resp, err := c.Send(Request{Type: TypeStateQuery})
+	resp, err := c.Send(protocol.Request{Type: protocol.TypeStateQuery})
 	if err != nil {
 		t.Fatalf("state_query: %v", err)
 	}
@@ -269,21 +270,21 @@ func TestIPC_ShutdownRequest(t *testing.T) {
 	go func() { _ = server.Serve(ctx) }()
 
 	c := NewClientWithSocket(socketPath)
-	resp, err := c.Send(Request{Type: TypeStateQuery})
+	resp, err := c.Send(protocol.Request{Type: protocol.TypeStateQuery})
 	if err != nil || !resp.OK {
 		t.Fatalf("query failed: err=%v resp=%+v", err, resp)
 	}
 
 	// Trigger shutdown via request.
 	handler.onShutdown = cancel
-	resp, err = c.Send(Request{Type: TypeShutdown})
+	resp, err = c.Send(protocol.Request{Type: protocol.TypeShutdown})
 	if err != nil || !resp.OK {
 		t.Fatalf("shutdown request failed: err=%v resp=%+v", err, resp)
 	}
 
 	// After shutdown, subsequent connects should fail.
 	time.Sleep(50 * time.Millisecond)
-	if _, err := c.Send(Request{Type: TypeStateQuery}); err == nil {
+	if _, err := c.Send(protocol.Request{Type: protocol.TypeStateQuery}); err == nil {
 		t.Fatal("expected connection error after shutdown")
 	}
 }

@@ -9,7 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -112,10 +112,10 @@ func TestCommandCopyAndClearStatusEffects(t *testing.T) {
 		t.Fatalf("copied title = %q, want api", copied)
 	}
 
-	var request daemon.Request
-	m.daemonCommand = func(req daemon.Request) (daemon.Response, error) {
+	var request protocol.Request
+	m.daemonCommand = func(req protocol.Request) (protocol.Response, error) {
 		request = req
-		return daemon.Response{OK: true}, nil
+		return protocol.Response{OK: true}, nil
 	}
 	_, clearCmd := commandByID(t, commandClearStatus).run(m, ctx)
 	if clearCmd == nil {

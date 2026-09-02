@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -98,7 +99,7 @@ func TestProbeClaudeScreenStop_RestingBrailleDoesNotPromoteEmptyWindow(t *testin
 		kitty.MatchWindowByID(42): claudeIdleScreen,
 	}}
 	h := newTestHandler()
-	if resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "user_clear", Harness: harness.Claude}); !resp.OK {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "user_clear", Harness: harness.Claude}); !resp.OK {
 		t.Fatalf("seed empty state response = %+v", resp)
 	}
 	h.SetKittyClient(fake)

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -262,11 +263,11 @@ func TestHookRoutingReadsCacheNotLiveList(t *testing.T) {
 	fake.listErr = errors.New("kitty is wedged")
 	fake.mu.Unlock()
 
-	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "PreToolUse"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "PreToolUse"})
 	if !resp.OK {
 		t.Fatalf("hook response = %+v", resp)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) != 1 {
 		t.Fatalf("events = %d, want 1 (%+v)", len(detail.Events), detail.Events)
 	}
@@ -292,7 +293,7 @@ func TestHookRoutingColdCacheFallsBackToSourcePane(t *testing.T) {
 	// reconciled.
 	h.useKittyClient(&fakeKittyClient{})
 
-	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "user_clear"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "user_clear"})
 	if !resp.OK {
 		t.Fatalf("user_clear response = %+v", resp)
 	}

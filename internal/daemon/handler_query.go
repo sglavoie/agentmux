@@ -1,14 +1,18 @@
 package daemon
 
-import "time"
+import (
+	"time"
 
-func (h *Handler) handleStateQuery() Response {
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+)
+
+func (h *Handler) handleStateQuery() protocol.Response {
 	h.stateMu.Lock()
 	now := time.Now().Unix()
-	states := make(map[int]WindowStateSnapshot, len(h.store))
+	states := make(map[int]protocol.WindowStateSnapshot, len(h.store))
 	snapshot := make(map[int]int64, len(h.store))
 	for id, st := range h.store {
-		state := WindowStateSnapshot{
+		state := protocol.WindowStateSnapshot{
 			IconState:   desiredIconForState(st),
 			Looping:     st.Looping,
 			LastAction:  st.LastAction,
@@ -29,13 +33,13 @@ func (h *Handler) handleStateQuery() Response {
 		state.LastEventAt = st.Activity.Unix()
 		states[id] = state
 	}
-	watchdog := make(map[int]WatchdogState, len(h.store))
+	watchdog := make(map[int]protocol.WatchdogState, len(h.store))
 	for id, st := range h.store {
 		action := st.LastAction
 		if action != "active" && action != "subagent" && action != "compact" {
 			continue
 		}
-		entry := WatchdogState{LastAction: action}
+		entry := protocol.WatchdogState{LastAction: action}
 		if !st.Activity.IsZero() {
 			entry.LastEventAt = st.Activity.Unix()
 		}
@@ -45,24 +49,24 @@ func (h *Handler) handleStateQuery() Response {
 		watchdog[id] = entry
 	}
 	h.stateMu.Unlock()
-	return Response{OK: true, Activity: snapshot, Watchdog: watchdog, States: states}
+	return protocol.Response{OK: true, Activity: snapshot, Watchdog: watchdog, States: states}
 }
 
 // handleSessionDetail returns the per-window event ring buffer for req.WindowID.
 // An unknown window yields a non-nil empty slice rather than nil so the TUI can
 // distinguish "no daemon error" from "no events yet" without a nil check.
-func (h *Handler) handleSessionDetail(req Request) Response {
+func (h *Handler) handleSessionDetail(req protocol.Request) protocol.Response {
 	h.stateMu.Lock()
-	var src []SessionEvent
+	var src []protocol.SessionEvent
 	if st, ok := h.windowStateLocked(req.WindowID); ok {
 		src = st.EventLog
 	}
-	events := make([]SessionEvent, len(src))
+	events := make([]protocol.SessionEvent, len(src))
 	for i := range src {
 		events[i] = h.enrichNotificationEvent(req.WindowID, cloneSessionEvent(src[i]))
 	}
 	h.stateMu.Unlock()
-	return Response{OK: true, Events: events}
+	return protocol.Response{OK: true, Events: events}
 }
 
 // handleEventsExport returns a deep copy of the requested window's event ring
@@ -70,13 +74,13 @@ func (h *Handler) handleSessionDetail(req Request) Response {
 // zero, every exported window is returned. Mirrors handleSessionDetail's
 // locking and defensive copies so callers cannot mutate the daemon's internal
 // state.
-func (h *Handler) handleEventsExport(req Request) Response {
+func (h *Handler) handleEventsExport(req protocol.Request) protocol.Response {
 	h.stateMu.Lock()
-	out := make(map[int][]SessionEvent)
-	meta := make(map[int]WindowDebugMetadata)
+	out := make(map[int][]protocol.SessionEvent)
+	meta := make(map[int]protocol.WindowDebugMetadata)
 	if req.WindowID != 0 {
 		if st, ok := h.windowStateLocked(req.WindowID); ok && len(st.EventLog) > 0 {
-			cp := make([]SessionEvent, len(st.EventLog))
+			cp := make([]protocol.SessionEvent, len(st.EventLog))
 			for i := range st.EventLog {
 				cp[i] = h.enrichNotificationEvent(req.WindowID, cloneSessionEvent(st.EventLog[i]))
 			}
@@ -86,24 +90,24 @@ func (h *Handler) handleEventsExport(req Request) Response {
 			meta[req.WindowID] = h.exportEnrichLocked(req.WindowID, cloneWindowDebugMetadata(snapshot))
 		}
 	} else {
-		out = make(map[int][]SessionEvent, len(h.store))
+		out = make(map[int][]protocol.SessionEvent, len(h.store))
 		for id, st := range h.store {
 			if len(st.EventLog) == 0 {
 				continue
 			}
-			cp := make([]SessionEvent, len(st.EventLog))
+			cp := make([]protocol.SessionEvent, len(st.EventLog))
 			for i := range st.EventLog {
 				cp[i] = h.enrichNotificationEvent(id, cloneSessionEvent(st.EventLog[i]))
 			}
 			out[id] = cp
 		}
-		meta = make(map[int]WindowDebugMetadata, len(h.windowMetadata))
+		meta = make(map[int]protocol.WindowDebugMetadata, len(h.windowMetadata))
 		for id, snapshot := range h.windowMetadata {
 			meta[id] = h.exportEnrichLocked(id, cloneWindowDebugMetadata(snapshot))
 		}
 	}
 	h.stateMu.Unlock()
-	return Response{OK: true, EventsByWindow: out, WindowMetadata: meta}
+	return protocol.Response{OK: true, EventsByWindow: out, WindowMetadata: meta}
 }
 
 // exportEnrichLocked stamps live-only state onto an export snapshot: the
@@ -113,7 +117,7 @@ func (h *Handler) handleEventsExport(req Request) Response {
 // accountable to the authoritative fact set, any terminal stop still being
 // withheld from that fact set, and the current busy-stretch anchor. Callers
 // hold stateMu.
-func (h *Handler) exportEnrichLocked(windowID int, meta WindowDebugMetadata) WindowDebugMetadata {
+func (h *Handler) exportEnrichLocked(windowID int, meta protocol.WindowDebugMetadata) protocol.WindowDebugMetadata {
 	st, ok := h.store[windowID]
 	if !ok {
 		return meta
@@ -131,7 +135,7 @@ func (h *Handler) exportEnrichLocked(windowID int, meta WindowDebugMetadata) Win
 	return meta
 }
 
-func cloneWindowDebugMetadata(in WindowDebugMetadata) WindowDebugMetadata {
+func cloneWindowDebugMetadata(in protocol.WindowDebugMetadata) protocol.WindowDebugMetadata {
 	out := in
 	if in.Stats.SuppressionReasons != nil {
 		out.Stats.SuppressionReasons = make(map[string]int, len(in.Stats.SuppressionReasons))
@@ -140,11 +144,11 @@ func cloneWindowDebugMetadata(in WindowDebugMetadata) WindowDebugMetadata {
 		}
 	}
 	if in.Shadow.Mismatches != nil {
-		out.Shadow.Mismatches = make([]ShadowMismatch, len(in.Shadow.Mismatches))
+		out.Shadow.Mismatches = make([]protocol.ShadowMismatch, len(in.Shadow.Mismatches))
 		copy(out.Shadow.Mismatches, in.Shadow.Mismatches)
 	}
 	if in.Watchdog.ScreenDeclines != nil {
-		out.Watchdog.ScreenDeclines = make([]ScreenDeclineSnapshot, len(in.Watchdog.ScreenDeclines))
+		out.Watchdog.ScreenDeclines = make([]protocol.ScreenDeclineSnapshot, len(in.Watchdog.ScreenDeclines))
 		copy(out.Watchdog.ScreenDeclines, in.Watchdog.ScreenDeclines)
 	}
 	out.Renderer.Generations = cloneRenderGenerationTraces(in.Renderer.Generations)

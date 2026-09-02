@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
@@ -73,7 +73,7 @@ func TestSessionEndedSeparatorMeasuresLabel(t *testing.T) {
 // would produce too-short or too-long dash runs depending on how the
 // fixed prefix/suffix is measured.
 func TestTimelineGapDashesGraphemeAware(t *testing.T) {
-	events := []daemon.SessionEvent{
+	events := []protocol.SessionEvent{
 		se(1000, "active", "SessionStart", ""),
 		se(1005, "stop", "Stop", ""),
 		se(1100, "active", "SessionStart", ""), // 95s gap → emits a gap line
@@ -99,7 +99,7 @@ func TestTimelineGapDashesGraphemeAware(t *testing.T) {
 // TestTimelineSeparatorWidthGraphemeAware mirrors the gap test for the
 // /compact separator branch.
 func TestTimelineSeparatorWidthGraphemeAware(t *testing.T) {
-	events := []daemon.SessionEvent{
+	events := []protocol.SessionEvent{
 		se(1000, "active", "SessionStart", ""),
 		se(1005, "stop", "Stop", ""),
 		{At: 1010, Action: "active", Event: "SessionStart", ResetFlow: true},
@@ -220,7 +220,7 @@ func TestDeleteChoiceHeaderPadsEmojiTitleIcon(t *testing.T) {
 // when the tool-name column budget cannot fit the full glyph string,
 // the truncation must keep grapheme clusters whole and append the tail.
 func TestDetailRowEmojiToolTruncation(t *testing.T) {
-	ev := daemon.SessionEvent{
+	ev := protocol.SessionEvent{
 		At:       100,
 		Event:    "PreToolUse",
 		Action:   "active",

@@ -7,11 +7,12 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func TestHandler_StateUpdateAllowed(t *testing.T) {
 	h := newTestHandler()
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active"})
 	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
 		t.Fatalf("want {ok:true, allowed:true, icon_state:bolt}, got %+v", resp)
 	}
@@ -19,9 +20,9 @@ func TestHandler_StateUpdateAllowed(t *testing.T) {
 
 func TestHandler_StateUpdateBlocked(t *testing.T) {
 	h := newTestHandler()
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "failure"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "failure"})
 
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "permission"})
 	if !resp.OK || resp.Allowed {
 		t.Fatalf("want {ok:true, allowed:false}, got %+v", resp)
 	}
@@ -42,17 +43,17 @@ func TestHandler_AllActionIconStates(t *testing.T) {
 		{"elicitation", "question"},
 		// idle and clear with no prior guard preserve whatever icon is already
 		// in the title (nothing to clear).
-		{"idle", IconStatePreserve},
-		{"clear", IconStatePreserve},
+		{"idle", protocol.IconStatePreserve},
+		{"clear", protocol.IconStatePreserve},
 		// user_clear is the TUI-initiated true wipe — icon goes empty.
 		{"user_clear", ""},
 		// loop_marker never paints an icon: ASL lifecycle signals are
 		// marker-only and must preserve whatever the user is currently seeing.
-		{"loop_marker", IconStatePreserve},
+		{"loop_marker", protocol.IconStatePreserve},
 	}
 	for _, tc := range cases {
 		h := newTestHandler()
-		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: tc.action})
+		resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: tc.action})
 		if !resp.OK || !resp.Allowed || resp.IconState != tc.iconState {
 			t.Errorf("action %q: want icon_state=%q, got %+v", tc.action, tc.iconState, resp)
 		}
@@ -74,17 +75,17 @@ func TestHandler_IdleClearsActiveIcon(t *testing.T) {
 			{"active", "", "idle after active clears bolt"},
 			{"subagent", "", "idle after subagent clears icon"},
 			{"compact", "", "idle after compact clears icon"},
-			{"stop", IconStatePreserve, "idle after stop preserves stop icon"},
-			{"permission", IconStatePreserve, "idle after permission preserves key icon"},
-			{"failure", IconStatePreserve, "idle after failure preserves warning icon"},
-			{"stop_failure", IconStatePreserve, "idle after stop failure preserves error icon"},
-			{"elicitation", IconStatePreserve, "idle after elicitation preserves question icon"},
+			{"stop", protocol.IconStatePreserve, "idle after stop preserves stop icon"},
+			{"permission", protocol.IconStatePreserve, "idle after permission preserves key icon"},
+			{"failure", protocol.IconStatePreserve, "idle after failure preserves warning icon"},
+			{"stop_failure", protocol.IconStatePreserve, "idle after stop failure preserves error icon"},
+			{"elicitation", protocol.IconStatePreserve, "idle after elicitation preserves question icon"},
 		}
 		// Test with a long guard (prevGuard still set when idle arrives).
 		for _, tc := range cases {
 			h := newTestHandler()
-			h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: tc.prev})
-			resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "idle"})
+			h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: tc.prev})
+			resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "idle"})
 			if !resp.OK || !resp.Allowed || resp.IconState != tc.wantIcon {
 				t.Errorf("%s (guard active): want icon_state=%q, got %+v", tc.wantLabel, tc.wantIcon, resp)
 			}
@@ -100,9 +101,9 @@ func TestHandler_IdleClearsActiveIcon(t *testing.T) {
 			}
 			h := NewHandler(guard, notifier)
 
-			h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: tc.prev})
+			h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: tc.prev})
 			time.Sleep(5 * time.Millisecond) // let the guard expire
-			resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "idle"})
+			resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "idle"})
 			if !resp.OK || !resp.Allowed || resp.IconState != tc.wantIcon {
 				t.Errorf("%s (guard expired): want icon_state=%q, got %+v", tc.wantLabel, tc.wantIcon, resp)
 			}
@@ -118,19 +119,19 @@ func TestHandler_LoopFinishedClearsActiveClassOnly(t *testing.T) {
 		{prev: "active", wantIcon: ""},
 		{prev: "subagent", wantIcon: ""},
 		{prev: "compact", wantIcon: ""},
-		{prev: "stop", wantIcon: IconStatePreserve},
-		{prev: "permission", wantIcon: IconStatePreserve},
-		{prev: "failure", wantIcon: IconStatePreserve},
-		{prev: "stop_failure", wantIcon: IconStatePreserve},
-		{prev: "elicitation", wantIcon: IconStatePreserve},
+		{prev: "stop", wantIcon: protocol.IconStatePreserve},
+		{prev: "permission", wantIcon: protocol.IconStatePreserve},
+		{prev: "failure", wantIcon: protocol.IconStatePreserve},
+		{prev: "stop_failure", wantIcon: protocol.IconStatePreserve},
+		{prev: "elicitation", wantIcon: protocol.IconStatePreserve},
 	}
 	for _, tc := range cases {
 		t.Run(tc.prev, func(t *testing.T) {
 			h := newTestHandler()
-			h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: tc.prev})
+			h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: tc.prev})
 
-			resp := h.Handle(Request{
-				Type:     TypeStateUpdate,
+			resp := h.Handle(protocol.Request{
+				Type:     protocol.TypeStateUpdate,
 				WindowID: 1,
 				Action:   "idle",
 				Event:    "AgentSessionLoopFinished",
@@ -158,11 +159,11 @@ func TestHandler_CleanupUsesRestoredDaemonState(t *testing.T) {
 		{"clear promotes stale Copilot compact to stop", "clear", "compact", "copilot", "stop"},
 		{"idle clears stale subagent", "idle", "subagent", "", ""},
 		{"clear clears stale bolt", "clear", "bolt", "", ""},
-		{"clear preserves stop icon", "clear", "stop", "", IconStatePreserve},
-		{"idle preserves permission icon", "idle", "key", "", IconStatePreserve},
-		{"idle preserves warning icon", "idle", "warning", "", IconStatePreserve},
-		{"idle preserves error icon", "idle", "error", "", IconStatePreserve},
-		{"idle preserves elicitation icon", "idle", "question", "", IconStatePreserve},
+		{"clear preserves stop icon", "clear", "stop", "", protocol.IconStatePreserve},
+		{"idle preserves permission icon", "idle", "key", "", protocol.IconStatePreserve},
+		{"idle preserves warning icon", "idle", "warning", "", protocol.IconStatePreserve},
+		{"idle preserves error icon", "idle", "error", "", protocol.IconStatePreserve},
+		{"idle preserves elicitation icon", "idle", "question", "", protocol.IconStatePreserve},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -170,8 +171,8 @@ func TestHandler_CleanupUsesRestoredDaemonState(t *testing.T) {
 			h.stateMu.Lock()
 			h.store[1] = &WindowState{LastAction: actionForIconStateForTest(tc.current), DesiredIcon: tc.current}
 			h.stateMu.Unlock()
-			resp := h.Handle(Request{
-				Type:     TypeStateUpdate,
+			resp := h.Handle(protocol.Request{
+				Type:     protocol.TypeStateUpdate,
 				WindowID: 1,
 				Action:   tc.cleanup,
 				Harness:  tc.harness,
@@ -199,7 +200,7 @@ func actionForIconStateForTest(iconState string) string {
 func TestHandler_StateUpdateRecordsActivity(t *testing.T) {
 	h := newTestHandler()
 	before := time.Now()
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active"})
 	if !resp.OK || !resp.Allowed {
 		t.Fatalf("want allowed update, got %+v", resp)
 	}
@@ -218,13 +219,13 @@ func TestHandler_StateUpdateRecordsActivity(t *testing.T) {
 
 func TestHandler_StateUpdateBlockedDoesNotRecordActivity(t *testing.T) {
 	h := newTestHandler()
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "failure"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "failure"})
 
 	h.stateMu.Lock()
 	h.store[1].Activity = time.Time{}
 	h.stateMu.Unlock()
 
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "permission"})
 	if !resp.OK || resp.Allowed {
 		t.Fatalf("expected blocked update, got %+v", resp)
 	}
@@ -246,7 +247,7 @@ func TestHandler_StateUpdateUsesSnapshotDerivedMute(t *testing.T) {
 		t.Fatal("window should default to unmuted")
 	}
 
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active"})
 	if !resp.OK || !resp.Allowed {
 		t.Fatalf("muted state update should still be allowed, got %+v", resp)
 	}
@@ -276,17 +277,17 @@ func TestHandler_AutoCompactResumeKeepsBolt(t *testing.T) {
 		notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
 		h := NewHandler(guard, notifier)
 
-		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "compact", Event: "PreCompact"})
+		resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "compact", Event: "PreCompact"})
 		if !resp.OK || !resp.Allowed || resp.IconState != "compact" {
 			t.Fatalf("PreCompact: want compact icon, got %+v", resp)
 		}
 
-		resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostCompactAuto"})
+		resp = h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostCompactAuto"})
 		if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
 			t.Fatalf("PostCompactAuto: want bolt restored, got %+v", resp)
 		}
 
-		resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse"})
+		resp = h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse"})
 		if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
 			t.Fatalf("PostToolUse after auto compact: want bolt without active-after-terminal suppression, got %+v", resp)
 		}
@@ -308,13 +309,13 @@ func TestHandler_ManualCompactStopPersists(t *testing.T) {
 		notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
 		h := NewHandler(guard, notifier)
 
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "compact", Event: "PreCompact"})
-		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop", Event: "PostCompactManual"})
+		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "compact", Event: "PreCompact"})
+		resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "stop", Event: "PostCompactManual"})
 		if !resp.OK || !resp.Allowed || resp.IconState != "stop" {
 			t.Fatalf("PostCompactManual: want stop icon, got %+v", resp)
 		}
 
-		resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse"})
+		resp = h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse"})
 		if !resp.OK || resp.Allowed {
 			t.Fatalf("PostToolUse after manual compact: want active-after-terminal suppression, got %+v", resp)
 		}

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -165,7 +166,7 @@ func (h *Handler) recoverClaudeBusyTitle(
 	sourceWindowTitle string,
 ) {
 	targetWindowID := binding.TargetWindowID
-	source := SourceID{Kind: SourceProbe, Key: claudeScreenStopProbeSource}
+	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: claudeScreenStopProbeSource}
 
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
@@ -204,7 +205,7 @@ func (h *Handler) recoverClaudeBusyTitle(
 	}
 
 	nextSeq := st.ShadowSeq + 1
-	decision := st.Reducer.Apply(ReducerEvent{
+	decision := st.Reducer.Apply(protocol.ReducerEvent{
 		Source:         source,
 		Action:         "active",
 		Seq:            nextSeq,
@@ -212,7 +213,7 @@ func (h *Handler) recoverClaudeBusyTitle(
 		Prompt:         true,
 		OriginWindowID: binding.SourceWindowID,
 	})
-	if decision != DecisionApplied {
+	if decision != protocol.DecisionApplied {
 		return
 	}
 	st.ShadowSeq = nextSeq

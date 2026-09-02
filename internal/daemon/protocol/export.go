@@ -1,4 +1,4 @@
-package daemon
+package protocol
 
 import (
 	"github.com/sglavoie/agentmux/internal/buildinfo"

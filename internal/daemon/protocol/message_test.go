@@ -1,4 +1,4 @@
-package daemon
+package protocol
 
 import (
 	"encoding/json"
@@ -88,7 +88,7 @@ func TestRequest_RoundtripCarriesOptionalHarnessProcessIdentity(t *testing.T) {
 }
 
 func TestValidatedHarnessProcessIdentity(t *testing.T) {
-	valid := validatedHarnessProcessIdentity(" Claude ", &HarnessProcessIdentity{
+	valid := ValidatedHarnessProcessIdentity(" Claude ", &HarnessProcessIdentity{
 		Harness: "CLAUDE", PID: 42, StartToken: " Thu  Jul  16  10:20:30  2026 ",
 	})
 	if valid == nil || *valid != (HarnessProcessIdentity{
@@ -113,7 +113,7 @@ func TestValidatedHarnessProcessIdentity(t *testing.T) {
 		{name: "oversized start token", producer: "claude", identity: &HarnessProcessIdentity{Harness: "claude", PID: 42, StartToken: strings.Repeat("x", 129)}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := validatedHarnessProcessIdentity(tc.producer, tc.identity); got != nil {
+			if got := ValidatedHarnessProcessIdentity(tc.producer, tc.identity); got != nil {
 				t.Fatalf("validated identity = %+v, want nil", got)
 			}
 		})
@@ -124,7 +124,7 @@ func TestValidatedHarnessProcessIdentity(t *testing.T) {
 // omitted from the wire payload (omitempty), so existing daemons that do not
 // know the field still see a clean request shape.
 func TestRequest_OmittedToolNameMarshalsClean(t *testing.T) {
-	in := Request{Type: TypeStateQuery, targetHarness: "claude", targetHarnessSet: true}
+	in := Request{Type: TypeStateQuery, TargetHarness: "claude", TargetHarnessSet: true}
 	data, err := json.Marshal(in)
 	if err != nil {
 		t.Fatalf("Marshal(Request): %v", err)

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func (h *Handler) correlateASLSupervisorQuestion(windowID int, now time.Time) {
@@ -95,7 +96,7 @@ func (h *Handler) applyASLSupervisorQuestionEvidenceLocked(
 
 	before := st.Reducer.Reduce(now.Unix())
 	source := aslSupervisorQuestionSource(target.candidate.RunID)
-	decision := st.Reducer.Apply(ReducerEvent{
+	decision := st.Reducer.Apply(protocol.ReducerEvent{
 		Source:         source,
 		Action:         "elicitation",
 		Seq:            projection.ProjectionSeq,
@@ -103,7 +104,7 @@ func (h *Handler) applyASLSupervisorQuestionEvidenceLocked(
 		OriginWindowID: target.originWindowID,
 		RunID:          target.candidate.RunID,
 	})
-	if decision != DecisionApplied {
+	if decision != protocol.DecisionApplied {
 		return nil
 	}
 	st.ShadowSeq++
@@ -144,10 +145,10 @@ func (h *Handler) applyASLSupervisorQuestionEvidenceLocked(
 func latestInteractiveSupervisorFact(r *Reducer, now int64) (*sourceFact, bool) {
 	var current *sourceFact
 	for _, fact := range r.facts {
-		identifiedHarness := fact.source.Kind == SourceHarness &&
+		identifiedHarness := fact.source.Kind == protocol.SourceHarness &&
 			fact.sessionID != "" &&
 			harnessFromSourceKey(fact.source.Key, fact.sessionID) != ""
-		authoritativeStopProbe := fact.source.Kind == SourceProbe &&
+		authoritativeStopProbe := fact.source.Kind == protocol.SourceProbe &&
 			fact.terminated &&
 			fact.action == "stop" &&
 			isAuthoritativeSupervisorStopProbe(fact.source.Key)

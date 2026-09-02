@@ -1,13 +1,16 @@
 package daemon
 
-import "github.com/sglavoie/agentmux/internal/conversation"
+import (
+	"github.com/sglavoie/agentmux/internal/conversation"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+)
 
 // HasLiveOriginRoute reports whether this reducer still owns the identified
 // harness session from originWindowID. A terminal or acknowledged fact is not
 // a route lease: the terminal event itself is admitted while the preceding
 // live fact exists, then its application closes ordinary continuation.
-func (r *Reducer) HasLiveOriginRoute(source SourceID, sessionID string, originWindowID int) bool {
-	if r == nil || source.Kind != SourceHarness || sessionID == "" || originWindowID <= 0 {
+func (r *Reducer) HasLiveOriginRoute(source protocol.SourceID, sessionID string, originWindowID int) bool {
+	if r == nil || source.Kind != protocol.SourceHarness || sessionID == "" || originWindowID <= 0 {
 		return false
 	}
 	f := r.facts[source]
@@ -30,7 +33,7 @@ func (r *Reducer) CurrentLiveProducerRoute(producerHarness string, targetWindowI
 	var identity conversation.Identity
 	originWindowID := 0
 	for _, fact := range r.facts {
-		if fact.source.Kind != SourceHarness || !fact.set || fact.acked || fact.terminated || fact.pipeMode {
+		if fact.source.Kind != protocol.SourceHarness || !fact.set || fact.acked || fact.terminated || fact.pipeMode {
 			continue
 		}
 		candidate, ok := conversation.New(harnessFromSourceKey(fact.source.Key, fact.sessionID), fact.sessionID)
@@ -56,7 +59,7 @@ func (r *Reducer) HasLiveProducerRoute(identity conversation.Identity, sourceWin
 	if r == nil || !identity.Valid() || sourceWindowID <= 0 || targetWindowID <= 0 {
 		return false
 	}
-	f := r.facts[SourceID{Kind: SourceHarness, Key: identity.Harness + ":" + identity.SessionID}]
+	f := r.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: identity.Harness + ":" + identity.SessionID}]
 	if f == nil || !f.set || f.acked || f.terminated || f.pipeMode || f.sessionID != identity.SessionID {
 		return false
 	}
@@ -81,7 +84,7 @@ func (r *Reducer) CurrentTerminalProducerRoute(producerHarness string, targetWin
 	var identity conversation.Identity
 	originWindowID := 0
 	for _, fact := range r.facts {
-		if fact.source.Kind != SourceHarness || !conversationFactLive(fact, now) || !fact.terminated || fact.pipeMode {
+		if fact.source.Kind != protocol.SourceHarness || !conversationFactLive(fact, now) || !fact.terminated || fact.pipeMode {
 			continue
 		}
 		candidate, ok := conversation.New(harnessFromSourceKey(fact.source.Key, fact.sessionID), fact.sessionID)
@@ -105,7 +108,7 @@ func (r *Reducer) HasTerminalProducerRoute(identity conversation.Identity, sourc
 	if r == nil || !identity.Valid() || sourceWindowID <= 0 || targetWindowID <= 0 {
 		return false
 	}
-	f := r.facts[SourceID{Kind: SourceHarness, Key: identity.Harness + ":" + identity.SessionID}]
+	f := r.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: identity.Harness + ":" + identity.SessionID}]
 	if !conversationFactLive(f, now) || !f.terminated || f.pipeMode || f.sessionID != identity.SessionID {
 		return false
 	}
@@ -127,7 +130,7 @@ func (r *Reducer) HasTerminalProducerRoute(identity conversation.Identity, sourc
 // such fact contributing a visible icon (or a live lease) makes the window's
 // state more than this probe's synthetic stop, and ok is false. It also returns
 // false when the probe holds no live terminated stop or carries no session memo.
-func (r *Reducer) ProbeStopRecovery(probe SourceID, now int64) (sessionID string, ok bool) {
+func (r *Reducer) ProbeStopRecovery(probe protocol.SourceID, now int64) (sessionID string, ok bool) {
 	f := r.facts[probe]
 	if f == nil || !f.set || f.acked || !f.terminated || r.visibleIcon(f, now) != "stop" || f.sessionID == "" {
 		return "", false
@@ -139,7 +142,7 @@ func (r *Reducer) ProbeStopRecovery(probe SourceID, now int64) (sessionID string
 		if r.visibleIcon(other, now) != "" {
 			return "", false
 		}
-		if other.source.Kind == SourceASL && other.leaseLive {
+		if other.source.Kind == protocol.SourceASL && other.leaseLive {
 			return "", false
 		}
 	}
@@ -152,7 +155,7 @@ func (r *Reducer) ProbeStopRecovery(probe SourceID, now int64) (sessionID string
 // producer/source/target binding and cannot select a pipe child or another
 // harness's conversation.
 func (r *Reducer) ProbeStopRecoveryRoute(
-	probe SourceID,
+	probe protocol.SourceID,
 	producerHarness string,
 	targetWindowID int,
 	now int64,
@@ -165,7 +168,7 @@ func (r *Reducer) ProbeStopRecoveryRoute(
 	if !ok {
 		return conversation.Identity{}, 0, false
 	}
-	f := r.facts[SourceID{Kind: SourceHarness, Key: identity.Harness + ":" + identity.SessionID}]
+	f := r.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: identity.Harness + ":" + identity.SessionID}]
 	if f == nil || !f.set || !f.acked || f.terminated || f.pipeMode || f.sessionID != sessionID {
 		return conversation.Identity{}, 0, false
 	}
@@ -199,14 +202,14 @@ func (r *Reducer) ProbeStopRecoveryRoute(
 // interactive (non-pipe) harness active-class bolt/compact fact for the memo
 // session — never a pipe-mode child, subagent, ASL, attention, warning, or
 // terminal fact. Reports whether it recovered.
-func (r *Reducer) RecoverInteractiveFromProbeStop(probe SourceID, sessionID string, at int64) bool {
+func (r *Reducer) RecoverInteractiveFromProbeStop(probe protocol.SourceID, sessionID string, at int64) bool {
 	pf := r.facts[probe]
 	if pf == nil || !pf.set || pf.acked || !pf.terminated || pf.icon != "stop" {
 		return false
 	}
 	var reinstate *sourceFact
 	for _, f := range r.facts {
-		if f == pf || f.source.Kind != SourceHarness || f.pipeMode {
+		if f == pf || f.source.Kind != protocol.SourceHarness || f.pipeMode {
 			continue
 		}
 		if !f.set || !f.acked || f.terminated || f.sessionID != sessionID {
@@ -233,7 +236,7 @@ func (r *Reducer) RecoverInteractiveFromProbeStop(probe SourceID, sessionID stri
 		Seq:      pf.seq,
 		Action:   "idle",
 		Icon:     "",
-		Decision: DecisionApplied,
+		Decision: protocol.DecisionApplied,
 		Reason:   "probe recovered its synthetic stop; interactive session reinstated after newer active evidence",
 	})
 	return true

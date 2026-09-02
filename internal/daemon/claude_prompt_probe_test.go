@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -52,7 +53,7 @@ func TestProbeClaudeScreenStop_CompletedIdleStopsStuckBoltAfterTwoSamples(t *tes
 		t.Fatalf("effective = %+v visible %q, want stop/stop", eff, visible)
 	}
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	ev, ok := lastEventNamed(resp.Events, screenStopProbeEvent)
 	if !ok {
 		t.Fatalf("no %q row in %+v", screenStopProbeEvent, resp.Events)
@@ -60,8 +61,8 @@ func TestProbeClaudeScreenStop_CompletedIdleStopsStuckBoltAfterTwoSamples(t *tes
 	if ev.Action != "stop" {
 		t.Fatalf("ScreenStopProbe action = %q, want stop", ev.Action)
 	}
-	if ev.Source != string(SourceProbe)+":"+claudeScreenStopProbeSource {
-		t.Fatalf("ScreenStopProbe source = %q, want %q", ev.Source, string(SourceProbe)+":"+claudeScreenStopProbeSource)
+	if ev.Source != string(protocol.SourceProbe)+":"+claudeScreenStopProbeSource {
+		t.Fatalf("ScreenStopProbe source = %q, want %q", ev.Source, string(protocol.SourceProbe)+":"+claudeScreenStopProbeSource)
 	}
 }
 
@@ -105,7 +106,7 @@ func TestProbeClaudeScreenStop_InterruptedStopsStuckBoltAfterTwoSamples(t *testi
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "stop" {
 		t.Fatalf("effective = %+v, want stop after interruption", eff)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if ev, ok := lastEventNamed(resp.Events, screenStopProbeEvent); !ok || ev.Action != "stop" {
 		t.Fatalf("ScreenStopProbe row = %+v ok=%v, want stop", ev, ok)
 	}
@@ -138,7 +139,7 @@ func TestProbeClaudeScreenStop_ActiveSpinnerKeepsBolt(t *testing.T) {
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 		t.Fatalf("effective = %+v, want the working bolt preserved", eff)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if ev, ok := lastEventNamed(resp.Events, screenStopProbeEvent); ok {
 		t.Fatalf("ScreenStopProbe row recorded for a still-working turn: %+v", ev)
 	}
@@ -187,10 +188,10 @@ func TestProbeClaudeScreenStop_BusyPaneTitleKeepsBolt(t *testing.T) {
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 		t.Fatalf("effective with busy pane title = %+v, want bolt", eff)
 	}
-	if ev, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, screenStopProbeEvent); ok {
+	if ev, ok := lastEventNamed(h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42}).Events, screenStopProbeEvent); ok {
 		t.Fatalf("ScreenStopProbe row recorded for a working turn: %+v", ev)
 	}
-	if ev, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, screenActiveProbeEvent); ok {
+	if ev, ok := lastEventNamed(h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42}).Events, screenActiveProbeEvent); ok {
 		t.Fatalf("ScreenActiveProbe row repeated for an existing bolt: %+v", ev)
 	}
 	if got := rec.len(); got != 0 {
@@ -252,12 +253,12 @@ func TestProbeClaudeScreenStop_BusyPaneTitleRestoresEmptyState(t *testing.T) {
 	if calls := fake.titleCalls(); len(calls) != 1 || calls[0].title != palette.BuildTitle("W:api", "bolt", false) {
 		t.Fatalf("SetTabTitle calls = %+v, want one recovered bolt title", calls)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	ev, ok := lastEventNamed(detail.Events, screenActiveProbeEvent)
 	if !ok {
 		t.Fatalf("no %q row in %+v", screenActiveProbeEvent, detail.Events)
 	}
-	if ev.Action != "bolt" || ev.Source != string(SourceProbe)+":"+claudeScreenStopProbeSource {
+	if ev.Action != "bolt" || ev.Source != string(protocol.SourceProbe)+":"+claudeScreenStopProbeSource {
 		t.Fatalf("ScreenActiveProbe = %+v, want actual bolt from Claude screen source", ev)
 	}
 
@@ -268,7 +269,7 @@ func TestProbeClaudeScreenStop_BusyPaneTitleRestoresEmptyState(t *testing.T) {
 	if reads != 1 {
 		t.Fatalf("screen reads after a repeated busy snapshot = %d, want 1", reads)
 	}
-	detail = h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail = h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	count := 0
 	for _, event := range detail.Events {
 		if event.Event == screenActiveProbeEvent {
@@ -314,17 +315,17 @@ func TestProbeClaudeScreenStop_BusyPaneTitleRecoversAfterUserClearPreservingLoop
 	h.stateMu.Lock()
 	st := h.store[42]
 	st.ShadowSeq++
-	if decision := st.Reducer.Apply(ReducerEvent{
-		Source: SourceID{Kind: SourceASL, Key: "run-1"},
+	if decision := st.Reducer.Apply(protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"},
 		RunID:  "run-1", Phase: ASLPhaseBetween, Seq: 1, At: base.Unix(),
-	}); decision != DecisionApplied {
+	}); decision != protocol.DecisionApplied {
 		h.stateMu.Unlock()
 		t.Fatalf("seed ASL lease decision = %q, want applied", decision)
 	}
 	h.publishEffectiveLocked(42, st, st.Reducer.Reduce(base.Unix()))
 	h.stateMu.Unlock()
 
-	if resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "user_clear", Harness: harness.Claude}); !resp.OK {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "user_clear", Harness: harness.Claude}); !resp.OK {
 		t.Fatalf("user_clear response = %+v", resp)
 	}
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "" || !eff.Looping {
@@ -335,7 +336,7 @@ func TestProbeClaudeScreenStop_BusyPaneTitleRecoversAfterUserClearPreservingLoop
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" || !eff.Looping {
 		t.Fatalf("after busy-title recovery effective = %+v, want bolt + preserved loop", eff)
 	}
-	if ev, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, screenActiveProbeEvent); !ok || ev.Action != "bolt" {
+	if ev, ok := lastEventNamed(h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42}).Events, screenActiveProbeEvent); !ok || ev.Action != "bolt" {
 		t.Fatalf("ScreenActiveProbe row = %+v ok=%v, want bolt", ev, ok)
 	}
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -43,11 +44,11 @@ func (w *cancelBuffer) Write(data []byte) (int, error) {
 	return written, err
 }
 
-func (debugTestProbe) SendWithAutoStartObserved(request daemon.Request, _ string, observer daemon.DeliveryObserver) (daemon.Response, error) {
+func (debugTestProbe) SendWithAutoStartObserved(request protocol.Request, _ string, observer daemon.DeliveryObserver) (protocol.Response, error) {
 	observer(daemon.DeliveryStageEvent{Stage: daemon.DeliveryStageIPCAttempt, Attempt: 1, Outcome: "success"})
-	return daemon.Response{OK: true, Delivery: &daemon.DeliveryAcknowledgement{
-		SchemaVersion: daemon.DeliveryAcknowledgementSchemaVersion,
-		Status:        daemon.DeliveryAcknowledgementAccepted, Reason: "routing_discovered",
+	return protocol.Response{OK: true, Delivery: &protocol.DeliveryAcknowledgement{
+		SchemaVersion: protocol.DeliveryAcknowledgementSchemaVersion,
+		Status:        protocol.DeliveryAcknowledgementAccepted, Reason: "routing_discovered",
 		TraceID: request.TraceID, RequestID: request.RequestID,
 		SourceWindowID: request.WindowID, TargetWindowID: request.WindowID,
 		RouteDecision: "source", SnapshotReady: true, WindowFound: true,
@@ -350,7 +351,7 @@ func TestDebugReplayJSONRunsOfflineAndHasNoLiveApplyFlags(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatalf("decode replay: %v\n%s", err, out.String())
 	}
-	if report.SchemaVersion != debugger.ReplaySchemaVersion || report.Input.SchemaVersion != daemon.EventsExportSchemaV8 ||
+	if report.SchemaVersion != debugger.ReplaySchemaVersion || report.Input.SchemaVersion != protocol.EventsExportSchemaV8 ||
 		!report.Success || report.Complete || len(report.Comparisons) != 1 {
 		t.Fatalf("replay report = %+v", report)
 	}

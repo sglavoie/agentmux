@@ -8,13 +8,13 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/screenstate"
 )
 
-func writeDoctorNotificationCapability(out io.Writer, capability *daemon.NotificationCapability, addFinding func(string, string, string, ...any)) error {
+func writeDoctorNotificationCapability(out io.Writer, capability *protocol.NotificationCapability, addFinding func(string, string, string, ...any)) error {
 	if capability == nil {
 		cfg, err := doctorLoadConfig()
 		if err != nil {
@@ -77,7 +77,7 @@ const checkScreenPatternOverrideInvalid = "screenstate_override_invalid"
 // A pattern set's name is not always a harness — internal/contextlimit owns one
 // under the name "contextlimit" — so this reports "pattern sets" rather than
 // claiming each name is a harness.
-func writeDoctorScreenPatterns(out io.Writer, patterns *daemon.ScreenPatternsSnapshot, addFinding func(string, string, string, ...any)) error {
+func writeDoctorScreenPatterns(out io.Writer, patterns *protocol.ScreenPatternsSnapshot, addFinding func(string, string, string, ...any)) error {
 	if patterns == nil {
 		_, err := fmt.Fprintln(out, "screen patterns: unreported (older daemon; restart required)")
 		return err
@@ -349,7 +349,7 @@ func writeDoctorHooks(out io.Writer, reportIssue func(string, ...any), reportUnv
 	return nil
 }
 
-func writeDoctorRenderer(out io.Writer, snapshot daemon.EventsExport, liveByID map[int]daemon.WindowLiveMetadata, kittyOK bool, reportIssue func(string, ...any)) error {
+func writeDoctorRenderer(out io.Writer, snapshot protocol.EventsExport, liveByID map[int]protocol.WindowLiveMetadata, kittyOK bool, reportIssue func(string, ...any)) error {
 	sockets := make(map[string]struct{})
 	ids := daemonExportWindowIDs(snapshot, 0)
 	for _, id := range ids {
@@ -442,7 +442,7 @@ func writeDoctorRenderer(out io.Writer, snapshot daemon.EventsExport, liveByID m
 	return nil
 }
 
-func writeDoctorSuppressions(out io.Writer, snapshot daemon.EventsExport, now time.Time) error {
+func writeDoctorSuppressions(out io.Writer, snapshot protocol.EventsExport, now time.Time) error {
 	cutoff := now.Add(-doctorSuppressionWindow).Unix()
 	counts := make(map[string]int)
 	for _, events := range snapshot.EventsByWindow {

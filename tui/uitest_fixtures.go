@@ -24,7 +24,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/overrides"
 )
@@ -45,8 +45,8 @@ type UITestFixture struct {
 	// anchor above all — so a fixture can pin the dashboard's daemon-owned
 	// columns. A fixture that leaves them nil reproduces an unreachable daemon,
 	// which is the honest default for a fixture with no daemon at all.
-	States   map[int]daemon.WindowStateSnapshot
-	Watchdog map[int]daemon.WatchdogState
+	States   map[int]protocol.WindowStateSnapshot
+	Watchdog map[int]protocol.WatchdogState
 	// ASLRows and ASLStatus stand in for one daemon ASL snapshot. A fixture that
 	// leaves ASLStatus zero reports the integration as unavailable, which is the
 	// honest default for a dashboard fixture with no agent-session-loop at all.
@@ -315,14 +315,14 @@ func runTimersFixture() UITestFixture {
 		Size:        UITestSize{Width: 120, Height: 32},
 		Config:      cfg,
 		Windows:     windows,
-		States: map[int]daemon.WindowStateSnapshot{
+		States: map[int]protocol.WindowStateSnapshot{
 			11: {IconState: "bolt", BusySinceAt: busySince(7 * time.Second)},
 			21: {IconState: "subagent", BusySinceAt: busySince(3*time.Minute + 7*time.Second)},
 			31: {IconState: "compact", BusySinceAt: busySince(12*time.Hour + 7*time.Minute)},
 			41: {IconState: "bolt", BusySinceAt: busySince(9*time.Minute + 41*time.Second)},
 			51: {IconState: "stop"},
 		},
-		Watchdog: map[int]daemon.WatchdogState{
+		Watchdog: map[int]protocol.WatchdogState{
 			11: {LastAction: "active", LastEventAt: lastEvent(7 * time.Second), ThresholdSec: thresholdSec},
 			21: {LastAction: "subagent", LastEventAt: lastEvent(3*time.Minute + 7*time.Second), ThresholdSec: thresholdSec},
 			31: {LastAction: "compact", LastEventAt: lastEvent(45 * time.Second), ThresholdSec: thresholdSec},

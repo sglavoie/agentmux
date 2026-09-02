@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func fakeSnapshots(snapshots map[int]processSnapshot) processSnapshotFunc {
@@ -39,7 +39,7 @@ func TestDiscoverHarnessProcessInteractiveHarnesses(t *testing.T) {
 			if discovery.Harness != tc.harness || discovery.PID != 100 || discovery.PipeMode || !discovery.Trackable {
 				t.Fatalf("discovery = %+v", discovery)
 			}
-			wantIdentity := daemon.HarnessProcessIdentity{Harness: tc.harness, PID: 100, StartToken: "Thu Jul 16 10:00:00 2026"}
+			wantIdentity := protocol.HarnessProcessIdentity{Harness: tc.harness, PID: 100, StartToken: "Thu Jul 16 10:00:00 2026"}
 			identity := discovery.Identity()
 			if identity == nil || *identity != wantIdentity {
 				t.Fatalf("identity = %+v, want %+v", identity, wantIdentity)
@@ -260,7 +260,7 @@ func TestDiscoverHarnessProcessLegacyDeliveryPreservesPipeModeWithoutIdentity(t 
 				t.Fatal(err)
 			}
 
-			client := &fakeDaemonClient{resp: daemon.Response{OK: true}}
+			client := &fakeDaemonClient{resp: protocol.Response{OK: true}}
 			deliverFromStdinWithDeps(
 				"Stop", 42, tc.producer, "/tmp/amx", DeliveryOptions{RequestID: "legacy-pipe-test"}, stdin, client,
 			)
@@ -283,8 +283,8 @@ func TestHarnessProcessDiscoveryDoesNotTransportCommandText(t *testing.T) {
 			CommandLine: "claude -p " + secretPrompt,
 		},
 	}))
-	wire, err := json.Marshal(daemon.Request{
-		Type: daemon.TypeHookEvent, ProducerHarness: "claude", HarnessProcess: discovery.Identity(),
+	wire, err := json.Marshal(protocol.Request{
+		Type: protocol.TypeHookEvent, ProducerHarness: "claude", HarnessProcess: discovery.Identity(),
 	})
 	if err != nil {
 		t.Fatal(err)

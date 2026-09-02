@@ -12,7 +12,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/transcript"
@@ -276,8 +276,8 @@ func TestAcceptancePastSessionsSharedProjectAliasContinuesAndForksInAliasContext
 				filterProject:     []string{"streamutil"},
 				transcriptReaders: map[string]transcript.Reader{harness.Claude: reader},
 				sessionResults:    []transcript.Result{{Meta: meta}},
-				daemonCommand: func(daemon.Request) (daemon.Response, error) {
-					return daemon.Response{OK: true}, nil
+				daemonCommand: func(protocol.Request) (protocol.Response, error) {
+					return protocol.Response{OK: true}, nil
 				},
 			}
 

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -36,8 +37,8 @@ func (h *Handler) applyCodexClearObservation(
 	if targetHarness == "" && binding.legacyDirectManaged {
 		targetHarness = harness.Codex
 	}
-	req := Request{
-		Type:             TypeStateUpdate,
+	req := protocol.Request{
+		Type:             protocol.TypeStateUpdate,
 		WindowID:         windowID,
 		Action:           "user_clear",
 		Event:            screenClearProbeEvent,
@@ -45,10 +46,10 @@ func (h *Handler) applyCodexClearObservation(
 		Account:          userVars.EffectiveProfile(),
 		Harness:          harness.Codex,
 		SessionTitle:     titleParts.Base,
-		currentIconState: titleParts.State,
+		CurrentIconState: titleParts.State,
 		ResetFlow:        true,
-		targetHarness:    targetHarness,
-		targetHarnessSet: true,
+		TargetHarness:    targetHarness,
+		TargetHarnessSet: true,
 	}
 
 	// Serialize the complete clear with the final application of any held Stop
@@ -123,7 +124,7 @@ func (h *Handler) applyCodexClearObservation(
 		st.Reducer = NewReducer(h.reducerCfg)
 	}
 	st.ShadowSeq++
-	st.Reducer.Apply(ReducerEvent{
+	st.Reducer.Apply(protocol.ReducerEvent{
 		Source: userActionSource(),
 		Action: "user_clear",
 		Seq:    st.ShadowSeq,

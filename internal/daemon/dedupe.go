@@ -4,6 +4,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // dedupeMaxEntries bounds how many distinct request IDs the daemon tracks at
@@ -46,21 +48,9 @@ func (m *Metrics) observeQueueWait(wait time.Duration) {
 	}
 }
 
-// MetricsSnapshot is a plain-value copy of Metrics for reporting.
-type MetricsSnapshot struct {
-	Accepted      uint64 `json:"accepted"`
-	Duplicate     uint64 `json:"duplicate"`
-	Rejected      uint64 `json:"rejected"`
-	QueueFull     uint64 `json:"queue_full"`
-	ExpiredDedupe uint64 `json:"expired_dedupe"`
-	// Ingress queue latency in nanoseconds (last observation / lifetime max).
-	QueueLastWaitNs int64 `json:"queue_last_wait_ns,omitempty"`
-	QueueMaxWaitNs  int64 `json:"queue_max_wait_ns,omitempty"`
-}
-
 // Snapshot returns the current counter values.
-func (m *Metrics) Snapshot() MetricsSnapshot {
-	return MetricsSnapshot{
+func (m *Metrics) Snapshot() protocol.MetricsSnapshot {
+	return protocol.MetricsSnapshot{
 		Accepted:        m.accepted.Load(),
 		Duplicate:       m.duplicate.Load(),
 		Rejected:        m.rejected.Load(),
@@ -75,7 +65,7 @@ func (m *Metrics) Snapshot() MetricsSnapshot {
 // resp is populated; completedAt is zero while the request is still in flight.
 type dedupeEntry struct {
 	done        chan struct{}
-	resp        Response
+	resp        protocol.Response
 	completedAt time.Time
 }
 
@@ -118,13 +108,13 @@ func newDedupeCache(metrics *Metrics) *dedupeCache {
 // (non-deduplicated) request that always runs. compute is expected to be fast;
 // it holds no cache lock while running so unrelated requests proceed in
 // parallel.
-func (c *dedupeCache) do(id string, compute func() Response) Response {
-	return c.doObserved(id, func(bool) Response { return compute() })
+func (c *dedupeCache) do(id string, compute func() protocol.Response) protocol.Response {
+	return c.doObserved(id, func(bool) protocol.Response { return compute() })
 }
 
 // doObserved is do with request-scoped saturation attribution. The callback
 // receives true only when the bounded dedupe cache could not retain this ID.
-func (c *dedupeCache) doObserved(id string, compute func(saturated bool) Response) Response {
+func (c *dedupeCache) doObserved(id string, compute func(saturated bool) protocol.Response) protocol.Response {
 	if id == "" {
 		c.metrics.accepted.Add(1)
 		return compute(false)
@@ -142,12 +132,12 @@ func (c *dedupeCache) doObserved(id string, compute func(saturated bool) Respons
 				resp := e.resp
 				resp.Delivery = cloneDeliveryAcknowledgement(resp.Delivery)
 				if resp.Delivery != nil {
-					resp.Delivery.Status = DeliveryAcknowledgementDuplicate
+					resp.Delivery.Status = protocol.DeliveryAcknowledgementDuplicate
 					resp.Delivery.Reason = "request_replayed"
 				}
 				return resp
 			case <-time.After(c.waitTimeout):
-				return Response{OK: false, Error: "duplicate request wait timed out", Retryable: true}
+				return protocol.Response{OK: false, Error: "duplicate request wait timed out", Retryable: true}
 			}
 		}
 		// The prior entry has expired; drop it and re-admit as a fresh request.

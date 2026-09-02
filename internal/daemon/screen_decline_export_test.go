@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -20,9 +21,9 @@ import (
 // exportedScreenDeclines reads one window's published decline snapshots back
 // out through the ordinary export path rather than out of the maps, because the
 // export path is what doctor and `daemon export-events` actually consume.
-func exportedScreenDeclines(t *testing.T, h *Handler, windowID int) []ScreenDeclineSnapshot {
+func exportedScreenDeclines(t *testing.T, h *Handler, windowID int) []protocol.ScreenDeclineSnapshot {
 	t.Helper()
-	resp := h.handleEventsExport(Request{WindowID: windowID})
+	resp := h.handleEventsExport(protocol.Request{WindowID: windowID})
 	if !resp.OK {
 		t.Fatalf("events export not ok: %+v", resp)
 	}
@@ -88,7 +89,7 @@ func TestScreenDeclinePublishedThroughProbeAndRetracted(t *testing.T) {
 // so the streak has to be retracted explicitly rather than merely stop growing.
 func TestScreenDeclinePublicationClearedOnWindowClose(t *testing.T) {
 	h := newTestHandler()
-	source := SourceID{Kind: SourceProbe, Key: screenPromptProbeSource}
+	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource}
 	idleSeedHarness(t, h, 7, "cur-7", "active", time.Now().Unix())
 
 	h.RecordScreenProbeDecline(7, source, declineEvidence(0x1111))
@@ -109,19 +110,19 @@ func TestScreenDeclinePublicationClearedOnWindowClose(t *testing.T) {
 // a projection that forgot to pin the watchdog shape would leak it into three
 // schemas at once.
 func TestScreenDeclineAbsentFromSchemaV12(t *testing.T) {
-	payload := ExportEventsPayload{
-		SchemaVersion: EventsExportSchemaVersion,
-		Windows: []ExportWindow{{
+	payload := protocol.ExportEventsPayload{
+		SchemaVersion: protocol.EventsExportSchemaVersion,
+		Windows: []protocol.ExportWindow{{
 			WindowID: 7,
-			Watchdog: WindowDebugWatchdog{ScreenDeclines: []ScreenDeclineSnapshot{{
+			Watchdog: protocol.WindowDebugWatchdog{ScreenDeclines: []protocol.ScreenDeclineSnapshot{{
 				Source: screenPromptProbeSource, Streak: 61, StableFingerprint: true,
 				Fingerprint: 0x1111, Vetoes: "working_status_line",
 			}}},
 		}},
 	}
 
-	for _, schema := range []int{EventsExportSchemaV12, EventsExportSchemaV11, EventsExportSchemaV10} {
-		projected, err := ProjectExportEventsPayload(payload, schema)
+	for _, schema := range []int{protocol.EventsExportSchemaV12, protocol.EventsExportSchemaV11, protocol.EventsExportSchemaV10} {
+		projected, err := protocol.ProjectExportEventsPayload(payload, schema)
 		if err != nil {
 			t.Fatalf("project schema %d: %v", schema, err)
 		}
@@ -134,7 +135,7 @@ func TestScreenDeclineAbsentFromSchemaV12(t *testing.T) {
 		}
 	}
 
-	current, err := ProjectExportEventsPayload(payload, EventsExportSchemaVersion)
+	current, err := protocol.ProjectExportEventsPayload(payload, protocol.EventsExportSchemaVersion)
 	if err != nil {
 		t.Fatalf("project current schema: %v", err)
 	}

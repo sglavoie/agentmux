@@ -11,12 +11,14 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func TestPSHarnessProcessInspectorClassifiesAndDeduplicates(t *testing.T) {
-	first := HarnessProcessIdentity{Harness: "claude", PID: 101, StartToken: "Thu Jul 16 10:20:30 2026"}
-	replaced := HarnessProcessIdentity{Harness: "codex", PID: 102, StartToken: "Thu Jul 16 10:21:30 2026"}
-	missing := HarnessProcessIdentity{Harness: "copilot", PID: 103, StartToken: "Thu Jul 16 10:22:30 2026"}
+	first := protocol.HarnessProcessIdentity{Harness: "claude", PID: 101, StartToken: "Thu Jul 16 10:20:30 2026"}
+	replaced := protocol.HarnessProcessIdentity{Harness: "codex", PID: 102, StartToken: "Thu Jul 16 10:21:30 2026"}
+	missing := protocol.HarnessProcessIdentity{Harness: "copilot", PID: 103, StartToken: "Thu Jul 16 10:22:30 2026"}
 	inspector := &psHarnessProcessInspector{
 		timeout: time.Second, batchSize: 64,
 		runBatch: func(_ context.Context, pids []int) ([]byte, error) {
@@ -27,16 +29,16 @@ func TestPSHarnessProcessInspectorClassifiesAndDeduplicates(t *testing.T) {
 		},
 	}
 
-	got := inspector.InspectHarnessProcesses(context.Background(), []HarnessProcessIdentity{first, replaced, missing, first})
+	got := inspector.InspectHarnessProcesses(context.Background(), []protocol.HarnessProcessIdentity{first, replaced, missing, first})
 	if got[first] != HarnessProcessAliveSameInstance || got[replaced] != HarnessProcessReplacedInstance || got[missing] != HarnessProcessMissing {
 		t.Fatalf("inspection = %+v", got)
 	}
 }
 
 func TestPSHarnessProcessInspectorChunksAndIsolatesFailedBatch(t *testing.T) {
-	identities := make([]HarnessProcessIdentity, 0, 5)
+	identities := make([]protocol.HarnessProcessIdentity, 0, 5)
 	for pid := 6; pid >= 2; pid-- {
-		identities = append(identities, HarnessProcessIdentity{
+		identities = append(identities, protocol.HarnessProcessIdentity{
 			Harness: "claude", PID: pid, StartToken: fmt.Sprintf("Thu Jul 16 10:20:0%d 2026", pid),
 		})
 	}
@@ -75,7 +77,7 @@ func TestPSHarnessProcessInspectorChunksAndIsolatesFailedBatch(t *testing.T) {
 }
 
 func TestPSHarnessProcessInspectorTimeoutAndMalformedOutputAreUnknown(t *testing.T) {
-	identity := HarnessProcessIdentity{Harness: "claude", PID: 101, StartToken: "Thu Jul 16 10:20:30 2026"}
+	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 101, StartToken: "Thu Jul 16 10:20:30 2026"}
 	for _, tc := range []struct {
 		name     string
 		timeout  time.Duration
@@ -97,7 +99,7 @@ func TestPSHarnessProcessInspectorTimeoutAndMalformedOutputAreUnknown(t *testing
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			inspector := &psHarnessProcessInspector{timeout: tc.timeout, batchSize: 64, runBatch: tc.runBatch}
-			if got := inspector.InspectHarnessProcesses(context.Background(), []HarnessProcessIdentity{identity})[identity]; got != HarnessProcessUnknown {
+			if got := inspector.InspectHarnessProcesses(context.Background(), []protocol.HarnessProcessIdentity{identity})[identity]; got != HarnessProcessUnknown {
 				t.Fatalf("status = %q, want unknown", got)
 			}
 		})
@@ -115,11 +117,11 @@ func TestPSHarnessProcessInspectorPinsTimezoneAcrossCaptureAndInspection(t *test
 	if err != nil {
 		t.Fatalf("parse capture ps snapshot: %v", err)
 	}
-	identity := HarnessProcessIdentity{Harness: "claude", PID: pid, StartToken: observed[pid]}
+	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: pid, StartToken: observed[pid]}
 
 	t.Setenv("TZ", "America/Los_Angeles")
 	inspector := newPSHarnessProcessInspector()
-	if got := inspector.InspectHarnessProcesses(context.Background(), []HarnessProcessIdentity{identity})[identity]; got != HarnessProcessAliveSameInstance {
+	if got := inspector.InspectHarnessProcesses(context.Background(), []protocol.HarnessProcessIdentity{identity})[identity]; got != HarnessProcessAliveSameInstance {
 		t.Fatalf("inspection across ambient TZ divergence = %q, want alive_same_instance", got)
 	}
 
@@ -151,7 +153,7 @@ func TestParsePSHarnessProcessBatchRejectsUnexpectedRows(t *testing.T) {
 }
 
 func TestDeduplicatedLifecycleIdentitiesStableOrder(t *testing.T) {
-	identities := []HarnessProcessIdentity{
+	identities := []protocol.HarnessProcessIdentity{
 		{Harness: "codex", PID: 3, StartToken: "c"},
 		{Harness: "claude", PID: 2, StartToken: "b"},
 		{Harness: "claude", PID: 1, StartToken: "a"},

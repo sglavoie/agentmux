@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
@@ -223,7 +223,7 @@ func (r *bundleRedactor) stringValue(key, value string) string {
 		return r.hash(value)
 	}
 	if key == "event" && value != "" {
-		if value == daemon.EventHarnessProcessExited {
+		if value == protocol.EventHarnessProcessExited {
 			return value
 		}
 		payload := hookevent.HookPayload{}

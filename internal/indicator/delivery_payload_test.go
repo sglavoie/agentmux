@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
@@ -87,8 +88,8 @@ func TestDeliverPayloadBoundariesAndEncoding(t *testing.T) {
 				"tool_name":       "Bash",
 			})
 			stdin := hookPayloadFile(t, payload)
-			client := &fakeDaemonClient{resp: daemon.Response{OK: true, Delivery: &daemon.DeliveryAcknowledgement{
-				SchemaVersion: 1, Status: daemon.DeliveryAcknowledgementAccepted, Reason: "accepted",
+			client := &fakeDaemonClient{resp: protocol.Response{OK: true, Delivery: &protocol.DeliveryAcknowledgement{
+				SchemaVersion: 1, Status: protocol.DeliveryAcknowledgementAccepted, Reason: "accepted",
 			}}}
 			beforeDiscovery := discoveryCalls
 			result := deliverFromStdinWithDeps(
@@ -182,8 +183,8 @@ func TestDeliverCompactPayloadCaptureAndHMACUseOriginalBytes(t *testing.T) {
 	})
 	stdin := hookPayloadFile(t, payload)
 
-	client := &fakeDaemonClient{resp: daemon.Response{OK: true, Delivery: &daemon.DeliveryAcknowledgement{
-		SchemaVersion: 1, Status: daemon.DeliveryAcknowledgementAccepted, Reason: "accepted",
+	client := &fakeDaemonClient{resp: protocol.Response{OK: true, Delivery: &protocol.DeliveryAcknowledgement{
+		SchemaVersion: 1, Status: protocol.DeliveryAcknowledgementAccepted, Reason: "accepted",
 	}}}
 	result := deliverFromStdinWithDeps(
 		"PostToolUse", 42, "claude", "/tmp/amx", DeliveryOptions{RequestID: "compact-payload"}, stdin, client,
@@ -318,7 +319,7 @@ func TestDeliverLargeHarnessPayloadsRetainSourceIdentity(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			payload := exactSizedHookPayload(t, maxRawHookPayloadBytes+1, tc.fields)
-			client := &fakeDaemonClient{resp: daemon.Response{OK: true}}
+			client := &fakeDaemonClient{resp: protocol.Response{OK: true}}
 			result := deliverFromStdinWithDeps(
 				tc.event, 42, tc.harness, "/tmp/amx", DeliveryOptions{RequestID: tc.harness + "-large-tool"}, hookPayloadFile(t, payload), client,
 			)
@@ -331,7 +332,7 @@ func TestDeliverLargeHarnessPayloadsRetainSourceIdentity(t *testing.T) {
 			}
 			normalized := daemon.NormalizedFromHook(tc.event, tc.harness, req.PayloadJSON, 42, false)
 			wantKey := tc.harness + ":" + tc.sessionID
-			if normalized.Invalid || normalized.Source.Kind != daemon.SourceHarness || normalized.Source.Key != wantKey ||
+			if normalized.Invalid || normalized.Source.Kind != protocol.SourceHarness || normalized.Source.Key != wantKey ||
 				normalized.SessionID != tc.sessionID || normalized.ToolUse != tc.toolUseID || normalized.SourceEventID != tc.eventID {
 				t.Fatalf("normalized compact event = %+v, want source %q", normalized, wantKey)
 			}
@@ -369,10 +370,10 @@ func TestDeliverCompactResetAndContextLimitMatchRawPayload(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			var requests []daemon.Request
+			var requests []protocol.Request
 			for _, size := range []int{1024, maxRawHookPayloadBytes + 1} {
 				payload := exactSizedHookPayload(t, size, tc.fields)
-				client := &fakeDaemonClient{resp: daemon.Response{OK: true}}
+				client := &fakeDaemonClient{resp: protocol.Response{OK: true}}
 				requestID := tc.harness + "-semantic-raw"
 				if size > maxRawHookPayloadBytes {
 					requestID = tc.harness + "-semantic-compact"
@@ -437,7 +438,7 @@ func TestDeliverMalformedAndOverLimitCannotReachDaemonOrDiscovery(t *testing.T) 
 			if client.calls != 0 || discoveryCalls != beforeDiscovery {
 				t.Fatalf("rejected payload reached daemon/discovery: daemon=%d discovery=%d", client.calls, discoveryCalls-beforeDiscovery)
 			}
-			if states := handler.Handle(daemon.Request{Type: daemon.TypeStateQuery}).States; len(states) != 0 {
+			if states := handler.Handle(protocol.Request{Type: protocol.TypeStateQuery}).States; len(states) != 0 {
 				t.Fatalf("rejected payload mutated daemon state: %+v", states)
 			}
 		})

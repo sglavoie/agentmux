@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -34,7 +34,7 @@ func TestSessionsMsgStoresActivity(t *testing.T) {
 // for the next render pass to consume.
 func TestSessionsMsgStoresWatchdog(t *testing.T) {
 	m := testModel()
-	wd := map[int]daemon.WatchdogState{
+	wd := map[int]protocol.WatchdogState{
 		7: {LastAction: "active", LastEventAt: time.Now().Unix(), ThresholdSec: 600},
 	}
 	updated, _ := m.Update(sessionsMsg{
@@ -181,10 +181,10 @@ func TestClearStatusCmdUsesDaemonWithoutWritingTabTitle(t *testing.T) {
 	runner := kitty.NewMockRunner(nil)
 	client := kitty.NewClientWithSocket(runner, "")
 	oldDaemonRequest := daemonRequest
-	var gotRequest daemon.Request
-	daemonRequest = func(req daemon.Request) (daemon.Response, error) {
+	var gotRequest protocol.Request
+	daemonRequest = func(req protocol.Request) (protocol.Response, error) {
 		gotRequest = req
-		return daemon.Response{OK: true}, nil
+		return protocol.Response{OK: true}, nil
 	}
 	t.Cleanup(func() { daemonRequest = oldDaemonRequest })
 
@@ -202,7 +202,7 @@ func TestClearStatusCmdUsesDaemonWithoutWritingTabTitle(t *testing.T) {
 	if len(runner.Calls) != 0 {
 		t.Errorf("clear must not write Kitty titles, got calls: %v", runner.Calls)
 	}
-	if gotRequest.Type != daemon.TypeStateUpdate || gotRequest.Action != "user_clear" || gotRequest.WindowID != 99 {
+	if gotRequest.Type != protocol.TypeStateUpdate || gotRequest.Action != "user_clear" || gotRequest.WindowID != 99 {
 		t.Errorf("daemon request = %+v, want user_clear for window 99", gotRequest)
 	}
 }

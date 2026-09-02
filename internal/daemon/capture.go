@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
@@ -15,7 +16,7 @@ func (h *Handler) setCaptureStore(store *diagnostics.CaptureStore) {
 	}
 }
 
-func (h *Handler) captureHookPayload(request Request) {
+func (h *Handler) captureHookPayload(request protocol.Request) {
 	if h == nil || h.captureStore == nil || request.PayloadCaptured || request.PayloadJSON == "" {
 		return
 	}

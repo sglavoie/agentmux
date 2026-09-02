@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -42,7 +43,7 @@ func TestProbeCodexScreenPrompts_ClearScreenClearsStoppedCodexTab(t *testing.T) 
 		t.Fatalf("guard.Current = %q, want empty after user_clear", got)
 	}
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(resp.Events) != 1 {
 		t.Fatalf("events = %d, want 1", len(resp.Events))
 	}
@@ -87,7 +88,7 @@ func TestProbeCodexScreenPrompts_ClearScreenKeepsStopWithTranscriptScrollback(t 
 	if got := h.guard.Current(42); got != "stop" {
 		t.Fatalf("guard.Current = %q, want stop", got)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(resp.Events) != 0 {
 		t.Fatalf("events = %d, want 0", len(resp.Events))
 	}
@@ -188,7 +189,7 @@ func TestProbeCodexClearWindow_CancelsDeferredStopGenerationSafely(t *testing.T)
 		}
 		h.SetKittyClient(fake)
 
-		if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "Stop"}); !resp.OK {
+		if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "Stop"}); !resp.OK {
 			t.Fatalf("older Stop response = %+v", resp)
 		}
 		h.stateMu.Lock()
@@ -232,7 +233,7 @@ func TestProbeCodexClearWindow_CancelsDeferredStopGenerationSafely(t *testing.T)
 		if got := len(fake.userVarsCalls()); got != userVarsCallsBefore {
 			t.Fatalf("late SetUserVars calls = %d, want %d", got, userVarsCallsBefore)
 		}
-		detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+		detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 		if len(detail.Events) != 1 || detail.Events[0].Event != screenClearProbeEvent || detail.Events[0].ResultIconState != "" {
 			t.Fatalf("events after canceled older timer = %+v, want only the cleared-screen audit", detail.Events)
 		}
@@ -248,7 +249,7 @@ func TestProbeCodexClearWindow_CancelsDeferredStopGenerationSafely(t *testing.T)
 		h.SetKittyClient(fake)
 		capturedSeq := h.captureWindowReceipt(42)
 
-		if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "Stop"}); !resp.OK {
+		if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "Stop"}); !resp.OK {
 			t.Fatalf("newer Stop response = %+v", resp)
 		}
 		h.stateMu.Lock()
@@ -276,7 +277,7 @@ func TestProbeCodexClearWindow_CancelsDeferredStopGenerationSafely(t *testing.T)
 		if eff, _ := windowEffective(t, h, 42); eff.Icon != "stop" {
 			t.Fatalf("effective after newer timer = %+v, want stop", eff)
 		}
-		detail = h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+		detail = h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 		if len(detail.Events) != 1 || detail.Events[0].Event != "Stop" || detail.Events[0].ResultIconState != "stop" {
 			t.Fatalf("events after newer timer = %+v, want only committed Stop", detail.Events)
 		}
@@ -304,8 +305,8 @@ func TestCodexClearDeferredStopClaimRace(t *testing.T) {
 		<-resume
 	}
 
-	req := Request{
-		Type:     TypeStateUpdate,
+	req := protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 42,
 		Action:   "stop",
 		Event:    "Stop",
@@ -369,7 +370,7 @@ func TestCodexClearDeferredStopClaimRace(t *testing.T) {
 	if afterResume := screenProbeMutationFingerprint(t, h, 42); afterResume != beforeResume {
 		t.Fatalf("canceled claimed Stop mutated state after clear:\n before %s\n after  %s", beforeResume, afterResume)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) != 1 || detail.Events[0].Event != screenClearProbeEvent || detail.Events[0].ResultIconState != "" {
 		t.Fatalf("events after canceled claimed Stop = %+v, want only cleared-screen audit", detail.Events)
 	}

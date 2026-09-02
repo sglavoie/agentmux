@@ -1,6 +1,9 @@
 package daemon
 
-import "github.com/sglavoie/agentmux/internal/screenstate"
+import (
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/screenstate"
+)
 
 // CodexPromptKind identifies the user-blocking Codex TUI prompt visible in a
 // Kitty screen scrape. The kinds themselves are harness knowledge and live in
@@ -56,6 +59,6 @@ func codexPromptResult(kind CodexPromptKind, action string) CodexPromptClassific
 	return CodexPromptClassification{
 		Kind:      kind,
 		Action:    action,
-		IconState: IconState(action),
+		IconState: protocol.IconState(action),
 	}
 }

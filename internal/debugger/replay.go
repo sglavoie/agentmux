@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 const (
@@ -50,31 +51,31 @@ type ReplayState struct {
 }
 
 type ReplayComparison struct {
-	Index              int                    `json:"index"`
-	TraceID            string                 `json:"trace_id,omitempty"`
-	RequestID          string                 `json:"request_id,omitempty"`
-	WindowID           string                 `json:"window_id,omitempty"`
-	Event              string                 `json:"event,omitempty"`
-	Action             string                 `json:"action,omitempty"`
-	SourceKind         string                 `json:"source_kind,omitempty"`
-	SourceKey          string                 `json:"source_key,omitempty"`
-	SourceSequence     uint64                 `json:"source_sequence,omitempty"`
-	DaemonSequence     uint64                 `json:"daemon_sequence,omitempty"`
-	RestartGeneration  int                    `json:"restart_generation,omitempty"`
-	RecordedDecision   daemon.ReducerDecision `json:"recorded_decision,omitempty"`
-	RecomputedDecision daemon.ReducerDecision `json:"recomputed_decision,omitempty"`
-	RecordedReason     string                 `json:"recorded_reason,omitempty"`
-	RecomputedReason   string                 `json:"recomputed_reason,omitempty"`
-	RecordedBefore     *ReplayState           `json:"recorded_before,omitempty"`
-	RecomputedBefore   ReplayState            `json:"recomputed_before"`
-	RecordedAfter      *ReplayState           `json:"recorded_after,omitempty"`
-	RecomputedAfter    ReplayState            `json:"recomputed_after"`
-	DecisionMatch      *bool                  `json:"decision_match,omitempty"`
-	ReasonMatch        *bool                  `json:"reason_match,omitempty"`
-	StateMatch         *bool                  `json:"state_match,omitempty"`
-	UsedFallback       bool                   `json:"used_fallback_identity,omitempty"`
-	Status             string                 `json:"status"`
-	Note               string                 `json:"note,omitempty"`
+	Index              int                      `json:"index"`
+	TraceID            string                   `json:"trace_id,omitempty"`
+	RequestID          string                   `json:"request_id,omitempty"`
+	WindowID           string                   `json:"window_id,omitempty"`
+	Event              string                   `json:"event,omitempty"`
+	Action             string                   `json:"action,omitempty"`
+	SourceKind         string                   `json:"source_kind,omitempty"`
+	SourceKey          string                   `json:"source_key,omitempty"`
+	SourceSequence     uint64                   `json:"source_sequence,omitempty"`
+	DaemonSequence     uint64                   `json:"daemon_sequence,omitempty"`
+	RestartGeneration  int                      `json:"restart_generation,omitempty"`
+	RecordedDecision   protocol.ReducerDecision `json:"recorded_decision,omitempty"`
+	RecomputedDecision protocol.ReducerDecision `json:"recomputed_decision,omitempty"`
+	RecordedReason     string                   `json:"recorded_reason,omitempty"`
+	RecomputedReason   string                   `json:"recomputed_reason,omitempty"`
+	RecordedBefore     *ReplayState             `json:"recorded_before,omitempty"`
+	RecomputedBefore   ReplayState              `json:"recomputed_before"`
+	RecordedAfter      *ReplayState             `json:"recorded_after,omitempty"`
+	RecomputedAfter    ReplayState              `json:"recomputed_after"`
+	DecisionMatch      *bool                    `json:"decision_match,omitempty"`
+	ReasonMatch        *bool                    `json:"reason_match,omitempty"`
+	StateMatch         *bool                    `json:"state_match,omitempty"`
+	UsedFallback       bool                     `json:"used_fallback_identity,omitempty"`
+	Status             string                   `json:"status"`
+	Note               string                   `json:"note,omitempty"`
 }
 
 type ReplayRouteComparison struct {
@@ -254,21 +255,21 @@ func replayDecisions(report *ReplayReport, decisions []replayDecision) {
 		}
 		seenWindow[windowID] = true
 
-		recomputedDecision := daemon.ReducerDecision("")
+		recomputedDecision := protocol.ReducerDecision("")
 		recomputedReason := ""
 		switch {
 		case decision.requestReplay:
-			recomputedDecision = daemon.DecisionDuplicate
-			recomputedReason = daemon.DecisionReasonRequestReplayed
-		case decision.recordedDecision == daemon.DecisionBypassed:
-			recomputedDecision = daemon.DecisionBypassed
+			recomputedDecision = protocol.DecisionDuplicate
+			recomputedReason = protocol.DecisionReasonRequestReplayed
+		case decision.recordedDecision == protocol.DecisionBypassed:
+			recomputedDecision = protocol.DecisionBypassed
 			recomputedReason = decision.recordedReason
-		case decision.recordedDecision == daemon.DecisionQuarantined && !decision.usedFallback && !decision.canApply:
-			recomputedDecision = daemon.DecisionQuarantined
-			recomputedReason = daemon.DecisionReasonInvalidPayload
+		case decision.recordedDecision == protocol.DecisionQuarantined && !decision.usedFallback && !decision.canApply:
+			recomputedDecision = protocol.DecisionQuarantined
+			recomputedReason = protocol.DecisionReasonInvalidPayload
 		case decision.canApply:
-			recomputedDecision = reducer.Apply(daemon.ReducerEvent{
-				Source: daemon.SourceID{Kind: daemon.SourceKind(decision.sourceKind), Key: decision.sourceKey},
+			recomputedDecision = reducer.Apply(protocol.ReducerEvent{
+				Source: protocol.SourceID{Kind: protocol.SourceKind(decision.sourceKind), Key: decision.sourceKey},
 				Action: decision.action, Seq: decision.seq, TurnID: decision.turnID, At: decision.at,
 				OriginWindowID: decision.originWindowID, Prompt: decision.prompt, ToolUse: decision.toolUseID,
 				PipeMode: decision.pipeMode, RunID: decision.runID, Phase: decision.phase,

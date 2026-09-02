@@ -5,6 +5,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
 
@@ -15,10 +16,10 @@ import (
 // counter. Assertions read the authoritative visible state (windowEffective),
 // never the legacy Response fields.
 
-func subagentHookEvent(t *testing.T, h *Handler, windowID int, event string, payload hookevent.HookPayload) Response {
+func subagentHookEvent(t *testing.T, h *Handler, windowID int, event string, payload hookevent.HookPayload) protocol.Response {
 	t.Helper()
-	return h.Handle(Request{
-		Type:        TypeHookEvent,
+	return h.Handle(protocol.Request{
+		Type:        protocol.TypeHookEvent,
 		WindowID:    windowID,
 		Event:       event,
 		Harness:     "claude",

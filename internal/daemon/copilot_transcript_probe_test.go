@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
 
@@ -34,13 +35,13 @@ func TestProbeCopilotTranscriptStop_CompletedTurnStopsStuckBolt(t *testing.T) {
 
 	// The stale interactive bolt fact was retired, so it can no longer mask 🛑.
 	h.stateMu.Lock()
-	old := h.store[42].Reducer.facts[SourceID{Kind: SourceHarness, Key: "copilot:sess-1"}]
+	old := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "copilot:sess-1"}]
 	h.stateMu.Unlock()
 	if old == nil || !old.acked {
 		t.Fatalf("stale interactive bolt was not retired: %+v", old)
 	}
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	ev, ok := lastEventNamed(resp.Events, copilotTranscriptStopProbeEvent)
 	if !ok {
 		t.Fatalf("no %q row in %+v", copilotTranscriptStopProbeEvent, resp.Events)
@@ -48,8 +49,8 @@ func TestProbeCopilotTranscriptStop_CompletedTurnStopsStuckBolt(t *testing.T) {
 	if ev.Action != "stop" {
 		t.Fatalf("TranscriptStopProbe action = %q, want stop", ev.Action)
 	}
-	if ev.Source != string(SourceProbe)+":"+copilotTranscriptStopProbeSource {
-		t.Fatalf("TranscriptStopProbe source = %q, want %q", ev.Source, string(SourceProbe)+":"+copilotTranscriptStopProbeSource)
+	if ev.Source != string(protocol.SourceProbe)+":"+copilotTranscriptStopProbeSource {
+		t.Fatalf("TranscriptStopProbe source = %q, want %q", ev.Source, string(protocol.SourceProbe)+":"+copilotTranscriptStopProbeSource)
 	}
 }
 
@@ -71,7 +72,7 @@ func TestProbeCopilotTranscriptStop_UserAbortStopsStuckBolt(t *testing.T) {
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "stop" {
 		t.Fatalf("effective = %+v, want stop after user abort", eff)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if ev, ok := lastEventNamed(resp.Events, copilotTranscriptStopProbeEvent); !ok || ev.Action != "stop" {
 		t.Fatalf("TranscriptStopProbe row = %+v ok=%v, want stop", ev, ok)
 	}
@@ -112,7 +113,7 @@ func TestProbeCopilotTranscriptStop_NonTerminalEvidenceKeepsBolt(t *testing.T) {
 			if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 				t.Fatalf("effective = %+v, want bolt preserved", eff)
 			}
-			resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+			resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 			if ev, ok := lastEventNamed(resp.Events, copilotTranscriptStopProbeEvent); ok {
 				t.Fatalf("TranscriptStopProbe row recorded for %s: %+v", tc.name, ev)
 			}
@@ -142,7 +143,7 @@ func TestProbeCopilotTranscriptStop_SubagentSpanBeganOutsideTail(t *testing.T) {
 		if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 			t.Fatalf("effective = %+v, want bolt preserved", eff)
 		}
-		resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+		resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 		if ev, ok := lastEventNamed(resp.Events, copilotTranscriptStopProbeEvent); ok {
 			t.Fatalf("TranscriptStopProbe row recorded for an open off-tail span: %+v", ev)
 		}
@@ -167,7 +168,7 @@ func TestProbeCopilotTranscriptStop_SubagentSpanBeganOutsideTail(t *testing.T) {
 		if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 			t.Fatalf("effective = %+v, want bolt preserved", eff)
 		}
-		resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+		resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 		if ev, ok := lastEventNamed(resp.Events, copilotTranscriptStopProbeEvent); ok {
 			t.Fatalf("TranscriptStopProbe row recorded for a still-open off-window span: %+v", ev)
 		}
@@ -188,7 +189,7 @@ func TestProbeCopilotTranscriptStop_SubagentSpanBeganOutsideTail(t *testing.T) {
 		if eff, visible := windowEffective(t, h, 42); eff.Icon != "stop" || visible != "stop" {
 			t.Fatalf("effective = %+v visible %q, want stop/stop after span closes", eff, visible)
 		}
-		resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+		resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 		if ev, ok := lastEventNamed(resp.Events, copilotTranscriptStopProbeEvent); !ok || ev.Action != "stop" {
 			t.Fatalf("TranscriptStopProbe row = %+v ok=%v, want stop", ev, ok)
 		}

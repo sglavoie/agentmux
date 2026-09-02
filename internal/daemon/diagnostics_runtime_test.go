@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
@@ -343,8 +344,8 @@ func TestRunShutdownPersistsQueuedStageRows(t *testing.T) {
 	go func() {
 		runErr <- run(ctx, cfg, runDependencies{
 			afterStartupPublication: func() {
-				resp, sendErr := NewClientWithSocket(SocketPath()).Send(Request{
-					Type: TypeStateUpdate, WindowID: 42, Action: "active", Event: "UserPromptSubmit",
+				resp, sendErr := NewClientWithSocket(SocketPath()).Send(protocol.Request{
+					Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Event: "UserPromptSubmit",
 					TraceID: traceID, RequestID: "request-run-render-shutdown",
 				})
 				if sendErr != nil {

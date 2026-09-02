@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -117,8 +117,8 @@ func TestSessionsMsg_DuplicateSelectionRequestDoesNotStealCursorAgain(t *testing
 
 func TestInitialFetchCmdConsumesExistingDashboardSelectionRequest(t *testing.T) {
 	oldDaemonRequest := daemonRequest
-	daemonRequest = func(daemon.Request) (daemon.Response, error) {
-		return daemon.Response{}, errors.New("daemon unavailable")
+	daemonRequest = func(protocol.Request) (protocol.Response, error) {
+		return protocol.Response{}, errors.New("daemon unavailable")
 	}
 	t.Cleanup(func() { daemonRequest = oldDaemonRequest })
 
@@ -152,8 +152,8 @@ func TestInitialFetchCmdConsumesExistingDashboardSelectionRequest(t *testing.T) 
 
 func TestInitialFetchCmdResolvesSourcePaneToContainingTab(t *testing.T) {
 	oldDaemonRequest := daemonRequest
-	daemonRequest = func(daemon.Request) (daemon.Response, error) {
-		return daemon.Response{}, errors.New("daemon unavailable")
+	daemonRequest = func(protocol.Request) (protocol.Response, error) {
+		return protocol.Response{}, errors.New("daemon unavailable")
 	}
 	t.Cleanup(func() { daemonRequest = oldDaemonRequest })
 
@@ -182,8 +182,8 @@ func TestInitialFetchCmdResolvesSourcePaneToContainingTab(t *testing.T) {
 
 func TestFetchCmdRemovesClosedSessionInsteadOfReanchoringDashboardOverlay(t *testing.T) {
 	oldDaemonRequest := daemonRequest
-	daemonRequest = func(daemon.Request) (daemon.Response, error) {
-		return daemon.Response{}, errors.New("daemon unavailable")
+	daemonRequest = func(protocol.Request) (protocol.Response, error) {
+		return protocol.Response{}, errors.New("daemon unavailable")
 	}
 	t.Cleanup(func() { daemonRequest = oldDaemonRequest })
 
@@ -254,13 +254,13 @@ func TestFetchCmdRemovesClosedSessionInsteadOfReanchoringDashboardOverlay(t *tes
 
 func TestFetchCmdUsesDaemonBulkStateOverTitleParsing(t *testing.T) {
 	oldDaemonRequest := daemonRequest
-	daemonRequest = func(req daemon.Request) (daemon.Response, error) {
-		if req.Type != daemon.TypeStateQuery {
+	daemonRequest = func(req protocol.Request) (protocol.Response, error) {
+		if req.Type != protocol.TypeStateQuery {
 			t.Fatalf("daemon request type = %q, want state_query", req.Type)
 		}
-		return daemon.Response{
+		return protocol.Response{
 			OK: true,
-			States: map[int]daemon.WindowStateSnapshot{
+			States: map[int]protocol.WindowStateSnapshot{
 				42: {IconState: "key", Looping: true, LastAction: "permission", LastEventAt: 123, GuardAction: "permission"},
 			},
 		}, nil
@@ -293,8 +293,8 @@ func TestFetchCmdUsesDaemonBulkStateOverTitleParsing(t *testing.T) {
 
 func TestFetchCmdFallsBackToTitleStateWhenDaemonIsUnreachable(t *testing.T) {
 	oldDaemonRequest := daemonRequest
-	daemonRequest = func(daemon.Request) (daemon.Response, error) {
-		return daemon.Response{}, errors.New("daemon unavailable")
+	daemonRequest = func(protocol.Request) (protocol.Response, error) {
+		return protocol.Response{}, errors.New("daemon unavailable")
 	}
 	t.Cleanup(func() { daemonRequest = oldDaemonRequest })
 
@@ -318,8 +318,8 @@ func TestFetchCmdFallsBackToTitleStateWhenDaemonIsUnreachable(t *testing.T) {
 
 func TestFetchCmdPreservesRuntimeProfileOverrideInConfigPicker(t *testing.T) {
 	oldDaemonRequest := daemonRequest
-	daemonRequest = func(daemon.Request) (daemon.Response, error) {
-		return daemon.Response{}, errors.New("daemon unavailable")
+	daemonRequest = func(protocol.Request) (protocol.Response, error) {
+		return protocol.Response{}, errors.New("daemon unavailable")
 	}
 	t.Cleanup(func() { daemonRequest = oldDaemonRequest })
 

@@ -1,5 +1,9 @@
 package daemon
 
+import (
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+)
+
 // ApplyNormalized is the only production entry point into the reducer: the live
 // path normalizes a raw hook delivery into a NormalizedEvent and hands it here.
 // It enforces the schema boundary — a non-deliverable event (quarantined
@@ -8,7 +12,7 @@ package daemon
 // mutate the visible icon or reach a terminal state. Deliverable events project
 // onto a ReducerEvent and flow through Apply. The returned decision lets the
 // shadow path tell whether the fact map changed without re-reading the trace.
-func (r *Reducer) ApplyNormalized(n NormalizedEvent) ReducerDecision {
+func (r *Reducer) ApplyNormalized(n protocol.NormalizedEvent) protocol.ReducerDecision {
 	if !n.Deliverable() {
 		reason := n.Reason
 		if reason == "" {
@@ -18,10 +22,10 @@ func (r *Reducer) ApplyNormalized(n NormalizedEvent) ReducerDecision {
 			Source:   n.Source,
 			Seq:      n.Seq,
 			Action:   n.Action,
-			Decision: DecisionQuarantined,
+			Decision: protocol.DecisionQuarantined,
 			Reason:   reason,
 		})
-		return DecisionQuarantined
+		return protocol.DecisionQuarantined
 	}
 	return r.Apply(n.ReducerEvent())
 }
@@ -36,7 +40,7 @@ func (r *Reducer) ApplyNormalized(n NormalizedEvent) ReducerDecision {
 //   - A terminated source suppresses later non-terminal activity: for identified
 //     sources only within the same turn; for legacy sources only within the
 //     guard_duration grace, after which activity self-heals.
-func (r *Reducer) Apply(ev ReducerEvent) ReducerDecision {
+func (r *Reducer) Apply(ev protocol.ReducerEvent) protocol.ReducerDecision {
 	if ev.Action == "user_clear" {
 		r.acknowledgeAll(ev.At)
 		// Record the clear so a later MergeDisjoint acknowledges any pre-clear
@@ -47,10 +51,10 @@ func (r *Reducer) Apply(ev ReducerEvent) ReducerDecision {
 			Source:   ev.Source,
 			Seq:      ev.Seq,
 			Action:   ev.Action,
-			Decision: DecisionAcknowledged,
+			Decision: protocol.DecisionAcknowledged,
 			Reason:   "user acknowledged visible facts; ASL leases preserved",
 		})
-		return DecisionAcknowledged
+		return protocol.DecisionAcknowledged
 	}
 
 	f := r.facts[ev.Source]
@@ -60,10 +64,10 @@ func (r *Reducer) Apply(ev ReducerEvent) ReducerDecision {
 	}
 
 	if f.set && ev.Seq <= f.seq {
-		decision := DecisionDuplicate
+		decision := protocol.DecisionDuplicate
 		reason := "duplicate sequence"
 		if ev.Seq < f.seq {
-			decision = DecisionReordered
+			decision = protocol.DecisionReordered
 			reason = "older sequence arrived after a newer one"
 		}
 		r.traces = append(r.traces, ReducerTrace{
@@ -108,7 +112,7 @@ func (r *Reducer) Apply(ev ReducerEvent) ReducerDecision {
 	// user-facing outcome: it must never claim the tab's ⏹. Keep the terminal
 	// fact (it suppresses stragglers for the same agent id) but contribute no
 	// icon. Failure-carrying stops keep their sticky error.
-	if ev.Source.Kind == SourceSubagent && action == "stop" {
+	if ev.Source.Kind == protocol.SourceSubagent && action == "stop" {
 		icon = ""
 	}
 
@@ -117,7 +121,7 @@ func (r *Reducer) Apply(ev ReducerEvent) ReducerDecision {
 	// source produces a real new state, mirroring the legacy cleanup semantics
 	// where idle preserved stop/permission/failure icons. ASL sources are
 	// exempt: their between-turns phase is a genuine idle contribution.
-	if (action == "idle" || action == "clear") && ev.Source.Kind != SourceASL &&
+	if (action == "idle" || action == "clear") && ev.Source.Kind != protocol.SourceASL &&
 		f.set && !f.acked && idlePreservesIcon(f.icon) {
 		f.seq = ev.Seq
 		r.stampCausalOrder(f)
@@ -126,10 +130,10 @@ func (r *Reducer) Apply(ev ReducerEvent) ReducerDecision {
 			Seq:      ev.Seq,
 			Action:   action,
 			Icon:     f.icon,
-			Decision: DecisionSuppressed,
+			Decision: protocol.DecisionSuppressed,
 			Reason:   "idle preserves attention/terminal icon",
 		})
-		return DecisionSuppressed
+		return protocol.DecisionSuppressed
 	}
 
 	if f.terminated && !isTerminalAction(action) && icon != "" && r.suppressed(f, ev) {
@@ -142,10 +146,10 @@ func (r *Reducer) Apply(ev ReducerEvent) ReducerDecision {
 			Seq:      ev.Seq,
 			Action:   action,
 			Icon:     f.icon,
-			Decision: DecisionSuppressed,
+			Decision: protocol.DecisionSuppressed,
 			Reason:   r.suppressionReason(f, ev),
 		})
-		return DecisionSuppressed
+		return protocol.DecisionSuppressed
 	}
 
 	f.set = true
@@ -163,7 +167,7 @@ func (r *Reducer) Apply(ev ReducerEvent) ReducerDecision {
 	if ev.SessionID != "" {
 		f.sessionID = ev.SessionID
 	}
-	if ev.Source.Kind == SourceASL {
+	if ev.Source.Kind == protocol.SourceASL {
 		f.runID = ev.RunID
 		f.phase = ev.Phase
 		f.leaseLive = leaseLive
@@ -194,10 +198,10 @@ func (r *Reducer) Apply(ev ReducerEvent) ReducerDecision {
 		Seq:      ev.Seq,
 		Action:   action,
 		Icon:     icon,
-		Decision: DecisionApplied,
+		Decision: protocol.DecisionApplied,
 		Reason:   reason,
 	})
-	return DecisionApplied
+	return protocol.DecisionApplied
 }
 
 // clearSessionAgents ends the remaining subagent contributions of one harness
@@ -215,7 +219,7 @@ func (r *Reducer) clearSessionAgents(sessionID string, at int64) int {
 			continue
 		}
 		switch id.Kind {
-		case SourceSubagent:
+		case protocol.SourceSubagent:
 			if sessionID != "" && f.sessionID != sessionID {
 				continue
 			}
@@ -226,7 +230,7 @@ func (r *Reducer) clearSessionAgents(sessionID string, at int64) int {
 			f.terminalToolUse = ""
 			f.terminalAt = at
 			cleared++
-		case SourceLegacy:
+		case protocol.SourceLegacy:
 			if !isLegacySubagentBucket(id.Key) {
 				continue
 			}
@@ -252,14 +256,14 @@ func (r *Reducer) clearSessionAgents(sessionID string, at int64) int {
 // terminated turn is suppressed — a new tool call or turn recovers
 // immediately. Without usable identity on both sides, suppression degrades to
 // the guard_duration grace, after which activity self-heals.
-func (r *Reducer) suppressed(f *sourceFact, ev ReducerEvent) bool {
+func (r *Reducer) suppressed(f *sourceFact, ev protocol.ReducerEvent) bool {
 	if ev.Prompt {
 		return false
 	}
 	// An agent id never restarts: once a subagent source has terminated, any
 	// trailing non-terminal event for the same id is a duplicate delivery or
 	// a reordered straggler, regardless of turn identity or age.
-	if f.source.Kind == SourceSubagent {
+	if f.source.Kind == protocol.SourceSubagent {
 		return true
 	}
 	if ev.ToolUse != "" && f.terminalToolUse != "" {
@@ -271,9 +275,9 @@ func (r *Reducer) suppressed(f *sourceFact, ev ReducerEvent) bool {
 	return ev.At-f.terminalAt < r.cfg.GuardDuration
 }
 
-func (r *Reducer) suppressionReason(f *sourceFact, ev ReducerEvent) string {
+func (r *Reducer) suppressionReason(f *sourceFact, ev protocol.ReducerEvent) string {
 	switch {
-	case f.source.Kind == SourceSubagent:
+	case f.source.Kind == protocol.SourceSubagent:
 		return "stopped subagent never restarts"
 	case ev.ToolUse != "" && f.terminalToolUse != "":
 		return "same-source same-tool terminal suppression"

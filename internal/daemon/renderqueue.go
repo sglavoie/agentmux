@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -43,7 +44,7 @@ import (
 type renderQueue struct {
 	mu           sync.Mutex
 	pending      map[int]bool
-	queuedTraces map[int]RenderGenerationTrace
+	queuedTraces map[int]protocol.RenderGenerationTrace
 	order        []int
 	inflight     map[int]bool
 	// wake is the coalesced worker signal: capacity one, non-blocking sends.
@@ -52,13 +53,13 @@ type renderQueue struct {
 
 type queuedRender struct {
 	windowID int
-	trace    RenderGenerationTrace
+	trace    protocol.RenderGenerationTrace
 }
 
 func newRenderQueue() *renderQueue {
 	return &renderQueue{
 		pending:      make(map[int]bool),
-		queuedTraces: make(map[int]RenderGenerationTrace),
+		queuedTraces: make(map[int]protocol.RenderGenerationTrace),
 		inflight:     make(map[int]bool),
 		wake:         make(chan struct{}, 1),
 	}
@@ -67,7 +68,7 @@ func newRenderQueue() *renderQueue {
 // enqueue adds a window to the queue and carries its latest queued-stage trace
 // to the worker. Safe to call while holding Handler.stateMu: it performs no
 // diagnostic I/O.
-func (q *renderQueue) enqueue(windowID int, trace RenderGenerationTrace) {
+func (q *renderQueue) enqueue(windowID int, trace protocol.RenderGenerationTrace) {
 	q.mu.Lock()
 	if !q.pending[windowID] {
 		q.pending[windowID] = true
@@ -88,7 +89,7 @@ func (q *renderQueue) signal() {
 // acquire pops the oldest pending window that is not already being rendered
 // and marks it in flight. ok is false when nothing is available (empty queue
 // or every pending window is in flight elsewhere).
-func (q *renderQueue) acquire() (windowID int, trace RenderGenerationTrace, ok bool) {
+func (q *renderQueue) acquire() (windowID int, trace protocol.RenderGenerationTrace, ok bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	for i, id := range q.order {
@@ -102,7 +103,7 @@ func (q *renderQueue) acquire() (windowID int, trace RenderGenerationTrace, ok b
 		q.inflight[id] = true
 		return id, trace, true
 	}
-	return 0, RenderGenerationTrace{}, false
+	return 0, protocol.RenderGenerationTrace{}, false
 }
 
 // release ends a window's in-flight render. If the window was re-enqueued
@@ -123,7 +124,7 @@ func (q *renderQueue) release(windowID int) {
 // its Kitty write, then persists the returned queued-stage trace after this
 // queue lock has been released. An in-flight render cannot be cancelled; its
 // completion bookkeeping already tolerates the deleted state.
-func (q *renderQueue) purge(windowID int) (RenderGenerationTrace, bool) {
+func (q *renderQueue) purge(windowID int) (protocol.RenderGenerationTrace, bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if q.pending[windowID] {
@@ -138,7 +139,7 @@ func (q *renderQueue) purge(windowID int) (RenderGenerationTrace, bool) {
 		}
 		return trace, true
 	}
-	return RenderGenerationTrace{}, false
+	return protocol.RenderGenerationTrace{}, false
 }
 
 // discardPending atomically transfers every pending queue entry to the caller
@@ -160,7 +161,7 @@ func (q *renderQueue) discardPending() []queuedRender {
 		})
 	}
 	q.pending = make(map[int]bool)
-	q.queuedTraces = make(map[int]RenderGenerationTrace)
+	q.queuedTraces = make(map[int]protocol.RenderGenerationTrace)
 	q.order = nil
 	return discarded
 }

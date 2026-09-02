@@ -7,13 +7,14 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/conversation"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 func TestReducerCurrentConversationUsesNewestLiveParentHarnessFact(t *testing.T) {
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{
-		Source:    SourceID{Kind: SourceHarness, Key: "claude:parent-1"},
+	r.Apply(protocol.ReducerEvent{
+		Source:    protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:parent-1"},
 		Action:    "active",
 		SessionID: "parent-1",
 		Seq:       1,
@@ -21,8 +22,8 @@ func TestReducerCurrentConversationUsesNewestLiveParentHarnessFact(t *testing.T)
 	})
 	// A child can arrive later but only carries lifecycle attribution; it must
 	// never replace the parent conversation identity.
-	r.Apply(ReducerEvent{
-		Source:    SourceID{Kind: SourceSubagent, Key: "child-1"},
+	r.Apply(protocol.ReducerEvent{
+		Source:    protocol.SourceID{Kind: protocol.SourceSubagent, Key: "child-1"},
 		Action:    "subagent",
 		SessionID: "child-session",
 		Seq:       2,
@@ -33,8 +34,8 @@ func TestReducerCurrentConversationUsesNewestLiveParentHarnessFact(t *testing.T)
 		t.Fatalf("CurrentConversation() = %+v, %v; want claude/parent-1", got, ok)
 	}
 
-	r.Apply(ReducerEvent{
-		Source:    SourceID{Kind: SourceHarness, Key: "codex:parent-2"},
+	r.Apply(protocol.ReducerEvent{
+		Source:    protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:parent-2"},
 		Action:    "active",
 		SessionID: "parent-2",
 		Seq:       3,
@@ -45,7 +46,7 @@ func TestReducerCurrentConversationUsesNewestLiveParentHarnessFact(t *testing.T)
 	}
 
 	// Acknowledged sources are stale and cannot leave a false live mapping.
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceProbe, Key: "user"}, Action: "user_clear", Seq: 4, At: 301})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceProbe, Key: "user"}, Action: "user_clear", Seq: 4, At: 301})
 	if got, ok := r.CurrentConversation(301); ok {
 		t.Fatalf("acknowledged facts produced stale conversation %+v", got)
 	}
@@ -54,8 +55,8 @@ func TestReducerCurrentConversationUsesNewestLiveParentHarnessFact(t *testing.T)
 func TestReducerCurrentConversationRejectsExpiredAndMalformedFacts(t *testing.T) {
 	t.Run("expired terminal", func(t *testing.T) {
 		r := NewReducer(ReducerConfig{})
-		r.Apply(ReducerEvent{
-			Source:    SourceID{Kind: SourceHarness, Key: "claude:old"},
+		r.Apply(protocol.ReducerEvent{
+			Source:    protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:old"},
 			Action:    "stop",
 			SessionID: "old",
 			Seq:       1,
@@ -68,8 +69,8 @@ func TestReducerCurrentConversationRejectsExpiredAndMalformedFacts(t *testing.T)
 
 	t.Run("source key must agree with fact", func(t *testing.T) {
 		r := NewReducer(ReducerConfig{})
-		r.Apply(ReducerEvent{
-			Source:    SourceID{Kind: SourceHarness, Key: "claude:one"},
+		r.Apply(protocol.ReducerEvent{
+			Source:    protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:one"},
 			Action:    "active",
 			SessionID: "two",
 			Seq:       1,
@@ -84,8 +85,8 @@ func TestReducerCurrentConversationRejectsExpiredAndMalformedFacts(t *testing.T)
 func TestConversationSurvivesDurableStateAndDaemonRestore(t *testing.T) {
 	now := time.Now()
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{
-		Source:    SourceID{Kind: SourceHarness, Key: "codex:thread-7"},
+	r.Apply(protocol.ReducerEvent{
+		Source:    protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:thread-7"},
 		Action:    "active",
 		SessionID: "thread-7",
 		Seq:       1,
@@ -112,7 +113,7 @@ func TestConversationSurvivesDurableStateAndDaemonRestore(t *testing.T) {
 		ID:       42,
 		UserVars: kitty.UserVars{Profile: "work", Harness: "codex", AMXState: encoded},
 	}}}}}}, now)
-	resp := h.Handle(Request{Type: TypeStateQuery})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateQuery})
 	got := resp.States[42].Conversation
 	if got == nil || *got != (conversation.Identity{Harness: "codex", SessionID: "thread-7"}) {
 		t.Fatalf("restored state-query conversation = %+v", got)
@@ -132,13 +133,13 @@ func TestConversationProjectionNeverTrustsDurableCacheWithoutFacts(t *testing.T)
 	h.stateMu.Lock()
 	h.store[8] = &state
 	h.stateMu.Unlock()
-	if got := h.Handle(Request{Type: TypeStateQuery}).States[8].Conversation; got != nil {
+	if got := h.Handle(protocol.Request{Type: protocol.TypeStateQuery}).States[8].Conversation; got != nil {
 		t.Fatalf("state snapshot exposed cache-only conversation: %+v", got)
 	}
 }
 
 func TestWindowStateSnapshotOmitsAbsentConversationForLegacyClients(t *testing.T) {
-	data, err := json.Marshal(WindowStateSnapshot{IconState: "bolt", LastAction: "active"})
+	data, err := json.Marshal(protocol.WindowStateSnapshot{IconState: "bolt", LastAction: "active"})
 	if err != nil {
 		t.Fatalf("Marshal snapshot: %v", err)
 	}

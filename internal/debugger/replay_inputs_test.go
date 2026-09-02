@@ -20,7 +20,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func TestReplaySchemaV8UsesOnlySufficientEvidenceAndReportsLimits(t *testing.T) {
@@ -33,7 +33,7 @@ func TestReplaySchemaV8UsesOnlySufficientEvidenceAndReportsLimits(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if report.Input.SchemaVersion != daemon.EventsExportSchemaV8 || !report.Success || report.Complete || len(report.Comparisons) != 1 {
+	if report.Input.SchemaVersion != protocol.EventsExportSchemaV8 || !report.Success || report.Complete || len(report.Comparisons) != 1 {
 		t.Fatalf("v8 report = %+v", report)
 	}
 	comparison := report.Comparisons[0]
@@ -43,34 +43,34 @@ func TestReplaySchemaV8UsesOnlySufficientEvidenceAndReportsLimits(t *testing.T) 
 }
 
 func TestReplayAcceptsCompleteEventsExportSchemasV9AndNewer(t *testing.T) {
-	payload := daemon.ExportEventsPayload{Windows: []daemon.ExportWindow{{
+	payload := protocol.ExportEventsPayload{Windows: []protocol.ExportWindow{{
 		WindowID: 42,
-		Shadow: daemon.WindowDebugShadow{Facts: []daemon.SourceFactSnapshot{{
-			Kind: daemon.SourceHarness, Key: "claude:s1", Action: "active", Icon: "bolt", Seq: 1,
+		Shadow: protocol.WindowDebugShadow{Facts: []protocol.SourceFactSnapshot{{
+			Kind: protocol.SourceHarness, Key: "claude:s1", Action: "active", Icon: "bolt", Seq: 1,
 			HarnessProcessHarness: "claude", HarnessProcessPID: 4321,
 			HarnessProcessStartToken: "Mon Jul 13 10:11:12 2026",
 		}}},
-		Events: []daemon.SessionEvent{{
+		Events: []protocol.SessionEvent{{
 			At: 100, Event: "PreToolUse", Action: "active", ResultIconState: "bolt",
 			TraceID: "trace-1", RequestID: "request-1", SourceEventID: "source-1",
-			ProducerHarness: "claude", SourceKind: string(daemon.SourceHarness), SourceKey: "claude:s1",
+			ProducerHarness: "claude", SourceKind: string(protocol.SourceHarness), SourceKey: "claude:s1",
 			SourceSeq: 1, DaemonSeq: 1, ReducerInputAction: "active",
-			ReducerInput:    &daemon.ReducerInputEvidence{EmittedAt: 100, GuardDuration: 5},
-			ReducerDecision: daemon.DecisionApplied, ReducerReason: string(daemon.DecisionApplied),
-			EffectiveBefore: &daemon.EffectiveStateEvidence{},
-			EffectiveAfter: &daemon.EffectiveStateEvidence{
-				Icon: "bolt", SourceKind: string(daemon.SourceHarness), SourceKey: "claude:s1",
+			ReducerInput:    &protocol.ReducerInputEvidence{EmittedAt: 100, GuardDuration: 5},
+			ReducerDecision: protocol.DecisionApplied, ReducerReason: string(protocol.DecisionApplied),
+			EffectiveBefore: &protocol.EffectiveStateEvidence{},
+			EffectiveAfter: &protocol.EffectiveStateEvidence{
+				Icon: "bolt", SourceKind: string(protocol.SourceHarness), SourceKey: "claude:s1",
 			},
-			RouteEvidence: &daemon.RoutingEvidence{
+			RouteEvidence: &protocol.RoutingEvidence{
 				SnapshotReady: true, LookupOutcome: "source_found", SourceWindowID: 42, TargetWindowID: 42,
 				SourceMatched: true, SelectionReason: "source", ChosenRoute: "source",
 			},
 		}},
 	}}}
-	for _, schema := range []int{daemon.EventsExportSchemaV9, daemon.EventsExportSchemaV10, daemon.EventsExportSchemaV11, daemon.EventsExportSchemaV12, daemon.EventsExportSchemaVersion} {
+	for _, schema := range []int{protocol.EventsExportSchemaV9, protocol.EventsExportSchemaV10, protocol.EventsExportSchemaV11, protocol.EventsExportSchemaV12, protocol.EventsExportSchemaVersion} {
 		t.Run(strconv.Itoa(schema), func(t *testing.T) {
 			input := filepath.Join(t.TempDir(), "events.json")
-			projected, err := daemon.ProjectExportEventsPayload(payload, schema)
+			projected, err := protocol.ProjectExportEventsPayload(payload, schema)
 			if err != nil {
 				t.Fatal(err)
 			}

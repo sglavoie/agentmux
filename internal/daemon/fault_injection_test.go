@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -57,7 +58,7 @@ func TestFaultWedgedKittyListNeverBlocksHookIngestion(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		for i := 0; i < 50; i++ {
-			h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "PreToolUse", PayloadJSON: "{}"})
+			h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "PreToolUse", PayloadJSON: "{}"})
 		}
 		close(done)
 	}()
@@ -230,7 +231,7 @@ func TestFaultDegradedStartupStillAppliesEvents(t *testing.T) {
 		t.Fatalf("bounded restore = (%v, %q); want degraded against a wedged Kitty", ok, reason)
 	}
 
-	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "PreToolUse", PayloadJSON: "{}"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "PreToolUse", PayloadJSON: "{}"})
 	if !resp.OK {
 		t.Fatalf("hook event while degraded = %+v; want applied", resp)
 	}
@@ -265,7 +266,7 @@ func TestFaultMalformedPersistedStateIsolatedPerWindow(t *testing.T) {
 	h.SetReducerConfig(ReducerConfig{GuardDuration: 1})
 
 	valid := NewReducer(ReducerConfig{})
-	valid.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "permission", Seq: 3, At: time.Now().Unix()})
+	valid.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "permission", Seq: 3, At: time.Now().Unix()})
 	healthy, err := WindowState{LastAction: "permission", Reducer: valid, Effective: valid.Reduce(time.Now().Unix())}.MarshalUserVar()
 	if err != nil {
 		t.Fatalf("MarshalUserVar: %v", err)
@@ -298,7 +299,7 @@ func TestFaultMalformedPersistedStateIsolatedPerWindow(t *testing.T) {
 		t.Fatalf("window with partially corrupted facts missing: %+v", st2)
 	}
 	facts := st2.Reducer.Facts()
-	if len(facts) != 1 || facts[0].Kind != SourceHarness || facts[0].Key != "claude:s2" {
+	if len(facts) != 1 || facts[0].Kind != protocol.SourceHarness || facts[0].Key != "claude:s2" {
 		t.Fatalf("corrupted facts not dropped: %+v; want only the valid harness fact", facts)
 	}
 	st3, ok := h.store[3]

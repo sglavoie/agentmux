@@ -11,7 +11,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/conversation"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -239,8 +239,8 @@ func newViewerActionExecution(t *testing.T) viewerActionExecution {
 	exec.model.client = exec.kitty
 	exec.model.handoffRunner = exec.handoff
 	exec.model.worktreeRunner = exec.worktree
-	exec.model.daemonCommand = func(daemon.Request) (daemon.Response, error) {
-		return daemon.Response{OK: true}, nil
+	exec.model.daemonCommand = func(protocol.Request) (protocol.Response, error) {
+		return protocol.Response{OK: true}, nil
 	}
 	return exec
 }
@@ -281,8 +281,8 @@ func TestSessionViewerExecutesContinuityActionsAgainstFakeDependencies(t *testin
 			ID:      100,
 			Windows: []kitty.Window{{ID: 10, IsActive: true, UserVars: kitty.UserVars{Profile: "work", Harness: harness.Claude, Project: "api"}}},
 		}}}}
-		exec.model.daemonCommand = func(daemon.Request) (daemon.Response, error) {
-			return daemon.Response{OK: true, States: map[int]daemon.WindowStateSnapshot{10: {Conversation: &identity}}}, nil
+		exec.model.daemonCommand = func(protocol.Request) (protocol.Response, error) {
+			return protocol.Response{OK: true, States: map[int]protocol.WindowStateSnapshot{10: {Conversation: &identity}}}, nil
 		}
 
 		updated, cmd := exec.model.Update(keyPress("c"))

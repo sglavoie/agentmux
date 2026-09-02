@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestAuthoritativeIdleSettlesStaleInteractiveBolt is the core done-when: an
@@ -31,7 +32,7 @@ func TestAuthoritativeIdleSettlesStaleInteractiveBolt(t *testing.T) {
 		t.Fatalf("effective = %+v visible %q, want stop/stop", eff, visible)
 	}
 	h.stateMu.Lock()
-	old := h.store[7].Reducer.facts[SourceID{Kind: SourceHarness, Key: "claude:old"}]
+	old := h.store[7].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:old"}]
 	h.stateMu.Unlock()
 	if old == nil || !old.acked {
 		t.Fatalf("older interactive bolt was not retired: %+v", old)
@@ -137,8 +138,8 @@ func TestAuthoritativeIdlePreservesProtectedAndBackgroundState(t *testing.T) {
 		h := newTestHandler()
 		base := time.Now().Unix()
 		idleSeedHarness(t, h, 7, "old", "active", base)
-		lease := NormalizedEvent{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", At: base, Event: agentSessionLoopStarted}
-		h.handleStateUpdate(Request{Type: TypeStateUpdate, WindowID: 7, Action: "loop_marker", Event: agentSessionLoopStarted, normalized: &lease})
+		lease := protocol.NormalizedEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", At: base, Event: agentSessionLoopStarted}
+		h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "loop_marker", Event: agentSessionLoopStarted, Normalized: &lease})
 
 		obs := AuthoritativeIdle{WindowID: 7, Source: AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
 		if !h.applyAuthoritativeIdle(obs) {
@@ -165,7 +166,7 @@ func TestAuthoritativeIdlePreservesProtectedAndBackgroundState(t *testing.T) {
 			t.Fatalf("effective = %+v, want the permission prompt preserved", eff)
 		}
 		h.stateMu.Lock()
-		perm := h.store[7].Reducer.facts[SourceID{Kind: SourceHarness, Key: "claude:perm"}]
+		perm := h.store[7].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:perm"}]
 		h.stateMu.Unlock()
 		if perm == nil || perm.acked {
 			t.Fatalf("permission fact was retired: %+v", perm)
@@ -175,8 +176,8 @@ func TestAuthoritativeIdlePreservesProtectedAndBackgroundState(t *testing.T) {
 	t.Run("pipe-mode child work is preserved", func(t *testing.T) {
 		h := newTestHandler()
 		base := time.Now().Unix()
-		pipe := NormalizedEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:pipe"}, Action: "active", SessionID: "pipe", PipeMode: true, At: base, Event: "Evt"}
-		h.handleStateUpdate(Request{Type: TypeStateUpdate, WindowID: 7, Action: "active", Event: "Evt", normalized: &pipe})
+		pipe := protocol.NormalizedEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:pipe"}, Action: "active", SessionID: "pipe", PipeMode: true, At: base, Event: "Evt"}
+		h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "active", Event: "Evt", Normalized: &pipe})
 
 		obs := AuthoritativeIdle{WindowID: 7, Source: AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
 		if !h.applyAuthoritativeIdle(obs) {
@@ -186,7 +187,7 @@ func TestAuthoritativeIdlePreservesProtectedAndBackgroundState(t *testing.T) {
 			t.Fatalf("effective = %+v, want the pipe-mode bolt preserved", eff)
 		}
 		h.stateMu.Lock()
-		pf := h.store[7].Reducer.facts[SourceID{Kind: SourceHarness, Key: "claude:pipe"}]
+		pf := h.store[7].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:pipe"}]
 		h.stateMu.Unlock()
 		if pf == nil || pf.acked {
 			t.Fatalf("pipe-mode fact was retired: %+v", pf)
@@ -197,8 +198,8 @@ func TestAuthoritativeIdlePreservesProtectedAndBackgroundState(t *testing.T) {
 		h := newTestHandler()
 		base := time.Now().Unix()
 		idleSeedHarness(t, h, 7, "old", "active", base)
-		sa := NormalizedEvent{Source: SourceID{Kind: SourceSubagent, Key: "agent-1"}, Action: "subagent", At: base + 1, Event: "SubagentStart"}
-		h.handleStateUpdate(Request{Type: TypeStateUpdate, WindowID: 7, Action: "subagent", Event: "SubagentStart", normalized: &sa})
+		sa := protocol.NormalizedEvent{Source: protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-1"}, Action: "subagent", At: base + 1, Event: "SubagentStart"}
+		h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "subagent", Event: "SubagentStart", Normalized: &sa})
 
 		obs := AuthoritativeIdle{WindowID: 7, Source: AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
 		if !h.applyAuthoritativeIdle(obs) {

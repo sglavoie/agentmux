@@ -5,6 +5,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
@@ -22,12 +23,12 @@ import (
 func TestTerminalStopHold_ProcessExitBypassesGate(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		h, rec := newTerminalHoldTestHandler(t)
-		identity := HarnessProcessIdentity{Harness: harness.Claude, PID: 7101, StartToken: "Thu Jul 16 10:20:30 2026"}
-		unheld := HarnessProcessIdentity{Harness: harness.Claude, PID: 7102, StartToken: "Thu Jul 16 10:20:31 2026"}
+		identity := protocol.HarnessProcessIdentity{Harness: harness.Claude, PID: 7101, StartToken: "Thu Jul 16 10:20:30 2026"}
+		unheld := protocol.HarnessProcessIdentity{Harness: harness.Claude, PID: 7102, StartToken: "Thu Jul 16 10:20:31 2026"}
 		applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
 		applyLifecycleEvent(t, h, 43, unheld, "session-43", "active", 1, false)
 		h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{
-			statuses: map[HarnessProcessIdentity]HarnessProcessInspection{
+			statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{
 				identity: HarnessProcessMissing,
 				unheld:   HarnessProcessMissing,
 			},
@@ -57,7 +58,7 @@ func TestTerminalStopHold_ProcessExitBypassesGate(t *testing.T) {
 			t.Fatalf("notifications = %d, want 0: a synthetic exit stop is silent (%+v)", got, rec.snapshot())
 		}
 		outcomes := stopHoldOutcomes(t, h, 42)
-		want := []StopHoldOutcome{StopHoldOutcomeHeld, StopHoldOutcomeBypassed}
+		want := []protocol.StopHoldOutcome{protocol.StopHoldOutcomeHeld, protocol.StopHoldOutcomeBypassed}
 		if len(outcomes) != len(want) {
 			t.Fatalf("hold rows = %v, want %v", outcomes, want)
 		}
@@ -102,22 +103,22 @@ func TestTerminalStopHold_ProcessExitBypassesGate(t *testing.T) {
 // that is the parent's only convergence bound, and stamp observed terminal
 // evidence on an exit that never received a native hook.
 func TestTerminalStopHold_UnrelatedProcessExitPreservesGate(t *testing.T) {
-	held := HarnessProcessIdentity{Harness: harness.Claude, PID: 7201, StartToken: "Thu Jul 16 10:20:30 2026"}
+	held := protocol.HarnessProcessIdentity{Harness: harness.Claude, PID: 7201, StartToken: "Thu Jul 16 10:20:30 2026"}
 	cases := []struct {
 		name      string
-		identity  HarnessProcessIdentity
+		identity  protocol.HarnessProcessIdentity
 		sessionID string
 		pipeMode  bool
 	}{
 		{
 			name:      "pipe_child",
-			identity:  HarnessProcessIdentity{Harness: harness.Claude, PID: 7202, StartToken: "Thu Jul 16 10:21:30 2026"},
+			identity:  protocol.HarnessProcessIdentity{Harness: harness.Claude, PID: 7202, StartToken: "Thu Jul 16 10:21:30 2026"},
 			sessionID: "pipe",
 			pipeMode:  true,
 		},
 		{
 			name:      "sibling_session",
-			identity:  HarnessProcessIdentity{Harness: harness.Claude, PID: 7203, StartToken: "Thu Jul 16 10:22:30 2026"},
+			identity:  protocol.HarnessProcessIdentity{Harness: harness.Claude, PID: 7203, StartToken: "Thu Jul 16 10:22:30 2026"},
 			sessionID: "sibling",
 			pipeMode:  false,
 		},
@@ -131,7 +132,7 @@ func TestTerminalStopHold_UnrelatedProcessExitPreservesGate(t *testing.T) {
 				// Only the unrelated process is gone; the held stop's own process is
 				// left unpolled so this pass can never settle it.
 				h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{
-					statuses: map[HarnessProcessIdentity]HarnessProcessInspection{
+					statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{
 						tc.identity: HarnessProcessMissing,
 					},
 				})
@@ -155,8 +156,8 @@ func TestTerminalStopHold_UnrelatedProcessExitPreservesGate(t *testing.T) {
 				if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 					t.Fatalf("icon after the unrelated exit = %q, want bolt: the held session is still working", eff.Icon)
 				}
-				if outcomes := stopHoldOutcomes(t, h, 42); len(outcomes) != 1 || outcomes[0] != StopHoldOutcomeHeld {
-					t.Fatalf("hold rows = %v, want just [%v]: nothing bypassed this gate", outcomes, StopHoldOutcomeHeld)
+				if outcomes := stopHoldOutcomes(t, h, 42); len(outcomes) != 1 || outcomes[0] != protocol.StopHoldOutcomeHeld {
+					t.Fatalf("hold rows = %v, want just [%v]: nothing bypassed this gate", outcomes, protocol.StopHoldOutcomeHeld)
 				}
 				// The withheld hook belongs to the surviving process, so it is not
 				// evidence about the one that exited.
@@ -186,24 +187,24 @@ func TestTerminalStopHold_UnrelatedProcessExitPreservesGate(t *testing.T) {
 func TestSupersedesStopHold(t *testing.T) {
 	cases := []struct {
 		name string
-		req  Request
+		req  protocol.Request
 		want bool
 	}{
-		{"prompt", Request{Action: "active", IsPrompt: true}, true},
-		{"user_clear", Request{Action: "user_clear"}, true},
-		{"clear", Request{Action: "clear"}, true},
-		{"active", Request{Action: "active"}, true},
-		{"subagent", Request{Action: "subagent"}, true},
-		{"compact", Request{Action: "compact"}, true},
-		{"permission", Request{Action: "permission"}, true},
-		{"elicitation", Request{Action: "elicitation"}, true},
-		{"failure", Request{Action: "failure"}, true},
-		{"stop", Request{Action: "stop"}, false},
-		{"loop_marker", Request{Action: "loop_marker"}, false},
+		{"prompt", protocol.Request{Action: "active", IsPrompt: true}, true},
+		{"user_clear", protocol.Request{Action: "user_clear"}, true},
+		{"clear", protocol.Request{Action: "clear"}, true},
+		{"active", protocol.Request{Action: "active"}, true},
+		{"subagent", protocol.Request{Action: "subagent"}, true},
+		{"compact", protocol.Request{Action: "compact"}, true},
+		{"permission", protocol.Request{Action: "permission"}, true},
+		{"elicitation", protocol.Request{Action: "elicitation"}, true},
+		{"failure", protocol.Request{Action: "failure"}, true},
+		{"stop", protocol.Request{Action: "stop"}, false},
+		{"loop_marker", protocol.Request{Action: "loop_marker"}, false},
 		// Reset-flow cleanup keeps the hold so the stop can fold into the same
 		// user_clear when it commits.
-		{"reset_flow_user_clear", Request{Action: "user_clear", ResetFlow: true}, false},
-		{"reset_flow_prompt", Request{Action: "active", IsPrompt: true, ResetFlow: true}, false},
+		{"reset_flow_user_clear", protocol.Request{Action: "user_clear", ResetFlow: true}, false},
+		{"reset_flow_prompt", protocol.Request{Action: "active", IsPrompt: true, ResetFlow: true}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -225,7 +226,7 @@ func TestTerminalStopHold_SupersededByPromptAndClear(t *testing.T) {
 				armTerminalHold(t, h)
 
 				time.Sleep(terminalHoldTestDelay / 3)
-				if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: event}); !resp.OK {
+				if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: event}); !resp.OK {
 					t.Fatalf("%s response = %+v", event, resp)
 				}
 
@@ -248,8 +249,8 @@ func TestTerminalStopHold_SupersededByPromptAndClear(t *testing.T) {
 // immediately": a reset-sensitive one still falls back to the reset class,
 // exactly as before the gate existed.
 func TestTerminalStopHold_BypassMatrix(t *testing.T) {
-	baseReq := Request{
-		Type:     TypeStateUpdate,
+	baseReq := protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 42,
 		Action:   "stop",
 		Event:    "Stop",
@@ -258,7 +259,7 @@ func TestTerminalStopHold_BypassMatrix(t *testing.T) {
 	cases := []struct {
 		name      string
 		handler   func(*Handler)
-		mutate    func(*Request)
+		mutate    func(*protocol.Request)
 		wantHeld  bool
 		wantClass stopHoldClass
 	}{
@@ -287,24 +288,24 @@ func TestTerminalStopHold_BypassMatrix(t *testing.T) {
 		},
 		{
 			name:      "pipe_mode",
-			mutate:    func(req *Request) { req.PipeMode = true },
+			mutate:    func(req *protocol.Request) { req.PipeMode = true },
 			wantHeld:  true,
 			wantClass: stopHoldClassReset,
 		},
 		{
 			name:      "harness_without_stop_probe",
-			mutate:    func(req *Request) { req.Harness = "" },
+			mutate:    func(req *protocol.Request) { req.Harness = "" },
 			wantHeld:  true,
 			wantClass: stopHoldClassReset,
 		},
 		{
 			name:     "context_limit",
-			mutate:   func(req *Request) { req.ContextLimit = true },
+			mutate:   func(req *protocol.Request) { req.ContextLimit = true },
 			wantHeld: false,
 		},
 		{
 			name:     "reset_flow",
-			mutate:   func(req *Request) { req.ResetFlow = true },
+			mutate:   func(req *protocol.Request) { req.ResetFlow = true },
 			wantHeld: false,
 		},
 	}
@@ -348,7 +349,7 @@ func TestTerminalStopHold_LiveASLLeaseBypassesTerminalClass(t *testing.T) {
 		t.Fatalf("effective = %+v, want a live loop lease before the stop", eff)
 	}
 
-	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "Stop"}); !resp.OK {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "Stop"}); !resp.OK {
 		t.Fatalf("Stop response = %+v", resp)
 	}
 	pending, armed := terminalHoldPending(t, h, 42)
@@ -370,12 +371,12 @@ func TestTerminalStopHold_LiveASLLeaseBypassesTerminalClass(t *testing.T) {
 func TestTerminalStopHold_ShadowSeqBumpsOncePerHold(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		h, _ := newTerminalHoldTestHandler(t)
-		if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "UserPromptSubmit"}); !resp.OK {
+		if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "UserPromptSubmit"}); !resp.OK {
 			t.Fatalf("UserPromptSubmit response = %+v", resp)
 		}
 		before := h.captureWindowReceipt(42)
 
-		if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "Stop"}); !resp.OK {
+		if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "Stop"}); !resp.OK {
 			t.Fatalf("first Stop response = %+v", resp)
 		}
 		armed := h.captureWindowReceipt(42)
@@ -388,7 +389,7 @@ func TestTerminalStopHold_ShadowSeqBumpsOncePerHold(t *testing.T) {
 		}
 
 		time.Sleep(terminalHoldTestDelay / 3)
-		if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "Stop"}); !resp.OK {
+		if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "Stop"}); !resp.OK {
 			t.Fatalf("second Stop response = %+v", resp)
 		}
 		if got := h.captureWindowReceipt(42); got != armed {
@@ -404,7 +405,7 @@ func TestTerminalStopHold_ShadowSeqBumpsOncePerHold(t *testing.T) {
 		if !second.armedAt.Equal(first.armedAt) {
 			t.Fatalf("re-arm reset armedAt from %v to %v; the window has been withholding continuously", first.armedAt, second.armedAt)
 		}
-		if rows := stopHoldOutcomes(t, h, 42); len(rows) != 1 || rows[0] != StopHoldOutcomeHeld {
+		if rows := stopHoldOutcomes(t, h, 42); len(rows) != 1 || rows[0] != protocol.StopHoldOutcomeHeld {
 			t.Fatalf("hold rows = %v, want exactly one held row across arm and re-arm", rows)
 		}
 

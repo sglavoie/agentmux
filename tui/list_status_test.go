@@ -8,7 +8,7 @@ import (
 	runewidth "github.com/mattn/go-runewidth"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -128,7 +128,7 @@ func TestRenderHealthHintsShownWhenDegraded(t *testing.T) {
 // the watchdog entry carries no LastAction (e.g., a row whose tab is not in a
 // sweep-eligible state).
 func TestFormatAgeNoLastAction(t *testing.T) {
-	if text := formatAge(daemon.WatchdogState{}, time.Now()); text != "—" {
+	if text := formatAge(protocol.WatchdogState{}, time.Now()); text != "—" {
 		t.Errorf("expected dash placeholder, got %q", text)
 	}
 }
@@ -137,11 +137,11 @@ func TestFormatAgeNoLastAction(t *testing.T) {
 // whole minutes below one hour and to whole hours beyond it.
 func TestFormatAgeCoarseRounding(t *testing.T) {
 	now := time.Now()
-	minutes := daemon.WatchdogState{LastAction: "active", LastEventAt: now.Add(-5 * time.Minute).Unix()}
+	minutes := protocol.WatchdogState{LastAction: "active", LastEventAt: now.Add(-5 * time.Minute).Unix()}
 	if text := formatAge(minutes, now); text != "5m" {
 		t.Errorf("expected \"5m\", got %q", text)
 	}
-	hours := daemon.WatchdogState{LastAction: "subagent", LastEventAt: now.Add(-2 * time.Hour).Unix()}
+	hours := protocol.WatchdogState{LastAction: "subagent", LastEventAt: now.Add(-2 * time.Hour).Unix()}
 	if text := formatAge(hours, now); text != "2h" {
 		t.Errorf("expected \"2h\", got %q", text)
 	}
@@ -206,7 +206,7 @@ func TestActivityCellTextWarningRequiresTimer(t *testing.T) {
 	now := time.Now()
 	busy := session.RunningSession{WindowID: 1, BusySince: now.Add(-90 * time.Second)}
 	idle := session.RunningSession{WindowID: 2}
-	onBand := daemon.WatchdogState{
+	onBand := protocol.WatchdogState{
 		LastAction:   "active",
 		LastEventAt:  now.Add(-8 * time.Minute).Unix(), // 8m of 10m is exactly the band
 		ThresholdSec: 600,
@@ -228,7 +228,7 @@ func TestActivityCellTextWarningRequiresTimer(t *testing.T) {
 		t.Errorf("idle text = %q, want the dash placeholder", text)
 	}
 
-	belowBand := daemon.WatchdogState{
+	belowBand := protocol.WatchdogState{
 		LastAction:   "active",
 		LastEventAt:  now.Add(-5 * time.Minute).Unix(),
 		ThresholdSec: 600,
@@ -237,7 +237,7 @@ func TestActivityCellTextWarningRequiresTimer(t *testing.T) {
 		t.Error("warning must not fire at 50% of threshold")
 	}
 
-	noThreshold := daemon.WatchdogState{LastAction: "active", LastEventAt: now.Add(-2 * time.Hour).Unix()}
+	noThreshold := protocol.WatchdogState{LastAction: "active", LastEventAt: now.Add(-2 * time.Hour).Unix()}
 	if _, warning = activityCellText(busy, noThreshold, now); warning {
 		t.Error("warning must not fire when ThresholdSec is zero")
 	}
@@ -252,7 +252,7 @@ func TestRenderActivityCellWarningStyled(t *testing.T) {
 	busy := session.RunningSession{WindowID: 1, BusySince: now.Add(-90 * time.Second)}
 	width := 8
 
-	wsWarn := daemon.WatchdogState{
+	wsWarn := protocol.WatchdogState{
 		LastAction:   "active",
 		LastEventAt:  now.Add(-9 * time.Minute).Unix(),
 		ThresholdSec: 600,
@@ -269,7 +269,7 @@ func TestRenderActivityCellWarningStyled(t *testing.T) {
 		t.Errorf("warning cell width = %d, want %d (%q)", got, width, plain)
 	}
 
-	wsOk := daemon.WatchdogState{
+	wsOk := protocol.WatchdogState{
 		LastAction:   "active",
 		LastEventAt:  now.Add(-1 * time.Minute).Unix(),
 		ThresholdSec: 600,
@@ -293,7 +293,7 @@ func TestAnyRowHasActivityFalseWhenNoRowIsBusy(t *testing.T) {
 		filtered: []session.RunningSession{
 			{WindowID: 1, Base: "a", State: "bolt"},
 		},
-		watchdog: map[int]daemon.WatchdogState{
+		watchdog: map[int]protocol.WatchdogState{
 			1: {LastAction: "active", LastEventAt: time.Now().Unix(), ThresholdSec: 600},
 		},
 	}
@@ -328,7 +328,7 @@ func TestRenderListActivityColumnAppears(t *testing.T) {
 		sessions: []session.RunningSession{
 			{WindowID: 1, Base: "api", State: "bolt", Account: "work", BusySince: now.Add(-(3*time.Minute + 7500*time.Millisecond))},
 		},
-		watchdog: map[int]daemon.WatchdogState{
+		watchdog: map[int]protocol.WatchdogState{
 			1: {LastAction: "active", LastEventAt: now.Unix(), ThresholdSec: 600},
 		},
 	}
@@ -377,7 +377,7 @@ func TestRenderListActivityColumnSharedWidthAcrossRows(t *testing.T) {
 			{WindowID: 2, Base: "web", State: "bolt", Account: "work", Directory: "~/p"},
 			{WindowID: 3, Base: "etl", State: "bolt", Account: "work", Directory: "~/p", BusySince: now.Add(-(99*24*time.Hour + 23*time.Hour))},
 		},
-		watchdog: map[int]daemon.WatchdogState{
+		watchdog: map[int]protocol.WatchdogState{
 			1: {LastAction: "active", LastEventAt: now.Add(-9 * time.Minute).Unix(), ThresholdSec: 600},
 		},
 	}

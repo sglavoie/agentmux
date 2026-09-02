@@ -4,6 +4,8 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // applyOutcome carries what the legacy state machine decided about a request
@@ -42,16 +44,16 @@ type applyOutcome struct {
 // divergence evidence in the shadow export. Suppressed transitions still
 // return OK, so the reducer sees them too and applies its own suppression
 // rules.
-func (h *Handler) handleStateUpdate(req Request) Response {
+func (h *Handler) handleStateUpdate(req protocol.Request) protocol.Response {
 	if req.Type == "" {
-		req.Type = TypeStateUpdate
+		req.Type = protocol.TypeStateUpdate
 	}
 	req = ensureRequestTraceID(req)
-	if req.eventRef == nil {
-		req.eventRef = &sessionEventReference{}
+	if req.EventRef == nil {
+		req.EventRef = &protocol.SessionEventReference{}
 	}
-	if req.parseOutcome == "" {
-		req.parseOutcome = ParseOutcomeSynthetic
+	if req.ParseOutcome == "" {
+		req.ParseOutcome = protocol.ParseOutcomeSynthetic
 	}
 	before := h.effectiveStateForTrace(req.WindowID)
 	resp, outcome := h.applyStateUpdate(req)
@@ -63,16 +65,16 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	return resp
 }
 
-func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
+func (h *Handler) applyStateUpdate(req protocol.Request) (protocol.Response, applyOutcome) {
 	var outcome applyOutcome
 	if req.WindowID <= 0 {
-		return Response{OK: false, Error: "window_id is required for state_update"}, outcome
+		return protocol.Response{OK: false, Error: "window_id is required for state_update"}, outcome
 	}
 	if req.Action == "" {
-		return Response{OK: false, Error: "action is required for state_update"}, outcome
+		return protocol.Response{OK: false, Error: "action is required for state_update"}, outcome
 	}
-	if _, ok := actionPriority[req.Action]; !ok {
-		return Response{OK: false, Error: "unknown action: " + req.Action}, outcome
+	if _, ok := protocol.ActionPriority(req.Action); !ok {
+		return protocol.Response{OK: false, Error: "unknown action: " + req.Action}, outcome
 	}
 
 	if req.Action == "loop_marker" {
@@ -83,7 +85,7 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 	// visible icon; they never become source facts.
 	outcome.skipReduce = req.PreservesIcon
 	if req.PreservesIcon {
-		outcome.skipReason = DecisionReasonPreservesIcon
+		outcome.skipReason = protocol.DecisionReasonPreservesIcon
 	}
 
 	// A newer prompt or explicit wipe supersedes a stop still on hold; drop it
@@ -100,7 +102,7 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 	inputAction := req.Action
 	req = h.applyResetFlowLocked(req)
 	if req.Action != inputAction {
-		req.normalizationOutcome = NormalizationOutcomeReducerRewrite
+		req.NormalizationOutcome = protocol.NormalizationOutcomeReducerRewrite
 	}
 	// A reset flow may have just rewritten the action (stop → user_clear); the
 	// reducer and notifier must see the settled action, not the raw stamp.
@@ -134,7 +136,7 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 
 	prevAction, currentIconState := h.lastKnownState(req.WindowID)
 	if currentIconState == "" {
-		currentIconState = req.currentIconState
+		currentIconState = req.CurrentIconState
 	}
 	h.stateMu.Lock()
 	st = h.ensureWindowStateLocked(req.WindowID)
@@ -176,8 +178,8 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonCopilotPendingPrompt, currentIconState))
 		h.stateMu.Unlock()
 		outcome.skipReduce = true
-		outcome.skipReason = DecisionReasonCopilotPendingPrompt
-		return Response{OK: true, Allowed: false}, outcome
+		outcome.skipReason = protocol.DecisionReasonCopilotPendingPrompt
+		return protocol.Response{OK: true, Allowed: false}, outcome
 	}
 	if shouldSuppressPendingElicitationActive(req, prevAction) {
 		slog.Debug("pending elicitation active suppression",
@@ -189,8 +191,8 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonElicitationPending, currentIconState))
 		h.stateMu.Unlock()
 		outcome.skipReduce = true
-		outcome.skipReason = DecisionReasonElicitationPending
-		return Response{OK: true, Allowed: false}, outcome
+		outcome.skipReason = protocol.DecisionReasonElicitationPending
+		return protocol.Response{OK: true, Allowed: false}, outcome
 	}
 
 	// Only terminal/idle transitions invalidate a pending permission notification.
@@ -275,7 +277,7 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 			h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonGuardBlocked, currentIconState))
 			h.stateMu.Unlock()
 		}
-		return Response{OK: true, Allowed: false}, outcome
+		return protocol.Response{OK: true, Allowed: false}, outcome
 	}
 
 	// Auto-approved permission: Copilot can emit a trailing
@@ -344,14 +346,14 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 		}
 	}
 
-	iconState := IconState(effective)
+	iconState := protocol.IconState(effective)
 	if req.PreservesIcon {
-		iconState = IconStatePreserve
+		iconState = protocol.IconStatePreserve
 	} else if isAutoApprovedPerm {
 		// Clear the permission guard immediately — it was auto-resolved, so a
 		// subsequent idle can fall back to lastAction ("active") and clear the bolt.
 		h.guard.Clear(req.WindowID)
-		iconState = IconStatePreserve
+		iconState = protocol.IconStatePreserve
 	} else if effective == "idle" || effective == "clear" {
 		// Prefer prevGuard (still within the guard window); fall back to the
 		// pre-update lastAction/current title icon snapshot captured in prevAction.
@@ -372,7 +374,7 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 			h.stateMu.Unlock()
 		case "compact":
 			if syntheticStop {
-				iconState = IconState("stop")
+				iconState = protocol.IconState("stop")
 			} else {
 				iconState = ""
 				h.stateMu.Lock()
@@ -383,7 +385,7 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 			}
 		default:
 			// stop/permission/failure icons persist until the user notices them.
-			iconState = IconStatePreserve
+			iconState = protocol.IconStatePreserve
 		}
 	} else if effective == "user_clear" {
 		// Explicit wipe (from the TUI or a reset flow) — reset lastAction so a
@@ -409,7 +411,7 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 		// The permission resolved itself; there is no fact to fold and no key
 		// icon to surface.
 		outcome.skipReduce = true
-		outcome.skipReason = DecisionReasonAutoApprovedPermission
+		outcome.skipReason = protocol.DecisionReasonAutoApprovedPermission
 	}
 
 	h.stateMu.Lock()
@@ -417,7 +419,7 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 	if syntheticStop {
 		loggedAction = "stop"
 	}
-	if iconState != IconStatePreserve {
+	if iconState != protocol.IconStatePreserve {
 		st := h.ensureWindowStateLocked(req.WindowID)
 		st.DesiredIcon = iconState
 		st.StateSet = true
@@ -439,7 +441,7 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 	}
 	h.stateMu.Unlock()
 
-	return Response{OK: true, Allowed: true, IconState: iconState}, outcome
+	return protocol.Response{OK: true, Allowed: true, IconState: iconState}, outcome
 }
 
 // handleLoopMarkerStateUpdate records an ASL lifecycle signal without
@@ -449,7 +451,7 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 // emitting loop markers still counts as alive. It deliberately skips the guard,
 // lastAction, notifications, stale tracking, and icon resolution paths so a
 // running ASL loop cannot introduce or disturb a bolt icon.
-func (h *Handler) handleLoopMarkerStateUpdate(req Request) Response {
+func (h *Handler) handleLoopMarkerStateUpdate(req protocol.Request) protocol.Response {
 	receivedAt := time.Now()
 	h.stateMu.Lock()
 	h.touchWindowMetadataLocked(req)
@@ -473,7 +475,7 @@ func (h *Handler) handleLoopMarkerStateUpdate(req Request) Response {
 		st.Looping = false
 		st.LoopingSet = true
 	}
-	h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, req.Action, IconStatePreserve, desiredIconForState(st)))
+	h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, req.Action, protocol.IconStatePreserve, desiredIconForState(st)))
 	h.linkRequestRenderGenerationLocked(req, st.Seq+1)
 	h.syncRendererMetadataLocked(req.WindowID)
 	// A heartbeat that leaves the marker as-is is activity bookkeeping; only a
@@ -493,5 +495,5 @@ func (h *Handler) handleLoopMarkerStateUpdate(req Request) Response {
 		"source", req.Source,
 	)
 
-	return Response{OK: true, Allowed: true, IconState: IconStatePreserve}
+	return protocol.Response{OK: true, Allowed: true, IconState: protocol.IconStatePreserve}
 }

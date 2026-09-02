@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
 
@@ -32,7 +33,7 @@ func stubLoopDiscovery(t *testing.T) *bool {
 
 // seedReducerFact installs a reducer fact on window 42 under stateMu and
 // publishes the initial reduction.
-func seedReducerFact(h *Handler, windowID int, now time.Time, events ...ReducerEvent) {
+func seedReducerFact(h *Handler, windowID int, now time.Time, events ...protocol.ReducerEvent) {
 	h.stateMu.Lock()
 	st := h.ensureWindowStateLocked(windowID)
 	if st.Reducer == nil {
@@ -92,8 +93,8 @@ func TestWatchdogTick_ExpiresOnAccumulatedIdle(t *testing.T) {
 		st.LastSessionTitle = "W:api"
 		st.Activity = base
 		h.stateMu.Unlock()
-		seedReducerFact(h, 42, base, ReducerEvent{
-			Source: SourceID{Kind: SourceHarness, Key: "main"},
+		seedReducerFact(h, 42, base, protocol.ReducerEvent{
+			Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "main"},
 			Action: "active", Seq: 1, At: base.Unix(),
 		})
 
@@ -152,8 +153,8 @@ func TestSweepStale_CompactsAcknowledgedFactsWithoutStaleThresholds(t *testing.T
 	h.stateMu.Lock()
 	st := h.ensureWindowStateLocked(42)
 	st.Reducer = NewReducer(h.reducerCfg)
-	st.Reducer.Restore([]SourceFactSnapshot{{
-		Kind: SourceHarness, Key: "codex:old", Action: "active", Icon: "bolt",
+	st.Reducer.Restore([]protocol.SourceFactSnapshot{{
+		Kind: protocol.SourceHarness, Key: "codex:old", Action: "active", Icon: "bolt",
 		Seq: 7, CausalOrder: 7, At: base.Unix(), Acked: true, AckedAt: base.Unix(),
 	}})
 	st.ShadowSeq = 7
@@ -201,8 +202,8 @@ func TestWatchdogTick_SleepGapDoesNotExpire(t *testing.T) {
 		st.LastSessionTitle = "W:api"
 		st.Activity = base
 		h.stateMu.Unlock()
-		seedReducerFact(h, 42, base, ReducerEvent{
-			Source: SourceID{Kind: SourceHarness, Key: "main"},
+		seedReducerFact(h, 42, base, protocol.ReducerEvent{
+			Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "main"},
 			Action: "active", Seq: 1, At: base.Unix(),
 		})
 
@@ -267,12 +268,12 @@ func TestWatchdogStale_ASLExecutingLeaseProtectsBolt(t *testing.T) {
 	h.publishSnapshot(fakeOSWindowsWithTab(42, palette.BuildTitle("W:api", "bolt", false)), base)
 
 	seedReducerFact(h, 42, base,
-		ReducerEvent{
-			Source: SourceID{Kind: SourceASL, Key: "run-1"},
+		protocol.ReducerEvent{
+			Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"},
 			Seq:    1, At: base.Unix(), RunID: "run-1", Phase: ASLPhaseTurn,
 		},
-		ReducerEvent{
-			Source: SourceID{Kind: SourceHarness, Key: "main"},
+		protocol.ReducerEvent{
+			Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "main"},
 			Action: "active", Seq: 1, At: base.Add(-time.Hour).Unix(),
 		},
 	)
@@ -309,7 +310,7 @@ func TestWatchdogStale_ASLExecutingLeaseProtectsBolt(t *testing.T) {
 		if !fact.Acked {
 			t.Fatalf("fact %s:%s not acked after expiry", fact.Kind, fact.Key)
 		}
-		if fact.Kind == SourceASL && !fact.LeaseLive {
+		if fact.Kind == protocol.SourceASL && !fact.LeaseLive {
 			t.Fatalf("ASL lease released by watchdog expiry; want live")
 		}
 	}
@@ -333,12 +334,12 @@ func TestSweepStale_ExpiresIndividualFacts(t *testing.T) {
 		st.Activity = now
 		h.stateMu.Unlock()
 		seedReducerFact(h, 42, now,
-			ReducerEvent{
-				Source: SourceID{Kind: SourceHarness, Key: "main"},
+			protocol.ReducerEvent{
+				Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "main"},
 				Action: "active", Seq: 1, At: now.Add(-15 * time.Minute).Unix(),
 			},
-			ReducerEvent{
-				Source: SourceID{Kind: SourceSubagent, Key: "agent-1"},
+			protocol.ReducerEvent{
+				Source: protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-1"},
 				Action: "subagent", Seq: 1, At: now.Unix(),
 			},
 		)
@@ -389,8 +390,8 @@ func TestSweepStale_StampsShadowMetadata(t *testing.T) {
 		st.Activity = now.Add(-15 * time.Minute)
 		h.stateMu.Unlock()
 		seedReducerFact(h, 42, now,
-			ReducerEvent{
-				Source: SourceID{Kind: SourceHarness, Key: "main"},
+			protocol.ReducerEvent{
+				Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "main"},
 				Action: "active", Seq: 1, At: now.Add(-15 * time.Minute).Unix(),
 			},
 		)

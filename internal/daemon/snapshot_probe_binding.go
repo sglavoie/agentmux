@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"github.com/sglavoie/agentmux/internal/conversation"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -32,7 +33,7 @@ type screenProbeBinding struct {
 	legacyDirectManaged bool
 	terminalProducer    bool
 	terminalAt          int64
-	recoverySource      SourceID
+	recoverySource      protocol.SourceID
 	recoveryAt          int64
 }
 
@@ -50,7 +51,7 @@ func (b screenProbeBinding) valid() bool {
 	if b.terminalProducer && b.recoverySource.Kind != "" {
 		return false
 	}
-	return b.recoverySource.Kind == "" || b.recoverySource.Kind == SourceProbe
+	return b.recoverySource.Kind == "" || b.recoverySource.Kind == protocol.SourceProbe
 }
 
 func newScreenProbeBinding(

@@ -1,5 +1,9 @@
 package daemon
 
+import (
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+)
+
 type resetFlowState uint8
 
 const (
@@ -17,7 +21,7 @@ func isResetCleanupAction(action string) bool {
 	}
 }
 
-func shouldClearPendingReset(req Request, state resetFlowState) bool {
+func shouldClearPendingReset(req protocol.Request, state resetFlowState) bool {
 	if state == resetFlowNone || req.ResetFlow {
 		return false
 	}
@@ -33,7 +37,7 @@ func shouldClearPendingReset(req Request, state resetFlowState) bool {
 // applyResetFlowLocked maintains the short-lived per-window reset marker and
 // rewrites reset-related cleanup into user_clear so stop icons/notifications do
 // not surface during /clear, /reset, or /new flows. Caller must hold stateMu.
-func (h *Handler) applyResetFlowLocked(req Request) Request {
+func (h *Handler) applyResetFlowLocked(req protocol.Request) protocol.Request {
 	st := h.ensureWindowStateLocked(req.WindowID)
 	state := st.PendingReset
 	if req.ResetFlow {

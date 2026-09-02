@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -28,11 +29,11 @@ func TestProbeClaudeScreenStop_BusyPaneTitleDoesNotOverrideStop(t *testing.T) {
 	}}
 	h := newTestHandler()
 	h.SetKittyClient(fake)
-	stop := NormalizedEvent{
-		Source: SourceID{Kind: SourceHarness, Key: "claude:sess-stop"},
+	stop := protocol.NormalizedEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:sess-stop"},
 		Action: "stop", SessionID: "sess-stop", Event: "Stop", At: base.Unix(),
 	}
-	if resp := h.handleStateUpdate(Request{Type: TypeStateUpdate, WindowID: 42, Action: "stop", normalized: &stop}); !resp.OK {
+	if resp := h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "stop", Normalized: &stop}); !resp.OK {
 		t.Fatalf("seed stop response = %+v", resp)
 	}
 
@@ -41,7 +42,7 @@ func TestProbeClaudeScreenStop_BusyPaneTitleDoesNotOverrideStop(t *testing.T) {
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "stop" {
 		t.Fatalf("effective with busy title over stop = %+v, want stop preserved", eff)
 	}
-	if ev, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, screenActiveProbeEvent); ok {
+	if ev, ok := lastEventNamed(h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42}).Events, screenActiveProbeEvent); ok {
 		t.Fatalf("ScreenActiveProbe row recorded over explicit stop: %+v", ev)
 	}
 }
@@ -65,11 +66,11 @@ func TestProbeClaudeScreenStop_ConcurrentTerminalInvalidatesBusyRecovery(t *test
 			return
 		}
 		injected = true
-		stop := NormalizedEvent{
-			Source: SourceID{Kind: SourceHarness, Key: "claude:sess-race"},
+		stop := protocol.NormalizedEvent{
+			Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:sess-race"},
 			Action: "stop", SessionID: "sess-race", Event: "Stop", At: base.Unix(),
 		}
-		if resp := h.handleStateUpdate(Request{Type: TypeStateUpdate, WindowID: 42, Action: "stop", normalized: &stop}); !resp.OK {
+		if resp := h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "stop", Normalized: &stop}); !resp.OK {
 			t.Fatalf("concurrent stop response = %+v", resp)
 		}
 	}
@@ -79,7 +80,7 @@ func TestProbeClaudeScreenStop_ConcurrentTerminalInvalidatesBusyRecovery(t *test
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "stop" {
 		t.Fatalf("effective after concurrent stop = %+v, want stop", eff)
 	}
-	if ev, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, screenActiveProbeEvent); ok {
+	if ev, ok := lastEventNamed(h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42}).Events, screenActiveProbeEvent); ok {
 		t.Fatalf("ScreenActiveProbe row recorded from stale busy snapshot: %+v", ev)
 	}
 }
@@ -122,7 +123,7 @@ func TestProbeClaudeScreenStop_ProtectedScreensKeepBolt(t *testing.T) {
 			if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 				t.Fatalf("effective = %+v, want bolt preserved", eff)
 			}
-			resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+			resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 			if ev, ok := lastEventNamed(resp.Events, screenStopProbeEvent); ok {
 				t.Fatalf("ScreenStopProbe row recorded for a protected screen: %+v", ev)
 			}
@@ -168,7 +169,7 @@ func TestProbeClaudeScreenStop_ConcurrentPromptInvalidatesStopProbe(t *testing.T
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 		t.Fatalf("effective = %+v, want the newer bolt preserved against a stale stop probe", eff)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if ev, ok := lastEventNamed(resp.Events, screenStopProbeEvent); ok {
 		t.Fatalf("ScreenStopProbe row recorded despite a concurrent prompt: %+v", ev)
 	}
@@ -229,7 +230,7 @@ func TestProbeClaudeScreenStop_UnmanagedForegroundNotProbed(t *testing.T) {
 	if got := len(fake.titleCalls()); got != 0 {
 		t.Fatalf("SetTabTitle calls = %d, want 0", got)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(resp.Events) != 0 {
 		t.Fatalf("events = %d, want 0 for an unmanaged foreground tab", len(resp.Events))
 	}
@@ -253,8 +254,8 @@ func TestProbeClaudeScreenStop_ConfirmsHeldStopInsteadOfSettling(t *testing.T) {
 
 	h.ProbeClaudeScreenStop(base.Add(2 * time.Second))
 	pending, ok := terminalHoldPending(t, h, 42)
-	if !ok || !pending.confirmed || pending.confirmedBy != StopConfirmedByClaudeScreen {
-		t.Fatalf("hold after two agreeing screens = %+v/%v, want confirmed by %s", pending, ok, StopConfirmedByClaudeScreen)
+	if !ok || !pending.confirmed || pending.confirmedBy != protocol.StopConfirmedByClaudeScreen {
+		t.Fatalf("hold after two agreeing screens = %+v/%v, want confirmed by %s", pending, ok, protocol.StopConfirmedByClaudeScreen)
 	}
 
 	// The held stop still owns the transition: the probe settled nothing of its
@@ -263,7 +264,7 @@ func TestProbeClaudeScreenStop_ConfirmsHeldStopInsteadOfSettling(t *testing.T) {
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 		t.Fatalf("icon while the confirmed hold waits = %q, want bolt", eff.Icon)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if ev, ok := lastEventNamed(resp.Events, screenStopProbeEvent); ok {
 		t.Fatalf("probe recorded %+v; a confirmation is not a synthetic stop", ev)
 	}
@@ -272,7 +273,7 @@ func TestProbeClaudeScreenStop_ConfirmsHeldStopInsteadOfSettling(t *testing.T) {
 func countEventsNamed(t *testing.T, h *Handler, windowID int, name string) int {
 	t.Helper()
 	count := 0
-	for _, event := range h.Handle(Request{Type: TypeSessionDetail, WindowID: windowID}).Events {
+	for _, event := range h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: windowID}).Events {
 		if event.Event == name {
 			count++
 		}
@@ -298,14 +299,14 @@ func windowBusySince(t *testing.T, h *Handler, windowID int) time.Time {
 // own render is the only title write the fake observes.
 func claudeSeedActiveBolt(t *testing.T, h *Handler, windowID int, session string, at int64) uint64 {
 	t.Helper()
-	ev := NormalizedEvent{
-		Source:    SourceID{Kind: SourceHarness, Key: "claude:" + session},
+	ev := protocol.NormalizedEvent{
+		Source:    protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:" + session},
 		Action:    "active",
 		SessionID: session,
 		At:        at,
 		Event:     "UserPromptSubmit",
 	}
-	resp := h.handleStateUpdate(Request{Type: TypeStateUpdate, WindowID: windowID, Action: "active", Event: "UserPromptSubmit", normalized: &ev})
+	resp := h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: windowID, Action: "active", Event: "UserPromptSubmit", Normalized: &ev})
 	if !resp.OK {
 		t.Fatalf("seed claude active %q rejected: %+v", session, resp)
 	}

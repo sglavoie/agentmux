@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // The Handler request surface: dispatch, health, and the notification helpers
@@ -12,50 +13,50 @@ import (
 // in handler.go.
 
 // Handle processes a Request and returns a Response.
-func (h *Handler) Handle(req Request) Response {
+func (h *Handler) Handle(req protocol.Request) protocol.Response {
 	req = normalizeProducerFields(req)
 	req = ensureRequestTraceID(req)
-	var resp Response
+	var resp protocol.Response
 	switch req.Type {
-	case TypeHookEvent:
+	case protocol.TypeHookEvent:
 		h.captureHookPayload(req)
 		resp = h.handleHookEvent(req)
 		resp = h.attachHookDeliveryAcknowledgement(req, resp)
-	case TypeDiagnosticProbe:
+	case protocol.TypeDiagnosticProbe:
 		resp = h.handleDiagnosticProbe(req)
-	case TypeStateUpdate:
+	case protocol.TypeStateUpdate:
 		resp = h.handleStateUpdate(req)
-	case TypeStateQuery:
+	case protocol.TypeStateQuery:
 		resp = h.handleStateQuery()
-	case TypeSessionDetail:
+	case protocol.TypeSessionDetail:
 		resp = h.handleSessionDetail(req)
-	case TypeEventsExport:
+	case protocol.TypeEventsExport:
 		resp = h.handleEventsExport(req)
-	case TypeASLSnapshot:
+	case protocol.TypeASLSnapshot:
 		resp = h.handleASLSnapshot()
-	case TypeASLQuestion:
+	case protocol.TypeASLQuestion:
 		resp = h.handleASLQuestion(req)
-	case TypeASLAction:
+	case protocol.TypeASLAction:
 		resp = h.handleASLAction(req)
-	case TypeASLWorkbench:
+	case protocol.TypeASLWorkbench:
 		resp = h.handleASLWorkbench(req)
-	case TypeHealth:
+	case protocol.TypeHealth:
 		resp = h.handleHealth()
-	case TypeShutdown:
+	case protocol.TypeShutdown:
 		resp = h.handleShutdown()
 	default:
-		resp = Response{OK: false, Error: "unknown request type: " + string(req.Type)}
+		resp = protocol.Response{OK: false, Error: "unknown request type: " + string(req.Type)}
 	}
 	return resp
 }
 
-func (h *Handler) handleHealth() Response {
+func (h *Handler) handleHealth() protocol.Response {
 	var uptime int64
 	if !h.startedAt.IsZero() {
 		uptime = int64(time.Since(h.startedAt).Seconds())
 	}
 	ready, degraded := h.Readiness()
-	resp := Response{OK: true, PID: os.Getpid(), UptimeSeconds: uptime, Ready: ready, DegradedReason: degraded}
+	resp := protocol.Response{OK: true, PID: os.Getpid(), UptimeSeconds: uptime, Ready: ready, DegradedReason: degraded}
 	if h.buildInfo != nil {
 		build := *h.buildInfo
 		resp.Build = &build
@@ -98,7 +99,7 @@ func (h *Handler) SetBuildInfo(info buildinfo.Info) {
 // setMetricsSource installs the server's metrics snapshot function so health
 // responses carry request-outcome counters. Called by NewServer before the
 // socket accepts connections.
-func (h *Handler) setMetricsSource(fn func() MetricsSnapshot) {
+func (h *Handler) setMetricsSource(fn func() protocol.MetricsSnapshot) {
 	h.metricsFn = fn
 }
 
@@ -161,9 +162,9 @@ func (h *Handler) notificationTarget(windowID int, account string) NotificationT
 	return target
 }
 
-func (h *Handler) handleShutdown() Response {
+func (h *Handler) handleShutdown() protocol.Response {
 	if h.onShutdown != nil {
 		h.shutdownOnce.Do(func() { go h.onShutdown() })
 	}
-	return Response{OK: true}
+	return protocol.Response{OK: true}
 }

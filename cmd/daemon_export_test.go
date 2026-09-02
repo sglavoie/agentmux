@@ -9,19 +9,20 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 type fakeDaemonExportClient struct {
 	health daemon.Health
 	calls  []int
-	export func(windowID int) (daemon.EventsExport, error)
+	export func(windowID int) (protocol.EventsExport, error)
 }
 
-func (f *fakeDaemonExportClient) ExportEvents(windowID int) (daemon.EventsExport, error) {
+func (f *fakeDaemonExportClient) ExportEvents(windowID int) (protocol.EventsExport, error) {
 	f.calls = append(f.calls, windowID)
 	if f.export == nil {
-		return daemon.EventsExport{}, nil
+		return protocol.EventsExport{}, nil
 	}
 	return f.export(windowID)
 }
@@ -43,14 +44,14 @@ func (f fakeKittyWindowLister) ListWindows() ([]kitty.OSWindow, error) {
 }
 
 type fakeDaemonLifecycleClient struct {
-	sendResp     daemon.Response
+	sendResp     protocol.Response
 	sendErr      error
-	sendCalls    []daemon.Request
+	sendCalls    []protocol.Request
 	restartErr   error
 	restartCalls []string
 }
 
-func (f *fakeDaemonLifecycleClient) Send(req daemon.Request) (daemon.Response, error) {
+func (f *fakeDaemonLifecycleClient) Send(req protocol.Request) (protocol.Response, error) {
 	f.sendCalls = append(f.sendCalls, req)
 	return f.sendResp, f.sendErr
 }
@@ -102,7 +103,7 @@ func resetDaemonExportTestState(t *testing.T) {
 func TestDaemonStopCommandWritesToCommandOutput(t *testing.T) {
 	resetDaemonLifecycleTestState(t)
 	client := &fakeDaemonLifecycleClient{
-		sendResp: daemon.Response{OK: true},
+		sendResp: protocol.Response{OK: true},
 	}
 	newDaemonLifecycleClient = func() daemonLifecycleClient { return client }
 
@@ -115,7 +116,7 @@ func TestDaemonStopCommandWritesToCommandOutput(t *testing.T) {
 	if got, want := out.String(), "daemon stopped\n"; got != want {
 		t.Fatalf("output = %q; want %q", got, want)
 	}
-	if len(client.sendCalls) != 1 || client.sendCalls[0].Type != daemon.TypeShutdown {
+	if len(client.sendCalls) != 1 || client.sendCalls[0].Type != protocol.TypeShutdown {
 		t.Fatalf("Send calls = %+v; want one shutdown request", client.sendCalls)
 	}
 }
@@ -139,7 +140,7 @@ func TestDaemonRestartCommandWritesToCommandOutput(t *testing.T) {
 	}
 }
 
-func findExportWindow(t *testing.T, payload daemon.ExportEventsPayload, id int) daemon.ExportWindow {
+func findExportWindow(t *testing.T, payload protocol.ExportEventsPayload, id int) protocol.ExportWindow {
 	t.Helper()
 	for _, window := range payload.Windows {
 		if window.WindowID == id {
@@ -147,7 +148,7 @@ func findExportWindow(t *testing.T, payload daemon.ExportEventsPayload, id int) 
 		}
 	}
 	t.Fatalf("window %d missing from payload: %+v", id, payload.Windows)
-	return daemon.ExportWindow{}
+	return protocol.ExportWindow{}
 }
 
 func resetDaemonStatusTestState(t *testing.T) {
@@ -164,7 +165,7 @@ func resetDaemonStatusTestState(t *testing.T) {
 
 func TestDaemonStatusCommandWritesToCommandOutput(t *testing.T) {
 	build := buildinfo.Info{Version: "9.9.9", Revision: "0123456789abcdef", GoVersion: "go1.99"}
-	notification := daemon.NotificationCapability{
+	notification := protocol.NotificationCapability{
 		Enabled: true, Available: true, Interactive: true, Backend: "alerter",
 		Executable: "/opt/homebrew/bin/alerter", Version: "26.5",
 	}
@@ -190,7 +191,7 @@ func TestDaemonStatusCommandWritesToCommandOutput(t *testing.T) {
 		},
 		{
 			name: "notifications unavailable without degrading daemon",
-			health: daemon.Health{Alive: true, Ready: true, Notification: &daemon.NotificationCapability{
+			health: daemon.Health{Alive: true, Ready: true, Notification: &protocol.NotificationCapability{
 				Enabled: true, Backend: "alerter", Reason: "not_found",
 			}},
 			want: "daemon: running (/tmp/amx.sock)\n" +
@@ -366,8 +367,8 @@ func TestDaemonExportEventsCommand_ErrorMessageReflectsDaemonState(t *testing.T)
 
 			client := &fakeDaemonExportClient{
 				health: daemon.Health{Alive: tc.alive, PID: 1, Uptime: time.Second},
-				export: func(windowID int) (daemon.EventsExport, error) {
-					return daemon.EventsExport{}, tc.exportErr
+				export: func(windowID int) (protocol.EventsExport, error) {
+					return protocol.EventsExport{}, tc.exportErr
 				},
 			}
 			newDaemonExportClient = func() daemonExportClient { return client }

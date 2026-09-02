@@ -3,12 +3,14 @@ package daemon
 import (
 	"log/slog"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // handleSubagentStateUpdate applies subagent reference counting and Copilot's
 // subagent-specific permission behavior. The boolean reports whether the
 // request was fully handled and should return before the normal guard path.
-func (h *Handler) handleSubagentStateUpdate(req Request, currentIconState string, outcome *applyOutcome) (Response, bool) {
+func (h *Handler) handleSubagentStateUpdate(req protocol.Request, currentIconState string, outcome *applyOutcome) (protocol.Response, bool) {
 	// SubagentStart: increment reference count so the robot icon persists
 	// even when interleaved parent "active" events arrive.
 	if req.Action == "subagent" {
@@ -47,7 +49,7 @@ func (h *Handler) handleSubagentStateUpdate(req Request, currentIconState string
 			h.stateMu.Lock()
 			h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonSubagentStillRunning, currentIconState))
 			h.stateMu.Unlock()
-			return Response{OK: true, Allowed: false}, true
+			return protocol.Response{OK: true, Allowed: false}, true
 		}
 		if wasTracked && remaining == 0 {
 			// Last agent finished — clear the subagent guard so the "active" below
@@ -106,8 +108,8 @@ func (h *Handler) handleSubagentStateUpdate(req Request, currentIconState string
 			h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonCopilotMidSubagent, currentIconState))
 			h.stateMu.Unlock()
 			outcome.skipReduce = true
-			outcome.skipReason = DecisionReasonCopilotMidSubagent
-			return Response{OK: true, Allowed: false}, true
+			outcome.skipReason = protocol.DecisionReasonCopilotMidSubagent
+			return protocol.Response{OK: true, Allowed: false}, true
 		}
 	}
 
@@ -132,15 +134,15 @@ func (h *Handler) handleSubagentStateUpdate(req Request, currentIconState string
 		meta := h.windowMetadata[req.WindowID]
 		meta.Durable.ActivityAt = now.Unix()
 		h.windowMetadata[req.WindowID] = meta
-		h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, req.Action, IconStatePreserve, currentIconState))
+		h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, req.Action, protocol.IconStatePreserve, currentIconState))
 		// The icon is preserved, so this is durable bookkeeping only.
 		h.linkRequestRenderGenerationLocked(req, st.Seq+1)
 		h.markWindowActivityDirtyLocked(req.WindowID)
 		h.stateMu.Unlock()
 		outcome.skipReduce = true
-		outcome.skipReason = DecisionReasonReducerBypassed
-		return Response{OK: true, Allowed: true, IconState: IconStatePreserve}, true
+		outcome.skipReason = protocol.DecisionReasonReducerBypassed
+		return protocol.Response{OK: true, Allowed: true, IconState: protocol.IconStatePreserve}, true
 	}
 
-	return Response{}, false
+	return protocol.Response{}, false
 }

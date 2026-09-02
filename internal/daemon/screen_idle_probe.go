@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/screenstate"
@@ -92,7 +93,7 @@ func (h *Handler) probeScreenIdle(
 	sourceWindowTitle string,
 	screens *screenTextCache,
 ) {
-	source := SourceID{Kind: SourceProbe, Key: spec.sourceKey}
+	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: spec.sourceKey}
 	targetWindowID := binding.TargetWindowID
 
 	// Revalidate the snapshot receipt before the off-lock read. A window with no
@@ -145,7 +146,7 @@ func (h *Handler) probeScreenIdleWindow(
 	sourceWindowTitle string,
 	screen string,
 ) {
-	source := SourceID{Kind: SourceProbe, Key: spec.sourceKey}
+	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: spec.sourceKey}
 	targetWindowID := binding.TargetWindowID
 
 	// One classification, read three times: whether the screen may settle at

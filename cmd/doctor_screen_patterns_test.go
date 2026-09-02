@@ -8,12 +8,13 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/screenstate"
 )
 
 // doctorScreenPatternHealth builds a live-daemon health response carrying the
 // given screen-pattern load result.
-func doctorScreenPatternHealth(patterns *daemon.ScreenPatternsSnapshot) daemon.Health {
+func doctorScreenPatternHealth(patterns *protocol.ScreenPatternsSnapshot) daemon.Health {
 	build := doctorTestBuild
 	return daemon.Health{
 		Alive: true, Ready: true, PID: 1, Uptime: time.Minute,
@@ -23,14 +24,14 @@ func doctorScreenPatternHealth(patterns *daemon.ScreenPatternsSnapshot) daemon.H
 }
 
 func TestDoctorReportsEmbeddedScreenPatternSourcesWithoutFinding(t *testing.T) {
-	health := doctorScreenPatternHealth(&daemon.ScreenPatternsSnapshot{
+	health := doctorScreenPatternHealth(&protocol.ScreenPatternsSnapshot{
 		Sources: map[string]string{
 			"claude":       screenstate.SourceEmbedded,
 			"codex":        screenstate.SourceEmbedded,
 			"contextlimit": screenstate.SourceEmbedded,
 		},
 	})
-	setUpDoctorFixture(t, health, daemon.EventsExport{})
+	setUpDoctorFixture(t, health, protocol.EventsExport{})
 	doctorStrict = true
 
 	var out bytes.Buffer
@@ -60,19 +61,19 @@ func TestDoctorReportsEmbeddedScreenPatternSourcesWithoutFinding(t *testing.T) {
 // path is printed and no finding is raised.
 func TestDoctorReportsAppliedScreenPatternOverrideAsSourceOnly(t *testing.T) {
 	overridePath := "/home/op/.config/agent-mux/screenstate/codex.toml"
-	health := doctorScreenPatternHealth(&daemon.ScreenPatternsSnapshot{
+	health := doctorScreenPatternHealth(&protocol.ScreenPatternsSnapshot{
 		Sources: map[string]string{
 			"claude": screenstate.SourceEmbedded,
 			"codex":  overridePath,
 		},
-		Warnings: []daemon.ScreenPatternWarning{{
+		Warnings: []protocol.ScreenPatternWarning{{
 			Kind:    string(screenstate.WarnOverrideApplied),
 			Harness: "codex",
 			Path:    overridePath,
 			Detail:  "embedded patterns replaced by override",
 		}},
 	})
-	setUpDoctorFixture(t, health, daemon.EventsExport{})
+	setUpDoctorFixture(t, health, protocol.EventsExport{})
 	doctorStrict = true
 
 	var out bytes.Buffer
@@ -97,16 +98,16 @@ func TestDoctorReportsAppliedScreenPatternOverrideAsSourceOnly(t *testing.T) {
 
 func TestDoctorBrokenScreenPatternOverrideWarnsWithoutFailingStrict(t *testing.T) {
 	overridePath := "/home/op/.config/agent-mux/screenstate/claude.toml"
-	health := doctorScreenPatternHealth(&daemon.ScreenPatternsSnapshot{
+	health := doctorScreenPatternHealth(&protocol.ScreenPatternsSnapshot{
 		Sources: map[string]string{"claude": screenstate.SourceEmbedded},
-		Warnings: []daemon.ScreenPatternWarning{{
+		Warnings: []protocol.ScreenPatternWarning{{
 			Kind:    string(screenstate.WarnOverrideInvalid),
 			Harness: "claude",
 			Path:    overridePath,
 			Detail:  `regex "working_status_line": missing closing )`,
 		}},
 	})
-	setUpDoctorFixture(t, health, daemon.EventsExport{})
+	setUpDoctorFixture(t, health, protocol.EventsExport{})
 	doctorStrict = true
 	doctorJSON = true
 
@@ -161,11 +162,11 @@ func TestDoctorScreenPatternWarningKindsAllRaiseTheOverrideFinding(t *testing.T)
 		screenstate.WarnEmbeddedInvalid,
 	} {
 		t.Run(string(kind), func(t *testing.T) {
-			health := doctorScreenPatternHealth(&daemon.ScreenPatternsSnapshot{
+			health := doctorScreenPatternHealth(&protocol.ScreenPatternsSnapshot{
 				Sources:  map[string]string{"claude": screenstate.SourceEmbedded},
-				Warnings: []daemon.ScreenPatternWarning{{Kind: string(kind), Detail: "boom"}},
+				Warnings: []protocol.ScreenPatternWarning{{Kind: string(kind), Detail: "boom"}},
 			})
-			setUpDoctorFixture(t, health, daemon.EventsExport{})
+			setUpDoctorFixture(t, health, protocol.EventsExport{})
 
 			var out bytes.Buffer
 			doctorCmd.SetOut(&out)
@@ -184,7 +185,7 @@ func TestDoctorScreenPatternWarningKindsAllRaiseTheOverrideFinding(t *testing.T)
 func TestDoctorReportsUnknownScreenPatternsForOlderDaemon(t *testing.T) {
 	build := doctorTestBuild
 	health := daemon.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build}
-	setUpDoctorFixture(t, health, daemon.EventsExport{})
+	setUpDoctorFixture(t, health, protocol.EventsExport{})
 	doctorStrict = true
 
 	var out bytes.Buffer

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -48,7 +49,7 @@ func TestHandler_ActiveLoopSiblingAmbiguousWorkspaceLeavesStateUnchanged(t *test
 	fake := &fakeKittyClient{windows: windows}
 	h.SetKittyClient(fake)
 
-	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 43, Event: "PreToolUse"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 43, Event: "PreToolUse"})
 	if !resp.OK {
 		t.Fatalf("hook response = %+v", resp)
 	}
@@ -64,7 +65,7 @@ func TestHandler_ActiveLoopSiblingAmbiguousWorkspaceLeavesStateUnchanged(t *test
 		t.Fatalf("owner 44 state = %+v; ambiguous match must leave it unchanged", owner44)
 	}
 	// The source pane records the ordinary owner-mismatch suppression instead.
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})
 	if len(detail.Events) != 1 || !detail.Events[0].Suppressed || detail.Events[0].SuppressionReason != suppressionReasonOwnerMismatch {
 		t.Fatalf("source events = %+v; want owner_mismatch suppression under ambiguity", detail.Events)
 	}
@@ -99,7 +100,7 @@ func TestHandler_ActiveLoopManagedNonOwnerUsesOwnState(t *testing.T) {
 	})}
 	h.SetKittyClient(fake)
 
-	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 43, Event: "PreToolUse"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 43, Event: "PreToolUse"})
 	if !resp.OK {
 		t.Fatalf("hook response = %+v", resp)
 	}
@@ -117,7 +118,7 @@ func TestHandler_ActiveLoopManagedNonOwnerUsesOwnState(t *testing.T) {
 	if source == nil || source.DesiredIcon != "bolt" {
 		t.Fatalf("managed source state = %+v; want its own bolt", source)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})
 	if len(detail.Events) != 1 || detail.Events[0].Suppressed || detail.Events[0].RouteDecision != routeDecisionSource {
 		t.Fatalf("source events = %+v; want an allowed source-owned event", detail.Events)
 	}
@@ -132,7 +133,7 @@ func TestHandler_ActiveLoopManagedOwnerUsesOrdinaryPath(t *testing.T) {
 	fake := &fakeKittyClient{windows: aslSiblingWindows("api", projectDir, 42, 43)}
 	h.SetKittyClient(fake)
 
-	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "PreToolUse"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "PreToolUse"})
 	if !resp.OK {
 		t.Fatalf("hook response = %+v", resp)
 	}
@@ -159,7 +160,7 @@ func TestHandler_ActiveLoopSiblingCachesDiscoveryWithinInterval(t *testing.T) {
 	h.SetKittyClient(fake)
 
 	for i := 0; i < 3; i++ {
-		if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 43, Event: "PreToolUse"}); !resp.OK {
+		if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 43, Event: "PreToolUse"}); !resp.OK {
 			t.Fatalf("hook %d response = %+v", i, resp)
 		}
 	}
@@ -168,15 +169,15 @@ func TestHandler_ActiveLoopSiblingCachesDiscoveryWithinInterval(t *testing.T) {
 	}
 
 	// A lifecycle event invalidates the cache; the next routed hook rescans.
-	h.Handle(Request{
-		Type:     TypeHookEvent,
+	h.Handle(protocol.Request{
+		Type:     protocol.TypeHookEvent,
 		WindowID: 43,
 		Event:    "AgentSessionLoopTurnStarted",
 		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{
 			Source: "agent_session_loop", CWD: projectDir, Harness: harness.Claude, KittyWindowID: 43,
 		}),
 	})
-	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 43, Event: "PreToolUse"}); !resp.OK {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 43, Event: "PreToolUse"}); !resp.OK {
 		t.Fatalf("post-invalidate hook response = %+v", resp)
 	}
 	if calls != 2 {
@@ -255,10 +256,10 @@ func TestHandler_ActiveLoopSiblingConcurrentHooksRaceSafe(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			if i%4 == 0 {
-				h.Handle(Request{Type: TypeHookEvent, WindowID: 43, Event: "AgentSessionLoopTurnStarted", PayloadJSON: loopPayload})
+				h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 43, Event: "AgentSessionLoopTurnStarted", PayloadJSON: loopPayload})
 				return
 			}
-			h.Handle(Request{Type: TypeHookEvent, WindowID: 43, Event: "PreToolUse"})
+			h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 43, Event: "PreToolUse"})
 		}(i)
 	}
 	wg.Wait()

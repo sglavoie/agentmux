@@ -3,25 +3,27 @@ package daemon
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func TestProjectExportEventsPayloadV8RemovesSchemaV9CausalFields(t *testing.T) {
-	payload := ExportEventsPayload{
-		SchemaVersion: EventsExportSchemaVersion,
-		Windows: []ExportWindow{{
+	payload := protocol.ExportEventsPayload{
+		SchemaVersion: protocol.EventsExportSchemaVersion,
+		Windows: []protocol.ExportWindow{{
 			WindowID: 7,
-			Renderer: WindowDebugRenderer{
+			Renderer: protocol.WindowDebugRenderer{
 				DesiredIcon: "bolt", QueuedGen: 3,
-				Generations: []RenderGenerationTrace{{Generation: 3, TraceIDs: []string{"trace-1"}, Stage: "rendered"}},
+				Generations: []protocol.RenderGenerationTrace{{Generation: 3, TraceIDs: []string{"trace-1"}, Stage: "rendered"}},
 			},
-			Events: []SessionEvent{{
+			Events: []protocol.SessionEvent{{
 				At: 1, Event: "PreToolUse", Action: "active", ResultIconState: "bolt",
 				DaemonSeq: 2, OriginWindowID: 8, TraceID: "trace-1", RequestID: "request-1",
-				DecisionReason: DecisionReasonAccepted, RenderGeneration: 3, RenderOutcome: "rendered",
+				DecisionReason: protocol.DecisionReasonAccepted, RenderGeneration: 3, RenderOutcome: "rendered",
 				NotificationOutcome: "sent", ProbeTraceIDs: []string{"probe-1"},
 			}},
-			Shadow: WindowDebugShadow{Facts: []SourceFactSnapshot{{
-				Kind: SourceHarness, Key: "claude:s1", Action: "active", Icon: "bolt",
+			Shadow: protocol.WindowDebugShadow{Facts: []protocol.SourceFactSnapshot{{
+				Kind: protocol.SourceHarness, Key: "claude:s1", Action: "active", Icon: "bolt",
 				CausalOrder: 2, OriginWindowID: 8, PipeMode: true,
 				HarnessProcessHarness: "claude", HarnessProcessPID: 4321,
 				HarnessProcessStartToken: "Mon Jul 13 10:11:12 2026",
@@ -29,7 +31,7 @@ func TestProjectExportEventsPayloadV8RemovesSchemaV9CausalFields(t *testing.T) {
 		}},
 	}
 
-	projected, err := ProjectExportEventsPayload(payload, EventsExportSchemaV8)
+	projected, err := protocol.ProjectExportEventsPayload(payload, protocol.EventsExportSchemaV8)
 	if err != nil {
 		t.Fatalf("ProjectExportEventsPayload: %v", err)
 	}
@@ -41,7 +43,7 @@ func TestProjectExportEventsPayloadV8RemovesSchemaV9CausalFields(t *testing.T) {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
-	if got := int(raw["schema_version"].(float64)); got != EventsExportSchemaV8 {
+	if got := int(raw["schema_version"].(float64)); got != protocol.EventsExportSchemaV8 {
 		t.Fatalf("schema_version = %d; want 8", got)
 	}
 	window := raw["windows"].([]any)[0].(map[string]any)
@@ -74,33 +76,33 @@ func TestProjectExportEventsPayloadV8RemovesSchemaV9CausalFields(t *testing.T) {
 }
 
 func TestProjectExportEventsPayloadV9PreservesCausalShapeWithoutProcessFields(t *testing.T) {
-	payload := ExportEventsPayload{
-		Windows: []ExportWindow{{
+	payload := protocol.ExportEventsPayload{
+		Windows: []protocol.ExportWindow{{
 			WindowID: 7,
-			Renderer: WindowDebugRenderer{
-				Generations: []RenderGenerationTrace{{Generation: 3, TraceIDs: []string{"trace-1"}, Stage: "rendered"}},
+			Renderer: protocol.WindowDebugRenderer{
+				Generations: []protocol.RenderGenerationTrace{{Generation: 3, TraceIDs: []string{"trace-1"}, Stage: "rendered"}},
 			},
-			Shadow: WindowDebugShadow{Facts: []SourceFactSnapshot{{
-				Kind: SourceHarness, Key: "claude:s1", Icon: "bolt", CausalOrder: 2,
+			Shadow: protocol.WindowDebugShadow{Facts: []protocol.SourceFactSnapshot{{
+				Kind: protocol.SourceHarness, Key: "claude:s1", Icon: "bolt", CausalOrder: 2,
 				OriginWindowID: 8, PipeMode: true, HarnessProcessHarness: "claude",
 				HarnessProcessPID: 4321, HarnessProcessStartToken: "Mon Jul 13 10:11:12 2026",
 			}}},
-			Events: []SessionEvent{{
+			Events: []protocol.SessionEvent{{
 				At: 1, Event: "PreToolUse", Action: "active", ResultIconState: "bolt",
-				TraceID: "trace-1", RequestID: "request-1", ReducerDecision: DecisionApplied,
-				ReducerInput: &ReducerInputEvidence{EmittedAt: 1}, RenderGeneration: 3,
+				TraceID: "trace-1", RequestID: "request-1", ReducerDecision: protocol.DecisionApplied,
+				ReducerInput: &protocol.ReducerInputEvidence{EmittedAt: 1}, RenderGeneration: 3,
 				ProcessHarness: "claude", ProcessPID: 4321, ProcessStartToken: "Mon Jul 13 10:11:12 2026",
 				ProcessObservation: string(HarnessProcessMissing), ProcessMode: "interactive",
 				WithdrawnFacts: processLifecycleTestIntPointer(1), TerminalHookEvidence: processTerminalHookEvidenceAbsent,
 			}},
-			Watchdog: WindowDebugWatchdog{
+			Watchdog: protocol.WindowDebugWatchdog{
 				ProcessExits: 1, LastProcessExitReason: HarnessProcessExitReasonInteractive,
 				LastProcessExitObservation: string(HarnessProcessMissing), LastProcessExitAt: 2,
 			},
 		}},
 	}
 
-	projected, err := ProjectExportEventsPayload(payload, EventsExportSchemaV9)
+	projected, err := protocol.ProjectExportEventsPayload(payload, protocol.EventsExportSchemaV9)
 	if err != nil {
 		t.Fatalf("ProjectExportEventsPayload: %v", err)
 	}
@@ -112,7 +114,7 @@ func TestProjectExportEventsPayloadV9PreservesCausalShapeWithoutProcessFields(t 
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
-	if got := int(raw["schema_version"].(float64)); got != EventsExportSchemaV9 {
+	if got := int(raw["schema_version"].(float64)); got != protocol.EventsExportSchemaV9 {
 		t.Fatalf("schema_version = %d; want 9", got)
 	}
 	window := raw["windows"].([]any)[0].(map[string]any)
@@ -150,24 +152,24 @@ func TestProjectExportEventsPayloadV9PreservesCausalShapeWithoutProcessFields(t 
 }
 
 func TestProjectExportEventsPayloadV10IncludesProcessFields(t *testing.T) {
-	payload := ExportEventsPayload{Windows: []ExportWindow{{
-		Shadow: WindowDebugShadow{Facts: []SourceFactSnapshot{{
-			Kind: SourceHarness, Key: "claude:s1", Icon: "bolt",
+	payload := protocol.ExportEventsPayload{Windows: []protocol.ExportWindow{{
+		Shadow: protocol.WindowDebugShadow{Facts: []protocol.SourceFactSnapshot{{
+			Kind: protocol.SourceHarness, Key: "claude:s1", Icon: "bolt",
 			HarnessProcessHarness: "claude", HarnessProcessPID: 4321,
 			HarnessProcessStartToken: "Mon Jul 13 10:11:12 2026",
 		}}},
-		Watchdog: WindowDebugWatchdog{
+		Watchdog: protocol.WindowDebugWatchdog{
 			ProcessExits: 1, LastProcessExitReason: HarnessProcessExitReasonPipe,
 			LastProcessExitObservation: string(HarnessProcessReplacedInstance), LastProcessExitAt: 2,
 		},
-		Events: []SessionEvent{{
-			At: 2, Event: EventHarnessProcessExited, Action: "idle", Reason: HarnessProcessExitReasonPipe,
+		Events: []protocol.SessionEvent{{
+			At: 2, Event: protocol.EventHarnessProcessExited, Action: "idle", Reason: HarnessProcessExitReasonPipe,
 			ProcessHarness: "claude", ProcessPID: 4321, ProcessStartToken: "Mon Jul 13 10:11:12 2026",
 			ProcessObservation: string(HarnessProcessReplacedInstance), ProcessMode: "pipe", WithdrawnFacts: processLifecycleTestIntPointer(1),
 			TerminalHookEvidence: processTerminalHookEvidenceAbsent,
 		}},
 	}}}
-	projected, err := ProjectExportEventsPayload(payload, EventsExportSchemaV10)
+	projected, err := protocol.ProjectExportEventsPayload(payload, protocol.EventsExportSchemaV10)
 	if err != nil {
 		t.Fatalf("ProjectExportEventsPayload: %v", err)
 	}

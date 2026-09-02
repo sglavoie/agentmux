@@ -1,11 +1,15 @@
 package daemon
 
+import (
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+)
+
 // supersede lets a new user prompt acknowledge stuck terminal facts on every
 // other source. A prompt is the user explicitly starting a new turn — the
 // authoritative recovery for ⏹/❗ icons whose source (e.g. a daemon probe)
 // will never emit a follow-up of its own. Non-terminal facts are untouched:
 // concurrent attention icons keep their plan precedence over new activity.
-func (r *Reducer) supersede(applied *sourceFact, ev ReducerEvent, action, icon string) {
+func (r *Reducer) supersede(applied *sourceFact, ev protocol.ReducerEvent, action, icon string) {
 	if !ev.Prompt || isTerminalAction(action) {
 		return
 	}
@@ -38,10 +42,10 @@ func (r *Reducer) supersede(applied *sourceFact, ev ReducerEvent, action, icon s
 // leases, attention icons (key/question), warnings, and terminal errors are
 // concurrent state a stale-session cleanup must never retire, so they are left
 // untouched.
-func (r *Reducer) supersedeInteractiveActive(applied *sourceFact, ev ReducerEvent, action string) {
-	harnessBoundary := applied.source.Kind == SourceHarness && !applied.pipeMode &&
+func (r *Reducer) supersedeInteractiveActive(applied *sourceFact, ev protocol.ReducerEvent, action string) {
+	harnessBoundary := applied.source.Kind == protocol.SourceHarness && !applied.pipeMode &&
 		(ev.Prompt || isTerminalAction(action))
-	aslBoundary := applied.source.Kind == SourceASL && ev.Phase == ASLPhaseFinished
+	aslBoundary := applied.source.Kind == protocol.SourceASL && ev.Phase == ASLPhaseFinished
 	if !harnessBoundary && !aslBoundary {
 		return
 	}
@@ -65,7 +69,7 @@ func (r *Reducer) retireOlderInteractiveActive(applied *sourceFact) {
 		if f == applied || !f.set || f.acked {
 			continue
 		}
-		if f.source.Kind != SourceHarness || f.pipeMode {
+		if f.source.Kind != protocol.SourceHarness || f.pipeMode {
 			continue
 		}
 		switch f.icon {
@@ -107,17 +111,17 @@ func (r *Reducer) retireOlderInteractiveActive(applied *sourceFact) {
 // RecoverInteractiveFromProbeStop) reads it to re-consult that transcript when
 // a post-settle append may have stranded the stop.
 func (r *Reducer) SettleAuthoritativeIdle(
-	probe SourceID,
+	probe protocol.SourceID,
 	seq uint64,
 	at int64,
 	sessionID string,
 	originWindowID int,
-) ReducerDecision {
-	decision := r.Apply(ReducerEvent{
+) protocol.ReducerDecision {
+	decision := r.Apply(protocol.ReducerEvent{
 		Source: probe, Action: "stop", Seq: seq, At: at,
 		SessionID: sessionID, OriginWindowID: originWindowID,
 	})
-	if decision != DecisionApplied {
+	if decision != protocol.DecisionApplied {
 		return decision
 	}
 	r.retireOlderInteractiveActive(r.facts[probe])
@@ -130,7 +134,7 @@ func (r *Reducer) SettleAuthoritativeIdle(
 // routing) keep those writers until an ASL event actually reaches the reducer.
 func (r *Reducer) LoopStateKnown() bool {
 	for id := range r.facts {
-		if id.Kind == SourceASL {
+		if id.Kind == protocol.SourceASL {
 			return true
 		}
 	}
@@ -138,7 +142,7 @@ func (r *Reducer) LoopStateKnown() bool {
 }
 
 // canRetract reports whether Retract would withdraw a live contribution.
-func (r *Reducer) canRetract(source SourceID) bool {
+func (r *Reducer) canRetract(source protocol.SourceID) bool {
 	f := r.facts[source]
 	return f != nil && f.set && !f.terminated && f.icon != "" && !f.acked
 }
@@ -150,7 +154,7 @@ func (r *Reducer) canRetract(source SourceID) bool {
 // activity. Terminal facts are not retractable: they stay until
 // acknowledgement or same-source recovery. Reports whether a live
 // contribution was actually withdrawn.
-func (r *Reducer) Retract(source SourceID, seq uint64, at int64) bool {
+func (r *Reducer) Retract(source protocol.SourceID, seq uint64, at int64) bool {
 	f := r.facts[source]
 	if f == nil || !f.set || f.terminated {
 		return false
@@ -167,7 +171,7 @@ func (r *Reducer) Retract(source SourceID, seq uint64, at int64) bool {
 		Source:   source,
 		Seq:      f.seq,
 		Action:   "idle",
-		Decision: DecisionApplied,
+		Decision: protocol.DecisionApplied,
 		Reason:   "probe retracted its own observation",
 	})
 	return withdrawn
@@ -202,7 +206,7 @@ func (r *Reducer) AckActiveClass(at int64) {
 // until the user acts. ASL loop leases survive, mirroring AckActiveClass: an
 // expired turn fact loses its ⚡ but keeps 🔁 until a finish event or
 // reconciliation releases the run. Reports whether the fact changed.
-func (r *Reducer) ExpireFact(source SourceID, seq uint64, at int64) bool {
+func (r *Reducer) ExpireFact(source protocol.SourceID, seq uint64, at int64) bool {
 	f := r.facts[source]
 	if f == nil || !f.set || f.acked || f.seq != seq {
 		return false

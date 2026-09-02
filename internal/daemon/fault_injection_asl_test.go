@@ -17,6 +17,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/aslcontract"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestFaultDroppedASLFinishRepairedByReconciliation drops a run's finish event
@@ -31,8 +32,8 @@ func TestFaultDroppedASLFinishRepairedByReconciliation(t *testing.T) {
 	h.publishSnapshot(windows, time.Now())
 	stubDaemonLoopDiscover(t, nil, nil)
 
-	resp := h.Handle(Request{
-		Type:     TypeHookEvent,
+	resp := h.Handle(protocol.Request{
+		Type:     protocol.TypeHookEvent,
 		WindowID: 42,
 		Event:    "AgentSessionLoopTurnStarted",
 		PayloadJSON: fmt.Sprintf(
@@ -60,7 +61,7 @@ func TestFaultDroppedASLFinishRepairedByReconciliation(t *testing.T) {
 		t.Fatalf("after two misses = looping=%v icon=%q; want the lost finish's 🛑 without 🔁", looping, icon)
 	}
 
-	export := h.Handle(Request{Type: TypeEventsExport})
+	export := h.Handle(protocol.Request{Type: protocol.TypeEventsExport})
 	wd := export.WindowMetadata[42].Watchdog
 	if wd.Reconciles == 0 || wd.LastEvent != eventASLReconciled {
 		t.Fatalf("watchdog metadata = %+v; want the reconciliation repair recorded", wd)

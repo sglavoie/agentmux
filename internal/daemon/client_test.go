@@ -14,6 +14,8 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func newShutdownTestSocketPath(t *testing.T) string {
@@ -44,7 +46,7 @@ func TestClientShutdownAndWaitWaitsPastAcknowledgement(t *testing.T) {
 		}
 		defer func() { _ = conn.Close() }()
 		_, _ = bufio.NewReader(conn).ReadBytes('\n')
-		_ = json.NewEncoder(conn).Encode(Response{OK: true})
+		_ = json.NewEncoder(conn).Encode(protocol.Response{OK: true})
 		close(acknowledged)
 		<-allowTeardown
 		_ = listener.Close()
@@ -91,8 +93,8 @@ func TestClientShutdownAndWaitAlreadyStopped(t *testing.T) {
 
 func TestClientShutdownAndWaitRejectsFailedAcknowledgement(t *testing.T) {
 	socketPath := newShutdownTestSocketPath(t)
-	stop := startTestDaemonServer(t, socketPath, func(Request) (Response, bool) {
-		return Response{OK: false, Error: "shutdown disabled"}, true
+	stop := startTestDaemonServer(t, socketPath, func(protocol.Request) (protocol.Response, bool) {
+		return protocol.Response{OK: false, Error: "shutdown disabled"}, true
 	})
 	t.Cleanup(stop)
 
@@ -117,9 +119,9 @@ func TestClientShutdownAndWaitHonorsTimeoutAndCancellation(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			socketPath := newShutdownTestSocketPath(t)
 			acknowledged := make(chan struct{}, 1)
-			stop := startTestDaemonServer(t, socketPath, func(Request) (Response, bool) {
+			stop := startTestDaemonServer(t, socketPath, func(protocol.Request) (protocol.Response, bool) {
 				acknowledged <- struct{}{}
-				return Response{OK: true}, true
+				return protocol.Response{OK: true}, true
 			})
 			t.Cleanup(stop)
 
@@ -160,10 +162,10 @@ func TestClientHealthIncludesDaemonDiagnostics(t *testing.T) {
 		}
 		defer func() { _ = conn.Close() }()
 		_, _ = bufio.NewReader(conn).ReadBytes('\n')
-		_ = json.NewEncoder(conn).Encode(Response{
+		_ = json.NewEncoder(conn).Encode(protocol.Response{
 			OK: true, PID: 42, UptimeSeconds: 7, Ready: false,
 			DegradedReason: "initial snapshot timed out",
-			Metrics:        &MetricsSnapshot{Accepted: 6, QueueFull: 1},
+			Metrics:        &protocol.MetricsSnapshot{Accepted: 6, QueueFull: 1},
 		})
 	}()
 	health := NewClientWithSocket(sockPath).Health()
@@ -244,7 +246,7 @@ func TestClient_SendHonorsDeadline(t *testing.T) {
 	c := NewClientWithSocket(sockPath)
 
 	start := time.Now()
-	_, err = c.Send(Request{Type: TypeStateQuery})
+	_, err = c.Send(protocol.Request{Type: protocol.TypeStateQuery})
 	elapsed := time.Since(start)
 	if err == nil {
 		t.Fatal("expected Send to fail when daemon never responds")
@@ -280,7 +282,7 @@ func TestClient_SendWithAutoStartHonorsFullDeadline(t *testing.T) {
 		}
 
 		started := time.Now()
-		_, err := client.SendWithAutoStart(Request{Type: TypeHealth}, "/tmp/amx")
+		_, err := client.SendWithAutoStart(protocol.Request{Type: protocol.TypeHealth}, "/tmp/amx")
 		if err == nil {
 			t.Fatal("SendWithAutoStart() error = nil, want deadline failure")
 		}
@@ -334,7 +336,7 @@ func TestClient_RejectsOversizeResponse(t *testing.T) {
 	}()
 
 	c := NewClientWithSocket(sockPath)
-	_, sendErr := c.Send(Request{Type: TypeStateQuery})
+	_, sendErr := c.Send(protocol.Request{Type: protocol.TypeStateQuery})
 	if sendErr == nil {
 		t.Fatal("expected Send to fail on oversize daemon response")
 	}
@@ -366,11 +368,11 @@ func TestClient_ExportEventsAboveLegacyCapRoundTrips(t *testing.T) {
 	// A valid export response comfortably above the legacy 1 MiB ceiling:
 	// 4096 events carrying ~512B payload fields each (~2.5 MiB marshaled).
 	filler := strings.Repeat("x", 512)
-	events := make([]SessionEvent, 4096)
+	events := make([]protocol.SessionEvent, 4096)
 	for i := range events {
-		events[i] = SessionEvent{At: int64(i), Event: "PostToolUse", Action: "active", Reason: filler}
+		events[i] = protocol.SessionEvent{At: int64(i), Event: "PostToolUse", Action: "active", Reason: filler}
 	}
-	resp := Response{OK: true, EventsByWindow: map[int][]SessionEvent{7: events}}
+	resp := protocol.Response{OK: true, EventsByWindow: map[int][]protocol.SessionEvent{7: events}}
 	data, err := json.Marshal(resp)
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)

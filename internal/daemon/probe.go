@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/sglavoie/agentmux/internal/contextlimit"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -37,7 +38,7 @@ type contextLimitProbeTarget struct {
 // and the targets are the managed title owners.
 type contextLimitProbe struct {
 	sourceWindowID int
-	req            Request
+	req            protocol.Request
 	event          string
 	payload        hookevent.HookPayload
 	targets        []contextLimitProbeTarget
@@ -115,15 +116,15 @@ func (h *Handler) runContextLimitProbe(p contextLimitProbe) {
 		)
 		// The promotion is daemon-synthesized, so its shadow fact is attributed
 		// to the probe source rather than the harness session.
-		normalized := NormalizedEvent{
+		normalized := protocol.NormalizedEvent{
 			Source:         ProbeSource(),
 			Action:         "stop_failure",
 			Event:          p.event,
 			OriginWindowID: p.sourceWindowID,
 		}
-		stateReq.normalized = &normalized
+		stateReq.Normalized = &normalized
 		stateReq.TraceID = p.traceID
-		stateReq.parentTraceID = p.parentTraceID
+		stateReq.ParentTraceID = p.parentTraceID
 		stateReq.SourceEventID = firstNonEmpty(p.req.SourceEventID, p.req.RequestID, p.traceID) + ":context-limit-probe"
 		stateReq.PayloadHMAC = p.req.PayloadHMAC
 		stateReq.PayloadSize = p.req.PayloadSize

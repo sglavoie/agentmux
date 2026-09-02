@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // newTestServerWithRef starts a real Server over a Unix socket and returns both
@@ -46,7 +47,7 @@ func newTestServerWithRef(t *testing.T) (string, *Server) {
 // windowEventCount returns how many events the daemon recorded for windowID.
 func windowEventCount(t *testing.T, c *Client, windowID int) int {
 	t.Helper()
-	resp, err := c.Send(Request{Type: TypeSessionDetail, WindowID: windowID})
+	resp, err := c.Send(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: windowID})
 	if err != nil {
 		t.Fatalf("session detail: %v", err)
 	}
@@ -61,8 +62,8 @@ func TestIPC_DedupeAppliesEventOnce(t *testing.T) {
 	c := NewClientWithSocket(sock)
 
 	const windowID = 5
-	req := Request{
-		Type:      TypeStateUpdate,
+	req := protocol.Request{
+		Type:      protocol.TypeStateUpdate,
 		RequestID: "logical-event-1",
 		WindowID:  windowID,
 		Action:    "active",
@@ -72,7 +73,7 @@ func TestIPC_DedupeAppliesEventOnce(t *testing.T) {
 	// Concurrent duplicates: the daemon must apply the state update once.
 	const callers = 12
 	var wg sync.WaitGroup
-	resps := make([]Response, callers)
+	resps := make([]protocol.Response, callers)
 	errs := make([]error, callers)
 	for i := 0; i < callers; i++ {
 		wg.Add(1)
@@ -125,7 +126,7 @@ func TestIPC_DistinctRequestIDsEachApply(t *testing.T) {
 	c := NewClientWithSocket(sock)
 
 	const windowID = 6
-	base := Request{Type: TypeStateUpdate, WindowID: windowID, Action: "active", Event: "PreToolUse"}
+	base := protocol.Request{Type: protocol.TypeStateUpdate, WindowID: windowID, Action: "active", Event: "PreToolUse"}
 
 	first := base
 	first.RequestID = "evt-1"

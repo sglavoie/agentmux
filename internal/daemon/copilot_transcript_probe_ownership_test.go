@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/transcript"
@@ -56,8 +57,8 @@ func TestProbeCopilotTranscriptStop_PrefersInteractiveOverPipeChild(t *testing.T
 	settleCopilotTurnEndProbe(h, base)
 
 	h.stateMu.Lock()
-	interactive := h.store[42].Reducer.facts[SourceID{Kind: SourceHarness, Key: "copilot:sess-interactive"}]
-	pipe := h.store[42].Reducer.facts[SourceID{Kind: SourceHarness, Key: "copilot:sess-pipe"}]
+	interactive := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "copilot:sess-interactive"}]
+	pipe := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "copilot:sess-pipe"}]
 	h.stateMu.Unlock()
 	// The interactive session's terminal transcript was the one resolved, so its
 	// stale bolt was retired.
@@ -72,7 +73,7 @@ func TestProbeCopilotTranscriptStop_PrefersInteractiveOverPipeChild(t *testing.T
 	if eff, visible := windowEffective(t, h, 42); visible == "stop" || eff.Icon == "stop" {
 		t.Fatalf("effective = %+v visible %q, want a non-stop state masked by the pipe child", eff, visible)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if ev, ok := lastEventNamed(resp.Events, copilotTranscriptStopProbeEvent); ok && ev.Action == "stop" {
 		t.Fatalf("TranscriptStopProbe recorded a false stop while a pipe child is active: %+v", ev)
 	}
@@ -117,12 +118,12 @@ func TestProbeCopilotTranscriptStop_PipeOnlyChildNeverProbed(t *testing.T) {
 	}
 	// No synthetic transcript-probe stop fact was created or refreshed.
 	h.stateMu.Lock()
-	probe := h.store[42].Reducer.facts[SourceID{Kind: SourceProbe, Key: copilotTranscriptStopProbeSource}]
+	probe := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceProbe, Key: copilotTranscriptStopProbeSource}]
 	h.stateMu.Unlock()
 	if probe != nil {
 		t.Fatalf("transcript-probe stop fact created for a pipe-only child: %+v", probe)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if ev, ok := lastEventNamed(resp.Events, copilotTranscriptStopProbeEvent); ok {
 		t.Fatalf("TranscriptStopProbe row recorded for a pipe-only child: %+v", ev)
 	}
@@ -155,7 +156,7 @@ func TestProbeCopilotTranscriptStop_MaskingPipeChildPreservesParentMemoAndRecove
 	assertProbeMemo := func(want string) {
 		t.Helper()
 		h.stateMu.Lock()
-		probe := h.store[42].Reducer.facts[SourceID{Kind: SourceProbe, Key: copilotTranscriptStopProbeSource}]
+		probe := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceProbe, Key: copilotTranscriptStopProbeSource}]
 		h.stateMu.Unlock()
 		if probe == nil || probe.sessionID != want {
 			t.Fatalf("probe stop memo = %+v, want sessionID %q", probe, want)
@@ -188,7 +189,7 @@ func TestProbeCopilotTranscriptStop_MaskingPipeChildPreservesParentMemoAndRecove
 	// the sole visible contribution again, so the tab reverts to 🛑.
 	h.stateMu.Lock()
 	st := h.store[42]
-	st.Reducer.facts[SourceID{Kind: SourceHarness, Key: "copilot:sess-pipe"}].acknowledge(base.Unix())
+	st.Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "copilot:sess-pipe"}].acknowledge(base.Unix())
 	st.ShadowSeq++
 	st.Reducer.Compact(base.Unix())
 	h.publishEffectiveLocked(42, st, st.Reducer.Reduce(base.Unix()))
@@ -210,7 +211,7 @@ func TestProbeCopilotTranscriptStop_MaskingPipeChildPreservesParentMemoAndRecove
 		t.Fatalf("effective = %+v visible %q, want the interactive parent's bolt reinstated", eff, visible)
 	}
 	h.stateMu.Lock()
-	interactive := h.store[42].Reducer.facts[SourceID{Kind: SourceHarness, Key: "copilot:sess-interactive"}]
+	interactive := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "copilot:sess-interactive"}]
 	h.stateMu.Unlock()
 	if interactive == nil || interactive.acked {
 		t.Fatalf("interactive parent not reinstated by recovery: %+v", interactive)

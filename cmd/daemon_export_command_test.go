@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -17,18 +18,18 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV10Payload(t *testing.T) 
 
 	now := time.Unix(1_700_000_100, 0)
 	daemonBuild := buildinfo.Info{Version: "9.9.9", Revision: "abc123", GoVersion: "go1.99", BinaryHash: "feedface"}
-	metrics := daemon.MetricsSnapshot{Accepted: 7, QueueFull: 0, QueueLastWaitNs: 1500}
+	metrics := protocol.MetricsSnapshot{Accepted: 7, QueueFull: 0, QueueLastWaitNs: 1500}
 	client := &fakeDaemonExportClient{
 		health: daemon.Health{
 			Alive: true, PID: 4321, Uptime: 2 * time.Minute, Ready: true,
 			Build: &daemonBuild, Metrics: &metrics,
 		},
-		export: func(windowID int) (daemon.EventsExport, error) {
+		export: func(windowID int) (protocol.EventsExport, error) {
 			if windowID != 0 {
-				return daemon.EventsExport{}, fmt.Errorf("unexpected filter %d", windowID)
+				return protocol.EventsExport{}, fmt.Errorf("unexpected filter %d", windowID)
 			}
-			return daemon.EventsExport{
-				EventsByWindow: map[int][]daemon.SessionEvent{
+			return protocol.EventsExport{
+				EventsByWindow: map[int][]protocol.SessionEvent{
 					42: {
 						{
 							At: 1_700_000_000, Event: "PreToolUse", Action: "active", Source: "new", ResultIconState: "bolt",
@@ -41,13 +42,13 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV10Payload(t *testing.T) 
 						{At: 1_700_000_005, Event: "Stop", Action: "stop", ResultIconState: "stop"},
 					},
 				},
-				WindowMetadata: map[int]daemon.WindowDebugMetadata{
+				WindowMetadata: map[int]protocol.WindowDebugMetadata{
 					42: {
-						Stats: daemon.WindowDebugStats{
+						Stats: protocol.WindowDebugStats{
 							EventCount: 2, FirstEventAt: 1_700_000_000, LastEventAt: 1_700_000_001,
 							SuppressionReasons: map[string]int{"guard_blocked": 2},
 						},
-						Durable: daemon.WindowDebugDurable{
+						Durable: protocol.WindowDebugDurable{
 							SessionTitle:    "W:api",
 							Profile:         "work",
 							Harness:         "codex",
@@ -55,27 +56,27 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV10Payload(t *testing.T) 
 							LastAction:      "elicitation",
 							LastActiveEvent: "PreToolUse",
 						},
-						Renderer: daemon.WindowDebugRenderer{
+						Renderer: protocol.WindowDebugRenderer{
 							DesiredIcon: "question", StateSet: true, Looping: true, LoopingSet: true, RenderFailures: 3,
 							LastRenderError: "set title: unavailable", KittyListenOn: "unix:/tmp/kitty-42",
 						},
-						Shadow: daemon.WindowDebugShadow{
+						Shadow: protocol.WindowDebugShadow{
 							EffectiveIcon: "question", EffectiveGen: 4,
-							Facts: []daemon.SourceFactSnapshot{{
-								Kind: daemon.SourceHarness, Key: "sess-1", Action: "elicitation", Icon: "question", Seq: 4,
+							Facts: []protocol.SourceFactSnapshot{{
+								Kind: protocol.SourceHarness, Key: "sess-1", Action: "elicitation", Icon: "question", Seq: 4,
 								PipeMode: true, Acked: true, AckedAt: 1_700_000_001, OriginWindowID: 91,
 								HarnessProcessHarness: "codex", HarnessProcessPID: 4321,
 								HarnessProcessStartToken: "Mon Jul 13 10:11:12 2026",
 							}},
 						},
-						Watchdog: daemon.WindowDebugWatchdog{
+						Watchdog: protocol.WindowDebugWatchdog{
 							LastEvent: "SourceExpired", LastReason: "stale active fact", LastAt: 1_700_000_001,
 							SourceExpiries: 2, StaleSweeps: 1, Reconciles: 3,
 						},
 					},
 					77: {
-						Stats: daemon.WindowDebugStats{EventCount: 1, FirstEventAt: 1_700_000_005, LastEventAt: 1_700_000_005},
-						Durable: daemon.WindowDebugDurable{
+						Stats: protocol.WindowDebugStats{EventCount: 1, FirstEventAt: 1_700_000_005, LastEventAt: 1_700_000_005},
+						Durable: protocol.WindowDebugDurable{
 							SessionTitle: "P:dotfiles",
 							Profile:      "personal",
 							Harness:      "copilot",
@@ -84,8 +85,8 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV10Payload(t *testing.T) 
 						},
 					},
 					88: {
-						Stats: daemon.WindowDebugStats{EventCount: 4, FirstEventAt: 1_699_999_900, LastEventAt: 1_699_999_999},
-						Durable: daemon.WindowDebugDurable{
+						Stats: protocol.WindowDebugStats{EventCount: 4, FirstEventAt: 1_699_999_900, LastEventAt: 1_699_999_999},
+						Durable: protocol.WindowDebugDurable{
 							SessionTitle: "W:stale",
 							Profile:      "work",
 							Harness:      "codex",
@@ -135,13 +136,13 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV10Payload(t *testing.T) 
 		t.Fatalf("RunE: %v", err)
 	}
 
-	var payload daemon.ExportEventsPayload
+	var payload protocol.ExportEventsPayload
 	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
 		t.Fatalf("Unmarshal payload: %v\n%s", err, out.String())
 	}
 
-	if payload.SchemaVersion != daemon.EventsExportSchemaVersion {
-		t.Fatalf("schema_version = %d; want %d", payload.SchemaVersion, daemon.EventsExportSchemaVersion)
+	if payload.SchemaVersion != protocol.EventsExportSchemaVersion {
+		t.Fatalf("schema_version = %d; want %d", payload.SchemaVersion, protocol.EventsExportSchemaVersion)
 	}
 	if payload.SchemaVersion != 13 {
 		t.Fatalf("schema_version = %d; want 13", payload.SchemaVersion)
@@ -193,7 +194,7 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV10Payload(t *testing.T) 
 		window42.Events[0].OriginWindowID != 91 {
 		t.Fatalf("window 42 v8 event fields = %+v", window42.Events[0])
 	}
-	if len(window42.Shadow.Facts) != 1 || window42.Shadow.Facts[0].Kind != daemon.SourceHarness ||
+	if len(window42.Shadow.Facts) != 1 || window42.Shadow.Facts[0].Kind != protocol.SourceHarness ||
 		window42.Shadow.Facts[0].Icon != "question" || !window42.Shadow.Facts[0].PipeMode ||
 		!window42.Shadow.Facts[0].Acked || window42.Shadow.Facts[0].AckedAt != 1_700_000_001 ||
 		window42.Shadow.Facts[0].OriginWindowID != 91 || window42.Shadow.Facts[0].HarnessProcessHarness != "codex" ||
@@ -233,18 +234,18 @@ func TestDaemonExportEventsCommand_SingleWindowUsesFilteredExportShape(t *testin
 
 	client := &fakeDaemonExportClient{
 		health: daemon.Health{Alive: true, PID: 99, Uptime: 5 * time.Second},
-		export: func(windowID int) (daemon.EventsExport, error) {
+		export: func(windowID int) (protocol.EventsExport, error) {
 			if windowID != 42 {
-				return daemon.EventsExport{}, fmt.Errorf("windowID = %d; want 42", windowID)
+				return protocol.EventsExport{}, fmt.Errorf("windowID = %d; want 42", windowID)
 			}
-			return daemon.EventsExport{
-				EventsByWindow: map[int][]daemon.SessionEvent{
+			return protocol.EventsExport{
+				EventsByWindow: map[int][]protocol.SessionEvent{
 					42: {{At: 1, Event: "PreToolUse", Action: "active", ResultIconState: "bolt"}},
 				},
-				WindowMetadata: map[int]daemon.WindowDebugMetadata{
+				WindowMetadata: map[int]protocol.WindowDebugMetadata{
 					42: {
-						Stats: daemon.WindowDebugStats{EventCount: 1, FirstEventAt: 1, LastEventAt: 1},
-						Durable: daemon.WindowDebugDurable{
+						Stats: protocol.WindowDebugStats{EventCount: 1, FirstEventAt: 1, LastEventAt: 1},
+						Durable: protocol.WindowDebugDurable{
 							SessionTitle: "W:api",
 							Profile:      "work",
 							Harness:      "claude",
@@ -296,7 +297,7 @@ func TestDaemonExportEventsCommand_SingleWindowUsesFilteredExportShape(t *testin
 		t.Fatalf("ExportEvents calls = %v; want [42]", client.calls)
 	}
 
-	var payload daemon.ExportEventsPayload
+	var payload protocol.ExportEventsPayload
 	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
 		t.Fatalf("Unmarshal payload: %v\n%s", err, out.String())
 	}
@@ -313,11 +314,11 @@ func TestDaemonExportEventsCommand_SingleWindowKeepsEmptyEventsArray(t *testing.
 
 	client := &fakeDaemonExportClient{
 		health: daemon.Health{Alive: true, PID: 1, Uptime: time.Second},
-		export: func(windowID int) (daemon.EventsExport, error) {
+		export: func(windowID int) (protocol.EventsExport, error) {
 			if windowID != 42 {
-				return daemon.EventsExport{}, fmt.Errorf("windowID = %d; want 42", windowID)
+				return protocol.EventsExport{}, fmt.Errorf("windowID = %d; want 42", windowID)
 			}
-			return daemon.EventsExport{}, nil
+			return protocol.EventsExport{}, nil
 		},
 	}
 
@@ -352,7 +353,7 @@ func TestDaemonExportEventsCommand_SingleWindowKeepsEmptyEventsArray(t *testing.
 		t.Fatalf("RunE: %v", err)
 	}
 
-	var payload daemon.ExportEventsPayload
+	var payload protocol.ExportEventsPayload
 	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
 		t.Fatalf("Unmarshal payload: %v\n%s", err, out.String())
 	}
@@ -369,18 +370,18 @@ func TestDaemonExportEventsCommandSchema8ProjectsCausalFields(t *testing.T) {
 	resetDaemonExportTestState(t)
 	client := &fakeDaemonExportClient{
 		health: daemon.Health{Alive: true},
-		export: func(int) (daemon.EventsExport, error) {
-			return daemon.EventsExport{
-				EventsByWindow: map[int][]daemon.SessionEvent{42: {{
+		export: func(int) (protocol.EventsExport, error) {
+			return protocol.EventsExport{
+				EventsByWindow: map[int][]protocol.SessionEvent{42: {{
 					At: 1, Event: "Stop", Action: "stop", ResultIconState: "stop",
 					TraceID: "trace-v9", DecisionReason: "accepted", RenderGeneration: 2,
 				}}},
-				WindowMetadata: map[int]daemon.WindowDebugMetadata{42: {
-					Renderer: daemon.WindowDebugRenderer{
-						Generations: []daemon.RenderGenerationTrace{{Generation: 2, TraceIDs: []string{"trace-v9"}, Stage: "rendered"}},
+				WindowMetadata: map[int]protocol.WindowDebugMetadata{42: {
+					Renderer: protocol.WindowDebugRenderer{
+						Generations: []protocol.RenderGenerationTrace{{Generation: 2, TraceIDs: []string{"trace-v9"}, Stage: "rendered"}},
 					},
-					Shadow: daemon.WindowDebugShadow{Facts: []daemon.SourceFactSnapshot{{
-						Kind: daemon.SourceHarness, Key: "claude:s1", Icon: "bolt",
+					Shadow: protocol.WindowDebugShadow{Facts: []protocol.SourceFactSnapshot{{
+						Kind: protocol.SourceHarness, Key: "claude:s1", Icon: "bolt",
 						HarnessProcessHarness: "claude", HarnessProcessPID: 4321,
 						HarnessProcessStartToken: "Mon Jul 13 10:11:12 2026",
 					}}},
@@ -390,7 +391,7 @@ func TestDaemonExportEventsCommandSchema8ProjectsCausalFields(t *testing.T) {
 	}
 	newDaemonExportClient = func() daemonExportClient { return client }
 	newDaemonExportKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
-	daemonExportEventsSchema = daemon.EventsExportSchemaV8
+	daemonExportEventsSchema = protocol.EventsExportSchemaV8
 	daemonExportEventsPretty = false
 	daemonExportEventsWindow = 42
 	var out bytes.Buffer
@@ -426,18 +427,18 @@ func TestDaemonExportEventsCommandSchema9PreservesCausalFieldsWithoutProcessIden
 	resetDaemonExportTestState(t)
 	client := &fakeDaemonExportClient{
 		health: daemon.Health{Alive: true},
-		export: func(int) (daemon.EventsExport, error) {
-			return daemon.EventsExport{
-				EventsByWindow: map[int][]daemon.SessionEvent{42: {{
+		export: func(int) (protocol.EventsExport, error) {
+			return protocol.EventsExport{
+				EventsByWindow: map[int][]protocol.SessionEvent{42: {{
 					At: 1, Event: "Stop", Action: "stop", ResultIconState: "stop",
 					TraceID: "trace-v9", DecisionReason: "accepted", RenderGeneration: 2,
 				}}},
-				WindowMetadata: map[int]daemon.WindowDebugMetadata{42: {
-					Renderer: daemon.WindowDebugRenderer{
-						Generations: []daemon.RenderGenerationTrace{{Generation: 2, TraceIDs: []string{"trace-v9"}, Stage: "rendered"}},
+				WindowMetadata: map[int]protocol.WindowDebugMetadata{42: {
+					Renderer: protocol.WindowDebugRenderer{
+						Generations: []protocol.RenderGenerationTrace{{Generation: 2, TraceIDs: []string{"trace-v9"}, Stage: "rendered"}},
 					},
-					Shadow: daemon.WindowDebugShadow{Facts: []daemon.SourceFactSnapshot{{
-						Kind: daemon.SourceHarness, Key: "claude:s1", Icon: "bolt", CausalOrder: 1,
+					Shadow: protocol.WindowDebugShadow{Facts: []protocol.SourceFactSnapshot{{
+						Kind: protocol.SourceHarness, Key: "claude:s1", Icon: "bolt", CausalOrder: 1,
 						HarnessProcessHarness: "claude", HarnessProcessPID: 4321,
 						HarnessProcessStartToken: "Mon Jul 13 10:11:12 2026",
 					}}},
@@ -447,7 +448,7 @@ func TestDaemonExportEventsCommandSchema9PreservesCausalFieldsWithoutProcessIden
 	}
 	newDaemonExportClient = func() daemonExportClient { return client }
 	newDaemonExportKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
-	daemonExportEventsSchema = daemon.EventsExportSchemaV9
+	daemonExportEventsSchema = protocol.EventsExportSchemaV9
 	daemonExportEventsPretty = false
 	daemonExportEventsWindow = 42
 	var out bytes.Buffer

@@ -10,6 +10,8 @@ package daemon
 import (
 	"context"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 const (
@@ -20,11 +22,11 @@ const (
 	processTerminalHookEvidenceObserved     = "observed"
 	// Retain the package-local name used by existing focused tests while the
 	// exported constant is the public schema contract.
-	eventHarnessProcessExited = EventHarnessProcessExited
+	eventHarnessProcessExited = protocol.EventHarnessProcessExited
 )
 
 type processLifecycleFactReceipt struct {
-	source         SourceID
+	source         protocol.SourceID
 	seq            uint64
 	causalOrder    uint64
 	pipeMode       bool
@@ -36,7 +38,7 @@ type processLifecycleFactReceipt struct {
 type processLifecycleCandidate struct {
 	windowID int
 	receipt  uint64
-	identity HarnessProcessIdentity
+	identity protocol.HarnessProcessIdentity
 	pipeMode bool
 	facts    []processLifecycleFactReceipt
 }
@@ -48,12 +50,12 @@ type pendingLifecycleNotificationDisposition struct {
 
 type processLifecycleDiagnostic struct {
 	windowID             int
-	identity             HarnessProcessIdentity
+	identity             protocol.HarnessProcessIdentity
 	observation          HarnessProcessInspection
 	mode                 string
 	terminalHookEvidence string
 	result               HarnessProcessExitResult
-	sources              []ProcessLifecycleSourceEvidence
+	sources              []protocol.ProcessLifecycleSourceEvidence
 	renderGeneration     uint64
 	sessionID            string
 }

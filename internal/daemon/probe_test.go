@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -57,10 +58,10 @@ func TestHandler_HookEventSlowProbeDoesNotDelayAck(t *testing.T) {
 	}
 	h.SetKittyClient(client)
 
-	done := make(chan Response, 1)
+	done := make(chan protocol.Response, 1)
 	go func() {
-		done <- h.Handle(Request{
-			Type:          TypeHookEvent,
+		done <- h.Handle(protocol.Request{
+			Type:          protocol.TypeHookEvent,
 			WindowID:      42,
 			Event:         "Notification",
 			TraceID:       "parent-trace",
@@ -107,7 +108,7 @@ func TestHandler_HookEventSlowProbeDoesNotDelayAck(t *testing.T) {
 		time.Sleep(2 * time.Millisecond)
 	}
 
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) == 0 {
 		t.Fatalf("probe-linked event history = %+v", detail.Events)
 	}

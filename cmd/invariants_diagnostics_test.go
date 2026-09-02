@@ -8,26 +8,27 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func TestInvariantUnknownProducerFactWarnings(t *testing.T) {
 	cases := []struct {
 		name string
-		fact daemon.SourceFactSnapshot
+		fact protocol.SourceFactSnapshot
 		want bool
 	}{
-		{"legacy window icon warns", daemon.SourceFactSnapshot{Kind: daemon.SourceLegacy, Key: "win:7", Icon: "bolt"}, true},
-		{"legacy alternate window key warns", daemon.SourceFactSnapshot{Kind: daemon.SourceLegacy, Key: "window:7", Icon: "stop"}, true},
-		{"legacy window lease warns", daemon.SourceFactSnapshot{Kind: daemon.SourceLegacy, Key: "win:7", LeaseLive: true}, true},
-		{"acknowledged legacy window passes", daemon.SourceFactSnapshot{Kind: daemon.SourceLegacy, Key: "win:7", Icon: "bolt", Acked: true}, false},
-		{"inert legacy window passes", daemon.SourceFactSnapshot{Kind: daemon.SourceLegacy, Key: "win:7"}, false},
-		{"legacy subagent bucket passes", daemon.SourceFactSnapshot{Kind: daemon.SourceLegacy, Key: "session:win:7", Icon: "subagent"}, false},
-		{"known producer passes", daemon.SourceFactSnapshot{Kind: daemon.SourceHarness, Key: "claude:s1", Icon: "bolt"}, false},
+		{"legacy window icon warns", protocol.SourceFactSnapshot{Kind: protocol.SourceLegacy, Key: "win:7", Icon: "bolt"}, true},
+		{"legacy alternate window key warns", protocol.SourceFactSnapshot{Kind: protocol.SourceLegacy, Key: "window:7", Icon: "stop"}, true},
+		{"legacy window lease warns", protocol.SourceFactSnapshot{Kind: protocol.SourceLegacy, Key: "win:7", LeaseLive: true}, true},
+		{"acknowledged legacy window passes", protocol.SourceFactSnapshot{Kind: protocol.SourceLegacy, Key: "win:7", Icon: "bolt", Acked: true}, false},
+		{"inert legacy window passes", protocol.SourceFactSnapshot{Kind: protocol.SourceLegacy, Key: "win:7"}, false},
+		{"legacy subagent bucket passes", protocol.SourceFactSnapshot{Kind: protocol.SourceLegacy, Key: "session:win:7", Icon: "subagent"}, false},
+		{"known producer passes", protocol.SourceFactSnapshot{Kind: protocol.SourceHarness, Key: "claude:s1", Icon: "bolt"}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			snapshot := daemon.EventsExport{WindowMetadata: map[int]daemon.WindowDebugMetadata{7: {
-				Shadow: daemon.WindowDebugShadow{Facts: []daemon.SourceFactSnapshot{tc.fact}},
+			snapshot := protocol.EventsExport{WindowMetadata: map[int]protocol.WindowDebugMetadata{7: {
+				Shadow: protocol.WindowDebugShadow{Facts: []protocol.SourceFactSnapshot{tc.fact}},
 			}}}
 			findings := evaluateDaemonInvariants(snapshot, healthyTestHealth(doctorTestBuild), doctorTestBuild, nil, invariantNow)
 			got := findingsByCheck(findings, checkUnknownProducerFact)
@@ -42,32 +43,32 @@ func TestInvariantUnknownProducerFactWarnings(t *testing.T) {
 }
 
 func TestInvariantMalformedProcessIdentityUsesPersistedFactsOnly(t *testing.T) {
-	valid := daemon.SourceFactSnapshot{
-		Kind: daemon.SourceHarness, Key: "claude:s1", Icon: "bolt",
+	valid := protocol.SourceFactSnapshot{
+		Kind: protocol.SourceHarness, Key: "claude:s1", Icon: "bolt",
 		HarnessProcessHarness: "claude", HarnessProcessPID: 4242,
 		HarnessProcessStartToken: "Thu Jul 16 10:20:30 2026",
 	}
 	cases := []struct {
 		name string
-		fact daemon.SourceFactSnapshot
+		fact protocol.SourceFactSnapshot
 		want bool
 	}{
 		{"complete identity passes", valid, false},
-		{"absent identity passes", daemon.SourceFactSnapshot{Kind: daemon.SourceHarness, Key: "claude:s1"}, false},
-		{"partial identity fails", daemon.SourceFactSnapshot{Kind: daemon.SourceHarness, Key: "claude:s1", HarnessProcessPID: 4242}, true},
-		{"producer mismatch fails", daemon.SourceFactSnapshot{
-			Kind: daemon.SourceHarness, Key: "claude:s1", HarnessProcessHarness: "codex", HarnessProcessPID: 4242,
+		{"absent identity passes", protocol.SourceFactSnapshot{Kind: protocol.SourceHarness, Key: "claude:s1"}, false},
+		{"partial identity fails", protocol.SourceFactSnapshot{Kind: protocol.SourceHarness, Key: "claude:s1", HarnessProcessPID: 4242}, true},
+		{"producer mismatch fails", protocol.SourceFactSnapshot{
+			Kind: protocol.SourceHarness, Key: "claude:s1", HarnessProcessHarness: "codex", HarnessProcessPID: 4242,
 			HarnessProcessStartToken: "Thu Jul 16 10:20:30 2026",
 		}, true},
-		{"ASL ownership fails", daemon.SourceFactSnapshot{
-			Kind: daemon.SourceASL, Key: "run-1", HarnessProcessHarness: "claude", HarnessProcessPID: 4242,
+		{"ASL ownership fails", protocol.SourceFactSnapshot{
+			Kind: protocol.SourceASL, Key: "run-1", HarnessProcessHarness: "claude", HarnessProcessPID: 4242,
 			HarnessProcessStartToken: "Thu Jul 16 10:20:30 2026",
 		}, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			snapshot := daemon.EventsExport{WindowMetadata: map[int]daemon.WindowDebugMetadata{7: {
-				Shadow: daemon.WindowDebugShadow{Facts: []daemon.SourceFactSnapshot{tc.fact}},
+			snapshot := protocol.EventsExport{WindowMetadata: map[int]protocol.WindowDebugMetadata{7: {
+				Shadow: protocol.WindowDebugShadow{Facts: []protocol.SourceFactSnapshot{tc.fact}},
 			}}}
 			findings := evaluateDaemonInvariants(snapshot, healthyTestHealth(doctorTestBuild), doctorTestBuild, nil, invariantNow)
 			got := findingsByCheck(findings, checkMalformedProcessIdentity)
@@ -82,11 +83,11 @@ func TestInvariantMalformedProcessIdentityUsesPersistedFactsOnly(t *testing.T) {
 }
 
 func TestInvariantAcknowledgedFactPressureBoundaries(t *testing.T) {
-	facts := func(n int) []daemon.SourceFactSnapshot {
-		out := make([]daemon.SourceFactSnapshot, 0, n)
+	facts := func(n int) []protocol.SourceFactSnapshot {
+		out := make([]protocol.SourceFactSnapshot, 0, n)
 		for i := 0; i < n; i++ {
-			out = append(out, daemon.SourceFactSnapshot{
-				Kind: daemon.SourceHarness, Key: "session-" + strconv.Itoa(i),
+			out = append(out, protocol.SourceFactSnapshot{
+				Kind: protocol.SourceHarness, Key: "session-" + strconv.Itoa(i),
 				Action: "active", Icon: "bolt", Acked: true, AckedAt: invariantNow.Unix(),
 			})
 		}
@@ -104,8 +105,8 @@ func TestInvariantAcknowledgedFactPressureBoundaries(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			snapshot := daemon.EventsExport{WindowMetadata: map[int]daemon.WindowDebugMetadata{7: {
-				Shadow: daemon.WindowDebugShadow{Facts: facts(tc.count)},
+			snapshot := protocol.EventsExport{WindowMetadata: map[int]protocol.WindowDebugMetadata{7: {
+				Shadow: protocol.WindowDebugShadow{Facts: facts(tc.count)},
 			}}}
 			findings := evaluateDaemonInvariants(snapshot, healthyTestHealth(doctorTestBuild), doctorTestBuild, nil, invariantNow)
 			pressure := findingsByCheck(findings, checkAcknowledgedPressure)
@@ -124,19 +125,19 @@ func TestInvariantAcknowledgedFactPressureBoundaries(t *testing.T) {
 }
 
 func TestInvariantAcknowledgedFactPressureExclusions(t *testing.T) {
-	facts := make([]daemon.SourceFactSnapshot, 0, 108)
+	facts := make([]protocol.SourceFactSnapshot, 0, 108)
 	for i := 0; i < 48; i++ {
-		facts = append(facts, daemon.SourceFactSnapshot{Kind: daemon.SourceHarness, Key: "acked-" + strconv.Itoa(i), Acked: true})
+		facts = append(facts, protocol.SourceFactSnapshot{Kind: protocol.SourceHarness, Key: "acked-" + strconv.Itoa(i), Acked: true})
 	}
 	for i := 0; i < 20; i++ {
 		facts = append(facts,
-			daemon.SourceFactSnapshot{Kind: daemon.SourceHarness, Key: "live-" + strconv.Itoa(i), Icon: "bolt"},
-			daemon.SourceFactSnapshot{Kind: daemon.SourceHarness, Key: "terminal-" + strconv.Itoa(i), Acked: true, Terminated: true, Icon: "stop"},
-			daemon.SourceFactSnapshot{Kind: daemon.SourceASL, Key: "lease-" + strconv.Itoa(i), Acked: true, LeaseLive: true},
+			protocol.SourceFactSnapshot{Kind: protocol.SourceHarness, Key: "live-" + strconv.Itoa(i), Icon: "bolt"},
+			protocol.SourceFactSnapshot{Kind: protocol.SourceHarness, Key: "terminal-" + strconv.Itoa(i), Acked: true, Terminated: true, Icon: "stop"},
+			protocol.SourceFactSnapshot{Kind: protocol.SourceASL, Key: "lease-" + strconv.Itoa(i), Acked: true, LeaseLive: true},
 		)
 	}
-	snapshot := daemon.EventsExport{WindowMetadata: map[int]daemon.WindowDebugMetadata{7: {
-		Shadow: daemon.WindowDebugShadow{Facts: facts},
+	snapshot := protocol.EventsExport{WindowMetadata: map[int]protocol.WindowDebugMetadata{7: {
+		Shadow: protocol.WindowDebugShadow{Facts: facts},
 	}}}
 	findings := evaluateDaemonInvariants(snapshot, healthyTestHealth(doctorTestBuild), doctorTestBuild, nil, invariantNow)
 	if got := findingsByCheck(findings, checkAcknowledgedPressure); len(got) != 0 {
@@ -145,54 +146,54 @@ func TestInvariantAcknowledgedFactPressureExclusions(t *testing.T) {
 }
 
 func TestInvariantShadowCurrentMismatch(t *testing.T) {
-	harnessFact := daemon.SourceFactSnapshot{Kind: daemon.SourceHarness, Key: "s", Action: "active", Icon: "bolt"}
-	aslFact := daemon.SourceFactSnapshot{Kind: daemon.SourceASL, Key: "run", Phase: daemon.ASLPhaseBetween, LeaseLive: true}
+	harnessFact := protocol.SourceFactSnapshot{Kind: protocol.SourceHarness, Key: "s", Action: "active", Icon: "bolt"}
+	aslFact := protocol.SourceFactSnapshot{Kind: protocol.SourceASL, Key: "run", Phase: daemon.ASLPhaseBetween, LeaseLive: true}
 	cases := []struct {
 		name string
-		meta daemon.WindowDebugMetadata
+		meta protocol.WindowDebugMetadata
 		want bool
 	}{
 		{
 			"icon disagreement fails",
-			daemon.WindowDebugMetadata{
-				Renderer: daemon.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true},
-				Shadow:   daemon.WindowDebugShadow{EffectiveIcon: "", EffectiveGen: 3, Facts: []daemon.SourceFactSnapshot{harnessFact}},
+			protocol.WindowDebugMetadata{
+				Renderer: protocol.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true},
+				Shadow:   protocol.WindowDebugShadow{EffectiveIcon: "", EffectiveGen: 3, Facts: []protocol.SourceFactSnapshot{harnessFact}},
 			},
 			true,
 		},
 		{
 			"agreement passes",
-			daemon.WindowDebugMetadata{
-				Renderer: daemon.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true},
-				Shadow:   daemon.WindowDebugShadow{EffectiveIcon: "bolt", EffectiveGen: 3, Facts: []daemon.SourceFactSnapshot{harnessFact}},
+			protocol.WindowDebugMetadata{
+				Renderer: protocol.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true},
+				Shadow:   protocol.WindowDebugShadow{EffectiveIcon: "bolt", EffectiveGen: 3, Facts: []protocol.SourceFactSnapshot{harnessFact}},
 			},
 			false,
 		},
 		{
 			"no shadow knowledge passes even with a scalar icon",
-			daemon.WindowDebugMetadata{
-				Renderer: daemon.WindowDebugRenderer{DesiredIcon: "stop", StateSet: true},
+			protocol.WindowDebugMetadata{
+				Renderer: protocol.WindowDebugRenderer{DesiredIcon: "stop", StateSet: true},
 			},
 			false,
 		},
 		{
 			"loop disagreement with an ASL fact fails",
-			daemon.WindowDebugMetadata{
-				Renderer: daemon.WindowDebugRenderer{DesiredIcon: "", StateSet: true, Looping: false, LoopingSet: true},
-				Shadow: daemon.WindowDebugShadow{
+			protocol.WindowDebugMetadata{
+				Renderer: protocol.WindowDebugRenderer{DesiredIcon: "", StateSet: true, Looping: false, LoopingSet: true},
+				Shadow: protocol.WindowDebugShadow{
 					EffectiveIcon: "", EffectiveLooping: true, EffectiveGen: 2,
-					Facts: []daemon.SourceFactSnapshot{aslFact},
+					Facts: []protocol.SourceFactSnapshot{aslFact},
 				},
 			},
 			true,
 		},
 		{
 			"loop disagreement without ASL knowledge passes (discovery owns 🔁)",
-			daemon.WindowDebugMetadata{
-				Renderer: daemon.WindowDebugRenderer{DesiredIcon: "", StateSet: true, Looping: true, LoopingSet: true},
-				Shadow: daemon.WindowDebugShadow{
+			protocol.WindowDebugMetadata{
+				Renderer: protocol.WindowDebugRenderer{DesiredIcon: "", StateSet: true, Looping: true, LoopingSet: true},
+				Shadow: protocol.WindowDebugShadow{
 					EffectiveIcon: "", EffectiveLooping: false, EffectiveGen: 2,
-					Facts: []daemon.SourceFactSnapshot{harnessFact},
+					Facts: []protocol.SourceFactSnapshot{harnessFact},
 				},
 			},
 			false,
@@ -200,7 +201,7 @@ func TestInvariantShadowCurrentMismatch(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			snapshot := daemon.EventsExport{WindowMetadata: map[int]daemon.WindowDebugMetadata{7: tc.meta}}
+			snapshot := protocol.EventsExport{WindowMetadata: map[int]protocol.WindowDebugMetadata{7: tc.meta}}
 			findings := evaluateDaemonInvariants(snapshot, healthyTestHealth(doctorTestBuild), doctorTestBuild, nil, invariantNow)
 			got := findingsByCheck(findings, checkShadowCurrentMismatch)
 			if (len(got) > 0) != tc.want {
@@ -211,12 +212,12 @@ func TestInvariantShadowCurrentMismatch(t *testing.T) {
 }
 
 func TestInvariantRenderGenerationDriftAndQueueSaturation(t *testing.T) {
-	snapshot := daemon.EventsExport{WindowMetadata: map[int]daemon.WindowDebugMetadata{
-		7: {Renderer: daemon.WindowDebugRenderer{DirtyAgeSeconds: 5, QueuedGen: 9, RenderedGen: 7, FailedGen: 9}},
-		8: {Renderer: daemon.WindowDebugRenderer{DirtyAgeSeconds: 4}},
+	snapshot := protocol.EventsExport{WindowMetadata: map[int]protocol.WindowDebugMetadata{
+		7: {Renderer: protocol.WindowDebugRenderer{DirtyAgeSeconds: 5, QueuedGen: 9, RenderedGen: 7, FailedGen: 9}},
+		8: {Renderer: protocol.WindowDebugRenderer{DirtyAgeSeconds: 4}},
 	}}
 	health := healthyTestHealth(doctorTestBuild)
-	health.Metrics = &daemon.MetricsSnapshot{QueueFull: 2}
+	health.Metrics = &protocol.MetricsSnapshot{QueueFull: 2}
 	findings := evaluateDaemonInvariants(snapshot, health, doctorTestBuild, nil, invariantNow)
 
 	drift := findingsByCheck(findings, checkRenderGenerationDrift)
@@ -229,12 +230,12 @@ func TestInvariantRenderGenerationDriftAndQueueSaturation(t *testing.T) {
 }
 
 func TestInvariantRenderCausalIDsAreBounded(t *testing.T) {
-	over := make([]string, daemon.MaxRenderCausalIDs+1)
+	over := make([]string, protocol.MaxRenderCausalIDs+1)
 	for i := range over {
 		over[i] = fmt.Sprintf("trace-%d", i)
 	}
-	snapshot := daemon.EventsExport{WindowMetadata: map[int]daemon.WindowDebugMetadata{
-		7: {Renderer: daemon.WindowDebugRenderer{Generations: []daemon.RenderGenerationTrace{{Generation: 9, TraceIDs: over}}}},
+	snapshot := protocol.EventsExport{WindowMetadata: map[int]protocol.WindowDebugMetadata{
+		7: {Renderer: protocol.WindowDebugRenderer{Generations: []protocol.RenderGenerationTrace{{Generation: 9, TraceIDs: over}}}},
 	}}
 	findings := evaluateDaemonInvariants(snapshot, healthyTestHealth(doctorTestBuild), doctorTestBuild, nil, invariantNow)
 	got := findingsByCheck(findings, checkRenderCausalBound)
@@ -258,7 +259,7 @@ func TestInvariantBuildMismatch(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			findings := evaluateDaemonInvariants(daemon.EventsExport{}, tc.health, doctorTestBuild, nil, invariantNow)
+			findings := evaluateDaemonInvariants(protocol.EventsExport{}, tc.health, doctorTestBuild, nil, invariantNow)
 			got := findingsByCheck(findings, checkBuildMismatch)
 			if (len(got) > 0) != tc.want {
 				t.Fatalf("build_mismatch findings = %+v; want failure=%t", got, tc.want)
@@ -268,20 +269,20 @@ func TestInvariantBuildMismatch(t *testing.T) {
 }
 
 func TestInvariantTombstonesAndAckedFactsAreInformational(t *testing.T) {
-	snapshot := daemon.EventsExport{WindowMetadata: map[int]daemon.WindowDebugMetadata{
+	snapshot := protocol.EventsExport{WindowMetadata: map[int]protocol.WindowDebugMetadata{
 		// A tombstoned window is exempt from failure checks even when its
 		// retained facts would otherwise violate the ASL invariant.
 		7: {
-			Watchdog: daemon.WindowDebugWatchdog{ClosedAt: invariantNow.Add(-time.Hour).Unix()},
-			Renderer: daemon.WindowDebugRenderer{DesiredIcon: "", StateSet: true},
-			Shadow: daemon.WindowDebugShadow{EffectiveGen: 1, Facts: []daemon.SourceFactSnapshot{{
-				Kind: daemon.SourceASL, Key: "run", Phase: daemon.ASLPhaseTurn, LeaseLive: true,
+			Watchdog: protocol.WindowDebugWatchdog{ClosedAt: invariantNow.Add(-time.Hour).Unix()},
+			Renderer: protocol.WindowDebugRenderer{DesiredIcon: "", StateSet: true},
+			Shadow: protocol.WindowDebugShadow{EffectiveGen: 1, Facts: []protocol.SourceFactSnapshot{{
+				Kind: protocol.SourceASL, Key: "run", Phase: daemon.ASLPhaseTurn, LeaseLive: true,
 			}}},
 		},
 		8: {
-			Renderer: daemon.WindowDebugRenderer{DesiredIcon: "", StateSet: true},
-			Shadow: daemon.WindowDebugShadow{EffectiveGen: 2, Facts: []daemon.SourceFactSnapshot{{
-				Kind: daemon.SourceHarness, Key: "s", Action: "stop", Icon: "stop", Acked: true,
+			Renderer: protocol.WindowDebugRenderer{DesiredIcon: "", StateSet: true},
+			Shadow: protocol.WindowDebugShadow{EffectiveGen: 2, Facts: []protocol.SourceFactSnapshot{{
+				Kind: protocol.SourceHarness, Key: "s", Action: "stop", Icon: "stop", Acked: true,
 			}}},
 		},
 	}}
@@ -299,10 +300,10 @@ func TestInvariantTombstonesAndAckedFactsAreInformational(t *testing.T) {
 }
 
 func TestInvariantHarnessDriftIsAWarning(t *testing.T) {
-	snapshot := daemon.EventsExport{WindowMetadata: map[int]daemon.WindowDebugMetadata{
-		7: {Durable: daemon.WindowDebugDurable{Harness: "claude"}},
+	snapshot := protocol.EventsExport{WindowMetadata: map[int]protocol.WindowDebugMetadata{
+		7: {Durable: protocol.WindowDebugDurable{Harness: "claude"}},
 	}}
-	liveByID := map[int]daemon.WindowLiveMetadata{
+	liveByID := map[int]protocol.WindowLiveMetadata{
 		7: {Found: true, Harness: "codex"},
 	}
 	findings := evaluateDaemonInvariants(snapshot, healthyTestHealth(doctorTestBuild), doctorTestBuild, liveByID, invariantNow)

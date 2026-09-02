@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/transcript"
@@ -53,7 +54,7 @@ type Handler struct {
 	// metricsFn returns the owning server's request-outcome counters (queue
 	// saturation, queue latency) for TypeHealth and export surfaces. Installed
 	// by NewServer; nil when the handler runs without a server.
-	metricsFn func() MetricsSnapshot
+	metricsFn func() protocol.MetricsSnapshot
 
 	// aslBridge is the optional agent-session-loop integration. Unset means the
 	// daemon was started without it, in which case every ASL request is refused
@@ -290,7 +291,7 @@ type Handler struct {
 	// the same convention as copilotTranscriptHomes above. Nil means the load
 	// never ran (a hand-built Handler in a test), which health reports as an
 	// absent block rather than as an empty one.
-	screenPatterns *ScreenPatternsSnapshot
+	screenPatterns *protocol.ScreenPatternsSnapshot
 
 	// copilotLifecycleReader reads a resolved Copilot transcript's terminal
 	// evidence for the transcript stop probe. Defaults to
@@ -324,7 +325,7 @@ type Handler struct {
 	// cleanup intentionally does not clear this so post-mortem exports still
 	// have identity/context even after the original Kitty tab is gone;
 	// closed-window GC bounds it via windowTombstones below.
-	windowMetadata map[int]WindowDebugMetadata
+	windowMetadata map[int]protocol.WindowDebugMetadata
 
 	// windowTombstones records when each closed window was garbage-collected.
 	// The tombstone is the retention lease for the window's durable metadata:
@@ -389,7 +390,7 @@ func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 		lastSeenEventAt:                make(map[string]time.Time),
 		notifiedHookSilence:            make(map[string]bool),
 		hookSilenceIdle:                make(map[string]*accountIdle),
-		windowMetadata:                 make(map[int]WindowDebugMetadata),
+		windowMetadata:                 make(map[int]protocol.WindowDebugMetadata),
 		windowTombstones:               make(map[int]time.Time),
 		notificationEffects:            make(map[string]NotificationDisposition),
 	}

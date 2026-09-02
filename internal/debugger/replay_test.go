@@ -24,6 +24,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
@@ -45,7 +46,7 @@ func newReplayFixture(t *testing.T) (*replayFixture, diagnostics.Paths) {
 	return &replayFixture{reducer: daemon.NewReducer(daemon.ReducerConfig{GuardDuration: 5}), journal: journal, windowID: 42}, paths
 }
 
-func (fixture *replayFixture) appendDecision(t *testing.T, traceID, requestID, event string, input daemon.ReducerEvent, fallback bool, renderGeneration uint64) diagnostics.TraceEnvelope {
+func (fixture *replayFixture) appendDecision(t *testing.T, traceID, requestID, event string, input protocol.ReducerEvent, fallback bool, renderGeneration uint64) diagnostics.TraceEnvelope {
 	t.Helper()
 	before := stateFromEffective(fixture.reducer.Reduce(input.At))
 	decision := fixture.reducer.Apply(input)
@@ -69,7 +70,7 @@ func (fixture *replayFixture) appendDecision(t *testing.T, traceID, requestID, e
 	return record
 }
 
-func replayFixtureEvidence(event string, input daemon.ReducerEvent, before, after ReplayState, daemonSeq uint64, reason string, fallback bool, renderGeneration uint64) map[string]string {
+func replayFixtureEvidence(event string, input protocol.ReducerEvent, before, after ReplayState, daemonSeq uint64, reason string, fallback bool, renderGeneration uint64) map[string]string {
 	sourceWindowID := input.OriginWindowID
 	if sourceWindowID == 0 {
 		sourceWindowID = 42
@@ -115,7 +116,7 @@ func (fixture *replayFixture) appendRequestReplay(t *testing.T, original diagnos
 	}
 	fixture.daemonSeq++
 	evidence["daemon_sequence"] = strconv.FormatUint(fixture.daemonSeq, 10)
-	evidence["reducer_reason"] = daemon.DecisionReasonRequestReplayed
+	evidence["reducer_reason"] = protocol.DecisionReasonRequestReplayed
 	current := stateFromEffective(fixture.reducer.Reduce(102))
 	evidence["replay.before_icon"] = current.Icon
 	evidence["replay.before_looping"] = strconv.FormatBool(current.Looping)
@@ -129,8 +130,8 @@ func (fixture *replayFixture) appendRequestReplay(t *testing.T, original diagnos
 	record.TraceID = "trace-request-replay"
 	record.RequestID = original.RequestID
 	record.WindowID = fixture.windowID
-	record.Outcome = string(daemon.DecisionDuplicate)
-	record.Reason = daemon.DecisionReasonRequestReplayed
+	record.Outcome = string(protocol.DecisionDuplicate)
+	record.Reason = protocol.DecisionReasonRequestReplayed
 	record.Evidence = evidence
 	if err := fixture.journal.Append(context.Background(), record); err != nil {
 		t.Fatal(err)
@@ -170,29 +171,29 @@ func (fixture *replayFixture) appendRender(t *testing.T, generation uint64, sour
 
 func TestReplayGoldenJournalCoversOrderingRestartsFallbackASLAndCoalescing(t *testing.T) {
 	fixture, paths := newReplayFixture(t)
-	legacy := fixture.appendDecision(t, "trace-fallback", "request-fallback", "PreToolUse", daemon.ReducerEvent{
-		Source: daemon.SourceID{Kind: daemon.SourceLegacy, Key: "window:42"}, Action: "active", Seq: 1, At: 100, OriginWindowID: 42,
+	legacy := fixture.appendDecision(t, "trace-fallback", "request-fallback", "PreToolUse", protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceLegacy, Key: "window:42"}, Action: "active", Seq: 1, At: 100, OriginWindowID: 42,
 	}, true, 10)
-	harness := fixture.appendDecision(t, "trace-new", "request-new", "UserPromptSubmit", daemon.ReducerEvent{
-		Source: daemon.SourceID{Kind: daemon.SourceHarness, Key: "claude:session-1"}, Action: "active", Seq: 2,
+	harness := fixture.appendDecision(t, "trace-new", "request-new", "UserPromptSubmit", protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:session-1"}, Action: "active", Seq: 2,
 		At: 101, OriginWindowID: 43, Prompt: true, TurnID: "turn-1", SessionID: "session-1",
 	}, false, 11)
-	fixture.appendDecision(t, "trace-reordered", "request-reordered", "Stop", daemon.ReducerEvent{
-		Source: daemon.SourceID{Kind: daemon.SourceHarness, Key: "claude:session-1"}, Action: "stop", Seq: 1,
+	fixture.appendDecision(t, "trace-reordered", "request-reordered", "Stop", protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:session-1"}, Action: "stop", Seq: 1,
 		At: 102, OriginWindowID: 42, TurnID: "turn-1", SessionID: "session-1",
 	}, false, 0)
 	fixture.appendRequestReplay(t, harness)
 	fixture.daemonSeq = 0 // a new daemon restored the same durable reducer facts
-	fixture.appendDecision(t, "trace-asl-turn", "request-asl-turn", "AgentSessionLoopTurnStarted", daemon.ReducerEvent{
-		Source: daemon.SourceID{Kind: daemon.SourceASL, Key: "run-1"}, Seq: 1, At: 103,
+	fixture.appendDecision(t, "trace-asl-turn", "request-asl-turn", "AgentSessionLoopTurnStarted", protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Seq: 1, At: 103,
 		OriginWindowID: 42, RunID: "run-1", Phase: daemon.ASLPhaseTurn,
 	}, false, 0)
-	fixture.appendDecision(t, "trace-asl-finish", "request-asl-finish", "AgentSessionLoopFinished", daemon.ReducerEvent{
-		Source: daemon.SourceID{Kind: daemon.SourceASL, Key: "run-1"}, Seq: 2, At: 104,
+	fixture.appendDecision(t, "trace-asl-finish", "request-asl-finish", "AgentSessionLoopFinished", protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Seq: 2, At: 104,
 		OriginWindowID: 42, RunID: "run-1", Phase: daemon.ASLPhaseFinished,
 	}, false, 0)
-	fixture.appendDecision(t, "trace-reset", "request-reset", "SessionEnd", daemon.ReducerEvent{
-		Source: daemon.SourceID{Kind: daemon.SourceHarness, Key: "claude:session-1"}, Action: "user_clear", Seq: 3,
+	fixture.appendDecision(t, "trace-reset", "request-reset", "SessionEnd", protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:session-1"}, Action: "user_clear", Seq: 3,
 		At: 105, OriginWindowID: 42, SessionID: "session-1", EndsSession: true,
 	}, false, 0)
 	fixture.appendRender(t, 11, []uint64{10, 11}, legacy, harness)
@@ -210,8 +211,8 @@ func TestReplayGoldenJournalCoversOrderingRestartsFallbackASLAndCoalescing(t *te
 	foundFallback, foundReordered, foundRequestReplay, foundASL := false, false, false, false
 	for _, comparison := range report.Comparisons {
 		foundFallback = foundFallback || comparison.UsedFallback && comparison.Status == "matched"
-		foundReordered = foundReordered || comparison.RecomputedDecision == daemon.DecisionReordered && comparison.Status == "matched"
-		foundRequestReplay = foundRequestReplay || comparison.RecomputedReason == daemon.DecisionReasonRequestReplayed && comparison.Status == "matched"
+		foundReordered = foundReordered || comparison.RecomputedDecision == protocol.DecisionReordered && comparison.Status == "matched"
+		foundRequestReplay = foundRequestReplay || comparison.RecomputedReason == protocol.DecisionReasonRequestReplayed && comparison.Status == "matched"
 		foundASL = foundASL || comparison.Event == "AgentSessionLoopTurnStarted" && comparison.RecomputedAfter.Looping
 	}
 	if !foundFallback || !foundReordered || !foundRequestReplay || !foundASL {
@@ -226,8 +227,8 @@ func TestReplayGoldenJournalCoversOrderingRestartsFallbackASLAndCoalescing(t *te
 
 func TestReplayShareBundleIsPortableAndPreservesReplaySafeEvidence(t *testing.T) {
 	fixture, paths := newReplayFixture(t)
-	fixture.appendDecision(t, "trace-portable", "request-portable", "UserPromptSubmit", daemon.ReducerEvent{
-		Source: daemon.SourceID{Kind: daemon.SourceHarness, Key: "claude:portable"}, Action: "active", Seq: 1,
+	fixture.appendDecision(t, "trace-portable", "request-portable", "UserPromptSubmit", protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:portable"}, Action: "active", Seq: 1,
 		At: 200, OriginWindowID: 42, Prompt: true, TurnID: "turn-portable", SessionID: "portable",
 	}, false, 0)
 	output := filepath.Join(t.TempDir(), "share.tar.gz")
@@ -264,12 +265,12 @@ func TestReplayShareBundleIsPortableAndPreservesReplaySafeEvidence(t *testing.T)
 
 func TestReplayASLRecordsExtractedFromV2Bundle(t *testing.T) {
 	fixture, paths := newReplayFixture(t)
-	fixture.appendDecision(t, "trace-asl-standalone", "request-asl-standalone", "AgentSessionLoopTurnStarted", daemon.ReducerEvent{
-		Source: daemon.SourceID{Kind: daemon.SourceASL, Key: "run-standalone"}, Seq: 1, At: 200,
+	fixture.appendDecision(t, "trace-asl-standalone", "request-asl-standalone", "AgentSessionLoopTurnStarted", protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-standalone"}, Seq: 1, At: 200,
 		OriginWindowID: 42, RunID: "run-standalone", Phase: daemon.ASLPhaseTurn,
 	}, false, 0)
-	fixture.appendDecision(t, "trace-unrelated", "request-unrelated", "UserPromptSubmit", daemon.ReducerEvent{
-		Source: daemon.SourceID{Kind: daemon.SourceHarness, Key: "claude:unrelated"}, Action: "active", Seq: 1,
+	fixture.appendDecision(t, "trace-unrelated", "request-unrelated", "UserPromptSubmit", protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:unrelated"}, Action: "active", Seq: 1,
 		At: 201, OriginWindowID: 42, Prompt: true, TurnID: "turn-unrelated", SessionID: "unrelated",
 	}, false, 0)
 	bundlePath := filepath.Join(t.TempDir(), "share.tar.gz")

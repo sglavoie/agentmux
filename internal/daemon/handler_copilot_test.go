@@ -2,13 +2,15 @@ package daemon
 
 import (
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func TestHandler_CopilotCompactCleanupSynthesizesStop(t *testing.T) {
 	h := newTestHandler()
 
-	resp := h.Handle(Request{
-		Type:     TypeStateUpdate,
+	resp := h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Harness:  "copilot",
 		Action:   "compact",
@@ -18,8 +20,8 @@ func TestHandler_CopilotCompactCleanupSynthesizesStop(t *testing.T) {
 		t.Fatalf("Copilot preCompact should show compact icon, got %+v", resp)
 	}
 
-	resp = h.Handle(Request{
-		Type:     TypeStateUpdate,
+	resp = h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Harness:  "copilot",
 		Action:   "idle",
@@ -29,8 +31,8 @@ func TestHandler_CopilotCompactCleanupSynthesizesStop(t *testing.T) {
 		t.Fatalf("Copilot compaction cleanup should synthesize stop icon, got %+v", resp)
 	}
 
-	resp = h.Handle(Request{
-		Type:     TypeStateUpdate,
+	resp = h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Harness:  "copilot",
 		Action:   "active",
@@ -53,10 +55,10 @@ func TestHandler_CopilotCompactCleanupSynthesizesStop(t *testing.T) {
 func TestHandler_CopilotTurnEndClearsBolt(t *testing.T) {
 	h := newTestHandler()
 	// Seed the guard at "active" (bolt visible).
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Account: "work",
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Account: "work",
 		Event: "preToolUse", Action: "active"})
 	// agentStop arrives — now mapped to action "stop" with PreservesIcon=false.
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Account: "work",
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Account: "work",
 		Event: "agentStop", Action: "stop", PreservesIcon: false})
 	if !resp.OK || !resp.Allowed {
 		t.Fatalf("agentStop should land: %+v", resp)
@@ -74,13 +76,13 @@ func TestHandler_CopilotTurnEndClearsBolt(t *testing.T) {
 // within the guard window.
 func TestHandler_CopilotPendingPromptSuppressionKeepsElicitationGuard(t *testing.T) {
 	h := newTestHandler()
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Harness: "copilot",
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Harness: "copilot",
 		Action: "elicitation", Event: "notification", NotificationType: "elicitation_dialog"})
 	if !resp.OK || !resp.Allowed || resp.IconState != "question" {
 		t.Fatalf("elicitation_dialog should show question icon, got %+v", resp)
 	}
 
-	resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Harness: "copilot",
+	resp = h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Harness: "copilot",
 		Action: "active", Event: "postToolUse"})
 	if !resp.OK || resp.Allowed {
 		t.Fatalf("speculative active during pending elicitation: want allowed=false, got %+v", resp)
@@ -89,7 +91,7 @@ func TestHandler_CopilotPendingPromptSuppressionKeepsElicitationGuard(t *testing
 		t.Fatalf("guard.Current after suppression = %q, want elicitation", got)
 	}
 
-	resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Harness: "copilot",
+	resp = h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Harness: "copilot",
 		Action: "elicitation", Event: "notification", NotificationType: "elicitation_dialog",
 	})
 	if !resp.OK || !resp.Allowed || resp.IconState != "question" {
@@ -109,7 +111,7 @@ func TestHandler_CopilotTurnEndDuringSubagentPreserves(t *testing.T) {
 	h.ensureWindowStateLocked(42).SubagentCount = 1
 	h.stateMu.Unlock()
 
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Account: "work",
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Account: "work",
 		Event: "agentStop", Action: "stop", PreservesIcon: false})
 	if !resp.OK {
 		t.Fatalf("agentStop should be handled OK: %+v", resp)

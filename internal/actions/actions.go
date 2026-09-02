@@ -9,7 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -105,7 +105,7 @@ type Dependencies struct {
 	Kitty           kitty.KittyClient
 	Config          *config.Config
 	Clipboard       func(string) error
-	Daemon          func(daemon.Request) (daemon.Response, error)
+	Daemon          func(protocol.Request) (protocol.Response, error)
 	Readers         map[string]transcript.Reader
 	Handoff         handoff.Runner
 	Worktree        worktree.Runner

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
@@ -26,8 +26,8 @@ func TestDeliverResolvesProducerConfigDirFromEnvAndStampsEvidence(t *testing.T) 
 	discoverHarnessProcessForDelivery = func(string) HarnessProcessDiscovery { return HarnessProcessDiscovery{} }
 	t.Cleanup(func() { discoverHarnessProcessForDelivery = oldDiscovery })
 
-	client := &fakeDaemonClient{resp: daemon.Response{OK: true, Delivery: &daemon.DeliveryAcknowledgement{
-		SchemaVersion: 1, Status: daemon.DeliveryAcknowledgementAccepted, Reason: "accepted", Profile: "personal-codex",
+	client := &fakeDaemonClient{resp: protocol.Response{OK: true, Delivery: &protocol.DeliveryAcknowledgement{
+		SchemaVersion: 1, Status: protocol.DeliveryAcknowledgementAccepted, Reason: "accepted", Profile: "personal-codex",
 	}}}
 	result := deliverFromStdinWithDeps(
 		"PreToolUse", 42, "claude", "/tmp/amx", DeliveryOptions{RequestID: "producer-config-dir"},
@@ -97,35 +97,35 @@ func TestDeliverPayloadWithDepsStructuredOutcomes(t *testing.T) {
 
 	for _, tc := range []struct {
 		name   string
-		resp   daemon.Response
+		resp   protocol.Response
 		err    error
 		status DeliveryStatus
 		reason string
 	}{
 		{
 			name: "accepted",
-			resp: daemon.Response{OK: true, Delivery: &daemon.DeliveryAcknowledgement{
-				SchemaVersion: 1, Status: daemon.DeliveryAcknowledgementAccepted, Reason: "accepted",
+			resp: protocol.Response{OK: true, Delivery: &protocol.DeliveryAcknowledgement{
+				SchemaVersion: 1, Status: protocol.DeliveryAcknowledgementAccepted, Reason: "accepted",
 			}},
 			status: DeliveryAccepted, reason: "accepted",
 		},
 		{
 			name: "duplicate",
-			resp: daemon.Response{OK: true, Delivery: &daemon.DeliveryAcknowledgement{
-				SchemaVersion: 1, Status: daemon.DeliveryAcknowledgementDuplicate, Reason: "request_replayed",
+			resp: protocol.Response{OK: true, Delivery: &protocol.DeliveryAcknowledgement{
+				SchemaVersion: 1, Status: protocol.DeliveryAcknowledgementDuplicate, Reason: "request_replayed",
 			}},
 			status: DeliveryDuplicate, reason: "duplicate",
 		},
 		{
 			name: "permanent rejection",
-			resp: daemon.Response{OK: true, Delivery: &daemon.DeliveryAcknowledgement{
-				SchemaVersion: 1, Status: daemon.DeliveryAcknowledgementRejected, Reason: "unknown_event",
+			resp: protocol.Response{OK: true, Delivery: &protocol.DeliveryAcknowledgement{
+				SchemaVersion: 1, Status: protocol.DeliveryAcknowledgementRejected, Reason: "unknown_event",
 			}},
 			status: DeliveryPermanentFailure, reason: "unknown_event",
 		},
 		{
 			name:   "retryable rejection",
-			resp:   daemon.Response{OK: false, Error: "busy", Retryable: true},
+			resp:   protocol.Response{OK: false, Error: "busy", Retryable: true},
 			status: DeliveryRetryableFailure, reason: "daemon_rejected",
 		},
 		{
@@ -161,8 +161,8 @@ func TestDeliverPayloadWithDepsStructuredOutcomes(t *testing.T) {
 
 func TestDeliverPayloadWithDepsForwardsHarnessProcessIdentity(t *testing.T) {
 	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
-	client := &fakeDaemonClient{resp: daemon.Response{OK: true}}
-	identity := &daemon.HarnessProcessIdentity{
+	client := &fakeDaemonClient{resp: protocol.Response{OK: true}}
+	identity := &protocol.HarnessProcessIdentity{
 		Harness: "claude", PID: 4242, StartToken: "Thu Jul 16 10:20:30 2026",
 	}
 

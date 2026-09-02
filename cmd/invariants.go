@@ -15,6 +15,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 const (
@@ -98,7 +99,7 @@ type doctorFinding struct {
 // checks are skipped). Tombstoned windows are reported as informational and
 // exempt from failure checks: their live state was garbage-collected and the
 // retained metadata is post-mortem evidence, not a running session.
-func evaluateDaemonInvariants(snapshot daemon.EventsExport, health daemon.Health, cliBuild buildinfo.Info, liveByID map[int]daemon.WindowLiveMetadata, now time.Time) []doctorFinding {
+func evaluateDaemonInvariants(snapshot protocol.EventsExport, health daemon.Health, cliBuild buildinfo.Info, liveByID map[int]protocol.WindowLiveMetadata, now time.Time) []doctorFinding {
 	findings := make([]doctorFinding, 0)
 	add := func(severity, check string, windowID int, format string, args ...any) {
 		findings = append(findings, doctorFinding{
@@ -167,7 +168,7 @@ func evaluateDaemonInvariants(snapshot daemon.EventsExport, health daemon.Health
 		// Active ASL work (a live turn/verification lease) must never render as
 		// stopped or empty: the loop is executing right now.
 		for _, fact := range facts {
-			if fact.Kind != daemon.SourceASL || fact.Acked || !fact.LeaseLive {
+			if fact.Kind != protocol.SourceASL || fact.Acked || !fact.LeaseLive {
 				continue
 			}
 			if fact.Phase != daemon.ASLPhaseTurn && fact.Phase != daemon.ASLPhaseVerification {
@@ -188,16 +189,16 @@ func evaluateDaemonInvariants(snapshot daemon.EventsExport, health daemon.Health
 			if fact.Acked {
 				continue
 			}
-			if fact.Kind == daemon.SourceSubagent && !fact.Terminated && fact.Icon == "subagent" {
+			if fact.Kind == protocol.SourceSubagent && !fact.Terminated && fact.Icon == "subagent" {
 				liveAgents = true
 				break
 			}
-			if fact.Kind == daemon.SourceLegacy && fact.Agents > 0 {
+			if fact.Kind == protocol.SourceLegacy && fact.Agents > 0 {
 				liveAgents = true
 				break
 			}
 		}
-		if liveAgents && daemon.IconPrecedence(desired) < daemon.IconPrecedence("subagent") {
+		if liveAgents && protocol.IconPrecedence(desired) < protocol.IconPrecedence("subagent") {
 			add(severityFailure, checkSubagentVisibility, id,
 				"live subagent facts present but the window shows icon %q (below 🤖 precedence)", desired)
 		}
@@ -251,7 +252,7 @@ func evaluateDaemonInvariants(snapshot daemon.EventsExport, health daemon.Health
 		// from every other health surface. Its own deadline bounds it; one still
 		// armed at twice the configured timeout has outlived every release path
 		// and the 🛑 it is holding will never arrive.
-		if hold := meta.Shadow.PendingTerminalStop; hold != nil && hold.Class == daemon.StopHoldClassTerminal {
+		if hold := meta.Shadow.PendingTerminalStop; hold != nil && hold.Class == protocol.StopHoldClassTerminal {
 			timeout := hold.Deadline - hold.ArmedAt
 			armedFor := now.Unix() - hold.ArmedAt
 			if timeout > 0 && armedFor > stopHoldStuckTimeoutMultiple*timeout {
@@ -317,12 +318,12 @@ func evaluateDaemonInvariants(snapshot daemon.EventsExport, health daemon.Health
 		}
 
 		for _, generation := range meta.Renderer.Generations {
-			if len(generation.TraceIDs) > daemon.MaxRenderCausalIDs ||
-				len(generation.RequestIDs) > daemon.MaxRenderCausalIDs ||
-				len(generation.SourceEventIDs) > daemon.MaxRenderCausalIDs {
+			if len(generation.TraceIDs) > protocol.MaxRenderCausalIDs ||
+				len(generation.RequestIDs) > protocol.MaxRenderCausalIDs ||
+				len(generation.SourceEventIDs) > protocol.MaxRenderCausalIDs {
 				add(severityFailure, checkRenderCausalBound, id,
 					"render generation %d exceeds the %d-ID causal bound (traces=%d requests=%d source_events=%d)",
-					generation.Generation, daemon.MaxRenderCausalIDs, len(generation.TraceIDs),
+					generation.Generation, protocol.MaxRenderCausalIDs, len(generation.TraceIDs),
 					len(generation.RequestIDs), len(generation.SourceEventIDs))
 			}
 		}
@@ -409,8 +410,8 @@ func evaluateDaemonInvariants(snapshot daemon.EventsExport, health daemon.Health
 //     intent, the reducer's authoritative answer, and the live tab title are
 //     three views of the same window, and a window that is genuinely still stuck
 //     shows ⚡ in all of them.
-func screenDeclineStillCurrent(meta daemon.WindowDebugMetadata, liveByID map[int]daemon.WindowLiveMetadata, id int) bool {
-	live, joined := daemon.WindowLiveMetadata{}, liveByID != nil
+func screenDeclineStillCurrent(meta protocol.WindowDebugMetadata, liveByID map[int]protocol.WindowLiveMetadata, id int) bool {
+	live, joined := protocol.WindowLiveMetadata{}, liveByID != nil
 	if joined {
 		if live = liveByID[id]; !live.Found {
 			return false
@@ -446,7 +447,7 @@ func screenDeclineStillCurrent(meta daemon.WindowDebugMetadata, liveByID map[int
 	return true
 }
 
-func isPromptSessionEvent(event daemon.SessionEvent) bool {
+func isPromptSessionEvent(event protocol.SessionEvent) bool {
 	switch strings.ToLower(strings.TrimSpace(event.Event)) {
 	case "userpromptsubmit", "userpromptsubmitted":
 		return true
@@ -455,30 +456,30 @@ func isPromptSessionEvent(event daemon.SessionEvent) bool {
 	}
 }
 
-func isUnknownProducerFact(fact daemon.SourceFactSnapshot) bool {
-	if fact.Kind != daemon.SourceLegacy || fact.Acked || (fact.Icon == "" && !fact.LeaseLive) {
+func isUnknownProducerFact(fact protocol.SourceFactSnapshot) bool {
+	if fact.Kind != protocol.SourceLegacy || fact.Acked || (fact.Icon == "" && !fact.LeaseLive) {
 		return false
 	}
 	return strings.HasPrefix(fact.Key, "win:") || strings.HasPrefix(fact.Key, "window:")
 }
 
-func isEvictableAcknowledgedFact(fact daemon.SourceFactSnapshot) bool {
+func isEvictableAcknowledgedFact(fact protocol.SourceFactSnapshot) bool {
 	if !fact.Acked || fact.Terminated {
 		return false
 	}
-	return fact.Kind != daemon.SourceASL || !fact.LeaseLive
+	return fact.Kind != protocol.SourceASL || !fact.LeaseLive
 }
 
-func hasASLFact(facts []daemon.SourceFactSnapshot) bool {
+func hasASLFact(facts []protocol.SourceFactSnapshot) bool {
 	for _, fact := range facts {
-		if fact.Kind == daemon.SourceASL {
+		if fact.Kind == protocol.SourceASL {
 			return true
 		}
 	}
 	return false
 }
 
-func allFactsAcked(facts []daemon.SourceFactSnapshot) bool {
+func allFactsAcked(facts []protocol.SourceFactSnapshot) bool {
 	for _, fact := range facts {
 		if !fact.Acked {
 			return false

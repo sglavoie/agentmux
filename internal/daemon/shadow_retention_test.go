@@ -7,13 +7,14 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func TestShadowReducerRetentionRetiresCompletedSubagentsAfterStragglerWindow(t *testing.T) {
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceSubagent, Key: "agent-1"}, Action: "subagent", Seq: 1, TurnID: "t1", At: 100})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceSubagent, Key: "agent-1"}, Action: "stop", Seq: 2, TurnID: "t1", At: 110})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceSubagent, Key: "agent-2"}, Action: "stop_failure", Seq: 1, TurnID: "t1", At: 120})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-1"}, Action: "subagent", Seq: 1, TurnID: "t1", At: 100})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-1"}, Action: "stop", Seq: 2, TurnID: "t1", At: 110})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-2"}, Action: "stop_failure", Seq: 1, TurnID: "t1", At: 120})
 
 	// Inside the straggler window the completed agent's icon-less tombstone is
 	// retained (it absorbs duplicate stops and reordered starts) but claims no
@@ -37,16 +38,16 @@ func TestShadowReducerRetentionRetiresCompletedSubagentsAfterStragglerWindow(t *
 }
 
 func TestShadowReducerRetentionExpiresTerminalFactsAfterAcknowledgement(t *testing.T) {
-	src := SourceID{Kind: SourceHarness, Key: "claude:s1"}
+	src := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{Source: src, Action: "stop", Seq: 1, TurnID: "t1", At: 100})
+	r.Apply(protocol.ReducerEvent{Source: src, Action: "stop", Seq: 1, TurnID: "t1", At: 100})
 
 	// Fresh, unacknowledged terminal facts persist inside the retention window.
 	if removed := r.Compact(101); removed != 0 {
 		t.Fatalf("fresh tombstone compacted: removed %d", removed)
 	}
 
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceProbe, Key: "user"}, Action: "user_clear", Seq: 2, At: 102})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceProbe, Key: "user"}, Action: "user_clear", Seq: 2, At: 102})
 	if removed := r.Compact(103); removed != 1 {
 		t.Fatalf("acked tombstone survived: removed %d", removed)
 	}
@@ -56,10 +57,10 @@ func TestShadowReducerRetentionExpiresTerminalFactsAfterAcknowledgement(t *testi
 }
 
 func TestShadowReducerRetentionExpiresTerminalFactsAfterTombstoneWindow(t *testing.T) {
-	src := SourceID{Kind: SourceHarness, Key: "claude:s1"}
+	src := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{Source: src, Action: "stop", Seq: 1, TurnID: "t1", At: 100})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhaseTurn, RunID: "run-1", Seq: 1, At: 100})
+	r.Apply(protocol.ReducerEvent{Source: src, Action: "stop", Seq: 1, TurnID: "t1", At: 100})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseTurn, RunID: "run-1", Seq: 1, At: 100})
 
 	if removed := r.Compact(100 + tombstoneRetentionSeconds - 1); removed != 0 {
 		t.Fatalf("tombstone expired early: removed %d", removed)
@@ -69,16 +70,16 @@ func TestShadowReducerRetentionExpiresTerminalFactsAfterTombstoneWindow(t *testi
 	}
 	// Non-terminal facts (the live ASL turn) are never compacted.
 	facts := r.Facts()
-	if len(facts) != 1 || facts[0].Kind != SourceASL || !facts[0].LeaseLive {
+	if len(facts) != 1 || facts[0].Kind != protocol.SourceASL || !facts[0].LeaseLive {
 		t.Fatalf("facts after expiry = %+v, want the live ASL turn only", facts)
 	}
 }
 
 func TestShadowReducerRetentionExpiresAckedNonTerminalFactsAfterWindow(t *testing.T) {
-	src := SourceID{Kind: SourceHarness, Key: "claude:s1"}
+	src := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{Source: src, Action: "active", Seq: 5, At: 100})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceProbe, Key: "user"}, Action: "user_clear", Seq: 6, At: 101})
+	r.Apply(protocol.ReducerEvent{Source: src, Action: "active", Seq: 5, At: 100})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceProbe, Key: "user"}, Action: "user_clear", Seq: 6, At: 101})
 
 	if facts := r.Facts(); len(facts) != 1 || facts[0].AckedAt != 101 {
 		t.Fatalf("acknowledgement timestamp = %+v; want 101", facts)
@@ -88,7 +89,7 @@ func TestShadowReducerRetentionExpiresAckedNonTerminalFactsAfterWindow(t *testin
 	}
 	// The retained fact still guards sequence monotonicity: replaying the old
 	// event stays a no-op.
-	if dec := r.Apply(ReducerEvent{Source: src, Action: "active", Seq: 5, At: 100}); dec != DecisionDuplicate {
+	if dec := r.Apply(protocol.ReducerEvent{Source: src, Action: "active", Seq: 5, At: 100}); dec != protocol.DecisionDuplicate {
 		t.Fatalf("replayed event decision = %s, want duplicate", dec)
 	}
 	if removed := r.Compact(101 + acknowledgedFactRetentionSeconds); removed != 1 {
@@ -99,12 +100,12 @@ func TestShadowReducerRetentionExpiresAckedNonTerminalFactsAfterWindow(t *testin
 func TestShadowReducerRetentionCapsNewestAcknowledgedFactsDeterministically(t *testing.T) {
 	r := NewReducer(ReducerConfig{})
 	for i := 0; i < maxAcknowledgedFacts+6; i++ {
-		r.Apply(ReducerEvent{
-			Source: SourceID{Kind: SourceHarness, Key: fmt.Sprintf("claude:%02d", i)},
+		r.Apply(protocol.ReducerEvent{
+			Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: fmt.Sprintf("claude:%02d", i)},
 			Action: "active", Seq: 1, At: int64(100 + i),
 		})
 	}
-	r.Apply(ReducerEvent{Source: userActionSource(), Action: "user_clear", Seq: 1, At: 1000})
+	r.Apply(protocol.ReducerEvent{Source: userActionSource(), Action: "user_clear", Seq: 1, At: 1000})
 
 	if removed := r.Compact(1001); removed != 6 {
 		t.Fatalf("Compact cap removed %d facts, want 6", removed)
@@ -122,15 +123,15 @@ func TestShadowReducerRetentionCapsNewestAcknowledgedFactsDeterministically(t *t
 }
 
 func TestShadowReducerRetentionUsesSourceIdentityAsFinalEvictionTieBreak(t *testing.T) {
-	facts := make([]SourceFactSnapshot, 0, maxAcknowledgedFacts+2)
+	facts := make([]protocol.SourceFactSnapshot, 0, maxAcknowledgedFacts+2)
 	for i := 0; i < maxAcknowledgedFacts+1; i++ {
-		facts = append(facts, SourceFactSnapshot{
-			Kind: SourceProbe, Key: fmt.Sprintf("probe:%02d", i), Action: "active", Icon: "bolt",
+		facts = append(facts, protocol.SourceFactSnapshot{
+			Kind: protocol.SourceProbe, Key: fmt.Sprintf("probe:%02d", i), Action: "active", Icon: "bolt",
 			Seq: 1, CausalOrder: 1, At: 100, Acked: true, AckedAt: 200,
 		})
 	}
-	facts = append(facts, SourceFactSnapshot{
-		Kind: SourceHarness, Key: "claude:first", Action: "active", Icon: "bolt",
+	facts = append(facts, protocol.SourceFactSnapshot{
+		Kind: protocol.SourceHarness, Key: "claude:first", Action: "active", Icon: "bolt",
 		Seq: 1, CausalOrder: 1, At: 100, Acked: true, AckedAt: 200,
 	})
 	r := NewReducer(ReducerConfig{})
@@ -140,23 +141,23 @@ func TestShadowReducerRetentionUsesSourceIdentityAsFinalEvictionTieBreak(t *test
 		t.Fatalf("Compact tied cap removed %d facts, want 2", removed)
 	}
 	retained := r.Facts()
-	if got := retained[0].Source(); got != (SourceID{Kind: SourceProbe, Key: "probe:01"}) {
+	if got := retained[0].Source(); got != (protocol.SourceID{Kind: protocol.SourceProbe, Key: "probe:01"}) {
 		t.Fatalf("first retained source = %+v; want probe:01 after kind/key tie-break eviction", got)
 	}
 }
 
 func TestShadowReducerRetentionPreservesUnackedFactsAndLiveASLLeases(t *testing.T) {
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:acked"}, Action: "active", Seq: 1, At: 100})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: 100})
-	r.Apply(ReducerEvent{Source: userActionSource(), Action: "user_clear", Seq: 1, At: 101})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:live"}, Action: "active", Seq: 1, At: 102})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:acked"}, Action: "active", Seq: 1, At: 100})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: 100})
+	r.Apply(protocol.ReducerEvent{Source: userActionSource(), Action: "user_clear", Seq: 1, At: 101})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:live"}, Action: "active", Seq: 1, At: 102})
 
 	if removed := r.Compact(101 + acknowledgedFactRetentionSeconds); removed != 1 {
 		t.Fatalf("Compact removed %d facts, want only expired acknowledged harness fact", removed)
 	}
 	retained := r.Facts()
-	if len(retained) != 2 || retained[0].Kind != SourceASL || !retained[0].Acked || !retained[0].LeaseLive ||
+	if len(retained) != 2 || retained[0].Kind != protocol.SourceASL || !retained[0].Acked || !retained[0].LeaseLive ||
 		retained[1].Key != "claude:live" || retained[1].Acked {
 		t.Fatalf("retained exemptions = %+v", retained)
 	}
@@ -172,13 +173,13 @@ func TestReducerNotificationDedupedBySourceEventID(t *testing.T) {
 		guard := NewStateGuard(time.Hour)
 		notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
 		h := NewHandler(guard, notifier)
-		src := SourceID{Kind: SourceHarness, Key: "claude:s1"}
+		src := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}
 
 		deliver := func(sourceEventID string) {
-			ev := NormalizedEvent{Source: src, Action: "stop", Event: "Stop", SourceEventID: sourceEventID}
-			h.handleStateUpdate(Request{
-				Type: TypeStateUpdate, WindowID: 3, Action: "stop", Event: "Stop",
-				SessionTitle: "W:api", normalized: &ev,
+			ev := protocol.NormalizedEvent{Source: src, Action: "stop", Event: "Stop", SourceEventID: sourceEventID}
+			h.handleStateUpdate(protocol.Request{
+				Type: protocol.TypeStateUpdate, WindowID: 3, Action: "stop", Event: "Stop",
+				SessionTitle: "W:api", Normalized: &ev,
 			})
 			// Out-run the notifier's own per-action cooldown so the only thing
 			// standing between a retry and a duplicate toast is the dedup.

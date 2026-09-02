@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/screenstate"
@@ -83,12 +84,12 @@ func (h *Handler) applyCodexPromptObservation(
 	allowed, effectiveAction := h.guard.TryUpdate(windowID, classification.Action, true)
 	if !allowed {
 		h.appendCodexPromptProbeEventLocked(now, windowID, titleParts.Base, titleParts.State, userVars,
-			classification, IconStatePreserve, true, binding.legacyDirectManaged, binding.SourceWindowID)
+			classification, protocol.IconStatePreserve, true, binding.legacyDirectManaged, binding.SourceWindowID)
 		h.stateMu.Unlock()
 		return
 	}
 
-	iconState := IconState(effectiveAction)
+	iconState := protocol.IconState(effectiveAction)
 	if iconState == "" {
 		iconState = classification.IconState
 	}
@@ -125,7 +126,7 @@ func (h *Handler) retractCodexPromptObservation(now time.Time, binding screenPro
 	if !ok || st.Reducer == nil {
 		return
 	}
-	source := SourceID{Kind: SourceProbe, Key: screenPromptProbeSource}
+	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource}
 	if !st.Reducer.canRetract(source) {
 		return
 	}

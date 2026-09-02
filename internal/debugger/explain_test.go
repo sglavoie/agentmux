@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hooks"
@@ -32,12 +33,12 @@ func TestExplanationClassifiesEveryInstrumentedBoundary(t *testing.T) {
 	}{
 		{"producer absence", explanationRecord("native.producer", "absent", "producer_not_invoked"), CauseProducerAbsence},
 		{"outside kitty", explanationRecord("hook.kitty_detection", "rejected", "outside_kitty"), CauseOutsideKitty},
-		{"invalid payload", explanationRecord("daemon.decision", "quarantined", daemon.DecisionReasonInvalidPayload), CauseInvalidPayload},
+		{"invalid payload", explanationRecord("daemon.decision", "quarantined", protocol.DecisionReasonInvalidPayload), CauseInvalidPayload},
 		{"delivery failure", explanationRecord("hook.failure", "error", "daemon_unavailable"), CauseDeliveryFailure},
-		{"duplicate", explanationRecord("daemon.decision", "duplicate", daemon.DecisionReasonRequestReplayed), CauseDuplicate},
-		{"owner mismatch", explanationRecord("daemon.decision", "suppressed", daemon.DecisionReasonOwnerMismatch), CauseOwnerMismatch},
-		{"quarantine", explanationRecord("daemon.decision", "quarantined", daemon.DecisionReasonUntrustedIdentityFallback), CauseQuarantine},
-		{"reducer suppression", explanationRecord("daemon.decision", "suppressed", daemon.DecisionReasonGuardBlocked), CauseReducerSuppression},
+		{"duplicate", explanationRecord("daemon.decision", "duplicate", protocol.DecisionReasonRequestReplayed), CauseDuplicate},
+		{"owner mismatch", explanationRecord("daemon.decision", "suppressed", protocol.DecisionReasonOwnerMismatch), CauseOwnerMismatch},
+		{"quarantine", explanationRecord("daemon.decision", "quarantined", protocol.DecisionReasonUntrustedIdentityFallback), CauseQuarantine},
+		{"reducer suppression", explanationRecord("daemon.decision", "suppressed", protocol.DecisionReasonGuardBlocked), CauseReducerSuppression},
 		{"render failure", explanationRecord("daemon.renderer.failed", "failed", "render_title"), CauseRenderFailure},
 		{"notification dispatch failure", explanationRecord("daemon.notification.dispatch", "failed", "send_failed"), CauseNotificationFailure},
 		{"notification backend timeout", explanationRecord("daemon.notification.dispatch", "failed", "backend_timeout"), CauseNotificationFailure},
@@ -70,7 +71,7 @@ func TestExplanationClassifiesProcessExitRecoveryWithoutOverridingRendererFailur
 	lifecycle := explanationRecord("daemon.process_lifecycle", "settled", daemon.HarnessProcessExitReasonInteractive)
 	lifecycle.RequestID = ""
 	lifecycle.Evidence = map[string]string{
-		"event": daemon.EventHarnessProcessExited, "terminal_hook_evidence": "absent",
+		"event": protocol.EventHarnessProcessExited, "terminal_hook_evidence": "absent",
 		"render_generation": "7", "process_observation": string(daemon.HarnessProcessMissing),
 	}
 	report := buildExplanation(ExplainOptions{Selector: Selector{WindowID: 42}, Recent: 10, Now: time.Now()}, []diagnostics.TraceEnvelope{lifecycle})

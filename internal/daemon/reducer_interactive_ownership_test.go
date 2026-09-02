@@ -4,12 +4,13 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/conversation"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // harnessEvent builds a parent-harness ReducerEvent for the ownership tests.
-func harnessEvent(session, action string, seq uint64, at int64, pipe bool) ReducerEvent {
-	return ReducerEvent{
-		Source:    SourceID{Kind: SourceHarness, Key: "claude:" + session},
+func harnessEvent(session, action string, seq uint64, at int64, pipe bool) protocol.ReducerEvent {
+	return protocol.ReducerEvent{
+		Source:    protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:" + session},
 		Action:    action,
 		SessionID: session,
 		Seq:       seq,
@@ -30,10 +31,10 @@ func TestInteractiveTerminalRetiresOlderInteractiveActive(t *testing.T) {
 	if got.Icon != "stop" {
 		t.Fatalf("icon = %q, want stop (older interactive bolt must not mask the current stop)", got.Icon)
 	}
-	if got.Source != (SourceID{Kind: SourceHarness, Key: "claude:new"}) {
+	if got.Source != (protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:new"}) {
 		t.Fatalf("source = %+v, want claude:new", got.Source)
 	}
-	if f := r.facts[SourceID{Kind: SourceHarness, Key: "claude:old"}]; f == nil || !f.acked {
+	if f := r.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:old"}]; f == nil || !f.acked {
 		t.Fatalf("older interactive active fact was not retired: %+v", f)
 	}
 }
@@ -48,8 +49,8 @@ func TestInteractiveTerminalRetiresOlderInteractiveActiveAtEqualTimestampAcrossS
 	r.Apply(harnessEvent("old", "active", 900, 100, false))
 	r.Apply(harnessEvent("current", "stop", 1, 100, false))
 
-	old := r.facts[SourceID{Kind: SourceHarness, Key: "claude:old"}]
-	current := r.facts[SourceID{Kind: SourceHarness, Key: "claude:current"}]
+	old := r.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:old"}]
+	current := r.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:current"}]
 	if old == nil || current == nil || !old.acked {
 		t.Fatalf("equal-time retirement failed: old=%+v current=%+v", old, current)
 	}
@@ -70,7 +71,7 @@ func TestInteractivePromptRetiresOlderInteractiveActiveAtEqualTimestampAcrossSou
 	prompt.Prompt = true
 	r.Apply(prompt)
 
-	if old := r.facts[SourceID{Kind: SourceHarness, Key: "claude:old"}]; old == nil || !old.acked {
+	if old := r.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:old"}]; old == nil || !old.acked {
 		t.Fatalf("equal-time prompt did not retire old high-sequence bolt: %+v", old)
 	}
 	if got := r.Reduce(100); got.Icon != "bolt" || got.Source.Key != "claude:current" {
@@ -87,7 +88,7 @@ func TestInteractiveTerminalDoesNotRetireNewerInteractiveActiveAtEqualTimestampA
 	r.Apply(harnessEvent("old", "stop", 900, 100, false))
 	r.Apply(harnessEvent("current", "active", 1, 100, false))
 
-	current := r.facts[SourceID{Kind: SourceHarness, Key: "claude:current"}]
+	current := r.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:current"}]
 	if current == nil || current.acked {
 		t.Fatalf("newer equal-time activity was retired: %+v", current)
 	}
@@ -101,8 +102,8 @@ func TestInteractiveTerminalDoesNotRetireNewerInteractiveActiveAtEqualTimestampA
 func TestCrossHarnessTerminalRetiresOlderInteractiveActive(t *testing.T) {
 	r := NewReducer(zeroCfg)
 	r.Apply(harnessEvent("old", "active", 1, 100, false))
-	r.Apply(ReducerEvent{
-		Source:    SourceID{Kind: SourceHarness, Key: "codex:new"},
+	r.Apply(protocol.ReducerEvent{
+		Source:    protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:new"},
 		Action:    "stop",
 		SessionID: "new",
 		Seq:       2,
@@ -122,17 +123,17 @@ func TestASLFinishRetiresOlderInteractiveActive(t *testing.T) {
 	for _, harnessName := range []string{"codex", "claude", "copilot"} {
 		t.Run(harnessName, func(t *testing.T) {
 			r := NewReducer(zeroCfg)
-			source := SourceID{Kind: SourceHarness, Key: harnessName + ":session-1"}
-			r.Apply(ReducerEvent{
+			source := protocol.SourceID{Kind: protocol.SourceHarness, Key: harnessName + ":session-1"}
+			r.Apply(protocol.ReducerEvent{
 				Source: source, Action: "active", SessionID: "session-1",
 				Seq: 1, At: 100,
 			})
-			r.Apply(ReducerEvent{
-				Source: SourceID{Kind: SourceASL, Key: "run-1"},
+			r.Apply(protocol.ReducerEvent{
+				Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"},
 				RunID:  "run-1", Phase: ASLPhaseFinished, Seq: 2, At: 200,
 			})
 
-			if got := r.Reduce(200); got.Icon != "stop" || got.Source.Kind != SourceASL {
+			if got := r.Reduce(200); got.Icon != "stop" || got.Source.Kind != protocol.SourceASL {
 				t.Fatalf("Reduce = %+v, want the finished run's stop", got)
 			}
 			if active := r.facts[source]; active == nil || !active.acked {
@@ -148,30 +149,30 @@ func TestASLFinishRetiresOlderInteractiveActive(t *testing.T) {
 func TestASLFinishPreservesNewerAndProtectedWork(t *testing.T) {
 	tests := []struct {
 		name     string
-		seed     ReducerEvent
+		seed     protocol.ReducerEvent
 		wantIcon string
 	}{
 		{
 			name: "newer interactive activity",
-			seed: ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:new"},
+			seed: protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:new"},
 				Action: "active", Seq: 1, At: 300},
 			wantIcon: "bolt",
 		},
 		{
 			name: "pipe-mode child",
-			seed: ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:pipe"},
+			seed: protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:pipe"},
 				Action: "active", Seq: 1, At: 100, PipeMode: true},
 			wantIcon: "bolt",
 		},
 		{
 			name: "subagent",
-			seed: ReducerEvent{Source: SourceID{Kind: SourceSubagent, Key: "agent-1"},
+			seed: protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-1"},
 				Action: "subagent", Seq: 1, At: 100},
 			wantIcon: "subagent",
 		},
 		{
 			name: "attention",
-			seed: ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:prompt"},
+			seed: protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:prompt"},
 				Action: "permission", Seq: 1, At: 100},
 			wantIcon: "key",
 		},
@@ -181,8 +182,8 @@ func TestASLFinishPreservesNewerAndProtectedWork(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := NewReducer(zeroCfg)
 			r.Apply(tc.seed)
-			r.Apply(ReducerEvent{
-				Source: SourceID{Kind: SourceASL, Key: "run-1"},
+			r.Apply(protocol.ReducerEvent{
+				Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"},
 				RunID:  "run-1", Phase: ASLPhaseFinished, Seq: 1, At: 200,
 			})
 
@@ -204,18 +205,18 @@ func TestInteractiveTerminalPreservesProtectedFacts(t *testing.T) {
 	// A concurrent pipe-mode child doing real work.
 	r.Apply(harnessEvent("pipe", "active", 1, 90, true))
 	// A subagent still running.
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceSubagent, Key: "agent-1"}, Action: "subagent", Seq: 1, At: 95})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-1"}, Action: "subagent", Seq: 1, At: 95})
 	// A live ASL lease.
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, Seq: 1, At: 96})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, Seq: 1, At: 96})
 	// Another interactive session holding a permission prompt (attention).
 	r.Apply(harnessEvent("perm", "permission", 1, 97, false))
 	// The current interactive session reaches stop.
 	r.Apply(harnessEvent("cur", "stop", 1, 200, false))
 
-	for _, id := range []SourceID{
-		{Kind: SourceHarness, Key: "claude:pipe"},
-		{Kind: SourceSubagent, Key: "agent-1"},
-		{Kind: SourceHarness, Key: "claude:perm"},
+	for _, id := range []protocol.SourceID{
+		{Kind: protocol.SourceHarness, Key: "claude:pipe"},
+		{Kind: protocol.SourceSubagent, Key: "agent-1"},
+		{Kind: protocol.SourceHarness, Key: "claude:perm"},
 	} {
 		if f := r.facts[id]; f == nil || f.acked {
 			t.Fatalf("protected fact %+v was retired: %+v", id, f)
@@ -249,7 +250,7 @@ func TestPipeTerminalDoesNotRetireInteractiveActive(t *testing.T) {
 	if got := r.Reduce(200); got.Icon != "bolt" || got.Source.Key != "claude:owner" {
 		t.Fatalf("reduce = %+v, want the interactive bolt preserved", got)
 	}
-	if f := r.facts[SourceID{Kind: SourceHarness, Key: "claude:owner"}]; f == nil || f.acked {
+	if f := r.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:owner"}]; f == nil || f.acked {
 		t.Fatalf("interactive active fact retired by a pipe stop: %+v", f)
 	}
 }
@@ -262,7 +263,7 @@ func TestInteractiveTerminalDoesNotRetireNewerInteractiveActive(t *testing.T) {
 	r.Apply(harnessEvent("new", "active", 1, 200, false))
 	r.Apply(harnessEvent("old", "stop", 1, 100, false))
 
-	if f := r.facts[SourceID{Kind: SourceHarness, Key: "claude:new"}]; f == nil || f.acked {
+	if f := r.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:new"}]; f == nil || f.acked {
 		t.Fatalf("newer interactive active fact was retired by an older stop: %+v", f)
 	}
 	if got := r.Reduce(200); got.Icon != "bolt" || got.Source.Key != "claude:new" {
@@ -279,7 +280,7 @@ func TestInteractivePromptRetiresOlderInteractiveActive(t *testing.T) {
 	ev.Prompt = true
 	r.Apply(ev)
 
-	if f := r.facts[SourceID{Kind: SourceHarness, Key: "claude:old"}]; f == nil || !f.acked {
+	if f := r.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:old"}]; f == nil || !f.acked {
 		t.Fatalf("older interactive active fact not retired on prompt: %+v", f)
 	}
 }

@@ -3,6 +3,7 @@ package daemon
 import (
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -65,7 +66,7 @@ func TestHookKittyClient_ScopesToRequestSocket(t *testing.T) {
 	runner := kitty.NewMockRunner(map[string][]byte{})
 	h.SetKittyClient(kitty.NewClientWithSocket(runner, "unix:/tmp/kitty-daemon"))
 
-	_, _ = h.hookKittyClient(Request{KittyListenOn: "unix:/tmp/kitty-request"}).ListWindows()
+	_, _ = h.hookKittyClient(protocol.Request{KittyListenOn: "unix:/tmp/kitty-request"}).ListWindows()
 
 	assertDialedSocket(t, runner, "unix:/tmp/kitty-request")
 }
@@ -86,7 +87,7 @@ func TestHookKittyClient_FallsBackForUnusableRequestSocket(t *testing.T) {
 			runner := kitty.NewMockRunner(map[string][]byte{})
 			h.SetKittyClient(kitty.NewClientWithSocket(runner, "unix:/tmp/kitty-daemon"))
 
-			_, _ = h.hookKittyClient(Request{KittyListenOn: tc.socket}).ListWindows()
+			_, _ = h.hookKittyClient(protocol.Request{KittyListenOn: tc.socket}).ListWindows()
 
 			assertDialedSocket(t, runner, "unix:/tmp/kitty-daemon")
 		})

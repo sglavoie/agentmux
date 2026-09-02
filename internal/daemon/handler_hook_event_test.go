@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -25,8 +26,8 @@ func TestHandler_HookEventEnrichesFromKittySnapshot(t *testing.T) {
 	}
 	h.SetKittyClient(fake)
 
-	resp := h.Handle(Request{
-		Type:          TypeHookEvent,
+	resp := h.Handle(protocol.Request{
+		Type:          protocol.TypeHookEvent,
 		WindowID:      42,
 		Event:         "PreToolUse",
 		PayloadJSON:   hookPayloadJSON(t, hookevent.HookPayload{ToolName: "Bash", Source: "hook"}),
@@ -37,7 +38,7 @@ func TestHandler_HookEventEnrichesFromKittySnapshot(t *testing.T) {
 		t.Fatalf("TypeHookEvent response = %+v; want ok-only response", resp)
 	}
 
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) != 1 {
 		t.Fatalf("events = %d, want 1 (%+v)", len(detail.Events), detail.Events)
 	}
@@ -70,8 +71,8 @@ func TestHandler_HookEventKeepsStampedProducerSeparateFromTargetMetadata(t *test
 		}}),
 	})
 
-	resp := h.Handle(Request{
-		Type:              TypeHookEvent,
+	resp := h.Handle(protocol.Request{
+		Type:              protocol.TypeHookEvent,
 		WindowID:          42,
 		Event:             "UserPromptSubmit",
 		Harness:           " Codex ",
@@ -82,12 +83,12 @@ func TestHandler_HookEventKeepsStampedProducerSeparateFromTargetMetadata(t *test
 		t.Fatalf("hook event response = %+v", resp)
 	}
 
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) != 1 {
 		t.Fatalf("events = %+v, want one producer-stamped event", detail.Events)
 	}
 	event := detail.Events[0]
-	if event.SourceKind != string(SourceHarness) || event.SourceKey != "codex:codex-session" {
+	if event.SourceKind != string(protocol.SourceHarness) || event.SourceKey != "codex:codex-session" {
 		t.Fatalf("normalized source = %q/%q, want harness/codex:codex-session", event.SourceKind, event.SourceKey)
 	}
 	if event.ProducerConfigDir != "/Users/dev/.codex-work" {
@@ -111,8 +112,8 @@ func TestHandler_HookEventExplicitUnknownProducerIsNotInferredFromTarget(t *test
 		}}),
 	})
 
-	resp := h.Handle(Request{
-		Type:        TypeHookEvent,
+	resp := h.Handle(protocol.Request{
+		Type:        protocol.TypeHookEvent,
 		WindowID:    42,
 		Event:       "Notification",
 		Harness:     "future-harness",
@@ -122,7 +123,7 @@ func TestHandler_HookEventExplicitUnknownProducerIsNotInferredFromTarget(t *test
 		t.Fatalf("hook event response = %+v", resp)
 	}
 
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) != 1 {
 		t.Fatalf("events = %+v, want one unknown-producer event", detail.Events)
 	}
@@ -130,7 +131,7 @@ func TestHandler_HookEventExplicitUnknownProducerIsNotInferredFromTarget(t *test
 	if event.Action != "idle" {
 		t.Fatalf("unknown-producer action = %q, want harness-agnostic idle", event.Action)
 	}
-	if event.SourceKind != string(SourceLegacy) || event.SourceKey != "win:42" {
+	if event.SourceKind != string(protocol.SourceLegacy) || event.SourceKey != "win:42" {
 		t.Fatalf("unknown-producer source = %q/%q, want legacy/win:42", event.SourceKind, event.SourceKey)
 	}
 
@@ -151,8 +152,8 @@ func TestHandler_HookEventUnknownProducerDoesNotAcquireCopilotPermissionBehavior
 		}}),
 	})
 
-	resp := h.Handle(Request{
-		Type:     TypeHookEvent,
+	resp := h.Handle(protocol.Request{
+		Type:     protocol.TypeHookEvent,
 		WindowID: 42,
 		Event:    "permissionRequest",
 		Harness:  "future-harness",
@@ -160,7 +161,7 @@ func TestHandler_HookEventUnknownProducerDoesNotAcquireCopilotPermissionBehavior
 	if !resp.OK {
 		t.Fatalf("hook event response = %+v", resp)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) != 1 || detail.Events[0].ResultIconState != "key" {
 		t.Fatalf("unknown-producer permission events = %+v, want generic key transition", detail.Events)
 	}
@@ -187,8 +188,8 @@ func TestHandler_HookEventCodexAutoCompactRestoresBolt(t *testing.T) {
 			{name: "PostCompact", payload: hookevent.HookPayload{Trigger: "auto"}},
 			{name: "PostToolUse"},
 		} {
-			resp := h.Handle(Request{
-				Type:        TypeHookEvent,
+			resp := h.Handle(protocol.Request{
+				Type:        protocol.TypeHookEvent,
 				WindowID:    42,
 				Event:       event.name,
 				PayloadJSON: hookPayloadJSON(t, event.payload),
@@ -198,7 +199,7 @@ func TestHandler_HookEventCodexAutoCompactRestoresBolt(t *testing.T) {
 			}
 		}
 
-		detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+		detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 		if len(detail.Events) != 3 {
 			t.Fatalf("events = %d, want 3 (%+v)", len(detail.Events), detail.Events)
 		}
@@ -246,8 +247,8 @@ func TestHandler_HookEventCodexManualCompactRemainsStopped(t *testing.T) {
 			{name: "PostCompact", payload: hookevent.HookPayload{Trigger: "manual"}},
 			{name: "PostToolUse"},
 		} {
-			resp := h.Handle(Request{
-				Type:        TypeHookEvent,
+			resp := h.Handle(protocol.Request{
+				Type:        protocol.TypeHookEvent,
 				WindowID:    42,
 				Event:       event.name,
 				PayloadJSON: hookPayloadJSON(t, event.payload),
@@ -257,7 +258,7 @@ func TestHandler_HookEventCodexManualCompactRemainsStopped(t *testing.T) {
 			}
 		}
 
-		detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+		detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 		if len(detail.Events) != 3 {
 			t.Fatalf("events = %d, want 3 (%+v)", len(detail.Events), detail.Events)
 		}
@@ -291,8 +292,8 @@ func TestHandler_HookEventOwnerMismatchNoOps(t *testing.T) {
 	})}
 	h.SetKittyClient(fake)
 
-	resp := h.Handle(Request{
-		Type:        TypeHookEvent,
+	resp := h.Handle(protocol.Request{
+		Type:        protocol.TypeHookEvent,
 		WindowID:    43,
 		Event:       "Notification",
 		Harness:     harness.Claude,
@@ -302,7 +303,7 @@ func TestHandler_HookEventOwnerMismatchNoOps(t *testing.T) {
 		t.Fatalf("hook event response = %+v", resp)
 	}
 
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})
 	if len(detail.Events) != 1 || !detail.Events[0].Suppressed ||
 		detail.Events[0].SuppressionReason != suppressionReasonOwnerMismatch {
 		t.Fatalf("events = %+v; want owner_mismatch suppression", detail.Events)
@@ -325,11 +326,11 @@ func TestHandler_HookEventTabTitleOwnerStillUpdates(t *testing.T) {
 	}
 	h.SetKittyClient(fake)
 
-	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "PostToolUse"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "PostToolUse"})
 	if !resp.OK {
 		t.Fatalf("hook event response = %+v", resp)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) != 1 || detail.Events[0].Suppressed || detail.Events[0].Action != "active" {
 		t.Fatalf("events = %+v; want one allowed active event", detail.Events)
 	}
@@ -355,8 +356,8 @@ func TestHandler_HookEventScreenContextLimitPromotesStopFailure(t *testing.T) {
 	}
 	h.SetKittyClient(fake)
 
-	resp := h.Handle(Request{
-		Type:        TypeHookEvent,
+	resp := h.Handle(protocol.Request{
+		Type:        protocol.TypeHookEvent,
 		WindowID:    42,
 		Event:       "Notification",
 		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{NotificationType: "agent_idle"}),
@@ -364,7 +365,7 @@ func TestHandler_HookEventScreenContextLimitPromotesStopFailure(t *testing.T) {
 	if !resp.OK {
 		t.Fatalf("hook event response = %+v", resp)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	// The asynchronous probe appends a stop_failure upgrade once it sees the
 	// banner on the source screen. It is always the final applied event.
 	if len(detail.Events) == 0 {
@@ -396,8 +397,8 @@ func TestHandler_HookEventStopReasonContextLimitSkipsScreenProbe(t *testing.T) {
 	}
 	h.SetKittyClient(fake)
 
-	resp := h.Handle(Request{
-		Type:        TypeHookEvent,
+	resp := h.Handle(protocol.Request{
+		Type:        protocol.TypeHookEvent,
 		WindowID:    42,
 		Event:       "agentStop",
 		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{StopReasonCamel: " context_limit_reached "}),
@@ -405,7 +406,7 @@ func TestHandler_HookEventStopReasonContextLimitSkipsScreenProbe(t *testing.T) {
 	if !resp.OK {
 		t.Fatalf("hook event response = %+v", resp)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) != 1 {
 		t.Fatalf("events = %d, want 1 (%+v)", len(detail.Events), detail.Events)
 	}
@@ -436,11 +437,11 @@ func TestHandler_HookEventIgnoredAndUnknownAreLoggedSuppressions(t *testing.T) {
 			}})}
 			h.SetKittyClient(fake)
 
-			resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: tc.event})
+			resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: tc.event})
 			if !resp.OK {
 				t.Fatalf("hook event response = %+v", resp)
 			}
-			detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+			detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 			if len(detail.Events) != 1 {
 				t.Fatalf("events = %d, want 1 (%+v)", len(detail.Events), detail.Events)
 			}

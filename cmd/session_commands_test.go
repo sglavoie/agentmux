@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -230,7 +230,7 @@ func TestSessionContinueCLIUsesExactNativeInvocation(t *testing.T) {
 		}}
 	}
 	sessionCommandsNewKitty = func() kitty.KittyClient { return client }
-	sessionCommandsDaemon = func(daemon.Request) (daemon.Response, error) { return daemon.Response{OK: true}, nil }
+	sessionCommandsDaemon = func(protocol.Request) (protocol.Response, error) { return protocol.Response{OK: true}, nil }
 	if err := sessionContinueCmd.Flags().Set("json", "true"); err != nil {
 		t.Fatal(err)
 	}

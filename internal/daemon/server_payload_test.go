@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestServer_BadPayloadCounterAndMilestone verifies that malformed payloads
@@ -44,7 +46,7 @@ func TestServer_BadPayloadCounterAndMilestone(t *testing.T) {
 	}
 
 	// One valid request must not bump the counter.
-	good, _ := json.Marshal(Request{Type: TypeStateQuery})
+	good, _ := json.Marshal(protocol.Request{Type: protocol.TypeStateQuery})
 	srv.serveConn(strings.NewReader(string(good)+"\n"), io.Discard)
 	if got := srv.badPayloads.Load(); got != uint64(badPayloadLogInterval+badPayloadLogInterval/2) {
 		t.Fatalf("valid request unexpectedly bumped counter to %d", got)
@@ -88,7 +90,7 @@ func TestServer_AcceptsLargeRequest(t *testing.T) {
 	// under the new 1 MiB ceiling. SessionTitle is the largest free-form field
 	// the daemon accepts, so it is a representative inflation vector.
 	bigTitle := strings.Repeat("x", 80*1024)
-	req := Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", SessionTitle: bigTitle}
+	req := protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", SessionTitle: bigTitle}
 	payload, err := json.Marshal(req)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)

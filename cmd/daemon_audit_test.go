@@ -10,6 +10,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func resetAuditTestState(t *testing.T) {
@@ -49,7 +50,7 @@ func TestDaemonAuditSamplesOnCadenceAndExitsNonzeroOnViolations(t *testing.T) {
 	newDoctorDaemonClient = func() daemonExportClient {
 		return &fakeDaemonExportClient{
 			health: daemon.Health{Alive: true, Ready: true, Build: &build},
-			export: func(int) (daemon.EventsExport, error) {
+			export: func(int) (protocol.EventsExport, error) {
 				return violatingDoctorSnapshot(start), nil
 			},
 		}
@@ -93,7 +94,7 @@ func TestDaemonAuditCleanRunExitsZeroAndJSONReports(t *testing.T) {
 	newDoctorDaemonClient = func() daemonExportClient {
 		return &fakeDaemonExportClient{
 			health: daemon.Health{Alive: true, Ready: true, Build: &build},
-			export: func(int) (daemon.EventsExport, error) { return daemon.EventsExport{}, nil },
+			export: func(int) (protocol.EventsExport, error) { return protocol.EventsExport{}, nil },
 		}
 	}
 	newDoctorKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
@@ -125,7 +126,7 @@ func TestDaemonAuditOwnerMismatchTraceUsesSharedFindingsAndFails(t *testing.T) {
 	newDoctorDaemonClient = func() daemonExportClient {
 		return &fakeDaemonExportClient{
 			health: daemon.Health{Alive: true, Ready: true, Build: &build},
-			export: func(int) (daemon.EventsExport, error) {
+			export: func(int) (protocol.EventsExport, error) {
 				return ownerMismatchDoctorSnapshot(start), nil
 			},
 		}

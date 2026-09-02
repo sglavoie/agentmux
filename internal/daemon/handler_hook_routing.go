@@ -3,6 +3,7 @@ package daemon
 import (
 	"log/slog"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -11,7 +12,7 @@ import (
 // for an exact live producer/session/origin binding. The returned match count
 // makes ambiguity fail closed instead of silently moving one session between
 // managed panes.
-func (h *Handler) rememberedManagedHookTarget(ctx hookEventContext, normalized NormalizedEvent) (loopLifecycleTarget, int) {
+func (h *Handler) rememberedManagedHookTarget(ctx hookEventContext, normalized protocol.NormalizedEvent) (loopLifecycleTarget, int) {
 	producerHarness := harness.NormalizeKnown(ctx.req.Harness)
 	if ctx.tab == nil || producerHarness == "" || normalized.SessionID == "" ||
 		normalized.OriginWindowID <= 0 {
@@ -20,7 +21,7 @@ func (h *Handler) rememberedManagedHookTarget(ctx hookEventContext, normalized N
 	// Route identity is the parent producer/session tuple even when the current
 	// event is sourced from a subagent fact. The parent harness fact established
 	// by the prompt keeps every child event on the same managed reducer.
-	parentSource := SourceID{Kind: SourceHarness, Key: producerHarness + ":" + normalized.SessionID}
+	parentSource := protocol.SourceID{Kind: protocol.SourceHarness, Key: producerHarness + ":" + normalized.SessionID}
 
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
@@ -53,11 +54,11 @@ func managedHookTarget(tab *kitty.Tab, win *kitty.Window) loopLifecycleTarget {
 
 func (h *Handler) suppressOwnerMismatch(ctx hookEventContext, eventOrAction, action string) {
 	ctx.req.Event = eventOrAction
-	ctx.req.routeDecision = routeDecisionRejected
-	chooseRoute(ctx.req.routeEvidence, routeDecisionRejected, DecisionReasonOwnerMismatch, nil)
+	ctx.req.RouteDecision = routeDecisionRejected
+	chooseRoute(ctx.req.RouteEvidence, routeDecisionRejected, protocol.DecisionReasonOwnerMismatch, nil)
 	if ctx.owner != nil {
-		ctx.req.routeEvidence.RejectedAlternatives = append(ctx.req.routeEvidence.RejectedAlternatives,
-			RejectedRouteEvidence{WindowID: ctx.owner.ID, Reason: DecisionReasonOwnerMismatch})
+		ctx.req.RouteEvidence.RejectedAlternatives = append(ctx.req.RouteEvidence.RejectedAlternatives,
+			protocol.RejectedRouteEvidence{WindowID: ctx.owner.ID, Reason: protocol.DecisionReasonOwnerMismatch})
 	}
 	h.appendSuppressedHookEvent(ctx.req, action, suppressionReasonOwnerMismatch)
 	if ctx.owner != nil {
@@ -75,11 +76,11 @@ func (h *Handler) suppressOwnerMismatch(ctx hookEventContext, eventOrAction, act
 // owner_mismatch_* doctor findings.
 func (h *Handler) suppressUnmanagedPipeSource(ctx hookEventContext, eventOrAction, action string) {
 	ctx.req.Event = eventOrAction
-	ctx.req.routeDecision = routeDecisionRejected
-	chooseRoute(ctx.req.routeEvidence, routeDecisionRejected, DecisionReasonUnmanagedPipeSource, nil)
+	ctx.req.RouteDecision = routeDecisionRejected
+	chooseRoute(ctx.req.RouteEvidence, routeDecisionRejected, protocol.DecisionReasonUnmanagedPipeSource, nil)
 	if ctx.owner != nil {
-		ctx.req.routeEvidence.RejectedAlternatives = append(ctx.req.routeEvidence.RejectedAlternatives,
-			RejectedRouteEvidence{WindowID: ctx.owner.ID, Reason: DecisionReasonUnmanagedPipeSource})
+		ctx.req.RouteEvidence.RejectedAlternatives = append(ctx.req.RouteEvidence.RejectedAlternatives,
+			protocol.RejectedRouteEvidence{WindowID: ctx.owner.ID, Reason: protocol.DecisionReasonUnmanagedPipeSource})
 	}
 	h.appendSuppressedHookEvent(ctx.req, action, suppressionReasonUnmanagedPipeSource)
 	slog.Debug("hook event ignored: non-interactive harness run in an unmanaged pane",

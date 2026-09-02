@@ -3,6 +3,7 @@ package daemon
 import (
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
 
@@ -10,15 +11,15 @@ func TestDiagnosticProbeDiscoversRouteWithoutMutatingState(t *testing.T) {
 	h := newTestHandler()
 	h.SetKittyClient(&fakeKittyClient{windows: unmanagedRouteWindows("api", harness.Codex, true)})
 
-	resp := h.Handle(Request{
-		Type: TypeDiagnosticProbe, WindowID: 43, Harness: harness.Claude,
+	resp := h.Handle(protocol.Request{
+		Type: protocol.TypeDiagnosticProbe, WindowID: 43, Harness: harness.Claude,
 		TraceID: "trace-1", RequestID: "request-1", Attempt: 1,
 	})
 	if !resp.OK || resp.Delivery == nil {
 		t.Fatalf("probe response = %+v", resp)
 	}
 	ack := resp.Delivery
-	if ack.Status != DeliveryAcknowledgementAccepted || ack.Reason != "routing_discovered" ||
+	if ack.Status != protocol.DeliveryAcknowledgementAccepted || ack.Reason != "routing_discovered" ||
 		ack.TraceID != "trace-1" || ack.RequestID != "request-1" || ack.Attempt != 1 ||
 		ack.ProducerHarness != harness.Claude || ack.TargetHarness != harness.Codex ||
 		ack.Profile != "managed" || ack.SourceWindowID != 43 || ack.TargetWindowID != 42 ||
@@ -39,16 +40,16 @@ func TestHookDeliveryAcknowledgesUnknownEvidenceWithoutState(t *testing.T) {
 	h := newTestHandler()
 	h.SetKittyClient(&fakeKittyClient{windows: unmanagedRouteWindows("api", harness.Codex, true)})
 
-	resp := h.Handle(Request{
-		Type: TypeHookEvent, WindowID: 43, Event: "FutureEvent", Harness: harness.Claude,
+	resp := h.Handle(protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 43, Event: "FutureEvent", Harness: harness.Claude,
 		ProducerHarness: harness.Claude, PayloadJSON: `{}`, TraceID: "trace-2",
 		RequestID: "request-2", SourceEventID: "source-2", Attempt: 2,
 	})
-	if !resp.OK || resp.Delivery == nil || resp.Delivery.Status != DeliveryAcknowledgementRejected ||
+	if !resp.OK || resp.Delivery == nil || resp.Delivery.Status != protocol.DeliveryAcknowledgementRejected ||
 		resp.Delivery.Reason != suppressionReasonUnknownEvent {
 		t.Fatalf("unknown response = %+v", resp)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})
 	if len(detail.Events) != 1 || !detail.Events[0].Suppressed ||
 		detail.Events[0].SuppressionReason != suppressionReasonUnknownEvent {
 		t.Fatalf("unknown evidence = %+v", detail.Events)
@@ -57,11 +58,11 @@ func TestHookDeliveryAcknowledgesUnknownEvidenceWithoutState(t *testing.T) {
 
 func TestHookDeliveryRejectsMissingWindow(t *testing.T) {
 	h := newTestHandler()
-	resp := h.Handle(Request{
-		Type: TypeHookEvent, WindowID: 0, Event: "Stop", Harness: harness.Claude,
+	resp := h.Handle(protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 0, Event: "Stop", Harness: harness.Claude,
 		PayloadJSON: `{}`, TraceID: "trace-missing-window", RequestID: "request-missing-window",
 	})
-	if !resp.OK || resp.Delivery == nil || resp.Delivery.Status != DeliveryAcknowledgementRejected ||
+	if !resp.OK || resp.Delivery == nil || resp.Delivery.Status != protocol.DeliveryAcknowledgementRejected ||
 		resp.Delivery.Reason != "invalid_window" {
 		t.Fatalf("missing-window response = %+v", resp)
 	}
@@ -78,20 +79,20 @@ func TestHookDeliveryRejectsMissingWindow(t *testing.T) {
 func TestDedupeReplayHasExplicitDuplicateAcknowledgement(t *testing.T) {
 	var metrics Metrics
 	cache := newDedupeCache(&metrics)
-	compute := func() Response {
-		return Response{OK: true, Delivery: &DeliveryAcknowledgement{
-			SchemaVersion: DeliveryAcknowledgementSchemaVersion,
-			Status:        DeliveryAcknowledgementAccepted,
+	compute := func() protocol.Response {
+		return protocol.Response{OK: true, Delivery: &protocol.DeliveryAcknowledgement{
+			SchemaVersion: protocol.DeliveryAcknowledgementSchemaVersion,
+			Status:        protocol.DeliveryAcknowledgementAccepted,
 			Reason:        "accepted",
 		}}
 	}
 
 	first := cache.do("request-1", compute)
 	duplicate := cache.do("request-1", compute)
-	if first.Delivery == nil || first.Delivery.Status != DeliveryAcknowledgementAccepted {
+	if first.Delivery == nil || first.Delivery.Status != protocol.DeliveryAcknowledgementAccepted {
 		t.Fatalf("first acknowledgement = %+v", first.Delivery)
 	}
-	if duplicate.Delivery == nil || duplicate.Delivery.Status != DeliveryAcknowledgementDuplicate ||
+	if duplicate.Delivery == nil || duplicate.Delivery.Status != protocol.DeliveryAcknowledgementDuplicate ||
 		duplicate.Delivery.Reason != "request_replayed" {
 		t.Fatalf("duplicate acknowledgement = %+v", duplicate.Delivery)
 	}

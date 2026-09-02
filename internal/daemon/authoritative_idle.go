@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
 
@@ -43,7 +44,7 @@ import (
 // context used only when the reduced state actually transitions to stop.
 type AuthoritativeIdle struct {
 	WindowID    int
-	Source      SourceID
+	Source      protocol.SourceID
 	Harness     string
 	CapturedSeq uint64
 	// ProbeBinding, when present, strengthens the ordinary target receipt check
@@ -126,12 +127,12 @@ type AuthoritativeIdle struct {
 // keyed by harness so a Codex idle and a Claude idle never collide, and is
 // deliberately never a SourceLegacy fact: an idle probe must settle stale work
 // through the reducer's source-scoped facts, not the legacy scalar grace.
-func AuthoritativeIdleSource(harnessName string) SourceID {
+func AuthoritativeIdleSource(harnessName string) protocol.SourceID {
 	key := "idle"
 	if h := harness.Normalize(harnessName); h != "" {
 		key = "idle:" + h
 	}
-	return SourceID{Kind: SourceProbe, Key: key}
+	return protocol.SourceID{Kind: protocol.SourceProbe, Key: key}
 }
 
 // captureWindowReceipt samples the window-wide reducer receipt generation
@@ -233,7 +234,7 @@ func (h *Handler) clearIdleSamplesForWindowLocked(windowID int) {
 // that require stabilized evidence call it each poll and compare the count
 // against their required sample threshold before emitting an AuthoritativeIdle.
 // Safe to call off the state lock.
-func (h *Handler) RecordIdleSample(windowID int, source SourceID) int {
+func (h *Handler) RecordIdleSample(windowID int, source protocol.SourceID) int {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	return h.recordIdleSampleLocked(idleSampleRef{windowID: windowID, key: source.Key})
@@ -242,7 +243,7 @@ func (h *Handler) RecordIdleSample(windowID int, source SourceID) int {
 // ClearIdleSample resets a probe source's consecutive-sample streak. Adapters
 // call it after a classifier failure or a protected-state change so
 // stabilization restarts from zero. Safe to call off the state lock.
-func (h *Handler) ClearIdleSample(windowID int, source SourceID) {
+func (h *Handler) ClearIdleSample(windowID int, source protocol.SourceID) {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	h.clearIdleSampleLocked(idleSampleRef{windowID: windowID, key: source.Key})
@@ -343,7 +344,7 @@ func (h *Handler) applyAuthoritativeIdle(obs AuthoritativeIdle) bool {
 	}
 	st.ShadowSeq++
 	decision := st.Reducer.SettleAuthoritativeIdle(obs.Source, st.ShadowSeq, at, obs.SessionID, originWindowID)
-	if decision != DecisionApplied {
+	if decision != protocol.DecisionApplied {
 		// The probe fact did not advance (a newer same-source fact already
 		// exists). Nothing to publish; reset the streak so the next stretch of
 		// evidence restarts cleanly.

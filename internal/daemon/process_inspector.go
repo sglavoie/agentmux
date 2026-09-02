@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 const (
@@ -44,7 +46,7 @@ const (
 // implementation must honor ctx cancellation. Missing map entries are treated
 // as HarnessProcessUnknown.
 type HarnessProcessInspector interface {
-	InspectHarnessProcesses(context.Context, []HarnessProcessIdentity) map[HarnessProcessIdentity]HarnessProcessInspection
+	InspectHarnessProcesses(context.Context, []protocol.HarnessProcessIdentity) map[protocol.HarnessProcessIdentity]HarnessProcessInspection
 }
 
 type psHarnessProcessInspector struct {
@@ -67,12 +69,12 @@ func newPSHarnessProcessInspector() *psHarnessProcessInspector {
 // batch; successful batches in the same pass remain usable.
 func (p *psHarnessProcessInspector) InspectHarnessProcesses(
 	ctx context.Context,
-	identities []HarnessProcessIdentity,
-) map[HarnessProcessIdentity]HarnessProcessInspection {
-	results := make(map[HarnessProcessIdentity]HarnessProcessInspection, len(identities))
-	byPID := make(map[int][]HarnessProcessIdentity)
+	identities []protocol.HarnessProcessIdentity,
+) map[protocol.HarnessProcessIdentity]HarnessProcessInspection {
+	results := make(map[protocol.HarnessProcessIdentity]HarnessProcessInspection, len(identities))
+	byPID := make(map[int][]protocol.HarnessProcessIdentity)
 	for _, raw := range identities {
-		identity, ok := canonicalHarnessProcessIdentity(raw)
+		identity, ok := protocol.CanonicalHarnessProcessIdentity(raw)
 		if !ok {
 			results[raw] = HarnessProcessUnknown
 			continue

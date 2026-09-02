@@ -23,10 +23,12 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
-func fuzzOracleReduce(cfg ReducerConfig, facts []SourceFactSnapshot, now int64) (icons map[string]bool, looping bool) {
-	stale := func(f SourceFactSnapshot) bool {
+func fuzzOracleReduce(cfg ReducerConfig, facts []protocol.SourceFactSnapshot, now int64) (icons map[string]bool, looping bool) {
+	stale := func(f protocol.SourceFactSnapshot) bool {
 		var threshold int64
 		switch f.Icon {
 		case "bolt":
@@ -39,7 +41,7 @@ func fuzzOracleReduce(cfg ReducerConfig, facts []SourceFactSnapshot, now int64) 
 		return threshold > 0 && now-f.At >= threshold
 	}
 	for _, f := range facts {
-		if f.Kind == SourceASL && f.LeaseLive {
+		if f.Kind == protocol.SourceASL && f.LeaseLive {
 			looping = true
 		}
 	}
@@ -54,7 +56,7 @@ func fuzzOracleReduce(cfg ReducerConfig, facts []SourceFactSnapshot, now int64) 
 		if looping && f.Icon == "stop" {
 			continue
 		}
-		prec := IconPrecedence(f.Icon)
+		prec := protocol.IconPrecedence(f.Icon)
 		switch {
 		case prec > bestPrec, prec == bestPrec && (f.At > bestAt || (f.At == bestAt && f.CausalOrder > bestOrder)):
 			bestPrec, bestAt, bestOrder = prec, f.At, f.CausalOrder
@@ -102,7 +104,7 @@ func TestFuzzReducerInvariantsEveryStep(t *testing.T) {
 				// active-or-lower work.
 				for _, f := range r.Facts() {
 					if f.Icon == "subagent" && !f.Acked {
-						if IconPrecedence(got.Icon) < IconPrecedence("subagent") {
+						if protocol.IconPrecedence(got.Icon) < protocol.IconPrecedence("subagent") {
 							_, ok := fuzzCfgsStaleSubagent(cfg, f, now)
 							if !ok {
 								t.Fatalf("cfg=%s seed=%d step=%d: live 🤖 outranked by %q\nfacts=%+v",
@@ -132,15 +134,15 @@ func TestFuzzReducerInvariantsEveryStep(t *testing.T) {
 
 // fuzzCfgsStaleSubagent reports whether a subagent fact is stale at now (the
 // only legitimate reason a visible 🤖 snapshot may not win precedence).
-func fuzzCfgsStaleSubagent(cfg ReducerConfig, f SourceFactSnapshot, now int64) (int64, bool) {
+func fuzzCfgsStaleSubagent(cfg ReducerConfig, f protocol.SourceFactSnapshot, now int64) (int64, bool) {
 	if cfg.StaleSubagent > 0 && now-f.At >= cfg.StaleSubagent {
 		return cfg.StaleSubagent, true
 	}
 	return 0, false
 }
 
-func factsBySource(facts []SourceFactSnapshot) map[SourceID]SourceFactSnapshot {
-	out := make(map[SourceID]SourceFactSnapshot, len(facts))
+func factsBySource(facts []protocol.SourceFactSnapshot) map[protocol.SourceID]protocol.SourceFactSnapshot {
+	out := make(map[protocol.SourceID]protocol.SourceFactSnapshot, len(facts))
 	for _, f := range facts {
 		out[f.Source()] = f
 	}
@@ -180,9 +182,9 @@ func TestFuzzReducerTerminalCrossSourceIsolation(t *testing.T) {
 // an ASL finish. It deliberately checks the complete snapshot delta so the fuzz
 // invariant still rejects retirement of pipe/protected facts or any mutation
 // beyond acknowledgement at the finish timestamp.
-func allowedASLFinishRetirement(ev ReducerEvent, before, after SourceFactSnapshot) bool {
-	if ev.Source.Kind != SourceASL || ev.Phase != ASLPhaseFinished ||
-		before.Kind != SourceHarness || before.PipeMode || before.Acked ||
+func allowedASLFinishRetirement(ev protocol.ReducerEvent, before, after protocol.SourceFactSnapshot) bool {
+	if ev.Source.Kind != protocol.SourceASL || ev.Phase != ASLPhaseFinished ||
+		before.Kind != protocol.SourceHarness || before.PipeMode || before.Acked ||
 		(before.Icon != "bolt" && before.Icon != "compact") {
 		return false
 	}
@@ -207,10 +209,10 @@ func TestFuzzReducerProcessExitInvariants(t *testing.T) {
 
 			at := int64(2_000_000 + seed)
 			pipeMode := seed%2 == 0
-			targetSource := SourceID{Kind: SourceHarness, Key: "claude:exit-target"}
+			targetSource := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:exit-target"}
 			target := processReducerEvent(targetSource, "active", 1, at, "exit-target", pipeMode, fuzzHarnessProcess)
 			targetAgent := processReducerEvent(
-				SourceID{Kind: SourceSubagent, Key: fmt.Sprintf("exit-agent-%d", seed)},
+				protocol.SourceID{Kind: protocol.SourceSubagent, Key: fmt.Sprintf("exit-agent-%d", seed)},
 				"subagent", 1, at+1, "exit-target", pipeMode, fuzzHarnessProcess,
 			)
 			r.Apply(target)
@@ -218,11 +220,11 @@ func TestFuzzReducerProcessExitInvariants(t *testing.T) {
 
 			otherIdentity := fuzzHarnessProcess
 			otherIdentity.PID++
-			otherSource := SourceID{Kind: SourceHarness, Key: fmt.Sprintf("claude:other-%d", seed)}
+			otherSource := protocol.SourceID{Kind: protocol.SourceHarness, Key: fmt.Sprintf("claude:other-%d", seed)}
 			r.Apply(processReducerEvent(otherSource, "permission", 1, at+2, "other", true, otherIdentity))
 
-			aslSource := SourceID{Kind: SourceASL, Key: fmt.Sprintf("exit-run-%d", seed)}
-			r.Apply(ReducerEvent{Source: aslSource, RunID: aslSource.Key, Phase: ASLPhaseBetween, Seq: 1, At: at + 3})
+			aslSource := protocol.SourceID{Kind: protocol.SourceASL, Key: fmt.Sprintf("exit-run-%d", seed)}
+			r.Apply(protocol.ReducerEvent{Source: aslSource, RunID: aslSource.Key, Phase: ASLPhaseBetween, Seq: 1, At: at + 3})
 			// The reducer operation must reject ASL even if restored/corrupt state
 			// somehow carries an exact process fingerprint.
 			r.facts[aslSource].harnessProcess = fuzzHarnessProcess

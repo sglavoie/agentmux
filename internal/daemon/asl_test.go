@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // fakeASLBridge is a scripted stand-in for the bridge manager. The handler is
@@ -74,8 +75,8 @@ func newASLHandler(bridge ASLBridge) *Handler {
 
 func TestASLRequestsAreRefusedWithoutABridge(t *testing.T) {
 	h := newASLHandler(nil)
-	for _, msgType := range []MessageType{TypeASLSnapshot, TypeASLQuestion, TypeASLAction, TypeASLWorkbench} {
-		resp := h.Handle(Request{Type: msgType, ASL: &ASLRequest{PlanDir: "/p"}})
+	for _, msgType := range []protocol.MessageType{protocol.TypeASLSnapshot, protocol.TypeASLQuestion, protocol.TypeASLAction, protocol.TypeASLWorkbench} {
+		resp := h.Handle(protocol.Request{Type: msgType, ASL: &protocol.ASLRequest{PlanDir: "/p"}})
 		if resp.OK {
 			t.Fatalf("%s succeeded without a bridge", msgType)
 		}
@@ -93,7 +94,7 @@ func TestASLUnavailabilityIsRetryable(t *testing.T) {
 		status: aslbridge.Status{Mode: string(aslbridge.ModeAuto)},
 		err:    aslbridge.ErrUnavailable,
 	})
-	resp := h.Handle(Request{Type: TypeASLSnapshot})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeASLSnapshot})
 	if resp.OK || !resp.Retryable {
 		t.Fatalf("response = %+v, want a retryable refusal", resp)
 	}
@@ -106,7 +107,7 @@ func TestASLSnapshotCarriesProvenanceAndReceipts(t *testing.T) {
 		meta:     aslbridge.SnapshotMeta{Generation: 7, AgeSeconds: 3},
 		receipts: []aslbridge.Operation{{OperationID: "op1", Status: aslbridge.OperationAccepted}},
 	}
-	resp := newASLHandler(bridge).Handle(Request{Type: TypeASLSnapshot})
+	resp := newASLHandler(bridge).Handle(protocol.Request{Type: protocol.TypeASLSnapshot})
 	if !resp.OK || resp.ASL == nil {
 		t.Fatalf("response = %+v", resp)
 	}
@@ -123,7 +124,7 @@ func TestASLActionForwardsTypedParametersOnce(t *testing.T) {
 		status:    aslbridge.Status{Mode: string(aslbridge.ModeAuto), Available: true, MutationsEnabled: true},
 		operation: aslbridge.Operation{OperationID: "op9", Status: aslbridge.OperationAccepted},
 	}
-	resp := newASLHandler(bridge).Handle(Request{Type: TypeASLAction, ASL: &ASLRequest{
+	resp := newASLHandler(bridge).Handle(protocol.Request{Type: protocol.TypeASLAction, ASL: &protocol.ASLRequest{
 		Method:      aslbridge.MethodQuestionReply,
 		PlanDir:     "/p",
 		RunID:       "r1",
@@ -145,7 +146,7 @@ func TestASLActionForwardsTypedParametersOnce(t *testing.T) {
 
 func TestASLActionWithoutParametersIsInvalid(t *testing.T) {
 	bridge := &fakeASLBridge{status: aslbridge.Status{Mode: string(aslbridge.ModeAuto)}}
-	resp := newASLHandler(bridge).Handle(Request{Type: TypeASLAction})
+	resp := newASLHandler(bridge).Handle(protocol.Request{Type: protocol.TypeASLAction})
 	if resp.OK || bridge.actions != 0 {
 		t.Fatalf("response = %+v, actions = %d", resp, bridge.actions)
 	}
@@ -158,7 +159,7 @@ func TestASLQuestionBodyIsNotLoggedOrCaptured(t *testing.T) {
 		body:   aslbridge.QuestionBody{QuestionID: "q1", Body: aslbridge.SecretText(secret)},
 	}
 	h := newASLHandler(bridge)
-	resp := h.Handle(Request{Type: TypeASLQuestion, ASL: &ASLRequest{PlanDir: "/p", QuestionID: "q1"}})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeASLQuestion, ASL: &protocol.ASLRequest{PlanDir: "/p", QuestionID: "q1"}})
 	if !resp.OK || resp.ASL == nil || resp.ASL.Question == nil {
 		t.Fatalf("response = %+v", resp)
 	}
@@ -170,7 +171,7 @@ func TestASLQuestionBodyIsNotLoggedOrCaptured(t *testing.T) {
 		t.Fatalf("a formatted response leaked the question body: %s", rendered)
 	}
 	// It stays out of the daemon's own per-window evidence too.
-	for _, events := range h.Handle(Request{Type: TypeEventsExport}).EventsByWindow {
+	for _, events := range h.Handle(protocol.Request{Type: protocol.TypeEventsExport}).EventsByWindow {
 		for _, e := range events {
 			if strings.Contains(e.QuestionPreview, "abc123") {
 				t.Fatal("the question body reached the event export")
@@ -192,7 +193,7 @@ func TestASLWorkbenchForwardsFocus(t *testing.T) {
 		status: aslbridge.Status{Mode: string(aslbridge.ModeAuto), Available: true},
 		link:   aslbridge.WorkbenchLink{PlanDir: "/p", URL: "http://127.0.0.1:1/x"},
 	}
-	resp := newASLHandler(bridge).Handle(Request{Type: TypeASLWorkbench, ASL: &ASLRequest{
+	resp := newASLHandler(bridge).Handle(protocol.Request{Type: protocol.TypeASLWorkbench, ASL: &protocol.ASLRequest{
 		PlanDir: "/p", Focus: aslbridge.FocusReply,
 	}})
 	if !resp.OK || resp.ASL == nil || resp.ASL.Workbench == nil {
@@ -235,7 +236,7 @@ func TestASLFailureKeepsTypedRefusalText(t *testing.T) {
 		status: aslbridge.Status{Mode: string(aslbridge.ModeAuto), Available: true, MutationsEnabled: true},
 		err:    &aslbridge.Error{Code: "stale-action-token", Message: "token is stale"},
 	}
-	resp := newASLHandler(bridge).Handle(Request{Type: TypeASLAction, ASL: &ASLRequest{
+	resp := newASLHandler(bridge).Handle(protocol.Request{Type: protocol.TypeASLAction, ASL: &protocol.ASLRequest{
 		Method: aslbridge.MethodRunAbort, PlanDir: "/p", OperationID: "op", ActionToken: "tok",
 	}})
 	if resp.OK || !strings.Contains(resp.Error, "stale-action-token") {
@@ -248,7 +249,7 @@ func TestASLFailureKeepsTypedRefusalText(t *testing.T) {
 
 // formatResponseForDiagnostics mimics a careless diagnostic rendering of a
 // whole response value.
-func formatResponseForDiagnostics(resp Response) string {
+func formatResponseForDiagnostics(resp protocol.Response) string {
 	return fmt.Sprintf("%v|%+v|%#v|%v|%+v|%#v",
 		resp, resp, resp, *resp.ASL.Question, *resp.ASL.Question, *resp.ASL.Question)
 }

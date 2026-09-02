@@ -9,6 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/aslcontract"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // Contract, projection, freshness, and delivery: the four dimensions that read
@@ -111,7 +112,7 @@ func TestQuarantinedHooksFailInRequiredModeAndWarnInAuto(t *testing.T) {
 	} {
 		in := pairedInputs()
 		in.Mode = mode
-		in.Delivery = &daemon.ASLHookDeliverySnapshot{
+		in.Delivery = &protocol.ASLHookDeliverySnapshot{
 			Accepted:            9,
 			Quarantined:         4,
 			QuarantinedByReason: map[string]uint64{"contract_set_mismatch": 3, "schema_unsupported": 1},
@@ -133,7 +134,7 @@ func TestNoDeliveredHookIsUnknownRatherThanHealthy(t *testing.T) {
 	aslDoctorStat = func(string) error { return nil }
 
 	in := pairedInputs()
-	in.Delivery = &daemon.ASLHookDeliverySnapshot{}
+	in.Delivery = &protocol.ASLHookDeliverySnapshot{}
 	dim := dimension(t, evaluateASLIntegration(in), aslDimensionDelivery)
 	if dim.Status != aslStatusUnknown {
 		t.Errorf("delivery = %s (%s), want unknown", dim.Status, dim.Detail)

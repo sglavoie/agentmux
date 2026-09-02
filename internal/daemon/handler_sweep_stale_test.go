@@ -13,6 +13,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -246,7 +247,7 @@ func TestSweepStale_IgnoresWaitingASLRun(t *testing.T) {
 		st.LastAction = ""
 		st.LastSessionTitle = "W:api"
 		st.Reducer = NewReducer(h.reducerCfg)
-		st.Reducer.Apply(ReducerEvent{
+		st.Reducer.Apply(protocol.ReducerEvent{
 			Source: aslSource("run-A"), RunID: "run-A", Phase: ASLPhaseWaiting,
 			Seq: 1, At: now.Add(-2 * time.Hour).Unix(),
 		})

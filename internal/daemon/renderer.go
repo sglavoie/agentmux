@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -346,7 +347,7 @@ func desiredIconForState(st *WindowState) string {
 	if st.StateSet || st.DesiredIcon != "" || st.LastAction == "" {
 		return st.DesiredIcon
 	}
-	return IconState(st.LastAction)
+	return protocol.IconState(st.LastAction)
 }
 
 func (h *Handler) kittyClientForList() kittyTitleClient {
@@ -373,7 +374,7 @@ func (h *Handler) kittyClientForWindow(windowID int) kittyTitleClient {
 // back to the daemon's established client only when the request has no reusable
 // (transferable) address, so a stale indicator forwarding an "fd:" descriptor
 // cannot force a dial through a process-local endpoint.
-func (h *Handler) hookKittyClient(req Request) kittyTitleClient {
+func (h *Handler) hookKittyClient(req protocol.Request) kittyTitleClient {
 	if isReusableKittySocket(req.KittyListenOn) {
 		return scopedKittyClient(h.kittyClient, strings.TrimSpace(req.KittyListenOn))
 	}

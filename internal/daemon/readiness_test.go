@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -75,7 +76,7 @@ func TestRestoreStateFromKittyBounded_ReadyWithResponsiveKitty(t *testing.T) {
 	if _, _, cached := h.cachedSnapshot(); !cached {
 		t.Fatal("snapshot cache should be primed after a responsive restore")
 	}
-	resp := h.Handle(Request{Type: TypeHealth})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHealth})
 	if !resp.Ready || resp.DegradedReason != "" {
 		t.Fatalf("health = %+v; want ready with no degraded reason", resp)
 	}
@@ -97,7 +98,7 @@ func TestRestoreStateFromKittyBounded_DegradedWhenKittyWedged(t *testing.T) {
 	if _, _, cached := h.cachedSnapshot(); cached {
 		t.Fatal("snapshot cache should stay cold while the initial list is wedged")
 	}
-	resp := h.Handle(Request{Type: TypeHealth})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHealth})
 	if resp.Ready || resp.DegradedReason == "" {
 		t.Fatalf("health = %+v; want degraded with a reason", resp)
 	}
@@ -118,7 +119,7 @@ func TestMaintenanceTick_ClearsStartupDegradedAfterSuccessfulSnapshot(t *testing
 
 	h.maintenanceTick(time.Now())
 
-	resp := h.Handle(Request{Type: TypeHealth})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHealth})
 	if !resp.Ready || resp.DegradedReason != "" {
 		t.Fatalf("health = %+v; want recovered readiness after maintenance snapshot", resp)
 	}

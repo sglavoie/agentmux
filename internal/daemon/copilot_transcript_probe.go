@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -87,7 +88,7 @@ func (h *Handler) probeCopilotTranscriptStopWithSnapshot(now time.Time, snapshot
 // pane without making that terminal session eligible for ordinary continuation.
 func (h *Handler) copilotTranscriptProbeBindings(now time.Time, snapshot screenProbeSnapshot) []screenProbeBinding {
 	bindings := h.screenProbeBindings(snapshot, harness.Copilot)
-	source := SourceID{Kind: SourceProbe, Key: copilotTranscriptStopProbeSource}
+	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: copilotTranscriptStopProbeSource}
 
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
@@ -213,7 +214,7 @@ func (h *Handler) probeCopilotTranscriptWindow(
 	userVars kitty.UserVars,
 ) {
 	windowID := binding.TargetWindowID
-	source := SourceID{Kind: SourceProbe, Key: copilotTranscriptStopProbeSource}
+	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: copilotTranscriptStopProbeSource}
 	ref := idleSampleRef{windowID: windowID, key: source.Key}
 
 	// Revalidate the complete producer/source/target binding and resolve which session's transcript
@@ -274,7 +275,7 @@ func (h *Handler) probeCopilotTranscriptWindow(
 	}
 	probeTraceID := diagnostics.NewTraceID()
 	probeSourceEventID := fmt.Sprintf("copilot-transcript-probe:%d:%d:%d", binding.SourceWindowID, windowID, binding.TargetReceipt)
-	probeReq := Request{
+	probeReq := protocol.Request{
 		TraceID: probeTraceID, SourceEventID: probeSourceEventID,
 		Harness: harness.Copilot, Account: account, WindowID: windowID,
 	}
@@ -403,7 +404,7 @@ func (h *Handler) probeCopilotTranscriptWindow(
 func (h *Handler) recoverCopilotTranscriptStop(
 	now time.Time,
 	binding screenProbeBinding,
-	source SourceID,
+	source protocol.SourceID,
 	state transcript.CopilotLifecycleState,
 ) {
 	if state != transcript.CopilotLifecycleActive {

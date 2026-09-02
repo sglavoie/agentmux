@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
@@ -16,7 +17,7 @@ type handlerDaemonClient struct {
 	calls   int
 }
 
-func (c *handlerDaemonClient) SendWithAutoStart(req daemon.Request, _ string) (daemon.Response, error) {
+func (c *handlerDaemonClient) SendWithAutoStart(req protocol.Request, _ string) (protocol.Response, error) {
 	c.calls++
 	return c.handler.Handle(req), nil
 }

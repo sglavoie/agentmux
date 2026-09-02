@@ -1,5 +1,9 @@
 package daemon
 
+import (
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+)
+
 // moreRecent breaks a recency tie between two facts. Emitted timestamp is
 // comparable across sources, so it decides first. Facts in the same Unix second
 // use the reducer-wide causal application order; a per-source Seq is consulted
@@ -42,7 +46,7 @@ func (r *Reducer) Reduce(now int64) EffectiveState {
 	looping := false
 
 	for _, f := range r.facts {
-		if f.source.Kind == SourceASL && f.leaseLive {
+		if f.source.Kind == protocol.SourceASL && f.leaseLive {
 			looping = true
 		}
 	}
@@ -55,7 +59,7 @@ func (r *Reducer) Reduce(now int64) EffectiveState {
 		if looping && icon == "stop" {
 			continue
 		}
-		prec := reducerIconPrecedence[icon]
+		prec := protocol.IconPrecedence(icon)
 		if prec > bestPrec || (prec == bestPrec && best != nil && moreRecent(f, best)) {
 			bestPrec = prec
 			best = f
@@ -89,7 +93,7 @@ func (r *Reducer) LatestTrace() (ReducerTrace, bool) {
 
 // Replay applies a sequence of events to a fresh reducer and returns the final
 // effective state. It is a convenience for deterministic replay/order tests.
-func Replay(cfg ReducerConfig, now int64, events ...ReducerEvent) EffectiveState {
+func Replay(cfg ReducerConfig, now int64, events ...protocol.ReducerEvent) EffectiveState {
 	r := NewReducer(cfg)
 	for _, ev := range events {
 		r.Apply(ev)

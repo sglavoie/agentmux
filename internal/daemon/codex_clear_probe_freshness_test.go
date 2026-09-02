@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -203,8 +204,8 @@ func TestProbeCodexClearWindow_DiscardsObservationAfterConcurrentReducerEvent(t 
 					return
 				}
 				injected = true
-				ev := NormalizedEvent{
-					Source:      SourceID{Kind: SourceHarness, Key: "codex:sess-new"},
+				ev := protocol.NormalizedEvent{
+					Source:      protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:sess-new"},
 					Action:      tc.action,
 					SessionID:   "sess-new",
 					At:          time.Now().Unix(),
@@ -212,8 +213,8 @@ func TestProbeCodexClearWindow_DiscardsObservationAfterConcurrentReducerEvent(t 
 					Prompt:      tc.prompt,
 					EndsSession: tc.action == "stop_failure",
 				}
-				resp := h.handleStateUpdate(Request{
-					Type:         TypeStateUpdate,
+				resp := h.handleStateUpdate(protocol.Request{
+					Type:         protocol.TypeStateUpdate,
 					WindowID:     42,
 					Action:       tc.action,
 					Event:        tc.event,
@@ -221,7 +222,7 @@ func TestProbeCodexClearWindow_DiscardsObservationAfterConcurrentReducerEvent(t 
 					Account:      "work",
 					Harness:      "codex",
 					SessionTitle: "W:api",
-					normalized:   &ev,
+					Normalized:   &ev,
 				})
 				if !resp.OK {
 					t.Fatalf("concurrent %s rejected: %+v", tc.action, resp)
@@ -247,8 +248,8 @@ func TestProbeCodexClearWindow_DiscardsObservationAfterConcurrentReducerEvent(t 
 			}
 
 			h.stateMu.Lock()
-			fact := h.store[42].Reducer.facts[SourceID{Kind: SourceHarness, Key: "codex:sess-new"}]
-			events := append([]SessionEvent(nil), h.store[42].EventLog...)
+			fact := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:sess-new"}]
+			events := append([]protocol.SessionEvent(nil), h.store[42].EventLog...)
 			h.stateMu.Unlock()
 			if fact == nil || fact.acked {
 				t.Fatalf("concurrent fact = %+v, want live and unacknowledged", fact)
@@ -304,7 +305,7 @@ func TestProbeCodexScreenPrompts_ManagedOwnerSuppressesUnmanagedCodexSiblingClea
 	if got := h.guard.Current(43); got != "stop" {
 		t.Fatalf("sibling guard.Current = %q, want stop", got)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})
 	if len(resp.Events) != 0 {
 		t.Fatalf("sibling events = %d, want 0", len(resp.Events))
 	}

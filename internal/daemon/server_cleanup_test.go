@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestHandler_ConcurrentSubagentRefCounting drives many overlapping
@@ -36,8 +37,8 @@ func TestHandler_ConcurrentSubagentRefCounting(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < cyclesPerGoroutine; j++ {
-				h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "SubagentStart"})
-				h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "SubagentStop"})
+				h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "SubagentStart"})
+				h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "SubagentStop"})
 			}
 		}()
 	}
@@ -70,14 +71,14 @@ func TestHandler_ConcurrentStateUpdatesDifferentWindows(t *testing.T) {
 			defer wg.Done()
 			for i := 0; i < opsPerWindow; i++ {
 				action := actions[i%len(actions)]
-				h.Handle(Request{Type: TypeStateUpdate, WindowID: windowID, Action: action})
+				h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: windowID, Action: action})
 			}
 		}()
 	}
 	wg.Wait()
 
 	// Verify state_query is consistent and includes (at most) one entry per window.
-	resp := h.Handle(Request{Type: TypeStateQuery})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateQuery})
 	if !resp.OK {
 		t.Fatalf("state_query: %+v", resp)
 	}
@@ -166,11 +167,11 @@ func TestServer_GoroutinesDrainAfterShutdownRequest(t *testing.T) {
 
 	c := NewClientWithSocket(socketPath)
 	for i := 0; i < 5; i++ {
-		if _, err := c.Send(Request{Type: TypeStateUpdate, WindowID: i + 1, Action: "active"}); err != nil {
+		if _, err := c.Send(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: i + 1, Action: "active"}); err != nil {
 			t.Fatalf("state update %d: %v", i+1, err)
 		}
 	}
-	if resp, err := c.Send(Request{Type: TypeShutdown}); err != nil {
+	if resp, err := c.Send(protocol.Request{Type: protocol.TypeShutdown}); err != nil {
 		t.Fatalf("shutdown Send: %v", err)
 	} else if !resp.OK {
 		t.Fatalf("shutdown response: %+v", resp)

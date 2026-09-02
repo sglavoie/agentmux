@@ -2,13 +2,15 @@ package daemon
 
 import (
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func TestHandler_ClaudeResetFlowUsesUserClear(t *testing.T) {
 	h := newTestHandler()
 
-	resp := h.Handle(Request{
-		Type:      TypeStateUpdate,
+	resp := h.Handle(protocol.Request{
+		Type:      protocol.TypeStateUpdate,
 		WindowID:  42,
 		Action:    "active",
 		Event:     "UserPromptSubmit",
@@ -19,8 +21,8 @@ func TestHandler_ClaudeResetFlowUsesUserClear(t *testing.T) {
 		t.Fatalf("reset prompt should still show activity, got %+v", resp)
 	}
 
-	resp = h.Handle(Request{
-		Type:     TypeStateUpdate,
+	resp = h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 42,
 		Action:   "stop",
 		Event:    "Stop",
@@ -29,8 +31,8 @@ func TestHandler_ClaudeResetFlowUsesUserClear(t *testing.T) {
 		t.Fatalf("Stop during reset flow should clear instead of stop, got %+v", resp)
 	}
 
-	resp = h.Handle(Request{
-		Type:     TypeStateUpdate,
+	resp = h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 42,
 		Action:   "stop",
 		Event:    "SessionEnd",
@@ -39,8 +41,8 @@ func TestHandler_ClaudeResetFlowUsesUserClear(t *testing.T) {
 		t.Fatalf("SessionEnd during reset cleanup should stay cleared, got %+v", resp)
 	}
 
-	resp = h.Handle(Request{
-		Type:     TypeStateUpdate,
+	resp = h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 42,
 		Action:   "idle",
 		Event:    "SessionStart",
@@ -59,8 +61,8 @@ func TestHandler_ClaudeResetFlowUsesUserClear(t *testing.T) {
 func TestHandler_CopilotResetFlowUsesUserClear(t *testing.T) {
 	h := newTestHandler()
 
-	resp := h.Handle(Request{
-		Type:      TypeStateUpdate,
+	resp := h.Handle(protocol.Request{
+		Type:      protocol.TypeStateUpdate,
 		WindowID:  42,
 		Harness:   "copilot",
 		Action:    "active",
@@ -72,23 +74,23 @@ func TestHandler_CopilotResetFlowUsesUserClear(t *testing.T) {
 		t.Fatalf("Copilot reset prompt should still show activity, got %+v", resp)
 	}
 
-	for _, req := range []Request{
+	for _, req := range []protocol.Request{
 		{
-			Type:     TypeStateUpdate,
+			Type:     protocol.TypeStateUpdate,
 			WindowID: 42,
 			Harness:  "copilot",
 			Action:   "stop",
 			Event:    "agentStop",
 		},
 		{
-			Type:     TypeStateUpdate,
+			Type:     protocol.TypeStateUpdate,
 			WindowID: 42,
 			Harness:  "copilot",
 			Action:   "stop",
 			Event:    "sessionEnd",
 		},
 		{
-			Type:     TypeStateUpdate,
+			Type:     protocol.TypeStateUpdate,
 			WindowID: 42,
 			Harness:  "copilot",
 			Action:   "idle",
@@ -111,8 +113,8 @@ func TestHandler_CopilotResetFlowUsesUserClear(t *testing.T) {
 func TestHandler_ResetFlowDoesNotLeakIntoLaterTurn(t *testing.T) {
 	h := newTestHandler()
 
-	h.Handle(Request{
-		Type:      TypeStateUpdate,
+	h.Handle(protocol.Request{
+		Type:      protocol.TypeStateUpdate,
 		WindowID:  42,
 		Harness:   "copilot",
 		Action:    "active",
@@ -121,8 +123,8 @@ func TestHandler_ResetFlowDoesNotLeakIntoLaterTurn(t *testing.T) {
 		ResetFlow: true,
 	})
 
-	resp := h.Handle(Request{
-		Type:     TypeStateUpdate,
+	resp := h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 42,
 		Harness:  "copilot",
 		Action:   "stop",
@@ -132,23 +134,23 @@ func TestHandler_ResetFlowDoesNotLeakIntoLaterTurn(t *testing.T) {
 		t.Fatalf("reset stop should clear icon, got %+v", resp)
 	}
 
-	for _, req := range []Request{
+	for _, req := range []protocol.Request{
 		{
-			Type:     TypeStateUpdate,
+			Type:     protocol.TypeStateUpdate,
 			WindowID: 42,
 			Harness:  "copilot",
 			Action:   "stop",
 			Event:    "sessionEnd",
 		},
 		{
-			Type:     TypeStateUpdate,
+			Type:     protocol.TypeStateUpdate,
 			WindowID: 42,
 			Harness:  "copilot",
 			Action:   "idle",
 			Event:    "sessionStart",
 		},
 		{
-			Type:             TypeStateUpdate,
+			Type:             protocol.TypeStateUpdate,
 			WindowID:         42,
 			Harness:          "copilot",
 			Action:           "stop",
@@ -162,8 +164,8 @@ func TestHandler_ResetFlowDoesNotLeakIntoLaterTurn(t *testing.T) {
 		}
 	}
 
-	resp = h.Handle(Request{
-		Type:     TypeStateUpdate,
+	resp = h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 42,
 		Harness:  "copilot",
 		Action:   "active",
@@ -181,8 +183,8 @@ func TestHandler_ResetFlowDoesNotLeakIntoLaterTurn(t *testing.T) {
 	}
 	h.stateMu.Unlock()
 
-	resp = h.Handle(Request{
-		Type:     TypeStateUpdate,
+	resp = h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 42,
 		Harness:  "copilot",
 		Action:   "stop",

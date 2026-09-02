@@ -5,16 +5,17 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/conversation"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func TestReducerEqualTimestampUsesCrossSourceCausalOrder(t *testing.T) {
 	r := NewReducer(zeroCfg)
-	r.Apply(ReducerEvent{
-		Source: SourceID{Kind: SourceProbe, Key: "old-permission"},
+	r.Apply(protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceProbe, Key: "old-permission"},
 		Action: "permission", Seq: 900, At: 100,
 	})
-	r.Apply(ReducerEvent{
-		Source: SourceID{Kind: SourceProbe, Key: "current-question"},
+	r.Apply(protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceProbe, Key: "current-question"},
 		Action: "question", Seq: 1, At: 100,
 	})
 
@@ -69,11 +70,11 @@ func TestPipeModeSurvivesDurableRoundTrip(t *testing.T) {
 	if err := restored.UnmarshalUserVar(encoded); err != nil {
 		t.Fatalf("UnmarshalUserVar: %v", err)
 	}
-	child := restored.Reducer.facts[SourceID{Kind: SourceHarness, Key: "claude:child"}]
+	child := restored.Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:child"}]
 	if child == nil || !child.pipeMode {
 		t.Fatalf("restored child fact lost pipe-mode: %+v", child)
 	}
-	parent := restored.Reducer.facts[SourceID{Kind: SourceHarness, Key: "claude:parent"}]
+	parent := restored.Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:parent"}]
 	if parent == nil || parent.pipeMode {
 		t.Fatalf("restored parent fact gained pipe-mode: %+v", parent)
 	}
@@ -103,8 +104,8 @@ func TestWindowStateCrossSourceCausalOrderSurvivesDurableRoundTrip(t *testing.T)
 	if err := restored.UnmarshalUserVar(encoded); err != nil {
 		t.Fatalf("UnmarshalUserVar: %v", err)
 	}
-	old := restored.Reducer.facts[SourceID{Kind: SourceHarness, Key: "claude:old"}]
-	current := restored.Reducer.facts[SourceID{Kind: SourceHarness, Key: "claude:current"}]
+	old := restored.Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:old"}]
+	current := restored.Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:current"}]
 	if old == nil || current == nil || old.causalOrder != 1 || current.causalOrder != 2 {
 		t.Fatalf("restored causal order old/current = %+v/%+v", old, current)
 	}
@@ -130,8 +131,8 @@ func TestReducerCrossSourceCausalOrderSurvivesDegradedMerge(t *testing.T) {
 		t.Fatalf("MergeDisjoint merged %d facts, want 1", got)
 	}
 
-	old := live.facts[SourceID{Kind: SourceHarness, Key: "claude:old"}]
-	current := live.facts[SourceID{Kind: SourceHarness, Key: "claude:current"}]
+	old := live.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:old"}]
+	current := live.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:current"}]
 	if old == nil || current == nil || current.causalOrder <= old.causalOrder {
 		t.Fatalf("merged causal order old/current = %+v/%+v; live fact must remain newer", old, current)
 	}
@@ -168,7 +169,7 @@ func TestOldPayloadRestoresAsInteractive(t *testing.T) {
 	if err := st.UnmarshalUserVar(payload); err != nil {
 		t.Fatalf("UnmarshalUserVar: %v", err)
 	}
-	old := st.Reducer.facts[SourceID{Kind: SourceHarness, Key: "claude:old"}]
+	old := st.Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:old"}]
 	if old == nil || old.pipeMode {
 		t.Fatalf("absent pm did not restore as interactive: %+v", old)
 	}
@@ -200,10 +201,10 @@ func TestInteractiveOwnershipSurvivesRestart(t *testing.T) {
 	restored.Reducer.SetConfig(zeroCfg)
 	restored.Reducer.Apply(harnessEvent("cur", "stop", 1, 200, false))
 
-	if f := restored.Reducer.facts[SourceID{Kind: SourceHarness, Key: "claude:old"}]; f == nil || !f.acked {
+	if f := restored.Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:old"}]; f == nil || !f.acked {
 		t.Fatalf("restored older interactive bolt not retired after restart: %+v", f)
 	}
-	if f := restored.Reducer.facts[SourceID{Kind: SourceHarness, Key: "claude:pipe"}]; f == nil || f.acked {
+	if f := restored.Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:pipe"}]; f == nil || f.acked {
 		t.Fatalf("restored pipe bolt wrongly retired after restart: %+v", f)
 	}
 	if got := restored.Reducer.Reduce(200); got.Icon != "bolt" || got.Source.Key != "claude:pipe" {
@@ -212,8 +213,8 @@ func TestInteractiveOwnershipSurvivesRestart(t *testing.T) {
 }
 
 // snapshot is a terse SourceFactSnapshot builder for the merge-cutoff test.
-func snapshot(kind SourceKind, key, icon string, seq uint64, at int64) SourceFactSnapshot {
-	return SourceFactSnapshot{Kind: kind, Key: key, Icon: icon, Seq: seq, At: at}
+func snapshot(kind protocol.SourceKind, key, icon string, seq uint64, at int64) protocol.SourceFactSnapshot {
+	return protocol.SourceFactSnapshot{Kind: kind, Key: key, Icon: icon, Seq: seq, At: at}
 }
 
 // TestMergeDisjointHonorsSupersessionCutoffs is the reducer-level core of
@@ -222,7 +223,7 @@ func snapshot(kind SourceKind, key, icon string, seq uint64, at int64) SourceFac
 // facts the merge imports, scoped by recency and by the same exclusions the live
 // supersession paths use.
 func TestMergeDisjointHonorsSupersessionCutoffs(t *testing.T) {
-	acked := func(t *testing.T, r *Reducer, id SourceID, want bool) {
+	acked := func(t *testing.T, r *Reducer, id protocol.SourceID, want bool) {
 		t.Helper()
 		f := r.facts[id]
 		if f == nil {
@@ -237,82 +238,82 @@ func TestMergeDisjointHonorsSupersessionCutoffs(t *testing.T) {
 		r := NewReducer(zeroCfg)
 		// In-process interactive terminal at t=200 records the interactive cutoff.
 		r.Apply(harnessEvent("cur", "stop", 1, 200, false))
-		imports := []SourceFactSnapshot{
-			snapshot(SourceHarness, "claude:old", "bolt", 1, 100),                                      // retired
-			{Kind: SourceHarness, Key: "claude:pipe", Icon: "bolt", Seq: 1, At: 100, PipeMode: true},   // preserved
-			snapshot(SourceSubagent, "a1", "subagent", 1, 100),                                         // preserved
-			snapshot(SourceHarness, "claude:att", "key", 1, 100),                                       // preserved (attention)
-			{Kind: SourceHarness, Key: "claude:err", Icon: "error", Seq: 1, At: 100, Terminated: true}, // preserved (no prompt)
-			snapshot(SourceHarness, "claude:new", "bolt", 1, 300),                                      // newer than cutoff: survives
+		imports := []protocol.SourceFactSnapshot{
+			snapshot(protocol.SourceHarness, "claude:old", "bolt", 1, 100),                                      // retired
+			{Kind: protocol.SourceHarness, Key: "claude:pipe", Icon: "bolt", Seq: 1, At: 100, PipeMode: true},   // preserved
+			snapshot(protocol.SourceSubagent, "a1", "subagent", 1, 100),                                         // preserved
+			snapshot(protocol.SourceHarness, "claude:att", "key", 1, 100),                                       // preserved (attention)
+			{Kind: protocol.SourceHarness, Key: "claude:err", Icon: "error", Seq: 1, At: 100, Terminated: true}, // preserved (no prompt)
+			snapshot(protocol.SourceHarness, "claude:new", "bolt", 1, 300),                                      // newer than cutoff: survives
 		}
 		if got := r.MergeDisjoint(imports); got != len(imports) {
 			t.Fatalf("merged %d facts, want %d", got, len(imports))
 		}
-		acked(t, r, SourceID{Kind: SourceHarness, Key: "claude:old"}, true)
-		acked(t, r, SourceID{Kind: SourceHarness, Key: "claude:pipe"}, false)
-		acked(t, r, SourceID{Kind: SourceSubagent, Key: "a1"}, false)
-		acked(t, r, SourceID{Kind: SourceHarness, Key: "claude:att"}, false)
-		acked(t, r, SourceID{Kind: SourceHarness, Key: "claude:err"}, false)
-		acked(t, r, SourceID{Kind: SourceHarness, Key: "claude:new"}, false)
+		acked(t, r, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:old"}, true)
+		acked(t, r, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:pipe"}, false)
+		acked(t, r, protocol.SourceID{Kind: protocol.SourceSubagent, Key: "a1"}, false)
+		acked(t, r, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:att"}, false)
+		acked(t, r, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:err"}, false)
+		acked(t, r, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:new"}, false)
 	})
 
 	t.Run("ASL finish retires an older interactive active imported later", func(t *testing.T) {
 		r := NewReducer(zeroCfg)
 		// The run finish lands while startup restore is still unavailable. Its
 		// cutoff must cover the stale provider bolt when MergeDisjoint imports it.
-		r.Apply(ReducerEvent{
-			Source: SourceID{Kind: SourceASL, Key: "run-1"}, RunID: "run-1",
+		r.Apply(protocol.ReducerEvent{
+			Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, RunID: "run-1",
 			Phase: ASLPhaseFinished, Seq: 2, At: 200,
 		})
-		imports := []SourceFactSnapshot{
-			snapshot(SourceHarness, "codex:old", "bolt", 1, 100),
-			{Kind: SourceHarness, Key: "codex:pipe", Icon: "bolt", Seq: 1, At: 100, PipeMode: true},
-			snapshot(SourceHarness, "codex:new", "bolt", 1, 300),
+		imports := []protocol.SourceFactSnapshot{
+			snapshot(protocol.SourceHarness, "codex:old", "bolt", 1, 100),
+			{Kind: protocol.SourceHarness, Key: "codex:pipe", Icon: "bolt", Seq: 1, At: 100, PipeMode: true},
+			snapshot(protocol.SourceHarness, "codex:new", "bolt", 1, 300),
 		}
 		if got := r.MergeDisjoint(imports); got != len(imports) {
 			t.Fatalf("merged %d facts, want %d", got, len(imports))
 		}
-		acked(t, r, SourceID{Kind: SourceHarness, Key: "codex:old"}, true)
-		acked(t, r, SourceID{Kind: SourceHarness, Key: "codex:pipe"}, false)
-		acked(t, r, SourceID{Kind: SourceHarness, Key: "codex:new"}, false)
+		acked(t, r, protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:old"}, true)
+		acked(t, r, protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:pipe"}, false)
+		acked(t, r, protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:new"}, false)
 	})
 
 	t.Run("prompt acknowledges older terminals and retires older interactive active", func(t *testing.T) {
 		r := NewReducer(zeroCfg)
 		// In-process prompt at t=200 records both the prompt and interactive cutoffs.
-		r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:cur"}, Action: "active", Prompt: true, SessionID: "cur", Seq: 1, At: 200})
-		imports := []SourceFactSnapshot{
-			{Kind: SourceHarness, Key: "claude:s0", Icon: "stop", Seq: 1, At: 100, Terminated: true},   // acked (prompt recovers terminals)
-			{Kind: SourceHarness, Key: "claude:err", Icon: "error", Seq: 1, At: 100, Terminated: true}, // acked (prompt recovers ❗ too)
-			snapshot(SourceHarness, "claude:old", "bolt", 1, 100),                                      // retired
-			snapshot(SourceSubagent, "a1", "subagent", 1, 100),                                         // preserved
-			{Kind: SourceHarness, Key: "claude:s3", Icon: "stop", Seq: 1, At: 300, Terminated: true},   // newer terminal: survives
+		r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:cur"}, Action: "active", Prompt: true, SessionID: "cur", Seq: 1, At: 200})
+		imports := []protocol.SourceFactSnapshot{
+			{Kind: protocol.SourceHarness, Key: "claude:s0", Icon: "stop", Seq: 1, At: 100, Terminated: true},   // acked (prompt recovers terminals)
+			{Kind: protocol.SourceHarness, Key: "claude:err", Icon: "error", Seq: 1, At: 100, Terminated: true}, // acked (prompt recovers ❗ too)
+			snapshot(protocol.SourceHarness, "claude:old", "bolt", 1, 100),                                      // retired
+			snapshot(protocol.SourceSubagent, "a1", "subagent", 1, 100),                                         // preserved
+			{Kind: protocol.SourceHarness, Key: "claude:s3", Icon: "stop", Seq: 1, At: 300, Terminated: true},   // newer terminal: survives
 		}
 		r.MergeDisjoint(imports)
-		acked(t, r, SourceID{Kind: SourceHarness, Key: "claude:s0"}, true)
-		acked(t, r, SourceID{Kind: SourceHarness, Key: "claude:err"}, true)
-		acked(t, r, SourceID{Kind: SourceHarness, Key: "claude:old"}, true)
-		acked(t, r, SourceID{Kind: SourceSubagent, Key: "a1"}, false)
-		acked(t, r, SourceID{Kind: SourceHarness, Key: "claude:s3"}, false)
+		acked(t, r, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s0"}, true)
+		acked(t, r, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:err"}, true)
+		acked(t, r, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:old"}, true)
+		acked(t, r, protocol.SourceID{Kind: protocol.SourceSubagent, Key: "a1"}, false)
+		acked(t, r, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s3"}, false)
 	})
 
 	t.Run("user_clear acknowledges every older fact but preserves a live lease", func(t *testing.T) {
 		r := NewReducer(zeroCfg)
 		// In-process user_clear at t=200 records the clear cutoff (creates no fact).
-		r.Apply(ReducerEvent{Source: userActionSource(), Action: "user_clear", Seq: 9, At: 200})
-		imports := []SourceFactSnapshot{
-			snapshot(SourceHarness, "claude:old", "bolt", 1, 100),                                      // acked
-			snapshot(SourceSubagent, "a1", "subagent", 1, 100),                                         // acked
-			{Kind: SourceHarness, Key: "claude:err", Icon: "error", Seq: 1, At: 100, Terminated: true}, // acked
-			{Kind: SourceASL, Key: "run-1", Seq: 1, At: 100, LeaseLive: true},                          // acked but LeaseLive kept
-			snapshot(SourceHarness, "claude:new", "bolt", 1, 300),                                      // newer: survives the clear
+		r.Apply(protocol.ReducerEvent{Source: userActionSource(), Action: "user_clear", Seq: 9, At: 200})
+		imports := []protocol.SourceFactSnapshot{
+			snapshot(protocol.SourceHarness, "claude:old", "bolt", 1, 100),                                      // acked
+			snapshot(protocol.SourceSubagent, "a1", "subagent", 1, 100),                                         // acked
+			{Kind: protocol.SourceHarness, Key: "claude:err", Icon: "error", Seq: 1, At: 100, Terminated: true}, // acked
+			{Kind: protocol.SourceASL, Key: "run-1", Seq: 1, At: 100, LeaseLive: true},                          // acked but LeaseLive kept
+			snapshot(protocol.SourceHarness, "claude:new", "bolt", 1, 300),                                      // newer: survives the clear
 		}
 		r.MergeDisjoint(imports)
-		acked(t, r, SourceID{Kind: SourceHarness, Key: "claude:old"}, true)
-		acked(t, r, SourceID{Kind: SourceSubagent, Key: "a1"}, true)
-		acked(t, r, SourceID{Kind: SourceHarness, Key: "claude:err"}, true)
-		acked(t, r, SourceID{Kind: SourceASL, Key: "run-1"}, true)
-		acked(t, r, SourceID{Kind: SourceHarness, Key: "claude:new"}, false)
+		acked(t, r, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:old"}, true)
+		acked(t, r, protocol.SourceID{Kind: protocol.SourceSubagent, Key: "a1"}, true)
+		acked(t, r, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:err"}, true)
+		acked(t, r, protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, true)
+		acked(t, r, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:new"}, false)
 		// The acknowledged live lease still loops: a clear preserves a live loop.
 		if _, live := r.LeaseState("run-1"); !live {
 			t.Fatal("user_clear cutoff cleared the live ASL lease's LeaseLive")

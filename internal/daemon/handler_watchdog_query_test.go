@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestHandler_TracksLastSessionTitle verifies that the session title from
@@ -13,7 +14,7 @@ import (
 // back to it when the live kitten lookup fails.
 func TestHandler_TracksLastSessionTitle(t *testing.T) {
 	h := newTestHandler()
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", SessionTitle: "W:api"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", SessionTitle: "W:api"})
 
 	h.stateMu.Lock()
 	got := h.store[42].LastSessionTitle
@@ -28,7 +29,7 @@ func TestHandler_TracksLastSessionTitle(t *testing.T) {
 // silence rule used by other notifyable actions.
 func TestHandler_TracksPipeMode(t *testing.T) {
 	h := newTestHandler()
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", PipeMode: true})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", PipeMode: true})
 
 	h.stateMu.Lock()
 	got := h.store[42].LastPipeMode
@@ -48,7 +49,7 @@ func TestHandler_NotifiedStaleClearedOnFreshEvent(t *testing.T) {
 	h.ensureWindowStateLocked(42).NotifiedStale = true
 	h.stateMu.Unlock()
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active"})
 
 	h.stateMu.Lock()
 	present := h.store[42].NotifiedStale
@@ -72,7 +73,7 @@ func TestHandler_CleanupOnTerminalAction(t *testing.T) {
 	// "stop" carries no SessionTitle / PipeMode in this test, so the
 	// post-cleanup re-write at the activity site leaves notifiedStale empty
 	// and lastSessionTitle / lastPipeMode at zero values.
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "stop"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "stop"})
 
 	h.stateMu.Lock()
 	staleOK := h.store[42].NotifiedStale
@@ -95,7 +96,7 @@ func TestHandler_CleanupOnTerminalAction(t *testing.T) {
 // account name so the sweep can resolve per-account threshold overrides.
 func TestHandler_TracksLastAccount(t *testing.T) {
 	h := newTestHandler()
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
 
 	h.stateMu.Lock()
 	got := h.store[42].LastAccount
@@ -114,7 +115,7 @@ func TestHandler_LastAccountClearedOnTerminal(t *testing.T) {
 	h.ensureWindowStateLocked(42).LastAccount = "work"
 	h.stateMu.Unlock()
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "stop"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "stop"})
 
 	h.stateMu.Lock()
 	present := h.store[42].LastAccount != ""
@@ -135,9 +136,9 @@ func TestHandler_StateQueryPopulatesWatchdogGlobalDefault(t *testing.T) {
 		"subagent": 30 * time.Minute,
 		"compact":  30 * time.Second,
 	}, nil)
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "personal"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Account: "personal"})
 
-	resp := h.Handle(Request{Type: TypeStateQuery})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateQuery})
 	if !resp.OK {
 		t.Fatalf("want ok=true, got %+v", resp)
 	}
@@ -167,9 +168,9 @@ func TestHandler_StateQueryWatchdogHonorsPerAccountOverride(t *testing.T) {
 			"work": {"active": 30 * time.Second},
 		},
 	)
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
 
-	resp := h.Handle(Request{Type: TypeStateQuery})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateQuery})
 	entry, ok := resp.Watchdog[42]
 	if !ok {
 		t.Fatalf("Watchdog[42] missing; got %+v", resp.Watchdog)
@@ -186,10 +187,10 @@ func TestHandler_StateQueryWatchdogHonorsPerAccountOverride(t *testing.T) {
 func TestHandler_StateQueryWatchdogSkipsNonActiveActions(t *testing.T) {
 	h := newTestHandler()
 	h.SetStaleThresholds(map[string]time.Duration{"active": 10 * time.Minute}, nil)
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "permission"})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 43, Action: "failure"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "permission"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 43, Action: "failure"})
 
-	resp := h.Handle(Request{Type: TypeStateQuery})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateQuery})
 	if _, ok := resp.Watchdog[42]; ok {
 		t.Errorf("Watchdog[42] should be absent for permission action; got %+v", resp.Watchdog[42])
 	}
@@ -205,7 +206,7 @@ func TestHandler_TracksLastSeenEventAt(t *testing.T) {
 	h := newTestHandler()
 
 	before := time.Now()
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
 	after := time.Now()
 
 	h.stateMu.Lock()
@@ -224,14 +225,14 @@ func TestHandler_TracksLastSeenEventAt(t *testing.T) {
 // needs strict per-account isolation to detect single-account hook drift.
 func TestHandler_LastSeenEventAtIsolatedPerAccount(t *testing.T) {
 	h := newTestHandler()
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
 
 	h.stateMu.Lock()
 	workBefore := h.lastSeenEventAt["work"]
 	h.stateMu.Unlock()
 
 	// Advance an event for a different account.
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 43, Action: "active", Account: "personal"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 43, Action: "active", Account: "personal"})
 
 	h.stateMu.Lock()
 	workAfter := h.lastSeenEventAt["work"]
@@ -251,7 +252,7 @@ func TestHandler_LastSeenEventAtIsolatedPerAccount(t *testing.T) {
 // map. The map is keyed by real account names only.
 func TestHandler_LastSeenEventAtSkippedWhenAccountEmpty(t *testing.T) {
 	h := newTestHandler()
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active"})
 
 	h.stateMu.Lock()
 	_, emptyKeyPresent := h.lastSeenEventAt[""]
@@ -272,7 +273,7 @@ func TestHandler_LastSeenEventAtSkippedWhenAccountEmpty(t *testing.T) {
 // hook-silence detector can still observe activity from the account.
 func TestHandler_LastSeenEventAtSurvivesTerminal(t *testing.T) {
 	h := newTestHandler()
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
 
 	h.stateMu.Lock()
 	before, present := h.lastSeenEventAt["work"]
@@ -281,7 +282,7 @@ func TestHandler_LastSeenEventAtSurvivesTerminal(t *testing.T) {
 		t.Fatalf("lastSeenEventAt[work] missing before terminal action")
 	}
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "stop"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "stop"})
 
 	h.stateMu.Lock()
 	after, stillPresent := h.lastSeenEventAt["work"]
@@ -304,7 +305,7 @@ func TestHandler_NotifiedHookSilenceLatchReArmed(t *testing.T) {
 	h.notifiedHookSilence["work"] = true
 	h.stateMu.Unlock()
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
 
 	h.stateMu.Lock()
 	_, latched := h.notifiedHookSilence["work"]
@@ -324,7 +325,7 @@ func TestHandler_NotifiedHookSilenceUntouchedByOtherAccount(t *testing.T) {
 	h.notifiedHookSilence["work"] = true
 	h.stateMu.Unlock()
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 43, Action: "active", Account: "personal"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 43, Action: "active", Account: "personal"})
 
 	h.stateMu.Lock()
 	stillLatched := h.notifiedHookSilence["work"]

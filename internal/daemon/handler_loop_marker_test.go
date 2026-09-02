@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestHandler_LoopMarkerPreservesIconWithoutPriorState verifies that an ASL
@@ -15,15 +16,15 @@ import (
 func TestHandler_LoopMarkerPreservesIconWithoutPriorState(t *testing.T) {
 	h := newTestHandler()
 
-	resp := h.Handle(Request{
-		Type:     TypeStateUpdate,
+	resp := h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Action:   "loop_marker",
 		Event:    "AgentSessionLoopStarted",
 		Source:   "agent_session_loop",
 	})
-	if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
-		t.Fatalf("loop_marker: want {ok:true, allowed:true, icon_state:%q}, got %+v", IconStatePreserve, resp)
+	if !resp.OK || !resp.Allowed || resp.IconState != protocol.IconStatePreserve {
+		t.Fatalf("loop_marker: want {ok:true, allowed:true, icon_state:%q}, got %+v", protocol.IconStatePreserve, resp)
 	}
 }
 
@@ -45,8 +46,8 @@ func TestHandler_LoopMarkerDoesNotDisturbGuardOrLastAction(t *testing.T) {
 		t.Run(tc.prevAction+"_"+tc.event, func(t *testing.T) {
 			h := newTestHandler()
 
-			h.Handle(Request{
-				Type:     TypeStateUpdate,
+			h.Handle(protocol.Request{
+				Type:     protocol.TypeStateUpdate,
 				WindowID: 1,
 				Action:   tc.prevAction,
 				Event:    "seed",
@@ -58,14 +59,14 @@ func TestHandler_LoopMarkerDoesNotDisturbGuardOrLastAction(t *testing.T) {
 			h.stateMu.Unlock()
 			wantGuard := h.guard.Current(1)
 
-			resp := h.Handle(Request{
-				Type:     TypeStateUpdate,
+			resp := h.Handle(protocol.Request{
+				Type:     protocol.TypeStateUpdate,
 				WindowID: 1,
 				Action:   "loop_marker",
 				Event:    tc.event,
 				Source:   "agent_session_loop",
 			})
-			if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
+			if !resp.OK || !resp.Allowed || resp.IconState != protocol.IconStatePreserve {
 				t.Fatalf("loop_marker after %q: want allowed preserve, got %+v", tc.prevAction, resp)
 			}
 
@@ -92,8 +93,8 @@ func TestHandler_LoopMarkerDoesNotDisturbGuardOrLastAction(t *testing.T) {
 func TestHandler_LoopMarkerAppendsRingBufferEntry(t *testing.T) {
 	h := newTestHandler()
 
-	h.Handle(Request{
-		Type:     TypeStateUpdate,
+	h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Action:   "loop_marker",
 		Event:    "AgentSessionLoopTurnStarted",
@@ -101,7 +102,7 @@ func TestHandler_LoopMarkerAppendsRingBufferEntry(t *testing.T) {
 		Reason:   "turn_started",
 	})
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 1})
 	if !resp.OK {
 		t.Fatalf("session detail: want OK=true, got %+v", resp)
 	}
@@ -115,8 +116,8 @@ func TestHandler_LoopMarkerAppendsRingBufferEntry(t *testing.T) {
 	if ev.Action != "loop_marker" || ev.Event != "AgentSessionLoopTurnStarted" {
 		t.Errorf("event = %+v; want action=loop_marker event=AgentSessionLoopTurnStarted", ev)
 	}
-	if ev.ResultIconState != IconStatePreserve {
-		t.Errorf("event result_icon_state = %q; want %q", ev.ResultIconState, IconStatePreserve)
+	if ev.ResultIconState != protocol.IconStatePreserve {
+		t.Errorf("event result_icon_state = %q; want %q", ev.ResultIconState, protocol.IconStatePreserve)
 	}
 	if ev.Source != "agent_session_loop" {
 		t.Errorf("event source = %q; want agent_session_loop", ev.Source)
@@ -139,8 +140,8 @@ func TestHandler_LoopMarkerSuppressesNotifications(t *testing.T) {
 	}
 	h := NewHandler(NewStateGuard(time.Hour), notifier)
 
-	resp := h.Handle(Request{
-		Type:         TypeStateUpdate,
+	resp := h.Handle(protocol.Request{
+		Type:         protocol.TypeStateUpdate,
 		WindowID:     1,
 		Action:       "loop_marker",
 		Event:        "AgentSessionLoopStarted",
@@ -148,7 +149,7 @@ func TestHandler_LoopMarkerSuppressesNotifications(t *testing.T) {
 		SessionTitle: "W:api",
 		Account:      "work",
 	})
-	if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
+	if !resp.OK || !resp.Allowed || resp.IconState != protocol.IconStatePreserve {
 		t.Fatalf("loop_marker: want allowed preserve, got %+v", resp)
 	}
 
@@ -170,14 +171,14 @@ func TestHandler_LoopMarkerLeavesStaleTrackingUntouched(t *testing.T) {
 	h.ensureWindowStateLocked(1).ContextLimitNotified = true
 	h.stateMu.Unlock()
 
-	resp := h.Handle(Request{
-		Type:     TypeStateUpdate,
+	resp := h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Action:   "loop_marker",
 		Event:    "AgentSessionLoopStarted",
 		Source:   "agent_session_loop",
 	})
-	if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
+	if !resp.OK || !resp.Allowed || resp.IconState != protocol.IconStatePreserve {
 		t.Fatalf("loop_marker: want allowed preserve, got %+v", resp)
 	}
 
@@ -204,8 +205,8 @@ func TestHandler_LoopMarkerArmsHookSilenceLatch(t *testing.T) {
 	h.stateMu.Unlock()
 
 	before := time.Now()
-	resp := h.Handle(Request{
-		Type:     TypeStateUpdate,
+	resp := h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Action:   "loop_marker",
 		Event:    "AgentSessionLoopStarted",
@@ -235,20 +236,20 @@ func TestHandler_LoopMarkerArmsHookSilenceLatch(t *testing.T) {
 func TestHandler_LoopMarkerAfterActiveLeavesBoltClearable(t *testing.T) {
 	h := newTestHandler()
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "UserPromptSubmit", IsPrompt: true})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "UserPromptSubmit", IsPrompt: true})
 
-	resp := h.Handle(Request{
-		Type:     TypeStateUpdate,
+	resp := h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Action:   "loop_marker",
 		Event:    "AgentSessionLoopTurnStarted",
 		Source:   "agent_session_loop",
 	})
-	if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
+	if !resp.OK || !resp.Allowed || resp.IconState != protocol.IconStatePreserve {
 		t.Fatalf("loop_marker after active: want allowed preserve, got %+v", resp)
 	}
 
-	resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "idle", Event: "AgentSessionLoopFinished"})
+	resp = h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "idle", Event: "AgentSessionLoopFinished"})
 	if !resp.OK || !resp.Allowed || resp.IconState != "" {
 		t.Fatalf("idle after loop_marker over active: want allowed empty icon, got %+v", resp)
 	}

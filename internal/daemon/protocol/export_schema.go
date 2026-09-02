@@ -1,4 +1,4 @@
-package daemon
+package protocol
 
 // Public wire-schema projection. Every compatibility schema is an explicit
 // field projection rather than a reuse of the current structs, so a field added

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func BenchmarkRun_StartupAndShutdown(b *testing.B) {
@@ -46,7 +47,7 @@ func BenchmarkRun_StartupAndShutdown(b *testing.B) {
 			}
 
 			c := NewClientWithSocket(socketPath)
-			resp, err := c.Send(Request{Type: TypeShutdown})
+			resp, err := c.Send(protocol.Request{Type: protocol.TypeShutdown})
 			if err != nil {
 				b.Fatalf("shutdown Send: %v", err)
 			}

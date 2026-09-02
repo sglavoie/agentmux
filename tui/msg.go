@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -17,8 +17,8 @@ type tickMsg struct{}
 type sessionsMsg struct {
 	sessions       []session.RunningSession
 	activity       map[int]time.Time
-	watchdog       map[int]daemon.WatchdogState
-	states         map[int]daemon.WindowStateSnapshot
+	watchdog       map[int]protocol.WatchdogState
+	states         map[int]protocol.WindowStateSnapshot
 	selectionTabID int
 	selectionToken string
 }
@@ -62,7 +62,7 @@ type peekDoneMsg struct{ err error }
 // detail pane before the round-trip completed).
 type detailEventsMsg struct {
 	windowID int
-	events   []daemon.SessionEvent
+	events   []protocol.SessionEvent
 	err      error
 }
 

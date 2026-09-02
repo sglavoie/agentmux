@@ -5,6 +5,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
@@ -28,8 +29,8 @@ func TestTerminalStopHold_ProbeConfirmsHeldStop(t *testing.T) {
 
 		h.ProbeClaudeScreenStop(base.Add(time.Second))
 		pending, ok := terminalHoldPending(t, h, 42)
-		if !ok || !pending.confirmed || pending.confirmedBy != StopConfirmedByClaudeScreen {
-			t.Fatalf("hold after two samples = %+v/%v, want confirmed by %s", pending, ok, StopConfirmedByClaudeScreen)
+		if !ok || !pending.confirmed || pending.confirmedBy != protocol.StopConfirmedByClaudeScreen {
+			t.Fatalf("hold after two samples = %+v/%v, want confirmed by %s", pending, ok, protocol.StopConfirmedByClaudeScreen)
 		}
 		if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 			t.Fatalf("icon while confirmed inside the quiet period = %q, want bolt", eff.Icon)
@@ -45,10 +46,10 @@ func TestTerminalStopHold_ProbeConfirmsHeldStop(t *testing.T) {
 			t.Fatalf("notifications = %d, want 1 (%+v)", got, rec.snapshot())
 		}
 		ev := lastStopEvent(t, h, 42)
-		if ev.StopHoldOutcome != StopHoldOutcomeConfirmed || ev.StopConfirmedBy != StopConfirmedByClaudeScreen {
-			t.Fatalf("released stop = outcome %q by %q, want confirmed/%s", ev.StopHoldOutcome, ev.StopConfirmedBy, StopConfirmedByClaudeScreen)
+		if ev.StopHoldOutcome != protocol.StopHoldOutcomeConfirmed || ev.StopConfirmedBy != protocol.StopConfirmedByClaudeScreen {
+			t.Fatalf("released stop = outcome %q by %q, want confirmed/%s", ev.StopHoldOutcome, ev.StopConfirmedBy, protocol.StopConfirmedByClaudeScreen)
 		}
-		detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+		detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 		if probe, ok := lastEventNamed(detail.Events, screenStopProbeEvent); ok {
 			t.Fatalf("%q row recorded while a native stop was held: %+v", screenStopProbeEvent, probe)
 		}
@@ -56,10 +57,10 @@ func TestTerminalStopHold_ProbeConfirmsHeldStop(t *testing.T) {
 		facts := windowFacts(t, h, 42)
 		nativeStop := false
 		for _, fact := range facts {
-			nativeStop = nativeStop || (fact.Kind == SourceHarness && fact.Action == "stop")
+			nativeStop = nativeStop || (fact.Kind == protocol.SourceHarness && fact.Action == "stop")
 		}
 		if !nativeStop {
-			t.Fatalf("facts = %+v, want the committed stop to be a %s fact", facts, SourceHarness)
+			t.Fatalf("facts = %+v, want the committed stop to be a %s fact", facts, protocol.SourceHarness)
 		}
 	})
 }
@@ -79,7 +80,7 @@ func TestConfirmStopHoldLocked_OnlyTerminalHoldsClaimProbeEvidence(t *testing.T)
 			name: "reset_class_hold",
 			arm: func(t *testing.T, h *Handler) {
 				h.SetStopConfirm(terminalHoldTestDelay, terminalHoldTestTimeout, false)
-				req := Request{Type: TypeStateUpdate, WindowID: 42, Action: "stop", Event: "Stop", Harness: harness.Claude}
+				req := protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "stop", Event: "Stop", Harness: harness.Claude}
 				if !h.holdStopForConfirmation(req, hookevent.HookPayload{}) {
 					t.Fatal("reset-sensitive stop was not held")
 				}
@@ -88,7 +89,7 @@ func TestConfirmStopHoldLocked_OnlyTerminalHoldsClaimProbeEvidence(t *testing.T)
 		{
 			name: "terminal_class_hold",
 			arm: func(t *testing.T, h *Handler) {
-				req := Request{Type: TypeStateUpdate, WindowID: 42, Action: "stop", Event: "Stop", Harness: harness.Claude}
+				req := protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "stop", Event: "Stop", Harness: harness.Claude}
 				if !h.holdStopForConfirmation(req, hookevent.HookPayload{}) {
 					t.Fatal("terminal stop was not held")
 				}
@@ -114,8 +115,8 @@ func TestConfirmStopHoldLocked_OnlyTerminalHoldsClaimProbeEvidence(t *testing.T)
 				return
 			}
 			pending, _ := terminalHoldPending(t, h, 42)
-			if !pending.confirmed || pending.confirmedBy != StopConfirmedByClaudeScreen {
-				t.Fatalf("confirmed hold = %+v, want confirmed by %s", pending, StopConfirmedByClaudeScreen)
+			if !pending.confirmed || pending.confirmedBy != protocol.StopConfirmedByClaudeScreen {
+				t.Fatalf("confirmed hold = %+v, want confirmed by %s", pending, protocol.StopConfirmedByClaudeScreen)
 			}
 		})
 	}
@@ -127,12 +128,12 @@ func TestConfirmStopHoldLocked_OnlyTerminalHoldsClaimProbeEvidence(t *testing.T)
 // StopConfirmedBy value into diagnostics.
 func TestStopConfirmedByProbeCoversEveryIdleProbeSource(t *testing.T) {
 	cases := []struct {
-		source SourceID
-		want   StopConfirmedBy
+		source protocol.SourceID
+		want   protocol.StopConfirmedBy
 	}{
-		{SourceID{Kind: SourceProbe, Key: claudeScreenStopProbeSource}, StopConfirmedByClaudeScreen},
-		{SourceID{Kind: SourceProbe, Key: screenPromptProbeSource}, StopConfirmedByCodexScreen},
-		{SourceID{Kind: SourceProbe, Key: copilotTranscriptStopProbeSource}, StopConfirmedByCopilotTranscript},
+		{protocol.SourceID{Kind: protocol.SourceProbe, Key: claudeScreenStopProbeSource}, protocol.StopConfirmedByClaudeScreen},
+		{protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource}, protocol.StopConfirmedByCodexScreen},
+		{protocol.SourceID{Kind: protocol.SourceProbe, Key: copilotTranscriptStopProbeSource}, protocol.StopConfirmedByCopilotTranscript},
 	}
 	for _, tc := range cases {
 		if got := stopConfirmedByProbe(tc.source); got != tc.want {

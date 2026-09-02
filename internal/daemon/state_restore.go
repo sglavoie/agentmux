@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -137,7 +138,7 @@ func (h *Handler) restoreFromUserVars(windows []kitty.OSWindow, now time.Time) {
 					h.guard.Restore(win.ID, st.GuardAction, st.GuardExpiresAt)
 				}
 				if st.Reducer == nil && st.DesiredIcon == "" && st.LastAction != "" {
-					st.DesiredIcon = IconState(st.LastAction)
+					st.DesiredIcon = protocol.IconState(st.LastAction)
 				}
 				if st.Reducer != nil {
 					// Deserialization built the reducer with zero thresholds;

@@ -10,18 +10,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
 type observedRequestSender struct {
 	client   *Client
-	req      Request
+	req      protocol.Request
 	deadline time.Time
 	observer DeliveryObserver
 	attempt  int
 }
 
-func (s *observedRequestSender) send() (Response, error) {
+func (s *observedRequestSender) send() (protocol.Response, error) {
 	s.attempt++
 	req := s.req
 	req.Attempt = s.attempt
@@ -56,8 +57,8 @@ func observeDeliveryStage(observer DeliveryObserver, stage, outcome, reason stri
 	})
 }
 
-func (c *Client) sendWithRetriesObserved(sender *observedRequestSender, deadline time.Time) (Response, error) {
-	var resp Response
+func (c *Client) sendWithRetriesObserved(sender *observedRequestSender, deadline time.Time) (protocol.Response, error) {
+	var resp protocol.Response
 	err := errors.New("daemon did not start in time")
 	for time.Until(deadline) > 0 {
 		delay := autoStartRetryDelay
@@ -72,19 +73,19 @@ func (c *Client) sendWithRetriesObserved(sender *observedRequestSender, deadline
 			return resp, nil
 		}
 	}
-	return Response{}, err
+	return protocol.Response{}, err
 }
 
 // SendWithAutoStart sends req to the daemon, auto-starting it if not running.
 // amxBin is the path to the amx binary used for auto-start.
-func (c *Client) SendWithAutoStart(req Request, amxBin string) (Response, error) {
+func (c *Client) SendWithAutoStart(req protocol.Request, amxBin string) (protocol.Response, error) {
 	return c.SendWithAutoStartObserved(req, amxBin, nil)
 }
 
 // SendWithAutoStartObserved is SendWithAutoStart with additive transport-stage
 // observation. The observer runs synchronously after each attempt or autostart
 // action; callers must keep it bounded and fail-open.
-func (c *Client) SendWithAutoStartObserved(req Request, amxBin string, observer DeliveryObserver) (Response, error) {
+func (c *Client) SendWithAutoStartObserved(req protocol.Request, amxBin string, observer DeliveryObserver) (protocol.Response, error) {
 	deadline := time.Now().Add(autoStartDeadline)
 	sender := &observedRequestSender{client: c, req: req, deadline: deadline, observer: observer}
 	restarted := false
@@ -99,7 +100,7 @@ func (c *Client) SendWithAutoStartObserved(req Request, amxBin string, observer 
 		lock, lockErr := acquireAutoStartLock(c.socketPath)
 		if lockErr != nil {
 			if !errors.Is(lockErr, errAutoStartInProgress) {
-				return Response{}, fmt.Errorf("daemon auto-start lock failed: %w", lockErr)
+				return protocol.Response{}, fmt.Errorf("daemon auto-start lock failed: %w", lockErr)
 			}
 			observeDeliveryStage(observer, DeliveryStageDaemonAutostart, "waiting", "another_client_starting", time.Now())
 			resp, err := sender.send()
@@ -110,7 +111,7 @@ func (c *Client) SendWithAutoStartObserved(req Request, amxBin string, observer 
 			if retryErr == nil {
 				return resp, nil
 			}
-			return Response{}, fmt.Errorf("daemon did not start in time: %w", retryErr)
+			return protocol.Response{}, fmt.Errorf("daemon did not start in time: %w", retryErr)
 		}
 		autoStartLock = lock
 
@@ -123,7 +124,7 @@ func (c *Client) SendWithAutoStartObserved(req Request, amxBin string, observer 
 			started := time.Now()
 			if err := c.restartDetachedBefore(amxBin, true, deadline); err != nil {
 				observeDeliveryStage(observer, DeliveryStageDaemonAutostart, "error", err.Error(), started)
-				return Response{}, fmt.Errorf("daemon auto-restart failed: %w", err)
+				return protocol.Response{}, fmt.Errorf("daemon auto-restart failed: %w", err)
 			}
 			observeDeliveryStage(observer, DeliveryStageDaemonAutostart, "success", "stale_daemon_restarted", started)
 			restarted = true
@@ -146,7 +147,7 @@ func (c *Client) SendWithAutoStartObserved(req Request, amxBin string, observer 
 			lock, lockErr := acquireAutoStartLock(c.socketPath)
 			if lockErr != nil {
 				if !errors.Is(lockErr, errAutoStartInProgress) {
-					return Response{}, fmt.Errorf("daemon auto-start lock failed: %w", lockErr)
+					return protocol.Response{}, fmt.Errorf("daemon auto-start lock failed: %w", lockErr)
 				}
 			} else {
 				autoStartLock = lock
@@ -162,7 +163,7 @@ func (c *Client) SendWithAutoStartObserved(req Request, amxBin string, observer 
 			started := time.Now()
 			if startErr := spawnDetached(amxBin); startErr != nil {
 				observeDeliveryStage(observer, DeliveryStageDaemonAutostart, "error", startErr.Error(), started)
-				return Response{}, fmt.Errorf("daemon auto-start failed: %w", startErr)
+				return protocol.Response{}, fmt.Errorf("daemon auto-start failed: %w", startErr)
 			}
 			observeDeliveryStage(observer, DeliveryStageDaemonAutostart, "success", "daemon_spawned", started)
 		}
@@ -173,7 +174,7 @@ func (c *Client) SendWithAutoStartObserved(req Request, amxBin string, observer 
 	if err == nil {
 		return resp, nil
 	}
-	return Response{}, fmt.Errorf("daemon did not start in time: %w", err)
+	return protocol.Response{}, fmt.Errorf("daemon did not start in time: %w", err)
 }
 
 // ExportEvents returns the per-window hook-event ring buffers plus durable
@@ -183,15 +184,15 @@ func (c *Client) SendWithAutoStartObserved(req Request, amxBin string, observer 
 // call Send directly (see tui/model_modes.go); ExportEvents is the typed helper
 // for the richer CLI export so the command does not have to know about the
 // message-type constant or response-shape details.
-func (c *Client) ExportEvents(windowID int) (EventsExport, error) {
-	resp, err := c.sendWithDeadline(Request{Type: TypeEventsExport, WindowID: windowID}, exportDeadline)
+func (c *Client) ExportEvents(windowID int) (protocol.EventsExport, error) {
+	resp, err := c.sendWithDeadline(protocol.Request{Type: protocol.TypeEventsExport, WindowID: windowID}, exportDeadline)
 	if err != nil {
-		return EventsExport{}, err
+		return protocol.EventsExport{}, err
 	}
 	if !resp.OK {
-		return EventsExport{}, fmt.Errorf("daemon error: %s", resp.Error)
+		return protocol.EventsExport{}, fmt.Errorf("daemon error: %s", resp.Error)
 	}
-	return EventsExport{
+	return protocol.EventsExport{
 		EventsByWindow: resp.EventsByWindow,
 		WindowMetadata: resp.WindowMetadata,
 	}, nil

@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
 
@@ -36,15 +37,15 @@ func supervisorQuestionFixture(t *testing.T, notifier *Notifier) (*Handler, aslS
 	st.LastAccount = "work"
 	st.LastHarness = "codex"
 	st.Reducer = NewReducer(ReducerConfig{})
-	st.Reducer.Apply(ReducerEvent{
-		Source: SourceID{Kind: SourceASL, Key: supervisorRunID},
+	st.Reducer.Apply(protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceASL, Key: supervisorRunID},
 		RunID:  supervisorRunID,
 		Phase:  ASLPhaseTurn,
 		Seq:    1,
 		At:     now.Add(-10 * time.Second).Unix(),
 	})
-	st.Reducer.Apply(ReducerEvent{
-		Source:    SourceID{Kind: SourceHarness, Key: "codex:parent"},
+	st.Reducer.Apply(protocol.ReducerEvent{
+		Source:    protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:parent"},
 		Action:    "active",
 		Seq:       1,
 		TurnID:    "turn-parent",
@@ -70,8 +71,8 @@ func supervisorProjection(now time.Time, seq uint64) agentloop.SupervisorQuestio
 }
 
 func applySupervisorStop(h *Handler, now time.Time) {
-	n := NormalizedEvent{
-		Source:        SourceID{Kind: SourceHarness, Key: "codex:parent"},
+	n := protocol.NormalizedEvent{
+		Source:        protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:parent"},
 		Action:        "stop",
 		Seq:           2,
 		TurnID:        "turn-parent",
@@ -81,14 +82,14 @@ func applySupervisorStop(h *Handler, now time.Time) {
 		Event:         "Stop",
 		SourceEventID: "parent-stop",
 	}
-	req := Request{
+	req := protocol.Request{
 		WindowID:     42,
 		SessionTitle: "W:api",
 		Account:      "work",
 		Harness:      "codex",
-		normalized:   &n,
+		Normalized:   &n,
 	}
-	h.reduceStateUpdate(req, applyOutcome{}, Response{OK: true}, now)
+	h.reduceStateUpdate(req, applyOutcome{}, protocol.Response{OK: true}, now)
 }
 
 func supervisorVisibleState(t *testing.T, h *Handler) EffectiveState {
@@ -130,8 +131,8 @@ func deliverSupervisorMailboxReply(
 	payload hookevent.HookPayload,
 ) {
 	t.Helper()
-	resp := h.Handle(Request{
-		Type:        TypeHookEvent,
+	resp := h.Handle(protocol.Request{
+		Type:        protocol.TypeHookEvent,
 		WindowID:    42,
 		Event:       agentSessionLoopMailboxReply,
 		PayloadJSON: hookPayloadJSON(t, payload),
@@ -178,8 +179,8 @@ func deliverSupervisorMailboxQuestion(
 	payload hookevent.HookPayload,
 ) {
 	t.Helper()
-	resp := h.Handle(Request{
-		Type:        TypeHookEvent,
+	resp := h.Handle(protocol.Request{
+		Type:        protocol.TypeHookEvent,
 		WindowID:    42,
 		Event:       agentSessionLoopMailboxQuestion,
 		PayloadJSON: hookPayloadJSON(t, payload),
@@ -225,7 +226,7 @@ func TestASLSupervisorMailboxQuestionRaisesImmediatelyAndRearmsOnlyForNewQuestio
 			t.Fatalf("duplicate handoff dispatched %d notifications; want 1", calls.len())
 		}
 
-		if resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "user_clear"}); !resp.OK {
+		if resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "user_clear"}); !resp.OK {
 			t.Fatalf("user clear response = %+v", resp)
 		}
 		payload.MailboxProjectionSequence = "8"
@@ -315,28 +316,28 @@ func TestASLSupervisorQuestionRejectsActiveAndPredatingStops(t *testing.T) {
 func TestASLSupervisorQuestionRejectsUntrustedWorkerStops(t *testing.T) {
 	cases := []struct {
 		name  string
-		event ReducerEvent
+		event protocol.ReducerEvent
 	}{
 		{
 			name: "anonymous legacy SessionEnd",
-			event: ReducerEvent{
-				Source: SourceID{Kind: SourceLegacy, Key: "win:42"},
+			event: protocol.ReducerEvent{
+				Source: protocol.SourceID{Kind: protocol.SourceLegacy, Key: "win:42"},
 				Action: "stop",
 				Seq:    1,
 			},
 		},
 		{
 			name: "unidentified harness stop",
-			event: ReducerEvent{
-				Source: SourceID{Kind: SourceHarness, Key: "win:42"},
+			event: protocol.ReducerEvent{
+				Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "win:42"},
 				Action: "stop",
 				Seq:    1,
 			},
 		},
 		{
 			name: "identified pipe worker stop",
-			event: ReducerEvent{
-				Source:    SourceID{Kind: SourceHarness, Key: "claude:worker"},
+			event: protocol.ReducerEvent{
+				Source:    protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:worker"},
 				Action:    "stop",
 				SessionID: "worker",
 				PipeMode:  true,
@@ -345,8 +346,8 @@ func TestASLSupervisorQuestionRejectsUntrustedWorkerStops(t *testing.T) {
 		},
 		{
 			name: "untrusted synthetic stop",
-			event: ReducerEvent{
-				Source: SourceID{Kind: SourceProbe, Key: "other"},
+			event: protocol.ReducerEvent{
+				Source: protocol.SourceID{Kind: protocol.SourceProbe, Key: "other"},
 				Action: "stop",
 				Seq:    1,
 			},
@@ -374,8 +375,8 @@ func TestASLSupervisorQuestionAcceptsAuthoritativeStopProbe(t *testing.T) {
 	h, target, now := supervisorQuestionFixture(t, nil)
 	h.stateMu.Lock()
 	st := h.store[42]
-	st.Reducer.Apply(ReducerEvent{
-		Source: SourceID{Kind: SourceProbe, Key: claudeScreenStopProbeSource},
+	st.Reducer.Apply(protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceProbe, Key: claudeScreenStopProbeSource},
 		Action: "stop",
 		Seq:    1,
 		At:     now.Unix(),
@@ -396,8 +397,8 @@ func TestASLSupervisorQuestionSurvivesHeartbeatAndClearsOnReply(t *testing.T) {
 
 	h.stateMu.Lock()
 	st := h.store[42]
-	st.Reducer.Apply(ReducerEvent{
-		Source: SourceID{Kind: SourceASL, Key: supervisorRunID},
+	st.Reducer.Apply(protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceASL, Key: supervisorRunID},
 		RunID:  supervisorRunID,
 		Phase:  ASLPhaseTurn,
 		Seq:    2,

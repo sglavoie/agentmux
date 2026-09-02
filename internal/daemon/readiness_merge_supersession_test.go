@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -45,7 +46,7 @@ func bringUpDegradedOnGatedClient(t *testing.T, h *Handler, windows []kitty.OSWi
 // and folds `ev` — a user_clear, a prompt, or an interactive terminal — through
 // Apply so the reducer records the transition's supersession cutoff before the
 // first persisted-fact restore runs.
-func seedInProcessReducerTransition(t *testing.T, h *Handler, windowID int, ev ReducerEvent) *WindowState {
+func seedInProcessReducerTransition(t *testing.T, h *Handler, windowID int, ev protocol.ReducerEvent) *WindowState {
 	t.Helper()
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
@@ -88,16 +89,16 @@ func TestMaintenanceTick_MergeHonorsPreRestoreUserClear(t *testing.T) {
 	// interactive harness bolt, a terminal probe stop, and a live between-turns
 	// ASL lease.
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 1, At: old})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceProbe, Key: "screen"}, Action: "stop", Seq: 1, At: old})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: old})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 1, At: old})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceProbe, Key: "screen"}, Action: "stop", Seq: 1, At: old})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: old})
 	windows := encodeMergeWindow(t, r, 1, now)
 
 	client := bringUpDegradedOnGatedClient(t, h, windows, now)
 
 	// A /clear lands FIRST, before any restore. user_clear creates no fact; it
 	// records the clear cutoff on the (otherwise empty) in-process reducer.
-	seedInProcessReducerTransition(t, h, 42, ReducerEvent{
+	seedInProcessReducerTransition(t, h, 42, protocol.ReducerEvent{
 		Source: userActionSource(), Action: "user_clear", Seq: 5, At: now.Unix(),
 	})
 
@@ -119,12 +120,12 @@ func TestMaintenanceTick_MergeHonorsPreRestoreUserClear(t *testing.T) {
 		t.Fatalf("merged Reduce = %+v; want icon-less (a merged pre-clear fact regained an icon)", eff)
 	}
 	// The merged interactive bolt is present but acknowledged.
-	if bolt := mergedFactBySource(merged.Reducer.Facts(), SourceID{Kind: SourceHarness, Key: "claude:s1"}); bolt == nil || !bolt.Acked {
+	if bolt := mergedFactBySource(merged.Reducer.Facts(), protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}); bolt == nil || !bolt.Acked {
 		t.Fatalf("merged pre-clear interactive bolt not acknowledged: %+v", bolt)
 	}
 	// The merged terminal stop was acknowledged then compacted away, exactly as a
 	// live user_clear + Compact retires an acknowledged terminal tombstone.
-	if stop := mergedFactBySource(merged.Reducer.Facts(), SourceID{Kind: SourceProbe, Key: "screen"}); stop != nil {
+	if stop := mergedFactBySource(merged.Reducer.Facts(), protocol.SourceID{Kind: protocol.SourceProbe, Key: "screen"}); stop != nil {
 		t.Fatalf("acknowledged terminal stop survived Compact: %+v", stop)
 	}
 	// The live ASL lease is preserved: user_clear leaves LeaseLive set, so the
@@ -166,17 +167,17 @@ func TestMaintenanceTick_MergeHonorsPreRestorePromptSupersession(t *testing.T) {
 	// stop on a different session, a stale interactive bolt on a third session, a
 	// concurrent pipe-mode `claude -p` child, and a live between-turns ASL lease.
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s0"}, Action: "stop", Seq: 1, At: old})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s2"}, Action: "active", Seq: 1, At: old})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:p1"}, Action: "active", Seq: 1, At: old, PipeMode: true})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: old})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s0"}, Action: "stop", Seq: 1, At: old})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s2"}, Action: "active", Seq: 1, At: old})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:p1"}, Action: "active", Seq: 1, At: old, PipeMode: true})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: old})
 	windows := encodeMergeWindow(t, r, 1, now)
 
 	client := bringUpDegradedOnGatedClient(t, h, windows, now)
 
 	// A prompt lands FIRST, before any restore, on a fresh interactive session.
-	seedInProcessReducerTransition(t, h, 42, ReducerEvent{
-		Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active",
+	seedInProcessReducerTransition(t, h, 42, protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active",
 		Prompt: true, SessionID: "s1", Seq: 5, At: now.Unix(),
 	})
 
@@ -197,15 +198,15 @@ func TestMaintenanceTick_MergeHonorsPreRestorePromptSupersession(t *testing.T) {
 	if eff := merged.Reducer.Reduce(now.Unix()); eff.Icon != "bolt" {
 		t.Fatalf("merged Reduce = %+v; want the prompt's bolt", eff)
 	}
-	if stop := mergedFactBySource(facts, SourceID{Kind: SourceHarness, Key: "claude:s0"}); stop != nil {
+	if stop := mergedFactBySource(facts, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s0"}); stop != nil {
 		t.Fatalf("prompt did not acknowledge the older terminal stop before merge: %+v", stop)
 	}
-	if stale := mergedFactBySource(facts, SourceID{Kind: SourceHarness, Key: "claude:s2"}); stale == nil || !stale.Acked {
+	if stale := mergedFactBySource(facts, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s2"}); stale == nil || !stale.Acked {
 		t.Fatalf("stale interactive bolt not retired by the pre-restore prompt: %+v", stale)
 	}
 	// Concurrent protected state survives: the pipe-mode child keeps its bolt and
 	// the live ASL lease keeps looping.
-	if pipe := mergedFactBySource(facts, SourceID{Kind: SourceHarness, Key: "claude:p1"}); pipe == nil || pipe.Acked || !pipe.PipeMode {
+	if pipe := mergedFactBySource(facts, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:p1"}); pipe == nil || pipe.Acked || !pipe.PipeMode {
 		t.Fatalf("concurrent pipe-mode child was wrongly retired: %+v", pipe)
 	}
 	if exists, live := merged.Reducer.LeaseState("run-1"); !exists || !live {
@@ -242,14 +243,14 @@ func TestMaintenanceTick_MergeHonorsPreRestoreTerminalRetirement(t *testing.T) {
 	// Persisted durable state for window 42: a stale interactive bolt on an older
 	// session that, without retirement, would mask the current stop.
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s2"}, Action: "active", Seq: 1, At: old})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s2"}, Action: "active", Seq: 1, At: old})
 	windows := encodeMergeWindow(t, r, 1, now)
 
 	client := bringUpDegradedOnGatedClient(t, h, windows, now)
 
 	// A native interactive terminal lands FIRST, before any restore.
-	seedInProcessReducerTransition(t, h, 42, ReducerEvent{
-		Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "stop",
+	seedInProcessReducerTransition(t, h, 42, protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "stop",
 		SessionID: "s1", Seq: 5, At: now.Unix(),
 	})
 
@@ -268,7 +269,7 @@ func TestMaintenanceTick_MergeHonorsPreRestoreTerminalRetirement(t *testing.T) {
 	if eff := merged.Reducer.Reduce(now.Unix()); eff.Icon != "stop" {
 		t.Fatalf("merged Reduce = %+v; want stop (a merged stale interactive bolt masked the terminal)", eff)
 	}
-	if stale := mergedFactBySource(merged.Reducer.Facts(), SourceID{Kind: SourceHarness, Key: "claude:s2"}); stale == nil || !stale.Acked {
+	if stale := mergedFactBySource(merged.Reducer.Facts(), protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s2"}); stale == nil || !stale.Acked {
 		t.Fatalf("stale interactive bolt not retired by the pre-restore terminal: %+v", stale)
 	}
 
@@ -305,16 +306,16 @@ func TestMaintenanceTick_MergeHonorsSameTimestampHigherPersistedSequence(t *test
 		// far higher per-source sequences: an interactive harness bolt, a terminal
 		// probe stop, and a live between-turns ASL lease.
 		r := NewReducer(ReducerConfig{})
-		r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 500, At: at})
-		r.Apply(ReducerEvent{Source: SourceID{Kind: SourceProbe, Key: "screen"}, Action: "stop", Seq: 600, At: at})
-		r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 700, At: at})
+		r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 500, At: at})
+		r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceProbe, Key: "screen"}, Action: "stop", Seq: 600, At: at})
+		r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 700, At: at})
 		windows := encodeMergeWindow(t, r, 1, now)
 
 		client := bringUpDegradedOnGatedClient(t, h, windows, now)
 
 		// The /clear lands FIRST on the fresh reducer, at a LOW sequence — the
 		// new in-process generation has just started counting.
-		seedInProcessReducerTransition(t, h, 42, ReducerEvent{
+		seedInProcessReducerTransition(t, h, 42, protocol.ReducerEvent{
 			Source: userActionSource(), Action: "user_clear", Seq: 1, At: at,
 		})
 
@@ -334,10 +335,10 @@ func TestMaintenanceTick_MergeHonorsSameTimestampHigherPersistedSequence(t *test
 		if eff := merged.Reducer.Reduce(now.Unix()); eff.Icon != "" {
 			t.Fatalf("merged Reduce = %+v; want icon-less (a same-second higher-seq persisted fact escaped the clear)", eff)
 		}
-		if bolt := mergedFactBySource(merged.Reducer.Facts(), SourceID{Kind: SourceHarness, Key: "claude:s1"}); bolt == nil || !bolt.Acked {
+		if bolt := mergedFactBySource(merged.Reducer.Facts(), protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}); bolt == nil || !bolt.Acked {
 			t.Fatalf("same-second higher-seq interactive bolt not acknowledged by the clear: %+v", bolt)
 		}
-		if stop := mergedFactBySource(merged.Reducer.Facts(), SourceID{Kind: SourceProbe, Key: "screen"}); stop != nil {
+		if stop := mergedFactBySource(merged.Reducer.Facts(), protocol.SourceID{Kind: protocol.SourceProbe, Key: "screen"}); stop != nil {
 			t.Fatalf("acknowledged terminal stop survived Compact: %+v", stop)
 		}
 		// The live ASL lease is preserved: user_clear leaves LeaseLive set.
@@ -370,17 +371,17 @@ func TestMaintenanceTick_MergeHonorsSameTimestampHigherPersistedSequence(t *test
 		// far higher per-source sequences: a terminal stop, a stale interactive
 		// bolt, a concurrent pipe-mode child, and a live between-turns ASL lease.
 		r := NewReducer(ReducerConfig{})
-		r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s0"}, Action: "stop", Seq: 500, At: at})
-		r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s2"}, Action: "active", Seq: 600, At: at})
-		r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:p1"}, Action: "active", Seq: 700, At: at, PipeMode: true})
-		r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 800, At: at})
+		r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s0"}, Action: "stop", Seq: 500, At: at})
+		r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s2"}, Action: "active", Seq: 600, At: at})
+		r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:p1"}, Action: "active", Seq: 700, At: at, PipeMode: true})
+		r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 800, At: at})
 		windows := encodeMergeWindow(t, r, 1, now)
 
 		client := bringUpDegradedOnGatedClient(t, h, windows, now)
 
 		// The prompt lands FIRST, on a fresh interactive session at a LOW sequence.
-		seedInProcessReducerTransition(t, h, 42, ReducerEvent{
-			Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active",
+		seedInProcessReducerTransition(t, h, 42, protocol.ReducerEvent{
+			Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active",
 			Prompt: true, SessionID: "s1", Seq: 1, At: at,
 		})
 
@@ -400,15 +401,15 @@ func TestMaintenanceTick_MergeHonorsSameTimestampHigherPersistedSequence(t *test
 		if eff := merged.Reducer.Reduce(now.Unix()); eff.Icon != "bolt" {
 			t.Fatalf("merged Reduce = %+v; want the prompt's bolt", eff)
 		}
-		if stop := mergedFactBySource(facts, SourceID{Kind: SourceHarness, Key: "claude:s0"}); stop != nil {
+		if stop := mergedFactBySource(facts, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s0"}); stop != nil {
 			t.Fatalf("prompt did not acknowledge the same-second higher-seq terminal stop: %+v", stop)
 		}
-		if stale := mergedFactBySource(facts, SourceID{Kind: SourceHarness, Key: "claude:s2"}); stale == nil || !stale.Acked {
+		if stale := mergedFactBySource(facts, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s2"}); stale == nil || !stale.Acked {
 			t.Fatalf("same-second higher-seq stale interactive bolt not retired by the prompt: %+v", stale)
 		}
 		// Concurrent protected state survives: the pipe-mode child keeps its bolt
 		// and the live ASL lease keeps looping.
-		if pipe := mergedFactBySource(facts, SourceID{Kind: SourceHarness, Key: "claude:p1"}); pipe == nil || pipe.Acked || !pipe.PipeMode {
+		if pipe := mergedFactBySource(facts, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:p1"}); pipe == nil || pipe.Acked || !pipe.PipeMode {
 			t.Fatalf("concurrent pipe-mode child was wrongly retired: %+v", pipe)
 		}
 		if exists, live := merged.Reducer.LeaseState("run-1"); !exists || !live {
@@ -439,14 +440,14 @@ func TestMaintenanceTick_MergeHonorsSameTimestampHigherPersistedSequence(t *test
 		// Persisted durable state for window 42: a stale interactive bolt in the
 		// SAME second as the terminal but with a far higher per-source sequence.
 		r := NewReducer(ReducerConfig{})
-		r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s2"}, Action: "active", Seq: 500, At: at})
+		r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s2"}, Action: "active", Seq: 500, At: at})
 		windows := encodeMergeWindow(t, r, 1, now)
 
 		client := bringUpDegradedOnGatedClient(t, h, windows, now)
 
 		// A native interactive terminal lands FIRST, at a LOW sequence.
-		seedInProcessReducerTransition(t, h, 42, ReducerEvent{
-			Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "stop",
+		seedInProcessReducerTransition(t, h, 42, protocol.ReducerEvent{
+			Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "stop",
 			SessionID: "s1", Seq: 1, At: at,
 		})
 
@@ -466,7 +467,7 @@ func TestMaintenanceTick_MergeHonorsSameTimestampHigherPersistedSequence(t *test
 		if eff := merged.Reducer.Reduce(now.Unix()); eff.Icon != "stop" {
 			t.Fatalf("merged Reduce = %+v; want stop (a same-second higher-seq stale bolt masked the terminal)", eff)
 		}
-		if stale := mergedFactBySource(merged.Reducer.Facts(), SourceID{Kind: SourceHarness, Key: "claude:s2"}); stale == nil || !stale.Acked {
+		if stale := mergedFactBySource(merged.Reducer.Facts(), protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s2"}); stale == nil || !stale.Acked {
 			t.Fatalf("same-second higher-seq stale interactive bolt not retired by the terminal: %+v", stale)
 		}
 

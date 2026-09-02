@@ -16,6 +16,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -246,7 +247,7 @@ func (f *processLifecycleAcceptanceFixture) sendHook(
 	sessionID string,
 	seq int,
 	pipeMode bool,
-	identity *daemon.HarnessProcessIdentity,
+	identity *protocol.HarnessProcessIdentity,
 	extra map[string]any,
 ) {
 	f.t.Helper()
@@ -268,13 +269,13 @@ func (f *processLifecycleAcceptanceFixture) sendHook(
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	var process *daemon.HarnessProcessIdentity
+	var process *protocol.HarnessProcessIdentity
 	if identity != nil {
 		copy := *identity
 		process = &copy
 	}
-	req := daemon.Request{
-		Type: daemon.TypeHookEvent, WindowID: windowID, Event: event,
+	req := protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: windowID, Event: event,
 		Harness: harnessName, ProducerHarness: harnessName, HarnessProcess: process,
 		PipeMode: pipeMode, PayloadJSON: string(encoded), Account: "acceptance",
 		SessionTitle: fmt.Sprintf("W:lifecycle-%d", windowID), KittyListenOn: lifecycleAcceptanceKittyAddr,
@@ -284,7 +285,7 @@ func (f *processLifecycleAcceptanceFixture) sendHook(
 	}
 	client := daemon.NewClient()
 	deadline := time.Now().Add(lifecycleHookRetryBudget)
-	var resp daemon.Response
+	var resp protocol.Response
 	// Package-level load can exceed the production acknowledgement budget even
 	// though the hermetic daemon is making progress. Bound the complete retry
 	// window by the production cold-start budget and reuse the request ID so a
@@ -310,8 +311,8 @@ func (f *processLifecycleAcceptanceFixture) sendHook(
 		time.Sleep(10 * time.Millisecond)
 	}
 	acknowledged := resp.Delivery != nil &&
-		(resp.Delivery.Status == daemon.DeliveryAcknowledgementAccepted ||
-			attempt > 1 && resp.Delivery.Status == daemon.DeliveryAcknowledgementDuplicate)
+		(resp.Delivery.Status == protocol.DeliveryAcknowledgementAccepted ||
+			attempt > 1 && resp.Delivery.Status == protocol.DeliveryAcknowledgementDuplicate)
 	if !resp.OK || !acknowledged {
 		f.t.Fatalf("send %s for window %d response = %+v", event, windowID, resp)
 	}
@@ -375,10 +376,10 @@ func (f *processLifecycleAcceptanceFixture) releaseProcessBlock() {
 
 func (f *processLifecycleAcceptanceFixture) waitForExport(
 	description string,
-	ready func(daemon.EventsExport) bool,
-) daemon.EventsExport {
+	ready func(protocol.EventsExport) bool,
+) protocol.EventsExport {
 	f.t.Helper()
-	var last daemon.EventsExport
+	var last protocol.EventsExport
 	waitForAcceptance(f.t, description, func() bool {
 		export, err := daemon.NewClient().ExportEvents(0)
 		if err != nil {

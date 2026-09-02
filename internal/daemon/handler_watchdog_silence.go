@@ -18,8 +18,9 @@ import (
 //   - No-op when h.kittyClient is nil (test environments without Kitty).
 //   - No-op when ListWindows fails — logged at debug and swallowed so other
 //     ticks can retry.
-//   - The "hook_silence" action is daemon-internal: not in actionPriority or
-//     actionIconState; only the notifier recognizes it as an action name.
+//   - The "hook_silence" action is daemon-internal: not in
+//     protocol.ActionPriority or protocol.IconState; only the notifier
+//     recognizes it as an action name.
 //   - The notifier's per-(windowID, action) cooldown is keyed by a synthetic
 //     negative ID derived from the account name so it cannot collide with
 //     real positive Kitty window IDs (see hookSilenceWindowID).

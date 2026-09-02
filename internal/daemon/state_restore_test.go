@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -91,8 +92,8 @@ func TestRestoreFromUserVarsRestoresReducerFactsLeasesAndGeneration(t *testing.T
 	now := time.Now()
 
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 2, TurnID: "t1", At: now.Unix()})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: now.Unix()})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 2, TurnID: "t1", At: now.Unix()})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: now.Unix()})
 	encoded, err := WindowState{
 		LastAction:   "active",
 		Reducer:      r,
@@ -126,7 +127,7 @@ func TestRestoreFromUserVarsRestoresReducerFactsLeasesAndGeneration(t *testing.T
 	if len(facts) != 2 {
 		t.Fatalf("restored facts = %+v, want harness fact + ASL lease", facts)
 	}
-	if facts[0].Kind != SourceASL || !facts[0].LeaseLive {
+	if facts[0].Kind != protocol.SourceASL || !facts[0].LeaseLive {
 		t.Fatalf("ASL lease not restored: %+v", facts[0])
 	}
 	if st.EffectiveGen != 4 || st.ShadowSeq != 2 {
@@ -155,8 +156,8 @@ func TestRestoreFromUserVarsRepublishesReducedStateAfterTombstoneExpiry(t *testi
 
 	encode := func(stopAt time.Time) string {
 		r := NewReducer(ReducerConfig{})
-		r.Apply(ReducerEvent{
-			Source: SourceID{Kind: SourceHarness, Key: "claude:s1"},
+		r.Apply(protocol.ReducerEvent{
+			Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"},
 			Action: "stop", Seq: 1, At: stopAt.Unix(),
 		})
 		encoded, err := WindowState{
@@ -226,8 +227,8 @@ func TestRestoreFromUserVarsKeepsLivePersistedBusySince(t *testing.T) {
 	anchor := now.Add(-7 * time.Minute).Truncate(time.Second)
 
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{
-		Source: SourceID{Kind: SourceHarness, Key: "claude:s1"},
+	r.Apply(protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"},
 		Action: "active", Seq: 1, At: now.Add(-time.Minute).Unix(),
 	})
 	encoded, err := WindowState{
@@ -363,10 +364,10 @@ func TestRestoreFromUserVarsMigratesV1PayloadToSyntheticLegacySource(t *testing.
 	// Migrated facts are re-keyed onto the window's live legacy key so
 	// post-restart events from the same window collide with the restored fact
 	// (same-source terminal suppression, lease release).
-	if facts[1].Kind != SourceLegacy || facts[1].Key != windowKey(42) || !facts[1].Terminated {
+	if facts[1].Kind != protocol.SourceLegacy || facts[1].Key != windowKey(42) || !facts[1].Terminated {
 		t.Fatalf("legacy migrated fact = %+v", facts[1])
 	}
-	if facts[0].Kind != SourceASL || facts[0].Key != windowKey(42) || !facts[0].LeaseLive {
+	if facts[0].Kind != protocol.SourceASL || facts[0].Key != windowKey(42) || !facts[0].LeaseLive {
 		t.Fatalf("ASL migrated fact = %+v", facts[0])
 	}
 	if st.Effective.Icon != "" || !st.Effective.Looping {

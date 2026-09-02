@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -48,8 +49,8 @@ func TestWatchdogTick_DelayedRenderDoesNotDelayExpiry(t *testing.T) {
 	st.LastSessionTitle = "W:api"
 	st.Activity = base
 	st.Reducer = NewReducer(h.reducerCfg)
-	st.Reducer.Apply(ReducerEvent{
-		Source: SourceID{Kind: SourceHarness, Key: "main"},
+	st.Reducer.Apply(protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "main"},
 		Action: "active", Seq: 1, At: base.Unix(),
 	})
 	h.publishEffectiveLocked(42, st, st.Reducer.Reduce(base.Unix()))
@@ -138,7 +139,7 @@ func TestPruneClosedWindows_CreatesTombstoneAndPurgesLiveState(t *testing.T) {
 	h.stateMu.Lock()
 	st := h.ensureWindowStateLocked(42)
 	st.LastSessionTitle = "W:api"
-	h.touchWindowMetadataLocked(Request{WindowID: 42, SessionTitle: "W:api", Account: "work"})
+	h.touchWindowMetadataLocked(protocol.Request{WindowID: 42, SessionTitle: "W:api", Account: "work"})
 	h.kittySockets[42] = "unix:/tmp/kitty-1"
 	ref := aslLeaseRef{windowID: 42, key: "run-1"}
 	h.aslMissStreak[ref] = 1

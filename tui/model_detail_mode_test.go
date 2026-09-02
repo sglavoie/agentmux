@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -81,7 +81,7 @@ func TestDetailEventsMsgPopulatesEvents(t *testing.T) {
 		m = mm.(Model)
 	}
 
-	events := []daemon.SessionEvent{
+	events := []protocol.SessionEvent{
 		{At: 1, Event: "PreToolUse", Action: "active", ToolName: "Bash"},
 		{At: 2, Event: "PostToolUse", Action: "active", ToolName: "Bash"},
 	}
@@ -107,7 +107,7 @@ func TestDetailEventsMsgStaleIsIgnored(t *testing.T) {
 
 	stale := detailEventsMsg{
 		windowID: m.detailWindowID + 9999, // mismatched
-		events:   []daemon.SessionEvent{{At: 1, Event: "PreToolUse", Action: "active"}},
+		events:   []protocol.SessionEvent{{At: 1, Event: "PreToolUse", Action: "active"}},
 	}
 	updated, _ := m.Update(stale)
 	got := updated.(Model)
@@ -145,7 +145,7 @@ func TestDetailEscReturnsToListAndZerosFields(t *testing.T) {
 		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID, false)
 		m = mm.(Model)
 	}
-	m.detailEvents = []daemon.SessionEvent{{At: 1, Event: "PreToolUse", Action: "active"}}
+	m.detailEvents = []protocol.SessionEvent{{At: 1, Event: "PreToolUse", Action: "active"}}
 	m.detailScroll = 3
 	m.detailLoading = false
 
@@ -223,7 +223,7 @@ func TestDetailScrollKeys(t *testing.T) {
 	// buffer exposes a maxOffset of 3 — enough to exercise both the up and
 	// down clamps without dipping into terminal-specific arithmetic.
 	m.height = 14 // overlay-aware: detailVisibleHeight(m) == detailMinVisible == 3
-	m.detailEvents = []daemon.SessionEvent{
+	m.detailEvents = []protocol.SessionEvent{
 		{At: 1, Event: "PreToolUse", Action: "active"},
 		{At: 2, Event: "PostToolUse", Action: "active"},
 		{At: 3, Event: "PreToolUse", Action: "active"},
@@ -338,7 +338,7 @@ func TestDetailEventsMsgIgnoredOutsideDetailMode(t *testing.T) {
 
 	updated, _ := m.Update(detailEventsMsg{
 		windowID: m.detailWindowID,
-		events:   []daemon.SessionEvent{{At: 1, Event: "PreToolUse", Action: "active"}},
+		events:   []protocol.SessionEvent{{At: 1, Event: "PreToolUse", Action: "active"}},
 	})
 	got := updated.(Model)
 	if len(got.detailEvents) != 0 {

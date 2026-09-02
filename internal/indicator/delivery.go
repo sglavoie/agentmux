@@ -10,6 +10,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -47,14 +48,14 @@ var captureHookPayload = func(ctx context.Context, request diagnostics.CapturePa
 // DeliveryResult is the stable hook-client outcome. JSON and strict callers
 // branch on Status/Retryable rather than parsing warnings or daemon error text.
 type DeliveryResult struct {
-	SchemaVersion         int                             `json:"schema_version"`
-	Status                DeliveryStatus                  `json:"status"`
-	Retryable             bool                            `json:"retryable"`
-	Reason                string                          `json:"reason"`
-	TraceID               string                          `json:"trace_id"`
-	RequestID             string                          `json:"request_id"`
-	DaemonAcknowledgement *daemon.DeliveryAcknowledgement `json:"daemon_acknowledgement,omitempty"`
-	LatencyMS             float64                         `json:"latency_ms"`
+	SchemaVersion         int                               `json:"schema_version"`
+	Status                DeliveryStatus                    `json:"status"`
+	Retryable             bool                              `json:"retryable"`
+	Reason                string                            `json:"reason"`
+	TraceID               string                            `json:"trace_id"`
+	RequestID             string                            `json:"request_id"`
+	DaemonAcknowledgement *protocol.DeliveryAcknowledgement `json:"daemon_acknowledgement,omitempty"`
+	LatencyMS             float64                           `json:"latency_ms"`
 }
 
 func (r DeliveryResult) Successful() bool {
@@ -62,7 +63,7 @@ func (r DeliveryResult) Successful() bool {
 }
 
 type observedDaemonClient interface {
-	SendWithAutoStartObserved(daemon.Request, string, daemon.DeliveryObserver) (daemon.Response, error)
+	SendWithAutoStartObserved(protocol.Request, string, daemon.DeliveryObserver) (protocol.Response, error)
 }
 
 type deliveryRecorder struct {
@@ -295,7 +296,7 @@ func (r *deliveryRecorder) captureRawPayload(event string, windowID int, produce
 	}
 }
 
-func resultFor(started time.Time, traceID, requestID string, status DeliveryStatus, reason string, ack *daemon.DeliveryAcknowledgement) DeliveryResult {
+func resultFor(started time.Time, traceID, requestID string, status DeliveryStatus, reason string, ack *protocol.DeliveryAcknowledgement) DeliveryResult {
 	return DeliveryResult{
 		SchemaVersion:         DeliveryResultSchemaVersion,
 		Status:                status,
@@ -325,7 +326,7 @@ func deliverPayloadWithDeps(
 	windowID int,
 	producerHarness, amxBin, payloadJSON string,
 	pipeMode bool,
-	harnessProcess *daemon.HarnessProcessIdentity,
+	harnessProcess *protocol.HarnessProcessIdentity,
 	traceID, requestID, sourceEventID string,
 	payloadSize int64,
 	payloadHMAC string,
@@ -362,8 +363,8 @@ func deliverPayloadWithDeps(
 		recorder.captureRawPayload(event, resolvedWindowID, producerHarness, payloadJSON, false)
 	}
 
-	req := daemon.Request{
-		Type:              daemon.TypeHookEvent,
+	req := protocol.Request{
+		Type:              protocol.TypeHookEvent,
 		RequestID:         requestID,
 		TraceID:           traceID,
 		SourceEventID:     sourceEventID,
@@ -389,7 +390,7 @@ func deliverPayloadWithDeps(
 			"attempt": fmt.Sprint(stage.Attempt),
 		}, stage.LatencyMS)
 	}
-	var resp daemon.Response
+	var resp protocol.Response
 	if observed, ok := client.(observedDaemonClient); ok {
 		resp, err = observed.SendWithAutoStartObserved(req, amxBin, observer)
 	} else {
@@ -425,10 +426,10 @@ func deliverPayloadWithDeps(
 	}
 	if ack != nil {
 		switch ack.Status {
-		case daemon.DeliveryAcknowledgementDuplicate:
+		case protocol.DeliveryAcknowledgementDuplicate:
 			recorder.record("hook.acknowledgement", "success", "duplicate", nil, 0)
 			return resultFor(started, traceID, requestID, DeliveryDuplicate, "duplicate", ack)
-		case daemon.DeliveryAcknowledgementRejected:
+		case protocol.DeliveryAcknowledgementRejected:
 			reason := ack.Reason
 			if reason == "" {
 				reason = "daemon_rejected"

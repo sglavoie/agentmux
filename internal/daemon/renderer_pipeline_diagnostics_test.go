@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"golang.org/x/sys/unix"
@@ -67,7 +68,7 @@ func TestRendererDiagnosticsTrackGenerations(t *testing.T) {
 	h.syncRendererMetadataLocked(42)
 	h.stateMu.Unlock()
 
-	resp := h.handleEventsExport(Request{Type: TypeEventsExport, WindowID: 42})
+	resp := h.handleEventsExport(protocol.Request{Type: protocol.TypeEventsExport, WindowID: 42})
 	meta, ok := resp.WindowMetadata[42]
 	if !ok {
 		t.Fatalf("export missing window metadata")
@@ -144,8 +145,8 @@ func TestRenderQueuePurgePersistsQueuedStageTrace(t *testing.T) {
 	h.setDecisionJournal(journal)
 
 	const traceID = "trace-render-purge"
-	resp := h.Handle(Request{
-		Type: TypeStateUpdate, WindowID: 42, Action: "active", Event: "UserPromptSubmit",
+	resp := h.Handle(protocol.Request{
+		Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Event: "UserPromptSubmit",
 		TraceID: traceID, RequestID: "request-render-purge",
 	})
 	if !resp.OK {
@@ -181,8 +182,8 @@ func TestRenderWorkerShutdownPersistsQueuedStageTraces(t *testing.T) {
 
 	traceIDs := []string{"trace-render-shutdown-a", "trace-render-shutdown-b"}
 	for i, traceID := range traceIDs {
-		resp := h.Handle(Request{
-			Type: TypeStateUpdate, WindowID: 42 + i, Action: "active", Event: "UserPromptSubmit",
+		resp := h.Handle(protocol.Request{
+			Type: protocol.TypeStateUpdate, WindowID: 42 + i, Action: "active", Event: "UserPromptSubmit",
 			TraceID: traceID, RequestID: "request-" + traceID,
 		})
 		if !resp.OK {
@@ -221,9 +222,9 @@ func TestRendererCoalescesBoundedCausalIDsAndPersistsFailure(t *testing.T) {
 	}
 	h.setDecisionJournal(journal)
 
-	for _, req := range []Request{
-		{Type: TypeStateUpdate, WindowID: 42, Action: "active", Event: "UserPromptSubmit", TraceID: "trace-a", RequestID: "request-a", SourceEventID: "source-a"},
-		{Type: TypeStateUpdate, WindowID: 42, Action: "permission", Event: "PermissionRequest", TraceID: "trace-b", RequestID: "request-b", SourceEventID: "source-b"},
+	for _, req := range []protocol.Request{
+		{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Event: "UserPromptSubmit", TraceID: "trace-a", RequestID: "request-a", SourceEventID: "source-a"},
+		{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "permission", Event: "PermissionRequest", TraceID: "trace-b", RequestID: "request-b", SourceEventID: "source-b"},
 	} {
 		if resp := h.Handle(req); !resp.OK {
 			t.Fatalf("Handle(%s): %+v", req.TraceID, resp)
@@ -231,7 +232,7 @@ func TestRendererCoalescesBoundedCausalIDsAndPersistsFailure(t *testing.T) {
 	}
 	h.drainRenderQueueWith(fake.windows)
 
-	export := h.handleEventsExport(Request{Type: TypeEventsExport, WindowID: 42})
+	export := h.handleEventsExport(protocol.Request{Type: protocol.TypeEventsExport, WindowID: 42})
 	renderer := export.WindowMetadata[42].Renderer
 	if len(renderer.Generations) != 1 {
 		t.Fatalf("render generations = %+v; want one coalesced generation", renderer.Generations)
@@ -241,7 +242,7 @@ func TestRendererCoalescesBoundedCausalIDsAndPersistsFailure(t *testing.T) {
 		t.Fatalf("coalesced generation = %+v; want rendered success", generation)
 	}
 	if len(generation.TraceIDs) != 2 || len(generation.RequestIDs) != 2 ||
-		len(generation.TraceIDs) > MaxRenderCausalIDs {
+		len(generation.TraceIDs) > protocol.MaxRenderCausalIDs {
 		t.Fatalf("coalesced causal IDs = %+v", generation)
 	}
 	for _, event := range export.EventsByWindow[42] {
@@ -278,7 +279,7 @@ func TestRendererCoalescesBoundedCausalIDsAndPersistsFailure(t *testing.T) {
 	fake.mu.Lock()
 	fake.setUserVarsErr = errors.New("kitty unavailable")
 	fake.mu.Unlock()
-	if resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "stop_failure", Event: "Stop", TraceID: "trace-fail", RequestID: "request-fail"}); !resp.OK {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "stop_failure", Event: "Stop", TraceID: "trace-fail", RequestID: "request-fail"}); !resp.OK {
 		t.Fatalf("failure Handle: %+v", resp)
 	}
 	h.drainRenderQueueWith(fake.windows)
@@ -295,7 +296,7 @@ func TestRendererCoalescesBoundedCausalIDsAndPersistsFailure(t *testing.T) {
 	fake.setUserVarsErr = nil
 	fake.mu.Unlock()
 	h.renderSnapshot(fake.windows)
-	recovered := h.handleEventsExport(Request{Type: TypeEventsExport, WindowID: 42}).WindowMetadata[42].Renderer
+	recovered := h.handleEventsExport(protocol.Request{Type: protocol.TypeEventsExport, WindowID: 42}).WindowMetadata[42].Renderer
 	matching := 0
 	for _, item := range recovered.Generations {
 		if item.Generation == recovered.RenderedGen {

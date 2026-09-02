@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -22,7 +23,7 @@ import (
 // settleReason returns the reason on the last ScreenStopProbe row for a window.
 func settleReason(t *testing.T, h *Handler, windowID int) string {
 	t.Helper()
-	event, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: windowID}).Events, screenStopProbeEvent)
+	event, ok := lastEventNamed(h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: windowID}).Events, screenStopProbeEvent)
 	if !ok {
 		t.Fatalf("no %s row on window %d", screenStopProbeEvent, windowID)
 	}

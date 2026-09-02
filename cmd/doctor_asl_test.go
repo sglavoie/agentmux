@@ -11,7 +11,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/aslcontract"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // dimension pulls one answer out of a report by name.
@@ -42,11 +42,11 @@ func pairedInputs() aslIntegrationInputs {
 			ExecutableSource: aslbridge.SourceConfigured,
 			ContractSetID:    aslcontract.ContractSetID,
 		},
-		Reconcile: &daemon.ASLReconcileSnapshot{
+		Reconcile: &protocol.ASLReconcileSnapshot{
 			StateRoot: "/srv/asl-state", Sweeps: 12, IntervalSeconds: 5, LagSeconds: 3,
 			PlansPresent: 4, ContractSetID: aslcontract.ContractSetID,
 		},
-		Delivery: &daemon.ASLHookDeliverySnapshot{Accepted: 31},
+		Delivery: &protocol.ASLHookDeliverySnapshot{Accepted: 31},
 	}
 }
 

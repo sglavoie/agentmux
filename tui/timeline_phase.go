@@ -5,16 +5,16 @@ import (
 	"sort"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 type timelinePhase struct {
 	kind         string // "preamble" | "active" | "subagent" | "compact" | "gap" | "separator"
 	startAt      time.Time
 	endAt        time.Time // zero = ongoing
-	events       []daemon.SessionEvent
-	termEvent    *daemon.SessionEvent // event that closed this phase (nil = ongoing)
-	contextLimit bool                 // phase terminated by context-limit probe
+	events       []protocol.SessionEvent
+	termEvent    *protocol.SessionEvent // event that closed this phase (nil = ongoing)
+	contextLimit bool                   // phase terminated by context-limit probe
 }
 
 // phaseDuration returns a human-readable duration string, or "ongoing" if endAt is zero.

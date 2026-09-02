@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -19,16 +20,16 @@ import (
 func TestMaintenanceTick_MergesPersistedFactsWithHookState(t *testing.T) {
 	h := newTestHandler()
 	now := time.Now()
-	process := HarnessProcessIdentity{Harness: "claude", PID: 4321, StartToken: "Mon Jul 13 10:11:12 2026"}
+	process := protocol.HarnessProcessIdentity{Harness: "claude", PID: 4321, StartToken: "Mon Jul 13 10:11:12 2026"}
 
 	// Persisted multi-source durable state for window 42: an interactive harness
 	// "active" fact, a live between-turns ASL lease, and an OLDER legacy
 	// window-keyed fact that collides with the source the degraded-window hook
 	// will create.
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 1, At: now.Unix(), HarnessProcess: process})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: now.Unix()})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceLegacy, Key: windowKey(42)}, Action: "active", Seq: 1, At: now.Add(-time.Minute).Unix()})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 1, At: now.Unix(), HarnessProcess: process})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: now.Unix()})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceLegacy, Key: windowKey(42)}, Action: "active", Seq: 1, At: now.Add(-time.Minute).Unix()})
 	encoded, err := WindowState{
 		LastAction: "active",
 		Reducer:    r,
@@ -80,7 +81,7 @@ func TestMaintenanceTick_MergesPersistedFactsWithHookState(t *testing.T) {
 	// A real hook lands FIRST, before any restore, creating the window's
 	// in-process state for the legacy window source only. The disjoint harness
 	// fact and ASL lease live solely in the persisted amx_state.
-	if resp := h.handleStateUpdate(Request{Type: TypeStateUpdate, WindowID: 42, Action: "permission"}); !resp.OK {
+	if resp := h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "permission"}); !resp.OK {
 		t.Fatalf("degraded-window hook = %+v; want OK", resp)
 	}
 	h.stateMu.Lock()
@@ -105,17 +106,17 @@ func TestMaintenanceTick_MergesPersistedFactsWithHookState(t *testing.T) {
 		t.Fatal("maintenance merge replaced the in-process state instead of merging into it")
 	}
 
-	legacyFact := func(facts []SourceFactSnapshot) *SourceFactSnapshot {
+	legacyFact := func(facts []protocol.SourceFactSnapshot) *protocol.SourceFactSnapshot {
 		for i := range facts {
-			if facts[i].Kind == SourceLegacy && facts[i].Key == windowKey(42) {
+			if facts[i].Kind == protocol.SourceLegacy && facts[i].Key == windowKey(42) {
 				return &facts[i]
 			}
 		}
 		return nil
 	}
-	harnessFact := func(facts []SourceFactSnapshot) *SourceFactSnapshot {
+	harnessFact := func(facts []protocol.SourceFactSnapshot) *protocol.SourceFactSnapshot {
 		for i := range facts {
-			if facts[i].Kind == SourceHarness && facts[i].Key == "claude:s1" {
+			if facts[i].Kind == protocol.SourceHarness && facts[i].Key == "claude:s1" {
 				return &facts[i]
 			}
 		}
@@ -191,9 +192,9 @@ func TestMaintenanceTick_MergesAcknowledgedPersistedFactsWithHookState(t *testin
 	// and a live between-turns ASL lease, both acknowledged by a user_clear that
 	// preserved the loop lease. The harness fact's Seq 5 is the persisted cutoff.
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 5, At: now.Unix()})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: now.Unix()})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceProbe, Key: "user"}, Action: "user_clear", Seq: 0, At: now.Unix()})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 5, At: now.Unix()})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: now.Unix()})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceProbe, Key: "user"}, Action: "user_clear", Seq: 0, At: now.Unix()})
 	if eff := r.Reduce(now.Unix()); eff.Icon != "" || !eff.Looping {
 		t.Fatalf("persisted /clear Reduce = %+v; want icon-less with a live lease", eff)
 	}
@@ -248,7 +249,7 @@ func TestMaintenanceTick_MergesAcknowledgedPersistedFactsWithHookState(t *testin
 	// A real hook lands FIRST, before any restore, creating the window's
 	// in-process state for the legacy window source only. The acknowledged
 	// harness fact and live ASL lease live solely in the persisted amx_state.
-	if resp := h.handleStateUpdate(Request{Type: TypeStateUpdate, WindowID: 42, Action: "permission"}); !resp.OK {
+	if resp := h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "permission"}); !resp.OK {
 		t.Fatalf("degraded-window hook = %+v; want OK", resp)
 	}
 	h.stateMu.Lock()
@@ -272,17 +273,17 @@ func TestMaintenanceTick_MergesAcknowledgedPersistedFactsWithHookState(t *testin
 		t.Fatal("maintenance merge replaced the in-process state instead of merging into it")
 	}
 
-	aslFact := func(facts []SourceFactSnapshot) *SourceFactSnapshot {
+	aslFact := func(facts []protocol.SourceFactSnapshot) *protocol.SourceFactSnapshot {
 		for i := range facts {
-			if facts[i].Kind == SourceASL && facts[i].Key == "run-1" {
+			if facts[i].Kind == protocol.SourceASL && facts[i].Key == "run-1" {
 				return &facts[i]
 			}
 		}
 		return nil
 	}
-	harnessFact := func(facts []SourceFactSnapshot) *SourceFactSnapshot {
+	harnessFact := func(facts []protocol.SourceFactSnapshot) *protocol.SourceFactSnapshot {
 		for i := range facts {
-			if facts[i].Kind == SourceHarness && facts[i].Key == "claude:s1" {
+			if facts[i].Kind == protocol.SourceHarness && facts[i].Key == "claude:s1" {
 				return &facts[i]
 			}
 		}
@@ -309,10 +310,10 @@ func TestMaintenanceTick_MergesAcknowledgedPersistedFactsWithHookState(t *testin
 
 	// The retained acknowledged cutoff keeps a pre-clear duplicate AND a reordered
 	// event no-ops for the harness source.
-	if dec := merged.Reducer.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 5, At: now.Unix()}); dec != DecisionDuplicate {
+	if dec := merged.Reducer.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 5, At: now.Unix()}); dec != protocol.DecisionDuplicate {
 		t.Fatalf("pre-clear replay decision = %s, want duplicate (cutoff lost)", dec)
 	}
-	if dec := merged.Reducer.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 3, At: now.Unix()}); dec != DecisionReordered {
+	if dec := merged.Reducer.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 3, At: now.Unix()}); dec != protocol.DecisionReordered {
 		t.Fatalf("pre-clear reorder decision = %s, want reordered (cutoff lost)", dec)
 	}
 
@@ -371,7 +372,7 @@ func encodeMergeWindow(t *testing.T, r *Reducer, shadowSeq uint64, now time.Time
 
 // mergedFactBySource returns the merged snapshot for a source (nil when absent),
 // so a test can assert acknowledgement and presence after a merge.
-func mergedFactBySource(facts []SourceFactSnapshot, id SourceID) *SourceFactSnapshot {
+func mergedFactBySource(facts []protocol.SourceFactSnapshot, id protocol.SourceID) *protocol.SourceFactSnapshot {
 	for i := range facts {
 		if facts[i].Source() == id {
 			return &facts[i]

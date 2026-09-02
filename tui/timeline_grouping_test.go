@@ -4,16 +4,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // se builds a minimal SessionEvent for use in timeline tests.
-func se(at int64, action, event, tool string) daemon.SessionEvent {
-	return daemon.SessionEvent{At: at, Action: action, Event: event, ToolName: tool}
+func se(at int64, action, event, tool string) protocol.SessionEvent {
+	return protocol.SessionEvent{At: at, Action: action, Event: event, ToolName: tool}
 }
 
-func seFlags(at int64, action string, contextLimit, resetFlow, suppressed bool) daemon.SessionEvent {
-	return daemon.SessionEvent{
+func seFlags(at int64, action string, contextLimit, resetFlow, suppressed bool) protocol.SessionEvent {
+	return protocol.SessionEvent{
 		At:           at,
 		Action:       action,
 		Event:        action,
@@ -38,7 +38,7 @@ func TestGroupIntoPhasesEmpty(t *testing.T) {
 }
 
 func TestGroupIntoPhasesEmptySlice(t *testing.T) {
-	phases := groupIntoPhases([]daemon.SessionEvent{})
+	phases := groupIntoPhases([]protocol.SessionEvent{})
 	if len(phases) != 1 {
 		t.Fatalf("expected 1 phase, got %d", len(phases))
 	}
@@ -49,7 +49,7 @@ func TestGroupIntoPhasesEmptySlice(t *testing.T) {
 
 // TestGroupIntoPhasesOngoingActive verifies a single active phase with no terminal event stays ongoing.
 func TestGroupIntoPhasesOngoingActive(t *testing.T) {
-	events := []daemon.SessionEvent{
+	events := []protocol.SessionEvent{
 		se(1000, "active", "SessionStart", ""),
 		se(1010, "active", "PreToolUse", "bash"),
 	}
@@ -72,7 +72,7 @@ func TestGroupIntoPhasesOngoingActive(t *testing.T) {
 // TestGroupIntoPhasesActiveThenStop verifies two complete phases with no gap.
 func TestGroupIntoPhasesTwoActiveStopCycles(t *testing.T) {
 	// timestamps close together (<60s gap) so no gap phases are inserted
-	events := []daemon.SessionEvent{
+	events := []protocol.SessionEvent{
 		se(1000, "active", "SessionStart", ""),
 		se(1010, "active", "PreToolUse", "bash"),
 		se(1020, "stop", "Stop", ""),
@@ -103,7 +103,7 @@ func TestGroupIntoPhasesTwoActiveStopCycles(t *testing.T) {
 
 // TestGroupIntoPhasesGapInserted verifies a gap phase is inserted when phases are >60s apart.
 func TestGroupIntoPhasesGapInserted(t *testing.T) {
-	events := []daemon.SessionEvent{
+	events := []protocol.SessionEvent{
 		se(1000, "active", "SessionStart", ""),
 		se(1005, "stop", "Stop", ""),
 		// gap: 1005 → 1075 = 70s ≥ 60s
@@ -133,7 +133,7 @@ func TestGroupIntoPhasesGapInserted(t *testing.T) {
 
 // TestGroupIntoPhasesNoGapBelowThreshold verifies no gap phase when gap < 60s.
 func TestGroupIntoPhasesNoGapBelowThreshold(t *testing.T) {
-	events := []daemon.SessionEvent{
+	events := []protocol.SessionEvent{
 		se(1000, "active", "SessionStart", ""),
 		se(1005, "stop", "Stop", ""),
 		// gap: 1005 → 1030 = 25s < 60s
@@ -153,7 +153,7 @@ func TestGroupIntoPhasesNoGapBelowThreshold(t *testing.T) {
 
 // TestGroupIntoPhasesSuppressedEventsIncluded verifies suppressed events are kept in phase.events.
 func TestGroupIntoPhasesSuppressedEventsIncluded(t *testing.T) {
-	events := []daemon.SessionEvent{
+	events := []protocol.SessionEvent{
 		se(1000, "active", "SessionStart", ""),
 		{At: 1010, Action: "active", Event: "PreToolUse", ToolName: "bash", Suppressed: true},
 	}
@@ -175,7 +175,7 @@ func TestGroupIntoPhasesSuppressedEventsIncluded(t *testing.T) {
 // TestGroupIntoPhasesContextLimit verifies contextLimit flag propagates from terminal event.
 func TestGroupIntoPhasesContextLimit(t *testing.T) {
 	ev := seFlags(1010, "stop_failure", true, false, false)
-	events := []daemon.SessionEvent{
+	events := []protocol.SessionEvent{
 		se(1000, "active", "SessionStart", ""),
 		ev,
 	}
@@ -190,8 +190,8 @@ func TestGroupIntoPhasesContextLimit(t *testing.T) {
 
 // TestGroupIntoPhasesResetFlow verifies a separator phase is inserted when ResetFlow is true.
 func TestGroupIntoPhasesResetFlow(t *testing.T) {
-	resetEv := daemon.SessionEvent{At: 1020, Action: "active", Event: "SessionStart", ResetFlow: true}
-	events := []daemon.SessionEvent{
+	resetEv := protocol.SessionEvent{At: 1020, Action: "active", Event: "SessionStart", ResetFlow: true}
+	events := []protocol.SessionEvent{
 		se(1000, "active", "SessionStart", ""),
 		se(1005, "stop", "Stop", ""),
 		resetEv,
@@ -217,7 +217,7 @@ func TestGroupIntoPhasesResetFlow(t *testing.T) {
 // TestGroupIntoPhasesPreamblesBeforeFirstActive ensures events before any active
 // action land in a preamble phase.
 func TestGroupIntoPhasesPreamblesBeforeFirstActive(t *testing.T) {
-	events := []daemon.SessionEvent{
+	events := []protocol.SessionEvent{
 		se(1000, "idle", "SessionStart", ""),
 		se(1005, "active", "PreToolUse", "bash"),
 	}
@@ -232,7 +232,7 @@ func TestGroupIntoPhasesPreamblesBeforeFirstActive(t *testing.T) {
 
 // TestGroupIntoPhasesSubagentAndCompact verifies subagent and compact open their own phases.
 func TestGroupIntoPhasesSubagentAndCompact(t *testing.T) {
-	events := []daemon.SessionEvent{
+	events := []protocol.SessionEvent{
 		se(1000, "active", "SessionStart", ""),
 		se(1005, "subagent", "SubagentStart", ""),
 		se(1010, "compact", "PreCompact", ""),

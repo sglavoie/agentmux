@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/conversation"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 )
@@ -16,7 +16,7 @@ func TestResolveLiveConversationRequiresExactCurrentOwner(t *testing.T) {
 		{ID: 99, Title: "shell", Windows: []kitty.Window{{ID: 9, IsActive: true}}},
 		{ID: 100, Title: "api", Windows: []kitty.Window{owner}},
 	}}}
-	states := map[int]daemon.WindowStateSnapshot{10: {Conversation: &target}}
+	states := map[int]protocol.WindowStateSnapshot{10: {Conversation: &target}}
 
 	got, ok := session.ResolveLiveConversation(target, states, windows)
 	if !ok {
@@ -36,29 +36,29 @@ func TestResolveLiveConversationRejectsStaleSiblingAndOwnerMismatch(t *testing.T
 
 	tests := []struct {
 		name    string
-		states  map[int]daemon.WindowStateSnapshot
+		states  map[int]protocol.WindowStateSnapshot
 		windows []kitty.OSWindow
 	}{
 		{
 			name:    "closed window snapshot",
-			states:  map[int]daemon.WindowStateSnapshot{10: {Conversation: &target}},
+			states:  map[int]protocol.WindowStateSnapshot{10: {Conversation: &target}},
 			windows: nil,
 		},
 		{
 			name:    "split pane sibling",
-			states:  map[int]daemon.WindowStateSnapshot{11: {Conversation: &target}},
+			states:  map[int]protocol.WindowStateSnapshot{11: {Conversation: &target}},
 			windows: split,
 		},
 		{
 			name:   "owner harness changed",
-			states: map[int]daemon.WindowStateSnapshot{10: {Conversation: &target}},
+			states: map[int]protocol.WindowStateSnapshot{10: {Conversation: &target}},
 			windows: []kitty.OSWindow{{Tabs: []kitty.Tab{{ID: 100, Windows: []kitty.Window{{
 				ID: 10, IsActive: true, UserVars: kitty.UserVars{Profile: "work", Harness: "codex"},
 			}}}}}},
 		},
 		{
 			name:    "different parent session",
-			states:  map[int]daemon.WindowStateSnapshot{10: {Conversation: &other}},
+			states:  map[int]protocol.WindowStateSnapshot{10: {Conversation: &other}},
 			windows: split,
 		},
 	}
@@ -74,7 +74,7 @@ func TestResolveLiveConversationRejectsStaleSiblingAndOwnerMismatch(t *testing.T
 
 func TestResolveLiveConversationRejectsAmbiguousDuplicateOwners(t *testing.T) {
 	target := conversation.Identity{Harness: "codex", SessionID: "thread-1"}
-	states := map[int]daemon.WindowStateSnapshot{
+	states := map[int]protocol.WindowStateSnapshot{
 		10: {Conversation: &target},
 		20: {Conversation: &target},
 	}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
 
@@ -100,7 +101,7 @@ func TestSweepStale_ReNotifyAfterRecovery(t *testing.T) {
 
 		// Simulate a fresh active event: Handle clears NotifiedStale and
 		// re-seeds LastAction = "active".
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", SessionTitle: "W:api"})
+		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", SessionTitle: "W:api"})
 
 		h.stateMu.Lock()
 		stillNotified := h.store[42].NotifiedStale

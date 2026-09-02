@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // Latency budgets are separated from correctness here on purpose.
@@ -122,13 +123,13 @@ func TestPerformance_ShutdownJoinBudget(t *testing.T) {
 
 	c := NewClientWithSocket(SocketPath())
 	for i := 0; i < 5; i++ {
-		if _, err := c.Send(Request{Type: TypeStateUpdate, WindowID: i + 1, Action: "active"}); err != nil {
+		if _, err := c.Send(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: i + 1, Action: "active"}); err != nil {
 			t.Fatalf("state update %d: %v", i+1, err)
 		}
 	}
 
 	requested := time.Now()
-	if resp, err := c.Send(Request{Type: TypeShutdown}); err != nil {
+	if resp, err := c.Send(protocol.Request{Type: protocol.TypeShutdown}); err != nil {
 		t.Fatalf("shutdown Send: %v", err)
 	} else if !resp.OK {
 		t.Fatalf("shutdown response: %+v", resp)

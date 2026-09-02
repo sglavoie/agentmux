@@ -5,6 +5,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -30,8 +31,8 @@ func TestHandler_HookEventAgentSessionLoopStartedTargetsWorkspace(t *testing.T) 
 	)}
 	h.SetKittyClient(fake)
 
-	resp := h.Handle(Request{
-		Type:     TypeHookEvent,
+	resp := h.Handle(protocol.Request{
+		Type:     protocol.TypeHookEvent,
 		WindowID: 43,
 		Event:    "AgentSessionLoopStarted",
 		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{
@@ -44,7 +45,7 @@ func TestHandler_HookEventAgentSessionLoopStartedTargetsWorkspace(t *testing.T) 
 	if !resp.OK {
 		t.Fatalf("hook event response = %+v", resp)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) != 1 || detail.Events[0].Action != "loop_marker" {
 		t.Fatalf("events = %+v; want loop_marker on project pane", detail.Events)
 	}
@@ -85,8 +86,8 @@ func TestHandler_HookEventLoopLifecycleTargetsActiveTitleOwner(t *testing.T) {
 	)}
 	h.SetKittyClient(fake)
 
-	resp := h.Handle(Request{
-		Type:     TypeHookEvent,
+	resp := h.Handle(protocol.Request{
+		Type:     protocol.TypeHookEvent,
 		WindowID: 44,
 		Event:    "AgentSessionLoopStarted",
 		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{
@@ -109,7 +110,7 @@ func TestHandler_HookEventLoopLifecycleTargetsActiveTitleOwner(t *testing.T) {
 	if first != nil && (first.Looping || first.LoopingSet) {
 		t.Fatalf("first managed window state = %+v; loop marker must not land on window 42", first)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 44})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 44})
 	if len(detail.Events) != 1 || detail.Events[0].Action != "loop_marker" {
 		t.Fatalf("owner events = %+v; want loop_marker on the active title owner", detail.Events)
 	}
@@ -140,8 +141,8 @@ func TestHandler_HookEventAgentSessionLoopFinishedClearsLoopMarker(t *testing.T)
 	h.ensureWindowStateLocked(42).LoopingSet = true
 	h.stateMu.Unlock()
 
-	resp := h.Handle(Request{
-		Type:     TypeHookEvent,
+	resp := h.Handle(protocol.Request{
+		Type:     protocol.TypeHookEvent,
 		WindowID: 43,
 		Event:    "AgentSessionLoopFinished",
 		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{
@@ -155,7 +156,7 @@ func TestHandler_HookEventAgentSessionLoopFinishedClearsLoopMarker(t *testing.T)
 	if !resp.OK {
 		t.Fatalf("hook event response = %+v", resp)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) != 1 || detail.Events[0].Action != "idle" || detail.Events[0].Event != "AgentSessionLoopFinished" {
 		t.Fatalf("events = %+v; want idle AgentSessionLoopFinished on project pane", detail.Events)
 	}
@@ -183,17 +184,17 @@ func TestHandler_HookEventDefersResetSensitiveStop(t *testing.T) {
 		}})}
 		h.SetKittyClient(fake)
 
-		resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "Stop"})
+		resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "Stop"})
 		if !resp.OK {
 			t.Fatalf("Stop response = %+v", resp)
 		}
-		if detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}); len(detail.Events) != 0 {
+		if detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42}); len(detail.Events) != 0 {
 			t.Fatalf("events before deferred timer = %+v; want none", detail.Events)
 		}
 
 		time.Sleep(resetFlowStopDelay / 4)
-		resp = h.Handle(Request{
-			Type:        TypeHookEvent,
+		resp = h.Handle(protocol.Request{
+			Type:        protocol.TypeHookEvent,
 			WindowID:    42,
 			Event:       "SessionEnd",
 			PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{Reason: "clear"}),
@@ -205,7 +206,7 @@ func TestHandler_HookEventDefersResetSensitiveStop(t *testing.T) {
 		time.Sleep(resetFlowStopDelay)
 		synctest.Wait()
 
-		detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+		detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 		if len(detail.Events) != 2 {
 			t.Fatalf("events = %d, want 2 (%+v)", len(detail.Events), detail.Events)
 		}
@@ -240,18 +241,18 @@ func TestHandler_HookEventDeferredResetStopSupersededByPromptAndClear(t *testing
 		h.SetKittyClient(fake)
 
 		// The Stop enters the reset-defer window rather than painting immediately.
-		if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "Stop"}); !resp.OK {
+		if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "Stop"}); !resp.OK {
 			t.Fatalf("Stop response = %+v", resp)
 		}
 		// Advance less than the debounce so the stop is still pending.
 		time.Sleep(resetFlowStopDelay / 3)
 
 		// A fresh prompt begins the next turn and must cancel the pending stop.
-		if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "UserPromptSubmit"}); !resp.OK {
+		if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "UserPromptSubmit"}); !resp.OK {
 			t.Fatalf("UserPromptSubmit response = %+v", resp)
 		}
 		// F8 then wipes the tab, still before the original stop timer fires.
-		if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "user_clear"}); !resp.OK {
+		if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "user_clear"}); !resp.OK {
 			t.Fatalf("user_clear response = %+v", resp)
 		}
 
@@ -265,7 +266,7 @@ func TestHandler_HookEventDeferredResetStopSupersededByPromptAndClear(t *testing
 		if st == nil || st.DesiredIcon != "" {
 			t.Fatalf("state = %+v; want cleared icon after prompt+F8 supersede the deferred stop", st)
 		}
-		detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+		detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 		for _, ev := range detail.Events {
 			if ev.ResultIconState == "stop" {
 				t.Fatalf("events = %+v; the deferred stop must not fire after being superseded", detail.Events)

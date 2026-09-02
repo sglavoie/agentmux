@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestHandler_AutoApprovedPermission verifies that a Claude/default
@@ -20,21 +21,21 @@ func TestHandler_AutoApprovedPermission(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		// --- Case 1: PreToolUse guard live → real prompt, key must show ---
 		h := newTestHandler()
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
+		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
 
-		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+		resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "permission"})
 		if !resp.OK || !resp.Allowed || resp.IconState != "key" {
 			t.Fatalf("permission (PreToolUse guard live): want icon_state=\"key\", got %+v", resp)
 		}
 
 		// After the user approves, PostToolUse (active) replaces key → bolt.
-		resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse"})
+		resp = h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse"})
 		if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
 			t.Fatalf("active after approved permission: want icon_state=\"bolt\", got %+v", resp)
 		}
 
 		// The tool completing (idle) then clears the icon.
-		resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "idle"})
+		resp = h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "idle"})
 		if !resp.OK || !resp.Allowed || resp.IconState != "" {
 			t.Fatalf("idle after approved permission: want icon_state=\"\", got %+v", resp)
 		}
@@ -47,10 +48,10 @@ func TestHandler_AutoApprovedPermission(t *testing.T) {
 		}
 		h2 := NewHandler(guard, notifier)
 
-		h2.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
+		h2.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
 		time.Sleep(5 * time.Millisecond) // let the guard expire
 
-		resp = h2.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+		resp = h2.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "permission"})
 		if !resp.OK || !resp.Allowed || resp.IconState != "key" {
 			t.Fatalf("manual permission (guard expired): want icon_state=\"key\", got %+v", resp)
 		}
@@ -60,9 +61,9 @@ func TestHandler_AutoApprovedPermission(t *testing.T) {
 		// then Tool B's PermissionRequest fires while that guard is still live.
 		// The key icon must appear because the user needs to approve Tool B.
 		h3 := newTestHandler()
-		h3.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse"})
+		h3.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse"})
 
-		resp = h3.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+		resp = h3.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "permission"})
 		if !resp.OK || !resp.Allowed || resp.IconState != "key" {
 			t.Fatalf("manual permission (PostToolUse guard live): want icon_state=\"key\", got %+v", resp)
 		}
@@ -71,9 +72,9 @@ func TestHandler_AutoApprovedPermission(t *testing.T) {
 		// The Claude-only auto-approval heuristic must not apply to Codex, whose
 		// normal real-permission flow is PreToolUse followed by PermissionRequest.
 		h4 := newTestHandler()
-		h4.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Harness: "codex", Action: "active", Event: "PreToolUse"})
+		h4.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Harness: "codex", Action: "active", Event: "PreToolUse"})
 
-		resp = h4.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Harness: "codex", Action: "permission", Event: "PermissionRequest"})
+		resp = h4.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Harness: "codex", Action: "permission", Event: "PermissionRequest"})
 		if !resp.OK || !resp.Allowed || resp.IconState != "key" {
 			t.Fatalf("codex permission (PreToolUse guard live): want icon_state=\"key\", got %+v", resp)
 		}
@@ -96,9 +97,9 @@ func TestHandler_ClaudePermissionRequestSurfacesKey(t *testing.T) {
 		}
 		h := NewHandler(guard, notifier)
 
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
+		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
 
-		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission", Event: "PermissionRequest"})
+		resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "permission", Event: "PermissionRequest"})
 		if !resp.OK || !resp.Allowed || resp.IconState != "key" {
 			t.Fatalf("claude PermissionRequest (PreToolUse guard live): want icon_state=\"key\", got %+v", resp)
 		}
@@ -108,8 +109,8 @@ func TestHandler_ClaudePermissionRequestSurfacesKey(t *testing.T) {
 
 		// Claude's delayed Notification(permission_prompt) arrives ~6s later; it
 		// must keep the key alive, not repaint it.
-		resp = h.Handle(Request{
-			Type:             TypeStateUpdate,
+		resp = h.Handle(protocol.Request{
+			Type:             protocol.TypeStateUpdate,
 			WindowID:         1,
 			Action:           "permission",
 			Event:            "Notification",
@@ -123,7 +124,7 @@ func TestHandler_ClaudePermissionRequestSurfacesKey(t *testing.T) {
 		}
 
 		// The user approves: PostToolUse (active) replaces key → bolt.
-		resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse"})
+		resp = h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse"})
 		if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
 			t.Fatalf("active after approved permission: want icon_state=\"bolt\", got %+v", resp)
 		}

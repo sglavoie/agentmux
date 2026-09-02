@@ -5,6 +5,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -87,8 +88,8 @@ func TestProbeClaudeContextLimit_RecoveryReArmsNotifier(t *testing.T) {
 		// User runs /compact or /clear; Claude resumes and a new hook event
 		// for the same window lands with action=active. That should clear
 		// contextLimitNotified so a future stall can re-notify.
-		resp := h.Handle(Request{
-			Type:         TypeStateUpdate,
+		resp := h.Handle(protocol.Request{
+			Type:         protocol.TypeStateUpdate,
 			WindowID:     42,
 			Action:       "active",
 			Event:        "UserPromptSubmit",
@@ -150,8 +151,8 @@ func TestProbeClaudeContextLimit_UserClearReArmsNotifier(t *testing.T) {
 		t.Fatalf("contextLimitNotified[42] = false after probe; want true")
 	}
 
-	resp := h.Handle(Request{
-		Type:     TypeStateUpdate,
+	resp := h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 42,
 		Action:   "user_clear",
 		Account:  "work",

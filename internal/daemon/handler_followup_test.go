@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestHandler_ShutdownInvokedOnce locks in that back-to-back (or concurrent)
@@ -26,7 +27,7 @@ func TestHandler_ShutdownInvokedOnce(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				resp := h.Handle(Request{Type: TypeShutdown})
+				resp := h.Handle(protocol.Request{Type: protocol.TypeShutdown})
 				if !resp.OK {
 					t.Errorf("want ok=true, got %+v", resp)
 				}
@@ -60,10 +61,10 @@ func TestHandler_PermissionSurvivesActiveFollowUp(t *testing.T) {
 		}
 		h := NewHandler(guard, notifier)
 
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
+		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "permission"})
 		time.Sleep(20 * time.Millisecond)
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse"})
+		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse"})
 
 		time.Sleep(time.Second)
 		synctest.Wait()
@@ -78,8 +79,8 @@ func TestHandler_PermissionSurvivesActiveFollowUp(t *testing.T) {
 func TestHandler_CopilotPendingPromptBlocksTurnNoiseUntilUserResponds(t *testing.T) {
 	h := newTestHandler()
 
-	resp := h.Handle(Request{
-		Type:             TypeStateUpdate,
+	resp := h.Handle(protocol.Request{
+		Type:             protocol.TypeStateUpdate,
 		WindowID:         1,
 		Harness:          "copilot",
 		Action:           "elicitation",
@@ -90,8 +91,8 @@ func TestHandler_CopilotPendingPromptBlocksTurnNoiseUntilUserResponds(t *testing
 		t.Fatalf("Copilot plan prompt: want question icon, got %+v", resp)
 	}
 
-	resp = h.Handle(Request{
-		Type:     TypeStateUpdate,
+	resp = h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Harness:  "copilot",
 		Action:   "stop",
@@ -101,8 +102,8 @@ func TestHandler_CopilotPendingPromptBlocksTurnNoiseUntilUserResponds(t *testing
 		t.Fatalf("Copilot agentStop while prompt pending: want allowed=false, got %+v", resp)
 	}
 
-	resp = h.Handle(Request{
-		Type:     TypeStateUpdate,
+	resp = h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Harness:  "copilot",
 		Action:   "active",
@@ -112,8 +113,8 @@ func TestHandler_CopilotPendingPromptBlocksTurnNoiseUntilUserResponds(t *testing
 		t.Fatalf("Copilot trailing active while prompt pending: want allowed=false, got %+v", resp)
 	}
 
-	resp = h.Handle(Request{
-		Type:     TypeStateUpdate,
+	resp = h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Harness:  "copilot",
 		Action:   "active",
@@ -131,8 +132,8 @@ func TestHandler_ResetFlowSuppressesStopNotification(t *testing.T) {
 		notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
 		h := NewHandler(guard, notifier)
 
-		h.Handle(Request{
-			Type:         TypeStateUpdate,
+		h.Handle(protocol.Request{
+			Type:         protocol.TypeStateUpdate,
 			WindowID:     1,
 			Action:       "active",
 			Event:        "UserPromptSubmit",
@@ -141,8 +142,8 @@ func TestHandler_ResetFlowSuppressesStopNotification(t *testing.T) {
 			SessionTitle: "W:api",
 		})
 
-		resp := h.Handle(Request{
-			Type:     TypeStateUpdate,
+		resp := h.Handle(protocol.Request{
+			Type:     protocol.TypeStateUpdate,
 			WindowID: 1,
 			Action:   "stop",
 			Event:    "Stop",
@@ -166,8 +167,8 @@ func TestHandler_CopilotResetFlowSuppressesTrailingIdleNotification(t *testing.T
 		notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
 		h := NewHandler(guard, notifier)
 
-		h.Handle(Request{
-			Type:         TypeStateUpdate,
+		h.Handle(protocol.Request{
+			Type:         protocol.TypeStateUpdate,
 			WindowID:     1,
 			Harness:      "copilot",
 			Action:       "active",
@@ -177,9 +178,9 @@ func TestHandler_CopilotResetFlowSuppressesTrailingIdleNotification(t *testing.T
 			SessionTitle: "W:api",
 		})
 
-		for _, req := range []Request{
+		for _, req := range []protocol.Request{
 			{
-				Type:     TypeStateUpdate,
+				Type:     protocol.TypeStateUpdate,
 				WindowID: 1,
 				Harness:  "copilot",
 				Action:   "stop",
@@ -188,7 +189,7 @@ func TestHandler_CopilotResetFlowSuppressesTrailingIdleNotification(t *testing.T
 				SessionTitle: "W:api",
 			},
 			{
-				Type:     TypeStateUpdate,
+				Type:     protocol.TypeStateUpdate,
 				WindowID: 1,
 				Harness:  "copilot",
 				Action:   "stop",
@@ -197,7 +198,7 @@ func TestHandler_CopilotResetFlowSuppressesTrailingIdleNotification(t *testing.T
 				SessionTitle: "W:api",
 			},
 			{
-				Type:     TypeStateUpdate,
+				Type:     protocol.TypeStateUpdate,
 				WindowID: 1,
 				Harness:  "copilot",
 				Action:   "idle",
@@ -206,7 +207,7 @@ func TestHandler_CopilotResetFlowSuppressesTrailingIdleNotification(t *testing.T
 				SessionTitle: "W:api",
 			},
 			{
-				Type:             TypeStateUpdate,
+				Type:             protocol.TypeStateUpdate,
 				WindowID:         1,
 				Harness:          "copilot",
 				Action:           "stop",
@@ -235,8 +236,8 @@ func TestHandler_CopilotUserExitSessionEndClearsWithoutNotification(t *testing.T
 		notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
 		h := NewHandler(guard, notifier)
 
-		resp := h.Handle(Request{
-			Type:      TypeStateUpdate,
+		resp := h.Handle(protocol.Request{
+			Type:      protocol.TypeStateUpdate,
 			WindowID:  1,
 			Harness:   "copilot",
 			Action:    "stop",
@@ -281,9 +282,9 @@ func TestHandler_ElicitationCancelsPendingPermission(t *testing.T) {
 		}
 		h := NewHandler(guard, notifier)
 
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "permission"})
 		time.Sleep(20 * time.Millisecond)
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "elicitation"})
+		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "elicitation"})
 
 		// Wait well past the original debounce window so the permission timer
 		// would have fired if it had not been cancelled.
@@ -309,8 +310,8 @@ func TestHandler_ElicitationCancelsPendingPermission(t *testing.T) {
 
 func TestHandleStateUpdate_AccountFieldPropagated(t *testing.T) {
 	h := newTestHandler()
-	resp := h.Handle(Request{
-		Type:     TypeStateUpdate,
+	resp := h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Action:   "active",
 		Account:  "claude-work",

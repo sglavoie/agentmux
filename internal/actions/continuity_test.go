@@ -12,7 +12,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/conversation"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -116,8 +116,8 @@ func TestContinueFocusesOnlyAnExactLiveConversation(t *testing.T) {
 
 	result, err := DefaultRegistry().Execute(context.Background(), Dependencies{
 		Kitty: client, Config: continuityConfig(harness.Claude), Readers: map[string]transcript.Reader{harness.Claude: reader},
-		Daemon: func(daemon.Request) (daemon.Response, error) {
-			return daemon.Response{OK: true, States: map[int]daemon.WindowStateSnapshot{10: {Conversation: &identity}}}, nil
+		Daemon: func(protocol.Request) (protocol.Response, error) {
+			return protocol.Response{OK: true, States: map[int]protocol.WindowStateSnapshot{10: {Conversation: &identity}}}, nil
 		},
 	}, Continue, Request{Conversation: &meta})
 	if err != nil {
@@ -148,8 +148,8 @@ func TestContinueRefusesAnAmbiguousLiveConversation(t *testing.T) {
 
 	_, err := DefaultRegistry().Execute(context.Background(), Dependencies{
 		Kitty: client, Config: continuityConfig(harness.Codex), Readers: map[string]transcript.Reader{harness.Codex: reader},
-		Daemon: func(daemon.Request) (daemon.Response, error) {
-			return daemon.Response{OK: true, States: map[int]daemon.WindowStateSnapshot{
+		Daemon: func(protocol.Request) (protocol.Response, error) {
+			return protocol.Response{OK: true, States: map[int]protocol.WindowStateSnapshot{
 				10: {Conversation: &identity}, 20: {Conversation: &identity},
 			}}, nil
 		},
@@ -179,7 +179,7 @@ func TestContinueLaunchesNativeResumeForEachSupportedHarness(t *testing.T) {
 			meta := continuityMeta(t, tc.harness, "source-1", "work")
 			result, err := DefaultRegistry().Execute(context.Background(), Dependencies{
 				Kitty: client, Config: continuityConfig(tc.harness), Readers: map[string]transcript.Reader{tc.harness: reader},
-				Daemon: func(daemon.Request) (daemon.Response, error) { return daemon.Response{OK: true}, nil },
+				Daemon: func(protocol.Request) (protocol.Response, error) { return protocol.Response{OK: true}, nil },
 			}, Continue, Request{Conversation: &meta})
 			if err != nil {
 				t.Fatalf("Continue: %v", err)

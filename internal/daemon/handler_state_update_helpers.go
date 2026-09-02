@@ -3,24 +3,26 @@ package daemon
 import (
 	"strings"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 const (
-	suppressionReasonGuardBlocked           = DecisionReasonGuardBlocked
-	suppressionReasonSubagentStillRunning   = DecisionReasonSubagentStillRunning
-	suppressionReasonCopilotMidSubagent     = DecisionReasonCopilotMidSubagent
-	suppressionReasonCopilotPendingPrompt   = DecisionReasonCopilotPendingPrompt
-	suppressionReasonActiveAfterTerminal    = DecisionReasonActiveAfterTerminal
-	suppressionReasonElicitationPending     = DecisionReasonElicitationPending
-	suppressionReasonUnknownEvent           = DecisionReasonUnknownEvent
-	suppressionReasonAutoApprovedPerm       = DecisionReasonAutoApprovedPermission
-	suppressionReasonOwnerMismatch          = DecisionReasonOwnerMismatch
-	suppressionReasonUnmanagedPipeSource    = DecisionReasonUnmanagedPipeSource
-	suppressionReasonIgnoredEvent           = DecisionReasonIgnoredEvent
-	suppressionReasonInvalidPayload         = DecisionReasonInvalidPayload
-	suppressionReasonTerminalStopHeld       = DecisionReasonTerminalStopHeld
-	suppressionReasonTerminalStopSuperseded = DecisionReasonTerminalStopSuperseded
-	suppressionReasonTerminalStopBypassed   = DecisionReasonTerminalStopBypassed
+	suppressionReasonGuardBlocked           = protocol.DecisionReasonGuardBlocked
+	suppressionReasonSubagentStillRunning   = protocol.DecisionReasonSubagentStillRunning
+	suppressionReasonCopilotMidSubagent     = protocol.DecisionReasonCopilotMidSubagent
+	suppressionReasonCopilotPendingPrompt   = protocol.DecisionReasonCopilotPendingPrompt
+	suppressionReasonActiveAfterTerminal    = protocol.DecisionReasonActiveAfterTerminal
+	suppressionReasonElicitationPending     = protocol.DecisionReasonElicitationPending
+	suppressionReasonUnknownEvent           = protocol.DecisionReasonUnknownEvent
+	suppressionReasonAutoApprovedPerm       = protocol.DecisionReasonAutoApprovedPermission
+	suppressionReasonOwnerMismatch          = protocol.DecisionReasonOwnerMismatch
+	suppressionReasonUnmanagedPipeSource    = protocol.DecisionReasonUnmanagedPipeSource
+	suppressionReasonIgnoredEvent           = protocol.DecisionReasonIgnoredEvent
+	suppressionReasonInvalidPayload         = protocol.DecisionReasonInvalidPayload
+	suppressionReasonTerminalStopHeld       = protocol.DecisionReasonTerminalStopHeld
+	suppressionReasonTerminalStopSuperseded = protocol.DecisionReasonTerminalStopSuperseded
+	suppressionReasonTerminalStopBypassed   = protocol.DecisionReasonTerminalStopBypassed
 )
 
 func (h *Handler) lastKnownState(windowID int) (action, iconState string) {
@@ -33,9 +35,9 @@ func (h *Handler) lastKnownState(windowID int) (action, iconState string) {
 	return action, iconState
 }
 
-func sessionEventFromRequest(req Request, action, resultIconState, currentIconState string) SessionEvent {
+func sessionEventFromRequest(req protocol.Request, action, resultIconState, currentIconState string) protocol.SessionEvent {
 	now := time.Now()
-	ev := SessionEvent{
+	ev := protocol.SessionEvent{
 		At:                   now.Unix(),
 		ReceivedAtNs:         now.UnixNano(),
 		Event:                req.Event,
@@ -51,58 +53,58 @@ func sessionEventFromRequest(req Request, action, resultIconState, currentIconSt
 		ContextLimit:         req.ContextLimit,
 		ResetFlow:            req.ResetFlow,
 		QuestionPreview:      req.QuestionPreview,
-		RouteDecision:        req.routeDecision,
+		RouteDecision:        req.RouteDecision,
 		OriginWindowID:       req.WindowID,
 		TraceID:              req.TraceID,
-		ParentTraceID:        req.parentTraceID,
+		ParentTraceID:        req.ParentTraceID,
 		RequestID:            req.RequestID,
 		SourceEventID:        req.SourceEventID,
 		Attempt:              req.Attempt,
 		PayloadSize:          req.PayloadSize,
 		PayloadHMAC:          req.PayloadHMAC,
 		PayloadEncoding:      req.PayloadEncoding,
-		ParseOutcome:         req.parseOutcome,
-		NormalizationOutcome: req.normalizationOutcome,
+		ParseOutcome:         req.ParseOutcome,
+		NormalizationOutcome: req.NormalizationOutcome,
 		ProducerHarness:      req.Harness,
 		ProducerConfigDir:    req.ProducerConfigDir,
-		TargetHarness:        req.targetHarness,
+		TargetHarness:        req.TargetHarness,
 		Profile:              req.Account,
-		SaturationReason:     req.saturationReason,
-		StopHoldOutcome:      req.stopHoldOutcome,
-		StopHoldWaitedMs:     req.stopHoldWaitedMs,
-		StopConfirmedBy:      req.stopConfirmedBy,
+		SaturationReason:     req.SaturationReason,
+		StopHoldOutcome:      req.StopHoldOutcome,
+		StopHoldWaitedMs:     req.StopHoldWaitedMs,
+		StopConfirmedBy:      req.StopConfirmedBy,
 		TargetWindowID:       req.WindowID,
-		RouteEvidence:        cloneRoutingEvidence(req.routeEvidence),
-		eventRef:             req.eventRef,
+		RouteEvidence:        cloneRoutingEvidence(req.RouteEvidence),
+		EventRef:             req.EventRef,
 	}
 	// The normalized stamp carries the source-scoped identity resolved from the
 	// raw payload; legacy clients and synthetic requests have none. A
 	// quarantined stamp keeps its identity fields for attribution — the reducer
 	// separately refuses to fold it.
-	if req.normalized != nil {
-		ev.SourceKind = string(req.normalized.Source.Kind)
-		ev.SourceKey = req.normalized.Source.Key
-		ev.SourceSeq = req.normalized.Seq
-		ev.IdentityConfidence = identityConfidenceFor(*req.normalized)
-		ev.SessionID = req.normalized.SessionID
-		ev.RunID = req.normalized.RunID
-		ev.TurnID = req.normalized.TurnID
-		ev.ToolUseID = req.normalized.ToolUse
+	if req.Normalized != nil {
+		ev.SourceKind = string(req.Normalized.Source.Kind)
+		ev.SourceKey = req.Normalized.Source.Key
+		ev.SourceSeq = req.Normalized.Seq
+		ev.IdentityConfidence = identityConfidenceFor(*req.Normalized)
+		ev.SessionID = req.Normalized.SessionID
+		ev.RunID = req.Normalized.RunID
+		ev.TurnID = req.Normalized.TurnID
+		ev.ToolUseID = req.Normalized.ToolUse
 		if ev.SourceEventID == "" {
-			ev.SourceEventID = req.normalized.SourceEventID
+			ev.SourceEventID = req.Normalized.SourceEventID
 		}
 		if ev.NormalizationOutcome == "" {
-			ev.NormalizationOutcome = normalizationOutcomeFor(*req.normalized)
+			ev.NormalizationOutcome = normalizationOutcomeFor(*req.Normalized)
 		}
-		if req.normalized.OriginWindowID > 0 {
-			ev.OriginWindowID = req.normalized.OriginWindowID
+		if req.Normalized.OriginWindowID > 0 {
+			ev.OriginWindowID = req.Normalized.OriginWindowID
 		}
 	}
 	if ev.ParseOutcome == "" {
-		ev.ParseOutcome = ParseOutcomeSynthetic
+		ev.ParseOutcome = protocol.ParseOutcomeSynthetic
 	}
 	if ev.NormalizationOutcome == "" {
-		ev.NormalizationOutcome = NormalizationOutcomeNotApplicable
+		ev.NormalizationOutcome = protocol.NormalizationOutcomeNotApplicable
 	}
 	if ev.RouteEvidence != nil && ev.RouteEvidence.TargetWindowID > 0 {
 		ev.TargetWindowID = ev.RouteEvidence.TargetWindowID
@@ -110,21 +112,21 @@ func sessionEventFromRequest(req Request, action, resultIconState, currentIconSt
 	return ev
 }
 
-func suppressedSessionEvent(req Request, action, suppressionReason, currentIconState string) SessionEvent {
-	ev := sessionEventFromRequest(req, action, IconStatePreserve, currentIconState)
+func suppressedSessionEvent(req protocol.Request, action, suppressionReason, currentIconState string) protocol.SessionEvent {
+	ev := sessionEventFromRequest(req, action, protocol.IconStatePreserve, currentIconState)
 	ev.Suppressed = true
 	ev.SuppressionReason = suppressionReason
 	return ev
 }
 
-func shouldSuppressPendingElicitationActive(req Request, prevAction string) bool {
+func shouldSuppressPendingElicitationActive(req protocol.Request, prevAction string) bool {
 	if req.PreservesIcon || isCopilotRequest(req) || prevAction != "elicitation" || req.Action != "active" {
 		return false
 	}
 	return !isElicitationResolutionEvent(req)
 }
 
-func isElicitationResolutionEvent(req Request) bool {
+func isElicitationResolutionEvent(req protocol.Request) bool {
 	if req.IsPrompt {
 		return true
 	}

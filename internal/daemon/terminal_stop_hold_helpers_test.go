@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -47,7 +48,7 @@ func terminalHoldPending(t *testing.T, h *Handler, windowID int) (pendingStopHol
 // confirmTerminalHold drives the probe confirmation seam the way
 // applyAuthoritativeIdle does — under stateMu — without needing a live screen or
 // transcript read.
-func confirmTerminalHold(t *testing.T, h *Handler, windowID int, source SourceID) bool {
+func confirmTerminalHold(t *testing.T, h *Handler, windowID int, source protocol.SourceID) bool {
 	t.Helper()
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
@@ -56,7 +57,7 @@ func confirmTerminalHold(t *testing.T, h *Handler, windowID int, source SourceID
 
 // claudeScreenProbeSource is the SourceID the Claude screen probe settles under,
 // and the one the confirmation seam maps to StopConfirmedByClaudeScreen.
-var claudeScreenProbeSource = SourceID{Kind: SourceProbe, Key: claudeScreenStopProbeSource}
+var claudeScreenProbeSource = protocol.SourceID{Kind: protocol.SourceProbe, Key: claudeScreenStopProbeSource}
 
 // newTerminalHoldProbeHandler builds the pane shape where the confirmed-idle
 // gate and the harness's own screen probe both apply: an interactive managed tab
@@ -86,7 +87,7 @@ func releaseHoldAtTestEnd(t *testing.T, h *Handler, windowID int) {
 	t.Cleanup(func() { h.cancelStopHold(windowID) })
 }
 
-func windowFacts(t *testing.T, h *Handler, windowID int) []SourceFactSnapshot {
+func windowFacts(t *testing.T, h *Handler, windowID int) []protocol.SourceFactSnapshot {
 	t.Helper()
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
@@ -103,7 +104,7 @@ func windowFacts(t *testing.T, h *Handler, windowID int) []SourceFactSnapshot {
 func assertNoProbeStopFact(t *testing.T, h *Handler, windowID int) {
 	t.Helper()
 	for _, fact := range windowFacts(t, h, windowID) {
-		if fact.Kind == SourceProbe {
+		if fact.Kind == protocol.SourceProbe {
 			t.Fatalf("probe fact %+v settled; the held native stop owns this transition", fact)
 		}
 	}
@@ -113,13 +114,13 @@ func assertNoProbeStopFact(t *testing.T, h *Handler, windowID int) {
 // entered the terminal class instead of painting immediately.
 func armTerminalHold(t *testing.T, h *Handler) {
 	t.Helper()
-	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "UserPromptSubmit"}); !resp.OK {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "UserPromptSubmit"}); !resp.OK {
 		t.Fatalf("UserPromptSubmit response = %+v", resp)
 	}
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 		t.Fatalf("icon after prompt = %q, want bolt", eff.Icon)
 	}
-	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "Stop"}); !resp.OK {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "Stop"}); !resp.OK {
 		t.Fatalf("Stop response = %+v", resp)
 	}
 	pending, armed := terminalHoldPending(t, h, 42)
@@ -135,10 +136,10 @@ func armTerminalHold(t *testing.T, h *Handler) {
 // carrying the session it belongs to and the exact process fingerprint that
 // emitted it, so the daemon can tell this stop's producer apart from any sibling
 // process sharing the window.
-func deliverProcessStop(t *testing.T, h *Handler, windowID int, identity HarnessProcessIdentity, sessionID string) {
+func deliverProcessStop(t *testing.T, h *Handler, windowID int, identity protocol.HarnessProcessIdentity, sessionID string) {
 	t.Helper()
-	resp := h.Handle(Request{
-		Type: TypeHookEvent, WindowID: windowID, Event: "Stop",
+	resp := h.Handle(protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: windowID, Event: "Stop",
 		Harness: identity.Harness, HarnessProcess: &identity,
 		PayloadJSON: `{"session_id":"` + sessionID + `"}`,
 	})
@@ -177,24 +178,24 @@ func awaitStopHoldClaim(t *testing.T, claims <-chan struct{}, failure string, re
 	}
 }
 
-func lastStopEvent(t *testing.T, h *Handler, windowID int) SessionEvent {
+func lastStopEvent(t *testing.T, h *Handler, windowID int) protocol.SessionEvent {
 	t.Helper()
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: windowID})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: windowID})
 	for i := len(detail.Events) - 1; i >= 0; i-- {
 		if detail.Events[i].Event == "Stop" {
 			return detail.Events[i]
 		}
 	}
 	t.Fatalf("no committed Stop event in %+v", detail.Events)
-	return SessionEvent{}
+	return protocol.SessionEvent{}
 }
 
-func stopHoldOutcomes(t *testing.T, h *Handler, windowID int) []StopHoldOutcome {
+func stopHoldOutcomes(t *testing.T, h *Handler, windowID int) []protocol.StopHoldOutcome {
 	t.Helper()
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: windowID})
-	var out []StopHoldOutcome
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: windowID})
+	var out []protocol.StopHoldOutcome
 	for _, ev := range detail.Events {
-		if ev.Event == EventTerminalStopHold {
+		if ev.Event == protocol.EventTerminalStopHold {
 			out = append(out, ev.StopHoldOutcome)
 		}
 	}
@@ -205,10 +206,10 @@ func stopHoldOutcomes(t *testing.T, h *Handler, windowID int) []StopHoldOutcome 
 // hold rows carry action "stop" too but apply nothing, so they are excluded.
 func settledStopEvents(t *testing.T, h *Handler, windowID int) int {
 	t.Helper()
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: windowID})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: windowID})
 	settled := 0
 	for _, ev := range detail.Events {
-		if ev.Action == "stop" && ev.Event != EventTerminalStopHold {
+		if ev.Action == "stop" && ev.Event != protocol.EventTerminalStopHold {
 			settled++
 		}
 	}

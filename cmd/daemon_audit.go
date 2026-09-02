@@ -10,8 +10,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/spf13/cobra"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // auditSampleInterval is the fixed cadence between invariant samples.
@@ -95,7 +96,7 @@ func runDaemonAudit(cmd *cobra.Command, _ []string) error {
 			if err != nil {
 				record(doctorFinding{Severity: severityFailure, Check: "daemon_export", Message: fmt.Sprintf("daemon export is unavailable: %s", err)})
 			} else {
-				var liveByID map[int]daemon.WindowLiveMetadata
+				var liveByID map[int]protocol.WindowLiveMetadata
 				if windows, kittyErr := newDoctorKitty().ListWindows(); kittyErr == nil {
 					liveByID = daemonExportLiveMetadata(windows, snapshot, 0)
 				}

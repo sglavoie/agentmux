@@ -13,6 +13,8 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // busySince reads the window's busy-stretch anchor.
@@ -141,8 +143,8 @@ func TestBusySinceNotRestampedByIdenticalRepublish(t *testing.T) {
 // publishEffectiveLocked, and must leave a live stretch running.
 func TestBusySinceUntouchedBySkipReduceUpdate(t *testing.T) {
 	h := newTestHandler()
-	if resp := h.handleStateUpdate(Request{
-		Type: TypeStateUpdate, WindowID: 7, Action: "active", Event: "UserPromptSubmit", IsPrompt: true,
+	if resp := h.handleStateUpdate(protocol.Request{
+		Type: protocol.TypeStateUpdate, WindowID: 7, Action: "active", Event: "UserPromptSubmit", IsPrompt: true,
 	}); !resp.OK || !resp.Allowed {
 		t.Fatalf("active update rejected: %+v", resp)
 	}
@@ -156,8 +158,8 @@ func TestBusySinceUntouchedBySkipReduceUpdate(t *testing.T) {
 	factsBefore := h.store[7].Reducer.Facts()
 	h.stateMu.Unlock()
 
-	if resp := h.handleStateUpdate(Request{
-		Type: TypeStateUpdate, WindowID: 7, Action: "active", Event: "PostToolUse", PreservesIcon: true,
+	if resp := h.handleStateUpdate(protocol.Request{
+		Type: protocol.TypeStateUpdate, WindowID: 7, Action: "active", Event: "PostToolUse", PreservesIcon: true,
 	}); !resp.OK {
 		t.Fatalf("child-complete update = %+v; want OK", resp)
 	}

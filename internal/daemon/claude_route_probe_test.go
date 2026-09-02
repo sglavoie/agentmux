@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -83,7 +84,7 @@ func TestProbeClaudeScreenStop_RoutedProducerSettlesManagedTarget(t *testing.T) 
 	if eff, visible := windowEffective(t, h, 42); eff.Icon != "stop" || visible != "stop" {
 		t.Fatalf("target effective = %+v visible %q, want stop/stop", eff, visible)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if ev, ok := lastEventNamed(detail.Events, screenStopProbeEvent); !ok || ev.Action != "stop" {
 		t.Fatalf("target ScreenStopProbe = %+v ok=%v, want stop", ev, ok)
 	}
@@ -127,7 +128,7 @@ func TestProbeClaudeScreenStop_RoutedBusyProducerTitleKeepsManagedTargetActive(t
 	if eff, visible := windowEffective(t, h, 42); eff.Icon != "bolt" || visible != "bolt" {
 		t.Fatalf("managed target with busy producer title = %+v/%q, want bolt/bolt", eff, visible)
 	}
-	if ev, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, screenStopProbeEvent); ok {
+	if ev, ok := lastEventNamed(h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42}).Events, screenStopProbeEvent); ok {
 		t.Fatalf("target ScreenStopProbe recorded for busy routed producer: %+v", ev)
 	}
 }
@@ -173,7 +174,7 @@ func TestProbeClaudeScreenStop_RoutedBusyTitleInvalidatesStaleIdleRead(t *testin
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 		t.Fatalf("busy-title publication did not invalidate stale idle read: %+v", eff)
 	}
-	if ev, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, screenStopProbeEvent); ok {
+	if ev, ok := lastEventNamed(h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42}).Events, screenStopProbeEvent); ok {
 		t.Fatalf("ScreenStopProbe recorded from stale idle-title snapshot: %+v", ev)
 	}
 }
@@ -242,19 +243,19 @@ func TestProbeClaudeContextLimit_RoutedSourceReceiptInvalidatesObservation(t *te
 		if match != kitty.MatchWindowByID(43) || extent != "screen" {
 			return
 		}
-		normalized := NormalizedEvent{
-			Source:    SourceID{Kind: SourceLegacy, Key: "window:43"},
+		normalized := protocol.NormalizedEvent{
+			Source:    protocol.SourceID{Kind: protocol.SourceLegacy, Key: "window:43"},
 			Action:    "active",
 			At:        base.Unix() + 1,
 			SessionID: "source-local",
 			Event:     "UserPromptSubmit",
 		}
-		if resp := h.handleStateUpdate(Request{
-			Type:       TypeStateUpdate,
+		if resp := h.handleStateUpdate(protocol.Request{
+			Type:       protocol.TypeStateUpdate,
 			WindowID:   43,
 			Action:     "active",
 			Event:      "UserPromptSubmit",
-			normalized: &normalized,
+			Normalized: &normalized,
 		}); !resp.OK {
 			t.Fatalf("source receipt update rejected: %+v", resp)
 		}
@@ -264,7 +265,7 @@ func TestProbeClaudeContextLimit_RoutedSourceReceiptInvalidatesObservation(t *te
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 		t.Fatalf("source-receipt-stale observation changed target to %+v, want bolt", eff)
 	}
-	if _, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, claudeContextLimitProbeEvent); ok {
+	if _, ok := lastEventNamed(h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42}).Events, claudeContextLimitProbeEvent); ok {
 		t.Fatal("context-limit audit row recorded from stale source receipt")
 	}
 }
@@ -299,8 +300,8 @@ func setProbeWindowTitle(t *testing.T, windows []kitty.OSWindow, windowID int, t
 
 func seedRoutedClaudeProbe(t *testing.T, h *Handler, targetWindowID, sourceWindowID int, sessionID string, at int64) uint64 {
 	t.Helper()
-	normalized := NormalizedEvent{
-		Source:         SourceID{Kind: SourceHarness, Key: harness.Claude + ":" + sessionID},
+	normalized := protocol.NormalizedEvent{
+		Source:         protocol.SourceID{Kind: protocol.SourceHarness, Key: harness.Claude + ":" + sessionID},
 		Action:         "active",
 		At:             at,
 		OriginWindowID: sourceWindowID,
@@ -308,17 +309,17 @@ func seedRoutedClaudeProbe(t *testing.T, h *Handler, targetWindowID, sourceWindo
 		SessionID:      sessionID,
 		Event:          "UserPromptSubmit",
 	}
-	resp := h.handleStateUpdate(Request{
-		Type:             TypeStateUpdate,
+	resp := h.handleStateUpdate(protocol.Request{
+		Type:             protocol.TypeStateUpdate,
 		WindowID:         targetWindowID,
 		Action:           "active",
 		Event:            "UserPromptSubmit",
 		SessionTitle:     "W:owner",
 		Account:          "owner",
 		Harness:          harness.Claude,
-		targetHarness:    harness.Codex,
-		targetHarnessSet: true,
-		normalized:       &normalized,
+		TargetHarness:    harness.Codex,
+		TargetHarnessSet: true,
+		Normalized:       &normalized,
 	})
 	if !resp.OK {
 		t.Fatalf("seed routed Claude session %q rejected: %+v", sessionID, resp)

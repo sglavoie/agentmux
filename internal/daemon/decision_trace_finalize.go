@@ -4,41 +4,42 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
 
-func (h *Handler) effectiveStateForTrace(windowID int) EffectiveStateEvidence {
+func (h *Handler) effectiveStateForTrace(windowID int) protocol.EffectiveStateEvidence {
 	if h == nil || windowID <= 0 {
-		return EffectiveStateEvidence{}
+		return protocol.EffectiveStateEvidence{}
 	}
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	if st, ok := h.windowStateLocked(windowID); ok {
 		return effectiveStateEvidence(st.Effective)
 	}
-	return EffectiveStateEvidence{}
+	return protocol.EffectiveStateEvidence{}
 }
 
-func eventByReferenceLocked(st *WindowState, ref *sessionEventReference) *SessionEvent {
-	if st == nil || ref == nil || ref.daemonSeq == 0 {
+func eventByReferenceLocked(st *WindowState, ref *protocol.SessionEventReference) *protocol.SessionEvent {
+	if st == nil || ref == nil || ref.DaemonSeq == 0 {
 		return nil
 	}
 	for i := len(st.EventLog) - 1; i >= 0; i-- {
-		if st.EventLog[i].DaemonSeq == ref.daemonSeq {
+		if st.EventLog[i].DaemonSeq == ref.DaemonSeq {
 			return &st.EventLog[i]
 		}
 	}
 	return nil
 }
 
-func ensureDirectRouteEvidence(req Request) *RoutingEvidence {
-	if req.routeEvidence != nil {
-		evidence := cloneRoutingEvidence(req.routeEvidence)
+func ensureDirectRouteEvidence(req protocol.Request) *protocol.RoutingEvidence {
+	if req.RouteEvidence != nil {
+		evidence := cloneRoutingEvidence(req.RouteEvidence)
 		if evidence.TargetWindowID == 0 && evidence.ChosenRoute != routeDecisionRejected {
 			evidence.TargetWindowID = req.WindowID
 		}
 		if evidence.EffectiveHarness == "" {
-			evidence.EffectiveHarness = harness.NormalizeKnown(req.targetHarness)
+			evidence.EffectiveHarness = harness.NormalizeKnown(req.TargetHarness)
 			if evidence.EffectiveHarness == "" {
 				evidence.EffectiveHarness = harness.NormalizeKnown(req.Harness)
 			}
@@ -50,7 +51,7 @@ func ensureDirectRouteEvidence(req Request) *RoutingEvidence {
 	}
 	evidence := newRoutingEvidence(req.WindowID)
 	evidence.TargetWindowID = req.WindowID
-	evidence.EffectiveHarness = harness.NormalizeKnown(req.targetHarness)
+	evidence.EffectiveHarness = harness.NormalizeKnown(req.TargetHarness)
 	if evidence.EffectiveHarness == "" {
 		evidence.EffectiveHarness = harness.NormalizeKnown(req.Harness)
 	}
@@ -60,19 +61,19 @@ func ensureDirectRouteEvidence(req Request) *RoutingEvidence {
 	return evidence
 }
 
-func (h *Handler) finalizeBypassedStateUpdate(req Request, outcome applyOutcome, before EffectiveStateEvidence) {
+func (h *Handler) finalizeBypassedStateUpdate(req protocol.Request, outcome applyOutcome, before protocol.EffectiveStateEvidence) {
 	if req.WindowID <= 0 {
 		return
 	}
 	h.stateMu.Lock()
 	st := h.ensureWindowStateLocked(req.WindowID)
-	event := eventByReferenceLocked(st, req.eventRef)
+	event := eventByReferenceLocked(st, req.EventRef)
 	if event == nil {
-		fallback := sessionEventFromRequest(req, outcome.reduceAction, IconStatePreserve, desiredIconForState(st))
+		fallback := sessionEventFromRequest(req, outcome.reduceAction, protocol.IconStatePreserve, desiredIconForState(st))
 		fallback.Suppressed = true
 		fallback.SuppressionReason = outcome.skipReason
 		appended := h.appendEventLocked(req.WindowID, fallback)
-		event = eventByReferenceLocked(st, req.eventRef)
+		event = eventByReferenceLocked(st, req.EventRef)
 		if event == nil {
 			event = &appended
 		}
@@ -82,9 +83,9 @@ func (h *Handler) finalizeBypassedStateUpdate(req Request, outcome applyOutcome,
 	event.RequestID = req.RequestID
 	event.SourceEventID = firstNonEmpty(req.SourceEventID, event.SourceEventID)
 	event.Attempt = req.Attempt
-	event.ReducerDecision = DecisionBypassed
+	event.ReducerDecision = protocol.DecisionBypassed
 	if outcome.skipReason == "" {
-		outcome.skipReason = DecisionReasonReducerBypassed
+		outcome.skipReason = protocol.DecisionReasonReducerBypassed
 	}
 	event.DecisionReason = outcome.skipReason
 	event.ReducerReason = outcome.skipReason
@@ -93,8 +94,8 @@ func (h *Handler) finalizeBypassedStateUpdate(req Request, outcome applyOutcome,
 	event.EffectiveAfter = &after
 	event.RouteEvidence = ensureDirectRouteEvidence(req)
 	event.TargetWindowID = req.WindowID
-	if event.IdentityConfidence == "" && req.normalized != nil {
-		event.IdentityConfidence = identityConfidenceFor(*req.normalized)
+	if event.IdentityConfidence == "" && req.Normalized != nil {
+		event.IdentityConfidence = identityConfidenceFor(*req.Normalized)
 	}
 	completed := cloneSessionEvent(*event)
 	h.stateMu.Unlock()
@@ -112,27 +113,27 @@ func firstNonEmpty(values ...string) string {
 
 func suppressionReasonForReducer(trace ReducerTrace, outcome applyOutcome) string {
 	switch trace.Decision {
-	case DecisionDuplicate:
-		return DecisionReasonDuplicateSequence
-	case DecisionReordered:
-		return DecisionReasonReorderedSequence
-	case DecisionQuarantined:
+	case protocol.DecisionDuplicate:
+		return protocol.DecisionReasonDuplicateSequence
+	case protocol.DecisionReordered:
+		return protocol.DecisionReasonReorderedSequence
+	case protocol.DecisionQuarantined:
 		reason := stableReducerReason(trace)
-		if strings.HasPrefix(reason, DecisionReasonInvalidPayload) {
-			return DecisionReasonInvalidPayload
+		if strings.HasPrefix(reason, protocol.DecisionReasonInvalidPayload) {
+			return protocol.DecisionReasonInvalidPayload
 		}
 		return reason
-	case DecisionSuppressed:
+	case protocol.DecisionSuppressed:
 		stable := stableReducerReason(trace)
 		switch stable {
-		case DecisionReasonTerminalTurnSuppression, DecisionReasonTerminalGraceSuppression:
-			return DecisionReasonActiveAfterTerminal
+		case protocol.DecisionReasonTerminalTurnSuppression, protocol.DecisionReasonTerminalGraceSuppression:
+			return protocol.DecisionReasonActiveAfterTerminal
 		default:
 			return stable
 		}
 	default:
 		if outcome.guardBlocked {
-			return DecisionReasonGuardBlocked
+			return protocol.DecisionReasonGuardBlocked
 		}
 		return ""
 	}
@@ -143,20 +144,20 @@ func suppressionReasonForReducer(trace ReducerTrace, outcome applyOutcome) strin
 // guard refusal), it creates the one authoritative row here. Caller holds
 // stateMu.
 func (h *Handler) finalizeReducerDecisionLocked(
-	req Request,
-	n NormalizedEvent,
+	req protocol.Request,
+	n protocol.NormalizedEvent,
 	trace ReducerTrace,
 	before, after EffectiveState,
 	identityConfidence string,
 	usedFallbackIdentity bool,
 	outcome applyOutcome,
-) SessionEvent {
+) protocol.SessionEvent {
 	st := h.ensureWindowStateLocked(req.WindowID)
-	event := eventByReferenceLocked(st, req.eventRef)
+	event := eventByReferenceLocked(st, req.EventRef)
 	if event == nil {
-		fallback := sessionEventFromRequest(req, n.Action, IconStatePreserve, desiredIconForState(st))
+		fallback := sessionEventFromRequest(req, n.Action, protocol.IconStatePreserve, desiredIconForState(st))
 		appended := h.appendEventLocked(req.WindowID, fallback)
-		event = eventByReferenceLocked(st, req.eventRef)
+		event = eventByReferenceLocked(st, req.EventRef)
 		if event == nil {
 			event = &appended
 		}
@@ -181,23 +182,23 @@ func (h *Handler) finalizeReducerDecisionLocked(
 	event.RequestID = req.RequestID
 	event.SourceEventID = firstNonEmpty(req.SourceEventID, n.SourceEventID, event.SourceEventID)
 	event.Attempt = req.Attempt
-	event.ParseOutcome = firstNonEmpty(req.parseOutcome, event.ParseOutcome, ParseOutcomeSynthetic)
+	event.ParseOutcome = firstNonEmpty(req.ParseOutcome, event.ParseOutcome, protocol.ParseOutcomeSynthetic)
 	switch {
 	case usedFallbackIdentity:
-		event.NormalizationOutcome = NormalizationOutcomeUntrustedFallback
-	case req.normalized == nil:
-		event.NormalizationOutcome = NormalizationOutcomeLegacySynthesized
-	case outcome.reduceAction != "" && req.normalized.Action != "" && outcome.reduceAction != req.normalized.Action:
-		event.NormalizationOutcome = NormalizationOutcomeReducerRewrite
+		event.NormalizationOutcome = protocol.NormalizationOutcomeUntrustedFallback
+	case req.Normalized == nil:
+		event.NormalizationOutcome = protocol.NormalizationOutcomeLegacySynthesized
+	case outcome.reduceAction != "" && req.Normalized.Action != "" && outcome.reduceAction != req.Normalized.Action:
+		event.NormalizationOutcome = protocol.NormalizationOutcomeReducerRewrite
 	default:
-		event.NormalizationOutcome = firstNonEmpty(req.normalizationOutcome, normalizationOutcomeFor(n))
+		event.NormalizationOutcome = firstNonEmpty(req.NormalizationOutcome, normalizationOutcomeFor(n))
 	}
 	event.IdentityConfidence = identityConfidence
 	event.UsedFallbackIdentity = usedFallbackIdentity
 	event.ProducerHarness = req.Harness
 	event.ProducerConfigDir = req.ProducerConfigDir
-	event.TargetHarness = req.targetHarness
-	if !req.targetHarnessSet {
+	event.TargetHarness = req.TargetHarness
+	if !req.TargetHarnessSet {
 		event.TargetHarness = req.Harness
 	}
 	event.Profile = req.Account
@@ -211,7 +212,7 @@ func (h *Handler) finalizeReducerDecisionLocked(
 		event.OriginWindowID = n.OriginWindowID
 	}
 	event.ReducerInputAction = n.Action
-	event.ReducerInput = &ReducerInputEvidence{
+	event.ReducerInput = &protocol.ReducerInputEvidence{
 		EmittedAt: n.At, OriginWindowID: n.OriginWindowID, Prompt: n.Prompt,
 		PipeMode: n.PipeMode, ASLPhase: n.Phase, EndsSession: n.EndsSession,
 		SubagentDelta: n.SubagentDelta, GuardDuration: h.reducerCfg.GuardDuration,
@@ -222,10 +223,10 @@ func (h *Handler) finalizeReducerDecisionLocked(
 	event.ReducerReason = stableReducerReason(trace)
 	event.DecisionReason = event.ReducerReason
 	if usedFallbackIdentity {
-		event.DecisionReason = DecisionReasonUntrustedIdentityFallback
+		event.DecisionReason = protocol.DecisionReasonUntrustedIdentityFallback
 	}
-	event.Quarantined = trace.Decision == DecisionQuarantined || usedFallbackIdentity ||
-		(req.normalized != nil && req.normalized.Invalid)
+	event.Quarantined = trace.Decision == protocol.DecisionQuarantined || usedFallbackIdentity ||
+		(req.Normalized != nil && req.Normalized.Invalid)
 	beforeEvidence := effectiveStateEvidence(before)
 	afterEvidence := effectiveStateEvidence(after)
 	event.EffectiveBefore = &beforeEvidence
@@ -238,7 +239,7 @@ func (h *Handler) finalizeReducerDecisionLocked(
 	// path. Link those applied/acknowledged rows to the generation the reducer
 	// just dirtied so their asynchronous render remains followable.
 	if event.RenderGeneration == 0 && st.Dirty &&
-		(trace.Decision == DecisionApplied || trace.Decision == DecisionAcknowledged) {
+		(trace.Decision == protocol.DecisionApplied || trace.Decision == protocol.DecisionAcknowledged) {
 		h.linkRequestRenderGenerationLocked(req, st.Seq)
 	}
 	return cloneSessionEvent(*event)
@@ -248,8 +249,8 @@ func (h *Handler) finalizeReducerDecisionLocked(
 // that the dedupe cache replayed before reducer admission. It clones the
 // original sanitized decision evidence when available, then stamps the current
 // trace/attempt identity and an unchanged before/after state.
-func (h *Handler) recordDuplicateDelivery(req Request, ack *DeliveryAcknowledgement) {
-	if h == nil || ack == nil || ack.Status != DeliveryAcknowledgementDuplicate {
+func (h *Handler) recordDuplicateDelivery(req protocol.Request, ack *protocol.DeliveryAcknowledgement) {
+	if h == nil || ack == nil || ack.Status != protocol.DeliveryAcknowledgementDuplicate {
 		return
 	}
 	windowID := ack.TargetWindowID
@@ -262,7 +263,7 @@ func (h *Handler) recordDuplicateDelivery(req Request, ack *DeliveryAcknowledgem
 
 	h.stateMu.Lock()
 	st := h.ensureWindowStateLocked(windowID)
-	var event SessionEvent
+	var event protocol.SessionEvent
 	for i := len(st.EventLog) - 1; i >= 0; i-- {
 		if st.EventLog[i].RequestID == req.RequestID && req.RequestID != "" {
 			event = cloneSessionEvent(st.EventLog[i])
@@ -270,10 +271,10 @@ func (h *Handler) recordDuplicateDelivery(req Request, ack *DeliveryAcknowledgem
 		}
 	}
 	if event.Event == "" {
-		event = SessionEvent{
-			Event: req.Event, Action: req.Action, ResultIconState: IconStatePreserve,
-			ParseOutcome:         ParseOutcomeDecoded,
-			NormalizationOutcome: NormalizationOutcomeNotApplicable,
+		event = protocol.SessionEvent{
+			Event: req.Event, Action: req.Action, ResultIconState: protocol.IconStatePreserve,
+			ParseOutcome:         protocol.ParseOutcomeDecoded,
+			NormalizationOutcome: protocol.NormalizationOutcomeNotApplicable,
 			OriginWindowID:       req.WindowID,
 		}
 	}
@@ -286,11 +287,11 @@ func (h *Handler) recordDuplicateDelivery(req Request, ack *DeliveryAcknowledgem
 	event.SourceEventID = firstNonEmpty(req.SourceEventID, event.SourceEventID)
 	event.Attempt = req.Attempt
 	event.Suppressed = true
-	event.SuppressionReason = DecisionReasonRequestReplayed
-	event.ResultIconState = IconStatePreserve
-	event.ReducerDecision = DecisionDuplicate
-	event.ReducerReason = DecisionReasonRequestReplayed
-	event.DecisionReason = DecisionReasonRequestReplayed
+	event.SuppressionReason = protocol.DecisionReasonRequestReplayed
+	event.ResultIconState = protocol.IconStatePreserve
+	event.ReducerDecision = protocol.DecisionDuplicate
+	event.ReducerReason = protocol.DecisionReasonRequestReplayed
+	event.DecisionReason = protocol.DecisionReasonRequestReplayed
 	event.RenderGeneration = 0
 	event.RenderOutcome = ""
 	event.RenderReason = ""
@@ -309,7 +310,7 @@ func (h *Handler) recordDuplicateDelivery(req Request, ack *DeliveryAcknowledgem
 	}
 	event.RouteEvidence.TargetWindowID = windowID
 	event.RouteEvidence.ChosenRoute = ack.RouteDecision
-	event.RouteEvidence.SelectionReason = DecisionReasonRequestReplayed
+	event.RouteEvidence.SelectionReason = protocol.DecisionReasonRequestReplayed
 	event.RouteEvidence.EffectiveHarness = ack.TargetHarness
 	event.RouteEvidence.EffectiveProfile = ack.Profile
 	event = h.appendEventLocked(windowID, event)

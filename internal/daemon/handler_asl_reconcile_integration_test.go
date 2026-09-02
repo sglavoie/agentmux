@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -168,8 +169,8 @@ func aslLifecycleHookRequest(t *testing.T, h *Handler, event, projectDir string,
 	payload.Source = "agent_session_loop"
 	payload.CWD = projectDir
 	payload.Harness = "claude"
-	resp := h.Handle(Request{
-		Type:        TypeHookEvent,
+	resp := h.Handle(protocol.Request{
+		Type:        protocol.TypeHookEvent,
 		WindowID:    42,
 		Event:       event,
 		PayloadJSON: hookPayloadJSON(t, payload),
@@ -191,8 +192,8 @@ func TestHookEventOverlappingRunsKeepIndependentLeases(t *testing.T) {
 	// Seed the real provider bolt that used to survive both finished ASL facts
 	// when Claude's native Stop was missing. Finishing run-A must retire it while
 	// run-B's independent lease continues to own the loop marker.
-	resp := h.Handle(Request{
-		Type: TypeHookEvent, WindowID: 42, Event: "UserPromptSubmit",
+	resp := h.Handle(protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 42, Event: "UserPromptSubmit",
 		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{SessionID: "session-1", TurnID: "turn-1"}),
 	})
 	if !resp.OK {
@@ -268,7 +269,7 @@ func TestHookEventWaitStartedCarriesQuestionPreviewToSessionDetail(t *testing.T)
 		RunID: "run-A", QuestionID: "q-1", QuestionPreview: preview,
 	})
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if !resp.OK {
 		t.Fatalf("session detail response = %+v", resp)
 	}
@@ -302,7 +303,7 @@ func TestHookEventWaitStartedSanitizesQuestionPreview(t *testing.T) {
 		QuestionPreview: esc + "[2JShip " + esc + "]0;pwned" + bel + "the shim?",
 	})
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if !resp.OK {
 		t.Fatalf("session detail response = %+v", resp)
 	}

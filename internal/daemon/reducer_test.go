@@ -1,6 +1,10 @@
 package daemon
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+)
 
 // These tests pin the pure reducer contract: the target icon precedence, replay
 // determinism, duplicate idempotency, reordered-event rejection, multi-source
@@ -11,10 +15,16 @@ import "testing"
 // isolate the property under test.
 var zeroCfg = ReducerConfig{}
 
-func harnessSource() SourceID          { return SourceID{Kind: SourceHarness, Key: "main"} }
-func subagentSource(k string) SourceID { return SourceID{Kind: SourceSubagent, Key: k} }
-func aslSource(k string) SourceID      { return SourceID{Kind: SourceASL, Key: k} }
-func legacySource() SourceID           { return SourceID{Kind: SourceLegacy} }
+func harnessSource() protocol.SourceID {
+	return protocol.SourceID{Kind: protocol.SourceHarness, Key: "main"}
+}
+func subagentSource(k string) protocol.SourceID {
+	return protocol.SourceID{Kind: protocol.SourceSubagent, Key: k}
+}
+func aslSource(k string) protocol.SourceID {
+	return protocol.SourceID{Kind: protocol.SourceASL, Key: k}
+}
+func legacySource() protocol.SourceID { return protocol.SourceID{Kind: protocol.SourceLegacy} }
 
 func TestReducerActionIconMapping(t *testing.T) {
 	cases := map[string]string{
@@ -64,8 +74,8 @@ func TestReducerPrecedenceTable(t *testing.T) {
 			// Emit the higher-precedence fact FIRST so the win is by precedence,
 			// not arrival/recency.
 			r := NewReducer(zeroCfg)
-			r.Apply(ReducerEvent{Source: harnessSource(), Action: hi.action, Seq: 1})
-			r.Apply(ReducerEvent{Source: subagentSource("b"), Action: lo.action, Seq: 1})
+			r.Apply(protocol.ReducerEvent{Source: harnessSource(), Action: hi.action, Seq: 1})
+			r.Apply(protocol.ReducerEvent{Source: subagentSource("b"), Action: lo.action, Seq: 1})
 			if got := r.Reduce(0); got.Icon != hi.icon {
 				t.Errorf("hi=%q lo=%q: icon = %q; want %q", hi.icon, lo.icon, got.Icon, hi.icon)
 			}
@@ -79,16 +89,16 @@ func TestReducerPrecedenceTable(t *testing.T) {
 func TestReducerPrecedenceQuestionKeyTie(t *testing.T) {
 	// Question is newer -> question wins.
 	r := NewReducer(zeroCfg)
-	r.Apply(ReducerEvent{Source: harnessSource(), Action: "permission", Seq: 1, At: 100})
-	r.Apply(ReducerEvent{Source: subagentSource("b"), Action: "question", Seq: 1, At: 200})
+	r.Apply(protocol.ReducerEvent{Source: harnessSource(), Action: "permission", Seq: 1, At: 100})
+	r.Apply(protocol.ReducerEvent{Source: subagentSource("b"), Action: "question", Seq: 1, At: 200})
 	if got := r.Reduce(0); got.Icon != "question" {
 		t.Fatalf("newer question: icon = %q; want question", got.Icon)
 	}
 
 	// Permission is newer -> key wins.
 	r2 := NewReducer(zeroCfg)
-	r2.Apply(ReducerEvent{Source: subagentSource("b"), Action: "question", Seq: 1, At: 100})
-	r2.Apply(ReducerEvent{Source: harnessSource(), Action: "permission", Seq: 1, At: 200})
+	r2.Apply(protocol.ReducerEvent{Source: subagentSource("b"), Action: "question", Seq: 1, At: 100})
+	r2.Apply(protocol.ReducerEvent{Source: harnessSource(), Action: "permission", Seq: 1, At: 200})
 	if got := r2.Reduce(0); got.Icon != "key" {
 		t.Fatalf("newer permission: icon = %q; want key", got.Icon)
 	}
@@ -98,13 +108,13 @@ func TestReducerPrecedenceQuestionKeyTie(t *testing.T) {
 // same events applied in two arrival orders (with consistent per-source Seqs)
 // reduce to the same state.
 func TestReducerReplayDeterministic(t *testing.T) {
-	events := []ReducerEvent{
+	events := []protocol.ReducerEvent{
 		{Source: harnessSource(), Action: "active", Seq: 1, At: 10},
 		{Source: subagentSource("a"), Action: "subagent", Seq: 1, At: 20},
 		{Source: harnessSource(), Action: "permission", Seq: 2, At: 30},
 		{Source: subagentSource("a"), Action: "stop", Seq: 2, At: 40},
 	}
-	shuffled := []ReducerEvent{events[3], events[0], events[2], events[1]}
+	shuffled := []protocol.ReducerEvent{events[3], events[0], events[2], events[1]}
 
 	a := Replay(zeroCfg, 100, events...)
 	b := Replay(zeroCfg, 100, shuffled...)
@@ -120,8 +130,8 @@ func TestReducerReplayDeterministic(t *testing.T) {
 // traced as a duplicate.
 func TestReducerDuplicateIdempotent(t *testing.T) {
 	r := NewReducer(zeroCfg)
-	r.Apply(ReducerEvent{Source: harnessSource(), Action: "active", Seq: 5, At: 1})
-	r.Apply(ReducerEvent{Source: harnessSource(), Action: "active", Seq: 5, At: 1})
+	r.Apply(protocol.ReducerEvent{Source: harnessSource(), Action: "active", Seq: 5, At: 1})
+	r.Apply(protocol.ReducerEvent{Source: harnessSource(), Action: "active", Seq: 5, At: 1})
 
 	if got := r.Reduce(0); got.Icon != "bolt" {
 		t.Fatalf("icon = %q; want bolt", got.Icon)
@@ -130,10 +140,10 @@ func TestReducerDuplicateIdempotent(t *testing.T) {
 	if len(traces) != 2 {
 		t.Fatalf("traces = %d; want 2", len(traces))
 	}
-	if traces[0].Decision != DecisionApplied {
+	if traces[0].Decision != protocol.DecisionApplied {
 		t.Errorf("trace[0].Decision = %q; want applied", traces[0].Decision)
 	}
-	if traces[1].Decision != DecisionDuplicate {
+	if traces[1].Decision != protocol.DecisionDuplicate {
 		t.Errorf("trace[1].Decision = %q; want duplicate", traces[1].Decision)
 	}
 }
@@ -142,19 +152,19 @@ func TestReducerDuplicateIdempotent(t *testing.T) {
 // dropped and traced as reordered.
 func TestReducerReorderedEvent(t *testing.T) {
 	r := NewReducer(zeroCfg)
-	r.Apply(ReducerEvent{Source: harnessSource(), Action: "active", Seq: 5, At: 50})
-	r.Apply(ReducerEvent{Source: harnessSource(), Action: "stop", Seq: 3, At: 30}) // older
+	r.Apply(protocol.ReducerEvent{Source: harnessSource(), Action: "active", Seq: 5, At: 50})
+	r.Apply(protocol.ReducerEvent{Source: harnessSource(), Action: "stop", Seq: 3, At: 30}) // older
 
 	if got := r.Reduce(0); got.Icon != "bolt" {
 		t.Fatalf("icon = %q; want bolt (older stop ignored)", got.Icon)
 	}
 	traces := r.Traces()
-	if traces[1].Decision != DecisionReordered {
+	if traces[1].Decision != protocol.DecisionReordered {
 		t.Fatalf("trace[1].Decision = %q; want reordered", traces[1].Decision)
 	}
 
 	// A genuinely newer event still applies.
-	r.Apply(ReducerEvent{Source: harnessSource(), Action: "stop", Seq: 6, At: 60})
+	r.Apply(protocol.ReducerEvent{Source: harnessSource(), Action: "stop", Seq: 6, At: 60})
 	if got := r.Reduce(0); got.Icon != "stop" {
 		t.Fatalf("icon = %q; want stop after newer event", got.Icon)
 	}
@@ -164,10 +174,10 @@ func TestReducerReorderedEvent(t *testing.T) {
 // two subagents, and a live ASL run — into one icon and the loop marker.
 func TestReducerMultiSource(t *testing.T) {
 	r := NewReducer(zeroCfg)
-	r.Apply(ReducerEvent{Source: harnessSource(), Action: "active", Seq: 1, At: 10})
-	r.Apply(ReducerEvent{Source: subagentSource("a"), Action: "subagent", Seq: 1, At: 11})
-	r.Apply(ReducerEvent{Source: subagentSource("b"), Action: "subagent", Seq: 1, At: 12})
-	r.Apply(ReducerEvent{Source: aslSource("run-1"), Phase: ASLPhaseTurn, Seq: 1, At: 13})
+	r.Apply(protocol.ReducerEvent{Source: harnessSource(), Action: "active", Seq: 1, At: 10})
+	r.Apply(protocol.ReducerEvent{Source: subagentSource("a"), Action: "subagent", Seq: 1, At: 11})
+	r.Apply(protocol.ReducerEvent{Source: subagentSource("b"), Action: "subagent", Seq: 1, At: 12})
+	r.Apply(protocol.ReducerEvent{Source: aslSource("run-1"), Phase: ASLPhaseTurn, Seq: 1, At: 13})
 
 	got := r.Reduce(100)
 	if got.Icon != "subagent" {
@@ -178,7 +188,7 @@ func TestReducerMultiSource(t *testing.T) {
 	}
 
 	// A permission on the main harness now outranks the subagents.
-	r.Apply(ReducerEvent{Source: harnessSource(), Action: "permission", Seq: 2, At: 20})
+	r.Apply(protocol.ReducerEvent{Source: harnessSource(), Action: "permission", Seq: 2, At: 20})
 	got = r.Reduce(100)
 	if got.Icon != "key" || got.Source != harnessSource() {
 		t.Fatalf("icon = %q src = %+v; want key from harness", got.Icon, got.Source)
@@ -193,14 +203,14 @@ func TestReducerMultiSource(t *testing.T) {
 // reasserts activity.
 func TestReducerUserClearAcknowledgesButKeepsLease(t *testing.T) {
 	r := NewReducer(zeroCfg)
-	r.Apply(ReducerEvent{Source: harnessSource(), Action: "permission", Seq: 1, At: 10})
-	r.Apply(ReducerEvent{Source: aslSource("run-1"), Phase: ASLPhaseTurn, Seq: 1, At: 11})
+	r.Apply(protocol.ReducerEvent{Source: harnessSource(), Action: "permission", Seq: 1, At: 10})
+	r.Apply(protocol.ReducerEvent{Source: aslSource("run-1"), Phase: ASLPhaseTurn, Seq: 1, At: 11})
 
 	if got := r.Reduce(100); got.Icon != "key" || !got.Looping {
 		t.Fatalf("pre-clear = %+v; want key + looping", got)
 	}
 
-	r.Apply(ReducerEvent{Source: harnessSource(), Action: "user_clear", Seq: 0, At: 12})
+	r.Apply(protocol.ReducerEvent{Source: harnessSource(), Action: "user_clear", Seq: 0, At: 12})
 	got := r.Reduce(100)
 	if got.Icon != "" {
 		t.Fatalf("post-clear icon = %q; want empty (all facts acknowledged)", got.Icon)
@@ -208,12 +218,12 @@ func TestReducerUserClearAcknowledgesButKeepsLease(t *testing.T) {
 	if !got.Looping {
 		t.Fatal("post-clear looping = false; want true (ASL lease preserved)")
 	}
-	if traces := r.Traces(); traces[len(traces)-1].Decision != DecisionAcknowledged {
+	if traces := r.Traces(); traces[len(traces)-1].Decision != protocol.DecisionAcknowledged {
 		t.Fatalf("last trace decision = %q; want acknowledged", traces[len(traces)-1].Decision)
 	}
 
 	// A newer ASL turn heartbeat reasserts activity.
-	r.Apply(ReducerEvent{Source: aslSource("run-1"), Phase: ASLPhaseTurn, Seq: 2, At: 20})
+	r.Apply(protocol.ReducerEvent{Source: aslSource("run-1"), Phase: ASLPhaseTurn, Seq: 2, At: 20})
 	if got := r.Reduce(100); got.Icon != "bolt" || !got.Looping {
 		t.Fatalf("post-heartbeat = %+v; want bolt + looping", got)
 	}
@@ -224,13 +234,13 @@ func TestReducerUserClearAcknowledgesButKeepsLease(t *testing.T) {
 // icon, and the wait ending remains a bare loop until work resumes or finishes.
 func TestReducerWaitingRunHoldsBareLease(t *testing.T) {
 	r := NewReducer(zeroCfg)
-	r.Apply(ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseBetween, Seq: 1, At: 10})
-	r.Apply(ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseWaiting, Seq: 2, At: 11})
+	r.Apply(protocol.ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseBetween, Seq: 1, At: 10})
+	r.Apply(protocol.ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseWaiting, Seq: 2, At: 11})
 	if got := r.Reduce(100); got.Icon != "" || !got.Looping {
 		t.Fatalf("waiting = %+v; want bare loop marker", got)
 	}
 
-	r.Apply(ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseBetween, Seq: 3, At: 12})
+	r.Apply(protocol.ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseBetween, Seq: 3, At: 12})
 	if got := r.Reduce(100); got.Icon != "" || !got.Looping {
 		t.Fatalf("wait ended = %+v; want bare loop marker", got)
 	}
@@ -240,18 +250,18 @@ func TestReducerWaitingRunHoldsBareLease(t *testing.T) {
 // a duplicate wait-started is a no-op and a wait-started that arrives after the
 // wait-ended it precedes is rejected as reordered rather than reopening it.
 func TestReducerWaitingRunOrderIndependent(t *testing.T) {
-	waiting := ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseWaiting, Seq: 1, At: 10}
-	ended := ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseBetween, Seq: 2, At: 11}
+	waiting := protocol.ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseWaiting, Seq: 1, At: 10}
+	ended := protocol.ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseBetween, Seq: 2, At: 11}
 
 	r := NewReducer(zeroCfg)
-	if d := r.Apply(waiting); d != DecisionApplied {
+	if d := r.Apply(waiting); d != protocol.DecisionApplied {
 		t.Fatalf("first wait decision = %v, want applied", d)
 	}
-	if d := r.Apply(waiting); d != DecisionDuplicate {
+	if d := r.Apply(waiting); d != protocol.DecisionDuplicate {
 		t.Fatalf("duplicate wait decision = %v, want duplicate", d)
 	}
 	r.Apply(ended)
-	if d := r.Apply(waiting); d != DecisionReordered {
+	if d := r.Apply(waiting); d != protocol.DecisionReordered {
 		t.Fatalf("late wait decision = %v, want reordered", d)
 	}
 	if got := r.Reduce(100); got.Icon != "" || !got.Looping {
@@ -265,14 +275,14 @@ func TestReducerWaitingRunOrderIndependent(t *testing.T) {
 // TestReducerWaitingDoesNotCompeteWithAttention: an internal mailbox wait owns
 // only 🔁, so a real permission prompt remains visible regardless of recency.
 func TestReducerWaitingDoesNotCompeteWithAttention(t *testing.T) {
-	waiting := ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseWaiting, Seq: 1, At: 100}
-	permission := ReducerEvent{Source: harnessSource(), Action: "permission", Seq: 1, At: 200}
+	waiting := protocol.ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseWaiting, Seq: 1, At: 100}
+	permission := protocol.ReducerEvent{Source: harnessSource(), Action: "permission", Seq: 1, At: 200}
 	if got := Replay(zeroCfg, 300, waiting, permission); got.Icon != "key" {
 		t.Fatalf("newer permission = %q; want key", got.Icon)
 	}
 
-	newerWait := ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseWaiting, Seq: 1, At: 300}
-	olderPermission := ReducerEvent{Source: harnessSource(), Action: "permission", Seq: 1, At: 200}
+	newerWait := protocol.ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseWaiting, Seq: 1, At: 300}
+	olderPermission := protocol.ReducerEvent{Source: harnessSource(), Action: "permission", Seq: 1, At: 200}
 	if got := Replay(zeroCfg, 400, olderPermission, newerWait); got.Icon != "key" {
 		t.Fatalf("newer internal wait = %q; want permission preserved", got.Icon)
 	}
@@ -283,13 +293,13 @@ func TestReducerWaitingDoesNotCompeteWithAttention(t *testing.T) {
 // and the terminal finish still releases the lease.
 func TestReducerWaitingPausedFallback(t *testing.T) {
 	r := NewReducer(zeroCfg)
-	r.Apply(ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseWaiting, Seq: 1, At: 10})
-	r.Apply(ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Action: "failure", Phase: ASLPhasePaused, Seq: 2, At: 11})
+	r.Apply(protocol.ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseWaiting, Seq: 1, At: 10})
+	r.Apply(protocol.ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Action: "failure", Phase: ASLPhasePaused, Seq: 2, At: 11})
 	if got := r.Reduce(100); got.Icon != "warning" || !got.Looping {
 		t.Fatalf("paused out of a wait = %+v; want warning + looping", got)
 	}
 
-	r.Apply(ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseFinished, Seq: 3, At: 12})
+	r.Apply(protocol.ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseFinished, Seq: 3, At: 12})
 	if got := r.Reduce(100); got.Icon != "stop" || got.Looping {
 		t.Fatalf("finished = %+v; want stop without looping", got)
 	}

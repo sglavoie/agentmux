@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -39,7 +40,7 @@ func TestProbeCodexScreenPrompts_EditPromptReplacesKeyWithQuestion(t *testing.T)
 		t.Fatalf("guard.Current = %q, want elicitation", got)
 	}
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(resp.Events) != 1 {
 		t.Fatalf("events = %d, want 1", len(resp.Events))
 	}
@@ -84,7 +85,7 @@ func TestProbeCodexScreenPrompts_CommandPromptStaysKey(t *testing.T) {
 		t.Fatalf("SetTabTitle title = %q, want %q", calls[0].title, want)
 	}
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(resp.Events) != 1 {
 		t.Fatalf("events = %d, want 1", len(resp.Events))
 	}
@@ -120,7 +121,7 @@ func TestProbeCodexScreenPrompts_RequestUserInputReplacesBoltWithQuestion(t *tes
 		t.Fatalf("guard.Current = %q, want elicitation", got)
 	}
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(resp.Events) != 1 {
 		t.Fatalf("events = %d, want 1", len(resp.Events))
 	}
@@ -179,7 +180,7 @@ func TestProbeCodexScreenPrompts_RequestUserInputOnlyWhileVisibleWithoutPostTool
 		t.Fatalf("answered prompt guard = %q, want cleared", got)
 	}
 	h.stateMu.Lock()
-	probeFact := h.store[42].Reducer.facts[SourceID{Kind: SourceProbe, Key: screenPromptProbeSource}]
+	probeFact := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource}]
 	lastAction := h.store[42].LastAction
 	durableAction := h.windowMetadata[42].Durable.LastAction
 	h.stateMu.Unlock()
@@ -212,7 +213,7 @@ func TestProbeCodexScreenPrompts_MissedPromptKeepsQuestionState(t *testing.T) {
 	if got := h.guard.Current(42); got != "elicitation" {
 		t.Fatalf("guard.Current = %q, want elicitation", got)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(resp.Events) != 0 {
 		t.Fatalf("events = %d, want 0", len(resp.Events))
 	}

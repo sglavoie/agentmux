@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/clipboard"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -126,11 +127,11 @@ func defaultDefinitions() []Definition {
 			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
 				requestFn := deps.Daemon
 				if requestFn == nil {
-					requestFn = func(req daemon.Request) (daemon.Response, error) { return daemon.NewClient().Send(req) }
+					requestFn = func(req protocol.Request) (protocol.Response, error) { return daemon.NewClient().Send(req) }
 				}
 				// This is intentionally best effort.  The daemon can be starting while
 				// the TUI issues this request, and a later refresh converges its state.
-				_, _ = requestFn(daemon.Request{Type: daemon.TypeStateUpdate, Action: "user_clear", WindowID: request.Session.WindowID, SessionTitle: request.Session.Base})
+				_, _ = requestFn(protocol.Request{Type: protocol.TypeStateUpdate, Action: "user_clear", WindowID: request.Session.WindowID, SessionTitle: request.Session.Base})
 				return Result{Changed: true, Message: "cleared session status"}, nil
 			},
 		},

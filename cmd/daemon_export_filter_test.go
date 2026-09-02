@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func TestDaemonExportEventsCommand_CurrentWindowResolvesKittyEnv(t *testing.T) {
@@ -18,12 +19,12 @@ func TestDaemonExportEventsCommand_CurrentWindowResolvesKittyEnv(t *testing.T) {
 
 	client := &fakeDaemonExportClient{
 		health: daemon.Health{Alive: true, PID: 7, Uptime: 7 * time.Second},
-		export: func(windowID int) (daemon.EventsExport, error) {
+		export: func(windowID int) (protocol.EventsExport, error) {
 			if windowID != 77 {
-				return daemon.EventsExport{}, fmt.Errorf("windowID = %d; want 77", windowID)
+				return protocol.EventsExport{}, fmt.Errorf("windowID = %d; want 77", windowID)
 			}
-			return daemon.EventsExport{
-				EventsByWindow: map[int][]daemon.SessionEvent{
+			return protocol.EventsExport{
+				EventsByWindow: map[int][]protocol.SessionEvent{
 					77: {{At: 7, Event: "Stop", Action: "stop", ResultIconState: "stop"}},
 				},
 			}, nil
@@ -50,7 +51,7 @@ func TestDaemonExportEventsCommand_CurrentWindowResolvesKittyEnv(t *testing.T) {
 		t.Fatalf("ExportEvents calls = %v; want [77]", client.calls)
 	}
 
-	var payload daemon.ExportEventsPayload
+	var payload protocol.ExportEventsPayload
 	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
 		t.Fatalf("Unmarshal payload: %v\n%s", err, out.String())
 	}
@@ -74,8 +75,8 @@ func TestDaemonExportEventsCommand_OutputExpandsTilde(t *testing.T) {
 
 	client := &fakeDaemonExportClient{
 		health: daemon.Health{Alive: true, PID: 1, Uptime: time.Second},
-		export: func(windowID int) (daemon.EventsExport, error) {
-			return daemon.EventsExport{}, nil
+		export: func(windowID int) (protocol.EventsExport, error) {
+			return protocol.EventsExport{}, nil
 		},
 	}
 
@@ -117,22 +118,22 @@ func TestDaemonExportEventsCommand_LastTrimsPerWindowEvents(t *testing.T) {
 
 	client := &fakeDaemonExportClient{
 		health: daemon.Health{Alive: true, PID: 42, Uptime: 42 * time.Second},
-		export: func(windowID int) (daemon.EventsExport, error) {
+		export: func(windowID int) (protocol.EventsExport, error) {
 			if windowID != 0 {
-				return daemon.EventsExport{}, fmt.Errorf("windowID = %d; want 0", windowID)
+				return protocol.EventsExport{}, fmt.Errorf("windowID = %d; want 0", windowID)
 			}
-			return daemon.EventsExport{
-				EventsByWindow: map[int][]daemon.SessionEvent{
+			return protocol.EventsExport{
+				EventsByWindow: map[int][]protocol.SessionEvent{
 					42: {
 						{At: 1, Event: "PreToolUse", Action: "active", ResultIconState: "bolt"},
 						{At: 2, Event: "PostToolUse", Action: "active", ResultIconState: "bolt"},
 						{At: 3, Event: "Stop", Action: "stop", ResultIconState: "stop"},
 					},
 				},
-				WindowMetadata: map[int]daemon.WindowDebugMetadata{
+				WindowMetadata: map[int]protocol.WindowDebugMetadata{
 					42: {
-						Stats: daemon.WindowDebugStats{EventCount: 3, FirstEventAt: 1, LastEventAt: 3},
-						Durable: daemon.WindowDebugDurable{
+						Stats: protocol.WindowDebugStats{EventCount: 3, FirstEventAt: 1, LastEventAt: 3},
+						Durable: protocol.WindowDebugDurable{
 							SessionTitle: "W:api",
 						},
 					},
@@ -157,7 +158,7 @@ func TestDaemonExportEventsCommand_LastTrimsPerWindowEvents(t *testing.T) {
 		t.Fatalf("RunE: %v", err)
 	}
 
-	var payload daemon.ExportEventsPayload
+	var payload protocol.ExportEventsPayload
 	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
 		t.Fatalf("Unmarshal payload: %v\n%s", err, out.String())
 	}

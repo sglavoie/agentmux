@@ -13,7 +13,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/plans"
@@ -31,7 +31,7 @@ type Model struct {
 	sortMode           string
 	attentionStates    map[string]bool // states the bracket-key nav (]/[ and }/{) jumps to
 	backgroundCommands modelBackgroundCommands
-	daemonCommand      func(daemon.Request) (daemon.Response, error)
+	daemonCommand      func(protocol.Request) (protocol.Response, error)
 	// now is the render clock. Production uses time.Now; the UI test harness
 	// freezes it so the seconds-resolution run timer renders identical text on
 	// every run.
@@ -154,7 +154,7 @@ type Model struct {
 	// resolved threshold for that window. Populated alongside lastActivity
 	// from the same TypeStateQuery round-trip; nil when the daemon is
 	// unreachable. Drives the per-row age column in renderListAt.
-	watchdog map[int]daemon.WatchdogState
+	watchdog map[int]protocol.WatchdogState
 
 	// recency-pulse bookkeeping. lastSeenStates is the snapshot of every
 	// session's state at the last user input in ModeList (or the first
@@ -205,11 +205,11 @@ type Model struct {
 
 	// detail pane state (ModeDetail). Fields are zeroed when the pane is
 	// closed so the placeholder render reads as a fresh state.
-	detailWindowID int                   // 0 when pane is closed
-	detailEvents   []daemon.SessionEvent // events from the daemon for detailWindowID
-	detailScroll   int                   // top row index for the scrollable view
-	detailLoading  bool                  // true while the daemon query is in flight
-	detailErr      error                 // last error from the daemon query
+	detailWindowID int                     // 0 when pane is closed
+	detailEvents   []protocol.SessionEvent // events from the daemon for detailWindowID
+	detailScroll   int                     // top row index for the scrollable view
+	detailLoading  bool                    // true while the daemon query is in flight
+	detailErr      error                   // last error from the daemon query
 
 	// timeline sub-view controls (within ModeDetail). All five are zeroed by exitDetailMode.
 	detailViewTimeline   bool

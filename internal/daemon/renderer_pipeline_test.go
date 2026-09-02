@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -207,7 +208,7 @@ func TestRendererSlowWindowDoesNotDelayEventIngestion(t *testing.T) {
 
 	// Window 42's visual change reaches the worker, which wedges on the title
 	// write.
-	resp := h.handleStateUpdate(Request{Type: TypeStateUpdate, WindowID: 42, Action: "stop", Event: "Stop"})
+	resp := h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "stop", Event: "Stop"})
 	if !resp.OK {
 		t.Fatalf("state update for slow window failed: %v", resp.Error)
 	}
@@ -218,9 +219,9 @@ func TestRendererSlowWindowDoesNotDelayEventIngestion(t *testing.T) {
 	}
 
 	// Event ingestion must complete while the Kitty write is wedged.
-	done := make(chan Response, 1)
+	done := make(chan protocol.Response, 1)
 	go func() {
-		done <- h.handleStateUpdate(Request{Type: TypeStateUpdate, WindowID: 43, Action: "stop", Event: "Stop"})
+		done <- h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 43, Action: "stop", Event: "Stop"})
 	}()
 	select {
 	case resp := <-done:
@@ -257,7 +258,7 @@ func TestRendererActivityOnlyEventsBatchPersistence(t *testing.T) {
 	fake.windows = fakeOSWindowsWithTab(42, "W:api")
 
 	// First event surfaces a new icon: a visual change queues immediately.
-	resp := h.handleStateUpdate(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Event: "UserPromptSubmit"})
+	resp := h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Event: "UserPromptSubmit"})
 	if !resp.OK {
 		t.Fatalf("first state update failed: %v", resp.Error)
 	}
@@ -272,7 +273,7 @@ func TestRendererActivityOnlyEventsBatchPersistence(t *testing.T) {
 
 	// A follow-up event that keeps the same icon is activity-only bookkeeping:
 	// durable state is marked dirty but no immediate render is queued.
-	resp = h.handleStateUpdate(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Event: "PostToolUse"})
+	resp = h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Event: "PostToolUse"})
 	if !resp.OK {
 		t.Fatalf("second state update failed: %v", resp.Error)
 	}

@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -172,7 +173,7 @@ func (h *Handler) reconcileASLDiscovery(now time.Time, windows []kitty.OSWindow,
 			continue
 		}
 		for _, fact := range st.Reducer.Facts() {
-			if fact.Kind != SourceASL || !fact.LeaseLive {
+			if fact.Kind != protocol.SourceASL || !fact.LeaseLive {
 				continue
 			}
 			ref := aslLeaseRef{windowID: windowID, key: fact.Key}
@@ -208,8 +209,8 @@ func (h *Handler) reconcileASLDiscovery(now time.Time, windows []kitty.OSWindow,
 				"ASL run missing from consecutive discoveries; supervisor question projection retired",
 			)
 			st.ShadowSeq++
-			st.Reducer.Apply(ReducerEvent{
-				Source:         SourceID{Kind: SourceASL, Key: fact.Key},
+			st.Reducer.Apply(protocol.ReducerEvent{
+				Source:         protocol.SourceID{Kind: protocol.SourceASL, Key: fact.Key},
 				Seq:            st.ShadowSeq,
 				At:             now.Unix(),
 				OriginWindowID: fact.OriginWindowID,
@@ -219,7 +220,7 @@ func (h *Handler) reconcileASLDiscovery(now time.Time, windows []kitty.OSWindow,
 			changedWindows[windowID] = true
 			h.aslMetrics.retiredLeases++
 			h.appendWatchdogEventLocked(windowID, fact.OriginWindowID, now, eventASLReconciled, "lease_released",
-				string(SourceASL)+":"+fact.Key,
+				string(protocol.SourceASL)+":"+fact.Key,
 				"run "+fact.RunID+" confirmed absent by consecutive discoveries; lease released")
 			slog.Debug("asl reconcile released confirmed-absent run lease",
 				"window_id", windowID,
@@ -260,7 +261,7 @@ func (h *Handler) aslLeaseEvidenceLocked(
 	byRunID map[string]agentloop.PlanObservation,
 	byStateDir map[string]agentloop.PlanObservation,
 	ref aslLeaseRef,
-	fact SourceFactSnapshot,
+	fact protocol.SourceFactSnapshot,
 ) aslEvidence {
 	if fact.RunID != "" {
 		if observation, ok := byRunID[fact.RunID]; ok {
@@ -349,15 +350,15 @@ func (h *Handler) seedASLLeaseLocked(now time.Time, seed aslSeed) bool {
 	if originWindowID <= 0 {
 		originWindowID = seed.windowID
 	}
-	decision := st.Reducer.Apply(ReducerEvent{
-		Source:         SourceID{Kind: SourceASL, Key: seed.key},
+	decision := st.Reducer.Apply(protocol.ReducerEvent{
+		Source:         protocol.SourceID{Kind: protocol.SourceASL, Key: seed.key},
 		Seq:            0,
 		At:             now.Unix(),
 		OriginWindowID: originWindowID,
 		RunID:          seed.candidate.RunID,
 		Phase:          phase,
 	})
-	if decision != DecisionApplied {
+	if decision != protocol.DecisionApplied {
 		return false
 	}
 	// A first-time seed stamps the fact at sequence 0 (so the run's own future
@@ -368,7 +369,7 @@ func (h *Handler) seedASLLeaseLocked(now time.Time, seed aslSeed) bool {
 	// discarded rather than allowed to retire the freshly seeded lease.
 	st.ShadowSeq++
 	h.appendWatchdogEventLocked(seed.windowID, originWindowID, now, eventASLReconciled, "lease_seeded",
-		string(SourceASL)+":"+seed.key,
+		string(protocol.SourceASL)+":"+seed.key,
 		"discovery seeded run "+seed.candidate.RunID+" (phase "+phase+")")
 	slog.Debug("asl reconcile seeded run lease",
 		"window_id", seed.windowID,

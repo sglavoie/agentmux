@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
 
@@ -29,7 +30,7 @@ const (
 var errHookPayloadOversized = errors.New("hook payload exceeds forwarding limit")
 
 type indicatorDaemonClient interface {
-	SendWithAutoStart(req daemon.Request, amxBin string) (daemon.Response, error)
+	SendWithAutoStart(req protocol.Request, amxBin string) (protocol.Response, error)
 }
 
 var getenv = os.Getenv

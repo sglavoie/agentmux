@@ -14,6 +14,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
 
@@ -33,10 +34,10 @@ func TestSweepStale_ClearsBusySinceWithNilReducer(t *testing.T) {
 		st.LastAction = "active"
 		st.LastSessionTitle = "W:api"
 		st.BusySince = now.Add(-15 * time.Minute)
-		h.windowMetadata[42] = WindowDebugMetadata{}
+		h.windowMetadata[42] = protocol.WindowDebugMetadata{}
 		h.stateMu.Unlock()
 
-		before := h.Handle(Request{Type: TypeEventsExport, WindowID: 42})
+		before := h.Handle(protocol.Request{Type: protocol.TypeEventsExport, WindowID: 42})
 		if got := before.WindowMetadata[42].Shadow.BusySinceAt; got != st.BusySince.Unix() {
 			t.Fatalf("busy_since_at before sweep = %d; want %d", got, st.BusySince.Unix())
 		}
@@ -55,7 +56,7 @@ func TestSweepStale_ClearsBusySinceWithNilReducer(t *testing.T) {
 			t.Fatalf("BusySince[42] = %v; want zero after the sweep", anchor)
 		}
 
-		after := h.Handle(Request{Type: TypeEventsExport, WindowID: 42})
+		after := h.Handle(protocol.Request{Type: protocol.TypeEventsExport, WindowID: 42})
 		encoded, err := json.Marshal(after.WindowMetadata[42].Shadow)
 		if err != nil {
 			t.Fatalf("Marshal(swept shadow): %v", err)
@@ -87,12 +88,12 @@ func TestSweepStale_PreservesBusySinceWhenReductionStaysActive(t *testing.T) {
 		st.Activity = now.Add(-15 * time.Minute)
 		h.stateMu.Unlock()
 		seedReducerFact(h, 42, now,
-			ReducerEvent{
-				Source: SourceID{Kind: SourceHarness, Key: "main"},
+			protocol.ReducerEvent{
+				Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "main"},
 				Action: "active", Seq: 1, At: now.Add(-15 * time.Minute).Unix(),
 			},
-			ReducerEvent{
-				Source: SourceID{Kind: SourceSubagent, Key: "agent-1"},
+			protocol.ReducerEvent{
+				Source: protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-1"},
 				Action: "subagent", Seq: 1, At: now.Add(-15 * time.Minute).Unix(),
 			},
 		)
@@ -139,12 +140,12 @@ func TestSweepStale_ClearsBusySinceWhenReductionLeavesActiveClass(t *testing.T) 
 		st.Activity = now.Add(-15 * time.Minute)
 		h.stateMu.Unlock()
 		seedReducerFact(h, 42, now,
-			ReducerEvent{
-				Source: SourceID{Kind: SourceHarness, Key: "main"},
+			protocol.ReducerEvent{
+				Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "main"},
 				Action: "active", Seq: 1, At: now.Add(-15 * time.Minute).Unix(),
 			},
-			ReducerEvent{
-				Source: SourceID{Kind: SourceProbe, Key: "permission"},
+			protocol.ReducerEvent{
+				Source: protocol.SourceID{Kind: protocol.SourceProbe, Key: "permission"},
 				Action: "permission", Seq: 1, At: now.Add(-15 * time.Minute).Unix(),
 			},
 		)

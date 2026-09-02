@@ -6,7 +6,11 @@ package daemon
 // keeps both the live map and the persisted payload bounded to live/recent
 // facts.
 
-import "sort"
+import (
+	"sort"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+)
 
 // reconcileMergedFact re-applies the reducer's recorded window-level
 // supersessions (see supersessionMark) to one fact just imported by
@@ -45,7 +49,7 @@ func (r *Reducer) reconcileMergedFact(f *sourceFact) {
 			ackedAt = r.promptCutoff.at
 		}
 	}
-	if f.source.Kind == SourceHarness && !f.pipeMode &&
+	if f.source.Kind == protocol.SourceHarness && !f.pipeMode &&
 		(f.icon == "bolt" || f.icon == "compact") &&
 		r.interactiveCutoff.notNewerThan(f) {
 		acknowledge = true
@@ -61,7 +65,7 @@ func (r *Reducer) reconcileMergedFact(f *sourceFact) {
 // sourceFactFromSnapshot rebuilds a live fact from its durable snapshot. Both
 // Restore (full rebuild) and MergeDisjoint (additive merge) share it so the two
 // persistence entry points can never drift on which fields survive a restart.
-func sourceFactFromSnapshot(s SourceFactSnapshot) *sourceFact {
+func sourceFactFromSnapshot(s protocol.SourceFactSnapshot) *sourceFact {
 	ackedAt := s.AckedAt
 	if s.Acked && ackedAt <= 0 {
 		ackedAt = s.At
@@ -107,21 +111,15 @@ func sourceFactFromSnapshot(s SourceFactSnapshot) *sourceFact {
 // zero identity while the fact itself remains restorable. Reusing the reducer
 // admission boundary also enforces ordinary-source ownership and the harness
 // source-key match for SourceHarness facts.
-func restoredHarnessProcessIdentity(s SourceFactSnapshot) HarnessProcessIdentity {
-	return reducerHarnessProcessIdentity(ReducerEvent{
+func restoredHarnessProcessIdentity(s protocol.SourceFactSnapshot) protocol.HarnessProcessIdentity {
+	return reducerHarnessProcessIdentity(protocol.ReducerEvent{
 		Source: s.Source(),
-		HarnessProcess: HarnessProcessIdentity{
+		HarnessProcess: protocol.HarnessProcessIdentity{
 			Harness:    s.HarnessProcessHarness,
 			PID:        s.HarnessProcessPID,
 			StartToken: s.HarnessProcessStartToken,
 		},
 	})
-}
-
-func (s *SourceFactSnapshot) clearHarnessProcessIdentity() {
-	s.HarnessProcessHarness = ""
-	s.HarnessProcessPID = 0
-	s.HarnessProcessStartToken = ""
 }
 
 // SetConfig replaces the reducer's thresholds. Restoration deserializes facts
@@ -140,13 +138,13 @@ func (r *Reducer) SetConfig(cfg ReducerConfig) { r.cfg = cfg }
 // moved.
 func (r *Reducer) RekeyMigratedFacts(windowID int) bool {
 	moved := false
-	for _, kind := range []SourceKind{SourceLegacy, SourceASL} {
-		from := SourceID{Kind: kind, Key: legacyV1MigrationKey}
+	for _, kind := range []protocol.SourceKind{protocol.SourceLegacy, protocol.SourceASL} {
+		from := protocol.SourceID{Kind: kind, Key: legacyV1MigrationKey}
 		f := r.facts[from]
 		if f == nil {
 			continue
 		}
-		to := SourceID{Kind: kind, Key: windowKey(windowID)}
+		to := protocol.SourceID{Kind: kind, Key: windowKey(windowID)}
 		if existing := r.facts[to]; existing != nil && existing.seq >= f.seq {
 			delete(r.facts, from)
 			continue
@@ -163,7 +161,7 @@ func (r *Reducer) RekeyMigratedFacts(windowID int) bool {
 // loop lease is live. Reconciliation uses it to decide between seeding a
 // missing run and leaving a live or deliberately released lease alone.
 func (r *Reducer) LeaseState(key string) (exists, live bool) {
-	f := r.facts[SourceID{Kind: SourceASL, Key: key}]
+	f := r.facts[protocol.SourceID{Kind: protocol.SourceASL, Key: key}]
 	if f == nil || !f.set {
 		return false, false
 	}
@@ -204,7 +202,7 @@ func (r *Reducer) MaxSeq() uint64 {
 func (r *Reducer) Compact(now int64) int {
 	removed := 0
 	type acknowledgedCandidate struct {
-		id SourceID
+		id protocol.SourceID
 		f  *sourceFact
 	}
 	candidates := make([]acknowledgedCandidate, 0)
@@ -212,7 +210,7 @@ func (r *Reducer) Compact(now int64) int {
 		if !f.set {
 			continue
 		}
-		if id.Kind == SourceASL && f.leaseLive {
+		if id.Kind == protocol.SourceASL && f.leaseLive {
 			continue
 		}
 		if !f.terminated {
@@ -224,7 +222,7 @@ func (r *Reducer) Compact(now int64) int {
 		switch {
 		case f.acked:
 			// Acknowledged tombstone.
-		case id.Kind == SourceSubagent && f.icon != "error":
+		case id.Kind == protocol.SourceSubagent && f.icon != "error":
 			// Completed subagent: hold through the straggler window, then drop.
 			if now-f.terminalAt < subagentStopRetentionSeconds {
 				continue

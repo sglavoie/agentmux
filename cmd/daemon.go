@@ -17,6 +17,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	ccerrors "github.com/sglavoie/agentmux/internal/errors"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -71,7 +72,7 @@ var daemonStopCmd = &cobra.Command{
 	Short: "Stop the running daemon",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c := newDaemonLifecycleClient()
-		resp, err := c.Send(daemon.Request{Type: daemon.TypeShutdown})
+		resp, err := c.Send(protocol.Request{Type: protocol.TypeShutdown})
 		if err != nil {
 			return fmt.Errorf("daemon not running: %w", err)
 		}
@@ -244,12 +245,12 @@ var (
 )
 
 type daemonLifecycleClient interface {
-	Send(daemon.Request) (daemon.Response, error)
+	Send(protocol.Request) (protocol.Response, error)
 	RestartDetached(amxBin string) error
 }
 
 type daemonExportClient interface {
-	ExportEvents(windowID int) (daemon.EventsExport, error)
+	ExportEvents(windowID int) (protocol.EventsExport, error)
 	Health() daemon.Health
 }
 
@@ -257,7 +258,7 @@ type kittyWindowLister interface {
 	ListWindows() ([]kitty.OSWindow, error)
 }
 
-func daemonExportWindowIDs(snapshot daemon.EventsExport, requestedWindowID int) []int {
+func daemonExportWindowIDs(snapshot protocol.EventsExport, requestedWindowID int) []int {
 	seen := make(map[int]struct{}, len(snapshot.EventsByWindow)+len(snapshot.WindowMetadata)+1)
 	ids := make([]int, 0, len(snapshot.EventsByWindow)+len(snapshot.WindowMetadata)+1)
 	add := func(id int) {
@@ -281,16 +282,16 @@ func daemonExportWindowIDs(snapshot daemon.EventsExport, requestedWindowID int) 
 	return ids
 }
 
-func daemonExportLiveMetadata(osWindows []kitty.OSWindow, snapshot daemon.EventsExport, requestedWindowID int) map[int]daemon.WindowLiveMetadata {
+func daemonExportLiveMetadata(osWindows []kitty.OSWindow, snapshot protocol.EventsExport, requestedWindowID int) map[int]protocol.WindowLiveMetadata {
 	ids := daemonExportWindowIDs(snapshot, requestedWindowID)
 	if len(ids) == 0 {
-		return map[int]daemon.WindowLiveMetadata{}
+		return map[int]protocol.WindowLiveMetadata{}
 	}
 
 	sessions := session.ListFromOSWindows(osWindows)
-	out := make(map[int]daemon.WindowLiveMetadata, len(ids))
+	out := make(map[int]protocol.WindowLiveMetadata, len(ids))
 	for _, id := range ids {
-		live := daemon.WindowLiveMetadata{}
+		live := protocol.WindowLiveMetadata{}
 		osw, tab, win, ok := kitty.FindWindowLocationByID(osWindows, id)
 		if !ok {
 			out[id] = live
@@ -329,24 +330,24 @@ func daemonExportLiveMetadata(osWindows []kitty.OSWindow, snapshot daemon.Events
 	return out
 }
 
-func daemonExportTrimEvents(events []daemon.SessionEvent, last int) []daemon.SessionEvent {
+func daemonExportTrimEvents(events []protocol.SessionEvent, last int) []protocol.SessionEvent {
 	if last > 0 && len(events) > last {
 		events = events[len(events)-last:]
 	}
-	out := make([]daemon.SessionEvent, len(events))
+	out := make([]protocol.SessionEvent, len(events))
 	copy(out, events)
 	return out
 }
 
-func buildDaemonExportPayload(snapshot daemon.EventsExport, health daemon.Health, osWindows []kitty.OSWindow, requestedWindowID int, last int, exportedAt time.Time) daemon.ExportEventsPayload {
+func buildDaemonExportPayload(snapshot protocol.EventsExport, health daemon.Health, osWindows []kitty.OSWindow, requestedWindowID int, last int, exportedAt time.Time) protocol.ExportEventsPayload {
 	liveByID := daemonExportLiveMetadata(osWindows, snapshot, requestedWindowID)
 	ids := daemonExportWindowIDs(snapshot, requestedWindowID)
-	windows := make([]daemon.ExportWindow, 0, len(ids))
+	windows := make([]protocol.ExportWindow, 0, len(ids))
 	for _, id := range ids {
-		window := daemon.ExportWindow{
+		window := protocol.ExportWindow{
 			WindowID: id,
 			Live:     liveByID[id],
-			Events:   []daemon.SessionEvent{},
+			Events:   []protocol.SessionEvent{},
 		}
 		if durable, ok := snapshot.WindowMetadata[id]; ok {
 			window.Stats = durable.Stats
@@ -362,10 +363,10 @@ func buildDaemonExportPayload(snapshot daemon.EventsExport, health daemon.Health
 	}
 
 	cliBuild := buildinfo.Current()
-	return daemon.ExportEventsPayload{
-		SchemaVersion: daemon.EventsExportSchemaVersion,
+	return protocol.ExportEventsPayload{
+		SchemaVersion: protocol.EventsExportSchemaVersion,
 		ExportedAt:    exportedAt.Unix(),
-		Daemon: daemon.ExportDaemonMetadata{
+		Daemon: protocol.ExportDaemonMetadata{
 			PID:           health.PID,
 			UptimeSeconds: int64(health.Uptime / time.Second),
 			Ready:         health.Ready,
@@ -422,12 +423,12 @@ complete causal shape, or --schema 8 for pre-causal consumers.`,
 		if daemonExportEventsLast < 0 {
 			return fmt.Errorf("--last must be >= 0")
 		}
-		if daemonExportEventsSchema != daemon.EventsExportSchemaV8 &&
-			daemonExportEventsSchema != daemon.EventsExportSchemaV9 &&
-			daemonExportEventsSchema != daemon.EventsExportSchemaV10 &&
-			daemonExportEventsSchema != daemon.EventsExportSchemaV11 &&
-			daemonExportEventsSchema != daemon.EventsExportSchemaV12 &&
-			daemonExportEventsSchema != daemon.EventsExportSchemaVersion {
+		if daemonExportEventsSchema != protocol.EventsExportSchemaV8 &&
+			daemonExportEventsSchema != protocol.EventsExportSchemaV9 &&
+			daemonExportEventsSchema != protocol.EventsExportSchemaV10 &&
+			daemonExportEventsSchema != protocol.EventsExportSchemaV11 &&
+			daemonExportEventsSchema != protocol.EventsExportSchemaV12 &&
+			daemonExportEventsSchema != protocol.EventsExportSchemaVersion {
 			return fmt.Errorf("--schema must be 8, 9, 10, 11, 12, or 13")
 		}
 		requestedWindowID, err := resolveDaemonExportWindowID(cmd)
@@ -452,7 +453,7 @@ complete causal shape, or --schema 8 for pre-causal consumers.`,
 		}
 
 		payload := buildDaemonExportPayload(snapshot, c.Health(), osWindows, requestedWindowID, daemonExportEventsLast, daemonExportNow())
-		projected, err := daemon.ProjectExportEventsPayload(payload, daemonExportEventsSchema)
+		projected, err := protocol.ProjectExportEventsPayload(payload, daemonExportEventsSchema)
 		if err != nil {
 			return err
 		}
@@ -489,7 +490,7 @@ func init() {
 	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsLast, "last", 0, "Keep only the last N events per exported window (0 = no limit)")
 	daemonExportEventsCmd.Flags().StringVar(&daemonExportEventsOutput, "output", "", "Write JSON to this file instead of stdout")
 	daemonExportEventsCmd.Flags().BoolVar(&daemonExportEventsPretty, "pretty", true, "Pretty-print JSON with 2-space indent")
-	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsSchema, "schema", daemon.EventsExportSchemaVersion, "Export schema version (8, 9, 10, 11, 12, or 13)")
+	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsSchema, "schema", protocol.EventsExportSchemaVersion, "Export schema version (8, 9, 10, 11, 12, or 13)")
 
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd, daemonRestartCmd, daemonExportEventsCmd)
 }

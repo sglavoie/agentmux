@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // activeRootMode resolves the root view that currently owns the model's async
@@ -398,8 +399,8 @@ func (m Model) handleDetailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // indefinitely.
 func sessionDetailCmd(windowID int) tea.Cmd {
 	return func() tea.Msg {
-		resp, err := daemon.NewClient().Send(daemon.Request{
-			Type:     daemon.TypeSessionDetail,
+		resp, err := daemon.NewClient().Send(protocol.Request{
+			Type:     protocol.TypeSessionDetail,
 			WindowID: windowID,
 		})
 		if err != nil {

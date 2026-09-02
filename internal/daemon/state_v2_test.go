@@ -7,15 +7,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 func TestUserVarV4RoundTripPersistsFactsProcessAndEffective(t *testing.T) {
-	process := HarnessProcessIdentity{Harness: "claude", PID: 4321, StartToken: "Mon Jul 13 10:11:12 2026"}
+	process := protocol.HarnessProcessIdentity{Harness: "claude", PID: 4321, StartToken: "Mon Jul 13 10:11:12 2026"}
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 3, TurnID: "t1", At: 1710000100, OriginWindowID: 91, HarnessProcess: process})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceSubagent, Key: "agent-1"}, Action: "stop_failure", Seq: 2, TurnID: "t1", At: 1710000200})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhaseTurn, RunID: "run-1", Seq: 5, At: 1710000300})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 3, TurnID: "t1", At: 1710000100, OriginWindowID: 91, HarnessProcess: process})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-1"}, Action: "stop_failure", Seq: 2, TurnID: "t1", At: 1710000200})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseTurn, RunID: "run-1", Seq: 5, At: 1710000300})
 
 	now := int64(1710000400)
 	busySince := time.Unix(1710000100, 0)
@@ -66,11 +67,11 @@ func TestUserVarV4RoundTripPersistsFactsProcessAndEffective(t *testing.T) {
 }
 
 func TestUserVarV4RoundTripPreservesAcknowledgementCutoff(t *testing.T) {
-	src := SourceID{Kind: SourceHarness, Key: "claude:s1"}
-	process := HarnessProcessIdentity{Harness: "claude", PID: 4321, StartToken: "Mon Jul 13 10:11:12 2026"}
+	src := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}
+	process := protocol.HarnessProcessIdentity{Harness: "claude", PID: 4321, StartToken: "Mon Jul 13 10:11:12 2026"}
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{Source: src, Action: "active", Seq: 1, At: 100, HarnessProcess: process})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceProbe, Key: "user"}, Action: "user_clear", Seq: 2, At: 101})
+	r.Apply(protocol.ReducerEvent{Source: src, Action: "active", Seq: 1, At: 100, HarnessProcess: process})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceProbe, Key: "user"}, Action: "user_clear", Seq: 2, At: 101})
 
 	encoded, err := (WindowState{Reducer: r}).MarshalUserVar()
 	if err != nil {
@@ -91,7 +92,7 @@ func TestUserVarV4RoundTripPreservesAcknowledgementCutoff(t *testing.T) {
 		t.Fatalf("acked fact rendered %q after restore, want idle", eff.Icon)
 	}
 	// A newer event for the source re-arms it past the restored cutoff.
-	got.Reducer.Apply(ReducerEvent{Source: src, Action: "active", Seq: 3, At: 103})
+	got.Reducer.Apply(protocol.ReducerEvent{Source: src, Action: "active", Seq: 3, At: 103})
 	if eff := got.Reducer.Reduce(104); eff.Icon != "bolt" {
 		t.Fatalf("post-restore event rendered %q, want bolt", eff.Icon)
 	}
@@ -124,9 +125,9 @@ func TestUserVarV4RestoresV2WithDeterministicAcknowledgementSeed(t *testing.T) {
 }
 
 func TestUserVarV4RestartPreservesRoutedOriginThroughTerminal(t *testing.T) {
-	source := SourceID{Kind: SourceHarness, Key: "claude:s1"}
+	source := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{
+	r.Apply(protocol.ReducerEvent{
 		Source: source, Action: "active", SessionID: "s1", Seq: 1, At: 100,
 		OriginWindowID: 91,
 	})
@@ -141,7 +142,7 @@ func TestUserVarV4RestartPreservesRoutedOriginThroughTerminal(t *testing.T) {
 	if !restored.Reducer.HasLiveOriginRoute(source, "s1", 91) {
 		t.Fatalf("restored reducer lost routed origin: %+v", restored.Reducer.Facts())
 	}
-	restored.Reducer.Apply(ReducerEvent{
+	restored.Reducer.Apply(protocol.ReducerEvent{
 		Source: source, Action: "stop", SessionID: "s1", Seq: 2, At: 101,
 		OriginWindowID: 91,
 	})
@@ -152,11 +153,11 @@ func TestUserVarV4RestartPreservesRoutedOriginThroughTerminal(t *testing.T) {
 }
 
 func TestUserVarV4RestartEquivalenceAcrossSources(t *testing.T) {
-	events := []ReducerEvent{
-		{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 1, TurnID: "t1", At: 100},
-		{Source: SourceID{Kind: SourceSubagent, Key: "agent-1"}, Action: "subagent", Seq: 1, TurnID: "t1", At: 110},
-		{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhasePaused, Action: "permission", RunID: "run-1", Seq: 4, At: 120},
-		{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "stop", Seq: 2, TurnID: "t1", At: 130},
+	events := []protocol.ReducerEvent{
+		{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 1, TurnID: "t1", At: 100},
+		{Source: protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-1"}, Action: "subagent", Seq: 1, TurnID: "t1", At: 110},
+		{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhasePaused, Action: "permission", RunID: "run-1", Seq: 4, At: 120},
+		{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "stop", Seq: 2, TurnID: "t1", At: 130},
 	}
 	r := NewReducer(ReducerConfig{})
 	for _, ev := range events {
@@ -204,10 +205,10 @@ func TestUserVarV4MigratesV1IntoSyntheticLegacySource(t *testing.T) {
 		t.Fatalf("migrated facts = %+v, want legacy action + ASL lease", facts)
 	}
 	asl, legacy := facts[0], facts[1] // sorted by kind: "asl" < "legacy"
-	if asl.Kind != SourceASL || asl.Key != legacyV1MigrationKey || !asl.LeaseLive || asl.Phase != ASLPhaseBetween {
+	if asl.Kind != protocol.SourceASL || asl.Key != legacyV1MigrationKey || !asl.LeaseLive || asl.Phase != ASLPhaseBetween {
 		t.Fatalf("ASL lease fact = %+v", asl)
 	}
-	if legacy.Kind != SourceLegacy || legacy.Key != legacyV1MigrationKey || legacy.Icon != "key" || legacy.Terminated {
+	if legacy.Kind != protocol.SourceLegacy || legacy.Key != legacyV1MigrationKey || legacy.Icon != "key" || legacy.Terminated {
 		t.Fatalf("legacy fact = %+v", legacy)
 	}
 	if legacy.At != 1710000001 || legacy.Seq != 1 {
@@ -297,7 +298,7 @@ func TestUserVarV4ShadowSeqNeverTrailsRestoredFacts(t *testing.T) {
 	// crashed daemon mid-update) must not hand out receipt sequences that the
 	// reducer would discard as reordered.
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 40, At: 100})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 40, At: 100})
 	encoded, err := (WindowState{Reducer: r, ShadowSeq: 2}).MarshalUserVar()
 	if err != nil {
 		t.Fatalf("MarshalUserVar() error: %v", err)
@@ -379,10 +380,10 @@ func TestUserVarV2AndV3IgnoreInjectedProcessMetadata(t *testing.T) {
 }
 
 func TestUserVarV4RestoredProcessCanSettleExit(t *testing.T) {
-	process := HarnessProcessIdentity{Harness: "claude", PID: 4321, StartToken: "Mon Jul 13 10:11:12 2026"}
+	process := protocol.HarnessProcessIdentity{Harness: "claude", PID: 4321, StartToken: "Mon Jul 13 10:11:12 2026"}
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{
-		Source: SourceID{Kind: SourceHarness, Key: "claude:pipe"}, Action: "active",
+	r.Apply(protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:pipe"}, Action: "active",
 		Seq: 1, At: 100, PipeMode: true, HarnessProcess: process,
 	})
 	encoded, err := (WindowState{Reducer: r, Effective: r.Reduce(100), ShadowSeq: 1}).MarshalUserVar()

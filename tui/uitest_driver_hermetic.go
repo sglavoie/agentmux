@@ -17,7 +17,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -88,8 +88,8 @@ func newUITestDriverModel(m Model, size UITestSize, tempParent string) (*UITestD
 		}
 	}
 	d := &UITestDriver{model: m, ctx: ctx, cancel: cancel, tempRoot: tempRoot}
-	d.model.daemonCommand = func(daemon.Request) (daemon.Response, error) {
-		return daemon.Response{}, d.liveAccess.reject("uitest: live daemon access is disabled")
+	d.model.daemonCommand = func(protocol.Request) (protocol.Response, error) {
+		return protocol.Response{}, d.liveAccess.reject("uitest: live daemon access is disabled")
 	}
 	if err := d.applySize(size); err != nil {
 		_ = d.Close()
@@ -103,7 +103,7 @@ func newUITestDriverModel(m Model, size UITestSize, tempParent string) (*UITestD
 // (the busy anchor above all). Both maps are nil for a driver built without a
 // fixture, which reproduces an unreachable daemon exactly as before. The
 // daemon is never contacted either way, so the no-live-daemon guarantee holds.
-func hermeticInitialFetch(states map[int]daemon.WindowStateSnapshot, watchdog map[int]daemon.WatchdogState) func(Model, int) tea.Cmd {
+func hermeticInitialFetch(states map[int]protocol.WindowStateSnapshot, watchdog map[int]protocol.WatchdogState) func(Model, int) tea.Cmd {
 	return func(m Model, _ int) tea.Cmd {
 		return func() tea.Msg {
 			windows, err := m.client.ListWindows()
@@ -204,7 +204,7 @@ func NewUITestConfigDriver(root, srcConfigPath string, windows []kitty.OSWindow,
 // keeps that first list identical to what a later tick's hermetic initial fetch
 // would produce. A query error leaves the model with an empty list rather than
 // failing driver construction.
-func (d *UITestDriver) loadSessionsFrom(client kitty.KittyClient, cfg *config.Config, states map[int]daemon.WindowStateSnapshot, watchdog map[int]daemon.WatchdogState) {
+func (d *UITestDriver) loadSessionsFrom(client kitty.KittyClient, cfg *config.Config, states map[int]protocol.WindowStateSnapshot, watchdog map[int]protocol.WatchdogState) {
 	sessions, _, err := session.ListWithConfig(client, cfg)
 	if err != nil {
 		return

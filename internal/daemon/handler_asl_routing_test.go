@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -50,7 +51,7 @@ func TestHandler_ActiveLoopSiblingRoutesActivityToOwner(t *testing.T) {
 	owner.LoopingSet = true
 	h.stateMu.Unlock()
 
-	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 43, Event: "PreToolUse"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 43, Event: "PreToolUse"})
 	if !resp.OK {
 		t.Fatalf("hook response = %+v", resp)
 	}
@@ -67,11 +68,11 @@ func TestHandler_ActiveLoopSiblingRoutesActivityToOwner(t *testing.T) {
 	}
 
 	// Event history belongs to the managed owner, not the unmanaged source.
-	ownerDetail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	ownerDetail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(ownerDetail.Events) != 1 || ownerDetail.Events[0].Action != "active" || ownerDetail.Events[0].Suppressed {
 		t.Fatalf("owner events = %+v; want one allowed active event", ownerDetail.Events)
 	}
-	srcDetail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	srcDetail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})
 	if len(srcDetail.Events) != 0 {
 		t.Fatalf("source events = %+v; want none on the routed source pane", srcDetail.Events)
 	}
@@ -84,8 +85,8 @@ func TestHandler_ActiveLoopSiblingRetargetKeepsProducerIdentity(t *testing.T) {
 	h := newTestHandler()
 	h.SetKittyClient(&fakeKittyClient{windows: aslSiblingWindows("api", projectDir, 42, 43)})
 
-	resp := h.Handle(Request{
-		Type:        TypeHookEvent,
+	resp := h.Handle(protocol.Request{
+		Type:        protocol.TypeHookEvent,
 		WindowID:    43,
 		Event:       "UserPromptSubmit",
 		Harness:     harness.Codex,
@@ -95,7 +96,7 @@ func TestHandler_ActiveLoopSiblingRetargetKeepsProducerIdentity(t *testing.T) {
 		t.Fatalf("hook response = %+v", resp)
 	}
 
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) != 1 {
 		t.Fatalf("owner events = %+v, want one routed event", detail.Events)
 	}
@@ -103,7 +104,7 @@ func TestHandler_ActiveLoopSiblingRetargetKeepsProducerIdentity(t *testing.T) {
 	if event.RouteDecision != routeDecisionOwner {
 		t.Fatalf("route decision = %q, want owner", event.RouteDecision)
 	}
-	if event.SourceKind != string(SourceHarness) || event.SourceKey != "codex:routed-codex" {
+	if event.SourceKind != string(protocol.SourceHarness) || event.SourceKey != "codex:routed-codex" {
 		t.Fatalf("routed source = %q/%q, want harness/codex:routed-codex", event.SourceKind, event.SourceKey)
 	}
 
@@ -140,7 +141,7 @@ func TestHandler_ActiveLoopSiblingRoutesAllStatesToOwner(t *testing.T) {
 			fake := &fakeKittyClient{windows: aslSiblingWindows("api", projectDir, 42, 43)}
 			h.SetKittyClient(fake)
 
-			resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 43, Event: tc.event})
+			resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 43, Event: tc.event})
 			if !resp.OK {
 				t.Fatalf("hook response = %+v", resp)
 			}
@@ -150,7 +151,7 @@ func TestHandler_ActiveLoopSiblingRoutesAllStatesToOwner(t *testing.T) {
 			if st == nil || st.DesiredIcon != tc.wantIcon {
 				t.Fatalf("owner state = %+v; want icon %q for %s", st, tc.wantIcon, tc.event)
 			}
-			detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+			detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 			if len(detail.Events) != 1 || detail.Events[0].Suppressed {
 				t.Fatalf("owner events = %+v; want one allowed event", detail.Events)
 			}
@@ -181,7 +182,7 @@ func TestHandler_ActiveLoopSiblingTurnCyclePreservesLoop(t *testing.T) {
 
 	// A turn's Stop routed from the unmanaged source pane must land stop on the
 	// managed owner while keeping the loop marker authoritative.
-	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 43, Event: "Stop"}); !resp.OK {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 43, Event: "Stop"}); !resp.OK {
 		t.Fatalf("routed Stop response = %+v", resp)
 	}
 	h.stateMu.Lock()
@@ -193,7 +194,7 @@ func TestHandler_ActiveLoopSiblingTurnCyclePreservesLoop(t *testing.T) {
 
 	// The next prompt in the same loop turn drives the owner back to bolt, still
 	// with the loop marker intact — the routed transition never resets 🔁.
-	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 43, Event: "UserPromptSubmit"}); !resp.OK {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 43, Event: "UserPromptSubmit"}); !resp.OK {
 		t.Fatalf("routed UserPromptSubmit response = %+v", resp)
 	}
 	h.stateMu.Lock()
@@ -224,8 +225,8 @@ func TestHandler_ActiveLoopSiblingContextLimitProbesSourceRendersErrorOnOwner(t 
 	}
 	h.SetKittyClient(fake)
 
-	resp := h.Handle(Request{
-		Type:        TypeHookEvent,
+	resp := h.Handle(protocol.Request{
+		Type:        protocol.TypeHookEvent,
 		WindowID:    43,
 		Event:       "Notification",
 		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{NotificationType: "agent_idle"}),
@@ -241,7 +242,7 @@ func TestHandler_ActiveLoopSiblingContextLimitProbesSourceRendersErrorOnOwner(t 
 	}
 	// The base transition routes to the owner first, then the source-pane probe
 	// upgrades it to stop_failure asynchronously.
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	last := detail.Events[len(detail.Events)-1]
 	if last.Action != "stop_failure" || !last.ContextLimit {
 		t.Fatalf("owner events = %+v; want a stop_failure context-limit upgrade on the owner", detail.Events)
@@ -292,7 +293,7 @@ func TestHandler_ActiveLoopSiblingFallsBackToOwnerMismatch(t *testing.T) {
 			fake := &fakeKittyClient{windows: aslSiblingWindows("api", projectDir, 42, 43)}
 			h.SetKittyClient(fake)
 
-			resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 43, Event: "PreToolUse"})
+			resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 43, Event: "PreToolUse"})
 			if !resp.OK {
 				t.Fatalf("hook response = %+v", resp)
 			}
@@ -303,7 +304,7 @@ func TestHandler_ActiveLoopSiblingFallsBackToOwnerMismatch(t *testing.T) {
 			if owner != nil && owner.DesiredIcon != "" {
 				t.Fatalf("owner state = %+v; want untouched", owner)
 			}
-			detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+			detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})
 			if len(detail.Events) != 1 || !detail.Events[0].Suppressed || detail.Events[0].SuppressionReason != suppressionReasonOwnerMismatch {
 				t.Fatalf("source events = %+v; want owner_mismatch suppression", detail.Events)
 			}

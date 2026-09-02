@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -60,7 +61,7 @@ func TestProbeCodexScreenPrompts_CompletedTurnStopsStuckBolt(t *testing.T) {
 
 	// The stale interactive bolt fact was retired, so it can no longer mask 🛑.
 	h.stateMu.Lock()
-	old := h.store[42].Reducer.facts[SourceID{Kind: SourceHarness, Key: "codex:sess-1"}]
+	old := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:sess-1"}]
 	h.stateMu.Unlock()
 	if old == nil || !old.acked {
 		t.Fatalf("stale interactive bolt was not retired: %+v", old)
@@ -68,7 +69,7 @@ func TestProbeCodexScreenPrompts_CompletedTurnStopsStuckBolt(t *testing.T) {
 
 	// The ScreenStopProbe row is attributed to the codex_screen probe source and
 	// reports the ACTUAL reduced result (stop), not the requested action.
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	ev, ok := lastEventNamed(resp.Events, screenStopProbeEvent)
 	if !ok {
 		t.Fatalf("no %q row in %+v", screenStopProbeEvent, resp.Events)
@@ -76,8 +77,8 @@ func TestProbeCodexScreenPrompts_CompletedTurnStopsStuckBolt(t *testing.T) {
 	if ev.Action != "stop" {
 		t.Fatalf("ScreenStopProbe action = %q, want stop", ev.Action)
 	}
-	if ev.Source != string(SourceProbe)+":"+screenPromptProbeSource {
-		t.Fatalf("ScreenStopProbe source = %q, want %q", ev.Source, string(SourceProbe)+":"+screenPromptProbeSource)
+	if ev.Source != string(protocol.SourceProbe)+":"+screenPromptProbeSource {
+		t.Fatalf("ScreenStopProbe source = %q, want %q", ev.Source, string(protocol.SourceProbe)+":"+screenPromptProbeSource)
 	}
 }
 
@@ -107,15 +108,15 @@ func TestProbeCodexScreenPrompts_ConfirmsHeldStopInsteadOfSettling(t *testing.T)
 	h.ProbeCodexScreenPrompts(base.Add(time.Duration(codexIdleProbeTerminalRun-1) * time.Second))
 
 	pending, ok := terminalHoldPending(t, h, 42)
-	if !ok || !pending.confirmed || pending.confirmedBy != StopConfirmedByCodexScreen {
+	if !ok || !pending.confirmed || pending.confirmedBy != protocol.StopConfirmedByCodexScreen {
 		t.Fatalf("hold after a full run of %d completed-turn screens = %+v/%v, want confirmed by %s",
-			codexIdleProbeTerminalRun, pending, ok, StopConfirmedByCodexScreen)
+			codexIdleProbeTerminalRun, pending, ok, protocol.StopConfirmedByCodexScreen)
 	}
 	assertNoProbeStopFact(t, h, 42)
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 		t.Fatalf("icon while the confirmed hold waits = %q, want bolt", eff.Icon)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if ev, ok := lastEventNamed(resp.Events, screenStopProbeEvent); ok {
 		t.Fatalf("probe recorded %+v; a confirmation is not a synthetic stop", ev)
 	}
@@ -151,7 +152,7 @@ func TestProbeCodexScreenPrompts_InterruptedTurnStopsStuckBolt(t *testing.T) {
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "stop" {
 		t.Fatalf("effective = %+v, want stop after interruption", eff)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if ev, ok := lastEventNamed(resp.Events, screenStopProbeEvent); !ok || ev.Action != "stop" {
 		t.Fatalf("ScreenStopProbe row = %+v ok=%v, want stop", ev, ok)
 	}
@@ -182,7 +183,7 @@ func TestProbeCodexScreenPrompts_ActiveWorkingTurnKeepsBolt(t *testing.T) {
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 		t.Fatalf("effective = %+v, want the working bolt preserved", eff)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if ev, ok := lastEventNamed(resp.Events, screenStopProbeEvent); ok {
 		t.Fatalf("ScreenStopProbe row recorded for a still-working turn: %+v", ev)
 	}
@@ -255,7 +256,7 @@ func TestProbeCodexScreenPrompts_ManagedOwnerSuppressesUnmanagedCodexSiblingStop
 	if got := len(fake.titleCalls()); got != 0 {
 		t.Fatalf("SetTabTitle calls = %d, want 0", got)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})
 	if len(resp.Events) != 0 {
 		t.Fatalf("sibling events = %d, want 0", len(resp.Events))
 	}
@@ -293,7 +294,7 @@ func TestProbeCodexScreenPrompts_ManagedNonCodexOwnerSuppressesUnmanagedCodexSib
 	if got := len(fake.titleCalls()); got != 0 {
 		t.Fatalf("SetTabTitle calls = %d, want 0", got)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})
 	if len(resp.Events) != 0 {
 		t.Fatalf("sibling events = %d, want 0", len(resp.Events))
 	}

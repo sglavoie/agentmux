@@ -14,6 +14,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hooks"
@@ -68,7 +69,7 @@ func resetDoctorTestState(t *testing.T) {
 // doctorTestBuild is a matching CLI/daemon artifact identity for tests that
 // exercise a healthy deployment.
 var doctorTestBuild = buildinfo.Info{Version: "1.2.3", Revision: "cafe0123", GoVersion: "go1.99", BinaryHash: "hash-a"}
-var doctorTestNotification = daemon.NotificationCapability{
+var doctorTestNotification = protocol.NotificationCapability{
 	Enabled: true, Available: true, Interactive: true, Backend: "alerter",
 	Executable: "/opt/homebrew/bin/alerter", Version: "26.5",
 }
@@ -97,13 +98,13 @@ func TestDoctorReportsDaemonRendererHookAndSuppressionHealth(t *testing.T) {
 	newDoctorDaemonClient = func() daemonExportClient {
 		return &fakeDaemonExportClient{
 			health: daemon.Health{Alive: true, PID: 4242, Uptime: 2 * time.Minute, Ready: true, Build: &build, Notification: &doctorTestNotification},
-			export: func(int) (daemon.EventsExport, error) {
-				return daemon.EventsExport{
-					EventsByWindow: map[int][]daemon.SessionEvent{42: {{
+			export: func(int) (protocol.EventsExport, error) {
+				return protocol.EventsExport{
+					EventsByWindow: map[int][]protocol.SessionEvent{42: {{
 						At: now.Unix(), Suppressed: true, SuppressionReason: "guard_blocked",
 					}}},
-					WindowMetadata: map[int]daemon.WindowDebugMetadata{42: {
-						Renderer: daemon.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true, KittyListenOn: "unix:/tmp/kitty-42"},
+					WindowMetadata: map[int]protocol.WindowDebugMetadata{42: {
+						Renderer: protocol.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true, KittyListenOn: "unix:/tmp/kitty-42"},
 					}},
 				}, nil
 			},
@@ -148,11 +149,11 @@ func TestDoctorReportsDaemonRendererHookAndSuppressionHealth(t *testing.T) {
 }
 
 func TestDoctorRendererTreatsSharedTabAsConvergedWhenAnyPaneMatches(t *testing.T) {
-	snapshot := daemon.EventsExport{WindowMetadata: map[int]daemon.WindowDebugMetadata{
-		42: {Renderer: daemon.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true, Looping: false, LoopingSet: true}},
-		43: {Renderer: daemon.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true, Looping: true, LoopingSet: true}},
+	snapshot := protocol.EventsExport{WindowMetadata: map[int]protocol.WindowDebugMetadata{
+		42: {Renderer: protocol.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true, Looping: false, LoopingSet: true}},
+		43: {Renderer: protocol.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true, Looping: true, LoopingSet: true}},
 	}}
-	liveByID := map[int]daemon.WindowLiveMetadata{
+	liveByID := map[int]protocol.WindowLiveMetadata{
 		42: {Found: true, OSWindowID: 1, TabID: 7, IconState: "bolt", Looping: false},
 		43: {Found: true, OSWindowID: 1, TabID: 7, IconState: "bolt", Looping: false},
 	}

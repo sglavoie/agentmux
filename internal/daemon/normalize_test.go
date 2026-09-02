@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
 
@@ -23,7 +24,7 @@ func TestNormalizeHarnessSourceKeys(t *testing.T) {
 		harness    string
 		payload    string
 		windowID   int
-		wantSource SourceID
+		wantSource protocol.SourceID
 		wantAction string
 		wantPhase  string
 	}{
@@ -33,7 +34,7 @@ func TestNormalizeHarnessSourceKeys(t *testing.T) {
 			harness:    "claude",
 			payload:    `{"session_id":"sess-1"}`,
 			windowID:   51,
-			wantSource: SourceID{Kind: SourceHarness, Key: "claude:sess-1"},
+			wantSource: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:sess-1"},
 			wantAction: "active",
 		},
 		{
@@ -42,7 +43,7 @@ func TestNormalizeHarnessSourceKeys(t *testing.T) {
 			harness:    "codex",
 			payload:    `{}`,
 			windowID:   77,
-			wantSource: SourceID{Kind: SourceHarness, Key: "win:77"},
+			wantSource: protocol.SourceID{Kind: protocol.SourceHarness, Key: "win:77"},
 			wantAction: "active",
 		},
 		{
@@ -51,7 +52,7 @@ func TestNormalizeHarnessSourceKeys(t *testing.T) {
 			harness:    "future-harness",
 			payload:    `{"session_id":"sess-unknown"}`,
 			windowID:   78,
-			wantSource: SourceID{Kind: SourceLegacy, Key: "win:78"},
+			wantSource: protocol.SourceID{Kind: protocol.SourceLegacy, Key: "win:78"},
 			wantAction: "active",
 		},
 		{
@@ -60,7 +61,7 @@ func TestNormalizeHarnessSourceKeys(t *testing.T) {
 			harness:    "claude",
 			payload:    `{"agent_id":"agent-7","session_id":"sess-1"}`,
 			windowID:   51,
-			wantSource: SourceID{Kind: SourceSubagent, Key: "agent-7"},
+			wantSource: protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-7"},
 			wantAction: "subagent",
 		},
 		{
@@ -69,7 +70,7 @@ func TestNormalizeHarnessSourceKeys(t *testing.T) {
 			harness:    "claude",
 			payload:    `{"session_id":"sess-1"}`,
 			windowID:   51,
-			wantSource: SourceID{Kind: SourceLegacy, Key: "session:sess-1"},
+			wantSource: protocol.SourceID{Kind: protocol.SourceLegacy, Key: "session:sess-1"},
 			wantAction: "subagent",
 		},
 		{
@@ -78,7 +79,7 @@ func TestNormalizeHarnessSourceKeys(t *testing.T) {
 			harness:    "claude",
 			payload:    `{}`,
 			windowID:   88,
-			wantSource: SourceID{Kind: SourceLegacy, Key: "session:win:88"},
+			wantSource: protocol.SourceID{Kind: protocol.SourceLegacy, Key: "session:win:88"},
 			wantAction: "subagent",
 		},
 		{
@@ -87,7 +88,7 @@ func TestNormalizeHarnessSourceKeys(t *testing.T) {
 			harness:    "codex",
 			payload:    `{"run_id":"run-42"}`,
 			windowID:   51,
-			wantSource: SourceID{Kind: SourceASL, Key: "run-42"},
+			wantSource: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-42"},
 			wantPhase:  ASLPhaseTurn,
 		},
 		{
@@ -96,7 +97,7 @@ func TestNormalizeHarnessSourceKeys(t *testing.T) {
 			harness:    "codex",
 			payload:    `{}`,
 			windowID:   51,
-			wantSource: SourceID{Kind: SourceASL, Key: "win:51"},
+			wantSource: protocol.SourceID{Kind: protocol.SourceASL, Key: "win:51"},
 			wantPhase:  ASLPhaseBetween,
 		},
 		{
@@ -105,7 +106,7 @@ func TestNormalizeHarnessSourceKeys(t *testing.T) {
 			harness:    "codex",
 			payload:    `{"run_id":"run-42"}`,
 			windowID:   51,
-			wantSource: SourceID{Kind: SourceASL, Key: "run-42"},
+			wantSource: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-42"},
 			wantPhase:  ASLPhaseFinished,
 		},
 		{
@@ -114,7 +115,7 @@ func TestNormalizeHarnessSourceKeys(t *testing.T) {
 			harness:    "claude",
 			payload:    `{}`,
 			windowID:   51,
-			wantSource: SourceID{Kind: SourceProbe, Key: "user"},
+			wantSource: protocol.SourceID{Kind: protocol.SourceProbe, Key: "user"},
 			wantAction: "user_clear",
 		},
 	}
@@ -176,13 +177,13 @@ func TestNormalizeCodexRequestUserInputStartStaysActiveUntilScreenConfirmation(t
 		51,
 		false,
 	)
-	if n.Action != "active" || n.Source != (SourceID{Kind: SourceHarness, Key: "codex:sess-1"}) {
+	if n.Action != "active" || n.Source != (protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:sess-1"}) {
 		t.Fatalf("normalized Codex request_user_input start = %+v, want identified active source", n)
 	}
 }
 
 func TestNormalizedFromHookRequestStampsOnlyOrdinaryValidatedSources(t *testing.T) {
-	identity := &HarnessProcessIdentity{Harness: "claude", PID: 42, StartToken: "Thu Jul 16 10:20:30 2026"}
+	identity := &protocol.HarnessProcessIdentity{Harness: "claude", PID: 42, StartToken: "Thu Jul 16 10:20:30 2026"}
 	want := *identity
 	for _, tc := range []struct {
 		name    string
@@ -197,14 +198,14 @@ func TestNormalizedFromHookRequestStampsOnlyOrdinaryValidatedSources(t *testing.
 		{name: "user action excluded", event: "user_clear", payload: `{}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			req := normalizeProducerFields(Request{
+			req := normalizeProducerFields(protocol.Request{
 				ProducerHarness: "claude", HarnessProcess: identity, PayloadJSON: tc.payload,
 			})
 			normalized := normalizedFromHookRequest(tc.event, req, 51)
 			if tc.want && normalized.HarnessProcess != want {
 				t.Fatalf("HarnessProcess = %+v, want %+v", normalized.HarnessProcess, want)
 			}
-			if !tc.want && normalized.HarnessProcess != (HarnessProcessIdentity{}) {
+			if !tc.want && normalized.HarnessProcess != (protocol.HarnessProcessIdentity{}) {
 				t.Fatalf("HarnessProcess = %+v, want zero identity", normalized.HarnessProcess)
 			}
 		})
@@ -212,17 +213,17 @@ func TestNormalizedFromHookRequestStampsOnlyOrdinaryValidatedSources(t *testing.
 }
 
 func TestNormalizedFromHookRequestDropsInvalidOrMismatchedIdentity(t *testing.T) {
-	for _, identity := range []*HarnessProcessIdentity{
+	for _, identity := range []*protocol.HarnessProcessIdentity{
 		{Harness: "codex", PID: 42, StartToken: "Thu Jul 16 10:20:30 2026"},
 		{Harness: "claude", PID: 0, StartToken: "Thu Jul 16 10:20:30 2026"},
 		{Harness: "claude", PID: 42},
 	} {
-		req := Request{
+		req := protocol.Request{
 			Harness: "claude", HarnessProcess: identity,
 			PayloadJSON: `{"session_id":"session-1"}`,
 		}
 		normalized := normalizedFromHookRequest("UserPromptSubmit", req, 51)
-		if normalized.HarnessProcess != (HarnessProcessIdentity{}) {
+		if normalized.HarnessProcess != (protocol.HarnessProcessIdentity{}) {
 			t.Fatalf("identity %+v stamped as %+v", identity, normalized.HarnessProcess)
 		}
 	}
@@ -262,7 +263,7 @@ func TestNormalizeQuarantinesMalformed(t *testing.T) {
 				t.Fatalf("quarantined event produced icon %q; want empty", got.Icon)
 			}
 			traces := r.Traces()
-			if len(traces) != 1 || traces[0].Decision != DecisionQuarantined {
+			if len(traces) != 1 || traces[0].Decision != protocol.DecisionQuarantined {
 				t.Fatalf("traces = %+v; want one quarantined entry", traces)
 			}
 		})
@@ -291,7 +292,7 @@ func TestNormalizeUnknownAndIgnoredAreInert(t *testing.T) {
 
 	// Neither can dislodge a live fact.
 	r := NewReducer(zeroCfg)
-	r.Apply(ReducerEvent{Source: harnessSource(), Action: "permission", Seq: 1, At: 10})
+	r.Apply(protocol.ReducerEvent{Source: harnessSource(), Action: "permission", Seq: 1, At: 10})
 	r.ApplyNormalized(unknown)
 	r.ApplyNormalized(ignored)
 	if got := r.Reduce(100); got.Icon != "key" {
@@ -357,7 +358,7 @@ func TestNormalizedApplyFeedsReducer(t *testing.T) {
 	if got.Icon != "key" {
 		t.Fatalf("icon = %q, want key", got.Icon)
 	}
-	if got.Source != (SourceID{Kind: SourceHarness, Key: "claude:sess-1"}) {
+	if got.Source != (protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:sess-1"}) {
 		t.Fatalf("source = %+v, want harness claude:sess-1", got.Source)
 	}
 }
@@ -365,7 +366,7 @@ func TestNormalizedApplyFeedsReducer(t *testing.T) {
 // TestProbeSourceIsSynthetic pins the explicit synthetic probe source key used
 // by the daemon-side context-limit probe path.
 func TestProbeSourceIsSynthetic(t *testing.T) {
-	if got := ProbeSource(); got != (SourceID{Kind: SourceProbe, Key: "context_limit"}) {
+	if got := ProbeSource(); got != (protocol.SourceID{Kind: protocol.SourceProbe, Key: "context_limit"}) {
 		t.Fatalf("ProbeSource() = %+v", got)
 	}
 }
@@ -374,7 +375,7 @@ func TestProbeSourceIsSynthetic(t *testing.T) {
 // into the source key so "Claude" and "claude" collapse onto one source.
 func TestNormalizeUsesHarnessNormalization(t *testing.T) {
 	mixed := NormalizedFromHook("UserPromptSubmit", "Claude", `{"session_id":"s"}`, 1, false)
-	want := SourceID{Kind: SourceHarness, Key: harness.Normalize("Claude") + ":s"}
+	want := protocol.SourceID{Kind: protocol.SourceHarness, Key: harness.Normalize("Claude") + ":s"}
 	if mixed.Source != want {
 		t.Fatalf("source = %+v, want %+v", mixed.Source, want)
 	}
@@ -386,7 +387,7 @@ func TestNormalizeUnknownProducerUsesHarnessAgnosticNotificationSemantics(t *tes
 	if unknown.Action != "idle" {
 		t.Fatalf("unknown producer idle_prompt action = %q, want generic idle", unknown.Action)
 	}
-	if unknown.Source != (SourceID{Kind: SourceLegacy, Key: "win:7"}) {
+	if unknown.Source != (protocol.SourceID{Kind: protocol.SourceLegacy, Key: "win:7"}) {
 		t.Fatalf("unknown producer source = %+v, want legacy win:7", unknown.Source)
 	}
 }

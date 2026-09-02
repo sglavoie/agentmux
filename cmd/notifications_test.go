@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func resetNotificationsTestState(t *testing.T) {
@@ -30,7 +31,7 @@ func TestNotificationsTestCommandConfirmsDelivery(t *testing.T) {
 	}
 	notificationsTestDelivery = func(context.Context, *config.NotificationConfig) (daemon.NotificationDeliveryTestResult, error) {
 		return daemon.NotificationDeliveryTestResult{
-			Capability:  daemon.NotificationCapability{Backend: "alerter", Available: true, Interactive: true},
+			Capability:  protocol.NotificationCapability{Backend: "alerter", Available: true, Interactive: true},
 			Interaction: "interaction_timeout",
 		}, nil
 	}

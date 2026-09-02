@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
@@ -20,7 +21,7 @@ const (
 	renderStageFailed    = "failed"
 )
 
-func cloneRenderGenerationTrace(in RenderGenerationTrace) RenderGenerationTrace {
+func cloneRenderGenerationTrace(in protocol.RenderGenerationTrace) protocol.RenderGenerationTrace {
 	out := in
 	out.SourceGenerations = append([]uint64(nil), in.SourceGenerations...)
 	out.TraceIDs = append([]string(nil), in.TraceIDs...)
@@ -29,8 +30,8 @@ func cloneRenderGenerationTrace(in RenderGenerationTrace) RenderGenerationTrace 
 	return out
 }
 
-func cloneRenderGenerationTraces(in []RenderGenerationTrace) []RenderGenerationTrace {
-	out := make([]RenderGenerationTrace, len(in))
+func cloneRenderGenerationTraces(in []protocol.RenderGenerationTrace) []protocol.RenderGenerationTrace {
+	out := make([]protocol.RenderGenerationTrace, len(in))
 	for i := range in {
 		out[i] = cloneRenderGenerationTrace(in[i])
 	}
@@ -48,8 +49,8 @@ func appendBoundedUnique(values []string, value string) []string {
 		}
 	}
 	values = append(values, value)
-	if len(values) > MaxRenderCausalIDs {
-		values = append([]string(nil), values[len(values)-MaxRenderCausalIDs:]...)
+	if len(values) > protocol.MaxRenderCausalIDs {
+		values = append([]string(nil), values[len(values)-protocol.MaxRenderCausalIDs:]...)
 	}
 	return values
 }
@@ -64,26 +65,26 @@ func appendBoundedUniqueGeneration(values []uint64, value uint64) []uint64 {
 		}
 	}
 	values = append(values, value)
-	if len(values) > MaxRenderCausalIDs {
-		values = append([]uint64(nil), values[len(values)-MaxRenderCausalIDs:]...)
+	if len(values) > protocol.MaxRenderCausalIDs {
+		values = append([]uint64(nil), values[len(values)-protocol.MaxRenderCausalIDs:]...)
 	}
 	return values
 }
 
-func renderGenerationTerminal(trace RenderGenerationTrace) bool {
+func renderGenerationTerminal(trace protocol.RenderGenerationTrace) bool {
 	// Failed generations remain retryable. Their durable failure row stays in
 	// the journal, while the in-memory generation can advance through a later
 	// queued/attempted/successful retry without creating a duplicate generation.
 	return trace.Stage == renderStageRendered
 }
 
-func renderGenerationLocked(st *WindowState, generation uint64) *RenderGenerationTrace {
+func renderGenerationLocked(st *WindowState, generation uint64) *protocol.RenderGenerationTrace {
 	for i := range st.RenderGenerations {
 		if st.RenderGenerations[i].Generation == generation {
 			return &st.RenderGenerations[i]
 		}
 	}
-	st.RenderGenerations = append(st.RenderGenerations, RenderGenerationTrace{
+	st.RenderGenerations = append(st.RenderGenerations, protocol.RenderGenerationTrace{
 		Generation:        generation,
 		SourceGenerations: []uint64{generation},
 		Stage:             renderStageDirty,
@@ -91,7 +92,7 @@ func renderGenerationLocked(st *WindowState, generation uint64) *RenderGeneratio
 		UpdatedAt:         time.Now().UnixNano(),
 	})
 	if len(st.RenderGenerations) > maxRenderGenerationTraces {
-		st.RenderGenerations = append([]RenderGenerationTrace(nil), st.RenderGenerations[len(st.RenderGenerations)-maxRenderGenerationTraces:]...)
+		st.RenderGenerations = append([]protocol.RenderGenerationTrace(nil), st.RenderGenerations[len(st.RenderGenerations)-maxRenderGenerationTraces:]...)
 	}
 	return &st.RenderGenerations[len(st.RenderGenerations)-1]
 }
@@ -99,19 +100,19 @@ func renderGenerationLocked(st *WindowState, generation uint64) *RenderGeneratio
 // linkRequestRenderGenerationLocked associates the exact event row for req
 // with the next state generation before markWindow*DirtyLocked increments Seq.
 // Callers hold stateMu.
-func (h *Handler) linkRequestRenderGenerationLocked(req Request, generation uint64) {
+func (h *Handler) linkRequestRenderGenerationLocked(req protocol.Request, generation uint64) {
 	if h == nil || req.WindowID <= 0 || generation == 0 {
 		return
 	}
 	st := h.ensureWindowStateLocked(req.WindowID)
-	event := eventByReferenceLocked(st, req.eventRef)
+	event := eventByReferenceLocked(st, req.EventRef)
 	h.linkSessionEventRenderGenerationLocked(req.WindowID, st, event, req.TraceID, req.RequestID, req.SourceEventID, generation)
 }
 
 func (h *Handler) linkSessionEventRenderGenerationLocked(
 	windowID int,
 	st *WindowState,
-	event *SessionEvent,
+	event *protocol.SessionEvent,
 	traceID, requestID, sourceEventID string,
 	generation uint64,
 ) {
@@ -130,7 +131,7 @@ func (h *Handler) linkSessionEventRenderGenerationLocked(
 	h.syncRendererMetadataLocked(windowID)
 }
 
-func mergeRenderGeneration(dst *RenderGenerationTrace, src RenderGenerationTrace) {
+func mergeRenderGeneration(dst *protocol.RenderGenerationTrace, src protocol.RenderGenerationTrace) {
 	for _, generation := range src.SourceGenerations {
 		dst.SourceGenerations = appendBoundedUniqueGeneration(dst.SourceGenerations, generation)
 	}
@@ -146,17 +147,17 @@ func mergeRenderGeneration(dst *RenderGenerationTrace, src RenderGenerationTrace
 	}
 }
 
-func (h *Handler) markRenderStageLocked(windowID int, generation uint64, stage, outcome, reason string, coalesce bool) RenderGenerationTrace {
+func (h *Handler) markRenderStageLocked(windowID int, generation uint64, stage, outcome, reason string, coalesce bool) protocol.RenderGenerationTrace {
 	st, ok := h.windowStateLocked(windowID)
 	if !ok || generation == 0 {
-		return RenderGenerationTrace{}
+		return protocol.RenderGenerationTrace{}
 	}
 	if coalesce {
-		target := RenderGenerationTrace{
+		target := protocol.RenderGenerationTrace{
 			Generation: generation,
 			Stage:      renderStageDirty, Outcome: "pending",
 		}
-		kept := make([]RenderGenerationTrace, 0, len(st.RenderGenerations)+1)
+		kept := make([]protocol.RenderGenerationTrace, 0, len(st.RenderGenerations)+1)
 		for _, existing := range st.RenderGenerations {
 			if existing.Generation <= generation && !renderGenerationTerminal(existing) {
 				mergeRenderGeneration(&target, existing)
@@ -174,7 +175,7 @@ func (h *Handler) markRenderStageLocked(windowID int, generation uint64, stage, 
 	trace.Reason = reason
 	trace.UpdatedAt = time.Now().UnixNano()
 	if len(st.RenderGenerations) > maxRenderGenerationTraces {
-		st.RenderGenerations = append([]RenderGenerationTrace(nil), st.RenderGenerations[len(st.RenderGenerations)-maxRenderGenerationTraces:]...)
+		st.RenderGenerations = append([]protocol.RenderGenerationTrace(nil), st.RenderGenerations[len(st.RenderGenerations)-maxRenderGenerationTraces:]...)
 		trace = &st.RenderGenerations[len(st.RenderGenerations)-1]
 	}
 	if stage == renderStageRendered || stage == renderStageFailed {
@@ -184,7 +185,7 @@ func (h *Handler) markRenderStageLocked(windowID int, generation uint64, stage, 
 	return cloneRenderGenerationTrace(*trace)
 }
 
-func (h *Handler) finishRenderEventsLocked(st *WindowState, trace RenderGenerationTrace) {
+func (h *Handler) finishRenderEventsLocked(st *WindowState, trace protocol.RenderGenerationTrace) {
 	if st == nil {
 		return
 	}
@@ -215,11 +216,11 @@ func (h *Handler) finishRenderEventsLocked(st *WindowState, trace RenderGenerati
 	}
 }
 
-func isDuplicateReplay(event *SessionEvent) bool {
-	return event != nil && event.ReducerDecision == DecisionDuplicate && event.DecisionReason == DecisionReasonRequestReplayed
+func isDuplicateReplay(event *protocol.SessionEvent) bool {
+	return event != nil && event.ReducerDecision == protocol.DecisionDuplicate && event.DecisionReason == protocol.DecisionReasonRequestReplayed
 }
 
-func (h *Handler) recordRenderGeneration(trace RenderGenerationTrace, windowID int) {
+func (h *Handler) recordRenderGeneration(trace protocol.RenderGenerationTrace, windowID int) {
 	if h == nil || h.decisionJournal == nil || trace.Generation == 0 {
 		return
 	}
@@ -249,7 +250,7 @@ func (h *Handler) recordRenderGeneration(trace RenderGenerationTrace, windowID i
 	h.decisionJournal.TryAppend(ctx, envelope)
 }
 
-func (h *Handler) recordRenderGenerationBounded(trace RenderGenerationTrace, windowID int) {
+func (h *Handler) recordRenderGenerationBounded(trace protocol.RenderGenerationTrace, windowID int) {
 	if h == nil || h.decisionJournal == nil || trace.Generation == 0 {
 		return
 	}
@@ -264,7 +265,7 @@ func formatUint64List(values []uint64) string {
 	return strings.Join(parts, ",")
 }
 
-func notificationTraceFromRequest(req Request) NotificationTrace {
+func notificationTraceFromRequest(req protocol.Request) NotificationTrace {
 	return NotificationTrace{
 		TraceID: req.TraceID, RequestID: req.RequestID,
 		SourceEventID: req.SourceEventID, Harness: req.Harness,
@@ -272,7 +273,7 @@ func notificationTraceFromRequest(req Request) NotificationTrace {
 	}
 }
 
-func notificationTraceFromEvent(event SessionEvent) NotificationTrace {
+func notificationTraceFromEvent(event protocol.SessionEvent) NotificationTrace {
 	return NotificationTrace{
 		TraceID: event.TraceID, RequestID: event.RequestID,
 		SourceEventID: event.SourceEventID, Harness: event.ProducerHarness,
@@ -334,7 +335,7 @@ func notificationEffectKey(windowID int, traceID string) string {
 	return fmt.Sprintf("%d:%s", windowID, traceID)
 }
 
-func (h *Handler) enrichNotificationEvent(windowID int, event SessionEvent) SessionEvent {
+func (h *Handler) enrichNotificationEvent(windowID int, event protocol.SessionEvent) protocol.SessionEvent {
 	if h == nil || event.TraceID == "" {
 		return event
 	}
@@ -383,7 +384,7 @@ func (h *Handler) linkProbeChild(parentTraceID, childTraceID string, windowIDs [
 
 func (h *Handler) recordProbeStage(
 	traceID, parentTraceID string,
-	req Request,
+	req protocol.Request,
 	windowID int,
 	stage, outcome, reason string,
 	evidence map[string]string,
@@ -410,7 +411,7 @@ func (h *Handler) recordProbeStage(
 
 func (h *Handler) recordProbeStageBounded(
 	traceID, parentTraceID string,
-	req Request,
+	req protocol.Request,
 	windowID int,
 	stage, outcome, reason string,
 	evidence map[string]string,

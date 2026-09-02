@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
@@ -307,18 +307,18 @@ func decodeEventsExport(inputPath string, data []byte) (replaySource, error) {
 	if err := json.Unmarshal(data, &header); err != nil {
 		return replaySource{}, err
 	}
-	if header.SchemaVersion != daemon.EventsExportSchemaVersion &&
-		header.SchemaVersion != daemon.EventsExportSchemaV12 &&
-		header.SchemaVersion != daemon.EventsExportSchemaV11 &&
-		header.SchemaVersion != daemon.EventsExportSchemaV10 &&
-		header.SchemaVersion != daemon.EventsExportSchemaV9 &&
-		header.SchemaVersion != daemon.EventsExportSchemaV8 {
+	if header.SchemaVersion != protocol.EventsExportSchemaVersion &&
+		header.SchemaVersion != protocol.EventsExportSchemaV12 &&
+		header.SchemaVersion != protocol.EventsExportSchemaV11 &&
+		header.SchemaVersion != protocol.EventsExportSchemaV10 &&
+		header.SchemaVersion != protocol.EventsExportSchemaV9 &&
+		header.SchemaVersion != protocol.EventsExportSchemaV8 {
 		return replaySource{}, fmt.Errorf("debugger: unsupported events export schema %d", header.SchemaVersion)
 	}
 	var payload struct {
 		Windows []struct {
-			WindowID int                   `json:"window_id"`
-			Events   []daemon.SessionEvent `json:"events"`
+			WindowID int                     `json:"window_id"`
+			Events   []protocol.SessionEvent `json:"events"`
 		} `json:"windows"`
 	}
 	if err := json.Unmarshal(data, &payload); err != nil {
@@ -331,7 +331,7 @@ func decodeEventsExport(inputPath string, data []byte) (replaySource, error) {
 		}
 	}
 	source := replaySource{input: ReplayInput{Path: inputPath, Format: "events-export", SchemaVersion: header.SchemaVersion, Records: len(records)}, records: records}
-	if header.SchemaVersion == daemon.EventsExportSchemaV8 {
+	if header.SchemaVersion == protocol.EventsExportSchemaV8 {
 		source.diagnostics = append(source.diagnostics, ReplayDiagnostic{Severity: "warning", Code: "schema_v8_partial", Message: "schema-v8 exports lack reducer decisions and complete normalized inputs; replay compares only cases with sufficient source/action/icon evidence"})
 	}
 	return source, nil

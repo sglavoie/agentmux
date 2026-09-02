@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -99,12 +100,12 @@ func TestRaceInjectedLatencyHookBurstsConverge(t *testing.T) {
 			for c := 0; c < cyclesPerProducer; c++ {
 				agent := fmt.Sprintf("agent-%d-%d", p, c)
 				turn := fmt.Sprintf(`"session_id":"sess-%d","turn_id":"turn-%d-%d"`, windowID, p, c)
-				h.Handle(Request{Type: TypeHookEvent, WindowID: windowID, Event: "UserPromptSubmit", PayloadJSON: "{" + turn + "}"})
-				h.Handle(Request{Type: TypeHookEvent, WindowID: windowID, Event: "SubagentStart",
+				h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: windowID, Event: "UserPromptSubmit", PayloadJSON: "{" + turn + "}"})
+				h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: windowID, Event: "SubagentStart",
 					PayloadJSON: fmt.Sprintf(`{%s,"agent_id":%q}`, turn, agent)})
-				h.Handle(Request{Type: TypeHookEvent, WindowID: windowID, Event: "SubagentStop",
+				h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: windowID, Event: "SubagentStop",
 					PayloadJSON: fmt.Sprintf(`{%s,"agent_id":%q,"stop_reason":"end_turn"}`, turn, agent)})
-				h.Handle(Request{Type: TypeHookEvent, WindowID: windowID, Event: "Stop",
+				h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: windowID, Event: "Stop",
 					PayloadJSON: "{" + turn + `,"stop_reason":"end_turn"}`})
 			}
 		}(p)
@@ -194,7 +195,7 @@ func TestRaceConcurrentRetriesEachLogicalRequestAppliesOnce(t *testing.T) {
 	const pairs = 10
 	const retriesPerRequest = 4
 	var wg sync.WaitGroup
-	sendRetried := func(req Request) {
+	sendRetried := func(req protocol.Request) {
 		var inner sync.WaitGroup
 		for r := 0; r < retriesPerRequest; r++ {
 			inner.Add(1)
@@ -211,12 +212,12 @@ func TestRaceConcurrentRetriesEachLogicalRequestAppliesOnce(t *testing.T) {
 			defer wg.Done()
 			// A real hook client emits the start before the stop; only the
 			// retries of each logical request race each other.
-			sendRetried(Request{
-				Type: TypeStateUpdate, RequestID: fmt.Sprintf("start-%d", i),
+			sendRetried(protocol.Request{
+				Type: protocol.TypeStateUpdate, RequestID: fmt.Sprintf("start-%d", i),
 				WindowID: 9, Action: "subagent", Event: "SubagentStart",
 			})
-			sendRetried(Request{
-				Type: TypeStateUpdate, RequestID: fmt.Sprintf("stop-%d", i),
+			sendRetried(protocol.Request{
+				Type: protocol.TypeStateUpdate, RequestID: fmt.Sprintf("stop-%d", i),
 				WindowID: 9, Action: "active", Event: "SubagentStop",
 			})
 		}(i)

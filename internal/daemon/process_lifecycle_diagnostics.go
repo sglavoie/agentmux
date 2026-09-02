@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
@@ -13,8 +14,8 @@ import (
 // are intentionally silent.
 func (h *Handler) recordProcessInspectionFailures(
 	observedAt time.Time,
-	identities []HarnessProcessIdentity,
-	inspections map[HarnessProcessIdentity]HarnessProcessInspection,
+	identities []protocol.HarnessProcessIdentity,
+	inspections map[protocol.HarnessProcessIdentity]HarnessProcessInspection,
 ) {
 	if h == nil || h.decisionJournal == nil {
 		return
@@ -56,7 +57,7 @@ func (h *Handler) recordProcessLifecycleSettlement(at time.Time, record processL
 	if h == nil || h.decisionJournal == nil {
 		return
 	}
-	primary := ProcessLifecycleSourceEvidence{}
+	primary := protocol.ProcessLifecycleSourceEvidence{}
 	if len(record.sources) > 0 {
 		primary = record.sources[0]
 	}
@@ -68,7 +69,7 @@ func (h *Handler) recordProcessLifecycleSettlement(at time.Time, record processL
 	envelope.Outcome = "settled"
 	envelope.Reason = record.result.Reason
 	envelope.Evidence = map[string]string{
-		"event":                  EventHarnessProcessExited,
+		"event":                  protocol.EventHarnessProcessExited,
 		"process_harness":        record.identity.Harness,
 		"process_pid":            fmt.Sprint(record.identity.PID),
 		"process_start_token":    record.identity.StartToken,
@@ -96,16 +97,16 @@ func (h *Handler) recordProcessLifecycleSettlement(at time.Time, record processL
 	h.decisionJournal.TryAppend(ctx, envelope)
 }
 
-func ordinaryLifecycleSource(kind SourceKind) bool {
+func ordinaryLifecycleSource(kind protocol.SourceKind) bool {
 	switch kind {
-	case SourceHarness, SourceLegacy, SourceSubagent:
+	case protocol.SourceHarness, protocol.SourceLegacy, protocol.SourceSubagent:
 		return true
 	default:
 		return false
 	}
 }
 
-func lifecycleGroupPipeMode(facts []SourceFactSnapshot) (bool, bool) {
+func lifecycleGroupPipeMode(facts []protocol.SourceFactSnapshot) (bool, bool) {
 	if len(facts) == 0 {
 		return false, false
 	}
@@ -122,10 +123,10 @@ func lifecycleGroupPipeMode(facts []SourceFactSnapshot) (bool, bool) {
 
 func lifecycleGroupCanChange(
 	reset resetFlowState,
-	identity HarnessProcessIdentity,
+	identity protocol.HarnessProcessIdentity,
 	pipeMode bool,
-	group []SourceFactSnapshot,
-	allFacts []SourceFactSnapshot,
+	group []protocol.SourceFactSnapshot,
+	allFacts []protocol.SourceFactSnapshot,
 ) bool {
 	if reset != resetFlowNone {
 		return len(group) > 0
@@ -140,7 +141,7 @@ func lifecycleGroupCanChange(
 		return false
 	}
 
-	var parent *SourceFactSnapshot
+	var parent *protocol.SourceFactSnapshot
 	for i := range group {
 		fact := &group[i]
 		if fact.PipeMode || !lifecycleParentFact(*fact) {
@@ -176,13 +177,13 @@ func lifecycleGroupCanChange(
 			continue
 		}
 		if sessionID != "" {
-			if (fact.Kind == SourceSubagent && fact.SessionID == sessionID) ||
-				(fact.Kind == SourceLegacy && fact.Key == legacySubagentBucketKey(sessionID)) {
+			if (fact.Kind == protocol.SourceSubagent && fact.SessionID == sessionID) ||
+				(fact.Kind == protocol.SourceLegacy && fact.Key == legacySubagentBucketKey(sessionID)) {
 				return true
 			}
 			continue
 		}
-		factIdentity, ok := canonicalHarnessProcessIdentity(HarnessProcessIdentity{
+		factIdentity, ok := protocol.CanonicalHarnessProcessIdentity(protocol.HarnessProcessIdentity{
 			Harness: fact.HarnessProcessHarness, PID: fact.HarnessProcessPID,
 			StartToken: fact.HarnessProcessStartToken,
 		})

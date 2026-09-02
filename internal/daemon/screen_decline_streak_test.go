@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -22,7 +23,7 @@ import (
 // the maps under stateMu. Tests assert on the stored values rather than only on
 // what recordScreenDeclineLocked returned, so a helper that reports a streak it
 // never persisted fails here.
-func screenDeclineState(t *testing.T, h *Handler, windowID int, source SourceID) (streak int, fingerprint int64, present bool) {
+func screenDeclineState(t *testing.T, h *Handler, windowID int, source protocol.SourceID) (streak int, fingerprint int64, present bool) {
 	t.Helper()
 	ref := idleSampleRef{windowID: windowID, key: source.Key}
 	h.stateMu.Lock()
@@ -112,7 +113,7 @@ func TestRecordScreenDeclineLockedStreakAndStability(t *testing.T) {
 // acquisition.
 func TestRecordScreenProbeDeclineResetsIdleSampleAtomically(t *testing.T) {
 	h := newTestHandler()
-	source := SourceID{Kind: SourceProbe, Key: screenPromptProbeSource}
+	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource}
 	ref := idleSampleRef{windowID: 7, key: source.Key}
 
 	// Bank a stabilization streak with a generation, exactly as a run of
@@ -158,8 +159,8 @@ func TestRecordScreenProbeDeclineResetsIdleSampleAtomically(t *testing.T) {
 // windows can be declining independently.
 func TestScreenProbeDeclineStreaksDoNotCollide(t *testing.T) {
 	h := newTestHandler()
-	codex := SourceID{Kind: SourceProbe, Key: screenPromptProbeSource}
-	claude := SourceID{Kind: SourceProbe, Key: claudeScreenStopProbeSource}
+	codex := protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource}
+	claude := protocol.SourceID{Kind: protocol.SourceProbe, Key: claudeScreenStopProbeSource}
 
 	h.RecordScreenProbeDecline(7, codex, declineEvidence(0x1111))
 	h.RecordScreenProbeDecline(7, codex, declineEvidence(0x1111))
@@ -179,7 +180,7 @@ func TestScreenProbeDeclineStreaksDoNotCollide(t *testing.T) {
 // frozen forever at whatever it reached.
 func TestScreenProbeDeclineStreakPurgedOnWindowClose(t *testing.T) {
 	h := newTestHandler()
-	source := SourceID{Kind: SourceProbe, Key: screenPromptProbeSource}
+	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource}
 	// Give both windows live state so window-closure GC recognizes them.
 	idleSeedHarness(t, h, 7, "cur-7", "active", time.Now().Unix())
 	idleSeedHarness(t, h, 8, "cur-8", "active", time.Now().Unix())
@@ -207,7 +208,7 @@ func TestScreenProbeDeclineStreakPurgedOnWindowClose(t *testing.T) {
 // exactly the shape a classifier that has stopped matching would produce.
 func TestProbeCodexScreenDeclineStreakThroughTheProbe(t *testing.T) {
 	base := time.Now()
-	source := SourceID{Kind: SourceProbe, Key: screenPromptProbeSource}
+	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource}
 	fake := &fakeKittyClient{
 		windows: codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
 			Profile: "work",
@@ -280,7 +281,7 @@ func seedStuckCodexDeclineStreak(t *testing.T, h *Handler, windowID int, session
 	for tick := 0; tick < declineRunPastDoctorThreshold; tick++ {
 		h.ProbeCodexScreenPrompts(base.Add(time.Duration(tick) * time.Second))
 	}
-	source := SourceID{Kind: SourceProbe, Key: screenPromptProbeSource}
+	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource}
 	streak, fingerprint, present := screenDeclineState(t, h, windowID, source)
 	if !present || streak != declineRunPastDoctorThreshold || fingerprint == 0 {
 		t.Fatalf("seeded decline streak = %d (fingerprint=%d present=%t), want %d on a stable fingerprint",
@@ -302,7 +303,7 @@ func seedStuckCodexDeclineStreak(t *testing.T, h *Handler, windowID int, session
 // the exact failure mode these tests exist for.
 func assertScreenDeclinesRetracted(t *testing.T, h *Handler, windowID int) {
 	t.Helper()
-	source := SourceID{Kind: SourceProbe, Key: screenPromptProbeSource}
+	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource}
 	if streak, fingerprint, present := screenDeclineState(t, h, windowID, source); present {
 		t.Fatalf("decline streak survived: streak=%d fingerprint=%d", streak, fingerprint)
 	}
@@ -353,7 +354,7 @@ func TestScreenDeclineRetractedWhenProbeBecomesIneligible(t *testing.T) {
 			// icon at all.
 			name: "user clear",
 			inject: func(t *testing.T, h *Handler, _ time.Time) {
-				if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "user_clear"}); !resp.OK {
+				if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "user_clear"}); !resp.OK {
 					t.Fatalf("inject user_clear rejected: %+v", resp)
 				}
 			},

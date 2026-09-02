@@ -3,6 +3,8 @@ package daemon
 import (
 	"testing"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func TestHandler_EventsExport_PreservesMetadataAfterClosedWindowGC(t *testing.T) {
@@ -11,8 +13,8 @@ func TestHandler_EventsExport_PreservesMetadataAfterClosedWindowGC(t *testing.T)
 	fake.windows = fakeOSWindowsWithTab(1, "W:api")
 	fake.mu.Unlock()
 
-	h.Handle(Request{
-		Type:         TypeStateUpdate,
+	h.Handle(protocol.Request{
+		Type:         protocol.TypeStateUpdate,
 		WindowID:     1,
 		Action:       "active",
 		Event:        "PreToolUse",
@@ -26,7 +28,7 @@ func TestHandler_EventsExport_PreservesMetadataAfterClosedWindowGC(t *testing.T)
 	fake.mu.Unlock()
 	h.SweepStale(time.Now())
 
-	resp := h.Handle(Request{Type: TypeEventsExport})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeEventsExport})
 	if !resp.OK {
 		t.Fatalf("events export: want OK=true, got %+v", resp)
 	}

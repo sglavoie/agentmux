@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -45,8 +46,8 @@ type aslSupervisorNotification struct {
 	bypassCooldown bool
 }
 
-func aslSupervisorQuestionSource(runID string) SourceID {
-	return SourceID{Kind: SourceProbe, Key: aslSupervisorQuestionProbePrefix + runID}
+func aslSupervisorQuestionSource(runID string) protocol.SourceID {
+	return protocol.SourceID{Kind: protocol.SourceProbe, Key: aslSupervisorQuestionProbePrefix + runID}
 }
 
 func (h *Handler) registerASLSupervisorTargetLocked(target aslSupervisorTarget) {
@@ -173,7 +174,7 @@ func (h *Handler) acceptASLSupervisorProjection(
 // path, a direct handoff does not wait for a correlated harness Stop.
 func (h *Handler) handleASLSupervisorMailboxQuestion(
 	payload hookevent.HookPayload,
-	baseReq Request,
+	baseReq protocol.Request,
 	windows []kitty.OSWindow,
 	now time.Time,
 ) {

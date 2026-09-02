@@ -3,6 +3,8 @@ package daemon
 import (
 	"sort"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // collectProcessLifecycleCandidates snapshots only ordinary, unacknowledged
@@ -20,12 +22,12 @@ func (h *Handler) collectProcessLifecycleCandidates() []processLifecycleCandidat
 			continue
 		}
 		allFacts := st.Reducer.Facts()
-		groups := make(map[HarnessProcessIdentity][]SourceFactSnapshot)
+		groups := make(map[protocol.HarnessProcessIdentity][]protocol.SourceFactSnapshot)
 		for _, fact := range allFacts {
 			if fact.Acked || !ordinaryLifecycleSource(fact.Kind) {
 				continue
 			}
-			identity, ok := canonicalHarnessProcessIdentity(HarnessProcessIdentity{
+			identity, ok := protocol.CanonicalHarnessProcessIdentity(protocol.HarnessProcessIdentity{
 				Harness: fact.HarnessProcessHarness, PID: fact.HarnessProcessPID,
 				StartToken: fact.HarnessProcessStartToken,
 			})
@@ -79,12 +81,12 @@ func (h *Handler) appendProcessLifecycleEventLocked(
 	at time.Time,
 	action string,
 	observation HarnessProcessInspection,
-	identity HarnessProcessIdentity,
+	identity protocol.HarnessProcessIdentity,
 	pipeMode bool,
 	terminalHookEvidence string,
 	result HarnessProcessExitResult,
-	sources []ProcessLifecycleSourceEvidence,
-	primary ProcessLifecycleSourceEvidence,
+	sources []protocol.ProcessLifecycleSourceEvidence,
+	primary protocol.ProcessLifecycleSourceEvidence,
 	renderGeneration uint64,
 ) {
 	before, after := effectiveStateEvidence(result.Before), effectiveStateEvidence(result.After)
@@ -93,13 +95,13 @@ func (h *Handler) appendProcessLifecycleEventLocked(
 	if originWindowID <= 0 {
 		originWindowID = windowID
 	}
-	h.appendEventLocked(windowID, SessionEvent{
-		At: at.Unix(), Event: EventHarnessProcessExited, Action: action,
+	h.appendEventLocked(windowID, protocol.SessionEvent{
+		At: at.Unix(), Event: protocol.EventHarnessProcessExited, Action: action,
 		Source: identity.Harness, Reason: result.Reason, ResultIconState: result.After.Icon,
 		SourceKind: primary.SourceKind, SourceKey: primary.SourceKey,
 		OriginWindowID: originWindowID, TargetWindowID: windowID,
 		ProducerHarness: identity.Harness, TargetHarness: identity.Harness,
-		ReducerDecision: DecisionApplied, ReducerReason: result.Reason, DecisionReason: result.Reason,
+		ReducerDecision: protocol.DecisionApplied, ReducerReason: result.Reason, DecisionReason: result.Reason,
 		EffectiveBefore: &before, EffectiveAfter: &after, RenderGeneration: renderGeneration,
 		ProcessHarness: identity.Harness, ProcessPID: identity.PID,
 		ProcessStartToken: identity.StartToken, ProcessObservation: string(observation),
@@ -108,7 +110,7 @@ func (h *Handler) appendProcessLifecycleEventLocked(
 		SynthesizedStop: &synthesizedStop, TerminalHookEvidence: terminalHookEvidence,
 	})
 	meta := h.windowMetadata[windowID]
-	meta.Watchdog.LastEvent = EventHarnessProcessExited
+	meta.Watchdog.LastEvent = protocol.EventHarnessProcessExited
 	meta.Watchdog.LastReason = result.Reason
 	meta.Watchdog.LastAt = at.Unix()
 	meta.Watchdog.ProcessExits++
@@ -128,13 +130,13 @@ func processLifecycleMode(pipeMode bool) string {
 func processLifecycleSources(
 	candidate processLifecycleCandidate,
 	result HarnessProcessExitResult,
-	facts []SourceFactSnapshot,
-) ([]ProcessLifecycleSourceEvidence, ProcessLifecycleSourceEvidence, string) {
-	factBySource := make(map[SourceID]SourceFactSnapshot, len(facts))
+	facts []protocol.SourceFactSnapshot,
+) ([]protocol.ProcessLifecycleSourceEvidence, protocol.ProcessLifecycleSourceEvidence, string) {
+	factBySource := make(map[protocol.SourceID]protocol.SourceFactSnapshot, len(facts))
 	for _, fact := range facts {
 		factBySource[fact.Source()] = fact
 	}
-	affected := make(map[SourceID]bool)
+	affected := make(map[protocol.SourceID]bool)
 	for _, source := range result.WithdrawnSources {
 		affected[source] = true
 	}
@@ -142,7 +144,7 @@ func processLifecycleSources(
 		affected[source] = true
 	}
 	if result.SynthesizedStop {
-		var newest *SourceFactSnapshot
+		var newest *protocol.SourceFactSnapshot
 		for _, receipt := range candidate.facts {
 			fact, ok := factBySource[receipt.source]
 			if !ok || fact.PipeMode || !lifecycleParentFact(fact) || fact.Acked {
@@ -160,12 +162,12 @@ func processLifecycleSources(
 	if len(affected) == 0 && len(candidate.facts) > 0 {
 		affected[candidate.facts[0].source] = true
 	}
-	ids := make([]SourceID, 0, len(affected))
+	ids := make([]protocol.SourceID, 0, len(affected))
 	for source := range affected {
 		ids = append(ids, source)
 	}
 	sortSourceIDs(ids)
-	sources := make([]ProcessLifecycleSourceEvidence, 0, len(ids))
+	sources := make([]protocol.ProcessLifecycleSourceEvidence, 0, len(ids))
 	sessionID := ""
 	for _, source := range ids {
 		fact := factBySource[source]
@@ -176,11 +178,11 @@ func processLifecycleSources(
 		if sessionID == "" {
 			sessionID = fact.SessionID
 		}
-		sources = append(sources, ProcessLifecycleSourceEvidence{
+		sources = append(sources, protocol.ProcessLifecycleSourceEvidence{
 			SourceKind: string(source.Kind), SourceKey: source.Key, OriginWindowID: origin,
 		})
 	}
-	primary := ProcessLifecycleSourceEvidence{OriginWindowID: candidate.windowID}
+	primary := protocol.ProcessLifecycleSourceEvidence{OriginWindowID: candidate.windowID}
 	if len(sources) > 0 {
 		primary = sources[0]
 	}

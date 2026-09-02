@@ -4,6 +4,8 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestProbeCopilotTranscriptStop_ConfirmsHeldStopInsteadOfSettling is the
@@ -26,14 +28,14 @@ func TestProbeCopilotTranscriptStop_ConfirmsHeldStopInsteadOfSettling(t *testing
 
 	h.ProbeCopilotTranscriptStop(base)
 	pending, ok := terminalHoldPending(t, h, 42)
-	if !ok || !pending.confirmed || pending.confirmedBy != StopConfirmedByCopilotTranscript {
-		t.Fatalf("hold after two transcript reads = %+v/%v, want confirmed by %s", pending, ok, StopConfirmedByCopilotTranscript)
+	if !ok || !pending.confirmed || pending.confirmedBy != protocol.StopConfirmedByCopilotTranscript {
+		t.Fatalf("hold after two transcript reads = %+v/%v, want confirmed by %s", pending, ok, protocol.StopConfirmedByCopilotTranscript)
 	}
 	assertNoProbeStopFact(t, h, 42)
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 		t.Fatalf("icon while the confirmed hold waits = %q, want bolt", eff.Icon)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if ev, ok := lastEventNamed(resp.Events, copilotTranscriptStopProbeEvent); ok {
 		t.Fatalf("probe recorded %+v; a confirmation is not a synthetic stop", ev)
 	}
@@ -62,13 +64,13 @@ func TestProbeCopilotTranscriptStop_AgentStopStillConvergesToStop(t *testing.T) 
 		if calls := rec.snapshot(); len(calls) != 1 {
 			t.Fatalf("stop notifications = %d, want exactly 1", len(calls))
 		}
-		resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+		resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 		ev, ok := lastEventNamed(resp.Events, "agentStop")
 		if !ok {
 			t.Fatalf("no committed agentStop row in %+v", resp.Events)
 		}
-		if ev.StopHoldOutcome != StopHoldOutcomeConfirmed || ev.StopConfirmedBy != StopConfirmedByCopilotTranscript {
-			t.Fatalf("committed agentStop = %+v, want outcome %s confirmed by %s", ev, StopHoldOutcomeConfirmed, StopConfirmedByCopilotTranscript)
+		if ev.StopHoldOutcome != protocol.StopHoldOutcomeConfirmed || ev.StopConfirmedBy != protocol.StopConfirmedByCopilotTranscript {
+			t.Fatalf("committed agentStop = %+v, want outcome %s confirmed by %s", ev, protocol.StopHoldOutcomeConfirmed, protocol.StopConfirmedByCopilotTranscript)
 		}
 		assertNoProbeStopFact(t, h, 42)
 	})

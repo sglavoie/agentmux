@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -25,7 +26,7 @@ func TestProbeClaudeContextLimit_NoMarker_NoOp(t *testing.T) {
 	if got := len(fake.titleCalls()); got != 0 {
 		t.Fatalf("SetTabTitle calls = %d, want 0", got)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(resp.Events) != 0 {
 		t.Fatalf("events = %d, want 0", len(resp.Events))
 	}
@@ -67,7 +68,7 @@ func TestProbeClaudeContextLimit_RealScreen_BoltToError(t *testing.T) {
 		t.Fatalf("SetTabTitle title = %q, want %q", calls[0].title, want)
 	}
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(resp.Events) != 1 {
 		t.Fatalf("events = %d, want 1", len(resp.Events))
 	}
@@ -124,7 +125,7 @@ func TestProbeClaudeContextLimit_RealScreen_EmptyToError(t *testing.T) {
 		t.Fatalf("SetTabTitle title = %q, want %q", calls[0].title, want)
 	}
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(resp.Events) != 1 {
 		t.Fatalf("events = %d, want 1", len(resp.Events))
 	}

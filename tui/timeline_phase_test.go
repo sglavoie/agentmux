@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestToolSummaryEmpty verifies empty string when no PreToolUse events exist.
 func TestToolSummaryEmpty(t *testing.T) {
-	p := timelinePhase{events: []daemon.SessionEvent{
+	p := timelinePhase{events: []protocol.SessionEvent{
 		se(1000, "active", "SessionStart", ""),
 	}}
 	if got := p.toolSummary(); got != "" {
@@ -20,7 +20,7 @@ func TestToolSummaryEmpty(t *testing.T) {
 
 // TestToolSummaryCountsAndFormat verifies correct counts, ordering, and format string.
 func TestToolSummaryCountsAndFormat(t *testing.T) {
-	p := timelinePhase{events: []daemon.SessionEvent{
+	p := timelinePhase{events: []protocol.SessionEvent{
 		{At: 1, Event: "PreToolUse", Action: "active", ToolName: "bash"},
 		{At: 2, Event: "PreToolUse", Action: "active", ToolName: "bash"},
 		{At: 3, Event: "PreToolUse", Action: "active", ToolName: "bash"},
@@ -56,9 +56,9 @@ func TestToolSummaryCountsAndFormat(t *testing.T) {
 
 // TestToolSummaryTop4Cap verifies only the top 4 tools appear.
 func TestToolSummaryTop4Cap(t *testing.T) {
-	events := make([]daemon.SessionEvent, 0, 5)
+	events := make([]protocol.SessionEvent, 0, 5)
 	for _, name := range []string{"a", "b", "c", "d", "e"} {
-		events = append(events, daemon.SessionEvent{Event: "PreToolUse", Action: "active", ToolName: name})
+		events = append(events, protocol.SessionEvent{Event: "PreToolUse", Action: "active", ToolName: name})
 	}
 	p := timelinePhase{events: events}
 	got := p.toolSummary()

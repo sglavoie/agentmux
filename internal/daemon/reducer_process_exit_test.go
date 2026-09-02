@@ -3,27 +3,29 @@ package daemon
 import (
 	"reflect"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 var (
-	testInteractiveProcess = HarnessProcessIdentity{
+	testInteractiveProcess = protocol.HarnessProcessIdentity{
 		Harness: "claude", PID: 4101, StartToken: "Thu Jul 16 10:20:30 2026",
 	}
-	testPipeProcess = HarnessProcessIdentity{
+	testPipeProcess = protocol.HarnessProcessIdentity{
 		Harness: "claude", PID: 4201, StartToken: "Thu Jul 16 10:21:30 2026",
 	}
 )
 
 func processReducerEvent(
-	source SourceID,
+	source protocol.SourceID,
 	action string,
 	seq uint64,
 	at int64,
 	sessionID string,
 	pipeMode bool,
-	identity HarnessProcessIdentity,
-) ReducerEvent {
-	return ReducerEvent{
+	identity protocol.HarnessProcessIdentity,
+) protocol.ReducerEvent {
+	return protocol.ReducerEvent{
 		Source:         source,
 		Action:         action,
 		Seq:            seq,
@@ -36,7 +38,7 @@ func processReducerEvent(
 
 func TestReducerHarnessProcessIdentityReplacement(t *testing.T) {
 	r := NewReducer(zeroCfg)
-	source := SourceID{Kind: SourceHarness, Key: "claude:session-1"}
+	source := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:session-1"}
 	canonical := testInteractiveProcess
 	raw := canonical
 	raw.Harness = " Claude "
@@ -50,37 +52,37 @@ func TestReducerHarnessProcessIdentityReplacement(t *testing.T) {
 
 	// The idle is suppressed to preserve the permission icon, but its accepted
 	// sequence still clears ownership because it carries no valid replacement.
-	if got := r.Apply(processReducerEvent(source, "idle", 2, 101, "session-1", false, HarnessProcessIdentity{})); got != DecisionSuppressed {
+	if got := r.Apply(processReducerEvent(source, "idle", 2, 101, "session-1", false, protocol.HarnessProcessIdentity{})); got != protocol.DecisionSuppressed {
 		t.Fatalf("idle decision = %q, want suppressed", got)
 	}
-	if f.harnessProcess != (HarnessProcessIdentity{}) || f.icon != "key" {
+	if f.harnessProcess != (protocol.HarnessProcessIdentity{}) || f.icon != "key" {
 		t.Fatalf("suppressed idle left fact %+v; want key with cleared process", f)
 	}
 
 	invalid := testInteractiveProcess
 	invalid.Harness = "codex" // does not match the claude source
 	r.Apply(processReducerEvent(source, "active", 3, 102, "session-1", false, invalid))
-	if f.harnessProcess != (HarnessProcessIdentity{}) {
+	if f.harnessProcess != (protocol.HarnessProcessIdentity{}) {
 		t.Fatalf("producer-mismatched identity was retained: %+v", f.harnessProcess)
 	}
 
-	legacy := SourceID{Kind: SourceLegacy, Key: "win:42"}
-	agent := SourceID{Kind: SourceSubagent, Key: "agent-1"}
+	legacy := protocol.SourceID{Kind: protocol.SourceLegacy, Key: "win:42"}
+	agent := protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-1"}
 	r.Apply(processReducerEvent(legacy, "active", 1, 103, "", false, canonical))
 	r.Apply(processReducerEvent(agent, "subagent", 1, 104, "session-1", false, canonical))
 	if r.facts[legacy].harnessProcess != canonical || r.facts[agent].harnessProcess != canonical {
 		t.Fatalf("ordinary legacy/subagent facts lost process ownership: legacy=%+v agent=%+v", r.facts[legacy], r.facts[agent])
 	}
 
-	asl := SourceID{Kind: SourceASL, Key: "run-1"}
-	probe := SourceID{Kind: SourceProbe, Key: "screen"}
-	r.Apply(ReducerEvent{Source: asl, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: 105, HarnessProcess: canonical})
+	asl := protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}
+	probe := protocol.SourceID{Kind: protocol.SourceProbe, Key: "screen"}
+	r.Apply(protocol.ReducerEvent{Source: asl, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: 105, HarnessProcess: canonical})
 	r.Apply(processReducerEvent(probe, "permission", 1, 106, "", false, canonical))
-	if r.facts[asl].harnessProcess != (HarnessProcessIdentity{}) || r.facts[probe].harnessProcess != (HarnessProcessIdentity{}) {
+	if r.facts[asl].harnessProcess != (protocol.HarnessProcessIdentity{}) || r.facts[probe].harnessProcess != (protocol.HarnessProcessIdentity{}) {
 		t.Fatalf("ASL/probe facts retained forbidden process ownership: asl=%+v probe=%+v", r.facts[asl], r.facts[probe])
 	}
 
-	normalized := NormalizedEvent{
+	normalized := protocol.NormalizedEvent{
 		Source: source, Action: "active", Seq: 4, At: 107,
 		SessionID: "session-1", HarnessProcess: canonical,
 	}
@@ -91,10 +93,10 @@ func TestReducerHarnessProcessIdentityReplacement(t *testing.T) {
 
 func TestReducerSuppressedModeFlipUsesReplacementProcessExitPolicy(t *testing.T) {
 	r := NewReducer(zeroCfg)
-	source := SourceID{Kind: SourceHarness, Key: "claude:session-1"}
+	source := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:session-1"}
 
 	r.Apply(processReducerEvent(source, "permission", 1, 100, "session-1", false, testInteractiveProcess))
-	if got := r.Apply(processReducerEvent(source, "idle", 2, 101, "session-1", true, testPipeProcess)); got != DecisionSuppressed {
+	if got := r.Apply(processReducerEvent(source, "idle", 2, 101, "session-1", true, testPipeProcess)); got != protocol.DecisionSuppressed {
 		t.Fatalf("mode-flip idle decision = %q, want suppressed", got)
 	}
 
@@ -115,18 +117,18 @@ func TestReducerSuppressedModeFlipUsesReplacementProcessExitPolicy(t *testing.T)
 
 func TestReducerPipeProcessExitPolicy(t *testing.T) {
 	r := NewReducer(zeroCfg)
-	eligible := []ReducerEvent{
-		processReducerEvent(SourceID{Kind: SourceHarness, Key: "claude:active"}, "active", 1, 100, "active", true, testPipeProcess),
-		processReducerEvent(SourceID{Kind: SourceHarness, Key: "claude:compact"}, "compact", 1, 101, "compact", true, testPipeProcess),
-		processReducerEvent(SourceID{Kind: SourceSubagent, Key: "agent-pipe"}, "subagent", 1, 102, "active", true, testPipeProcess),
-		processReducerEvent(SourceID{Kind: SourceLegacy, Key: "pipe-idle"}, "idle", 1, 103, "", true, testPipeProcess),
-		processReducerEvent(SourceID{Kind: SourceHarness, Key: "claude:clean-stop"}, "stop", 1, 104, "clean-stop", true, testPipeProcess),
+	eligible := []protocol.ReducerEvent{
+		processReducerEvent(protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:active"}, "active", 1, 100, "active", true, testPipeProcess),
+		processReducerEvent(protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:compact"}, "compact", 1, 101, "compact", true, testPipeProcess),
+		processReducerEvent(protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-pipe"}, "subagent", 1, 102, "active", true, testPipeProcess),
+		processReducerEvent(protocol.SourceID{Kind: protocol.SourceLegacy, Key: "pipe-idle"}, "idle", 1, 103, "", true, testPipeProcess),
+		processReducerEvent(protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:clean-stop"}, "stop", 1, 104, "clean-stop", true, testPipeProcess),
 	}
-	protected := []ReducerEvent{
-		processReducerEvent(SourceID{Kind: SourceHarness, Key: "claude:permission"}, "permission", 1, 105, "permission", true, testPipeProcess),
-		processReducerEvent(SourceID{Kind: SourceHarness, Key: "claude:question"}, "elicitation", 1, 106, "question", true, testPipeProcess),
-		processReducerEvent(SourceID{Kind: SourceHarness, Key: "claude:warning"}, "failure", 1, 107, "warning", true, testPipeProcess),
-		processReducerEvent(SourceID{Kind: SourceHarness, Key: "claude:error"}, "stop_failure", 1, 108, "error", true, testPipeProcess),
+	protected := []protocol.ReducerEvent{
+		processReducerEvent(protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:permission"}, "permission", 1, 105, "permission", true, testPipeProcess),
+		processReducerEvent(protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:question"}, "elicitation", 1, 106, "question", true, testPipeProcess),
+		processReducerEvent(protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:warning"}, "failure", 1, 107, "warning", true, testPipeProcess),
+		processReducerEvent(protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:error"}, "stop_failure", 1, 108, "error", true, testPipeProcess),
 	}
 	for _, ev := range append(eligible, protected...) {
 		r.Apply(ev)
@@ -135,10 +137,10 @@ func TestReducerPipeProcessExitPolicy(t *testing.T) {
 	reused := testPipeProcess
 	reused.StartToken = "Thu Jul 16 11:21:30 2026"
 	unrelated := processReducerEvent(
-		SourceID{Kind: SourceHarness, Key: "claude:reused"}, "active", 1, 109, "reused", true, reused,
+		protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:reused"}, "active", 1, 109, "reused", true, reused,
 	)
 	interactiveSameFingerprint := processReducerEvent(
-		SourceID{Kind: SourceHarness, Key: "claude:interactive"}, "active", 1, 110, "interactive", false, testPipeProcess,
+		protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:interactive"}, "active", 1, 110, "interactive", false, testPipeProcess,
 	)
 	r.Apply(unrelated)
 	r.Apply(interactiveSameFingerprint)
@@ -150,12 +152,12 @@ func TestReducerPipeProcessExitPolicy(t *testing.T) {
 	if result.WithdrawnFacts != len(eligible) || len(result.WithdrawnSources) != len(eligible) {
 		t.Fatalf("withdrawal counts = %+v, want %d", result, len(eligible))
 	}
-	wantWithdrawn := []SourceID{
-		{Kind: SourceHarness, Key: "claude:active"},
-		{Kind: SourceHarness, Key: "claude:clean-stop"},
-		{Kind: SourceHarness, Key: "claude:compact"},
-		{Kind: SourceLegacy, Key: "pipe-idle"},
-		{Kind: SourceSubagent, Key: "agent-pipe"},
+	wantWithdrawn := []protocol.SourceID{
+		{Kind: protocol.SourceHarness, Key: "claude:active"},
+		{Kind: protocol.SourceHarness, Key: "claude:clean-stop"},
+		{Kind: protocol.SourceHarness, Key: "claude:compact"},
+		{Kind: protocol.SourceLegacy, Key: "pipe-idle"},
+		{Kind: protocol.SourceSubagent, Key: "agent-pipe"},
 	}
 	if !reflect.DeepEqual(result.WithdrawnSources, wantWithdrawn) {
 		t.Fatalf("withdrawn sources = %+v, want deterministic %+v", result.WithdrawnSources, wantWithdrawn)
@@ -190,27 +192,27 @@ func TestReducerPipeProcessExitPolicy(t *testing.T) {
 func TestReducerPipeProcessExitRevealsUnderlyingState(t *testing.T) {
 	tests := []struct {
 		name       string
-		survivor   *ReducerEvent
+		survivor   *protocol.ReducerEvent
 		wantIcon   string
-		wantSource SourceID
+		wantSource protocol.SourceID
 	}{
 		{
 			name: "interactive parent",
-			survivor: func() *ReducerEvent {
-				ev := processReducerEvent(SourceID{Kind: SourceHarness, Key: "claude:parent"}, "active", 1, 100, "parent", false, testInteractiveProcess)
+			survivor: func() *protocol.ReducerEvent {
+				ev := processReducerEvent(protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:parent"}, "active", 1, 100, "parent", false, testInteractiveProcess)
 				return &ev
 			}(),
-			wantIcon: "bolt", wantSource: SourceID{Kind: SourceHarness, Key: "claude:parent"},
+			wantIcon: "bolt", wantSource: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:parent"},
 		},
 		{
 			name: "another pipe process",
-			survivor: func() *ReducerEvent {
+			survivor: func() *protocol.ReducerEvent {
 				other := testPipeProcess
 				other.PID++
-				ev := processReducerEvent(SourceID{Kind: SourceHarness, Key: "claude:other-pipe"}, "active", 1, 100, "other-pipe", true, other)
+				ev := processReducerEvent(protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:other-pipe"}, "active", 1, 100, "other-pipe", true, other)
 				return &ev
 			}(),
-			wantIcon: "bolt", wantSource: SourceID{Kind: SourceHarness, Key: "claude:other-pipe"},
+			wantIcon: "bolt", wantSource: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:other-pipe"},
 		},
 		{name: "empty"},
 	}
@@ -221,7 +223,7 @@ func TestReducerPipeProcessExitRevealsUnderlyingState(t *testing.T) {
 			if tc.survivor != nil {
 				r.Apply(*tc.survivor)
 			}
-			exiting := processReducerEvent(SourceID{Kind: SourceHarness, Key: "claude:exiting-pipe"}, "active", 1, 150, "exiting-pipe", true, testPipeProcess)
+			exiting := processReducerEvent(protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:exiting-pipe"}, "active", 1, 150, "exiting-pipe", true, testPipeProcess)
 			r.Apply(exiting)
 
 			result := r.SettleHarnessProcessExit(testPipeProcess, 200, HarnessProcessExitOptions{PipeMode: true})
@@ -246,7 +248,7 @@ func TestReducerInteractiveProcessExitSynthesizesStop(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := NewReducer(zeroCfg)
-			source := SourceID{Kind: SourceHarness, Key: "claude:session-1"}
+			source := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:session-1"}
 			r.Apply(processReducerEvent(source, tc.action, 7, 100, "session-1", false, testInteractiveProcess))
 			beforeOrder := r.facts[source].causalOrder
 
@@ -279,7 +281,7 @@ func TestReducerInteractiveProcessExitPreservesTerminalOutcome(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := NewReducer(zeroCfg)
-			source := SourceID{Kind: SourceHarness, Key: "claude:session-1"}
+			source := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:session-1"}
 			r.Apply(processReducerEvent(source, tc.action, 1, 100, "session-1", false, testInteractiveProcess))
 			before := *r.facts[source]
 
@@ -296,18 +298,18 @@ func TestReducerInteractiveProcessExitPreservesTerminalOutcome(t *testing.T) {
 
 func TestReducerInteractiveProcessExitChoosesNewestParentAndClearsItsAgents(t *testing.T) {
 	r := NewReducer(zeroCfg)
-	old := processReducerEvent(SourceID{Kind: SourceHarness, Key: "claude:old"}, "active", 50, 100, "old", false, testInteractiveProcess)
-	middle := processReducerEvent(SourceID{Kind: SourceHarness, Key: "claude:middle"}, "compact", 1, 150, "middle", false, testInteractiveProcess)
-	current := processReducerEvent(SourceID{Kind: SourceHarness, Key: "claude:current"}, "permission", 1, 200, "current", false, testInteractiveProcess)
-	for _, ev := range []ReducerEvent{old, middle, current} {
+	old := processReducerEvent(protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:old"}, "active", 50, 100, "old", false, testInteractiveProcess)
+	middle := processReducerEvent(protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:middle"}, "compact", 1, 150, "middle", false, testInteractiveProcess)
+	current := processReducerEvent(protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:current"}, "permission", 1, 200, "current", false, testInteractiveProcess)
+	for _, ev := range []protocol.ReducerEvent{old, middle, current} {
 		r.Apply(ev)
 	}
 
-	currentAgent := processReducerEvent(SourceID{Kind: SourceSubagent, Key: "agent-current"}, "subagent", 1, 210, "current", false, HarnessProcessIdentity{})
-	oldAgent := processReducerEvent(SourceID{Kind: SourceSubagent, Key: "agent-old"}, "subagent", 1, 211, "old", false, testInteractiveProcess)
-	currentBucket := processReducerEvent(SourceID{Kind: SourceLegacy, Key: legacySubagentBucketKey("current")}, "subagent", 1, 212, "current", false, HarnessProcessIdentity{})
+	currentAgent := processReducerEvent(protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-current"}, "subagent", 1, 210, "current", false, protocol.HarnessProcessIdentity{})
+	oldAgent := processReducerEvent(protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-old"}, "subagent", 1, 211, "old", false, testInteractiveProcess)
+	currentBucket := processReducerEvent(protocol.SourceID{Kind: protocol.SourceLegacy, Key: legacySubagentBucketKey("current")}, "subagent", 1, 212, "current", false, protocol.HarnessProcessIdentity{})
 	currentBucket.SubagentDelta = 1
-	for _, ev := range []ReducerEvent{currentAgent, oldAgent, currentBucket} {
+	for _, ev := range []protocol.ReducerEvent{currentAgent, oldAgent, currentBucket} {
 		r.Apply(ev)
 	}
 
@@ -318,7 +320,7 @@ func TestReducerInteractiveProcessExitChoosesNewestParentAndClearsItsAgents(t *t
 	if f := r.facts[current.Source]; f.action != "stop" || !f.terminated {
 		t.Fatalf("newest parent was not settled: %+v", f)
 	}
-	for _, source := range []SourceID{old.Source, middle.Source} {
+	for _, source := range []protocol.SourceID{old.Source, middle.Source} {
 		if f := r.facts[source]; f == nil || !f.acked || f.ackedAt != 300 {
 			t.Fatalf("older active parent %+v was not retired: %+v", source, f)
 		}
@@ -342,15 +344,15 @@ func TestReducerInteractiveProcessExitChoosesNewestParentAndClearsItsAgents(t *t
 
 func TestReducerInteractiveProcessExitClearsSubagentsInDeterministicOrder(t *testing.T) {
 	parent := processReducerEvent(
-		SourceID{Kind: SourceHarness, Key: "claude:current"},
+		protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:current"},
 		"active", 1, 100, "current", false, testInteractiveProcess,
 	)
-	agents := []ReducerEvent{
-		processReducerEvent(SourceID{Kind: SourceSubagent, Key: "agent-zulu"}, "subagent", 1, 110, "current", false, HarnessProcessIdentity{}),
-		processReducerEvent(SourceID{Kind: SourceSubagent, Key: "agent-alpha"}, "subagent", 1, 111, "current", false, HarnessProcessIdentity{}),
-		processReducerEvent(SourceID{Kind: SourceSubagent, Key: "agent-mike"}, "subagent", 1, 112, "current", false, HarnessProcessIdentity{}),
-		processReducerEvent(SourceID{Kind: SourceSubagent, Key: "agent-bravo"}, "subagent", 1, 113, "current", false, HarnessProcessIdentity{}),
-		processReducerEvent(SourceID{Kind: SourceLegacy, Key: legacySubagentBucketKey("current")}, "subagent", 1, 114, "current", false, HarnessProcessIdentity{}),
+	agents := []protocol.ReducerEvent{
+		processReducerEvent(protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-zulu"}, "subagent", 1, 110, "current", false, protocol.HarnessProcessIdentity{}),
+		processReducerEvent(protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-alpha"}, "subagent", 1, 111, "current", false, protocol.HarnessProcessIdentity{}),
+		processReducerEvent(protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-mike"}, "subagent", 1, 112, "current", false, protocol.HarnessProcessIdentity{}),
+		processReducerEvent(protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-bravo"}, "subagent", 1, 113, "current", false, protocol.HarnessProcessIdentity{}),
+		processReducerEvent(protocol.SourceID{Kind: protocol.SourceLegacy, Key: legacySubagentBucketKey("current")}, "subagent", 1, 114, "current", false, protocol.HarnessProcessIdentity{}),
 	}
 	agents[len(agents)-1].SubagentDelta = 1
 
@@ -383,14 +385,14 @@ func TestReducerInteractiveProcessExitClearsSubagentsInDeterministicOrder(t *tes
 
 func TestReducerInteractiveProcessExitWithoutSessionClearsExactProcessAgents(t *testing.T) {
 	r := NewReducer(zeroCfg)
-	parent := processReducerEvent(SourceID{Kind: SourceLegacy, Key: "win:42"}, "active", 1, 100, "", false, testInteractiveProcess)
-	exactAgent := processReducerEvent(SourceID{Kind: SourceSubagent, Key: "agent-exact"}, "subagent", 1, 101, "unknown", false, testInteractiveProcess)
-	exactBucket := processReducerEvent(SourceID{Kind: SourceLegacy, Key: legacySubagentBucketKey("win:42")}, "subagent", 1, 102, "", false, testInteractiveProcess)
+	parent := processReducerEvent(protocol.SourceID{Kind: protocol.SourceLegacy, Key: "win:42"}, "active", 1, 100, "", false, testInteractiveProcess)
+	exactAgent := processReducerEvent(protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-exact"}, "subagent", 1, 101, "unknown", false, testInteractiveProcess)
+	exactBucket := processReducerEvent(protocol.SourceID{Kind: protocol.SourceLegacy, Key: legacySubagentBucketKey("win:42")}, "subagent", 1, 102, "", false, testInteractiveProcess)
 	exactBucket.SubagentDelta = 1
 	otherProcess := testInteractiveProcess
 	otherProcess.PID++
-	otherAgent := processReducerEvent(SourceID{Kind: SourceSubagent, Key: "agent-other"}, "subagent", 1, 103, "unknown", false, otherProcess)
-	for _, ev := range []ReducerEvent{parent, exactAgent, exactBucket, otherAgent} {
+	otherAgent := processReducerEvent(protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-other"}, "subagent", 1, 103, "unknown", false, otherProcess)
+	for _, ev := range []protocol.ReducerEvent{parent, exactAgent, exactBucket, otherAgent} {
 		r.Apply(ev)
 	}
 
@@ -408,18 +410,18 @@ func TestReducerInteractiveProcessExitWithoutSessionClearsExactProcessAgents(t *
 
 func TestReducerHarnessProcessExitExactFingerprintAndResetExclusions(t *testing.T) {
 	r := NewReducer(zeroCfg)
-	active := processReducerEvent(SourceID{Kind: SourceHarness, Key: "claude:active"}, "active", 1, 100, "active", false, testInteractiveProcess)
-	errorFact := processReducerEvent(SourceID{Kind: SourceHarness, Key: "claude:error"}, "stop_failure", 1, 101, "error", false, testInteractiveProcess)
-	agent := processReducerEvent(SourceID{Kind: SourceSubagent, Key: "agent-1"}, "subagent", 1, 102, "active", false, testInteractiveProcess)
+	active := processReducerEvent(protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:active"}, "active", 1, 100, "active", false, testInteractiveProcess)
+	errorFact := processReducerEvent(protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:error"}, "stop_failure", 1, 101, "error", false, testInteractiveProcess)
+	agent := processReducerEvent(protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-1"}, "subagent", 1, 102, "active", false, testInteractiveProcess)
 	// Apply the terminal outcome first so the later distinct-source activity is
 	// still live; clear-only settlement must withdraw both classes.
-	for _, ev := range []ReducerEvent{errorFact, active, agent} {
+	for _, ev := range []protocol.ReducerEvent{errorFact, active, agent} {
 		r.Apply(ev)
 	}
-	aslSource := SourceID{Kind: SourceASL, Key: "run-1"}
-	r.Apply(ReducerEvent{Source: aslSource, RunID: "run-1", Phase: ASLPhaseBetween, Seq: 1, At: 103})
-	probeSource := SourceID{Kind: SourceProbe, Key: "screen"}
-	r.Apply(ReducerEvent{Source: probeSource, Action: "permission", Seq: 1, At: 104})
+	aslSource := protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}
+	r.Apply(protocol.ReducerEvent{Source: aslSource, RunID: "run-1", Phase: ASLPhaseBetween, Seq: 1, At: 103})
+	probeSource := protocol.SourceID{Kind: protocol.SourceProbe, Key: "screen"}
+	r.Apply(protocol.ReducerEvent{Source: probeSource, Action: "permission", Seq: 1, At: 104})
 	// Corrupt/test-inject matching metadata to prove settlement excludes ASL and
 	// daemon probes regardless of matching process fields.
 	r.facts[aslSource].harnessProcess = testInteractiveProcess
@@ -438,7 +440,7 @@ func TestReducerHarnessProcessExitExactFingerprintAndResetExclusions(t *testing.
 	if !result.Changed || result.SynthesizedStop || result.Reason != HarnessProcessExitReasonReset || result.WithdrawnFacts != 3 {
 		t.Fatalf("reset result = %+v, want three exact ordinary withdrawals", result)
 	}
-	for _, source := range []SourceID{active.Source, errorFact.Source, agent.Source} {
+	for _, source := range []protocol.SourceID{active.Source, errorFact.Source, agent.Source} {
 		if f := r.facts[source]; f == nil || !f.acked || f.ackedAt != 200 {
 			t.Fatalf("reset did not withdraw %+v: %+v", source, f)
 		}
@@ -453,14 +455,14 @@ func TestReducerHarnessProcessExitExactFingerprintAndResetExclusions(t *testing.
 		t.Fatalf("ASL lease was released: %+v", result.After)
 	}
 
-	invalid := r.SettleHarnessProcessExit(HarnessProcessIdentity{Harness: "claude", PID: 1, StartToken: "token"}, 201, HarnessProcessExitOptions{})
+	invalid := r.SettleHarnessProcessExit(protocol.HarnessProcessIdentity{Harness: "claude", PID: 1, StartToken: "token"}, 201, HarnessProcessExitOptions{})
 	if invalid.Changed || invalid.Reason != HarnessProcessExitReasonInvalid || invalid.Before != invalid.After {
 		t.Fatalf("invalid identity result = %+v", invalid)
 	}
 }
 
-func cloneReducerSourceFacts(r *Reducer) map[SourceID]sourceFact {
-	out := make(map[SourceID]sourceFact, len(r.facts))
+func cloneReducerSourceFacts(r *Reducer) map[protocol.SourceID]sourceFact {
+	out := make(map[protocol.SourceID]sourceFact, len(r.facts))
 	for source, fact := range r.facts {
 		out[source] = *fact
 	}

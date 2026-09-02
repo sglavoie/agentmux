@@ -4,6 +4,8 @@ import (
 	"hash/fnv"
 	"strings"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // SetKittyClient injects the Kitty client used by the stale sweep to clear
@@ -195,7 +197,7 @@ func (h *Handler) appendWatchdogEventLocked(windowID, originWindowID int, at tim
 	if originWindowID <= 0 {
 		originWindowID = windowID
 	}
-	h.appendEventLocked(windowID, SessionEvent{
+	h.appendEventLocked(windowID, protocol.SessionEvent{
 		At:             at.Unix(),
 		Event:          event,
 		Action:         action,

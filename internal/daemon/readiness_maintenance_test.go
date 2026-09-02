@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -64,7 +65,7 @@ func TestMaintenanceTick_RestoresAmxStateBeforeReadyAndLateStartupCannotRollBack
 
 	// Durable state for one managed window: a live harness "active" fact.
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 1, At: now.Unix()})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 1, At: now.Unix()})
 	encoded, err := WindowState{
 		LastAction: "active",
 		Reducer:    r,
@@ -133,7 +134,7 @@ func TestMaintenanceTick_RestoresAmxStateBeforeReadyAndLateStartupCannotRollBack
 	if r2, _ := h.Readiness(); !r2 {
 		t.Fatal("daemon should be ready only after the maintenance restore repopulated the store")
 	}
-	resp := h.Handle(Request{Type: TypeHealth})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHealth})
 	if !resp.Ready || resp.DegradedReason != "" {
 		t.Fatalf("health = %+v; want ready with a restored store", resp)
 	}
@@ -142,7 +143,7 @@ func TestMaintenanceTick_RestoresAmxStateBeforeReadyAndLateStartupCannotRollBack
 	// change the persisted user var does not carry. Capture pointer identity so a
 	// rollback (store replacement) is unambiguous.
 	h.stateMu.Lock()
-	restored.Reducer.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "permission", Seq: 9, At: now.Add(time.Second).Unix()})
+	restored.Reducer.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "permission", Seq: 9, At: now.Add(time.Second).Unix()})
 	restored.LastAction = "permission"
 	restored.DesiredIcon = "key"
 	restored.StateSet = true
@@ -197,7 +198,7 @@ func TestRestoreStateFromKittyBounded_DegradedOnImmediateListError(t *testing.T)
 	if _, _, cached := h.cachedSnapshot(); cached {
 		t.Fatal("snapshot cache should stay cold after an immediate startup list error")
 	}
-	resp := h.Handle(Request{Type: TypeHealth})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHealth})
 	if resp.Ready || resp.DegradedReason == "" {
 		t.Fatalf("health = %+v; want degraded with a reason", resp)
 	}
@@ -215,8 +216,8 @@ func TestMaintenanceTick_RestoresAfterImmediateStartupListError(t *testing.T) {
 	// Persisted multi-source durable state for window 42: an interactive harness
 	// "active" fact plus a live between-turns ASL lease.
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 1, At: now.Unix()})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: now.Unix()})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 1, At: now.Unix()})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: now.Unix()})
 	encoded, err := WindowState{
 		LastAction: "active",
 		Reducer:    r,
@@ -273,7 +274,7 @@ func TestMaintenanceTick_RestoresAfterImmediateStartupListError(t *testing.T) {
 	if r2, _ := h.Readiness(); !r2 {
 		t.Fatal("daemon should be ready only after the maintenance restore repopulated the store")
 	}
-	resp := h.Handle(Request{Type: TypeHealth})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHealth})
 	if !resp.Ready || resp.DegradedReason != "" {
 		t.Fatalf("health = %+v; want ready with a restored store", resp)
 	}
@@ -282,7 +283,7 @@ func TestMaintenanceTick_RestoresAfterImmediateStartupListError(t *testing.T) {
 	// fact and the live ASL lease survived, and Reduce reflects both.
 	haveHarness := false
 	for _, f := range restored.Reducer.Facts() {
-		if f.Kind == SourceHarness && f.Key == "claude:s1" {
+		if f.Kind == protocol.SourceHarness && f.Key == "claude:s1" {
 			haveHarness = true
 		}
 	}
@@ -312,10 +313,10 @@ func TestRenderWorkerDoesNotOverwriteUnrestoredFactsAfterDegradedStartup(t *test
 	// The clear makes the latter two facts invisible but still semantically
 	// durable: the harness Seq rejects old replays and LeaseLive supplies 🔁.
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceLegacy, Key: windowKey(42)}, Action: "active", Seq: 9, At: now.Add(-time.Minute).Unix()})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 7, At: now.Add(-time.Minute).Unix()})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 3, At: now.Add(-time.Minute).Unix()})
-	r.Apply(ReducerEvent{Source: userActionSource(), Action: "user_clear", At: now.Add(-time.Second).Unix()})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceLegacy, Key: windowKey(42)}, Action: "active", Seq: 9, At: now.Add(-time.Minute).Unix()})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 7, At: now.Add(-time.Minute).Unix()})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 3, At: now.Add(-time.Minute).Unix()})
+	r.Apply(protocol.ReducerEvent{Source: userActionSource(), Action: "user_clear", At: now.Add(-time.Second).Unix()})
 	windows := encodeMergeWindow(t, r, 9, now)
 
 	client := &fakeKittyClient{
@@ -339,7 +340,7 @@ func TestRenderWorkerDoesNotOverwriteUnrestoredFactsAfterDegradedStartup(t *test
 	// A real hook creates only the legacy window source and queues an immediate
 	// render. Its permission fact must win the same-source conflict with the
 	// older persisted active fact.
-	if resp := h.handleStateUpdate(Request{Type: TypeStateUpdate, WindowID: 42, Action: "permission"}); !resp.OK {
+	if resp := h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "permission"}); !resp.OK {
 		t.Fatalf("degraded-window hook = %+v; want OK", resp)
 	}
 	h.stateMu.Lock()
@@ -369,15 +370,15 @@ func TestRenderWorkerDoesNotOverwriteUnrestoredFactsAfterDegradedStartup(t *test
 	}
 
 	facts := written.Reducer.Facts()
-	legacy := mergedFactBySource(facts, SourceID{Kind: SourceLegacy, Key: windowKey(42)})
+	legacy := mergedFactBySource(facts, protocol.SourceID{Kind: protocol.SourceLegacy, Key: windowKey(42)})
 	if legacy == nil || legacy.Action != "permission" || legacy.Icon != "key" || legacy.Acked {
 		t.Fatalf("same-source hook fact lost authority in first write: %+v", legacy)
 	}
-	cutoff := mergedFactBySource(facts, SourceID{Kind: SourceHarness, Key: "claude:s1"})
+	cutoff := mergedFactBySource(facts, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"})
 	if cutoff == nil || !cutoff.Acked || cutoff.Seq != 7 {
 		t.Fatalf("acknowledged durable cutoff missing from first write: %+v", cutoff)
 	}
-	lease := mergedFactBySource(facts, SourceID{Kind: SourceASL, Key: "run-1"})
+	lease := mergedFactBySource(facts, protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"})
 	if lease == nil || !lease.Acked || !lease.LeaseLive || lease.Seq != 3 {
 		t.Fatalf("acknowledged live ASL lease missing from first write: %+v", lease)
 	}
@@ -406,10 +407,10 @@ func TestRenderWorkerDoesNotOverwriteUnrestoredFactsAfterDegradedStartup(t *test
 	if len(afterFacts) != beforeCount {
 		t.Fatalf("repeated restore changed fact count %d -> %d", beforeCount, len(afterFacts))
 	}
-	if got := mergedFactBySource(afterFacts, SourceID{Kind: SourceLegacy, Key: windowKey(42)}); got == nil || got.Action != "permission" {
+	if got := mergedFactBySource(afterFacts, protocol.SourceID{Kind: protocol.SourceLegacy, Key: windowKey(42)}); got == nil || got.Action != "permission" {
 		t.Fatalf("repeated restore rolled back same-source hook fact: %+v", got)
 	}
-	if got := mergedFactBySource(afterFacts, SourceID{Kind: SourceHarness, Key: "claude:s1"}); got == nil || !got.Acked || got.Seq != 7 {
+	if got := mergedFactBySource(afterFacts, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}); got == nil || !got.Acked || got.Seq != 7 {
 		t.Fatalf("repeated restore lost durable cutoff: %+v", got)
 	}
 	if exists, live := after.Reducer.LeaseState("run-1"); !exists || !live {

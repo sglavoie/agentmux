@@ -1,5 +1,9 @@
 package daemon
 
+import (
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+)
+
 // Screen-probe declines: the negative half of the idle evidence recorded in
 // authoritative_idle.go. A decline is a screen the probe classified and Layer A
 // refused to call a settleable terminal, credited per source so an operator can
@@ -144,7 +148,7 @@ func (h *Handler) retractScreenDeclinesForIconLocked(windowID int, icon string) 
 // different frame than the one just credited.
 //
 // Safe to call off the state lock.
-func (h *Handler) RecordScreenProbeDecline(windowID int, source SourceID, evidence ScreenDeclineEvidence) ScreenDeclineObservation {
+func (h *Handler) RecordScreenProbeDecline(windowID int, source protocol.SourceID, evidence ScreenDeclineEvidence) ScreenDeclineObservation {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	ref := idleSampleRef{windowID: windowID, key: source.Key}
@@ -158,7 +162,7 @@ func (h *Handler) RecordScreenProbeDecline(windowID int, source SourceID, eviden
 // after a settle actually lands: reaching a terminal screen is the classifier
 // proving it can still grade this pane, which is precisely the condition the
 // streak exists to detect the absence of. Safe to call off the state lock.
-func (h *Handler) ClearScreenProbeDecline(windowID int, source SourceID) {
+func (h *Handler) ClearScreenProbeDecline(windowID int, source protocol.SourceID) {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	h.clearScreenDeclineLocked(idleSampleRef{windowID: windowID, key: source.Key})

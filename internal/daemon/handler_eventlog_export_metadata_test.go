@@ -1,12 +1,16 @@
 package daemon
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+)
 
 func TestHandler_EventsExport_CopilotCompactCleanupSynthesizesStop(t *testing.T) {
 	h := newTestHandler()
 
-	h.Handle(Request{
-		Type:         TypeStateUpdate,
+	h.Handle(protocol.Request{
+		Type:         protocol.TypeStateUpdate,
 		WindowID:     1,
 		Harness:      "copilot",
 		Action:       "compact",
@@ -14,8 +18,8 @@ func TestHandler_EventsExport_CopilotCompactCleanupSynthesizesStop(t *testing.T)
 		SessionTitle: "W:api",
 		Account:      "work",
 	})
-	h.Handle(Request{
-		Type:         TypeStateUpdate,
+	h.Handle(protocol.Request{
+		Type:         protocol.TypeStateUpdate,
 		WindowID:     1,
 		Harness:      "copilot",
 		Action:       "idle",
@@ -24,7 +28,7 @@ func TestHandler_EventsExport_CopilotCompactCleanupSynthesizesStop(t *testing.T)
 		Account:      "work",
 	})
 
-	resp := h.Handle(Request{Type: TypeEventsExport, WindowID: 1})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeEventsExport, WindowID: 1})
 	if !resp.OK {
 		t.Fatalf("events export: want OK=true, got %+v", resp)
 	}
@@ -55,11 +59,11 @@ func TestHandler_EventsExport_CopilotCompactCleanupSynthesizesStop(t *testing.T)
 
 func TestHandler_EventsExportIncludesRendererFailuresAndSuppressionReasons(t *testing.T) {
 	h := newTestHandler()
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 7, Action: "failure", KittyListenOn: "unix:/tmp/kitty-7"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "failure", KittyListenOn: "unix:/tmp/kitty-7"})
 	// The legacy failure guard refuses the permission (logged as guard_blocked),
 	// but the reducer applies it: key outranks warning in the icon precedence,
 	// so the authoritative visible icon is the key.
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 7, Action: "permission"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "permission"})
 
 	h.stateMu.Lock()
 	st := h.store[7]
@@ -68,7 +72,7 @@ func TestHandler_EventsExportIncludesRendererFailuresAndSuppressionReasons(t *te
 	h.syncRendererMetadataLocked(7)
 	h.stateMu.Unlock()
 
-	resp := h.Handle(Request{Type: TypeEventsExport, WindowID: 7})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeEventsExport, WindowID: 7})
 	if !resp.OK {
 		t.Fatalf("events export: want OK=true, got %+v", resp)
 	}
@@ -89,7 +93,7 @@ func TestHandler_EventsExportIncludesRendererFailuresAndSuppressionReasons(t *te
 func TestHandler_SessionDetail_UnknownWindow(t *testing.T) {
 	h := newTestHandler()
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 99})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 99})
 	if !resp.OK {
 		t.Fatalf("session detail: want OK=true, got %+v", resp)
 	}
@@ -108,16 +112,16 @@ func TestHandler_SessionDetail_UnknownWindow(t *testing.T) {
 func TestHandler_EventsExport_ReturnsAllWindows(t *testing.T) {
 	h := newTestHandler()
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse", SessionTitle: "W:one"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse", SessionTitle: "W:one"})
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 2, Action: "active", Event: "PreToolUse", SessionTitle: "W:two"})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 2, Action: "stop", Event: "Stop", SessionTitle: "W:two"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 2, Action: "active", Event: "PreToolUse", SessionTitle: "W:two"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 2, Action: "stop", Event: "Stop", SessionTitle: "W:two"})
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 3, Action: "active", Event: "PreToolUse", SessionTitle: "W:three"})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 3, Action: "active", Event: "PostToolUse", SessionTitle: "W:three"})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 3, Action: "stop", Event: "Stop", SessionTitle: "W:three"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 3, Action: "active", Event: "PreToolUse", SessionTitle: "W:three"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 3, Action: "active", Event: "PostToolUse", SessionTitle: "W:three"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 3, Action: "stop", Event: "Stop", SessionTitle: "W:three"})
 
-	resp := h.Handle(Request{Type: TypeEventsExport})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeEventsExport})
 	if !resp.OK {
 		t.Fatalf("events export: want OK=true, got %+v", resp)
 	}
@@ -139,9 +143,9 @@ func TestHandler_EventsExport_ReturnsAllWindows(t *testing.T) {
 func TestHandler_EventsExport_WindowFilterReturnsOneWindow(t *testing.T) {
 	h := newTestHandler()
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse", SessionTitle: "W:one"})
-	h.Handle(Request{
-		Type:         TypeStateUpdate,
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse", SessionTitle: "W:one"})
+	h.Handle(protocol.Request{
+		Type:         protocol.TypeStateUpdate,
 		WindowID:     2,
 		Action:       "active",
 		Event:        "PreToolUse",
@@ -149,8 +153,8 @@ func TestHandler_EventsExport_WindowFilterReturnsOneWindow(t *testing.T) {
 		Account:      "work",
 		Harness:      "copilot",
 	})
-	h.Handle(Request{
-		Type:         TypeStateUpdate,
+	h.Handle(protocol.Request{
+		Type:         protocol.TypeStateUpdate,
 		WindowID:     2,
 		Action:       "stop",
 		Event:        "Stop",
@@ -159,7 +163,7 @@ func TestHandler_EventsExport_WindowFilterReturnsOneWindow(t *testing.T) {
 		Harness:      "copilot",
 	})
 
-	resp := h.Handle(Request{Type: TypeEventsExport, WindowID: 2})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeEventsExport, WindowID: 2})
 	if !resp.OK {
 		t.Fatalf("events export: want OK=true, got %+v", resp)
 	}
@@ -186,7 +190,7 @@ func TestHandler_EventsExport_WindowFilterReturnsOneWindow(t *testing.T) {
 func TestHandler_EventsExport_EmptyWhenNoEvents(t *testing.T) {
 	h := newTestHandler()
 
-	resp := h.Handle(Request{Type: TypeEventsExport})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeEventsExport})
 	if !resp.OK {
 		t.Fatalf("events export: want OK=true, got %+v", resp)
 	}
@@ -206,8 +210,8 @@ func TestHandler_EventsExport_EmptyWhenNoEvents(t *testing.T) {
 func TestHandler_EventsExport_DoesNotMutateOriginal(t *testing.T) {
 	h := newTestHandler()
 
-	h.Handle(Request{
-		Type:         TypeStateUpdate,
+	h.Handle(protocol.Request{
+		Type:         protocol.TypeStateUpdate,
 		WindowID:     1,
 		Action:       "active",
 		Event:        "PreToolUse",
@@ -217,7 +221,7 @@ func TestHandler_EventsExport_DoesNotMutateOriginal(t *testing.T) {
 		Harness:      "copilot",
 	})
 
-	first := h.Handle(Request{Type: TypeEventsExport})
+	first := h.Handle(protocol.Request{Type: protocol.TypeEventsExport})
 	if !first.OK || len(first.EventsByWindow[1]) != 1 {
 		t.Fatalf("first export: want one event for window 1, got %+v", first)
 	}
@@ -229,7 +233,7 @@ func TestHandler_EventsExport_DoesNotMutateOriginal(t *testing.T) {
 	meta.Durable.SessionTitle = "TAMPERED"
 	first.WindowMetadata[1] = meta
 
-	second := h.Handle(Request{Type: TypeEventsExport})
+	second := h.Handle(protocol.Request{Type: protocol.TypeEventsExport})
 	if !second.OK || len(second.EventsByWindow[1]) != 1 {
 		t.Fatalf("second export: want one event for window 1, got %+v", second)
 	}
@@ -244,8 +248,8 @@ func TestHandler_EventsExport_DoesNotMutateOriginal(t *testing.T) {
 func TestHandler_EventsExport_CarriesSource(t *testing.T) {
 	h := newTestHandler()
 
-	h.Handle(Request{
-		Type:         TypeStateUpdate,
+	h.Handle(protocol.Request{
+		Type:         protocol.TypeStateUpdate,
 		WindowID:     1,
 		Action:       "active",
 		Event:        "SessionStart",
@@ -253,7 +257,7 @@ func TestHandler_EventsExport_CarriesSource(t *testing.T) {
 		SessionTitle: "W:api",
 	})
 
-	resp := h.Handle(Request{Type: TypeEventsExport, WindowID: 1})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeEventsExport, WindowID: 1})
 	if !resp.OK {
 		t.Fatalf("events export: want OK=true, got %+v", resp)
 	}
@@ -268,8 +272,8 @@ func TestHandler_EventsExport_CarriesSource(t *testing.T) {
 func TestHandler_EventsExport_IncludesDurableMetadata(t *testing.T) {
 	h := newTestHandler()
 
-	h.Handle(Request{
-		Type:         TypeStateUpdate,
+	h.Handle(protocol.Request{
+		Type:         protocol.TypeStateUpdate,
 		WindowID:     1,
 		Action:       "active",
 		Event:        "PreToolUse",
@@ -278,8 +282,8 @@ func TestHandler_EventsExport_IncludesDurableMetadata(t *testing.T) {
 		Harness:      "Copilot",
 		PipeMode:     true,
 	})
-	h.Handle(Request{
-		Type:         TypeStateUpdate,
+	h.Handle(protocol.Request{
+		Type:         protocol.TypeStateUpdate,
 		WindowID:     1,
 		Action:       "idle",
 		Event:        "TeammateIdle",
@@ -290,15 +294,15 @@ func TestHandler_EventsExport_IncludesDurableMetadata(t *testing.T) {
 	})
 	// Simulate a degraded terminal hook where the daemon no longer gets live
 	// Kitty identity strings. The durable snapshot must keep the prior values.
-	h.Handle(Request{
-		Type:     TypeStateUpdate,
+	h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Action:   "stop",
 		Event:    "Stop",
 		PipeMode: true,
 	})
 
-	resp := h.Handle(Request{Type: TypeEventsExport})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeEventsExport})
 	if !resp.OK {
 		t.Fatalf("events export: want OK=true, got %+v", resp)
 	}
@@ -338,8 +342,8 @@ func TestHandler_EventsExport_IncludesDurableMetadata(t *testing.T) {
 func TestHandler_EventsExport_DurableActiveMetadataSurvivesIdleCleanup(t *testing.T) {
 	h := newTestHandler()
 
-	h.Handle(Request{
-		Type:         TypeStateUpdate,
+	h.Handle(protocol.Request{
+		Type:         protocol.TypeStateUpdate,
 		WindowID:     1,
 		Action:       "active",
 		Event:        "PreToolUse",
@@ -347,8 +351,8 @@ func TestHandler_EventsExport_DurableActiveMetadataSurvivesIdleCleanup(t *testin
 		Account:      "work",
 		Harness:      "claude",
 	})
-	h.Handle(Request{
-		Type:         TypeStateUpdate,
+	h.Handle(protocol.Request{
+		Type:         protocol.TypeStateUpdate,
 		WindowID:     1,
 		Action:       "idle",
 		Event:        "TeammateIdle",
@@ -357,7 +361,7 @@ func TestHandler_EventsExport_DurableActiveMetadataSurvivesIdleCleanup(t *testin
 		Harness:      "claude",
 	})
 
-	resp := h.Handle(Request{Type: TypeEventsExport})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeEventsExport})
 	if !resp.OK {
 		t.Fatalf("events export: want OK=true, got %+v", resp)
 	}
@@ -373,11 +377,11 @@ func TestHandler_EventsExport_DurableActiveMetadataSurvivesIdleCleanup(t *testin
 func TestHandler_EventsExport_DurableSubagentCountPreservedOnTerminalCleanup(t *testing.T) {
 	h := newTestHandler()
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "SubagentStart", SessionTitle: "W:api"})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "SubagentStart", SessionTitle: "W:api"})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop", Event: "Stop", SessionTitle: "W:api"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "SubagentStart", SessionTitle: "W:api"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "SubagentStart", SessionTitle: "W:api"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "stop", Event: "Stop", SessionTitle: "W:api"})
 
-	resp := h.Handle(Request{Type: TypeEventsExport})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeEventsExport})
 	if !resp.OK {
 		t.Fatalf("events export: want OK=true, got %+v", resp)
 	}

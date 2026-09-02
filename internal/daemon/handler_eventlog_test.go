@@ -4,6 +4,8 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestHandler_EventLog_PreservedAcrossStaleSweep verifies that SweepStale leaves
@@ -19,8 +21,8 @@ func TestHandler_EventLog_PreservedAcrossStaleSweep(t *testing.T) {
 		fake.windows = fakeOSWindowsWithTab(1, "W:api")
 		fake.mu.Unlock()
 
-		h.Handle(Request{
-			Type:         TypeStateUpdate,
+		h.Handle(protocol.Request{
+			Type:         protocol.TypeStateUpdate,
 			WindowID:     1,
 			Action:       "active",
 			Event:        "PreToolUse",
@@ -36,7 +38,7 @@ func TestHandler_EventLog_PreservedAcrossStaleSweep(t *testing.T) {
 		h.SweepStale(time.Now())
 		synctest.Wait()
 
-		resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
+		resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 1})
 		if !resp.OK {
 			t.Fatalf("session detail: want OK=true, got %+v", resp)
 		}
@@ -67,14 +69,14 @@ func TestHandler_EventLog_GCDropsClosedWindows(t *testing.T) {
 
 		now := time.Now()
 		h.stateMu.Lock()
-		h.ensureWindowStateLocked(1).EventLog = []SessionEvent{{At: now.Unix(), Event: "PreToolUse", Action: "active"}}
-		h.ensureWindowStateLocked(2).EventLog = []SessionEvent{{At: now.Unix(), Event: "PreToolUse", Action: "active"}}
+		h.ensureWindowStateLocked(1).EventLog = []protocol.SessionEvent{{At: now.Unix(), Event: "PreToolUse", Action: "active"}}
+		h.ensureWindowStateLocked(2).EventLog = []protocol.SessionEvent{{At: now.Unix(), Event: "PreToolUse", Action: "active"}}
 		h.stateMu.Unlock()
 
 		h.SweepStale(now)
 		synctest.Wait()
 
-		resp1 := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
+		resp1 := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 1})
 		if !resp1.OK {
 			t.Fatalf("session detail w1: want OK=true, got %+v", resp1)
 		}
@@ -82,7 +84,7 @@ func TestHandler_EventLog_GCDropsClosedWindows(t *testing.T) {
 			t.Fatalf("window 1 events = %d; want 1 (%+v)", len(resp1.Events), resp1.Events)
 		}
 
-		resp2 := h.Handle(Request{Type: TypeSessionDetail, WindowID: 2})
+		resp2 := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 2})
 		if !resp2.OK {
 			t.Fatalf("session detail w2: want OK=true, got %+v", resp2)
 		}
@@ -120,8 +122,8 @@ func TestHandler_PruneClosedWindows_DropsAllLivePerWindowMaps(t *testing.T) {
 			h.ensureWindowStateLocked(id).LastSessionTitle = "W:foo"
 			h.ensureWindowStateLocked(id).LastPipeMode = false
 			h.ensureWindowStateLocked(id).PendingReset = resetFlowRequested
-			h.ensureWindowStateLocked(id).EventLog = []SessionEvent{{At: now.Unix(), Event: "PreToolUse", Action: "active"}}
-			h.windowMetadata[id] = WindowDebugMetadata{Durable: WindowDebugDurable{SessionTitle: "W:foo"}}
+			h.ensureWindowStateLocked(id).EventLog = []protocol.SessionEvent{{At: now.Unix(), Event: "PreToolUse", Action: "active"}}
+			h.windowMetadata[id] = protocol.WindowDebugMetadata{Durable: protocol.WindowDebugDurable{SessionTitle: "W:foo"}}
 		}
 		h.stateMu.Unlock()
 
@@ -190,7 +192,7 @@ func TestHandler_PruneClosedWindows_PurgesNotifierState(t *testing.T) {
 		// Seed an eventLog entry for window 2 so pruneClosedWindows sees it as
 		// a candidate to GC.
 		h.stateMu.Lock()
-		h.ensureWindowStateLocked(2).EventLog = []SessionEvent{{At: time.Now().Unix(), Event: "Stop", Action: "stop"}}
+		h.ensureWindowStateLocked(2).EventLog = []protocol.SessionEvent{{At: time.Now().Unix(), Event: "Stop", Action: "stop"}}
 		h.stateMu.Unlock()
 
 		h.SweepStale(time.Now())
@@ -233,7 +235,7 @@ func TestHandler_PruneClosedWindows_PurgesGuardEntries(t *testing.T) {
 		// Seed an eventLog entry for window 2 so pruneClosedWindows sees it as
 		// a candidate to GC.
 		h.stateMu.Lock()
-		h.ensureWindowStateLocked(2).EventLog = []SessionEvent{{At: time.Now().Unix(), Event: "Stop", Action: "stop"}}
+		h.ensureWindowStateLocked(2).EventLog = []protocol.SessionEvent{{At: time.Now().Unix(), Event: "Stop", Action: "stop"}}
 		h.stateMu.Unlock()
 
 		h.SweepStale(time.Now())

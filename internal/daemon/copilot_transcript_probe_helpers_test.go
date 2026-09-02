@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -130,15 +131,15 @@ func copilotSeedActiveBolt(t *testing.T, h *Handler, windowID int, session strin
 
 func copilotSeedActiveBoltPiped(t *testing.T, h *Handler, windowID int, session string, at int64, pipeMode bool) uint64 {
 	t.Helper()
-	ev := NormalizedEvent{
-		Source:    SourceID{Kind: SourceHarness, Key: "copilot:" + session},
+	ev := protocol.NormalizedEvent{
+		Source:    protocol.SourceID{Kind: protocol.SourceHarness, Key: "copilot:" + session},
 		Action:    "active",
 		SessionID: session,
 		At:        at,
 		Event:     "userPromptSubmitted",
 		PipeMode:  pipeMode,
 	}
-	resp := h.handleStateUpdate(Request{Type: TypeStateUpdate, WindowID: windowID, Action: "active", Event: "userPromptSubmitted", PipeMode: pipeMode, normalized: &ev})
+	resp := h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: windowID, Action: "active", Event: "userPromptSubmitted", PipeMode: pipeMode, Normalized: &ev})
 	if !resp.OK {
 		t.Fatalf("seed copilot active %q rejected: %+v", session, resp)
 	}
@@ -203,11 +204,11 @@ func copilotProbeHandler(t *testing.T, windowID int, iconState string, home stri
 func armCopilotTerminalHold(t *testing.T, h *Handler, windowID int, session string) {
 	t.Helper()
 	promptPayload := hookPayloadJSON(t, hookevent.HookPayload{SessionIDCamel: session})
-	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: windowID, Event: "userPromptSubmitted", PayloadJSON: promptPayload}); !resp.OK {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: windowID, Event: "userPromptSubmitted", PayloadJSON: promptPayload}); !resp.OK {
 		t.Fatalf("userPromptSubmitted response = %+v", resp)
 	}
 	stopPayload := hookPayloadJSON(t, hookevent.HookPayload{SessionIDCamel: session, StopReasonCamel: "end_turn"})
-	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: windowID, Event: "agentStop", PayloadJSON: stopPayload}); !resp.OK {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: windowID, Event: "agentStop", PayloadJSON: stopPayload}); !resp.OK {
 		t.Fatalf("agentStop response = %+v", resp)
 	}
 	pending, armed := terminalHoldPending(t, h, windowID)

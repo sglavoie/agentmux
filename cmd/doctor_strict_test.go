@@ -14,12 +14,13 @@ import (
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
 // setUpDoctorFixture installs a healthy socket/binary/config environment plus
 // the given daemon snapshot, returning the shared "now" used by the fakes.
-func setUpDoctorFixture(t *testing.T, health daemon.Health, snapshot daemon.EventsExport) time.Time {
+func setUpDoctorFixture(t *testing.T, health daemon.Health, snapshot protocol.EventsExport) time.Time {
 	t.Helper()
 	resetDoctorTestState(t)
 	now := time.Unix(1_700_000_000, 0)
@@ -48,7 +49,7 @@ func setUpDoctorFixture(t *testing.T, health daemon.Health, snapshot daemon.Even
 	newDoctorDaemonClient = func() daemonExportClient {
 		return &fakeDaemonExportClient{
 			health: health,
-			export: func(int) (daemon.EventsExport, error) { return snapshot, nil },
+			export: func(int) (protocol.EventsExport, error) { return snapshot, nil },
 		}
 	}
 	newDoctorKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
@@ -59,17 +60,17 @@ func setUpDoctorFixture(t *testing.T, health daemon.Health, snapshot daemon.Even
 	return now
 }
 
-func violatingDoctorSnapshot(now time.Time) daemon.EventsExport {
-	return daemon.EventsExport{
-		WindowMetadata: map[int]daemon.WindowDebugMetadata{
+func violatingDoctorSnapshot(now time.Time) protocol.EventsExport {
+	return protocol.EventsExport{
+		WindowMetadata: map[int]protocol.WindowDebugMetadata{
 			// An active ASL turn rendered as empty: a health failure. StateSet
 			// stays false so the not-live window does not also trip the
 			// renderer-drift check — the test asserts exactly the invariant
 			// findings it sets up.
 			7: {
-				Renderer: daemon.WindowDebugRenderer{DesiredIcon: "", StateSet: false},
-				Shadow: daemon.WindowDebugShadow{EffectiveGen: 1, Facts: []daemon.SourceFactSnapshot{{
-					Kind: daemon.SourceASL, Key: "run-1", RunID: "run-1",
+				Renderer: protocol.WindowDebugRenderer{DesiredIcon: "", StateSet: false},
+				Shadow: protocol.WindowDebugShadow{EffectiveGen: 1, Facts: []protocol.SourceFactSnapshot{{
+					Kind: protocol.SourceASL, Key: "run-1", RunID: "run-1",
 					Phase: daemon.ASLPhaseTurn, LeaseLive: true, At: now.Unix(),
 				}}},
 			},
@@ -77,22 +78,22 @@ func violatingDoctorSnapshot(now time.Time) daemon.EventsExport {
 	}
 }
 
-func ownerMismatchDoctorSnapshot(now time.Time) daemon.EventsExport {
-	events := make([]daemon.SessionEvent, 0, 19)
-	events = append(events, daemon.SessionEvent{
+func ownerMismatchDoctorSnapshot(now time.Time) protocol.EventsExport {
+	events := make([]protocol.SessionEvent, 0, 19)
+	events = append(events, protocol.SessionEvent{
 		At: now.Unix(), Event: "UserPromptSubmit", Action: "active",
 		Suppressed: true, SuppressionReason: "owner_mismatch",
 	})
 	for i := 0; i < 18; i++ {
-		events = append(events, daemon.SessionEvent{
+		events = append(events, protocol.SessionEvent{
 			At: now.Unix(), Event: "PreToolUse", Action: "active",
 			Suppressed: true, SuppressionReason: "owner_mismatch",
 		})
 	}
-	return daemon.EventsExport{
-		EventsByWindow: map[int][]daemon.SessionEvent{7: events},
-		WindowMetadata: map[int]daemon.WindowDebugMetadata{7: {
-			Durable: daemon.WindowDebugDurable{SessionTitle: "OrderBook"},
+	return protocol.EventsExport{
+		EventsByWindow: map[int][]protocol.SessionEvent{7: events},
+		WindowMetadata: map[int]protocol.WindowDebugMetadata{7: {
+			Durable: protocol.WindowDebugDurable{SessionTitle: "OrderBook"},
 		}},
 	}
 }
@@ -129,7 +130,7 @@ func TestDoctorStrictExitsNonzeroOnHealthFailures(t *testing.T) {
 func TestDoctorStrictPassesOnCleanDeployment(t *testing.T) {
 	build := doctorTestBuild
 	health := daemon.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build}
-	setUpDoctorFixture(t, health, daemon.EventsExport{})
+	setUpDoctorFixture(t, health, protocol.EventsExport{})
 	doctorStrict = true
 
 	var out bytes.Buffer
@@ -144,14 +145,14 @@ func TestDoctorStrictPassesOnCleanDeployment(t *testing.T) {
 
 func TestDoctorStrictFailsWhenInteractiveNotificationsUnavailable(t *testing.T) {
 	build := doctorTestBuild
-	capability := daemon.NotificationCapability{
+	capability := protocol.NotificationCapability{
 		Enabled: true, Backend: "alerter", Reason: "not_found",
 	}
 	health := daemon.Health{
 		Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build,
 		Notification: &capability,
 	}
-	setUpDoctorFixture(t, health, daemon.EventsExport{})
+	setUpDoctorFixture(t, health, protocol.EventsExport{})
 	doctorStrict = true
 
 	var out bytes.Buffer
@@ -176,7 +177,7 @@ func TestDoctorStrictFailsWhenInteractiveNotificationsUnavailable(t *testing.T) 
 func TestDoctorStrictStaysGreenOnDeliveryFailureWarning(t *testing.T) {
 	build := doctorTestBuild
 	health := daemon.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build}
-	now := setUpDoctorFixture(t, health, daemon.EventsExport{})
+	now := setUpDoctorFixture(t, health, protocol.EventsExport{})
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	paths, err := diagnostics.DefaultPaths()
 	if err != nil {
@@ -245,7 +246,7 @@ func TestDoctorJSONEmitsStructuredReport(t *testing.T) {
 	build := doctorTestBuild
 	health := daemon.Health{
 		Alive: true, Ready: true, PID: 77, Uptime: 3 * time.Minute, Build: &build,
-		Metrics: &daemon.MetricsSnapshot{Accepted: 9},
+		Metrics: &protocol.MetricsSnapshot{Accepted: 9},
 	}
 	setUpDoctorFixture(t, health, violatingDoctorSnapshot(doctorNow()))
 	doctorJSON = true

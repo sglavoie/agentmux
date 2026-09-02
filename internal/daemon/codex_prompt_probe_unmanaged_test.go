@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -39,7 +40,7 @@ func TestProbeCodexScreenPrompts_UnmanagedCodexForegroundReplacesBoltWithQuestio
 		t.Fatalf("guard.Current = %q, want elicitation", got)
 	}
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(resp.Events) != 1 {
 		t.Fatalf("events = %d, want 1", len(resp.Events))
 	}
@@ -107,7 +108,7 @@ func TestProbeCodexScreenPrompts_UnmanagedPipeModeCodexForegroundIsNotProbed(t *
 			if got := len(fake.titleCalls()); got != 0 {
 				t.Fatalf("SetTabTitle calls = %d, want 0", got)
 			}
-			if resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}); len(resp.Events) != 0 {
+			if resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42}); len(resp.Events) != 0 {
 				t.Fatalf("events = %d, want 0", len(resp.Events))
 			}
 		})
@@ -150,7 +151,7 @@ func TestProbeCodexScreenPrompts_ManagedOwnerSuppressesUnmanagedCodexSiblingNoti
 		if got := len(fake.titleCalls()); got != 0 {
 			t.Fatalf("SetTabTitle calls = %d, want 0", got)
 		}
-		resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+		resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})
 		if len(resp.Events) != 0 {
 			t.Fatalf("sibling events = %d, want 0", len(resp.Events))
 		}
@@ -179,7 +180,7 @@ func TestProbeCodexScreenPrompts_IgnoresUnmanagedNonCodexForeground(t *testing.T
 	if got := len(fake.titleCalls()); got != 0 {
 		t.Fatalf("SetTabTitle calls = %d, want 0", got)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(resp.Events) != 0 {
 		t.Fatalf("events = %d, want 0", len(resp.Events))
 	}
@@ -223,10 +224,10 @@ func TestProbeCodexScreenPrompts_UnmanagedTabProbesOnlyActiveCodexForeground(t *
 	if want := palette.BuildTitle("W:api", "key", false); calls[0].title != want {
 		t.Fatalf("SetTabTitle title = %q, want %q", calls[0].title, want)
 	}
-	if resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}); len(resp.Events) != 0 {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42}); len(resp.Events) != 0 {
 		t.Fatalf("inactive foreground events = %d, want 0", len(resp.Events))
 	}
-	if resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43}); len(resp.Events) != 1 {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43}); len(resp.Events) != 1 {
 		t.Fatalf("active foreground events = %d, want 1", len(resp.Events))
 	}
 }

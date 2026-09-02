@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -45,7 +46,7 @@ func TestHandler_UserClearWipesManagedPaneIcons(t *testing.T) {
 			h.SetKittyClient(fake)
 			seedOwnerState(h, 42, tc.action, tc.icon)
 
-			resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "user_clear"})
+			resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "user_clear"})
 			if !resp.OK {
 				t.Fatalf("user_clear response = %+v", resp)
 			}
@@ -62,7 +63,7 @@ func TestHandler_UserClearWipesManagedPaneIcons(t *testing.T) {
 			if g := h.guard.Current(42); g != "" {
 				t.Fatalf("guard = %q; want cleared", g)
 			}
-			detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+			detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 			if len(detail.Events) != 1 || detail.Events[0].Action != "user_clear" || detail.Events[0].Suppressed {
 				t.Fatalf("events = %+v; want one allowed user_clear", detail.Events)
 			}
@@ -82,7 +83,7 @@ func TestHandler_UserClearFromUnmanagedSiblingTargetsOwner(t *testing.T) {
 	h.SetKittyClient(fake)
 	seedOwnerState(h, 42, "stop", "stop")
 
-	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 43, Event: "user_clear"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 43, Event: "user_clear"})
 	if !resp.OK {
 		t.Fatalf("user_clear response = %+v", resp)
 	}
@@ -98,14 +99,14 @@ func TestHandler_UserClearFromUnmanagedSiblingTargetsOwner(t *testing.T) {
 	}
 
 	// The source pane must not log an owner_mismatch suppression.
-	srcDetail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	srcDetail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})
 	for _, ev := range srcDetail.Events {
 		if ev.SuppressionReason == suppressionReasonOwnerMismatch {
 			t.Fatalf("source event = %+v; want no owner_mismatch", ev)
 		}
 	}
 	// The clear is logged against the owner.
-	ownerDetail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	ownerDetail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(ownerDetail.Events) != 1 || ownerDetail.Events[0].Action != "user_clear" || ownerDetail.Events[0].Suppressed {
 		t.Fatalf("owner events = %+v; want one allowed user_clear", ownerDetail.Events)
 	}
@@ -123,7 +124,7 @@ func TestHandler_UserClearFromManagedNonOwnerTargetsOwner(t *testing.T) {
 	h.SetKittyClient(fake)
 	seedOwnerState(h, 42, "permission", "key")
 
-	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 43, Event: "user_clear"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 43, Event: "user_clear"})
 	if !resp.OK {
 		t.Fatalf("user_clear response = %+v", resp)
 	}
@@ -138,7 +139,7 @@ func TestHandler_UserClearFromManagedNonOwnerTargetsOwner(t *testing.T) {
 	if src != nil && (src.DesiredIcon != "" || src.StateSet) {
 		t.Fatalf("source state = %+v; managed non-owner must not gain a desired icon", src)
 	}
-	srcDetail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	srcDetail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})
 	for _, ev := range srcDetail.Events {
 		if ev.SuppressionReason == suppressionReasonOwnerMismatch {
 			t.Fatalf("source event = %+v; want no owner_mismatch", ev)
@@ -154,7 +155,7 @@ func TestHandler_UserClearNoOwnerLeavesTabUnchanged(t *testing.T) {
 	)}
 	h.SetKittyClient(fake)
 
-	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 43, Event: "user_clear"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 43, Event: "user_clear"})
 	if !resp.OK {
 		t.Fatalf("user_clear response = %+v", resp)
 	}
@@ -166,7 +167,7 @@ func TestHandler_UserClearNoOwnerLeavesTabUnchanged(t *testing.T) {
 	if st != nil && (st.DesiredIcon != "" || st.StateSet || st.Dirty) {
 		t.Fatalf("state = %+v; ownerless user_clear must not create renderer state", st)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})
 	if len(detail.Events) != 0 {
 		t.Fatalf("events = %+v; want none for ownerless no-op", detail.Events)
 	}
@@ -202,7 +203,7 @@ func TestHandler_UserClearOwnerlessTabWithGlyphClearsSource(t *testing.T) {
 	)}
 	h.SetKittyClient(fake)
 
-	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 43, Event: "user_clear"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 43, Event: "user_clear"})
 	if !resp.OK {
 		t.Fatalf("user_clear response = %+v", resp)
 	}
@@ -216,7 +217,7 @@ func TestHandler_UserClearOwnerlessTabWithGlyphClearsSource(t *testing.T) {
 	if h.renderQueue.empty() {
 		t.Fatal("ownerless visible-icon clear was not queued immediately")
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})
 	if len(detail.Events) != 1 || detail.Events[0].Action != "user_clear" ||
 		detail.Events[0].Suppressed || detail.Events[0].RouteDecision != routeDecisionSource {
 		t.Fatalf("events = %+v; want one allowed source-routed user_clear", detail.Events)
@@ -238,7 +239,7 @@ func TestHandler_UserClearOwnerlessRecordedStateWithoutLiveIcon(t *testing.T) {
 	h.SetKittyClient(fake)
 	seedOwnerState(h, 43, "stop", "stop")
 
-	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 43, Event: "user_clear"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 43, Event: "user_clear"})
 	if !resp.OK {
 		t.Fatalf("user_clear response = %+v", resp)
 	}
@@ -271,7 +272,7 @@ func TestHandler_UserClearKittyLookupFailureWipesSourceFallback(t *testing.T) {
 	h.SetKittyClient(fake)
 	seedOwnerState(h, 42, "stop", "stop")
 
-	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "user_clear"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "user_clear"})
 	if !resp.OK {
 		t.Fatalf("user_clear response = %+v", resp)
 	}
@@ -285,7 +286,7 @@ func TestHandler_UserClearKittyLookupFailureWipesSourceFallback(t *testing.T) {
 	if g := h.guard.Current(42); g != "" {
 		t.Fatalf("guard = %q; want cleared on the fallback wipe", g)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) != 1 || detail.Events[0].Action != "user_clear" || detail.Events[0].Suppressed {
 		t.Fatalf("events = %+v; want one allowed user_clear on the fallback source pane", detail.Events)
 	}
@@ -321,7 +322,7 @@ func TestHandler_UserClearPreservesForeignTitleParts(t *testing.T) {
 	st.LoopingSet = true
 	h.stateMu.Unlock()
 
-	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "user_clear"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "user_clear"})
 	if !resp.OK {
 		t.Fatalf("user_clear response = %+v", resp)
 	}
@@ -356,7 +357,7 @@ func TestHandler_UserClearClearsGuardAndActionButKeepsLoop(t *testing.T) {
 	st.LoopingSet = true
 	h.stateMu.Unlock()
 
-	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "user_clear"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "user_clear"})
 	if !resp.OK {
 		t.Fatalf("user_clear response = %+v", resp)
 	}
@@ -394,8 +395,8 @@ func TestHandler_UserClearConvergesDriftedTitleAndResetsFailures(t *testing.T) {
 	st.LastRenderError = "boom"
 	h.stateMu.Unlock()
 
-	resp := h.Handle(Request{
-		Type:          TypeHookEvent,
+	resp := h.Handle(protocol.Request{
+		Type:          protocol.TypeHookEvent,
 		WindowID:      42,
 		Event:         "user_clear",
 		KittyListenOn: "unix:/tmp/kitty-1",
@@ -432,10 +433,10 @@ func TestHandler_UserClearThenPromptSetsBolt(t *testing.T) {
 	h.SetKittyClient(fake)
 	seedOwnerState(h, 42, "stop", "stop")
 
-	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "user_clear"}); !resp.OK {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "user_clear"}); !resp.OK {
 		t.Fatalf("user_clear response = %+v", resp)
 	}
-	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "UserPromptSubmit"}); !resp.OK {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "UserPromptSubmit"}); !resp.OK {
 		t.Fatalf("UserPromptSubmit response = %+v", resp)
 	}
 

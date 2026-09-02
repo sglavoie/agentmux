@@ -17,7 +17,11 @@ package daemon
 // plan path — because a quarantined payload is precisely one whose self-
 // description the daemon has declined to believe.
 
-import "time"
+import (
+	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+)
 
 // aslHookDeliveryMetrics accumulates lifecycle-hook ingestion outcomes. Guarded
 // by stateMu.
@@ -31,25 +35,6 @@ type aslHookDeliveryMetrics struct {
 	// lastReason is the most recent refusal reason. It is a daemon constant
 	// from the isQuarantineReason set, never producer-supplied text.
 	lastReason string
-}
-
-// ASLHookDeliverySnapshot is the health-response view of hook ingestion.
-type ASLHookDeliverySnapshot struct {
-	Accepted    uint64 `json:"accepted"`
-	Quarantined uint64 `json:"quarantined"`
-	// QuarantinedByReason is keyed by the stable refusal reasons. It is omitted
-	// when empty rather than published as an empty object, so a consumer can
-	// tell "no refusals" from "refusals this build does not classify".
-	QuarantinedByReason map[string]uint64 `json:"quarantined_by_reason,omitempty"`
-
-	// AcceptedAgeSeconds and QuarantinedAgeSeconds are ages rather than
-	// timestamps, computed at read time. A daemon that stopped ingesting also
-	// stopped writing, so the useful signal is the one a stalled writer could
-	// not have produced.
-	AcceptedAgeSeconds    *float64 `json:"accepted_age_seconds,omitempty"`
-	QuarantinedAgeSeconds *float64 `json:"quarantined_age_seconds,omitempty"`
-
-	LastQuarantineReason string `json:"last_quarantine_reason,omitempty"`
 }
 
 // recordASLHookAccepted counts one lifecycle payload the daemon believed and
@@ -80,10 +65,10 @@ func (h *Handler) recordASLHookQuarantined(now time.Time, reason string) {
 }
 
 // ASLHookDeliveryMetrics returns the current ingestion snapshot.
-func (h *Handler) ASLHookDeliveryMetrics() ASLHookDeliverySnapshot {
+func (h *Handler) ASLHookDeliveryMetrics() protocol.ASLHookDeliverySnapshot {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	snapshot := ASLHookDeliverySnapshot{
+	snapshot := protocol.ASLHookDeliverySnapshot{
 		Accepted:             h.aslDelivery.accepted,
 		Quarantined:          h.aslDelivery.quarantined,
 		LastQuarantineReason: h.aslDelivery.lastReason,

@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/aslcontract"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -26,12 +27,12 @@ func TestHandler_CopilotLateInitialSessionStartPreservesPromptAndAllowsStop(t *t
 	h.SetKittyClient(fake)
 
 	promptPayload := hookPayloadJSON(t, hookevent.HookPayload{SessionIDCamel: "session-1"})
-	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "userPromptSubmitted", PayloadJSON: promptPayload}); !resp.OK {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "userPromptSubmitted", PayloadJSON: promptPayload}); !resp.OK {
 		t.Fatalf("userPromptSubmitted response = %+v", resp)
 	}
 
 	startPayload := hookPayloadJSON(t, hookevent.HookPayload{SessionIDCamel: "session-1", Source: "new"})
-	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "sessionStart", PayloadJSON: startPayload}); !resp.OK {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "sessionStart", PayloadJSON: startPayload}); !resp.OK {
 		t.Fatalf("sessionStart response = %+v", resp)
 	}
 	h.stateMu.Lock()
@@ -42,7 +43,7 @@ func TestHandler_CopilotLateInitialSessionStartPreservesPromptAndAllowsStop(t *t
 	h.stateMu.Unlock()
 
 	stopPayload := hookPayloadJSON(t, hookevent.HookPayload{SessionIDCamel: "session-1", StopReasonCamel: "end_turn"})
-	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "agentStop", PayloadJSON: stopPayload}); !resp.OK {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "agentStop", PayloadJSON: stopPayload}); !resp.OK {
 		t.Fatalf("agentStop response = %+v", resp)
 	}
 	h.stateMu.Lock()
@@ -52,11 +53,11 @@ func TestHandler_CopilotLateInitialSessionStartPreservesPromptAndAllowsStop(t *t
 	}
 	h.stateMu.Unlock()
 
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) != 3 {
 		t.Fatalf("events = %+v, want prompt/start/stop", detail.Events)
 	}
-	if detail.Events[1].ResetFlow || detail.Events[1].ResultIconState != IconStatePreserve {
+	if detail.Events[1].ResetFlow || detail.Events[1].ResultIconState != protocol.IconStatePreserve {
 		t.Fatalf("late sessionStart event = %+v, want non-reset preserve", detail.Events[1])
 	}
 }
@@ -73,12 +74,12 @@ func TestHandler_HookEventClaudePermissionRequestSurfacesKey(t *testing.T) {
 	}})}
 	h.SetKittyClient(fake)
 
-	h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "PreToolUse"})
-	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "PermissionRequest"})
+	h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "PreToolUse"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "PermissionRequest"})
 	if !resp.OK {
 		t.Fatalf("PermissionRequest response = %+v", resp)
 	}
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) != 2 {
 		t.Fatalf("events = %+v; want two events", detail.Events)
 	}

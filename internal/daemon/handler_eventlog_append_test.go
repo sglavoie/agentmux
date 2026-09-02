@@ -2,6 +2,8 @@ package daemon
 
 import (
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestHandler_EventLog_AppendOnAllowed verifies that an allowed PreToolUse →
@@ -10,15 +12,15 @@ import (
 func TestHandler_EventLog_AppendOnAllowed(t *testing.T) {
 	h := newTestHandler()
 
-	h.Handle(Request{
-		Type:     TypeStateUpdate,
+	h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Action:   "active",
 		Event:    "PreToolUse",
 		ToolName: "Bash",
 	})
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 1})
 	if !resp.OK {
 		t.Fatalf("session detail: want OK=true, got %+v", resp)
 	}
@@ -45,16 +47,16 @@ func TestHandler_EventLog_AppendOnAllowed(t *testing.T) {
 
 func TestHandler_EventLog_CarriesRoutedOriginWindow(t *testing.T) {
 	h := newTestHandler()
-	normalized := NormalizedEvent{
-		Source: SourceID{Kind: SourceHarness, Key: "claude:s1"},
+	normalized := protocol.NormalizedEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"},
 		Action: "active", Seq: 1, At: 100, OriginWindowID: 91,
 	}
-	h.Handle(Request{
-		Type: TypeStateUpdate, WindowID: 42, Action: "active", Event: "PreToolUse",
-		normalized: &normalized, routeDecision: routeDecisionOwner,
+	h.Handle(protocol.Request{
+		Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Event: "PreToolUse",
+		Normalized: &normalized, RouteDecision: routeDecisionOwner,
 	})
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(resp.Events) != 1 || resp.Events[0].OriginWindowID != 91 ||
 		resp.Events[0].RouteDecision != routeDecisionOwner {
 		t.Fatalf("routed event row = %+v; want origin 91 and owner route", resp.Events)
@@ -68,10 +70,10 @@ func TestHandler_EventLog_CarriesRoutedOriginWindow(t *testing.T) {
 func TestHandler_EventLog_AppendOnGuardSuppressed(t *testing.T) {
 	h := newTestHandler()
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "SubagentStart"})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse", ToolName: "Read"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "SubagentStart"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse", ToolName: "Read"})
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 1})
 	if !resp.OK {
 		t.Fatalf("session detail: want OK=true, got %+v", resp)
 	}
@@ -87,7 +89,7 @@ func TestHandler_EventLog_AppendOnGuardSuppressed(t *testing.T) {
 	if resp.Events[1].Action != "active" || resp.Events[1].ToolName != "Read" {
 		t.Errorf("second event = %+v; want action=active tool_name=Read", resp.Events[1])
 	}
-	if resp.Events[1].ResultIconState != IconStatePreserve || resp.Events[1].SuppressionReason != suppressionReasonGuardBlocked {
+	if resp.Events[1].ResultIconState != protocol.IconStatePreserve || resp.Events[1].SuppressionReason != suppressionReasonGuardBlocked {
 		t.Errorf("second event = %+v; want result_icon_state=preserve suppression_reason=%q", resp.Events[1], suppressionReasonGuardBlocked)
 	}
 	if resp.Events[1].CurrentIconState != "subagent" {
@@ -102,10 +104,10 @@ func TestHandler_EventLog_AppendOnGuardSuppressed(t *testing.T) {
 func TestHandler_EventLog_AppendOnCopilotMidSubagentSuppression(t *testing.T) {
 	h := newTestHandler()
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "subagentStart"})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop", Event: "agentStop"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "subagentStart"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "stop", Event: "agentStop"})
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 1})
 	if !resp.OK {
 		t.Fatalf("session detail: want OK=true, got %+v", resp)
 	}
@@ -115,7 +117,7 @@ func TestHandler_EventLog_AppendOnCopilotMidSubagentSuppression(t *testing.T) {
 	if resp.Events[1].Event != "agentStop" || !resp.Events[1].Suppressed {
 		t.Errorf("second event = %+v; want event=agentStop suppressed=true", resp.Events[1])
 	}
-	if resp.Events[1].SuppressionReason != suppressionReasonCopilotMidSubagent || resp.Events[1].ResultIconState != IconStatePreserve {
+	if resp.Events[1].SuppressionReason != suppressionReasonCopilotMidSubagent || resp.Events[1].ResultIconState != protocol.IconStatePreserve {
 		t.Errorf("second event = %+v; want suppression_reason=%q result_icon_state=preserve", resp.Events[1], suppressionReasonCopilotMidSubagent)
 	}
 	if resp.Events[1].CurrentIconState != "subagent" {
@@ -126,23 +128,23 @@ func TestHandler_EventLog_AppendOnCopilotMidSubagentSuppression(t *testing.T) {
 func TestHandler_EventLog_AppendOnCopilotPendingPromptSuppression(t *testing.T) {
 	h := newTestHandler()
 
-	h.Handle(Request{
-		Type:             TypeStateUpdate,
+	h.Handle(protocol.Request{
+		Type:             protocol.TypeStateUpdate,
 		WindowID:         1,
 		Harness:          "copilot",
 		Action:           "elicitation",
 		Event:            "notification",
 		NotificationType: "elicitation_dialog",
 	})
-	h.Handle(Request{
-		Type:     TypeStateUpdate,
+	h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Harness:  "copilot",
 		Action:   "stop",
 		Event:    "agentStop",
 	})
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 1})
 	if !resp.OK {
 		t.Fatalf("session detail: want OK=true, got %+v", resp)
 	}
@@ -156,8 +158,8 @@ func TestHandler_EventLog_AppendOnCopilotPendingPromptSuppression(t *testing.T) 
 	if ev.SuppressionReason != suppressionReasonCopilotPendingPrompt {
 		t.Fatalf("suppression_reason = %q; want %q", ev.SuppressionReason, suppressionReasonCopilotPendingPrompt)
 	}
-	if ev.ResultIconState != IconStatePreserve {
-		t.Fatalf("result_icon_state = %q; want %q", ev.ResultIconState, IconStatePreserve)
+	if ev.ResultIconState != protocol.IconStatePreserve {
+		t.Fatalf("result_icon_state = %q; want %q", ev.ResultIconState, protocol.IconStatePreserve)
 	}
 	if ev.CurrentIconState != "question" {
 		t.Fatalf("current_icon_state = %q; want question", ev.CurrentIconState)
@@ -167,15 +169,15 @@ func TestHandler_EventLog_AppendOnCopilotPendingPromptSuppression(t *testing.T) 
 func TestHandler_EventLog_AppendOnActiveAfterTerminalSuppression(t *testing.T) {
 	h := newTestHandler()
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop", Event: "Stop"})
-	h.Handle(Request{
-		Type:     TypeStateUpdate,
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "stop", Event: "Stop"})
+	h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Action:   "active",
 		Event:    "PostToolUse",
 	})
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 1})
 	if !resp.OK {
 		t.Fatalf("session detail: want OK=true, got %+v", resp)
 	}
@@ -189,8 +191,8 @@ func TestHandler_EventLog_AppendOnActiveAfterTerminalSuppression(t *testing.T) {
 	if ev.SuppressionReason != suppressionReasonActiveAfterTerminal {
 		t.Fatalf("suppression_reason = %q; want %q", ev.SuppressionReason, suppressionReasonActiveAfterTerminal)
 	}
-	if ev.ResultIconState != IconStatePreserve {
-		t.Fatalf("result_icon_state = %q; want %q", ev.ResultIconState, IconStatePreserve)
+	if ev.ResultIconState != protocol.IconStatePreserve {
+		t.Fatalf("result_icon_state = %q; want %q", ev.ResultIconState, protocol.IconStatePreserve)
 	}
 	if ev.CurrentIconState != "stop" {
 		t.Fatalf("current_icon_state = %q; want stop", ev.CurrentIconState)
@@ -200,8 +202,8 @@ func TestHandler_EventLog_AppendOnActiveAfterTerminalSuppression(t *testing.T) {
 func TestHandler_EventLog_CarriesNormalizedDebugContext(t *testing.T) {
 	h := newTestHandler()
 
-	h.Handle(Request{
-		Type:     TypeStateUpdate,
+	h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Action:   "stop_failure",
 		Event:    "SessionEnd",
@@ -213,7 +215,7 @@ func TestHandler_EventLog_CarriesNormalizedDebugContext(t *testing.T) {
 		ContextLimit:     true,
 	})
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 1})
 	if !resp.OK {
 		t.Fatalf("session detail: want OK=true, got %+v", resp)
 	}
@@ -247,9 +249,9 @@ func TestHandler_EventLog_CarriesNormalizedDebugContext(t *testing.T) {
 func TestHandler_EventLog_LoopFinishedCarriesSourceAndReason(t *testing.T) {
 	h := newTestHandler()
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
-	h.Handle(Request{
-		Type:     TypeStateUpdate,
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
+	h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Action:   "idle",
 		Event:    "AgentSessionLoopFinished",
@@ -257,7 +259,7 @@ func TestHandler_EventLog_LoopFinishedCarriesSourceAndReason(t *testing.T) {
 		Reason:   "run_finished",
 	})
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 1})
 	if !resp.OK {
 		t.Fatalf("session detail: want OK=true, got %+v", resp)
 	}
@@ -285,8 +287,8 @@ func TestHandler_EventLog_LoopFinishedCarriesSourceAndReason(t *testing.T) {
 func TestHandler_EventLog_RewrittenResetStopCarriesResetFlow(t *testing.T) {
 	h := newTestHandler()
 
-	h.Handle(Request{
-		Type:      TypeStateUpdate,
+	h.Handle(protocol.Request{
+		Type:      protocol.TypeStateUpdate,
 		WindowID:  1,
 		Harness:   "copilot",
 		Action:    "active",
@@ -294,15 +296,15 @@ func TestHandler_EventLog_RewrittenResetStopCarriesResetFlow(t *testing.T) {
 		IsPrompt:  true,
 		ResetFlow: true,
 	})
-	h.Handle(Request{
-		Type:     TypeStateUpdate,
+	h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Harness:  "copilot",
 		Action:   "stop",
 		Event:    "agentStop",
 	})
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 1})
 	if !resp.OK {
 		t.Fatalf("session detail: want OK=true, got %+v", resp)
 	}
@@ -329,8 +331,8 @@ func TestHandler_EventLog_TrimsAtMax(t *testing.T) {
 
 	total := maxEventsPerWindow + 5
 	for i := 0; i < total; i++ {
-		h.Handle(Request{
-			Type:     TypeStateUpdate,
+		h.Handle(protocol.Request{
+			Type:     protocol.TypeStateUpdate,
 			WindowID: 1,
 			Action:   "active",
 			Event:    "PreToolUse",
@@ -338,7 +340,7 @@ func TestHandler_EventLog_TrimsAtMax(t *testing.T) {
 		})
 	}
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 1})
 	if !resp.OK {
 		t.Fatalf("session detail: want OK=true, got %+v", resp)
 	}
@@ -354,11 +356,11 @@ func TestHandler_EventLog_TrimsAtMax(t *testing.T) {
 func TestHandler_EventLog_PreservedAcrossTerminalActions(t *testing.T) {
 	h := newTestHandler()
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse"})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop", Event: "Stop"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "stop", Event: "Stop"})
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 1})
 	if !resp.OK {
 		t.Fatalf("session detail: want OK=true, got %+v", resp)
 	}
@@ -381,8 +383,8 @@ func TestHandler_EventLog_CapAt5000(t *testing.T) {
 
 	const cap5k = 5000
 	for i := 0; i < cap5k+1; i++ {
-		h.Handle(Request{
-			Type:     TypeStateUpdate,
+		h.Handle(protocol.Request{
+			Type:     protocol.TypeStateUpdate,
 			WindowID: 1,
 			Action:   "active",
 			Event:    "PreToolUse",
@@ -390,7 +392,7 @@ func TestHandler_EventLog_CapAt5000(t *testing.T) {
 		})
 	}
 
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 1})
 	if !resp.OK {
 		t.Fatalf("session detail: want OK=true, got %+v", resp)
 	}

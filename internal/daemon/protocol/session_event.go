@@ -1,4 +1,4 @@
-package daemon
+package protocol
 
 // SessionEvent is one entry in a window's hook event ring buffer. The daemon
 // appends one of these per Request it processes (both allowed and suppressed),
@@ -118,9 +118,9 @@ type SessionEvent struct {
 	// text or when payload compaction dropped it.
 	QuestionPreview string `json:"question_preview,omitempty"`
 
-	// eventRef exists only while appendEventLocked stamps the daemon sequence.
+	// EventRef exists only while appendEventLocked stamps the daemon sequence.
 	// Stored/exported events always clear it.
-	eventRef *sessionEventReference
+	EventRef *SessionEventReference `json:"-"`
 }
 
 // ProcessLifecycleSourceEvidence identifies a reducer source affected by one
@@ -191,11 +191,18 @@ var actionIconState = map[string]string{
 
 // Priority returns the priority for an action, or 0 for unknown actions.
 func Priority(action string) int {
-	p, ok := actionPriority[action]
-	if !ok {
-		return 0
-	}
+	p, _ := ActionPriority(action)
 	return p
+}
+
+// ActionPriority returns the guard priority for an action and whether the
+// action is one the wire protocol recognizes at all. Callers that must reject
+// unknown actions need the second result: several real actions legitimately
+// carry priority 0, so a bare priority cannot distinguish them from a name the
+// daemon has never heard of.
+func ActionPriority(action string) (int, bool) {
+	p, ok := actionPriority[action]
+	return p, ok
 }
 
 // IconState returns the icon state name for an action.

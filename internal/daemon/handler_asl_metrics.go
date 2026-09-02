@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // aslRunPosition is the furthest position AgentMux has folded in for one run.
@@ -58,37 +59,6 @@ type aslReconcileMetrics struct {
 	// reported verbatim so a mismatch can be diagnosed against ASL's own
 	// identifier rather than guessed at.
 	lastContractSetID string
-}
-
-// ASLReconcileSnapshot is the health-response view of reconciliation state.
-type ASLReconcileSnapshot struct {
-	StateRoot string `json:"state_root"`
-	// LagSeconds is how long ago the last successful sweep completed. It is
-	// computed at read time rather than stored, because a daemon that has
-	// stopped reconciling stops updating stored values too — the useful signal
-	// is precisely the one a stalled writer could not have written.
-	LagSeconds      float64 `json:"lag_seconds"`
-	MaxGapSeconds   float64 `json:"max_gap_seconds"`
-	IntervalSeconds float64 `json:"interval_seconds"`
-	Sweeps          uint64  `json:"sweeps"`
-	SweepErrors     uint64  `json:"sweep_errors"`
-
-	PlansPresent       int `json:"plans_present"`
-	PlansAbsent        int `json:"plans_confirmed_absent"`
-	PlansIndeterminate int `json:"plans_indeterminate"`
-
-	InvalidProjections   uint64 `json:"invalid_projections"`
-	UnsupportedContracts uint64 `json:"unsupported_contracts"`
-	UnreadableStates     uint64 `json:"unreadable_states"`
-	MissingProjections   uint64 `json:"missing_projections"`
-	ProcessUnverified    uint64 `json:"process_unverified"`
-
-	ConfirmedMisses     uint64 `json:"confirmed_misses"`
-	IndeterminateLeases uint64 `json:"indeterminate_leases"`
-	RetiredLeases       uint64 `json:"retired_leases"`
-	StaleObservations   uint64 `json:"stale_observations"`
-
-	ContractSetID string `json:"contract_set_id,omitempty"`
 }
 
 // recordASLScanLocked folds one successful sweep's classification counts into
@@ -136,10 +106,10 @@ func (h *Handler) recordASLScanFailure(_ time.Time, _ error) {
 }
 
 // ASLReconcileMetrics returns the current reconciliation snapshot.
-func (h *Handler) ASLReconcileMetrics() ASLReconcileSnapshot {
+func (h *Handler) ASLReconcileMetrics() protocol.ASLReconcileSnapshot {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	snapshot := ASLReconcileSnapshot{
+	snapshot := protocol.ASLReconcileSnapshot{
 		StateRoot:            h.aslStateRootValue,
 		MaxGapSeconds:        h.aslMetrics.maxSweepGap.Seconds(),
 		IntervalSeconds:      aslReconcileInterval.Seconds(),

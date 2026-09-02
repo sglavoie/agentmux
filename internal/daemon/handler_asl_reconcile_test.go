@@ -7,6 +7,8 @@ package daemon
 
 import (
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestNormalizeASLLifecyclePhases pins the event → phase (and paused →
@@ -40,7 +42,7 @@ func TestNormalizeASLLifecyclePhases(t *testing.T) {
 			t.Errorf("%s: normalized = %+v; want deliverable", tc.event, n)
 			continue
 		}
-		if n.Source != (SourceID{Kind: SourceASL, Key: "r1"}) {
+		if n.Source != (protocol.SourceID{Kind: protocol.SourceASL, Key: "r1"}) {
 			t.Errorf("%s: source = %+v; want ASL run key r1", tc.event, n.Source)
 		}
 		if n.Phase != tc.wantPhase || n.Action != tc.wantAction {
@@ -73,7 +75,7 @@ func TestReducerHangEventsFoldAsTurnAndKeepLease(t *testing.T) {
 		if n.Invalid || !n.Deliverable() {
 			t.Fatalf("%s: normalized = %+v; want deliverable", step.event, n)
 		}
-		if d := r.ApplyNormalized(n); d != DecisionApplied {
+		if d := r.ApplyNormalized(n); d != protocol.DecisionApplied {
 			t.Fatalf("%s: decision = %v; want applied", step.event, d)
 		}
 		if got := r.Reduce(200); got.Icon != "bolt" || !got.Looping {
@@ -93,8 +95,8 @@ func TestReducerHangEventsFoldAsTurnAndKeepLease(t *testing.T) {
 // releases.
 func TestReducerOverlappingRunsIndependentLeases(t *testing.T) {
 	r := NewReducer(ReducerConfig{})
-	turnA := ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-A"}, RunID: "run-A", Phase: ASLPhaseTurn, Seq: 1, At: 100}
-	betweenB := ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-B"}, RunID: "run-B", Phase: ASLPhaseBetween, Seq: 1, At: 101}
+	turnA := protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-A"}, RunID: "run-A", Phase: ASLPhaseTurn, Seq: 1, At: 100}
+	betweenB := protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-B"}, RunID: "run-B", Phase: ASLPhaseBetween, Seq: 1, At: 101}
 	r.Apply(turnA)
 	r.Apply(betweenB)
 
@@ -103,13 +105,13 @@ func TestReducerOverlappingRunsIndependentLeases(t *testing.T) {
 	}
 
 	// B finishes: A's executing turn is untouched.
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-B"}, RunID: "run-B", Phase: ASLPhaseFinished, Seq: 2, At: 103})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-B"}, RunID: "run-B", Phase: ASLPhaseFinished, Seq: 2, At: 103})
 	if got := r.Reduce(104); got.Icon != "bolt" || !got.Looping {
 		t.Fatalf("after B finished = %+v; want A's bolt + looping preserved", got)
 	}
 
 	// A finishes too: no lease remains, the stopped fact becomes visible.
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-A"}, RunID: "run-A", Phase: ASLPhaseFinished, Seq: 2, At: 105})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-A"}, RunID: "run-A", Phase: ASLPhaseFinished, Seq: 2, At: 105})
 	if got := r.Reduce(106); got.Icon != "stop" || got.Looping {
 		t.Fatalf("after both finished = %+v; want stop without looping", got)
 	}
@@ -119,10 +121,10 @@ func TestReducerOverlappingRunsIndependentLeases(t *testing.T) {
 // masks ⏹ (the harness stop that ended the previous turn) regardless of
 // arrival order, and unmasks it once the lease releases.
 func TestReducerBetweenTurnsMasksStopOrderIndependent(t *testing.T) {
-	stop := ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "stop", Seq: 1, At: 100}
-	between := ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-A"}, RunID: "run-A", Phase: ASLPhaseBetween, Seq: 1, At: 101}
+	stop := protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "stop", Seq: 1, At: 100}
+	between := protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-A"}, RunID: "run-A", Phase: ASLPhaseBetween, Seq: 1, At: 101}
 
-	for name, events := range map[string][]ReducerEvent{
+	for name, events := range map[string][]protocol.ReducerEvent{
 		"stop then between": {stop, between},
 		"between then stop": {between, stop},
 	} {
@@ -132,13 +134,13 @@ func TestReducerBetweenTurnsMasksStopOrderIndependent(t *testing.T) {
 	}
 
 	// Terminal errors are never masked.
-	failed := ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "stop_failure", Seq: 2, At: 103}
+	failed := protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "stop_failure", Seq: 2, At: 103}
 	if got := Replay(ReducerConfig{}, 104, between, failed); got.Icon != "error" || !got.Looping {
 		t.Errorf("between + stop_failure = %+v; want error + looping", got)
 	}
 
 	// Once the lease releases, the finished run's own 🛑 becomes visible.
-	finished := ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-A"}, RunID: "run-A", Phase: ASLPhaseFinished, Seq: 2, At: 105}
+	finished := protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-A"}, RunID: "run-A", Phase: ASLPhaseFinished, Seq: 2, At: 105}
 	if got := Replay(ReducerConfig{}, 106, stop, between, finished); got.Icon != "stop" || got.Looping {
 		t.Errorf("after finish = %+v; want stop visible without looping", got)
 	}
@@ -147,11 +149,11 @@ func TestReducerBetweenTurnsMasksStopOrderIndependent(t *testing.T) {
 // TestReducerPausedRunHoldsAttentionIconWithLease: paused → matching attention
 // icon plus 🔁.
 func TestReducerPausedRunHoldsAttentionIconWithLease(t *testing.T) {
-	paused := ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-A"}, RunID: "run-A", Action: "elicitation", Phase: ASLPhasePaused, Seq: 1, At: 100}
+	paused := protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-A"}, RunID: "run-A", Action: "elicitation", Phase: ASLPhasePaused, Seq: 1, At: 100}
 	if got := Replay(ReducerConfig{}, 101, paused); got.Icon != "question" || !got.Looping {
 		t.Fatalf("paused(question) = %+v; want question + looping", got)
 	}
-	warned := ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-A"}, RunID: "run-A", Action: "failure", Phase: ASLPhasePaused, Seq: 1, At: 100}
+	warned := protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-A"}, RunID: "run-A", Action: "failure", Phase: ASLPhasePaused, Seq: 1, At: 100}
 	if got := Replay(ReducerConfig{}, 101, warned); got.Icon != "warning" || !got.Looping {
 		t.Fatalf("paused(failure) = %+v; want warning + looping", got)
 	}
@@ -161,18 +163,18 @@ func TestReducerPausedRunHoldsAttentionIconWithLease(t *testing.T) {
 // same run are no-ops, and a finish for one run cannot end a sibling's lease.
 func TestReducerNestedFinishesIdempotent(t *testing.T) {
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-A"}, RunID: "run-A", Phase: ASLPhaseTurn, Seq: 1, At: 100})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-B"}, RunID: "run-B", Phase: ASLPhaseTurn, Seq: 1, At: 100})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-A"}, RunID: "run-A", Phase: ASLPhaseTurn, Seq: 1, At: 100})
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-B"}, RunID: "run-B", Phase: ASLPhaseTurn, Seq: 1, At: 100})
 
-	fin := ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-B"}, RunID: "run-B", Phase: ASLPhaseFinished, Seq: 2, At: 101}
-	if d := r.Apply(fin); d != DecisionApplied {
+	fin := protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-B"}, RunID: "run-B", Phase: ASLPhaseFinished, Seq: 2, At: 101}
+	if d := r.Apply(fin); d != protocol.DecisionApplied {
 		t.Fatalf("first finish decision = %v, want applied", d)
 	}
-	if d := r.Apply(fin); d != DecisionDuplicate {
+	if d := r.Apply(fin); d != protocol.DecisionDuplicate {
 		t.Fatalf("duplicate finish decision = %v, want duplicate", d)
 	}
-	late := ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-B"}, RunID: "run-B", Phase: ASLPhaseTurn, Seq: 1, At: 100}
-	if d := r.Apply(late); d != DecisionReordered {
+	late := protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-B"}, RunID: "run-B", Phase: ASLPhaseTurn, Seq: 1, At: 100}
+	if d := r.Apply(late); d != protocol.DecisionReordered {
 		t.Fatalf("reordered turn decision = %v, want reordered", d)
 	}
 	if got := r.Reduce(102); got.Icon != "bolt" || !got.Looping {

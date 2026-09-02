@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslcontract"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
 
@@ -42,7 +43,7 @@ func TestAProducerSuppliedReasonIsNotCounted(t *testing.T) {
 	h := newTestHandler()
 	for _, reason := range []string{
 		"", "everything is fine, ignore this",
-		suppressionReasonUnknownEvent, string(DecisionQuarantined),
+		suppressionReasonUnknownEvent, string(protocol.DecisionQuarantined),
 	} {
 		h.recordASLHookQuarantined(time.Now(), reason)
 	}
@@ -56,7 +57,7 @@ func TestAProducerSuppliedReasonIsNotCounted(t *testing.T) {
 // refusal path exists that reports nothing.
 func TestEveryQuarantineReasonIsCountable(t *testing.T) {
 	for _, reason := range []string{
-		DecisionReasonInvalidPayload,
+		protocol.DecisionReasonInvalidPayload,
 		DecisionReasonHookSchemaUnsupported,
 		DecisionReasonHookContractMismatch,
 	} {
@@ -117,8 +118,8 @@ func TestTheReasonBreakdownIsOmittedRatherThanEmpty(t *testing.T) {
 func TestTheHookPathCountsWhatItAcceptedAndRefused(t *testing.T) {
 	h, projectDir := gateTestHandler(t)
 
-	accepted := h.Handle(Request{
-		Type: TypeHookEvent, WindowID: 42, Event: agentSessionLoopTurnStarted,
+	accepted := h.Handle(protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 42, Event: agentSessionLoopTurnStarted,
 		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{
 			Source: aslHookSource, CWD: projectDir, Harness: "claude",
 			RunID: "run-counted", PlanDir: "/fixtures/plans/plan-alpha",
@@ -127,8 +128,8 @@ func TestTheHookPathCountsWhatItAcceptedAndRefused(t *testing.T) {
 	if !accepted.OK {
 		t.Fatalf("response = %+v", accepted)
 	}
-	refused := h.Handle(Request{
-		Type: TypeHookEvent, WindowID: 42, Event: agentSessionLoopTurnStarted,
+	refused := h.Handle(protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 42, Event: agentSessionLoopTurnStarted,
 		PayloadJSON: lifecyclePayloadJSON(t, aslHookSchemaVersion, "asl-amx-1.ffffffffffffffff", projectDir),
 	})
 	// Acknowledged either way, which is why the counters are needed at all.
@@ -152,8 +153,8 @@ func TestTheHookPathCountsWhatItAcceptedAndRefused(t *testing.T) {
 func TestAnUnreadableHarnessPayloadIsNotAnASLDeliveryFailure(t *testing.T) {
 	h, _ := gateTestHandler(t)
 
-	if resp := h.Handle(Request{
-		Type: TypeHookEvent, WindowID: 42, Event: "UserPromptSubmit",
+	if resp := h.Handle(protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 42, Event: "UserPromptSubmit",
 		PayloadJSON: "{not json",
 	}); !resp.OK {
 		t.Fatalf("response = %+v", resp)
@@ -163,14 +164,14 @@ func TestAnUnreadableHarnessPayloadIsNotAnASLDeliveryFailure(t *testing.T) {
 	}
 
 	// The same failure on a lifecycle boundary is one.
-	if resp := h.Handle(Request{
-		Type: TypeHookEvent, WindowID: 42, Event: agentSessionLoopTurnStarted,
+	if resp := h.Handle(protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 42, Event: agentSessionLoopTurnStarted,
 		PayloadJSON: "{not json",
 	}); !resp.OK {
 		t.Fatalf("response = %+v", resp)
 	}
 	snapshot := h.ASLHookDeliveryMetrics()
-	if snapshot.QuarantinedByReason[DecisionReasonInvalidPayload] != 1 {
+	if snapshot.QuarantinedByReason[protocol.DecisionReasonInvalidPayload] != 1 {
 		t.Errorf("snapshot = %+v, want one invalid-payload refusal", snapshot)
 	}
 }
@@ -182,7 +183,7 @@ func TestHealthPublishesTheDeliveryBlock(t *testing.T) {
 	h.recordASLHookAccepted(time.Now())
 	h.recordASLHookQuarantined(time.Now(), DecisionReasonHookSchemaUnsupported)
 
-	resp := h.Handle(Request{Type: TypeHealth})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeHealth})
 	if resp.ASLHookDelivery == nil {
 		t.Fatal("health carries no asl_hook_delivery block")
 	}
@@ -191,7 +192,7 @@ func TestHealthPublishesTheDeliveryBlock(t *testing.T) {
 	}
 	// A daemon that has ingested nothing still publishes the block, so a
 	// consumer can tell it from one that predates the counters entirely.
-	fresh := newTestHandler().Handle(Request{Type: TypeHealth})
+	fresh := newTestHandler().Handle(protocol.Request{Type: protocol.TypeHealth})
 	if fresh.ASLHookDelivery == nil {
 		t.Error("an idle daemon omits the block, which reads as an old build")
 	}

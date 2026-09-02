@@ -1,6 +1,9 @@
 package daemon
 
-import "github.com/sglavoie/agentmux/internal/conversation"
+import (
+	"github.com/sglavoie/agentmux/internal/conversation"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+)
 
 // CurrentConversation returns the still-live parent harness identity that owns
 // the managed tab. Only SourceHarness facts can establish it: subagent facts
@@ -35,7 +38,7 @@ func (r *Reducer) currentConversation(now int64, interactiveOnly bool) (conversa
 	var current *sourceFact
 	var identity conversation.Identity
 	for _, fact := range r.facts {
-		if fact.source.Kind != SourceHarness || !conversationFactLive(fact, now) {
+		if fact.source.Kind != protocol.SourceHarness || !conversationFactLive(fact, now) {
 			continue
 		}
 		if interactiveOnly && fact.pipeMode {

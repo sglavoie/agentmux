@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -98,7 +99,7 @@ func TestProbeCodexScreenPrompts_RoutedPromptSurvivesUnrelatedTabPublication(t *
 	if eff, visible := windowEffective(t, h, 42); eff.Icon != "question" || visible != "question" {
 		t.Fatalf("Katana target effective = %+v visible %q, want question/question", eff, visible)
 	}
-	ev, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, screenPromptProbeEvent)
+	ev, ok := lastEventNamed(h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42}).Events, screenPromptProbeEvent)
 	if !ok || ev.PromptKind != string(CodexPromptRequestUserInput) || ev.OriginWindowID != 43 {
 		t.Fatalf("Katana routed prompt event = %+v ok=%v, want request_user_input from origin 43", ev, ok)
 	}
@@ -151,7 +152,7 @@ func TestProbeCodexScreenPrompts_RoutedPromptSurvivesSiblingPaneChurn(t *testing
 	if eff, visible := windowEffective(t, h, 42); eff.Icon != "question" || visible != "question" {
 		t.Fatalf("routed target effective = %+v visible %q, want question/question", eff, visible)
 	}
-	ev, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, screenPromptProbeEvent)
+	ev, ok := lastEventNamed(h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42}).Events, screenPromptProbeEvent)
 	if !ok || ev.PromptKind != string(CodexPromptRequestUserInput) || ev.OriginWindowID != 43 {
 		t.Fatalf("routed prompt event = %+v ok=%v, want request_user_input from origin 43", ev, ok)
 	}
@@ -252,7 +253,7 @@ func TestProbeCodexScreenPrompts_RoutedClearReadsProducerAndClearsTarget(t *test
 	if eff, visible := windowEffective(t, h, 42); eff.Icon != "" || visible != "" {
 		t.Fatalf("target effective = %+v visible %q, want cleared", eff, visible)
 	}
-	if ev, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, screenClearProbeEvent); !ok || ev.Action != "user_clear" {
+	if ev, ok := lastEventNamed(h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42}).Events, screenClearProbeEvent); !ok || ev.Action != "user_clear" {
 		t.Fatalf("target clear event = %+v ok=%v, want routed user_clear", ev, ok)
 	}
 	assertRoutedProbeOwnership(t, h, 42, harness.Claude)
@@ -345,14 +346,14 @@ func TestProbeCopilotTranscriptStop_RoutedSourceReceiptInvalidatesBinding(t *tes
 		t.Fatal("cached snapshot is not ready")
 	}
 
-	normalized := NormalizedEvent{
-		Source:    SourceID{Kind: SourceLegacy, Key: "window:43"},
+	normalized := protocol.NormalizedEvent{
+		Source:    protocol.SourceID{Kind: protocol.SourceLegacy, Key: "window:43"},
 		Action:    "active",
 		At:        base.Unix() + 1,
 		SessionID: "source-local",
 		Event:     "UserPromptSubmit",
 	}
-	if resp := h.handleStateUpdate(Request{Type: TypeStateUpdate, WindowID: 43, Action: "active", Event: "UserPromptSubmit", normalized: &normalized}); !resp.OK {
+	if resp := h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 43, Action: "active", Event: "UserPromptSubmit", Normalized: &normalized}); !resp.OK {
 		t.Fatalf("source receipt update rejected: %+v", resp)
 	}
 	readReached := false
@@ -403,8 +404,8 @@ func seedRoutedHarnessProbe(
 		prompt = false
 		endsSession = true
 	}
-	normalized := NormalizedEvent{
-		Source:         SourceID{Kind: SourceHarness, Key: producerHarness + ":" + sessionID},
+	normalized := protocol.NormalizedEvent{
+		Source:         protocol.SourceID{Kind: protocol.SourceHarness, Key: producerHarness + ":" + sessionID},
 		Action:         action,
 		At:             at,
 		OriginWindowID: sourceWindowID,
@@ -413,17 +414,17 @@ func seedRoutedHarnessProbe(
 		SessionID:      sessionID,
 		Event:          event,
 	}
-	resp := h.handleStateUpdate(Request{
-		Type:             TypeStateUpdate,
+	resp := h.handleStateUpdate(protocol.Request{
+		Type:             protocol.TypeStateUpdate,
 		WindowID:         targetWindowID,
 		Action:           action,
 		Event:            event,
 		SessionTitle:     "W:owner",
 		Account:          "owner",
 		Harness:          producerHarness,
-		targetHarness:    targetHarness,
-		targetHarnessSet: true,
-		normalized:       &normalized,
+		TargetHarness:    targetHarness,
+		TargetHarnessSet: true,
+		Normalized:       &normalized,
 	})
 	if !resp.OK {
 		t.Fatalf("seed routed %s session %q action %q rejected: %+v", producerHarness, sessionID, action, resp)

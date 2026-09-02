@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/aslcontract"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
 
@@ -99,7 +100,7 @@ func aslHookContractRefusal(event string, payload hookevent.HookPayload) string 
 // to believe the identity fields it carried.
 func isQuarantineReason(reason string) bool {
 	switch reason {
-	case DecisionReasonInvalidPayload,
+	case protocol.DecisionReasonInvalidPayload,
 		DecisionReasonHookSchemaUnsupported,
 		DecisionReasonHookContractMismatch:
 		return true

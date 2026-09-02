@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslcontract"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -35,7 +36,7 @@ type replayStep struct {
 type replayTrace struct {
 	name     string
 	harness  string
-	process  HarnessProcessIdentity
+	process  protocol.HarnessProcessIdentity
 	pipeMode bool
 	steps    []replayStep
 }
@@ -83,7 +84,7 @@ func replayTraces(projectDir string) []replayTrace {
 			// complete schema-v4 process fingerprint, not only icon/loop state.
 			name:     "claude-pipe-process-owned-active",
 			harness:  "claude",
-			process:  HarnessProcessIdentity{Harness: "claude", PID: 4242, StartToken: "Thu Jul 16 10:20:30 2026"},
+			process:  protocol.HarnessProcessIdentity{Harness: "claude", PID: 4242, StartToken: "Thu Jul 16 10:20:30 2026"},
 			pipeMode: true,
 			steps: []replayStep{
 				{"SessionStart", pl(1, `"session_id":"sess-pipe-0001","source":"startup"`), "", false},
@@ -347,8 +348,8 @@ func newReplayHandler(t *testing.T, harnessName, projectDir string) (*Handler, [
 
 func replayHookStep(t *testing.T, h *Handler, trace replayTrace, step replayStep) {
 	t.Helper()
-	req := Request{Type: TypeHookEvent, WindowID: 42, Event: step.event, PayloadJSON: step.payload}
-	if trace.process != (HarnessProcessIdentity{}) {
+	req := protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: step.event, PayloadJSON: step.payload}
+	if trace.process != (protocol.HarnessProcessIdentity{}) {
 		process := trace.process
 		req.Harness = trace.harness
 		req.ProducerHarness = trace.harness
@@ -362,7 +363,7 @@ func replayHookStep(t *testing.T, h *Handler, trace replayTrace, step replayStep
 }
 
 // replayVisibleState reads the daemon-owned visible outcome for window 42.
-func replayVisibleState(t *testing.T, h *Handler) (icon string, looping bool, facts []SourceFactSnapshot) {
+func replayVisibleState(t *testing.T, h *Handler) (icon string, looping bool, facts []protocol.SourceFactSnapshot) {
 	t.Helper()
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()

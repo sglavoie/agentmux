@@ -11,6 +11,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/aslcontract"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // What the report renders: the findings each dimension raises, their
@@ -28,7 +29,7 @@ func TestEachDimensionRaisesItsOwnStableFinding(t *testing.T) {
 	in.Status.ContractSetID = "asl-amx-1.2222222222222222"
 	in.Status.SnapshotStale = true
 	in.Reconcile.InvalidProjections = 1
-	in.Delivery = &daemon.ASLHookDeliverySnapshot{Accepted: 1, Quarantined: 1}
+	in.Delivery = &protocol.ASLHookDeliverySnapshot{Accepted: 1, Quarantined: 1}
 
 	findings := renderIntegration(t, evaluateASLIntegration(in))
 	for _, want := range []string{
@@ -56,7 +57,7 @@ func TestEveryRaisedFindingCarriesARemediation(t *testing.T) {
 	in.Status.Available = false
 	in.Status.Reason = "connection refused"
 	in.Reconcile.SweepErrors = 3
-	in.Delivery = &daemon.ASLHookDeliverySnapshot{Quarantined: 2}
+	in.Delivery = &protocol.ASLHookDeliverySnapshot{Quarantined: 2}
 
 	var out bytes.Buffer
 	var messages []string
@@ -113,7 +114,7 @@ func TestStrictDoctorFailsForAnUnavailableRequiredIntegration(t *testing.T) {
 			Available: false,
 			Reason:    `asl bridge: exec: "asl": executable file not found in $PATH`,
 		},
-	}, daemon.EventsExport{})
+	}, protocol.EventsExport{})
 	doctorJSON, doctorStrict = true, true
 
 	var out bytes.Buffer
@@ -164,7 +165,7 @@ func TestTheReadOnlyFindingIsPreserved(t *testing.T) {
 			ExecutableSource: aslbridge.SourceConfigured,
 			ContractSetID:    aslcontract.ContractSetID,
 		},
-	}, daemon.EventsExport{})
+	}, protocol.EventsExport{})
 	doctorJSON = true
 
 	var out bytes.Buffer

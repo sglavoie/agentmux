@@ -1,4 +1,10 @@
-package daemon
+// Package protocol is the daemon's wire contract: the IPC request/response
+// model, the command names, the durable and exported state envelopes, and the
+// serialization-facing vocabularies both sides key on. It holds shapes and the
+// pure functions that project between them — never orchestration, I/O, or
+// clock reads — so a client, an offline debugger, and the daemon itself can all
+// agree on a message without any of them importing the daemon.
+package protocol
 
 import (
 	"github.com/sglavoie/agentmux/internal/aslbridge"
@@ -116,52 +122,58 @@ type DeliveryAcknowledgement struct {
 
 // Request is a JSON message sent by a client to the daemon over the Unix socket.
 // One request per connection; the connection is closed after the response.
+//
+// The leading block of fields is daemon-owned context rather than client input.
+// Each carries `json:"-"`, which is what keeps it off the wire in both
+// directions: the daemon may stamp it, but no client can send it and no export
+// can leak it. They are exported only because the daemon package that stamps
+// them now lives outside this one.
 type Request struct {
-	// currentIconState is daemon-internal snapshot context. It is deliberately
+	// CurrentIconState is daemon-internal snapshot context. It is deliberately
 	// not serialized: hook clients must never make the title an input to the
 	// state machine, but event exports can still record the live icon observed
 	// by daemon-side probes and snapshot enrichment.
-	currentIconState string
-	// normalized is the daemon-internal, source-scoped view of the underlying
+	CurrentIconState string `json:"-"`
+	// Normalized is the daemon-internal, source-scoped view of the underlying
 	// hook event, stamped by paths that hold the raw payload (hook routing,
 	// loop lifecycle fan-out, probe promotion). The shadow reducer consumes it;
 	// requests without it (legacy clients, sweeps) fall back to a synthesized
 	// legacy-source event. Never serialized: clients cannot inject identity.
-	normalized *NormalizedEvent
-	// routeDecision records how the daemon routed a hook event to its target
+	Normalized *NormalizedEvent `json:"-"`
+	// RouteDecision records how the daemon routed a hook event to its target
 	// window ("source", "owner", "source_fallback") for the event log. Daemon-
 	// internal: routing is a daemon decision, never client input.
-	routeDecision string
-	// targetHarness is daemon-internal managed-window metadata. Harness is the
-	// event producer; targetHarness identifies the pane whose durable title
+	RouteDecision string `json:"-"`
+	// TargetHarness is daemon-internal managed-window metadata. Harness is the
+	// event producer; TargetHarness identifies the pane whose durable title
 	// metadata is updated after routing. Direct legacy state_update requests
-	// leave targetHarnessSet false and use Harness for both roles.
-	targetHarness    string
-	targetHarnessSet bool
-	// parseOutcome, normalizationOutcome, and routeEvidence are daemon-owned
+	// leave TargetHarnessSet false and use Harness for both roles.
+	TargetHarness    string `json:"-"`
+	TargetHarnessSet bool   `json:"-"`
+	// ParseOutcome, NormalizationOutcome, and RouteEvidence are daemon-owned
 	// causal context. Hook clients cannot inject them; routing copies them onto
 	// the internal state-update request after decoding the raw delivery.
-	parseOutcome         string
-	normalizationOutcome string
-	routeEvidence        *RoutingEvidence
-	// eventRef links the legacy event-log append to the reducer finalization for
+	ParseOutcome         string           `json:"-"`
+	NormalizationOutcome string           `json:"-"`
+	RouteEvidence        *RoutingEvidence `json:"-"`
+	// EventRef links the legacy event-log append to the reducer finalization for
 	// this request without relying on "last event" ordering. It is process-local
 	// and never serialized.
-	eventRef *sessionEventReference
-	// parentTraceID links daemon-synthesized async work to its originating trace.
+	EventRef *SessionEventReference `json:"-"`
+	// ParentTraceID links daemon-synthesized async work to its originating trace.
 	// It is daemon-internal so clients cannot forge causal ancestry.
-	parentTraceID string
-	// saturationReason attributes bounded-capacity degradation to this request.
+	ParentTraceID string `json:"-"`
+	// SaturationReason attributes bounded-capacity degradation to this request.
 	// It is daemon-owned and appears only in sanitized decision evidence.
-	saturationReason string
-	// stopHoldOutcome, stopHoldWaitedMs and stopConfirmedBy stamp the release
+	SaturationReason string `json:"-"`
+	// StopHoldOutcome, StopHoldWaitedMs and StopConfirmedBy stamp the release
 	// evidence of a terminal stop hold onto the stop the hold finally commits.
 	// Only commitStopHold sets them, so a client can never claim its own stop
 	// was confirmed idle.
-	stopHoldOutcome  StopHoldOutcome
-	stopHoldWaitedMs int
-	stopConfirmedBy  StopConfirmedBy
-	Type             MessageType `json:"type"`
+	StopHoldOutcome  StopHoldOutcome `json:"-"`
+	StopHoldWaitedMs int             `json:"-"`
+	StopConfirmedBy  StopConfirmedBy `json:"-"`
+	Type             MessageType     `json:"type"`
 	// RequestID is a client-generated UUID identifying one logical request.
 	// It is reused verbatim across retries so the daemon can deduplicate an
 	// ambiguous-timeout resend and apply the underlying event exactly once.

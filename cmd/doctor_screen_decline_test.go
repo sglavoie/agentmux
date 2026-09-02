@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -27,13 +28,13 @@ import (
 // so the fixture is a window that is genuinely still stuck rather than one that
 // merely retains the evidence — and it trips no renderer-drift finding on the
 // way, which is what keeps these tests asserting exactly the finding they set up.
-func stuckScreenDeclineSnapshot(streak int) daemon.EventsExport {
-	return daemon.EventsExport{
-		WindowMetadata: map[int]daemon.WindowDebugMetadata{
+func stuckScreenDeclineSnapshot(streak int) protocol.EventsExport {
+	return protocol.EventsExport{
+		WindowMetadata: map[int]protocol.WindowDebugMetadata{
 			7: {
-				Renderer: daemon.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true},
-				Shadow:   daemon.WindowDebugShadow{EffectiveIcon: "bolt", EffectiveGen: 4},
-				Watchdog: daemon.WindowDebugWatchdog{ScreenDeclines: []daemon.ScreenDeclineSnapshot{{
+				Renderer: protocol.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true},
+				Shadow:   protocol.WindowDebugShadow{EffectiveIcon: "bolt", EffectiveGen: 4},
+				Watchdog: protocol.WindowDebugWatchdog{ScreenDeclines: []protocol.ScreenDeclineSnapshot{{
 					Source:            "codex_screen_prompt",
 					Streak:            streak,
 					StableFingerprint: true,
@@ -73,7 +74,7 @@ func screenDeclineWindowsShowing(icon string) []kitty.OSWindow {
 // the decline finding needs. It exists because every test here has to agree
 // about what "still live" looks like: a disagreement would silently turn a
 // finding assertion into a retraction assertion.
-func setUpStuckScreenDeclineFixture(t *testing.T, snapshot daemon.EventsExport, windows []kitty.OSWindow) {
+func setUpStuckScreenDeclineFixture(t *testing.T, snapshot protocol.EventsExport, windows []kitty.OSWindow) {
 	t.Helper()
 	build := doctorTestBuild
 	health := daemon.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build}
@@ -116,7 +117,7 @@ func TestDoctorStrictFailsOnPersistentScreenDecline(t *testing.T) {
 func TestDoctorStaysCleanOnBenignScreenDeclines(t *testing.T) {
 	cases := []struct {
 		name     string
-		snapshot daemon.EventsExport
+		snapshot protocol.EventsExport
 		// windows overrides the live Kitty view. Nil means the ordinary
 		// still-live ⚡ pane; a case whose window is gone says so explicitly
 		// rather than leaving the live join to contradict its own snapshot.
@@ -127,7 +128,7 @@ func TestDoctorStaysCleanOnBenignScreenDeclines(t *testing.T) {
 			// counter, so the fingerprint moves and the streak restarts. This
 			// is the ordinary state of every busy window.
 			name: "repainting pane never reaches a stable fingerprint",
-			snapshot: func() daemon.EventsExport {
+			snapshot: func() protocol.EventsExport {
 				snapshot := stuckScreenDeclineSnapshot(screenDeclinePersistentStreak * 10)
 				meta := snapshot.WindowMetadata[7]
 				meta.Watchdog.ScreenDeclines[0].StableFingerprint = false
@@ -145,7 +146,7 @@ func TestDoctorStaysCleanOnBenignScreenDeclines(t *testing.T) {
 			// A tombstoned window is never classified again, so whatever its
 			// last streak was it can no longer be a live problem.
 			name: "closed window",
-			snapshot: func() daemon.EventsExport {
+			snapshot: func() protocol.EventsExport {
 				snapshot := stuckScreenDeclineSnapshot(screenDeclinePersistentStreak)
 				meta := snapshot.WindowMetadata[7]
 				meta.Watchdog.ClosedAt = 1_700_000_000
@@ -157,7 +158,7 @@ func TestDoctorStaysCleanOnBenignScreenDeclines(t *testing.T) {
 		{
 			// The clean deployment: no windows, no declines, nothing to say.
 			name:     "clean deployment",
-			snapshot: daemon.EventsExport{},
+			snapshot: protocol.EventsExport{},
 			windows:  []kitty.OSWindow{},
 		},
 	}
@@ -269,7 +270,7 @@ func TestDoctorJSONReportsPersistentScreenDecline(t *testing.T) {
 func TestDoctorIgnoresRecoveredPersistentScreenDecline(t *testing.T) {
 	// recovered is the stuck snapshot with the retained decline untouched and
 	// the window's icon moved off ⚡ — a daemon that has not yet republished.
-	recovered := func(icon string) daemon.EventsExport {
+	recovered := func(icon string) protocol.EventsExport {
 		snapshot := stuckScreenDeclineSnapshot(screenDeclinePersistentStreak + 5)
 		meta := snapshot.WindowMetadata[7]
 		meta.Renderer.DesiredIcon = icon
@@ -280,7 +281,7 @@ func TestDoctorIgnoresRecoveredPersistentScreenDecline(t *testing.T) {
 
 	cases := []struct {
 		name     string
-		snapshot daemon.EventsExport
+		snapshot protocol.EventsExport
 		windows  []kitty.OSWindow
 		// otherFailures allows a case whose whole point is that the window is
 		// gone: that shape is legitimately renderer drift, and asserting an

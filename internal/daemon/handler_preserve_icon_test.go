@@ -8,13 +8,14 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func TestHandler_PreserveCurrentIcon(t *testing.T) {
 	h := newTestHandler()
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", PreservesIcon: true})
-	if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
-		t.Errorf("PreservesIcon: want icon_state=%q, got %+v", IconStatePreserve, resp)
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", PreservesIcon: true})
+	if !resp.OK || !resp.Allowed || resp.IconState != protocol.IconStatePreserve {
+		t.Errorf("PreservesIcon: want icon_state=%q, got %+v", protocol.IconStatePreserve, resp)
 	}
 }
 
@@ -26,9 +27,9 @@ func TestHandler_PreserveCurrentRestoresPreviousState(t *testing.T) {
 	}{
 		{"active remains clearable", "active", ""},
 		{"subagent remains clearable", "subagent", ""},
-		{"permission remains sticky", "permission", IconStatePreserve},
-		{"failure remains sticky", "failure", IconStatePreserve},
-		{"elicitation remains sticky", "elicitation", IconStatePreserve},
+		{"permission remains sticky", "permission", protocol.IconStatePreserve},
+		{"failure remains sticky", "failure", protocol.IconStatePreserve},
+		{"elicitation remains sticky", "elicitation", protocol.IconStatePreserve},
 	}
 
 	for _, tc := range cases {
@@ -40,18 +41,18 @@ func TestHandler_PreserveCurrentRestoresPreviousState(t *testing.T) {
 			}
 			h := NewHandler(guard, notifier)
 
-			resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: tc.prevAction})
+			resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: tc.prevAction})
 			if !resp.OK || !resp.Allowed {
 				t.Fatalf("seed %s: want allowed=true, got %+v", tc.prevAction, resp)
 			}
 			time.Sleep(60 * time.Millisecond)
 
-			resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "TaskCompleted", PreservesIcon: true})
-			if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
-				t.Fatalf("preserve-current after %s: want icon_state=%q, got %+v", tc.prevAction, IconStatePreserve, resp)
+			resp = h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "TaskCompleted", PreservesIcon: true})
+			if !resp.OK || !resp.Allowed || resp.IconState != protocol.IconStatePreserve {
+				t.Fatalf("preserve-current after %s: want icon_state=%q, got %+v", tc.prevAction, protocol.IconStatePreserve, resp)
 			}
 
-			resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "idle"})
+			resp = h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "idle"})
 			if !resp.OK || !resp.Allowed || resp.IconState != tc.wantIdle {
 				t.Fatalf("idle after preserve-current and %s: want icon_state=%q, got %+v", tc.prevAction, tc.wantIdle, resp)
 			}
@@ -68,7 +69,7 @@ func TestHandler_ChildCompleteEventsDoNotNotifyStop(t *testing.T) {
 		{
 			name: "TeammateIdle preserves parent activity",
 			seed: func(h *Handler) {
-				h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
+				h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
 			},
 			event: "TeammateIdle",
 		},
@@ -92,16 +93,16 @@ func TestHandler_ChildCompleteEventsDoNotNotifyStop(t *testing.T) {
 
 				tc.seed(h)
 
-				resp := h.Handle(Request{
-					Type:          TypeStateUpdate,
+				resp := h.Handle(protocol.Request{
+					Type:          protocol.TypeStateUpdate,
 					WindowID:      1,
 					Action:        "active",
 					Event:         tc.event,
 					PreservesIcon: true,
 					SessionTitle:  "W:api",
 				})
-				if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
-					t.Fatalf("%s: want icon_state=%q, got %+v", tc.name, IconStatePreserve, resp)
+				if !resp.OK || !resp.Allowed || resp.IconState != protocol.IconStatePreserve {
+					t.Fatalf("%s: want icon_state=%q, got %+v", tc.name, protocol.IconStatePreserve, resp)
 				}
 
 				synctest.Wait()

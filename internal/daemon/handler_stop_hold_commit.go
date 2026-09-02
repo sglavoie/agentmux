@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
@@ -17,7 +18,7 @@ import (
 // Reset-flow cleanup (req.ResetFlow) is deliberately excluded: the held stop is
 // kept so applyResetFlowLocked can fold it into the same user_clear when the
 // hold commits.
-func supersedesStopHold(req Request) bool {
+func supersedesStopHold(req protocol.Request) bool {
 	if req.ResetFlow {
 		return false
 	}
@@ -46,7 +47,7 @@ func (h *Handler) commitStopHold(windowID int, seq uint64) {
 	if pending.class == stopHoldClassTerminal && !pending.confirmed {
 		// The quiet period kept elapsing without the harness ever confirming, so
 		// the hard deadline is what releases this stop.
-		pending.confirmedBy = StopConfirmedByDeadline
+		pending.confirmedBy = protocol.StopConfirmedByDeadline
 	}
 	h.pendingStopHolds[windowID] = pending
 	h.stateMu.Unlock()
@@ -72,11 +73,11 @@ func (h *Handler) commitStopHold(windowID int, seq uint64) {
 	req := pending.req
 	if pending.class == stopHoldClassTerminal {
 		req = h.refreshHeldStopRequestLocked(req)
-		req.stopHoldWaitedMs = int(time.Since(pending.armedAt).Milliseconds())
-		req.stopConfirmedBy = pending.confirmedBy
-		req.stopHoldOutcome = StopHoldOutcomeDeadline
+		req.StopHoldWaitedMs = int(time.Since(pending.armedAt).Milliseconds())
+		req.StopConfirmedBy = pending.confirmedBy
+		req.StopHoldOutcome = protocol.StopHoldOutcomeDeadline
 		if pending.confirmed {
-			req.stopHoldOutcome = StopHoldOutcomeConfirmed
+			req.StopHoldOutcome = protocol.StopHoldOutcomeConfirmed
 		}
 	}
 	h.stateMu.Unlock()
@@ -98,7 +99,7 @@ func (h *Handler) commitStopHold(windowID int, seq uint64) {
 // plain values, then dispatch off-lock. Mutedness deliberately has no captured
 // copy — the notifier consults Handler.IsMuted at dispatch time, so it is
 // already read fresh. Callers hold stateMu.
-func (h *Handler) refreshHeldStopRequestLocked(req Request) Request {
+func (h *Handler) refreshHeldStopRequestLocked(req protocol.Request) protocol.Request {
 	st, ok := h.windowStateLocked(req.WindowID)
 	if !ok {
 		return req
@@ -109,7 +110,7 @@ func (h *Handler) refreshHeldStopRequestLocked(req Request) Request {
 	if st.LastAccount != "" {
 		req.Account = st.LastAccount
 	}
-	req.currentIconState = desiredIconForState(st)
+	req.CurrentIconState = desiredIconForState(st)
 	return req
 }
 
@@ -118,17 +119,17 @@ func (h *Handler) refreshHeldStopRequestLocked(req Request) Request {
 // 500ms debounce nothing can observe, while a terminal hold is a visible state
 // the window is deliberately not showing yet, and the one whose failure to
 // converge (stop_hold_stuck) is otherwise invisible. Callers hold stateMu.
-func (h *Handler) pendingTerminalStopSnapshotLocked(windowID int) *PendingTerminalStop {
+func (h *Handler) pendingTerminalStopSnapshotLocked(windowID int) *protocol.PendingTerminalStop {
 	pending, ok := h.pendingStopHolds[windowID]
 	if !ok || pending.class != stopHoldClassTerminal {
 		return nil
 	}
-	return &PendingTerminalStop{
+	return &protocol.PendingTerminalStop{
 		ArmedAt:    pending.armedAt.Unix(),
 		QuietUntil: pending.quietUntil.Unix(),
 		Deadline:   pending.deadline.Unix(),
 		Confirmed:  pending.confirmed,
-		Class:      StopHoldClassTerminal,
+		Class:      protocol.StopHoldClassTerminal,
 	}
 }
 
@@ -136,13 +137,13 @@ func (h *Handler) pendingTerminalStopSnapshotLocked(windowID int) *PendingTermin
 // Only outcomes that end the hold without committing its stop get their own
 // row; the release outcomes (confirmed, deadline) are stamped on the stop the
 // hold commits.
-func stopHoldDecisionReason(outcome StopHoldOutcome) (string, bool) {
+func stopHoldDecisionReason(outcome protocol.StopHoldOutcome) (string, bool) {
 	switch outcome {
-	case StopHoldOutcomeHeld:
+	case protocol.StopHoldOutcomeHeld:
 		return suppressionReasonTerminalStopHeld, true
-	case StopHoldOutcomeSuperseded:
+	case protocol.StopHoldOutcomeSuperseded:
 		return suppressionReasonTerminalStopSuperseded, true
-	case StopHoldOutcomeBypassed:
+	case protocol.StopHoldOutcomeBypassed:
 		return suppressionReasonTerminalStopBypassed, true
 	default:
 		return "", false
@@ -153,7 +154,7 @@ func stopHoldDecisionReason(outcome StopHoldOutcome) (string, bool) {
 // stop the handler is withholding from the reducer. Nothing is applied and no
 // icon changes, so the row follows the suppressed-event append shape: the
 // window's own effective state is both the before and after evidence.
-func (h *Handler) appendStopHoldEvent(req Request, outcome StopHoldOutcome, waited time.Duration) {
+func (h *Handler) appendStopHoldEvent(req protocol.Request, outcome protocol.StopHoldOutcome, waited time.Duration) {
 	reason, ok := stopHoldDecisionReason(outcome)
 	if !ok || req.WindowID <= 0 {
 		return
@@ -163,11 +164,11 @@ func (h *Handler) appendStopHoldEvent(req Request, outcome StopHoldOutcome, wait
 	st := h.ensureWindowStateLocked(req.WindowID)
 	effective := effectiveStateEvidence(st.Effective)
 	event := suppressedSessionEvent(req, req.Action, reason, desiredIconForState(st))
-	event.Event = EventTerminalStopHold
+	event.Event = protocol.EventTerminalStopHold
 	event.StopHoldOutcome = outcome
 	event.StopHoldWaitedMs = int(waited.Milliseconds())
 	event.DecisionReason = reason
-	event.ReducerDecision = DecisionSuppressed
+	event.ReducerDecision = protocol.DecisionSuppressed
 	event.ReducerReason = reason
 	event.ReducerInputAction = req.Action
 	event.RouteEvidence = ensureDirectRouteEvidence(req)
@@ -182,7 +183,7 @@ func (h *Handler) appendStopHoldEvent(req Request, outcome StopHoldOutcome, wait
 // whether it should be held at all. The terminal class claims every stop the
 // bypass matrix left armable (terminalArmable); a bypassed stop falls back to
 // the reset class exactly as before the confirmed-idle gate existed.
-func stopHoldClassFor(req Request, payload hookevent.HookPayload, terminalArmable bool) (stopHoldClass, bool) {
+func stopHoldClassFor(req protocol.Request, payload hookevent.HookPayload, terminalArmable bool) (stopHoldClass, bool) {
 	if req.Action != "stop" || req.ContextLimit || req.ResetFlow {
 		return stopHoldClassReset, false
 	}
@@ -197,7 +198,7 @@ func stopHoldClassFor(req Request, payload hookevent.HookPayload, terminalArmabl
 
 // resetSensitiveStop reports whether a stop is one a late reset marker may
 // still fold into the same user_clear transition.
-func resetSensitiveStop(req Request, payload hookevent.HookPayload) bool {
+func resetSensitiveStop(req protocol.Request, payload hookevent.HookPayload) bool {
 	switch req.Event {
 	case "Stop", "SessionEnd", "agentStop", "sessionEnd":
 		return true
@@ -214,7 +215,7 @@ func resetSensitiveStop(req Request, payload hookevent.HookPayload) bool {
 // had before the gate existed. Repeated probe read failures are deliberately
 // absent: they are knowable only after arming, and a pane that stays unreadable
 // is exactly where the native hook must still be trusted at the deadline.
-func (h *Handler) terminalStopHoldArmableLocked(req Request) bool {
+func (h *Handler) terminalStopHoldArmableLocked(req protocol.Request) bool {
 	if !h.stopConfirmEnabled || h.stopConfirmDelay <= 0 {
 		return false
 	}
@@ -252,9 +253,9 @@ func harnessHasStopProbe(name string) bool {
 // stopHoldTargetHarness resolves the pane the stop is being held for. Direct
 // legacy state_update requests predate the producer/target split and use
 // Harness for both roles.
-func stopHoldTargetHarness(req Request) string {
-	if req.targetHarnessSet {
-		return req.targetHarness
+func stopHoldTargetHarness(req protocol.Request) string {
+	if req.TargetHarnessSet {
+		return req.TargetHarness
 	}
 	return req.Harness
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // testLivenessGrace bounds how long a lifecycle test waits for a signal the
@@ -109,7 +110,7 @@ func TestRun_RemovesSocketOnShutdown(t *testing.T) {
 
 	// Send shutdown request via real socket round-trip.
 	c := NewClientWithSocket(socketPath)
-	resp, err := c.Send(Request{Type: TypeShutdown})
+	resp, err := c.Send(protocol.Request{Type: protocol.TypeShutdown})
 	if err != nil {
 		t.Fatalf("shutdown Send: %v", err)
 	}
@@ -156,7 +157,7 @@ func TestRun_ShutdownAcceptedDuringStartupReturnsCleanly(t *testing.T) {
 		t.Fatal("Run did not reach startup confirmation")
 	}
 
-	resp, err := NewClientWithSocket(SocketPath()).Send(Request{Type: TypeShutdown})
+	resp, err := NewClientWithSocket(SocketPath()).Send(protocol.Request{Type: protocol.TypeShutdown})
 	if err != nil {
 		t.Fatalf("shutdown Send during startup: %v", err)
 	}
@@ -249,7 +250,7 @@ func TestRun_DuplicateStartExitsWithoutTouchingLiveSocket(t *testing.T) {
 	}
 
 	c := NewClientWithSocket(socketPath)
-	resp, err := c.Send(Request{Type: TypeHealth})
+	resp, err := c.Send(protocol.Request{Type: protocol.TypeHealth})
 	if err != nil {
 		t.Fatalf("live daemon not reachable after duplicate start: %v", err)
 	}
@@ -257,7 +258,7 @@ func TestRun_DuplicateStartExitsWithoutTouchingLiveSocket(t *testing.T) {
 		t.Fatalf("health response after duplicate start = %+v, want OK with PID", resp)
 	}
 
-	if resp, err := c.Send(Request{Type: TypeShutdown}); err != nil {
+	if resp, err := c.Send(protocol.Request{Type: protocol.TypeShutdown}); err != nil {
 		t.Fatalf("shutdown Send: %v", err)
 	} else if !resp.OK {
 		t.Fatalf("shutdown response: %+v", resp)

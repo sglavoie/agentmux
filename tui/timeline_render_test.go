@@ -4,14 +4,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // ── Rendering ────────────────────────────────────────────────────────────────
 
 // TestRenderTimelineLinesCollapsedVsExpanded verifies line count increases when a phase is expanded.
 func TestRenderTimelineLinesCollapsedVsExpanded(t *testing.T) {
-	events := []daemon.SessionEvent{
+	events := []protocol.SessionEvent{
 		se(1000, "active", "PreToolUse", "bash"),
 		se(1001, "active", "PreToolUse", "bash"),
 		se(1002, "active", "PreToolUse", "bash"),
@@ -33,7 +33,7 @@ func TestRenderTimelineLinesCollapsedVsExpanded(t *testing.T) {
 // When showSuppressed=false the suppressed event row is replaced by a "N more hidden" summary
 // line, so total line counts are equal; we only check text content.
 func TestRenderTimelineLinesSuppressedToggle(t *testing.T) {
-	events := []daemon.SessionEvent{
+	events := []protocol.SessionEvent{
 		{At: 1000, Action: "active", Event: "PreToolUse", ToolName: "bash"},
 		{At: 1001, Action: "active", Event: "PreToolUse", ToolName: "write_file", Suppressed: true},
 		{At: 1002, Action: "active", Event: "PreToolUse", ToolName: "read_file"},
@@ -63,7 +63,7 @@ func TestRenderTimelineLinesSuppressedToggle(t *testing.T) {
 
 // TestRenderTimelineLinesContainsSeparator verifies /compact separator appears in output.
 func TestRenderTimelineLinesContainsSeparator(t *testing.T) {
-	events := []daemon.SessionEvent{
+	events := []protocol.SessionEvent{
 		se(1000, "active", "SessionStart", ""),
 		se(1005, "stop", "Stop", ""),
 		{At: 1010, Action: "active", Event: "SessionStart", ResetFlow: true},
@@ -84,7 +84,7 @@ func TestRenderTimelineLinesContainsSeparator(t *testing.T) {
 
 // TestRenderTimelineLinesContainsGap verifies gap line appears for >60s idle periods.
 func TestRenderTimelineLinesContainsGap(t *testing.T) {
-	events := []daemon.SessionEvent{
+	events := []protocol.SessionEvent{
 		se(1000, "active", "SessionStart", ""),
 		se(1005, "stop", "Stop", ""),
 		se(1075, "active", "SessionStart", ""), // 70s gap
@@ -115,7 +115,7 @@ func TestRenderTimelineLinesEmptyEvents(t *testing.T) {
 
 // TestRenderTimelineLinesOngoing verifies last phase with no termEvent renders correctly.
 func TestRenderTimelineLinesOngoing(t *testing.T) {
-	events := []daemon.SessionEvent{
+	events := []protocol.SessionEvent{
 		se(1000, "active", "PreToolUse", "bash"),
 	}
 	phases := groupIntoPhases(events)

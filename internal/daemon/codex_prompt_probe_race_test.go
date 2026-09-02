@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -27,7 +28,7 @@ func TestProbeCodexScreenPrompts_IgnoresNonCodexManagedWindows(t *testing.T) {
 	if got := len(fake.titleCalls()); got != 0 {
 		t.Fatalf("SetTabTitle calls = %d, want 0", got)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(resp.Events) != 0 {
 		t.Fatalf("events = %d, want 0", len(resp.Events))
 	}
@@ -78,7 +79,7 @@ func TestProbeCodexScreenPrompts_ConcurrentPromptInvalidatesStopProbe(t *testing
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 		t.Fatalf("effective = %+v, want the newer bolt preserved against a stale stop probe", eff)
 	}
-	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if ev, ok := lastEventNamed(resp.Events, screenStopProbeEvent); ok {
 		t.Fatalf("ScreenStopProbe row recorded despite a concurrent prompt: %+v", ev)
 	}
@@ -134,7 +135,7 @@ func TestProbeCodexScreenPrompt_DiscardsObservationAfterConcurrentReducerEvent(t
 		{
 			name: "clear",
 			inject: func(t *testing.T, h *Handler, at int64) {
-				resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "user_clear", Harness: "codex"})
+				resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "user_clear", Harness: "codex"})
 				if !resp.OK {
 					t.Fatalf("inject user_clear rejected: %+v", resp)
 				}
@@ -190,8 +191,8 @@ func TestProbeCodexScreenPrompt_DiscardsObservationAfterConcurrentReducerEvent(t
 				// No reducer mutation: the discarded prompt left no probe fact and
 				// did not acknowledge the session's own fact.
 				h.stateMu.Lock()
-				probeFact := h.store[42].Reducer.facts[SourceID{Kind: SourceProbe, Key: screenPromptProbeSource}]
-				sessionFact := h.store[42].Reducer.facts[SourceID{Kind: SourceHarness, Key: "codex:sess-1"}]
+				probeFact := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource}]
+				sessionFact := h.store[42].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:sess-1"}]
 				h.stateMu.Unlock()
 				if probeFact != nil {
 					t.Fatalf("discarded observation left a probe fact: %+v", probeFact)
@@ -205,7 +206,7 @@ func TestProbeCodexScreenPrompt_DiscardsObservationAfterConcurrentReducerEvent(t
 					t.Fatalf("guard.Current = %q, want %q", got, tc.wantGuard)
 				}
 				// No audit mutation: not even a suppressed ScreenPromptProbe row.
-				resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+				resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 				for _, ev := range resp.Events {
 					if ev.Event == screenPromptProbeEvent {
 						t.Fatalf("discarded observation recorded an audit row: %+v", ev)

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestAcceptanceHarnessProcessLifecyclePipeline crosses the production Unix
@@ -35,7 +36,7 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 	resetProcess := lifecycleAcceptanceIdentity("copilot", 5401)
 	stopHoldProcess := lifecycleAcceptanceIdentity("claude", 5501)
 
-	for _, identity := range []daemon.HarnessProcessIdentity{
+	for _, identity := range []protocol.HarnessProcessIdentity{
 		parent, claudePipe, codexPipe, copilotPipe, concurrentA, concurrentB,
 		protected, nativeBefore, interactiveClaude, interactiveCodex,
 		interactiveCopilot, restoredPipe, aslPipe, resetProcess, stopHoldProcess,
@@ -87,12 +88,12 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 		"prompt": "/clear",
 	})
 
-	initial := fixture.waitForExport("initial process facts persisted and rendered", func(export daemon.EventsExport) bool {
+	initial := fixture.waitForExport("initial process facts persisted and rendered", func(export protocol.EventsExport) bool {
 		meta := export.WindowMetadata[lifecycleRestartWindow]
-		return lifecycleAcceptanceFact(meta, daemon.SourceHarness, "claude:restart-52") != nil &&
+		return lifecycleAcceptanceFact(meta, protocol.SourceHarness, "claude:restart-52") != nil &&
 			meta.Renderer.PersistedGen > 0 && meta.Renderer.RenderedGen >= meta.Renderer.PersistedGen &&
 			export.WindowMetadata[lifecycleASLWindow].Shadow.EffectiveLooping &&
-			lifecycleAcceptanceFact(export.WindowMetadata[lifecycleASLWindow], daemon.SourceASL, "acceptance-run-53") != nil
+			lifecycleAcceptanceFact(export.WindowMetadata[lifecycleASLWindow], protocol.SourceASL, "acceptance-run-53") != nil
 	})
 	if got := initial.WindowMetadata[lifecycleParentChildWindow].Shadow.EffectiveIcon; got != "bolt" {
 		t.Fatalf("parent/child initial icon = %q, want bolt", got)
@@ -104,8 +105,8 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 	fixture.sendHook(lifecycleNativeBeforeWindow, "codex", "Stop", "native-47", 2, true, &nativeBefore, map[string]any{
 		"stop_reason": "end_turn",
 	})
-	fixture.waitForExport("native terminal applied before inspection", func(export daemon.EventsExport) bool {
-		fact := lifecycleAcceptanceFact(export.WindowMetadata[lifecycleNativeBeforeWindow], daemon.SourceHarness, "codex:native-47")
+	fixture.waitForExport("native terminal applied before inspection", func(export protocol.EventsExport) bool {
+		fact := lifecycleAcceptanceFact(export.WindowMetadata[lifecycleNativeBeforeWindow], protocol.SourceHarness, "codex:native-47")
 		return fact != nil && fact.Action == "stop" && fact.Terminated
 	})
 
@@ -115,7 +116,7 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 	fixture.sendHook(lifecycleStopHoldWindow, "claude", "Stop", "hold-55", 2, false, &stopHoldProcess, map[string]any{
 		"stop_reason": "end_turn",
 	})
-	fixture.waitForExport("interactive native terminal held by the confirmed-idle gate", func(export daemon.EventsExport) bool {
+	fixture.waitForExport("interactive native terminal held by the confirmed-idle gate", func(export protocol.EventsExport) bool {
 		return lifecycleAcceptanceHoldOutcomes(export.EventsByWindow[lifecycleStopHoldWindow]) != nil &&
 			export.WindowMetadata[lifecycleStopHoldWindow].Shadow.EffectiveIcon == "bolt"
 	})
@@ -133,7 +134,7 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 	fixture.removeProcess(resetProcess.PID)
 	fixture.removeProcess(stopHoldProcess.PID)
 
-	settled := fixture.waitForExport("cross-harness lifecycle settlements", func(export daemon.EventsExport) bool {
+	settled := fixture.waitForExport("cross-harness lifecycle settlements", func(export protocol.EventsExport) bool {
 		for _, expected := range []struct {
 			windowID int
 			pid      int
@@ -167,10 +168,10 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 	if concurrentMeta.Shadow.EffectiveIcon != "bolt" {
 		t.Fatalf("one concurrent child exit produced icon %q, want surviving bolt", concurrentMeta.Shadow.EffectiveIcon)
 	}
-	if exited := lifecycleAcceptanceFact(concurrentMeta, daemon.SourceHarness, "codex:pipe-45-a"); exited == nil || !exited.Acked {
+	if exited := lifecycleAcceptanceFact(concurrentMeta, protocol.SourceHarness, "codex:pipe-45-a"); exited == nil || !exited.Acked {
 		t.Fatalf("exiting concurrent fact = %+v, want acknowledged", exited)
 	}
-	if survivor := lifecycleAcceptanceFact(concurrentMeta, daemon.SourceHarness, "codex:pipe-45-b"); survivor == nil || survivor.Acked {
+	if survivor := lifecycleAcceptanceFact(concurrentMeta, protocol.SourceHarness, "codex:pipe-45-b"); survivor == nil || survivor.Acked {
 		t.Fatalf("surviving concurrent fact = %+v, want live", survivor)
 	}
 	if _, ok := lifecycleAcceptanceExit(settled.EventsByWindow[lifecycleConcurrentWindow], concurrentB.PID); ok {
@@ -182,11 +183,11 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 		t.Fatalf("protected pipe outcome icon = %q, want error", protectedMeta.Shadow.EffectiveIcon)
 	}
 	for _, key := range []string{"claude:failure-46", "claude:question-46"} {
-		if fact := lifecycleAcceptanceFact(protectedMeta, daemon.SourceHarness, key); fact == nil || fact.Acked {
+		if fact := lifecycleAcceptanceFact(protectedMeta, protocol.SourceHarness, key); fact == nil || fact.Acked {
 			t.Fatalf("protected fact %s = %+v, want unacknowledged", key, fact)
 		}
 	}
-	if fact := lifecycleAcceptanceFact(protectedMeta, daemon.SourceHarness, "claude:active-46"); fact == nil || !fact.Acked {
+	if fact := lifecycleAcceptanceFact(protectedMeta, protocol.SourceHarness, "claude:active-46"); fact == nil || !fact.Acked {
 		t.Fatalf("disposable protected-group fact = %+v, want acknowledged", fact)
 	}
 
@@ -197,7 +198,7 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 
 	for _, expected := range []struct {
 		windowID int
-		identity daemon.HarnessProcessIdentity
+		identity protocol.HarnessProcessIdentity
 	}{
 		{lifecycleClaudeInteractive, interactiveClaude},
 		{lifecycleCodexInteractive, interactiveCodex},
@@ -217,7 +218,7 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 	if !aslMeta.Shadow.EffectiveLooping || aslMeta.Shadow.EffectiveIcon != "bolt" {
 		t.Fatalf("ASL coexistence after pipe exit = %+v", aslMeta.Shadow)
 	}
-	if asl := lifecycleAcceptanceFact(aslMeta, daemon.SourceASL, "acceptance-run-53"); asl == nil || !asl.LeaseLive || asl.Acked {
+	if asl := lifecycleAcceptanceFact(aslMeta, protocol.SourceASL, "acceptance-run-53"); asl == nil || !asl.LeaseLive || asl.Acked {
 		t.Fatalf("ASL lease changed during process settlement: %+v", asl)
 	}
 
@@ -233,8 +234,8 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 		t.Fatalf("held-stop process exit = %+v shadow=%+v", stopHoldExit, settled.WindowMetadata[lifecycleStopHoldWindow].Shadow)
 	}
 	holdOutcomes := lifecycleAcceptanceHoldOutcomes(settled.EventsByWindow[lifecycleStopHoldWindow])
-	if len(holdOutcomes) != 2 || holdOutcomes[0] != daemon.StopHoldOutcomeHeld ||
-		holdOutcomes[1] != daemon.StopHoldOutcomeBypassed {
+	if len(holdOutcomes) != 2 || holdOutcomes[0] != protocol.StopHoldOutcomeHeld ||
+		holdOutcomes[1] != protocol.StopHoldOutcomeBypassed {
 		t.Fatalf("stop-hold rows = %v, want [held bypassed]", holdOutcomes)
 	}
 	if got := lifecycleAcceptanceSettledStops(settled.EventsByWindow[lifecycleStopHoldWindow]); got != 1 {
@@ -269,7 +270,7 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 	if _, ok := lifecycleAcceptanceExit(beforeFreshPass.EventsByWindow[lifecycleNativeAfterWindow], nativeAfter.PID); ok {
 		t.Fatal("stale in-flight inspection settled a newer native terminal receipt")
 	}
-	nativeAfterExport := fixture.waitForExport("fresh inspection after native terminal", func(export daemon.EventsExport) bool {
+	nativeAfterExport := fixture.waitForExport("fresh inspection after native terminal", func(export protocol.EventsExport) bool {
 		_, ok := lifecycleAcceptanceExit(export.EventsByWindow[lifecycleNativeAfterWindow], nativeAfter.PID)
 		return ok
 	})
@@ -288,13 +289,13 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 	fixture.setPersistedState(lifecycleRestartWindow, persisted)
 	fixture.stopDaemon()
 	fixture.startDaemon()
-	fixture.waitForExport("schema-v4 process fact restored", func(export daemon.EventsExport) bool {
-		fact := lifecycleAcceptanceFact(export.WindowMetadata[lifecycleRestartWindow], daemon.SourceHarness, "claude:restart-52")
+	fixture.waitForExport("schema-v4 process fact restored", func(export protocol.EventsExport) bool {
+		fact := lifecycleAcceptanceFact(export.WindowMetadata[lifecycleRestartWindow], protocol.SourceHarness, "claude:restart-52")
 		return fact != nil && !fact.Acked && fact.HarnessProcessPID == restoredPipe.PID &&
 			fact.HarnessProcessStartToken == restoredPipe.StartToken
 	})
 	fixture.removeProcess(restoredPipe.PID)
-	restarted := fixture.waitForExport("restored pipe process settled after restart", func(export daemon.EventsExport) bool {
+	restarted := fixture.waitForExport("restored pipe process settled after restart", func(export protocol.EventsExport) bool {
 		exit, ok := lifecycleAcceptanceExit(export.EventsByWindow[lifecycleRestartWindow], restoredPipe.PID)
 		return ok && lifecycleAcceptanceRenderComplete(export.WindowMetadata[lifecycleRestartWindow], exit.RenderGeneration)
 	})

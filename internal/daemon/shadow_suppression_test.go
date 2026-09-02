@@ -11,6 +11,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestReduceStateUpdate_SuppressedMutationMarksActivityDirty pins the durable
@@ -21,14 +23,14 @@ import (
 // terminal payload and accept an already-consumed replay.
 func TestReduceStateUpdate_SuppressedMutationMarksActivityDirty(t *testing.T) {
 	h := newTestHandler()
-	src := SourceID{Kind: SourceHarness, Key: "claude:s1"}
+	src := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}
 	now := time.Now()
 
-	terminal := NormalizedEvent{
+	terminal := protocol.NormalizedEvent{
 		Source: src, Action: "stop", Seq: 5, TurnID: "t1", At: now.Unix(), Event: "Stop",
 	}
-	if resp := h.handleStateUpdate(Request{
-		Type: TypeStateUpdate, WindowID: 42, Action: "stop", Event: "Stop", normalized: &terminal,
+	if resp := h.handleStateUpdate(protocol.Request{
+		Type: protocol.TypeStateUpdate, WindowID: 42, Action: "stop", Event: "Stop", Normalized: &terminal,
 	}); !resp.OK || !resp.Allowed {
 		t.Fatalf("terminal update rejected: %+v", resp)
 	}
@@ -43,11 +45,11 @@ func TestReduceStateUpdate_SuppressedMutationMarksActivityDirty(t *testing.T) {
 	h.stateMu.Unlock()
 	h.renderQueue.purge(42)
 
-	trailing := NormalizedEvent{
+	trailing := protocol.NormalizedEvent{
 		Source: src, Action: "active", Seq: 7, TurnID: "t1", At: now.Add(time.Second).Unix(), Event: "PostToolBatch",
 	}
-	resp := h.handleStateUpdate(Request{
-		Type: TypeStateUpdate, WindowID: 42, Action: "active", Event: "PostToolBatch", normalized: &trailing,
+	resp := h.handleStateUpdate(protocol.Request{
+		Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Event: "PostToolBatch", Normalized: &trailing,
 	})
 	if !resp.OK || resp.Allowed {
 		t.Fatalf("trailing update = %+v, want guard-blocked success", resp)
@@ -81,10 +83,10 @@ func TestReduceStateUpdate_SuppressedMutationMarksActivityDirty(t *testing.T) {
 	if err := restored.UnmarshalUserVar(encoded); err != nil {
 		t.Fatalf("UnmarshalUserVar() error: %v", err)
 	}
-	replay := ReducerEvent{
+	replay := protocol.ReducerEvent{
 		Source: src, Action: "active", Seq: 6, TurnID: "t2", At: now.Add(2 * time.Second).Unix(),
 	}
-	if decision := restored.Reducer.Apply(replay); decision != DecisionReordered {
+	if decision := restored.Reducer.Apply(replay); decision != protocol.DecisionReordered {
 		t.Fatalf("post-restart replay decision = %s, want reordered", decision)
 	}
 	if effective := restored.Reducer.Reduce(now.Add(2 * time.Second).Unix()); effective.Icon != "stop" {
@@ -96,19 +98,19 @@ func TestReduceStateUpdate_SuppressedMutationMarksActivityDirty(t *testing.T) {
 	// receipt so the assertion isolates reduction from receipt allocation.
 	tests := []struct {
 		name  string
-		event NormalizedEvent
-		want  ReducerDecision
+		event protocol.NormalizedEvent
+		want  protocol.ReducerDecision
 	}{
-		{name: "duplicate", event: trailing, want: DecisionDuplicate},
-		{name: "reordered", event: NormalizedEvent{
+		{name: "duplicate", event: trailing, want: protocol.DecisionDuplicate},
+		{name: "reordered", event: protocol.NormalizedEvent{
 			Source: src, Action: "active", Seq: 6, TurnID: "t1", At: now.Add(time.Second).Unix(), Event: "PostToolBatch",
-		}, want: DecisionReordered},
-		{name: "quarantined", event: NormalizedEvent{
-			Source: SourceID{Kind: SourceInvalid, Key: InvalidPayloadReason}, Seq: 7, Event: "Stop", Reason: InvalidPayloadReason,
-		}, want: DecisionQuarantined},
-		{name: "ignored", event: NormalizedEvent{
+		}, want: protocol.DecisionReordered},
+		{name: "quarantined", event: protocol.NormalizedEvent{
+			Source: protocol.SourceID{Kind: SourceInvalid, Key: InvalidPayloadReason}, Seq: 7, Event: "Stop", Reason: InvalidPayloadReason,
+		}, want: protocol.DecisionQuarantined},
+		{name: "ignored", event: protocol.NormalizedEvent{
 			Seq: 7, Event: "InstructionsLoaded", Reason: reasonIgnoredEvent,
-		}, want: DecisionQuarantined},
+		}, want: protocol.DecisionQuarantined},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -123,9 +125,9 @@ func TestReduceStateUpdate_SuppressedMutationMarksActivityDirty(t *testing.T) {
 			h.renderQueue.purge(42)
 
 			event := tt.event
-			h.reduceStateUpdate(Request{
-				Type: TypeStateUpdate, WindowID: 42, Action: event.Action, Event: event.Event, normalized: &event,
-			}, applyOutcome{}, Response{OK: true}, now.Add(3*time.Second))
+			h.reduceStateUpdate(protocol.Request{
+				Type: protocol.TypeStateUpdate, WindowID: 42, Action: event.Action, Event: event.Event, Normalized: &event,
+			}, applyOutcome{}, protocol.Response{OK: true}, now.Add(3*time.Second))
 
 			h.stateMu.Lock()
 			st = h.store[42]

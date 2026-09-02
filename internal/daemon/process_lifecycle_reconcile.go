@@ -3,27 +3,29 @@ package daemon
 import (
 	"sort"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
-func lifecycleParentFact(fact SourceFactSnapshot) bool {
-	if fact.Kind == SourceHarness {
+func lifecycleParentFact(fact protocol.SourceFactSnapshot) bool {
+	if fact.Kind == protocol.SourceHarness {
 		return true
 	}
-	return fact.Kind == SourceLegacy && !isLegacySubagentBucket(fact.Key)
+	return fact.Kind == protocol.SourceLegacy && !isLegacySubagentBucket(fact.Key)
 }
 
-func lifecycleActiveSubagent(fact SourceFactSnapshot) bool {
+func lifecycleActiveSubagent(fact protocol.SourceFactSnapshot) bool {
 	switch fact.Kind {
-	case SourceSubagent:
+	case protocol.SourceSubagent:
 		return fact.Icon == "subagent"
-	case SourceLegacy:
+	case protocol.SourceLegacy:
 		return isLegacySubagentBucket(fact.Key) && (fact.Agents > 0 || fact.Icon == "subagent")
 	default:
 		return false
 	}
 }
 
-func lifecycleFactMoreRecent(left, right SourceFactSnapshot) bool {
+func lifecycleFactMoreRecent(left, right protocol.SourceFactSnapshot) bool {
 	if left.At != right.At {
 		return left.At > right.At
 	}
@@ -36,9 +38,9 @@ func lifecycleFactMoreRecent(left, right SourceFactSnapshot) bool {
 	return sourceIDLess(right.Source(), left.Source())
 }
 
-func deduplicatedLifecycleIdentities(candidates []processLifecycleCandidate) []HarnessProcessIdentity {
-	seen := make(map[HarnessProcessIdentity]bool, len(candidates))
-	identities := make([]HarnessProcessIdentity, 0, len(candidates))
+func deduplicatedLifecycleIdentities(candidates []processLifecycleCandidate) []protocol.HarnessProcessIdentity {
+	seen := make(map[protocol.HarnessProcessIdentity]bool, len(candidates))
+	identities := make([]protocol.HarnessProcessIdentity, 0, len(candidates))
 	for _, candidate := range candidates {
 		if seen[candidate.identity] {
 			continue
@@ -61,13 +63,13 @@ func deduplicatedLifecycleIdentities(candidates []processLifecycleCandidate) []H
 func processLifecycleCandidateCurrent(
 	candidate processLifecycleCandidate,
 	reset resetFlowState,
-	allFacts []SourceFactSnapshot,
+	allFacts []protocol.SourceFactSnapshot,
 ) bool {
-	current := make(map[SourceID]SourceFactSnapshot, len(allFacts))
-	group := make([]SourceFactSnapshot, 0, len(candidate.facts))
+	current := make(map[protocol.SourceID]protocol.SourceFactSnapshot, len(allFacts))
+	group := make([]protocol.SourceFactSnapshot, 0, len(candidate.facts))
 	for _, fact := range allFacts {
 		current[fact.Source()] = fact
-		identity, ok := canonicalHarnessProcessIdentity(HarnessProcessIdentity{
+		identity, ok := protocol.CanonicalHarnessProcessIdentity(protocol.HarnessProcessIdentity{
 			Harness: fact.HarnessProcessHarness, PID: fact.HarnessProcessPID,
 			StartToken: fact.HarnessProcessStartToken,
 		})
@@ -83,7 +85,7 @@ func processLifecycleCandidateCurrent(
 		if !ok || fact.Acked || fact.Seq != receipt.seq || fact.CausalOrder != receipt.causalOrder || fact.PipeMode != receipt.pipeMode {
 			return false
 		}
-		identity, valid := canonicalHarnessProcessIdentity(HarnessProcessIdentity{
+		identity, valid := protocol.CanonicalHarnessProcessIdentity(protocol.HarnessProcessIdentity{
 			Harness: fact.HarnessProcessHarness, PID: fact.HarnessProcessPID,
 			StartToken: fact.HarnessProcessStartToken,
 		})
@@ -152,13 +154,13 @@ func (h *Handler) syncLegacyLifecycleWinnerLocked(
 	h.windowMetadata[windowID] = meta
 }
 
-func lifecycleActiveSubagentCount(facts []SourceFactSnapshot) int {
+func lifecycleActiveSubagentCount(facts []protocol.SourceFactSnapshot) int {
 	total := 0
 	for _, fact := range facts {
 		if fact.Acked || fact.Terminated || !lifecycleActiveSubagent(fact) {
 			continue
 		}
-		if fact.Kind == SourceLegacy && fact.Agents > 0 {
+		if fact.Kind == protocol.SourceLegacy && fact.Agents > 0 {
 			total += fact.Agents
 		} else {
 			total++

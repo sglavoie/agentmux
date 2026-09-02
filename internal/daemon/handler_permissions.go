@@ -3,14 +3,15 @@ package daemon
 import (
 	"strings"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
 
-func isCopilotRequest(req Request) bool {
+func isCopilotRequest(req protocol.Request) bool {
 	if harness.NormalizeKnown(req.Harness) == harness.Copilot {
 		return true
 	}
-	if req.targetHarnessSet {
+	if req.TargetHarnessSet {
 		// Hook-origin requests explicitly separate producer and target roles. An
 		// empty producer there is unknown and must stay harness-agnostic.
 		return false
@@ -32,7 +33,7 @@ func isCopilotRequest(req Request) bool {
 	}
 }
 
-func isCopilotPermissionResolutionEvent(req Request) bool {
+func isCopilotPermissionResolutionEvent(req protocol.Request) bool {
 	if req.IsPrompt {
 		return true
 	}
@@ -44,31 +45,31 @@ func isCopilotPermissionResolutionEvent(req Request) bool {
 	}
 }
 
-func isCopilotPermissionRequest(req Request) bool {
+func isCopilotPermissionRequest(req protocol.Request) bool {
 	return isCopilotRequest(req) &&
 		req.Action == "permission" &&
 		req.Event == "permissionRequest"
 }
 
-func isCopilotPermissionPromptNotification(req Request) bool {
+func isCopilotPermissionPromptNotification(req protocol.Request) bool {
 	return isCopilotRequest(req) &&
 		req.Action == "permission" &&
 		(req.Event == "notification" || req.Event == "Notification") &&
 		req.NotificationType == "permission_prompt"
 }
 
-func isCopilotElicitationPrompt(req Request) bool {
+func isCopilotElicitationPrompt(req protocol.Request) bool {
 	return isCopilotRequest(req) &&
 		req.Action == "elicitation" &&
 		(req.Event == "notification" || req.Event == "Notification") &&
 		req.NotificationType == "elicitation_dialog"
 }
 
-func isCopilotAutoApprovedToolPermission(req Request) bool {
+func isCopilotAutoApprovedToolPermission(req protocol.Request) bool {
 	return isCopilotPermissionPromptNotification(req)
 }
 
-func isCopilotTrailingAutoApprovedToolPermission(req Request, priorAutoApproved bool) bool {
+func isCopilotTrailingAutoApprovedToolPermission(req protocol.Request, priorAutoApproved bool) bool {
 	return priorAutoApproved && isCopilotAutoApprovedToolPermission(req)
 }
 
@@ -80,7 +81,7 @@ const (
 	copilotToolPermissionAutoApproved
 )
 
-func shouldResetCopilotToolPermissionState(req Request) bool {
+func shouldResetCopilotToolPermissionState(req protocol.Request) bool {
 	if !isCopilotRequest(req) {
 		return false
 	}
@@ -99,11 +100,11 @@ func shouldResetCopilotToolPermissionState(req Request) bool {
 	}
 }
 
-func shouldConfirmCopilotAutoApprovedToolPermission(req Request) bool {
+func shouldConfirmCopilotAutoApprovedToolPermission(req protocol.Request) bool {
 	return isCopilotRequest(req) && req.Action != "permission"
 }
 
-func shouldSuppressCopilotPendingPrompt(req Request, prevAction string) bool {
+func shouldSuppressCopilotPendingPrompt(req protocol.Request, prevAction string) bool {
 	if !isCopilotRequest(req) || (prevAction != "permission" && prevAction != "elicitation") {
 		return false
 	}
@@ -120,7 +121,7 @@ func shouldSuppressCopilotPendingPrompt(req Request, prevAction string) bool {
 // Copilot exposes preCompact but not a documented postCompact hook. If the
 // first follow-up is only an idle/cleanup event, preserve the compaction
 // context long enough to surface a stop icon instead of silently clearing it.
-func shouldSynthesizeCopilotCompactStop(req Request, prevAction string) bool {
+func shouldSynthesizeCopilotCompactStop(req protocol.Request, prevAction string) bool {
 	return isCopilotRequest(req) &&
 		prevAction == "compact" &&
 		(req.Action == "idle" || req.Action == "clear")

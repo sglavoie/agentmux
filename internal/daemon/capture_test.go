@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
@@ -21,12 +22,12 @@ func TestDaemonCapturesLegacyHookPayloadAndTrustsClientCaptureMarker(t *testing.
 	}
 	handler := NewHandler(NewStateGuard(0), nil)
 	handler.setCaptureStore(store)
-	handler.Handle(Request{
-		Type: TypeHookEvent, WindowID: 42, Event: "PreToolUse", RequestID: "legacy-capture",
+	handler.Handle(protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 42, Event: "PreToolUse", RequestID: "legacy-capture",
 		PayloadJSON: `{"tool_name":"Bash"}`,
 	})
-	handler.Handle(Request{
-		Type: TypeHookEvent, WindowID: 42, Event: "PreToolUse", RequestID: "already-captured",
+	handler.Handle(protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 42, Event: "PreToolUse", RequestID: "already-captured",
 		PayloadJSON: `{"tool_name":"Read"}`, PayloadCaptured: true,
 	})
 	status, err := store.Status(t.Context())

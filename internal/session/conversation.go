@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/conversation"
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -32,7 +32,7 @@ const (
 // this call, keeping the Kitty re-query at the action boundary.
 func ResolveLiveConversation(
 	identity conversation.Identity,
-	states map[int]daemon.WindowStateSnapshot,
+	states map[int]protocol.WindowStateSnapshot,
 	osWindows []kitty.OSWindow,
 ) (RunningSession, bool) {
 	resolved, status := ResolveLiveConversationStatus(identity, states, osWindows)
@@ -45,7 +45,7 @@ func ResolveLiveConversation(
 // instance of a conversation whose live ownership is already unclear.
 func ResolveLiveConversationStatus(
 	identity conversation.Identity,
-	states map[int]daemon.WindowStateSnapshot,
+	states map[int]protocol.WindowStateSnapshot,
 	osWindows []kitty.OSWindow,
 ) (RunningSession, LiveConversationStatus) {
 	target, ok := conversation.New(identity.Harness, identity.SessionID)

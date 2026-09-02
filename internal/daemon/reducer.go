@@ -1,5 +1,9 @@
 package daemon
 
+import (
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+)
+
 // This file implements the side-effect-free state reducer that owns each
 // window's visible state in production: reduceStateUpdate folds every
 // normalized hook event into it and publishes the reduced result (via
@@ -43,89 +47,24 @@ type ReducerConfig struct {
 	StaleCompact  int64
 }
 
-// ReducerEvent is one normalized, source-scoped fact delivered to the reducer.
-// Seq is the per-source monotonic sequence used for dedup and reordering: only
-// the highest Seq seen for a source takes effect, so replay is order-independent
-// and duplicates are no-ops. At is the emitted unix timestamp used for staleness
-// and the legacy grace. TurnID scopes identified terminal suppression.
-type ReducerEvent struct {
-	Source SourceID
-	Action string // active|compact|subagent|stop|elicitation|permission|failure|stop_failure|idle|clear|user_clear
-	Seq    uint64
-	TurnID string
-	At     int64
-	// OriginWindowID identifies the pane that produced this fact. It can differ
-	// from the reducer's managed window when an unmanaged sibling borrows it.
-	OriginWindowID int
-
-	// Prompt marks a direct user prompt submission. A prompt is authoritative
-	// recovery: it bypasses terminal trailing suppression for its own source and
-	// acknowledges stuck terminal facts on every other source.
-	Prompt bool
-	// ToolUse is the tool-use identity carried by the event, used alongside
-	// TurnID to distinguish an identifiable trailing completion of the
-	// terminated turn from a genuinely new tool call.
-	ToolUse string
-	// PipeMode marks a non-interactive `claude -p` hook. It stamps interactive
-	// ownership on the fact: an interactive (non-pipe) harness session may
-	// retire an older interactive session's stale active fact, while pipe-mode
-	// facts are protected from that supersession. Absent (false) is interactive.
-	PipeMode bool
-	// HarnessProcess is the validated, non-sensitive process fingerprint that
-	// produced this event. Ordinary harness, legacy, and subagent sources retain
-	// it; the zero value deliberately clears any older ownership on an accepted
-	// event. ASL and probe sources never retain process ownership.
-	HarnessProcess HarnessProcessIdentity
-
-	// ASL-only. Phase selects the contributed icon and lease; for ASLPhasePaused
-	// the attention icon comes from Action.
-	RunID string
-	Phase string
-
-	// SessionID is the parent harness session the event belongs to. Subagent
-	// facts remember it so a session's completion clears only its own agents.
-	SessionID string
-	// EndsSession marks a session-terminating event: after it applies, the
-	// session's remaining subagent contributions (identified facts and its
-	// legacy multiset bucket) are ended. With an empty SessionID the clear is
-	// window-wide — identity-less clients have no session boundary.
-	EndsSession bool
-	// SubagentDelta adjusts the source's balanced agent multiset (+1 start,
-	// -1 stop) for identity-less subagent lifecycle events. The count never
-	// goes negative, and while any agent remains the source contributes 🤖.
-	SubagentDelta int
-}
-
 // EffectiveState is the reduced, renderable outcome: exactly one icon state and
 // the loop marker. Source identifies which fact won the icon (zero value when
 // idle). It carries no side effects — callers map Icon to a palette glyph.
 type EffectiveState struct {
 	Icon    string // "", "bolt", "stop", "key", "warning", "error", "subagent", "compact", "question"
 	Looping bool
-	Source  SourceID
+	Source  protocol.SourceID
 }
-
-// ReducerDecision labels how Apply handled one event, for audit traces.
-type ReducerDecision string
-
-const (
-	DecisionApplied      ReducerDecision = "applied"      // fact advanced
-	DecisionDuplicate    ReducerDecision = "duplicate"    // same Seq already seen
-	DecisionReordered    ReducerDecision = "reordered"    // older Seq arrived late
-	DecisionSuppressed   ReducerDecision = "suppressed"   // terminal suppression blocked activity
-	DecisionAcknowledged ReducerDecision = "acknowledged" // user_clear acked visible facts
-	DecisionQuarantined  ReducerDecision = "quarantined"  // malformed/inert event never reached the facts
-)
 
 // ReducerTrace records one Apply outcome. Reliability tests assert the full
 // before/after trace, not just the final icon, so a regression that reaches the
 // right icon by the wrong path still fails.
 type ReducerTrace struct {
-	Source   SourceID
+	Source   protocol.SourceID
 	Seq      uint64
 	Action   string
 	Icon     string
-	Decision ReducerDecision
+	Decision protocol.ReducerDecision
 	Reason   string
 }
 
@@ -135,7 +74,7 @@ type ReducerTrace struct {
 // takes `now`.
 type Reducer struct {
 	cfg             ReducerConfig
-	facts           map[SourceID]*sourceFact
+	facts           map[protocol.SourceID]*sourceFact
 	traces          []ReducerTrace
 	nextCausalOrder uint64
 
@@ -156,7 +95,7 @@ type Reducer struct {
 
 // NewReducer returns an empty reducer with the given thresholds.
 func NewReducer(cfg ReducerConfig) *Reducer {
-	return &Reducer{cfg: cfg, facts: make(map[SourceID]*sourceFact)}
+	return &Reducer{cfg: cfg, facts: make(map[protocol.SourceID]*sourceFact)}
 }
 
 // stampCausalOrder records one accepted reducer mutation on f. Per-source Seq
@@ -170,8 +109,8 @@ func (r *Reducer) stampCausalOrder(f *sourceFact) {
 // resolve turns an event into its contributed action, icon, and loop lease.
 // ASL phases are mapped here so callers only ever supply the phase (and, for a
 // pause, the attention Action).
-func (r *Reducer) resolve(ev ReducerEvent) (action, icon string, leaseLive bool) {
-	if ev.Source.Kind == SourceASL {
+func (r *Reducer) resolve(ev protocol.ReducerEvent) (action, icon string, leaseLive bool) {
+	if ev.Source.Kind == protocol.SourceASL {
 		switch ev.Phase {
 		case ASLPhaseTurn, ASLPhaseVerification:
 			return "active", "bolt", true

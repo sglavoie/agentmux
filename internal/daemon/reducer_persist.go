@@ -6,7 +6,11 @@ package daemon
 // keeps both the live map and the persisted payload bounded to live/recent
 // facts.
 
-import "sort"
+import (
+	"sort"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+)
 
 // tombstoneRetentionSeconds bounds how long an unacknowledged terminal fact is
 // retained after termination. Terminal suppression only matters for trailing
@@ -30,91 +34,15 @@ const (
 // forgotten — a finished agent produces no further real events.
 const subagentStopRetentionSeconds int64 = 300
 
-// SourceFactSnapshot is the exported, durable view of one source fact. Field
-// names mirror sourceFact; the compact JSON tags are the schema-v4 user-var
-// wire form (amx_state must stay small), so this one struct is both the
-// snapshot seam and the persisted shape.
-type SourceFactSnapshot struct {
-	Kind   SourceKind `json:"k"`
-	Key    string     `json:"y,omitempty"`
-	Action string     `json:"a,omitempty"`
-	Icon   string     `json:"i,omitempty"`
-	Seq    uint64     `json:"q,omitempty"`
-	// CausalOrder is the reducer-wide application generation. Seq remains
-	// source-local deduplication metadata; this independent order is what makes
-	// equal-timestamp comparisons valid across sources. Older payloads omit it
-	// and restore with the deterministic legacy fallback.
-	CausalOrder uint64 `json:"o,omitempty"`
-	TurnID      string `json:"tn,omitempty"`
-	At          int64  `json:"t,omitempty"`
-	Acked       bool   `json:"ak,omitempty"`
-	AckedAt     int64  `json:"aa,omitempty"`
-	// OriginWindowID is the pane that produced a routed fact. It differs from
-	// the reducer/window carrying this snapshot when an unmanaged sibling borrows
-	// a managed title owner.
-	OriginWindowID int    `json:"ow,omitempty"`
-	ToolUse        string `json:"tu,omitempty"`
-
-	// Harness process ownership is safe lifecycle metadata, never command-line
-	// content. The three fields are deliberately flat and compact because this
-	// snapshot is persisted in Kitty's size-sensitive amx_state user var.
-	// Partial or source-incompatible triples are discarded during restoration
-	// without invalidating the containing fact.
-	HarnessProcessHarness    string `json:"ph,omitempty"`
-	HarnessProcessPID        int    `json:"pp,omitempty"`
-	HarnessProcessStartToken string `json:"pt,omitempty"`
-
-	// PipeMode records whether this harness source is a non-interactive
-	// `claude -p` child. Absent (false) restores as interactive, so a payload
-	// written before this field decodes with the backward-compatible default;
-	// ASL and subagent facts remain independently typed by their source kind.
-	PipeMode bool `json:"pm,omitempty"`
-
-	// Subagent aggregation: the parent harness session an identified agent
-	// belongs to, and the balanced identity-less agent multiset carried by a
-	// legacy subagent bucket.
-	SessionID string `json:"sid,omitempty"`
-	Agents    int    `json:"ag,omitempty"`
-
-	// ASL lease bookkeeping.
-	RunID     string `json:"r,omitempty"`
-	Phase     string `json:"p,omitempty"`
-	LeaseLive bool   `json:"ll,omitempty"`
-
-	// Terminal suppression bookkeeping.
-	Terminated      bool   `json:"tm,omitempty"`
-	TerminalTurn    string `json:"tt,omitempty"`
-	TerminalToolUse string `json:"ttu,omitempty"`
-	TerminalAt      int64  `json:"ta,omitempty"`
-}
-
-// Source reconstructs the fact's map key.
-func (s SourceFactSnapshot) Source() SourceID { return SourceID{Kind: s.Kind, Key: s.Key} }
-
-// HasMalformedHarnessProcessIdentity reports a partial, source-incompatible,
-// or non-canonical persisted process fingerprint. It performs validation over
-// the exported snapshot only and never consults the live process table.
-func (s SourceFactSnapshot) HasMalformedHarnessProcessIdentity() bool {
-	present := s.HarnessProcessHarness != "" || s.HarnessProcessPID != 0 || s.HarnessProcessStartToken != ""
-	if !present {
-		return false
-	}
-	identity := restoredHarnessProcessIdentity(s)
-	return identity == (HarnessProcessIdentity{}) ||
-		identity.Harness != s.HarnessProcessHarness ||
-		identity.PID != s.HarnessProcessPID ||
-		identity.StartToken != s.HarnessProcessStartToken
-}
-
 // Facts returns a deterministic snapshot of every set fact, ordered by source
 // kind then key so serialized payloads are stable across runs.
-func (r *Reducer) Facts() []SourceFactSnapshot {
-	out := make([]SourceFactSnapshot, 0, len(r.facts))
+func (r *Reducer) Facts() []protocol.SourceFactSnapshot {
+	out := make([]protocol.SourceFactSnapshot, 0, len(r.facts))
 	for _, f := range r.facts {
 		if !f.set {
 			continue
 		}
-		out = append(out, SourceFactSnapshot{
+		out = append(out, protocol.SourceFactSnapshot{
 			Kind:                     f.source.Kind,
 			Key:                      f.source.Key,
 			Action:                   f.action,
@@ -154,8 +82,8 @@ func (r *Reducer) Facts() []SourceFactSnapshot {
 // Restore replaces the fact map with the given snapshots. Entries without a
 // source kind (or carrying the synthetic invalid kind) are dropped: they can
 // only come from a corrupted payload and must never become live facts.
-func (r *Reducer) Restore(facts []SourceFactSnapshot) {
-	r.facts = make(map[SourceID]*sourceFact, len(facts))
+func (r *Reducer) Restore(facts []protocol.SourceFactSnapshot) {
+	r.facts = make(map[protocol.SourceID]*sourceFact, len(facts))
 	r.nextCausalOrder = 0
 	r.mergeCausalFloor = 0
 	for _, s := range facts {
@@ -204,14 +132,14 @@ func (r *Reducer) Restore(facts []SourceFactSnapshot) {
 // recorded cutoffs (reconcileMergedFact) so an older persisted fact cannot
 // resurrect exactly the state the accepted transition superseded. Reports how
 // many facts were added.
-func (r *Reducer) MergeDisjoint(facts []SourceFactSnapshot) int {
+func (r *Reducer) MergeDisjoint(facts []protocol.SourceFactSnapshot) int {
 	if r.facts == nil {
-		r.facts = make(map[SourceID]*sourceFact, len(facts))
+		r.facts = make(map[protocol.SourceID]*sourceFact, len(facts))
 	}
 
 	// First identify real additions. Repeated startup restores that contain no
 	// new sources must not keep shifting the causal domain.
-	candidates := make([]SourceFactSnapshot, 0, len(facts))
+	candidates := make([]protocol.SourceFactSnapshot, 0, len(facts))
 	importedMax := r.mergeCausalFloor
 	for _, s := range facts {
 		if s.Kind == "" || s.Kind == SourceInvalid {

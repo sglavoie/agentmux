@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
 
@@ -23,7 +24,7 @@ func TestASLSupervisorMailboxReplyClearsMatchingProbeImmediately(t *testing.T) {
 	if got := supervisorVisibleState(t, h); got.Icon != "bolt" || !got.Looping {
 		t.Fatalf("matching mailbox reply = %+v; want underlying bolt + loop", got)
 	}
-	if got := h.Handle(Request{Type: TypeStateQuery}).States[42]; got.IconState != "bolt" || !got.Looping {
+	if got := h.Handle(protocol.Request{Type: protocol.TypeStateQuery}).States[42]; got.IconState != "bolt" || !got.Looping {
 		t.Fatalf("dashboard snapshot after reply = %+v; want bolt + loop", got)
 	}
 	if h.renderQueue.empty() {
@@ -49,8 +50,8 @@ func TestASLSupervisorMailboxResolutionClearsMatchingProbeImmediately(t *testing
 	payload.ResolutionAction = "continue"
 	payload.SourceEventID = supervisorRunID + ":mailbox-resolution:7"
 
-	resp := h.Handle(Request{
-		Type:        TypeHookEvent,
+	resp := h.Handle(protocol.Request{
+		Type:        protocol.TypeHookEvent,
 		WindowID:    42,
 		Event:       agentSessionLoopMailboxResolution,
 		PayloadJSON: hookPayloadJSON(t, payload),
@@ -159,8 +160,8 @@ func TestASLSupervisorMailboxReplyLeavesRunnerWaitingLoopBare(t *testing.T) {
 	h.acceptASLSupervisorProjection(now, target, supervisorProjection(now, 7))
 	h.stateMu.Lock()
 	st := h.store[42]
-	st.Reducer.Apply(ReducerEvent{
-		Source: SourceID{Kind: SourceASL, Key: supervisorRunID},
+	st.Reducer.Apply(protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceASL, Key: supervisorRunID},
 		RunID:  supervisorRunID,
 		Phase:  ASLPhaseWaiting,
 		Seq:    2,
@@ -188,8 +189,8 @@ func TestASLSupervisorQuestionUserClearIsNotReassertedBySameProjection(t *testin
 
 	h.stateMu.Lock()
 	st := h.store[42]
-	st.Reducer.Apply(ReducerEvent{
-		Source: SourceID{Kind: SourceProbe, Key: "user"},
+	st.Reducer.Apply(protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceProbe, Key: "user"},
 		Action: "user_clear",
 		Seq:    1,
 		At:     now.Add(time.Second).Unix(),

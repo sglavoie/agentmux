@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
@@ -51,7 +52,7 @@ type replayDecision struct {
 	endsSession      bool
 	subagentDelta    int
 	cfg              daemon.ReducerConfig
-	recordedDecision daemon.ReducerDecision
+	recordedDecision protocol.ReducerDecision
 	recordedReason   string
 	recordedBefore   *ReplayState
 	recordedAfter    *ReplayState
@@ -101,7 +102,7 @@ func decodeReplayDecision(record replayRecord) replayDecision {
 	d.seq = parseUint64(value("replay.source_sequence", "source_sequence"))
 	d.daemonSeq = parseUint64(evidence["daemon_sequence"])
 	d.renderGeneration = parseUint64(value("replay.render_generation", "render_generation"))
-	d.recordedDecision = daemon.ReducerDecision(firstNonEmptyReplay(value("replay.recorded_decision", ""), record.outcome))
+	d.recordedDecision = protocol.ReducerDecision(firstNonEmptyReplay(value("replay.recorded_decision", ""), record.outcome))
 	d.at, _ = strconv.ParseInt(evidence["replay.emitted_at"], 10, 64)
 	if d.at == 0 {
 		d.at = record.observedAt.Unix()
@@ -127,7 +128,7 @@ func decodeReplayDecision(record replayRecord) replayDecision {
 		inferReplayInput(&d)
 	}
 	d.canApply = d.sourceKind != "" && d.sourceKey != "" && d.seq > 0 && (d.action != "" || d.phase != "")
-	d.requestReplay = d.recordedReason == daemon.DecisionReasonRequestReplayed || record.reason == daemon.DecisionReasonRequestReplayed
+	d.requestReplay = d.recordedReason == protocol.DecisionReasonRequestReplayed || record.reason == protocol.DecisionReasonRequestReplayed
 	d.route = decodeReplayRoute(evidence)
 	return d
 }
@@ -156,7 +157,7 @@ func inferReplayInput(decision *replayDecision) {
 	case "sessionend":
 		decision.endsSession = true
 	}
-	if decision.sourceKind == string(daemon.SourceLegacy) && strings.Contains(strings.ToLower(decision.event), "subagent") {
+	if decision.sourceKind == string(protocol.SourceLegacy) && strings.Contains(strings.ToLower(decision.event), "subagent") {
 		if strings.Contains(strings.ToLower(decision.event), "stop") {
 			decision.subagentDelta = -1
 		} else {
@@ -321,8 +322,8 @@ func decodeCausalRecords(data []byte) ([]replayRecord, int, int, error) {
 	return records, wrapper.SchemaVersion, corruptLines, nil
 }
 
-func replayRecordFromSessionEvent(windowID int, event daemon.SessionEvent, schemaVersion int) replayRecord {
-	legacyV8 := schemaVersion == daemon.EventsExportSchemaV8
+func replayRecordFromSessionEvent(windowID int, event protocol.SessionEvent, schemaVersion int) replayRecord {
+	legacyV8 := schemaVersion == protocol.EventsExportSchemaV8
 	evidence := map[string]string{
 		"replay.event": event.Event, "replay.action": event.ReducerInputAction,
 		"replay.source_kind": event.SourceKind, "replay.source_key": event.SourceKey,
@@ -383,7 +384,7 @@ func replayRecordFromSessionEvent(windowID int, event daemon.SessionEvent, schem
 	}
 }
 
-func encodeSessionEventState(out map[string]string, prefix string, state *daemon.EffectiveStateEvidence) {
+func encodeSessionEventState(out map[string]string, prefix string, state *protocol.EffectiveStateEvidence) {
 	if state == nil {
 		return
 	}
@@ -419,19 +420,19 @@ func stableReplayReason(trace daemon.ReducerTrace) string {
 	}
 	switch trace.Reason {
 	case "duplicate sequence":
-		return daemon.DecisionReasonDuplicateSequence
+		return protocol.DecisionReasonDuplicateSequence
 	case "older sequence arrived after a newer one":
-		return daemon.DecisionReasonReorderedSequence
+		return protocol.DecisionReasonReorderedSequence
 	case "idle preserves attention/terminal icon":
-		return daemon.DecisionReasonIdlePreservesTerminal
+		return protocol.DecisionReasonIdlePreservesTerminal
 	case "same identified turn after terminal", "stopped subagent never restarts", "same-source same-tool terminal suppression", "same-source same-turn terminal suppression":
-		return daemon.DecisionReasonTerminalTurnSuppression
+		return protocol.DecisionReasonTerminalTurnSuppression
 	case "legacy terminal grace window", "terminal trailing-event grace":
-		return daemon.DecisionReasonTerminalGraceSuppression
+		return protocol.DecisionReasonTerminalGraceSuppression
 	case "user acknowledged visible facts; ASL leases preserved":
-		return daemon.DecisionReasonUserAcknowledged
+		return protocol.DecisionReasonUserAcknowledged
 	case "session end cleared its remaining subagent facts":
-		return daemon.DecisionReasonSessionAgentsCleared
+		return protocol.DecisionReasonSessionAgentsCleared
 	default:
 		return strings.TrimSpace(trace.Reason)
 	}

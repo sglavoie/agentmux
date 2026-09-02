@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestAuthoritativeIdleDiscardedWhenSequenceMoved covers the new-prompt race:
@@ -80,7 +81,7 @@ func TestAuthoritativeIdleDiscardedWhenLowerExplicitSequenceLands(t *testing.T) 
 		t.Fatalf("effective = %+v visible %q, want the newer interactive bolt preserved", eff, visible)
 	}
 	h.stateMu.Lock()
-	newFact := h.store[7].Reducer.facts[SourceID{Kind: SourceHarness, Key: "claude:new"}]
+	newFact := h.store[7].Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:new"}]
 	h.stateMu.Unlock()
 	if newFact == nil || newFact.acked {
 		t.Fatalf("newer interactive work was retired by the stale probe: %+v", newFact)
@@ -140,7 +141,7 @@ func TestAuthoritativeIdleDiscardedWhenPersistedMergeLands(t *testing.T) {
 	// generation, so the merge cannot advance the receipt generation via MaxSeq
 	// alone.
 	persisted := NewReducer(ReducerConfig{})
-	persisted.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: base})
+	persisted.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: base})
 	win := encodeMergeWindow(t, persisted, 1, now)[0].Tabs[0].Windows[0]
 
 	h.stateMu.Lock()

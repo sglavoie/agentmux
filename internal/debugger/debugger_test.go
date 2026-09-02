@@ -13,6 +13,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -30,15 +31,15 @@ type testKittyClient struct {
 func (c testKittyClient) ListWindows() ([]kitty.OSWindow, error) { return c.windows, c.err }
 
 type testProbeClient struct {
-	request daemon.Request
+	request protocol.Request
 }
 
-func (c *testProbeClient) SendWithAutoStartObserved(request daemon.Request, _ string, observer daemon.DeliveryObserver) (daemon.Response, error) {
+func (c *testProbeClient) SendWithAutoStartObserved(request protocol.Request, _ string, observer daemon.DeliveryObserver) (protocol.Response, error) {
 	c.request = request
 	observer(daemon.DeliveryStageEvent{Stage: daemon.DeliveryStageIPCAttempt, Attempt: 1, Outcome: "success", Reason: "acknowledged", LatencyMS: 1.25})
-	return daemon.Response{OK: true, Delivery: &daemon.DeliveryAcknowledgement{
-		SchemaVersion: daemon.DeliveryAcknowledgementSchemaVersion,
-		Status:        daemon.DeliveryAcknowledgementAccepted, Reason: "routing_discovered",
+	return protocol.Response{OK: true, Delivery: &protocol.DeliveryAcknowledgement{
+		SchemaVersion: protocol.DeliveryAcknowledgementSchemaVersion,
+		Status:        protocol.DeliveryAcknowledgementAccepted, Reason: "routing_discovered",
 		TraceID: request.TraceID, RequestID: request.RequestID,
 		ProducerHarness: harness.Claude, TargetHarness: harness.Codex,
 		Profile: "work", SourceWindowID: 43, TargetWindowID: 42,
@@ -359,7 +360,7 @@ func TestProbeReportsEveryObservedTransportStageAndScope(t *testing.T) {
 	if !report.Success || len(report.Stages) != 2 || report.Stages[0].Stage != daemon.DeliveryStageIPCAttempt || report.Stages[1].Stage != "daemon_acknowledgement" {
 		t.Fatalf("probe report = %+v", report)
 	}
-	if client.request.Type != daemon.TypeDiagnosticProbe || client.request.WindowID != 43 || client.request.RequestID != "request-1" {
+	if client.request.Type != protocol.TypeDiagnosticProbe || client.request.WindowID != 43 || client.request.RequestID != "request-1" {
 		t.Fatalf("probe request = %+v", client.request)
 	}
 	if !strings.Contains(report.Scope, "does not prove") || !strings.Contains(report.Scope, "without changing reducer") {

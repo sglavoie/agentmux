@@ -1,6 +1,10 @@
 package daemon
 
-import "sort"
+import (
+	"sort"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+)
 
 // Stable process-exit reason codes. The reducer returns one of these for every
 // settlement attempt so later daemon diagnostics do not have to infer policy
@@ -27,9 +31,9 @@ type HarnessProcessExitResult struct {
 	Changed                bool
 	SynthesizedStop        bool
 	WithdrawnFacts         int
-	WithdrawnSources       []SourceID
+	WithdrawnSources       []protocol.SourceID
 	ClearedSubagents       int
-	ClearedSubagentSources []SourceID
+	ClearedSubagentSources []protocol.SourceID
 	Reason                 string
 	Before                 EffectiveState
 	After                  EffectiveState
@@ -39,32 +43,8 @@ type HarnessProcessExitResult struct {
 // accepted reducer event may retain. Transport normalization already validates
 // production events; this second boundary keeps direct/replay callers from
 // attaching malformed, producer-mismatched, or forbidden ownership.
-func reducerHarnessProcessIdentity(ev ReducerEvent) HarnessProcessIdentity {
-	switch ev.Source.Kind {
-	case SourceHarness, SourceLegacy, SourceSubagent:
-	default:
-		return HarnessProcessIdentity{}
-	}
-
-	identity, ok := canonicalHarnessProcessIdentity(ev.HarnessProcess)
-	if !ok {
-		return HarnessProcessIdentity{}
-	}
-	if ev.Source.Kind == SourceHarness {
-		prefix := identity.Harness + ":"
-		if len(ev.Source.Key) <= len(prefix) || ev.Source.Key[:len(prefix)] != prefix {
-			return HarnessProcessIdentity{}
-		}
-	}
-	return identity
-}
-
-func canonicalHarnessProcessIdentity(identity HarnessProcessIdentity) (HarnessProcessIdentity, bool) {
-	validated := validatedHarnessProcessIdentity(identity.Harness, &identity)
-	if validated == nil {
-		return HarnessProcessIdentity{}, false
-	}
-	return *validated, true
+func reducerHarnessProcessIdentity(ev protocol.ReducerEvent) protocol.HarnessProcessIdentity {
+	return protocol.FactProcessIdentity(ev.Source, ev.HarnessProcess)
 }
 
 // SettleHarnessProcessExit folds external evidence that one exact harness
@@ -79,7 +59,7 @@ func canonicalHarnessProcessIdentity(identity HarnessProcessIdentity) (HarnessPr
 // clear active subagents belonging to that parent session. Clear-only/reset
 // exits withdraw every matched non-ASL fact and never synthesize a stop.
 func (r *Reducer) SettleHarnessProcessExit(
-	identity HarnessProcessIdentity,
+	identity protocol.HarnessProcessIdentity,
 	at int64,
 	options HarnessProcessExitOptions,
 ) HarnessProcessExitResult {
@@ -90,7 +70,7 @@ func (r *Reducer) SettleHarnessProcessExit(
 	result.Before = r.Reduce(at)
 	result.After = result.Before
 
-	identity, ok := canonicalHarnessProcessIdentity(identity)
+	identity, ok := protocol.CanonicalHarnessProcessIdentity(identity)
 	if !ok {
 		result.Reason = HarnessProcessExitReasonInvalid
 		return result
@@ -131,14 +111,14 @@ func processExitReason(options HarnessProcessExitOptions) string {
 // deterministic source order. ASL and probe facts are excluded even if
 // corrupted or test-injected state carries a matching fingerprint: their
 // lifecycles are governed only by their own events.
-func (r *Reducer) processFacts(identity HarnessProcessIdentity) []*sourceFact {
+func (r *Reducer) processFacts(identity protocol.HarnessProcessIdentity) []*sourceFact {
 	matched := make([]*sourceFact, 0)
 	for _, f := range r.facts {
 		if !f.set || f.harnessProcess != identity {
 			continue
 		}
 		switch f.source.Kind {
-		case SourceHarness, SourceLegacy, SourceSubagent:
+		case protocol.SourceHarness, protocol.SourceLegacy, protocol.SourceSubagent:
 		default:
 			continue
 		}
@@ -165,7 +145,7 @@ func (r *Reducer) settlePipeProcessExit(matched []*sourceFact, at int64, result 
 }
 
 func (r *Reducer) settleInteractiveProcessExit(
-	identity HarnessProcessIdentity,
+	identity protocol.HarnessProcessIdentity,
 	matched []*sourceFact,
 	at int64,
 	result *HarnessProcessExitResult,
@@ -227,10 +207,10 @@ func newestInteractiveProcessParent(matched []*sourceFact) *sourceFact {
 }
 
 func processParentFact(f *sourceFact) bool {
-	if f.source.Kind == SourceHarness {
+	if f.source.Kind == protocol.SourceHarness {
 		return true
 	}
-	return f.source.Kind == SourceLegacy && !isLegacySubagentBucket(f.source.Key)
+	return f.source.Kind == protocol.SourceLegacy && !isLegacySubagentBucket(f.source.Key)
 }
 
 // clearProcessSubagents clears active subagents for the selected parent
@@ -238,9 +218,9 @@ func processParentFact(f *sourceFact) bool {
 // with the exact exiting process are eligible.
 func (r *Reducer) clearProcessSubagents(
 	sessionID string,
-	identity HarnessProcessIdentity,
+	identity protocol.HarnessProcessIdentity,
 	at int64,
-) []SourceID {
+) []protocol.SourceID {
 	candidates := make([]*sourceFact, 0)
 	for _, f := range r.facts {
 		if !f.set || f.acked || f.terminated || !activeSubagentFact(f) {
@@ -248,11 +228,11 @@ func (r *Reducer) clearProcessSubagents(
 		}
 		if sessionID != "" {
 			switch f.source.Kind {
-			case SourceSubagent:
+			case protocol.SourceSubagent:
 				if f.sessionID != sessionID {
 					continue
 				}
-			case SourceLegacy:
+			case protocol.SourceLegacy:
 				if f.source.Key != legacySubagentBucketKey(sessionID) {
 					continue
 				}
@@ -266,18 +246,18 @@ func (r *Reducer) clearProcessSubagents(
 		return sourceIDLess(candidates[i].source, candidates[j].source)
 	})
 
-	cleared := make([]SourceID, 0, len(candidates))
+	cleared := make([]protocol.SourceID, 0, len(candidates))
 	for _, f := range candidates {
 		settledAt := processSettlementTime(at, f)
 		switch f.source.Kind {
-		case SourceSubagent:
+		case protocol.SourceSubagent:
 			f.action = "stop"
 			f.icon = ""
 			f.terminated = true
 			f.terminalTurn = ""
 			f.terminalToolUse = ""
 			f.terminalAt = settledAt
-		case SourceLegacy:
+		case protocol.SourceLegacy:
 			f.agents = 0
 			f.action = "idle"
 			f.icon = ""
@@ -290,9 +270,9 @@ func (r *Reducer) clearProcessSubagents(
 
 func activeSubagentFact(f *sourceFact) bool {
 	switch f.source.Kind {
-	case SourceSubagent:
+	case protocol.SourceSubagent:
 		return f.icon == "subagent"
-	case SourceLegacy:
+	case protocol.SourceLegacy:
 		return isLegacySubagentBucket(f.source.Key) && (f.agents > 0 || f.icon == "subagent")
 	default:
 		return false
@@ -322,11 +302,11 @@ func processSettlementTime(at int64, f *sourceFact) int64 {
 	return 1
 }
 
-func sortSourceIDs(ids []SourceID) {
+func sortSourceIDs(ids []protocol.SourceID) {
 	sort.Slice(ids, func(i, j int) bool { return sourceIDLess(ids[i], ids[j]) })
 }
 
-func sourceIDLess(a, b SourceID) bool {
+func sourceIDLess(a, b protocol.SourceID) bool {
 	if a.Kind != b.Kind {
 		return a.Kind < b.Kind
 	}

@@ -5,6 +5,8 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestTerminalStopHold_WorkAfterStopKeepsBolt is the reported bug: Claude fires
@@ -17,7 +19,7 @@ func TestTerminalStopHold_WorkAfterStopKeepsBolt(t *testing.T) {
 		armTerminalHold(t, h)
 
 		time.Sleep(terminalHoldTestDelay / 2)
-		if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "PostToolUse"}); !resp.OK {
+		if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "PostToolUse"}); !resp.OK {
 			t.Fatalf("PostToolUse response = %+v", resp)
 		}
 		if _, stillHeld := terminalHoldPending(t, h, 42); stillHeld {
@@ -36,7 +38,7 @@ func TestTerminalStopHold_WorkAfterStopKeepsBolt(t *testing.T) {
 			t.Fatalf("notifications = %d, want 0 (%+v)", got, rec.snapshot())
 		}
 		outcomes := stopHoldOutcomes(t, h, 42)
-		want := []StopHoldOutcome{StopHoldOutcomeHeld, StopHoldOutcomeSuperseded}
+		want := []protocol.StopHoldOutcome{protocol.StopHoldOutcomeHeld, protocol.StopHoldOutcomeSuperseded}
 		if len(outcomes) != len(want) {
 			t.Fatalf("hold rows = %v, want %v", outcomes, want)
 		}
@@ -79,7 +81,7 @@ func TestTerminalStopHold_UncontestedStopCommitsAtDeadline(t *testing.T) {
 			t.Fatal("committed hold stayed addressable")
 		}
 		ev := lastStopEvent(t, h, 42)
-		if ev.StopHoldOutcome != StopHoldOutcomeDeadline || ev.StopConfirmedBy != StopConfirmedByDeadline {
+		if ev.StopHoldOutcome != protocol.StopHoldOutcomeDeadline || ev.StopConfirmedBy != protocol.StopConfirmedByDeadline {
 			t.Fatalf("released stop = outcome %q by %q, want deadline/deadline", ev.StopHoldOutcome, ev.StopConfirmedBy)
 		}
 		if want := int(terminalHoldTestTimeout.Milliseconds()); ev.StopHoldWaitedMs != want {
@@ -122,8 +124,8 @@ func TestTerminalStopHold_ConfirmationBeforeQuietPeriodStillWaits(t *testing.T) 
 			t.Fatalf("icon at quietUntil = %q, want stop", eff.Icon)
 		}
 		ev := lastStopEvent(t, h, 42)
-		if ev.StopHoldOutcome != StopHoldOutcomeConfirmed || ev.StopConfirmedBy != StopConfirmedByClaudeScreen {
-			t.Fatalf("released stop = outcome %q by %q, want confirmed/%s", ev.StopHoldOutcome, ev.StopConfirmedBy, StopConfirmedByClaudeScreen)
+		if ev.StopHoldOutcome != protocol.StopHoldOutcomeConfirmed || ev.StopConfirmedBy != protocol.StopConfirmedByClaudeScreen {
+			t.Fatalf("released stop = outcome %q by %q, want confirmed/%s", ev.StopHoldOutcome, ev.StopConfirmedBy, protocol.StopConfirmedByClaudeScreen)
 		}
 		if want := int(terminalHoldTestDelay.Milliseconds()); ev.StopHoldWaitedMs != want {
 			t.Fatalf("stop_hold_waited_ms = %d, want %d (released exactly at quietUntil)", ev.StopHoldWaitedMs, want)
@@ -162,8 +164,8 @@ func TestTerminalStopHold_ConfirmationAfterQuietPeriodCommitsImmediately(t *test
 			t.Fatalf("confirmed commit landed after %v; it must not wait for the next re-arm tick", waited)
 		}
 		ev := lastStopEvent(t, h, 42)
-		if ev.StopHoldOutcome != StopHoldOutcomeConfirmed || ev.StopConfirmedBy != StopConfirmedByClaudeScreen {
-			t.Fatalf("released stop = outcome %q by %q, want confirmed/%s", ev.StopHoldOutcome, ev.StopConfirmedBy, StopConfirmedByClaudeScreen)
+		if ev.StopHoldOutcome != protocol.StopHoldOutcomeConfirmed || ev.StopConfirmedBy != protocol.StopConfirmedByClaudeScreen {
+			t.Fatalf("released stop = outcome %q by %q, want confirmed/%s", ev.StopHoldOutcome, ev.StopConfirmedBy, protocol.StopConfirmedByClaudeScreen)
 		}
 	})
 }
@@ -225,10 +227,10 @@ func TestTerminalStopHold_ConfirmationDeadlineClaimRace(t *testing.T) {
 	// the only two commit attempts are the simulated deadline callback and the
 	// one confirmation pulls in.
 	h.SetStopConfirm(time.Hour, 2*time.Hour, true)
-	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "UserPromptSubmit"}); !resp.OK {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "UserPromptSubmit"}); !resp.OK {
 		t.Fatalf("UserPromptSubmit response = %+v", resp)
 	}
-	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "Stop"}); !resp.OK {
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "Stop"}); !resp.OK {
 		t.Fatalf("Stop response = %+v", resp)
 	}
 	pending, armed := terminalHoldPending(t, h, 42)
@@ -281,7 +283,7 @@ func TestTerminalStopHold_ConfirmationDeadlineClaimRace(t *testing.T) {
 	// resetStopCommitMu-then-stateMu order every commit path takes — guarantees no
 	// commit is half-applied while the events are counted.
 	h.resetStopCommitMu.Lock()
-	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	h.resetStopCommitMu.Unlock()
 
 	stops := 0

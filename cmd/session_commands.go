@@ -12,6 +12,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/transcript"
@@ -27,7 +28,7 @@ var (
 	sessionCommandsSessionIndexPath = transcript.IndexPath
 	sessionCommandsSessionReaders   = transcriptReaders
 	sessionCommandsNewKitty         = func() kitty.KittyClient { return kitty.NewClient(kitty.NewRealRunner()) }
-	sessionCommandsDaemon           = func(req daemon.Request) (daemon.Response, error) { return daemon.NewClient().Send(req) }
+	sessionCommandsDaemon           = func(req protocol.Request) (protocol.Response, error) { return daemon.NewClient().Send(req) }
 	sessionCommandsNewHandoff       = func() handoff.Runner { return handoff.NewWorkflow() }
 	sessionCommandsNewWorktree      = func() worktree.Runner { return worktree.NewWorkflow() }
 )

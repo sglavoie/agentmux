@@ -8,13 +8,14 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
 type fakeHarnessProcessInspector struct {
 	mu       sync.Mutex
-	statuses map[HarnessProcessIdentity]HarnessProcessInspection
-	calls    [][]HarnessProcessIdentity
+	statuses map[protocol.HarnessProcessIdentity]HarnessProcessInspection
+	calls    [][]protocol.HarnessProcessIdentity
 	entered  chan struct{}
 	release  chan struct{}
 	once     sync.Once
@@ -22,10 +23,10 @@ type fakeHarnessProcessInspector struct {
 
 func (f *fakeHarnessProcessInspector) InspectHarnessProcesses(
 	ctx context.Context,
-	identities []HarnessProcessIdentity,
-) map[HarnessProcessIdentity]HarnessProcessInspection {
+	identities []protocol.HarnessProcessIdentity,
+) map[protocol.HarnessProcessIdentity]HarnessProcessInspection {
 	f.mu.Lock()
-	f.calls = append(f.calls, append([]HarnessProcessIdentity(nil), identities...))
+	f.calls = append(f.calls, append([]protocol.HarnessProcessIdentity(nil), identities...))
 	f.mu.Unlock()
 	if f.entered != nil {
 		f.once.Do(func() { close(f.entered) })
@@ -37,7 +38,7 @@ func (f *fakeHarnessProcessInspector) InspectHarnessProcesses(
 			return nil
 		}
 	}
-	out := make(map[HarnessProcessIdentity]HarnessProcessInspection, len(identities))
+	out := make(map[protocol.HarnessProcessIdentity]HarnessProcessInspection, len(identities))
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for _, identity := range identities {
@@ -56,7 +57,7 @@ func applyLifecycleEvent(
 	t *testing.T,
 	h *Handler,
 	windowID int,
-	identity HarnessProcessIdentity,
+	identity protocol.HarnessProcessIdentity,
 	sessionID string,
 	action string,
 	seq uint64,
@@ -67,8 +68,8 @@ func applyLifecycleEvent(
 	if action == "stop" || action == "stop_failure" {
 		event = "Stop"
 	}
-	normalized := NormalizedEvent{
-		Source:         SourceID{Kind: SourceHarness, Key: identity.Harness + ":" + sessionID},
+	normalized := protocol.NormalizedEvent{
+		Source:         protocol.SourceID{Kind: protocol.SourceHarness, Key: identity.Harness + ":" + sessionID},
 		Action:         action,
 		Event:          event,
 		Seq:            seq,
@@ -77,21 +78,21 @@ func applyLifecycleEvent(
 		PipeMode:       pipeMode,
 		HarnessProcess: identity,
 	}
-	resp := h.handleStateUpdate(Request{
-		Type: TypeStateUpdate, WindowID: windowID, Action: action, Event: event,
+	resp := h.handleStateUpdate(protocol.Request{
+		Type: protocol.TypeStateUpdate, WindowID: windowID, Action: action, Event: event,
 		Harness: identity.Harness, Account: "work", SessionTitle: "W:api",
-		PipeMode: pipeMode, normalized: &normalized,
+		PipeMode: pipeMode, Normalized: &normalized,
 	})
 	if !resp.OK {
 		t.Fatalf("apply lifecycle event: %+v", resp)
 	}
 }
 
-func lifecycleEvents(st *WindowState) []SessionEvent {
+func lifecycleEvents(st *WindowState) []protocol.SessionEvent {
 	if st == nil {
 		return nil
 	}
-	out := make([]SessionEvent, 0)
+	out := make([]protocol.SessionEvent, 0)
 	for _, event := range st.EventLog {
 		if event.Event == eventHarnessProcessExited {
 			out = append(out, event)
@@ -101,7 +102,7 @@ func lifecycleEvents(st *WindowState) []SessionEvent {
 }
 
 // lifecycleExitEvent returns the single process-exit row a window recorded.
-func lifecycleExitEvent(t *testing.T, h *Handler, windowID int) SessionEvent {
+func lifecycleExitEvent(t *testing.T, h *Handler, windowID int) protocol.SessionEvent {
 	t.Helper()
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
@@ -116,10 +117,10 @@ func TestProcessLifecycleAliveAndUnknownPreserveState(t *testing.T) {
 	for _, status := range []HarnessProcessInspection{HarnessProcessAliveSameInstance, HarnessProcessUnknown} {
 		t.Run(string(status), func(t *testing.T) {
 			h := newTestHandler()
-			identity := HarnessProcessIdentity{Harness: "claude", PID: 5101, StartToken: "Thu Jul 16 10:20:30 2026"}
+			identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5101, StartToken: "Thu Jul 16 10:20:30 2026"}
 			applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
 			h.renderQueue = newRenderQueue()
-			h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[HarnessProcessIdentity]HarnessProcessInspection{identity: status}})
+			h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: status}})
 
 			h.stateMu.Lock()
 			beforeEffective := h.store[42].Effective
@@ -152,10 +153,10 @@ func TestProcessLifecycleMissingAndReplacedSettleInteractiveSilently(t *testing.
 		t.Run(string(status), func(t *testing.T) {
 			notifier, calls := newTestNotifier(&config.NotificationConfig{Stop: true})
 			h := NewHandler(NewStateGuard(time.Hour), notifier)
-			identity := HarnessProcessIdentity{Harness: "claude", PID: 5201, StartToken: "Thu Jul 16 10:20:30 2026"}
+			identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5201, StartToken: "Thu Jul 16 10:20:30 2026"}
 			applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
 			h.renderQueue = newRenderQueue()
-			h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[HarnessProcessIdentity]HarnessProcessInspection{identity: status}})
+			h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: status}})
 
 			if committed := h.processLifecycleTick(context.Background(), time.Now()); committed != 1 {
 				t.Fatalf("committed = %d, want 1", committed)
@@ -192,10 +193,10 @@ func TestProcessLifecycleSettlementPublishesSafeDiagnosticEvidenceOnce(t *testin
 	}
 	h := newTestHandler()
 	h.setDecisionJournal(journal)
-	identity := HarnessProcessIdentity{Harness: "claude", PID: 5242, StartToken: "Thu Jul 16 10:20:30 2026"}
+	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5242, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
 	h.renderQueue = newRenderQueue()
-	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[HarnessProcessIdentity]HarnessProcessInspection{
+	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{
 		identity: HarnessProcessMissing,
 	}})
 	observedAt := time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC)
@@ -215,10 +216,10 @@ func TestProcessLifecycleSettlementPublishesSafeDiagnosticEvidenceOnce(t *testin
 		t.Fatalf("lifecycle events = %+v, want one", events)
 	}
 	event := events[0]
-	if event.Event != EventHarnessProcessExited || event.Reason != HarnessProcessExitReasonInteractive ||
+	if event.Event != protocol.EventHarnessProcessExited || event.Reason != HarnessProcessExitReasonInteractive ||
 		event.ProcessHarness != identity.Harness || event.ProcessPID != identity.PID ||
 		event.ProcessStartToken != identity.StartToken || event.ProcessObservation != string(HarnessProcessMissing) ||
-		event.ProcessMode != "interactive" || event.SourceKind != string(SourceHarness) ||
+		event.ProcessMode != "interactive" || event.SourceKind != string(protocol.SourceHarness) ||
 		event.SourceKey != "claude:session" || event.OriginWindowID != 42 ||
 		event.WithdrawnFacts == nil || *event.WithdrawnFacts != 0 ||
 		event.ClearedSubagents == nil || *event.ClearedSubagents != 0 ||
@@ -244,7 +245,7 @@ func TestProcessLifecycleSettlementPublishesSafeDiagnosticEvidenceOnce(t *testin
 	}
 	record := records[0]
 	if record.Outcome != "settled" || record.Reason != HarnessProcessExitReasonInteractive ||
-		record.Evidence["event"] != EventHarnessProcessExited || record.Evidence["process_start_token"] != identity.StartToken ||
+		record.Evidence["event"] != protocol.EventHarnessProcessExited || record.Evidence["process_start_token"] != identity.StartToken ||
 		record.Evidence["terminal_hook_evidence"] != processTerminalHookEvidenceAbsent ||
 		record.Evidence["render_generation"] == "" || record.Evidence["before_icon"] != "bolt" ||
 		record.Evidence["after_icon"] != "stop" {
@@ -265,9 +266,9 @@ func TestProcessLifecycleInspectionFailuresAreRateLimitedAndHealthyPollsSilent(t
 	}
 	h := newTestHandler()
 	h.setDecisionJournal(journal)
-	identity := HarnessProcessIdentity{Harness: "codex", PID: 5243, StartToken: "Thu Jul 16 10:21:30 2026"}
+	identity := protocol.HarnessProcessIdentity{Harness: "codex", PID: 5243, StartToken: "Thu Jul 16 10:21:30 2026"}
 	applyLifecycleEvent(t, h, 43, identity, "session", "active", 1, false)
-	inspector := &fakeHarnessProcessInspector{statuses: map[HarnessProcessIdentity]HarnessProcessInspection{
+	inspector := &fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{
 		identity: HarnessProcessUnknown,
 	}}
 	h.SetHarnessProcessInspector(inspector)
@@ -302,7 +303,7 @@ func TestProcessLifecycleInspectionFailuresAreRateLimitedAndHealthyPollsSilent(t
 func TestProcessLifecycleCancelsPendingPermissionNotification(t *testing.T) {
 	notifier, calls := newTestNotifier(&config.NotificationConfig{Permission: true, PermissionDebounceMs: 60_000})
 	h := NewHandler(NewStateGuard(time.Hour), notifier)
-	identity := HarnessProcessIdentity{Harness: "claude", PID: 5251, StartToken: "Thu Jul 16 10:20:30 2026"}
+	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5251, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "permission", 1, false)
 	notifier.mu.Lock()
 	_, pendingBefore := notifier.pending[42]
@@ -310,7 +311,7 @@ func TestProcessLifecycleCancelsPendingPermissionNotification(t *testing.T) {
 	if !pendingBefore {
 		t.Fatal("permission event did not schedule pending notification")
 	}
-	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing}})
+	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing}})
 
 	if committed := h.processLifecycleTick(context.Background(), time.Now()); committed != 1 {
 		t.Fatalf("committed = %d, want 1", committed)
@@ -328,12 +329,12 @@ func TestProcessLifecycleCancelsPendingPermissionNotification(t *testing.T) {
 
 func TestProcessLifecyclePipeExitRevealsParentAndQueuesRender(t *testing.T) {
 	h := newTestHandler()
-	parent := HarnessProcessIdentity{Harness: "claude", PID: 5301, StartToken: "Thu Jul 16 10:20:30 2026"}
-	pipe := HarnessProcessIdentity{Harness: "claude", PID: 5302, StartToken: "Thu Jul 16 10:21:30 2026"}
+	parent := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5301, StartToken: "Thu Jul 16 10:20:30 2026"}
+	pipe := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5302, StartToken: "Thu Jul 16 10:21:30 2026"}
 	applyLifecycleEvent(t, h, 42, parent, "parent", "stop", 1, false)
 	applyLifecycleEvent(t, h, 42, pipe, "pipe", "active", 1, true)
 	h.renderQueue = newRenderQueue()
-	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[HarnessProcessIdentity]HarnessProcessInspection{pipe: HarnessProcessMissing}})
+	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{pipe: HarnessProcessMissing}})
 
 	if committed := h.processLifecycleTick(context.Background(), time.Now()); committed != 1 {
 		t.Fatalf("committed = %d, want 1", committed)
@@ -355,12 +356,12 @@ func TestProcessLifecyclePipeExitRevealsParentAndQueuesRender(t *testing.T) {
 
 func TestProcessLifecycleResetClearsWithoutSynthesizingStop(t *testing.T) {
 	h := newTestHandler()
-	identity := HarnessProcessIdentity{Harness: "claude", PID: 5401, StartToken: "Thu Jul 16 10:20:30 2026"}
+	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5401, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
 	h.stateMu.Lock()
 	h.store[42].PendingReset = resetFlowClearing
 	h.stateMu.Unlock()
-	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing}})
+	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing}})
 
 	if committed := h.processLifecycleTick(context.Background(), time.Now()); committed != 1 {
 		t.Fatalf("committed = %d, want 1", committed)
@@ -379,17 +380,17 @@ func TestProcessLifecycleResetClearsWithoutSynthesizingStop(t *testing.T) {
 
 func TestProcessLifecycleLeavesASLFactUntouched(t *testing.T) {
 	h := newTestHandler()
-	identity := HarnessProcessIdentity{Harness: "claude", PID: 5501, StartToken: "Thu Jul 16 10:20:30 2026"}
+	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5501, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
-	aslSource := SourceID{Kind: SourceASL, Key: "run-1"}
+	aslSource := protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}
 	h.stateMu.Lock()
 	st := h.store[42]
-	st.Reducer.Apply(ReducerEvent{Source: aslSource, RunID: "run-1", Phase: ASLPhaseBetween, Seq: 1, At: time.Now().Unix()})
+	st.Reducer.Apply(protocol.ReducerEvent{Source: aslSource, RunID: "run-1", Phase: ASLPhaseBetween, Seq: 1, At: time.Now().Unix()})
 	st.ShadowSeq++
 	h.publishEffectiveLocked(42, st, st.Reducer.Reduce(time.Now().Unix()))
 	before := factSnapshotBySource(st.Reducer.Facts(), aslSource)
 	h.stateMu.Unlock()
-	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing}})
+	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing}})
 
 	if committed := h.processLifecycleTick(context.Background(), time.Now()); committed != 1 {
 		t.Fatalf("committed = %d, want 1", committed)

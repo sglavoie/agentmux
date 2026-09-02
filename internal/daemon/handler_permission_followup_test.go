@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // TestHandler_CopilotAutoApprovedPermissionSuppressesNotification verifies that
@@ -32,9 +33,9 @@ func TestHandler_CopilotAutoApprovedPermissionSuppressesNotification(t *testing.
 		}
 		h := NewHandler(guard, notifier)
 
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "preToolUse"})
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission", Event: "permissionRequest"})
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "postToolUse"})
+		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "preToolUse"})
+		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "permission", Event: "permissionRequest"})
+		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "postToolUse"})
 
 		// Advance fake time well past the debounce window; a leaked AfterFunc
 		// would fire here, and synctest.Wait then drains its dispatch goroutine.
@@ -61,27 +62,27 @@ func TestHandler_CopilotLatePermissionPromptAfterAutoApprovedToolPreservesBolt(t
 		}
 		h := NewHandler(guard, notifier)
 
-		h.Handle(Request{
-			Type:     TypeStateUpdate,
+		h.Handle(protocol.Request{
+			Type:     protocol.TypeStateUpdate,
 			WindowID: 1,
 			Harness:  "copilot",
 			Action:   "active",
 			Event:    "postToolUse",
 		})
 
-		resp := h.Handle(Request{
-			Type:     TypeStateUpdate,
+		resp := h.Handle(protocol.Request{
+			Type:     protocol.TypeStateUpdate,
 			WindowID: 1,
 			Harness:  "copilot",
 			Action:   "permission",
 			Event:    "permissionRequest",
 		})
-		if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
+		if !resp.OK || !resp.Allowed || resp.IconState != protocol.IconStatePreserve {
 			t.Fatalf("Copilot permissionRequest should preserve the bolt while permission is still ambiguous, got %+v", resp)
 		}
 
-		resp = h.Handle(Request{
-			Type:     TypeStateUpdate,
+		resp = h.Handle(protocol.Request{
+			Type:     protocol.TypeStateUpdate,
 			WindowID: 1,
 			Harness:  "copilot",
 			Action:   "active",
@@ -91,20 +92,20 @@ func TestHandler_CopilotLatePermissionPromptAfterAutoApprovedToolPreservesBolt(t
 			t.Fatalf("Copilot postToolUse after auto-approved prompt: want bolt, got %+v", resp)
 		}
 
-		resp = h.Handle(Request{
-			Type:             TypeStateUpdate,
+		resp = h.Handle(protocol.Request{
+			Type:             protocol.TypeStateUpdate,
 			WindowID:         1,
 			Harness:          "copilot",
 			Action:           "permission",
 			Event:            "notification",
 			NotificationType: "permission_prompt",
 		})
-		if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
+		if !resp.OK || !resp.Allowed || resp.IconState != protocol.IconStatePreserve {
 			t.Fatalf("late Copilot permission_prompt after auto-approved tool use: want preserve, got %+v", resp)
 		}
 
-		resp = h.Handle(Request{
-			Type:     TypeStateUpdate,
+		resp = h.Handle(protocol.Request{
+			Type:     protocol.TypeStateUpdate,
 			WindowID: 1,
 			Harness:  "copilot",
 			Action:   "stop",
@@ -128,8 +129,8 @@ func TestHandler_CopilotLatePermissionPromptAfterAutoApprovedToolPreservesBolt(t
 func TestHandler_CopilotPermissionPromptAfterPrePermissionSignalShowsKey(t *testing.T) {
 	h := newTestHandler()
 
-	resp := h.Handle(Request{
-		Type:     TypeStateUpdate,
+	resp := h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Harness:  "copilot",
 		Action:   "active",
@@ -139,19 +140,19 @@ func TestHandler_CopilotPermissionPromptAfterPrePermissionSignalShowsKey(t *test
 		t.Fatalf("setup postToolUse: want bolt, got %+v", resp)
 	}
 
-	resp = h.Handle(Request{
-		Type:     TypeStateUpdate,
+	resp = h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Harness:  "copilot",
 		Action:   "permission",
 		Event:    "permissionRequest",
 	})
-	if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
+	if !resp.OK || !resp.Allowed || resp.IconState != protocol.IconStatePreserve {
 		t.Fatalf("Copilot permissionRequest should preserve bolt until a real prompt appears, got %+v", resp)
 	}
 
-	resp = h.Handle(Request{
-		Type:             TypeStateUpdate,
+	resp = h.Handle(protocol.Request{
+		Type:             protocol.TypeStateUpdate,
 		WindowID:         1,
 		Harness:          "copilot",
 		Action:           "permission",
@@ -178,9 +179,9 @@ func TestHandler_PermissionCancelledByTerminalAction(t *testing.T) {
 		}
 		h := NewHandler(guard, notifier)
 
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "permission"})
 		time.Sleep(20 * time.Millisecond)
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop"})
+		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "stop"})
 
 		time.Sleep(time.Second)
 		synctest.Wait()
@@ -214,10 +215,10 @@ func TestHandler_PermissionNotificationFiresWhenGuardBlocks(t *testing.T) {
 		h := NewHandler(guard, notifier)
 
 		// Prime with failure so the guard sits at priority 4.
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "failure"})
+		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "failure"})
 
 		// Permission is blocked by the failure guard.
-		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+		resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "permission"})
 		if !resp.OK || resp.Allowed {
 			t.Fatalf("permission blocked by failure guard: want allowed=false, got %+v", resp)
 		}

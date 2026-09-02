@@ -5,15 +5,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 func TestProcessLifecycleConcurrentHookInvalidatesObservation(t *testing.T) {
 	h := newTestHandler()
-	identity := HarnessProcessIdentity{Harness: "claude", PID: 5601, StartToken: "Thu Jul 16 10:20:30 2026"}
+	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5601, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
 	inspector := &fakeHarnessProcessInspector{
-		statuses: map[HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing},
+		statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing},
 		entered:  make(chan struct{}), release: make(chan struct{}),
 	}
 	h.SetHarnessProcessInspector(inspector)
@@ -40,9 +41,9 @@ func TestProcessLifecycleConcurrentHookInvalidatesObservation(t *testing.T) {
 
 func TestProcessLifecycleLateNativeStopWinsAndSettlementIsIdempotent(t *testing.T) {
 	h := newTestHandler()
-	identity := HarnessProcessIdentity{Harness: "claude", PID: 5701, StartToken: "Thu Jul 16 10:20:30 2026"}
+	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5701, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
-	inspector := &fakeHarnessProcessInspector{statuses: map[HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing}}
+	inspector := &fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing}}
 	h.SetHarnessProcessInspector(inspector)
 	if committed := h.processLifecycleTick(context.Background(), time.Now()); committed != 1 {
 		t.Fatalf("committed = %d, want 1", committed)
@@ -54,7 +55,7 @@ func TestProcessLifecycleLateNativeStopWinsAndSettlementIsIdempotent(t *testing.
 
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	fact := factSnapshotBySource(h.store[42].Reducer.Facts(), SourceID{Kind: SourceHarness, Key: "claude:session"})
+	fact := factSnapshotBySource(h.store[42].Reducer.Facts(), protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:session"})
 	if fact == nil || fact.Seq != 2 || fact.Action != "stop" || !fact.Terminated {
 		t.Fatalf("native terminal fact = %+v", fact)
 	}
@@ -67,9 +68,9 @@ func TestProcessLifecycleLateNativeStopWinsAndSettlementIsIdempotent(t *testing.
 }
 
 func TestProcessLifecycleRestoredV4StateSettlesOnFirstPass(t *testing.T) {
-	identity := HarnessProcessIdentity{Harness: "claude", PID: 5801, StartToken: "Thu Jul 16 10:20:30 2026"}
+	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5801, StartToken: "Thu Jul 16 10:20:30 2026"}
 	r := NewReducer(zeroCfg)
-	r.Apply(processReducerEvent(SourceID{Kind: SourceHarness, Key: "claude:restored"}, "active", 1, time.Now().Unix(), "restored", false, identity))
+	r.Apply(processReducerEvent(protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:restored"}, "active", 1, time.Now().Unix(), "restored", false, identity))
 	persisted := WindowState{
 		Activity: time.Now(), LastAction: "active", LastHarness: "claude", LastAccount: "work",
 		LastSessionTitle: "W:api", DesiredIcon: "bolt", StateSet: true,
@@ -84,7 +85,7 @@ func TestProcessLifecycleRestoredV4StateSettlesOnFirstPass(t *testing.T) {
 		ID: 42, UserVars: kitty.UserVars{Profile: "work", Harness: "claude", AMXState: encoded},
 	}}}}}}, time.Now())
 	h.renderQueue = newRenderQueue()
-	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing}})
+	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing}})
 
 	if committed := h.processLifecycleTick(context.Background(), time.Now()); committed != 1 {
 		t.Fatalf("committed = %d, want 1", committed)
@@ -98,12 +99,12 @@ func TestProcessLifecycleRestoredV4StateSettlesOnFirstPass(t *testing.T) {
 
 func TestProcessLifecycleSlowInspectorDoesNotBlockDaemonWork(t *testing.T) {
 	h := newTestHandler()
-	identity := HarnessProcessIdentity{Harness: "claude", PID: 5901, StartToken: "Thu Jul 16 10:20:30 2026"}
+	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5901, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
 	windows := []kitty.OSWindow{{ID: 1, Tabs: []kitty.Tab{{ID: 2, Windows: []kitty.Window{{ID: 42}}}}}}
 	h.SetKittyClient(&fakeKittyClient{windows: windows})
 	inspector := &fakeHarnessProcessInspector{
-		statuses: map[HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing},
+		statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing},
 		entered:  make(chan struct{}), release: make(chan struct{}),
 	}
 	h.SetHarnessProcessInspector(inspector)
@@ -118,15 +119,15 @@ func TestProcessLifecycleSlowInspectorDoesNotBlockDaemonWork(t *testing.T) {
 		t.Fatal("inspector did not start")
 	}
 
-	workDone := make(chan Response, 1)
+	workDone := make(chan protocol.Response, 1)
 	go func() {
-		normalized := NormalizedEvent{
-			Source: SourceID{Kind: SourceHarness, Key: "claude:session"}, Action: "active", Event: "LifecycleTestEvent",
+		normalized := protocol.NormalizedEvent{
+			Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:session"}, Action: "active", Event: "LifecycleTestEvent",
 			Seq: 2, At: time.Now().Unix(), SessionID: "session", HarnessProcess: identity,
 		}
-		resp := h.handleStateUpdate(Request{
-			Type: TypeStateUpdate, WindowID: 42, Action: "active", Event: "LifecycleTestEvent",
-			Harness: "claude", Account: "work", SessionTitle: "W:api", normalized: &normalized,
+		resp := h.handleStateUpdate(protocol.Request{
+			Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Event: "LifecycleTestEvent",
+			Harness: "claude", Account: "work", SessionTitle: "W:api", Normalized: &normalized,
 		})
 		h.watchdogTick(time.Now(), time.Millisecond)
 		h.renderSnapshot(windows)
@@ -150,9 +151,9 @@ func TestProcessLifecycleSlowInspectorDoesNotBlockDaemonWork(t *testing.T) {
 
 func TestRunHarnessProcessLifecycleConvergesOnPollingPass(t *testing.T) {
 	h := newTestHandler()
-	identity := HarnessProcessIdentity{Harness: "claude", PID: 5951, StartToken: "Thu Jul 16 10:20:30 2026"}
+	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5951, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
-	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing}})
+	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing}})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
@@ -184,16 +185,16 @@ func TestRunHarnessProcessLifecycleConvergesOnPollingPass(t *testing.T) {
 
 func TestSetHarnessProcessInspectorWhileLifecycleLoopRuns(t *testing.T) {
 	h := newTestHandler()
-	identity := HarnessProcessIdentity{Harness: "claude", PID: 5971, StartToken: "Thu Jul 16 10:20:30 2026"}
+	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5971, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
 
 	inspectors := []*fakeHarnessProcessInspector{
 		{
-			statuses: map[HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessAliveSameInstance},
+			statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessAliveSameInstance},
 			entered:  make(chan struct{}),
 		},
 		{
-			statuses: map[HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessUnknown},
+			statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessUnknown},
 			entered:  make(chan struct{}),
 		},
 	}
@@ -243,10 +244,10 @@ func TestSetHarnessProcessInspectorWhileLifecycleLoopRuns(t *testing.T) {
 
 func TestRunHarnessProcessLifecycleCancellationStopsPolling(t *testing.T) {
 	h := newTestHandler()
-	identity := HarnessProcessIdentity{Harness: "claude", PID: 6001, StartToken: "Thu Jul 16 10:20:30 2026"}
+	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 6001, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
 	inspector := &fakeHarnessProcessInspector{
-		statuses: map[HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing},
+		statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing},
 		entered:  make(chan struct{}), release: make(chan struct{}),
 	}
 	h.SetHarnessProcessInspector(inspector)
@@ -269,7 +270,7 @@ func TestRunHarnessProcessLifecycleCancellationStopsPolling(t *testing.T) {
 	}
 }
 
-func factSnapshotBySource(facts []SourceFactSnapshot, source SourceID) *SourceFactSnapshot {
+func factSnapshotBySource(facts []protocol.SourceFactSnapshot, source protocol.SourceID) *protocol.SourceFactSnapshot {
 	for i := range facts {
 		if facts[i].Source() == source {
 			fact := facts[i]

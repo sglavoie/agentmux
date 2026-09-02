@@ -3,11 +3,13 @@ package daemon
 import (
 	"testing"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 func TestHandler_UnknownType(t *testing.T) {
 	h := newTestHandler()
-	resp := h.Handle(Request{Type: "bogus"})
+	resp := h.Handle(protocol.Request{Type: "bogus"})
 	if resp.OK {
 		t.Fatal("expected ok=false for unknown type")
 	}
@@ -16,8 +18,8 @@ func TestHandler_UnknownType(t *testing.T) {
 func TestHandler_StateUpdateWithoutNotifier(t *testing.T) {
 	h := NewHandler(NewStateGuard(time.Hour), nil)
 
-	resp := h.Handle(Request{
-		Type:     TypeStateUpdate,
+	resp := h.Handle(protocol.Request{
+		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,
 		Action:   "stop",
 		Event:    "Stop",
@@ -29,7 +31,7 @@ func TestHandler_StateUpdateWithoutNotifier(t *testing.T) {
 
 func TestHandler_MissingAction(t *testing.T) {
 	h := newTestHandler()
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1})
 	if resp.OK {
 		t.Fatal("expected ok=false when action is missing")
 	}
@@ -47,7 +49,7 @@ func TestHandler_InvalidWindowID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := newTestHandler()
-			resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: tt.windowID, Action: "active"})
+			resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: tt.windowID, Action: "active"})
 			if resp.OK {
 				t.Fatalf("expected ok=false for window_id %d", tt.windowID)
 			}
@@ -57,7 +59,7 @@ func TestHandler_InvalidWindowID(t *testing.T) {
 
 func TestHandler_UnknownAction(t *testing.T) {
 	h := newTestHandler()
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "nope"})
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "nope"})
 	if resp.OK {
 		t.Fatal("expected ok=false for unknown action")
 	}

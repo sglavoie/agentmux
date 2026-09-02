@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/contextlimit"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -242,8 +243,8 @@ func (h *Handler) recordClaudeContextLimitProbeStateLocked(
 		st.Reducer = NewReducer(h.reducerCfg)
 	}
 	st.ShadowSeq++
-	st.Reducer.Apply(ReducerEvent{
-		Source:         SourceID{Kind: SourceProbe, Key: claudeContextLimitFactSource},
+	st.Reducer.Apply(protocol.ReducerEvent{
+		Source:         protocol.SourceID{Kind: protocol.SourceProbe, Key: claudeContextLimitFactSource},
 		Action:         claudeContextLimitProbeAction,
 		Seq:            st.ShadowSeq,
 		At:             now.Unix(),
@@ -269,7 +270,7 @@ func (h *Handler) recordClaudeContextLimitProbeStateLocked(
 
 	// The audit row records the ACTUAL reduced icon, not the requested action, so
 	// a masked probe never claims an error the window does not actually show.
-	h.appendEventLocked(windowID, SessionEvent{
+	h.appendEventLocked(windowID, protocol.SessionEvent{
 		At:               now.Unix(),
 		Event:            claudeContextLimitProbeEvent,
 		Action:           claudeContextLimitProbeAction,

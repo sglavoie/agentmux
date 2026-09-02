@@ -12,6 +12,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hooks"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -27,7 +28,7 @@ var sharedActionRegistry = actions.DefaultRegistry()
 
 // daemonRequest is a narrow seam around the IPC client so fetch and clear
 // behavior can be tested without connecting to an operator's daemon.
-var daemonRequest = func(req daemon.Request) (daemon.Response, error) {
+var daemonRequest = func(req protocol.Request) (protocol.Response, error) {
 	return daemon.NewClient().Send(req)
 }
 
@@ -146,8 +147,8 @@ func dashboardSelectionRequest(osWindows []kitty.OSWindow) (tabID int, token str
 // fetchDaemonState queries the daemon once for activity, watchdog, icon, and
 // loop state. All maps are nil when the daemon is unreachable or rejects the
 // query, which tells fetchCmd to retain its title-derived fallback values.
-func fetchDaemonState() (map[int]time.Time, map[int]daemon.WatchdogState, map[int]daemon.WindowStateSnapshot) {
-	resp, err := daemonRequest(daemon.Request{Type: daemon.TypeStateQuery})
+func fetchDaemonState() (map[int]time.Time, map[int]protocol.WatchdogState, map[int]protocol.WindowStateSnapshot) {
+	resp, err := daemonRequest(protocol.Request{Type: protocol.TypeStateQuery})
 	if err != nil || !resp.OK {
 		return nil, nil, nil
 	}
@@ -164,7 +165,7 @@ func fetchDaemonState() (map[int]time.Time, map[int]daemon.WatchdogState, map[in
 // applyDaemonStates overlays daemon-owned state onto Kitty-enumerated rows.
 // A reachable daemon is authoritative even for a freshly seen window without
 // a state entry: its dashboard state is empty until the daemon observes it.
-func applyDaemonStates(sessions []session.RunningSession, states map[int]daemon.WindowStateSnapshot) {
+func applyDaemonStates(sessions []session.RunningSession, states map[int]protocol.WindowStateSnapshot) {
 	for i := range sessions {
 		state, ok := states[sessions[i].WindowID]
 		if !ok {
@@ -190,7 +191,7 @@ func clearStatusCmd(_ kitty.KittyClient, s session.RunningSession) tea.Cmd {
 	return clearStatusWithDaemonCmd(daemonRequest, s)
 }
 
-func clearStatusWithDaemonCmd(request func(daemon.Request) (daemon.Response, error), s session.RunningSession) tea.Cmd {
+func clearStatusWithDaemonCmd(request func(protocol.Request) (protocol.Response, error), s session.RunningSession) tea.Cmd {
 	return func() tea.Msg {
 		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Daemon: request}, actions.ClearStatus, actions.Request{Session: &s})
 		return actionDoneMsg{err: err}
@@ -282,7 +283,7 @@ func (m Model) conversationHandoffCmd(meta transcript.SessionMeta, profile strin
 	return runConversationHandoffCmd(m.conversationDependencies(m.transcriptReaders), meta, profile, edit)
 }
 
-func (m Model) actionDaemon() func(daemon.Request) (daemon.Response, error) {
+func (m Model) actionDaemon() func(protocol.Request) (protocol.Response, error) {
 	if m.daemonCommand != nil {
 		return m.daemonCommand
 	}

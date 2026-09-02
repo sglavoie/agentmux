@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/conversation"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
 // WindowState is the daemon's mutable per-window state. Handler.stateMu remains
@@ -24,7 +25,7 @@ type WindowState struct {
 	LastSessionTitle           string
 	LastPipeMode               bool
 	Muted                      bool
-	EventLog                   []SessionEvent
+	EventLog                   []protocol.SessionEvent
 	Looping                    bool
 	LoopingSet                 bool
 	DesiredIcon                string
@@ -53,7 +54,7 @@ type WindowState struct {
 	FailedGen         uint64
 	DirtySince        time.Time
 	LastRenderLatency time.Duration
-	RenderGenerations []RenderGenerationTrace
+	RenderGenerations []protocol.RenderGenerationTrace
 
 	// Shadow reducer state (source-scoped facts).
 	// Reducer is the authoritative source for this window's visible icon and
@@ -93,7 +94,7 @@ type WindowState struct {
 	watchdogSeeded   bool
 	watchdogAnchor   time.Time
 	watchdogIdle     time.Duration
-	watchdogFactIdle map[SourceID]*factIdle
+	watchdogFactIdle map[protocol.SourceID]*factIdle
 
 	// promotedBusyBody is the marker body of the Claude pane title the busy-title
 	// probe last promoted to ⚡ from (unexported, never persisted). The watchdog
@@ -170,13 +171,13 @@ type windowStateUserVar struct {
 	BusySince int64 `json:"bs,omitempty"`
 
 	// Schema v2+: bounded source facts plus the shadow effective generation.
-	Facts            []SourceFactSnapshot `json:"f,omitempty"`
-	EffectiveIcon    string               `json:"ei,omitempty"`
-	EffectiveLooping bool                 `json:"el,omitempty"`
-	EffectiveKind    string               `json:"ek,omitempty"`
-	EffectiveKey     string               `json:"ey,omitempty"`
-	EffectiveGen     uint64               `json:"eg,omitempty"`
-	ShadowSeq        uint64               `json:"sq,omitempty"`
+	Facts            []protocol.SourceFactSnapshot `json:"f,omitempty"`
+	EffectiveIcon    string                        `json:"ei,omitempty"`
+	EffectiveLooping bool                          `json:"el,omitempty"`
+	EffectiveKind    string                        `json:"ek,omitempty"`
+	EffectiveKey     string                        `json:"ey,omitempty"`
+	EffectiveGen     uint64                        `json:"eg,omitempty"`
+	ShadowSeq        uint64                        `json:"sq,omitempty"`
 	// Conversation is a redundant, reader-friendly projection of Facts. It is
 	// written for durable diagnostics but never trusted on restore; Facts remain
 	// the authoritative source and prevent a stale projection from claiming a
@@ -287,7 +288,7 @@ func (s *WindowState) UnmarshalUserVar(value string) error {
 	}
 	s.LoopingSet = true
 	s.StateSet = true
-	s.DesiredIcon = IconState(s.LastAction)
+	s.DesiredIcon = protocol.IconState(s.LastAction)
 	if uv.Schema >= stateUserVarSchemaV2 {
 		s.restoreReducerV2(uv)
 		// The reducer is authoritative for visible state, so a v2/v3/v4 restore with
@@ -312,9 +313,9 @@ func (s *WindowState) restoreReducerV2(uv windowStateUserVar) {
 	if len(uv.Facts) > 0 {
 		facts := uv.Facts
 		if uv.Schema < stateUserVarSchemaV4 || uv.ProcessTokenVersion != harnessProcessTokenVersionUTC {
-			facts = append([]SourceFactSnapshot(nil), facts...)
+			facts = append([]protocol.SourceFactSnapshot(nil), facts...)
 			for i := range facts {
-				facts[i].clearHarnessProcessIdentity()
+				facts[i].ClearHarnessProcessIdentity()
 			}
 		}
 		r := NewReducer(ReducerConfig{})
@@ -326,7 +327,7 @@ func (s *WindowState) restoreReducerV2(uv windowStateUserVar) {
 		Looping: uv.EffectiveLooping,
 	}
 	if uv.EffectiveKind != "" {
-		s.Effective.Source = SourceID{Kind: SourceKind(uv.EffectiveKind), Key: uv.EffectiveKey}
+		s.Effective.Source = protocol.SourceID{Kind: protocol.SourceKind(uv.EffectiveKind), Key: uv.EffectiveKey}
 	}
 	s.EffectiveGen = uv.EffectiveGen
 	s.ShadowSeq = uv.ShadowSeq
@@ -350,10 +351,10 @@ func (s *WindowState) restoreReducerV2(uv windowStateUserVar) {
 // fact (guard-grace terminal suppression); a persisted loop marker becomes a
 // between-turns ASL lease so the shadow loop marker survives the migration.
 func (s *WindowState) migrateReducerV1(uv windowStateUserVar) {
-	var facts []SourceFactSnapshot
+	var facts []protocol.SourceFactSnapshot
 	if uv.Action != "" {
-		fact := SourceFactSnapshot{
-			Kind:   SourceLegacy,
+		fact := protocol.SourceFactSnapshot{
+			Kind:   protocol.SourceLegacy,
 			Key:    legacyV1MigrationKey,
 			Action: uv.Action,
 			Icon:   reducerActionIcon(uv.Action),
@@ -367,8 +368,8 @@ func (s *WindowState) migrateReducerV1(uv windowStateUserVar) {
 		facts = append(facts, fact)
 	}
 	if uv.Looping {
-		facts = append(facts, SourceFactSnapshot{
-			Kind:      SourceASL,
+		facts = append(facts, protocol.SourceFactSnapshot{
+			Kind:      protocol.SourceASL,
 			Key:       legacyV1MigrationKey,
 			Action:    "idle",
 			Seq:       1,
@@ -387,6 +388,6 @@ func (s *WindowState) migrateReducerV1(uv windowStateUserVar) {
 	s.Effective = EffectiveState{Looping: uv.Looping}
 	if icon := reducerActionIcon(uv.Action); icon != "" {
 		s.Effective.Icon = icon
-		s.Effective.Source = SourceID{Kind: SourceLegacy, Key: legacyV1MigrationKey}
+		s.Effective.Source = protocol.SourceID{Kind: protocol.SourceLegacy, Key: legacyV1MigrationKey}
 	}
 }
