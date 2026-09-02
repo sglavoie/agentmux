@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
@@ -42,7 +43,7 @@ func TestHandler_AutoApprovedPermission(t *testing.T) {
 		}
 
 		// --- Case 2: active guard expired → manual-permission path, key shows ---
-		guard := NewStateGuard(time.Nanosecond)
+		guard := activity.NewStateGuard(time.Nanosecond)
 		notifier := notification.NewNotifier(&config.NotificationConfig{})
 		notifier.SetBackend(func(_ context.Context, _ int, _, _, _ string) (bool, error) {
 			return false, nil
@@ -91,7 +92,7 @@ func TestHandler_AutoApprovedPermission(t *testing.T) {
 // user having approved) replaces it with the bolt.
 func TestHandler_ClaudePermissionRequestSurfacesKey(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		guard := NewStateGuard(time.Hour)
+		guard := activity.NewStateGuard(time.Hour)
 		notifier := notification.NewNotifier(&config.NotificationConfig{})
 		notifier.SetBackend(func(_ context.Context, _ int, _, _, _ string) (bool, error) {
 			return false, nil

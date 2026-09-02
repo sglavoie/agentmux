@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -79,7 +80,7 @@ func (h *Handler) runScreenProbesWithSnapshot(now time.Time, snapshot screenProb
 	// classify the SAME frame — closing the race where the context-limit veto
 	// inside the idle classifier was evaluated against a different capture than
 	// the one that decided the banner.
-	screens := newScreenTextCache(h.kittyClient)
+	screens := activity.NewScreenTextCache(h.kittyClient)
 	h.probeCodexScreenPromptsWithSnapshot(now, snapshot, screens)
 	// Context-limit probing runs before the idle stop probe so a
 	// context-limited Claude tab is settled to the error state first; the idle

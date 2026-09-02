@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -134,7 +135,7 @@ func TestProbeCodexClearWindow_DiscardsObservationAfterConcurrentReducerEvent(t 
 				PermissionDebounceMs: 60_000,
 				StopFailure:          &no,
 			})
-			h := NewHandler(NewStateGuard(time.Hour), notifier)
+			h := NewHandler(activity.NewStateGuard(time.Hour), notifier)
 			parts := palette.ParseTitleParts(palette.BuildTitle("W:api", "stop", false))
 			userVars := kitty.UserVars{Profile: "work", Harness: "codex"}
 			fake := &fakeKittyClient{

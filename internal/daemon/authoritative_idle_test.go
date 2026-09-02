@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
@@ -21,7 +22,7 @@ func TestAuthoritativeIdleSettlesStaleInteractiveBolt(t *testing.T) {
 
 	obs := AuthoritativeIdle{
 		WindowID:        7,
-		Source:          AuthoritativeIdleSource("claude"),
+		Source:          activity.AuthoritativeIdleSource("claude"),
 		Harness:         "claude",
 		CapturedSeq:     idleShadowSeq(t, h, 7),
 		At:              base + 5,
@@ -54,7 +55,7 @@ func TestAuthoritativeIdleBlockedByResetFlow(t *testing.T) {
 
 	obs := AuthoritativeIdle{
 		WindowID:        7,
-		Source:          AuthoritativeIdleSource("claude"),
+		Source:          activity.AuthoritativeIdleSource("claude"),
 		Harness:         "claude",
 		CapturedSeq:     idleShadowSeq(t, h, 7),
 		At:              base + 5,
@@ -79,7 +80,7 @@ func TestAuthoritativeIdleRequiresConsecutiveSamples(t *testing.T) {
 	captured := idleShadowSeq(t, h, 7)
 	obs := AuthoritativeIdle{
 		WindowID:        7,
-		Source:          AuthoritativeIdleSource("claude"),
+		Source:          activity.AuthoritativeIdleSource("claude"),
 		Harness:         "claude",
 		CapturedSeq:     captured,
 		At:              base + 5,
@@ -113,7 +114,7 @@ func TestAuthoritativeIdleStreakClearedByActivity(t *testing.T) {
 	captured := idleShadowSeq(t, h, 7)
 	obs := AuthoritativeIdle{
 		WindowID:        7,
-		Source:          AuthoritativeIdleSource("claude"),
+		Source:          activity.AuthoritativeIdleSource("claude"),
 		Harness:         "claude",
 		CapturedSeq:     captured,
 		At:              base + 5,
@@ -125,7 +126,7 @@ func TestAuthoritativeIdleStreakClearedByActivity(t *testing.T) {
 	// Real activity between samples must reset the streak.
 	idleSeedHarness(t, h, 7, "cur", "active", base+1)
 	h.stateMu.Lock()
-	_, streaking := h.idleSampleStreak[idleSampleRef{windowID: 7, key: obs.Source.Key}]
+	streaking := h.idleSamples.Streak(activity.Ref{WindowID: 7, Key: obs.Source.Key}) > 0
 	h.stateMu.Unlock()
 	if streaking {
 		t.Fatalf("activity did not clear the idle-sample streak")
@@ -143,7 +144,7 @@ func TestAuthoritativeIdlePreservesProtectedAndBackgroundState(t *testing.T) {
 		lease := protocol.NormalizedEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: state.ASLPhaseBetween, RunID: "run-1", At: base, Event: events.AgentSessionLoopStarted}
 		h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "loop_marker", Event: events.AgentSessionLoopStarted, Normalized: &lease})
 
-		obs := AuthoritativeIdle{WindowID: 7, Source: AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
+		obs := AuthoritativeIdle{WindowID: 7, Source: activity.AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
 		if !h.applyAuthoritativeIdle(obs) {
 			t.Fatalf("observation not applied")
 		}
@@ -159,7 +160,7 @@ func TestAuthoritativeIdlePreservesProtectedAndBackgroundState(t *testing.T) {
 		idleSeedHarness(t, h, 7, "old", "active", base)
 		idleSeedHarness(t, h, 7, "perm", "permission", base+1)
 
-		obs := AuthoritativeIdle{WindowID: 7, Source: AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
+		obs := AuthoritativeIdle{WindowID: 7, Source: activity.AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
 		if !h.applyAuthoritativeIdle(obs) {
 			t.Fatalf("observation not applied")
 		}
@@ -181,7 +182,7 @@ func TestAuthoritativeIdlePreservesProtectedAndBackgroundState(t *testing.T) {
 		pipe := protocol.NormalizedEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:pipe"}, Action: "active", SessionID: "pipe", PipeMode: true, At: base, Event: "Evt"}
 		h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "active", Event: "Evt", Normalized: &pipe})
 
-		obs := AuthoritativeIdle{WindowID: 7, Source: AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
+		obs := AuthoritativeIdle{WindowID: 7, Source: activity.AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
 		if !h.applyAuthoritativeIdle(obs) {
 			t.Fatalf("observation not applied")
 		}
@@ -203,7 +204,7 @@ func TestAuthoritativeIdlePreservesProtectedAndBackgroundState(t *testing.T) {
 		sa := protocol.NormalizedEvent{Source: protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-1"}, Action: "subagent", At: base + 1, Event: "SubagentStart"}
 		h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "subagent", Event: "SubagentStart", Normalized: &sa})
 
-		obs := AuthoritativeIdle{WindowID: 7, Source: AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
+		obs := AuthoritativeIdle{WindowID: 7, Source: activity.AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
 		if !h.applyAuthoritativeIdle(obs) {
 			t.Fatalf("observation not applied")
 		}
@@ -225,7 +226,7 @@ func TestAuthoritativeIdleRecordsRenderGeneration(t *testing.T) {
 	genBefore := h.store[7].EffectiveGen
 	h.stateMu.Unlock()
 
-	obs := AuthoritativeIdle{WindowID: 7, Source: AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
+	obs := AuthoritativeIdle{WindowID: 7, Source: activity.AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
 	if !h.applyAuthoritativeIdle(obs) {
 		t.Fatalf("observation not applied")
 	}
@@ -248,7 +249,7 @@ func TestAuthoritativeIdleRecordsRenderGeneration(t *testing.T) {
 // deduplicated by upstream source event ID.
 func TestAuthoritativeIdleNotifiesOnTransitionOnlyAndDedupes(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		guard := NewStateGuard(time.Hour)
+		guard := activity.NewStateGuard(time.Hour)
 		notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
 		h := NewHandler(guard, notifier)
 		base := time.Now().Unix()
@@ -260,7 +261,7 @@ func TestAuthoritativeIdleNotifiesOnTransitionOnlyAndDedupes(t *testing.T) {
 			tick += 10
 			obs := AuthoritativeIdle{
 				WindowID:      7,
-				Source:        AuthoritativeIdleSource("claude"),
+				Source:        activity.AuthoritativeIdleSource("claude"),
 				Harness:       "claude",
 				CapturedSeq:   idleShadowSeq(t, h, 7),
 				At:            base + tick,
@@ -297,7 +298,7 @@ func TestAuthoritativeIdleNotifiesOnTransitionOnlyAndDedupes(t *testing.T) {
 // window (no reducer facts) is dropped without panicking.
 func TestAuthoritativeIdleNoWindowIsNoop(t *testing.T) {
 	h := newTestHandler()
-	obs := AuthoritativeIdle{WindowID: 99, Source: AuthoritativeIdleSource("claude"), CapturedSeq: 0, At: time.Now().Unix(), RequiredSamples: 1}
+	obs := AuthoritativeIdle{WindowID: 99, Source: activity.AuthoritativeIdleSource("claude"), CapturedSeq: 0, At: time.Now().Unix(), RequiredSamples: 1}
 	if h.applyAuthoritativeIdle(obs) {
 		t.Fatalf("observation for an unknown window was applied")
 	}
@@ -307,7 +308,7 @@ func TestAuthoritativeIdleNoWindowIsNoop(t *testing.T) {
 // consecutive-sample API and the window-closure cleanup.
 func TestIdleSampleExportedTrackingAndWindowClose(t *testing.T) {
 	h := newTestHandler()
-	src := AuthoritativeIdleSource("claude")
+	src := activity.AuthoritativeIdleSource("claude")
 	// Give the window live state so window-closure GC recognizes it as closed.
 	idleSeedHarness(t, h, 7, "cur", "active", time.Now().Unix())
 
@@ -326,7 +327,7 @@ func TestIdleSampleExportedTrackingAndWindowClose(t *testing.T) {
 	// Window closure drops the streak with the rest of the window's state.
 	h.pruneClosedWindows(time.Now(), map[int]bool{})
 	h.stateMu.Lock()
-	_, present := h.idleSampleStreak[idleSampleRef{windowID: 7, key: src.Key}]
+	present := h.idleSamples.Streak(activity.Ref{WindowID: 7, Key: src.Key}) > 0
 	h.stateMu.Unlock()
 	if present {
 		t.Fatalf("window closure did not drop the idle-sample streak")

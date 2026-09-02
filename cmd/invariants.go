@@ -15,6 +15,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -403,7 +404,7 @@ func evaluateDaemonInvariants(snapshot protocol.EventsExport, health daemon.Heal
 //     would hide the fault it exists for, so the export's own view stands alone.
 //
 //  2. The screen probe is still eligible for it. The probe classifies a window
-//     only while its reduced icon is the ⚡ daemon.ScreenProbeEligibleIcon names,
+//     only while its reduced icon is the ⚡ activity.ScreenProbeEligibleIcon names,
 //     so a native stop, a blocking prompt, an error, or a clear/reset recovers
 //     the window by taking it out of the probe's reach entirely — and the probe
 //     then has no further tick in which to notice. Every icon the export reports
@@ -441,7 +442,7 @@ func screenDeclineStillCurrent(meta protocol.WindowDebugMetadata, liveByID map[i
 		return false
 	}
 	for _, icon := range icons {
-		if !daemon.ScreenProbeEligibleIcon(icon) {
+		if !activity.ScreenProbeEligibleIcon(icon) {
 			return false
 		}
 	}

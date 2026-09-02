@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
@@ -427,7 +428,7 @@ func TestDeliverMalformedAndOverLimitCannotReachDaemonOrDiscovery(t *testing.T) 
 		{name: "over limit", payload: exactSizedHookPayload(t, maxHookPayloadBytes+1, map[string]any{"session_id": "never-delivered"}), reason: "payload_oversized"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			handler := daemon.NewHandler(daemon.NewStateGuard(time.Hour), nil)
+			handler := daemon.NewHandler(activity.NewStateGuard(time.Hour), nil)
 			client := &handlerDaemonClient{handler: handler}
 			beforeDiscovery := discoveryCalls
 			result := deliverFromStdinWithDeps(

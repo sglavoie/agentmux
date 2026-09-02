@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -171,7 +172,7 @@ func TestShadowReducerRetentionPreservesUnackedFactsAndLiveASLLeases(t *testing.
 // the source event ID is the only identity that can recognize the retry.
 func TestReducerNotificationDedupedBySourceEventID(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		guard := NewStateGuard(time.Hour)
+		guard := activity.NewStateGuard(time.Hour)
 		notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
 		h := NewHandler(guard, notifier)
 		src := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}

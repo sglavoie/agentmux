@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
@@ -24,7 +25,7 @@ func TestNotificationDispatchFailurePersistsTerminalJournalOutcome(t *testing.T)
 		n.SetBackend(func(context.Context, int, string, string, string) (bool, error) {
 			return false, errors.New("backend unavailable")
 		})
-		h := NewHandler(NewStateGuard(time.Hour), n)
+		h := NewHandler(activity.NewStateGuard(time.Hour), n)
 		journal, err := diagnostics.NewJournal(diagnostics.PathsForRoot(t.TempDir()), diagnostics.JournalOptions{})
 		if err != nil {
 			t.Fatal(err)

@@ -1,10 +1,9 @@
 package daemon
 
 import (
-	"hash/fnv"
-	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -37,41 +36,7 @@ func (h *Handler) useKittyClient(client kittyTitleClient) {
 // is disabled entirely when every global value is <= 0 AND no per-account
 // override supplies a positive duration.
 func (h *Handler) SetStaleThresholds(global map[string]time.Duration, perAccount map[string]map[string]time.Duration) {
-	gs := make(map[string]time.Duration, len(global))
-	for action, d := range global {
-		gs[action] = d
-	}
-	h.staleThresholds = gs
-
-	pa := make(map[string]map[string]time.Duration, len(perAccount))
-	for account, m := range perAccount {
-		if len(m) == 0 {
-			continue
-		}
-		inner := make(map[string]time.Duration, len(m))
-		for action, d := range m {
-			inner[action] = d
-		}
-		pa[strings.ToLower(account)] = inner
-	}
-	h.perAccountThresholds = pa
-}
-
-// resolveThreshold returns the sweep duration to use for the given account
-// and action. Per-account overrides win over the global default; a zero
-// value at either level means "no threshold configured for this action".
-func (h *Handler) resolveThreshold(account, action string) time.Duration {
-	if action == "" {
-		return 0
-	}
-	if account != "" {
-		if inner, ok := h.perAccountThresholds[strings.ToLower(account)]; ok {
-			if d, ok := inner[action]; ok && d > 0 {
-				return d
-			}
-		}
-	}
-	return h.staleThresholds[action]
+	h.staleThresholds = activity.NewStaleThresholds(global, perAccount)
 }
 
 // SetClaudeContextLimitProbe toggles the periodic Claude context-limit probe.
@@ -115,57 +80,7 @@ func (h *Handler) SetCopilotTranscriptHomes(profileHomes []string, defaultHome s
 // sweep unless a positive per-account override is supplied. Per-account keys
 // are lowercased on insert; lookups also lowercase the account name.
 func (h *Handler) SetHookSilenceThresholds(global time.Duration, perAccount map[string]time.Duration) {
-	h.hookSilenceThreshold = global
-	pa := make(map[string]time.Duration, len(perAccount))
-	for account, d := range perAccount {
-		if d <= 0 {
-			continue
-		}
-		pa[strings.ToLower(account)] = d
-	}
-	h.perAccountHookSilence = pa
-}
-
-// resolveHookSilenceThreshold returns the hook-silence duration to use for the
-// given account. A positive per-account override wins over the global default;
-// a zero value at both levels means the sweep is disabled for that account.
-func (h *Handler) resolveHookSilenceThreshold(account string) time.Duration {
-	if account != "" {
-		if d, ok := h.perAccountHookSilence[strings.ToLower(account)]; ok && d > 0 {
-			return d
-		}
-	}
-	return h.hookSilenceThreshold
-}
-
-// hookSilenceWindowID maps an account name to a stable synthetic window ID
-// used as the notifier dedup key for hook-silence dispatches. Real Kitty
-// window IDs are positive ints; negating the FNV-32 hash places the synthetic
-// IDs in a non-overlapping negative range. The -1 offset prevents collision
-// with the zero value (uint32 hashes are 32-bit, so a 64-bit int can hold the
-// full negation without overflow).
-func hookSilenceWindowID(account string) int {
-	hh := fnv.New32a()
-	_, _ = hh.Write([]byte(strings.ToLower(account)))
-	return -int(hh.Sum32()) - 1
-}
-
-// anyStaleThresholdSet reports whether at least one global or per-account
-// threshold is positive. The sweep early-exits when this returns false.
-func (h *Handler) anyStaleThresholdSet() bool {
-	for _, d := range h.staleThresholds {
-		if d > 0 {
-			return true
-		}
-	}
-	for _, inner := range h.perAccountThresholds {
-		for _, d := range inner {
-			if d > 0 {
-				return true
-			}
-		}
-	}
-	return false
+	h.hookSilence = activity.NewHookSilenceThresholds(global, perAccount)
 }
 
 const (

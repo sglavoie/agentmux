@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
@@ -101,7 +102,7 @@ func TestCodexClearProbeDoesNotJournalUnderStateLock(t *testing.T) {
 		Permission:           true,
 		PermissionDebounceMs: 60_000,
 	})
-	h := NewHandler(NewStateGuard(time.Hour), notifier)
+	h := NewHandler(activity.NewStateGuard(time.Hour), notifier)
 	notifier.MaybeNotifyTraced(42, "W:api", "work", "permission", false, notification.NotificationTrace{
 		TraceID: "trace-codex-clear-pending",
 	})

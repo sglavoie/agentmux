@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -14,7 +15,7 @@ import (
 // TestHealthCarriesBuildIdentityAndMetrics verifies TypeHealth reports the
 // artifact identity stamped at startup and the server's request metrics.
 func TestHealthCarriesBuildIdentityAndMetrics(t *testing.T) {
-	h := NewHandler(NewStateGuard(time.Second), nil)
+	h := NewHandler(activity.NewStateGuard(time.Second), nil)
 	build := buildinfo.Info{Version: "9.9.9", Revision: "abc", BinaryHash: "hash-x"}
 	h.SetBuildInfo(build)
 	h.setMetricsSource(func() protocol.MetricsSnapshot {
@@ -38,7 +39,7 @@ func TestHealthCarriesNotificationCapabilityWithoutDegradingReadiness(t *testing
 	n.SetCapability(protocol.NotificationCapability{
 		Enabled: true, Backend: "alerter", Reason: "not_found",
 	})
-	h := NewHandler(NewStateGuard(time.Second), n)
+	h := NewHandler(activity.NewStateGuard(time.Second), n)
 	h.MarkReady()
 
 	resp := h.Handle(protocol.Request{Type: protocol.TypeHealth})
@@ -53,7 +54,7 @@ func TestHealthCarriesNotificationCapabilityWithoutDegradingReadiness(t *testing
 // TestHealthWithoutBuildOrMetricsOmitsThem covers handlers running without a
 // server or startup stamp (unit-test topology, legacy daemons).
 func TestHealthWithoutBuildOrMetricsOmitsThem(t *testing.T) {
-	h := NewHandler(NewStateGuard(time.Second), nil)
+	h := NewHandler(activity.NewStateGuard(time.Second), nil)
 	resp := h.Handle(protocol.Request{Type: protocol.TypeHealth})
 	if resp.Build != nil || resp.Metrics != nil {
 		t.Fatalf("resp = build %+v metrics %+v; want both nil", resp.Build, resp.Metrics)
@@ -64,7 +65,7 @@ func TestHealthWithoutBuildOrMetricsOmitsThem(t *testing.T) {
 // stamping (daemon sequence, nanosecond receipt) and identity/route stamping
 // on logged events, plus the live source facts on the shadow export section.
 func TestEventsExportStampsV6EventAndFactFields(t *testing.T) {
-	h := NewHandler(NewStateGuard(time.Second), nil)
+	h := NewHandler(activity.NewStateGuard(time.Second), nil)
 
 	req := protocol.Request{
 		Type:     protocol.TypeStateUpdate,

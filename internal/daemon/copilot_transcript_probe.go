@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -215,7 +216,7 @@ func (h *Handler) probeCopilotTranscriptWindow(
 ) {
 	windowID := binding.TargetWindowID
 	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: copilotTranscriptStopProbeSource}
-	ref := idleSampleRef{windowID: windowID, key: source.Key}
+	ref := activity.Ref{WindowID: windowID, Key: source.Key}
 
 	// Revalidate the complete producer/source/target binding and resolve which session's transcript
 	// backs this tab before the off-lock read. A stop tab is a recovery candidate: the

@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -24,7 +25,7 @@ const (
 func supervisorQuestionFixture(t *testing.T, notifier *notification.Notifier) (*Handler, aslSupervisorTarget, time.Time) {
 	t.Helper()
 	now := time.Now().UTC().Truncate(time.Second)
-	h := NewHandler(NewStateGuard(time.Hour), notifier)
+	h := NewHandler(activity.NewStateGuard(time.Hour), notifier)
 	target := aslSupervisorTarget{
 		windowID:       42,
 		originWindowID: 84,

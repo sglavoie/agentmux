@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
@@ -35,7 +36,7 @@ func TestHandler_PreserveCurrentRestoresPreviousState(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			guard := NewStateGuard(50 * time.Millisecond)
+			guard := activity.NewStateGuard(50 * time.Millisecond)
 			notifier := notification.NewNotifier(&config.NotificationConfig{})
 			notifier.SetBackend(func(_ context.Context, _ int, _, _, _ string) (bool, error) {
 				return false, nil
@@ -79,7 +80,7 @@ func TestHandler_ChildCompleteEventsDoNotNotifyStop(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
-				guard := NewStateGuard(time.Hour)
+				guard := activity.NewStateGuard(time.Hour)
 				cfg := &config.NotificationConfig{Stop: true}
 				notifier := notification.NewNotifier(cfg)
 				var mu sync.Mutex

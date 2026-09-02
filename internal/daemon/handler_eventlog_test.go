@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -171,7 +172,7 @@ func TestHandler_PruneClosedWindows_DropsAllLivePerWindowMaps(t *testing.T) {
 // the daemon's lifetime.
 func TestHandler_PruneClosedWindows_PurgesNotifierState(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		guard := NewStateGuard(time.Hour)
+		guard := activity.NewStateGuard(time.Hour)
 		// A 24h debounce keeps the scheduled permission timer from firing
 		// during the test, so the assertions observe whether PurgeWindow
 		// cancelled and removed it rather than whether it elapsed.

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -89,7 +90,7 @@ func TestProbeClaudeScreenStop_StaleBusyTitlePromotesOnce(t *testing.T) {
 // after the turn ends, but that stale frame must never recover an empty tab to ⚡.
 func TestProbeClaudeScreenStop_RestingBrailleDoesNotPromoteEmptyWindow(t *testing.T) {
 	base := time.Now()
-	const restingTitle = "\u2802 " + claudeRestingTitleText
+	const restingTitle = "\u2802 " + activity.ClaudeRestingTitleText
 	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "", false), kitty.UserVars{
 		Profile: "work",
 		Harness: harness.Claude,

@@ -32,7 +32,7 @@ type applyOutcome struct {
 	// tracks reduceAction except for synthetic copilot stops, which the legacy
 	// notifier never surfaced.
 	notifyAction string
-	// guardBlocked marks a request the legacy StateGuard refused. The event
+	// guardBlocked marks a request the legacy activity.StateGuard refused. The event
 	// still reaches the reducer, which owns the visible outcome — the reducer
 	// step logs the authoritative suppression reason (or falls back to
 	// guard_blocked when the reducer did not suppress).

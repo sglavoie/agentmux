@@ -1,4 +1,4 @@
-package daemon
+package activity
 
 import (
 	"sync"
@@ -177,6 +177,11 @@ func (g *StateGuard) Restore(windowID int, action string, expiresAt time.Time) {
 		expiresAt: expiresAt,
 	}
 }
+
+// Duration reports the hold duration the guard was built with. The daemon
+// derives the reducer's trailing-event grace from it so legacy guard semantics
+// and reducer suppression agree; nothing else reads it.
+func (g *StateGuard) Duration() time.Duration { return g.duration }
 
 // Clear removes any guard for windowID.
 func (g *StateGuard) Clear(windowID int) {

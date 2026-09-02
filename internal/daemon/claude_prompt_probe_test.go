@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -164,7 +165,7 @@ func TestProbeClaudeScreenStop_BusyPaneTitleKeepsBolt(t *testing.T) {
 		},
 	}
 	notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
-	h := NewHandler(NewStateGuard(time.Hour), notifier)
+	h := NewHandler(activity.NewStateGuard(time.Hour), notifier)
 	notifier.SetIsMuted(h.IsMuted)
 	h.SetKittyClient(fake)
 	claudeSeedActiveBolt(t, h, 42, "sess-title-busy", base.Unix())

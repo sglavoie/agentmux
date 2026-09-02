@@ -118,6 +118,19 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   the daemon root, and it performs no Kitty, IPC, or journal I/O. Routing
   *decisions* and transport dispatch stay in the daemon root: this package
   supplies the vocabulary and the evidence, the root chooses and acts.
+- `internal/daemon/activity`: whether a window is working or resting, and the
+  evidence that settles the question — the legacy action guard, the
+  stabilization-sample and screen-decline trackers with their per-(harness,tier)
+  sample policy, the Claude title and Codex prompt classifiers, the per-sweep
+  screen-text cache, authoritative-idle naming and probe eligibility, foreground
+  harness classification, and the stale/hook-silence thresholds. The trackers are
+  deliberately CALLER-LOCKED and zero-value ready: the daemon mutates a streak in
+  the same critical section as the reducer state it is about to settle, so an
+  internal mutex would hide an atomicity requirement rather than satisfy it. Like
+  protocol, state, rendering, and events it must never import the daemon root,
+  and it performs no Kitty, IPC, or journal I/O — deciding what an idle
+  observation DOES to a window stays in the root, which owns the reducer, the
+  renderer, and the notifier.
 - `internal/diagnostics`: private fail-open causal journals, operational and
   native logs, temporary raw captures, and bounded diagnostic storage.
 - `internal/debugger`: offline-first status, query, explanation, bundle, and

@@ -5,11 +5,11 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
-	"github.com/sglavoie/agentmux/internal/screenstate"
 )
 
 // The screen idle probe recovers a managed tab whose ⚡ is stuck on a finished
@@ -68,20 +68,6 @@ type screenIdleFields struct {
 	muted        bool
 }
 
-// ScreenProbeEligibleIcon reports whether a window's reduced icon is the ⚡ the
-// screen idle probe is eligible to classify. Every other icon means the probe
-// does not run: a native stop, a blocking prompt, an error, or a clear/reset
-// moves the window off ⚡ and the classifier stops being asked anything about
-// it.
-//
-// It is EXPORTED because `amx doctor` gates screenstate_persistent_decline on
-// exactly this predicate — a decline streak is only current health while the
-// probe would still run — and a private copy of the string "bolt" in cmd would
-// be free to drift away from the gate it is supposed to mirror.
-func ScreenProbeEligibleIcon(icon string) bool {
-	return icon == "bolt"
-}
-
 // probeScreenIdle runs the whole shared probe for one binding: the pre-read
 // eligibility gate, this tick's cached screen capture, and the classification
 // body below. It is the only entry point production uses.
@@ -92,7 +78,7 @@ func (h *Handler) probeScreenIdle(
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
 	sourceWindowTitle string,
-	screens *screenTextCache,
+	screens *activity.ScreenTextCache,
 ) {
 	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: spec.sourceKey}
 	targetWindowID := binding.TargetWindowID
@@ -102,7 +88,7 @@ func (h *Handler) probeScreenIdle(
 	// work for the probe to settle, so bail without a screen read and drop any
 	// in-flight stabilization streak.
 	h.stateMu.Lock()
-	if !h.screenProbeBindingEligibilityCurrentLocked(binding, titleParts.State, ScreenProbeEligibleIcon) {
+	if !h.screenProbeBindingEligibilityCurrentLocked(binding, titleParts.State, activity.ScreenProbeEligibleIcon) {
 		// The probe no longer owns this window: the route moved, the receipt
 		// advanced, the pane was recreated, or the reduced icon left ⚡. Whatever
 		// the classifier was refusing, it is not refusing it for this binding any
@@ -116,7 +102,7 @@ func (h *Handler) probeScreenIdle(
 	}
 	st, ok := h.windowStateLocked(targetWindowID)
 	if !ok || st.Reducer == nil {
-		h.clearIdleSampleLocked(idleSampleRef{windowID: targetWindowID, key: source.Key})
+		h.clearIdleSampleLocked(activity.Ref{WindowID: targetWindowID, Key: source.Key})
 		h.retractScreenDeclinesLocked(targetWindowID)
 		h.stateMu.Unlock()
 		return
@@ -124,7 +110,7 @@ func (h *Handler) probeScreenIdle(
 	fields := spec.fields(st, binding, titleParts, userVars)
 	h.stateMu.Unlock()
 
-	screen, err := screens.screen(binding.SourceWindowID)
+	screen, err := screens.Screen(binding.SourceWindowID)
 	if err != nil {
 		slog.Debug("screen stop probe: get screen failed", "harness", spec.harness,
 			"source_window_id", binding.SourceWindowID, "target_window_id", targetWindowID, "err", err)
@@ -154,7 +140,7 @@ func (h *Handler) probeScreenIdleWindow(
 	// all, how strong the evidence was, and what fingerprint the stabilization
 	// gate compares. Splitting these across boolean shims would let the answers
 	// be computed from different readings of the same capture.
-	obs := classifyScreenState(spec.harness, screen)
+	obs := activity.ClassifyScreenState(spec.harness, screen)
 	if !obs.SettleableTerminal() {
 		// Still working, a queued-input composer, a blocking prompt, a
 		// context-limited screen, or unrelated output: reset the stabilization
@@ -178,7 +164,7 @@ func (h *Handler) probeScreenIdleWindow(
 		// classifier that stopped matching a redesigned harness UI is then a
 		// counter plus the exact copy it refused, rather than a debug line
 		// someone has to be tailing at the right moment.
-		decline := h.RecordScreenProbeDecline(targetWindowID, source, ScreenDeclineEvidence{
+		decline := h.RecordScreenProbeDecline(targetWindowID, source, activity.ScreenDeclineEvidence{
 			Fingerprint: obs.Fingerprint,
 			Vetoes:      obs.Vetoes.String(),
 			StatusLine:  obs.StatusLine,
@@ -218,7 +204,7 @@ func (h *Handler) probeScreenIdleWindow(
 		// required count — no matter what the classification above concluded.
 		// This is the harness-independent half of the defense: it survives any
 		// change to either harness's status-line copy.
-		RequiredSamples: requiredIdleSamples(spec.harness, obs.Tier, bump),
+		RequiredSamples: activity.RequiredIdleSamples(spec.harness, obs.Tier, bump),
 		// The tier that bought that count, carried purely so the durable event
 		// ring can name WHY a settle cost what it did. It is a diagnostic label
 		// and is never read back as a decision input.
@@ -244,16 +230,4 @@ func (h *Handler) probeScreenIdleWindow(
 		// transition decision.
 		h.ClearScreenProbeDecline(targetWindowID, source)
 	}
-}
-
-// classifyScreenState resolves a harness adapter and classifies one capture. A
-// missing adapter is impossible in practice for the two harnesses wired here —
-// the registry is a package-level literal — but the fail-closed zero
-// Observation is the right answer anyway, and it is never terminal.
-func classifyScreenState(harnessName string, screen string) screenstate.Observation {
-	adapter, ok := screenstate.For(harnessName)
-	if !ok {
-		return screenstate.Observation{}
-	}
-	return adapter.Classify(screen)
 }

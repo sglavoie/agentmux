@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -45,7 +46,7 @@ func TestProbeCodexScreenPrompts_UnmanagedCodexForegroundReplacesBoltWithQuestio
 		t.Fatalf("events = %d, want 1", len(resp.Events))
 	}
 	ev := resp.Events[0]
-	if ev.PromptKind != string(CodexPromptRequestUserInput) || ev.ResultIconState != "question" {
+	if ev.PromptKind != string(activity.CodexPromptRequestUserInput) || ev.ResultIconState != "question" {
 		t.Fatalf("event = %+v, want request_user_input/question", ev)
 	}
 	h.stateMu.Lock()
@@ -117,7 +118,7 @@ func TestProbeCodexScreenPrompts_UnmanagedPipeModeCodexForegroundIsNotProbed(t *
 
 func TestProbeCodexScreenPrompts_ManagedOwnerSuppressesUnmanagedCodexSiblingNotification(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		guard := NewStateGuard(time.Hour)
+		guard := activity.NewStateGuard(time.Hour)
 		notifier, rec := newTestNotifier(&config.NotificationConfig{Permission: true})
 		h := NewHandler(guard, notifier)
 		fake := &fakeKittyClient{

@@ -26,13 +26,6 @@ const (
 	watchdogGapThreshold = 5 * time.Second
 )
 
-// accountIdle is the hook-silence sweep's per-account idle accumulation entry,
-// anchored to the account's lastSeenEventAt value.
-type accountIdle struct {
-	anchor time.Time
-	idle   time.Duration
-}
-
 // runWatchdog drives staleness evaluation every watchdogInterval. Elapsed time
 // between ticks comes from the monotonic clock reading carried by the tick
 // values, so wall-clock adjustments cannot stretch or shrink it.

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -48,8 +49,8 @@ func TestProbeCodexScreenPrompts_EditPromptReplacesKeyWithQuestion(t *testing.T)
 	if ev.Event != screenPromptProbeEvent || ev.Source != screenPromptProbeSource {
 		t.Fatalf("event identity = (%q, %q), want (%q, %q)", ev.Event, ev.Source, screenPromptProbeEvent, screenPromptProbeSource)
 	}
-	if ev.PromptKind != string(CodexPromptEditApproval) || ev.Action != "elicitation" {
-		t.Fatalf("event prompt/action = (%q, %q), want (%q, elicitation)", ev.PromptKind, ev.Action, CodexPromptEditApproval)
+	if ev.PromptKind != string(activity.CodexPromptEditApproval) || ev.Action != "elicitation" {
+		t.Fatalf("event prompt/action = (%q, %q), want (%q, elicitation)", ev.PromptKind, ev.Action, activity.CodexPromptEditApproval)
 	}
 	if ev.ResultIconState != "question" || ev.CurrentIconState != "key" {
 		t.Fatalf("event icons = current %q result %q, want key -> question", ev.CurrentIconState, ev.ResultIconState)
@@ -90,7 +91,7 @@ func TestProbeCodexScreenPrompts_CommandPromptStaysKey(t *testing.T) {
 		t.Fatalf("events = %d, want 1", len(resp.Events))
 	}
 	ev := resp.Events[0]
-	if ev.PromptKind != string(CodexPromptCommandApproval) || ev.Action != "permission" || ev.ResultIconState != "key" {
+	if ev.PromptKind != string(activity.CodexPromptCommandApproval) || ev.Action != "permission" || ev.ResultIconState != "key" {
 		t.Fatalf("event = %+v, want command permission key", ev)
 	}
 }
@@ -126,8 +127,8 @@ func TestProbeCodexScreenPrompts_RequestUserInputReplacesBoltWithQuestion(t *tes
 		t.Fatalf("events = %d, want 1", len(resp.Events))
 	}
 	ev := resp.Events[0]
-	if ev.PromptKind != string(CodexPromptRequestUserInput) || ev.Action != "elicitation" {
-		t.Fatalf("event prompt/action = (%q, %q), want (%q, elicitation)", ev.PromptKind, ev.Action, CodexPromptRequestUserInput)
+	if ev.PromptKind != string(activity.CodexPromptRequestUserInput) || ev.Action != "elicitation" {
+		t.Fatalf("event prompt/action = (%q, %q), want (%q, elicitation)", ev.PromptKind, ev.Action, activity.CodexPromptRequestUserInput)
 	}
 	if ev.ResultIconState != "question" || ev.CurrentIconState != "bolt" {
 		t.Fatalf("event icons = current %q result %q, want bolt -> question", ev.CurrentIconState, ev.ResultIconState)

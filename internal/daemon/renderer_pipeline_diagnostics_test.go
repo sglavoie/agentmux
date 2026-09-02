@@ -15,11 +15,12 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/palette"
-	"golang.org/x/sys/unix"
 )
 
 func TestRendererDiagnosticsTrackGenerations(t *testing.T) {

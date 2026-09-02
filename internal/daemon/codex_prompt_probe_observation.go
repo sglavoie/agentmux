@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -15,7 +16,7 @@ func (h *Handler) probeCodexWindow(
 	binding screenProbeBinding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
-	screens *screenTextCache,
+	screens *activity.ScreenTextCache,
 ) {
 	targetWindowID := binding.TargetWindowID
 	// The receipt was captured before the ListWindows call that produced the
@@ -32,13 +33,13 @@ func (h *Handler) probeCodexWindow(
 		return
 	}
 
-	screen, err := screens.screen(binding.SourceWindowID)
+	screen, err := screens.Screen(binding.SourceWindowID)
 	if err != nil {
 		slog.Debug("codex prompt probe: get-text failed", "source_window_id", binding.SourceWindowID,
 			"target_window_id", targetWindowID, "err", err)
 		return
 	}
-	classification, ok := ClassifyCodexPromptScreen(screen)
+	classification, ok := activity.ClassifyCodexPromptScreen(screen)
 	if !ok {
 		// No prompt on screen: withdraw any earlier probe observation so an
 		// answered prompt cannot strand a key/question fact over the session's
@@ -67,7 +68,7 @@ func (h *Handler) applyCodexPromptObservation(
 	binding screenProbeBinding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
-	classification CodexPromptClassification,
+	classification activity.CodexPromptClassification,
 ) {
 	windowID := binding.TargetWindowID
 	h.stateMu.Lock()
@@ -156,7 +157,7 @@ func (h *Handler) probeCodexClearWindow(
 	binding screenProbeBinding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
-	screens *screenTextCache,
+	screens *activity.ScreenTextCache,
 ) {
 	targetWindowID := binding.TargetWindowID
 	// Bind the stale-stop eligibility from the cached title to its reducer
@@ -172,7 +173,7 @@ func (h *Handler) probeCodexClearWindow(
 		return
 	}
 
-	screen, err := screens.screen(binding.SourceWindowID)
+	screen, err := screens.Screen(binding.SourceWindowID)
 	if err != nil {
 		slog.Debug("codex clear probe: get screen failed", "source_window_id", binding.SourceWindowID,
 			"target_window_id", targetWindowID, "err", err)

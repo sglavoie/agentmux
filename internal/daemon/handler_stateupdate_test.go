@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
@@ -96,7 +97,7 @@ func TestHandler_IdleClearsActiveIcon(t *testing.T) {
 		// Test with an expired guard (idle arrives after guard_duration; must use
 		// lastAction fallback — this was the stale-bolt bug on Claude sessions).
 		for _, tc := range cases {
-			guard := NewStateGuard(time.Nanosecond) // expires immediately
+			guard := activity.NewStateGuard(time.Nanosecond) // expires immediately
 			notifier := notification.NewNotifier(&config.NotificationConfig{})
 			notifier.SetBackend(func(_ context.Context, _ int, _, _, _ string) (bool, error) {
 				return false, nil
@@ -275,7 +276,7 @@ func TestHandler_StateUpdateUsesSnapshotDerivedMute(t *testing.T) {
 // the active-after-terminal barrier must not arm against later tool events.
 func TestHandler_AutoCompactResumeKeepsBolt(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		guard := NewStateGuard(time.Hour)
+		guard := activity.NewStateGuard(time.Hour)
 		notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
 		h := NewHandler(guard, notifier)
 
@@ -307,7 +308,7 @@ func TestHandler_AutoCompactResumeKeepsBolt(t *testing.T) {
 // suppresses follow-up non-prompt active events until the next user prompt.
 func TestHandler_ManualCompactStopPersists(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		guard := NewStateGuard(time.Hour)
+		guard := activity.NewStateGuard(time.Hour)
 		notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
 		h := NewHandler(guard, notifier)
 

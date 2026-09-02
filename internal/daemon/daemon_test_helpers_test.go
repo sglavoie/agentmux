@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -89,7 +90,7 @@ func newTestHandler() *Handler {
 // toggle a notification setting mid-test. The notifier keeps the returned
 // pointer, so a later write to it is observed by the next dispatch decision.
 func newTestHandlerWithNotificationConfig() (*Handler, *config.NotificationConfig) {
-	guard := NewStateGuard(time.Hour)
+	guard := activity.NewStateGuard(time.Hour)
 	cfg := &config.NotificationConfig{}
 	notifier := notification.NewNotifier(cfg)
 	notifier.SetBackend(func(_ context.Context, _ int, _, _, _ string) (bool, error) {
@@ -105,7 +106,7 @@ func newTestHandlerWithNotificationConfig() (*Handler, *config.NotificationConfi
 // that pre-date per-state thresholds continue to exercise the sweep
 // uniformly; per-state behavior is covered by newSweepTestHandlerWithMap.
 func newSweepTestHandler(threshold time.Duration) (*Handler, *fakeKittyClient, *callRecorder) {
-	guard := NewStateGuard(time.Hour)
+	guard := activity.NewStateGuard(time.Hour)
 	notifier, rec := newTestNotifier(&config.NotificationConfig{})
 	h := NewHandler(guard, notifier)
 	fake := &fakeKittyClient{}
@@ -122,7 +123,7 @@ func newSweepTestHandler(threshold time.Duration) (*Handler, *fakeKittyClient, *
 // per-action thresholds so per-state tests can configure different durations
 // for active/subagent/compact independently.
 func newSweepTestHandlerWithMap(global map[string]time.Duration, perAccount map[string]map[string]time.Duration) (*Handler, *fakeKittyClient, *callRecorder) {
-	guard := NewStateGuard(time.Hour)
+	guard := activity.NewStateGuard(time.Hour)
 	notifier, rec := newTestNotifier(&config.NotificationConfig{})
 	h := NewHandler(guard, notifier)
 	fake := &fakeKittyClient{}
@@ -136,7 +137,7 @@ func newSweepTestHandlerWithMap(global map[string]time.Duration, perAccount map[
 // SweepHookSilence; tests populate fake.windows to control which accounts the
 // sweep considers "running" and seed h.lastSeenEventAt under stateMu.
 func newHookSilenceTestHandler(global time.Duration, perAccount map[string]time.Duration) (*Handler, *fakeKittyClient, *callRecorder) {
-	guard := NewStateGuard(time.Hour)
+	guard := activity.NewStateGuard(time.Hour)
 	notifier, rec := newTestNotifier(&config.NotificationConfig{})
 	h := NewHandler(guard, notifier)
 	fake := &fakeKittyClient{}

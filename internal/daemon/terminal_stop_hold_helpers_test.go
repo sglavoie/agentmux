@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -24,7 +25,7 @@ const (
 func newTerminalHoldTestHandler(t *testing.T) (*Handler, *callRecorder) {
 	t.Helper()
 	notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
-	h := NewHandler(NewStateGuard(time.Hour), notifier)
+	h := NewHandler(activity.NewStateGuard(time.Hour), notifier)
 	// Wire the live mute lookup the daemon installs, so mute is consulted at
 	// dispatch time exactly as it is in production.
 	notifier.SetIsMuted(h.IsMuted)
@@ -65,7 +66,7 @@ var claudeScreenProbeSource = protocol.SourceID{Kind: protocol.SourceProbe, Key:
 func newTerminalHoldProbeHandler(t *testing.T, harnessName, screen string) (*Handler, *callRecorder) {
 	t.Helper()
 	notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
-	h := NewHandler(NewStateGuard(time.Hour), notifier)
+	h := NewHandler(activity.NewStateGuard(time.Hour), notifier)
 	notifier.SetIsMuted(h.IsMuted)
 	h.SetStopConfirm(terminalHoldTestDelay, terminalHoldTestTimeout, true)
 	h.SetKittyClient(&fakeKittyClient{

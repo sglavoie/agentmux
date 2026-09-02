@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -145,7 +146,7 @@ func TestSweepStale_ReNotifyAfterRecovery(t *testing.T) {
 // fires; only the title-clear step is skipped.
 func TestSweepStale_NilKittyClient(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		guard := NewStateGuard(time.Hour)
+		guard := activity.NewStateGuard(time.Hour)
 		notifier, rec := newTestNotifier(&config.NotificationConfig{})
 		h := NewHandler(guard, notifier)
 		h.SetStaleThresholds(map[string]time.Duration{"active": 10 * time.Minute}, nil)

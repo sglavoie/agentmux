@@ -1,7 +1,6 @@
 package daemon
 
 import (
-	"sort"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -92,38 +91,16 @@ func (h *Handler) syncRendererMetadataLocked(windowID int) {
 // carrying two probe sources must never report a merged count. Callers hold
 // stateMu.
 func (h *Handler) syncScreenDeclineMetadataLocked(windowID int) {
-	if _, ok := h.windowMetadata[windowID]; !ok && len(h.screenProbeDeclineStreak) == 0 {
+	if _, ok := h.windowMetadata[windowID]; !ok && h.declines.Empty() {
 		// Nothing recorded and nothing to clear: do not conjure a metadata entry
 		// for a window the daemon has no other reason to export.
 		return
 	}
-	declines := make([]protocol.ScreenDeclineSnapshot, 0, 1)
-	for ref, streak := range h.screenProbeDeclineStreak {
-		if ref.windowID != windowID || streak <= 0 {
-			continue
-		}
-		evidence := h.screenProbeDeclineEvidence[ref]
-		fingerprint := h.screenProbeDeclineFingerprint[ref]
-		declines = append(declines, protocol.ScreenDeclineSnapshot{
-			Source: ref.key,
-			Streak: streak,
-			// Recomputed from the stored streak and fingerprint rather than
-			// carried over from the observation, so the published value can never
-			// contradict the state it is derived from.
-			StableFingerprint: fingerprint != 0 && streak > 1,
-			Fingerprint:       fingerprint,
-			Vetoes:            evidence.Vetoes,
-			StatusLine:        evidence.StatusLine,
-			At:                evidence.At,
-		})
-	}
-	if len(declines) == 0 {
+	declines := h.declines.Snapshots(windowID)
+	if declines == nil {
 		if _, ok := h.windowMetadata[windowID]; !ok {
 			return
 		}
-		declines = nil
-	} else {
-		sort.Slice(declines, func(i, j int) bool { return declines[i].Source < declines[j].Source })
 	}
 	meta := h.windowMetadata[windowID]
 	meta.Watchdog.ScreenDeclines = declines

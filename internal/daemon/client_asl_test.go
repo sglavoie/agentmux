@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 )
 
 // startASLTestServer publishes a daemon socket backed by the given bridge, so
@@ -17,7 +18,7 @@ func startASLTestServer(t *testing.T, bridge ASLBridge) string {
 	t.Helper()
 	dir := t.TempDir()
 	socketPath := filepath.Join(dir, "d.sock")
-	handler := NewHandler(NewStateGuard(0), nil)
+	handler := NewHandler(activity.NewStateGuard(0), nil)
 	if bridge != nil {
 		handler.SetASLBridge(bridge)
 	}

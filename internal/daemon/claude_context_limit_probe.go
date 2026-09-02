@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/contextlimit"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -66,7 +67,7 @@ func (h *Handler) ProbeClaudeContextLimitWithSnapshot(now time.Time, windows []k
 func (h *Handler) probeClaudeContextLimitWithSnapshot(
 	now time.Time,
 	snapshot screenProbeSnapshot,
-	screens *screenTextCache,
+	screens *activity.ScreenTextCache,
 ) {
 	if !h.claudeContextLimitProbeEnabled {
 		return
@@ -94,7 +95,7 @@ func (h *Handler) probeClaudeContextLimitWindow(
 	binding screenProbeBinding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
-	screens *screenTextCache,
+	screens *activity.ScreenTextCache,
 ) {
 	targetWindowID := binding.TargetWindowID
 	h.stateMu.Lock()
@@ -134,7 +135,7 @@ func (h *Handler) probeClaudeContextLimitWindow(
 	// This tick's shared capture: the idle stop probe classifies the very same
 	// frame, so the context-limit banner and the idle composer can never be read
 	// from two different repaints of one pane.
-	screen, err := screens.screen(binding.SourceWindowID)
+	screen, err := screens.Screen(binding.SourceWindowID)
 	if err != nil {
 		slog.Debug("claude context-limit probe: get-text failed", "source_window_id", binding.SourceWindowID,
 			"target_window_id", targetWindowID, "err", err)

@@ -3,6 +3,7 @@ package daemon
 import (
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -21,7 +22,7 @@ func (h *Handler) recordCodexPromptProbeStateLocked(
 	baseTitle string,
 	currentIconState string,
 	userVars kitty.UserVars,
-	classification CodexPromptClassification,
+	classification activity.CodexPromptClassification,
 	defaultCodexOwnership bool,
 	originWindowID int,
 ) (before, effective state.EffectiveState) {
@@ -103,7 +104,7 @@ func (h *Handler) appendCodexPromptProbeEventLocked(
 	baseTitle string,
 	currentIconState string,
 	userVars kitty.UserVars,
-	classification CodexPromptClassification,
+	classification activity.CodexPromptClassification,
 	resultIconState string,
 	suppressed bool,
 	defaultCodexOwnership bool,
@@ -135,7 +136,7 @@ func (h *Handler) appendCodexPromptProbeEventLocked(
 func codexPromptProbeEventRow(
 	now time.Time,
 	currentIconState string,
-	classification CodexPromptClassification,
+	classification activity.CodexPromptClassification,
 	resultIconState string,
 	suppressed bool,
 	originWindowID int,

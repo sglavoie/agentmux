@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
@@ -139,7 +140,7 @@ func TestHandler_LoopMarkerSuppressesNotifications(t *testing.T) {
 		mu.Unlock()
 		return false, nil
 	})
-	h := NewHandler(NewStateGuard(time.Hour), notifier)
+	h := NewHandler(activity.NewStateGuard(time.Hour), notifier)
 
 	resp := h.Handle(protocol.Request{
 		Type:         protocol.TypeStateUpdate,

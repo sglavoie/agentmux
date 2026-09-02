@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -25,20 +26,20 @@ import (
 // never persisted fails here.
 func screenDeclineState(t *testing.T, h *Handler, windowID int, source protocol.SourceID) (streak int, fingerprint int64, present bool) {
 	t.Helper()
-	ref := idleSampleRef{windowID: windowID, key: source.Key}
+	ref := activity.Ref{WindowID: windowID, Key: source.Key}
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	streak, present = h.screenProbeDeclineStreak[ref]
-	fingerprint = h.screenProbeDeclineFingerprint[ref]
-	return streak, fingerprint, present
+	streak = h.declines.Streak(ref)
+	fingerprint = h.declines.Fingerprint(ref)
+	return streak, fingerprint, streak > 0
 }
 
 // declineEvidence is the ordinary shape of one declined frame: a fingerprint
 // plus the diagnostic context the export publishes. Tests that only care about
 // the counter still hand over a veto set and a status line, because a recorder
 // that dropped them would otherwise pass.
-func declineEvidence(fingerprint int64) ScreenDeclineEvidence {
-	return ScreenDeclineEvidence{
+func declineEvidence(fingerprint int64) activity.ScreenDeclineEvidence {
+	return activity.ScreenDeclineEvidence{
 		Fingerprint: fingerprint,
 		Vetoes:      "working_status_line",
 		StatusLine:  "Working (12s · esc to interrupt)",
@@ -53,13 +54,13 @@ func declineEvidence(fingerprint int64) ScreenDeclineEvidence {
 // without NewHandler.
 func TestRecordScreenDeclineLockedStreakAndStability(t *testing.T) {
 	h := &Handler{}
-	ref := idleSampleRef{windowID: 7, key: "codex_screen"}
+	ref := activity.Ref{WindowID: 7, Key: "codex_screen"}
 
-	record := func(fingerprint int64) ScreenDeclineObservation {
+	record := func(fingerprint int64) activity.ScreenDeclineObservation {
 		t.Helper()
 		h.stateMu.Lock()
 		defer h.stateMu.Unlock()
-		return h.recordScreenDeclineLocked(ref, ScreenDeclineEvidence{Fingerprint: fingerprint})
+		return h.recordScreenDeclineLocked(ref, activity.ScreenDeclineEvidence{Fingerprint: fingerprint})
 	}
 
 	steps := []struct {
@@ -96,8 +97,8 @@ func TestRecordScreenDeclineLockedStreakAndStability(t *testing.T) {
 			t.Fatalf("%s: fingerprint = %d, want %d", step.name, got.Fingerprint, step.fingerprint)
 		}
 		h.stateMu.Lock()
-		storedStreak := h.screenProbeDeclineStreak[ref]
-		storedFingerprint := h.screenProbeDeclineFingerprint[ref]
+		storedStreak := h.declines.Streak(ref)
+		storedFingerprint := h.declines.Fingerprint(ref)
 		h.stateMu.Unlock()
 		if storedStreak != step.wantStreak || storedFingerprint != step.fingerprint {
 			t.Fatalf("%s: stored (streak=%d fingerprint=%d), want (streak=%d fingerprint=%d)",
@@ -114,7 +115,7 @@ func TestRecordScreenDeclineLockedStreakAndStability(t *testing.T) {
 func TestRecordScreenProbeDeclineResetsIdleSampleAtomically(t *testing.T) {
 	h := newTestHandler()
 	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource}
-	ref := idleSampleRef{windowID: 7, key: source.Key}
+	ref := activity.Ref{WindowID: 7, Key: source.Key}
 
 	// Bank a stabilization streak with a generation, exactly as a run of
 	// agreeing settleable frames would.
@@ -131,8 +132,9 @@ func TestRecordScreenProbeDeclineResetsIdleSampleAtomically(t *testing.T) {
 	}
 
 	h.stateMu.Lock()
-	idleStreak, idlePresent := h.idleSampleStreak[ref]
-	_, genPresent := h.idleSampleGen[ref]
+	idleStreak := h.idleSamples.Streak(ref)
+	idlePresent := idleStreak > 0
+	genPresent := h.idleSamples.Generation(ref) != 0
 	h.stateMu.Unlock()
 	if idlePresent || genPresent {
 		t.Fatalf("decline left idle stabilization state behind: streak=%d present=%t gen_present=%t",
@@ -154,7 +156,7 @@ func TestRecordScreenProbeDeclineResetsIdleSampleAtomically(t *testing.T) {
 	}
 }
 
-// TestScreenProbeDeclineStreaksDoNotCollide covers the reason idleSampleRef is
+// TestScreenProbeDeclineStreaksDoNotCollide covers the reason activity.Ref is
 // the right key: one window can run both harnesses' probe sources, and two
 // windows can be declining independently.
 func TestScreenProbeDeclineStreaksDoNotCollide(t *testing.T) {

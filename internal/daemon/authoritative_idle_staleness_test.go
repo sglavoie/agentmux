@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/transcript"
@@ -137,7 +138,7 @@ func TestAuthoritativeIdleAdapters_DiscardStaleMuteSnapshot(t *testing.T) {
 	for _, harnessName := range []string{"codex", "claude", "copilot"} {
 		t.Run(harnessName, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
-				guard := NewStateGuard(time.Hour)
+				guard := activity.NewStateGuard(time.Hour)
 				notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
 				h := NewHandler(guard, notifier)
 				notifier.SetIsMuted(h.IsMuted)

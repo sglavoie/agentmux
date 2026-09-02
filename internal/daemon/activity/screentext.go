@@ -1,10 +1,10 @@
-package daemon
+package activity
 
 import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
-// screenTextCache memoizes one `kitten @ get-text --extent=screen` capture per
+// ScreenTextCache memoizes one `kitten @ get-text --extent=screen` capture per
 // source pane for the lifetime of a single probe tick.
 //
 // It buys two things, and the second is the reason it exists:
@@ -37,9 +37,16 @@ import (
 // Only the `screen` extent is cached. The Codex clear probe's second
 // `--extent=all` read is a different capture of a different size and stays
 // uncached, so the map can stay keyed on the window ID alone.
-type screenTextCache struct {
-	client  kittyTitleClient
+type ScreenTextCache struct {
+	client  TextReader
 	entries map[int]screenTextEntry
+}
+
+// TextReader is the one Kitty capability this cache needs: read the text of a
+// window matched by expression. The daemon's full Kitty client satisfies it,
+// and narrowing to this seam is what keeps the cache free of the daemon root.
+type TextReader interface {
+	GetText(matchExpr, extent string) (string, error)
 }
 
 type screenTextEntry struct {
@@ -47,25 +54,18 @@ type screenTextEntry struct {
 	err    error
 }
 
-// newScreenTextCache builds the per-tick cache over the handler's Kitty client.
-func newScreenTextCache(client kittyTitleClient) *screenTextCache {
-	return &screenTextCache{client: client, entries: make(map[int]screenTextEntry)}
+// NewScreenTextCache builds the per-tick cache over the handler's Kitty client.
+func NewScreenTextCache(client TextReader) *ScreenTextCache {
+	return &ScreenTextCache{client: client, entries: make(map[int]screenTextEntry)}
 }
 
-// screen returns this tick's `--extent=screen` capture of one pane, reading it
+// Screen returns this tick's `--extent=screen` capture of one pane, reading it
 // through to Kitty exactly once.
-func (c *screenTextCache) screen(sourceWindowID int) (string, error) {
+func (c *ScreenTextCache) Screen(sourceWindowID int) (string, error) {
 	if entry, ok := c.entries[sourceWindowID]; ok {
 		return entry.screen, entry.err
 	}
 	screen, err := c.client.GetText(kitty.MatchWindowByID(sourceWindowID), "screen")
 	c.entries[sourceWindowID] = screenTextEntry{screen: screen, err: err}
 	return screen, err
-}
-
-// screenTextCacheFor builds a one-shot cache for an entry point that drives a
-// single probe outside the shared tick, so those paths keep the same "one read
-// per pane" guarantee without reaching for a nil check at every call site.
-func (h *Handler) screenTextCacheFor() *screenTextCache {
-	return newScreenTextCache(h.kittyClient)
 }

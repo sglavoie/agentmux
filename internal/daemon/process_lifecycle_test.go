@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
@@ -154,7 +155,7 @@ func TestProcessLifecycleMissingAndReplacedSettleInteractiveSilently(t *testing.
 	for _, status := range []HarnessProcessInspection{HarnessProcessMissing, HarnessProcessReplacedInstance} {
 		t.Run(string(status), func(t *testing.T) {
 			notifier, calls := newTestNotifier(&config.NotificationConfig{Stop: true})
-			h := NewHandler(NewStateGuard(time.Hour), notifier)
+			h := NewHandler(activity.NewStateGuard(time.Hour), notifier)
 			identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5201, StartToken: "Thu Jul 16 10:20:30 2026"}
 			applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
 			h.renderQueue = rendering.NewQueue()
@@ -304,7 +305,7 @@ func TestProcessLifecycleInspectionFailuresAreRateLimitedAndHealthyPollsSilent(t
 
 func TestProcessLifecycleCancelsPendingPermissionNotification(t *testing.T) {
 	notifier, calls := newTestNotifier(&config.NotificationConfig{Permission: true, PermissionDebounceMs: 60_000})
-	h := NewHandler(NewStateGuard(time.Hour), notifier)
+	h := NewHandler(activity.NewStateGuard(time.Hour), notifier)
 	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5251, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "permission", 1, false)
 	if !notifier.HasPending(42) {

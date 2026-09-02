@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -24,7 +25,7 @@ import (
 // the watchdog loop never waits on rendering.
 func TestWatchdogTick_DelayedRenderDoesNotDelayExpiry(t *testing.T) {
 	stubLoopDiscovery(t)
-	guard := NewStateGuard(time.Hour)
+	guard := activity.NewStateGuard(time.Hour)
 	h := NewHandler(guard, nil)
 	fake := &fakeKittyClient{}
 	base := time.Now()

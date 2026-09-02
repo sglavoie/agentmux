@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -19,7 +20,7 @@ import (
 // TierTerminalExplicit is the only tier the Codex adapter can produce (see
 // codexAdapter.Classify), and no Codex evidence buys a title bump, so this one
 // number covers every Codex settle in the package.
-var codexIdleProbeTerminalRun = requiredIdleSamples(harness.Codex, screenstate.TierTerminalExplicit, 0)
+var codexIdleProbeTerminalRun = activity.RequiredIdleSamples(harness.Codex, screenstate.TierTerminalExplicit, 0)
 
 // probeCodexUntilSettled drives ProbeCodexScreenPrompts for one whole
 // stabilization run — one tick per simulated second from base — and returns the

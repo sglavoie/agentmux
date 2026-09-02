@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -90,7 +91,7 @@ func TestSweepHookSilence_LatchClearsOnFreshEventThenReFires(t *testing.T) {
 		// Bypass the notifier's per-(windowID, action) cooldown so a re-stall
 		// produces a new dispatch. Reset against the same synthetic ID the
 		// sweep uses internally.
-		h.notifier.ResetCooldown(hookSilenceWindowID("work"))
+		h.notifier.ResetCooldown(activity.HookSilenceWindowID("work"))
 
 		// Re-stall: backdate the per-account timestamp and sweep again.
 		now2 := time.Now()
@@ -202,7 +203,7 @@ func TestSweepHookSilence_NotRunningSkipped(t *testing.T) {
 // notification storm if they later toggle the flag back on.
 func TestSweepHookSilence_SuppressedByConfig(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		guard := NewStateGuard(time.Hour)
+		guard := activity.NewStateGuard(time.Hour)
 		disabled := false
 		notifier, rec := newTestNotifier(&config.NotificationConfig{HookSilence: &disabled})
 		h := NewHandler(guard, notifier)
@@ -290,7 +291,7 @@ func TestSweepHookSilence_NoEventEverSkipped(t *testing.T) {
 // short-circuits before any lock acquisition.
 func TestSweepHookSilence_NilKittyClient(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		guard := NewStateGuard(time.Hour)
+		guard := activity.NewStateGuard(time.Hour)
 		notifier, rec := newTestNotifier(&config.NotificationConfig{})
 		h := NewHandler(guard, notifier)
 		h.SetHookSilenceThresholds(1*time.Hour, nil)
@@ -335,21 +336,21 @@ func TestSweepHookSilence_ListWindowsErrorTolerated(t *testing.T) {
 // different accounts → different IDs, and every ID is negative so it cannot
 // collide with any real Kitty window ID (always positive).
 func TestHookSilenceWindowID_StableAndNegative(t *testing.T) {
-	a1 := hookSilenceWindowID("work")
-	a2 := hookSilenceWindowID("work")
-	b1 := hookSilenceWindowID("personal")
+	a1 := activity.HookSilenceWindowID("work")
+	a2 := activity.HookSilenceWindowID("work")
+	b1 := activity.HookSilenceWindowID("personal")
 	if a1 != a2 {
-		t.Errorf("hookSilenceWindowID(work) not stable: %d vs %d", a1, a2)
+		t.Errorf("activity.HookSilenceWindowID(work) not stable: %d vs %d", a1, a2)
 	}
 	if a1 == b1 {
-		t.Errorf("hookSilenceWindowID(work) collided with personal: %d", a1)
+		t.Errorf("activity.HookSilenceWindowID(work) collided with personal: %d", a1)
 	}
 	if a1 >= 0 || b1 >= 0 {
 		t.Errorf("synthetic IDs should be negative; got work=%d personal=%d", a1, b1)
 	}
 	// Case-insensitive — the per-account threshold lookup lowercases too.
-	if hookSilenceWindowID("work") != hookSilenceWindowID("WORK") {
-		t.Errorf("hookSilenceWindowID should be case-insensitive")
+	if activity.HookSilenceWindowID("work") != activity.HookSilenceWindowID("WORK") {
+		t.Errorf("activity.HookSilenceWindowID should be case-insensitive")
 	}
 }
 

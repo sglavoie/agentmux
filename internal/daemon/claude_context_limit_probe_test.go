@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -28,7 +29,7 @@ func loadClaudeContextLimitFixture(t *testing.T) string {
 // records dispatches via callRecorder so probe tests can assert that
 // MaybeNotify fired exactly once per stall episode.
 func newClaudeContextLimitProbeTestHandler() (*Handler, *fakeKittyClient, *callRecorder) {
-	guard := NewStateGuard(time.Hour)
+	guard := activity.NewStateGuard(time.Hour)
 	notifier, rec := newTestNotifier(&config.NotificationConfig{})
 	h := NewHandler(guard, notifier)
 	fake := &fakeKittyClient{}

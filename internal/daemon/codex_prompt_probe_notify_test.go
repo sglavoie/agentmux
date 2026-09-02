@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -18,7 +19,7 @@ import (
 // still visible must not re-dispatch.
 func TestProbeCodexScreenPrompts_DetectedPromptNotifiesOnceOnTransition(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		guard := NewStateGuard(time.Hour)
+		guard := activity.NewStateGuard(time.Hour)
 		notifier, rec := newTestNotifier(&config.NotificationConfig{Permission: true})
 		h := NewHandler(guard, notifier)
 		fake := &fakeKittyClient{
@@ -68,7 +69,7 @@ func TestProbeCodexScreenPrompts_DetectedPromptNotifiesOnceOnTransition(t *testi
 // suppresses the dispatch.
 func TestProbeCodexScreenPrompts_DetectedPromptMutedWindowNoDispatch(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		guard := NewStateGuard(time.Hour)
+		guard := activity.NewStateGuard(time.Hour)
 		notifier, rec := newTestNotifier(&config.NotificationConfig{Permission: true})
 		h := NewHandler(guard, notifier)
 		notifier.SetIsMuted(h.IsMuted)
@@ -105,7 +106,7 @@ func TestProbeCodexScreenPrompts_DetectedPromptMutedWindowNoDispatch(t *testing.
 // mutates prompt state or schedules a notification.
 func TestProbeCodexScreenPrompts_DiscardsStaleMuteSnapshot(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		guard := NewStateGuard(time.Hour)
+		guard := activity.NewStateGuard(time.Hour)
 		notifier, rec := newTestNotifier(&config.NotificationConfig{Permission: true})
 		h := NewHandler(guard, notifier)
 		notifier.SetIsMuted(h.IsMuted)

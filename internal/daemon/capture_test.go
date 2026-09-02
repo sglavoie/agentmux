@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
@@ -20,7 +21,7 @@ func TestDaemonCapturesLegacyHookPayloadAndTrustsClientCaptureMarker(t *testing.
 	}); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewHandler(NewStateGuard(0), nil)
+	handler := NewHandler(activity.NewStateGuard(0), nil)
 	handler.setCaptureStore(store)
 	handler.Handle(protocol.Request{
 		Type: protocol.TypeHookEvent, WindowID: 42, Event: "PreToolUse", RequestID: "legacy-capture",
@@ -51,7 +52,7 @@ func TestDaemonMaintenanceExpiresCaptureWithoutKittyOrFurtherHooks(t *testing.T)
 	}); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewHandler(NewStateGuard(0), nil)
+	handler := NewHandler(activity.NewStateGuard(0), nil)
 	handler.setCaptureStore(store)
 	now = now.Add(2 * time.Minute)
 	handler.maintenanceTick(now)

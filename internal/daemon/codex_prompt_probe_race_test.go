@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -148,7 +149,7 @@ func TestProbeCodexScreenPrompt_DiscardsObservationAfterConcurrentReducerEvent(t
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
-				guard := NewStateGuard(time.Hour)
+				guard := activity.NewStateGuard(time.Hour)
 				// Permission notifications enabled so an applied (non-discarded)
 				// prompt WOULD dispatch; stop_failure disabled so the injected
 				// error event cannot dispatch on its own.

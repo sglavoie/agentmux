@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
@@ -24,7 +25,7 @@ import (
 // harness signal that separates the two.
 func TestHandler_CopilotAutoApprovedPermissionSuppressesNotification(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		guard := NewStateGuard(time.Hour)
+		guard := activity.NewStateGuard(time.Hour)
 		cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 100}
 		notifier := notification.NewNotifier(cfg)
 		var calls []string
@@ -53,7 +54,7 @@ func TestHandler_CopilotAutoApprovedPermissionSuppressesNotification(t *testing.
 
 func TestHandler_CopilotLatePermissionPromptAfterAutoApprovedToolPreservesBolt(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		guard := NewStateGuard(time.Hour)
+		guard := activity.NewStateGuard(time.Hour)
 		cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 100}
 		notifier := notification.NewNotifier(cfg)
 		var calls []string
@@ -167,7 +168,7 @@ func TestHandler_CopilotPermissionPromptAfterPrePermissionSignalShowsKey(t *test
 
 func TestHandler_PermissionCancelledByTerminalAction(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		guard := NewStateGuard(time.Hour)
+		guard := activity.NewStateGuard(time.Hour)
 		cfg := &config.NotificationConfig{Permission: true, Stop: true, PermissionDebounceMs: 100}
 		notifier := notification.NewNotifier(cfg)
 		var mu sync.Mutex
@@ -202,7 +203,7 @@ func TestHandler_PermissionCancelledByTerminalAction(t *testing.T) {
 // the guard only governs visual state, not whether the user gets alerted.
 func TestHandler_PermissionNotificationFiresWhenGuardBlocks(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		guard := NewStateGuard(time.Hour)
+		guard := activity.NewStateGuard(time.Hour)
 		cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 50}
 		notifier := notification.NewNotifier(cfg)
 		var mu sync.Mutex

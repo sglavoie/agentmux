@@ -27,10 +27,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
-	"github.com/sglavoie/agentmux/internal/harness"
 )
 
 // AuthoritativeIdle is one piece of external idle evidence for a managed
@@ -124,19 +124,6 @@ type AuthoritativeIdle struct {
 	DiagnosticEvent string
 }
 
-// AuthoritativeIdleSource is the probe source an authoritative idle observation
-// applies its synthetic stop under. It is a daemon-originated SourceProbe fact
-// keyed by harness so a Codex idle and a Claude idle never collide, and is
-// deliberately never a SourceLegacy fact: an idle probe must settle stale work
-// through the reducer's source-scoped facts, not the legacy scalar grace.
-func AuthoritativeIdleSource(harnessName string) protocol.SourceID {
-	key := "idle"
-	if h := harness.Normalize(harnessName); h != "" {
-		key = "idle:" + h
-	}
-	return protocol.SourceID{Kind: protocol.SourceProbe, Key: key}
-}
-
 // captureWindowReceipt samples the window-wide reducer receipt generation
 // (WindowState.ShadowSeq) under stateMu so a slow off-lock external read (a
 // screen text capture, a transcript stat) can later prove no receipt-relevant
@@ -172,63 +159,28 @@ func (h *Handler) windowReceiptCurrentLocked(windowID int, capturedSeq uint64) b
 	return h.windowReceiptLocked(windowID) == capturedSeq
 }
 
-// idleSampleRef keys the consecutive idle-sample stabilization streak by window
-// and probe source key, mirroring aslLeaseRef's shape.
-type idleSampleRef struct {
-	windowID int
-	key      string
-}
-
-// recordIdleSampleLocked credits one stabilized idle observation for the ref
-// and returns the new consecutive-sample count. Callers hold stateMu.
-func (h *Handler) recordIdleSampleLocked(ref idleSampleRef) int {
-	if h.idleSampleStreak == nil {
-		h.idleSampleStreak = make(map[idleSampleRef]int)
-	}
-	h.idleSampleStreak[ref]++
-	return h.idleSampleStreak[ref]
-}
+// The stabilization streaks themselves live in internal/daemon/activity as a
+// caller-locked activity.Samples tracker. The wrappers below keep the daemon's
+// *Locked naming at the call sites and are what documents that stateMu is the
+// lock the tracker is relying on.
 
 // recordIdleSampleWithGenerationLocked credits one stabilized idle observation
-// for the ref, keyed to an evidence generation. When the observed generation
-// differs from the last one recorded for this ref, the stabilization streak
-// restarts before this sample is counted: agreeing samples must observe the SAME
-// generation. A zero generation disables the check and behaves exactly like
-// recordIdleSampleLocked. Callers hold stateMu.
-func (h *Handler) recordIdleSampleWithGenerationLocked(ref idleSampleRef, generation int64) int {
-	if generation != 0 {
-		if h.idleSampleGen == nil {
-			h.idleSampleGen = make(map[idleSampleRef]int64)
-		}
-		if h.idleSampleGen[ref] != generation {
-			delete(h.idleSampleStreak, ref)
-			h.idleSampleGen[ref] = generation
-		}
-	}
-	return h.recordIdleSampleLocked(ref)
+// for the ref, keyed to an evidence generation. Callers hold stateMu.
+func (h *Handler) recordIdleSampleWithGenerationLocked(ref activity.Ref, generation int64) int {
+	return h.idleSamples.RecordWithGeneration(ref, generation)
 }
 
 // clearIdleSampleLocked resets a single probe source's stabilization streak and
 // its recorded evidence generation. Callers hold stateMu.
-func (h *Handler) clearIdleSampleLocked(ref idleSampleRef) {
-	delete(h.idleSampleStreak, ref)
-	delete(h.idleSampleGen, ref)
+func (h *Handler) clearIdleSampleLocked(ref activity.Ref) {
+	h.idleSamples.Clear(ref)
 }
 
 // clearIdleSamplesForWindowLocked drops every stabilization streak for a
 // window, used when fresh activity or a window closure invalidates all of its
 // in-flight idle evidence. Callers hold stateMu.
 func (h *Handler) clearIdleSamplesForWindowLocked(windowID int) {
-	for ref := range h.idleSampleStreak {
-		if ref.windowID == windowID {
-			delete(h.idleSampleStreak, ref)
-		}
-	}
-	for ref := range h.idleSampleGen {
-		if ref.windowID == windowID {
-			delete(h.idleSampleGen, ref)
-		}
-	}
+	h.idleSamples.ClearWindow(windowID)
 }
 
 // RecordIdleSample credits one stabilized idle observation for the window's
@@ -239,7 +191,7 @@ func (h *Handler) clearIdleSamplesForWindowLocked(windowID int) {
 func (h *Handler) RecordIdleSample(windowID int, source protocol.SourceID) int {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	return h.recordIdleSampleLocked(idleSampleRef{windowID: windowID, key: source.Key})
+	return h.idleSamples.Record(activity.Ref{WindowID: windowID, Key: source.Key})
 }
 
 // ClearIdleSample resets a probe source's consecutive-sample streak. Adapters
@@ -248,7 +200,7 @@ func (h *Handler) RecordIdleSample(windowID int, source protocol.SourceID) int {
 func (h *Handler) ClearIdleSample(windowID int, source protocol.SourceID) {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	h.clearIdleSampleLocked(idleSampleRef{windowID: windowID, key: source.Key})
+	h.clearIdleSampleLocked(activity.Ref{WindowID: windowID, Key: source.Key})
 }
 
 // applyAuthoritativeIdle atomically folds one idle observation into a window's
@@ -262,7 +214,7 @@ func (h *Handler) applyAuthoritativeIdle(obs AuthoritativeIdle) bool {
 	if obs.WindowID <= 0 {
 		return false
 	}
-	ref := idleSampleRef{windowID: obs.WindowID, key: obs.Source.Key}
+	ref := activity.Ref{WindowID: obs.WindowID, Key: obs.Source.Key}
 
 	h.stateMu.Lock()
 	st, ok := h.windowStateLocked(obs.WindowID)
@@ -388,7 +340,7 @@ func (h *Handler) applyAuthoritativeIdle(obs AuthoritativeIdle) bool {
 	h.appendWatchdogEventLocked(obs.WindowID, originWindowID, time.Unix(at, 0), diagnosticEvent, resultAction,
 		string(obs.Source.Kind)+":"+obs.Source.Key,
 		fmt.Sprintf("authoritative idle (%s) settled visible state %q→%q (tier=%s samples=%d generation=%d)",
-			idleHarnessLabel(obs.Harness), before.Icon, effective.Icon, tier, required, obs.Generation))
+			activity.IdleHarnessLabel(obs.Harness), before.Icon, effective.Icon, tier, required, obs.Generation))
 	if len(st.EventLog) > 0 && obs.TraceID != "" {
 		event := &st.EventLog[len(st.EventLog)-1]
 		event.TraceID = obs.TraceID
@@ -431,13 +383,4 @@ func (h *Handler) applyAuthoritativeIdle(obs AuthoritativeIdle) bool {
 		})
 	}
 	return true
-}
-
-// idleHarnessLabel gives the authoritative-idle diagnostic a stable harness
-// label, falling back to a generic tag when the observation carried none.
-func idleHarnessLabel(harnessName string) string {
-	if h := harness.Normalize(harnessName); h != "" {
-		return h
-	}
-	return "session"
 }

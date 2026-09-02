@@ -1,12 +1,11 @@
 package daemon
 
 import (
-	"path/filepath"
 	"reflect"
 	"sync"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -183,35 +182,10 @@ func screenProbeSignature(osWindow *kitty.OSWindow, tab *kitty.Tab) screenProbeT
 func screenProbeWindowSignatureFor(win *kitty.Window) screenProbeWindowSignature {
 	signature := screenProbeWindowSignature{
 		mute:            win.UserVars.Mute,
-		claudeBusyTitle: claudeWindowTitleHasDescriptionMarker(win.Title),
+		claudeBusyTitle: activity.ClaudeWindowTitleHasDescriptionMarker(win.Title),
 	}
-	signature.foregroundHarness, signature.foregroundPipeMode = screenProbeForegroundHarness(win)
+	signature.foregroundHarness, signature.foregroundPipeMode = activity.ForegroundHarness(win)
 	return signature
-}
-
-// screenProbeForegroundHarness names the harness this pane is running, if any,
-// preferring the pane's own command line over its foreground processes.
-func screenProbeForegroundHarness(win *kitty.Window) (string, bool) {
-	if name, pipeMode, ok := harnessInvocationFromCmdline(win.Cmdline); ok {
-		return name, pipeMode
-	}
-	for i := range win.ForegroundProcesses {
-		if name, pipeMode, ok := harnessInvocationFromCmdline(win.ForegroundProcesses[i].Cmdline); ok {
-			return name, pipeMode
-		}
-	}
-	return "", false
-}
-
-func harnessInvocationFromCmdline(cmdline []string) (string, bool, bool) {
-	if len(cmdline) == 0 {
-		return "", false, false
-	}
-	name := harness.NormalizeKnown(filepath.Base(cmdline[0]))
-	if name == "" {
-		return "", false, false
-	}
-	return name, harness.InvocationIsPipeMode(name, cmdline[1:]), true
 }
 
 // loadForScreenProbes returns the immutable window tree together with the

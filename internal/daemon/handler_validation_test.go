@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -16,7 +17,7 @@ func TestHandler_UnknownType(t *testing.T) {
 }
 
 func TestHandler_StateUpdateWithoutNotifier(t *testing.T) {
-	h := NewHandler(NewStateGuard(time.Hour), nil)
+	h := NewHandler(activity.NewStateGuard(time.Hour), nil)
 
 	resp := h.Handle(protocol.Request{
 		Type:     protocol.TypeStateUpdate,

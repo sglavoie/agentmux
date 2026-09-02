@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -54,7 +55,7 @@ func TestSettleReasonNamesTierSamplesAndGeneration(t *testing.T) {
 
 		// A bare (marker-free) pane title buys no bump, so this is the tier's own
 		// count: three samples for the weakest terminal evidence Claude produces.
-		const wantSamples = claudeIdleProbeQuiescentSamples
+		const wantSamples = activity.ClaudeIdleProbeQuiescentSamples
 		for sample := 1; sample <= wantSamples; sample++ {
 			h.ProbeClaudeScreenStop(base.Add(time.Duration(sample) * time.Second))
 		}
@@ -62,14 +63,14 @@ func TestSettleReasonNamesTierSamplesAndGeneration(t *testing.T) {
 			t.Fatalf("effective after %d samples = %+v, want stop", wantSamples, eff)
 		}
 		want := fmt.Sprintf("(tier=quiescent samples=3 generation=%d)",
-			classifyScreenState(harness.Claude, claudeQuiescentIdleScreen).Fingerprint)
+			activity.ClassifyScreenState(harness.Claude, claudeQuiescentIdleScreen).Fingerprint)
 		if got := settleReason(t, h, 42); !strings.HasSuffix(got, want) {
 			t.Fatalf("settle reason = %q, want suffix %q", got, want)
 		}
 	})
 
 	t.Run("codex explicit terminal", func(t *testing.T) {
-		observation := classifyScreenState(harness.Codex, codexCompletedTurnScreen)
+		observation := activity.ClassifyScreenState(harness.Codex, codexCompletedTurnScreen)
 		if observation.Tier != screenstate.TierTerminalExplicit {
 			t.Fatalf("fixture tier = %v, want %v", observation.Tier, screenstate.TierTerminalExplicit)
 		}

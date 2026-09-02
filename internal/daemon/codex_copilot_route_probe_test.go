@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -100,7 +101,7 @@ func TestProbeCodexScreenPrompts_RoutedPromptSurvivesUnrelatedTabPublication(t *
 		t.Fatalf("Katana target effective = %+v visible %q, want question/question", eff, visible)
 	}
 	ev, ok := lastEventNamed(h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42}).Events, screenPromptProbeEvent)
-	if !ok || ev.PromptKind != string(CodexPromptRequestUserInput) || ev.OriginWindowID != 43 {
+	if !ok || ev.PromptKind != string(activity.CodexPromptRequestUserInput) || ev.OriginWindowID != 43 {
 		t.Fatalf("Katana routed prompt event = %+v ok=%v, want request_user_input from origin 43", ev, ok)
 	}
 }
@@ -153,7 +154,7 @@ func TestProbeCodexScreenPrompts_RoutedPromptSurvivesSiblingPaneChurn(t *testing
 		t.Fatalf("routed target effective = %+v visible %q, want question/question", eff, visible)
 	}
 	ev, ok := lastEventNamed(h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42}).Events, screenPromptProbeEvent)
-	if !ok || ev.PromptKind != string(CodexPromptRequestUserInput) || ev.OriginWindowID != 43 {
+	if !ok || ev.PromptKind != string(activity.CodexPromptRequestUserInput) || ev.OriginWindowID != 43 {
 		t.Fatalf("routed prompt event = %+v ok=%v, want request_user_input from origin 43", ev, ok)
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -110,7 +111,7 @@ func TestSweepStale_ClearsActiveSessionAndNotifies(t *testing.T) {
 }
 
 func TestSweepStale_WithoutNotifierStillClearsStateAndTitle(t *testing.T) {
-	guard := NewStateGuard(time.Hour)
+	guard := activity.NewStateGuard(time.Hour)
 	h := NewHandler(guard, nil)
 	fake := &fakeKittyClient{}
 	h.SetKittyClient(fake)

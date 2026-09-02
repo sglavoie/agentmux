@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -22,7 +23,7 @@ import (
 // the quiescent tier plus the pane-title marker bump. Negative tests tick past
 // it so a held ⚡ proves the guard under test held it, not a stabilization
 // streak that simply had not finished accumulating.
-const claudeIdleProbeLongestRun = claudeIdleProbeQuiescentSamples + claudeIdleProbeMarkerSampleBump
+const claudeIdleProbeLongestRun = activity.ClaudeIdleProbeQuiescentSamples + activity.ClaudeIdleProbeMarkerSampleBump
 
 // TestClaudeIdleProbeSampleTiers pins the tier table itself. The counts are
 // written as literals rather than derived from the constants, so re-tuning a
@@ -43,9 +44,9 @@ func TestClaudeIdleProbeSampleTiers(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := claudeIdleProbeSamples(tc.tier, tc.hasMarker)
+			got := activity.ClaudeIdleProbeSamples(tc.tier, tc.hasMarker)
 			if got != tc.want {
-				t.Fatalf("claudeIdleProbeSamples(%v, %v) = %d, want %d",
+				t.Fatalf("activity.ClaudeIdleProbeSamples(%v, %v) = %d, want %d",
 					tc.tier, tc.hasMarker, got, tc.want)
 			}
 			// The Layer B invariant: at one sample the screen fingerprint in
@@ -53,7 +54,7 @@ func TestClaudeIdleProbeSampleTiers(t *testing.T) {
 			// observation, so a tier below the floor would opt out of
 			// stabilization entirely — the exact hole this plan closes.
 			if got < 2 {
-				t.Fatalf("claudeIdleProbeSamples(%v, %v) = %d, want the floor of 2 or more",
+				t.Fatalf("activity.ClaudeIdleProbeSamples(%v, %v) = %d, want the floor of 2 or more",
 					tc.tier, tc.hasMarker, got)
 			}
 		})
@@ -65,7 +66,7 @@ func TestClaudeIdleProbeSampleTiers(t *testing.T) {
 // row of the tier table when a fixture or a classifier changes.
 func assertClaudeScreenTier(t *testing.T, screen string, want screenstate.Tier) {
 	t.Helper()
-	observation := classifyClaudeScreen(screen)
+	observation := activity.ClassifyClaudeScreen(screen)
 	if !observation.SettleableTerminal() {
 		t.Fatalf("fixture is not settleable terminal: state=%v vetoes=%b", observation.State, observation.Vetoes)
 	}
@@ -124,13 +125,13 @@ func TestProbeClaudeScreenStop_QuiescentScreenWithMarkerRunsLongest(t *testing.T
 // never at one, where the fingerprint generation would go uncompared.
 func TestProbeClaudeScreenStop_InterruptedScreenSettlesOnTheFloor(t *testing.T) {
 	assertClaudeScreenTier(t, claudeInterruptedScreen, screenstate.TierTerminalExplicit)
-	const wantSamples = claudeIdleProbeRequiredSamples
+	const wantSamples = activity.ClaudeIdleProbeRequiredSamples
 	base := time.Now()
 	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
 		Profile: "work",
 		Harness: harness.Claude,
 	})
-	windows[0].Tabs[0].Windows[0].Title = claudeRestingTitleText
+	windows[0].Tabs[0].Windows[0].Title = activity.ClaudeRestingTitleText
 	fake := &fakeKittyClient{windows: windows, getText: map[string]string{
 		kitty.MatchWindowByID(42): claudeInterruptedScreen,
 	}}
@@ -157,12 +158,12 @@ func TestProbeClaudeScreenStop_RestingBrailleRequiresMarkerBumpedRun(t *testing.
 	// claudeIdleScreen carries "✻ Cooked for 17m 6s", so the screen is
 	// TierTerminalShape: two samples for the tier, plus one for the marker title.
 	assertClaudeScreenTier(t, claudeIdleScreen, screenstate.TierTerminalShape)
-	const wantSamples = claudeIdleProbeRequiredSamples + claudeIdleProbeMarkerSampleBump
+	const wantSamples = activity.ClaudeIdleProbeRequiredSamples + activity.ClaudeIdleProbeMarkerSampleBump
 	if wantSamples != 3 {
 		t.Fatalf("marker-bumped terminal-shape run = %d, want 3", wantSamples)
 	}
 	base := time.Now()
-	const restingTitle = "\u2802 " + claudeRestingTitleText
+	const restingTitle = "\u2802 " + activity.ClaudeRestingTitleText
 	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
 		Profile: "work",
 		Harness: harness.Claude,
@@ -199,7 +200,7 @@ func TestProbeClaudeScreenStop_RestingBrailleRequiresMarkerBumpedRun(t *testing.
 // and the title only lengthens stabilization by the marker bump.
 func TestProbeClaudeScreenStop_BusyBrailleDescriptionSettlesAfterMarkerRun(t *testing.T) {
 	assertClaudeScreenTier(t, claudeIdleScreen, screenstate.TierTerminalShape)
-	const wantSamples = claudeIdleProbeRequiredSamples + claudeIdleProbeMarkerSampleBump
+	const wantSamples = activity.ClaudeIdleProbeRequiredSamples + activity.ClaudeIdleProbeMarkerSampleBump
 	base := time.Now()
 	const staleTitle = "\u2810 Fix cursor corruption"
 	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
@@ -274,7 +275,7 @@ func TestProbeClaudeScreenStop_BlockingPromptWithDescriptionTitleKeepsBolt(t *te
 // event restarts the streak, so a settle really does mean an uninterrupted run
 // of idle screens with zero hook traffic.
 func TestProbeClaudeScreenStop_HookEventResetsDescriptionMarkerRun(t *testing.T) {
-	const wantSamples = claudeIdleProbeRequiredSamples + claudeIdleProbeMarkerSampleBump
+	const wantSamples = activity.ClaudeIdleProbeRequiredSamples + activity.ClaudeIdleProbeMarkerSampleBump
 	base := time.Now()
 	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
 		Profile: "work",

@@ -45,7 +45,7 @@ func (h *Handler) handleStateQuery() protocol.Response {
 		if !st.Activity.IsZero() {
 			entry.LastEventAt = st.Activity.Unix()
 		}
-		if d := h.resolveThreshold(st.LastAccount, action); d > 0 {
+		if d := h.staleThresholds.Resolve(st.LastAccount, action); d > 0 {
 			entry.ThresholdSec = int(d / time.Second)
 		}
 		watchdog[id] = entry

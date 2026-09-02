@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -58,7 +59,7 @@ func (h *Handler) SweepStaleWithSnapshot(now time.Time, windows []kitty.OSWindow
 // clears — with its one-shot "Session idle" notification — only when the
 // window as a whole has been idle past its threshold (WatchdogStale).
 func (h *Handler) sweepStale(now time.Time, _ []kitty.OSWindow, credit time.Duration, gapTick bool) bool {
-	staleThresholdsEnabled := h.anyStaleThresholdSet()
+	staleThresholdsEnabled := h.staleThresholds.AnySet()
 	type staleEntry struct {
 		windowID int
 		account  string
@@ -92,7 +93,7 @@ func (h *Handler) sweepStale(now time.Time, _ []kitty.OSWindow, credit time.Dura
 		action := st.LastAction
 		windowStale := false
 		if staleThresholdsEnabled && (action == "active" || action == "subagent" || action == "compact") {
-			if threshold := h.resolveThreshold(account, action); threshold > 0 {
+			if threshold := h.staleThresholds.Resolve(account, action); threshold > 0 {
 				idle := st.AdvanceIdle(now, credit, gapTick)
 				// An authoritative ASL turn or verification lease is live
 				// evidence the loop is still working this window; the bolt is
@@ -136,7 +137,7 @@ func (h *Handler) sweepStale(now time.Time, _ []kitty.OSWindow, credit time.Dura
 			}
 			h.appendWatchdogEventLocked(windowID, windowID, now, eventWatchdogStale, "stale", "",
 				"no activity for "+st.IdleDuration().Truncate(time.Second).String()+
-					" (threshold "+h.resolveThreshold(account, action).String()+")")
+					" (threshold "+h.staleThresholds.Resolve(account, action).String()+")")
 			h.syncRendererMetadataLocked(windowID)
 			h.markWindowDirtyLocked(windowID)
 			stale = append(stale, staleEntry{
@@ -175,21 +176,6 @@ func (h *Handler) sweepStale(now time.Time, _ []kitty.OSWindow, credit time.Dura
 	return len(stale) > 0 || changedWindows > 0
 }
 
-// staleActionForIcon maps an active-class icon back to the threshold action
-// name used by [defaults.watchdog]. Non-active-class icons return "" — they
-// are never expired by the watchdog.
-func staleActionForIcon(icon string) string {
-	switch icon {
-	case "bolt":
-		return "active"
-	case "subagent":
-		return "subagent"
-	case "compact":
-		return "compact"
-	}
-	return ""
-}
-
 // expireStaleFactsLocked advances the per-fact idle accumulators for one
 // window and expires the individual source facts whose accumulated idle time
 // exceeded their per-icon threshold. It reports how many facts expired and
@@ -214,12 +200,12 @@ func (h *Handler) expireStaleFactsLocked(windowID int, st *state.WindowState, no
 	seen := make(map[protocol.SourceID]bool)
 	for _, fact := range st.Reducer.Facts() {
 		src := fact.Source()
-		action := staleActionForIcon(fact.Icon)
+		action := activity.StaleActionForIcon(fact.Icon)
 		if action == "" || fact.Acked {
 			continue
 		}
 		seen[src] = true
-		threshold := h.resolveThreshold(st.LastAccount, action)
+		threshold := h.staleThresholds.Resolve(st.LastAccount, action)
 		idle := st.AdvanceFactIdle(fact, now, credit, gapTick)
 		factStale := threshold > 0 && idle >= threshold
 		if fact.Kind == protocol.SourceASL && fact.LeaseLive && !factStale &&

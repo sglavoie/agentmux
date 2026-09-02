@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -36,10 +37,10 @@ func screenProbeMutationFingerprint(t *testing.T, h *Handler, windowID int) stri
 		h.stateMu.Unlock()
 		t.Fatalf("marshal window %d state: %v", windowID, err)
 	}
-	refs := [3]idleSampleRef{
-		{windowID: windowID, key: screenPromptProbeSource},
-		{windowID: windowID, key: claudeScreenStopProbeSource},
-		{windowID: windowID, key: copilotTranscriptStopProbeSource},
+	refs := [3]activity.Ref{
+		{WindowID: windowID, Key: screenPromptProbeSource},
+		{WindowID: windowID, Key: claudeScreenStopProbeSource},
+		{WindowID: windowID, Key: copilotTranscriptStopProbeSource},
 	}
 	got := fingerprint{
 		WindowState: windowState,
@@ -48,8 +49,8 @@ func screenProbeMutationFingerprint(t *testing.T, h *Handler, windowID int) stri
 		Metadata:    h.windowMetadata[windowID],
 	}
 	for i, ref := range refs {
-		got.IdleSamples[i] = h.idleSampleStreak[ref]
-		got.IdleGenerations[i] = h.idleSampleGen[ref]
+		got.IdleSamples[i] = h.idleSamples.Streak(ref)
+		got.IdleGenerations[i] = h.idleSamples.Generation(ref)
 	}
 	h.stateMu.Unlock()
 

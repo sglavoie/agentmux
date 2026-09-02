@@ -1,4 +1,4 @@
-package daemon
+package activity
 
 import (
 	"strings"
@@ -18,27 +18,21 @@ import (
 // Claude does not reliably revert. Only the second kind stays here, because it
 // is consumed exclusively by recoverClaudeBusyTitle's one-way promotion.
 
-// classifyClaudeScreen resolves the Claude adapter and classifies one capture.
-// A missing adapter is impossible in practice — the registry is a package-level
-// literal — but the fail-closed zero Observation is the right answer anyway,
-// and it is never terminal.
-func classifyClaudeScreen(screen string) screenstate.Observation {
-	adapter, ok := screenstate.For(harness.Claude)
-	if !ok {
-		return screenstate.Observation{}
-	}
-	return adapter.Classify(screen)
+// ClassifyClaudeScreen is ClassifyScreenState pinned to the Claude adapter, for
+// the callers that only ever grade Claude screens.
+func ClassifyClaudeScreen(screen string) screenstate.Observation {
+	return ClassifyScreenState(harness.Claude, screen)
 }
 
-// claudeRestingTitleText is the generic body Claude Code publishes in its pane
+// ClaudeRestingTitleText is the generic body Claude Code publishes in its pane
 // title when no turn is running.
-const claudeRestingTitleText = "Claude Code"
+const ClaudeRestingTitleText = "Claude Code"
 
-// claudeTitleMarkerBody splits a Claude pane title into its work-marker rune and
+// ClaudeTitleMarkerBody splits a Claude pane title into its work-marker rune and
 // trimmed body, reporting whether a recognized marker is present. Claude cycles
 // its star, its Braille spinner block, and its quadrant spinner block through
 // this position.
-func claudeTitleMarkerBody(title string) (string, bool) {
+func ClaudeTitleMarkerBody(title string) (string, bool) {
 	runes := []rune(strings.TrimLeftFunc(title, unicode.IsSpace))
 	if len(runes) < 2 || !unicode.IsSpace(runes[1]) {
 		return "", false
@@ -61,14 +55,14 @@ func claudeTitleMarkerRune(r rune) bool {
 	return false
 }
 
-// claudeTitleHasMarker reports whether Claude's pane title carries a work marker
+// ClaudeTitleHasMarker reports whether Claude's pane title carries a work marker
 // at all, over a description body or over the generic resting body alike.
-func claudeTitleHasMarker(title string) bool {
-	_, ok := claudeTitleMarkerBody(title)
+func ClaudeTitleHasMarker(title string) bool {
+	_, ok := ClaudeTitleMarkerBody(title)
 	return ok
 }
 
-// claudeWindowTitleHasDescriptionMarker reports whether Claude's pane title
+// ClaudeWindowTitleHasDescriptionMarker reports whether Claude's pane title
 // carries a work marker over a turn description rather than over its generic
 // resting body.
 //
@@ -79,7 +73,7 @@ func claudeTitleHasMarker(title string) bool {
 // classifier only gates positive promotion of an empty tab to ⚡, where a marker
 // that outlived its turn costs one recoverable promotion rather than a stuck
 // icon.
-func claudeWindowTitleHasDescriptionMarker(title string) bool {
-	body, ok := claudeTitleMarkerBody(title)
-	return ok && body != claudeRestingTitleText
+func ClaudeWindowTitleHasDescriptionMarker(title string) bool {
+	body, ok := ClaudeTitleMarkerBody(title)
+	return ok && body != ClaudeRestingTitleText
 }

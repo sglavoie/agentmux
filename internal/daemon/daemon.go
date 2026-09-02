@@ -14,6 +14,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
@@ -87,7 +88,7 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	}()
 
 	guardDur := time.Duration(cfg.Defaults.GuardDuration) * time.Second
-	guard := NewStateGuard(guardDur)
+	guard := activity.NewStateGuard(guardDur)
 	notifier := notification.NewNotifier(&cfg.Defaults.Notifications)
 	handler := NewHandler(guard, notifier)
 	if recorder != nil {

@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -59,16 +60,16 @@ func TestCodexIdleProbeSampleTiers(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			// No Codex evidence buys a title bump, so the row is the whole count.
-			got := requiredIdleSamples(harness.Codex, tc.tier, 0)
+			got := activity.RequiredIdleSamples(harness.Codex, tc.tier, 0)
 			if got != tc.want {
-				t.Fatalf("requiredIdleSamples(codex, %v) = %d, want %d", tc.tier, got, tc.want)
+				t.Fatalf("activity.RequiredIdleSamples(codex, %v) = %d, want %d", tc.tier, got, tc.want)
 			}
 			// The Layer B invariant: below two samples the fingerprint in
 			// AuthoritativeIdle.Generation is never compared against a second
 			// observation, so the row would opt out of stabilization entirely.
-			if got < idleMinimumSamples {
-				t.Fatalf("requiredIdleSamples(codex, %v) = %d, want at least the floor of %d",
-					tc.tier, got, idleMinimumSamples)
+			if got < activity.IdleMinimumSamples {
+				t.Fatalf("activity.RequiredIdleSamples(codex, %v) = %d, want at least the floor of %d",
+					tc.tier, got, activity.IdleMinimumSamples)
 			}
 		})
 	}

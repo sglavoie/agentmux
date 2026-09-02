@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -44,8 +45,8 @@ var claudeScreenIdleSpec = screenIdleSpec{
 // title still carrying a work-marker rune lengthens the run of agreeing samples
 // the screen's own tier already bought.
 func claudeIdleProbeTitleBump(sourceWindowTitle string) int {
-	if claudeTitleHasMarker(sourceWindowTitle) {
-		return claudeIdleProbeMarkerSampleBump
+	if activity.ClaudeTitleHasMarker(sourceWindowTitle) {
+		return activity.ClaudeIdleProbeMarkerSampleBump
 	}
 	return 0
 }
@@ -119,7 +120,7 @@ func (h *Handler) ProbeClaudeScreenStopWithSnapshot(now time.Time, windows []kit
 func (h *Handler) probeClaudeScreenStopWithSnapshot(
 	now time.Time,
 	snapshot screenProbeSnapshot,
-	screens *screenTextCache,
+	screens *activity.ScreenTextCache,
 ) {
 	for _, binding := range h.screenProbeBindings(snapshot, harness.Claude) {
 		_, tab, target, ok := kitty.FindWindowLocationByID(snapshot.windows, binding.TargetWindowID)
@@ -143,7 +144,7 @@ func (h *Handler) probeClaudeScreenStopWithSnapshot(
 		// committed promotion bumps ShadowSeq and so fails the eligibility check on
 		// this same tick; every other tick reads the screen, which is authoritative
 		// for whether a turn is actually running.
-		if claudeWindowTitleHasDescriptionMarker(source.Title) {
+		if activity.ClaudeWindowTitleHasDescriptionMarker(source.Title) {
 			h.recoverClaudeBusyTitle(now, binding, titleParts, target.UserVars, source.Title)
 		}
 
@@ -194,7 +195,7 @@ func (h *Handler) recoverClaudeBusyTitle(
 	// The marker rune is an animation frame frozen at an arbitrary value, so the
 	// one-shot is keyed on the body alone: a raw-title key re-arms itself whenever
 	// the frozen frame differs over the same description.
-	promotedBody, _ := claudeTitleMarkerBody(sourceWindowTitle)
+	promotedBody, _ := activity.ClaudeTitleMarkerBody(sourceWindowTitle)
 	if ok && st != nil && st.PromotedBusyBody() == promotedBody {
 		return
 	}
@@ -222,7 +223,7 @@ func (h *Handler) recoverClaudeBusyTitle(
 	// Only a committed promotion invalidates accumulated idle evidence. The
 	// caller's screen read now depends on that streak surviving every tick where
 	// the title merely repeats itself.
-	h.clearIdleSampleLocked(idleSampleRef{windowID: targetWindowID, key: source.Key})
+	h.clearIdleSampleLocked(activity.Ref{WindowID: targetWindowID, Key: source.Key})
 
 	st.Activity = now
 	if titleParts.Base != "" {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
@@ -29,7 +30,7 @@ type kittyTitleClient interface {
 
 // Handler processes daemon requests.
 type Handler struct {
-	guard    *StateGuard
+	guard    *activity.StateGuard
 	notifier *notification.Notifier
 	// decisionJournal receives complete sanitized core decision records after
 	// the in-memory SessionEvent has been finalized. Nil keeps diagnostics
@@ -95,28 +96,15 @@ type Handler struct {
 	processDiagnosticsMu           sync.Mutex
 	lastProcessInspectionFailureAt time.Time
 
-	// staleThresholds holds per-action stale-detection durations, keyed by
-	// the action name ("active", "subagent", "compact"). A missing or zero
-	// value for an action disables the sweep for that action. The sweep is
-	// disabled entirely when every value is <= 0.
-	staleThresholds map[string]time.Duration
+	// staleThresholds is the per-action stale-detection policy the sweep
+	// resolves an (account, action) pair against. Its zero value disables the
+	// sweep, which is what a Handler behaves like until SetStaleThresholds runs.
+	staleThresholds activity.StaleThresholds
 
-	// perAccountThresholds overrides staleThresholds for specific accounts.
-	// The outer map is keyed by lowercased account name; the inner map is
-	// keyed by action name. A zero or missing inner entry falls back to the
-	// matching staleThresholds entry.
-	perAccountThresholds map[string]map[string]time.Duration
-
-	// hookSilenceThreshold is the global account-level threshold for the
-	// hook-silence sweep: when an account's most recent event is older than
-	// this duration, the sweep fires a one-shot notification. A zero value
-	// disables the sweep entirely (per-account overrides aside).
-	hookSilenceThreshold time.Duration
-
-	// perAccountHookSilence overrides hookSilenceThreshold for specific
-	// accounts. Keyed by lowercased account name. A zero or missing entry
-	// falls back to hookSilenceThreshold.
-	perAccountHookSilence map[string]time.Duration
+	// hookSilence is the account-level hook-silence policy: when an account's
+	// most recent event is older than the duration it resolves, the sweep fires
+	// a one-shot notification. Its zero value disables the sweep.
+	hookSilence activity.HookSilenceThresholds
 
 	// stateMu protects store, the account-level hook-silence maps, and
 	// windowMetadata. Per-window state lives under store so handlers mutate a
@@ -211,48 +199,24 @@ type Handler struct {
 	aslSupervisorProjections    map[aslLeaseRef]agentloop.SupervisorQuestionProjection
 	aslSupervisorClosureCutoffs map[aslLeaseRef]uint64
 
-	// idleSampleStreak counts, per window probe source, how many consecutive
+	// idleSamples counts, per window probe source, how many consecutive
 	// stabilized idle screen samples an adapter has observed before an
-	// AuthoritativeIdle may settle stale interactive work. Screen adapters that
-	// require stabilized evidence (Codex/Claude reads) accumulate here; the
-	// count is cleared after activity, a classifier failure, a protected-state
-	// change, or window closure. Guarded by stateMu.
-	idleSampleStreak map[idleSampleRef]int
+	// AuthoritativeIdle may settle stale interactive work, together with the
+	// evidence generation each streak is pinned to. Screen adapters that require
+	// stabilized evidence (Codex/Claude reads) accumulate here; a streak is
+	// cleared after activity, a classifier failure, a protected-state change, or
+	// window closure. The tracker is caller-locked: guarded by stateMu.
+	idleSamples activity.Samples
 
-	// idleSampleGen records, per window probe source, the evidence generation
-	// (e.g. a Copilot transcript's byte size) the current stabilization streak is
-	// accumulating against. A sample observing a different generation restarts the
-	// streak, so consecutive agreeing samples must describe the SAME evidence
-	// state — a probe source whose evidence advances on every new record cannot
-	// converge across two distinct intermediate terminals. Guarded by stateMu.
-	idleSampleGen map[idleSampleRef]int64
-
-	// screenProbeDeclineStreak counts, per window probe source, how many
-	// consecutive screen frames the classifier refused to grade as a settleable
-	// terminal. A pane that is genuinely working declines on every tick, so the
-	// count on its own is not a health signal — screenProbeDeclineFingerprint is
-	// what turns it into one. Cleared by a successful settle and dropped when the
-	// window closes. Guarded by stateMu.
-	screenProbeDeclineStreak map[idleSampleRef]int
-
-	// screenProbeDeclineFingerprint records the normalized-screen fingerprint the
-	// current decline streak is accumulating against. It is the machine-readable
-	// half of the rationale spelled out at screen_idle_probe.go's decline site:
-	// consecutive declines carrying the SAME fingerprint mean the screen is quiet
-	// and Layer A vetoed it anyway, while a changing one means the pane is
-	// repainting. A decline observing a different fingerprint restarts the streak
-	// at one, so a streak above one means exactly "the classifier has now refused
-	// the same unchanging screen this many times". Guarded by stateMu.
-	screenProbeDeclineFingerprint map[idleSampleRef]int64
-
-	// screenProbeDeclineEvidence records the diagnostic context of the frame
-	// that last extended each decline streak: the named vetoes and the status
-	// line the classifier read. It is deliberately separate from
-	// screenProbeDeclineFingerprint even though both describe the same frame —
-	// the fingerprint is a decision input (it restarts the streak), this is pure
-	// post-mortem text that is published and never read back. Guarded by
-	// stateMu.
-	screenProbeDeclineEvidence map[idleSampleRef]ScreenDeclineEvidence
+	// declines counts, per window probe source, how many consecutive screen
+	// frames the classifier refused to grade as a settleable terminal, the
+	// fingerprint each streak is accumulating against, and the diagnostic
+	// context of the frame that last extended it. A pane that is genuinely
+	// working declines on every tick, so the count on its own is not a health
+	// signal — the fingerprint is what turns it into one. Cleared by a
+	// successful settle and dropped when the window closes. Caller-locked:
+	// guarded by stateMu.
+	declines activity.Declines
 
 	// reducerCfg holds the deterministic thresholds handed to each window's
 	// shadow reducer. Set once at startup from [defaults.watchdog] and
@@ -322,7 +286,7 @@ type Handler struct {
 	// hook-silence sweep expires on the accumulated duration rather than a
 	// wall-clock difference so a system sleep cannot fire a false silence
 	// notification on wake. Guarded by stateMu.
-	hookSilenceIdle map[string]*accountIdle
+	hookSilenceIdle map[string]*activity.AccountIdle
 
 	// windowMetadata stores the durable per-window export snapshot. Terminal
 	// cleanup intentionally does not clear this so post-mortem exports still
@@ -356,19 +320,16 @@ const maxEventsPerWindow = 5000
 // reducer's trailing-event grace defaults to the guard duration so legacy
 // guard semantics and reducer suppression agree; daemon.Run overrides the
 // full threshold set via SetReducerConfig.
-func NewHandler(guard *StateGuard, notifier *notification.Notifier) *Handler {
+func NewHandler(guard *activity.StateGuard, notifier *notification.Notifier) *Handler {
 	var cfg state.ReducerConfig
 	if guard != nil {
-		cfg.GuardDuration = int64(guard.duration / time.Second)
+		cfg.GuardDuration = int64(guard.Duration() / time.Second)
 	}
 	h := &Handler{
 		guard:                          guard,
 		notifier:                       notifier,
 		reducerCfg:                     cfg,
 		startedAt:                      time.Now(),
-		staleThresholds:                make(map[string]time.Duration),
-		perAccountThresholds:           make(map[string]map[string]time.Duration),
-		perAccountHookSilence:          make(map[string]time.Duration),
 		store:                          make(map[int]*state.WindowState),
 		pendingStopHolds:               make(map[int]pendingStopHold),
 		renderQueue:                    rendering.NewQueue(),
@@ -385,14 +346,9 @@ func NewHandler(guard *StateGuard, notifier *notification.Notifier) *Handler {
 		aslSupervisorTargets:           make(map[aslLeaseRef]aslSupervisorTarget),
 		aslSupervisorProjections:       make(map[aslLeaseRef]agentloop.SupervisorQuestionProjection),
 		aslSupervisorClosureCutoffs:    make(map[aslLeaseRef]uint64),
-		idleSampleStreak:               make(map[idleSampleRef]int),
-		idleSampleGen:                  make(map[idleSampleRef]int64),
-		screenProbeDeclineStreak:       make(map[idleSampleRef]int),
-		screenProbeDeclineFingerprint:  make(map[idleSampleRef]int64),
-		screenProbeDeclineEvidence:     make(map[idleSampleRef]ScreenDeclineEvidence),
 		lastSeenEventAt:                make(map[string]time.Time),
 		notifiedHookSilence:            make(map[string]bool),
-		hookSilenceIdle:                make(map[string]*accountIdle),
+		hookSilenceIdle:                make(map[string]*activity.AccountIdle),
 		windowMetadata:                 make(map[int]protocol.WindowDebugMetadata),
 		windowTombstones:               make(map[int]time.Time),
 		notificationEffects:            make(map[string]notification.NotificationDisposition),

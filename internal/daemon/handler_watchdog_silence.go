@@ -1,10 +1,12 @@
 package daemon
 
 import (
-	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"log/slog"
 	"strings"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
+	"github.com/sglavoie/agentmux/internal/daemon/notification"
 
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -24,7 +26,7 @@ import (
 //     recognizes it as an action name.
 //   - The notifier's per-(windowID, action) cooldown is keyed by a synthetic
 //     negative ID derived from the account name so it cannot collide with
-//     real positive Kitty window IDs (see hookSilenceWindowID).
+//     real positive Kitty window IDs (see activity.HookSilenceWindowID).
 func (h *Handler) SweepHookSilence(now time.Time) {
 	if h.kittyClient == nil {
 		return
@@ -68,7 +70,7 @@ func (h *Handler) sweepHookSilence(now time.Time, windows []kitty.OSWindow, cred
 
 	h.stateMu.Lock()
 	for account := range running {
-		threshold := h.resolveHookSilenceThreshold(account)
+		threshold := h.hookSilence.Resolve(account)
 		if threshold <= 0 {
 			continue
 		}
@@ -81,18 +83,18 @@ func (h *Handler) sweepHookSilence(now time.Time, windows []kitty.OSWindow, cred
 			continue
 		}
 		entry := h.hookSilenceIdle[accountKey]
-		if entry == nil || !entry.anchor.Equal(last) {
-			entry = &accountIdle{anchor: last}
+		if entry == nil || !entry.Anchor.Equal(last) {
+			entry = &activity.AccountIdle{Anchor: last}
 			if !gapTick {
 				if age := now.Sub(last); age > 0 {
-					entry.idle = age
+					entry.Idle = age
 				}
 			}
 			h.hookSilenceIdle[accountKey] = entry
 		} else {
-			entry.idle += credit
+			entry.Idle += credit
 		}
-		if entry.idle < threshold {
+		if entry.Idle < threshold {
 			continue
 		}
 		if h.notifiedHookSilence[accountKey] {
@@ -106,7 +108,7 @@ func (h *Handler) sweepHookSilence(now time.Time, windows []kitty.OSWindow, cred
 	for _, s := range silent {
 		if h.notifier != nil {
 			h.notifier.MaybeNotifyTarget(notification.NotificationTarget{
-				WindowID: hookSilenceWindowID(s.account), Account: s.account,
+				WindowID: activity.HookSilenceWindowID(s.account), Account: s.account,
 			}, s.account, "hook_silence", false)
 		}
 	}

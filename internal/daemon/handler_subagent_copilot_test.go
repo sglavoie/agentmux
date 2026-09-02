@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
@@ -61,7 +62,7 @@ func TestHandler_CopilotMidSubagentSuppression(t *testing.T) {
 	// debounce".
 	t.Run("permissionRequest during subagent suppresses notification", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
-			guard := NewStateGuard(time.Hour)
+			guard := activity.NewStateGuard(time.Hour)
 			cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 100}
 			notifier := notification.NewNotifier(cfg)
 			var mu sync.Mutex
@@ -103,7 +104,7 @@ func TestHandler_CopilotMidSubagentSuppression(t *testing.T) {
 	// previously-scheduled AfterFunc must not fire.
 	t.Run("permissionRequest during subagent clears previously-pending notification", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
-			guard := NewStateGuard(time.Hour)
+			guard := activity.NewStateGuard(time.Hour)
 			cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 100}
 			notifier := notification.NewNotifier(cfg)
 			var mu sync.Mutex

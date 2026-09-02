@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/screenstate"
 )
 
@@ -225,7 +226,7 @@ func TestRun_ScreenPatternsRejectsSemanticallyIncompleteOverride(t *testing.T) {
 // client can tell "this daemon predates the field" apart from "this daemon
 // loaded no patterns".
 func TestHealthOmitsScreenPatternsWhenLoadNeverRan(t *testing.T) {
-	h := NewHandler(NewStateGuard(0), nil)
+	h := NewHandler(activity.NewStateGuard(0), nil)
 	if resp := h.handleHealth(); resp.ScreenPatterns != nil {
 		t.Fatalf("ScreenPatterns = %+v; want nil", resp.ScreenPatterns)
 	}

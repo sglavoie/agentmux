@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 
 	"github.com/sglavoie/agentmux/internal/conversation"
@@ -86,7 +87,7 @@ func (h *Handler) ProbeCodexScreenPromptsWithSnapshot(now time.Time, windows []k
 func (h *Handler) probeCodexScreenPromptsWithSnapshot(
 	now time.Time,
 	snapshot screenProbeSnapshot,
-	screens *screenTextCache,
+	screens *activity.ScreenTextCache,
 ) {
 	bindings := h.screenProbeBindings(snapshot, harness.Codex)
 	bindings = append(bindings, h.screenProbeTerminalBindings(snapshot, harness.Codex, now.Unix())...)
@@ -129,7 +130,7 @@ func (h *Handler) probeCodexBinding(
 	binding screenProbeBinding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
-	screens *screenTextCache,
+	screens *activity.ScreenTextCache,
 ) {
 	titleParts, userVars, ok := h.codexProbeTargetContext(binding, titleParts, userVars)
 	if !ok {

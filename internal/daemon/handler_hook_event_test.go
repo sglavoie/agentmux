@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
@@ -169,7 +170,7 @@ func TestHandler_HookEventUnknownProducerDoesNotAcquireCopilotPermissionBehavior
 
 func TestHandler_HookEventCodexAutoCompactRestoresBolt(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		guard := NewStateGuard(time.Hour)
+		guard := activity.NewStateGuard(time.Hour)
 		notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
 		h := NewHandler(guard, notifier)
 		fake := &fakeKittyClient{
@@ -227,7 +228,7 @@ func TestHandler_HookEventCodexAutoCompactRestoresBolt(t *testing.T) {
 
 func TestHandler_HookEventCodexManualCompactRemainsStopped(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		guard := NewStateGuard(time.Hour)
+		guard := activity.NewStateGuard(time.Hour)
 		notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
 		h := NewHandler(guard, notifier)
 		h.SetStopConfirm(0, 0, false) // pin the immediate-stop path, not the confirmed-idle hold
