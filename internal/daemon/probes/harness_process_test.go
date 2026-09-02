@@ -1,4 +1,4 @@
-package daemon
+package probes
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -120,7 +119,7 @@ func TestPSHarnessProcessInspectorPinsTimezoneAcrossCaptureAndInspection(t *test
 	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: pid, StartToken: observed[pid]}
 
 	t.Setenv("TZ", "America/Los_Angeles")
-	inspector := newPSHarnessProcessInspector()
+	inspector := NewPSHarnessProcessInspector()
 	if got := inspector.InspectHarnessProcesses(context.Background(), []protocol.HarnessProcessIdentity{identity})[identity]; got != HarnessProcessAliveSameInstance {
 		t.Fatalf("inspection across ambient TZ divergence = %q, want alive_same_instance", got)
 	}
@@ -149,27 +148,5 @@ func TestParsePSHarnessProcessBatchRejectsUnexpectedRows(t *testing.T) {
 		if _, err := parsePSHarnessProcessBatch(output, []int{42}); err == nil {
 			t.Errorf("parsePSHarnessProcessBatch(%q) succeeded", output)
 		}
-	}
-}
-
-func TestDeduplicatedLifecycleIdentitiesStableOrder(t *testing.T) {
-	identities := []protocol.HarnessProcessIdentity{
-		{Harness: "codex", PID: 3, StartToken: "c"},
-		{Harness: "claude", PID: 2, StartToken: "b"},
-		{Harness: "claude", PID: 1, StartToken: "a"},
-	}
-	candidates := make([]processLifecycleCandidate, 0, 4)
-	for _, identity := range append(identities, identities[0]) {
-		candidates = append(candidates, processLifecycleCandidate{identity: identity})
-	}
-	got := deduplicatedLifecycleIdentities(candidates)
-	sort.Slice(identities, func(i, j int) bool {
-		if identities[i].Harness != identities[j].Harness {
-			return identities[i].Harness < identities[j].Harness
-		}
-		return identities[i].PID < identities[j].PID
-	})
-	if !reflect.DeepEqual(got, identities) {
-		t.Fatalf("identities = %+v, want %+v", got, identities)
 	}
 }

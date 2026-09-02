@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 
 	"github.com/sglavoie/agentmux/internal/conversation"
@@ -46,7 +47,7 @@ var codexScreenIdleSpec = screenIdleSpec{
 // always false — Codex has no pipe-mode child to describe.
 func codexScreenIdleFields(
 	_ *state.WindowState,
-	_ screenProbeBinding,
+	_ probes.Binding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
 ) screenIdleFields {
@@ -75,7 +76,7 @@ func (h *Handler) ProbeCodexScreenPrompts(now time.Time) {
 		slog.Debug("codex prompt probe: list windows failed", "err", err)
 		return
 	}
-	h.probeCodexScreenPromptsWithSnapshot(now, screenProbeSnapshot{windows: windows, reducerReceipts: reducerReceipts},
+	h.probeCodexScreenPromptsWithSnapshot(now, probes.NewSnapshot(windows, reducerReceipts),
 		h.screenTextCacheFor())
 	h.renderSnapshot(windows)
 }
@@ -86,13 +87,13 @@ func (h *Handler) ProbeCodexScreenPromptsWithSnapshot(now time.Time, windows []k
 
 func (h *Handler) probeCodexScreenPromptsWithSnapshot(
 	now time.Time,
-	snapshot screenProbeSnapshot,
+	snapshot probes.Snapshot,
 	screens *activity.ScreenTextCache,
 ) {
 	bindings := h.screenProbeBindings(snapshot, harness.Codex)
 	bindings = append(bindings, h.screenProbeTerminalBindings(snapshot, harness.Codex, now.Unix())...)
 	for _, binding := range bindings {
-		_, tab, target, ok := kitty.FindWindowLocationByID(snapshot.windows, binding.TargetWindowID)
+		_, tab, target, ok := kitty.FindWindowLocationByID(snapshot.Windows(), binding.TargetWindowID)
 		if !ok {
 			continue
 		}
@@ -103,14 +104,14 @@ func (h *Handler) probeCodexScreenPromptsWithSnapshot(
 	// target. The executable check is positive Codex producer evidence; encode
 	// that as an explicit known-producer direct binding rather than allowing an
 	// empty harness to fall through configuration's default-to-Claude path.
-	for i := range snapshot.windows {
-		for j := range snapshot.windows[i].Tabs {
-			tab := &snapshot.windows[i].Tabs[j]
+	for i := range snapshot.Windows() {
+		for j := range snapshot.Windows()[i].Tabs {
+			tab := &snapshot.Windows()[i].Tabs[j]
 			win, ok := codexPromptProbeTarget(tab)
 			if !ok {
 				continue
 			}
-			binding, found := newScreenProbeBinding(
+			binding, found := probes.NewBinding(
 				snapshot,
 				conversation.Identity{Harness: harness.Codex},
 				win.ID,
@@ -119,7 +120,7 @@ func (h *Handler) probeCodexScreenPromptsWithSnapshot(
 			if !found {
 				continue
 			}
-			binding.legacyDirectManaged = true
+			binding.LegacyDirectManaged = true
 			h.probeCodexBinding(now, binding, palette.ParseTitleParts(tab.Title), win.UserVars, screens)
 		}
 	}
@@ -127,7 +128,7 @@ func (h *Handler) probeCodexScreenPromptsWithSnapshot(
 
 func (h *Handler) probeCodexBinding(
 	now time.Time,
-	binding screenProbeBinding,
+	binding probes.Binding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
 	screens *activity.ScreenTextCache,
@@ -140,7 +141,7 @@ func (h *Handler) probeCodexBinding(
 		h.probeCodexClearWindow(now, binding, titleParts, userVars, screens)
 		return
 	}
-	if binding.terminalProducer {
+	if binding.TerminalProducer {
 		// A terminal binding exists only to authorize the producer's routed
 		// cleared-screen check. It never reopens prompt or idle classification.
 		return
@@ -163,7 +164,7 @@ func (h *Handler) probeCodexBinding(
 // preserves an inactive borrowed target's title/profile/owner metadata while
 // the binding continues to read the producer pane.
 func (h *Handler) codexProbeTargetContext(
-	binding screenProbeBinding,
+	binding probes.Binding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
 ) (palette.TitleParts, kitty.UserVars, bool) {
@@ -180,7 +181,7 @@ func (h *Handler) codexProbeTargetContext(
 	// while the in-process reducer is empty (including a deferred Stop that has
 	// advanced only the receipt). Preserve that snapshot stop candidate; routed
 	// bindings always derive their branch from the target reducer.
-	if st.Effective.Icon != "" || !binding.legacyDirectManaged || titleParts.State != "stop" {
+	if st.Effective.Icon != "" || !binding.LegacyDirectManaged || titleParts.State != "stop" {
 		titleParts.State = st.Effective.Icon
 	}
 	titleParts.Muted = titleParts.Muted || st.Muted

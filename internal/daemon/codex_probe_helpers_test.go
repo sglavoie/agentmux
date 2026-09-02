@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -92,8 +93,8 @@ func codexSeedActiveBolt(t *testing.T, h *Handler, windowID int, session string,
 	return st.ShadowSeq
 }
 
-func directCodexProbeBinding(windowID int, receipt, snapshotGen uint64) screenProbeBinding {
-	binding := screenProbeBinding{
+func directCodexProbeBinding(windowID int, receipt, snapshotGen uint64) probes.Binding {
+	binding := probes.Binding{
 		SourceWindowID:      windowID,
 		TargetWindowID:      windowID,
 		SourceReceipt:       receipt,
@@ -102,7 +103,7 @@ func directCodexProbeBinding(windowID int, receipt, snapshotGen uint64) screenPr
 		SnapshotTabEpoch:    snapshotGen,
 		SnapshotSourceEpoch: snapshotGen,
 		SnapshotTargetEpoch: snapshotGen,
-		legacyDirectManaged: true,
+		LegacyDirectManaged: true,
 	}
 	binding.Producer.Harness = harness.Codex
 	return binding

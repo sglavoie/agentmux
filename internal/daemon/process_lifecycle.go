@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -53,7 +54,7 @@ type pendingLifecycleNotificationDisposition struct {
 type processLifecycleDiagnostic struct {
 	windowID             int
 	identity             protocol.HarnessProcessIdentity
-	observation          HarnessProcessInspection
+	observation          probes.HarnessProcessInspection
 	mode                 string
 	terminalHookEvidence string
 	result               state.HarnessProcessExitResult
@@ -66,13 +67,13 @@ type processLifecycleDiagnostic struct {
 // It is safe to call while runHarnessProcessLifecycle is active. A nil
 // inspector disables lifecycle polling while retaining watchdog fallback
 // behavior.
-func (h *Handler) SetHarnessProcessInspector(inspector HarnessProcessInspector) {
+func (h *Handler) SetHarnessProcessInspector(inspector probes.HarnessProcessInspector) {
 	h.processInspectorMu.Lock()
 	defer h.processInspectorMu.Unlock()
 	h.processInspector = inspector
 }
 
-func (h *Handler) harnessProcessInspector() HarnessProcessInspector {
+func (h *Handler) harnessProcessInspector() probes.HarnessProcessInspector {
 	h.processInspectorMu.RLock()
 	defer h.processInspectorMu.RUnlock()
 	return h.processInspector
@@ -136,7 +137,7 @@ func (h *Handler) processLifecycleTick(ctx context.Context, observedAt time.Time
 	h.stateMu.Lock()
 	for _, candidate := range candidates {
 		status := inspections[candidate.identity]
-		if status != HarnessProcessMissing && status != HarnessProcessReplacedInstance {
+		if status != probes.HarnessProcessMissing && status != probes.HarnessProcessReplacedInstance {
 			continue
 		}
 		st, ok := h.windowStateLocked(candidate.windowID)

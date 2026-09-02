@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
@@ -16,7 +17,7 @@ func TestProcessLifecycleConcurrentHookInvalidatesObservation(t *testing.T) {
 	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5601, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
 	inspector := &fakeHarnessProcessInspector{
-		statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing},
+		statuses: map[protocol.HarnessProcessIdentity]probes.HarnessProcessInspection{identity: probes.HarnessProcessMissing},
 		entered:  make(chan struct{}), release: make(chan struct{}),
 	}
 	h.SetHarnessProcessInspector(inspector)
@@ -45,7 +46,7 @@ func TestProcessLifecycleLateNativeStopWinsAndSettlementIsIdempotent(t *testing.
 	h := newTestHandler()
 	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5701, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
-	inspector := &fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing}}
+	inspector := &fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]probes.HarnessProcessInspection{identity: probes.HarnessProcessMissing}}
 	h.SetHarnessProcessInspector(inspector)
 	if committed := h.processLifecycleTick(context.Background(), time.Now()); committed != 1 {
 		t.Fatalf("committed = %d, want 1", committed)
@@ -87,7 +88,7 @@ func TestProcessLifecycleRestoredV4StateSettlesOnFirstPass(t *testing.T) {
 		ID: 42, UserVars: kitty.UserVars{Profile: "work", Harness: "claude", AMXState: encoded},
 	}}}}}}, time.Now())
 	h.renderQueue = rendering.NewQueue()
-	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing}})
+	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]probes.HarnessProcessInspection{identity: probes.HarnessProcessMissing}})
 
 	if committed := h.processLifecycleTick(context.Background(), time.Now()); committed != 1 {
 		t.Fatalf("committed = %d, want 1", committed)
@@ -106,7 +107,7 @@ func TestProcessLifecycleSlowInspectorDoesNotBlockDaemonWork(t *testing.T) {
 	windows := []kitty.OSWindow{{ID: 1, Tabs: []kitty.Tab{{ID: 2, Windows: []kitty.Window{{ID: 42}}}}}}
 	h.SetKittyClient(&fakeKittyClient{windows: windows})
 	inspector := &fakeHarnessProcessInspector{
-		statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing},
+		statuses: map[protocol.HarnessProcessIdentity]probes.HarnessProcessInspection{identity: probes.HarnessProcessMissing},
 		entered:  make(chan struct{}), release: make(chan struct{}),
 	}
 	h.SetHarnessProcessInspector(inspector)
@@ -155,7 +156,7 @@ func TestRunHarnessProcessLifecycleConvergesOnPollingPass(t *testing.T) {
 	h := newTestHandler()
 	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5951, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
-	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing}})
+	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]probes.HarnessProcessInspection{identity: probes.HarnessProcessMissing}})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
@@ -192,11 +193,11 @@ func TestSetHarnessProcessInspectorWhileLifecycleLoopRuns(t *testing.T) {
 
 	inspectors := []*fakeHarnessProcessInspector{
 		{
-			statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessAliveSameInstance},
+			statuses: map[protocol.HarnessProcessIdentity]probes.HarnessProcessInspection{identity: probes.HarnessProcessAliveSameInstance},
 			entered:  make(chan struct{}),
 		},
 		{
-			statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessUnknown},
+			statuses: map[protocol.HarnessProcessIdentity]probes.HarnessProcessInspection{identity: probes.HarnessProcessUnknown},
 			entered:  make(chan struct{}),
 		},
 	}
@@ -249,7 +250,7 @@ func TestRunHarnessProcessLifecycleCancellationStopsPolling(t *testing.T) {
 	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 6001, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
 	inspector := &fakeHarnessProcessInspector{
-		statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{identity: HarnessProcessMissing},
+		statuses: map[protocol.HarnessProcessIdentity]probes.HarnessProcessInspection{identity: probes.HarnessProcessMissing},
 		entered:  make(chan struct{}), release: make(chan struct{}),
 	}
 	h.SetHarnessProcessInspector(inspector)

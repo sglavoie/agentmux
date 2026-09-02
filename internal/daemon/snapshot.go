@@ -1,252 +1,18 @@
 package daemon
 
 import (
-	"reflect"
-	"sync"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon/activity"
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
-// This file introduces the daemon's immutable Kitty snapshot cache. Hook
-// processing must never call ListWindows (a slow or wedged Kitty remote-control
-// subprocess would otherwise delay hook acknowledgement and reorder state
-// application). Instead the maintenance/render loop is the single lister: each
-// tick it publishes the freshly listed windows here, and hook routing reads the
-// last published snapshot without any Kitty I/O.
-//
-// The snapshot is treated as immutable: publishSnapshot stores the slice
-// produced by a single ListWindows call (the real client and the test fake both
-// return freshly built, unshared data) and consumers only ever read it. Nothing
-// mutates a published snapshot in place, so the read path needs no defensive
-// deep copy and never blocks on Kitty.
-
-// kittySnapshot is one published view of the Kitty window tree plus the
-// bookkeeping the read path needs to reason about freshness and readiness.
-type kittySnapshot struct {
-	windows []kitty.OSWindow
-	// reducerReceipts binds the external window-tree evidence to the daemon's
-	// reducer generation at the start of the ListWindows capture that produced
-	// it. Screen/transcript probes compare the per-window receipt before doing
-	// any external read, so a reducer event accepted after this snapshot began
-	// cannot be treated as part of the older eligibility evidence.
-	reducerReceipts map[int]uint64
-	// gen increments on every publish so a consumer can detect that the world
-	// changed between two reads without diffing the whole tree.
-	gen uint64
-	// probeTabs carries a separate freshness epoch for each Kitty tab plus one
-	// for each pane inside it. Repeated maintenance/render publications preserve
-	// an unchanged epoch, so activity in one tab cannot starve screen probes in
-	// another, and a busy plain split cannot starve the managed pane beside it.
-	probeTabs map[int]screenProbeTabState
-	// at is the wall-clock time the snapshot was captured, used only for
-	// diagnostics/staleness reporting.
-	at time.Time
-	// ready is false until the first successful publish. A cold (never
-	// published) cache means the daemon has not yet completed its initial
-	// restore; the hook path treats that as "cannot see the tab" so a wipe
-	// falls back to the source pane rather than silently dropping.
-	ready bool
-}
-
-// snapshotStore holds the current immutable Kitty snapshot behind a
-// reader/writer lock. Reads dominate (every hook resolves against it) while
-// writes happen once per render interval, so an RWMutex keeps concurrent hook
-// routing off the writer's back.
-type snapshotStore struct {
-	mu             sync.RWMutex
-	snap           kittySnapshot
-	nextProbeEpoch uint64
-}
-
-// screenProbeTabState is the immutable, probe-relevant projection of one
-// Kitty tab plus its monotonic freshness epoch and the per-pane epochs of the
-// panes it currently holds. Nesting the pane map under the tab makes a pane
-// that moved to another tab fail closed without a separate residency check.
-type screenProbeTabState struct {
-	epoch     uint64
-	signature screenProbeTabSignature
-	windows   map[int]screenProbeWindowState
-}
-
-// screenProbeTabSignature holds the facts every probe in the tab shares. Pane
-// ownership stays here because FindTabTitleOwner resolves to the active managed
-// pane, else the first managed pane: a third pane becoming active can move
-// ownership without touching the probed pane's own flags.
-type screenProbeTabSignature struct {
-	osWindowID       int
-	osWindowActive   bool
-	osWindowFocused  bool
-	osWindowLastUsed bool
-	tabActive        bool
-	title            string
-	ownership        []screenProbeOwnershipSignature
-}
-
-type screenProbeOwnershipSignature struct {
-	id               int
-	active           bool
-	effectiveProfile string
-	effectiveHarness string
-}
-
-type screenProbeWindowState struct {
-	epoch     uint64
-	signature screenProbeWindowSignature
-}
-
-// screenProbeWindowSignature is a derived projection rather than raw argv. A
-// plain pane rewrites its foreground processes on every shell command and a
-// routed source pane rewrites them on every tool the harness spawns, so raw
-// argv makes probes self-invalidate mid-read. The projection keeps only facts
-// probes consume: harness/pipe identity plus Claude's normalized busy-title
-// class, never the rotating marker or task text itself.
-type screenProbeWindowSignature struct {
-	mute               string
-	foregroundHarness  string
-	foregroundPipeMode bool
-	claudeBusyTitle    bool
-}
-
-// publish replaces the cached snapshot with windows captured at now. The slice
-// is stored by reference and must not be mutated by the caller afterward.
-func (s *snapshotStore) publish(windows []kitty.OSWindow, now time.Time) {
-	s.publishWithReceipts(windows, nil, now)
-}
-
-func (s *snapshotStore) publishWithReceipts(windows []kitty.OSWindow, reducerReceipts map[int]uint64, now time.Time) {
-	s.mu.Lock()
-	probeTabs := make(map[int]screenProbeTabState)
-	for i := range windows {
-		osWindow := &windows[i]
-		for j := range osWindow.Tabs {
-			tab := &osWindow.Tabs[j]
-			state := screenProbeTabState{
-				signature: screenProbeSignature(osWindow, tab),
-				windows:   make(map[int]screenProbeWindowState, len(tab.Windows)),
-			}
-			previous, hadPrevious := s.snap.probeTabs[tab.ID]
-			if hadPrevious && reflect.DeepEqual(previous.signature, state.signature) {
-				state.epoch = previous.epoch
-			} else {
-				s.nextProbeEpoch++
-				state.epoch = s.nextProbeEpoch
-			}
-			for k := range tab.Windows {
-				win := &tab.Windows[k]
-				windowState := screenProbeWindowState{signature: screenProbeWindowSignatureFor(win)}
-				if prior, ok := previous.windows[win.ID]; hadPrevious && ok &&
-					prior.signature == windowState.signature {
-					windowState.epoch = prior.epoch
-				} else {
-					s.nextProbeEpoch++
-					windowState.epoch = s.nextProbeEpoch
-				}
-				state.windows[win.ID] = windowState
-			}
-			probeTabs[tab.ID] = state
-		}
-	}
-	s.snap.windows = windows
-	s.snap.reducerReceipts = reducerReceipts
-	s.snap.gen++
-	s.snap.probeTabs = probeTabs
-	s.snap.at = now
-	s.snap.ready = true
-	s.mu.Unlock()
-}
-
-func screenProbeSignature(osWindow *kitty.OSWindow, tab *kitty.Tab) screenProbeTabSignature {
-	signature := screenProbeTabSignature{
-		osWindowID:       osWindow.ID,
-		osWindowActive:   osWindow.IsActive,
-		osWindowFocused:  osWindow.IsFocused,
-		osWindowLastUsed: osWindow.LastFocused,
-		tabActive:        tab.IsActive,
-		title:            tab.Title,
-		ownership:        make([]screenProbeOwnershipSignature, 0, len(tab.Windows)),
-	}
-	for i := range tab.Windows {
-		win := &tab.Windows[i]
-		signature.ownership = append(signature.ownership, screenProbeOwnershipSignature{
-			id:               win.ID,
-			active:           win.IsActive,
-			effectiveProfile: win.UserVars.EffectiveProfile(),
-			effectiveHarness: win.UserVars.EffectiveHarness(),
-		})
-	}
-	return signature
-}
-
-func screenProbeWindowSignatureFor(win *kitty.Window) screenProbeWindowSignature {
-	signature := screenProbeWindowSignature{
-		mute:            win.UserVars.Mute,
-		claudeBusyTitle: activity.ClaudeWindowTitleHasDescriptionMarker(win.Title),
-	}
-	signature.foregroundHarness, signature.foregroundPipeMode = activity.ForegroundHarness(win)
-	return signature
-}
-
-// loadForScreenProbes returns the immutable window tree together with the
-// reducer receipts captured before the ListWindows call that produced it and
-// the publication generation that owns both. Both the slice and map are
-// read-only after publication.
-func (s *snapshotStore) loadForScreenProbes() (
-	windows []kitty.OSWindow,
-	reducerReceipts map[int]uint64,
-	gen uint64,
-	probeTabs map[int]screenProbeTabState,
-	ready bool,
-) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.snap.windows, s.snap.reducerReceipts, s.snap.gen, s.snap.probeTabs, s.snap.ready
-}
-
-// screenProbeSnapshot is the causally bound evidence consumed by every
-// periodic screen/transcript adapter. receipt returns zero for a window that
-// had no in-process reducer state when capture began; creating state in the
-// meantime necessarily advances the current receipt past zero.
-type screenProbeSnapshot struct {
-	windows         []kitty.OSWindow
-	reducerReceipts map[int]uint64
-	probeTabs       map[int]screenProbeTabState
-	// gen binds every cached observation to the Kitty snapshot that supplied
-	// it. Probe bindings use the narrower per-tab epochs above; gen remains the
-	// publication counter exposed by the general snapshot cache. A zero
-	// generation denotes a direct caller-supplied snapshot.
-	gen uint64
-}
-
-func (s screenProbeSnapshot) receipt(windowID int) uint64 {
-	return s.reducerReceipts[windowID]
-}
-
-// probeEpochsForWindow returns the tab-scoped and pane-scoped freshness epochs
-// covering windowID. A zero generation denotes a direct caller-supplied
-// snapshot that carries no epochs at all; those bindings skip epoch validation
-// entirely.
-func (s screenProbeSnapshot) probeEpochsForWindow(windowID int) (
-	tabID int, tabEpoch, windowEpoch uint64, ok bool,
-) {
-	_, tab, _, found := kitty.FindWindowLocationByID(s.windows, windowID)
-	if !found {
-		return 0, 0, 0, false
-	}
-	if s.gen == 0 {
-		return tab.ID, 0, 0, true
-	}
-	state, found := s.probeTabs[tab.ID]
-	if !found || state.epoch == 0 {
-		return 0, 0, 0, false
-	}
-	windowState, found := state.windows[windowID]
-	if !found || windowState.epoch == 0 {
-		return 0, 0, 0, false
-	}
-	return tab.ID, state.epoch, windowState.epoch, true
-}
+// This file holds the Handler's seams onto the immutable Kitty snapshot cache
+// in internal/daemon/probes. The cache itself, its freshness epochs, and the
+// probe-facing projection live there; what stays here is everything that needs
+// the Handler: sampling reducer receipts under stateMu, republishing the mute
+// cache in the same critical section as a publication, and the one best-effort
+// ListWindows the daemon performs at client-injection time.
 
 // captureSnapshotReducerReceipts samples every in-process window receipt
 // before a potentially slow ListWindows call. The returned map is immutable
@@ -261,15 +27,6 @@ func (h *Handler) captureSnapshotReducerReceipts() map[int]uint64 {
 		}
 	}
 	return receipts
-}
-
-// load returns the current snapshot's windows, its generation, and whether any
-// snapshot has been published yet. The returned slice is read-only; callers must
-// not mutate it.
-func (s *snapshotStore) load() (windows []kitty.OSWindow, gen uint64, ready bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.snap.windows, s.snap.gen, s.snap.ready
 }
 
 // publishSnapshot records windows as the current immutable snapshot. It is the
@@ -290,33 +47,27 @@ func (h *Handler) publishSnapshotWithReceipts(windows []kitty.OSWindow, reducerR
 	// mute from a snapshot published in between the check and mutation.
 	h.stateMu.Lock()
 	h.refreshMutedFromSnapshotLocked(windows)
-	h.snapshots.publishWithReceipts(windows, reducerReceipts, now)
+	h.snapshots.PublishWithReceipts(windows, reducerReceipts, now)
 	h.stateMu.Unlock()
 }
 
 // cachedSnapshot returns the last published Kitty snapshot without any Kitty
 // I/O. ready is false until the initial restore has published once.
 func (h *Handler) cachedSnapshot() (windows []kitty.OSWindow, gen uint64, ready bool) {
-	return h.snapshots.load()
+	return h.snapshots.Load()
 }
 
 // cachedScreenProbeSnapshot returns the last published external evidence and
 // its causally earlier reducer receipts without any Kitty I/O.
-func (h *Handler) cachedScreenProbeSnapshot() (screenProbeSnapshot, bool) {
-	windows, receipts, gen, probeTabs, ready := h.snapshots.loadForScreenProbes()
-	return screenProbeSnapshot{
-		windows:         windows,
-		reducerReceipts: receipts,
-		probeTabs:       probeTabs,
-		gen:             gen,
-	}, ready
+func (h *Handler) cachedScreenProbeSnapshot() (probes.Snapshot, bool) {
+	return h.snapshots.ScreenProbeSnapshot()
 }
 
 // screenProbeSnapshotForWindows binds an already-available window tree to the
 // current reducer receipts. Direct probe wrappers and tests use it when they
 // supply their own ListWindows result instead of consuming the shared cache.
-func (h *Handler) screenProbeSnapshotForWindows(windows []kitty.OSWindow) screenProbeSnapshot {
-	return screenProbeSnapshot{windows: windows, reducerReceipts: h.captureSnapshotReducerReceipts()}
+func (h *Handler) screenProbeSnapshotForWindows(windows []kitty.OSWindow) probes.Snapshot {
+	return probes.NewSnapshot(windows, h.captureSnapshotReducerReceipts())
 }
 
 // primeSnapshot performs one best-effort ListWindows through the injected client

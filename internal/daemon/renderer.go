@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -73,7 +74,7 @@ func (h *Handler) runScreenProbes(ctx context.Context) {
 	}
 }
 
-func (h *Handler) runScreenProbesWithSnapshot(now time.Time, snapshot screenProbeSnapshot) {
+func (h *Handler) runScreenProbesWithSnapshot(now time.Time, snapshot probes.Snapshot) {
 	// One `--extent=screen` capture per source pane for the whole tick. Beyond
 	// halving Kitty round-trips for a Claude pane (two probes) and a bolted
 	// Codex pane (prompt then idle), this is what makes the probes below

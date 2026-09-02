@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
@@ -73,7 +73,7 @@ func TestExplanationClassifiesProcessExitRecoveryWithoutOverridingRendererFailur
 	lifecycle.RequestID = ""
 	lifecycle.Evidence = map[string]string{
 		"event": protocol.EventHarnessProcessExited, "terminal_hook_evidence": "absent",
-		"render_generation": "7", "process_observation": string(daemon.HarnessProcessMissing),
+		"render_generation": "7", "process_observation": string(probes.HarnessProcessMissing),
 	}
 	report := buildExplanation(ExplainOptions{Selector: Selector{WindowID: 42}, Recent: 10, Now: time.Now()}, []diagnostics.TraceEnvelope{lifecycle})
 	if report.Cause.Classification != CauseProcessLifecycleRecovery || report.Cause.Certainty != CertaintyProven ||

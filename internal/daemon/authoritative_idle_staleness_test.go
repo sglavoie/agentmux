@@ -226,11 +226,11 @@ func TestAuthoritativeIdleAdapters_DiscardStaleMuteSnapshot(t *testing.T) {
 				<-done
 				synctest.Wait()
 
-				if receiptDuringIO != snapshot.receipt(42) {
-					t.Fatalf("receipt changed during %s probe I/O = %d, want %d", harnessName, receiptDuringIO, snapshot.receipt(42))
+				if receiptDuringIO != snapshot.Receipt(42) {
+					t.Fatalf("receipt changed during %s probe I/O = %d, want %d", harnessName, receiptDuringIO, snapshot.Receipt(42))
 				}
-				if receiptAfterPublish != snapshot.receipt(42) {
-					t.Fatalf("mute-only publication advanced receipt = %d, want %d", receiptAfterPublish, snapshot.receipt(42))
+				if receiptAfterPublish != snapshot.Receipt(42) {
+					t.Fatalf("mute-only publication advanced receipt = %d, want %d", receiptAfterPublish, snapshot.Receipt(42))
 				}
 				if !mutedAfterPublish {
 					t.Fatal("new snapshot did not mute window 42")

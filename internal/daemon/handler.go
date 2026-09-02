@@ -9,6 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
@@ -88,7 +89,7 @@ type Handler struct {
 	// rejection and shutdown. The dedicated mutex permits live replacement without
 	// coupling a potentially slow process-table read to stateMu.
 	processInspectorMu sync.RWMutex
-	processInspector   HarnessProcessInspector
+	processInspector   probes.HarnessProcessInspector
 	// processDiagnosticsMu rate-limits lifecycle inspection-failure journal
 	// records independently of stateMu. Healthy one-second polls are never
 	// journaled; committed settlements are recorded separately without rate
@@ -128,7 +129,7 @@ type Handler struct {
 	// loop is the single lister and publishes into it; hook routing reads it
 	// without any Kitty I/O so a slow or wedged ListWindows can never delay a
 	// hook acknowledgement. Its own RWMutex keeps snapshot reads off stateMu.
-	snapshots snapshotStore
+	snapshots probes.SnapshotStore
 
 	// readiness tracks whether the daemon completed its bounded initial
 	// snapshot+restore before binding the public socket, and, if not, why it
@@ -333,7 +334,7 @@ func NewHandler(guard *activity.StateGuard, notifier *notification.Notifier) *Ha
 		store:                          make(map[int]*state.WindowState),
 		pendingStopHolds:               make(map[int]pendingStopHold),
 		renderQueue:                    rendering.NewQueue(),
-		processInspector:               newPSHarnessProcessInspector(),
+		processInspector:               probes.NewPSHarnessProcessInspector(),
 		kittySockets:                   make(map[int]string),
 		claudeContextLimitProbeEnabled: true,
 		stopConfirmDelay:               defaultStopConfirmDelay,

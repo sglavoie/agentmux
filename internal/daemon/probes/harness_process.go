@@ -1,4 +1,12 @@
-package daemon
+// Package probes is the daemon's external-evidence layer: how it looks at the
+// world outside its own hook stream, and how it decides that a look is still
+// valid. Two kinds of evidence live here — the OS process table (is the exact
+// harness instance still alive?) and the Kitty window tree (which panes exist,
+// which are managed, and has anything probe-relevant changed since capture?).
+// It never decides what an observation MEANS for a window: the reducer, the
+// renderer, and the notifier stay in the daemon root, and probes must never
+// import its parent.
+package probes
 
 // Harness process liveness inspection. The hook client is the only component
 // that ever needs command text: it uses it transiently to discover the owning
@@ -55,7 +63,8 @@ type psHarnessProcessInspector struct {
 	runBatch  func(context.Context, []int) ([]byte, error)
 }
 
-func newPSHarnessProcessInspector() *psHarnessProcessInspector {
+// NewPSHarnessProcessInspector returns the production PID/lstart inspector.
+func NewPSHarnessProcessInspector() HarnessProcessInspector {
 	return &psHarnessProcessInspector{
 		timeout:   harnessProcessInspectionTimeout,
 		batchSize: harnessProcessInspectionBatchSize,

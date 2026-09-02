@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -58,7 +59,7 @@ func (h *Handler) ProbeCopilotTranscriptStop(now time.Time) {
 		slog.Debug("copilot transcript probe: list windows failed", "err", err)
 		return
 	}
-	h.probeCopilotTranscriptStopWithSnapshot(now, screenProbeSnapshot{windows: windows, reducerReceipts: reducerReceipts})
+	h.probeCopilotTranscriptStopWithSnapshot(now, probes.NewSnapshot(windows, reducerReceipts))
 	h.renderSnapshot(windows)
 }
 
@@ -73,9 +74,9 @@ func (h *Handler) ProbeCopilotTranscriptStopWithSnapshot(now time.Time, windows 
 	h.probeCopilotTranscriptStopWithSnapshot(now, h.screenProbeSnapshotForWindows(windows))
 }
 
-func (h *Handler) probeCopilotTranscriptStopWithSnapshot(now time.Time, snapshot screenProbeSnapshot) {
+func (h *Handler) probeCopilotTranscriptStopWithSnapshot(now time.Time, snapshot probes.Snapshot) {
 	for _, binding := range h.copilotTranscriptProbeBindings(now, snapshot) {
-		_, tab, target, ok := kitty.FindWindowLocationByID(snapshot.windows, binding.TargetWindowID)
+		_, tab, target, ok := kitty.FindWindowLocationByID(snapshot.Windows(), binding.TargetWindowID)
 		if !ok {
 			continue
 		}
@@ -87,17 +88,17 @@ func (h *Handler) probeCopilotTranscriptStopWithSnapshot(now time.Time, snapshot
 // exact post-settle recovery routes. Recovery is derived from the probe stop's
 // session memo and the retired producer fact, so it retains the original source
 // pane without making that terminal session eligible for ordinary continuation.
-func (h *Handler) copilotTranscriptProbeBindings(now time.Time, snapshot screenProbeSnapshot) []screenProbeBinding {
+func (h *Handler) copilotTranscriptProbeBindings(now time.Time, snapshot probes.Snapshot) []probes.Binding {
 	bindings := h.screenProbeBindings(snapshot, harness.Copilot)
 	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: copilotTranscriptStopProbeSource}
 
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	var recovery []screenProbeBinding
-	for i := range snapshot.windows {
-		for j := range snapshot.windows[i].Tabs {
-			for k := range snapshot.windows[i].Tabs[j].Windows {
-				target := &snapshot.windows[i].Tabs[j].Windows[k]
+	var recovery []probes.Binding
+	for i := range snapshot.Windows() {
+		for j := range snapshot.Windows()[i].Tabs {
+			for k := range snapshot.Windows()[i].Tabs[j].Windows {
+				target := &snapshot.Windows()[i].Tabs[j].Windows[k]
 				if target.UserVars.EffectiveProfile() == "" && target.UserVars.EffectiveHarness() == "" {
 					continue
 				}
@@ -111,12 +112,12 @@ func (h *Handler) copilotTranscriptProbeBindings(now time.Time, snapshot screenP
 				if !ok {
 					continue
 				}
-				binding, found := newScreenProbeBinding(snapshot, identity, sourceWindowID, target.ID)
+				binding, found := probes.NewBinding(snapshot, identity, sourceWindowID, target.ID)
 				if !found {
 					continue
 				}
-				binding.recoverySource = source
-				binding.recoveryAt = now.Unix()
+				binding.RecoverySource = source
+				binding.RecoveryAt = now.Unix()
 				if h.screenProbeBindingCurrentLocked(binding) {
 					recovery = append(recovery, binding)
 				}
@@ -210,7 +211,7 @@ func copilotTranscriptStopProbeCanOverwrite(iconState string) bool {
 // non-probe-owned 🛑 bails before any transcript I/O.
 func (h *Handler) probeCopilotTranscriptWindow(
 	now time.Time,
-	binding screenProbeBinding,
+	binding probes.Binding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
 ) {
@@ -404,7 +405,7 @@ func (h *Handler) probeCopilotTranscriptWindow(
 // discarded and the stop left intact.
 func (h *Handler) recoverCopilotTranscriptStop(
 	now time.Time,
-	binding screenProbeBinding,
+	binding probes.Binding,
 	source protocol.SourceID,
 	state transcript.CopilotLifecycleState,
 ) {

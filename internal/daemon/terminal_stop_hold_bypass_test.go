@@ -5,6 +5,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
@@ -28,9 +29,9 @@ func TestTerminalStopHold_ProcessExitBypassesGate(t *testing.T) {
 		applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
 		applyLifecycleEvent(t, h, 43, unheld, "session-43", "active", 1, false)
 		h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{
-			statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{
-				identity: HarnessProcessMissing,
-				unheld:   HarnessProcessMissing,
+			statuses: map[protocol.HarnessProcessIdentity]probes.HarnessProcessInspection{
+				identity: probes.HarnessProcessMissing,
+				unheld:   probes.HarnessProcessMissing,
 			},
 		})
 
@@ -132,8 +133,8 @@ func TestTerminalStopHold_UnrelatedProcessExitPreservesGate(t *testing.T) {
 				// Only the unrelated process is gone; the held stop's own process is
 				// left unpolled so this pass can never settle it.
 				h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{
-					statuses: map[protocol.HarnessProcessIdentity]HarnessProcessInspection{
-						tc.identity: HarnessProcessMissing,
+					statuses: map[protocol.HarnessProcessIdentity]probes.HarnessProcessInspection{
+						tc.identity: probes.HarnessProcessMissing,
 					},
 				})
 

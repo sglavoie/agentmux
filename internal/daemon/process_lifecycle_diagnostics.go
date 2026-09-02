@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
@@ -16,14 +17,14 @@ import (
 func (h *Handler) recordProcessInspectionFailures(
 	observedAt time.Time,
 	identities []protocol.HarnessProcessIdentity,
-	inspections map[protocol.HarnessProcessIdentity]HarnessProcessInspection,
+	inspections map[protocol.HarnessProcessIdentity]probes.HarnessProcessInspection,
 ) {
 	if h == nil || h.decisionJournal == nil {
 		return
 	}
 	unknown := 0
 	for _, identity := range identities {
-		if inspections[identity] == HarnessProcessUnknown || inspections[identity] == "" {
+		if inspections[identity] == probes.HarnessProcessUnknown || inspections[identity] == "" {
 			unknown++
 		}
 	}

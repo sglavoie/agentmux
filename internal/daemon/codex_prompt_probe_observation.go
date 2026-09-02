@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -13,7 +14,7 @@ import (
 
 func (h *Handler) probeCodexWindow(
 	now time.Time,
-	binding screenProbeBinding,
+	binding probes.Binding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
 	screens *activity.ScreenTextCache,
@@ -65,7 +66,7 @@ func (h *Handler) probeCodexWindow(
 // notify.
 func (h *Handler) applyCodexPromptObservation(
 	now time.Time,
-	binding screenProbeBinding,
+	binding probes.Binding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
 	classification activity.CodexPromptClassification,
@@ -85,7 +86,7 @@ func (h *Handler) applyCodexPromptObservation(
 	allowed, effectiveAction := h.guard.TryUpdate(windowID, classification.Action, true)
 	if !allowed {
 		h.appendCodexPromptProbeEventLocked(now, windowID, titleParts.Base, titleParts.State, userVars,
-			classification, protocol.IconStatePreserve, true, binding.legacyDirectManaged, binding.SourceWindowID)
+			classification, protocol.IconStatePreserve, true, binding.LegacyDirectManaged, binding.SourceWindowID)
 		h.stateMu.Unlock()
 		return
 	}
@@ -95,7 +96,7 @@ func (h *Handler) applyCodexPromptObservation(
 		iconState = classification.IconState
 	}
 	before, effective := h.recordCodexPromptProbeStateLocked(now, windowID, titleParts.Base, titleParts.State,
-		userVars, classification, binding.legacyDirectManaged, binding.SourceWindowID)
+		userVars, classification, binding.LegacyDirectManaged, binding.SourceWindowID)
 	h.stateMu.Unlock()
 
 	if effective.Icon == iconState && before.Icon != effective.Icon {
@@ -116,7 +117,7 @@ func (h *Handler) applyCodexPromptObservation(
 // observation when the window's reducer receipt moved past capturedSeq: the
 // reducer event that landed during the read owns the window's state, and a
 // prompt it may have re-created must not be withdrawn on stale evidence.
-func (h *Handler) retractCodexPromptObservation(now time.Time, binding screenProbeBinding) {
+func (h *Handler) retractCodexPromptObservation(now time.Time, binding probes.Binding) {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	if !h.screenProbeBindingCurrentLocked(binding) {
@@ -154,7 +155,7 @@ func (h *Handler) retractCodexPromptObservation(now time.Time, binding screenPro
 
 func (h *Handler) probeCodexClearWindow(
 	now time.Time,
-	binding screenProbeBinding,
+	binding probes.Binding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
 	screens *activity.ScreenTextCache,

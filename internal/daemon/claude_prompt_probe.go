@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -58,7 +59,7 @@ func claudeIdleProbeTitleBump(sourceWindowTitle string) int {
 // being read.
 func claudeScreenIdleFields(
 	st *state.WindowState,
-	binding screenProbeBinding,
+	binding probes.Binding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
 ) screenIdleFields {
@@ -97,7 +98,7 @@ func (h *Handler) ProbeClaudeScreenStop(now time.Time) {
 		slog.Debug("claude stop probe: list windows failed", "err", err)
 		return
 	}
-	h.probeClaudeScreenStopWithSnapshot(now, screenProbeSnapshot{windows: windows, reducerReceipts: reducerReceipts},
+	h.probeClaudeScreenStopWithSnapshot(now, probes.NewSnapshot(windows, reducerReceipts),
 		h.screenTextCacheFor())
 	h.renderSnapshot(windows)
 }
@@ -119,15 +120,15 @@ func (h *Handler) ProbeClaudeScreenStopWithSnapshot(now time.Time, windows []kit
 // only Claude-specific step left here is the busy-title recovery below.
 func (h *Handler) probeClaudeScreenStopWithSnapshot(
 	now time.Time,
-	snapshot screenProbeSnapshot,
+	snapshot probes.Snapshot,
 	screens *activity.ScreenTextCache,
 ) {
 	for _, binding := range h.screenProbeBindings(snapshot, harness.Claude) {
-		_, tab, target, ok := kitty.FindWindowLocationByID(snapshot.windows, binding.TargetWindowID)
+		_, tab, target, ok := kitty.FindWindowLocationByID(snapshot.Windows(), binding.TargetWindowID)
 		if !ok {
 			continue
 		}
-		_, _, source, ok := kitty.FindWindowLocationByID(snapshot.windows, binding.SourceWindowID)
+		_, _, source, ok := kitty.FindWindowLocationByID(snapshot.Windows(), binding.SourceWindowID)
 		if !ok {
 			continue
 		}
@@ -162,7 +163,7 @@ func (h *Handler) probeClaudeScreenStopWithSnapshot(
 // the promoted fact.
 func (h *Handler) recoverClaudeBusyTitle(
 	now time.Time,
-	binding screenProbeBinding,
+	binding probes.Binding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
 	sourceWindowTitle string,

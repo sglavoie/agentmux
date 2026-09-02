@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -56,7 +57,7 @@ type screenIdleSpec struct {
 	// section as the eligibility recheck. It is per-harness because the two
 	// probes genuinely disagree about pipe mode and about which mute flags a
 	// routed binding may read.
-	fields func(st *state.WindowState, binding screenProbeBinding, titleParts palette.TitleParts, userVars kitty.UserVars) screenIdleFields
+	fields func(st *state.WindowState, binding probes.Binding, titleParts palette.TitleParts, userVars kitty.UserVars) screenIdleFields
 }
 
 // screenIdleFields is the presentation/notification context read off the
@@ -74,7 +75,7 @@ type screenIdleFields struct {
 func (h *Handler) probeScreenIdle(
 	now time.Time,
 	spec screenIdleSpec,
-	binding screenProbeBinding,
+	binding probes.Binding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
 	sourceWindowTitle string,
@@ -128,7 +129,7 @@ func (h *Handler) probeScreenIdle(
 func (h *Handler) probeScreenIdleWindow(
 	now time.Time,
 	spec screenIdleSpec,
-	binding screenProbeBinding,
+	binding probes.Binding,
 	fields screenIdleFields,
 	sourceWindowTitle string,
 	screen string,

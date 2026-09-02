@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -93,12 +94,12 @@ func TestProjectExportEventsPayloadV9PreservesCausalShapeWithoutProcessFields(t 
 				TraceID: "trace-1", RequestID: "request-1", ReducerDecision: protocol.DecisionApplied,
 				ReducerInput: &protocol.ReducerInputEvidence{EmittedAt: 1}, RenderGeneration: 3,
 				ProcessHarness: "claude", ProcessPID: 4321, ProcessStartToken: "Mon Jul 13 10:11:12 2026",
-				ProcessObservation: string(HarnessProcessMissing), ProcessMode: "interactive",
+				ProcessObservation: string(probes.HarnessProcessMissing), ProcessMode: "interactive",
 				WithdrawnFacts: processLifecycleTestIntPointer(1), TerminalHookEvidence: processTerminalHookEvidenceAbsent,
 			}},
 			Watchdog: protocol.WindowDebugWatchdog{
 				ProcessExits: 1, LastProcessExitReason: state.HarnessProcessExitReasonInteractive,
-				LastProcessExitObservation: string(HarnessProcessMissing), LastProcessExitAt: 2,
+				LastProcessExitObservation: string(probes.HarnessProcessMissing), LastProcessExitAt: 2,
 			},
 		}},
 	}
@@ -161,12 +162,12 @@ func TestProjectExportEventsPayloadV10IncludesProcessFields(t *testing.T) {
 		}}},
 		Watchdog: protocol.WindowDebugWatchdog{
 			ProcessExits: 1, LastProcessExitReason: state.HarnessProcessExitReasonPipe,
-			LastProcessExitObservation: string(HarnessProcessReplacedInstance), LastProcessExitAt: 2,
+			LastProcessExitObservation: string(probes.HarnessProcessReplacedInstance), LastProcessExitAt: 2,
 		},
 		Events: []protocol.SessionEvent{{
 			At: 2, Event: protocol.EventHarnessProcessExited, Action: "idle", Reason: state.HarnessProcessExitReasonPipe,
 			ProcessHarness: "claude", ProcessPID: 4321, ProcessStartToken: "Mon Jul 13 10:11:12 2026",
-			ProcessObservation: string(HarnessProcessReplacedInstance), ProcessMode: "pipe", WithdrawnFacts: processLifecycleTestIntPointer(1),
+			ProcessObservation: string(probes.HarnessProcessReplacedInstance), ProcessMode: "pipe", WithdrawnFacts: processLifecycleTestIntPointer(1),
 			TerminalHookEvidence: processTerminalHookEvidenceAbsent,
 		}},
 	}}}
@@ -192,7 +193,7 @@ func TestProjectExportEventsPayloadV10IncludesProcessFields(t *testing.T) {
 	window := raw["windows"].([]any)[0].(map[string]any)
 	event := window["events"].([]any)[0].(map[string]any)
 	if event["process_harness"] != "claude" || int(event["process_pid"].(float64)) != 4321 ||
-		event["process_start_token"] != "Mon Jul 13 10:11:12 2026" || event["process_observation"] != string(HarnessProcessReplacedInstance) {
+		event["process_start_token"] != "Mon Jul 13 10:11:12 2026" || event["process_observation"] != string(probes.HarnessProcessReplacedInstance) {
 		t.Fatalf("schema v10 event process fields = %v", event)
 	}
 	watchdog := window["watchdog"].(map[string]any)

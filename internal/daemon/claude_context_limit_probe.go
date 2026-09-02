@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/contextlimit"
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -55,7 +56,7 @@ func (h *Handler) ProbeClaudeContextLimit(now time.Time) {
 		slog.Debug("claude context-limit probe: list windows failed", "err", err)
 		return
 	}
-	h.probeClaudeContextLimitWithSnapshot(now, screenProbeSnapshot{windows: windows, reducerReceipts: reducerReceipts},
+	h.probeClaudeContextLimitWithSnapshot(now, probes.NewSnapshot(windows, reducerReceipts),
 		h.screenTextCacheFor())
 	h.renderSnapshot(windows)
 }
@@ -66,14 +67,14 @@ func (h *Handler) ProbeClaudeContextLimitWithSnapshot(now time.Time, windows []k
 
 func (h *Handler) probeClaudeContextLimitWithSnapshot(
 	now time.Time,
-	snapshot screenProbeSnapshot,
+	snapshot probes.Snapshot,
 	screens *activity.ScreenTextCache,
 ) {
 	if !h.claudeContextLimitProbeEnabled {
 		return
 	}
 	for _, binding := range h.screenProbeBindings(snapshot, harness.Claude) {
-		_, tab, target, ok := kitty.FindWindowLocationByID(snapshot.windows, binding.TargetWindowID)
+		_, tab, target, ok := kitty.FindWindowLocationByID(snapshot.Windows(), binding.TargetWindowID)
 		if !ok {
 			continue
 		}
@@ -92,7 +93,7 @@ func claudeContextLimitProbeCanOverwrite(iconState string) bool {
 
 func (h *Handler) probeClaudeContextLimitWindow(
 	now time.Time,
-	binding screenProbeBinding,
+	binding probes.Binding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
 	screens *activity.ScreenTextCache,
@@ -169,7 +170,7 @@ func (h *Handler) probeClaudeContextLimitWindow(
 		return
 	}
 	before, effective, account := h.recordClaudeContextLimitProbeStateLocked(
-		now, targetWindowID, baseTitle, currentIconState, profile, userVars, binding.legacyDirectManaged,
+		now, targetWindowID, baseTitle, currentIconState, profile, userVars, binding.LegacyDirectManaged,
 		binding.SourceWindowID,
 	)
 	h.stateMu.Unlock()

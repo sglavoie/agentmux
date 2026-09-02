@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -161,9 +162,9 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 		return true
 	})
 
-	assertLifecycleAcceptancePipeResult(t, settled, lifecycleParentChildWindow, claudePipe, "bolt", daemon.HarnessProcessMissing)
-	assertLifecycleAcceptancePipeResult(t, settled, lifecycleCodexPipeWindow, codexPipe, "", daemon.HarnessProcessReplacedInstance)
-	assertLifecycleAcceptancePipeResult(t, settled, lifecycleCopilotPipeWindow, copilotPipe, "", daemon.HarnessProcessMissing)
+	assertLifecycleAcceptancePipeResult(t, settled, lifecycleParentChildWindow, claudePipe, "bolt", probes.HarnessProcessMissing)
+	assertLifecycleAcceptancePipeResult(t, settled, lifecycleCodexPipeWindow, codexPipe, "", probes.HarnessProcessReplacedInstance)
+	assertLifecycleAcceptancePipeResult(t, settled, lifecycleCopilotPipeWindow, copilotPipe, "", probes.HarnessProcessMissing)
 
 	concurrentMeta := settled.WindowMetadata[lifecycleConcurrentWindow]
 	if concurrentMeta.Shadow.EffectiveIcon != "bolt" {

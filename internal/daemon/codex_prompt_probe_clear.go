@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -31,13 +32,13 @@ import (
 // recheck atomic with the complete synthetic clear.
 func (h *Handler) applyCodexClearObservation(
 	now time.Time,
-	binding screenProbeBinding,
+	binding probes.Binding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
 ) {
 	windowID := binding.TargetWindowID
 	targetHarness := harness.NormalizeKnown(userVars.EffectiveHarness())
-	if targetHarness == "" && binding.legacyDirectManaged {
+	if targetHarness == "" && binding.LegacyDirectManaged {
 		targetHarness = harness.Codex
 	}
 	req := protocol.Request{

@@ -2,84 +2,15 @@ package daemon
 
 import (
 	"github.com/sglavoie/agentmux/internal/conversation"
-	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
-// screenProbeBinding is the immutable routing and freshness evidence shared by
-// the periodic screen/transcript adapters. Producer identifies the harness
-// session whose external evidence is being read; SourceWindowID is that
-// producer pane, while TargetWindowID owns the reducer state that observations
-// mutate. Direct managed sessions use the same source and target. Both receipts
-// are captured before the Kitty snapshot that supplied the route. SnapshotTabID
-// and SnapshotTabEpoch invalidate the binding when the tab's focus, topology,
-// title, or pane ownership changes, while SnapshotSourceEpoch and
-// SnapshotTargetEpoch invalidate it when either of its own two panes changes —
-// so an unrelated pane in the same tab cannot starve it. Most bindings require
-// a live producer route; terminalProducer and recoverySource narrowly authorize
-// Codex clear and Copilot self-recovery after the ordinary live route has
-// closed.
-type screenProbeBinding struct {
-	Producer            conversation.Identity
-	SourceWindowID      int
-	TargetWindowID      int
-	SourceReceipt       uint64
-	TargetReceipt       uint64
-	SnapshotTabID       int
-	SnapshotTabEpoch    uint64
-	SnapshotSourceEpoch uint64
-	SnapshotTargetEpoch uint64
-	legacyDirectManaged bool
-	terminalProducer    bool
-	terminalAt          int64
-	recoverySource      protocol.SourceID
-	recoveryAt          int64
-}
-
-func (b screenProbeBinding) valid() bool {
-	if b.SourceWindowID <= 0 || b.TargetWindowID <= 0 ||
-		(!b.Producer.Valid() && (!b.legacyDirectManaged || harness.NormalizeKnown(b.Producer.Harness) == "")) {
-		return false
-	}
-	// A hand-built binding that recorded a tab epoch but no pane epochs is
-	// partially populated; fail it closed rather than skipping the pane checks.
-	if b.SnapshotTabEpoch > 0 &&
-		(b.SnapshotTabID <= 0 || b.SnapshotSourceEpoch == 0 || b.SnapshotTargetEpoch == 0) {
-		return false
-	}
-	if b.terminalProducer && b.recoverySource.Kind != "" {
-		return false
-	}
-	return b.recoverySource.Kind == "" || b.recoverySource.Kind == protocol.SourceProbe
-}
-
-func newScreenProbeBinding(
-	snapshot screenProbeSnapshot,
-	producer conversation.Identity,
-	sourceWindowID int,
-	targetWindowID int,
-) (screenProbeBinding, bool) {
-	sourceTabID, sourceTabEpoch, sourceEpoch, ok := snapshot.probeEpochsForWindow(sourceWindowID)
-	if !ok {
-		return screenProbeBinding{}, false
-	}
-	targetTabID, targetTabEpoch, targetEpoch, ok := snapshot.probeEpochsForWindow(targetWindowID)
-	if !ok || sourceTabID != targetTabID || sourceTabEpoch != targetTabEpoch {
-		return screenProbeBinding{}, false
-	}
-	return screenProbeBinding{
-		Producer:            producer,
-		SourceWindowID:      sourceWindowID,
-		TargetWindowID:      targetWindowID,
-		SourceReceipt:       snapshot.receipt(sourceWindowID),
-		TargetReceipt:       snapshot.receipt(targetWindowID),
-		SnapshotTabID:       targetTabID,
-		SnapshotTabEpoch:    targetTabEpoch,
-		SnapshotSourceEpoch: sourceEpoch,
-		SnapshotTargetEpoch: targetEpoch,
-	}, true
-}
+// The binding value and its snapshot-independent validity rules live in
+// internal/daemon/probes. What stays here is the half that needs the reducer:
+// deriving routes from the facts attached to managed panes, and revalidating a
+// binding against the reducer under stateMu before an observation is applied.
 
 // screenProbeBindings derives producer/source/target routes from the reducers
 // attached to managed panes in the supplied Kitty snapshot. A routed producer
@@ -87,7 +18,7 @@ func newScreenProbeBinding(
 // lease; direct managed producers retain the historical title-owner-only
 // behavior. The legacy fallback preserves direct managed probes that have title
 // metadata but no in-process session fact yet.
-func (h *Handler) screenProbeBindings(snapshot screenProbeSnapshot, producerHarness string) []screenProbeBinding {
+func (h *Handler) screenProbeBindings(snapshot probes.Snapshot, producerHarness string) []probes.Binding {
 	producerHarness = harness.NormalizeKnown(producerHarness)
 	if producerHarness == "" {
 		return nil
@@ -96,10 +27,11 @@ func (h *Handler) screenProbeBindings(snapshot screenProbeSnapshot, producerHarn
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 
-	var bindings []screenProbeBinding
-	for i := range snapshot.windows {
-		for j := range snapshot.windows[i].Tabs {
-			tab := &snapshot.windows[i].Tabs[j]
+	windows := snapshot.Windows()
+	var bindings []probes.Binding
+	for i := range windows {
+		for j := range windows[i].Tabs {
+			tab := &windows[i].Tabs[j]
 			owner, _ := kitty.FindTabTitleOwner(tab)
 			ownerHasBinding := false
 			for k := range tab.Windows {
@@ -123,7 +55,7 @@ func (h *Handler) screenProbeBindings(snapshot screenProbeSnapshot, producerHarn
 						continue
 					}
 				}
-				binding, found := newScreenProbeBinding(snapshot, identity, sourceWindowID, target.ID)
+				binding, found := probes.NewBinding(snapshot, identity, sourceWindowID, target.ID)
 				if !found {
 					continue
 				}
@@ -143,7 +75,7 @@ func (h *Handler) screenProbeBindings(snapshot screenProbeSnapshot, producerHarn
 					harness.NormalizeKnown(st.LastHarness) != producerHarness {
 					continue
 				}
-				binding, found := newScreenProbeBinding(
+				binding, found := probes.NewBinding(
 					snapshot,
 					conversation.Identity{Harness: producerHarness},
 					owner.ID,
@@ -152,7 +84,7 @@ func (h *Handler) screenProbeBindings(snapshot screenProbeSnapshot, producerHarn
 				if !found {
 					continue
 				}
-				binding.legacyDirectManaged = true
+				binding.LegacyDirectManaged = true
 				if h.screenProbeBindingCurrentLocked(binding) {
 					bindings = append(bindings, binding)
 				}
@@ -168,13 +100,13 @@ func (h *Handler) screenProbeBindings(snapshot screenProbeSnapshot, producerHarn
 	}
 	counts := make(map[routeKey]int, len(bindings))
 	for _, binding := range bindings {
-		if !binding.legacyDirectManaged {
+		if !binding.LegacyDirectManaged {
 			counts[routeKey{producer: binding.Producer, source: binding.SourceWindowID}]++
 		}
 	}
 	filtered := bindings[:0]
 	for _, binding := range bindings {
-		if binding.legacyDirectManaged || counts[routeKey{producer: binding.Producer, source: binding.SourceWindowID}] == 1 {
+		if binding.LegacyDirectManaged || counts[routeKey{producer: binding.Producer, source: binding.SourceWindowID}] == 1 {
 			filtered = append(filtered, binding)
 		}
 	}
@@ -186,7 +118,7 @@ func (h *Handler) screenProbeBindings(snapshot screenProbeSnapshot, producerHarn
 // excludes direct sessions (the legacy direct-managed fallback already covers
 // their title-owner behavior) and does not make a terminal fact a live route for
 // ordinary hook traffic.
-func (h *Handler) screenProbeTerminalBindings(snapshot screenProbeSnapshot, producerHarness string, now int64) []screenProbeBinding {
+func (h *Handler) screenProbeTerminalBindings(snapshot probes.Snapshot, producerHarness string, now int64) []probes.Binding {
 	producerHarness = harness.NormalizeKnown(producerHarness)
 	if producerHarness == "" {
 		return nil
@@ -195,10 +127,11 @@ func (h *Handler) screenProbeTerminalBindings(snapshot screenProbeSnapshot, prod
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 
-	var bindings []screenProbeBinding
-	for i := range snapshot.windows {
-		for j := range snapshot.windows[i].Tabs {
-			tab := &snapshot.windows[i].Tabs[j]
+	windows := snapshot.Windows()
+	var bindings []probes.Binding
+	for i := range windows {
+		for j := range windows[i].Tabs {
+			tab := &windows[i].Tabs[j]
 			for k := range tab.Windows {
 				target := &tab.Windows[k]
 				if target.UserVars.EffectiveProfile() == "" && target.UserVars.EffectiveHarness() == "" {
@@ -212,12 +145,12 @@ func (h *Handler) screenProbeTerminalBindings(snapshot screenProbeSnapshot, prod
 				if !ok || sourceWindowID == target.ID {
 					continue
 				}
-				binding, found := newScreenProbeBinding(snapshot, identity, sourceWindowID, target.ID)
+				binding, found := probes.NewBinding(snapshot, identity, sourceWindowID, target.ID)
 				if !found {
 					continue
 				}
-				binding.terminalProducer = true
-				binding.terminalAt = now
+				binding.TerminalProducer = true
+				binding.TerminalAt = now
 				if h.screenProbeBindingCurrentLocked(binding) {
 					bindings = append(bindings, binding)
 				}
@@ -244,13 +177,13 @@ func (h *Handler) screenProbeTerminalBindings(snapshot screenProbeSnapshot, prod
 
 // screenProbeBindingCurrentLocked revalidates every causal component of a
 // binding. Callers hold stateMu and keep it held through any ensuing mutation.
-func (h *Handler) screenProbeBindingCurrentLocked(binding screenProbeBinding) bool {
-	if !binding.valid() || !h.screenProbeFreshnessCurrentLocked(binding) ||
+func (h *Handler) screenProbeBindingCurrentLocked(binding probes.Binding) bool {
+	if !binding.Valid() || !h.snapshots.BindingFresh(binding) ||
 		!h.windowReceiptCurrentLocked(binding.SourceWindowID, binding.SourceReceipt) ||
 		!h.windowReceiptCurrentLocked(binding.TargetWindowID, binding.TargetReceipt) {
 		return false
 	}
-	if binding.legacyDirectManaged {
+	if binding.LegacyDirectManaged {
 		if binding.SourceWindowID != binding.TargetWindowID {
 			return false
 		}
@@ -262,49 +195,25 @@ func (h *Handler) screenProbeBindingCurrentLocked(binding screenProbeBinding) bo
 	if !ok || st == nil || st.Reducer == nil {
 		return false
 	}
-	if binding.recoverySource.Kind != "" {
+	if binding.RecoverySource.Kind != "" {
 		identity, sourceWindowID, ok := st.Reducer.ProbeStopRecoveryRoute(
-			binding.recoverySource, binding.Producer.Harness, binding.TargetWindowID, binding.recoveryAt,
+			binding.RecoverySource, binding.Producer.Harness, binding.TargetWindowID, binding.RecoveryAt,
 		)
 		return ok && identity == binding.Producer && sourceWindowID == binding.SourceWindowID
 	}
-	if binding.terminalProducer {
+	if binding.TerminalProducer {
 		return st.Reducer.HasTerminalProducerRoute(
-			binding.Producer, binding.SourceWindowID, binding.TargetWindowID, binding.terminalAt,
+			binding.Producer, binding.SourceWindowID, binding.TargetWindowID, binding.TerminalAt,
 		)
 	}
 	return st.Reducer.HasLiveProducerRoute(binding.Producer, binding.SourceWindowID, binding.TargetWindowID)
-}
-
-// screenProbeFreshnessCurrentLocked revalidates the tab epoch plus the epoch of
-// each of the binding's own two panes. Presence in the tab's pane map is proof
-// of current residency, so no window-tree scan is needed.
-func (h *Handler) screenProbeFreshnessCurrentLocked(binding screenProbeBinding) bool {
-	if binding.SnapshotTabEpoch == 0 {
-		return true
-	}
-	h.snapshots.mu.RLock()
-	defer h.snapshots.mu.RUnlock()
-	if !h.snapshots.snap.ready {
-		return false
-	}
-	state, ok := h.snapshots.snap.probeTabs[binding.SnapshotTabID]
-	if !ok || state.epoch != binding.SnapshotTabEpoch {
-		return false
-	}
-	source, ok := state.windows[binding.SourceWindowID]
-	if !ok || source.epoch != binding.SnapshotSourceEpoch {
-		return false
-	}
-	target, ok := state.windows[binding.TargetWindowID]
-	return ok && target.epoch == binding.SnapshotTargetEpoch
 }
 
 // screenProbeBindingEligibilityCurrentLocked adds the target's current reduced
 // icon to exact binding validation. fallbackIcon is used only for the legacy
 // direct-managed case where no in-process state exists yet.
 func (h *Handler) screenProbeBindingEligibilityCurrentLocked(
-	binding screenProbeBinding,
+	binding probes.Binding,
 	fallbackIcon string,
 	eligible func(string) bool,
 ) bool {
@@ -313,7 +222,7 @@ func (h *Handler) screenProbeBindingEligibilityCurrentLocked(
 	}
 	st, ok := h.windowStateLocked(binding.TargetWindowID)
 	if !ok || st == nil {
-		return binding.legacyDirectManaged && eligible(fallbackIcon)
+		return binding.LegacyDirectManaged && eligible(fallbackIcon)
 	}
 	return eligible(st.Effective.Icon)
 }

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/events"
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -82,7 +83,7 @@ func (h *Handler) appendProcessLifecycleEventLocked(
 	windowID int,
 	at time.Time,
 	action string,
-	observation HarnessProcessInspection,
+	observation probes.HarnessProcessInspection,
 	identity protocol.HarnessProcessIdentity,
 	pipeMode bool,
 	terminalHookEvidence string,

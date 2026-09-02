@@ -29,6 +29,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -53,7 +54,7 @@ type AuthoritativeIdle struct {
 	// with the exact producer session, source pane, source receipt, and snapshot
 	// epochs captured by a route-aware adapter. Legacy/direct adapters may leave
 	// it zero-valued and retain the original check.
-	ProbeBinding    screenProbeBinding
+	ProbeBinding    probes.Binding
 	At              int64
 	RequiredSamples int
 
@@ -232,7 +233,7 @@ func (h *Handler) applyAuthoritativeIdle(obs AuthoritativeIdle) bool {
 	// cannot be overwritten by an older observation whose reducer receipt still
 	// happens to match.
 	fresh := st.ShadowSeq == obs.CapturedSeq
-	if obs.ProbeBinding.valid() {
+	if obs.ProbeBinding.Valid() {
 		fresh = obs.ProbeBinding.TargetWindowID == obs.WindowID &&
 			obs.ProbeBinding.TargetReceipt == obs.CapturedSeq &&
 			h.screenProbeBindingCurrentLocked(obs.ProbeBinding)

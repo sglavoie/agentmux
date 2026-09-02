@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -69,7 +69,7 @@ func assertLifecycleAcceptancePipeResult(
 	windowID int,
 	identity protocol.HarnessProcessIdentity,
 	wantIcon string,
-	wantObservation daemon.HarnessProcessInspection,
+	wantObservation probes.HarnessProcessInspection,
 ) {
 	t.Helper()
 	exit, ok := lifecycleAcceptanceExit(export.EventsByWindow[windowID], identity.PID)
