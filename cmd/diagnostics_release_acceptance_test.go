@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/cmd/hooks"
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
@@ -20,6 +22,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/indicator"
+	"github.com/spf13/cobra"
 )
 
 // TestAcceptanceDiagnosticPipeline exercises the release diagnostic path with
@@ -314,27 +317,47 @@ func runAcceptanceHookCommandMode(t *testing.T, event, requestID, harnessName, p
 	}
 	defer func() { _ = stdin.Close() }()
 
+	// The flag values are the only handle this package has on the hook command's
+	// inputs now that it lives in cmd/hooks, which is also how the real binary
+	// supplies them.
+	command := hooks.IndicatorCommand()
 	oldStdin := os.Stdin
-	oldWindowID, oldHarness, oldRequestID := hookWindowID, hookHarness, hookRequestID
-	oldJSON, oldStrict := hookJSON, hookStrict
-	oldOut := hookIndicatorCmd.OutOrStdout()
+	oldOut := command.OutOrStdout()
 	defer func() {
 		os.Stdin = oldStdin
-		hookWindowID, hookHarness, hookRequestID = oldWindowID, oldHarness, oldRequestID
-		hookJSON, hookStrict = oldJSON, oldStrict
-		hookIndicatorCmd.SetOut(oldOut)
+		command.SetOut(oldOut)
+		setAcceptanceHookFlags(t, command, "0", "", "", "false", "false")
 	}()
 	os.Stdin = stdin
-	hookWindowID, hookHarness, hookRequestID = 42, harnessName, requestID
-	hookJSON, hookStrict = true, strict
+	setAcceptanceHookFlags(t, command, "42", harnessName, requestID, "true", strconv.FormatBool(strict))
 	var output bytes.Buffer
-	hookIndicatorCmd.SetOut(&output)
-	runErr := hookIndicatorCmd.RunE(hookIndicatorCmd, []string{event})
+	command.SetOut(&output)
+	runErr := command.RunE(command, []string{event})
 	var result indicator.DeliveryResult
 	if err := json.Unmarshal(output.Bytes(), &result); err != nil {
 		return indicator.DeliveryResult{}, fmt.Errorf("decode hook-indicator %s result: %w (%s)", event, err, output.String())
 	}
 	return result, runErr
+}
+
+// setAcceptanceHookFlags assigns the hook-indicator flags positionally in the
+// order they are declared, and clears Changed so a later run starts from the
+// same state Cobra would give a fresh process.
+func setAcceptanceHookFlags(t *testing.T, command *cobra.Command, windowID, harnessName, requestID, jsonOutput, strict string) {
+	t.Helper()
+	values := []struct{ name, value string }{
+		{"window-id", windowID},
+		{"harness", harnessName},
+		{"request-id", requestID},
+		{"json", jsonOutput},
+		{"strict", strict},
+	}
+	for _, flag := range values {
+		if err := command.Flags().Set(flag.name, flag.value); err != nil {
+			t.Fatalf("set hook-indicator --%s=%s: %v", flag.name, flag.value, err)
+		}
+		command.Flags().Lookup(flag.name).Changed = false
+	}
 }
 
 func acceptancePaddedPayload(t *testing.T, paddingBytes int, fields map[string]any) string {

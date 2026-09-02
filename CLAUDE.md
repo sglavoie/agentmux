@@ -72,8 +72,38 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
 
 ### Main packages
 
-- `cmd`: Cobra surfaces, command flag parsing and text output, safe selector
-  errors, doctor/transcript maintenance, and hidden TUI scenario commands.
+- `cmd`: the root command and the command families that have not yet been split
+  out — `rootCmd` itself with `Execute`'s exit mapping, the daemon, session,
+  worktree, transcripts, notifications, and Kitty tab-control leaves, and the
+  assembly that registers every child package's commands. It is the only package
+  in the `cmd` tree that any other `cmd` package may not import.
+- `cmd/dashboard`: the interactive surfaces `amx` opens inside Kitty — the
+  live-session dashboard, which is what a bare `amx` runs rather than a
+  subcommand of its own, and the color, harness-icon, and keybinding overlays.
+  What makes them one family is the singleton rule: each asks Kitty whether its
+  surface is already open and focuses that window instead of opening a second
+  copy, and the dashboard additionally hands the running instance the tab the
+  caller came from.
+- `cmd/config`: the `amx config` family — the config file's lifecycle (init,
+  edit, show, path, validate, including the `$EDITOR` field splitter and the
+  project-directory audit) and `asl-sync`, the ordered preflight-migrate-write-
+  restart-verify pairing with agent-session-loop and its structured error codes.
+  It registers `cmd/hooks`' two leaves under itself.
+- `cmd/hooks`: harness hook files and hook delivery — the `hook-indicator`
+  entry point harness hooks call, with its fail-open legacy path and its strict
+  75/2 exit mapping, and the `hooks-sync`/`hooks-status` maintenance leaves the
+  config family surfaces.
+- `cmd/debug`: the daemon-state diagnostic surfaces and the vocabulary they
+  share — `amx debug` (status, tail, probe, explain, capture, bundle, replay),
+  `amx doctor` with its stable finding identifiers and versioned report, the
+  invariant evaluator both run, and `amx daemon audit`, which is a doctor
+  surface wearing a daemon subcommand name. It also owns the export projections
+  (`ExportWindowIDs`, `ExportLiveMetadata`, `ASLStatusLine`) that doctor and the
+  daemon command family must agree on, so a doctor cannot report drift that
+  `daemon export-events` does not see.
+- `cmd/release` and `cmd/tuitest`: the two hidden operator/developer commands.
+  `release-gate` drives the paired release procedure in `internal/release`;
+  `tui-test` drives the in-process TUI scenario harness in `tui`.
 - `internal/cli`: the shared bootstrap every command family runs before it does
   its own job — how a failure becomes a process exit status (the `ExitError`
   quiet-exit contract and the nonzero status vocabulary), how a command answers

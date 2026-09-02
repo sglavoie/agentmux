@@ -7,13 +7,11 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"sort"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/cmd/debug"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
@@ -24,8 +22,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	ccerrors "github.com/sglavoie/agentmux/internal/errors"
 	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/palette"
-	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/spf13/cobra"
 )
 
@@ -143,78 +139,12 @@ var daemonStatusCmd = &cobra.Command{
 			}
 		}
 		if health.ASL != nil {
-			if _, err := fmt.Fprintf(out, "asl: %s\n", aslStatusLine(health.ASL)); err != nil {
+			if _, err := fmt.Fprintf(out, "asl: %s\n", debug.ASLStatusLine(health.ASL)); err != nil {
 				return err
 			}
 		}
 		return nil
 	},
-}
-
-// aslStatusLine renders the optional ASL capability block for text surfaces.
-// It reports only availability, identity, and sanitized counters: no plan
-// directory, question, or reply text ever reaches this line.
-func aslStatusLine(s *aslbridge.Status) string {
-	state := "unavailable"
-	switch {
-	case s.Mode == string(aslbridge.ModeDisabled):
-		state = "disabled"
-	case s.Available && s.MutationsEnabled:
-		state = "ready"
-	case s.Available:
-		state = "read-only"
-	}
-	detail := "mode " + s.Mode
-	if s.Executable != "" {
-		detail += " at " + s.Executable
-	} else if s.Command != "" {
-		detail += " via " + s.Command
-	}
-	if s.Version != "" {
-		detail += fmt.Sprintf("; asl %s protocol %d", s.Version, s.Protocol)
-	}
-	if s.SnapshotAgeSeconds != nil {
-		age := fmt.Sprintf("; snapshot %ds old", *s.SnapshotAgeSeconds)
-		if s.SnapshotStale {
-			age += " (stale)"
-		}
-		detail += age
-	}
-	if s.RestartCount > 0 {
-		detail += fmt.Sprintf("; restarts %d", s.RestartCount)
-	}
-	if outcomes := aslActionOutcomes(s.Metrics); outcomes != "" {
-		detail += "; actions " + outcomes
-	}
-	if s.Reason != "" {
-		detail += "; " + s.Reason
-	}
-	return fmt.Sprintf("%s (%s)", state, detail)
-}
-
-// aslActionOutcomes summarizes how the operator's mutations settled. The status
-// vocabulary is fixed by the protocol, so the rendered order is fixed too and a
-// counter key can never be bridge-authored text.
-func aslActionOutcomes(m *aslbridge.Metrics) string {
-	if m == nil {
-		return ""
-	}
-	var parts []string
-	for _, status := range []string{
-		aslbridge.OperationAccepted,
-		aslbridge.OperationConsumed,
-		aslbridge.OperationRejected,
-		aslbridge.OperationExpired,
-		aslbridge.OperationSuperseded,
-	} {
-		if count := m.OperationsByStatus[status]; count > 0 {
-			parts = append(parts, fmt.Sprintf("%d %s", count, status))
-		}
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	return strings.Join(parts, "/")
 }
 
 var daemonRestartCmd = &cobra.Command{
@@ -252,81 +182,9 @@ type daemonLifecycleClient interface {
 	RestartDetached(amxBin string) error
 }
 
-func daemonExportWindowIDs(snapshot protocol.EventsExport, requestedWindowID int) []int {
-	seen := make(map[int]struct{}, len(snapshot.EventsByWindow)+len(snapshot.WindowMetadata)+1)
-	ids := make([]int, 0, len(snapshot.EventsByWindow)+len(snapshot.WindowMetadata)+1)
-	add := func(id int) {
-		if id == 0 {
-			return
-		}
-		if _, ok := seen[id]; ok {
-			return
-		}
-		seen[id] = struct{}{}
-		ids = append(ids, id)
-	}
-	for id := range snapshot.EventsByWindow {
-		add(id)
-	}
-	for id := range snapshot.WindowMetadata {
-		add(id)
-	}
-	add(requestedWindowID)
-	sort.Ints(ids)
-	return ids
-}
-
-func daemonExportLiveMetadata(osWindows []kitty.OSWindow, snapshot protocol.EventsExport, requestedWindowID int) map[int]protocol.WindowLiveMetadata {
-	ids := daemonExportWindowIDs(snapshot, requestedWindowID)
-	if len(ids) == 0 {
-		return map[int]protocol.WindowLiveMetadata{}
-	}
-
-	sessions := session.ListFromOSWindows(osWindows)
-	out := make(map[int]protocol.WindowLiveMetadata, len(ids))
-	for _, id := range ids {
-		live := protocol.WindowLiveMetadata{}
-		osw, tab, win, ok := kitty.FindWindowLocationByID(osWindows, id)
-		if !ok {
-			out[id] = live
-			continue
-		}
-
-		live.Found = true
-		live.TabID = tab.ID
-		live.OSWindowID = osw.ID
-		live.TabTitle = tab.Title
-		live.WindowTitle = win.Title
-		if rs, ok := session.FindByWindowID(sessions, id); ok {
-			live.BaseTitle = rs.Base
-			live.IconState = rs.State
-			live.Looping = rs.Looping
-			live.Starred = rs.Starred
-			live.Project = rs.Project
-			live.Profile = rs.Profile
-			live.Harness = rs.Harness
-			live.Directory = rs.Directory
-		} else {
-			parts := palette.ParseTitleParts(tab.Title)
-			live.BaseTitle = parts.Base
-			live.IconState = parts.State
-			live.Looping = parts.Looping
-			live.Starred = parts.Starred
-			live.Profile = win.UserVars.EffectiveProfile()
-			live.Harness = win.UserVars.EffectiveHarness()
-			live.Directory = win.UserVars.EffectiveDirectory()
-			if live.Directory == "" {
-				live.Directory = win.CWD
-			}
-		}
-		out[id] = live
-	}
-	return out
-}
-
 func buildDaemonExportPayload(snapshot protocol.EventsExport, health ipc.Health, osWindows []kitty.OSWindow, requestedWindowID int, last int, exportedAt time.Time) protocol.ExportEventsPayload {
-	liveByID := daemonExportLiveMetadata(osWindows, snapshot, requestedWindowID)
-	ids := daemonExportWindowIDs(snapshot, requestedWindowID)
+	liveByID := debug.ExportLiveMetadata(osWindows, snapshot, requestedWindowID)
+	ids := debug.ExportWindowIDs(snapshot, requestedWindowID)
 	windows := make([]protocol.ExportWindow, 0, len(ids))
 	for _, id := range ids {
 		window := protocol.ExportWindow{
@@ -431,7 +289,7 @@ complete causal shape, or --schema 8 for pre-causal consumers.`,
 		}
 
 		var osWindows []kitty.OSWindow
-		if ids := daemonExportWindowIDs(snapshot, requestedWindowID); len(ids) > 0 {
+		if ids := debug.ExportWindowIDs(snapshot, requestedWindowID); len(ids) > 0 {
 			if liveWindows, liveErr := newDaemonExportKitty().ListWindows(); liveErr == nil {
 				osWindows = liveWindows
 			}
@@ -477,5 +335,6 @@ func init() {
 	daemonExportEventsCmd.Flags().BoolVar(&daemonExportEventsPretty, "pretty", true, "Pretty-print JSON with 2-space indent")
 	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsSchema, "schema", protocol.EventsExportSchemaVersion, "Export schema version (8, 9, 10, 11, 12, or 13)")
 
+	daemonCmd.AddCommand(debug.AuditCommand())
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd, daemonRestartCmd, daemonExportEventsCmd)
 }

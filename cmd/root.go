@@ -4,13 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strconv"
-	"time"
 
+	"github.com/sglavoie/agentmux/cmd/config"
+	"github.com/sglavoie/agentmux/cmd/dashboard"
+	"github.com/sglavoie/agentmux/cmd/debug"
+	"github.com/sglavoie/agentmux/cmd/hooks"
+	"github.com/sglavoie/agentmux/cmd/release"
+	"github.com/sglavoie/agentmux/cmd/tuitest"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/cli"
-	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -26,19 +28,7 @@ var rootCmd = &cobra.Command{
 		cli.ConfigureLogging(cli.DebugEnabled())
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := cli.LoadRunnableConfig()
-		if err != nil {
-			return err
-		}
-		client := cli.NewKittyClient()
-		sourceWindowID := dashboardSourceWindowID
-		if sourceWindowID <= 0 {
-			sourceWindowID = cli.WindowIDFromEnv()
-		}
-		if focusExistingDashboard(client, sourceWindowID) {
-			return nil
-		}
-		return tui.RunFromWindow(cfg, client, sourceWindowID)
+		return dashboard.Run(dashboardSourceWindowID)
 	},
 }
 
@@ -59,35 +49,6 @@ func Execute() {
 	}
 }
 
-func focusExistingDashboard(client kitty.KittyClient, sourceWindowID int) bool {
-	osWindows, err := client.ListWindows()
-	if err != nil {
-		return false
-	}
-	loc, found := kitty.FindDashboardWindow(osWindows, cli.WindowIDFromEnv())
-	if !found {
-		return false
-	}
-	var sourceTabID int
-	if sourceWindowID > 0 {
-		if sourceTab, _, ok := kitty.FindTabByWindowID(osWindows, sourceWindowID); ok {
-			sourceTabID = sourceTab.ID
-		}
-	}
-	if err := client.FocusTab(kitty.MatchTabByID(loc.TabID)); err != nil {
-		return false
-	}
-	if sourceTabID > 0 {
-		request := strconv.Itoa(sourceTabID) + ":" + strconv.FormatInt(time.Now().UnixNano(), 10)
-		_ = client.SetUserVars(kitty.MatchWindowByID(loc.WindowID), map[string]string{
-			kitty.DashboardSelectionVar: request,
-		})
-	}
-	_ = client.FocusWindow(kitty.MatchWindowByID(loc.WindowID))
-	fmt.Fprintln(os.Stderr, "Agent Mux dashboard already running — focused existing tab.")
-	return true
-}
-
 func init() {
 	// Version output carries the full artifact identity (VCS revision, dirty
 	// marker, build time, Go version, binary hash) so an installed CLI can be
@@ -96,5 +57,5 @@ func init() {
 	rootCmd.Version = buildinfo.Current().String()
 	rootCmd.PersistentFlags().BoolVar(&cli.DebugFlag, "debug", false, "enable verbose debug output")
 	rootCmd.Flags().IntVar(&dashboardSourceWindowID, "window-id", 0, "Kitty window ID whose tab should be selected initially")
-	rootCmd.AddCommand(colorPickerCmd, configCmd, daemonCmd, debugCmd, hookIndicatorCmd, iconPickerCmd, keybindingsCmd, notificationsCmd, releaseGateCmd, resortCmd, sessionCmd, transcriptsCmd, tuiTestCmd, worktreeCmd)
+	rootCmd.AddCommand(dashboard.ColorPickerCommand(), config.Command(), daemonCmd, debug.Command(), debug.DoctorCommand(), hooks.IndicatorCommand(), dashboard.IconPickerCommand(), dashboard.KeybindingsCommand(), notificationsCmd, release.Command(), resortCmd, sessionCmd, transcriptsCmd, tuitest.Command(), worktreeCmd)
 }
