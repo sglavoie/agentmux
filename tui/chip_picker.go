@@ -155,3 +155,13 @@ func currentChipValue(m Model) string {
 	}
 	return ""
 }
+
+// singleChipValue returns the one active value of a multi-select filter, or
+// the empty string when the filter is unset. Chip filters are single-valued in
+// practice; the slice shape is what the model stores.
+func singleChipValue(s []string) string {
+	if len(s) == 0 {
+		return ""
+	}
+	return s[0]
+}

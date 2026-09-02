@@ -1,4 +1,4 @@
-package tui
+package history
 
 import (
 	"fmt"
@@ -174,27 +174,15 @@ func renderTimelineLines(
 	return lines
 }
 
-// renderTimeline applies scroll offset into the pre-rendered lines and wraps
-// everything in the overlay box. Called from renderDetailBox when detailViewTimeline=true.
-func renderTimeline(m Model) string {
-	phases := groupIntoPhases(m.detailEvents)
-	innerWidth := detailBoxInnerWidth(m)
-	// Padding(0,1) in styleOverlayBox subtracts 2 cols from the render width.
-	renderWidth := innerWidth - 2
-	if renderWidth < 1 {
-		renderWidth = 1
-	}
-
-	lines := renderTimelineLines(phases, renderWidth, m.detailTimelineFold, m.detailShowSuppressed, m.detailShowTimestamps)
-
-	innerH := detailOverlayInnerHeight(m)
-	visibleH := innerH - detailInnerChrome
-	if visibleH < 0 {
-		visibleH = 0
-	}
+// RenderTimeline applies scroll offset into the pre-rendered lines and wraps
+// everything in the overlay box. Called from RenderBox when ViewTimeline=true.
+func (in DetailInput) RenderTimeline() string {
+	innerWidth := in.boxInnerWidth()
+	lines := in.timelineLines()
+	visibleH := in.TimelineVisibleHeight()
 
 	total := len(lines)
-	offset := m.detailTimelineScroll
+	offset := in.TimelineScroll
 	if offset+visibleH > total {
 		offset = total - visibleH
 	}
@@ -203,7 +191,7 @@ func renderTimeline(m Model) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(detailHeader(m))
+	sb.WriteString(in.Header())
 	sb.WriteString("\n\n")
 
 	if offset > 0 {

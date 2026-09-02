@@ -1,4 +1,4 @@
-package tui
+package history
 
 import (
 	"fmt"
@@ -18,19 +18,19 @@ const messageDetailChrome = 4
 // overlay stays usable on short terminals. Mirrors helpMinVisible.
 const messageDetailMinVisible = 3
 
-// messageDetailBodyLines builds the flat list of body lines for the current
+// MessageBodyLines builds the flat list of body lines for the current
 // message: each \n-separated paragraph is wrapped to the viewport width via
 // lipgloss.NewStyle().Width(...).Render, preserving completely-blank
 // paragraphs as a single empty line. Internal whitespace inside each
 // paragraph is NOT collapsed — full fidelity is the whole point of the
 // overlay. Returns nil when the overlay is closed or the captured index is
 // out of range so the renderer treats nil as "no body".
-func messageDetailBodyLines(m Model) []string {
-	if m.messageDetailIdx < 0 || m.messageDetailIdx >= len(m.viewerMessages) {
+func (in ViewerInput) MessageBodyLines() []string {
+	if in.MessageIdx < 0 || in.MessageIdx >= len(in.Messages) {
 		return nil
 	}
-	msg := m.viewerMessages[m.messageDetailIdx]
-	maxWidth := m.width
+	msg := in.Messages[in.MessageIdx]
+	maxWidth := in.Width
 	if maxWidth <= 0 {
 		maxWidth = 120
 	}
@@ -51,44 +51,44 @@ func messageDetailBodyLines(m Model) []string {
 	return lines
 }
 
-// messageDetailScrollBounds returns the total number of body lines and the
-// number of those lines visible at the model's current height. When the
-// model has no height yet (pre-WindowSizeMsg) the visible window equals the
-// total so scroll keys become no-ops naturally.
-func messageDetailScrollBounds(m Model) (total, visible int) {
-	total = len(messageDetailBodyLines(m))
-	if m.height == 0 {
+// MessageScrollBounds returns the total number of body lines and the number of
+// those lines visible at the input's current height. When the input has no
+// height yet (pre-WindowSizeMsg) the visible window equals the total so scroll
+// keys become no-ops naturally.
+func (in ViewerInput) MessageScrollBounds() (total, visible int) {
+	total = len(in.MessageBodyLines())
+	if in.Height == 0 {
 		return total, total
 	}
-	visible = max(messageDetailMinVisible, min(total, rootBodyHeight(m)-messageDetailChrome))
+	visible = max(messageDetailMinVisible, min(total, in.BodyHeight-messageDetailChrome))
 	return total, visible
 }
 
-// renderMessageDetail renders the full-message overlay with a manual
-// viewport. On short terminals the body is clipped to the visible window
-// and the ▲ / ▼ indicators reveal off-screen content; the layout reserves
-// a slot for each indicator unconditionally so the overlay does not jitter
-// as the user scrolls.
-func renderMessageDetail(m Model) string {
+// RenderMessage renders the full-message overlay with a manual viewport. On
+// short terminals the body is clipped to the visible window and the ▲ / ▼
+// indicators reveal off-screen content; the layout reserves a slot for each
+// indicator unconditionally so the overlay does not jitter as the user
+// scrolls.
+func (in ViewerInput) RenderMessage() string {
 	var sb strings.Builder
 
 	header := "Message"
-	if m.messageDetailIdx >= 0 && m.messageDetailIdx < len(m.viewerMessages) {
-		msg := m.viewerMessages[m.messageDetailIdx]
+	if in.MessageIdx >= 0 && in.MessageIdx < len(in.Messages) {
+		msg := in.Messages[in.MessageIdx]
 		role := strings.TrimSpace(msg.Role)
 		if role == "" {
 			role = "?"
 		}
 		ts := msg.Timestamp.Format("2006-01-02 15:04:05")
 		header = fmt.Sprintf("Message %d/%d  [%s]  %s",
-			m.messageDetailIdx+1, len(m.viewerMessages), role, ts)
+			in.MessageIdx+1, len(in.Messages), role, ts)
 	}
 	sb.WriteString(styleHeader.Render(header))
 	sb.WriteString("\n\n")
 
-	lines := messageDetailBodyLines(m)
+	lines := in.MessageBodyLines()
 
-	if m.height == 0 {
+	if in.Height == 0 {
 		// Pre-resize: emit every line verbatim so behaviour matches the
 		// post-resize render until the first WindowSizeMsg lands.
 		sb.WriteString(strings.Join(lines, "\n"))
@@ -97,8 +97,8 @@ func renderMessageDetail(m Model) string {
 	}
 
 	n := len(lines)
-	_, visible := messageDetailScrollBounds(m)
-	offset := m.messageDetailScroll
+	_, visible := in.MessageScrollBounds()
+	offset := in.MessageScroll
 	if offset+visible > n {
 		offset = n - visible
 	}

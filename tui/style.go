@@ -80,28 +80,6 @@ var (
 	stylePipWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
 	stylePipErr  = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
 	styleBanner  = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00")).Bold(true)
-
-	// Detail-pane styles (ModeDetail). detailRowStyle is intentionally
-	// neutral so row text inherits the terminal's default foreground;
-	// keeping the call site explicit makes it easy to recolor every row
-	// later without hunting through detail.go. detailToolStyle picks up the
-	// active-teal already established for `bolt` so the tool-name column
-	// reads as an accent without introducing a new palette color.
-	detailRowStyle  = lipgloss.NewStyle()
-	detailToolStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#4ec9b0"))
-)
-
-// Timeline phase header and annotation styles (ModeDetail timeline sub-view).
-var (
-	styleTimelineActive   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#4ec9b0"))
-	styleTimelineCompact  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#ffaa00"))
-	styleTimelineStop     = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
-	styleTimelineError    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#ff5555"))
-	styleTimelineGap      = lipgloss.NewStyle().Faint(true)
-	styleTimelineSep      = lipgloss.NewStyle().Faint(true)
-	styleTimelineTree     = lipgloss.NewStyle().Faint(true)
-	styleTimelineTool     = lipgloss.NewStyle().Foreground(lipgloss.Color("#4ec9b0"))
-	styleTimelineExpanded = lipgloss.NewStyle().Faint(true).Italic(true)
 )
 
 // stateAccentStyle returns the per-state foreground style used to color the

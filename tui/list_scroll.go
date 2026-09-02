@@ -7,7 +7,7 @@ import (
 
 // listMinVisible is the floor on the visible row budget for the session list.
 // Even on very short terminals we keep at least this many rows visible so the
-// pane remains useful. Mirrors detailMinVisible.
+// pane remains useful. Mirrors the history overlay's own floor.
 const listMinVisible = 3
 
 const statusBarLines = 1

@@ -237,53 +237,26 @@ func (m Model) handleDetailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if !m.detailViewTimeline {
 			return m, nil
 		}
-		phases := groupIntoPhases(m.detailEvents)
-		positions := phaseHeaderLinePositions(phases, m.detailTimelineFold, m.detailShowSuppressed)
-		target := -1
-		for _, pos := range positions {
-			if pos < m.detailTimelineScroll {
-				target = pos
-			}
-		}
-		if target >= 0 {
-			m.detailTimelineScroll = target
-		}
+		m.detailTimelineScroll = historyDetailInput(m).TimelinePrevPhaseScroll()
 		return m, nil
 
 	case keyPhaseNext:
 		if !m.detailViewTimeline {
 			return m, nil
 		}
-		phases := groupIntoPhases(m.detailEvents)
-		positions := phaseHeaderLinePositions(phases, m.detailTimelineFold, m.detailShowSuppressed)
-		for _, pos := range positions {
-			if pos > m.detailTimelineScroll {
-				m.detailTimelineScroll = pos
-				break
-			}
-		}
+		m.detailTimelineScroll = historyDetailInput(m).TimelineNextPhaseScroll()
 		return m, nil
 
 	case keyEnter:
 		if !m.detailViewTimeline {
 			return m, nil
 		}
-		phases := groupIntoPhases(m.detailEvents)
-		positions := phaseHeaderLinePositions(phases, m.detailTimelineFold, m.detailShowSuppressed)
-		phaseIdx := phaseAtScroll(positions, m.detailTimelineScroll)
-		if phaseIdx < 0 {
+		fold, ok := historyDetailInput(m).TimelineToggleFold()
+		if !ok {
 			return m, nil
 		}
-		ph := phases[phaseIdx]
-		if ph.kind == "gap" || ph.kind == "separator" || (ph.kind == "preamble" && len(ph.events) == 0) {
-			return m, nil
-		}
-		if m.detailTimelineFold == nil {
-			m.detailTimelineFold = make(map[int]bool)
-		}
-		currentlyExpanded := isPhaseExpanded(ph, phaseIdx, m.detailTimelineFold)
-		m.detailTimelineFold[phaseIdx] = !currentlyExpanded
-		clampTimelineScroll(&m, phases)
+		m.detailTimelineFold = fold
+		m.detailTimelineScroll = historyDetailInput(m).ClampTimelineScroll()
 		return m, nil
 
 	case "s":
@@ -291,54 +264,29 @@ func (m Model) handleDetailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.detailShowSuppressed = !m.detailShowSuppressed
-		clampTimelineScroll(&m, groupIntoPhases(m.detailEvents))
+		m.detailTimelineScroll = historyDetailInput(m).ClampTimelineScroll()
 		return m, nil
 
 	case "z":
 		if !m.detailViewTimeline {
 			return m, nil
 		}
-		phases := groupIntoPhases(m.detailEvents)
-		m.detailTimelineFold = make(map[int]bool)
-		for i, p := range phases {
-			if p.kind != "gap" && p.kind != "separator" {
-				m.detailTimelineFold[i] = false
-			}
-		}
-		clampTimelineScroll(&m, phases)
+		m.detailTimelineFold = historyDetailInput(m).TimelineFoldAll(false)
+		m.detailTimelineScroll = historyDetailInput(m).ClampTimelineScroll()
 		return m, nil
 
 	case "Z":
 		if !m.detailViewTimeline {
 			return m, nil
 		}
-		phases := groupIntoPhases(m.detailEvents)
-		m.detailTimelineFold = make(map[int]bool)
-		for i, p := range phases {
-			if p.kind != "gap" && p.kind != "separator" {
-				m.detailTimelineFold[i] = true
-			}
-		}
+		m.detailTimelineFold = historyDetailInput(m).TimelineFoldAll(true)
 		return m, nil
 	}
 
 	if m.detailViewTimeline {
-		phases := groupIntoPhases(m.detailEvents)
-		innerWidth := detailBoxInnerWidth(m)
-		renderWidth := innerWidth - 2
-		if renderWidth < 1 {
-			renderWidth = 1
-		}
-		tlLines := renderTimelineLines(phases, renderWidth, m.detailTimelineFold, m.detailShowSuppressed, m.detailShowTimestamps)
-		innerH := detailOverlayInnerHeight(m)
-		tlVisible := innerH - detailInnerChrome
-		if tlVisible < 0 {
-			tlVisible = 0
-		}
-		tlMax := len(tlLines) - tlVisible
-		if tlMax < 0 {
-			tlMax = 0
-		}
+		tlIn := historyDetailInput(m)
+		tlMax := tlIn.TimelineMaxScroll()
+		tlVisible := tlIn.TimelineVisibleHeight()
 		switch msg.String() {
 		case keyJ, keyDown:
 			if m.detailTimelineScroll < tlMax {

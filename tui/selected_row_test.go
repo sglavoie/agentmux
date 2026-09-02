@@ -109,8 +109,7 @@ func TestSelectableListFamiliesUseNormalizedRenderer(t *testing.T) {
 	files := []string{
 		"asl_runs.go", "chip_picker.go", "command_palette.go",
 		"config_picker.go", "model_live_session_picker.go",
-		"picker.go", "plan_search.go", "plan_view.go", "session_search.go",
-		"session_view.go", "worktrees.go",
+		"picker.go", "plan_search.go", "plan_view.go", "worktrees.go",
 	}
 	for _, name := range files {
 		t.Run(name, func(t *testing.T) {

@@ -53,7 +53,7 @@ func renderPlanView(m Model) string {
 }
 
 // renderPlanViewBody renders wrapped visual rows derived from the logical
-// source lines in planViewerLines. Mirrors renderSessionViewBody's windowing
+// source lines in planViewerLines. Mirrors the transcript viewer's windowing
 // contract: at most height rows, with ▲ when offset > 0 and ▼ when more rows
 // remain past the window.
 func renderPlanViewBody(m Model, height int) string {

@@ -1,4 +1,4 @@
-package tui
+package history
 
 import (
 	"testing"
@@ -166,19 +166,19 @@ func TestClampTimelineScroll(t *testing.T) {
 	events := []protocol.SessionEvent{
 		se(1000, "active", "PreToolUse", "bash"),
 	}
-	m := Model{
-		detailEvents:         events,
-		detailTimelineScroll: 9999,
-		width:                80,
-		height:               40,
+	in := DetailInput{
+		Events:         events,
+		TimelineScroll: 9999,
+		Width:          80,
+		Height:         40,
+		BodyHeight:     40,
 	}
-	phases := groupIntoPhases(m.detailEvents)
-	clampTimelineScroll(&m, phases)
-	if m.detailTimelineScroll < 0 {
-		t.Errorf("scroll must not be negative, got %d", m.detailTimelineScroll)
+	scroll := in.ClampTimelineScroll()
+	if scroll < 0 {
+		t.Errorf("scroll must not be negative, got %d", scroll)
 	}
 	// With a single small phase and a 40-row viewport, totalLines < visibleH → maxOffset=0.
-	if m.detailTimelineScroll != 0 {
-		t.Errorf("expected scroll clamped to 0 (few lines, large viewport), got %d", m.detailTimelineScroll)
+	if scroll != 0 {
+		t.Errorf("expected scroll clamped to 0 (few lines, large viewport), got %d", scroll)
 	}
 }

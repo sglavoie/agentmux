@@ -10,38 +10,6 @@ import (
 	tuiplans "github.com/sglavoie/agentmux/tui/plans"
 )
 
-func TestFormatViewerLineUsesDisplayTruncate(t *testing.T) {
-	msg := transcript.Message{Role: "user", Text: strings.Repeat("alpha beta gamma ", 12)}
-	for _, width := range []int{20, 40, 80} {
-		t.Run("width-"+itoa(width), func(t *testing.T) {
-			line := formatViewerLine(msg, width)
-			if w := layout.StyledWidth(line); w > maxRunes(width) {
-				t.Fatalf("formatViewerLine visible width = %d > %d: %q", w, maxRunes(width), line)
-			}
-			if !strings.Contains(stripAnsi(line), "…") {
-				t.Fatalf("expected truncation marker in %q", line)
-			}
-		})
-	}
-}
-
-func TestFormatViewerLineGraphemeAtomicOnEmoji(t *testing.T) {
-	msg := transcript.Message{Role: "assistant", Text: "🗣🗣🗣🗣🗣🗣🗣🗣🗣🗣 trailing"}
-	line := stripAnsi(formatViewerLine(msg, 12))
-	// The truncated content must remain a sequence of whole graphemes; a
-	// raw-byte truncation would slice the multibyte emoji and produce
-	// invalid UTF-8 in the rendered string.
-	if !strings.Contains(line, "…") {
-		t.Fatalf("expected ellipsis tail, got %q", line)
-	}
-	if !strings.HasSuffix(line, "…") {
-		t.Fatalf("expected ellipsis at end, got %q", line)
-	}
-	if w := layout.Width(line); w > maxRunes(12) {
-		t.Fatalf("truncated line width = %d, want <= %d: %q", w, maxRunes(12), line)
-	}
-}
-
 func TestRenderSessionViewEmojiTitleReservesIconColumn(t *testing.T) {
 	emoji := Model{
 		width:         60,
