@@ -49,7 +49,7 @@ func uitestCursor(m Model) int {
 	case ModeASLRuns:
 		return m.aslCursor
 	case ModeASLResponse:
-		return m.aslResponse.questionIdx
+		return m.aslResponse.QuestionIdx
 	default:
 		return m.cursor
 	}

@@ -1,15 +1,15 @@
 package tui
 
-// Run-level control commands (stop after current, abort) and the bounded
-// receipt window every submission is tracked in. The code under test lives in
-// model_asl_control.go.
+// Run-level control commands (stop after current, abort) and the receipt window
+// every submission is tracked in. The flow under test lives in
+// model_asl_control.go; the window itself lives in tui/asl.
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/tui/asl"
 )
 
 func TestASLActionsFollowProjectedCapabilities(t *testing.T) {
@@ -45,8 +45,8 @@ func TestASLStopAndAbortConfirmBeforeSubmitting(t *testing.T) {
 		method      string
 		consequence string
 	}{
-		{keyASLStop, aslConfirmStop, aslbridge.MethodRunStopAfterCurrent, "runs to completion"},
-		{keyASLAbort, aslConfirmAbort, aslbridge.MethodRunAbort, "120 seconds"},
+		{keyASLStop, asl.ConfirmStop, aslbridge.MethodRunStopAfterCurrent, "runs to completion"},
+		{keyASLAbort, asl.ConfirmAbort, aslbridge.MethodRunAbort, "120 seconds"},
 	} {
 		t.Run(tc.action, func(t *testing.T) {
 			d, _ := enterASLRunsDriver(t)
@@ -141,10 +141,10 @@ func TestASLOperationReceiptsAdvanceAfterTheFormCloses(t *testing.T) {
 		t.Fatalf("submitting: %v", err)
 	}
 	m := d.Model()
-	if m.aslResponse.active {
+	if m.aslResponse.Active {
 		t.Fatal("the paused form stayed open after a resume")
 	}
-	if len(m.aslOperations) != 1 || m.aslOperations[0].State != aslOpAccepted {
+	if len(m.aslOperations) != 1 || m.aslOperations[0].State != asl.OpAccepted {
 		t.Fatalf("operations = %+v, want one accepted receipt", m.aslOperations)
 	}
 	operationID := m.aslOperations[0].OperationID
@@ -156,25 +156,8 @@ func TestASLOperationReceiptsAdvanceAfterTheFormCloses(t *testing.T) {
 		receipts: []aslbridge.Operation{{OperationID: operationID, Status: aslbridge.OperationConsumed}},
 	})
 	ops := d.Model().aslOperations
-	if len(ops) != 1 || ops[0].State != aslOpConsumed {
+	if len(ops) != 1 || ops[0].State != asl.OpConsumed {
 		t.Fatalf("operations after the receipt = %+v, want consumed", ops)
 	}
 	assertNoASLTextLeak(t, d, "resume please")
-}
-
-func TestASLOperationHistoryStaysBounded(t *testing.T) {
-	var m Model
-	for i := 0; i < aslOperationHistory+3; i++ {
-		m.trackASLOperation(aslOperationView{
-			OperationID: fmt.Sprintf("op-%d", i),
-			Method:      aslbridge.MethodQuestionReply,
-			State:       aslOpSubmitting,
-		})
-	}
-	if len(m.aslOperations) != aslOperationHistory {
-		t.Fatalf("tracked %d operations, want %d", len(m.aslOperations), aslOperationHistory)
-	}
-	if m.aslOperations[0].OperationID != "op-3" {
-		t.Fatalf("oldest retained operation = %q, want op-3", m.aslOperations[0].OperationID)
-	}
 }

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/actions"
+	"github.com/sglavoie/agentmux/tui/asl"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
@@ -43,10 +44,10 @@ func renderConfirm(m Model) string {
 	case "worktree forget":
 		verb = "Forget worktree metadata"
 		title = worktreeConfirmationTitle(m.worktreeActionTarget)
-	case aslConfirmStop:
+	case asl.ConfirmStop:
 		verb = "Stop after the current session"
 		title = aslConfirmationTitle(m.aslActionTarget)
-	case aslConfirmAbort:
+	case asl.ConfirmAbort:
 		verb = "Abort the in-flight turn"
 		title = aslConfirmationTitle(m.aslActionTarget)
 	default:
@@ -66,7 +67,7 @@ func renderConfirm(m Model) string {
 // aslConfirmationTitle names the captured run. It reads the capture rather than
 // the current selection, so the overlay keeps describing what the operator
 // reviewed even if a refresh moves the list underneath it.
-func aslConfirmationTitle(target *aslActionTarget) string {
+func aslConfirmationTitle(target *asl.ActionTarget) string {
 	if target == nil {
 		return "selected run"
 	}

@@ -2,17 +2,12 @@ package tui
 
 import (
 	"errors"
-	"path/filepath"
-	"sort"
-	"strings"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
-	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/asl"
 )
 
 // aslSnapshotLoadedMsg carries one polled ASL projection. seq is compared
@@ -125,7 +120,7 @@ func (m Model) handleASLSnapshotLoaded(msg aslSnapshotLoadedMsg) (tea.Model, tea
 	m.aslErr = nil
 	m.aslLoaded = true
 	m.aslMeta = msg.meta
-	m.aslRows = sortASLRows(msg.snapshot.Rows)
+	m.aslRows = asl.SortRows(msg.snapshot.Rows)
 	m.restoreASLSelection()
 	return m, nil
 }
@@ -151,63 +146,8 @@ func (m *Model) restoreASLSelection() {
 	scrollASLToCursor(m)
 }
 
-// sortASLRows orders needs-action ahead of in-progress and everything else,
-// then by ASL's own urgency rank, then by most recent activity. Label and plan
-// directory break the final tie so an unchanged snapshot always renders in the
-// same order.
-func sortASLRows(rows []aslbridge.Row) []aslbridge.Row {
-	ordered := append([]aslbridge.Row(nil), rows...)
-	sort.SliceStable(ordered, func(i, j int) bool {
-		a, b := ordered[i], ordered[j]
-		if ga, gb := aslGroupRank(a.UrgencyGroup), aslGroupRank(b.UrgencyGroup); ga != gb {
-			return ga < gb
-		}
-		if a.UrgencyRank != b.UrgencyRank {
-			return a.UrgencyRank < b.UrgencyRank
-		}
-		at, bt := aslActivityTime(a), aslActivityTime(b)
-		if !at.Equal(bt) {
-			return at.After(bt)
-		}
-		if a.Label != b.Label {
-			return a.Label < b.Label
-		}
-		return a.PlanDir < b.PlanDir
-	})
-	return ordered
-}
-
-// aslGroupRank mirrors ASL's urgency grouping. An unknown group sorts after
-// every known one rather than silently joining needs-action.
-func aslGroupRank(group string) int {
-	switch group {
-	case "needs-action":
-		return 0
-	case "in-progress":
-		return 1
-	case "ready":
-		return 2
-	case "complete":
-		return 3
-	default:
-		return 4
-	}
-}
-
-func aslActivityTime(row aslbridge.Row) time.Time {
-	for _, stamp := range []string{row.LastActivityAt, row.RunStartedAt} {
-		if parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(stamp)); err == nil {
-			return parsed
-		}
-	}
-	return time.Time{}
-}
-
 func (m Model) selectedASLRow() (aslbridge.Row, bool) {
-	if m.aslCursor < 0 || m.aslCursor >= len(m.aslRows) {
-		return aslbridge.Row{}, false
-	}
-	return m.aslRows[m.aslCursor], true
+	return asl.RunsInput{Rows: m.aslRows, Cursor: m.aslCursor}.SelectedRow()
 }
 
 func (m Model) handleASLRunsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -271,11 +211,11 @@ func (m Model) focusSelectedASLRun() (tea.Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
-	if bound, found := aslExactBinding(row, m.sessions); found {
+	if bound, found := asl.ExactBinding(row, m.sessions); found {
 		m.aslErr = nil
 		return m, focusCmd(m.client, bound.TabID)
 	}
-	candidates := aslFallbackCandidates(row, m.sessions)
+	candidates := asl.FallbackCandidates(row, m.sessions)
 	switch len(candidates) {
 	case 0:
 		m.aslErr = errors.New("focus unavailable: no live session matches this run's workspace and harness")
@@ -286,109 +226,9 @@ func (m Model) focusSelectedASLRun() (tea.Model, tea.Cmd) {
 	default:
 		m.aslErr = nil
 		m.aslFocusTarget = row.RowID
-		m.openLiveSessionPicker(LivePickerASLFocus, ModeASLRuns, aslRowLabel(row), candidates)
+		m.openLiveSessionPicker(LivePickerASLFocus, ModeASLRuns, asl.RowLabel(row), candidates)
 		return m, nil
 	}
-}
-
-// aslExactBinding reports the live session ASL has positively identified for a
-// row: either the projected Kitty window, or a session carrying the same run ID
-// in its managed user variables. Anything looser is a guess and is left to the
-// fallback path.
-func aslExactBinding(row aslbridge.Row, sessions []session.RunningSession) (session.RunningSession, bool) {
-	for _, candidate := range sessions {
-		if row.Window != nil && row.Window.KittyWindowID != 0 && candidate.WindowID == row.Window.KittyWindowID {
-			return candidate, true
-		}
-		if row.RunID != "" && candidate.ASLRunID == row.RunID {
-			return candidate, true
-		}
-	}
-	return session.RunningSession{}, false
-}
-
-// aslFallbackCandidates returns live sessions in the run's canonical workspace
-// running the run's harness. Both must match: a workspace alone can host
-// several harnesses, and a harness alone says nothing about which run it serves.
-func aslFallbackCandidates(row aslbridge.Row, sessions []session.RunningSession) []actions.WorktreeLiveSession {
-	root := aslCanonicalDir(row.WorkspaceRoot)
-	harness := strings.TrimSpace(strings.ToLower(row.Harness))
-	if root == "" || harness == "" {
-		return nil
-	}
-	var out []actions.WorktreeLiveSession
-	for _, candidate := range sessions {
-		if aslCanonicalDir(candidate.Directory) != root {
-			continue
-		}
-		if strings.ToLower(strings.TrimSpace(candidate.Harness)) != harness {
-			continue
-		}
-		out = append(out, actions.WorktreeLiveSession{
-			ID:               candidate.HarnessSessionID,
-			TabID:            candidate.TabID,
-			WindowID:         candidate.WindowID,
-			Project:          candidate.Project,
-			Profile:          candidate.Profile,
-			Harness:          candidate.Harness,
-			HarnessSessionID: candidate.HarnessSessionID,
-			Directory:        candidate.Directory,
-		})
-	}
-	return out
-}
-
-// aslMarkerFor returns the dashboard marker for a session an ASL run is
-// exactly bound to. It reports false for every session ASL has not positively
-// identified, and for any snapshot the view already considers untrustworthy.
-func aslMarkerFor(m Model, s session.RunningSession) (string, bool) {
-	if len(m.aslRows) == 0 {
-		return "", false
-	}
-	switch aslView(m) {
-	case aslViewLive, aslViewStale:
-	default:
-		return "", false
-	}
-	for _, row := range m.aslRows {
-		if row.Window != nil && row.Window.KittyWindowID != 0 && row.Window.KittyWindowID == s.WindowID {
-			return aslStateMarker(row.PrimaryState), true
-		}
-		if row.RunID != "" && row.RunID == s.ASLRunID {
-			return aslStateMarker(row.PrimaryState), true
-		}
-	}
-	return "", false
-}
-
-func aslStateMarker(state string) string {
-	switch state {
-	case "paused-for-reply":
-		return "❓"
-	case "verifying":
-		return "🔍"
-	case "failed", "invalid":
-		return "❌"
-	case "stale":
-		return "⏳"
-	default:
-		return "🔁"
-	}
-}
-
-func aslCanonicalDir(path string) string {
-	trimmed := strings.TrimSpace(path)
-	if trimmed == "" {
-		return ""
-	}
-	abs, err := filepath.Abs(trimmed)
-	if err != nil {
-		return filepath.Clean(trimmed)
-	}
-	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
-		return resolved
-	}
-	return abs
 }
 
 // openSelectedASLWorkbench opens the run's Workbench detail view at the section
@@ -408,22 +248,7 @@ func (m Model) openSelectedASLWorkbench() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.aslErr = nil
-	return m, m.runASLWorkbenchCmd(row.RowID, row.PlanDir, aslWorkbenchFocus(row.PrimaryState))
-}
-
-// aslWorkbenchFocus maps a run state to the Workbench section an operator needs
-// next for that state.
-func aslWorkbenchFocus(state string) string {
-	switch state {
-	case "paused-for-reply":
-		return aslbridge.FocusReply
-	case "verifying":
-		return aslbridge.FocusVerification
-	case "failed", "stale", "invalid":
-		return aslbridge.FocusEvents
-	default:
-		return aslbridge.FocusActive
-	}
+	return m, m.runASLWorkbenchCmd(row.RowID, row.PlanDir, asl.WorkbenchFocus(row.PrimaryState))
 }
 
 func (m Model) handleASLWorkbenchDone(msg aslWorkbenchDoneMsg) (tea.Model, tea.Cmd) {

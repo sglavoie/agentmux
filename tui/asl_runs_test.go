@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/asl"
 )
 
 func aslRunsDriver(t *testing.T) (*UITestDriver, *UITestKittyClient) {
@@ -134,7 +136,7 @@ func TestASLRunsSortNeedsActionThenUrgencyThenActivity(t *testing.T) {
 		{RowID: "recent", Label: "alpha", UrgencyGroup: "in-progress", UrgencyRank: 50, LastActivityAt: now.Format(time.RFC3339)},
 		{RowID: "a", Label: "alpha", UrgencyGroup: "in-progress", UrgencyRank: 50, PlanDir: "/plans/a"},
 	}
-	if got := aslRowIDs(sortASLRows(tied)); !equalStrings(got, []string{"recent", "a", "b"}) {
+	if got := aslRowIDs(asl.SortRows(tied)); !equalStrings(got, []string{"recent", "a", "b"}) {
 		t.Fatalf("tie-broken rows = %v, want [recent a b]", got)
 	}
 }
@@ -199,8 +201,8 @@ func TestASLRunsStaleBannerThenUnavailable(t *testing.T) {
 	m := d.Model()
 	m.aslMeta = aslbridge.SnapshotMeta{ReceivedAt: time.Now().Add(-3 * time.Second), Stale: true}
 
-	if got := aslView(m); got != aslViewStale {
-		t.Fatalf("view inside the stale window = %v, want aslViewStale", got)
+	if got := aslView(m); got != asl.ViewStale {
+		t.Fatalf("view inside the stale window = %v, want asl.ViewStale", got)
 	}
 	rendered := renderASLRuns(m)
 	if !strings.Contains(rendered, aslBannerText(m)) {
@@ -211,8 +213,8 @@ func TestASLRunsStaleBannerThenUnavailable(t *testing.T) {
 	}
 
 	m.aslMeta.ReceivedAt = time.Now().Add(-aslbridge.StaleWindow - time.Second)
-	if got := aslView(m); got != aslViewUnavailable {
-		t.Fatalf("view past the stale window = %v, want aslViewUnavailable", got)
+	if got := aslView(m); got != asl.ViewUnavailable {
+		t.Fatalf("view past the stale window = %v, want asl.ViewUnavailable", got)
 	}
 	if rendered := renderASLRuns(m); !strings.Contains(rendered, "unavailable") {
 		t.Fatalf("expired render does not say unavailable:\n%s", rendered)
@@ -230,8 +232,8 @@ func TestASLRunsUnavailableRatherThanEmpty(t *testing.T) {
 	}
 
 	m := d.Model()
-	if got := aslView(m); got != aslViewUnavailable {
-		t.Fatalf("view without a snapshot = %v, want aslViewUnavailable", got)
+	if got := aslView(m); got != asl.ViewUnavailable {
+		t.Fatalf("view without a snapshot = %v, want asl.ViewUnavailable", got)
 	}
 	rendered := renderASLRuns(m)
 	if !strings.Contains(rendered, "unavailable") || !strings.Contains(rendered, fx.ASLStatus.Reason) {
@@ -254,10 +256,10 @@ func TestASLMarkersRequireAnExactBinding(t *testing.T) {
 		t.Fatalf("fixture produced %d live sessions, want 4", len(byWindow))
 	}
 
-	if marker, ok := aslMarkerFor(m, byWindow[11]); !ok || marker != aslStateMarker("paused-for-reply") {
+	if marker, ok := aslMarkerFor(m, byWindow[11]); !ok || marker != asl.StateMarker("paused-for-reply") {
 		t.Fatalf("exactly bound session marker = (%q, %v), want the paused-for-reply marker", marker, ok)
 	}
-	if marker, ok := aslMarkerFor(m, byWindow[31]); !ok || marker != aslStateMarker("running") {
+	if marker, ok := aslMarkerFor(m, byWindow[31]); !ok || marker != asl.StateMarker("running") {
 		t.Fatalf("exactly bound running session marker = (%q, %v)", marker, ok)
 	}
 	// row-verify matches both gateway sessions on workspace and harness, which
@@ -379,23 +381,6 @@ func TestASLFocusWithoutAnyCandidateExplainsItself(t *testing.T) {
 	}
 	if !strings.Contains(renderStatusBar(m), "no live session") {
 		t.Fatalf("status bar hides the focus reason: %q", renderStatusBar(m))
-	}
-}
-
-func TestASLWorkbenchFocusMapping(t *testing.T) {
-	cases := map[string]string{
-		"paused-for-reply": aslbridge.FocusReply,
-		"verifying":        aslbridge.FocusVerification,
-		"failed":           aslbridge.FocusEvents,
-		"stale":            aslbridge.FocusEvents,
-		"invalid":          aslbridge.FocusEvents,
-		"running":          aslbridge.FocusActive,
-		"":                 aslbridge.FocusActive,
-	}
-	for state, want := range cases {
-		if got := aslWorkbenchFocus(state); got != want {
-			t.Errorf("aslWorkbenchFocus(%q) = %q, want %q", state, got, want)
-		}
 	}
 }
 

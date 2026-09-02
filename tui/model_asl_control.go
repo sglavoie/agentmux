@@ -1,75 +1,16 @@
 package tui
 
 // This file owns the two run-level control commands (stop after current and
-// abort) and the bounded receipt window every submission is tracked in. A
-// receipt carries identity and state only, so a submission can be followed from
-// accepted to consumed long after the form that made it has closed.
+// abort) and the model's half of the receipt window. The window's own shape and
+// bound live in tui/asl; what a confirmation DOES to the model stays here.
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
-)
-
-// Body-free operation states the UI reports. They are derived from the bridge
-// receipt vocabulary rather than from anything the operator typed.
-const (
-	aslOpSubmitting = "submitting"
-	aslOpAccepted   = "accepted"
-	aslOpConsumed   = "consumed"
-	aslOpFailed     = "failed"
-	aslOpExpired    = "expired"
-)
-
-func aslOperationState(status string) string {
-	switch status {
-	case aslbridge.OperationAccepted:
-		return aslOpAccepted
-	case aslbridge.OperationConsumed:
-		return aslOpConsumed
-	case aslbridge.OperationExpired:
-		return aslOpExpired
-	case aslbridge.OperationRejected, aslbridge.OperationSuperseded:
-		return aslOpFailed
-	default:
-		return aslOpSubmitting
-	}
-}
-
-// aslOperationView is one tracked submission. It carries identity and state
-// only, so the receipt history can outlive the form without holding an answer.
-type aslOperationView struct {
-	OperationID string
-	Method      string
-	RowID       string
-	State       string
-}
-
-// aslOperationHistory bounds how many receipts the Runs view keeps. A receipt
-// is a status line, not a journal, so the window only has to be long enough to
-// watch a submission travel from accepted to consumed.
-const aslOperationHistory = 5
-
-// newASLOperationID mints the client operation ID for one submission. It is
-// opaque and unique per submission; the bridge uses it both to deduplicate a
-// replayed call and, for control commands, as the durable command ID.
-func newASLOperationID() string {
-	var buf [16]byte
-	if _, err := rand.Read(buf[:]); err != nil {
-		return fmt.Sprintf("amx-%d", time.Now().UnixNano())
-	}
-	return "amx-" + hex.EncodeToString(buf[:])
-}
-
-// Confirmation action names for the shared y/n overlay.
-const (
-	aslConfirmStop  = "asl stop"
-	aslConfirmAbort = "asl abort"
+	"github.com/sglavoie/agentmux/tui/asl"
 )
 
 // confirmASLControl captures the selected run and raises the shared
@@ -88,31 +29,22 @@ func (m Model) confirmASLControl(method string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.aslNotice = ""
-	m.aslActionTarget = &aslActionTarget{
+	m.aslActionTarget = &asl.ActionTarget{
 		RowID:       row.RowID,
 		PlanDir:     row.PlanDir,
 		RunID:       row.RunID,
 		ActionToken: row.ActionToken,
-		Label:       aslRowLabel(row),
+		Label:       asl.RowLabel(row),
 	}
 	if method == aslbridge.MethodRunAbort {
-		m.confirmAction = aslConfirmAbort
+		m.confirmAction = asl.ConfirmAbort
 	} else {
-		m.confirmAction = aslConfirmStop
+		m.confirmAction = asl.ConfirmStop
 	}
-	m.confirmConsequence = aslControlConsequence(method)
+	m.confirmConsequence = asl.ControlConsequence(method)
 	m.confirmReturnMode = ModeASLRuns
 	m.mode = ModeConfirm
 	return m, nil
-}
-
-func aslControlConsequence(method string) string {
-	if method == aslbridge.MethodRunAbort {
-		return fmt.Sprintf(
-			"The in-flight turn is asked to stop within %d seconds. A turn that cannot be interrupted in time degrades to stopping after the current session.",
-			aslbridge.AbortGraceSeconds)
-	}
-	return "The current session runs to completion and the run then stops. The in-flight turn is not interrupted."
 }
 
 // submitASLControl queues one control command against the captured target. The
@@ -126,14 +58,14 @@ func (m Model) submitASLControl(method string) (tea.Model, tea.Cmd) {
 	if m.aslControlInFlight {
 		return m, nil
 	}
-	operationID := newASLOperationID()
+	operationID := asl.NewOperationID()
 	m.aslControlInFlight = true
 	m.aslControlSeq++
-	m.trackASLOperation(aslOperationView{
+	m.trackASLOperation(asl.OperationView{
 		OperationID: operationID,
 		Method:      method,
 		RowID:       target.RowID,
-		State:       aslOpSubmitting,
+		State:       asl.OpSubmitting,
 	})
 	return m, m.runASLActionCmd(m.aslControlSeq, true, target.RowID, aslbridge.ActionRequest{
 		Method:      method,
@@ -150,44 +82,27 @@ func (m Model) handleASLControlDone(msg aslActionDoneMsg, state string) (tea.Mod
 	}
 	m.aslControlInFlight = false
 	if msg.err != nil {
-		if aslStaleTarget(msg.err) {
-			m.aslNotice = aslTargetChangedText
+		if asl.StaleTarget(msg.err) {
+			m.aslNotice = asl.TargetChangedText
 			return m, m.beginASLRefresh()
 		}
-		m.aslNotice = aslRefusalText(msg.err)
+		m.aslNotice = asl.RefusalText(msg.err)
 		return m, nil
 	}
 	m.aslNotice = ""
 	toast := m.pushToast(Toast{
 		Severity: toastSuccess,
-		Text:     fmt.Sprintf("%s: %s", sentenceCase(aslMethodLabel(msg.method)), state),
+		Text:     fmt.Sprintf("%s: %s", sentenceCase(asl.MethodLabel(msg.method)), state),
 	})
 	return m, tea.Batch(toast, m.beginASLRefresh())
 }
 
-func (m *Model) trackASLOperation(view aslOperationView) {
-	for i := range m.aslOperations {
-		if m.aslOperations[i].OperationID == view.OperationID {
-			m.aslOperations[i] = view
-			return
-		}
-	}
-	m.aslOperations = append(m.aslOperations, view)
-	if len(m.aslOperations) > aslOperationHistory {
-		m.aslOperations = m.aslOperations[len(m.aslOperations)-aslOperationHistory:]
-	}
+func (m *Model) trackASLOperation(view asl.OperationView) {
+	m.aslOperations = asl.TrackOperation(m.aslOperations, view)
 }
 
 func (m *Model) recordASLOperationState(operationID, state string) {
-	if operationID == "" {
-		return
-	}
-	for i := range m.aslOperations {
-		if m.aslOperations[i].OperationID == operationID {
-			m.aslOperations[i].State = state
-			return
-		}
-	}
+	asl.RecordOperationState(m.aslOperations, operationID, state)
 }
 
 // applyASLReceipts folds the daemon's bounded receipt window into the tracked
@@ -195,7 +110,5 @@ func (m *Model) recordASLOperationState(operationID, state string) {
 // form has already closed: the status advances without the answer being held,
 // replayed, or resubmitted.
 func (m *Model) applyASLReceipts(receipts []aslbridge.Operation) {
-	for _, receipt := range receipts {
-		m.recordASLOperationState(receipt.OperationID, aslOperationState(receipt.Status))
-	}
+	asl.ApplyReceipts(m.aslOperations, receipts)
 }

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/tui/asl"
 )
 
 // openASLResponseDriver enters the Runs view, selects a run by ID, and opens its
@@ -53,13 +54,13 @@ func assertNoASLTextLeak(t *testing.T, d *UITestDriver, text string) {
 func TestASLResponseLiveReplySubmitsCapturedTarget(t *testing.T) {
 	d := openASLResponseDriver(t, "row-reply")
 	m := d.Model()
-	if m.aslResponse.kind != aslResponseLive {
-		t.Fatalf("kind = %v, want aslResponseLive", m.aslResponse.kind)
+	if m.aslResponse.Kind != asl.ResponseLive {
+		t.Fatalf("kind = %v, want asl.ResponseLive", m.aslResponse.Kind)
 	}
-	if m.aslResponse.target.ActionToken != "token-reply" || m.aslResponse.target.QuestionID != "q-api-1" {
-		t.Fatalf("capture = %+v, want the row's token and first question", m.aslResponse.target)
+	if m.aslResponse.Target.ActionToken != "token-reply" || m.aslResponse.Target.QuestionID != "q-api-1" {
+		t.Fatalf("capture = %+v, want the row's token and first question", m.aslResponse.Target)
 	}
-	if m.aslResponse.body.Reveal() == "" {
+	if m.aslResponse.Body.Reveal() == "" {
 		t.Fatal("the selected question's body was not fetched")
 	}
 
@@ -103,8 +104,8 @@ func TestASLResponseContinueAndPauseNeedNoAnswer(t *testing.T) {
 				}
 			}
 			state := d.Model().aslResponse
-			button, ok := state.button()
-			if !ok || button.resolution != tc.resolution {
+			button, ok := state.Button()
+			if !ok || button.Resolution != tc.resolution {
 				t.Fatalf("selected button = %+v, want resolution %q", button, tc.resolution)
 			}
 			if err := d.Key(keyEnter); err != nil {
@@ -121,11 +122,11 @@ func TestASLResponseContinueAndPauseNeedNoAnswer(t *testing.T) {
 func TestASLResponsePausedRunOffersOnlyReplyAndResume(t *testing.T) {
 	d := openASLResponseDriver(t, "row-paused")
 	m := d.Model()
-	if m.aslResponse.kind != aslResponsePaused {
-		t.Fatalf("kind = %v, want aslResponsePaused", m.aslResponse.kind)
+	if m.aslResponse.Kind != asl.ResponsePaused {
+		t.Fatalf("kind = %v, want asl.ResponsePaused", m.aslResponse.Kind)
 	}
-	if len(m.aslResponse.buttons) != 1 || m.aslResponse.buttons[0].method != aslbridge.MethodRunResume {
-		t.Fatalf("buttons = %+v, want a single run.resume", m.aslResponse.buttons)
+	if len(m.aslResponse.Buttons) != 1 || m.aslResponse.Buttons[0].Method != aslbridge.MethodRunResume {
+		t.Fatalf("buttons = %+v, want a single run.resume", m.aslResponse.Buttons)
 	}
 
 	typeASLAnswer(t, d, "proceed with the migration")
@@ -139,33 +140,33 @@ func TestASLResponsePausedRunOffersOnlyReplyAndResume(t *testing.T) {
 	if d.Model().mode != ModeASLRuns {
 		t.Fatalf("mode after a resume = %v, want ModeASLRuns", d.Model().mode)
 	}
-	if d.Model().aslResponse.active {
+	if d.Model().aslResponse.Active {
 		t.Fatal("the form survived a resume")
 	}
 }
 
 func TestASLResponseNavigatesQuestionsAndFetchesEachBodySeparately(t *testing.T) {
 	d := openASLResponseDriver(t, "row-reply")
-	first := d.Model().aslResponse.body.Reveal()
+	first := d.Model().aslResponse.Body.Reveal()
 	typeASLAnswer(t, d, "draft for one")
 
 	if err := d.Key(keyCtrlN); err != nil {
 		t.Fatalf("moving to the next question: %v", err)
 	}
 	m := d.Model()
-	if m.aslResponse.target.QuestionID != "q-api-2" {
-		t.Fatalf("question = %q, want q-api-2", m.aslResponse.target.QuestionID)
+	if m.aslResponse.Target.QuestionID != "q-api-2" {
+		t.Fatalf("question = %q, want q-api-2", m.aslResponse.Target.QuestionID)
 	}
-	if body := m.aslResponse.body.Reveal(); body == first || body == "" {
+	if body := m.aslResponse.Body.Reveal(); body == first || body == "" {
 		t.Fatalf("the second question reused the first body: %q", body)
 	}
-	if m.aslResponse.target.ActionToken != "token-reply" {
-		t.Fatalf("navigation rewrote the captured token to %q", m.aslResponse.target.ActionToken)
+	if m.aslResponse.Target.ActionToken != "token-reply" {
+		t.Fatalf("navigation rewrote the captured token to %q", m.aslResponse.Target.ActionToken)
 	}
-	if got := m.aslResponse.drafts["q-api-1"].Reveal(); got != "draft for one" {
+	if got := m.aslResponse.Drafts["q-api-1"].Reveal(); got != "draft for one" {
 		t.Fatalf("draft for the first question = %q, want it kept", got)
 	}
-	if got := m.aslResponse.drafts[m.aslResponse.target.QuestionID].Reveal(); got != "" {
+	if got := m.aslResponse.Drafts[m.aslResponse.Target.QuestionID].Reveal(); got != "" {
 		t.Fatalf("second question opened with draft %q, want empty", got)
 	}
 }
@@ -177,13 +178,13 @@ func TestASLResponseAdvancesToTheRemainingQuestionAfterClosure(t *testing.T) {
 		t.Fatalf("submitting: %v", err)
 	}
 	m := d.Model()
-	if !m.aslResponse.active {
+	if !m.aslResponse.Active {
 		t.Fatal("the form closed while a captured question was still open")
 	}
-	if m.aslResponse.target.QuestionID != "q-api-2" {
-		t.Fatalf("advanced to %q, want q-api-2", m.aslResponse.target.QuestionID)
+	if m.aslResponse.Target.QuestionID != "q-api-2" {
+		t.Fatalf("advanced to %q, want q-api-2", m.aslResponse.Target.QuestionID)
 	}
-	if _, kept := m.aslResponse.drafts["q-api-1"]; kept {
+	if _, kept := m.aslResponse.Drafts["q-api-1"]; kept {
 		t.Fatal("the answered question's draft survived its submission")
 	}
 }
@@ -196,13 +197,13 @@ func TestASLResponseSubmitsTwoQuestionsEndToEnd(t *testing.T) {
 	}
 
 	m := d.Model()
-	if !m.aslResponse.active || m.aslResponse.target.QuestionID != "q-api-2" {
+	if !m.aslResponse.Active || m.aslResponse.Target.QuestionID != "q-api-2" {
 		t.Fatalf("after the first closure the form was %+v, want q-api-2 open", m.aslResponse)
 	}
-	if m.aslResponse.target.ActionToken != "token-reply-2" {
-		t.Fatalf("token = %q, want the remaining question's refreshed token", m.aslResponse.target.ActionToken)
+	if m.aslResponse.Target.ActionToken != "token-reply-2" {
+		t.Fatalf("token = %q, want the remaining question's refreshed token", m.aslResponse.Target.ActionToken)
 	}
-	if m.aslResponse.reauthorize {
+	if m.aslResponse.Reauthorize {
 		t.Fatal("the form is still awaiting authorization after its body loaded")
 	}
 
@@ -231,11 +232,11 @@ func TestASLResponseSubmitsTwoQuestionsEndToEnd(t *testing.T) {
 	}
 
 	m = d.Model()
-	if m.aslNotice != "" || m.aslResponse.notice != "" {
-		t.Fatalf("a closure was refused: list notice %q, form notice %q", m.aslNotice, m.aslResponse.notice)
+	if m.aslNotice != "" || m.aslResponse.Notice != "" {
+		t.Fatalf("a closure was refused: list notice %q, form notice %q", m.aslNotice, m.aslResponse.Notice)
 	}
-	if m.mode != ModeASLRuns || m.aslResponse.active {
-		t.Fatalf("the form survived its last question: mode=%v active=%v", m.mode, m.aslResponse.active)
+	if m.mode != ModeASLRuns || m.aslResponse.Active {
+		t.Fatalf("the form survived its last question: mode=%v active=%v", m.mode, m.aslResponse.Active)
 	}
 }
 
@@ -247,7 +248,7 @@ func TestASLResponseEnterInsertsANewlineAndTabMovesFocus(t *testing.T) {
 	}
 	typeASLAnswer(t, d, "two")
 	editor := d.Model().aslResponse
-	if got := editor.draft().Reveal(); got != "one\ntwo" {
+	if got := editor.Draft().Reveal(); got != "one\ntwo" {
 		t.Fatalf("draft = %q, want a newline between the lines", got)
 	}
 	if actions := d.ASLActions(); len(actions) != 0 {
@@ -257,13 +258,13 @@ func TestASLResponseEnterInsertsANewlineAndTabMovesFocus(t *testing.T) {
 	if err := d.Key(keyTab); err != nil {
 		t.Fatalf("pressing tab: %v", err)
 	}
-	if !d.Model().aslResponse.focusButtons {
+	if !d.Model().aslResponse.FocusButtons {
 		t.Fatal("tab did not move focus to the buttons")
 	}
 	if err := d.Key(keyShiftTab); err != nil {
 		t.Fatalf("pressing shift+tab: %v", err)
 	}
-	if d.Model().aslResponse.focusButtons {
+	if d.Model().aslResponse.FocusButtons {
 		t.Fatal("shift+tab did not return focus to the editor")
 	}
 }
@@ -278,7 +279,7 @@ func TestASLResponseEscapeClearsTheBodyAndEveryDraft(t *testing.T) {
 	if m.mode != ModeASLRuns {
 		t.Fatalf("mode after cancel = %v, want ModeASLRuns", m.mode)
 	}
-	if m.aslResponse.active || len(m.aslResponse.drafts) != 0 || m.aslResponse.body != "" {
+	if m.aslResponse.Active || len(m.aslResponse.Drafts) != 0 || m.aslResponse.Body != "" {
 		t.Fatalf("cancel left form state behind: %+v", m.aslResponse)
 	}
 	if actions := d.ASLActions(); len(actions) != 0 {
@@ -300,7 +301,7 @@ func TestASLResponseRedactsDraftsAndBodiesInFormattedOutput(t *testing.T) {
 	if !strings.Contains(dump, "drafts:1") {
 		t.Fatalf("formatted state lost its body-free draft count: %s", dump)
 	}
-	if got := fmt.Sprintf("%+v", d.Model().aslResponse.body); got != "[redacted]" {
+	if got := fmt.Sprintf("%+v", d.Model().aslResponse.Body); got != "[redacted]" {
 		t.Fatalf("formatted body = %q, want [redacted]", got)
 	}
 }
@@ -311,14 +312,14 @@ func TestASLResponseDoubleSubmitIsRefusedWhileInFlight(t *testing.T) {
 	m := d.Model()
 	updated, _ := m.openASLResponse()
 	m = updated.(Model)
-	m.aslResponse.setDraft("an answer")
-	m.aslResponse.inFlight = true
+	m.aslResponse.SetDraft("an answer")
+	m.aslResponse.InFlight = true
 
-	updated, cmd := m.submitASLResponse(m.aslResponse.buttons[0])
+	updated, cmd := m.submitASLResponse(m.aslResponse.Buttons[0])
 	if cmd != nil {
 		t.Fatal("a second submission was dispatched while one was in flight")
 	}
-	if updated.(Model).aslResponse.actionSeq != m.aslResponse.actionSeq {
+	if updated.(Model).aslResponse.ActionSeq != m.aslResponse.ActionSeq {
 		t.Fatal("the refused submission still advanced the action sequence")
 	}
 }
@@ -329,28 +330,28 @@ func TestASLResponseRetryReusesTheOperationIDForTheSameCall(t *testing.T) {
 	m := d.Model()
 	updated, _ := m.openASLResponse()
 	m = updated.(Model)
-	m.aslResponse.setDraft("an answer")
+	m.aslResponse.SetDraft("an answer")
 
-	updated, _ = m.submitASLResponse(m.aslResponse.buttons[0])
+	updated, _ = m.submitASLResponse(m.aslResponse.Buttons[0])
 	m = updated.(Model)
-	first := m.aslResponse.pending.operationID
+	first := m.aslResponse.Pending.OperationID
 	if first == "" {
 		t.Fatal("the first submission minted no operation ID")
 	}
 
 	// A timeout leaves the outcome unknown; the form must not retry on its own.
-	m.aslResponse.inFlight = false
-	updated, _ = m.submitASLResponse(m.aslResponse.buttons[0])
+	m.aslResponse.InFlight = false
+	updated, _ = m.submitASLResponse(m.aslResponse.Buttons[0])
 	m = updated.(Model)
-	if m.aslResponse.pending.operationID != first {
+	if m.aslResponse.Pending.OperationID != first {
 		t.Fatal("a manual retry of the same call minted a new operation ID")
 	}
 
 	// Choosing a different closure is a different call and must not replay the
 	// earlier receipt.
-	m.aslResponse.inFlight = false
-	updated, _ = m.submitASLResponse(m.aslResponse.buttons[1])
-	if got := updated.(Model).aslResponse.pending.operationID; got == first {
+	m.aslResponse.InFlight = false
+	updated, _ = m.submitASLResponse(m.aslResponse.Buttons[1])
+	if got := updated.(Model).aslResponse.Pending.OperationID; got == first {
 		t.Fatal("a different closure reused the reply's operation ID")
 	}
 }

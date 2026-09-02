@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/tui/asl"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -184,7 +185,7 @@ func aslRespondAvailable(m Model) bool {
 	if !ok {
 		return false
 	}
-	allowed, _ := aslActionAllowed(m, row, aslResponseGateMethod(aslResponseKindFor(row)))
+	allowed, _ := aslActionAllowed(m, row, asl.ResponseGateMethod(asl.ResponseKindFor(row)))
 	return allowed
 }
 
@@ -210,7 +211,7 @@ var aslResponseFooterPalette = []footerEntry{
 	{"tab", "editor/buttons", footerSectionRow, footerAlways, footerPriorityEssential},
 	{"enter", "newline or button", footerSectionRow, footerAlways, footerPriorityPrimary},
 	{"ctrl+n/p", "question", footerSectionRow, func(m Model) bool {
-		return len(m.aslResponse.questionIDs) > 1
+		return len(m.aslResponse.QuestionIDs) > 1
 	}, footerPriorityPrimary},
 	{"esc", "cancel", footerSectionApp, footerAlways, footerPriorityEssential},
 }
@@ -222,10 +223,10 @@ func aslFocusAvailable(m Model) bool {
 	if !ok {
 		return false
 	}
-	if _, bound := aslExactBinding(row, m.sessions); bound {
+	if _, bound := asl.ExactBinding(row, m.sessions); bound {
 		return true
 	}
-	return len(aslFallbackCandidates(row, m.sessions)) > 0
+	return len(asl.FallbackCandidates(row, m.sessions)) > 0
 }
 
 func aslWorkbenchAvailable(m Model) bool {

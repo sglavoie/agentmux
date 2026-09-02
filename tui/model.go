@@ -20,6 +20,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
+	"github.com/sglavoie/agentmux/tui/asl"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/launch"
 )
@@ -344,14 +345,14 @@ type Model struct {
 	// aslResponse is the answer form (ModeASLResponse). It owns the fetched
 	// question body and the operator's drafts and is zeroed wholesale on cancel,
 	// success, and mode exit.
-	aslResponse aslResponseState
+	aslResponse asl.ResponseState
 	// aslOperations is the bounded body-free receipt window shown next to the
 	// runs list, so an accepted submission can reach consumed after its form has
 	// already closed.
-	aslOperations []aslOperationView
+	aslOperations []asl.OperationView
 	// aslActionTarget retains the run a stop/abort confirmation was raised for,
 	// so a refresh landing under the overlay cannot retarget it.
-	aslActionTarget    *aslActionTarget
+	aslActionTarget    *asl.ActionTarget
 	aslControlInFlight bool
 	aslControlSeq      int
 	// aslNotice explains the outcome of a deliberate action: a refusal, an

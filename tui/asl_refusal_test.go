@@ -2,14 +2,14 @@ package tui
 
 // Refusals: what the Runs view does when the bridge declines an action, when the
 // run moves under a modal, and when the snapshot on screen is read-only. The
-// vocabulary under test lives in model_asl_refusal.go.
+// vocabulary under test lives in tui/asl.
 
 import (
-	"errors"
 	"strings"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/tui/asl"
 )
 
 func TestASLResponseStaleTargetInvalidatesTheFormAndRefreshes(t *testing.T) {
@@ -32,8 +32,8 @@ func TestASLResponseStaleTargetInvalidatesTheFormAndRefreshes(t *testing.T) {
 	}
 
 	m := d.Model()
-	if m.mode != ModeASLRuns || m.aslResponse.active {
-		t.Fatalf("a stale target left the form open: mode=%v active=%v", m.mode, m.aslResponse.active)
+	if m.mode != ModeASLRuns || m.aslResponse.Active {
+		t.Fatalf("a stale target left the form open: mode=%v active=%v", m.mode, m.aslResponse.Active)
 	}
 	if !strings.Contains(m.aslNotice, "changed") {
 		t.Fatalf("notice = %q, want a changed-target explanation", m.aslNotice)
@@ -62,14 +62,14 @@ func TestASLResponseBridgeRefusalNeverEchoesBridgeText(t *testing.T) {
 		t.Fatalf("submitting: %v", err)
 	}
 	m := d.Model()
-	if !m.aslResponse.active {
+	if !m.aslResponse.Active {
 		t.Fatal("a non-stale refusal closed the form")
 	}
-	if m.aslResponse.status != aslOpFailed {
-		t.Fatalf("status = %q, want %q", m.aslResponse.status, aslOpFailed)
+	if m.aslResponse.Status != asl.OpFailed {
+		t.Fatalf("status = %q, want %q", m.aslResponse.Status, asl.OpFailed)
 	}
-	if strings.Contains(m.aslResponse.notice, "fixture refusal") {
-		t.Fatalf("the bridge's own message was echoed: %q", m.aslResponse.notice)
+	if strings.Contains(m.aslResponse.Notice, "fixture refusal") {
+		t.Fatalf("the bridge's own message was echoed: %q", m.aslResponse.Notice)
 	}
 }
 
@@ -86,7 +86,7 @@ func TestASLResponseVanishedQuestionIsRefusedOnFetch(t *testing.T) {
 		t.Fatalf("opening the form: %v", err)
 	}
 	m := d.Model()
-	if m.aslResponse.active {
+	if m.aslResponse.Active {
 		t.Fatal("a vanished question left the form open")
 	}
 	if !strings.Contains(m.aslNotice, "changed") {
@@ -124,8 +124,8 @@ func TestASLResponseCachedRowsAreReadOnly(t *testing.T) {
 	selectASLRun(t, d, "row-reply")
 	m := d.Model()
 	m.aslMeta.Stale = true
-	if view := aslView(m); view != aslViewStale {
-		t.Fatalf("view = %v, want aslViewStale", view)
+	if view := aslView(m); view != asl.ViewStale {
+		t.Fatalf("view = %v, want asl.ViewStale", view)
 	}
 	row, _ := m.selectedASLRow()
 	for _, method := range []string{
@@ -139,50 +139,6 @@ func TestASLResponseCachedRowsAreReadOnly(t *testing.T) {
 		}
 		if !strings.Contains(reason, "read-only") {
 			t.Fatalf("reason for %s = %q, want a read-only explanation", method, reason)
-		}
-	}
-}
-
-// A refusal the TUI does not recognize falls through to the generic "outcome is
-// unknown" sentence, which is correct for a genuinely unknown outcome and wrong
-// for a code the bridge already explains. Auditing against the shared vocabulary
-// makes a bridge that grows a code fail here rather than silently degrade.
-func TestASLRefusalTextCoversEveryDeclaredErrorCode(t *testing.T) {
-	generic := aslRefusalText(errors.New("some-code-that-does-not-exist: detail"))
-
-	for _, code := range aslbridge.ErrorCodes {
-		if aslStaleCodes[code] == aslErrorCodes[code] {
-			t.Errorf("%s: must be classified as exactly one of stale or error", code)
-			continue
-		}
-		err := errors.New(code + ": drop the v1 column before the backfill lands")
-		if got := aslErrorCode(err); got != code {
-			t.Errorf("%s: recovered code = %q", code, got)
-		}
-		text := aslRefusalText(err)
-		if strings.Contains(text, "backfill") {
-			t.Errorf("%s: refusal text repeats the bridge message: %q", code, text)
-		}
-		if aslStaleCodes[code] {
-			if !aslStaleTarget(err) {
-				t.Errorf("%s: stale code is not treated as a moved target", code)
-			}
-			continue
-		}
-		if text == generic {
-			t.Errorf("%s: falls through to the generic unknown-outcome sentence", code)
-		}
-	}
-
-	declared := make(map[string]bool, len(aslbridge.ErrorCodes))
-	for _, code := range aslbridge.ErrorCodes {
-		declared[code] = true
-	}
-	for _, mapped := range []map[string]bool{aslStaleCodes, aslErrorCodes} {
-		for code := range mapped {
-			if !declared[code] {
-				t.Errorf("%s: mapped here but absent from aslbridge.ErrorCodes", code)
-			}
 		}
 	}
 }

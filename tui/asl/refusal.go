@@ -1,4 +1,4 @@
-package tui
+package asl
 
 // This file is the whole of what the Runs view is allowed to say about a
 // refused action. Availability is read from the daemon capability block and
@@ -11,13 +11,13 @@ import (
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 )
 
-// aslTargetChangedText is shown when the bridge refuses because the run moved
+// TargetChangedText is shown when the bridge refuses because the run moved
 // under a modal. The action is not retried against a fresh token.
-const aslTargetChangedText = "this run changed since it was selected: the form was closed and the list refreshed"
+const TargetChangedText = "this run changed since it was selected: the form was closed and the list refreshed"
 
-// aslRowPermits reports whether ASL's own projection lists a method as
-// permitted on this row. Permission is never inferred from the state string.
-func aslRowPermits(row aslbridge.Row, method string) bool {
+// RowPermits reports whether ASL's own projection lists a method as permitted
+// on this row. Permission is never inferred from the state string.
+func RowPermits(row aslbridge.Row, method string) bool {
 	for _, permitted := range row.Actions {
 		if permitted == method {
 			return true
@@ -26,34 +26,35 @@ func aslRowPermits(row aslbridge.Row, method string) bool {
 	return false
 }
 
-// aslActionAllowed decides whether one bridge method may be invoked against a
-// row right now, and explains the refusal when it may not. Availability comes
-// only from the daemon capability block and the row's projected metadata.
-func aslActionAllowed(m Model, row aslbridge.Row, method string) (bool, string) {
-	switch aslView(m) {
-	case aslViewLive:
-	case aslViewStale:
+// ActionAllowed decides whether one bridge method may be invoked against a row
+// right now, and explains the refusal when it may not. Availability comes only
+// from the daemon capability block and the row's projected metadata.
+func (in RunsInput) ActionAllowed(row aslbridge.Row, method string) (bool, string) {
+	switch in.View() {
+	case ViewLive:
+	case ViewStale:
 		return false, "actions are unavailable: this snapshot is read-only"
 	default:
 		return false, "actions are unavailable: agent-session-loop is not reachable"
 	}
-	if !m.aslStatus.MutationsEnabled {
+	if !in.Status.MutationsEnabled {
 		return false, "actions are unavailable: the daemon reports agent-session-loop mutations as disabled"
 	}
 	if strings.TrimSpace(row.ActionToken) == "" {
 		return false, "actions are unavailable: this run carries no action token"
 	}
-	if aslRowPermits(row, method) {
+	if RowPermits(row, method) {
 		return true, ""
 	}
-	label := aslMethodLabel(method)
+	label := MethodLabel(method)
 	if reason := strings.TrimSpace(row.DisabledReasons[method]); reason != "" {
 		return false, label + " is unavailable: " + reason
 	}
 	return false, label + " is unavailable for this run"
 }
 
-func aslMethodLabel(method string) string {
+// MethodLabel names a bridge method the way an operator would.
+func MethodLabel(method string) string {
 	switch method {
 	case aslbridge.MethodQuestionReply:
 		return "reply"
@@ -70,9 +71,9 @@ func aslMethodLabel(method string) string {
 	}
 }
 
-// aslStaleCodes are the refusals that mean the run moved: the token, the
-// question, or the run itself no longer matches what the operator reviewed.
-var aslStaleCodes = map[string]bool{
+// StaleCodes are the refusals that mean the run moved: the token, the question,
+// or the run itself no longer matches what the operator reviewed.
+var StaleCodes = map[string]bool{
 	"stale-action-token":   true,
 	"action-not-permitted": true,
 	"no-active-run":        true,
@@ -86,7 +87,8 @@ var aslStaleCodes = map[string]bool{
 	"stale-snapshot": true,
 }
 
-var aslErrorCodes = map[string]bool{
+// ErrorCodes are the refusals that report a fault rather than a moved target.
+var ErrorCodes = map[string]bool{
 	"invalid-plan":            true,
 	"invalid-action":          true,
 	"empty-text":              true,
@@ -106,10 +108,10 @@ var aslErrorCodes = map[string]bool{
 	"contract-set-mismatch": true,
 }
 
-// aslErrorCode recovers the bridge refusal code from a daemon error. The daemon
+// ErrorCode recovers the bridge refusal code from a daemon error. The daemon
 // flattens a typed bridge error to "<code>: <message>", so the code is the only
 // machine-readable part that survives the IPC boundary.
-func aslErrorCode(err error) string {
+func ErrorCode(err error) string {
 	if err == nil {
 		return ""
 	}
@@ -118,22 +120,23 @@ func aslErrorCode(err error) string {
 	if idx := strings.Index(text, ": "); idx > 0 {
 		code = text[:idx]
 	}
-	if aslStaleCodes[code] || aslErrorCodes[code] {
+	if StaleCodes[code] || ErrorCodes[code] {
 		return code
 	}
 	return ""
 }
 
-func aslStaleTarget(err error) bool {
-	return aslStaleCodes[aslErrorCode(err)]
+// StaleTarget reports whether a refusal means the run moved under the operator.
+func StaleTarget(err error) bool {
+	return StaleCodes[ErrorCode(err)]
 }
 
-// aslRefusalText maps a refusal to a fixed operator-facing sentence. The
-// bridge's own message is deliberately dropped: mapping by code is what makes
-// it structurally impossible for question or answer text to reach an error
-// string, a status line, or a toast.
-func aslRefusalText(err error) string {
-	switch aslErrorCode(err) {
+// RefusalText maps a refusal to a fixed operator-facing sentence. The bridge's
+// own message is deliberately dropped: mapping by code is what makes it
+// structurally impossible for question or answer text to reach an error string,
+// a status line, or a toast.
+func RefusalText(err error) string {
+	switch ErrorCode(err) {
 	case "empty-text":
 		return "the answer is empty: type a reply before submitting"
 	case "question-body-too-large":

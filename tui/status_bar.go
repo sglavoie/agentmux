@@ -7,6 +7,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/sglavoie/agentmux/tui/asl"
 	"github.com/sglavoie/agentmux/tui/launch"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
@@ -153,12 +154,12 @@ func modeErrorStatus(m Model) (statusMessage, bool) {
 		if m.aslNotice != "" {
 			return statusMessage{Text: sentenceCase(m.aslNotice), Severity: statusWarning}, true
 		}
-		if aslView(m) == aslViewStale {
+		if aslView(m) == asl.ViewStale {
 			return statusMessage{Text: "Runs: read-only, showing the last snapshot", Severity: statusWarning}, true
 		}
 	case ModeASLResponse:
-		if m.aslResponse.notice != "" {
-			return statusMessage{Text: sentenceCase(m.aslResponse.notice), Severity: statusWarning}, true
+		if m.aslResponse.Notice != "" {
+			return statusMessage{Text: sentenceCase(m.aslResponse.Notice), Severity: statusWarning}, true
 		}
 	}
 	return statusMessage{}, false
@@ -257,20 +258,20 @@ func fallbackStatusText(m Model) string {
 		return fmt.Sprintf("Worktrees: %d/%d visible", len(m.worktreeFiltered), len(m.worktreeEntries))
 	case ModeASLRuns:
 		switch aslView(m) {
-		case aslViewLoading:
+		case asl.ViewLoading:
 			return "Runs: loading"
-		case aslViewUnavailable:
+		case asl.ViewUnavailable:
 			return "Runs: agent-session-loop unavailable"
 		}
-		return fmt.Sprintf("Runs: %d need action / %d active", aslNeedsActionCount(m.aslRows), len(m.aslRows))
+		return fmt.Sprintf("Runs: %d need action / %d active", asl.NeedsActionCount(m.aslRows), len(m.aslRows))
 	case ModeASLResponse:
-		if m.aslResponse.inFlight {
+		if m.aslResponse.InFlight {
 			return "Runs: submitting"
 		}
-		if total := len(m.aslResponse.questionIDs); total > 1 {
-			return fmt.Sprintf("Runs: answering question %d of %d", m.aslResponse.questionIdx+1, total)
+		if total := len(m.aslResponse.QuestionIDs); total > 1 {
+			return fmt.Sprintf("Runs: answering question %d of %d", m.aslResponse.QuestionIdx+1, total)
 		}
-		if m.aslResponse.kind == aslResponsePaused {
+		if m.aslResponse.Kind == asl.ResponsePaused {
 			return "Runs: reply and resume"
 		}
 		return "Runs: reply"

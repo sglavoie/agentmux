@@ -4,6 +4,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/tui/asl"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
@@ -141,9 +142,9 @@ func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m.confirmedWorktreeMutation(true)
 		case "worktree forget":
 			return m.confirmedWorktreeForget()
-		case aslConfirmStop:
+		case asl.ConfirmStop:
 			return m.submitASLControl(aslbridge.MethodRunStopAfterCurrent)
-		case aslConfirmAbort:
+		case asl.ConfirmAbort:
 			return m.submitASLControl(aslbridge.MethodRunAbort)
 		}
 	case keyN, keyEsc:
