@@ -8,6 +8,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/launch"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -45,7 +46,7 @@ func (m *Model) openWorktreeSessionPicker(candidates []actions.Candidate) {
 
 func (m *Model) openWorktreeProfilePicker() {
 	m.configPickerAccounts = append(m.configPickerAccounts[:0], m.cfg.Accounts...)
-	m.configPickerPurpose = ConfigPickerWorktreeReopen
+	m.configPickerPurpose = launch.ConfigPickerWorktreeReopen
 	m.configPickerReturnMode = ModeWorktrees
 	m.configPickerProjectIdx = -1
 	m.configPickerCurrent = ""

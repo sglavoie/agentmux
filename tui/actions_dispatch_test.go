@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 // TestActionsOverlayDispatchClose verifies that pressing `X` from the
@@ -44,7 +45,7 @@ func TestActionsOverlayDispatchDashboardLaunch(t *testing.T) {
 	if m.mode != ModeConfigPicker {
 		t.Fatalf("expected ModeConfigPicker after overlay C, got %d", m.mode)
 	}
-	if m.configPickerPurpose != ConfigPickerDashboardLaunch {
+	if m.configPickerPurpose != launch.ConfigPickerDashboardLaunch {
 		t.Fatalf("expected dashboard-launch purpose after overlay C, got %d", m.configPickerPurpose)
 	}
 }
@@ -72,7 +73,7 @@ func TestActionsOverlayDispatchConfigPicker(t *testing.T) {
 	if m.mode != ModeConfigPicker {
 		t.Fatalf("expected ModeConfigPicker after c, got %d", m.mode)
 	}
-	if m.configPickerPurpose != ConfigPickerRestartProfile {
+	if m.configPickerPurpose != launch.ConfigPickerRestartProfile {
 		t.Fatalf("expected restart-profile purpose after overlay c, got %d", m.configPickerPurpose)
 	}
 }

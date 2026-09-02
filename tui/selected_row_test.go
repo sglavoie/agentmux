@@ -13,6 +13,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/launch"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -55,7 +56,7 @@ func TestConfigPickerCursorMoveRestoresNormalRow(t *testing.T) {
 	m.configPickerAccounts = cfg.Accounts
 	m.configPickerCurrent = "codex-sandbox"
 	m.configPickerCursor = 0
-	m.configPickerPurpose = ConfigPickerLauncherOverride
+	m.configPickerPurpose = launch.ConfigPickerLauncherOverride
 	m.configPickerReturnMode = ModePicker
 
 	normal := m
@@ -108,8 +109,8 @@ func renderedLineContaining(t *testing.T, rendered, visible string) string {
 func TestSelectableListFamiliesUseNormalizedRenderer(t *testing.T) {
 	files := []string{
 		"asl_runs.go", "chip_picker.go", "command_palette.go",
-		"config_picker.go", "model_live_session_picker.go",
-		"picker.go", "plan_search.go", "plan_view.go", "worktrees.go",
+		"model_live_session_picker.go",
+		"plan_search.go", "plan_view.go", "worktrees.go",
 	}
 	for _, name := range files {
 		t.Run(name, func(t *testing.T) {

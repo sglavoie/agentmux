@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -218,7 +219,7 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.configPickerAccounts = m.cfg.Accounts
 			m.configPickerCurrent = profile
 			m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, profile)
-			m.configPickerPurpose = ConfigPickerLauncherOverride
+			m.configPickerPurpose = launch.ConfigPickerLauncherOverride
 			m.configPickerReturnMode = ModePicker
 			m.configPickerProjectIdx = origIdx
 			m.mode = ModeConfigPicker

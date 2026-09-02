@@ -37,8 +37,6 @@ var (
 					Foreground(lipgloss.Color("#5a5a5a")).
 					Bold(true)
 
-	styleAttentionRow = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
-
 	// Per-state accent styles used by the footer gloss. bolt picks up the
 	// success/active teal; stop/key/warning reuse the attention orange; terminal
 	// error stays on the stronger red accent.

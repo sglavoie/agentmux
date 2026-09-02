@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 // TestDispatchPickerLaunch_ToastTickNotInSequence pins the fix that the
@@ -99,7 +100,7 @@ func TestConfigPickerEnterProjectIdxOOBSafe(t *testing.T) {
 	m.pickerSessions = []config.Session{{Title: "api", Account: "work"}}
 	m.configPickerAccounts = cfg.Accounts
 	m.configPickerCursor = 0
-	m.configPickerPurpose = ConfigPickerLauncherOverride
+	m.configPickerPurpose = launch.ConfigPickerLauncherOverride
 	m.configPickerReturnMode = ModePicker
 	m.configPickerProjectIdx = 99 // stale / out of bounds
 	m.mode = ModeConfigPicker
@@ -133,7 +134,7 @@ func TestConfigPickerEnterNegativeCursorSafe(t *testing.T) {
 	m := NewModel(cfg, client)
 	m.configPickerAccounts = cfg.Accounts
 	m.configPickerCursor = -1
-	m.configPickerPurpose = ConfigPickerRestartProfile
+	m.configPickerPurpose = launch.ConfigPickerRestartProfile
 	m.configPickerReturnMode = ModeList
 	m.mode = ModeConfigPicker
 

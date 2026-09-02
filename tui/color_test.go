@@ -9,6 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/dashboard"
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 // TestPickerRowHarnessColor verifies that the picker row renders the project
@@ -140,7 +141,7 @@ func TestConfigPickerHarnessEmojiAndColor(t *testing.T) {
 	m.configPickerAccounts = cfg.Accounts
 	m.configPickerCurrent = "personal"
 	m.configPickerCursor = -1
-	m.configPickerPurpose = ConfigPickerLauncherOverride
+	m.configPickerPurpose = launch.ConfigPickerLauncherOverride
 	m.configPickerReturnMode = ModePicker
 
 	out := renderConfigPicker(m)

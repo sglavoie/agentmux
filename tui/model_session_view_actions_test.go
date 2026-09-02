@@ -17,6 +17,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 func viewerActionMeta() transcript.SessionMeta {
@@ -124,7 +125,7 @@ func TestSessionViewerHandoffPickerReturnsToViewer(t *testing.T) {
 			if picker.mode != ModeConfigPicker || cmd != nil {
 				t.Fatalf("%s = mode %v cmd %T, want profile picker without launch", tc.key, picker.mode, cmd)
 			}
-			if picker.configPickerPurpose != ConfigPickerHandoff || picker.configPickerReturnMode != ModeSessionView {
+			if picker.configPickerPurpose != launch.ConfigPickerHandoff || picker.configPickerReturnMode != ModeSessionView {
 				t.Fatalf("%s picker purpose = %v return = %v, want handoff returning to the viewer", tc.key, picker.configPickerPurpose, picker.configPickerReturnMode)
 			}
 			if picker.handoffConversation == nil || picker.handoffConversation.ID != "viewer-source" || picker.handoffEdit != tc.wantEdit {

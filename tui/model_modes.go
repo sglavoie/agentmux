@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 // activeRootMode resolves the root view that currently owns the model's async
@@ -33,12 +34,12 @@ func (m Model) activeRootMode() Mode {
 func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case keyEsc, keyQ:
-		if m.activeConfigPickerPurpose() == ConfigPickerHandoff {
+		if m.activeConfigPickerPurpose() == launch.ConfigPickerHandoff {
 			m.handoffConversation = nil
 			m.handoffEdit = false
 		}
 		m.mode = m.configPickerReturnMode
-		if m.activeConfigPickerPurpose() == ConfigPickerWorktreeReopen {
+		if m.activeConfigPickerPurpose() == launch.ConfigPickerWorktreeReopen {
 			m.worktreeActionTarget = nil
 		}
 	case keyCtrlC:
@@ -57,7 +58,7 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			acc := m.configPickerAccounts[m.configPickerCursor]
 			purpose := m.activeConfigPickerPurpose()
 			m.mode = m.configPickerReturnMode
-			if purpose == ConfigPickerHandoff {
+			if purpose == launch.ConfigPickerHandoff {
 				if m.handoffConversation == nil {
 					return m, nil
 				}
@@ -67,10 +68,10 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.handoffEdit = false
 				return m, m.conversationHandoffCmd(meta, acc.Name, edit)
 			}
-			if purpose == ConfigPickerWorktreeReopen {
+			if purpose == launch.ConfigPickerWorktreeReopen {
 				return m.reopenWorktreeWithParameters(map[string]string{"profile": acc.Name})
 			}
-			if purpose == ConfigPickerLauncherOverride && m.configPickerProjectIdx >= 0 && m.configPickerProjectIdx < len(m.pickerSessions) {
+			if purpose == launch.ConfigPickerLauncherOverride && m.configPickerProjectIdx >= 0 && m.configPickerProjectIdx < len(m.pickerSessions) {
 				defaultProfile := m.pickerSessions[m.configPickerProjectIdx].EffectiveProfile()
 				if strings.EqualFold(acc.Name, defaultProfile) {
 					delete(m.pickerProfileOverride, m.configPickerProjectIdx)
@@ -86,10 +87,10 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
-			if purpose == ConfigPickerRestartProfile && strings.EqualFold(acc.Name, m.configPickerCurrent) {
+			if purpose == launch.ConfigPickerRestartProfile && strings.EqualFold(acc.Name, m.configPickerCurrent) {
 				return m, nil
 			}
-			if purpose == ConfigPickerDashboardLaunch {
+			if purpose == launch.ConfigPickerDashboardLaunch {
 				return m, m.dashboardLaunchWithAccountCmd(acc)
 			}
 			return m, m.restartWithAccountCmd(acc)

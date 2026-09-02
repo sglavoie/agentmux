@@ -1,7 +1,11 @@
-package tui
+package launch
 
 import "fmt"
 
+// ConfigPickerPurpose is why the profile-override overlay is open. Every
+// purpose ends the same way — a harness process starts under the chosen
+// profile — but the wording of the overlay header and of the harness-switch
+// warning differs by how that start is reached.
 type ConfigPickerPurpose int
 
 const (
@@ -12,16 +16,6 @@ const (
 	ConfigPickerHandoff
 	ConfigPickerWorktreeReopen
 )
-
-func (m Model) activeConfigPickerPurpose() ConfigPickerPurpose {
-	if m.configPickerPurpose != ConfigPickerPurposeUnspecified {
-		return m.configPickerPurpose
-	}
-	if m.configPickerReturnMode == ModePicker {
-		return ConfigPickerLauncherOverride
-	}
-	return ConfigPickerRestartProfile
-}
 
 func (p ConfigPickerPurpose) header() string {
 	switch p {

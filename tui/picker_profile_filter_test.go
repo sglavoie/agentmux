@@ -143,22 +143,6 @@ func TestPickerFIsSearchTextAndEscClearsAllFiltersBeforeExit(t *testing.T) {
 	}
 }
 
-func TestPickerProfileCycleEmptySingleAndCaseInsensitive(t *testing.T) {
-	if got := nextPickerProfileFilter(nil, ""); got != "" {
-		t.Fatalf("empty cycle = %q, want all", got)
-	}
-	one := []config.Session{{Title: "api", Profile: "Work"}}
-	if got := nextPickerProfileFilter(one, ""); got != "Work" {
-		t.Fatalf("single-profile first cycle = %q, want Work", got)
-	}
-	if got := nextPickerProfileFilter(one, "work"); got != "" {
-		t.Fatalf("single-profile wrap = %q, want all", got)
-	}
-	if got := filterPickerIndicesByProfile(one, []int{0}, "work"); !slices.Equal(got, []int{0}) {
-		t.Fatalf("case-insensitive profile match = %v, want [0]", got)
-	}
-}
-
 func TestPickerProfileIndicatorAndEntryReset(t *testing.T) {
 	m := pickerModel(t)
 	m.width = 120

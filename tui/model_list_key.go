@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/tui/dashboard"
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 // clearJumpChord resets any in-flight bracket-key chord. Callers invoke this
@@ -327,7 +328,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.configPickerAccounts = m.cfg.Accounts
 				m.configPickerCurrent = m.targetSession.EffectiveProfile()
 				m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
-				m.configPickerPurpose = ConfigPickerRestartProfile
+				m.configPickerPurpose = launch.ConfigPickerRestartProfile
 				m.configPickerReturnMode = ModeList
 				m.configPickerProjectIdx = -1
 				m.actionErr = nil
@@ -340,7 +341,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.configPickerAccounts = m.cfg.Accounts
 				m.configPickerCurrent = m.targetSession.EffectiveProfile()
 				m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
-				m.configPickerPurpose = ConfigPickerDashboardLaunch
+				m.configPickerPurpose = launch.ConfigPickerDashboardLaunch
 				m.configPickerReturnMode = ModeList
 				m.configPickerProjectIdx = -1
 				m.actionErr = nil

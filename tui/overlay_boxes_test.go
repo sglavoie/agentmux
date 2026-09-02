@@ -8,6 +8,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 // Smoke tests for the centered-overlay box wrappers introduced when the
@@ -106,7 +107,7 @@ func TestRenderConfigPickerBox(t *testing.T) {
 	m.configPickerAccounts = m.cfg.Accounts
 	m.configPickerCurrent = "work"
 	m.configPickerCursor = 0
-	m.configPickerPurpose = ConfigPickerRestartProfile
+	m.configPickerPurpose = launch.ConfigPickerRestartProfile
 	m.configPickerReturnMode = ModeList
 	m.mode = ModeConfigPicker
 	m.width, m.height = 100, 40
@@ -125,7 +126,7 @@ func TestRenderConfigPickerBoxLaunchHeader(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m.targetSession = session.RunningSession{TabID: 1, Base: "api", Account: "work"}
 	m.configPickerAccounts = m.cfg.Accounts
-	m.configPickerPurpose = ConfigPickerLauncherOverride
+	m.configPickerPurpose = launch.ConfigPickerLauncherOverride
 	m.configPickerReturnMode = ModePicker
 	m.mode = ModeConfigPicker
 	m.width, m.height = 100, 40
@@ -140,7 +141,7 @@ func TestRenderConfigPickerBoxDashboardLaunchHeader(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m.targetSession = session.RunningSession{TabID: 1, Base: "api", Account: "work"}
 	m.configPickerAccounts = m.cfg.Accounts
-	m.configPickerPurpose = ConfigPickerDashboardLaunch
+	m.configPickerPurpose = launch.ConfigPickerDashboardLaunch
 	m.configPickerReturnMode = ModeList
 	m.mode = ModeConfigPicker
 	m.width, m.height = 100, 40
@@ -171,7 +172,7 @@ func TestRenderConfigPickerBoxExpandsForProfileRows(t *testing.T) {
 	m.configPickerAccounts = m.cfg.Accounts
 	m.configPickerCurrent = "vta-claude"
 	m.configPickerCursor = 5
-	m.configPickerPurpose = ConfigPickerLauncherOverride
+	m.configPickerPurpose = launch.ConfigPickerLauncherOverride
 	m.configPickerReturnMode = ModePicker
 	m.mode = ModeConfigPicker
 	m.width, m.height = 120, 40
@@ -212,7 +213,7 @@ func TestRenderConfigPickerBoxNarrowClamps(t *testing.T) {
 	m.configPickerAccounts = m.cfg.Accounts
 	m.configPickerCurrent = "tradition-claude"
 	m.configPickerCursor = 0
-	m.configPickerPurpose = ConfigPickerLauncherOverride
+	m.configPickerPurpose = launch.ConfigPickerLauncherOverride
 	m.configPickerReturnMode = ModePicker
 	m.mode = ModeConfigPicker
 	m.width, m.height = 40, 20
@@ -287,7 +288,7 @@ func TestDashboardOverlaysReserveStatusBar(t *testing.T) {
 	configPicker.targetSession = session.RunningSession{TabID: 1, Base: "api", Account: "work"}
 	configPicker.configPickerAccounts = configPicker.cfg.Accounts
 	configPicker.configPickerCurrent = "work"
-	configPicker.configPickerPurpose = ConfigPickerRestartProfile
+	configPicker.configPickerPurpose = launch.ConfigPickerRestartProfile
 	configPicker.configPickerReturnMode = ModeList
 	configPicker.mode = ModeConfigPicker
 

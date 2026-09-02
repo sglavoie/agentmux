@@ -21,6 +21,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
 	"github.com/sglavoie/agentmux/tui/dashboard"
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 // Model is the root Bubble Tea model for the dashboard.
@@ -129,7 +130,7 @@ type Model struct {
 	configPickerAccounts   []config.Account
 	configPickerCursor     int
 	configPickerCurrent    string
-	configPickerPurpose    ConfigPickerPurpose
+	configPickerPurpose    launch.ConfigPickerPurpose
 	configPickerReturnMode Mode
 	configPickerProjectIdx int
 	// handoffConversation is populated only while the profile picker is

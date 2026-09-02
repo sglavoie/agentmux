@@ -8,6 +8,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/dashboard"
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 func TestLKeyOpensPicker(t *testing.T) {
@@ -187,7 +188,7 @@ func TestCKeyOpensConfigPicker(t *testing.T) {
 	if m.mode != ModeConfigPicker {
 		t.Fatalf("expected ModeConfigPicker after c, got %d", m.mode)
 	}
-	if m.configPickerPurpose != ConfigPickerRestartProfile {
+	if m.configPickerPurpose != launch.ConfigPickerRestartProfile {
 		t.Fatalf("expected restart-profile purpose after c, got %d", m.configPickerPurpose)
 	}
 	if len(m.configPickerAccounts) != 2 {
@@ -229,7 +230,7 @@ func TestConfigPickerSameAccountNoOp(t *testing.T) {
 	m = pressKey(m, "c") // → ModeConfigPicker
 	// After state-group sort cursor=0 is backend (bolt), account="work".
 	// configPickerCurrent should be "work", cursor at index 0 (work).
-	if m.configPickerPurpose != ConfigPickerRestartProfile {
+	if m.configPickerPurpose != launch.ConfigPickerRestartProfile {
 		t.Fatalf("expected restart-profile purpose after c, got %d", m.configPickerPurpose)
 	}
 	if m.configPickerCurrent != "work" {

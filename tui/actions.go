@@ -5,6 +5,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/clipboard"
 	"github.com/sglavoie/agentmux/tui/dashboard"
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 var copyToClipboard = clipboard.Copy
@@ -83,7 +84,7 @@ func actionsFor(_ Model) []action {
 				m.configPickerAccounts = m.cfg.Accounts
 				m.configPickerCurrent = m.targetSession.EffectiveProfile()
 				m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
-				m.configPickerPurpose = ConfigPickerRestartProfile
+				m.configPickerPurpose = launch.ConfigPickerRestartProfile
 				m.configPickerReturnMode = m.actionsReturnMode
 				m.actionsReturnMode = ModeList
 				m.configPickerProjectIdx = -1
@@ -102,7 +103,7 @@ func actionsFor(_ Model) []action {
 				m.configPickerAccounts = m.cfg.Accounts
 				m.configPickerCurrent = m.targetSession.EffectiveProfile()
 				m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
-				m.configPickerPurpose = ConfigPickerDashboardLaunch
+				m.configPickerPurpose = launch.ConfigPickerDashboardLaunch
 				m.configPickerReturnMode = m.actionsReturnMode
 				m.actionsReturnMode = ModeList
 				m.configPickerProjectIdx = -1

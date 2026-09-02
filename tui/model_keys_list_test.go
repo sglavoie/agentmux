@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 // lockedTestModel returns a model preloaded with a single locked session
@@ -89,7 +90,7 @@ func TestDashboardLaunchAllowedOnLockedRow(t *testing.T) {
 	if m2.mode != ModeConfigPicker {
 		t.Fatalf("C on locked row: expected ModeConfigPicker, got %d", m2.mode)
 	}
-	if m2.configPickerPurpose != ConfigPickerDashboardLaunch {
+	if m2.configPickerPurpose != launch.ConfigPickerDashboardLaunch {
 		t.Fatalf("C on locked row: expected dashboard-launch purpose, got %d", m2.configPickerPurpose)
 	}
 	if len(m2.toasts) != 0 {

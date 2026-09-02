@@ -9,6 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 func TestDispatchPickerLaunch_SisOverrideCreatesNewCodexInstances(t *testing.T) {
@@ -50,7 +51,7 @@ func TestDispatchPickerLaunch_SisOverrideCreatesNewCodexInstances(t *testing.T) 
 	if m.mode != ModeConfigPicker {
 		t.Fatalf("expected ModeConfigPicker after C, got %d", m.mode)
 	}
-	if m.configPickerPurpose != ConfigPickerLauncherOverride {
+	if m.configPickerPurpose != launch.ConfigPickerLauncherOverride {
 		t.Fatalf("expected launcher-override purpose after C, got %d", m.configPickerPurpose)
 	}
 	m = pressKey(m, "j")

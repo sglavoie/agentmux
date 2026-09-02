@@ -7,6 +7,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/sglavoie/agentmux/tui/launch"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -196,7 +197,7 @@ func fallbackStatusText(m Model) string {
 	case ModePicker:
 		return pickerStatusText(m)
 	case ModeConfigPicker:
-		if m.activeConfigPickerPurpose() == ConfigPickerWorktreeReopen {
+		if m.activeConfigPickerPurpose() == launch.ConfigPickerWorktreeReopen {
 			return "Choose worktree replacement profile"
 		}
 		if m.configPickerReturnMode == ModePicker {

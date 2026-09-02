@@ -5,6 +5,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 // actionsModalAt returns a model with the per-row actions overlay open, sized
@@ -31,7 +32,7 @@ func configPickerModalAt(width, height int) Model {
 	m.configPickerAccounts = m.cfg.Accounts
 	m.configPickerCurrent = "tradition-claude-long"
 	m.configPickerCursor = 0
-	m.configPickerPurpose = ConfigPickerRestartProfile
+	m.configPickerPurpose = launch.ConfigPickerRestartProfile
 	m.configPickerReturnMode = ModeList
 	m.mode = ModeConfigPicker
 	m.width, m.height = width, height

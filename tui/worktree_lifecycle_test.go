@@ -3,6 +3,8 @@ package tui
 import (
 	"strings"
 	"testing"
+
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 func lifecycleDriver(t *testing.T) (*UITestDriver, *UITestKittyClient) {
@@ -108,7 +110,7 @@ func TestWorktreeReplacementProfilePurposeReturnsToWorktrees(t *testing.T) {
 		t.Fatalf("request reopen: %v", err)
 	}
 	model := driver.Model()
-	if model.mode != ModeConfigPicker || model.configPickerPurpose != ConfigPickerWorktreeReopen || model.configPickerReturnMode != ModeWorktrees || model.worktreeActionTarget == nil {
+	if model.mode != ModeConfigPicker || model.configPickerPurpose != launch.ConfigPickerWorktreeReopen || model.configPickerReturnMode != ModeWorktrees || model.worktreeActionTarget == nil {
 		t.Fatalf("profile detour state = mode %v purpose %v return %v target %+v", model.mode, model.configPickerPurpose, model.configPickerReturnMode, model.worktreeActionTarget)
 	}
 	if err := driver.Key("enter"); err != nil {

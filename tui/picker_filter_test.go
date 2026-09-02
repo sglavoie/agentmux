@@ -9,20 +9,6 @@ import (
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
-func TestPickerDSLAccountFilter(t *testing.T) {
-	// Drive the DSL filter via applyPickerFilter directly to verify the underlying
-	// semantics — the live-typing path (in search mode) is covered by TestPickerTypingNarrowsLive.
-	sessions := []config.Session{
-		{Title: "api", Account: "work"},
-		{Title: "dotfiles", Account: "personal"},
-		{Title: "notes", Account: "personal"},
-	}
-	got := applyPickerFilter(sessions, "@personal")
-	if len(got) != 2 || got[0] != 1 || got[1] != 2 {
-		t.Errorf("expected [1,2] for @personal, got %v", got)
-	}
-}
-
 func TestPickerStickyInputRendered(t *testing.T) {
 	m := pickerModel(t)
 	m.width = 80
@@ -109,40 +95,6 @@ func TestPickerFooterShowsFilterControls(t *testing.T) {
 	}
 	if !strings.Contains(footer, "g/G top/bottom") {
 		t.Errorf("expected picker footer to advertise boundary navigation, got:\n%s", footer)
-	}
-}
-
-func TestApplyPickerFilterDSLSubstring(t *testing.T) {
-	sessions := []config.Session{
-		{Title: "api", Directory: "/home/user/api", Account: "work"},
-		{Title: "backend", Directory: "/home/user/backend", Account: "work"},
-		{Title: "dotfiles", Directory: "/home/user/dotfiles", Account: "personal"},
-	}
-	got := applyPickerFilter(sessions, "back")
-	if len(got) != 1 || got[0] != 1 {
-		t.Errorf("expected [1] for 'back', got %v", got)
-	}
-}
-
-func TestApplyPickerFilterDSLAccount(t *testing.T) {
-	sessions := []config.Session{
-		{Title: "api", Account: "work"},
-		{Title: "dotfiles", Account: "personal"},
-	}
-	got := applyPickerFilter(sessions, "@personal")
-	if len(got) != 1 || got[0] != 1 {
-		t.Errorf("expected [1] for '@personal', got %v", got)
-	}
-}
-
-func TestApplyPickerFilterEmptyReturnsAll(t *testing.T) {
-	sessions := []config.Session{
-		{Title: "api", Account: "work"},
-		{Title: "dotfiles", Account: "personal"},
-	}
-	got := applyPickerFilter(sessions, "")
-	if len(got) != 2 || got[0] != 0 || got[1] != 1 {
-		t.Errorf("expected [0,1] for empty query, got %v", got)
 	}
 }
 

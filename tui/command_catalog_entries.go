@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/tui/dashboard"
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 func commandCatalog() []command {
@@ -59,7 +60,7 @@ func commandCatalog() []command {
 				m.configPickerAccounts = m.cfg.Accounts
 				m.configPickerCurrent = ctx.target.EffectiveProfile()
 				m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, ctx.target.EffectiveProfile())
-				m.configPickerPurpose = ConfigPickerRestartProfile
+				m.configPickerPurpose = launch.ConfigPickerRestartProfile
 				m.configPickerReturnMode = ModeList
 				m.configPickerProjectIdx = -1
 				m.actionErr = nil
@@ -78,7 +79,7 @@ func commandCatalog() []command {
 				m.configPickerAccounts = m.cfg.Accounts
 				m.configPickerCurrent = ctx.target.EffectiveProfile()
 				m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, ctx.target.EffectiveProfile())
-				m.configPickerPurpose = ConfigPickerDashboardLaunch
+				m.configPickerPurpose = launch.ConfigPickerDashboardLaunch
 				m.configPickerReturnMode = ModeList
 				m.configPickerProjectIdx = -1
 				m.actionErr = nil

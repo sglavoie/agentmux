@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 func TestEnterSessionSearchStartsCacheLoadWhenCacheMissing(t *testing.T) {
@@ -81,7 +82,7 @@ func TestLegacySessionSearchKeepsEnterViewerAndAddsContinuityActions(t *testing.
 		if got.mode != ModeConfigPicker || cmd != nil {
 			t.Fatalf("%s = mode %v cmd %T, want profile picker without launch", tc.key, got.mode, cmd)
 		}
-		if got.configPickerPurpose != ConfigPickerHandoff || got.handoffConversation == nil || got.handoffConversation.ID != meta.ID || got.handoffEdit != tc.wantEdit {
+		if got.configPickerPurpose != launch.ConfigPickerHandoff || got.handoffConversation == nil || got.handoffConversation.ID != meta.ID || got.handoffEdit != tc.wantEdit {
 			t.Fatalf("%s handoff picker = %+v, want source handoff with edit=%v", tc.key, got, tc.wantEdit)
 		}
 	}

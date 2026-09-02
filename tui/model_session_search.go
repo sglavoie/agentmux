@@ -8,6 +8,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 // sessionSearchDebounce is the wait between the user's last keystroke and
@@ -312,7 +313,7 @@ func (m *Model) startHandoffPicker(meta transcript.SessionMeta, returnMode Mode,
 	}
 	m.configPickerCurrent = meta.DisplayProfile()
 	m.configPickerCursor = pickerAccountIndex(m.configPickerAccounts, m.configPickerCurrent)
-	m.configPickerPurpose = ConfigPickerHandoff
+	m.configPickerPurpose = launch.ConfigPickerHandoff
 	m.configPickerReturnMode = returnMode
 	m.configPickerProjectIdx = -1
 	m.handoffEdit = edit

@@ -11,6 +11,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/dashboard"
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 func TestSessionsMsgStoresActivity(t *testing.T) {
@@ -114,7 +115,7 @@ func TestCapitalCKeyOpensDashboardLaunchPicker(t *testing.T) {
 	if m.mode != ModeConfigPicker {
 		t.Fatalf("expected ModeConfigPicker after C, got %d", m.mode)
 	}
-	if m.configPickerPurpose != ConfigPickerDashboardLaunch {
+	if m.configPickerPurpose != launch.ConfigPickerDashboardLaunch {
 		t.Fatalf("expected dashboard-launch purpose after C, got %d", m.configPickerPurpose)
 	}
 }
@@ -136,7 +137,7 @@ func TestCapitalCUsesDashboardLaunchPurpose(t *testing.T) {
 	if m.mode != ModeConfigPicker {
 		t.Fatalf("expected ModeConfigPicker after C, got %d", m.mode)
 	}
-	if m.configPickerPurpose == ConfigPickerRestartProfile {
+	if m.configPickerPurpose == launch.ConfigPickerRestartProfile {
 		t.Fatal("uppercase C should not reuse restart-profile purpose")
 	}
 }

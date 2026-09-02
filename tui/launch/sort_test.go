@@ -1,4 +1,4 @@
-package tui
+package launch
 
 import (
 	"testing"
@@ -36,7 +36,7 @@ func TestSortPickerSessions_EmojiAndCaseInsensitive(t *testing.T) {
 		{Title: "🧰dev-helpers", Account: "personal"},
 	}
 
-	got := sortPickerSessions(in)
+	got := SortSessions(in)
 
 	// Expected: personal/codex group first (p < t), then tradition/codex group.
 	// Within each group: by first alphabetic rune, case-insensitive.

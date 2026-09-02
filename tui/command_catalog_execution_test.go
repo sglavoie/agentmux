@@ -14,6 +14,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/dashboard"
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 func TestCommandRunRejectsDisabledAndHiddenCommands(t *testing.T) {
@@ -169,7 +170,7 @@ func TestCommandRowTransitions(t *testing.T) {
 		{
 			name: "override profile picker", id: commandOverrideProfile,
 			check: func(t *testing.T, got Model, cmd tea.Cmd) {
-				if got.mode != ModeConfigPicker || got.configPickerPurpose != ConfigPickerRestartProfile || got.configPickerReturnMode != ModeList || got.configPickerCurrent != "work" || got.configPickerProjectIdx != -1 || cmd != nil {
+				if got.mode != ModeConfigPicker || got.configPickerPurpose != launch.ConfigPickerRestartProfile || got.configPickerReturnMode != ModeList || got.configPickerCurrent != "work" || got.configPickerProjectIdx != -1 || cmd != nil {
 					t.Fatalf("override result: mode=%v purpose=%v return=%v current=%q project=%d cmd=%v", got.mode, got.configPickerPurpose, got.configPickerReturnMode, got.configPickerCurrent, got.configPickerProjectIdx, cmd != nil)
 				}
 			},
@@ -177,7 +178,7 @@ func TestCommandRowTransitions(t *testing.T) {
 		{
 			name: "launch another picker", id: commandLaunchAnother,
 			check: func(t *testing.T, got Model, cmd tea.Cmd) {
-				if got.mode != ModeConfigPicker || got.configPickerPurpose != ConfigPickerDashboardLaunch || got.configPickerReturnMode != ModeList || got.configPickerCurrent != "work" || cmd != nil {
+				if got.mode != ModeConfigPicker || got.configPickerPurpose != launch.ConfigPickerDashboardLaunch || got.configPickerReturnMode != ModeList || got.configPickerCurrent != "work" || cmd != nil {
 					t.Fatalf("launch result: mode=%v purpose=%v return=%v current=%q cmd=%v", got.mode, got.configPickerPurpose, got.configPickerReturnMode, got.configPickerCurrent, cmd != nil)
 				}
 			},
