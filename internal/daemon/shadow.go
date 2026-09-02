@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
@@ -52,11 +53,11 @@ func reduceNormalizedForRequest(req protocol.Request, outcome applyOutcome) (pro
 			n.Source.Kind != protocol.SourceSubagent && n.SubagentDelta == 0 {
 			n.Action = outcome.reduceAction
 		}
-		return n, true, identityConfidenceFor(n), false
+		return n, true, events.IdentityConfidenceFor(n), false
 	}
 	untrustedFallback := req.Normalized != nil && req.Normalized.Invalid
 	if req.Action == "loop_marker" {
-		phase := aslPhaseForEvent(req.Event)
+		phase := events.ASLPhaseForEvent(req.Event)
 		if phase == "" {
 			return protocol.NormalizedEvent{}, false, "", untrustedFallback
 		}
@@ -66,7 +67,7 @@ func reduceNormalizedForRequest(req protocol.Request, outcome applyOutcome) (pro
 			Phase:  phase,
 		}
 		if phase == state.ASLPhasePaused {
-			n.Action = aslPausedAttentionAction(req.Reason)
+			n.Action = events.ASLPausedAttentionAction(req.Reason)
 		}
 		return n, true, protocol.IdentityConfidenceDaemon, untrustedFallback
 	}
@@ -81,7 +82,7 @@ func reduceNormalizedForRequest(req protocol.Request, outcome applyOutcome) (pro
 	// direct calls) carry no agent or session identity; aggregate them as a
 	// balanced multiset on the window's legacy bucket so parent activity on
 	// the plain window source can never overwrite the 🤖 they contribute.
-	if action == "subagent" || isSubagentStopEvent(req.Event) {
+	if action == "subagent" || events.IsSubagentStopEvent(req.Event) {
 		n := protocol.NormalizedEvent{
 			Source: protocol.SourceID{Kind: protocol.SourceLegacy, Key: protocol.LegacySubagentBucketKey(protocol.WindowKey(req.WindowID))},
 			Event:  req.Event,

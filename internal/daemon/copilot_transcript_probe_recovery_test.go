@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -267,9 +268,9 @@ func TestProbeCopilotTranscriptStop_ActiveASLLeaseMasksStop(t *testing.T) {
 		Phase:  state.ASLPhaseTurn,
 		RunID:  "run-1",
 		At:     base.Unix(),
-		Event:  agentSessionLoopTurnStarted,
+		Event:  events.AgentSessionLoopTurnStarted,
 	}
-	h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "loop_marker", Event: agentSessionLoopTurnStarted, Normalized: &aslEv})
+	h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "loop_marker", Event: events.AgentSessionLoopTurnStarted, Normalized: &aslEv})
 
 	settleCopilotTurnEndProbe(h, base)
 

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -163,8 +164,8 @@ func (h *Handler) appendStopHoldEvent(req protocol.Request, outcome protocol.Sto
 	h.stateMu.Lock()
 	h.touchWindowMetadataLocked(req)
 	st := h.ensureWindowStateLocked(req.WindowID)
-	effective := effectiveStateEvidence(st.Effective)
-	event := suppressedSessionEvent(req, req.Action, reason, rendering.DesiredIcon(st))
+	effective := events.EffectiveStateEvidence(st.Effective)
+	event := events.SuppressedSessionEvent(req, req.Action, reason, rendering.DesiredIcon(st))
 	event.Event = protocol.EventTerminalStopHold
 	event.StopHoldOutcome = outcome
 	event.StopHoldWaitedMs = int(waited.Milliseconds())

@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
@@ -136,7 +137,7 @@ func deliverSupervisorMailboxReply(
 	resp := h.Handle(protocol.Request{
 		Type:        protocol.TypeHookEvent,
 		WindowID:    42,
-		Event:       agentSessionLoopMailboxReply,
+		Event:       events.AgentSessionLoopMailboxReply,
 		PayloadJSON: hookPayloadJSON(t, payload),
 	})
 	if !resp.OK {
@@ -184,7 +185,7 @@ func deliverSupervisorMailboxQuestion(
 	resp := h.Handle(protocol.Request{
 		Type:        protocol.TypeHookEvent,
 		WindowID:    42,
-		Event:       agentSessionLoopMailboxQuestion,
+		Event:       events.AgentSessionLoopMailboxQuestion,
 		PayloadJSON: hookPayloadJSON(t, payload),
 	})
 	if !resp.OK {
@@ -199,7 +200,7 @@ func TestASLSupervisorMailboxQuestionRaisesImmediatelyAndRearmsOnlyForNewQuestio
 		h.notifier = notifier
 		h.SetKittyClient(&fakeKittyClient{windows: windows})
 		statePath := filepath.Join(t.TempDir(), "state.json")
-		aslLifecycleHookRequest(t, h, agentSessionLoopStarted, projectDir, hookevent.HookPayload{
+		aslLifecycleHookRequest(t, h, events.AgentSessionLoopStarted, projectDir, hookevent.HookPayload{
 			RunID:     supervisorRunID,
 			StatePath: statePath,
 		})

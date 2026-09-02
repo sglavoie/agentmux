@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -107,10 +108,10 @@ func TestReduceStateUpdate_SuppressedMutationMarksActivityDirty(t *testing.T) {
 			Source: src, Action: "active", Seq: 6, TurnID: "t1", At: now.Add(time.Second).Unix(), Event: "PostToolBatch",
 		}, want: protocol.DecisionReordered},
 		{name: "quarantined", event: protocol.NormalizedEvent{
-			Source: protocol.SourceID{Kind: protocol.SourceInvalid, Key: InvalidPayloadReason}, Seq: 7, Event: "Stop", Reason: InvalidPayloadReason,
+			Source: protocol.SourceID{Kind: protocol.SourceInvalid, Key: events.InvalidPayloadReason}, Seq: 7, Event: "Stop", Reason: events.InvalidPayloadReason,
 		}, want: protocol.DecisionQuarantined},
 		{name: "ignored", event: protocol.NormalizedEvent{
-			Seq: 7, Event: "InstructionsLoaded", Reason: reasonIgnoredEvent,
+			Seq: 7, Event: "InstructionsLoaded", Reason: events.ReasonIgnoredEvent,
 		}, want: protocol.DecisionQuarantined},
 	}
 	for _, tt := range tests {

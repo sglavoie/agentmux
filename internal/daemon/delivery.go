@@ -3,23 +3,11 @@ package daemon
 import (
 	"strings"
 
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
-
-// normalizeProducerFields makes the additive ProducerHarness field
-// authoritative when present while keeping the legacy Harness field usable by
-// every existing handler path.
-func normalizeProducerFields(req protocol.Request) protocol.Request {
-	if producer := strings.TrimSpace(req.ProducerHarness); producer != "" {
-		req.Harness = producer
-	} else {
-		req.ProducerHarness = req.Harness
-	}
-	req.HarnessProcess = protocol.ValidatedHarnessProcessIdentity(req.Harness, req.HarnessProcess)
-	return req
-}
 
 func baseDeliveryAcknowledgement(req protocol.Request, status, reason string) *protocol.DeliveryAcknowledgement {
 	producer := harness.NormalizeKnown(req.ProducerHarness)
@@ -43,7 +31,7 @@ func baseDeliveryAcknowledgement(req protocol.Request, status, reason string) *p
 		ProducerHarness: producer,
 		SourceWindowID:  req.WindowID,
 		TargetWindowID:  req.WindowID,
-		RouteDecision:   routeDecisionSource,
+		RouteDecision:   events.RouteDecisionSource,
 	}
 }
 
@@ -76,7 +64,7 @@ func (h *Handler) attachHookDeliveryAcknowledgement(req protocol.Request, resp p
 	case strings.TrimSpace(req.Event) == "":
 		status, reason = protocol.DeliveryAcknowledgementRejected, "missing_event"
 	case payloadErr != nil:
-		status, reason = protocol.DeliveryAcknowledgementRejected, InvalidPayloadReason
+		status, reason = protocol.DeliveryAcknowledgementRejected, events.InvalidPayloadReason
 	case hookevent.IsIgnoredEventForHarness(req.Event, payload, req.Harness):
 		reason = suppressionReasonIgnoredEvent
 	case func() bool {
@@ -99,9 +87,9 @@ func (h *Handler) attachHookDeliveryAcknowledgement(req protocol.Request, resp p
 		ack.TargetWindowID = ctx.owner.ID
 		ack.TargetHarness = ctx.owner.UserVars.EffectiveHarness()
 		ack.Profile = ctx.owner.UserVars.EffectiveProfile()
-		ack.RouteDecision = routeDecisionOwner
+		ack.RouteDecision = events.RouteDecisionOwner
 	} else if ctx.lookupFailed {
-		ack.RouteDecision = routeDecisionSourceFallback
+		ack.RouteDecision = events.RouteDecisionSourceFallback
 	}
 	resp.Delivery = ack
 	return resp
@@ -133,9 +121,9 @@ func (h *Handler) handleDiagnosticProbe(req protocol.Request) protocol.Response 
 		ack.TargetWindowID = ctx.owner.ID
 		ack.TargetHarness = ctx.owner.UserVars.EffectiveHarness()
 		ack.Profile = ctx.owner.UserVars.EffectiveProfile()
-		ack.RouteDecision = routeDecisionOwner
+		ack.RouteDecision = events.RouteDecisionOwner
 	} else if ctx.lookupFailed {
-		ack.RouteDecision = routeDecisionSourceFallback
+		ack.RouteDecision = events.RouteDecisionSourceFallback
 	}
 	return protocol.Response{OK: true, Delivery: ack}
 }

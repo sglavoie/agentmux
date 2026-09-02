@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
@@ -50,7 +51,7 @@ func TestHandler_UnmanagedRouteCrossHarnessMatrix(t *testing.T) {
 					t.Fatalf("target events = %+v; want one", detail.Events)
 				}
 				event := detail.Events[0]
-				if event.Suppressed || event.RouteDecision != routeDecisionOwner ||
+				if event.Suppressed || event.RouteDecision != events.RouteDecisionOwner ||
 					event.SourceKind != string(protocol.SourceHarness) || event.SourceKey != producerHarness+":"+sessionID {
 					t.Fatalf("routed event = %+v", event)
 				}
@@ -93,7 +94,7 @@ func TestHandler_ActiveUnmanagedNonPromptEstablishesRoute(t *testing.T) {
 	}
 	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) != 1 || detail.Events[0].Suppressed ||
-		detail.Events[0].SourceKey != "claude:active-claude" || detail.Events[0].RouteDecision != routeDecisionOwner {
+		detail.Events[0].SourceKey != "claude:active-claude" || detail.Events[0].RouteDecision != events.RouteDecisionOwner {
 		t.Fatalf("target events = %+v; want active unmanaged Claude route", detail.Events)
 	}
 }
@@ -143,7 +144,7 @@ func TestHandler_UnmanagedPromptTakeoverAndStickyTerminal(t *testing.T) {
 	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(detail.Events) != 3 || detail.Events[1].Suppressed || detail.Events[1].Action != "active" ||
 		detail.Events[2].Suppressed || detail.Events[2].Action != "stop" ||
-		detail.Events[2].RouteDecision != routeDecisionOwner {
+		detail.Events[2].RouteDecision != events.RouteDecisionOwner {
 		t.Fatalf("target events = %+v; want routed Claude terminal", detail.Events)
 	}
 	if other := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 44}); len(other.Events) != 0 {
@@ -225,7 +226,7 @@ func TestHandler_PipeModeUnmanagedSourceDoesNotBorrowOwner(t *testing.T) {
 	}
 	owner := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(owner.Events) != 1 || owner.Events[0].Suppressed ||
-		owner.Events[0].RouteDecision != routeDecisionOwner ||
+		owner.Events[0].RouteDecision != events.RouteDecisionOwner ||
 		owner.Events[0].SourceKey != "claude:interactive-run" {
 		t.Fatalf("owner events = %+v; want the interactive run routed to the owner", owner.Events)
 	}
@@ -256,7 +257,7 @@ func TestHandler_PipeModeUnmanagedSourceRoutesWithExactLoopCandidate(t *testing.
 
 	owner := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(owner.Events) != 1 || owner.Events[0].Suppressed ||
-		owner.Events[0].RouteDecision != routeDecisionOwner ||
+		owner.Events[0].RouteDecision != events.RouteDecisionOwner ||
 		owner.Events[0].SourceKey != "claude:loop-run" {
 		t.Fatalf("owner events = %+v; want the loop's hook routed to the owner", owner.Events)
 	}

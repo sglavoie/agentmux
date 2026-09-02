@@ -20,6 +20,7 @@ package daemon
 import (
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -33,7 +34,7 @@ type aslHookDeliveryMetrics struct {
 	byReason          map[string]uint64
 	lastQuarantinedAt time.Time
 	// lastReason is the most recent refusal reason. It is a daemon constant
-	// from the isQuarantineReason set, never producer-supplied text.
+	// from the events.IsQuarantineReason set, never producer-supplied text.
 	lastReason string
 }
 
@@ -50,7 +51,7 @@ func (h *Handler) recordASLHookAccepted(now time.Time) {
 // reason is a daemon-authored constant; anything else is dropped rather than
 // keyed, so the reason map cannot be grown by a producer.
 func (h *Handler) recordASLHookQuarantined(now time.Time, reason string) {
-	if !isQuarantineReason(reason) {
+	if !events.IsQuarantineReason(reason) {
 		return
 	}
 	h.stateMu.Lock()

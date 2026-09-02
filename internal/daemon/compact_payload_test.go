@@ -3,6 +3,7 @@ package daemon
 import (
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -63,7 +64,7 @@ func TestMalformedCompactRequestCannotMutateReducerState(t *testing.T) {
 		Type: protocol.TypeHookEvent, WindowID: 42, Event: "Stop", Harness: "claude",
 		PayloadJSON: `{`, PayloadEncoding: "json_compact", ContextLimit: true, ResetFlow: true,
 	})
-	if resp.Delivery == nil || resp.Delivery.Status != protocol.DeliveryAcknowledgementRejected || resp.Delivery.Reason != InvalidPayloadReason {
+	if resp.Delivery == nil || resp.Delivery.Status != protocol.DeliveryAcknowledgementRejected || resp.Delivery.Reason != events.InvalidPayloadReason {
 		t.Fatalf("malformed compact acknowledgement = %+v", resp)
 	}
 
@@ -127,7 +128,7 @@ func normalizedCompactPayload(t *testing.T, event, harnessName string, fixture h
 		SessionID: fixture.SessionID, TurnID: fixture.TurnID, ToolUseID: fixture.ToolUseID,
 		SourceSequence: fixture.SourceSequence, EmittedTime: fixture.EmittedTime, Reason: fixture.Reason,
 	})
-	normalized := NormalizedFromHook(event, harnessName, payloadJSON, 42, false)
+	normalized := events.NormalizedFromHook(event, harnessName, payloadJSON, 42, false)
 	if normalized.Invalid || !normalized.Deliverable() {
 		t.Fatalf("normalized compact payload = %+v", normalized)
 	}

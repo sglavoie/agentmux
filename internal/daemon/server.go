@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -242,7 +243,7 @@ func (s *Server) serveConn(r io.Reader, w io.Writer) {
 		writeResponse(w, protocol.Response{OK: false, Error: "invalid JSON"})
 		return
 	}
-	req = ensureRequestTraceID(req)
+	req = events.EnsureRequestTraceID(req)
 
 	// Deduplicate state-changing retries: a request carrying a stable ID is
 	// applied exactly once, so an ambiguous-timeout resend replays the original

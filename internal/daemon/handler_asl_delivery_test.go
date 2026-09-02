@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslcontract"
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
@@ -22,16 +23,16 @@ func TestAcceptedAndQuarantinedHooksAreCountedSeparately(t *testing.T) {
 
 	h.recordASLHookAccepted(now)
 	h.recordASLHookAccepted(now)
-	h.recordASLHookQuarantined(now, DecisionReasonHookContractMismatch)
+	h.recordASLHookQuarantined(now, events.DecisionReasonHookContractMismatch)
 
 	snapshot := h.ASLHookDeliveryMetrics()
 	if snapshot.Accepted != 2 || snapshot.Quarantined != 1 {
 		t.Fatalf("snapshot = %+v, want 2 accepted and 1 quarantined", snapshot)
 	}
-	if snapshot.QuarantinedByReason[DecisionReasonHookContractMismatch] != 1 {
+	if snapshot.QuarantinedByReason[events.DecisionReasonHookContractMismatch] != 1 {
 		t.Errorf("by-reason = %v", snapshot.QuarantinedByReason)
 	}
-	if snapshot.LastQuarantineReason != DecisionReasonHookContractMismatch {
+	if snapshot.LastQuarantineReason != events.DecisionReasonHookContractMismatch {
 		t.Errorf("last reason = %q", snapshot.LastQuarantineReason)
 	}
 }
@@ -58,8 +59,8 @@ func TestAProducerSuppliedReasonIsNotCounted(t *testing.T) {
 func TestEveryQuarantineReasonIsCountable(t *testing.T) {
 	for _, reason := range []string{
 		protocol.DecisionReasonInvalidPayload,
-		DecisionReasonHookSchemaUnsupported,
-		DecisionReasonHookContractMismatch,
+		events.DecisionReasonHookSchemaUnsupported,
+		events.DecisionReasonHookContractMismatch,
 	} {
 		h := newTestHandler()
 		h.recordASLHookQuarantined(time.Now(), reason)
@@ -119,9 +120,9 @@ func TestTheHookPathCountsWhatItAcceptedAndRefused(t *testing.T) {
 	h, projectDir := gateTestHandler(t)
 
 	accepted := h.Handle(protocol.Request{
-		Type: protocol.TypeHookEvent, WindowID: 42, Event: agentSessionLoopTurnStarted,
+		Type: protocol.TypeHookEvent, WindowID: 42, Event: events.AgentSessionLoopTurnStarted,
 		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{
-			Source: aslHookSource, CWD: projectDir, Harness: "claude",
+			Source: events.ASLHookSource, CWD: projectDir, Harness: "claude",
 			RunID: "run-counted", PlanDir: "/fixtures/plans/plan-alpha",
 		}),
 	})
@@ -129,8 +130,8 @@ func TestTheHookPathCountsWhatItAcceptedAndRefused(t *testing.T) {
 		t.Fatalf("response = %+v", accepted)
 	}
 	refused := h.Handle(protocol.Request{
-		Type: protocol.TypeHookEvent, WindowID: 42, Event: agentSessionLoopTurnStarted,
-		PayloadJSON: lifecyclePayloadJSON(t, aslHookSchemaVersion, "asl-amx-1.ffffffffffffffff", projectDir),
+		Type: protocol.TypeHookEvent, WindowID: 42, Event: events.AgentSessionLoopTurnStarted,
+		PayloadJSON: lifecyclePayloadJSON(t, events.ASLHookSchemaVersion, "asl-amx-1.ffffffffffffffff", projectDir),
 	})
 	// Acknowledged either way, which is why the counters are needed at all.
 	if !refused.OK {
@@ -142,7 +143,7 @@ func TestTheHookPathCountsWhatItAcceptedAndRefused(t *testing.T) {
 		t.Errorf("accepted = %d, want 1", snapshot.Accepted)
 	}
 	if snapshot.Quarantined != 1 ||
-		snapshot.QuarantinedByReason[DecisionReasonHookContractMismatch] != 1 {
+		snapshot.QuarantinedByReason[events.DecisionReasonHookContractMismatch] != 1 {
 		t.Errorf("snapshot = %+v, want one contract-mismatch refusal", snapshot)
 	}
 }
@@ -165,7 +166,7 @@ func TestAnUnreadableHarnessPayloadIsNotAnASLDeliveryFailure(t *testing.T) {
 
 	// The same failure on a lifecycle boundary is one.
 	if resp := h.Handle(protocol.Request{
-		Type: protocol.TypeHookEvent, WindowID: 42, Event: agentSessionLoopTurnStarted,
+		Type: protocol.TypeHookEvent, WindowID: 42, Event: events.AgentSessionLoopTurnStarted,
 		PayloadJSON: "{not json",
 	}); !resp.OK {
 		t.Fatalf("response = %+v", resp)
@@ -181,7 +182,7 @@ func TestAnUnreadableHarnessPayloadIsNotAnASLDeliveryFailure(t *testing.T) {
 func TestHealthPublishesTheDeliveryBlock(t *testing.T) {
 	h := newTestHandler()
 	h.recordASLHookAccepted(time.Now())
-	h.recordASLHookQuarantined(time.Now(), DecisionReasonHookSchemaUnsupported)
+	h.recordASLHookQuarantined(time.Now(), events.DecisionReasonHookSchemaUnsupported)
 
 	resp := h.Handle(protocol.Request{Type: protocol.TypeHealth})
 	if resp.ASLHookDelivery == nil {
@@ -202,10 +203,10 @@ func TestHealthPublishesTheDeliveryBlock(t *testing.T) {
 // hard-codes an identity would rot the moment the corpus changes.
 func TestTheGateAndTheCountersAgreeOnThisBuildsContractSet(t *testing.T) {
 	payload := hookevent.HookPayload{
-		Source: aslHookSource, SchemaVersion: aslHookSchemaVersion,
+		Source: events.ASLHookSource, SchemaVersion: events.ASLHookSchemaVersion,
 		ContractSetID: aslcontract.ContractSetID,
 	}
-	if refusal := aslHookContractRefusal(agentSessionLoopTurnStarted, payload); refusal != "" {
+	if refusal := events.ASLHookContractRefusal(events.AgentSessionLoopTurnStarted, payload); refusal != "" {
 		t.Fatalf("this build's own payload was refused: %s", refusal)
 	}
 }

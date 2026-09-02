@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
@@ -140,7 +141,7 @@ func (h *Handler) applyCodexClearObservation(
 	meta := h.windowMetadata[windowID]
 	meta.Durable.ActivityAt = now.Unix()
 	h.windowMetadata[windowID] = meta
-	eventRow := sessionEventFromRequest(req, req.Action, effective.Icon, titleParts.State)
+	eventRow := events.SessionEventFromRequest(req, req.Action, effective.Icon, titleParts.State)
 	eventRow.OriginWindowID = binding.SourceWindowID
 	h.appendEventLocked(windowID, eventRow)
 	h.syncRendererMetadataLocked(windowID)

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -219,7 +220,7 @@ func TestHandler_UserClearOwnerlessTabWithGlyphClearsSource(t *testing.T) {
 	}
 	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})
 	if len(detail.Events) != 1 || detail.Events[0].Action != "user_clear" ||
-		detail.Events[0].Suppressed || detail.Events[0].RouteDecision != routeDecisionSource {
+		detail.Events[0].Suppressed || detail.Events[0].RouteDecision != events.RouteDecisionSource {
 		t.Fatalf("events = %+v; want one allowed source-routed user_clear", detail.Events)
 	}
 

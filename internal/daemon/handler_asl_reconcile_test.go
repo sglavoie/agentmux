@@ -8,6 +8,7 @@ package daemon
 import (
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -38,7 +39,7 @@ func TestNormalizeASLLifecyclePhases(t *testing.T) {
 		{"AgentSessionLoopFinished", `{"run_id":"r1"}`, state.ASLPhaseFinished, ""},
 	}
 	for _, tc := range cases {
-		n := NormalizedFromHook(tc.event, "claude", tc.payload, 42, false)
+		n := events.NormalizedFromHook(tc.event, "claude", tc.payload, 42, false)
 		if n.Invalid || !n.Deliverable() {
 			t.Errorf("%s: normalized = %+v; want deliverable", tc.event, n)
 			continue
@@ -72,7 +73,7 @@ func TestReducerHangEventsFoldAsTurnAndKeepLease(t *testing.T) {
 		{"AgentSessionLoopTurnHangCleared", `{"run_id":"r1","source_sequence":"3","emitted_time":"102","hang_reason":"result_received_process_alive"}`},
 	}
 	for _, step := range episode {
-		n := NormalizedFromHook(step.event, "claude", step.payload, 42, false)
+		n := events.NormalizedFromHook(step.event, "claude", step.payload, 42, false)
 		if n.Invalid || !n.Deliverable() {
 			t.Fatalf("%s: normalized = %+v; want deliverable", step.event, n)
 		}
@@ -84,7 +85,7 @@ func TestReducerHangEventsFoldAsTurnAndKeepLease(t *testing.T) {
 		}
 	}
 
-	r.ApplyNormalized(NormalizedFromHook("AgentSessionLoopTurnFinished", "claude",
+	r.ApplyNormalized(events.NormalizedFromHook("AgentSessionLoopTurnFinished", "claude",
 		`{"run_id":"r1","source_sequence":"4","emitted_time":"103"}`, 42, false))
 	if got := r.Reduce(200); got.Icon != "" || !got.Looping {
 		t.Fatalf("after finish = %+v; want bare loop marker", got)

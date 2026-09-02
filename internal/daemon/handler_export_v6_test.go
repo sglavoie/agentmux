@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
@@ -77,7 +78,7 @@ func TestEventsExportStampsV6EventAndFactFields(t *testing.T) {
 		Event:  "PreToolUse",
 		Seq:    9,
 	}
-	req.RouteDecision = routeDecisionSource
+	req.RouteDecision = events.RouteDecisionSource
 	before := time.Now().UnixNano()
 	if resp := h.Handle(req); !resp.OK {
 		t.Fatalf("state update failed: %+v", resp)
@@ -92,17 +93,17 @@ func TestEventsExportStampsV6EventAndFactFields(t *testing.T) {
 		Event:  "Stop",
 		Seq:    10,
 	}
-	stop.RouteDecision = routeDecisionOwner
+	stop.RouteDecision = events.RouteDecisionOwner
 	if resp := h.Handle(stop); !resp.OK {
 		t.Fatalf("stop update failed: %+v", resp)
 	}
 
 	export := h.Handle(protocol.Request{Type: protocol.TypeEventsExport, WindowID: 5})
-	events := export.EventsByWindow[5]
-	if len(events) != 2 {
-		t.Fatalf("len(events) = %d; want 2 (%+v)", len(events), events)
+	exportedEvents := export.EventsByWindow[5]
+	if len(exportedEvents) != 2 {
+		t.Fatalf("len(events) = %d; want 2 (%+v)", len(exportedEvents), exportedEvents)
 	}
-	first, second := events[0], events[1]
+	first, second := exportedEvents[0], exportedEvents[1]
 	if first.DaemonSeq == 0 || second.DaemonSeq <= first.DaemonSeq {
 		t.Fatalf("daemon sequence not monotonic: %d then %d", first.DaemonSeq, second.DaemonSeq)
 	}
@@ -112,7 +113,7 @@ func TestEventsExportStampsV6EventAndFactFields(t *testing.T) {
 	if first.SourceKind != string(protocol.SourceHarness) || first.SourceKey != "sess-1" || first.SourceSeq != 9 {
 		t.Fatalf("first event identity = %q/%q/%d; want harness/sess-1/9", first.SourceKind, first.SourceKey, first.SourceSeq)
 	}
-	if first.RouteDecision != routeDecisionSource || second.RouteDecision != routeDecisionOwner {
+	if first.RouteDecision != events.RouteDecisionSource || second.RouteDecision != events.RouteDecisionOwner {
 		t.Fatalf("route decisions = %q, %q; want source, owner", first.RouteDecision, second.RouteDecision)
 	}
 

@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/aslcontract"
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -98,8 +99,8 @@ func TestHandler_HookEventClaudePermissionRequestSurfacesKey(t *testing.T) {
 // without it is not one. Tests that exercise the gate build their own JSON.
 func hookPayloadJSON(t *testing.T, payload hookevent.HookPayload) string {
 	t.Helper()
-	if payload.Source == aslHookSource {
-		payload.SchemaVersion = aslHookSchemaVersion
+	if payload.Source == events.ASLHookSource {
+		payload.SchemaVersion = events.ASLHookSchemaVersion
 		payload.ContractSetID = aslcontract.ContractSetID
 	}
 	data, err := json.Marshal(payload)

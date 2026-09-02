@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/hookevent"
@@ -330,7 +331,7 @@ func TestDeliverLargeHarnessPayloadsRetainSourceIdentity(t *testing.T) {
 			if req.PayloadEncoding != "json_compact" || req.SourceEventID != tc.eventID {
 				t.Fatalf("request identity = %+v", req)
 			}
-			normalized := daemon.NormalizedFromHook(tc.event, tc.harness, req.PayloadJSON, 42, false)
+			normalized := events.NormalizedFromHook(tc.event, tc.harness, req.PayloadJSON, 42, false)
 			wantKey := tc.harness + ":" + tc.sessionID
 			if normalized.Invalid || normalized.Source.Kind != protocol.SourceHarness || normalized.Source.Key != wantKey ||
 				normalized.SessionID != tc.sessionID || normalized.ToolUse != tc.toolUseID || normalized.SourceEventID != tc.eventID {

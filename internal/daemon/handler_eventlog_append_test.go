@@ -3,6 +3,7 @@ package daemon
 import (
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -53,12 +54,12 @@ func TestHandler_EventLog_CarriesRoutedOriginWindow(t *testing.T) {
 	}
 	h.Handle(protocol.Request{
 		Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Event: "PreToolUse",
-		Normalized: &normalized, RouteDecision: routeDecisionOwner,
+		Normalized: &normalized, RouteDecision: events.RouteDecisionOwner,
 	})
 
 	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 42})
 	if len(resp.Events) != 1 || resp.Events[0].OriginWindowID != 91 ||
-		resp.Events[0].RouteDecision != routeDecisionOwner {
+		resp.Events[0].RouteDecision != events.RouteDecisionOwner {
 		t.Fatalf("routed event row = %+v; want origin 91 and owner route", resp.Events)
 	}
 }

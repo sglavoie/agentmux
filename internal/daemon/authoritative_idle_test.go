@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -139,8 +140,8 @@ func TestAuthoritativeIdlePreservesProtectedAndBackgroundState(t *testing.T) {
 		h := newTestHandler()
 		base := time.Now().Unix()
 		idleSeedHarness(t, h, 7, "old", "active", base)
-		lease := protocol.NormalizedEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: state.ASLPhaseBetween, RunID: "run-1", At: base, Event: agentSessionLoopStarted}
-		h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "loop_marker", Event: agentSessionLoopStarted, Normalized: &lease})
+		lease := protocol.NormalizedEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: state.ASLPhaseBetween, RunID: "run-1", At: base, Event: events.AgentSessionLoopStarted}
+		h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "loop_marker", Event: events.AgentSessionLoopStarted, Normalized: &lease})
 
 		obs := AuthoritativeIdle{WindowID: 7, Source: AuthoritativeIdleSource("claude"), Harness: "claude", CapturedSeq: idleShadowSeq(t, h, 7), At: base + 5, RequiredSamples: 1}
 		if !h.applyAuthoritativeIdle(obs) {

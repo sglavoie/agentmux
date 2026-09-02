@@ -6,27 +6,12 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
-)
-
-const (
-	agentSessionLoopStarted               = "AgentSessionLoopStarted"
-	agentSessionLoopTurnStarted           = "AgentSessionLoopTurnStarted"
-	agentSessionLoopTurnHeartbeat         = "AgentSessionLoopTurnHeartbeat"
-	agentSessionLoopTurnHangSuspected     = "AgentSessionLoopTurnHangSuspected"
-	agentSessionLoopTurnHangCleared       = "AgentSessionLoopTurnHangCleared"
-	agentSessionLoopTurnFinished          = "AgentSessionLoopTurnFinished"
-	agentSessionLoopVerificationStarted   = "AgentSessionLoopVerificationStarted"
-	agentSessionLoopVerificationHeartbeat = "AgentSessionLoopVerificationHeartbeat"
-	agentSessionLoopVerificationFinished  = "AgentSessionLoopVerificationFinished"
-	agentSessionLoopWaitStarted           = "AgentSessionLoopWaitStarted"
-	agentSessionLoopWaitEnded             = "AgentSessionLoopWaitEnded"
-	agentSessionLoopPaused                = "AgentSessionLoopPaused"
-	agentSessionLoopFinished              = "AgentSessionLoopFinished"
 )
 
 // daemonLoopDiscoverPlans is the tri-state discovery seam reconciliation uses:
@@ -70,7 +55,7 @@ func (h *Handler) handleLoopLifecycleHookEvent(
 	// A finish that carries no run identity cannot name which per-run lease it
 	// releases. Instead of clearing every run, reconcile the window's leases
 	// against on-disk loop state so only genuinely finished runs lose 🔁.
-	if eventOrAction == agentSessionLoopFinished && payload.EffectiveRunID() == "" {
+	if eventOrAction == events.AgentSessionLoopFinished && payload.EffectiveRunID() == "" {
 		h.ReconcileASLLeases(time.Now(), windows)
 	}
 	return true
@@ -95,7 +80,7 @@ func (h *Handler) handleLoopLifecycleTarget(
 	}
 	h.setMutedFromSnapshot(target.windowID, muted)
 
-	req := buildHookStateUpdateRequest(
+	req := events.BuildHookStateUpdateRequest(
 		target.windowID,
 		action,
 		eventOrAction,
@@ -111,25 +96,25 @@ func (h *Handler) handleLoopLifecycleTarget(
 		false,
 		baseReq.KittyListenOn,
 	)
-	propagateIngressTrace(&req, baseReq)
+	events.PropagateIngressTrace(&req, baseReq)
 	if req.RouteEvidence == nil {
-		req.RouteEvidence = newRoutingEvidence(baseReq.WindowID)
+		req.RouteEvidence = events.NewRoutingEvidence(baseReq.WindowID)
 	}
 	req.RouteEvidence.ConsideredWindows = nil
 	req.RouteEvidence.RejectedAlternatives = nil
 	req.RouteEvidence.ASLMatches = 1
-	populateRoutingCandidates(req.RouteEvidence, target.tab, routingWindowByID(target.tab, baseReq.WindowID), target.win)
-	chooseRoute(req.RouteEvidence, routeDecisionOwner, "asl_workspace", target.win)
-	req.RouteDecision = routeDecisionOwner
+	events.PopulateRoutingCandidates(req.RouteEvidence, target.tab, events.RoutingWindowByID(target.tab, baseReq.WindowID), target.win)
+	events.ChooseRoute(req.RouteEvidence, events.RouteDecisionOwner, "asl_workspace", target.win)
+	req.RouteDecision = events.RouteDecisionOwner
 	// The fact lands on the managed target but retains the pane identified by
 	// the request/payload as its origin for route-aware probes and diagnostics.
 	originWindowID := baseReq.WindowID
 	if payloadWindowID := payload.EffectiveKittyWindowID(); payloadWindowID > 0 {
 		originWindowID = payloadWindowID
 	}
-	normalized := normalizedFromHookRequest(eventOrAction, baseReq, originWindowID)
+	normalized := events.NormalizedFromHookRequest(eventOrAction, baseReq, originWindowID)
 	req.Normalized = &normalized
-	req.NormalizationOutcome = normalizationOutcomeFor(normalized)
+	req.NormalizationOutcome = events.NormalizationOutcomeFor(normalized)
 	resp := h.handleStateUpdate(req)
 	if !resp.OK {
 		slog.Debug("loop lifecycle target state update failed",
@@ -140,7 +125,7 @@ func (h *Handler) handleLoopLifecycleTarget(
 		)
 	}
 	runID := payload.EffectiveRunID()
-	if eventOrAction == agentSessionLoopFinished {
+	if eventOrAction == events.AgentSessionLoopFinished {
 		h.finishASLSupervisorQuestion(target.windowID, runID, time.Now())
 	} else {
 		h.registerASLSupervisorLifecycleTarget(
@@ -330,35 +315,20 @@ func normalizeKnownLoopHarness(raw string) string {
 	}
 }
 
-func isAgentSessionLoopEvent(eventOrAction string) bool {
-	switch eventOrAction {
-	case agentSessionLoopStarted, agentSessionLoopTurnStarted,
-		agentSessionLoopTurnHeartbeat, agentSessionLoopTurnHangSuspected,
-		agentSessionLoopTurnHangCleared, agentSessionLoopTurnFinished,
-		agentSessionLoopVerificationStarted, agentSessionLoopVerificationHeartbeat,
-		agentSessionLoopVerificationFinished, agentSessionLoopWaitStarted,
-		agentSessionLoopWaitEnded, agentSessionLoopPaused,
-		agentSessionLoopFinished:
-		return true
-	default:
-		return false
-	}
-}
-
 func loopMarkerForLifecycleTarget(eventOrAction string, target agentloop.WorkspaceTarget, openTargets []agentloop.WorkspaceTarget) *bool {
 	switch eventOrAction {
-	case agentSessionLoopStarted, agentSessionLoopTurnStarted,
-		agentSessionLoopTurnHeartbeat, agentSessionLoopTurnHangSuspected,
-		agentSessionLoopTurnHangCleared, agentSessionLoopTurnFinished,
-		agentSessionLoopVerificationStarted, agentSessionLoopVerificationHeartbeat,
-		agentSessionLoopVerificationFinished, agentSessionLoopWaitStarted,
-		agentSessionLoopWaitEnded, agentSessionLoopPaused:
+	case events.AgentSessionLoopStarted, events.AgentSessionLoopTurnStarted,
+		events.AgentSessionLoopTurnHeartbeat, events.AgentSessionLoopTurnHangSuspected,
+		events.AgentSessionLoopTurnHangCleared, events.AgentSessionLoopTurnFinished,
+		events.AgentSessionLoopVerificationStarted, events.AgentSessionLoopVerificationHeartbeat,
+		events.AgentSessionLoopVerificationFinished, events.AgentSessionLoopWaitStarted,
+		events.AgentSessionLoopWaitEnded, events.AgentSessionLoopPaused:
 		// Every non-final lifecycle event asserts the loop marker: turns and
 		// verification are active work (a suspected or retracted worker hang is
 		// still an executing turn), between-turn signals keep the lease, and
 		// a paused or mailbox-waiting run still owns 🔁 while it is blocked.
 		return boolPtr(true)
-	case agentSessionLoopFinished:
+	case events.AgentSessionLoopFinished:
 		if strings.TrimSpace(target.CWD) == "" && target.WindowID <= 0 {
 			slog.Debug("preserving loop marker after loop finish; target directory missing")
 			return nil

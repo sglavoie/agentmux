@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/hookevent"
@@ -18,14 +19,11 @@ import (
 )
 
 const (
-	aslSupervisorQuestionProbePrefix  = "asl_supervisor:"
-	eventASLSupervisorQuestion        = "ASLSupervisorQuestion"
-	agentSessionLoopMailboxQuestion   = "AgentSessionLoopMailboxQuestion"
-	agentSessionLoopMailboxReply      = "AgentSessionLoopMailboxReply"
-	agentSessionLoopMailboxResolution = "AgentSessionLoopMailboxResolution"
-	aslMailboxQuestionReason          = "mailbox_question_surfaced"
-	aslMailboxReplyReason             = "mailbox_reply_appended"
-	aslMailboxResolutionReason        = "mailbox_resolution_appended"
+	aslSupervisorQuestionProbePrefix = "asl_supervisor:"
+	eventASLSupervisorQuestion       = "ASLSupervisorQuestion"
+	aslMailboxQuestionReason         = "mailbox_question_surfaced"
+	aslMailboxReplyReason            = "mailbox_reply_appended"
+	aslMailboxResolutionReason       = "mailbox_resolution_appended"
 )
 
 // aslSupervisorTarget is one live ASL run whose adjacent fixed-size supervisor
@@ -190,7 +188,7 @@ func (h *Handler) handleASLSupervisorMailboxQuestion(
 		strings.TrimSpace(payload.QuestionPreview) != "" {
 		return
 	}
-	questionSeq, _, err := parseSourceSeqAt(payload)
+	questionSeq, _, err := events.ParseSourceSeqAt(payload)
 	if err != nil || questionSeq == 0 {
 		return
 	}
@@ -310,14 +308,14 @@ func (h *Handler) handleASLSupervisorMailboxClosure(
 	questionID := strings.TrimSpace(payload.QuestionID)
 	reason := aslMailboxReplyReason
 	eventLabel := "mailbox-reply"
-	if event == agentSessionLoopMailboxResolution {
+	if event == events.AgentSessionLoopMailboxResolution {
 		reason = aslMailboxResolutionReason
 		eventLabel = "mailbox-resolution"
 		action := strings.TrimSpace(payload.ResolutionAction)
 		if action != "continue" && action != "pause" {
 			return
 		}
-	} else if event != agentSessionLoopMailboxReply {
+	} else if event != events.AgentSessionLoopMailboxReply {
 		return
 	}
 	if strings.TrimSpace(payload.Source) != "agent_session_loop" ||
@@ -326,7 +324,7 @@ func (h *Handler) handleASLSupervisorMailboxClosure(
 		!validASLMailboxQuestionID(questionID) {
 		return
 	}
-	closureSeq, _, err := parseSourceSeqAt(payload)
+	closureSeq, _, err := events.ParseSourceSeqAt(payload)
 	if err != nil || closureSeq == 0 {
 		return
 	}

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
@@ -16,8 +17,8 @@ import (
 
 // Handle processes a Request and returns a Response.
 func (h *Handler) Handle(req protocol.Request) protocol.Response {
-	req = normalizeProducerFields(req)
-	req = ensureRequestTraceID(req)
+	req = events.NormalizeProducerFields(req)
+	req = events.EnsureRequestTraceID(req)
 	var resp protocol.Response
 	switch req.Type {
 	case protocol.TypeHookEvent:

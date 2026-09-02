@@ -109,6 +109,15 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   is domain-specific, not a formatting utility package: it must never import the
   daemon root, and it performs no Kitty, IPC, or journal I/O — the daemon root
   keeps the render loops and every Kitty write.
+- `internal/daemon/events`: what one hook delivery *is*, before anything decides
+  what to do about it — the agent-session-loop wire vocabulary and its
+  compatibility gate, payload normalization into the identity-stamped
+  `protocol.NormalizedEvent`, the state-update request built from it, per-event
+  routing evidence and its outcome/confidence classification, and the durable
+  session-event record. Like protocol, state, and rendering it must never import
+  the daemon root, and it performs no Kitty, IPC, or journal I/O. Routing
+  *decisions* and transport dispatch stay in the daemon root: this package
+  supplies the vocabulary and the evidence, the root chooses and acts.
 - `internal/diagnostics`: private fail-open causal journals, operational and
   native logs, temporary raw captures, and bounded diagnostic storage.
 - `internal/debugger`: offline-first status, query, explanation, bundle, and

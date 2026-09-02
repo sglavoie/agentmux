@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
@@ -50,7 +51,7 @@ func (h *Handler) handleStateUpdate(req protocol.Request) protocol.Response {
 	if req.Type == "" {
 		req.Type = protocol.TypeStateUpdate
 	}
-	req = ensureRequestTraceID(req)
+	req = events.EnsureRequestTraceID(req)
 	if req.EventRef == nil {
 		req.EventRef = &protocol.SessionEventReference{}
 	}
@@ -177,7 +178,7 @@ func (h *Handler) applyStateUpdate(req protocol.Request) (protocol.Response, app
 			"action", req.Action,
 		)
 		h.stateMu.Lock()
-		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonCopilotPendingPrompt, currentIconState))
+		h.appendEventLocked(req.WindowID, events.SuppressedSessionEvent(req, req.Action, suppressionReasonCopilotPendingPrompt, currentIconState))
 		h.stateMu.Unlock()
 		outcome.skipReduce = true
 		outcome.skipReason = protocol.DecisionReasonCopilotPendingPrompt
@@ -190,7 +191,7 @@ func (h *Handler) applyStateUpdate(req protocol.Request) (protocol.Response, app
 			"tool_name", req.ToolName,
 		)
 		h.stateMu.Lock()
-		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonElicitationPending, currentIconState))
+		h.appendEventLocked(req.WindowID, events.SuppressedSessionEvent(req, req.Action, suppressionReasonElicitationPending, currentIconState))
 		h.stateMu.Unlock()
 		outcome.skipReduce = true
 		outcome.skipReason = protocol.DecisionReasonElicitationPending
@@ -276,7 +277,7 @@ func (h *Handler) applyStateUpdate(req protocol.Request) (protocol.Response, app
 		outcome.guardBlocked = true
 		if outcome.skipReduce {
 			h.stateMu.Lock()
-			h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonGuardBlocked, currentIconState))
+			h.appendEventLocked(req.WindowID, events.SuppressedSessionEvent(req, req.Action, suppressionReasonGuardBlocked, currentIconState))
 			h.stateMu.Unlock()
 		}
 		return protocol.Response{OK: true, Allowed: false}, outcome
@@ -427,9 +428,9 @@ func (h *Handler) applyStateUpdate(req protocol.Request) (protocol.Response, app
 		st.StateSet = true
 	}
 	if isAutoApprovedPerm {
-		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, loggedAction, suppressionReasonAutoApprovedPerm, currentIconState))
+		h.appendEventLocked(req.WindowID, events.SuppressedSessionEvent(req, loggedAction, suppressionReasonAutoApprovedPerm, currentIconState))
 	} else {
-		h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, loggedAction, iconState, currentIconState))
+		h.appendEventLocked(req.WindowID, events.SessionEventFromRequest(req, loggedAction, iconState, currentIconState))
 	}
 	st = h.ensureWindowStateLocked(req.WindowID)
 	h.linkRequestRenderGenerationLocked(req, st.Seq+1)
@@ -466,18 +467,18 @@ func (h *Handler) handleLoopMarkerStateUpdate(req protocol.Request) protocol.Res
 	}
 	loopingBefore, loopingSetBefore := st.Looping, st.LoopingSet
 	switch req.Event {
-	case agentSessionLoopStarted, agentSessionLoopTurnStarted,
-		agentSessionLoopTurnHeartbeat, agentSessionLoopTurnHangSuspected,
-		agentSessionLoopTurnHangCleared, agentSessionLoopTurnFinished,
-		agentSessionLoopVerificationStarted, agentSessionLoopVerificationHeartbeat,
-		agentSessionLoopVerificationFinished, agentSessionLoopPaused:
+	case events.AgentSessionLoopStarted, events.AgentSessionLoopTurnStarted,
+		events.AgentSessionLoopTurnHeartbeat, events.AgentSessionLoopTurnHangSuspected,
+		events.AgentSessionLoopTurnHangCleared, events.AgentSessionLoopTurnFinished,
+		events.AgentSessionLoopVerificationStarted, events.AgentSessionLoopVerificationHeartbeat,
+		events.AgentSessionLoopVerificationFinished, events.AgentSessionLoopPaused:
 		st.Looping = true
 		st.LoopingSet = true
-	case agentSessionLoopFinished:
+	case events.AgentSessionLoopFinished:
 		st.Looping = false
 		st.LoopingSet = true
 	}
-	h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, req.Action, protocol.IconStatePreserve, rendering.DesiredIcon(st)))
+	h.appendEventLocked(req.WindowID, events.SessionEventFromRequest(req, req.Action, protocol.IconStatePreserve, rendering.DesiredIcon(st)))
 	h.linkRequestRenderGenerationLocked(req, st.Seq+1)
 	h.syncRendererMetadataLocked(req.WindowID)
 	// A heartbeat that leaves the marker as-is is activity bookkeeping; only a

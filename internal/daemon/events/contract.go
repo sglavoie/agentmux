@@ -1,4 +1,4 @@
-package daemon
+package events
 
 // The lifecycle-hook contract gate.
 //
@@ -27,13 +27,13 @@ import (
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
 
-// aslHookSchemaVersion is the only lifecycle-hook schema this build ingests.
-const aslHookSchemaVersion = 2
+// ASLHookSchemaVersion is the only lifecycle-hook schema this build ingests.
+const ASLHookSchemaVersion = 2
 
-// aslHookSource is the producer name a lifecycle payload declares. The schema
+// ASLHookSource is the producer name a lifecycle payload declares. The schema
 // pins it as a const, so it is the field that says "this payload is from ASL"
 // independently of which boundary it names.
-const aslHookSource = "agent_session_loop"
+const ASLHookSource = "agent_session_loop"
 
 // Compatibility refusals. They are daemon-authored constants, so they are
 // stable across producers and carry nothing the payload chose: the version and
@@ -49,43 +49,43 @@ const (
 // EventName enum in the tests rather than restated from memory, so it cannot
 // drift from what ASL publishes.
 var aslLifecycleHookEvents = map[string]bool{
-	agentSessionLoopStarted:               true,
-	agentSessionLoopTurnStarted:           true,
-	agentSessionLoopTurnHeartbeat:         true,
-	agentSessionLoopTurnFinished:          true,
-	agentSessionLoopTurnHangSuspected:     true,
-	agentSessionLoopTurnHangCleared:       true,
-	agentSessionLoopVerificationStarted:   true,
-	agentSessionLoopVerificationHeartbeat: true,
-	agentSessionLoopVerificationFinished:  true,
-	agentSessionLoopWaitStarted:           true,
-	agentSessionLoopWaitEnded:             true,
-	agentSessionLoopMailboxQuestion:       true,
-	agentSessionLoopMailboxReply:          true,
-	agentSessionLoopMailboxResolution:     true,
-	agentSessionLoopPaused:                true,
-	agentSessionLoopFinished:              true,
+	AgentSessionLoopStarted:               true,
+	AgentSessionLoopTurnStarted:           true,
+	AgentSessionLoopTurnHeartbeat:         true,
+	AgentSessionLoopTurnFinished:          true,
+	AgentSessionLoopTurnHangSuspected:     true,
+	AgentSessionLoopTurnHangCleared:       true,
+	AgentSessionLoopVerificationStarted:   true,
+	AgentSessionLoopVerificationHeartbeat: true,
+	AgentSessionLoopVerificationFinished:  true,
+	AgentSessionLoopWaitStarted:           true,
+	AgentSessionLoopWaitEnded:             true,
+	AgentSessionLoopMailboxQuestion:       true,
+	AgentSessionLoopMailboxReply:          true,
+	AgentSessionLoopMailboxResolution:     true,
+	AgentSessionLoopPaused:                true,
+	AgentSessionLoopFinished:              true,
 }
 
-// isAgentSessionLoopHookEvent reports whether event is a lifecycle boundary and
+// IsAgentSessionLoopHookEvent reports whether event is a lifecycle boundary and
 // so subject to the contract gate. It is deliberately wider than
-// isAgentSessionLoopEvent, which names only the thirteen boundaries that carry
+// IsAgentSessionLoopEvent, which names only the thirteen boundaries that carry
 // the loop marker: the three mailbox boundaries are lifecycle payloads under the
 // same schema even though they are emitted by the CLI rather than the loop.
-func isAgentSessionLoopHookEvent(event string) bool {
+func IsAgentSessionLoopHookEvent(event string) bool {
 	return aslLifecycleHookEvents[strings.TrimSpace(event)]
 }
 
-// aslHookContractRefusal returns the stable reason a lifecycle payload cannot be
+// ASLHookContractRefusal returns the stable reason a lifecycle payload cannot be
 // ingested, or "" when it may be. The refusal is non-retryable by construction:
 // nothing about resending the same payload changes either answer, so the caller
 // quarantines rather than deferring.
-func aslHookContractRefusal(event string, payload hookevent.HookPayload) string {
-	if !isAgentSessionLoopHookEvent(event) {
+func ASLHookContractRefusal(event string, payload hookevent.HookPayload) string {
+	if !IsAgentSessionLoopHookEvent(event) {
 		return ""
 	}
 	switch {
-	case payload.SchemaVersion != aslHookSchemaVersion:
+	case payload.SchemaVersion != ASLHookSchemaVersion:
 		return DecisionReasonHookSchemaUnsupported
 	case payload.ContractSetID != aslcontract.ContractSetID:
 		return DecisionReasonHookContractMismatch
@@ -94,11 +94,11 @@ func aslHookContractRefusal(event string, payload hookevent.HookPayload) string 
 	}
 }
 
-// isQuarantineReason reports whether a suppression reason means the payload was
+// IsQuarantineReason reports whether a suppression reason means the payload was
 // refused as unusable rather than merely not acted on. A quarantined event is
 // recorded with an invalid identity, because the daemon is explicitly declining
 // to believe the identity fields it carried.
-func isQuarantineReason(reason string) bool {
+func IsQuarantineReason(reason string) bool {
 	switch reason {
 	case protocol.DecisionReasonInvalidPayload,
 		DecisionReasonHookSchemaUnsupported,

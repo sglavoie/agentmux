@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
@@ -55,7 +56,7 @@ func TestASLSupervisorMailboxResolutionClearsMatchingProbeImmediately(t *testing
 	resp := h.Handle(protocol.Request{
 		Type:        protocol.TypeHookEvent,
 		WindowID:    42,
-		Event:       agentSessionLoopMailboxResolution,
+		Event:       events.AgentSessionLoopMailboxResolution,
 		PayloadJSON: hookPayloadJSON(t, payload),
 	})
 	if !resp.OK {

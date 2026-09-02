@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
@@ -133,8 +134,8 @@ func TestReducerSameTurnTrailingCompletionStaysSuppressed(t *testing.T) {
 func TestShadowReducerTracksASLLoopLease(t *testing.T) {
 	h := newTestHandler()
 
-	started := protocol.NormalizedEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: state.ASLPhaseBetween, RunID: "run-1", Event: agentSessionLoopStarted}
-	h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 9, Action: "loop_marker", Event: agentSessionLoopStarted, Normalized: &started})
+	started := protocol.NormalizedEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: state.ASLPhaseBetween, RunID: "run-1", Event: events.AgentSessionLoopStarted}
+	h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 9, Action: "loop_marker", Event: events.AgentSessionLoopStarted, Normalized: &started})
 
 	eff, legacyIcon := windowEffective(t, h, 9)
 	if !eff.Looping || eff.Icon != "" || legacyIcon != "" {
@@ -144,8 +145,8 @@ func TestShadowReducerTracksASLLoopLease(t *testing.T) {
 		t.Fatalf("loop start diverged from legacy marker: %+v", meta)
 	}
 
-	finished := protocol.NormalizedEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: state.ASLPhaseFinished, RunID: "run-1", Event: agentSessionLoopFinished}
-	h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 9, Action: "loop_marker", Event: agentSessionLoopFinished, Normalized: &finished})
+	finished := protocol.NormalizedEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: state.ASLPhaseFinished, RunID: "run-1", Event: events.AgentSessionLoopFinished}
+	h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 9, Action: "loop_marker", Event: events.AgentSessionLoopFinished, Normalized: &finished})
 
 	eff, legacyIcon = windowEffective(t, h, 9)
 	if eff.Looping {

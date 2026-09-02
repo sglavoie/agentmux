@@ -6,20 +6,11 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslcontract"
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
-)
-
-// Route decisions recorded onto SessionEvent.RouteDecision: the firing pane
-// was the target itself, the event was rerouted to the tab's managed title
-// owner, or ownership could not be resolved and the daemon fell back to the
-// firing pane.
-const (
-	routeDecisionSource         = "source"
-	routeDecisionOwner          = "owner"
-	routeDecisionSourceFallback = "source_fallback"
 )
 
 type hookEventContext struct {
@@ -52,8 +43,8 @@ func (h *Handler) handleHookEvent(req protocol.Request) protocol.Response {
 		ctx := h.resolveHookEventContext(req)
 		ctx.req.ParseOutcome = protocol.ParseOutcomeMissingEvent
 		ctx.req.NormalizationOutcome = protocol.NormalizationOutcomeNotApplicable
-		ctx.req.RouteDecision = routeDecisionRejected
-		chooseRoute(ctx.req.RouteEvidence, routeDecisionRejected, protocol.DecisionReasonMissingEvent, nil)
+		ctx.req.RouteDecision = events.RouteDecisionRejected
+		events.ChooseRoute(ctx.req.RouteEvidence, events.RouteDecisionRejected, protocol.DecisionReasonMissingEvent, nil)
 		h.appendSuppressedHookEvent(ctx.req, "", protocol.DecisionReasonMissingEvent)
 		slog.Debug("hook event ignored: missing event")
 		return protocol.Response{OK: true}
@@ -64,10 +55,10 @@ func (h *Handler) handleHookEvent(req protocol.Request) protocol.Response {
 		ctx := h.resolveHookEventContext(req)
 		ctx.req.ParseOutcome = protocol.ParseOutcomeInvalid
 		ctx.req.NormalizationOutcome = protocol.NormalizationOutcomeQuarantined
-		invalid := quarantine(eventOrAction, protocol.DecisionReasonInvalidPayload)
+		invalid := events.Quarantine(eventOrAction, protocol.DecisionReasonInvalidPayload)
 		ctx.req.Normalized = &invalid
-		ctx.req.RouteDecision = routeDecisionRejected
-		chooseRoute(ctx.req.RouteEvidence, routeDecisionRejected, protocol.DecisionReasonInvalidPayload, nil)
+		ctx.req.RouteDecision = events.RouteDecisionRejected
+		events.ChooseRoute(ctx.req.RouteEvidence, events.RouteDecisionRejected, protocol.DecisionReasonInvalidPayload, nil)
 		if ctx.req.WindowID > 0 {
 			ctx.req.Event = eventOrAction
 			h.appendSuppressedHookEvent(ctx.req, "", suppressionReasonInvalidPayload)
@@ -76,7 +67,7 @@ func (h *Handler) handleHookEvent(req protocol.Request) protocol.Response {
 		// is a Claude/Copilot/Codex problem, and folding it into the ASL
 		// delivery counters would make the pairing look broken by something it
 		// has no part in.
-		if isAgentSessionLoopHookEvent(eventOrAction) {
+		if events.IsAgentSessionLoopHookEvent(eventOrAction) {
 			h.recordASLHookQuarantined(time.Now(), protocol.DecisionReasonInvalidPayload)
 		}
 		slog.Warn("hook event payload unreadable; rejecting delivery", "event", eventOrAction, "err", err)
@@ -87,15 +78,15 @@ func (h *Handler) handleHookEvent(req protocol.Request) protocol.Response {
 	// lifecycle event that fails it is not an event this build can place: its
 	// phase, run identity, and mailbox generation are the reducer's durable
 	// inputs, and half-reading them is worse than dropping the message.
-	if refusal := aslHookContractRefusal(eventOrAction, payload); refusal != "" {
+	if refusal := events.ASLHookContractRefusal(eventOrAction, payload); refusal != "" {
 		ctx := h.resolveHookEventContext(req)
 		ctx.req.Event = eventOrAction
 		ctx.req.ParseOutcome = protocol.ParseOutcomeDecoded
 		ctx.req.NormalizationOutcome = protocol.NormalizationOutcomeQuarantined
-		incompatible := quarantine(eventOrAction, refusal)
+		incompatible := events.Quarantine(eventOrAction, refusal)
 		ctx.req.Normalized = &incompatible
-		ctx.req.RouteDecision = routeDecisionRejected
-		chooseRoute(ctx.req.RouteEvidence, routeDecisionRejected, refusal, nil)
+		ctx.req.RouteDecision = events.RouteDecisionRejected
+		events.ChooseRoute(ctx.req.RouteEvidence, events.RouteDecisionRejected, refusal, nil)
 		if ctx.req.WindowID > 0 {
 			h.appendSuppressedHookEvent(ctx.req, "", refusal)
 		}
@@ -108,7 +99,7 @@ func (h *Handler) handleHookEvent(req protocol.Request) protocol.Response {
 			"reason", refusal,
 			"offered_schema_version", payload.SchemaVersion,
 			"offered_contract_set_id", payload.ContractSetID,
-			"expected_schema_version", aslHookSchemaVersion,
+			"expected_schema_version", events.ASLHookSchemaVersion,
 			"expected_contract_set_id", aslcontract.ContractSetID,
 		)
 		return protocol.Response{OK: true}
@@ -126,10 +117,10 @@ func (h *Handler) handleHookEvent(req protocol.Request) protocol.Response {
 	if hookevent.IsIgnoredEventForHarness(eventOrAction, payload, ctx.req.Harness) {
 		ctx.req.Event = eventOrAction
 		ctx.req.NormalizationOutcome = protocol.NormalizationOutcomeIgnored
-		normalized := inert(eventOrAction, reasonIgnoredEvent)
+		normalized := events.Inert(eventOrAction, events.ReasonIgnoredEvent)
 		ctx.req.Normalized = &normalized
-		ctx.req.RouteDecision = routeDecisionRejected
-		chooseRoute(ctx.req.RouteEvidence, routeDecisionRejected, protocol.DecisionReasonIgnoredEvent, nil)
+		ctx.req.RouteDecision = events.RouteDecisionRejected
+		events.ChooseRoute(ctx.req.RouteEvidence, events.RouteDecisionRejected, protocol.DecisionReasonIgnoredEvent, nil)
 		h.appendSuppressedHookEvent(ctx.req, "", suppressionReasonIgnoredEvent)
 		slog.Debug("hook event intentionally ignored",
 			"window_id", ctx.req.WindowID,
@@ -143,10 +134,10 @@ func (h *Handler) handleHookEvent(req protocol.Request) protocol.Response {
 	if !ok {
 		ctx.req.Event = eventOrAction
 		ctx.req.NormalizationOutcome = protocol.NormalizationOutcomeUnknown
-		normalized := inert(eventOrAction, reasonUnknownEvent)
+		normalized := events.Inert(eventOrAction, events.ReasonUnknownEvent)
 		ctx.req.Normalized = &normalized
-		ctx.req.RouteDecision = routeDecisionRejected
-		chooseRoute(ctx.req.RouteEvidence, routeDecisionRejected, protocol.DecisionReasonUnknownEvent, nil)
+		ctx.req.RouteDecision = events.RouteDecisionRejected
+		events.ChooseRoute(ctx.req.RouteEvidence, events.RouteDecisionRejected, protocol.DecisionReasonUnknownEvent, nil)
 		h.appendSuppressedHookEvent(ctx.req, "", suppressionReasonUnknownEvent)
 		slog.Debug("hook event unknown, ignoring", "window_id", ctx.req.WindowID, "event", eventOrAction)
 		return protocol.Response{OK: true}
@@ -158,22 +149,22 @@ func (h *Handler) handleHookEvent(req protocol.Request) protocol.Response {
 	// placing the event, so this is where acceptance is counted — one line, for
 	// all sixteen boundaries, rather than at each dispatch below where a new
 	// branch could silently stop counting.
-	if isAgentSessionLoopHookEvent(eventOrAction) {
+	if events.IsAgentSessionLoopHookEvent(eventOrAction) {
 		h.recordASLHookAccepted(time.Now())
 	}
 
-	if eventOrAction == agentSessionLoopMailboxQuestion {
+	if eventOrAction == events.AgentSessionLoopMailboxQuestion {
 		h.handleASLSupervisorMailboxQuestion(payload, ctx.req, ctx.windows, time.Now())
 		return protocol.Response{OK: true}
 	}
 
-	if eventOrAction == agentSessionLoopMailboxReply ||
-		eventOrAction == agentSessionLoopMailboxResolution {
+	if eventOrAction == events.AgentSessionLoopMailboxReply ||
+		eventOrAction == events.AgentSessionLoopMailboxResolution {
 		h.handleASLSupervisorMailboxClosure(eventOrAction, payload, time.Now())
 		return protocol.Response{OK: true}
 	}
 
-	if isAgentSessionLoopEvent(eventOrAction) {
+	if events.IsAgentSessionLoopEvent(eventOrAction) {
 		// A loop lifecycle event changes the active-loop set, so the routing
 		// cache built from a prior burst is no longer authoritative.
 		h.invalidateActiveLoopCache()
@@ -189,7 +180,7 @@ func (h *Handler) handleHookEvent(req protocol.Request) protocol.Response {
 	if shouldResolveUnmanagedHookRoute(eventOrAction, ctx) {
 		// A previously accepted session stays bound to its original managed
 		// target through its terminal event, even if focus has since moved.
-		normalized := normalizedFromHookRequest(eventOrAction, ctx.req, ctx.req.WindowID)
+		normalized := events.NormalizedFromHookRequest(eventOrAction, ctx.req, ctx.req.WindowID)
 		ctx.req.Normalized = &normalized
 		if target, matches := h.rememberedManagedHookTarget(ctx, normalized); matches == 1 {
 			ctx.req.RouteEvidence.StickyMatches = matches
@@ -235,9 +226,9 @@ func (h *Handler) handleHookEvent(req protocol.Request) protocol.Response {
 	// running an exact active loop keeps delivering that run's harness hooks.
 	if ctx.req.PipeMode && ctx.win != nil &&
 		ctx.win.UserVars.EffectiveProfile() == "" && ctx.win.UserVars.EffectiveHarness() == "" &&
-		!isAgentSessionLoopEvent(eventOrAction) &&
+		!events.IsAgentSessionLoopEvent(eventOrAction) &&
 		!h.hasExactActiveLoopCandidate(ctx.req.WindowID) {
-		normalized := normalizedFromHookRequest(eventOrAction, ctx.req, ctx.req.WindowID)
+		normalized := events.NormalizedFromHookRequest(eventOrAction, ctx.req, ctx.req.WindowID)
 		ctx.req.Normalized = &normalized
 		h.suppressUnmanagedPipeSource(ctx, eventOrAction, action)
 		return protocol.Response{OK: true}
@@ -261,7 +252,7 @@ func (h *Handler) handleHookEvent(req protocol.Request) protocol.Response {
 
 	resetFlowDetected := (hookevent.PayloadHasResetFlow(ctx.req.Harness, eventOrAction, payload) ||
 		(ctx.req.PayloadEncoding == "json_compact" && ctx.req.ResetFlow)) && !lateCopilotStart
-	stateReq := buildHookStateUpdateRequest(
+	stateReq := events.BuildHookStateUpdateRequest(
 		ctx.req.WindowID,
 		action,
 		eventOrAction,
@@ -277,16 +268,16 @@ func (h *Handler) handleHookEvent(req protocol.Request) protocol.Response {
 		resetFlowDetected,
 		ctx.req.KittyListenOn,
 	)
-	propagateIngressTrace(&stateReq, ctx.req)
+	events.PropagateIngressTrace(&stateReq, ctx.req)
 	// Stamp the source-scoped view for the shadow reducer while the raw payload
 	// is still in hand. A held stop keeps the stamp and delivers it at commit
 	// time.
-	normalized := normalizedFromHookRequest(eventOrAction, ctx.req, ctx.req.WindowID)
+	normalized := events.NormalizedFromHookRequest(eventOrAction, ctx.req, ctx.req.WindowID)
 	stateReq.Normalized = &normalized
-	stateReq.RouteDecision = routeDecisionSource
-	stateReq.NormalizationOutcome = normalizationOutcomeFor(normalized)
-	chooseRoute(ctx.req.RouteEvidence, routeDecisionSource, "source", ctx.win)
-	stateReq.RouteEvidence = cloneRoutingEvidence(ctx.req.RouteEvidence)
+	stateReq.RouteDecision = events.RouteDecisionSource
+	stateReq.NormalizationOutcome = events.NormalizationOutcomeFor(normalized)
+	events.ChooseRoute(ctx.req.RouteEvidence, events.RouteDecisionSource, "source", ctx.win)
+	stateReq.RouteEvidence = events.CloneRoutingEvidence(ctx.req.RouteEvidence)
 	deferred := h.holdStopForConfirmation(stateReq, payload)
 	if !deferred {
 		h.handleStateUpdate(stateReq)
@@ -407,7 +398,7 @@ func (h *Handler) handleUserClearHookEvent(ctx hookEventContext, eventOrAction, 
 		return protocol.Response{OK: true}
 	}
 
-	stateReq := buildHookStateUpdateRequest(
+	stateReq := events.BuildHookStateUpdateRequest(
 		targetID,
 		action,
 		eventOrAction,
@@ -423,24 +414,24 @@ func (h *Handler) handleUserClearHookEvent(ctx hookEventContext, eventOrAction, 
 		false, // resetFlowDetected: F8 is a manual wipe, not a reset flow
 		ctx.req.KittyListenOn,
 	)
-	propagateIngressTrace(&stateReq, ctx.req)
+	events.PropagateIngressTrace(&stateReq, ctx.req)
 	// The wipe was retargeted, so normalize against the target window: the
 	// shadow reducer must acknowledge the owner's facts, not the source pane's.
-	normalized := normalizedFromHookRequest(eventOrAction, ctx.req, targetID)
+	normalized := events.NormalizedFromHookRequest(eventOrAction, ctx.req, targetID)
 	stateReq.Normalized = &normalized
 	switch {
 	case ctx.owner != nil:
-		stateReq.RouteDecision = routeDecisionOwner
-		chooseRoute(ctx.req.RouteEvidence, routeDecisionOwner, "user_clear_owner", ctx.owner)
+		stateReq.RouteDecision = events.RouteDecisionOwner
+		events.ChooseRoute(ctx.req.RouteEvidence, events.RouteDecisionOwner, "user_clear_owner", ctx.owner)
 	case !ctx.lookupFailed:
-		stateReq.RouteDecision = routeDecisionSource
-		chooseRoute(ctx.req.RouteEvidence, routeDecisionSource, "user_clear_source", ctx.win)
+		stateReq.RouteDecision = events.RouteDecisionSource
+		events.ChooseRoute(ctx.req.RouteEvidence, events.RouteDecisionSource, "user_clear_source", ctx.win)
 	case ctx.lookupFailed:
-		stateReq.RouteDecision = routeDecisionSourceFallback
-		chooseRoute(ctx.req.RouteEvidence, routeDecisionSourceFallback, "lookup_fallback", ctx.win)
+		stateReq.RouteDecision = events.RouteDecisionSourceFallback
+		events.ChooseRoute(ctx.req.RouteEvidence, events.RouteDecisionSourceFallback, "lookup_fallback", ctx.win)
 	}
-	stateReq.NormalizationOutcome = normalizationOutcomeFor(normalized)
-	stateReq.RouteEvidence = cloneRoutingEvidence(ctx.req.RouteEvidence)
+	stateReq.NormalizationOutcome = events.NormalizationOutcomeFor(normalized)
+	stateReq.RouteEvidence = events.CloneRoutingEvidence(ctx.req.RouteEvidence)
 	h.handleStateUpdate(stateReq)
 	if forceVisibleClear {
 		// user_clear above made the new/empty source state durable. Queue that

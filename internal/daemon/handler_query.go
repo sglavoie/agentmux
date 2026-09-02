@@ -3,6 +3,7 @@ package daemon
 import (
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 )
@@ -62,12 +63,12 @@ func (h *Handler) handleSessionDetail(req protocol.Request) protocol.Response {
 	if st, ok := h.windowStateLocked(req.WindowID); ok {
 		src = st.EventLog
 	}
-	events := make([]protocol.SessionEvent, len(src))
+	detail := make([]protocol.SessionEvent, len(src))
 	for i := range src {
-		events[i] = h.enrichNotificationEvent(req.WindowID, cloneSessionEvent(src[i]))
+		detail[i] = h.enrichNotificationEvent(req.WindowID, events.CloneSessionEvent(src[i]))
 	}
 	h.stateMu.Unlock()
-	return protocol.Response{OK: true, Events: events}
+	return protocol.Response{OK: true, Events: detail}
 }
 
 // handleEventsExport returns a deep copy of the requested window's event ring
@@ -83,7 +84,7 @@ func (h *Handler) handleEventsExport(req protocol.Request) protocol.Response {
 		if st, ok := h.windowStateLocked(req.WindowID); ok && len(st.EventLog) > 0 {
 			cp := make([]protocol.SessionEvent, len(st.EventLog))
 			for i := range st.EventLog {
-				cp[i] = h.enrichNotificationEvent(req.WindowID, cloneSessionEvent(st.EventLog[i]))
+				cp[i] = h.enrichNotificationEvent(req.WindowID, events.CloneSessionEvent(st.EventLog[i]))
 			}
 			out[req.WindowID] = cp
 		}
@@ -98,7 +99,7 @@ func (h *Handler) handleEventsExport(req protocol.Request) protocol.Response {
 			}
 			cp := make([]protocol.SessionEvent, len(st.EventLog))
 			for i := range st.EventLog {
-				cp[i] = h.enrichNotificationEvent(id, cloneSessionEvent(st.EventLog[i]))
+				cp[i] = h.enrichNotificationEvent(id, events.CloneSessionEvent(st.EventLog[i]))
 			}
 			out[id] = cp
 		}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -275,7 +276,7 @@ func TestHookEventWaitStartedCarriesQuestionPreviewToSessionDetail(t *testing.T)
 	}
 	var found bool
 	for _, ev := range resp.Events {
-		if ev.Event != agentSessionLoopWaitStarted {
+		if ev.Event != events.AgentSessionLoopWaitStarted {
 			continue
 		}
 		found = true
@@ -284,7 +285,7 @@ func TestHookEventWaitStartedCarriesQuestionPreviewToSessionDetail(t *testing.T)
 		}
 	}
 	if !found {
-		t.Fatalf("no %s event in session detail buffer: %+v", agentSessionLoopWaitStarted, resp.Events)
+		t.Fatalf("no %s event in session detail buffer: %+v", events.AgentSessionLoopWaitStarted, resp.Events)
 	}
 }
 
@@ -309,7 +310,7 @@ func TestHookEventWaitStartedSanitizesQuestionPreview(t *testing.T) {
 	}
 	var found bool
 	for _, ev := range resp.Events {
-		if ev.Event != agentSessionLoopWaitStarted {
+		if ev.Event != events.AgentSessionLoopWaitStarted {
 			continue
 		}
 		found = true
@@ -318,7 +319,7 @@ func TestHookEventWaitStartedSanitizesQuestionPreview(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatalf("no %s event in session detail buffer: %+v", agentSessionLoopWaitStarted, resp.Events)
+		t.Fatalf("no %s event in session detail buffer: %+v", events.AgentSessionLoopWaitStarted, resp.Events)
 	}
 }
 

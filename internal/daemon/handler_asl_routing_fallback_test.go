@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
@@ -119,7 +120,7 @@ func TestHandler_ActiveLoopManagedNonOwnerUsesOwnState(t *testing.T) {
 		t.Fatalf("managed source state = %+v; want its own bolt", source)
 	}
 	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 43})
-	if len(detail.Events) != 1 || detail.Events[0].Suppressed || detail.Events[0].RouteDecision != routeDecisionSource {
+	if len(detail.Events) != 1 || detail.Events[0].Suppressed || detail.Events[0].RouteDecision != events.RouteDecisionSource {
 		t.Fatalf("source events = %+v; want an allowed source-owned event", detail.Events)
 	}
 }

@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -22,13 +22,13 @@ func (h *Handler) resolveHookEventContext(req protocol.Request) hookEventContext
 	// metadata when the routed request is built.
 	req.TargetHarness = req.Harness
 	req.TargetHarnessSet = true
-	req.RouteEvidence = newRoutingEvidence(req.WindowID)
+	req.RouteEvidence = events.NewRoutingEvidence(req.WindowID)
 	ctx := hookEventContext{req: req}
 	if ctx.req.WindowID <= 0 {
 		return ctx
 	}
 	if h.kittyClient == nil {
-		ctx.req.RouteEvidence.LookupOutcome = routeLookupRequestOnly
+		ctx.req.RouteEvidence.LookupOutcome = events.RouteLookupRequestOnly
 		return ctx
 	}
 	// Route against the last published snapshot instead of a live ListWindows.
@@ -41,24 +41,24 @@ func (h *Handler) resolveHookEventContext(req protocol.Request) hookEventContext
 	if !ready {
 		slog.Debug("hook event snapshot cache cold; routing from request only", "window_id", ctx.req.WindowID)
 		ctx.lookupFailed = true
-		ctx.req.RouteEvidence.LookupOutcome = routeLookupSnapshotUnavailable
+		ctx.req.RouteEvidence.LookupOutcome = events.RouteLookupSnapshotUnavailable
 		return ctx
 	}
 	ctx.req.RouteEvidence.SnapshotReady = true
 	ctx.windows = windows
 	tab, win, found := kitty.FindTabByWindowID(windows, ctx.req.WindowID)
 	if !found {
-		ctx.req.RouteEvidence.LookupOutcome = routeLookupSourceNotFound
+		ctx.req.RouteEvidence.LookupOutcome = events.RouteLookupSourceNotFound
 		return ctx
 	}
-	ctx.req.RouteEvidence.LookupOutcome = routeLookupSourceFound
+	ctx.req.RouteEvidence.LookupOutcome = events.RouteLookupSourceFound
 	ctx.req.RouteEvidence.SourceMatched = true
 	ctx.tab = tab
 	ctx.win = win
 	if owner, ok := kitty.FindTabTitleOwner(tab); ok {
 		ctx.owner = owner
 	}
-	populateRoutingCandidates(ctx.req.RouteEvidence, tab, win, ctx.owner)
+	events.PopulateRoutingCandidates(ctx.req.RouteEvidence, tab, win, ctx.owner)
 	parts := palette.ParseTitleParts(tab.Title)
 	ctx.req.SessionTitle = parts.Base
 	ctx.req.CurrentIconState = parts.State
@@ -93,55 +93,13 @@ func (h *Handler) resolveHookEventContext(req protocol.Request) hookEventContext
 }
 
 func shouldResolveUnmanagedHookRoute(eventOrAction string, ctx hookEventContext) bool {
-	if isAgentSessionLoopEvent(eventOrAction) {
+	if events.IsAgentSessionLoopEvent(eventOrAction) {
 		return false
 	}
 	if ctx.win == nil || ctx.owner == nil || ctx.owner.ID == ctx.req.WindowID {
 		return false
 	}
 	return ctx.win.UserVars.EffectiveProfile() == "" && ctx.win.UserVars.EffectiveHarness() == ""
-}
-
-func buildHookStateUpdateRequest(
-	windowID int,
-	action string,
-	eventOrAction string,
-	payload hookevent.HookPayload,
-	sessionTitle string,
-	profile string,
-	producerHarness string,
-	targetHarness string,
-	currentIconState string,
-	pipeMode bool,
-	preservesIcon bool,
-	contextLimitDetected bool,
-	resetFlowDetected bool,
-	kittyListenOn string,
-) protocol.Request {
-	return protocol.Request{
-		Type:             protocol.TypeStateUpdate,
-		WindowID:         windowID,
-		Action:           action,
-		Event:            eventOrAction,
-		ToolName:         payload.EffectiveToolName(),
-		Source:           payload.Source,
-		IsPrompt:         hookevent.IsPromptEvent(eventOrAction),
-		PreservesIcon:    preservesIcon,
-		PipeMode:         pipeMode,
-		KittyListenOn:    strings.TrimSpace(kittyListenOn),
-		SessionTitle:     sessionTitle,
-		Account:          profile,
-		Harness:          harness.NormalizeKnown(producerHarness),
-		TargetHarness:    harness.NormalizeKnown(targetHarness),
-		TargetHarnessSet: true,
-		CurrentIconState: currentIconState,
-		NotificationType: payload.EffectiveNotificationType(),
-		StopReason:       payload.EffectiveStopReason(),
-		Reason:           payload.Reason,
-		ContextLimit:     contextLimitDetected,
-		ResetFlow:        resetFlowDetected,
-		QuestionPreview:  payload.QuestionPreview,
-	}
 }
 
 func (h *Handler) appendSuppressedHookEvent(req protocol.Request, action, suppressionReason string) {
@@ -158,8 +116,8 @@ func (h *Handler) appendSuppressedHookEvent(req protocol.Request, action, suppre
 		h.lastSeenEventAt[accountKey] = time.Now()
 		delete(h.notifiedHookSilence, accountKey)
 	}
-	effective := effectiveStateEvidence(st.Effective)
-	event := suppressedSessionEvent(req, action, suppressionReason, rendering.DesiredIcon(st))
+	effective := events.EffectiveStateEvidence(st.Effective)
+	event := events.SuppressedSessionEvent(req, action, suppressionReason, rendering.DesiredIcon(st))
 	event.DecisionReason = suppressionReason
 	event.ReducerDecision = protocol.DecisionSuppressed
 	event.ReducerReason = suppressionReason
@@ -167,7 +125,7 @@ func (h *Handler) appendSuppressedHookEvent(req protocol.Request, action, suppre
 	event.RouteEvidence = ensureDirectRouteEvidence(req)
 	event.EffectiveBefore = &effective
 	event.EffectiveAfter = &effective
-	if isQuarantineReason(suppressionReason) {
+	if events.IsQuarantineReason(suppressionReason) {
 		event.ReducerDecision = protocol.DecisionQuarantined
 		event.Quarantined = true
 		event.IdentityConfidence = protocol.IdentityConfidenceInvalid

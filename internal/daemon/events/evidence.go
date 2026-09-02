@@ -1,4 +1,4 @@
-package daemon
+package events
 
 import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -8,32 +8,39 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
+// Route decisions recorded onto SessionEvent.RouteDecision: the firing pane
+// was the target itself, the event was rerouted to the tab's managed title
+// owner, ownership could not be resolved and the daemon fell back to the
+// firing pane, or no route was taken at all.
 const (
-	routeDecisionRejected = "rejected"
+	RouteDecisionSource         = "source"
+	RouteDecisionOwner          = "owner"
+	RouteDecisionSourceFallback = "source_fallback"
+	RouteDecisionRejected       = "rejected"
 
-	routeLookupRequestOnly         = "request_only"
-	routeLookupSnapshotUnavailable = "snapshot_unavailable"
-	routeLookupSourceNotFound      = "source_not_found"
-	routeLookupSourceFound         = "source_found"
+	RouteLookupRequestOnly         = "request_only"
+	RouteLookupSnapshotUnavailable = "snapshot_unavailable"
+	RouteLookupSourceNotFound      = "source_not_found"
+	RouteLookupSourceFound         = "source_found"
 )
 
 const maxRoutingEvidenceWindows = 16
 
-func ensureRequestTraceID(req protocol.Request) protocol.Request {
+func EnsureRequestTraceID(req protocol.Request) protocol.Request {
 	if (req.Type == protocol.TypeHookEvent || req.Type == protocol.TypeStateUpdate) && req.TraceID == "" {
 		req.TraceID = diagnostics.NewTraceID()
 	}
 	return req
 }
 
-func effectiveStateEvidence(effective state.EffectiveState) protocol.EffectiveStateEvidence {
+func EffectiveStateEvidence(effective state.EffectiveState) protocol.EffectiveStateEvidence {
 	return protocol.EffectiveStateEvidence{
 		Icon: effective.Icon, Looping: effective.Looping,
 		SourceKind: string(effective.Source.Kind), SourceKey: effective.Source.Key,
 	}
 }
 
-func cloneRoutingEvidence(in *protocol.RoutingEvidence) *protocol.RoutingEvidence {
+func CloneRoutingEvidence(in *protocol.RoutingEvidence) *protocol.RoutingEvidence {
 	if in == nil {
 		return nil
 	}
@@ -43,9 +50,9 @@ func cloneRoutingEvidence(in *protocol.RoutingEvidence) *protocol.RoutingEvidenc
 	return &out
 }
 
-func cloneSessionEvent(in protocol.SessionEvent) protocol.SessionEvent {
+func CloneSessionEvent(in protocol.SessionEvent) protocol.SessionEvent {
 	out := in
-	out.RouteEvidence = cloneRoutingEvidence(in.RouteEvidence)
+	out.RouteEvidence = CloneRoutingEvidence(in.RouteEvidence)
 	out.ProbeTraceIDs = append([]string(nil), in.ProbeTraceIDs...)
 	out.ProcessSources = append([]protocol.ProcessLifecycleSourceEvidence(nil), in.ProcessSources...)
 	if in.WithdrawnFacts != nil {
@@ -75,14 +82,14 @@ func cloneSessionEvent(in protocol.SessionEvent) protocol.SessionEvent {
 	return out
 }
 
-func newRoutingEvidence(sourceWindowID int) *protocol.RoutingEvidence {
+func NewRoutingEvidence(sourceWindowID int) *protocol.RoutingEvidence {
 	return &protocol.RoutingEvidence{
-		LookupOutcome:  routeLookupRequestOnly,
+		LookupOutcome:  RouteLookupRequestOnly,
 		SourceWindowID: sourceWindowID,
 	}
 }
 
-func populateRoutingCandidates(evidence *protocol.RoutingEvidence, tab *kitty.Tab, source, owner *kitty.Window) {
+func PopulateRoutingCandidates(evidence *protocol.RoutingEvidence, tab *kitty.Tab, source, owner *kitty.Window) {
 	if evidence == nil || tab == nil {
 		return
 	}
@@ -106,14 +113,14 @@ func populateRoutingCandidates(evidence *protocol.RoutingEvidence, tab *kitty.Ta
 	}
 }
 
-func chooseRoute(evidence *protocol.RoutingEvidence, decision, selectionReason string, target *kitty.Window) {
+func ChooseRoute(evidence *protocol.RoutingEvidence, decision, selectionReason string, target *kitty.Window) {
 	if evidence == nil {
 		return
 	}
 	evidence.ChosenRoute = decision
 	evidence.SelectionReason = selectionReason
 	if target == nil {
-		if decision == routeDecisionSource || decision == routeDecisionSourceFallback {
+		if decision == RouteDecisionSource || decision == RouteDecisionSourceFallback {
 			evidence.TargetWindowID = evidence.SourceWindowID
 		}
 		return
@@ -121,7 +128,7 @@ func chooseRoute(evidence *protocol.RoutingEvidence, decision, selectionReason s
 	evidence.TargetWindowID = target.ID
 	evidence.EffectiveHarness = harness.NormalizeKnown(target.UserVars.EffectiveHarness())
 	evidence.EffectiveProfile = target.UserVars.EffectiveProfile()
-	evidence.OwnerMatched = evidence.TargetWindowID > 0 && decision == routeDecisionOwner
+	evidence.OwnerMatched = evidence.TargetWindowID > 0 && decision == RouteDecisionOwner
 	for _, candidate := range evidence.ConsideredWindows {
 		if candidate.WindowID == target.ID {
 			continue
@@ -133,7 +140,7 @@ func chooseRoute(evidence *protocol.RoutingEvidence, decision, selectionReason s
 	}
 }
 
-func routingWindowByID(tab *kitty.Tab, windowID int) *kitty.Window {
+func RoutingWindowByID(tab *kitty.Tab, windowID int) *kitty.Window {
 	if tab == nil || windowID <= 0 {
 		return nil
 	}
@@ -145,35 +152,7 @@ func routingWindowByID(tab *kitty.Tab, windowID int) *kitty.Window {
 	return nil
 }
 
-func normalizationOutcomeFor(n protocol.NormalizedEvent) string {
-	switch {
-	case n.Invalid:
-		return protocol.NormalizationOutcomeQuarantined
-	case n.Reason == reasonIgnoredEvent:
-		return protocol.NormalizationOutcomeIgnored
-	case n.Reason == reasonUnknownEvent:
-		return protocol.NormalizationOutcomeUnknown
-	default:
-		return protocol.NormalizationOutcomeNormalized
-	}
-}
-
-func identityConfidenceFor(n protocol.NormalizedEvent) string {
-	switch n.Source.Kind {
-	case "":
-		return protocol.IdentityConfidenceUnresolved
-	case protocol.SourceInvalid:
-		return protocol.IdentityConfidenceInvalid
-	case protocol.SourceLegacy:
-		return protocol.IdentityConfidenceLegacySynthesized
-	case protocol.SourceProbe:
-		return protocol.IdentityConfidenceDaemon
-	default:
-		return protocol.IdentityConfidenceDeclared
-	}
-}
-
-func propagateIngressTrace(dst *protocol.Request, src protocol.Request) {
+func PropagateIngressTrace(dst *protocol.Request, src protocol.Request) {
 	dst.TraceID = src.TraceID
 	dst.RequestID = src.RequestID
 	dst.SourceEventID = src.SourceEventID
@@ -190,6 +169,6 @@ func propagateIngressTrace(dst *protocol.Request, src protocol.Request) {
 	}
 	dst.ParseOutcome = src.ParseOutcome
 	dst.NormalizationOutcome = src.NormalizationOutcome
-	dst.RouteEvidence = cloneRoutingEvidence(src.RouteEvidence)
+	dst.RouteEvidence = CloneRoutingEvidence(src.RouteEvidence)
 	dst.SaturationReason = src.SaturationReason
 }

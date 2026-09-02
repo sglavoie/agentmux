@@ -4,6 +4,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -90,7 +91,7 @@ func (h *Handler) appendProcessLifecycleEventLocked(
 	primary protocol.ProcessLifecycleSourceEvidence,
 	renderGeneration uint64,
 ) {
-	before, after := effectiveStateEvidence(result.Before), effectiveStateEvidence(result.After)
+	before, after := events.EffectiveStateEvidence(result.Before), events.EffectiveStateEvidence(result.After)
 	withdrawnFacts, clearedSubagents, synthesizedStop := result.WithdrawnFacts, result.ClearedSubagents, result.SynthesizedStop
 	originWindowID := primary.OriginWindowID
 	if originWindowID <= 0 {

@@ -3,6 +3,7 @@ package daemon
 import (
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
@@ -23,7 +24,7 @@ func TestDiagnosticProbeDiscoversRouteWithoutMutatingState(t *testing.T) {
 		ack.TraceID != "trace-1" || ack.RequestID != "request-1" || ack.Attempt != 1 ||
 		ack.ProducerHarness != harness.Claude || ack.TargetHarness != harness.Codex ||
 		ack.Profile != "managed" || ack.SourceWindowID != 43 || ack.TargetWindowID != 42 ||
-		ack.RouteDecision != routeDecisionOwner || !ack.SnapshotReady || !ack.WindowFound {
+		ack.RouteDecision != events.RouteDecisionOwner || !ack.SnapshotReady || !ack.WindowFound {
 		t.Fatalf("probe acknowledgement = %+v", ack)
 	}
 

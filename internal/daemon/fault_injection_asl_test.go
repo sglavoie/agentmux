@@ -17,6 +17,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/aslcontract"
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -39,7 +40,7 @@ func TestFaultDroppedASLFinishRepairedByReconciliation(t *testing.T) {
 		PayloadJSON: fmt.Sprintf(
 			`{"schema_version":%d,"contract_set_id":%q,"source":"agent_session_loop",`+
 				`"cwd":%q,"harness":"claude","run_id":"run-lost"}`,
-			aslHookSchemaVersion, aslcontract.ContractSetID, projectDir),
+			events.ASLHookSchemaVersion, aslcontract.ContractSetID, projectDir),
 	})
 	if !resp.OK {
 		t.Fatalf("turn started = %+v", resp)

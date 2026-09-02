@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslcontract"
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -313,7 +314,7 @@ func aslPl(projectDir, runID string, seq int, extra string) string {
 func aslPlForHarness(projectDir, harnessName, runID string, seq int, extra string) string {
 	body := fmt.Sprintf(
 		`"schema_version":%d,"contract_set_id":%q,"source":"agent_session_loop","cwd":%q,"harness":%q,"run_id":%q`,
-		aslHookSchemaVersion, aslcontract.ContractSetID, projectDir, harnessName, runID)
+		events.ASLHookSchemaVersion, aslcontract.ContractSetID, projectDir, harnessName, runID)
 	if extra != "" {
 		body += "," + extra
 	}

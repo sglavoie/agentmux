@@ -16,10 +16,6 @@ import (
 // isolate the property under test.
 var zeroCfg = state.ReducerConfig{}
 
-func harnessSource() protocol.SourceID {
-	return protocol.SourceID{Kind: protocol.SourceHarness, Key: "main"}
-}
-
 func aslSource(k string) protocol.SourceID {
 	return protocol.SourceID{Kind: protocol.SourceASL, Key: k}
 }

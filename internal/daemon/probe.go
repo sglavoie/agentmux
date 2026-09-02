@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/sglavoie/agentmux/internal/contextlimit"
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/hookevent"
@@ -98,7 +99,7 @@ func (h *Handler) runContextLimitProbe(p contextLimitProbe) {
 		return
 	}
 	for _, t := range p.targets {
-		stateReq := buildHookStateUpdateRequest(
+		stateReq := events.BuildHookStateUpdateRequest(
 			t.windowID,
 			"stop_failure",
 			p.event,

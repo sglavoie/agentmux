@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
@@ -182,7 +183,7 @@ func (h *Handler) routeUnmanagedHookTarget(
 		currentIcon:   currentIcon,
 	}
 
-	stateReq := buildHookStateUpdateRequest(
+	stateReq := events.BuildHookStateUpdateRequest(
 		target.windowID,
 		action,
 		eventOrAction,
@@ -198,19 +199,19 @@ func (h *Handler) routeUnmanagedHookTarget(
 		resetFlowDetected,
 		ctx.req.KittyListenOn,
 	)
-	propagateIngressTrace(&stateReq, ctx.req)
+	events.PropagateIngressTrace(&stateReq, ctx.req)
 	// Stamp the source-scoped view for the shadow reducer against the managed
 	// target: a routed sibling hook advances the owner's fact map, exactly as
 	// its legacy transition advances the owner's state machine.
-	normalized := normalizedFromHookRequest(eventOrAction, ctx.req, ctx.req.WindowID)
+	normalized := events.NormalizedFromHookRequest(eventOrAction, ctx.req, ctx.req.WindowID)
 	stateReq.Normalized = &normalized
-	stateReq.RouteDecision = routeDecisionOwner
-	stateReq.NormalizationOutcome = normalizationOutcomeFor(normalized)
+	stateReq.RouteDecision = events.RouteDecisionOwner
+	stateReq.NormalizationOutcome = events.NormalizationOutcomeFor(normalized)
 	selectionReason := ctx.req.RouteEvidence.SelectionReason
 	if selectionReason == "" {
 		selectionReason = "owner"
 	}
-	chooseRoute(stateReq.RouteEvidence, routeDecisionOwner, selectionReason, target.win)
+	events.ChooseRoute(stateReq.RouteEvidence, events.RouteDecisionOwner, selectionReason, target.win)
 	if h.holdStopForConfirmation(stateReq, payload) {
 		return probeTarget
 	}

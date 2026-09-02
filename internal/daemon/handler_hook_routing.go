@@ -3,6 +3,7 @@ package daemon
 import (
 	"log/slog"
 
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -54,8 +55,8 @@ func managedHookTarget(tab *kitty.Tab, win *kitty.Window) loopLifecycleTarget {
 
 func (h *Handler) suppressOwnerMismatch(ctx hookEventContext, eventOrAction, action string) {
 	ctx.req.Event = eventOrAction
-	ctx.req.RouteDecision = routeDecisionRejected
-	chooseRoute(ctx.req.RouteEvidence, routeDecisionRejected, protocol.DecisionReasonOwnerMismatch, nil)
+	ctx.req.RouteDecision = events.RouteDecisionRejected
+	events.ChooseRoute(ctx.req.RouteEvidence, events.RouteDecisionRejected, protocol.DecisionReasonOwnerMismatch, nil)
 	if ctx.owner != nil {
 		ctx.req.RouteEvidence.RejectedAlternatives = append(ctx.req.RouteEvidence.RejectedAlternatives,
 			protocol.RejectedRouteEvidence{WindowID: ctx.owner.ID, Reason: protocol.DecisionReasonOwnerMismatch})
@@ -76,8 +77,8 @@ func (h *Handler) suppressOwnerMismatch(ctx hookEventContext, eventOrAction, act
 // owner_mismatch_* doctor findings.
 func (h *Handler) suppressUnmanagedPipeSource(ctx hookEventContext, eventOrAction, action string) {
 	ctx.req.Event = eventOrAction
-	ctx.req.RouteDecision = routeDecisionRejected
-	chooseRoute(ctx.req.RouteEvidence, routeDecisionRejected, protocol.DecisionReasonUnmanagedPipeSource, nil)
+	ctx.req.RouteDecision = events.RouteDecisionRejected
+	events.ChooseRoute(ctx.req.RouteEvidence, events.RouteDecisionRejected, protocol.DecisionReasonUnmanagedPipeSource, nil)
 	if ctx.owner != nil {
 		ctx.req.RouteEvidence.RejectedAlternatives = append(ctx.req.RouteEvidence.RejectedAlternatives,
 			protocol.RejectedRouteEvidence{WindowID: ctx.owner.ID, Reason: protocol.DecisionReasonUnmanagedPipeSource})

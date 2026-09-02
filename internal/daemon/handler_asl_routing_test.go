@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
@@ -101,7 +102,7 @@ func TestHandler_ActiveLoopSiblingRetargetKeepsProducerIdentity(t *testing.T) {
 		t.Fatalf("owner events = %+v, want one routed event", detail.Events)
 	}
 	event := detail.Events[0]
-	if event.RouteDecision != routeDecisionOwner {
+	if event.RouteDecision != events.RouteDecisionOwner {
 		t.Fatalf("route decision = %q, want owner", event.RouteDecision)
 	}
 	if event.SourceKind != string(protocol.SourceHarness) || event.SourceKey != "codex:routed-codex" {

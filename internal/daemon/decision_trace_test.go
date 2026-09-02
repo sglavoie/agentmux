@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
@@ -74,7 +75,7 @@ func TestHookDecisionTraceCorrelatesRoutingNormalizationAndReducer(t *testing.T)
 		t.Fatalf("offline reducer input = %+v", event.ReducerInput)
 	}
 	route := event.RouteEvidence
-	if route == nil || route.ChosenRoute != routeDecisionOwner || route.TargetWindowID != 42 ||
+	if route == nil || route.ChosenRoute != events.RouteDecisionOwner || route.TargetWindowID != 42 ||
 		!route.SourceMatched || !route.OwnerMatched || !route.FocusCandidate || !route.PromptCandidate ||
 		route.ConsideredWindowCount != 2 || len(route.ConsideredWindows) != 2 {
 		t.Fatalf("route evidence = %+v", route)
@@ -245,8 +246,8 @@ func TestDecisionTraceRecordsRejectedOwnerAlternative(t *testing.T) {
 	}
 	event := detail.Events[0]
 	if event.ReducerDecision != protocol.DecisionSuppressed || event.DecisionReason != protocol.DecisionReasonOwnerMismatch ||
-		event.RouteDecision != routeDecisionRejected || event.RouteEvidence == nil ||
-		event.RouteEvidence.ChosenRoute != routeDecisionRejected || len(event.RouteEvidence.RejectedAlternatives) == 0 ||
+		event.RouteDecision != events.RouteDecisionRejected || event.RouteEvidence == nil ||
+		event.RouteEvidence.ChosenRoute != events.RouteDecisionRejected || len(event.RouteEvidence.RejectedAlternatives) == 0 ||
 		event.RouteEvidence.RejectedAlternatives[len(event.RouteEvidence.RejectedAlternatives)-1].WindowID != 42 {
 		t.Fatalf("owner mismatch evidence = %+v", event)
 	}

@@ -281,10 +281,10 @@ type NormalizedEvent struct {
 	// protected and never masked by interactive supersession. Absent (false) is
 	// interactive, the backward-compatible default.
 	PipeMode bool
-	// HarnessProcess is populated only by normalizedFromHookRequest after the
-	// daemon validates the hook-supplied fingerprint. Its zero value means no
-	// process ownership. ASL lifecycle and daemon-synthesized probe facts never
-	// receive this identity.
+	// HarnessProcess is populated only by events.NormalizedFromHookRequest
+	// after the daemon validates the hook-supplied fingerprint. Its zero value
+	// means no process ownership. ASL lifecycle and daemon-synthesized probe
+	// facts never receive this identity.
 	HarnessProcess HarnessProcessIdentity
 
 	// ASL-only. Phase selects the reducer icon + loop lease; for a paused run the

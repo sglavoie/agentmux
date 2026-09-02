@@ -1,4 +1,4 @@
-package daemon
+package events
 
 import (
 	"reflect"
@@ -9,6 +9,17 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
+
+// zeroCfg disables staleness and the legacy grace so ordering assertions
+// isolate the normalization property under test, and harnessSource is the
+// ordinary main-session identity. Both are re-declared here rather than shared:
+// the daemon package keeps its own copies for the handler tests that still
+// drive a reducer through a Handler.
+var zeroCfg = state.ReducerConfig{}
+
+func harnessSource() protocol.SourceID {
+	return protocol.SourceID{Kind: protocol.SourceHarness, Key: "main"}
+}
 
 // These tests pin the normalized event schema: every harness payload variant
 // normalizes to a deterministic source key + action, and malformed or unknown
@@ -199,10 +210,10 @@ func TestNormalizedFromHookRequestStampsOnlyOrdinaryValidatedSources(t *testing.
 		{name: "user action excluded", event: "user_clear", payload: `{}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			req := normalizeProducerFields(protocol.Request{
+			req := NormalizeProducerFields(protocol.Request{
 				ProducerHarness: "claude", HarnessProcess: identity, PayloadJSON: tc.payload,
 			})
-			normalized := normalizedFromHookRequest(tc.event, req, 51)
+			normalized := NormalizedFromHookRequest(tc.event, req, 51)
 			if tc.want && normalized.HarnessProcess != want {
 				t.Fatalf("HarnessProcess = %+v, want %+v", normalized.HarnessProcess, want)
 			}
@@ -223,7 +234,7 @@ func TestNormalizedFromHookRequestDropsInvalidOrMismatchedIdentity(t *testing.T)
 			Harness: "claude", HarnessProcess: identity,
 			PayloadJSON: `{"session_id":"session-1"}`,
 		}
-		normalized := normalizedFromHookRequest("UserPromptSubmit", req, 51)
+		normalized := NormalizedFromHookRequest("UserPromptSubmit", req, 51)
 		if normalized.HarnessProcess != (protocol.HarnessProcessIdentity{}) {
 			t.Fatalf("identity %+v stamped as %+v", identity, normalized.HarnessProcess)
 		}
@@ -282,12 +293,12 @@ func TestNormalizeUnknownAndIgnoredAreInert(t *testing.T) {
 	if unknown.Deliverable() || unknown.Action != "" {
 		t.Fatalf("unknown event should be inert: %+v", unknown)
 	}
-	if unknown.Reason != reasonUnknownEvent {
-		t.Errorf("unknown reason = %q, want %q", unknown.Reason, reasonUnknownEvent)
+	if unknown.Reason != ReasonUnknownEvent {
+		t.Errorf("unknown reason = %q, want %q", unknown.Reason, ReasonUnknownEvent)
 	}
 
 	ignored := NormalizedFromHook("InstructionsLoaded", "claude", `{}`, 51, false)
-	if ignored.Deliverable() || ignored.Reason != reasonIgnoredEvent {
+	if ignored.Deliverable() || ignored.Reason != ReasonIgnoredEvent {
 		t.Fatalf("ignored event should be inert with ignored reason: %+v", ignored)
 	}
 

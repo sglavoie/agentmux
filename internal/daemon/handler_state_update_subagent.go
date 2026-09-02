@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -48,7 +49,7 @@ func (h *Handler) handleSubagentStateUpdate(req protocol.Request, currentIconSta
 			// through hiding the event.
 			h.guard.TryUpdate(req.WindowID, "subagent", false)
 			h.stateMu.Lock()
-			h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonSubagentStillRunning, currentIconState))
+			h.appendEventLocked(req.WindowID, events.SuppressedSessionEvent(req, req.Action, suppressionReasonSubagentStillRunning, currentIconState))
 			h.stateMu.Unlock()
 			return protocol.Response{OK: true, Allowed: false}, true
 		}
@@ -106,7 +107,7 @@ func (h *Handler) handleSubagentStateUpdate(req protocol.Request, currentIconSta
 				"subagent_count", count,
 			)
 			h.stateMu.Lock()
-			h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonCopilotMidSubagent, currentIconState))
+			h.appendEventLocked(req.WindowID, events.SuppressedSessionEvent(req, req.Action, suppressionReasonCopilotMidSubagent, currentIconState))
 			h.stateMu.Unlock()
 			outcome.skipReduce = true
 			outcome.skipReason = protocol.DecisionReasonCopilotMidSubagent
@@ -135,7 +136,7 @@ func (h *Handler) handleSubagentStateUpdate(req protocol.Request, currentIconSta
 		meta := h.windowMetadata[req.WindowID]
 		meta.Durable.ActivityAt = now.Unix()
 		h.windowMetadata[req.WindowID] = meta
-		h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, req.Action, protocol.IconStatePreserve, currentIconState))
+		h.appendEventLocked(req.WindowID, events.SessionEventFromRequest(req, req.Action, protocol.IconStatePreserve, currentIconState))
 		// The icon is preserved, so this is durable bookkeeping only.
 		h.linkRequestRenderGenerationLocked(req, st.Seq+1)
 		h.markWindowActivityDirtyLocked(req.WindowID)

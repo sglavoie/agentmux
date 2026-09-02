@@ -1,4 +1,17 @@
-package daemon
+// Package events is what one hook delivery is, before anything decides what to
+// do about it: the agent-session-loop wire vocabulary and the compatibility
+// gate that admits it, the normalization of a raw payload into an
+// identity-stamped protocol.NormalizedEvent, the state-update request built
+// from that payload, the per-event routing evidence and the outcome and
+// identity-confidence classifications read back off it, and the durable session
+// event a window retains.
+//
+// Everything here is pure. The package reads no clock beyond stamping a record,
+// performs no Kitty, IPC, or journal I/O, and never imports the daemon root.
+// The division with that root is deliberate: this package supplies the
+// vocabulary and the evidence, and the root makes the routing decision and acts
+// on it.
+package events
 
 // This file introduces the normalized hook-event schema. A raw HookPayload is
 // noisy, dialect-specific (snake vs camel), and carries sensitive prompt bodies.
@@ -30,20 +43,20 @@ import (
 const InvalidPayloadReason = "invalid_payload"
 
 const (
-	// reasonUnknownEvent marks an event name the resolver does not recognize.
+	// ReasonUnknownEvent marks an event name the resolver does not recognize.
 	// It is inert (empty action), not quarantined: an unknown event simply has
 	// no icon effect, matching the live handler's suppression path.
-	reasonUnknownEvent = "unknown_event"
-	// reasonIgnoredEvent marks an event that is recognized but intentionally has
+	ReasonUnknownEvent = "unknown_event"
+	// ReasonIgnoredEvent marks an event that is recognized but intentionally has
 	// no tab-icon effect.
-	reasonIgnoredEvent = "ignored_event"
+	ReasonIgnoredEvent = "ignored_event"
 )
 
-// normalizedFromHookRequest centralizes request validation and process-identity
+// NormalizedFromHookRequest centralizes request validation and process-identity
 // stamping for every hook-routing path. NormalizedFromHook stays pure and
 // transport-agnostic for reducer tests and replay; this seam adds a complete
 // validated identity only to ordinary harness, legacy, and subagent facts.
-func normalizedFromHookRequest(event string, req protocol.Request, windowID int) protocol.NormalizedEvent {
+func NormalizedFromHookRequest(event string, req protocol.Request, windowID int) protocol.NormalizedEvent {
 	normalized := NormalizedFromHook(event, req.Harness, req.PayloadJSON, windowID, req.PipeMode)
 	switch normalized.Source.Kind {
 	case protocol.SourceHarness, protocol.SourceLegacy, protocol.SourceSubagent:
@@ -54,10 +67,10 @@ func normalizedFromHookRequest(event string, req protocol.Request, windowID int)
 	return normalized
 }
 
-// quarantine builds an inert, invalid event carrying the given reason. Its
+// Quarantine builds an inert, invalid event carrying the given reason. Its
 // Action is empty and its source kind is the synthetic protocol.SourceInvalid
 // so it can never be mistaken for a live fact.
-func quarantine(event, reason string) protocol.NormalizedEvent {
+func Quarantine(event, reason string) protocol.NormalizedEvent {
 	return protocol.NormalizedEvent{
 		Source:  protocol.SourceID{Kind: protocol.SourceInvalid, Key: InvalidPayloadReason},
 		Event:   event,
@@ -66,9 +79,9 @@ func quarantine(event, reason string) protocol.NormalizedEvent {
 	}
 }
 
-// inert builds a recognized-but-no-effect event (unknown or ignored). It is not
+// Inert builds a recognized-but-no-effect event (unknown or ignored). It is not
 // quarantined (the payload was well-formed); it simply contributes no icon.
-func inert(event, reason string) protocol.NormalizedEvent {
+func Inert(event, reason string) protocol.NormalizedEvent {
 	return protocol.NormalizedEvent{Event: event, Reason: reason}
 }
 
@@ -89,25 +102,25 @@ func NormalizedFromHook(event, harnessName, payloadJSON string, windowID int, pi
 
 	payload, err := hookevent.DecodeHookPayload(strings.NewReader(payloadJSON))
 	if err != nil {
-		return quarantine(event, fmt.Sprintf("%s: %v", InvalidPayloadReason, err))
+		return Quarantine(event, fmt.Sprintf("%s: %v", InvalidPayloadReason, err))
 	}
 
-	if isAgentSessionLoopEvent(event) {
+	if IsAgentSessionLoopEvent(event) {
 		return normalizeASLEvent(event, payload, windowID, pipeMode)
 	}
 
 	if hookevent.IsIgnoredEventForHarness(event, payload, harnessName) {
-		return inert(event, reasonIgnoredEvent)
+		return Inert(event, ReasonIgnoredEvent)
 	}
 
 	action, ok := hookevent.ResolveActionForHarness(event, payload, harnessName)
 	if !ok {
-		return inert(event, reasonUnknownEvent)
+		return Inert(event, ReasonUnknownEvent)
 	}
 
-	seq, at, err := parseSourceSeqAt(payload)
+	seq, at, err := ParseSourceSeqAt(payload)
 	if err != nil {
-		return quarantine(event, fmt.Sprintf("%s: %v", InvalidPayloadReason, err))
+		return Quarantine(event, fmt.Sprintf("%s: %v", InvalidPayloadReason, err))
 	}
 
 	// A clean SubagentStop resolves to "active" for the legacy scalar (repaint
@@ -119,7 +132,7 @@ func NormalizedFromHook(event, harnessName, payloadJSON string, windowID int, pi
 	// identity-less session bucket falls back to a plain idle. The visible icon
 	// then falls back to the highest remaining fact — normally the parent
 	// session's own activity. Failure-carrying stops keep their stop_failure.
-	if isSubagentStopEvent(event) && action == "active" {
+	if IsSubagentStopEvent(event) && action == "active" {
 		if payload.EffectiveAgentID() != "" {
 			action = "stop"
 		} else {
@@ -133,7 +146,7 @@ func NormalizedFromHook(event, harnessName, payloadJSON string, windowID int, pi
 	// one, and the bucket keeps contributing 🤖 while any remain.
 	subagentDelta := 0
 	if isSubagentEvent(event) && payload.EffectiveAgentID() == "" {
-		if isSubagentStopEvent(event) {
+		if IsSubagentStopEvent(event) {
 			subagentDelta = -1
 		} else {
 			subagentDelta = 1
@@ -167,9 +180,9 @@ func NormalizedFromHook(event, harnessName, payloadJSON string, windowID int, pi
 // A paused run additionally carries the attention action derived from its pause
 // reason: the reducer renders it as the matching attention icon plus 🔁.
 func normalizeASLEvent(event string, payload hookevent.HookPayload, windowID int, pipeMode bool) protocol.NormalizedEvent {
-	seq, at, err := parseSourceSeqAt(payload)
+	seq, at, err := ParseSourceSeqAt(payload)
 	if err != nil {
-		return quarantine(event, fmt.Sprintf("%s: %v", InvalidPayloadReason, err))
+		return Quarantine(event, fmt.Sprintf("%s: %v", InvalidPayloadReason, err))
 	}
 	runID := payload.EffectiveRunID()
 	key := runID
@@ -177,8 +190,8 @@ func normalizeASLEvent(event string, payload hookevent.HookPayload, windowID int
 		key = protocol.WindowKey(windowID)
 	}
 	action := ""
-	if event == agentSessionLoopPaused {
-		action = aslPausedAttentionAction(payload.EffectivePauseReason())
+	if event == AgentSessionLoopPaused {
+		action = ASLPausedAttentionAction(payload.EffectivePauseReason())
 	}
 	return protocol.NormalizedEvent{
 		Source:         protocol.SourceID{Kind: protocol.SourceASL, Key: key},
@@ -188,14 +201,14 @@ func normalizeASLEvent(event string, payload hookevent.HookPayload, windowID int
 		OriginWindowID: windowID,
 		PipeMode:       pipeMode,
 		RunID:          runID,
-		Phase:          aslPhaseForEvent(event),
+		Phase:          ASLPhaseForEvent(event),
 		TurnID:         payload.EffectiveTurnID(),
 		Event:          event,
 		SourceEventID:  payload.EffectiveSourceEventID(),
 	}
 }
 
-// aslPhaseForEvent maps ASL lifecycle events onto reducer phases. Started opens
+// ASLPhaseForEvent maps ASL lifecycle events onto reducer phases. Started opens
 // the run's loop lease without a turn (between); turn start/heartbeat are an
 // executing turn, and so are a suspected worker hang and its retraction (the
 // turn is still live — notify-only suspicion must not drop the lease or repaint
@@ -204,36 +217,36 @@ func normalizeASLEvent(event string, payload hookevent.HookPayload, windowID int
 // stays live, no icon); a started wait awaits a mailbox reply and an ended wait
 // returns to between-turns; paused awaits a human; finished releases the lease
 // and stops.
-func aslPhaseForEvent(event string) string {
+func ASLPhaseForEvent(event string) string {
 	switch event {
-	case agentSessionLoopStarted:
+	case AgentSessionLoopStarted:
 		return state.ASLPhaseBetween
-	case agentSessionLoopTurnStarted, agentSessionLoopTurnHeartbeat,
-		agentSessionLoopTurnHangSuspected, agentSessionLoopTurnHangCleared:
+	case AgentSessionLoopTurnStarted, AgentSessionLoopTurnHeartbeat,
+		AgentSessionLoopTurnHangSuspected, AgentSessionLoopTurnHangCleared:
 		return state.ASLPhaseTurn
-	case agentSessionLoopTurnFinished, agentSessionLoopVerificationFinished:
+	case AgentSessionLoopTurnFinished, AgentSessionLoopVerificationFinished:
 		return state.ASLPhaseBetween
-	case agentSessionLoopVerificationStarted, agentSessionLoopVerificationHeartbeat:
+	case AgentSessionLoopVerificationStarted, AgentSessionLoopVerificationHeartbeat:
 		return state.ASLPhaseVerification
-	case agentSessionLoopWaitStarted:
+	case AgentSessionLoopWaitStarted:
 		return state.ASLPhaseWaiting
-	case agentSessionLoopWaitEnded:
+	case AgentSessionLoopWaitEnded:
 		return state.ASLPhaseBetween
-	case agentSessionLoopPaused:
+	case AgentSessionLoopPaused:
 		return state.ASLPhasePaused
-	case agentSessionLoopFinished:
+	case AgentSessionLoopFinished:
 		return state.ASLPhaseFinished
 	default:
 		return ""
 	}
 }
 
-// aslPausedAttentionAction maps an ASL pause reason onto the attention action a
+// ASLPausedAttentionAction maps an ASL pause reason onto the attention action a
 // paused run contributes alongside its 🔁 lease. Question-style pauses (the loop
 // is waiting for an answer) surface the question icon; every other pause reason
 // (verify-failed, blocked, unsafe, malformed-plan, unknown) is a recoverable
 // warning — the run is not dead, it is waiting for a human to intervene.
-func aslPausedAttentionAction(reason string) string {
+func ASLPausedAttentionAction(reason string) string {
 	switch strings.ToLower(strings.TrimSpace(reason)) {
 	case "question", "questions", "qna", "elicitation", "clarification", "answer-required":
 		return "elicitation"
@@ -297,13 +310,13 @@ func isSubagentEvent(event string) bool {
 	case "SubagentStart", "subagentStart":
 		return true
 	default:
-		return isSubagentStopEvent(event)
+		return IsSubagentStopEvent(event)
 	}
 }
 
-// isSubagentStopEvent reports whether the event is a subagent completion in
+// IsSubagentStopEvent reports whether the event is a subagent completion in
 // either harness dialect.
-func isSubagentStopEvent(event string) bool {
+func IsSubagentStopEvent(event string) bool {
 	return event == "SubagentStop" || event == "subagentStop"
 }
 
@@ -313,12 +326,12 @@ func isSessionEndEvent(event string) bool {
 	return event == "SessionEnd" || event == "sessionEnd"
 }
 
-// parseSourceSeqAt parses the per-source sequence and emitted timestamp from
+// ParseSourceSeqAt parses the per-source sequence and emitted timestamp from
 // their string payload fields. Absent fields yield zero (no sequence / no
 // timestamp). A present-but-unparseable field returns an error so the caller can
 // quarantine: an untrustworthy sequence could otherwise shadow a later real
 // event, which must never reach Apply.
-func parseSourceSeqAt(payload hookevent.HookPayload) (seq uint64, at int64, err error) {
+func ParseSourceSeqAt(payload hookevent.HookPayload) (seq uint64, at int64, err error) {
 	if raw := strings.TrimSpace(payload.EffectiveSourceSequence()); raw != "" {
 		v, perr := strconv.ParseUint(raw, 10, 64)
 		if perr != nil {
@@ -334,4 +347,17 @@ func parseSourceSeqAt(payload hookevent.HookPayload) (seq uint64, at int64, err 
 		at = v
 	}
 	return seq, at, nil
+}
+
+// NormalizeProducerFields makes the additive ProducerHarness field
+// authoritative when present while keeping the legacy Harness field usable by
+// every existing handler path.
+func NormalizeProducerFields(req protocol.Request) protocol.Request {
+	if producer := strings.TrimSpace(req.ProducerHarness); producer != "" {
+		req.Harness = producer
+	} else {
+		req.ProducerHarness = req.Harness
+	}
+	req.HarnessProcess = protocol.ValidatedHarnessProcessIdentity(req.Harness, req.HarnessProcess)
+	return req
 }
