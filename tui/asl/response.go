@@ -12,9 +12,9 @@ import (
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
-// ResponseInnerWidth is the widest the response form draws. It is clamped to
+// responseInnerWidth is the widest the response form draws. It is clamped to
 // the terminal on narrow layouts so the box never overflows.
-const ResponseInnerWidth = 76
+const responseInnerWidth = 76
 
 // responseBodyLines bounds how much of a question is shown at once. The
 // remainder is reachable by opening the Workbench; the form is for answering,
@@ -24,9 +24,9 @@ const responseBodyLines = 10
 // responseEditorLines bounds the visible height of the answer editor.
 const responseEditorLines = 6
 
-// ResponseWidth is the inner width the form draws at on a terminal this wide.
-func ResponseWidth(terminalWidth int) int {
-	width := ResponseInnerWidth
+// responseWidth is the inner width the form draws at on a terminal this wide.
+func responseWidth(terminalWidth int) int {
+	width := responseInnerWidth
 	if avail := terminalWidth - 4; terminalWidth > 0 && avail < width {
 		width = avail
 	}
@@ -38,12 +38,12 @@ func ResponseWidth(terminalWidth int) int {
 
 // RenderResponseBox draws the form inside the overlay border.
 func RenderResponseBox(state ResponseState, terminalWidth int) string {
-	width := ResponseWidth(terminalWidth)
-	return styleOverlayBox.Width(width).Render(strings.TrimRight(RenderResponse(state, width), "\n"))
+	width := responseWidth(terminalWidth)
+	return styleOverlayBox.Width(width).Render(strings.TrimRight(renderResponse(state, width), "\n"))
 }
 
-// RenderResponse draws the form body at an already-clamped inner width.
-func RenderResponse(state ResponseState, width int) string {
+// renderResponse draws the form body at an already-clamped inner width.
+func renderResponse(state ResponseState, width int) string {
 	var sb strings.Builder
 
 	sb.WriteString(styleHeader.Render(responseTitle(state)))

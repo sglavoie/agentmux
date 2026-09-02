@@ -108,8 +108,7 @@ func renderedLineContaining(t *testing.T, rendered, visible string) string {
 // renderSelectedRow instead of directly nesting the reverse style around it.
 func TestSelectableListFamiliesUseNormalizedRenderer(t *testing.T) {
 	files := []string{
-		"chip_picker.go", "model_live_session_picker.go",
-		"plan_search.go", "plan_view.go", "worktrees.go",
+		"chip_picker.go", "model_overlays.go",
 	}
 	for _, name := range files {
 		t.Run(name, func(t *testing.T) {

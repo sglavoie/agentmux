@@ -8,14 +8,14 @@ import (
 )
 
 func TestTokenAtCaret_EmptyInput(t *testing.T) {
-	sigil, prefix, from, to := TokenAtCaret("", 0)
+	sigil, prefix, from, to := tokenAtCaret("", 0)
 	if sigil != 0 || prefix != "" || from != 0 || to != 0 {
 		t.Errorf("expected zero values, got (%q, %q, %d, %d)", sigil, prefix, from, to)
 	}
 }
 
 func TestTokenAtCaret_BareWord(t *testing.T) {
-	sigil, prefix, _, _ := TokenAtCaret("api", 3)
+	sigil, prefix, _, _ := tokenAtCaret("api", 3)
 	if sigil != 0 {
 		t.Errorf("expected no sigil for bare word, got %q", sigil)
 	}
@@ -25,7 +25,7 @@ func TestTokenAtCaret_BareWord(t *testing.T) {
 }
 
 func TestTokenAtCaret_AccountSigil(t *testing.T) {
-	sigil, prefix, from, to := TokenAtCaret("@wo", 3)
+	sigil, prefix, from, to := tokenAtCaret("@wo", 3)
 	if sigil != '@' {
 		t.Errorf("expected sigil=@, got %q", sigil)
 	}
@@ -38,7 +38,7 @@ func TestTokenAtCaret_AccountSigil(t *testing.T) {
 }
 
 func TestTokenAtCaret_StateSigilAfterWhitespace(t *testing.T) {
-	sigil, prefix, from, to := TokenAtCaret("api !ke", 7)
+	sigil, prefix, from, to := tokenAtCaret("api !ke", 7)
 	if sigil != '!' {
 		t.Errorf("expected sigil=!, got %q", sigil)
 	}
@@ -51,7 +51,7 @@ func TestTokenAtCaret_StateSigilAfterWhitespace(t *testing.T) {
 }
 
 func TestTokenAtCaret_HarnessSigilNoPrefix(t *testing.T) {
-	sigil, prefix, _, _ := TokenAtCaret("%", 1)
+	sigil, prefix, _, _ := tokenAtCaret("%", 1)
 	if sigil != '%' {
 		t.Errorf("expected sigil=%%, got %q", sigil)
 	}
@@ -62,7 +62,7 @@ func TestTokenAtCaret_HarnessSigilNoPrefix(t *testing.T) {
 
 func TestTokenAtCaret_AfterTrailingSpace(t *testing.T) {
 	// Caret right after a space → no active token.
-	sigil, _, _, _ := TokenAtCaret("@work ", 6)
+	sigil, _, _, _ := tokenAtCaret("@work ", 6)
 	if sigil != 0 {
 		t.Errorf("expected no sigil after trailing space, got %q", sigil)
 	}
@@ -72,7 +72,7 @@ func TestCandidatesForSigil_Account(t *testing.T) {
 	cfg := &config.Config{
 		Profiles: []config.Account{{Name: "work", Color: "blue"}, {Name: "personal", Color: "yellow"}},
 	}
-	got := CandidatesForSigil('@', cfg)
+	got := candidatesForSigil('@', cfg)
 	want := []string{"work", "personal"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("expected %v, got %v", want, got)
@@ -84,7 +84,7 @@ func TestCandidatesForSigil_AccountDedupesLegacyAlias(t *testing.T) {
 		Profiles: []config.Account{{Name: "work", Color: "blue"}},
 		Accounts: []config.Account{{Name: "work", Color: "blue"}, {Name: "personal", Color: "yellow"}},
 	}
-	got := CandidatesForSigil('@', cfg)
+	got := candidatesForSigil('@', cfg)
 	want := []string{"work", "personal"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("expected dedup, got %v", got)
@@ -92,7 +92,7 @@ func TestCandidatesForSigil_AccountDedupesLegacyAlias(t *testing.T) {
 }
 
 func TestCandidatesForSigil_State(t *testing.T) {
-	got := CandidatesForSigil('!', nil)
+	got := candidatesForSigil('!', nil)
 	for _, want := range []string{"active", "idle", "bolt", "key", "stop", "warning", "error"} {
 		found := false
 		for _, g := range got {
@@ -112,7 +112,7 @@ func TestCandidatesForSigil_State(t *testing.T) {
 // recognizes. Without subagent/compact/question, typing "!s" would suggest
 // only "stop" even though "!subagent" is a real, working filter.
 func TestCandidatesForSigil_StateMirrorsMatchState(t *testing.T) {
-	got := CandidatesForSigil('!', nil)
+	got := candidatesForSigil('!', nil)
 	have := map[string]bool{}
 	for _, g := range got {
 		have[g] = true
@@ -125,7 +125,7 @@ func TestCandidatesForSigil_StateMirrorsMatchState(t *testing.T) {
 }
 
 func TestCandidatesForSigil_HarnessFromRegistry(t *testing.T) {
-	got := CandidatesForSigil('%', nil)
+	got := candidatesForSigil('%', nil)
 	if len(got) == 0 {
 		t.Fatal("expected non-empty harness names")
 	}
@@ -144,7 +144,7 @@ func TestCandidatesForSigil_HarnessFromRegistry(t *testing.T) {
 }
 
 func TestFilterCandidates_PrefixFirst(t *testing.T) {
-	got := FilterCandidates([]string{"alpha", "beta", "alfresco"}, "al")
+	got := filterCandidates([]string{"alpha", "beta", "alfresco"}, "al")
 	// Both alpha and alfresco are prefix matches.
 	if len(got) != 2 || got[0] != "alpha" || got[1] != "alfresco" {
 		t.Errorf("expected prefix matches, got %v", got)
@@ -152,7 +152,7 @@ func TestFilterCandidates_PrefixFirst(t *testing.T) {
 }
 
 func TestFilterCandidates_SubstringFallback(t *testing.T) {
-	got := FilterCandidates([]string{"foo", "barfoo", "bar"}, "foo")
+	got := filterCandidates([]string{"foo", "barfoo", "bar"}, "foo")
 	// Prefix: foo; substring: barfoo.
 	if len(got) != 2 || got[0] != "foo" || got[1] != "barfoo" {
 		t.Errorf("expected foo,barfoo, got %v", got)
@@ -160,14 +160,14 @@ func TestFilterCandidates_SubstringFallback(t *testing.T) {
 }
 
 func TestFilterCandidates_CaseInsensitive(t *testing.T) {
-	got := FilterCandidates([]string{"Work", "Personal"}, "wo")
+	got := filterCandidates([]string{"Work", "Personal"}, "wo")
 	if len(got) != 1 || got[0] != "Work" {
 		t.Errorf("expected Work only, got %v", got)
 	}
 }
 
 func TestFilterCandidates_EmptyPrefixReturnsAll(t *testing.T) {
-	got := FilterCandidates([]string{"a", "b"}, "")
+	got := filterCandidates([]string{"a", "b"}, "")
 	if !reflect.DeepEqual(got, []string{"a", "b"}) {
 		t.Errorf("expected full set, got %v", got)
 	}

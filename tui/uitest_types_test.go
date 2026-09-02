@@ -27,7 +27,7 @@ func TestUITestActionTypeValid(t *testing.T) {
 // TestUITestResultJSONRoundTrip verifies the JSON-facing contract types marshal
 // and unmarshal without loss, so the CLI output stays stable across sessions.
 func TestUITestResultJSONRoundTrip(t *testing.T) {
-	orig := UITestResult{
+	orig := uitestResult{
 		Name:   "profile-picker-fits",
 		Passed: false,
 		Screen: UITestScreen{
@@ -47,12 +47,12 @@ func TestUITestResultJSONRoundTrip(t *testing.T) {
 
 	data, err := json.Marshal(orig)
 	if err != nil {
-		t.Fatalf("marshal UITestResult: %v", err)
+		t.Fatalf("marshal uitestResult: %v", err)
 	}
 
-	var got UITestResult
+	var got uitestResult
 	if err := json.Unmarshal(data, &got); err != nil {
-		t.Fatalf("unmarshal UITestResult: %v", err)
+		t.Fatalf("unmarshal uitestResult: %v", err)
 	}
 	if !reflect.DeepEqual(got, orig) {
 		t.Fatalf("round-trip mismatch:\n got  %+v\n want %+v", got, orig)

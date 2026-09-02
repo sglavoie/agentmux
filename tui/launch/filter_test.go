@@ -66,7 +66,7 @@ func TestPickerProfileCycleEmptySingleAndCaseInsensitive(t *testing.T) {
 	if got := NextProfileFilter(one, "work"); got != "" {
 		t.Fatalf("single-profile wrap = %q, want all", got)
 	}
-	if got := FilterIndicesByProfile(one, []int{0}, "work"); !slices.Equal(got, []int{0}) {
+	if got := filterIndicesByProfile(one, []int{0}, "work"); !slices.Equal(got, []int{0}) {
 		t.Fatalf("case-insensitive profile match = %v, want [0]", got)
 	}
 }

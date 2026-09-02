@@ -37,7 +37,7 @@ func (in ProfileInput) Render() string {
 		if n := layout.Width(acc.Name); n > maxName {
 			maxName = n
 		}
-		if h := layout.Width(HarnessDisplayText(in.Cfg, acc.EffectiveHarness())); h > maxHarness {
+		if h := layout.Width(harnessDisplayText(in.Cfg, acc.EffectiveHarness())); h > maxHarness {
 			maxHarness = h
 		}
 	}
@@ -48,7 +48,7 @@ func (in ProfileInput) Render() string {
 			namePad = 0
 		}
 		name := accountStyle(acc.Color).Render(acc.Name) + strings.Repeat(" ", namePad)
-		harnessText := HarnessDisplayText(in.Cfg, acc.EffectiveHarness())
+		harnessText := harnessDisplayText(in.Cfg, acc.EffectiveHarness())
 		pad := maxHarness - layout.Width(harnessText)
 		if pad < 0 {
 			pad = 0

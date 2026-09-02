@@ -2,10 +2,10 @@ package plans
 
 import planindex "github.com/sglavoie/agentmux/internal/plans"
 
-// SortLabel returns the short label rendered in the Plans header to signal
+// sortLabel returns the short label rendered in the Plans header to signal
 // which ordering is active. Kept distinct from the SortMode constants so the
 // on-screen labels can evolve without touching the internal type.
-func SortLabel(mode planindex.SortMode) string {
+func sortLabel(mode planindex.SortMode) string {
 	switch mode {
 	case planindex.SortByModTime:
 		return "recent"

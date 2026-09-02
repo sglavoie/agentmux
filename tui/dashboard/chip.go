@@ -99,7 +99,7 @@ func RenderChips(f Filter, acctColor map[string]string, focused, width int) stri
 	var line strings.Builder
 	lineW := 0
 	for i, c := range comps {
-		chip := RenderChip(c, acctColor, i == focused)
+		chip := renderChip(c, acctColor, i == focused)
 		// A single chip whose label exceeds the terminal is never split by the
 		// wrap loop below, so clamp it to width first.
 		if width > 0 {
@@ -128,12 +128,12 @@ func RenderChips(f Filter, acctColor map[string]string, focused, width int) stri
 	return strings.Join(lines, "\n") + "\n"
 }
 
-// RenderChip renders a single chip body. The leading ▌ glyph and trailing
+// renderChip renders a single chip body. The leading ▌ glyph and trailing
 // ✕ remove icon share the chip's color so the entire chip reads as one unit.
 // Focused chips wrap the ✕ in brackets — Postel's Law: chip focus is also
 // signaled by the underline overlay in chipStyle, but the bracketed glyph
 // makes the affordance unmistakable.
-func RenderChip(c Chip, acctColor map[string]string, focused bool) string {
+func renderChip(c Chip, acctColor map[string]string, focused bool) string {
 	suffix := " ✕"
 	if focused {
 		suffix = " [✕]"

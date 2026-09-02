@@ -9,11 +9,11 @@ import (
 
 func TestUITestDriverSeedsHermeticFilesystemIndexes(t *testing.T) {
 	t.Setenv("HOME", filepath.Join(t.TempDir(), "operator-sentinel-home"))
-	fx, err := UITestFixtureByName("basic")
+	fx, err := uitestFixtureByName("basic")
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, _ := NewUITestFixtureDriver(fx, fx.Size)
+	d, _ := newUITestFixtureDriver(fx, fx.Size)
 	cleanupUITestDriver(t, d)
 
 	for label, path := range map[string]string{
@@ -56,7 +56,7 @@ func TestUITestDriverSeedsHermeticFilesystemIndexes(t *testing.T) {
 func TestUITestDriverDoesNotCreateDefaultDatabase(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	d := NewUITestDriverModel(testModelWithSessions(), UITestSize{Width: 80, Height: 24})
+	d := newUITestDriverModel(testModelWithSessions(), UITestSize{Width: 80, Height: 24})
 	cleanupUITestDriver(t, d)
 	for _, path := range []string{
 		filepath.Join(home, ".local", "share", "agent-mux", "agent-mux.db"),
@@ -69,7 +69,7 @@ func TestUITestDriverDoesNotCreateDefaultDatabase(t *testing.T) {
 }
 
 func TestUITestDriverTickUsesDeterministicDaemonAndDiscoveryDependencies(t *testing.T) {
-	d := NewUITestDriverModel(testModelWithSessions(), UITestSize{Width: 80, Height: 24})
+	d := newUITestDriverModel(testModelWithSessions(), UITestSize{Width: 80, Height: 24})
 	cleanupUITestDriver(t, d)
 	d.model.mode = ModeDetail
 	d.model.detailWindowID = 42
@@ -83,7 +83,7 @@ func TestUITestDriverTickUsesDeterministicDaemonAndDiscoveryDependencies(t *test
 }
 
 func TestUITestDriverActionDaemonFailsFast(t *testing.T) {
-	d := NewUITestDriverModel(testModelWithSessions(), UITestSize{Width: 80, Height: 24})
+	d := newUITestDriverModel(testModelWithSessions(), UITestSize{Width: 80, Height: 24})
 	cleanupUITestDriver(t, d)
 	if err := d.drain(d.model.clearStatusCmd(makeSessions()[0])); err != nil {
 		t.Fatalf("clear status command: %v", err)

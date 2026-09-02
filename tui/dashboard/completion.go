@@ -25,9 +25,9 @@ type Completion struct {
 // Mirrors matchState in filter.go plus the active/idle aliases.
 var completionStateNames = []string{"active", "idle", "bolt", "key", "stop", "warning", "error", "subagent", "compact", "question"}
 
-// CandidatesForSigil returns the unfiltered candidate set for a sigil.
+// candidatesForSigil returns the unfiltered candidate set for a sigil.
 // Returns nil for unknown sigils.
-func CandidatesForSigil(sigil byte, cfg *config.Config) []string {
+func candidatesForSigil(sigil byte, cfg *config.Config) []string {
 	switch sigil {
 	case '@':
 		var out []string
@@ -53,10 +53,10 @@ func CandidatesForSigil(sigil byte, cfg *config.Config) []string {
 	return nil
 }
 
-// FilterCandidates ranks all against prefix (case-insensitive): prefix matches
+// filterCandidates ranks all against prefix (case-insensitive): prefix matches
 // first (in their original order), then substring matches not already
 // included. Empty prefix returns all unchanged.
-func FilterCandidates(all []string, prefix string) []string {
+func filterCandidates(all []string, prefix string) []string {
 	if prefix == "" {
 		return append([]string(nil), all...)
 	}
@@ -81,14 +81,14 @@ func FilterCandidates(all []string, prefix string) []string {
 // preserving the current selection when it still indexes the new candidate
 // list.
 func (c *Completion) Recompute(text string, cfg *config.Config) {
-	sigil, prefix, from, to := TokenAtCaret(text, len(text))
+	sigil, prefix, from, to := tokenAtCaret(text, len(text))
 	if sigil == 0 {
 		c.Visible = false
 		c.Candidates = nil
 		c.Selected = 0
 		return
 	}
-	filtered := FilterCandidates(CandidatesForSigil(sigil, cfg), prefix)
+	filtered := filterCandidates(candidatesForSigil(sigil, cfg), prefix)
 	if len(filtered) == 0 {
 		c.Visible = false
 		c.Candidates = nil

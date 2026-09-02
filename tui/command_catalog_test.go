@@ -23,8 +23,8 @@ func commandByID(t *testing.T, id commands.ID) commands.Command[Model] {
 	return commands.Command[Model]{}
 }
 
-func commandTestModel(target session.RunningSession) (Model, commands.Context, *UITestKittyClient) {
-	client := NewUITestKittyClient(nil)
+func commandTestModel(target session.RunningSession) (Model, commands.Context, *uitestKittyClient) {
+	client := newUITestKittyClient(nil)
 	m := testModelWithSessions()
 	m.client = client
 	m.width = 160

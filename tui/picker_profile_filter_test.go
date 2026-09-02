@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/tui/commands"
+	"github.com/sglavoie/agentmux/tui/launch"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -25,7 +26,7 @@ func TestPickerProfileCycleFiltersProjectProfilesAndWraps(t *testing.T) {
 	if m.pickerProfileFilter != "" {
 		t.Fatalf("initial profile filter = %q, want all", m.pickerProfileFilter)
 	}
-	if got := pickerProjectProfiles(m.pickerSessions); !slices.Equal(got, []string{"personal", "work"}) {
+	if got := launch.ProjectProfiles(m.pickerSessions); !slices.Equal(got, []string{"personal", "work"}) {
 		t.Fatalf("project-backed profile cycle = %v, want [personal work]", got)
 	}
 

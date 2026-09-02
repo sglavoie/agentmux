@@ -172,7 +172,7 @@ func (in PickerInput) RenderList(height int) string {
 			titleColW = w
 		}
 		if acc, ok := findAccountByName(in.Cfg.Accounts, sess.EffectiveProfile()); ok {
-			hw := layout.Width(HarnessCellText(in.Cfg, acc))
+			hw := layout.Width(harnessCellText(in.Cfg, acc))
 			if hw > harnessColW {
 				harnessColW = hw
 			}
@@ -253,7 +253,7 @@ func (in PickerInput) RenderList(height int) string {
 
 		var harnessCell string
 		if acc, ok := findAccountByName(in.Cfg.Accounts, sess.EffectiveProfile()); ok {
-			text := HarnessCellText(in.Cfg, acc)
+			text := harnessCellText(in.Cfg, acc)
 			pad := harnessColW - layout.Width(text)
 			if pad < 0 {
 				pad = 0

@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/plans"
+	tuiplans "github.com/sglavoie/agentmux/tui/plans"
 )
 
 func planProjectFilterTestModel() Model {
@@ -61,10 +62,10 @@ func TestPlanSearchProjectPickerCancelReturnsToPlans(t *testing.T) {
 
 func TestPlanSearchAndViewerRenderProjectLabels(t *testing.T) {
 	known := plans.PlanMeta{Name: "known", Project: "Primary", Projects: []string{"Primary", "Alias"}, Files: []string{"manifest.md"}}
-	if got := stripAnsi(formatPlanRow(plans.Result{Meta: known}, 100)); !strings.Contains(got, "[Primary]") {
+	if got := stripAnsi(tuiplans.FormatRow(plans.Result{Meta: known}, 100)); !strings.Contains(got, "[Primary]") {
 		t.Fatalf("known row missing project label: %q", got)
 	}
-	if got := stripAnsi(formatPlanRow(plans.Result{Meta: plans.PlanMeta{Name: "legacy"}}, 100)); !strings.Contains(got, "[Unknown]") {
+	if got := stripAnsi(tuiplans.FormatRow(plans.Result{Meta: plans.PlanMeta{Name: "legacy"}}, 100)); !strings.Contains(got, "[Unknown]") {
 		t.Fatalf("unknown row missing project label: %q", got)
 	}
 

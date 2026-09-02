@@ -15,9 +15,9 @@ import (
 // under a modal. The action is not retried against a fresh token.
 const TargetChangedText = "this run changed since it was selected: the form was closed and the list refreshed"
 
-// RowPermits reports whether ASL's own projection lists a method as permitted
+// rowPermits reports whether ASL's own projection lists a method as permitted
 // on this row. Permission is never inferred from the state string.
-func RowPermits(row aslbridge.Row, method string) bool {
+func rowPermits(row aslbridge.Row, method string) bool {
 	for _, permitted := range row.Actions {
 		if permitted == method {
 			return true
@@ -43,7 +43,7 @@ func (in RunsInput) ActionAllowed(row aslbridge.Row, method string) (bool, strin
 	if strings.TrimSpace(row.ActionToken) == "" {
 		return false, "actions are unavailable: this run carries no action token"
 	}
-	if RowPermits(row, method) {
+	if rowPermits(row, method) {
 		return true, ""
 	}
 	label := MethodLabel(method)
@@ -71,9 +71,9 @@ func MethodLabel(method string) string {
 	}
 }
 
-// StaleCodes are the refusals that mean the run moved: the token, the question,
+// staleCodes are the refusals that mean the run moved: the token, the question,
 // or the run itself no longer matches what the operator reviewed.
-var StaleCodes = map[string]bool{
+var staleCodes = map[string]bool{
 	"stale-action-token":   true,
 	"action-not-permitted": true,
 	"no-active-run":        true,
@@ -87,8 +87,8 @@ var StaleCodes = map[string]bool{
 	"stale-snapshot": true,
 }
 
-// ErrorCodes are the refusals that report a fault rather than a moved target.
-var ErrorCodes = map[string]bool{
+// errorCodes are the refusals that report a fault rather than a moved target.
+var errorCodes = map[string]bool{
 	"invalid-plan":            true,
 	"invalid-action":          true,
 	"empty-text":              true,
@@ -120,7 +120,7 @@ func ErrorCode(err error) string {
 	if idx := strings.Index(text, ": "); idx > 0 {
 		code = text[:idx]
 	}
-	if StaleCodes[code] || ErrorCodes[code] {
+	if staleCodes[code] || errorCodes[code] {
 		return code
 	}
 	return ""
@@ -128,7 +128,7 @@ func ErrorCode(err error) string {
 
 // StaleTarget reports whether a refusal means the run moved under the operator.
 func StaleTarget(err error) bool {
-	return StaleCodes[ErrorCode(err)]
+	return staleCodes[ErrorCode(err)]
 }
 
 // RefusalText maps a refusal to a fixed operator-facing sentence. The bridge's

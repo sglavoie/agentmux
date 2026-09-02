@@ -3,7 +3,6 @@ package tui
 import (
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/history"
 )
@@ -115,10 +114,6 @@ func renderSessionSearchList(m Model, height int) string {
 	return historySearchInput(m).RenderList(height)
 }
 
-func formatSessionRow(res transcript.Result, acctColor map[string]string, maxWidth int) string {
-	return history.FormatRow(res, acctColor, maxWidth)
-}
-
 func sessionSearchVisibleHeight(m Model) int {
 	return historySearchInput(m).VisibleHeight()
 }
@@ -170,17 +165,6 @@ func renderSessionView(m Model) string {
 
 func sessionViewVisibleHeight(m Model) int {
 	return historyViewerInput(m).VisibleHeight()
-}
-
-// collapseWhitespace is the root-side name for the viewer's one-line
-// collapsing, kept so the viewer-copy regression can assert that yanking
-// copies the backing text rather than the collapsed rendering.
-func collapseWhitespace(s string) string {
-	return history.CollapseWhitespace(s)
-}
-
-func computeViewerMatches(msgs []transcript.Message, query string) []int {
-	return history.ComputeMatches(msgs, query)
 }
 
 func scrollViewerToCursor(m *Model) {

@@ -12,8 +12,8 @@ import (
 const (
 	// GroupBorderGlyph is the 1-cell left border drawn for each row of a group.
 	GroupBorderGlyph = "▌"
-	// GroupBorderWidth is the visual width consumed by the border + trailing space.
-	GroupBorderWidth = 2
+	// groupBorderWidth is the visual width consumed by the border + trailing space.
+	groupBorderWidth = 2
 )
 
 // StateGroup classifies a session into one of three buckets:
@@ -102,7 +102,7 @@ func renderGroupLabel(group, count int) string {
 	default:
 		styled = styleGroupLabelIdle.Render(label)
 	}
-	return strings.Repeat(" ", GroupBorderWidth) + styled
+	return strings.Repeat(" ", groupBorderWidth) + styled
 }
 
 var groupLabels = [3]string{"Needs Attention", "Active", "Idle"}

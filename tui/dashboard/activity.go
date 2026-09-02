@@ -43,14 +43,14 @@ const (
 	runTimerOverflowText  = "99d+"
 )
 
-// FormatRunElapsed renders how long a row's current busy stretch has been
+// formatRunElapsed renders how long a row's current busy stretch has been
 // running, in at most runTimerMaxCells cells: `—` for a row with no anchor,
 // `M:SS` below one hour, `<n>h<MM>` below 100 hours, `<n>d<HH>` below 100 days,
 // and the saturating `99d+` beyond that. Each band rolls over before its
 // leading count reaches three digits, so the activity column can never outgrow
 // its reserved width. Negative durations clamp to zero so clock skew between
 // the daemon and the TUI cannot surface a count running backwards.
-func FormatRunElapsed(busySince, now time.Time) string {
+func formatRunElapsed(busySince, now time.Time) string {
 	if busySince.IsZero() {
 		return "—"
 	}
@@ -70,14 +70,14 @@ func FormatRunElapsed(busySince, now time.Time) string {
 	}
 }
 
-// ActivityCellText returns a row's rendered activity text and whether the
+// activityCellText returns a row's rendered activity text and whether the
 // staleness warning fires. The warning keeps the watchdog's 80%-of-threshold
 // rule (ThresholdSec ≤ 0 disables it) but applies only to a row that has a
 // timer: the reducer is authoritative for what the row displays, so a row
 // whose legacy LastAction scalar has diverged from the reduced icon must not
 // render a bare `— ⏳`.
-func ActivityCellText(s session.RunningSession, ws protocol.WatchdogState, now time.Time) (text string, warning bool) {
-	text = FormatRunElapsed(s.BusySince, now)
+func activityCellText(s session.RunningSession, ws protocol.WatchdogState, now time.Time) (text string, warning bool) {
+	text = formatRunElapsed(s.BusySince, now)
 	if s.BusySince.IsZero() || ws.LastAction == "" || ws.ThresholdSec <= 0 {
 		return text, false
 	}
@@ -91,12 +91,12 @@ func ActivityCellText(s session.RunningSession, ws protocol.WatchdogState, now t
 
 // activityColumnWidth returns a stable width for every row in the current
 // filtered result set: the widest rendered activity text plus one trailing
-// space. Mirrors TabNumberColumnWidth — one scan per render pass, so the
+// space. Mirrors tabNumberColumnWidth — one scan per render pass, so the
 // column cannot jitter between rows of the same frame.
 func activityColumnWidth(rows []session.RunningSession, watchdog map[int]protocol.WatchdogState, now time.Time) int {
 	widest := layout.Width("—")
 	for _, s := range rows {
-		text, _ := ActivityCellText(s, watchdog[s.WindowID], now)
+		text, _ := activityCellText(s, watchdog[s.WindowID], now)
 		if w := layout.Width(text); w > widest {
 			widest = w
 		}
@@ -109,7 +109,7 @@ func activityColumnWidth(rows []session.RunningSession, watchdog map[int]protoco
 // directory without an extra separator. Warning rows get the warning glyph
 // appended and the whole cell styled in styleAgeWarning.
 func renderActivityCell(s session.RunningSession, ws protocol.WatchdogState, now time.Time, width int) string {
-	text, warning := ActivityCellText(s, ws, now)
+	text, warning := activityCellText(s, ws, now)
 	pad := width - 1 - layout.Width(text)
 	if pad < 0 {
 		pad = 0

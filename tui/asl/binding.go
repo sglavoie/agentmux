@@ -35,14 +35,14 @@ func ExactBinding(row aslbridge.Row, sessions []session.RunningSession) (session
 // running the run's harness. Both must match: a workspace alone can host
 // several harnesses, and a harness alone says nothing about which run it serves.
 func FallbackCandidates(row aslbridge.Row, sessions []session.RunningSession) []actions.WorktreeLiveSession {
-	root := CanonicalDir(row.WorkspaceRoot)
+	root := canonicalDir(row.WorkspaceRoot)
 	harness := strings.TrimSpace(strings.ToLower(row.Harness))
 	if root == "" || harness == "" {
 		return nil
 	}
 	var out []actions.WorktreeLiveSession
 	for _, candidate := range sessions {
-		if CanonicalDir(candidate.Directory) != root {
+		if canonicalDir(candidate.Directory) != root {
 			continue
 		}
 		if strings.ToLower(strings.TrimSpace(candidate.Harness)) != harness {
@@ -85,9 +85,9 @@ func (in RunsInput) MarkerFor(s session.RunningSession) (string, bool) {
 	return "", false
 }
 
-// CanonicalDir resolves a workspace path to the form two sides can be compared
+// canonicalDir resolves a workspace path to the form two sides can be compared
 // in, so a symlinked checkout and its target are recognized as one workspace.
-func CanonicalDir(path string) string {
+func canonicalDir(path string) string {
 	trimmed := strings.TrimSpace(path)
 	if trimmed == "" {
 		return ""

@@ -12,14 +12,14 @@ import (
 	"github.com/sglavoie/agentmux/tui/commands"
 )
 
-func aslRunsDriver(t *testing.T) (*UITestDriver, *UITestKittyClient) {
+func aslRunsDriver(t *testing.T) (*uitestDriver, *uitestKittyClient) {
 	t.Helper()
-	d, client := NewUITestFixtureDriver(aslRunsFixture(), UITestSize{})
+	d, client := newUITestFixtureDriver(aslRunsFixture(), UITestSize{})
 	t.Cleanup(func() { _ = d.Close() })
 	return d, client
 }
 
-func enterASLRunsDriver(t *testing.T) (*UITestDriver, *UITestKittyClient) {
+func enterASLRunsDriver(t *testing.T) (*uitestDriver, *uitestKittyClient) {
 	t.Helper()
 	d, client := aslRunsDriver(t)
 	if err := d.Key(keyASLRuns); err != nil {
@@ -37,7 +37,7 @@ func enterASLRunsDriver(t *testing.T) (*UITestDriver, *UITestKittyClient) {
 // selectASLRun moves the Runs cursor onto a row by ID. Selecting by identity
 // rather than by a fixed number of keystrokes keeps a test targeting the run it
 // names when the fixture gains a row.
-func selectASLRun(t *testing.T, d *UITestDriver, rowID string) {
+func selectASLRun(t *testing.T, d *uitestDriver, rowID string) {
 	t.Helper()
 	want := -1
 	for i, row := range d.Model().aslRows {
@@ -226,7 +226,7 @@ func TestASLRunsUnavailableRatherThanEmpty(t *testing.T) {
 	fx := aslRunsFixture()
 	fx.ASLRows = nil
 	fx.ASLStatus = aslbridge.Status{Reason: "the agent-session-loop bridge is not running"}
-	d, _ := NewUITestFixtureDriver(fx, UITestSize{})
+	d, _ := newUITestFixtureDriver(fx, UITestSize{})
 	defer func() { _ = d.Close() }()
 	if err := d.Key(keyASLRuns); err != nil {
 		t.Fatalf("entering Runs: %v", err)

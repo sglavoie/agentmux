@@ -65,24 +65,24 @@ func TestFormatRunElapsedBoundaries(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := FormatRunElapsed(now.Add(-tc.elapsed), now)
+			got := formatRunElapsed(now.Add(-tc.elapsed), now)
 			if got != tc.want {
-				t.Errorf("FormatRunElapsed(%s) = %q, want %q", tc.elapsed, got, tc.want)
+				t.Errorf("formatRunElapsed(%s) = %q, want %q", tc.elapsed, got, tc.want)
 			}
 			if w := layout.Width(got); w > runTimerMaxCells {
-				t.Errorf("FormatRunElapsed(%s) = %q occupies %d cells, want at most %d", tc.elapsed, got, w, runTimerMaxCells)
+				t.Errorf("formatRunElapsed(%s) = %q occupies %d cells, want at most %d", tc.elapsed, got, w, runTimerMaxCells)
 			}
 		})
 	}
-	if got := FormatRunElapsed(time.Time{}, now); got != "—" {
+	if got := formatRunElapsed(time.Time{}, now); got != "—" {
 		t.Errorf("a row with no anchor = %q, want the dash placeholder", got)
 	}
 
 	// The named cases only sample the bands; sweep the whole range so no
 	// future band boundary can reintroduce an unbounded leading count.
 	for elapsed := time.Second; elapsed < 1<<20*time.Hour; elapsed = elapsed*3/2 + time.Second {
-		if w := layout.Width(FormatRunElapsed(now.Add(-elapsed), now)); w > runTimerMaxCells {
-			t.Fatalf("FormatRunElapsed(%s) = %q occupies %d cells, want at most %d", elapsed, FormatRunElapsed(now.Add(-elapsed), now), w, runTimerMaxCells)
+		if w := layout.Width(formatRunElapsed(now.Add(-elapsed), now)); w > runTimerMaxCells {
+			t.Fatalf("formatRunElapsed(%s) = %q occupies %d cells, want at most %d", elapsed, formatRunElapsed(now.Add(-elapsed), now), w, runTimerMaxCells)
 		}
 	}
 }
@@ -101,7 +101,7 @@ func TestActivityCellTextWarningRequiresTimer(t *testing.T) {
 		ThresholdSec: 600,
 	}
 
-	text, warning := ActivityCellText(busy, onBand, now)
+	text, warning := activityCellText(busy, onBand, now)
 	if !warning {
 		t.Error("warning must fire at 80% of threshold on a row with a timer")
 	}
@@ -109,7 +109,7 @@ func TestActivityCellTextWarningRequiresTimer(t *testing.T) {
 		t.Errorf("warning text = %q, want %q", text, want)
 	}
 
-	text, warning = ActivityCellText(idle, onBand, now)
+	text, warning = activityCellText(idle, onBand, now)
 	if warning {
 		t.Error("warning must not fire on a row with no timer")
 	}
@@ -122,12 +122,12 @@ func TestActivityCellTextWarningRequiresTimer(t *testing.T) {
 		LastEventAt:  now.Add(-5 * time.Minute).Unix(),
 		ThresholdSec: 600,
 	}
-	if _, warning = ActivityCellText(busy, belowBand, now); warning {
+	if _, warning = activityCellText(busy, belowBand, now); warning {
 		t.Error("warning must not fire at 50% of threshold")
 	}
 
 	noThreshold := protocol.WatchdogState{LastAction: "active", LastEventAt: now.Add(-2 * time.Hour).Unix()}
-	if _, warning = ActivityCellText(busy, noThreshold, now); warning {
+	if _, warning = activityCellText(busy, noThreshold, now); warning {
 		t.Error("warning must not fire when ThresholdSec is zero")
 	}
 }

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// TestUITestRunnerCapturesObservationPerStep verifies RunUITestModel returns one
+// TestUITestRunnerCapturesObservationPerStep verifies runUITestModel returns one
 // observation for the initial render plus one after each action, with modes and
 // sizes reflecting the applied steps.
 func TestUITestRunnerCapturesObservationPerStep(t *testing.T) {
@@ -17,9 +17,9 @@ func TestUITestRunnerCapturesObservationPerStep(t *testing.T) {
 		{Type: UITestActionResize, Width: 90, Height: 28},
 		{Type: UITestActionKey, Key: "a"},
 	}
-	obs, err := RunUITestModel(m, UITestOptions{Size: UITestSize{Width: 80, Height: 24}}, actions)
+	obs, err := runUITestModel(m, UITestOptions{Size: UITestSize{Width: 80, Height: 24}}, actions)
 	if err != nil {
-		t.Fatalf("RunUITestModel error: %v", err)
+		t.Fatalf("runUITestModel error: %v", err)
 	}
 	if len(obs) != len(actions)+1 {
 		t.Fatalf("expected %d observations, got %d", len(actions)+1, len(obs))
@@ -47,7 +47,7 @@ func TestUITestRunnerStopsOnBadAction(t *testing.T) {
 		{Type: UITestActionType("bogus")},
 		{Type: UITestActionKey, Key: "a"},
 	}
-	obs, err := RunUITestModel(m, UITestOptions{Size: UITestSize{Width: 80, Height: 24}}, actions)
+	obs, err := runUITestModel(m, UITestOptions{Size: UITestSize{Width: 80, Height: 24}}, actions)
 	if err == nil {
 		t.Fatal("expected error for unknown action type")
 	}
@@ -57,13 +57,13 @@ func TestUITestRunnerStopsOnBadAction(t *testing.T) {
 	}
 }
 
-// TestUITestRunnerFromConfigBuildsFreshModel verifies RunUITest constructs a
+// TestUITestRunnerFromConfigBuildsFreshModel verifies runUITest constructs a
 // model from config + client and renders at the requested size with no actions.
 func TestUITestRunnerFromConfigBuildsFreshModel(t *testing.T) {
 	base := testModelWithSessions()
-	obs, err := RunUITest(base.cfg, base.client, UITestOptions{Size: UITestSize{Width: 80, Height: 24}}, nil)
+	obs, err := runUITest(base.cfg, base.client, UITestOptions{Size: UITestSize{Width: 80, Height: 24}}, nil)
 	if err != nil {
-		t.Fatalf("RunUITest error: %v", err)
+		t.Fatalf("runUITest error: %v", err)
 	}
 	if len(obs) != 1 {
 		t.Fatalf("expected 1 observation with no actions, got %d", len(obs))

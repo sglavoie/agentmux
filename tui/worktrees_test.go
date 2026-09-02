@@ -201,7 +201,7 @@ func TestWorktreeNavigationFilterAndReturn(t *testing.T) {
 
 func TestWorktreeShellEditorAndCopyActions(t *testing.T) {
 	fx := worktreesFixture()
-	client := NewUITestKittyClient(fx.Windows)
+	client := newUITestKittyClient(fx.Windows)
 	m := NewModel(fx.Config, client)
 	m.width, m.height = 120, 30
 	m.mode = ModeWorktrees

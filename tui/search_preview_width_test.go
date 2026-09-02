@@ -11,7 +11,10 @@ import (
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/dashboard"
+	"github.com/sglavoie/agentmux/tui/history"
 	"github.com/sglavoie/agentmux/tui/layout"
+	tuiplans "github.com/sglavoie/agentmux/tui/plans"
 )
 
 // assertVisibleWidthAtMost fails when any line in output exceeds maxWidth
@@ -57,7 +60,7 @@ func TestFormatSessionRowNarrowWidthStaysWithinBounds(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			meta := narrowFixtureMeta(tc.project, tc.preview)
-			row := formatSessionRow(transcript.Result{Meta: meta, Preview: tc.preview, Matches: tc.matches}, map[string]string{}, tc.width)
+			row := history.FormatRow(transcript.Result{Meta: meta, Preview: tc.preview, Matches: tc.matches}, map[string]string{}, tc.width)
 			if w := layout.StyledWidth(row); w > tc.width {
 				t.Fatalf("formatSessionRow visible width = %d > max %d: %q", w, tc.width, row)
 			}
@@ -67,7 +70,7 @@ func TestFormatSessionRowNarrowWidthStaysWithinBounds(t *testing.T) {
 
 func TestFormatSessionRowEmojiProjectReservesIconColumn(t *testing.T) {
 	meta := narrowFixtureMeta("🗣commscoach", "snippet")
-	row := stripAnsi(formatSessionRow(transcript.Result{Meta: meta, Preview: "snippet", Matches: 1}, map[string]string{}, 120))
+	row := stripAnsi(history.FormatRow(transcript.Result{Meta: meta, Preview: "snippet", Matches: 1}, map[string]string{}, 120))
 	if !strings.Contains(row, "🗣commscoach") {
 		t.Fatalf("session-search row should keep title icon tight, got %q", row)
 	}
@@ -109,7 +112,7 @@ func TestFormatPlanRowNarrowWidthStaysWithinBounds(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			row := formatPlanRow(tc.planRes, tc.width)
+			row := tuiplans.FormatRow(tc.planRes, tc.width)
 			if w := layout.StyledWidth(row); w > tc.width {
 				t.Fatalf("formatPlanRow visible width = %d > max %d: %q", w, tc.width, row)
 			}
@@ -118,14 +121,14 @@ func TestFormatPlanRowNarrowWidthStaysWithinBounds(t *testing.T) {
 }
 
 func TestSearchRowsStyledTruncationPreservesAnsi(t *testing.T) {
-	sessionRow := formatSessionRow(transcript.Result{
+	sessionRow := history.FormatRow(transcript.Result{
 		Meta:    narrowFixtureMeta("api", strings.Repeat("alpha ", 20)),
 		Preview: strings.Repeat("alpha ", 20),
 		Matches: 3,
 	}, map[string]string{"work": "blue"}, 24)
 	assertStyledTruncatedLine(t, "session row", sessionRow, 24)
 
-	planRow := formatPlanRow(plans.Result{
+	planRow := tuiplans.FormatRow(plans.Result{
 		Meta:    plans.PlanMeta{Name: "api", Files: []string{"manifest.md", "session-1.md"}, ModTime: time.Now()},
 		Matches: 3,
 		Preview: strings.Repeat("alpha ", 20),
@@ -229,20 +232,20 @@ func TestRenderPreviewLinesStayWithinWidth(t *testing.T) {
 
 	for _, width := range []int{20, 40, 80} {
 		t.Run("width-"+itoa(width), func(t *testing.T) {
-			out := renderPreview(width, 6, sess, text, "", acctColor, cfg)
+			out := dashboard.RenderPreview(width, 6, sess, text, "", acctColor, cfg)
 			assertVisibleWidthAtMost(t, out, width)
 		})
 	}
 
 	t.Run("error path", func(t *testing.T) {
 		errText := strings.Repeat("a very long error message that should be clipped ", 3)
-		out := renderPreview(30, 4, sess, "", errText, acctColor, cfg)
+		out := dashboard.RenderPreview(30, 4, sess, "", errText, acctColor, cfg)
 		assertVisibleWidthAtMost(t, out, 30)
 	})
 
 	t.Run("not running placeholder", func(t *testing.T) {
 		idle := session.RunningSession{Base: "idle", Project: "idle"}
-		out := renderPreview(20, 3, idle, "", "", acctColor, cfg)
+		out := dashboard.RenderPreview(20, 3, idle, "", "", acctColor, cfg)
 		assertVisibleWidthAtMost(t, out, 20)
 	})
 }
@@ -266,8 +269,8 @@ func TestRenderPreviewEmojiTitleReservesIconColumn(t *testing.T) {
 	acctColor := map[string]string{"work": "blue"}
 
 	const width = 40
-	emojiHeader := strings.SplitN(stripAnsi(renderPreview(width, 1, emojiSess, "", "", acctColor, cfg)), "\n", 2)[0]
-	plainHeader := strings.SplitN(stripAnsi(renderPreview(width, 1, plainSess, "", "", acctColor, cfg)), "\n", 2)[0]
+	emojiHeader := strings.SplitN(stripAnsi(dashboard.RenderPreview(width, 1, emojiSess, "", "", acctColor, cfg)), "\n", 2)[0]
+	plainHeader := strings.SplitN(stripAnsi(dashboard.RenderPreview(width, 1, plainSess, "", "", acctColor, cfg)), "\n", 2)[0]
 
 	// The emoji "🗣" must reserve a 2-cell column without gaining a phantom
 	// space before the title body. Compare the two headers' "body after the

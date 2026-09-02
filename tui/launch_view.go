@@ -2,7 +2,6 @@ package tui
 
 import (
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/launch"
 )
@@ -80,36 +79,8 @@ func scrollPickerToCursor(m *Model) {
 	m.pickerOffset = in.Offset
 }
 
-func sortPickerSessions(sessions []config.Session) []config.Session {
-	return launch.SortSessions(sessions)
-}
-
-func buildPickerRunning(sessions []session.RunningSession) map[string]int {
-	return launch.BuildRunning(sessions)
-}
-
-func runningSessionKey(sess session.RunningSession) string {
-	return launch.RunningSessionKey(sess)
-}
-
-func applyPickerFilter(sessions []config.Session, query string) []int {
-	return launch.ApplyFilter(sessions, query)
-}
-
 func (m Model) pickerFilteredIndices(query string) []int {
 	return m.pickerInput().FilteredIndices(query)
-}
-
-func pickerProjectProfiles(sessions []config.Session) []string {
-	return launch.ProjectProfiles(sessions)
-}
-
-func nextPickerProfileFilter(sessions []config.Session, current string) string {
-	return launch.NextProfileFilter(sessions, current)
-}
-
-func pickerAccountIndex(accounts []config.Account, name string) int {
-	return launch.AccountIndex(accounts, name)
 }
 
 func (m Model) pickerEffectiveProfile(origIdx int) string {
@@ -122,10 +93,6 @@ func (m Model) pickerSessionWithResolvedProfile(origIdx int) config.Session {
 
 func (m Model) pickerOpenTargets() []config.Session {
 	return m.pickerInput().OpenTargets()
-}
-
-func loadPickerState(sessions []config.Session) (map[int]string, map[int]bool) {
-	return launch.LoadState(sessions)
 }
 
 func (m Model) savePickerState(profileOverrides map[int]string, pinned map[int]bool) error {

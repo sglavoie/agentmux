@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 // pickerModel returns a model preloaded with a picker open and seeded with a
@@ -202,7 +203,7 @@ func TestPickerProjectSessionSearchUsesFilteredRowTitle(t *testing.T) {
 	}
 	m.pickerSessions = m.cfg.Sessions
 	m.pickerFilter = "Bar"
-	m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, m.pickerFilter)
+	m.pickerFilteredIdx = launch.ApplyFilter(m.pickerSessions, m.pickerFilter)
 	m.pickerCursor = 0
 	seq := m.sessionSearchSeq
 

@@ -1,9 +1,20 @@
+// This file is the root's visual vocabulary: the lipgloss theme every root
+// renderer paints with, the normalized selected-row renderer every selectable
+// list routes its highlight through, and the small shared text helpers —
+// pluralization, rune clamping, relative times, title display, the search bar,
+// and the path row — that draw with that theme.
+
 package tui
 
 import (
-	"charm.land/lipgloss/v2"
+	"fmt"
+	"strings"
+	"time"
 
-	"github.com/sglavoie/agentmux/internal/palette"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 const footerStripeBackgroundHex = "#2b2b2b"
@@ -44,12 +55,6 @@ var (
 	styleStateKey     = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
 	styleStateWarning = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
 	styleStateError   = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
-
-	// styleChip is the neutral base for substring chips. Account chips use
-	// accountStyle(colorName) on top; state chips with attention semantics
-	// (key/stop/warning/error) pick up their state accent. Focused chips overlay
-	// an underline regardless of the base color.
-	styleChip = lipgloss.NewStyle()
 
 	// Status bar styles own the fixed bottom row. Each style sets a
 	// background so the padded row reads as a full-width mode/status strip.
@@ -99,12 +104,114 @@ func stateAccentStyle(state string) lipgloss.Style {
 	}
 }
 
-// accountStyle returns a Lipgloss style with the account's foreground color.
-// Falls back to the default style if the color name is unknown.
-func accountStyle(colorName string) lipgloss.Style {
-	c, err := palette.Lookup(colorName)
-	if err != nil {
-		return lipgloss.NewStyle()
+// renderSelectedRow normalizes a selectable row to one continuous selection
+// span. Row renderers may compose semantic foreground, faint, and reset
+// sequences for their normal state; retaining those sequences underneath a
+// reverse-video wrapper can terminate the selection early and leave stale
+// inverse cells behind when the cursor moves. The selected copy therefore
+// keeps only its visible content before applying the shared selection style.
+func renderSelectedRow(row string) string {
+	return styleSelected.Render(ansi.Strip(row))
+}
+
+// The helpers below are the root's shared count and timestamp labels. They
+// used to live alongside the Past Sessions list; that view moved into
+// tui/history, which carries its own private copies, so what remains here is
+// what the plan search, the plan viewer, and the status bar still need.
+
+func plural(n int) string {
+	if n == 1 {
+		return ""
 	}
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(c.ForegroundHex()))
+	return "s"
+}
+
+// formatSessionWhen returns a short human-readable representation of a
+// timestamp. Entries newer than 24h show as "Xh", older up to 7d as "Xd", and
+// anything older falls back to YYYY-MM-DD.
+func formatSessionWhen(t time.Time) string {
+	if t.IsZero() {
+		return "          "
+	}
+	delta := time.Since(t)
+	if delta < 0 {
+		delta = 0
+	}
+	switch {
+	case delta < time.Hour:
+		mins := int(delta.Minutes())
+		if mins < 1 && delta > 0 {
+			mins = 1
+		}
+		return fmt.Sprintf("%2dm   ago", mins)
+	case delta < 24*time.Hour:
+		return fmt.Sprintf("%2dh   ago", int(delta.Hours()))
+	case delta < 7*24*time.Hour:
+		return fmt.Sprintf("%2dd   ago", int(delta.Hours()/24))
+	default:
+		return t.Format("2006-01-02")
+	}
+}
+
+func renderPathRow(label, path string, maxWidth int) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	if maxWidth <= 0 {
+		maxWidth = 120
+	}
+	row := "  " + label + ": " + path
+	return styleDim.Render(layout.Truncate(row, maxWidth, "…"))
+}
+
+func selectedSessionSearchPath(m Model) string {
+	if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
+		return ""
+	}
+	return m.sessionResults[m.sessionCursor].Meta.Path
+}
+
+func currentSessionViewPath(m Model) string {
+	if m.viewerSession == nil {
+		return ""
+	}
+	return m.viewerSession.Path
+}
+
+func selectedPlanSearchPath(m Model) string {
+	if m.planCursor < 0 || m.planCursor >= len(m.planResults) {
+		return ""
+	}
+	return m.planResults[m.planCursor].Meta.DirPath
+}
+
+func currentPlanViewPath(m Model) string {
+	if m.viewerPlan == nil {
+		return ""
+	}
+	return m.viewerPlan.DirPath
+}
+
+func selectedWorktreePath(m Model) string {
+	if m.worktreeCursor < 0 || m.worktreeCursor >= len(m.worktreeFiltered) {
+		return ""
+	}
+	return m.worktreeFiltered[m.worktreeCursor].Path
+}
+
+// renderSearch renders the filter input bar (shown when in ModeSearch) and
+// the sigil-aware completion popup when it is open. The DSL is documented in
+// tui/filter.go.
+func renderSearch(m Model) string {
+	prompt := styleSearch.Render("/") + m.filterText + "█"
+	out := prompt + "\n"
+	if popup := renderCompletion(m); popup != "" {
+		out += popup
+	}
+	return out
+}
+
+func configSessionDisplayTitle(sess config.Session) string {
+	return sess.Title
 }

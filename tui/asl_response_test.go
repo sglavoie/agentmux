@@ -15,7 +15,7 @@ import (
 
 // openASLResponseDriver enters the Runs view, selects a run by ID, and opens its
 // response form.
-func openASLResponseDriver(t *testing.T, rowID string) *UITestDriver {
+func openASLResponseDriver(t *testing.T, rowID string) *uitestDriver {
 	t.Helper()
 	d, _ := enterASLRunsDriver(t)
 	selectASLRun(t, d, rowID)
@@ -28,7 +28,7 @@ func openASLResponseDriver(t *testing.T, rowID string) *UITestDriver {
 	return d
 }
 
-func typeASLAnswer(t *testing.T, d *UITestDriver, text string) {
+func typeASLAnswer(t *testing.T, d *uitestDriver, text string) {
 	t.Helper()
 	if err := d.Text(text); err != nil {
 		t.Fatalf("typing the answer: %v", err)
@@ -38,7 +38,7 @@ func typeASLAnswer(t *testing.T, d *UITestDriver, text string) {
 // assertNoASLTextLeak checks the surfaces an answer must never reach: the
 // rendered screen, the model's own formatting, and the observation a scenario
 // serializes.
-func assertNoASLTextLeak(t *testing.T, d *UITestDriver, text string) {
+func assertNoASLTextLeak(t *testing.T, d *uitestDriver, text string) {
 	t.Helper()
 	observation := d.Observe()
 	for _, line := range observation.Screen.Lines {
@@ -358,7 +358,7 @@ func TestASLResponseRetryReusesTheOperationIDForTheSameCall(t *testing.T) {
 
 func TestASLResponseFitsNarrowTerminals(t *testing.T) {
 	for _, size := range []UITestSize{{Width: 60, Height: 20}, {Width: 80, Height: 24}, {Width: 132, Height: 34}} {
-		d, _ := NewUITestFixtureDriver(aslRunsFixture(), size)
+		d, _ := newUITestFixtureDriver(aslRunsFixture(), size)
 		if err := d.Key(keyASLRuns); err != nil {
 			t.Fatalf("entering Runs at %dx%d: %v", size.Width, size.Height, err)
 		}

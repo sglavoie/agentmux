@@ -15,7 +15,7 @@ import (
 // RenderRuns draws the whole Runs body.
 func RenderRuns(in RunsInput) string {
 	var sb strings.Builder
-	sb.WriteString(layout.ClampLine(styleHeader.Render(in.HeaderText()), in.Width))
+	sb.WriteString(layout.ClampLine(styleHeader.Render(in.headerText()), in.Width))
 	sb.WriteByte('\n')
 	sb.WriteByte('\n')
 
@@ -51,9 +51,9 @@ func RenderRuns(in RunsInput) string {
 	return sb.String()
 }
 
-// HeaderText states the availability verdict next to the counts, so the header
+// headerText states the availability verdict next to the counts, so the header
 // never claims a count for data it does not trust.
-func (in RunsInput) HeaderText() string {
+func (in RunsInput) headerText() string {
 	header := "Runs"
 	switch in.View() {
 	case ViewLoading:
@@ -92,7 +92,7 @@ func (in RunsInput) renderRunList(height int) string {
 		sb.WriteByte('\n')
 	}
 	for i := window.Start; i < window.End; i++ {
-		line := FormatRow(in.Rows[i], in.Width, in.Wide(), now)
+		line := FormatRow(in.Rows[i], in.Width, in.wide(), now)
 		if i == in.Cursor {
 			line = renderSelectedRow(line)
 		}
@@ -132,7 +132,7 @@ func (in RunsInput) detailPanel() []string {
 		return nil
 	}
 	lines := []string{"", styleDim.Render("  binding: ") + in.bindingText(row)}
-	if in.Wide() {
+	if in.wide() {
 		return lines
 	}
 	return append(lines,

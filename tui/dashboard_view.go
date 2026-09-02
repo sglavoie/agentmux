@@ -1,8 +1,15 @@
+// This file is the seam between the root Bubble Tea model and the
+// tui/dashboard leaf, plus the preview pane's own root-side plumbing: the tick
+// that schedules a refresh, the command that fetches scrollback, and the fit
+// test that charges the root's status-bar chrome.
+
 package tui
 
 import (
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
@@ -119,4 +126,46 @@ func (m *Model) insertCompletionInto(buf *string) {
 // closeCompletion hides the menu without changing the filter text.
 func (m *Model) closeCompletion() {
 	m.completion = dashboard.Completion{}
+}
+
+// previewTickMsg is sent by the preview ticker while preview is enabled.
+type previewTickMsg struct{}
+
+// previewContentMsg carries the result of a scrollback fetch.
+type previewContentMsg struct {
+	windowID int
+	text     string
+	err      error
+}
+
+// previewTickCmd schedules a single previewTickMsg after d.
+func previewTickCmd(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg {
+		return previewTickMsg{}
+	})
+}
+
+// fetchPreviewCmd asynchronously fetches the full scrollback for a window.
+// windowID == 0 (no running window) short-circuits with an empty text and
+// no error so callers can render a "(session not running)" placeholder.
+func fetchPreviewCmd(client kitty.KittyClient, windowID int) tea.Cmd {
+	return func() tea.Msg {
+		if windowID == 0 {
+			return previewContentMsg{windowID: 0, text: "", err: nil}
+		}
+		text, err := client.GetText(kitty.MatchWindowByID(windowID), "all")
+		return previewContentMsg{windowID: windowID, text: text, err: err}
+	}
+}
+
+// previewFits reports whether the current terminal dimensions allow the
+// configured preview direction. footerLines plus the sticky status row are
+// reserved at the bottom.
+func previewFits(width, height, footerLines, minCols, minRows int, direction string) bool {
+	switch direction {
+	case "vertical":
+		return height-footerLines-statusBarLines >= minRows
+	default:
+		return width >= minCols
+	}
 }

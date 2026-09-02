@@ -139,7 +139,7 @@ func RenderList(in ListInput) string {
 		}
 	}
 	activeLoopActive := anyVisibleRowHasActiveLoop(in, startIdx, endIdx)
-	tabNumberWidth := TabNumberColumnWidth(in.Rows)
+	tabNumberWidth := tabNumberColumnWidth(in.Rows)
 	var activityWidth int
 	if activityActive {
 		activityWidth = activityColumnWidth(in.Rows, in.Watchdog, now)
@@ -165,7 +165,7 @@ func RenderList(in ListInput) string {
 		}
 		rowWidth := in.Width
 		if multiGroup && rowWidth > 0 {
-			rowWidth -= GroupBorderWidth
+			rowWidth -= groupBorderWidth
 		}
 		if pulseActive && rowWidth > 0 {
 			rowWidth -= pulseColumnWidth
@@ -178,7 +178,7 @@ func RenderList(in ListInput) string {
 		if activeLoopActive {
 			activeLoopCell = renderLoopCellFor(in, s)
 		}
-		tabNumberCell := RenderTabNumberCell(s.TabNumber, tabNumberWidth)
+		tabNumberCell := renderTabNumberCell(s.TabNumber, tabNumberWidth)
 		row := FormatRow(s, acctColor, harnessColor, in.Cfg, rowWidth, tabNumberCell, activeLoopCell, activityCell)
 		var styledRow string
 		switch {

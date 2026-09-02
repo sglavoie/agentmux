@@ -139,9 +139,9 @@ func (s *ResponseState) Button() (ResponseButton, bool) {
 // so the refusal names the action the operator expected.
 func ResponseKindFor(row aslbridge.Row) ResponseKind {
 	switch {
-	case RowPermits(row, aslbridge.MethodQuestionReply):
+	case rowPermits(row, aslbridge.MethodQuestionReply):
 		return ResponseLive
-	case RowPermits(row, aslbridge.MethodRunResume):
+	case rowPermits(row, aslbridge.MethodRunResume):
 		return ResponsePaused
 	case row.Question != nil && row.Question.ContextKind == "pause":
 		return ResponsePaused
@@ -180,7 +180,7 @@ func QuestionIDs(row aslbridge.Row) []string {
 // body that disagrees means the run moved under the form.
 func BodyMatchesTarget(body aslbridge.QuestionBody, target ActionTarget) bool {
 	if body.PlanDir != "" && target.PlanDir != "" &&
-		CanonicalDir(body.PlanDir) != CanonicalDir(target.PlanDir) {
+		canonicalDir(body.PlanDir) != canonicalDir(target.PlanDir) {
 		return false
 	}
 	if target.QuestionID != "" && body.QuestionID != "" && body.QuestionID != target.QuestionID {

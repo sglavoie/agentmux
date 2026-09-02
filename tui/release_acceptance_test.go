@@ -215,11 +215,11 @@ func TestAcceptanceWarmPastSessionsStayVisibleAndPartialRefreshPublishesSuccessf
 func TestAcceptanceTUIContinuityForkUsesFilesystemSnapshotWithoutDatabase(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	fixture, err := UITestFixtureByName("basic")
+	fixture, err := uitestFixtureByName("basic")
 	if err != nil {
 		t.Fatal(err)
 	}
-	driver, client := NewUITestFixtureDriver(fixture, fixture.Size)
+	driver, client := newUITestFixtureDriver(fixture, fixture.Size)
 	t.Cleanup(func() {
 		if err := driver.Close(); err != nil {
 			t.Errorf("close TUI driver: %v", err)
@@ -270,7 +270,7 @@ func TestAcceptancePastSessionsSharedProjectAliasContinuesAndForksInAliasContext
 
 	for _, key := range []string{"c", "f"} {
 		t.Run(key, func(t *testing.T) {
-			client := NewUITestKittyClient(nil)
+			client := newUITestKittyClient(nil)
 			m := Model{
 				mode:              ModeSessionSearch,
 				cfg:               cfg,

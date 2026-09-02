@@ -91,15 +91,15 @@ func isSeparatorLine(line string) bool {
 	return strings.HasPrefix(line, "--- ") && strings.HasSuffix(line, " ---")
 }
 
-// IsSeparator reports whether this row renders part of a file separator.
-func (r ViewerRow) IsSeparator(lines []string) bool {
+// isSeparator reports whether this row renders part of a file separator.
+func (r ViewerRow) isSeparator(lines []string) bool {
 	return r.SourceLine >= 0 &&
 		r.SourceLine < len(lines) &&
 		isSeparatorLine(lines[r.SourceLine])
 }
 
-// IsMatch reports whether this row's source line is one of the search matches.
-func (r ViewerRow) IsMatch(matchLines []int) bool {
+// isMatch reports whether this row's source line is one of the search matches.
+func (r ViewerRow) isMatch(matchLines []int) bool {
 	for _, idx := range matchLines {
 		if r.SourceLine == idx {
 			return true

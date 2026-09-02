@@ -16,7 +16,7 @@ func TestASLRefusalTextCoversEveryDeclaredErrorCode(t *testing.T) {
 	generic := RefusalText(errors.New("some-code-that-does-not-exist: detail"))
 
 	for _, code := range aslbridge.ErrorCodes {
-		if StaleCodes[code] == ErrorCodes[code] {
+		if staleCodes[code] == errorCodes[code] {
 			t.Errorf("%s: must be classified as exactly one of stale or error", code)
 			continue
 		}
@@ -28,7 +28,7 @@ func TestASLRefusalTextCoversEveryDeclaredErrorCode(t *testing.T) {
 		if strings.Contains(text, "backfill") {
 			t.Errorf("%s: refusal text repeats the bridge message: %q", code, text)
 		}
-		if StaleCodes[code] {
+		if staleCodes[code] {
 			if !StaleTarget(err) {
 				t.Errorf("%s: stale code is not treated as a moved target", code)
 			}
@@ -43,7 +43,7 @@ func TestASLRefusalTextCoversEveryDeclaredErrorCode(t *testing.T) {
 	for _, code := range aslbridge.ErrorCodes {
 		declared[code] = true
 	}
-	for _, mapped := range []map[string]bool{StaleCodes, ErrorCodes} {
+	for _, mapped := range []map[string]bool{staleCodes, errorCodes} {
 		for code := range mapped {
 			if !declared[code] {
 				t.Errorf("%s: mapped here but absent from aslbridge.ErrorCodes", code)

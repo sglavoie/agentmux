@@ -13,15 +13,15 @@ import (
 // that the window stops growing and evicts oldest-first — is unchanged.
 func TestASLOperationHistoryStaysBounded(t *testing.T) {
 	var history []OperationView
-	for i := 0; i < OperationHistory+3; i++ {
+	for i := 0; i < operationHistory+3; i++ {
 		history = TrackOperation(history, OperationView{
 			OperationID: fmt.Sprintf("op-%d", i),
 			Method:      aslbridge.MethodQuestionReply,
 			State:       OpSubmitting,
 		})
 	}
-	if len(history) != OperationHistory {
-		t.Fatalf("tracked %d operations, want %d", len(history), OperationHistory)
+	if len(history) != operationHistory {
+		t.Fatalf("tracked %d operations, want %d", len(history), operationHistory)
 	}
 	if history[0].OperationID != "op-3" {
 		t.Fatalf("oldest retained operation = %q, want op-3", history[0].OperationID)

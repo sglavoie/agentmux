@@ -65,17 +65,17 @@ func TestTabNumberColumnAlignsSingleAndMultiDigitNumbers(t *testing.T) {
 		{TabNumber: 12},
 		{},
 	}
-	width := TabNumberColumnWidth(sessions)
+	width := tabNumberColumnWidth(sessions)
 	if width != 4 {
 		t.Fatalf("tab number column width = %d, want 4", width)
 	}
-	if got := RenderTabNumberCell(2, width); got != " 2: " {
+	if got := renderTabNumberCell(2, width); got != " 2: " {
 		t.Errorf("single-digit cell = %q, want %q", got, " 2: ")
 	}
-	if got := RenderTabNumberCell(12, width); got != "12: " {
+	if got := renderTabNumberCell(12, width); got != "12: " {
 		t.Errorf("multi-digit cell = %q, want %q", got, "12: ")
 	}
-	if got := RenderTabNumberCell(0, width); got != "    " {
+	if got := renderTabNumberCell(0, width); got != "    " {
 		t.Errorf("unknown cell = %q, want four spaces", got)
 	}
 }

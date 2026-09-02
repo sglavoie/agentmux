@@ -43,13 +43,13 @@ func ApplyFilter(sessions []config.Session, query string) []int {
 // retain that existing order.
 func (in PickerInput) FilteredIndices(query string) []int {
 	indices := ApplyFilter(in.Sessions, query)
-	indices = FilterIndicesByProfile(in.Sessions, indices, in.ProfileFilter)
+	indices = filterIndicesByProfile(in.Sessions, indices, in.ProfileFilter)
 	return pinIndices(indices, in.Pinned)
 }
 
-// FilterIndicesByProfile drops indices whose configured default profile does
+// filterIndicesByProfile drops indices whose configured default profile does
 // not match the cycled profile filter. An empty filter is a pass-through.
-func FilterIndicesByProfile(sessions []config.Session, indices []int, profile string) []int {
+func filterIndicesByProfile(sessions []config.Session, indices []int, profile string) []int {
 	if profile == "" {
 		return indices
 	}

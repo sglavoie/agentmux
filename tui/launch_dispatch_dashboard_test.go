@@ -8,6 +8,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 func TestDashboardRestartProfile_CrossHarnessUsesConfiguredProjectTemplate(t *testing.T) {
@@ -140,8 +141,8 @@ func TestDashboardLaunch_OrphanRowUsesSessionFromRunningTemplate(t *testing.T) {
 func TestDispatchPickerLaunch_MissingAccountReportsError(t *testing.T) {
 	m := launchDispatchModel(t, nil)
 	m.cfg.Sessions[0].Account = "missing"
-	m.pickerSessions = sortPickerSessions(m.cfg.Sessions)
-	m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, "")
+	m.pickerSessions = launch.SortSessions(m.cfg.Sessions)
+	m.pickerFilteredIdx = launch.ApplyFilter(m.pickerSessions, "")
 	m.pickerSelected = make(map[int]bool)
 	selectByTitle(&m, "api")
 

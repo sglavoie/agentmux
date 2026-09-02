@@ -295,7 +295,7 @@ func TestRenderPreviewOverrideHeaderColor(t *testing.T) {
 	}
 	yellowHex := yellow.ForegroundHex()
 
-	out := renderPreview(80, 4, s, "", "", acctColor, cfg)
+	out := dashboard.RenderPreview(80, 4, s, "", "", acctColor, cfg)
 	if indexColoredSegment(out, yellowHex, "api") < 0 {
 		t.Errorf("expected preview header to keep the project default color (%s, yellow); rendered:\n%s", yellowHex, out)
 	}

@@ -21,6 +21,10 @@ var (
 	styleAttentionRow = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
 	styleEmptyHero    = lipgloss.NewStyle().Bold(true)
 
+	// stylePreviewError colors the inline error the scrollback preview pane
+	// renders when a capture fails.
+	stylePreviewError = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
+
 	// styleAgeWarning colors the per-row activity cell when a sweep-eligible
 	// session has been silent for >= 80% of its resolved threshold.
 	styleAgeWarning = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))

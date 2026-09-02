@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/dashboard"
+	"github.com/sglavoie/agentmux/tui/launch"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -247,7 +248,7 @@ func renderSplit(m Model) string {
 		listHeight := paneHeight - previewHeight - 1
 		listView := renderListAt(m, m.width, listHeight)
 		divider := styleDim.Render(strings.Repeat("─", m.width))
-		previewView := renderPreview(m.width, previewHeight, sess, m.previewText, m.previewError, acctColor, m.cfg)
+		previewView := dashboard.RenderPreview(m.width, previewHeight, sess, m.previewText, m.previewError, acctColor, m.cfg)
 		return lipgloss.JoinVertical(lipgloss.Left, listView, divider, previewView) + "\n"
 	}
 
@@ -269,7 +270,7 @@ func renderSplit(m Model) string {
 		return renderList(m)
 	}
 	listView := renderListAt(m, listWidth, paneHeight)
-	previewView := renderPreview(previewWidth, paneHeight, sess, m.previewText, m.previewError, acctColor, m.cfg)
+	previewView := dashboard.RenderPreview(previewWidth, paneHeight, sess, m.previewText, m.previewError, acctColor, m.cfg)
 	divider := strings.Repeat(styleDim.Render("│")+"\n", paneHeight)
 	divider = strings.TrimRight(divider, "\n")
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, previewView) + "\n"
@@ -383,7 +384,7 @@ func (m Model) pickerCurrentWindowID() int {
 	key := session.SessionKey(sess.EffectiveProfile(), sess.Title)
 	winID := 0
 	for _, rs := range m.sessions {
-		if runningSessionKey(rs) == key {
+		if launch.RunningSessionKey(rs) == key {
 			winID = rs.WindowID
 		}
 	}

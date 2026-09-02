@@ -76,12 +76,12 @@ func TestPlanViewerRows_SeparatorsUseLogicalSourceLine(t *testing.T) {
 	for _, row := range rows {
 		switch row.SourceLine {
 		case 0:
-			if !row.IsSeparator(lines) {
+			if !row.isSeparator(lines) {
 				t.Errorf("separator row %#v was not detected from source line", row)
 			}
 		case 1:
 			seenContent = true
-			if row.IsSeparator(lines) {
+			if row.isSeparator(lines) {
 				t.Errorf("content row %#v was detected as a separator", row)
 			}
 		default:
@@ -105,7 +105,7 @@ func TestPlanViewerRows_MatchesUseLogicalSourceLine(t *testing.T) {
 	}
 
 	for _, row := range rows {
-		got := row.IsMatch(matches)
+		got := row.isMatch(matches)
 		want := row.SourceLine == 0
 		if got != want {
 			t.Errorf("row %#v isMatch = %v, want %v", row, got, want)

@@ -7,9 +7,9 @@ import (
 	"github.com/sglavoie/agentmux/tui/launch"
 )
 
-func lifecycleDriver(t *testing.T) (*UITestDriver, *UITestKittyClient) {
+func lifecycleDriver(t *testing.T) (*uitestDriver, *uitestKittyClient) {
 	t.Helper()
-	driver, client := NewUITestFixtureDriver(worktreeLifecycleFixture(), UITestSize{})
+	driver, client := newUITestFixtureDriver(worktreeLifecycleFixture(), UITestSize{})
 	cleanupUITestDriver(t, driver)
 	if err := driver.Key("W"); err != nil {
 		t.Fatalf("enter Worktrees: %v", err)
@@ -17,7 +17,7 @@ func lifecycleDriver(t *testing.T) (*UITestDriver, *UITestKittyClient) {
 	return driver, client
 }
 
-func filterLifecycleWorktree(t *testing.T, driver *UITestDriver, id string) {
+func filterLifecycleWorktree(t *testing.T, driver *uitestDriver, id string) {
 	t.Helper()
 	if err := driver.Key("/"); err != nil {
 		t.Fatalf("open filter: %v", err)

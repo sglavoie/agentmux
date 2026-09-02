@@ -17,9 +17,9 @@ func TestUITestScenarioParseValid(t *testing.T) {
 			{"type": "kitty_calls", "op": "FocusTab", "count": 0}
 		]
 	}`)
-	sc, err := ParseUITestScenario(data)
+	sc, err := parseUITestScenario(data)
 	if err != nil {
-		t.Fatalf("ParseUITestScenario error: %v", err)
+		t.Fatalf("parseUITestScenario error: %v", err)
 	}
 	if sc.Name != "open actions" || sc.Fixture != "basic" {
 		t.Errorf("unexpected header: %+v", sc)
@@ -57,7 +57,7 @@ func TestUITestScenarioParseRejectsBadInput(t *testing.T) {
 		"trailing content":  `{"fixture": "basic", "size": {"width": 80, "height": 24}} not json`,
 	}
 	for name, body := range cases {
-		if _, err := ParseUITestScenario([]byte(body)); err == nil {
+		if _, err := parseUITestScenario([]byte(body)); err == nil {
 			t.Errorf("%s: expected error, got nil", name)
 		}
 	}
@@ -67,9 +67,9 @@ func TestUITestScenarioParseRejectsBadInput(t *testing.T) {
 // rule still accepts trailing whitespace after the top-level object.
 func TestUITestScenarioParseAllowsTrailingWhitespace(t *testing.T) {
 	data := []byte("{\"fixture\": \"basic\", \"size\": {\"width\": 80, \"height\": 24}}\n\t  \n")
-	sc, err := ParseUITestScenario(data)
+	sc, err := parseUITestScenario(data)
 	if err != nil {
-		t.Fatalf("ParseUITestScenario error: %v", err)
+		t.Fatalf("parseUITestScenario error: %v", err)
 	}
 	if sc.Fixture != "basic" {
 		t.Errorf("unexpected fixture: %q", sc.Fixture)

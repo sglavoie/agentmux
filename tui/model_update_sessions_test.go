@@ -123,7 +123,7 @@ func TestInitialFetchCmdConsumesExistingDashboardSelectionRequest(t *testing.T) 
 	}
 	t.Cleanup(func() { commands.DaemonRequest = oldDaemonRequest })
 
-	client := NewUITestKittyClient([]kitty.OSWindow{{
+	client := newUITestKittyClient([]kitty.OSWindow{{
 		Tabs: []kitty.Tab{
 			{
 				ID:    7,
@@ -158,7 +158,7 @@ func TestInitialFetchCmdResolvesSourcePaneToContainingTab(t *testing.T) {
 	}
 	t.Cleanup(func() { commands.DaemonRequest = oldDaemonRequest })
 
-	client := NewUITestKittyClient([]kitty.OSWindow{{
+	client := newUITestKittyClient([]kitty.OSWindow{{
 		Tabs: []kitty.Tab{{
 			ID:    7,
 			Title: "api",
@@ -198,7 +198,7 @@ func TestFetchCmdRemovesClosedSessionInsteadOfReanchoringDashboardOverlay(t *tes
 			{Title: "Pulse", Account: "work", Directory: pulseDir},
 		},
 	}
-	client := NewUITestKittyClient([]kitty.OSWindow{{
+	client := newUITestKittyClient([]kitty.OSWindow{{
 		ID:       1,
 		IsActive: true,
 		Tabs: []kitty.Tab{
@@ -268,7 +268,7 @@ func TestFetchCmdUsesDaemonBulkStateOverTitleParsing(t *testing.T) {
 	}
 	t.Cleanup(func() { commands.DaemonRequest = oldDaemonRequest })
 
-	client := NewUITestKittyClient([]kitty.OSWindow{{
+	client := newUITestKittyClient([]kitty.OSWindow{{
 		Tabs: []kitty.Tab{{
 			ID:    7,
 			Title: palette.BuildTitleParts(palette.TitleParts{Base: "api", State: "stop"}),
@@ -299,7 +299,7 @@ func TestFetchCmdFallsBackToTitleStateWhenDaemonIsUnreachable(t *testing.T) {
 	}
 	t.Cleanup(func() { commands.DaemonRequest = oldDaemonRequest })
 
-	client := NewUITestKittyClient([]kitty.OSWindow{{
+	client := newUITestKittyClient([]kitty.OSWindow{{
 		Tabs: []kitty.Tab{{
 			ID:    7,
 			Title: palette.BuildTitleParts(palette.TitleParts{Base: "api", State: "stop", Looping: true}),
@@ -325,7 +325,7 @@ func TestFetchCmdPreservesRuntimeProfileOverrideInConfigPicker(t *testing.T) {
 	t.Cleanup(func() { commands.DaemonRequest = oldDaemonRequest })
 
 	const projectDir = "/projects/sis"
-	client := NewUITestKittyClient([]kitty.OSWindow{{
+	client := newUITestKittyClient([]kitty.OSWindow{{
 		Tabs: []kitty.Tab{{
 			ID:    68,
 			Title: "sis",

@@ -18,12 +18,12 @@ func TestParseUITestSize(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.spec, func(t *testing.T) {
-			got, err := ParseUITestSize(c.spec)
+			got, err := parseUITestSize(c.spec)
 			if err != nil {
-				t.Fatalf("ParseUITestSize(%q): %v", c.spec, err)
+				t.Fatalf("parseUITestSize(%q): %v", c.spec, err)
 			}
 			if got != c.want {
-				t.Errorf("ParseUITestSize(%q) = %+v, want %+v", c.spec, got, c.want)
+				t.Errorf("parseUITestSize(%q) = %+v, want %+v", c.spec, got, c.want)
 			}
 		})
 	}
@@ -33,8 +33,8 @@ func TestParseUITestSize(t *testing.T) {
 func TestParseUITestSizeErrors(t *testing.T) {
 	for _, spec := range []string{"", "80", "80x", "x24", "0x24", "80x-1", "axb", "80x24x2"} {
 		t.Run(spec, func(t *testing.T) {
-			if _, err := ParseUITestSize(spec); err == nil {
-				t.Errorf("ParseUITestSize(%q) = nil error, want error", spec)
+			if _, err := parseUITestSize(spec); err == nil {
+				t.Errorf("parseUITestSize(%q) = nil error, want error", spec)
 			}
 		})
 	}
@@ -45,7 +45,7 @@ func TestParseUITestSizeErrors(t *testing.T) {
 // does not create a phantom empty final line.
 func TestNormalizeUITestScreenStripsAnsiAndMeasures(t *testing.T) {
 	raw := "\x1b[31mred\x1b[0m\nwiderline\n"
-	screen := NormalizeUITestScreen(raw, UITestSize{Width: 80, Height: 24})
+	screen := normalizeUITestScreen(raw, UITestSize{Width: 80, Height: 24})
 
 	if got := screen.Lines; !reflect.DeepEqual(got, []string{"red", "widerline"}) {
 		t.Fatalf("lines = %q, want [red widerline]", got)
@@ -64,7 +64,7 @@ func TestNormalizeUITestScreenStripsAnsiAndMeasures(t *testing.T) {
 // TestNormalizeUITestScreenEmojiWidth confirms wide glyphs are measured by
 // display cells via the shared layout.Width helper, not by rune count.
 func TestNormalizeUITestScreenEmojiWidth(t *testing.T) {
-	screen := NormalizeUITestScreen("⚡bolt", UITestSize{Width: 80, Height: 24})
+	screen := normalizeUITestScreen("⚡bolt", UITestSize{Width: 80, Height: 24})
 	// ⚡ is 2 cells + "bolt" (4) = 6.
 	if screen.Width != 6 {
 		t.Errorf("emoji line width = %d, want 6", screen.Width)
@@ -74,7 +74,7 @@ func TestNormalizeUITestScreenEmojiWidth(t *testing.T) {
 // TestNormalizeUITestScreenLineWidthOverflow flags a line wider than the
 // declared terminal width and records the measured cells and limit.
 func TestNormalizeUITestScreenLineWidthOverflow(t *testing.T) {
-	screen := NormalizeUITestScreen("okay\ntoo-wide-line", UITestSize{Width: 8, Height: 24})
+	screen := normalizeUITestScreen("okay\ntoo-wide-line", UITestSize{Width: 8, Height: 24})
 	var found *UITestLayoutIssue
 	for i := range screen.Issues {
 		if screen.Issues[i].Type == UITestIssueLineWidthOverflow {
@@ -95,7 +95,7 @@ func TestNormalizeUITestScreenLineWidthOverflow(t *testing.T) {
 // TestNormalizeUITestScreenHeightOverflow flags a view taller than the
 // terminal height.
 func TestNormalizeUITestScreenHeightOverflow(t *testing.T) {
-	screen := NormalizeUITestScreen("a\nb\nc\nd", UITestSize{Width: 80, Height: 2})
+	screen := normalizeUITestScreen("a\nb\nc\nd", UITestSize{Width: 80, Height: 2})
 	var found *UITestLayoutIssue
 	for i := range screen.Issues {
 		if screen.Issues[i].Type == UITestIssueScreenHeightOverflow {
@@ -113,7 +113,7 @@ func TestNormalizeUITestScreenHeightOverflow(t *testing.T) {
 // TestNormalizeUITestScreenInvalidUTF8 flags lines that are not valid UTF-8.
 func TestNormalizeUITestScreenInvalidUTF8(t *testing.T) {
 	raw := "good\n" + string([]byte{0xff, 0xfe})
-	screen := NormalizeUITestScreen(raw, UITestSize{Width: 80, Height: 24})
+	screen := normalizeUITestScreen(raw, UITestSize{Width: 80, Height: 24})
 	var found *UITestLayoutIssue
 	for i := range screen.Issues {
 		if screen.Issues[i].Type == UITestIssueInvalidUTF8 {
@@ -131,7 +131,7 @@ func TestNormalizeUITestScreenInvalidUTF8(t *testing.T) {
 // TestNormalizeUITestScreenZeroSizeSkipsOverflow confirms an unset (zero)
 // terminal size disables overflow reporting while still normalizing content.
 func TestNormalizeUITestScreenZeroSizeSkipsOverflow(t *testing.T) {
-	screen := NormalizeUITestScreen("a very wide line indeed\nsecond", UITestSize{})
+	screen := normalizeUITestScreen("a very wide line indeed\nsecond", UITestSize{})
 	if len(screen.Issues) != 0 {
 		t.Errorf("zero size should not report overflow, got %+v", screen.Issues)
 	}

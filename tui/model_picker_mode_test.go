@@ -80,7 +80,7 @@ func TestBuildPickerRunning(t *testing.T) {
 	running := append(makeSessions(), session.RunningSession{
 		TabID: 4, Base: "api", Account: "work", Directory: "/home/user/api",
 	})
-	got := buildPickerRunning(running)
+	got := launch.BuildRunning(running)
 	if got[session.SessionKey("work", "api")] != 2 {
 		t.Errorf("expected work/api running count 2, got %d", got[session.SessionKey("work", "api")])
 	}

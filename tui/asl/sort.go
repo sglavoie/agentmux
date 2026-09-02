@@ -27,7 +27,7 @@ func SortRows(rows []aslbridge.Row) []aslbridge.Row {
 		if a.UrgencyRank != b.UrgencyRank {
 			return a.UrgencyRank < b.UrgencyRank
 		}
-		at, bt := ActivityTime(a), ActivityTime(b)
+		at, bt := activityTime(a), activityTime(b)
 		if !at.Equal(bt) {
 			return at.After(bt)
 		}
@@ -56,9 +56,9 @@ func groupRank(group string) int {
 	}
 }
 
-// ActivityTime is when a run was last seen doing something, falling back to
+// activityTime is when a run was last seen doing something, falling back to
 // when it started and finally to the zero time for a run that reports neither.
-func ActivityTime(row aslbridge.Row) time.Time {
+func activityTime(row aslbridge.Row) time.Time {
 	for _, stamp := range []string{row.LastActivityAt, row.RunStartedAt} {
 		if parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(stamp)); err == nil {
 			return parsed

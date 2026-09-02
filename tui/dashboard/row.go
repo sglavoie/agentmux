@@ -179,10 +179,10 @@ func FormatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 	return tabNumberCell + lockCol + muteCol + activeLoopCell + iconCol + " " + badge + " " + harnessCell + " " + title + "  " + activityCell + dir
 }
 
-// TabNumberColumnWidth returns a stable width for every row in the current
+// tabNumberColumnWidth returns a stable width for every row in the current
 // filtered result set: the widest decimal tab number plus ':' and one trailing
 // space. One digit is reserved even when all rows lack a known number.
-func TabNumberColumnWidth(sessions []session.RunningSession) int {
+func tabNumberColumnWidth(sessions []session.RunningSession) int {
 	digits := 1
 	for _, s := range sessions {
 		if s.TabNumber <= 0 {
@@ -195,9 +195,9 @@ func TabNumberColumnWidth(sessions []session.RunningSession) int {
 	return digits + 2
 }
 
-// RenderTabNumberCell right-aligns a known tab number within the dashboard's
+// renderTabNumberCell right-aligns a known tab number within the dashboard's
 // shared number column. Unknown numbers render as spaces to preserve alignment.
-func RenderTabNumberCell(tabNumber, width int) string {
+func renderTabNumberCell(tabNumber, width int) string {
 	if width < minimumTabNumberColumnWidth {
 		width = minimumTabNumberColumnWidth
 	}

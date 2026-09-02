@@ -37,12 +37,12 @@ func TestParseUITestKeyNamedAndPrintable(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.spec, func(t *testing.T) {
-			msg, err := ParseUITestKey(c.spec)
+			msg, err := parseUITestKey(c.spec)
 			if err != nil {
-				t.Fatalf("ParseUITestKey(%q) error: %v", c.spec, err)
+				t.Fatalf("parseUITestKey(%q) error: %v", c.spec, err)
 			}
 			if got := msg.String(); got != c.want {
-				t.Errorf("ParseUITestKey(%q).String() = %q, want %q", c.spec, got, c.want)
+				t.Errorf("parseUITestKey(%q).String() = %q, want %q", c.spec, got, c.want)
 			}
 		})
 	}
@@ -51,9 +51,9 @@ func TestParseUITestKeyNamedAndPrintable(t *testing.T) {
 // TestParseUITestKeySpaceHasNoText verifies the spacebar is created without
 // Text so it reports "space" — matching the existing keyPress helper.
 func TestParseUITestKeySpaceHasNoText(t *testing.T) {
-	msg, err := ParseUITestKey("space")
+	msg, err := parseUITestKey("space")
 	if err != nil {
-		t.Fatalf("ParseUITestKey(space): %v", err)
+		t.Fatalf("parseUITestKey(space): %v", err)
 	}
 	if tea.Key(msg).Text != "" {
 		t.Errorf("space key Text = %q, want empty", tea.Key(msg).Text)
@@ -63,9 +63,9 @@ func TestParseUITestKeySpaceHasNoText(t *testing.T) {
 // TestParseUITestKeyCtrlChordCarriesModifier verifies control chords set the
 // ctrl modifier on the underlying rune rather than emitting literal text.
 func TestParseUITestKeyCtrlChordCarriesModifier(t *testing.T) {
-	msg, err := ParseUITestKey("ctrl+c")
+	msg, err := parseUITestKey("ctrl+c")
 	if err != nil {
-		t.Fatalf("ParseUITestKey(ctrl+c): %v", err)
+		t.Fatalf("parseUITestKey(ctrl+c): %v", err)
 	}
 	key := tea.Key(msg)
 	if key.Code != 'c' {
@@ -81,8 +81,8 @@ func TestParseUITestKeyCtrlChordCarriesModifier(t *testing.T) {
 func TestParseUITestKeyErrors(t *testing.T) {
 	for _, spec := range []string{"", "nope", "ArrowUp", "ab", "ctrl+", "ctrl+ab"} {
 		t.Run(spec, func(t *testing.T) {
-			if _, err := ParseUITestKey(spec); err == nil {
-				t.Errorf("ParseUITestKey(%q) = nil error, want error", spec)
+			if _, err := parseUITestKey(spec); err == nil {
+				t.Errorf("parseUITestKey(%q) = nil error, want error", spec)
 			}
 		})
 	}

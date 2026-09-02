@@ -10,7 +10,7 @@ import (
 	tuiworktrees "github.com/sglavoie/agentmux/tui/worktrees"
 )
 
-func cleanupUITestDriver(t testing.TB, d *UITestDriver) {
+func cleanupUITestDriver(t testing.TB, d *uitestDriver) {
 	t.Helper()
 	t.Cleanup(func() {
 		if err := d.Close(); err != nil {
@@ -25,7 +25,7 @@ func cleanupUITestDriver(t testing.TB, d *UITestDriver) {
 func TestUITestDriverOpenActionsAndResize(t *testing.T) {
 	m := testModelWithSessions()
 	m = loadSessions(m, makeSessions())
-	d := NewUITestDriverModel(m, UITestSize{Width: 80, Height: 24})
+	d := newUITestDriverModel(m, UITestSize{Width: 80, Height: 24})
 	cleanupUITestDriver(t, d)
 
 	obs0 := d.Observe()
@@ -63,8 +63,8 @@ func TestUITestDriverOpenActionsAndResize(t *testing.T) {
 
 func TestUITestDriverWorktreeOpenUsesHermeticActionSeam(t *testing.T) {
 	fx := worktreesFixture()
-	client := NewUITestKittyClient(fx.Windows)
-	d := NewUITestDriver(fx.Config, client, UITestSize{Width: 120, Height: 30})
+	client := newUITestKittyClient(fx.Windows)
+	d := newUITestDriver(fx.Config, client, UITestSize{Width: 120, Height: 30})
 	cleanupUITestDriver(t, d)
 
 	d.model.mode = ModeWorktrees
@@ -97,7 +97,7 @@ func TestUITestDriverWorktreeOpenUsesHermeticActionSeam(t *testing.T) {
 func TestUITestDriverTextTypesEachRune(t *testing.T) {
 	m := testModelWithSessions()
 	m = loadSessions(m, makeSessions())
-	d := NewUITestDriverModel(m, UITestSize{Width: 80, Height: 24})
+	d := newUITestDriverModel(m, UITestSize{Width: 80, Height: 24})
 	cleanupUITestDriver(t, d)
 
 	if err := d.Key("/"); err != nil {
@@ -119,7 +119,7 @@ func TestUITestDriverTextTypesEachRune(t *testing.T) {
 // re-scheduled 2s tick — without hanging or leaving list mode.
 func TestUITestDriverTickDrainsWithoutBlocking(t *testing.T) {
 	m := testModelWithSessions()
-	d := NewUITestDriverModel(m, UITestSize{Width: 80, Height: 24})
+	d := newUITestDriverModel(m, UITestSize{Width: 80, Height: 24})
 	cleanupUITestDriver(t, d)
 
 	done := make(chan struct{})
@@ -141,7 +141,7 @@ func TestUITestDriverTickDrainsWithoutBlocking(t *testing.T) {
 // TestUITestDriverKeyRejectsBadSpec verifies an invalid key spec surfaces an
 // error rather than mutating the model.
 func TestUITestDriverKeyRejectsBadSpec(t *testing.T) {
-	d := NewUITestDriver(testModelWithSessions().cfg, testModel().client, UITestSize{Width: 80, Height: 24})
+	d := newUITestDriver(testModelWithSessions().cfg, testModel().client, UITestSize{Width: 80, Height: 24})
 	cleanupUITestDriver(t, d)
 	if err := d.Key("nope"); err == nil {
 		t.Fatal("expected error for multi-rune key spec")
@@ -172,7 +172,7 @@ func TestUITestDriverFlattenCmds(t *testing.T) {
 // TestUITestDriverSkipsTimersBeforeLaunch verifies scheduled effects are the
 // only commands omitted by the harness and never start a goroutine.
 func TestUITestDriverSkipsTimersBeforeLaunch(t *testing.T) {
-	d := NewUITestDriverModel(testModelWithSessions(), UITestSize{Width: 80, Height: 24})
+	d := newUITestDriverModel(testModelWithSessions(), UITestSize{Width: 80, Height: 24})
 	cleanupUITestDriver(t, d)
 
 	fast := func() tea.Msg { return commands.TickMsg{} }
@@ -197,7 +197,7 @@ func TestUITestDriverSkipsTimersBeforeLaunch(t *testing.T) {
 }
 
 func TestUITestDriverCloseCancelsAndJoinsStartedCommandBeforeRemovingRoot(t *testing.T) {
-	d := NewUITestDriverModel(testModelWithSessions(), UITestSize{Width: 80, Height: 24})
+	d := newUITestDriverModel(testModelWithSessions(), UITestSize{Width: 80, Height: 24})
 	root := d.tempRoot
 	started := make(chan struct{})
 	finished := make(chan struct{})

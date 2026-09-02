@@ -15,11 +15,11 @@ import (
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
-// WideThreshold is the terminal width at or above which the Runs list shows
+// wideThreshold is the terminal width at or above which the Runs list shows
 // every column inline. Below it the row keeps only what an operator needs to
 // triage — state, label, age, reason — and the rest moves to the selected-row
 // panel instead of being truncated away.
-const WideThreshold = 100
+const wideThreshold = 100
 
 // ViewState is the single availability verdict the header, banner, and body all
 // read, so they can never disagree about whether data is trustworthy.
@@ -126,9 +126,9 @@ func NeedsActionCount(rows []aslbridge.Row) int {
 	return count
 }
 
-// Wide reports whether the list has room for every column inline.
-func (in RunsInput) Wide() bool {
-	return in.Width <= 0 || in.Width >= WideThreshold
+// wide reports whether the list has room for every column inline.
+func (in RunsInput) wide() bool {
+	return in.Width <= 0 || in.Width >= wideThreshold
 }
 
 // VisibleHeight is how many run rows fit once the notices and the selected-row

@@ -50,10 +50,10 @@ type OperationView struct {
 	State       string
 }
 
-// OperationHistory bounds how many receipts the Runs view keeps. A receipt is a
+// operationHistory bounds how many receipts the Runs view keeps. A receipt is a
 // status line, not a journal, so the window only has to be long enough to watch
 // a submission travel from accepted to consumed.
-const OperationHistory = 5
+const operationHistory = 5
 
 // NewOperationID mints the client operation ID for one submission. It is opaque
 // and unique per submission; the bridge uses it both to deduplicate a replayed
@@ -76,8 +76,8 @@ func TrackOperation(history []OperationView, view OperationView) []OperationView
 		}
 	}
 	history = append(history, view)
-	if len(history) > OperationHistory {
-		history = history[len(history)-OperationHistory:]
+	if len(history) > operationHistory {
+		history = history[len(history)-operationHistory:]
 	}
 	return history
 }

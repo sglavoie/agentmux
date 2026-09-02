@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/tui/commands"
+	"github.com/sglavoie/agentmux/tui/history"
 )
 
 func runViewerCopyCmd(t *testing.T, cmd tea.Cmd) string {
@@ -61,7 +62,7 @@ func TestSessionViewerYCopiesSelectedMessage(t *testing.T) {
 
 func TestSessionViewerYCopiesBackingMultilineText(t *testing.T) {
 	raw := "first line\nsecond\tline   still raw"
-	if collapsed := collapseWhitespace(raw); collapsed == raw {
+	if collapsed := history.CollapseWhitespace(raw); collapsed == raw {
 		t.Fatal("setup: raw text should differ from collapsed rendered text")
 	}
 	m := Model{

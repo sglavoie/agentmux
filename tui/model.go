@@ -1,14 +1,14 @@
-package tui
+// This file is the root program model itself: every field the TUI holds, the
+// mode vocabulary those fields are read under, and the recent-transition
+// pulses the dashboard paints from. Everything else in the root package
+// answers a question about this struct or decides what a message does to it.
 
-// The root model's state. Construction, Init, and the Update dispatch table
-// live in model_update.go; each field group's behaviour lives in the
-// model_*.go file named for that view.
+package tui
 
 import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/aslbridge"
@@ -25,6 +25,10 @@ import (
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/launch"
 )
+
+// The root model's state. Construction, Init, and the Update dispatch table
+// live in model_update.go; each field group's behaviour lives in the
+// model_*.go file named for that view.
 
 // Model is the root Bubble Tea model for the dashboard.
 type Model struct {
@@ -418,4 +422,127 @@ type Model struct {
 	planViewerLoading    bool
 	planViewerLoadErr    error
 	planViewerLoadSeq    int
+}
+
+// Mode represents the current UI mode.
+type Mode int
+
+const (
+	ModeList              Mode = iota
+	ModeSearch                 // typing a filter expression (DSL)
+	ModeConfirm                // y/n confirmation for a destructive action
+	ModePicker                 // multi-select session launcher
+	ModeConfigPicker           // account picker for config override
+	ModeHelp                   // help overlay
+	ModeDetail                 // detail pane: per-session hook event log
+	ModeActions                // per-row actions overlay
+	ModeSessionSearch          // searchable list of past harness transcripts
+	ModeSessionView            // scrollable transcript viewer for a single past session
+	ModeDeleteChoice           // three-way prompt: hide from index, also delete file, cancel
+	ModeChipPicker             // overlay listing chip values for ModeSessionSearch
+	ModeMessageDetail          // full-message overlay opened from ModeSessionView
+	ModeWorktrees              // managed Git worktree inventory and non-destructive actions
+	ModePlanSearch             // searchable list of past agent-plan directories
+	ModePlanView               // inline pager for a single plan directory
+	ModeCommandPalette         // searchable dashboard command catalog
+	ModeLiveSessionPicker      // ambiguous live Kitty sessions for one target
+	ModeASLRuns                // agent-session-loop active and actionable runs
+	ModeASLResponse            // answer editor and closure buttons for one ASL question
+)
+
+// LivePickerPurpose names the caller that raised ModeLiveSessionPicker. The
+// picker only chooses among candidates; the purpose decides what Enter does
+// with the chosen one and which root view the detour returns to.
+type LivePickerPurpose int
+
+const (
+	LivePickerWorktreeReopen LivePickerPurpose = iota
+	LivePickerASLFocus
+)
+
+// pulseDecay is how long a recorded state transition keeps pulsing in the
+// list before it's swept off.
+const pulseDecay = 5 * time.Second
+
+// recordTransitions diffs the current m.sessions against m.lastSeenStates
+// and records any state change in m.recentTransitions. On the very first
+// refresh (lastSeenStates is nil) the snapshot is seeded silently so the
+// initial list does not pulse every row.
+func (m *Model) recordTransitions() {
+	if m.lastSeenStates == nil {
+		m.lastSeenStates = make(map[int]string, len(m.sessions))
+		for _, s := range m.sessions {
+			m.lastSeenStates[s.WindowID] = s.State
+		}
+		return
+	}
+	for _, s := range m.sessions {
+		prev, ok := m.lastSeenStates[s.WindowID]
+		if !ok {
+			// New session since last snapshot — treat as no-op so a freshly
+			// launched tab does not pulse on its first appearance.
+			m.lastSeenStates[s.WindowID] = s.State
+			continue
+		}
+		if prev == s.State {
+			continue
+		}
+		if m.recentTransitions == nil {
+			m.recentTransitions = make(map[int]time.Time)
+		}
+		if _, already := m.recentTransitions[s.WindowID]; !already {
+			m.recentTransitions[s.WindowID] = time.Now()
+		}
+		// Advance the snapshot to the new state. Without this, a session
+		// that changed once and remained stable would re-pulse forever:
+		// after sweepRecentTransitions drops the entry past pulseDecay,
+		// the next refresh still sees prev != s.State and would record a
+		// fresh pulse. Updating here ties the pulse strictly to the
+		// observed change rather than the persistent mismatch between
+		// the (stale) snapshot and current state.
+		m.lastSeenStates[s.WindowID] = s.State
+	}
+}
+
+// sweepRecentTransitions drops entries older than pulseDecay so the maps
+// stay bounded and stale pulses do not linger after their visual window.
+func (m *Model) sweepRecentTransitions() {
+	if len(m.recentTransitions) == 0 {
+		return
+	}
+	cutoff := time.Now().Add(-pulseDecay)
+	for id, t := range m.recentTransitions {
+		if t.Before(cutoff) {
+			delete(m.recentTransitions, id)
+		}
+	}
+}
+
+// snapshotSeenStates refreshes the per-session state snapshot to match the
+// current view and clears any in-flight pulses. Called on every ModeList
+// key press so the pulse layer surfaces only changes the user has not yet
+// seen.
+func (m *Model) snapshotSeenStates() {
+	if m.lastSeenStates == nil {
+		m.lastSeenStates = make(map[int]string, len(m.sessions))
+	}
+	for _, s := range m.sessions {
+		m.lastSeenStates[s.WindowID] = s.State
+	}
+	if len(m.recentTransitions) > 0 {
+		m.recentTransitions = nil
+	}
+}
+
+// hasActivePulse reports whether windowID has a recent-transition record
+// that has not yet decayed past pulseDecay.
+func (m Model) hasActivePulse(windowID int) bool {
+	if len(m.recentTransitions) == 0 {
+		return false
+	}
+	t, ok := m.recentTransitions[windowID]
+	if !ok {
+		return false
+	}
+	return time.Since(t) < pulseDecay
 }

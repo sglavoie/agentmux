@@ -25,7 +25,7 @@ func FormatRow(row aslbridge.Row, width int, wide bool, now time.Time) string {
 	}
 	state := stateText(row)
 	label := RowLabel(row)
-	age := tuiworktrees.CompactAge(ActivityTime(row), now)
+	age := tuiworktrees.CompactAge(activityTime(row), now)
 	var line string
 	if wide {
 		line = fmt.Sprintf("  %s  %s  %s  %s  %5s  %s",

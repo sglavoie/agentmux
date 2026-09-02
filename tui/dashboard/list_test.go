@@ -59,7 +59,7 @@ func TestRenderListActivityColumnHiddenByDefault(t *testing.T) {
 // column is reserved, an idle row renders the "—" placeholder and every row
 // pays the same column width, so the directory column starts at one offset
 // regardless of how wide the busiest row's timer is. The third row carries the
-// widest representation FormatRunElapsed can produce, pinning that even a
+// widest representation formatRunElapsed can produce, pinning that even a
 // multi-month stretch cannot widen the column past a warning-decorated timer.
 func TestRenderListActivityColumnSharedWidthAcrossRows(t *testing.T) {
 	now := time.Now()

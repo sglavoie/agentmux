@@ -21,7 +21,7 @@ func uitestTestdataDir(name string) string {
 }
 
 // setenvFunc adapts t.Setenv (which auto-restores at test end) to the
-// error-returning callback shape NewUITestConfigDriver expects (matching
+// error-returning callback shape newUITestConfigDriver expects (matching
 // os.Setenv for the CLI path).
 func setenvFunc(t *testing.T) func(string, string) error {
 	return func(k, v string) error {
@@ -44,13 +44,13 @@ func TestUITestFixtureNamesAreSortedAndKnown(t *testing.T) {
 }
 
 func TestUITestFixtureByNameUnknownReturnsStructuredError(t *testing.T) {
-	_, err := UITestFixtureByName("does-not-exist")
+	_, err := uitestFixtureByName("does-not-exist")
 	if err == nil {
 		t.Fatal("expected error for unknown fixture")
 	}
-	var fe *UITestFixtureError
+	var fe *uitestFixtureError
 	if !errors.As(err, &fe) {
-		t.Fatalf("expected *UITestFixtureError, got %T: %v", err, err)
+		t.Fatalf("expected *uitestFixtureError, got %T: %v", err, err)
 	}
 	if fe.Name != "does-not-exist" {
 		t.Errorf("expected error to name the bad fixture, got %q", fe.Name)
@@ -61,11 +61,11 @@ func TestUITestFixtureByNameUnknownReturnsStructuredError(t *testing.T) {
 }
 
 func TestUITestFixtureDriverLoadsSessionsWithoutLiveKitty(t *testing.T) {
-	fx, err := UITestFixtureByName("basic")
+	fx, err := uitestFixtureByName("basic")
 	if err != nil {
 		t.Fatalf("basic fixture: %v", err)
 	}
-	d, client := NewUITestFixtureDriver(fx, UITestSize{})
+	d, client := newUITestFixtureDriver(fx, UITestSize{})
 	cleanupUITestDriver(t, d)
 	if got := len(d.Model().sessions); got != 3 {
 		t.Fatalf("expected 3 loaded sessions, got %d", got)
@@ -85,7 +85,7 @@ func TestUITestFixtureDriverLoadsSessionsWithoutLiveKitty(t *testing.T) {
 }
 
 func TestUITestFixtureDriverPartialSizeUsesFixtureDefaults(t *testing.T) {
-	fx, err := UITestFixtureByName("basic")
+	fx, err := uitestFixtureByName("basic")
 	if err != nil {
 		t.Fatalf("basic fixture: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestUITestFixtureDriverPartialSizeUsesFixtureDefaults(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			d, _ := NewUITestFixtureDriver(fx, tc.in)
+			d, _ := newUITestFixtureDriver(fx, tc.in)
 			cleanupUITestDriver(t, d)
 			if got := d.Observe().Size; got != tc.want {
 				t.Fatalf("partial %+v resolved to %+v, want %+v", tc.in, got, tc.want)
@@ -111,11 +111,11 @@ func TestUITestFixtureDriverPartialSizeUsesFixtureDefaults(t *testing.T) {
 }
 
 func TestUITestFixtureActionsOverlayOpens(t *testing.T) {
-	fx, err := UITestFixtureByName("actions")
+	fx, err := uitestFixtureByName("actions")
 	if err != nil {
 		t.Fatalf("actions fixture: %v", err)
 	}
-	d, _ := NewUITestFixtureDriver(fx, UITestSize{})
+	d, _ := newUITestFixtureDriver(fx, UITestSize{})
 	cleanupUITestDriver(t, d)
 	if err := d.Key("a"); err != nil {
 		t.Fatalf("press a: %v", err)
@@ -131,11 +131,11 @@ func TestUITestFixtureActionsOverlayOpens(t *testing.T) {
 }
 
 func TestUITestFixtureConfigPickerOpens(t *testing.T) {
-	fx, err := UITestFixtureByName("wide_profiles")
+	fx, err := uitestFixtureByName("wide_profiles")
 	if err != nil {
 		t.Fatalf("wide_profiles fixture: %v", err)
 	}
-	d, _ := NewUITestFixtureDriver(fx, UITestSize{})
+	d, _ := newUITestFixtureDriver(fx, UITestSize{})
 	cleanupUITestDriver(t, d)
 	if err := d.Key("C"); err != nil {
 		t.Fatalf("press C: %v", err)
@@ -154,7 +154,7 @@ func TestUITestKittyClientReturnsFixtureWindowsAndRecordsCalls(t *testing.T) {
 	windows := []kitty.OSWindow{uitestOSWindow(
 		uitestTab(1, 11, "🦊api", true, managedVars("work", "claude", "api", "~/projects/api")),
 	)}
-	client := NewUITestKittyClient(windows)
+	client := newUITestKittyClient(windows)
 
 	got, err := client.ListWindows()
 	if err != nil {
@@ -202,7 +202,7 @@ func TestUITestConfigDriverIsolatesUserPaths(t *testing.T) {
 	t.Setenv("amx_CONFIG", "")
 
 	root := t.TempDir()
-	d, client, env, err := NewUITestConfigDriver(
+	d, client, env, err := newUITestConfigDriver(
 		root,
 		uitestTestdataDir("basic_config.toml"),
 		nil,
@@ -210,7 +210,7 @@ func TestUITestConfigDriverIsolatesUserPaths(t *testing.T) {
 		setenvFunc(t),
 	)
 	if err != nil {
-		t.Fatalf("NewUITestConfigDriver: %v", err)
+		t.Fatalf("newUITestConfigDriver: %v", err)
 	}
 	cleanupUITestDriver(t, d)
 	if client == nil || d == nil {
@@ -251,7 +251,7 @@ func TestUITestConfigDriverIsolatesUserPaths(t *testing.T) {
 
 func TestUITestConfigDriverUnknownConfigErrors(t *testing.T) {
 	root := t.TempDir()
-	_, _, _, err := NewUITestConfigDriver(
+	_, _, _, err := newUITestConfigDriver(
 		root,
 		uitestTestdataDir("does_not_exist.toml"),
 		nil,

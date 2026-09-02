@@ -116,12 +116,12 @@ func SerializeFilter(f Filter) string {
 	return strings.Join(parts, " ")
 }
 
-// TokenAtCaret inspects input around caretPos and reports whether the caret
+// tokenAtCaret inspects input around caretPos and reports whether the caret
 // sits in a sigil-led token (`@`, `!`, `%`). When it does, prefix is the text
 // already typed after the sigil and replaceFrom..replaceTo are the byte
 // indices a completion should overwrite. sigil is 0 when the caret is not in
 // a sigil token (or the input is malformed) — callers should hide the popup.
-func TokenAtCaret(input string, caretPos int) (sigil byte, prefix string, replaceFrom, replaceTo int) {
+func tokenAtCaret(input string, caretPos int) (sigil byte, prefix string, replaceFrom, replaceTo int) {
 	if caretPos < 0 {
 		caretPos = 0
 	}

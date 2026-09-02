@@ -35,7 +35,7 @@ func TestCommandRunRejectsDisabledAndHiddenCommands(t *testing.T) {
 }
 
 func TestCommandExecutionUsesCapturedTarget(t *testing.T) {
-	client := NewUITestKittyClient(nil)
+	client := newUITestKittyClient(nil)
 	m := testModelWithSessions()
 	m.client = client
 	m = loadSessions(m, []session.RunningSession{

@@ -2,11 +2,11 @@ package launch
 
 import "github.com/sglavoie/agentmux/internal/config"
 
-// HarnessCellText renders the launcher's harness cell text for a single
+// harnessCellText renders the launcher's harness cell text for a single
 // account: "<emoji> <profile>/<harness>", or just "<profile>/<harness>" when
 // no emoji is configured for the harness, so unconfigured users do not see a
 // stray leading space.
-func HarnessCellText(cfg *config.Config, acc config.Account) string {
+func harnessCellText(cfg *config.Config, acc config.Account) string {
 	label := acc.Name + "/" + acc.EffectiveHarness()
 	emoji := ""
 	if cfg != nil {
@@ -18,9 +18,9 @@ func HarnessCellText(cfg *config.Config, acc config.Account) string {
 	return emoji + " " + label
 }
 
-// HarnessDisplayText renders a harness name with its configured emoji prefix,
+// harnessDisplayText renders a harness name with its configured emoji prefix,
 // falling back to the bare harness name when no emoji is configured.
-func HarnessDisplayText(cfg *config.Config, harness string) string {
+func harnessDisplayText(cfg *config.Config, harness string) string {
 	emoji := ""
 	if cfg != nil {
 		emoji = cfg.HarnessEmoji(harness)
