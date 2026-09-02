@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/asl"
 	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
@@ -139,7 +140,7 @@ func TestReconcileMissStreakResetsWhenRunReappears(t *testing.T) {
 }
 
 // TestMaybeReconcileHonorsInterval: the periodic entry point reconciles on the
-// first tick (startup) and then at most every aslReconcileInterval.
+// first tick (startup) and then at most every asl.ReconcileInterval.
 func TestMaybeReconcileHonorsInterval(t *testing.T) {
 	h, windows, _ := reconcileTestFixture(t)
 	calls := 0
@@ -153,11 +154,11 @@ func TestMaybeReconcileHonorsInterval(t *testing.T) {
 	now := time.Now()
 	h.maybeReconcileASLLeases(now, windows)
 	h.maybeReconcileASLLeases(now.Add(2*time.Second), windows)
-	h.maybeReconcileASLLeases(now.Add(aslReconcileInterval-time.Millisecond), windows)
+	h.maybeReconcileASLLeases(now.Add(asl.ReconcileInterval-time.Millisecond), windows)
 	if calls != 1 {
 		t.Fatalf("discovery calls within interval = %d, want 1 (startup only)", calls)
 	}
-	h.maybeReconcileASLLeases(now.Add(aslReconcileInterval), windows)
+	h.maybeReconcileASLLeases(now.Add(asl.ReconcileInterval), windows)
 	if calls != 2 {
 		t.Fatalf("discovery calls after interval = %d, want 2", calls)
 	}

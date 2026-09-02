@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
+	"github.com/sglavoie/agentmux/internal/daemon/asl"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -66,7 +67,7 @@ func (f *fakeASLBridge) Workbench(_ context.Context, req aslbridge.WorkbenchRequ
 	return f.link, nil
 }
 
-func newASLHandler(bridge ASLBridge) *Handler {
+func newASLHandler(bridge asl.Bridge) *Handler {
 	h := NewHandler(activity.NewStateGuard(0), nil)
 	if bridge != nil {
 		h.SetASLBridge(bridge)

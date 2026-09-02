@@ -17,6 +17,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/aslcontract"
+	"github.com/sglavoie/agentmux/internal/daemon/asl"
 	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
@@ -55,7 +56,7 @@ func TestFaultDroppedASLFinishRepairedByReconciliation(t *testing.T) {
 	if looping, _ := windowLoopState(t, h, 42); !looping {
 		t.Fatal("one miss released the lease; want two-miss protection")
 	}
-	h.ReconcileASLLeases(now.Add(aslReconcileInterval), windows)
+	h.ReconcileASLLeases(now.Add(asl.ReconcileInterval), windows)
 
 	looping, icon := windowLoopState(t, h, 42)
 	if looping || icon != "stop" {
@@ -95,7 +96,7 @@ func TestFaultDiscoveryFailurePreservesLeases(t *testing.T) {
 	stubDaemonLoopDiscover(t, nil, errors.New("state dir unreadable"))
 	now := time.Now()
 	for i := 1; i <= 3; i++ {
-		h.ReconcileASLLeases(now.Add(time.Duration(i)*aslReconcileInterval), windows)
+		h.ReconcileASLLeases(now.Add(time.Duration(i)*asl.ReconcileInterval), windows)
 	}
 	if looping, icon := windowLoopState(t, h, 42); !looping || icon != "bolt" {
 		t.Fatalf("after failed discoveries = looping=%v icon=%q; want lease preserved", looping, icon)

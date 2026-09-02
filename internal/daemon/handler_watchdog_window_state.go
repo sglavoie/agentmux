@@ -2,6 +2,8 @@ package daemon
 
 import (
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/daemon/asl"
 )
 
 // pruneClosedWindows drops per-window state for windows that Kitty no longer
@@ -35,20 +37,14 @@ func (h *Handler) pruneClosedWindows(now time.Time, liveIDs map[int]bool) {
 		delete(h.kittySockets, id)
 		h.recordWindowClosedLocked(id, now)
 	}
-	// ASL miss streaks are per-window leases; a closed window can never
-	// corroborate a run again, so its streaks go with it.
-	for ref := range h.aslMissStreak {
-		if _, ok := closed[ref.windowID]; ok {
-			delete(h.aslMissStreak, ref)
-		}
+	// ASL miss streaks and supervision records are per-window leases; a closed
+	// window can never corroborate a run again, so both go with it.
+	stillOpen := func(windowID int) bool {
+		_, gone := closed[windowID]
+		return !gone
 	}
-	for ref := range h.aslSupervisorTargets {
-		if _, ok := closed[ref.windowID]; ok {
-			delete(h.aslSupervisorTargets, ref)
-			delete(h.aslSupervisorProjections, ref)
-			delete(h.aslSupervisorClosureCutoffs, ref)
-		}
-	}
+	h.aslMissStreak.Retain(func(ref asl.LeaseRef) bool { return stillOpen(ref.WindowID) })
+	h.aslSupervisors.RetainWindows(stillOpen)
 	for id := range closed {
 		// Idle-sample stabilization streaks are per-window: a closed window's
 		// pane can produce no further screen evidence, so its streaks (and the

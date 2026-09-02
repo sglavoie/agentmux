@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/daemon/asl"
 	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -36,13 +37,13 @@ func (h *Handler) Handle(req protocol.Request) protocol.Response {
 	case protocol.TypeEventsExport:
 		resp = h.handleEventsExport(req)
 	case protocol.TypeASLSnapshot:
-		resp = h.handleASLSnapshot()
+		resp = asl.HandleSnapshot(h.aslBridge.Current())
 	case protocol.TypeASLQuestion:
-		resp = h.handleASLQuestion(req)
+		resp = asl.HandleQuestion(h.aslBridge.Current(), req)
 	case protocol.TypeASLAction:
-		resp = h.handleASLAction(req)
+		resp = asl.HandleAction(h.aslBridge.Current(), req)
 	case protocol.TypeASLWorkbench:
-		resp = h.handleASLWorkbench(req)
+		resp = asl.HandleWorkbench(h.aslBridge.Current(), req)
 	case protocol.TypeHealth:
 		resp = h.handleHealth()
 	case protocol.TypeShutdown:
@@ -72,7 +73,7 @@ func (h *Handler) handleHealth() protocol.Response {
 		capability := h.notifier.Capability()
 		resp.Notification = &capability
 	}
-	if bridge := h.asl(); bridge != nil {
+	if bridge := h.aslBridge.Current(); bridge != nil {
 		status := bridge.Status()
 		resp.ASLCapability = &status
 	}
@@ -97,6 +98,13 @@ func (h *Handler) handleHealth() protocol.Response {
 // once at startup, before any request is served.
 func (h *Handler) SetBuildInfo(info buildinfo.Info) {
 	h.buildInfo = &info
+}
+
+// SetASLBridge installs the optional agent-session-loop integration. It is
+// called once at startup, after the daemon socket is published, so a missing or
+// slow ASL cannot delay the core daemon.
+func (h *Handler) SetASLBridge(bridge asl.Bridge) {
+	h.aslBridge.Install(bridge)
 }
 
 // setMetricsSource installs the server's metrics snapshot function so health

@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
+	"github.com/sglavoie/agentmux/internal/daemon/asl"
 	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -22,14 +23,14 @@ const (
 	supervisorQuestionID = "00000000-0000-0000-0000-000000000011"
 )
 
-func supervisorQuestionFixture(t *testing.T, notifier *notification.Notifier) (*Handler, aslSupervisorTarget, time.Time) {
+func supervisorQuestionFixture(t *testing.T, notifier *notification.Notifier) (*Handler, asl.SupervisorTarget, time.Time) {
 	t.Helper()
 	now := time.Now().UTC().Truncate(time.Second)
 	h := NewHandler(activity.NewStateGuard(time.Hour), notifier)
-	target := aslSupervisorTarget{
-		windowID:       42,
-		originWindowID: 84,
-		candidate: agentloop.Candidate{
+	target := asl.SupervisorTarget{
+		WindowID:       42,
+		OriginWindowID: 84,
+		Candidate: agentloop.Candidate{
 			RunID:    supervisorRunID,
 			StateDir: t.TempDir(),
 		},
@@ -58,7 +59,7 @@ func supervisorQuestionFixture(t *testing.T, notifier *notification.Notifier) (*
 	})
 	st.ShadowSeq = 2
 	h.publishEffectiveLocked(42, st, st.Reducer.Reduce(now.Unix()))
-	h.registerASLSupervisorTargetLocked(target)
+	h.aslSupervisors.Register(target)
 	h.stateMu.Unlock()
 	return h, target, now
 }
@@ -108,21 +109,21 @@ func supervisorVisibleState(t *testing.T, h *Handler) state.EffectiveState {
 }
 
 func supervisorMailboxReplyPayload(
-	target aslSupervisorTarget,
+	target asl.SupervisorTarget,
 	projectionSeq uint64,
 	replySeq uint64,
 ) hookevent.HookPayload {
 	return hookevent.HookPayload{
 		Source:                    "agent_session_loop",
-		Reason:                    aslMailboxReplyReason,
-		RunID:                     target.candidate.RunID,
-		StatePath:                 filepath.Join(target.candidate.StateDir, "state.json"),
+		Reason:                    asl.MailboxReplyReason,
+		RunID:                     target.Candidate.RunID,
+		StatePath:                 filepath.Join(target.Candidate.StateDir, "state.json"),
 		QuestionID:                supervisorQuestionID,
 		SourceSequence:            fmt.Sprintf("%d", replySeq),
 		MailboxProjectionSequence: fmt.Sprintf("%d", projectionSeq),
 		SourceEventID: fmt.Sprintf(
 			"%s:mailbox-reply:%d",
-			target.candidate.RunID,
+			target.Candidate.RunID,
 			replySeq,
 		),
 		EmittedTime: "1785256911",
@@ -156,7 +157,7 @@ func supervisorMailboxQuestionPayload(
 ) hookevent.HookPayload {
 	return hookevent.HookPayload{
 		Source:                    "agent_session_loop",
-		Reason:                    aslMailboxQuestionReason,
+		Reason:                    asl.MailboxQuestionReason,
 		CWD:                       projectDir,
 		Harness:                   "claude",
 		KittyWindowID:             42,

@@ -160,6 +160,24 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   inspection — the retry/deadline path around a spawn stays with the client, and
   reconciling an observed harness exit into window state stays in the root with
   the reducer.
+- `internal/daemon/asl`: what the daemon knows about an agent-session-loop run,
+  and how it reads it. Two directions of evidence meet here. Outbound, the
+  optional bridge subprocess seam, its capability block, and the four
+  snapshot/question/action/workbench request handlers, plus the client-side
+  decoding of their replies. Inbound, the durable per-run state ASL publishes:
+  the projection phase a discovered run is in, the supervisor mailbox markers
+  that say a human is being waited on and the closure markers that say they are
+  not, the per-run monotonic generation/sequence position that decides whether a
+  read is stale, the lease-evidence rule that keeps one unreadable plan from
+  retiring a healthy run's lease, and the reconciliation and hook-delivery
+  counters that make a silent pairing legible. Like protocol, state, rendering,
+  events, activity, probes, and process it must never import the daemon root,
+  and it performs no Kitty, IPC, or journal I/O. It does not own what an ASL
+  observation *does* to a window: seeding a lease, retiring one, raising the
+  question icon, and notifying about it are reducer mutations under stateMu and
+  stay in the root. Generic hook decoding likewise stays in
+  `internal/daemon/events`, which normalizes an ASL lifecycle event alongside
+  every other hook.
 - `internal/diagnostics`: private fail-open causal journals, operational and
   native logs, temporary raw captures, and bounded diagnostic storage.
 - `internal/debugger`: offline-first status, query, explanation, bundle, and

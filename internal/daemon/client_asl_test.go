@@ -9,12 +9,13 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
+	"github.com/sglavoie/agentmux/internal/daemon/asl"
 )
 
 // startASLTestServer publishes a daemon socket backed by the given bridge, so
 // the typed client helpers are exercised over real IPC rather than against the
 // handler directly.
-func startASLTestServer(t *testing.T, bridge ASLBridge) string {
+func startASLTestServer(t *testing.T, bridge asl.Bridge) string {
 	t.Helper()
 	dir := t.TempDir()
 	socketPath := filepath.Join(dir, "d.sock")
@@ -108,10 +109,10 @@ func TestClientASLReportsRefusals(t *testing.T) {
 }
 
 func TestClientASLDeadlinesOutlastTheDaemonBudget(t *testing.T) {
-	if aslReadDeadline <= aslbridge.ReadTimeout {
-		t.Fatalf("client read deadline %s must outlast the daemon's %s", aslReadDeadline, aslbridge.ReadTimeout)
+	if asl.ReadDeadline <= aslbridge.ReadTimeout {
+		t.Fatalf("client read deadline %s must outlast the daemon's %s", asl.ReadDeadline, aslbridge.ReadTimeout)
 	}
-	if aslActionDeadline <= aslbridge.ActionTimeout {
-		t.Fatalf("client action deadline %s must outlast the daemon's %s", aslActionDeadline, aslbridge.ActionTimeout)
+	if asl.ActionDeadline <= aslbridge.ActionTimeout {
+		t.Fatalf("client action deadline %s must outlast the daemon's %s", asl.ActionDeadline, aslbridge.ActionTimeout)
 	}
 }

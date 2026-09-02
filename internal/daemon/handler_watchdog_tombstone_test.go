@@ -14,6 +14,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
+	"github.com/sglavoie/agentmux/internal/daemon/asl"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -143,16 +144,16 @@ func TestPruneClosedWindows_CreatesTombstoneAndPurgesLiveState(t *testing.T) {
 	st.LastSessionTitle = "W:api"
 	h.touchWindowMetadataLocked(protocol.Request{WindowID: 42, SessionTitle: "W:api", Account: "work"})
 	h.kittySockets[42] = "unix:/tmp/kitty-1"
-	ref := aslLeaseRef{windowID: 42, key: "run-1"}
-	h.aslMissStreak[ref] = 1
-	h.aslSupervisorTargets[ref] = aslSupervisorTarget{
-		windowID: 42,
-		candidate: agentloop.Candidate{
+	ref := asl.LeaseRef{WindowID: 42, Key: "run-1"}
+	h.aslMissStreak.Advance(ref)
+	h.aslSupervisors.Register(asl.SupervisorTarget{
+		WindowID: 42,
+		Candidate: agentloop.Candidate{
 			RunID:    "run-1",
 			StateDir: t.TempDir(),
 		},
-	}
-	h.aslSupervisorClosureCutoffs[ref] = 8
+	})
+	h.aslSupervisors.RaiseClosureCutoff(ref, 8)
 	h.enqueueRenderLocked(42, st)
 	h.stateMu.Unlock()
 
@@ -161,9 +162,9 @@ func TestPruneClosedWindows_CreatesTombstoneAndPurgesLiveState(t *testing.T) {
 	h.stateMu.Lock()
 	_, inStore := h.store[42]
 	_, hasSocket := h.kittySockets[42]
-	streaks := len(h.aslMissStreak)
-	supervisorTargets := len(h.aslSupervisorTargets)
-	replyCutoffs := len(h.aslSupervisorClosureCutoffs)
+	streaks := h.aslMissStreak.Len()
+	supervisorTargets := h.aslSupervisors.TargetCount()
+	replyCutoffs := h.aslSupervisors.CutoffCount()
 	meta, hasMeta := h.windowMetadata[42]
 	_, hasTombstone := h.windowTombstones[42]
 	h.stateMu.Unlock()

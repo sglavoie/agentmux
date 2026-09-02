@@ -1,29 +1,24 @@
 package daemon
 
+// The client half of the ASL request surface: request construction and the
+// socket deadlines, over the transport the daemon client already owns. Decoding
+// a reply is an ASL fact and lives with the domain in internal/daemon/asl.
+
 import (
 	"errors"
-	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/internal/daemon/asl"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-)
-
-// aslReadDeadline and aslActionDeadline bound the client half of an ASL
-// exchange. Each leaves room for the daemon's own bridge timeout plus IPC, so
-// a client gives up only after the daemon has already given up — never before,
-// which would turn a settled mutation into an unknown one.
-var (
-	aslReadDeadline   = aslbridge.ReadTimeout + time.Second
-	aslActionDeadline = aslbridge.ActionTimeout + time.Second
 )
 
 // ASLSnapshot returns the daemon's current ASL projection with its provenance
 // and the bounded receipt window.
 func (c *Client) ASLSnapshot() (aslbridge.Snapshot, aslbridge.SnapshotMeta, []aslbridge.Operation, aslbridge.Status, error) {
-	resp, err := c.sendWithDeadline(protocol.Request{Type: protocol.TypeASLSnapshot}, aslReadDeadline)
-	result, err := aslResult(resp, err)
+	resp, err := c.sendWithDeadline(protocol.Request{Type: protocol.TypeASLSnapshot}, asl.ReadDeadline)
+	result, err := asl.Result(resp, err)
 	if err != nil {
-		return aslbridge.Snapshot{}, aslbridge.SnapshotMeta{}, nil, aslStatusOf(resp), err
+		return aslbridge.Snapshot{}, aslbridge.SnapshotMeta{}, nil, asl.ResponseStatus(resp), err
 	}
 	var snapshot aslbridge.Snapshot
 	if result.Snapshot != nil {
@@ -42,8 +37,8 @@ func (c *Client) ASLQuestionBody(req aslbridge.QuestionRequest) (aslbridge.Quest
 	resp, err := c.sendWithDeadline(protocol.Request{Type: protocol.TypeASLQuestion, ASL: &protocol.ASLRequest{
 		PlanDir:    req.PlanDir,
 		QuestionID: req.QuestionID,
-	}}, aslReadDeadline)
-	result, err := aslResult(resp, err)
+	}}, asl.ReadDeadline)
+	result, err := asl.Result(resp, err)
 	if err != nil {
 		return aslbridge.QuestionBody{}, err
 	}
@@ -66,8 +61,8 @@ func (c *Client) ASLAct(req aslbridge.ActionRequest) (aslbridge.Operation, error
 		Resolution:  req.Resolution,
 		Note:        req.Note,
 		Text:        req.Text,
-	}}, aslActionDeadline)
-	result, err := aslResult(resp, err)
+	}}, asl.ActionDeadline)
+	result, err := asl.Result(resp, err)
 	if err != nil {
 		return aslbridge.Operation{}, err
 	}
@@ -82,8 +77,8 @@ func (c *Client) ASLWorkbench(req aslbridge.WorkbenchRequest) (aslbridge.Workben
 	resp, err := c.sendWithDeadline(protocol.Request{Type: protocol.TypeASLWorkbench, ASL: &protocol.ASLRequest{
 		PlanDir: req.PlanDir,
 		Focus:   req.Focus,
-	}}, aslActionDeadline)
-	result, err := aslResult(resp, err)
+	}}, asl.ActionDeadline)
+	result, err := asl.Result(resp, err)
 	if err != nil {
 		return aslbridge.WorkbenchLink{}, err
 	}
@@ -91,27 +86,4 @@ func (c *Client) ASLWorkbench(req aslbridge.WorkbenchRequest) (aslbridge.Workben
 		return aslbridge.WorkbenchLink{}, errors.New("daemon returned no workbench link")
 	}
 	return *result.Workbench, nil
-}
-
-func aslResult(resp protocol.Response, err error) (protocol.ASLResponse, error) {
-	if err != nil {
-		return protocol.ASLResponse{}, err
-	}
-	if !resp.OK {
-		if resp.Error == "" {
-			return protocol.ASLResponse{}, errors.New("daemon refused the ASL request")
-		}
-		return protocol.ASLResponse{}, errors.New(resp.Error)
-	}
-	if resp.ASL == nil {
-		return protocol.ASLResponse{}, errors.New("daemon returned no ASL result")
-	}
-	return *resp.ASL, nil
-}
-
-func aslStatusOf(resp protocol.Response) aslbridge.Status {
-	if resp.ASL == nil {
-		return aslbridge.Status{}
-	}
-	return resp.ASL.Status
 }

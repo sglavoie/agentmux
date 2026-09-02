@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/asl"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -88,7 +89,7 @@ func TestReconcileCorruptPlanNeitherClearsItsLeaseNorHidesHealthyPlans(t *testin
 	), nil)
 
 	for i := 1; i <= 5; i++ {
-		h.ReconcileASLLeases(now.Add(time.Duration(i)*aslReconcileInterval), windows)
+		h.ReconcileASLLeases(now.Add(time.Duration(i)*asl.ReconcileInterval), windows)
 	}
 
 	if !leaseLive(t, h, 42, "run-corrupt") {
@@ -152,7 +153,7 @@ func TestReconcilePresentEvidenceClearsTheMissStreak(t *testing.T) {
 
 	for i, result := range []agentloop.DiscoveryResult{absent, present, absent, present, absent} {
 		stubDaemonDiscoverPlans(t, result, nil)
-		h.ReconcileASLLeases(now.Add(time.Duration(i+1)*aslReconcileInterval), windows)
+		h.ReconcileASLLeases(now.Add(time.Duration(i+1)*asl.ReconcileInterval), windows)
 	}
 	if !leaseLive(t, h, 42, "run-A") {
 		t.Fatal("alternating evidence retired the lease; want only consecutive confirmations to count")
@@ -283,7 +284,7 @@ func TestReconcileReusesOneProjectionCacheAcrossSweeps(t *testing.T) {
 
 	now := time.Now()
 	h.ReconcileASLLeases(now, windows)
-	h.ReconcileASLLeases(now.Add(aslReconcileInterval), windows)
+	h.ReconcileASLLeases(now.Add(asl.ReconcileInterval), windows)
 
 	if len(caches) != 2 {
 		t.Fatalf("sweeps = %d, want 2", len(caches))
@@ -333,8 +334,8 @@ func TestHealthReportsASLReconciliationMetrics(t *testing.T) {
 	if metrics.Sweeps != 1 {
 		t.Errorf("Sweeps = %d, want 1", metrics.Sweeps)
 	}
-	if metrics.IntervalSeconds != aslReconcileInterval.Seconds() {
-		t.Errorf("IntervalSeconds = %v, want %v", metrics.IntervalSeconds, aslReconcileInterval.Seconds())
+	if metrics.IntervalSeconds != asl.ReconcileInterval.Seconds() {
+		t.Errorf("IntervalSeconds = %v, want %v", metrics.IntervalSeconds, asl.ReconcileInterval.Seconds())
 	}
 	if metrics.ContractSetID != "" && metrics.ContractSetID != candidate.ContractSetID {
 		t.Errorf("ContractSetID = %q", metrics.ContractSetID)
@@ -353,7 +354,7 @@ func TestReconcileScanFailureIsRecordedAndChangesNothing(t *testing.T) {
 
 	stubDaemonLoopDiscover(t, nil, errScanFailed{})
 	for i := 1; i <= 4; i++ {
-		h.ReconcileASLLeases(now.Add(time.Duration(i)*aslReconcileInterval), windows)
+		h.ReconcileASLLeases(now.Add(time.Duration(i)*asl.ReconcileInterval), windows)
 	}
 	if !leaseLive(t, h, 42, "run-A") {
 		t.Fatal("scan failures retired the lease")

@@ -2,12 +2,12 @@ package daemon
 
 import (
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
+	"github.com/sglavoie/agentmux/internal/daemon/asl"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -64,9 +64,9 @@ type Handler struct {
 	// aslBridge is the optional agent-session-loop integration. Unset means the
 	// daemon was started without it, in which case every ASL request is refused
 	// and the health capability block is omitted. It is installed after the
-	// socket is already serving, so it is read atomically rather than under
+	// socket is already serving, so it publishes atomically rather than under
 	// stateMu: connections are being answered before it exists.
-	aslBridge atomic.Pointer[ASLBridge]
+	aslBridge asl.BridgeHolder
 
 	// eventSeq is the daemon's global monotonic receipt sequence, stamped onto
 	// every event appended to a per-window ring so exports can totally order
@@ -161,44 +161,42 @@ type Handler struct {
 
 	// aslMissStreak counts, per window lease, how many consecutive discoveries
 	// positively confirmed the lease's run absent. Reconciliation releases the
-	// lease at aslMissingRunThreshold; indeterminate evidence neither advances
+	// lease at asl.MissingRunThreshold; indeterminate evidence neither advances
 	// nor resets a counter, and a discovery failure leaves the counters (and
 	// the leases) untouched. lastASLReconcileAt gates the periodic
 	// reconciliation cadence. Both guarded by stateMu.
-	aslMissStreak      map[aslLeaseRef]int
+	aslMissStreak      asl.MissStreaks
 	lastASLReconcileAt time.Time
 	// aslRunPosition records, per run ID, the furthest projection generation
 	// and lifecycle source sequence reconciliation has folded in. Both counters
 	// are monotonic at the source, so an observation that goes backwards on
 	// either is a stale read and is rejected rather than applied. Guarded by
 	// stateMu.
-	aslRunPosition map[string]aslRunPosition
+	aslRunPosition asl.RunPositions
 	// aslStateRootValue is the canonical agent-session-loop state root, and
 	// aslMetrics the reconciliation counters surfaced in health. Both guarded
 	// by stateMu.
 	aslStateRootValue string
-	aslMetrics        aslReconcileMetrics
+	aslMetrics        asl.ReconcileMetrics
 	// aslDelivery counts lifecycle-hook ingestion outcomes. It is the inbound
 	// counterpart to aslMetrics: reconciliation says what the daemon can read
 	// from the state root, delivery says what ASL managed to push. Guarded by
 	// stateMu.
-	aslDelivery aslHookDeliveryMetrics
+	aslDelivery asl.HookDeliveryMetrics
 	// aslProjectionCache lets the repeating sweep skip re-parsing state
 	// documents that have not changed since the last one. It is internally
 	// synchronized and is deliberately not guarded by stateMu, because
 	// discovery runs outside it.
 	aslProjectionCache *agentloop.ProjectionCache
-	// aslSupervisorTargets retains the small fixed-size lease path for each
+	// aslSupervisors retains the small fixed-size lease path for each
 	// discovered live ASL run. The two-second maintenance pass refreshes only
 	// these registered targets instead of rescanning the complete ASL state
-	// root. Projections are cached separately so a Stop arriving after the
+	// root. Projections are cached alongside them so a Stop arriving after the
 	// mailbox observation can correlate without filesystem I/O on the hook
-	// path. Closure cutoffs keep an in-flight stale projection from reasserting a
-	// question after an authoritative mailbox reply or resolution. All three
-	// maps are guarded by stateMu.
-	aslSupervisorTargets        map[aslLeaseRef]aslSupervisorTarget
-	aslSupervisorProjections    map[aslLeaseRef]agentloop.SupervisorQuestionProjection
-	aslSupervisorClosureCutoffs map[aslLeaseRef]uint64
+	// path, and closure cutoffs keep an in-flight stale projection from
+	// reasserting a question after an authoritative mailbox reply or
+	// resolution. Guarded by stateMu.
+	aslSupervisors asl.SupervisorRegistry
 
 	// idleSamples counts, per window probe source, how many consecutive
 	// stabilized idle screen samples an adapter has observed before an
@@ -341,12 +339,7 @@ func NewHandler(guard *activity.StateGuard, notifier *notification.Notifier) *Ha
 		stopConfirmTimeout:             defaultStopConfirmTimeout,
 		stopConfirmEnabled:             true,
 		copilotLifecycleReader:         transcript.ReadCopilotLifecycle,
-		aslMissStreak:                  make(map[aslLeaseRef]int),
-		aslRunPosition:                 make(map[string]aslRunPosition),
 		aslProjectionCache:             agentloop.NewProjectionCache(),
-		aslSupervisorTargets:           make(map[aslLeaseRef]aslSupervisorTarget),
-		aslSupervisorProjections:       make(map[aslLeaseRef]agentloop.SupervisorQuestionProjection),
-		aslSupervisorClosureCutoffs:    make(map[aslLeaseRef]uint64),
 		lastSeenEventAt:                make(map[string]time.Time),
 		notifiedHookSilence:            make(map[string]bool),
 		hookSilenceIdle:                make(map[string]*activity.AccountIdle),

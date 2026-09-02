@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/asl"
 	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
@@ -35,11 +36,11 @@ func TestASLSupervisorMailboxReplyClearsMatchingProbeImmediately(t *testing.T) {
 	}
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	ref := aslLeaseRef{windowID: 42, key: supervisorRunID}
-	if _, ok := h.aslSupervisorProjections[ref]; ok {
+	ref := asl.LeaseRef{WindowID: 42, Key: supervisorRunID}
+	if _, ok := h.aslSupervisors.Projection(ref); ok {
 		t.Fatal("matching mailbox reply retained cached projection")
 	}
-	if got := h.aslSupervisorClosureCutoffs[ref]; got != 8 {
+	if got, _ := h.aslSupervisors.ClosureCutoff(ref); got != 8 {
 		t.Fatalf("closure cutoff = %d; want 8", got)
 	}
 }
@@ -49,7 +50,7 @@ func TestASLSupervisorMailboxResolutionClearsMatchingProbeImmediately(t *testing
 	applySupervisorStop(h, now)
 	h.acceptASLSupervisorProjection(now, target, supervisorProjection(now, 7))
 	payload := supervisorMailboxReplyPayload(target, 7, 7)
-	payload.Reason = aslMailboxResolutionReason
+	payload.Reason = asl.MailboxResolutionReason
 	payload.ResolutionAction = "continue"
 	payload.SourceEventID = supervisorRunID + ":mailbox-resolution:7"
 
@@ -135,7 +136,7 @@ func TestASLSupervisorMailboxReplyCutoffBlocksStaleProjection(t *testing.T) {
 	}
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	if _, ok := h.aslSupervisorClosureCutoffs[aslLeaseRef{windowID: 42, key: supervisorRunID}]; ok {
+	if _, ok := h.aslSupervisors.ClosureCutoff(asl.LeaseRef{WindowID: 42, Key: supervisorRunID}); ok {
 		t.Fatal("newer projection did not retire closure cutoff")
 	}
 }
@@ -220,14 +221,14 @@ func TestASLSupervisorQuestionRunFinishRetiresProbeAndTarget(t *testing.T) {
 	}
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	ref := aslLeaseRef{windowID: 42, key: supervisorRunID}
-	if _, ok := h.aslSupervisorTargets[ref]; ok {
+	ref := asl.LeaseRef{WindowID: 42, Key: supervisorRunID}
+	if _, ok := h.aslSupervisors.Target(ref); ok {
 		t.Fatal("finished run retained supervisor target")
 	}
-	if _, ok := h.aslSupervisorProjections[ref]; ok {
+	if _, ok := h.aslSupervisors.Projection(ref); ok {
 		t.Fatal("finished run retained supervisor projection")
 	}
-	if _, ok := h.aslSupervisorClosureCutoffs[ref]; ok {
+	if _, ok := h.aslSupervisors.ClosureCutoff(ref); ok {
 		t.Fatal("finished run retained supervisor closure cutoff")
 	}
 }

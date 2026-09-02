@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/daemon/asl"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
@@ -13,15 +14,8 @@ import (
 func (h *Handler) correlateASLSupervisorQuestion(windowID int, now time.Time) {
 	h.stateMu.Lock()
 	var notifications []aslSupervisorNotification
-	for ref, projection := range h.aslSupervisorProjections {
-		if ref.windowID != windowID || projection.UnansweredQuestions <= 0 {
-			continue
-		}
-		target, ok := h.aslSupervisorTargets[ref]
-		if !ok {
-			continue
-		}
-		if pending := h.applyASLSupervisorQuestionLocked(now, target, projection); pending != nil {
+	for _, pendingQuestion := range h.aslSupervisors.PendingForWindow(windowID) {
+		if pending := h.applyASLSupervisorQuestionLocked(now, pendingQuestion.Target, pendingQuestion.Projection); pending != nil {
 			notifications = append(notifications, *pending)
 		}
 	}
@@ -38,10 +32,10 @@ func (h *Handler) correlateASLSupervisorQuestion(windowID int, now time.Time) {
 // human-actionable question icon and its notification deduplication.
 func (h *Handler) applyASLSupervisorQuestionLocked(
 	now time.Time,
-	target aslSupervisorTarget,
+	target asl.SupervisorTarget,
 	projection agentloop.SupervisorQuestionProjection,
 ) *aslSupervisorNotification {
-	st, ok := h.windowStateLocked(target.windowID)
+	st, ok := h.windowStateLocked(target.WindowID)
 	if !ok || st.Reducer == nil || projection.UnansweredQuestions <= 0 {
 		return nil
 	}
@@ -62,7 +56,7 @@ func (h *Handler) applyASLSupervisorQuestionLocked(
 		projection,
 		fmt.Sprintf(
 			"asl-supervisor:%s:%s",
-			target.candidate.RunID,
+			target.Candidate.RunID,
 			projection.LatestQuestionID,
 		),
 		firstNonEmpty(
@@ -83,7 +77,7 @@ func (h *Handler) applyASLSupervisorQuestionLocked(
 // used by both the immediate outbox handoff and the clean-Stop lease fallback.
 func (h *Handler) applyASLSupervisorQuestionEvidenceLocked(
 	now time.Time,
-	target aslSupervisorTarget,
+	target asl.SupervisorTarget,
 	projection agentloop.SupervisorQuestionProjection,
 	sourceEventID string,
 	harnessName string,
@@ -91,36 +85,36 @@ func (h *Handler) applyASLSupervisorQuestionEvidenceLocked(
 	bypassCooldown bool,
 	reason string,
 ) *aslSupervisorNotification {
-	st, ok := h.windowStateLocked(target.windowID)
+	st, ok := h.windowStateLocked(target.WindowID)
 	if !ok || st.Reducer == nil || projection.UnansweredQuestions <= 0 {
 		return nil
 	}
 
 	before := st.Reducer.Reduce(now.Unix())
-	source := aslSupervisorQuestionSource(target.candidate.RunID)
+	source := asl.QuestionSource(target.Candidate.RunID)
 	decision := st.Reducer.Apply(protocol.ReducerEvent{
 		Source:         source,
 		Action:         "elicitation",
 		Seq:            projection.ProjectionSeq,
 		At:             now.Unix(),
-		OriginWindowID: target.originWindowID,
-		RunID:          target.candidate.RunID,
+		OriginWindowID: target.OriginWindowID,
+		RunID:          target.Candidate.RunID,
 	})
 	if decision != protocol.DecisionApplied {
 		return nil
 	}
 	st.ShadowSeq++
 	effective := st.Reducer.Reduce(now.Unix())
-	h.publishEffectiveLocked(target.windowID, st, effective)
-	h.syncRendererMetadataLocked(target.windowID)
+	h.publishEffectiveLocked(target.WindowID, st, effective)
+	h.syncRendererMetadataLocked(target.WindowID)
 	if effective != before {
-		h.markWindowDirtyLocked(target.windowID)
+		h.markWindowDirtyLocked(target.WindowID)
 	} else {
-		h.markWindowActivityDirtyLocked(target.windowID)
+		h.markWindowActivityDirtyLocked(target.WindowID)
 	}
 	h.appendWatchdogEventLocked(
-		target.windowID,
-		target.originWindowID,
+		target.WindowID,
+		target.OriginWindowID,
 		now,
 		eventASLSupervisorQuestion,
 		"elicitation",
@@ -133,12 +127,12 @@ func (h *Handler) applyASLSupervisorQuestionEvidenceLocked(
 		return nil
 	}
 	return &aslSupervisorNotification{
-		windowID:       target.windowID,
+		windowID:       target.WindowID,
 		sessionTitle:   st.LastSessionTitle,
 		account:        st.LastAccount,
 		harness:        firstNonEmpty(harnessName, st.LastHarness),
 		sessionID:      sessionID,
-		runID:          target.candidate.RunID,
+		runID:          target.Candidate.RunID,
 		sourceEventID:  sourceEventID,
 		bypassCooldown: bypassCooldown,
 	}
@@ -199,13 +193,12 @@ func (h *Handler) clearASLSupervisorQuestionLocked(
 	now time.Time,
 	reason string,
 ) {
-	ref := aslLeaseRef{windowID: windowID, key: runID}
-	delete(h.aslSupervisorProjections, ref)
+	h.aslSupervisors.ClearProjection(asl.LeaseRef{WindowID: windowID, Key: runID})
 	st, ok := h.windowStateLocked(windowID)
 	if !ok || st.Reducer == nil {
 		return
 	}
-	source := aslSupervisorQuestionSource(runID)
+	source := asl.QuestionSource(runID)
 	if !st.Reducer.CanRetract(source) {
 		return
 	}
@@ -238,12 +231,10 @@ func (h *Handler) finishASLSupervisorQuestion(windowID int, runID string, now ti
 		return
 	}
 	h.stateMu.Lock()
-	ref := aslLeaseRef{windowID: windowID, key: runID}
-	delete(h.aslSupervisorTargets, ref)
-	delete(h.aslSupervisorClosureCutoffs, ref)
+	h.aslSupervisors.Retire(asl.LeaseRef{WindowID: windowID, Key: runID})
 	seq := uint64(0)
 	if st, ok := h.windowStateLocked(windowID); ok && st.Reducer != nil {
-		if fact, known := st.Reducer.Fact(aslSupervisorQuestionSource(runID)); known {
+		if fact, known := st.Reducer.Fact(asl.QuestionSource(runID)); known {
 			seq = fact.Seq + 1
 		}
 	}

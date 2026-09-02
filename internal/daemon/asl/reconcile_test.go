@@ -1,4 +1,4 @@
-package daemon
+package asl
 
 // Session 8 coverage: per-run ASL phase facts, the new lifecycle events, and
 // discovery-backed lease reconciliation. The scenarios pin the plan's ASL
