@@ -46,6 +46,20 @@ args = []
 # toasts where available.
 confirm_destructive = false
 
+# Per-directory Git probe. The daemon asks each live session's directory for
+# its branch name and whether it has uncommitted changes to tracked files, so
+# the dashboard can tell apart rows that share a repository and differ only by
+# worktree. It is advisory decoration: two short git commands per directory,
+# cached for a few seconds, run off the render path, and every failure — a
+# directory that is not a repository, a missing git, a timeout, a detached
+# HEAD — is silently reported as no branch rather than as an error.
+#
+# Set to false to stop running git entirely. That is worth doing if your
+# sessions live on a network filesystem or a slow mount, where the two commands
+# cost round trips instead of microseconds. Read once when the daemon starts:
+# run `amx daemon restart` after changing it.
+# git_probe = true
+
 # Editor command used by the `O` keybinding (Open in editor). When unset,
 # falls back to $VISUAL, then $EDITOR, then "vi". Multi-token values like
 # "code --wait" are split on whitespace.

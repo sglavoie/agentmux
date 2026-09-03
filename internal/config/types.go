@@ -65,7 +65,23 @@ type Defaults struct {
 	PlansDirectory       string               `toml:"plans_directory"` // root for the `P` keybinding's plans index; defaults to ~/.local/share/agent-plans
 	ASL                  ASLConfig            `toml:"asl"`             // optional agent-session-loop bridge integration
 	Release              ReleaseConfig        `toml:"release"`         // paired ASL/Agent Mux release gate
+
+	// GitProbe enables the cheap per-directory Git probe behind the dashboard's
+	// branch column (internal/gitstate). *bool so the load path can distinguish
+	// "user omitted the key" (nil → default true) from "user set
+	// git_probe = false" (&false → the daemon runs no git subprocess at all).
+	//
+	// It exists because the probe's cost is not uniform: on a local checkout it
+	// is two short commands per session directory per ten seconds, and on a
+	// network filesystem it is two round trips that can take the whole probe
+	// timeout. Anyone paying the second price must be able to buy the column
+	// back out, and the only honest way to do that is to stop running git.
+	GitProbe *bool `toml:"git_probe"`
 }
+
+// GitProbeValue reports whether the per-directory Git probe runs. An omitted
+// key means enabled, matching the other *bool toggles here.
+func (d Defaults) GitProbeValue() bool { return d.GitProbe == nil || *d.GitProbe }
 
 // ReleaseConfig configures the paired release gate. It is operator tooling, not
 // a runtime feature: nothing in the daemon, the dashboard, or any session path

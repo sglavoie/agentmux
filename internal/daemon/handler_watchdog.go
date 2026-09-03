@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
+	"github.com/sglavoie/agentmux/internal/gitstate"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -50,6 +51,25 @@ func (h *Handler) SetStaleThresholds(global map[string]time.Duration, perAccount
 // Safe to call once before the probe ticker fires.
 func (h *Handler) SetClaudeContextLimitProbe(enabled bool) {
 	h.claudeContextLimitProbeEnabled = enabled
+}
+
+// SetGitProbe enables or disables the per-directory Git probe. Mirrors the
+// [defaults].git_probe config knob. Disabling installs no cache at all rather
+// than an idle one, so a user who turned it off pays nothing — not a
+// subprocess, not a goroutine, not a map. Safe to call once before the watchdog
+// loop starts.
+func (h *Handler) SetGitProbe(enabled bool) {
+	if !enabled {
+		h.gitState = nil
+		return
+	}
+	h.gitState = gitstate.New(gitstate.Options{})
+}
+
+// setGitStateCache installs a specific probe cache. Tests use it to inject a
+// scripted executor and clock; production goes through SetGitProbe.
+func (h *Handler) setGitStateCache(cache *gitstate.Cache) {
+	h.gitState = cache
 }
 
 // SetStopConfirm configures the confirmed-idle gate applied to native stops:

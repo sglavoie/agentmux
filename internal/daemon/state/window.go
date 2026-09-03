@@ -75,6 +75,29 @@ type WindowState struct {
 	// all. Absent for a sweep, then correct, beats confident and wrong.
 	PromptKind string
 
+	// GitDirectory, GitBranch and GitDirty are the advisory Git facts the
+	// per-directory probe (internal/gitstate) last read for this window, and
+	// the directory it read them from. They describe the checkout a session is
+	// sitting in, not the session: nothing in the reducer, the renderer or the
+	// notifier consults them, and a wrong value costs a wrong word in a
+	// dashboard column and nothing else.
+	//
+	// GitDirectory is not redundant with the two facts it accompanies. The
+	// probe runs off stateMu, so its result arrives describing the directory
+	// the window was in when the sweep collected it; keeping that directory
+	// here is what lets the write-back notice that the pane moved (or that the
+	// window ID was reused) while git was running, and drop the answer instead
+	// of stamping it onto the wrong checkout.
+	//
+	// Like PromptKind they are DELIBERATELY ABSENT from windowStateUserVar. A
+	// branch is not news: the checkout is still on disk, so the next sweep
+	// re-reads it within one probe TTL, and a branch restored from before a
+	// daemon restart would be a confident claim about a directory nobody looked
+	// at since. Absent for a sweep, then correct, beats confident and wrong.
+	GitDirectory string
+	GitBranch    string
+	GitDirty     bool
+
 	// Render-generation diagnostics. Seq is the window's generation counter;
 	// these track how far each stage of the render pipeline has advanced so
 	// exports can show where a window is stuck. DirtySince is when the current

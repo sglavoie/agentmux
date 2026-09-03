@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
@@ -15,6 +16,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
+	"github.com/sglavoie/agentmux/internal/gitstate"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
@@ -229,6 +231,22 @@ type Handler struct {
 	// [defaults.watchdog].claude_context_limit_probe at daemon startup.
 	// Defaults to true; an explicit `false` skips the probe entirely.
 	claudeContextLimitProbeEnabled bool
+
+	// gitState is the cheap per-directory Git probe (internal/gitstate) behind
+	// the dashboard's branch column. NIL DISABLES THE PROBE ENTIRELY — no cache,
+	// no goroutine, no git subprocess — and nil is both what
+	// [defaults].git_probe = false installs and what every Handler that never
+	// calls SetGitProbe has, which is every unit test. Set once at startup
+	// before the watchdog loop starts and never mutated afterward, so the sweep
+	// reads it without a lock, matching claudeContextLimitProbeEnabled above.
+	gitState *gitstate.Cache
+
+	// gitStateRefreshing single-flights the probe round refreshGitState starts.
+	// Its own atomic rather than stateMu: the latch is claimed on the watchdog
+	// goroutine and released on the probe goroutine, and taking stateMu to do
+	// that would put a lock acquisition in front of the one path whose whole
+	// purpose is to stay off it.
+	gitStateRefreshing atomic.Bool
 
 	// stopConfirmDelay, stopConfirmTimeout and stopConfirmEnabled configure the
 	// confirmed-idle gate a native stop passes through before it paints the

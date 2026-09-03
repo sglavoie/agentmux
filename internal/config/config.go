@@ -183,6 +183,10 @@ func applyDefaults(cfg *Config) {
 		t := true
 		cfg.Defaults.Watchdog.ClaudeContextLimitProbe = &t
 	}
+	if cfg.Defaults.GitProbe == nil {
+		t := true
+		cfg.Defaults.GitProbe = &t
+	}
 	if cfg.Defaults.StopConfirm.Delay == 0 {
 		cfg.Defaults.StopConfirm.Delay = 6
 	}

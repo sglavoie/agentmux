@@ -67,6 +67,11 @@ func (h *Handler) watchdogTick(now time.Time, elapsed time.Duration) {
 	}
 	h.sweepStale(now, windows, credit, gapTick)
 	h.sweepHookSilence(now, windows, credit, gapTick)
+	// The gitstate refresh rides this loop rather than the render path or the
+	// TUI: it forks processes, so it belongs where nothing is waiting on it.
+	// It starts a round and returns — see git_state.go for why it must never
+	// run inline here, and for the lock discipline the round itself keeps.
+	h.refreshGitState(windows)
 }
 
 // refreshAfterGap re-establishes the daemon's external evidence after a long

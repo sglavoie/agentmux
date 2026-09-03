@@ -139,6 +139,7 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	if cfg.Defaults.Watchdog.ClaudeContextLimitProbe != nil {
 		handler.SetClaudeContextLimitProbe(*cfg.Defaults.Watchdog.ClaudeContextLimitProbe)
 	}
+	handler.SetGitProbe(cfg.Defaults.GitProbeValue())
 	handler.SetStopConfirm(
 		time.Duration(cfg.Defaults.StopConfirm.Delay)*time.Second,
 		time.Duration(cfg.Defaults.StopConfirm.Timeout)*time.Second,

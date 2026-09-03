@@ -179,6 +179,26 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
 - `internal/handoff`: bounded deterministic pack creation, private artifacts,
   and cross-harness launch workflow.
 - `internal/worktree`: bounded managed Git worktree creation and cleanup.
+- `internal/gitstate`: what the checkout in a directory says about itself — a
+  branch name and a dirty bit, read through an injectable runner with a
+  per-command timeout and held in a bounded TTL cache keyed by absolute
+  directory. It decides nothing and reports no errors: a non-repository, a
+  missing `git`, a timeout, and a detached HEAD all come back as an empty
+  branch, because this state decorates a dashboard row and a row that grew an
+  error message would be worse than one that said nothing. The boundary against
+  `internal/worktree` is the thing to keep straight, since both produce a branch
+  and a dirty bit. `worktree` is AUTHORITATIVE and EXPENSIVE — scoped to the
+  managed worktree root, canonicalizing symlinks, checking containment,
+  requiring Git registration, and spending four or more git calls plus
+  user-visible warnings per entry, because its answers gate destructive
+  actions. `gitstate` is CHEAP, UNSCOPED, and ADVISORY: any directory, two
+  commands, no warnings. Use `worktree` to decide something and `gitstate` to
+  paint a column, never the reverse. Ahead/behind is deliberately out of scope
+  and documented as a decision in the package doc, not left as an omission.
+  What the daemon does with the result — which directories are worth probing
+  and how a result reaches a window without holding `stateMu` across a
+  subprocess — stays in `internal/daemon` (`git_state.go`), which drives the
+  refresh from the watchdog loop.
 - `internal/daemon`: the orchestration root — daemon construction and lifecycle,
   the sweep/probe/render schedules, reconciliation coordination, and the public
   entry points `Run`, `NewOperationalLogger`, and `NewHandler`/`Handler`. It owns
@@ -428,6 +448,7 @@ sort = "alpha"
 refresh_interval = 2
 guard_duration = 1
 plans_directory = "~/.local/share/agent-plans"
+git_probe = true   # per-directory branch/dirty probe; false stops running git
 
 [defaults.handoff]
 max_bytes = 65536
