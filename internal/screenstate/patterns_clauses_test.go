@@ -29,6 +29,14 @@ func TestEmbeddedPatternsDefineEveryAdapterClause(t *testing.T) {
 			claudeClauseInterruptHint,
 			claudeClauseBackgroundTask,
 			claudeClauseBlockingPrompt,
+			// The four prompt-kind clauses are OPTIONAL to a user override
+			// (see claudeRequirements) but mandatory in the file this
+			// repository ships: blocking_prompt is a group that refs them, so
+			// a rename here would leave the shipped veto matching nothing.
+			claudeClausePromptPermission,
+			claudeClausePromptTrust,
+			claudeClausePromptEdit,
+			claudeClausePromptElicitation,
 		},
 		harness.Codex: {
 			codexClauseComposerLine,

@@ -59,6 +59,21 @@ const (
 // composer_placeholder has no Claude analog. An override written against an
 // older release therefore still loads as long as it kept the refusals.
 //
+// THE FOUR PROMPT-KIND CLAUSES ARE NOT LISTED EITHER, AND MUST NOT BE. This is
+// the same argument extended, and it is worth spelling out because the omission
+// looks like one line someone tightening this list would helpfully add.
+// prompt_permission, prompt_trust, prompt_edit and prompt_elicitation
+// (claude_prompt.go) are the copy the shipped blocking_prompt group refs, and
+// requiring them would loudly REFUSE every override that kept blocking_prompt
+// as the flat phrase list it used to be — which is precisely the set of files
+// the split exists to keep working, and which the loader would reject at
+// install time with a message about a clause the user never wrote. A flat-list
+// override loses no refusal by omitting them: blocking_prompt itself stays
+// required above, so the veto still fires; all that is lost is the LABEL on an
+// already-firing veto. That is also the asymmetry with codexPromptRequirements,
+// where every kind clause IS mandatory because a missing one blinds the veto
+// itself and lets a pane waiting on that one prompt settle.
+//
 // Two things consume this list. patterns.go refuses to INSTALL an override that
 // does not satisfy it, which is where a real user's mistake is caught; Classify
 // refuses to SETTLE against a set that does not satisfy it, which covers every

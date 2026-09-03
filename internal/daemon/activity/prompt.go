@@ -62,3 +62,30 @@ func codexPromptResult(kind CodexPromptKind, action string) CodexPromptClassific
 		IconState: protocol.IconState(action),
 	}
 }
+
+// ClaudePromptKind identifies the user-blocking Claude Code prompt visible in a
+// Kitty screen scrape. Like the Codex kinds above it is harness knowledge
+// living in internal/screenstate; this alias and the constants below exist so
+// daemon callers keep naming them without importing that package.
+type ClaudePromptKind = screenstate.ClaudePromptKind
+
+const (
+	ClaudePromptPermission  = screenstate.ClaudePromptPermission
+	ClaudePromptTrust       = screenstate.ClaudePromptTrust
+	ClaudePromptEdit        = screenstate.ClaudePromptEdit
+	ClaudePromptElicitation = screenstate.ClaudePromptElicitation
+)
+
+// ClassifyClaudePromptScreen reports which blocking prompt a Claude screen is
+// showing.
+//
+// It has no CodexPromptClassification analog on purpose. A Codex prompt
+// classification carries an action and an icon because classifying the screen
+// is what RAISES the blocked state for that harness; a Claude prompt is already
+// wearing its icon by the time anything asks, so there is nothing here for an
+// action to decide and a bare kind is the whole answer. A false result means no
+// label is available — including from an override that kept blocking_prompt as
+// a flat phrase list — and never that the pane is unblocked.
+func ClassifyClaudePromptScreen(screen string) (ClaudePromptKind, bool) {
+	return screenstate.ClassifyClaudePrompt(screen)
+}

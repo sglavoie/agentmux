@@ -144,8 +144,78 @@ func (h *Handler) probeClaudeScreenStopWithSnapshot(
 			h.recoverClaudeBusyTitle(now, binding, titleParts, target.UserVars, source.Title)
 		}
 
+		// Labelling an already-blocked pane is disjoint from settling a stuck ⚡:
+		// this reads only 🔑/❓ windows and the idle probe below reads only ⚡
+		// ones, so no pane is classified twice and the per-tick screen cache is
+		// never asked for a capture both would want.
+		h.stampClaudePromptKind(binding, screens)
+
 		h.probeScreenIdle(now, claudeScreenIdleSpec, binding, titleParts, target.UserVars, source.Title, screens)
 	}
+}
+
+// stampClaudePromptKind labels a Claude window that is ALREADY blocked with
+// which prompt is on its screen, feeding state.WindowState.PromptKind — the
+// same field the Codex prompt probe writes (see
+// recordCodexPromptProbeStateLocked).
+//
+// It is a pure labeller and that is the whole design. It applies no reducer
+// event, publishes no state, and raises no icon: the Claude hook path already
+// painted 🔑/❓, and nothing here may change what a pane looks like. Compare the
+// Codex probe, which classifies in order to RAISE the state and therefore folds
+// its result into the reducer.
+//
+// The blocking-icon gate is also what bounds the cost. It runs before the
+// screen read, so an ordinary working or resting pane pays nothing, and a pane
+// that IS blocked is a pane whose user is being waited on — one cached Kitty
+// capture per probe tick is not a cost anyone is counting. The gate is
+// promptKindBlockingIcon, the same predicate stampPromptKindLocked clears
+// against, so this can never write a kind that the next publish would strip.
+//
+// Nothing is marked dirty: PromptKind is deliberately not persisted (see the
+// field) and does not yet reach the wire, so there is no durable or rendered
+// consequence to flush. Whatever projects it onto a row must revisit that.
+func (h *Handler) stampClaudePromptKind(binding probes.Binding, screens *activity.ScreenTextCache) {
+	targetWindowID := binding.TargetWindowID
+
+	h.stateMu.Lock()
+	if !h.screenProbeBindingEligibilityCurrentLocked(binding, "", promptKindBlockingIcon) {
+		h.stateMu.Unlock()
+		return
+	}
+	h.stateMu.Unlock()
+
+	screen, err := screens.Screen(binding.SourceWindowID)
+	if err != nil {
+		slog.Debug("claude prompt kind: get screen failed",
+			"source_window_id", binding.SourceWindowID, "target_window_id", targetWindowID, "err", err)
+		return
+	}
+	// A screen that names no kind leaves the existing one alone rather than
+	// clearing it. An override with a flat blocking_prompt answers false for
+	// every screen, and so does a Claude build that reworded its prompt: in both
+	// cases "no label available" is the fact, and blanking a good label the last
+	// tick read would be a worse answer than keeping it. Leaving the pane's
+	// blocking icon is what clears the kind, and stampPromptKindLocked owns that.
+	kind, ok := activity.ClassifyClaudePromptScreen(screen)
+	if !ok {
+		return
+	}
+
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	// Revalidated after the off-lock read, exactly as the idle probe revalidates
+	// before it mutates: the prompt may have been answered while the capture was
+	// in flight, and a kind written onto a window that has moved on is the stale
+	// reason this whole field is arranged to prevent.
+	if !h.screenProbeBindingEligibilityCurrentLocked(binding, "", promptKindBlockingIcon) {
+		return
+	}
+	st, ok := h.windowStateLocked(targetWindowID)
+	if !ok || st == nil {
+		return
+	}
+	st.PromptKind = string(kind)
 }
 
 // recoverClaudeBusyTitle promotes an empty managed Claude target to active from

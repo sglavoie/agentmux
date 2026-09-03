@@ -71,11 +71,57 @@ background_task = ["ctrl+b to"]
 # line of defence so a stuck bolt with a visible prompt is never settled to
 # stop. These are English-only and exhaustive by construction, which is exactly
 # the limitation a user override exists to lift.
-blocking_prompt = [
+#
+# The four lists below used to be one flat blocking_prompt list. They are split
+# so a fired veto can also say WHICH prompt fired it — see claude_prompt.go,
+# which reads them and maps each to a ClaudePromptKind. The split is copy only:
+# the SET of kinds is Go constants and a new list here reaches no icon and no
+# gloss, so widening one of these four is a repair and inventing a fifth is not.
+#
+# Every list is OPTIONAL to an override, unlike Codex's kind clauses. Losing one
+# costs a reason string, never a refusal, because blocking_prompt below stays
+# required and still vetoes. See the note above claudeRequirements in claude.go.
+
+# "Do you want to proceed?" (a Bash command), "Do you want to allow …" (a tool
+# or an MCP server). The 🔑 half.
+prompt_permission = [
     "do you want to proceed",
+    "do you want to allow",
+]
+
+# "Do you trust the files in this folder?", Claude's startup workspace-trust
+# dialog. It is its own kind rather than a permission because nothing in the
+# session is waiting on it — the session has not started.
+prompt_trust = ["do you trust"]
+
+# "Do you want to make this edit to app.go?", "Do you want to create foo.txt?" —
+# a write to the filesystem, which is the prompt a user most often wants named,
+# since it is the one whose answer is not obvious from the icon.
+prompt_edit = [
     "do you want to make this edit",
     "do you want to create",
-    "do you want to allow",
-    "do you trust",
-    "would you like to",
+]
+
+# "Would you like to …", Claude asking the user to choose rather than to
+# approve. Deliberately the loosest wording of the four, which is why
+# classifyClaudePrompt tests it LAST.
+prompt_elicitation = ["would you like to"]
+
+[group]
+
+# blocking_prompt is the clause claude.go's veto reads, and it is a group only
+# so the four kind lists above are the single home of the copy. An `any` list
+# with no `all` is a plain OR, so this matches exactly what the flat list it
+# replaced matched.
+#
+# An override is free to define blocking_prompt as a flat phrase list again:
+# claudeRequirements asks for it as AnyClause, and Patterns.Match resolves a
+# regex, a phrase list and a group alike. Such a set still vetoes correctly and
+# simply yields no kind.
+[group.blocking_prompt]
+any = [
+    "prompt_permission",
+    "prompt_trust",
+    "prompt_edit",
+    "prompt_elicitation",
 ]
