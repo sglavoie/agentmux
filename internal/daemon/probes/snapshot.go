@@ -15,11 +15,14 @@ import (
 // publishes the freshly listed windows here, and hook routing reads the last
 // published snapshot without any Kitty I/O.
 //
-// The snapshot is treated as immutable: PublishWithReceipts stores the slice
-// produced by a single ListWindows call (the real client and the test fake both return
-// freshly built, unshared data) and consumers only ever read it. Nothing mutates
-// a published snapshot in place, so the read path needs no defensive deep copy
-// and never blocks on Kitty.
+// The snapshot is treated as immutable: Publish takes one Publication — the
+// window slice a single ListWindows call produced, plus the receipts, socket,
+// and completion time of that same read — and stores the slice and receipt map
+// by reference rather than copying them (the real client and the test fake both
+// return freshly built, unshared data, and the daemon hands ownership over at
+// publication). Consumers only ever read them, and nothing mutates a published
+// snapshot in place, so the read path needs no defensive deep copy and never
+// blocks on Kitty.
 
 // snapshot is one published view of the Kitty window tree plus the bookkeeping
 // the read path needs to reason about freshness and readiness.
