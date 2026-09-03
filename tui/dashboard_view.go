@@ -44,12 +44,7 @@ func renderListAt(m Model, width, height int) string {
 // marker lookup and the pulse predicate stay behind closures because both read
 // model state the dashboard has no business knowing about.
 func dashboardListInput(m Model, width, height int) dashboard.ListInput {
-	// Fall back to the wall clock for a Model built as a bare literal, which is
-	// how most of this package's render tests construct their input.
-	now := time.Now()
-	if m.now != nil {
-		now = m.now()
-	}
+	now := modelNow(m)
 	return dashboard.ListInput{
 		Rows:          m.filtered,
 		SessionCount:  len(m.sessions),

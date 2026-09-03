@@ -97,7 +97,7 @@ func TestPostActionRefreshCoalescesWithTicks(t *testing.T) {
 		t.Fatalf("actions during an in-flight refresh dispatched %d refreshes, want 0", recorder.count())
 	}
 
-	m = send(m, commands.SessionsMsg{Seq: startupSeq, Sessions: makeSessions()})
+	send(m, commands.SessionsMsg{Seq: startupSeq, Sessions: makeSessions()})
 	if recorder.count() != 1 {
 		t.Fatalf("a tick plus two actions produced %d catch-up refreshes, want exactly 1", recorder.count())
 	}

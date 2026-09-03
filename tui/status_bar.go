@@ -7,6 +7,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/tui/asl"
 	"github.com/sglavoie/agentmux/tui/launch"
 	"github.com/sglavoie/agentmux/tui/layout"
@@ -73,8 +74,8 @@ func fallbackStatusMessage(m Model) statusMessage {
 	if m.actionErr != nil {
 		return statusMessage{Text: "Action error: " + m.actionErr.Error(), Severity: statusError}
 	}
-	if m.err != nil {
-		return statusMessage{Text: "Kitty error: " + m.err.Error(), Severity: statusError}
+	if msg, ok := topologyStatus(m, modelNow(m)); ok {
+		return msg
 	}
 	if msg, ok := modeErrorStatus(m); ok {
 		return msg
@@ -92,6 +93,57 @@ func fallbackStatusMessage(m Model) statusMessage {
 		return statusMessage{Text: "Scanning transcripts… results will update automatically", Severity: statusInfo}
 	}
 	return statusMessage{Text: fallbackStatusText(m), Severity: statusIdle}
+}
+
+// topologyStatus is the live window tree's own slot in the status bar, ranked
+// directly below action errors so a refresh problem never displaces the report
+// of something the operator just asked for.
+//
+// A refresh failure is only fatal while the dashboard is cold — no successful
+// refresh has ever landed, so there is nothing to keep showing and the red
+// `Kitty error` is the whole truth. Once a tree has been rendered, an outage is
+// a degradation rather than a failure: the rows stay, and the only question is
+// how old they have become. Below the threshold nothing is said at all, because
+// a dashboard that shouts about a two-second gap between refreshes teaches the
+// operator to ignore it.
+func topologyStatus(m Model, now time.Time) (statusMessage, bool) {
+	age, warm := topologyAge(m, now)
+	if !warm {
+		if m.err != nil {
+			return statusMessage{Text: "Kitty error: " + m.err.Error(), Severity: statusError}, true
+		}
+		return statusMessage{}, false
+	}
+	if age < protocol.KittySnapshotStaleAfter {
+		return statusMessage{}, false
+	}
+	return statusMessage{
+		Text:     fmt.Sprintf("Kitty refresh delayed; showing cached sessions (%ds old)", int(age/time.Second)),
+		Severity: statusWarning,
+	}, true
+}
+
+// topologyAge reports how old the window tree currently on screen is: the age
+// it already carried when it was applied plus everything elapsed since. Adding
+// the elapsed term is what lets the warning appear during an outage, when no
+// message is arriving to recompute anything.
+//
+// The threshold is protocol.KittySnapshotStaleAfter, the daemon's own — but the
+// verdict is not. A daemon Stale flag describes one snapshot at the moment it
+// answered and says nothing about a refresh that never reached a daemon at all,
+// so the age the operator is warned about has to be derived here. The flag
+// remains the sole authority over whether topology may drive Kitty writes.
+//
+// A backwards clock is clamped to zero. The false return is the cold state.
+func topologyAge(m Model, now time.Time) (time.Duration, bool) {
+	if m.topologyObservedAt.IsZero() {
+		return 0, false
+	}
+	age := m.topology.Age + now.Sub(m.topologyObservedAt)
+	if age < 0 {
+		return 0, true
+	}
+	return age, true
 }
 
 func modeErrorStatus(m Model) (statusMessage, bool) {

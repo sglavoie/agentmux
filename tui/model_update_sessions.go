@@ -82,7 +82,12 @@ func (m Model) handleSessionsMsg(msg commands.SessionsMsg) (tea.Model, tea.Cmd) 
 	if !m.settleTopologyRefresh(msg.Seq) {
 		return m, nil
 	}
+	// Freshness is stamped with the tree it describes. Age is rendered later as
+	// this reading plus everything elapsed since, so a newer tree — even one the
+	// daemon already marked stale — resets the displayed age and, with it, any
+	// staleness warning the previous one had raised.
 	m.topology = msg.Topology
+	m.topologyObservedAt = modelNow(m)
 	// The source window has now been resolved against a real window tree, so
 	// the startup selection is spent. Retaining it until here is what lets a
 	// failed first refresh still select the caller's tab on the retry.
@@ -124,6 +129,11 @@ func (m Model) handleSessionsMsg(msg commands.SessionsMsg) (tea.Model, tea.Cmd) 
 // was — a dashboard showing a slightly old list beats one that empties itself
 // because a subprocess timed out — and the pending bit is dropped so the retry
 // waits for the next tick rather than firing immediately.
+//
+// The error is recorded but the topology and its stamp are not touched, so the
+// rows on screen keep aging from their own last successful capture. How loudly
+// this failure is rendered is decided at render time by whether there is a
+// usable tree to keep showing at all: see topologyStatus.
 func (m Model) handleRefreshErr(msg commands.ErrMsg) (tea.Model, tea.Cmd) {
 	if !m.settleTopologyRefresh(msg.Seq) {
 		return m, nil

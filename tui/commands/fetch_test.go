@@ -212,6 +212,132 @@ func TestRefreshWritesBackFromAFreshDaemonSnapshot(t *testing.T) {
 	}
 }
 
+// ghostConfig describes a project the dashboard can recognize from a tab title
+// alone. That is what lets a tab whose anchor window was closed still be matched,
+// and therefore what makes it a ghost worth re-stamping.
+func ghostConfig() *config.Config {
+	return &config.Config{
+		Defaults: config.Defaults{Sort: "alpha"},
+		Accounts: []config.Account{{Name: "work", Harness: "claude"}},
+		Sessions: []config.Session{{Title: "api", Account: "work", Directory: "/work/api"}},
+	}
+}
+
+// ghostTree is one such tab: the title still names the configured project and a
+// harness is still running in it, but no window carries the amx user vars any
+// more. Tab 70 alongside it holds a pending cross-window selection request, so a
+// single tree exercises both topology-derived Kitty writes at once.
+func ghostTree() []kitty.OSWindow {
+	return []kitty.OSWindow{{
+		Tabs: []kitty.Tab{
+			{
+				ID:    7,
+				Title: "api",
+				Windows: []kitty.Window{{
+					ID:                  42,
+					IsActive:            true,
+					ForegroundProcesses: []kitty.ForegroundProcess{{Cmdline: []string{"claude"}}},
+				}},
+			},
+			{
+				ID:      70,
+				Windows: []kitty.Window{{ID: 700, UserVars: kitty.UserVars{DashboardSelect: "7:request-1"}}},
+			},
+		},
+	}}
+}
+
+func refreshOnceWith(t *testing.T, client kitty.KittyClient, cfg *config.Config, seq int) any {
+	t.Helper()
+	return Refresh(client, cfg, cfg.Defaults.Sort, seq, 0)()
+}
+
+// TestStaleSnapshotDefersBothTopologyDerivedWrites is the safety half of the
+// stale rule. A ghost re-stamp and a selection clear both aim at a window ID
+// read out of a tree old enough that the window may already be gone — and a
+// write aimed at a vanished window is at best wasted and at worst aimed at its
+// replacement. Both are dropped, and the row they were about is rendered anyway.
+func TestStaleSnapshotDefersBothTopologyDerivedWrites(t *testing.T) {
+	stubStateQuery(t, func() (protocol.Response, error) {
+		return protocol.Response{OK: true, KittySnapshot: readySnapshot(ghostTree(), true)}, nil
+	})
+	client := &recordingKittyClient{}
+
+	msg := refreshOnceWith(t, client, ghostConfig(), 1).(SessionsMsg)
+	if len(msg.Sessions) != 1 || msg.Sessions[0].WindowID != 42 {
+		t.Fatalf("sessions = %+v, want the ghost tab still rendered as window 42", msg.Sessions)
+	}
+	if msg.SelectionTabID != 7 || msg.SelectionToken != "request-1" {
+		t.Fatalf("selection = tab %d token %q, want tab 7 token request-1", msg.SelectionTabID, msg.SelectionToken)
+	}
+	if client.userVarWrites() != 0 {
+		t.Fatalf("stale snapshot drove %d user-var writes, want 0", client.userVarWrites())
+	}
+}
+
+// TestRepeatedStaleRefreshesStayReadOnly extends the rule from one refresh to an
+// outage. Nothing accumulates across stale refreshes that would eventually let a
+// write through, and none of them falls back to a Kitty subprocess either.
+func TestRepeatedStaleRefreshesStayReadOnly(t *testing.T) {
+	stubStateQuery(t, func() (protocol.Response, error) {
+		return protocol.Response{OK: true, KittySnapshot: readySnapshot(ghostTree(), true)}, nil
+	})
+	client := &recordingKittyClient{}
+	cfg := ghostConfig()
+
+	for seq := 1; seq <= 5; seq++ {
+		if _, ok := refreshOnceWith(t, client, cfg, seq).(SessionsMsg); !ok {
+			t.Fatalf("refresh %d did not produce a session list", seq)
+		}
+	}
+	if client.userVarWrites() != 0 {
+		t.Fatalf("five stale refreshes drove %d user-var writes, want 0", client.userVarWrites())
+	}
+	if client.listCalls() != 0 {
+		t.Fatalf("five stale refreshes ran %d Kitty listings, want 0", client.listCalls())
+	}
+}
+
+// TestFreshRecoveryPerformsBothDeferredWrites closes the deferral. Neither write
+// is lost by being skipped: both triggers are re-detected from the next fresh
+// tree, because a stale refresh never cleared the evidence that raised them.
+func TestFreshRecoveryPerformsBothDeferredWrites(t *testing.T) {
+	stale := true
+	stubStateQuery(t, func() (protocol.Response, error) {
+		return protocol.Response{OK: true, KittySnapshot: readySnapshot(ghostTree(), stale)}, nil
+	})
+	client := &recordingKittyClient{}
+	cfg := ghostConfig()
+
+	refreshOnceWith(t, client, cfg, 1)
+	if client.userVarWrites() != 0 {
+		t.Fatalf("the stale refresh wrote %d times, want 0", client.userVarWrites())
+	}
+
+	stale = false
+	refreshOnceWith(t, client, cfg, 2)
+
+	client.mu.Lock()
+	writes := append([]map[string]string(nil), client.userVars...)
+	client.mu.Unlock()
+	if len(writes) != 2 {
+		t.Fatalf("fresh recovery wrote %d times, want the re-anchor and the selection clear", len(writes))
+	}
+	clears, reanchors := 0, 0
+	for _, vars := range writes {
+		if value, ok := vars[kitty.DashboardSelectionVar]; ok && len(vars) == 1 && value == "" {
+			clears++
+			continue
+		}
+		if vars["amx_project"] == "api" {
+			reanchors++
+		}
+	}
+	if clears != 1 || reanchors != 1 {
+		t.Fatalf("recovery writes = %+v, want exactly one selection clear and one ghost re-anchor", writes)
+	}
+}
+
 // TestRefreshFallsBackToDirectListing enumerates every reason the daemon cannot
 // supply a topology. All four end in the same place — one direct listing — but
 // they are genuinely different daemon states and each has to be handled.

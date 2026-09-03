@@ -79,7 +79,16 @@ type Model struct {
 	topologyRefreshPending   bool
 	// topology describes the window tree the current session list was built
 	// from: daemon snapshot or direct listing, and how old it is.
-	topology commands.TopologyFreshness
+	//
+	// topologyObservedAt is the model clock reading when that tree was applied.
+	// Both are written only by a successful refresh, which is what makes the
+	// pair survive an outage: a failed refresh leaves the last good tree and its
+	// stamp in place, and the age rendered from them keeps growing on its own.
+	// A zero topologyObservedAt is the cold state — no refresh has ever produced
+	// a usable tree — and is the only condition under which a refresh failure is
+	// fatal enough to render red.
+	topology           commands.TopologyFreshness
+	topologyObservedAt time.Time
 	// lastSelectionRequestToken prevents a request left on a Kitty window
 	// after a failed best-effort clear from repeatedly stealing the cursor.
 	lastSelectionRequestToken string
@@ -566,4 +575,15 @@ func (m Model) hasActivePulse(windowID int) bool {
 		return false
 	}
 	return time.Since(t) < pulseDecay
+}
+
+// modelNow reads the render clock, falling back to the wall clock for a Model
+// built as a bare literal — which is how most of this package's render tests
+// construct their input. Anything that stamps or compares a display time must
+// go through here, or the scenario harness cannot freeze it.
+func modelNow(m Model) time.Time {
+	if m.now == nil {
+		return time.Now()
+	}
+	return m.now()
 }
