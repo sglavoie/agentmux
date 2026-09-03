@@ -20,10 +20,10 @@ test:
 vet:
     go vet ./...
 
-# Run the concurrency-sensitive filesystem persistence, continuity, daemon,
-# and TUI suites under the race detector.
+# Run the concurrency-sensitive filesystem persistence, continuity, Kitty
+# read-coordination, daemon, and TUI suites under the race detector.
 race-core:
-    go test -race ./internal/transcript ./internal/plans ./internal/handoff ./internal/worktree ./internal/daemon ./tui
+    go test -race ./internal/transcript ./internal/plans ./internal/handoff ./internal/worktree ./internal/kitty ./internal/daemon ./tui
 
 # Run every committed narrow/wide TUI acceptance scenario in isolation.
 tui-scenarios:

@@ -3,6 +3,7 @@ package kitty
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os/exec"
 	"time"
 )
@@ -33,5 +34,12 @@ func (r *RealRunner) Run(name string, args ...string) ([]byte, []byte, error) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := cmd.Run()
+	if err != nil && ctx.Err() != nil {
+		// exec reports a deadline kill as a plain "signal: killed" ExitError,
+		// which is indistinguishable from any other fatal signal. Joining the
+		// context error keeps the ten-second budget exactly as it was while
+		// letting callers classify the failure with errors.Is.
+		err = fmt.Errorf("%w: %w", ctx.Err(), err)
+	}
 	return stdout.Bytes(), stderr.Bytes(), err
 }

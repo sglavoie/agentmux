@@ -2,7 +2,6 @@ package kitty
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"sort"
 
@@ -56,6 +55,10 @@ type LaunchOpts struct {
 type SubprocessClient struct {
 	runner CommandRunner
 	socket string // from KITTY_LISTEN_ON
+	// lists collapses concurrent ListWindows reads that target the same
+	// socket. It is shared by every WithSocket clone, which is what makes the
+	// per-socket coalescing hold across a process rather than per client value.
+	lists *listCoordinator
 }
 
 // NewClient creates a SubprocessClient using KITTY_LISTEN_ON for socket discovery.
@@ -63,21 +66,54 @@ func NewClient(runner CommandRunner) *SubprocessClient {
 	return &SubprocessClient{
 		runner: runner,
 		socket: os.Getenv("KITTY_LISTEN_ON"),
+		lists:  newListCoordinator(),
 	}
 }
 
 // NewClientWithSocket creates a SubprocessClient with an explicit socket address.
 // Pass an empty string to disable socket (useful in tests).
 func NewClientWithSocket(runner CommandRunner, socket string) *SubprocessClient {
-	return &SubprocessClient{runner: runner, socket: socket}
+	return &SubprocessClient{runner: runner, socket: socket, lists: newListCoordinator()}
 }
 
 // WithSocket returns a shallow copy that targets a specific Kitty remote
-// control socket. The runner is shared; the socket selection is per copy.
+// control socket. The runner and the list coordinator are shared; the socket
+// selection is per copy. Sharing the coordinator is deliberate: the daemon
+// scopes a clone per window, and one underlying `kitten @ ls` per socket is
+// only achievable if those clones coordinate with each other.
 func (c *SubprocessClient) WithSocket(socket string) *SubprocessClient {
 	cp := *c
 	cp.socket = socket
 	return &cp
+}
+
+// SetListObserver installs a fail-open observer for list-health transitions.
+// The observer is shared with every WithSocket clone and is invoked outside
+// the coordinator's locks. Pass nil to remove it.
+func (c *SubprocessClient) SetListObserver(observer ListObserver) {
+	if c.lists == nil {
+		return
+	}
+	c.lists.setObserver(observer)
+}
+
+// ListStatus returns the retained coordination accounting for this client's
+// socket, reporting false when the socket has not been read yet or its idle
+// key has been evicted.
+func (c *SubprocessClient) ListStatus() (ListStatus, bool) {
+	if c.lists == nil {
+		return ListStatus{}, false
+	}
+	return c.lists.status(c.socket)
+}
+
+// ListStatuses returns the retained accounting for every socket key this
+// client's coordinator still holds, ordered by socket.
+func (c *SubprocessClient) ListStatuses() []ListStatus {
+	if c.lists == nil {
+		return nil
+	}
+	return c.lists.statuses()
 }
 
 func (c *SubprocessClient) kitten(args ...string) ([]byte, error) {
@@ -97,16 +133,29 @@ func (c *SubprocessClient) kitten(args ...string) ([]byte, error) {
 	return stdout, nil
 }
 
+// ListWindows returns the Kitty topology. Concurrent callers targeting the
+// same socket share one underlying subprocess and decode; each still receives
+// an independent copy of the result.
 func (c *SubprocessClient) ListWindows() ([]OSWindow, error) {
-	data, err := c.kitten("ls")
-	if err != nil {
-		return nil, err
+	run := func() ([]OSWindow, error) {
+		data, err := c.kitten("ls")
+		if err != nil {
+			return nil, err
+		}
+		var windows []OSWindow
+		if err := json.Unmarshal(data, &windows); err != nil {
+			return nil, &listDecodeError{err: err}
+		}
+		return windows, nil
 	}
-	var windows []OSWindow
-	if err := json.Unmarshal(data, &windows); err != nil {
-		return nil, fmt.Errorf("parsing kitten @ ls output: %w", err)
+	// A zero-value client never comes from the constructors, but falling back
+	// to an uncoordinated read is cheaper than making every caller carry a nil
+	// check.
+	if c.lists == nil {
+		windows, err := run()
+		return cloneOSWindows(windows), err
 	}
-	return windows, nil
+	return c.lists.list(c.socket, run)
 }
 
 func (c *SubprocessClient) LaunchTab(opts LaunchOpts) error {

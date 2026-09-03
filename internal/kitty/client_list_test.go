@@ -60,6 +60,33 @@ func TestListWindows_Empty(t *testing.T) {
 	}
 }
 
+// TestListWindows_SequentialCallsAreNotCached pins that list coordination
+// collapses concurrent reads only. A caller that asks after the previous read
+// finished still gets a fresh `kitten @ ls`: the coordinator is a coalescer,
+// not a cache, and callers depend on it for current topology.
+func TestListWindows_SequentialCallsAreNotCached(t *testing.T) {
+	fixture := loadFixture(t, "kitty_ls.json")
+	runner := kitty.NewMockRunner(map[string][]byte{
+		"kitten @ ls": fixture,
+	})
+	client := kitty.NewClientWithSocket(runner, "")
+
+	first, err := client.ListWindows()
+	if err != nil {
+		t.Fatalf("first ListWindows: %v", err)
+	}
+	second, err := client.ListWindows()
+	if err != nil {
+		t.Fatalf("second ListWindows: %v", err)
+	}
+	if got := runner.CallCount("kitten", "@", "ls"); got != 2 {
+		t.Fatalf("underlying executions: got %d, want 2", got)
+	}
+	if &first[0] == &second[0] {
+		t.Fatal("sequential callers received the same backing array")
+	}
+}
+
 func TestListWindows_InvalidJSON(t *testing.T) {
 	runner := kitty.NewMockRunner(map[string][]byte{
 		"kitten @ ls": []byte("not-json"),
