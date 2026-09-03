@@ -7,9 +7,10 @@ import (
 	"time"
 	"unicode/utf8"
 
-	runewidth "github.com/mattn/go-runewidth"
+	"github.com/rivo/uniseg"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
@@ -138,12 +139,11 @@ func TestStateGroupZeroThreshold(t *testing.T) {
 // we can compare visual offsets independent of styling.
 var ansiRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
-// terminalWidth approximates how many cells a string consumes when
-// printed to a real terminal. Kitty renders FE0F-bearing glyphs like
-// "⚠️" as a single cell (matching go-runewidth's measurement), so a
-// straight StringWidth call is what we want here.
+// terminalWidth approximates how many cells a string consumes when printed to
+// a real terminal. Unlike go-runewidth, uniseg accounts for VS-16 selecting the
+// two-cell emoji presentation of glyphs such as "⚠️".
 func terminalWidth(s string) int {
-	return runewidth.StringWidth(s)
+	return uniseg.StringWidth(s)
 }
 
 // idxBadge returns the visual cell offset of the first '[' character (the
@@ -247,16 +247,18 @@ func TestRenderListSingleGroupNoBorder(t *testing.T) {
 
 // TestFormatRowWarningIconAlignment locks in that a row carrying the ⚠️
 // warning icon aligns column-for-column with a row carrying the ⚡ bolt
-// icon. Kitty renders ⚠️ as a single cell, so iconDisplayWidth must
-// report 1 (not 2) and formatRow must pad the icon column with a
-// trailing space — otherwise every column after the icon shifts left by
-// one on warning-state rows. We assert alignment at both the account
-// badge and the title so the check covers the full row tail.
+// icon. Terminals render the VS-16 emoji form as two cells, so FormatRow must
+// not add icon-cell padding or every subsequent column shifts right by one.
+// We assert alignment at both the account badge and the title so the check
+// covers the full row tail.
 func TestFormatRowWarningIconAlignment(t *testing.T) {
 	sBolt := session.RunningSession{State: "bolt", Account: "p", Base: "api"}
 	sWarn := session.RunningSession{State: "warning", Account: "p", Base: "api"}
 	rowBolt := dashboard.FormatRow(sBolt, nil, nil, nil, 0, "", "", "")
 	rowWarn := dashboard.FormatRow(sWarn, nil, nil, nil, 0, "", "", "")
+	if plain := stripAnsi(rowWarn); strings.Contains(plain, palette.StateIcon("warning")+"  [") {
+		t.Fatalf("warning icon has an extra padding cell: %q", plain)
+	}
 
 	iBoltBadge := idxBadge(rowBolt)
 	iWarnBadge := idxBadge(rowWarn)

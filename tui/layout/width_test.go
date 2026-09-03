@@ -42,7 +42,7 @@ func TestDisplayWidthBasic(t *testing.T) {
 		{"emoji-speak", "🗣", 2},
 		{"emoji-speak-vs", "🗣️", 2},
 		{"emoji-warn", "⚠", 1},
-		{"emoji-warn-vs", "⚠️", 1},
+		{"emoji-warn-vs", "⚠️", 2},
 		{"emoji-bolt", "⚡", 2},
 		{"emoji-rainbow-flag", "\U0001f3f3️‍\U0001f308", 1},
 		{"emoji-then-text", "🐱 cat", 6},
@@ -264,7 +264,7 @@ func TestTitleCellIconPadding(t *testing.T) {
 		{"brain-already-wide", "🧠", "🧠"},
 		{"bolt-already-wide", "⚡", "⚡"},
 		{"warn-needs-pad", "⚠", "⚠ "},
-		{"warn-vs-needs-pad", "⚠️", "⚠️ "},
+		{"warn-vs-already-wide", "⚠️", "⚠️"},
 		{"speak-already-wide", "🗣", "🗣"},
 		{"speak-vs-already-wide", "🗣️", "🗣️"},
 		{"rainbow-needs-pad", "\U0001f3f3️‍\U0001f308", "\U0001f3f3️‍\U0001f308 "},
@@ -320,10 +320,10 @@ func TestTitleCellIsLeadingIcon(t *testing.T) {
 // leaves the remainder intact. Titles without a leading emoji must not
 // gain any phantom padding.
 func TestTitleCellRenderPadsIconColumn(t *testing.T) {
-	t.Run("warn-vs-padded", func(t *testing.T) {
+	t.Run("warn-vs-already-wide", func(t *testing.T) {
 		const title = "⚠️ api"
 		got := RenderTitleIcon(title)
-		want := "⚠️  api"
+		want := title
 		if got != want {
 			t.Errorf("RenderTitleIcon(%q) = %q, want %q", title, got, want)
 		}

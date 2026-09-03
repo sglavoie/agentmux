@@ -32,7 +32,8 @@ const IconCellWidth = 2
 // cluster by cluster via uniseg so ZWJ sequences, combining marks, and
 // variation selectors fold into the preceding base grapheme instead of adding
 // extra cells. Per-cluster width mostly comes from go-runewidth, with targeted
-// overrides for glyphs that Kitty renders wider than the library reports.
+// overrides for emoji-presentation graphemes that terminals render wider than
+// the library reports.
 //
 // The input must be ANSI-free. Use StyledWidth for measurement on already
 // styled output containing CSI escape sequences.
@@ -409,6 +410,11 @@ func totalGraphemeWidth(clusters []string) int {
 
 func graphemeWidth(cluster string) int {
 	switch cluster {
+	case "\u26a0\ufe0f":
+		// VS-16 selects the emoji presentation of WARNING SIGN. Terminals render
+		// that form as two cells even though go-runewidth reports one. Keep the
+		// bare text-presentation glyph (⚠) at its natural one-cell width.
+		return IconCellWidth
 	case "\U0001f5e3", "\U0001f5e3\ufe0f":
 		// Kitty renders speaking-head project icons as a full emoji cell pair,
 		// while go-runewidth reports this grapheme as one cell.
