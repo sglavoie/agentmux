@@ -201,10 +201,15 @@ func (c *Client) ExportEvents(windowID int) (protocol.EventsExport, error) {
 //
 // It is the dashboard refresh path: the response's KittySnapshot carries the
 // window tree the daemon already listed, so a refresh does not run a
-// `kitten @ ls` of its own. A nil KittySnapshot means the daemon predates the
-// block and the caller must fall back to direct Kitty I/O; a non-nil block with
-// Ready false means a new daemon that has not listed successfully yet, which is
-// a wait rather than a fallback.
+// `kitten @ ls` of its own. Only a ready snapshot supplies that tree, and a
+// ready one does so even when the daemon has marked it stale; every other shape
+// sends the caller to direct Kitty I/O as a fallback. A nil KittySnapshot means
+// the daemon predates the block. A non-nil block with Ready false means a cold
+// snapshot — a daemon that has not completed a listing yet — and the refresh
+// falls back to direct Kitty I/O for that tick rather than waiting for the
+// daemon to warm up. The per-window state from the same response is still used
+// in both cases: a reachable daemon is authoritative about state even when its
+// topology is unusable.
 //
 // The raw Response is returned rather than a projection because the state query
 // has always been consumed field by field by its callers; adding a projection
