@@ -248,6 +248,11 @@ func decodeDaemonState(resp protocol.Response) daemonState {
 // in the no-entry branch: an unobserved window has no authority for the bit,
 // and false (seen) is the quiet direction — it can only ever demote a row out
 // of Needs Attention, never pin one there on the strength of a stale overlay.
+// Reason joins them on the same argument. A reason only ever explains the icon
+// the same entry supplied, so carrying one forward past a window the daemon no
+// longer has an entry for would gloss a row with the cause of a prompt that is
+// no longer on screen — and empty is what the dashboard already renders for
+// every blocked row nothing has labelled.
 func ApplyDaemonStates(sessions []session.RunningSession, states map[int]protocol.WindowStateSnapshot) {
 	for i := range sessions {
 		state, ok := states[sessions[i].WindowID]
@@ -256,11 +261,13 @@ func ApplyDaemonStates(sessions []session.RunningSession, states map[int]protoco
 			sessions[i].Looping = false
 			sessions[i].BusySince = time.Time{}
 			sessions[i].Unseen = false
+			sessions[i].Reason = ""
 			continue
 		}
 		sessions[i].State = state.IconState
 		sessions[i].Looping = state.Looping
 		sessions[i].Unseen = state.Unseen
+		sessions[i].Reason = state.Reason
 		sessions[i].BusySince = time.Time{}
 		if state.BusySinceAt > 0 {
 			sessions[i].BusySince = time.Unix(state.BusySinceAt, 0)

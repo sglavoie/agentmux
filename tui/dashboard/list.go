@@ -148,6 +148,11 @@ func RenderList(in ListInput) string {
 	if activityActive {
 		activityWidth = activityColumnWidth(in.Rows, in.Watchdog, now)
 	}
+	// One scan per pass, like the activity and tab-number columns. A zero width
+	// is how the column declines to be reserved at all, so there is no separate
+	// "any row has a reason" predicate to keep in step with the measurement —
+	// the measurement IS the predicate.
+	reasonWidth := reasonColumnWidth(in.Rows, in.group)
 
 	var sb strings.Builder
 	if showTop {
@@ -174,6 +179,7 @@ func RenderList(in ListInput) string {
 		if pulseActive && rowWidth > 0 {
 			rowWidth -= pulseColumnWidth
 		}
+		reasonCell := renderReasonCell(s, g, reasonWidth)
 		var activityCell string
 		if activityActive {
 			activityCell = renderActivityCell(s, in.Watchdog[s.WindowID], now, activityWidth)
@@ -183,7 +189,7 @@ func RenderList(in ListInput) string {
 			activeLoopCell = renderLoopCellFor(in, s)
 		}
 		tabNumberCell := renderTabNumberCell(s.TabNumber, tabNumberWidth)
-		row := FormatRow(s, acctColor, harnessColor, in.Cfg, rowWidth, tabNumberCell, activeLoopCell, activityCell)
+		row := FormatRow(s, acctColor, harnessColor, in.Cfg, rowWidth, tabNumberCell, activeLoopCell, reasonCell, activityCell)
 		var styledRow string
 		switch {
 		case i == in.Cursor:

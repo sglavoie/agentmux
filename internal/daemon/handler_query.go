@@ -23,6 +23,12 @@ func (h *Handler) handleStateQuery() protocol.Response {
 			// daemon's publish path and focus observation are its only writers,
 			// so a query that derived it again would be a second opinion.
 			Unseen: st.Unseen,
+			// Same rule for the blocked reason, and the same reason for it.
+			// stampPromptKindLocked already clears the kind on every publish
+			// whose icon is outside the blocking class, so re-checking the icon
+			// here would be a second opinion about a question the publish path
+			// has already answered — and one that could disagree with it.
+			Reason: st.PromptKind,
 		}
 		if identity, ok := st.CurrentConversation(now); ok {
 			identityCopy := identity

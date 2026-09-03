@@ -25,6 +25,21 @@ type WindowStateSnapshot struct {
 	// Absent for every seen window, which also preserves the former response
 	// shape for clients that do not group on it.
 	Unseen bool `json:"unseen,omitempty"`
+	// Reason names WHY a blocked window is blocked: the harness prompt kind a
+	// screen probe classified onto state.WindowState.PromptKind, projected here
+	// verbatim. It is a bare string rather than an enum for the same reason the
+	// durable field is — Claude and Codex kinds share it without a shared type —
+	// so the SET of values is the union of screenstate.ClaudePromptKind and
+	// screenstate.CodexPromptKind and a client must map it totally.
+	//
+	// Absent is the ordinary steady state, not an error: a blocked window whose
+	// icon came from the hook path, a Copilot window (no screen adapter at all),
+	// and a pattern override that dropped a kind clause all reach a client with
+	// an empty reason. Every non-blocked window is absent too, because the daemon
+	// clears the kind at the publish choke point the moment the icon leaves the
+	// blocking class. Omitting it preserves the response shape for clients that
+	// do not gloss it, exactly as BusySinceAt and Unseen do.
+	Reason string `json:"reason,omitempty"`
 	// Conversation is derived from live parent-harness reducer facts. It is
 	// absent for identity-less state, preserving the former response shape for
 	// clients that do not use live-conversation continuity.

@@ -21,6 +21,7 @@ type RunningSession struct {
 	Looping          bool      // daemon-owned loop marker; title-derived only when the daemon is unreachable
 	BusySince        time.Time // daemon-owned start of the current active-class stretch; zero when the row is not busy
 	Unseen           bool      // daemon-owned: the row came to rest on a turn the user has not looked at; false (seen) with no daemon
+	Reason           string    // daemon-owned harness prompt kind naming WHY a blocked row is blocked; empty when nothing is blocking it, when no screen probe labelled the prompt, and with no daemon
 	Starred          bool
 	Locked           bool
 	Muted            bool

@@ -90,6 +90,54 @@ func TestApplyDaemonStatesOverlaysUnseen(t *testing.T) {
 	}
 }
 
+// TestApplyDaemonStatesOverlaysReason asserts the blocked reason is overlaid in
+// both directions and cleared in the no-entry branch alongside
+// State/Looping/BusySince/Unseen. A reason only ever explains the icon the same
+// entry supplied, so a row the daemon has dropped must not keep glossing a
+// prompt that is no longer on screen — and it must not keep glossing one after
+// the daemon reports the window blocked by something it could not label either.
+func TestApplyDaemonStatesOverlaysReason(t *testing.T) {
+	sessions := []session.RunningSession{
+		{WindowID: 1},
+		{WindowID: 2, Reason: "command_approval"},
+		{WindowID: 3, State: "key", Reason: "permission"},
+	}
+	commands.ApplyDaemonStates(sessions, map[int]protocol.WindowStateSnapshot{
+		1: {IconState: "key", Reason: "permission"},
+		2: {IconState: "key"},
+	})
+
+	if sessions[0].Reason != "permission" {
+		t.Errorf("Reason = %q for a labelled window, want %q", sessions[0].Reason, "permission")
+	}
+	if sessions[1].Reason != "" {
+		t.Errorf("Reason = %q after the daemon reported the window unlabelled, want empty", sessions[1].Reason)
+	}
+	if sessions[2].Reason != "" {
+		t.Errorf("Reason = %q for a window the daemon does not know, want empty", sessions[2].Reason)
+	}
+	if sessions[2].State != "" || sessions[2].Looping {
+		t.Errorf("no-entry row = %+v, want State and Looping cleared alongside Reason", sessions[2])
+	}
+}
+
+// TestApplyDaemonStatesDecodesAnOlderDaemonAsUnlabelled pins the reason across
+// the wire rather than across the struct: a state response written before the
+// field existed carries no `reason` key, and the row it overlays must come out
+// with nothing to gloss rather than keeping whatever it held before.
+func TestApplyDaemonStatesDecodesAnOlderDaemonAsUnlabelled(t *testing.T) {
+	var legacy protocol.WindowStateSnapshot
+	if err := json.Unmarshal([]byte(`{"icon_state":"key","looping":false}`), &legacy); err != nil {
+		t.Fatalf("json.Unmarshal() error: %v", err)
+	}
+	sessions := []session.RunningSession{{WindowID: 1, Reason: "command_approval"}}
+	commands.ApplyDaemonStates(sessions, map[int]protocol.WindowStateSnapshot{1: legacy})
+
+	if sessions[0].Reason != "" {
+		t.Errorf("Reason = %q from a response with no reason key, want empty", sessions[0].Reason)
+	}
+}
+
 // TestApplyDaemonStatesDecodesAnOlderDaemonAsSeen pins the inversion across the
 // wire rather than across the struct: a state response written before the field
 // existed carries no `unseen` key, and the row it overlays must come out seen.

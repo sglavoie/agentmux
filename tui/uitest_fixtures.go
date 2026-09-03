@@ -90,6 +90,7 @@ var uitestFixtureBuilders = map[string]func() uitestFixture{
 	"asl_runs":           aslRunsFixture,
 	"run_timers":         runTimersFixture,
 	"unseen_stops":       unseenStopsFixture,
+	"blocked_reasons":    blockedReasonsFixture,
 }
 
 // uitestFixtureError reports a request for an unknown built-in fixture and
@@ -379,6 +380,70 @@ func unseenStopsFixture() uitestFixture {
 			11: {IconState: "stop", Unseen: true},
 			21: {IconState: "stop"},
 			31: {IconState: "bolt", BusySinceAt: uitestFrozenNow.Add(-42 * time.Second).Unix()},
+		},
+	}
+}
+
+// blockedReasonsFixture is four Needs Attention rows that a tab title cannot
+// tell apart — two 🔑 and two ❓ — where only the daemon knows what each one is
+// actually waiting for. It covers the three cases the reason column has to get
+// right at once:
+//
+//   - a Codex permission prompt and a Claude permission prompt, whose kind
+//     strings are deliberately different (`command_approval` vs `permission`,
+//     because the two harnesses share one untyped field) and which must
+//     nonetheless read as the same `perm` tag: the tag names what is being asked
+//     of the user, not which dialog asked it;
+//   - a Codex request-for-input prompt, whose `input` tag is the widest in the
+//     view and therefore the one that sets the column width for every row;
+//   - a blocked row with NO reason at all, which is the ordinary steady state
+//     for a hook-raised icon no screen probe has labelled yet. Its cell must pad
+//     to the same width as the others so the column stays a column.
+//
+// The `working` row holds Active so the reserved-for-the-whole-pass rule is
+// visible too: it is not in the attention group, has nothing to explain, and
+// still keeps its badge and title in the same columns as the rows above it.
+//
+// The kinds are written as bare strings rather than screenstate constants
+// because that is exactly what a fixture stands in for: one daemon state query,
+// whose Reason field is an untyped wire string. The dashboard's own map from
+// those strings to tags is pinned separately, in package tui/dashboard.
+func blockedReasonsFixture() uitestFixture {
+	cfg := &config.Config{
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		HarnessEmojis: map[string]string{"claude": "🦊", "codex": "🤖"},
+		HarnessColors: map[string]string{"claude": "blue", "codex": "green"},
+		Accounts: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "~/.config/agent-mux/homes/work", Color: "blue"},
+			{Name: "personal", Harness: "codex", HomeDir: "~/.config/agent-mux/homes/personal", Color: "green"},
+		},
+		Sessions: []config.Session{
+			{Title: "approve", Directory: "~/projects/approve", Profile: "personal"},
+			{Title: "grant", Directory: "~/projects/grant", Profile: "work"},
+			{Title: "choose", Directory: "~/projects/choose", Profile: "personal"},
+			{Title: "silent", Directory: "~/projects/silent", Profile: "work"},
+			{Title: "working", Directory: "~/projects/working", Profile: "work"},
+		},
+	}
+	windows := []kitty.OSWindow{uitestOSWindow(
+		uitestTab(1, 11, "🔑🤖approve", false, managedVars("personal", "codex", "approve", "~/projects/approve")),
+		uitestTab(2, 21, "🔑🦊grant", false, managedVars("work", "claude", "grant", "~/projects/grant")),
+		uitestTab(3, 31, "❓🤖choose", false, managedVars("personal", "codex", "choose", "~/projects/choose")),
+		uitestTab(4, 41, "❓🦊silent", false, managedVars("work", "claude", "silent", "~/projects/silent")),
+		uitestTab(5, 51, "⚡🦊working", true, managedVars("work", "claude", "working", "~/projects/working")),
+	)}
+	return uitestFixture{
+		Name:        "blocked_reasons",
+		Description: "four identically-iconed blocked rows the daemon explains with different prompt kinds, one of them unlabelled",
+		Size:        UITestSize{Width: 100, Height: 32},
+		Config:      cfg,
+		Windows:     windows,
+		States: map[int]protocol.WindowStateSnapshot{
+			11: {IconState: "key", Reason: "command_approval"},
+			21: {IconState: "key", Reason: "permission"},
+			31: {IconState: "question", Reason: "request_user_input"},
+			41: {IconState: "question"},
+			51: {IconState: "bolt"},
 		},
 	}
 }

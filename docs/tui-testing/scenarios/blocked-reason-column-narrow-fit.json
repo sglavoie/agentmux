@@ -1,0 +1,16 @@
+{
+  "name": "blocked-reason-column-narrow-fit",
+  "fixture": "blocked_reasons",
+  "size": { "width": 34, "height": 32 },
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "cursor_equals", "cursor": 0 },
+    { "type": "selected_title", "value": "approve" },
+    { "type": "contains_text", "text": "Needs Attention (4)" },
+    { "type": "contains_text", "text": "🔑 perm  [P] 🤖 codex" },
+    { "type": "contains_text", "text": "🔑 perm  [W] 🦊 claude" },
+    { "type": "contains_text", "text": "❓ input [P] 🤖 codex" },
+    { "type": "contains_text", "text": "❓       [W] 🦊 claude" },
+    { "type": "no_layout_issues" }
+  ]
+}

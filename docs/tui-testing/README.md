@@ -73,6 +73,7 @@ amx tui-test list-fixtures
 # asl_question
 # asl_runs
 # basic
+# blocked_reasons
 # run_timers
 # unseen_stops
 # wide_profiles
@@ -114,6 +115,7 @@ amx tui-test fixture wide_profiles --width 140 --key C
 | `actions` | one session with a very long title | stresses the actions overlay box width |
 | `asl_question` | `basic` with a human-actionable `❓🔁` supervisor handoff and a `⚡🔁` active run | ASL handoff presentation: attention grouping, gloss, `]q` jump |
 | `asl_runs` | four supervisor runs spanning exact, ambiguous, second-exact, and unbound live sessions | Runs view focus outcomes and binding presentation |
+| `blocked_reasons` | four blocked rows — two `🔑`, two `❓` — carrying a Codex permission kind, a Claude permission kind, a request-for-input kind, and no kind at all | the blocked-reason column: two harnesses' distinct kind strings reading as one `perm` tag, the widest tag setting the column, and an unlabelled row padding rather than collapsing |
 | `run_timers` | five busy stretches: sub-minute, multi-minute, hours-long, warning-band, and idle | per-row run timer formatting bands and the `⏳` watchdog warning |
 | `unseen_stops` | two `🛑` rows the daemon separates by seenness, plus one `⚡` row | the unseen-stop demotion: a read `🛑` falls to Idle while an unread one holds Needs Attention |
 | `wide_profiles` | long profile names and home dirs | stresses the profile/config picker box width |
@@ -126,10 +128,13 @@ alpha-sorted: the cursor starts on `dotfiles` (personal).
 ### Daemon-owned state and the frozen clock
 
 A fixture may also carry the per-window state the daemon owns — icon state,
-looping, the busy-stretch anchor, the unseen bit, and watchdog thresholds —
+looping, the busy-stretch anchor, the unseen bit, the blocked reason, and
+watchdog thresholds —
 which no Kitty tab title can express. The `unseen_stops` fixture is the clearest
 case: both of its `🛑` rows carry the same icon in the same title, and only the
-daemon state tells them apart. The harness overlays it on the enumerated
+daemon state tells them apart. `blocked_reasons` is the same argument one field
+over: four rows wearing two icons between them, where what each is actually
+waiting for is only ever on the wire. The harness overlays it on the enumerated
 sessions and
 replays it on every refresh, so a `tick` action does not wipe the columns it
 feeds. The daemon is never contacted: a fixture that supplies no such state
@@ -286,6 +291,8 @@ file. The exact inventory is:
 | [`asl-response-paused-narrow-fit.json`](scenarios/asl-response-paused-narrow-fit.json) | `asl_runs` | a paused run's form offers only reply-and-resume and still fits a narrow terminal while typing |
 | [`asl-runs-narrow-fit.json`](scenarios/asl-runs-narrow-fit.json) | `asl_runs` | narrow Runs rows keep state, label, reason, and age, and move the rest into the selected-row panel |
 | [`asl-runs-wide.json`](scenarios/asl-runs-wide.json) | `asl_runs` | `A` opens Runs with needs-action rows first, the full wide columns, and no Kitty focus |
+| [`blocked-reason-column-narrow-fit.json`](scenarios/blocked-reason-column-narrow-fit.json) | `blocked_reasons` | the reason tags survive below the fixed-column floor, where the directory has already collapsed and the row is clamped to the viewport |
+| [`blocked-reason-column-wide.json`](scenarios/blocked-reason-column-wide.json) | `blocked_reasons` | a Codex and a Claude permission prompt both read `perm`, a request-for-input reads `input`, an unlabelled blocked row pads to the same column, and no raw prompt kind reaches the screen |
 | [`command-palette-execute-help.json`](scenarios/command-palette-execute-help.json) | `basic` | palette search executes the safe keyboard-help transition without Kitty mutations |
 | [`command-palette-filter.json`](scenarios/command-palette-filter.json) | `basic` | printable text filters the palette to the matching plans command |
 | [`command-palette-narrow-scroll.json`](scenarios/command-palette-narrow-scroll.json) | `basic` | narrow palette scrolls the active command into view without layout issues |

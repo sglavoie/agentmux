@@ -311,8 +311,8 @@ func TestRenderListSingleGroupNoBorder(t *testing.T) {
 func TestFormatRowWarningIconAlignment(t *testing.T) {
 	sBolt := session.RunningSession{State: "bolt", Account: "p", Base: "api"}
 	sWarn := session.RunningSession{State: "warning", Account: "p", Base: "api"}
-	rowBolt := dashboard.FormatRow(sBolt, nil, nil, nil, 0, "", "", "")
-	rowWarn := dashboard.FormatRow(sWarn, nil, nil, nil, 0, "", "", "")
+	rowBolt := dashboard.FormatRow(sBolt, nil, nil, nil, 0, "", "", "", "")
+	rowWarn := dashboard.FormatRow(sWarn, nil, nil, nil, 0, "", "", "", "")
 	if plain := stripAnsi(rowWarn); strings.Contains(plain, palette.StateIcon("warning")+"  [") {
 		t.Fatalf("warning icon has an extra padding cell: %q", plain)
 	}
@@ -364,10 +364,10 @@ func TestFormatRowHarnessBadge(t *testing.T) {
 	sCopilot := session.RunningSession{Base: "api", Account: "work", Harness: "copilot"}
 	sNone := session.RunningSession{Base: "api", Account: "work", Harness: ""}
 
-	rowClaude := stripAnsi(dashboard.FormatRow(sClaude, nil, nil, cfg, 0, "", "", ""))
-	rowCodex := stripAnsi(dashboard.FormatRow(sCodex, nil, nil, cfg, 0, "", "", ""))
-	rowCopilot := stripAnsi(dashboard.FormatRow(sCopilot, nil, nil, cfg, 0, "", "", ""))
-	rowNone := stripAnsi(dashboard.FormatRow(sNone, nil, nil, cfg, 0, "", "", ""))
+	rowClaude := stripAnsi(dashboard.FormatRow(sClaude, nil, nil, cfg, 0, "", "", "", ""))
+	rowCodex := stripAnsi(dashboard.FormatRow(sCodex, nil, nil, cfg, 0, "", "", "", ""))
+	rowCopilot := stripAnsi(dashboard.FormatRow(sCopilot, nil, nil, cfg, 0, "", "", "", ""))
+	rowNone := stripAnsi(dashboard.FormatRow(sNone, nil, nil, cfg, 0, "", "", "", ""))
 
 	if !strings.Contains(rowClaude, "🐱 claude") {
 		t.Errorf("expected '🤖 claude' cell for claude harness; got %q", rowClaude)
@@ -417,7 +417,7 @@ func TestFormatRowAcctBadgeUnicode(t *testing.T) {
 	}
 	for _, tc := range cases {
 		s := session.RunningSession{Base: "x", Account: tc.account}
-		row := stripAnsi(dashboard.FormatRow(s, nil, nil, nil, 0, "", "", ""))
+		row := stripAnsi(dashboard.FormatRow(s, nil, nil, nil, 0, "", "", "", ""))
 		if !strings.Contains(row, tc.want) {
 			t.Errorf("account %q: row %q does not contain expected badge %q", tc.account, row, tc.want)
 		}
@@ -448,7 +448,7 @@ func TestFormatRowEmojiTitleColumnAlignment(t *testing.T) {
 	var dirOffset int
 	for i, title := range titles {
 		s := session.RunningSession{Base: title, Account: "work", Directory: dirText}
-		row := stripAnsi(dashboard.FormatRow(s, nil, nil, nil, 120, "", "", ""))
+		row := stripAnsi(dashboard.FormatRow(s, nil, nil, nil, 120, "", "", "", ""))
 		if !utf8.ValidString(row) {
 			t.Fatalf("title %q produced invalid UTF-8 row: %q", title, row)
 		}
@@ -481,7 +481,7 @@ func TestFormatRowEmojiTitleColumnAlignment(t *testing.T) {
 	first := true
 	for title, body := range emojiBodies {
 		s := session.RunningSession{Base: title, Account: "work", Directory: dirText}
-		row := stripAnsi(dashboard.FormatRow(s, nil, nil, nil, 120, "", "", ""))
+		row := stripAnsi(dashboard.FormatRow(s, nil, nil, nil, 120, "", "", "", ""))
 		idx := strings.Index(row, body)
 		if idx < 0 {
 			t.Fatalf("title body %q not found in row for title %q: %q", body, title, row)
@@ -502,7 +502,7 @@ func TestFormatRowEmojiTitleColumnAlignment(t *testing.T) {
 	// emoji-prefixed bodies above so users still see the bullet as a narrow
 	// marker rather than a chunky icon.
 	sBullet := session.RunningSession{Base: "•dotfiles", Account: "work", Directory: dirText}
-	rowBullet := stripAnsi(dashboard.FormatRow(sBullet, nil, nil, nil, 120, "", "", ""))
+	rowBullet := stripAnsi(dashboard.FormatRow(sBullet, nil, nil, nil, 120, "", "", "", ""))
 	bulletBody := strings.Index(rowBullet, "dotfiles")
 	if bulletBody < 0 {
 		t.Fatalf("bullet-prefixed title body not found in row: %q", rowBullet)

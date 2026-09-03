@@ -29,6 +29,12 @@ var (
 	// session has been silent for >= 80% of its resolved threshold.
 	styleAgeWarning = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
 
+	// styleReasonTag colors the blocked-reason tag beside a Needs Attention
+	// row's icon. Faint rather than accented: the icon and the group border are
+	// already carrying "this row wants you", and a second attention-colored
+	// element one cell away would compete with them instead of qualifying them.
+	styleReasonTag = lipgloss.NewStyle().Faint(true)
+
 	// Per-state accent styles used by the row pulse, the chips, and the
 	// legend gloss.
 	styleStateBolt    = lipgloss.NewStyle().Foreground(lipgloss.Color("#4ec9b0"))

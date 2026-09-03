@@ -104,6 +104,58 @@ func TestHandler_StateQueryReportsUnseenAndOmitsItWhenSeen(t *testing.T) {
 	}
 }
 
+// TestHandler_StateQueryReportsPromptKindAndOmitsItWhenUnlabelled pins the wire
+// half of the blocked reason. The projection carries the durable field
+// unchanged, and absent has to survive the encoding as well as the struct: a
+// blocked window nothing labelled must write no `reason` key at all, so a
+// dashboard reading a response from a daemon too old to carry the field decodes
+// exactly what the unlabelled window decodes. That equivalence is what makes
+// "no reason" a supported steady state rather than a version skew to detect.
+func TestHandler_StateQueryReportsPromptKindAndOmitsItWhenUnlabelled(t *testing.T) {
+	h := newTestHandler()
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "permission"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 9, Action: "permission"})
+	// Seeded rather than driven through a screen probe: this test is about the
+	// projection. Which prompt produces which kind is pinned by the probe tables
+	// in shadow_prompt_kind_test.go and claude_prompt_kind_test.go, and the rule
+	// that clears a kind when the icon stops blocking belongs to
+	// stampPromptKindLocked, which has its own coverage.
+	h.stateMu.Lock()
+	h.store[7].PromptKind = "command_approval"
+	h.stateMu.Unlock()
+
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateQuery})
+	got, ok := resp.States[7]
+	if !ok {
+		t.Fatalf("state query omitted window 7: %+v", resp.States)
+	}
+	if got.Reason != "command_approval" {
+		t.Fatalf("Reason = %q for a labelled prompt, want %q: %+v", got.Reason, "command_approval", got)
+	}
+	bare, ok := resp.States[9]
+	if !ok {
+		t.Fatalf("state query omitted window 9: %+v", resp.States)
+	}
+	if bare.Reason != "" {
+		t.Fatalf("Reason = %q for a blocked window no probe labelled, want empty: %+v", bare.Reason, bare)
+	}
+
+	encoded, err := json.Marshal(bare)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v", err)
+	}
+	if strings.Contains(string(encoded), "reason") {
+		t.Fatalf("unlabelled snapshot wrote the field on the wire: %s", encoded)
+	}
+	labelled, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v", err)
+	}
+	if !strings.Contains(string(labelled), `"reason":"command_approval"`) {
+		t.Fatalf("labelled snapshot did not write the field on the wire: %s", labelled)
+	}
+}
+
 func TestHandler_StateQueryReportsBusySinceAndOmitsItWhenIdle(t *testing.T) {
 	h := newTestHandler()
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "active", IsPrompt: true})

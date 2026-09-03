@@ -229,6 +229,10 @@ func fallbackSessionFromMatch(tab kitty.Tab, winID int, m titleFallbackMatch, ba
 		// direction: a daemonless dashboard demotes a resting row into Idle
 		// rather than pinning every one of them under Needs Attention on the
 		// strength of a guess.
+		//
+		// Reason is left empty for the same reason and a stronger one: the kind
+		// of prompt behind a 🔑 is read off the pane's screen, which only the
+		// daemon looks at. A title says a window is blocked, never why.
 		Starred:          starred,
 		Muted:            muted,
 		Project:          m.sess.Title,

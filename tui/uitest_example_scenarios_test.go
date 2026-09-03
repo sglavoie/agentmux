@@ -51,6 +51,8 @@ func TestExampleScenariosParseAndPass(t *testing.T) {
 		"asl-response-live-wide.json":               false,
 		"asl-response-paused-narrow-fit.json":       false,
 		"baseline-layout.json":                      false,
+		"blocked-reason-column-narrow-fit.json":     false,
+		"blocked-reason-column-wide.json":           false,
 		"command-palette-execute-help.json":         false,
 		"command-palette-filter.json":               false,
 		"command-palette-narrow-scroll.json":        false,

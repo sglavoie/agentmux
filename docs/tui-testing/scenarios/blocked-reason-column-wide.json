@@ -1,0 +1,19 @@
+{
+  "name": "blocked-reason-column-wide",
+  "fixture": "blocked_reasons",
+  "size": { "width": 100, "height": 32 },
+  "actions": [{ "type": "tick" }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "Needs Attention (4)" },
+    { "type": "contains_text", "text": "Active (1)" },
+    { "type": "contains_text", "text": "🔑 perm  [P] 🤖 codex   approve" },
+    { "type": "contains_text", "text": "🔑 perm  [W] 🦊 claude  grant" },
+    { "type": "contains_text", "text": "❓ input [P] 🤖 codex   choose" },
+    { "type": "contains_text", "text": "❓       [W] 🦊 claude  silent" },
+    { "type": "contains_text", "text": "⚡       [W] 🦊 claude  working" },
+    { "type": "excludes_text", "text": "command_approval" },
+    { "type": "excludes_text", "text": "request_user_input" },
+    { "type": "no_layout_issues" }
+  ]
+}
