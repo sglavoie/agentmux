@@ -39,7 +39,9 @@ func (h *Handler) captureSnapshotReducerReceipts() map[int]uint64 {
 type kittySnapshotCapture struct {
 	windows         []kitty.OSWindow
 	reducerReceipts map[int]uint64
-	// at is stamped after ListWindows returns, never before it is called. The
+	// at is the completion instant of the underlying read — stamped after
+	// ListWindows returns, never before it is called, and shared unchanged with
+	// every caller that coalesced onto that read rather than restamped. The
 	// loop that asks for a read holds a tick or start time that can be
 	// arbitrarily older than the answer — a list wedged behind a slow Kitty
 	// would otherwise publish a snapshot that claims to have been captured when
@@ -48,22 +50,58 @@ type kittySnapshotCapture struct {
 	at time.Time
 }
 
-// captureKittySnapshot performs one coordinated ListWindows and stamps its
-// completion time. Every daemon publication path goes through it so the
-// stamping rule lives in one place rather than in five loops.
+// kittyCaptureLister is the coordinated-capture seam a Kitty client offers when
+// its reads can coalesce. It is deliberately separate from kittyTitleClient:
+// only the real *kitty.SubprocessClient collapses concurrent reads, and a fake
+// that answers a list from memory has no other read to join and therefore
+// nothing to share provenance with.
+type kittyCaptureLister interface {
+	ListWindowsCapture(sample func() any) (kitty.ListCapture, error)
+}
+
+// captureKittySnapshot performs one coordinated ListWindows and returns its
+// windows, the reducer receipts sampled before it started, and its completion
+// time. Every daemon publication path goes through it so the stamping rule
+// lives in one place rather than in five loops.
 //
 // A failure returns the error and nothing else: the caller publishes nothing,
 // which is what leaves the last successful windows, generation, and capture
 // time standing. Session 1's per-socket coordinator sits underneath, so a call
 // arriving while another subsystem's read of the same socket is in flight joins
 // that read instead of starting a second `kitten @ ls`.
+//
+// Joining is exactly why the receipts are sampled through the coordinator
+// rather than here. A waiter arrives after the shared read began, so receipts
+// it sampled for itself would be younger than the windows it is handed: a
+// reducer event accepted in between would be inside the receipt and outside the
+// topology, and screen or transcript evidence gathered against that older tree
+// would then pass the current-receipt guard and mutate newer state. The
+// coordinator hands every caller the executor's sample instead, so all three
+// facts describe one read.
 func (h *Handler) captureKittySnapshot(client kittyTitleClient) (kittySnapshotCapture, error) {
-	reducerReceipts := h.captureSnapshotReducerReceipts()
-	windows, err := client.ListWindows()
+	lister, ok := client.(kittyCaptureLister)
+	if !ok {
+		// No coalescing underneath, so this caller is always its own executor.
+		reducerReceipts := h.captureSnapshotReducerReceipts()
+		windows, err := client.ListWindows()
+		if err != nil {
+			return kittySnapshotCapture{}, err
+		}
+		return kittySnapshotCapture{windows: windows, reducerReceipts: reducerReceipts, at: time.Now()}, nil
+	}
+	capture, err := lister.ListWindowsCapture(func() any { return h.captureSnapshotReducerReceipts() })
 	if err != nil {
 		return kittySnapshotCapture{}, err
 	}
-	return kittySnapshotCapture{windows: windows, reducerReceipts: reducerReceipts, at: time.Now()}, nil
+	// A nil assertion result is the cold, receipt-free capture a publication
+	// already tolerates; it can only arise if the sample never ran, which means
+	// there were no receipts to inherit either.
+	reducerReceipts, _ := capture.Provenance.(map[int]uint64)
+	return kittySnapshotCapture{
+		windows:         capture.Windows,
+		reducerReceipts: reducerReceipts,
+		at:              capture.CompletedAt,
+	}, nil
 }
 
 // publishCapture publishes a successful capture under its own completion time.

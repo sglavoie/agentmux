@@ -135,6 +135,35 @@ type listCall struct {
 	done    chan struct{}
 	windows []OSWindow
 	err     error
+	// provenance is whatever the executing caller sampled immediately before
+	// this read started, and completedAt is when the read answered. Both belong
+	// to the execution rather than to any one caller, which is what lets a
+	// waiter describe the shared topology with facts that truly predate it.
+	provenance  any
+	completedAt time.Time
+}
+
+// ListCapture is one underlying coordinated `kitten @ ls` as every caller that
+// shared it sees it: the decoded topology, the provenance the executing caller
+// sampled before the read started, and the instant the read completed.
+//
+// The three travel together on purpose. A caller that joins an in-flight read
+// arrives after that read began, so anything it samples for itself is younger
+// than the windows it is about to receive. Pairing the two would let evidence
+// gathered against a newer world be published as if it described the older one.
+type ListCapture struct {
+	// Windows is this caller's own deep copy of the shared topology.
+	Windows []OSWindow
+	// Provenance is the value the executor's sample callback returned, or nil
+	// when the caller supplied no callback. The coordinator never inspects it:
+	// it exists so a caller can bind its own causally earlier facts to this
+	// exact read. It is shared by reference with every coalesced caller and
+	// must be treated as immutable.
+	Provenance any
+	// CompletedAt is the coordinator-clock instant the underlying read
+	// returned. It is identical for the executor and every waiter, and is never
+	// the instant a waiter happened to join.
+	CompletedAt time.Time
 }
 
 func newListCoordinator() *listCoordinator {
@@ -144,12 +173,23 @@ func newListCoordinator() *listCoordinator {
 	}
 }
 
-// list runs run exactly once per socket key per in-flight window. The first
+// capture runs run exactly once per socket key per in-flight window. The first
 // caller executes; callers that arrive while it is running wait for its
 // result. Every caller — the executor included — receives its own deep copy of
 // the topology, so the ownership semantics of a per-caller JSON decode survive
 // coalescing.
-func (co *listCoordinator) list(socket string, run func() ([]OSWindow, error)) ([]OSWindow, error) {
+//
+// sample is invoked by the executing caller only, after the entry is marked in
+// flight and before the read begins, and its value reaches every caller that
+// shares the read. That ordering is the whole point: marking in flight first is
+// what makes a caller arriving in between join this read instead of starting
+// one, and running sample before the read is what makes the returned provenance
+// causally earlier than the topology it is published with.
+func (co *listCoordinator) capture(
+	socket string,
+	sample func() any,
+	run func() ([]OSWindow, error),
+) (ListCapture, error) {
 	co.mu.Lock()
 	entry := co.entries[socket]
 	if entry == nil {
@@ -160,25 +200,41 @@ func (co *listCoordinator) list(socket string, run func() ([]OSWindow, error)) (
 		entry.status.CoalescedWaiters++
 		co.mu.Unlock()
 		<-call.done
-		return cloneOSWindows(call.windows), call.err
+		return ListCapture{
+			Windows:     cloneOSWindows(call.windows),
+			Provenance:  call.provenance,
+			CompletedAt: call.completedAt,
+		}, call.err
 	}
 	call := &listCall{done: make(chan struct{})}
 	entry.call = call
 	entry.status.InFlight = true
 	co.mu.Unlock()
 
+	var provenance any
+	if sample != nil {
+		provenance = sample()
+	}
+
+	// Sampling is the caller's own bookkeeping, not Kitty's latency, so the
+	// attempt clock starts after it.
 	started := co.now()
 	windows, err := run()
 	finished := co.now()
 
 	call.windows, call.err = windows, err
+	call.provenance, call.completedAt = provenance, finished
 	transition, observer := co.settle(entry, started, finished, err)
 	close(call.done)
 
 	if observer != nil && transition != nil {
 		observer(*transition)
 	}
-	return cloneOSWindows(windows), err
+	return ListCapture{
+		Windows:     cloneOSWindows(windows),
+		Provenance:  provenance,
+		CompletedAt: finished,
+	}, err
 }
 
 // settle records one underlying attempt and reports the transition, if any,

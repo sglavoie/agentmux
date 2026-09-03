@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"sort"
+	"time"
 
 	ccerrors "github.com/sglavoie/agentmux/internal/errors"
 )
@@ -137,6 +138,21 @@ func (c *SubprocessClient) kitten(args ...string) ([]byte, error) {
 // same socket share one underlying subprocess and decode; each still receives
 // an independent copy of the result.
 func (c *SubprocessClient) ListWindows() ([]OSWindow, error) {
+	capture, err := c.ListWindowsCapture(nil)
+	return capture.Windows, err
+}
+
+// ListWindowsCapture reads the Kitty topology and returns the whole capture:
+// the windows, the provenance sampled immediately before the underlying read
+// started, and the instant that read completed.
+//
+// sample runs only in the caller that executes the underlying subprocess. A
+// caller that coalesces onto a read already in flight receives the executing
+// caller's provenance and completion time rather than sampling its own, which
+// is what keeps the facts a caller binds to a topology older than the facts
+// themselves. Use this instead of ListWindows whenever anything sampled around
+// the read is published together with it.
+func (c *SubprocessClient) ListWindowsCapture(sample func() any) (ListCapture, error) {
 	run := func() ([]OSWindow, error) {
 		data, err := c.kitten("ls")
 		if err != nil {
@@ -150,12 +166,21 @@ func (c *SubprocessClient) ListWindows() ([]OSWindow, error) {
 	}
 	// A zero-value client never comes from the constructors, but falling back
 	// to an uncoordinated read is cheaper than making every caller carry a nil
-	// check.
+	// check. Nothing can join such a read, so this caller's own sample is
+	// already the executor's.
 	if c.lists == nil {
+		var provenance any
+		if sample != nil {
+			provenance = sample()
+		}
 		windows, err := run()
-		return cloneOSWindows(windows), err
+		return ListCapture{
+			Windows:     cloneOSWindows(windows),
+			Provenance:  provenance,
+			CompletedAt: time.Now(),
+		}, err
 	}
-	return c.lists.list(c.socket, run)
+	return c.lists.capture(c.socket, sample, run)
 }
 
 func (c *SubprocessClient) LaunchTab(opts LaunchOpts) error {

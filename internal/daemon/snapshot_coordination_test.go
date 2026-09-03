@@ -321,6 +321,110 @@ func TestConcurrentDaemonPathsShareOneSubprocessRepeatedly(t *testing.T) {
 	}
 }
 
+// TestCoalescedSnapshotPreservesExecutorReceiptProvenance pins the causal rule
+// coalescing puts at risk. A caller that joins a read already in flight arrives
+// after it began, so reducer receipts it sampled for itself would be YOUNGER
+// than the windows it is handed. Publishing that pair would place a reducer
+// event accepted mid-read inside the receipt and outside the topology, and
+// screen or transcript evidence gathered against the older tree would then pass
+// the current-receipt guard and mutate newer state.
+//
+// The reducer is advanced deliberately after the executor's read has started
+// and before the waiter joins, which is the exact window the finding names. Both
+// callers must come back with the executor's receipts and the executor's
+// completion time.
+func TestCoalescedSnapshotPreservesExecutorReceiptProvenance(t *testing.T) {
+	runner := newGatedListRunner(mustMarshalWindows(t, fakeOSWindowsWithTab(42, "W:api")))
+	release, entered := runner.blockLists(coordinationSocket)
+	defer release()
+	h, client := newCoordinatedHandler(t, runner)
+
+	const executorReceipt = uint64(7)
+	h.stateMu.Lock()
+	h.ensureWindowStateLocked(42).ShadowSeq = executorReceipt
+	h.stateMu.Unlock()
+
+	type captureResult struct {
+		capture kittySnapshotCapture
+		err     error
+	}
+	executed := make(chan captureResult, 1)
+	go func() {
+		capture, err := h.captureKittySnapshot(h.kittyClientForList())
+		executed <- captureResult{capture: capture, err: err}
+	}()
+
+	// The runner is reached only after the executing caller has sampled, so this
+	// is precisely the instant the read owns its provenance and the world is
+	// still free to move underneath it.
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the executing list never reached the runner")
+	}
+
+	const laterReceipt = executorReceipt + 1
+	h.stateMu.Lock()
+	h.ensureWindowStateLocked(42).ShadowSeq = laterReceipt
+	h.stateMu.Unlock()
+
+	joined := make(chan captureResult, 1)
+	go func() {
+		capture, err := h.captureKittySnapshot(h.kittyClientForList())
+		joined <- captureResult{capture: capture, err: err}
+	}()
+	waitForCoalescedWaiters(t, client, coordinationSocket, 1)
+
+	release()
+	executor := <-executed
+	waiter := <-joined
+	if executor.err != nil || waiter.err != nil {
+		t.Fatalf("captures failed: executor %v, waiter %v", executor.err, waiter.err)
+	}
+	if got := runner.listCallCount(coordinationSocket); got != 1 {
+		t.Fatalf("kitten @ ls ran %d times; want the single coalesced subprocess", got)
+	}
+
+	if got := executor.capture.reducerReceipts[42]; got != executorReceipt {
+		t.Fatalf("executor receipt = %d; want the %d it sampled before its read", got, executorReceipt)
+	}
+	if got := waiter.capture.reducerReceipts[42]; got != executorReceipt {
+		t.Fatalf("waiter receipt = %d; want the executor's %d, not the %d the reducer reached after the read began",
+			got, executorReceipt, laterReceipt)
+	}
+	if executor.capture.at.IsZero() || !waiter.capture.at.Equal(executor.capture.at) {
+		t.Fatalf("waiter capture time %v; want the executor's completion instant %v",
+			waiter.capture.at, executor.capture.at)
+	}
+	if len(waiter.capture.windows) != len(executor.capture.windows) || len(waiter.capture.windows) == 0 {
+		t.Fatalf("waiter saw %d windows, executor saw %d; want the one shared topology",
+			len(waiter.capture.windows), len(executor.capture.windows))
+	}
+	// Shared provenance, independently owned topology: the deep copy per caller
+	// survives the change.
+	if &waiter.capture.windows[0] == &executor.capture.windows[0] {
+		t.Fatal("both callers received the same backing array; each must own its decode")
+	}
+
+	// The waiter publishing last is what made the defect reachable, so publish
+	// its capture and prove the guard now rejects evidence gathered against it.
+	h.publishCapture(waiter.capture)
+	snapshot, ready := h.cachedScreenProbeSnapshot()
+	if !ready {
+		t.Fatal("no snapshot published")
+	}
+	if got := snapshot.Receipt(42); got != executorReceipt {
+		t.Fatalf("published receipt = %d; want the executor's %d", got, executorReceipt)
+	}
+	h.stateMu.Lock()
+	current := h.windowReceiptCurrentLocked(42, snapshot.Receipt(42))
+	h.stateMu.Unlock()
+	if current {
+		t.Fatalf("published receipt %d reads as current although the reducer advanced to %d; "+
+			"stale topology evidence would pass the guard", snapshot.Receipt(42), laterReceipt)
+	}
+}
+
 // waitForGeneration blocks until the published snapshot reaches want, which is
 // how a test joins the detached startup restore: its publication is the only
 // observable it leaves behind.
