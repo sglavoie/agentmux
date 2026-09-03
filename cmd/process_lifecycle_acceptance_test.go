@@ -4,9 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
@@ -263,15 +261,19 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 	fixture.sendHook(lifecycleNativeAfterWindow, "claude", "Stop", "native-48", 2, true, &nativeAfter, map[string]any{
 		"stop_reason": "end_turn",
 	})
+	// Stop is reset-sensitive and reaches the reducer only after its debounce, so
+	// hold the inspection until the terminal fact has actually been applied.
+	// Releasing on the acknowledgement alone would let the next inspection pass
+	// collect a not-yet-terminal candidate and report the hook absent.
+	fixture.waitForExport("native terminal applied before inspection release", func(export protocol.EventsExport) bool {
+		fact := lifecycleAcceptanceFact(export.WindowMetadata[lifecycleNativeAfterWindow], protocol.SourceHarness, "claude:native-48")
+		return fact != nil && fact.Action == "stop" && fact.Terminated
+	})
 	fixture.releaseProcessBlock()
-	time.Sleep(100 * time.Millisecond)
-	beforeFreshPass, err := ipc.NewClient().ExportEvents(lifecycleNativeAfterWindow)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := lifecycleAcceptanceExit(beforeFreshPass.EventsByWindow[lifecycleNativeAfterWindow], nativeAfter.PID); ok {
-		t.Fatal("stale in-flight inspection settled a newer native terminal receipt")
-	}
+	// The blocked pass captured its candidate before that terminal fact existed,
+	// so its receipt is the evidence of which pass settled: a stale settlement can
+	// only report the terminal hook absent, and only a pass that collected the
+	// applied fact can report it observed.
 	nativeAfterExport := fixture.waitForExport("fresh inspection after native terminal", func(export protocol.EventsExport) bool {
 		_, ok := lifecycleAcceptanceExit(export.EventsByWindow[lifecycleNativeAfterWindow], nativeAfter.PID)
 		return ok
