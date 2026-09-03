@@ -143,6 +143,15 @@ func TestStatusBarFallbackBehavior(t *testing.T) {
 	}
 }
 
+func TestStatusBarReportsInitialSessionLoad(t *testing.T) {
+	m := testModel()
+	m.width = 80
+	assertStatusBarContains(t, m, "Loading sessions…")
+
+	m = loadSessions(m, nil)
+	assertStatusBarContains(t, m, "No running sessions")
+}
+
 func TestStatusBarPromotesTranscriptScanWithCachedResults(t *testing.T) {
 	m := Model{
 		mode:                   ModeSessionSearch,

@@ -335,6 +335,9 @@ func fallbackStatusText(m Model) string {
 }
 
 func listStatusText(m Model) string {
+	if topologyLoading(m) {
+		return "Loading sessions…"
+	}
 	total := len(m.sessions)
 	visible := len(m.filtered)
 	switch {

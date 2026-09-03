@@ -39,6 +39,10 @@ const activeLoopColumnWidth = 3
 type ListInput struct {
 	// Rows are the filtered, sorted rows currently on screen.
 	Rows []session.RunningSession
+	// Loading is true while the initial running-session snapshot is still in
+	// flight. Later background refreshes keep rendering the last usable rows (or
+	// the confirmed empty state) instead of returning to the loading hero.
+	Loading bool
 	// SessionCount is the size of the unfiltered running-session set. It only
 	// distinguishes "no sessions running" from "all rows filtered out" in the
 	// empty hero.
@@ -338,7 +342,10 @@ func renderEmptyHero(in ListInput) string {
 
 	title := "No running sessions."
 	var hint string
-	if hasSessions && hasFilters {
+	if in.Loading {
+		title = "Loading sessions…"
+		hint = "press  ?  for all keys"
+	} else if hasSessions && hasFilters {
 		title = "No sessions match the active filter."
 		hint = "press  esc  to clear filters     press  ?  for all keys"
 	} else {

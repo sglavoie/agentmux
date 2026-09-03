@@ -179,6 +179,30 @@ func TestRenderListEmptyHeroNoSessions(t *testing.T) {
 	}
 }
 
+// TestRenderListInitialLoadDoesNotClaimTheListIsEmpty verifies that the cold
+// startup state remains distinct from a successfully loaded empty snapshot.
+func TestRenderListInitialLoadDoesNotClaimTheListIsEmpty(t *testing.T) {
+	m := testModel()
+	m.width = 60
+
+	out := stripAnsi(renderList(m))
+	if !strings.Contains(out, "Loading sessions…") {
+		t.Errorf("expected loading title; got %q", out)
+	}
+	if strings.Contains(out, "No running sessions.") {
+		t.Errorf("startup must not render the confirmed-empty title; got %q", out)
+	}
+
+	m = loadSessions(m, nil)
+	out = stripAnsi(renderList(m))
+	if !strings.Contains(out, "No running sessions.") {
+		t.Errorf("expected confirmed-empty title after load; got %q", out)
+	}
+	if strings.Contains(out, "Loading sessions…") {
+		t.Errorf("loading title remained after the initial snapshot; got %q", out)
+	}
+}
+
 // TestRenderListEmptyHeroFilteredOut covers the case where sessions exist
 // but the active filter rules every one of them out: the hero should hint
 // at `esc` to clear the filter.

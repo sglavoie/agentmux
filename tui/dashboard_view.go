@@ -47,6 +47,7 @@ func dashboardListInput(m Model, width, height int) dashboard.ListInput {
 	now := modelNow(m)
 	return dashboard.ListInput{
 		Rows:          m.filtered,
+		Loading:       topologyLoading(m),
 		SessionCount:  len(m.sessions),
 		Filter:        m.activeFilter,
 		Cursor:        m.cursor,
@@ -63,6 +64,12 @@ func dashboardListInput(m Model, width, height int) dashboard.ListInput {
 			return aslMarkerFor(m, s)
 		},
 	}
+}
+
+// topologyLoading is true only until the first usable running-session snapshot
+// lands. Periodic refreshes after that keep showing the last confirmed state.
+func topologyLoading(m Model) bool {
+	return m.topologyObservedAt.IsZero() && m.topologyRefreshInFlight
 }
 
 // dashboardScrollInput projects the model onto the pagination math. multiGroup
