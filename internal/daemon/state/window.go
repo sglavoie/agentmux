@@ -57,6 +57,24 @@ type WindowState struct {
 	// band.
 	Unseen bool
 
+	// PromptKind names WHY the window is blocked, when it is: the harness
+	// prompt kind a screen probe classified (screenstate.CodexPromptKind's five
+	// values today) for the icon the window currently shows. It is empty
+	// whenever the window is not blocked, and stampPromptKindLocked — which
+	// every publish path runs — is what guarantees that: the probe supplies the
+	// kind, the stamp owns the clear.
+	//
+	// IT IS DELIBERATELY ABSENT FROM windowStateUserVar, and that asymmetry with
+	// Unseen just above is the point. Unseen is news that exists nowhere else —
+	// lose it on restart and the fact that a turn went unwatched is gone for
+	// good — so it is persisted. A prompt kind is not news: the prompt is still
+	// on the pane's screen, so the next screen probe re-derives the kind within
+	// one sweep. Persisting it would only add a way to be wrong, since a kind
+	// restored against a prompt the user answered while the daemon was down is a
+	// stale reason attached to a live row, which reads worse than no reason at
+	// all. Absent for a sweep, then correct, beats confident and wrong.
+	PromptKind string
+
 	// Render-generation diagnostics. Seq is the window's generation counter;
 	// these track how far each stage of the render pipeline has advanced so
 	// exports can show where a window is stuck. DirtySince is when the current

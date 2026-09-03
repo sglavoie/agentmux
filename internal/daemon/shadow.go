@@ -318,6 +318,7 @@ func (h *Handler) publishEffectiveLocked(windowID int, st *state.WindowState, ef
 	meta.Shadow.EffectiveGen = st.EffectiveGen
 	h.windowMetadata[windowID] = meta
 	stampBusySinceLocked(st, effective.Icon, time.Now())
+	stampPromptKindLocked(st, effective.Icon)
 	// The screen idle probe only classifies a ⚡ window, so a decline streak
 	// stops describing anything the instant the reduced icon leaves it. This runs
 	// AFTER the metadata write above because it republishes the same entry.
@@ -341,6 +342,41 @@ func stampBusySinceLocked(st *state.WindowState, icon string, now time.Time) {
 		}
 	default:
 		st.BusySince = time.Time{}
+	}
+}
+
+// promptKindBlockingIcon reports whether an icon is one a prompt reason may
+// describe. The blocking class is the two icons a visible harness prompt can
+// two icons a visible harness prompt can raise. Any other icon means no prompt
+// is on screen, so no reason is available to explain the row.
+func promptKindBlockingIcon(icon string) bool {
+	return icon == "key" || icon == "question"
+}
+
+// stampPromptKindLocked maintains the blocked-reason string as an invariant of
+// the visible icon, in stampBusySinceLocked's shape rather than
+// stampUnseenLocked's: it needs no "previous state" reasoning because the
+// question it answers — is a prompt on screen right now — is fully settled by
+// the icon this publish installs.
+//
+// It is HALF a writer on purpose. It only ever clears; the kind itself is
+// supplied by the screen probe that read it, under the same stateMu critical
+// section that folded the prompt into the reducer (see
+// recordCodexPromptProbeStateLocked). That split is what keeps a stale reason
+// from outliving its prompt. A prompt kind is written on exactly one path — a
+// probe that saw the prompt — but the icon can leave the blocking class on
+// paths the probe never runs: a hook stop, a watchdog expiry, a process exit, an
+// ASL reconciliation, a restore. Putting the clear at the choke point every one
+// of those already moves through is what makes "the row shows no reason unless
+// one is visible" a property rather than a list of remembered call sites.
+//
+// The kind is left alone while the icon stays blocking, which is what lets a
+// re-probe of a still-visible prompt overwrite it with a fresher reading —
+// including a different kind at the same icon, since command_approval and
+// permission_grant both raise 🔑. Callers hold stateMu.
+func stampPromptKindLocked(st *state.WindowState, icon string) {
+	if !promptKindBlockingIcon(icon) {
+		st.PromptKind = ""
 	}
 }
 

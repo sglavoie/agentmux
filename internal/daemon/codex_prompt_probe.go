@@ -463,6 +463,24 @@ func (h *Handler) recordCodexPromptProbeStateLocked(
 	})
 	st.Reducer.Compact(now.Unix())
 	effective = st.Reducer.Reduce(now.Unix())
+	// The classified kind is the one thing the reducer cannot re-derive: it
+	// collapses to an action and an icon on the way in, and 🔑 alone cannot say
+	// whether it stands for a command approval or a permission grant. Stamp it
+	// here, then let publishEffectiveLocked's stampPromptKindLocked decide
+	// whether the reduced icon still justifies it — a prompt masked by a
+	// higher-precedence fact clears on the same publish that installed the
+	// masking icon, exactly like the audit row below records the icon that
+	// actually won.
+	//
+	// This is the write for the icon-raising transition the caller notifies on,
+	// and it deliberately sits HERE rather than at that transition test: the
+	// caller reaches it after releasing stateMu, where the window's state may
+	// already have moved on, and a kind written there could attach a reason to
+	// an icon no stamp is going to run against. The raise is also a strict
+	// subset of what needs the write — Codex can swap one 🔑 prompt for another
+	// kind of 🔑 prompt with no transition at all, and gating on the transition
+	// would leave the first kind describing the second prompt.
+	st.PromptKind = string(classification.Kind)
 	h.publishEffectiveLocked(windowID, st, effective)
 	h.markWindowDirtyLocked(windowID)
 

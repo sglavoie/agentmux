@@ -210,6 +210,37 @@ const codexCommandApprovalScreen = `
 Press enter to confirm
 `
 
+// The two screens below are synthesized rather than captured: unlike the three
+// above, no testdata fixture exists for either kind. They are written to the
+// clause lists in internal/screenstate/patterns_codex.toml and, just as
+// importantly, AGAINST the arms that precede theirs in ClassifyCodexPrompt's
+// fixed switch — the wording is chosen so each screen falls through every
+// earlier arm and lands on its own. TestCodexPromptKindReachesWindowState is
+// what proves that, since a screen that classified as the wrong kind would fail
+// its row rather than pass quietly.
+
+const codexUnansweredConfirmationScreen = `
+▌ Unanswered confirmation
+
+  Two questions were left blank.
+
+› 1. Continue anyway
+  2. Go back
+
+Press enter to confirm
+`
+
+const codexPermissionGrantScreen = `
+▌ Grant permission to read files outside the workspace?
+
+  ~/notes
+
+› 1. Yes
+  2. No
+
+Press enter to confirm
+`
+
 // The six screens below stayed behind when the Codex classifier tests moved to
 // internal/screenstate/codex_test.go. They are not classifier fixtures here:
 // each one is served through the Kitty fake by a probe test that asserts the
