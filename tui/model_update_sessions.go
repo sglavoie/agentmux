@@ -20,9 +20,73 @@ import (
 	tuiplans "github.com/sglavoie/agentmux/tui/plans"
 )
 
+// The live-topology refresh controller. Every refresh the dashboard performs —
+// the startup load, each interval tick, and the follow-up after an action
+// changed Kitty — enters through requestTopologyRefresh, which is what makes
+// "at most one refresh in flight" a property of the model rather than a habit
+// of its callers.
+
+// requestTopologyRefresh asks for a refresh of the live window tree. If one is
+// already running the request collapses into the pending bit and no command is
+// returned: a burst of ticks arriving while a slow refresh is out costs exactly
+// one catch-up, not one fetch each.
+func (m *Model) requestTopologyRefresh() tea.Cmd {
+	if m.topologyRefreshInFlight {
+		m.topologyRefreshPending = true
+		return nil
+	}
+	return m.startTopologyRefresh()
+}
+
+// startTopologyRefresh draws the next sequence and dispatches the fetch. It
+// assumes the caller has established that nothing is in flight.
+func (m *Model) startTopologyRefresh() tea.Cmd {
+	m.topologyRefreshNextSeq++
+	m.topologyRefreshActiveSeq = m.topologyRefreshNextSeq
+	m.topologyRefreshInFlight = true
+	m.topologyRefreshPending = false
+	return m.runTopologyRefreshCmd(m.topologyRefreshActiveSeq, m.initialSourceWindowID)
+}
+
+// settleTopologyRefresh reports whether a completion with this sequence belongs
+// to the refresh currently in flight, marking it finished when it does. A
+// completion that arrives when nothing is outstanding was already settled, and
+// one carrying a sequence other than the active one was superseded before it
+// landed; both are obsolete and neither is allowed to touch the list.
+func (m *Model) settleTopologyRefresh(seq int) bool {
+	if !m.topologyRefreshInFlight || seq != m.topologyRefreshActiveSeq {
+		return false
+	}
+	m.topologyRefreshInFlight = false
+	return true
+}
+
+// catchUpTopologyRefresh starts the single refresh that requests coalesced
+// while the one just finished was out. It is called only after a success: a
+// failed refresh clears the pending bit instead, so a run of ticks that piled
+// up during an outage cannot turn into an immediate retry storm against a
+// daemon or a Kitty that is still down. The next scheduled tick asks again.
+func (m *Model) catchUpTopologyRefresh() tea.Cmd {
+	if m.topologyRefreshInFlight || !m.topologyRefreshPending {
+		return nil
+	}
+	return m.startTopologyRefresh()
+}
+
 // handleSessionsMsg processes a commands.SessionsMsg: rebuilds the session list,
 // restores the cursor position, and clamps scroll offsets.
 func (m Model) handleSessionsMsg(msg commands.SessionsMsg) (tea.Model, tea.Cmd) {
+	// A completion that is not the refresh we are waiting on is an obsolete
+	// one: it was superseded before it landed, and applying it would move the
+	// list backwards.
+	if !m.settleTopologyRefresh(msg.Seq) {
+		return m, nil
+	}
+	m.topology = msg.Topology
+	// The source window has now been resolved against a real window tree, so
+	// the startup selection is spent. Retaining it until here is what lets a
+	// failed first refresh still select the caller's tab on the retry.
+	m.initialSourceWindowID = 0
 	m.err = nil
 	// Capture the prior cursor's row identity before the list is
 	// rebuilt so we can restore it post-refresh. Empty list → no
@@ -52,6 +116,20 @@ func (m Model) handleSessionsMsg(msg commands.SessionsMsg) (tea.Model, tea.Cmd) 
 	}
 	clampListOffset(&m)
 	scrollListToCursor(&m)
+	return m, m.catchUpTopologyRefresh()
+}
+
+// handleRefreshErr processes a commands.ErrMsg: a refresh that could reach
+// neither the daemon nor Kitty. The session list is deliberately left as it
+// was — a dashboard showing a slightly old list beats one that empties itself
+// because a subprocess timed out — and the pending bit is dropped so the retry
+// waits for the next tick rather than firing immediately.
+func (m Model) handleRefreshErr(msg commands.ErrMsg) (tea.Model, tea.Cmd) {
+	if !m.settleTopologyRefresh(msg.Seq) {
+		return m, nil
+	}
+	m.topologyRefreshPending = false
+	m.err = msg.Err
 	return m, nil
 }
 
@@ -76,7 +154,7 @@ func (m Model) handleActiveLoopsMsg(msg commands.ActiveLoopsMsg) (tea.Model, tea
 func (m Model) handleActionDone(msg commands.ActionDoneMsg) (tea.Model, tea.Cmd) {
 	m.actionErr = msg.Err
 	// Trigger a refresh so the list reflects the new state.
-	return m, commands.Fetch(m.client, m.cfg, m.sortMode)
+	return m, m.requestTopologyRefresh()
 }
 
 // handleCopyDone processes a commands.CopyDoneMsg without refreshing live sessions.
@@ -106,7 +184,9 @@ func (m Model) handleResortDone(msg commands.ResortDoneMsg) (tea.Model, tea.Cmd)
 	if c := m.pushToast(t); c != nil {
 		cmds = append(cmds, c)
 	}
-	cmds = append(cmds, commands.Fetch(m.client, m.cfg, m.sortMode))
+	if c := m.requestTopologyRefresh(); c != nil {
+		cmds = append(cmds, c)
+	}
 	return m, tea.Batch(cmds...)
 }
 
@@ -116,7 +196,7 @@ func (m Model) handleResortDone(msg commands.ResortDoneMsg) (tea.Model, tea.Cmd)
 func (m Model) handlePickerOpenDone(msg commands.PickerOpenDoneMsg) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
 		m.actionErr = msg.Err
-		return m, commands.Fetch(m.client, m.cfg, m.sortMode)
+		return m, m.requestTopologyRefresh()
 	}
 	return m, tea.Quit
 }
@@ -520,8 +600,11 @@ func (m Model) actionDaemon() func(protocol.Request) (protocol.Response, error) 
 // hook, and active-loop implementations; the in-process UI harness replaces
 // every entry with a deterministic fixture command.
 type modelBackgroundCommands struct {
-	initialFetch   func(Model, int) tea.Cmd
-	activeLoops    func(int) tea.Cmd
+	// topologyRefresh takes the refresh sequence and the startup source window
+	// ID; the message it produces carries that sequence back so the controller
+	// can tell its own completion from an obsolete one.
+	topologyRefresh func(Model, int, int) tea.Cmd
+	activeLoops     func(int) tea.Cmd
 	health         func(Model, bool, bool) tea.Cmd
 	detail         func(int) tea.Cmd
 	worktrees      func(Model, int) tea.Cmd
@@ -539,8 +622,8 @@ type modelBackgroundCommands struct {
 
 func defaultModelBackgroundCommands() modelBackgroundCommands {
 	return modelBackgroundCommands{
-		initialFetch: func(m Model, sourceWindowID int) tea.Cmd {
-			return commands.InitialFetch(m.client, m.cfg, m.sortMode, sourceWindowID)
+		topologyRefresh: func(m Model, seq, sourceWindowID int) tea.Cmd {
+			return commands.Refresh(m.client, m.cfg, m.sortMode, seq, sourceWindowID)
 		},
 		activeLoops: commands.ActiveLoopRefresh,
 		health: func(m Model, checkDaemon, checkHooks bool) tea.Cmd {
@@ -582,11 +665,11 @@ func (m Model) runWorktreeActionCmd(id actions.ID, request actions.Request) tea.
 	return defaultModelBackgroundCommands().worktreeAction(m, id, request)
 }
 
-func (m Model) runInitialFetchCmd(sourceWindowID int) tea.Cmd {
-	if m.backgroundCommands.initialFetch != nil {
-		return m.backgroundCommands.initialFetch(m, sourceWindowID)
+func (m Model) runTopologyRefreshCmd(seq, sourceWindowID int) tea.Cmd {
+	if m.backgroundCommands.topologyRefresh != nil {
+		return m.backgroundCommands.topologyRefresh(m, seq, sourceWindowID)
 	}
-	return defaultModelBackgroundCommands().initialFetch(m, sourceWindowID)
+	return defaultModelBackgroundCommands().topologyRefresh(m, seq, sourceWindowID)
 }
 
 func (m Model) runActiveLoopRefreshCmd(seq int) tea.Cmd {

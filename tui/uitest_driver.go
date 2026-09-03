@@ -395,7 +395,7 @@ func newUITestFixtureDriver(fx uitestFixture, size UITestSize) (*uitestDriver, *
 	}
 	client := newUITestKittyClient(fx.Windows)
 	d := newUITestDriver(fx.Config, client, size)
-	d.model.backgroundCommands.initialFetch = hermeticInitialFetch(fx.States, fx.Watchdog)
+	d.model.backgroundCommands.topologyRefresh = hermeticTopologyRefresh(fx.States, fx.Watchdog)
 	fixtureWorktrees := append([]actions.WorktreeView(nil), fx.Worktrees...)
 	d.model.backgroundCommands.worktrees = func(_ Model, seq int) tea.Cmd {
 		return func() tea.Msg {
@@ -637,26 +637,37 @@ func newUITestDriverUnder(m Model, size UITestSize, tempParent string) (*uitestD
 	return d, nil
 }
 
-// hermeticInitialFetch enumerates sessions from the no-op Kitty client and
+// hermeticTopologyRefresh enumerates sessions from the no-op Kitty client and
 // overlays the fixture's daemon-owned state, which no Kitty title can carry
 // (the busy anchor above all). Both maps are nil for a driver built without a
 // fixture, which reproduces an unreachable daemon exactly as before. The
 // daemon is never contacted either way, so the no-live-daemon guarantee holds.
-func hermeticInitialFetch(states map[int]protocol.WindowStateSnapshot, watchdog map[int]protocol.WatchdogState) func(Model, int) tea.Cmd {
-	return func(m Model, _ int) tea.Cmd {
+//
+// It carries the refresh sequence and the freshness metadata the real command
+// does, so the model's one-refresh-in-flight controller settles here exactly as
+// it does in production; a fixture fetch that dropped the sequence would leave
+// every scenario stuck after its first refresh. The fixture's own listing stands
+// in for a direct fallback, which is what it is: no daemon is reachable.
+func hermeticTopologyRefresh(states map[int]protocol.WindowStateSnapshot, watchdog map[int]protocol.WatchdogState) func(Model, int, int) tea.Cmd {
+	return func(m Model, seq, _ int) tea.Cmd {
 		return func() tea.Msg {
 			windows, err := m.client.ListWindows()
 			if err != nil {
-				return commands.ErrMsg{Err: err}
+				return commands.ErrMsg{Seq: seq, Err: err}
 			}
 			sessions, _ := session.ListFromOSWindowsWithConfig(windows, m.cfg)
 			if states != nil {
 				commands.ApplyDaemonStates(sessions, states)
 			}
 			return commands.SessionsMsg{
+				Seq:      seq,
 				Sessions: session.SortRunning(sessions, m.sortMode),
 				Watchdog: watchdog,
 				States:   states,
+				Topology: commands.TopologyFreshness{
+					Source:     commands.TopologyFromDirect,
+					CapturedAt: m.now(),
+				},
 			}
 		}
 	}
@@ -664,7 +675,7 @@ func hermeticInitialFetch(states map[int]protocol.WindowStateSnapshot, watchdog 
 
 func hermeticModelBackgroundCommands() modelBackgroundCommands {
 	return modelBackgroundCommands{
-		initialFetch: hermeticInitialFetch(nil, nil),
+		topologyRefresh: hermeticTopologyRefresh(nil, nil),
 		activeLoops: func(seq int) tea.Cmd {
 			return func() tea.Msg { return commands.ActiveLoopsMsg{Seq: seq} }
 		},
@@ -751,9 +762,17 @@ func (d *uitestDriver) loadSessionsFrom(client kitty.KittyClient, cfg *config.Co
 	if states != nil {
 		commands.ApplyDaemonStates(sessions, states)
 	}
+	// This load stands in for the startup refresh the constructor armed, so it
+	// carries that refresh's sequence: settling it is what lets the first tick
+	// start a refresh instead of collapsing into the pending bit.
 	d.recordErr(d.dispatch(commands.SessionsMsg{
+		Seq:      d.model.topologyRefreshActiveSeq,
 		Sessions: session.SortRunning(sessions, d.model.sortMode),
 		Watchdog: watchdog,
 		States:   states,
+		Topology: commands.TopologyFreshness{
+			Source:     commands.TopologyFromDirect,
+			CapturedAt: d.model.now(),
+		},
 	}))
 }

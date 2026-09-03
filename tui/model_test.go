@@ -1,13 +1,36 @@
 package tui
 
 import (
+	"errors"
+	"testing"
+
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 )
+
+// stubStateQuery replaces the dashboard refresh's daemon seam for one test.
+// Every test that exercises a real refresh must install one: the default seam
+// dials the operator's live daemon socket.
+func stubStateQuery(t *testing.T, query func() (protocol.Response, error)) {
+	t.Helper()
+	previous := commands.StateQuery
+	commands.StateQuery = query
+	t.Cleanup(func() { commands.StateQuery = previous })
+}
+
+// stubUnreachableDaemon is the common case: no daemon at all, so the refresh
+// must fall back to listing Kitty directly.
+func stubUnreachableDaemon(t *testing.T) {
+	t.Helper()
+	stubStateQuery(t, func() (protocol.Response, error) {
+		return protocol.Response{}, errors.New("daemon unavailable")
+	})
+}
 
 // testModel returns a Model with a minimal config and mock client.
 func testModel() Model {
@@ -27,8 +50,36 @@ func testModel() Model {
 // loadSessions feeds a set of RunningSession values into the model
 // as if they came from a Kitty query.
 func loadSessions(m Model, sessions []session.RunningSession) Model {
-	updated, _ := m.Update(commands.SessionsMsg{Sessions: sessions})
+	return applySessions(m, commands.SessionsMsg{Sessions: sessions})
+}
+
+// applySessions feeds msg through the model as the completion of a refresh the
+// model itself started. The refresh controller only accepts the sequence it is
+// currently waiting on, so a hand-built message has to be stamped with it or it
+// is (correctly) dropped as obsolete.
+func applySessions(m Model, msg commands.SessionsMsg) Model {
+	msg.Seq = armTopologyRefresh(&m)
+	updated, _ := m.Update(msg)
 	return updated.(Model)
+}
+
+// applyRefreshErr feeds a refresh failure through the model as the completion
+// of a refresh it started, under the same sequence rule as applySessions.
+func applyRefreshErr(m Model, err error) Model {
+	updated, _ := m.Update(commands.ErrMsg{Seq: armTopologyRefresh(&m), Err: err})
+	return updated.(Model)
+}
+
+// armTopologyRefresh leaves m in the state a dispatched refresh leaves it in
+// and returns that refresh's sequence. A model fresh from the constructor is
+// already armed, so this is a no-op on the first call.
+func armTopologyRefresh(m *Model) int {
+	if !m.topologyRefreshInFlight {
+		m.topologyRefreshNextSeq++
+		m.topologyRefreshActiveSeq = m.topologyRefreshNextSeq
+		m.topologyRefreshInFlight = true
+	}
+	return m.topologyRefreshActiveSeq
 }
 
 func pressKey(m Model, key string) Model {

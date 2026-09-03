@@ -66,7 +66,9 @@ func TestTickRefreshesActiveLoops(t *testing.T) {
 	candidate := agentloop.Candidate{PlanDir: "/plans/backend", CWD: "/work/backend"}
 	stubActiveLoopDiscover(t, []agentloop.Candidate{candidate}, nil)
 
-	m := testModel()
+	// Settle the startup refresh the constructor armed, so the tick below
+	// starts a topology refresh instead of collapsing into the pending bit.
+	m := loadSessions(testModel(), makeSessions())
 	m.activeLoopRefreshSeq = 7
 	updated, cmd := m.Update(commands.TickMsg{})
 	got := updated.(Model)

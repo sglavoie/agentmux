@@ -1,0 +1,417 @@
+package commands
+
+import (
+	"errors"
+	"net"
+	"os"
+	"path/filepath"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/kitty"
+)
+
+// recordingKittyClient is a KittyClient that answers ListWindows from a fixed
+// tree and records the calls a refresh made, so a test can assert not only what
+// a refresh produced but what it touched. Every method a refresh does not use
+// fails loudly rather than silently succeeding.
+type recordingKittyClient struct {
+	mu       sync.Mutex
+	windows  []kitty.OSWindow
+	listErr  error
+	lists    int
+	userVars []map[string]string
+}
+
+func (c *recordingKittyClient) ListWindows() ([]kitty.OSWindow, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.lists++
+	if c.listErr != nil {
+		return nil, c.listErr
+	}
+	return c.windows, nil
+}
+
+func (c *recordingKittyClient) SetUserVars(_ string, vars map[string]string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.userVars = append(c.userVars, vars)
+	return nil
+}
+
+func (c *recordingKittyClient) listCalls() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lists
+}
+
+func (c *recordingKittyClient) userVarWrites() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.userVars)
+}
+
+func (c *recordingKittyClient) LaunchTab(kitty.LaunchOpts) error     { panic("unexpected LaunchTab") }
+func (c *recordingKittyClient) LaunchOverlay(kitty.LaunchOpts) error { panic("unexpected LaunchOverlay") }
+func (c *recordingKittyClient) CloseTab(string) error                { panic("unexpected CloseTab") }
+func (c *recordingKittyClient) MoveTab(string, int) error            { panic("unexpected MoveTab") }
+func (c *recordingKittyClient) SetTabColor(string, string, string, string, string) error {
+	panic("unexpected SetTabColor")
+}
+func (c *recordingKittyClient) SetTabTitle(string, string) error { panic("unexpected SetTabTitle") }
+func (c *recordingKittyClient) FocusTab(string) error            { panic("unexpected FocusTab") }
+func (c *recordingKittyClient) FocusWindow(string) error         { panic("unexpected FocusWindow") }
+func (c *recordingKittyClient) GetText(string, string) (string, error) {
+	panic("unexpected GetText")
+}
+func (c *recordingKittyClient) LaunchOverlayPager(string) error {
+	panic("unexpected LaunchOverlayPager")
+}
+
+// stubStateQuery installs the refresh's daemon seam for one test. Without it a
+// refresh would dial the operator's live daemon socket.
+func stubStateQuery(t *testing.T, query func() (protocol.Response, error)) {
+	t.Helper()
+	previous := StateQuery
+	StateQuery = query
+	t.Cleanup(func() { StateQuery = previous })
+}
+
+// managedWindows is one managed session inside one tab, which is the smallest
+// tree ListFromOSWindowsWithConfig turns into a dashboard row.
+func managedWindows(tabID, windowID int, title string) []kitty.OSWindow {
+	return []kitty.OSWindow{{
+		Tabs: []kitty.Tab{{
+			ID:    tabID,
+			Title: title,
+			Windows: []kitty.Window{{
+				ID:       windowID,
+				IsActive: true,
+				UserVars: kitty.UserVars{
+					Profile: "work", Harness: "claude",
+					AMXDirectory: "/work/api", LaunchID: "api-launch",
+				},
+			}},
+		}},
+	}}
+}
+
+func readySnapshot(windows []kitty.OSWindow, stale bool) *protocol.KittySnapshot {
+	return &protocol.KittySnapshot{
+		Ready:      true,
+		Stale:      stale,
+		Generation: 12,
+		CapturedAt: time.Unix(1_700_000_000, 0).Unix(),
+		AgeMS:      1500,
+		Windows:    windows,
+	}
+}
+
+func refreshOnce(t *testing.T, client kitty.KittyClient, seq, sourceWindowID int) any {
+	t.Helper()
+	return Refresh(client, &config.Config{Defaults: config.Defaults{Sort: "alpha"}}, "alpha", seq, sourceWindowID)()
+}
+
+// TestRefreshPrefersDaemonSnapshotOverListingKitty is the whole point of the
+// daemon-first path: the daemon already ran `kitten @ ls`, so the dashboard runs
+// none of its own.
+func TestRefreshPrefersDaemonSnapshotOverListingKitty(t *testing.T) {
+	daemonTree := managedWindows(7, 42, "api")
+	stubStateQuery(t, func() (protocol.Response, error) {
+		return protocol.Response{
+			OK:            true,
+			States:        map[int]protocol.WindowStateSnapshot{42: {IconState: "key", Looping: true}},
+			KittySnapshot: readySnapshot(daemonTree, false),
+		}, nil
+	})
+	// A tree the daemon's snapshot disagrees with, so the assertion below can
+	// only pass if the daemon's copy is what was rendered.
+	client := &recordingKittyClient{windows: managedWindows(9, 99, "stale-direct")}
+
+	msg, ok := refreshOnce(t, client, 3, 0).(SessionsMsg)
+	if !ok {
+		t.Fatalf("refresh produced %T, want SessionsMsg", msg)
+	}
+	if client.listCalls() != 0 {
+		t.Fatalf("direct Kitty listings = %d, want 0 with a ready daemon snapshot", client.listCalls())
+	}
+	if msg.Seq != 3 {
+		t.Fatalf("message sequence = %d, want the requested 3", msg.Seq)
+	}
+	if len(msg.Sessions) != 1 || msg.Sessions[0].TabID != 7 {
+		t.Fatalf("sessions = %+v, want the daemon snapshot's tab 7", msg.Sessions)
+	}
+	if got := msg.Sessions[0]; got.State != "key" || !got.Looping {
+		t.Fatalf("session state = %+v, want the daemon's key + looping", got)
+	}
+	if msg.Topology.Source != TopologyFromDaemon || msg.Topology.Stale {
+		t.Fatalf("topology = %+v, want a fresh daemon source", msg.Topology)
+	}
+	if msg.Topology.Generation != 12 || msg.Topology.Age != 1500*time.Millisecond {
+		t.Fatalf("topology freshness = %+v, want generation 12 and a 1.5s age", msg.Topology)
+	}
+}
+
+// TestRefreshReusesStaleDaemonSnapshotWithoutListingKitty pins both halves of
+// the stale rule: a stale tree is still rendered rather than discarded, and it
+// still costs no Kitty subprocess — but it drives no write back into Kitty,
+// because every window ID in it may already be gone.
+func TestRefreshReusesStaleDaemonSnapshotWithoutListingKitty(t *testing.T) {
+	tree := managedWindows(7, 42, "api")
+	tree[0].Tabs = append(tree[0].Tabs, kitty.Tab{
+		ID:      70,
+		Windows: []kitty.Window{{ID: 700, UserVars: kitty.UserVars{DashboardSelect: "7:request-1"}}},
+	})
+	stubStateQuery(t, func() (protocol.Response, error) {
+		return protocol.Response{OK: true, KittySnapshot: readySnapshot(tree, true)}, nil
+	})
+	client := &recordingKittyClient{}
+
+	msg := refreshOnce(t, client, 1, 0).(SessionsMsg)
+	if client.listCalls() != 0 {
+		t.Fatalf("direct Kitty listings = %d, want 0 for a stale-but-ready snapshot", client.listCalls())
+	}
+	if len(msg.Sessions) != 1 || msg.Sessions[0].TabID != 7 {
+		t.Fatalf("sessions = %+v, want the stale snapshot still rendered", msg.Sessions)
+	}
+	if !msg.Topology.Stale || msg.Topology.Source != TopologyFromDaemon {
+		t.Fatalf("topology = %+v, want a stale daemon source", msg.Topology)
+	}
+	if msg.SelectionTabID != 7 || msg.SelectionToken != "request-1" {
+		t.Fatalf("selection = tab %d token %q, want tab 7 token request-1", msg.SelectionTabID, msg.SelectionToken)
+	}
+	if client.userVarWrites() != 0 {
+		t.Fatalf("stale snapshot drove %d user-var writes, want 0", client.userVarWrites())
+	}
+}
+
+// TestRefreshWritesBackFromAFreshDaemonSnapshot is the control for the test
+// above: the write is skipped because the snapshot was stale, not because the
+// daemon path never writes.
+func TestRefreshWritesBackFromAFreshDaemonSnapshot(t *testing.T) {
+	tree := managedWindows(7, 42, "api")
+	tree[0].Tabs = append(tree[0].Tabs, kitty.Tab{
+		ID:      70,
+		Windows: []kitty.Window{{ID: 700, UserVars: kitty.UserVars{DashboardSelect: "7:request-1"}}},
+	})
+	stubStateQuery(t, func() (protocol.Response, error) {
+		return protocol.Response{OK: true, KittySnapshot: readySnapshot(tree, false)}, nil
+	})
+	client := &recordingKittyClient{}
+
+	if msg := refreshOnce(t, client, 1, 0).(SessionsMsg); msg.SelectionTabID != 7 {
+		t.Fatalf("selection tab = %d, want 7", msg.SelectionTabID)
+	}
+	if client.userVarWrites() != 1 {
+		t.Fatalf("fresh snapshot drove %d user-var writes, want 1", client.userVarWrites())
+	}
+}
+
+// TestRefreshFallsBackToDirectListing enumerates every reason the daemon cannot
+// supply a topology. All four end in the same place — one direct listing — but
+// they are genuinely different daemon states and each has to be handled.
+func TestRefreshFallsBackToDirectListing(t *testing.T) {
+	cases := []struct {
+		name  string
+		query func() (protocol.Response, error)
+	}{
+		{
+			// An older daemon that predates the block omits it entirely.
+			name: "legacy daemon omits the block",
+			query: func() (protocol.Response, error) {
+				return protocol.Response{OK: true}, nil
+			},
+		},
+		{
+			// A new daemon that has not completed a successful list yet.
+			name: "cold snapshot",
+			query: func() (protocol.Response, error) {
+				return protocol.Response{OK: true, KittySnapshot: &protocol.KittySnapshot{Ready: false}}, nil
+			},
+		},
+		{
+			// The client turns resp.OK == false into an error, so a refusal
+			// arrives here as one.
+			name: "daemon rejected the query",
+			query: func() (protocol.Response, error) {
+				return protocol.Response{}, errors.New("daemon error: unknown request type")
+			},
+		},
+		{
+			name: "daemon unreachable",
+			query: func() (protocol.Response, error) {
+				return protocol.Response{}, errors.New("dial unix: connect: no such file or directory")
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stubStateQuery(t, tc.query)
+			client := &recordingKittyClient{windows: managedWindows(9, 99, "api")}
+
+			msg, ok := refreshOnce(t, client, 5, 0).(SessionsMsg)
+			if !ok {
+				t.Fatalf("refresh produced %T, want SessionsMsg", msg)
+			}
+			if client.listCalls() != 1 {
+				t.Fatalf("direct Kitty listings = %d, want exactly 1", client.listCalls())
+			}
+			if len(msg.Sessions) != 1 || msg.Sessions[0].TabID != 9 {
+				t.Fatalf("sessions = %+v, want the directly listed tab 9", msg.Sessions)
+			}
+			if msg.Topology.Source != TopologyFromDirect || msg.Topology.Stale {
+				t.Fatalf("topology = %+v, want a fresh direct source", msg.Topology)
+			}
+		})
+	}
+}
+
+// TestRefreshAppliesDaemonStateToADirectFallbackTopology covers the case the
+// two halves of the fallback rule meet in: the daemon answered, so it is still
+// authoritative about per-window state, but it had no usable window tree.
+func TestRefreshAppliesDaemonStateToADirectFallbackTopology(t *testing.T) {
+	stubStateQuery(t, func() (protocol.Response, error) {
+		return protocol.Response{
+			OK:            true,
+			Activity:      map[int]int64{99: 1_700_000_500},
+			Watchdog:      map[int]protocol.WatchdogState{99: {LastAction: "active", ThresholdSec: 600}},
+			States:        map[int]protocol.WindowStateSnapshot{99: {IconState: "key", Looping: true}},
+			KittySnapshot: &protocol.KittySnapshot{Ready: false},
+		}, nil
+	})
+	client := &recordingKittyClient{windows: managedWindows(9, 99, "api")}
+
+	msg := refreshOnce(t, client, 1, 0).(SessionsMsg)
+	if client.listCalls() != 1 {
+		t.Fatalf("direct Kitty listings = %d, want exactly 1", client.listCalls())
+	}
+	if got := msg.Sessions[0]; got.State != "key" || !got.Looping {
+		t.Fatalf("fallback row state = %+v, want the daemon's key + looping", got)
+	}
+	if !msg.Activity[99].Equal(time.Unix(1_700_000_500, 0)) {
+		t.Fatalf("activity = %v, want the daemon's timestamp", msg.Activity[99])
+	}
+	if msg.Watchdog[99].LastAction != "active" || msg.States[99].IconState != "key" {
+		t.Fatalf("daemon maps did not reach the fallback message: %+v / %+v", msg.Watchdog, msg.States)
+	}
+}
+
+// TestRefreshStampsDirectFallbackWithItsOwnCompletionTime pins that a listing
+// this process just finished is reported as exactly that — fresh, ageless, and
+// not carrying some other capture's timestamp.
+func TestRefreshStampsDirectFallbackWithItsOwnCompletionTime(t *testing.T) {
+	stubStateQuery(t, func() (protocol.Response, error) {
+		return protocol.Response{}, errors.New("daemon unavailable")
+	})
+	client := &recordingKittyClient{windows: managedWindows(9, 99, "api")}
+
+	before := time.Now()
+	msg := refreshOnce(t, client, 1, 0).(SessionsMsg)
+	after := time.Now()
+
+	if msg.Topology.CapturedAt.Before(before) || msg.Topology.CapturedAt.After(after) {
+		t.Fatalf("capture time = %v, want it inside [%v, %v]", msg.Topology.CapturedAt, before, after)
+	}
+	if msg.Topology.Age != 0 || msg.Topology.Generation != 0 {
+		t.Fatalf("direct topology = %+v, want zero age and no generation", msg.Topology)
+	}
+}
+
+// TestRefreshReportsASequenceBearingErrorWhenBothSourcesFail is the total
+// failure case. The message carries the sequence so the controller can settle,
+// and carries no sessions so the model keeps the list it already has.
+func TestRefreshReportsASequenceBearingErrorWhenBothSourcesFail(t *testing.T) {
+	stubStateQuery(t, func() (protocol.Response, error) {
+		return protocol.Response{}, errors.New("daemon unavailable")
+	})
+	client := &recordingKittyClient{listErr: errors.New("kitten @ ls: signal: killed")}
+
+	msg, ok := refreshOnce(t, client, 4, 0).(ErrMsg)
+	if !ok {
+		t.Fatalf("refresh produced %T, want ErrMsg", msg)
+	}
+	if msg.Seq != 4 {
+		t.Fatalf("error sequence = %d, want the requested 4", msg.Seq)
+	}
+	if msg.Err == nil || msg.Error() == "" {
+		t.Fatalf("error message = %+v, want the listing failure", msg)
+	}
+}
+
+// TestRefreshResolvesTheSourcePaneAgainstTheDaemonSnapshot pins that the
+// startup selection works off whichever tree won, not only off a direct
+// listing.
+func TestRefreshResolvesTheSourcePaneAgainstTheDaemonSnapshot(t *testing.T) {
+	tree := managedWindows(7, 42, "api")
+	tree[0].Tabs[0].Windows = append(tree[0].Tabs[0].Windows, kitty.Window{ID: 99})
+	stubStateQuery(t, func() (protocol.Response, error) {
+		return protocol.Response{OK: true, KittySnapshot: readySnapshot(tree, false)}, nil
+	})
+	client := &recordingKittyClient{}
+
+	msg := refreshOnce(t, client, 1, 99).(SessionsMsg)
+	if msg.SelectionTabID != 7 {
+		t.Fatalf("source tab = %d, want the pane's containing tab 7", msg.SelectionTabID)
+	}
+	if client.listCalls() != 0 {
+		t.Fatalf("direct Kitty listings = %d, want 0", client.listCalls())
+	}
+}
+
+// TestStateQuerySeamBoundsItsWaitAtOneSecond pins the budget the refresh
+// actually runs under. The seam is wired to the client's dedicated state-query
+// deadline rather than the 250ms acknowledgement budget every other request
+// shares, and a daemon that accepts the connection and then says nothing must
+// cost one refresh, not an unbounded stall.
+func TestStateQuerySeamBoundsItsWaitAtOneSecond(t *testing.T) {
+	dir, err := os.MkdirTemp("", "amxq")
+	if err != nil {
+		t.Fatalf("temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socket := filepath.Join(dir, "s")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer func() { _ = listener.Close() }()
+
+	// Accept and hold every connection open without ever replying.
+	accepted := make(chan net.Conn, 4)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			accepted <- conn
+		}
+	}()
+	t.Cleanup(func() {
+		_ = listener.Close()
+		<-done
+		close(accepted)
+		for conn := range accepted {
+			_ = conn.Close()
+		}
+	})
+
+	start := time.Now()
+	if _, err := ipc.NewClientWithSocket(socket).StateQuery(); err == nil {
+		t.Fatal("silent daemon returned no error, want a deadline failure")
+	}
+	elapsed := time.Since(start)
+	if elapsed < 900*time.Millisecond {
+		t.Fatalf("state query gave up after %v, want it to hold the full one-second budget", elapsed)
+	}
+	if elapsed > 3*time.Second {
+		t.Fatalf("state query waited %v, want it bounded near one second", elapsed)
+	}
+}

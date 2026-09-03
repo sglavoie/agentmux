@@ -269,15 +269,20 @@ func TestPickerOpenDoneMsgQuitsOnSuccess(t *testing.T) {
 }
 
 func TestPickerOpenDoneMsgStaysOpenOnError(t *testing.T) {
-	m := testModel()
+	stubUnreachableDaemon(t)
+	// The startup refresh has to be settled first: a post-action refresh
+	// requested while one is already in flight coalesces and returns no
+	// command, which is a different (also correct) outcome than this test is
+	// about.
+	m := loadSessions(testModel(), nil)
 	updated, cmd := m.Update(commands.PickerOpenDoneMsg{Err: errors.New("kitten exploded")})
 	if updated.(Model).actionErr == nil {
 		t.Fatal("expected actionErr set on error")
 	}
 	if cmd == nil {
-		t.Fatal("expected non-nil cmd (commands.Fetch) on error")
+		t.Fatal("expected a non-nil refresh cmd on error")
 	}
-	// commands.Fetch would emit commands.SessionsMsg or commands.ErrMsg; it must not be tea.Quit.
+	// The refresh emits commands.SessionsMsg or commands.ErrMsg; it must not be tea.Quit.
 	// Invoking it requires a live Kitty client, so we only assert by type
 	// of cmd indirectly: invoke and confirm we did NOT get a QuitMsg.
 	msg := cmd()

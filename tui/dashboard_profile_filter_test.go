@@ -129,10 +129,9 @@ func TestDashboardProfileCycleUsesLatestRunningProfiles(t *testing.T) {
 		t.Fatalf("setup profile = %q, want personal", m.activeFilter.Account)
 	}
 
-	updated, _ := m.Update(commands.SessionsMsg{Sessions: []session.RunningSession{
+	m = applySessions(m, commands.SessionsMsg{Sessions: []session.RunningSession{
 		{Base: "work", Profile: "work"},
 	}})
-	m = updated.(Model)
 	if m.activeFilter.Account != "personal" || len(m.filtered) != 0 {
 		t.Fatalf("refresh changed active filter or retained rows: filter=%q rows=%v", m.activeFilter.Account, visibleDashboardBases(m))
 	}

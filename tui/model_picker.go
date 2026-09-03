@@ -407,7 +407,7 @@ func (m Model) handleLaunchProgress(msg launchProgressMsg) (tea.Model, tea.Cmd) 
 	if msg.batchID != m.launchBatchID {
 		// Stale launch from a prior batch; ignore so we don't clobber a
 		// fresh batch's toast.
-		return m, commands.Fetch(m.client, m.cfg, m.sortMode)
+		return m, m.requestTopologyRefresh()
 	}
 	m.launchBatchDone++
 	var cmds []tea.Cmd
@@ -439,8 +439,8 @@ func (m Model) handleLaunchProgress(msg launchProgressMsg) (tea.Model, tea.Cmd) 
 	}
 	if batchDone && m.launchBatchErrors == 0 && m.launchBatchQuitOnSuccess {
 		cmds = append(cmds, tea.Quit)
-	} else {
-		cmds = append(cmds, commands.Fetch(m.client, m.cfg, m.sortMode))
+	} else if c := m.requestTopologyRefresh(); c != nil {
+		cmds = append(cmds, c)
 	}
 	return m, tea.Batch(cmds...)
 }

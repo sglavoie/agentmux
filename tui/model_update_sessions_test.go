@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"errors"
 	"strings"
 	"testing"
 
@@ -26,8 +25,7 @@ func TestSessionsMsg_RestoresCursorByTabIDWhenBaseDuplicates(t *testing.T) {
 		{TabID: 1, WindowID: 11, Base: "api", Profile: "work", Account: "work", Project: "api", Harness: "claude", Directory: "/work/api"},
 		{TabID: 2, WindowID: 22, Base: "api", Profile: "personal", Account: "personal", Project: "api", Harness: "claude", Directory: "/personal/api"},
 	}
-	updated, _ := m.Update(commands.SessionsMsg{Sessions: refreshed})
-	m = updated.(Model)
+	m = applySessions(m, commands.SessionsMsg{Sessions: refreshed})
 
 	if got := m.filtered[m.cursor].TabID; got != 2 {
 		t.Fatalf("cursor restored to tab %d, want tab 2", got)
@@ -36,14 +34,13 @@ func TestSessionsMsg_RestoresCursorByTabIDWhenBaseDuplicates(t *testing.T) {
 
 func TestSessionsMsg_InitialSourceTabSelectsMatchingSession(t *testing.T) {
 	m := testModel()
-	updated, _ := m.Update(commands.SessionsMsg{
+	m = applySessions(m, commands.SessionsMsg{
 		Sessions: []session.RunningSession{
 			{TabID: 1, WindowID: 11, Base: "needs-permission", Account: "work", State: "key"},
 			{TabID: 2, WindowID: 22, Base: "source-tab", Account: "work"},
 		},
 		SelectionTabID: 2,
 	})
-	m = updated.(Model)
 
 	if got := m.filtered[m.cursor].TabID; got != 2 {
 		t.Fatalf("initial cursor selected tab %d, want source tab 2", got)
@@ -61,14 +58,13 @@ func TestSessionsMsg_UnmappedInitialSourceDoesNotOverrideSelection(t *testing.T)
 		}
 	}
 
-	updated, _ := m.Update(commands.SessionsMsg{
+	m = applySessions(m, commands.SessionsMsg{
 		Sessions: []session.RunningSession{
 			{TabID: 1, WindowID: 11, Base: "first", Account: "work"},
 			{TabID: 2, WindowID: 22, Base: "selected", Account: "work"},
 		},
 		SelectionTabID: 999,
 	})
-	m = updated.(Model)
 
 	if got := m.filtered[m.cursor].TabID; got != 2 {
 		t.Fatalf("unmapped source changed selection to tab %d, want tab 2", got)
@@ -78,8 +74,7 @@ func TestSessionsMsg_UnmappedInitialSourceDoesNotOverrideSelection(t *testing.T)
 func TestSessionsMsg_InitialSourceWithNoSessionsLeavesCursorUnchanged(t *testing.T) {
 	m := testModel()
 	m.cursor = 0
-	updated, _ := m.Update(commands.SessionsMsg{SelectionTabID: 2})
-	m = updated.(Model)
+	m = applySessions(m, commands.SessionsMsg{SelectionTabID: 2})
 
 	if m.cursor != 0 || len(m.filtered) != 0 {
 		t.Fatalf("empty startup state = cursor %d, rows %d; want cursor 0 and no rows", m.cursor, len(m.filtered))
@@ -92,36 +87,30 @@ func TestSessionsMsg_DuplicateSelectionRequestDoesNotStealCursorAgain(t *testing
 		{TabID: 2, WindowID: 22, Base: "requested", Account: "work"},
 	}
 	m := testModel()
-	updated, _ := m.Update(commands.SessionsMsg{
+	m = applySessions(m, commands.SessionsMsg{
 		Sessions:       sessions,
 		SelectionTabID: 2,
 		SelectionToken: "request-1",
 	})
-	m = updated.(Model)
 	for i := range m.filtered {
 		if m.filtered[i].TabID == 1 {
 			m.cursor = i
 		}
 	}
 
-	updated, _ = m.Update(commands.SessionsMsg{
+	m = applySessions(m, commands.SessionsMsg{
 		Sessions:       sessions,
 		SelectionTabID: 2,
 		SelectionToken: "request-1",
 	})
-	m = updated.(Model)
 
 	if got := m.filtered[m.cursor].TabID; got != 1 {
 		t.Fatalf("duplicate request moved cursor to tab %d, want current tab 1", got)
 	}
 }
 
-func TestInitialFetchCmdConsumesExistingDashboardSelectionRequest(t *testing.T) {
-	oldDaemonRequest := commands.DaemonRequest
-	commands.DaemonRequest = func(protocol.Request) (protocol.Response, error) {
-		return protocol.Response{}, errors.New("daemon unavailable")
-	}
-	t.Cleanup(func() { commands.DaemonRequest = oldDaemonRequest })
+func TestRefreshCmdConsumesExistingDashboardSelectionRequest(t *testing.T) {
+	stubUnreachableDaemon(t)
 
 	client := newUITestKittyClient([]kitty.OSWindow{{
 		Tabs: []kitty.Tab{
@@ -141,7 +130,7 @@ func TestInitialFetchCmdConsumesExistingDashboardSelectionRequest(t *testing.T) 
 		},
 	}})
 
-	msg := commands.Fetch(client, &config.Config{}, "alpha")().(commands.SessionsMsg)
+	msg := commands.Refresh(client, &config.Config{}, "alpha", 1, 0)().(commands.SessionsMsg)
 	if msg.SelectionTabID != 7 || msg.SelectionToken != "request-1" {
 		t.Fatalf("selection request = tab %d token %q, want tab 7 token request-1", msg.SelectionTabID, msg.SelectionToken)
 	}
@@ -151,12 +140,8 @@ func TestInitialFetchCmdConsumesExistingDashboardSelectionRequest(t *testing.T) 
 	}
 }
 
-func TestInitialFetchCmdResolvesSourcePaneToContainingTab(t *testing.T) {
-	oldDaemonRequest := commands.DaemonRequest
-	commands.DaemonRequest = func(protocol.Request) (protocol.Response, error) {
-		return protocol.Response{}, errors.New("daemon unavailable")
-	}
-	t.Cleanup(func() { commands.DaemonRequest = oldDaemonRequest })
+func TestRefreshCmdResolvesSourcePaneToContainingTab(t *testing.T) {
+	stubUnreachableDaemon(t)
 
 	client := newUITestKittyClient([]kitty.OSWindow{{
 		Tabs: []kitty.Tab{{
@@ -169,9 +154,9 @@ func TestInitialFetchCmdResolvesSourcePaneToContainingTab(t *testing.T) {
 		}},
 	}})
 
-	msg, ok := commands.InitialFetch(client, &config.Config{}, "alpha", 99)().(commands.SessionsMsg)
+	msg, ok := commands.Refresh(client, &config.Config{}, "alpha", 1, 99)().(commands.SessionsMsg)
 	if !ok {
-		t.Fatal("initialFetchCmd returned an unexpected message type")
+		t.Fatal("Refresh returned an unexpected message type")
 	}
 	if msg.SelectionTabID != 7 {
 		t.Fatalf("source tab ID = %d, want 7", msg.SelectionTabID)
@@ -181,12 +166,8 @@ func TestInitialFetchCmdResolvesSourcePaneToContainingTab(t *testing.T) {
 	}
 }
 
-func TestFetchCmdRemovesClosedSessionInsteadOfReanchoringDashboardOverlay(t *testing.T) {
-	oldDaemonRequest := commands.DaemonRequest
-	commands.DaemonRequest = func(protocol.Request) (protocol.Response, error) {
-		return protocol.Response{}, errors.New("daemon unavailable")
-	}
-	t.Cleanup(func() { commands.DaemonRequest = oldDaemonRequest })
+func TestRefreshCmdRemovesClosedSessionInsteadOfReanchoringDashboardOverlay(t *testing.T) {
+	stubUnreachableDaemon(t)
 
 	katanaDir := t.TempDir()
 	pulseDir := t.TempDir()
@@ -238,7 +219,7 @@ func TestFetchCmdRemovesClosedSessionInsteadOfReanchoringDashboardOverlay(t *tes
 	})
 	m.cursor = 0
 
-	msg := commands.Fetch(client, cfg, "alpha")().(commands.SessionsMsg)
+	msg := commands.Refresh(client, cfg, "alpha", 1, 0)().(commands.SessionsMsg)
 	if len(msg.Sessions) != 1 || msg.Sessions[0].Project != "Pulse" {
 		t.Fatalf("post-close sessions = %+v, want only Pulse", msg.Sessions)
 	}
@@ -246,27 +227,21 @@ func TestFetchCmdRemovesClosedSessionInsteadOfReanchoringDashboardOverlay(t *tes
 		t.Fatalf("dashboard overlay was re-anchored: %+v", calls)
 	}
 
-	updated, _ := m.Update(msg)
-	m = updated.(Model)
+	m = applySessions(m, msg)
 	if len(m.filtered) != 1 || m.filtered[0].Project != "Pulse" || m.cursor != 0 {
 		t.Fatalf("refreshed dashboard = rows %+v cursor %d, want only Pulse at cursor 0", m.filtered, m.cursor)
 	}
 }
 
-func TestFetchCmdUsesDaemonBulkStateOverTitleParsing(t *testing.T) {
-	oldDaemonRequest := commands.DaemonRequest
-	commands.DaemonRequest = func(req protocol.Request) (protocol.Response, error) {
-		if req.Type != protocol.TypeStateQuery {
-			t.Fatalf("daemon request type = %q, want state_query", req.Type)
-		}
+func TestRefreshCmdUsesDaemonBulkStateOverTitleParsing(t *testing.T) {
+	stubStateQuery(t, func() (protocol.Response, error) {
 		return protocol.Response{
 			OK: true,
 			States: map[int]protocol.WindowStateSnapshot{
 				42: {IconState: "key", Looping: true, LastAction: "permission", LastEventAt: 123, GuardAction: "permission"},
 			},
 		}, nil
-	}
-	t.Cleanup(func() { commands.DaemonRequest = oldDaemonRequest })
+	})
 
 	client := newUITestKittyClient([]kitty.OSWindow{{
 		Tabs: []kitty.Tab{{
@@ -280,9 +255,9 @@ func TestFetchCmdUsesDaemonBulkStateOverTitleParsing(t *testing.T) {
 		}},
 	}})
 
-	msg, ok := commands.Fetch(client, &config.Config{Defaults: config.Defaults{Sort: "alpha"}}, "alpha")().(commands.SessionsMsg)
+	msg, ok := commands.Refresh(client, &config.Config{Defaults: config.Defaults{Sort: "alpha"}}, "alpha", 1, 0)().(commands.SessionsMsg)
 	if !ok {
-		t.Fatal("fetchCmd returned an unexpected message type")
+		t.Fatal("Refresh returned an unexpected message type")
 	}
 	if len(msg.Sessions) != 1 {
 		t.Fatalf("session count = %d, want 1", len(msg.Sessions))
@@ -292,12 +267,8 @@ func TestFetchCmdUsesDaemonBulkStateOverTitleParsing(t *testing.T) {
 	}
 }
 
-func TestFetchCmdFallsBackToTitleStateWhenDaemonIsUnreachable(t *testing.T) {
-	oldDaemonRequest := commands.DaemonRequest
-	commands.DaemonRequest = func(protocol.Request) (protocol.Response, error) {
-		return protocol.Response{}, errors.New("daemon unavailable")
-	}
-	t.Cleanup(func() { commands.DaemonRequest = oldDaemonRequest })
+func TestRefreshCmdFallsBackToTitleStateWhenDaemonIsUnreachable(t *testing.T) {
+	stubUnreachableDaemon(t)
 
 	client := newUITestKittyClient([]kitty.OSWindow{{
 		Tabs: []kitty.Tab{{
@@ -311,18 +282,14 @@ func TestFetchCmdFallsBackToTitleStateWhenDaemonIsUnreachable(t *testing.T) {
 		}},
 	}})
 
-	msg := commands.Fetch(client, &config.Config{Defaults: config.Defaults{Sort: "alpha"}}, "alpha")().(commands.SessionsMsg)
+	msg := commands.Refresh(client, &config.Config{Defaults: config.Defaults{Sort: "alpha"}}, "alpha", 1, 0)().(commands.SessionsMsg)
 	if got := msg.Sessions[0]; got.State != "stop" || !got.Looping {
 		t.Fatalf("session state = %+v, want title-derived stop + looping fallback", got)
 	}
 }
 
-func TestFetchCmdPreservesRuntimeProfileOverrideInConfigPicker(t *testing.T) {
-	oldDaemonRequest := commands.DaemonRequest
-	commands.DaemonRequest = func(protocol.Request) (protocol.Response, error) {
-		return protocol.Response{}, errors.New("daemon unavailable")
-	}
-	t.Cleanup(func() { commands.DaemonRequest = oldDaemonRequest })
+func TestRefreshCmdPreservesRuntimeProfileOverrideInConfigPicker(t *testing.T) {
+	stubUnreachableDaemon(t)
 
 	const projectDir = "/projects/sis"
 	client := newUITestKittyClient([]kitty.OSWindow{{
@@ -358,7 +325,7 @@ func TestFetchCmdPreservesRuntimeProfileOverrideInConfigPicker(t *testing.T) {
 		}},
 	}
 
-	msg := commands.Fetch(client, cfg, "alpha")().(commands.SessionsMsg)
+	msg := commands.Refresh(client, cfg, "alpha", 1, 0)().(commands.SessionsMsg)
 	if len(msg.Sessions) != 1 || msg.Sessions[0].EffectiveProfile() != "tradition-claude" {
 		t.Fatalf("fetched sessions = %+v, want tradition-claude/sis", msg.Sessions)
 	}
@@ -366,9 +333,7 @@ func TestFetchCmdPreservesRuntimeProfileOverrideInConfigPicker(t *testing.T) {
 		t.Fatalf("runtime profile override was re-anchored: %+v", calls)
 	}
 
-	m := NewModel(cfg, client)
-	updated, _ := m.Update(msg)
-	m = updated.(Model)
+	m := applySessions(NewModel(cfg, client), msg)
 	m = pressKey(m, "c")
 	if m.configPickerCurrent != "tradition-claude" {
 		t.Fatalf("picker current profile = %q, want tradition-claude", m.configPickerCurrent)

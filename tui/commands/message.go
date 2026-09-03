@@ -41,16 +41,57 @@ func Tick(d time.Duration) tea.Cmd {
 	})
 }
 
-// SessionsMsg carries a fresh session list from Kitty plus the daemon's
-// per-window last-activity timestamps and watchdog snapshot (nil if the
-// daemon is unreachable).
+// TopologySource names where one refresh's window tree came from. It is the
+// difference between a dashboard that reads the daemon's cached listing and one
+// that ran a `kitten @ ls` subprocess of its own.
+type TopologySource string
+
+const (
+	// TopologyFromDaemon is the normal path: the tree came from the daemon's
+	// published snapshot, so this process ran no Kitty subprocess at all.
+	TopologyFromDaemon TopologySource = "daemon"
+	// TopologyFromDirect means the refresh listed Kitty itself because the
+	// daemon was unreachable, rejected the query, had never published a
+	// snapshot, or predates the snapshot block.
+	TopologyFromDirect TopologySource = "direct"
+)
+
+// TopologyFreshness travels with every successful refresh and describes the
+// window tree it carried: where it came from, how old it is, and whether the
+// daemon has already ruled it too old to act on.
+//
+// Stale is the daemon's own verdict, shipped as a boolean rather than recomputed
+// here from Age, so the dashboard and the daemon cannot disagree about the same
+// snapshot. Generation, not CapturedAt, orders two daemon snapshots: concurrent
+// listers stamp their own completion times, so capture times across successive
+// generations are not monotonic. A direct listing carries its local completion
+// time as CapturedAt, generation zero, and is never stale.
+type TopologyFreshness struct {
+	Source     TopologySource
+	Stale      bool
+	Generation uint64
+	CapturedAt time.Time
+	Age        time.Duration
+}
+
+// SessionsMsg carries a fresh session list plus the daemon's per-window
+// last-activity timestamps and watchdog snapshot (nil if the daemon is
+// unreachable).
+//
+// Seq is the refresh sequence the model's controller handed the command that
+// produced this message. A completion whose Seq is not the one currently
+// outstanding was superseded before it landed and is discarded, so a slow
+// refresh can never move the list backwards over a newer one. Sequences start
+// at one, which leaves the zero value recognizable as "never issued".
 type SessionsMsg struct {
+	Seq            int
 	Sessions       []session.RunningSession
 	Activity       map[int]time.Time
 	Watchdog       map[int]protocol.WatchdogState
 	States         map[int]protocol.WindowStateSnapshot
 	SelectionTabID int
 	SelectionToken string
+	Topology       TopologyFreshness
 }
 
 // ActiveLoopsMsg carries the latest active agent-session-loop discovery result.
@@ -60,8 +101,16 @@ type ActiveLoopsMsg struct {
 	Err        error
 }
 
-// ErrMsg carries an error from a Kitty query.
-type ErrMsg struct{ Err error }
+// ErrMsg carries a refresh failure: neither the daemon nor a direct listing
+// could produce a window tree. It deliberately carries no sessions, so the
+// dashboard keeps the last list it successfully rendered.
+//
+// Seq follows the same contract as SessionsMsg.Seq: it settles the refresh
+// controller only when it matches the refresh currently outstanding.
+type ErrMsg struct {
+	Seq int
+	Err error
+}
 
 func (e ErrMsg) Error() string { return e.Err.Error() }
 

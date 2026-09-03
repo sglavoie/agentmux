@@ -19,11 +19,10 @@ func TestSessionsMsgStoresActivity(t *testing.T) {
 	m := testModel()
 	now := time.Now()
 	activity := map[int]time.Time{42: now}
-	updated, _ := m.Update(commands.SessionsMsg{
+	m2 := applySessions(m, commands.SessionsMsg{
 		Sessions: makeSessions(),
 		Activity: activity,
 	})
-	m2 := updated.(Model)
 	if m2.lastActivity == nil {
 		t.Fatal("expected lastActivity to be set after commands.SessionsMsg")
 	}
@@ -40,11 +39,10 @@ func TestSessionsMsgStoresWatchdog(t *testing.T) {
 	wd := map[int]protocol.WatchdogState{
 		7: {LastAction: "active", LastEventAt: time.Now().Unix(), ThresholdSec: 600},
 	}
-	updated, _ := m.Update(commands.SessionsMsg{
+	m2 := applySessions(m, commands.SessionsMsg{
 		Sessions: makeSessions(),
 		Watchdog: wd,
 	})
-	m2 := updated.(Model)
 	if m2.watchdog == nil {
 		t.Fatal("expected watchdog to be set after commands.SessionsMsg")
 	}

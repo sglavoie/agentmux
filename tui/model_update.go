@@ -69,13 +69,26 @@ func newModel(cfg *config.Config, client kitty.KittyClient, sourceWindowID int, 
 		messageDetailIdx:      -1,
 		initialSourceWindowID: sourceWindowID,
 		mode:                  initialMode,
+		// Arm the first refresh here rather than in Init. Init has a value
+		// receiver, so the sequence it drew and the in-flight bit it set would
+		// be discarded with its copy of the model, and the first tick would
+		// start a second concurrent refresh against the same startup one.
+		topologyRefreshNextSeq:   firstTopologyRefreshSeq,
+		topologyRefreshActiveSeq: firstTopologyRefreshSeq,
+		topologyRefreshInFlight:  true,
 	}
 }
 
-// Init starts the refresh ticker and fetches the first session list.
+// firstTopologyRefreshSeq is the sequence the constructor arms. Sequences start
+// at one so that zero can mean "unsequenced" on the wire between the refresh
+// command and the update loop.
+const firstTopologyRefreshSeq = 1
+
+// Init starts the refresh ticker and fetches the first session list. The
+// topology refresh it dispatches is the one newModel already armed.
 func (m Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{
-		m.runInitialFetchCmd(m.initialSourceWindowID),
+		m.runTopologyRefreshCmd(m.topologyRefreshActiveSeq, m.initialSourceWindowID),
 		m.runActiveLoopRefreshCmd(m.activeLoopRefreshSeq),
 		commands.Tick(m.interval),
 		m.runHealthCmd(true, true),
@@ -110,8 +123,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleActiveLoopsMsg(msg)
 
 	case commands.ErrMsg:
-		m.err = msg.Err
-		return m, nil
+		return m.handleRefreshErr(msg)
 
 	case commands.ActionDoneMsg:
 		return m.handleActionDone(msg)
@@ -273,7 +285,7 @@ func (m Model) handleTick(msg commands.TickMsg) (tea.Model, tea.Cmd) {
 	m.sweepRecentTransitions()
 	m.activeLoopRefreshSeq++
 	cmds := []tea.Cmd{
-		m.runInitialFetchCmd(0),
+		m.requestTopologyRefresh(),
 		m.runActiveLoopRefreshCmd(m.activeLoopRefreshSeq),
 		commands.Tick(m.interval),
 	}

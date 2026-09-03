@@ -57,8 +57,29 @@ type Model struct {
 	cursor     int
 	listOffset int // top row index for the scrollable list view in ModeList
 	// initialSourceWindowID is the Kitty window from which the dashboard was
-	// opened. Only the startup fetch uses it to select the matching tab row.
+	// opened, used to select the matching tab row. It is retained across
+	// refreshes and cleared by the first usable topology result, so a startup
+	// refresh that fails does not cost the operator their selection.
 	initialSourceWindowID int
+	// Live-topology refresh controller. This is the dashboard's window tree,
+	// which is a different thing from sessionRefreshInFlight below: that one
+	// tracks the Past Sessions transcript index scan.
+	//
+	// At most one refresh is in flight at a time. topologyRefreshNextSeq is the
+	// counter sequences are drawn from, topologyRefreshActiveSeq is the one
+	// currently outstanding (meaningful only while topologyRefreshInFlight),
+	// and topologyRefreshPending is a single bit: every request that arrives
+	// during a refresh collapses into it, so a burst of ticks and post-action
+	// refreshes costs exactly one catch-up rather than one fetch each. The
+	// first sequence is armed in the constructor because Init has a value
+	// receiver and cannot persist the mutation that starting a refresh is.
+	topologyRefreshNextSeq   int
+	topologyRefreshActiveSeq int
+	topologyRefreshInFlight  bool
+	topologyRefreshPending   bool
+	// topology describes the window tree the current session list was built
+	// from: daemon snapshot or direct listing, and how old it is.
+	topology commands.TopologyFreshness
 	// lastSelectionRequestToken prevents a request left on a Kitty window
 	// after a failed best-effort clear from repeatedly stealing the cursor.
 	lastSelectionRequestToken string

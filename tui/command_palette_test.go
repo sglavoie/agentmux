@@ -287,8 +287,7 @@ func TestCommandPaletteExecutionUsesCapturedTargetAndClearsBeforeTransition(t *t
 	replacement := session.RunningSession{
 		TabID: 8, WindowID: 80, Base: "backend", Project: "backend", Profile: "work", State: "bolt",
 	}
-	updated, _ = m.Update(commands.SessionsMsg{Sessions: []session.RunningSession{replacement}})
-	m = updated.(Model)
+	m = applySessions(m, commands.SessionsMsg{Sessions: []session.RunningSession{replacement}})
 	if m.filtered[0].TabID != replacement.TabID {
 		t.Fatalf("background refresh did not replace live row: %+v", m.filtered)
 	}

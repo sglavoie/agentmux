@@ -330,8 +330,8 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   projection seam in one file), and the deterministic in-process uitest harness
   that `cmd/tuitest/tuitest.go` drives. Command and message production is
   divided rather than owned outright. The effects the dashboard starts away from
-  the update loop — Kitty enumeration and the initial fetch, daemon queries,
-  harness lifecycle, clipboard, directory and editor launches, health probes,
+  the update loop — the live-topology refresh, daemon queries, harness
+  lifecycle, clipboard, directory and editor launches, health probes,
   agent-session-loop discovery — live in `tui/commands`
   (`tui/commands/session.go` and its siblings) together with the shared result
   messages they report back with (`tui/commands/message.go`). The root keeps the
@@ -386,8 +386,14 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   and the exported messages those effects come back as. What a command *does* to
   the model stays in the root, which supplies every catalog entry's closure. It
   additionally owns the dashboard refresh command cycle and the package-level
-  seams root tests swap (`Registry`, `DaemonRequest`, `SpawnDaemonDetached`,
-  `CopyToClipboard`, `ActiveLoopDiscover`).
+  seams root tests swap (`Registry`, `DaemonRequest`, `StateQuery`,
+  `SpawnDaemonDetached`, `CopyToClipboard`, `ActiveLoopDiscover`). Its live
+  topology is daemon-first: a refresh takes the window tree from the daemon's
+  published snapshot whenever that snapshot is present and ready — including
+  when the daemon has marked it stale — and lists Kitty itself only when the
+  daemon is unreachable, rejects the query, has never completed a list, or
+  predates the snapshot block. A stale tree is still rendered but drives no
+  Kitty write, because the window IDs in it may already be gone.
 - `tui/customization`: the standalone color, icon, and keybinding overlays, each
   its own Bubble Tea program. It is a sibling of the root rather than one of its
   leaves: `cmd` launches it directly and root `tui` does not import it.

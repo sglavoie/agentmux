@@ -238,17 +238,14 @@ func TestTickTriggersRefetch(t *testing.T) {
 // ---- Error display test ----
 
 func TestErrMsgSetsErr(t *testing.T) {
-	m := testModel()
-	updated, _ := m.Update(commands.ErrMsg{Err: errors.New("kitty offline")})
-	if updated.(Model).err == nil {
+	m := applyRefreshErr(testModel(), errors.New("kitty offline"))
+	if m.err == nil {
 		t.Fatal("expected err to be set after commands.ErrMsg")
 	}
 }
 
 func TestSessionsMsgClearsErr(t *testing.T) {
-	m := testModel()
-	updated, _ := m.Update(commands.ErrMsg{Err: errors.New("kitty offline")})
-	m = updated.(Model)
+	m := applyRefreshErr(testModel(), errors.New("kitty offline"))
 	m = loadSessions(m, makeSessions())
 	if m.err != nil {
 		t.Fatalf("expected err cleared after commands.SessionsMsg, got %v", m.err)
