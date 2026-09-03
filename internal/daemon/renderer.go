@@ -150,15 +150,18 @@ func (h *Handler) restoreStateFromKitty(now time.Time) (bool, error) {
 	if client == nil {
 		return false, nil
 	}
-	reducerReceipts := h.captureSnapshotReducerReceipts()
-	windows, err := client.ListWindows()
+	capture, err := h.captureKittySnapshot(client)
 	if err != nil {
 		slog.Debug("renderer: startup list windows failed", "err", err)
 		return false, err
 	}
+	windows := capture.windows
 	// Publish before restore so the hook path can route against the initial
-	// snapshot the moment restore finishes.
-	h.publishSnapshotWithReceipts(windows, reducerReceipts, now)
+	// snapshot the moment restore finishes. The snapshot carries the list's own
+	// completion time; restore keeps the daemon's start time, because a restored
+	// durable fact is dated by the event it replays, not by how long the startup
+	// list took to answer.
+	h.publishCapture(capture)
 	h.restoreFromUserVars(windows, now)
 	// ASL reconciliation deliberately does NOT run here. Restore rebuilds leases
 	// from Kitty user vars, which record what was true when the daemon stopped,
@@ -182,12 +185,12 @@ func (h *Handler) maintenanceTick(now time.Time) {
 	if client == nil {
 		return
 	}
-	reducerReceipts := h.captureSnapshotReducerReceipts()
-	windows, err := client.ListWindows()
+	capture, err := h.captureKittySnapshot(client)
 	if err != nil {
 		slog.Debug("maintenance: list windows failed", "err", err)
 		return
 	}
+	windows := capture.windows
 	// A daemon whose bounded startup snapshot timed out is only temporarily
 	// degraded. Restore the durable amx_state this first successful list carries
 	// BEFORE advertising ready, so a health check or startup smoke never observes
@@ -198,25 +201,32 @@ func (h *Handler) maintenanceTick(now time.Time) {
 	// persisted payload still carries — never overwriting a same-source in-process
 	// fact — so no accepted hook state is rolled back while a live ASL lease, pipe
 	// child, subagent, or attention/error contribution is not silently dropped.
-	// runSnapshotTickWithReceipts then enqueues the freshly restored windows for rendering.
+	// runSnapshotTickWithCapture then enqueues the freshly restored windows for rendering.
 	recovering := false
 	if ready, _ := h.Readiness(); !ready {
 		recovering = true
 		h.restoreFromUserVars(windows, now)
 	}
-	h.runSnapshotTickWithReceipts(now, windows, reducerReceipts)
+	h.runSnapshotTickWithCapture(now, capture)
 	if recovering {
 		h.MarkReady()
 	}
 }
 
-func (h *Handler) runSnapshotTickWithReceipts(now time.Time, windows []kitty.OSWindow, reducerReceipts map[int]uint64) {
+// runSnapshotTickWithCapture runs one maintenance pass over a completed
+// capture. The two times it works with are deliberately distinct: the snapshot
+// is published under the capture's completion time (freshness is a property of
+// the read), while pruning and ASL reconciliation keep the tick time they were
+// scheduled for (expiry is a property of the schedule, and must not drift by
+// however long Kitty took to answer).
+func (h *Handler) runSnapshotTickWithCapture(now time.Time, capture kittySnapshotCapture) {
+	windows := capture.windows
 	// The maintenance loop is the periodic Kitty lister: publish the fresh
 	// snapshot so hook routing reads it instead of calling ListWindows itself.
 	// Staleness evaluation deliberately does not live here: the independent
 	// watchdog loop owns it, measuring idleness with in-process elapsed time
 	// instead of rewriting activity timestamps after tick gaps.
-	h.publishSnapshotWithReceipts(windows, reducerReceipts, now)
+	h.publishCapture(capture)
 	h.pruneClosedWindows(now, liveWindowIDs(windows))
 	// This is the startup reconciliation as well as the periodic one: the
 	// interval gate has never run when the daemon comes up, so the first tick

@@ -31,25 +31,64 @@ func (h *Handler) captureSnapshotReducerReceipts() map[int]uint64 {
 	return receipts
 }
 
-// publishSnapshot records windows as the current immutable snapshot. It is the
-// single seam the render/restore loop uses; the hook path only ever reads via
-// cachedSnapshot.
-func (h *Handler) publishSnapshot(windows []kitty.OSWindow, now time.Time) {
-	h.publishSnapshotWithReceipts(windows, h.captureSnapshotReducerReceipts(), now)
+// kittySnapshotCapture is one successful coordinated ListWindows: the windows
+// it returned, the reducer receipts sampled before it started, and the instant
+// it completed. The three belong together — publishing any one of them under a
+// different read's provenance is exactly the incoherence this type exists to
+// prevent.
+type kittySnapshotCapture struct {
+	windows         []kitty.OSWindow
+	reducerReceipts map[int]uint64
+	// at is stamped after ListWindows returns, never before it is called. The
+	// loop that asks for a read holds a tick or start time that can be
+	// arbitrarily older than the answer — a list wedged behind a slow Kitty
+	// would otherwise publish a snapshot that claims to have been captured when
+	// it was merely requested, and every freshness measurement downstream would
+	// inherit that lie.
+	at time.Time
+}
+
+// captureKittySnapshot performs one coordinated ListWindows and stamps its
+// completion time. Every daemon publication path goes through it so the
+// stamping rule lives in one place rather than in five loops.
+//
+// A failure returns the error and nothing else: the caller publishes nothing,
+// which is what leaves the last successful windows, generation, and capture
+// time standing. Session 1's per-socket coordinator sits underneath, so a call
+// arriving while another subsystem's read of the same socket is in flight joins
+// that read instead of starting a second `kitten @ ls`.
+func (h *Handler) captureKittySnapshot(client kittyTitleClient) (kittySnapshotCapture, error) {
+	reducerReceipts := h.captureSnapshotReducerReceipts()
+	windows, err := client.ListWindows()
+	if err != nil {
+		return kittySnapshotCapture{}, err
+	}
+	return kittySnapshotCapture{windows: windows, reducerReceipts: reducerReceipts, at: time.Now()}, nil
+}
+
+// publishCapture publishes a successful capture under its own completion time.
+func (h *Handler) publishCapture(capture kittySnapshotCapture) {
+	h.publishSnapshotWithReceipts(capture.windows, capture.reducerReceipts, capture.at)
+}
+
+// publishSnapshot records windows as the current immutable snapshot, captured
+// at capturedAt. Production listers publish a kittySnapshotCapture instead; this
+// remains the seam for tests and callers that already hold an in-memory tree.
+func (h *Handler) publishSnapshot(windows []kitty.OSWindow, capturedAt time.Time) {
+	h.publishSnapshotWithReceipts(windows, h.captureSnapshotReducerReceipts(), capturedAt)
 }
 
 // publishSnapshotWithReceipts publishes windows with reducer receipts captured
-// before the ListWindows call that returned them. Production listers use this
-// seam; publishSnapshot remains a convenient atomic-now wrapper for tests and
-// callers that already hold an in-memory tree.
-func (h *Handler) publishSnapshotWithReceipts(windows []kitty.OSWindow, reducerReceipts map[int]uint64, now time.Time) {
+// before the ListWindows call that returned them, stamped with the instant that
+// call completed.
+func (h *Handler) publishSnapshotWithReceipts(windows []kitty.OSWindow, reducerReceipts map[int]uint64, capturedAt time.Time) {
 	// Publish the new generation and its mute cache in one state critical
 	// section. Probe apply paths hold the same lock while checking gen, so an
 	// older observation cannot pass its generation check and then overwrite a
 	// mute from a snapshot published in between the check and mutation.
 	h.stateMu.Lock()
 	h.refreshMutedFromSnapshotLocked(windows)
-	h.snapshots.PublishWithReceipts(windows, reducerReceipts, now)
+	h.snapshots.PublishWithReceipts(windows, reducerReceipts, capturedAt)
 	h.stateMu.Unlock()
 }
 
@@ -59,6 +98,13 @@ func (h *Handler) cachedSnapshot() (windows []kitty.OSWindow, gen uint64, ready 
 	return h.snapshots.Load()
 }
 
+// cachedSnapshotView returns the last published snapshot together with the
+// generation, capture time, and readiness that describe it, read as one value
+// so a consumer cannot pair facts from two different publications.
+func (h *Handler) cachedSnapshotView() probes.SnapshotView {
+	return h.snapshots.View()
+}
+
 // cachedScreenProbeSnapshot returns the last published external evidence and
 // its causally earlier reducer receipts without any Kitty I/O.
 func (h *Handler) cachedScreenProbeSnapshot() (probes.Snapshot, bool) {
@@ -66,22 +112,21 @@ func (h *Handler) cachedScreenProbeSnapshot() (probes.Snapshot, bool) {
 }
 
 // primeSnapshot performs one best-effort ListWindows through the injected client
-// and publishes the result. It is used at client injection time (and by tests)
-// so the hook path has an immediate cache to route against; a list error leaves
-// the cache cold and the maintenance loop reconciles on its next tick. It never
-// returns an error because a cold cache is a supported degraded state, not a
-// failure.
-func (h *Handler) primeSnapshot(now time.Time) {
+// and publishes the result under its completion time. It is used at client
+// injection time (and by tests) so the hook path has an immediate cache to route
+// against; a list error leaves the cache cold and the maintenance loop
+// reconciles on its next tick. It never returns an error because a cold cache is
+// a supported degraded state, not a failure.
+func (h *Handler) primeSnapshot() {
 	client := h.kittyClientForList()
 	if client == nil {
 		return
 	}
-	reducerReceipts := h.captureSnapshotReducerReceipts()
-	windows, err := client.ListWindows()
+	capture, err := h.captureKittySnapshot(client)
 	if err != nil {
 		return
 	}
-	h.publishSnapshotWithReceipts(windows, reducerReceipts, now)
+	h.publishCapture(capture)
 }
 
 // The binding value and its snapshot-independent validity rules live in

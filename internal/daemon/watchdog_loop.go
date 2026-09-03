@@ -78,12 +78,14 @@ func (h *Handler) refreshAfterGap(now time.Time) {
 	if client == nil {
 		return
 	}
-	reducerReceipts := h.captureSnapshotReducerReceipts()
-	windows, err := client.ListWindows()
+	capture, err := h.captureKittySnapshot(client)
 	if err != nil {
 		slog.Debug("watchdog: post-gap kitty refresh failed", "err", err)
 		return
 	}
-	h.publishSnapshotWithReceipts(windows, reducerReceipts, now)
-	h.ReconcileASLLeases(now, windows)
+	// The snapshot is dated by the refresh that produced it; the lease
+	// reconciliation keeps the tick time, since expiry is judged against the
+	// idleness this tick is crediting.
+	h.publishCapture(capture)
+	h.ReconcileASLLeases(now, capture.windows)
 }

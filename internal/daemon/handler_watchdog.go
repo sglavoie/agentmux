@@ -24,7 +24,7 @@ func (h *Handler) SetKittyClient(client kittyTitleClient) {
 	// list is synchronous, so production startup uses useKittyClient + the
 	// bounded restore instead, and only tests and simple callers rely on the
 	// prime here.
-	h.primeSnapshot(time.Now())
+	h.primeSnapshot()
 }
 
 // useKittyClient installs the Kitty client without priming the snapshot cache.

@@ -93,16 +93,19 @@ func (h *Handler) drainRenderQueue() {
 	if client == nil {
 		return
 	}
-	reducerReceipts := h.captureSnapshotReducerReceipts()
-	windows, err := client.ListWindows()
+	capture, err := h.captureKittySnapshot(client)
 	if err != nil {
+		// Returning before Acquire is what preserves the pending work: nothing
+		// leaves the queue, and the next maintenance flush re-signals the wake
+		// so this drain retries within a tick. The last successful snapshot,
+		// its generation, and its capture time are equally untouched.
 		slog.Debug("render worker: list windows failed", "err", err)
 		return
 	}
 	// Freshen the shared snapshot too: the hook path routes against it, and a
 	// render-demand list is strictly newer than the last maintenance tick.
-	h.publishSnapshotWithReceipts(windows, reducerReceipts, time.Now())
-	h.drainRenderQueueWith(windows)
+	h.publishCapture(capture)
+	h.drainRenderQueueWith(capture.windows)
 }
 
 // drainRenderQueueWith renders every queued window against the given snapshot.
