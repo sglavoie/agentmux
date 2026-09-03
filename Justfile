@@ -318,9 +318,11 @@ paired-release-gate asl_root signing_key="" tag="no":
 # Product acceptance without the optional linter dependency.
 acceptance: test race-core vet tui-scenarios
 
-# Run linter
+# Run linter.
+# golangci-lint's default lock is machine-wide, not repository-scoped, so a
+# linter running in an unrelated checkout would otherwise fail this gate.
 lint:
-    golangci-lint run
+    golangci-lint run --allow-parallel-runners
 
 # Run the full repository gate.
 check: acceptance lint
