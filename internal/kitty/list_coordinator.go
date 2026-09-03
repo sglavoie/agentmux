@@ -77,8 +77,16 @@ type ListTransition struct {
 
 // ListObserver receives list-health transitions. It is invoked outside every
 // coordinator lock, so an observer may call back into the client without
-// deadlocking, and a slow observer delays only the caller that ran the
-// underlying attempt.
+// deadlocking.
+//
+// Per socket, callbacks arrive in the order the transitions they report were
+// recorded. That is not free: a socket becomes available for the next attempt
+// the moment the previous one settles, so an attempt that recovers can overtake
+// a slow observer still reporting the failure it recovered from. The
+// coordinator therefore delivers a socket's transitions through a single
+// caller at a time, which means a slow observer can delay a later caller on the
+// same socket, and a caller can find itself delivering a transition another
+// attempt recorded. Different socket keys never wait on each other.
 type ListObserver func(ListTransition)
 
 // listDecodeError marks a `kitten @ ls` invocation that ran successfully but
@@ -126,6 +134,22 @@ type listEntry struct {
 	// idleAt is the coordinator sequence number at which this entry last
 	// became idle. It orders eviction without needing a wall clock.
 	idleAt uint64
+	// queued holds the transitions recorded for this socket that no observer
+	// has been told about yet, oldest first, and delivering says whether some
+	// caller is currently working through them. Together they are what makes
+	// observer delivery per-socket serial and ordered even though the socket is
+	// released for the next attempt as soon as the previous one settles.
+	queued     []pendingTransition
+	delivering bool
+}
+
+// pendingTransition is one recorded transition waiting to be reported, bound to
+// the observer that was installed when it was recorded. Binding it here rather
+// than reading the observer at delivery time keeps a transition from being
+// reported to an observer that replaced the one in force when it happened.
+type pendingTransition struct {
+	transition ListTransition
+	observer   ListObserver
 }
 
 // listCall is one underlying execution. Its result fields are written by the
@@ -234,11 +258,11 @@ func (co *listCoordinator) capture(
 
 	call.windows, call.err = windows, err
 	call.provenance, call.completedAt = provenance, finished
-	transition, observer := co.settle(entry, started, finished, err)
+	queued := co.settle(entry, started, finished, err)
 	close(call.done)
 
-	if observer != nil && transition != nil {
-		observer(*transition)
+	if queued {
+		co.deliver(entry)
 	}
 	return ListCapture{
 		Windows:     cloneOSWindows(windows),
@@ -248,9 +272,16 @@ func (co *listCoordinator) capture(
 	}, err
 }
 
-// settle records one underlying attempt and reports the transition, if any,
-// that the caller must emit after releasing the lock.
-func (co *listCoordinator) settle(entry *listEntry, started, finished time.Time, err error) (*ListTransition, ListObserver) {
+// settle records one underlying attempt and queues the transition, if any, that
+// it produced. It reports whether anything was queued, which is the caller's
+// cue to run the delivery loop once it has released the lock.
+//
+// Queueing under the same lock that recorded the transition is what fixes the
+// order: settle also frees the socket for the next attempt, so the recovery
+// that follows a failure can settle while the failure is still being reported.
+// Enqueueing in state-transition order and delivering serially per socket is
+// what keeps a durable consumer's chronology matching the coordinator's.
+func (co *listCoordinator) settle(entry *listEntry, started, finished time.Time, err error) bool {
 	// A clock that went backwards must not produce a negative latency or a
 	// MaxLatency that can never be beaten again.
 	latency := finished.Sub(started)
@@ -287,31 +318,71 @@ func (co *listCoordinator) settle(entry *listEntry, started, finished time.Time,
 		kind = ListTransitionRecovered
 	}
 
+	// A nil observer queues nothing at all, so a daemon with its journal
+	// disabled pays no delivery cost on the list path.
+	queued := kind != "" && co.observer != nil
+	if queued {
+		entry.queued = append(entry.queued, pendingTransition{
+			transition: ListTransition{Kind: kind, Status: entry.status, Err: err},
+			observer:   co.observer,
+		})
+	}
+
 	co.idleSeq++
 	entry.idleAt = co.idleSeq
 	co.evictIdleLocked()
 
-	if kind == "" {
-		return nil, nil
+	return queued
+}
+
+// deliver reports this socket's queued transitions, oldest first, with no
+// coordinator lock held.
+//
+// Exactly one caller per socket runs the loop: a caller that finds delivery
+// already under way returns immediately and leaves its transition to the caller
+// already in the loop. That is what makes delivery ordered without blocking an
+// attempt behind another attempt's observer, and it is also what keeps an
+// observer that reads or lists through the client from deadlocking on itself —
+// a transition its own call produces is queued and delivered by the loop it is
+// already inside, after it returns.
+func (co *listCoordinator) deliver(entry *listEntry) {
+	co.mu.Lock()
+	defer co.mu.Unlock()
+	if entry.delivering {
+		return
 	}
-	return &ListTransition{Kind: kind, Status: entry.status, Err: err}, co.observer
+	entry.delivering = true
+	for len(entry.queued) > 0 {
+		pending := entry.queued[0]
+		entry.queued = entry.queued[1:]
+		co.mu.Unlock()
+		pending.observer(pending.transition)
+		co.mu.Lock()
+	}
+	entry.delivering = false
+	// The entry was held back from eviction while it owed a delivery; now that
+	// it owes none, it is an ordinary idle key again.
+	co.evictIdleLocked()
 }
 
 // evictIdleLocked trims the retained key space to maxRetainedListSockets idle
-// entries, oldest idle first. In-flight entries are neither counted nor
-// evicted: dropping one would orphan the accounting of a read that is still
-// running.
+// entries, oldest idle first. An entry that owns a running read, or that still
+// owes an observer a transition, is neither counted nor evicted: dropping the
+// first would orphan the accounting of a read still running, and dropping the
+// second would let the next read of that socket build its ordering state on a
+// fresh entry while the old one's transitions were still undelivered — which is
+// the out-of-order delivery this ordering exists to prevent.
 func (co *listCoordinator) evictIdleLocked() {
 	idle := 0
 	for _, e := range co.entries {
-		if e.call == nil {
+		if e.idleLocked() {
 			idle++
 		}
 	}
 	for idle > maxRetainedListSockets {
 		oldestKey, oldest := "", (*listEntry)(nil)
 		for key, e := range co.entries {
-			if e.call != nil {
+			if !e.idleLocked() {
 				continue
 			}
 			if oldest == nil || e.idleAt < oldest.idleAt {
@@ -324,6 +395,12 @@ func (co *listCoordinator) evictIdleLocked() {
 		delete(co.entries, oldestKey)
 		idle--
 	}
+}
+
+// idleLocked reports whether this entry is doing nothing the coordinator still
+// has to account for. It must be called with co.mu held.
+func (e *listEntry) idleLocked() bool {
+	return e.call == nil && !e.delivering && len(e.queued) == 0
 }
 
 func (co *listCoordinator) setObserver(observer ListObserver) {

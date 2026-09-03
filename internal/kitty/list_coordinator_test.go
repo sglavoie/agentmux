@@ -451,6 +451,98 @@ func TestListCoordinator_ReportsOnlyEdgeTransitions(t *testing.T) {
 	}
 }
 
+// TestListCoordinator_ObserverTransitionsRemainOrderedAcrossConcurrentAttempts
+// pins the chronology a durable consumer depends on. Settling a failure frees
+// the socket before that failure has been reported, so a recovery can run to
+// completion while the failure report is still in progress. The recovery must
+// still be announced second: a journal that records the recovery first says the
+// socket healed before it broke.
+func TestListCoordinator_ObserverTransitionsRemainOrderedAcrossConcurrentAttempts(t *testing.T) {
+	var mode struct {
+		mu   sync.Mutex
+		fail bool
+	}
+	setFail := func(v bool) {
+		mode.mu.Lock()
+		defer mode.mu.Unlock()
+		mode.fail = v
+	}
+	runner := &scriptedRunner{run: func(string) ([]byte, []byte, error) {
+		mode.mu.Lock()
+		defer mode.mu.Unlock()
+		if mode.fail {
+			return nil, nil, errors.New("kitten unavailable")
+		}
+		return []byte(listPayload), nil, nil
+	}}
+
+	client := NewClientWithSocket(runner, "sock-order")
+
+	var (
+		mu   sync.Mutex
+		seen []ListTransitionKind
+	)
+	reportingFailure := make(chan struct{})
+	releaseFailure := make(chan struct{})
+	client.SetListObserver(func(tr ListTransition) {
+		if tr.Kind == ListTransitionFailed {
+			// Hold the failure report open before recording it. Recording on
+			// entry would let an implementation that reports out of order still
+			// produce the right slice.
+			close(reportingFailure)
+			<-releaseFailure
+		}
+		// Reading status from inside the observer proves the transition is
+		// emitted with no coordinator lock held, delivery loop included.
+		if _, ok := client.ListStatus(); !ok {
+			t.Error("observer could not read status")
+		}
+		mu.Lock()
+		seen = append(seen, tr.Kind)
+		mu.Unlock()
+	})
+
+	setFail(true)
+	failing := make(chan struct{})
+	go func() {
+		defer close(failing)
+		if _, err := client.ListWindows(); err == nil {
+			t.Error("first read: expected an error")
+		}
+	}()
+	<-reportingFailure
+
+	// The failure has settled, so the socket is free and this read is a real
+	// second attempt overlapping the first attempt's report.
+	setFail(false)
+	if _, err := client.ListWindows(); err != nil {
+		t.Fatalf("recovery read: %v", err)
+	}
+	if status, _ := client.ListStatus(); status.ConsecutiveFailures != 0 {
+		t.Fatalf("recovery must have settled before its report: %+v", status)
+	}
+
+	// Releasing the failure report is what lets either ordering become visible;
+	// the failing caller returns only once every transition owed to this socket
+	// has been reported.
+	close(releaseFailure)
+	<-failing
+
+	mu.Lock()
+	got := append([]ListTransitionKind(nil), seen...)
+	mu.Unlock()
+
+	want := []ListTransitionKind{ListTransitionFailed, ListTransitionRecovered}
+	if len(got) != len(want) {
+		t.Fatalf("transitions: got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("transition order: got %v, want %v (a recovery may never be reported before the failure it ended)", got, want)
+		}
+	}
+}
+
 func TestListCoordinator_EvictsOldestIdleSockets(t *testing.T) {
 	runner := okRunner(listPayload)
 	base := NewClientWithSocket(runner, "")
