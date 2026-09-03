@@ -28,14 +28,14 @@ import (
 // obsolete one.
 //
 // The window tree is taken from the daemon's cached snapshot whenever the
-// optional block is present, ready, and describes this dashboard's own Kitty
-// instance — including when the daemon has already marked it stale, because a
-// stale tree still describes the session list far better than no list at all.
-// Direct Kitty I/O happens only when the daemon cannot supply one: the IPC call
-// failed or was rejected, the daemon is new but has never completed a
-// successful list (a cold block), the daemon predates the block entirely and
-// omits it, or the snapshot belongs to a different Kitty instance than this
-// dashboard's.
+// optional block is present, ready, and positively attributed to this
+// dashboard's own Kitty instance — including when the daemon has already marked
+// it stale, because a stale tree still describes the session list far better
+// than no list at all. Direct Kitty I/O happens only when the daemon cannot
+// supply one: the IPC call failed or was rejected, the daemon is new but has
+// never completed a successful list (a cold block), the daemon predates the
+// block entirely and omits it, or the snapshot is not provably this dashboard's
+// — either side unidentified, or the two identities known to differ.
 //
 // Per-window daemon state is applied to whichever topology won. A daemon that
 // answered but had no usable snapshot still owns the icon, loop, and busy
@@ -130,8 +130,8 @@ func refreshTopology(client kitty.KittyClient) ([]kitty.OSWindow, TopologyFreshn
 	return osWindows, TopologyFreshness{Source: TopologyFromDirect, CapturedAt: time.Now()}, state, nil
 }
 
-// snapshotDescribesLocalKitty reports whether a ready daemon snapshot describes
-// the Kitty instance this dashboard is running inside.
+// snapshotDescribesLocalKitty reports whether a ready daemon snapshot is
+// positively attributed to the Kitty instance this dashboard is running inside.
 //
 // Kitty window IDs are unique only within one instance, so a tree from another
 // instance is not merely out of date — it is a different world whose IDs happen
@@ -143,17 +143,19 @@ func refreshTopology(client kitty.KittyClient) ([]kitty.OSWindow, TopologyFreshn
 // one's per-window state; the socket recorded on the block is what makes the two
 // distinguishable.
 //
-// Only a KNOWN disagreement rejects. An empty socket on either side is an
-// absence of identity, not evidence of a different instance: the daemon may
-// predate the field or be reading through no reusable endpoint, and the
-// dashboard may be running outside Kitty or behind an address that does not
-// normalize. Treating those as mismatches would send every such dashboard down
-// the direct-listing path forever, trading a real regression for a hypothetical
-// one — and a dashboard with no Kitty identity of its own has nothing better to
-// compare against anyway.
+// Agreement therefore has to be proven, not assumed: both identities must be
+// present and equal. An empty socket on either side is an ABSENCE of provenance,
+// never evidence of a match — an old daemon omits the field, a daemon reading
+// through no reusable endpoint has nothing to report, and a dashboard outside
+// Kitty or behind an unnormalizable address cannot name its own instance. Each
+// of those is a tree that might belong to any instance at all, which is exactly
+// the hazard this gate exists to stop. The cost of demanding proof is bounded
+// and visible — such a dashboard runs its own `kitten @ ls` per refresh, the
+// documented fallback — while the cost of assuming it is a foreign tree
+// rendered as ours and written back into our windows.
 func snapshotDescribesLocalKitty(snapshot *protocol.KittySnapshot) bool {
 	local := LocalKittySocket()
-	return local == "" || snapshot.Socket == "" || snapshot.Socket == local
+	return local != "" && snapshot.Socket == local
 }
 
 // daemonTopologyFreshness projects the wire block onto the freshness the model

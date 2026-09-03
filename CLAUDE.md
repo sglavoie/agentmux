@@ -389,10 +389,12 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   seams root tests swap (`Registry`, `DaemonRequest`, `StateQuery`,
   `SpawnDaemonDetached`, `CopyToClipboard`, `ActiveLoopDiscover`). Its live
   topology is daemon-first: a refresh takes the window tree from the daemon's
-  published snapshot whenever that snapshot is present and ready — including
-  when the daemon has marked it stale — and lists Kitty itself only when the
-  daemon is unreachable, rejects the query, has never completed a list, or
-  predates the snapshot block. A stale tree is still rendered but drives no
+  published snapshot whenever that snapshot is present, ready, and attributed to
+  the same Kitty instance the dashboard runs inside — including when the daemon
+  has marked it stale — and lists Kitty itself only when the daemon is
+  unreachable, rejects the query, has never completed a list, predates the
+  snapshot block, or supplies a tree whose instance identity is missing on
+  either side or known to differ. A stale tree is still rendered but drives no
   Kitty write, because the window IDs in it may already be gone.
 - `tui/customization`: the standalone color, icon, and keybinding overlays, each
   its own Bubble Tea program. It is a sibling of the root rather than one of its

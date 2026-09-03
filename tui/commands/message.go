@@ -52,8 +52,9 @@ const (
 	TopologyFromDaemon TopologySource = "daemon"
 	// TopologyFromDirect means the refresh listed Kitty itself because the
 	// daemon was unreachable, rejected the query, had never published a
-	// snapshot, predates the snapshot block, or published one belonging to a
-	// different Kitty instance than this dashboard's.
+	// snapshot, predates the snapshot block, or published one that is not
+	// provably this dashboard's own Kitty instance — unattributed on either
+	// side, or attributed to a different instance.
 	TopologyFromDirect TopologySource = "direct"
 )
 
