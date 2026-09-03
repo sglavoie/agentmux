@@ -615,11 +615,11 @@ type modelBackgroundCommands struct {
 	// can tell its own completion from an obsolete one.
 	topologyRefresh func(Model, int, int) tea.Cmd
 	activeLoops     func(int) tea.Cmd
-	health         func(Model, bool, bool) tea.Cmd
-	detail         func(int) tea.Cmd
-	worktrees      func(Model, int) tea.Cmd
-	worktreeAction func(Model, actions.ID, actions.Request) tea.Cmd
-	aslSnapshot    func(Model, int) tea.Cmd
+	health          func(Model, bool, bool) tea.Cmd
+	detail          func(int) tea.Cmd
+	worktrees       func(Model, int) tea.Cmd
+	worktreeAction  func(Model, actions.ID, actions.Request) tea.Cmd
+	aslSnapshot     func(Model, int) tea.Cmd
 	// aslWorkbench takes the row, plan directory, and focus rather than a link,
 	// because the tokenized URL is minted and consumed inside the command.
 	aslWorkbench func(Model, string, string, string) tea.Cmd

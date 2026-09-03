@@ -56,10 +56,12 @@ func (c *recordingKittyClient) userVarWrites() int {
 	return len(c.userVars)
 }
 
-func (c *recordingKittyClient) LaunchTab(kitty.LaunchOpts) error     { panic("unexpected LaunchTab") }
-func (c *recordingKittyClient) LaunchOverlay(kitty.LaunchOpts) error { panic("unexpected LaunchOverlay") }
-func (c *recordingKittyClient) CloseTab(string) error                { panic("unexpected CloseTab") }
-func (c *recordingKittyClient) MoveTab(string, int) error            { panic("unexpected MoveTab") }
+func (c *recordingKittyClient) LaunchTab(kitty.LaunchOpts) error { panic("unexpected LaunchTab") }
+func (c *recordingKittyClient) LaunchOverlay(kitty.LaunchOpts) error {
+	panic("unexpected LaunchOverlay")
+}
+func (c *recordingKittyClient) CloseTab(string) error     { panic("unexpected CloseTab") }
+func (c *recordingKittyClient) MoveTab(string, int) error { panic("unexpected MoveTab") }
 func (c *recordingKittyClient) SetTabColor(string, string, string, string, string) error {
 	panic("unexpected SetTabColor")
 }
