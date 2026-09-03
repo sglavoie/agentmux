@@ -234,16 +234,8 @@ func TestRefreshCmdRemovesClosedSessionInsteadOfReanchoringDashboardOverlay(t *t
 }
 
 func TestRefreshCmdUsesDaemonBulkStateOverTitleParsing(t *testing.T) {
-	stubStateQuery(t, func() (protocol.Response, error) {
-		return protocol.Response{
-			OK: true,
-			States: map[int]protocol.WindowStateSnapshot{
-				42: {IconState: "key", Looping: true, LastAction: "permission", LastEventAt: 123, GuardAction: "permission"},
-			},
-		}, nil
-	})
-
-	client := newUITestKittyClient([]kitty.OSWindow{{
+	const socket = "unix:/tmp/kitty-1234"
+	tree := []kitty.OSWindow{{
 		Tabs: []kitty.Tab{{
 			ID:    7,
 			Title: palette.BuildTitleParts(palette.TitleParts{Base: "api", State: "stop"}),
@@ -253,7 +245,22 @@ func TestRefreshCmdUsesDaemonBulkStateOverTitleParsing(t *testing.T) {
 				UserVars: kitty.UserVars{Profile: "work", Harness: "claude", AMXDirectory: "/work/api", LaunchID: "api-launch"},
 			}},
 		}},
-	}})
+	}}
+	// The daemon's state is keyed by a window ID that means nothing outside the
+	// instance it came from, so the refresh consumes it only from a daemon that
+	// proved it watches this dashboard's own Kitty.
+	stubStateQuery(t, func() (protocol.Response, error) {
+		return protocol.Response{
+			OK: true,
+			States: map[int]protocol.WindowStateSnapshot{
+				42: {IconState: "key", Looping: true, LastAction: "permission", LastEventAt: 123, GuardAction: "permission"},
+			},
+			KittySnapshot: &protocol.KittySnapshot{Ready: true, Socket: socket, Windows: tree},
+		}, nil
+	})
+	stubLocalKittySocket(t, socket)
+
+	client := newUITestKittyClient(tree)
 
 	msg, ok := commands.Refresh(client, &config.Config{Defaults: config.Defaults{Sort: "alpha"}}, "alpha", 1, 0)().(commands.SessionsMsg)
 	if !ok {

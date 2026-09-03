@@ -23,6 +23,19 @@ func stubStateQuery(t *testing.T, query func() (protocol.Response, error)) {
 	t.Cleanup(func() { commands.StateQuery = previous })
 }
 
+// stubLocalKittySocket pins the Kitty instance the refresh believes it is
+// running inside, so a test that expects the daemon's answer to be consumed
+// does not depend on whether `go test` was launched from inside Kitty. The
+// refresh takes nothing from a daemon it cannot prove shares its instance —
+// neither the window tree nor the per-window state keyed by that instance's
+// window IDs.
+func stubLocalKittySocket(t *testing.T, socket string) {
+	t.Helper()
+	previous := commands.LocalKittySocket
+	commands.LocalKittySocket = func() string { return socket }
+	t.Cleanup(func() { commands.LocalKittySocket = previous })
+}
+
 // stubUnreachableDaemon is the common case: no daemon at all, so the refresh
 // must fall back to listing Kitty directly.
 func stubUnreachableDaemon(t *testing.T) {

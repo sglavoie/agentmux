@@ -394,8 +394,13 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   has marked it stale — and lists Kitty itself only when the daemon is
   unreachable, rejects the query, has never completed a list, predates the
   snapshot block, or supplies a tree whose instance identity is missing on
-  either side or known to differ. A stale tree is still rendered but drives no
-  Kitty write, because the window IDs in it may already be gone.
+  either side or known to differ. That same instance proof gates the daemon's
+  per-window state, activity, and watchdog maps, which are keyed by bare window
+  IDs that name a window only inside the instance they came from: a refresh that
+  cannot prove the instance renders the state and loop markers parsed from live
+  Kitty titles instead, exactly as it does with no daemon at all. A stale tree is
+  still rendered but drives no Kitty write, because the window IDs in it may
+  already be gone.
 - `tui/customization`: the standalone color, icon, and keybinding overlays, each
   its own Bubble Tea program. It is a sibling of the root rather than one of its
   leaves: `cmd` launches it directly and root `tui` does not import it.

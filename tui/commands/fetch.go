@@ -37,10 +37,12 @@ import (
 // block entirely and omits it, or the snapshot is not provably this dashboard's
 // — either side unidentified, or the two identities known to differ.
 //
-// Per-window daemon state is applied to whichever topology won. A daemon that
-// answered but had no usable snapshot still owns the icon, loop, and busy
-// state of the windows a direct listing found, so its maps are overlaid on the
-// fallback topology exactly as they would be on its own.
+// The daemon's per-window state travels with its tree rather than separately:
+// its icon, loop, busy, activity, and watchdog maps are consumed only when the
+// same instance attribution that admits the tree holds. Those maps are keyed by
+// bare Kitty window IDs, which name a window only inside the instance they were
+// read from, so a daemon that cannot prove its IDs are this dashboard's cannot
+// be allowed to describe this dashboard's rows either.
 //
 // sourceWindowID, when nonzero, is resolved to its containing Kitty tab so the
 // startup update can select that tab's managed row, including when the source
@@ -99,8 +101,10 @@ func Refresh(client kitty.KittyClient, cfg *config.Config, sortMode string, seq,
 }
 
 // daemonState is the per-window state one state query returned. All three maps
-// are nil when the daemon is unreachable or rejected the query, which tells the
-// refresh to retain the state and loop markers parsed from live Kitty titles.
+// are nil when the daemon is unreachable, rejected the query, or could not prove
+// that the window IDs keying them belong to this dashboard's Kitty instance,
+// which tells the refresh to retain the state and loop markers parsed from live
+// Kitty titles.
 type daemonState struct {
 	Activity map[int]time.Time
 	Watchdog map[int]protocol.WatchdogState
@@ -108,15 +112,19 @@ type daemonState struct {
 }
 
 // refreshTopology resolves the window tree for one refresh, preferring the
-// daemon's published snapshot and falling back to a direct listing. The daemon
-// state it collected is returned either way: a reachable daemon with an
-// unusable snapshot is still authoritative about per-window state.
+// daemon's published snapshot and falling back to a direct listing.
+//
+// The daemon's per-window state is collected only behind the same instance
+// proof that admits its tree, and is therefore returned empty on every fallback
+// a real daemon can produce. Readiness is the only thing the two decisions
+// disagree about: a daemon that has proven the instance but has no tree yet
+// still owns the state of the windows a direct listing finds, while a daemon
+// that has proven nothing owns neither.
 func refreshTopology(client kitty.KittyClient) ([]kitty.OSWindow, TopologyFreshness, daemonState, error) {
 	var state daemonState
-	if resp, err := StateQuery(); err == nil {
+	if resp, err := StateQuery(); err == nil && snapshotDescribesLocalKitty(resp.KittySnapshot) {
 		state = decodeDaemonState(resp)
-		if snapshot := resp.KittySnapshot; snapshot != nil && snapshot.Ready &&
-			snapshotDescribesLocalKitty(snapshot) {
+		if snapshot := resp.KittySnapshot; snapshot.Ready {
 			return snapshot.Windows, daemonTopologyFreshness(snapshot), state, nil
 		}
 	}
@@ -130,8 +138,10 @@ func refreshTopology(client kitty.KittyClient) ([]kitty.OSWindow, TopologyFreshn
 	return osWindows, TopologyFreshness{Source: TopologyFromDirect, CapturedAt: time.Now()}, state, nil
 }
 
-// snapshotDescribesLocalKitty reports whether a ready daemon snapshot is
-// positively attributed to the Kitty instance this dashboard is running inside.
+// snapshotDescribesLocalKitty reports whether a daemon snapshot is positively
+// attributed to the Kitty instance this dashboard is running inside. It is the
+// single gate on everything one state query can contribute: the window tree it
+// carries and the per-window state, activity, and watchdog maps beside it.
 //
 // Kitty window IDs are unique only within one instance, so a tree from another
 // instance is not merely out of date — it is a different world whose IDs happen
@@ -143,6 +153,16 @@ func refreshTopology(client kitty.KittyClient) ([]kitty.OSWindow, TopologyFreshn
 // one's per-window state; the socket recorded on the block is what makes the two
 // distinguishable.
 //
+// The maps are gated by the very same proof because they are keyed by nothing
+// but those window IDs, and the daemon's store spans every instance it has ever
+// been hooked from. Rejecting the tree while keeping them would let a foreign
+// window's icon, loop marker, busy anchor, and watchdog threshold land on the
+// local row that happens to share its number, and be forwarded onward in the
+// refresh message — the same cross-instance confusion the tree gate exists to
+// stop, arriving through the door beside it. A dashboard that cannot prove the
+// instance therefore falls back to the state and loop markers parsed from live
+// Kitty titles, which is what it already does when no daemon answers at all.
+//
 // Agreement therefore has to be proven, not assumed: both identities must be
 // present and equal. An empty socket on either side is an ABSENCE of provenance,
 // never evidence of a match — an old daemon omits the field, a daemon reading
@@ -153,7 +173,14 @@ func refreshTopology(client kitty.KittyClient) ([]kitty.OSWindow, TopologyFreshn
 // and visible — such a dashboard runs its own `kitten @ ls` per refresh, the
 // documented fallback — while the cost of assuming it is a foreign tree
 // rendered as ours and written back into our windows.
+//
+// A nil block is one more shape of the same absence — a daemon too old to carry
+// the field says nothing about which Kitty it watches — so it is refused here
+// rather than at each call site.
 func snapshotDescribesLocalKitty(snapshot *protocol.KittySnapshot) bool {
+	if snapshot == nil {
+		return false
+	}
 	local := LocalKittySocket()
 	return local != "" && snapshot.Socket == local
 }

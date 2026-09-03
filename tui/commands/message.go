@@ -77,8 +77,10 @@ type TopologyFreshness struct {
 }
 
 // SessionsMsg carries a fresh session list plus the daemon's per-window
-// last-activity timestamps and watchdog snapshot (nil if the daemon is
-// unreachable).
+// last-activity timestamps, watchdog snapshot, and window states. All three are
+// nil unless the daemon proved that the window IDs keying them belong to this
+// dashboard's own Kitty instance: unreachable, refusing, or unattributable, it
+// contributes nothing, and the rows carry only what live Kitty titles said.
 //
 // Seq is the refresh sequence the model's controller handed the command that
 // produced this message. A completion whose Seq is not the one currently

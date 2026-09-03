@@ -153,6 +153,8 @@ func TestRefreshPrefersDaemonSnapshotOverListingKitty(t *testing.T) {
 	stubStateQuery(t, func() (protocol.Response, error) {
 		return protocol.Response{
 			OK:            true,
+			Activity:      map[int]int64{42: 1_700_000_500},
+			Watchdog:      map[int]protocol.WatchdogState{42: {LastAction: "active", ThresholdSec: 600}},
 			States:        map[int]protocol.WindowStateSnapshot{42: {IconState: "key", Looping: true}},
 			KittySnapshot: readySnapshot(daemonTree, false),
 		}, nil
@@ -177,6 +179,14 @@ func TestRefreshPrefersDaemonSnapshotOverListingKitty(t *testing.T) {
 	}
 	if got := msg.Sessions[0]; got.State != "key" || !got.Looping {
 		t.Fatalf("session state = %+v, want the daemon's key + looping", got)
+	}
+	// The maps travel with the tree they were proven alongside: a refusal that
+	// dropped them here would be indistinguishable from one that never had them.
+	if !msg.Activity[42].Equal(time.Unix(1_700_000_500, 0)) {
+		t.Fatalf("activity = %v, want the daemon's timestamp", msg.Activity[42])
+	}
+	if msg.Watchdog[42].LastAction != "active" || msg.States[42].IconState != "key" {
+		t.Fatalf("daemon maps did not reach an attributed message: %+v / %+v", msg.Watchdog, msg.States)
 	}
 	if msg.Topology.Source != TopologyFromDaemon || msg.Topology.Stale {
 		t.Fatalf("topology = %+v, want a fresh daemon source", msg.Topology)
@@ -588,33 +598,124 @@ func TestRefreshAcceptsDaemonSnapshotFromTheSameKittySocket(t *testing.T) {
 	}
 }
 
-// TestRefreshAppliesDaemonStateToADirectFallbackTopology covers the case the
-// two halves of the fallback rule meet in: the daemon answered, so it is still
-// authoritative about per-window state, but it had no usable window tree.
-func TestRefreshAppliesDaemonStateToADirectFallbackTopology(t *testing.T) {
+// assertNoDaemonMetadata fails unless one refresh contributed nothing of the
+// daemon's per-window bookkeeping: not to the row it would have described, and
+// not to the message that carries the maps onward to the detail and activity
+// surfaces. Both halves matter — a row is what the operator sees, and the
+// forwarded maps are what everything downstream of this refresh reads.
+func assertNoDaemonMetadata(t *testing.T, msg SessionsMsg, windowID int) {
+	t.Helper()
+	if len(msg.Sessions) != 1 || msg.Sessions[0].WindowID != windowID {
+		t.Fatalf("sessions = %+v, want this Kitty's own window %d", msg.Sessions, windowID)
+	}
+	if got := msg.Sessions[0]; got.State != "" || got.Looping || !got.BusySince.IsZero() {
+		t.Fatalf("row = %+v, want no icon state, no loop marker, and no busy anchor", got)
+	}
+	if msg.States != nil || msg.Watchdog != nil || msg.Activity != nil {
+		t.Fatalf("forwarded daemon maps = %+v / %+v / %+v, want all three dropped",
+			msg.States, msg.Watchdog, msg.Activity)
+	}
+}
+
+// TestRefreshDoesNotApplyForeignDaemonStateToDirectTopology is the collision
+// itself. The daemon is watching another Kitty instance and answers with state
+// for ITS window 99, while this dashboard's own direct listing also has a window
+// 99 — a number, not a name, and the two windows share nothing else. Rejecting
+// the foreign tree while keeping the maps beside it would paint that other
+// instance's icon, loop marker, and busy anchor onto a local row and forward its
+// watchdog entry to every surface reading the refresh, so the maps are refused
+// by the same proof the tree is.
+func TestRefreshDoesNotApplyForeignDaemonStateToDirectTopology(t *testing.T) {
 	stubStateQuery(t, func() (protocol.Response, error) {
 		return protocol.Response{
-			OK:            true,
-			Activity:      map[int]int64{99: 1_700_000_500},
-			Watchdog:      map[int]protocol.WatchdogState{99: {LastAction: "active", ThresholdSec: 600}},
-			States:        map[int]protocol.WindowStateSnapshot{99: {IconState: "key", Looping: true}},
-			KittySnapshot: &protocol.KittySnapshot{Ready: false},
+			OK:       true,
+			Activity: map[int]int64{99: 1_700_000_500},
+			Watchdog: map[int]protocol.WatchdogState{99: {LastAction: "active", ThresholdSec: 600}},
+			States: map[int]protocol.WindowStateSnapshot{99: {
+				IconState:   "key",
+				Looping:     true,
+				BusySinceAt: 1_700_000_000,
+			}},
+			// The foreign tree numbers its own window 99 too, which is exactly
+			// why a bare window ID cannot carry state across instances.
+			KittySnapshot: snapshotFrom(foreignKittySocket, managedWindows(3, 99, "someone-elses-api")),
 		}, nil
 	})
+	stubLocalKittySocket(t, localKittySocket)
 	client := &recordingKittyClient{windows: managedWindows(9, 99, "api")}
 
-	msg := refreshOnce(t, client, 1, 0).(SessionsMsg)
+	msg, ok := refreshOnce(t, client, 1, 0).(SessionsMsg)
+	if !ok {
+		t.Fatalf("refresh produced %T, want SessionsMsg", msg)
+	}
 	if client.listCalls() != 1 {
-		t.Fatalf("direct Kitty listings = %d, want exactly 1", client.listCalls())
+		t.Fatalf("direct Kitty listings = %d, want exactly 1 for a foreign snapshot", client.listCalls())
 	}
-	if got := msg.Sessions[0]; got.State != "key" || !got.Looping {
-		t.Fatalf("fallback row state = %+v, want the daemon's key + looping", got)
+	if msg.Sessions[0].TabID != 9 {
+		t.Fatalf("sessions = %+v, want this Kitty's directly listed tab 9", msg.Sessions)
 	}
-	if !msg.Activity[99].Equal(time.Unix(1_700_000_500, 0)) {
-		t.Fatalf("activity = %v, want the daemon's timestamp", msg.Activity[99])
+	assertNoDaemonMetadata(t, msg, 99)
+}
+
+// TestRefreshDropsDaemonStateWhenTheInstanceIsUnproven extends the refusal from
+// a known mismatch to every shape of absent provenance, for the same reason the
+// tree gate does: an unattributed map is one whose window IDs might belong to
+// any Kitty at all, and a numeric collision with a local window is what makes
+// that dangerous rather than merely useless. Each case here is a daemon that
+// answered and had per-window state to offer, and none of it is applied.
+func TestRefreshDropsDaemonStateWhenTheInstanceIsUnproven(t *testing.T) {
+	cases := []struct {
+		name        string
+		snapshot    *protocol.KittySnapshot
+		localSocket string
+	}{
+		{
+			// An older daemon that predates the block says nothing about which
+			// Kitty its window IDs came from.
+			name:        "legacy daemon omits the block",
+			snapshot:    nil,
+			localSocket: localKittySocket,
+		},
+		{
+			// A new daemon that has not completed a successful list yet: its
+			// state is real, but nothing attributes it to an instance.
+			name:        "cold snapshot",
+			snapshot:    &protocol.KittySnapshot{Ready: false},
+			localSocket: localKittySocket,
+		},
+		{
+			name:        "dashboard cannot name its own instance",
+			snapshot:    snapshotFrom(localKittySocket, managedWindows(3, 99, "api")),
+			localSocket: "",
+		},
 	}
-	if msg.Watchdog[99].LastAction != "active" || msg.States[99].IconState != "key" {
-		t.Fatalf("daemon maps did not reach the fallback message: %+v / %+v", msg.Watchdog, msg.States)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stubStateQuery(t, func() (protocol.Response, error) {
+				return protocol.Response{
+					OK:       true,
+					Activity: map[int]int64{99: 1_700_000_500},
+					Watchdog: map[int]protocol.WatchdogState{99: {LastAction: "active", ThresholdSec: 600}},
+					States: map[int]protocol.WindowStateSnapshot{99: {
+						IconState:   "key",
+						Looping:     true,
+						BusySinceAt: 1_700_000_000,
+					}},
+					KittySnapshot: tc.snapshot,
+				}, nil
+			})
+			stubLocalKittySocket(t, tc.localSocket)
+			client := &recordingKittyClient{windows: managedWindows(9, 99, "api")}
+
+			msg, ok := refreshOnce(t, client, 1, 0).(SessionsMsg)
+			if !ok {
+				t.Fatalf("refresh produced %T, want SessionsMsg", msg)
+			}
+			if client.listCalls() != 1 {
+				t.Fatalf("direct Kitty listings = %d, want exactly 1", client.listCalls())
+			}
+			assertNoDaemonMetadata(t, msg, 99)
+		})
 	}
 }
 
