@@ -1,0 +1,108 @@
+# Default GitHub Copilot CLI screen patterns.
+#
+# ############################################################################
+# # PROVISIONAL. EVERY VALUE BELOW IS A GUESS AND NONE OF IT HAS BEEN SEEN   #
+# # IN A REAL CAPTURE. The clause NAMES are the contract with copilot.go and #
+# # are settled; the copy is a placeholder that exists so the set validates  #
+# # against copilotRequirements, so `PatternsFor("copilot")` answers, and so #
+# # there is one file to fill in rather than a file to invent. Replace it    #
+# # from `kitten @ get-text --extent=screen` captures of a live Copilot pane #
+# # and delete this banner; until then assume every clause matches nothing.  #
+# ############################################################################
+#
+# What that provisional status costs, precisely, is nothing — and that is by
+# construction rather than by luck. This set is not on any production path: no
+# screenIdleSpec names copilot, no probe in internal/daemon classifies a Copilot
+# screen, and copilotAdapter.Classify cannot report Terminal under any pattern
+# set at all (see the composition decision in copilot.go). A clause here that
+# matches the wrong thing therefore cannot settle a live pane and cannot strand
+# a stuck one; it can only make a test that has not been written yet fail. That
+# is the whole reason it was safe to ship the structure ahead of the copy.
+#
+# Only UI COPY lives here. Evaluation order, positional requirements and the
+# veto-first contract stay in Go (see copilot.go) — a pattern file must never be
+# able to imply when a clause is consulted.
+#
+# Clause names live in one namespace shared by [regex], [phrases] and [group],
+# so a [group] ref may name any of the three.
+#
+# Phrases match a lowercase fold of the screen and must therefore be written
+# lowercase; regexes match the capture as read.
+
+harness = "copilot"
+
+[regex]
+
+# composer_line matches a ready, EMPTY composer: the prompt indicator followed
+# by only horizontal whitespace, tolerating an input box's leading and trailing
+# vertical edges. Its absence is what raises VetoComposerBusy, so a composer
+# holding queued input must not match — which is why the line is anchored at
+# both ends rather than searched.
+#
+# PROVISIONAL: the indicator set (❯, ›, >) and the non-breaking space are
+# carried over from the Claude and Codex composers because a framed TUI composer
+# is a convention rather than a wording choice, and a shape borrowed from two
+# harnesses is a better first guess than one invented for a third. It is still a
+# guess: Copilot may frame its composer differently, or not frame it at all.
+composer_line = '(?m)^[\t \x{00a0}]*(?:[│┃][\t \x{00a0}]*)?[\x{276f}\x{203a}>][\t \x{00a0}]*(?:[│┃][\t \x{00a0}]*)?$'
+
+# choice_line matches a selected menu option in an open prompt
+# ("❯ 1. Yes"). It is half the blocking-prompt veto and the half that survives a
+# reworded prompt, exactly as in patterns_claude.toml. The selection indicator is
+# required so a plain transcript numbered list cannot read as an open prompt.
+#
+# PROVISIONAL: same borrowed indicator set, same caveat.
+choice_line = '(?m)^\s*(?:[│┃]\s*)?[\x{276f}\x{203a}]\s*\d+\.\s'
+
+# working_status_line is the live-turn discriminator and the sole source of
+# VetoLiveStatusLine.
+#
+# The shape rather than the wording is pinned, for the reason
+# patterns_claude.toml's twin records: an ellipsis plus a parenthesized LIVE
+# elapsed timer on one line is a UI convention, while the gerund in front of it
+# is a word the harness is free to change between releases. The leading glyph is
+# deliberately not matched — [^\p{L}\p{N}]* skips whatever spinner decoration is
+# present and cannot skip past a letter or digit, so the match still anchors on
+# the line's first word.
+#
+# PROVISIONAL: Copilot is ASSUMED to render a spinner-plus-elapsed status line.
+# If it does not, this clause is not merely mis-tuned but wrong in kind, and the
+# capture that shows so is the one that decides what replaces it.
+working_status_line = '^[^\p{L}\p{N}]*\p{L}[\p{L}\p{M}]*\x{2026}\s*\(\s*\d+[hms]\b'
+
+[phrases]
+
+# interrupt_hint is the sole source of VetoInterruptHint: the "<key> to
+# interrupt/cancel" affordance a harness renders while a turn is in flight. Its
+# ABSENCE proves nothing — Claude Code 2.1.x stopped rendering its own, which is
+# the bug this whole package exists to close — so it is a one-way veto and never
+# positive terminal evidence.
+#
+# PROVISIONAL: both spellings below are the ones Claude and Codex use. Copilot's
+# actual key and wording are unknown.
+interrupt_hint = [
+    "esc to interrupt",
+    "ctrl+c to cancel",
+]
+
+# blocking_prompt is a permission, elicitation, or other user-blocking choice
+# prompt waiting on the user. Together with choice_line it is the
+# VetoBlockingPrompt evidence, and it is the ONE clause here whose eventual copy
+# does real work in production: it is the evidence a Copilot pane is waiting on
+# a human that the session transcript structurally cannot carry, which is the
+# entire argument for a Copilot screen adapter (see copilot.go).
+#
+# It is a flat phrase list rather than the kind-split [group] patterns_claude.toml
+# grew, and deliberately so: the split exists to LABEL a fired veto with a
+# ClaudePromptKind, and inventing Copilot prompt kinds from copy nobody has read
+# would be guessing about the taxonomy on top of guessing about the words. A flat
+# list vetoes exactly as well; the kinds can be split out of it later without
+# changing the clause name copilot.go reads.
+#
+# PROVISIONAL: English-only and exhaustive by construction even once it is real,
+# which is exactly the limitation a user override exists to lift.
+blocking_prompt = [
+    "do you want to allow",
+    "do you want to proceed",
+    "allow this command",
+]

@@ -160,6 +160,27 @@ func (h *Handler) copilotTranscriptProbeBindings(now time.Time, snapshot probes.
 // idle path must never downgrade. The reducer's own precedence is the final
 // guard (a live ASL lease, subagent, or pipe-mode fact still wins at reduce time
 // even for a bolt tab), so this filter is an early-exit, not the safety boundary.
+//
+// THE COPILOT SCREEN ADAPTER DOES NOT BELONG HERE, and that is a decision rather
+// than an omission. internal/screenstate/copilot.go now registers a Copilot
+// adapter, and the composition it documents is that the screen may REFUSE a
+// transcript-driven settle — a visible permission prompt outranks a transcript
+// tail, because the prompt is not a transcript event and the tail can read
+// terminal while a human is being waited on. But this predicate is an ICON
+// filter, consulted by both the settle gate and the recovery gate, and screen
+// evidence is not an icon: folding a veto in here would make the same call mean
+// "may act on this tab" in one caller and "the screen agrees" in the other. The
+// refusal belongs beside the `evidence.State != CopilotLifecycleTerminal` test
+// in probeCopilotTranscriptWindow, where the probe is already deciding what the
+// evidence supports, and it needs the tick's activity.ScreenTextCache threaded
+// through probeCopilotTranscriptStopWithSnapshot to get there.
+//
+// It is not wired yet because patterns_copilot.toml is still provisional copy: a
+// blocking_prompt or composer_line clause that matches the wrong thing would
+// refuse EVERY Copilot settle and strand panes on a permanent ⚡, which is worse
+// than the stuck-bolt case the probe exists to fix. The wait is cheap because
+// copilotAdapter.Classify can never report Terminal, so wiring the screen in can
+// only ever remove settles, never add one.
 func copilotTranscriptStopProbeCanOverwrite(iconState string) bool {
 	return iconState == "bolt" || iconState == "stop"
 }

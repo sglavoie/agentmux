@@ -207,16 +207,26 @@ type Adapter interface {
 }
 
 // adapters is keyed by canonical lowercase harness name.
+//
+// Registration is not the same as being on a probe path. The Copilot adapter is
+// here because For() is the registry every caller asks, and an adapter that
+// exists but cannot be looked up is a worse fiction than one that does not
+// exist; no screenIdleSpec names copilot today, so nothing in internal/daemon
+// classifies a Copilot screen yet. copilot.go's composition decision says which
+// direction that wiring may eventually go.
 var adapters = map[string]Adapter{
-	claudeAdapter{}.Harness(): claudeAdapter{},
-	codexAdapter{}.Harness():  codexAdapter{},
+	claudeAdapter{}.Harness():  claudeAdapter{},
+	codexAdapter{}.Harness():   codexAdapter{},
+	copilotAdapter{}.Harness(): copilotAdapter{},
 }
 
 // For returns the adapter for a harness name, reporting whether one exists.
 //
 // Unlike harness.Lookup it does NOT fall back to Claude for an unknown name:
-// classifying a Copilot pane with Claude's UI copy would produce confident
+// classifying one harness's pane with another's UI copy would produce confident
 // nonsense, and the fail-closed answer for "no adapter" is to observe nothing.
+// Registering Copilot narrows that fence rather than removing it — an
+// unrecognized name still gets no adapter, which is the load-bearing half.
 func For(harnessName string) (Adapter, bool) {
 	adapter, ok := adapters[strings.ToLower(strings.TrimSpace(harnessName))]
 	return adapter, ok

@@ -90,8 +90,18 @@ func TestPatternsForReturnsEmbeddedWithoutLoad(t *testing.T) {
 	if set.Source() != SourceEmbedded {
 		t.Fatalf("source = %q, want %q", set.Source(), SourceEmbedded)
 	}
-	if _, ok := PatternsFor("copilot"); ok {
-		t.Fatal("PatternsFor must not invent a set for an unknown harness")
+	// Copilot moved to the positive side when its adapter landed, and the
+	// assertion moved with it rather than being deleted: the fence was never
+	// "copilot has no patterns", it was "PatternsFor does not invent a set for a
+	// harness this package cannot classify". Registering one harness narrows the
+	// fence; the names below are what still proves it is there.
+	if _, ok := PatternsFor("Copilot"); !ok {
+		t.Fatal("PatternsFor(copilot) missing; the registered adapter must have a set")
+	}
+	for _, name := range []string{"", "unknown", "aider"} {
+		if _, ok := PatternsFor(name); ok {
+			t.Fatalf("PatternsFor(%q) must not invent a set for an unknown harness", name)
+		}
 	}
 }
 

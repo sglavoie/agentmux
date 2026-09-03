@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/harness"
 )
 
 // Loading a user override: what shadows the embedded set, what is refused, and
@@ -268,6 +270,55 @@ func TestEmbeddedPatternsSatisfyTheirRequirements(t *testing.T) {
 		if err := requirements.Validate(sets[name]); err != nil {
 			t.Errorf("embedded %s: %v", name, err)
 		}
+	}
+}
+
+// TestLoadRejectsIncompleteCopilotOverride is the Copilot instance of
+// TestLoadRejectsSemanticallyIncompleteOverride above, and it exists as its own
+// test rather than as a row in that one because the thing it proves is
+// registration-specific: before copilotRequirements was wired into
+// requirementsFor, this file would have installed cleanly. requirementsFor
+// returns nil for an unlisted set and a nil Requirements accepts anything, so a
+// harness whose adapter was added without its requirements list gets NO semantic
+// validation at all — silently, and with a valid-looking override in doctor.
+//
+// The override below is a real one someone might write: it keeps the clause
+// whose wording changed and drops the rest, which is exactly the shape of a file
+// hand-edited to fix one broken match.
+func TestLoadRejectsIncompleteCopilotOverride(t *testing.T) {
+	restorePatterns(t)
+
+	dir := writeOverride(t, harness.Copilot, `
+harness = "copilot"
+[phrases]
+blocking_prompt = ["may i run this"]
+`)
+	warnings := Load(dir)
+	invalid := warningsOfKind(warnings, WarnOverrideInvalid)
+	if len(invalid) != 1 {
+		t.Fatalf("warnings = %v, want exactly one %s", warnings, WarnOverrideInvalid)
+	}
+	if len(warningsOfKind(warnings, WarnOverrideApplied)) != 0 {
+		t.Fatalf("warnings = %v; an incomplete override must not report as applied", warnings)
+	}
+	// The detail is the whole remedy: there is nothing in the file to point at,
+	// so it must name every missing clause and say what each one costs.
+	for _, want := range []string{
+		copilotClauseWorking, "live-status veto",
+		copilotClauseComposerLine, copilotClauseChoiceLine, copilotClauseInterruptHint,
+	} {
+		if !strings.Contains(invalid[0].Detail, want) {
+			t.Errorf("detail = %q, want it to mention %q", invalid[0].Detail, want)
+		}
+	}
+	set, ok := PatternsFor(harness.Copilot)
+	if !ok || set.Source() != SourceEmbedded {
+		t.Fatal("an incomplete override must keep the embedded default in force")
+	}
+	// And the refusal is not merely reported: the override's own phrase must be
+	// absent, or the daemon would be classifying with the file it rejected.
+	if set.Match(copilotClauseBlockingPrompt, "May I run this?", "may i run this?") {
+		t.Fatal("the rejected override's copy reached the installed set")
 	}
 }
 

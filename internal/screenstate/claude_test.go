@@ -333,15 +333,27 @@ func TestClaudeStatusLineIsBounded(t *testing.T) {
 
 // TestScreenstateForUnknownHarness pins the deliberate difference from
 // harness.Lookup: no adapter is returned for a harness this package cannot
-// classify, because classifying a Copilot pane with Claude's UI copy would
+// classify, because classifying one harness's pane with another's UI copy would
 // produce a confident wrong answer.
+//
+// Copilot used to sit in the second list. It moved to the first when its
+// adapter landed, WITH its whitespace and case variants, because the positive
+// list is asserting normalization as much as registration — moving the bare
+// string across would have registered the harness without proving For()
+// normalizes its name. The names left in the second list are what still proves
+// the fence exists at all; "" is the one that matters most, since it is what an
+// unlabelled window supplies.
 func TestScreenstateForUnknownHarness(t *testing.T) {
-	for _, name := range []string{"  Claude  ", "CLAUDE", "  Codex  ", "CODEX"} {
+	for _, name := range []string{
+		"  Claude  ", "CLAUDE",
+		"  Codex  ", "CODEX",
+		"  Copilot  ", "COPILOT",
+	} {
 		if _, ok := For(name); !ok {
 			t.Errorf("For(%q) = false, want a registered adapter", name)
 		}
 	}
-	for _, name := range []string{"", "copilot", "unknown"} {
+	for _, name := range []string{"", "   ", "unknown", "aider"} {
 		if _, ok := For(name); ok {
 			t.Errorf("For(%q) returned an adapter, want none", name)
 		}

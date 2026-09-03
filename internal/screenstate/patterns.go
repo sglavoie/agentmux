@@ -342,6 +342,8 @@ func requirementsFor(name string) patternset.Requirements {
 		return claudeRequirements
 	case harness.Codex:
 		return codexRequirements
+	case harness.Copilot:
+		return copilotRequirements
 	case contextlimit.PatternsName:
 		return contextlimit.Requirements()
 	default:

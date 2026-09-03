@@ -58,6 +58,13 @@ func TestEmbeddedPatternsDefineEveryAdapterClause(t *testing.T) {
 			codexClausePromptCommandApproval,
 			codexClausePromptPermissionGrant,
 		},
+		harness.Copilot: {
+			copilotClauseComposerLine,
+			copilotClauseChoiceLine,
+			copilotClauseWorking,
+			copilotClauseInterruptHint,
+			copilotClauseBlockingPrompt,
+		},
 	}
 	for harnessName, clauses := range cases {
 		t.Run(harnessName, func(t *testing.T) {
