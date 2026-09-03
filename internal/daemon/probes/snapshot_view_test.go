@@ -96,9 +96,17 @@ func TestSnapshotView_AgeClampsBackwardsClock(t *testing.T) {
 func TestSnapshotView_MatchesLoadAndScreenProbeAPI(t *testing.T) {
 	var s SnapshotStore
 	captured := time.Unix(1_700_000_000, 0)
-	s.PublishWithReceipts(fakeOSWindowsWithTab(42, "api"), map[int]uint64{42: 7}, captured)
+	s.Publish(Publication{
+		Windows:         fakeOSWindowsWithTab(42, "api"),
+		ReducerReceipts: map[int]uint64{42: 7},
+		Socket:          "unix:/tmp/kitty-1",
+		CapturedAt:      captured,
+	})
 
 	view := s.View()
+	if view.Socket() != "unix:/tmp/kitty-1" {
+		t.Fatalf("view socket = %q; want the endpoint the publication was read through", view.Socket())
+	}
 	windows, gen, ready := s.Load()
 	if gen != view.Generation() || ready != view.Ready() || len(windows) != len(view.Windows()) {
 		t.Fatalf("Load() = (gen %d, ready %v, windows %d); view = (gen %d, ready %v, windows %d)",

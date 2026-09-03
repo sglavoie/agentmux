@@ -28,12 +28,14 @@ import (
 // obsolete one.
 //
 // The window tree is taken from the daemon's cached snapshot whenever the
-// optional block is present and ready — including when the daemon has already
-// marked it stale, because a stale tree still describes the session list far
-// better than no list at all. Direct Kitty I/O happens only when the daemon
-// cannot supply one: the IPC call failed or was rejected, the daemon is new
-// but has never completed a successful list (a cold block), or the daemon
-// predates the block entirely and omits it.
+// optional block is present, ready, and describes this dashboard's own Kitty
+// instance — including when the daemon has already marked it stale, because a
+// stale tree still describes the session list far better than no list at all.
+// Direct Kitty I/O happens only when the daemon cannot supply one: the IPC call
+// failed or was rejected, the daemon is new but has never completed a
+// successful list (a cold block), the daemon predates the block entirely and
+// omits it, or the snapshot belongs to a different Kitty instance than this
+// dashboard's.
 //
 // Per-window daemon state is applied to whichever topology won. A daemon that
 // answered but had no usable snapshot still owns the icon, loop, and busy
@@ -113,7 +115,8 @@ func refreshTopology(client kitty.KittyClient) ([]kitty.OSWindow, TopologyFreshn
 	var state daemonState
 	if resp, err := StateQuery(); err == nil {
 		state = decodeDaemonState(resp)
-		if snapshot := resp.KittySnapshot; snapshot != nil && snapshot.Ready {
+		if snapshot := resp.KittySnapshot; snapshot != nil && snapshot.Ready &&
+			snapshotDescribesLocalKitty(snapshot) {
 			return snapshot.Windows, daemonTopologyFreshness(snapshot), state, nil
 		}
 	}
@@ -125,6 +128,32 @@ func refreshTopology(client kitty.KittyClient) ([]kitty.OSWindow, TopologyFreshn
 	// it is stamped with its own completion time rather than inheriting the
 	// daemon's capture time or being reported as ageless.
 	return osWindows, TopologyFreshness{Source: TopologyFromDirect, CapturedAt: time.Now()}, state, nil
+}
+
+// snapshotDescribesLocalKitty reports whether a ready daemon snapshot describes
+// the Kitty instance this dashboard is running inside.
+//
+// Kitty window IDs are unique only within one instance, so a tree from another
+// instance is not merely out of date — it is a different world whose IDs happen
+// to look like ours. Rendering it would list somebody else's sessions, and the
+// re-anchor and selection-clear writes derived from it would be aimed at
+// whatever windows happen to hold those IDs here. The daemon retargets its
+// effective socket the moment a hook arrives from a second Kitty, so a snapshot
+// published against the first one can still be returned alongside the second
+// one's per-window state; the socket recorded on the block is what makes the two
+// distinguishable.
+//
+// Only a KNOWN disagreement rejects. An empty socket on either side is an
+// absence of identity, not evidence of a different instance: the daemon may
+// predate the field or be reading through no reusable endpoint, and the
+// dashboard may be running outside Kitty or behind an address that does not
+// normalize. Treating those as mismatches would send every such dashboard down
+// the direct-listing path forever, trading a real regression for a hypothetical
+// one — and a dashboard with no Kitty identity of its own has nothing better to
+// compare against anyway.
+func snapshotDescribesLocalKitty(snapshot *protocol.KittySnapshot) bool {
+	local := LocalKittySocket()
+	return local == "" || snapshot.Socket == "" || snapshot.Socket == local
 }
 
 // daemonTopologyFreshness projects the wire block onto the freshness the model

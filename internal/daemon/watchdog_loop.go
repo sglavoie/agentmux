@@ -74,11 +74,11 @@ func (h *Handler) watchdogTick(now time.Time, elapsed time.Duration) {
 // both predate the gap. Activity timestamps are deliberately not touched —
 // the gap simply does not count toward idleness.
 func (h *Handler) refreshAfterGap(now time.Time) {
-	client := h.kittyClientForList()
+	client, socket := h.kittyListTarget()
 	if client == nil {
 		return
 	}
-	capture, err := h.captureKittySnapshot(client)
+	capture, err := h.captureKittySnapshot(client, socket)
 	if err != nil {
 		slog.Debug("watchdog: post-gap kitty refresh failed", "err", err)
 		return

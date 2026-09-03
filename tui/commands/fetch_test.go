@@ -82,6 +82,17 @@ func stubStateQuery(t *testing.T, query func() (protocol.Response, error)) {
 	t.Cleanup(func() { StateQuery = previous })
 }
 
+// stubLocalKittySocket pins the Kitty instance the refresh believes it is
+// running inside. Without it the answer comes from the operator's own
+// environment, so a test asserting on socket identity would pass or fail
+// depending on whether `go test` was launched from inside Kitty.
+func stubLocalKittySocket(t *testing.T, socket string) {
+	t.Helper()
+	previous := LocalKittySocket
+	LocalKittySocket = func() string { return socket }
+	t.Cleanup(func() { LocalKittySocket = previous })
+}
+
 // managedWindows is one managed session inside one tab, which is the smallest
 // tree ListFromOSWindowsWithConfig turns into a dashboard row.
 func managedWindows(tabID, windowID int, title string) []kitty.OSWindow {
@@ -392,6 +403,120 @@ func TestRefreshFallsBackToDirectListing(t *testing.T) {
 			}
 			if msg.Topology.Source != TopologyFromDirect || msg.Topology.Stale {
 				t.Fatalf("topology = %+v, want a fresh direct source", msg.Topology)
+			}
+		})
+	}
+}
+
+// snapshotFrom is a fresh, ready snapshot attributed to one Kitty instance.
+// Window IDs are only meaningful inside the instance they were read from, so
+// the socket is the field that says whether this tree is about this dashboard's
+// Kitty at all.
+func snapshotFrom(socket string, windows []kitty.OSWindow) *protocol.KittySnapshot {
+	snapshot := readySnapshot(windows, false)
+	snapshot.Socket = socket
+	return snapshot
+}
+
+// TestRefreshRejectsDaemonSnapshotFromDifferentKittySocket is the fifth reason
+// the daemon cannot supply a topology, and the only one where the daemon is
+// perfectly healthy: it is watching a different Kitty instance than this
+// dashboard runs in. Its window IDs name windows in that other instance, so
+// rendering them would show foreign rows and — worse — every topology-derived
+// write would land on whatever window happens to hold the same ID here. The
+// tree is dropped for the safe fallback, and no write is attempted from it.
+func TestRefreshRejectsDaemonSnapshotFromDifferentKittySocket(t *testing.T) {
+	// The daemon's tree is the ghost tree, which drives both topology-derived
+	// writes when it is consumed fresh. If either write is observed, the
+	// mismatched tree was acted on.
+	stubStateQuery(t, func() (protocol.Response, error) {
+		return protocol.Response{
+			OK:            true,
+			States:        map[int]protocol.WindowStateSnapshot{42: {IconState: "key", Looping: true}},
+			KittySnapshot: snapshotFrom("unix:/tmp/kitty-9999", ghostTree()),
+		}, nil
+	})
+	stubLocalKittySocket(t, "unix:/tmp/kitty-1234")
+	client := &recordingKittyClient{windows: managedWindows(9, 99, "api")}
+
+	msg, ok := refreshOnceWith(t, client, ghostConfig(), 4).(SessionsMsg)
+	if !ok {
+		t.Fatalf("refresh produced %T, want SessionsMsg", msg)
+	}
+	if client.listCalls() != 1 {
+		t.Fatalf("direct Kitty listings = %d, want exactly 1 for a foreign snapshot", client.listCalls())
+	}
+	if len(msg.Sessions) != 1 || msg.Sessions[0].TabID != 9 {
+		t.Fatalf("sessions = %+v, want this Kitty's directly listed tab 9", msg.Sessions)
+	}
+	if msg.Topology.Source != TopologyFromDirect || msg.Topology.Stale {
+		t.Fatalf("topology = %+v, want a fresh direct source", msg.Topology)
+	}
+	// The foreign tree carried a pending selection request in tab 70 and a ghost
+	// in tab 7. Neither may reach Kitty: both name IDs from the other instance.
+	if client.userVarWrites() != 0 {
+		t.Fatalf("a foreign snapshot drove %d user-var writes, want 0", client.userVarWrites())
+	}
+	if msg.SelectionTabID != 0 || msg.SelectionToken != "" {
+		t.Fatalf("selection = tab %d token %q, want none from a foreign tree",
+			msg.SelectionTabID, msg.SelectionToken)
+	}
+}
+
+// TestRefreshAcceptsDaemonSnapshotWithoutAKnownDisagreement is the control for
+// the rejection above, and it pins that the gate refuses only on a *known*
+// disagreement. Two of these cases carry no evidence either way — an older
+// daemon omits the socket, and a dashboard outside Kitty cannot name its own —
+// and treating absent evidence as mismatch would push those onto a Kitty
+// subprocess on every single refresh forever.
+func TestRefreshAcceptsDaemonSnapshotWithoutAKnownDisagreement(t *testing.T) {
+	cases := []struct {
+		name           string
+		snapshotSocket string
+		localSocket    string
+	}{
+		{
+			name:           "same instance",
+			snapshotSocket: "unix:/tmp/kitty-1234",
+			localSocket:    "unix:/tmp/kitty-1234",
+		},
+		{
+			name:           "daemon predates the socket field",
+			snapshotSocket: "",
+			localSocket:    "unix:/tmp/kitty-1234",
+		},
+		{
+			name:           "dashboard cannot name its own instance",
+			snapshotSocket: "unix:/tmp/kitty-1234",
+			localSocket:    "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stubStateQuery(t, func() (protocol.Response, error) {
+				return protocol.Response{
+					OK:            true,
+					KittySnapshot: snapshotFrom(tc.snapshotSocket, ghostTree()),
+				}, nil
+			})
+			stubLocalKittySocket(t, tc.localSocket)
+			client := &recordingKittyClient{windows: managedWindows(9, 99, "api")}
+
+			msg := refreshOnceWith(t, client, ghostConfig(), 4).(SessionsMsg)
+			if client.listCalls() != 0 {
+				t.Fatalf("direct Kitty listings = %d, want 0 for an acceptable snapshot", client.listCalls())
+			}
+			if len(msg.Sessions) != 1 || msg.Sessions[0].TabID != 7 {
+				t.Fatalf("sessions = %+v, want the daemon snapshot's tab 7", msg.Sessions)
+			}
+			if msg.Topology.Source != TopologyFromDaemon {
+				t.Fatalf("topology = %+v, want the daemon source", msg.Topology)
+			}
+			// The same fresh tree the mismatch case refused to act on: here it is
+			// this dashboard's own, so both topology-derived writes go through.
+			if client.userVarWrites() != 2 {
+				t.Fatalf("accepted snapshot drove %d user-var writes, want the re-anchor and the selection clear",
+					client.userVarWrites())
 			}
 		})
 	}

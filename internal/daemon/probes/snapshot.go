@@ -39,6 +39,14 @@ type snapshot struct {
 	// an unchanged epoch, so activity in one tab cannot starve screen probes in
 	// another, and a busy plain split cannot starve the managed pane beside it.
 	probeTabs map[int]tabState
+	// socket is the Kitty remote-control endpoint the ListWindows behind these
+	// windows was read through. Window IDs are unique only inside one Kitty
+	// instance, so the tree alone does not say which world it describes: the
+	// daemon's effective socket can change while a published snapshot stays put,
+	// and a consumer handed the tree without the socket cannot tell that the two
+	// no longer belong together. Empty means the read went through no reusable
+	// endpoint and the snapshot binds to no identifiable instance.
+	socket string
 	// at is the wall-clock instant the successful ListWindows that produced
 	// these windows COMPLETED, which is the origin every freshness measurement
 	// counts from. It is deliberately not the tick or start time of the loop
@@ -64,18 +72,40 @@ type SnapshotStore struct {
 
 // publish replaces the cached snapshot with windows captured at capturedAt. The
 // slice is stored by reference and must not be mutated by the caller afterward.
-// The daemon always has receipts to publish with, so this wrapper exists only
-// for the epoch tests below.
+// The daemon always has receipts and a socket to publish with, so this wrapper
+// exists only for the epoch tests below.
 func (s *SnapshotStore) publish(windows []kitty.OSWindow, capturedAt time.Time) {
-	s.PublishWithReceipts(windows, nil, capturedAt)
+	s.Publish(Publication{Windows: windows, CapturedAt: capturedAt})
 }
 
-// PublishWithReceipts publishes windows together with the reducer receipts
-// sampled before the ListWindows call that returned them. capturedAt is the
-// instant that call completed successfully; publication is the only thing that
-// advances the generation and the capture time, so a failed read leaves both —
-// and the windows they describe — exactly as the last success left them.
-func (s *SnapshotStore) PublishWithReceipts(windows []kitty.OSWindow, reducerReceipts map[int]uint64, capturedAt time.Time) {
+// Publication is one successful Kitty list as the store records it. The four
+// facts are a single value rather than four parameters because they are only
+// meaningful together: the receipts predate this exact read, the socket names
+// the Kitty instance whose IDs the windows carry, and the capture time is when
+// this read — not some other one — answered. Publishing any of them under
+// another read's provenance is exactly the incoherence the cache exists to
+// prevent.
+type Publication struct {
+	// Windows is the tree the read returned. It is stored by reference and must
+	// not be mutated after publication.
+	Windows []kitty.OSWindow
+	// ReducerReceipts are the per-window receipts sampled before the read
+	// started. Nil is a legitimate receipt-free publication.
+	ReducerReceipts map[int]uint64
+	// Socket is the remote-control endpoint the read ran against, which is what
+	// binds the window IDs to one Kitty instance. Empty when the read went
+	// through no reusable endpoint.
+	Socket string
+	// CapturedAt is the instant the read completed successfully.
+	CapturedAt time.Time
+}
+
+// Publish replaces the cached snapshot with p. Publication is the only thing
+// that advances the generation, the capture time, and the recorded socket, so a
+// failed read leaves all three — and the windows they describe — exactly as the
+// last success left them.
+func (s *SnapshotStore) Publish(p Publication) {
+	windows, reducerReceipts, capturedAt := p.Windows, p.ReducerReceipts, p.CapturedAt
 	s.mu.Lock()
 	probeTabs := make(map[int]tabState)
 	for i := range windows {
@@ -112,6 +142,7 @@ func (s *SnapshotStore) PublishWithReceipts(windows []kitty.OSWindow, reducerRec
 	s.snap.reducerReceipts = reducerReceipts
 	s.snap.gen++
 	s.snap.probeTabs = probeTabs
+	s.snap.socket = p.Socket
 	s.snap.at = capturedAt
 	s.snap.ready = true
 	s.mu.Unlock()
@@ -126,30 +157,34 @@ func (s *SnapshotStore) Load() (windows []kitty.OSWindow, gen uint64, ready bool
 }
 
 // View returns the whole published snapshot as one immutable value read under a
-// single lock acquisition. Windows, generation, capture time, and readiness are
-// four facts about ONE publication; handing them back separately would let a
-// caller pair a generation with the capture time of the publication that
-// replaced it.
+// single lock acquisition. Windows, generation, socket, capture time, and
+// readiness are five facts about ONE publication; handing them back separately
+// would let a caller pair a generation with the capture time of the publication
+// that replaced it, or a window tree with the socket the daemon has since moved
+// to.
 func (s *SnapshotStore) View() SnapshotView {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return SnapshotView{
 		windows:    s.snap.windows,
 		gen:        s.snap.gen,
+		socket:     s.snap.socket,
 		capturedAt: s.snap.at,
 		ready:      s.snap.ready,
 	}
 }
 
 // SnapshotView is one coherent read of the published Kitty snapshot: the window
-// tree, the publication generation that owns it, the instant the successful
-// ListWindows behind it completed, and whether anything has been published at
-// all. The zero value is the cold view a daemon serves before its first
-// successful list, which is the only state readiness distinguishes — an old
-// capture time makes a view stale, never un-ready.
+// tree, the publication generation that owns it, the socket the tree was read
+// through, the instant the successful ListWindows behind it completed, and
+// whether anything has been published at all. The zero value is the cold view a
+// daemon serves before its first successful list, which is the only state
+// readiness distinguishes — an old capture time makes a view stale, never
+// un-ready.
 type SnapshotView struct {
 	windows    []kitty.OSWindow
 	gen        uint64
+	socket     string
 	capturedAt time.Time
 	ready      bool
 }
@@ -161,6 +196,13 @@ func (v SnapshotView) Windows() []kitty.OSWindow { return v.windows }
 // Generation returns the publication counter, which advances once per
 // successful publication and never on a failed read.
 func (v SnapshotView) Generation() uint64 { return v.gen }
+
+// Socket returns the Kitty remote-control endpoint this view's windows were
+// read through — the one thing that says which Kitty instance their IDs belong
+// to. It is empty for a cold view and for a publication whose read went through
+// no reusable endpoint; empty therefore means "unattributed", never "the local
+// instance", so a consumer must not read it as agreement with its own socket.
+func (v SnapshotView) Socket() string { return v.socket }
 
 // CapturedAt returns the completion time of the ListWindows that produced this
 // view. It is the zero time for a cold view.

@@ -146,11 +146,11 @@ func (h *Handler) restoreStateFromKittyBounded(now time.Time, timeout time.Durat
 // treated as a degraded startup so the maintenance loop still owns the durable
 // restore.
 func (h *Handler) restoreStateFromKitty(now time.Time) (bool, error) {
-	client := h.kittyClientForList()
+	client, socket := h.kittyListTarget()
 	if client == nil {
 		return false, nil
 	}
-	capture, err := h.captureKittySnapshot(client)
+	capture, err := h.captureKittySnapshot(client, socket)
 	if err != nil {
 		slog.Debug("renderer: startup list windows failed", "err", err)
 		return false, err
@@ -181,11 +181,11 @@ func (h *Handler) restoreStateFromKitty(now time.Time) (bool, error) {
 // result. It is the periodic entry point of runMaintenance.
 func (h *Handler) maintenanceTick(now time.Time) {
 	h.maintainCaptureStore(now)
-	client := h.kittyClientForList()
+	client, socket := h.kittyListTarget()
 	if client == nil {
 		return
 	}
-	capture, err := h.captureKittySnapshot(client)
+	capture, err := h.captureKittySnapshot(client, socket)
 	if err != nil {
 		slog.Debug("maintenance: list windows failed", "err", err)
 		return
@@ -328,12 +328,27 @@ func (h *Handler) renderTitleOwnerLocked(tab *kitty.Tab) (*kitty.Window, bool) {
 	})
 }
 
-func (h *Handler) kittyClientForList() kittyTitleClient {
+// kittyListTarget returns the client every daemon list path reads through,
+// together with the socket it was scoped to. The socket comes back rather than
+// staying inside because a published snapshot has to record which Kitty
+// instance answered it: h.lastKittyListenOn moves as soon as a hook arrives
+// from another instance, so re-reading it after the read would attribute the
+// tree to whichever Kitty spoke last instead of to the one that produced it.
+func (h *Handler) kittyListTarget() (kittyTitleClient, string) {
 	h.stateMu.Lock()
 	socket := h.lastKittyListenOn
 	client := h.kittyClient
 	h.stateMu.Unlock()
-	return scopedKittyClient(client, socket)
+	return scopedKittyClient(client, socket), socket
+}
+
+// currentKittyListenOn returns the daemon's effective Kitty socket right now.
+// It is a point-in-time read and is never a substitute for the socket a
+// specific capture recorded.
+func (h *Handler) currentKittyListenOn() string {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	return h.lastKittyListenOn
 }
 
 func (h *Handler) kittyClientForWindow(windowID int) kittyTitleClient {

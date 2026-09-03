@@ -144,16 +144,25 @@ type listCall struct {
 }
 
 // ListCapture is one underlying coordinated `kitten @ ls` as every caller that
-// shared it sees it: the decoded topology, the provenance the executing caller
-// sampled before the read started, and the instant the read completed.
+// shared it sees it: the decoded topology, the socket it was read through, the
+// provenance the executing caller sampled before the read started, and the
+// instant the read completed.
 //
-// The three travel together on purpose. A caller that joins an in-flight read
+// They travel together on purpose. A caller that joins an in-flight read
 // arrives after that read began, so anything it samples for itself is younger
 // than the windows it is about to receive. Pairing the two would let evidence
 // gathered against a newer world be published as if it described the older one.
 type ListCapture struct {
 	// Windows is this caller's own deep copy of the shared topology.
 	Windows []OSWindow
+	// Socket is the remote-control endpoint the underlying read ran against —
+	// the coordinator's own key, not what any caller believed it was asking.
+	// Window IDs are meaningful only within the Kitty instance behind it, so a
+	// consumer that stores or forwards this topology must carry the socket with
+	// it or lose the only thing that says which Kitty the IDs belong to. It is
+	// identical for the executor and every coalesced waiter, because a shared
+	// read is shared precisely by having one socket key.
+	Socket string
 	// Provenance is the value the executor's sample callback returned, or nil
 	// when the caller supplied no callback. The coordinator never inspects it:
 	// it exists so a caller can bind its own causally earlier facts to this
@@ -202,6 +211,7 @@ func (co *listCoordinator) capture(
 		<-call.done
 		return ListCapture{
 			Windows:     cloneOSWindows(call.windows),
+			Socket:      socket,
 			Provenance:  call.provenance,
 			CompletedAt: call.completedAt,
 		}, call.err
@@ -232,6 +242,7 @@ func (co *listCoordinator) capture(
 	}
 	return ListCapture{
 		Windows:     cloneOSWindows(windows),
+		Socket:      socket,
 		Provenance:  provenance,
 		CompletedAt: finished,
 	}, err

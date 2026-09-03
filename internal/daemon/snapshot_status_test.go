@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -205,6 +206,66 @@ func TestSnapshotBlockCarriesEffectiveSocketCoordination(t *testing.T) {
 	}
 }
 
+// TestStateQueryBindsSnapshotToCaptureSocket pins which Kitty instance a
+// published tree belongs to, against the one thing that moves underneath it.
+// The daemon's effective socket is retargeted the moment a hook arrives from a
+// second Kitty; the snapshot published against the first one does not move with
+// it. Answering "which Kitty produced this tree" with "which Kitty is the daemon
+// talking to now" is what would let a dashboard in the second instance accept
+// the first instance's window IDs as its own and write to them.
+//
+// The two sockets are deliberately both present in one block, because they
+// answer different questions: Socket describes THIS publication, Coordinator
+// describes the socket the daemon is reading through at response time.
+func TestStateQueryBindsSnapshotToCaptureSocket(t *testing.T) {
+	runner := newGatedListRunner(mustMarshalWindows(t, fakeOSWindowsWithTab(42, "W:api")))
+	h, client := newCoordinatedHandler(t, runner)
+	h.primeSnapshot()
+
+	// A hook from a second Kitty instance retargets the daemon. Nothing is
+	// published, so the cached tree is still the first instance's.
+	h.stateMu.Lock()
+	h.rememberKittySocketLocked(42, otherSocket)
+	h.stateMu.Unlock()
+	// Give the new socket its own coordination accounting without publishing
+	// anything, so the block below can carry both sockets at once.
+	if _, err := client.WithSocket(otherSocket).ListWindows(); err != nil {
+		t.Fatalf("listing the retargeted socket: %v", err)
+	}
+
+	block := stateQuerySnapshot(t, h)
+	if block.Socket != coordinationSocket {
+		t.Fatalf("snapshot socket = %q; want the %q the published windows were read through",
+			block.Socket, coordinationSocket)
+	}
+	if block.Generation != 1 {
+		t.Fatalf("generation = %d; want the retarget to have published nothing", block.Generation)
+	}
+	if block.Coordinator == nil || block.Coordinator.Socket != otherSocket {
+		t.Fatalf("coordinator = %+v; want the daemon's current effective socket %q",
+			block.Coordinator, otherSocket)
+	}
+	if len(block.Windows) != 1 || block.Windows[0].Tabs[0].Windows[0].ID != 42 {
+		t.Fatalf("block windows = %+v; want the tree captured on the original socket", block.Windows)
+	}
+
+	// Health reports the same binding: the block is status-only, but the socket
+	// it names is still the capture's rather than the daemon's current one.
+	health := h.Handle(protocol.Request{Type: protocol.TypeHealth})
+	if health.KittySnapshot == nil || health.KittySnapshot.Socket != coordinationSocket {
+		t.Fatalf("health block = %+v; want the same capture socket %q",
+			health.KittySnapshot, coordinationSocket)
+	}
+
+	// The binding follows publication, not response time: the first list taken
+	// through the new socket rebinds the snapshot to it.
+	h.primeSnapshot()
+	rebound := stateQuerySnapshot(t, h)
+	if rebound.Socket != otherSocket || rebound.Generation != 2 {
+		t.Fatalf("rebound block = %+v; want generation 2 bound to %q", rebound, otherSocket)
+	}
+}
+
 // TestStateQueryCapturesStateAndTopologyCoherently is the lock-order test. The
 // publisher below stamps a generation tag into a window's state and publishes
 // the matching topology in ONE stateMu critical section, exactly as
@@ -233,7 +294,10 @@ func TestStateQueryCapturesStateAndTopologyCoherently(t *testing.T) {
 			st := h.ensureWindowStateLocked(windowID)
 			st.StateSet = true
 			st.LastAction = tag
-			h.snapshots.PublishWithReceipts(fakeOSWindowsWithTab(windowID, "W:"+tag), nil, time.Now())
+			h.snapshots.Publish(probes.Publication{
+				Windows:    fakeOSWindowsWithTab(windowID, "W:"+tag),
+				CapturedAt: time.Now(),
+			})
 			h.stateMu.Unlock()
 		}
 	}()

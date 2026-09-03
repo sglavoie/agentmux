@@ -143,8 +143,9 @@ func (c *SubprocessClient) ListWindows() ([]OSWindow, error) {
 }
 
 // ListWindowsCapture reads the Kitty topology and returns the whole capture:
-// the windows, the provenance sampled immediately before the underlying read
-// started, and the instant that read completed.
+// the windows, the socket they were read through, the provenance sampled
+// immediately before the underlying read started, and the instant that read
+// completed.
 //
 // sample runs only in the caller that executes the underlying subprocess. A
 // caller that coalesces onto a read already in flight receives the executing
@@ -176,6 +177,7 @@ func (c *SubprocessClient) ListWindowsCapture(sample func() any) (ListCapture, e
 		windows, err := run()
 		return ListCapture{
 			Windows:     cloneOSWindows(windows),
+			Socket:      c.socket,
 			Provenance:  provenance,
 			CompletedAt: time.Now(),
 		}, err

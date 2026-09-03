@@ -6,6 +6,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/process"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 // Registry is intentionally package-level and stateless. It gives direct
@@ -29,6 +30,22 @@ var DaemonRequest = func(req protocol.Request) (protocol.Response, error) {
 var StateQuery = func() (protocol.Response, error) {
 	return ipc.NewClient().StateQuery()
 }
+
+// LocalKittySocket reports the reusable remote-control endpoint of the Kitty
+// instance this dashboard is running inside. It is the identity a daemon
+// snapshot's own socket is checked against, so the dashboard never renders — or
+// writes back into — a window tree belonging to a different Kitty.
+//
+// It is the NORMALIZED address rather than the raw KITTY_LISTEN_ON: a pane
+// launched with --allow-remote-control inherits a process-local "fd:N"
+// descriptor, which names the same instance the daemon dials as
+// "unix:/tmp/kitty-<pid>" but shares no characters with it. Comparing the raw
+// values would report a mismatch for the ordinary single-Kitty case.
+//
+// It is empty outside Kitty and for any address that cannot be normalized,
+// which is "unknown", not "matches everything"; the comparison below is what
+// decides what to do with that.
+var LocalKittySocket = kitty.NormalizedListenAddressFromEnv
 
 // SpawnDaemonDetached is the seam the health probe uses to start a daemon it
 // found unreachable.

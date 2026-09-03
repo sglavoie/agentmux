@@ -89,11 +89,11 @@ func (h *Handler) drainRenderQueue() {
 	if h.renderQueue.Empty() {
 		return
 	}
-	client := h.kittyClientForList()
+	client, socket := h.kittyListTarget()
 	if client == nil {
 		return
 	}
-	capture, err := h.captureKittySnapshot(client)
+	capture, err := h.captureKittySnapshot(client, socket)
 	if err != nil {
 		// Returning before Acquire is what preserves the pending work: nothing
 		// leaves the queue, and the next maintenance flush re-signals the wake

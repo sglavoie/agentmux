@@ -32,13 +32,19 @@ func (h *Handler) captureSnapshotReducerReceipts() map[int]uint64 {
 }
 
 // kittySnapshotCapture is one successful coordinated ListWindows: the windows
-// it returned, the reducer receipts sampled before it started, and the instant
-// it completed. The three belong together — publishing any one of them under a
-// different read's provenance is exactly the incoherence this type exists to
-// prevent.
+// it returned, the reducer receipts sampled before it started, the socket it
+// was read through, and the instant it completed. The four belong together —
+// publishing any one of them under a different read's provenance is exactly the
+// incoherence this type exists to prevent.
 type kittySnapshotCapture struct {
 	windows         []kitty.OSWindow
 	reducerReceipts map[int]uint64
+	// socket is the remote-control endpoint the read actually ran against,
+	// taken from the capture rather than from the daemon's current effective
+	// socket. The two can differ: h.lastKittyListenOn moves the moment a hook
+	// arrives from another Kitty instance, while this read stays bound to the
+	// instance whose window IDs it returned.
+	socket string
 	// at is the completion instant of the underlying read — stamped after
 	// ListWindows returns, never before it is called, and shared unchanged with
 	// every caller that coalesced onto that read rather than restamped. The
@@ -59,10 +65,18 @@ type kittyCaptureLister interface {
 	ListWindowsCapture(sample func() any) (kitty.ListCapture, error)
 }
 
-// captureKittySnapshot performs one coordinated ListWindows and returns its
-// windows, the reducer receipts sampled before it started, and its completion
-// time. Every daemon publication path goes through it so the stamping rule
-// lives in one place rather than in five loops.
+// captureKittySnapshot performs one coordinated ListWindows through client,
+// which the caller has already scoped to socket, and returns its windows, the
+// reducer receipts sampled before it started, the endpoint it was read through,
+// and its completion time. Every daemon publication path goes through it so the
+// stamping rule lives in one place rather than in five loops.
+//
+// socket is the caller's belief about where the read is going; a coordinated
+// client reports where it actually went, and that answer wins. The two agree in
+// production, but only the client's answer is derived from the same value the
+// `kitten @ --to` argument was built from — and when the daemon has no recorded
+// listen address at all, the client's own constructor socket is the read's true
+// endpoint while the caller's belief is the empty string.
 //
 // A failure returns the error and nothing else: the caller publishes nothing,
 // which is what leaves the last successful windows, generation, and capture
@@ -78,16 +92,23 @@ type kittyCaptureLister interface {
 // would then pass the current-receipt guard and mutate newer state. The
 // coordinator hands every caller the executor's sample instead, so all three
 // facts describe one read.
-func (h *Handler) captureKittySnapshot(client kittyTitleClient) (kittySnapshotCapture, error) {
+func (h *Handler) captureKittySnapshot(client kittyTitleClient, socket string) (kittySnapshotCapture, error) {
 	lister, ok := client.(kittyCaptureLister)
 	if !ok {
-		// No coalescing underneath, so this caller is always its own executor.
+		// No coalescing underneath, so this caller is always its own executor,
+		// and the socket it scoped the client to is the only account of the
+		// read's endpoint available.
 		reducerReceipts := h.captureSnapshotReducerReceipts()
 		windows, err := client.ListWindows()
 		if err != nil {
 			return kittySnapshotCapture{}, err
 		}
-		return kittySnapshotCapture{windows: windows, reducerReceipts: reducerReceipts, at: time.Now()}, nil
+		return kittySnapshotCapture{
+			windows:         windows,
+			reducerReceipts: reducerReceipts,
+			socket:          socket,
+			at:              time.Now(),
+		}, nil
 	}
 	capture, err := lister.ListWindowsCapture(func() any { return h.captureSnapshotReducerReceipts() })
 	if err != nil {
@@ -100,33 +121,47 @@ func (h *Handler) captureKittySnapshot(client kittyTitleClient) (kittySnapshotCa
 	return kittySnapshotCapture{
 		windows:         capture.Windows,
 		reducerReceipts: reducerReceipts,
+		socket:          capture.Socket,
 		at:              capture.CompletedAt,
 	}, nil
 }
 
-// publishCapture publishes a successful capture under its own completion time.
+// publishCapture publishes a successful capture under its own completion time
+// and its own socket.
 func (h *Handler) publishCapture(capture kittySnapshotCapture) {
-	h.publishSnapshotWithReceipts(capture.windows, capture.reducerReceipts, capture.at)
+	h.publishSnapshotFrom(probes.Publication{
+		Windows:         capture.windows,
+		ReducerReceipts: capture.reducerReceipts,
+		Socket:          capture.socket,
+		CapturedAt:      capture.at,
+	})
 }
 
 // publishSnapshot records windows as the current immutable snapshot, captured
 // at capturedAt. Production listers publish a kittySnapshotCapture instead; this
-// remains the seam for tests and callers that already hold an in-memory tree.
+// remains the seam for tests and callers that already hold an in-memory tree,
+// so the tree is attributed to the daemon's current effective socket — the best
+// available answer when no read produced one.
 func (h *Handler) publishSnapshot(windows []kitty.OSWindow, capturedAt time.Time) {
-	h.publishSnapshotWithReceipts(windows, h.captureSnapshotReducerReceipts(), capturedAt)
+	h.publishSnapshotFrom(probes.Publication{
+		Windows:         windows,
+		ReducerReceipts: h.captureSnapshotReducerReceipts(),
+		Socket:          h.currentKittyListenOn(),
+		CapturedAt:      capturedAt,
+	})
 }
 
-// publishSnapshotWithReceipts publishes windows with reducer receipts captured
-// before the ListWindows call that returned them, stamped with the instant that
-// call completed.
-func (h *Handler) publishSnapshotWithReceipts(windows []kitty.OSWindow, reducerReceipts map[int]uint64, capturedAt time.Time) {
+// publishSnapshotFrom publishes one completed read: its windows, the reducer
+// receipts captured before the ListWindows call that returned them, the socket
+// that call ran against, and the instant it completed.
+func (h *Handler) publishSnapshotFrom(publication probes.Publication) {
 	// Publish the new generation and its mute cache in one state critical
 	// section. Probe apply paths hold the same lock while checking gen, so an
 	// older observation cannot pass its generation check and then overwrite a
 	// mute from a snapshot published in between the check and mutation.
 	h.stateMu.Lock()
-	h.refreshMutedFromSnapshotLocked(windows)
-	h.snapshots.PublishWithReceipts(windows, reducerReceipts, capturedAt)
+	h.refreshMutedFromSnapshotLocked(publication.Windows)
+	h.snapshots.Publish(publication)
 	h.stateMu.Unlock()
 }
 
@@ -156,11 +191,11 @@ func (h *Handler) cachedScreenProbeSnapshot() (probes.Snapshot, bool) {
 // reconciles on its next tick. It never returns an error because a cold cache is
 // a supported degraded state, not a failure.
 func (h *Handler) primeSnapshot() {
-	client := h.kittyClientForList()
+	client, socket := h.kittyListTarget()
 	if client == nil {
 		return
 	}
-	capture, err := h.captureKittySnapshot(client)
+	capture, err := h.captureKittySnapshot(client, socket)
 	if err != nil {
 		return
 	}

@@ -55,6 +55,19 @@ type KittySnapshot struct {
 	// evidence": concurrent listers stamp their own completion times, so a read
 	// that finished first can publish second.
 	Generation uint64 `json:"generation,omitempty"`
+	// Socket is the Kitty remote-control endpoint the windows in this block were
+	// read through, which is the only thing that says which Kitty instance their
+	// IDs belong to. It describes THIS publication and is not the daemon's
+	// current effective socket: the daemon retargets as soon as a hook arrives
+	// from another instance, and a snapshot published before that move still
+	// describes the instance that answered it.
+	//
+	// A client must compare it against its own Kitty instance before rendering
+	// the tree or deriving any write from it, and must read empty as
+	// "unattributed" rather than as agreement — an old daemon omits the field
+	// entirely, and a daemon reading through no reusable endpoint has nothing to
+	// report.
+	Socket string `json:"socket,omitempty"`
 	// CapturedAt is the Unix second at which the successful ListWindows behind
 	// this snapshot COMPLETED. Zero for a cold block.
 	CapturedAt int64 `json:"captured_at,omitempty"`

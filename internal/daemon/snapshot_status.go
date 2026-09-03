@@ -83,7 +83,14 @@ func kittySnapshotBlock(
 		Ready:      view.Ready(),
 		Stale:      protocol.KittySnapshotStale(view.Ready(), age),
 		Generation: view.Generation(),
-		AgeMS:      protocol.DurationMillis(age),
+		// The socket comes from the view, never from the daemon's effective
+		// socket at response time. Those are two different questions —
+		// "which Kitty produced this tree" and "which Kitty is the daemon
+		// talking to now" — and answering the first with the second is what
+		// would let a client accept one instance's window IDs as its own.
+		// Coordinator below deliberately answers the second.
+		Socket: view.Socket(),
+		AgeMS:  protocol.DurationMillis(age),
 	}
 	if capturedAt := view.CapturedAt(); !capturedAt.IsZero() {
 		block.CapturedAt = capturedAt.Unix()

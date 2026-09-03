@@ -350,7 +350,7 @@ func TestCoalescedSnapshotPreservesExecutorReceiptProvenance(t *testing.T) {
 	}
 	executed := make(chan captureResult, 1)
 	go func() {
-		capture, err := h.captureKittySnapshot(h.kittyClientForList())
+		capture, err := h.captureKittySnapshot(h.kittyListTarget())
 		executed <- captureResult{capture: capture, err: err}
 	}()
 
@@ -370,7 +370,7 @@ func TestCoalescedSnapshotPreservesExecutorReceiptProvenance(t *testing.T) {
 
 	joined := make(chan captureResult, 1)
 	go func() {
-		capture, err := h.captureKittySnapshot(h.kittyClientForList())
+		capture, err := h.captureKittySnapshot(h.kittyListTarget())
 		joined <- captureResult{capture: capture, err: err}
 	}()
 	waitForCoalescedWaiters(t, client, coordinationSocket, 1)
