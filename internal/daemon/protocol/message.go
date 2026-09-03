@@ -323,6 +323,14 @@ type Response struct {
 	ScreenPatterns *ScreenPatternsSnapshot `json:"screen_patterns,omitempty"`
 	// ASL is populated for the ASL message types.
 	ASL *ASLResponse `json:"asl_result,omitempty"`
+	// KittySnapshot is the daemon's cached window tree and its freshness. It is
+	// populated for both TypeStateQuery (with Windows) and TypeHealth (status
+	// only), and omitted entirely by daemons that predate it — which is what
+	// lets a new client fall back to its own direct Kitty I/O against an old
+	// daemon instead of rendering an empty dashboard. A new daemon always
+	// publishes a non-nil block, cold or not, so nil means "old daemon" rather
+	// than "no snapshot yet".
+	KittySnapshot *KittySnapshot `json:"kitty_snapshot,omitempty"`
 	// Ready reports whether the daemon completed its bounded initial restore
 	// before binding the public socket, or — after a degraded start — later
 	// recovered when a maintenance tick restored durable state from a

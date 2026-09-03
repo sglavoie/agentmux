@@ -111,6 +111,16 @@ var maxResponseBytes = 64 << 20
 // gets its own generous bound instead of inheriting sendDeadline.
 var exportDeadline = 5 * time.Second
 
+// stateQueryDeadline bounds one dashboard state query. It sits deliberately
+// between the two existing budgets. The 250ms acknowledgement budget is sized
+// for a hook that must not delay its harness and is too tight here: a state
+// query marshals every tracked window plus the cached Kitty tree. The 5s export
+// budget is far too loose: the whole point of serving the query from the cache
+// is that it never waits on Kitty, so a second is already generous and anything
+// longer would let a wedged daemon stall a dashboard refresh instead of letting
+// it fall back.
+var stateQueryDeadline = 1 * time.Second
+
 // Send sends req to the daemon and returns the response.
 // Returns an error if the daemon is not reachable.
 func (c *Client) Send(req protocol.Request) (protocol.Response, error) {
@@ -231,6 +241,18 @@ type Health struct {
 	// source per pattern set plus every load warning. Nil against a daemon that
 	// predates the block.
 	ScreenPatterns *protocol.ScreenPatternsSnapshot
+	// KittySnapshot is the status-only view of the daemon's cached Kitty
+	// topology: readiness, staleness, generation, capture time, age, and the
+	// list-coordinator counters. Its Windows field is always empty here —
+	// health is a probe, and the tree belongs to StateQuery. Nil against a
+	// daemon that predates the block, which a consumer must report as unknown
+	// rather than as a cold cache.
+	//
+	// Staleness here is deliberately independent of Ready and DegradedReason
+	// above: a wedged `kitten @ ls` is a different fault from a daemon that
+	// failed its bounded restore, and folding one into the other would hide
+	// whichever came second.
+	KittySnapshot *protocol.KittySnapshot
 }
 
 // Health pings the daemon and returns its liveness, PID and uptime. Never
@@ -258,6 +280,7 @@ func (c *Client) healthBefore(deadline time.Time) Health {
 		ASLReconcile:    resp.ASLReconcile,
 		ASLHookDelivery: resp.ASLHookDelivery,
 		ScreenPatterns:  resp.ScreenPatterns,
+		KittySnapshot:   resp.KittySnapshot,
 	}
 }
 

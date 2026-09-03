@@ -91,6 +91,17 @@ func (h *Handler) handleHealth() protocol.Response {
 		patterns := *h.screenPatterns
 		resp.ScreenPatterns = &patterns
 	}
+	// Status only, never the window tree: health is a probe with an
+	// acknowledgement budget, and the tree belongs to the state query. Published
+	// unconditionally, so a cold daemon still says so.
+	//
+	// Deliberately computed after Readiness above and never folded into it: a
+	// stale or cold snapshot means Kitty stopped answering, which is a different
+	// fault with a different remedy from a daemon that failed its bounded
+	// restore. Letting it move Ready or DegradedReason would make every wedged
+	// `kitten @ ls` look like a broken daemon, and would erase the real
+	// degraded reason a daemon already had.
+	resp.KittySnapshot = h.kittySnapshotStatus(time.Now())
 	return resp
 }
 

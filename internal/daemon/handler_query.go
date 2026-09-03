@@ -50,8 +50,26 @@ func (h *Handler) handleStateQuery() protocol.Response {
 		}
 		watchdog[id] = entry
 	}
+	// Topology is read in the same critical section as the window states, under
+	// the established stateMu → SnapshotStore order. A publication landing
+	// between two separate reads would otherwise hand a dashboard states from
+	// one moment and a window tree from another, which is precisely the
+	// incoherence a single-round-trip refresh exists to avoid.
+	view, listClient, listSocket := h.kittyListSourceLocked()
 	h.stateMu.Unlock()
-	return protocol.Response{OK: true, Activity: snapshot, Watchdog: watchdog, States: states}
+	// Sampled after the unlock: kittyClientForList takes stateMu itself, so
+	// scoping the already-captured client here is what keeps the sample off the
+	// lock without re-entering it. These are operational counters for the same
+	// effective socket rather than facts about the publication above, so they
+	// are not required to be coherent with it.
+	status, hasStatus := kittyListStatus(listClient, listSocket)
+	return protocol.Response{
+		OK:            true,
+		Activity:      snapshot,
+		Watchdog:      watchdog,
+		States:        states,
+		KittySnapshot: kittySnapshotBlock(view, status, hasStatus, time.Now(), true),
+	}
 }
 
 // handleSessionDetail returns the per-window event ring buffer for req.WindowID.

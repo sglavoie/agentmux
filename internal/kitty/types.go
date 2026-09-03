@@ -371,6 +371,44 @@ func (u *UserVars) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// MarshalJSON re-encodes user vars so a decoded UserVars survives being sent on
+// somewhere else and decoded again by UnmarshalJSON above. The daemon publishes
+// its cached Kitty window tree on the IPC wire, so that round trip is now a
+// real path rather than a hypothetical one, and two facts would be silently
+// lost across it:
+//
+//   - ExplicitFlagsSet records whether cc_explicit_flags was PRESENT, not what
+//     it contained; internal/session/restart.go reads it to decide whether a
+//     session's argv was operator-authored. The default encoding emits the key
+//     unconditionally, so an absent flag would come back as a present empty one
+//     and a restart would stop falling back to the project's args.
+//   - Locked is decoded from amx_locked, which no struct field carries at all.
+//     The default encoding drops it, so every transported session would arrive
+//     unlocked and the TUI would offer the destructive actions a lock exists to
+//     refuse.
+//
+// Encoding through a key map rather than a second struct keeps this tied to
+// whatever UnmarshalJSON actually reads: both sides key on presence, so both
+// have to speak in keys.
+func (u UserVars) MarshalJSON() ([]byte, error) {
+	type alias UserVars
+	data, err := json.Marshal(alias(u))
+	if err != nil {
+		return nil, err
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+	if !u.ExplicitFlagsSet {
+		delete(raw, "cc_explicit_flags")
+	}
+	if u.Locked {
+		raw["amx_locked"] = json.RawMessage(`"true"`)
+	}
+	return json.Marshal(raw)
+}
+
 func (u UserVars) EffectiveProfile() string {
 	if u.Profile != "" {
 		return u.Profile

@@ -405,3 +405,43 @@ func TestUserVars_UnmarshalJSON_Locked(t *testing.T) {
 		})
 	}
 }
+
+// TestUserVars_MarshalJSON_RoundTripPreservesPresenceFacts covers the path the
+// daemon opened by publishing its cached window tree on the IPC wire: user vars
+// decoded from `kitten @ ls` are re-encoded, sent, and decoded again by a
+// client. Two facts are carried by key presence rather than by a value, so the
+// default struct encoding loses both — silently, and in the direction that
+// makes a locked session look unlocked.
+func TestUserVars_MarshalJSON_RoundTripPreservesPresenceFacts(t *testing.T) {
+	tests := []struct {
+		name string
+		json string
+	}{
+		{"locked with explicit flags", `{"cc_account":"work","cc_explicit_flags":"--model opus","amx_locked":"true"}`},
+		{"locked with no explicit flags", `{"cc_account":"work","amx_locked":"true"}`},
+		{"unlocked with an empty explicit flags key", `{"cc_account":"work","cc_explicit_flags":""}`},
+		{"unlocked with neither key", `{"cc_account":"work"}`},
+		{"explicitly unlocked", `{"cc_account":"work","amx_locked":"false"}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var first UserVars
+			if err := json.Unmarshal([]byte(tt.json), &first); err != nil {
+				t.Fatalf("Unmarshal(%q) error: %v", tt.json, err)
+			}
+			data, err := json.Marshal(first)
+			if err != nil {
+				t.Fatalf("Marshal(UserVars): %v", err)
+			}
+			var second UserVars
+			if err := json.Unmarshal(data, &second); err != nil {
+				t.Fatalf("Unmarshal(re-encoded %s): %v", data, err)
+			}
+			if second != first {
+				t.Fatalf("round trip changed the user vars:\n got %+v\nwant %+v\nencoded as %s",
+					second, first, data)
+			}
+		})
+	}
+}

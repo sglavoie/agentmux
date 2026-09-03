@@ -194,3 +194,28 @@ func (c *Client) ExportEvents(windowID int) (protocol.EventsExport, error) {
 		WindowMetadata: resp.WindowMetadata,
 	}, nil
 }
+
+// StateQuery asks the daemon for its per-window states and its cached Kitty
+// topology in one round trip, under the dedicated one-second budget rather
+// than the 250ms hook-acknowledgement budget Send enforces.
+//
+// It is the dashboard refresh path: the response's KittySnapshot carries the
+// window tree the daemon already listed, so a refresh does not run a
+// `kitten @ ls` of its own. A nil KittySnapshot means the daemon predates the
+// block and the caller must fall back to direct Kitty I/O; a non-nil block with
+// Ready false means a new daemon that has not listed successfully yet, which is
+// a wait rather than a fallback.
+//
+// The raw Response is returned rather than a projection because the state query
+// has always been consumed field by field by its callers; adding a projection
+// type here would only oblige every existing one to be rewritten.
+func (c *Client) StateQuery() (protocol.Response, error) {
+	resp, err := c.sendWithDeadline(protocol.Request{Type: protocol.TypeStateQuery}, stateQueryDeadline)
+	if err != nil {
+		return protocol.Response{}, err
+	}
+	if !resp.OK {
+		return protocol.Response{}, fmt.Errorf("daemon error: %s", resp.Error)
+	}
+	return resp, nil
+}
