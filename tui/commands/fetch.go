@@ -244,6 +244,10 @@ func decodeDaemonState(resp protocol.Response) daemonState {
 // ApplyDaemonStates overlays daemon-owned state onto Kitty-enumerated rows.
 // A reachable daemon is authoritative even for a freshly seen window without
 // a state entry: its dashboard state is empty until the daemon observes it.
+// Unseen joins State/Looping/BusySince in both directions, including the reset
+// in the no-entry branch: an unobserved window has no authority for the bit,
+// and false (seen) is the quiet direction — it can only ever demote a row out
+// of Needs Attention, never pin one there on the strength of a stale overlay.
 func ApplyDaemonStates(sessions []session.RunningSession, states map[int]protocol.WindowStateSnapshot) {
 	for i := range sessions {
 		state, ok := states[sessions[i].WindowID]
@@ -251,10 +255,12 @@ func ApplyDaemonStates(sessions []session.RunningSession, states map[int]protoco
 			sessions[i].State = ""
 			sessions[i].Looping = false
 			sessions[i].BusySince = time.Time{}
+			sessions[i].Unseen = false
 			continue
 		}
 		sessions[i].State = state.IconState
 		sessions[i].Looping = state.Looping
+		sessions[i].Unseen = state.Unseen
 		sessions[i].BusySince = time.Time{}
 		if state.BusySinceAt > 0 {
 			sessions[i].BusySince = time.Unix(state.BusySinceAt, 0)

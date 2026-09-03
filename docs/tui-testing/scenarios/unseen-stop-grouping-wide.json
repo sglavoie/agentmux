@@ -1,0 +1,17 @@
+{
+  "name": "unseen-stop-grouping-wide",
+  "fixture": "unseen_stops",
+  "size": { "width": 120, "height": 36 },
+  "actions": [
+    { "type": "key", "key": "]" },
+    { "type": "key", "key": "s" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "Needs Attention (1)" },
+    { "type": "contains_text", "text": "Active (1)" },
+    { "type": "contains_text", "text": "Idle (1)" },
+    { "type": "selected_title", "value": "read" },
+    { "type": "no_layout_issues" }
+  ]
+}

@@ -7,6 +7,16 @@ import "github.com/sglavoie/agentmux/internal/session"
 // a config). In production the root populates its set from
 // cfg.Defaults.Jump.AttentionStates, which applyDefaults fills with the same
 // set when the user does not override it.
+//
+// stop is deliberately absent, and stayed absent when StateGroup learned to put
+// an UNSEEN stop under Needs Attention. Jump is keyed by state name, from a
+// user-editable config list; "an unseen stop" is not a state name, so honoring
+// it here would mean widening the whole matcher from func(string) bool to a
+// predicate over the row — a signature change the grouping work explicitly did
+// not need. The rows stay reachable regardless: the ]s chord targets every
+// stop, seen or not, and an unseen stop now sorts into the top group, which is
+// where the cursor already starts. Jump answers "take me to the next one";
+// seenness decides where a row sits, not whether ]a stops on it.
 var defaultAttentionStates = map[string]bool{
 	"key":      true,
 	"error":    true,

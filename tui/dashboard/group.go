@@ -18,10 +18,11 @@ const (
 
 // StateGroup classifies a session into one of three buckets:
 //
-//	0 → Needs Attention (key, stop, error, question)
+//	0 → Needs Attention (key, error, question, or an UNSEEN stop)
 //	1 → Active (bolt, warning, subagent, compact, or empty state within the
 //	    idle threshold, or empty state with no activity record)
-//	2 → Idle (empty state with stale activity, beyond the threshold)
+//	2 → Idle (a SEEN stop, or empty state with stale activity beyond the
+//	    threshold)
 //
 // The warning state is grouped under Active so a session whose last tool
 // call failed (carrying the ⚠️ icon) stays visible alongside bolt rows
@@ -31,13 +32,30 @@ const (
 // classify alongside bolt; question is the elicitation prompt, which requires
 // user input and so groups under Needs Attention.
 //
+// stop is the one state whose bucket is not decided by its name alone, and it
+// is the reason Needs Attention now drains. A finished turn is worth the top of
+// the list exactly once — until the user has looked at it. Unseen carries that,
+// daemon-owned and inverted so that its zero value means seen: a row with no
+// daemon behind it, a client too old to read the field, and every non-stop
+// state all demote quietly rather than pinning the group open. A seen stop
+// therefore lands in Idle beside the stale rows, where a session that finished
+// hours ago belongs, instead of sitting above one on a live permission prompt.
+//
 // Without a daemon-recorded activity timestamp a session is treated as
 // Active rather than Idle so a fresh session does not flicker into the
 // Idle bucket the moment it appears.
 func StateGroup(s session.RunningSession, lastActivity map[int]time.Time, threshold time.Duration) int {
 	switch s.State {
-	case "key", "stop", "error", "question":
+	case "key", "error", "question":
 		return 0
+	case "stop":
+		// Decided inside the switch rather than in the tail below, so an
+		// unknown/legacy state name keeps reaching the tail's own Idle rule
+		// instead of being answered by this one.
+		if s.Unseen {
+			return 0
+		}
+		return 2
 	case "bolt", "warning", "subagent", "compact":
 		return 1
 	}
@@ -110,6 +128,11 @@ var groupLabels = [3]string{"Needs Attention", "Active", "Idle"}
 // SortRows applies a stable sort so attention rows come first, then active,
 // then idle — preserving existing order within each group. Sessions with no
 // state icon are bucketed with the activity map and idle threshold.
+//
+// It names no state of its own: every bucket decision is StateGroup's, and the
+// only state name it reads is the empty one, inside the Active tie-break. That
+// is why the unseen demotion needed no change here — a seen stop simply comes
+// back as group 2 and sorts with the idle rows.
 func SortRows(rows []session.RunningSession, lastActivity map[int]time.Time, threshold time.Duration) {
 	sort.SliceStable(rows, func(i, j int) bool {
 		gi := StateGroup(rows[i], lastActivity, threshold)

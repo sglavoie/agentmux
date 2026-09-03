@@ -40,14 +40,17 @@ func TestStateGroupSorting(t *testing.T) {
 		{TabID: 1, Base: "idle1", Account: "work", State: ""},
 		{TabID: 2, Base: "active1", Account: "work", State: "bolt"},
 		{TabID: 3, Base: "attention1", Account: "personal", State: "key"},
-		{TabID: 4, Base: "attention2", Account: "personal", State: "stop"},
+		{TabID: 4, Base: "attention2", Account: "personal", State: "stop", Unseen: true},
 		{TabID: 5, Base: "attention3", Account: "work", State: "error"},
+		{TabID: 6, Base: "readstop", Account: "work", State: "stop"},
 	}
 	m = loadSessions(m, sessions)
 
-	// Attention (key, stop, error) comes first; then Active with icon (bolt)
-	// before empty-state Active sessions (per the no-record→Active design).
-	expected := []string{"attention1", "attention2", "attention3", "active1", "idle1"}
+	// Attention (key, unseen stop, error) comes first; then Active with icon
+	// (bolt) before empty-state Active sessions (per the no-record→Active
+	// design). The seen stop sorts below both: it is Idle, and it is the only
+	// row here whose bucket its state name alone would have got wrong.
+	expected := []string{"attention1", "attention2", "attention3", "active1", "idle1", "readstop"}
 	if len(m.filtered) != len(expected) {
 		t.Fatalf("expected %d filtered sessions, got %d", len(expected), len(m.filtered))
 	}

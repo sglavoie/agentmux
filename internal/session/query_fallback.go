@@ -216,13 +216,19 @@ func fallbackSessionFromMatch(tab kitty.Tab, winID int, m titleFallbackMatch, ba
 	groups := append([]string(nil), m.sess.Groups...)
 
 	rs := RunningSession{
-		TabID:            tab.ID,
-		WindowID:         winID,
-		Key:              SessionKey(profile, m.sess.Title),
-		Title:            tab.Title,
-		Base:             base,
-		State:            state,
-		Looping:          palette.ParseTitleParts(tab.Title).Looping,
+		TabID:    tab.ID,
+		WindowID: winID,
+		Key:      SessionKey(profile, m.sess.Title),
+		Title:    tab.Title,
+		Base:     base,
+		State:    state,
+		Looping:  palette.ParseTitleParts(tab.Title).Looping,
+		// Unseen is deliberately left false. A tab title carries the icon but
+		// not the seenness behind it, and with no daemon there is no authority
+		// for the bit at all — so this path claims none. False is the quiet
+		// direction: a daemonless dashboard demotes a resting row into Idle
+		// rather than pinning every one of them under Needs Attention on the
+		// strength of a guess.
 		Starred:          starred,
 		Muted:            muted,
 		Project:          m.sess.Title,

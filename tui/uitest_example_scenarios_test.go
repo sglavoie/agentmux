@@ -80,6 +80,8 @@ func TestExampleScenariosParseAndPass(t *testing.T) {
 		"session-search-header-narrow-fit.json":     false,
 		"session-view-hints-narrow-fit.json":        false,
 		"session-view-hints-wide.json":              false,
+		"unseen-stop-grouping-narrow-fit.json":      false,
+		"unseen-stop-grouping-wide.json":            false,
 		"worktrees-browse.json":                     false,
 		"worktrees-cleanup-active-refusal.json":     false,
 		"worktrees-cleanup-dirty-refusal.json":      false,

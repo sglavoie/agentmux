@@ -1,0 +1,13 @@
+{
+  "name": "unseen-stop-grouping-narrow-fit",
+  "fixture": "unseen_stops",
+  "size": { "width": 34, "height": 32 },
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "cursor_equals", "cursor": 0 },
+    { "type": "selected_title", "value": "unread" },
+    { "type": "contains_text", "text": "Needs Attention (1)" },
+    { "type": "contains_text", "text": "Idle (1)" },
+    { "type": "no_layout_issues" }
+  ]
+}

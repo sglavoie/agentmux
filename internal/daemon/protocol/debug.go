@@ -17,6 +17,14 @@ type WindowStateSnapshot struct {
 	// seconds). Absent while the window is not busy, which also preserves the
 	// former response shape for clients that do not render the stretch.
 	BusySinceAt int64 `json:"busy_since_at,omitempty"`
+	// Unseen reports that the window came to rest on a turn the user has not
+	// looked at yet. The polarity is inverted for the same reason it is inverted
+	// on the durable state.WindowState field: absent means SEEN, so a daemon too
+	// old to carry the bit, or a client reading a response written before it
+	// existed, demotes the row quietly instead of flooding Needs Attention.
+	// Absent for every seen window, which also preserves the former response
+	// shape for clients that do not group on it.
+	Unseen bool `json:"unseen,omitempty"`
 	// Conversation is derived from live parent-harness reducer facts. It is
 	// absent for identity-less state, preserving the former response shape for
 	// clients that do not use live-conversation continuity.

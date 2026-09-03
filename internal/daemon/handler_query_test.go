@@ -57,6 +57,53 @@ func TestHandler_StateQueryReturnsDaemonStateSnapshot(t *testing.T) {
 	}
 }
 
+// TestHandler_StateQueryReportsUnseenAndOmitsItWhenSeen pins the wire half of
+// the unseen bit. The projection carries the durable field unchanged, and the
+// inversion has to survive the encoding as well as the struct: a seen window
+// must write no `unseen` key at all, so a dashboard reading a response from a
+// daemon too old to carry the field decodes exactly what a seen window decodes.
+func TestHandler_StateQueryReportsUnseenAndOmitsItWhenSeen(t *testing.T) {
+	h := newTestHandler()
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "stop"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 9, Action: "stop"})
+	// Seeded rather than driven through a focus snapshot: this test is about the
+	// projection, and the transitions that raise and clear the bit have their own
+	// table in shadow_unseen_test.go.
+	seedUnseen(h, 7, true, false)
+	seedUnseen(h, 9, false, false)
+
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateQuery})
+	got, ok := resp.States[7]
+	if !ok {
+		t.Fatalf("state query omitted window 7: %+v", resp.States)
+	}
+	if !got.Unseen {
+		t.Fatalf("Unseen = false for an unread stop, want true: %+v", got)
+	}
+	seen, ok := resp.States[9]
+	if !ok {
+		t.Fatalf("state query omitted window 9: %+v", resp.States)
+	}
+	if seen.Unseen {
+		t.Fatalf("Unseen = true for a read stop, want false: %+v", seen)
+	}
+
+	encoded, err := json.Marshal(seen)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v", err)
+	}
+	if strings.Contains(string(encoded), "unseen") {
+		t.Fatalf("seen snapshot wrote the field on the wire: %s", encoded)
+	}
+	raised, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v", err)
+	}
+	if !strings.Contains(string(raised), `"unseen":true`) {
+		t.Fatalf("unseen snapshot did not write the field on the wire: %s", raised)
+	}
+}
+
 func TestHandler_StateQueryReportsBusySinceAndOmitsItWhenIdle(t *testing.T) {
 	h := newTestHandler()
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "active", IsPrompt: true})

@@ -74,6 +74,7 @@ amx tui-test list-fixtures
 # asl_runs
 # basic
 # run_timers
+# unseen_stops
 # wide_profiles
 # worktree_lifecycle
 # worktrees
@@ -114,6 +115,7 @@ amx tui-test fixture wide_profiles --width 140 --key C
 | `asl_question` | `basic` with a human-actionable `❓🔁` supervisor handoff and a `⚡🔁` active run | ASL handoff presentation: attention grouping, gloss, `]q` jump |
 | `asl_runs` | four supervisor runs spanning exact, ambiguous, second-exact, and unbound live sessions | Runs view focus outcomes and binding presentation |
 | `run_timers` | five busy stretches: sub-minute, multi-minute, hours-long, warning-band, and idle | per-row run timer formatting bands and the `⏳` watchdog warning |
+| `unseen_stops` | two `🛑` rows the daemon separates by seenness, plus one `⚡` row | the unseen-stop demotion: a read `🛑` falls to Idle while an unread one holds Needs Attention |
 | `wide_profiles` | long profile names and home dirs | stresses the profile/config picker box width |
 | `worktree_lifecycle` | deterministic reopen and cleanup outcomes | exercises focus/resume/fresh reopen, ambiguity, replacement profiles, cleanup refusals, safe deletion, forgetting, and partial recovery without real Git or Kitty mutations |
 | `worktrees` | clean, dirty, live, looping, missing, and invalid managed worktrees | hermetic Worktrees browsing, filtering, badges, and layout |
@@ -124,8 +126,11 @@ alpha-sorted: the cursor starts on `dotfiles` (personal).
 ### Daemon-owned state and the frozen clock
 
 A fixture may also carry the per-window state the daemon owns — icon state,
-looping, the busy-stretch anchor, and watchdog thresholds — which no Kitty tab
-title can express. The harness overlays it on the enumerated sessions and
+looping, the busy-stretch anchor, the unseen bit, and watchdog thresholds —
+which no Kitty tab title can express. The `unseen_stops` fixture is the clearest
+case: both of its `🛑` rows carry the same icon in the same title, and only the
+daemon state tells them apart. The harness overlays it on the enumerated
+sessions and
 replays it on every refresh, so a `tick` action does not wipe the columns it
 feeds. The daemon is never contacted: a fixture that supplies no such state
 renders exactly as it would against an unreachable daemon, which stays the
@@ -310,6 +315,8 @@ file. The exact inventory is:
 | [`session-search-header-narrow-fit.json`](scenarios/session-search-header-narrow-fit.json) | `basic` | Past Sessions header and filters fit at narrow width |
 | [`session-view-hints-wide.json`](scenarios/session-view-hints-wide.json) | `basic` | transcript viewer advertises the full continuity palette including `c continue` |
 | [`session-view-hints-narrow-fit.json`](scenarios/session-view-hints-narrow-fit.json) | `basic` | transcript viewer hints truncate to the row budget and surface the actionable `? more` marker |
+| [`unseen-stop-grouping-narrow-fit.json`](scenarios/unseen-stop-grouping-narrow-fit.json) | `unseen_stops` | two identically-iconed 🛑 rows split across Needs Attention and Idle by the daemon's unseen bit, with the unread one leading the list at narrow width |
+| [`unseen-stop-grouping-wide.json`](scenarios/unseen-stop-grouping-wide.json) | `unseen_stops` | the seen 🛑 demotes to Idle while the unseen one holds Needs Attention, and `]s` still reaches the demoted row |
 | [`worktrees-browse.json`](scenarios/worktrees-browse.json) | `worktrees` | `W` opens the hermetic managed-worktree inventory and whitespace-AND filtering narrows to the dirty row without exposing lifecycle mutations |
 | [`worktrees-cleanup-active-refusal.json`](scenarios/worktrees-cleanup-active-refusal.json) | `worktree_lifecycle` | checkout removal is refused from a snapshot with a live session |
 | [`worktrees-cleanup-dirty-refusal.json`](scenarios/worktrees-cleanup-dirty-refusal.json) | `worktree_lifecycle` | checkout removal is refused from a dirty snapshot |

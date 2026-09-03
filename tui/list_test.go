@@ -23,6 +23,7 @@ func TestStateGroupClassification(t *testing.T) {
 	cases := []struct {
 		name     string
 		state    string
+		unseen   bool
 		windowID int
 		activity map[int]time.Time
 		want     int
@@ -35,10 +36,42 @@ func TestStateGroupClassification(t *testing.T) {
 			want:     0,
 		},
 		{
-			name:     "stop state always attention",
+			// An unseen stop is the one the feature exists for: the turn
+			// finished and nobody has looked at it yet.
+			name:     "unseen stop is Needs Attention",
 			state:    "stop",
+			unseen:   true,
 			windowID: 2,
 			want:     0,
+		},
+		{
+			// The demotion that makes Needs Attention drain. Stale activity is
+			// irrelevant — seenness alone decides.
+			name:     "seen stop is Idle",
+			state:    "stop",
+			windowID: 13,
+			activity: map[int]time.Time{13: now.Add(-time.Minute)}, // fresh, ignored
+			want:     2,
+		},
+		{
+			// The unseen bit only ever means anything on stop; a non-resting
+			// icon is classified by its name whatever the bit says. The daemon
+			// clears it on every non-stop publish, so this pairing is defensive.
+			name:     "unseen is ignored on a non-stop state",
+			state:    "bolt",
+			unseen:   true,
+			windowID: 14,
+			want:     1,
+		},
+		{
+			// The inversion in action: no daemon behind a row leaves Unseen at
+			// its zero value, and zero means seen, so the row demotes quietly
+			// rather than pinning Needs Attention open.
+			name:     "unknown legacy state stays Idle even when unseen",
+			state:    "sparkle",
+			unseen:   true,
+			windowID: 15,
+			want:     2,
 		},
 		{
 			name:     "bolt state always active",
@@ -115,10 +148,10 @@ func TestStateGroupClassification(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			s := session.RunningSession{State: tc.state, WindowID: tc.windowID}
+			s := session.RunningSession{State: tc.state, Unseen: tc.unseen, WindowID: tc.windowID}
 			got := dashboard.StateGroup(s, tc.activity, threshold)
 			if got != tc.want {
-				t.Errorf("dashboard.StateGroup(%q, win=%d) = %d, want %d", tc.state, tc.windowID, got, tc.want)
+				t.Errorf("dashboard.StateGroup(%q, unseen=%v, win=%d) = %d, want %d", tc.state, tc.unseen, tc.windowID, got, tc.want)
 			}
 		})
 	}

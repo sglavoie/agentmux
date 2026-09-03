@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -56,5 +57,52 @@ func TestApplyDaemonStatesStampsBusySince(t *testing.T) {
 	}
 	if !sessions[2].BusySince.IsZero() {
 		t.Errorf("BusySince = %v for a window the daemon does not know, want the zero time", sessions[2].BusySince)
+	}
+}
+
+// TestApplyDaemonStatesOverlaysUnseen asserts the unseen bit is overlaid in
+// both directions and, crucially, cleared in the no-entry branch alongside
+// State/Looping/BusySince. A row the daemon has no entry for carries no
+// authority for the bit, and leaving a stale true there would pin it under
+// Needs Attention for as long as the daemon stayed silent about it.
+func TestApplyDaemonStatesOverlaysUnseen(t *testing.T) {
+	sessions := []session.RunningSession{
+		{WindowID: 1},
+		{WindowID: 2, Unseen: true},
+		{WindowID: 3, State: "stop", Unseen: true},
+	}
+	commands.ApplyDaemonStates(sessions, map[int]protocol.WindowStateSnapshot{
+		1: {IconState: "stop", Unseen: true},
+		2: {IconState: "stop"},
+	})
+
+	if !sessions[0].Unseen {
+		t.Error("Unseen = false for a window the daemon reports unseen, want true")
+	}
+	if sessions[1].Unseen {
+		t.Error("Unseen = true after the daemon reported the window seen, want false")
+	}
+	if sessions[2].Unseen {
+		t.Error("Unseen = true for a window the daemon does not know, want false")
+	}
+	if sessions[2].State != "" || sessions[2].Looping {
+		t.Errorf("no-entry row = %+v, want State and Looping cleared alongside Unseen", sessions[2])
+	}
+}
+
+// TestApplyDaemonStatesDecodesAnOlderDaemonAsSeen pins the inversion across the
+// wire rather than across the struct: a state response written before the field
+// existed carries no `unseen` key, and the row it overlays must come out seen.
+// This is the property that keeps an upgrade from flooding Needs Attention.
+func TestApplyDaemonStatesDecodesAnOlderDaemonAsSeen(t *testing.T) {
+	var legacy protocol.WindowStateSnapshot
+	if err := json.Unmarshal([]byte(`{"icon_state":"stop","looping":false}`), &legacy); err != nil {
+		t.Fatalf("json.Unmarshal() error: %v", err)
+	}
+	sessions := []session.RunningSession{{WindowID: 1, Unseen: true}}
+	commands.ApplyDaemonStates(sessions, map[int]protocol.WindowStateSnapshot{1: legacy})
+
+	if sessions[0].Unseen {
+		t.Error("Unseen = true from a response with no unseen key, want false (seen)")
 	}
 }

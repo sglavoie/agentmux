@@ -89,6 +89,7 @@ var uitestFixtureBuilders = map[string]func() uitestFixture{
 	"worktree_lifecycle": worktreeLifecycleFixture,
 	"asl_runs":           aslRunsFixture,
 	"run_timers":         runTimersFixture,
+	"unseen_stops":       unseenStopsFixture,
 }
 
 // uitestFixtureError reports a request for an unknown built-in fixture and
@@ -337,6 +338,47 @@ func runTimersFixture() uitestFixture {
 			31: {LastAction: "compact", LastEventAt: lastEvent(45 * time.Second), ThresholdSec: thresholdSec},
 			41: {LastAction: "active", LastEventAt: lastEvent(9*time.Minute + 41*time.Second), ThresholdSec: thresholdSec},
 			51: {LastAction: "active", LastEventAt: lastEvent(22 * time.Minute), ThresholdSec: thresholdSec},
+		},
+	}
+}
+
+// unseenStopsFixture is two finished sessions that a tab title cannot tell
+// apart. Both carry 🛑; only the daemon knows the user has read one of them and
+// not the other. It exists so scenarios can pin the demotion that makes Needs
+// Attention drain: the unread stop leads the list, the read one falls to Idle,
+// and a working row holds Active in between so all three group labels render.
+// The state names alone are ambiguous here on purpose — a fixture where the
+// grouping could be reproduced from the titles would prove nothing.
+func unseenStopsFixture() uitestFixture {
+	cfg := &config.Config{
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		HarnessEmojis: map[string]string{"claude": "🦊", "codex": "🤖"},
+		HarnessColors: map[string]string{"claude": "blue", "codex": "green"},
+		Accounts: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "~/.config/agent-mux/homes/work", Color: "blue"},
+			{Name: "personal", Harness: "codex", HomeDir: "~/.config/agent-mux/homes/personal", Color: "green"},
+		},
+		Sessions: []config.Session{
+			{Title: "unread", Directory: "~/projects/unread", Profile: "work"},
+			{Title: "read", Directory: "~/projects/read", Profile: "work"},
+			{Title: "working", Directory: "~/projects/working", Profile: "personal"},
+		},
+	}
+	windows := []kitty.OSWindow{uitestOSWindow(
+		uitestTab(1, 11, "🛑🦊unread", false, managedVars("work", "claude", "unread", "~/projects/unread")),
+		uitestTab(2, 21, "🛑🦊read", false, managedVars("work", "claude", "read", "~/projects/read")),
+		uitestTab(3, 31, "⚡🤖working", true, managedVars("personal", "codex", "working", "~/projects/working")),
+	)}
+	return uitestFixture{
+		Name:        "unseen_stops",
+		Description: "two identical 🛑 rows the daemon separates by seenness, plus one working row",
+		Size:        UITestSize{Width: 100, Height: 32},
+		Config:      cfg,
+		Windows:     windows,
+		States: map[int]protocol.WindowStateSnapshot{
+			11: {IconState: "stop", Unseen: true},
+			21: {IconState: "stop"},
+			31: {IconState: "bolt", BusySinceAt: uitestFrozenNow.Add(-42 * time.Second).Unix()},
 		},
 	}
 }

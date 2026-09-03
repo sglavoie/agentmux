@@ -20,6 +20,7 @@ type RunningSession struct {
 	State            string    // "bolt", "stop", "key", "warning", "error", "subagent", "compact", "question", or ""
 	Looping          bool      // daemon-owned loop marker; title-derived only when the daemon is unreachable
 	BusySince        time.Time // daemon-owned start of the current active-class stretch; zero when the row is not busy
+	Unseen           bool      // daemon-owned: the row came to rest on a turn the user has not looked at; false (seen) with no daemon
 	Starred          bool
 	Locked           bool
 	Muted            bool
