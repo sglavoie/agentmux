@@ -322,16 +322,31 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   from an injectable clock, which is what keeps the gate testable without
   touching the live installation.
 - `tui`: the Bubble Tea program itself — the `Model`, the mode dispatcher, every
-  key handler, every `tea.Cmd` and `tea.Msg`, the shared theme, one projection
-  seam file per leaf (`dashboard_view.go`, `history_view.go`, `launch_view.go`,
-  `plans_view.go`, `worktrees_view.go`, `asl_view.go`,
-  `command_palette_view.go`), and the deterministic in-process uitest harness
-  that `cmd/tuitest.go` drives. It is the only package in the TUI tree that
+  key handler, the update loop that consumes whatever an effect reports back,
+  the shared theme, one projection seam file per leaf
+  (`tui/dashboard_view.go`, `tui/history_view.go`, `tui/launch_view.go`,
+  `tui/plans_view.go`, `tui/worktrees_view.go`, `tui/asl_view.go`, and
+  `tui/command_palette.go`, which carries the palette's controller and its
+  projection seam in one file), and the deterministic in-process uitest harness
+  that `cmd/tuitest/tuitest.go` drives. Command and message production is
+  divided rather than owned outright. The effects the dashboard starts away from
+  the update loop — Kitty enumeration and the initial fetch, daemon queries,
+  harness lifecycle, clipboard, directory and editor launches, health probes,
+  agent-session-loop discovery — live in `tui/commands`
+  (`tui/commands/session.go` and its siblings) together with the shared result
+  messages they report back with (`tui/commands/message.go`). The root keeps the
+  command and message pairs that close over its own model state: the transcript
+  and plan cache loads and debounced searches, worktree loads and mutations, the
+  ASL snapshot/question/action round trips, the preview and toast tickers, and
+  launch progress. Visibility is the line to read: every message type in
+  `tui/commands` is exported because it crosses back into the root's update
+  loop, and every message type the root declares is unexported because it never
+  leaves the loop that raised it. It is the only package in the TUI tree that
   names `Model`: the nine leaves below take explicit `*Input` values and return
-  strings, so vocabulary and pure rendering move out while what-a-keypress-*does*
-  stays in. The uitest files cannot become a child package because `cmd` reaches
-  them through the root. The whole TUI tree — root included — depends on
-  `internal/daemon/ipc`, `internal/daemon/process`, and
+  strings, so vocabulary and pure rendering move out while
+  what-a-keypress-*does* stays in. The uitest files cannot become a child
+  package because `cmd` reaches them through the root. The whole TUI tree — root
+  included — depends on `internal/daemon/ipc`, `internal/daemon/process`, and
   `internal/daemon/protocol` only; `internal/daemon` itself is not in its
   transitive imports at all.
 - `tui/layout`: terminal geometry, and nothing else — the visible-window slice
@@ -365,9 +380,14 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   root model with generics (`Command[M]`, `Action[M]`) so the leaf never names
   `Model` yet the palette can still ask a live model whether a command is
   visible and available — availability is re-derived at render time, not frozen
-  when the palette opens. It also owns the dashboard refresh command cycle and
-  the package-level seams root tests swap (`Registry`, `DaemonRequest`,
-  `SpawnDaemonDetached`, `CopyToClipboard`, `ActiveLoopDiscover`).
+  when the palette opens. It also owns the palette's matching, ordering, layout
+  and painting, and the effect layer the root half of the division above hands
+  off to: the model-free command builders that run work outside the update loop
+  and the exported messages those effects come back as. What a command *does* to
+  the model stays in the root, which supplies every catalog entry's closure. It
+  additionally owns the dashboard refresh command cycle and the package-level
+  seams root tests swap (`Registry`, `DaemonRequest`, `SpawnDaemonDetached`,
+  `CopyToClipboard`, `ActiveLoopDiscover`).
 - `tui/customization`: the standalone color, icon, and keybinding overlays, each
   its own Bubble Tea program. It is a sibling of the root rather than one of its
   leaves: `cmd` launches it directly and root `tui` does not import it.
