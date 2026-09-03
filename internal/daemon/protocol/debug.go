@@ -40,6 +40,27 @@ type WindowStateSnapshot struct {
 	// blocking class. Omitting it preserves the response shape for clients that
 	// do not gloss it, exactly as BusySinceAt and Unseen do.
 	Reason string `json:"reason,omitempty"`
+	// Branch and Dirty are the advisory Git facts the daemon's per-directory
+	// probe (internal/gitstate) last read for the checkout this window is
+	// sitting in, projected from state.WindowState.GitBranch/GitDirty. Branch is
+	// the short ref name; Dirty reports tracked-file modifications.
+	//
+	// Absent is an ordinary steady state with several honest causes, none of
+	// them an error: the directory is not a repository, the probe is switched
+	// off (`git_probe = false` leaves the daemon with no prober at all), git is
+	// missing or timed out, HEAD is detached, or no sweep has reached the window
+	// yet. internal/gitstate deliberately collapses all of them to an empty
+	// branch, and a client must render the absence as "nothing to say" rather
+	// than as a failure. Dirty is meaningful on its own: a detached HEAD reports
+	// its dirty bit with no branch to hang it on, because the probe reports what
+	// it saw rather than gating one fact on the other.
+	//
+	// Omitting them preserves the response shape for clients that do not paint a
+	// branch, exactly as BusySinceAt, Unseen, and Reason do. GitDirectory is not
+	// projected: it is write-back bookkeeping that lets the daemon notice a pane
+	// moved while git was running, not a display fact.
+	Branch string `json:"branch,omitempty"`
+	Dirty  bool   `json:"dirty,omitempty"`
 	// Conversation is derived from live parent-harness reducer facts. It is
 	// absent for identity-less state, preserving the former response shape for
 	// clients that do not use live-conversation continuity.

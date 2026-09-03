@@ -156,6 +156,79 @@ func TestHandler_StateQueryReportsPromptKindAndOmitsItWhenUnlabelled(t *testing.
 	}
 }
 
+// TestHandler_StateQueryReportsGitBranchAndDirtyAndOmitsThemWhenUnprobed pins
+// the wire half of the branch column. Three properties at once:
+//
+//   - the pair is projected verbatim from the durable fields the probe's
+//     write-back stamped, with no re-derivation — running git under stateMu is
+//     the one thing the asynchronous refresh exists to avoid;
+//   - Dirty stands on its own. A detached HEAD reports its dirty bit with no
+//     branch to hang it on, because internal/gitstate probes the two facts
+//     independently and neither gates the other. The renderer decides not to
+//     draw a marker with nothing to mark; the wire still carries the fact;
+//   - absent survives the encoding. An unprobed window — no repository, no
+//     `git`, `git_probe = false`, or simply no sweep yet — must write neither
+//     key, so a dashboard reading a response from a daemon too old to carry them
+//     decodes exactly what an unprobed window decodes.
+//
+// GitDirectory is deliberately not on the wire: it is the write-back's staleness
+// evidence, not a display fact, and the last assertion pins that it stays home.
+func TestHandler_StateQueryReportsGitBranchAndDirtyAndOmitsThemWhenUnprobed(t *testing.T) {
+	h := newTestHandler()
+	for _, id := range []int{7, 9, 11} {
+		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: id, Action: "active", IsPrompt: true})
+	}
+	// Seeded rather than driven through a real probe: this test is about the
+	// projection. Which git output produces which branch belongs to
+	// internal/gitstate, and how a result reaches a window without holding
+	// stateMu across a subprocess belongs to git_state_test.go.
+	h.stateMu.Lock()
+	h.store[7].GitDirectory, h.store[7].GitBranch, h.store[7].GitDirty = "/repo/api", "amx/feat-x", true
+	h.store[9].GitDirectory, h.store[9].GitDirty = "/repo/detached", true
+	h.stateMu.Unlock()
+
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateQuery})
+	probed, ok := resp.States[7]
+	if !ok {
+		t.Fatalf("state query omitted window 7: %+v", resp.States)
+	}
+	if probed.Branch != "amx/feat-x" || !probed.Dirty {
+		t.Fatalf("Branch/Dirty = %q/%v, want %q/true: %+v", probed.Branch, probed.Dirty, "amx/feat-x", probed)
+	}
+	detached, ok := resp.States[9]
+	if !ok {
+		t.Fatalf("state query omitted window 9: %+v", resp.States)
+	}
+	if detached.Branch != "" || !detached.Dirty {
+		t.Fatalf("Branch/Dirty = %q/%v for a detached HEAD, want \"\"/true: %+v", detached.Branch, detached.Dirty, detached)
+	}
+	bare, ok := resp.States[11]
+	if !ok {
+		t.Fatalf("state query omitted window 11: %+v", resp.States)
+	}
+	if bare.Branch != "" || bare.Dirty {
+		t.Fatalf("Branch/Dirty = %q/%v for an unprobed window, want \"\"/false: %+v", bare.Branch, bare.Dirty, bare)
+	}
+
+	encoded, err := json.Marshal(bare)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v", err)
+	}
+	if strings.Contains(string(encoded), "branch") || strings.Contains(string(encoded), "dirty") {
+		t.Fatalf("unprobed snapshot wrote a git key on the wire: %s", encoded)
+	}
+	written, err := json.Marshal(probed)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v", err)
+	}
+	if !strings.Contains(string(written), `"branch":"amx/feat-x"`) || !strings.Contains(string(written), `"dirty":true`) {
+		t.Fatalf("probed snapshot did not write both fields on the wire: %s", written)
+	}
+	if strings.Contains(string(written), "/repo/api") {
+		t.Fatalf("the probe's bookkeeping directory reached the wire: %s", written)
+	}
+}
+
 func TestHandler_StateQueryReportsBusySinceAndOmitsItWhenIdle(t *testing.T) {
 	h := newTestHandler()
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "active", IsPrompt: true})

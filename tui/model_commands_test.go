@@ -121,6 +121,77 @@ func TestApplyDaemonStatesOverlaysReason(t *testing.T) {
 	}
 }
 
+// TestApplyDaemonStatesOverlaysBranchAndDirty asserts the Git pair is overlaid
+// in both directions and cleared in the no-entry branch alongside every other
+// daemon-owned field.
+//
+// The reset matters more here than for any of the others. A branch describes a
+// checkout on disk rather than a fact about the session, so one carried forward
+// past the entry that supplied it would go on naming a directory nobody has
+// looked at since — for as long as the row stayed on screen, with nothing on the
+// row admitting the claim is old. Clearing costs the row nothing visible,
+// because a view with no branch does not reserve the column at all.
+//
+// The pair is also overlaid independently: a window the daemon reports as dirty
+// with no branch (a detached HEAD) must not keep the branch it held before, and
+// a window it reports clean must lose the dirty bit rather than the branch.
+func TestApplyDaemonStatesOverlaysBranchAndDirty(t *testing.T) {
+	sessions := []session.RunningSession{
+		{WindowID: 1},
+		{WindowID: 2, Branch: "amx/stale", Dirty: true},
+		{WindowID: 3, Branch: "amx/gone", Dirty: true},
+		{WindowID: 4, Branch: "main", Dirty: true},
+	}
+	commands.ApplyDaemonStates(sessions, map[int]protocol.WindowStateSnapshot{
+		1: {IconState: "bolt", Branch: "amx/feat-x", Dirty: true},
+		2: {IconState: "bolt"},
+		4: {IconState: "bolt", Dirty: true},
+	})
+
+	if sessions[0].Branch != "amx/feat-x" || !sessions[0].Dirty {
+		t.Errorf("row 1 = %q/%v, want %q/true", sessions[0].Branch, sessions[0].Dirty, "amx/feat-x")
+	}
+	if sessions[1].Branch != "" || sessions[1].Dirty {
+		t.Errorf("row 2 = %q/%v after the daemon reported an unprobed window, want \"\"/false",
+			sessions[1].Branch, sessions[1].Dirty)
+	}
+	if sessions[2].Branch != "" || sessions[2].Dirty {
+		t.Errorf("row 3 = %q/%v for a window the daemon does not know, want \"\"/false",
+			sessions[2].Branch, sessions[2].Dirty)
+	}
+	if sessions[2].State != "" || sessions[2].Looping {
+		t.Errorf("no-entry row = %+v, want State and Looping cleared alongside the git pair", sessions[2])
+	}
+	if sessions[3].Branch != "" || !sessions[3].Dirty {
+		t.Errorf("row 4 = %q/%v for a detached-HEAD report, want \"\"/true",
+			sessions[3].Branch, sessions[3].Dirty)
+	}
+}
+
+// TestApplyDaemonStatesDecodesAnOlderDaemonAsUnbranched pins the Git pair across
+// the wire rather than across the struct: a state response written before the
+// fields existed carries neither key, and the row it overlays must come out with
+// no branch to paint rather than keeping whatever it held before. That
+// equivalence is what makes "no branch" a supported steady state — the same one
+// a non-repository, a disabled probe, and a timeout all produce — rather than a
+// version skew a client would have to detect.
+func TestApplyDaemonStatesDecodesAnOlderDaemonAsUnbranched(t *testing.T) {
+	var legacy protocol.WindowStateSnapshot
+	if err := json.Unmarshal([]byte(`{"icon_state":"bolt","looping":false}`), &legacy); err != nil {
+		t.Fatalf("decoding a pre-branch state response failed: %v", err)
+	}
+	if legacy.Branch != "" || legacy.Dirty {
+		t.Fatalf("decoded legacy snapshot = %q/%v, want \"\"/false", legacy.Branch, legacy.Dirty)
+	}
+
+	sessions := []session.RunningSession{{WindowID: 1, Branch: "amx/stale", Dirty: true}}
+	commands.ApplyDaemonStates(sessions, map[int]protocol.WindowStateSnapshot{1: legacy})
+	if sessions[0].Branch != "" || sessions[0].Dirty {
+		t.Fatalf("row = %q/%v against an older daemon, want \"\"/false",
+			sessions[0].Branch, sessions[0].Dirty)
+	}
+}
+
 // TestApplyDaemonStatesDecodesAnOlderDaemonAsUnlabelled pins the reason across
 // the wire rather than across the struct: a state response written before the
 // field existed carries no `reason` key, and the row it overlays must come out

@@ -22,6 +22,8 @@ type RunningSession struct {
 	BusySince        time.Time // daemon-owned start of the current active-class stretch; zero when the row is not busy
 	Unseen           bool      // daemon-owned: the row came to rest on a turn the user has not looked at; false (seen) with no daemon
 	Reason           string    // daemon-owned harness prompt kind naming WHY a blocked row is blocked; empty when nothing is blocking it, when no screen probe labelled the prompt, and with no daemon
+	Branch           string    // daemon-owned short Git branch of the row's checkout; empty for a non-repository, a detached HEAD, a disabled/failed probe, and with no daemon
+	Dirty            bool      // daemon-owned: the row's checkout has modified tracked files; independent of Branch, so a detached HEAD still reports it
 	Starred          bool
 	Locked           bool
 	Muted            bool

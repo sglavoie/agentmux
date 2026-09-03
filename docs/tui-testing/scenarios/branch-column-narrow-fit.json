@@ -1,0 +1,15 @@
+{
+  "name": "branch-column-narrow-fit",
+  "fixture": "worktree_branches",
+  "size": { "width": 66, "height": 32 },
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "3:07 amx/feat-x …x" },
+    { "type": "contains_text", "text": "0:12 amx/hotfix …x" },
+    { "type": "contains_text", "text": "0:42 main*      …i" },
+    { "type": "contains_text", "text": "1:05            …s" },
+    { "type": "excludes_text", "text": "worktrees/api-feat-x" },
+    { "type": "excludes_text", "text": "worktrees/api-hotfix" },
+    { "type": "no_layout_issues" }
+  ]
+}

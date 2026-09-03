@@ -90,6 +90,31 @@ clears active-class icons while reconciling the tab-title `🔁` marker.
 The dashboard keeps the profile badge and harness metadata separate from the
 title column, so visible titles are just the project name.
 
+A row reads left to right as tab number, state icon, profile badge, harness,
+title, run timer, branch, and directory:
+
+```
+1: ⚡ [W] 🤖 claude   API     0:42  main*      ~/projects/api
+2: ⚡ [W] 🤖 claude   API     3:07  amx/feat-x ~/…/worktrees/api-feat-x
+3: 🛑 [P] 📜 codex    web     —                ~/projects/web
+```
+
+The branch column names the Git checkout each row is sitting in, which is what
+tells two managed worktrees of one repository apart once their shared directory
+prefix has truncated away. A `*` after the branch means the checkout has
+modified tracked files. Long branches truncate from the left, like the
+directory, so the distinguishing tail of a name like `amx/feature-name`
+survives.
+
+Both the run timer and the branch are reserved only when some row in the current
+view needs them, and the directory column absorbs the difference — so filtering
+down to rows with no branch gives that width straight back to the paths. A blank
+branch cell is the ordinary case rather than an error: the directory is not a
+repository, `HEAD` is detached, the daemon has not probed the row yet, or
+`git_probe = false` turned the probe off entirely. The facts come from the
+daemon, so a dashboard running with no daemon reachable shows no branch column
+at all.
+
 A sticky status row occupies the final terminal line for health, active mode
 summaries, and transient action messages; keybinding hints stay immediately
 above it.

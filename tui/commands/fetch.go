@@ -253,6 +253,12 @@ func decodeDaemonState(resp protocol.Response) daemonState {
 // longer has an entry for would gloss a row with the cause of a prompt that is
 // no longer on screen — and empty is what the dashboard already renders for
 // every blocked row nothing has labelled.
+// Branch and Dirty join them too, and the reset matters more for them than for
+// any of the others: they describe a checkout on disk rather than a fact about
+// the session, so a branch carried forward past the entry that supplied it would
+// keep naming a directory nobody has looked at since — and would go on naming it
+// for as long as the row stayed on screen. An empty branch is not reserved as a
+// column at all, so dropping the pair costs the row nothing it can see.
 func ApplyDaemonStates(sessions []session.RunningSession, states map[int]protocol.WindowStateSnapshot) {
 	for i := range sessions {
 		state, ok := states[sessions[i].WindowID]
@@ -262,12 +268,16 @@ func ApplyDaemonStates(sessions []session.RunningSession, states map[int]protoco
 			sessions[i].BusySince = time.Time{}
 			sessions[i].Unseen = false
 			sessions[i].Reason = ""
+			sessions[i].Branch = ""
+			sessions[i].Dirty = false
 			continue
 		}
 		sessions[i].State = state.IconState
 		sessions[i].Looping = state.Looping
 		sessions[i].Unseen = state.Unseen
 		sessions[i].Reason = state.Reason
+		sessions[i].Branch = state.Branch
+		sessions[i].Dirty = state.Dirty
 		sessions[i].BusySince = time.Time{}
 		if state.BusySinceAt > 0 {
 			sessions[i].BusySince = time.Unix(state.BusySinceAt, 0)

@@ -153,6 +153,11 @@ func RenderList(in ListInput) string {
 	// "any row has a reason" predicate to keep in step with the measurement —
 	// the measurement IS the predicate.
 	reasonWidth := reasonColumnWidth(in.Rows, in.group)
+	// Same shape, same argument: a zero width is the branch column declining to
+	// be reserved, so a view where no row sits in a named checkout — no daemon,
+	// git_probe off, or simply no repositories — gives the whole column back to
+	// the directory instead of padding every row around an empty slot.
+	branchWidth := branchColumnWidth(in.Rows)
 
 	var sb strings.Builder
 	if showTop {
@@ -188,8 +193,9 @@ func RenderList(in ListInput) string {
 		if activeLoopActive {
 			activeLoopCell = renderLoopCellFor(in, s)
 		}
+		branchCell := renderBranchCell(s, branchWidth)
 		tabNumberCell := renderTabNumberCell(s.TabNumber, tabNumberWidth)
-		row := FormatRow(s, acctColor, harnessColor, in.Cfg, rowWidth, tabNumberCell, activeLoopCell, reasonCell, activityCell)
+		row := FormatRow(s, acctColor, harnessColor, in.Cfg, rowWidth, tabNumberCell, activeLoopCell, reasonCell, activityCell, branchCell)
 		var styledRow string
 		switch {
 		case i == in.Cursor:

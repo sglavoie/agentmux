@@ -72,8 +72,23 @@ func TestCrossModeEmojiTitleIconColumn(t *testing.T) {
 // fixture through the dashboard list renderer at a narrow viewport and
 // asserts every rendered row stays within the viewport width.
 func TestCrossModeDashboardListWidthAcrossFixture(t *testing.T) {
+	// Every third row carries a branch, and one of them is longer than the
+	// column's cap. That makes this the width regression for the conditionally
+	// reserved branch column too: the reserved width is measured across the
+	// whole view, so a single over-long branch charges every OTHER row's
+	// directory budget, and a row with no branch of its own still pays for the
+	// padding that keeps its directory in the same column. Both of those are
+	// ways the hand-maintained arithmetic in FormatRow can silently draw past
+	// the viewport, and only a run of the real list renderer catches it.
 	var running []session.RunningSession
 	for i, tc := range emojiTitleFixture {
+		var branch string
+		switch i % 3 {
+		case 0:
+			branch = "amx/" + tc.body
+		case 1:
+			branch = "main"
+		}
 		running = append(running, session.RunningSession{
 			TabID:     i + 1,
 			TabNumber: i + 1,
@@ -84,6 +99,8 @@ func TestCrossModeDashboardListWidthAcrossFixture(t *testing.T) {
 			Profile:   "work",
 			Harness:   harness.Claude,
 			Directory: "/work/" + tc.body,
+			Branch:    branch,
+			Dirty:     i%2 == 0,
 		})
 	}
 

@@ -77,6 +77,7 @@ amx tui-test list-fixtures
 # run_timers
 # unseen_stops
 # wide_profiles
+# worktree_branches
 # worktree_lifecycle
 # worktrees
 ```
@@ -119,6 +120,7 @@ amx tui-test fixture wide_profiles --width 140 --key C
 | `run_timers` | five busy stretches: sub-minute, multi-minute, hours-long, warning-band, and idle | per-row run timer formatting bands and the `⏳` watchdog warning |
 | `unseen_stops` | two `🛑` rows the daemon separates by seenness, plus one `⚡` row | the unseen-stop demotion: a read `🛑` falls to Idle while an unread one holds Needs Attention |
 | `wide_profiles` | long profile names and home dirs | stresses the profile/config picker box width |
+| `worktree_branches` | three rows in one repository — a dirty `main` checkout and two managed worktrees — plus a directory that is not a repository | the branch column: two worktrees told apart after the shared directory prefix has truncated away, the dirty `*` marker, a non-repository row padding rather than collapsing, and the column declining to be reserved when a filter leaves no branch in the view |
 | `worktree_lifecycle` | deterministic reopen and cleanup outcomes | exercises focus/resume/fresh reopen, ambiguity, replacement profiles, cleanup refusals, safe deletion, forgetting, and partial recovery without real Git or Kitty mutations |
 | `worktrees` | clean, dirty, live, looping, missing, and invalid managed worktrees | hermetic Worktrees browsing, filtering, badges, and layout |
 
@@ -128,13 +130,16 @@ alpha-sorted: the cursor starts on `dotfiles` (personal).
 ### Daemon-owned state and the frozen clock
 
 A fixture may also carry the per-window state the daemon owns — icon state,
-looping, the busy-stretch anchor, the unseen bit, the blocked reason, and
-watchdog thresholds —
+looping, the busy-stretch anchor, the unseen bit, the blocked reason, the Git
+branch and dirty bit, and watchdog thresholds —
 which no Kitty tab title can express. The `unseen_stops` fixture is the clearest
 case: both of its `🛑` rows carry the same icon in the same title, and only the
 daemon state tells them apart. `blocked_reasons` is the same argument one field
 over: four rows wearing two icons between them, where what each is actually
-waiting for is only ever on the wire. The harness overlays it on the enumerated
+waiting for is only ever on the wire. `worktree_branches` is the third: a branch
+name is read by running `git` in the row's directory, which the harness never
+does and a tab title never carries, so the fixture supplies what a probe found
+exactly as the daemon would. The harness overlays it on the enumerated
 sessions and
 replays it on every refresh, so a `tick` action does not wipe the columns it
 feeds. The daemon is never contacted: a fixture that supplies no such state
@@ -293,6 +298,9 @@ file. The exact inventory is:
 | [`asl-runs-wide.json`](scenarios/asl-runs-wide.json) | `asl_runs` | `A` opens Runs with needs-action rows first, the full wide columns, and no Kitty focus |
 | [`blocked-reason-column-narrow-fit.json`](scenarios/blocked-reason-column-narrow-fit.json) | `blocked_reasons` | the reason tags survive below the fixed-column floor, where the directory has already collapsed and the row is clamped to the viewport |
 | [`blocked-reason-column-wide.json`](scenarios/blocked-reason-column-wide.json) | `blocked_reasons` | a Codex and a Claude permission prompt both read `perm`, a request-for-input reads `input`, an unlabelled blocked row pads to the same column, and no raw prompt kind reaches the screen |
+| [`branch-column-narrow-fit.json`](scenarios/branch-column-narrow-fit.json) | `worktree_branches` | at 66 cells both worktree directories have left-truncated to the same two characters and only the branch column still tells the two checkouts apart |
+| [`branch-column-unreserved.json`](scenarios/branch-column-unreserved.json) | `worktree_branches` | filtering down to the non-repository row leaves no branch in the view, so the column is not reserved and the directory recovers its full width |
+| [`branch-column-wide.json`](scenarios/branch-column-wide.json) | `worktree_branches` | two worktrees of one repository read their own branches, a dirty checkout carries the `*` marker, and the non-repository row pads so every directory starts in the same column |
 | [`command-palette-execute-help.json`](scenarios/command-palette-execute-help.json) | `basic` | palette search executes the safe keyboard-help transition without Kitty mutations |
 | [`command-palette-filter.json`](scenarios/command-palette-filter.json) | `basic` | printable text filters the palette to the matching plans command |
 | [`command-palette-narrow-scroll.json`](scenarios/command-palette-narrow-scroll.json) | `basic` | narrow palette scrolls the active command into view without layout issues |

@@ -1,0 +1,19 @@
+{
+  "name": "branch-column-unreserved",
+  "fixture": "worktree_branches",
+  "size": { "width": 100, "height": 32 },
+  "actions": [
+    { "type": "key", "key": "/" },
+    { "type": "text", "text": "notes" },
+    { "type": "key", "key": "enter" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "1:05 ~/notes" },
+    { "type": "excludes_text", "text": "1:05            ~/notes" },
+    { "type": "excludes_text", "text": "amx/feat-x" },
+    { "type": "excludes_text", "text": "amx/hotfix" },
+    { "type": "excludes_text", "text": "main*" },
+    { "type": "no_layout_issues" }
+  ]
+}

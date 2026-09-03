@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // TestFormatRowLockIconPresentWhenLocked verifies that a locked session
@@ -22,13 +23,13 @@ func TestFormatRowLockIconPresentWhenLocked(t *testing.T) {
 	}
 	acctColor := map[string]string{"work": "blue"}
 
-	unlocked := stripAnsi(FormatRow(s, acctColor, nil, nil, 120, "", "", "", ""))
+	unlocked := stripAnsi(FormatRow(s, acctColor, nil, nil, 120, "", "", "", "", ""))
 	if strings.Contains(unlocked, palette.LockIcon()) {
 		t.Fatalf("unlocked row should not contain %q; got %q", palette.LockIcon(), unlocked)
 	}
 
 	s.Locked = true
-	locked := stripAnsi(FormatRow(s, acctColor, nil, nil, 120, "", "", "", ""))
+	locked := stripAnsi(FormatRow(s, acctColor, nil, nil, 120, "", "", "", "", ""))
 	if !strings.Contains(locked, palette.LockIcon()) {
 		t.Fatalf("locked row should contain %q; got %q", palette.LockIcon(), locked)
 	}
@@ -47,15 +48,61 @@ func TestFormatRowMuteIconPresentWhenMuted(t *testing.T) {
 	}
 	acctColor := map[string]string{"work": "blue"}
 
-	unmuted := stripAnsi(FormatRow(s, acctColor, nil, nil, 120, "", "", "", ""))
+	unmuted := stripAnsi(FormatRow(s, acctColor, nil, nil, 120, "", "", "", "", ""))
 	if strings.Contains(unmuted, palette.MuteIcon()) {
 		t.Fatalf("unmuted row should not contain %q; got %q", palette.MuteIcon(), unmuted)
 	}
 
 	s.Muted = true
-	muted := stripAnsi(FormatRow(s, acctColor, nil, nil, 120, "", "", "", ""))
+	muted := stripAnsi(FormatRow(s, acctColor, nil, nil, 120, "", "", "", "", ""))
 	if !strings.Contains(muted, palette.MuteIcon()) {
 		t.Fatalf("muted row should contain %q; got %q", palette.MuteIcon(), muted)
+	}
+}
+
+// TestFormatRowWidthArithmeticMatchesTheComposedRow is the audit the `used`
+// enumeration in FormatRow cannot perform on itself. That expression is a
+// hand-maintained sum of every cell the return statement concatenates, and
+// nothing in the compiler relates the two: a cell added to the row without a
+// term in the sum overflows the viewport, and a term without a cell silently
+// steals directory width. This drives the real function with every optional
+// column reserved at once and asserts the composed row lands exactly one cell
+// under the budget — the single cell of deliberate slack the enumeration
+// documents, and the reason the sum charges 3 after the title where
+// MinRowWidth charges 2.
+func TestFormatRowWidthArithmeticMatchesTheComposedRow(t *testing.T) {
+	s := session.RunningSession{
+		Account: "work",
+		Base:    "api",
+		Title:   "api",
+		// Long enough that the directory is the binding constraint at every
+		// width below, which is what makes the row's total width a statement
+		// about the arithmetic rather than about this path.
+		Directory: "/home/user/projects/agent-mux/worktrees/api-feature-x/internal/daemon/state/reducer/deep/deeper/deepest",
+	}
+	cells := []struct {
+		name  string
+		cells []string
+	}{
+		{"no optional columns", []string{"1: ", "", "", "", ""}},
+		{"every optional column", []string{
+			"12: ",
+			renderActiveLoopCell(true),
+			renderReasonCell(session.RunningSession{Reason: "command_approval"}, 0, 5),
+			"0:42 ",
+			renderBranchCell(session.RunningSession{Branch: "amx/feat-x", Dirty: true}, 12),
+		}},
+	}
+	for _, tc := range cells {
+		for _, width := range []int{80, 100, 120} {
+			row := FormatRow(s, nil, nil, nil, width,
+				tc.cells[0], tc.cells[1], tc.cells[2], tc.cells[3], tc.cells[4])
+			got := layout.StyledWidth(row)
+			if got != width-1 {
+				t.Errorf("%s at width %d: composed row is %d cells, want %d",
+					tc.name, width, got, width-1)
+			}
+		}
 	}
 }
 

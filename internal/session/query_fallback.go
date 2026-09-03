@@ -233,6 +233,15 @@ func fallbackSessionFromMatch(tab kitty.Tab, winID int, m titleFallbackMatch, ba
 		// Reason is left empty for the same reason and a stronger one: the kind
 		// of prompt behind a 🔑 is read off the pane's screen, which only the
 		// daemon looks at. A title says a window is blocked, never why.
+		//
+		// Branch and Dirty are left empty and false on the strongest version of
+		// that argument. They are read by running git in the row's directory,
+		// which this path must not do: the fallback exists precisely because the
+		// daemon is unreachable, and forking two subprocesses per row inside a
+		// refresh that already lost its fast path would trade a missing column
+		// for a stalled dashboard. Empty is what the branch column already
+		// renders for every unprobed row, and with no row carrying one the
+		// column is not reserved at all.
 		Starred:          starred,
 		Muted:            muted,
 		Project:          m.sess.Title,

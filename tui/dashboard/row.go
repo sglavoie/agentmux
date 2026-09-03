@@ -59,8 +59,9 @@ func harnessLabel(h string) string {
 // fixed columns before the directory column: tab number + lock + mute + state
 // icon + a space + the "[X]" account badge + a space + the harness cell + a
 // space + the title column + the two separator spaces that precede the
-// directory. The dynamic columns (loop, activity, reason, pulse, group border)
-// are excluded because they are only reserved when a row needs them. Below this
+// directory. The dynamic columns (loop, activity, reason, branch, pulse, group
+// border) are excluded because they are only reserved when a row needs them.
+// Below this
 // floor the row can no longer shrink, so the list renderer clamps it and the
 // root's split view falls back to the plain full-width list.
 //
@@ -72,7 +73,8 @@ func harnessLabel(h string) string {
 // list. Folding a conditionally-reserved column in would make that threshold
 // depend on which rows happen to be on screen, so a view would gain and lose
 // its preview pane as rows came and went. The cost of leaving it out is bounded
-// and already paid by loop, activity, and pulse: between MinRowWidth and
+// and already paid by loop, activity, reason, branch, and pulse: between
+// MinRowWidth and
 // MinRowWidth + the reserved dynamic columns, the directory column shrinks to
 // zero and RenderList's own layout.StyledTruncate clamp at the render boundary
 // keeps the row inside the viewport. Confirmed against
@@ -88,7 +90,7 @@ func MinRowWidth() int {
 }
 
 // FormatRow formats a single session row.
-// Format: tab_number | [loop] | state_icon | [reason] | account_prefix | <emoji> harness | title | [activity] | directory
+// Format: tab_number | [loop] | state_icon | [reason] | account_prefix | <emoji> harness | title | [activity] | [branch] | directory
 // tabNumberCell is a fixed-width, pre-rendered cell such as "1: " or
 // " 1: ". It is blank-padded when the tab number is unavailable.
 // activeLoopCell is empty when the loop column is not reserved; otherwise it is
@@ -101,13 +103,17 @@ func MinRowWidth() int {
 // activityCell is empty when no row in the current view is running a busy
 // stretch; otherwise it is a pre-rendered cell (activityColumnWidth cells for
 // the whole render pass, trailing space included) inserted immediately before
-// the directory column.
+// the branch column.
+// branchCell is empty when no row in the current view sits in a named checkout;
+// otherwise it is a pre-rendered cell (branchColumnWidth cells for the whole
+// render pass, trailing space included) sitting between the activity cell and
+// the directory, and blank-padded for every row with no branch of its own.
 // cfg supplies the [harness_emojis] lookup so the harness cell can render as
 // "<emoji> <label>". harnessColor supplies the optional [harness_colors]
 // foreground for that cell. When the configured emoji is empty, the cell
 // collapses to just "<label>" so unconfigured users don't see a stray leading
 // space.
-func FormatRow(s session.RunningSession, acctColor, harnessColor map[string]string, cfg *config.Config, width int, tabNumberCell, activeLoopCell, reasonCell, activityCell string) string {
+func FormatRow(s session.RunningSession, acctColor, harnessColor map[string]string, cfg *config.Config, width int, tabNumberCell, activeLoopCell, reasonCell, activityCell, branchCell string) string {
 	// Lock indicator column. Always reserved (2 cells) so column alignment is
 	// stable; only filled when the session is locked.
 	lockCol := "  "
@@ -185,15 +191,35 @@ func FormatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 	dir := s.Directory
 	maxDir := dirMaxWidth
 	if width > 0 {
-		used := layout.Width(tabNumberCell) + lockColumnWidth + muteColumnWidth + layout.Width(activeLoopCell) + 3 + layout.StyledWidth(reasonCell) + 4 + harnessColWidth + 1 + titleColWidth + 3 + layout.Width(activityCell)
-		// tab number + lock (2) + mute (2) + optional loop + icon+space (3)
+		used := layout.Width(tabNumberCell) + lockColumnWidth + muteColumnWidth + layout.Width(activeLoopCell) + 3 + layout.StyledWidth(reasonCell) + 4 + harnessColWidth + 1 + titleColWidth + 3 + layout.Width(activityCell) + layout.StyledWidth(branchCell)
+		// This enumeration is hand-maintained and MUST be walked against the
+		// return statement below every time a cell is added, moved, or removed;
+		// nothing checks the two against each other but
+		// TestFormatRowWidthArithmeticMatchesTheComposedRow, which is why that
+		// test exists. Term by term, in the order the row concatenates them:
+		//
+		//   tab number (measured) + lock (2) + mute (2) + optional loop (measured)
+		//   + icon + space (3)
 		//   + optional reason cell, whose width is set per render pass
 		//   + "[X] " badge (4)
-		//   + harness (10) + space (1) + title (20) + separators before dir (3)
-		//   + optional activity cell, whose width is set per render pass.
-		// The reason cell is measured with StyledWidth because renderReasonCell
-		// colors its tag; the activity cell's own styling wraps the cell only
-		// after this arithmetic has already read it.
+		//   + harness (10) + space (1)
+		//   + title (20) + separators before the next cell (3)
+		//   + optional activity cell, whose width is set per render pass
+		//   + optional branch cell, whose width is set per render pass.
+		//
+		// The 3 charged after the title is 2 literal separator cells plus one
+		// cell of deliberate slack, which is why it disagrees with MinRowWidth's
+		// `titleColWidth + 2`. The slack is load-bearing in one direction only:
+		// it makes the composed row one cell NARROWER than the budget, never
+		// wider, so a terminal whose emoji metrics disagree with layout.Width by
+		// a cell still cannot draw past the edge. Do not "fix" it to 2 without
+		// re-running the cross-mode width regression tests at 80/100/120.
+		//
+		// The reason and branch cells are measured with StyledWidth because
+		// renderReasonCell colors its tag and renderBranchCell dims its text, and
+		// layout.Width would count their ANSI bytes as visible cells; the
+		// activity cell's own styling wraps the cell only after this arithmetic
+		// has already read it.
 		available := width - used
 		if available < 0 {
 			available = 0
@@ -203,7 +229,7 @@ func FormatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 	dir = layout.TruncateLeft(dir, maxDir, "…")
 	dir = styleDim.Render(dir)
 
-	return tabNumberCell + lockCol + muteCol + activeLoopCell + iconCol + " " + reasonCell + badge + " " + harnessCell + " " + title + "  " + activityCell + dir
+	return tabNumberCell + lockCol + muteCol + activeLoopCell + iconCol + " " + reasonCell + badge + " " + harnessCell + " " + title + "  " + activityCell + branchCell + dir
 }
 
 // tabNumberColumnWidth returns a stable width for every row in the current

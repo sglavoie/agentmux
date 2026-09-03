@@ -29,6 +29,15 @@ func (h *Handler) handleStateQuery() protocol.Response {
 			// here would be a second opinion about a question the publish path
 			// has already answered — and one that could disagree with it.
 			Reason: st.PromptKind,
+			// The Git facts are likewise projected verbatim. The probe's
+			// write-back already dropped a result whose directory no longer
+			// matches the window's, so the pair on the state is either what the
+			// checkout said or nothing at all; re-deriving either here would
+			// mean running git under stateMu, which is the one thing the
+			// asynchronous refresh exists to avoid. GitDirectory stays behind:
+			// it is the write-back's staleness evidence, not a display fact.
+			Branch: st.GitBranch,
+			Dirty:  st.GitDirty,
 		}
 		if identity, ok := st.CurrentConversation(now); ok {
 			identityCopy := identity

@@ -1,0 +1,14 @@
+{
+  "name": "branch-column-wide",
+  "fixture": "worktree_branches",
+  "size": { "width": 100, "height": 32 },
+  "actions": [{ "type": "tick" }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "3:07 amx/feat-x ~/projects/worktrees/api-feat-x" },
+    { "type": "contains_text", "text": "0:12 amx/hotfix ~/projects/worktrees/api-hotfix" },
+    { "type": "contains_text", "text": "0:42 main*      ~/projects/api" },
+    { "type": "contains_text", "text": "1:05            ~/notes" },
+    { "type": "no_layout_issues" }
+  ]
+}

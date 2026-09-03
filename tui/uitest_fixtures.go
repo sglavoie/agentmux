@@ -91,6 +91,7 @@ var uitestFixtureBuilders = map[string]func() uitestFixture{
 	"run_timers":         runTimersFixture,
 	"unseen_stops":       unseenStopsFixture,
 	"blocked_reasons":    blockedReasonsFixture,
+	"worktree_branches":  worktreeBranchesFixture,
 }
 
 // uitestFixtureError reports a request for an unknown built-in fixture and
@@ -444,6 +445,73 @@ func blockedReasonsFixture() uitestFixture {
 			31: {IconState: "question", Reason: "request_user_input"},
 			41: {IconState: "question"},
 			51: {IconState: "bolt"},
+		},
+	}
+}
+
+// worktreeBranchesFixture is the case managed worktrees make ordinary: three
+// rows sitting in ONE repository and differing only by checkout, plus a fourth
+// that is not a repository at all. It is the fixture for the branch column
+// because it is the situation the column exists for.
+//
+// Two of the rows are worktrees of the same project. Their directories share
+// `~/projects/worktrees/api-` and diverge in the tail, which is exactly what the
+// directory column's left truncation surrenders first at a narrow width — so
+// without a branch the two rows are indistinguishable at the sizes an operator
+// actually runs the dashboard at. The narrow scenario is where that shows.
+//
+// It also carries the three cases the column has to get right at once:
+//
+//   - a dirty checkout (`main*`), which is the whole of the dirty rendering: a
+//     trailing marker on the branch rather than a color or a second column, so
+//     it survives a monochrome terminal and the harness's own stripAnsi;
+//   - a NON-REPOSITORY row, whose cell is blank and whose directory must
+//     nonetheless start in the same column as the other three. That is the point
+//     of measuring once per pass rather than per row;
+//   - an activity timer on every row, so the column's position — between the
+//     activity cell and the directory — is visible rather than asserted.
+//
+// The branch strings are written as bare values for the reason the blocked
+// reason kinds are: a fixture stands in for one daemon state query, whose Branch
+// and Dirty fields are what internal/gitstate last read off disk. Whether a
+// non-repository, a disabled probe, a timeout, or a detached HEAD produced the
+// empty branch is deliberately not representable here, because it is not
+// representable on the wire either — gitstate collapses all four to the same
+// nothing.
+func worktreeBranchesFixture() uitestFixture {
+	cfg := &config.Config{
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		HarnessEmojis: map[string]string{"claude": "🦊", "codex": "🤖"},
+		HarnessColors: map[string]string{"claude": "blue", "codex": "green"},
+		Accounts: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "~/.config/agent-mux/homes/work", Color: "blue"},
+			{Name: "personal", Harness: "codex", HomeDir: "~/.config/agent-mux/homes/personal", Color: "green"},
+		},
+		Sessions: []config.Session{
+			{Title: "api", Directory: "~/projects/api", Profile: "work"},
+			{Title: "api-feat-x", Directory: "~/projects/worktrees/api-feat-x", Profile: "work"},
+			{Title: "api-hotfix", Directory: "~/projects/worktrees/api-hotfix", Profile: "work"},
+			{Title: "notes", Directory: "~/notes", Profile: "personal"},
+		},
+	}
+	windows := []kitty.OSWindow{uitestOSWindow(
+		uitestTab(1, 11, "⚡🦊api", true, managedVars("work", "claude", "api", "~/projects/api")),
+		uitestTab(2, 21, "⚡🦊api-feat-x", false, managedVars("work", "claude", "api-feat-x", "~/projects/worktrees/api-feat-x")),
+		uitestTab(3, 31, "⚡🦊api-hotfix", false, managedVars("work", "claude", "api-hotfix", "~/projects/worktrees/api-hotfix")),
+		uitestTab(4, 41, "⚡🤖notes", false, managedVars("personal", "codex", "notes", "~/notes")),
+	)}
+	busySince := func(d time.Duration) int64 { return uitestFrozenNow.Add(-d).Unix() }
+	return uitestFixture{
+		Name:        "worktree_branches",
+		Description: "three rows in one repository — a dirty main checkout and two managed worktrees — plus a directory that is not a repository at all",
+		Size:        UITestSize{Width: 100, Height: 32},
+		Config:      cfg,
+		Windows:     windows,
+		States: map[int]protocol.WindowStateSnapshot{
+			11: {IconState: "bolt", BusySinceAt: busySince(42 * time.Second), Branch: "main", Dirty: true},
+			21: {IconState: "bolt", BusySinceAt: busySince(3*time.Minute + 7*time.Second), Branch: "amx/feat-x"},
+			31: {IconState: "bolt", BusySinceAt: busySince(12 * time.Second), Branch: "amx/hotfix"},
+			41: {IconState: "bolt", BusySinceAt: busySince(1*time.Minute + 5*time.Second)},
 		},
 	}
 }

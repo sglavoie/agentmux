@@ -198,7 +198,7 @@ func TestFormatRowPlacesTheReasonBesideTheIcon(t *testing.T) {
 		Reason:    string(screenstate.ClaudePromptPermission),
 	}
 	cell := renderReasonCell(s, 0, reasonColumnWidth([]session.RunningSession{s}, attentionGroup))
-	row := stripAnsi(FormatRow(s, map[string]string{"work": "blue"}, nil, nil, 120, "", "", cell, ""))
+	row := stripAnsi(FormatRow(s, map[string]string{"work": "blue"}, nil, nil, 120, "", "", cell, "", ""))
 
 	icon := palette.StateIcon("key")
 	want := icon + " perm "
@@ -226,9 +226,9 @@ func TestFormatRowReasonCellIsChargedToTheDirectory(t *testing.T) {
 		Reason:    string(screenstate.CodexPromptRequestUserInput),
 	}
 	const width = 100
-	without := layout.StyledWidth(FormatRow(s, nil, nil, nil, width, "", "", "", ""))
+	without := layout.StyledWidth(FormatRow(s, nil, nil, nil, width, "", "", "", "", ""))
 	cell := renderReasonCell(s, 0, reasonColumnWidth([]session.RunningSession{s}, attentionGroup))
-	with := layout.StyledWidth(FormatRow(s, nil, nil, nil, width, "", "", cell, ""))
+	with := layout.StyledWidth(FormatRow(s, nil, nil, nil, width, "", "", cell, "", ""))
 	if with != without {
 		t.Fatalf("row width with the reason cell = %d, without = %d: the cell must be charged to the directory budget, not added to the row",
 			with, without)
