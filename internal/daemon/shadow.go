@@ -298,6 +298,10 @@ func (h *Handler) reduceStateUpdate(req protocol.Request, outcome applyOutcome, 
 // twice: restored windows after a restart, and watchdog-expired windows
 // during the 30-minute monitored audit). Callers hold stateMu.
 func (h *Handler) publishEffectiveLocked(windowID int, st *state.WindowState, effective state.EffectiveState) {
+	// The unseen bit is a transition rule, not an invariant of the new icon
+	// (see stampUnseenLocked), so it must read st.Effective.Icon while that is
+	// still the PREVIOUS icon — before the write below overwrites it.
+	stampUnseenLocked(st, effective.Icon, h.windowFocusedFromSnapshotLocked(windowID))
 	if effective != st.Effective {
 		st.Effective = effective
 		st.EffectiveGen++
@@ -337,5 +341,43 @@ func stampBusySinceLocked(st *state.WindowState, icon string, now time.Time) {
 		}
 	default:
 		st.BusySince = time.Time{}
+	}
+}
+
+// stampUnseenLocked maintains the unseen bit from the icon this publish is about
+// to install. Unlike stampBusySinceLocked it cannot be an invariant of the new
+// icon alone, because "resting and unread" and "resting and already read" are the
+// same icon: only the transition into rest carries the news. So it reads
+// st.Effective.Icon as the PREVIOUS icon and must be called before
+// publishEffectiveLocked overwrites it. Three rules, in the order a reader wants
+// them:
+//
+//   - any icon that is not resting clears the bit — a window that went back to
+//     work has nothing unread about it;
+//   - entering rest from anywhere else records whether the user was looking:
+//     unfocused means the finished turn went unwitnessed, focused means they
+//     watched it land;
+//   - resting and staying resting leaves the bit exactly as it is. This is the
+//     load-bearing case. A republish is not new news, and the focus observation
+//     clears the bit out of band, so re-deriving it here would let any watchdog
+//     sweep, restore, or probe re-raise a row the user just cleared by looking
+//     at it. It is also what makes a daemon restart quiet: a restored stop
+//     republishes as stop and keeps the seen state it persisted with.
+//
+// It deliberately fires INDEPENDENTLY OF MUTE. Mute suppresses a notification;
+// it says nothing about whether the user has seen the row, and a muted window
+// that finished unwatched is exactly as unread as a loud one. herdr entangles
+// the two (its completion transition assigns seen from the notification
+// suppression flag) and inherits the bug where muting a pane silently marks its
+// output read. Callers hold stateMu.
+func stampUnseenLocked(st *state.WindowState, icon string, focused bool) {
+	const resting = "stop"
+	switch {
+	case icon != resting:
+		st.Unseen = false
+	case st.Effective.Icon == resting:
+		// Already at rest: not news. Leave the bit alone.
+	default:
+		st.Unseen = !focused
 	}
 }

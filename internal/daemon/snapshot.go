@@ -159,8 +159,13 @@ func (h *Handler) publishSnapshotFrom(publication probes.Publication) {
 	// section. Probe apply paths hold the same lock while checking gen, so an
 	// older observation cannot pass its generation check and then overwrite a
 	// mute from a snapshot published in between the check and mutation.
+	// The focus observation joins them for the same reason: it is the only path
+	// that clears the unseen bit, and clearing it in the same critical section as
+	// the publication means a publish path cannot raise the bit against a tree
+	// this read has already superseded.
 	h.stateMu.Lock()
 	h.refreshMutedFromSnapshotLocked(publication.Windows)
+	h.refreshFocusFromSnapshotLocked(publication.Windows)
 	h.snapshots.Publish(publication)
 	h.stateMu.Unlock()
 }

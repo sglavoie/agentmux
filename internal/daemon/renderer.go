@@ -265,6 +265,59 @@ func (h *Handler) refreshMutedFromSnapshotLocked(windows []kitty.OSWindow) {
 	}
 }
 
+// refreshFocusFromSnapshotLocked clears the unseen bit on every window the given
+// immutable Kitty snapshot shows the user actually looking at. Focus is the
+// observation that a finished turn has been read, so this is where "seen"
+// happens: no key, no command, just the pane being on screen at snapshot time.
+//
+// Unlike refreshMutedFromSnapshotLocked, which recomputes the mute cache in both
+// directions from each snapshot, this is deliberately ONE-DIRECTIONAL: it only
+// ever clears Unseen and never sets it. Raising the bit belongs to
+// publishEffectiveLocked, which is the only place that knows a window just
+// transitioned into rest. A snapshot that merely fails to observe focus is not
+// evidence the user looked away — it is the normal state of every window but one,
+// and reasserting the bit from it would re-raise every row the user has ever
+// read, two seconds at a time. Callers hold stateMu.
+func (h *Handler) refreshFocusFromSnapshotLocked(windows []kitty.OSWindow) {
+	for i := range windows {
+		for j := range windows[i].Tabs {
+			for k := range windows[i].Tabs[j].Windows {
+				if !snapshotPaneFocused(&windows[i], &windows[i].Tabs[j], &windows[i].Tabs[j].Windows[k]) {
+					continue
+				}
+				if st, ok := h.windowStateLocked(windows[i].Tabs[j].Windows[k].ID); ok {
+					st.Unseen = false
+				}
+			}
+		}
+	}
+}
+
+// snapshotPaneFocused reports whether a pane is the one the user is looking at:
+// the active pane, of the active tab, of the focused OS window. All three are
+// required — Kitty marks the active pane of every tab and the active tab of every
+// OS window, so either flag alone is true for panes nobody can see.
+func snapshotPaneFocused(osWindow *kitty.OSWindow, tab *kitty.Tab, win *kitty.Window) bool {
+	return osWindow.IsFocused && tab.IsActive && win.IsActive
+}
+
+// windowFocusedFromSnapshotLocked answers the same question for one window ID
+// from the last published snapshot, which is what the publish path has instead of
+// a tree. A cold or stale cache answers "not focused", and that is the safe
+// direction: the worst case is one row raised as unseen that the next snapshot's
+// focus observation clears within the render cadence. Callers hold stateMu.
+func (h *Handler) windowFocusedFromSnapshotLocked(windowID int) bool {
+	windows, _, ready := h.snapshots.Load()
+	if !ready {
+		return false
+	}
+	osWindow, tab, win, ok := kitty.FindWindowLocationByID(windows, windowID)
+	if !ok {
+		return false
+	}
+	return snapshotPaneFocused(osWindow, tab, win)
+}
+
 // setMutedFromSnapshot records the cc_mute/title mute state read from a live
 // Kitty snapshot. Hook requests may carry the legacy Muted wire field, but the
 // daemon deliberately never trusts that client-provided value.

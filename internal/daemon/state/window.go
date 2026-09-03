@@ -42,6 +42,21 @@ type WindowState struct {
 	// and is zero whenever the window is not busy.
 	BusySince time.Time
 
+	// Unseen marks a window that came to rest on a turn the user has not looked
+	// at yet. The polarity is deliberately inverted: the ZERO VALUE MEANS SEEN.
+	// Every writer that predates the field — a daemon restart, a schema-v1
+	// payload, a test constructing a WindowState literal — therefore demotes the
+	// row quietly instead of flooding Needs Attention with every already-read
+	// stop, which is the failure the inversion exists to prevent. It follows the
+	// BusySince precedent below (added inside schema v4 without a bump; an
+	// absent key restores zero and self-heals on the next publish).
+	//
+	// publishEffectiveLocked is the only writer that raises it
+	// (stampUnseenLocked); the snapshot focus observation
+	// (refreshFocusFromSnapshotLocked) is the only one that clears it out of
+	// band.
+	Unseen bool
+
 	// Render-generation diagnostics. Seq is the window's generation counter;
 	// these track how far each stage of the render pipeline has advanced so
 	// exports can show where a window is stuck. DirtySince is when the current
@@ -169,6 +184,14 @@ type windowStateUserVar struct {
 	// rather than bumping the schema: older readers ignore it, and a payload
 	// written without it restores zero and self-heals on the next publish.
 	BusySince int64 `json:"bs,omitempty"`
+	// Unseen is the durable unseen bit, added inside schema v4 on the same terms
+	// as BusySince above: older readers ignore it, and a payload written without
+	// it restores zero. Because the polarity is inverted (zero means *seen*)
+	// that absent key is the safe answer rather than a lossy one — a pre-field
+	// payload restores the row as already read instead of re-raising a stop the
+	// user cleared before the restart. omitempty is what makes the false case
+	// indistinguishable from the pre-field case, which is intended.
+	Unseen bool `json:"us,omitempty"`
 
 	// Schema v2+: bounded source facts plus the shadow effective generation.
 	Facts            []protocol.SourceFactSnapshot `json:"f,omitempty"`
@@ -208,6 +231,7 @@ func (s WindowState) MarshalUserVar() (string, error) {
 		PipeMode:                   s.LastPipeMode,
 		Account:                    s.LastAccount,
 		Harness:                    s.LastHarness,
+		Unseen:                     s.Unseen,
 	}
 	if !s.GuardExpiresAt.IsZero() {
 		uv.GuardExpiresAt = s.GuardExpiresAt.Unix()
@@ -351,6 +375,11 @@ func (s *WindowState) restoreReducerV2(uv windowStateUserVar) {
 	if uv.BusySince != 0 {
 		s.BusySince = time.Unix(uv.BusySince, 0)
 	}
+	// The unseen bit rides the same gate for the same reason. Restoring it only
+	// from v2+ means a v1 payload cannot carry one at all, which is the correct
+	// answer rather than a lossy one: absent means seen, so the row restores
+	// quietly and the next publish re-raises it if the turn is still unread.
+	s.Unseen = uv.Unseen
 	// Never hand out a receipt sequence at or below a restored fact's: the
 	// reducer would discard the next live event as reordered.
 	if s.Reducer != nil {
