@@ -49,16 +49,6 @@ func TestReducerAcknowledgementPathsStampAndClearAckedAt(t *testing.T) {
 		requireFactAcknowledgement(t, r, source, true, 300)
 	})
 
-	t.Run("active-class sweep", func(t *testing.T) {
-		source := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:sweep"}
-		r := NewReducer(ReducerConfig{})
-		r.Apply(protocol.ReducerEvent{Source: source, Action: "active", Seq: 1, At: 100})
-		r.AckActiveClass(400)
-		requireFactAcknowledgement(t, r, source, true, 400)
-		r.Apply(protocol.ReducerEvent{Source: source, Action: "active", Seq: 2, At: 401})
-		requireFactAcknowledgement(t, r, source, false, 0)
-	})
-
 	t.Run("single-fact expiry", func(t *testing.T) {
 		source := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:expiry"}
 		r := NewReducer(ReducerConfig{})
@@ -67,6 +57,10 @@ func TestReducerAcknowledgementPathsStampAndClearAckedAt(t *testing.T) {
 			t.Fatal("ExpireFact returned false")
 		}
 		requireFactAcknowledgement(t, r, source, true, 500)
+		// The next real event from the source clears the acknowledgement, so an
+		// expired active-class fact never suppresses the work that follows it.
+		r.Apply(protocol.ReducerEvent{Source: source, Action: "active", Seq: 8, At: 501})
+		requireFactAcknowledgement(t, r, source, false, 0)
 	})
 }
 

@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
-	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
@@ -24,7 +23,7 @@ func TestAuthoritativeIdleDiscardedWhenSequenceMoved(t *testing.T) {
 
 	obs := authoritativeIdle{
 		WindowID:        7,
-		Source:          activity.AuthoritativeIdleSource("claude"),
+		Source:          authoritativeIdleTestSource("claude"),
 		Harness:         "claude",
 		CapturedSeq:     captured,
 		At:              base + 5,
@@ -70,7 +69,7 @@ func TestAuthoritativeIdleDiscardedWhenLowerExplicitSequenceLands(t *testing.T) 
 
 	obs := authoritativeIdle{
 		WindowID:        7,
-		Source:          activity.AuthoritativeIdleSource("claude"),
+		Source:          authoritativeIdleTestSource("claude"),
 		Harness:         "claude",
 		CapturedSeq:     captured,
 		At:              base + 5,
@@ -112,7 +111,7 @@ func TestAuthoritativeIdleDiscardedWhenWatchdogExpiryLands(t *testing.T) {
 
 	obs := authoritativeIdle{
 		WindowID:        7,
-		Source:          activity.AuthoritativeIdleSource("claude"),
+		Source:          authoritativeIdleTestSource("claude"),
 		Harness:         "claude",
 		CapturedSeq:     captured,
 		At:              base + 5,
@@ -161,7 +160,7 @@ func TestAuthoritativeIdleDiscardedWhenPersistedMergeLands(t *testing.T) {
 
 	obs := authoritativeIdle{
 		WindowID:        42,
-		Source:          activity.AuthoritativeIdleSource("claude"),
+		Source:          authoritativeIdleTestSource("claude"),
 		Harness:         "claude",
 		CapturedSeq:     captured,
 		At:              base + 5,
@@ -202,7 +201,7 @@ func TestAuthoritativeIdleDiscardedWhenASLLeaseSeedLands(t *testing.T) {
 
 	obs := authoritativeIdle{
 		WindowID:        7,
-		Source:          activity.AuthoritativeIdleSource("claude"),
+		Source:          authoritativeIdleTestSource("claude"),
 		Harness:         "claude",
 		CapturedSeq:     captured,
 		At:              base + 5,

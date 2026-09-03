@@ -180,33 +180,12 @@ func (r *Reducer) Retract(source protocol.SourceID, seq uint64, at int64) bool {
 	return withdrawn
 }
 
-// AckActiveClass acknowledges every fact currently contributing an
-// active-class icon (bolt/subagent/compact). The stale sweep uses it so a
-// wedged session's self-heal is reflected in the authoritative facts; leases
-// and attention/terminal facts are untouched, and the next real event from
-// the source clears the acknowledgement.
-func (r *Reducer) AckActiveClass(at int64) {
-	for _, f := range r.facts {
-		if !f.set || f.acked {
-			continue
-		}
-		switch f.icon {
-		case "bolt", "subagent", "compact":
-			f.acknowledge(at)
-			// A swept 🤖 also rebalances the identity-less agent multiset: the
-			// self-heal must not leave a stale count that would inflate the
-			// next real start.
-			f.agents = 0
-		}
-	}
-}
-
 // ExpireFact acknowledges one source's active-class contribution after the
 // watchdog judged it stale. seq pins the observation: if the fact advanced
 // since the caller looked at it, nothing expires — fresh activity always
 // outranks a queued expiry decision. Only active-class icons
 // (bolt/subagent/compact) are expirable; attention and terminal facts persist
-// until the user acts. ASL loop leases survive, mirroring AckActiveClass: an
+// until the user acts. ASL loop leases survive, mirroring acknowledgeAll: an
 // expired turn fact loses its ⚡ but keeps 🔁 until a finish event or
 // reconciliation releases the run. Reports whether the fact changed.
 func (r *Reducer) ExpireFact(source protocol.SourceID, seq uint64, at int64) bool {

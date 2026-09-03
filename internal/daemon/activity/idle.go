@@ -1,7 +1,6 @@
 package activity
 
 import (
-	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/screenstate"
 )
@@ -11,19 +10,11 @@ import (
 // business — it needs the reducer, the renderer, and the notifier to say it.
 // What such an observation is attributed to, and when a probe is allowed to
 // produce one at all, is pure vocabulary and lives here.
-
-// AuthoritativeIdleSource is the probe source an authoritative idle observation applies its
-// synthetic stop under. It is a daemon-originated SourceProbe fact keyed by
-// harness so a Codex idle and a Claude idle never collide, and is deliberately
-// never a SourceLegacy fact: an idle probe must settle stale work through the
-// reducer's source-scoped facts, not the legacy scalar grace.
-func AuthoritativeIdleSource(harnessName string) protocol.SourceID {
-	key := "idle"
-	if h := harness.Normalize(harnessName); h != "" {
-		key = "idle:" + h
-	}
-	return protocol.SourceID{Kind: protocol.SourceProbe, Key: key}
-}
+//
+// Each probe names its OWN SourceProbe key — the screen probes take theirs
+// from their spec, the Copilot transcript probe from its package constant — so
+// there is deliberately no shared idle-source constructor here: a generic one
+// would be production API with no production caller.
 
 // IdleHarnessLabel gives the authoritative-idle diagnostic a stable harness label,
 // falling back to a generic tag when the observation carried none.
