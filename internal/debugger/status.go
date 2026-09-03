@@ -11,6 +11,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/hooks"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -57,6 +58,18 @@ type DaemonReport struct {
 	Build          *buildinfo.Info `json:"build,omitempty"`
 	CLIBuild       buildinfo.Info  `json:"cli_build"`
 	BuildMatches   *bool           `json:"build_matches,omitempty"`
+	// KittySnapshot is the daemon's cached Kitty topology as health reports it:
+	// readiness, staleness, generation, capture time, age, and the per-socket
+	// list-coordinator counters. Its Windows field is always empty — health is a
+	// probe, and the tree belongs to the state query — so this carries status
+	// only however large the daemon's window tree is.
+	//
+	// Nil means the daemon predates the block, which is an unknown rather than a
+	// cold cache. It is reported and not judged: `amx doctor` owns the
+	// kitty_snapshot_stale finding, and status stays a description so a stale
+	// Kitty read cannot change this report's verdict out from under a consumer
+	// that has always branched on daemon liveness and build identity.
+	KittySnapshot *protocol.KittySnapshot `json:"kitty_snapshot,omitempty"`
 }
 
 type JournalReport struct {
@@ -113,6 +126,7 @@ func CollectStatus(ctx context.Context, options StatusOptions) (StatusReport, er
 		Verdict: VerdictHealthy, Alive: health.Alive, Ready: health.Ready,
 		DegradedReason: health.DegradedReason, PID: health.PID,
 		UptimeSeconds: int64(health.Uptime / time.Second), Build: health.Build, CLIBuild: options.CLIBuild,
+		KittySnapshot: health.KittySnapshot,
 	}
 	if !health.Alive {
 		report.Daemon.Verdict = VerdictWarning

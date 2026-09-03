@@ -189,6 +189,14 @@ func writeDebugStatusText(out io.Writer, report debugger.StatusReport) error {
 			return err
 		}
 	}
+	// Only a daemon that answered has a snapshot to report. An offline daemon
+	// already printed why it could not be asked, and adding "unreported" under
+	// that would read as an old daemon rather than as no daemon.
+	if report.Daemon.Alive {
+		if err := writeKittySnapshot(out, report.Daemon.KittySnapshot); err != nil {
+			return err
+		}
+	}
 	if len(report.Hooks.Profiles) == 0 {
 		if _, err := fmt.Fprintf(out, "hooks: %s (no matching configured profiles)\n", report.Hooks.Verdict); err != nil {
 			return err

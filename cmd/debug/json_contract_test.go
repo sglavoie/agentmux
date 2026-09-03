@@ -86,11 +86,17 @@ func TestDoctorJSONCommandSurfaceIsVersioned(t *testing.T) {
 		}
 	}
 
+	// v4 is the Kitty-snapshot bump: `kitty_snapshot_stale` is a new WARNING
+	// identifier carried alongside the additive `daemon.kitty_snapshot` block.
+	// It is the first bump not driven by a failure identifier — a consumer that
+	// has never seen it cannot tell a fresh snapshot from a daemon too old to
+	// report one, which is exactly the distinction the block exists to make.
+	//
 	// v3 is the screen-classifier bump: `screenstate_persistent_decline` is a
 	// new failure identifier. `screenstate_override_invalid` shipped in the
 	// same work at warning severity and required no bump of its own.
-	if doctorReportSchemaVersion != 3 {
-		t.Fatalf("unexpected doctor JSON schema version %d; want 3", doctorReportSchemaVersion)
+	if doctorReportSchemaVersion != 4 {
+		t.Fatalf("unexpected doctor JSON schema version %d; want 4", doctorReportSchemaVersion)
 	}
 
 	// Every stable finding identifier a doctor report can carry. Adding one is
@@ -105,6 +111,7 @@ func TestDoctorJSONCommandSurfaceIsVersioned(t *testing.T) {
 		checkUnknownProducerFact, checkAcknowledgedPressure,
 		checkMalformedProcessIdentity, checkStopHoldStuck,
 		checkScreenPersistentDecline, checkScreenPatternOverrideInvalid,
+		checkKittySnapshotStale,
 	}
 	seen := make(map[string]bool, len(checks))
 	for _, check := range checks {

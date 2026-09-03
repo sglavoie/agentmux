@@ -123,11 +123,11 @@ func TestDoctorBrokenScreenPatternOverrideWarnsWithoutFailingStrict(t *testing.T
 	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatalf("decode doctor report: %v\n%s", err, out.String())
 	}
-	// v3 was bumped for screenstate_persistent_decline, a FAILURE identifier.
-	// This warning-severity finding is not what moved it and must never move it
-	// again.
-	if report.SchemaVersion != 3 {
-		t.Errorf("schema_version = %d; want 3", report.SchemaVersion)
+	// v3 was bumped for screenstate_persistent_decline, a FAILURE identifier,
+	// and v4 for kitty_snapshot_stale. This warning-severity finding is not
+	// what moved either and must never move the version again.
+	if report.SchemaVersion != 4 {
+		t.Errorf("schema_version = %d; want 4", report.SchemaVersion)
 	}
 	if !report.Healthy {
 		t.Errorf("a warning-severity finding must not make the report unhealthy: %+v", report.Findings)

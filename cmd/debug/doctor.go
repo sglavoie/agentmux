@@ -21,6 +21,14 @@ const doctorSuppressionWindow = 15 * time.Minute
 
 // doctorReportSchemaVersion versions the `amx doctor --json` payload.
 //
+// v4 adds the `kitty_snapshot_stale` finding, raised when the daemon's cached
+// Kitty topology is older than the shared staleness threshold, and the
+// `daemon.kitty_snapshot` block it is derived from. Its severity is warning,
+// not failure, so unlike every bump before it this one does not change what
+// `--strict` exits on. It is still a bump: the finding identifier is the
+// contract a consumer branches on, and one that has never seen this identifier
+// cannot distinguish "no stale snapshot" from "a daemon too old to say".
+//
 // v3 adds the `screenstate_persistent_decline` finding, raised when the screen
 // classifier has refused the same unchanging frame on a live ⚡ window long
 // enough that a harness UI change is the only ordinary explanation. Its
@@ -33,7 +41,7 @@ const doctorSuppressionWindow = 15 * time.Minute
 // not recognize as fatal would start failing on conditions a v1 daemon never
 // reported. The two identifiers that predate it, `asl_unavailable` and
 // `asl_read_only`, keep their exact names and meanings.
-const doctorReportSchemaVersion = 3
+const doctorReportSchemaVersion = 4
 
 var (
 	newDoctorDaemonClient = cli.NewDaemonExportClient
@@ -87,6 +95,13 @@ type doctorDaemonStatus struct {
 	// and the warnings the startup load produced. Omitted by a daemon that
 	// predates the block.
 	ScreenPatterns *protocol.ScreenPatternsSnapshot `json:"screen_patterns,omitempty"`
+	// KittySnapshot is the daemon's cached Kitty topology status: readiness,
+	// staleness, generation, capture time, age, and the list-coordinator
+	// counters for the daemon's effective socket. Its Windows field is always
+	// empty because health carries status only. Omitted by a daemon that
+	// predates the block, which is an unknown rather than a cold cache and
+	// raises no finding of its own.
+	KittySnapshot *protocol.KittySnapshot `json:"kitty_snapshot,omitempty"`
 }
 
 // DoctorCommand returns the `doctor` command so the root command can register
@@ -151,6 +166,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		ASLReconcile:    health.ASLReconcile,
 		ASLHookDelivery: health.ASLHookDelivery,
 		ScreenPatterns:  health.ScreenPatterns,
+		KittySnapshot:   health.KittySnapshot,
 	}
 	if health.Alive {
 		if _, err := fmt.Fprintf(textOut, "daemon: running (pid %d, uptime %s)\n", health.PID, health.Uptime.Round(time.Second)); err != nil {
@@ -176,6 +192,13 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		// the RUNNING process loaded at startup, which is precisely what a
 		// re-read of the config directory by this CLI would fail to show.
 		if err := writeDoctorScreenPatterns(textOut, health.ScreenPatterns, addFinding); err != nil {
+			return err
+		}
+		// The daemon's cached topology is reported before the CLI does its own
+		// `kitten @ ls` below, because a stale daemon snapshot is compatible with
+		// a Kitty that answers this process immediately: the two lines together
+		// are what separate "Kitty is wedged" from "the daemon stopped asking".
+		if err := writeDoctorKittySnapshot(textOut, health.KittySnapshot, addFinding); err != nil {
 			return err
 		}
 	}

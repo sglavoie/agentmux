@@ -271,10 +271,12 @@ func TestDoctorJSONEmitsStructuredReport(t *testing.T) {
 		t.Fatalf("output is not a single JSON report: %v\n%s", err, out.String())
 	}
 	// Pinned to a literal, not the constant: the wire version is a consumer
-	// contract, so a bump has to be a deliberate edit here. v3 arrived with the
-	// screenstate_persistent_decline failure identifier.
-	if report.SchemaVersion != 3 || report.Healthy {
-		t.Fatalf("report = schema %d healthy %t; want schema 3 healthy=false", report.SchemaVersion, report.Healthy)
+	// contract, so a bump has to be a deliberate edit here. v4 arrived with the
+	// kitty_snapshot_stale warning identifier and the daemon.kitty_snapshot
+	// block; v3 arrived with the screenstate_persistent_decline failure
+	// identifier.
+	if report.SchemaVersion != 4 || report.Healthy {
+		t.Fatalf("report = schema %d healthy %t; want schema 4 healthy=false", report.SchemaVersion, report.Healthy)
 	}
 	if doctorReportSchemaVersion != report.SchemaVersion {
 		t.Fatalf("doctorReportSchemaVersion = %d; the emitted report must carry the constant", doctorReportSchemaVersion)

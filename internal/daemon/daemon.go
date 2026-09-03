@@ -38,6 +38,11 @@ type runDependencies struct {
 	beforeStartupConfirmation func(context.Context)
 	afterStartupPublication   func()
 	afterRenderWorkerShutdown func()
+	// kittyRunner replaces the kitten subprocess runner. Tests inject a
+	// deterministic runner so a startup path can be driven against a Kitty that
+	// fails or blocks on demand instead of whichever Kitty the test host
+	// happens to be running; production leaves it nil.
+	kittyRunner kitty.CommandRunner
 }
 
 func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr error) {
@@ -110,8 +115,16 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	// report what the daemon is actually executing.
 	handler.SetBuildInfo(buildinfo.Current())
 
-	kittyRunner := kitty.NewRealRunner()
+	var kittyRunner kitty.CommandRunner = kitty.NewRealRunner()
+	if deps.kittyRunner != nil {
+		kittyRunner = deps.kittyRunner
+	}
 	kittyClient := newDaemonKittyClient(kittyRunner)
+	// Install the list-health observer before the client is used for anything,
+	// so the very first read — the bounded startup restore below — is already
+	// covered. The observer is a single slot shared by every WithSocket clone,
+	// and this is the only place in the daemon that claims it.
+	kittyClient.SetListObserver(recorder.kittySnapshotObserver())
 	// Assign the Kitty client on the startup goroutine before any server
 	// goroutine can read it. Set the field directly rather than via
 	// SetKittyClient: SetKittyClient primes the cache with an UNBOUNDED
