@@ -22,10 +22,23 @@ import (
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
-// pulseColumnWidth is the visual width consumed by the recency-pulse column
-// (1-cell glyph + 1-cell space). Only reserved when at least one row in the
-// current view has an active pulse.
-const pulseColumnWidth = 2
+// noticeColumnWidth is the visual width consumed by the notice gutter (1-cell
+// glyph + 1-cell space). The gutter carries two different pieces of news in the
+// same two cells — a transient state-transition pulse and a durable unread
+// completion — and is only reserved when at least one item in the current
+// projection has one of them.
+const noticeColumnWidth = 2
+
+// UnreadNoticeGlyph marks a completion the operator has not looked at. It is a
+// different glyph from the pulse deliberately: the pulse says "this just
+// changed" and fades, while the dot says "this finished and you have not seen
+// it" and stays until the daemon says otherwise. One cell wide, like the pulse,
+// so the two share the gutter without either shifting the rows behind it.
+//
+// Exported on the same terms as GroupBorderGlyph: the root package renders this
+// leaf but does not name its glyphs, so the only caller outside this package is
+// a root test asserting what the composed screen says.
+const UnreadNoticeGlyph = "•"
 
 // activeLoopColumnWidth is the visual width reserved for the active
 // agent-session-loop indicator (🔁 = 2 cells + 1 trailing space). It is only
@@ -77,8 +90,11 @@ type ListInput struct {
 	IdleThreshold time.Duration
 	Watchdog      map[int]protocol.WatchdogState
 
-	// ActivePulse reports whether a window carries an active recency pulse.
-	// Nil means no row pulses.
+	// ActivePulse reports whether a window carries an active recency pulse. It
+	// is the transient half of the notice gutter; the durable half — the unread
+	// completion — is read off the rows themselves and needs no seam, because it
+	// is daemon-owned state the projection already carries. Nil means no row
+	// pulses.
 	ActivePulse func(windowID int) bool
 	// LoopMarker returns the supervision marker bound to a row, when one is
 	// positively identified. A guessed association would put a wrong state
@@ -124,7 +140,7 @@ func RenderList(in ListInput) string {
 	// same-group rows, which is a claim only the urgency ordering makes good on.
 	multiGroup := in.Items.CountGroups(in.LastActivity, in.IdleThreshold) > 1
 	headings := ShowsGroupHeadings(in.View, in.Items, in.LastActivity, in.IdleThreshold)
-	pulseActive := anyRowHasActivePulse(in)
+	noticeActive := anyItemHasNotice(in)
 	activityActive := anyRowHasActivity(in)
 	now := in.Now
 
@@ -183,8 +199,8 @@ func RenderList(in ListInput) string {
 		if multiGroup && rowWidth > 0 {
 			rowWidth -= groupBorderWidth
 		}
-		if pulseActive && rowWidth > 0 {
-			rowWidth -= pulseColumnWidth
+		if noticeActive && rowWidth > 0 {
+			rowWidth -= noticeColumnWidth
 		}
 		// A nested line pays for its indent out of the same budget the row
 		// content is laid out against, so the composed line stays inside the pane
@@ -248,8 +264,8 @@ func RenderList(in ListInput) string {
 		if multiGroup {
 			styledRow = groupBorder(g) + " " + styledRow
 		}
-		if pulseActive {
-			styledRow = pulsePrefix(in, s, isSession) + styledRow
+		if noticeActive {
+			styledRow = noticePrefix(in, item) + styledRow
 		}
 		// Safety clamp at the render boundary. FormatRow has a fixed-column
 		// floor (MinRowWidth) it cannot shrink below, so when the pane is
@@ -283,16 +299,62 @@ func (in ListInput) scrollInput(headings bool) ScrollInput {
 	}
 }
 
-// anyRowHasActivePulse reports whether any row carries an active
-// recency-pulse record. Used to decide whether to reserve the pulse column
-// for the entire render pass so rows stay aligned.
-func anyRowHasActivePulse(in ListInput) bool {
-	for _, s := range in.Items.Rows {
-		if in.pulsing(s.WindowID) {
+// anyItemHasNotice reports whether any line in the current projection carries
+// something the gutter would draw. Used to decide whether to reserve the notice
+// column for the entire render pass so rows stay aligned.
+//
+// Two things about what it scans are load-bearing. It walks the whole
+// projection rather than the rendered window, so scrolling a marked item off
+// screen cannot shift every remaining column two cells to the left. And it walks
+// the projection rather than in.Items.Rows, so a row the current arrangement
+// draws no line for — a member folded away inside a collapsed family — reserves
+// nothing on its own; the family above it reserves for it, because a collapsed
+// summary rolls its members' unread completions up. Rows is already the filtered
+// set, so a session the active filter excluded is in neither.
+func anyItemHasNotice(in ListInput) bool {
+	for _, it := range in.Items.Items {
+		if in.noticeFor(it) != noticeNone {
 			return true
 		}
 	}
 	return false
+}
+
+// noticeKind is what the gutter has to say about one line.
+type noticeKind int
+
+const (
+	// noticeNone is the ordinary line: two blank cells, so the marked lines
+	// above and below it stay in one column.
+	noticeNone noticeKind = iota
+	// noticeUnread is a completion the operator has not looked at.
+	noticeUnread
+	// noticePulse is a state change recent enough to still be worth pointing at.
+	noticePulse
+)
+
+// noticeFor decides which notice a line carries. Reservation and rendering both
+// read this one rule, so the column cannot be reserved by one predicate and
+// painted by another — the way a whole render pass acquires a two-cell gutter
+// that nothing ever draws in, or worse, loses one it is about to draw in.
+//
+// A pulse outranks the dot. Both can be true of the same row at once, and the
+// pulse is then the same news said louder and more recently. When it decays, or
+// when a ModeList keypress clears the pulse layer wholesale, the dot is still
+// underneath: seenness is daemon-owned and a completion stays unread until the
+// operator has actually looked at the session, not until they have touched the
+// dashboard.
+//
+// A synthetic summary has no window of its own and so never pulses, which is
+// why the pulse arm asks for a session first.
+func (in ListInput) noticeFor(it Item) noticeKind {
+	if s, isSession := in.Items.Session(it); isSession && in.pulsing(s.WindowID) {
+		return noticePulse
+	}
+	if in.Items.HasUnreadNotice(it) {
+		return noticeUnread
+	}
+	return noticeNone
 }
 
 // anyVisibleRowHasActiveLoop reports whether the daemon's bulk state snapshot
@@ -338,7 +400,7 @@ func renderActiveLoopCell(active bool) string {
 }
 
 // anyRowHasActivity reports whether any row is running a busy stretch.
-// Mirrors anyRowHasActivePulse: the activity column is reserved for the
+// Mirrors anyItemHasNotice: the activity column is reserved for the
 // entire render pass when at least one row carries a timer, otherwise the
 // column is omitted so rows recover their full directory budget.
 func anyRowHasActivity(in ListInput) bool {
@@ -350,15 +412,25 @@ func anyRowHasActivity(in ListInput) bool {
 	return false
 }
 
-// pulsePrefix returns the colored glyph (+ trailing space) for a pulsing
-// row, or two spaces for a non-pulsing row so column alignment is preserved
-// across the render pass. A synthetic row has no window of its own and so never
-// pulses; it still pays the column so the rows below it stay aligned.
-func pulsePrefix(in ListInput, s session.RunningSession, isSession bool) string {
-	if !isSession || !in.pulsing(s.WindowID) {
-		return strings.Repeat(" ", pulseColumnWidth)
+// noticePrefix returns the gutter cell for one line (+ its trailing space): the
+// state-colored pulse glyph, the attention-colored unread-completion dot, or two
+// spaces for a line with no news, so column alignment is preserved across the
+// render pass.
+//
+// Nothing here reads or writes seenness beyond projecting it. A render that
+// acknowledged what it drew would clear the news by showing it, and the cursor
+// passing over a row is not the operator having read it — clearing the bit stays
+// with the daemon and its Kitty focus observation.
+func noticePrefix(in ListInput, it Item) string {
+	switch in.noticeFor(it) {
+	case noticePulse:
+		s, _ := in.Items.Session(it)
+		return stateAccentStyle(s.State).Render(GroupBorderGlyph) + " "
+	case noticeUnread:
+		return styleUnreadNotice.Render(UnreadNoticeGlyph) + " "
+	default:
+		return strings.Repeat(" ", noticeColumnWidth)
 	}
-	return stateAccentStyle(s.State).Render(GroupBorderGlyph) + " "
 }
 
 const (

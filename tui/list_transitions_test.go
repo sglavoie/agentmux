@@ -174,6 +174,65 @@ func TestRenderListPulseColumnAppearsOnTransition(t *testing.T) {
 	}
 }
 
+// TestUnreadDotSurvivesTheKeypressThatClearsThePulse is the fallback the two
+// notices share one gutter for. A ModeList keypress wipes the whole pulse layer
+// — that is what makes a pulse mean "you have not seen this change yet" — but
+// seenness is daemon-owned, so the completion underneath is still unread and the
+// gutter keeps saying so with the durable dot. Neither the keypress, the cursor
+// move it caused, nor the render that followed may touch Unseen.
+func TestUnreadDotSurvivesTheKeypressThatClearsThePulse(t *testing.T) {
+	m := Model{
+		cfg:   &config.Config{},
+		width: 100,
+		sessions: []session.RunningSession{
+			{WindowID: 1, Base: "api", State: "stop", Account: "w", Unseen: true},
+			{WindowID: 2, Base: "web", State: "stop", Account: "w", Unseen: true},
+		},
+		recentTransitions: map[int]time.Time{1: time.Now()},
+		lastSeenStates:    map[int]string{1: "bolt", 2: "stop"},
+	}
+	m.filtered = m.sessions
+	m.rebuildItems()
+
+	pulsing := stripAnsi(renderList(m))
+	pulsedRow, dottedRow := pulsing, pulsing
+	if lines := strings.Split(strings.TrimRight(pulsing, "\n"), "\n"); len(lines) == 2 {
+		pulsedRow, dottedRow = lines[0], lines[1]
+	} else {
+		t.Fatalf("setup: expected 2 rendered rows, got %d:\n%s", len(lines), pulsing)
+	}
+	if !strings.Contains(pulsedRow, dashboard.GroupBorderGlyph) {
+		t.Fatalf("setup: expected the transition pulse in the gutter; got %q", pulsedRow)
+	}
+	// The pulsing row is ALSO an unread stop; the louder, newer notice wins the
+	// cell, while its unpulsed sibling shows the dot in the same column.
+	if strings.Contains(pulsedRow, dashboard.UnreadNoticeGlyph) {
+		t.Errorf("the pulsing row drew the dot as well as the pulse: %q", pulsedRow)
+	}
+	if !strings.Contains(dottedRow, dashboard.UnreadNoticeGlyph) {
+		t.Errorf("the unpulsed unread row lost its dot to its sibling's pulse: %q", dottedRow)
+	}
+
+	// A cursor move is ModeList input, so it clears the pulse layer.
+	moved := pressKey(m, "j")
+	if len(moved.recentTransitions) != 0 {
+		t.Fatalf("setup: expected the keypress to clear the pulse layer; got %v", moved.recentTransitions)
+	}
+
+	after := stripAnsi(renderList(moved))
+	if strings.Contains(after, dashboard.GroupBorderGlyph) {
+		t.Errorf("the pulse outlived the keypress that cleared it:\n%s", after)
+	}
+	if got, want := strings.Count(after, dashboard.UnreadNoticeGlyph), 2; got != want {
+		t.Errorf("expected %d unread dots once the pulse cleared, got %d:\n%s", want, got, after)
+	}
+	for i, s := range moved.filtered {
+		if !s.Unseen {
+			t.Errorf("row %d had its unseen bit cleared by a keypress and a render; only the daemon may clear it", i)
+		}
+	}
+}
+
 // TestRenderListNoPulseColumnByDefault asserts that with no active
 // transitions, the pulse column is omitted entirely so rows render at full
 // width — no permanent visual cost.

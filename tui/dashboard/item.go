@@ -165,6 +165,51 @@ func (l ItemList) GroupAt(i int, lastActivity map[int]time.Time, threshold time.
 	return group
 }
 
+// HasUnreadNotice reports whether the item carries a completion the operator
+// has not looked at yet: a session leaf resting on an unseen stop, or a
+// COLLAPSED summary at least one of whose members is one.
+//
+// An expanded summary answers false. Its members are lines of their own in this
+// same projection and each carries its own marker, so aggregating here as well
+// would print one family's news twice on adjacent lines. A collapsed summary is
+// the opposite case: its members project to no lines at all, so the summary is
+// the only place their news can be said — the same reason GroupAt lets a folded
+// family speak with its most urgent member's bucket.
+//
+// A member index outside the row set contributes nothing, exactly as it does to
+// GroupAt and SummaryCounts, and every member index is checked rather than
+// trusted: a summary is built beside the row set it points into, but the two
+// travel as separate fields and a caller may pair them wrongly.
+func (l ItemList) HasUnreadNotice(it Item) bool {
+	if s, isSession := l.Session(it); isSession {
+		return unreadStop(s)
+	}
+	if it.Kind != ItemFamilySummary || !it.Collapsed {
+		return false
+	}
+	for _, row := range it.Members {
+		if row < 0 || row >= len(l.Rows) {
+			continue
+		}
+		if unreadStop(l.Rows[row]) {
+			return true
+		}
+	}
+	return false
+}
+
+// unreadStop is the leaf rule the whole marker rests on, and it requires both
+// halves. Unseen is daemon-owned and inverted so that its zero value means seen,
+// and the daemon only ever raises it alongside a resting icon — but it is a bare
+// bool on a struct any caller may build, and a fallback row with no daemon
+// behind it carries whatever it was given. Requiring the stop state as well is
+// what keeps a stale or malformed bit from announcing a completion on a session
+// that is still working. It is the same claim StateGroup makes about the same
+// two fields, said here for the marker rather than for the bucket.
+func unreadStop(s session.RunningSession) bool {
+	return s.State == "stop" && s.Unseen
+}
+
 // CountGroups returns how many distinct urgency groups the projected items
 // span. The list renders group labels and borders only when this is greater
 // than one, so pagination and scroll math charge the same chrome the renderer

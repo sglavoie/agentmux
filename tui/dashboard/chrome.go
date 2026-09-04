@@ -29,6 +29,12 @@ var (
 	// session has been silent for >= 80% of its resolved threshold.
 	styleAgeWarning = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
 
+	// styleUnreadNotice colors the notice gutter's unread-completion dot. It
+	// wears the attention accent because an unseen stop is exactly what puts a
+	// row in the Needs Attention bucket: the dot names the reason the row is
+	// where it is, so it must not read as a third, unrelated color.
+	styleUnreadNotice = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
+
 	// styleReasonTag colors the blocked-reason tag beside a Needs Attention
 	// row's icon. Faint rather than accented: the icon and the group border are
 	// already carrying "this row wants you", and a second attention-colored
