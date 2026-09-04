@@ -129,44 +129,12 @@ func RenderList(in ListInput) string {
 	now := in.Now
 
 	total := in.Items.Len()
-	startIdx := 0
-	endIdx := total
-	showTop := false
-	showBottom := false
-
-	if in.Height > 0 {
-		// Defensive clamp for a stale offset (e.g. after a refresh shrank the
-		// row set).
-		offset := in.Offset
-		if offset < 0 {
-			offset = 0
-		}
-		if offset > total {
-			offset = total
-		}
-		startIdx = offset
-
-		budget := in.Height
-		if startIdx > 0 {
-			showTop = true
-			budget--
-		}
-		if budget < 0 {
-			budget = 0
-		}
-
-		// Two-pass fit: first see how many rows land inside the budget
-		// without reserving the bottom indicator. If rows still remain after
-		// the fit, re-fit with one fewer line so the ▼ slot is reserved.
-		endIdx = fitRows(in, startIdx, budget, headings)
-		if endIdx < total {
-			showBottom = true
-			if budget > 0 {
-				budget--
-			}
-			endIdx = fitRows(in, startIdx, budget, headings)
-		}
-	}
+	// One implementation of the windowed walk, asked here and asked again by the
+	// footer's position indicator. A second copy of the fit is what let the two
+	// disagree about how many items a height actually shows.
+	startIdx, endIdx := in.scrollInput(headings).VisibleRange(in.Offset, in.Height)
+	showTop := startIdx > 0
+	showBottom := endIdx < total
 	activeLoopActive := anyVisibleRowHasActiveLoop(in, startIdx, endIdx)
 	tabNumberWidth := tabNumberColumnWidth(in.Items.Rows)
 	var activityWidth int
@@ -303,48 +271,16 @@ func RenderList(in ListInput) string {
 	return sb.String()
 }
 
-// fitRows returns the exclusive end index such that rendering items
-// [startIdx, end) consumes at most budget lines. The walk mirrors RenderList:
-// when headings is true, prevGroup initializes to -1 so the first item at
-// startIdx always charges a group-label line, matching the renderer's "begin a
-// window inside group 1 still emits the label" behavior. Subsequent visible
-// group transitions also charge one blank separator line before the next group
-// label.
-//
-// Every item costs exactly one line regardless of kind and depth: a summary is
-// one line, an indented child is one line, and a collapsed family's children
-// are not items at all and so cost nothing. That is the whole reason the
-// projection folds before the walk runs rather than during it.
-func fitRows(in ListInput, startIdx, budget int, headings bool) int {
-	total := in.Items.Len()
-	if budget <= 0 || startIdx >= total {
-		return startIdx
+// scrollInput is the subset of the renderer's facts the windowed walk reads.
+// headings is passed rather than re-derived so the walk charges exactly the
+// chrome this render pass is about to draw.
+func (in ListInput) scrollInput(headings bool) ScrollInput {
+	return ScrollInput{
+		Items:         in.Items,
+		LastActivity:  in.LastActivity,
+		IdleThreshold: in.IdleThreshold,
+		GroupHeadings: headings,
 	}
-	used := 0
-	prevGroup := -1
-	end := startIdx
-	for i := startIdx; i < total; i++ {
-		cost := 1
-		var g int
-		if headings {
-			g = in.groupAt(i)
-			if g != prevGroup {
-				cost++
-				if prevGroup != -1 {
-					cost++
-				}
-			}
-		}
-		if used+cost > budget {
-			break
-		}
-		used += cost
-		if headings {
-			prevGroup = g
-		}
-		end = i + 1
-	}
-	return end
 }
 
 // anyRowHasActivePulse reports whether any row carries an active

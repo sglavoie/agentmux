@@ -507,27 +507,37 @@ func listPositionFragment(m Model) string {
 	return listPositionFragmentForVisible(m, listVisibleHeight(m))
 }
 
-func listPositionFragmentForVisible(m Model, visible int) string {
-	// Counted in items, not sessions: start and end are derived from
-	// m.listOffset, which is an item index, so the denominator has to be the
-	// same unit or the indicator drifts the moment a line stands for more than
-	// one session.
+// listPositionFragmentForVisible reports the position for an explicit list-pane
+// height. The height is a LINE budget, not an item count, and the two are the
+// same number only in a view that draws no chrome between its rows: in a
+// multi-group urgency list the group labels and their separators are spent out
+// of the same budget, and the ▼ marker costs one more. Comparing the height to
+// the item count therefore concluded that every item fit while the renderer was
+// drawing an overflow marker under three of seven of them.
+//
+// So the range and the overflow decision are both taken from the window the
+// renderer actually emits. Suppression follows from that window rather than from
+// a separate test: the fragment is dropped only when the first item is the top
+// of the list and the last item is the bottom of it.
+func listPositionFragmentForVisible(m Model, height int) string {
+	// Counted in items, not sessions: the window is in item indices, so the
+	// denominator has to be the same unit or the indicator drifts the moment a
+	// line stands for more than one session.
 	total := m.listItemCount()
 	if total == 0 || m.height == 0 {
 		return ""
 	}
-	if visible >= total {
+	start, end := dashboardScrollInput(&m, listShowsGroupHeadings(&m)).VisibleRange(m.listOffset, height)
+	if start <= 0 && end >= total {
 		return ""
 	}
-	start := m.listOffset + 1
-	end := m.listOffset + visible
-	if end > total {
-		end = total
+	if end <= start {
+		// A budget too small for even one item still has a cursor parked on one,
+		// and "4–3 of 7" is not a range. Report the single item the window is
+		// pinned to rather than an empty one.
+		end = start + 1
 	}
-	if start < 1 {
-		start = 1
-	}
-	return fmt.Sprintf("%d–%d of %d", start, end, total)
+	return fmt.Sprintf("%d–%d of %d", start+1, end, total)
 }
 
 // listFooterBudgetLineCount measures the reflowed ModeList footer using the

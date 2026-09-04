@@ -57,6 +57,101 @@ func (in ScrollInput) LineCost(offset, cursor int) int {
 	return cost
 }
 
+// VisibleRange returns the half-open item window [start, end) that RenderList
+// emits from the given offset inside a pane of the given height. It charges the
+// same group chrome LineCost does and reserves the same ▲/▼ indicator lines the
+// renderer spends, so a caller asking "which items are on screen" gets the
+// renderer's own answer rather than a second estimate of it.
+//
+// This is the question a line budget cannot answer on its own: a height of 12
+// shows twelve items in the Projects view and as few as four in a multi-group
+// urgency view, because there the headings and their separators are spent out of
+// the same budget. Callers that treat the height as an item count report a
+// window the renderer never drew.
+//
+// A non-positive height means "unbounded", matching RenderList: every item is
+// displayed and neither indicator is drawn.
+func (in ScrollInput) VisibleRange(offset, height int) (start, end int) {
+	total := in.Items.Len()
+	if total <= 0 {
+		return 0, 0
+	}
+	if height <= 0 {
+		return 0, total
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > total {
+		offset = total
+	}
+	start = offset
+
+	budget := height
+	if start > 0 {
+		budget-- // ▲
+	}
+	if budget < 0 {
+		budget = 0
+	}
+
+	// Two-pass fit, mirroring RenderList: fit once without reserving the bottom
+	// indicator, and if items still remain below the window, re-fit with one
+	// fewer line so the ▼ slot is paid for.
+	end = in.FitRows(start, budget)
+	if end < total {
+		if budget > 0 {
+			budget--
+		}
+		end = in.FitRows(start, budget)
+	}
+	return start, end
+}
+
+// FitRows returns the exclusive end index such that rendering items
+// [startIdx, end) consumes at most budget lines. The walk mirrors RenderList:
+// when GroupHeadings is true, prevGroup initializes to -1 so the first item at
+// startIdx always charges a group-label line, matching the renderer's "begin a
+// window inside group 1 still emits the label" behavior. Subsequent visible
+// group transitions also charge one blank separator line before the next group
+// label.
+//
+// Every item costs exactly one line regardless of kind and depth: a summary is
+// one line, an indented child is one line, and a collapsed family's children
+// are not items at all and so cost nothing. That is the whole reason the
+// projection folds before the walk runs rather than during it.
+func (in ScrollInput) FitRows(startIdx, budget int) int {
+	total := in.Items.Len()
+	if budget <= 0 || startIdx >= total {
+		return startIdx
+	}
+	used := 0
+	prevGroup := -1
+	end := startIdx
+	for i := startIdx; i < total; i++ {
+		cost := 1
+		var g int
+		if in.GroupHeadings {
+			g = in.Items.GroupAt(i, in.LastActivity, in.IdleThreshold)
+			if g != prevGroup {
+				cost++
+				if prevGroup != -1 {
+					cost++
+				}
+			}
+		}
+		if used+cost > budget {
+			break
+		}
+		used += cost
+		if in.GroupHeadings {
+			prevGroup = g
+		}
+		end = i + 1
+	}
+	return end
+}
+
 // CursorFits reports whether RenderList can emit the cursor item from the given
 // offset inside a pane of the given height. The pane height is not all row
 // budget: RenderList spends one line on ▲ when offset > 0 and one line on ▼
