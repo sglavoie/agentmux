@@ -53,7 +53,7 @@ func responsiveRows() []session.RunningSession {
 		},
 		{
 			TabID: 3, TabNumber: 3, WindowID: 103,
-			Base: "an-unusually-long-project-title-that-no-band-can-hold",
+			Base:      "an-unusually-long-project-title-that-no-band-can-hold",
 			Project:   "an-unusually-long-project-title-that-no-band-can-hold",
 			Account:   "personal",
 			Profile:   "personal",

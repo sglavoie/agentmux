@@ -53,6 +53,7 @@ Key flows:
 - `X`: close the selected running session
 - `o`: open the selected project's directory in a plain shell tab
 - `p`: toggle the preview pane
+- `v`: switch between the urgency order and the Projects view, and back
 - `d`: show the per-session hook event log (scrollable detail pane)
 - `S`: search past session transcripts across every configured profile
 - `P`: search saved agent plans; rows and the viewer show the configured
@@ -115,9 +116,83 @@ repository, `HEAD` is detached, the daemon has not probed the row yet, or
 daemon, so a dashboard running with no daemon reachable shows no branch column
 at all.
 
+### Responsive layout
+
+The list pane is classified into one of three width bands, and every responsive
+decision reads that band rather than a bare column count. Below 80 columns the
+band is compact, 80 through 119 is standard, and 120 and above is spacious. The
+band is taken from the width of the **list pane**, not the terminal, so a
+horizontal preview split can put a compact list inside a wide terminal.
+
+- Compact keeps the tab number, the state icon, the blocked reason, and the
+  title, and drops the profile, harness, run timer, branch, and directory.
+- Standard is the layout above: a one-letter profile cell such as `[W]`, the
+  harness name, and the optional tail columns.
+- Spacious widens the profile cell to the padded profile name, lets the title
+  grow to its content, and adds the icon legend when the terminal is tall
+  enough.
+
+Under a compact list a two-line detail strip sits below the rows and carries the
+dropped fields for the **selected item only** — title, profile, harness, and run
+timer on the first line, branch and directory on the second. For a selected
+project it names the project, its bucket tally, and then the context of the
+member that decided its urgency. The strip is always exactly two lines, occupied
+or not, so moving the cursor never moves the bottom edge of the list.
+
+### Projects view
+
+`v` switches the list between the default urgency order and the Projects view,
+and `v` again switches back. The selected session is carried across both ways,
+so the cursor stays on the row you were looking at; switching back out of a
+project summary selects that project's leading session.
+
+The Projects view replaces the **Needs Attention** / **Active** / **Idle**
+headings with one summary line per project, followed by that project's sessions
+indented underneath it. A summary reads as its state icon, the project label, and
+the bucket tally of its members — `▾ 🔑 api  1 attention · 1 active · 1 idle`.
+Projects keep the position of their highest-urgency member, so the most urgent
+work stays at the top of the list in either view.
+
+Only a project with more than one live session earns a summary line. A
+single-checkout project and a session that resolved to no project at all both
+render as ordinary top-level rows, which keeps a summary a claim about a group
+rather than decoration on a lone session.
+
+Tree keys, all of which are inert in the urgency view:
+
+- `→`: expand the selected project
+- `←`: collapse the selected project; pressed on a session it selects that
+  session's project first, so two presses fold the project you are inside
+- `enter` / `space`: fold or unfold the selected project. This is the one place
+  these keys do not act on a session — on a project summary every session action
+  (focus, restart, close, peek, open directory) is refused rather than applied to
+  a guessed member.
+
+Projects start expanded, and a fold lasts until `amx` exits. Neither the current
+view nor the set of folded projects is written to disk: a project key is built
+from filesystem paths, and persisting it would record checkout paths on behalf of
+a keystroke that only asked to hide a few rows. Both reset on every launch. The
+view also has no ordering of its own — it is the urgency order, grouped — and it
+adds no Git work, since every fact it groups by was already stamped on the row at
+discovery time.
+
+### Status line
+
 A sticky status row occupies the final terminal line for health, active mode
 summaries, and transient action messages; keybinding hints stay immediately
-above it.
+above it. With nothing more urgent to report, the dashboard's own line is:
+
+```text
+Sessions: 7 · 2 attention · 2 active · 3 idle
+Sessions: 2/7 visible · 2 attention · 0 active · 0 idle
+```
+
+The second form appears when a filter is active. The tally counts **sessions**,
+using the same grouping as the headings and the `!attention` / `!active` /
+`!idle` filters, so folding a project in the Projects view never changes it — a
+summary is a line, not a session. Action errors, a delayed Kitty refresh, a
+degraded daemon or hook health check, in-progress work, and transient toasts all
+outrank this line and replace it while they apply.
 
 The detail pane's event history persists through terminal hooks (`Stop`,
 `SessionEnd`, etc.) and through the watchdog's stale sweep, so you can still
@@ -459,5 +534,17 @@ The list and launcher share the same filter DSL:
 | --- | --- |
 | `word` | case-insensitive substring against title, directory, or profile |
 | `@profile` | exact profile match |
-| `!state` | state match: `active`, `idle`, `bolt`, `key`, `stop`, `warning`, `error`, `subagent`, `compact`, `question` |
-| `\@foo`, `\!x` | literal leading `@` or `!` |
+| `%harness` | exact harness match, e.g. `%claude`, `%codex`, `%copilot` |
+| `!state` | state match: one whole urgency group (`attention`, `active`, `idle`) or one icon (`bolt`, `key`, `stop`, `warning`, `error`, `subagent`, `compact`, `question`) |
+| `\@foo`, `\!x`, `\%y` | literal leading `@`, `!`, or `%` |
+
+`!attention`, `!active`, and `!idle` select exactly the three groups the
+dashboard already sorts rows into, so `!attention` always matches the rows under
+the **Needs Attention** heading and nothing else. They are groups, not shorthand
+for a set of icons: an unseen `🛑` is in the attention group and a `🛑` you have
+already looked at is not, so the two rows carry the same icon and answer
+`!attention` differently.
+
+Tokens are whitespace-separated and combine with AND. Lone `@`, `!`, and `%`
+markers and unrecognized `!state` names are ignored rather than rejected — a
+typo like `!attn` leaves the list unfiltered instead of emptying it.

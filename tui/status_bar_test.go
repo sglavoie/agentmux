@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/plans"
+	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/tui/commands"
 )
@@ -96,7 +97,7 @@ func TestStatusBarFallbackBehavior(t *testing.T) {
 		m    Model
 		want string
 	}{
-		{name: "list counts", m: list, want: "Sessions: 3 running"},
+		{name: "list counts", m: list, want: "Sessions: 3 · 0 attention · 3 active · 0 idle"},
 		{name: "search", m: Model{mode: ModeSearch, width: 80, filterText: "api"}, want: "Filter sessions: /api"},
 		{name: "confirm", m: Model{mode: ModeConfirm, width: 80, confirmAction: "close session"}, want: "Confirm close session"},
 		{name: "picker selection count", m: picker, want: "Launch Sessions: 2 selected - 2/3 visible"},
@@ -140,6 +141,75 @@ func TestStatusBarFallbackBehavior(t *testing.T) {
 				t.Fatalf("status fallback = %q, want to contain %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// familyTriageSessions is one repository family of three checkouts spread
+// across all three urgency buckets, plus a single-checkout project. It is the
+// smallest shape in which folding changes the number of LINES without changing
+// the number of SESSIONS, which is what the tally has to survive.
+func familyTriageSessions() []session.RunningSession {
+	fam := func(tab int, base, state string, unseen bool) session.RunningSession {
+		return session.RunningSession{
+			TabID: tab, WindowID: tab * 10, Base: base, Account: "work",
+			Directory: "/home/user/" + base, State: state, Unseen: unseen,
+			FamilyKey: "git:api", FamilyLabel: "api", FamilyIsRepository: true,
+			FamilyPrimaryRoot: "/home/user/api",
+		}
+	}
+	return []session.RunningSession{
+		fam(1, "api", "key", false),
+		fam(2, "api-feat-x", "bolt", false),
+		fam(3, "api-hotfix", "stop", false),
+		{TabID: 4, WindowID: 40, Base: "notes", Account: "personal", Directory: "/home/user/notes", State: "stop"},
+	}
+}
+
+func TestListStatusTallyCountsSessionsInGroupOrder(t *testing.T) {
+	m := loadSessions(testModel(), familyTriageSessions())
+	if got := listStatusText(m); got != "Sessions: 4 · 1 attention · 1 active · 2 idle" {
+		t.Fatalf("status = %q", got)
+	}
+}
+
+// TestListStatusTallyIsUnchangedByFoldingAFamily is the count semantics stated
+// as a test. In the Projects view a folded family draws ONE line where three
+// sessions were, so a tally taken from the item projection would report a
+// different number of sessions depending on which families the operator had
+// folded — a number that changes when nothing changed.
+func TestListStatusTallyIsUnchangedByFoldingAFamily(t *testing.T) {
+	m := loadSessions(testModel(), familyTriageSessions())
+	want := listStatusText(m)
+
+	m.toggleListView()
+	m.rebuildItems()
+	if lines := len(m.items.Items); lines != 5 {
+		t.Fatalf("expected 5 projected lines in the expanded Projects view, got %d", lines)
+	}
+	if got := listStatusText(m); got != want {
+		t.Fatalf("switching to Projects changed the tally: %q, want %q", got, want)
+	}
+
+	m.setFamilyCollapsed("git:api", true)
+	m.rebuildItems()
+	if lines := len(m.items.Items); lines != 2 {
+		t.Fatalf("expected the fold to remove three lines, got %d", lines)
+	}
+	if got := listStatusText(m); got != want {
+		t.Fatalf("folding a family changed the tally: %q, want %q", got, want)
+	}
+}
+
+// TestListStatusReportsVisibleOverTotalWhenFiltered pins both halves of the
+// filtered form: the lead becomes V/N, and the tally describes the VISIBLE
+// rows rather than continuing to describe the whole list.
+func TestListStatusReportsVisibleOverTotalWhenFiltered(t *testing.T) {
+	m := loadSessions(testModel(), familyTriageSessions())
+	m.filterText = "!attention"
+	m.reapplyFilterLive()
+
+	if got := listStatusText(m); got != "Sessions: 1/4 visible · 1 attention · 0 active · 0 idle" {
+		t.Fatalf("filtered status = %q", got)
 	}
 }
 

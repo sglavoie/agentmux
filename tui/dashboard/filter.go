@@ -13,8 +13,8 @@ import (
 //
 //	@<account>   exact account match (case-insensitive)
 //	%<harness>   exact harness match (case-insensitive); e.g. %claude, %copilot
-//	!<state>     state filter; recognized: active, idle, bolt, key, stop,
-//	             warning, error, subagent, compact, question
+//	!<state>     state filter; recognized: attention, active, idle, bolt, key,
+//	             stop, warning, error, subagent, compact, question
 //	<word>       case-insensitive substring against title, directory, or account
 //	\@foo / \!x  literal leading @ or ! (lenient: also accepted bare in titles)
 //
@@ -61,8 +61,8 @@ func (f Filter) IsEmpty() bool {
 }
 
 // Match reports whether a session passes the filter. lastActivity and idle
-// are used only for the !active / !idle state aliases, which require
-// StateGroup classification.
+// are used only for the !attention / !active / !idle state aliases, which
+// require StateGroup classification.
 func (f Filter) Match(s session.RunningSession, lastActivity map[int]time.Time, idle time.Duration) bool {
 	profile := s.EffectiveProfile()
 	if f.Account != "" && !strings.EqualFold(profile, f.Account) {
@@ -147,14 +147,23 @@ func tokenAtCaret(input string, caretPos int) (sigil byte, prefix string, replac
 	return 0, "", start, caretPos
 }
 
-// matchState applies the !<state> filter, including the active/idle aliases
-// that fan out to StateGroup buckets.
+// matchState applies the !<state> filter, including the attention/active/idle
+// aliases that fan out to StateGroup buckets.
+//
+// The three aliases name the three buckets and nothing else, which is what
+// makes `!attention` mean the same thing as the group heading above the rows
+// it selects. In particular it is NOT "the key, error, and question states":
+// an unseen 🛑 is in the bucket and a seen one is not, and only StateGroup
+// knows which. Spelling the set out here would have quietly disagreed with the
+// heading the moment the unseen demotion moved a row.
 func matchState(s session.RunningSession, state string, lastActivity map[int]time.Time, idle time.Duration) bool {
 	switch strings.ToLower(state) {
+	case "attention":
+		return StateGroup(s, lastActivity, idle) == attentionGroup
 	case "active":
-		return StateGroup(s, lastActivity, idle) == 1
+		return StateGroup(s, lastActivity, idle) == activeGroup
 	case "idle":
-		return StateGroup(s, lastActivity, idle) == 2
+		return StateGroup(s, lastActivity, idle) == idleGroup
 	case "bolt", "key", "stop", "warning", "error", "subagent", "compact", "question":
 		return s.State == strings.ToLower(state)
 	}

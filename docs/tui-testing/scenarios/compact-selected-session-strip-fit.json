@@ -1,0 +1,16 @@
+{
+  "name": "compact-selected-session-strip-fit",
+  "fixture": "project_families",
+  "size": { "width": 72, "height": 30 },
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "cursor_equals", "cursor": 0 },
+    { "type": "selected_title", "value": "api" },
+    { "type": "contains_text", "text": "▌ 1:     🔑 perm api" },
+    { "type": "excludes_text", "text": "[work" },
+    { "type": "contains_text", "text": "api · work · claude" },
+    { "type": "contains_text", "text": "main* · ~/projects/api" },
+    { "type": "contains_text", "text": "Sessions: 7 · 2 attention · 2 active · 3 idle" },
+    { "type": "no_layout_issues" }
+  ]
+}

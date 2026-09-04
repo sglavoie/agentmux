@@ -23,7 +23,7 @@ Requires Go 1.22+, Kitty, and `just`.
 ```bash
 just build
 just test
-just acceptance   # tests, core race suites, vet, every TUI scenario
+just acceptance   # gofmt, tests, core race suites, vet, every TUI scenario
 just check        # acceptance plus golangci-lint
 just install-restart-smoke
 just crash-restart   # fault injection and restart equivalence, under -race

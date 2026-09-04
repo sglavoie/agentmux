@@ -114,7 +114,8 @@ var helpSections = []struct {
 		"  p         toggle preview pane (also active in launcher)",
 	}},
 	{"Filter", []string{
-		"  /         filter (DSL: @profile, !state, word)",
+		"  /         filter (DSL: @profile, %harness, !state, word)",
+		"  !state    !attention / !active / !idle select one whole group",
 		"  f         cycle profile (dashboard live / launcher default)",
 		"  esc       clear filter chips",
 		"  1 – 9     remove filter chip at that position",

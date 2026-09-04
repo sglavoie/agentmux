@@ -22,8 +22,10 @@ type Completion struct {
 }
 
 // completionStateNames is the closed set of state names completed for `!`.
-// Mirrors matchState in filter.go plus the active/idle aliases.
-var completionStateNames = []string{"active", "idle", "bolt", "key", "stop", "warning", "error", "subagent", "compact", "question"}
+// Mirrors matchState in filter.go: the three group aliases first, in bucket
+// order, then the exact state names. The aliases lead because they are the ones
+// that select what the list is already grouped by.
+var completionStateNames = []string{"attention", "active", "idle", "bolt", "key", "stop", "warning", "error", "subagent", "compact", "question"}
 
 // candidatesForSigil returns the unfiltered candidate set for a sigil.
 // Returns nil for unknown sigils.

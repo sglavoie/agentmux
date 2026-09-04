@@ -190,7 +190,3 @@ func (l ItemList) countInGroup(group int, lastActivity map[int]time.Time, thresh
 	}
 	return n
 }
-
-// idleGroup is the bucket that claims the least, used wherever a projection
-// question has no answer to give.
-const idleGroup = 2

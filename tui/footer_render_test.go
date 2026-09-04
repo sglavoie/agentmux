@@ -68,7 +68,7 @@ func TestRootRenderPinsStatusBarToFinalRow(t *testing.T) {
 	if got := runewidth.StringWidth(last); got != m.width {
 		t.Fatalf("status row width = %d, want %d; row %q", got, m.width, last)
 	}
-	if !strings.Contains(strings.TrimSpace(last), "Sessions: 3 running") {
+	if !strings.Contains(strings.TrimSpace(last), "Sessions: 3 · ") {
 		t.Fatalf("final row = %q, want list status", last)
 	}
 
@@ -111,7 +111,7 @@ func TestRootRenderListPreviewSuppressesFooterButKeepsStatusBar(t *testing.T) {
 		t.Fatalf("rendered line count = %d, want terminal height %d:\n%s", len(lines), m.height, out)
 	}
 	last := strings.TrimSpace(lines[len(lines)-1])
-	if !strings.Contains(last, "Sessions: 3 running") {
+	if !strings.Contains(last, "Sessions: 3 · ") {
 		t.Fatalf("final row = %q, want list status", last)
 	}
 	if strings.Contains(out, "q quit") || strings.Contains(out, "j/k up/down") {

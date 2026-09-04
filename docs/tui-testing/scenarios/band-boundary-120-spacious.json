@@ -1,0 +1,13 @@
+{
+  "name": "band-boundary-120-spacious",
+  "fixture": "project_families",
+  "size": { "width": 119, "height": 26 },
+  "actions": [{ "type": "resize", "width": 120, "height": 26 }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "▌ 1:     🔑 perm [work    ] 🦊 claude  api " },
+    { "type": "contains_text", "text": "▌ 6:     🛑      [personal] 🤖 codex   notes " },
+    { "type": "contains_text", "text": "icons:" },
+    { "type": "no_layout_issues" }
+  ]
+}

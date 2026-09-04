@@ -1,0 +1,19 @@
+{
+  "name": "projects-cross-view-selection",
+  "fixture": "project_families",
+  "size": { "width": 120, "height": 32 },
+  "actions": [
+    { "type": "key", "key": "j" },
+    { "type": "key", "key": "j" },
+    { "type": "key", "key": "j" },
+    { "type": "key", "key": "j" },
+    { "type": "key", "key": "v" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "Agent Mux · Projects" },
+    { "type": "cursor_equals", "cursor": 3 },
+    { "type": "selected_title", "value": "api-hotfix" },
+    { "type": "no_layout_issues" }
+  ]
+}

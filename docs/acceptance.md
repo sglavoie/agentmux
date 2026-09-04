@@ -6,10 +6,12 @@ The AgentMux 0.8.0 product acceptance gate is:
 just check
 ```
 
-It runs `go test ./...`, the race-sensitive transcript, plan, handoff,
-worktree, daemon, and TUI suites, `go vet ./...`, every committed TUI
-scenario, and `golangci-lint`. `just acceptance` is the same gate without the
-optional linter dependency.
+It runs `gofmt -l` over every tracked Go file, `go test ./...`, the
+race-sensitive transcript, plan, handoff, worktree, daemon, and TUI suites,
+`go vet ./...`, every committed TUI scenario, and `golangci-lint`. `just
+acceptance` is the same gate without the optional linter dependency. The
+formatting check leads because it is the cheapest of them: a formatting drift
+reported after the race suite is a long wait for a one-command fix.
 All persistence tests use temporary homes, transcript sources, plan roots, and
 cache paths.
 

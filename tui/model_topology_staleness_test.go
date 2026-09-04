@@ -69,7 +69,7 @@ func TestStaleWarningOnsetIsExactlyTheSharedThreshold(t *testing.T) {
 				assertStatusBarLacks(t, m, staleWarningPrefix)
 				// Silence below the threshold means the ordinary list status,
 				// not a blank bar.
-				assertStatusBarContains(t, m, "Sessions: 3 running")
+				assertStatusBarContains(t, m, "Sessions: 3 · ")
 				return
 			}
 			assertStatusBarContains(t, m, tc.want)
@@ -113,7 +113,7 @@ func TestStaleWarningClearsOnTheNextSuccessfulTopology(t *testing.T) {
 		Topology: commands.TopologyFreshness{Source: commands.TopologyFromDirect, CapturedAt: clock},
 	})
 	assertStatusBarLacks(t, m, staleWarningPrefix)
-	assertStatusBarContains(t, m, "Sessions: 3 running")
+	assertStatusBarContains(t, m, "Sessions: 3 · ")
 	if m.err != nil {
 		t.Fatalf("recovery left err = %v, want it cleared", m.err)
 	}
@@ -167,7 +167,7 @@ func TestWarmRefreshFailureIsQuietThenNonfatal(t *testing.T) {
 
 	assertStatusBarLacks(t, m, "Kitty error")
 	assertStatusBarLacks(t, m, staleWarningPrefix)
-	assertStatusBarContains(t, m, "Sessions: 3 running")
+	assertStatusBarContains(t, m, "Sessions: 3 · ")
 
 	clock = staleTestEpoch.Add(11 * time.Second)
 	assertStatusBarLacks(t, m, "Kitty error")

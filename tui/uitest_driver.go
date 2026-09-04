@@ -395,7 +395,7 @@ func newUITestFixtureDriver(fx uitestFixture, size UITestSize) (*uitestDriver, *
 	}
 	client := newUITestKittyClient(fx.Windows)
 	d := newUITestDriver(fx.Config, client, size)
-	d.model.backgroundCommands.topologyRefresh = hermeticTopologyRefresh(fx.States, fx.Watchdog)
+	d.model.backgroundCommands.topologyRefresh = hermeticTopologyRefresh(fx.overlay())
 	fixtureWorktrees := append([]actions.WorktreeView(nil), fx.Worktrees...)
 	d.model.backgroundCommands.worktrees = func(_ Model, seq int) tea.Cmd {
 		return func() tea.Msg {
@@ -478,7 +478,7 @@ func newUITestFixtureDriver(fx uitestFixture, size UITestSize) (*uitestDriver, *
 			return msg
 		}
 	}
-	d.loadSessionsFrom(client, fx.Config, fx.States, fx.Watchdog)
+	d.loadSessionsFrom(client, fx.Config, fx.overlay())
 	return d, client
 }
 
@@ -638,17 +638,19 @@ func newUITestDriverUnder(m Model, size UITestSize, tempParent string) (*uitestD
 }
 
 // hermeticTopologyRefresh enumerates sessions from the no-op Kitty client and
-// overlays the fixture's daemon-owned state, which no Kitty title can carry
-// (the busy anchor above all). Both maps are nil for a driver built without a
-// fixture, which reproduces an unreachable daemon exactly as before. The
-// daemon is never contacted either way, so the no-live-daemon guarantee holds.
+// overlays the fixture's injected facts: the daemon-owned state no Kitty title
+// can carry (the busy anchor above all), and the repository-family identity a
+// real Git probe would have stamped. The overlay is zero for a driver built
+// without a fixture, which reproduces an unreachable daemon and discovery's own
+// family answer exactly as before. The daemon is never contacted either way, so
+// the no-live-daemon guarantee holds.
 //
 // It carries the refresh sequence and the freshness metadata the real command
 // does, so the model's one-refresh-in-flight controller settles here exactly as
 // it does in production; a fixture fetch that dropped the sequence would leave
 // every scenario stuck after its first refresh. The fixture's own listing stands
 // in for a direct fallback, which is what it is: no daemon is reachable.
-func hermeticTopologyRefresh(states map[int]protocol.WindowStateSnapshot, watchdog map[int]protocol.WatchdogState) func(Model, int, int) tea.Cmd {
+func hermeticTopologyRefresh(overlay uitestSessionOverlay) func(Model, int, int) tea.Cmd {
 	return func(m Model, seq, _ int) tea.Cmd {
 		return func() tea.Msg {
 			windows, err := m.client.ListWindows()
@@ -656,14 +658,12 @@ func hermeticTopologyRefresh(states map[int]protocol.WindowStateSnapshot, watchd
 				return commands.ErrMsg{Seq: seq, Err: err}
 			}
 			sessions, _ := session.ListFromOSWindowsWithConfig(windows, m.cfg)
-			if states != nil {
-				commands.ApplyDaemonStates(sessions, states)
-			}
+			overlay.apply(sessions)
 			return commands.SessionsMsg{
 				Seq:      seq,
 				Sessions: session.SortRunning(sessions, m.sortMode),
-				Watchdog: watchdog,
-				States:   states,
+				Watchdog: overlay.Watchdog,
+				States:   overlay.States,
 				Topology: commands.TopologyFreshness{
 					Source:     commands.TopologyFromDirect,
 					CapturedAt: m.now(),
@@ -675,7 +675,7 @@ func hermeticTopologyRefresh(states map[int]protocol.WindowStateSnapshot, watchd
 
 func hermeticModelBackgroundCommands() modelBackgroundCommands {
 	return modelBackgroundCommands{
-		topologyRefresh: hermeticTopologyRefresh(nil, nil),
+		topologyRefresh: hermeticTopologyRefresh(uitestSessionOverlay{}),
 		activeLoops: func(seq int) tea.Cmd {
 			return func() tea.Msg { return commands.ActiveLoopsMsg{Seq: seq} }
 		},
@@ -742,34 +742,32 @@ func newUITestConfigDriver(root, srcConfigPath string, windows []kitty.OSWindow,
 	if err != nil {
 		return nil, nil, env, err
 	}
-	d.loadSessionsFrom(client, cfg, nil, nil)
+	d.loadSessionsFrom(client, cfg, uitestSessionOverlay{})
 	return d, client, env, nil
 }
 
 // loadSessionsFrom populates the model's session list the way the production
 // fetch command does, but synchronously: it enumerates managed sessions from
-// client + cfg, overlays the caller's daemon-owned state, and feeds the result
-// through Model.Update as a commands.SessionsMsg. This lets a fixture- or config-backed
+// client + cfg, applies the caller's overlay, and feeds the result through
+// Model.Update as a commands.SessionsMsg. This lets a fixture- or config-backed
 // driver start with a populated list without running the refresh ticker, and
 // keeps that first list identical to what a later tick's hermetic initial fetch
-// would produce. A query error leaves the model with an empty list rather than
-// failing driver construction.
-func (d *uitestDriver) loadSessionsFrom(client kitty.KittyClient, cfg *config.Config, states map[int]protocol.WindowStateSnapshot, watchdog map[int]protocol.WatchdogState) {
+// would produce — which is why both go through the same overlay. A query error
+// leaves the model with an empty list rather than failing driver construction.
+func (d *uitestDriver) loadSessionsFrom(client kitty.KittyClient, cfg *config.Config, overlay uitestSessionOverlay) {
 	sessions, _, err := session.ListWithConfig(client, cfg)
 	if err != nil {
 		return
 	}
-	if states != nil {
-		commands.ApplyDaemonStates(sessions, states)
-	}
+	overlay.apply(sessions)
 	// This load stands in for the startup refresh the constructor armed, so it
 	// carries that refresh's sequence: settling it is what lets the first tick
 	// start a refresh instead of collapsing into the pending bit.
 	d.recordErr(d.dispatch(commands.SessionsMsg{
 		Seq:      d.model.topologyRefreshActiveSeq,
 		Sessions: session.SortRunning(sessions, d.model.sortMode),
-		Watchdog: watchdog,
-		States:   states,
+		Watchdog: overlay.Watchdog,
+		States:   overlay.States,
 		Topology: commands.TopologyFreshness{
 			Source:     commands.TopologyFromDirect,
 			CapturedAt: d.model.now(),

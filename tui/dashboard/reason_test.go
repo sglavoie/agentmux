@@ -11,12 +11,12 @@ import (
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
-// attentionGroup is the grouping the reason column is measured against in these
+// reasonTestGroup is the grouping the reason column is measured against in these
 // tests. Using the real StateGroup rather than a stub is deliberate: the
 // column's whole reservation rule is "some row in group 0 has a reason", so a
 // test that invented its own grouping would stop proving the rule the moment
 // StateGroup's buckets moved.
-func attentionGroup(s session.RunningSession) int {
+func reasonTestGroup(s session.RunningSession) int {
 	return StateGroup(s, nil, time.Minute)
 }
 
@@ -139,11 +139,11 @@ func TestReasonColumnNotReservedWithoutAReason(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := reasonColumnWidth(tc.rows, attentionGroup); got != 0 {
+			if got := reasonColumnWidth(tc.rows, reasonTestGroup); got != 0 {
 				t.Fatalf("reasonColumnWidth = %d, want 0 (column must not be reserved)", got)
 			}
 			for _, s := range tc.rows {
-				if cell := renderReasonCell(s, attentionGroup(s), 0); cell != "" {
+				if cell := renderReasonCell(s, reasonTestGroup(s), 0); cell != "" {
 					t.Fatalf("renderReasonCell at width 0 = %q, want empty", cell)
 				}
 			}
@@ -165,12 +165,12 @@ func TestReasonColumnMeasuredOnceForTheWholePass(t *testing.T) {
 		{State: "key"}, // blocked, unlabelled
 		{State: "bolt", BusySince: time.Unix(1, 0)},
 	}
-	width := reasonColumnWidth(rows, attentionGroup)
+	width := reasonColumnWidth(rows, reasonTestGroup)
 	if want := layout.Width("input") + 1; width != want {
 		t.Fatalf("reasonColumnWidth = %d, want %d (widest tag in the view plus one trailing space)", width, want)
 	}
 	for i, s := range rows {
-		cell := renderReasonCell(s, attentionGroup(s), width)
+		cell := renderReasonCell(s, reasonTestGroup(s), width)
 		if got := layout.StyledWidth(cell); got != width {
 			t.Errorf("row %d cell %q is %d cells, want %d", i, stripAnsi(cell), got, width)
 		}
@@ -178,7 +178,7 @@ func TestReasonColumnMeasuredOnceForTheWholePass(t *testing.T) {
 
 	// Drop the widest tag and the column shrinks with it, rather than staying
 	// sized for a vocabulary the view is not using.
-	narrower := reasonColumnWidth(rows[:1], attentionGroup)
+	narrower := reasonColumnWidth(rows[:1], reasonTestGroup)
 	if want := layout.Width("perm") + 1; narrower != want {
 		t.Fatalf("reasonColumnWidth without the input row = %d, want %d", narrower, want)
 	}
@@ -197,7 +197,7 @@ func TestFormatRowPlacesTheReasonBesideTheIcon(t *testing.T) {
 		State:     "key",
 		Reason:    string(screenstate.ClaudePromptPermission),
 	}
-	cell := renderReasonCell(s, 0, reasonColumnWidth([]session.RunningSession{s}, attentionGroup))
+	cell := renderReasonCell(s, 0, reasonColumnWidth([]session.RunningSession{s}, reasonTestGroup))
 	// Standard band: the profile cell is the initial, which is the form this
 	// test names when it asserts the tag lands before it.
 	row := stripAnsi(FormatRow(RowInput{Session: s, Band: BandStandard, Width: 100, AcctColor: map[string]string{"work": "blue"}, ReasonCell: cell}))
@@ -229,7 +229,7 @@ func TestFormatRowReasonCellIsChargedToTheDirectory(t *testing.T) {
 	}
 	const width = 100
 	without := layout.StyledWidth(FormatRow(RowInput{Session: s, Band: BandFor(width), Width: width}))
-	cell := renderReasonCell(s, 0, reasonColumnWidth([]session.RunningSession{s}, attentionGroup))
+	cell := renderReasonCell(s, 0, reasonColumnWidth([]session.RunningSession{s}, reasonTestGroup))
 	with := layout.StyledWidth(FormatRow(RowInput{Session: s, Band: BandFor(width), Width: width, ReasonCell: cell}))
 	if with != without {
 		t.Fatalf("row width with the reason cell = %d, without = %d: the cell must be charged to the directory budget, not added to the row",

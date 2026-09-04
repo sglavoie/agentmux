@@ -1,0 +1,21 @@
+{
+  "name": "projects-cross-view-summary-return",
+  "fixture": "project_families",
+  "size": { "width": 120, "height": 32 },
+  "actions": [
+    { "type": "key", "key": "j" },
+    { "type": "key", "key": "j" },
+    { "type": "key", "key": "j" },
+    { "type": "key", "key": "j" },
+    { "type": "key", "key": "v" },
+    { "type": "key", "key": "left" },
+    { "type": "key", "key": "v" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "Agent Mux · Urgency" },
+    { "type": "cursor_equals", "cursor": 0 },
+    { "type": "selected_title", "value": "api" },
+    { "type": "no_layout_issues" }
+  ]
+}

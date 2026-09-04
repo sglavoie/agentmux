@@ -71,6 +71,31 @@ func TestFilterRemoveOutOfRangeNoOp(t *testing.T) {
 	}
 }
 
+// TestAttentionChipIsColoredLikeTheGroupItSelects keeps the `!attention` chip
+// from reading as an ordinary filter token. The chip row is the only place the
+// active filter is visible once the search input closes, and a chip naming the
+// urgency group has to look like the group's heading — the same style `!key` and
+// `!stop`, its two most common members, already get.
+func TestAttentionChipIsColoredLikeTheGroupItSelects(t *testing.T) {
+	attention := Parse("!attention").Components()
+	if len(attention) != 1 {
+		t.Fatalf("expected one chip, got %v", attention)
+	}
+	want := chipStyle(Parse("!key").Components()[0], nil, false).Render("x")
+	if got := chipStyle(attention[0], nil, false).Render("x"); got != want {
+		t.Errorf("!attention chip renders %q, want the attention style %q", got, want)
+	}
+
+	// The other two aliases are deliberately NOT special-cased: their groups
+	// carry no urgency, so a colored chip would claim one.
+	plain := chipStyle(Chip{kind: chipSubstring}, nil, false).Render("x")
+	for _, alias := range []string{"active", "idle"} {
+		if got := chipStyle(Parse("!" + alias).Components()[0], nil, false).Render("x"); got != plain {
+			t.Errorf("!%s chip renders %q, want the plain chip style %q", alias, got, plain)
+		}
+	}
+}
+
 func TestSerializeFilterEscapesLeadingMarkers(t *testing.T) {
 	f := Filter{Substrings: []string{"@literal", "!banged"}}
 	got := SerializeFilter(f)

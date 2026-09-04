@@ -20,6 +20,27 @@ test:
 vet:
     go vet ./...
 
+# Fail when any TRACKED Go file is not gofmt-clean.
+#
+# gofmt exits 0 whether or not it found anything, so the check is on its
+# output: any listed path is a file the formatter would rewrite. The paths are
+# printed before failing, because "run gofmt -w" is only actionable if the
+# operator knows on what.
+#
+# The file list comes from git rather than from a directory walk. An operator's
+# checkout carries agent worktrees and other untracked Go sources under
+# .claude/, and a gate that failed on a stale copy of a file nobody is editing
+# would be a gate people learn to ignore.
+fmt-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    unformatted="$(git ls-files -z '*.go' | xargs -0 gofmt -l)"
+    if [ -n "$unformatted" ]; then
+        echo "gofmt would rewrite these files; run 'gofmt -w' on them:" >&2
+        echo "$unformatted" >&2
+        exit 1
+    fi
+
 # Run the concurrency-sensitive filesystem persistence, continuity, Kitty
 # read-coordination, daemon, and TUI suites under the race detector.
 race-core:
@@ -316,7 +337,11 @@ paired-release-gate asl_root signing_key="" tag="no":
     go run . "${args[@]}"
 
 # Product acceptance without the optional linter dependency.
-acceptance: test race-core vet tui-scenarios
+#
+# fmt-check leads because it is the cheapest gate here and the one whose
+# failure says the least about the change: a formatting drift found after a
+# twenty-minute race suite is a twenty-minute wait for a one-command fix.
+acceptance: fmt-check test race-core vet tui-scenarios
 
 # Run linter.
 # golangci-lint's default lock is machine-wide, not repository-scoped, so a

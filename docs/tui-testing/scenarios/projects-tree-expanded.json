@@ -1,0 +1,20 @@
+{
+  "name": "projects-tree-expanded",
+  "fixture": "project_families",
+  "size": { "width": 120, "height": 32 },
+  "actions": [{ "type": "key", "key": "v" }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "Agent Mux · Projects" },
+    { "type": "contains_text", "text": "▾ 🔑 api  1 attention · 1 active · 1 idle" },
+    { "type": "contains_text", "text": "▾ ⚡ docs  1 active · 1 idle" },
+    { "type": "contains_text", "text": "▌   1:     🔑 perm [work    ] 🦊 claude  api " },
+    { "type": "contains_text", "text": "▌   2:     ⚡      [work    ] 🦊 claude  api-feat-x " },
+    { "type": "contains_text", "text": "▌   3:     🛑      [work    ] 🦊 claude  api-hotfix " },
+    { "type": "contains_text", "text": "▌ 6:     🛑      [personal] 🤖 codex   notes " },
+    { "type": "contains_text", "text": "▌ 7:     🛑      [work    ] 🦊 claude  scratch " },
+    { "type": "excludes_text", "text": "Needs Attention" },
+    { "type": "contains_text", "text": "Sessions: 7 · 2 attention · 2 active · 3 idle" },
+    { "type": "no_layout_issues" }
+  ]
+}

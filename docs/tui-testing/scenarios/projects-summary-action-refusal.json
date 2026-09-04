@@ -1,0 +1,24 @@
+{
+  "name": "projects-summary-action-refusal",
+  "fixture": "project_families",
+  "size": { "width": 120, "height": 32 },
+  "actions": [
+    { "type": "key", "key": "v" },
+    { "type": "key", "key": "left" },
+    { "type": "key", "key": "a" },
+    { "type": "key", "key": "X" },
+    { "type": "key", "key": "r" },
+    { "type": "key", "key": "e" },
+    { "type": "key", "key": "o" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "cursor_equals", "cursor": 0 },
+    { "type": "contains_text", "text": "▾ 🔑 api  1 attention · 1 active · 1 idle" },
+    { "type": "kitty_calls", "op": "CloseTab", "count": 0 },
+    { "type": "kitty_calls", "op": "FocusTab", "count": 0 },
+    { "type": "kitty_calls", "op": "LaunchOverlayPager", "count": 0 },
+    { "type": "kitty_calls", "op": "LaunchTab", "count": 0 },
+    { "type": "no_layout_issues" }
+  ]
+}

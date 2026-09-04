@@ -18,6 +18,21 @@ const (
 	groupBorderWidth = 2
 )
 
+// The three urgency buckets StateGroup answers with, named here rather than
+// spelled as literals at each site. They are declared beside StateGroup and
+// groupLabels because this file is where a bucket is decided and where it is
+// given the name the operator reads: the `!attention` filter, the status bar's
+// tally, and the group heading all have to mean the same three things, and a
+// bare 0 in three packages' worth of call sites is how they would stop.
+//
+// idleGroup doubles as the answer a projection gives when it has no answer to
+// give — it is the bucket that claims the least.
+const (
+	attentionGroup = 0
+	activeGroup    = 1
+	idleGroup      = 2
+)
+
 // StateGroup classifies a session into one of three buckets:
 //
 //	0 → Needs Attention (key, error, question, or an UNSEEN stop)

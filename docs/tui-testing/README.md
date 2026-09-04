@@ -74,6 +74,7 @@ amx tui-test list-fixtures
 # asl_runs
 # basic
 # blocked_reasons
+# project_families
 # run_timers
 # unseen_stops
 # wide_profiles
@@ -117,6 +118,7 @@ amx tui-test fixture wide_profiles --width 140 --key C
 | `asl_question` | `basic` with a human-actionable `❓🔁` supervisor handoff and a `⚡🔁` active run | ASL handoff presentation: attention grouping, gloss, `]q` jump |
 | `asl_runs` | four supervisor runs spanning exact, ambiguous, second-exact, and unbound live sessions | Runs view focus outcomes and binding presentation |
 | `blocked_reasons` | four blocked rows — two `🔑`, two `❓` — carrying a Codex permission kind, a Claude permission kind, a request-for-input kind, and no kind at all | the blocked-reason column: two harnesses' distinct kind strings reading as one `perm` tag, the widest tag setting the column, and an unlabelled row padding rather than collapsing |
+| `project_families` | two multi-checkout repository families whose members span all three urgency buckets, plus a single-checkout family and a row belonging to no family | the Projects view: summaries, fold/unfold, the singleton that earns no summary, the unfamilied leaf, the project card, and count semantics under a filter |
 | `run_timers` | five busy stretches: sub-minute, multi-minute, hours-long, warning-band, and idle | per-row run timer formatting bands and the `⏳` watchdog warning |
 | `unseen_stops` | two `🛑` rows the daemon separates by seenness, plus one `⚡` row | the unseen-stop demotion: a read `🛑` falls to Idle while an unread one holds Needs Attention |
 | `wide_profiles` | long profile names and home dirs | stresses the profile/config picker box width |
@@ -145,6 +147,21 @@ replays it on every refresh, so a `tick` action does not wipe the columns it
 feeds. The daemon is never contacted: a fixture that supplies no such state
 renders exactly as it would against an unreachable daemon, which stays the
 default.
+
+A fixture may likewise supply the repository-family identity discovery stamps
+onto each row. That stamp normally comes from a Git probe against a directory
+on disk, so a multi-checkout family could otherwise only be built out of real
+temporary repositories — whose paths would then appear in the directory column,
+in the detail strip, and in the project card, which is exactly what a committed
+scenario cannot assert against. `project_families` is the fixture that supplies
+it. Unlike the daemon-state block, a supplied family map is **authoritative for
+every discovered row**, not a patch over what discovery produced: a window it
+does not name has its family fields cleared. That is the only way to express
+"this row belongs to no family at all", since discovery gives a configured
+project a singleton family of its own. It is replayed on every refresh for the
+same reason the daemon state is. Real-Git family resolution keeps its own
+coverage in `internal/projectresolve` and `internal/session`, where temporary
+repositories are appropriate because nothing there asserts on rendered text.
 
 Because those columns include a seconds-resolution run timer, the harness pins
 the model's render clock to one fixed instant instead of reading the wall
@@ -296,6 +313,10 @@ file. The exact inventory is:
 | [`asl-response-paused-narrow-fit.json`](scenarios/asl-response-paused-narrow-fit.json) | `asl_runs` | a paused run's form offers only reply-and-resume and still fits a narrow terminal while typing |
 | [`asl-runs-narrow-fit.json`](scenarios/asl-runs-narrow-fit.json) | `asl_runs` | narrow Runs rows keep state, label, reason, and age, and move the rest into the selected-row panel |
 | [`asl-runs-wide.json`](scenarios/asl-runs-wide.json) | `asl_runs` | `A` opens Runs with needs-action rows first, the full wide columns, and no Kitty focus |
+| [`band-boundary-79-compact-fit.json`](scenarios/band-boundary-79-compact-fit.json) | `project_families` | one cell below the standard band the rows have dropped the profile cell and the harness name, and the selected row's identity is carried by the detail strip instead |
+| [`band-boundary-80-standard.json`](scenarios/band-boundary-80-standard.json) | `project_families` | exactly at 80 the standard band appears with the initial-only `[W]` profile cell and the harness name, and still without the spacious legend |
+| [`band-boundary-119-standard.json`](scenarios/band-boundary-119-standard.json) | `project_families` | one cell below the spacious band the initial-only profile cell survives alongside the full activity, branch, and directory columns |
+| [`band-boundary-120-spacious.json`](scenarios/band-boundary-120-spacious.json) | `project_families` | exactly at 120 the spacious band widens the profile cell to the padded name and adds the icon legend |
 | [`blocked-reason-column-narrow-fit.json`](scenarios/blocked-reason-column-narrow-fit.json) | `blocked_reasons` | the reason tags survive the compact band, which has already dropped the profile, harness, activity, branch, and directory, and the selected row's context has moved into the two-line detail strip |
 | [`blocked-reason-column-wide.json`](scenarios/blocked-reason-column-wide.json) | `blocked_reasons` | a Codex and a Claude permission prompt both read `perm`, a request-for-input reads `input`, an unlabelled blocked row pads to the same column, and no raw prompt kind reaches the screen |
 | [`branch-column-narrow-fit.json`](scenarios/branch-column-narrow-fit.json) | `worktree_branches` | at 66 cells the compact band has taken the branch and directory off every row, and the detail strip is what tells the selected checkout from its sibling |
@@ -305,6 +326,8 @@ file. The exact inventory is:
 | [`command-palette-filter.json`](scenarios/command-palette-filter.json) | `basic` | printable text filters the palette to the matching plans command |
 | [`command-palette-narrow-scroll.json`](scenarios/command-palette-narrow-scroll.json) | `basic` | narrow palette scrolls the active command into view without layout issues |
 | [`command-palette-wide.json`](scenarios/command-palette-wide.json) | `basic` | wide empty-query palette shows grouped commands and inline disabled reasons |
+| [`compact-selected-family-strip-fit.json`](scenarios/compact-selected-family-strip-fit.json) | `project_families` | the compact strip under a selected family summary reports the family's own bucket tally and then the primary checkout's profile, harness, branch, and directory |
+| [`compact-selected-session-strip-fit.json`](scenarios/compact-selected-session-strip-fit.json) | `project_families` | the compact strip under a selected session recovers the profile, harness, branch, and directory the compact rows dropped |
 | [`config-picker-fit.json`](scenarios/config-picker-fit.json) | `wide_profiles` | profile/config picker fits after pressing `C` with long profile names |
 | [`config-picker-selection-transition.json`](scenarios/config-picker-selection-transition.json) | `wide_profiles` | `l` → `C` → `down` restores the old colored profile row and keeps the new selection within the modal |
 | [`contextual-help-from-session-view.json`](scenarios/contextual-help-from-session-view.json) | `basic` | `?` opens the generated keymap over the truncated transcript viewer, which stays as the backdrop |
@@ -314,6 +337,14 @@ file. The exact inventory is:
 | [`legend-narrow-fit.json`](scenarios/legend-narrow-fit.json) | `actions` | live-session legend remains bounded at narrow width |
 | [`list-preview-narrow-fit.json`](scenarios/list-preview-narrow-fit.json) | `actions` | list+preview falls back to the plain list below the row-column floor |
 | [`picker-dsl-narrow-fit.json`](scenarios/picker-dsl-narrow-fit.json) | `basic` | launcher DSL/help text clamps at narrow width |
+| [`projects-cross-view-selection.json`](scenarios/projects-cross-view-selection.json) | `project_families` | `v` carries the selected session across to Projects, where the cursor lands on the same session at its new tree index |
+| [`projects-cross-view-summary-return.json`](scenarios/projects-cross-view-summary-return.json) | `project_families` | `v` back out of Projects from a family summary selects that family's primary session in Urgency rather than losing the cursor |
+| [`projects-family-collapse.json`](scenarios/projects-family-collapse.json) | `project_families` | `←` on a summary folds its family away while the sibling family stays expanded and the status tally is unchanged |
+| [`projects-family-expand.json`](scenarios/projects-family-expand.json) | `project_families` | `→` unfolds a collapsed family and restores every checkout row underneath it |
+| [`projects-filtered-attention-counts.json`](scenarios/projects-filtered-attention-counts.json) | `project_families` | the `!attention` chip keeps only the two attention rows, drops the now-empty family summaries, and the status bar switches to the `V/N visible` form |
+| [`projects-summary-action-refusal.json`](scenarios/projects-summary-action-refusal.json) | `project_families` | session actions pressed on a family summary are refused outright — no Kitty focus, launch, close, or pager call is made |
+| [`projects-summary-preview.json`](scenarios/projects-summary-preview.json) | `project_families` | the preview pane for a selected family summary lists the family's bucket tally and every checkout with its branch and directory |
+| [`projects-tree-expanded.json`](scenarios/projects-tree-expanded.json) | `project_families` | `v` replaces the urgency group borders with family summary lines and indented checkouts, leaving unfamilied and single-checkout rows flat |
 | [`resize-stress.json`](scenarios/resize-stress.json) | `basic` | the dashboard survives a sequence of resizes and ends clean |
 | [`picker-fit.json`](scenarios/picker-fit.json) | `actions` | launch picker rows stay within width after pressing `l` |
 | [`picker-preview-fit.json`](scenarios/picker-preview-fit.json) | `actions` | launch picker list+preview split fits after pressing `l` then `p` |
@@ -330,6 +361,7 @@ file. The exact inventory is:
 | [`session-search-header-narrow-fit.json`](scenarios/session-search-header-narrow-fit.json) | `basic` | Past Sessions header and filters fit at narrow width |
 | [`session-view-hints-wide.json`](scenarios/session-view-hints-wide.json) | `basic` | transcript viewer advertises the full continuity palette including `c continue` |
 | [`session-view-hints-narrow-fit.json`](scenarios/session-view-hints-narrow-fit.json) | `basic` | transcript viewer hints truncate to the row budget and surface the actionable `? more` marker |
+| [`spacious-identity-columns.json`](scenarios/spacious-identity-columns.json) | `wide_profiles` | the spacious band gives a long profile name its own truncated cell and lets a long title and its full directory share the same row |
 | [`unseen-stop-grouping-narrow-fit.json`](scenarios/unseen-stop-grouping-narrow-fit.json) | `unseen_stops` | two identically-iconed 🛑 rows split across Needs Attention and Idle by the daemon's unseen bit, with the unread one leading the list at narrow width |
 | [`unseen-stop-grouping-wide.json`](scenarios/unseen-stop-grouping-wide.json) | `unseen_stops` | the seen 🛑 demotes to Idle while the unseen one holds Needs Attention, and `]s` still reaches the demoted row |
 | [`worktrees-browse.json`](scenarios/worktrees-browse.json) | `worktrees` | `W` opens the hermetic managed-worktree inventory and whitespace-AND filtering narrows to the dirty row without exposing lifecycle mutations |

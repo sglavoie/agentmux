@@ -1,0 +1,21 @@
+{
+  "name": "projects-summary-preview",
+  "fixture": "project_families",
+  "size": { "width": 140, "height": 32 },
+  "actions": [
+    { "type": "key", "key": "v" },
+    { "type": "key", "key": "left" },
+    { "type": "key", "key": "p" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "cursor_equals", "cursor": 0 },
+    { "type": "contains_text", "text": "p: hide preview" },
+    { "type": "contains_text", "text": "│▾ api" },
+    { "type": "contains_text", "text": "│1 attention · 1 active · 1 idle" },
+    { "type": "contains_text", "text": "│🔑 api  work · claude · main* · ~/projects/api" },
+    { "type": "contains_text", "text": "│⚡ api-feat-x  … claude · amx/feat-x · ~/projects/worktrees/api-feat-x" },
+    { "type": "contains_text", "text": "│🛑 api-hotfix  … claude · amx/hotfix · ~/projects/worktrees/api-hotfix" },
+    { "type": "no_layout_issues" }
+  ]
+}

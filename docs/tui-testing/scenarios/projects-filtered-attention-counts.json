@@ -1,0 +1,24 @@
+{
+  "name": "projects-filtered-attention-counts",
+  "fixture": "project_families",
+  "size": { "width": 120, "height": 32 },
+  "actions": [
+    { "type": "key", "key": "v" },
+    { "type": "key", "key": "/" },
+    { "type": "key", "key": "!" },
+    { "type": "key", "key": "a" },
+    { "type": "key", "key": "t" },
+    { "type": "key", "key": "enter" },
+    { "type": "key", "key": "enter" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "▌!attention ✕" },
+    { "type": "contains_text", "text": "🔑 perm [work    ] 🦊 claude  api " },
+    { "type": "contains_text", "text": "🛑      [personal] 🤖 codex   notes " },
+    { "type": "excludes_text", "text": "api-feat-x" },
+    { "type": "excludes_text", "text": "🔑 api  1 attention" },
+    { "type": "contains_text", "text": "Sessions: 2/7 visible · 2 attention · 0 active · 0 idle" },
+    { "type": "no_layout_issues" }
+  ]
+}

@@ -290,6 +290,85 @@ func TestMatchStateSubagentCompactQuestion(t *testing.T) {
 	}
 }
 
+// TestMatchStateAttentionAliasIsTheGroupNotAnIconSet is the load-bearing test
+// for `!attention`. Two sessions carrying the SAME "stop" state answer the
+// filter differently, because only the daemon's unseen bit decides which of
+// them is still asking for a human. A matchState that enumerated icon names —
+// the obvious implementation — would accept both and quietly disagree with the
+// Needs Attention heading the rows are drawn under.
+func TestMatchStateAttentionAliasIsTheGroupNotAnIconSet(t *testing.T) {
+	f := Parse("!attention")
+
+	unseen := session.RunningSession{State: "stop", Unseen: true, WindowID: 1}
+	if !f.Match(unseen, nil, time.Minute) {
+		t.Error("expected !attention to match an unseen stop (group 0)")
+	}
+	seen := session.RunningSession{State: "stop", WindowID: 2}
+	if f.Match(seen, nil, time.Minute) {
+		t.Error("expected !attention to reject a seen stop, which StateGroup demotes to idle")
+	}
+
+	if key := (session.RunningSession{State: "key", WindowID: 3}); !f.Match(key, nil, time.Minute) {
+		t.Error("expected !attention to match a permission prompt")
+	}
+	if bolt := (session.RunningSession{State: "bolt", WindowID: 4}); f.Match(bolt, nil, time.Minute) {
+		t.Error("expected !attention to reject an active session")
+	}
+}
+
+// TestMatchStateAliasesPartitionTheGroups states the property that makes the
+// three aliases a partition rather than three independent predicates: every
+// session matches exactly one of them, and which one is StateGroup's verdict.
+func TestMatchStateAliasesPartitionTheGroups(t *testing.T) {
+	lastActivity := map[int]time.Time{5: time.Now().Add(-time.Hour)}
+	rows := []session.RunningSession{
+		{State: "key", WindowID: 1},
+		{State: "stop", Unseen: true, WindowID: 2},
+		{State: "bolt", WindowID: 3},
+		{State: "stop", WindowID: 4},
+		{State: "", WindowID: 5},
+	}
+	aliases := []string{"attention", "active", "idle"}
+
+	for _, s := range rows {
+		matched := 0
+		for i, alias := range aliases {
+			if !Parse("!"+alias).Match(s, lastActivity, time.Minute) {
+				continue
+			}
+			matched++
+			if got := StateGroup(s, lastActivity, time.Minute); got != i {
+				t.Errorf("window %d matched !%s but StateGroup says %d", s.WindowID, alias, got)
+			}
+		}
+		if matched != 1 {
+			t.Errorf("window %d (state %q) matched %d aliases, want exactly 1", s.WindowID, s.State, matched)
+		}
+	}
+}
+
+// TestSerializeFilterRoundTripsTheAttentionAlias keeps the alias usable from
+// the chip row: a chip removal reserializes the whole filter, so an alias that
+// did not round-trip would be silently rewritten the first time some other chip
+// was dropped.
+func TestSerializeFilterRoundTripsTheAttentionAlias(t *testing.T) {
+	f := Parse("@work !attention api")
+	if f.State != "attention" {
+		t.Fatalf("State = %q, want attention", f.State)
+	}
+	round := SerializeFilter(f)
+	if got := Parse(round); got.State != "attention" {
+		t.Fatalf("round trip %q lost the alias: State = %q", round, got.State)
+	}
+	kept := f.RemoveComponent(1) // drop @work; the alias must survive untouched
+	if kept.State != "attention" {
+		t.Fatalf("removing a sibling chip changed State to %q", kept.State)
+	}
+	if got := Parse(kept.Raw); got.State != "attention" {
+		t.Fatalf("reserialized Raw %q lost the alias", kept.Raw)
+	}
+}
+
 func TestMatchStateActiveAlias(t *testing.T) {
 	f := Parse("!active")
 	bolt := session.RunningSession{State: "bolt", WindowID: 1}

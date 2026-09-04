@@ -1,0 +1,14 @@
+{
+  "name": "band-boundary-79-compact-fit",
+  "fixture": "project_families",
+  "size": { "width": 80, "height": 26 },
+  "actions": [{ "type": "resize", "width": 79, "height": 26 }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "▌ 1:     🔑 perm api" },
+    { "type": "excludes_text", "text": "🦊 claude" },
+    { "type": "excludes_text", "text": "[W]" },
+    { "type": "contains_text", "text": "api · work · claude" },
+    { "type": "no_layout_issues" }
+  ]
+}

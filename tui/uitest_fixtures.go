@@ -21,8 +21,10 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/plans"
+	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 // This file supplies the deterministic data sources the harness driver runs
@@ -67,6 +69,74 @@ type uitestFixture struct {
 	// ASLActionOutcomes overrides the default accepted receipt per bridge method,
 	// so a scenario can exercise a refusal or a consumed receipt without a bridge.
 	ASLActionOutcomes map[string]uitestASLOutcome
+	// Families stands in for what config-aware discovery stamped onto each row,
+	// keyed by Kitty window ID. It exists because the real stamp comes from
+	// projectresolve.NewWithGit, which asks Git about a directory on disk: a
+	// multi-checkout repository family is not expressible in a fixture without
+	// creating real repositories, and their temporary paths would then appear in
+	// the directory column and in the strip, which is exactly what a committed
+	// scenario cannot assert against.
+	//
+	// A non-nil map is AUTHORITATIVE for every discovered row, not a patch over
+	// what discovery produced: a window it does not name has its family fields
+	// cleared. That is what makes "this row belongs to no family" expressible at
+	// all, since discovery gives a configured project its own singleton family
+	// and there would otherwise be no way to say otherwise. A nil map leaves
+	// discovery's own answer alone, which for a fixture pointing at directories
+	// that do not exist is a singleton family per configured project.
+	Families map[int]uitestFamily
+}
+
+// uitestFamily is one row's repository-family identity, mirroring the four
+// family fields on session.RunningSession. It is spelled out here rather than
+// reusing the session type so a fixture states only the facts a family is, with
+// no room to set an unrelated session field through the same map.
+type uitestFamily struct {
+	Key          string
+	Label        string
+	IsRepository bool
+	PrimaryRoot  string
+}
+
+// uitestSessionOverlay is everything a fixture injects onto the session list
+// discovery produced: the daemon-owned state no Kitty title can carry, the
+// watchdog block that goes with it, and the repository-family identity a real
+// Git probe would have stamped.
+//
+// The three travel together because they must be replayed together. The
+// scenario harness applies them at the initial load AND on every refresh tick,
+// so a `tick` action cannot quietly wipe half the fixture's world; a signature
+// that took them one at a time is a signature a later injection point can be
+// wired into having forgotten.
+type uitestSessionOverlay struct {
+	States   map[int]protocol.WindowStateSnapshot
+	Watchdog map[int]protocol.WatchdogState
+	Families map[int]uitestFamily
+}
+
+// overlay collects the fixture's injected facts for the driver's two
+// application points.
+func (f uitestFixture) overlay() uitestSessionOverlay {
+	return uitestSessionOverlay{States: f.States, Watchdog: f.Watchdog, Families: f.Families}
+}
+
+// apply overlays the fixture's injected facts onto a freshly discovered session
+// list, in place. Call it before sorting: the sort reads state, and the family
+// fields decide how the Projects projection groups the result.
+func (o uitestSessionOverlay) apply(sessions []session.RunningSession) {
+	if o.States != nil {
+		commands.ApplyDaemonStates(sessions, o.States)
+	}
+	if o.Families == nil {
+		return
+	}
+	for i := range sessions {
+		fam := o.Families[sessions[i].WindowID]
+		sessions[i].FamilyKey = fam.Key
+		sessions[i].FamilyLabel = fam.Label
+		sessions[i].FamilyIsRepository = fam.IsRepository
+		sessions[i].FamilyPrimaryRoot = fam.PrimaryRoot
+	}
 }
 
 // uitestASLOutcome is one scripted result for a submitted mutation. ErrorCode
@@ -92,6 +162,7 @@ var uitestFixtureBuilders = map[string]func() uitestFixture{
 	"unseen_stops":       unseenStopsFixture,
 	"blocked_reasons":    blockedReasonsFixture,
 	"worktree_branches":  worktreeBranchesFixture,
+	"project_families":   projectFamiliesFixture,
 }
 
 // uitestFixtureError reports a request for an unknown built-in fixture and
@@ -512,6 +583,108 @@ func worktreeBranchesFixture() uitestFixture {
 			21: {IconState: "bolt", BusySinceAt: busySince(3*time.Minute + 7*time.Second), Branch: "amx/feat-x"},
 			31: {IconState: "bolt", BusySinceAt: busySince(12 * time.Second), Branch: "amx/hotfix"},
 			41: {IconState: "bolt", BusySinceAt: busySince(1*time.Minute + 5*time.Second)},
+		},
+	}
+}
+
+// projectFamiliesFixture is the Projects view's world: seven rows arranged into
+// two multi-checkout repository families, one single-checkout family, and one
+// row belonging to no family at all. It is the fixture the tree scenarios need,
+// and it is the reason uitestFixture.Families exists — the real stamp comes from
+// a Git probe against a directory on disk, so without an injection seam a
+// multi-checkout family could only be built out of temporary repositories whose
+// paths would then appear in the very columns the scenarios assert on.
+//
+// The four grouping cases it has to hold at once:
+//
+//   - `api`, three checkouts of one repository whose members sit in three
+//     DIFFERENT urgency buckets. That is what makes the summary a claim rather
+//     than a label: it speaks with its most urgent member's voice (🔑), and
+//     folding it must not change the status line's tally, because the tally
+//     counts sessions and a summary is a line;
+//   - `docs`, two checkouts under a different profile and harness, so a family
+//     is visibly not the same thing as a profile;
+//   - `notes`, a family with exactly ONE member, which earns no summary. A
+//     summary over a lone session would be decoration;
+//   - `scratch`, a row with no family at all, which renders as a top-level leaf
+//     indistinguishable from the singleton above it. The two arrive at the same
+//     rendering by different routes, and pinning both is what stops a later
+//     change from special-casing one of them.
+//
+// The bucket spread is deliberate and load-bearing for the count scenarios:
+// two attention (a 🔑 prompt and an unread 🛑), two active, three idle. Both
+// attention rows are in different families, so `!attention` leaves a family
+// filtered down to one visible member — the case where a summary correctly
+// disappears rather than claiming a count nobody can reach.
+func projectFamiliesFixture() uitestFixture {
+	cfg := &config.Config{
+		Defaults: config.Defaults{
+			Sort: "alpha", RefreshInterval: 2,
+			// Spelled out because a fixture builds its Config literally and never
+			// runs config.Load's defaulting pass: a zero Preview block has ratio
+			// 0, which every split calculation reads as "no preview fits". These
+			// are exactly the values Load would have filled in, so the summary's
+			// project card is reachable from a scenario.
+			Preview: config.PreviewConfig{
+				Direction: "horizontal", Ratio: 0.5, RefreshMs: 500, MinCols: 100, MinRows: 30,
+			},
+		},
+		HarnessEmojis: map[string]string{"claude": "🦊", "codex": "🤖"},
+		HarnessColors: map[string]string{"claude": "blue", "codex": "green"},
+		Accounts: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "~/.config/agent-mux/homes/work", Color: "blue"},
+			{Name: "personal", Harness: "codex", HomeDir: "~/.config/agent-mux/homes/personal", Color: "green"},
+		},
+		Sessions: []config.Session{
+			{Title: "api", Directory: "~/projects/api", Profile: "work"},
+			{Title: "api-feat-x", Directory: "~/projects/worktrees/api-feat-x", Profile: "work"},
+			{Title: "api-hotfix", Directory: "~/projects/worktrees/api-hotfix", Profile: "work"},
+			{Title: "docs", Directory: "~/projects/docs", Profile: "personal"},
+			{Title: "docs-review", Directory: "~/projects/worktrees/docs-review", Profile: "personal"},
+			{Title: "notes", Directory: "~/notes", Profile: "personal"},
+			{Title: "scratch", Directory: "~/scratch", Profile: "work"},
+		},
+	}
+	windows := []kitty.OSWindow{uitestOSWindow(
+		uitestTab(1, 11, "🔑🦊api", true, managedVars("work", "claude", "api", "~/projects/api")),
+		uitestTab(2, 21, "⚡🦊api-feat-x", false, managedVars("work", "claude", "api-feat-x", "~/projects/worktrees/api-feat-x")),
+		uitestTab(3, 31, "🛑🦊api-hotfix", false, managedVars("work", "claude", "api-hotfix", "~/projects/worktrees/api-hotfix")),
+		uitestTab(4, 41, "⚡🤖docs", false, managedVars("personal", "codex", "docs", "~/projects/docs")),
+		uitestTab(5, 51, "🛑🤖docs-review", false, managedVars("personal", "codex", "docs-review", "~/projects/worktrees/docs-review")),
+		uitestTab(6, 61, "🛑🤖notes", false, managedVars("personal", "codex", "notes", "~/notes")),
+		uitestTab(7, 71, "🛑🦊scratch", false, managedVars("work", "claude", "scratch", "~/scratch")),
+	)}
+	busySince := func(d time.Duration) int64 { return uitestFrozenNow.Add(-d).Unix() }
+	// The keys are opaque to everything downstream — the dashboard groups by
+	// them and must never render them — so they are written as short readable
+	// strings rather than as the canonical common-dir paths discovery mints.
+	// A scenario that depended on their shape would be pinning the resolver,
+	// which is tested against real temporary repositories in internal/session.
+	return uitestFixture{
+		Name:        "project_families",
+		Description: "two multi-checkout repository families spanning three urgency buckets, plus a single-checkout family and an unfamilied row",
+		Size:        UITestSize{Width: 120, Height: 32},
+		Config:      cfg,
+		Windows:     windows,
+		States: map[int]protocol.WindowStateSnapshot{
+			11: {IconState: "key", Reason: "permission", Branch: "main", Dirty: true},
+			21: {IconState: "bolt", BusySinceAt: busySince(3*time.Minute + 7*time.Second), Branch: "amx/feat-x"},
+			31: {IconState: "stop", Branch: "amx/hotfix"},
+			41: {IconState: "bolt", BusySinceAt: busySince(42 * time.Second), Branch: "main"},
+			51: {IconState: "stop", Branch: "amx/review"},
+			61: {IconState: "stop", Unseen: true},
+			71: {IconState: "stop"},
+		},
+		Families: map[int]uitestFamily{
+			11: {Key: "git:api", Label: "api", IsRepository: true, PrimaryRoot: "~/projects/api"},
+			21: {Key: "git:api", Label: "api", IsRepository: true, PrimaryRoot: "~/projects/api"},
+			31: {Key: "git:api", Label: "api", IsRepository: true, PrimaryRoot: "~/projects/api"},
+			41: {Key: "git:docs", Label: "docs", IsRepository: true, PrimaryRoot: "~/projects/docs"},
+			51: {Key: "git:docs", Label: "docs", IsRepository: true, PrimaryRoot: "~/projects/docs"},
+			61: {Key: "project:notes", Label: "notes", PrimaryRoot: "~/notes"},
+			// 71 (scratch) is deliberately absent: an authoritative Families map
+			// clears what it does not name, which is the only way to say that a
+			// discovered row belongs to no family.
 		},
 	}
 }

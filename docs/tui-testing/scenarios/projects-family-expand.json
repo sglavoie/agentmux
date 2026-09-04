@@ -1,0 +1,20 @@
+{
+  "name": "projects-family-expand",
+  "fixture": "project_families",
+  "size": { "width": 120, "height": 32 },
+  "actions": [
+    { "type": "key", "key": "v" },
+    { "type": "key", "key": "left" },
+    { "type": "key", "key": "left" },
+    { "type": "key", "key": "right" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "cursor_equals", "cursor": 0 },
+    { "type": "contains_text", "text": "▾ 🔑 api  1 attention · 1 active · 1 idle" },
+    { "type": "contains_text", "text": "▌   2:     ⚡      [work    ] 🦊 claude  api-feat-x " },
+    { "type": "contains_text", "text": "▌   3:     🛑      [work    ] 🦊 claude  api-hotfix " },
+    { "type": "contains_text", "text": "Sessions: 7 · 2 attention · 2 active · 3 idle" },
+    { "type": "no_layout_issues" }
+  ]
+}

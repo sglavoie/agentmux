@@ -149,8 +149,8 @@ func chipStyle(c Chip, acctColor map[string]string, focused bool) lipgloss.Style
 	case chipAccount:
 		base = accountStyle(acctColor[c.raw])
 	case chipState:
-		switch c.raw {
-		case "key", "stop":
+		switch strings.ToLower(c.raw) {
+		case "attention", "key", "stop":
 			base = styleAttentionRow
 		case "warning":
 			base = styleStateWarning

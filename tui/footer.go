@@ -26,7 +26,7 @@ func renderFooter(m Model) string {
 	switch m.mode {
 	case ModeSearch:
 		lines = nonEmptyFooterLines(
-			footerLine(m.width, " · ", "filter: @profile", "!state", "word", "\\@/\\! literal"),
+			footerLine(m.width, " · ", "filter: @profile", "!state (!attention)", "word", "\\@/\\! literal"),
 			footerStyledLine(m.width, "  ", renderFooterBinding("enter", "apply"), renderFooterBinding("esc", "cancel")),
 		)
 	case ModeConfirm:

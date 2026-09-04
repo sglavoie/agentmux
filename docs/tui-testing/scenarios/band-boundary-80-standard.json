@@ -1,0 +1,13 @@
+{
+  "name": "band-boundary-80-standard",
+  "fixture": "project_families",
+  "size": { "width": 79, "height": 26 },
+  "actions": [{ "type": "resize", "width": 80, "height": 26 }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "▌ 1:     🔑 perm [W] 🦊 claude  api " },
+    { "type": "excludes_text", "text": "[work    ]" },
+    { "type": "excludes_text", "text": "icons:" },
+    { "type": "no_layout_issues" }
+  ]
+}

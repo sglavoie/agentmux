@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/tui/asl"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/launch"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
@@ -334,20 +335,54 @@ func fallbackStatusText(m Model) string {
 	}
 }
 
+// listStatusText is the dashboard's own line: how many sessions there are, how
+// many the filter left, and how those break down across the three urgency
+// buckets. The breakdown is what makes the line worth reading in the Projects
+// view, where a collapsed family hides its members' icons — the tally says how
+// many rows are folded away needing attention without unfolding anything.
+//
+// The counts are taken from the VISIBLE SESSIONS (m.filtered) rather than from
+// the projected items, and that is the whole of the count semantics: a family
+// summary is a line, not a session, so counting items would count a two-session
+// family three times in the expanded view and once in the collapsed one, and the
+// same dashboard would report a different number of sessions depending on which
+// families the operator had folded. Sessions are what the operator has; lines
+// are how they are currently drawn.
+//
+// Every bucket decision is dashboard.StateGroup's, so the tally cannot drift
+// from the group headings the rows render under, nor from the `!attention`,
+// `!active`, and `!idle` filters that select each bucket.
 func listStatusText(m Model) string {
 	if topologyLoading(m) {
 		return "Loading sessions…"
 	}
 	total := len(m.sessions)
 	visible := len(m.filtered)
-	switch {
-	case total == 0:
+	if total == 0 {
 		return "No running sessions"
-	case visible == total:
-		return fmt.Sprintf("Sessions: %d running", total)
-	default:
-		return fmt.Sprintf("Sessions: %d/%d visible", visible, total)
 	}
+	lead := fmt.Sprintf("Sessions: %d", total)
+	if visible != total {
+		lead = fmt.Sprintf("Sessions: %d/%d visible", visible, total)
+	}
+	counts := visibleStateCounts(m)
+	return fmt.Sprintf("%s · %d attention · %d active · %d idle", lead, counts[0], counts[1], counts[2])
+}
+
+// visibleStateCounts tallies the filtered sessions into the three urgency
+// buckets, indexed by group. It reads m.filtered directly: the item projection
+// is a rendering of these rows, and a summary line standing for several of them
+// must never be added to or substituted for its members.
+func visibleStateCounts(m Model) [3]int {
+	var counts [3]int
+	for _, s := range m.filtered {
+		g := dashboard.StateGroup(s, m.lastActivity, m.idleThreshold)
+		if g < 0 || g >= len(counts) {
+			continue
+		}
+		counts[g]++
+	}
+	return counts
 }
 
 func pickerStatusText(m Model) string {

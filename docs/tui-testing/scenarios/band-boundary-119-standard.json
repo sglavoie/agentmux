@@ -1,0 +1,14 @@
+{
+  "name": "band-boundary-119-standard",
+  "fixture": "project_families",
+  "size": { "width": 120, "height": 26 },
+  "actions": [{ "type": "resize", "width": 119, "height": 26 }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "▌ 1:     🔑 perm [W] 🦊 claude  api " },
+    { "type": "contains_text", "text": "▌ 2:     ⚡      [W] 🦊 claude  api-feat-x            3:07 amx/feat-x ~/projects/worktrees/api-feat-x" },
+    { "type": "excludes_text", "text": "[work    ]" },
+    { "type": "excludes_text", "text": "icons:" },
+    { "type": "no_layout_issues" }
+  ]
+}
