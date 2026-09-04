@@ -46,11 +46,12 @@ func TestStateGroupSorting(t *testing.T) {
 	}
 	m = loadSessions(m, sessions)
 
-	// Attention (key, unseen stop, error) comes first; then Active with icon
-	// (bolt) before empty-state Active sessions (per the no-record→Active
-	// design). The seen stop sorts below both: it is Idle, and it is the only
-	// row here whose bucket its state name alone would have got wrong.
-	expected := []string{"attention1", "attention2", "attention3", "active1", "idle1", "readstop"}
+	// Attention comes first in severity order (error, key/question, unseen
+	// stop); then Active with an explicit work icon (bolt) before empty-state
+	// Active sessions (per the no-record→Active design). The seen stop sorts
+	// below both: it is Idle, and it is the only row here whose bucket its state
+	// name alone would have got wrong.
+	expected := []string{"attention3", "attention1", "attention2", "active1", "idle1", "readstop"}
 	if len(m.filtered) != len(expected) {
 		t.Fatalf("expected %d filtered sessions, got %d", len(expected), len(m.filtered))
 	}
