@@ -164,10 +164,11 @@ func (l ItemList) SummaryCounts(it Item, lastActivity map[int]time.Time, thresho
 	return counts
 }
 
-// SummaryLead returns the member whose urgency the summary speaks with: the
-// most urgent one, ties broken by source order so the answer is the same on
-// every rebuild. It is the session whose state icon the summary paints, and its
-// group is exactly the group GroupAt gives the summary.
+// SummaryLead returns the member whose urgency the summary speaks with, using
+// the same group, subtype, and durable-recency priority as SortRows. Exact ties
+// keep source order so the answer is the same on every rebuild. It is the
+// session whose state icon the summary paints, and its group is exactly the
+// group GroupAt gives the summary.
 //
 // It reports false for a non-summary item and for a summary whose members are
 // all out of range, which is the same "nothing to claim" answer GroupAt
@@ -176,15 +177,13 @@ func (l ItemList) SummaryLead(it Item, lastActivity map[int]time.Time, threshold
 	if it.Kind != ItemFamilySummary {
 		return session.RunningSession{}, false
 	}
-	best := idleGroup + 1
 	var lead session.RunningSession
 	found := false
 	for _, row := range it.Members {
 		if row < 0 || row >= len(l.Rows) {
 			continue
 		}
-		if g := StateGroup(l.Rows[row], lastActivity, threshold); g < best {
-			best = g
+		if !found || compareRowPriority(l.Rows[row], lead, lastActivity, threshold) < 0 {
 			lead = l.Rows[row]
 			found = true
 		}

@@ -262,14 +262,16 @@ func TestSummaryCountsDescribeVisibleMembers(t *testing.T) {
 	}
 }
 
-// TestSummaryLeadIsTheMostUrgentMember asserts the summary speaks with its worst
-// child's voice and that the choice is stable: ties go to source order, so a
-// rebuild cannot swap which icon the family shows.
+// TestSummaryLeadIsTheMostUrgentMember asserts the summary speaks with its
+// highest-priority child's voice using the same severity and durable-recency
+// relation as SortRows.
 func TestSummaryLeadIsTheMostUrgentMember(t *testing.T) {
+	old := time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)
+	newest := old.Add(time.Hour)
 	rows := []session.RunningSession{
-		{TabID: 1, Base: "a", State: "bolt", FamilyKey: "git:/repo"},
-		{TabID: 2, Base: "b", State: "error", FamilyKey: "git:/repo"},
-		{TabID: 3, Base: "c", State: "key", FamilyKey: "git:/repo"},
+		{TabID: 1, Base: "a", State: "key", PresentationChangedAt: newest, FamilyKey: "git:/repo"},
+		{TabID: 2, Base: "b", State: "error", PresentationChangedAt: old, FamilyKey: "git:/repo"},
+		{TabID: 3, Base: "c", State: "error", PresentationChangedAt: newest, FamilyKey: "git:/repo"},
 	}
 	list := BuildProjectItems(rows, nil)
 	summary, _ := list.At(0)
@@ -278,13 +280,23 @@ func TestSummaryLeadIsTheMostUrgentMember(t *testing.T) {
 	if !ok {
 		t.Fatal("SummaryLead found no member of a three-member family")
 	}
-	// Both "error" and "key" are group 0; the earlier one in source order wins,
-	// and it is also the group GroupAt reports for the summary.
-	if lead.TabID != 2 {
-		t.Errorf("SummaryLead = tab %d, want tab 2 (first of the tied attention members)", lead.TabID)
+	// Error outranks the newer key prompt; among the two errors, the newer
+	// presentation transition wins even though it appears later in source order.
+	if lead.TabID != 3 {
+		t.Errorf("SummaryLead = tab %d, want tab 3 (newest member at the highest severity)", lead.TabID)
 	}
 	if got, want := StateGroup(lead, nil, projectIdle), list.GroupAt(0, nil, projectIdle); got != want {
 		t.Errorf("lead group = %d but GroupAt(summary) = %d; the icon and the band would disagree", got, want)
+	}
+
+	tiedRows := []session.RunningSession{
+		{TabID: 4, State: "question", PresentationChangedAt: newest, FamilyKey: "git:/tied"},
+		{TabID: 5, State: "key", PresentationChangedAt: newest, FamilyKey: "git:/tied"},
+	}
+	tied := BuildProjectItems(tiedRows, nil)
+	tiedSummary, _ := tied.At(0)
+	if tiedLead, found := tied.SummaryLead(tiedSummary, nil, projectIdle); !found || tiedLead.TabID != 4 {
+		t.Errorf("SummaryLead exact tie = tab %d (found=%v), want first source tab 4", tiedLead.TabID, found)
 	}
 
 	if _, ok := list.SummaryLead(Item{Kind: ItemSession, Row: 0}, nil, projectIdle); ok {

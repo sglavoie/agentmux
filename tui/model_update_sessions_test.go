@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -29,6 +30,45 @@ func TestSessionsMsg_RestoresCursorByTabIDWhenBaseDuplicates(t *testing.T) {
 
 	if got := m.filtered[m.cursor].TabID; got != 2 {
 		t.Fatalf("cursor restored to tab %d, want tab 2", got)
+	}
+}
+
+func TestSessionsMsgPresentationReorderPreservesSelectionAndPreviewTarget(t *testing.T) {
+	old := time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)
+	newest := old.Add(time.Hour)
+	m := loadSessions(testModel(), []session.RunningSession{
+		{TabID: 1, WindowID: 11, Base: "api", State: "key", PresentationChangedAt: old},
+		{TabID: 2, WindowID: 22, Base: "web", State: "question", PresentationChangedAt: newest},
+	})
+	for i := range m.items.Items {
+		if s, ok := m.items.SessionAt(i); ok && s.TabID == 1 {
+			m.cursor = i
+		}
+	}
+	if m.cursor == 0 {
+		t.Fatal("fixture did not initially place selected tab 1 after newer tab 2")
+	}
+	m.previewEnabled = true
+	m.retargetPreview(11)
+	previewSeq := m.previewTargetSeq
+
+	m = applySessions(m, commands.SessionsMsg{Sessions: []session.RunningSession{
+		{TabID: 1, WindowID: 11, Base: "api", State: "key", PresentationChangedAt: newest},
+		{TabID: 2, WindowID: 22, Base: "web", State: "question", PresentationChangedAt: old},
+	}})
+
+	selected, ok := m.selectedSession()
+	if !ok || selected.TabID != 1 {
+		t.Fatalf("selection after recency reorder = %+v (ok=%v), want tab 1", selected, ok)
+	}
+	if m.cursor != 0 {
+		t.Errorf("selected tab moved to cursor %d, want reordered position 0", m.cursor)
+	}
+	if m.previewWindowID != selected.WindowID {
+		t.Errorf("preview target = window %d, want selected window %d", m.previewWindowID, selected.WindowID)
+	}
+	if m.previewTargetSeq != previewSeq {
+		t.Errorf("unchanged preview target bumped sequence from %d to %d", previewSeq, m.previewTargetSeq)
 	}
 }
 

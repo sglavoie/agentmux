@@ -137,30 +137,84 @@ func renderGroupLabel(group, count int) string {
 
 var groupLabels = [3]string{"Needs Attention", "Active", "Idle"}
 
-// SortRows applies a stable sort so attention rows come first, then active,
-// then idle — preserving existing order within each group. Sessions with no
-// state icon are bucketed with the activity map and idle threshold.
+// compareRowPriority compares the operational priority of two rows. A negative
+// result means a should precede b; zero deliberately leaves their incoming
+// order untouched. The caller supplies that final order (normally
+// session.SortRunning), so configured sorting and pins remain the deterministic
+// fallback without outranking urgency, severity, or presentation recency.
 //
-// It names no state of its own: every bucket decision is StateGroup's, and the
-// only state name it reads is the empty one, inside the Active tie-break. That
-// is why the unseen demotion needed no change here — a seen stop simply comes
-// back as group 2 and sorts with the idle rows.
+// PresentationChangedAt is the only recency signal consulted here. In
+// particular, BusySince and the activity map are not recency substitutes: the
+// activity map is used only by StateGroup to decide whether an iconless row is
+// Active or Idle.
+func compareRowPriority(a, b session.RunningSession, lastActivity map[int]time.Time, threshold time.Duration) int {
+	ga := StateGroup(a, lastActivity, threshold)
+	gb := StateGroup(b, lastActivity, threshold)
+	if ga != gb {
+		if ga < gb {
+			return -1
+		}
+		return 1
+	}
+
+	ra := rowSubtypeRank(a, ga)
+	rb := rowSubtypeRank(b, gb)
+	if ra != rb {
+		if ra < rb {
+			return -1
+		}
+		return 1
+	}
+
+	az := a.PresentationChangedAt.IsZero()
+	bz := b.PresentationChangedAt.IsZero()
+	if az != bz {
+		if az {
+			return 1
+		}
+		return -1
+	}
+	if !az && !a.PresentationChangedAt.Equal(b.PresentationChangedAt) {
+		if a.PresentationChangedAt.After(b.PresentationChangedAt) {
+			return -1
+		}
+		return 1
+	}
+	return 0
+}
+
+// rowSubtypeRank orders the state variants inside one urgency group. Idle has
+// no subtype priority: its seen stops, stale iconless rows, and unknown legacy
+// states all reach the presentation clock together.
+func rowSubtypeRank(s session.RunningSession, group int) int {
+	switch group {
+	case attentionGroup:
+		switch s.State {
+		case "error":
+			return 0
+		case "key", "question":
+			return 1
+		case "stop":
+			return 2
+		}
+	case activeGroup:
+		switch s.State {
+		case "warning":
+			return 0
+		case "bolt", "subagent", "compact":
+			return 1
+		case "":
+			return 2
+		}
+	}
+	return 0
+}
+
+// SortRows applies the shared priority relation as a stable in-place sort.
+// Sessions with no state icon are bucketed with the activity map and idle
+// threshold; ties preserve the incoming session.SortRunning order.
 func SortRows(rows []session.RunningSession, lastActivity map[int]time.Time, threshold time.Duration) {
 	sort.SliceStable(rows, func(i, j int) bool {
-		gi := StateGroup(rows[i], lastActivity, threshold)
-		gj := StateGroup(rows[j], lastActivity, threshold)
-		if gi != gj {
-			return gi < gj
-		}
-		// Within Active (group 1), sessions with an explicit state icon sort
-		// before those without.
-		if gi == 1 {
-			si := rows[i].State != ""
-			sj := rows[j].State != ""
-			if si != sj {
-				return si
-			}
-		}
-		return false
+		return compareRowPriority(rows[i], rows[j], lastActivity, threshold) < 0
 	})
 }
