@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 func completionTestModel() Model {
@@ -143,5 +144,22 @@ func TestRenderCompletion_RendersCandidates(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected %q in rendered popup, got %q", want, out)
 		}
+	}
+}
+
+func TestRecomputeCompletion_ProjectCandidatesUseLiveSessions(t *testing.T) {
+	m := completionTestModel()
+	m.sessions = []session.RunningSession{
+		{FamilyLabel: "API", Account: "work", State: "error"},
+		{FamilyLabel: "Web", Account: "personal", State: "bolt"},
+	}
+	m.filterText = "@work #"
+	m.recomputeCompletion()
+	if !m.completion.Visible || len(m.completion.Candidates) != 1 || m.completion.Candidates[0] != "API" {
+		t.Fatalf("project completion = visible %v candidates %v", m.completion.Visible, m.completion.Candidates)
+	}
+	m.insertCompletion()
+	if m.filterText != "@work #API " {
+		t.Fatalf("inserted project completion = %q", m.filterText)
 	}
 }

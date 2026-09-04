@@ -227,3 +227,96 @@ func TestFilterCandidates_EmptyPrefixReturnsAll(t *testing.T) {
 		t.Errorf("expected full set, got %v", got)
 	}
 }
+
+func TestTokenAtCaret_QuotedProjectPrefixAndReplacementRange(t *testing.T) {
+	input := `api #"My Project" !key`
+	caret := len(`api #"My Pro`)
+	sigil, prefix, from, to := tokenAtCaret(input, caret)
+	if sigil != '#' || prefix != "My Pro" {
+		t.Fatalf("tokenAtCaret() = (%q, %q), want (#, My Pro)", sigil, prefix)
+	}
+	if from != len("api ") || to != len(`api #"My Project"`) {
+		t.Fatalf("replacement range = [%d..%d], want [%d..%d]", from, to, len("api "), len(`api #"My Project"`))
+	}
+}
+
+func TestTokenAtCaret_UnterminatedQuotedProjectRemainsCompletable(t *testing.T) {
+	input := `@work #"My Pro`
+	sigil, prefix, from, to := tokenAtCaret(input, len(input))
+	if sigil != '#' || prefix != "My Pro" || from != len("@work ") || to != len(input) {
+		t.Fatalf("tokenAtCaret(%q) = (%q, %q, %d, %d)", input, sigil, prefix, from, to)
+	}
+}
+
+func TestTokenAtCaret_UnterminatedQuotedProjectDecodesEscapedQuote(t *testing.T) {
+	input := `#"My \"`
+	sigil, prefix, _, _ := tokenAtCaret(input, len(input))
+	if sigil != '#' || prefix != `My "` {
+		t.Fatalf("tokenAtCaret(%q) = (%q, %q), want (#, %q)", input, sigil, prefix, `My "`)
+	}
+}
+
+func TestTokenAtCaret_RejectsQuotedProjectWithAttachedSuffix(t *testing.T) {
+	input := `#"My Project"suffix`
+	sigil, _, _, _ := tokenAtCaret(input, len(input))
+	if sigil != 0 {
+		t.Fatalf("malformed quoted selector offered completion for sigil %q", sigil)
+	}
+}
+
+func TestProjectCompletionUsesContextAndCanonicalLabels(t *testing.T) {
+	now := time.Now()
+	rows := []session.RunningSession{
+		{FamilyLabel: "api", Account: "work", Harness: "claude", State: "bolt", PresentationChangedAt: now.Add(-time.Minute)},
+		{FamilyLabel: "API", Account: "work", Harness: "claude", State: "error", PresentationChangedAt: now},
+		{FamilyLabel: "Web", Account: "personal", Harness: "claude", State: "key"},
+		{FamilyLabel: "Worker", Account: "work", Harness: "copilot", State: "warning"},
+		{FamilyLabel: "My Project", Account: "work", Harness: "claude", State: "bolt"},
+	}
+	var c Completion
+	c.Recompute(`@work %claude #`, nil, rows, nil, time.Minute)
+	want := []string{"API", "My Project"}
+	if !c.Visible || !reflect.DeepEqual(c.Candidates, want) {
+		t.Fatalf("project completion = visible %v candidates %v, want %v", c.Visible, c.Candidates, want)
+	}
+}
+
+func TestProjectCompletionIgnoresExistingProjectSelectorInContext(t *testing.T) {
+	rows := []session.RunningSession{
+		{FamilyLabel: "API", Account: "work", State: "bolt"},
+		{FamilyLabel: "Web", Account: "work", State: "bolt"},
+	}
+	var c Completion
+	c.Recompute(`#old @work #`, nil, rows, nil, time.Minute)
+	if !reflect.DeepEqual(c.Candidates, []string{"API", "Web"}) {
+		t.Fatalf("existing project selector narrowed contextual source: %v", c.Candidates)
+	}
+}
+
+func TestProjectCompletionInsertionQuotesAndEscapes(t *testing.T) {
+	tests := []struct {
+		label string
+		want  string
+	}{
+		{label: "My Project", want: `#"My Project" `},
+		{label: `quote " and slash \`, want: `#"quote \" and slash \\" `},
+	}
+	for _, tt := range tests {
+		t.Run(tt.label, func(t *testing.T) {
+			buf := `#"`
+			rows := []session.RunningSession{{FamilyLabel: tt.label, State: "bolt"}}
+			var c Completion
+			c.Recompute(buf, nil, rows, nil, time.Minute)
+			if !c.Visible || len(c.Candidates) != 1 {
+				t.Fatalf("setup: visible=%v candidates=%v", c.Visible, c.Candidates)
+			}
+			c.Insert(&buf)
+			if buf != tt.want {
+				t.Fatalf("Insert() = %q, want %q", buf, tt.want)
+			}
+			if Parse(buf).Project != tt.label {
+				t.Fatalf("inserted selector did not parse back to %q: %q", tt.label, buf)
+			}
+		})
+	}
+}

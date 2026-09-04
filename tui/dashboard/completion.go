@@ -2,9 +2,11 @@ package dashboard
 
 import (
 	"strings"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 // Completion backs the floating completion menu rendered under the dashboard
@@ -34,6 +36,9 @@ func candidatesForSigil(sigil byte, cfg *config.Config) []string {
 	case '@':
 		var out []string
 		seen := map[string]bool{}
+		if cfg == nil {
+			return out
+		}
 		for _, p := range cfg.Profiles {
 			if !seen[p.Name] {
 				out = append(out, p.Name)
@@ -82,7 +87,7 @@ func filterCandidates(all []string, prefix string) []string {
 // closes the menu when no sigil token is active or no candidates remain,
 // preserving the current selection when it still indexes the new candidate
 // list.
-func (c *Completion) Recompute(text string, cfg *config.Config) {
+func (c *Completion) Recompute(text string, cfg *config.Config, sessions []session.RunningSession, lastActivity map[int]time.Time, idle time.Duration) {
 	sigil, prefix, from, to := tokenAtCaret(text, len(text))
 	if sigil == 0 {
 		c.Visible = false
@@ -90,7 +95,13 @@ func (c *Completion) Recompute(text string, cfg *config.Config) {
 		c.Selected = 0
 		return
 	}
-	filtered := filterCandidates(candidatesForSigil(sigil, cfg), prefix)
+	all := candidatesForSigil(sigil, cfg)
+	if sigil == '#' {
+		contextFilter := Parse(text).WithoutProject()
+		contextRows := ApplyFilter(sessions, contextFilter, lastActivity, idle)
+		all = CanonicalProjectLabels(contextRows, lastActivity, idle)
+	}
+	filtered := filterCandidates(all, prefix)
 	if len(filtered) == 0 {
 		c.Visible = false
 		c.Candidates = nil
@@ -124,7 +135,7 @@ func (c *Completion) Insert(buf *string) {
 	if !c.Visible || len(c.Candidates) == 0 {
 		return
 	}
-	inserted := string(c.sigil) + c.Candidates[c.Selected] + " "
+	inserted := completionSelector(c.sigil, c.Candidates[c.Selected]) + " "
 	s := *buf
 	*buf = s[:c.replaceFrom] + inserted + s[c.replaceTo:]
 	*c = Completion{}
@@ -148,7 +159,7 @@ func RenderCompletion(c Completion) string {
 	}
 	var sb strings.Builder
 	for i := start; i < end; i++ {
-		body := "  " + string(c.sigil) + c.Candidates[i] + "  "
+		body := "  " + completionSelector(c.sigil, c.Candidates[i]) + "  "
 		if i == c.Selected {
 			sb.WriteString(renderSelectedRow(body))
 		} else {
@@ -157,4 +168,11 @@ func RenderCompletion(c Completion) string {
 		sb.WriteByte('\n')
 	}
 	return sb.String()
+}
+
+func completionSelector(sigil byte, value string) string {
+	if sigil == '#' {
+		return serializeProjectSelector(value)
+	}
+	return string(sigil) + value
 }

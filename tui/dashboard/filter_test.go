@@ -497,3 +497,103 @@ func TestMatchHarnessCombinedWithAccount(t *testing.T) {
 		t.Error("expected account+harness filter to reject personal+claude session")
 	}
 }
+
+func TestParseProjectSelectors(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      string
+		project    string
+		substrings []string
+		account    string
+		state      string
+	}{
+		{name: "unquoted", input: `#api`, project: "api"},
+		{name: "quoted whitespace", input: `#"My Project"`, project: "My Project"},
+		{name: "quoted escapes", input: `#"My \"Project\" \\ repo"`, project: `My "Project" \ repo`},
+		{name: "combined", input: `backend #"My Project" @work !key`, project: "My Project", substrings: []string{"backend"}, account: "work", state: "key"},
+		{name: "last valid wins", input: `#api #web`, project: "web"},
+		{name: "lone ignored", input: `# api`, substrings: []string{"api"}},
+		{name: "empty quoted ignored", input: `#"" api`, substrings: []string{"api"}},
+		{name: "literal escaped hash", input: `\#literal`, substrings: []string{"#literal"}},
+		{name: "unterminated ignored", input: `api @work #"Half typed`, substrings: []string{"api"}, account: "work"},
+		{name: "malformed suffix leaves earlier selector", input: `#first #"bad"suffix !key`, project: "first", state: "key"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Parse(tt.input)
+			if got.Project != tt.project || !reflect.DeepEqual(got.Substrings, tt.substrings) || got.Account != tt.account || got.State != tt.state {
+				t.Fatalf("Parse(%q) = %+v, want project=%q substrings=%v account=%q state=%q", tt.input, got, tt.project, tt.substrings, tt.account, tt.state)
+			}
+		})
+	}
+}
+
+func TestSerializeProjectSelectorRoundTrips(t *testing.T) {
+	tests := []struct {
+		value string
+		want  string
+	}{
+		{value: "api", want: `#api`},
+		{value: "My Project", want: `#"My Project"`},
+		{value: `quote " and slash \`, want: `#"quote \" and slash \\"`},
+		{value: "tabs\there", want: "#\"tabs\there\""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			serialized := SerializeFilter(Filter{Project: tt.value})
+			if serialized != tt.want {
+				t.Fatalf("SerializeFilter(Project=%q) = %q, want %q", tt.value, serialized, tt.want)
+			}
+			reparsed := Parse(serialized)
+			if reparsed.Project != tt.value {
+				t.Fatalf("Parse(%q).Project = %q, want %q", serialized, reparsed.Project, tt.value)
+			}
+			if again := SerializeFilter(reparsed); again != serialized {
+				t.Fatalf("serialization not idempotent: first=%q second=%q", serialized, again)
+			}
+		})
+	}
+}
+
+func TestMalformedQuotedProjectNeverCreatesPartialFilter(t *testing.T) {
+	f := Parse(`#"No Such Project`)
+	if f.Project != "" || !f.IsEmpty() {
+		t.Fatalf("half-typed quoted selector became live: %+v", f)
+	}
+	if !f.Match(session.RunningSession{Project: "anything"}, nil, 0) {
+		t.Fatal("half-typed quoted selector unexpectedly emptied the live list")
+	}
+}
+
+func TestMatchProjectUsesSharedDisplayLabel(t *testing.T) {
+	withFamily := session.RunningSession{FamilyLabel: "API", Project: "Configured Name"}
+	if !Parse(`#api`).Match(withFamily, nil, 0) {
+		t.Fatal("expected case-insensitive family-label match")
+	}
+	if Parse(`#"Configured Name"`).Match(withFamily, nil, 0) {
+		t.Fatal("expected FamilyLabel to take precedence over EffectiveProject")
+	}
+
+	fallback := session.RunningSession{Project: "Configured Name"}
+	if !Parse(`#"configured name"`).Match(fallback, nil, 0) {
+		t.Fatal("expected EffectiveProject fallback match")
+	}
+}
+
+func TestWithoutProjectPreservesEveryOtherComponent(t *testing.T) {
+	f := Parse(`one two #"My Project" @work %Claude !key`)
+	got := f.WithoutProject()
+	if got.Project != "" {
+		t.Fatalf("WithoutProject retained Project=%q", got.Project)
+	}
+	if !reflect.DeepEqual(got.Substrings, []string{"one", "two"}) || got.Account != "work" || got.Harness != "claude" || got.State != "key" {
+		t.Fatalf("WithoutProject dropped another component: %+v", got)
+	}
+	if got.Raw != `one two @work %claude !key` {
+		t.Fatalf("WithoutProject Raw = %q", got.Raw)
+	}
+	got.Substrings[0] = "changed"
+	if f.Substrings[0] != "one" {
+		t.Fatal("WithoutProject aliased the source substring slice")
+	}
+}

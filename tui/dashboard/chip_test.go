@@ -8,13 +8,13 @@ import (
 // ---- Components / RemoveComponent ----
 
 func TestFilterComponentsOrder(t *testing.T) {
-	f := Parse("api backend @work !key")
+	f := Parse("api backend #project @work %claude !key")
 	comps := f.Components()
-	if len(comps) != 4 {
-		t.Fatalf("expected 4 components, got %d (%v)", len(comps), comps)
+	if len(comps) != 6 {
+		t.Fatalf("expected 6 components, got %d (%v)", len(comps), comps)
 	}
-	wantLabels := []string{"/api", "/backend", "@work", "!key"}
-	wantKinds := []chipKind{chipSubstring, chipSubstring, chipAccount, chipState}
+	wantLabels := []string{"/api", "/backend", "#project", "@work", "%claude", "!key"}
+	wantKinds := []chipKind{chipSubstring, chipSubstring, chipProject, chipAccount, chipHarness, chipState}
 	for i, c := range comps {
 		if c.label != wantLabels[i] {
 			t.Errorf("comp[%d].label = %q, want %q", i, c.label, wantLabels[i])
@@ -22,6 +22,20 @@ func TestFilterComponentsOrder(t *testing.T) {
 		if c.kind != wantKinds[i] {
 			t.Errorf("comp[%d].kind = %d, want %d", i, c.kind, wantKinds[i])
 		}
+	}
+}
+
+func TestFilterRemoveProjectPreservesOtherComponents(t *testing.T) {
+	f := Parse(`api #"My Project" @work %claude !key`)
+	out := f.RemoveComponent(1)
+	if out.Project != "" {
+		t.Fatalf("expected Project cleared, got %q", out.Project)
+	}
+	if len(out.Substrings) != 1 || out.Substrings[0] != "api" || out.Account != "work" || out.Harness != "claude" || out.State != "key" {
+		t.Fatalf("project removal lost another component: %+v", out)
+	}
+	if out.Raw != `api @work %claude !key` {
+		t.Fatalf("project removal Raw = %q", out.Raw)
 	}
 }
 
@@ -97,13 +111,13 @@ func TestAttentionChipIsColoredLikeTheGroupItSelects(t *testing.T) {
 }
 
 func TestSerializeFilterEscapesLeadingMarkers(t *testing.T) {
-	f := Filter{Substrings: []string{"@literal", "!banged"}}
+	f := Filter{Substrings: []string{"@literal", "!banged", "#hashed"}}
 	got := SerializeFilter(f)
-	if got != `\@literal \!banged` {
+	if got != `\@literal \!banged \#hashed` {
 		t.Errorf("expected escapes, got %q", got)
 	}
 	// Round-trip must yield the original substrings.
-	if rt := Parse(got); rt.Substrings[0] != "@literal" || rt.Substrings[1] != "!banged" {
+	if rt := Parse(got); rt.Substrings[0] != "@literal" || rt.Substrings[1] != "!banged" || rt.Substrings[2] != "#hashed" || rt.Project != "" {
 		t.Errorf("escape round-trip failed: %v", rt.Substrings)
 	}
 }

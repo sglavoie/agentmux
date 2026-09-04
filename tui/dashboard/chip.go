@@ -13,6 +13,7 @@ type chipKind int
 
 const (
 	chipSubstring chipKind = iota
+	chipProject
 	chipAccount
 	chipHarness
 	chipState
@@ -31,13 +32,16 @@ type Chip struct {
 func (c Chip) Label() string { return c.label }
 
 // Components returns the ordered chip list backing the filter: substrings
-// first (in token order), then account, then harness, then state. Removal
+// first (in token order), then project, account, harness, and state. Removal
 // keys (1..N) map onto this order so the indices are stable as long as
 // Components and RemoveComponent are kept in sync.
 func (f Filter) Components() []Chip {
 	var out []Chip
 	for _, s := range f.Substrings {
 		out = append(out, Chip{kind: chipSubstring, label: "/" + s, raw: s})
+	}
+	if f.Project != "" {
+		out = append(out, Chip{kind: chipProject, label: "#" + f.Project, raw: f.Project})
 	}
 	if f.Account != "" {
 		out = append(out, Chip{kind: chipAccount, label: "@" + f.Account, raw: f.Account})
@@ -61,6 +65,7 @@ func (f Filter) RemoveComponent(idx int) Filter {
 	}
 	out := Filter{
 		Substrings: append([]string(nil), f.Substrings...),
+		Project:    f.Project,
 		Account:    f.Account,
 		Harness:    f.Harness,
 		State:      f.State,
@@ -71,6 +76,8 @@ func (f Filter) RemoveComponent(idx int) Filter {
 		// Substrings sit at positions 0..len(Substrings)-1 in Components,
 		// so idx is a direct slice index.
 		out.Substrings = append(out.Substrings[:idx], out.Substrings[idx+1:]...)
+	case chipProject:
+		out.Project = ""
 	case chipAccount:
 		out.Account = ""
 	case chipHarness:

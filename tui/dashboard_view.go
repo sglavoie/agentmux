@@ -212,7 +212,7 @@ func (m *Model) recomputeCompletion() {
 // recomputeCompletionFor is the buffer-agnostic core used by the ModeSearch
 // input, which recomputes against a candidate buffer before committing it.
 func (m *Model) recomputeCompletionFor(text string) {
-	m.completion.Recompute(text, m.cfg)
+	m.completion.Recompute(text, m.cfg, m.sessions, m.lastActivity, m.idleThreshold)
 }
 
 // cycleCompletion moves the popup selection by delta with wrap-around.
