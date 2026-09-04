@@ -274,6 +274,8 @@ func (h *Handler) refreshMutedFromSnapshotLocked(windows []kitty.OSWindow) {
 // immutable Kitty snapshot shows the user actually looking at. Focus is the
 // observation that a finished turn has been read, so this is where "seen"
 // happens: no key, no command, just the pane being on screen at snapshot time.
+// The same observation time becomes PresentationChangedAt, rather than a later
+// renderer clock sample, so the durable transition retains its real provenance.
 //
 // Unlike refreshMutedFromSnapshotLocked, which recomputes the mute cache in both
 // directions from each snapshot, this is deliberately ONE-DIRECTIONAL: it only
@@ -299,7 +301,7 @@ func (h *Handler) refreshMutedFromSnapshotLocked(windows []kitty.OSWindow) {
 // focus — finds the bit already clear and marks nothing, so looking at a window
 // does not rewrite its amx_state twice a second for as long as you look at it.
 // Callers hold stateMu.
-func (h *Handler) refreshFocusFromSnapshotLocked(windows []kitty.OSWindow) {
+func (h *Handler) refreshFocusFromSnapshotLocked(windows []kitty.OSWindow, observedAt time.Time) {
 	for i := range windows {
 		for j := range windows[i].Tabs {
 			for k := range windows[i].Tabs[j].Windows {
@@ -312,6 +314,7 @@ func (h *Handler) refreshFocusFromSnapshotLocked(windows []kitty.OSWindow) {
 					continue
 				}
 				st.Unseen = false
+				st.PresentationChangedAt = observedAt
 				h.markWindowDirtyLocked(windowID)
 			}
 		}

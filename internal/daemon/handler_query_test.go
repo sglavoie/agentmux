@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 func TestHandler_StateQuery(t *testing.T) {
@@ -261,6 +262,27 @@ func TestHandler_StateQueryReportsBusySinceAndOmitsItWhenIdle(t *testing.T) {
 	}
 	if strings.Contains(string(encoded), "busy_since_at") {
 		t.Fatalf("idle snapshot wrote the field on the wire: %s", encoded)
+	}
+}
+
+func TestHandler_StateQueryReportsPresentationChangedAtInMillisecondsAndOmitsZero(t *testing.T) {
+	h := newTestHandler()
+	changedAt := time.Unix(1_710_000_100, 123_000_000)
+	h.stateMu.Lock()
+	h.store[7] = &state.WindowState{PresentationChangedAt: changedAt}
+	h.store[9] = &state.WindowState{}
+	h.stateMu.Unlock()
+
+	resp := h.Handle(protocol.Request{Type: protocol.TypeStateQuery})
+	if got := resp.States[7].PresentationChangedAtMS; got != changedAt.UnixMilli() {
+		t.Fatalf("PresentationChangedAtMS = %d; want %d", got, changedAt.UnixMilli())
+	}
+	encoded, err := json.Marshal(resp.States[9])
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v", err)
+	}
+	if strings.Contains(string(encoded), "presentation_changed_at_ms") {
+		t.Fatalf("zero presentation timestamp reached the wire: %s", encoded)
 	}
 }
 

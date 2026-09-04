@@ -165,7 +165,7 @@ func (h *Handler) publishSnapshotFrom(publication probes.Publication) {
 	// this read has already superseded.
 	h.stateMu.Lock()
 	h.refreshMutedFromSnapshotLocked(publication.Windows)
-	h.refreshFocusFromSnapshotLocked(publication.Windows)
+	h.refreshFocusFromSnapshotLocked(publication.Windows, publication.CapturedAt)
 	h.snapshots.Publish(publication)
 	h.stateMu.Unlock()
 }

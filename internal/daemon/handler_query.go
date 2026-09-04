@@ -46,6 +46,9 @@ func (h *Handler) handleStateQuery() protocol.Response {
 		if !st.BusySince.IsZero() {
 			state.BusySinceAt = st.BusySince.Unix()
 		}
+		if !st.PresentationChangedAt.IsZero() {
+			state.PresentationChangedAtMS = st.PresentationChangedAt.UnixMilli()
+		}
 		if st.Activity.IsZero() {
 			states[id] = state
 			continue

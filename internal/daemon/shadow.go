@@ -289,8 +289,10 @@ func (h *Handler) reduceStateUpdate(req protocol.Request, outcome applyOutcome, 
 // publishEffectiveLocked writes the reduced effective state as the window's
 // authoritative visible state. Looping is only asserted when the reducer
 // holds ASL knowledge; discovery-driven loop markers (restored titles,
-// sibling routing bookkeeping) keep their writers otherwise. It also stamps
-// the shadow export metadata: the shadow_current_mismatch invariant compares
+// sibling routing bookkeeping) keep their writers otherwise. Icon or Unseen
+// changes stamp one shared PresentationChangedAt; source and looping churn at
+// the same icon do not. It also stamps the shadow export metadata: the
+// shadow_current_mismatch invariant compares
 // the renderer's desired icon against Shadow.EffectiveIcon, so every publish
 // path — events, restore, watchdog sweeps, ASL reconciliation, screen probes
 // — must move both together or the non-event paths pin a false-positive
@@ -298,10 +300,18 @@ func (h *Handler) reduceStateUpdate(req protocol.Request, outcome applyOutcome, 
 // twice: restored windows after a restart, and watchdog-expired windows
 // during the 30-minute monitored audit). Callers hold stateMu.
 func (h *Handler) publishEffectiveLocked(windowID int, st *state.WindowState, effective state.EffectiveState) {
+	previousIcon := st.Effective.Icon
+	previousUnseen := st.Unseen
+	now := time.Now()
 	// The unseen bit is a transition rule, not an invariant of the new icon
 	// (see stampUnseenLocked), so it must read st.Effective.Icon while that is
 	// still the PREVIOUS icon — before the write below overwrites it.
 	stampUnseenLocked(st, effective.Icon, h.windowFocusedFromSnapshotLocked(windowID))
+	if effective.Icon != previousIcon || st.Unseen != previousUnseen {
+		// One publication owns one transition instant even when the icon and unseen
+		// bit change together.
+		st.PresentationChangedAt = now
+	}
 	if effective != st.Effective {
 		st.Effective = effective
 		st.EffectiveGen++
@@ -317,7 +327,7 @@ func (h *Handler) publishEffectiveLocked(windowID int, st *state.WindowState, ef
 	meta.Shadow.EffectiveLooping = effective.Looping
 	meta.Shadow.EffectiveGen = st.EffectiveGen
 	h.windowMetadata[windowID] = meta
-	stampBusySinceLocked(st, effective.Icon, time.Now())
+	stampBusySinceLocked(st, effective.Icon, now)
 	stampPromptKindLocked(st, effective.Icon)
 	// The screen idle probe only classifies a ⚡ window, so a decline streak
 	// stops describing anything the instant the reduced icon leaves it. This runs

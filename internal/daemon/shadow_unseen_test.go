@@ -205,7 +205,7 @@ func TestFocusRefreshRequiresAllThreeFlags(t *testing.T) {
 			}}
 
 			h.stateMu.Lock()
-			h.refreshFocusFromSnapshotLocked(windows)
+			h.refreshFocusFromSnapshotLocked(windows, time.Now())
 			h.stateMu.Unlock()
 
 			if cleared := !unseen(t, h, 7); cleared != tc.wantCleared {
@@ -248,7 +248,7 @@ func TestFocusRefreshNeverSetsUnseen(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		h.stateMu.Lock()
-		h.refreshFocusFromSnapshotLocked(windows)
+		h.refreshFocusFromSnapshotLocked(windows, time.Now())
 		h.stateMu.Unlock()
 	}
 
@@ -287,7 +287,7 @@ func TestFocusRefreshClearsOnlyTheFocusedPane(t *testing.T) {
 	}
 
 	h.stateMu.Lock()
-	h.refreshFocusFromSnapshotLocked(windows)
+	h.refreshFocusFromSnapshotLocked(windows, time.Now())
 	h.stateMu.Unlock()
 
 	if unseen(t, h, 7) {
@@ -305,7 +305,7 @@ func TestFocusRefreshIgnoresUnknownWindows(t *testing.T) {
 	h := newTestHandler()
 
 	h.stateMu.Lock()
-	h.refreshFocusFromSnapshotLocked(unseenTree(4242, true))
+	h.refreshFocusFromSnapshotLocked(unseenTree(4242, true), time.Now())
 	storeSize := len(h.store)
 	h.stateMu.Unlock()
 

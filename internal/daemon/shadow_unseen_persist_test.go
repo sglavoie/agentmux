@@ -190,10 +190,14 @@ func TestFocusClearPersistsUnseenAcrossRestart(t *testing.T) {
 
 	// 4. The user looks at the pane. One snapshot, no key and no command.
 	focusFakeTree(fake, true)
-	h.publishSnapshot(fakeTree(t, fake), time.Now())
+	focusAt := time.UnixMilli(time.Now().UnixMilli())
+	h.publishSnapshot(fakeTree(t, fake), focusAt)
 
 	if unseen(t, h, windowID) {
 		t.Fatal("a snapshot observing focus did not clear the unseen bit")
+	}
+	if got := presentationChangedAt(t, h, windowID); !got.Equal(focusAt) {
+		t.Fatalf("focus clear presentation timestamp = %v; want %v", got, focusAt)
 	}
 	focusSeq, focusDirty, _ := windowRenderGen(t, h, windowID)
 	if focusSeq != seq+1 {
@@ -231,6 +235,9 @@ func TestFocusClearPersistsUnseenAcrossRestart(t *testing.T) {
 	restarted.restoreFromUserVars(fakeTree(t, fake), time.Now())
 	if unseen(t, restarted, windowID) {
 		t.Fatal("the restarted daemon restored the row as unseen: the focus clear never reached amx_state")
+	}
+	if got := presentationChangedAt(t, restarted, windowID); !got.Equal(focusAt) {
+		t.Fatalf("restarted presentation timestamp = %v; want persisted focus instant %v", got, focusAt)
 	}
 	if group := daemonRowGroup(t, restarted, windowID); group != groupIdle {
 		t.Fatalf("restored row grouped into %d; want Idle (%d)", group, groupIdle)

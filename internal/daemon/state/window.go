@@ -42,6 +42,12 @@ type WindowState struct {
 	// and is zero whenever the window is not busy.
 	BusySince time.Time
 
+	// PresentationChangedAt is the last time the dashboard-visible icon or unseen
+	// bit changed. It is deliberately independent of Activity and BusySince: a
+	// maintenance republish must not make old attention look new, while a focus
+	// observation that marks a resting row read is itself a visible transition.
+	PresentationChangedAt time.Time
+
 	// Unseen marks a window that came to rest on a turn the user has not looked
 	// at yet. The polarity is deliberately inverted: the ZERO VALUE MEANS SEEN.
 	// Every writer that predates the field — a daemon restart, a schema-v1
@@ -225,6 +231,10 @@ type windowStateUserVar struct {
 	// rather than bumping the schema: older readers ignore it, and a payload
 	// written without it restores zero and self-heals on the next publish.
 	BusySince int64 `json:"bs,omitempty"`
+	// PresentationChangedAt is the dashboard-visible transition clock in unix
+	// milliseconds. It is additive within schema v4: an older payload restores
+	// zero, and older readers ignore this compact key.
+	PresentationChangedAt int64 `json:"pc,omitempty"`
 	// Unseen is the durable unseen bit, added inside schema v4 on the same terms
 	// as BusySince above: older readers ignore it, and a payload written without
 	// it restores zero. Because the polarity is inverted (zero means *seen*)
@@ -282,6 +292,9 @@ func (s WindowState) MarshalUserVar() (string, error) {
 	}
 	if !s.BusySince.IsZero() {
 		uv.BusySince = s.BusySince.Unix()
+	}
+	if !s.PresentationChangedAt.IsZero() {
+		uv.PresentationChangedAt = s.PresentationChangedAt.UnixMilli()
 	}
 	if s.Reducer != nil {
 		uv.Facts = s.Reducer.Facts()
@@ -350,6 +363,9 @@ func (s *WindowState) UnmarshalUserVar(value string) error {
 	}
 	if uv.LastEventAt != 0 {
 		s.Activity = time.Unix(uv.LastEventAt, 0)
+	}
+	if uv.Schema >= stateUserVarSchemaV4 && uv.PresentationChangedAt != 0 {
+		s.PresentationChangedAt = time.UnixMilli(uv.PresentationChangedAt)
 	}
 	s.LoopingSet = true
 	s.StateSet = true

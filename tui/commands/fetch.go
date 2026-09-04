@@ -244,10 +244,11 @@ func decodeDaemonState(resp protocol.Response) daemonState {
 // ApplyDaemonStates overlays daemon-owned state onto Kitty-enumerated rows.
 // A reachable daemon is authoritative even for a freshly seen window without
 // a state entry: its dashboard state is empty until the daemon observes it.
-// Unseen joins State/Looping/BusySince in both directions, including the reset
-// in the no-entry branch: an unobserved window has no authority for the bit,
-// and false (seen) is the quiet direction — it can only ever demote a row out
-// of Needs Attention, never pin one there on the strength of a stale overlay.
+// Unseen and PresentationChangedAt join State/Looping/BusySince in both
+// directions, including the reset in the no-entry branch: an unobserved window
+// has no authority for either fact. Their zero values are quiet: they can only
+// demote a row out of Needs Attention or leave its recency unknown, never pin
+// one there on the strength of a stale overlay.
 // Reason joins them on the same argument. A reason only ever explains the icon
 // the same entry supplied, so carrying one forward past a window the daemon no
 // longer has an entry for would gloss a row with the cause of a prompt that is
@@ -266,6 +267,7 @@ func ApplyDaemonStates(sessions []session.RunningSession, states map[int]protoco
 			sessions[i].State = ""
 			sessions[i].Looping = false
 			sessions[i].BusySince = time.Time{}
+			sessions[i].PresentationChangedAt = time.Time{}
 			sessions[i].Unseen = false
 			sessions[i].Reason = ""
 			sessions[i].Branch = ""
@@ -281,6 +283,10 @@ func ApplyDaemonStates(sessions []session.RunningSession, states map[int]protoco
 		sessions[i].BusySince = time.Time{}
 		if state.BusySinceAt > 0 {
 			sessions[i].BusySince = time.Unix(state.BusySinceAt, 0)
+		}
+		sessions[i].PresentationChangedAt = time.Time{}
+		if state.PresentationChangedAtMS > 0 {
+			sessions[i].PresentationChangedAt = time.UnixMilli(state.PresentationChangedAtMS)
 		}
 	}
 }

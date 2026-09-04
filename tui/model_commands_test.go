@@ -60,6 +60,29 @@ func TestApplyDaemonStatesStampsBusySince(t *testing.T) {
 	}
 }
 
+func TestApplyDaemonStatesOverlaysAndClearsPresentationChangedAt(t *testing.T) {
+	changedAt := time.Unix(1_710_000_100, 123_000_000)
+	sessions := []session.RunningSession{
+		{WindowID: 1},
+		{WindowID: 2, PresentationChangedAt: changedAt},
+		{WindowID: 3, PresentationChangedAt: changedAt},
+	}
+	commands.ApplyDaemonStates(sessions, map[int]protocol.WindowStateSnapshot{
+		1: {PresentationChangedAtMS: changedAt.UnixMilli()},
+		2: {},
+	})
+
+	if !sessions[0].PresentationChangedAt.Equal(changedAt) {
+		t.Errorf("PresentationChangedAt = %v; want %v", sessions[0].PresentationChangedAt, changedAt)
+	}
+	if !sessions[1].PresentationChangedAt.IsZero() {
+		t.Errorf("omitted timestamp left stale value %v", sessions[1].PresentationChangedAt)
+	}
+	if !sessions[2].PresentationChangedAt.IsZero() {
+		t.Errorf("no-entry row left stale value %v", sessions[2].PresentationChangedAt)
+	}
+}
+
 // TestApplyDaemonStatesOverlaysUnseen asserts the unseen bit is overlaid in
 // both directions and, crucially, cleared in the no-entry branch alongside
 // State/Looping/BusySince. A row the daemon has no entry for carries no

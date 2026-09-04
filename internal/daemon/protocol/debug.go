@@ -17,6 +17,10 @@ type WindowStateSnapshot struct {
 	// seconds). Absent while the window is not busy, which also preserves the
 	// former response shape for clients that do not render the stretch.
 	BusySinceAt int64 `json:"busy_since_at,omitempty"`
+	// PresentationChangedAtMS is the last dashboard-visible icon or unseen
+	// transition in unix milliseconds. Its absence is the backward-compatible
+	// zero value for state restored or served by a daemon predating the field.
+	PresentationChangedAtMS int64 `json:"presentation_changed_at_ms,omitempty"`
 	// Unseen reports that the window came to rest on a turn the user has not
 	// looked at yet. The polarity is inverted for the same reason it is inverted
 	// on the durable state.WindowState field: absent means SEEN, so a daemon too

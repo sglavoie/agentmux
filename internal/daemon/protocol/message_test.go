@@ -148,7 +148,10 @@ func TestRequest_OmittedToolNameMarshalsClean(t *testing.T) {
 
 func TestResponse_RoundtripCarriesStateSnapshots(t *testing.T) {
 	in := Response{OK: true, States: map[int]WindowStateSnapshot{
-		42: {IconState: "key", Looping: true, LastAction: "permission", LastEventAt: 1_700_000_000, GuardAction: "permission"},
+		42: {
+			IconState: "key", Looping: true, LastAction: "permission", LastEventAt: 1_700_000_000,
+			GuardAction: "permission", PresentationChangedAtMS: 1_700_000_000_123,
+		},
 	}}
 	data, err := json.Marshal(in)
 	if err != nil {
@@ -160,6 +163,29 @@ func TestResponse_RoundtripCarriesStateSnapshots(t *testing.T) {
 	}
 	if !reflect.DeepEqual(out.States, in.States) {
 		t.Fatalf("state snapshots = %#v, want %#v", out.States, in.States)
+	}
+}
+
+func TestLegacyStateSnapshotReaderIgnoresPresentationChangedAt(t *testing.T) {
+	type legacySnapshot struct {
+		IconState string `json:"icon_state"`
+	}
+	type legacyResponse struct {
+		States map[int]legacySnapshot `json:"states,omitempty"`
+	}
+
+	data, err := json.Marshal(Response{OK: true, States: map[int]WindowStateSnapshot{
+		42: {IconState: "stop", PresentationChangedAtMS: 1_700_000_000_123},
+	}})
+	if err != nil {
+		t.Fatalf("Marshal(Response): %v", err)
+	}
+	var legacy legacyResponse
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		t.Fatalf("legacy reader rejected added snapshot field: %v", err)
+	}
+	if got := legacy.States[42].IconState; got != "stop" {
+		t.Fatalf("legacy icon_state = %q; want stop", got)
 	}
 }
 
