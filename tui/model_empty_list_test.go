@@ -125,10 +125,16 @@ func TestEmptyListFooterRendersWithoutPanic(t *testing.T) {
 		}
 	}()
 	out := stripAnsi(renderFooter(m))
-	// At least one app-section key must still render — the palette is
-	// fixed-order and reserves space for the row keys in their unavailable
-	// style regardless of selection.
-	if !strings.Contains(out, "R resort") {
-		t.Errorf("expected R resort in empty-list footer, got:\n%s", out)
+	// The essential band must still render — the palette is fixed-order and
+	// reserves space for the row keys in their unavailable style regardless of
+	// selection. Keys below the two-row budget are omitted rather than moved,
+	// and `? more` is what says so.
+	for _, want := range []string{"j/k up/down", "a actions", ": commands", footerHintMore} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected %q in empty-list footer, got:\n%s", want, out)
+		}
+	}
+	if !strings.Contains(out, "x clear") {
+		t.Errorf("expected the unavailable row key `x clear` to hold its slot, got:\n%s", out)
 	}
 }

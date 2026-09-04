@@ -338,22 +338,38 @@ func TestCompactFooterFallsBackWholesaleRatherThanMixingSpellings(t *testing.T) 
 	}
 }
 
-// TestStandardAndSpaciousKeepTheFullFooter is the complement: the one-row
-// prioritized footer is a compact-band concession, not the new default.
-func TestStandardAndSpaciousKeepTheFullFooter(t *testing.T) {
+// TestStandardAndSpaciousOutspendCompactWithinTwoRows is the complement: the
+// standard and spacious bands are capped too, but at two rows rather than one,
+// and they spend that budget on the labelled palette rather than on the compact
+// row's abbreviations. Extra width buys more of the palette, never a third row.
+func TestStandardAndSpaciousOutspendCompactWithinTwoRows(t *testing.T) {
 	compact := rootFooterLines(responsiveModel(70, 30, dashboard.ViewUrgency, false))
+	if len(compact) != 1 {
+		t.Fatalf("compact band spent %d rows, want exactly 1: %q", len(compact), stripAnsi(strings.Join(compact, " / ")))
+	}
+
+	prev := 0
 	for _, width := range []int{80, 119, 120, 160} {
 		m := responsiveModel(width, 30, dashboard.ViewUrgency, false)
-		plain := stripAnsi(strings.Join(rootFooterLines(m), " "))
-		for _, want := range []string{"quit", "view"} {
+		rows := rootFooterLines(m)
+		if len(rows) < 1 || len(rows) > footerHintMaxLines {
+			t.Errorf("width %d: footer spent %d rows, want 1..%d", width, len(rows), footerHintMaxLines)
+		}
+		plain := stripAnsi(strings.Join(rows, " "))
+		// The labelled spelling, not the compact row's `j/k move` / bare keys.
+		for _, want := range []string{"j/k up/down", "a actions", ": commands", "/ filter", "? help"} {
 			if !strings.Contains(plain, want) {
-				t.Errorf("width %d: full footer is missing %q: %q", width, want, plain)
+				t.Errorf("width %d: footer is missing essential %q: %q", width, want, plain)
 			}
 		}
-		if len(rootFooterLines(m)) < len(compact) {
-			t.Errorf("width %d: full footer has fewer rows (%d) than the compact one (%d)",
-				width, len(rootFooterLines(m)), len(compact))
+		// Wider terminals reveal strictly more of the palette. Counting
+		// separators counts hints without naming which ones a width affords.
+		hints := strings.Count(plain, strings.TrimSpace(footerHintSeparator))
+		if hints < prev {
+			t.Errorf("width %d carries fewer hints (%d) than the narrower band did (%d): %q",
+				width, hints, prev, plain)
 		}
+		prev = hints
 	}
 }
 

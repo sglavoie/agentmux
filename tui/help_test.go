@@ -16,13 +16,69 @@ func TestRenderHelpNoHeightShowsAll(t *testing.T) {
 
 	out := stripAnsi(renderHelp(m))
 
-	for _, header := range []string{"Navigate", "Act on row", "Launch / open", "Filter", "App", "Past Sessions", "Plans", "Worktrees"} {
+	for _, header := range []string{"Dashboard", "Navigate", "Act on row", "Launch / open", "Filter", "App", "Past Sessions", "Plans", "Worktrees"} {
 		if !strings.Contains(out, header) {
 			t.Errorf("expected section header %q in help output, got:\n%s", header, out)
 		}
 	}
 	if !strings.Contains(out, "footer overflow") {
 		t.Errorf("expected footer overflow line in help output, got:\n%s", out)
+	}
+}
+
+// TestDashboardHelpDocumentsEveryFooterBinding is the parity guard behind the
+// `? more` marker. The capped dashboard footer omits its lower bands on a narrow
+// terminal and tells the operator to press `?`; if a binding were declared in the
+// palette but missing from the generated section, that promise would be a dead
+// end. Both directions are asserted — no binding missing from help, and no
+// generated line the overlay does not actually render.
+func TestDashboardHelpDocumentsEveryFooterBinding(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m.mode = ModeHelp
+	m.height = 0
+
+	out := stripAnsi(renderHelp(m))
+	lines := helpDashboardSection()
+
+	bindings := listFooterBindings()
+	if len(lines) != len(bindings) {
+		t.Errorf("expected one generated line per binding (%d), got %d: %v", len(bindings), len(lines), lines)
+	}
+	for _, e := range bindings {
+		line, ok := helpPaletteLineFor(lines, e.key)
+		if !ok {
+			t.Errorf("palette binding %q (%s) has no generated Dashboard line: %v", e.key, e.label, lines)
+			continue
+		}
+		if !strings.Contains(line, e.label) {
+			t.Errorf("generated line %q does not carry the palette label %q", line, e.label)
+		}
+		if !strings.Contains(out, line) {
+			t.Errorf("overlay does not render the generated line %q, got:\n%s", line, out)
+		}
+	}
+}
+
+// TestDashboardHelpOmitsNonBindingCandidates asserts the two metadata
+// candidates stay out of the keymap. The position fragment and the state gloss
+// compete with the bindings for footer space, but they bind nothing: a keymap
+// row for either would advertise a keystroke that does not exist.
+func TestDashboardHelpOmitsNonBindingCandidates(t *testing.T) {
+	metadata := 0
+	for _, c := range listFooterPalette {
+		if c.textFor == nil {
+			continue
+		}
+		metadata++
+		if c.key != "" {
+			t.Errorf("metadata candidate declares key %q; it would leak into generated help", c.key)
+		}
+	}
+	if metadata == 0 {
+		t.Fatal("the palette declares no metadata candidates; this guard is inert")
+	}
+	if got, want := len(listFooterBindings()), len(listFooterPalette)-metadata; got != want {
+		t.Errorf("listFooterBindings() returned %d entries, want %d bindings", got, want)
 	}
 }
 

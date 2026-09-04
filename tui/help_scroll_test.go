@@ -149,11 +149,15 @@ func TestHelpScrollReachesBottom(t *testing.T) {
 		t.Fatalf("expected G to scroll to max offset %d, got %d", maxOffset, m.helpOffset)
 	}
 
-	// The final help row (footer-overflow footnote) must render within the
-	// visible window once scrolled to the bottom.
+	// The final help row (the tail of the footer-overflow footnote, which wraps
+	// at this width) must render within the visible window once scrolled to the
+	// bottom. The row is read from the wrapped content rather than spelled out
+	// here, because where the footnote breaks is a function of the width.
+	rows := helpWrappedContentLines(m)
+	last := stripAnsi(rows[len(rows)-1])
 	out := stripAnsi(renderHelp(m))
-	if !strings.Contains(out, "least-frequent") {
-		t.Errorf("expected the last help row to be visible after G, got:\n%s", out)
+	if !strings.Contains(out, last) {
+		t.Errorf("expected the last help row %q to be visible after G, got:\n%s", last, out)
 	}
 }
 

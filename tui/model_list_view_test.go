@@ -740,7 +740,7 @@ func TestBuiltSummaryOffersOnlyViewActions(t *testing.T) {
 		}
 	}
 
-	for _, e := range listFooterPalette {
+	for _, e := range listFooterBindings() {
 		got := e.availFn(m)
 		if e.section == footerSectionRow && got {
 			t.Errorf("footer entry %q (%s) is available on a summary", e.key, e.label)

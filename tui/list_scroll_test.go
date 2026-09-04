@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -38,33 +39,53 @@ func TestListChromeLines_BaselineModeList(t *testing.T) {
 	}
 }
 
+// TestListFooterBudgetMatchesRenderedRowsAcrossStates pins the fixed point the
+// layout math depends on: the position fragment depends on the list height,
+// which depends on the footer height, which depends on the position fragment.
+// The budget must therefore measure the same capped output the renderer emits —
+// at every width, because the cap only binds once the palette overflows.
 func TestListFooterBudgetMatchesRenderedRowsAcrossStates(t *testing.T) {
-	base := scrollModel()
-	base.width = 72
-	base.height = 18
-	base.filtered = makeRowsForScroll(20)
-	base.rebuildItems()
+	for _, width := range []int{0, 79, 80, 119, 120, 160} {
+		base := scrollModel()
+		base.width = width
+		base.height = 18
+		base.filtered = makeRowsForScroll(20)
+		base.rebuildItems()
 
-	filtered := base
-	filtered.activeFilter = dashboard.Filter{Substrings: []string{"api"}}
-	jump := base
-	jump.pendingJumpDir = 1
+		empty := base
+		empty.filtered = nil
+		empty.rebuildItems()
+		filtered := base
+		filtered.activeFilter = dashboard.Filter{Substrings: []string{"api"}}
+		jumpNext := base
+		jumpNext.pendingJumpDir = 1
+		jumpPrev := base
+		jumpPrev.pendingJumpDir = -1
+		preview := base
+		preview.previewEnabled = true
 
-	for _, tc := range []struct {
-		name string
-		m    Model
-	}{
-		{name: "overflowing list", m: base},
-		{name: "active filter", m: filtered},
-		{name: "jump chord", m: jump},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			got := footerBudgetLines(tc.m)
-			want := len(rootFooterLines(tc.m))
-			if got != want {
-				t.Fatalf("footer budget = %d, rendered footer rows = %d", got, want)
-			}
-		})
+		for _, tc := range []struct {
+			name string
+			m    Model
+		}{
+			{name: "overflowing list", m: base},
+			{name: "empty list", m: empty},
+			{name: "active filter", m: filtered},
+			{name: "jump chord next", m: jumpNext},
+			{name: "jump chord prev", m: jumpPrev},
+			{name: "preview", m: preview},
+		} {
+			t.Run(fmt.Sprintf("%s/%d", tc.name, width), func(t *testing.T) {
+				got := footerBudgetLines(tc.m)
+				want := len(rootFooterLines(tc.m))
+				if got != want {
+					t.Fatalf("footer budget = %d, rendered footer rows = %d", got, want)
+				}
+				if width > 0 && dashboard.BandFor(width) != dashboard.BandCompact && got > footerHintMaxLines {
+					t.Fatalf("budget measured %d rows, above the %d-row cap", got, footerHintMaxLines)
+				}
+			})
+		}
 	}
 }
 
@@ -424,15 +445,17 @@ func TestScrollListToCursor_PreviewEnabledKeepsCursorVisible(t *testing.T) {
 
 func TestScrollListToCursor_ReservesBottomIndicatorWhenRowsRemain(t *testing.T) {
 	m := scrollModel()
-	m.height = 15 // short-terminal chrome leaves a 6-line list pane
+	m.height = 15 // short-terminal chrome leaves a 9-line list pane
 	m.filtered = makeRowsForScroll(20)
 	m.rebuildItems()
 	m.cursor = 10
 	m.listOffset = 0
 
+	// Nine, not six: capping the hint block at two rows hands the three rows the
+	// old exhaustive footer spent back to the list.
 	visible := listVisibleHeight(m)
-	if visible != 6 {
-		t.Fatalf("test fixture expected visible=6, got %d", visible)
+	if visible != 9 {
+		t.Fatalf("test fixture expected visible=9, got %d", visible)
 	}
 
 	scrollListToCursor(&m)

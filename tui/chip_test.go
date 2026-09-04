@@ -253,6 +253,13 @@ func TestFooterShowsChipHintsWhenFiltered(t *testing.T) {
 	if !strings.Contains(footer, "tab focus next") {
 		t.Errorf("expected tab hint, got:\n%s", footer)
 	}
+
+	// One chip is a digit, not a range.
+	m.activeFilter = dashboard.Parse("api")
+	footer = stripAnsi(renderFooter(m))
+	if !strings.Contains(footer, "1 remove chip") || strings.Contains(footer, "1-1 remove chip") {
+		t.Errorf("expected the single-chip hint to read `1 remove chip`, got:\n%s", footer)
+	}
 }
 
 func TestFooterOmitsChipHintsWithoutFilter(t *testing.T) {

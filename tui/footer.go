@@ -165,14 +165,6 @@ func nonEmptyFooterLines(lines ...string) []string {
 	return out
 }
 
-func listFooterLines(m Model, selectedLine string) []string {
-	lines := []string{listFooterActions(m)}
-	if selectedLine != "" {
-		lines = append(lines, selectedLine)
-	}
-	return lines
-}
-
 // listModeFooterLines assembles the unstyled physical blocks for ModeList.
 // position is passed in by callers so layout budgeting can measure the same
 // footer without recursively asking listVisibleHeight for the position text.
@@ -194,29 +186,55 @@ func listModeFooterLines(m Model, position string) []string {
 		required, optional := compactListFooterTokens(m)
 		return []string{compactFooterRow(m, "  ", required, optional)}
 	case m.pendingJumpDir != 0:
-		// Bracket chord pending: show the chord vocabulary instead of
-		// the usual nav row so the user can complete or cancel.
-		arrow := "next"
-		if m.pendingJumpDir == -1 {
-			arrow = "prev"
-		}
-		return listFooterLines(m, footerStyledLine(m.width, "  ",
-			styleFooter.Render(fmt.Sprintf("jump %s: ", arrow))+renderFooterBindingWithLabel("p", "", ")perm", styleFooter),
-			renderFooterBindingWithLabel("e", "", ")fail", styleFooter),
-			renderFooterBindingWithLabel("a", "", ")active", styleFooter),
-			renderFooterBindingWithLabel("q", "", ")question", styleFooter),
-			renderFooterBindingWithLabel("s", "", ")stop", styleFooter),
-			renderFooterBindingWithLabel("c", "", ")compact", styleFooter),
-			renderFooterBindingWithLabel("b", "", ")sub", styleFooter),
-			renderFooterBindingWithLabel("]]/[[", "", ")attention", styleFooter),
-			styleFooter.Render("(")+renderFooterBindingWithLabel("esc", "", " cancels)", styleFooter),
-		))
+		// Bracket chord pending: the chord vocabulary replaces the palette
+		// outright rather than joining it. Half of these letters mean something
+		// else in the normal footer, so showing both rows at once would print two
+		// contradictory meanings for `p`, `e`, `a`, `q`, `s`, and `c` on adjacent
+		// lines while the very keypress that resolves them is pending.
+		return prioritizedFooterLines(listJumpChordTokens(m), footerHintIndent, m.width, footerHintMaxLines)
 	case m.previewEnabled:
 		// In preview mode the only binding shown is `p: hide preview`,
 		// which is rendered right-aligned in the title row.
 		return nil
 	default:
-		return listFooterLines(m, listFooterLine2WithPosition(m, listFooterNavTokens(m), position))
+		return prioritizedFooterLines(listFooterTokens(m, position), footerHintIndent, m.width, footerHintMaxLines)
+	}
+}
+
+// listJumpChordTokens is the wide spelling of the bracket chord: each target
+// named in full, capped at the same two rows the palette gets.
+//
+// The heading rides on the first chord rather than standing as its own token,
+// because "jump next:" is the sentence the letters complete and a separator
+// between them would read as a third target. Only the heading and the escape
+// hatch are essential: a chord the operator cannot cancel is a trap, while a
+// target they cannot see is a key they will not press.
+func listJumpChordTokens(m Model) []prioritizedFooterToken {
+	arrow := "next"
+	if m.pendingJumpDir == -1 {
+		arrow = "prev"
+	}
+	target := func(key, tail string) prioritizedFooterToken {
+		return prioritizedFooterToken{
+			token:    footerCustomBindingToken(key, "", tail, styleFooter),
+			priority: footerPriorityPrimary,
+		}
+	}
+	heading := styleFooter.Render(fmt.Sprintf("jump %s: ", arrow)) +
+		renderFooterBindingWithLabel("p", "", ")perm", styleFooter)
+	return []prioritizedFooterToken{
+		{token: footerRenderedToken(heading), priority: footerPriorityEssential},
+		target("e", ")fail"),
+		target("a", ")active"),
+		target("q", ")question"),
+		target("s", ")stop"),
+		target("c", ")compact"),
+		target("b", ")sub"),
+		target("]]/[[", ")attention"),
+		{
+			token:    footerCustomBindingToken("esc", " ", "cancels", styleFooter),
+			priority: footerPriorityEssential,
+		},
 	}
 }
 
@@ -364,40 +382,6 @@ func compactFooterRowWidth(indent string, sepW int, tokens []compactFooterToken,
 	return w
 }
 
-func listFooterNavTokens(m Model) []string {
-	// A family summary has no tab to focus and no session to act on, so the two
-	// row-targeted tokens in this row change with it: enter becomes the fold it
-	// actually performs, and the actions overlay renders in the unavailable
-	// style, exactly as the row-section entries below already do.
-	focusToken := renderFooterBinding("enter", "focus")
-	actionsToken := renderFooterBinding("a", "actions")
-	if m.summarySelected() {
-		focusToken = renderFooterBinding("enter/←/→", "fold/unfold")
-		actionsToken = renderUnavailableFooterBinding("a", "actions")
-	}
-	navTokens := []string{
-		renderFooterBinding("j/k", "up/down"),
-		renderFooterBinding("]/[", "jump-chord"),
-		renderFooterBinding("}/{", "nav+focus"),
-		focusToken,
-		actionsToken,
-		renderFooterBinding("/", "filter"),
-		renderFooterBinding("?", "help"),
-		renderFooterBinding("q", "quit"),
-		renderFooterBinding("p", "preview"),
-	}
-	if !m.activeFilter.IsEmpty() {
-		navTokens = append(navTokens, renderFooterBinding("esc", "clear filters"))
-		if n := len(m.activeFilter.Components()); n > 0 {
-			navTokens = append(navTokens,
-				renderFooterBinding(fmt.Sprintf("1-%d", n), "remove chip"),
-				renderFooterBinding("tab", "focus next"),
-			)
-		}
-	}
-	return navTokens
-}
-
 // zebraFooterLines flattens wrapped footer blocks into physical rows, then
 // applies the shared root-footer zebra treatment. The first row receives the
 // dark background and is padded to the viewport width; the next row retains
@@ -433,71 +417,6 @@ func renderFooterStripeRow(row string, maxWidth int) string {
 
 func footerStripeBackgroundSequence() string {
 	return footerStripeBackgroundANSI
-}
-
-// listFooterLine2 prefixes the navigation hints with a gloss of the cursor
-// row's state icon (e.g. `⚡ active — j/k: up/down …`). The gloss text picks
-// up the state's accent color so the meaning of the row icon is reinforced;
-// the dash separator and trailing nav stay in the dim footer style. When the
-// filtered list overflows the visible window a `start–end of total` position
-// fragment is prepended so the user sees where the cursor sits.
-//
-// navFragments is the ordered list of navigation hints to render; each
-// fragment is joined with the standard double-space separator and wrapped to
-// fit m.width.
-func listFooterLine2(m Model, navFragments []string) string {
-	return listFooterLine2WithPosition(m, navFragments, listPositionFragment(m))
-}
-
-func listFooterLine2WithPosition(m Model, navFragments []string, position string) string {
-	sep := styleFooter.Render("  ")
-	sepW := layout.StyledWidth(sep)
-
-	tokens := make([]footerToken, 0, len(navFragments)+1)
-	if position != "" {
-		// The position fragment sits before the nav hints with a wider
-		// three-space gap so the eye chunks it as a separate group.
-		gap := styleFooter.Render("   ")
-		gapW := layout.StyledWidth(gap)
-		posRendered := styleFooter.Render(position)
-		tokens = append(tokens, footerToken{
-			rendered: posRendered,
-			width:    layout.StyledWidth(posRendered),
-			sep:      gap,
-			sepWidth: gapW,
-		})
-	}
-
-	for i, rendered := range navFragments {
-		tok := footerToken{
-			rendered: rendered,
-			width:    layout.StyledWidth(rendered),
-		}
-		if i < len(navFragments)-1 {
-			tok.sep = sep
-			tok.sepWidth = sepW
-		}
-		tokens = append(tokens, tok)
-	}
-	firstLead, contIndent := listFooterLine2Leads(m)
-	return wrapFooterLine(firstLead, contIndent, tokens, m.width)
-}
-
-// listFooterLine2Leads returns the rendered prefix for the first line and the
-// indent used on continuation lines. When the cursor row has a state gloss
-// the first line carries the accent-colored "⚡ active —" lead; continuation
-// lines fall back to the plain two-space indent so the gloss does not repeat.
-func listFooterLine2Leads(m Model) (string, string) {
-	indent := "  "
-	if s, ok := m.selectedSession(); ok {
-		if g := dashboard.StateGloss(s.State); g != "" {
-			icon := palette.StateIcon(s.State)
-			glossText := layout.PadIconCell(icon) + " " + g
-			lead := indent + stateAccentStyle(s.State).Render(glossText) + styleFooter.Render(" — ")
-			return lead, indent
-		}
-	}
-	return indent, indent
 }
 
 // listPositionFragment returns a `start–end of total` indicator (mirroring
@@ -643,107 +562,257 @@ func hasRow(m Model) bool {
 	return m.hasSelectedSession()
 }
 
-// listFooterPalette is the fixed-order set of keys shown in the ModeList footer
-// command rows. Order is invariant — entries never move between states. Each
-// entry's availability function decides whether to render with the available
-// or unavailable style.
-// Every entry carries priority 0: the ModeList footer is budgeted by
-// listFooterBudgetLineCount rather than truncated, so no entry is ever dropped.
-var listFooterPalette = []footerEntry{
-	{"e", "peek", footerSectionRow, func(m Model) bool {
-		s, ok := m.selectedSession()
-		return ok && s.State == "bolt"
-	}, 0},
-	{"T", "timeline", footerSectionRow, hasRow, 0},
-	{"r", "restart", footerSectionRow, hasRow, 0},
-	{"c", "profile", footerSectionRow, hasRow, 0},
-	{"C", "launch", footerSectionRow, hasRow, 0},
-	{"s", "project sessions", footerSectionRow, hasRow, 0},
-	{"x", "clear", footerSectionRow, func(m Model) bool {
-		s, ok := m.selectedSession()
-		if !ok {
-			return false
-		}
-		return dashboard.StateGroup(s, m.lastActivity, m.idleThreshold) == 0
-	}, 0},
-	{"X", "close", footerSectionRow, hasRow, 0},
-	{"o", "open dir", footerSectionRow, func(m Model) bool {
-		s, ok := m.selectedSession()
-		if !ok {
-			return false
-		}
-		_, found := commands.FindConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject())
-		return found
-	}, 0},
-	{"O", "open in editor", footerSectionRow, func(m Model) bool {
-		s, ok := m.selectedSession()
-		if !ok {
-			return false
-		}
-		_, found := commands.FindConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject())
-		return found
-	}, 0},
-	{"f", "profile", footerSectionLaunch, func(Model) bool { return true }, 0},
-	{"l", "launch", footerSectionLaunch, func(Model) bool { return true }, 0},
+// listFooterCandidate is one thing the regular and spacious ModeList footer may
+// draw. Most candidates name a key, but two do not: the position fragment and
+// the cursor row's state gloss describe the list rather than binding anything,
+// and they compete for the same two rows against the same ladder as the keys.
+// Declaring all of them in one ordered list is what makes truncation a single
+// decision instead of two blocks racing each other for the space left over.
+//
+// The list stays authoritative when the budget omits an entry. Generated help is
+// built from these same declarations, so the `? more` marker the drop appends
+// always points at a keymap that is complete.
+type listFooterCandidate struct {
+	// footerEntry carries the canonical key, label, section, availability, and
+	// priority band. A metadata candidate leaves the key empty, has no
+	// availability, and never reaches generated help.
+	footerEntry
+	// keyFor and labelFor respell a binding for the current model without moving
+	// it: enter focuses a session and folds a project summary. Generated help
+	// documents the canonical spelling, which is the one true in every state.
+	keyFor   func(Model) string
+	labelFor func(Model) string
+	// textFor renders a metadata candidate's own styled text, returning "" when
+	// there is nothing to say. Metadata is never dimmed — it is either a fact
+	// about the list or absent.
+	textFor func(m Model, position string) string
+	// shownFn omits a binding that does not exist in the current state at all:
+	// the chip controls name no key until a filter is active. Generated help
+	// still documents them, because the overlay is where a user who has never
+	// filtered finds out the state exists.
+	shownFn func(Model) bool
+}
+
+func listBinding(key, label, section string, priority int, avail func(Model) bool) listFooterCandidate {
+	return listFooterCandidate{footerEntry: footerEntry{key, label, section, avail, priority}}
+}
+
+func listMetadata(priority int, text func(m Model, position string) string) listFooterCandidate {
+	return listFooterCandidate{footerEntry: footerEntry{priority: priority}, textFor: text}
+}
+
+func (c listFooterCandidate) respelled(keyFor, labelFor func(Model) string) listFooterCandidate {
+	c.keyFor, c.labelFor = keyFor, labelFor
+	return c
+}
+
+func (c listFooterCandidate) shownWhen(fn func(Model) bool) listFooterCandidate {
+	c.shownFn = fn
+	return c
+}
+
+// listFooterPalette is the complete, fixed-order ModeList footer palette. Order
+// is invariant: a candidate never moves between states, and the only thing the
+// cursor row changes is whether a key renders available or dim.
+//
+// The priority band is what the two-row budget spends: essentials survive any
+// width, and everything below is dropped from the bottom of the declaration up,
+// so the row is always a prefix of this list plus `? more`. Nothing is lost by
+// dropping — every candidate here is documented in the generated Dashboard help
+// section, and most are also reachable from the command palette.
+var listFooterPalette = []listFooterCandidate{
+	// Essential: the six commands without which the dashboard cannot be driven at
+	// all — move the cursor, act on what it holds, reach every other command, and
+	// find out what those are. Dropping any of them would leave a row that cannot
+	// lead anywhere, so none of them ever drop.
+	listBinding("j/k", "up/down", footerSectionApp, footerPriorityEssential, footerAlways),
+	// enter is not a row action even though it usually acts on one: on a project
+	// summary it folds, which is why it is available in every state and lives
+	// outside the row section that dims itself on a summary.
+	listBinding("enter", "focus", footerSectionApp, footerPriorityEssential, footerAlways).
+		respelled(listEnterKey, listEnterLabel),
+	listBinding("a", "actions", footerSectionRow, footerPriorityEssential, hasRow),
+	listBinding(":", "commands", footerSectionApp, footerPriorityEssential, footerAlways),
+	listBinding("/", "filter", footerSectionApp, footerPriorityEssential, footerAlways),
+	listBinding("?", "help", footerSectionApp, footerPriorityEssential, footerAlways),
+
+	// Primary: where the cursor sits, what is filtering the list, and the rest of
+	// the ways to move or leave. The position fragment leads the band — and so
+	// outlives every key in it — because a list that is hiding rows and will not
+	// say so is the one thing no keypress recovers.
+	listMetadata(footerPriorityPrimary, listPositionText),
+	listBinding("esc", "clear filters", footerSectionApp, footerPriorityPrimary, footerAlways).
+		shownWhen(listFilterActive),
+	listBinding("1-9", "remove chip", footerSectionApp, footerPriorityPrimary, footerAlways).
+		shownWhen(listHasChips).respelled(listChipRangeKey, nil),
+	listBinding("tab", "focus next", footerSectionApp, footerPriorityPrimary, footerAlways).
+		shownWhen(listHasChips),
+	listBinding("]/[", "jump chord", footerSectionApp, footerPriorityPrimary, footerAlways),
+	listBinding("}/{", "jump + focus", footerSectionApp, footerPriorityPrimary, footerAlways),
+	listBinding("p", "preview", footerSectionApp, footerPriorityPrimary, footerAlways),
 	// A view action, not a row action: switching the arrangement is available
 	// with the cursor on a summary, on a session, and on an empty list alike.
-	{"v", "group view", footerSectionApp, func(Model) bool { return true }, 0},
-	{":", "command palette", footerSectionApp, func(Model) bool { return true }, 0},
-	{"S", "sessions", footerSectionApp, func(Model) bool { return true }, 0},
-	{"P", "plans", footerSectionApp, func(Model) bool { return true }, 0},
-	{"R", "resort", footerSectionApp, func(Model) bool { return true }, 0},
+	listBinding("v", "group view", footerSectionApp, footerPriorityPrimary, footerAlways),
+	listBinding("l", "launch", footerSectionLaunch, footerPriorityPrimary, footerAlways),
+	listBinding("q", "quit", footerSectionApp, footerPriorityPrimary, footerAlways),
+
+	// Secondary: the gloss that says what the cursor row's icon means, then the
+	// row actions reached often enough to be worth a key hint.
+	listMetadata(footerPrioritySecondary, listGlossText),
+	listBinding("e", "peek", footerSectionRow, footerPrioritySecondary, listPeekAvailable),
+	listBinding("T", "timeline", footerSectionRow, footerPrioritySecondary, hasRow),
+	listBinding("x", "clear", footerSectionRow, footerPrioritySecondary, listClearAvailable),
+	listBinding("r", "restart", footerSectionRow, footerPrioritySecondary, hasRow),
+
+	// Extra: the tail the narrow footer sheds first. Every one of these is also
+	// in the actions overlay or the command palette, both of which the essential
+	// band keeps one keypress away.
+	listBinding("c", "profile", footerSectionRow, footerPriorityExtra, hasRow),
+	listBinding("C", "launch", footerSectionRow, footerPriorityExtra, hasRow),
+	listBinding("s", "project sessions", footerSectionRow, footerPriorityExtra, hasRow),
+	listBinding("X", "close", footerSectionRow, footerPriorityExtra, hasRow),
+	listBinding("o", "open dir", footerSectionRow, footerPriorityExtra, listConfiguredProject),
+	listBinding("O", "open in editor", footerSectionRow, footerPriorityExtra, listConfiguredProject),
+	listBinding("f", "profile", footerSectionLaunch, footerPriorityExtra, footerAlways),
+	listBinding("S", "sessions", footerSectionApp, footerPriorityExtra, footerAlways),
+	listBinding("P", "plans", footerSectionApp, footerPriorityExtra, footerAlways),
+	listBinding("R", "resort", footerSectionApp, footerPriorityExtra, footerAlways),
 }
 
-func listFooterActions(m Model) string {
-	return listFooterSectionsLine(m, []string{
-		footerSectionRow,
-		footerSectionLaunch,
-		footerSectionApp,
-	})
+func listEnterKey(m Model) string {
+	if m.summarySelected() {
+		return "enter/←/→"
+	}
+	return "enter"
 }
 
-func listFooterSectionsLine(m Model, sections []string) string {
-	const indent = "  "
-	innerSep := styleFooter.Render(" · ")
-	innerSepW := layout.StyledWidth(innerSep)
+func listEnterLabel(m Model) string {
+	if m.summarySelected() {
+		return "fold/unfold"
+	}
+	return "focus"
+}
 
-	var tokens []footerToken
-	for _, sec := range sections {
-		entries := footerEntriesForSection(sec)
-		if len(entries) == 0 {
+func listFilterActive(m Model) bool { return !m.activeFilter.IsEmpty() }
+
+func listHasChips(m Model) bool { return len(m.activeFilter.Components()) > 0 }
+
+// listChipRangeKey names the digits that actually remove something. With a
+// single chip the range collapses to "1": "1-1" is a range with one member,
+// which reads as a typo rather than as a fact about the filter.
+func listChipRangeKey(m Model) string {
+	if n := len(m.activeFilter.Components()); n > 1 {
+		return fmt.Sprintf("1-%d", n)
+	}
+	return "1"
+}
+
+func listPeekAvailable(m Model) bool {
+	s, ok := m.selectedSession()
+	return ok && s.State == "bolt"
+}
+
+func listClearAvailable(m Model) bool {
+	s, ok := m.selectedSession()
+	if !ok {
+		return false
+	}
+	return dashboard.StateGroup(s, m.lastActivity, m.idleThreshold) == 0
+}
+
+func listConfiguredProject(m Model) bool {
+	s, ok := m.selectedSession()
+	if !ok {
+		return false
+	}
+	_, found := commands.FindConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject())
+	return found
+}
+
+// listPositionText renders the `start–end of total` fragment the caller already
+// measured. It takes the position rather than deriving one because the layout
+// budget and the renderer must measure the same footer, and deriving it here
+// would ask listVisibleHeight for a height that depends on this very answer.
+func listPositionText(_ Model, position string) string {
+	if position == "" {
+		return ""
+	}
+	return styleFooter.Render(position)
+}
+
+// listGlossText renders the cursor row's state icon and its meaning in the
+// state's accent color, so the icon painted in the list is explained in the
+// words the legend uses. Rows with no gloss — idle and unknown states — say
+// nothing rather than saying "idle", which is what their bare icon already says.
+func listGlossText(m Model, _ string) string {
+	s, ok := m.selectedSession()
+	if !ok {
+		return ""
+	}
+	g := dashboard.StateGloss(s.State)
+	if g == "" {
+		return ""
+	}
+	return stateAccentStyle(s.State).Render(layout.PadIconCell(palette.StateIcon(s.State)) + " " + g)
+}
+
+// listFooterTokens renders the palette into prioritized tokens for the current
+// model, in declaration order. Every candidate is rendered exactly once: as with
+// footerHintTokens, availFn is pure over the Model snapshot, so re-running it per
+// drop pass could only produce the same answer.
+func listFooterTokens(m Model, position string) []prioritizedFooterToken {
+	tokens := make([]prioritizedFooterToken, 0, len(listFooterPalette))
+	for _, c := range listFooterPalette {
+		tok, ok := c.render(m, position)
+		if !ok {
 			continue
 		}
-		for i, e := range entries {
-			var tok footerToken
-			if e.availFn(m) {
-				tok = footerBindingToken(e.key, e.label)
-			} else {
-				tok = footerUnavailableBindingToken(e.key, e.label)
-			}
-			if i < len(entries)-1 || hasLaterEntries(sections, sec) {
-				tok.sep = innerSep
-				tok.sepWidth = innerSepW
-			}
-			tokens = append(tokens, tok)
-		}
+		tokens = append(tokens, prioritizedFooterToken{token: tok, priority: c.priority})
 	}
-	return wrapFooterLine(indent, indent, tokens, m.width)
+	return tokens
 }
 
-func hasLaterEntries(sections []string, current string) bool {
-	foundCurrent := false
-	for _, sec := range sections {
-		if !foundCurrent {
-			if sec == current {
-				foundCurrent = true
-			}
+// render returns the token this candidate draws for m, or ok=false when it has
+// nothing to draw at all. An unavailable binding still draws: keeping the key
+// visible in the muted style is what lets the footer's order stay fixed while
+// the cursor moves.
+func (c listFooterCandidate) render(m Model, position string) (footerToken, bool) {
+	if c.textFor != nil {
+		text := c.textFor(m, position)
+		if text == "" {
+			return footerToken{}, false
+		}
+		return footerRenderedToken(text), true
+	}
+	if c.shownFn != nil && !c.shownFn(m) {
+		return footerToken{}, false
+	}
+	key, label := c.key, c.label
+	if c.keyFor != nil {
+		key = c.keyFor(m)
+	}
+	if c.labelFor != nil {
+		label = c.labelFor(m)
+	}
+	if !c.availFn(m) {
+		return footerUnavailableBindingToken(key, label), true
+	}
+	return footerBindingToken(key, label), true
+}
+
+// listFooterBindings projects the palette onto the keybindings it declares,
+// dropping the metadata candidates that name no key. It is what generated help
+// documents and what parity tests compare against: the footer may omit a
+// binding, but this projection never does.
+func listFooterBindings() []footerEntry {
+	out := make([]footerEntry, 0, len(listFooterPalette))
+	for _, c := range listFooterPalette {
+		if c.key == "" {
 			continue
 		}
-		if len(footerEntriesForSection(sec)) > 0 {
-			return true
-		}
+		out = append(out, c.footerEntry)
 	}
-	return false
+	return out
 }
 
 // footerToken pairs a styled rendered string with its visible width and an
@@ -828,16 +897,4 @@ func wrapFooterLine(firstLineLead, continuationIndent string, tokens []footerTok
 		lines[i] = layout.StyledTruncate(line, maxWidth, "…")
 	}
 	return strings.Join(lines, "\n")
-}
-
-// footerEntriesForSection returns the palette entries whose section matches
-// the given identifier, preserving declaration order.
-func footerEntriesForSection(section string) []footerEntry {
-	var out []footerEntry
-	for _, e := range listFooterPalette {
-		if e.section == section {
-			out = append(out, e)
-		}
-	}
-	return out
 }

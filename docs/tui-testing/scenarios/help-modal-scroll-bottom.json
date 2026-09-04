@@ -9,6 +9,6 @@
   "assertions": [
     { "type": "mode_equals", "mode": "help" },
     { "type": "excludes_layout_issue", "value": "modal_height_overflow" },
-    { "type": "contains_text", "text": "least-frequent" }
+    { "type": "contains_text", "text": "listed above" }
   ]
 }

@@ -64,7 +64,7 @@ func TestRootFooterBindingsRemoveSeparatorColonsAndPreserveSemanticColons(t *tes
 	}
 
 	list := stripAnsi(renderFooter(Model{mode: ModeList, width: 400}))
-	if !strings.Contains(list, ": command palette") {
+	if !strings.Contains(list, ": commands") {
 		t.Fatalf("list footer lost literal command-palette key: %q", list)
 	}
 	if strings.Contains(list, "j/k:") || strings.Contains(list, "enter:") {

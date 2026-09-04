@@ -133,9 +133,12 @@ var helpSections = []struct {
 	}},
 }
 
-// helpFooterOverflowLine is the dim footnote shown after the section list
-// describing the `…` overflow indicator used in the row-action footer.
-const helpFooterOverflowLine = "  …         footer overflow — least-frequent row actions (y)"
+// helpFooterMoreLine is the dim footnote shown after the section list. It names
+// the marker the capped footers append when their line budget omits a hint, and
+// says where the omitted keys went. The marker is a live binding rather than a
+// glyph: pressing `?` is what opens this overlay, so the footnote is describing
+// the key that was already pressed to read it.
+const helpFooterMoreLine = "  ? more    footer overflow — every omitted key is listed above"
 
 // helpPalette is one mode's footer palette tagged with the scope name the
 // overlay uses to disambiguate keys the section's palettes label differently or
@@ -167,6 +170,19 @@ var helpPaletteSections = []struct {
 	{"Runs", []helpPalette{
 		{"runs", aslRunsFooterPalette},
 	}},
+}
+
+// helpDashboardSection generates the Dashboard keymap from the ModeList footer
+// palette. The palette is the single source of truth for it, which is what makes
+// this section the authority behind `? more`: the capped footer sheds its lower
+// priority bands on a narrow terminal, and this is where the keys it shed are
+// guaranteed to still be named.
+//
+// Only the palette's keybindings reach here. The position fragment and the state
+// gloss compete for the same footer space but bind nothing, so listing them in a
+// keymap would advertise two keys that do not exist.
+func helpDashboardSection() []string {
+	return helpPaletteLines([]helpPalette{{"dashboard", listFooterBindings()}})
 }
 
 // helpKeyMeaning pairs a palette scope with the label that palette declares for
@@ -231,14 +247,18 @@ func helpMeaningLabel(meanings []helpKeyMeaning, palettes int) string {
 // Each section header is followed by its entries and a trailing blank
 // separator; the overflow footnote is appended at the end.
 func helpContentLines() []string {
-	var lines []string
+	// Dashboard leads: it is the one section guaranteed complete, so a reader
+	// sent here by `? more` finds the missing key without scrolling past seven
+	// sections first. The static sections below repeat some of these keys where a
+	// fuller explanation earns the space.
+	lines := appendHelpSection(nil, "Dashboard", helpDashboardSection())
 	for _, sec := range helpSections {
 		lines = appendHelpSection(lines, sec.name, sec.lines)
 	}
 	for _, sec := range helpPaletteSections {
 		lines = appendHelpSection(lines, sec.name, helpPaletteLines(sec.palettes))
 	}
-	lines = append(lines, styleDim.Render(helpFooterOverflowLine))
+	lines = append(lines, styleDim.Render(helpFooterMoreLine))
 	return lines
 }
 

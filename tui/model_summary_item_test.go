@@ -184,7 +184,7 @@ func TestSummaryItemFooterOffersNoRowAction(t *testing.T) {
 	if hasRow(m) {
 		t.Fatal("hasRow reported a row with the cursor on a family summary")
 	}
-	for _, e := range listFooterPalette {
+	for _, e := range listFooterBindings() {
 		if e.section != footerSectionRow {
 			continue
 		}

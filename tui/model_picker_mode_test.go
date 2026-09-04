@@ -140,20 +140,20 @@ func TestFooterIncludesDirectKeys(t *testing.T) {
 			t.Errorf("list footer missing direct key %q, got:\n%s", frag, footer)
 		}
 	}
+	// Before the first WindowSizeMsg there is no width to budget against, so the
+	// whole palette rides one unwrapped row rather than being trimmed for a
+	// terminal size nothing has reported yet.
 	lines := strings.Split(footer, "\n")
-	if len(lines) != 2 {
-		t.Fatalf("expected compact 2-line footer before terminal sizing, got %d lines", len(lines))
+	if len(lines) != 1 {
+		t.Fatalf("expected a single unwrapped footer row before terminal sizing, got %d lines:\n%s", len(lines), footer)
 	}
 	for _, frag := range []string{
-		"C launch", "s project sessions", "x clear", "X close",
+		"j/k up/down", "C launch", "s project sessions", "x clear", "X close",
 		"l launch", "S sessions", "P plans", "R resort",
 	} {
 		if !strings.Contains(lines[0], frag) {
 			t.Errorf("expected action %q in continuous footer flow", frag)
 		}
-	}
-	if !strings.Contains(lines[1], "j/k up/down") {
-		t.Error("expected navigation immediately after the action flow")
 	}
 	if strings.Contains(footer, "a: more actions") {
 		t.Error("actions menu hint should not appear in footer")
