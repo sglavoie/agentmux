@@ -85,8 +85,16 @@ var helpSections = []struct {
 		"  esc       cancel pending chord",
 		"  (attention set configurable via [defaults.jump])",
 	}},
+	{"Projects view", []string{
+		"  v         group by project / back to urgency order",
+		"  →         expand the selected project",
+		"  ←         collapse it (from a session, selects its project first)",
+		"  enter     fold / unfold the selected project",
+		"  space     fold / unfold the selected project",
+		"  (projects start expanded; folds last until amx exits)",
+	}},
 	{"Act on row", []string{
-		"  enter     focus the session's tab",
+		"  enter     focus the session's tab (a project folds instead)",
 		"  space     focus the session's tab (alternate path)",
 		"  a         open actions overlay (lists every key below)",
 		"  e         peek scrollback (active rows only)",

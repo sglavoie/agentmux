@@ -370,17 +370,28 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case keyEnter:
 		if m.focusedChipIdx >= 0 {
-			m.applyFilterChange(m.activeFilter.RemoveComponent(m.focusedChipIdx))
-			return m, nil
+			return m, m.applyFilterChange(m.activeFilter.RemoveComponent(m.focusedChipIdx))
+		}
+		if m.summarySelected() {
+			return m, m.toggleSelectedFamily()
 		}
 		if s, ok := m.selectedSession(); ok {
 			return m, commands.Focus(m.client, s.TabID)
 		}
 
 	case keySpace:
+		if m.summarySelected() {
+			return m, m.toggleSelectedFamily()
+		}
 		if s, ok := m.selectedSession(); ok {
 			return m, commands.Focus(m.client, s.TabID)
 		}
+
+	case keyCollapse:
+		return m, m.collapseSelection()
+
+	case keyExpand:
+		return m, m.expandSelection()
 
 	case keyTab:
 		if n := len(m.activeFilter.Components()); n > 0 {
@@ -394,18 +405,18 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key1, key2, key3, key4, key5, key6, key7, key8, key9:
 		idx := int(key[0] - '1')
 		if idx < len(m.activeFilter.Components()) {
-			m.applyFilterChange(m.activeFilter.RemoveComponent(idx))
+			return m, m.applyFilterChange(m.activeFilter.RemoveComponent(idx))
 		}
 
 	case keyBackspace:
 		if m.focusedChipIdx >= 0 {
-			m.applyFilterChange(m.activeFilter.RemoveComponent(m.focusedChipIdx))
+			return m, m.applyFilterChange(m.activeFilter.RemoveComponent(m.focusedChipIdx))
 		}
 
 	case keyEsc:
 		// Clear active filter and any chip focus so a single esc returns the
 		// user to a clean list.
-		m.applyFilterChange(dashboard.Filter{})
+		return m, m.applyFilterChange(dashboard.Filter{})
 
 	case keyQuestion:
 		m.openHelp(ModeList)
@@ -442,6 +453,8 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		switch key {
 		case keyTogglePreview:
 			return m.togglePreview()
+		case keyToggleView:
+			return m, m.toggleListView()
 		case keyA:
 			if s, ok := m.selectedSession(); ok {
 				m.targetSession = s

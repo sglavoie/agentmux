@@ -195,8 +195,14 @@ func (m *Model) closeCompletion() {
 // previewTickMsg is sent by the preview ticker while preview is enabled.
 type previewTickMsg struct{}
 
-// previewContentMsg carries the result of a scrollback fetch.
+// previewContentMsg carries the result of a scrollback fetch, stamped with the
+// target generation the fetch was issued for. The pane accepts a response only
+// when both the generation and the window still match what it is pointed at, so
+// a read in flight when the selection moves is dropped instead of painting over
+// the newer target — including the case the window ID alone cannot tell apart,
+// where the selection leaves a session for a family summary and comes back.
 type previewContentMsg struct {
+	seq      int
 	windowID int
 	text     string
 	err      error
@@ -212,13 +218,15 @@ func previewTickCmd(d time.Duration) tea.Cmd {
 // fetchPreviewCmd asynchronously fetches the full scrollback for a window.
 // windowID == 0 (no running window) short-circuits with an empty text and
 // no error so callers can render a "(session not running)" placeholder.
-func fetchPreviewCmd(client kitty.KittyClient, windowID int) tea.Cmd {
+// A family summary owns no window, so it tracks window 0 and takes the
+// short-circuit: previewing one costs no Kitty call at all.
+func fetchPreviewCmd(client kitty.KittyClient, windowID, seq int) tea.Cmd {
 	return func() tea.Msg {
 		if windowID == 0 {
-			return previewContentMsg{windowID: 0, text: "", err: nil}
+			return previewContentMsg{seq: seq, windowID: 0, text: "", err: nil}
 		}
 		text, err := client.GetText(kitty.MatchWindowByID(windowID), "all")
-		return previewContentMsg{windowID: windowID, text: text, err: err}
+		return previewContentMsg{seq: seq, windowID: windowID, text: text, err: err}
 	}
 }
 

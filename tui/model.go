@@ -232,10 +232,24 @@ type Model struct {
 	deprecationDismissed  bool
 
 	// preview pane
-	previewEnabled  bool
-	previewWindowID int
-	previewText     string
-	previewError    string
+	//
+	// previewTargetSeq identifies what the pane is currently pointed at. A window
+	// ID alone cannot: the cursor can leave a session for a family summary — which
+	// owns no window and paints a project card instead of scrollback — and come
+	// back, and a read issued before the detour would then match on window ID and
+	// repaint the pane with scrollback captured for an older selection. Every
+	// retarget bumps the counter and stamps it on the fetch, so a response is only
+	// accepted for the target that asked for it.
+	//
+	// The periodic refresh deliberately does NOT bump it: a tick re-reads the
+	// SAME target, and bumping per tick would mean that whenever a read takes
+	// longer than the tick interval every response is superseded before it lands
+	// and the pane never updates at all.
+	previewEnabled   bool
+	previewWindowID  int
+	previewTargetSeq int
+	previewText      string
+	previewError     string
 
 	// transient status messages + launch-progress bookkeeping
 	toasts                   []Toast

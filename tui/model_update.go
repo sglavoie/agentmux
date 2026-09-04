@@ -333,13 +333,21 @@ func (m Model) handlePreviewTick(msg previewTickMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	d := time.Duration(m.cfg.Defaults.Preview.RefreshMs) * time.Millisecond
-	return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID), previewTickCmd(d))
+	// The tick re-reads the current target under the current generation. It must
+	// not open a new one: a read slower than the refresh interval would then be
+	// superseded by the next tick before it ever landed.
+	return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID, m.previewTargetSeq), previewTickCmd(d))
 }
 
 // handlePreviewContent processes a previewContentMsg: updates the cached
-// preview text or error when the message belongs to the current window.
+// preview text or error when the message belongs to the current target.
+//
+// Both halves of the identity are checked. The generation alone would accept a
+// stale window under a reused counter after a restore, and the window alone
+// cannot tell a read issued before the cursor detoured through a family summary
+// from one issued after it came back.
 func (m Model) handlePreviewContent(msg previewContentMsg) (tea.Model, tea.Cmd) {
-	if !m.activePreviewEnabled() || msg.windowID != m.previewWindowID {
+	if !m.activePreviewEnabled() || msg.seq != m.previewTargetSeq || msg.windowID != m.previewWindowID {
 		return m, nil
 	}
 	if msg.err != nil {

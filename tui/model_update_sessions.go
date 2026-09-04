@@ -122,7 +122,16 @@ func (m Model) handleSessionsMsg(msg commands.SessionsMsg) (tea.Model, tea.Cmd) 
 	}
 	clampListOffset(&m)
 	scrollListToCursor(&m)
-	return m, m.catchUpTopologyRefresh()
+	// The preview is retargeted last, once the projection, the restored cursor,
+	// and the selection token have all had their say. A refresh can move the
+	// cursor onto a different session — or, in the Projects view, off a folded
+	// family and onto its summary — and the pane must follow the selection the
+	// refresh ended on rather than the one it started from.
+	cmds := []tea.Cmd{m.catchUpTopologyRefresh()}
+	if cmd := m.refreshPreviewForCursor(); cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+	return m, tea.Batch(cmds...)
 }
 
 // handleRefreshErr processes a commands.ErrMsg: a refresh that could reach

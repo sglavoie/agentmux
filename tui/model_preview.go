@@ -231,11 +231,6 @@ func renderSplit(m Model) string {
 		return renderList(m)
 	}
 
-	// A selection that is not a session leaves sess at its zero value, which
-	// RenderPreview already paints as the empty pane it uses for an empty list.
-	sess, _ := m.selectedSession()
-	acctColor := dashboard.ProfileColorMap(m.cfg)
-
 	if cfg.Direction == "vertical" {
 		previewHeight := int(float64(paneHeight) * cfg.Ratio)
 		if previewHeight < 3 {
@@ -247,8 +242,7 @@ func renderSplit(m Model) string {
 		listHeight := paneHeight - previewHeight - 1
 		listView := renderListAt(m, m.width, listHeight)
 		divider := styleDim.Render(strings.Repeat("─", m.width))
-		previewView := dashboard.RenderPreview(m.width, previewHeight, sess, m.previewText, m.previewError, acctColor, m.cfg)
-		return lipgloss.JoinVertical(lipgloss.Left, listView, divider, previewView) + "\n"
+		return lipgloss.JoinVertical(lipgloss.Left, listView, divider, renderPreviewPane(m, m.width, previewHeight)) + "\n"
 	}
 
 	previewWidth := int(float64(m.width) * cfg.Ratio)
@@ -269,10 +263,35 @@ func renderSplit(m Model) string {
 		return renderList(m)
 	}
 	listView := renderListAt(m, listWidth, paneHeight)
-	previewView := dashboard.RenderPreview(previewWidth, paneHeight, sess, m.previewText, m.previewError, acctColor, m.cfg)
 	divider := strings.Repeat(styleDim.Render("│")+"\n", paneHeight)
 	divider = strings.TrimRight(divider, "\n")
-	return lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, previewView) + "\n"
+	return lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, renderPreviewPane(m, previewWidth, paneHeight)) + "\n"
+}
+
+// renderPreviewPane paints whatever the current selection makes the pane mean.
+//
+// A family summary gets a project card rather than scrollback. That is not a
+// presentation preference: a summary owns no window, so there is no scrollback
+// to show, and the only way to produce some would be to pick one of its members
+// — the exact "resolve a summary to an arbitrary session" the item layer refuses
+// everywhere else. The card is the honest answer to the selection that was made.
+//
+// Any other non-session selection leaves sess at its zero value, which
+// RenderPreview already paints as the empty pane it uses for an empty list.
+func renderPreviewPane(m Model, width, height int) string {
+	if it, ok := m.selectedItem(); ok && it.Kind == dashboard.ItemFamilySummary {
+		return dashboard.RenderProjectCard(dashboard.ProjectCardInput{
+			Width:         width,
+			Height:        height,
+			Items:         m.items,
+			Item:          it,
+			LastActivity:  m.lastActivity,
+			IdleThreshold: m.idleThreshold,
+			Cfg:           m.cfg,
+		})
+	}
+	sess, _ := m.selectedSession()
+	return dashboard.RenderPreview(width, height, sess, m.previewText, m.previewError, dashboard.ProfileColorMap(m.cfg), m.cfg)
 }
 
 // footerBudgetLines returns the number of footer rows reserved by layout math
@@ -326,9 +345,7 @@ func (m *Model) clearPreviewNotice() {
 func (m Model) togglePreview() (tea.Model, tea.Cmd) {
 	if m.previewEnabled {
 		m.previewEnabled = false
-		m.previewText = ""
-		m.previewError = ""
-		m.previewWindowID = 0
+		m.retargetPreview(0)
 		scrollListToCursor(&m)
 		return m, nil
 	}
@@ -337,13 +354,23 @@ func (m Model) togglePreview() (tea.Model, tea.Cmd) {
 		return m, m.pushPreviewNotice("preview unavailable: terminal too small")
 	}
 	m.previewEnabled = true
-	m.previewText = ""
-	m.previewError = ""
-	m.previewWindowID = m.currentPreviewWindowID()
+	m.retargetPreview(m.currentPreviewWindowID())
 	m.clearPreviewNotice()
 	scrollListToCursor(&m)
 	d := time.Duration(cfg.RefreshMs) * time.Millisecond
-	return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID), previewTickCmd(d))
+	return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID, m.previewTargetSeq), previewTickCmd(d))
+}
+
+// retargetPreview points the pane at a new target and opens a new generation for
+// it. Every path that changes what the preview is showing goes through here, so
+// no path can move the target without also invalidating the read that is still
+// in flight for the previous one. The periodic tick is not such a path: it
+// re-reads the current target under the current generation.
+func (m *Model) retargetPreview(windowID int) {
+	m.previewWindowID = windowID
+	m.previewTargetSeq++
+	m.previewText = ""
+	m.previewError = ""
 }
 
 // activePreviewEnabled reports whether the preview pane is enabled for the
@@ -401,10 +428,8 @@ func (m *Model) refreshPreviewForPickerCursor() tea.Cmd {
 	if winID == m.previewWindowID {
 		return nil
 	}
-	m.previewWindowID = winID
-	m.previewText = ""
-	m.previewError = ""
-	return fetchPreviewCmd(m.client, winID)
+	m.retargetPreview(winID)
+	return fetchPreviewCmd(m.client, winID, m.previewTargetSeq)
 }
 
 // refreshPreviewForCursor returns an immediate fetch cmd when the cursor
@@ -424,10 +449,8 @@ func (m *Model) refreshPreviewForCursor() tea.Cmd {
 	if winID == m.previewWindowID {
 		return nil
 	}
-	m.previewWindowID = winID
-	m.previewText = ""
-	m.previewError = ""
-	return fetchPreviewCmd(m.client, winID)
+	m.retargetPreview(winID)
+	return fetchPreviewCmd(m.client, winID, m.previewTargetSeq)
 }
 
 func (m Model) resumeListPreviewTickCmd() tea.Cmd {
@@ -443,9 +466,7 @@ func (m Model) resumeListPreviewTickCmd() tea.Cmd {
 func (m Model) togglePickerPreview() (tea.Model, tea.Cmd) {
 	if m.pickerPreviewEnabled {
 		m.pickerPreviewEnabled = false
-		m.previewText = ""
-		m.previewError = ""
-		m.previewWindowID = 0
+		m.retargetPreview(0)
 		scrollPickerToCursor(&m)
 		return m, nil
 	}
@@ -454,29 +475,23 @@ func (m Model) togglePickerPreview() (tea.Model, tea.Cmd) {
 		return m, m.pushPreviewNotice("preview unavailable: terminal too small")
 	}
 	m.pickerPreviewEnabled = true
-	m.previewText = ""
-	m.previewError = ""
-	m.previewWindowID = m.pickerCurrentWindowID()
+	m.retargetPreview(m.pickerCurrentWindowID())
 	m.clearPreviewNotice()
 	scrollPickerToCursor(&m)
 	d := time.Duration(cfg.RefreshMs) * time.Millisecond
-	return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID), previewTickCmd(d))
+	return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID, m.previewTargetSeq), previewTickCmd(d))
 }
 
 // disablePreviewWithNotice turns the dashboard preview off and shows a
 // transient status-bar notice. Used by the resize guard.
 func (m *Model) disablePreviewWithNotice(msg string) tea.Cmd {
 	m.previewEnabled = false
-	m.previewText = ""
-	m.previewError = ""
-	m.previewWindowID = 0
+	m.retargetPreview(0)
 	return m.pushPreviewNotice(msg)
 }
 
 func (m *Model) disablePickerPreviewWithNotice(msg string) tea.Cmd {
 	m.pickerPreviewEnabled = false
-	m.previewText = ""
-	m.previewError = ""
-	m.previewWindowID = 0
+	m.retargetPreview(0)
 	return m.pushPreviewNotice(msg)
 }

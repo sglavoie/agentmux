@@ -206,12 +206,22 @@ func listModeFooterLines(m Model, position string) []string {
 }
 
 func listFooterNavTokens(m Model) []string {
+	// A family summary has no tab to focus and no session to act on, so the two
+	// row-targeted tokens in this row change with it: enter becomes the fold it
+	// actually performs, and the actions overlay renders in the unavailable
+	// style, exactly as the row-section entries below already do.
+	focusToken := renderFooterBinding("enter", "focus")
+	actionsToken := renderFooterBinding("a", "actions")
+	if m.summarySelected() {
+		focusToken = renderFooterBinding("enter/←/→", "fold/unfold")
+		actionsToken = renderUnavailableFooterBinding("a", "actions")
+	}
 	navTokens := []string{
 		renderFooterBinding("j/k", "up/down"),
 		renderFooterBinding("]/[", "jump-chord"),
 		renderFooterBinding("}/{", "nav+focus"),
-		renderFooterBinding("enter", "focus"),
-		renderFooterBinding("a", "actions"),
+		focusToken,
+		actionsToken,
 		renderFooterBinding("/", "filter"),
 		renderFooterBinding("?", "help"),
 		renderFooterBinding("q", "quit"),
@@ -506,6 +516,9 @@ var listFooterPalette = []footerEntry{
 	}, 0},
 	{"f", "profile", footerSectionLaunch, func(Model) bool { return true }, 0},
 	{"l", "launch", footerSectionLaunch, func(Model) bool { return true }, 0},
+	// A view action, not a row action: switching the arrangement is available
+	// with the cursor on a summary, on a session, and on an empty list alike.
+	{"v", "group view", footerSectionApp, func(Model) bool { return true }, 0},
 	{":", "command palette", footerSectionApp, func(Model) bool { return true }, 0},
 	{"S", "sessions", footerSectionApp, func(Model) bool { return true }, 0},
 	{"P", "plans", footerSectionApp, func(Model) bool { return true }, 0},

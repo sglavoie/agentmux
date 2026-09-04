@@ -85,6 +85,14 @@ const (
 	keyCtrlS  = "ctrl+s" // submit a multi-line editor whose Enter inserts a newline
 
 	keyTogglePreview = "p" // toggles the split-pane live preview
+	keyToggleView    = "v" // toggles the dashboard list between Urgency and Projects
+
+	// keyCollapse/keyExpand fold and unfold a project family in ModeList.
+	// They reuse keyLeft/keyRight above, which the list has never bound; the
+	// separate names are here so the collapse handler reads as what it does
+	// rather than as a direction.
+	keyCollapse = keyLeft
+	keyExpand   = keyRight
 
 	keyTab      = "tab"
 	keyShiftTab = "shift+tab"

@@ -344,13 +344,23 @@ func scrollChipPickerToCursor(m *Model) {
 // applyFilterChange swaps in a new active filter, re-applies it to the
 // session list, and resets cursor + chip focus. Used by chip removal and
 // the Esc "clear all" path so they share the bookkeeping.
-func (m *Model) applyFilterChange(f dashboard.Filter) {
+//
+// The returned command refreshes the preview, and it is returned rather than
+// dispatched because the selection has to settle first: a filter change
+// reprojects the list, and the pane's target is whatever the cursor points at
+// once the new projection exists. Callers must not drop it — a preview left
+// pointed at a window the filter has just hidden keeps polling a session that is
+// no longer on screen.
+func (m *Model) applyFilterChange(f dashboard.Filter) tea.Cmd {
 	m.activeFilter = f
 	m.filtered = dashboard.ApplyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
 	m.sortFiltered()
 	m.cursor = 0
+	m.listOffset = 0
 	m.focusedChipIdx = -1
+	clampListOffset(m)
 	scrollListToCursor(m)
+	return m.refreshPreviewForCursor()
 }
 
 // cycleDashboardProfile updates the dashboard's existing @profile filter
@@ -360,9 +370,7 @@ func (m *Model) cycleDashboardProfile() tea.Cmd {
 	filter := m.activeFilter
 	filter.Account = next
 	filter.Raw = dashboard.SerializeFilter(filter)
-	m.applyFilterChange(filter)
-	m.listOffset = 0
-	return m.refreshPreviewForCursor()
+	return m.applyFilterChange(filter)
 }
 
 // enterFilter switches into ModeSearch with the given pre-filled buffer and

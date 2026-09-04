@@ -122,6 +122,19 @@ func sessionItem(rows []session.RunningSession, row int) Item {
 	}
 }
 
+// FamilySummaryIndex returns the index of the summary standing for key, or -1
+// when the projection has none — which is the ordinary answer in the urgency
+// view, in a family filtered down to one visible session, and for a row that
+// belongs to no family at all. It is what lets the collapse keys move a child's
+// selection up to its family without the root having to walk the item list, and
+// its -1 is the whole "there is nothing to fold here" verdict.
+func (l ItemList) FamilySummaryIndex(key string) int {
+	if key == "" {
+		return -1
+	}
+	return findFamilySummary(l, key)
+}
+
 // SummaryCounts reports how many of a summary's members sit in each urgency
 // bucket, indexed by group. Because the projection is built from the already
 // filtered rows, every member it counts is a match the operator can currently

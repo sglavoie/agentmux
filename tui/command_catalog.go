@@ -349,8 +349,7 @@ func commandCatalog() []commands.Command[Model] {
 			Aliases:     []string{"chips", "reset"}, Shortcut: keyEsc,
 			Visible: func(m Model, _ commands.Context) bool { return !m.activeFilter.IsEmpty() },
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
-				m.applyFilterChange(dashboard.Filter{})
-				return m, nil
+				return m, m.applyFilterChange(dashboard.Filter{})
 			},
 		},
 		{
@@ -414,6 +413,24 @@ func commandCatalog() []commands.Command[Model] {
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
 				updated, cmd := m.togglePreview()
 				return updated.(Model), cmd
+			},
+		},
+		{
+			ID: commands.ToggleListView, Group: commands.GroupExplore,
+			// The title names the arrangement the command switches TO, not the
+			// one the list is in, so the palette entry reads as the action it
+			// performs rather than as a status line.
+			Title: func(m Model, _ commands.Context) string {
+				if m.listView == dashboard.ViewProjects {
+					return "Group by Urgency"
+				}
+				return "Group by Project"
+			},
+			Description: "Switch the dashboard between urgency order and project families.",
+			Aliases:     []string{"projects", "families", "urgency", "group"}, Shortcut: keyToggleView,
+			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
+				cmd := m.toggleListView()
+				return m, cmd
 			},
 		},
 

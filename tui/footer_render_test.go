@@ -206,6 +206,7 @@ func TestListFooterAvailability(t *testing.T) {
 				"C": false, "s": false, "x": false, "X": false,
 				"o": false, "O": false,
 				"f": true, "l": true, ":": true, "S": true, "P": true, "R": true,
+				"v": true,
 			},
 		},
 		{
@@ -216,6 +217,7 @@ func TestListFooterAvailability(t *testing.T) {
 				"C": true, "s": true, "x": true, "X": true,
 				"o": false, "O": false,
 				"f": true, "l": true, ":": true, "S": true, "P": true, "R": true,
+				"v": true,
 			},
 		},
 		{
@@ -226,6 +228,7 @@ func TestListFooterAvailability(t *testing.T) {
 				"C": true, "s": true, "x": false, "X": true,
 				"o": false, "O": false,
 				"f": true, "l": true, ":": true, "S": true, "P": true, "R": true,
+				"v": true,
 			},
 		},
 		{
@@ -236,6 +239,7 @@ func TestListFooterAvailability(t *testing.T) {
 				"C": true, "s": true, "x": false, "X": true,
 				"o": false, "O": false,
 				"f": true, "l": true, ":": true, "S": true, "P": true, "R": true,
+				"v": true,
 			},
 		},
 	}
