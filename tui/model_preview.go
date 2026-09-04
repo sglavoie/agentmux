@@ -231,10 +231,9 @@ func renderSplit(m Model) string {
 		return renderList(m)
 	}
 
-	var sess session.RunningSession
-	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
-		sess = m.filtered[m.cursor]
-	}
+	// A selection that is not a session leaves sess at its zero value, which
+	// RenderPreview already paints as the empty pane it uses for an empty list.
+	sess, _ := m.selectedSession()
 	acctColor := dashboard.ProfileColorMap(m.cfg)
 
 	if cfg.Direction == "vertical" {
@@ -365,8 +364,8 @@ func (m Model) currentPreviewWindowID() int {
 	if m.mode == ModePicker {
 		return m.pickerCurrentWindowID()
 	}
-	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
-		return m.filtered[m.cursor].WindowID
+	if s, ok := m.selectedSession(); ok {
+		return s.WindowID
 	}
 	return 0
 }
@@ -415,9 +414,12 @@ func (m *Model) refreshPreviewForCursor() tea.Cmd {
 	if !m.previewEnabled {
 		return nil
 	}
+	// A selection that is not a session tracks window 0, which fetchPreviewCmd
+	// short-circuits into the "(session not running)" placeholder rather than a
+	// Kitty read.
 	var winID int
-	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
-		winID = m.filtered[m.cursor].WindowID
+	if s, ok := m.selectedSession(); ok {
+		winID = s.WindowID
 	}
 	if winID == m.previewWindowID {
 		return nil

@@ -93,24 +93,25 @@ func (m Model) handleSessionsMsg(msg commands.SessionsMsg) (tea.Model, tea.Cmd) 
 	// failed first refresh still select the caller's tab on the retry.
 	m.initialSourceWindowID = 0
 	m.err = nil
-	// Capture the prior cursor's row identity before the list is
-	// rebuilt so we can restore it post-refresh. Empty list → no
-	// prior selection to preserve.
-	var prior dashboard.CursorIdentity
-	if len(m.filtered) > 0 && m.cursor >= 0 && m.cursor < len(m.filtered) {
-		prior = dashboard.CaptureCursorIdentity(m.filtered[m.cursor])
-	}
+	// Capture the prior cursor's item identity before the list is rebuilt so we
+	// can restore it post-refresh. An empty list, or a cursor that is not on an
+	// item, yields the zero identity — there is no prior selection to preserve.
+	prior := dashboard.CaptureItemIdentity(m.items, m.cursor)
 	m.lastActivity = msg.Activity
 	m.watchdog = msg.Watchdog
 	m.sessions = msg.Sessions
 	m.recordTransitions()
 	m.filtered = dashboard.ApplyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
 	m.sortFiltered()
-	m.cursor = dashboard.RestoreCursorByIdentity(m.filtered, prior, m.lastActivity, m.idleThreshold)
+	m.cursor = dashboard.RestoreItemCursor(m.items, prior, m.lastActivity, m.idleThreshold)
 	selectionIsNew := msg.SelectionToken == "" || msg.SelectionToken != m.lastSelectionRequestToken
 	if msg.SelectionTabID > 0 && selectionIsNew {
-		for i, running := range m.filtered {
-			if running.TabID == msg.SelectionTabID {
+		// The requested tab is named by a session, but the cursor addresses a
+		// line: resolve the session through the projection rather than
+		// assuming the two are indexed alike.
+		for i := range m.items.Items {
+			running, ok := m.items.SessionAt(i)
+			if ok && running.TabID == msg.SelectionTabID {
 				m.cursor = i
 				break
 			}

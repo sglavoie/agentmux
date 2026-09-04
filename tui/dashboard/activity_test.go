@@ -179,9 +179,9 @@ func TestRenderActivityCellWarningStyled(t *testing.T) {
 func TestAnyRowHasActivityFalseWhenNoRowIsBusy(t *testing.T) {
 	in := ListInput{
 		Cfg: &config.Config{},
-		Rows: []session.RunningSession{
+		Items: BuildItems([]session.RunningSession{
 			{WindowID: 1, Base: "a", State: "bolt"},
-		},
+		}),
 		Watchdog: map[int]protocol.WatchdogState{
 			1: {LastAction: "active", LastEventAt: time.Now().Unix(), ThresholdSec: 600},
 		},
@@ -196,10 +196,10 @@ func TestAnyRowHasActivityFalseWhenNoRowIsBusy(t *testing.T) {
 func TestAnyRowHasActivityTrueWhenAnyRowIsBusy(t *testing.T) {
 	in := ListInput{
 		Cfg: &config.Config{},
-		Rows: []session.RunningSession{
+		Items: BuildItems([]session.RunningSession{
 			{WindowID: 1, Base: "a", State: "bolt", BusySince: time.Now()},
 			{WindowID: 2, Base: "b", State: ""},
-		},
+		}),
 	}
 	if !anyRowHasActivity(in) {
 		t.Error("anyRowHasActivity must return true when at least one row is busy")

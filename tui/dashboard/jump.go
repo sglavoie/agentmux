@@ -1,7 +1,5 @@
 package dashboard
 
-import "github.com/sglavoie/agentmux/internal/session"
-
 // defaultAttentionStates is the canonical fallback set used when the caller
 // has no configured attention set (only happens for a dashboard built without
 // a config). In production the root populates its set from
@@ -24,19 +22,23 @@ var defaultAttentionStates = map[string]bool{
 	"question": true,
 }
 
-// FindNextMatching returns the index in rows of the next row whose State
-// passes match, walking from index `from` in direction `dir` (+1 forward,
-// -1 backward), wrapping exactly once. Returns -1 if no row matches or
-// rows is empty. If the row at `from` matches, it is skipped — the
+// FindNextMatching returns the index in the projection of the next item whose
+// state passes match, walking from index `from` in direction `dir` (+1 forward,
+// -1 backward), wrapping exactly once. Returns -1 if no item matches or the
+// projection is empty. If the item at `from` matches, it is skipped — the
 // function never returns `from` itself unless `from` is out of range.
-func FindNextMatching(rows []session.RunningSession, from, dir int, match func(string) bool) int {
-	n := len(rows)
+//
+// A non-session item reports the empty state, which is in no chord set and in
+// no attention set, so jump navigation walks past a synthetic row without the
+// matchers needing to know that item kinds exist.
+func FindNextMatching(list ItemList, from, dir int, match func(string) bool) int {
+	n := list.Len()
 	if n == 0 || (dir != 1 && dir != -1) {
 		return -1
 	}
 	for step := 1; step <= n; step++ {
 		i := ((from+dir*step)%n + n) % n
-		if match(rows[i].State) {
+		if match(list.StateAt(i)) {
 			return i
 		}
 	}

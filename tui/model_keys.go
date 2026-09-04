@@ -177,6 +177,26 @@ func (m *Model) clearJumpChord() {
 	m.pendingJumpDir = 0
 }
 
+// focusSelectedAndPreview focuses the session under the cursor and refreshes
+// the preview for it. The two ]f / [f focus jumps land on a matched item and
+// then act on it, so the target is resolved through selectedSession rather
+// than by indexing: a matcher only ever matches a session leaf today, but a
+// selection that turns out not to be one must move the cursor without issuing
+// a Kitty focus.
+func (m Model) focusSelectedAndPreview() (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	if s, ok := m.selectedSession(); ok {
+		cmds = append(cmds, commands.Focus(m.client, s.TabID))
+	}
+	if cmd := m.refreshPreviewForCursor(); cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+	if len(cmds) == 0 {
+		return m, nil
+	}
+	return m, tea.Batch(cmds...)
+}
+
 func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.snapshotSeenStates()
 	key := msg.String()
@@ -193,7 +213,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if matcher := dashboard.ChordStateMatcher(key); matcher != nil {
-			if next := dashboard.FindNextMatching(m.filtered, m.cursor, dir, matcher); next >= 0 {
+			if next := dashboard.FindNextMatching(m.listItems(), m.cursor, dir, matcher); next >= 0 {
 				m.cursor = next
 				scrollListToCursor(&m)
 				if cmd := m.refreshPreviewForCursor(); cmd != nil {
@@ -211,14 +231,14 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case keyJ, keyDown:
-		m.cursor = clamp(m.cursor+1, 0, len(m.filtered)-1)
+		m.cursor = clamp(m.cursor+1, 0, m.listItemCount()-1)
 		scrollListToCursor(&m)
 		if cmd := m.refreshPreviewForCursor(); cmd != nil {
 			return m, cmd
 		}
 
 	case keyK, keyUp:
-		m.cursor = clamp(m.cursor-1, 0, len(m.filtered)-1)
+		m.cursor = clamp(m.cursor-1, 0, m.listItemCount()-1)
 		scrollListToCursor(&m)
 		if cmd := m.refreshPreviewForCursor(); cmd != nil {
 			return m, cmd
@@ -229,7 +249,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			// Double-tap ]]: perform the attention-set jump.
 			m.pendingJumpDir = 0
 			attn := dashboard.AttentionMatcher(m.attentionStates)
-			if next := dashboard.FindNextMatching(m.filtered, m.cursor, +1, attn); next >= 0 {
+			if next := dashboard.FindNextMatching(m.listItems(), m.cursor, +1, attn); next >= 0 {
 				m.cursor = next
 				scrollListToCursor(&m)
 				if cmd := m.refreshPreviewForCursor(); cmd != nil {
@@ -247,7 +267,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			// Double-tap [[: perform the attention-set jump backward.
 			m.pendingJumpDir = 0
 			attn := dashboard.AttentionMatcher(m.attentionStates)
-			if prev := dashboard.FindNextMatching(m.filtered, m.cursor, -1, attn); prev >= 0 {
+			if prev := dashboard.FindNextMatching(m.listItems(), m.cursor, -1, attn); prev >= 0 {
 				m.cursor = prev
 				scrollListToCursor(&m)
 				if cmd := m.refreshPreviewForCursor(); cmd != nil {
@@ -262,29 +282,19 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case keyJumpAttentionNextFocus:
 		attn := dashboard.AttentionMatcher(m.attentionStates)
-		if next := dashboard.FindNextMatching(m.filtered, m.cursor, +1, attn); next >= 0 {
+		if next := dashboard.FindNextMatching(m.listItems(), m.cursor, +1, attn); next >= 0 {
 			m.cursor = next
 			scrollListToCursor(&m)
-			s := m.filtered[m.cursor]
-			cmds := []tea.Cmd{commands.Focus(m.client, s.TabID)}
-			if cmd := m.refreshPreviewForCursor(); cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-			return m, tea.Batch(cmds...)
+			return m.focusSelectedAndPreview()
 		}
 		return m, nil
 
 	case keyJumpAttentionPrevFocus:
 		attn := dashboard.AttentionMatcher(m.attentionStates)
-		if prev := dashboard.FindNextMatching(m.filtered, m.cursor, -1, attn); prev >= 0 {
+		if prev := dashboard.FindNextMatching(m.listItems(), m.cursor, -1, attn); prev >= 0 {
 			m.cursor = prev
 			scrollListToCursor(&m)
-			s := m.filtered[m.cursor]
-			cmds := []tea.Cmd{commands.Focus(m.client, s.TabID)}
-			if cmd := m.refreshPreviewForCursor(); cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-			return m, tea.Batch(cmds...)
+			return m.focusSelectedAndPreview()
 		}
 		return m, nil
 
@@ -296,7 +306,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case keyGG:
-		m.cursor = len(m.filtered) - 1
+		m.cursor = m.listItemCount() - 1
 		if m.cursor < 0 {
 			m.cursor = 0
 		}
@@ -310,7 +320,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if step < 1 {
 			step = 1
 		}
-		m.cursor = clamp(m.cursor+step, 0, len(m.filtered)-1)
+		m.cursor = clamp(m.cursor+step, 0, m.listItemCount()-1)
 		scrollListToCursor(&m)
 		if cmd := m.refreshPreviewForCursor(); cmd != nil {
 			return m, cmd
@@ -321,7 +331,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if step < 1 {
 			step = 1
 		}
-		m.cursor = clamp(m.cursor-step, 0, len(m.filtered)-1)
+		m.cursor = clamp(m.cursor-step, 0, m.listItemCount()-1)
 		scrollListToCursor(&m)
 		if cmd := m.refreshPreviewForCursor(); cmd != nil {
 			return m, cmd
@@ -332,7 +342,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if step < 1 {
 			step = 1
 		}
-		m.cursor = clamp(m.cursor+step, 0, len(m.filtered)-1)
+		m.cursor = clamp(m.cursor+step, 0, m.listItemCount()-1)
 		scrollListToCursor(&m)
 		if cmd := m.refreshPreviewForCursor(); cmd != nil {
 			return m, cmd
@@ -343,7 +353,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if step < 1 {
 			step = 1
 		}
-		m.cursor = clamp(m.cursor-step, 0, len(m.filtered)-1)
+		m.cursor = clamp(m.cursor-step, 0, m.listItemCount()-1)
 		scrollListToCursor(&m)
 		if cmd := m.refreshPreviewForCursor(); cmd != nil {
 			return m, cmd
@@ -363,13 +373,13 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.applyFilterChange(m.activeFilter.RemoveComponent(m.focusedChipIdx))
 			return m, nil
 		}
-		if len(m.filtered) > 0 {
-			return m, commands.Focus(m.client, m.filtered[m.cursor].TabID)
+		if s, ok := m.selectedSession(); ok {
+			return m, commands.Focus(m.client, s.TabID)
 		}
 
 	case keySpace:
-		if len(m.filtered) > 0 {
-			return m, commands.Focus(m.client, m.filtered[m.cursor].TabID)
+		if s, ok := m.selectedSession(); ok {
+			return m, commands.Focus(m.client, s.TabID)
 		}
 
 	case keyTab:
@@ -433,22 +443,20 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		case keyTogglePreview:
 			return m.togglePreview()
 		case keyA:
-			if len(m.filtered) > 0 {
-				m.targetSession = m.filtered[m.cursor]
+			if s, ok := m.selectedSession(); ok {
+				m.targetSession = s
 				m.actionErr = nil
 				m.actionsOffset = 0
 				m.mode = ModeActions
 			}
 			return m, nil
 		case keyE:
-			if len(m.filtered) > 0 {
-				s := m.filtered[m.cursor]
+			if s, ok := m.selectedSession(); ok {
 				return m, commands.Peek(m.client, s.WindowID)
 			}
 			return m, nil
 		case keyR:
-			if len(m.filtered) > 0 {
-				s := m.filtered[m.cursor]
+			if s, ok := m.selectedSession(); ok {
 				if s.Locked {
 					return m, m.lockedDenyToast()
 				}
@@ -461,8 +469,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case keyClose:
-			if len(m.filtered) > 0 {
-				s := m.filtered[m.cursor]
+			if s, ok := m.selectedSession(); ok {
 				if s.Locked {
 					return m, m.lockedDenyToast()
 				}
@@ -480,8 +487,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		case keyU:
 			return m, m.undoLastCmd()
 		case keyC:
-			if len(m.filtered) > 0 {
-				s := m.filtered[m.cursor]
+			if s, ok := m.selectedSession(); ok {
 				if s.Locked {
 					return m, m.lockedDenyToast()
 				}
@@ -497,8 +503,8 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case keyDashboardLaunch:
-			if len(m.filtered) > 0 {
-				m.targetSession = m.filtered[m.cursor]
+			if s, ok := m.selectedSession(); ok {
+				m.targetSession = s
 				m.configPickerAccounts = m.cfg.Accounts
 				m.configPickerCurrent = m.targetSession.EffectiveProfile()
 				m.configPickerCursor = launch.AccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
@@ -510,8 +516,8 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case keyClearStatus:
-			if len(m.filtered) > 0 {
-				m.targetSession = m.filtered[m.cursor]
+			if s, ok := m.selectedSession(); ok {
+				m.targetSession = s
 				if dashboard.StateGroup(m.targetSession, m.lastActivity, m.idleThreshold) != 0 {
 					return m, nil
 				}
@@ -520,23 +526,20 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case keyLock:
-			if len(m.filtered) > 0 {
-				s := m.filtered[m.cursor]
+			if s, ok := m.selectedSession(); ok {
 				m.actionErr = nil
 				return m, commands.ToggleLock(m.client, s)
 			}
 			return m, nil
 		case keyM:
-			if len(m.filtered) > 0 {
-				s := m.filtered[m.cursor]
+			if s, ok := m.selectedSession(); ok {
 				m.actionErr = nil
 				return m, commands.ToggleMute(m.client, s)
 			}
 			return m, nil
 		case keyO:
-			if len(m.filtered) > 0 {
-				s := m.filtered[m.cursor]
-				if cs, ok := commands.FindConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject()); ok {
+			if s, ok := m.selectedSession(); ok {
+				if cs, found := commands.FindConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject()); found {
 					m.targetSession = s
 					m.actionErr = nil
 					return m, commands.OpenDirectory(m.client, m.cfg, cs)
@@ -544,9 +547,8 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case keyOpenEditor:
-			if len(m.filtered) > 0 {
-				s := m.filtered[m.cursor]
-				if cs, ok := commands.FindConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject()); ok {
+			if s, ok := m.selectedSession(); ok {
+				if cs, found := commands.FindConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject()); found {
 					m.targetSession = s
 					m.actionErr = nil
 					return m, commands.OpenInEditor(m.client, m.cfg, cs)
@@ -554,8 +556,8 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case keyY:
-			if len(m.filtered) > 0 {
-				title := dashboard.SessionDisplayTitle(m.filtered[m.cursor])
+			if s, ok := m.selectedSession(); ok {
+				title := dashboard.SessionDisplayTitle(s)
 				m.actionErr = nil
 				return m, commands.CopyTitle(title)
 			}
@@ -563,10 +565,11 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		case keySessionSearch:
 			return m.enterSessionSearch()
 		case keyProjectSessionSearch:
-			if len(m.filtered) == 0 || m.cursor < 0 || m.cursor >= len(m.filtered) {
+			s, ok := m.selectedSession()
+			if !ok {
 				return m, nil
 			}
-			return m.enterSessionSearchForProject(m.filtered[m.cursor].EffectiveProject())
+			return m.enterSessionSearchForProject(s.EffectiveProject())
 		case keyPlanSearch:
 			return m.enterPlanSearch()
 		case keyWorktrees:
@@ -581,13 +584,14 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.deprecationDismissed = true
 				return m, nil
 			}
-			if len(m.filtered) == 0 {
+			s, ok := m.selectedSession()
+			if !ok {
 				return m, nil
 			}
-			return m.enterDetailMode(m.filtered[m.cursor].WindowID, false)
+			return m.enterDetailMode(s.WindowID, false)
 		case keyOpenTimeline:
-			if m.cursor < len(m.filtered) {
-				return m.enterDetailMode(m.filtered[m.cursor].WindowID, true)
+			if s, ok := m.selectedSession(); ok {
+				return m.enterDetailMode(s.WindowID, true)
 			}
 		}
 	}

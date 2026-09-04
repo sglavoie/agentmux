@@ -23,6 +23,7 @@ func jumpFocusModel(rows []session.RunningSession, cursor int) (Model, *kitty.Mo
 	m := NewModel(cfg, client)
 	m.sessions = rows
 	m.filtered = rows
+	m.rebuildItems()
 	m.cursor = cursor
 	return m, runner
 }

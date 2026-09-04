@@ -42,6 +42,7 @@ func TestListFooterBudgetMatchesRenderedRowsAcrossStates(t *testing.T) {
 	base.width = 72
 	base.height = 18
 	base.filtered = makeRowsForScroll(20)
+	base.rebuildItems()
 
 	filtered := base
 	filtered.activeFilter = dashboard.Filter{Substrings: []string{"api"}}
@@ -196,6 +197,7 @@ func TestClampListOffset_PinsToValidRange(t *testing.T) {
 	m := scrollModel()
 	m.height = 15 // small enough that total > visible budget
 	m.filtered = makeRowsForScroll(40)
+	m.rebuildItems()
 
 	visible := listVisibleHeight(m)
 	maxOffset := len(m.filtered) - visible
@@ -222,6 +224,7 @@ func TestClampListOffset_PinsToValidRange(t *testing.T) {
 func TestClampListOffset_ZeroWhenTotalFits(t *testing.T) {
 	m := scrollModel()
 	m.filtered = makeRowsForScroll(2) // fewer rows than the visible budget
+	m.rebuildItems()
 	m.listOffset = 4
 	clampListOffset(&m)
 	if m.listOffset != 0 {
@@ -232,11 +235,13 @@ func TestClampListOffset_ZeroWhenTotalFits(t *testing.T) {
 func TestClampListOffset_ShrinkPullsOffsetBack(t *testing.T) {
 	m := scrollModel()
 	m.filtered = makeRowsForScroll(40)
+	m.rebuildItems()
 	visible := listVisibleHeight(m)
 	m.listOffset = len(m.filtered) - visible // valid offset at full size
 
 	// Simulate a refresh that shrinks the list (e.g. a session was closed).
 	m.filtered = m.filtered[:6]
+	m.rebuildItems()
 	clampListOffset(&m)
 	if m.listOffset != 0 {
 		t.Errorf("after shrink to %d rows: got offset %d want 0", len(m.filtered), m.listOffset)
@@ -247,6 +252,7 @@ func TestScrollListToCursor_CursorBeforeWindowMovesOffsetDown(t *testing.T) {
 	m := scrollModel()
 	m.height = 15 // small enough that the visible budget is bounded
 	m.filtered = makeRowsForScroll(30)
+	m.rebuildItems()
 	m.listOffset = 10
 	m.cursor = 4 // cursor sits above the window
 
@@ -260,6 +266,7 @@ func TestScrollListToCursor_CursorAfterWindowAdvancesOffset(t *testing.T) {
 	m := scrollModel()
 	m.height = 15 // tight visible budget so the cursor lands past the window
 	m.filtered = makeRowsForScroll(50)
+	m.rebuildItems()
 	visible := listVisibleHeight(m)
 	m.listOffset = 0
 	m.cursor = visible + 5 // cursor sits past the window's bottom row
@@ -293,6 +300,7 @@ func TestScrollListToCursor_GroupLabelChargedCorrectly(t *testing.T) {
 		{WindowID: 4, Base: "b2", Account: "work", State: "bolt"},
 		{WindowID: 5, Base: "b3", Account: "work", State: "bolt"},
 	}
+	m.rebuildItems()
 	m.lastActivity = map[int]time.Time{}
 
 	if g := dashboard.CountGroups(m.filtered, m.lastActivity, m.idleThreshold); g <= 1 {
@@ -365,6 +373,7 @@ func TestScrollListToCursor_PreviewEnabledKeepsCursorVisible(t *testing.T) {
 		{WindowID: 11, Base: "act6", Account: "work", State: "bolt"},
 		{WindowID: 12, Base: "act7", Account: "work", State: "bolt"},
 	}
+	m.rebuildItems()
 	m.lastActivity = map[int]time.Time{}
 
 	if g := dashboard.CountGroups(m.filtered, m.lastActivity, m.idleThreshold); g <= 1 {
@@ -401,6 +410,7 @@ func TestScrollListToCursor_ReservesBottomIndicatorWhenRowsRemain(t *testing.T) 
 	m := scrollModel()
 	m.height = 15 // short-terminal chrome leaves a 6-line list pane
 	m.filtered = makeRowsForScroll(20)
+	m.rebuildItems()
 	m.cursor = 10
 	m.listOffset = 0
 

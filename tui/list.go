@@ -265,12 +265,12 @@ func listChromeLines(m Model) int {
 // listVisibleHeight returns the row-line budget for the scrollable session
 // list at the model's current dimensions. The result is floored at
 // listMinVisible so a degenerate terminal does not yield a zero or negative
-// window. Pre-WindowSizeMsg (height==0) the budget equals the filtered length
+// window. Pre-WindowSizeMsg (height==0) the budget equals the item count
 // so scroll-affecting operations are no-ops until the first resize arrives,
 // mirroring detailScrollBounds.
 func listVisibleHeight(m Model) int {
 	if m.height == 0 {
-		return len(m.filtered)
+		return m.listItemCount()
 	}
 	if m.previewEnabled && m.cfg != nil {
 		var h int
@@ -304,7 +304,7 @@ func listVisibleHeight(m Model) int {
 // listVisibleHeight through renderFooter.
 func listVisibleHeightForFooterLines(m Model, footerLines int) int {
 	if m.height == 0 {
-		return len(m.filtered)
+		return m.listItemCount()
 	}
 	h := m.height - chromeAboveListLines(m) - 1 /* padding row */ - footerLines - statusBarLines
 	if h < listMinVisible {
@@ -313,12 +313,12 @@ func listVisibleHeightForFooterLines(m Model, footerLines int) int {
 	return h
 }
 
-// clampListOffset pins m.listOffset to [0, max(0, len(m.filtered) - visible)]
+// clampListOffset pins m.listOffset to [0, max(0, listItemCount - visible)]
 // at the model's current dimensions. Mirrors clampDetailScroll: a resize or a
-// shrink in m.filtered can leave the persisted offset above maxOffset and the
+// shrink in the item list can leave the persisted offset above maxOffset and the
 // next j/k keypress would chew through dead rows before the viewport reacts.
 func clampListOffset(m *Model) {
-	total := len(m.filtered)
+	total := m.listItemCount()
 	visible := listVisibleHeight(*m)
 	maxOffset := total - visible
 	if maxOffset < 0 {
@@ -345,15 +345,16 @@ func scrollListToCursor(m *Model) {
 	if m.height == 0 {
 		return
 	}
-	if len(m.filtered) == 0 {
+	total := m.listItemCount()
+	if total == 0 {
 		m.listOffset = 0
 		return
 	}
 	if m.cursor < 0 {
 		m.cursor = 0
 	}
-	if m.cursor >= len(m.filtered) {
-		m.cursor = len(m.filtered) - 1
+	if m.cursor >= total {
+		m.cursor = total - 1
 	}
 
 	// Cursor moved above the window: pin offset to cursor.
@@ -362,12 +363,12 @@ func scrollListToCursor(m *Model) {
 	}
 
 	visible := listVisibleHeight(*m)
-	multiGroup := dashboard.CountGroups(m.filtered, m.lastActivity, m.idleThreshold) > 1
+	multiGroup := m.items.CountGroups(m.lastActivity, m.idleThreshold) > 1
 
-	// Advance offset row-by-row until the cumulative line cost from offset
+	// Advance offset item-by-item until the cumulative line cost from offset
 	// through cursor fits within the visible budget. Stops when cursor and
 	// offset coincide so we never overshoot. We deliberately do not call
-	// clampListOffset here: its upper bound is computed in rows, but the
+	// clampListOffset here: its upper bound is computed in items, but the
 	// label-aware walk above can require an offset > (total - visible) when
 	// group labels eat into the line budget. Mirrors
 	// color_picker_app.scrollToCursor, which also only floors at zero.

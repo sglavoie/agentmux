@@ -26,21 +26,15 @@ func TestListFooterPaletteOrder(t *testing.T) {
 		},
 		{
 			name: "attention row",
-			m: Model{
-				filtered: []session.RunningSession{{Base: "a", State: "key", Account: "w"}},
-			},
+			m:    withListRows(Model{}, session.RunningSession{Base: "a", State: "key", Account: "w"}),
 		},
 		{
 			name: "active row",
-			m: Model{
-				filtered: []session.RunningSession{{Base: "a", State: "bolt", Account: "w"}},
-			},
+			m:    withListRows(Model{}, session.RunningSession{Base: "a", State: "bolt", Account: "w"}),
 		},
 		{
 			name: "idle row",
-			m: Model{
-				filtered: []session.RunningSession{{Base: "a", State: "", Account: "w"}},
-			},
+			m:    withListRows(Model{}, session.RunningSession{Base: "a", State: "", Account: "w"}),
 		},
 	}
 
@@ -69,10 +63,7 @@ func TestListFooterPaletteOrder(t *testing.T) {
 // space remaining after the final row action instead of starting a new block.
 func TestListFooterActionsReflow(t *testing.T) {
 	const width = 110
-	out := stripAnsi(listFooterActions(Model{
-		width:    width,
-		filtered: []session.RunningSession{{State: "bolt"}},
-	}))
+	out := stripAnsi(listFooterActions(withListRows(Model{width: width}, session.RunningSession{State: "bolt"})))
 
 	if strings.Contains(out, "▏") {
 		t.Errorf("footer should not render section bars; got %q", out)
@@ -102,11 +93,7 @@ func TestListFooterActionsReflow(t *testing.T) {
 
 func TestListFooterHasNoSpacerAndZebraRowsSpanViewport(t *testing.T) {
 	const width = 110
-	m := Model{
-		mode:     ModeList,
-		width:    width,
-		filtered: []session.RunningSession{{State: "bolt"}},
-	}
+	m := withListRows(Model{mode: ModeList, width: width}, session.RunningSession{State: "bolt"})
 
 	rendered := renderFooter(m)
 	rawLines := strings.Split(rendered, "\n")
@@ -229,21 +216,15 @@ func TestListFooterKeyHintsAlwaysPresent(t *testing.T) {
 		},
 		{
 			name: "attention",
-			m: Model{
-				filtered: []session.RunningSession{{State: "key"}},
-			},
+			m:    withListRows(Model{}, session.RunningSession{State: "key"}),
 		},
 		{
 			name: "active",
-			m: Model{
-				filtered: []session.RunningSession{{State: "bolt"}},
-			},
+			m:    withListRows(Model{}, session.RunningSession{State: "bolt"}),
 		},
 		{
 			name: "idle",
-			m: Model{
-				filtered: []session.RunningSession{{State: ""}},
-			},
+			m:    withListRows(Model{}, session.RunningSession{State: ""}),
 		},
 	}
 	for _, tc := range cases {

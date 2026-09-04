@@ -268,6 +268,7 @@ func TestRenderListMixedGroupBorders(t *testing.T) {
 		},
 	}
 	m.filtered = m.sessions
+	m.rebuildItems()
 	out := stripAnsi(renderList(m))
 	if !strings.Contains(out, "Needs Attention (1)") {
 		t.Errorf("expected attention label; got %q", out)
@@ -293,6 +294,7 @@ func TestRenderListSingleGroupNoBorder(t *testing.T) {
 		},
 	}
 	m.filtered = m.sessions
+	m.rebuildItems()
 	out := stripAnsi(renderList(m))
 	if strings.Contains(out, "Active (") {
 		t.Errorf("single-group list should not render label; got %q", out)

@@ -388,16 +388,19 @@ func (m *Model) reapplyFilterLive() {
 	m.activeFilter = dashboard.Parse(m.filterText)
 	m.filtered = dashboard.ApplyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
 	m.sortFiltered()
-	m.cursor = clamp(m.cursor, 0, len(m.filtered)-1)
+	m.cursor = clamp(m.cursor, 0, m.listItemCount()-1)
 	m.focusedChipIdx = -1
 	scrollListToCursor(m)
 }
 
 // sortFiltered orders m.filtered so attention items come first, then active,
 // then idle, using the model's activity map and idle threshold to bucket
-// sessions with no state icon.
-func (m Model) sortFiltered() {
+// sessions with no state icon, then rebuilds the item projection the cursor
+// indexes. Sorting and reprojecting are one step because a projection built
+// from a pre-sort row order names the wrong line for every row the sort moved.
+func (m *Model) sortFiltered() {
 	dashboard.SortRows(m.filtered, m.lastActivity, m.idleThreshold)
+	m.rebuildItems()
 }
 
 // clamp constrains v to [lo, hi]. Returns lo when hi < lo.

@@ -320,8 +320,7 @@ func listFooterLine2WithPosition(m Model, navFragments []string, position string
 // lines fall back to the plain two-space indent so the gloss does not repeat.
 func listFooterLine2Leads(m Model) (string, string) {
 	indent := "  "
-	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
-		s := m.filtered[m.cursor]
+	if s, ok := m.selectedSession(); ok {
 		if g := dashboard.StateGloss(s.State); g != "" {
 			icon := palette.StateIcon(s.State)
 			glossText := layout.PadIconCell(icon) + " " + g
@@ -340,7 +339,11 @@ func listPositionFragment(m Model) string {
 }
 
 func listPositionFragmentForVisible(m Model, visible int) string {
-	total := len(m.filtered)
+	// Counted in items, not sessions: start and end are derived from
+	// m.listOffset, which is an item index, so the denominator has to be the
+	// same unit or the indicator drifts the moment a line stands for more than
+	// one session.
+	total := m.listItemCount()
 	if total == 0 || m.height == 0 {
 		return ""
 	}
@@ -453,9 +456,12 @@ const (
 )
 
 // hasRow reports whether a row is selected; any row-targeted action requires a
-// cursor sitting on a session.
+// cursor sitting on a session. A cursor parked on an item that is not a session
+// leaf reports false, so every row-section footer entry below renders in the
+// unavailable style — which is the same thing the key handlers do when they
+// fail to resolve a target.
 func hasRow(m Model) bool {
-	return len(m.filtered) > 0 && m.cursor < len(m.filtered)
+	return m.hasSelectedSession()
 }
 
 // listFooterPalette is the fixed-order set of keys shown in the ModeList footer
@@ -466,7 +472,8 @@ func hasRow(m Model) bool {
 // listFooterBudgetLineCount rather than truncated, so no entry is ever dropped.
 var listFooterPalette = []footerEntry{
 	{"e", "peek", footerSectionRow, func(m Model) bool {
-		return hasRow(m) && m.filtered[m.cursor].State == "bolt"
+		s, ok := m.selectedSession()
+		return ok && s.State == "bolt"
 	}, 0},
 	{"T", "timeline", footerSectionRow, hasRow, 0},
 	{"r", "restart", footerSectionRow, hasRow, 0},
@@ -474,27 +481,28 @@ var listFooterPalette = []footerEntry{
 	{"C", "launch", footerSectionRow, hasRow, 0},
 	{"s", "project sessions", footerSectionRow, hasRow, 0},
 	{"x", "clear", footerSectionRow, func(m Model) bool {
-		if !hasRow(m) {
+		s, ok := m.selectedSession()
+		if !ok {
 			return false
 		}
-		return dashboard.StateGroup(m.filtered[m.cursor], m.lastActivity, m.idleThreshold) == 0
+		return dashboard.StateGroup(s, m.lastActivity, m.idleThreshold) == 0
 	}, 0},
 	{"X", "close", footerSectionRow, hasRow, 0},
 	{"o", "open dir", footerSectionRow, func(m Model) bool {
-		if !hasRow(m) {
+		s, ok := m.selectedSession()
+		if !ok {
 			return false
 		}
-		s := m.filtered[m.cursor]
-		_, ok := commands.FindConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject())
-		return ok
+		_, found := commands.FindConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject())
+		return found
 	}, 0},
 	{"O", "open in editor", footerSectionRow, func(m Model) bool {
-		if !hasRow(m) {
+		s, ok := m.selectedSession()
+		if !ok {
 			return false
 		}
-		s := m.filtered[m.cursor]
-		_, ok := commands.FindConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject())
-		return ok
+		_, found := commands.FindConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject())
+		return found
 	}, 0},
 	{"f", "profile", footerSectionLaunch, func(Model) bool { return true }, 0},
 	{"l", "launch", footerSectionLaunch, func(Model) bool { return true }, 0},

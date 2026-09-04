@@ -155,6 +155,7 @@ func TestRenderListPulseColumnAppearsOnTransition(t *testing.T) {
 		},
 	}
 	base.filtered = base.sessions
+	base.rebuildItems()
 
 	without := stripAnsi(renderList(base))
 
@@ -185,6 +186,7 @@ func TestRenderListNoPulseColumnByDefault(t *testing.T) {
 		},
 	}
 	m.filtered = m.sessions
+	m.rebuildItems()
 	out := renderList(m)
 	if m.hasActivePulse(1) {
 		t.Fatalf("baseline model should have no active pulse; got %v", m.recentTransitions)

@@ -20,9 +20,9 @@ func TestRenderListActivityColumnAppears(t *testing.T) {
 		Cfg:   &config.Config{},
 		Width: 80,
 		Now:   now,
-		Rows: []session.RunningSession{
+		Items: BuildItems([]session.RunningSession{
 			{WindowID: 1, Base: "api", State: "bolt", Account: "work", BusySince: now.Add(-(3*time.Minute + 7500*time.Millisecond))},
-		},
+		}),
 		Watchdog: map[int]protocol.WatchdogState{
 			1: {LastAction: "active", LastEventAt: now.Unix(), ThresholdSec: 600},
 		},
@@ -42,9 +42,9 @@ func TestRenderListActivityColumnHiddenByDefault(t *testing.T) {
 		Cfg:   &config.Config{},
 		Width: 80,
 		Now:   time.Now(),
-		Rows: []session.RunningSession{
+		Items: BuildItems([]session.RunningSession{
 			{WindowID: 1, Base: "api", State: "bolt", Account: "work"},
-		},
+		}),
 	}
 	if anyRowHasActivity(in) {
 		t.Fatal("baseline input with no busy rows should not reserve the activity column")
@@ -67,17 +67,17 @@ func TestRenderListActivityColumnSharedWidthAcrossRows(t *testing.T) {
 		Cfg:   &config.Config{},
 		Width: 80,
 		Now:   now,
-		Rows: []session.RunningSession{
+		Items: BuildItems([]session.RunningSession{
 			{WindowID: 1, Base: "api", State: "bolt", Account: "work", Directory: "~/p", BusySince: now.Add(-(12*time.Hour + 7*time.Minute + 30*time.Second))},
 			{WindowID: 2, Base: "web", State: "bolt", Account: "work", Directory: "~/p"},
 			{WindowID: 3, Base: "etl", State: "bolt", Account: "work", Directory: "~/p", BusySince: now.Add(-(99*24*time.Hour + 23*time.Hour))},
-		},
+		}),
 		Watchdog: map[int]protocol.WatchdogState{
 			1: {LastAction: "active", LastEventAt: now.Add(-9 * time.Minute).Unix(), ThresholdSec: 600},
 		},
 	}
 
-	if got, want := activityColumnWidth(in.Rows, in.Watchdog, now), layout.Width("12h07 "+ageWarningGlyph)+1; got != want {
+	if got, want := activityColumnWidth(in.Items.Rows, in.Watchdog, now), layout.Width("12h07 "+ageWarningGlyph)+1; got != want {
 		t.Fatalf("activityColumnWidth = %d, want %d (the widest cell of the pass plus its trailing space)", got, want)
 	}
 

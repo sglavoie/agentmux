@@ -14,6 +14,7 @@ import (
 func TestRenderListAt_UnboundedHeightRendersAllRowsNoIndicators(t *testing.T) {
 	m := scrollModel()
 	m.filtered = makeRowsForScroll(30)
+	m.rebuildItems()
 	m.listOffset = 5 // offset is ignored when height <= 0
 
 	out := stripAnsi(renderListAt(m, m.width, 0))
@@ -38,6 +39,7 @@ func TestRenderListAt_UnboundedHeightRendersAllRowsNoIndicators(t *testing.T) {
 func TestRenderListAt_OffsetZeroFullBudgetRendersAllNoIndicators(t *testing.T) {
 	m := scrollModel()
 	m.filtered = makeRowsForScroll(5)
+	m.rebuildItems()
 	m.listOffset = 0
 
 	out := stripAnsi(renderListAt(m, m.width, 20))
@@ -59,6 +61,7 @@ func TestRenderListAt_OffsetZeroFullBudgetRendersAllNoIndicators(t *testing.T) {
 func TestRenderListAt_OffsetGreaterThanZeroEmitsTopIndicator(t *testing.T) {
 	m := scrollModel()
 	m.filtered = makeRowsForScroll(20)
+	m.rebuildItems()
 	m.listOffset = 5
 
 	// Budget big enough that the remaining rows (15) all fit -- only the
@@ -92,6 +95,7 @@ func TestRenderListAt_OffsetGreaterThanZeroEmitsTopIndicator(t *testing.T) {
 func TestRenderListAt_OverflowEmitsBottomIndicator(t *testing.T) {
 	m := scrollModel()
 	m.filtered = makeRowsForScroll(40)
+	m.rebuildItems()
 	m.listOffset = 0
 
 	out := stripAnsi(renderListAt(m, m.width, 8))
@@ -123,6 +127,7 @@ func TestRenderListAt_GroupLabelEmittedAtWindowStart(t *testing.T) {
 		{WindowID: 4, Base: "act2", Account: "w", State: "bolt"},  // group 1
 		{WindowID: 5, Base: "act3", Account: "w", State: "bolt"},  // group 1
 	}
+	m.rebuildItems()
 	m.lastActivity = map[int]time.Time{}
 	// Offset places the window squarely inside group 1.
 	m.listOffset = 3

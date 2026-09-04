@@ -37,8 +37,10 @@ const activeLoopColumnWidth = 3
 // A non-positive Height means "unbounded": every row in Rows is rendered and
 // the ▲/▼ scroll indicators are suppressed.
 type ListInput struct {
-	// Rows are the filtered, sorted rows currently on screen.
-	Rows []session.RunningSession
+	// Items is the flattened projection of the filtered, sorted rows currently
+	// on screen: one entry per rendered line, indexed by Cursor and Offset. Its
+	// Rows half remains the source of truth every row's facts are read from.
+	Items ItemList
 	// Loading is true while the initial running-session snapshot is still in
 	// flight. Later background refreshes keep rendering the last usable rows (or
 	// the confirmed empty state) instead of returning to the loading hero.
@@ -75,6 +77,12 @@ func (in ListInput) group(s session.RunningSession) int {
 	return StateGroup(s, in.LastActivity, in.IdleThreshold)
 }
 
+// groupAt is the item-indexed form of group, used everywhere the walk is
+// driven by a line rather than by a session.
+func (in ListInput) groupAt(i int) int {
+	return in.Items.GroupAt(i, in.LastActivity, in.IdleThreshold)
+}
+
 func (in ListInput) pulsing(windowID int) bool {
 	return in.ActivePulse != nil && in.ActivePulse(windowID)
 }
@@ -90,20 +98,20 @@ func (in ListInput) marker(s session.RunningSession) (string, bool) {
 // The width budget controls per-row column truncation; the height budget caps
 // the number of lines emitted by the windowed walk.
 func RenderList(in ListInput) string {
-	if len(in.Rows) == 0 {
+	if in.Items.Len() == 0 {
 		return renderEmptyHero(in)
 	}
 
 	acctColor := ProfileColorMap(in.Cfg)
 	harnessColor := HarnessColorMap(in.Cfg)
 
-	groupCounts := CountGroups(in.Rows, in.LastActivity, in.IdleThreshold)
+	groupCounts := in.Items.CountGroups(in.LastActivity, in.IdleThreshold)
 	multiGroup := groupCounts > 1
 	pulseActive := anyRowHasActivePulse(in)
 	activityActive := anyRowHasActivity(in)
 	now := in.Now
 
-	total := len(in.Rows)
+	total := in.Items.Len()
 	startIdx := 0
 	endIdx := total
 	showTop := false
@@ -143,21 +151,21 @@ func RenderList(in ListInput) string {
 		}
 	}
 	activeLoopActive := anyVisibleRowHasActiveLoop(in, startIdx, endIdx)
-	tabNumberWidth := tabNumberColumnWidth(in.Rows)
+	tabNumberWidth := tabNumberColumnWidth(in.Items.Rows)
 	var activityWidth int
 	if activityActive {
-		activityWidth = activityColumnWidth(in.Rows, in.Watchdog, now)
+		activityWidth = activityColumnWidth(in.Items.Rows, in.Watchdog, now)
 	}
 	// One scan per pass, like the activity and tab-number columns. A zero width
 	// is how the column declines to be reserved at all, so there is no separate
 	// "any row has a reason" predicate to keep in step with the measurement —
 	// the measurement IS the predicate.
-	reasonWidth := reasonColumnWidth(in.Rows, in.group)
+	reasonWidth := reasonColumnWidth(in.Items.Rows, in.group)
 	// Same shape, same argument: a zero width is the branch column declining to
 	// be reserved, so a view where no row sits in a named checkout — no daemon,
 	// git_probe off, or simply no repositories — gives the whole column back to
 	// the directory instead of padding every row around an empty slot.
-	branchWidth := branchColumnWidth(in.Rows)
+	branchWidth := branchColumnWidth(in.Items.Rows)
 
 	var sb strings.Builder
 	if showTop {
@@ -167,13 +175,14 @@ func RenderList(in ListInput) string {
 
 	prevGroup := -1
 	for i := startIdx; i < endIdx; i++ {
-		s := in.Rows[i]
-		g := in.group(s)
+		item, _ := in.Items.At(i)
+		s, isSession := in.Items.Session(item)
+		g := in.groupAt(i)
 		if multiGroup && g != prevGroup {
 			if prevGroup != -1 {
 				sb.WriteByte('\n')
 			}
-			sb.WriteString(renderGroupLabel(g, countInGroup(in.Rows, g, in.LastActivity, in.IdleThreshold)))
+			sb.WriteString(renderGroupLabel(g, in.Items.countInGroup(g, in.LastActivity, in.IdleThreshold)))
 			sb.WriteByte('\n')
 			prevGroup = g
 		}
@@ -184,23 +193,28 @@ func RenderList(in ListInput) string {
 		if pulseActive && rowWidth > 0 {
 			rowWidth -= pulseColumnWidth
 		}
-		reasonCell := renderReasonCell(s, g, reasonWidth)
-		var activityCell string
-		if activityActive {
-			activityCell = renderActivityCell(s, in.Watchdog[s.WindowID], now, activityWidth)
+		var row string
+		if isSession {
+			reasonCell := renderReasonCell(s, g, reasonWidth)
+			var activityCell string
+			if activityActive {
+				activityCell = renderActivityCell(s, in.Watchdog[s.WindowID], now, activityWidth)
+			}
+			var activeLoopCell string
+			if activeLoopActive {
+				activeLoopCell = renderLoopCellFor(in, s)
+			}
+			branchCell := renderBranchCell(s, branchWidth)
+			tabNumberCell := renderTabNumberCell(s.TabNumber, tabNumberWidth)
+			row = FormatRow(s, acctColor, harnessColor, in.Cfg, rowWidth, tabNumberCell, activeLoopCell, reasonCell, activityCell, branchCell)
+		} else {
+			row = renderSummaryRow(item, rowWidth)
 		}
-		var activeLoopCell string
-		if activeLoopActive {
-			activeLoopCell = renderLoopCellFor(in, s)
-		}
-		branchCell := renderBranchCell(s, branchWidth)
-		tabNumberCell := renderTabNumberCell(s.TabNumber, tabNumberWidth)
-		row := FormatRow(s, acctColor, harnessColor, in.Cfg, rowWidth, tabNumberCell, activeLoopCell, reasonCell, activityCell, branchCell)
 		var styledRow string
 		switch {
 		case i == in.Cursor:
 			styledRow = renderSelectedRow(row)
-		case s.Locked:
+		case isSession && s.Locked:
 			styledRow = styleDim.Render(row)
 		case g == 0:
 			styledRow = styleAttentionRow.Render(row)
@@ -211,7 +225,7 @@ func RenderList(in ListInput) string {
 			styledRow = groupBorder(g) + " " + styledRow
 		}
 		if pulseActive {
-			styledRow = pulsePrefix(in, s) + styledRow
+			styledRow = pulsePrefix(in, s, isSession) + styledRow
 		}
 		// Safety clamp at the render boundary. FormatRow has a fixed-column
 		// floor (MinRowWidth) it cannot shrink below, so when the pane is
@@ -241,7 +255,7 @@ func RenderList(in ListInput) string {
 // group transitions also charge one blank separator line before the next group
 // label.
 func fitRows(in ListInput, startIdx, budget int, multiGroup bool) int {
-	total := len(in.Rows)
+	total := in.Items.Len()
 	if budget <= 0 || startIdx >= total {
 		return startIdx
 	}
@@ -252,7 +266,7 @@ func fitRows(in ListInput, startIdx, budget int, multiGroup bool) int {
 		cost := 1
 		var g int
 		if multiGroup {
-			g = in.group(in.Rows[i])
+			g = in.groupAt(i)
 			if g != prevGroup {
 				cost++
 				if prevGroup != -1 {
@@ -276,7 +290,7 @@ func fitRows(in ListInput, startIdx, budget int, multiGroup bool) int {
 // recency-pulse record. Used to decide whether to reserve the pulse column
 // for the entire render pass so rows stay aligned.
 func anyRowHasActivePulse(in ListInput) bool {
-	for _, s := range in.Rows {
+	for _, s := range in.Items.Rows {
 		if in.pulsing(s.WindowID) {
 			return true
 		}
@@ -292,14 +306,18 @@ func anyVisibleRowHasActiveLoop(in ListInput, startIdx, endIdx int) bool {
 	if startIdx < 0 {
 		startIdx = 0
 	}
-	if endIdx > len(in.Rows) {
-		endIdx = len(in.Rows)
+	if endIdx > in.Items.Len() {
+		endIdx = in.Items.Len()
 	}
 	for i := startIdx; i < endIdx; i++ {
-		if in.Rows[i].Looping {
+		s, ok := in.Items.SessionAt(i)
+		if !ok {
+			continue
+		}
+		if s.Looping {
 			return true
 		}
-		if _, ok := in.marker(in.Rows[i]); ok {
+		if _, marked := in.marker(s); marked {
 			return true
 		}
 	}
@@ -327,7 +345,7 @@ func renderActiveLoopCell(active bool) string {
 // entire render pass when at least one row carries a timer, otherwise the
 // column is omitted so rows recover their full directory budget.
 func anyRowHasActivity(in ListInput) bool {
-	for _, s := range in.Rows {
+	for _, s := range in.Items.Rows {
 		if !s.BusySince.IsZero() {
 			return true
 		}
@@ -337,12 +355,30 @@ func anyRowHasActivity(in ListInput) bool {
 
 // pulsePrefix returns the colored glyph (+ trailing space) for a pulsing
 // row, or two spaces for a non-pulsing row so column alignment is preserved
-// across the render pass.
-func pulsePrefix(in ListInput, s session.RunningSession) string {
-	if !in.pulsing(s.WindowID) {
+// across the render pass. A synthetic row has no window of its own and so never
+// pulses; it still pays the column so the rows below it stay aligned.
+func pulsePrefix(in ListInput, s session.RunningSession, isSession bool) string {
+	if !isSession || !in.pulsing(s.WindowID) {
 		return strings.Repeat(" ", pulseColumnWidth)
 	}
 	return stateAccentStyle(s.State).Render(GroupBorderGlyph) + " "
+}
+
+// renderSummaryRow paints a family summary as one line, which is what keeps
+// "one item costs one line" true for the fit walk and the scroll math. The copy
+// is deliberately minimal: what a summary shows — member counts, aggregate
+// state, the collapse affordance — belongs with the change that starts
+// projecting summaries, and nothing here produces one yet.
+func renderSummaryRow(it Item, width int) string {
+	label := it.FamilyLabel
+	if label == "" {
+		label = "(unnamed project)"
+	}
+	row := "▾ " + label
+	if width > 0 {
+		row = layout.StyledTruncate(row, width, "…")
+	}
+	return styleDim.Render(row)
 }
 
 // renderEmptyHero renders a centered hero block when there are no rows to

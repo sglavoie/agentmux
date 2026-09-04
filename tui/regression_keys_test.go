@@ -169,6 +169,7 @@ func TestHandleListKeyTabCyclesChips(t *testing.T) {
 	// independent of search input details.
 	m.activeFilter = dashboard.Parse("api @work !bolt")
 	m.filtered = dashboard.ApplyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
+	m.rebuildItems()
 	if got := len(m.activeFilter.Components()); got != 3 {
 		t.Fatalf("expected 3 chips, got %d (raw=%q)", got, m.activeFilter.Raw)
 	}

@@ -52,10 +52,16 @@ type Model struct {
 	worktreeRunner worktree.Runner
 
 	// session state
-	sessions   []session.RunningSession // sorted full list
-	filtered   []session.RunningSession // sessions after query+filter applied
+	sessions []session.RunningSession // sorted full list
+	filtered []session.RunningSession // sessions after query+filter applied
+	// items is the flattened selectable projection of filtered: one entry per
+	// line the dashboard list draws, in draw order. cursor and listOffset index
+	// this, not filtered, because a line does not have to stand for exactly one
+	// session. It is rebuilt from filtered — never edited in place — by
+	// rebuildItems, which every write to filtered is followed by.
+	items      dashboard.ItemList
 	cursor     int
-	listOffset int // top row index for the scrollable list view in ModeList
+	listOffset int // top item index for the scrollable list view in ModeList
 	// initialSourceWindowID is the Kitty window from which the dashboard was
 	// opened, used to select the matching tab row. It is retained across
 	// refreshes and cleared by the first usable topology result, so a startup

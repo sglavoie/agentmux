@@ -18,6 +18,7 @@ func scrollFixtureModel(t *testing.T, rows, height int) Model {
 	m.width = 100
 	m.height = height
 	m.filtered = makeRowsForScroll(rows)
+	m.rebuildItems()
 	if visible := listVisibleHeight(m); visible >= rows {
 		t.Fatalf("scrollFixtureModel: visible budget %d not smaller than rows %d; tighten the height", visible, rows)
 	}

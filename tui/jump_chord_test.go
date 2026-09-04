@@ -14,6 +14,7 @@ func chordModel(rows []session.RunningSession, cursor int) Model {
 	m := testModel()
 	m.sessions = rows
 	m.filtered = rows
+	m.rebuildItems()
 	m.cursor = cursor
 	return m
 }

@@ -106,7 +106,7 @@ func TestFindNextMatching(t *testing.T) {
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			got := FindNextMatching(tc.rows, tc.from, tc.dir, match)
+			got := FindNextMatching(BuildItems(tc.rows), tc.from, tc.dir, match)
 			if got != tc.want {
 				t.Errorf("FindNextMatching(from=%d, dir=%d) = %d, want %d", tc.from, tc.dir, got, tc.want)
 			}

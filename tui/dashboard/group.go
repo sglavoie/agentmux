@@ -84,16 +84,6 @@ func CountGroups(sessions []session.RunningSession, lastActivity map[int]time.Ti
 	return len(seen)
 }
 
-func countInGroup(sessions []session.RunningSession, group int, lastActivity map[int]time.Time, threshold time.Duration) int {
-	n := 0
-	for _, s := range sessions {
-		if StateGroup(s, lastActivity, threshold) == group {
-			n++
-		}
-	}
-	return n
-}
-
 // groupBorder returns the colored 1-cell left border glyph for the given
 // group (0 = attention, 1 = active, 2 = idle).
 func groupBorder(group int) string {

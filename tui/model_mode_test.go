@@ -180,6 +180,7 @@ func TestSearchFilterByTitle(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.activeFilter = dashboard.Parse("api")
 	m.filtered = dashboard.ApplyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
+	m.rebuildItems()
 	if len(m.filtered) != 1 {
 		t.Fatalf("expected 1 result for 'api', got %d", len(m.filtered))
 	}
@@ -191,6 +192,7 @@ func TestSearchFilterByTitle(t *testing.T) {
 func TestSearchFilterByDirectory(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.filtered = dashboard.ApplyFilter(m.sessions, dashboard.Parse("dotfiles"), m.lastActivity, m.idleThreshold)
+	m.rebuildItems()
 	if len(m.filtered) != 1 {
 		t.Fatalf("expected 1 result for 'dotfiles' dir, got %d", len(m.filtered))
 	}
@@ -201,6 +203,7 @@ func TestSearchFilterByAccountSubstring(t *testing.T) {
 	// Bare-token 'work' matches the Account field, so both work sessions survive
 	// even though the visible title column is project-only.
 	m.filtered = dashboard.ApplyFilter(m.sessions, dashboard.Parse("work"), m.lastActivity, m.idleThreshold)
+	m.rebuildItems()
 	if len(m.filtered) != 2 {
 		t.Fatalf("expected 2 results for substring 'work', got %d", len(m.filtered))
 	}
@@ -209,6 +212,7 @@ func TestSearchFilterByAccountSubstring(t *testing.T) {
 func TestAccountFilterNarrowsList(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.filtered = dashboard.ApplyFilter(m.sessions, dashboard.Parse("@personal"), m.lastActivity, m.idleThreshold)
+	m.rebuildItems()
 	if len(m.filtered) != 1 {
 		t.Fatalf("expected 1 personal session, got %d", len(m.filtered))
 	}
@@ -217,6 +221,7 @@ func TestAccountFilterNarrowsList(t *testing.T) {
 func TestSearchCombinedWithAccountFilter(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.filtered = dashboard.ApplyFilter(m.sessions, dashboard.Parse("api @work"), m.lastActivity, m.idleThreshold)
+	m.rebuildItems()
 	if len(m.filtered) != 1 || m.filtered[0].Base != "api" {
 		t.Fatalf("unexpected combined filter result: %v", m.filtered)
 	}

@@ -258,6 +258,7 @@ func TestCommandExploreAndAppExecution(t *testing.T) {
 		got.mode = ModeList
 		got.activeFilter = dashboard.Parse("api")
 		got.filtered = got.sessions
+		got.rebuildItems()
 		got, cmd = commandByID(t, commands.ClearFilters).Run(got, ctx)
 		if !got.activeFilter.IsEmpty() || got.cursor != 0 || cmd != nil {
 			t.Fatalf("clear result: filter=%+v cursor=%d cmd=%v", got.activeFilter, got.cursor, cmd != nil)

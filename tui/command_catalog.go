@@ -23,12 +23,17 @@ import (
 // mutation.
 
 // captureCommandContext snapshots the current dashboard selection. It is safe
-// for an empty list and for transiently invalid cursor values.
+// for an empty list, for transiently invalid cursor values, and for a selected
+// item that is not a session leaf — all three yield the zero Context, whose
+// HasTarget is false, which is what every session command's availability gate
+// reads. That is the whole fail-closed story for the palette: a synthetic row
+// cannot become a command target because it never produces one.
 func captureCommandContext(m Model) commands.Context {
-	if m.cursor < 0 || m.cursor >= len(m.filtered) {
+	s, ok := m.selectedSession()
+	if !ok {
 		return commands.Context{}
 	}
-	return commands.Context{Target: m.filtered[m.cursor], HasTarget: true}
+	return commands.Context{Target: s, HasTarget: true}
 }
 
 func sessionCommandAvailability(_ Model, ctx commands.Context) commands.Availability {

@@ -40,13 +40,66 @@ func renderListAt(m Model, width, height int) string {
 	return dashboard.RenderList(dashboardListInput(m, width, height))
 }
 
+// The dashboard cursor indexes items, not sessions. m.filtered stays the
+// filtered and urgency-sorted source of truth; m.items is the flattened
+// projection of it that the cursor and the scroll offset address, and every
+// question about "the current row" is asked through the three accessors below
+// rather than by indexing m.filtered directly. That is what lets a kind other
+// than a session leaf appear in the list without any of the callers having to
+// learn about it: a non-session selection simply has no session to give back,
+// and the session-targeted paths already handle "no session".
+
+// listItems returns the item projection the cursor and scroll offset index.
+func (m Model) listItems() dashboard.ItemList {
+	return m.items
+}
+
+// rebuildItems re-derives the item projection from the current filtered rows.
+// Every write to m.filtered must be followed by one of these, which is what
+// keeps the projection from describing a row set a refresh, a filter change, or
+// a resort has already replaced.
+func (m *Model) rebuildItems() {
+	m.items = dashboard.BuildItems(m.filtered)
+}
+
+// listItemCount is the number of selectable lines in the dashboard list. This
+// is the bound every cursor clamp and scroll calculation charges against — not
+// len(m.filtered), which counts sessions and stops agreeing with the list the
+// moment a line stands for more than one of them.
+func (m Model) listItemCount() int {
+	return m.items.Len()
+}
+
+// selectedItem returns the item under the cursor, reporting false for an empty
+// list and for a transiently out-of-range cursor.
+func (m Model) selectedItem() (dashboard.Item, bool) {
+	return m.items.At(m.cursor)
+}
+
+// selectedSession returns the running session under the cursor. It reports
+// false when the list is empty, when the cursor is out of range, and when the
+// selected item is not a session leaf. Every row-targeted action, availability
+// check, command-context capture, and preview refresh resolves its target
+// through here, so a synthetic row cannot become the subject of a Kitty or
+// daemon mutation.
+func (m Model) selectedSession() (session.RunningSession, bool) {
+	return m.items.SessionAt(m.cursor)
+}
+
+// hasSelectedSession reports whether a row-targeted action has a session to act
+// on at all.
+func (m Model) hasSelectedSession() bool {
+	_, ok := m.selectedSession()
+	return ok
+}
+
 // dashboardListInput projects the model onto the renderer's input. The ASL
 // marker lookup and the pulse predicate stay behind closures because both read
 // model state the dashboard has no business knowing about.
 func dashboardListInput(m Model, width, height int) dashboard.ListInput {
 	now := modelNow(m)
 	return dashboard.ListInput{
-		Rows:          m.filtered,
+		Items:         m.items,
 		Loading:       topologyLoading(m),
 		SessionCount:  len(m.sessions),
 		Filter:        m.activeFilter,
@@ -77,7 +130,7 @@ func topologyLoading(m Model) bool {
 // the renderer will actually draw.
 func dashboardScrollInput(m *Model, multiGroup bool) dashboard.ScrollInput {
 	return dashboard.ScrollInput{
-		Rows:          m.filtered,
+		Items:         m.items,
 		LastActivity:  m.lastActivity,
 		IdleThreshold: m.idleThreshold,
 		MultiGroup:    multiGroup,

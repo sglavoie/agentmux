@@ -210,9 +210,7 @@ func TestListFooterAvailability(t *testing.T) {
 		},
 		{
 			name: "attention row — x active, e unavailable",
-			m: Model{
-				filtered: []session.RunningSession{{State: "key"}},
-			},
+			m:    withListRows(Model{}, session.RunningSession{State: "key"}),
 			want: map[string]bool{
 				"e": false, "T": true, "r": true, "c": true,
 				"C": true, "s": true, "x": true, "X": true,
@@ -222,9 +220,7 @@ func TestListFooterAvailability(t *testing.T) {
 		},
 		{
 			name: "active row — e active, x unavailable",
-			m: Model{
-				filtered: []session.RunningSession{{State: "bolt"}},
-			},
+			m:    withListRows(Model{}, session.RunningSession{State: "bolt"}),
 			want: map[string]bool{
 				"e": true, "T": true, "r": true, "c": true,
 				"C": true, "s": true, "x": false, "X": true,
@@ -234,9 +230,7 @@ func TestListFooterAvailability(t *testing.T) {
 		},
 		{
 			name: "idle row — neither e nor x available",
-			m: Model{
-				filtered: []session.RunningSession{{State: ""}},
-			},
+			m:    withListRows(Model{}, session.RunningSession{State: ""}),
 			want: map[string]bool{
 				"e": false, "T": true, "r": true, "c": true,
 				"C": true, "s": true, "x": false, "X": true,

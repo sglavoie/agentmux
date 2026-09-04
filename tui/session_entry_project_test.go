@@ -14,6 +14,7 @@ func TestListProjectSessionSearchWithReadyCacheDispatchesProjectFilter(t *testin
 	m := sessionSearchFilterModel(t)
 	m.mode = ModeList
 	m.filtered = []session.RunningSession{{TabID: 1, WindowID: 10, Base: "Foo", Profile: "work"}}
+	m.rebuildItems()
 	m.cursor = 0
 	m.sessionResults = nil
 	seq := m.sessionSearchSeq
@@ -70,6 +71,7 @@ func TestListProjectSessionSearchUsesResolvedProjectForWorktreeRow(t *testing.T)
 		Profile:   "vta-claude",
 		Directory: "/Users/sglavoie/1_dev_projects/vta_ss_oidc_op_worker-security-audit",
 	}}
+	m.rebuildItems()
 	m.cursor = 0
 
 	updated, cmd := m.Update(keyPress("s"))
@@ -145,6 +147,7 @@ func TestListProjectSessionSearchClearsPriorFiltersAndResetsEntryState(t *testin
 	m := sessionSearchFilterModel(t)
 	m.mode = ModeList
 	m.filtered = []session.RunningSession{{TabID: 1, WindowID: 10, Project: "Foo"}}
+	m.rebuildItems()
 	m.cursor = 0
 	m.sessionQuery = "needle"
 	m.filterHarness = []string{harness.Claude}
@@ -182,6 +185,7 @@ func TestDashboardUppercaseSDoesNotApplyProjectShortcut(t *testing.T) {
 	m := sessionSearchFilterModel(t)
 	m.mode = ModeList
 	m.filtered = []session.RunningSession{{TabID: 1, WindowID: 10, Project: "Foo"}}
+	m.rebuildItems()
 	m.cursor = 0
 
 	updated, cmd := m.Update(keyPress("S"))

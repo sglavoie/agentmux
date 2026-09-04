@@ -60,6 +60,18 @@ func testModel() Model {
 	return NewModel(cfg, client)
 }
 
+// withListRows installs rows as the dashboard's filtered list and rebuilds the
+// item projection the cursor indexes, which is what every production write to
+// filtered does. Tests that set filtered directly must go through here: the
+// projection is a stored field, so a bare assignment leaves the model claiming
+// an empty list and the assertion silently exercises the empty-list branch
+// instead of the one it names.
+func withListRows(m Model, rows ...session.RunningSession) Model {
+	m.filtered = rows
+	m.rebuildItems()
+	return m
+}
+
 // loadSessions feeds a set of RunningSession values into the model
 // as if they came from a Kitty query.
 func loadSessions(m Model, sessions []session.RunningSession) Model {

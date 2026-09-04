@@ -344,14 +344,12 @@ func uitestScreenText(obs UITestObservation) string {
 }
 
 // uitestSelectedSession returns the running session under the list cursor, which
-// is also the target of the actions overlay. It reports false when the filtered
-// list is empty or the cursor is out of range so selection assertions fail
-// cleanly instead of panicking.
+// is also the target of the actions overlay. It reports false when the item list
+// is empty, when the cursor is out of range, and when the selected item is not a
+// session leaf, so selection assertions observe exactly what the row-targeted
+// actions would resolve rather than a parallel notion of "the current row".
 func uitestSelectedSession(m Model) (session.RunningSession, bool) {
-	if m.cursor < 0 || m.cursor >= len(m.filtered) {
-		return session.RunningSession{}, false
-	}
-	return m.filtered[m.cursor], true
+	return m.selectedSession()
 }
 
 // uitestModeNameSet builds the set of valid mode-name strings from the same
