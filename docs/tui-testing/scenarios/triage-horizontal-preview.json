@@ -1,0 +1,13 @@
+{
+  "name": "triage horizontal preview keeps rail and list",
+  "fixture": "triage_integration",
+  "size": { "width": 240, "height": 30 },
+  "actions": [{ "type": "key", "key": "p" }],
+  "assertions": [
+    { "type": "contains_text", "text": "Projects            N A I" },
+    { "type": "contains_text", "text": "release-guard" },
+    { "type": "contains_text", "text": "(loading…)" },
+    { "type": "contains_text", "text": "p: hide preview" },
+    { "type": "no_layout_issues" }
+  ]
+}

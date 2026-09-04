@@ -74,7 +74,7 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 		{commands.ShowRuns, commands.GroupExplore, "Show Runs", []string{"asl", "loop", "needs action"}, "A"},
 		{commands.TogglePreview, commands.GroupExplore, "Show Preview", []string{"hide", "pane", "scrollback"}, "p"},
 		{commands.ToggleRail, commands.GroupExplore, "Hide Project Rail", []string{"sidebar", "projects", "scope"}, "b"},
-		{commands.ToggleListView, commands.GroupExplore, "Group by Project", []string{"projects", "families", "urgency", "group"}, "v"},
+		{commands.ToggleListView, commands.GroupExplore, "Show Projects View", []string{"projects", "families", "urgency", "group"}, "v"},
 		{commands.ResortTabs, commands.GroupApp, "Resort Tabs", []string{"reorder", "tabs"}, "R"},
 		{commands.UndoClose, commands.GroupApp, "Undo Last Close", []string{"restore", "reopen"}, "u"},
 		{commands.DismissDeprecation, commands.GroupApp, "Dismiss Deprecation Warning", []string{"banner", "warning"}, "d"},

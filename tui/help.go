@@ -93,6 +93,14 @@ var helpSections = []struct {
 		"  space     fold / unfold the selected project",
 		"  (projects start expanded; folds last until amx exits)",
 	}},
+	{"Project rail", []string{
+		"  b         show / hide the project rail (urgency only)",
+		"  ← / →     move focus between rail and session list",
+		"  j/k ↑/↓   move the rail cursor",
+		"  enter     apply the highlighted row as a project filter",
+		"  mouse     click to scope; wheel scrolls the pane under it",
+		"  (responsive hiding never clears an active project filter)",
+	}},
 	{"Act on row", []string{
 		"  enter     focus the session's tab (a project folds instead)",
 		"  space     focus the session's tab (alternate path)",
@@ -114,7 +122,7 @@ var helpSections = []struct {
 		"  p         toggle preview pane (also active in launcher)",
 	}},
 	{"Filter", []string{
-		"  /         filter (DSL: @profile, %harness, !state, word)",
+		"  /         filter (DSL: #project, @profile, %harness, !state, word)",
 		"  !state    !attention / !active / !idle select one whole group",
 		"  f         cycle profile (dashboard live / launcher default)",
 		"  esc       clear filter chips",

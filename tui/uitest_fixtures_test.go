@@ -3,6 +3,7 @@ package tui
 import (
 	"errors"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -32,7 +33,7 @@ func setenvFunc(t *testing.T) func(string, string) error {
 
 func TestUITestFixtureNamesAreSortedAndKnown(t *testing.T) {
 	names := UITestFixtureNames()
-	want := []string{"actions", "asl_question", "asl_runs", "basic", "blocked_reasons", "family_unread", "project_families", "run_timers", "unseen_stops", "wide_profiles", "worktree_branches", "worktree_lifecycle", "worktrees"}
+	want := []string{"actions", "asl_question", "asl_runs", "basic", "blocked_reasons", "family_unread", "project_families", "run_timers", "triage_integration", "triage_vertical", "unseen_stops", "wide_profiles", "worktree_branches", "worktree_lifecycle", "worktrees"}
 	if len(names) != len(want) {
 		t.Fatalf("expected %d fixtures, got %v", len(want), names)
 	}
@@ -40,6 +41,102 @@ func TestUITestFixtureNamesAreSortedAndKnown(t *testing.T) {
 		if names[i] != want[i] {
 			t.Fatalf("fixture names not sorted/complete: got %v, want %v", names, want)
 		}
+	}
+}
+
+func TestTriageIntegrationFixturePinsReleaseMatrix(t *testing.T) {
+	fx, err := uitestFixtureByName("triage_integration")
+	if err != nil {
+		t.Fatalf("triage_integration fixture: %v", err)
+	}
+	if got := len(fx.Config.Sessions); got != 12 {
+		t.Fatalf("session count = %d, want 12", got)
+	}
+	if got := len(fx.States); got != 12 {
+		t.Fatalf("state count = %d, want 12", got)
+	}
+	if got := len(fx.Families); got != 12 {
+		t.Fatalf("family count = %d, want 12", got)
+	}
+
+	wantStates := map[int]string{
+		11: "error", 21: "key", 31: "question", 41: "stop",
+		51: "warning", 61: "bolt", 71: "subagent", 81: "compact",
+		91: "", 101: "stop", 111: "legacy", 121: "stop",
+	}
+	for windowID, want := range wantStates {
+		if got := fx.States[windowID].IconState; got != want {
+			t.Errorf("window %d state = %q, want %q", windowID, got, want)
+		}
+	}
+	if !fx.States[41].Unseen {
+		t.Error("unseen stop rank is absent")
+	}
+	if fx.States[61].PresentationChangedAtMS == 0 || fx.States[61].PresentationChangedAtMS != fx.States[71].PresentationChangedAtMS {
+		t.Error("bolt/subagent equal-timestamp case is absent")
+	}
+	if fx.States[81].PresentationChangedAtMS != 0 || fx.States[121].PresentationChangedAtMS != 0 {
+		t.Error("zero-timestamp cases are absent")
+	}
+	if fx.States[11].PresentationChangedAtMS == fx.States[21].PresentationChangedAtMS {
+		t.Error("distinct-timestamp case is absent")
+	}
+
+	workPortal := fx.Families[21]
+	personalPortal := fx.Families[31]
+	if workPortal.Key == personalPortal.Key || workPortal.Label == personalPortal.Label ||
+		!strings.EqualFold(workPortal.Label, personalPortal.Label) {
+		t.Fatalf("portal variants do not span distinct families with case-folded labels: %+v %+v", workPortal, personalPortal)
+	}
+	if fx.Config.Sessions[1].Profile == fx.Config.Sessions[2].Profile {
+		t.Fatal("portal variants do not span profiles")
+	}
+	labels := make(map[string]bool)
+	for _, family := range fx.Families {
+		labels[strings.ToLower(family.Label)] = true
+	}
+	if got := len(labels); got < 10 {
+		t.Fatalf("canonical label count = %d, want enough to force a short rail to scroll", got)
+	}
+}
+
+func TestTriageIntegrationFixtureRendersPriorityAndRailOrder(t *testing.T) {
+	fx, err := uitestFixtureByName("triage_integration")
+	if err != nil {
+		t.Fatalf("triage_integration fixture: %v", err)
+	}
+	d, _ := newUITestFixtureDriver(fx, UITestSize{Width: 140, Height: 20})
+	cleanupUITestDriver(t, d)
+	m := d.Model()
+
+	gotSessions := make([]string, len(m.filtered))
+	for i := range m.filtered {
+		gotSessions[i] = m.filtered[i].EffectiveProject()
+	}
+	wantSessions := []string{
+		"release-guard", "portal-work", "portal-personal", "finished-work",
+		"watchtower", "agent-fleet", "build-farm", "compact-ops",
+		"quiet-queue", "archive", "legacy-lab", "spare-parts",
+	}
+	if !reflect.DeepEqual(gotSessions, wantSessions) {
+		t.Fatalf("session priority order = %v, want %v", gotSessions, wantSessions)
+	}
+
+	rows := dashboardRailRows(m)
+	gotLabels := make([]string, len(rows))
+	for i := range rows {
+		gotLabels[i] = rows[i].Label
+	}
+	wantLabels := []string{
+		"All", "Release Guard", "Client Portal", "Finished Work",
+		"Watchtower", "Agent Fleet", "Build Farm", "Compact Ops",
+		"Quiet Queue", "Archive", "Legacy Lab", "Spare Parts",
+	}
+	if !reflect.DeepEqual(gotLabels, wantLabels) {
+		t.Fatalf("rail order = %v, want %v", gotLabels, wantLabels)
+	}
+	if rows[0].Counts != [3]int{4, 5, 3} || rows[2].Counts != [3]int{2, 0, 0} {
+		t.Fatalf("rail tallies: all=%v client=%v", rows[0].Counts, rows[2].Counts)
 	}
 }
 

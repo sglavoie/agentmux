@@ -53,6 +53,7 @@ Key flows:
 - `X`: close the selected running session
 - `o`: open the selected project's directory in a plain shell tab
 - `p`: toggle the preview pane
+- `b`: toggle the project rail in the urgency view
 - `v`: switch between the urgency order and the Projects view, and back
 - `d`: show the per-session hook event log (scrollable detail pane)
 - `S`: search past session transcripts across every configured profile
@@ -116,6 +117,21 @@ repository, `HEAD` is detached, the daemon has not probed the row yet, or
 daemon, so a dashboard running with no daemon reachable shows no branch column
 at all.
 
+### Triage order
+
+The default view sorts by urgency bucket, then by severity inside that bucket,
+then by the time the row's visible state last changed. **Needs Attention** puts
+terminal errors first, permission/input prompts next, and unread completed turns
+last. **Active** puts warnings first, explicit running/subagent/compaction states
+next, and iconless recent activity last. **Idle** has no severity subdivision.
+Within one severity rank, the newest nonzero transition time leads; rows with no
+transition time follow, and exact ties retain the configured/pinned order.
+
+That transition clock is daemon-owned and survives a daemon restart. Activity
+time and the run timer do not substitute for it: activity decides only whether
+an iconless row is Active or Idle, while presentation recency decides order
+within an already-selected severity rank.
+
 ### Responsive layout
 
 The list pane is classified into one of three width bands, and every responsive
@@ -138,6 +154,37 @@ timer on the first line, branch and directory on the second. For a selected
 project it names the project, its bucket tally, and then the context of the
 member that decided its urgency. The strip is always exactly two lines, occupied
 or not, so moving the cursor never moves the bottom edge of the list.
+
+### Project rail
+
+The urgency view shows a project rail by default when it can preserve at least
+80 cells for the main list. `b` requests it hidden or shown; `←` moves keyboard
+focus into a visible rail, `↑`/`↓` or `j`/`k` moves its independent cursor, and
+`enter` applies that project as a filter. `→` returns focus to the session list.
+Page and top/bottom navigation use the same keys as the list. A short rail
+scrolls independently and marks omitted rows with `▲`/`▼`.
+
+Each row shows the project label and its Needs Attention/Active/Idle tallies.
+Labels aggregate case-insensitively across live sessions, profiles, and
+repository identities; the highest-priority member supplies the displayed
+casing and state icon. A label such as `Client Portal` is therefore one rail row
+even when another live checkout reports `client portal`.
+
+The preview is allocated before the rail. If a horizontal preview plus its
+divider cannot leave the 80-cell list floor and the rail's 20–32 cells plus its
+divider, the rail disappears. A vertical preview can coexist at full width.
+Narrowing the terminal can also suppress the rail, but it never clears an
+active project filter; the chip remains the authoritative scope, and widening
+the terminal shows the rail again. The Projects view never draws the rail,
+because it is a different list arrangement rather than a filtering control.
+
+Mouse behavior mirrors these controls: click a rail row to select and apply its
+scope, wheel over the rail to move its cursor, wheel over the list to move the
+session selection, and click a filter chip to remove that exact component. One
+click on a session selects it; a second click on the same session focuses its
+Kitty tab. The view, rail, and preview labels in the header are clickable.
+Terminal-native text selection remains available with Shift-drag; Agent Mux
+does not intercept the modified drag.
 
 ### Projects view
 
@@ -536,7 +583,9 @@ The list and launcher share the same filter DSL:
 | `@profile` | exact profile match |
 | `%harness` | exact harness match, e.g. `%claude`, `%codex`, `%copilot` |
 | `!state` | state match: one whole urgency group (`attention`, `active`, `idle`) or one icon (`bolt`, `key`, `stop`, `warning`, `error`, `subagent`, `compact`, `question`) |
-| `\@foo`, `\!x`, `\%y` | literal leading `@`, `!`, or `%` |
+| `#project` | exact case-insensitive project-label match |
+| `#"project name"` | project label containing whitespace; inside quotes use `\"` for `"` and `\\` for `\` |
+| `\@foo`, `\!x`, `\%y`, `\#z` | literal leading `@`, `!`, `%`, or `#` |
 
 `!attention`, `!active`, and `!idle` select exactly the three groups the
 dashboard already sorts rows into, so `!attention` always matches the rows under
@@ -545,6 +594,11 @@ for a set of icons: an unseen `🛑` is in the attention group and a `🛑` you 
 already looked at is not, so the two rows carry the same icon and answer
 `!attention` differently.
 
-Tokens are whitespace-separated and combine with AND. Lone `@`, `!`, and `%`
+Project completion is contextual: type `#` in the filter editor and the popup
+lists the case-insensitive canonical labels remaining after every other active
+token is applied. Labels that need quoting are inserted in their escaped quoted
+form.
+
+Tokens are whitespace-separated and combine with AND. Lone `@`, `!`, `%`, and `#`
 markers and unrecognized `!state` names are ignored rather than rejected — a
 typo like `!attn` leaves the list unfiltered instead of emptying it.

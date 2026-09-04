@@ -685,6 +685,11 @@ func TestKeyboardHelpDocumentsTheProjectsView(t *testing.T) {
 	if !strings.Contains(out, "Projects view") {
 		t.Fatalf("the help overlay has no Projects section:\n%s", out)
 	}
+	for _, phrase := range []string{"Project rail", "project filter", "#project"} {
+		if !strings.Contains(out, phrase) {
+			t.Errorf("the help overlay does not keep %q distinct:\n%s", phrase, out)
+		}
+	}
 	// The collapse keys are written as the arrows they are printed on, the way
 	// every other cursor key in this overlay is.
 	for _, key := range []string{keyToggleView, "←", "→"} {

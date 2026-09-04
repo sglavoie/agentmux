@@ -1,0 +1,16 @@
+{
+  "name": "triage contextual project completion",
+  "fixture": "triage_integration",
+  "size": { "width": 140, "height": 20 },
+  "actions": [
+    { "type": "key", "key": "/" },
+    { "type": "text", "text": "%claude #" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "search" },
+    { "type": "contains_text", "text": "#\"Client Portal\"" },
+    { "type": "contains_text", "text": "#\"Release Guard\"" },
+    { "type": "excludes_text", "text": "#Archive" },
+    { "type": "no_layout_issues" }
+  ]
+}

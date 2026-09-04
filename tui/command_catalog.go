@@ -438,11 +438,11 @@ func commandCatalog() []commands.Command[Model] {
 			// performs rather than as a status line.
 			Title: func(m Model, _ commands.Context) string {
 				if m.listView == dashboard.ViewProjects {
-					return "Group by Urgency"
+					return "Show Urgency View"
 				}
-				return "Group by Project"
+				return "Show Projects View"
 			},
-			Description: "Switch the dashboard between urgency order and project families.",
+			Description: "Switch the list arrangement between Urgency and Projects; this does not change the project filter.",
 			Aliases:     []string{"projects", "families", "urgency", "group"}, Shortcut: keyToggleView,
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
 				cmd := m.toggleListView()

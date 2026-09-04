@@ -163,6 +163,8 @@ var uitestFixtureBuilders = map[string]func() uitestFixture{
 	"blocked_reasons":    blockedReasonsFixture,
 	"worktree_branches":  worktreeBranchesFixture,
 	"project_families":   projectFamiliesFixture,
+	"triage_integration": triageIntegrationFixture,
+	"triage_vertical":    triageVerticalFixture,
 	"family_unread":      familyUnreadFixture,
 }
 
@@ -688,6 +690,104 @@ func projectFamiliesFixture() uitestFixture {
 			// discovered row belongs to no family.
 		},
 	}
+}
+
+// triageIntegrationFixture is the release-level dashboard world. Unlike the
+// narrower fixtures above, it deliberately composes every triage input in one
+// place: every group/subtype rank, zero/equal/distinct presentation clocks,
+// case-folded project identity across profiles and repository families, a label
+// that needs quoted filter syntax, and enough canonical labels to make the rail
+// scroll independently in a short terminal.
+func triageIntegrationFixture() uitestFixture {
+	cfg := &config.Config{
+		Defaults: config.Defaults{
+			Sort: "alpha", RefreshInterval: 2,
+			Preview: config.PreviewConfig{
+				Direction: "horizontal", Ratio: 0.4, RefreshMs: 500, MinCols: 100, MinRows: 20,
+			},
+		},
+		HarnessEmojis: map[string]string{"claude": "🦊", "codex": "🤖"},
+		HarnessColors: map[string]string{"claude": "blue", "codex": "green"},
+		Accounts: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "~/.config/agent-mux/homes/work", Color: "blue"},
+			{Name: "personal", Harness: "codex", HomeDir: "~/.config/agent-mux/homes/personal", Color: "green"},
+		},
+		Sessions: []config.Session{
+			{Title: "release-guard", Directory: "~/projects/release-guard", Profile: "work"},
+			{Title: "portal-work", Directory: "~/projects/portal-work", Profile: "work"},
+			{Title: "portal-personal", Directory: "~/projects/portal-personal", Profile: "personal"},
+			{Title: "finished-work", Directory: "~/projects/finished-work", Profile: "personal"},
+			{Title: "watchtower", Directory: "~/projects/watchtower", Profile: "work"},
+			{Title: "build-farm", Directory: "~/projects/build-farm", Profile: "work"},
+			{Title: "agent-fleet", Directory: "~/projects/agent-fleet", Profile: "personal"},
+			{Title: "compact-ops", Directory: "~/projects/compact-ops", Profile: "personal"},
+			{Title: "quiet-queue", Directory: "~/projects/quiet-queue", Profile: "work"},
+			{Title: "archive", Directory: "~/projects/archive", Profile: "personal"},
+			{Title: "legacy-lab", Directory: "~/projects/legacy-lab", Profile: "work"},
+			{Title: "spare-parts", Directory: "~/projects/spare-parts", Profile: "personal"},
+		},
+	}
+	windows := []kitty.OSWindow{uitestOSWindow(
+		uitestTab(1, 11, "❗🦊release-guard", true, managedVars("work", "claude", "release-guard", "~/projects/release-guard")),
+		uitestTab(2, 21, "🔑🦊portal-work", false, managedVars("work", "claude", "portal-work", "~/projects/portal-work")),
+		uitestTab(3, 31, "❓🤖portal-personal", false, managedVars("personal", "codex", "portal-personal", "~/projects/portal-personal")),
+		uitestTab(4, 41, "🛑🤖finished-work", false, managedVars("personal", "codex", "finished-work", "~/projects/finished-work")),
+		uitestTab(5, 51, "⚠️🦊watchtower", false, managedVars("work", "claude", "watchtower", "~/projects/watchtower")),
+		uitestTab(6, 61, "⚡🦊build-farm", false, managedVars("work", "claude", "build-farm", "~/projects/build-farm")),
+		uitestTab(7, 71, "🤖🤖agent-fleet", false, managedVars("personal", "codex", "agent-fleet", "~/projects/agent-fleet")),
+		uitestTab(8, 81, "🌀🤖compact-ops", false, managedVars("personal", "codex", "compact-ops", "~/projects/compact-ops")),
+		uitestTab(9, 91, "🦊quiet-queue", false, managedVars("work", "claude", "quiet-queue", "~/projects/quiet-queue")),
+		uitestTab(10, 101, "🛑🤖archive", false, managedVars("personal", "codex", "archive", "~/projects/archive")),
+		uitestTab(11, 111, "🦊legacy-lab", false, managedVars("work", "claude", "legacy-lab", "~/projects/legacy-lab")),
+		uitestTab(12, 121, "🛑🤖spare-parts", false, managedVars("personal", "codex", "spare-parts", "~/projects/spare-parts")),
+	)}
+	changed := func(d time.Duration) int64 { return uitestFrozenNow.Add(-d).UnixMilli() }
+	return uitestFixture{
+		Name:        "triage_integration",
+		Description: "all triage ranks and presentation-clock tie cases across a scrollable case-folded project rail",
+		Size:        UITestSize{Width: 140, Height: 16},
+		Config:      cfg,
+		Windows:     windows,
+		States: map[int]protocol.WindowStateSnapshot{
+			11:  {IconState: "error", PresentationChangedAtMS: changed(1 * time.Second)},
+			21:  {IconState: "key", Reason: "permission", PresentationChangedAtMS: changed(2 * time.Second)},
+			31:  {IconState: "question", Reason: "request_user_input", PresentationChangedAtMS: changed(3 * time.Second)},
+			41:  {IconState: "stop", Unseen: true, PresentationChangedAtMS: changed(4 * time.Second)},
+			51:  {IconState: "warning", PresentationChangedAtMS: changed(5 * time.Second)},
+			61:  {IconState: "bolt", PresentationChangedAtMS: changed(6 * time.Second)},
+			71:  {IconState: "subagent", PresentationChangedAtMS: changed(6 * time.Second)},
+			81:  {IconState: "compact"},
+			91:  {},
+			101: {IconState: "stop", PresentationChangedAtMS: changed(7 * time.Second)},
+			111: {IconState: "legacy", PresentationChangedAtMS: changed(8 * time.Second)},
+			121: {IconState: "stop"},
+		},
+		Families: map[int]uitestFamily{
+			11:  {Key: "git:release", Label: "Release Guard", IsRepository: true, PrimaryRoot: "~/projects/release-guard"},
+			21:  {Key: "git:portal-work", Label: "Client Portal", IsRepository: true, PrimaryRoot: "~/projects/portal-work"},
+			31:  {Key: "git:portal-personal", Label: "client portal", IsRepository: true, PrimaryRoot: "~/projects/portal-personal"},
+			41:  {Key: "git:finished", Label: "Finished Work", IsRepository: true, PrimaryRoot: "~/projects/finished-work"},
+			51:  {Key: "git:watchtower", Label: "Watchtower", IsRepository: true, PrimaryRoot: "~/projects/watchtower"},
+			61:  {Key: "git:build", Label: "Build Farm", IsRepository: true, PrimaryRoot: "~/projects/build-farm"},
+			71:  {Key: "git:agents", Label: "Agent Fleet", IsRepository: true, PrimaryRoot: "~/projects/agent-fleet"},
+			81:  {Key: "git:compact", Label: "Compact Ops", IsRepository: true, PrimaryRoot: "~/projects/compact-ops"},
+			91:  {Key: "git:quiet", Label: "Quiet Queue", IsRepository: true, PrimaryRoot: "~/projects/quiet-queue"},
+			101: {Key: "git:archive", Label: "Archive", IsRepository: true, PrimaryRoot: "~/projects/archive"},
+			111: {Key: "git:legacy", Label: "Legacy Lab", IsRepository: true, PrimaryRoot: "~/projects/legacy-lab"},
+			121: {Key: "git:spare", Label: "Spare Parts", IsRepository: true, PrimaryRoot: "~/projects/spare-parts"},
+		},
+	}
+}
+
+// triageVerticalFixture keeps the same integrated world and changes only the
+// preview direction, so the horizontal and vertical scenarios compare layout
+// policy without accidentally comparing different data.
+func triageVerticalFixture() uitestFixture {
+	fx := triageIntegrationFixture()
+	fx.Name = "triage_vertical"
+	fx.Description = "triage_integration with the preview configured below the list"
+	fx.Config.Defaults.Preview.Direction = "vertical"
+	return fx
 }
 
 // familyUnreadFixture is the one world the unread-completion marker cannot be

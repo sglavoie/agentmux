@@ -77,6 +77,8 @@ amx tui-test list-fixtures
 # family_unread
 # project_families
 # run_timers
+# triage_integration
+# triage_vertical
 # unseen_stops
 # wide_profiles
 # worktree_branches
@@ -122,6 +124,8 @@ amx tui-test fixture wide_profiles --width 140 --key C
 | `family_unread` | a three-checkout family holding one unread `🛑` beside a seen `🛑` and an `⚡`, a second family with nothing unread, and an unfamilied seen `🛑` | the unread-completion marker inside a family: which row the `•` lands on when the family is folded versus unfolded, that a seen sibling never earns one, and that a family with no unread member stays unmarked in both folds |
 | `project_families` | two multi-checkout repository families whose members span all three urgency buckets, plus a single-checkout family and a row belonging to no family | the Projects view: summaries, fold/unfold, the singleton that earns no summary, the unfamilied leaf, the project card, and count semantics under a filter |
 | `run_timers` | five busy stretches: sub-minute, multi-minute, hours-long, warning-band, and idle | per-row run timer formatting bands and the `⏳` watchdog warning |
+| `triage_integration` | twelve sessions spanning every triage severity rank, zero/equal/distinct presentation timestamps, eleven canonical project labels, and `Client Portal`/`client portal` across profiles and repository identities | release-level ordering, case-insensitive project aggregation, quoted filtering, contextual completion, rail scrolling and exact responsive thresholds |
+| `triage_vertical` | the exact `triage_integration` data with a vertical preview configuration | compares stacked preview coexistence with the horizontal-preview scenario without changing the dashboard data |
 | `unseen_stops` | two `🛑` rows the daemon separates by seenness, plus one `⚡` row | the unseen-stop demotion: a read `🛑` falls to Idle while an unread one holds Needs Attention |
 | `wide_profiles` | long profile names and home dirs | stresses the profile/config picker box width |
 | `worktree_branches` | three rows in one repository — a dirty `main` checkout and two managed worktrees — plus a directory that is not a repository | the branch column: two worktrees told apart after the shared directory prefix has truncated away, the dirty `*` marker, a non-repository row padding rather than collapsing, and the column declining to be reserved when a filter leaves no branch in the view |
@@ -134,8 +138,8 @@ alpha-sorted: the cursor starts on `dotfiles` (personal).
 ### Daemon-owned state and the frozen clock
 
 A fixture may also carry the per-window state the daemon owns — icon state,
-looping, the busy-stretch anchor, the unseen bit, the blocked reason, the Git
-branch and dirty bit, and watchdog thresholds —
+looping, the busy-stretch anchor, the durable presentation-transition time, the
+unseen bit, the blocked reason, the Git branch and dirty bit, and watchdog thresholds —
 which no Kitty tab title can express. The `unseen_stops` fixture is the clearest
 case: both of its `🛑` rows carry the same icon in the same title, and only the
 daemon state tells them apart. `blocked_reasons` is the same argument one field
@@ -171,6 +175,13 @@ clock. Fixtures anchor their timestamps at fixed offsets from it, so every cell
 renders identical text on every run and scenarios can assert it exactly. Only
 the render clock is frozen; pulse decay and idle classification still follow
 the wall clock.
+
+`triage_integration` also pins the presentation clock matrix directly: some
+rows have no clock, two same-rank rows share one timestamp, and the remaining
+rows have distinct timestamps. Its case variants intentionally use different
+profiles and repository-family keys, proving that project completion and the
+rail aggregate by operator-facing label rather than by either implementation
+identity.
 
 ### Asserting the unread-completion marker
 
@@ -248,6 +259,12 @@ silently selecting nothing.
 | `resize` | `width`, `height` | change the terminal viewport (both must be positive) |
 | `tick` | `count` | advance the refresh timer `count` times (0 or omitted = one tick) |
 | `mouse` | `x`, `y`, `event` | route a zero-based cell coordinate through the last rendered view; `event` is `left`, `wheel_up`, or `wheel_down` |
+
+Mouse coordinates address the last rendered frame, so clicks and wheel events
+exercise the same immutable hit map a live Bubble Tea view captured. Shift-drag
+is intentionally not a scenario event: Kitty consumes that modified gesture for
+terminal-native text selection before the application receives a mouse event,
+so it remains part of the attended live checklist in `docs/acceptance.md`.
 
 **Key names** accepted by `key` actions:
 
@@ -419,6 +436,15 @@ file. The exact inventory is:
 | [`session-view-hints-wide.json`](scenarios/session-view-hints-wide.json) | `basic` | transcript viewer advertises the full continuity palette including `c continue` |
 | [`session-view-hints-narrow-fit.json`](scenarios/session-view-hints-narrow-fit.json) | `basic` | transcript viewer hints truncate to the row budget and surface the actionable `? more` marker |
 | [`spacious-identity-columns.json`](scenarios/spacious-identity-columns.json) | `wide_profiles` | the spacious band gives a long profile name its own truncated cell and lets a long title and its full directory share the same row |
+| [`triage-contextual-project-completion.json`](scenarios/triage-contextual-project-completion.json) | `triage_integration` | `%claude #` completes only labels remaining in that harness context and quotes labels containing spaces |
+| [`triage-default-wide-ordering.json`](scenarios/triage-default-wide-ordering.json) | `triage_integration` | the default wide dashboard renders the integrated severity/recency order and exact All/project bucket tallies |
+| [`triage-horizontal-preview.json`](scenarios/triage-horizontal-preview.json) | `triage_integration` | a wide side-by-side preview coexists with the rail and the 80-cell main-list floor |
+| [`triage-quoted-scope-hidden-rail.json`](scenarios/triage-quoted-scope-hidden-rail.json) | `triage_integration` | a quoted spaced-label selector aggregates both case variants and remains authoritative after `b` hides the rail |
+| [`triage-rail-scroll.json`](scenarios/triage-rail-scroll.json) | `triage_integration` | a short terminal scrolls the focused rail independently while the list selection and total session count stay fixed |
+| [`triage-rail-threshold-hidden.json`](scenarios/triage-rail-threshold-hidden.json) | `triage_integration` | resizing from the exact threshold to one cell below suppresses the 25-cell natural rail before starving the 80-cell list |
+| [`triage-rail-threshold-visible.json`](scenarios/triage-rail-threshold-visible.json) | `triage_integration` | resizing from one cell below to the exact 106-cell threshold restores that rail |
+| [`triage-vertical-preview.json`](scenarios/triage-vertical-preview.json) | `triage_vertical` | a stacked preview coexists with the same integrated rail and list data |
+| [`triage-view-round-trip.json`](scenarios/triage-view-round-trip.json) | `triage_integration` | a rail-applied project scope survives Urgency → Projects → Urgency while keeping the canonical aggregate selected |
 | [`unseen-stop-grouping-narrow-fit.json`](scenarios/unseen-stop-grouping-narrow-fit.json) | `unseen_stops` | two identically-iconed 🛑 rows split across Needs Attention and Idle by the daemon's unseen bit, with the unread one leading the list at narrow width and wearing the only `•` the compact gutter paints |
 | [`unseen-stop-grouping-wide.json`](scenarios/unseen-stop-grouping-wide.json) | `unseen_stops` | the seen 🛑 demotes to Idle while the unseen one holds Needs Attention, `]s` still reaches the demoted row, and jumping to it neither marks it nor clears the marker on the row that has one |
 | [`worktrees-browse.json`](scenarios/worktrees-browse.json) | `worktrees` | `W` opens the hermetic managed-worktree inventory and whitespace-AND filtering narrows to the dirty row without exposing lifecycle mutations |

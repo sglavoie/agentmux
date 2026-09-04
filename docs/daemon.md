@@ -81,12 +81,24 @@ the intended state and the renderer converges the live title on its next pass.
 fingerprint (`ph` harness, `pp` PID, and opaque `pt` start token) alongside the
 schema-v3 producer-pane origin (`ow`) and acknowledgement time (`aa`). A compact
 payload marker (`pv:1`) records that process tokens were rendered under the
-pinned UTC timezone. Readers retain v1-v4 compatibility; v1-v3 facts and early
-v4 payloads without that marker restore without lifecycle ownership and continue
-using watchdog fallback.
+pinned UTC timezone. The optional compact `pc` field is the Unix-millisecond
+time of the last effective icon or unseen transition; omitting it is the
+backward-compatible zero value. Readers retain v1-v4 compatibility; v1-v3 facts
+and early v4 payloads without that marker restore without lifecycle ownership
+and continue using watchdog fallback.
 Acknowledged nonterminal replay cutoffs expire after one hour and are capped at
 the newest 64; unacknowledged facts and live ASL leases are never removed by
 that cap.
+
+The state-query response projects each window as `icon_state`, `looping`,
+`last_action`, `last_event_at`, and `guard_action`, plus optional
+`busy_since_at`, `presentation_changed_at_ms`, `unseen`, `reason`, `branch`,
+`dirty`, and `conversation`. `presentation_changed_at_ms` uses Unix
+milliseconds and is omitted when unknown, including for restored pre-field
+payloads and daemons predating the field. Dashboard clients must clear a stale
+local value when the member or whole window entry is absent; the timestamp is
+an ordering signal only and does not replace the busy-stretch or activity
+clocks.
 The base title, `★`, and `🔇` remain owned by their existing writers. Hooks only
 forward raw events, window/socket context, pipe-mode detection, and the safe
 process fingerprint; they auto-start the daemon when needed, log a dropped
