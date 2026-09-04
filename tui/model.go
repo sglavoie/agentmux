@@ -128,9 +128,14 @@ type Model struct {
 	commandContext commands.Context
 
 	// running-session filter (profile + state DSL)
-	filterText     string               // live input while in ModeSearch
-	activeFilter   dashboard.Filter     // committed filter applied to filtered
-	savedFilter    dashboard.Filter     // snapshot taken on enter; restored on Esc
+	filterText   string           // live input while in ModeSearch
+	activeFilter dashboard.Filter // committed filter applied to filtered
+	savedFilter  dashboard.Filter // snapshot taken on enter; restored on Esc
+	// savedSelection is the item the cursor was on when ModeSearch was entered,
+	// captured beside savedFilter and restored with it. Cancelling a search puts
+	// the operator back where they were, which is a filter and a selection, not
+	// a filter alone.
+	savedSelection dashboard.CursorIdentity
 	focusedChipIdx int                  // -1 when no chip focused; otherwise index into Components()
 	completion     dashboard.Completion // sigil-aware popup state for ModeSearch
 

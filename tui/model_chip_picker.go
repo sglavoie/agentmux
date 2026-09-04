@@ -341,26 +341,43 @@ func scrollChipPickerToCursor(m *Model) {
 	}
 }
 
-// applyFilterChange swaps in a new active filter, re-applies it to the
-// session list, and resets cursor + chip focus. Used by chip removal and
-// the Esc "clear all" path so they share the bookkeeping.
+// applyActiveFilter re-applies m.activeFilter to the session list and reprojects
+// around prior, which callers capture against the OLD projection before they
+// change the filter. It is the one path every filter-driven rebuild takes —
+// chip removal, clear-all, the profile cycle, entering search, every keystroke
+// inside it, and the Esc that leaves it — so none of them can rebuild the list
+// without also deciding where the selection went.
+//
+// Restoring by identity rather than resetting to row 0 is the whole point: a
+// filter narrows the list, it does not usually remove what the operator was
+// looking at, and a numeric cursor survives a narrowing only by coincidence of
+// index. RestoreItemCursor's fallback (the first attention item, then item 0)
+// is reached only when the captured item is genuinely gone.
+//
+// The rows are sorted here directly rather than through sortFiltered because
+// reprojectList already performs the rebuild sortFiltered would pair with the
+// sort. The invariant sortFiltered exists to hold — no write to m.filtered
+// without a reprojection behind it — is exactly what reprojectList is.
 //
 // The returned command refreshes the preview, and it is returned rather than
-// dispatched because the selection has to settle first: a filter change
-// reprojects the list, and the pane's target is whatever the cursor points at
-// once the new projection exists. Callers must not drop it — a preview left
-// pointed at a window the filter has just hidden keeps polling a session that is
-// no longer on screen.
-func (m *Model) applyFilterChange(f dashboard.Filter) tea.Cmd {
-	m.activeFilter = f
+// dispatched because the selection has to settle first: the pane's target is
+// whatever the cursor points at once the new projection exists. Callers must not
+// drop it — a preview left pointed at a window the filter has just hidden keeps
+// polling a session that is no longer on screen.
+func (m *Model) applyActiveFilter(prior dashboard.CursorIdentity) tea.Cmd {
 	m.filtered = dashboard.ApplyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
-	m.sortFiltered()
-	m.cursor = 0
-	m.listOffset = 0
+	dashboard.SortRows(m.filtered, m.lastActivity, m.idleThreshold)
 	m.focusedChipIdx = -1
-	clampListOffset(m)
-	scrollListToCursor(m)
-	return m.refreshPreviewForCursor()
+	return m.reprojectList(prior)
+}
+
+// applyFilterChange swaps in a new active filter and re-applies it, carrying the
+// current selection across. Used by chip removal and the Esc "clear all" path so
+// they share the bookkeeping.
+func (m *Model) applyFilterChange(f dashboard.Filter) tea.Cmd {
+	prior := dashboard.CaptureItemIdentity(m.items, m.cursor)
+	m.activeFilter = f
+	return m.applyActiveFilter(prior)
 }
 
 // cycleDashboardProfile updates the dashboard's existing @profile filter
@@ -376,29 +393,37 @@ func (m *Model) cycleDashboardProfile() tea.Cmd {
 // enterFilter switches into ModeSearch with the given pre-filled buffer and
 // snapshots the current filter so Esc can restore it. The pre-fill is parsed
 // and live-applied immediately so the list reflects the buffer on entry.
-func (m *Model) enterFilter(prefill string) {
+//
+// The selection is snapshotted beside the filter, because Esc restores a state
+// the operator was in and that state included which row they were on. Filter and
+// selection are captured in the same step for the same reason they are restored
+// in one: taking them apart would let a keystroke between them make the pair
+// describe a list that never existed.
+//
+// The mode is set before the reprojection so the scroll math sizes the window
+// for the mode the list is about to be drawn in rather than the one it is
+// leaving.
+func (m *Model) enterFilter(prefill string) tea.Cmd {
 	m.clearJumpChord()
+	prior := dashboard.CaptureItemIdentity(m.items, m.cursor)
 	m.savedFilter = m.activeFilter
+	m.savedSelection = prior
 	m.filterText = prefill
 	m.activeFilter = dashboard.Parse(prefill)
-	m.filtered = dashboard.ApplyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
-	m.sortFiltered()
-	m.cursor = 0
-	m.focusedChipIdx = -1
 	m.mode = ModeSearch
+	cmd := m.applyActiveFilter(prior)
 	m.recomputeCompletion()
-	scrollListToCursor(m)
+	return cmd
 }
 
 // reapplyFilterLive parses filterText and refreshes the list. Used by every
-// keystroke handler in ModeSearch to provide live filtering.
-func (m *Model) reapplyFilterLive() {
+// keystroke handler in ModeSearch to provide live filtering, so it is the path
+// on which a still-visible selection is most often nearly lost: one added
+// character reorders the list under a numeric cursor.
+func (m *Model) reapplyFilterLive() tea.Cmd {
+	prior := dashboard.CaptureItemIdentity(m.items, m.cursor)
 	m.activeFilter = dashboard.Parse(m.filterText)
-	m.filtered = dashboard.ApplyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
-	m.sortFiltered()
-	m.cursor = clamp(m.cursor, 0, m.listItemCount()-1)
-	m.focusedChipIdx = -1
-	scrollListToCursor(m)
+	return m.applyActiveFilter(prior)
 }
 
 // sortFiltered orders m.filtered so attention items come first, then active,

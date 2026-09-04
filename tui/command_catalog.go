@@ -329,8 +329,8 @@ func commandCatalog() []commands.Command[Model] {
 			Description: "Filter running sessions with the dashboard query language.",
 			Aliases:     []string{"find", "search"}, Shortcut: keySlash,
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
-				m.enterFilter("")
-				return m, nil
+				cmd := m.enterFilter("")
+				return m, cmd
 			},
 		},
 		{

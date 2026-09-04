@@ -71,9 +71,9 @@ func (m Model) handleSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case keyEnter:
 			m.insertCompletion()
-			m.reapplyFilterLive()
+			cmd := m.reapplyFilterLive()
 			m.recomputeCompletion()
-			return m, nil
+			return m, cmd
 		case keyTab, keyDown:
 			m.cycleCompletion(1)
 			return m, nil
@@ -83,6 +83,12 @@ func (m Model) handleSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Every branch below that rebuilds the list hands back the command that
+	// retargets the preview, which is why the handler carries one out rather
+	// than returning nil: the pane's target is only knowable once the branch has
+	// settled the cursor, and a dropped command leaves it reading the window the
+	// operator has just filtered away.
+	var cmd tea.Cmd
 	switch key {
 	case keyCtrlC:
 		// ctrl+c must quit from every mode. ModeSearch's default branch
@@ -91,37 +97,50 @@ func (m Model) handleSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case keyEsc:
-		// Cancel: restore the snapshot taken on entry and recompute.
+		// Cancel: restore the snapshot taken on entry — the filter and the
+		// selection it was taken beside — and recompute. The selection comes
+		// back whenever it is still visible under the restored filter; when it
+		// is not, applyActiveFilter's identity fallback picks the landing.
 		m.activeFilter = m.savedFilter
 		m.filterText = m.savedFilter.Raw
-		m.filtered = dashboard.ApplyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
-		m.sortFiltered()
-		m.cursor = 0
-		m.focusedChipIdx = -1
 		m.closeCompletion()
 		m.mode = ModeList
+		cmd = m.applyActiveFilter(m.savedSelection)
 
 	case keyEnter:
-		// Live-applied already — just exit the input.
+		// The rows were live-applied by the keystrokes that produced them, so
+		// committing only leaves the input — but it leaves it for ModeList, which
+		// draws more chrome above the list and so gives it a shorter window. The
+		// offset is resized against that window before the pane is asked what it
+		// should be showing.
+		//
+		// That last call cannot currently return a command: every keystroke in
+		// ModeSearch already retargeted, so the commit finds the pane pointed at
+		// the cursor it inherits. It is kept because the alternative is a mode
+		// exit that trusts a claim about a different function — the day one
+		// ModeSearch path stops retargeting, this is what keeps the pane honest.
 		m.closeCompletion()
 		m.mode = ModeList
+		clampListOffset(&m)
+		scrollListToCursor(&m)
+		cmd = m.refreshPreviewForCursor()
 
 	case keyBackspace:
 		if r := []rune(m.filterText); len(r) > 0 {
 			m.filterText = string(r[:len(r)-1])
 		}
-		m.reapplyFilterLive()
+		cmd = m.reapplyFilterLive()
 		m.recomputeCompletion()
 
 	default:
 		if t := msg.Key().Text; t != "" {
 			m.filterText += t
-			m.reapplyFilterLive()
+			cmd = m.reapplyFilterLive()
 			m.recomputeCompletion()
 		}
 	}
 
-	return m, nil
+	return m, cmd
 }
 
 func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -360,7 +379,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case keySlash:
-		m.enterFilter("")
+		return m, m.enterFilter("")
 
 	case keyF:
 		return m, m.cycleDashboardProfile()
