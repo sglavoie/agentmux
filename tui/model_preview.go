@@ -313,13 +313,16 @@ func dashboardBaseListPaneWidth(m Model) int {
 	return m.width
 }
 
-// dashboardRailWidth applies the rail's responsive rule to the main-list
-// column left by preview resolution. The divider is charged before checking
-// the 80-cell list guarantee.
-func dashboardRailWidth(m Model, baseListWidth int) int {
+// dashboardRailWidth applies the rail's responsive rule to the one shared
+// main-list base left by preview resolution. Every caller goes through this
+// helper so a short terminal that later drops its preview cannot make body
+// geometry disagree with the header and footer about whether the rail exists.
+// The divider is charged before checking the 80-cell list guarantee.
+func dashboardRailWidth(m Model) int {
 	if !m.railRequested || m.listView != dashboard.ViewUrgency {
 		return 0
 	}
+	baseListWidth := dashboardBaseListPaneWidth(m)
 	railWidth := dashboard.RailWidth(dashboardRailRows(m))
 	if baseListWidth-railWidth-1 < 80 {
 		return 0
@@ -329,7 +332,7 @@ func dashboardRailWidth(m Model, baseListWidth int) int {
 
 func dashboardListPaneWidth(m Model) int {
 	base := dashboardBaseListPaneWidth(m)
-	if railWidth := dashboardRailWidth(m, base); railWidth > 0 {
+	if railWidth := dashboardRailWidth(m); railWidth > 0 {
 		return base - railWidth - 1
 	}
 	return base
@@ -354,7 +357,7 @@ func dashboardGeometry(m Model) dashboardGeom {
 
 	if paneHeight < previewMinPaneHeight || (!horizontal && !vertical) {
 		listHeight := clampListHeight(paneHeight)
-		railWidth := dashboardRailWidth(m, width)
+		railWidth := dashboardRailWidth(m)
 		return dashboardGeom{
 			rail: railWidth > 0, railWidth: railWidth, railHeight: listHeight,
 			listWidth: width - railWidth - boolWidth(railWidth > 0), listHeight: listHeight,
@@ -375,13 +378,13 @@ func dashboardGeometry(m Model) dashboardGeom {
 		}
 		if previewHeight < 1 {
 			listHeight := clampListHeight(paneHeight)
-			railWidth := dashboardRailWidth(m, width)
+			railWidth := dashboardRailWidth(m)
 			return dashboardGeom{
 				rail: railWidth > 0, railWidth: railWidth, railHeight: listHeight,
 				listWidth: width - railWidth - boolWidth(railWidth > 0), listHeight: listHeight,
 			}
 		}
-		railWidth := dashboardRailWidth(m, width)
+		railWidth := dashboardRailWidth(m)
 		return dashboardGeom{
 			split:         true,
 			vertical:      true,
@@ -394,7 +397,7 @@ func dashboardGeometry(m Model) dashboardGeom {
 			previewHeight: previewHeight,
 		}
 	}
-	railWidth := dashboardRailWidth(m, listWidth)
+	railWidth := dashboardRailWidth(m)
 	return dashboardGeom{
 		split:         true,
 		rail:          railWidth > 0,

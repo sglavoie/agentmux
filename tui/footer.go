@@ -709,7 +709,7 @@ func listHasChips(m Model) bool { return len(m.activeFilter.Components()) > 0 }
 func listUrgencyView(m Model) bool { return m.listView == dashboard.ViewUrgency }
 
 func listRailVisible(m Model) bool {
-	return listUrgencyView(m) && dashboardRailWidth(m, dashboardBaseListPaneWidth(m)) > 0
+	return listUrgencyView(m) && dashboardRailWidth(m) > 0
 }
 
 // listChipRangeKey names the digits that actually remove something. With a

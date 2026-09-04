@@ -86,12 +86,14 @@ func renderHeaderWithHits(m Model) headerRender {
 		prependIfFits(styleFooter.Render(label), mouseHitPreview)
 	}
 	if m.listView == dashboard.ViewUrgency {
-		switch {
-		case dashboardRailWidth(m, dashboardBaseListPaneWidth(m)) > 0:
-			prependIfFits(styleFooter.Render("b: hide rail"), mouseHitRailToggle)
-		case !m.railRequested:
-			prependIfFits(styleFooter.Render("b: show rail"), mouseHitRailToggle)
+		label := "b: show rail"
+		if m.railRequested {
+			// A requested rail may be responsively suppressed. The toggle still
+			// exists in that state: pressing it disables the request so the rail
+			// does not unexpectedly reappear after a resize.
+			label = "b: hide rail"
 		}
+		prependIfFits(styleFooter.Render(label), mouseHitRailToggle)
 	}
 	if m.mode == ModeList && dashboard.BandFor(m.width) != dashboard.BandCompact {
 		prependIfFits(styleDim.Render(inlineFilterPlaceholder), mouseHitNone)

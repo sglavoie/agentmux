@@ -255,6 +255,46 @@ func TestResponsiveRailThresholdBandsAndPreviewGeometry(t *testing.T) {
 	}
 }
 
+// TestRailChromeAgreesWithGeometryAcrossSizes pins the short horizontal-preview
+// fallback where the body used to admit a rail from the full terminal width
+// while the header and footer rejected it from the preview-reserved list width.
+func TestRailChromeAgreesWithGeometryAcrossSizes(t *testing.T) {
+	for width := 90; width <= 200; width++ {
+		for height := 8; height <= 30; height++ {
+			m := responsiveModel(width, height, dashboard.ViewUrgency, true)
+			g := dashboardGeometry(m)
+			if visible := listRailVisible(m); visible != g.rail {
+				t.Fatalf("%dx%d rail visibility: geometry=%v chrome=%v geom=%+v",
+					width, height, g.rail, visible, g)
+			}
+			if g.rail {
+				header := stripAnsi(layout.SectionLines(renderHeader(m))[0])
+				if !strings.Contains(header, "b: hide rail") {
+					t.Fatalf("%dx%d paints a rail without its header control: %q", width, height, header)
+				}
+			}
+		}
+	}
+
+	// At the original 106x9 reproduction the horizontal preview's reserved base
+	// is too narrow for the rail even though the preview is dropped for height.
+	// The request remains explicit in the header so a later resize cannot make
+	// the rail silently reappear without an operator-visible toggle.
+	m := responsiveModel(106, 9, dashboard.ViewUrgency, true)
+	if g := dashboardGeometry(m); g.rail {
+		t.Fatalf("106x9 rail should be suppressed from the shared preview base: %+v", g)
+	}
+	header := stripAnsi(layout.SectionLines(renderHeader(m))[0])
+	if !strings.Contains(header, "b: hide rail") {
+		t.Fatalf("hidden requested rail has no header control: %q", header)
+	}
+	m.railRequested = false
+	header = stripAnsi(layout.SectionLines(renderHeader(m))[0])
+	if !strings.Contains(header, "b: show rail") {
+		t.Fatalf("non-requested rail has no header control: %q", header)
+	}
+}
+
 // TestResponsiveDetailStripDrawsExactlyWhatItReserved is the budget/render
 // agreement for the strip. A block that reserved two lines and drew one would
 // shift the list's bottom edge, and the scroll arithmetic would be wrong by
