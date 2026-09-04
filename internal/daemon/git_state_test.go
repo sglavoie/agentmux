@@ -91,7 +91,13 @@ func windowGitState(t *testing.T, h *Handler, windowID int) state.WindowState {
 func TestGitStateRefreshTakesNoLockAcrossASubprocess(t *testing.T) {
 	git := &scriptedGitState{branches: map[string]string{"/repo/one": "main", "/repo/two": "amx/feature"}}
 	h := seedGitStateHandler(t, git, map[int]string{42: "/repo/one", 43: "/repo/two"})
+	// Refresh probes directories concurrently. Serialize the assertions so one
+	// callback's successful TryLock cannot make a sibling callback falsely
+	// report that the refresh itself held stateMu across the subprocess seam.
+	var assertionMu sync.Mutex
 	git.before = func(directory string) {
+		assertionMu.Lock()
+		defer assertionMu.Unlock()
 		if !h.stateMu.TryLock() {
 			t.Errorf("stateMu was held across the git subprocess for %s", directory)
 			return
