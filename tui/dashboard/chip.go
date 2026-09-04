@@ -94,8 +94,14 @@ func (f Filter) RemoveComponent(idx int) Filter {
 // line when the running width would exceed width. focused is the index of the
 // chip carrying keyboard focus, or -1 for none.
 func RenderChips(f Filter, acctColor map[string]string, focused, width int) string {
+	return RenderChipsWithHits(f, acctColor, focused, width).Text
+}
+
+// RenderChipsWithHits renders chips and returns their wrapped terminal-cell
+// rectangles from the same layout loop.
+func RenderChipsWithHits(f Filter, acctColor map[string]string, focused, width int) ChipRender {
 	if f.IsEmpty() {
-		return ""
+		return ChipRender{}
 	}
 	comps := f.Components()
 
@@ -103,8 +109,10 @@ func RenderChips(f Filter, acctColor map[string]string, focused, width int) stri
 	sepW := layout.StyledWidth(chipSep)
 
 	var lines []string
+	var hits []ChipHit
 	var line strings.Builder
 	lineW := 0
+	y := 0
 	for i, c := range comps {
 		chip := renderChip(c, acctColor, i == focused)
 		// A single chip whose label exceeds the terminal is never split by the
@@ -122,17 +130,21 @@ func RenderChips(f Filter, acctColor map[string]string, focused, width int) stri
 			line.Reset()
 			lineW = 0
 			add = chipW
+			y++
 		}
+		x := lineW
 		if line.Len() > 0 {
 			line.WriteString(chipSep)
+			x += sepW
 		}
 		line.WriteString(chip)
+		hits = append(hits, ChipHit{Rect: HitRect{X: x, Y: y, Width: chipW, Height: 1}, Index: i, Label: c.Label()})
 		lineW += add
 	}
 	if line.Len() > 0 {
 		lines = append(lines, line.String())
 	}
-	return strings.Join(lines, "\n") + "\n"
+	return ChipRender{Text: strings.Join(lines, "\n") + "\n", Hits: hits}
 }
 
 // renderChip renders a single chip body. The leading ▌ glyph and trailing

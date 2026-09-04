@@ -216,6 +216,8 @@ func TestUITestActionValidation(t *testing.T) {
 		{Type: UITestActionResize, Width: 80, Height: 24},
 		{Type: UITestActionTick, Count: 0},
 		{Type: UITestActionTick, Count: 3},
+		{Type: UITestActionMouse, X: 0, Y: 0, Event: UITestMouseLeft},
+		{Type: UITestActionMouse, X: 10, Y: 5, Event: UITestMouseWheelDown},
 	}
 	for _, a := range ok {
 		if err := validateUITestAction(a); err != nil {
@@ -230,6 +232,8 @@ func TestUITestActionValidation(t *testing.T) {
 		{Type: UITestActionText},
 		{Type: UITestActionResize, Width: -1, Height: 24},
 		{Type: UITestActionTick, Count: -1},
+		{Type: UITestActionMouse, X: -1, Y: 0, Event: UITestMouseLeft},
+		{Type: UITestActionMouse, X: 0, Y: 0, Event: "right"},
 	}
 	for _, a := range bad {
 		if err := validateUITestAction(a); err == nil {

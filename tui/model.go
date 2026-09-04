@@ -263,6 +263,11 @@ type Model struct {
 	previewTargetSeq int
 	previewText      string
 	previewError     string
+	// Mouse double-click state is process-local and identity-bearing. A row's
+	// coordinates are never retained: every click arrives with the identity
+	// captured by the last render and is revalidated against the live items.
+	lastMouseSession dashboard.CursorIdentity
+	lastMouseClickAt time.Time
 
 	// transient status messages + launch-progress bookkeeping
 	toasts                   []Toast

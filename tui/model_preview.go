@@ -15,9 +15,21 @@ import (
 
 // View renders the full dashboard.
 func (m Model) View() tea.View {
-	content := m.render()
+	var content string
+	var hitMap mouseHitMap
+	if m.mode == ModeList {
+		rendered := renderDashboardWithHits(m)
+		content = composeRootView(rendered.text, m)
+		hitMap = rendered.hitMap.clipped(m.width, rootBodyHeight(m))
+	} else {
+		content = m.render()
+	}
 	v := tea.NewView(content)
 	v.AltScreen = true
+	if m.mode == ModeList {
+		v.MouseMode = tea.MouseModeCellMotion
+		v.OnMouse = hitMap.handler()
+	}
 	return v
 }
 

@@ -36,7 +36,7 @@ The harness therefore inspects each open modal's own natural geometry
 ## How it works
 
 - **In-process driver** (`tui/uitest_driver.go`): feeds window sizes, keys,
-  text, and ticks straight through `Model.Update`, draining the resulting
+  text, ticks, and render-routed mouse events through the model, draining the resulting
   Bubble Tea commands with a short timeout so refresh-style flows settle before
   an observation is captured. Time-based commands (the refresh ticker) are
   abandoned rather than blocking.
@@ -247,6 +247,7 @@ silently selecting nothing.
 | `text` | `text` | type a run of printable characters, one key at a time |
 | `resize` | `width`, `height` | change the terminal viewport (both must be positive) |
 | `tick` | `count` | advance the refresh timer `count` times (0 or omitted = one tick) |
+| `mouse` | `x`, `y`, `event` | route a zero-based cell coordinate through the last rendered view; `event` is `left`, `wheel_up`, or `wheel_down` |
 
 **Key names** accepted by `key` actions:
 
@@ -383,6 +384,12 @@ file. The exact inventory is:
 | [`help-modal-scroll-bottom.json`](scenarios/help-modal-scroll-bottom.json) | `basic` | help scroll reaches the final surviving bindings |
 | [`legend-narrow-fit.json`](scenarios/legend-narrow-fit.json) | `actions` | live-session legend remains bounded at narrow width |
 | [`list-preview-narrow-fit.json`](scenarios/list-preview-narrow-fit.json) | `actions` | list+preview falls back to the plain list below the row-column floor |
+| [`mouse-chip-removal.json`](scenarios/mouse-chip-removal.json) | `project_families` | a click on a rendered project chip removes exactly the filter component named by the captured chip identity |
+| [`mouse-header-controls.json`](scenarios/mouse-header-controls.json) | `project_families` | the rendered view, rail, and preview header controls invoke the same toggles as `v`, `b`, and `p` |
+| [`mouse-list-wheel.json`](scenarios/mouse-list-wheel.json) | `project_families` | a wheel event over the session pane moves the selection by three selectable rows |
+| [`mouse-rail-scope.json`](scenarios/mouse-rail-scope.json) | `project_families` | clicking a rendered rail row applies its project scope and moves keyboard focus into the rail |
+| [`mouse-rail-wheel.json`](scenarios/mouse-rail-wheel.json) | `project_families` | a wheel event over the rail moves its independent cursor by three rows before keyboard application |
+| [`mouse-session-select-focus.json`](scenarios/mouse-session-select-focus.json) | `project_families` | one click selects a live session and a second click on the same identity focuses its Kitty tab |
 | [`picker-dsl-narrow-fit.json`](scenarios/picker-dsl-narrow-fit.json) | `basic` | launcher DSL/help text clamps at narrow width |
 | [`projects-cross-view-selection.json`](scenarios/projects-cross-view-selection.json) | `project_families` | `v` carries the selected session across to Projects, where the cursor lands on the same session at its new tree index |
 | [`projects-cross-view-summary-return.json`](scenarios/projects-cross-view-summary-return.json) | `project_families` | `v` back out of Projects from a family summary selects that family's primary session in Urgency rather than losing the cursor |

@@ -1,0 +1,10 @@
+{
+  "name": "mouse rail applies project scope",
+  "fixture": "project_families",
+  "size": { "width": 120, "height": 32 },
+  "actions": [{ "type": "mouse", "x": 5, "y": 5, "event": "left" }],
+  "assertions": [
+    { "type": "contains_text", "text": "#api" },
+    { "type": "no_layout_issues" }
+  ]
+}

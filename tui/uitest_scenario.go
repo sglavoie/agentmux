@@ -142,6 +142,15 @@ func validateUITestAction(a UITestAction) error {
 		if a.Count < 0 {
 			return fmt.Errorf("tick action count must not be negative")
 		}
+	case UITestActionMouse:
+		if a.X < 0 || a.Y < 0 {
+			return fmt.Errorf("mouse action coordinates must not be negative, got %d,%d", a.X, a.Y)
+		}
+		switch a.Event {
+		case UITestMouseLeft, UITestMouseWheelUp, UITestMouseWheelDown:
+		default:
+			return fmt.Errorf("mouse action has unknown event %q", a.Event)
+		}
 	}
 	return nil
 }
@@ -522,7 +531,8 @@ type UITestSize struct {
 
 // UITestActionType enumerates the scenario step kinds the first harness
 // version understands. It intentionally omits a generic command action;
-// scenarios drive the model with keys, literal text, resizes, and ticks.
+// scenarios drive the model with keys, literal text, resizes, ticks, and
+// mouse events routed through the rendered View.
 type UITestActionType string
 
 const (
@@ -534,12 +544,14 @@ const (
 	UITestActionResize UITestActionType = "resize"
 	// UITestActionTick advances the model's timer Count times.
 	UITestActionTick UITestActionType = "tick"
+	// UITestActionMouse routes a click or wheel event through the rendered View.
+	UITestActionMouse UITestActionType = "mouse"
 )
 
 // Valid reports whether t is one of the recognized action kinds.
 func (t UITestActionType) Valid() bool {
 	switch t {
-	case UITestActionKey, UITestActionText, UITestActionResize, UITestActionTick:
+	case UITestActionKey, UITestActionText, UITestActionResize, UITestActionTick, UITestActionMouse:
 		return true
 	default:
 		return false
@@ -555,7 +567,16 @@ type UITestAction struct {
 	Width  int              `json:"width,omitempty"`
 	Height int              `json:"height,omitempty"`
 	Count  int              `json:"count,omitempty"`
+	X      int              `json:"x,omitempty"`
+	Y      int              `json:"y,omitempty"`
+	Event  string           `json:"event,omitempty"`
 }
+
+const (
+	UITestMouseLeft      = "left"
+	UITestMouseWheelUp   = "wheel_up"
+	UITestMouseWheelDown = "wheel_down"
+)
 
 // UITestLayoutIssueType names a layout regression the harness can detect.
 type UITestLayoutIssueType string

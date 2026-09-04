@@ -31,8 +31,9 @@ import (
 
 // This file drives the real Bubble Tea dashboard Model in-process, without a
 // terminal or the runtime event loop. It feeds deterministic input (window
-// sizes, keys, ticks) straight through Model.Update and drains the resulting
-// commands so refresh-style flows settle before an observation is captured.
+// sizes, keys, ticks, and rendered mouse targets) through the Model and drains
+// the resulting commands so refresh-style flows settle before an observation
+// is captured.
 //
 // Draining is the delicate part. Bubble Tea v2 aggregates commands into
 // slice-shaped batch/sequence messages, so a single Update can fan out into
@@ -191,9 +192,36 @@ func (d *uitestDriver) Apply(action UITestAction) error {
 	case UITestActionTick:
 		d.Tick(action.Count)
 		return d.Err()
+	case UITestActionMouse:
+		return d.Mouse(action.X, action.Y, action.Event)
 	default:
 		return fmt.Errorf("uitest: unknown action type %q", action.Type)
 	}
+}
+
+// Mouse obtains the handler from the last rendered View, executes its command,
+// and drains the resulting semantic message through Update. Scenarios therefore
+// exercise the render-owned hit map rather than calling model helpers directly.
+func (d *uitestDriver) Mouse(x, y int, event string) error {
+	view := d.model.View()
+	if view.OnMouse == nil {
+		return nil
+	}
+	var msg tea.MouseMsg
+	switch event {
+	case UITestMouseLeft:
+		msg = tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft}
+	case UITestMouseWheelUp:
+		msg = tea.MouseWheelMsg{X: x, Y: y, Button: tea.MouseWheelUp}
+	case UITestMouseWheelDown:
+		msg = tea.MouseWheelMsg{X: x, Y: y, Button: tea.MouseWheelDown}
+	default:
+		return fmt.Errorf("uitest: unknown mouse event %q", event)
+	}
+	if err := d.drain(view.OnMouse(msg)); err != nil {
+		return err
+	}
+	return d.liveAccess.Err()
 }
 
 // Key parses spec into a key-press message and sends it through the model.

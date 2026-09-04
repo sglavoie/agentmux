@@ -1,0 +1,14 @@
+{
+  "name": "mouse rail wheel moves three rows",
+  "fixture": "project_families",
+  "size": { "width": 120, "height": 32 },
+  "actions": [
+    { "type": "mouse", "x": 5, "y": 4, "event": "wheel_down" },
+    { "type": "key", "key": "left" },
+    { "type": "key", "key": "enter" }
+  ],
+  "assertions": [
+    { "type": "contains_text", "text": "#docs" },
+    { "type": "no_layout_issues" }
+  ]
+}

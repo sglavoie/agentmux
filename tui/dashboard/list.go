@@ -128,8 +128,16 @@ func (in ListInput) marker(s session.RunningSession) (string, bool) {
 // The width budget controls per-row column truncation; the height budget caps
 // the number of lines emitted by the windowed walk.
 func RenderList(in ListInput) string {
+	return RenderListWithHits(in).Text
+}
+
+// RenderListWithHits renders the list and returns semantic row regions from
+// the very walk that emitted them. Callers that only need text keep using
+// RenderList; mouse-aware callers avoid reconstructing group and indicator
+// offsets from the finished ANSI string.
+func RenderListWithHits(in ListInput) ListRender {
 	if in.Items.Len() == 0 {
-		return renderEmptyHero(in)
+		return ListRender{Text: renderEmptyHero(in)}
 	}
 
 	acctColor := ProfileColorMap(in.Cfg)
@@ -177,9 +185,12 @@ func RenderList(in ListInput) string {
 	titleWidth := titleColumnWidth(in.Items.Rows, band)
 
 	var sb strings.Builder
+	var hits []ListHit
+	y := 0
 	if showTop {
 		sb.WriteString(styleDim.Render("  ▲"))
 		sb.WriteByte('\n')
+		y++
 	}
 
 	prevGroup := -1
@@ -190,9 +201,11 @@ func RenderList(in ListInput) string {
 		if headings && g != prevGroup {
 			if prevGroup != -1 {
 				sb.WriteByte('\n')
+				y++
 			}
 			sb.WriteString(renderGroupLabel(g, in.Items.countInGroup(g, in.LastActivity, in.IdleThreshold)))
 			sb.WriteByte('\n')
+			y++
 			prevGroup = g
 		}
 		rowWidth := in.Width
@@ -275,8 +288,28 @@ func RenderList(in ListInput) string {
 		if in.Width > 0 {
 			styledRow = layout.StyledTruncate(styledRow, in.Width, "…")
 		}
+		hitWidth := layout.StyledWidth(styledRow)
+		if in.Width > 0 {
+			hitWidth = in.Width
+		}
+		hit := ListHit{
+			Rect:     HitRect{Y: y, Width: hitWidth, Height: 1},
+			Identity: CaptureItemIdentity(in.Items, i),
+		}
+		if item.Kind == ItemFamilySummary {
+			hit.HasChevron = true
+			hit.Collapsed = item.Collapsed
+			if noticeActive {
+				hit.ChevronX += noticeColumnWidth
+			}
+			if multiGroup {
+				hit.ChevronX += groupBorderWidth
+			}
+		}
+		hits = append(hits, hit)
 		sb.WriteString(styledRow)
 		sb.WriteByte('\n')
+		y++
 	}
 
 	if showBottom {
@@ -284,7 +317,7 @@ func RenderList(in ListInput) string {
 		sb.WriteByte('\n')
 	}
 
-	return sb.String()
+	return ListRender{Text: sb.String(), Hits: hits}
 }
 
 // scrollInput is the subset of the renderer's facts the windowed walk reads.

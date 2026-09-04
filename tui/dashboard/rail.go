@@ -189,27 +189,41 @@ func ScrollRailToCursor(total, cursor, offset, height int) int {
 
 // RenderRail draws a one-line header plus a window of aggregate scopes.
 func RenderRail(in RailInput) string {
+	return RenderRailWithHits(in).Text
+}
+
+// RenderRailWithHits renders the rail and returns the scope row rectangles
+// from the same pagination walk.
+func RenderRailWithHits(in RailInput) RailRender {
 	width := in.Width
 	if width < 0 {
 		width = 0
 	}
 	start, end, top, bottom := RailVisibleRange(len(in.Rows), in.Offset, in.Height)
 	var sb strings.Builder
+	var hits []RailHit
+	y := 0
 	sb.WriteString(railHeader(width))
 	sb.WriteByte('\n')
+	y++
 	if top {
 		sb.WriteString(styleDim.Render("  ▲"))
 		sb.WriteByte('\n')
+		y++
 	}
 	for i := start; i < end; i++ {
 		sb.WriteString(renderRailRow(in.Rows[i], i == in.Cursor, in.Focused, in.AppliedProject, width))
 		sb.WriteByte('\n')
+		hits = append(hits, RailHit{
+			Rect: HitRect{Y: y, Width: width, Height: 1}, Project: in.Rows[i].Project, Label: in.Rows[i].Label,
+		})
+		y++
 	}
 	if bottom {
 		sb.WriteString(styleDim.Render("  ▼"))
 		sb.WriteByte('\n')
 	}
-	return sb.String()
+	return RailRender{Text: sb.String(), Hits: hits}
 }
 
 func railHeader(width int) string {

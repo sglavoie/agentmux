@@ -1,0 +1,11 @@
+{
+  "name": "mouse list wheel moves three rows",
+  "fixture": "project_families",
+  "size": { "width": 120, "height": 32 },
+  "actions": [{ "type": "mouse", "x": 30, "y": 4, "event": "wheel_down" }],
+  "assertions": [
+    { "type": "cursor_equals", "cursor": 3 },
+    { "type": "selected_title", "value": "docs" },
+    { "type": "no_layout_issues" }
+  ]
+}

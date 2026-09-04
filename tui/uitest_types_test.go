@@ -10,7 +10,7 @@ import (
 // the first harness version supports key/text/resize/tick and nothing else.
 func TestUITestActionTypeValid(t *testing.T) {
 	valid := []UITestActionType{
-		UITestActionKey, UITestActionText, UITestActionResize, UITestActionTick,
+		UITestActionKey, UITestActionText, UITestActionResize, UITestActionTick, UITestActionMouse,
 	}
 	for _, at := range valid {
 		if !at.Valid() {
@@ -77,5 +77,13 @@ func TestUITestActionJSONOmitsZeroFields(t *testing.T) {
 	}
 	if want := `{"type":"resize","width":100,"height":40}`; string(resizeData) != want {
 		t.Fatalf("resize action JSON = %s, want %s", resizeData, want)
+	}
+
+	mouseData, err := json.Marshal(UITestAction{Type: UITestActionMouse, X: 10, Y: 5, Event: UITestMouseLeft})
+	if err != nil {
+		t.Fatalf("marshal mouse UITestAction: %v", err)
+	}
+	if want := `{"type":"mouse","x":10,"y":5,"event":"left"}`; string(mouseData) != want {
+		t.Fatalf("mouse action JSON = %s, want %s", mouseData, want)
 	}
 }

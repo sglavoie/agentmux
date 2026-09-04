@@ -1,0 +1,14 @@
+{
+  "name": "mouse session select and focus",
+  "fixture": "project_families",
+  "size": { "width": 120, "height": 32 },
+  "actions": [
+    { "type": "mouse", "x": 30, "y": 5, "event": "left" },
+    { "type": "mouse", "x": 30, "y": 5, "event": "left" }
+  ],
+  "assertions": [
+    { "type": "selected_title", "value": "notes" },
+    { "type": "kitty_calls", "op": "FocusTab", "count": 1 },
+    { "type": "no_layout_issues" }
+  ]
+}

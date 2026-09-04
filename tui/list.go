@@ -23,28 +23,59 @@ import (
 // read as a flat urgency list or as project families, and a header that did not
 // say which would leave the operator to infer it from the shape of the rows.
 func renderHeader(m Model) string {
+	return renderHeaderWithHits(m).text
+}
+
+type headerRender struct {
+	text string
+	hits []mouseHitRegion
+}
+
+type headerSegment struct {
+	text string
+	kind mouseHitKind
+}
+
+// renderHeaderWithHits keeps the adaptive admission decisions and the mouse
+// spans in one pass. A control omitted for width contributes no target.
+func renderHeaderWithHits(m Model) headerRender {
 	title := styleHeader.Render("Agent Mux")
-	left := title + styleDim.Render(" · "+m.listView.String())
+	viewPrefix := styleDim.Render(" · ")
+	viewLabel := styleDim.Render(m.listView.String())
+	left := title + viewPrefix + viewLabel
 	pips := renderHealthPips(m)
 	if m.width <= 0 {
-		return left + "\n"
+		return headerRender{
+			text: left + "\n",
+			hits: []mouseHitRegion{{kind: mouseHitView, rect: dashboard.HitRect{
+				X: layout.StyledWidth(title) + layout.StyledWidth(viewPrefix), Width: layout.StyledWidth(viewLabel), Height: 1,
+			}}},
+		}
 	}
 
 	// Required health status owns the right edge. Controls are admitted next;
 	// the duplicated filter placeholder is considered last and therefore drops
 	// first. This keeps the current view label stable as a future mouse target.
 	sep := styleFooter.Render("   ")
-	right := pips
-	prependIfFits := func(part string) {
+	var right []headerSegment
+	if pips != "" {
+		right = append(right, headerSegment{text: pips})
+	}
+	rightText := func(parts []headerSegment) string {
+		texts := make([]string, len(parts))
+		for i := range parts {
+			texts[i] = parts[i].text
+		}
+		return strings.Join(texts, sep)
+	}
+	prependIfFits := func(part string, kind mouseHitKind) {
 		if part == "" {
 			return
 		}
-		candidate := part
-		if right != "" {
-			candidate += sep + right
-		}
+		candidateParts := append([]headerSegment{{text: part, kind: kind}}, right...)
+		candidate := rightText(candidateParts)
 		if layout.StyledWidth(left)+1+layout.StyledWidth(candidate) <= m.width {
-			right = candidate
+			right = candidateParts
 		}
 	}
 	if m.cfg != nil {
@@ -52,37 +83,59 @@ func renderHeader(m Model) string {
 		if m.previewEnabled {
 			label = "p: hide preview"
 		}
-		prependIfFits(styleFooter.Render(label))
+		prependIfFits(styleFooter.Render(label), mouseHitPreview)
 	}
 	if m.listView == dashboard.ViewUrgency {
 		switch {
 		case dashboardRailWidth(m, dashboardBaseListPaneWidth(m)) > 0:
-			prependIfFits(styleFooter.Render("b: hide rail"))
+			prependIfFits(styleFooter.Render("b: hide rail"), mouseHitRailToggle)
 		case !m.railRequested:
-			prependIfFits(styleFooter.Render("b: show rail"))
+			prependIfFits(styleFooter.Render("b: show rail"), mouseHitRailToggle)
 		}
 	}
 	if m.mode == ModeList && dashboard.BandFor(m.width) != dashboard.BandCompact {
-		prependIfFits(styleDim.Render(inlineFilterPlaceholder))
+		prependIfFits(styleDim.Render(inlineFilterPlaceholder), mouseHitNone)
 	}
 
 	line := left
-	if right != "" {
-		rightWidth := layout.StyledWidth(right)
+	var hits []mouseHitRegion
+	rightRendered := rightText(right)
+	if rightRendered != "" {
+		rightWidth := layout.StyledWidth(rightRendered)
 		if rightWidth >= m.width {
-			line = layout.StyledTruncate(right, m.width, "…")
+			line = layout.StyledTruncate(rightRendered, m.width, "…")
+			left = ""
 		} else {
 			left = layout.StyledTruncate(left, m.width-rightWidth-1, "…")
 			pad := m.width - layout.StyledWidth(left) - rightWidth
-			line = left + strings.Repeat(" ", pad) + right
+			line = left + strings.Repeat(" ", pad) + rightRendered
+			x := m.width - rightWidth
+			for i, segment := range right {
+				w := layout.StyledWidth(segment.text)
+				if segment.kind != mouseHitNone && w > 0 {
+					hits = append(hits, mouseHitRegion{kind: segment.kind, rect: dashboard.HitRect{X: x, Width: w, Height: 1}})
+				}
+				x += w
+				if i < len(right)-1 {
+					x += layout.StyledWidth(sep)
+				}
+			}
 		}
+	}
+	viewX := layout.StyledWidth(title) + layout.StyledWidth(viewPrefix)
+	if visible := layout.StyledWidth(left) - viewX; visible > 0 {
+		w := layout.StyledWidth(viewLabel)
+		if w > visible {
+			w = visible
+		}
+		hits = append(hits, mouseHitRegion{kind: mouseHitView, rect: dashboard.HitRect{X: viewX, Width: w, Height: 1}})
 	}
 	line = layout.StyledTruncate(line, m.width, "…")
 	out := line + "\n"
 	if hint := renderHealthHints(m); hint != "" {
 		out += hint
 	}
-	return out
+	return headerRender{text: out, hits: hits}
 }
 
 // renderHealthPips returns the right-aligned `● daemon   ● hooks` strip

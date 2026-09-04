@@ -1,0 +1,13 @@
+{
+  "name": "mouse chip removal",
+  "fixture": "project_families",
+  "size": { "width": 120, "height": 32 },
+  "actions": [
+    { "type": "mouse", "x": 5, "y": 5, "event": "left" },
+    { "type": "mouse", "x": 1, "y": 2, "event": "left" }
+  ],
+  "assertions": [
+    { "type": "excludes_text", "text": "#api" },
+    { "type": "no_layout_issues" }
+  ]
+}
