@@ -16,19 +16,25 @@ type ScrollInput struct {
 	Items         ItemList
 	LastActivity  map[int]time.Time
 	IdleThreshold time.Duration
-	// MultiGroup mirrors Items.CountGroups(...) > 1. It is passed rather than
-	// derived so a caller that already computed it for the renderer charges
-	// the same chrome the renderer will actually draw.
-	MultiGroup bool
+	// GroupHeadings mirrors ShowsGroupHeadings for the view the renderer is
+	// drawing under. It is passed rather than derived so a caller that already
+	// computed it for the renderer charges the same chrome the renderer will
+	// actually draw — and so the Projects view, which draws no headings, does not
+	// have to be named again here.
+	GroupHeadings bool
 }
 
 // LineCost returns the number of rendered lines from offset through cursor
-// inclusive, matching the RenderList walk. When MultiGroup is true a
-// group-label line precedes the first item and every subsequent item whose group
-// differs from the previous one; subsequent visible group labels also get a
-// blank separator line. The walk initializes prevGroup to -1 to match
-// RenderList, so the item at offset always emits a label when MultiGroup is
-// true.
+// inclusive, matching the RenderList walk. Every item costs one line whatever
+// its kind and depth: a family summary is one line, an indented child is one
+// line, and a collapsed family's children are absent from the projection
+// entirely and so cost nothing.
+//
+// When GroupHeadings is true a group-label line precedes the first item and
+// every subsequent item whose group differs from the previous one; subsequent
+// visible group labels also get a blank separator line. The walk initializes
+// prevGroup to -1 to match RenderList, so the item at offset always emits a
+// label when GroupHeadings is true.
 func (in ScrollInput) LineCost(offset, cursor int) int {
 	if offset > cursor || offset < 0 || cursor >= in.Items.Len() {
 		return 0
@@ -36,7 +42,7 @@ func (in ScrollInput) LineCost(offset, cursor int) int {
 	cost := 0
 	prevGroup := -1
 	for i := offset; i <= cursor; i++ {
-		if in.MultiGroup {
+		if in.GroupHeadings {
 			g := in.Items.GroupAt(i, in.LastActivity, in.IdleThreshold)
 			if g != prevGroup {
 				if prevGroup != -1 {

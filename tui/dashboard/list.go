@@ -11,11 +11,13 @@
 package dashboard
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
@@ -30,6 +32,12 @@ const pulseColumnWidth = 2
 // reserved when at least one rendered row has a matching active loop.
 const activeLoopColumnWidth = 3
 
+// childIndentWidth is the horizontal offset one nesting level costs a line in
+// the Projects view. It buys the summary above the child a visible span to be
+// wider than, which is the whole signal that the child belongs to it. It costs
+// no vertical line, which is why nothing in the fit walk charges for it.
+const childIndentWidth = 2
+
 // ListInput is every fact the dashboard list renderer reads. The root builds
 // one from its Model at the call site, which is what keeps this package free
 // of Bubble Tea state.
@@ -41,6 +49,12 @@ type ListInput struct {
 	// on screen: one entry per rendered line, indexed by Cursor and Offset. Its
 	// Rows half remains the source of truth every row's facts are read from.
 	Items ItemList
+	// View is the arrangement Items was projected under. The renderer reads it
+	// for one decision only — whether urgency group headings are drawn — because
+	// everything else about the arrangement is already carried by the items
+	// themselves. Its zero value is ViewUrgency, so a caller that has never heard
+	// of views renders the historical list.
+	View ViewMode
 	// Loading is true while the initial running-session snapshot is still in
 	// flight. Later background refreshes keep rendering the last usable rows (or
 	// the confirmed empty state) instead of returning to the loading hero.
@@ -105,8 +119,11 @@ func RenderList(in ListInput) string {
 	acctColor := ProfileColorMap(in.Cfg)
 	harnessColor := HarnessColorMap(in.Cfg)
 
-	groupCounts := in.Items.CountGroups(in.LastActivity, in.IdleThreshold)
-	multiGroup := groupCounts > 1
+	// The two questions the urgency bands answer are separate here. Borders
+	// qualify one row and stay in both views; headings introduce a run of
+	// same-group rows, which is a claim only the urgency ordering makes good on.
+	multiGroup := in.Items.CountGroups(in.LastActivity, in.IdleThreshold) > 1
+	headings := ShowsGroupHeadings(in.View, in.Items, in.LastActivity, in.IdleThreshold)
 	pulseActive := anyRowHasActivePulse(in)
 	activityActive := anyRowHasActivity(in)
 	now := in.Now
@@ -141,13 +158,13 @@ func RenderList(in ListInput) string {
 		// Two-pass fit: first see how many rows land inside the budget
 		// without reserving the bottom indicator. If rows still remain after
 		// the fit, re-fit with one fewer line so the ▼ slot is reserved.
-		endIdx = fitRows(in, startIdx, budget, multiGroup)
+		endIdx = fitRows(in, startIdx, budget, headings)
 		if endIdx < total {
 			showBottom = true
 			if budget > 0 {
 				budget--
 			}
-			endIdx = fitRows(in, startIdx, budget, multiGroup)
+			endIdx = fitRows(in, startIdx, budget, headings)
 		}
 	}
 	activeLoopActive := anyVisibleRowHasActiveLoop(in, startIdx, endIdx)
@@ -178,7 +195,7 @@ func RenderList(in ListInput) string {
 		item, _ := in.Items.At(i)
 		s, isSession := in.Items.Session(item)
 		g := in.groupAt(i)
-		if multiGroup && g != prevGroup {
+		if headings && g != prevGroup {
 			if prevGroup != -1 {
 				sb.WriteByte('\n')
 			}
@@ -192,6 +209,16 @@ func RenderList(in ListInput) string {
 		}
 		if pulseActive && rowWidth > 0 {
 			rowWidth -= pulseColumnWidth
+		}
+		// A nested line pays for its indent out of the same budget the row
+		// content is laid out against, so the composed line stays inside the pane
+		// instead of pushing its rightmost column past the edge.
+		indent := item.Depth * childIndentWidth
+		if indent > 0 && rowWidth > 0 {
+			rowWidth -= indent
+			if rowWidth < 0 {
+				rowWidth = 0
+			}
 		}
 		var row string
 		if isSession {
@@ -208,7 +235,14 @@ func RenderList(in ListInput) string {
 			tabNumberCell := renderTabNumberCell(s.TabNumber, tabNumberWidth)
 			row = FormatRow(s, acctColor, harnessColor, in.Cfg, rowWidth, tabNumberCell, activeLoopCell, reasonCell, activityCell, branchCell)
 		} else {
-			row = renderSummaryRow(item, rowWidth)
+			row = renderSummaryRow(in, item, rowWidth)
+		}
+		if indent > 0 {
+			// Inside row rather than around the styled result: the selection
+			// highlight and the attention accent are applied to a whole line, and a
+			// prefix added after them would leave an unhighlighted notch in front
+			// of the selected child.
+			row = strings.Repeat(" ", indent) + row
 		}
 		var styledRow string
 		switch {
@@ -247,14 +281,19 @@ func RenderList(in ListInput) string {
 	return sb.String()
 }
 
-// fitRows returns the exclusive end index such that rendering rows
+// fitRows returns the exclusive end index such that rendering items
 // [startIdx, end) consumes at most budget lines. The walk mirrors RenderList:
-// when multiGroup is true, prevGroup initializes to -1 so the first row at
+// when headings is true, prevGroup initializes to -1 so the first item at
 // startIdx always charges a group-label line, matching the renderer's "begin a
 // window inside group 1 still emits the label" behavior. Subsequent visible
 // group transitions also charge one blank separator line before the next group
 // label.
-func fitRows(in ListInput, startIdx, budget int, multiGroup bool) int {
+//
+// Every item costs exactly one line regardless of kind and depth: a summary is
+// one line, an indented child is one line, and a collapsed family's children
+// are not items at all and so cost nothing. That is the whole reason the
+// projection folds before the walk runs rather than during it.
+func fitRows(in ListInput, startIdx, budget int, headings bool) int {
 	total := in.Items.Len()
 	if budget <= 0 || startIdx >= total {
 		return startIdx
@@ -265,7 +304,7 @@ func fitRows(in ListInput, startIdx, budget int, multiGroup bool) int {
 	for i := startIdx; i < total; i++ {
 		cost := 1
 		var g int
-		if multiGroup {
+		if headings {
 			g = in.groupAt(i)
 			if g != prevGroup {
 				cost++
@@ -278,7 +317,7 @@ func fitRows(in ListInput, startIdx, budget int, multiGroup bool) int {
 			break
 		}
 		used += cost
-		if multiGroup {
+		if headings {
 			prevGroup = g
 		}
 		end = i + 1
@@ -364,21 +403,81 @@ func pulsePrefix(in ListInput, s session.RunningSession, isSession bool) string 
 	return stateAccentStyle(s.State).Render(GroupBorderGlyph) + " "
 }
 
+const (
+	// summaryChevronExpanded and summaryChevronCollapsed are the collapse
+	// affordance. Both are one cell, so a family folding and unfolding does not
+	// shift the label beside it.
+	summaryChevronExpanded  = "▾"
+	summaryChevronCollapsed = "▸"
+
+	// unnamedFamilyLabel is what a family with no readable name renders as. The
+	// grouping key is built out of filesystem paths and must never be shown, so a
+	// family whose label was lost to a degraded probe says nothing rather than
+	// saying the key.
+	unnamedFamilyLabel = "(unnamed project)"
+)
+
+// summaryCountLabels name the three urgency buckets in a summary's tally. They
+// are the group labels said briefly: a summary reports several buckets on one
+// line, where "Needs Attention" would spend a quarter of a compact pane.
+var summaryCountLabels = [3]string{"attention", "active", "idle"}
+
 // renderSummaryRow paints a family summary as one line, which is what keeps
-// "one item costs one line" true for the fit walk and the scroll math. The copy
-// is deliberately minimal: what a summary shows — member counts, aggregate
-// state, the collapse affordance — belongs with the change that starts
-// projecting summaries, and nothing here produces one yet.
-func renderSummaryRow(it Item, width int) string {
+// "one item costs one line" true for the fit walk and the scroll math.
+//
+// The line reads chevron, worst-child state icon, family label, then the tally
+// of visible members per urgency bucket. The state icon is the summary's whole
+// urgency claim — it is the icon of the most urgent member, so a folded family
+// hiding a session that needs attention still shows that session's glyph — and
+// the tally qualifies it with how many members are behind it.
+//
+// When the line does not fit, the tally is dropped whole rather than cut. A
+// truncated "2 atten…" would read as a smaller number than it is, and the icon
+// has already carried the part that must not be lost.
+func renderSummaryRow(in ListInput, it Item, width int) string {
+	chevron := summaryChevronExpanded
+	if it.Collapsed {
+		chevron = summaryChevronCollapsed
+	}
 	label := it.FamilyLabel
 	if label == "" {
-		label = "(unnamed project)"
+		label = unnamedFamilyLabel
 	}
-	row := "▾ " + label
+
+	group := idleGroup
+	icon := ""
+	if lead, ok := in.Items.SummaryLead(it, in.LastActivity, in.IdleThreshold); ok {
+		group = StateGroup(lead, in.LastActivity, in.IdleThreshold)
+		if lead.State != "" {
+			icon = palette.StateIcon(lead.State)
+		}
+	}
+
+	head := chevron + " " + layout.PadIconCell(icon) + " " + groupLabelStyle(group).Render(label)
+	tally := renderSummaryCounts(in.Items.SummaryCounts(it, in.LastActivity, in.IdleThreshold))
+
+	row := head
+	if tally != "" && (width <= 0 || layout.StyledWidth(head)+2+layout.StyledWidth(tally) <= width) {
+		row = head + "  " + tally
+	}
 	if width > 0 {
 		row = layout.StyledTruncate(row, width, "…")
 	}
-	return styleDim.Render(row)
+	return row
+}
+
+// renderSummaryCounts renders the per-bucket tally, most urgent first, omitting
+// the buckets no visible member sits in. Each count wears its own group's label
+// style, so the tally is scannable as color before it is read as text.
+func renderSummaryCounts(counts [3]int) string {
+	var parts []string
+	for group, n := range counts {
+		if n == 0 {
+			continue
+		}
+		parts = append(parts, groupLabelStyle(group).Render(fmt.Sprintf("%d %s", n, summaryCountLabels[group])))
+	}
+	return strings.Join(parts, styleDim.Render(" · "))
 }
 
 // renderEmptyHero renders a centered hero block when there are no rows to

@@ -334,12 +334,14 @@ func clampListOffset(m *Model) {
 
 // scrollListToCursor adjusts m.listOffset so the cursor sits within the
 // currently visible window. Mirrors color_picker_app.scrollToCursor but
-// accounts for the group chrome emitted by renderListAt when multiGroup is
-// true: a row that starts a visible group costs one extra line for its label,
-// plus a blank separator when a prior group is already visible.
+// accounts for the group chrome emitted by renderListAt when the urgency
+// headings are drawn: a row that starts a visible group costs one extra line
+// for its label, plus a blank separator when a prior group is already visible.
+// The Projects view draws no headings, so there every item costs exactly one
+// line and the walk reduces to plain counting.
 //
 // The renderer initializes prevGroup to -1, so the first row at the window
-// origin always emits a group label when multiGroup is true. The cost walk
+// origin always emits a group label when the headings are drawn. The cost walk
 // here mirrors that initialization.
 func scrollListToCursor(m *Model) {
 	if m.height == 0 {
@@ -363,7 +365,7 @@ func scrollListToCursor(m *Model) {
 	}
 
 	visible := listVisibleHeight(*m)
-	multiGroup := m.items.CountGroups(m.lastActivity, m.idleThreshold) > 1
+	groupHeadings := listShowsGroupHeadings(m)
 
 	// Advance offset item-by-item until the cumulative line cost from offset
 	// through cursor fits within the visible budget. Stops when cursor and
@@ -373,7 +375,7 @@ func scrollListToCursor(m *Model) {
 	// group labels eat into the line budget. Mirrors
 	// color_picker_app.scrollToCursor, which also only floors at zero.
 	for m.listOffset < m.cursor {
-		if listCursorFitsWindow(m, m.listOffset, visible, multiGroup) {
+		if listCursorFitsWindow(m, m.listOffset, visible, groupHeadings) {
 			break
 		}
 		m.listOffset++
@@ -390,14 +392,14 @@ func scrollListToCursor(m *Model) {
 // one line on ▼ when rows remain below the cursor, and the dashboard reserves
 // those indicator lines so the model cannot select a row that the renderer
 // drops while making space for the scroll markers.
-func listCursorFitsWindow(m *Model, offset, height int, multiGroup bool) bool {
-	return dashboardScrollInput(m, multiGroup).CursorFits(offset, m.cursor, height)
+func listCursorFitsWindow(m *Model, offset, height int, groupHeadings bool) bool {
+	return dashboardScrollInput(m, groupHeadings).CursorFits(offset, m.cursor, height)
 }
 
 // listLineCost returns the number of rendered lines from offset through
 // cursor inclusive, matching the renderListAt walk.
-func listLineCost(m *Model, offset, cursor int, multiGroup bool) int {
-	return dashboardScrollInput(m, multiGroup).LineCost(offset, cursor)
+func listLineCost(m *Model, offset, cursor int, groupHeadings bool) int {
+	return dashboardScrollInput(m, groupHeadings).LineCost(offset, cursor)
 }
 
 func halfPageStep(visible int) int {

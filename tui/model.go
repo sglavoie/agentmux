@@ -59,9 +59,19 @@ type Model struct {
 	// this, not filtered, because a line does not have to stand for exactly one
 	// session. It is rebuilt from filtered — never edited in place — by
 	// rebuildItems, which every write to filtered is followed by.
-	items      dashboard.ItemList
-	cursor     int
-	listOffset int // top item index for the scrollable list view in ModeList
+	items dashboard.ItemList
+	// listView is the arrangement items is projected under. Its zero value is
+	// dashboard.ViewUrgency, so the dashboard starts — and every construction
+	// path that never mentions a view stays — on the historical list.
+	//
+	// collapsedFamilies records which family summaries are folded, keyed by
+	// family key. An absent entry means expanded, so the zero map is "everything
+	// open" and no view switch has to seed it. It is in-memory only: nothing
+	// persists a view or a collapse across runs.
+	listView          dashboard.ViewMode
+	collapsedFamilies map[string]bool
+	cursor            int
+	listOffset        int // top item index for the scrollable list view in ModeList
 	// initialSourceWindowID is the Kitty window from which the dashboard was
 	// opened, used to select the matching tab row. It is retained across
 	// refreshes and cleared by the first usable topology result, so a startup

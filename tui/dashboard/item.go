@@ -52,6 +52,16 @@ type Item struct {
 	// FamilyLabel is the family's readable name — the one of the two that is
 	// meant to reach a surface. Empty for an ungrouped row.
 	FamilyLabel string
+	// Depth is how far the line is indented, in nesting levels. Zero for every
+	// summary and every top-level leaf; one for a session rendered underneath the
+	// summary that speaks for it. It is presentation only: an indented line is
+	// still one line, so nothing in the fit walk or the scroll math reads it.
+	Depth int
+	// Collapsed reports that a summary's members are folded away and therefore
+	// project to no lines of their own. The summary still carries those members,
+	// because a folded family that forgot them would also forget that one of them
+	// needs attention.
+	Collapsed bool
 }
 
 // IsSession reports whether this item resolves to exactly one running session.
@@ -74,19 +84,13 @@ type ItemList struct {
 // names row i of the source: the urgency view's rendering, pagination, and
 // selection are unchanged by the existence of the item layer.
 //
-// Family summaries are not projected here. Grouping deterministic multi-session
-// families into summaries is a later change; what this establishes is that the
-// cursor already indexes a kinded item, so adding a non-session kind cannot
-// reach a session-targeted action.
+// Family summaries are not projected here: this is the urgency arrangement, in
+// which a line is a session and grouping is the urgency band the renderer draws
+// around it. BuildProjectItems is the arrangement that folds families.
 func BuildItems(rows []session.RunningSession) ItemList {
 	items := make([]Item, len(rows))
-	for i, s := range rows {
-		items[i] = Item{
-			Kind:        ItemSession,
-			Row:         i,
-			FamilyKey:   s.FamilyKey,
-			FamilyLabel: s.FamilyLabel,
-		}
+	for i := range rows {
+		items[i] = sessionItem(rows, i)
 	}
 	return ItemList{Rows: rows, Items: items}
 }

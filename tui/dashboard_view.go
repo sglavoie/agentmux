@@ -54,12 +54,20 @@ func (m Model) listItems() dashboard.ItemList {
 	return m.items
 }
 
-// rebuildItems re-derives the item projection from the current filtered rows.
-// Every write to m.filtered must be followed by one of these, which is what
-// keeps the projection from describing a row set a refresh, a filter change, or
-// a resort has already replaced.
+// rebuildItems re-derives the item projection from the current filtered rows
+// under the current view. Every write to m.filtered must be followed by one of
+// these, which is what keeps the projection from describing a row set a
+// refresh, a filter change, or a resort has already replaced — and every change
+// of view or of collapse state is a rebuild for the same reason.
 func (m *Model) rebuildItems() {
-	m.items = dashboard.BuildItems(m.filtered)
+	m.items = dashboard.BuildItemsFor(m.listView, m.filtered, m.collapsedFamilies)
+}
+
+// listShowsGroupHeadings reports whether the list renderer will draw urgency
+// group headings for the current projection. The scroll math charges the same
+// chrome the renderer draws, so both ask the leaf rather than each deciding.
+func listShowsGroupHeadings(m *Model) bool {
+	return dashboard.ShowsGroupHeadings(m.listView, m.items, m.lastActivity, m.idleThreshold)
 }
 
 // listItemCount is the number of selectable lines in the dashboard list. This
@@ -100,6 +108,7 @@ func dashboardListInput(m Model, width, height int) dashboard.ListInput {
 	now := modelNow(m)
 	return dashboard.ListInput{
 		Items:         m.items,
+		View:          m.listView,
 		Loading:       topologyLoading(m),
 		SessionCount:  len(m.sessions),
 		Filter:        m.activeFilter,
@@ -125,15 +134,15 @@ func topologyLoading(m Model) bool {
 	return m.topologyObservedAt.IsZero() && m.topologyRefreshInFlight
 }
 
-// dashboardScrollInput projects the model onto the pagination math. multiGroup
-// is passed in rather than derived so the caller charges the same group chrome
-// the renderer will actually draw.
-func dashboardScrollInput(m *Model, multiGroup bool) dashboard.ScrollInput {
+// dashboardScrollInput projects the model onto the pagination math.
+// groupHeadings is passed in rather than derived so the caller charges the same
+// group chrome the renderer will actually draw.
+func dashboardScrollInput(m *Model, groupHeadings bool) dashboard.ScrollInput {
 	return dashboard.ScrollInput{
 		Items:         m.items,
 		LastActivity:  m.lastActivity,
 		IdleThreshold: m.idleThreshold,
-		MultiGroup:    multiGroup,
+		GroupHeadings: groupHeadings,
 	}
 }
 

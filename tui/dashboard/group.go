@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/lipgloss/v2"
+
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -97,20 +99,25 @@ func groupBorder(group int) string {
 	}
 }
 
+// groupLabelStyle returns the emphasis a group's name is written in. It is
+// shared by the urgency heading and the family summary's tally so a bucket
+// looks the same wherever it is named.
+func groupLabelStyle(group int) lipgloss.Style {
+	switch group {
+	case 0:
+		return styleGroupLabelAttention
+	case 1:
+		return styleGroupLabelActive
+	default:
+		return styleGroupLabelIdle
+	}
+}
+
 // renderGroupLabel emits the left-aligned tag above the first row of a group.
 // The label is indented to line up with the row content (border + space).
 func renderGroupLabel(group, count int) string {
 	label := fmt.Sprintf("%s (%d)", groupLabels[group], count)
-	var styled string
-	switch group {
-	case 0:
-		styled = styleGroupLabelAttention.Render(label)
-	case 1:
-		styled = styleGroupLabelActive.Render(label)
-	default:
-		styled = styleGroupLabelIdle.Render(label)
-	}
-	return strings.Repeat(" ", groupBorderWidth) + styled
+	return strings.Repeat(" ", groupBorderWidth) + groupLabelStyle(group).Render(label)
 }
 
 var groupLabels = [3]string{"Needs Attention", "Active", "Idle"}
