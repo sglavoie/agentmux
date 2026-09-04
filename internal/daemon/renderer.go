@@ -277,7 +277,23 @@ func (h *Handler) refreshMutedFromSnapshotLocked(windows []kitty.OSWindow) {
 // transitioned into rest. A snapshot that merely fails to observe focus is not
 // evidence the user looked away — it is the normal state of every window but one,
 // and reasserting the bit from it would re-raise every row the user has ever
-// read, two seconds at a time. Callers hold stateMu.
+// read, two seconds at a time.
+//
+// The clear is a DURABLE mutation and goes through markWindowDirtyLocked like any
+// other, which is what the true→false guard below exists for. Two properties hang
+// on it. First, the bit lives only in amx_state — no title carries it, so
+// enqueueSnapshotCandidates' title-drift leg can never rediscover it and a clear
+// that skipped the dirty mark would be lost on the next daemon restart, restoring
+// the row the user just read straight back into Needs Attention. Second, Seq is
+// the renderer's generation: advancing it is what makes a render candidate built
+// before this observation stale, so a pass already in flight with the pre-focus
+// payload requeues instead of persisting the unseen bit over the cleared one.
+//
+// The guard also bounds the cost to exactly one generation per transition. Every
+// subsequent snapshot — one every rendering.Interval for as long as the pane keeps
+// focus — finds the bit already clear and marks nothing, so looking at a window
+// does not rewrite its amx_state twice a second for as long as you look at it.
+// Callers hold stateMu.
 func (h *Handler) refreshFocusFromSnapshotLocked(windows []kitty.OSWindow) {
 	for i := range windows {
 		for j := range windows[i].Tabs {
@@ -285,9 +301,13 @@ func (h *Handler) refreshFocusFromSnapshotLocked(windows []kitty.OSWindow) {
 				if !snapshotPaneFocused(&windows[i], &windows[i].Tabs[j], &windows[i].Tabs[j].Windows[k]) {
 					continue
 				}
-				if st, ok := h.windowStateLocked(windows[i].Tabs[j].Windows[k].ID); ok {
-					st.Unseen = false
+				windowID := windows[i].Tabs[j].Windows[k].ID
+				st, ok := h.windowStateLocked(windowID)
+				if !ok || !st.Unseen {
+					continue
 				}
+				st.Unseen = false
+				h.markWindowDirtyLocked(windowID)
 			}
 		}
 	}

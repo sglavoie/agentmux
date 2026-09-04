@@ -32,8 +32,12 @@ func (h *Handler) windowStateLocked(windowID int) (*state.WindowState, bool) {
 	return st, ok
 }
 
-// markWindowDirtyLocked records a visible-state change (effective icon or
-// loop marker) and queues the window for an immediate render.
+// markWindowDirtyLocked records a visible-state change (effective icon, loop
+// marker, or the unseen bit that decides which dashboard group the row sits in)
+// and queues the window for an immediate render. Visible does not mean "in the
+// tab title": the unseen bit is carried only by amx_state, and it is here rather
+// than on the batched path because a row the user has just read must survive a
+// restart that lands before the next maintenance flush.
 func (h *Handler) markWindowDirtyLocked(windowID int) {
 	st := h.markWindowStateDirtyLocked(windowID)
 	h.enqueueRenderLocked(windowID, st)
