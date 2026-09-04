@@ -149,9 +149,9 @@ func TestBranchColumnChargesTheDirectoryAndNotTheViewport(t *testing.T) {
 		Directory: "/home/user/projects/worktrees/api-feature-x/internal/deep",
 	}
 
-	without := FormatRow(s, nil, nil, nil, width, "1: ", "", "", "", "")
+	without := FormatRow(RowInput{Session: s, Band: BandFor(width), Width: width, TabNumberCell: "1: "})
 	cell := renderBranchCell(session.RunningSession{Branch: "amx/feat-x"}, 11)
-	with := FormatRow(s, nil, nil, nil, width, "1: ", "", "", "", cell)
+	with := FormatRow(RowInput{Session: s, Band: BandFor(width), Width: width, TabNumberCell: "1: ", BranchCell: cell})
 
 	if layout.StyledWidth(without) != layout.StyledWidth(with) {
 		t.Fatalf("row width changed with the branch column: %d without, %d with",

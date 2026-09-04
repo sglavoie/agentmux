@@ -14,14 +14,23 @@ import (
 
 // renderHeader renders the dashboard title line. Active filters are surfaced
 // as chips below the header via renderChips, so this line carries the title,
-// the filter hint, the preview hint, and the right-aligned daemon/hooks
-// health pips. Error details are surfaced through the sticky status bar.
+// the name of the current view, the filter hint, the preview hint, and the
+// right-aligned daemon/hooks health pips. Error details are surfaced through
+// the sticky status bar.
+//
+// The view name is here rather than in the footer because it is the one piece
+// of state that changes what every line below means: the same filtered sessions
+// read as a flat urgency list or as project families, and a header that did not
+// say which would leave the operator to infer it from the shape of the rows.
 func renderHeader(m Model) string {
 	title := styleHeader.Render("Agent Mux")
-	left := title
+	left := title + styleDim.Render(" · "+m.listView.String())
 
 	var rightParts []string
-	if m.mode == ModeList {
+	// The filter hint is the first thing a compact terminal gives up: it names a
+	// key the footer already lists, and the room it costs is the room the health
+	// pips need to stay on screen.
+	if m.mode == ModeList && dashboard.BandFor(m.width) != dashboard.BandCompact {
 		rightParts = append(rightParts, styleDim.Render(inlineFilterPlaceholder))
 	}
 	if m.previewEnabled {
@@ -132,7 +141,12 @@ func renderDeprecationBanner(m Model) string {
 	}
 	headline := "⚠ config uses deprecated keys: " + strings.Join(pairs, ", ")
 	hint := "  edit amx config path and replace the keys above · press d to dismiss for this session"
-	return styleBanner.Render(headline) + "\n" + styleFooter.Render(hint) + "\n"
+	// Both lines are clamped for the same reason the header and every footer row
+	// are: the banner's width is the config's, not the terminal's, and one
+	// deprecated key with a long replacement is already wider than a compact
+	// pane.
+	return layout.ClampLine(styleBanner.Render(headline), m.width) + "\n" +
+		layout.ClampLine(styleFooter.Render(hint), m.width) + "\n"
 }
 
 // inlineFilterPlaceholder is the greyed copy shown in the dashboard title row.
@@ -156,11 +170,22 @@ func renderInlineFilter(m Model) string {
 const legendMinHeight = 20
 
 // renderLegend returns the icon→meaning legend strip drawn above the list.
-// Returns "" when the terminal is too short to spare a line, when the model
-// has no width set, or when no state has a gloss to render. Each token is
-// styled in its state's accent so the user maps icon → meaning at a glance.
+// Returns "" when the terminal is too short to spare a line, when it is too
+// narrow to spend one on a reference, or when no state has a gloss to render.
+// Each token is styled in its state's accent so the user maps icon → meaning at
+// a glance.
+//
+// Both gates are the same judgement made on the two axes. The legend is a
+// reference, not a status: it teaches the icon column and then stops being
+// read. On a short terminal it costs rows the sessions need; on a narrow one it
+// wraps to several rows to say the same thing, which is worse. So it appears
+// only where the terminal can afford it on both axes — a spacious width, and a
+// height above the existing floor.
 func renderLegend(m Model) string {
 	if m.height > 0 && m.height < legendMinHeight {
+		return ""
+	}
+	if dashboard.BandFor(m.width) != dashboard.BandSpacious {
 		return ""
 	}
 	var tokens []footerToken
@@ -197,69 +222,60 @@ const listMinVisible = 3
 const statusBarLines = 1
 
 // chromeAboveListLines returns the number of vertical lines render() writes
-// between the very top of the screen and the start of the list block in
-// ModeList. This is the "header + everything between header and list" budget;
-// the trailing newline after the list and the footer area are accounted for
-// separately by callers so the preview-ON path can subtract them in the same
-// place as the preview's own height allocation.
+// between the very top of the screen and the start of the list block. This is
+// the "header + everything between header and list" budget; the trailing
+// newline after the list and the footer area are accounted for separately by
+// callers so the preview-ON path can subtract them in the same place as the
+// preview's own height allocation.
 //
-// Elements (each contributes its row count when visible):
-//   - header + health hints                                             (1..3)
-//   - deprecation banner (when undismissed and at least one entry)        (2)
-//   - legend (omitted when m.height > 0 && m.height < legendMinHeight)    (1..n)
-//   - chips (when activeFilter has at least one component)                (1)
-//   - spacer where the inline filter hint used to sit in ModeList          (1)
+// Every element is counted by rendering it and measuring the result rather than
+// by re-deriving its height from the same conditions the renderer reads. The
+// two used to be separate statements of the same rule — a hint that wrapped, a
+// banner that grew a line, a legend that reflowed at a narrower width would
+// each drift the real chrome away from the charged chrome, and the drift lands
+// on the cursor as a row the renderer clips. Rendering twice costs a few string
+// builds per frame; the alternative costs correctness at exactly the widths
+// this file exists to get right.
 //
-// The renderHeader hint and chip-wrap-to-two-lines edge cases can drift the
-// real chrome by one line; the listMinVisible floor in listVisibleHeight
-// absorbs that drift on short terminals.
+// The one thing not measured is the spacer where the inline filter hint used to
+// sit: it is a bare newline, which layout.SectionLines correctly reports as no
+// content, and it is still a physical row on screen.
 func chromeAboveListLines(m Model) int {
-	n := 1 // header
-	n += healthHintLines(m)
-	if !m.deprecationDismissed && len(m.deprecations) > 0 {
-		n += 2
+	if m.mode == ModeSearch {
+		// ModeSearch replaces the whole header block with the search input and
+		// draws none of the chrome below it.
+		return len(layout.SectionLines(renderSearch(m)))
 	}
-	n += legendLineCount(m)
-	if len(m.activeFilter.Components()) > 0 {
-		n++
-	}
+	n := len(layout.SectionLines(renderHeader(m)))
+	n += len(layout.SectionLines(renderDeprecationBanner(m)))
+	n += len(layout.SectionLines(renderLegend(m)))
+	n += len(layout.SectionLines(renderChips(m, m.width)))
 	if m.mode == ModeList {
 		n++ // spacer is always one line in ModeList
 	}
 	return n
 }
 
+// chromeBelowListLines returns the vertical lines drawn between the bottom of
+// the list/preview area and the padding row above the footer. Only the compact
+// band's selected-item detail strip lives there.
+func chromeBelowListLines(m Model) int {
+	return detailStripBudgetLines(m)
+}
+
 func legendLineCount(m Model) int {
 	return len(layout.SectionLines(renderLegend(m)))
 }
 
-// healthHintLines mirrors renderHealthHints' line count without rendering
-// styled text. renderHeader appends one line per degraded health signal below
-// the title row, so list/preview height math must reserve those rows.
-func healthHintLines(m Model) int {
-	if m.daemonHealthCheckedAt.IsZero() && m.hookHealthCheckedAt.IsZero() {
-		return 0
-	}
-	n := 0
-	if !m.daemonHealthCheckedAt.IsZero() && !m.daemonAlive {
-		n++
-	}
-	if m.hookHealthErr != nil {
-		n++
-	} else if !m.hookHealthCheckedAt.IsZero() && !m.hookHealth.Healthy() {
-		n++
-	}
-	return n
-}
-
 // listChromeLines returns the total number of vertical lines the dashboard
 // chrome occupies around the session list in ModeList, mirroring the
-// composition in render(). Sum of chromeAboveListLines (above) + the padding
-// row between body and footer + footerBudgetLines + the sticky status bar.
-// Used by listVisibleHeight to derive the row budget when the preview pane
-// is off.
+// composition in render(). Sum of chromeAboveListLines (above) + the compact
+// detail strip below the list + the padding row between body and footer +
+// footerBudgetLines + the sticky status bar. Used by listVisibleHeight to
+// derive the row budget when the preview pane is off.
 func listChromeLines(m Model) int {
-	return chromeAboveListLines(m) + 1 /* padding row */ + footerBudgetLines(m) + statusBarLines
+	return chromeAboveListLines(m) + chromeBelowListLines(m) +
+		1 /* padding row */ + footerBudgetLines(m) + statusBarLines
 }
 
 // listVisibleHeight returns the row-line budget for the scrollable session
@@ -268,34 +284,16 @@ func listChromeLines(m Model) int {
 // window. Pre-WindowSizeMsg (height==0) the budget equals the item count
 // so scroll-affecting operations are no-ops until the first resize arrives,
 // mirroring detailScrollBounds.
+//
+// It reads the same dashboardGeometry renderSplit lays the panes out from, so
+// the budget the cursor is clamped against and the budget the renderer draws
+// into cannot drift apart — including in the cases where the split silently
+// falls back to the plain list.
 func listVisibleHeight(m Model) int {
 	if m.height == 0 {
 		return m.listItemCount()
 	}
-	if m.previewEnabled && m.cfg != nil {
-		var h int
-		cfg := m.cfg.Defaults.Preview
-		footerLines := footerBudgetLines(m)
-		paneHeight := m.height - chromeAboveListLines(m) - 1 /* padding row */ - footerLines - statusBarLines
-		if cfg.Direction == "vertical" {
-			previewHeight := int(float64(paneHeight) * cfg.Ratio)
-			if previewHeight < 3 {
-				previewHeight = 3
-			}
-			if previewHeight > paneHeight-2 {
-				previewHeight = paneHeight - 2
-			}
-			h = paneHeight - previewHeight - 1
-		} else {
-			h = paneHeight
-		}
-		if h < listMinVisible {
-			h = listMinVisible
-		}
-		return h
-	}
-
-	return listVisibleHeightForFooterLines(m, footerBudgetLines(m))
+	return dashboardGeometry(m).listHeight
 }
 
 // listVisibleHeightForFooterLines derives the non-preview list height from an
@@ -306,7 +304,8 @@ func listVisibleHeightForFooterLines(m Model, footerLines int) int {
 	if m.height == 0 {
 		return m.listItemCount()
 	}
-	h := m.height - chromeAboveListLines(m) - 1 /* padding row */ - footerLines - statusBarLines
+	h := m.height - chromeAboveListLines(m) - chromeBelowListLines(m) -
+		1 /* padding row */ - footerLines - statusBarLines
 	if h < listMinVisible {
 		h = listMinVisible
 	}

@@ -198,7 +198,9 @@ func TestFormatRowPlacesTheReasonBesideTheIcon(t *testing.T) {
 		Reason:    string(screenstate.ClaudePromptPermission),
 	}
 	cell := renderReasonCell(s, 0, reasonColumnWidth([]session.RunningSession{s}, attentionGroup))
-	row := stripAnsi(FormatRow(s, map[string]string{"work": "blue"}, nil, nil, 120, "", "", cell, "", ""))
+	// Standard band: the profile cell is the initial, which is the form this
+	// test names when it asserts the tag lands before it.
+	row := stripAnsi(FormatRow(RowInput{Session: s, Band: BandStandard, Width: 100, AcctColor: map[string]string{"work": "blue"}, ReasonCell: cell}))
 
 	icon := palette.StateIcon("key")
 	want := icon + " perm "
@@ -226,9 +228,9 @@ func TestFormatRowReasonCellIsChargedToTheDirectory(t *testing.T) {
 		Reason:    string(screenstate.CodexPromptRequestUserInput),
 	}
 	const width = 100
-	without := layout.StyledWidth(FormatRow(s, nil, nil, nil, width, "", "", "", "", ""))
+	without := layout.StyledWidth(FormatRow(RowInput{Session: s, Band: BandFor(width), Width: width}))
 	cell := renderReasonCell(s, 0, reasonColumnWidth([]session.RunningSession{s}, attentionGroup))
-	with := layout.StyledWidth(FormatRow(s, nil, nil, nil, width, "", "", cell, "", ""))
+	with := layout.StyledWidth(FormatRow(RowInput{Session: s, Band: BandFor(width), Width: width, ReasonCell: cell}))
 	if with != without {
 		t.Fatalf("row width with the reason cell = %d, without = %d: the cell must be charged to the directory budget, not added to the row",
 			with, without)

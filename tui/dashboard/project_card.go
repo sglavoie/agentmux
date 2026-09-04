@@ -140,25 +140,16 @@ func projectCardChildLine(in ProjectCardInput, s session.RunningSession) string 
 		return line
 	}
 
-	var parts []string
-	if p := s.EffectiveProfile(); p != "" {
-		parts = append(parts, p)
-	}
-	if h := harnessLabel(s.Harness); h != "" {
-		parts = append(parts, h)
-	}
-	if b := branchText(s); b != "" {
-		parts = append(parts, b)
-	}
-	if s.Directory != "" {
-		parts = append(parts, s.Directory)
-	}
-	if len(parts) == 0 {
+	// Profile, harness, branch, directory — the same tokens in the same
+	// drop-priority order the compact band's detail strip uses, from the one
+	// helper, so the two surfaces cannot start describing a child differently.
+	parts := joinDetailTokens(sessionContextTokens(s)...)
+	if parts == "" {
 		return line
 	}
 	// The directory is the last part and the widest, so cutting from the right
 	// takes the tail of the path — which is the half that names the checkout.
 	// TruncateLeft keeps it and drops the shared prefix instead, exactly as the
 	// list row's directory column does.
-	return line + "  " + styleDim.Render(layout.TruncateLeft(strings.Join(parts, " · "), remaining, "…"))
+	return line + "  " + styleDim.Render(layout.TruncateLeft(parts, remaining, "…"))
 }

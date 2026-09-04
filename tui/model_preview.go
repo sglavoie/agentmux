@@ -126,6 +126,7 @@ func (m Model) render() string {
 		} else {
 			sb.WriteString(renderList(m))
 		}
+		sb.WriteString(renderDetailStripBlock(m))
 	}
 
 	return composeRootView(sb.String(), m)
@@ -210,62 +211,178 @@ func renderDashboard(m Model) string {
 	} else {
 		sb.WriteString(renderList(m))
 	}
+	sb.WriteString(renderDetailStripBlock(m))
 	return sb.String()
 }
 
+const (
+	// previewMinPaneWidth is the narrowest column either pane is worth drawing
+	// in. It bounds the preview from below and, through dashboardSplitWidths,
+	// the terminal width a horizontal split is attempted at all.
+	previewMinPaneWidth = 20
+	// previewMinPaneHeight is the same judgement on the vertical axis: below it
+	// the list and the preview cannot both hold anything readable.
+	previewMinPaneHeight = 4
+	// previewMinVerticalHeight is the floor on the stacked preview's own rows.
+	previewMinVerticalHeight = 3
+)
+
+// dashboardGeom is the dashboard body's rectangle, resolved once. renderSplit
+// draws from it and listVisibleHeight clamps the cursor against it, so the
+// renderer and the scroll arithmetic cannot disagree about how many rows exist
+// — including in the cases where the split silently falls back to the plain
+// list, which is exactly where the two used to drift.
+type dashboardGeom struct {
+	// split reports whether the preview pane is drawn at all. When it is false
+	// the list takes the whole body and the preview fields are zero.
+	split bool
+	// vertical reports a stacked split rather than a side-by-side one.
+	vertical bool
+
+	listWidth, listHeight       int
+	previewWidth, previewHeight int
+}
+
+// dashboardPreviewRequested reports whether the model is asking for a preview
+// pane, before any question of whether one fits.
+func dashboardPreviewRequested(m Model) bool {
+	return m.previewEnabled && m.cfg != nil
+}
+
+// dashboardSplitWidths resolves a side-by-side split's column allocation. It
+// reports false when there is no preview, when the direction is vertical (both
+// panes are then full width), or when the terminal cannot hold a readable
+// preview beside a list at the compact row floor.
+//
+// The floor is the point of the ok result: MinRowWidth is the width the compact
+// band's fixed prefix and its smallest useful title need, so a list column below
+// it can only be an elided one. Pairing that with a preview is worse than
+// dropping the preview, which is what the caller does.
+//
+// Nothing here reads m.height. That is load-bearing: the detail strip's height
+// charge is derived from the list column's width, so a width that depended on
+// the height would close a loop between the two and let a resize oscillate
+// between the split and the plain list.
+func dashboardSplitWidths(m Model) (listWidth, previewWidth int, ok bool) {
+	if !dashboardPreviewRequested(m) || m.width < previewMinPaneWidth {
+		return 0, 0, false
+	}
+	if m.cfg.Defaults.Preview.Direction == "vertical" {
+		return 0, 0, false
+	}
+	maxPreview := m.width - dashboard.MinRowWidth() - 1
+	previewWidth = int(float64(m.width) * m.cfg.Defaults.Preview.Ratio)
+	if previewWidth > maxPreview {
+		previewWidth = maxPreview
+	}
+	if previewWidth < previewMinPaneWidth {
+		return 0, 0, false
+	}
+	return m.width - previewWidth - 1, previewWidth, true
+}
+
+// dashboardListPaneWidth returns the width the list column is laid out at, and
+// therefore the width its band is judged from. Width-only, for the reason
+// dashboardSplitWidths documents: a height-dependent answer here would feed the
+// detail strip's charge back into the geometry that decides the strip.
+//
+// A short terminal can still drop the split after this returns, which leaves
+// the list wider than the band it was charged for. That direction is safe — the
+// strip is reserved and drawn consistently, it is merely more detail than a
+// standard-band list strictly needs — and it is the price of the loop staying
+// open.
+func dashboardListPaneWidth(m Model) int {
+	if listWidth, _, ok := dashboardSplitWidths(m); ok {
+		return listWidth
+	}
+	if m.width < 0 {
+		return 0
+	}
+	return m.width
+}
+
+// dashboardGeometry lays the body out: the list column, and the preview pane
+// when one fits. Every height term the renderer will spend is subtracted here
+// once — the chrome above the list, the compact detail strip below it, the
+// padding row, the footer, and the sticky status bar — so no caller has to
+// re-derive the same subtraction and get it subtly wrong.
+func dashboardGeometry(m Model) dashboardGeom {
+	width := m.width
+	if width < 0 {
+		width = 0
+	}
+	paneHeight := m.height - chromeAboveListLines(m) - chromeBelowListLines(m) -
+		1 /* padding row */ - footerBudgetLines(m) - statusBarLines
+
+	listWidth, previewWidth, horizontal := dashboardSplitWidths(m)
+	vertical := dashboardPreviewRequested(m) && width >= previewMinPaneWidth &&
+		m.cfg.Defaults.Preview.Direction == "vertical"
+
+	if paneHeight < previewMinPaneHeight || (!horizontal && !vertical) {
+		return dashboardGeom{listWidth: width, listHeight: clampListHeight(paneHeight)}
+	}
+	if vertical {
+		previewHeight := int(float64(paneHeight) * m.cfg.Defaults.Preview.Ratio)
+		if previewHeight < previewMinVerticalHeight {
+			previewHeight = previewMinVerticalHeight
+		}
+		// The list's floor is taken out of the preview rather than out of the
+		// pane, so the two heights plus the divider always sum to exactly
+		// paneHeight. Clamping the list up afterwards instead would make the
+		// body taller than the space it was given, and the root would clip the
+		// bottom of the preview to fit it back.
+		if room := paneHeight - listMinVisible - 1; previewHeight > room {
+			previewHeight = room
+		}
+		if previewHeight < 1 {
+			return dashboardGeom{listWidth: width, listHeight: clampListHeight(paneHeight)}
+		}
+		return dashboardGeom{
+			split:         true,
+			vertical:      true,
+			listWidth:     width,
+			listHeight:    paneHeight - previewHeight - 1,
+			previewWidth:  width,
+			previewHeight: previewHeight,
+		}
+	}
+	return dashboardGeom{
+		split:         true,
+		listWidth:     listWidth,
+		listHeight:    clampListHeight(paneHeight),
+		previewWidth:  previewWidth,
+		previewHeight: paneHeight,
+	}
+}
+
+// clampListHeight floors a computed row budget so a degenerate terminal yields
+// a usable window rather than a zero or negative one.
+func clampListHeight(h int) int {
+	if h < listMinVisible {
+		return listMinVisible
+	}
+	return h
+}
+
 // renderSplit renders the list and preview pane side-by-side or stacked
-// according to the configured direction. Falls back to the plain list when
-// dimensions or selection make the preview unusable.
+// according to the resolved geometry. Falls back to the plain list when
+// dimensions make the preview unusable.
 func renderSplit(m Model) string {
-	cfg := m.cfg.Defaults.Preview
-	footerLines := footerBudgetLines(m)
-	// Vertical space available for the list+preview area: total height minus
-	// all chrome rendered above the list (header + banner + legend + chips +
-	// spacer), minus the padding row between body and footer, minus the footer,
-	// minus the sticky status bar. Must stay in lock-step with
-	// listVisibleHeight's preview branch so scrollListToCursor and renderListAt
-	// agree on the budget — otherwise the cursor can land at a row the
-	// renderer emits past the visible terminal area.
-	paneHeight := m.height - chromeAboveListLines(m) - 1 /* padding row */ - footerLines - statusBarLines
-	if paneHeight < 4 || m.width < 20 {
+	g := dashboardGeometry(m)
+	if !g.split {
 		return renderList(m)
 	}
-
-	if cfg.Direction == "vertical" {
-		previewHeight := int(float64(paneHeight) * cfg.Ratio)
-		if previewHeight < 3 {
-			previewHeight = 3
-		}
-		if previewHeight > paneHeight-2 {
-			previewHeight = paneHeight - 2
-		}
-		listHeight := paneHeight - previewHeight - 1
-		listView := renderListAt(m, m.width, listHeight)
-		divider := styleDim.Render(strings.Repeat("─", m.width))
-		return lipgloss.JoinVertical(lipgloss.Left, listView, divider, renderPreviewPane(m, m.width, previewHeight)) + "\n"
+	if g.vertical {
+		listView := renderListAt(m, g.listWidth, g.listHeight)
+		divider := styleDim.Render(strings.Repeat("─", g.listWidth))
+		return lipgloss.JoinVertical(lipgloss.Left, listView, divider,
+			renderPreviewPane(m, g.previewWidth, g.previewHeight)) + "\n"
 	}
-
-	previewWidth := int(float64(m.width) * cfg.Ratio)
-	if previewWidth < 20 {
-		previewWidth = 20
-	}
-	if previewWidth > m.width-20 {
-		previewWidth = m.width - 20
-	}
-	listWidth := m.width - previewWidth - 1
-	// A horizontal split shrinks the list to listWidth, but formatRow cannot
-	// lay out its fixed columns below minListRowWidth. Below the floor the list
-	// column can only be truncated, which pairs a cramped, elided list with the
-	// preview; fall back to the full-width plain list instead (mirrors the
-	// paneHeight<4 || m.width<20 guard above). The plain list is itself clamped
-	// to m.width by renderListAt's safety truncation.
-	if listWidth < dashboard.MinRowWidth() {
-		return renderList(m)
-	}
-	listView := renderListAt(m, listWidth, paneHeight)
-	divider := strings.Repeat(styleDim.Render("│")+"\n", paneHeight)
+	listView := renderListAt(m, g.listWidth, g.listHeight)
+	divider := strings.Repeat(styleDim.Render("│")+"\n", g.listHeight)
 	divider = strings.TrimRight(divider, "\n")
-	return lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, renderPreviewPane(m, previewWidth, paneHeight)) + "\n"
+	return lipgloss.JoinHorizontal(lipgloss.Top, listView, divider,
+		renderPreviewPane(m, g.previewWidth, g.previewHeight)) + "\n"
 }
 
 // renderPreviewPane paints whatever the current selection makes the pane mean.

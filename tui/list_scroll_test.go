@@ -9,6 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // scrollModel returns a baseline Model parked in ModeList with a generous
@@ -95,7 +96,7 @@ func TestListChromeLines_HealthHintsAddHeaderLines(t *testing.T) {
 	if got != base+2 {
 		t.Errorf("with daemon and hook health hints: got %d want %d", got, base+2)
 	}
-	if hints := healthHintLines(m); hints != 2 {
+	if hints := len(layout.SectionLines(renderHealthHints(m))); hints != 2 {
 		t.Errorf("health hint count: got %d want 2", hints)
 	}
 
@@ -108,7 +109,14 @@ func TestListChromeLines_HealthHintsAddHeaderLines(t *testing.T) {
 
 func TestListChromeLines_LegendDroppedBelowLegendMinHeight(t *testing.T) {
 	m := scrollModel()
+	// The legend has a width gate as well as a height one, and scrollModel's
+	// 100 columns are below it. Widen locally so the height gate is the thing
+	// under test rather than a legend that was never going to render.
+	m.width = 120
 	base := listChromeLines(m)
+	if legendLineCount(m) == 0 {
+		t.Fatalf("fixture must render a legend before the height gate is tested")
+	}
 	legendLines := legendLineCount(m)
 	m.height = legendMinHeight - 1 // legend omitted
 	got := listChromeLines(m)
@@ -157,13 +165,13 @@ func TestListVisibleHeight_PreviewVerticalMatchesRenderSplit(t *testing.T) {
 	m.previewEnabled = true
 
 	footerLines := footerBudgetLines(m)
-	paneHeight := m.height - chromeAboveListLines(m) - 1 - footerLines - statusBarLines
+	paneHeight := m.height - chromeAboveListLines(m) - chromeBelowListLines(m) - 1 - footerLines - statusBarLines
 	previewHeight := int(float64(paneHeight) * 0.5)
-	if previewHeight < 3 {
-		previewHeight = 3
+	if previewHeight < previewMinVerticalHeight {
+		previewHeight = previewMinVerticalHeight
 	}
-	if previewHeight > paneHeight-2 {
-		previewHeight = paneHeight - 2
+	if room := paneHeight - listMinVisible - 1; previewHeight > room {
+		previewHeight = room
 	}
 	want := paneHeight - previewHeight - 1
 
@@ -178,10 +186,18 @@ func TestListVisibleHeight_PreviewHorizontalReturnsPaneHeight(t *testing.T) {
 	m.previewEnabled = true
 
 	footerLines := footerBudgetLines(m)
-	want := m.height - chromeAboveListLines(m) - 1 - footerLines - statusBarLines
+	want := m.height - chromeAboveListLines(m) - chromeBelowListLines(m) - 1 - footerLines - statusBarLines
 
 	if got := listVisibleHeight(m); got != want {
 		t.Errorf("preview horizontal: got %d want %d", got, want)
+	}
+	// A side-by-side split at 100 columns leaves the list column in the compact
+	// band, so the strip below it is part of that budget rather than an
+	// accounting detail: assert the charge is really there, otherwise the line
+	// above silently degrades into `want == paneHeight` and stops testing it.
+	if got := chromeBelowListLines(m); got != dashboard.DetailStripLines {
+		t.Errorf("compact list column should reserve the detail strip: got %d want %d",
+			got, dashboard.DetailStripLines)
 	}
 }
 

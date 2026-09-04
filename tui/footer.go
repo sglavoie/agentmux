@@ -177,7 +177,22 @@ func listFooterLines(m Model, selectedLine string) []string {
 // position is passed in by callers so layout budgeting can measure the same
 // footer without recursively asking listVisibleHeight for the position text.
 func listModeFooterLines(m Model, position string) []string {
+	// The compact band spends one physical row on the footer and no more. Two
+	// full blocks reflow to five or six rows at those widths, which is a third
+	// of a short terminal spent restating keys that are all in the command
+	// palette — and every row it takes is a session the list does not show.
+	compact := dashboard.BandFor(m.width) == dashboard.BandCompact
 	switch {
+	case m.pendingJumpDir != 0 && compact:
+		// The chord's vocabulary is the whole point of the row while a chord is
+		// pending, so it is what the single row carries; the action blocks stay
+		// dropped.
+		return []string{compactFooterRow(m, "  ", compactJumpChordTokens(m), nil)}
+	case compact && m.previewEnabled:
+		return nil
+	case compact:
+		required, optional := compactListFooterTokens(m)
+		return []string{compactFooterRow(m, "  ", required, optional)}
 	case m.pendingJumpDir != 0:
 		// Bracket chord pending: show the chord vocabulary instead of
 		// the usual nav row so the user can complete or cancel.
@@ -203,6 +218,150 @@ func listModeFooterLines(m Model, position string) []string {
 	default:
 		return listFooterLines(m, listFooterLine2WithPosition(m, listFooterNavTokens(m), position))
 	}
+}
+
+// compactFooterToken is one binding in the two spellings the compact row may
+// draw it in: the labelled form it prefers, and the bare key it falls back to
+// when the labelled forms together do not fit the terminal.
+//
+// Both spellings name the same key, which is what makes the fallback a change
+// of wording rather than a change of vocabulary — the operator who learned the
+// row at one width has not been shown a different row at another.
+type compactFooterToken struct{ long, short string }
+
+func compactBinding(key, label string) compactFooterToken {
+	return compactBindingKeys(key, label, key)
+}
+
+// compactBindingKeys is the variant for a key whose own name is too long to
+// survive the fallback. "enter" spelled out is five of the nineteen cells the
+// narrowest supported dashboard has; ↵ is one, and it is the glyph the key is
+// printed with on the keyboard the operator is looking at.
+func compactBindingKeys(key, label, shortKey string) compactFooterToken {
+	return compactFooterToken{
+		long:  renderFooterBinding(key, label),
+		short: styleFooterKey.Render(shortKey),
+	}
+}
+
+// compactListFooterTokens splits the compact footer's palette into what the row
+// keeps at any width and what it adds when there is room.
+//
+// The four required tokens are the ones without which the dashboard cannot be
+// operated at all: move the cursor, act on the row, reach every other command,
+// and find out what those are. Everything else — including every row action in
+// listFooterPalette — is reachable through the palette token that is always
+// present, which is what makes dropping it defensible rather than merely
+// necessary.
+func compactListFooterTokens(m Model) (required, optional []compactFooterToken) {
+	focus := compactBindingKeys("enter", "focus", "↵")
+	if m.summarySelected() {
+		// Same substitution the wide footer makes: a summary has no tab to focus,
+		// so enter names the fold it actually performs.
+		focus = compactBindingKeys("enter", "fold", "↵")
+	}
+	required = []compactFooterToken{
+		compactBinding("j/k", "move"),
+		focus,
+		compactBinding(":", "cmds"),
+		compactBinding("?", "help"),
+	}
+	optional = []compactFooterToken{
+		compactBinding("v", "view"),
+		compactBinding("q", "quit"),
+	}
+	return required, optional
+}
+
+// compactJumpChordTokens is the chord vocabulary, abbreviated to the letters
+// themselves. The wide footer spells each target out; at compact widths the
+// spelling is what does not fit, and the letters are what the chord needs.
+//
+// Unlike the list row it has no required subset: a chord is eight targets, and
+// a terminal too narrow for eight letters has nothing to thin down to. It is
+// the one compact row that may still clamp.
+func compactJumpChordTokens(m Model) []compactFooterToken {
+	arrow := "next"
+	if m.pendingJumpDir == -1 {
+		arrow = "prev"
+	}
+	chord := func(key, tail string) compactFooterToken {
+		return compactFooterToken{
+			long:  renderFooterBindingWithLabel(key, "", tail, styleFooter),
+			short: styleFooterKey.Render(key),
+		}
+	}
+	label := styleFooter.Render("jump " + arrow + ":")
+	return []compactFooterToken{
+		{long: label, short: label},
+		chord("p", ")erm"),
+		chord("e", ")rr"),
+		chord("a", ")ctive"),
+		chord("q", ")uestion"),
+		chord("s", ")top"),
+		chord("c", ")ompact"),
+		chord("b", ")sub"),
+		{
+			long:  renderFooterBindingWithLabel("esc", " ", "cancels", styleFooter),
+			short: styleFooterKey.Render("esc"),
+		},
+	}
+}
+
+// compactFooterRow renders exactly one physical row: every required token, then
+// each optional token that fits whole, then a hard clamp.
+//
+// The required tokens are never dropped and never half-drawn. When their
+// labelled spellings do not fit, the whole row falls back to bare keys rather
+// than eliding the tail — a row ending in "…" tells the operator there is
+// something they cannot see, whereas "j/k · enter · : · ?" tells them the four
+// keys, which is the thing the row exists to say. The fallback is all-or-
+// nothing so the row never mixes spellings and implies that the tokens still
+// spelled out are the more important ones.
+//
+// Optional tokens are appended in the same spelling and stop at the first one
+// that does not fit rather than skipping to a narrower later one, so the row is
+// always a prefix of the declared palette and does not reorder itself as the
+// terminal is dragged.
+func compactFooterRow(m Model, indent string, required, optional []compactFooterToken) string {
+	sep := styleFooter.Render(" · ")
+	sepW := layout.StyledWidth(sep)
+
+	spell := func(t compactFooterToken) string { return t.long }
+	if m.width > 0 && compactFooterRowWidth(indent, sepW, required, spell) > m.width {
+		spell = func(t compactFooterToken) string { return t.short }
+	}
+
+	parts := make([]string, 0, len(required))
+	for _, t := range required {
+		parts = append(parts, spell(t))
+	}
+	line := indent + strings.Join(parts, sep)
+	width := layout.StyledWidth(line)
+	for _, t := range optional {
+		cost := sepW + layout.StyledWidth(spell(t))
+		if m.width > 0 && width+cost > m.width {
+			break
+		}
+		line += sep + spell(t)
+		width += cost
+	}
+	if m.width > 0 {
+		line = layout.StyledTruncate(line, m.width, "…")
+	}
+	return line
+}
+
+func compactFooterRowWidth(indent string, sepW int, tokens []compactFooterToken,
+	spell func(compactFooterToken) string) int {
+	w := layout.Width(indent)
+	for i, t := range tokens {
+		if i > 0 {
+			w += sepW
+		}
+		w += layout.StyledWidth(spell(t))
+	}
+	return w
 }
 
 func listFooterNavTokens(m Model) []string {

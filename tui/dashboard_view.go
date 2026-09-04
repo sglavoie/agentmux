@@ -6,6 +6,7 @@
 package tui
 
 import (
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -38,6 +39,50 @@ func renderList(m Model) string {
 // windowing.
 func renderListAt(m Model, width, height int) string {
 	return dashboard.RenderList(dashboardListInput(m, width, height))
+}
+
+// detailStripBudgetLines returns the number of lines reserved below the list
+// for the compact band's selected-item strip: the whole strip when the list
+// column is compact, and nothing otherwise.
+//
+// The band is read from the list column's width, not the terminal's, because
+// the strip exists to carry the fields a compact ROW dropped — a wide terminal
+// whose list column is squeezed by a side-by-side preview dropped them too.
+// Pre-resize (width or height still zero) nothing is reserved: there is no
+// geometry yet to be compact.
+func detailStripBudgetLines(m Model) int {
+	if m.width <= 0 || m.height <= 0 {
+		return 0
+	}
+	if dashboard.BandFor(dashboardListPaneWidth(m)) != dashboard.BandCompact {
+		return 0
+	}
+	return dashboard.DetailStripLines
+}
+
+// renderDetailStripBlock renders the strip detailStripBudgetLines reserved, or
+// "" when it reserved nothing. It is drawn at the full terminal width below the
+// list/preview area rather than inside the list column: it describes the
+// selection, and a preview beside a compact list has no more claim on those two
+// rows than the list does.
+func renderDetailStripBlock(m Model) string {
+	n := detailStripBudgetLines(m)
+	if n == 0 {
+		return ""
+	}
+	item, ok := m.selectedItem()
+	lines := dashboard.RenderDetailStrip(dashboard.DetailStripInput{
+		Width:         m.width,
+		Items:         m.items,
+		Item:          item,
+		Selected:      ok,
+		Cfg:           m.cfg,
+		LastActivity:  m.lastActivity,
+		IdleThreshold: m.idleThreshold,
+		Watchdog:      m.watchdog,
+		Now:           modelNow(m),
+	})
+	return strings.Join(lines[:n], "\n") + "\n"
 }
 
 // The dashboard cursor indexes items, not sessions. m.filtered stays the

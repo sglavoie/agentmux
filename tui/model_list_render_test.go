@@ -17,7 +17,7 @@ func TestFormatRowIconFirst(t *testing.T) {
 		TabID: 1, Base: "api", Account: "work",
 		Directory: "/home/user/api", State: "bolt",
 	}
-	row := dashboard.FormatRow(s, acctColor, nil, nil, 120, "", "", "", "", "")
+	row := dashboard.FormatRow(dashboard.RowInput{Session: s, Band: dashboard.BandStandard, Width: 100, AcctColor: acctColor})
 	// The bolt icon (⚡) should appear before the badge [W].
 	boltIdx := strings.Index(row, "⚡")
 	badgeIdx := strings.Index(row, "[W]")
@@ -127,7 +127,7 @@ func TestFormatRowNoStateIcon(t *testing.T) {
 		TabID: 1, Base: "api", Account: "work",
 		Directory: "/home/user/api", State: "",
 	}
-	row := dashboard.FormatRow(s, acctColor, nil, nil, 120, "", "", "", "", "")
+	row := dashboard.FormatRow(dashboard.RowInput{Session: s, Band: dashboard.BandStandard, Width: 100, AcctColor: acctColor})
 	// No state icon, but row should start with 2-space placeholder then space then badge.
 	if !strings.HasPrefix(row, "   ") {
 		t.Errorf("expected row to start with placeholder spaces, got: %q", row)

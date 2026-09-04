@@ -183,6 +183,14 @@ func RenderList(in ListInput) string {
 	// git_probe off, or simply no repositories — gives the whole column back to
 	// the directory instead of padding every row around an empty slot.
 	branchWidth := branchColumnWidth(in.Items.Rows)
+	// The band is the pane's, not the row's: it is read once, from the width the
+	// list was given, and every row in the pass is laid out under it. Reading it
+	// per row from the already-reduced row budget would let a group border or a
+	// child indent tip one row into a narrower band than its neighbors and break
+	// the alignment the column scans above exist to produce.
+	band := BandFor(in.Width)
+	profileWidth := profileColumnWidth(in.Items.Rows)
+	titleWidth := titleColumnWidth(in.Items.Rows, band)
 
 	var sb strings.Builder
 	if showTop {
@@ -233,7 +241,21 @@ func RenderList(in ListInput) string {
 			}
 			branchCell := renderBranchCell(s, branchWidth)
 			tabNumberCell := renderTabNumberCell(s.TabNumber, tabNumberWidth)
-			row = FormatRow(s, acctColor, harnessColor, in.Cfg, rowWidth, tabNumberCell, activeLoopCell, reasonCell, activityCell, branchCell)
+			row = FormatRow(RowInput{
+				Session:        s,
+				Band:           band,
+				Width:          rowWidth,
+				AcctColor:      acctColor,
+				HarnessColor:   harnessColor,
+				Cfg:            in.Cfg,
+				TabNumberCell:  tabNumberCell,
+				ActiveLoopCell: activeLoopCell,
+				ReasonCell:     reasonCell,
+				ActivityCell:   activityCell,
+				BranchCell:     branchCell,
+				ProfileWidth:   profileWidth,
+				TitleWidth:     titleWidth,
+			})
 		} else {
 			row = renderSummaryRow(in, item, rowWidth)
 		}

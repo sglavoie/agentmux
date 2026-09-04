@@ -4,12 +4,14 @@
   "size": { "width": 66, "height": 32 },
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
-    { "type": "contains_text", "text": "3:07 amx/feat-x …x" },
-    { "type": "contains_text", "text": "0:12 amx/hotfix …x" },
-    { "type": "contains_text", "text": "0:42 main*      …i" },
-    { "type": "contains_text", "text": "1:05            …s" },
-    { "type": "excludes_text", "text": "worktrees/api-feat-x" },
+    { "type": "selected_title", "value": "api-feat-x" },
+    { "type": "contains_text", "text": "api-feat-x" },
+    { "type": "contains_text", "text": "api-hotfix" },
+    { "type": "contains_text", "text": "api-feat-x · work · claude · 3:07" },
+    { "type": "contains_text", "text": "amx/feat-x · ~/projects/worktrees/api-feat-x" },
+    { "type": "excludes_text", "text": "amx/hotfix" },
     { "type": "excludes_text", "text": "worktrees/api-hotfix" },
+    { "type": "excludes_text", "text": "main*" },
     { "type": "no_layout_issues" }
   ]
 }

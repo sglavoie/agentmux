@@ -23,13 +23,13 @@ func TestFormatRowLockIconPresentWhenLocked(t *testing.T) {
 	}
 	acctColor := map[string]string{"work": "blue"}
 
-	unlocked := stripAnsi(FormatRow(s, acctColor, nil, nil, 120, "", "", "", "", ""))
+	unlocked := stripAnsi(FormatRow(RowInput{Session: s, Band: BandSpacious, Width: 120, AcctColor: acctColor}))
 	if strings.Contains(unlocked, palette.LockIcon()) {
 		t.Fatalf("unlocked row should not contain %q; got %q", palette.LockIcon(), unlocked)
 	}
 
 	s.Locked = true
-	locked := stripAnsi(FormatRow(s, acctColor, nil, nil, 120, "", "", "", "", ""))
+	locked := stripAnsi(FormatRow(RowInput{Session: s, Band: BandSpacious, Width: 120, AcctColor: acctColor}))
 	if !strings.Contains(locked, palette.LockIcon()) {
 		t.Fatalf("locked row should contain %q; got %q", palette.LockIcon(), locked)
 	}
@@ -48,37 +48,43 @@ func TestFormatRowMuteIconPresentWhenMuted(t *testing.T) {
 	}
 	acctColor := map[string]string{"work": "blue"}
 
-	unmuted := stripAnsi(FormatRow(s, acctColor, nil, nil, 120, "", "", "", "", ""))
+	unmuted := stripAnsi(FormatRow(RowInput{Session: s, Band: BandSpacious, Width: 120, AcctColor: acctColor}))
 	if strings.Contains(unmuted, palette.MuteIcon()) {
 		t.Fatalf("unmuted row should not contain %q; got %q", palette.MuteIcon(), unmuted)
 	}
 
 	s.Muted = true
-	muted := stripAnsi(FormatRow(s, acctColor, nil, nil, 120, "", "", "", "", ""))
+	muted := stripAnsi(FormatRow(RowInput{Session: s, Band: BandSpacious, Width: 120, AcctColor: acctColor}))
 	if !strings.Contains(muted, palette.MuteIcon()) {
 		t.Fatalf("muted row should contain %q; got %q", palette.MuteIcon(), muted)
 	}
 }
 
-// TestFormatRowWidthArithmeticMatchesTheComposedRow is the audit the `used`
+// TestFormatRowWidthArithmeticMatchesTheComposedRow is the audit the prefix
 // enumeration in FormatRow cannot perform on itself. That expression is a
-// hand-maintained sum of every cell the return statement concatenates, and
-// nothing in the compiler relates the two: a cell added to the row without a
-// term in the sum overflows the viewport, and a term without a cell silently
-// steals directory width. This drives the real function with every optional
-// column reserved at once and asserts the composed row lands exactly one cell
-// under the budget — the single cell of deliberate slack the enumeration
-// documents, and the reason the sum charges 3 after the title where
-// MinRowWidth charges 2.
+// hand-maintained sum of the cells the composition concatenates ahead of the
+// allocator's fields, and nothing in the compiler relates the two: a cell added
+// to the row without a term in the sum overflows the viewport, and a term
+// without a cell silently steals directory width. This drives the real function
+// with every optional column reserved at once, across every band, and asserts
+// the composed row lands exactly one cell under the budget — the single cell of
+// deliberate slack rowSafetySlack documents.
+//
+// The fixture is chosen so the last field in each band is always the binding
+// constraint: a long directory for the bands that draw one, and a long title for
+// compact, which draws nothing after it. Without that the row would be narrower
+// than its budget for an uninteresting reason and the test would assert nothing.
 func TestFormatRowWidthArithmeticMatchesTheComposedRow(t *testing.T) {
 	s := session.RunningSession{
 		Account: "work",
 		Base:    "api",
-		Title:   "api",
+		// Wider than any band's title column, so compact — which draws nothing
+		// after the title — still fills its budget to the last cell.
+		Project: "an api gateway service with a deliberately long project title for band tests",
 		// Long enough that the directory is the binding constraint at every
-		// width below, which is what makes the row's total width a statement
-		// about the arithmetic rather than about this path.
-		Directory: "/home/user/projects/agent-mux/worktrees/api-feature-x/internal/daemon/state/reducer/deep/deeper/deepest",
+		// width below that draws one, which is what makes the row's total width
+		// a statement about the arithmetic rather than about this path.
+		Directory: "/home/user/projects/agent-mux/worktrees/api-feature-x/internal/daemon/state/reducer/deep/deeper/deepest/and/deeper/still/for/the/widest/band",
 	}
 	cells := []struct {
 		name  string
@@ -94,13 +100,22 @@ func TestFormatRowWidthArithmeticMatchesTheComposedRow(t *testing.T) {
 		}},
 	}
 	for _, tc := range cells {
-		for _, width := range []int{80, 100, 120} {
-			row := FormatRow(s, nil, nil, nil, width,
-				tc.cells[0], tc.cells[1], tc.cells[2], tc.cells[3], tc.cells[4])
+		for _, width := range []int{36, 79, 80, 119, 120, 160} {
+			band := BandFor(width)
+			row := FormatRow(RowInput{
+				Session:        s,
+				Band:           band,
+				Width:          width,
+				TabNumberCell:  tc.cells[0],
+				ActiveLoopCell: tc.cells[1],
+				ReasonCell:     tc.cells[2],
+				ActivityCell:   tc.cells[3],
+				BranchCell:     tc.cells[4],
+			})
 			got := layout.StyledWidth(row)
 			if got != width-1 {
-				t.Errorf("%s at width %d: composed row is %d cells, want %d",
-					tc.name, width, got, width-1)
+				t.Errorf("%s at width %d (%s): composed row is %d cells, want %d",
+					tc.name, width, band, got, width-1)
 			}
 		}
 	}

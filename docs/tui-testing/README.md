@@ -290,15 +290,15 @@ file. The exact inventory is:
 | [`baseline-layout.json`](scenarios/baseline-layout.json) | `basic` | dashboard list renders clean with all projects visible |
 | [`actions-popup-fit.json`](scenarios/actions-popup-fit.json) | `actions` | actions overlay fits after pressing `a` on a long-titled session |
 | [`asl-abort-confirmation-fit.json`](scenarios/asl-abort-confirmation-fit.json) | `asl_runs` | `a` confirms an abort against the captured run and states the 120-second grace and its degrade-to-stop behavior |
-| [`asl-question-pending-narrow-fit.json`](scenarios/asl-question-pending-narrow-fit.json) | `asl_question` | a human-actionable ASL handoff leads Needs Attention and keeps its `awaiting response` gloss at narrow width |
+| [`asl-question-pending-narrow-fit.json`](scenarios/asl-question-pending-narrow-fit.json) | `asl_question` | a human-actionable ASL handoff leads Needs Attention in a compact pane, where the `awaiting response` gloss is gone with the rest of the wide footer and the one prioritized footer row has fallen back to bare keys |
 | [`asl-question-pending-wide.json`](scenarios/asl-question-pending-wide.json) | `asl_question` | `]q` jumps from an unrelated row back to the human-actionable ASL handoff |
 | [`asl-response-live-wide.json`](scenarios/asl-response-live-wide.json) | `asl_runs` | `r` opens the live response form with an answer editor, the Reply/Continue/Pause buttons, and the multiple-question counter |
 | [`asl-response-paused-narrow-fit.json`](scenarios/asl-response-paused-narrow-fit.json) | `asl_runs` | a paused run's form offers only reply-and-resume and still fits a narrow terminal while typing |
 | [`asl-runs-narrow-fit.json`](scenarios/asl-runs-narrow-fit.json) | `asl_runs` | narrow Runs rows keep state, label, reason, and age, and move the rest into the selected-row panel |
 | [`asl-runs-wide.json`](scenarios/asl-runs-wide.json) | `asl_runs` | `A` opens Runs with needs-action rows first, the full wide columns, and no Kitty focus |
-| [`blocked-reason-column-narrow-fit.json`](scenarios/blocked-reason-column-narrow-fit.json) | `blocked_reasons` | the reason tags survive below the fixed-column floor, where the directory has already collapsed and the row is clamped to the viewport |
+| [`blocked-reason-column-narrow-fit.json`](scenarios/blocked-reason-column-narrow-fit.json) | `blocked_reasons` | the reason tags survive the compact band, which has already dropped the profile, harness, activity, branch, and directory, and the selected row's context has moved into the two-line detail strip |
 | [`blocked-reason-column-wide.json`](scenarios/blocked-reason-column-wide.json) | `blocked_reasons` | a Codex and a Claude permission prompt both read `perm`, a request-for-input reads `input`, an unlabelled blocked row pads to the same column, and no raw prompt kind reaches the screen |
-| [`branch-column-narrow-fit.json`](scenarios/branch-column-narrow-fit.json) | `worktree_branches` | at 66 cells both worktree directories have left-truncated to the same two characters and only the branch column still tells the two checkouts apart |
+| [`branch-column-narrow-fit.json`](scenarios/branch-column-narrow-fit.json) | `worktree_branches` | at 66 cells the compact band has taken the branch and directory off every row, and the detail strip is what tells the selected checkout from its sibling |
 | [`branch-column-unreserved.json`](scenarios/branch-column-unreserved.json) | `worktree_branches` | filtering down to the non-repository row leaves no branch in the view, so the column is not reserved and the directory recovers its full width |
 | [`branch-column-wide.json`](scenarios/branch-column-wide.json) | `worktree_branches` | two worktrees of one repository read their own branches, a dirty checkout carries the `*` marker, and the non-repository row pads so every directory starts in the same column |
 | [`command-palette-execute-help.json`](scenarios/command-palette-execute-help.json) | `basic` | palette search executes the safe keyboard-help transition without Kitty mutations |
@@ -322,7 +322,7 @@ file. The exact inventory is:
 | [`plan-search-sort-rebind.json`](scenarios/plan-search-sort-rebind.json) | `basic` | `o` cycles the Plans sort order and the footer advertises `o sort`, not `s sort` |
 | [`plan-view-fit.json`](scenarios/plan-view-fit.json) | `basic` | plan viewer read-error line wraps to width after `P` then `enter` |
 | [`plan-view-narrow-fit.json`](scenarios/plan-view-narrow-fit.json) | `basic` | plan viewer remains bounded at narrow width |
-| [`run-timer-narrow-fit.json`](scenarios/run-timer-narrow-fit.json) | `run_timers` | every run-timer band still renders whole at the narrowest width that fits the activity column |
+| [`run-timer-narrow-fit.json`](scenarios/run-timer-narrow-fit.json) | `run_timers` | the compact band drops the activity column from every row and the selected row's timer survives in the detail strip |
 | [`run-timer-wide.json`](scenarios/run-timer-wide.json) | `run_timers` | run timers survive refresh ticks and only running rows carry the `⏳` warning |
 | [`search-narrow-fit.json`](scenarios/search-narrow-fit.json) | `basic` | live-list filter rows truncate at a sub-floor terminal after `/` |
 | [`session-fork-continuity.json`](scenarios/session-fork-continuity.json) | `basic` | Past Sessions dispatches a native fork through the shared action registry |

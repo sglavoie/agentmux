@@ -112,7 +112,10 @@ func TestCrossModeDashboardListWidthAcrossFixture(t *testing.T) {
 	runner := kitty.NewMockRunner(nil)
 	client := kitty.NewClientWithSocket(runner, "")
 
-	for _, width := range []int{80, 100, 120} {
+	// The widths straddle both band boundaries in both directions — 79/80 and
+	// 119/120 — so a row that only overflows in one preset cannot hide behind a
+	// sample taken entirely inside another.
+	for _, width := range []int{36, 79, 80, 119, 120, 160} {
 		t.Run("width-"+itoa(width), func(t *testing.T) {
 			m := NewModel(cfg, client)
 			m = loadSessions(m, running)
