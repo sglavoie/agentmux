@@ -1,0 +1,31 @@
+  Current   Sessions   Issues   Pull requests   Gists 
+
+   18. 61 is a twin prime with 59.                                                                                                ┃
+   19. 67 is a prime between 64 and 81, two nearby squares.                                                                       ┃
+   20. 71 is an emirp because its reverse, 17, is also prime.                                                                     ┃
+   21. 73 is an emirp because its reverse, 37, is also prime.                                                                     ┃
+   22. 79 is the largest prime below 80.                                                                                          ┃
+   23. 83 is a prime just above 81, which is (9^2).                                                                               ┃
+   24. 89 is both a Fibonacci number and a prime.                                                                                 ┃
+   25. 97 is the largest two-digit prime.                                                                                         ┃
+   26. 101 is a palindromic prime.                                                                                                ┃
+   27. 103 is a prime immediately after the square 100.                                                                           ┃
+   28. 107 forms a twin-prime pair with 109.                                                                                      ┃
+   29. 109 forms a twin-prime pair with 107.                                                                                      ┃
+   30. 113 is a prime with no repeated digits.                                                                                    ┃
+   31. 127 is a Mersenne prime because (127 = 2^7 - 1).                                                                           ┃
+   32. 131 is a palindromic prime.                                                                                                ┃
+   33. 137 is a prime close to the golden-angle value (137.5^\circ).                                                              ┃
+   34. 139 is a prime just below 140.                                                                                             ┃
+   35. 149 is the largest prime below 150.                                                                                        ┃
+   36. 151 is a prime just above 150.                                                                                             ┃
+   37. 157 is a prime between (12^2) and (13^2).                                                                                  ┃
+   38. 163 is a Heegner number tied to the near-integer (e^{\pi\sqrt{163}}).                                                      ┃
+   39. 167 is a prime in the 160s.                                                                                                ┃
+   40. 173 is the 40th prime number.                                                                                              ┃
+                                                                                                                                  ┃
+ /private/tmp/copilot-capture [⎇ main%]                                        Plan: 720/10,000 (7% used) · Session: 9.85 AIC used 
+╻▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+┃  
+╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+ ← open sidebar · / commands · ? help · tab next tab                                                   GPT-5.3-Codex · High · (7%)

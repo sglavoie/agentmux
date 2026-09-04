@@ -175,10 +175,23 @@ func (h *Handler) copilotTranscriptProbeBindings(now time.Time, snapshot probes.
 // evidence supports, and it needs the tick's activity.ScreenTextCache threaded
 // through probeCopilotTranscriptStopWithSnapshot to get there.
 //
-// It is not wired yet because patterns_copilot.toml is still provisional copy: a
-// blocking_prompt or composer_line clause that matches the wrong thing would
-// refuse EVERY Copilot settle and strand panes on a permanent ⚡, which is worse
-// than the stuck-bolt case the probe exists to fix. The wait is cheap because
+// The blocker that held it back is now cleared: patterns_copilot.toml was
+// provisional copy, and a blocking_prompt or composer_line clause matching the
+// wrong thing would have refused EVERY Copilot settle and stranded panes on a
+// permanent ⚡ — worse than the stuck-bolt case this probe exists to fix. The set
+// is now written entirely from committed `kitten @ get-text` captures of live
+// GitHub Copilot CLI 1.0.82 panes and asserted per capture in
+// internal/screenstate/copilot_adapter_test.go, including the two readings that
+// matter here: a real permission prompt reports Blocked, and a finished turn
+// raises no veto at all.
+//
+// What remains is the threading described above — the tick's
+// activity.ScreenTextCache reaching probeCopilotTranscriptWindow through
+// probeCopilotTranscriptStopWithSnapshot — plus the tests that pin a refusal
+// against a live probe rather than against the adapter alone. That is a change
+// to this file's plumbing, not a question about the patterns.
+//
+// Whoever picks it up should know the risk is asymmetric in their favour:
 // copilotAdapter.Classify can never report Terminal, so wiring the screen in can
 // only ever remove settles, never add one.
 func copilotTranscriptStopProbeCanOverwrite(iconState string) bool {

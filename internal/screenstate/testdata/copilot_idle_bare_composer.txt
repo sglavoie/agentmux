@@ -1,0 +1,31 @@
+  Current   Sessions   Issues   Pull requests   Gists 
+
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  
+│                                                                                                                               │  
+│  ╭─╮╭─╮                            │  Getting started                                                                         │  
+│  ╰─╯╰─╯  Copilot v1.0.82 uses AI.  │  Use the tabs above to explore your sessions and pull requests                           │  
+│  █ ▘▝ █  Check for mistakes.       │  /init — Initialize Copilot instructions for this repository                             │  
+│   ▔▔▔▔                             │  /model — Switch models across providers, or use Auto                                    │  
+│                                                                                                                               │  
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  
+
+ ● No copilot-instructions.md found. Run /init to generate.
+                                                                                                                                   
+ ● Tip: /context
+   └ Show context window token usage and visualization
+
+
+
+
+
+
+
+
+
+
+
+ /private/tmp/copilot-capture [⎇ main%]                                           Plan: 720/10,000 (7% used) · Session: 0 AIC used 
+╻▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+┃  
+╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+ ← open sidebar · / commands · ? help · tab next tab                                                   GPT-5.3-Codex · High · (0%)

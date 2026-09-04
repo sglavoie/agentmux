@@ -14,17 +14,20 @@ import (
 //
 // The captures were taken with `kitten @ get-text --extent=screen`, the same
 // call and the same extent the daemon reads panes with (internal/kitty:
-// GetText(match, "screen")), against Claude Code 2.1.231 and codex-cli 0.149.1.
+// GetText(match, "screen")), against Claude Code 2.1.231, codex-cli 0.149.1 and
+// GitHub Copilot CLI 1.0.82.
 
 // TestFingerprintSeparatesConsecutiveWorkingCaptures is the assertion the
 // stabilization gate rests on: two captures of the same working pane, taken 3s
 // apart at the probe's own cadence, must not agree.
 //
-// The wide pair and the narrow pair fail the gate for different reasons, which
-// is why both are kept. The wide pair moves because Claude renders an elapsed
-// timer; the narrow pair moves even though Claude has truncated the timer off
-// the screen entirely, because the spinner glyph still animates. Layer A can
-// read the first and is blind to the second.
+// The pairs fail the gate for different reasons, which is why each is kept. The
+// wide Claude pair moves because Claude renders an elapsed timer; the narrow
+// Claude pair moves even though Claude has truncated the timer off the screen
+// entirely, because the spinner glyph still animates. Layer A can read the first
+// and is blind to the second. The Copilot pair moves on all three of its
+// available axes at once — streamed output, spinner frame, and a transferred-byte
+// counter the harness folds into its footer.
 func TestFingerprintSeparatesConsecutiveWorkingCaptures(t *testing.T) {
 	cases := []struct {
 		name string
@@ -40,6 +43,11 @@ func TestFingerprintSeparatesConsecutiveWorkingCaptures(t *testing.T) {
 			name: "narrow pane advances only its spinner glyph",
 			t0:   "claude_working_narrow_t0.txt",
 			t1:   "claude_working_narrow_t1.txt",
+		},
+		{
+			name: "copilot pane advances its spinner and streams output",
+			t0:   "copilot_working_t0.txt",
+			t1:   "copilot_working_t1.txt",
 		},
 	}
 
@@ -115,6 +123,32 @@ func TestFingerprintHoldsStillOnConsecutiveCodexIdleCaptures(t *testing.T) {
 
 	if got, want := Fingerprint(second), Fingerprint(first); got != want {
 		t.Fatalf("Fingerprint(codex_idle_completed_t1.txt) = %d, Fingerprint(codex_idle_completed_t0.txt) = %d, want equal; an unstable Codex idle screen means Codex must not take a screen-derived generation", got, want)
+	}
+}
+
+// TestFingerprintHoldsStillOnConsecutiveCopilotIdleCaptures is the Copilot
+// counterpart of the Codex result above, and it carries more weight here than
+// for either other harness.
+//
+// The Copilot screen adapter has no Terminal branch at all: it can refuse a
+// settle and never grant one, so every Copilot settle arrives from the
+// transcript. A screen-derived generation that flickered while the pane sat idle
+// would therefore suppress the only settle path Copilot has, and the tab would
+// stay busy forever. The two captures are 3s apart on a finished Copilot turn
+// and, as with Codex, were byte-identical before normalization — which is worth
+// stating because Copilot's footer carries a per-session cost counter that could
+// plausibly have ticked between them.
+func TestFingerprintHoldsStillOnConsecutiveCopilotIdleCaptures(t *testing.T) {
+	const (
+		t0 = "copilot_idle_completed_t0.txt"
+		t1 = "copilot_idle_completed_t1.txt"
+	)
+
+	first := readScreenFixture(t, t0)
+	second := readScreenFixture(t, t1)
+
+	if got, want := Fingerprint(second), Fingerprint(first); got != want {
+		t.Fatalf("Fingerprint(%s) = %d, Fingerprint(%s) = %d, want equal; an unstable Copilot idle screen strands every Copilot tab, because the screen adapter can never settle one itself", t1, got, t0, want)
 	}
 }
 

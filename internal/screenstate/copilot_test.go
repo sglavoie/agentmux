@@ -13,42 +13,56 @@ import (
 // close survived a full suite of exactly such screens.
 //
 // That limitation is why nothing here asserts a CLASSIFICATION of Copilot's real
-// UI. These screens are written against patterns_copilot.toml's provisional copy
-// on purpose, and what they test is the adapter's STRUCTURE — that a matching
+// UI. What these screens test is the adapter's STRUCTURE — that a matching
 // working line raises the live-status veto, that a matching prompt raises the
 // blocking veto and reports Blocked, that an empty composer clears the composer
-// veto — none of which changes when the copy is replaced from real captures.
-// The tests that need real copy are session 9's, and they need real files.
+// veto. Every claim about what Copilot ACTUALLY renders is asserted against the
+// committed captures instead, in copilot_adapter_test.go.
+//
+// They are modelled on those captures rather than invented, which they were not
+// before: the first version of this file was written against provisional copy
+// and drew a ❯ composer Copilot does not have, a "…(4m 29s)" status line it does
+// not render, and an "esc to interrupt" hint it spells without the preposition.
+// Each screen below now carries the real UI's shape — a flush-left ┃ composer
+// box, a footer whose right segment ends in the context percentage — because a
+// structure test written against a shape the harness does not produce tests the
+// structure of nothing.
 const (
-	copilotSyntheticWorkingScreen = `● Reticulating… (4m 29s · ↓ 17.2k tokens)
-
-╭──────────────────────────────────────────────────╮
-│ ❯                                                │
-╰──────────────────────────────────────────────────╯
+	// A live turn under a RENAMED spinner word: the veto must survive Copilot
+	// calling the state anything, so this deliberately does not say "Working".
+	copilotSyntheticWorkingScreen = `● Here is what I found so far.
+╻▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+┃
+╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+ ◎ Reticulating esc interrupt                     GPT-5.3-Codex · High · (6%)
 `
 
-	copilotSyntheticQuietScreen = `Here is the summary you asked for.
-
-╭──────────────────────────────────────────────────╮
-│ ❯                                                │
-╰──────────────────────────────────────────────────╯
+	copilotSyntheticQuietScreen = `● Here is the summary you asked for.
+╻▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+┃
+╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+ ← open sidebar · / commands · ? help · tab next tab   GPT-5.3-Codex · High · (6%)
 `
 
-	copilotSyntheticPromptScreen = `Do you want to allow this tool to run?
-
-  ❯ 1. Yes
-    2. No
-
-╭──────────────────────────────────────────────────╮
-│ ❯                                                │
-╰──────────────────────────────────────────────────╯
+	// A modal prompt covers the composer, exactly as both captured prompts do,
+	// so this screen deliberately shows no composer box at all.
+	copilotSyntheticPromptScreen = `╭─────────────────────────────────────────────────╮
+│ Remove notes.txt if it exists                   │
+│ ─────────────────────────────────────────────── │
+│ Do you want to run this command?                │
+│                                                 │
+│ ❯ 1. Yes                                        │
+│   2. No                                         │
+│                                                 │
+│ ↑/↓ to navigate · enter to select · esc to cancel │
+╰─────────────────────────────────────────────────╯
 `
 
-	copilotSyntheticQueuedInputScreen = `Here is the summary you asked for.
-
-╭──────────────────────────────────────────────────╮
-│ ❯ and now do the other thing                     │
-╰──────────────────────────────────────────────────╯
+	copilotSyntheticQueuedInputScreen = `● Here is the summary you asked for.
+╻▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+┃ and now do the other thing
+╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+ @ files · # issues                                   GPT-5.3-Codex · High · (6%)
 `
 )
 
@@ -194,11 +208,15 @@ func TestCopilotVetoesAreComputedFirstAndUnconditionally(t *testing.T) {
 
 // TestCopilotChoiceLineAloneVetoes pins the half of the blocking-prompt veto
 // that survives a reworded prompt. It is the reason choice_line is a required
-// clause rather than a nicety: Copilot may reword "do you want to allow", but a
-// selected numbered option is a shape, not a sentence.
+// clause rather than a nicety: Copilot may reword "do you want to run this
+// command?", but a selected numbered option is a shape, not a sentence.
+//
+// The choice line carries its modal frame, which the real captures show is not
+// decoration — see TestCopilotEchoedUserMessageIsNotAPrompt for the false
+// positive the frame exists to exclude.
 func TestCopilotChoiceLineAloneVetoes(t *testing.T) {
 	adapter := copilotAdapter{Patterns: embeddedCopilotPatterns(t)}
-	screen := "Some question nobody wrote a phrase for\n\n  ❯ 1. Sure\n    2. No\n"
+	screen := "Some question nobody wrote a phrase for\n\n│ ❯ 1. Sure\n│   2. No\n"
 	observation := adapter.Classify(screen)
 	if observation.Vetoes&VetoBlockingPrompt == 0 {
 		t.Fatalf("a selected choice line raised no blocking veto: %s", observation.Vetoes)
@@ -237,15 +255,15 @@ func TestCopilotRequirementsCoverEverySoleVetoSource(t *testing.T) {
 			veto:   VetoLiveStatusLine,
 		},
 		copilotClauseBlockingPrompt: {
-			screen: "Do you want to allow this tool to run?\n",
+			screen: "Do you want to run this command?\n",
 			veto:   VetoBlockingPrompt,
 		},
 		copilotClauseChoiceLine: {
-			screen: "  ❯ 1. Sure\n",
+			screen: "│ ❯ 1. Sure\n",
 			veto:   VetoBlockingPrompt,
 		},
 		copilotClauseInterruptHint: {
-			screen: "esc to interrupt\n",
+			screen: "esc interrupt\n",
 			veto:   VetoInterruptHint,
 		},
 	}
@@ -330,22 +348,5 @@ func TestCopilotIncompleteSetStillCannotSettle(t *testing.T) {
 		if observation.State != Unknown {
 			t.Errorf("%s screen = %s against an incomplete set, want unknown", name, observation.State)
 		}
-	}
-}
-
-// TestCopilotPatternsAreMarkedProvisional pins the marker session 9 drops. The
-// copy in patterns_copilot.toml has never been checked against a live Copilot
-// pane, and a reader who does not know that would reasonably trust it — so the
-// file says so, and this fails if the banner is removed while the file is still
-// the one this session wrote.
-//
-// It deliberately asserts only that the word is present, not where: the whole
-// file is rewritten from captures in session 9, and a test that pinned the
-// banner's exact position would fail for the right reason at the wrong moment.
-func TestCopilotPatternsAreMarkedProvisional(t *testing.T) {
-	body := embeddedPatternFile(t, harness.Copilot)
-	if !strings.Contains(body, "PROVISIONAL") {
-		t.Error("patterns_copilot.toml no longer marks itself provisional; if the copy is now " +
-			"from real captures, delete this test in the same change")
 	}
 }

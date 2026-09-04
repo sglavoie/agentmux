@@ -1,0 +1,31 @@
+  Current   Sessions   Issues   Pull requests   Gists 
+
+   practice, craft lore, and speculative cosmology. Modern readers may dismiss such systems as pre-scientific, but historically   ┃
+   they provided coherent explanatory structures and experimental vocabularies. Seven thrived in them because it sat at a         ┃
+   workable scale: small enough to memorize, large enough to suggest complexity, and already sanctioned by inherited religious    ┃
+   and textual authority.                                                                                                         ┃
+                                                                                                                                  ┃
+   The early modern scientific revolution did not erase seven’s cultural force, but it changed the terms of legitimacy.           ┃
+   Copernican astronomy displaced the old planetary framework, and later chemistry abandoned metallic-planetary correspondences.  ┃
+   Still, seven survived in adjusted forms. Music theory in Europe normalized the seven-note diatonic scale (with repeating       ┃
+   octaves), even as global music practices remained far more varied. Cartography and education popularized the “seven seas” and  ┃
+   eventually the “seven continents,” categories that were historically contingent and sometimes politically motivated. The       ┃
+   persistence of seven in these frameworks shows how educational convention can preserve a number’s prestige after its original  ┃
+   cosmology has faded.                                                                                                           ┃
+                                                                                                                                  ┃
+   The modern age also gave seven new life through print capitalism, mass media, and standardized schooling. Phrases like “the    ┃
+   seven wonders,” “seven ages,” “seven days,” and “lucky seven” became globally portable through textbooks, religious            ┃
+   instruction, colonial institutions, and entertainment industries. In many societies, lotteries and gambling cultures elevated  ┃
+   seven as a luck number, partly through game mechanics (as in craps) and partly through inherited symbolism. Advertising        ┃
+   exploited this familiarity: seven sounded complete but not overwhelming, special yet accessible. Once brand strategists        ┃
+   learned that people remember short numbered sets, seven became a commercial device as much as a cultural inheritance.          ┃
+                                                                                                                                  ┃
+   Psychology added another influential chapter in the twentieth century. George A. Miller’s famous 1956 paper, “The Magical      ┃
+   Number Seven, Plus or Minus Two,” argued that short-term memory has limited capacity often clustering around seven items.      ┃
+   Later research revised and nuanced these                                                                                       ┃
+                                                                                                                                  ┃
+ /private/tmp/copilot-capture [⎇ main%]                                        Plan: 720/10,000 (7% used) · Session: 9.85 AIC used 
+╻▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+┃  
+╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+ ← open sidebar · / commands · ? help · tab next tab                                                   GPT-5.3-Codex · High · (7%)

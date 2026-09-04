@@ -1,0 +1,31 @@
+  Current   Sessions   Issues   Pull requests   Gists 
+
+                                                                                                                                  ┃
+ ● No copilot-instructions.md found. Run /init to generate.                                                                       ┃
+                                                                                                                                  ┃
+ ● Tip: /context                                                                                                                  ┃
+   └ Show context window token usage and visualization                                                                            ┃
+ ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄ ┃
+  ❯ Explain in five short paragraphs why terminal user interfaces are hard to test.                                       18:23   ┃
+ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀ ┃
+ ● Terminal UIs are hard to test because what users see is not plain text; it is a stream of cursor moves, color codes, and       ┃
+   partial redraws. Small rendering differences can make snapshots fail even when behavior is correct.                            ┃
+                                                                                                                                  ┃
+   They are also highly timing-sensitive. Input events, background tasks, and screen refreshes can race each other, so tests may  ┃
+   pass locally and fail in CI due to slight speed differences.                                                                   ┃
+                                                                                                                                  ┃
+   Many TUIs are stateful and modal, which increases test complexity. A single key can mean different things depending on focus,  ┃
+   selection, scroll position, or active pane, so test setup must reproduce exact state before each assertion.                    ┃
+                                                                                                                                  ┃
+   Environment differences make results unstable too. Terminal size, font/Unicode support, shell settings, OS behavior, and even  ┃
+   TERM capabilities can change layout and interaction paths in ways that are hard to normalize.                                  ┃
+                                                                                                                                  ┃
+   Finally, asserting correctness is tricky because user intent is often semantic, not textual. You usually need to verify        ┃
+   interaction flow, focus movement, and side effects, not just final output, which requires heavier harnesses than typical unit  ┃
+   tests.                                                                                                                         ┃
+                                                                                                                                  ┃
+ /private/tmp/copilot-capture [⎇ main%]                                        Plan: 720/10,000 (7% used) · Session: 4.52 AIC used 
+╻▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+┃ and now do the other thing
+╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+ @ files · # issues                                                                                    GPT-5.3-Codex · High · (6%)

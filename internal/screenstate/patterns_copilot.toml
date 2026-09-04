@@ -1,23 +1,21 @@
 # Default GitHub Copilot CLI screen patterns.
 #
-# ############################################################################
-# # PROVISIONAL. EVERY VALUE BELOW IS A GUESS AND NONE OF IT HAS BEEN SEEN   #
-# # IN A REAL CAPTURE. The clause NAMES are the contract with copilot.go and #
-# # are settled; the copy is a placeholder that exists so the set validates  #
-# # against copilotRequirements, so `PatternsFor("copilot")` answers, and so #
-# # there is one file to fill in rather than a file to invent. Replace it    #
-# # from `kitten @ get-text --extent=screen` captures of a live Copilot pane #
-# # and delete this banner; until then assume every clause matches nothing.  #
-# ############################################################################
+# Every clause below was written from byte-for-byte `kitten @ get-text
+# --extent=screen` captures of live GitHub Copilot CLI 1.0.82 panes, committed
+# under testdata/ as copilot_*.txt and asserted per capture in
+# copilot_adapter_test.go. Nothing here is guessed. The set this file replaced
+# was explicitly provisional, and all three of its central guesses turned out to
+# be wrong in kind rather than merely mis-tuned — which is worth recording,
+# because each one would have failed silently:
 #
-# What that provisional status costs, precisely, is nothing — and that is by
-# construction rather than by luck. This set is not on any production path: no
-# screenIdleSpec names copilot, no probe in internal/daemon classifies a Copilot
-# screen, and copilotAdapter.Classify cannot report Terminal under any pattern
-# set at all (see the composition decision in copilot.go). A clause here that
-# matches the wrong thing therefore cannot settle a live pane and cannot strand
-# a stuck one; it can only make a test that has not been written yet fail. That
-# is the whole reason it was safe to ship the structure ahead of the copy.
+#   - the composer was assumed to be a chevron (❯/›/>) the way Claude's and
+#     Codex's are. Copilot draws an unlabelled box instead and its input line
+#     carries NO indicator at all, so the borrowed pattern matched nothing and
+#     every Copilot screen would have read composer_busy forever.
+#   - the working status line was assumed to be a gerund, an ellipsis and a
+#     parenthesized elapsed timer. Copilot renders no ellipsis and no timer.
+#   - the interrupt hint was assumed to be "esc to interrupt". Copilot writes
+#     "esc interrupt", with no preposition.
 #
 # Only UI COPY lives here. Evaluation order, positional requirements and the
 # veto-first contract stay in Go (see copilot.go) — a pattern file must never be
@@ -33,42 +31,104 @@ harness = "copilot"
 
 [regex]
 
-# composer_line matches a ready, EMPTY composer: the prompt indicator followed
-# by only horizontal whitespace, tolerating an input box's leading and trailing
-# vertical edges. Its absence is what raises VetoComposerBusy, so a composer
-# holding queued input must not match — which is why the line is anchored at
-# both ends rather than searched.
+# composer_line matches a ready, EMPTY composer. Copilot frames its input as a
+# three-line box whose middle line is a single heavy vertical bar at COLUMN 0
+# followed by the cursor cell:
 #
-# PROVISIONAL: the indicator set (❯, ›, >) and the non-breaking space are
-# carried over from the Claude and Codex composers because a framed TUI composer
-# is a convention rather than a wording choice, and a shape borrowed from two
-# harnesses is a better first guess than one invented for a third. It is still a
-# guess: Copilot may frame its composer differently, or not frame it at all.
-composer_line = '(?m)^[\t \x{00a0}]*(?:[│┃][\t \x{00a0}]*)?[\x{276f}\x{203a}>][\t \x{00a0}]*(?:[│┃][\t \x{00a0}]*)?$'
+#     ╻▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+#     ┃
+#     ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+#
+# There is no prompt indicator inside the box, so unlike the other two harnesses
+# there is nothing to match but the frame itself. Its absence is what raises
+# VetoComposerBusy, so a composer holding queued input must not match — which is
+# why the line is anchored at both ends rather than searched
+# (copilot_queued_input.txt renders "┃ and now do the other thing").
+#
+# THE COLUMN-0 ANCHOR IS LOAD-BEARING, not tidiness. Copilot draws a scrollbar
+# track in the LAST column using the same ┃ glyph, so a blank row of scrollable
+# output is spaces followed by ┃ — a line that a leading-whitespace-tolerant
+# pattern matches happily. Every capture with output in it (see
+# copilot_idle_completed.txt) contains such rows, and matching one would clear
+# the composer veto on a screen whose composer is not visible at all. Requiring
+# the bar in column 0 separates the two, because the composer box is flush left
+# and the scrollbar never is.
+#
+# Accepted cost: a Copilot pane whose composer is indented — the sidebar the
+# footer advertises with "← open sidebar" is the known candidate — stops
+# matching and reads composer_busy. That is the fail-closed direction: a
+# withheld reading, never a settled one.
+composer_line = '(?m)^\x{2503}[\t \x{00a0}]*$'
 
-# choice_line matches a selected menu option in an open prompt
-# ("❯ 1. Yes"). It is half the blocking-prompt veto and the half that survives a
-# reworded prompt, exactly as in patterns_claude.toml. The selection indicator is
-# required so a plain transcript numbered list cannot read as an open prompt.
+# choice_line matches the selected option of an open modal prompt
+# ("│ ❯ 1. Yes"). It is half the blocking-prompt veto and the half that survives
+# a reworded prompt, exactly as in patterns_claude.toml: Copilot may reword the
+# question, but a selected numbered option is a shape rather than a sentence.
 #
-# PROVISIONAL: same borrowed indicator set, same caveat.
-choice_line = '(?m)^\s*(?:[│┃]\s*)?[\x{276f}\x{203a}]\s*\d+\.\s'
+# THE FRAME IS REQUIRED, and this is the one place the Copilot pattern is
+# strictly tighter than Claude's, for a reason visible in the captures. Copilot
+# echoes the user's own submitted message with a ❯ prefix and no frame:
+#
+#       ❯ Run the shell command: rm -f notes.txt
+#
+# so a pattern that made the frame optional would read a user message that
+# merely began "1. " as an open permission prompt, and refuse every settle for
+# that pane. Both committed prompt captures — copilot_permission_prompt.txt and
+# copilot_trust_prompt.txt — draw their choices inside a │ box, and the echoed
+# message never is, so the frame is exactly the discriminator.
+choice_line = '(?m)^[\t \x{00a0}]*[\x{2502}\x{2503}][\t \x{00a0}]*[\x{276f}\x{203a}][\t \x{00a0}]*\d+\.[\t \x{00a0}]'
 
 # working_status_line is the live-turn discriminator and the sole source of
-# VetoLiveStatusLine.
+# VetoLiveStatusLine. copilot.go feeds it ONE LINE AT A TIME, so it uses a bare
+# ^ rather than (?m).
 #
-# The shape rather than the wording is pinned, for the reason
-# patterns_claude.toml's twin records: an ellipsis plus a parenthesized LIVE
-# elapsed timer on one line is a UI convention, while the gerund in front of it
-# is a word the harness is free to change between releases. The leading glyph is
-# deliberately not matched — [^\p{L}\p{N}]* skips whatever spinner decoration is
-# present and cannot skip past a letter or digit, so the match still anchors on
-# the line's first word.
+# Copilot has no separate status area: the bottom line of the pane is a footer
+# whose LEFT segment changes with the state and whose RIGHT segment is always
+# the model, the reasoning effort and the context percentage. The four shapes
+# the captures show are
 #
-# PROVISIONAL: Copilot is ASSUMED to render a spinner-plus-elapsed status line.
-# If it does not, this clause is not merely mis-tuned but wrong in kind, and the
-# capture that shows so is the one that decides what replaces it.
-working_status_line = '^[^\p{L}\p{N}]*\p{L}[\p{L}\p{M}]*\x{2026}\s*\(\s*\d+[hms]\b'
+#   ◎ Working esc interrupt                       GPT-5.3-Codex · High · (6%)
+#   ◉ Working · 1.1 KiB esc interrupt             GPT-5.3-Codex · High · (6%)
+#   ◎ Cancelling                                  GPT-5.3-Codex · High · (7%)
+#   ← open sidebar · / commands · ? help …        GPT-5.3-Codex · High · (7%)
+#
+# and only the first three are live. So the pattern is: a spinner glyph, ONE
+# capitalized word, an optional transferred-bytes segment, an optional interrupt
+# affordance, then the column gap and the right segment.
+#
+# WHY THE SINGLE WORD AND THE RIGHT SEGMENT ARE BOTH REQUIRED. The obvious
+# pattern — "a spinner glyph and a gerund" — is wrong, and the captures are what
+# show it. Copilot's spinner is a four-frame filling circle ○ ◎ ◉ ●, and its
+# LAST frame ● is also the bullet it prefixes ordinary assistant output with:
+#
+#   ● Running it now.
+#   ● Terminal UIs are hard to test because they …
+#   ● Operation cancelled by user
+#
+# There is therefore no glyph that separates the status line from prose, and a
+# glyph-plus-word pattern matches finished output on a quiet pane. Because
+# copilotLatestWorkingLine takes the LAST match on the screen, that would raise
+# VetoLiveStatusLine on an idle Copilot pane holding any bulleted output at all —
+# a permanent refusal, i.e. exactly the stranded-pane failure the capture-first
+# rule exists to prevent. What content bullets cannot imitate is the FOOTER
+# SHAPE: a lone capitalized word, then a run of column padding, then a segment
+# ending in a parenthesized percentage. copilot_idle_completed.txt and
+# copilot_interrupted.txt are both dense with ● bullets and neither produces a
+# match.
+#
+# The word itself is not pinned. "Working" and "Cancelling" are both matched by
+# \p{Lu}[\p{L}\p{M}]*, so a renamed spinner word still vetoes — the same
+# word-independence patterns_codex.toml's twin was rewritten for after a rename
+# was shown to defeat a literal.
+#
+# Accepted cost: a pane too narrow to render the right segment loses this veto.
+# interrupt_hint is the documented backstop for that case and covers the
+# "Working" screens; the residual gap is a NARROW pane mid-cancel, since
+# copilot_cancelling.txt shows that Copilot drops the interrupt affordance as
+# soon as the cancel is requested while the turn is still winding down. That gap
+# is a lost refusal on an unusual screen, never a settle — this adapter has no
+# Terminal branch to reach.
+working_status_line = '^[\t \x{00a0}]*[\x{25cb}\x{25ce}\x{25c9}\x{25cf}][\t \x{00a0}]+\p{Lu}[\p{L}\p{M}]*(?:[\t \x{00a0}]+\x{00b7}[\t \x{00a0}]+[\d.]+[\t \x{00a0}]*[KMGT]?i?B)?(?:[\t \x{00a0}]+esc[\t \x{00a0}]+interrupt)?[\t \x{00a0}]{2,}\S.*\([\t \x{00a0}]*\d+%[\t \x{00a0}]*\)[\t \x{00a0}]*$'
 
 [phrases]
 
@@ -78,31 +138,40 @@ working_status_line = '^[^\p{L}\p{N}]*\p{L}[\p{L}\p{M}]*\x{2026}\s*\(\s*\d+[hms]
 # the bug this whole package exists to close — so it is a one-way veto and never
 # positive terminal evidence.
 #
-# PROVISIONAL: both spellings below are the ones Claude and Codex use. Copilot's
-# actual key and wording are unknown.
+# Copilot writes "esc interrupt" with no preposition, which is why the borrowed
+# "esc to interrupt" matched none of the working captures. Only the observed
+# spelling is listed: a phrase nobody has seen on a real pane is the guess this
+# file was rewritten to remove, and "esc to cancel" specifically must NOT be
+# added, because Copilot uses that wording for its MODAL PROMPT footer
+# (copilot_permission_prompt.txt) rather than for a live turn.
 interrupt_hint = [
-    "esc to interrupt",
-    "ctrl+c to cancel",
+    "esc interrupt",
 ]
 
 # blocking_prompt is a permission, elicitation, or other user-blocking choice
 # prompt waiting on the user. Together with choice_line it is the
-# VetoBlockingPrompt evidence, and it is the ONE clause here whose eventual copy
-# does real work in production: it is the evidence a Copilot pane is waiting on
-# a human that the session transcript structurally cannot carry, which is the
-# entire argument for a Copilot screen adapter (see copilot.go).
+# VetoBlockingPrompt evidence, and it is the ONE clause here whose copy does real
+# work in production: it is the evidence a Copilot pane is waiting on a human
+# that the session transcript structurally cannot carry, which is the entire
+# argument for a Copilot screen adapter (see copilot.go).
 #
-# It is a flat phrase list rather than the kind-split [group] patterns_claude.toml
-# grew, and deliberately so: the split exists to LABEL a fired veto with a
-# ClaudePromptKind, and inventing Copilot prompt kinds from copy nobody has read
-# would be guessing about the taxonomy on top of guessing about the words. A flat
-# list vetoes exactly as well; the kinds can be split out of it later without
-# changing the clause name copilot.go reads.
+# The first two entries are the questions of the two prompt kinds captured. The
+# third is the modal's navigation footer, which both captures render verbatim
+# and which survives ANY rewording of the question above it — the phrase-list
+# counterpart to choice_line's shape argument, and the reason a Copilot prompt
+# with no numbered options would still be caught.
 #
-# PROVISIONAL: English-only and exhaustive by construction even once it is real,
-# which is exactly the limitation a user override exists to lift.
+# It stays a flat phrase list rather than the kind-split [group] that
+# patterns_claude.toml grew. That split exists to LABEL a fired veto with a
+# ClaudePromptKind, and copilot.go reads no such label; with two observed prompt
+# kinds there is not yet a taxonomy to split into. A flat list vetoes exactly as
+# well, and the kinds can be lifted out of it later without changing the clause
+# name copilot.go reads.
+#
+# English-only and exhaustive by construction, which is exactly the limitation a
+# user override exists to lift.
 blocking_prompt = [
-    "do you want to allow",
-    "do you want to proceed",
-    "allow this command",
+    "do you want to run this command?",
+    "do you trust the files in this folder?",
+    "enter to select · esc to cancel",
 ]
