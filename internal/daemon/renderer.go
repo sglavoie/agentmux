@@ -89,10 +89,15 @@ func (h *Handler) runScreenProbesWithSnapshot(now time.Time, snapshot probes.Sna
 	// never fight over the same tab.
 	h.probeClaudeContextLimitWithSnapshot(now, snapshot, screens)
 	h.probeClaudeScreenStopWithSnapshot(now, snapshot, screens)
-	// The Copilot transcript stop probe reads no screen: it consults the
-	// interactive session transcript's latest state-bearing event to recover a
-	// stuck ⚡ whose native agentStop/sessionEnd hook was lost.
-	h.probeCopilotTranscriptStopWithSnapshot(now, snapshot)
+	// The Copilot transcript stop probe SETTLES from the interactive session
+	// transcript's latest state-bearing event, recovering a stuck ⚡ whose native
+	// agentStop/sessionEnd hook was lost. It takes the same per-tick cache
+	// because the screen is its REFUSAL: a Copilot pane sitting on a permission
+	// prompt has stopped writing records, so the transcript tail can read
+	// terminal while a human is being waited on, and only the pane says so. The
+	// Copilot adapter can never report Terminal, so handing it this cache can
+	// only ever remove settles, never add one.
+	h.probeCopilotTranscriptStopWithSnapshot(now, snapshot, screens)
 }
 
 // initialSnapshotBudget bounds the one-shot startup snapshot+restore taken

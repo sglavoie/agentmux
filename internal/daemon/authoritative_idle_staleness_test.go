@@ -156,6 +156,11 @@ func TestAuthoritativeIdleAdapters_DiscardStaleMuteSnapshot(t *testing.T) {
 					fake.getText = map[string]string{kitty.MatchWindowByID(42): claudeInterruptedScreen}
 				case "copilot":
 					h.SetCopilotTranscriptHomes(nil, t.TempDir())
+					// A veto-free pane, so the only thing that can stop the
+					// settle below is the staleness this test is about.
+					fake.getText = map[string]string{
+						kitty.MatchWindowByID(42): copilotScreenCapture(t, copilotVetoFreeScreen),
+					}
 				}
 				h.SetKittyClient(fake)
 				switch harnessName {
@@ -204,7 +209,7 @@ func TestAuthoritativeIdleAdapters_DiscardStaleMuteSnapshot(t *testing.T) {
 					case "claude":
 						h.probeClaudeScreenStopWithSnapshot(base.Add(time.Second), snapshot, h.screenTextCacheFor())
 					case "copilot":
-						h.probeCopilotTranscriptStopWithSnapshot(base.Add(time.Second), snapshot)
+						h.probeCopilotTranscriptStopWithSnapshot(base.Add(time.Second), snapshot, h.screenTextCacheFor())
 					}
 				}()
 				<-entered

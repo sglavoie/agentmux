@@ -78,6 +78,63 @@ const (
 		`{"type":"assistant.turn_end","data":{"turnId":"6"}}` + "\n"
 )
 
+// copilotScreenCapture reads one of the committed byte-for-byte
+// `kitten @ get-text --extent=screen` captures of a live GitHub Copilot CLI
+// pane out of internal/screenstate/testdata.
+//
+// Reaching across a package boundary for testdata is deliberate and is the
+// point of these tests rather than a shortcut. The Copilot transcript probe now
+// refuses a settle on screen evidence, and the whole argument for that refusal
+// is what a REAL Copilot pane looks like — a permission prompt Copilot's own
+// transcript structurally cannot report. A screen hand-written here to look
+// like Copilot would assert the daemon against this file's idea of the
+// harness, which is the exact failure CLAUDE.md's capture-first rule exists to
+// prevent ("all three provisional clauses were wrong in kind"). Sharing the one
+// committed capture also means a re-capture for a new Copilot release moves the
+// adapter's fixtures and the daemon's evidence together instead of leaving this
+// package asserting bytes Copilot no longer draws.
+//
+// It fails rather than skips: a missing capture means the shared fixture moved,
+// and silently degrading to "no screen" would turn every refusal assertion
+// below vacuous.
+func copilotScreenCapture(t *testing.T, name string) string {
+	t.Helper()
+	path := filepath.Join("..", "screenstate", "testdata", name)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read shared Copilot screen capture %s: %v", path, err)
+	}
+	if len(data) == 0 {
+		t.Fatalf("shared Copilot screen capture %s is empty", path)
+	}
+	return string(data)
+}
+
+// copilotVetoFreeScreen is the capture of a Copilot pane whose turn has
+// finished: output, the ordinary idle footer, and an empty composer box. The
+// adapter raises NO veto over it (pinned in
+// internal/screenstate/copilot_adapter_test.go), so it is the screen that lets
+// the transcript settle a pane — which makes it the right default for every
+// probe test whose subject is the transcript evidence rather than the pane.
+const copilotVetoFreeScreen = "copilot_idle_completed.txt"
+
+// copilotPermissionPromptScreen is the capture of a Copilot pane blocked on a
+// tool-permission modal. It is the whole reason the screen is consulted at all:
+// Copilot has written its records and stopped, so this pane's transcript tail
+// reads terminal while a human is being waited on.
+const copilotPermissionPromptScreen = "copilot_permission_prompt.txt"
+
+// copilotSetScreen points a fake pane at one of the committed captures.
+func copilotSetScreen(t *testing.T, fake *fakeKittyClient, sourceWindowID int, capture string) {
+	t.Helper()
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+	if fake.getText == nil {
+		fake.getText = map[string]string{}
+	}
+	fake.getText[kitty.MatchWindowByID(sourceWindowID)] = copilotScreenCapture(t, capture)
+}
+
 // writeCopilotTranscript writes an events.jsonl fixture at the Copilot
 // transcript path (<home>/session-state/<session>/events.jsonl) the resolver
 // builds, so the probe exercises ResolveCopilotTranscript + ReadCopilotLifecycle
@@ -181,9 +238,16 @@ func copilotProbeHandlerNotifier(t *testing.T, windowID int, iconState, home str
 		}),
 	}
 	h.SetKittyClient(fake)
+	copilotSetScreen(t, fake, windowID, copilotVetoFreeScreen)
 	return h, fake, rec
 }
 
+// copilotProbeHandler builds a one-window Copilot probe fixture. The pane is
+// seeded with the veto-free finished-turn capture, because the probe now
+// consults the screen before it settles: a fake with no screen at all reads as
+// an empty capture, which raises VetoComposerBusy and would silently turn every
+// transcript-evidence test in this package into a screen-refusal test. A test
+// whose subject IS the screen overrides it with copilotSetScreen.
 func copilotProbeHandler(t *testing.T, windowID int, iconState string, home string) (*Handler, *fakeKittyClient) {
 	t.Helper()
 	h := newTestHandler()
@@ -195,6 +259,7 @@ func copilotProbeHandler(t *testing.T, windowID int, iconState string, home stri
 		}),
 	}
 	h.SetKittyClient(fake)
+	copilotSetScreen(t, fake, windowID, copilotVetoFreeScreen)
 	return h, fake
 }
 

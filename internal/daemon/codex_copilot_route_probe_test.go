@@ -310,6 +310,9 @@ func TestProbeCopilotTranscriptStop_RoutedProducerSettlesAndRecoversManagedTarge
 	windows := routedHarnessProbeWindows("bolt", harness.Codex, true)
 	fake := &fakeKittyClient{windows: windows}
 	h.SetKittyClient(fake)
+	// The screen refusal reads the PRODUCER pane, so a borrowed session's
+	// veto-free capture belongs on 43 rather than on the managed target 42.
+	copilotSetScreen(t, fake, 43, copilotVetoFreeScreen)
 	seedRoutedHarnessProbe(t, h, 42, 43, harness.Copilot, harness.Codex, "copilot-route", base.Unix(), "active")
 
 	h.ProbeCopilotTranscriptStop(base.Add(time.Second))
@@ -362,7 +365,7 @@ func TestProbeCopilotTranscriptStop_RoutedSourceReceiptInvalidatesBinding(t *tes
 		readReached = true
 		return transcript.CopilotLifecycleEvidence{State: transcript.CopilotLifecycleTerminal}, nil
 	}
-	h.probeCopilotTranscriptStopWithSnapshot(base.Add(2*time.Second), snapshot)
+	h.probeCopilotTranscriptStopWithSnapshot(base.Add(2*time.Second), snapshot, h.screenTextCacheFor())
 
 	if readReached {
 		t.Fatal("stale routed source receipt reached Copilot transcript I/O")

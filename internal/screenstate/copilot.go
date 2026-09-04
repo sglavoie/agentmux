@@ -11,11 +11,13 @@ import (
 // adapter alongside claude.go and codex.go, and it is deliberately the smallest
 // of the three, for a reason that is a design decision rather than an omission.
 //
-// THE COPY IS PROVISIONAL. patterns_copilot.toml ships placeholder wording that
-// has never been checked against a live Copilot pane; the clause NAMES below are
-// the settled half. Nothing here is on a production path yet (see the
-// composition decision), so a placeholder that matches the wrong thing cannot
-// reach a pane. Replacing the copy from real captures is the next step.
+// THE COPY IS CAPTURE-DERIVED. patterns_copilot.toml's wording was rewritten
+// from `kitten @ get-text --extent=screen` captures of GitHub Copilot CLI
+// 1.0.82, committed byte-for-byte under testdata/ and each named in a
+// copilot_adapter_test.go row. It replaced provisional copy written by analogy
+// to Claude and Codex, which was wrong in kind rather than mis-tuned in all
+// three clauses — see the header of that test file for what each placeholder
+// got wrong and which build a re-capture is owed to.
 //
 // ---------------------------------------------------------------------------
 // COMPOSITION WITH THE TRANSCRIPT PROBE: the screen REFUSES, the transcript
@@ -62,16 +64,24 @@ import (
 //	Claude and Codex screen paths in front of their hook paths: a visible
 //	prompt outranks a silent record.
 //
-// That refusal is NOT WIRED YET, and the seam is named so the next reader does
-// not have to find it: it belongs beside the `evidence.State !=
-// CopilotLifecycleTerminal` test in probeCopilotTranscriptWindow, not in
-// copilotTranscriptStopProbeCanOverwrite — which is an ICON filter consulted by
-// both the settle and the recovery gate, and which stays unchanged (there is a
-// paragraph there saying so). It waits on the copy because a wrong provisional
-// blocking_prompt or composer_line would refuse EVERY Copilot settle and strand
-// panes on a permanent ⚡, which is the failure the capture-first rule exists to
-// prevent. The refusal-only contract above is what makes that wait cheap:
-// wiring the screen in can only ever remove settles, never add one.
+// That refusal IS wired, at the seam this paragraph used to only name:
+// copilotScreenRefusesSettle, called beside the `evidence.State !=
+// CopilotLifecycleTerminal` test in probeCopilotTranscriptWindow. It is not in
+// copilotTranscriptStopProbeCanOverwrite — that is an ICON filter consulted by
+// both the settle and the recovery gate, and it stays unchanged (there is a
+// paragraph there saying so). The placement is what makes the refusal
+// FORWARD-ONLY: recovery of a stranded synthetic 🛑 returns before it, because
+// recovery un-settles rather than settles and a blocked pane must not be left
+// wearing a stop its own transcript disagrees with. Every veto refuses, not
+// just VetoBlockingPrompt, and so does a failed screen read.
+//
+// Two consequences of the refusal-only contract are load-bearing there. Wiring
+// the screen in can only ever REMOVE settles, never add one, so the worst a
+// mistake here can do is strand a pane on a ⚡ that its next real turn clears.
+// And the direction of that risk is why the copy had to be capture-derived
+// first: a wrong blocking_prompt or composer_line would refuse EVERY Copilot
+// settle, since a finished Copilot turn renders no completion marker at all and
+// the veto-free reading is the ordinary case.
 
 // The UI copy this adapter keys on lives in patterns_copilot.toml, loaded by
 // patterns.go and overridable per user. The clause names below are the contract

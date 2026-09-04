@@ -59,7 +59,8 @@ func (h *Handler) ProbeCopilotTranscriptStop(now time.Time) {
 		slog.Debug("copilot transcript probe: list windows failed", "err", err)
 		return
 	}
-	h.probeCopilotTranscriptStopWithSnapshot(now, probes.NewSnapshot(windows, reducerReceipts))
+	h.probeCopilotTranscriptStopWithSnapshot(now, probes.NewSnapshot(windows, reducerReceipts),
+		h.screenTextCacheFor())
 	h.renderSnapshot(windows)
 }
 
@@ -67,16 +68,26 @@ func (h *Handler) ProbeCopilotTranscriptStop(now time.Time) {
 // against an already-published Kitty snapshot. Direct sessions retain the
 // Copilot title-owner rule; borrowed sessions follow their exact producer route
 // to the managed target. Only a target whose reduced icon is a stuck ⚡ or this
-// probe's recoverable synthetic 🛑 is considered. Unlike the Codex/Claude probes
-// this reads no screen — the authoritative evidence is the matching producer
-// session's transcript.
-func (h *Handler) probeCopilotTranscriptStopWithSnapshot(now time.Time, snapshot probes.Snapshot) {
+// probe's recoverable synthetic 🛑 is considered.
+//
+// Unlike the Codex/Claude probes the screen is not what settles here — the
+// authoritative positive evidence is the matching producer session's
+// transcript. The per-tick cache is threaded through for the REFUSAL half of
+// the composition (see copilotScreenRefusesSettle), which is why it is a
+// parameter rather than something this function builds: on the production tick
+// a Copilot pane shares its capture with whatever else read it, exactly as the
+// Claude prompt-kind and idle probes share one.
+func (h *Handler) probeCopilotTranscriptStopWithSnapshot(
+	now time.Time,
+	snapshot probes.Snapshot,
+	screens *activity.ScreenTextCache,
+) {
 	for _, binding := range h.copilotTranscriptProbeBindings(now, snapshot) {
 		_, tab, target, ok := kitty.FindWindowLocationByID(snapshot.Windows(), binding.TargetWindowID)
 		if !ok {
 			continue
 		}
-		h.probeCopilotTranscriptWindow(now, binding, palette.ParseTitleParts(tab.Title), target.UserVars)
+		h.probeCopilotTranscriptWindow(now, binding, palette.ParseTitleParts(tab.Title), target.UserVars, screens)
 	}
 }
 
@@ -161,39 +172,25 @@ func (h *Handler) copilotTranscriptProbeBindings(now time.Time, snapshot probes.
 // guard (a live ASL lease, subagent, or pipe-mode fact still wins at reduce time
 // even for a bolt tab), so this filter is an early-exit, not the safety boundary.
 //
-// THE COPILOT SCREEN ADAPTER DOES NOT BELONG HERE, and that is a decision rather
-// than an omission. internal/screenstate/copilot.go now registers a Copilot
-// adapter, and the composition it documents is that the screen may REFUSE a
-// transcript-driven settle — a visible permission prompt outranks a transcript
-// tail, because the prompt is not a transcript event and the tail can read
-// terminal while a human is being waited on. But this predicate is an ICON
-// filter, consulted by both the settle gate and the recovery gate, and screen
-// evidence is not an icon: folding a veto in here would make the same call mean
-// "may act on this tab" in one caller and "the screen agrees" in the other. The
-// refusal belongs beside the `evidence.State != CopilotLifecycleTerminal` test
-// in probeCopilotTranscriptWindow, where the probe is already deciding what the
-// evidence supports, and it needs the tick's activity.ScreenTextCache threaded
-// through probeCopilotTranscriptStopWithSnapshot to get there.
+// THE COPILOT SCREEN REFUSAL DOES NOT BELONG HERE, and that is a decision rather
+// than an omission. The screen may REFUSE a transcript-driven settle — a visible
+// permission prompt outranks a transcript tail, because the prompt is not a
+// transcript event and the tail can read terminal while a human is being waited
+// on — but this predicate is an ICON filter, consulted by both the settle gate
+// and the recovery gate, and screen evidence is not an icon: folding a veto in
+// here would make the same call mean "may act on this tab" in one caller and
+// "the screen agrees" in the other. The refusal instead lives beside the
+// `evidence.State != CopilotLifecycleTerminal` test in
+// probeCopilotTranscriptWindow (copilotScreenRefusesSettle), where the probe is
+// already deciding what the evidence supports.
 //
-// The blocker that held it back is now cleared: patterns_copilot.toml was
-// provisional copy, and a blocking_prompt or composer_line clause matching the
-// wrong thing would have refused EVERY Copilot settle and stranded panes on a
-// permanent ⚡ — worse than the stuck-bolt case this probe exists to fix. The set
-// is now written entirely from committed `kitten @ get-text` captures of live
-// GitHub Copilot CLI 1.0.82 panes and asserted per capture in
-// internal/screenstate/copilot_adapter_test.go, including the two readings that
-// matter here: a real permission prompt reports Blocked, and a finished turn
-// raises no veto at all.
-//
-// What remains is the threading described above — the tick's
-// activity.ScreenTextCache reaching probeCopilotTranscriptWindow through
-// probeCopilotTranscriptStopWithSnapshot — plus the tests that pin a refusal
-// against a live probe rather than against the adapter alone. That is a change
-// to this file's plumbing, not a question about the patterns.
-//
-// Whoever picks it up should know the risk is asymmetric in their favour:
-// copilotAdapter.Classify can never report Terminal, so wiring the screen in can
-// only ever remove settles, never add one.
+// That placement is also what keeps the refusal FORWARD-ONLY. Recovery reaches
+// probeCopilotTranscriptWindow through this same predicate and returns from the
+// `recovering` branch above the refusal, so a vetoing screen can never block a
+// stranded synthetic 🛑 from being taken back. Recovery is deliberately
+// transcript-driven: it un-settles rather than settles, so refusing it would
+// leave a pane wearing a stop its own transcript disagrees with — the failure
+// direction this whole probe exists to avoid.
 func copilotTranscriptStopProbeCanOverwrite(iconState string) bool {
 	return iconState == "bolt" || iconState == "stop"
 }
@@ -215,7 +212,12 @@ func copilotTranscriptStopProbeCanOverwrite(iconState string) bool {
 //   - only a CopilotLifecycleTerminal evidence state drives the synthetic stop.
 //     Active, Unknown, a missing/unreadable file, a malformed tail, an unsafe
 //     session ID, or a missing profile home all fail closed: the stabilization
-//     streak is reset and the stuck bolt is left untouched.
+//     streak is reset and the stuck bolt is left untouched;
+//   - and the pane itself may still refuse what the transcript supports. A
+//     Copilot session waiting on a tool-permission answer has written its
+//     records and stopped, so a terminal tail is exactly what a blocked pane
+//     looks like; the screen is the only evidence that prompt exists. See
+//     copilotScreenRefusesSettle.
 //
 // The synthetic stop is applied through the race-safe authoritative-idle path
 // under a distinct SourceProbe fact, so ASL leases, subagents, pipe-mode
@@ -244,6 +246,7 @@ func (h *Handler) probeCopilotTranscriptWindow(
 	binding probes.Binding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
+	screens *activity.ScreenTextCache,
 ) {
 	windowID := binding.TargetWindowID
 	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: copilotTranscriptStopProbeSource}
@@ -356,6 +359,22 @@ func (h *Handler) probeCopilotTranscriptWindow(
 		})
 		return
 	}
+
+	// The transcript supports a settle; the pane gets to refuse it. This is the
+	// forward direction only — recovery returned above — and it resets the
+	// stabilization streak rather than merely skipping this observation, because
+	// a refusal is evidence the earlier agreeing samples described a pane that
+	// is now waiting on a human.
+	if refusal, reason, evidenceMap := h.copilotScreenRefusesSettle(binding, screens); refusal {
+		h.ClearIdleSample(windowID, source)
+		outcome := "success"
+		if reason == copilotScreenReadFailedReason {
+			outcome = "failed"
+		}
+		h.recordProbeStage(probeTraceID, "", probeReq, windowID, "completed", outcome, reason, evidenceMap)
+		return
+	}
+
 	// A normal completion (assistant.turn_end) is the intermediate-prone signal:
 	// require it to hold steady across two probe observations at the same
 	// transcript generation, and re-verify at apply time that no record was
@@ -422,6 +441,75 @@ func (h *Handler) probeCopilotTranscriptWindow(
 	h.recordProbeStage(probeTraceID, "", probeReq, windowID, "completed", outcome, reason, map[string]string{
 		"event_type": fmt.Sprint(evidence.EventType),
 	})
+}
+
+const (
+	// copilotScreenReadFailedReason records that the pane could not be read at
+	// all. It is a distinct reason from a veto because it is the one refusal
+	// that says nothing about the pane: Kitty failed, not Copilot.
+	copilotScreenReadFailedReason = "screen_read_failed"
+
+	// copilotScreenRefusedReason records that the pane was read and the Copilot
+	// adapter raised at least one veto over it.
+	copilotScreenRefusedReason = "screen_refused"
+)
+
+// copilotScreenRefusesSettle asks the pane whether the transcript's terminal
+// reading may become a synthetic 🛑, and reports the refusal with the reason and
+// journal evidence the caller records.
+//
+// THE SCREEN REFUSES AND THE TRANSCRIPT SETTLES. That composition is decided in
+// internal/screenstate/copilot.go and this is its production caller. The
+// adapter has no Terminal branch on any pattern set, so nothing it can observe
+// is settleable and this function can only ever remove a settle — which is what
+// makes admitting screen evidence to a transcript-driven probe safe. What the
+// screen has that the transcript does not is the pane RIGHT NOW: a Copilot
+// session sitting on a tool-permission prompt has written its records and
+// stopped writing, so its tail reads terminal while a human is being waited on.
+// A live status line and a composer holding queued input are the same shape of
+// fact.
+//
+// EVERY veto refuses, not just VetoBlockingPrompt. Two reasons. The vetoes this
+// adapter can raise are each a reading that the pane is not at rest, so ranking
+// them would be inventing a precedence the adapter deliberately does not have
+// (see the Observation contract: vetoes are a SET, not a first hit). And
+// VetoComposerBusy — raised whenever the composer box is not visible flush left,
+// which includes a prompt modal covering it and a pane scrolled away from it —
+// is precisely the "I could not see the pane's resting state" reading, so
+// treating it as permission to settle would discard the caution it exists to
+// express.
+//
+// A read failure refuses for the same fail-closed reason. The stuck ⚡ this
+// probe fixes is a cosmetic annoyance; a 🛑 painted over a pane blocking on a
+// permission answer hides the one row the dashboard exists to raise. When the
+// screen cannot be consulted, the safe answer is to leave the bolt and try
+// again next tick.
+func (h *Handler) copilotScreenRefusesSettle(
+	binding probes.Binding,
+	screens *activity.ScreenTextCache,
+) (bool, string, map[string]string) {
+	evidence := map[string]string{
+		"source_window_id": fmt.Sprint(binding.SourceWindowID),
+	}
+	if screens == nil {
+		// No cache means no caller threaded one through. Refusing is the same
+		// fail-closed answer an unreadable pane gets, and it keeps a future entry
+		// point from silently opting out of the refusal by omission.
+		return true, copilotScreenReadFailedReason, evidence
+	}
+	screen, err := screens.Screen(binding.SourceWindowID)
+	if err != nil {
+		slog.Debug("copilot transcript probe: get screen failed",
+			"source_window_id", binding.SourceWindowID, "target_window_id", binding.TargetWindowID, "err", err)
+		return true, copilotScreenReadFailedReason, evidence
+	}
+	observation := activity.ClassifyScreenState(harness.Copilot, screen)
+	if observation.Vetoes == 0 {
+		return false, "", nil
+	}
+	evidence["screen_state"] = fmt.Sprint(observation.State)
+	evidence["screen_vetoes"] = observation.Vetoes.String()
+	return true, copilotScreenRefusedReason, evidence
 }
 
 // recoverCopilotTranscriptStop self-heals a synthetic 🛑 that a post-settle
