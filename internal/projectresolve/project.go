@@ -52,6 +52,14 @@ type resolvedGitProject struct {
 	worktreeRoot  string
 	worktreeRoots []string
 	relativeDir   string
+	// commonDir is the canonical absolute Git common directory shared by the
+	// main checkout and every linked worktree. It is the repository-family
+	// identity; an empty value means the probe could not establish one and the
+	// project must not be treated as part of a Git family.
+	commonDir string
+	// primaryRoot is the canonical absolute main-checkout root of the same
+	// repository, which is where the family's display label is looked up.
+	primaryRoot string
 }
 
 type gitMetadataProvider interface {
@@ -61,6 +69,7 @@ type gitMetadataProvider interface {
 type gitMetadata struct {
 	worktreeRoot  string
 	worktreeRoots []string
+	commonDir     string
 }
 
 // New returns a resolver that only considers configured directory paths.
@@ -144,7 +153,23 @@ func resolveGitProject(dir string, provider gitMetadataProvider) (resolvedGitPro
 		worktreeRoot:  root,
 		worktreeRoots: normalizeWorktreeRoots(root, meta.worktreeRoots),
 		relativeDir:   relative,
+		commonDir:     AbsPath(meta.commonDir),
+		primaryRoot:   primaryWorktreeRoot(meta.worktreeRoots, root),
 	}, true
+}
+
+// primaryWorktreeRoot returns the main checkout of the repository. Git
+// documents that `worktree list` reports the main worktree first and the linked
+// worktrees after it, so the first readable entry is the primary root. A
+// provider that reported no worktrees at all degrades to the checkout the probe
+// ran in, which is the only root this resolver can prove exists.
+func primaryWorktreeRoot(roots []string, fallback string) string {
+	for _, candidate := range roots {
+		if abs := AbsPath(candidate); abs != "" {
+			return abs
+		}
+	}
+	return fallback
 }
 
 func normalizeWorktreeRoots(root string, roots []string) []string {
@@ -190,15 +215,30 @@ func (r Resolver) Matches(cwd string) []Match {
 	if abs == "" {
 		return nil
 	}
-	if matches := r.physicalMatches(abs); len(matches) > 0 {
-		return matches
+	matched := r.matchedProjects(abs)
+	if len(matched) == 0 {
+		return nil
+	}
+	matches := make([]Match, 0, len(matched))
+	for _, p := range matched {
+		matches = append(matches, p.match())
+	}
+	return matches
+}
+
+// matchedProjects is Matches without the projection to the exported Match, so
+// family resolution can read the Git metadata behind a match instead of
+// re-probing for it.
+func (r Resolver) matchedProjects(abs string) []resolvedProject {
+	if matched := r.physicalMatches(abs); len(matched) > 0 {
+		return matched
 	}
 	return r.gitEquivalentMatches(abs)
 }
 
-func (r Resolver) physicalMatches(abs string) []Match {
+func (r Resolver) physicalMatches(abs string) []resolvedProject {
 	bestLen := -1
-	var matches []Match
+	var matches []resolvedProject
 	for _, p := range r.projects {
 		if !pathMatchesOrHasAncestor(abs, p.dir) {
 			continue
@@ -208,15 +248,15 @@ func (r Resolver) physicalMatches(abs string) []Match {
 			matches = matches[:0]
 		}
 		if len(p.dir) == bestLen {
-			matches = append(matches, p.match())
+			matches = append(matches, p)
 		}
 	}
 	return matches
 }
 
-func (r Resolver) gitEquivalentMatches(abs string) []Match {
+func (r Resolver) gitEquivalentMatches(abs string) []resolvedProject {
 	bestLen := -1
-	var matches []Match
+	var matches []resolvedProject
 	for _, p := range r.projects {
 		if p.git.relativeDir == "" {
 			continue
@@ -231,7 +271,7 @@ func (r Resolver) gitEquivalentMatches(abs string) []Match {
 				matches = matches[:0]
 			}
 			if len(mapped) == bestLen {
-				matches = append(matches, p.match())
+				matches = append(matches, p)
 			}
 		}
 	}
@@ -329,11 +369,14 @@ func (p realGitMetadataProvider) gitMetadata(dir string) (gitMetadata, error) {
 		return gitMetadata{}, errors.New("project path is not a directory")
 	}
 
-	revParse, err := p.gitOutput(dir, "rev-parse", "--path-format=absolute", "--show-toplevel")
+	// The common directory rides along on the existing rev-parse rather than
+	// costing a third command: this probe already runs once per configured
+	// project under a worker cap, and family identity must not add a cycle.
+	revParse, err := p.gitOutput(dir, "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-common-dir")
 	if err != nil {
 		return gitMetadata{}, err
 	}
-	root, err := parseGitRevParseRoot(revParse)
+	root, commonDir, err := parseGitRevParseRoots(revParse)
 	if err != nil {
 		return gitMetadata{}, err
 	}
@@ -350,6 +393,7 @@ func (p realGitMetadataProvider) gitMetadata(dir string) (gitMetadata, error) {
 	return gitMetadata{
 		worktreeRoot:  root,
 		worktreeRoots: worktreeRoots,
+		commonDir:     commonDir,
 	}, nil
 }
 
@@ -380,17 +424,24 @@ func (p realGitMetadataProvider) gitOutput(dir string, args ...string) ([]byte, 
 	return stdout.Bytes(), nil
 }
 
-func parseGitRevParseRoot(out []byte) (string, error) {
+// parseGitRevParseRoots reads the `--show-toplevel --git-common-dir` pair. Both
+// paths are required: a run that answered only one of them is malformed output
+// rather than a repository with half an identity, and degrading to no Git
+// metadata is the fail-closed direction.
+func parseGitRevParseRoots(out []byte) (root, commonDir string, err error) {
 	text := strings.TrimRight(string(out), "\n")
 	lines := strings.Split(text, "\n")
-	if len(lines) != 1 {
-		return "", fmt.Errorf("malformed git rev-parse output: got %d lines", len(lines))
+	if len(lines) != 2 {
+		return "", "", fmt.Errorf("malformed git rev-parse output: got %d lines", len(lines))
 	}
-	root := strings.TrimSuffix(lines[0], "\r")
-	if root == "" {
-		return "", errors.New("malformed git rev-parse output: empty path")
+	for i, line := range lines {
+		path := strings.TrimSuffix(line, "\r")
+		if path == "" {
+			return "", "", errors.New("malformed git rev-parse output: empty path")
+		}
+		lines[i] = filepath.Clean(path)
 	}
-	return filepath.Clean(root), nil
+	return lines[0], lines[1], nil
 }
 
 func parseGitWorktreeListPorcelainZ(out []byte) ([]string, error) {

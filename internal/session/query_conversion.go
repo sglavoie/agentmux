@@ -80,6 +80,10 @@ func runningSessionsFromTabs(tabs []kitty.Tab, ctx projectMatchContext) ([]Runni
 		// position within its OS window. Assign it before managed tabs are
 		// filtered so unmanaged tabs still occupy their visible positions.
 		rs.TabNumber = i + 1
+		// Stamped here rather than inside each conversion path so the user-var,
+		// title-fallback, and CWD-recovery paths cannot disagree about a row's
+		// family.
+		rs = ctx.stampFamily(rs)
 		sessions = append(sessions, rs)
 		if ghost != nil {
 			ghosts = append(ghosts, *ghost)

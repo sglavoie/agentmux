@@ -11,41 +11,53 @@ import (
 
 // RunningSession is a currently open managed harness tab in Kitty.
 type RunningSession struct {
-	TabID            int
-	TabNumber        int // 1-based physical position within the containing Kitty OS window
-	WindowID         int
-	Key              string
-	Title            string    // raw Kitty tab title (may include icons)
-	Base             string    // title with all icons stripped (e.g., "api"; older tabs may still be "W:api")
-	State            string    // "bolt", "stop", "key", "warning", "error", "subagent", "compact", "question", or ""
-	Looping          bool      // daemon-owned loop marker; title-derived only when the daemon is unreachable
-	BusySince        time.Time // daemon-owned start of the current active-class stretch; zero when the row is not busy
-	Unseen           bool      // daemon-owned: the row came to rest on a turn the user has not looked at; false (seen) with no daemon
-	Reason           string    // daemon-owned harness prompt kind naming WHY a blocked row is blocked; empty when nothing is blocking it, when no screen probe labelled the prompt, and with no daemon
-	Branch           string    // daemon-owned short Git branch of the row's checkout; empty for a non-repository, a detached HEAD, a disabled/failed probe, and with no daemon
-	Dirty            bool      // daemon-owned: the row's checkout has modified tracked files; independent of Branch, so a detached HEAD still reports it
-	Starred          bool
-	Locked           bool
-	Muted            bool
-	Project          string   // configured project title
-	Profile          string   // from amx_profile / legacy cc_account user vars
-	Account          string   // compatibility alias for Profile
-	Harness          string   // from amx_harness or inferred from legacy vars
-	HomeDir          string   // from amx_home_dir / legacy cc_config_dir
-	Directory        string   // from amx_directory / legacy cc_cwd user var, or the selected managed window's CWD
-	Args             string   // from amx_args / legacy cc_flags (shell-quoted)
-	Flags            string   // compatibility alias for Args
-	ExplicitFlags    string   // from cc_explicit_flags (shell-quoted); empty when inherited or legacy
-	ExplicitFlagsSet bool     // true when cc_explicit_flags was present in Kitty user vars
-	Env              string   // from amx_env / legacy cc_env (raw serialized)
-	Groups           []string // decoded from cc_groups user var (\x1f-delimited)
-	LaunchID         string
-	NativeCoverage   string
-	NativeLogPath    string
-	NativeLogLevel   string
-	NativeOverride   string
-	HarnessSessionID string
-	ASLRunID         string
+	TabID     int
+	TabNumber int // 1-based physical position within the containing Kitty OS window
+	WindowID  int
+	Key       string
+	Title     string    // raw Kitty tab title (may include icons)
+	Base      string    // title with all icons stripped (e.g., "api"; older tabs may still be "W:api")
+	State     string    // "bolt", "stop", "key", "warning", "error", "subagent", "compact", "question", or ""
+	Looping   bool      // daemon-owned loop marker; title-derived only when the daemon is unreachable
+	BusySince time.Time // daemon-owned start of the current active-class stretch; zero when the row is not busy
+	Unseen    bool      // daemon-owned: the row came to rest on a turn the user has not looked at; false (seen) with no daemon
+	Reason    string    // daemon-owned harness prompt kind naming WHY a blocked row is blocked; empty when nothing is blocking it, when no screen probe labelled the prompt, and with no daemon
+	Branch    string    // daemon-owned short Git branch of the row's checkout; empty for a non-repository, a detached HEAD, a disabled/failed probe, and with no daemon
+	Dirty     bool      // daemon-owned: the row's checkout has modified tracked files; independent of Branch, so a detached HEAD still reports it
+	Starred   bool
+	Locked    bool
+	Muted     bool
+	// Repository-family identity, resolved during config-aware discovery from
+	// the configured project that owns Directory. All four stay empty when no
+	// configured project matches the row's directory and when the projects that
+	// do match disagree about which family they are, so a row never groups on a
+	// guess. Discovery without a config resolves no family at all.
+	//
+	// FamilyKey is an internal grouping token built out of filesystem paths and
+	// must never be rendered; FamilyLabel is the one of these meant to be read.
+	FamilyKey          string
+	FamilyLabel        string
+	FamilyIsRepository bool     // the family is a Git repository rather than a lone configured project
+	FamilyPrimaryRoot  string   // main checkout root, or the configured directory for a non-repository
+	Project            string   // configured project title
+	Profile            string   // from amx_profile / legacy cc_account user vars
+	Account            string   // compatibility alias for Profile
+	Harness            string   // from amx_harness or inferred from legacy vars
+	HomeDir            string   // from amx_home_dir / legacy cc_config_dir
+	Directory          string   // from amx_directory / legacy cc_cwd user var, or the selected managed window's CWD
+	Args               string   // from amx_args / legacy cc_flags (shell-quoted)
+	Flags              string   // compatibility alias for Args
+	ExplicitFlags      string   // from cc_explicit_flags (shell-quoted); empty when inherited or legacy
+	ExplicitFlagsSet   bool     // true when cc_explicit_flags was present in Kitty user vars
+	Env                string   // from amx_env / legacy cc_env (raw serialized)
+	Groups             []string // decoded from cc_groups user var (\x1f-delimited)
+	LaunchID           string
+	NativeCoverage     string
+	NativeLogPath      string
+	NativeLogLevel     string
+	NativeOverride     string
+	HarnessSessionID   string
+	ASLRunID           string
 }
 
 func (rs RunningSession) EffectiveProfile() string {
@@ -112,6 +124,25 @@ func newProjectMatchContext(cfg *config.Config) projectMatchContext {
 		ctx.resolver = projectresolve.NewWithGit(configuredProjects(cfg))
 	}
 	return ctx
+}
+
+// stampFamily attaches repository-family identity to a session that discovery
+// has already settled. It reads the resolver ghost recovery was going to build
+// anyway, so no second Git probe pass runs, and it leaves every family field
+// empty when the resolver declines to name a family.
+func (ctx projectMatchContext) stampFamily(rs RunningSession) RunningSession {
+	if ctx.cfg == nil {
+		return rs
+	}
+	family, ok := ctx.resolver.ResolveFamily(rs.Directory)
+	if !ok {
+		return rs
+	}
+	rs.FamilyKey = family.Key
+	rs.FamilyLabel = family.Label
+	rs.FamilyIsRepository = family.IsRepository
+	rs.FamilyPrimaryRoot = family.PrimaryRoot
+	return rs
 }
 
 // List returns all managed running sessions from Kitty.
