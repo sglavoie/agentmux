@@ -12,7 +12,10 @@ import (
 // Per-mode footer palettes for the Past Sessions and Plans views. Each palette
 // is a flat, declaration-ordered list: footerHintLines renders it into at most
 // a fixed number of physical rows, dropping the least important entries when
-// the terminal is too narrow to show them all.
+// the terminal is too narrow to show them all. The truncation policy itself
+// lives in prioritizedFooterLines at the bottom of this file, over rendered
+// tokens rather than palette entries, so footers built some other way can
+// reuse it.
 const (
 	footerHintIndent    = "  "
 	footerHintSeparator = " · "
@@ -235,23 +238,62 @@ func aslWorkbenchAvailable(m Model) bool {
 	return ok && row.PlanDir != "" && commands.BrowserSupported()
 }
 
-// footerHintLines renders entries into physical footer rows, wrapped to
-// m.width. While the block needs more than maxLines rows, the entry with the
-// highest priority number is dropped (last declared first among ties) and
-// footerHintMore is appended so the loss is visible. Entries with
-// priority 0 are never dropped, so the result may still exceed maxLines once
-// only those remain. maxLines <= 0 disables truncation entirely.
+// footerHintLines renders a static footerEntry palette into physical footer
+// rows, wrapped to m.width. It is the adapter Past Sessions, Plans, Worktrees,
+// and ASL Runs use: it turns declaration-ordered entries into prioritized
+// rendered tokens and leaves the truncation policy to prioritizedFooterLines,
+// whose documented rules it inherits unchanged.
 func footerHintLines(m Model, entries []footerEntry, maxLines int) []string {
-	kept := make([]footerEntry, len(entries))
-	copy(kept, entries)
+	return prioritizedFooterLines(footerHintTokens(m, entries), footerHintIndent, m.width, maxLines)
+}
+
+// footerHintTokens renders each entry once through the same
+// availFn -> style -> footerToken pipeline as listFooterSectionsLine. A single
+// pass is enough because availFn is a pure function of the Model snapshot the
+// footer is being rendered for: re-running it once per drop, as the pre-token
+// loop did, could only produce the same answer.
+func footerHintTokens(m Model, entries []footerEntry) []prioritizedFooterToken {
+	tokens := make([]prioritizedFooterToken, 0, len(entries))
+	for _, e := range entries {
+		tok := footerBindingToken(e.key, e.label)
+		if !e.availFn(m) {
+			tok = footerUnavailableBindingToken(e.key, e.label)
+		}
+		tokens = append(tokens, prioritizedFooterToken{token: tok, priority: e.priority})
+	}
+	return tokens
+}
+
+// prioritizedFooterToken is one already-rendered footer token plus the priority
+// that decides when width pressure drops it. Rendering happens before the
+// truncation loop runs, so the loop needs to know nothing about what produced a
+// token — a static footerEntry palette or any other source of rendered tokens.
+type prioritizedFooterToken struct {
+	token    footerToken
+	priority int
+}
+
+// prioritizedFooterLines renders prioritized rendered tokens into physical
+// footer rows, wrapped to width. While the block needs more than maxLines rows,
+// the token with the highest priority number is dropped (last declared first
+// among ties) and footerHintMore is appended so the loss is visible. Tokens at
+// footerPriorityEssential are never dropped, so the result may still exceed
+// maxLines once only those remain. maxLines <= 0 disables truncation entirely,
+// and width <= 0 yields the single unwrapped row wrapFooterLine falls back to.
+//
+// The helper owns the separator and the more marker so every caller truncates
+// identically; it interprets nothing about what a token means.
+func prioritizedFooterLines(tokens []prioritizedFooterToken, indent string, width, maxLines int) []string {
+	kept := make([]prioritizedFooterToken, len(tokens))
+	copy(kept, tokens)
 
 	truncated := false
 	for {
-		lines := strings.Split(footerHintBlock(m, kept, truncated), "\n")
+		lines := strings.Split(prioritizedFooterBlock(kept, indent, width, truncated), "\n")
 		if maxLines <= 0 || len(lines) <= maxLines {
 			return lines
 		}
-		drop := footerHintDropIndex(kept)
+		drop := prioritizedFooterDropIndex(kept)
 		if drop < 0 {
 			return lines
 		}
@@ -260,41 +302,44 @@ func footerHintLines(m Model, entries []footerEntry, maxLines int) []string {
 	}
 }
 
-// footerHintBlock renders one palette pass through the same
-// availFn -> style -> footerToken -> wrapFooterLine pipeline as
-// listFooterSectionsLine, returning the newline-joined physical rows.
-func footerHintBlock(m Model, entries []footerEntry, truncated bool) string {
+// prioritizedFooterBlock renders one pass of the surviving tokens through
+// wrapFooterLine, separating them with footerHintSeparator and appending the
+// more marker when an earlier pass dropped something. Separators are assigned
+// here rather than taken from the caller so the last token on the block — which
+// changes as tokens drop — never trails one.
+func prioritizedFooterBlock(tokens []prioritizedFooterToken, indent string, width int, truncated bool) string {
 	sep := styleFooter.Render(footerHintSeparator)
 	sepW := layout.StyledWidth(sep)
 
-	tokens := make([]footerToken, 0, len(entries)+1)
-	for _, e := range entries {
-		if e.availFn(m) {
-			tokens = append(tokens, footerBindingToken(e.key, e.label))
-		} else {
-			tokens = append(tokens, footerUnavailableBindingToken(e.key, e.label))
-		}
+	rendered := make([]footerToken, 0, len(tokens)+1)
+	for _, t := range tokens {
+		rendered = append(rendered, t.token)
 	}
 	if truncated {
-		tokens = append(tokens, footerBindingToken("?", "more"))
+		rendered = append(rendered, footerBindingToken("?", "more"))
 	}
-	for i := 0; i < len(tokens)-1; i++ {
-		tokens[i].sep = sep
-		tokens[i].sepWidth = sepW
+	for i := range rendered {
+		if i < len(rendered)-1 {
+			rendered[i].sep = sep
+			rendered[i].sepWidth = sepW
+		} else {
+			rendered[i].sep = ""
+			rendered[i].sepWidth = 0
+		}
 	}
-	return wrapFooterLine(footerHintIndent, footerHintIndent, tokens, m.width)
+	return wrapFooterLine(indent, indent, rendered, width)
 }
 
-// footerHintDropIndex returns the index of the next entry to drop: the highest
-// priority number, and among equal priorities the last declared. Returns -1
-// when every remaining entry is priority 0.
-func footerHintDropIndex(entries []footerEntry) int {
+// prioritizedFooterDropIndex returns the index of the next token to drop: the
+// highest priority number, and among equal priorities the last declared.
+// Returns -1 when every remaining token is essential.
+func prioritizedFooterDropIndex(tokens []prioritizedFooterToken) int {
 	drop := -1
-	for i, e := range entries {
-		if e.priority <= footerPriorityEssential {
+	for i, t := range tokens {
+		if t.priority <= footerPriorityEssential {
 			continue
 		}
-		if drop < 0 || e.priority >= entries[drop].priority {
+		if drop < 0 || t.priority >= tokens[drop].priority {
 			drop = i
 		}
 	}
