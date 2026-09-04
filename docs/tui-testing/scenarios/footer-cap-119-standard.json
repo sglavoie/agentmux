@@ -1,0 +1,14 @@
+{
+  "name": "footer-cap-119-standard",
+  "fixture": "project_families",
+  "size": { "width": 120, "height": 26 },
+  "actions": [{ "type": "resize", "width": 119, "height": 26 }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "  j/k up/down · enter focus · a actions · : commands · / filter · ? help · ]/[ jump chord · }/{ jump + focus" },
+    { "type": "contains_text", "text": "  p preview · v group view · l launch · q quit · 🔑 needs permission · e peek · T timeline · x clear · ? more" },
+    { "type": "excludes_text", "text": "r restart" },
+    { "type": "contains_text", "text": " Sessions: 7 · 2 attention · 2 active · 3 idle" },
+    { "type": "no_layout_issues" }
+  ]
+}

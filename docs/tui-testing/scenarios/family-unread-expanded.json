@@ -1,0 +1,25 @@
+{
+  "name": "family-unread-expanded",
+  "fixture": "family_unread",
+  "size": { "width": 120, "height": 32 },
+  "actions": [
+    { "type": "key", "key": "v" },
+    { "type": "key", "key": "left" },
+    { "type": "key", "key": "left" },
+    { "type": "key", "key": "right" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "cursor_equals", "cursor": 0 },
+    { "type": "contains_text", "text": "  ▌ ▾ 🛑 svc  1 attention · 1 active · 1 idle" },
+    { "type": "excludes_text", "text": "• ▌ ▾ 🛑 svc" },
+    { "type": "contains_text", "text": "• ▌   3:     🛑 [work    ] 🦊 claude  svc-review" },
+    { "type": "contains_text", "text": "  ▌   1:     ⚡ [work    ] 🦊 claude  svc  " },
+    { "type": "contains_text", "text": "  ▌   2:     🛑 [work    ] 🦊 claude  svc-legacy" },
+    { "type": "excludes_text", "text": "• ▌   1:" },
+    { "type": "excludes_text", "text": "• ▌   2:" },
+    { "type": "contains_text", "text": "  ▌ ▾ ⚡ web  1 active · 1 idle" },
+    { "type": "contains_text", "text": "Sessions: 6 · 1 attention · 2 active · 3 idle" },
+    { "type": "no_layout_issues" }
+  ]
+}

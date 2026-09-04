@@ -1,0 +1,16 @@
+{
+  "name": "footer-cap-short-height",
+  "fixture": "project_families",
+  "size": { "width": 120, "height": 14 },
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "  j/k up/down · enter focus · a actions · : commands · / filter · ? help · 1–4 of 7 · ]/[ jump chord · }/{ jump + focus" },
+    { "type": "contains_text", "text": "  p preview · v group view · l launch · q quit · 🔑 needs permission · e peek · T timeline · x clear · ? more" },
+    { "type": "excludes_text", "text": "r restart" },
+    { "type": "contains_text", "text": "▌ 1:     🔑 perm [work    ] 🦊 claude  api " },
+    { "type": "contains_text", "text": "▌ 4:     ⚡      [personal] 🤖 codex   docs " },
+    { "type": "contains_text", "text": "  ▼" },
+    { "type": "contains_text", "text": " Sessions: 7 · 2 attention · 2 active · 3 idle" },
+    { "type": "no_layout_issues" }
+  ]
+}

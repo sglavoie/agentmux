@@ -1,0 +1,14 @@
+{
+  "name": "footer-jump-chord-pending",
+  "fixture": "project_families",
+  "size": { "width": 120, "height": 26 },
+  "actions": [{ "type": "key", "key": "]" }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "  jump next: p)perm · e)fail · a)active · q)question · s)stop · c)compact · b)sub · ]]/[[)attention · esc cancels" },
+    { "type": "excludes_text", "text": "j/k up/down" },
+    { "type": "excludes_text", "text": "? more" },
+    { "type": "contains_text", "text": " Sessions: 7 · 2 attention · 2 active · 3 idle" },
+    { "type": "no_layout_issues" }
+  ]
+}

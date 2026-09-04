@@ -1,0 +1,15 @@
+{
+  "name": "footer-preview-suppressed",
+  "fixture": "project_families",
+  "size": { "width": 120, "height": 32 },
+  "actions": [{ "type": "key", "key": "p" }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "p: hide preview" },
+    { "type": "excludes_text", "text": "j/k up/down" },
+    { "type": "excludes_text", "text": "? more" },
+    { "type": "contains_text", "text": "api · work · claude" },
+    { "type": "contains_text", "text": " Sessions: 7 · 2 attention · 2 active · 3 idle" },
+    { "type": "no_layout_issues" }
+  ]
+}

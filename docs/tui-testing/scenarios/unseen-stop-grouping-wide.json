@@ -12,6 +12,11 @@
     { "type": "contains_text", "text": "Active (1)" },
     { "type": "contains_text", "text": "Idle (1)" },
     { "type": "selected_title", "value": "read" },
+    { "type": "contains_text", "text": "• ▌ 1:     🛑 [work    ] 🦊 claude  unread" },
+    { "type": "contains_text", "text": "  ▌ 2:     🛑 [work    ] 🦊 claude  read" },
+    { "type": "contains_text", "text": "  ▌ 3:     ⚡ [personal] 🤖 codex   working" },
+    { "type": "excludes_text", "text": "• ▌ 2:" },
+    { "type": "excludes_text", "text": "• ▌ 3:" },
     { "type": "no_layout_issues" }
   ]
 }

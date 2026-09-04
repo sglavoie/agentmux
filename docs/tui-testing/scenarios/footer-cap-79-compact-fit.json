@@ -1,0 +1,14 @@
+{
+  "name": "footer-cap-79-compact-fit",
+  "fixture": "project_families",
+  "size": { "width": 80, "height": 26 },
+  "actions": [{ "type": "resize", "width": 79, "height": 26 }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "  j/k move · enter focus · : cmds · ? help · v view · q quit" },
+    { "type": "excludes_text", "text": "j/k up/down" },
+    { "type": "excludes_text", "text": "? more" },
+    { "type": "contains_text", "text": " Sessions: 7 · 2 attention · 2 active · 3 idle" },
+    { "type": "no_layout_issues" }
+  ]
+}

@@ -163,6 +163,7 @@ var uitestFixtureBuilders = map[string]func() uitestFixture{
 	"blocked_reasons":    blockedReasonsFixture,
 	"worktree_branches":  worktreeBranchesFixture,
 	"project_families":   projectFamiliesFixture,
+	"family_unread":      familyUnreadFixture,
 }
 
 // uitestFixtureError reports a request for an unknown built-in fixture and
@@ -685,6 +686,94 @@ func projectFamiliesFixture() uitestFixture {
 			// 71 (scratch) is deliberately absent: an authoritative Families map
 			// clears what it does not name, which is the only way to say that a
 			// discovered row belongs to no family.
+		},
+	}
+}
+
+// familyUnreadFixture is the one world the unread-completion marker cannot be
+// proved in anywhere else: an unseen stop sitting INSIDE a multi-checkout
+// family, where folding the family is what decides whether the news is said on
+// the summary or on the leaf.
+//
+// It is a separate fixture rather than an edit to project_families on purpose.
+// That fixture's ordering, bucket spread, and count matrix are pinned by nine
+// scenarios and read as a single load-bearing claim; adding a second unread
+// member to it would have moved counts those scenarios assert exactly, and
+// relaxing them to accommodate the marker would have spent grouping evidence to
+// buy marker evidence. This fixture buys the marker evidence separately.
+//
+// The six rows are chosen so every way the marker can go wrong is visible in
+// one screen:
+//
+//   - `svc`, a THREE-member family holding the unread stop (`svc-review`)
+//     beside a SEEN stop (`svc-legacy`) and an active checkout (`svc`). The seen
+//     sibling is the control: a marker driven by the stop state alone rather
+//     than by the unseen bit would mark it too, and a collapsed summary that
+//     aggregated "any stopped member" rather than "any unread member" would
+//     still light up after the unread one was read;
+//   - `web`, a two-member family with NO unread member at all, whose summary
+//     must stay unmarked in both folds. Without it, a summary that marked every
+//     family would pass every assertion `svc` can make;
+//   - `tmp`, an unfamilied seen stop, which renders as a top-level leaf and
+//     charges the gutter nothing.
+//
+// Every row is a stop or an active row and none carries a busy anchor that
+// would pulse, so the gutter's contents are decided by the unseen bit alone:
+// the pulse arm of the notice rule cannot fire here and cannot be mistaken for
+// the dot. The surrounding rows are what make an alignment regression legible —
+// five unmarked rows share the gutter with the marked one, so a marker rendered
+// inside the row content instead of in front of it shifts exactly one line out
+// of six.
+func familyUnreadFixture() uitestFixture {
+	cfg := &config.Config{
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		HarnessEmojis: map[string]string{"claude": "🦊", "codex": "🤖"},
+		HarnessColors: map[string]string{"claude": "blue", "codex": "green"},
+		Accounts: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "~/.config/agent-mux/homes/work", Color: "blue"},
+			{Name: "personal", Harness: "codex", HomeDir: "~/.config/agent-mux/homes/personal", Color: "green"},
+		},
+		Sessions: []config.Session{
+			{Title: "svc", Directory: "~/projects/svc", Profile: "work"},
+			{Title: "svc-legacy", Directory: "~/projects/worktrees/svc-legacy", Profile: "work"},
+			{Title: "svc-review", Directory: "~/projects/worktrees/svc-review", Profile: "work"},
+			{Title: "web", Directory: "~/projects/web", Profile: "personal"},
+			{Title: "web-beta", Directory: "~/projects/worktrees/web-beta", Profile: "personal"},
+			{Title: "tmp", Directory: "~/tmp", Profile: "personal"},
+		},
+	}
+	windows := []kitty.OSWindow{uitestOSWindow(
+		uitestTab(1, 11, "⚡🦊svc", true, managedVars("work", "claude", "svc", "~/projects/svc")),
+		uitestTab(2, 21, "🛑🦊svc-legacy", false, managedVars("work", "claude", "svc-legacy", "~/projects/worktrees/svc-legacy")),
+		uitestTab(3, 31, "🛑🦊svc-review", false, managedVars("work", "claude", "svc-review", "~/projects/worktrees/svc-review")),
+		uitestTab(4, 41, "⚡🤖web", false, managedVars("personal", "codex", "web", "~/projects/web")),
+		uitestTab(5, 51, "🛑🤖web-beta", false, managedVars("personal", "codex", "web-beta", "~/projects/worktrees/web-beta")),
+		uitestTab(6, 61, "🛑🤖tmp", false, managedVars("personal", "codex", "tmp", "~/tmp")),
+	)}
+	busySince := func(d time.Duration) int64 { return uitestFrozenNow.Add(-d).Unix() }
+	return uitestFixture{
+		Name:        "family_unread",
+		Description: "an unread stop folded inside a three-checkout family, beside a seen sibling, a family with nothing unread, and an unfamilied leaf",
+		Size:        UITestSize{Width: 120, Height: 32},
+		Config:      cfg,
+		Windows:     windows,
+		States: map[int]protocol.WindowStateSnapshot{
+			11: {IconState: "bolt", BusySinceAt: busySince(1*time.Minute + 12*time.Second), Branch: "main"},
+			21: {IconState: "stop", Branch: "amx/legacy"},
+			31: {IconState: "stop", Unseen: true, Branch: "amx/review"},
+			41: {IconState: "bolt", BusySinceAt: busySince(24 * time.Second), Branch: "main"},
+			51: {IconState: "stop", Branch: "amx/beta"},
+			61: {IconState: "stop"},
+		},
+		Families: map[int]uitestFamily{
+			11: {Key: "git:svc", Label: "svc", IsRepository: true, PrimaryRoot: "~/projects/svc"},
+			21: {Key: "git:svc", Label: "svc", IsRepository: true, PrimaryRoot: "~/projects/svc"},
+			31: {Key: "git:svc", Label: "svc", IsRepository: true, PrimaryRoot: "~/projects/svc"},
+			41: {Key: "git:web", Label: "web", IsRepository: true, PrimaryRoot: "~/projects/web"},
+			51: {Key: "git:web", Label: "web", IsRepository: true, PrimaryRoot: "~/projects/web"},
+			// 61 (tmp) is deliberately absent, exactly as scratch is in
+			// project_families: an authoritative Families map clears what it does
+			// not name, which is the only way to say a row belongs to no family.
 		},
 	}
 }

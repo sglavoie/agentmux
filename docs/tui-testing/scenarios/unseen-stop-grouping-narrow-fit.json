@@ -7,7 +7,13 @@
     { "type": "cursor_equals", "cursor": 0 },
     { "type": "selected_title", "value": "unread" },
     { "type": "contains_text", "text": "Needs Attention (1)" },
+    { "type": "contains_text", "text": "Active (1)" },
     { "type": "contains_text", "text": "Idle (1)" },
+    { "type": "contains_text", "text": "• ▌ 1:     🛑 unread" },
+    { "type": "contains_text", "text": "  ▌ 2:     🛑 read" },
+    { "type": "contains_text", "text": "  ▌ 3:     ⚡ working" },
+    { "type": "excludes_text", "text": "• ▌ 2:" },
+    { "type": "excludes_text", "text": "• ▌ 3:" },
     { "type": "no_layout_issues" }
   ]
 }

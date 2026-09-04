@@ -74,6 +74,7 @@ amx tui-test list-fixtures
 # asl_runs
 # basic
 # blocked_reasons
+# family_unread
 # project_families
 # run_timers
 # unseen_stops
@@ -118,6 +119,7 @@ amx tui-test fixture wide_profiles --width 140 --key C
 | `asl_question` | `basic` with a human-actionable `❓🔁` supervisor handoff and a `⚡🔁` active run | ASL handoff presentation: attention grouping, gloss, `]q` jump |
 | `asl_runs` | four supervisor runs spanning exact, ambiguous, second-exact, and unbound live sessions | Runs view focus outcomes and binding presentation |
 | `blocked_reasons` | four blocked rows — two `🔑`, two `❓` — carrying a Codex permission kind, a Claude permission kind, a request-for-input kind, and no kind at all | the blocked-reason column: two harnesses' distinct kind strings reading as one `perm` tag, the widest tag setting the column, and an unlabelled row padding rather than collapsing |
+| `family_unread` | a three-checkout family holding one unread `🛑` beside a seen `🛑` and an `⚡`, a second family with nothing unread, and an unfamilied seen `🛑` | the unread-completion marker inside a family: which row the `•` lands on when the family is folded versus unfolded, that a seen sibling never earns one, and that a family with no unread member stays unmarked in both folds |
 | `project_families` | two multi-checkout repository families whose members span all three urgency buckets, plus a single-checkout family and a row belonging to no family | the Projects view: summaries, fold/unfold, the singleton that earns no summary, the unfamilied leaf, the project card, and count semantics under a filter |
 | `run_timers` | five busy stretches: sub-minute, multi-minute, hours-long, warning-band, and idle | per-row run timer formatting bands and the `⏳` watchdog warning |
 | `unseen_stops` | two `🛑` rows the daemon separates by seenness, plus one `⚡` row | the unseen-stop demotion: a read `🛑` falls to Idle while an unread one holds Needs Attention |
@@ -169,6 +171,41 @@ clock. Fixtures anchor their timestamps at fixed offsets from it, so every cell
 renders identical text on every run and scenarios can assert it exactly. Only
 the render clock is frozen; pulse decay and idle classification still follow
 the wall clock.
+
+### Asserting the unread-completion marker
+
+When any line in the list has news, a two-column notice gutter is reserved in
+front of the group border for the whole render pass, so a row reads `• ▌ …`
+when it is the one with news and `  ▌ …` when it is not. Reservation scans the
+whole projection rather than the visible window, so scrolling toward an unread
+row does not shift the columns. A list where nothing has news drops the gutter
+entirely and every row moves two cells left — which is why a scenario asserting
+a marker should also assert the padded form of at least one unmarked row.
+
+Three rules decide what a scenario will see:
+
+- a **leaf** row carries `•` when the daemon says it is stopped *and* unseen. A
+  stopped row whose completion has already been seen carries nothing, which is
+  why every marker scenario pairs the marked row with a seen `🛑` control;
+- a **collapsed family summary** carries `•` when any member it is hiding is
+  unread, and the members themselves are off-screen. This is aggregation over
+  the unread bit, not over the stop state: a folded family whose only stop has
+  been read stays unmarked;
+- an **expanded family summary** never carries `•`. The marker moves down to the
+  unread child, so folding and unfolding relocates exactly one marker rather
+  than duplicating it.
+
+A live pulse outranks both: a pulsing row paints the state-colored `▌` pulse
+glyph in the same gutter cell instead of the dot, and the dot returns unchanged
+when the pulse decays, because seenness is daemon-owned and no keypress clears
+it. Fixtures written to prove marker behaviour therefore avoid pulses entirely,
+so the gutter's contents are decided by the unseen bit alone and a scenario
+cannot mistake one arm of the rule for the other.
+
+`family_unread` exists because the folded/unfolded question can only be asked
+inside a multi-checkout family, and `project_families` could not answer it
+without changing the counts nine scenarios already assert verbatim. Prefer
+adding a narrow fixture over widening a load-bearing one for the same reason.
 
 ## Scenario schema
 
@@ -331,7 +368,17 @@ file. The exact inventory is:
 | [`config-picker-fit.json`](scenarios/config-picker-fit.json) | `wide_profiles` | profile/config picker fits after pressing `C` with long profile names |
 | [`config-picker-selection-transition.json`](scenarios/config-picker-selection-transition.json) | `wide_profiles` | `l` → `C` → `down` restores the old colored profile row and keeps the new selection within the modal |
 | [`contextual-help-from-session-view.json`](scenarios/contextual-help-from-session-view.json) | `basic` | `?` opens the generated keymap over the truncated transcript viewer, which stays as the backdrop |
+| [`family-unread-collapsed.json`](scenarios/family-unread-collapsed.json) | `family_unread` | folding the family moves the unread child's marker onto the summary, which reports the family's own tally while its members — read and unread alike — are hidden, and the family with nothing unread stays unmarked beside it |
+| [`family-unread-expanded.json`](scenarios/family-unread-expanded.json) | `family_unread` | unfolding clears the summary's marker and puts exactly one `•` on the unread checkout, leaving its seen and active siblings aligned underneath |
+| [`footer-cap-79-compact-fit.json`](scenarios/footer-cap-79-compact-fit.json) | `project_families` | one cell below the standard band the footer falls back wholesale to the single compact row, which spells the hints short and offers no `? more` because nothing was dropped |
+| [`footer-cap-80-standard.json`](scenarios/footer-cap-80-standard.json) | `project_families` | exactly at 80 the footer is two standard rows ending in `? more`, and `q quit` is one of the hints that marker is standing in for |
+| [`footer-cap-119-standard.json`](scenarios/footer-cap-119-standard.json) | `project_families` | one cell below the spacious band two rows still carry the full vocabulary through `x clear`, with `r restart` left behind the `? more` marker |
+| [`footer-cap-120-spacious.json`](scenarios/footer-cap-120-spacious.json) | `project_families` | exactly at 120 the reclaimed cell buys `r restart` and pulls `p preview` up onto the first row, and the cap holds at two rows |
+| [`footer-cap-short-height.json`](scenarios/footer-cap-short-height.json) | `project_families` | a 14-row viewport still spends only two rows on hints — the pagination token pays for itself by displacing `r restart` — and the list keeps four rows plus the more-indicator |
+| [`footer-filter-chips-active.json`](scenarios/footer-filter-chips-active.json) | `project_families` | two active chips add their own removal hints to the footer without exceeding two rows or displacing the pinned status line |
 | [`footer-gloss-narrow-fit.json`](scenarios/footer-gloss-narrow-fit.json) | `basic` | narrow footer keeps the surviving dashboard hints readable |
+| [`footer-jump-chord-pending.json`](scenarios/footer-jump-chord-pending.json) | `project_families` | a pending jump chord replaces the whole footer with the chord's own vocabulary and its escape hatch, and the status line stays pinned underneath |
+| [`footer-preview-suppressed.json`](scenarios/footer-preview-suppressed.json) | `project_families` | opening the preview pane suppresses the footer hint rows entirely, moves the toggle's own hint into the header, and still pins the status line |
 | [`help-modal-narrow-fit.json`](scenarios/help-modal-narrow-fit.json) | `basic` | help remains bounded in a narrow viewport |
 | [`help-modal-scroll-bottom.json`](scenarios/help-modal-scroll-bottom.json) | `basic` | help scroll reaches the final surviving bindings |
 | [`legend-narrow-fit.json`](scenarios/legend-narrow-fit.json) | `actions` | live-session legend remains bounded at narrow width |
@@ -362,8 +409,8 @@ file. The exact inventory is:
 | [`session-view-hints-wide.json`](scenarios/session-view-hints-wide.json) | `basic` | transcript viewer advertises the full continuity palette including `c continue` |
 | [`session-view-hints-narrow-fit.json`](scenarios/session-view-hints-narrow-fit.json) | `basic` | transcript viewer hints truncate to the row budget and surface the actionable `? more` marker |
 | [`spacious-identity-columns.json`](scenarios/spacious-identity-columns.json) | `wide_profiles` | the spacious band gives a long profile name its own truncated cell and lets a long title and its full directory share the same row |
-| [`unseen-stop-grouping-narrow-fit.json`](scenarios/unseen-stop-grouping-narrow-fit.json) | `unseen_stops` | two identically-iconed 🛑 rows split across Needs Attention and Idle by the daemon's unseen bit, with the unread one leading the list at narrow width |
-| [`unseen-stop-grouping-wide.json`](scenarios/unseen-stop-grouping-wide.json) | `unseen_stops` | the seen 🛑 demotes to Idle while the unseen one holds Needs Attention, and `]s` still reaches the demoted row |
+| [`unseen-stop-grouping-narrow-fit.json`](scenarios/unseen-stop-grouping-narrow-fit.json) | `unseen_stops` | two identically-iconed 🛑 rows split across Needs Attention and Idle by the daemon's unseen bit, with the unread one leading the list at narrow width and wearing the only `•` the compact gutter paints |
+| [`unseen-stop-grouping-wide.json`](scenarios/unseen-stop-grouping-wide.json) | `unseen_stops` | the seen 🛑 demotes to Idle while the unseen one holds Needs Attention, `]s` still reaches the demoted row, and jumping to it neither marks it nor clears the marker on the row that has one |
 | [`worktrees-browse.json`](scenarios/worktrees-browse.json) | `worktrees` | `W` opens the hermetic managed-worktree inventory and whitespace-AND filtering narrows to the dirty row without exposing lifecycle mutations |
 | [`worktrees-cleanup-active-refusal.json`](scenarios/worktrees-cleanup-active-refusal.json) | `worktree_lifecycle` | checkout removal is refused from a snapshot with a live session |
 | [`worktrees-cleanup-dirty-refusal.json`](scenarios/worktrees-cleanup-dirty-refusal.json) | `worktree_lifecycle` | checkout removal is refused from a dirty snapshot |

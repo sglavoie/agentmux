@@ -1,0 +1,25 @@
+{
+  "name": "family-unread-collapsed",
+  "fixture": "family_unread",
+  "size": { "width": 120, "height": 32 },
+  "actions": [
+    { "type": "key", "key": "v" },
+    { "type": "key", "key": "left" },
+    { "type": "key", "key": "left" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "left" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "cursor_equals", "cursor": 1 },
+    { "type": "contains_text", "text": "• ▌ ▸ 🛑 svc  1 attention · 1 active · 1 idle" },
+    { "type": "contains_text", "text": "  ▌ ▸ ⚡ web  1 active · 1 idle" },
+    { "type": "excludes_text", "text": "• ▌ ▸ ⚡ web" },
+    { "type": "excludes_text", "text": "svc-review" },
+    { "type": "excludes_text", "text": "svc-legacy" },
+    { "type": "excludes_text", "text": "web-beta" },
+    { "type": "contains_text", "text": "  ▌ 6:     🛑 [personal] 🤖 codex   tmp" },
+    { "type": "contains_text", "text": "Sessions: 6 · 1 attention · 2 active · 3 idle" },
+    { "type": "no_layout_issues" }
+  ]
+}
