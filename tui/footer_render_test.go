@@ -165,7 +165,7 @@ func TestListFooterZeroWidthEmitsOneUnwrappedRow(t *testing.T) {
 var cursorIndependentFooterKeys = map[string]bool{
 	"j/k": true, "enter": true, ":": true, "/": true, "?": true,
 	"esc": true, "1-9": true, "tab": true, "]/[": true, "}/{": true,
-	"p": true, "v": true, "l": true, "q": true,
+	"p": true, "b": true, "v": true, "l": true, "q": true,
 	"f": true, "S": true, "P": true, "R": true,
 }
 
@@ -185,6 +185,7 @@ func TestListFooterAvailability(t *testing.T) {
 				"a": false, "e": false, "T": false, "r": false, "c": false,
 				"C": false, "s": false, "x": false, "X": false,
 				"o": false, "O": false,
+				"←/→": false,
 			},
 		},
 		{
@@ -194,6 +195,7 @@ func TestListFooterAvailability(t *testing.T) {
 				"a": true, "e": false, "T": true, "r": true, "c": true,
 				"C": true, "s": true, "x": true, "X": true,
 				"o": false, "O": false,
+				"←/→": false,
 			},
 		},
 		{
@@ -203,6 +205,7 @@ func TestListFooterAvailability(t *testing.T) {
 				"a": true, "e": true, "T": true, "r": true, "c": true,
 				"C": true, "s": true, "x": false, "X": true,
 				"o": false, "O": false,
+				"←/→": false,
 			},
 		},
 		{
@@ -212,6 +215,7 @@ func TestListFooterAvailability(t *testing.T) {
 				"a": true, "e": false, "T": true, "r": true, "c": true,
 				"C": true, "s": true, "x": false, "X": true,
 				"o": false, "O": false,
+				"←/→": false,
 			},
 		},
 	}

@@ -405,6 +405,7 @@ func (m *Model) cycleDashboardProfile() tea.Cmd {
 // leaving.
 func (m *Model) enterFilter(prefill string) tea.Cmd {
 	m.clearJumpChord()
+	m.railFocused = false
 	prior := dashboard.CaptureItemIdentity(m.items, m.cursor)
 	m.savedFilter = m.activeFilter
 	m.savedSelection = prior

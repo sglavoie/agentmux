@@ -72,6 +72,14 @@ type Model struct {
 	collapsedFamilies map[string]bool
 	cursor            int
 	listOffset        int // top item index for the scrollable list view in ModeList
+	// railRequested is the operator's process-local preference; geometry may
+	// still suppress the rail when it would leave the session list under its
+	// 80-cell guarantee. railFocused and the cursor/offset belong to the rail's
+	// independent keyboard viewport.
+	railRequested bool
+	railFocused   bool
+	railCursor    int
+	railOffset    int
 	// initialSourceWindowID is the Kitty window from which the dashboard was
 	// opened, used to select the matching tab row. It is retained across
 	// refreshes and cleared by the first usable topology result, so a startup

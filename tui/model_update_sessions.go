@@ -122,6 +122,7 @@ func (m Model) handleSessionsMsg(msg commands.SessionsMsg) (tea.Model, tea.Cmd) 
 	}
 	clampListOffset(&m)
 	scrollListToCursor(&m)
+	m.syncRailState()
 	// The preview is retargeted last, once the projection, the restored cursor,
 	// and the selection token have all had their say. A refresh can move the
 	// cursor onto a different session — or, in the Projects view, off a folded

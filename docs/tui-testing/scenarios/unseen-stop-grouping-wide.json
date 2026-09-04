@@ -3,6 +3,7 @@
   "fixture": "unseen_stops",
   "size": { "width": 120, "height": 36 },
   "actions": [
+    { "type": "key", "key": "b" },
     { "type": "key", "key": "]" },
     { "type": "key", "key": "s" }
   ],

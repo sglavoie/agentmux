@@ -64,6 +64,7 @@ func newModel(cfg *config.Config, client kitty.KittyClient, sourceWindowID int, 
 		now:                   time.Now,
 		idleThreshold:         idle,
 		focusedChipIdx:        -1,
+		railRequested:         true,
 		amxBin:                amxBin,
 		deprecations:          cfg.Deprecations,
 		messageDetailIdx:      -1,
@@ -260,6 +261,7 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	clampMessageDetailScroll(&m)
 	clampListOffset(&m)
 	scrollListToCursor(&m)
+	m.syncRailState()
 	clampPickerOffset(&m)
 	scrollPickerToCursor(&m)
 	scrollSessionSearchToCursor(&m)

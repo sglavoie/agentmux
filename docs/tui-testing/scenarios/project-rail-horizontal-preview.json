@@ -1,0 +1,14 @@
+{
+  "name": "project-rail-horizontal-preview",
+  "fixture": "project_families",
+  "size": { "width": 240, "height": 30 },
+  "actions": [{ "type": "key", "key": "p" }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "Projects       N A I" },
+    { "type": "contains_text", "text": "p: hide preview" },
+    { "type": "contains_text", "text": "api" },
+    { "type": "contains_text", "text": "(loading…)" },
+    { "type": "no_layout_issues" }
+  ]
+}

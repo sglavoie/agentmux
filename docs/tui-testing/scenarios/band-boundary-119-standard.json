@@ -2,7 +2,10 @@
   "name": "band-boundary-119-standard",
   "fixture": "project_families",
   "size": { "width": 120, "height": 26 },
-  "actions": [{ "type": "resize", "width": 119, "height": 26 }],
+  "actions": [
+    { "type": "resize", "width": 119, "height": 26 },
+    { "type": "key", "key": "b" }
+  ],
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
     { "type": "contains_text", "text": "▌ 1:     🔑 perm [W] 🦊 claude  api " },

@@ -86,6 +86,7 @@ const (
 
 	keyTogglePreview = "p" // toggles the split-pane live preview
 	keyToggleView    = "v" // toggles the dashboard list between Urgency and Projects
+	keyToggleRail    = "b" // toggles the project rail in Urgency view
 
 	// keyCollapse/keyExpand fold and unfold a project family in ModeList.
 	// They reuse keyLeft/keyRight above, which the list has never bound; the

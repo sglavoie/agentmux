@@ -392,6 +392,9 @@ file. The exact inventory is:
 | [`projects-summary-action-refusal.json`](scenarios/projects-summary-action-refusal.json) | `project_families` | session actions pressed on a family summary are refused outright — no Kitty focus, launch, close, or pager call is made |
 | [`projects-summary-preview.json`](scenarios/projects-summary-preview.json) | `project_families` | the preview pane for a selected family summary lists the family's bucket tally and every checkout with its branch and directory |
 | [`projects-tree-expanded.json`](scenarios/projects-tree-expanded.json) | `project_families` | `v` replaces the urgency group borders with family summary lines and indented checkouts, leaving unfamilied and single-checkout rows flat |
+| [`project-rail-horizontal-preview.json`](scenarios/project-rail-horizontal-preview.json) | `project_families` | a wide horizontal preview retains the project rail while preserving the list and preview columns |
+| [`project-rail-keyboard-apply.json`](scenarios/project-rail-keyboard-apply.json) | `project_families` | Left enters the rail and Enter applies its project scope without leaving rail focus |
+| [`project-rail-responsive-suppression.json`](scenarios/project-rail-responsive-suppression.json) | `project_families` | narrowing below the rail threshold returns focus to the list while preserving the active project chip |
 | [`resize-stress.json`](scenarios/resize-stress.json) | `basic` | the dashboard survives a sequence of resizes and ends clean |
 | [`picker-fit.json`](scenarios/picker-fit.json) | `actions` | launch picker rows stay within width after pressing `l` |
 | [`picker-preview-fit.json`](scenarios/picker-preview-fit.json) | `actions` | launch picker list+preview split fits after pressing `l` then `p` |

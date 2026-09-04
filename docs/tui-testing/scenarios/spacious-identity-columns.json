@@ -2,6 +2,7 @@
   "name": "spacious-identity-columns",
   "fixture": "wide_profiles",
   "size": { "width": 140, "height": 30 },
+  "actions": [{ "type": "key", "key": "b" }],
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
     { "type": "contains_text", "text": "[claude-produc…] 🦊 claude  platform-services-monorepo  ~/projects/platform-services-monorepo" },

@@ -121,7 +121,7 @@ func (m Model) render() string {
 			sb.WriteString(renderChips(m, m.width))
 			sb.WriteString(renderInlineFilter(m))
 		}
-		if m.mode == ModeList && m.previewEnabled {
+		if m.mode == ModeList {
 			sb.WriteString(renderSplit(m))
 		} else {
 			sb.WriteString(renderList(m))
@@ -206,11 +206,7 @@ func renderDashboard(m Model) string {
 	sb.WriteString(renderLegend(m))
 	sb.WriteString(renderChips(m, m.width))
 	sb.WriteString(renderInlineFilter(m))
-	if m.previewEnabled {
-		sb.WriteString(renderSplit(m))
-	} else {
-		sb.WriteString(renderList(m))
-	}
+	sb.WriteString(renderSplit(m))
 	sb.WriteString(renderDetailStripBlock(m))
 	return sb.String()
 }
@@ -238,7 +234,11 @@ type dashboardGeom struct {
 	split bool
 	// vertical reports a stacked split rather than a side-by-side one.
 	vertical bool
+	// rail reports that the project rail fits beside the list after the preview
+	// contract has claimed its space. railWidth is zero otherwise.
+	rail bool
 
+	railWidth, railHeight       int
 	listWidth, listHeight       int
 	previewWidth, previewHeight int
 }
@@ -291,7 +291,7 @@ func dashboardSplitWidths(m Model) (listWidth, previewWidth int, ok bool) {
 // strip is reserved and drawn consistently, it is merely more detail than a
 // standard-band list strictly needs — and it is the price of the loop staying
 // open.
-func dashboardListPaneWidth(m Model) int {
+func dashboardBaseListPaneWidth(m Model) int {
 	if listWidth, _, ok := dashboardSplitWidths(m); ok {
 		return listWidth
 	}
@@ -299,6 +299,28 @@ func dashboardListPaneWidth(m Model) int {
 		return 0
 	}
 	return m.width
+}
+
+// dashboardRailWidth applies the rail's responsive rule to the main-list
+// column left by preview resolution. The divider is charged before checking
+// the 80-cell list guarantee.
+func dashboardRailWidth(m Model, baseListWidth int) int {
+	if !m.railRequested || m.listView != dashboard.ViewUrgency {
+		return 0
+	}
+	railWidth := dashboard.RailWidth(dashboardRailRows(m))
+	if baseListWidth-railWidth-1 < 80 {
+		return 0
+	}
+	return railWidth
+}
+
+func dashboardListPaneWidth(m Model) int {
+	base := dashboardBaseListPaneWidth(m)
+	if railWidth := dashboardRailWidth(m, base); railWidth > 0 {
+		return base - railWidth - 1
+	}
+	return base
 }
 
 // dashboardGeometry lays the body out: the list column, and the preview pane
@@ -319,7 +341,12 @@ func dashboardGeometry(m Model) dashboardGeom {
 		m.cfg.Defaults.Preview.Direction == "vertical"
 
 	if paneHeight < previewMinPaneHeight || (!horizontal && !vertical) {
-		return dashboardGeom{listWidth: width, listHeight: clampListHeight(paneHeight)}
+		listHeight := clampListHeight(paneHeight)
+		railWidth := dashboardRailWidth(m, width)
+		return dashboardGeom{
+			rail: railWidth > 0, railWidth: railWidth, railHeight: listHeight,
+			listWidth: width - railWidth - boolWidth(railWidth > 0), listHeight: listHeight,
+		}
 	}
 	if vertical {
 		previewHeight := int(float64(paneHeight) * m.cfg.Defaults.Preview.Ratio)
@@ -335,24 +362,44 @@ func dashboardGeometry(m Model) dashboardGeom {
 			previewHeight = room
 		}
 		if previewHeight < 1 {
-			return dashboardGeom{listWidth: width, listHeight: clampListHeight(paneHeight)}
+			listHeight := clampListHeight(paneHeight)
+			railWidth := dashboardRailWidth(m, width)
+			return dashboardGeom{
+				rail: railWidth > 0, railWidth: railWidth, railHeight: listHeight,
+				listWidth: width - railWidth - boolWidth(railWidth > 0), listHeight: listHeight,
+			}
 		}
+		railWidth := dashboardRailWidth(m, width)
 		return dashboardGeom{
 			split:         true,
 			vertical:      true,
-			listWidth:     width,
+			rail:          railWidth > 0,
+			railWidth:     railWidth,
+			railHeight:    paneHeight - previewHeight - 1,
+			listWidth:     width - railWidth - boolWidth(railWidth > 0),
 			listHeight:    paneHeight - previewHeight - 1,
 			previewWidth:  width,
 			previewHeight: previewHeight,
 		}
 	}
+	railWidth := dashboardRailWidth(m, listWidth)
 	return dashboardGeom{
 		split:         true,
-		listWidth:     listWidth,
+		rail:          railWidth > 0,
+		railWidth:     railWidth,
+		railHeight:    clampListHeight(paneHeight),
+		listWidth:     listWidth - railWidth - boolWidth(railWidth > 0),
 		listHeight:    clampListHeight(paneHeight),
 		previewWidth:  previewWidth,
 		previewHeight: paneHeight,
 	}
+}
+
+func boolWidth(on bool) int {
+	if on {
+		return 1
+	}
+	return 0
 }
 
 // clampListHeight floors a computed row budget so a degenerate terminal yields
@@ -370,19 +417,33 @@ func clampListHeight(h int) int {
 func renderSplit(m Model) string {
 	g := dashboardGeometry(m)
 	if !g.split {
-		return renderList(m)
+		if !g.rail {
+			return renderListAt(m, g.listWidth, g.listHeight)
+		}
+		return renderRailList(m, g) + "\n"
 	}
 	if g.vertical {
-		listView := renderListAt(m, g.listWidth, g.listHeight)
-		divider := styleDim.Render(strings.Repeat("─", g.listWidth))
-		return lipgloss.JoinVertical(lipgloss.Left, listView, divider,
+		mainView := renderRailList(m, g)
+		divider := styleDim.Render(strings.Repeat("─", m.width))
+		return lipgloss.JoinVertical(lipgloss.Left, mainView, divider,
 			renderPreviewPane(m, g.previewWidth, g.previewHeight)) + "\n"
 	}
-	listView := renderListAt(m, g.listWidth, g.listHeight)
+	listView := renderRailList(m, g)
 	divider := strings.Repeat(styleDim.Render("│")+"\n", g.listHeight)
 	divider = strings.TrimRight(divider, "\n")
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, divider,
 		renderPreviewPane(m, g.previewWidth, g.previewHeight)) + "\n"
+}
+
+func renderRailList(m Model, g dashboardGeom) string {
+	listView := renderListAt(m, g.listWidth, g.listHeight)
+	if !g.rail {
+		return listView
+	}
+	railView := renderProjectRail(m, g.railWidth, g.railHeight)
+	divider := strings.Repeat(styleDim.Render("│")+"\n", g.listHeight)
+	divider = strings.TrimRight(divider, "\n")
+	return lipgloss.JoinHorizontal(lipgloss.Top, railView, divider, listView)
 }
 
 // renderPreviewPane paints whatever the current selection makes the pane mean.

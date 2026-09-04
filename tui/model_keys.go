@@ -219,6 +219,9 @@ func (m Model) focusSelectedAndPreview() (tea.Model, tea.Cmd) {
 func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.snapshotSeenStates()
 	key := msg.String()
+	if m.railFocused {
+		return m.handleRailKey(key)
+	}
 
 	// Chord intercept. When ]/[ has set pendingJumpDir, the very next key is
 	// the chord follow-up — including q, which would otherwise quit, and
@@ -407,9 +410,16 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case keyCollapse:
+		if m.listView == dashboard.ViewUrgency {
+			m.focusRail()
+			return m, nil
+		}
 		return m, m.collapseSelection()
 
 	case keyExpand:
+		if m.listView == dashboard.ViewUrgency {
+			return m, nil
+		}
 		return m, m.expandSelection()
 
 	case keyTab:
@@ -470,8 +480,14 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	default:
 		switch key {
+		case keyToggleRail:
+			m.toggleRail()
+			return m, nil
 		case keyTogglePreview:
-			return m.togglePreview()
+			updated, cmd := m.togglePreview()
+			out := updated.(Model)
+			out.syncRailState()
+			return out, cmd
 		case keyToggleView:
 			return m, m.toggleListView()
 		case keyA:

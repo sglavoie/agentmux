@@ -202,6 +202,59 @@ func TestResponsiveGeometryIsStableUnderRepeatedResolution(t *testing.T) {
 	})
 }
 
+func TestResponsiveRailThresholdBandsAndPreviewGeometry(t *testing.T) {
+	base := responsiveModel(160, 40, dashboard.ViewUrgency, false)
+	railWidth := dashboard.RailWidth(dashboardRailRows(base))
+	threshold := railWidth + 1 + 80
+
+	below := base
+	below.width = threshold - 1
+	if g := dashboardGeometry(below); g.rail {
+		t.Fatalf("rail visible one cell below threshold: %+v", g)
+	}
+	at := base
+	at.width = threshold
+	if g := dashboardGeometry(at); !g.rail || g.railWidth != railWidth || g.listWidth != 80 {
+		t.Fatalf("threshold geometry = %+v, want rail %d and 80-cell list", g, railWidth)
+	}
+
+	bands := []struct {
+		width int
+		want  dashboard.Band
+	}{{79, dashboard.BandCompact}, {120, dashboard.BandStandard}, {160, dashboard.BandSpacious}}
+	for _, tc := range bands {
+		m := base
+		m.width = tc.width
+		g := dashboardGeometry(m)
+		if got := dashboard.BandFor(g.listWidth); got != tc.want {
+			t.Errorf("terminal width %d produced list width %d band %v, want %v", tc.width, g.listWidth, got, tc.want)
+		}
+	}
+
+	horizontal := base
+	horizontal.width = 240
+	horizontal.previewEnabled = true
+	horizontal.cfg.Defaults.Preview = config.PreviewConfig{Ratio: .5, Direction: "horizontal"}
+	hg := dashboardGeometry(horizontal)
+	if !hg.split || hg.vertical || !hg.rail || hg.railWidth+1+hg.listWidth+1+hg.previewWidth != horizontal.width || hg.listWidth < 80 {
+		t.Fatalf("horizontal rail/list/preview geometry = %+v", hg)
+	}
+
+	vertical := at
+	vertical.previewEnabled = true
+	vertical.cfg.Defaults.Preview = config.PreviewConfig{Ratio: .4, Direction: "vertical"}
+	vg := dashboardGeometry(vertical)
+	if !vg.split || !vg.vertical || !vg.rail || vg.railWidth+1+vg.listWidth != vertical.width || vg.previewWidth != vertical.width {
+		t.Fatalf("vertical rail/list over full preview geometry = %+v", vg)
+	}
+
+	projects := base
+	projects.listView = dashboard.ViewProjects
+	if g := dashboardGeometry(projects); g.rail {
+		t.Fatalf("Projects view rendered a rail: %+v", g)
+	}
+}
+
 // TestResponsiveDetailStripDrawsExactlyWhatItReserved is the budget/render
 // agreement for the strip. A block that reserved two lines and drew one would
 // shift the list's bottom edge, and the scroll arithmetic would be wrong by

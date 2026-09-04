@@ -12,6 +12,6 @@
     { "type": "contains_text", "text": "Focus Selected Session" },
     { "type": "contains_text", "text": "unavailable: session" },
     { "type": "contains_text", "text": "is not active" },
-    { "type": "contains_text", "text": "Command Palette: 28 results" }
+    { "type": "contains_text", "text": "Command Palette: 29 results" }
   ]
 }

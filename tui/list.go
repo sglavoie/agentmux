@@ -25,41 +25,60 @@ import (
 func renderHeader(m Model) string {
 	title := styleHeader.Render("Agent Mux")
 	left := title + styleDim.Render(" · "+m.listView.String())
-
-	var rightParts []string
-	// The filter hint is the first thing a compact terminal gives up: it names a
-	// key the footer already lists, and the room it costs is the room the health
-	// pips need to stay on screen.
-	if m.mode == ModeList && dashboard.BandFor(m.width) != dashboard.BandCompact {
-		rightParts = append(rightParts, styleDim.Render(inlineFilterPlaceholder))
-	}
-	if m.previewEnabled {
-		rightParts = append(rightParts, styleFooter.Render("p: hide preview"))
-	}
 	pips := renderHealthPips(m)
-	if pips != "" {
-		rightParts = append(rightParts, pips)
+	if m.width <= 0 {
+		return left + "\n"
 	}
-	right := strings.Join(rightParts, styleFooter.Render("   "))
 
-	if right != "" && m.width > 0 {
-		pad := m.width - layout.StyledWidth(left) - layout.StyledWidth(right)
-		if pad < 1 {
-			pad = 1
+	// Required health status owns the right edge. Controls are admitted next;
+	// the duplicated filter placeholder is considered last and therefore drops
+	// first. This keeps the current view label stable as a future mouse target.
+	sep := styleFooter.Render("   ")
+	right := pips
+	prependIfFits := func(part string) {
+		if part == "" {
+			return
 		}
-		line := left + strings.Repeat(" ", pad) + right
-		// Final hard-clamp: at very narrow widths the title plus filter hint /
-		// health pips exceed the terminal even with the pad collapsed to 1, so
-		// truncate the composed row to m.width. Mirrors the per-line clamp in
-		// footer.go and the per-row clamp in list_rows.go.
-		line = layout.StyledTruncate(line, m.width, "…")
-		out := line + "\n"
-		if hint := renderHealthHints(m); hint != "" {
-			out += hint
+		candidate := part
+		if right != "" {
+			candidate += sep + right
 		}
-		return out
+		if layout.StyledWidth(left)+1+layout.StyledWidth(candidate) <= m.width {
+			right = candidate
+		}
 	}
-	out := left + "\n"
+	if m.cfg != nil {
+		label := "p: preview"
+		if m.previewEnabled {
+			label = "p: hide preview"
+		}
+		prependIfFits(styleFooter.Render(label))
+	}
+	if m.listView == dashboard.ViewUrgency {
+		switch {
+		case dashboardRailWidth(m, dashboardBaseListPaneWidth(m)) > 0:
+			prependIfFits(styleFooter.Render("b: hide rail"))
+		case !m.railRequested:
+			prependIfFits(styleFooter.Render("b: show rail"))
+		}
+	}
+	if m.mode == ModeList && dashboard.BandFor(m.width) != dashboard.BandCompact {
+		prependIfFits(styleDim.Render(inlineFilterPlaceholder))
+	}
+
+	line := left
+	if right != "" {
+		rightWidth := layout.StyledWidth(right)
+		if rightWidth >= m.width {
+			line = layout.StyledTruncate(right, m.width, "…")
+		} else {
+			left = layout.StyledTruncate(left, m.width-rightWidth-1, "…")
+			pad := m.width - layout.StyledWidth(left) - rightWidth
+			line = left + strings.Repeat(" ", pad) + right
+		}
+	}
+	line = layout.StyledTruncate(line, m.width, "…")
+	out := line + "\n"
 	if hint := renderHealthHints(m); hint != "" {
 		out += hint
 	}

@@ -416,6 +416,22 @@ func commandCatalog() []commands.Command[Model] {
 			},
 		},
 		{
+			ID: commands.ToggleRail, Group: commands.GroupExplore,
+			Title: func(m Model, _ commands.Context) string {
+				if m.railRequested {
+					return "Hide Project Rail"
+				}
+				return "Show Project Rail"
+			},
+			Description: "Toggle the project scope rail in Urgency view.",
+			Aliases:     []string{"sidebar", "projects", "scope"}, Shortcut: keyToggleRail,
+			Visible: func(m Model, _ commands.Context) bool { return m.listView == dashboard.ViewUrgency },
+			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
+				m.toggleRail()
+				return m, nil
+			},
+		},
+		{
 			ID: commands.ToggleListView, Group: commands.GroupExplore,
 			// The title names the arrangement the command switches TO, not the
 			// one the list is in, so the palette entry reads as the action it

@@ -41,6 +41,19 @@ func renderListAt(m Model, width, height int) string {
 	return dashboard.RenderList(dashboardListInput(m, width, height))
 }
 
+func dashboardRailRows(m Model) []dashboard.RailRow {
+	contextual := dashboard.ApplyFilter(m.sessions, m.activeFilter.WithoutProject(), m.lastActivity, m.idleThreshold)
+	return dashboard.BuildRailRows(contextual, m.lastActivity, m.idleThreshold)
+}
+
+func renderProjectRail(m Model, width, height int) string {
+	return dashboard.RenderRail(dashboard.RailInput{
+		Rows: dashboardRailRows(m), Cursor: m.railCursor, Offset: m.railOffset,
+		Width: width, Height: height, AppliedProject: m.activeFilter.Project,
+		Focused: m.railFocused,
+	})
+}
+
 // detailStripBudgetLines returns the number of lines reserved below the list
 // for the compact band's selected-item strip: the whole strip when the list
 // column is compact, and nothing otherwise.
