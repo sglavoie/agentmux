@@ -262,6 +262,74 @@ this command does not touch: pass `--contract-version` to state what the caller
 understands, and a build that speaks a different version refuses the request
 outright instead of answering it in a dialect the caller may misread.
 
+## Reading the evidence: `amx overseer history`
+
+`amx overseer policy` answers a question; `amx overseer history` is the surface
+that acts on the answer. It returns bounded excerpts from the harness
+conversations that worked inside the repositories of an authorized plan, which
+is what turns "the run is stuck" into "here is what was said just before it got
+stuck":
+
+```bash
+amx overseer history --json \
+  --plan e24c7728 \
+  --repository api=~/projects/api \
+  --limit 5 --messages 10 --max-chars 1500
+```
+
+`--plan` and `--repository` mean exactly what they mean for `policy`, and the
+access category is fixed at `context` rather than being a flag: reading a
+conversation is reading conversation content, and a caller that could label the
+request `action` would be labelling it wrongly. `--limit`, `--messages`, and
+`--max-chars` bound the answer (conversations, messages per conversation taken
+from the end, and characters per excerpt); each has a default and a ceiling, and
+the bounds actually applied come back in a `limits` block so a clamped request is
+visible rather than silent. `--harness` and `--since` narrow the corpus.
+
+Authorization happens before any message is read, and twice. Once for the plan,
+exactly as `policy` decides it — a plan-level refusal ends the command with the
+corpus never walked, not even for identity. Then once per conversation, against
+the working directory the conversation's own identity metadata names: it must lie
+inside one of the plan's authorized repositories, and it must pass the policy
+evaluation on its own, which examines every declaration applicable to it. The
+transcript metadata cache is not in the path at any point. That matters because
+`amx transcripts rebuild` reads every message body and writes the text into a
+search sidecar, so a cache lookup would be a way to serve an excluded
+conversation without ever asking about it.
+
+Two shapes are unavailable no matter how the configuration reads. A conversation
+whose metadata names **no** working directory cannot be shown to be outside an
+exclusion. A conversation that names **more than one** may hold messages from
+several projects, and which messages belong to which is a question only its
+content could answer — the content the decision is supposed to gate. Both are
+refused with the file still closed.
+
+Each returned conversation carries its harness, session id, working directory,
+participating projects, session class, total message count, and its excerpts.
+An excerpt carries its role, its timestamp, its text, and its `index` — the
+message's position in the conversation, so an excerpt says where it came from
+rather than only that the conversation contained it. Excerpts are drawn from the
+handoff-safe message text, so thinking blocks and tool payloads are not in them.
+
+Every conversation that was discovered and not returned appears under `withheld`
+with its harness, its session id, and a reason (`out_of_scope`,
+`ambiguous_project`, `unidentified`, `path_unresolved`, `declined`,
+`unenrolled`, …). It carries nothing else on purpose: the path, the working
+directory, and the project are what an exclusion is about, so reporting them
+under the heading of explaining a refusal would hand back exactly what the
+operator withheld. An answer that silently omitted them would be worse still — a
+mostly-refused corpus would read as an empty one.
+
+Like `policy`, a plan-level refusal returns the ordinary
+`{"schema_version":1,"data":…}` envelope with a nonzero quiet exit, and only a
+malformed request or unreadable configuration uses the structured error envelope
+(`unsupported_contract_version`, `invalid_repository`, `invalid_since`,
+`config_error`, `history_error`). The `contract` block names `overseer_history`
+and versions independently of both the schema-v1 envelope and the policy
+contract. The `request_digest` binds the bounds as well as the plan and the
+repository set: an answer taken under a 10-message bound is not evidence for a
+request that asked for 200.
+
 ## Deferred
 
 These are known gaps, not bugs. Nothing in the cockpit is waiting on them:

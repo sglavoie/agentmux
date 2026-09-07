@@ -2,10 +2,15 @@
 // surface the ASL overseer asks before it reads project or conversation
 // content, prepares a mutation, or dispatches an action.
 //
-// It is one leaf, `amx overseer policy`, and it decides nothing itself. It
-// reads the operator's current configuration, hands the plan's repository set
-// to internal/overseerpolicy, and reports what that package answered. Three
-// properties are the whole point of the surface:
+// It is two leaves. `amx overseer policy` decides nothing itself: it reads the
+// operator's current configuration, hands the plan's repository set to
+// internal/overseerpolicy, and reports what that package answered. `amx overseer
+// history` is the one surface in the family that returns conversation content,
+// and it asks that same question twice — once for the plan before anything is
+// discovered, and once per conversation against the working directory its
+// identity metadata names — so a transcript is admitted before it is opened
+// rather than filtered after it is read. Three properties are the whole point of
+// the surface:
 //
 //   - Configuration is read on every invocation. There is no cached evaluator
 //     and no daemon in the path, so withdrawing an opt-in takes effect on the
@@ -95,10 +100,11 @@ func Command() *cobra.Command {
 	overseerCmd := &cobra.Command{
 		Use:   "overseer",
 		Short: "Authorization surface for ASL overseer supervision",
-		Long: "The overseer command family answers whether the ASL overseer is authorized to act on the repositories of a plan.\n\n" +
-			"It reports the operator's current configuration only. It never writes the asl_overseer opt-in, and it reads no project or conversation content.",
+		Long: "The overseer command family answers whether the ASL overseer is authorized to act on the repositories of a plan, and returns bounded conversation evidence from the repositories it is authorized for.\n\n" +
+			"It reports the operator's current configuration only, and it never writes the asl_overseer opt-in. `policy` reads no project or conversation content at all; `history` reads a conversation only after the plan and that conversation's own working directory have both been authorized.",
 	}
 	overseerCmd.AddCommand(newPolicyCommand())
+	overseerCmd.AddCommand(newHistoryCommand())
 	return overseerCmd
 }
 

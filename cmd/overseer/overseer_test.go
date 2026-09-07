@@ -659,13 +659,16 @@ func TestPolicyAuthorizesARealCheckout(t *testing.T) {
 	}
 }
 
-func TestOverseerFamilyRegistersOnlyThePolicyLeaf(t *testing.T) {
+// The family is the authorization surface and nothing else. A leaf that
+// appeared here without being named in this list would be a new way to reach
+// project or conversation content past the two that were designed for it.
+func TestOverseerFamilyRegistersOnlyTheAuthorizationLeaves(t *testing.T) {
 	var names []string
 	for _, command := range Command().Commands() {
 		names = append(names, command.Name())
 	}
-	if got := strings.Join(names, ","); got != "policy" {
-		t.Fatalf("overseer leaves = %q, want policy", got)
+	if got := strings.Join(names, ","); got != "history,policy" {
+		t.Fatalf("overseer leaves = %q, want history,policy", got)
 	}
 }
 

@@ -147,8 +147,8 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   apart from a muted operating system.
 - `cmd/overseer`: the `amx overseer` family — the authorization surface the ASL
   overseer asks before it reads project or conversation content, prepares a
-  mutation, or dispatches an action. Its one leaf, `policy`, decides nothing: it
-  reads the operator's current configuration, hands the plan's repository set to
+  mutation, or dispatches an action. `policy` decides nothing: it reads the
+  operator's current configuration, hands the plan's repository set to
   `internal/overseerpolicy`, and reports what that package answered. Three
   properties are the surface, not incidental to it. Configuration is read on
   every invocation, with no cached evaluator and no daemon in the path, so
@@ -157,7 +157,20 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   fingerprint it was decided against and a digest of the request, and no token,
   expiry, or grant — so there is nothing in it to hold and present later as
   permission. And a refusal exits nonzero in both output modes, so a caller that
-  branches on the process status alone fails closed.
+  branches on the process status alone fails closed. `history` is the one leaf in
+  the family that returns conversation content, and it asks that same question
+  twice: once for the plan before anything is discovered, and once per
+  conversation against the working directory its identity metadata names, which
+  must both lie inside an authorized repository and pass the policy evaluation on
+  its own. It reaches the corpus only through `transcript.History` and never
+  through the transcript index or its search sidecars — a refresh has already
+  read every message body into a sidecar, so a cache lookup would be a way to
+  serve an excluded conversation without asking about it. Its `withheld` entries
+  name the harness, the session, and the reason and nothing that locates them,
+  because the path, the directory, and the project are what an exclusion is
+  about. The two payloads version independently of each other and of the
+  envelope: `overseer_policy` and `overseer_history`, each with its own digest
+  domain.
 - `cmd/release` and `cmd/tuitest`: the two hidden operator/developer commands.
   `release-gate` drives the paired release procedure in `internal/release`;
   `tui-test` drives the in-process TUI scenario harness in `tui`.
@@ -186,7 +199,20 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   harness invocation construction.
 - `internal/harness`: adapter-owned fresh/resume/fork argv and capability metadata.
 - `internal/transcript`, `internal/plans`: filesystem discovery, metadata caches,
-  source-backed search, pruning, and corruption recovery.
+  source-backed search, pruning, and corruption recovery. `internal/transcript`
+  additionally holds the metadata admission path (`Candidate`, `Authorizer`,
+  `MetadataDiscoverer`, `History`), which is a second and narrower walk of the
+  same corpus: it reads conversation identity through per-harness structs that
+  have no field for message content, authorizes each conversation against the
+  single working directory it names, and only then opens it. The ordinary
+  discovery path cannot serve as that boundary — `Discover` streams every message
+  body to build the snippet, the count, and the search text, and `Refresh` writes
+  that text into a sidecar, so by the time a refresh has decided anything about a
+  transcript it has already read all of it. `History` never touches `Index`,
+  `LoadIndex`, or a search sidecar, and its signature is the proof. Zero named
+  directories and more than one are both refusals, because an unidentifiable
+  conversation cannot be shown to be outside an exclusion and a mixed-project one
+  could only be sorted out by reading the content the decision gates.
 - `internal/cachefile`, `internal/searchstore`: shared atomic cache primitives
   and disposable search-sidecar storage.
 - `internal/handoff`: bounded deterministic pack creation, private artifacts,
@@ -514,13 +540,15 @@ while `probe`, `capture`, and `replay` remain on schema v1. `debug tail
 `release-gate --json` likewise emits its evidence record directly: the record is
 the release artifact and carries its own `schema_version`, so wrapping it would
 put a second, unrelated version number in front of the one that governs it.
-`overseer policy --json` goes the other way: it keeps the common `data` wrapper
-and versions its own capability contract *inside* it, in a `contract` block
-naming the contract, its version, and the access categories it accepts. The
-authorization surface has to be able to move without moving a version number
-that governs commands with nothing to do with authorization, and it is likewise
-independent of the ASL bridge protocol. Its refusals are decisions rather than
-errors, so a refusal returns the data envelope with a nonzero quiet exit; only a
+`overseer policy --json` and `overseer history --json` go the other way: they
+keep the common `data` wrapper and version their own capability contract
+*inside* it, in a `contract` block naming the contract, its version, and the
+access categories it accepts. The authorization surface has to be able to move
+without moving a version number that governs commands with nothing to do with
+authorization, and it is likewise independent of the ASL bridge protocol. The
+two contracts (`overseer_policy` and `overseer_history`) version independently of
+each other for the same reason. Their refusals are decisions rather than errors,
+so a refusal returns the data envelope with a nonzero quiet exit; only a
 malformed request or unreadable configuration uses the error envelope.
 
 When adding a command:
