@@ -145,6 +145,19 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   surface that sends a real notification through the configured backend and
   reports whether delivery could be confirmed, so a silent daemon can be told
   apart from a muted operating system.
+- `cmd/overseer`: the `amx overseer` family — the authorization surface the ASL
+  overseer asks before it reads project or conversation content, prepares a
+  mutation, or dispatches an action. Its one leaf, `policy`, decides nothing: it
+  reads the operator's current configuration, hands the plan's repository set to
+  `internal/overseerpolicy`, and reports what that package answered. Three
+  properties are the surface, not incidental to it. Configuration is read on
+  every invocation, with no cached evaluator and no daemon in the path, so
+  withdrawing an opt-in takes effect on the next question rather than the next
+  restart. An answer is evidence for one question — it carries the configuration
+  fingerprint it was decided against and a digest of the request, and no token,
+  expiry, or grant — so there is nothing in it to hold and present later as
+  permission. And a refusal exits nonzero in both output modes, so a caller that
+  branches on the process status alone fails closed.
 - `cmd/release` and `cmd/tuitest`: the two hidden operator/developer commands.
   `release-gate` drives the paired release procedure in `internal/release`;
   `tui-test` drives the in-process TUI scenario harness in `tui`.
@@ -501,6 +514,14 @@ while `probe`, `capture`, and `replay` remain on schema v1. `debug tail
 `release-gate --json` likewise emits its evidence record directly: the record is
 the release artifact and carries its own `schema_version`, so wrapping it would
 put a second, unrelated version number in front of the one that governs it.
+`overseer policy --json` goes the other way: it keeps the common `data` wrapper
+and versions its own capability contract *inside* it, in a `contract` block
+naming the contract, its version, and the access categories it accepts. The
+authorization surface has to be able to move without moving a version number
+that governs commands with nothing to do with authorization, and it is likewise
+independent of the ASL bridge protocol. Its refusals are decisions rather than
+errors, so a refusal returns the data envelope with a nonzero quiet exit; only a
+malformed request or unreadable configuration uses the error envelope.
 
 When adding a command:
 

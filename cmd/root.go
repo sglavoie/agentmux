@@ -17,6 +17,7 @@ import (
 	"github.com/sglavoie/agentmux/cmd/debug"
 	"github.com/sglavoie/agentmux/cmd/hooks"
 	"github.com/sglavoie/agentmux/cmd/notifications"
+	"github.com/sglavoie/agentmux/cmd/overseer"
 	"github.com/sglavoie/agentmux/cmd/release"
 	"github.com/sglavoie/agentmux/cmd/session"
 	"github.com/sglavoie/agentmux/cmd/transcripts"
@@ -68,5 +69,5 @@ func init() {
 	rootCmd.Version = buildinfo.Current().String()
 	rootCmd.PersistentFlags().BoolVar(&cli.DebugFlag, "debug", false, "enable verbose debug output")
 	rootCmd.Flags().IntVar(&dashboardSourceWindowID, "window-id", 0, "Kitty window ID whose tab should be selected initially")
-	rootCmd.AddCommand(dashboard.ColorPickerCommand(), config.Command(), daemon.Command(), debug.Command(), debug.DoctorCommand(), session.FocusNextCommand(), session.FocusNextManagedCommand(), session.FocusPrevManagedCommand(), hooks.IndicatorCommand(), dashboard.IconPickerCommand(), dashboard.KeybindingsCommand(), session.MuteToggleCommand(), notifications.Command(), release.Command(), session.ResortCommand(), session.Command(), transcripts.Command(), tuitest.Command(), worktree.Command())
+	rootCmd.AddCommand(dashboard.ColorPickerCommand(), config.Command(), daemon.Command(), debug.Command(), debug.DoctorCommand(), session.FocusNextCommand(), session.FocusNextManagedCommand(), session.FocusPrevManagedCommand(), hooks.IndicatorCommand(), dashboard.IconPickerCommand(), dashboard.KeybindingsCommand(), session.MuteToggleCommand(), notifications.Command(), overseer.Command(), release.Command(), session.ResortCommand(), session.Command(), transcripts.Command(), tuitest.Command(), worktree.Command())
 }

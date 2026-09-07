@@ -207,6 +207,61 @@ Every refusal carries a stable reason (`declined`, `unenrolled`, `undeclared`,
 declaration or path that produced it, so "why was my plan refused" has an answer
 that points at the line to edit.
 
+## Asking the question: `amx overseer policy`
+
+The rules above are reachable as a command. `amx overseer policy` takes the
+complete repository set of one plan and the category of access being requested,
+and answers whether the overseer may act:
+
+```bash
+amx overseer policy --json \
+  --plan e24c7728 \
+  --access context \
+  --repository api=~/projects/api \
+  --repository ~/projects/api-docs
+```
+
+`--repository` is repeatable and takes `alias=path` or a bare `path`. The path
+must be absolute or start with `~` — a relative path is rejected rather than
+resolved against the caller's working directory, which is the same rule
+`state_root` follows and for the same reason. The text before the first `=` is
+read as an alias only when it is a non-empty name with no path separator, so a
+path containing `=` still works unaliased. Aliases must be distinct within one
+request; they are labels for reading the answer back, not identities.
+
+`--access` is required and must be one of `context` (read project or
+conversation content), `mutation` (prepare a mutation to a repository), or
+`action` (dispatch an action into a run) — the three points at which permission
+is rechecked. All three are gated by the same per-project opt-in today, so
+naming one does not change the decision; what it changes is what the answer is
+an answer *to*. Inspecting minimal identity metadata has no category on purpose:
+it is the one thing allowed before authorization, so a category for it would be
+a request that always succeeds.
+
+The answer carries the decision, the stable reason, every repository with its
+canonicalized path and the declarations that applied to it, a
+`config_fingerprint` naming the configuration state it was decided against, and
+a `request_digest` binding it to this exact question. It carries no token, no
+expiry, and no grant, because it is not a lease: ask again before the next
+access. Configuration is read on every invocation — there is no cached evaluator
+and no daemon in the path — so withdrawing an opt-in takes effect on the next
+question, and both the fingerprint and the digest move when it does.
+
+**A refusal exits nonzero in both text and JSON mode**, so
+`amx overseer policy … && act` fails closed for a caller that reads only the
+process status. A refusal is still a decision and comes back in the ordinary
+`{"schema_version":1,"data":…}` envelope; only a malformed request or unreadable
+configuration uses the structured error envelope, with `unsupported_access`,
+`unsupported_contract_version`, `invalid_repository`, `missing_parameter`, or
+`config_error`.
+
+Inside the envelope, a `contract` block names the contract (`overseer_policy`),
+its version, and the access categories this build accepts. It is versioned
+separately from the schema-v1 envelope and from the ASL bridge protocol, which
+this command does not touch: pass `--contract-version` to state what the caller
+understands, and a build that speaks a different version refuses the request
+outright instead of answering it in a dialect the caller may misread.
+
 ## Deferred
 
 These are known gaps, not bugs. Nothing in the cockpit is waiting on them:

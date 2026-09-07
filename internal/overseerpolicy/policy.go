@@ -23,10 +23,14 @@
 package overseerpolicy
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/config"
@@ -213,6 +217,43 @@ func newWithIdentityResolver(projects []config.Session, identities identityResol
 		})
 	}
 	return &Evaluator{declarations: declarations, identities: identities}
+}
+
+// fingerprintDomain is stamped into every fingerprint so that widening what a
+// fingerprint covers cannot silently produce an old value for a new meaning.
+const fingerprintDomain = "overseerpolicy/declarations/1"
+
+// Fingerprint identifies the configuration this Evaluator decides against.
+//
+// It covers exactly the authorization input — every declaration, in
+// configuration order, with the directory it governs and the answer it carries
+// — and deliberately nothing else in the config file: an edit that changes no
+// project declaration changes no decision, and saying otherwise would make a
+// caller re-ask a question whose answer cannot have moved.
+//
+// A changed fingerprint is a caller's evidence that an earlier answer was
+// decided against different configuration and must not be reused. It is an
+// identity, not a signature: it carries no secret and authenticates nothing.
+func (e *Evaluator) Fingerprint() string {
+	sum := sha256.New()
+	writeFingerprintField(sum, fingerprintDomain)
+	writeFingerprintField(sum, strconv.Itoa(len(e.declarations)))
+	for _, d := range e.declarations {
+		writeFingerprintField(sum, d.Title)
+		writeFingerprintField(sum, d.Profile)
+		writeFingerprintField(sum, d.Directory)
+		writeFingerprintField(sum, d.ConfiguredDirectory)
+		writeFingerprintField(sum, strconv.FormatBool(d.Configured))
+		writeFingerprintField(sum, strconv.FormatBool(d.OptIn))
+	}
+	return "sha256:" + hex.EncodeToString(sum.Sum(nil))
+}
+
+// writeFingerprintField length-prefixes a field before hashing it, so no
+// rearrangement of titles, directories, and answers can encode to the same
+// bytes as a different set of declarations.
+func writeFingerprintField(h hash.Hash, field string) {
+	_, _ = fmt.Fprintf(h, "%d:%s|", len(field), field)
 }
 
 // Evaluate answers the whole request at once. Every repository is evaluated so
