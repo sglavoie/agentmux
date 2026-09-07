@@ -385,6 +385,12 @@ codex   = "purple"
 #              Omit or leave empty to inherit the profile's args.
 #   env        Key/value pairs injected into the session's environment.
 #   groups     Arbitrary labels for filtering in the dashboard and launcher.
+#   asl_overseer
+#              Opt this project in to overseer supervision of its
+#              agent-session-loop runs. Only `true` opts in; `false` and an
+#              omitted key both mean excluded, and nothing turns this on for
+#              you — installing or upgrading amx never writes it, and the
+#              overseer never enrolls a project itself.
 
 # Example project:
 # [[projects]]
@@ -392,6 +398,21 @@ codex   = "purple"
 # directory = "~"
 # profile = "claude-work"
 # groups = ["config"]
+
+# Example project opted in to overseer supervision:
+# [[projects]]
+# title = "api"
+# directory = "~/projects/api"
+# profile = "claude-work"
+# asl_overseer = true
+
+# Example project explicitly kept out. Identical in effect to omitting the key;
+# write it when you want the answer recorded rather than left open.
+# [[projects]]
+# title = "client-work"
+# directory = "~/projects/client-work"
+# profile = "claude-work"
+# asl_overseer = false
 
 
 # ── Hook overrides ────────────────────────────────────────────────────────────

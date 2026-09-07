@@ -280,6 +280,21 @@ type Session struct {
 	ClaudeFlags []string          `toml:"claude_flags"` // legacy alias for args
 	Env         map[string]string `toml:"env"`
 	Groups      []string          `toml:"groups"`
+
+	// ASLOverseer is the project's explicit opt-in to overseer supervision of
+	// its agent-session-loop runs. *bool rather than bool because the three
+	// states are not interchangeable to anything that has to justify acting on
+	// someone's repository: omitted is "never asked", explicit false is "asked
+	// and declined", and only explicit true is consent. Nothing may collapse
+	// the first two into a default, and installation and the overseer itself
+	// must never write this key — enrollment is the operator's decision, made
+	// in their own config file.
+	//
+	// Only explicit true grants supervision (see ASLOverseerValue), so an
+	// unreadable, absent, or malformed value fails closed. The pointer is
+	// deep-copied by cloneSessions so the deprecated [[sessions]] alias can
+	// never mutate the canonical [[projects]] answer.
+	ASLOverseer *bool `toml:"asl_overseer"`
 }
 
 // HooksConfig is the top-level [hooks] table.
@@ -403,6 +418,21 @@ func (s Session) EffectiveProfile() string {
 	}
 	return s.Account
 }
+
+// ASLOverseerValue reports whether the project opted in to overseer
+// supervision. Unlike the other pointer booleans in this file, an omitted key
+// means false: those toggles default to their safe observable behavior, and the
+// safe behavior for supervision of someone else's repository is to stay out of
+// it. False, omitted, and unconfigured are all "excluded"; callers that must
+// tell them apart read the ASLOverseer pointer directly.
+func (s Session) ASLOverseerValue() bool {
+	return s.ASLOverseer != nil && *s.ASLOverseer
+}
+
+// ASLOverseerConfigured reports whether the project stated an answer at all.
+// It separates "declined" from "never asked" for diagnostics and enrollment
+// surfaces; it does not grant anything on its own.
+func (s Session) ASLOverseerConfigured() bool { return s.ASLOverseer != nil }
 
 // EffectiveArgs returns the normalized per-project args, preferring args over
 // legacy claude_flags.

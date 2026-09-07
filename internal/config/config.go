@@ -431,6 +431,10 @@ func cloneSessions(in []Session) []Session {
 		out[i].ClaudeFlags = cloneStrings(out[i].ClaudeFlags)
 		out[i].Groups = cloneStrings(out[i].Groups)
 		out[i].Env = cloneStringMap(out[i].Env)
+		// Deep-copy rather than share: the deprecated [[sessions]] alias is a
+		// clone of [[projects]], and a shared pointer would let a write through
+		// one view silently flip a consent bit read through the other.
+		out[i].ASLOverseer = cloneBoolPtr(out[i].ASLOverseer)
 	}
 	return out
 }

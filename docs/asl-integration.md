@@ -132,6 +132,38 @@ its default location. It must be absolute or start with `~`; a relative path is
 rejected at load rather than resolved against the daemon's working directory,
 where it would silently find no runs.
 
+## Per-project overseer opt-in
+
+`[defaults.asl]` decides whether the daemon talks to ASL at all. It does not
+decide which projects an overseer may supervise: that is stated once per
+project, in the operator's own config file.
+
+```toml
+[[projects]]
+title = "api"
+directory = "~/projects/api"
+profile = "claude-work"
+asl_overseer = true
+```
+
+Only `true` opts in. `false`, an omitted key, and a directory that matches no
+configured project are all "excluded", and so is a project whose configuration
+cannot be read or parsed — the field fails closed in every direction, because
+the alternative is supervising a repository nobody consented to.
+
+The load path keeps three states apart rather than two. Omitted is *never
+asked*, `false` is *asked and declined*, and only `true` is consent; write
+`asl_overseer = false` when you want the decision recorded rather than left
+open. Both grant the same access today, so the distinction exists for
+diagnostics and enrollment surfaces, not for behavior.
+
+Nothing enrolls a project for you. Installing or upgrading Agent Mux never
+writes the key, `amx config asl-sync` writes only `[defaults.asl]`, and the
+overseer does not turn on the flag for a project it wants to watch. The
+deprecated `[[sessions]]` table accepts the field for compatibility; when both
+tables are present `[[projects]]` wins whole, so an opt-in left behind in
+`[[sessions]]` does not carry over to a project that was migrated without it.
+
 ## Deferred
 
 These are known gaps, not bugs. Nothing in the cockpit is waiting on them:
