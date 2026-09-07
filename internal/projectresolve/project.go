@@ -347,6 +347,14 @@ func AbsPath(p string) string {
 	return filepath.Clean(p)
 }
 
+// errNotARepository is Git positively answering "this is not a repository",
+// which is a fact about the directory rather than a failure to establish one.
+// Display resolution treats every probe error alike, but authorization must
+// tell the two apart: a plain directory is allowed to be a plain directory,
+// while a probe that merely failed could be hiding a linked worktree of an
+// excluded repository.
+var errNotARepository = errors.New("not a git repository")
+
 type realGitMetadataProvider struct {
 	timeout time.Duration
 }
@@ -407,6 +415,9 @@ func (p realGitMetadataProvider) gitOutput(dir string, args ...string) ([]byte, 
 
 	gitArgs := append([]string{"-C", dir}, args...)
 	cmd := exec.CommandContext(ctx, "git", gitArgs...)
+	// The "not a git repository" answer is read back out of stderr, so the
+	// message must not be translated out from under the check.
+	cmd.Env = append(os.Environ(), "LC_ALL=C", "LANGUAGE=C")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -416,12 +427,26 @@ func (p realGitMetadataProvider) gitOutput(dir string, args ...string) ([]byte, 
 			return nil, fmt.Errorf("git %s timed out after %s", args[0], timeout)
 		}
 		stderrText := strings.TrimSpace(stderr.String())
+		if isNotARepositoryStderr(stderrText) {
+			return nil, fmt.Errorf("git %s: %w: %s", args[0], errNotARepository, stderrText)
+		}
 		if stderrText == "" {
 			return nil, fmt.Errorf("git %s failed: %w", args[0], err)
 		}
 		return nil, fmt.Errorf("git %s failed: %w: %s", args[0], err, stderrText)
 	}
 	return stdout.Bytes(), nil
+}
+
+// isNotARepositoryStderr recognizes only the two refusals that mean "there is
+// no repository here". Everything else Git can fail with — dubious ownership,
+// a broken worktree link, a missing binary, a timeout — stays an unresolved
+// identity, because those failures can occur *inside* a repository and reading
+// them as "no repository" is the direction that grants access.
+func isNotARepositoryStderr(stderrText string) bool {
+	lowered := strings.ToLower(stderrText)
+	return strings.Contains(lowered, "not a git repository") ||
+		strings.Contains(lowered, "not a working tree")
 }
 
 // parseGitRevParseRoots reads the `--show-toplevel --git-common-dir` pair. Both

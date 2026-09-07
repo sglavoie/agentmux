@@ -199,6 +199,23 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   and how a result reaches a window without holding `stateMu` across a
   subprocess — stays in `internal/daemon` (`git_state.go`), which drives the
   refresh from the watchdog loop.
+- `internal/overseerpolicy`: whether the ASL overseer is authorized to act on
+  the repositories of one plan. It reads the same configured projects
+  `internal/projectresolve` reads, and the boundary between them is the one to
+  keep straight: `projectresolve` answers "what should this row be called" and
+  is allowed to pick the most specific match and fall back to a basename,
+  because a mislabelled row is cosmetic; `overseerpolicy` answers "may we act
+  here" and has no degraded form. It examines every declaration that applies to
+  a directory rather than the most specific one, so a nested opt-in cannot carve
+  an exception out of an enclosing exclusion; it measures applicability both
+  physically and by position inside the repository family, so an exclusion on a
+  main checkout reaches the linked worktree that would otherwise bypass it while
+  monorepo siblings stay independent; and it refuses on an unresolvable path or
+  an unresolved Git identity rather than treating either as "no project here".
+  Authorization is per plan, not per directory: every repository a plan
+  participates in must be permitted, so one exclusion denies the whole request.
+  It decides only — it reads no project or conversation content, and it never
+  writes the `asl_overseer` key, which stays an operator edit.
 - `internal/daemon`: the orchestration root — daemon construction and lifecycle,
   the sweep/probe/render schedules, reconciliation coordination, and the public
   entry points `Run`, `NewOperationalLogger`, and `NewHandler`/`Handler`. It owns

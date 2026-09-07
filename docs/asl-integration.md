@@ -164,6 +164,49 @@ deprecated `[[sessions]]` table accepts the field for compatibility; when both
 tables are present `[[projects]]` wins whole, so an opt-in left behind in
 `[[sessions]]` does not carry over to a project that was migrated without it.
 
+## How a plan's repositories are authorized
+
+The opt-in above is a per-project answer. A plan is not a project: it names one
+or more repositories, and every one of them has to be permitted before the
+overseer may act, so a plan touching an excluded repository is refused whole
+rather than trimmed down to the permitted part. A plan that names no repository
+at all is refused too — there is nothing to have consented.
+
+Matching a directory to a project declaration is deliberately stricter here than
+the resolution behind a dashboard label:
+
+- **Every applicable declaration is examined, not the most specific one.** A
+  dashboard row shows the innermost project that contains a directory. An
+  authorization request looks at all of them, in both directions of nesting: a
+  declined enclosing project denies a nested opt-in, and a declined nested
+  project denies a plan running at the enclosing path, because that plan works
+  on the nested project's files too.
+- **Aliases are one place with several names.** The same directory configured
+  once per harness profile is still one repository. If any of those entries
+  declines or never answered, the repository is excluded — an alias is not a
+  second opinion to choose between.
+- **Symlinks and `~` are resolved on both sides.** The configured directory and
+  the plan's path are canonicalized before they are compared, so naming a
+  repository through a symlink neither grants nor escapes an answer. A
+  configured directory that does not exist on this machine cannot be
+  canonicalized and therefore governs nothing, which refuses rather than grants.
+- **Linked worktrees inherit the repository's answer.** A checkout is matched by
+  its Git common directory and by its position inside the checkout, so an
+  exclusion on a main checkout reaches every linked worktree of the same
+  repository, in either direction. Position is what keeps sibling projects in
+  one monorepo independent: sharing a repository is not sharing an answer.
+- **Unresolved is refused.** A path that does not exist, is not a directory, or
+  sits behind a dangling symlink is refused. So is a directory whose Git
+  identity could not be established — a probe that timed out inside a linked
+  worktree looks exactly like a plain directory, and reading it as one would
+  drop the exclusion that applies. Only Git positively reporting "not a
+  repository" makes a plain directory a plain directory.
+
+Every refusal carries a stable reason (`declined`, `unenrolled`, `undeclared`,
+`path_unresolved`, `identity_unresolved`, `no_repositories`) and names the
+declaration or path that produced it, so "why was my plan refused" has an answer
+that points at the line to edit.
+
 ## Deferred
 
 These are known gaps, not bugs. Nothing in the cockpit is waiting on them:
