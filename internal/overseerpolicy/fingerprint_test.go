@@ -90,6 +90,31 @@ func TestFingerprintChangesWithDeclarationCountAndOrder(t *testing.T) {
 	}
 }
 
+// A caller that holds an answer and acts on it later re-asks first and compares
+// fingerprints, refusing when they differ. That guard is only reachable because
+// the fingerprint covers every declaration rather than only the ones the plan
+// named: configuration can move somewhere the plan never looks, and the caller
+// still has to notice. The pairing is what matters — the fingerprint moves while
+// the decision about the queried repository does not — so both halves are
+// asserted together.
+func TestFingerprintMovesWhenAnUnrelatedProjectIsWithdrawn(t *testing.T) {
+	app := abs("repos", "app")
+	docs := config.Session{Title: "Docs", Directory: abs("repos", "docs"), Profile: "work", ASLOverseer: boolPtr(true)}
+	withdrawn := docs
+	withdrawn.ASLOverseer = boolPtr(false)
+	declared := config.Session{Title: "App", Directory: app, Profile: "work", ASLOverseer: boolPtr(true)}
+
+	before := fingerprintOf(declared, docs)
+	after := fingerprintOf(declared, withdrawn)
+	if before == after {
+		t.Fatalf("withdrawing an unrelated project left the fingerprint at %q; a caller holding the earlier answer cannot tell configuration moved", before)
+	}
+
+	resolver := resolving(repoDir(app, app))
+	assertAllowed(t, evaluate(t, []config.Session{declared, docs}, resolver, requestFor(app)))
+	assertAllowed(t, evaluate(t, []config.Session{declared, withdrawn}, resolver, requestFor(app)))
+}
+
 // Naive concatenation would hash "a"+"b" and "ab"+"" to the same bytes. The
 // length prefix is what keeps a title and a profile from trading characters
 // across their boundary without moving the fingerprint.
