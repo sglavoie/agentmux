@@ -297,6 +297,28 @@ transcript metadata cache is not in the path at any point. That matters because
 search sidecar, so a cache lookup would be a way to serve an excluded
 conversation without ever asking about it.
 
+Both questions are decided against the configuration that exists when they are
+asked, not against a snapshot taken when the command started. Every conversation
+reloads the configuration file, rebuilds the evaluator, and re-decides the plan's
+**whole** participating repository set before it is opened — walking a corpus and
+reading transcripts takes time, and an opt-in withdrawn in the middle of that has
+been withdrawn. The recheck covers the whole set rather than the conversation's
+own directory because authorization is per plan: one repository losing its opt-in
+denies the request, so a conversation admitted afterwards would be admitted under
+a permission the plan no longer holds.
+
+Losing authorization mid-request stops it. No further conversation is opened, the
+evidence gathered before the withdrawal is dropped rather than returned beside a
+refusal, and the answer is a plan-level refusal naming the configuration it was
+decided against — a request half-served under a permission that has since been
+withdrawn is not half-authorized, and the client contract is binary in any case
+(an allowed answer carries conversations and exits zero; a refused one carries
+none and exits nonzero). `examined` and any corpus `warnings` survive, so a
+stopped request does not read as an empty corpus. Configuration that becomes
+unreadable partway through stops the request the same way and reports
+`config_error`, because an answer nobody can currently give is not an answer of
+yes.
+
 Two shapes are unavailable no matter how the configuration reads. A conversation
 whose metadata names **no** working directory cannot be shown to be outside an
 exclusion. A conversation that names **more than one** may hold messages from

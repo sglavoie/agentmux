@@ -12,9 +12,11 @@
 // rather than filtered after it is read. Three properties are the whole point of
 // the surface:
 //
-//   - Configuration is read on every invocation. There is no cached evaluator
-//     and no daemon in the path, so withdrawing an opt-in takes effect on the
-//     next question rather than on the next restart.
+//   - Configuration is read on every question, not merely on every invocation.
+//     There is no cached evaluator and no daemon in the path, and `history`
+//     reloads and re-decides the plan's whole repository set before each
+//     conversation it opens, so withdrawing an opt-in takes effect on the next
+//     conversation rather than on the next request or the next restart.
 //   - An answer is evidence for one question. The payload carries the
 //     configuration fingerprint it was decided against and a digest of the
 //     question itself, and it carries no token, expiry, or grant — there is

@@ -152,7 +152,7 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   operator's current configuration, hands the plan's repository set to
   `internal/overseerpolicy`, and reports what that package answered. Three
   properties are the surface, not incidental to it. Configuration is read on
-  every invocation, with no cached evaluator and no daemon in the path, so
+  every question, with no cached evaluator and no daemon in the path, so
   withdrawing an opt-in takes effect on the next question rather than the next
   restart. An answer is evidence for one question — it carries the configuration
   fingerprint it was decided against and a digest of the request, and no token,
@@ -163,7 +163,16 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   twice: once for the plan before anything is discovered, and once per
   conversation against the working directory its identity metadata names, which
   must both lie inside an authorized repository and pass the policy evaluation on
-  its own. It reaches the corpus only through `transcript.History` and never
+  its own. The per-conversation question is decided against configuration
+  reloaded at that moment and re-decides the plan's whole repository set, not the
+  conversation's directory alone, because authorization is per plan and a walk of
+  a corpus takes long enough for an opt-in to be withdrawn during it. A
+  withdrawal partway through stops the request: no further conversation is
+  opened, and the evidence gathered before it is dropped rather than returned
+  beside a refusal, since the client contract is binary and a request half-served
+  under a permission that no longer holds is not half-authorized. Configuration
+  that becomes unreadable mid-request stops it the same way, as an error rather
+  than a decision. It reaches the corpus only through `transcript.History` and never
   through the transcript index or its search sidecars — a refresh has already
   read every message body into a sidecar, so a cache lookup would be a way to
   serve an excluded conversation without asking about it. Its `withheld` entries

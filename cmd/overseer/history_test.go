@@ -3,15 +3,18 @@ package overseer
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/overseerpolicy"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
@@ -610,6 +613,161 @@ func TestHistoryTextModeCarriesTheWholeAnswer(t *testing.T) {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("text output is missing %q:\n%s", want, stdout)
 		}
+	}
+}
+
+// controlledReader is the corpus seam the mid-request revocation tests share.
+//
+// It enumerates a fixed candidate list without opening anything, and it records
+// every path whose messages were read, in order. That is what lets those tests
+// assert on a call that did not happen rather than on content that did not
+// appear: a conversation absent from the answer proves only that it was not
+// returned, while a conversation absent from this list was never opened.
+type controlledReader struct {
+	candidates []transcript.Candidate
+	// onRead runs after a read has been served. It is where a test moves the
+	// operator's configuration, so the change lands between one conversation and
+	// the next inside a single request.
+	onRead func()
+	reads  []string
+}
+
+func (r *controlledReader) Harness() string { return "claude" }
+
+// Discover is the content-reading path this boundary exists to precede. History
+// must never reach it.
+func (r *controlledReader) Discover(string, transcript.DiscoverOptions) ([]transcript.SessionMeta, error) {
+	return nil, errors.New("history reached the content-reading discovery path")
+}
+
+func (r *controlledReader) DiscoverMetadata(string, transcript.MetadataOptions) ([]transcript.Candidate, error) {
+	return append([]transcript.Candidate(nil), r.candidates...), nil
+}
+
+func (r *controlledReader) ReadMessages(path string) ([]transcript.Message, error) {
+	r.reads = append(r.reads, path)
+	if r.onRead != nil {
+		r.onRead()
+	}
+	return []transcript.Message{{
+		Role:      "user",
+		Text:      historySecret + " from " + filepath.Base(path),
+		Timestamp: time.Date(2026, 8, 1, 10, 0, 0, 0, time.UTC),
+	}}, nil
+}
+
+// controlledHistory is two conversations in one enrolled repository, behind a
+// corpus seam, with the operator's real configuration file staged so a test can
+// rewrite it while the request is in flight.
+type controlledHistory struct {
+	reader     *controlledReader
+	configPath string
+	home       string
+	app        string
+	firstPath  string
+	secondPath string
+}
+
+func stageControlledHistory(t *testing.T) *controlledHistory {
+	t.Helper()
+	requireGit(t)
+	root := t.TempDir()
+	home := filepath.Join(root, "claude-home")
+	app := filepath.Join(root, "app")
+	if err := os.MkdirAll(app, 0o755); err != nil {
+		t.Fatalf("MkdirAll %s: %v", app, err)
+	}
+
+	path := configPath(t)
+	writeConfigFile(t, path, renderHistoryConfig(home, projectFixture{title: "App", directory: app, optIn: "true"}))
+
+	fixture := &controlledHistory{
+		configPath: path,
+		home:       home,
+		app:        app,
+		firstPath:  filepath.Join(home, "first-session.jsonl"),
+		secondPath: filepath.Join(home, "second-session.jsonl"),
+	}
+	// The modification times order the walk, newest first, so which conversation
+	// is opened before the configuration moves is fixed rather than incidental.
+	fixture.reader = &controlledReader{candidates: []transcript.Candidate{
+		{ID: "first-session", Path: fixture.firstPath, Directories: []string{app}, FileModTime: time.Unix(2_000, 0)},
+		{ID: "second-session", Path: fixture.secondPath, Directories: []string{app}, FileModTime: time.Unix(1_000, 0)},
+	}}
+
+	original := historyReaders
+	t.Cleanup(func() { historyReaders = original })
+	historyReaders = func() map[string]transcript.Reader {
+		return map[string]transcript.Reader{"claude": fixture.reader}
+	}
+	return fixture
+}
+
+// Enrollment is rechecked before every conversation is opened, against the
+// configuration that exists at that moment. Withdrawing a participating
+// project's opt-in after one conversation has been read therefore stops the
+// next one inside the same request, rather than only stopping the next request.
+func TestHistoryRechecksEnrollmentBetweenConversations(t *testing.T) {
+	fixture := stageControlledHistory(t)
+	fixture.reader.onRead = func() {
+		// The operator withdraws the opt-in between the first conversation and
+		// the second, through the real configuration file the command reads.
+		writeConfigFile(t, fixture.configPath, renderHistoryConfig(fixture.home,
+			projectFixture{title: "App", directory: fixture.app, optIn: "false"}))
+	}
+
+	stdout, _, err := executeHistory(t, "--json", "--plan", "plan-1", "--repository", "app="+fixture.app)
+	requireQuietExit(t, err)
+
+	if want := []string{fixture.firstPath}; !slices.Equal(fixture.reader.reads, want) {
+		t.Fatalf("conversations opened = %v, want %v; the withdrawal did not stop the request", fixture.reader.reads, want)
+	}
+
+	data := decodeHistory(t, stdout).Data
+	if data.Allowed {
+		t.Fatal("the request stayed authorized after the opt-in was withdrawn")
+	}
+	if data.Reason != string(overseerpolicy.ReasonDeclined) {
+		t.Errorf("reason = %q, want %q; the refusal was not decided against the configuration that exists now",
+			data.Reason, overseerpolicy.ReasonDeclined)
+	}
+	if len(data.Conversations) != 0 {
+		t.Errorf("a refused request returned %d conversations", len(data.Conversations))
+	}
+	if strings.Contains(stdout, historySecret) {
+		t.Fatalf("evidence read before the withdrawal was returned beside the refusal: %s", stdout)
+	}
+	if data.Examined != 2 {
+		t.Errorf("examined = %d, want 2; a stopped request must not read as an empty corpus", data.Examined)
+	}
+	if data.ConfigFingerprint == "" || !strings.HasPrefix(data.RequestDigest, "sha256:") {
+		t.Errorf("refusal is missing its evidence fields: fingerprint=%q digest=%q", data.ConfigFingerprint, data.RequestDigest)
+	}
+}
+
+// An answer that cannot be obtained is not an answer of yes. Configuration that
+// becomes unreadable partway through a request stops the remaining conversations
+// and fails the request, rather than letting the evaluator the invocation opened
+// with stand in for the answer nobody can currently give.
+func TestHistoryConfigFailureBetweenConversationsFailsClosed(t *testing.T) {
+	fixture := stageControlledHistory(t)
+	fixture.reader.onRead = func() {
+		writeConfigFile(t, fixture.configPath, "this is not = = valid toml\n")
+	}
+
+	stdout, _, err := executeHistory(t, "--json", "--plan", "plan-1", "--repository", "app="+fixture.app)
+	requireQuietExit(t, err)
+
+	if want := []string{fixture.firstPath}; !slices.Equal(fixture.reader.reads, want) {
+		t.Fatalf("conversations opened = %v, want %v; an unreadable configuration did not stop the request",
+			fixture.reader.reads, want)
+	}
+	if strings.Contains(stdout, historySecret) {
+		t.Fatalf("evidence read before the failure was returned: %s", stdout)
+	}
+	failure := decodeFailure(t, stdout)
+	if failure.Code != "config_error" {
+		t.Errorf("error code = %q, want config_error", failure.Code)
 	}
 }
 

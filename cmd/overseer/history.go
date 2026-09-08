@@ -26,10 +26,24 @@ package overseer
 //     conversation in a nested directory that an enclosing exclusion covers is
 //     refused even though the plan as a whole was permitted.
 //
-// The second question is asked through an authorizer that holds the evaluator
-// built for this invocation and nothing else. There is no memoized answer: the
-// same directory asked about twice is decided twice, so a withdrawn opt-in
-// stops the next conversation rather than the next process.
+// The second question is asked against the configuration that exists when it is
+// asked, not against the evaluator this invocation opened with. Discovery walks
+// the whole corpus and reading a conversation takes time, so "the configuration
+// as it read before any of that" and "the configuration as it reads now" are two
+// different things, and only the second one is the operator's current answer.
+// Every conversation therefore reloads configuration, rebuilds the evaluator,
+// and re-decides the plan's whole participating repository set before it is
+// opened — a withdrawn opt-in stops the next conversation rather than the next
+// request.
+//
+// The recheck is per plan rather than per conversation because authorization
+// here is per plan: one repository losing its opt-in denies the request, so a
+// conversation admitted after that would be admitted under a permission the plan
+// no longer holds. And the loss latches. Once enrollment has stopped holding, or
+// configuration has stopped being readable, no further conversation is opened,
+// the evidence already gathered is dropped, and the request answers as a
+// refusal — a request half-taken under a permission that has since been
+// withdrawn is not half-authorized.
 
 import (
 	"crypto/sha256"
@@ -80,7 +94,23 @@ const (
 	// canonicalized — it has been deleted, or it is not a directory. An
 	// unresolvable path cannot be shown to be outside an exclusion.
 	reasonDirectoryUnresolved = "path_unresolved"
+	// reasonPolicyWithdrawn is a conversation left unopened because the plan's
+	// enrollment stopped holding partway through this request. It is distinct
+	// from the per-repository refusal reasons on purpose: the conversation was
+	// not refused on its own account, the request it belonged to was stopped.
+	reasonPolicyWithdrawn = "policy_withdrawn"
+	// reasonPolicyUnavailable is a conversation left unopened because
+	// configuration could not be read again. An answer that cannot be obtained
+	// is not an answer of yes.
+	reasonPolicyUnavailable = "policy_unavailable"
 )
+
+// The two halt reasons above do not appear in a payload today, and that is not
+// an oversight. They travel back through the admission path so that stopping a
+// request is expressed in the same vocabulary as refusing a conversation, but a
+// halted request answers as a plan-level refusal and returns no withheld list at
+// all — see writeHistoryHalt. They become observable the moment a halt returns
+// one.
 
 // The transcript readers and the config loader are seams for the same reason
 // the policy leaf's loader is: a test has to be able to pose a corpus, and
@@ -188,7 +218,12 @@ func runHistory(cmd *cobra.Command, _ []string) error {
 		return writeHistory(cmd, jsonOutput, data)
 	}
 
-	authorizer := &planScopedAuthorizer{evaluator: evaluator, scope: authorizedScope(decision)}
+	authorizer := &planScopedAuthorizer{
+		load:         overseerLoadConfig,
+		plan:         plan,
+		repositories: repositories,
+		scope:        authorizedScope(decision),
+	}
 	result, err := historyRun(cfg, historyReaders(), authorizer, transcript.HistoryRequest{
 		Harnesses: harnesses,
 		Since:     since,
@@ -197,6 +232,10 @@ func runHistory(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return policyError(cli.CommandFailure(cmd, jsonOutput, "history_error", err))
 	}
+	if halt := authorizer.halt; halt != nil {
+		return writeHistoryHalt(cmd, jsonOutput, data, halt, result,
+			historyRequestDigest(plan, repositories, harnesses, since, limits, halt.fingerprint))
+	}
 
 	data.Examined = result.Examined
 	data.Truncated = result.Truncated
@@ -204,6 +243,48 @@ func runHistory(cmd *cobra.Command, _ []string) error {
 	data.Withheld = withheldViews(result.Withheld)
 	data.Warnings = result.Warnings
 	data.Summary = historySummary(result)
+	return writeHistory(cmd, jsonOutput, data)
+}
+
+// writeHistoryHalt answers a request whose authorization stopped holding while
+// it was being served.
+//
+// The evidence already gathered is dropped rather than returned beside the
+// refusal. Two things force that and they agree. The client contract is binary —
+// an allowed answer carries conversations and exits zero, a refused one carries
+// none and exits nonzero — so an answer that was both would be rejected as
+// inconsistent by the caller that has to decide what to do with it. And a
+// permission that has been withdrawn was withdrawn: handing back what was read
+// before it was, under a heading that says the plan is refused, is the shape of
+// a cached permission being spent after it expired.
+//
+// What survives is the arithmetic that carries no content — how many
+// conversations were discovered, and which corpora could not be enumerated at
+// all — because a refusal that also looked like an empty corpus would hide that
+// the request had been under way.
+func writeHistoryHalt(cmd *cobra.Command, jsonOutput bool, data historyData, halt *historyHalt, result transcript.HistoryResult, digest string) error {
+	if halt.err != nil {
+		// Configuration that cannot be read is not a decision, and this family
+		// keeps the two apart: a refusal is a decision and travels in the data
+		// envelope, while unreadable configuration is a failure and travels in
+		// the error envelope, exactly as it does when the read fails before the
+		// request starts.
+		return policyError(cli.CommandFailure(cmd, jsonOutput, "config_error", halt.err))
+	}
+	data.Allowed = false
+	data.Reason = string(halt.decision.Reason)
+	// The fingerprint and the digest name the configuration the refusal was
+	// decided against, not the one the request opened under; reporting the
+	// opening fingerprint beside a decision taken against a later one would
+	// misname what was read.
+	data.ConfigFingerprint = halt.fingerprint
+	data.RequestDigest = digest
+	data.Repositories = repositoryViews(halt.decision.Repositories)
+	data.Examined = result.Examined
+	data.Warnings = result.Warnings
+	data.Summary = fmt.Sprintf(
+		"authorization was withdrawn during the request, so no evidence is returned (%d conversations discovered): %s",
+		result.Examined, halt.summary)
 	return writeHistory(cmd, jsonOutput, data)
 }
 
@@ -224,16 +305,52 @@ func writeHistory(cmd *cobra.Command, jsonOutput bool, data historyData) error {
 }
 
 // planScopedAuthorizer answers the per-conversation question. It holds the
-// evaluator built for this invocation and the resolved directories the plan was
-// authorized for, and it decides every conversation from scratch.
+// configuration seam rather than an evaluator, and it decides every conversation
+// against configuration read at the moment it is asked.
 type planScopedAuthorizer struct {
-	evaluator *overseerpolicy.Evaluator
+	// load is the configuration seam. It is called again for every conversation
+	// that reaches the policy question, which is what makes an answer here the
+	// operator's current answer rather than the one this invocation opened with.
+	load func() (*config.Config, error)
+	plan string
+	// repositories is the plan's whole participating set, re-decided in full
+	// before every content open. Authorization is per plan, so a conversation is
+	// admitted under the plan's permission and not its own directory's.
+	repositories []overseerpolicy.Repository
 	// scope is the resolved directory of every repository the plan was
-	// authorized for. A conversation outside all of them was not asked about.
+	// authorized for when the request opened. A conversation outside all of them
+	// was not asked about. It is only ever a pre-filter: it narrows which
+	// conversations reach the policy question and can never admit one, so
+	// holding it across the request cannot outlive a withdrawn opt-in.
 	scope []string
+	// halt latches the first loss of authorization observed inside the request.
+	halt *historyHalt
+}
+
+// historyHalt is authorization stopping partway through a request: either the
+// plan's enrollment no longer holds, or configuration can no longer be read.
+//
+// It latches. Once set, no further conversation is opened and configuration is
+// not read again, so an opt-in that flickers back cannot re-open a request that
+// has already been stopped, and a caller cannot be handed evidence from both
+// sides of a withdrawal.
+type historyHalt struct {
+	// reason is the vocabulary the remaining conversations are refused under.
+	reason  string
+	summary string
+	// decision is the refusing decision, present only for a withdrawal.
+	decision overseerpolicy.Decision
+	// fingerprint is the configuration the withdrawal was observed against.
+	fingerprint string
+	// err is the configuration failure, present only when configuration could
+	// not be read again.
+	err error
 }
 
 func (a *planScopedAuthorizer) Authorize(directory string) transcript.Admission {
+	if a.halt != nil {
+		return transcript.Admission{Reason: a.halt.reason, Detail: a.halt.summary}
+	}
 	resolved, err := resolveDirectory(directory)
 	if err != nil {
 		return transcript.Admission{Reason: reasonDirectoryUnresolved, Detail: err.Error()}
@@ -245,7 +362,11 @@ func (a *planScopedAuthorizer) Authorize(directory string) transcript.Admission 
 	if !withinScope(resolved, a.scope) {
 		return transcript.Admission{Reason: reasonOutOfScope}
 	}
-	decision := a.evaluator.Evaluate(overseerpolicy.Request{
+	evaluator, ok := a.currentPolicy()
+	if !ok {
+		return transcript.Admission{Reason: a.halt.reason, Detail: a.halt.summary}
+	}
+	decision := evaluator.Evaluate(overseerpolicy.Request{
 		Repositories: []overseerpolicy.Repository{{Path: directory}},
 	})
 	if !decision.Allowed {
@@ -260,6 +381,44 @@ func (a *planScopedAuthorizer) Authorize(directory string) transcript.Admission 
 		Reason:   string(overseerpolicy.ReasonAllowed),
 		Projects: declaredProjects(decision),
 	}
+}
+
+// currentPolicy rebuilds authorization from the configuration that exists now
+// and re-decides the plan's whole participating repository set.
+//
+// This is the difference between a request that was authorized once and one that
+// stays authorized. The evaluator the invocation opened with is a snapshot of
+// the declarations as they read before the corpus was walked; replaying it would
+// mean an operator who withdraws a project while a request is in flight has
+// withdrawn it only for the next request, which is exactly the guarantee this
+// surface makes and would not be keeping.
+//
+// A refusal or an unreadable configuration halts the request rather than
+// refusing one conversation, because neither is a statement about the
+// conversation in hand: one says the plan may no longer be read for at all, and
+// the other says nobody can currently say whether it may.
+func (a *planScopedAuthorizer) currentPolicy() (*overseerpolicy.Evaluator, bool) {
+	cfg, err := a.load()
+	if err != nil {
+		a.halt = &historyHalt{
+			reason:  reasonPolicyUnavailable,
+			summary: fmt.Sprintf("configuration could not be read during the request: %v", err),
+			err:     err,
+		}
+		return nil, false
+	}
+	evaluator := overseerpolicy.New(cfg.Projects)
+	decision := evaluator.Evaluate(overseerpolicy.Request{Plan: a.plan, Repositories: a.repositories})
+	if !decision.Allowed {
+		a.halt = &historyHalt{
+			reason:      reasonPolicyWithdrawn,
+			summary:     decision.Summary(),
+			decision:    decision,
+			fingerprint: evaluator.Fingerprint(),
+		}
+		return nil, false
+	}
+	return evaluator, true
 }
 
 // authorizedScope collects the resolved directory of every permitted repository.
