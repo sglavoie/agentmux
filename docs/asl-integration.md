@@ -330,6 +330,43 @@ contract. The `request_digest` binds the bounds as well as the plan and the
 repository set: an answer taken under a 10-message bound is not evidence for a
 request that asked for 200.
 
+## Checking the installed pair: `just overseer-integration`
+
+Everything above is a contract between two programs that are released
+separately, so the version an operator runs is the only version that matters.
+`just overseer-integration asl_root=/path/to/scripts` is the gate that judges
+it, and the only one that does.
+
+```bash
+just overseer-integration asl_root=~/scripts
+```
+
+It drives ASL's own overseer leaves — policy, history, watch, checkpoint,
+resume — against the `amx` in `~/.local/bin` and the `asl` on `PATH`, and checks
+compatibility in both directions: the installed binary must answer the contracts
+this ASL speaks, and a component that does not must be refused rather than read
+past. A genuinely older AgentMux is not one reporting a lower contract number —
+version 1 is the first — it is one whose payload carries no `contract` block at
+all, and that has to read as unavailable rather than as permission.
+
+The world it runs in is built and deleted by the suite: its own Git
+repositories, its own state root, its own `config.toml` reached through
+`AMX_CONFIG`, its own profile home and transcripts, and fake harness processes
+standing in for the ones a lock names. It reads no operator configuration,
+touches no real plan, and launches no runner — the resume path replaces the
+launcher and nothing else.
+
+The recipe refuses rather than shrugging when a half is missing or wrong: no
+installed `amx`, no `asl` on `PATH`, or an `asl` that resolves outside the
+checkout it was given each fail with the fix named. The ASL suite behind it
+(`tests/test_asl_overseer_paired_smoke.py`) skips when there is no installed
+pair, because a checkout is a legitimate place to have none; the recipe sets
+`AMX_ASL_OVERSEER_SMOKE` to turn that skip into a failure, because a gate that
+silently skips reports success for having done nothing.
+
+The paired release gate runs this in its `smoke` phase, before `cockpit-smoke`.
+See `docs/paired-releases.md`.
+
 ## Deferred
 
 These are known gaps, not bugs. Nothing in the cockpit is waiting on them:

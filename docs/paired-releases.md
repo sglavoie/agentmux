@@ -44,7 +44,7 @@ truncated gate can never read as a complete one.
 | `build` | `just build`, then hash the artifacts | The artifact exists before anything claims to have tested it. |
 | `verify` | `just check`; ASL `test-all` and `lint`; `asl-contract-sync`; `asl-integration`; `crash-restart`; both `reliability-stress` gates | Cheapest gate first, the long stress and crash/restart runs last, so an ordinary regression fails fast. |
 | `install` | ASL `just all`, ASL `just verify-asl-install`, Agent Mux `just install-restart-smoke` | **ASL first, then Agent Mux.** The Agent Mux install restarts the daemon, and a daemon restarted against a stale ASL proves nothing about the pair. |
-| `smoke` | `just cockpit-smoke` | Against the installation the previous phase just produced, in a real Kitty window. |
+| `smoke` | `just overseer-integration`, then `just cockpit-smoke` | Against the installation the previous phase just produced. The overseer smoke needs only the two installed programs; the cockpit smoke needs a real Kitty window, so the terminal-dependent step goes last. |
 
 Three artifact hashes are recorded: the built `amx` binary, the ASL wrapper, and
 a digest over ASL's Python sources. The source-tree digest exists because ASL
@@ -59,6 +59,27 @@ body, refusing a stale token, accepting a mutation, and receiving a body-free
 receipt are proven against the installed ASL wrapper by `just asl-integration`,
 which the gate runs separately in the verify phase. The two halves are recorded
 as two steps because they are two claims.
+
+**What the overseer smoke proves.** `just overseer-integration asl_root=…` is
+the only step that judges the two *installed* programs against each other. It
+drives ASL's own overseer leaves -- policy, history, watch, checkpoint, resume --
+against the `amx` in `~/.local/bin` and the `asl` on `PATH`, and it checks the
+compatibility both ways: that the installed binary answers the contracts ASL
+speaks, and that a component which does not is refused rather than read past.
+Everything it touches is a throwaway world it builds and deletes -- its own Git
+repositories, its own state root, its own `config.toml` reached through
+`AMX_CONFIG`, its own profile home and transcripts, and fake harness processes
+standing in for the ones a lock names. It never reads the operator's
+configuration and never touches a real plan.
+
+The other three paired gates cannot see what it sees. `just check` judges Agent
+Mux's sources; `asl-integration` judges the installed ASL against *those*
+sources; `asl-contract-sync` compares two checkouts offline. A version skew
+between the two installed programs is invisible to all three, and it is the skew
+an operator meets, because the two are released separately. Like the others it
+fails rather than skips: the ASL suite behind it skips when there is no
+installed pair, and the recipe sets `AMX_ASL_OVERSEER_SMOKE` to turn that skip
+into a failure.
 
 ## Active runs
 
@@ -303,7 +324,7 @@ running against a peer it was not tested with.
 4. `amx config asl-sync --check`, then `amx config asl-sync` if the resolved
    path changed. Pairing is transactional: any failure after the write restores
    the previous configuration and restarts the daemon onto it.
-5. `just cockpit-smoke`.
+5. `just overseer-integration asl_root=…`, then `just cockpit-smoke`.
 
 There is no state migration to undo. The contract set is checked, not converted,
 and `asl-sync` refuses rather than migrating around a live run — so a rollback
@@ -319,6 +340,7 @@ phase and the smoke:
 ```bash
 just verify-asl-install        # in the ASL checkout
 just install-restart-smoke     # in the Agent Mux checkout
+just overseer-integration asl_root=~/scripts
 just cockpit-smoke
 amx doctor --strict
 amx config hooks-status

@@ -28,6 +28,7 @@ just check        # acceptance plus golangci-lint
 just install-restart-smoke
 just crash-restart   # fault injection and restart equivalence, under -race
 just cockpit-smoke   # real Kitty + installed pair; fails rather than skips
+just overseer-integration asl_root=~/scripts   # installed amx + installed asl, isolated world
 ```
 
 Releases of the Agent Mux / agent-session-loop pair go through

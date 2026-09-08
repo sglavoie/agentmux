@@ -38,7 +38,11 @@ const (
 //   - install after verify, in the documented order -- ASL first, then Agent Mux
 //     -- because Agent Mux's own install smoke restarts the daemon, and a daemon
 //     restarted against a stale ASL proves nothing about the pair;
-//   - smoke last, against the installation the previous phase just produced.
+//   - smoke last, against the installation the previous phase just produced,
+//     with the overseer pair before the cockpit: the overseer smoke needs only
+//     the two installed programs, while the cockpit smoke needs a live Kitty
+//     window, and a gate should exhaust what it can judge on its own before it
+//     depends on the operator's terminal being what it expects.
 //
 // A step that fails stops the run. Continuing past a failure would produce
 // evidence in which later steps ran against a state the record does not
@@ -65,6 +69,7 @@ func Plan(agentMuxRoot, aslRoot string) []Step {
 		{Name: "asl-install-verify", Repo: ASLRepo, Phase: PhaseInstall, Argv: []string{"just", "verify-asl-install"}},
 		{Name: "amx-install-restart", Repo: AgentMuxRepo, Phase: PhaseInstall, Argv: []string{"just", "install-restart-smoke"}},
 
+		{Name: "overseer-integration", Repo: AgentMuxRepo, Phase: PhaseSmoke, Argv: []string{"just", "overseer-integration", "asl_root=" + aslRoot}},
 		{Name: "cockpit-smoke", Repo: AgentMuxRepo, Phase: PhaseSmoke, Argv: []string{"just", "cockpit-smoke"}},
 	}
 }

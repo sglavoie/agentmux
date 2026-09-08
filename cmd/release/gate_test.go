@@ -119,6 +119,72 @@ func TestJustCockpitSmokeFailsRatherThanSkips(t *testing.T) {
 	}
 }
 
+// TestJustOverseerIntegrationFailsRatherThanSkips is the same property as the
+// cockpit smoke's, for the gate that judges the installed *pair*. The suite it
+// runs skips itself when there is no installed pair, because a checkout is a
+// legitimate place to have none; this recipe is the caller that says there is
+// supposed to be one, so the skip has to become a failure here or the step is a
+// green report about two programs nobody checked against each other.
+func TestJustOverseerIntegrationFailsRatherThanSkips(t *testing.T) {
+	recipe := justfileParameterizedRecipe(t, readJustfile(t), "overseer-integration")
+
+	for _, want := range []string{
+		"AMX_ASL_OVERSEER_SMOKE=1",             // the suite's skip becomes a failure
+		"AMX_INSTALLED_BINARY=",                // and it judges the installed binary
+		"{{ prefix_bin }}/amx",                 // which is the installed one, not a build
+		"tests.test_asl_overseer_paired_smoke", // the paired smoke suite itself
+		"${asl_root_arg#asl_root=}",            // `just` hands key=value positionally
+		"command -v asl",                       // the ASL half is the one on PATH
+	} {
+		if !strings.Contains(recipe, want) {
+			t.Errorf("overseer-integration does not exercise %q:\n%s", want, recipe)
+		}
+	}
+	// Every failure path must be a nonzero exit. A recipe that shrugged at a
+	// missing half would report a compatible pair it never assembled.
+	for _, absent := range []string{"exit 0", "|| true", "skip"} {
+		if strings.Contains(recipe, absent) {
+			t.Errorf("overseer-integration contains %q; it must fail rather than skip:\n%s", absent, recipe)
+		}
+	}
+}
+
+// TestOverseerIntegrationSmokesBeforeTheCockpit pins the smoke phase's internal
+// order. The overseer smoke needs only the two installed programs; the cockpit
+// smoke needs a live Kitty window. Running the terminal-dependent step last is
+// what lets a headless failure be reported as a real regression rather than as
+// the operator's shell being wrong.
+func TestOverseerIntegrationSmokesBeforeTheCockpit(t *testing.T) {
+	steps := release.Plan("/amx", "/asl")
+
+	overseer, cockpit := -1, -1
+	for i, step := range steps {
+		switch step.Name {
+		case "overseer-integration":
+			overseer = i
+		case "cockpit-smoke":
+			cockpit = i
+		}
+	}
+	if overseer < 0 {
+		t.Fatal("plan has no overseer-integration step")
+	}
+	if cockpit < 0 {
+		t.Fatal("plan has no cockpit-smoke step")
+	}
+	if overseer > cockpit {
+		t.Errorf("overseer-integration runs at %d, after cockpit-smoke at %d", overseer, cockpit)
+	}
+	if steps[overseer].Phase != release.PhaseSmoke {
+		t.Errorf("overseer-integration is in phase %q, not %q", steps[overseer].Phase, release.PhaseSmoke)
+	}
+	// The checkout has to reach the recipe, or the gate smokes some other
+	// pair -- or none, if nothing is installed where it looked.
+	if got := strings.Join(steps[overseer].Argv, " "); !strings.Contains(got, "asl_root=/asl") {
+		t.Errorf("overseer-integration argv = %q; it does not carry the ASL checkout", got)
+	}
+}
+
 // TestJustPairedReleaseGatePassesTheCheckoutThrough covers the one thing the
 // recipe itself owns: `just` hands `key=value` after a recipe name to the
 // recipe positionally, so the prefixes have to be stripped or the gate is

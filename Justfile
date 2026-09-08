@@ -102,6 +102,81 @@ asl-contract-sync asl_root:
 
     echo "asl-contract-sync: vendored corpus matches $canonical"
 
+# Exercise the overseer against the *installed* pair: the amx in ~/.local/bin
+# and the asl wrapper on PATH. It drives policy, history, watch, checkpoint and
+# resume through ASL's own leaves, and checks the compatibility both ways --
+# that the installed binary answers the contracts ASL speaks, and that a
+# component which does not is refused rather than read past.
+#
+# This is the one gate that judges what an operator actually has. `just check`
+# judges these sources; `asl-integration` judges the installed ASL against
+# *these* sources; `asl-contract-sync` compares two checkouts offline. A version
+# skew between the two installed programs is invisible to all three, and it is
+# the skew an operator meets, because the two are released separately.
+#
+# Everything it touches is a throwaway world the suite builds and deletes:
+# its own Git repositories, its own state root, its own config.toml reached
+# through AMX_CONFIG, its own profile home and transcripts, and fake harness
+# processes standing in for the ones a lock names. It never reads the
+# operator's configuration and never touches a real plan.
+#
+# Like asl-integration, it fails rather than skips: AMX_ASL_OVERSEER_SMOKE
+# turns the suite's "no installed pair here" skip into a failure, because a
+# silent skip would report a compatible pair that was never actually checked.
+#
+# As with asl-contract-sync, `just` passes everything after the recipe name
+# positionally, so the documented `asl_root=/path/to/scripts` prefix is stripped
+# here rather than refused.
+overseer-integration asl_root:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    asl_root_arg="{{ asl_root }}"
+    asl_root="${asl_root_arg#asl_root=}"
+    amx="{{ prefix_bin }}/amx"
+    suite="tests.test_asl_overseer_paired_smoke"
+
+    if [ ! -x "$amx" ]; then
+        echo "no installed amx at $amx; run just install-restart-smoke first" >&2
+        exit 1
+    fi
+
+    if [ ! -d "$asl_root/agent_session_loop" ]; then
+        echo "no ASL checkout at $asl_root" >&2
+        echo "pass the ASL checkout: just overseer-integration asl_root=/path/to/scripts" >&2
+        exit 1
+    fi
+
+    # The installed wrapper has to be the one this checkout publishes, or the
+    # run would judge a pair nobody deployed. The suite asserts this too; it is
+    # repeated here so the operator hears which checkout is wrong, immediately,
+    # rather than as a failing test.
+    if ! wrapper="$(command -v asl)"; then
+        echo "no asl on PATH; install it from $asl_root: just all" >&2
+        exit 1
+    fi
+    resolved="$(cd "$(dirname "$(readlink -f "$wrapper")")" && pwd -P)"
+    canonical="$(cd "$asl_root" && pwd -P)"
+    case "$resolved/" in
+        "$canonical"/*) ;;
+        *)
+            echo "installed asl resolves to $resolved, outside $canonical" >&2
+            echo "install this checkout first: cd $asl_root && just all" >&2
+            exit 1
+            ;;
+    esac
+
+    echo "== installed pair =="
+    "$amx" --version
+    echo "asl: $wrapper -> $(readlink -f "$wrapper")"
+
+    echo "== overseer smoke =="
+    cd "$asl_root"
+    AMX_ASL_OVERSEER_SMOKE=1 AMX_INSTALLED_BINARY="$amx" \
+        python3 -m unittest "$suite" -v
+
+    echo "overseer-integration: ok"
+
 # Daemon lifecycle scenarios whose determinism this repository stresses:
 # startup publication, owned-loop shutdown drain, and the concurrent handler
 # state paths. Extend this pattern as new fault scenarios land.
