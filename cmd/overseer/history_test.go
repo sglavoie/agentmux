@@ -215,6 +215,83 @@ func TestHistoryReturnsBoundedEvidenceForAuthorizedConversations(t *testing.T) {
 	}
 }
 
+// writeClassifiedClaudeTranscript writes one transcript whose user record
+// carries the marker that decides its class, so a payload assertion can name the
+// class it expects rather than reading whatever the default fixture happens to
+// produce. The markers are the ones observeClaudeRecord acts on.
+func writeClassifiedClaudeTranscript(t *testing.T, home, encodedDir, sessionID, cwd, markers string) string {
+	t.Helper()
+	path := filepath.Join(home, "projects", encodedDir, sessionID+".jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	body := `{"type":"user","timestamp":"2026-08-01T10:00:00.000Z","sessionId":"` + sessionID + `","cwd":"` + cwd +
+		`",` + markers + `"message":{"role":"user","content":[{"type":"text","text":"` + historySecret + ` from ` + sessionID + `"}]}}` + "\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write transcript: %v", err)
+	}
+	return path
+}
+
+// session_class is the field ASL's overseer reads to decide whether a user turn
+// can carry a human authorization, and it reads it fail-closed: only "main"
+// yields an instruction, "automated" yields a generated prompt, and anything
+// else — including a spelling a future amx might introduce — authorizes nothing.
+// That makes the closed vocabulary a cross-repository contract rather than a
+// display detail, so the answer is asserted to stay inside it, and to still
+// distinguish the automated conversation from the human one it is the whole
+// point of the field to separate.
+func TestHistoryClassifiesEveryConversationWithinThePublishedVocabulary(t *testing.T) {
+	requireGit(t)
+	root := t.TempDir()
+	home := filepath.Join(root, "claude-home")
+	app := filepath.Join(root, "app")
+	if err := os.MkdirAll(app, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	writeClassifiedClaudeTranscript(t, home, "-app", "typed-session", app, `"entrypoint":"cli",`)
+	writeClassifiedClaudeTranscript(t, home, "-app", "sidechain-session", app, `"entrypoint":"cli","isSidechain":true,`)
+	writeClaudeTranscript(t, home, "-app", "unmarked-session", app)
+	path := configPath(t)
+	writeConfigFile(t, path, renderHistoryConfig(home, projectFixture{title: "App", directory: app, optIn: "true"}))
+
+	stdout, _, err := executeHistory(t, "--json", "--plan", "plan-1", "--repository", "app="+app)
+	if err != nil {
+		t.Fatalf("history: %v", err)
+	}
+	data := decodeHistory(t, stdout).Data
+
+	published := map[string]bool{
+		string(transcript.SessionClassMain):      true,
+		string(transcript.SessionClassAutomated): true,
+		string(transcript.SessionClassUnknown):   true,
+	}
+	if len(data.Conversations) != 3 {
+		t.Fatalf("conversations = %d, want 3: %+v", len(data.Conversations), data.Conversations)
+	}
+	for _, conversation := range data.Conversations {
+		if !published[conversation.SessionClass] {
+			t.Errorf("session_class = %q for %s, which is outside the published vocabulary a caller can act on",
+				conversation.SessionClass, conversation.ID)
+		}
+	}
+
+	want := map[string]transcript.SessionClass{
+		"typed-session":     transcript.SessionClassMain,
+		"sidechain-session": transcript.SessionClassAutomated,
+		"unmarked-session":  transcript.SessionClassUnknown,
+	}
+	for id, class := range want {
+		conversation, ok := findHistoryConversation(data, id)
+		if !ok {
+			t.Fatalf("conversation %s missing from the answer", id)
+		}
+		if conversation.SessionClass != string(class) {
+			t.Errorf("session_class for %s = %q, want %q", id, conversation.SessionClass, class)
+		}
+	}
+}
+
 // A plan-level refusal ends the command before the corpus is walked, even for
 // identity. Nothing about the conversations is discovered, because the plan that
 // would have justified looking at them was not authorized.

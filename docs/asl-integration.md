@@ -306,6 +306,19 @@ refused with the file still closed.
 
 Each returned conversation carries its harness, session id, working directory,
 participating projects, session class, total message count, and its excerpts.
+
+`session_class` is a contract rather than a label. It is always one of `main`,
+`automated`, or `unknown` — anything the classifier cannot place normalizes to
+`unknown` before the answer is written, so the field is never empty and never
+carries a fourth spelling. ASL's overseer reads it fail-closed to decide whether
+a `user` turn can carry a human authorization: only `main` yields an
+instruction, `automated` yields a generated prompt, and `unknown` yields a
+statement that authorizes nothing. That is what makes a role field safe to act
+on at all — ASL injects its own composed prompts under the `user` role, and a
+subagent or an `exec` run types its own. Adding a class here without ASL
+learning it means every conversation in it stops authorizing, which is the safe
+direction and still a coordinated change.
+
 An excerpt carries its role, its timestamp, its text, and its `index` — the
 message's position in the conversation, so an excerpt says where it came from
 rather than only that the conversation contained it. Excerpts are drawn from the
