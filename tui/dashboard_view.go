@@ -46,13 +46,11 @@ func dashboardRailRows(m Model) []dashboard.RailRow {
 	return dashboard.BuildRailRows(contextual, m.lastActivity, m.idleThreshold)
 }
 
-func renderProjectRail(m Model, width, height int) string {
-	return dashboard.RenderRail(dashboard.RailInput{
-		Rows: dashboardRailRows(m), Cursor: m.railCursor, Offset: m.railOffset,
-		Width: width, Height: height, AppliedProject: m.activeFilter.Project,
-		Focused: m.railFocused,
-	})
-}
+// The rail has no text-only seam here on purpose. It is drawn from
+// renderSplitFrame through dashboard.RenderRailWithHits, which is the only way
+// into the leaf that produces its row rectangles beside its text; a second
+// adapter that produced the text alone would be a way to draw a rail whose rows
+// nothing can be clicked on.
 
 // detailStripBudgetLines returns the number of lines reserved below the list
 // for the compact band's selected-item strip: the whole strip when the list

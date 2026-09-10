@@ -23,24 +23,11 @@ func (m *Model) openHelp(returnMode Mode) {
 }
 
 // helpBaseView renders the view the overlay was raised from so the dimmed
-// backdrop matches the mode esc returns to.
+// backdrop matches the mode esc returns to. Help records its return mode
+// directly rather than going through activeRootMode, which is why it names the
+// mode itself; the dispatch behind it is the shared one.
 func helpBaseView(m Model) string {
-	switch m.helpReturnMode {
-	case ModeSessionSearch:
-		return renderSessionSearch(m)
-	case ModeSessionView:
-		return renderSessionView(m)
-	case ModePlanSearch:
-		return renderPlanSearch(m)
-	case ModePlanView:
-		return renderPlanView(m)
-	case ModeWorktrees:
-		return renderWorktrees(m)
-	case ModeASLRuns:
-		return renderASLRuns(m)
-	default:
-		return renderDashboard(m)
-	}
+	return rootBaseViewFor(m, m.helpReturnMode)
 }
 
 // helpSections is the static list of dashboard-scoped sections rendered in the

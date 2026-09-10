@@ -49,17 +49,15 @@ func renderPickerPreview(m Model, origIdx, width, height int) string {
 	return m.pickerInput().RenderPreview(origIdx, width, height)
 }
 
+// pickerPaneHeight is the launcher's body budget. It is the root body height —
+// the launcher composes into the same footer and status row every other root
+// view does — and says so rather than restating the subtraction.
 func pickerPaneHeight(m Model) int {
-	if m.height <= 0 {
-		return 0
-	}
-	h := m.height - pickerFooterLineCount(m) - statusBarLines
-	if h < 0 {
-		return 0
-	}
-	return h
+	return rootBodyHeight(m)
 }
 
+// pickerFooterLineCount is the launcher's footer term in the shared vertical
+// budget, taken from the trimmed rows the composition will actually spend.
 func pickerFooterLineCount(m Model) int {
 	return len(rootFooterLines(m))
 }

@@ -29,7 +29,7 @@ func TestUITestObservationCapturesModeSizeAndScreen(t *testing.T) {
 	if len(obs.Screen.Lines) == 0 {
 		t.Fatal("expected non-empty screen lines")
 	}
-	// composeRootView pads/truncates the body to the terminal height, so a
+	// rootChrome.compose pads/truncates the body to the terminal height, so a
 	// sized render should exactly fill the viewport with no height overflow.
 	if obs.Screen.Height != 24 {
 		t.Errorf("expected 24 rendered lines, got %d", obs.Screen.Height)

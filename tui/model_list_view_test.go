@@ -559,7 +559,7 @@ func TestSummaryPreviewPaintsACardAndCallsNoKitty(t *testing.T) {
 	// The whole split renders the card in place of scrollback, still without
 	// asking Kitty anything.
 	calls = len(runner.Calls)
-	split := stripAnsi(renderSplit(m))
+	split := stripAnsi(renderSplitFrame(m).text)
 	if n := len(runner.Calls); n != calls {
 		t.Errorf("rendering the split over a summary made %d Kitty call(s): %+v", n-calls, runner.Calls[calls:])
 	}

@@ -342,14 +342,11 @@ func legendLineCount(m Model) int {
 }
 
 // listChromeLines returns the total number of vertical lines the dashboard
-// chrome occupies around the session list in ModeList, mirroring the
-// composition in render(). Sum of chromeAboveListLines (above) + the compact
-// detail strip below the list + the padding row between body and footer +
-// footerBudgetLines + the sticky status bar. Used by listVisibleHeight to
-// derive the row budget when the preview pane is off.
+// chrome occupies around the session list in ModeList. It is the complement of
+// the pane rows dashboardGeometry lays out, read from the same dashboardChrome,
+// so the two cannot disagree about what the chrome costs.
 func listChromeLines(m Model) int {
-	return chromeAboveListLines(m) + chromeBelowListLines(m) +
-		1 /* padding row */ + footerBudgetLines(m) + statusBarLines
+	return dashboardChromeFor(m).total()
 }
 
 // listVisibleHeight returns the row-line budget for the scrollable session
@@ -371,15 +368,15 @@ func listVisibleHeight(m Model) int {
 }
 
 // listVisibleHeightForFooterLines derives the non-preview list height from an
-// explicit footer-row count. Keeping this small calculation separate lets the
-// footer budget and position indicator converge without recursively calling
-// listVisibleHeight through renderFooter.
+// explicit footer-row count. Supplying the footer term rather than asking for
+// it is what lets the footer budget and its position indicator converge without
+// recursively calling listVisibleHeight through renderFooter — the substitution
+// is the loop-breaker, and dashboardChromeWithFooter is where it is named.
 func listVisibleHeightForFooterLines(m Model, footerLines int) int {
 	if m.height == 0 {
 		return m.listItemCount()
 	}
-	h := m.height - chromeAboveListLines(m) - chromeBelowListLines(m) -
-		1 /* padding row */ - footerLines - statusBarLines
+	h := dashboardChromeWithFooter(m, footerLines).paneRows(m.height)
 	if h < listMinVisible {
 		h = listMinVisible
 	}

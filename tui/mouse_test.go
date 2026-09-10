@@ -27,7 +27,7 @@ func mouseFixture(t *testing.T) (*uitestDriver, *uitestKittyClient) {
 
 func findMouseHit(t *testing.T, m Model, kind mouseHitKind, match func(mouseHitRegion) bool) mouseHitRegion {
 	t.Helper()
-	hits := renderDashboardWithHits(m).hitMap.clicks
+	hits := renderDashboardFrame(m).hitMap.clicks
 	for _, hit := range hits {
 		if hit.kind == kind && (match == nil || match(hit)) {
 			return hit
@@ -187,7 +187,7 @@ func TestMouseRailChipHeaderAndWheelRouting(t *testing.T) {
 		t.Fatalf("second view click left %v", d.model.listView)
 	}
 
-	hitMap := renderDashboardWithHits(d.model).hitMap
+	hitMap := renderDashboardFrame(d.model).hitMap
 	d.model.cursor = 0
 	if err := d.Mouse(hitMap.listPane.X, hitMap.listPane.Y, UITestMouseWheelDown); err != nil {
 		t.Fatal(err)
@@ -210,7 +210,7 @@ func TestMouseGeometryWrappedChipsSuppressedRailAndPreview(t *testing.T) {
 	d.model.width = 36
 	d.model.height = 30
 	d.model.applyActiveFilter(dashboard.CursorIdentity{})
-	rendered := renderDashboardWithHits(d.model)
+	rendered := renderDashboardFrame(d.model)
 	maxChipY := -1
 	for _, hit := range rendered.hitMap.clicks {
 		if hit.kind == mouseHitChip && hit.rect.Y > maxChipY {
@@ -248,7 +248,7 @@ func TestMouseGeometryWrappedChipsSuppressedRailAndPreview(t *testing.T) {
 		d.model.previewEnabled = true
 		before := d.model.cursor
 		g := dashboardGeometry(d.model)
-		mapNow := renderDashboardWithHits(d.model).hitMap
+		mapNow := renderDashboardFrame(d.model).hitMap
 		x, y := 0, mapNow.listPane.Y+g.listHeight+1
 		if direction == "horizontal" {
 			x = mapNow.listPane.X + g.listWidth + 2

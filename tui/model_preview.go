@@ -5,7 +5,6 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -15,26 +14,53 @@ import (
 
 // View renders the full dashboard.
 func (m Model) View() tea.View {
-	var content string
-	var hitMap mouseHitMap
-	if m.mode == ModeList {
-		rendered := renderDashboardWithHits(m)
-		content = composeRootView(rendered.text, m)
-		hitMap = rendered.hitMap.clipped(m.width, rootBodyHeight(m))
-	} else {
-		content = m.render()
-	}
-	v := tea.NewView(content)
+	frame := renderRootFrame(m)
+	v := tea.NewView(frame.text)
 	v.AltScreen = true
 	if m.mode == ModeList {
 		v.MouseMode = tea.MouseModeCellMotion
-		v.OnMouse = hitMap.handler()
+		v.OnMouse = frame.hitMap.handler()
 	}
 	return v
 }
 
-// render builds the string content for View.
+// render builds the string content for View. The scenario harness captures the
+// screen through here, so it deliberately shares renderRootFrame with View
+// rather than composing its own: a committed scenario that asserted a different
+// composition from the one an operator sees would assert nothing.
 func (m Model) render() string {
+	return renderRootFrame(m).text
+}
+
+// rootFrame is one composed screen: the text the terminal will show and, when
+// the live dashboard owns it, the mouse regions the body produced beside that
+// text and clipped to the body it was composed into.
+type rootFrame struct {
+	text   string
+	hitMap mouseHitMap
+}
+
+// renderRootFrame composes the whole screen once. The bottom-of-screen chrome
+// is measured a single time and both halves of the composition read that one
+// measurement — the rows the body is clipped to and the rows an overlay is
+// centred in are then the same number by construction rather than two
+// independent answers to the same question.
+func renderRootFrame(m Model) rootFrame {
+	chrome := newRootChrome(m)
+	if m.mode == ModeList {
+		body := renderDashboardFrame(m)
+		return rootFrame{
+			text:   chrome.compose(body.text),
+			hitMap: body.hitMap.clipped(m.width, chrome.bodyHeight()),
+		}
+	}
+	return rootFrame{text: chrome.compose(renderRootBody(m, chrome))}
+}
+
+// renderRootBody draws the body of whichever non-ModeList screen owns the
+// terminal, including the overlay modes, which composite their popup over the
+// backdrop the mode they were raised from owns.
+func renderRootBody(m Model, chrome rootChrome) string {
 	var sb strings.Builder
 
 	switch m.mode {
@@ -52,7 +78,7 @@ func (m Model) render() string {
 	case ModeLiveSessionPicker:
 		base := rootBaseView(m)
 		popup := renderLiveSessionPickerBox(m)
-		sb.WriteString(layout.CenterOverlay(base, popup, m.width, rootBodyHeight(m), true))
+		sb.WriteString(layout.CenterOverlay(base, popup, m.width, chrome.bodyHeight(), true))
 	case ModePlanSearch:
 		// Plan search owns its full layout — like ModeSessionSearch, the
 		// dashboard list must not render underneath.
@@ -72,28 +98,29 @@ func (m Model) render() string {
 		// rendered then dimmed; the bordered popup is composited via
 		// line-splicing so the underlying list stays visible around it.
 		// See tui/overlay.go for the splicing algorithm.
-		base := renderSessionSearch(m)
-		if m.mode == ModeChipPicker && chipPickerSourceMode(m) == ModePlanSearch {
-			base = renderPlanSearch(m)
+		//
+		// These two resolve their owning view themselves rather than through
+		// activeRootMode — the chip picker's is recorded on the picker, not on
+		// the mode — but the view is drawn through the same dispatch as every
+		// other backdrop.
+		source := ModeSessionSearch
+		if m.mode == ModeChipPicker {
+			source = chipPickerSourceMode(m)
 		}
+		base := rootBaseViewFor(m, source)
 		var popup string
 		if m.mode == ModeChipPicker {
 			popup = renderChipPickerBox(m)
 		} else {
 			popup = renderDeleteChoiceBox(m)
 		}
-		overlayH := rootBodyHeight(m)
-		sb.WriteString(layout.CenterOverlay(base, popup, m.width, overlayH, true))
+		sb.WriteString(layout.CenterOverlay(base, popup, m.width, chrome.bodyHeight(), true))
 	case ModeActions, ModeConfirm, ModeConfigPicker, ModeHelp, ModeDetail, ModeCommandPalette, ModeASLResponse:
-		var base string
-		switch {
-		case m.mode == ModeConfigPicker && m.configPickerReturnMode == ModePicker:
-			base = renderPicker(m)
-		case m.mode == ModeHelp:
-			base = helpBaseView(m)
-		default:
-			base = rootBaseView(m)
-		}
+		// Every one of these raises a popup over the view esc returns to, and
+		// activeRootMode is the one place that names that view — including for
+		// help, whose backdrop is its own return mode, and for the config
+		// picker raised from the launcher.
+		base := rootBaseView(m)
 		var popup string
 		switch m.mode {
 		case ModeActions:
@@ -111,44 +138,56 @@ func (m Model) render() string {
 		case ModeASLResponse:
 			popup = renderASLResponseBox(m)
 		}
-		overlayH := rootBodyHeight(m)
 		if m.mode == ModeConfigPicker {
 			// Top-anchored so the modal doesn't jump when the harness-switch
 			// warning is appended/removed.
-			sb.WriteString(layout.TopCenterOverlay(base, popup, m.width, overlayH, true))
+			sb.WriteString(layout.TopCenterOverlay(base, popup, m.width, chrome.bodyHeight(), true))
 		} else {
-			sb.WriteString(layout.CenterOverlay(base, popup, m.width, overlayH, true))
+			sb.WriteString(layout.CenterOverlay(base, popup, m.width, chrome.bodyHeight(), true))
 		}
 	default:
-		// Header area varies by mode; list is always shown below.
+		// Header area varies by mode; list is always shown below. ModeList never
+		// arrives here — renderRootFrame routes it to the canonical dashboard
+		// frame, which is where the chrome between the header and the list is
+		// drawn.
 		switch m.mode {
 		case ModeSearch:
 			sb.WriteString(renderSearch(m))
 		default:
 			sb.WriteString(renderHeader(m))
 		}
-		if m.mode == ModeList {
-			sb.WriteString(renderDeprecationBanner(m))
-			sb.WriteString(renderLegend(m))
-			sb.WriteString(renderChips(m, m.width))
-			sb.WriteString(renderInlineFilter(m))
-		}
-		if m.mode == ModeList {
-			sb.WriteString(renderSplit(m))
-		} else {
-			sb.WriteString(renderList(m))
-		}
+		sb.WriteString(renderList(m))
 		sb.WriteString(renderDetailStripBlock(m))
 	}
 
-	return composeRootView(sb.String(), m)
+	return sb.String()
 }
 
 // rootBaseView renders the full-layout view that currently owns the screen, so
 // an overlay raised from Worktrees or Runs dims that view rather than the
 // dashboard the operator is not looking at.
 func rootBaseView(m Model) string {
-	switch m.activeRootMode() {
+	return rootBaseViewFor(m, m.activeRootMode())
+}
+
+// rootBaseViewFor is the one place that answers "which view owns the screen
+// behind this overlay". Both callers reach it: the overlay composition through
+// activeRootMode, and the help overlay through its own recorded return mode.
+// They used to be separate switches over overlapping sets of modes, so a
+// backdrop could be correct under esc-from-help and wrong under esc-from-
+// confirm for the very same screen.
+func rootBaseViewFor(m Model, mode Mode) string {
+	switch mode {
+	case ModePicker:
+		return renderPicker(m)
+	case ModeSessionSearch:
+		return renderSessionSearch(m)
+	case ModeSessionView:
+		return renderSessionView(m)
+	case ModePlanSearch:
+		return renderPlanSearch(m)
+	case ModePlanView:
+		return renderPlanView(m)
 	case ModeWorktrees:
 		return renderWorktrees(m)
 	case ModeASLRuns:
@@ -158,69 +197,95 @@ func rootBaseView(m Model) string {
 	}
 }
 
-func composeRootView(body string, m Model) string {
-	bodyLines := layout.SectionLines(body)
-	footerLines := rootFooterLines(m)
-	status := renderStatusBar(m)
-
-	paddingLines := 1
-	if m.height > 0 {
-		footerBudget := m.height - statusBarLines
-		if footerBudget < 0 {
-			footerBudget = 0
-		}
-		if len(footerLines) > footerBudget {
-			footerLines = footerLines[len(footerLines)-footerBudget:]
-		}
-
-		bodyBudget := m.height - len(footerLines) - statusBarLines
-		if bodyBudget < 0 {
-			bodyBudget = 0
-		}
-		if len(bodyLines) > bodyBudget {
-			bodyLines = bodyLines[:bodyBudget]
-		}
-		paddingLines = bodyBudget - len(bodyLines)
-	}
-
-	lines := make([]string, 0, len(bodyLines)+paddingLines+len(footerLines)+statusBarLines)
-	lines = append(lines, bodyLines...)
-	for i := 0; i < paddingLines; i++ {
-		lines = append(lines, "")
-	}
-	lines = append(lines, footerLines...)
-	lines = append(lines, status)
-	return strings.Join(lines, "\n")
+// rootChrome is the bottom-of-screen budget a composed screen is laid out
+// against: the reflowed footer rows and the sticky status row, measured once.
+//
+// Measuring once is not only a cost argument, though the ModeList footer is the
+// expensive thing on the frame — its position indicator is derived from the
+// list height, which is derived from the footer's own row count, so measuring
+// it iterates to a fixpoint and each iteration re-renders the chrome above the
+// list. It is also a correctness one: the composition clips the body to the
+// rows the footer left it, and an overlay is centred in the rows the footer
+// left it, and those were two separate calculations over two separate
+// measurements of the same footer.
+type rootChrome struct {
+	// footer holds the footer rows already trimmed to what the terminal can
+	// actually show, so len(footer) is what the composition will spend rather
+	// than what the footer asked for.
+	footer []string
+	status string
+	// height is the terminal height the trim was resolved against. A
+	// non-positive height means "not yet resized": nothing is clipped and the
+	// body keeps its natural length.
+	height int
 }
 
-func rootBodyHeight(m Model) int {
-	if m.height <= 0 {
+func newRootChrome(m Model) rootChrome {
+	c := rootChrome{
+		footer: layout.SectionLines(renderFooter(m)),
+		status: renderStatusBar(m),
+		height: m.height,
+	}
+	if c.height > 0 {
+		budget := c.height - statusBarLines
+		if budget < 0 {
+			budget = 0
+		}
+		if len(c.footer) > budget {
+			c.footer = c.footer[len(c.footer)-budget:]
+		}
+	}
+	return c
+}
+
+// bodyHeight is the rows left for the body above the footer and status row.
+func (c rootChrome) bodyHeight() int {
+	if c.height <= 0 {
 		return 0
 	}
-	h := m.height - len(rootFooterLines(m)) - statusBarLines
+	h := c.height - len(c.footer) - statusBarLines
 	if h < 0 {
 		return 0
 	}
 	return h
 }
 
-func rootFooterLines(m Model) []string {
-	return layout.SectionLines(renderFooter(m))
+// compose stacks body, padding, footer, and status into the final screen,
+// clipping the body to bodyHeight and padding it out to the same when it is
+// short. The result is exactly the terminal's height whenever there is one.
+func (c rootChrome) compose(body string) string {
+	bodyLines := layout.SectionLines(body)
+	paddingLines := 1
+	if c.height > 0 {
+		budget := c.bodyHeight()
+		if len(bodyLines) > budget {
+			bodyLines = bodyLines[:budget]
+		}
+		paddingLines = budget - len(bodyLines)
+	}
+
+	lines := make([]string, 0, len(bodyLines)+paddingLines+len(c.footer)+statusBarLines)
+	lines = append(lines, bodyLines...)
+	for i := 0; i < paddingLines; i++ {
+		lines = append(lines, "")
+	}
+	lines = append(lines, c.footer...)
+	lines = append(lines, c.status)
+	return strings.Join(lines, "\n")
 }
 
-// renderDashboard emits the canonical ModeList layout — header, deprecation
-// banner, legend, chips, spacer, then list (or list+preview split).
-// Overlay-modal modes use this as the dimmed base view behind their popup.
-func renderDashboard(m Model) string {
-	var sb strings.Builder
-	sb.WriteString(renderHeader(m))
-	sb.WriteString(renderDeprecationBanner(m))
-	sb.WriteString(renderLegend(m))
-	sb.WriteString(renderChips(m, m.width))
-	sb.WriteString(renderInlineFilter(m))
-	sb.WriteString(renderSplit(m))
-	sb.WriteString(renderDetailStripBlock(m))
-	return sb.String()
+// rootBodyHeight is the body-row budget for callers that are sizing one surface
+// rather than composing a whole frame. renderRootFrame does not use it: it
+// holds a rootChrome already and asking again would measure the footer twice.
+func rootBodyHeight(m Model) int {
+	return newRootChrome(m).bodyHeight()
+}
+
+// rootFooterLines is the footer rows the composition will spend, for the same
+// one-surface callers. Trimmed, because a row the terminal cannot show is not a
+// row anything downstream should budget for.
+func rootFooterLines(m Model) []string {
+	return newRootChrome(m).footer
 }
 
 const (
@@ -348,8 +413,7 @@ func dashboardGeometry(m Model) dashboardGeom {
 	if width < 0 {
 		width = 0
 	}
-	paneHeight := m.height - chromeAboveListLines(m) - chromeBelowListLines(m) -
-		1 /* padding row */ - footerBudgetLines(m) - statusBarLines
+	paneHeight := dashboardChromeFor(m).paneRows(m.height)
 
 	listWidth, previewWidth, horizontal := dashboardSplitWidths(m)
 	vertical := dashboardPreviewRequested(m) && width >= previewMinPaneWidth &&
@@ -424,41 +488,6 @@ func clampListHeight(h int) int {
 		return listMinVisible
 	}
 	return h
-}
-
-// renderSplit renders the list and preview pane side-by-side or stacked
-// according to the resolved geometry. Falls back to the plain list when
-// dimensions make the preview unusable.
-func renderSplit(m Model) string {
-	g := dashboardGeometry(m)
-	if !g.split {
-		if !g.rail {
-			return renderListAt(m, g.listWidth, g.listHeight)
-		}
-		return renderRailList(m, g) + "\n"
-	}
-	if g.vertical {
-		mainView := renderRailList(m, g)
-		divider := styleDim.Render(strings.Repeat("─", m.width))
-		return lipgloss.JoinVertical(lipgloss.Left, mainView, divider,
-			renderPreviewPane(m, g.previewWidth, g.previewHeight)) + "\n"
-	}
-	listView := renderRailList(m, g)
-	divider := strings.Repeat(styleDim.Render("│")+"\n", g.listHeight)
-	divider = strings.TrimRight(divider, "\n")
-	return lipgloss.JoinHorizontal(lipgloss.Top, listView, divider,
-		renderPreviewPane(m, g.previewWidth, g.previewHeight)) + "\n"
-}
-
-func renderRailList(m Model, g dashboardGeom) string {
-	listView := renderListAt(m, g.listWidth, g.listHeight)
-	if !g.rail {
-		return listView
-	}
-	railView := renderProjectRail(m, g.railWidth, g.railHeight)
-	divider := strings.Repeat(styleDim.Render("│")+"\n", g.listHeight)
-	divider = strings.TrimRight(divider, "\n")
-	return lipgloss.JoinHorizontal(lipgloss.Top, railView, divider, listView)
 }
 
 // renderPreviewPane paints whatever the current selection makes the pane mean.

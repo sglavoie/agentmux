@@ -1,11 +1,9 @@
 package tui
 
 import (
-	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -46,11 +44,6 @@ type mouseHitMap struct {
 	railPane dashboard.HitRect
 	hasList  bool
 	hasRail  bool
-}
-
-type dashboardHitRender struct {
-	text   string
-	hitMap mouseHitMap
 }
 
 type mouseActionKind int
@@ -116,131 +109,6 @@ func translateHitRect(r dashboard.HitRect, x, y int) dashboard.HitRect {
 	r.X += x
 	r.Y += y
 	return r
-}
-
-func renderedRows(s string) int {
-	if s == "" {
-		return 0
-	}
-	n := strings.Count(s, "\n")
-	if !strings.HasSuffix(s, "\n") {
-		n++
-	}
-	return n
-}
-
-// renderDashboardWithHits is the semantic form beneath the ordinary dashboard
-// string renderer. Each child contributes text and regions together, so ANSI
-// styling, wide glyphs, wrapped chips, group headings, and pane composition
-// cannot move a target without moving the region produced beside it.
-func renderDashboardWithHits(m Model) dashboardHitRender {
-	var sb strings.Builder
-	var hitMap mouseHitMap
-	y := 0
-
-	header := renderHeaderWithHits(m)
-	sb.WriteString(header.text)
-	for _, hit := range header.hits {
-		hit.rect = translateHitRect(hit.rect, 0, y)
-		hitMap.clicks = append(hitMap.clicks, hit)
-	}
-	y += renderedRows(header.text)
-
-	for _, block := range []string{renderDeprecationBanner(m), renderLegend(m)} {
-		sb.WriteString(block)
-		y += renderedRows(block)
-	}
-
-	chips := dashboard.RenderChipsWithHits(m.activeFilter, dashboard.ProfileColorMap(m.cfg), m.focusedChipIdx, m.width)
-	sb.WriteString(chips.Text)
-	for _, chip := range chips.Hits {
-		hitMap.clicks = append(hitMap.clicks, mouseHitRegion{
-			kind: mouseHitChip, rect: translateHitRect(chip.Rect, 0, y),
-			filterRaw: m.activeFilter.Raw, chipIndex: chip.Index, chipLabel: chip.Label,
-		})
-	}
-	y += renderedRows(chips.Text)
-
-	spacer := renderInlineFilter(m)
-	sb.WriteString(spacer)
-	y += renderedRows(spacer)
-
-	panes := renderSplitWithHits(m)
-	sb.WriteString(panes.text)
-	for _, hit := range panes.hitMap.clicks {
-		hit.rect = translateHitRect(hit.rect, 0, y)
-		hitMap.clicks = append(hitMap.clicks, hit)
-	}
-	if panes.hitMap.hasList {
-		hitMap.listPane = translateHitRect(panes.hitMap.listPane, 0, y)
-		hitMap.hasList = true
-	}
-	if panes.hitMap.hasRail {
-		hitMap.railPane = translateHitRect(panes.hitMap.railPane, 0, y)
-		hitMap.hasRail = true
-	}
-
-	sb.WriteString(renderDetailStripBlock(m))
-	return dashboardHitRender{text: sb.String(), hitMap: hitMap}
-}
-
-func renderSplitWithHits(m Model) dashboardHitRender {
-	g := dashboardGeometry(m)
-	list := dashboard.RenderListWithHits(dashboardListInput(m, g.listWidth, g.listHeight))
-	result := dashboardHitRender{text: list.Text}
-	listX := 0
-
-	var rail dashboard.RailRender
-	if g.rail {
-		rail = dashboard.RenderRailWithHits(dashboard.RailInput{
-			Rows: dashboardRailRows(m), Cursor: m.railCursor, Offset: m.railOffset,
-			Width: g.railWidth, Height: g.railHeight, AppliedProject: m.activeFilter.Project, Focused: m.railFocused,
-		})
-		divider := strings.TrimRight(strings.Repeat(styleDim.Render("│")+"\n", g.listHeight), "\n")
-		result.text = lipgloss.JoinHorizontal(lipgloss.Top, rail.Text, divider, list.Text)
-		listX = g.railWidth + 1
-		result.hitMap.railPane = dashboard.HitRect{Width: g.railWidth, Height: g.railHeight}
-		result.hitMap.hasRail = true
-		for _, hit := range rail.Hits {
-			result.hitMap.clicks = append(result.hitMap.clicks, mouseHitRegion{
-				kind: mouseHitRailRow, rect: hit.Rect, project: hit.Project, railLabel: hit.Label,
-			})
-		}
-	}
-
-	for _, hit := range list.Hits {
-		row := translateHitRect(hit.Rect, listX, 0)
-		if hit.HasChevron {
-			result.hitMap.clicks = append(result.hitMap.clicks, mouseHitRegion{
-				kind:            mouseHitFamilyChevron,
-				rect:            dashboard.HitRect{X: listX + hit.ChevronX, Y: hit.Rect.Y, Width: 1, Height: 1},
-				identity:        hit.Identity,
-				familyCollapsed: hit.Collapsed,
-			})
-			result.hitMap.clicks = append(result.hitMap.clicks, mouseHitRegion{kind: mouseHitFamily, rect: row, identity: hit.Identity})
-		} else {
-			result.hitMap.clicks = append(result.hitMap.clicks, mouseHitRegion{kind: mouseHitSession, rect: row, identity: hit.Identity})
-		}
-	}
-	result.hitMap.listPane = dashboard.HitRect{X: listX, Width: g.listWidth, Height: g.listHeight}
-	result.hitMap.hasList = true
-
-	if !g.split {
-		if g.rail {
-			result.text += "\n"
-		}
-		return result
-	}
-	if g.vertical {
-		divider := styleDim.Render(strings.Repeat("─", m.width))
-		result.text = lipgloss.JoinVertical(lipgloss.Left, result.text, divider,
-			renderPreviewPane(m, g.previewWidth, g.previewHeight)) + "\n"
-		return result
-	}
-	divider := strings.TrimRight(strings.Repeat(styleDim.Render("│")+"\n", g.listHeight), "\n")
-	result.text = lipgloss.JoinHorizontal(lipgloss.Top, result.text, divider,
-		renderPreviewPane(m, g.previewWidth, g.previewHeight)) + "\n"
-	return result
 }
 
 func (m mouseHitMap) handler() func(tea.MouseMsg) tea.Cmd {
