@@ -6,14 +6,11 @@
 package tui
 
 import (
-	"time"
-
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/tui/asl"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
-	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 // handleKey dispatches key events by current mode.
@@ -248,10 +245,13 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// reset); fall through so the keypress hits its normal handler.
 	}
 
+	// What remains in this switch is everything a dashboard key can do that is
+	// not a catalog command: moving the cursor, folding a family, editing the
+	// filter chips, and opening the two surfaces (the palette and the actions
+	// overlay) that offer commands rather than being one. Every other key falls
+	// through to the binding table, which is the same declaration the palette
+	// and the footer read.
 	switch key {
-	case keyCtrlC, keyQ:
-		return m, tea.Quit
-
 	case keyJ, keyDown:
 		m.cursor = clamp(m.cursor+1, 0, m.listItemCount()-1)
 		scrollListToCursor(&m)
@@ -381,15 +381,15 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-	case keySlash:
-		return m, m.enterFilter("")
-
-	case keyF:
-		return m, m.cycleDashboardProfile()
-
 	case keyColon:
 		m.openCommandPalette()
 
+	// enter and space reach the binding table, but only after the two things
+	// they mean on a row that is not a session. A focused chip and a family
+	// summary are list structure rather than targets, and neither is expressible
+	// as a command: the summary in particular must never become one, since a
+	// synthetic row standing for several sessions has no single session to act
+	// on. Both branches answer here and the keypress never reaches FocusSession.
 	case keyEnter:
 		if m.focusedChipIdx >= 0 {
 			return m, m.applyFilterChange(m.activeFilter.RemoveComponent(m.focusedChipIdx))
@@ -397,17 +397,25 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.summarySelected() {
 			return m, m.toggleSelectedFamily()
 		}
-		if s, ok := m.selectedSession(); ok {
-			return m, commands.Focus(m.client, s.TabID)
-		}
+		return m.runDashboardBinding(key)
 
 	case keySpace:
 		if m.summarySelected() {
 			return m, m.toggleSelectedFamily()
 		}
+		return m.runDashboardBinding(key)
+
+	case keyA:
+		// The actions overlay is a surface over the commands, not one of them,
+		// so it keeps its own case. It captures its target the same way the
+		// bindings do, which is what keeps a family summary out of it.
 		if s, ok := m.selectedSession(); ok {
-			return m, commands.Focus(m.client, s.TabID)
+			m.targetSession = s
+			m.actionErr = nil
+			m.actionsOffset = 0
+			m.mode = ModeActions
 		}
+		return m, nil
 
 	case keyCollapse:
 		if m.listView == dashboard.ViewUrgency {
@@ -442,205 +450,9 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, m.applyFilterChange(m.activeFilter.RemoveComponent(m.focusedChipIdx))
 		}
 
-	case keyEsc:
-		// Clear active filter and any chip focus so a single esc returns the
-		// user to a clean list.
-		return m, m.applyFilterChange(dashboard.Filter{})
-
-	case keyQuestion:
-		m.openHelp(ModeList)
-
-	case keyL:
-		m.pickerSessions = launch.SortSessions(m.cfg.Sessions)
-		m.pickerRunning = launch.BuildRunning(m.sessions)
-		m.pickerSelected = make(map[int]bool)
-		m.pickerProfileOverride, m.pickerPinned = launch.LoadState(m.pickerSessions)
-		m.pickerCursor = 0
-		m.pickerFilter = ""
-		m.pickerProfileFilter = ""
-		m.pickerSearchMode = false
-		m.pickerFilteredIdx = m.pickerFilteredIndices("")
-		m.mode = ModePicker
-		if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
-			return m, cmd
-		}
-
-	case keyResort:
-		// Resort is a global, top-level action.
-		m.actionErr = nil
-		cmds := []tea.Cmd{commands.Resort(m.client, m.sortMode)}
-		if c := m.pushToast(Toast{
-			Severity: toastInfo,
-			Text:     "Resorting tabs…",
-			Expires:  time.Now().Add(progressToastTTL),
-		}); c != nil {
-			cmds = append(cmds, c)
-		}
-		return m, tea.Batch(cmds...)
-
 	default:
-		switch key {
-		case keyToggleRail:
-			m.toggleRail()
-			return m, nil
-		case keyTogglePreview:
-			updated, cmd := m.togglePreview()
-			out := updated.(Model)
-			out.syncRailState()
-			return out, cmd
-		case keyToggleView:
-			return m, m.toggleListView()
-		case keyA:
-			if s, ok := m.selectedSession(); ok {
-				m.targetSession = s
-				m.actionErr = nil
-				m.actionsOffset = 0
-				m.mode = ModeActions
-			}
-			return m, nil
-		case keyE:
-			if s, ok := m.selectedSession(); ok {
-				return m, commands.Peek(m.client, s.WindowID)
-			}
-			return m, nil
-		case keyR:
-			if s, ok := m.selectedSession(); ok {
-				if s.Locked {
-					return m, m.lockedDenyToast()
-				}
-				m.targetSession = s
-				m.actionErr = nil
-				m.confirmAction = "restart"
-				m.confirmConsequence = restartConsequence
-				m.mode = ModeConfirm
-				return m, nil
-			}
-			return m, nil
-		case keyClose:
-			if s, ok := m.selectedSession(); ok {
-				if s.Locked {
-					return m, m.lockedDenyToast()
-				}
-				m.targetSession = s
-				m.actionErr = nil
-				if m.cfg.Defaults.ConfirmDestructive {
-					m.confirmAction = "close"
-					m.confirmConsequence = closeConsequence
-					m.mode = ModeConfirm
-					return m, nil
-				}
-				return m, m.closeWithToast(m.targetSession)
-			}
-			return m, nil
-		case keyU:
-			return m, m.undoLastCmd()
-		case keyC:
-			if s, ok := m.selectedSession(); ok {
-				if s.Locked {
-					return m, m.lockedDenyToast()
-				}
-				m.targetSession = s
-				m.configPickerAccounts = m.cfg.Accounts
-				m.configPickerCurrent = m.targetSession.EffectiveProfile()
-				m.configPickerCursor = launch.AccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
-				m.configPickerPurpose = launch.ConfigPickerRestartProfile
-				m.configPickerReturnMode = ModeList
-				m.configPickerProjectIdx = -1
-				m.actionErr = nil
-				m.mode = ModeConfigPicker
-			}
-			return m, nil
-		case keyDashboardLaunch:
-			if s, ok := m.selectedSession(); ok {
-				m.targetSession = s
-				m.configPickerAccounts = m.cfg.Accounts
-				m.configPickerCurrent = m.targetSession.EffectiveProfile()
-				m.configPickerCursor = launch.AccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
-				m.configPickerPurpose = launch.ConfigPickerDashboardLaunch
-				m.configPickerReturnMode = ModeList
-				m.configPickerProjectIdx = -1
-				m.actionErr = nil
-				m.mode = ModeConfigPicker
-			}
-			return m, nil
-		case keyClearStatus:
-			if s, ok := m.selectedSession(); ok {
-				m.targetSession = s
-				if dashboard.StateGroup(m.targetSession, m.lastActivity, m.idleThreshold) != 0 {
-					return m, nil
-				}
-				m.actionErr = nil
-				return m, m.clearStatusCmd(m.targetSession)
-			}
-			return m, nil
-		case keyLock:
-			if s, ok := m.selectedSession(); ok {
-				m.actionErr = nil
-				return m, commands.ToggleLock(m.client, s)
-			}
-			return m, nil
-		case keyM:
-			if s, ok := m.selectedSession(); ok {
-				m.actionErr = nil
-				return m, commands.ToggleMute(m.client, s)
-			}
-			return m, nil
-		case keyO:
-			if s, ok := m.selectedSession(); ok {
-				if cs, found := commands.FindConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject()); found {
-					m.targetSession = s
-					m.actionErr = nil
-					return m, commands.OpenDirectory(m.client, m.cfg, cs)
-				}
-			}
-			return m, nil
-		case keyOpenEditor:
-			if s, ok := m.selectedSession(); ok {
-				if cs, found := commands.FindConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject()); found {
-					m.targetSession = s
-					m.actionErr = nil
-					return m, commands.OpenInEditor(m.client, m.cfg, cs)
-				}
-			}
-			return m, nil
-		case keyY:
-			if s, ok := m.selectedSession(); ok {
-				title := dashboard.SessionDisplayTitle(s)
-				m.actionErr = nil
-				return m, commands.CopyTitle(title)
-			}
-			return m, nil
-		case keySessionSearch:
-			return m.enterSessionSearch()
-		case keyProjectSessionSearch:
-			s, ok := m.selectedSession()
-			if !ok {
-				return m, nil
-			}
-			return m.enterSessionSearchForProject(s.EffectiveProject())
-		case keyPlanSearch:
-			return m.enterPlanSearch()
-		case keyWorktrees:
-			return m.enterWorktrees()
-		case keyASLRuns:
-			return m.enterASLRuns()
-		case keyD:
-			if !m.deprecationDismissed && len(m.deprecations) > 0 {
-				// Banner dismissal first when one is visible; the detail
-				// pane is opened on a subsequent press once the banner
-				// is gone.
-				m.deprecationDismissed = true
-				return m, nil
-			}
-			s, ok := m.selectedSession()
-			if !ok {
-				return m, nil
-			}
-			return m.enterDetailMode(s.WindowID, false)
-		case keyOpenTimeline:
-			if s, ok := m.selectedSession(); ok {
-				return m.enterDetailMode(s.WindowID, true)
-			}
+		if updated, cmd, claimed := m.dispatchDashboardBinding(key); claimed {
+			return updated, cmd
 		}
 	}
 

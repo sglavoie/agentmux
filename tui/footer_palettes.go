@@ -41,6 +41,12 @@ const (
 
 func footerAlways(Model) bool { return true }
 
+// footerNever is the availability of an entry that has nothing behind it — a
+// command-backed candidate whose command no key binds. It renders dim rather
+// than crashing, which keeps a mistake in the binding table visible in the
+// footer instead of taking the dashboard down with it.
+func footerNever(Model) bool { return false }
+
 func hasSessionResult(m Model) bool {
 	return m.sessionCursor >= 0 && m.sessionCursor < len(m.sessionResults)
 }

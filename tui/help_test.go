@@ -65,7 +65,7 @@ func TestDashboardHelpDocumentsEveryFooterBinding(t *testing.T) {
 // row for either would advertise a keystroke that does not exist.
 func TestDashboardHelpOmitsNonBindingCandidates(t *testing.T) {
 	metadata := 0
-	for _, c := range listFooterPalette {
+	for _, c := range listFooterPalette() {
 		if c.textFor == nil {
 			continue
 		}
@@ -77,7 +77,7 @@ func TestDashboardHelpOmitsNonBindingCandidates(t *testing.T) {
 	if metadata == 0 {
 		t.Fatal("the palette declares no metadata candidates; this guard is inert")
 	}
-	if got, want := len(listFooterBindings()), len(listFooterPalette)-metadata; got != want {
+	if got, want := len(listFooterBindings()), len(listFooterPalette())-metadata; got != want {
 		t.Errorf("listFooterBindings() returned %d entries, want %d bindings", got, want)
 	}
 }

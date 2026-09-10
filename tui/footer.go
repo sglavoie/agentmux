@@ -597,6 +597,40 @@ func listBinding(key, label, section string, priority int, avail func(Model) boo
 	return listFooterCandidate{footerEntry: footerEntry{key, label, section, avail, priority}}
 }
 
+// listCommandBinding is a footer entry whose key, label, and availability all
+// come from the dashboard binding table rather than being restated here. Only
+// the section and the priority band are the footer's own business: they say
+// where the entry is drawn and what it costs, which is a layout decision the
+// binding has no opinion about.
+//
+// The availability is the command's own — the same question the palette asks —
+// so a key rendered live is a key that will do something and a dim one will not.
+// The exception is a binding the key runs unchecked: that key always acts, and
+// the command reports its own refusal to the operator, so dimming it in the
+// footer would contradict what pressing it does.
+func listCommandBinding(bindings commands.BindingSet, id commands.ID, section string, priority int) listFooterCandidate {
+	binding, ok := bindings.Of(id)
+	if !ok {
+		// Unreachable while the table is the only source of dashboard keys; a
+		// footer entry for a command nothing binds would draw an empty key.
+		return listBinding("", "", section, priority, footerNever)
+	}
+	avail := dashboardCommandAvailable(id)
+	if binding.Gate == commands.GateUnchecked {
+		avail = footerAlways
+	}
+	return listBinding(binding.Key(), binding.Hint, section, priority, avail)
+}
+
+// availableWhen overrides the availability a command-backed entry derives, for
+// the two footer keys that mean more on the dashboard than the command they
+// dispatch. It exists so the override has to be written down beside a reason
+// rather than achieved by quietly declaring the entry as a literal.
+func (c listFooterCandidate) availableWhen(fn func(Model) bool) listFooterCandidate {
+	c.availFn = fn
+	return c
+}
+
 func listMetadata(priority int, text func(m Model, position string) string) listFooterCandidate {
 	return listFooterCandidate{footerEntry: footerEntry{priority: priority}, textFor: text}
 }
@@ -620,66 +654,83 @@ func (c listFooterCandidate) shownWhen(fn func(Model) bool) listFooterCandidate 
 // so the row is always a prefix of this list plus `? more`. Nothing is lost by
 // dropping — every candidate here is documented in the generated Dashboard help
 // section, and most are also reachable from the command palette.
-var listFooterPalette = []listFooterCandidate{
-	// Essential: the six commands without which the dashboard cannot be driven at
-	// all — move the cursor, act on what it holds, reach every other command, and
-	// find out what those are. Dropping any of them would leave a row that cannot
-	// lead anywhere, so none of them ever drop.
-	listBinding("j/k", "up/down", footerSectionApp, footerPriorityEssential, footerAlways),
-	// enter is not a row action even though it usually acts on one: on a project
-	// summary it folds, which is why it is available in every state and lives
-	// outside the row section that dims itself on a summary.
-	listBinding("enter", "focus", footerSectionApp, footerPriorityEssential, footerAlways).
-		respelled(listEnterKey, listEnterLabel),
-	listBinding("a", "actions", footerSectionRow, footerPriorityEssential, hasRow),
-	listBinding(":", "commands", footerSectionApp, footerPriorityEssential, footerAlways),
-	listBinding("/", "filter", footerSectionApp, footerPriorityEssential, footerAlways),
-	listBinding("?", "help", footerSectionApp, footerPriorityEssential, footerAlways),
+// It is a function rather than a package variable because the command-backed
+// entries read the catalog, and the catalog's preview gate measures this very
+// footer. As a variable that would be an initialization cycle; as a function it
+// is just the ordinary recursion the budget already resolves.
+func listFooterPalette() []listFooterCandidate {
+	// Read once and threaded through: the table is rebuilt per call, and asking
+	// it for each of twenty entries would rebuild it twenty times per measured
+	// frame.
+	bindings := dashboardBindings()
+	return []listFooterCandidate{
+		// Essential: the six commands without which the dashboard cannot be driven
+		// at all — move the cursor, act on what it holds, reach every other command,
+		// and find out what those are. Dropping any of them would leave a row that
+		// cannot lead anywhere, so none of them ever drop.
+		listBinding("j/k", "up/down", footerSectionApp, footerPriorityEssential, footerAlways),
+		// enter is not a row action even though it usually acts on one: on a project
+		// summary it folds and on the rail it applies a scope, neither of which is
+		// FocusSession. Its key and label come from the binding, but its
+		// availability cannot, because the two other things it does are available
+		// exactly when focusing is not.
+		listCommandBinding(bindings, commands.FocusSession, footerSectionApp, footerPriorityEssential).
+			availableWhen(footerAlways).
+			respelled(listEnterKey, listEnterLabel),
+		listBinding("a", "actions", footerSectionRow, footerPriorityEssential, hasRow),
+		listBinding(":", "commands", footerSectionApp, footerPriorityEssential, footerAlways),
+		listCommandBinding(bindings, commands.FilterSessions, footerSectionApp, footerPriorityEssential),
+		listCommandBinding(bindings, commands.ShowKeyboardHelp, footerSectionApp, footerPriorityEssential),
 
-	// Primary: where the cursor sits, what is filtering the list, and the rest of
-	// the ways to move or leave. The position fragment leads the band — and so
-	// outlives every key in it — because a list that is hiding rows and will not
-	// say so is the one thing no keypress recovers.
-	listMetadata(footerPriorityPrimary, listPositionText),
-	listBinding("esc", "clear filters", footerSectionApp, footerPriorityPrimary, footerAlways).
-		shownWhen(listFilterActive),
-	listBinding("1-9", "remove chip", footerSectionApp, footerPriorityPrimary, footerAlways).
-		shownWhen(listHasChips).respelled(listChipRangeKey, nil),
-	listBinding("tab", "focus next", footerSectionApp, footerPriorityPrimary, footerAlways).
-		shownWhen(listHasChips),
-	listBinding("]/[", "jump chord", footerSectionApp, footerPriorityPrimary, footerAlways),
-	listBinding("}/{", "jump + focus", footerSectionApp, footerPriorityPrimary, footerAlways),
-	listBinding("p", "preview", footerSectionApp, footerPriorityPrimary, footerAlways),
-	listBinding("b", "project rail", footerSectionApp, footerPriorityPrimary, listUrgencyView),
-	listBinding("←/→", "switch pane", footerSectionApp, footerPriorityPrimary, listRailVisible).
-		shownWhen(listUrgencyView),
-	// A view action, not a row action: switching the arrangement is available
-	// with the cursor on a summary, on a session, and on an empty list alike.
-	listBinding("v", "group view", footerSectionApp, footerPriorityPrimary, footerAlways),
-	listBinding("l", "launch", footerSectionLaunch, footerPriorityPrimary, footerAlways),
-	listBinding("q", "quit", footerSectionApp, footerPriorityPrimary, footerAlways),
+		// Primary: where the cursor sits, what is filtering the list, and the rest of
+		// the ways to move or leave. The position fragment leads the band — and so
+		// outlives every key in it — because a list that is hiding rows and will not
+		// say so is the one thing no keypress recovers.
+		listMetadata(footerPriorityPrimary, listPositionText),
+		// The command is hidden with no filter active and the entry is withheld in
+		// exactly that state, so deriving the availability too would only ever
+		// produce a dim key nothing draws.
+		listCommandBinding(bindings, commands.ClearFilters, footerSectionApp, footerPriorityPrimary).
+			availableWhen(footerAlways).
+			shownWhen(listFilterActive),
+		listBinding("1-9", "remove chip", footerSectionApp, footerPriorityPrimary, footerAlways).
+			shownWhen(listHasChips).respelled(listChipRangeKey, nil),
+		listBinding("tab", "focus next", footerSectionApp, footerPriorityPrimary, footerAlways).
+			shownWhen(listHasChips),
+		listBinding("]/[", "jump chord", footerSectionApp, footerPriorityPrimary, footerAlways),
+		listBinding("}/{", "jump + focus", footerSectionApp, footerPriorityPrimary, footerAlways),
+		listCommandBinding(bindings, commands.TogglePreview, footerSectionApp, footerPriorityPrimary),
+		listCommandBinding(bindings, commands.ToggleRail, footerSectionApp, footerPriorityPrimary),
+		listBinding("←/→", "switch pane", footerSectionApp, footerPriorityPrimary, listRailVisible).
+			shownWhen(listUrgencyView),
+		// A view action, not a row action: switching the arrangement is available
+		// with the cursor on a summary, on a session, and on an empty list alike.
+		listCommandBinding(bindings, commands.ToggleListView, footerSectionApp, footerPriorityPrimary),
+		listCommandBinding(bindings, commands.OpenLauncher, footerSectionLaunch, footerPriorityPrimary),
+		listCommandBinding(bindings, commands.Quit, footerSectionApp, footerPriorityPrimary),
 
-	// Secondary: the gloss that says what the cursor row's icon means, then the
-	// row actions reached often enough to be worth a key hint.
-	listMetadata(footerPrioritySecondary, listGlossText),
-	listBinding("e", "peek", footerSectionRow, footerPrioritySecondary, listPeekAvailable),
-	listBinding("T", "timeline", footerSectionRow, footerPrioritySecondary, hasRow),
-	listBinding("x", "clear", footerSectionRow, footerPrioritySecondary, listClearAvailable),
-	listBinding("r", "restart", footerSectionRow, footerPrioritySecondary, hasRow),
+		// Secondary: the gloss that says what the cursor row's icon means, then the
+		// row actions reached often enough to be worth a key hint.
+		listMetadata(footerPrioritySecondary, listGlossText),
+		listCommandBinding(bindings, commands.PeekScrollback, footerSectionRow, footerPrioritySecondary),
+		listCommandBinding(bindings, commands.ShowTimeline, footerSectionRow, footerPrioritySecondary),
+		listCommandBinding(bindings, commands.ClearStatusIcon, footerSectionRow, footerPrioritySecondary),
+		listCommandBinding(bindings, commands.RestartSession, footerSectionRow, footerPrioritySecondary),
 
-	// Extra: the tail the narrow footer sheds first. Every one of these is also
-	// in the actions overlay or the command palette, both of which the essential
-	// band keeps one keypress away.
-	listBinding("c", "profile", footerSectionRow, footerPriorityExtra, hasRow),
-	listBinding("C", "launch", footerSectionRow, footerPriorityExtra, hasRow),
-	listBinding("s", "project sessions", footerSectionRow, footerPriorityExtra, hasRow),
-	listBinding("X", "close", footerSectionRow, footerPriorityExtra, hasRow),
-	listBinding("o", "open dir", footerSectionRow, footerPriorityExtra, listConfiguredProject),
-	listBinding("O", "open in editor", footerSectionRow, footerPriorityExtra, listConfiguredProject),
-	listBinding("f", "profile", footerSectionLaunch, footerPriorityExtra, footerAlways),
-	listBinding("S", "sessions", footerSectionApp, footerPriorityExtra, footerAlways),
-	listBinding("P", "plans", footerSectionApp, footerPriorityExtra, footerAlways),
-	listBinding("R", "resort", footerSectionApp, footerPriorityExtra, footerAlways),
+		// Extra: the tail the narrow footer sheds first. Every one of these is also
+		// in the actions overlay or the command palette, both of which the essential
+		// band keeps one keypress away.
+		listCommandBinding(bindings, commands.OverrideProfile, footerSectionRow, footerPriorityExtra),
+		listCommandBinding(bindings, commands.LaunchAnother, footerSectionRow, footerPriorityExtra),
+		listCommandBinding(bindings, commands.SearchProject, footerSectionRow, footerPriorityExtra),
+		listCommandBinding(bindings, commands.CloseSession, footerSectionRow, footerPriorityExtra),
+		listCommandBinding(bindings, commands.OpenDirectoryID, footerSectionRow, footerPriorityExtra),
+		listCommandBinding(bindings, commands.OpenEditorID, footerSectionRow, footerPriorityExtra),
+		listCommandBinding(bindings, commands.CycleProfileFilter, footerSectionLaunch, footerPriorityExtra),
+		listCommandBinding(bindings, commands.SearchAllSessions, footerSectionApp, footerPriorityExtra),
+		listCommandBinding(bindings, commands.SearchPlans, footerSectionApp, footerPriorityExtra),
+		listCommandBinding(bindings, commands.ResortTabs, footerSectionApp, footerPriorityExtra),
+	}
 }
 
 func listEnterKey(m Model) string {
@@ -722,37 +773,6 @@ func listChipRangeKey(m Model) string {
 	return "1"
 }
 
-func listPeekAvailable(m Model) bool {
-	if m.railFocused {
-		return false
-	}
-	s, ok := m.selectedSession()
-	return ok && s.State == "bolt"
-}
-
-func listClearAvailable(m Model) bool {
-	if m.railFocused {
-		return false
-	}
-	s, ok := m.selectedSession()
-	if !ok {
-		return false
-	}
-	return dashboard.StateGroup(s, m.lastActivity, m.idleThreshold) == 0
-}
-
-func listConfiguredProject(m Model) bool {
-	if m.railFocused {
-		return false
-	}
-	s, ok := m.selectedSession()
-	if !ok {
-		return false
-	}
-	_, found := commands.FindConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject())
-	return found
-}
-
 // listPositionText renders the `start–end of total` fragment the caller already
 // measured. It takes the position rather than deriving one because the layout
 // budget and the renderer must measure the same footer, and deriving it here
@@ -788,8 +808,9 @@ func listGlossText(m Model, _ string) string {
 // footerHintTokens, availFn is pure over the Model snapshot, so re-running it per
 // drop pass could only produce the same answer.
 func listFooterTokens(m Model, position string) []prioritizedFooterToken {
-	tokens := make([]prioritizedFooterToken, 0, len(listFooterPalette))
-	for _, c := range listFooterPalette {
+	palette := listFooterPalette()
+	tokens := make([]prioritizedFooterToken, 0, len(palette))
+	for _, c := range palette {
 		tok, ok := c.render(m, position)
 		if !ok {
 			continue
@@ -832,8 +853,9 @@ func (c listFooterCandidate) render(m Model, position string) (footerToken, bool
 // documents and what parity tests compare against: the footer may omit a
 // binding, but this projection never does.
 func listFooterBindings() []footerEntry {
-	out := make([]footerEntry, 0, len(listFooterPalette))
-	for _, c := range listFooterPalette {
+	palette := listFooterPalette()
+	out := make([]footerEntry, 0, len(palette))
+	for _, c := range palette {
 		if c.key == "" {
 			continue
 		}

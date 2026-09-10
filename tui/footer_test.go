@@ -91,7 +91,7 @@ func TestListFooterPaletteOrder(t *testing.T) {
 // prefix of.
 func shownFooterFragments(m Model) []string {
 	var out []string
-	for _, c := range listFooterPalette {
+	for _, c := range listFooterPalette() {
 		if c.textFor != nil {
 			continue
 		}
@@ -216,7 +216,7 @@ func TestListFooterTruncationKeepsTokensWhole(t *testing.T) {
 // isFooterMetadataToken reports whether tok is one of the two non-binding
 // candidates: the position fragment or the selected row's state gloss.
 func isFooterMetadataToken(m Model, tok string) bool {
-	for _, c := range listFooterPalette {
+	for _, c := range listFooterPalette() {
 		if c.textFor == nil {
 			continue
 		}

@@ -105,13 +105,29 @@ func openLauncherCommand(m Model, _ commands.Context) (Model, tea.Cmd) {
 	return m, m.refreshPreviewForPickerCursor()
 }
 
+// commandCatalog is the catalog every palette, footer, and dashboard key reads.
+//
+// The shortcut a palette row advertises is not written beside the command: it is
+// read back out of the dashboard binding table, which is the thing that actually
+// dispatches the key. A command nothing is bound to advertises no shortcut, and
+// a rebinding moves the palette label with it, because there is no second
+// spelling for either to drift from.
 func commandCatalog() []commands.Command[Model] {
+	bindings := dashboardBindings()
+	catalog := commandDeclarations()
+	for i := range catalog {
+		catalog[i].Shortcut = bindings.Display(catalog[i].ID)
+	}
+	return catalog
+}
+
+func commandDeclarations() []commands.Command[Model] {
 	return []commands.Command[Model]{
 		{
 			ID: commands.FocusSession, Group: commands.GroupSession,
-			Title:       commands.StaticTitle[Model]("Focus Selected Session"),
-			Description: "Jump to the selected session's Kitty tab.",
-			Aliases:     []string{"jump", "tab"}, Shortcut: "enter / space",
+			Title:        commands.StaticTitle[Model]("Focus Selected Session"),
+			Description:  "Jump to the selected session's Kitty tab.",
+			Aliases:      []string{"jump", "tab"},
 			Availability: sessionCommandAvailability,
 			Execute: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
 				m.actionErr = nil
@@ -120,9 +136,9 @@ func commandCatalog() []commands.Command[Model] {
 		},
 		{
 			ID: commands.PeekScrollback, Group: commands.GroupSession,
-			Title:       commands.StaticTitle[Model]("Peek Scrollback"),
-			Description: "Open the active session's scrollback in an overlay pager.",
-			Aliases:     []string{"pager", "scrollback"}, Shortcut: keyE,
+			Title:        commands.StaticTitle[Model]("Peek Scrollback"),
+			Description:  "Open the active session's scrollback in an overlay pager.",
+			Aliases:      []string{"pager", "scrollback"},
 			Availability: peekCommandAvailability,
 			Execute: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
 				m.actionErr = nil
@@ -131,9 +147,9 @@ func commandCatalog() []commands.Command[Model] {
 		},
 		{
 			ID: commands.RestartSession, Group: commands.GroupSession,
-			Title:       commands.StaticTitle[Model]("Restart Session"),
-			Description: "Confirm before closing and relaunching the selected session.",
-			Aliases:     []string{"relaunch"}, Shortcut: keyR,
+			Title:        commands.StaticTitle[Model]("Restart Session"),
+			Description:  "Confirm before closing and relaunching the selected session.",
+			Aliases:      []string{"relaunch"},
 			Availability: unlockedSessionCommandAvailability,
 			Execute: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
 				m.targetSession = ctx.Target
@@ -147,9 +163,9 @@ func commandCatalog() []commands.Command[Model] {
 		},
 		{
 			ID: commands.OverrideProfile, Group: commands.GroupSession,
-			Title:       commands.StaticTitle[Model]("Override Profile"),
-			Description: "Restart the selected session under a different harness profile.",
-			Aliases:     []string{"account", "profile"}, Shortcut: keyC,
+			Title:        commands.StaticTitle[Model]("Override Profile"),
+			Description:  "Restart the selected session under a different harness profile.",
+			Aliases:      []string{"account", "profile"},
 			Availability: unlockedSessionCommandAvailability,
 			Execute: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
 				m.targetSession = ctx.Target
@@ -166,9 +182,9 @@ func commandCatalog() []commands.Command[Model] {
 		},
 		{
 			ID: commands.LaunchAnother, Group: commands.GroupSession,
-			Title:       commands.StaticTitle[Model]("Launch Another Session"),
-			Description: "Pick a profile and launch another session from the selected project.",
-			Aliases:     []string{"duplicate", "new"}, Shortcut: keyDashboardLaunch,
+			Title:        commands.StaticTitle[Model]("Launch Another Session"),
+			Description:  "Pick a profile and launch another session from the selected project.",
+			Aliases:      []string{"duplicate", "new"},
 			Availability: sessionCommandAvailability,
 			Execute: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
 				m.targetSession = ctx.Target
@@ -185,9 +201,9 @@ func commandCatalog() []commands.Command[Model] {
 		},
 		{
 			ID: commands.ClearStatusIcon, Group: commands.GroupSession,
-			Title:       commands.StaticTitle[Model]("Clear Status Icon"),
-			Description: "Drop the attention, key, or stop badge from the selected tab.",
-			Aliases:     []string{"attention", "badge", "icon"}, Shortcut: keyClearStatus,
+			Title:        commands.StaticTitle[Model]("Clear Status Icon"),
+			Description:  "Drop the attention, key, or stop badge from the selected tab.",
+			Aliases:      []string{"attention", "badge", "icon"},
 			Availability: clearStatusCommandAvailability,
 			Execute: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
 				m.targetSession = ctx.Target
@@ -197,9 +213,9 @@ func commandCatalog() []commands.Command[Model] {
 		},
 		{
 			ID: commands.CloseSession, Group: commands.GroupSession,
-			Title:       commands.StaticTitle[Model]("Close Session"),
-			Description: "Exit the harness process while preserving its transcript.",
-			Aliases:     []string{"exit", "kill"}, Shortcut: keyClose,
+			Title:        commands.StaticTitle[Model]("Close Session"),
+			Description:  "Exit the harness process while preserving its transcript.",
+			Aliases:      []string{"exit", "kill"},
 			Availability: unlockedSessionCommandAvailability,
 			Execute: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
 				m.targetSession = ctx.Target
@@ -216,9 +232,9 @@ func commandCatalog() []commands.Command[Model] {
 		},
 		{
 			ID: commands.OpenDirectoryID, Group: commands.GroupSession,
-			Title:       commands.StaticTitle[Model]("Open Directory in Shell"),
-			Description: "Open a plain shell tab in the selected project's directory.",
-			Aliases:     []string{"directory", "shell", "terminal"}, Shortcut: keyO,
+			Title:        commands.StaticTitle[Model]("Open Directory in Shell"),
+			Description:  "Open a plain shell tab in the selected project's directory.",
+			Aliases:      []string{"directory", "shell", "terminal"},
 			Availability: configuredProjectCommandAvailability,
 			Execute: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
 				cs, ok := commands.FindConfigSession(m.cfg, ctx.Target.EffectiveProfile(), ctx.Target.EffectiveProject())
@@ -232,9 +248,9 @@ func commandCatalog() []commands.Command[Model] {
 		},
 		{
 			ID: commands.OpenEditorID, Group: commands.GroupSession,
-			Title:       commands.StaticTitle[Model]("Open in Editor"),
-			Description: "Open the selected project in the configured editor.",
-			Aliases:     []string{"directory", "edit"}, Shortcut: keyOpenEditor,
+			Title:        commands.StaticTitle[Model]("Open in Editor"),
+			Description:  "Open the selected project in the configured editor.",
+			Aliases:      []string{"directory", "edit"},
 			Availability: configuredProjectCommandAvailability,
 			Execute: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
 				cs, ok := commands.FindConfigSession(m.cfg, ctx.Target.EffectiveProfile(), ctx.Target.EffectiveProject())
@@ -248,9 +264,9 @@ func commandCatalog() []commands.Command[Model] {
 		},
 		{
 			ID: commands.CopyTitleID, Group: commands.GroupSession,
-			Title:       commands.StaticTitle[Model]("Copy Session Title"),
-			Description: "Copy the selected session's display title to the clipboard.",
-			Aliases:     []string{"clipboard", "yank"}, Shortcut: keyY,
+			Title:        commands.StaticTitle[Model]("Copy Session Title"),
+			Description:  "Copy the selected session's display title to the clipboard.",
+			Aliases:      []string{"clipboard", "yank"},
 			Availability: sessionCommandAvailability,
 			Execute: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
 				m.actionErr = nil
@@ -265,8 +281,8 @@ func commandCatalog() []commands.Command[Model] {
 				}
 				return "Lock Session"
 			},
-			Description: "Toggle protection from close, restart, and profile override.",
-			Aliases:     []string{"protect", "unlock"}, Shortcut: keyLock,
+			Description:  "Toggle protection from close, restart, and profile override.",
+			Aliases:      []string{"protect", "unlock"},
 			Availability: sessionCommandAvailability,
 			Execute: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
 				m.actionErr = nil
@@ -281,8 +297,8 @@ func commandCatalog() []commands.Command[Model] {
 				}
 				return "Mute Session"
 			},
-			Description: "Toggle macOS notifications for the selected session.",
-			Aliases:     []string{"notifications", "unmute"}, Shortcut: keyM,
+			Description:  "Toggle macOS notifications for the selected session.",
+			Aliases:      []string{"notifications", "unmute"},
 			Availability: sessionCommandAvailability,
 			Execute: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
 				m.actionErr = nil
@@ -291,9 +307,9 @@ func commandCatalog() []commands.Command[Model] {
 		},
 		{
 			ID: commands.SearchProject, Group: commands.GroupSession,
-			Title:       commands.StaticTitle[Model]("Search This Project's Past Sessions"),
-			Description: "Search transcript history filtered to the selected project.",
-			Aliases:     []string{"history", "project", "transcripts"}, Shortcut: keyProjectSessionSearch,
+			Title:        commands.StaticTitle[Model]("Search This Project's Past Sessions"),
+			Description:  "Search transcript history filtered to the selected project.",
+			Aliases:      []string{"history", "project", "transcripts"},
 			Availability: sessionCommandAvailability,
 			Execute: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
 				updated, cmd := m.enterSessionSearchForProject(ctx.Target.EffectiveProject())
@@ -302,9 +318,9 @@ func commandCatalog() []commands.Command[Model] {
 		},
 		{
 			ID: commands.ShowDetails, Group: commands.GroupSession,
-			Title:       commands.StaticTitle[Model]("Show Session Details"),
-			Description: "Open the selected session's hook event log.",
-			Aliases:     []string{"events", "hooks"}, Shortcut: keyD,
+			Title:        commands.StaticTitle[Model]("Show Session Details"),
+			Description:  "Open the selected session's hook event log.",
+			Aliases:      []string{"events", "hooks"},
 			Availability: sessionCommandAvailability,
 			Execute: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
 				updated, cmd := m.enterDetailMode(ctx.Target.WindowID, false)
@@ -313,9 +329,9 @@ func commandCatalog() []commands.Command[Model] {
 		},
 		{
 			ID: commands.ShowTimeline, Group: commands.GroupSession,
-			Title:       commands.StaticTitle[Model]("Show Session Timeline"),
-			Description: "Open the selected session's events grouped into timeline phases.",
-			Aliases:     []string{"events", "phases"}, Shortcut: keyOpenTimeline,
+			Title:        commands.StaticTitle[Model]("Show Session Timeline"),
+			Description:  "Open the selected session's events grouped into timeline phases.",
+			Aliases:      []string{"events", "phases"},
 			Availability: sessionCommandAvailability,
 			Execute: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
 				updated, cmd := m.enterDetailMode(ctx.Target.WindowID, true)
@@ -327,7 +343,7 @@ func commandCatalog() []commands.Command[Model] {
 			ID: commands.FilterSessions, Group: commands.GroupExplore,
 			Title:       commands.StaticTitle[Model]("Filter Sessions"),
 			Description: "Filter running sessions with the dashboard query language.",
-			Aliases:     []string{"find", "search"}, Shortcut: keySlash,
+			Aliases:     []string{"find", "search"},
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
 				cmd := m.enterFilter("")
 				return m, cmd
@@ -337,7 +353,7 @@ func commandCatalog() []commands.Command[Model] {
 			ID: commands.CycleProfileFilter, Group: commands.GroupExplore,
 			Title:       commands.StaticTitle[Model]("Cycle Profile Filter"),
 			Description: "Cycle running sessions by effective profile and back to all profiles.",
-			Aliases:     []string{"account", "filter", "running"}, Shortcut: keyF,
+			Aliases:     []string{"account", "filter", "running"},
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
 				return m, m.cycleDashboardProfile()
 			},
@@ -346,8 +362,8 @@ func commandCatalog() []commands.Command[Model] {
 			ID: commands.ClearFilters, Group: commands.GroupExplore,
 			Title:       commands.StaticTitle[Model]("Clear Filters"),
 			Description: "Remove every active dashboard filter chip.",
-			Aliases:     []string{"chips", "reset"}, Shortcut: keyEsc,
-			Visible: func(m Model, _ commands.Context) bool { return !m.activeFilter.IsEmpty() },
+			Aliases:     []string{"chips", "reset"},
+			Visible:     func(m Model, _ commands.Context) bool { return !m.activeFilter.IsEmpty() },
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
 				return m, m.applyFilterChange(dashboard.Filter{})
 			},
@@ -356,14 +372,14 @@ func commandCatalog() []commands.Command[Model] {
 			ID: commands.OpenLauncher, Group: commands.GroupExplore,
 			Title:       commands.StaticTitle[Model]("Open Launcher"),
 			Description: "Choose configured projects to launch.",
-			Aliases:     []string{"launch", "projects"}, Shortcut: keyL,
-			Execute: openLauncherCommand,
+			Aliases:     []string{"launch", "projects"},
+			Execute:     openLauncherCommand,
 		},
 		{
 			ID: commands.SearchAllSessions, Group: commands.GroupExplore,
 			Title:       commands.StaticTitle[Model]("Search All Past Sessions"),
 			Description: "Search transcript history across every project and harness.",
-			Aliases:     []string{"history", "transcripts"}, Shortcut: keySessionSearch,
+			Aliases:     []string{"history", "transcripts"},
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
 				updated, cmd := m.enterSessionSearch()
 				return updated.(Model), cmd
@@ -373,7 +389,7 @@ func commandCatalog() []commands.Command[Model] {
 			ID: commands.SearchPlans, Group: commands.GroupExplore,
 			Title:       commands.StaticTitle[Model]("Search Plans"),
 			Description: "Search indexed agent-session-loop plans.",
-			Aliases:     []string{"agent plans", "history"}, Shortcut: keyPlanSearch,
+			Aliases:     []string{"agent plans", "history"},
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
 				updated, cmd := m.enterPlanSearch()
 				return updated.(Model), cmd
@@ -383,7 +399,7 @@ func commandCatalog() []commands.Command[Model] {
 			ID: commands.ManageWorktrees, Group: commands.GroupExplore,
 			Title:       commands.StaticTitle[Model]("Manage Worktrees"),
 			Description: "Browse managed Git worktrees and open their paths.",
-			Aliases:     []string{"git", "branches", "inventory"}, Shortcut: keyWorktrees,
+			Aliases:     []string{"git", "branches", "inventory"},
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
 				updated, cmd := m.enterWorktrees()
 				return updated.(Model), cmd
@@ -393,7 +409,7 @@ func commandCatalog() []commands.Command[Model] {
 			ID: commands.ShowRuns, Group: commands.GroupExplore,
 			Title:       commands.StaticTitle[Model]("Show Runs"),
 			Description: "Review active and actionable agent-session-loop runs.",
-			Aliases:     []string{"asl", "loop", "needs action"}, Shortcut: keyASLRuns,
+			Aliases:     []string{"asl", "loop", "needs action"},
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
 				updated, cmd := m.enterASLRuns()
 				return updated.(Model), cmd
@@ -407,12 +423,19 @@ func commandCatalog() []commands.Command[Model] {
 				}
 				return "Show Preview"
 			},
-			Description: "Toggle the selected session's live scrollback pane.",
-			Aliases:     []string{"hide", "pane", "scrollback"}, Shortcut: keyTogglePreview,
+			Description:  "Toggle the selected session's live scrollback pane.",
+			Aliases:      []string{"hide", "pane", "scrollback"},
 			Availability: previewCommandAvailability,
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
 				updated, cmd := m.togglePreview()
-				return updated.(Model), cmd
+				out := updated.(Model)
+				// Showing the preview can take the width the rail was drawn
+				// in, so the rail's requested and actual state have to be
+				// reconciled before the next frame. The direct key did this
+				// and the palette entry did not; sharing one body is what
+				// makes the answer the same either way.
+				out.syncRailState()
+				return out, cmd
 			},
 		},
 		{
@@ -424,8 +447,8 @@ func commandCatalog() []commands.Command[Model] {
 				return "Show Project Rail"
 			},
 			Description: "Toggle the project scope rail in Urgency view.",
-			Aliases:     []string{"sidebar", "projects", "scope"}, Shortcut: keyToggleRail,
-			Visible: func(m Model, _ commands.Context) bool { return m.listView == dashboard.ViewUrgency },
+			Aliases:     []string{"sidebar", "projects", "scope"},
+			Visible:     func(m Model, _ commands.Context) bool { return m.listView == dashboard.ViewUrgency },
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
 				m.toggleRail()
 				return m, nil
@@ -443,7 +466,7 @@ func commandCatalog() []commands.Command[Model] {
 				return "Show Projects View"
 			},
 			Description: "Switch the list arrangement between Urgency and Projects; this does not change the project filter.",
-			Aliases:     []string{"projects", "families", "urgency", "group"}, Shortcut: keyToggleView,
+			Aliases:     []string{"projects", "families", "urgency", "group"},
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
 				cmd := m.toggleListView()
 				return m, cmd
@@ -454,7 +477,7 @@ func commandCatalog() []commands.Command[Model] {
 			ID: commands.ResortTabs, Group: commands.GroupApp,
 			Title:       commands.StaticTitle[Model]("Resort Tabs"),
 			Description: "Reorder managed Kitty tabs to match the dashboard sort order.",
-			Aliases:     []string{"reorder", "tabs"}, Shortcut: keyResort,
+			Aliases:     []string{"reorder", "tabs"},
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
 				m.actionErr = nil
 				cmds := []tea.Cmd{commands.Resort(m.client, m.sortMode)}
@@ -470,9 +493,9 @@ func commandCatalog() []commands.Command[Model] {
 		},
 		{
 			ID: commands.UndoClose, Group: commands.GroupApp,
-			Title:       commands.StaticTitle[Model]("Undo Last Close"),
-			Description: "Relaunch the most recently closed session before undo expires.",
-			Aliases:     []string{"restore", "reopen"}, Shortcut: keyU,
+			Title:        commands.StaticTitle[Model]("Undo Last Close"),
+			Description:  "Relaunch the most recently closed session before undo expires.",
+			Aliases:      []string{"restore", "reopen"},
 			Availability: undoCommandAvailability,
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
 				return m, m.undoLastCmd()
@@ -482,7 +505,7 @@ func commandCatalog() []commands.Command[Model] {
 			ID: commands.DismissDeprecation, Group: commands.GroupApp,
 			Title:       commands.StaticTitle[Model]("Dismiss Deprecation Warning"),
 			Description: "Hide the visible configuration deprecation banner.",
-			Aliases:     []string{"banner", "warning"}, Shortcut: keyD,
+			Aliases:     []string{"banner", "warning"},
 			Visible: func(m Model, _ commands.Context) bool {
 				return !m.deprecationDismissed && len(m.deprecations) > 0
 			},
@@ -495,7 +518,7 @@ func commandCatalog() []commands.Command[Model] {
 			ID: commands.ShowKeyboardHelp, Group: commands.GroupApp,
 			Title:       commands.StaticTitle[Model]("Show Keyboard Shortcuts"),
 			Description: "Open the complete dashboard keyboard reference.",
-			Aliases:     []string{"help", "keys"}, Shortcut: keyQuestion,
+			Aliases:     []string{"help", "keys"},
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
 				m.openHelp(ModeList)
 				return m, nil
@@ -505,7 +528,7 @@ func commandCatalog() []commands.Command[Model] {
 			ID: commands.Quit, Group: commands.GroupApp,
 			Title:       commands.StaticTitle[Model]("Quit"),
 			Description: "Exit the agentmux dashboard.",
-			Aliases:     []string{"close app", "exit"}, Shortcut: keyQ + " / " + keyCtrlC,
+			Aliases:     []string{"close app", "exit"},
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
 				return m, tea.Quit
 			},
