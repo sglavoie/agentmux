@@ -3,7 +3,7 @@ package tui
 // Key string constants used in KeyPressMsg switch cases.
 //
 // A constant here names a keystroke, not a surface. After the dashboard keymap
-// shrank to the eight entries in dashboardBindings() plus the cursor and
+// shrank to the entries in dashboardBindings() plus the cursor and
 // structure keys handleListKey owns, most of the session mnemonics below —
 // keyE, keyR, keyC, keyDashboardLaunch, keyClearStatus, keyClose, keyO,
 // keyOpenEditor, keyY, keyLock, keyM — are pressed inside the actions overlay
@@ -20,6 +20,7 @@ const (
 	keyG               = "g"
 	keyGG              = "G"
 	keySlash           = "/"
+	keyAllSessions     = "S" // dashboard: all-project Past Sessions, newest activity first
 	keyColon           = ":" // opens ModeCommandPalette from ModeList only
 	keyF               = "f"
 	keyWorktreeFork    = "w" // Past Sessions search/viewer: confirm an isolated Git worktree fork
@@ -53,10 +54,8 @@ const (
 	// remove a worktree, and dismiss a health notice.
 	keyD = "d"
 	// keyASLRuns is now a ModeASLRuns key alone: it closes the view it used to
-	// open. The dashboard side is retired along with `S`, `P`, and `W` — the four
-	// capital letters that opened Past Sessions, Plans, Worktrees, and ASL Runs
-	// are palette entries now, which is where a surface an operator visits rarely
-	// belongs.
+	// open. Plans, Worktrees, and ASL Runs are palette entries on the dashboard.
+	// Past Sessions keeps its direct `S` shortcut for browsing recent activity.
 	keyASLRuns              = "A"
 	keyASLWorkbench         = "w" // ModeASLRuns: open the run's Workbench deep link
 	keyASLRespond           = "r" // ModeASLRuns: open the response/resume form for the run
@@ -136,8 +135,6 @@ const (
 	keyShiftTab = "shift+tab"
 )
 
-// keyProjectSessionSearch is a launcher key, not a dashboard one: the picker
-// still has a full direct keymap, and only the dashboard's shrank. The
-// dashboard reaches the same capability through the palette's
-// commands.SearchProject entry.
+// keyProjectSessionSearch opens the selected project's history from the
+// dashboard or launcher.
 const keyProjectSessionSearch = "s" // opens ModeSessionSearch filtered to the selected project

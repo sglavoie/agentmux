@@ -175,7 +175,7 @@ func TestListFooterZeroWidthEmitsOneUnwrappedRow(t *testing.T) {
 	}
 	// One hint from each priority band, so a regression that sheds a whole band
 	// at zero width is what this catches rather than one entry going missing.
-	for _, want := range []string{"j/k up/down", "a actions", "n/N needs you", "l launch"} {
+	for _, want := range []string{"j/k up/down", "a actions", "n/N needs you", "l launch", "S past sessions", "s project history"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("zero-width footer missing %q: %q", want, out)
 		}
@@ -194,12 +194,12 @@ func TestListFooterZeroWidthEmitsOneUnwrappedRow(t *testing.T) {
 var cursorIndependentFooterKeys = map[string]bool{
 	"j/k": true, "enter": true, ":": true, "/": true, "?": true,
 	"esc": true, "tab": true,
-	"i": true, "p": true, "l": true, "q": true,
+	"i": true, "p": true, "l": true, "q": true, "S": true,
 }
 
 // TestListFooterAvailability verifies the per-entry availability rules for the
-// two candidates whose answer depends on what the cursor row is: `a` opens the
-// actions overlay and needs a row to act on, and `n`/`N` dims when nothing on
+// candidates whose answer depends on the cursor row: `a` opens the actions
+// overlay, `s` opens project history, and `n`/`N` dims when nothing on
 // the dashboard is waiting on a human.
 func TestListFooterAvailability(t *testing.T) {
 	cases := []struct {
@@ -210,22 +210,22 @@ func TestListFooterAvailability(t *testing.T) {
 		{
 			name: "empty list — only global actions available",
 			m:    Model{},
-			want: map[string]bool{"a": false, "n/N": false},
+			want: map[string]bool{"a": false, "s": false, "n/N": false},
 		},
 		{
 			name: "attention row — actions and needs-you both live",
 			m:    withListRows(Model{}, session.RunningSession{State: "key"}),
-			want: map[string]bool{"a": true, "n/N": true},
+			want: map[string]bool{"a": true, "s": true, "n/N": true},
 		},
 		{
 			name: "active row — actions live, nothing waiting to jump to",
 			m:    withListRows(Model{}, session.RunningSession{State: "bolt"}),
-			want: map[string]bool{"a": true, "n/N": false},
+			want: map[string]bool{"a": true, "s": true, "n/N": false},
 		},
 		{
 			name: "idle row — actions live, nothing waiting to jump to",
 			m:    withListRows(Model{}, session.RunningSession{State: ""}),
-			want: map[string]bool{"a": true, "n/N": false},
+			want: map[string]bool{"a": true, "s": true, "n/N": false},
 		},
 	}
 	for _, tc := range cases {

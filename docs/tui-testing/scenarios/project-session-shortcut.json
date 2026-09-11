@@ -1,0 +1,11 @@
+{
+  "name": "project-session-shortcut",
+  "fixture": "basic",
+  "size": { "width": 100, "height": 30 },
+  "actions": [{ "type": "key", "key": "s" }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "session_search" },
+    { "type": "contains_text", "text": "project:" },
+    { "type": "no_layout_issues" }
+  ]
+}

@@ -11,8 +11,8 @@
       "key": "j"
     },
     {
-      "type": "command",
-      "command_id": "explore.search-session-history"
+      "type": "key",
+      "key": "S"
     },
     {
       "type": "key",

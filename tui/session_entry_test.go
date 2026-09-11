@@ -125,7 +125,8 @@ func TestEnterSessionSearchReusesWarmedResultsOnRepeatedEntry(t *testing.T) {
 	m.sessionResults = m.sessionResults[:1]
 	warmedID := m.sessionResults[0].Meta.ID
 
-	got, cmd := runDashboardCommand(t, m, commands.SearchAllSessions)
+	entered, cmd := m.enterSessionSearch()
+	got := entered.(Model)
 
 	if cmd == nil {
 		t.Fatal("first warmed entry returned nil cmd; want background refresh")
@@ -150,7 +151,8 @@ func TestEnterSessionSearchReusesWarmedResultsOnRepeatedEntry(t *testing.T) {
 	}
 
 	got.mode = ModeList
-	got, cmd = runDashboardCommand(t, got, commands.SearchAllSessions)
+	entered, cmd = got.enterSessionSearch()
+	got = entered.(Model)
 	if cmd != nil {
 		t.Fatalf("repeated warmed entry returned cmd %T; want no duplicate refresh", cmd)
 	}
@@ -335,7 +337,8 @@ func TestEnterSessionSearchWithPreservedQueryRefreshesMatchingRows(t *testing.T)
 		sessionResults:    []transcript.Result{{Meta: warmed, Preview: warmed.Snippet}},
 	}
 
-	got, cmd := runDashboardCommand(t, m, commands.SearchAllSessions)
+	entered, cmd := m.enterSessionSearch()
+	got := entered.(Model)
 	if cmd == nil {
 		t.Fatal("warm Past Sessions re-entry returned nil cmd; want background refresh")
 	}

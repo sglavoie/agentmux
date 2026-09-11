@@ -21,11 +21,10 @@ import (
 
 // dashboardBindings is the complete ModeList binding table.
 //
-// It is eight entries, and the shortness is the design rather than an accident
-// of what has been written so far. Every other catalog command is still on the
-// dashboard — it is reached through the actions overlay (`a`) for the
-// row-targeted ones and through the palette (`:`) for the rest — but it has no
-// key of its own here. `docs/dashboard-keymap-inventory.md` is the row-by-row
+// The table keeps frequent navigation directly accessible. Every other catalog
+// command is reached through the actions overlay (`a`) for row-targeted actions
+// and through the palette (`:`) for the rest, without a key of its own here.
+// `docs/dashboard-keymap-inventory.md` is the row-by-row
 // record of which capability went to which surface; a binding may only be
 // removed once that table names its successor.
 //
@@ -46,8 +45,10 @@ func dashboardBindings() commands.BindingSet {
 		// context, not a check the key performs. `handleListKey` answers Enter on a
 		// summary before it ever reaches here, by folding.
 		{Keys: []string{keyEnter}, Display: keyEnter, Hint: "focus", Command: commands.FocusSession},
+		{Keys: []string{keyProjectSessionSearch}, Display: keyProjectSessionSearch, Hint: "project history", Command: commands.SearchProject},
 
 		// Explore.
+		{Keys: []string{keyAllSessions}, Display: keyAllSessions, Hint: "past sessions", Command: commands.SearchAllSessions},
 		{Keys: []string{keySlash}, Display: keySlash, Hint: "filter", Command: commands.FilterSessions},
 		{Keys: []string{keyEsc}, Display: keyEsc, Hint: "clear filters", Command: commands.ClearFilters},
 		{Keys: []string{keyL}, Display: keyL, Hint: "launch", Command: commands.OpenLauncher},

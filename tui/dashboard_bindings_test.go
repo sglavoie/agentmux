@@ -624,7 +624,7 @@ var retiredDashboardKeys = []string{
 	// Session actions, now entries in the `a` overlay.
 	"e", "r", "c", "C", "x", "X", "o", "O", "y", "L", "m",
 	// Surfaces, now palette entries.
-	"s", "S", "P", "W", "A", "T", "d", "v", "R", "u", "f", "b",
+	"P", "W", "A", "T", "d", "v", "R", "u", "f", "b",
 	// Cursor and structure keys with a successor spelling.
 	"g", "G", "ctrl+d", "ctrl+u", "left", "right",
 	// The bracket chords and their focus-on-arrival variants.

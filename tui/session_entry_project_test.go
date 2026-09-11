@@ -20,7 +20,8 @@ func TestListProjectSessionSearchWithReadyCacheDispatchesProjectFilter(t *testin
 	m.sessionResults = nil
 	seq := m.sessionSearchSeq
 
-	got, cmd := runDashboardCommand(t, m, commands.SearchProject)
+	entered, cmd := m.Update(keyPress(keyProjectSessionSearch))
+	got := entered.(Model)
 
 	if cmd == nil {
 		t.Fatal("project session search with ready cache returned nil cmd; want debounced search")
@@ -74,7 +75,8 @@ func TestListProjectSessionSearchUsesResolvedProjectForWorktreeRow(t *testing.T)
 	m.rebuildItems()
 	m.cursor = 0
 
-	got, cmd := runDashboardCommand(t, m, commands.SearchProject)
+	entered, cmd := m.Update(keyPress(keyProjectSessionSearch))
+	got := entered.(Model)
 
 	if cmd == nil {
 		t.Fatal("project session search returned nil cmd; want debounced search")
@@ -92,7 +94,8 @@ func TestListProjectSessionSearchDuringCacheLoadDoesNotDuplicateWork(t *testing.
 	m.sessionCacheLoadInFlight = true
 	seq := m.sessionSearchSeq
 
-	got, cmd := runDashboardCommand(t, m, commands.SearchProject)
+	entered, cmd := m.Update(keyPress(keyProjectSessionSearch))
+	got := entered.(Model)
 
 	if cmd != nil {
 		t.Fatalf("project session search during cache load returned duplicate cmd %T", cmd)
@@ -114,50 +117,22 @@ func TestListProjectSessionSearchDuringCacheLoadDoesNotDuplicateWork(t *testing.
 	}
 }
 
-// An empty list has no project to search, and the palette says so before the
-// keystroke rather than after: the command is offered and disabled, which is
-// what the old bare `s` could not do — it looked identical to a key that does
-// nothing.
+// An empty list has no project to search: the shortcut is inert and the
+// palette command is disabled.
 func TestListProjectSessionSearchIsDisabledOnAnEmptyList(t *testing.T) {
-	m := pressKey(loadSessions(testModel(), nil), keyColon)
+	m := loadSessions(testModel(), nil)
+	updated, cmd := m.Update(keyPress(keyProjectSessionSearch))
+	m = updated.(Model)
+	if m.mode != ModeList || cmd != nil {
+		t.Fatal("project history shortcut must do nothing without a selection")
+	}
+	m = pressKey(m, keyColon)
 	if m.mode != ModeCommandPalette {
 		t.Fatalf("expected the palette to open, got mode %q", uitestModeName(m.mode))
 	}
 	entry := commandByID(t, commands.SearchProject)
 	if availability := entry.AvailabilityFor(m, m.commandContext); availability.Available {
 		t.Fatal("the project history search is available with no session selected")
-	}
-}
-
-// TestRetiredProjectSearchKeysAreInertAtTheList is the other half: `s` and `S`
-// were the two direct spellings, and both are unbound now. Their capabilities
-// are palette entries, so a press that still worked would be a second,
-// undocumented route to them.
-func TestRetiredProjectSearchKeysAreInertAtTheList(t *testing.T) {
-	for _, key := range []string{"s", "S"} {
-		t.Run(key, func(t *testing.T) {
-			m := sessionSearchFilterModel(t)
-			m.mode = ModeList
-			m.filtered = []session.RunningSession{{TabID: 1, WindowID: 10, Project: "Foo"}}
-			m.rebuildItems()
-			m.cursor = 0
-			m.sessionQuery = "keep"
-			m.filterProject = []string{"Bar"}
-
-			updated, cmd := m.Update(keyPress(key))
-			got := updated.(Model)
-
-			if cmd != nil {
-				t.Errorf("%q dispatched %T", key, cmd)
-			}
-			if got.mode != ModeList {
-				t.Errorf("%q left ModeList for %q", key, uitestModeName(got.mode))
-			}
-			if got.sessionQuery != "keep" || singleChipValue(got.filterProject) != "Bar" {
-				t.Errorf("%q touched session-search state: query=%q project=%#v",
-					key, got.sessionQuery, got.filterProject)
-			}
-		})
 	}
 }
 
@@ -175,7 +150,8 @@ func TestListProjectSessionSearchClearsPriorFiltersAndResetsEntryState(t *testin
 	m.sessionOffset = 2
 	m.sessionSearchMode = true
 
-	got, cmd := runDashboardCommand(t, m, commands.SearchProject)
+	entered, cmd := m.Update(keyPress(keyProjectSessionSearch))
+	got := entered.(Model)
 
 	if cmd == nil {
 		t.Fatal("project session search returned nil cmd; want debounced search")

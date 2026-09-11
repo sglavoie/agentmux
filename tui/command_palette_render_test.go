@@ -114,7 +114,7 @@ func TestCommandPaletteShortcutAlignmentAndWrappedDetail(t *testing.T) {
 	// Session no longer does — `r` is an actions-overlay mnemonic now, and the
 	// palette reads its shortcut column from the dashboard binding table, so a
 	// retired key leaves the column empty and there is nothing to right-align.
-	// Toggle Inspector is one of the eight bindings that survived.
+	// Toggle Inspector is one of the direct dashboard bindings.
 	m := commandPaletteTestModel(46, 30)
 	m.commandQuery = "inspector"
 	m.recomputeCommandPaletteResults()

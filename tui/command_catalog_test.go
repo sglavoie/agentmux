@@ -61,14 +61,14 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 		{commands.CopyTitleID, commands.GroupSession, "Copy Session Title", []string{"clipboard", "yank"}, ""},
 		{commands.ToggleLockID, commands.GroupSession, "Lock Session", []string{"protect", "unlock"}, ""},
 		{commands.ToggleMuteID, commands.GroupSession, "Mute Session", []string{"notifications", "unmute"}, ""},
-		{commands.SearchProject, commands.GroupSession, "Search This Project's Past Sessions", []string{"history", "project", "transcripts"}, ""},
+		{commands.SearchProject, commands.GroupSession, "Search This Project's Past Sessions", []string{"history", "project", "transcripts"}, keyProjectSessionSearch},
 		{commands.ShowDetails, commands.GroupSession, "Show Session Details", []string{"events", "hooks"}, ""},
 		{commands.ShowTimeline, commands.GroupSession, "Show Session Timeline", []string{"events", "phases"}, ""},
 		{commands.FilterSessions, commands.GroupExplore, "Filter Sessions", []string{"find", "search"}, "/"},
 		{commands.CycleProfileFilter, commands.GroupExplore, "Cycle Profile Filter", []string{"account", "filter", "running"}, ""},
 		{commands.ClearFilters, commands.GroupExplore, "Clear Filters", []string{"chips", "reset"}, "esc"},
 		{commands.OpenLauncher, commands.GroupExplore, "Open Launcher", []string{"launch", "projects"}, "l"},
-		{commands.SearchAllSessions, commands.GroupExplore, "Search All Past Sessions", []string{"history", "transcripts"}, ""},
+		{commands.SearchAllSessions, commands.GroupExplore, "Search All Past Sessions", []string{"history", "transcripts"}, keyAllSessions},
 		{commands.SearchPlans, commands.GroupExplore, "Search Plans", []string{"agent plans", "history"}, ""},
 		{commands.ManageWorktrees, commands.GroupExplore, "Manage Worktrees", []string{"git", "branches", "inventory"}, ""},
 		{commands.ShowRuns, commands.GroupExplore, "Show Runs", []string{"asl", "loop", "needs action"}, ""},
@@ -134,7 +134,7 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 }
 
 // TestCommandCatalogDashboardShortcutBindings is where the small keymap is
-// stated as data. Every command keeps its palette entry; only eight of them
+// stated as data. Every command keeps its palette entry; ten of them
 // still carry a dashboard key, and the rest render with no shortcut column at
 // all rather than with a key that would do nothing if pressed.
 //
@@ -146,14 +146,16 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 func TestCommandCatalogDashboardShortcutBindings(t *testing.T) {
 	const noDashboardKey = ""
 	want := map[commands.ID]string{
-		commands.FocusSession:     keyEnter,
-		commands.FilterSessions:   keySlash,
-		commands.ClearFilters:     keyEsc,
-		commands.OpenLauncher:     keyL,
-		commands.ToggleInspector:  keyInspector,
-		commands.SwitchProject:    keyProjectSwitcher,
-		commands.ShowKeyboardHelp: keyQuestion,
-		commands.Quit:             keyQ + " / " + keyCtrlC,
+		commands.FocusSession:      keyEnter,
+		commands.SearchProject:     keyProjectSessionSearch,
+		commands.FilterSessions:    keySlash,
+		commands.ClearFilters:      keyEsc,
+		commands.OpenLauncher:      keyL,
+		commands.SearchAllSessions: keyAllSessions,
+		commands.ToggleInspector:   keyInspector,
+		commands.SwitchProject:     keyProjectSwitcher,
+		commands.ShowKeyboardHelp:  keyQuestion,
+		commands.Quit:              keyQ + " / " + keyCtrlC,
 
 		// Everything below is palette-and-actions-only. None of these lost its
 		// command; each lost the direct dashboard shortcut that used to duplicate
@@ -169,11 +171,9 @@ func TestCommandCatalogDashboardShortcutBindings(t *testing.T) {
 		commands.CopyTitleID:        noDashboardKey,
 		commands.ToggleLockID:       noDashboardKey,
 		commands.ToggleMuteID:       noDashboardKey,
-		commands.SearchProject:      noDashboardKey,
 		commands.ShowDetails:        noDashboardKey,
 		commands.ShowTimeline:       noDashboardKey,
 		commands.CycleProfileFilter: noDashboardKey,
-		commands.SearchAllSessions:  noDashboardKey,
 		commands.SearchPlans:        noDashboardKey,
 		commands.ManageWorktrees:    noDashboardKey,
 		commands.ShowRuns:           noDashboardKey,

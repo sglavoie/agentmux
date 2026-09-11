@@ -42,6 +42,7 @@ func TestExampleScenariosParseAndPass(t *testing.T) {
 	// Every committed file is still executed below; rejecting untracked names
 	// prevents the documentation and acceptance recipe from silently diverging.
 	want := map[string]bool{
+		"project-session-shortcut.json":                        false,
 		"actions-popup-fit.json":                               false,
 		"asl-abort-confirmation-fit.json":                      false,
 		"asl-question-pending-narrow-fit.json":                 false,

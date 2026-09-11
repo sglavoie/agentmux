@@ -643,6 +643,8 @@ func listFooterPalette() []listFooterCandidate {
 		listCommandBinding(bindings, commands.Quit, footerSectionApp, footerPriorityPrimary),
 		listCommandBinding(bindings, commands.SwitchProject, footerSectionApp, footerPriorityPrimary),
 		listCommandBinding(bindings, commands.OpenLauncher, footerSectionLaunch, footerPriorityPrimary),
+		listCommandBinding(bindings, commands.SearchAllSessions, footerSectionApp, footerPriorityPrimary),
+		listCommandBinding(bindings, commands.SearchProject, footerSectionRow, footerPriorityPrimary),
 	}
 }
 

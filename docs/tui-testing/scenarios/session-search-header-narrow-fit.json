@@ -2,7 +2,7 @@
   "name": "session-search-header-narrow-fit",
   "fixture": "basic",
   "size": { "width": 30, "height": 24 },
-  "actions": [{ "type": "command", "command_id": "explore.search-session-history" }],
+  "actions": [{ "type": "key", "key": "S" }],
   "assertions": [
     { "type": "mode_equals", "mode": "session_search" },
     { "type": "no_layout_issues" }

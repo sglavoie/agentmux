@@ -368,10 +368,10 @@ func commandDeclarations() []commands.Command[Model] {
 		{
 			ID: commands.SearchAllSessions, Group: commands.GroupExplore,
 			Title:       commands.StaticTitle[Model]("Search All Past Sessions"),
-			Description: "Search transcript history across every project and harness.",
+			Description: "Browse all projects and harnesses by latest activity, with search filters cleared.",
 			Aliases:     []string{"history", "transcripts"},
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
-				updated, cmd := m.enterSessionSearch()
+				updated, cmd := m.enterAllSessionSearch()
 				return updated.(Model), cmd
 			},
 		},

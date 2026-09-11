@@ -113,6 +113,32 @@ func (m Model) enterSessionSearch() (tea.Model, tea.Cmd) {
 	return m, m.runSessionWarmRefreshCmd(m.transcriptIndex, m.cfg, m.transcriptReaders, m.sessionSearchSeq, m.currentSessionQuery())
 }
 
+// enterAllSessionSearch opens history across all projects, newest first. A
+// previous project search must not narrow this entry point or publish its
+// pending results after the filters have been cleared.
+func (m Model) enterAllSessionSearch() (tea.Model, tea.Cmd) {
+	if sessionQueryIsEmpty(m.currentSessionQuery()) {
+		return m.enterSessionSearch()
+	}
+	m.sessionQuery = ""
+	m.filterHarness = nil
+	m.filterProfile = nil
+	m.filterProject = nil
+	m.sessionResults = nil
+	m.sessionSearchSeq++
+
+	updated, cmd := m.enterSessionSearch()
+	m = updated.(Model)
+	if m.transcriptIndex == nil || m.sessionCacheLoadInFlight {
+		return m, cmd
+	}
+	// Search the ready cache while the filesystem refresh runs. Advancing the
+	// generation also makes any in-flight warm refresh search the latest query
+	// again on completion, so a pre-refresh search cannot leave stale rows.
+	searchCmd := m.dispatchSessionSearch()
+	return m, tea.Batch(cmd, searchCmd)
+}
+
 // enterSessionSearchForProject resets Past Sessions to a single project chip
 // and uses the normal entry/cache path before dispatching a filtered search
 // when the transcript cache is already available.

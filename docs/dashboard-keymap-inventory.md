@@ -40,6 +40,8 @@ fails there.
 | `/` | Edit filters |
 | `a` | Selected-session actions |
 | `l` | Launcher |
+| `s` | Past Sessions for the selected project |
+| `S` | All-project Past Sessions, newest activity first; clears previous history filters |
 | `:` | Command palette |
 | `?` | Help |
 | `q`, `Ctrl+C` | Quit dashboard |
@@ -52,7 +54,7 @@ to pane switching, and `Enter` keeps focusing but no longer shares the job with
 
 ## Command-backed bindings
 
-Each surviving row is one entry in `dashboardBindings()`, which is eight entries
+Each surviving row is one entry in `dashboardBindings()`, which is ten entries
 long. "Successor" names the surface that reaches the capability now. A palette
 entry exists for every command in this table — the catalog is the complete list
 — so "palette" never means "gone"; where something more direct exists, it is
@@ -72,7 +74,7 @@ named first.
 | `y` | `CopyTitleID` | Copy the tab title | **Retired** | actions `a`; palette |
 | `L` | `ToggleLockID` | Lock/unlock the session | **Retired** | actions `a`; palette |
 | `m` | `ToggleMuteID` | Mute/unmute notifications | **Retired** | actions `a`; palette |
-| `s` | `SearchProject` | Past Sessions scoped to this project | **Retired** | palette only — the actions overlay has no entry for it |
+| `s` | `SearchProject` | Past Sessions scoped to this project | Survives (restored) | `s`; palette |
 | `d` | `DismissDeprecation` | Silence the configuration deprecation notice | **Retired** | palette; the health details overlay's own `d`. The banner this used to hide is gone — the notice reads as the header's health indicator and as one issue in that overlay, and both recompute from the same dismissible issue |
 | `d` | `ShowDetails` | Per-session event detail overlay | **Retired** | inspector `i`; palette |
 | `T` | `ShowTimeline` | Per-session phase timeline | **Retired** | palette |
@@ -80,7 +82,7 @@ named first.
 | `f` | `CycleProfileFilter` | Cycle the profile filter component | **Retired** | project switcher `p` for the project component; `/` for the rest; palette |
 | `esc` | `ClearFilters` | Clear all filter components | Survives, as the last rung of the Escape ladder | `Esc` |
 | `l` | `OpenLauncher` | Open the launcher | Survives | `l` |
-| `S` | `SearchAllSessions` | Past Sessions across all projects | **Retired** | palette |
+| `S` | `SearchAllSessions` | Past Sessions across all projects | Survives (restored for recency browsing) | `S`; palette |
 | `P` | `SearchPlans` | Plans browser | **Retired** | palette |
 | `W` | `ManageWorktrees` | Managed worktrees | **Retired** | palette |
 | `A` | `ShowRuns` | ASL Runs | **Retired** | palette |
