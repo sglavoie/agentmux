@@ -251,26 +251,42 @@ func (m *Model) closeCompletion() {
 	m.completion = dashboard.Completion{}
 }
 
-// previewTickMsg is sent by the preview ticker while preview is enabled.
-type previewTickMsg struct{}
-
-// previewContentMsg carries the result of a scrollback fetch, stamped with the
-// target generation the fetch was issued for. The pane accepts a response only
-// when both the generation and the window still match what it is pointed at, so
-// a read in flight when the selection moves is dropped instead of painting over
-// the newer target — including the case the window ID alone cannot tell apart,
-// where the selection leaves a session for a family summary and comes back.
-type previewContentMsg struct {
-	seq      int
-	windowID int
-	text     string
-	err      error
+// previewTickMsg is one beat of the preview polling chain, stamped with the
+// chain that scheduled it. A tick only ever schedules its own successor, so the
+// stamp is what stops a retired chain from running beside the live one and
+// doubling the pane's read rate — see handlePreviewTick.
+type previewTickMsg struct {
+	pollSeq int
 }
 
-// previewTickCmd schedules a single previewTickMsg after d.
-func previewTickCmd(d time.Duration) tea.Cmd {
+// previewContentMsg carries the result of a scrollback fetch, stamped with both
+// identities the reply is judged by.
+//
+// targetSeq is the generation of what the pane was pointed at when the read was
+// issued, and it decides whether the CONTENT may paint: the pane accepts a
+// response only when both the generation and the window still match what it is
+// pointed at, so a read in flight when the selection moves is dropped instead of
+// painting over the newer target — including the case the window ID alone cannot
+// tell apart, where the selection leaves a session for a family summary and comes
+// back.
+//
+// requestSeq identifies the read itself and decides only whether the
+// controller's in-flight slot may be released. The two are separate because a
+// reply can be worthless as content and still be the settlement the controller
+// is waiting for; conflating them would leave the slot held by a read nobody
+// will ever accept and stop the pane from ever reading again.
+type previewContentMsg struct {
+	targetSeq  int
+	requestSeq int
+	windowID   int
+	text       string
+	err        error
+}
+
+// previewTickCmd schedules a single previewTickMsg after d on behalf of pollSeq.
+func previewTickCmd(d time.Duration, pollSeq int) tea.Cmd {
 	return tea.Tick(d, func(time.Time) tea.Msg {
-		return previewTickMsg{}
+		return previewTickMsg{pollSeq: pollSeq}
 	})
 }
 
@@ -279,13 +295,19 @@ func previewTickCmd(d time.Duration) tea.Cmd {
 // no error so callers can render a "(session not running)" placeholder.
 // A family summary owns no window, so it tracks window 0 and takes the
 // short-circuit: previewing one costs no Kitty call at all.
-func fetchPreviewCmd(client kitty.KittyClient, windowID, seq int) tea.Cmd {
+//
+// It is called from startPreviewRead alone. Every read the pane performs is
+// therefore one the controller has accounted for, and the reply always comes
+// back — the short circuit answers immediately and a real read is bounded by the
+// Kitty runner's own subprocess deadline (internal/kitty/exec.go) — which is
+// what lets the controller treat a stamped reply as the release of its slot.
+func fetchPreviewCmd(client kitty.KittyClient, windowID, targetSeq, requestSeq int) tea.Cmd {
 	return func() tea.Msg {
 		if windowID == 0 {
-			return previewContentMsg{seq: seq, windowID: 0, text: "", err: nil}
+			return previewContentMsg{targetSeq: targetSeq, requestSeq: requestSeq, windowID: 0, text: "", err: nil}
 		}
 		text, err := client.GetText(kitty.MatchWindowByID(windowID), "all")
-		return previewContentMsg{seq: seq, windowID: windowID, text: text, err: err}
+		return previewContentMsg{targetSeq: targetSeq, requestSeq: requestSeq, windowID: windowID, text: text, err: err}
 	}
 }
 

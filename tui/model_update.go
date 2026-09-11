@@ -330,40 +330,59 @@ func (m Model) handleHealth(msg commands.HealthMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handlePreviewTick processes a previewTickMsg: if preview is active, schedules
-// the next content fetch and tick.
+// handlePreviewTick processes a previewTickMsg: schedules the chain's next beat
+// and asks the read controller for a refresh of the current target.
+//
+// The tick re-reads the current target under the current generation. It must not
+// open a new one: a read slower than the refresh interval would then be
+// superseded by the next tick before it ever landed. Whether that read actually
+// starts is the controller's call — while one is out the tick coalesces into the
+// pending catch-up instead of stacking a second read on top of it.
 func (m Model) handlePreviewTick(msg previewTickMsg) (tea.Model, tea.Cmd) {
-	_ = msg
-	if !m.activePreviewEnabled() {
+	// A tick from a retired chain is not merely late. Acting on one would
+	// schedule a second successor, and from then on two chains would beat
+	// against the same pane forever, at twice the configured rate and with no
+	// path back to one. Zero belongs to no chain at all.
+	if msg.pollSeq == 0 || msg.pollSeq != m.previewPollSeq {
 		return m, nil
 	}
-	d := time.Duration(m.cfg.Defaults.Preview.RefreshMs) * time.Millisecond
-	// The tick re-reads the current target under the current generation. It must
-	// not open a new one: a read slower than the refresh interval would then be
-	// superseded by the next tick before it ever landed.
-	return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID, m.previewTargetSeq), previewTickCmd(d))
+	if !m.activePreviewEnabled() {
+		// The pane is hidden, so let the chain die here rather than poll a
+		// surface nobody is looking at. Whichever path shows it again opens a
+		// fresh chain through startPreviewPoll.
+		return m, nil
+	}
+	next := previewTickCmd(previewRefreshInterval(m.cfg), msg.pollSeq)
+	return m, tea.Batch(m.requestPreviewRead(), next)
 }
 
-// handlePreviewContent processes a previewContentMsg: updates the cached
-// preview text or error when the message belongs to the current target.
+// handlePreviewContent processes a previewContentMsg: updates the cached preview
+// text or error when the message describes what the pane is pointed at, and
+// settles the controller's bookkeeping when it is the read that was outstanding.
 //
-// Both halves of the identity are checked. The generation alone would accept a
-// stale window under a reused counter after a restore, and the window alone
-// cannot tell a read issued before the cursor detoured through a family summary
-// from one issued after it came back.
+// Those are two independent questions and the order they are asked in is the
+// point. A reply for an abandoned target is worthless as content and is still
+// the settlement the controller is waiting on, so the slot is released first and
+// unconditionally; only then is the content judged. Gating the settlement on the
+// content test — the shape this handler used to have — would strand the slot on
+// every read the operator outran and stop the pane reading at all.
 func (m Model) handlePreviewContent(msg previewContentMsg) (tea.Model, tea.Cmd) {
-	if !m.activePreviewEnabled() || msg.seq != m.previewTargetSeq || msg.windowID != m.previewWindowID {
+	settled := m.settlePreviewRead(msg.requestSeq)
+	if m.previewAcceptsContent(msg) {
+		// Either outcome is a read that has landed for this target, which is
+		// what previewLoaded records: it separates "nothing has come back yet"
+		// from "this session has printed nothing", and a failure has answered
+		// the question too.
+		m.previewLoaded = true
+		if msg.err != nil {
+			m.previewError = msg.err.Error()
+		} else {
+			m.previewError = ""
+			m.previewText = msg.text
+		}
+	}
+	if !settled {
 		return m, nil
 	}
-	// Either outcome is a read that has landed for this target, which is what
-	// previewLoaded records: it separates "nothing has come back yet" from "this
-	// session has printed nothing", and a failure has answered the question too.
-	m.previewLoaded = true
-	if msg.err != nil {
-		m.previewError = msg.err.Error()
-	} else {
-		m.previewError = ""
-		m.previewText = msg.text
-	}
-	return m, nil
+	return m, m.catchUpPreviewRead()
 }

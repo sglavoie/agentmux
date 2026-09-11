@@ -240,7 +240,11 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.pickerProfileOverride = nil
 		m.pickerPinned = nil
 		m.pickerProfileFilter = ""
-		return m, tea.Batch(cmd, m.resumeListPreviewTickCmd())
+		// Resumed before the return expression is built, not inside it: the
+		// resume draws a new chain identity onto m, and Go does not order a bare
+		// operand against a call in the same expression list.
+		resume := m.resumeListPreviewTickCmd()
+		return m, tea.Batch(cmd, resume)
 	case keyBackspace:
 		if r := []rune(m.pickerFilter); len(r) > 0 {
 			m.pickerFilter = string(r[:len(r)-1])

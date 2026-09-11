@@ -261,8 +261,31 @@ type Model struct {
 	previewEnabled   bool
 	previewWindowID  int
 	previewTargetSeq int
-	previewText      string
-	previewError     string
+	// previewText is the latest fetched snapshot and the only one the model
+	// retains. The one other copy that exists is the display snapshot
+	// inspectorViewport takes when the operator scrolls back; nothing queues
+	// reads or keeps a history of them, so a burst of refreshes costs two
+	// captures at most. See tui/model_preview_read.go for the controller that
+	// keeps it that way.
+	previewText  string
+	previewError string
+	// The read controller's bookkeeping. previewRequestSeq is the identity
+	// counter every fetch is stamped with, previewReadActiveSeq names the one
+	// read currently out, and previewReadPending records that a newer target
+	// wants a read as soon as that one settles. Request identity is deliberately
+	// separate from previewTargetSeq: the target decides whether content may
+	// PAINT, the request decides whether the in-flight slot may be RELEASED, and
+	// a reply for an abandoned target must still do the second.
+	previewRequestSeq    int
+	previewReadActiveSeq int
+	previewReadInFlight  bool
+	previewReadPending   bool
+	// previewPollSeq names the live polling chain. Each tick carries the chain
+	// it was scheduled by and only the live one schedules its successor, so a
+	// tick left over from a chain that was retired (hide/show, picker exit)
+	// cannot fork the pane into two chains polling at once. Zero is never a live
+	// chain: the first chain is 1.
+	previewPollSeq int
 	// previewLoaded records that a read has come back for the CURRENT target,
 	// successfully or not. It is the one fact an empty previewText cannot carry:
 	// a session that has printed nothing and a session whose first read is still

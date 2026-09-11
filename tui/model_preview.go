@@ -618,8 +618,12 @@ func (m Model) togglePreview() (tea.Model, tea.Cmd) {
 	m.retargetPreview(m.currentPreviewWindowID())
 	m.clearPreviewNotice()
 	scrollListToCursor(&m)
-	d := time.Duration(cfg.RefreshMs) * time.Millisecond
-	return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID, m.previewTargetSeq), previewTickCmd(d))
+	// Both halves go through the controller: the read may coalesce behind one
+	// still in flight from before the pane was hidden, and the chain bump retires
+	// any tick the previous chain has left over, so a hide/show cycle faster than
+	// the refresh interval cannot end with two chains polling.
+	read := m.requestPreviewRead()
+	return m, tea.Batch(read, m.startPreviewPoll())
 }
 
 // retargetPreview points the pane at a new target and opens a new generation for
@@ -627,6 +631,14 @@ func (m Model) togglePreview() (tea.Model, tea.Cmd) {
 // no path can move the target without also invalidating the read that is still
 // in flight for the previous one. The periodic tick is not such a path: it
 // re-reads the current target under the current generation.
+//
+// It moves the target only. The read in flight keeps its request identity and
+// its slot, because that read is still going to answer and the controller still
+// has to hear it; what the retarget takes away is its permission to paint. The
+// reset of the operator's scroll hold hangs off the target change for the same
+// reason it is written here rather than in the controller: a coalesced
+// re-request of the SAME target must not drop a hold, and only a genuine move to
+// another buffer may.
 func (m *Model) retargetPreview(windowID int) {
 	m.previewWindowID = windowID
 	m.previewTargetSeq++
@@ -695,7 +707,7 @@ func (m *Model) refreshPreviewForPickerCursor() tea.Cmd {
 		return nil
 	}
 	m.retargetPreview(winID)
-	return fetchPreviewCmd(m.client, winID, m.previewTargetSeq)
+	return m.requestPreviewRead()
 }
 
 // refreshPreviewForCursor returns an immediate fetch cmd when the cursor
@@ -716,15 +728,19 @@ func (m *Model) refreshPreviewForCursor() tea.Cmd {
 		return nil
 	}
 	m.retargetPreview(winID)
-	return fetchPreviewCmd(m.client, winID, m.previewTargetSeq)
+	return m.requestPreviewRead()
 }
 
-func (m Model) resumeListPreviewTickCmd() tea.Cmd {
+// resumeListPreviewTickCmd reopens the dashboard's polling chain on the way back
+// from a mode that owned the pane itself. It is a pointer method because the
+// chain identity it draws has to survive on the model the caller returns:
+// resuming without the bump is how the picker's exit used to leave the tick it
+// had already scheduled beating beside the one it started.
+func (m *Model) resumeListPreviewTickCmd() tea.Cmd {
 	if !m.previewEnabled {
 		return nil
 	}
-	d := time.Duration(m.cfg.Defaults.Preview.RefreshMs) * time.Millisecond
-	return previewTickCmd(d)
+	return m.startPreviewPoll()
 }
 
 // togglePickerPreview flips the picker's own preview pane on/off, independent
@@ -744,8 +760,11 @@ func (m Model) togglePickerPreview() (tea.Model, tea.Cmd) {
 	m.retargetPreview(m.pickerCurrentWindowID())
 	m.clearPreviewNotice()
 	scrollPickerToCursor(&m)
-	d := time.Duration(cfg.RefreshMs) * time.Millisecond
-	return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID, m.previewTargetSeq), previewTickCmd(d))
+	// The launcher's pane shares the dashboard's controller, target, and chain —
+	// only the visibility flag is its own — so enabling it is the same two steps
+	// and inherits the same one-read-at-a-time bound.
+	read := m.requestPreviewRead()
+	return m, tea.Batch(read, m.startPreviewPoll())
 }
 
 // disablePreviewWithNotice turns the dashboard preview off and shows a

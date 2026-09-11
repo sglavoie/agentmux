@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/actions"
@@ -1313,6 +1314,17 @@ type uitestKittyClient struct {
 	text    string
 	// Calls is the ordered log of trapped mutating/focus/overlay operations.
 	Calls []uitestKittyCall
+
+	// The read seam. A preview read runs inside a tea.Cmd, on its own
+	// goroutine, while the update loop goes on handling keys; readMu guards
+	// this pair because that is the arrangement the seam exists to exercise
+	// rather than an incidental hazard. reads counts every GetText that reached
+	// the client, which is how a test observes the one-read-at-a-time bound from
+	// outside the model. readFn, when a test installs one, supplies the answer
+	// and is what makes a read slow, make it fail, or park it until released.
+	readMu sync.Mutex
+	reads  int
+	readFn func(matchExpr string) (string, error)
 }
 
 // compile-time assertion that the no-op client satisfies the full interface.
@@ -1377,7 +1389,35 @@ func (c *uitestKittyClient) FocusWindow(matchExpr string) error {
 	return nil
 }
 
-func (c *uitestKittyClient) GetText(_, _ string) (string, error) { return c.text, nil }
+// GetText serves the fixture text, or whatever behavior SetReadBehavior
+// installed. The installed function is invoked with the lock released: a test
+// parks a read here for as long as it likes, and the count and the behavior stay
+// readable while it is parked.
+func (c *uitestKittyClient) GetText(matchExpr, _ string) (string, error) {
+	c.readMu.Lock()
+	c.reads++
+	fn, text := c.readFn, c.text
+	c.readMu.Unlock()
+	if fn == nil {
+		return text, nil
+	}
+	return fn(matchExpr)
+}
+
+// SetReadBehavior installs the function GetText answers with. Passing nil
+// restores the plain fixture text.
+func (c *uitestKittyClient) SetReadBehavior(fn func(matchExpr string) (string, error)) {
+	c.readMu.Lock()
+	defer c.readMu.Unlock()
+	c.readFn = fn
+}
+
+// ReadCount reports how many reads have reached the client.
+func (c *uitestKittyClient) ReadCount() int {
+	c.readMu.Lock()
+	defer c.readMu.Unlock()
+	return c.reads
+}
 
 func (c *uitestKittyClient) LaunchOverlayPager(sourceMatchExpr string) error {
 	c.Calls = append(c.Calls, uitestKittyCall{Op: "LaunchOverlayPager", Match: sourceMatchExpr})

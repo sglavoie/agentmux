@@ -14,9 +14,15 @@ import (
 // dropped the command leaves the pane blank until the next tick, which is the
 // state a stale preview is actually seen in. Running the command is the only
 // way to tell the two apart, so the filter cases below do.
+//
+// The reply is fed back before returning, because the read controller allows one
+// read at a time: a reply left unanswered holds the slot, and the next keystroke
+// coalesces into it and hands back nil, which this helper would report as the
+// key having dispatched nothing.
 func pressKeyForPreview(t *testing.T, m Model, key string) (Model, int) {
 	t.Helper()
 	updated, cmd := m.Update(keyPress(key))
+	m = updated.(Model)
 	if cmd == nil {
 		t.Fatalf("%q returned no command, so nothing re-reads the pane for the selection it left", key)
 	}
@@ -24,7 +30,10 @@ func pressKeyForPreview(t *testing.T, m Model, key string) (Model, int) {
 	if !ok {
 		t.Fatalf("%q returned a %T, want the preview fetch for its new selection", key, cmd())
 	}
-	return updated.(Model), msg.windowID
+	updated, follow := m.Update(msg)
+	m = updated.(Model)
+	settlePreviewRead(t, &m, follow)
+	return m, msg.windowID
 }
 
 // A filter narrows the list; it does not usually remove what the operator was
@@ -48,7 +57,7 @@ func TestDashboardFilterPreservesSelectionAndRetargetsPreview(t *testing.T) {
 		m, _ := listViewModel(dashboard.ViewUrgency)
 		m.previewEnabled = true
 		m = selectLine(t, m, "session:cli")
-		m.refreshPreviewForCursor()
+		settlePreviewRead(t, &m, m.refreshPreviewForCursor())
 		if m.previewWindowID != 13 {
 			t.Fatalf("setup: the preview tracks window %d, want cli's 13", m.previewWindowID)
 		}
@@ -96,7 +105,7 @@ func TestDashboardFilterPreservesSelectionAndRetargetsPreview(t *testing.T) {
 		m, _ := listViewModel(dashboard.ViewUrgency)
 		m.previewEnabled = true
 		m = selectLine(t, m, "session:lib")
-		m.refreshPreviewForCursor()
+		settlePreviewRead(t, &m, m.refreshPreviewForCursor())
 		if m.previewWindowID != 14 {
 			t.Fatalf("setup: the preview tracks window %d, want lib's 14", m.previewWindowID)
 		}
@@ -142,9 +151,9 @@ func TestDashboardFilterPreservesSelectionAndRetargetsPreview(t *testing.T) {
 		// Start on a session so the pane holds a real window; the moves below
 		// then have something to be wrong about.
 		m = selectLine(t, m, "session:api")
-		m.refreshPreviewForCursor()
+		settlePreviewRead(t, &m, m.refreshPreviewForCursor())
 		m = selectLine(t, m, "summary:toolbox(open)")
-		m.refreshPreviewForCursor()
+		settlePreviewRead(t, &m, m.refreshPreviewForCursor())
 		if m.previewWindowID != 0 {
 			t.Fatalf("setup: the preview tracks window %d on a summary, want the empty window", m.previewWindowID)
 		}

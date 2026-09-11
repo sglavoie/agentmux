@@ -261,8 +261,13 @@ func TestPickerPreviewMovementRefetchesWindow(t *testing.T) {
 	m = pressKey(m, "l")
 	// Sorted: personal first ("notes") then work ("api"). Cursor=0 → notes.
 	if !m.pickerPreviewEnabled {
-		// Enable preview from within the picker.
-		m = pressKey(m, "p")
+		// Enable preview from within the picker, and answer the read that
+		// opening it dispatches: the controller keeps one read in flight, so an
+		// unanswered reply would make the move below coalesce into it rather
+		// than fetch.
+		updated, cmd := m.Update(keyPress("p"))
+		m = updated.(Model)
+		settlePreviewRead(t, &m, cmd)
 	}
 	if m.previewWindowID != 22 {
 		t.Errorf("expected previewWindowID=22 (notes) on picker entry, got %d", m.previewWindowID)
@@ -300,7 +305,11 @@ func TestPickerExitRestartsListPreviewTicker(t *testing.T) {
 	m.pickerPreviewEnabled = false
 	m.pickerFilteredIdx = []int{0}
 
-	updated, deadTick := m.Update(previewTickMsg{})
+	// Stamped with the live chain, so the tick is refused for what the picker
+	// owns rather than for belonging to no chain: an unstamped tick is dropped
+	// on identity alone and would assert nothing about the picker.
+	m.previewPollSeq = 1
+	updated, deadTick := m.Update(previewTickMsg{pollSeq: 1})
 	m = updated.(Model)
 	if deadTick != nil {
 		t.Fatal("setup expected picker without picker preview to consume the list preview tick")

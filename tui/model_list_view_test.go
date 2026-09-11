@@ -628,7 +628,7 @@ func TestPreviewRejectsAResponseForAnOlderTarget(t *testing.T) {
 	m = selectLine(t, m, "session:api")
 	m.refreshPreviewForCursor()
 
-	stale := previewContentMsg{windowID: m.previewWindowID, seq: m.previewTargetSeq, text: "scrollback for api"}
+	stale := previewContentMsg{windowID: m.previewWindowID, targetSeq: m.previewTargetSeq, text: "scrollback for api"}
 	updated, _ := m.Update(stale)
 	m = updated.(Model)
 	if m.previewText != "scrollback for api" {
@@ -644,7 +644,7 @@ func TestPreviewRejectsAResponseForAnOlderTarget(t *testing.T) {
 	if m.previewWindowID != stale.windowID {
 		t.Fatalf("the round trip left the preview on window %d, want %d", m.previewWindowID, stale.windowID)
 	}
-	if m.previewTargetSeq == stale.seq {
+	if m.previewTargetSeq == stale.targetSeq {
 		t.Fatal("the round trip reused the generation the stale read was stamped with")
 	}
 
@@ -656,7 +656,7 @@ func TestPreviewRejectsAResponseForAnOlderTarget(t *testing.T) {
 
 	// A response for the current generation but the wrong window is refused
 	// too: both halves of the identity have to match.
-	wrongWindow := previewContentMsg{windowID: stale.windowID + 100, seq: m.previewTargetSeq, text: "someone else's scrollback"}
+	wrongWindow := previewContentMsg{windowID: stale.windowID + 100, targetSeq: m.previewTargetSeq, text: "someone else's scrollback"}
 	updated, _ = m.Update(wrongWindow)
 	if got := updated.(Model).previewText; got != "" {
 		t.Errorf("a response for another window repainted the pane with %q", got)
@@ -665,7 +665,8 @@ func TestPreviewRejectsAResponseForAnOlderTarget(t *testing.T) {
 	// And the periodic tick re-reads the SAME target under the SAME generation,
 	// so a read slower than the tick interval is not superseded before it lands.
 	seq := m.previewTargetSeq
-	ticked, _ := m.handlePreviewTick(previewTickMsg{})
+	m.previewPollSeq = 1
+	ticked, _ := m.handlePreviewTick(previewTickMsg{pollSeq: 1})
 	if got := ticked.(Model).previewTargetSeq; got != seq {
 		t.Errorf("a preview tick bumped the generation from %d to %d", seq, got)
 	}

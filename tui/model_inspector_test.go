@@ -29,7 +29,7 @@ func TestInspectorTellsAPendingReadFromAnEmptyBuffer(t *testing.T) {
 	}
 
 	updated, _ := m.handlePreviewContent(previewContentMsg{
-		windowID: m.previewWindowID, seq: m.previewTargetSeq, text: "",
+		windowID: m.previewWindowID, targetSeq: m.previewTargetSeq, text: "",
 	})
 	m = updated.(Model)
 	if !m.previewLoaded {
@@ -45,7 +45,7 @@ func TestInspectorTellsAPendingReadFromAnEmptyBuffer(t *testing.T) {
 
 	// A failure has answered the question too, and says which one it was.
 	updated, _ = m.handlePreviewContent(previewContentMsg{
-		windowID: m.previewWindowID, seq: m.previewTargetSeq, err: errors.New("no such window"),
+		windowID: m.previewWindowID, targetSeq: m.previewTargetSeq, err: errors.New("no such window"),
 	})
 	m = updated.(Model)
 	if got := inspectorPane(m); !strings.Contains(got, "error: no such window") {
@@ -63,7 +63,7 @@ func TestRetargetResetsTheInspectorsReadState(t *testing.T) {
 	m.retargetPreview(m.currentPreviewWindowID())
 
 	updated, _ := m.handlePreviewContent(previewContentMsg{
-		windowID: m.previewWindowID, seq: m.previewTargetSeq,
+		windowID: m.previewWindowID, targetSeq: m.previewTargetSeq,
 		text: strings.Repeat("line\n", 40),
 	})
 	m = updated.(Model)
