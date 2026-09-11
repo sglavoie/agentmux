@@ -62,22 +62,6 @@ func clearStatusCommandAvailability(m Model, ctx commands.Context) commands.Avai
 	return commands.Available()
 }
 
-func previewCommandAvailability(m Model, _ commands.Context) commands.Availability {
-	// Hiding an already-enabled preview must remain possible even after a
-	// terminal resize makes the viewport too small to enable it again.
-	if m.previewEnabled {
-		return commands.Available()
-	}
-	if m.cfg == nil {
-		return commands.Unavailable(commands.ReasonPreviewTooSmall)
-	}
-	cfg := m.cfg.Defaults.Preview
-	if !previewFits(m.width, m.height, dashboardPreviewEnableFooterLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
-		return commands.Unavailable(commands.ReasonPreviewTooSmall)
-	}
-	return commands.Available()
-}
-
 func undoCommandAvailability(m Model, _ commands.Context) commands.Availability {
 	if len(m.activeUndoEntries()) == 0 {
 		return commands.Unavailable(commands.ReasonNothingToUndo)
@@ -416,26 +400,24 @@ func commandDeclarations() []commands.Command[Model] {
 			},
 		},
 		{
-			ID: commands.TogglePreview, Group: commands.GroupExplore,
+			ID: commands.ToggleInspector, Group: commands.GroupExplore,
 			Title: func(m Model, _ commands.Context) string {
-				if m.previewEnabled {
-					return "Hide Preview"
+				if m.inspectorActive() {
+					return "Hide Inspector"
 				}
-				return "Show Preview"
+				return "Show Inspector"
 			},
-			Description:  "Toggle the selected session's live scrollback pane.",
-			Aliases:      []string{"hide", "pane", "scrollback"},
-			Availability: previewCommandAvailability,
+			Description: "Toggle the selected session's inspector pane.",
+			Aliases:     []string{"hide", "pane", "scrollback", "preview", "output"},
+			// No availability rule. The inspector has no size at which it must
+			// refuse: too narrow for a split means full-screen rather than
+			// nothing, so a dimmed palette row would be stating a limit that does
+			// not exist. Showing the pane can take the width the rail was drawn
+			// in, which is why toggleInspector reconciles the rail itself — the
+			// key and this entry share that body rather than each remembering.
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
-				updated, cmd := m.togglePreview()
-				out := updated.(Model)
-				// Showing the preview can take the width the rail was drawn
-				// in, so the rail's requested and actual state have to be
-				// reconciled before the next frame. The direct key did this
-				// and the palette entry did not; sharing one body is what
-				// makes the answer the same either way.
-				out.syncRailState()
-				return out, cmd
+				updated, cmd := m.toggleInspector()
+				return updated.(Model), cmd
 			},
 		},
 		{

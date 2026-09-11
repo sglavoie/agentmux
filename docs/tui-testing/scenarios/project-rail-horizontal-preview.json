@@ -1,14 +1,39 @@
 {
   "name": "project-rail-horizontal-preview",
   "fixture": "project_families",
-  "size": { "width": 240, "height": 30 },
-  "actions": [{ "type": "key", "key": "p" }],
+  "size": {
+    "width": 240,
+    "height": 30
+  },
+  "actions": [
+    {
+      "type": "key",
+      "key": "b"
+    }
+  ],
   "assertions": [
-    { "type": "mode_equals", "mode": "list" },
-    { "type": "contains_text", "text": "Projects       N A I" },
-    { "type": "contains_text", "text": "p: hide preview" },
-    { "type": "contains_text", "text": "api" },
-    { "type": "contains_text", "text": "(no output)" },
-    { "type": "no_layout_issues" }
+    {
+      "type": "mode_equals",
+      "mode": "list"
+    },
+    {
+      "type": "contains_text",
+      "text": "Projects       N A I"
+    },
+    {
+      "type": "contains_text",
+      "text": "api"
+    },
+    {
+      "type": "contains_text",
+      "text": "(no output)"
+    },
+    {
+      "type": "contains_text",
+      "text": "i: hide inspector"
+    },
+    {
+      "type": "no_layout_issues"
+    }
   ]
 }

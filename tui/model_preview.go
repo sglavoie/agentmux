@@ -157,7 +157,6 @@ func renderRootBody(m Model, chrome rootChrome) string {
 			sb.WriteString(renderHeader(m))
 		}
 		sb.WriteString(renderList(m))
-		sb.WriteString(renderDetailStripBlock(m))
 	}
 
 	return sb.String()
@@ -288,31 +287,23 @@ func rootFooterLines(m Model) []string {
 	return newRootChrome(m).footer
 }
 
-const (
-	// previewMinPaneWidth is the narrowest column either pane is worth drawing
-	// in. It bounds the preview from below and, through dashboardSplitWidths,
-	// the terminal width a horizontal split is attempted at all.
-	previewMinPaneWidth = 20
-	// previewMinPaneHeight is the same judgement on the vertical axis: below it
-	// the list and the preview cannot both hold anything readable.
-	previewMinPaneHeight = 4
-	// previewMinVerticalHeight is the floor on the stacked preview's own rows.
-	previewMinVerticalHeight = 3
-)
-
 // dashboardGeom is the dashboard body's rectangle, resolved once. renderSplit
 // draws from it and listVisibleHeight clamps the cursor against it, so the
 // renderer and the scroll arithmetic cannot disagree about how many rows exist
 // — including in the cases where the split silently falls back to the plain
 // list, which is exactly where the two used to drift.
 type dashboardGeom struct {
-	// split reports whether the preview pane is drawn at all. When it is false
+	// split reports whether the inspector pane is drawn at all. When it is false
 	// the list takes the whole body and the preview fields are zero.
 	split bool
-	// vertical reports a stacked split rather than a side-by-side one.
-	vertical bool
-	// rail reports that the project rail fits beside the list after the preview
-	// contract has claimed its space. railWidth is zero otherwise.
+	// fullScreen reports that the inspector has the whole body and no queue
+	// column is drawn. listWidth and listHeight are still populated in that
+	// state: the cursor and the scroll offset outlive the queue being hidden,
+	// and clamping them against a zero-row window would lose the selection the
+	// operator returns to.
+	fullScreen bool
+	// rail reports that the project rail fits beside the list after the
+	// inspector contract has claimed its space. railWidth is zero otherwise.
 	rail bool
 
 	railWidth, railHeight       int
@@ -320,55 +311,62 @@ type dashboardGeom struct {
 	previewWidth, previewHeight int
 }
 
-// dashboardPreviewRequested reports whether the model is asking for a preview
-// pane, before any question of whether one fits.
-func dashboardPreviewRequested(m Model) bool {
-	return m.previewEnabled && m.cfg != nil
+// dashboardSplitWidths resolves the side-by-side split's column allocation
+// against the approved pane floors: a queue column of at least
+// inspectorMinQueueCols, an inspector column of at least inspectorMinCols, one
+// divider between them, and a terminal at least as wide as the configured
+// minimum. It reports false when the operator has hidden the inspector, when
+// full screen has taken the row outright, or when any of those floors is
+// unmet — in which case the queue takes the whole width.
+//
+// The configured ratio is a PREFERENCE, not an allocation: it is clamped up to
+// the inspector's floor and down to whatever leaves the queue its own, so the
+// two floors are guaranteed by construction and the ratio decides only what
+// happens in the room above them.
+//
+// The dashboard has no vertical form. A stacked inspector would put the queue's
+// rows and the output's rows in competition on the axis both are scarcest on,
+// and the metadata block alone is six rows. cfg.Defaults.Preview.Direction still
+// governs the launcher's pane, which is why the key is read there and not here.
+//
+// Nothing in here reads m.height, and that is load-bearing: the footer's row
+// count is derived from the list geometry, so a width that depended on the
+// height would close a loop through the footer measurement. The body-row floor
+// is applied by dashboardGeometry and inspectorSplitFits instead, neither of
+// which is reachable from the footer.
+func dashboardSplitWidths(m Model) (listWidth, inspectorWidth int, ok bool) {
+	if !m.inspectorSplitRequested() || m.width <= 0 {
+		return 0, 0, false
+	}
+	floor := inspectorMinQueueCols + inspectorDividerCols + inspectorMinCols
+	if configured := m.cfg.Defaults.Preview.MinCols; configured > floor {
+		floor = configured
+	}
+	if m.width < floor {
+		return 0, 0, false
+	}
+	inspectorWidth = int(float64(m.width) * m.cfg.Defaults.Preview.Ratio)
+	if inspectorWidth < inspectorMinCols {
+		inspectorWidth = inspectorMinCols
+	}
+	if room := m.width - inspectorDividerCols - inspectorMinQueueCols; inspectorWidth > room {
+		inspectorWidth = room
+	}
+	return m.width - inspectorWidth - inspectorDividerCols, inspectorWidth, true
 }
 
-// dashboardSplitWidths resolves a side-by-side split's column allocation. It
-// reports false when there is no preview, when the direction is vertical (both
-// panes are then full width), or when the terminal cannot hold a readable
-// preview beside a list at the compact row floor.
+// dashboardBaseListPaneWidth returns the width the list column is laid out at,
+// and therefore the width its band is judged from. Width-only, for the reason
+// dashboardSplitWidths documents.
 //
-// The floor is the point of the ok result: MinRowWidth is the width the compact
-// band's fixed prefix and its smallest useful title need, so a list column below
-// it can only be an elided one. Pairing that with a preview is worse than
-// dropping the preview, which is what the caller does.
-//
-// Nothing here reads m.height. That is load-bearing: the detail strip's height
-// charge is derived from the list column's width, so a width that depended on
-// the height would close a loop between the two and let a resize oscillate
-// between the split and the plain list.
-func dashboardSplitWidths(m Model) (listWidth, previewWidth int, ok bool) {
-	if !dashboardPreviewRequested(m) || m.width < previewMinPaneWidth {
-		return 0, 0, false
-	}
-	if m.cfg.Defaults.Preview.Direction == "vertical" {
-		return 0, 0, false
-	}
-	maxPreview := m.width - dashboard.MinRowWidth() - 1
-	previewWidth = int(float64(m.width) * m.cfg.Defaults.Preview.Ratio)
-	if previewWidth > maxPreview {
-		previewWidth = maxPreview
-	}
-	if previewWidth < previewMinPaneWidth {
-		return 0, 0, false
-	}
-	return m.width - previewWidth - 1, previewWidth, true
-}
-
-// dashboardListPaneWidth returns the width the list column is laid out at, and
-// therefore the width its band is judged from. Width-only, for the reason
-// dashboardSplitWidths documents: a height-dependent answer here would feed the
-// detail strip's charge back into the geometry that decides the strip.
-//
-// A short terminal can still drop the split after this returns, which leaves
-// the list wider than the band it was charged for. That direction is safe — the
-// strip is reserved and drawn consistently, it is merely more detail than a
-// standard-band list strictly needs — and it is the price of the loop staying
-// open.
+// A short terminal can still drop the split after this returns, which leaves the
+// list wider than the band it was charged for. That direction is safe — a row
+// drawn for a narrower band in a wider column is merely less dense than it could
+// be — and it is the price of the loop staying open.
 func dashboardBaseListPaneWidth(m Model) int {
+	if m.inspectorFullScreenActive() {
+		return 0
+	}
 	if listWidth, _, ok := dashboardSplitWidths(m); ok {
 		return listWidth
 	}
@@ -403,11 +401,18 @@ func dashboardListPaneWidth(m Model) int {
 	return base
 }
 
-// dashboardGeometry lays the body out: the list column, and the preview pane
-// when one fits. Every height term the renderer will spend is subtracted here
-// once — the chrome above the list, the compact detail strip below it, the
+// dashboardGeometry lays the body out: the queue column, and the inspector pane
+// in whichever of its two forms the terminal admits. Every height term the
+// renderer will spend is subtracted here once — the chrome above the list, the
 // padding row, the footer, and the sticky status bar — so no caller has to
 // re-derive the same subtraction and get it subtly wrong.
+//
+// The three outcomes are decided in the order their preconditions are
+// independent. Full screen answers first and asks nothing of the width, because
+// a single pane has no floors to clear beyond existing. The split answers next
+// and must clear both: the column floors dashboardSplitWidths enforces and the
+// body-row floor, which is applied here rather than there so the width
+// resolution stays free of the footer loop. Everything else is the queue alone.
 func dashboardGeometry(m Model) dashboardGeom {
 	width := m.width
 	if width < 0 {
@@ -415,50 +420,23 @@ func dashboardGeometry(m Model) dashboardGeom {
 	}
 	paneHeight := dashboardChromeFor(m).paneRows(m.height)
 
-	listWidth, previewWidth, horizontal := dashboardSplitWidths(m)
-	vertical := dashboardPreviewRequested(m) && width >= previewMinPaneWidth &&
-		m.cfg.Defaults.Preview.Direction == "vertical"
+	if m.inspectorFullScreenActive() {
+		return dashboardGeom{
+			split: true, fullScreen: true,
+			// The queue keeps its row budget even though it is not drawn, so the
+			// cursor and the offset survive the round trip through full screen.
+			listWidth: width, listHeight: clampListHeight(paneHeight),
+			previewWidth: width, previewHeight: paneHeight,
+		}
+	}
 
-	if paneHeight < previewMinPaneHeight || (!horizontal && !vertical) {
+	listWidth, inspectorWidth, widthsFit := dashboardSplitWidths(m)
+	if !widthsFit || paneHeight < inspectorMinBodyRows {
 		listHeight := clampListHeight(paneHeight)
 		railWidth := dashboardRailWidth(m)
 		return dashboardGeom{
 			rail: railWidth > 0, railWidth: railWidth, railHeight: listHeight,
 			listWidth: width - railWidth - boolWidth(railWidth > 0), listHeight: listHeight,
-		}
-	}
-	if vertical {
-		previewHeight := int(float64(paneHeight) * m.cfg.Defaults.Preview.Ratio)
-		if previewHeight < previewMinVerticalHeight {
-			previewHeight = previewMinVerticalHeight
-		}
-		// The list's floor is taken out of the preview rather than out of the
-		// pane, so the two heights plus the divider always sum to exactly
-		// paneHeight. Clamping the list up afterwards instead would make the
-		// body taller than the space it was given, and the root would clip the
-		// bottom of the preview to fit it back.
-		if room := paneHeight - listMinVisible - 1; previewHeight > room {
-			previewHeight = room
-		}
-		if previewHeight < 1 {
-			listHeight := clampListHeight(paneHeight)
-			railWidth := dashboardRailWidth(m)
-			return dashboardGeom{
-				rail: railWidth > 0, railWidth: railWidth, railHeight: listHeight,
-				listWidth: width - railWidth - boolWidth(railWidth > 0), listHeight: listHeight,
-			}
-		}
-		railWidth := dashboardRailWidth(m)
-		return dashboardGeom{
-			split:         true,
-			vertical:      true,
-			rail:          railWidth > 0,
-			railWidth:     railWidth,
-			railHeight:    paneHeight - previewHeight - 1,
-			listWidth:     width - railWidth - boolWidth(railWidth > 0),
-			listHeight:    paneHeight - previewHeight - 1,
-			previewWidth:  width,
-			previewHeight: previewHeight,
 		}
 	}
 	railWidth := dashboardRailWidth(m)
@@ -469,7 +447,7 @@ func dashboardGeometry(m Model) dashboardGeom {
 		railHeight:    clampListHeight(paneHeight),
 		listWidth:     listWidth - railWidth - boolWidth(railWidth > 0),
 		listHeight:    clampListHeight(paneHeight),
-		previewWidth:  previewWidth,
+		previewWidth:  inspectorWidth,
 		previewHeight: paneHeight,
 	}
 }
@@ -559,6 +537,13 @@ func inspectorContentFor(m Model, sess session.RunningSession, selected bool) da
 // and preview resize checks. ModeList measures its reflowed content; other
 // modes retain their established fixed budgets. The sticky status row is
 // accounted for separately by callers.
+//
+// The dashboard footer is no longer suppressed when the inspector is on screen.
+// It could be when the inspector was an opt-in the operator had just pressed a
+// key for; now that the pane is the default, suppressing it would leave a
+// first-run dashboard with no key hints at all. It is also what keeps the
+// inspector's body-row floor out of a loop: the fit test reads the footer's row
+// count, so a footer that read the fit could not be measured.
 func footerBudgetLines(m Model) int {
 	if m.mode == ModePicker {
 		return pickerFooterLineCount(m)
@@ -566,22 +551,7 @@ func footerBudgetLines(m Model) int {
 	if m.mode != ModeList {
 		return 2
 	}
-	if m.previewEnabled {
-		// Footer keybindings are suppressed while preview owns the split pane.
-		return 0
-	}
 	return listFooterBudgetLineCount(m)
-}
-
-// dashboardPreviewEnableFooterLines returns the footer budget used to decide
-// whether enabling ModeList preview will fit. A successful enable suppresses
-// the regular dashboard footer, so the preview-off footer must not make the
-// initial fit check stricter than the enabled layout.
-func dashboardPreviewEnableFooterLines(m Model) int {
-	if m.mode != ModeList {
-		return footerBudgetLines(m)
-	}
-	return 0
 }
 
 const (
@@ -599,31 +569,6 @@ func (m *Model) pushPreviewNotice(text string) tea.Cmd {
 
 func (m *Model) clearPreviewNotice() {
 	m.clearToastByID(previewNoticeToastID)
-}
-
-// togglePreview flips the preview pane on/off. Returns the model and any cmd
-// (immediate fetch + ticker) to dispatch on enable.
-func (m Model) togglePreview() (tea.Model, tea.Cmd) {
-	if m.previewEnabled {
-		m.previewEnabled = false
-		m.retargetPreview(0)
-		scrollListToCursor(&m)
-		return m, nil
-	}
-	cfg := m.cfg.Defaults.Preview
-	if !previewFits(m.width, m.height, dashboardPreviewEnableFooterLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
-		return m, m.pushPreviewNotice("preview unavailable: terminal too small")
-	}
-	m.previewEnabled = true
-	m.retargetPreview(m.currentPreviewWindowID())
-	m.clearPreviewNotice()
-	scrollListToCursor(&m)
-	// Both halves go through the controller: the read may coalesce behind one
-	// still in flight from before the pane was hidden, and the chain bump retires
-	// any tick the previous chain has left over, so a hide/show cycle faster than
-	// the refresh interval cannot end with two chains polling.
-	read := m.requestPreviewRead()
-	return m, tea.Batch(read, m.startPreviewPoll())
 }
 
 // retargetPreview points the pane at a new target and opens a new generation for
@@ -658,7 +603,7 @@ func (m Model) activePreviewEnabled() bool {
 	if m.mode == ModePicker {
 		return m.pickerPreviewEnabled
 	}
-	return m.previewEnabled
+	return m.inspectorActive()
 }
 
 // currentPreviewWindowID returns the window ID the preview should track for
@@ -714,7 +659,7 @@ func (m *Model) refreshPreviewForPickerCursor() tea.Cmd {
 // has moved to a session backed by a different window. Returns nil when
 // preview is off or the selection still points at the same window.
 func (m *Model) refreshPreviewForCursor() tea.Cmd {
-	if !m.previewEnabled {
+	if !m.inspectorActive() {
 		return nil
 	}
 	// A selection that is not a session tracks window 0, which fetchPreviewCmd
@@ -737,7 +682,7 @@ func (m *Model) refreshPreviewForCursor() tea.Cmd {
 // resuming without the bump is how the picker's exit used to leave the tick it
 // had already scheduled beating beside the one it started.
 func (m *Model) resumeListPreviewTickCmd() tea.Cmd {
-	if !m.previewEnabled {
+	if !m.inspectorActive() {
 		return nil
 	}
 	return m.startPreviewPoll()
@@ -767,13 +712,11 @@ func (m Model) togglePickerPreview() (tea.Model, tea.Cmd) {
 	return m, tea.Batch(read, m.startPreviewPoll())
 }
 
-// disablePreviewWithNotice turns the dashboard preview off and shows a
-// transient status-bar notice. Used by the resize guard.
-func (m *Model) disablePreviewWithNotice(msg string) tea.Cmd {
-	m.previewEnabled = false
-	m.retargetPreview(0)
-	return m.pushPreviewNotice(msg)
-}
+// The dashboard has no counterpart to disablePickerPreviewWithNotice on
+// purpose. A resize that stops clearing the inspector's floors does not disable
+// anything: the intent stays where the operator left it and the split simply
+// stops being drawn until the terminal can hold one again. A notice would be
+// announcing a decision nothing made.
 
 func (m *Model) disablePickerPreviewWithNotice(msg string) tea.Cmd {
 	m.pickerPreviewEnabled = false

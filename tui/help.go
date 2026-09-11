@@ -230,6 +230,19 @@ func helpMeaningLabel(meanings []helpKeyMeaning, palettes int) string {
 	if same {
 		return meanings[0].label
 	}
+	// A one-palette section has one scope, so repeating its name after every
+	// meaning says nothing. Tab is why this case exists: it is declared twice in
+	// the dashboard palette — `switch pane` beside an inspector, `focus next`
+	// without one — and the tagged form spelled that "switch pane (dashboard) ·
+	// focus next (dashboard)", which names the scope twice and the condition
+	// that selects between them not at all.
+	if palettes == 1 {
+		parts := make([]string, 0, len(meanings))
+		for _, m := range meanings {
+			parts = append(parts, m.label)
+		}
+		return strings.Join(parts, " · ")
+	}
 	parts := make([]string, 0, len(meanings))
 	for _, m := range meanings {
 		parts = append(parts, fmt.Sprintf("%s (%s)", m.label, m.scope))

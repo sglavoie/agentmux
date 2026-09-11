@@ -228,16 +228,22 @@ func TestPickerPreviewOverrideHeaderColor(t *testing.T) {
 	}
 }
 
-// TestSelectedSessionContextUsesTheConfiguredDefaultProfileColor is where the
-// row's identity color went. The queue row draws its name unstyled — a neutral
-// name is what lets the amber status beside it mean something — so the project's
-// color is now carried by the detail strip, which describes the selection.
+// TestQueueRowDrawsNoProfileColorWhileTheInspectorDoes is where the row's
+// identity color went. The queue row draws its name unstyled — a neutral name is
+// what lets the amber status beside it mean something — and the project's color
+// is carried by the inspector, which describes the selection rather than every
+// row in the view.
 //
 // The claim that survives the move is the one that was load-bearing: a session
 // LAUNCHED under an override profile still wears its project's CONFIGURED
 // default color, so the operator's color association with a project is not
 // rewritten by how a particular window happened to start.
-func TestSelectedSessionContextUsesTheConfiguredDefaultProfileColor(t *testing.T) {
+//
+// What did NOT survive is the harness sharing that colored span. The inspector
+// says the harness on its dim `Agent` line instead, because the pane has room to
+// label a fact rather than encode it, and one identity color on the title is
+// what the eye is meant to find.
+func TestQueueRowDrawsNoProfileColorWhileTheInspectorDoes(t *testing.T) {
 	cfg := &config.Config{
 		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts: []config.Account{
@@ -266,16 +272,11 @@ func TestSelectedSessionContextUsesTheConfiguredDefaultProfileColor(t *testing.T
 	yellowHex := yellow.ForegroundHex()
 
 	items := dashboard.BuildItemsFor(dashboard.ViewUrgency, []session.RunningSession{s}, nil)
-	item, _ := items.At(0)
-	lines := dashboard.RenderDetailStrip(dashboard.DetailStripInput{
-		Width: 100, Items: items, Item: item, Selected: true, Cfg: cfg,
+	out := dashboard.RenderInspector(dashboard.InspectorInput{
+		Width: 100, Height: 12, Content: dashboard.InspectorReady, Session: s, Cfg: cfg,
 	})
-
-	if indexColoredSegment(lines[0], yellowHex, "api") < 0 {
-		t.Errorf("expected the selected session's title to keep the project default profile color (%s, yellow); strip:\n%q", yellowHex, lines[0])
-	}
-	if indexColoredSegment(lines[0], yellowHex, "claude") < 0 {
-		t.Errorf("expected the harness to sit inside the same identity span (%s, yellow); strip:\n%q", yellowHex, lines[0])
+	if indexColoredSegment(out, yellowHex, "api") < 0 {
+		t.Errorf("expected the selected session's title to keep the project default profile color (%s, yellow); inspector:\n%s", yellowHex, out)
 	}
 
 	// The row itself says nothing about the profile, which is the point: the only

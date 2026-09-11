@@ -10,7 +10,8 @@
     { "type": "excludes_text", "text": "/ to filter" },
     { "type": "excludes_text", "text": "icons:" },
     { "type": "excludes_text", "text": "🦊 claude" },
-    { "type": "contains_text", "text": "api · work · claude" },
+    { "type": "excludes_text", "text": "│" },
+    { "type": "contains_text", "text": "i: inspector" },
     { "type": "no_layout_issues" }
   ]
 }

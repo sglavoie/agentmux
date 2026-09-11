@@ -11,8 +11,8 @@
     { "type": "mode_equals", "mode": "list" },
     { "type": "cursor_equals", "cursor": 0 },
     { "type": "contains_text", "text": "▸ 🔑 api  1 attention · 1 active · 1 idle" },
-    { "type": "excludes_text", "text": "api-feat-x" },
-    { "type": "excludes_text", "text": "api-hotfix" },
+    { "type": "excludes_text", "text": "▌   api-feat-x" },
+    { "type": "excludes_text", "text": "▌   api-hotfix" },
     { "type": "contains_text", "text": "▾ ⚡ docs  1 active · 1 idle" },
     { "type": "contains_text", "text": "Sessions: 7 · 2 attention · 2 active · 3 idle" },
     { "type": "no_layout_issues" }

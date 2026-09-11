@@ -1,5 +1,5 @@
 {
-  "name": "compact-selected-family-strip-fit",
+  "name": "compact-family-below-split-floor",
   "fixture": "project_families",
   "size": { "width": 72, "height": 30 },
   "actions": [
@@ -10,8 +10,9 @@
     { "type": "mode_equals", "mode": "list" },
     { "type": "cursor_equals", "cursor": 0 },
     { "type": "contains_text", "text": "▌ ▾ 🔑 api  1 attention · 1 active · 1 idle" },
-    { "type": "contains_text", "text": "api · 1 attention · 1 active · 1 idle" },
-    { "type": "contains_text", "text": "api · work · claude · main* · ~/projects/api" },
+    { "type": "excludes_text", "text": "│" },
+    { "type": "excludes_text", "text": "~/projects/api" },
+    { "type": "contains_text", "text": "i: inspector" },
     { "type": "contains_text", "text": "Sessions: 7 · 2 attention · 2 active · 3 idle" },
     { "type": "no_layout_issues" }
   ]

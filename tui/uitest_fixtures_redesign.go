@@ -22,14 +22,6 @@ import (
 	"github.com/sglavoie/agentmux/tui/commands"
 )
 
-// redesignPreviewDefaults is the Preview block config.Load would have filled
-// in. A fixture builds its Config literally and never runs that defaulting
-// pass, and a zero block has ratio 0 — which every split calculation reads as
-// "no preview fits", making the pane unreachable from a scenario.
-func redesignPreviewDefaults() config.PreviewConfig {
-	return config.PreviewConfig{Direction: "horizontal", Ratio: 0.5, RefreshMs: 500, MinCols: 100, MinRows: 30}
-}
-
 // duplicateNamesFixture is six rows whose names collide, arranged so that each
 // rung of the disambiguation ladder is the ONLY rung that separates one pair.
 //
@@ -60,7 +52,7 @@ func duplicateNamesFixture() uitestFixture {
 	cfg := &config.Config{
 		Defaults: config.Defaults{
 			Sort: "alpha", RefreshInterval: 2,
-			Preview: redesignPreviewDefaults(),
+			Preview: uitestPreviewDefaults(),
 		},
 		HarnessEmojis: map[string]string{"claude": "🦊", "codex": "🤖"},
 		HarnessColors: map[string]string{"claude": "blue", "codex": "green"},
@@ -137,7 +129,7 @@ func pausedOutputFixture() uitestFixture {
 	cfg := &config.Config{
 		Defaults: config.Defaults{
 			Sort: "alpha", RefreshInterval: 2,
-			Preview: redesignPreviewDefaults(),
+			Preview: uitestPreviewDefaults(),
 		},
 		HarnessEmojis: map[string]string{"claude": "🦊", "codex": "🤖"},
 		HarnessColors: map[string]string{"claude": "blue", "codex": "green"},
@@ -200,7 +192,7 @@ func healthStatesFixture() uitestFixture {
 	cfg := &config.Config{
 		Defaults: config.Defaults{
 			Sort: "alpha", RefreshInterval: 2,
-			Preview: redesignPreviewDefaults(),
+			Preview: uitestPreviewDefaults(),
 		},
 		HarnessEmojis: map[string]string{"claude": "🦊", "codex": "🤖"},
 		HarnessColors: map[string]string{"claude": "blue", "codex": "green"},
@@ -270,7 +262,7 @@ func attentionOverlapFixture() uitestFixture {
 	cfg := &config.Config{
 		Defaults: config.Defaults{
 			Sort: "alpha", RefreshInterval: 2,
-			Preview: redesignPreviewDefaults(),
+			Preview: uitestPreviewDefaults(),
 		},
 		HarnessEmojis: map[string]string{"claude": "🦊", "codex": "🤖"},
 		HarnessColors: map[string]string{"claude": "blue", "codex": "green"},

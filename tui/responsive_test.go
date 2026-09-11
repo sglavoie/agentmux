@@ -5,7 +5,6 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -74,16 +73,24 @@ func responsiveRows() []session.RunningSession {
 }
 
 // responsiveModel returns a dashboard parked on the responsive fixture at a
-// given size, view, and preview setting.
-func responsiveModel(width, height int, view dashboard.ViewMode, preview bool) Model {
+// given size, view, and inspector intent.
+//
+// The boolean is intent, not outcome. It used to be the preview's single
+// on/off bit, which a resize was allowed to clear; it now selects between the
+// automatic default and an explicit hide, and whether a pane is actually drawn
+// is left to the geometry the case is exercising. A caller asking for the
+// inspector at 36 cells gets a queue-only dashboard, which is the case worth
+// walking rather than one to skip.
+func responsiveModel(width, height int, view dashboard.ViewMode, inspector bool) Model {
 	m := loadSessions(testModel(), responsiveRows())
 	m.listView = view
 	m.rebuildItems()
 	m.width = width
 	m.height = height
-	m.previewEnabled = preview
-	if preview {
-		m.cfg.Defaults.Preview = config.PreviewConfig{Ratio: 0.5, Direction: "horizontal"}
+	if inspector {
+		m.inspectorDisplay = inspectorAutomatic
+	} else {
+		m.inspectorDisplay = inspectorHidden
 	}
 	scrollListToCursor(&m)
 	return m
@@ -97,13 +104,13 @@ func responsiveCases(t *testing.T, fn func(t *testing.T, m Model)) {
 	}{{"sessions", dashboard.ViewUrgency}, {"families", dashboard.ViewProjects}} {
 		for _, width := range responsiveWidths {
 			for _, height := range responsiveHeights {
-				for _, preview := range []bool{false, true} {
+				for _, inspector := range []bool{false, true} {
 					name := view.name + "/w" + itoa(width) + "h" + itoa(height)
-					if preview {
-						name += "/preview"
+					if inspector {
+						name += "/inspector"
 					}
 					t.Run(name, func(t *testing.T) {
-						fn(t, responsiveModel(width, height, view.mode, preview))
+						fn(t, responsiveModel(width, height, view.mode, inspector))
 					})
 				}
 			}
@@ -154,56 +161,67 @@ func TestResponsiveListPaneFitsItsColumn(t *testing.T) {
 	})
 }
 
-// TestResponsiveSplitNeverStarvesTheListColumn pins the preview fallback rule:
-// a split is drawn only when the list column still clears the compact row floor,
-// so there is no width at which the operator trades a readable list for a
-// preview beside an elided one.
+// TestResponsiveSplitNeverStarvesTheListColumn pins the split fallback rule:
+// a split is drawn only when the queue column still clears the compact row
+// floor, so there is no width at which the operator trades a readable list for
+// an inspector beside an elided one.
 func TestResponsiveSplitNeverStarvesTheListColumn(t *testing.T) {
 	responsiveCases(t, func(t *testing.T, m Model) {
 		g := dashboardGeometry(m)
-		if !g.split || g.vertical {
+		if !g.split || g.fullScreen {
 			return
 		}
 		if g.listWidth < dashboard.MinRowWidth() {
-			t.Fatalf("horizontal split left a %d-cell list column, below the compact floor %d",
+			t.Fatalf("split left a %d-cell queue column, below the compact floor %d",
 				g.listWidth, dashboard.MinRowWidth())
 		}
 		if g.listWidth+1+g.previewWidth > m.width {
-			t.Fatalf("list %d + divider + preview %d exceeds the viewport %d",
+			t.Fatalf("queue %d + divider + inspector %d exceeds the viewport %d",
 				g.listWidth, g.previewWidth, m.width)
 		}
 	})
 }
 
 // TestResponsiveGeometryIsStableUnderRepeatedResolution is the anti-oscillation
-// guard, and it now asserts the stronger form of the property it was written
-// for. The strip's height charge used to be derived from the list column's
-// width, which is a quantity the height could have fed back into; it is a
-// constant reservation at every width, so the one input it still reads is
-// whether there is any geometry at all.
+// guard, and with the inspector it has a sharper edge than it did under the
+// preview. The body-row floor the split is gated on is measured from a chrome
+// budget that includes the footer, and the footer's own row count is decided by
+// what it prints — so a token that asked whether the inspector fit would make
+// resolution a fixpoint search rather than a computation. Resolving twice and
+// demanding the same answer is how that shows up as a failure instead of as a
+// flickering pane.
 //
-// The unconditional charge is the point rather than a simplification: the queue
-// row carries no profile, harness, branch, directory, supervision, lock, mute,
-// or timer at any width, so a wide terminal has nowhere else to say them and
-// gets exactly the gap a narrow one does.
+// It asserts nothing about a detail strip: there is no longer one. The two rows
+// under the list that used to restate the selection's metadata were retired
+// with dashboard `p`, because the inspector carries the same facts at every
+// width and those rows cost two sessions the list could have shown.
 func TestResponsiveGeometryIsStableUnderRepeatedResolution(t *testing.T) {
 	responsiveCases(t, func(t *testing.T, m Model) {
 		first := dashboardGeometry(m)
 		if second := dashboardGeometry(m); second != first {
 			t.Fatalf("geometry is not deterministic: %+v then %+v", first, second)
 		}
-		if got := detailStripBudgetLines(m); got != detailStripBudgetLines(m) {
-			t.Fatal("detail strip budget is not deterministic")
+		if got := footerBudgetLines(m); got != footerBudgetLines(m) {
+			t.Fatal("footer budget is not deterministic")
 		}
-		if got := detailStripBudgetLines(m); got != dashboard.DetailStripLines {
-			t.Fatalf("detail strip budget = %d, want the constant %d for a %d-cell list column",
-				got, dashboard.DetailStripLines, dashboardListPaneWidth(m))
+		if got := listChromeLines(m); got != listChromeLines(m) {
+			t.Fatal("list chrome budget is not deterministic")
 		}
 	})
 }
 
-func TestResponsiveRailThresholdBandsAndPreviewGeometry(t *testing.T) {
-	base := responsiveModel(160, 40, dashboard.ViewUrgency, false)
+// responsiveRailModel is responsiveModel with the project rail asked for. The
+// rail is opt-in now — the inspector took the columns it used to sit in — so a
+// test about rail geometry has to press its toggle the way an operator would
+// rather than inherit it from the default dashboard.
+func responsiveRailModel(width, height int, view dashboard.ViewMode, inspector bool) Model {
+	m := responsiveModel(width, height, view, inspector)
+	m.railRequested = true
+	return m
+}
+
+func TestResponsiveRailThresholdBandsAndInspectorGeometry(t *testing.T) {
+	base := responsiveRailModel(160, 40, dashboard.ViewUrgency, false)
 	railWidth := dashboard.RailWidth(dashboardRailRows(base))
 	threshold := railWidth + 1 + 80
 
@@ -231,21 +249,24 @@ func TestResponsiveRailThresholdBandsAndPreviewGeometry(t *testing.T) {
 		}
 	}
 
-	horizontal := base
-	horizontal.width = 240
-	horizontal.previewEnabled = true
-	horizontal.cfg.Defaults.Preview = config.PreviewConfig{Ratio: .5, Direction: "horizontal"}
-	hg := dashboardGeometry(horizontal)
-	if !hg.split || hg.vertical || !hg.rail || hg.railWidth+1+hg.listWidth+1+hg.previewWidth != horizontal.width || hg.listWidth < 80 {
-		t.Fatalf("horizontal rail/list/preview geometry = %+v", hg)
+	// Three vertical strips on one row: rail, queue, inspector. The sum is the
+	// assertion — an off-by-one in any of the two dividers is a column of the
+	// terminal nobody owns, which the renderer would either leave blank or
+	// overrun.
+	split := responsiveRailModel(240, 40, dashboard.ViewUrgency, true)
+	sg := dashboardGeometry(split)
+	if !sg.split || sg.fullScreen || !sg.rail ||
+		sg.railWidth+1+sg.listWidth+1+sg.previewWidth != split.width || sg.listWidth < 80 {
+		t.Fatalf("rail/queue/inspector geometry = %+v", sg)
 	}
 
-	vertical := at
-	vertical.previewEnabled = true
-	vertical.cfg.Defaults.Preview = config.PreviewConfig{Ratio: .4, Direction: "vertical"}
-	vg := dashboardGeometry(vertical)
-	if !vg.split || !vg.vertical || !vg.rail || vg.railWidth+1+vg.listWidth != vertical.width || vg.previewWidth != vertical.width {
-		t.Fatalf("vertical rail/list over full preview geometry = %+v", vg)
+	// Full screen is the one state the rail cannot share a row with: there is no
+	// queue column beside it to filter, so the strip would be a scope picker for
+	// a list that is not on screen.
+	full := split
+	full.inspectorDisplay = inspectorFullScreen
+	if g := dashboardGeometry(full); !g.fullScreen || g.rail || g.previewWidth != full.width {
+		t.Fatalf("full-screen inspector geometry = %+v", g)
 	}
 
 	projects := base
@@ -255,13 +276,14 @@ func TestResponsiveRailThresholdBandsAndPreviewGeometry(t *testing.T) {
 	}
 }
 
-// TestRailChromeAgreesWithGeometryAcrossSizes pins the short horizontal-preview
-// fallback where the body used to admit a rail from the full terminal width
-// while the header and footer rejected it from the preview-reserved list width.
+// TestRailChromeAgreesWithGeometryAcrossSizes pins the short-terminal fallback
+// where the body used to admit a rail from the full terminal width while the
+// header and footer rejected it from the width the second pane had already
+// claimed.
 func TestRailChromeAgreesWithGeometryAcrossSizes(t *testing.T) {
 	for width := 90; width <= 200; width++ {
 		for height := 8; height <= 30; height++ {
-			m := responsiveModel(width, height, dashboard.ViewUrgency, true)
+			m := responsiveRailModel(width, height, dashboard.ViewUrgency, true)
 			g := dashboardGeometry(m)
 			if visible := listRailVisible(m); visible != g.rail {
 				t.Fatalf("%dx%d rail visibility: geometry=%v chrome=%v geom=%+v",
@@ -276,13 +298,13 @@ func TestRailChromeAgreesWithGeometryAcrossSizes(t *testing.T) {
 		}
 	}
 
-	// At the original 106x9 reproduction the horizontal preview's reserved base
-	// is too narrow for the rail even though the preview is dropped for height.
+	// At the original 106x9 reproduction the split's reserved queue base is too
+	// narrow for the rail even though the split itself is dropped for height.
 	// The request remains explicit in the header so a later resize cannot make
 	// the rail silently reappear without an operator-visible toggle.
-	m := responsiveModel(106, 9, dashboard.ViewUrgency, true)
+	m := responsiveRailModel(106, 9, dashboard.ViewUrgency, true)
 	if g := dashboardGeometry(m); g.rail {
-		t.Fatalf("106x9 rail should be suppressed from the shared preview base: %+v", g)
+		t.Fatalf("106x9 rail should be suppressed from the shared split base: %+v", g)
 	}
 	header := stripAnsi(layout.SectionLines(renderHeader(m))[0])
 	if !strings.Contains(header, "b: hide rail") {
@@ -295,20 +317,30 @@ func TestRailChromeAgreesWithGeometryAcrossSizes(t *testing.T) {
 	}
 }
 
-// TestResponsiveDetailStripDrawsExactlyWhatItReserved is the budget/render
-// agreement for the strip. A block that reserved two lines and drew one would
-// shift the list's bottom edge, and the scroll arithmetic would be wrong by
-// exactly that much.
-func TestResponsiveDetailStripDrawsExactlyWhatItReserved(t *testing.T) {
+// TestResponsiveInspectorDrawsExactlyWhatItReserved is the budget/render
+// agreement the detail strip's used to be. The strip is gone, and the pane that
+// replaced it is charged against the same body-row budget the queue is, so the
+// claim transfers rather than disappearing: whatever dashboardGeometry handed
+// the inspector is what the inspector has to fill, to the row and to the cell.
+//
+// A pane that under-drew would leave the composed frame short of the viewport;
+// one that over-drew would push the footer off the bottom of a terminal the
+// scroll math had already clamped the cursor against.
+func TestResponsiveInspectorDrawsExactlyWhatItReserved(t *testing.T) {
 	responsiveCases(t, func(t *testing.T, m Model) {
-		want := detailStripBudgetLines(m)
-		got := len(layout.SectionLines(renderDetailStripBlock(m)))
-		if got != want {
-			t.Fatalf("detail strip drew %d lines against a reservation of %d", got, want)
+		g := dashboardGeometry(m)
+		if !g.split {
+			return
 		}
-		if want != 0 && want != dashboard.DetailStripLines {
-			t.Fatalf("detail strip reserved %d lines, want either 0 or %d",
-				want, dashboard.DetailStripLines)
+		lines := layout.SectionLines(renderPreviewPane(m, g.previewWidth, g.previewHeight))
+		if len(lines) > g.previewHeight {
+			t.Fatalf("inspector drew %d rows against a reservation of %d", len(lines), g.previewHeight)
+		}
+		for i, line := range lines {
+			if w := layout.StyledWidth(line); w > g.previewWidth {
+				t.Fatalf("inspector line %d is %d cells wide, column is %d: %q",
+					i, w, g.previewWidth, stripAnsi(line))
+			}
 		}
 	})
 }
@@ -327,11 +359,15 @@ func TestResponsiveChromeBudgetMatchesRenderedChrome(t *testing.T) {
 		if got := chromeAboveListLines(m); got != above {
 			t.Fatalf("chrome above the list: budget %d, rendered %d", got, above)
 		}
-		if got, want := chromeBelowListLines(m), detailStripBudgetLines(m); got != want {
-			t.Fatalf("chrome below the list: budget %d, strip %d", got, want)
-		}
 		if got, want := footerBudgetLines(m), len(rootFooterLines(m)); got != want {
 			t.Fatalf("footer budget %d, rendered footer rows %d", got, want)
+		}
+		// Nothing is drawn between the panes and the padding row, so the total
+		// chrome charge is exactly what is above the list plus what is below the
+		// footer. A reintroduced strip that charged rows without rendering them
+		// would move the cursor off the bottom of the window it was clamped to.
+		if got, want := listChromeLines(m), above+dashboardPaddingLines+len(rootFooterLines(m))+statusBarLines; got != want {
+			t.Fatalf("total chrome budget %d, rendered chrome %d", got, want)
 		}
 	})
 }

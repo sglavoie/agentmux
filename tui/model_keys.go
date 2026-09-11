@@ -220,6 +220,18 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleRailKey(key)
 	}
 
+	// The inspector claims the navigation keys and nothing else while it holds
+	// the focus, so every command key below still reaches its binding. It is
+	// asked before the chord intercept because a pending ]/[ chord is a jump
+	// through the QUEUE: arming one while the keys are aimed at the output pane
+	// is the operator's own doing, and the follow-up letter belongs to the chord
+	// either way.
+	if m.pendingJumpDir == 0 && m.inspectorFocused() {
+		if updated, cmd, claimed := m.handleInspectorKey(key); claimed {
+			return updated, cmd
+		}
+	}
+
 	// Chord intercept. When ]/[ has set pendingJumpDir, the very next key is
 	// the chord follow-up — including q, which would otherwise quit, and
 	// single letters like p/e/a/c that map to existing list actions. The
@@ -430,7 +442,15 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.expandSelection()
 
+	// Tab means "move to the next thing that takes keys". With an inspector on
+	// screen that is the other body pane, and the chip ring gives the key up:
+	// chips remain reachable by 1-9 and removable by backspace, while the two
+	// panes have no other way to hand the keyboard between them. With no
+	// inspector there is nothing to switch to and the chips keep the key.
 	case keyTab:
+		if m.toggleInspectorFocus() {
+			return m, nil
+		}
 		if n := len(m.activeFilter.Components()); n > 0 {
 			if m.focusedChipIdx < 0 {
 				m.focusedChipIdx = 0
@@ -438,6 +458,37 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.focusedChipIdx = (m.focusedChipIdx + 1) % n
 			}
 		}
+
+	// Two panes are a cycle of length two, so shift+tab is the same move as tab
+	// rather than its inverse. It is bound anyway: an operator who reaches for
+	// the reverse of a pane switch should land on the pane they meant, not on
+	// nothing.
+	case keyShiftTab:
+		if m.toggleInspectorFocus() {
+			return m, nil
+		}
+		if n := len(m.activeFilter.Components()); n > 0 {
+			if m.focusedChipIdx <= 0 {
+				m.focusedChipIdx = n - 1
+			} else {
+				m.focusedChipIdx--
+			}
+		}
+
+	case keyInspector:
+		return m.toggleInspector()
+
+	// The escape ladder, in the order the layers were raised. Overlays have
+	// already had their turn — every one of them owns its own mode and handles
+	// esc there — so what is left here is the inspector's two layers and then
+	// the filter. Clearing filters is reached through the binding table like any
+	// other command, which is what keeps the palette entry and the key on one
+	// implementation.
+	case keyEsc:
+		if m.escapeInspectorLayer() {
+			return m, nil
+		}
+		return m.runDashboardBinding(key)
 
 	case key1, key2, key3, key4, key5, key6, key7, key8, key9:
 		idx := int(key[0] - '1')

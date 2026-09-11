@@ -75,7 +75,7 @@ func TestRootRenderPinsStatusBarToFinalRow(t *testing.T) {
 	// The hint block is capped at two rows, so the keys are spread across the
 	// rows between the list and the status bar rather than pinned to one line.
 	footerBlock := strings.Join(lines[len(lines)-1-footerHintMaxLines:len(lines)-1], "\n")
-	for _, want := range []string{"j/k up/down", "q quit", "p preview"} {
+	for _, want := range []string{"j/k up/down", "q quit", "i inspector"} {
 		if !strings.Contains(footerBlock, want) {
 			t.Fatalf("footer above status missing %q:\n%s", want, footerBlock)
 		}
@@ -101,11 +101,22 @@ func TestRootRenderUsesStatusBarForToasts(t *testing.T) {
 	}
 }
 
-func TestRootRenderListPreviewSuppressesFooterButKeepsStatusBar(t *testing.T) {
+// TestRootRenderListKeepsItsFooterBesideTheInspector reverses the rule the
+// preview pane shipped with, and the reversal is required rather than cosmetic.
+//
+// The preview was opt-in, so an operator who turned it on had already read the
+// footer; suppressing it bought the pane four rows. The inspector is on before
+// the first keypress, so the same rule would give a first-run dashboard no key
+// hints at all — there would be nothing on screen naming the key that turns the
+// pane off. The footer also cannot be conditioned on the inspector for a
+// mechanical reason: its own height is a term in the body-row floor the split is
+// judged against, so a footer that asked whether the inspector fits would be
+// asking itself.
+func TestRootRenderListKeepsItsFooterBesideTheInspector(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.width = 140
-	m.height = 20
-	m.previewEnabled = true
+	m.height = 30
+	requireInspector(t, m)
 
 	out := stripAnsi(m.render())
 	lines := strings.Split(out, "\n")
@@ -116,11 +127,11 @@ func TestRootRenderListPreviewSuppressesFooterButKeepsStatusBar(t *testing.T) {
 	if !strings.Contains(last, "Sessions: 3 · ") {
 		t.Fatalf("final row = %q, want list status", last)
 	}
-	if strings.Contains(out, "q quit") || strings.Contains(out, "j/k up/down") {
-		t.Fatalf("normal footer hints should be suppressed while preview is on:\n%s", out)
+	if !strings.Contains(out, "q") || !strings.Contains(out, "quit") {
+		t.Fatalf("the footer went missing beside the inspector:\n%s", out)
 	}
-	if !strings.Contains(out, "p: hide preview") {
-		t.Fatalf("preview header hint should remain visible:\n%s", out)
+	if !strings.Contains(out, "i: hide inspector") {
+		t.Fatalf("the header does not name the key that hides the pane:\n%s", out)
 	}
 }
 
@@ -165,7 +176,7 @@ func TestListFooterZeroWidthEmitsOneUnwrappedRow(t *testing.T) {
 var cursorIndependentFooterKeys = map[string]bool{
 	"j/k": true, "enter": true, ":": true, "/": true, "?": true,
 	"esc": true, "1-9": true, "tab": true, "]/[": true, "}/{": true,
-	"p": true, "b": true, "v": true, "l": true, "q": true,
+	"i": true, "b": true, "v": true, "l": true, "q": true,
 	"f": true, "S": true, "P": true, "R": true,
 }
 

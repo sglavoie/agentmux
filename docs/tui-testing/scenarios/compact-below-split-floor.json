@@ -1,5 +1,5 @@
 {
-  "name": "compact-selected-session-strip-fit",
+  "name": "compact-below-split-floor",
   "fixture": "project_families",
   "size": { "width": 72, "height": 30 },
   "assertions": [
@@ -10,8 +10,9 @@
     { "type": "contains_text", "text": "• ▌ notes        Done                  —" },
     { "type": "excludes_text", "text": "[work" },
     { "type": "excludes_text", "text": "▌ 1:" },
-    { "type": "contains_text", "text": "api · work · claude" },
-    { "type": "contains_text", "text": "main* · ~/projects/api" },
+    { "type": "excludes_text", "text": "│" },
+    { "type": "excludes_text", "text": "~/projects/api" },
+    { "type": "contains_text", "text": "i: inspector" },
     { "type": "contains_text", "text": "Sessions: 7 · 2 attention · 2 active · 3 idle" },
     { "type": "no_layout_issues" }
   ]

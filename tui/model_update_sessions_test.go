@@ -48,7 +48,6 @@ func TestSessionsMsgPresentationReorderPreservesSelectionAndPreviewTarget(t *tes
 	if m.cursor == 0 {
 		t.Fatal("fixture did not initially place selected tab 1 after newer tab 2")
 	}
-	m.previewEnabled = true
 	m.retargetPreview(11)
 	previewSeq := m.previewTargetSeq
 

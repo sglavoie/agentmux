@@ -10,7 +10,8 @@
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
     { "type": "contains_text", "text": "notes     Working   1:05" },
-    { "type": "contains_text", "text": "notes · personal · codex · 1:05" },
+    { "type": "contains_text", "text": "Working · 1:05" },
+    { "type": "contains_text", "text": "Agent   codex · personal" },
     { "type": "contains_text", "text": "~/notes" },
     { "type": "excludes_text", "text": "· ~/notes" },
     { "type": "excludes_text", "text": "amx/feat-x" },

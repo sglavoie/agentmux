@@ -41,8 +41,16 @@ func TestDashboardHelpDocumentsEveryFooterBinding(t *testing.T) {
 	lines := helpDashboardSection()
 
 	bindings := listFooterBindings()
-	if len(lines) != len(bindings) {
-		t.Errorf("expected one generated line per binding (%d), got %d: %v", len(bindings), len(lines), lines)
+	// One line per KEY, not per binding. Tab is declared twice — `switch pane`
+	// beside an inspector, `focus next` without one — and help has no terminal
+	// size to decide between them, so it carries both meanings on the one line
+	// the key gets.
+	keys := map[string]bool{}
+	for _, e := range bindings {
+		keys[e.key] = true
+	}
+	if len(lines) != len(keys) {
+		t.Errorf("expected one generated line per distinct key (%d), got %d: %v", len(keys), len(lines), lines)
 	}
 	for _, e := range bindings {
 		line, ok := helpPaletteLineFor(lines, e.key)

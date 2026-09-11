@@ -186,6 +186,44 @@ var uitestFixtureBuilders = map[string]func() uitestFixture{
 	"attention_overlap":  attentionOverlapFixture,
 }
 
+// uitestPreviewDefaults is the Preview block config.Load fills in for an
+// operator who configured none. A fixture builds its Config literally and never
+// runs that defaulting pass, so without this the harness would render a world
+// no installation can produce: ratio 0 pins the inspector to its 40-column
+// floor at every width, and min_cols 0 lowers the split floor from the
+// configured 100 to the pane minimums' own 89.
+func uitestPreviewDefaults() config.PreviewConfig {
+	return config.PreviewConfig{Direction: "horizontal", Ratio: 0.5, RefreshMs: 500, MinCols: 100, MinRows: 30}
+}
+
+// uitestApplyPreviewDefaults fills the zero fields of a config's Preview block,
+// field by field, exactly as config.Load's defaulting pass does. Field by field
+// is what lets a fixture state one setting and inherit the rest —
+// triage_vertical sets a direction and nothing else, and a whole-block fallback
+// would silently take it back.
+func uitestApplyPreviewDefaults(cfg *config.Config) {
+	if cfg == nil {
+		return
+	}
+	defaults := uitestPreviewDefaults()
+	preview := &cfg.Defaults.Preview
+	if preview.Direction == "" {
+		preview.Direction = defaults.Direction
+	}
+	if preview.Ratio == 0 {
+		preview.Ratio = defaults.Ratio
+	}
+	if preview.RefreshMs == 0 {
+		preview.RefreshMs = defaults.RefreshMs
+	}
+	if preview.MinCols == 0 {
+		preview.MinCols = defaults.MinCols
+	}
+	if preview.MinRows == 0 {
+		preview.MinRows = defaults.MinRows
+	}
+}
+
 // uitestFixtureError reports a request for an unknown built-in fixture and
 // lists the names that are available.
 type uitestFixtureError struct {
@@ -801,8 +839,15 @@ func triageIntegrationFixture() uitestFixture {
 }
 
 // triageVerticalFixture keeps the same integrated world and changes only the
-// preview direction, so the horizontal and vertical scenarios compare layout
-// policy without accidentally comparing different data.
+// configured preview direction, which the dashboard no longer reads: the
+// inspector is a side-by-side split or it is full screen, and there is no
+// stacked form for the setting to select. The fixture earns its place by
+// proving exactly that — same data, `direction = "vertical"`, and a screen the
+// horizontal scenarios would recognize.
+//
+// The setting is not dead, which is why this is a claim about the dashboard
+// rather than about the configuration: it still governs the launcher's own
+// preview pane.
 func triageVerticalFixture() uitestFixture {
 	fx := triageIntegrationFixture()
 	fx.Name = "triage_vertical"

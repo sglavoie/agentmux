@@ -6,7 +6,6 @@
 package tui
 
 import (
-	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -52,52 +51,13 @@ func dashboardRailRows(m Model) []dashboard.RailRow {
 // adapter that produced the text alone would be a way to draw a rail whose rows
 // nothing can be clicked on.
 
-// detailStripBudgetLines returns the number of lines reserved below the list
-// for the selected-item strip.
-//
-// It is reserved at every width. The strip used to be the compact band's
-// compensation for a row too narrow to carry its own metadata; the queue row
-// carries none of it at any width, so a wide terminal has exactly the same gap a
-// narrow one does and the strip is the only place profile, harness, branch,
-// directory, supervision, lock, mute, and the watchdog timer are said at all.
-// Session 6's inspector takes the reservation over.
-//
-// Pre-resize (width or height still zero) nothing is reserved: there is no
-// geometry yet to draw into.
-func detailStripBudgetLines(m Model) int {
-	if m.width <= 0 || m.height <= 0 {
-		return 0
-	}
-	return dashboard.DetailStripLines
-}
-
-// renderDetailStripBlock renders the strip detailStripBudgetLines reserved, or
-// "" when it reserved nothing. It is drawn at the full terminal width below the
-// list/preview area rather than inside the list column: it describes the
-// selection, and a preview beside a compact list has no more claim on those two
-// rows than the list does.
-func renderDetailStripBlock(m Model) string {
-	n := detailStripBudgetLines(m)
-	if n == 0 {
-		return ""
-	}
-	item, ok := m.selectedItem()
-	lines := dashboard.RenderDetailStrip(dashboard.DetailStripInput{
-		Width:         m.width,
-		Items:         m.items,
-		Item:          item,
-		Selected:      ok,
-		Cfg:           m.cfg,
-		LastActivity:  m.lastActivity,
-		IdleThreshold: m.idleThreshold,
-		Watchdog:      m.watchdog,
-		Now:           modelNow(m),
-		LoopMarker: func(s session.RunningSession) (string, bool) {
-			return aslMarkerFor(m, s)
-		},
-	})
-	return strings.Join(lines[:n], "\n") + "\n"
-}
+// The selected-item detail strip that used to be reserved here is gone, and
+// with it the two rows below the list. It existed because the session row
+// carried no metadata of its own at any width, and the inspector now carries all
+// of it — profile, harness, branch, directory, supervision, lock, mute, and the
+// watchdog timer — beside the row rather than beneath the list. Keeping both
+// would have spent two rows of every terminal saying what the pane next to them
+// already said.
 
 // The dashboard cursor indexes items, not sessions. m.filtered stays the
 // filtered and urgency-sorted source of truth; m.items is the flattened

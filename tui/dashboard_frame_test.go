@@ -90,6 +90,88 @@ func TestDashboardHitsStayInsideTheComposedBody(t *testing.T) {
 	})
 }
 
+// TestSplitPanesAreDrawnWhereTheHitMapSaysTheyAre is the column half of the
+// coordinate check below, and the one the panes can fail on their own.
+//
+// A pane is drawn by joining blocks left to right, and a block joined at its
+// natural content width ends wherever its widest row happened to stop — while
+// the hit map published in the very same pass says the queue is g.listWidth
+// wide and the inspector begins one column after it. The queue rendered short
+// by 34 columns at 120x40 and the two disagreed by exactly that much: a click
+// near the right of the queue selected nothing, and a click on the inspector's
+// leading columns was charged to the queue row behind it.
+//
+// The divider is the witness, because it is the one glyph whose column is
+// decided by the join rather than by the content.
+func TestSplitPanesAreDrawnWhereTheHitMapSaysTheyAre(t *testing.T) {
+	check := func(t *testing.T, m Model) {
+		t.Helper()
+		frame := renderRootFrame(m)
+		if !frame.hitMap.hasList {
+			return
+		}
+		lines := strings.Split(frame.text, "\n")
+		list := frame.hitMap.listPane
+		row := lines[list.Y]
+
+		if frame.hitMap.hasRail {
+			rail := frame.hitMap.railPane
+			if got := cellAt(row, rail.X+rail.Width); got != "│" {
+				t.Fatalf("rail %+v ends at column %d, which draws %q not the divider",
+					rail, rail.X+rail.Width, got)
+			}
+			if list.X != rail.X+rail.Width+1 {
+				t.Fatalf("queue starts at %d, one past the rail divider is %d", list.X, rail.X+rail.Width+1)
+			}
+		}
+		if !frame.hitMap.hasInspector {
+			return
+		}
+		inspector := frame.hitMap.inspectorPane
+		if got := cellAt(row, list.X+list.Width); got != "│" {
+			t.Fatalf("queue %+v ends at column %d, which draws %q not the divider",
+				list, list.X+list.Width, got)
+		}
+		if inspector.X != list.X+list.Width+1 {
+			t.Fatalf("inspector starts at %d, one past the queue divider is %d", inspector.X, list.X+list.Width+1)
+		}
+		// And the split spans the terminal rather than stopping wherever the
+		// inspector's own content did.
+		if got := layout.StyledWidth(row); got != m.width {
+			t.Fatalf("split row is %d cells wide in a %d-column terminal", got, m.width)
+		}
+	}
+
+	responsiveCases(t, check)
+	// The rail is opt-in and stands third in line for columns, so the matrix
+	// above never reaches the three-strip join. This is the case where a stale
+	// queue offset would be charged to the rail's divider instead.
+	t.Run("rail", func(t *testing.T) {
+		m := responsiveModel(240, 40, dashboard.ViewUrgency, true)
+		m.railRequested = true
+		if g := dashboardGeometry(m); !g.rail || !g.split {
+			t.Fatalf("no three-strip join to check: %+v", g)
+		}
+		check(t, m)
+	})
+}
+
+// cellAt is the glyph drawn at a display column of a rendered row. It walks the
+// row in display cells rather than indexing it, because a session title whose
+// first grapheme is two cells wide makes byte and rune offsets lie about which
+// column anything is in.
+func cellAt(line string, col int) string {
+	x := 0
+	for _, r := range stripAnsi(line) {
+		w := layout.Width(string(r))
+		if col < x+w {
+			return string(r)
+		}
+		x += w
+	}
+	return ""
+}
+
 // TestDashboardHitRowsNameTheRowTheyLandOn is the coordinate check the frame's
 // single pass is supposed to make trivial. Every region is a terminal-cell
 // rectangle in the composed screen, so the row a session's region names has to

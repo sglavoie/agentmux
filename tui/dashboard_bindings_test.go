@@ -40,7 +40,9 @@ type bindingOutcome struct {
 	configPickerReturnMode Mode
 	configPickerCurrent    string
 	detailWindow           int
-	previewEnabled         bool
+	inspectorDisplay       inspectorDisplay
+	paneFocus              paneFocus
+	previewWindowID        int
 	railRequested          bool
 	listView               dashboard.ViewMode
 	deprecationDismissed   bool
@@ -64,7 +66,9 @@ func observeBinding(m Model, cmd tea.Cmd) bindingOutcome {
 		configPickerReturnMode: m.configPickerReturnMode,
 		configPickerCurrent:    m.configPickerCurrent,
 		detailWindow:           m.detailWindowID,
-		previewEnabled:         m.previewEnabled,
+		inspectorDisplay:       m.inspectorDisplay,
+		paneFocus:              m.paneFocus,
+		previewWindowID:        m.previewWindowID,
 		railRequested:          m.railRequested,
 		listView:               m.listView,
 		deprecationDismissed:   m.deprecationDismissed,
@@ -241,7 +245,7 @@ func TestUncheckedBindingsRunTheirCommandRegardless(t *testing.T) {
 			unchecked[binding.Command] = true
 		}
 	}
-	want := map[commands.ID]bool{commands.TogglePreview: true, commands.UndoClose: true}
+	want := map[commands.ID]bool{commands.ToggleInspector: true, commands.UndoClose: true}
 	if len(unchecked) != len(want) {
 		t.Fatalf("unchecked bindings: got %v, want %v", unchecked, want)
 	}
@@ -557,11 +561,11 @@ func TestFooterKeysAreTheKeysThatDispatch(t *testing.T) {
 	}
 }
 
-// TestPreviewKeySyncsTheRailFromEitherPath is the latent divergence the shared
+// TestInspectorKeySyncsTheRailFromEitherPath is the latent divergence the shared
 // body closed: the direct key reconciled the rail after toggling the pane and
 // the palette entry did not, so the same command left two different models
 // depending on how it was reached.
-func TestPreviewKeySyncsTheRailFromEitherPath(t *testing.T) {
+func TestInspectorKeySyncsTheRailFromEitherPath(t *testing.T) {
 	base := withListRows(testModelWithSessions(), session.RunningSession{
 		TabID: 1, WindowID: 11, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt",
 	})
@@ -570,9 +574,15 @@ func TestPreviewKeySyncsTheRailFromEitherPath(t *testing.T) {
 	base.listView = dashboard.ViewUrgency
 	base.railRequested = true
 
-	viaKey := runViaKey(base, keyTogglePreview)
-	viaPalette := runViaPalette(base, commands.TogglePreview)
-	if viaKey != viaPalette {
-		t.Errorf("preview toggle diverges:\n  key:     %+v\n  palette: %+v", viaKey, viaPalette)
+	// Both directions, because the two halves of the toggle touch different
+	// state: hiding releases the read target and re-syncs the rail, showing
+	// re-acquires it and takes the focus.
+	for _, name := range []string{"hide", "show"} {
+		viaKey := runViaKey(base, keyInspector)
+		viaPalette := runViaPalette(base, commands.ToggleInspector)
+		if viaKey != viaPalette {
+			t.Errorf("inspector %s diverges:\n  key:     %+v\n  palette: %+v", name, viaKey, viaPalette)
+		}
+		base.inspectorDisplay = inspectorHidden
 	}
 }

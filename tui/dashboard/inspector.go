@@ -48,6 +48,17 @@ const (
 	// It is fixed at every width and for every content state.
 	InspectorMetaLines = 6
 
+	// The fixed row each metadata fact occupies. They are named because the
+	// block's geometry is a contract — the pane scans top to bottom and a fact
+	// that moved rows would defeat that — and a caller or a test that wants one
+	// line should say which fact it means rather than count.
+	inspectorTitleRow   = 0
+	inspectorStatusRow  = 1
+	inspectorAgentLine  = 2
+	inspectorBranchLine = 3
+	inspectorDirLine    = 4
+	inspectorWatchLine  = 5
+
 	// inspectorDividerLines is the rule between the metadata block and the
 	// output, which is also where the Paused indication is drawn.
 	inspectorDividerLines = 1
@@ -198,13 +209,13 @@ func inspectorMetaLines(in InspectorInput) []string {
 	s := in.Session
 	group := StateGroup(s, in.LastActivity, in.IdleThreshold)
 
-	lines[0] = layout.StyledTruncate(inspectorTitleLine(in, s), in.Width, "…")
-	lines[1] = layout.StyledTruncate(inspectorStatusLine(in, s, group), in.Width, "…")
-	lines[2] = inspectorLabelled(in.Width, "Agent",
+	lines[inspectorTitleRow] = layout.StyledTruncate(inspectorTitleLine(in, s), in.Width, "…")
+	lines[inspectorStatusRow] = layout.StyledTruncate(inspectorStatusLine(in, s, group), in.Width, "…")
+	lines[inspectorAgentLine] = inspectorLabelled(in.Width, "Agent",
 		joinDetailTokens(harnessLabel(s.Harness), s.EffectiveProfile()))
-	lines[3] = inspectorLabelled(in.Width, "Branch", branchText(s))
-	lines[4] = inspectorDirectoryLine(in.Width, s.Directory)
-	lines[5] = inspectorLabelled(in.Width, "Watch", inspectorWatchText(in, s))
+	lines[inspectorBranchLine] = inspectorLabelled(in.Width, "Branch", branchText(s))
+	lines[inspectorDirLine] = inspectorDirectoryLine(in.Width, s.Directory)
+	lines[inspectorWatchLine] = inspectorLabelled(in.Width, "Watch", inspectorWatchText(in, s))
 	return lines
 }
 

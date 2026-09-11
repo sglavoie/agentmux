@@ -130,29 +130,30 @@ func TestActivityCellTextWarningRequiresTimer(t *testing.T) {
 }
 
 // TestActivityWarningIsStyledWhereItIsStillDrawn follows the warning into its
-// one surviving surface. The queue row dropped the activity column outright, so
-// the glyph now appears only inside the detail strip's identity span — which is
-// also why it is a glyph rather than a color: a second foreground inside that
-// span would split it in two for a fact the glyph already carries.
+// one surviving surface. The queue row dropped the activity column outright and
+// the detail strip that carried it afterwards is gone too, so the glyph now
+// appears only in the inspector's metadata block — which is also why it is a
+// glyph rather than a color: a second foreground inside that line would split it
+// in two for a fact the glyph already carries.
 func TestActivityWarningIsStyledWhereItIsStillDrawn(t *testing.T) {
 	now := time.Now()
 	busy := session.RunningSession{WindowID: 1, Base: "api", Project: "api",
 		Directory: "/tmp/api", BusySince: now.Add(-90 * time.Second)}
-	items := BuildItemsFor(ViewUrgency, []session.RunningSession{busy}, nil)
-	item, _ := items.At(0)
+	render := func(ws protocol.WatchdogState) string {
+		return stripAnsi(RenderInspector(InspectorInput{
+			Width: 78, Height: 12, Content: InspectorReady,
+			Session: busy, Watchdog: ws, Now: now,
+		}))
+	}
 
 	warn := protocol.WatchdogState{LastAction: "active", LastEventAt: now.Add(-9 * time.Minute).Unix(), ThresholdSec: 600}
-	lines := RenderDetailStrip(DetailStripInput{Width: 78, Items: items, Item: item, Selected: true,
-		Watchdog: map[int]protocol.WatchdogState{1: warn}, Now: now})
-	if plain := stripAnsi(lines[0]); !strings.Contains(plain, ageWarningGlyph) {
-		t.Errorf("strip %q is missing the ⏳ warning glyph", plain)
+	if plain := render(warn); !strings.Contains(plain, ageWarningGlyph) {
+		t.Errorf("inspector %q is missing the ⏳ warning glyph", plain)
 	}
 
 	ok := protocol.WatchdogState{LastAction: "active", LastEventAt: now.Add(-1 * time.Minute).Unix(), ThresholdSec: 600}
-	lines = RenderDetailStrip(DetailStripInput{Width: 78, Items: items, Item: item, Selected: true,
-		Watchdog: map[int]protocol.WatchdogState{1: ok}, Now: now})
-	if plain := stripAnsi(lines[0]); strings.Contains(plain, ageWarningGlyph) {
-		t.Errorf("strip %q carries ⏳ for a row well inside its threshold", plain)
+	if plain := render(ok); strings.Contains(plain, ageWarningGlyph) {
+		t.Errorf("inspector %q carries ⏳ for a session well inside its threshold", plain)
 	}
 }
 

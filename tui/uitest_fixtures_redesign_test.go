@@ -108,11 +108,12 @@ func TestPausedOutputFixtureOverflowsThePane(t *testing.T) {
 		t.Fatalf("scrollback endpoints = %q…%q", lines[0], lines[len(lines)-1])
 	}
 
-	if err := d.Key(keyTogglePreview); err != nil {
-		t.Fatalf("toggle preview: %v", err)
-	}
-	if !d.Model().previewEnabled {
-		t.Fatal("preview did not open, so the fixture's text never reaches a pane")
+	// No key opens the pane any more: the inspector is what the fixture's size
+	// was chosen to afford, so the text reaches a pane on the first frame. The
+	// assertion stays because the fixture is worthless if it does not.
+	if !d.Model().inspectorActive() {
+		t.Fatalf("no inspector at %dx%d, so the fixture's text never reaches a pane",
+			d.Model().width, d.Model().height)
 	}
 	screen := strings.Join(d.Observe().Screen.Lines, "\n")
 	if !strings.Contains(screen, "output line 40") {

@@ -17,9 +17,8 @@ package tui
 import (
 	"strings"
 
-	"charm.land/lipgloss/v2"
-
 	"github.com/sglavoie/agentmux/tui/dashboard"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // dashboardFrame is the dashboard body: its text and the hit regions the very
@@ -35,7 +34,7 @@ type dashboardFrame struct {
 
 // renderDashboardFrame emits the canonical ModeList body: header, deprecation
 // banner, legend, chips, spacer, then the list (with the project rail and the
-// preview pane when the geometry admits them), then the compact detail strip.
+// inspector pane when the geometry admits them).
 func renderDashboardFrame(m Model) dashboardFrame {
 	var sb strings.Builder
 	var hitMap mouseHitMap
@@ -82,8 +81,11 @@ func renderDashboardFrame(m Model) dashboardFrame {
 		hitMap.railPane = translateHitRect(panes.hitMap.railPane, 0, y)
 		hitMap.hasRail = true
 	}
+	if panes.hitMap.hasInspector {
+		hitMap.inspectorPane = translateHitRect(panes.hitMap.inspectorPane, 0, y)
+		hitMap.hasInspector = true
+	}
 
-	sb.WriteString(renderDetailStripBlock(m))
 	return dashboardFrame{text: sb.String(), hitMap: hitMap}
 }
 
@@ -95,14 +97,29 @@ func renderDashboard(m Model) string {
 }
 
 // renderSplitFrame lays out the body row: the project rail, the session list,
-// and the preview pane, joined according to the resolved geometry and falling
+// and the inspector pane, joined according to the resolved geometry and falling
 // back to the plain list when the split does not fit. Hit regions are
 // translated into the joined result here, where the column offsets are known,
 // rather than recovered from it.
+//
+// The full-screen inspector returns before a single list region is produced.
+// That is the mouse contract, not an optimization: no queue column is on screen,
+// so nothing on it may be clickable, and a click that landed on the inspector
+// must not select the row that would have been under it.
 func renderSplitFrame(m Model) dashboardFrame {
 	g := dashboardGeometry(m)
+	if g.fullScreen {
+		return dashboardFrame{
+			text: renderPreviewPane(m, g.previewWidth, g.previewHeight) + "\n",
+			hitMap: mouseHitMap{
+				inspectorPane: dashboard.HitRect{Width: g.previewWidth, Height: g.previewHeight},
+				hasInspector:  true,
+			},
+		}
+	}
 	list := dashboard.RenderListWithHits(dashboardListInput(m, g.listWidth, g.listHeight))
 	result := dashboardFrame{text: list.Text}
+	blocks := []paneBlock{{text: list.Text, width: g.listWidth}}
 	listX := 0
 
 	var rail dashboard.RailRender
@@ -111,8 +128,7 @@ func renderSplitFrame(m Model) dashboardFrame {
 			Rows: dashboardRailRows(m), Cursor: m.railCursor, Offset: m.railOffset,
 			Width: g.railWidth, Height: g.railHeight, AppliedProject: m.activeFilter.Project, Focused: m.railFocused,
 		})
-		divider := strings.TrimRight(strings.Repeat(styleDim.Render("│")+"\n", g.listHeight), "\n")
-		result.text = lipgloss.JoinHorizontal(lipgloss.Top, rail.Text, divider, list.Text)
+		blocks = append([]paneBlock{{text: rail.Text, width: g.railWidth}, paneDivider(g.listHeight)}, blocks...)
 		listX = g.railWidth + 1
 		result.hitMap.railPane = dashboard.HitRect{Width: g.railWidth, Height: g.railHeight}
 		result.hitMap.hasRail = true
@@ -142,20 +158,76 @@ func renderSplitFrame(m Model) dashboardFrame {
 
 	if !g.split {
 		if g.rail {
-			result.text += "\n"
+			result.text = joinPanes(g.listHeight, blocks...) + "\n"
 		}
 		return result
 	}
-	if g.vertical {
-		divider := styleDim.Render(strings.Repeat("─", m.width))
-		result.text = lipgloss.JoinVertical(lipgloss.Left, result.text, divider,
-			renderPreviewPane(m, g.previewWidth, g.previewHeight)) + "\n"
-		return result
-	}
-	divider := strings.TrimRight(strings.Repeat(styleDim.Render("│")+"\n", g.listHeight), "\n")
-	result.text = lipgloss.JoinHorizontal(lipgloss.Top, result.text, divider,
-		renderPreviewPane(m, g.previewWidth, g.previewHeight)) + "\n"
+	inspectorX := listX + g.listWidth + 1
+	blocks = append(blocks, paneDivider(g.listHeight),
+		paneBlock{text: renderPreviewPane(m, g.previewWidth, g.previewHeight), width: g.previewWidth})
+	result.text = joinPanes(g.listHeight, blocks...) + "\n"
+	result.hitMap.inspectorPane = dashboard.HitRect{X: inspectorX, Width: g.previewWidth, Height: g.previewHeight}
+	result.hitMap.hasInspector = true
 	return result
+}
+
+// paneBlock is a rendered pane and the column width the geometry allotted it.
+// The width travels with the text because it is what the block was laid out to
+// occupy, not what its content happened to fill: a run of short queue rows ends
+// the block early, and the hit map published in the same pass still says the
+// queue is g.listWidth wide and the inspector starts one column after it.
+type paneBlock struct {
+	text  string
+	width int
+}
+
+// paneDivider is the one-column rule drawn between two panes, full body height.
+func paneDivider(height int) paneBlock {
+	if height <= 0 {
+		return paneBlock{width: 1}
+	}
+	return paneBlock{text: strings.TrimRight(strings.Repeat(styleDim.Render("│")+"\n", height), "\n"), width: 1}
+}
+
+// joinPanes stacks pane blocks side by side at the widths they were allotted,
+// padding each to its width and to the full body height as it goes.
+//
+// It is a hand-rolled join rather than lipgloss.JoinHorizontal because the
+// column a pane starts at is a claim the hit map makes, so exactly one ruler may
+// decide it. lipgloss measures with go-runewidth and layout measures pictographic
+// clusters as two cells, and the two disagree on glyphs whose East Asian width is
+// neutral — 🗣 among them. Padding with one ruler and joining with the other put
+// a session titled 🗣commscoach one column right of every other row, which widened
+// the whole frame past the terminal.
+//
+// A short block is padded to height because the divider beside it is full
+// height; without that the rows below the queue's last entry would close early
+// and the rule would have nothing to sit beside.
+func joinPanes(height int, blocks ...paneBlock) string {
+	if height <= 0 {
+		return ""
+	}
+	split := make([][]string, len(blocks))
+	for i, block := range blocks {
+		split[i] = strings.Split(block.text, "\n")
+	}
+	rows := make([]string, height)
+	var sb strings.Builder
+	for y := range rows {
+		sb.Reset()
+		for i, lines := range split {
+			line := ""
+			if y < len(lines) {
+				line = lines[y]
+			}
+			sb.WriteString(line)
+			if gap := blocks[i].width - layout.StyledWidth(line); gap > 0 {
+				sb.WriteString(strings.Repeat(" ", gap))
+			}
+		}
+		rows[y] = sb.String()
+	}
+	return strings.Join(rows, "\n")
 }
 
 // renderedRows counts the physical rows a rendered block occupies. A block that
@@ -185,11 +257,14 @@ const dashboardPaddingLines = 1
 // fixpoint's measurement of a candidate footer. They used to be three
 // independent spellings of one subtraction, which is a shape that stays correct
 // only for as long as nobody adds a term to it.
+// There is no term below the list any more. The detail strip that used to hold
+// those two rows was the compact band's compensation for a session row that
+// could not carry its own metadata; the inspector says all of it, at every
+// width, beside the row rather than beneath the list — so the strip had become
+// two rows spent restating what the pane next to it already said.
 type dashboardChrome struct {
 	// above is header, deprecation banner, legend, chips, and the spacer.
 	above int
-	// below is the compact band's selected-item detail strip, or nothing.
-	below int
 	// footer is the reflowed footer's row count.
 	footer int
 }
@@ -204,7 +279,6 @@ type dashboardChrome struct {
 func dashboardChromeWithFooter(m Model, footerLines int) dashboardChrome {
 	return dashboardChrome{
 		above:  chromeAboveListLines(m),
-		below:  chromeBelowListLines(m),
 		footer: footerLines,
 	}
 }
@@ -217,10 +291,10 @@ func dashboardChromeFor(m Model) dashboardChrome {
 
 // total is every row the chrome spends around the list.
 func (c dashboardChrome) total() int {
-	return c.above + c.below + dashboardPaddingLines + c.footer + statusBarLines
+	return c.above + dashboardPaddingLines + c.footer + statusBarLines
 }
 
-// paneRows is the complement: the body rows left for the list and the preview
+// paneRows is the complement: the body rows left for the list and the inspector
 // at termHeight. The result may be zero or negative on a degenerate terminal;
 // flooring it to something usable is the caller's judgement, because the list
 // and the split floor it differently.

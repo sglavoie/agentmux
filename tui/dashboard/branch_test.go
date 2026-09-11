@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // TestBranchTextRendersTheDirtyMarkerOnlyOnANamedBranch pins the one asymmetry
@@ -38,7 +39,7 @@ func TestBranchTextRendersTheDirtyMarkerOnlyOnANamedBranch(t *testing.T) {
 // TestBranchReachesTheSelectedSessionContextRatherThanTheRow is where the
 // retired branch column went. The queue row must not name a branch at any width
 // — that was the column's whole cost, charged to every row in the view for a fact
-// about one — and the strip under the list must name it for the selection.
+// about one — and the inspector must name it for the selection.
 func TestBranchReachesTheSelectedSessionContextRatherThanTheRow(t *testing.T) {
 	s := session.RunningSession{
 		WindowID: 1, Base: "api", Project: "api",
@@ -46,7 +47,6 @@ func TestBranchReachesTheSelectedSessionContextRatherThanTheRow(t *testing.T) {
 		Branch:    "amx/feat-x", Dirty: true, State: "bolt",
 	}
 	items := BuildItemsFor(ViewUrgency, []session.RunningSession{s}, nil)
-	item, _ := items.At(0)
 
 	queue := BuildQueue(QueueInput{Rows: items.Rows})
 	for _, width := range rowTestWidths {
@@ -56,27 +56,43 @@ func TestBranchReachesTheSelectedSessionContextRatherThanTheRow(t *testing.T) {
 		}
 	}
 
-	lines := RenderDetailStrip(DetailStripInput{Width: 78, Items: items, Item: item, Selected: true})
-	if got := stripAnsi(lines[1]); !strings.Contains(got, "amx/feat-x"+dirtyMarker) {
-		t.Errorf("strip line 2 %q is missing the branch and its dirty marker", got)
+	lines := renderInspectorLines(t, InspectorInput{Width: 78, Content: InspectorReady, Session: s})
+	if got := lines[inspectorBranchLine]; !strings.Contains(got, "amx/feat-x"+dirtyMarker) {
+		t.Errorf("inspector branch line %q is missing the branch and its dirty marker", got)
 	}
 }
 
-// TestBranchIsDimAlongsideTheDirectory pins the styling decision that survived
-// the column. The branch and the directory together answer one question — where
-// is this session — so they are styled alike and neither competes with the status
-// beside the name on the line above.
-func TestBranchIsDimAlongsideTheDirectory(t *testing.T) {
+// TestBranchIsUncoloredAlongsideTheDirectory pins the styling decision that
+// survived the column. The branch and the directory together answer one question
+// — where is this session — so they sit in the same labelled block wearing the
+// same dim label and no color of their own, leaving the pane's only color on the
+// headline two lines above.
+func TestBranchIsUncoloredAlongsideTheDirectory(t *testing.T) {
 	s := session.RunningSession{WindowID: 1, Base: "api", Project: "api",
 		Directory: "/tmp/api", Branch: "main"}
-	items := BuildItemsFor(ViewUrgency, []session.RunningSession{s}, nil)
-	item, _ := items.At(0)
-	line := RenderDetailStrip(DetailStripInput{Width: 78, Items: items, Item: item, Selected: true})[1]
-	if line == stripAnsi(line) {
-		t.Fatalf("strip line 2 %q carries no styling", line)
-	}
-	if want := styleDim.Render("main"); !strings.Contains(line, want) {
-		t.Fatalf("strip line 2 %q does not render the branch with styleDim", line)
+	out := RenderInspector(inspectorInput(InspectorInput{Width: 78, Content: InspectorReady, Session: s}))
+	lines := strings.Split(out, "\n")
+
+	for _, tc := range []struct {
+		idx   int
+		label string
+		value string
+	}{
+		{inspectorBranchLine, "Branch", "main"},
+		{inspectorDirLine, "Dir", "/tmp/api"},
+	} {
+		line := lines[tc.idx]
+		if want := styleDim.Render(layout.PadRight(tc.label, inspectorLabelWidth)); !strings.Contains(line, want) {
+			t.Errorf("%s line %q does not wear the dim label column", tc.label, line)
+		}
+		// The value is written through with no styling of its own: what tells the
+		// two lines apart is what they say, not how they are painted.
+		if !strings.Contains(line, tc.value) {
+			t.Fatalf("%s line %q is missing %q", tc.label, line, tc.value)
+		}
+		if styled := strings.Index(line, tc.value); styled >= 0 && strings.Contains(line[styled:], "\x1b[") {
+			t.Errorf("%s line %q colors its value", tc.label, line)
+		}
 	}
 }
 
@@ -87,10 +103,8 @@ func TestBranchIsDimAlongsideTheDirectory(t *testing.T) {
 func TestBranchLongEnoughToHaveNeededACapIsStillDrawnWhole(t *testing.T) {
 	s := session.RunningSession{WindowID: 1, Base: "api", Project: "api",
 		Branch: "release/2026-q3-migration-rollback"}
-	items := BuildItemsFor(ViewUrgency, []session.RunningSession{s}, nil)
-	item, _ := items.At(0)
-	line := stripAnsi(RenderDetailStrip(DetailStripInput{Width: 120, Items: items, Item: item, Selected: true})[1])
-	if !strings.Contains(line, s.Branch) {
-		t.Fatalf("strip line 2 %q truncated a branch it had room for", line)
+	lines := renderInspectorLines(t, InspectorInput{Width: 120, Content: InspectorReady, Session: s})
+	if line := lines[inspectorBranchLine]; !strings.Contains(line, s.Branch) {
+		t.Fatalf("inspector branch line %q truncated a branch it had room for", line)
 	}
 }

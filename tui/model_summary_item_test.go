@@ -200,7 +200,6 @@ func TestSummaryItemFooterOffersNoRowAction(t *testing.T) {
 // whichever member happened to be first.
 func TestSummaryItemPreviewTracksNoWindow(t *testing.T) {
 	m, runner, setupCalls := summaryModel(t)
-	m.previewEnabled = true
 	m.previewWindowID = 11 // as if the cursor had just left the first member
 
 	cmd := m.refreshPreviewForCursor()

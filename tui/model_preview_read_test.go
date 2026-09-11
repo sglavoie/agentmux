@@ -31,31 +31,44 @@ import (
 // before or after refresh mutates it.
 func settlePreviewRead(t *testing.T, m *Model, cmd tea.Cmd) {
 	t.Helper()
-	settlePreviewReadDepth(t, m, cmd, 0)
+	if !feedPreviewReplies(m, cmd, 0) {
+		t.Fatal("preview commands never settled: catch-ups chained off one another without end")
+	}
 }
 
-func settlePreviewReadDepth(t *testing.T, m *Model, cmd tea.Cmd, depth int) {
-	t.Helper()
+// feedPreviewReplies is settlePreviewRead without a testing.T, so the shared
+// model helpers can use it too. It reports whether the chain terminated inside
+// the depth bound rather than failing, because its other caller — applySessions
+// — is not in a position to fail a test.
+//
+// Draining is not optional bookkeeping now that the inspector is on by default.
+// Every path that moves the pane's target dispatches a read and takes the single
+// in-flight slot, so a helper that applied a refresh and dropped the command
+// would leave that slot held for the rest of the test: from then on every
+// request coalesces into the pending bit and hands back nil, which reads exactly
+// like the dashboard refusing to fetch.
+func feedPreviewReplies(m *Model, cmd tea.Cmd, depth int) bool {
 	if cmd == nil || isUITestTimerCmd(cmd) {
-		return
+		return true
 	}
 	if depth > 16 {
-		t.Fatal("preview commands never settled: catch-ups chained off one another without end")
+		return false
 	}
 	msg := cmd()
 	if parts, ok := uitestFlattenCmds(msg); ok {
+		ok := true
 		for _, part := range parts {
-			settlePreviewReadDepth(t, m, part, depth+1)
+			ok = feedPreviewReplies(m, part, depth+1) && ok
 		}
-		return
+		return ok
 	}
-	content, ok := msg.(previewContentMsg)
-	if !ok {
-		return
+	content, isContent := msg.(previewContentMsg)
+	if !isContent {
+		return true
 	}
 	updated, follow := m.Update(content)
 	*m = updated.(Model)
-	settlePreviewReadDepth(t, m, follow, depth+1)
+	return feedPreviewReplies(m, follow, depth+1)
 }
 
 // previewReadModel is an urgency dashboard with the pane open on session:api and
@@ -64,7 +77,7 @@ func settlePreviewReadDepth(t *testing.T, m *Model, cmd tea.Cmd, depth int) {
 func previewReadModel(t *testing.T) Model {
 	t.Helper()
 	m, _ := listViewModel(dashboard.ViewUrgency)
-	m.previewEnabled = true
+	requireInspector(t, m)
 	m = selectLine(t, m, "session:api")
 	settlePreviewRead(t, &m, m.refreshPreviewForCursor())
 	return m
@@ -201,21 +214,49 @@ func TestAFailedReadSettlesLikeAnyOther(t *testing.T) {
 	}
 }
 
-// TestHidingThePaneDoesNotStrandTheSlot covers the ownership changes: the
-// dashboard pane toggled shut and the resize guard turning one off. Each leaves
-// a read in flight whose reply nobody wants, and each has to end with a pane
-// that reads normally once it is shown again.
+// TestHidingThePaneDoesNotStrandTheSlot covers the two ways the pane goes away:
+// the operator toggling it shut, and a terminal narrowing past the split floors.
+// Each leaves a read in flight whose reply nobody wants, and each has to end
+// with a pane that reads normally once it is back.
+//
+// The resize case is the one that changed shape. There is no longer a guard that
+// turns the pane off and says so — a narrowing changes no intent at all, it just
+// stops the split from fitting — so the "show it again" half is the terminal
+// getting its width back rather than a second keypress. That path has to revive
+// the polling chain itself: the chain died the first time a tick found the pane
+// hidden, and nothing else would ever open another.
 func TestHidingThePaneDoesNotStrandTheSlot(t *testing.T) {
-	hide := map[string]func(m *Model){
-		"toggled off": func(m *Model) {
-			updated, _ := m.togglePreview()
-			*m = updated.(Model)
+	cases := map[string]struct {
+		hide func(*testing.T, *Model)
+		show func(*testing.T, *Model) tea.Cmd
+	}{
+		"toggled off": {
+			hide: func(_ *testing.T, m *Model) {
+				updated, _ := m.toggleInspector()
+				*m = updated.(Model)
+			},
+			show: func(_ *testing.T, m *Model) tea.Cmd {
+				updated, cmd := m.toggleInspector()
+				*m = updated.(Model)
+				return cmd
+			},
 		},
-		"disabled by the resize guard": func(m *Model) {
-			m.disablePreviewWithNotice("preview disabled: terminal too small")
+		"narrowed past the split floor": {
+			hide: func(t *testing.T, m *Model) {
+				updated, _ := m.handleWindowSize(tea.WindowSizeMsg{Width: 60, Height: 50})
+				*m = updated.(Model)
+				if m.inspectorDisplay != inspectorAutomatic {
+					t.Fatalf("a resize rewrote the operator's intent to %v", m.inspectorDisplay)
+				}
+			},
+			show: func(_ *testing.T, m *Model) tea.Cmd {
+				updated, cmd := m.handleWindowSize(tea.WindowSizeMsg{Width: 160, Height: 50})
+				*m = updated.(Model)
+				return cmd
+			},
 		},
 	}
-	for name, hideIt := range hide {
+	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			m := previewReadModel(t)
 			m = selectLine(t, m, "session:web")
@@ -226,8 +267,8 @@ func TestHidingThePaneDoesNotStrandTheSlot(t *testing.T) {
 			inFlight := read().(previewContentMsg)
 			inFlight.text = "web scrollback"
 
-			hideIt(&m)
-			if m.previewEnabled {
+			tc.hide(t, &m)
+			if m.inspectorActive() {
 				t.Fatal("setup: the pane is still shown")
 			}
 
@@ -244,9 +285,8 @@ func TestHidingThePaneDoesNotStrandTheSlot(t *testing.T) {
 			}
 
 			// Shown again, it reads for itself.
-			updated, cmd := m.togglePreview()
-			m = updated.(Model)
-			if !m.previewEnabled {
+			cmd := tc.show(t, &m)
+			if !m.inspectorActive() {
 				t.Fatal("the pane refused to reopen")
 			}
 			if cmd == nil {
@@ -313,7 +353,6 @@ func TestARetiredTickChainNeverSchedulesAgain(t *testing.T) {
 	// An unstamped tick belongs to no chain and is refused even against the zero
 	// counter a model that has never shown a pane holds.
 	fresh, _ := listViewModel(dashboard.ViewUrgency)
-	fresh.previewEnabled = true
 	updated, follow = fresh.Update(previewTickMsg{})
 	if follow != nil {
 		t.Error("an unstamped tick opened a polling chain")

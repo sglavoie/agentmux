@@ -1,8 +1,9 @@
 {
   "name": "mouse rail wheel moves three rows",
   "fixture": "project_families",
-  "size": { "width": 120, "height": 32 },
+  "size": { "width": 240, "height": 32 },
   "actions": [
+    { "type": "key", "key": "b" },
     { "type": "mouse", "x": 5, "y": 4, "event": "wheel_down" },
     { "type": "key", "key": "left" },
     { "type": "key", "key": "enter" }

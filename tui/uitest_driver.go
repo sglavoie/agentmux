@@ -734,7 +734,13 @@ var uitestFrozenNow = time.Date(2026, 1, 2, 15, 4, 5, 0, time.UTC)
 // newUITestDriver builds a driver around a freshly constructed Model. The model
 // is created from prepared config and an injected client (both supplied by the
 // caller / Session 3), then sized with an initial tea.WindowSizeMsg.
+//
+// It defaults the config's Preview block on the way in. A driver stands in for
+// a running program, and a running program's config came through config.Load;
+// a fixture's did not, so without this every scenario would be judged against a
+// split geometry no installation produces.
 func newUITestDriver(cfg *config.Config, client kitty.KittyClient, size UITestSize) *uitestDriver {
+	uitestApplyPreviewDefaults(cfg)
 	return newUITestDriverModel(NewModel(cfg, client), size)
 }
 

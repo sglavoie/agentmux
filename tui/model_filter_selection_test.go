@@ -55,7 +55,6 @@ func pressKeyForPreview(t *testing.T, m Model, key string) (Model, int) {
 func TestDashboardFilterPreservesSelectionAndRetargetsPreview(t *testing.T) {
 	t.Run("a still-visible session survives live edits and the commit", func(t *testing.T) {
 		m, _ := listViewModel(dashboard.ViewUrgency)
-		m.previewEnabled = true
 		m = selectLine(t, m, "session:cli")
 		settlePreviewRead(t, &m, m.refreshPreviewForCursor())
 		if m.previewWindowID != 13 {
@@ -103,7 +102,6 @@ func TestDashboardFilterPreservesSelectionAndRetargetsPreview(t *testing.T) {
 
 	t.Run("cancelling restores the saved filter and the pre-search session", func(t *testing.T) {
 		m, _ := listViewModel(dashboard.ViewUrgency)
-		m.previewEnabled = true
 		m = selectLine(t, m, "session:lib")
 		settlePreviewRead(t, &m, m.refreshPreviewForCursor())
 		if m.previewWindowID != 14 {
@@ -146,7 +144,6 @@ func TestDashboardFilterPreservesSelectionAndRetargetsPreview(t *testing.T) {
 
 	t.Run("a selected family summary survives a filter that keeps its family", func(t *testing.T) {
 		m, _ := listViewModel(dashboard.ViewProjects)
-		m.previewEnabled = true
 
 		// Start on a session so the pane holds a real window; the moves below
 		// then have something to be wrong about.

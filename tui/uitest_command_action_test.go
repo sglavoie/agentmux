@@ -179,6 +179,13 @@ func TestCommandActionRefusesWhileTheRailHoldsFocus(t *testing.T) {
 	d, _ := newUITestFixtureDriver(fx, fx.Size)
 	cleanupUITestDriver(t, d)
 
+	// The rail is opt-in and stands third in line for columns behind the queue
+	// and the inspector, so reaching the state under test takes a terminal wide
+	// enough for three strips and the operator's own toggle.
+	d.Resize(240, 32)
+	if err := d.Key(keyToggleRail); err != nil {
+		t.Fatal(err)
+	}
 	if err := d.Key(keyLeft); err != nil {
 		t.Fatal(err)
 	}

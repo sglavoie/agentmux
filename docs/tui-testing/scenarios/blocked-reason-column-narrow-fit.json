@@ -14,8 +14,8 @@
     { "type": "excludes_text", "text": "[P]" },
     { "type": "excludes_text", "text": "[W]" },
     { "type": "excludes_text", "text": "🤖 codex" },
-    { "type": "contains_text", "text": "approve · personal · codex" },
-    { "type": "contains_text", "text": "~/projects/approve" },
+    { "type": "excludes_text", "text": "│" },
+    { "type": "excludes_text", "text": "~/projects/approve" },
     { "type": "no_layout_issues" }
   ]
 }

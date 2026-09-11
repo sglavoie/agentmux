@@ -6,7 +6,8 @@ goes under the replacement keymap.
 This is an inventory, not a change. The bindings listed as **retiring** still
 work exactly as before; the table in `tui/dashboard_bindings.go` is what will
 be edited to retire them, and it is the only place a retirement has to be
-written down. The point of the inventory is that no capability is dropped by
+written down. A row whose disposition reads **Retired** has already been
+edited there — the inventory records what happened rather than what is planned. The point of the inventory is that no capability is dropped by
 accident: a key can only retire once the row naming it says which surviving
 surface still reaches it.
 
@@ -68,7 +69,7 @@ it is named first.
 | `P` | `SearchPlans` | Plans browser | Retires | palette |
 | `W` | `ManageWorktrees` | Managed worktrees | Retires | palette |
 | `A` | `ShowRuns` | ASL Runs | Retires | palette |
-| `p` | `TogglePreview` | Toggle the preview pane | Retires the meaning, keeps the key for the project switcher | inspector `i`; palette |
+| `p` | `TogglePreview` | Toggle the preview pane | **Retired.** The command is `ToggleInspector` (`explore.toggle-inspector`) on `i`, and `p` answers nothing on the dashboard until the project switcher claims it | inspector `i`; palette |
 | `b` | `ToggleRail` | Toggle the project rail | Retires | project switcher `p`; palette |
 | `v` | `ToggleListView` | Urgency ↔ Projects view | Retires | palette (the contract keeps Projects view palette-accessible) |
 | `R` | `ResortTabs` | Resort Kitty tabs | Retires | palette |

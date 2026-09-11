@@ -105,11 +105,11 @@ func (m Model) handleRailKey(key string) (tea.Model, tea.Cmd) {
 		m.openHelp(ModeList)
 	case keyToggleRail:
 		m.toggleRail()
-	case keyTogglePreview:
-		updated, cmd := m.togglePreview()
-		out := updated.(Model)
-		out.syncRailState()
-		return out, cmd
+	case keyInspector:
+		// toggleInspector already re-syncs the rail and drops the rail's keyboard
+		// claim when it opens, so the rail hands the key straight on rather than
+		// post-processing the result the way the preview toggle did.
+		return m.toggleInspector()
 	case keyToggleView:
 		m.railFocused = false
 		return m, m.toggleListView()

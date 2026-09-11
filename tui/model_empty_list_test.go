@@ -134,7 +134,12 @@ func TestEmptyListFooterRendersWithoutPanic(t *testing.T) {
 			t.Errorf("expected %q in empty-list footer, got:\n%s", want, out)
 		}
 	}
-	if !strings.Contains(out, "x clear") {
-		t.Errorf("expected the unavailable row key `x clear` to hold its slot, got:\n%s", out)
+	// `e peek` is the last row-targeted key inside the two-row budget at this
+	// width — the inspector's own `i` and tab's pane gloss pushed the ones below
+	// it past the cap. It is the assertion's subject for exactly that reason:
+	// a key that is unavailable still occupies its place in the fixed order, so
+	// availability changes restyle the palette rather than reflow it.
+	if !strings.Contains(out, "e peek") {
+		t.Errorf("expected the unavailable row key `e peek` to hold its slot, got:\n%s", out)
 	}
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
@@ -368,13 +369,35 @@ func TestFooterZebraExcludesViewsWithoutRootFooter(t *testing.T) {
 		m    Model
 	}{
 		{name: "detail overlay", m: Model{mode: ModeDetail, width: 72}},
-		{name: "dashboard preview", m: Model{mode: ModeList, width: 72, previewEnabled: true}},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := renderFooter(tc.m); got != "" {
 				t.Errorf("renderFooter() = %q, want no root footer", got)
+			}
+		})
+	}
+
+	// Neither inspector state is such a view, and that is a reversal worth
+	// stating. The pane is on by default, so suppressing the footer beside a
+	// split would leave a first-run dashboard with no key hints at all; and full
+	// screen is a display state of the dashboard rather than a modal overlay —
+	// the keys that leave it are `i` and escape, and the footer is the only place
+	// either of them is written down.
+	for _, tc := range []struct {
+		name    string
+		display inspectorDisplay
+		width   int
+	}{
+		{name: "split inspector", display: inspectorAutomatic, width: 160},
+		{name: "full-screen inspector", display: inspectorFullScreen, width: 72},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := Model{mode: ModeList, width: tc.width, height: 40, cfg: &config.Config{},
+				inspectorDisplay: tc.display}
+			if got := renderFooter(m); got == "" {
+				t.Error("the inspector suppressed the root footer")
 			}
 		})
 	}

@@ -1,23 +1,72 @@
 {
   "name": "run-timer-wide",
   "fixture": "run_timers",
-  "size": { "width": 120, "height": 32 },
+  "size": {
+    "width": 120,
+    "height": 32
+  },
   "actions": [
-    { "type": "tick", "count": 2 },
-    { "type": "key", "key": "j" },
-    { "type": "key", "key": "j" },
-    { "type": "key", "key": "j" }
+    {
+      "type": "tick",
+      "count": 2
+    },
+    {
+      "type": "key",
+      "key": "j"
+    },
+    {
+      "type": "key",
+      "key": "j"
+    },
+    {
+      "type": "key",
+      "key": "j"
+    }
   ],
   "assertions": [
-    { "type": "mode_equals", "mode": "list" },
-    { "type": "contains_text", "text": "burst     Working      0:07" },
-    { "type": "contains_text", "text": "review    Subagent     3:07" },
-    { "type": "contains_text", "text": "indexer   Compacting  12h07" },
-    { "type": "contains_text", "text": "idle      Done            —" },
-    { "type": "selected_title", "value": "stale" },
-    { "type": "contains_text", "text": "stale · work · claude · 9:41 ⏳" },
-    { "type": "excludes_text", "text": "— ⏳" },
-    { "type": "kitty_calls", "op": "FocusTab", "count": 0 },
-    { "type": "no_layout_issues" }
+    {
+      "type": "mode_equals",
+      "mode": "list"
+    },
+    {
+      "type": "contains_text",
+      "text": "burst     Working      0:07"
+    },
+    {
+      "type": "contains_text",
+      "text": "review    Subagent     3:07"
+    },
+    {
+      "type": "contains_text",
+      "text": "indexer   Compacting  12h07"
+    },
+    {
+      "type": "contains_text",
+      "text": "idle      Done            —"
+    },
+    {
+      "type": "selected_title",
+      "value": "stale"
+    },
+    {
+      "type": "contains_text",
+      "text": "Working · 9:41"
+    },
+    {
+      "type": "contains_text",
+      "text": "Watch   last event 9m ⏳"
+    },
+    {
+      "type": "excludes_text",
+      "text": "— ⏳"
+    },
+    {
+      "type": "kitty_calls",
+      "op": "FocusTab",
+      "count": 0
+    },
+    {
+      "type": "no_layout_issues"
+    }
   ]
 }

@@ -104,18 +104,19 @@ func TestSupervisionMarkerMovedOffTheRowIntoTheSelectedContext(t *testing.T) {
 		t.Fatalf("the supervision marker is back in the list:\n%s", out)
 	}
 
-	// Put the cursor on the supervised session; the strip is what answers.
+	// Put the cursor on the supervised session; the inspector is what answers.
 	for i := range m.items.Items {
 		if s, ok := m.items.Session(m.items.Items[i]); ok && s.Base == "backend" {
 			m.cursor = i
 		}
 	}
-	strip := stripAnsi(renderDetailStripBlock(m))
-	if !strings.Contains(strip, "🔁") {
-		t.Fatalf("the selected supervised session is not marked in its context: %q", strip)
+	requireInspector(t, m)
+	pane := stripAnsi(renderPreviewPane(m, 60, 16))
+	if !strings.Contains(pane, "🔁") {
+		t.Fatalf("the selected supervised session is not marked in its context:\n%s", pane)
 	}
-	if !strings.Contains(strip, "backend") {
-		t.Fatalf("the strip is describing some other session: %q", strip)
+	if !strings.Contains(pane, "backend") {
+		t.Fatalf("the inspector is describing some other session:\n%s", pane)
 	}
 }
 

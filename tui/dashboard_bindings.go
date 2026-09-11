@@ -62,12 +62,14 @@ func dashboardBindings() commands.BindingSet {
 		{Keys: []string{keyPlanSearch}, Display: keyPlanSearch, Hint: "plans", Command: commands.SearchPlans},
 		{Keys: []string{keyWorktrees}, Display: keyWorktrees, Command: commands.ManageWorktrees},
 		{Keys: []string{keyASLRuns}, Display: keyASLRuns, Command: commands.ShowRuns},
-		// One of the two unchecked bindings. togglePreview refuses a viewport too
-		// small for the pane by pushing an addressable notice that says so; the
-		// palette states the same refusal by dimming the row, which a key has no
-		// way to draw. Gating the key would swallow the notice and leave `p`
-		// looking broken on a short terminal.
-		{Keys: []string{keyTogglePreview}, Display: keyTogglePreview, Hint: "preview", Command: commands.TogglePreview, Gate: commands.GateUnchecked},
+		// One of the two unchecked bindings, and the reason is now the opposite of
+		// what it was under `p`. The inspector never refuses: a terminal too
+		// narrow for a split gets the pane full-screen instead, so there is no
+		// state in which the key should read as unavailable and a gate would only
+		// be a chance to get that wrong. `p` is deliberately not bound on the
+		// dashboard at all — session 9 gives it to the project switcher, and a
+		// key that still toggled a pane in the meantime would have to be untaught.
+		{Keys: []string{keyInspector}, Display: keyInspector, Hint: "inspector", Command: commands.ToggleInspector, Gate: commands.GateUnchecked},
 		{Keys: []string{keyToggleRail}, Display: keyToggleRail, Hint: "project rail", Command: commands.ToggleRail},
 		{Keys: []string{keyToggleView}, Display: keyToggleView, Hint: "group view", Command: commands.ToggleListView},
 

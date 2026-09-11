@@ -15,9 +15,9 @@
     { "type": "contains_text", "text": "• ▌ ▸ 🛑 svc  1 attention · 1 active · 1 idle" },
     { "type": "contains_text", "text": "  ▌ ▸ ⚡ web  1 active · 1 idle" },
     { "type": "excludes_text", "text": "• ▌ ▸ ⚡ web" },
-    { "type": "excludes_text", "text": "svc-review" },
-    { "type": "excludes_text", "text": "svc-legacy" },
-    { "type": "excludes_text", "text": "web-beta" },
+    { "type": "excludes_text", "text": "▌   svc-review" },
+    { "type": "excludes_text", "text": "▌   svc-legacy" },
+    { "type": "excludes_text", "text": "▌   web-beta" },
     { "type": "contains_text", "text": "  ▌ tmp         Done         —" },
     { "type": "contains_text", "text": "Sessions: 6 · 1 attention · 2 active · 3 idle" },
     { "type": "no_layout_issues" }

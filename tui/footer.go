@@ -96,7 +96,7 @@ func renderFooter(m Model) string {
 		))
 	default: // ModeList
 		position := ""
-		if m.pendingJumpDir == 0 && !m.previewEnabled {
+		if m.pendingJumpDir == 0 && !m.inspectorFullScreenActive() {
 			position = listPositionFragment(m)
 		}
 		lines = listModeFooterLines(m, position)
@@ -180,8 +180,6 @@ func listModeFooterLines(m Model, position string) []string {
 		// pending, so it is what the single row carries; the action blocks stay
 		// dropped.
 		return []string{compactFooterRow(m, "  ", compactJumpChordTokens(m), nil)}
-	case compact && m.previewEnabled:
-		return nil
 	case compact:
 		required, optional := compactListFooterTokens(m)
 		return []string{compactFooterRow(m, "  ", required, optional)}
@@ -192,10 +190,6 @@ func listModeFooterLines(m Model, position string) []string {
 		// contradictory meanings for `p`, `e`, `a`, `q`, `s`, and `c` on adjacent
 		// lines while the very keypress that resolves them is pending.
 		return prioritizedFooterLines(listJumpChordTokens(m), footerHintIndent, m.width, footerHintMaxLines)
-	case m.previewEnabled:
-		// In preview mode the only binding shown is `p: hide preview`,
-		// which is rendered right-aligned in the title row.
-		return nil
 	default:
 		return prioritizedFooterLines(listFooterTokens(m, position), footerHintIndent, m.width, footerHintMaxLines)
 	}
@@ -464,10 +458,10 @@ func listPositionFragmentForVisible(m Model, height int) string {
 // while list height depends on footer rows, so iterate the small calculation
 // to a stable row count rather than falling back to a hard-coded budget.
 func listFooterBudgetLineCount(m Model) int {
-	if m.previewEnabled {
-		return 0
-	}
-
+	// The inspector no longer suppresses the footer, so there is no early return
+	// here and there must not be one: this count is a term in the body-row floor
+	// the inspector's own fit is judged against, and a footer that asked whether
+	// the inspector fits would be asking itself.
 	position := ""
 	lineCount := countFooterPhysicalRows(listModeFooterLines(m, position))
 	maxLineCount := lineCount
@@ -695,11 +689,17 @@ func listFooterPalette() []listFooterCandidate {
 			shownWhen(listFilterActive),
 		listBinding("1-9", "remove chip", footerSectionApp, footerPriorityPrimary, footerAlways).
 			shownWhen(listHasChips).respelled(listChipRangeKey, nil),
+		// One key, two meanings, and only ever one of them shown. With an
+		// inspector on screen tab hands the keyboard between the panes; with none
+		// it keeps its older job of walking the chip row. Printing both would put
+		// two contradictory glosses for the same key on the same line.
+		listBinding("tab", "switch pane", footerSectionApp, footerPriorityPrimary, footerAlways).
+			shownWhen(listInspectorShown),
 		listBinding("tab", "focus next", footerSectionApp, footerPriorityPrimary, footerAlways).
-			shownWhen(listHasChips),
+			shownWhen(listChipFocusAvailable),
 		listBinding("]/[", "jump chord", footerSectionApp, footerPriorityPrimary, footerAlways),
 		listBinding("}/{", "jump + focus", footerSectionApp, footerPriorityPrimary, footerAlways),
-		listCommandBinding(bindings, commands.TogglePreview, footerSectionApp, footerPriorityPrimary),
+		listCommandBinding(bindings, commands.ToggleInspector, footerSectionApp, footerPriorityPrimary),
 		listCommandBinding(bindings, commands.ToggleRail, footerSectionApp, footerPriorityPrimary),
 		listBinding("←/→", "switch pane", footerSectionApp, footerPriorityPrimary, listRailVisible).
 			shownWhen(listUrgencyView),
@@ -756,6 +756,11 @@ func listEnterLabel(m Model) string {
 func listFilterActive(m Model) bool { return !m.activeFilter.IsEmpty() }
 
 func listHasChips(m Model) bool { return len(m.activeFilter.Components()) > 0 }
+
+// listChipFocusAvailable is the narrower half of tab's split meaning: chip
+// cycling is only what the key does when there is no second pane to hand the
+// keyboard to.
+func listChipFocusAvailable(m Model) bool { return listHasChips(m) && !listInspectorShown(m) }
 
 func listUrgencyView(m Model) bool { return m.listView == dashboard.ViewUrgency }
 

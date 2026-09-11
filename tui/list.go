@@ -14,7 +14,7 @@ import (
 
 // renderHeader renders the dashboard title line. Active filters are surfaced
 // as chips below the header via renderChips, so this line carries the title,
-// the name of the current view, the filter hint, the preview hint, and the
+// the name of the current view, the filter hint, the inspector hint, and the
 // right-aligned daemon/hooks health pips. Error details are surfaced through
 // the sticky status bar.
 //
@@ -79,11 +79,11 @@ func renderHeaderWithHits(m Model) headerRender {
 		}
 	}
 	if m.cfg != nil {
-		label := "p: preview"
-		if m.previewEnabled {
-			label = "p: hide preview"
+		label := "i: inspector"
+		if listInspectorShown(m) {
+			label = "i: hide inspector"
 		}
-		prependIfFits(styleFooter.Render(label), mouseHitPreview)
+		prependIfFits(styleFooter.Render(label), mouseHitInspectorToggle)
 	}
 	if m.listView == dashboard.ViewUrgency {
 		label := "b: show rail"
@@ -330,12 +330,11 @@ func chromeAboveListLines(m Model) int {
 	return n
 }
 
-// chromeBelowListLines returns the vertical lines drawn between the bottom of
-// the list/preview area and the padding row above the footer. Only the compact
-// band's selected-item detail strip lives there.
-func chromeBelowListLines(m Model) int {
-	return detailStripBudgetLines(m)
-}
+// Nothing is drawn between the bottom of the body panes and the padding row
+// above the footer, so there is no chromeBelowListLines to charge for. The
+// detail strip that used to live there was retired with dashboard `p`: the
+// inspector carries the selected session's metadata at every width, and two
+// rows restating it under the list were two sessions the list could not show.
 
 func legendLineCount(m Model) int {
 	return len(layout.SectionLines(renderLegend(m)))

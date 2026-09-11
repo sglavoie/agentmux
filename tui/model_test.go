@@ -48,7 +48,13 @@ func stubUnreachableDaemon(t *testing.T) {
 // testModel returns a Model with a minimal config and mock client.
 func testModel() Model {
 	cfg := &config.Config{
-		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		// Preview carries config.Load's defaults for the same reason the uitest
+		// fixtures do: a literal config never runs the defaulting pass, and a
+		// zero Preview block describes a world no installation produces — ratio
+		// 0 pins the inspector to its 40-column floor at every width, and
+		// min_cols 0 lowers the split floor from the configured 100 to the pane
+		// minimums' own 89.
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2, Preview: uitestPreviewDefaults()},
 		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts: []config.Account{
 			{Name: "work", Color: "blue"},
@@ -58,6 +64,28 @@ func testModel() Model {
 	runner := kitty.NewMockRunner(nil)
 	client := kitty.NewClientWithSocket(runner, "")
 	return NewModel(cfg, client)
+}
+
+// requireInspector asserts the inspector is actually on screen at the model's
+// current size.
+//
+// It is what the retired `m.previewEnabled = true` became. The inspector is on
+// by default now, so a test no longer turns it on — it only has to be sure the
+// terminal it chose still affords one. Saying so is not ceremony: a test that
+// picked a width below the split floors would get a queue-only dashboard, and
+// every preview assertion under it would pass vacuously against a pane that was
+// never drawn.
+func requireInspector(t *testing.T, m Model) {
+	t.Helper()
+	if !m.inspectorActive() {
+		t.Fatalf("no inspector at %dx%d: split widths fit=%v, body rows=%d (floor %d)",
+			m.width, m.height, splitWidthsFit(m), dashboardInspectorBodyRows(m), inspectorMinBodyRows)
+	}
+}
+
+func splitWidthsFit(m Model) bool {
+	_, _, ok := dashboardSplitWidths(m)
+	return ok
 }
 
 // withListRows installs rows as the dashboard's filtered list and rebuilds the
@@ -82,10 +110,17 @@ func loadSessions(m Model, sessions []session.RunningSession) Model {
 // model itself started. The refresh controller only accepts the sequence it is
 // currently waiting on, so a hand-built message has to be stamped with it or it
 // is (correctly) dropped as obsolete.
+// It also answers the inspector read the refresh starts. The pane is on by
+// default, so applying a session list retargets it and takes the single
+// in-flight read slot; a helper that dropped that command would hand every
+// later test a controller that can no longer fetch. feedPreviewReplies says
+// more about why.
 func applySessions(m Model, msg commands.SessionsMsg) Model {
 	msg.Seq = armTopologyRefresh(&m)
-	updated, _ := m.Update(msg)
-	return updated.(Model)
+	updated, cmd := m.Update(msg)
+	m = updated.(Model)
+	feedPreviewReplies(&m, cmd, 0)
+	return m
 }
 
 // applyRefreshErr feeds a refresh failure through the model as the completion
@@ -214,7 +249,7 @@ func modalConfirmModel() Model {
 
 func testModelWithSessions() Model {
 	cfg := &config.Config{
-		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2, Preview: uitestPreviewDefaults()},
 		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts: []config.Account{
 			{Name: "work", Color: "blue"},

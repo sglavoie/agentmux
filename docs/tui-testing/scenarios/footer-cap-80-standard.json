@@ -6,7 +6,7 @@
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
     { "type": "contains_text", "text": "  j/k up/down · enter focus · a actions · : commands · / filter · ? help" },
-    { "type": "contains_text", "text": "  ]/[ jump chord · }/{ jump + focus · p preview · b project rail · ? more" },
+    { "type": "contains_text", "text": "  ]/[ jump chord · }/{ jump + focus · i inspector · b project rail · ? more" },
     { "type": "excludes_text", "text": "j/k move · enter focus · : cmds" },
     { "type": "excludes_text", "text": "q quit" },
     { "type": "contains_text", "text": " Sessions: 7 · 2 attention · 2 active · 3 idle" },

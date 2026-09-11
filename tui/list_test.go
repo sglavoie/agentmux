@@ -352,36 +352,32 @@ func TestHarnessTravelsWithTheSelectedSessionRatherThanEveryRow(t *testing.T) {
 			t.Errorf("harness %q still reaches the queue row: %q", harness, row)
 		}
 
-		items := dashboard.BuildItemsFor(dashboard.ViewUrgency, []session.RunningSession{s}, nil)
-		item, _ := items.At(0)
-		lines := dashboard.RenderDetailStrip(dashboard.DetailStripInput{
-			Width: 100, Items: items, Item: item, Selected: true, Cfg: cfg,
-		})
-		if !strings.Contains(stripAnsi(lines[0]), harness) {
-			t.Errorf("harness %q is named nowhere in the selected context: %q", harness, lines[0])
+		pane := stripAnsi(dashboard.RenderInspector(dashboard.InspectorInput{
+			Width: 100, Height: 12, Content: dashboard.InspectorReady, Session: s, Cfg: cfg,
+		}))
+		if !strings.Contains(pane, harness) {
+			t.Errorf("harness %q is named nowhere in the selected context:\n%s", harness, pane)
 		}
 	}
 }
 
 // TestMultibyteProfileNameSurvivesWholeInTheSelectedContext replaces the badge's
 // first-rune test. The row used to compress a profile to `[É]`, which is why
-// taking that initial by byte rather than by rune was a real hazard; the strip
-// spends a whole token on the name instead, so the contract is now that the name
-// arrives intact and still renders as valid UTF-8 through the identity span's
-// color.
+// taking that initial by byte rather than by rune was a real hazard; the
+// inspector spends a whole labelled line on the name instead, so the contract is
+// now that the name arrives intact and still renders as valid UTF-8.
 func TestMultibyteProfileNameSurvivesWholeInTheSelectedContext(t *testing.T) {
 	for _, profile := range []string{"éscriba", "中文", "🐙ctopus"} {
 		s := session.RunningSession{Base: "x", Account: profile}
-		items := dashboard.BuildItemsFor(dashboard.ViewUrgency, []session.RunningSession{s}, nil)
-		item, _ := items.At(0)
-		lines := dashboard.RenderDetailStrip(dashboard.DetailStripInput{
-			Width: 100, Items: items, Item: item, Selected: true, Cfg: &config.Config{},
+		pane := dashboard.RenderInspector(dashboard.InspectorInput{
+			Width: 100, Height: 12, Content: dashboard.InspectorReady,
+			Session: s, Cfg: &config.Config{},
 		})
-		if !strings.Contains(stripAnsi(lines[0]), profile) {
-			t.Errorf("profile %q is not carried whole by the selected context: %q", profile, lines[0])
+		if !strings.Contains(stripAnsi(pane), profile) {
+			t.Errorf("profile %q is not carried whole by the selected context:\n%s", profile, pane)
 		}
-		if !utf8.ValidString(lines[0]) {
-			t.Errorf("profile %q: rendered context is not valid UTF-8: %q", profile, lines[0])
+		if !utf8.ValidString(pane) {
+			t.Errorf("profile %q: rendered context is not valid UTF-8:\n%s", profile, pane)
 		}
 	}
 }

@@ -31,11 +31,12 @@ func TestListChromeLines_BaselineModeList(t *testing.T) {
 		t.Fatalf("footer budget = %d, rendered footer rows = %d", footerLines, renderedLines)
 	}
 	// Baseline: header(1) + wrapped legend + spacer(1) + padding row(1)
-	// + the selected-item strip + the measured reflowed footer + status bar(1).
-	// The strip is in the baseline at every width now that the queue row carries
-	// no metadata of its own to be a wide terminal's alternative to it.
+	// + the measured reflowed footer + status bar(1). Nothing sits below the
+	// list any more: the selected-item strip that used to be charged here is
+	// gone, and what it carried is in the inspector beside the list instead —
+	// which costs columns rather than rows and so appears in no height budget.
 	got := listChromeLines(m)
-	want := 1 + legendLineCount(m) + 1 + 1 + detailStripBudgetLines(m) + footerLines + statusBarLines
+	want := 1 + legendLineCount(m) + 1 + 1 + footerLines + statusBarLines
 	if got != want {
 		t.Errorf("baseline chrome: got %d want %d", got, want)
 	}
@@ -63,8 +64,14 @@ func TestListFooterBudgetMatchesRenderedRowsAcrossStates(t *testing.T) {
 		jumpNext.pendingJumpDir = 1
 		jumpPrev := base
 		jumpPrev.pendingJumpDir = -1
-		preview := base
-		preview.previewEnabled = true
+		// The inspector's three display states are three different footers: the
+		// split and the hidden queue draw the same one with a different `i` label
+		// and a different tab gloss, and full screen draws none at all. Each has
+		// to measure what it renders.
+		hidden := base
+		hidden.inspectorDisplay = inspectorHidden
+		fullScreen := base
+		fullScreen.inspectorDisplay = inspectorFullScreen
 
 		for _, tc := range []struct {
 			name string
@@ -75,7 +82,8 @@ func TestListFooterBudgetMatchesRenderedRowsAcrossStates(t *testing.T) {
 			{name: "active filter", m: filtered},
 			{name: "jump chord next", m: jumpNext},
 			{name: "jump chord prev", m: jumpPrev},
-			{name: "preview", m: preview},
+			{name: "inspector hidden", m: hidden},
+			{name: "inspector full screen", m: fullScreen},
 		} {
 			t.Run(fmt.Sprintf("%s/%d", tc.name, width), func(t *testing.T) {
 				got := footerBudgetLines(tc.m)
@@ -182,45 +190,63 @@ func TestListVisibleHeight_PreviewOffSubtractsChrome(t *testing.T) {
 	}
 }
 
-func TestListVisibleHeight_PreviewVerticalMatchesRenderSplit(t *testing.T) {
+// TestListVisibleHeight_SplitInspectorKeepsTheWholePaneHeight is the height half
+// of the side-by-side split. The inspector takes columns from the list, never
+// rows: both panes are drawn to the same height, so the queue's visible budget
+// beside an inspector is exactly the budget it has without one. A split that
+// shortened the list would be the vertical preview this replaced.
+func TestListVisibleHeight_SplitInspectorKeepsTheWholePaneHeight(t *testing.T) {
 	m := scrollModel()
-	m.cfg.Defaults.Preview = config.PreviewConfig{Direction: "vertical", Ratio: 0.5}
-	m.previewEnabled = true
+	m.width = 160
+	m.cfg.Defaults.Preview = config.PreviewConfig{Direction: "horizontal", Ratio: 0.5}
+	requireInspector(t, m)
 
 	footerLines := footerBudgetLines(m)
-	paneHeight := m.height - chromeAboveListLines(m) - chromeBelowListLines(m) - 1 - footerLines - statusBarLines
-	previewHeight := int(float64(paneHeight) * 0.5)
-	if previewHeight < previewMinVerticalHeight {
-		previewHeight = previewMinVerticalHeight
-	}
-	if room := paneHeight - listMinVisible - 1; previewHeight > room {
-		previewHeight = room
-	}
-	want := paneHeight - previewHeight - 1
-
+	want := m.height - chromeAboveListLines(m) - 1 - footerLines - statusBarLines
 	if got := listVisibleHeight(m); got != want {
-		t.Errorf("preview vertical: got %d want %d (pane=%d preview=%d)", got, want, paneHeight, previewHeight)
+		t.Errorf("split inspector: got %d want %d", got, want)
+	}
+
+	// And the same model with the inspector hidden answers the same number, which
+	// is the claim above said from the other side.
+	hidden := m
+	hidden.inspectorDisplay = inspectorHidden
+	if got := listVisibleHeight(hidden); got != want {
+		t.Errorf("hiding the inspector changed the list height: got %d want %d", got, want)
 	}
 }
 
-func TestListVisibleHeight_PreviewHorizontalReturnsPaneHeight(t *testing.T) {
+// TestListVisibleHeight_FullScreenInspectorLeavesTheListNothing is the other
+// end. Full screen is not a wider split; the queue is not drawn at all, so its
+// height question has no pane behind it and the geometry keeps the list's own
+// dimensions untouched rather than clamping them to zero — which is what lets
+// the cursor and the scroll offset survive the round trip.
+func TestListVisibleHeight_FullScreenInspectorLeavesTheListNothing(t *testing.T) {
 	m := scrollModel()
-	m.cfg.Defaults.Preview = config.PreviewConfig{Direction: "horizontal", Ratio: 0.5}
-	m.previewEnabled = true
+	m.width = 160
+	m.filtered = makeRowsForScroll(20)
+	m.rebuildItems()
+	m.cursor = 12
+	scrollListToCursor(&m)
+	before := m.listOffset
 
-	footerLines := footerBudgetLines(m)
-	want := m.height - chromeAboveListLines(m) - chromeBelowListLines(m) - 1 - footerLines - statusBarLines
+	split := dashboardGeometry(m)
+	m.inspectorDisplay = inspectorFullScreen
+	full := dashboardGeometry(m)
 
-	if got := listVisibleHeight(m); got != want {
-		t.Errorf("preview horizontal: got %d want %d", got, want)
+	// Rows, and only rows. The scroll offset is an index into a row budget, so
+	// the height is what has to survive; the width the undrawn queue is handed
+	// is arbitrary and the assertion deliberately says nothing about it.
+	if full.listHeight != split.listHeight {
+		t.Errorf("full screen resized the row budget of the queue it stopped drawing: %d, want %d",
+			full.listHeight, split.listHeight)
 	}
-	// A side-by-side split at 100 columns leaves the list column in the compact
-	// band, so the strip below it is part of that budget rather than an
-	// accounting detail: assert the charge is really there, otherwise the line
-	// above silently degrades into `want == paneHeight` and stops testing it.
-	if got := chromeBelowListLines(m); got != dashboard.DetailStripLines {
-		t.Errorf("compact list column should reserve the detail strip: got %d want %d",
-			got, dashboard.DetailStripLines)
+	if !full.fullScreen {
+		t.Error("geometry did not report a full-screen inspector")
+	}
+	if m.cursor != 12 || m.listOffset != before {
+		t.Errorf("entering full screen moved the selection: cursor=%d offset=%d, want 12/%d",
+			m.cursor, m.listOffset, before)
 	}
 }
 
@@ -382,8 +408,8 @@ func TestScrollListToCursor_GroupLabelChargedCorrectly(t *testing.T) {
 	}
 }
 
-// TestScrollListToCursor_PreviewEnabledKeepsCursorVisible reconstructs the
-// screenshot scenario reported against commit 1802fa2: preview pane on,
+// TestScrollListToCursor_InspectorShownKeepsCursorVisible reconstructs the
+// screenshot scenario reported against commit 1802fa2: side pane on,
 // multi-group filtered list, cursor on a row past the visible window. Before
 // the fix, listVisibleHeight (and renderSplit) over-counted the available
 // height by the size of the chrome above the list (legend + spacer +
@@ -391,13 +417,15 @@ func TestScrollListToCursor_GroupLabelChargedCorrectly(t *testing.T) {
 // practice the terminal clipped it. This test fails on the buggy
 // `m.height - 1 - 1 - footerLines` formula and passes after the chrome is
 // subtracted properly.
-func TestScrollListToCursor_PreviewEnabledKeepsCursorVisible(t *testing.T) {
+func TestScrollListToCursor_InspectorShownKeepsCursorVisible(t *testing.T) {
 	m := scrollModel()
-	m.cfg.Defaults.Preview = config.PreviewConfig{Direction: "vertical", Ratio: 0.5}
-	m.previewEnabled = true
+	m.width = 160
+	m.cfg.Defaults.Preview = config.PreviewConfig{Direction: "horizontal", Ratio: 0.5}
 	// Mirror the screenshot: a tight terminal where chrome consumes enough
-	// lines that ignoring it inflates the budget by several rows.
-	m.height = 26
+	// lines that ignoring it inflates the budget by several rows. It is shorter
+	// than the reported one because the retired detail strip gave the list two
+	// rows back, and the fixture only tests anything while the list overflows.
+	m.height = 16
 	m.filtered = []session.RunningSession{
 		{WindowID: 1, Base: "amx", Account: "work", State: "stop"},
 		{WindowID: 2, Base: "AiBroker", Account: "work", State: "stop"},
@@ -433,7 +461,7 @@ func TestScrollListToCursor_PreviewEnabledKeepsCursorVisible(t *testing.T) {
 	// any group-label charges — must fit within the visible budget so the
 	// renderer can actually emit the cursor's row.
 	if cost := listLineCost(&m, m.listOffset, m.cursor, true); cost > visible {
-		t.Errorf("cursor not in window after scroll with preview enabled: "+
+		t.Errorf("cursor not in window after scroll with the inspector shown: "+
 			"cost=%d visible=%d offset=%d cursor=%d",
 			cost, visible, m.listOffset, m.cursor)
 	}
@@ -453,12 +481,12 @@ func TestScrollListToCursor_ReservesBottomIndicatorWhenRowsRemain(t *testing.T) 
 	m.cursor = 10
 	m.listOffset = 0
 
-	// Seven: capping the hint block at two rows handed the list three rows back
-	// from the old exhaustive footer, and the always-reserved selected-item strip
-	// then takes two of them.
+	// Nine: capping the hint block at two rows handed the list three rows back
+	// from the old exhaustive footer, and retiring the always-reserved
+	// selected-item strip handed it the two that strip used to take.
 	visible := listVisibleHeight(m)
-	if visible != 7 {
-		t.Fatalf("test fixture expected visible=7, got %d", visible)
+	if visible != 9 {
+		t.Fatalf("test fixture expected visible=9, got %d", visible)
 	}
 
 	scrollListToCursor(&m)

@@ -8,8 +8,8 @@
     { "type": "contains_text", "text": "Needs you (1)" },
     { "type": "contains_text", "text": "▌ api       Awaiting reply" },
     { "type": "excludes_text", "text": "❓ api" },
-    { "type": "contains_text", "text": "🔁 api · work · claude" },
-    { "type": "contains_text", "text": "~/projects/api" },
+    { "type": "excludes_text", "text": "│" },
+    { "type": "excludes_text", "text": "🔁" },
     { "type": "contains_text", "text": "j/k · ↵ · : · ?" },
     { "type": "excludes_text", "text": "awaiting response" },
     { "type": "no_layout_issues" }

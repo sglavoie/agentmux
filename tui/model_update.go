@@ -54,17 +54,21 @@ func newModel(cfg *config.Config, client kitty.KittyClient, sourceWindowID int, 
 		attn[s] = true
 	}
 	return Model{
-		client:                client,
-		cfg:                   cfg,
-		interval:              interval,
-		sortMode:              sort,
-		attentionStates:       attn,
-		backgroundCommands:    defaultModelBackgroundCommands(),
-		daemonCommand:         commands.DaemonRequest,
-		now:                   time.Now,
-		idleThreshold:         idle,
-		focusedChipIdx:        -1,
-		railRequested:         true,
+		client:             client,
+		cfg:                cfg,
+		interval:           interval,
+		sortMode:           sort,
+		attentionStates:    attn,
+		backgroundCommands: defaultModelBackgroundCommands(),
+		daemonCommand:      commands.DaemonRequest,
+		now:                time.Now,
+		idleThreshold:      idle,
+		focusedChipIdx:     -1,
+		// The project rail is now opt-in. The inspector took the columns it used
+		// to sit in, and two vertical strips beside the queue is one more than a
+		// terminal has room for. `b` and the palette still bring it back, and the
+		// project filtering it drives is unchanged and reachable without it.
+		railRequested:         false,
 		amxBin:                amxBin,
 		deprecations:          cfg.Deprecations,
 		messageDetailIdx:      -1,
@@ -233,16 +237,27 @@ const (
 )
 
 func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
+	// What the inspector was doing before the terminal changed size. The resize
+	// itself decides nothing about the operator's intent — m.inspectorDisplay is
+	// deliberately not touched anywhere in this function — so the only question is
+	// whether the new geometry still honours it.
+	wasActive := m.inspectorActive()
 	m.width = msg.Width
 	m.height = msg.Height
 	cfg := m.cfg.Defaults.Preview
 	var cmds []tea.Cmd
-	if m.previewEnabled {
-		if !previewFits(m.width, m.height, footerBudgetLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
-			if c := m.disablePreviewWithNotice("preview disabled: terminal too small"); c != nil {
-				cmds = append(cmds, c)
-			}
-		}
+	// Nothing reconciles the focus here, and that is the point. A split that no
+	// longer fits gives its keys back to the queue because inspectorFocused asks
+	// whether the pane is on screen, not because anything rewrote the bit — so
+	// widening restores the pane, the focus, and the scroll scope together. The
+	// operator's own Tab, Escape, and mouse are the only things that move it.
+	if !wasActive && m.inspectorActive() {
+		// The pane just came back. Its polling chain died the first time a tick
+		// found it hidden and nothing else revives one, so the resize has to — and
+		// startPreviewPoll retires whatever chain the model still names, which is
+		// what keeps a fast shrink/grow cycle from ending with two.
+		m.retargetPreview(m.currentPreviewWindowID())
+		cmds = append(cmds, m.requestPreviewRead(), m.startPreviewPoll())
 	}
 	if m.pickerPreviewEnabled {
 		if !previewFits(m.width, m.height, footerBudgetLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {

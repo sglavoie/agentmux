@@ -9,8 +9,9 @@
     { "type": "contains_text", "text": "api-hotfix  Working   0:12" },
     { "type": "contains_text", "text": "api         Working   0:42" },
     { "type": "contains_text", "text": "notes       Working   1:05" },
-    { "type": "contains_text", "text": "api-feat-x · work · claude · 3:07" },
-    { "type": "contains_text", "text": "amx/feat-x · ~/projects/worktrees/api-feat-x" },
+    { "type": "contains_text", "text": "Working · 3:07" },
+    { "type": "contains_text", "text": "Branch  amx/feat-x" },
+    { "type": "contains_text", "text": "Dir     ~/projects/worktrees/api-feat-x" },
     { "type": "excludes_text", "text": "amx/hotfix" },
     { "type": "excludes_text", "text": "main*" },
     { "type": "no_layout_issues" }

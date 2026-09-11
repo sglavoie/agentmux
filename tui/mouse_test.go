@@ -164,8 +164,25 @@ func TestMouseSummaryBodyAndChevronHaveDistinctActions(t *testing.T) {
 	}
 }
 
-func TestMouseRailChipHeaderAndWheelRouting(t *testing.T) {
+// mouseRailFixture is the mouse fixture with the project rail actually on
+// screen. The rail is opt-in now and third in line for columns behind the queue
+// and the inspector, so putting one there takes both an operator toggle and a
+// terminal wide enough to hold three vertical strips.
+func mouseRailFixture(t *testing.T) *uitestDriver {
+	t.Helper()
 	d, _ := mouseFixture(t)
+	d.Resize(240, 32)
+	if err := d.Key(keyToggleRail); err != nil {
+		t.Fatalf("toggle rail: %v", err)
+	}
+	if g := dashboardGeometry(d.Model()); !g.rail {
+		t.Fatalf("no rail at %dx%d: %+v", d.Model().width, d.Model().height, g)
+	}
+	return d
+}
+
+func TestMouseRailChipHeaderAndWheelRouting(t *testing.T) {
+	d := mouseRailFixture(t)
 	apiRail := findMouseHit(t, d.model, mouseHitRailRow, func(hit mouseHitRegion) bool { return hit.project == "api" })
 	clickHit(t, d, apiRail)
 	if d.model.activeFilter.Project != "api" || !d.model.railFocused {
@@ -239,27 +256,27 @@ func TestMouseGeometryWrappedChipsSuppressedRailAndPreview(t *testing.T) {
 		}
 	}
 
-	for _, direction := range []string{"horizontal", "vertical"} {
-		d.model = railTestModel()
-		d.model.width = 220
-		d.model.height = 40
-		d.model.cfg.Defaults.Preview.Direction = direction
-		d.model.cfg.Defaults.Preview.Ratio = .4
-		d.model.previewEnabled = true
-		before := d.model.cursor
-		g := dashboardGeometry(d.model)
-		mapNow := renderDashboardFrame(d.model).hitMap
-		x, y := 0, mapNow.listPane.Y+g.listHeight+1
-		if direction == "horizontal" {
-			x = mapNow.listPane.X + g.listWidth + 2
-			y = mapNow.listPane.Y
-		}
-		if err := d.Mouse(x, y, UITestMouseWheelDown); err != nil {
-			t.Fatal(err)
-		}
-		if d.model.cursor != before {
-			t.Fatalf("%s preview wheel moved list cursor to %d", direction, d.model.cursor)
-		}
+	// The wheel acts where the pointer is. Over the inspector column it scrolls
+	// output and the queue cursor must not move — the two panes are side by side
+	// now, so a wheel event that fell through to the list would scroll the wrong
+	// thing while the operator is looking at the other one.
+	d.model = railTestModel()
+	d.model.width = 220
+	d.model.height = 40
+	d.model.cfg.Defaults.Preview.Direction = "horizontal"
+	d.model.cfg.Defaults.Preview.Ratio = .4
+	requireInspector(t, d.model)
+	before := d.model.cursor
+	g := dashboardGeometry(d.model)
+	mapNow := renderDashboardFrame(d.model).hitMap
+	if !mapNow.hasInspector {
+		t.Fatal("the split frame recorded no inspector hit region")
+	}
+	if err := d.Mouse(mapNow.listPane.X+g.listWidth+2, mapNow.listPane.Y, UITestMouseWheelDown); err != nil {
+		t.Fatal(err)
+	}
+	if d.model.cursor != before {
+		t.Fatalf("the inspector wheel moved the list cursor to %d", d.model.cursor)
 	}
 }
 

@@ -511,7 +511,6 @@ func TestProjectsNavigationUnderAFilter(t *testing.T) {
 // already on the rows.
 func TestSummaryPreviewPaintsACardAndCallsNoKitty(t *testing.T) {
 	m, runner := listViewModel(dashboard.ViewProjects)
-	m.previewEnabled = true
 	m = selectLine(t, m, "summary:monorepo(open)")
 	if cmd := m.refreshPreviewForCursor(); cmd != nil {
 		if msg, ok := cmd().(previewContentMsg); !ok || msg.windowID != 0 {
@@ -575,7 +574,6 @@ func TestSummaryPreviewPaintsACardAndCallsNoKitty(t *testing.T) {
 // from and not whichever line the cursor passed over on the way.
 func TestRefreshRetargetsThePreviewAtTheSelectionItEndedOn(t *testing.T) {
 	m, _ := listViewModel(dashboard.ViewProjects)
-	m.previewEnabled = true
 	m = selectLine(t, m, "session:api")
 	m.refreshPreviewForCursor()
 	if m.previewWindowID != 11 {
@@ -624,7 +622,6 @@ func TestRefreshRetargetsThePreviewAtTheSelectionItEndedOn(t *testing.T) {
 // scrollback captured for an older selection.
 func TestPreviewRejectsAResponseForAnOlderTarget(t *testing.T) {
 	m, _ := listViewModel(dashboard.ViewProjects)
-	m.previewEnabled = true
 	m = selectLine(t, m, "session:api")
 	m.refreshPreviewForCursor()
 

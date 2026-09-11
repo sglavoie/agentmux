@@ -147,10 +147,14 @@ func TestDashboardProfileCycleResetsNavigationAndRefreshesPreview(t *testing.T) 
 		{Base: "personal", Profile: "personal", WindowID: 11},
 		{Base: "work", Profile: "work", WindowID: 22},
 	})
+	// A size the split fits at: retargeting is something only a visible pane
+	// does, so a zero-size model would assert the refresh half of this test
+	// against an inspector that was never drawn.
+	m.width, m.height = 160, 50
+	requireInspector(t, m)
 	m.cursor = 1
 	m.listOffset = 1
 	m.focusedChipIdx = 2
-	m.previewEnabled = true
 	m.previewWindowID = 22
 
 	updated, cmd := m.Update(keyPress("f"))

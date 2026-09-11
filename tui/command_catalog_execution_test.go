@@ -295,15 +295,24 @@ func TestCommandExploreAndAppExecution(t *testing.T) {
 		}
 	})
 
-	t.Run("preview", func(t *testing.T) {
+	// The inspector is on before the first press now, so the pair runs
+	// hide-then-show rather than show-then-hide. What each half must prove is
+	// unchanged: hiding releases the read target, and showing re-acquires it and
+	// arms the read.
+	t.Run("inspector", func(t *testing.T) {
 		m, ctx, _ := commandTestModel(target)
-		got, cmd := commandByID(t, commands.TogglePreview).Run(m, ctx)
-		if !got.previewEnabled || got.previewWindowID != 202 || cmd == nil {
-			t.Fatalf("show preview result: enabled=%v window=%d cmd=%v", got.previewEnabled, got.previewWindowID, cmd != nil)
+		requireInspector(t, m)
+		got, cmd := commandByID(t, commands.ToggleInspector).Run(m, ctx)
+		if got.inspectorActive() || got.previewWindowID != 0 || cmd != nil {
+			t.Fatalf("hide inspector result: active=%v window=%d cmd=%v", got.inspectorActive(), got.previewWindowID, cmd != nil)
 		}
-		got, cmd = commandByID(t, commands.TogglePreview).Run(got, ctx)
-		if got.previewEnabled || got.previewWindowID != 0 || cmd != nil {
-			t.Fatalf("hide preview result: enabled=%v window=%d cmd=%v", got.previewEnabled, got.previewWindowID, cmd != nil)
+		got, cmd = commandByID(t, commands.ToggleInspector).Run(got, ctx)
+		if !got.inspectorActive() || got.previewWindowID != 202 || cmd == nil {
+			t.Fatalf("show inspector result: active=%v window=%d cmd=%v", got.inspectorActive(), got.previewWindowID, cmd != nil)
+		}
+		// Opening takes the keyboard: the press was a request to read output.
+		if !got.inspectorFocused() {
+			t.Fatalf("show inspector left the keyboard on the queue")
 		}
 	})
 

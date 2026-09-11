@@ -9,7 +9,7 @@ func bindingFixture() BindingSet {
 		{Keys: []string{"enter", "space"}, Display: "enter / space", Hint: "focus", Command: FocusSession},
 		{Keys: []string{"d"}, Display: "d", Command: DismissDeprecation},
 		{Keys: []string{"d"}, Display: "d", Hint: "details", Command: ShowDetails},
-		{Keys: []string{"p"}, Display: "p", Hint: "preview", Command: TogglePreview, Gate: GateUnchecked},
+		{Keys: []string{"i"}, Display: "i", Hint: "inspector", Command: ToggleInspector, Gate: GateUnchecked},
 	}
 }
 

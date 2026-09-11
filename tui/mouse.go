@@ -17,7 +17,15 @@ const (
 	mouseHitNone mouseHitKind = iota
 	mouseHitView
 	mouseHitRailToggle
-	mouseHitPreview
+	// mouseHitInspectorToggle is the header control that shows or hides the
+	// inspector — the pointer's spelling of `i`.
+	mouseHitInspectorToggle
+	// mouseHitInspectorBody is the inspector pane itself. It is a click target
+	// rather than dead space for two reasons: clicking into a pane is how a
+	// pointer says "aim the keys here", and a click that produced no target at
+	// all would leave a half-finished double-click chain on the queue intact
+	// across it.
+	mouseHitInspectorBody
 	mouseHitChip
 	mouseHitSession
 	mouseHitFamily
@@ -39,11 +47,13 @@ type mouseHitRegion struct {
 }
 
 type mouseHitMap struct {
-	clicks   []mouseHitRegion
-	listPane dashboard.HitRect
-	railPane dashboard.HitRect
-	hasList  bool
-	hasRail  bool
+	clicks        []mouseHitRegion
+	listPane      dashboard.HitRect
+	railPane      dashboard.HitRect
+	inspectorPane dashboard.HitRect
+	hasList       bool
+	hasRail       bool
+	hasInspector  bool
 }
 
 type mouseActionKind int
@@ -52,6 +62,7 @@ const (
 	mouseActionClick mouseActionKind = iota
 	mouseActionListWheel
 	mouseActionRailWheel
+	mouseActionInspectorWheel
 )
 
 type mouseActionMsg struct {
@@ -98,6 +109,9 @@ func (m mouseHitMap) clipped(width, height int) mouseHitMap {
 	if rect, ok := clipHitRect(m.railPane, width, height); ok && m.hasRail {
 		out.railPane, out.hasRail = rect, true
 	}
+	if rect, ok := clipHitRect(m.inspectorPane, width, height); ok && m.hasInspector {
+		out.inspectorPane, out.hasInspector = rect, true
+	}
 	return out
 }
 
@@ -128,6 +142,14 @@ func (m mouseHitMap) handler() func(tea.MouseMsg) tea.Cmd {
 					return func() tea.Msg { return mouseActionMsg{kind: mouseActionClick, target: t} }
 				}
 			}
+			// The inspector's body is resolved last and as a whole rather than as
+			// a set of rows: nothing inside it is individually selectable, and the
+			// click means only "the pointer is in this pane".
+			if m.hasInspector && hitContains(m.inspectorPane, mouse.X, mouse.Y) {
+				return func() tea.Msg {
+					return mouseActionMsg{kind: mouseActionClick, target: mouseHitRegion{kind: mouseHitInspectorBody}}
+				}
+			}
 		case tea.MouseWheelMsg:
 			delta := 0
 			switch mouse.Button {
@@ -137,6 +159,13 @@ func (m mouseHitMap) handler() func(tea.MouseMsg) tea.Cmd {
 				delta = 3
 			default:
 				return nil
+			}
+			// Every pane is tested before the list, and the list is tested last,
+			// so a wheel event scrolls the pane the pointer is actually over. The
+			// panes never overlap, so the order is a reading convenience rather
+			// than a precedence rule.
+			if m.hasInspector && hitContains(m.inspectorPane, mouse.X, mouse.Y) {
+				return func() tea.Msg { return mouseActionMsg{kind: mouseActionInspectorWheel, delta: delta} }
 			}
 			if m.hasRail && hitContains(m.railPane, mouse.X, mouse.Y) {
 				return func() tea.Msg { return mouseActionMsg{kind: mouseActionRailWheel, delta: delta} }
@@ -185,20 +214,31 @@ func (m Model) handleMouseAction(msg mouseActionMsg) (tea.Model, tea.Cmd) {
 	m.snapshotSeenStates()
 	m.clearJumpChord()
 
+	// Every wheel event breaks a pending double-click chain, whichever pane it
+	// scrolled. A scroll moves the rows out from under the pointer, so the click
+	// that follows it lands on a different session than the one that started the
+	// chain even when the coordinates are identical — and an inspector scroll
+	// says the operator's attention left the queue entirely.
 	switch msg.kind {
 	case mouseActionListWheel:
+		m.clearMouseClickChain()
 		if m.listItemCount() == 0 {
 			return m, nil
 		}
+		m.focusPane(focusQueue)
 		m.cursor = clamp(m.cursor+msg.delta, 0, m.listItemCount()-1)
 		scrollListToCursor(&m)
 		return m, m.refreshPreviewForCursor()
 	case mouseActionRailWheel:
+		m.clearMouseClickChain()
 		if !dashboardGeometry(m).rail {
 			return m, nil
 		}
 		m.moveRailCursor(msg.delta)
 		return m, nil
+	case mouseActionInspectorWheel:
+		m.clearMouseClickChain()
+		return m.scrollInspectorBy(msg.delta), nil
 	}
 
 	target := msg.target
@@ -211,11 +251,14 @@ func (m Model) handleMouseAction(msg mouseActionMsg) (tea.Model, tea.Cmd) {
 	case mouseHitRailToggle:
 		m.toggleRail()
 		return m, nil
-	case mouseHitPreview:
-		updated, cmd := m.togglePreview()
-		out := updated.(Model)
-		out.syncRailState()
-		return out, cmd
+	case mouseHitInspectorToggle:
+		return m.toggleInspector()
+	case mouseHitInspectorBody:
+		// Clicking into the pane aims the keys at it. Nothing else happens: the
+		// inspector has no selectable rows, and the chain break above is the
+		// other half of what this click is for.
+		m.focusPane(focusInspector)
+		return m, nil
 	case mouseHitChip:
 		components := m.activeFilter.Components()
 		if m.activeFilter.Raw != target.filterRaw || target.chipIndex < 0 || target.chipIndex >= len(components) || components[target.chipIndex].Label() != target.chipLabel {
@@ -241,6 +284,7 @@ func (m Model) handleMouseAction(msg mouseActionMsg) (tea.Model, tea.Cmd) {
 		}
 		item, _ := m.items.At(i)
 		m.railFocused = false
+		m.focusPane(focusQueue)
 		if target.kind == mouseHitFamilyChevron {
 			if item.Collapsed != target.familyCollapsed {
 				return m, nil
@@ -267,6 +311,7 @@ func (m Model) handleMouseAction(msg mouseActionMsg) (tea.Model, tea.Cmd) {
 		}
 		m.cursor = i
 		m.railFocused = false
+		m.focusPane(focusQueue)
 		scrollListToCursor(&m)
 		var cmds []tea.Cmd
 		if cmd := m.refreshPreviewForCursor(); cmd != nil {

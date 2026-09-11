@@ -258,7 +258,16 @@ type Model struct {
 	// SAME target, and bumping per tick would mean that whenever a read takes
 	// longer than the tick interval every response is superseded before it lands
 	// and the pane never updates at all.
-	previewEnabled   bool
+	// inspectorDisplay is the operator's standing intent for the dashboard
+	// inspector and paneFocus is which of the two panes the keyboard is aimed
+	// at. Neither is a statement about the current terminal: whether a split
+	// actually fits is geometry, re-derived on every frame, so a resize that
+	// takes the split away and one that gives it back leave the intent
+	// untouched. The zero values are the defaults — an automatic inspector and
+	// a focused queue — which is what makes the pane present by default without
+	// any constructor saying so.
+	inspectorDisplay inspectorDisplay
+	paneFocus        paneFocus
 	previewWindowID  int
 	previewTargetSeq int
 	// previewText is the latest fetched snapshot and the only one the model

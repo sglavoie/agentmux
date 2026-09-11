@@ -72,8 +72,11 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 		{commands.SearchPlans, commands.GroupExplore, "Search Plans", []string{"agent plans", "history"}, "P"},
 		{commands.ManageWorktrees, commands.GroupExplore, "Manage Worktrees", []string{"git", "branches", "inventory"}, "W"},
 		{commands.ShowRuns, commands.GroupExplore, "Show Runs", []string{"asl", "loop", "needs action"}, "A"},
-		{commands.TogglePreview, commands.GroupExplore, "Show Preview", []string{"hide", "pane", "scrollback"}, "p"},
-		{commands.ToggleRail, commands.GroupExplore, "Hide Project Rail", []string{"sidebar", "projects", "scope"}, "b"},
+		{commands.ToggleInspector, commands.GroupExplore, "Hide Inspector", []string{"hide", "pane", "scrollback", "preview", "output"}, "i"},
+		// Show, not Hide: the rail is opt-in now that the inspector occupies the
+		// columns it used to, so a fresh dashboard's `b` offers it rather than
+		// takes it away.
+		{commands.ToggleRail, commands.GroupExplore, "Show Project Rail", []string{"sidebar", "projects", "scope"}, "b"},
 		{commands.ToggleListView, commands.GroupExplore, "Show Projects View", []string{"projects", "families", "urgency", "group"}, "v"},
 		{commands.ResortTabs, commands.GroupApp, "Resort Tabs", []string{"reorder", "tabs"}, "R"},
 		{commands.UndoClose, commands.GroupApp, "Undo Last Close", []string{"restore", "reopen"}, "u"},
@@ -154,7 +157,7 @@ func TestCommandCatalogDashboardShortcutBindings(t *testing.T) {
 		commands.SearchPlans:        keyPlanSearch,
 		commands.ManageWorktrees:    keyWorktrees,
 		commands.ShowRuns:           keyASLRuns,
-		commands.TogglePreview:      keyTogglePreview,
+		commands.ToggleInspector:    keyInspector,
 		commands.ToggleRail:         keyToggleRail,
 		commands.ToggleListView:     keyToggleView,
 		commands.ResortTabs:         keyResort,
@@ -213,7 +216,9 @@ func TestCommandCatalogDynamicTitles(t *testing.T) {
 	}{
 		{commands.ToggleLockID, func(_ *Model, ctx *commands.Context) { ctx.Target.Locked = true }, "Unlock Session"},
 		{commands.ToggleMuteID, func(_ *Model, ctx *commands.Context) { ctx.Target.Muted = true }, "Unmute Session"},
-		{commands.TogglePreview, func(m *Model, _ *commands.Context) { m.previewEnabled = true }, "Hide Preview"},
+		// The inspector reads the other way round from the two above it: its
+		// resting state is ON, so the edit that changes the title is the hide.
+		{commands.ToggleInspector, func(m *Model, _ *commands.Context) { m.inspectorDisplay = inspectorHidden }, "Show Inspector"},
 	}
 	for _, tc := range cases {
 		t.Run(string(tc.id), func(t *testing.T) {
@@ -275,16 +280,19 @@ func TestCommandCatalogAvailability(t *testing.T) {
 		})
 	}
 
-	t.Run("narrow preview can still be hidden", func(t *testing.T) {
+	// The inspector never refuses, at any size. Where the preview it replaced
+	// reported "terminal is too small", the inspector answers a terminal too
+	// narrow for a split by taking the whole body instead — so there is no
+	// geometry in which the palette should draw this row as unavailable, and the
+	// binding is declared GateUnchecked for the same reason.
+	t.Run("the inspector is available at every width", func(t *testing.T) {
 		m, ctx, _ := commandTestModel(base)
-		m.width = 80
-		preview := commandByID(t, commands.TogglePreview)
-		if got := preview.AvailabilityFor(m, ctx); got != commands.Unavailable(commands.ReasonPreviewTooSmall) {
-			t.Fatalf("narrow preview availability = %+v", got)
-		}
-		m.previewEnabled = true
-		if got := preview.AvailabilityFor(m, ctx); got != commands.Available() {
-			t.Fatalf("enabled narrow preview availability = %+v", got)
+		inspector := commandByID(t, commands.ToggleInspector)
+		for _, width := range []int{20, 80, inspectorMinQueueCols + inspectorDividerCols + inspectorMinCols, 160} {
+			m.width = width
+			if got := inspector.AvailabilityFor(m, ctx); got != commands.Available() {
+				t.Fatalf("inspector availability at width %d = %+v", width, got)
+			}
 		}
 	})
 

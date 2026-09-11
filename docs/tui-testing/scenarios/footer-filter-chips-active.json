@@ -12,7 +12,7 @@
     { "type": "contains_text", "text": "▌/api ✕" },
     { "type": "contains_text", "text": "▌@work ✕" },
     { "type": "contains_text", "text": "· ? help · esc clear filters · 1-2 remove chip" },
-    { "type": "contains_text", "text": "· p preview · b project rail · ←/→ switch pane · ? more" },
+    { "type": "contains_text", "text": "· i inspector · b project rail · ←/→ switch pane · ? more" },
     { "type": "contains_text", "text": " Sessions: 3/7 visible · 1 attention · 1 active · 1 idle" },
     { "type": "no_layout_issues" }
   ]

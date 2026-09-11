@@ -14,7 +14,12 @@ func railTestModel() Model {
 		{TabID: 2, WindowID: 22, Project: "docs", Profile: "work", State: "bolt"},
 		{TabID: 3, WindowID: 33, Project: "notes", Profile: "personal", State: "stop"},
 	})
-	m.width = 140
+	// The rail is opt-in now, so a rail test presses its toggle the way an
+	// operator would rather than inheriting it. The width is what three vertical
+	// strips cost: the inspector claims its column first, and the rail is only
+	// granted what is left over the queue's own 80-cell guarantee.
+	m.railRequested = true
+	m.width = 240
 	m.height = 30
 	m.syncRailState()
 	return m
@@ -88,7 +93,6 @@ func TestRailToggleViewResizeAndPreviewPreserveProjectScope(t *testing.T) {
 	m = updated.(Model)
 	m.cfg.Defaults.Preview.Direction = "horizontal"
 	m.cfg.Defaults.Preview.Ratio = .5
-	m.previewEnabled = true
 	m.syncRailState()
 	if !dashboardGeometry(m).rail {
 		t.Fatal("wide horizontal preview should retain the rail")

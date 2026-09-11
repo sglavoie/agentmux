@@ -74,6 +74,8 @@ const (
 
 	keyPgUp   = "pgup"   // move up by one page in scrollable views
 	keyPgDown = "pgdown" // move down by one page in scrollable views
+	keyHome   = "home"   // jump to the top of a scrollable pane
+	keyEnd    = "end"    // jump to the bottom of a scrollable pane, resuming a held viewport
 	keyCtrlD  = "ctrl+d" // move down by half a page in scrollable views
 	keyCtrlU  = "ctrl+u" // move up by half a page in scrollable views
 	keyCtrlF  = "ctrl+f" // move down by one page in scrollable views
@@ -84,9 +86,16 @@ const (
 	keyCtrlP  = "ctrl+p" // move up in searchable command menus
 	keyCtrlS  = "ctrl+s" // submit a multi-line editor whose Enter inserts a newline
 
-	keyTogglePreview = "p" // toggles the split-pane live preview
-	keyToggleView    = "v" // toggles the dashboard list between Urgency and Projects
-	keyToggleRail    = "b" // toggles the project rail in Urgency view
+	// keyTogglePreview belongs to the launcher and the plan browser alone. The
+	// dashboard retired it with the preview pane it named: `p` there is reserved
+	// for the project switcher, and the inspector that replaced the preview has
+	// its own key below.
+	keyTogglePreview = "p" // launcher/plans: toggles the split-pane live preview
+	// keyInspector is the same key string as keyCopySessionID; disambiguation is
+	// by mode. In ModeList: show or hide the session inspector.
+	keyInspector  = "i"
+	keyToggleView = "v" // toggles the dashboard list between Urgency and Projects
+	keyToggleRail = "b" // toggles the project rail in Urgency view
 
 	// keyCollapse/keyExpand fold and unfold a project family in ModeList.
 	// They reuse keyLeft/keyRight above, which the list has never bound; the

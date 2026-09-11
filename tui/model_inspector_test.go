@@ -20,7 +20,6 @@ func inspectorPane(m Model) string {
 // back — which is what previewLoaded is for.
 func TestInspectorTellsAPendingReadFromAnEmptyBuffer(t *testing.T) {
 	m, _ := listViewModel(dashboard.ViewUrgency)
-	m.previewEnabled = true
 	m = selectLine(t, m, "session:api")
 	m.retargetPreview(m.currentPreviewWindowID())
 
@@ -58,7 +57,6 @@ func TestInspectorTellsAPendingReadFromAnEmptyBuffer(t *testing.T) {
 // snapshot under another session's metadata.
 func TestRetargetResetsTheInspectorsReadState(t *testing.T) {
 	m, _ := listViewModel(dashboard.ViewUrgency)
-	m.previewEnabled = true
 	m = selectLine(t, m, "session:api")
 	m.retargetPreview(m.currentPreviewWindowID())
 
@@ -89,7 +87,6 @@ func TestRetargetResetsTheInspectorsReadState(t *testing.T) {
 // the leaf the facts the queue row stopped carrying.
 func TestInspectorPaneNamesTheSelectedSession(t *testing.T) {
 	m, _ := listViewModel(dashboard.ViewUrgency)
-	m.previewEnabled = true
 	m = selectLine(t, m, "session:api")
 	m.retargetPreview(m.currentPreviewWindowID())
 
@@ -108,7 +105,6 @@ func TestInspectorPaneNamesTheSelectedSession(t *testing.T) {
 // read": the metadata is still the answer to who this session was.
 func TestInspectorPaneOverAVanishedWindow(t *testing.T) {
 	m, _ := listViewModel(dashboard.ViewUrgency)
-	m.previewEnabled = true
 	m = selectLine(t, m, "session:api")
 	for i := range m.sessions {
 		m.sessions[i].WindowID = 0

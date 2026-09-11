@@ -27,15 +27,13 @@ func TestPickerPreviewToggleP(t *testing.T) {
 	if m.pickerPreviewEnabled {
 		t.Fatal("picker preview should start disabled")
 	}
-	if m.previewEnabled {
-		t.Fatal("list preview should start disabled")
-	}
+	dashboardBefore := m.inspectorDisplay
 	m = pressKey(m, "p")
 	if !m.pickerPreviewEnabled {
 		t.Fatal("expected pickerPreviewEnabled=true after p in picker")
 	}
-	if m.previewEnabled {
-		t.Fatal("p in picker must not touch m.previewEnabled")
+	if m.inspectorDisplay != dashboardBefore {
+		t.Fatalf("p in the picker moved the dashboard inspector to %v", m.inspectorDisplay)
 	}
 	// `p` should not have landed in the filter buffer.
 	if strings.Contains(m.pickerFilter, "p") {
@@ -45,8 +43,8 @@ func TestPickerPreviewToggleP(t *testing.T) {
 	if m.pickerPreviewEnabled {
 		t.Fatal("expected pickerPreviewEnabled=false after second p in picker")
 	}
-	if m.previewEnabled {
-		t.Fatal("second p in picker must not touch m.previewEnabled")
+	if m.inspectorDisplay != dashboardBefore {
+		t.Fatalf("a second p in the picker moved the dashboard inspector to %v", m.inspectorDisplay)
 	}
 }
 
@@ -299,7 +297,6 @@ func TestPickerExitRestartsListPreviewTicker(t *testing.T) {
 		{TabID: 1, WindowID: 11, Base: "api", Account: "work"},
 	})
 	m.width, m.height = 120, 40
-	m.previewEnabled = true
 	m.previewWindowID = 11
 	m.mode = ModePicker
 	m.pickerPreviewEnabled = false
