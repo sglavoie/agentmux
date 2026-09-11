@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 // TestSessionFromRunningSnapshotMatchesRunning verifies the snapshot we
@@ -35,15 +36,20 @@ func TestSessionFromRunningSnapshotMatchesRunning(t *testing.T) {
 	}
 }
 
-// TestXCloseDispatchesToastByDefault verifies that pressing X in ModeList
-// with the default config (confirm_destructive=false) skips ModeConfirm,
-// records an undoable snapshot, and pushes the aggregating undo toast.
+// Close is an actions-overlay entry rather than a dashboard key now, so these
+// tests reach `X` through the overlay. The mnemonic is unchanged and so is
+// everything the entry does; only the two keystrokes in front of it are new.
+// That `X` no longer dispatches from the list is asserted where it belongs, in
+// TestRetiredDirectActionKeysDoNotDispatch.
+
+// TestXCloseDispatchesToastByDefault verifies that choosing close with the
+// default config (confirm_destructive=false) skips ModeConfirm, records an
+// undoable snapshot, and pushes the aggregating undo toast.
 func TestXCloseDispatchesToastByDefault(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
-	updated, cmd := m.Update(keyPress("X"))
-	m2 := updated.(Model)
+	m2, cmd := runRowAction(t, m, keyClose)
 	if m2.mode != ModeList {
-		t.Fatalf("expected ModeList after X, got %d", m2.mode)
+		t.Fatalf("expected ModeList after close, got %d", m2.mode)
 	}
 	if cmd == nil {
 		t.Fatal("expected a close+toast cmd, got nil")
@@ -52,24 +58,26 @@ func TestXCloseDispatchesToastByDefault(t *testing.T) {
 		t.Fatalf("expected 1 pending undo entry, got %d", len(m2.pendingUndo))
 	}
 	if len(m2.toasts) != 1 {
-		t.Fatalf("expected 1 toast after X, got %d", len(m2.toasts))
+		t.Fatalf("expected 1 toast after close, got %d", len(m2.toasts))
 	}
-	if !strings.Contains(m2.toasts[0].Text, "u to undo") {
+	// The toast advertises the palette, not `u`: undo is a command now, and a
+	// toast naming a retired key would be the only thing on screen claiming it
+	// still works. See undoToastText.
+	if !strings.Contains(m2.toasts[0].Text, keyColon+" undo") {
 		t.Errorf("expected toast to advertise undo, got %q", m2.toasts[0].Text)
 	}
-	assertStatusBarContains(t, m2, "u to undo")
+	assertStatusBarContains(t, m2, keyColon+" undo")
 	if m2.toasts[0].id != undoCloseToastID {
 		t.Errorf("expected toast id=%d, got %d", undoCloseToastID, m2.toasts[0].id)
 	}
 }
 
 // TestXCloseUsesModalWhenConfirmDestructive verifies opt-out: with
-// confirm_destructive=true, X reverts to the existing ModeConfirm flow and
+// confirm_destructive=true, close reverts to the existing ModeConfirm flow and
 // records no undo state.
 func TestXCloseUsesModalWhenConfirmDestructive(t *testing.T) {
 	m := loadSessions(modalConfirmModel(), makeSessions())
-	updated, _ := m.Update(keyPress("X"))
-	m2 := updated.(Model)
+	m2 := pressRowAction(t, m, keyClose)
 	if m2.mode != ModeConfirm {
 		t.Fatalf("expected ModeConfirm under opt-out, got %d", m2.mode)
 	}
@@ -84,9 +92,8 @@ func TestXCloseUsesModalWhenConfirmDestructive(t *testing.T) {
 func TestMultipleClosesAggregateToSingleToast(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	for range 3 {
-		updated, _ := m.Update(keyPress("X"))
-		m = updated.(Model)
-		// Each press selects the new top-of-list session; the snapshots are
+		m = pressRowAction(t, m, keyClose)
+		// Each pass acts on the row under the cursor; the snapshots are
 		// distinct, but the toast collapses into a single slot.
 	}
 	if len(m.pendingUndo) != 3 {
@@ -112,17 +119,15 @@ func TestMultipleClosesAggregateToSingleToast(t *testing.T) {
 	}
 }
 
-// TestUndoLastConsumesNewestEntry verifies u pops the most recent undo
-// entry and produces a launch cmd. The aggregating toast updates so the
+// TestUndoLastConsumesNewestEntry verifies Undo Last Close pops the most recent
+// undo entry and produces a launch cmd. The aggregating toast updates so the
 // remaining undo count stays accurate.
 func TestUndoLastConsumesNewestEntry(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
-	updated, _ := m.Update(keyPress("X"))
-	m = updated.(Model)
+	m = pressRowAction(t, m, keyClose)
 	first := m.pendingUndo[0].label
 
-	updated, cmd := m.Update(keyPress("u"))
-	m = updated.(Model)
+	m, cmd := runDashboardCommand(t, m, commands.UndoClose)
 	if cmd == nil {
 		t.Fatal("expected non-nil launch cmd from undo")
 	}
@@ -141,17 +146,44 @@ func TestUndoLastConsumesNewestEntry(t *testing.T) {
 	assertStatusBarContains(t, m, "restored "+first)
 }
 
-// TestUndoLastWithoutEntriesIsNoOp verifies u with nothing to undo returns
-// no cmd and leaves model state untouched. Guards against accidental
-// dispatches when the user mashes u out of habit.
-func TestUndoLastWithoutEntriesIsNoOp(t *testing.T) {
+// TestUndoLastWithoutEntriesIsOfferedDisabled verifies that with nothing to
+// undo the palette says so before the keystroke rather than after. The old `u`
+// key could only answer by doing nothing, which on screen is indistinguishable
+// from a key that is not bound at all; a dimmed entry carrying its reason is the
+// same guard made visible.
+func TestUndoLastWithoutEntriesIsOfferedDisabled(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
-	updated, cmd := m.Update(keyPress("u"))
-	if cmd != nil {
-		t.Errorf("expected no cmd when nothing to undo, got %v", cmd)
+	m = pressKey(m, keyColon)
+	if m.mode != ModeCommandPalette {
+		t.Fatalf("expected the command palette, got mode %d", m.mode)
 	}
-	if updated.(Model).mode != ModeList {
-		t.Errorf("expected ModeList preserved after no-op undo, got %d", updated.(Model).mode)
+	entry := commandByID(t, commands.UndoClose)
+	availability := entry.AvailabilityFor(m, m.commandContext)
+	if availability.Available {
+		t.Fatal("Undo Last Close is available with nothing to undo")
+	}
+	if availability.Reason != commands.ReasonNothingToUndo {
+		t.Errorf("reason: got %q, want %q", availability.Reason, commands.ReasonNothingToUndo)
+	}
+}
+
+// TestUndoKeyIsRetiredAtTheList is the other half: `u` was undo's direct
+// spelling and is unbound rather than rebound, so it does not consume a live
+// entry that the palette would happily restore.
+func TestUndoKeyIsRetiredAtTheList(t *testing.T) {
+	m := loadSessions(testModelWithSessions(), makeSessions())
+	m.pendingUndo = []undoEntry{{label: "phantom", deadline: time.Now().Add(undoWindow)}}
+
+	updated, cmd := m.Update(keyPress("u"))
+	m2 := updated.(Model)
+	if cmd != nil {
+		t.Errorf("%q dispatched a command", "u")
+	}
+	if m2.mode != ModeList {
+		t.Errorf("%q left ModeList for mode=%d", "u", m2.mode)
+	}
+	if len(m2.pendingUndo) != 1 {
+		t.Errorf("%q consumed the pending undo entry, %d left", "u", len(m2.pendingUndo))
 	}
 }
 
@@ -172,21 +204,29 @@ func TestExpiredUndoEntriesAreSwept(t *testing.T) {
 	}
 }
 
-// TestExpiredUndoEntryRejectedOnU verifies popUndo refuses to revive an
-// entry past its deadline. Without this guard, a slow user could press u
-// and unintentionally relaunch a session minutes after closing it.
-func TestExpiredUndoEntryRejectedOnU(t *testing.T) {
+// TestExpiredUndoEntryIsNeitherOfferedNorRevived verifies the deadline is
+// enforced twice: the palette stops offering Undo Last Close once the window
+// closes, and undoLastCmd refuses the stale entry anyway. The second half is
+// what matters — availability is evaluated when the palette paints, so an entry
+// that expires between the paint and the enter must still be refused rather
+// than relaunching a session minutes after it was closed.
+func TestExpiredUndoEntryIsNeitherOfferedNorRevived(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m.pendingUndo = []undoEntry{
 		{label: "stale", deadline: time.Now().Add(-time.Second)},
 	}
-	updated, cmd := m.Update(keyPress("u"))
-	if cmd != nil {
-		t.Errorf("expected no cmd when only undo entry has expired, got %v", cmd)
+
+	palette := pressKey(m, keyColon)
+	if availability := commandByID(t, commands.UndoClose).AvailabilityFor(palette, palette.commandContext); availability.Available {
+		t.Error("Undo Last Close is offered for an entry past its deadline")
 	}
-	if len(updated.(Model).pendingUndo) != 0 {
+
+	if cmd := m.undoLastCmd(); cmd != nil {
+		t.Errorf("expected no cmd when the only undo entry has expired, got %v", cmd)
+	}
+	if len(m.pendingUndo) != 0 {
 		// popUndo also discards stale entries it encounters.
-		t.Errorf("expected stale entry dropped, got %d remaining", len(updated.(Model).pendingUndo))
+		t.Errorf("expected stale entry dropped, got %d remaining", len(m.pendingUndo))
 	}
 }
 
@@ -197,8 +237,7 @@ func TestTransientCloseSkipsUndo(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
 		{TabID: 99, Base: "orphan", Account: "unknown", Profile: "unknown"},
 	})
-	updated, cmd := m.Update(keyPress("X"))
-	m2 := updated.(Model)
+	m2, cmd := runRowAction(t, m, keyClose)
 	if cmd == nil {
 		t.Fatal("expected close cmd even for transient session")
 	}
@@ -213,14 +252,21 @@ func TestTransientCloseSkipsUndo(t *testing.T) {
 	}
 }
 
-// TestRestartDirectKeyConfirmsByDefault verifies the one-key dashboard r path
-// always enters the modal confirmation flow before dispatching a restart.
-func TestRestartDirectKeyConfirmsByDefault(t *testing.T) {
-	m := loadSessions(testModelWithSessions(), makeSessions())
-	updated, cmd := m.Update(keyPress("r"))
-	m2 := updated.(Model)
+// TestRestartConfirmsUnderConfirmDestructive verifies restart arms the modal
+// confirmation flow, with its own consequence text, before dispatching.
+//
+// The old scoped exception is gone with the key that needed it: a direct `r`
+// always confirmed, even under the default confirm_destructive=false, because a
+// single keystroke on the dashboard could restart a session with nothing in
+// between. Restart is two deliberate presses through the actions overlay now,
+// so it follows the operator's configured setting like every other destructive
+// entry — TestActionsOverlayRestartStillFiresToastByDefault is the default-config
+// half of the pair.
+func TestRestartConfirmsUnderConfirmDestructive(t *testing.T) {
+	m := loadSessions(modalConfirmModel(), makeSessions())
+	m2, cmd := runRowAction(t, m, keyR)
 	if m2.mode != ModeConfirm {
-		t.Fatalf("expected ModeConfirm after r, got %d", m2.mode)
+		t.Fatalf("expected ModeConfirm after restart, got %d", m2.mode)
 	}
 	if cmd != nil {
 		t.Fatal("expected no immediate restart cmd before confirmation")
@@ -257,8 +303,9 @@ func TestActionsOverlayCloseFiresToast(t *testing.T) {
 	}
 }
 
-// TestActionsOverlayRestartStillFiresToastByDefault verifies the scoped
-// direct-r guard does not change the existing a -> r overlay behavior.
+// TestActionsOverlayRestartStillFiresToastByDefault verifies that under the
+// default confirm_destructive=false the overlay's restart dispatches straight
+// away and reports itself with a toast.
 func TestActionsOverlayRestartStillFiresToastByDefault(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m = openActionsOverlay(t, m)
@@ -281,15 +328,16 @@ func TestActionsOverlayRestartStillFiresToastByDefault(t *testing.T) {
 	}
 }
 
-// TestUKeyRunsUndoFromListMode verifies `u` remains a row-level shortcut now
-// that dashboard filtering only starts after /.
-func TestUKeyRunsUndoFromListMode(t *testing.T) {
+// TestUndoCloseRunsFromTheCommandPalette verifies the surviving route reaches a
+// live entry from the dashboard: `:` then the command by name, no close
+// required first.
+func TestUndoCloseRunsFromTheCommandPalette(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m.pendingUndo = []undoEntry{{label: "phantom", deadline: time.Now().Add(undoWindow)}}
-	updated, cmd := m.Update(keyPress("u"))
-	m2 := updated.(Model)
+
+	m2, cmd := runDashboardCommand(t, m, commands.UndoClose)
 	if cmd == nil {
-		t.Fatal("expected u to dispatch undo cmd")
+		t.Fatal("expected Undo Last Close to dispatch an undo cmd")
 	}
 	if len(m2.pendingUndo) != 0 {
 		t.Errorf("expected pending undo consumed, got %d", len(m2.pendingUndo))

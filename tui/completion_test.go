@@ -16,7 +16,7 @@ func completionTestModel() Model {
 			{Name: "personal", Color: "yellow"},
 		},
 	}
-	return Model{cfg: cfg, focusedChipIdx: -1}
+	return Model{cfg: cfg}
 }
 
 func TestRecomputeCompletion_HidesWithoutSigil(t *testing.T) {

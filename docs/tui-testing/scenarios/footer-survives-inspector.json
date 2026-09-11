@@ -1,7 +1,7 @@
 {
   "name": "footer-survives-inspector",
   "fixture": "project_families",
-  "size": { "width": 120, "height": 32 },
+  "size": { "width": 140, "height": 32 },
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
     { "type": "contains_text", "text": "j/k up/down" },

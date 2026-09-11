@@ -154,7 +154,10 @@ func TestUITestConfigPickerModalFitPinsWidthFix(t *testing.T) {
 	// Narrow: the picker's widest row cannot fit, so the fit detector flags it.
 	narrow, _ := newUITestFixtureDriver(fx, UITestSize{Width: 120, Height: 40})
 	cleanupUITestDriver(t, narrow)
-	if err := narrow.Key("C"); err != nil {
+	if err := narrow.Key(keyA); err != nil {
+		t.Fatalf("Key(a) error: %v", err)
+	}
+	if err := narrow.Key(keyDashboardLaunch); err != nil {
 		t.Fatalf("Key(C) error: %v", err)
 	}
 	nobs := narrow.Observe()
@@ -168,7 +171,10 @@ func TestUITestConfigPickerModalFitPinsWidthFix(t *testing.T) {
 	// Wide: the box grows to fit its widest row (the sizing fix), so no issue.
 	wide, _ := newUITestFixtureDriver(fx, UITestSize{Width: 140, Height: 40})
 	cleanupUITestDriver(t, wide)
-	if err := wide.Key("C"); err != nil {
+	if err := wide.Key(keyA); err != nil {
+		t.Fatalf("Key(a) error: %v", err)
+	}
+	if err := wide.Key(keyDashboardLaunch); err != nil {
 		t.Fatalf("Key(C) error: %v", err)
 	}
 	wobs := wide.Observe()

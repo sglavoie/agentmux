@@ -61,10 +61,6 @@ func TestListFooterBudgetMatchesRenderedRowsAcrossStates(t *testing.T) {
 		empty.rebuildItems()
 		filtered := base
 		filtered.activeFilter = dashboard.Filter{Substrings: []string{"api"}}
-		jumpNext := base
-		jumpNext.pendingJumpDir = 1
-		jumpPrev := base
-		jumpPrev.pendingJumpDir = -1
 		// The inspector's three display states are three different footers: the
 		// split and the hidden queue draw the same one with a different `i` label
 		// and a different tab gloss, and full screen draws none at all. Each has
@@ -81,8 +77,6 @@ func TestListFooterBudgetMatchesRenderedRowsAcrossStates(t *testing.T) {
 			{name: "overflowing list", m: base},
 			{name: "empty list", m: empty},
 			{name: "active filter", m: filtered},
-			{name: "jump chord next", m: jumpNext},
-			{name: "jump chord prev", m: jumpPrev},
 			{name: "inspector hidden", m: hidden},
 			{name: "inspector full screen", m: fullScreen},
 		} {

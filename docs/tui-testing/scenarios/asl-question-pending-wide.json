@@ -5,8 +5,7 @@
   "actions": [
     { "type": "key", "key": "j" },
     { "type": "key", "key": "j" },
-    { "type": "key", "key": "]" },
-    { "type": "key", "key": "q" }
+    { "type": "key", "key": "n" }
   ],
   "assertions": [
     { "type": "mode_equals", "mode": "list" },

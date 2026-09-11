@@ -317,12 +317,14 @@ func TestWorktreeRenderingStatusFooterHelpAndWidths(t *testing.T) {
 	}
 }
 
-func TestDashboardAndCommandPaletteEnterWorktreesWithLifecycleControls(t *testing.T) {
+// The worktrees browser is reached by name now. `W` was its dashboard key and
+// is retired with the rest of them; the browser itself, including its own full
+// keymap, is unchanged.
+func TestCommandPaletteEntersWorktreesWithLifecycleControls(t *testing.T) {
 	m := loadSessions(worktreeTestModel(), makeSessions())
 	updated, cmd := m.Update(keyPress("W"))
-	m = updated.(Model)
-	if m.mode != ModeWorktrees || cmd == nil {
-		t.Fatalf("W = mode %v cmd %T", m.mode, cmd)
+	if got := updated.(Model); got.mode != ModeList || cmd != nil {
+		t.Fatalf("retired W = mode %v cmd %T, want an untouched list and no command", got.mode, cmd)
 	}
 
 	m = loadSessions(worktreeTestModel(), makeSessions())

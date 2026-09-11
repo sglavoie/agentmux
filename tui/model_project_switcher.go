@@ -58,7 +58,6 @@ func projectSwitcherCursor(m Model) int {
 // scope the filter currently names so the first thing the operator sees is where
 // they already are.
 func (m Model) openProjectSwitcher() (tea.Model, tea.Cmd) {
-	m.clearJumpChord()
 	m.mode = ModeProjectSwitcher
 	m.projectSwitcherQuery = ""
 	m.projectSwitcherSearch = false

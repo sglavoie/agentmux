@@ -3,6 +3,8 @@ package tui
 import (
 	"strings"
 	"testing"
+
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 func TestUITestModalLayoutRegressions(t *testing.T) {
@@ -31,15 +33,20 @@ func TestUITestModalLayoutRegressions(t *testing.T) {
 			name:    "top anchored config picker does not clip bottom border",
 			fixture: "wide_profiles",
 			size:    UITestSize{Width: 140, Height: 10},
-			actions: []UITestAction{{Type: UITestActionKey, Key: "C"}},
-			mode:    "config_picker",
+			actions: []UITestAction{
+				{Type: UITestActionKey, Key: keyA},
+				{Type: UITestActionKey, Key: keyDashboardLaunch},
+			},
+			mode: "config_picker",
 		},
 		{
 			name:    "detail overlay natural width fits at 100 columns",
 			fixture: "basic",
 			size:    UITestSize{Width: 100, Height: 24},
-			actions: []UITestAction{{Type: UITestActionKey, Key: "T"}},
-			mode:    "detail",
+			actions: []UITestAction{
+				{Type: UITestActionCommand, CommandID: string(commands.ShowTimeline)},
+			},
+			mode: "detail",
 		},
 		{
 			name:    "actions overlay fits after resize",
@@ -66,7 +73,8 @@ func TestUITestModalLayoutRegressions(t *testing.T) {
 			fixture: "wide_profiles",
 			size:    UITestSize{Width: 140, Height: 40},
 			actions: []UITestAction{
-				{Type: UITestActionKey, Key: "C"},
+				{Type: UITestActionKey, Key: keyA},
+				{Type: UITestActionKey, Key: keyDashboardLaunch},
 				{Type: UITestActionResize, Width: 140, Height: 10},
 			},
 			mode: "config_picker",
@@ -76,7 +84,7 @@ func TestUITestModalLayoutRegressions(t *testing.T) {
 			fixture: "basic",
 			size:    UITestSize{Width: 140, Height: 40},
 			actions: []UITestAction{
-				{Type: UITestActionKey, Key: "T"},
+				{Type: UITestActionCommand, CommandID: string(commands.ShowTimeline)},
 				{Type: UITestActionResize, Width: 100, Height: 24},
 			},
 			mode: "detail",
@@ -102,7 +110,8 @@ func TestUITestModalLayoutRegressions(t *testing.T) {
 
 func TestUITestStillReportsNarrowConfigPickerWidthOverflow(t *testing.T) {
 	obs, err := RunUITestFixture("wide_profiles", UITestOptions{Size: UITestSize{Width: 80, Height: 24}}, []UITestAction{
-		{Type: UITestActionKey, Key: "C"},
+		{Type: UITestActionKey, Key: keyA},
+		{Type: UITestActionKey, Key: keyDashboardLaunch},
 	})
 	if err != nil {
 		t.Fatalf("RunUITestFixture returned error: %v", err)

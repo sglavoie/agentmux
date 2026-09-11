@@ -49,21 +49,22 @@ func newModel(cfg *config.Config, client kitty.KittyClient, sourceWindowID int, 
 	if err != nil {
 		amxBin = "amx"
 	}
-	attn := make(map[string]bool, len(cfg.Defaults.Jump.AttentionStates))
-	for _, s := range cfg.Defaults.Jump.AttentionStates {
-		attn[s] = true
-	}
+	// cfg.Defaults.Jump is deliberately not read here. The attention set it
+	// carries drove the retired bracket-key navigation; `n`/`N` asks
+	// dashboard.NeedsYou instead, which is the same judgement the queue heading
+	// and the count are drawn from rather than a second, user-editable list of
+	// state names. The configuration is still accepted and still validated —
+	// internal/config raises a deprecation for it — but nothing on the dashboard
+	// navigates by it.
 	return Model{
 		client:                client,
 		cfg:                   cfg,
 		interval:              interval,
 		sortMode:              sort,
-		attentionStates:       attn,
 		backgroundCommands:    defaultModelBackgroundCommands(),
 		daemonCommand:         commands.DaemonRequest,
 		now:                   time.Now,
 		idleThreshold:         idle,
-		focusedChipIdx:        -1,
 		amxBin:                amxBin,
 		deprecations:          cfg.Deprecations,
 		messageDetailIdx:      -1,

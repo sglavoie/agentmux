@@ -84,6 +84,23 @@ func collectDeprecations(cfg *Config, md toml.MetaData) []Deprecation {
 			Location:    "[defaults]",
 		})
 	}
+	// [defaults.jump] configured the bracket-chord attention navigation, which
+	// is retired: `]`/`[` and `}`/`{` are unbound at the dashboard, and `n`/`N`
+	// walk the Needs You group in list order rather than a configured state set.
+	// The key is still decoded and still validated — a config that was valid
+	// yesterday must load today, and rewriting the user's file is not ours to do
+	// — but nothing reads the result any more, so the only honest thing to say
+	// about it is that it no longer selects anything. Reported whenever the
+	// table is present, even holding the canonical default set, because the
+	// point is that the setting has stopped mattering rather than that its value
+	// is wrong.
+	if tomlKeyDefined(md, "defaults", "jump") || tomlKeyDefined(md, "defaults", "jump", "attention_states") {
+		deps = append(deps, Deprecation{
+			Key:         "defaults.jump.attention_states",
+			Replacement: "nothing; delete it — n/N walk Needs You",
+			Location:    "[defaults.jump]",
+		})
+	}
 	// Per-project: scan both Projects and Sessions for legacy claude_flags
 	// and account keys. Report the deprecated key whenever it is populated;
 	// when canonical fields are also populated, canonical wins and the legacy

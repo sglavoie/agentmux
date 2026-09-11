@@ -60,12 +60,13 @@ confirm_destructive = false
 # run `amx daemon restart` after changing it.
 # git_probe = true
 
-# Editor command used by the `O` keybinding (Open in editor). When unset,
-# falls back to $VISUAL, then $EDITOR, then "vi". Multi-token values like
-# "code --wait" are split on whitespace.
+# Editor command used by the actions overlay's "open in editor" entry (`a`, then
+# `O`) and by the worktrees browser's. When unset, falls back to $VISUAL, then
+# $EDITOR, then "vi". Multi-token values like "code --wait" are split on
+# whitespace.
 # editor = "nvim"
 
-# Filesystem root scanned by the `P` keybinding to list past plans.
+# Filesystem root scanned by the Plans browser (`:`, then "Search Plans").
 # Each top-level directory under this root is treated as one plan.
 # plans_directory = "~/.local/share/agent-plans"
 # Plans in that directory and harness transcript files remain authoritative.
@@ -120,11 +121,20 @@ confirm_destructive = false
 [defaults.release]
 # evidence_dir = "~/.local/share/agent-mux/release-evidence"
 
-# Preview pane shown by the `p` keybinding. Direction chooses a side-by-side
-# split ("horizontal") or stacked split ("vertical"). Ratio is the fraction of
-# the terminal given to the preview. Refresh is in milliseconds while the
-# preview is open. The min_* values disable preview automatically on terminals
-# too small to keep both panes usable.
+# Live pane geometry, shared by the dashboard's session inspector (`i`) and the
+# launcher's preview (`p`, inside the launcher). Ratio is the fraction of the
+# terminal the pane asks for, refresh is in milliseconds while it is open, and
+# the min_* values turn the pane off automatically on terminals too small to
+# keep both halves usable.
+#
+# Direction chooses a side-by-side ("horizontal") or stacked ("vertical") split
+# in the launcher only. The dashboard's inspector is always side-by-side: a
+# stacked one would put the session list's rows and the output's rows in
+# competition on the axis both are scarcest on.
+#
+# On the dashboard, ratio is a preference rather than an allocation — it is
+# clamped up to the inspector's own minimum width and down to whatever leaves
+# the list its own, so both floors hold whatever you write here.
 [defaults.preview]
 direction = "horizontal"
 ratio = 0.5
@@ -247,13 +257,18 @@ native_keep_days = 14
 native_max_mib = 1024
 native_session_max_mib = 128
 
-# Bracket-key navigation: the set of session states that ]/[ (cursor jump)
-# and }/{ (cursor jump + Kitty tab focus) treat as "attention". Defaults to
-# the four states below — add "stop" to also land on cleanly stopped
-# sessions, or other names from
-# {bolt, stop, key, warning, error, subagent, compact, question}.
-# An omitted section or an empty list both fall back to the default set;
-# unknown state names fail config validation.
+# [defaults.jump] is DEPRECATED and selects nothing.
+#
+# It named the session states that the bracket chords ]/[ and }/{ treated as
+# "attention". Those chords are unbound: the dashboard walks the Needs You group
+# with n/N, in the order the list already shows it, so what counts as attention
+# is the grouping you can see rather than a second set that could disagree with
+# it. Delete the table on your next edit.
+#
+# An existing table is still accepted and still validated — a file that was
+# valid before the upgrade loads unchanged, and an unknown state name is still
+# an error — and Agent Mux never rewrites it for you. It is reported once, as a
+# dismissible Configuration warning in the dashboard's health reading.
 # [defaults.jump]
 # attention_states = ["key", "error", "warning", "question"]
 

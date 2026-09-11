@@ -21,48 +21,37 @@ import (
 
 // dashboardBindings is the complete ModeList binding table.
 //
-// Order is dispatch precedence, not catalog order. The two are the same
-// everywhere except `d`, whose two claimants are declared adjacent below so the
-// precedence between them is visible at the only place it matters.
+// It is eight entries, and the shortness is the design rather than an accident
+// of what has been written so far. Every other catalog command is still on the
+// dashboard — it is reached through the actions overlay (`a`) for the
+// row-targeted ones and through the palette (`:`) for the rest — but it has no
+// key of its own here. `docs/dashboard-keymap-inventory.md` is the row-by-row
+// record of which capability went to which surface; a binding may only be
+// removed once that table names its successor.
+//
+// The retirement needs no other edit to take effect, which is the reason the
+// table is the single declaration. A key absent from here is not dispatched,
+// because `dispatchDashboardBinding` reports an unbound key as unclaimed; it is
+// not advertised, because `commandCatalog` reads every `Shortcut` from here and
+// a command with no binding gets no shortcut label; and it is not in the footer
+// or the generated help, because both read this table too.
+//
+// Order is dispatch precedence, not catalog order. Nothing shares a key now that
+// `d` has stopped being contested, so the two agree throughout.
 func dashboardBindings() commands.BindingSet {
 	return commands.BindingSet{
-		// Session — every one of these resolves its target from the captured
-		// context, so a cursor parked on a family summary or on nothing yields no
-		// target and the key refuses. That refusal is the summary guard: it is a
-		// property of the context, not a check any of these keys performs.
-		{Keys: []string{keyEnter, keySpace}, Display: keyEnter + " / " + keySpace, Hint: "focus", Command: commands.FocusSession},
-		{Keys: []string{keyE}, Display: keyE, Hint: "peek", Command: commands.PeekScrollback},
-		{Keys: []string{keyR}, Display: keyR, Hint: "restart", Command: commands.RestartSession},
-		{Keys: []string{keyC}, Display: keyC, Hint: "profile", Command: commands.OverrideProfile},
-		{Keys: []string{keyDashboardLaunch}, Display: keyDashboardLaunch, Hint: "launch", Command: commands.LaunchAnother},
-		{Keys: []string{keyClearStatus}, Display: keyClearStatus, Hint: "clear", Command: commands.ClearStatusIcon},
-		{Keys: []string{keyClose}, Display: keyClose, Hint: "close", Command: commands.CloseSession},
-		{Keys: []string{keyO}, Display: keyO, Hint: "open dir", Command: commands.OpenDirectoryID},
-		{Keys: []string{keyOpenEditor}, Display: keyOpenEditor, Hint: "open in editor", Command: commands.OpenEditorID},
-		{Keys: []string{keyY}, Display: keyY, Command: commands.CopyTitleID},
-		{Keys: []string{keyLock}, Display: keyLock, Command: commands.ToggleLockID},
-		{Keys: []string{keyM}, Display: keyM, Command: commands.ToggleMuteID},
-		{Keys: []string{keyProjectSessionSearch}, Display: keyProjectSessionSearch, Hint: "project sessions", Command: commands.SearchProject},
-
-		// `d` is shared, and the banner wins it. A visible deprecation banner is
-		// the one thing on the dashboard the operator cannot dismiss any other
-		// way, so it claims the key until it is gone and the detail pane opens on
-		// the next press. Reversing these two lines reverses that.
-		{Keys: []string{keyD}, Display: keyD, Command: commands.DismissDeprecation},
-		{Keys: []string{keyD}, Display: keyD, Command: commands.ShowDetails},
-
-		{Keys: []string{keyOpenTimeline}, Display: keyOpenTimeline, Hint: "timeline", Command: commands.ShowTimeline},
+		// Session. Enter resolves its target from the captured context, so a
+		// cursor parked on a family summary or on nothing yields no target and the
+		// key refuses. That refusal is the summary guard: it is a property of the
+		// context, not a check the key performs. `handleListKey` answers Enter on a
+		// summary before it ever reaches here, by folding.
+		{Keys: []string{keyEnter}, Display: keyEnter, Hint: "focus", Command: commands.FocusSession},
 
 		// Explore.
 		{Keys: []string{keySlash}, Display: keySlash, Hint: "filter", Command: commands.FilterSessions},
-		{Keys: []string{keyF}, Display: keyF, Hint: "profile", Command: commands.CycleProfileFilter},
 		{Keys: []string{keyEsc}, Display: keyEsc, Hint: "clear filters", Command: commands.ClearFilters},
 		{Keys: []string{keyL}, Display: keyL, Hint: "launch", Command: commands.OpenLauncher},
-		{Keys: []string{keySessionSearch}, Display: keySessionSearch, Hint: "sessions", Command: commands.SearchAllSessions},
-		{Keys: []string{keyPlanSearch}, Display: keyPlanSearch, Hint: "plans", Command: commands.SearchPlans},
-		{Keys: []string{keyWorktrees}, Display: keyWorktrees, Command: commands.ManageWorktrees},
-		{Keys: []string{keyASLRuns}, Display: keyASLRuns, Command: commands.ShowRuns},
-		// One of the three unchecked bindings. The inspector never refuses: a
+		// One of the two unchecked bindings. The inspector never refuses: a
 		// terminal too narrow for a split gets the pane full-screen instead, so
 		// there is no state in which the key should read as unavailable and a
 		// gate would only be a chance to get that wrong.
@@ -71,16 +60,8 @@ func dashboardBindings() commands.BindingSet {
 		// like any other and the aggregation always produces it — so there is no
 		// empty session list at which the key should read as dead.
 		{Keys: []string{keyProjectSwitcher}, Display: keyProjectSwitcher, Hint: "projects", Command: commands.SwitchProject, Gate: commands.GateUnchecked},
-		{Keys: []string{keyToggleView}, Display: keyToggleView, Hint: "group view", Command: commands.ToggleListView},
 
 		// App.
-		{Keys: []string{keyResort}, Display: keyResort, Hint: "resort", Command: commands.ResortTabs},
-		// The third unchecked binding. `undoLastCmd` owns the undo stack: asked
-		// for an entry past its deadline it discards it and does nothing, which
-		// is both the refusal and the only thing that prunes a stale entry on
-		// demand. Gating the key would leave the expired entry sitting there
-		// until the next toast tick swept it.
-		{Keys: []string{keyU}, Display: keyU, Command: commands.UndoClose, Gate: commands.GateUnchecked},
 		{Keys: []string{keyQuestion}, Display: keyQuestion, Hint: "help", Command: commands.ShowKeyboardHelp},
 		{Keys: []string{keyQ, keyCtrlC}, Display: keyQ + " / " + keyCtrlC, Hint: "quit", Command: commands.Quit},
 	}
@@ -146,13 +127,19 @@ func dashboardCommandAvailable(id commands.ID) func(Model) bool {
 //
 // The target is captured once, before anything is decided, and every binding
 // that claims the key is offered that same snapshot. That is what stops a
-// refusal from re-reading a cursor a background refresh has moved underneath it,
-// and it is why `d` cannot dismiss a banner against one row and open the detail
-// pane of another.
+// refusal from re-reading a cursor a background refresh has moved underneath it.
+// No key is claimed by two bindings today, but the loop and the single capture
+// stay: the alternative is a table whose correctness depends on nobody ever
+// declaring a second claimant.
+// Every refusal is silent. A refused key leaves the model exactly as it was and
+// says nothing, because what it would have said is already on the row the cursor
+// is on: no selection, a summary rather than a session, an empty list. The lock
+// denial that used to speak here went with the three destructive shortcuts it
+// answered for — the actions overlay and the palette draw those commands dimmed
+// with their reason, which says it before the keystroke rather than after.
 func (m Model) dispatchDashboardBinding(key string) (tea.Model, tea.Cmd, bool) {
 	ctx := dashboardBindingContext(m)
 	claimed := false
-	refusal := ""
 	for _, binding := range dashboardBindings().For(key) {
 		candidate, ok := dashboardCommand(binding.Command)
 		if !ok {
@@ -167,25 +154,12 @@ func (m Model) dispatchDashboardBinding(key string) (tea.Model, tea.Cmd, bool) {
 			continue
 		}
 		if availability := candidate.AvailabilityFor(m, ctx); !availability.Available {
-			if refusal == "" {
-				refusal = availability.Reason
-			}
 			continue
 		}
 		updated, cmd := candidate.Execute(m, ctx)
 		return updated, cmd, true
 	}
-	if !claimed {
-		return m, nil, false
-	}
-	// One refusal speaks. A locked session is a decision the operator made and
-	// can undo, so a key that hits it says so rather than appearing dead; every
-	// other refusal — no selection, an inactive pane, an unconfigured project —
-	// is already legible from the row the cursor is on.
-	if refusal == commands.ReasonLocked {
-		return m, m.lockedDenyToast(), true
-	}
-	return m, nil, true
+	return m, nil, claimed
 }
 
 // runDashboardBinding is dispatchDashboardBinding for a caller that has already

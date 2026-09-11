@@ -153,9 +153,9 @@ func TestDashboardLaunch_SameProfileSelectionStillLaunches(t *testing.T) {
 		{TabID: 10, WindowID: 11, Base: "api", Profile: "work", Account: "work", Harness: "claude", Project: "api", Directory: "/home/user/api", Key: session.SessionKey("work", "api")},
 	})
 
-	m = pressKey(m, "C")
+	m = pressRowAction(t, m, keyDashboardLaunch)
 	if m.mode != ModeConfigPicker {
-		t.Fatalf("expected ModeConfigPicker after dashboard C, got %d", m.mode)
+		t.Fatalf("expected ModeConfigPicker after the dashboard launch action, got %d", m.mode)
 	}
 	updated, cmd := m.Update(keyPress("enter"))
 	if updated.(Model).mode != ModeList {
@@ -207,7 +207,7 @@ func TestDashboardLaunch_AlternateProfileSelectionLaunchesWithSelectedVars(t *te
 		{TabID: 10, WindowID: 11, Base: "api", Profile: "work", Account: "work", Harness: "claude", Project: "api", Directory: "/home/user/api", Key: session.SessionKey("work", "api")},
 	})
 
-	m = pressKey(m, "C")
+	m = pressRowAction(t, m, keyDashboardLaunch)
 	m = pressKey(m, "j")
 	_, cmd := m.Update(keyPress("enter"))
 	if cmd == nil {
@@ -272,7 +272,7 @@ func TestDashboardLaunch_CrossHarnessUsesConfiguredProjectTemplate(t *testing.T)
 		},
 	})
 
-	m = pressKey(m, "C")
+	m = pressRowAction(t, m, keyDashboardLaunch)
 	m = pressKey(m, "j")
 	_, cmd := m.Update(keyPress("enter"))
 	if cmd == nil {

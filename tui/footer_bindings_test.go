@@ -70,11 +70,10 @@ func TestRootFooterBindingsRemoveSeparatorColonsAndPreserveSemanticColons(t *tes
 	if strings.Contains(list, "j/k:") || strings.Contains(list, "enter:") {
 		t.Fatalf("list footer retained navigation key/description colon: %q", list)
 	}
-
-	jump := stripAnsi(renderFooter(Model{mode: ModeList, width: 400, pendingJumpDir: 1}))
-	if !strings.Contains(jump, "jump next: p)perm") {
-		t.Fatalf("jump footer lost semantic heading colon: %q", jump)
-	}
+	// `jump next: p)perm` was the one semantic colon the dashboard footer had.
+	// It went with the chord, so the dashboard footer now has no semantic colon
+	// at all beyond the palette key's own literal spelling, which the assertion
+	// above already covers. The search and picker footers still carry theirs.
 }
 
 func TestFooterCompactPromptsAndTruncatedMoreBinding(t *testing.T) {

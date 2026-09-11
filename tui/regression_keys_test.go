@@ -39,31 +39,36 @@ func TestUpdateUnknownMsgIsNoop(t *testing.T) {
 // restoring ModeList for any single mode.
 func TestModeRoundTripBackToList(t *testing.T) {
 	cases := []struct {
-		name    string
-		openKey string
+		name string
+		// openKeys is the whole sequence that reaches the mode. The
+		// config picker takes two now: `c` is an actions-overlay entry
+		// rather than a dashboard key, so `a` comes first.
+		openKeys []string
 		// extraEsc covers modes where opening immediately shows an overlay
 		// inside the mode, so the first esc closes the overlay and the
 		// second exits the mode.
 		extraEsc bool
 	}{
-		{"search via /", "/", false},
-		{"help via ?", "?", false},
-		{"actions via a", "a", false},
-		{"config-picker via c", "c", false},
+		{"search via /", []string{"/"}, false},
+		{"help via ?", []string{"?"}, false},
+		{"actions via a", []string{keyA}, false},
+		{"config-picker via a then c", []string{keyA, keyC}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			m := loadSessions(testModel(), makeSessions())
-			m = pressKey(m, tc.openKey)
+			for _, key := range tc.openKeys {
+				m = pressKey(m, key)
+			}
 			if m.mode == ModeList {
-				t.Fatalf("opening %q did not change mode away from ModeList", tc.openKey)
+				t.Fatalf("opening with %q did not change mode away from ModeList", tc.openKeys)
 			}
 			m = pressKey(m, "esc")
 			if tc.extraEsc {
 				m = pressKey(m, "esc")
 			}
 			if m.mode != ModeList {
-				t.Fatalf("after opening with %q and esc'ing, expected ModeList, got %d", tc.openKey, m.mode)
+				t.Fatalf("after opening with %q and esc'ing, expected ModeList, got %d", tc.openKeys, m.mode)
 			}
 		})
 	}
@@ -160,53 +165,65 @@ func TestPickerSpaceWithEmptyFilteredIdxIsSafe(t *testing.T) {
 	}
 }
 
-// TestHandleListKeyTabCyclesChips verifies that tab cycles through the
-// active filter's chip indices and wraps around. Catches the case where
-// tab fails to wrap or jumps past Components()-1.
-func TestHandleListKeyTabCyclesChips(t *testing.T) {
+// TestHandleListKeyTabDoesNotReachTheFilterChips is the retirement of the chip
+// ring. Tab cycled the active filter's chips whenever no inspector was on
+// screen, which is what made a three-chip filter a three-press ring; the ring is
+// gone, so with one pane the key must be spent on nothing and the filter it used
+// to walk must come through untouched.
+func TestHandleListKeyTabDoesNotReachTheFilterChips(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	// Apply a filter with three components directly so the chip focus path is
+	// Apply a filter with three components directly so the assertion is
 	// independent of search input details.
 	m.activeFilter = dashboard.Parse("api @work !bolt")
 	m.filtered = dashboard.ApplyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
 	m.rebuildItems()
+	m.inspectorDisplay = inspectorHidden
 	if got := len(m.activeFilter.Components()); got != 3 {
 		t.Fatalf("expected 3 chips, got %d (raw=%q)", got, m.activeFilter.Raw)
 	}
-	if m.focusedChipIdx != -1 {
-		t.Fatalf("expected focusedChipIdx=-1 on return to list, got %d", m.focusedChipIdx)
-	}
-	m = pressKey(m, "tab")
-	if m.focusedChipIdx != 0 {
-		t.Fatalf("first tab → focusedChipIdx=0, got %d", m.focusedChipIdx)
-	}
-	m = pressKey(m, "tab")
-	if m.focusedChipIdx != 1 {
-		t.Fatalf("second tab → focusedChipIdx=1, got %d", m.focusedChipIdx)
-	}
-	m = pressKey(m, "tab")
-	if m.focusedChipIdx != 2 {
-		t.Fatalf("third tab → focusedChipIdx=2, got %d", m.focusedChipIdx)
-	}
-	m = pressKey(m, "tab")
-	if m.focusedChipIdx != 0 {
-		t.Fatalf("fourth tab must wrap to 0, got %d", m.focusedChipIdx)
+
+	before := m
+	for i := 0; i < 4; i++ {
+		m = pressKey(m, keyTab)
+		if m.activeFilter.Raw != before.activeFilter.Raw {
+			t.Fatalf("tab %d rewrote the filter to %q", i+1, m.activeFilter.Raw)
+		}
+		if m.cursor != before.cursor || m.mode != ModeList {
+			t.Fatalf("tab %d moved the cursor to %d or left mode %v", i+1, m.cursor, m.mode)
+		}
+		if m.inspectorFocused() {
+			t.Fatalf("tab %d aimed the keys at a hidden pane", i+1)
+		}
 	}
 }
 
-// TestNavOnEmptyListIsSafe pins that j/k/g/G on a model with no filtered
-// rows never produce a negative cursor and never panic. clamp's lo-wins
-// semantics matter here — with hi<lo (because len-1 == -1) the function
+// TestNavOnEmptyListIsSafe pins that the dashboard's motion keys on a model with
+// no filtered rows never produce a negative cursor and never panic. clamp's
+// lo-wins semantics matter here — with hi<lo (because len-1 == -1) the function
 // must return lo (0).
+//
+// `n`/`N` are in the list because the Needs you walk is a motion key too, and it
+// is the one that resolves its destination through a search rather than by
+// arithmetic: an empty list is the case where that search finds nothing.
 func TestNavOnEmptyListIsSafe(t *testing.T) {
 	m := loadSessions(testModel(), nil)
 	if len(m.filtered) != 0 {
 		t.Fatalf("expected empty filtered, got %d", len(m.filtered))
 	}
-	for _, k := range []string{"j", "k", "g", "G"} {
+	for _, k := range []string{keyJ, keyK, keyHome, keyEnd, keyPgUp, keyPgDown, keyNeedsYouNext, keyNeedsYouPrev} {
 		m = pressKey(m, k)
 		if m.cursor != 0 {
 			t.Errorf("after %q on empty list, cursor=%d (want 0)", k, m.cursor)
+		}
+	}
+
+	// The retired vi-style pair moves nothing either, on an empty list or a full
+	// one — `g`/`G` are Home/End now.
+	full := loadSessions(testModel(), makeSessions())
+	full.cursor = 1
+	for _, k := range []string{keyG, keyGG} {
+		if got := pressKey(full, k).cursor; got != full.cursor {
+			t.Errorf("retired key %q moved the cursor from %d to %d", k, full.cursor, got)
 		}
 	}
 }
@@ -281,16 +298,6 @@ func TestHandleKeyDispatchByMode(t *testing.T) {
 				t.Fatalf("ctrl+c in mode %d returned nil cmd; expected tea.Quit", mode)
 			}
 		})
-	}
-}
-
-// TestSpaceInListFocuses verifies the bare space shortcut remains a row action
-// now that dashboard filtering only starts after /.
-func TestSpaceInListFocuses(t *testing.T) {
-	m := loadSessions(testModel(), makeSessions())
-	_, cmd := m.Update(keyPress(" "))
-	if cmd == nil {
-		t.Fatal("space on a non-empty list must return commands.Focus")
 	}
 }
 

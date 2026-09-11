@@ -48,39 +48,22 @@ var helpSections = []struct {
 	{"Navigate", []string{
 		"  j / ↓     move down",
 		"  k / ↑     move up",
-		"  ctrl+d    half page down",
-		"  ctrl+u    half page up",
-		"  ctrl+f    page down",
-		"  ctrl+b    page up",
 		"  pgdn      page down",
 		"  pgup      page up",
-		"  g         go to top",
-		"  G         go to bottom",
-		"  }         next attention session + focus tab",
-		"  {         previous attention session + focus tab",
-		"  tab       focus next filter chip",
-		"  esc       clear filter / back out of overlay",
-	}},
-	{"Bracket jump", []string{
-		"  ]]        next attention session",
-		"  [[        previous attention session",
-		"  ]p / [p   next/prev permission request",
-		"  ]e / [e   next/prev failure (error or warning)",
-		"  ]a / [a   next/prev active session",
-		"  ]q / [q   next/prev awaiting-response (question)",
-		"  ]s / [s   next/prev stopped session",
-		"  ]c / [c   next/prev compacting session",
-		"  ]b / [b   next/prev subagent session",
-		"  esc       cancel pending chord",
-		"  (attention set configurable via [defaults.jump])",
+		"  home      go to top",
+		"  end       go to bottom",
+		"  n         next Needs you session (reveals it; opens nothing)",
+		"  N         previous Needs you session",
+		"  tab       switch between the queue and the inspector",
+		"  shift+tab same switch (two panes are a cycle of length two)",
+		"  esc       leave full screen / pane focus, then clear filters",
+		"  (n/N move the cursor only — Enter is what opens a terminal)",
 	}},
 	{"Projects view", []string{
-		"  v         group by project / back to urgency order",
-		"  →         expand the selected project",
-		"  ←         collapse it (from a session, selects its project first)",
 		"  enter     fold / unfold the selected project",
-		"  space     fold / unfold the selected project",
+		"  :         then \"Toggle List View\" to group by project",
 		"  (projects start expanded; folds last until amx exits)",
+		"  (a folded project's members are still reachable with n/N)",
 	}},
 	{"Project switcher", []string{
 		"  p         open the project switcher (header control does the same)",
@@ -99,43 +82,79 @@ var helpSections = []struct {
 		"  (reads the cached checks; it never triggers a health refresh)",
 		"  (dismissing the notice never silences a daemon or hooks failure)",
 	}},
+	// Act on row and the two sections below it name no dashboard letters of
+	// their own, because there are none left to name: the row commands are
+	// reached through the actions overlay and the palette, both of which draw
+	// each entry with its own availability. The keys inside the overlay are its
+	// own mnemonics rather than dashboard bindings, which is why they are listed
+	// as "a, then e" rather than as "e".
 	{"Act on row", []string{
 		"  enter     focus the session's tab (a project folds instead)",
-		"  space     focus the session's tab (alternate path)",
-		"  a         open actions overlay (lists every key below)",
-		"  e         peek scrollback (active rows only)",
-		"  r         restart session (confirm)",
-		"  x         clear session icon",
-		"  X         close session (confirm)",
-		"  c         override session profile",
-		"  L         lock / unlock session (blocks r/x/c)",
-		"  m         mute / unmute session (suppresses notifications)",
+		"  a         open actions overlay for the selected session",
+		"  a, then e peek scrollback (active rows only)",
+		"  a, then r restart session (confirm)",
+		"  a, then x clear session icon",
+		"  a, then X close session (confirm)",
+		"  a, then c override session profile",
+		"  a, then L lock / unlock session (blocks restart/close/override)",
+		"  a, then m mute / unmute session (suppresses notifications)",
+		"  a, then y copy session title",
+		"  a, then o open a shell in the session's directory",
+		"  a, then O open the configured editor there",
+		"  (a locked row draws restart, override, and close dimmed; L unlocks it)",
 	}},
+	// The launcher keeps its own direct keymap: it is a modal surface with no
+	// dashboard rows behind it, so its letters collide with nothing. Only the
+	// dashboard's keymap shrank, which is why every line but the first and last
+	// here is scoped "in the launcher".
 	{"Launch / open", []string{
 		"  l         open session launcher (live filter + preview)",
-		"  P         pin / unpin highlighted launcher project",
-		"  C         launch new session with profile selection",
+		"  space     select / deselect the highlighted project (in the launcher)",
+		"  enter     launch every selected project (in the launcher)",
+		"  f         cycle profile (dashboard live / launcher default)",
+		"  C         choose a profile for this launch (in the launcher)",
+		"  P         pin / unpin highlighted launcher project (in the launcher)",
+		"  p         toggle the launcher's preview pane (in the launcher)",
+		"  s         search past sessions for the highlighted project (launcher)",
 		"  o         open selected launcher directories (highlighted fallback)",
-		"  y         copy session title",
-		"  p         toggle preview pane (also active in launcher)",
+		"  O         open those directories in the configured editor (launcher)",
+		"  a, then C launch another session in the same project",
+	}},
+	// Session detail has no dashboard key of its own any more — `d` opened it
+	// and is retired — but the view it opens still has a full keymap, and that
+	// keymap is not reachable from any footer palette (ModeDetail renders its own
+	// hint line). Listing it here is what keeps `?` an accurate description of
+	// the mode the reader is about to be in. `[`/`]` are the timeline's phase
+	// steps, not the dashboard's retired group jumps; they never collide because
+	// the dashboard no longer binds them at all.
+	{"Session detail", []string{
+		"  :         then \"Show Session Detail\" to show session detail",
+		"  t         flat event list ↔ phase timeline",
+		"  j/k ↑/↓   scroll; g/G jump to the ends; pgup/pgdn page",
+		"  enter     fold / unfold the phase under the cursor (timeline)",
+		"  [ / ]     previous / next phase header (timeline)",
+		"  z / Z     unfold all / fold all phases (timeline)",
+		"  s         show / hide suppressed events (timeline)",
+		"  T         show / hide the timestamp column (timeline)",
+		"  esc/q/d   close",
 	}},
 	{"Filter", []string{
 		"  /         filter (DSL: #project, @profile, %harness, !state, word)",
 		"  !state    !attention / !active / !idle select one whole group",
-		"  f         cycle profile (dashboard live / launcher default)",
-		"  esc       clear filter chips",
-		"  1 – 9     remove filter chip at that position",
+		"  p         project switcher — writes the #project component only",
+		"  esc       clear every filter component",
+		"  mouse     click a chip to remove it",
+		"  (/ opens prefilled: backspace edits one component off the end)",
 	}},
 	{"App", []string{
-		"  :         open command palette",
+		"  :         open command palette — every command, searchable",
 		"  ?         show / hide this help",
-		"  d         show session detail (hook event log)",
-		"  S         search past session transcripts",
-		"  P         search saved plans (from dashboard)",
-		"  W         manage Git worktrees",
-		"  A         show agent-session-loop runs",
+		"  i         show / hide the session inspector",
 		"  q         quit",
 		"  ctrl+c    quit",
+		"  (Past Sessions, Plans, Worktrees, Runs, session detail, the phase",
+		"   timeline, health details, undo, resort, and the list arrangement",
+		"   are palette entries — search the palette by name)",
 	}},
 }
 

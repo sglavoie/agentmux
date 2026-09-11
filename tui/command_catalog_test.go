@@ -49,39 +49,39 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 		shortcut string
 	}
 	want := []expectedCommand{
-		{commands.FocusSession, commands.GroupSession, "Focus Selected Session", []string{"jump", "tab"}, "enter / space"},
-		{commands.PeekScrollback, commands.GroupSession, "Peek Scrollback", []string{"pager", "scrollback"}, "e"},
-		{commands.RestartSession, commands.GroupSession, "Restart Session", []string{"relaunch"}, "r"},
-		{commands.OverrideProfile, commands.GroupSession, "Override Profile", []string{"account", "profile"}, "c"},
-		{commands.LaunchAnother, commands.GroupSession, "Launch Another Session", []string{"duplicate", "new"}, "C"},
-		{commands.ClearStatusIcon, commands.GroupSession, "Clear Status Icon", []string{"attention", "badge", "icon"}, "x"},
-		{commands.CloseSession, commands.GroupSession, "Close Session", []string{"exit", "kill"}, "X"},
-		{commands.OpenDirectoryID, commands.GroupSession, "Open Directory in Shell", []string{"directory", "shell", "terminal"}, "o"},
-		{commands.OpenEditorID, commands.GroupSession, "Open in Editor", []string{"directory", "edit"}, "O"},
-		{commands.CopyTitleID, commands.GroupSession, "Copy Session Title", []string{"clipboard", "yank"}, "y"},
-		{commands.ToggleLockID, commands.GroupSession, "Lock Session", []string{"protect", "unlock"}, "L"},
-		{commands.ToggleMuteID, commands.GroupSession, "Mute Session", []string{"notifications", "unmute"}, "m"},
-		{commands.SearchProject, commands.GroupSession, "Search This Project's Past Sessions", []string{"history", "project", "transcripts"}, "s"},
-		{commands.ShowDetails, commands.GroupSession, "Show Session Details", []string{"events", "hooks"}, "d"},
-		{commands.ShowTimeline, commands.GroupSession, "Show Session Timeline", []string{"events", "phases"}, "T"},
+		{commands.FocusSession, commands.GroupSession, "Focus Selected Session", []string{"jump", "tab"}, "enter"},
+		{commands.PeekScrollback, commands.GroupSession, "Peek Scrollback", []string{"pager", "scrollback"}, ""},
+		{commands.RestartSession, commands.GroupSession, "Restart Session", []string{"relaunch"}, ""},
+		{commands.OverrideProfile, commands.GroupSession, "Override Profile", []string{"account", "profile"}, ""},
+		{commands.LaunchAnother, commands.GroupSession, "Launch Another Session", []string{"duplicate", "new"}, ""},
+		{commands.ClearStatusIcon, commands.GroupSession, "Clear Status Icon", []string{"attention", "badge", "icon"}, ""},
+		{commands.CloseSession, commands.GroupSession, "Close Session", []string{"exit", "kill"}, ""},
+		{commands.OpenDirectoryID, commands.GroupSession, "Open Directory in Shell", []string{"directory", "shell", "terminal"}, ""},
+		{commands.OpenEditorID, commands.GroupSession, "Open in Editor", []string{"directory", "edit"}, ""},
+		{commands.CopyTitleID, commands.GroupSession, "Copy Session Title", []string{"clipboard", "yank"}, ""},
+		{commands.ToggleLockID, commands.GroupSession, "Lock Session", []string{"protect", "unlock"}, ""},
+		{commands.ToggleMuteID, commands.GroupSession, "Mute Session", []string{"notifications", "unmute"}, ""},
+		{commands.SearchProject, commands.GroupSession, "Search This Project's Past Sessions", []string{"history", "project", "transcripts"}, ""},
+		{commands.ShowDetails, commands.GroupSession, "Show Session Details", []string{"events", "hooks"}, ""},
+		{commands.ShowTimeline, commands.GroupSession, "Show Session Timeline", []string{"events", "phases"}, ""},
 		{commands.FilterSessions, commands.GroupExplore, "Filter Sessions", []string{"find", "search"}, "/"},
-		{commands.CycleProfileFilter, commands.GroupExplore, "Cycle Profile Filter", []string{"account", "filter", "running"}, "f"},
+		{commands.CycleProfileFilter, commands.GroupExplore, "Cycle Profile Filter", []string{"account", "filter", "running"}, ""},
 		{commands.ClearFilters, commands.GroupExplore, "Clear Filters", []string{"chips", "reset"}, "esc"},
 		{commands.OpenLauncher, commands.GroupExplore, "Open Launcher", []string{"launch", "projects"}, "l"},
-		{commands.SearchAllSessions, commands.GroupExplore, "Search All Past Sessions", []string{"history", "transcripts"}, "S"},
-		{commands.SearchPlans, commands.GroupExplore, "Search Plans", []string{"agent plans", "history"}, "P"},
-		{commands.ManageWorktrees, commands.GroupExplore, "Manage Worktrees", []string{"git", "branches", "inventory"}, "W"},
-		{commands.ShowRuns, commands.GroupExplore, "Show Runs", []string{"asl", "loop", "needs action"}, "A"},
+		{commands.SearchAllSessions, commands.GroupExplore, "Search All Past Sessions", []string{"history", "transcripts"}, ""},
+		{commands.SearchPlans, commands.GroupExplore, "Search Plans", []string{"agent plans", "history"}, ""},
+		{commands.ManageWorktrees, commands.GroupExplore, "Manage Worktrees", []string{"git", "branches", "inventory"}, ""},
+		{commands.ShowRuns, commands.GroupExplore, "Show Runs", []string{"asl", "loop", "needs action"}, ""},
 		{commands.ToggleInspector, commands.GroupExplore, "Hide Inspector", []string{"hide", "pane", "scrollback", "preview", "output"}, "i"},
 		// "all projects" rather than a project name: the catalog is read against a
 		// model with no project selector applied, and the title names the scope the
 		// dashboard is currently showing.
 		{commands.SwitchProject, commands.GroupExplore, "Switch Project (all projects)", []string{"projects", "scope", "sidebar", "rail"}, "p"},
-		{commands.ToggleListView, commands.GroupExplore, "Show Projects View", []string{"projects", "families", "urgency", "group"}, "v"},
-		{commands.ResortTabs, commands.GroupApp, "Resort Tabs", []string{"reorder", "tabs"}, "R"},
-		{commands.UndoClose, commands.GroupApp, "Undo Last Close", []string{"restore", "reopen"}, "u"},
+		{commands.ToggleListView, commands.GroupExplore, "Show Projects View", []string{"projects", "families", "urgency", "group"}, ""},
+		{commands.ResortTabs, commands.GroupApp, "Resort Tabs", []string{"reorder", "tabs"}, ""},
+		{commands.UndoClose, commands.GroupApp, "Undo Last Close", []string{"restore", "reopen"}, ""},
 		{commands.ShowHealth, commands.GroupApp, "Show Health Details", []string{"daemon", "hooks", "diagnostics", "status"}, ""},
-		{commands.DismissDeprecation, commands.GroupApp, "Dismiss Deprecation Warning", []string{"banner", "warning"}, "d"},
+		{commands.DismissDeprecation, commands.GroupApp, "Dismiss Deprecation Warning", []string{"banner", "warning"}, ""},
 		{commands.ShowKeyboardHelp, commands.GroupApp, "Show Keyboard Shortcuts", []string{"help", "keys"}, "?"},
 		{commands.Quit, commands.GroupApp, "Quit", []string{"close app", "exit"}, "q / ctrl+c"},
 	}
@@ -133,42 +133,55 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 	}
 }
 
+// TestCommandCatalogDashboardShortcutBindings is where the small keymap is
+// stated as data. Every command keeps its palette entry; only eight of them
+// still carry a dashboard key, and the rest render with no shortcut column at
+// all rather than with a key that would do nothing if pressed.
+//
+// The map is exhaustive in both directions on purpose. A command missing from
+// it fails, and an entry naming a command the catalog no longer has fails too,
+// so "the palette advertises exactly the keys the dashboard dispatches" is
+// checked rather than assumed — Shortcut is read from dashboardBindings, so a
+// key retired there must show up here as an empty string.
 func TestCommandCatalogDashboardShortcutBindings(t *testing.T) {
+	const noDashboardKey = ""
 	want := map[commands.ID]string{
-		commands.FocusSession:       keyEnter + " / " + keySpace,
-		commands.PeekScrollback:     keyE,
-		commands.RestartSession:     keyR,
-		commands.OverrideProfile:    keyC,
-		commands.LaunchAnother:      keyDashboardLaunch,
-		commands.ClearStatusIcon:    keyClearStatus,
-		commands.CloseSession:       keyClose,
-		commands.OpenDirectoryID:    keyO,
-		commands.OpenEditorID:       keyOpenEditor,
-		commands.CopyTitleID:        keyY,
-		commands.ToggleLockID:       keyLock,
-		commands.ToggleMuteID:       keyM,
-		commands.SearchProject:      keyProjectSessionSearch,
-		commands.ShowDetails:        keyD,
-		commands.ShowTimeline:       keyOpenTimeline,
-		commands.FilterSessions:     keySlash,
-		commands.CycleProfileFilter: keyF,
-		commands.ClearFilters:       keyEsc,
-		commands.OpenLauncher:       keyL,
-		commands.SearchAllSessions:  keySessionSearch,
-		commands.SearchPlans:        keyPlanSearch,
-		commands.ManageWorktrees:    keyWorktrees,
-		commands.ShowRuns:           keyASLRuns,
-		commands.ToggleInspector:    keyInspector,
-		commands.SwitchProject:      keyProjectSwitcher,
-		commands.ToggleListView:     keyToggleView,
-		commands.ResortTabs:         keyResort,
-		commands.UndoClose:          keyU,
-		// No dashboard key of its own: the health details are palette-only until
-		// the compact header entry point lands.
-		commands.ShowHealth:         "",
-		commands.DismissDeprecation: keyD,
-		commands.ShowKeyboardHelp:   keyQuestion,
-		commands.Quit:               keyQ + " / " + keyCtrlC,
+		commands.FocusSession:     keyEnter,
+		commands.FilterSessions:   keySlash,
+		commands.ClearFilters:     keyEsc,
+		commands.OpenLauncher:     keyL,
+		commands.ToggleInspector:  keyInspector,
+		commands.SwitchProject:    keyProjectSwitcher,
+		commands.ShowKeyboardHelp: keyQuestion,
+		commands.Quit:             keyQ + " / " + keyCtrlC,
+
+		// Everything below is palette-and-actions-only. None of these lost its
+		// command; each lost the direct dashboard shortcut that used to duplicate
+		// it, which is what the replacement keymap is.
+		commands.PeekScrollback:     noDashboardKey,
+		commands.RestartSession:     noDashboardKey,
+		commands.OverrideProfile:    noDashboardKey,
+		commands.LaunchAnother:      noDashboardKey,
+		commands.ClearStatusIcon:    noDashboardKey,
+		commands.CloseSession:       noDashboardKey,
+		commands.OpenDirectoryID:    noDashboardKey,
+		commands.OpenEditorID:       noDashboardKey,
+		commands.CopyTitleID:        noDashboardKey,
+		commands.ToggleLockID:       noDashboardKey,
+		commands.ToggleMuteID:       noDashboardKey,
+		commands.SearchProject:      noDashboardKey,
+		commands.ShowDetails:        noDashboardKey,
+		commands.ShowTimeline:       noDashboardKey,
+		commands.CycleProfileFilter: noDashboardKey,
+		commands.SearchAllSessions:  noDashboardKey,
+		commands.SearchPlans:        noDashboardKey,
+		commands.ManageWorktrees:    noDashboardKey,
+		commands.ShowRuns:           noDashboardKey,
+		commands.ToggleListView:     noDashboardKey,
+		commands.ResortTabs:         noDashboardKey,
+		commands.UndoClose:          noDashboardKey,
+		commands.ShowHealth:         noDashboardKey,
+		commands.DismissDeprecation: noDashboardKey,
 	}
 
 	catalog := commandCatalog()
@@ -196,16 +209,16 @@ func TestCommandCatalogDashboardShortcutBindings(t *testing.T) {
 		}
 	}
 
-	allowedShared := map[string][]commands.ID{
-		keyD: {commands.ShowDetails, commands.DismissDeprecation},
-	}
+	// No dashboard key is shared any more. The one exemption that used to live
+	// here — `d` for both ShowDetails and DismissDeprecation — is gone with both
+	// keys, so an overload is now a plain failure rather than a listed
+	// exception. The empty shortcut is skipped: "no key" is shared by every
+	// palette-only command by construction and is not an overload.
 	for shortcut, ids := range byShortcut {
-		if len(ids) < 2 {
+		if shortcut == "" || len(ids) < 2 {
 			continue
 		}
-		if !reflect.DeepEqual(ids, allowedShared[shortcut]) {
-			t.Errorf("shortcut %q is unexpectedly shared by %v", shortcut, ids)
-		}
+		t.Errorf("dashboard shortcut %q is shared by %v", shortcut, ids)
 	}
 }
 

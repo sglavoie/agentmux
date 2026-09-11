@@ -125,22 +125,31 @@ func TestFamilySummaryResolvesToNoSession(t *testing.T) {
 	}
 }
 
-// TestFamilySummaryStateIsEmptySoJumpWalksPast pins the mechanism that keeps
-// jump navigation working without teaching the matchers about item kinds: the
-// empty state is in no chord set and in no attention set.
-func TestFamilySummaryStateIsEmptySoJumpWalksPast(t *testing.T) {
+// TestFamilySummaryStateIsEmptyAndNavigationReachesThroughIt pins the two halves
+// of what a summary is to navigation. It carries no state of its own — a summary
+// stands for several sessions and has no single one to report — and the row it
+// folds away is still reachable, because `n`/`N` walks the underlying sessions
+// rather than the visible lines and answers with the family to unfold.
+func TestFamilySummaryStateIsEmptyAndNavigationReachesThroughIt(t *testing.T) {
 	list := summaryList()
 	if got := list.StateAt(0); got != "" {
 		t.Fatalf("StateAt(summary) = %q, want \"\"", got)
 	}
-	// Both members are matched by their own states, but the summary standing
-	// for them answers to neither matcher.
-	attn := AttentionMatcher(nil)
-	if attn("") {
-		t.Error("the attention matcher accepts the empty state, so a summary would be a jump target")
+	// The same projection with the family actually folded: row 0 needs the
+	// operator and has no line of its own, and the walk still reaches it.
+	folded := list
+	folded.Items = append([]Item(nil), list.Items...)
+	folded.Items[0].Collapsed = true
+
+	target, ok := FindNextNeedsYou(folded, -1, +1, nil, 10*time.Minute)
+	if !ok {
+		t.Fatal("the needs-you row folded inside the summary was unreachable")
 	}
-	if next := FindNextMatching(list, -1, +1, attn); next != -1 {
-		t.Errorf("FindNextMatching landed on item %d; the only attention row is folded into the summary, so there is nothing to land on", next)
+	if target.Row != 0 {
+		t.Errorf("target row = %d, want row 0, the blocked prompt inside the family", target.Row)
+	}
+	if target.Item != 0 || !target.Reveal {
+		t.Errorf("target = %+v, want the summary at item 0 with Reveal set", target)
 	}
 }
 

@@ -54,7 +54,7 @@ func TestDashboardRestartProfile_CrossHarnessUsesConfiguredProjectTemplate(t *te
 		},
 	})
 
-	m = pressKey(m, "c")
+	m = pressRowAction(t, m, keyC)
 	m = pressKey(m, "j")
 	updated, cmd := m.Update(keyPress("enter"))
 	if updated.(Model).mode != ModeList {
@@ -113,7 +113,7 @@ func TestDashboardLaunch_OrphanRowUsesSessionFromRunningTemplate(t *testing.T) {
 		{TabID: 10, WindowID: 11, Base: "orphan", Profile: "work", Account: "work", Harness: "claude", Project: "orphan", Directory: "/home/user/orphan", Key: session.SessionKey("work", "orphan"), Args: "--danger", Env: "FOO=bar"},
 	})
 
-	m = pressKey(m, "C")
+	m = pressRowAction(t, m, keyDashboardLaunch)
 	_, cmd := m.Update(keyPress("enter"))
 	if cmd == nil {
 		t.Fatal("expected non-nil cmd for orphan-row dashboard launch")

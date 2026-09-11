@@ -126,42 +126,40 @@ func TestActionsOverlayDispatchCopyTitle(t *testing.T) {
 	}
 }
 
-// TestListYCopiesTitleDirectly verifies `y` in ModeList copies the cursor
-// row's title without opening the overlay.
-func TestListYCopiesTitleDirectly(t *testing.T) {
-	m := loadSessions(testModelWithSessions(), makeSessions())
-	updated, cmd := m.Update(keyPress("y"))
-	m2 := updated.(Model)
-	if m2.mode != ModeList {
-		t.Fatalf("expected ModeList after y, got %d", m2.mode)
-	}
-	if cmd == nil {
-		t.Error("expected copy cmd from list y")
-	}
-}
+// `y`, `o`, and `O` used to dispatch straight from the list, bypassing the
+// overlay that also offered them. The overlay is the only route now, so each of
+// the three below asserts the capability where it lives rather than at a key
+// that no longer answers; the keys' inertness is asserted once, in
+// TestRetiredDirectActionKeysDoNotDispatch.
 
-// TestListODirectOpensWhenConfigMatches verifies `o` in ModeList resolves
-// the cursor's config session and dispatches an open-dir cmd.
-func TestListODirectOpensWhenConfigMatches(t *testing.T) {
+// TestOpenDirActionOpensWhenConfigMatches verifies the open-dir action resolves
+// the target row's config session and dispatches.
+func TestOpenDirActionOpensWhenConfigMatches(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
 		{TabID: 1, Base: "api", Account: "work", State: "bolt"},
 	})
-	updated, cmd := m.Update(keyPress("o"))
-	if updated.(Model).mode != ModeList {
-		t.Fatalf("expected ModeList after o, got %d", updated.(Model).mode)
+	m2, cmd := runRowAction(t, m, keyO)
+	if m2.mode != ModeList {
+		t.Fatalf("expected ModeList after the open-dir action, got %d", m2.mode)
 	}
 	if cmd == nil {
-		t.Error("expected open-dir cmd from list o with matching config session")
+		t.Error("expected open-dir cmd with a matching config session")
 	}
 }
 
-// TestListONoOpWithoutMatchingConfig verifies `o` is silent on a row whose
-// title isn't in the config.
-func TestListONoOpWithoutMatchingConfig(t *testing.T) {
+// TestOpenDirActionUnavailableWithoutMatchingConfig verifies the entry dims on
+// a row whose title isn't in the config, rather than dispatching into nothing.
+func TestOpenDirActionUnavailableWithoutMatchingConfig(t *testing.T) {
 	m := loadSessions(testModel(), []session.RunningSession{
 		{TabID: 1, Base: "orphan", Account: "work", State: "bolt"},
 	})
-	_, cmd := m.Update(keyPress("o"))
+	m = openActionsOverlay(t, m)
+	for _, a := range actionsFor(m) {
+		if a.KeyMatch == keyO && a.Available(m) {
+			t.Error("expected open-dir unavailable without a matching config session")
+		}
+	}
+	_, cmd := m.Update(keyPress(keyO))
 	if cmd != nil {
 		t.Error("expected no cmd when no config session matches")
 	}
@@ -182,29 +180,17 @@ func TestOpenInEditorActionUnavailableWithoutConfig(t *testing.T) {
 	}
 }
 
-// TestListOpenEditorDirectOpensWhenConfigMatches verifies `O` in ModeList
-// resolves the cursor's config session and dispatches an open-in-editor cmd.
-func TestListOpenEditorDirectOpensWhenConfigMatches(t *testing.T) {
+// TestOpenEditorActionOpensWhenConfigMatches verifies the open-in-editor action
+// resolves the target row's config session and dispatches.
+func TestOpenEditorActionOpensWhenConfigMatches(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
 		{TabID: 1, Base: "api", Account: "work", State: "bolt"},
 	})
-	updated, cmd := m.Update(keyPress("O"))
-	if updated.(Model).mode != ModeList {
-		t.Fatalf("expected ModeList after O, got %d", updated.(Model).mode)
+	m2, cmd := runRowAction(t, m, keyOpenEditor)
+	if m2.mode != ModeList {
+		t.Fatalf("expected ModeList after the open-in-editor action, got %d", m2.mode)
 	}
 	if cmd == nil {
-		t.Error("expected open-in-editor cmd from list O with matching config session")
-	}
-}
-
-// TestListOpenEditorNoOpWithoutMatchingConfig verifies `O` is silent on a
-// row whose title isn't in the config.
-func TestListOpenEditorNoOpWithoutMatchingConfig(t *testing.T) {
-	m := loadSessions(testModel(), []session.RunningSession{
-		{TabID: 1, Base: "orphan", Account: "work", State: "bolt"},
-	})
-	_, cmd := m.Update(keyPress("O"))
-	if cmd != nil {
-		t.Error("expected no cmd when no config session matches for O")
+		t.Error("expected open-in-editor cmd with a matching config session")
 	}
 }

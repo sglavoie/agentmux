@@ -148,8 +148,20 @@ func pressKey(m Model, key string) Model {
 }
 
 // typeString types each character of s into the model in sequence.
+//
+// A space is the one character that cannot go through keyPress: that helper
+// spells space as the *key* — String() is "space" and Text is empty, which is
+// what a handler matching a binding sees — while typing one into a filter or a
+// search buffer needs the rune with its Text set. The filter DSL separates its
+// components with spaces, so a test that composes a two-chip query depends on
+// this branch.
 func typeString(m Model, s string) Model {
 	for _, ch := range s {
+		if ch == ' ' {
+			updated, _ := m.Update(tea.KeyPressMsg(tea.Key{Code: ' ', Text: " "}))
+			m = updated.(Model)
+			continue
+		}
 		m = pressKey(m, string(ch))
 	}
 	return m

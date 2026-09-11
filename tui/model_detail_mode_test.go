@@ -22,13 +22,12 @@ func detailSessions() []session.RunningSession {
 	}
 }
 
-func TestDKeyOpensDetailMode(t *testing.T) {
+func TestShowDetailsCommandOpensDetailMode(t *testing.T) {
 	m := loadSessions(testModel(), detailSessions())
 	want := m.filtered[m.cursor].WindowID
-	updated, cmd := m.Update(keyPress("d"))
-	got := updated.(Model)
+	got, cmd := runDashboardCommand(t, m, commands.ShowDetails)
 	if got.mode != ModeDetail {
-		t.Fatalf("expected ModeDetail after d, got %d", got.mode)
+		t.Fatalf("expected ModeDetail after Show Details, got %d", got.mode)
 	}
 	if got.detailWindowID != want {
 		t.Fatalf("expected detailWindowID=%d, got %d", want, got.detailWindowID)
@@ -37,41 +36,54 @@ func TestDKeyOpensDetailMode(t *testing.T) {
 		t.Fatal("expected detailLoading=true while query is in flight")
 	}
 	if cmd == nil {
-		t.Fatal("expected non-nil cmd after d (session detail query)")
+		t.Fatal("expected non-nil cmd after Show Details (session detail query)")
 	}
 }
 
-func TestDKeyEmptyListIsNoOp(t *testing.T) {
-	m := loadSessions(testModel(), nil)
-	updated, cmd := m.Update(keyPress("d"))
-	got := updated.(Model)
-	if got.mode != ModeList {
-		t.Fatalf("expected ModeList after d on empty list, got %d", got.mode)
-	}
-	if cmd != nil {
-		t.Fatal("expected nil cmd after d on empty list")
+// `d` used to do two things at the dashboard — dismiss the configuration
+// notice, then open session detail — and the ordering between them was the
+// bug the second test below existed to pin. Both are palette commands now, so
+// neither can shadow the other, and the key itself is inert.
+func TestRetiredDetailKeyIsInertAtTheList(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		sessions []session.RunningSession
+	}{
+		{name: "with sessions", sessions: detailSessions()},
+		{name: "empty list", sessions: nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := loadSessions(testModel(), tc.sessions)
+			m.deprecations = []config.Deprecation{{Key: "stale_active_threshold", Replacement: "[defaults.watchdog].active"}}
+			m.deprecationDismissed = false
+
+			updated, cmd := m.Update(keyPress("d"))
+			got := updated.(Model)
+			if got.mode != ModeList {
+				t.Fatalf("d left ModeList for mode=%d", got.mode)
+			}
+			if cmd != nil {
+				t.Fatal("d dispatched a command")
+			}
+			if got.deprecationDismissed {
+				t.Fatal("d still dismissed the configuration notice")
+			}
+		})
 	}
 }
 
-func TestDKeyDismissesDeprecationBeforeEnteringDetail(t *testing.T) {
+// The dismissal itself survives as a palette command, independent of detail.
+func TestDismissDeprecationCommandSilencesTheNotice(t *testing.T) {
 	m := loadSessions(testModel(), detailSessions())
-	// Force a visible deprecation banner so keyD is consumed by the
-	// banner-dismiss path on first press.
 	m.deprecations = []config.Deprecation{{Key: "stale_active_threshold", Replacement: "[defaults.watchdog].active"}}
 	m.deprecationDismissed = false
 
-	m = pressKey(m, "d")
+	m = pressDashboardCommand(t, m, commands.DismissDeprecation)
 	if m.mode != ModeList {
-		t.Fatalf("expected ModeList after first d (banner dismiss), got %d", m.mode)
+		t.Fatalf("expected ModeList after Dismiss Deprecation Warning, got %d", m.mode)
 	}
 	if !m.deprecationDismissed {
-		t.Fatal("expected deprecation banner to be dismissed by first d")
-	}
-
-	// Second press now opens the detail pane.
-	m = pressKey(m, "d")
-	if m.mode != ModeDetail {
-		t.Fatalf("expected ModeDetail after second d, got %d", m.mode)
+		t.Fatal("expected the configuration notice dismissed")
 	}
 }
 
@@ -165,15 +177,17 @@ func TestDetailEscReturnsToListAndZerosFields(t *testing.T) {
 	}
 }
 
-func TestDetailDKeyToggles(t *testing.T) {
+// `d` survives inside the detail view as the key that closes it, the same way
+// `A` survives inside ASL Runs. Only the dashboard half of the toggle is gone.
+func TestDetailDKeyClosesTheViewItNoLongerOpens(t *testing.T) {
 	m := loadSessions(testModel(), detailSessions())
-	m = pressKey(m, "d") // open
+	m = pressDashboardCommand(t, m, commands.ShowDetails)
 	if m.mode != ModeDetail {
-		t.Fatalf("expected ModeDetail after first d, got %d", m.mode)
+		t.Fatalf("expected ModeDetail after Show Details, got %d", m.mode)
 	}
 	m = pressKey(m, "d") // close
 	if m.mode != ModeList {
-		t.Fatalf("expected ModeList after second d, got %d", m.mode)
+		t.Fatalf("expected ModeList after d in the detail view, got %d", m.mode)
 	}
 	if m.detailWindowID != 0 {
 		t.Fatalf("expected detailWindowID=0 after close, got %d", m.detailWindowID)

@@ -176,8 +176,8 @@ type undoEntry struct {
 	label    string // short label for the toast (typically the row's project title)
 }
 
-// closeWithToast snapshots rs, dispatches the close, and pushes an
-// aggregating "u to undo" toast. When the running session has no matching
+// closeWithToast snapshots rs, dispatches the close, and pushes the
+// aggregating undo toast. When the running session has no matching
 // account in the loaded config, the snapshot is best-effort: the close
 // still fires but the toast omits the undo affordance.
 func (m *Model) closeWithToast(rs session.RunningSession) tea.Cmd {
@@ -223,35 +223,40 @@ func (m *Model) restartWithToast(rs session.RunningSession) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// lockedDenyToast pushes the standard "session is locked" denial toast and
-// returns the cmd that arms the toast tick. Reused by every direct keypress
-// that would otherwise destroy or override a locked session so the user
-// sees a uniform message regardless of which key was rejected.
-func (m *Model) lockedDenyToast() tea.Cmd {
-	return m.pushToast(Toast{
-		Severity: toastError,
-		Text:     "session is locked — press L to unlock",
-	})
-}
+// The "session is locked — press L to unlock" denial toast is gone with the
+// keys that raised it. It existed because a direct shortcut had no way to say
+// "not on this row" before it was pressed; the three destructive commands are
+// reached through the actions overlay and the palette now, and both draw an
+// unavailable entry dimmed with its reason beside it. The toast's own text was
+// the tell: it named `L`, which is no longer the unlock key, and a refusal that
+// has to name a key is a refusal arriving too late.
 
 // undoToastText returns the user-facing message for the aggregating undo
 // toast. A single pending entry shows its label; multiple entries collapse
 // into a count with "undo last" so the affordance stays accurate.
+//
+// It names the palette rather than a key. `u` was the undo shortcut and is
+// retired with the rest of the direct destructive keymap; Undo Last Close is a
+// palette command now, and a toast that still said "u to undo" would be the
+// only thing on screen advertising a key that no longer dispatches. The window
+// is the part worth printing either way — the command's own availability
+// expires with it, so a toast that outlived the window would offer a route that
+// is already closed.
 func (m *Model) undoToastText() string {
 	active := m.activeUndoEntries()
 	switch len(active) {
 	case 0:
 		return ""
 	case 1:
-		return fmt.Sprintf("closed %s · u to undo (5s)", active[0].label)
+		return fmt.Sprintf("closed %s · %s undo (5s)", active[0].label, keyColon)
 	default:
-		return fmt.Sprintf("closed %d sessions · u to undo last (5s)", len(active))
+		return fmt.Sprintf("closed %d sessions · %s undo last (5s)", len(active), keyColon)
 	}
 }
 
 // activeUndoEntries returns the pending entries whose deadline is still in
-// the future. Used both to compose the toast label and to gate the `u`
-// handler so an expired entry is never silently revived.
+// the future. Used both to compose the toast label and to decide whether Undo
+// Last Close is offered at all, so an expired entry is never silently revived.
 func (m *Model) activeUndoEntries() []undoEntry {
 	now := time.Now()
 	out := make([]undoEntry, 0, len(m.pendingUndo))
@@ -264,8 +269,8 @@ func (m *Model) activeUndoEntries() []undoEntry {
 }
 
 // popUndo removes and returns the most recent pending entry that hasn't yet
-// expired. Stale entries are dropped from the slice so a no-op `u` press
-// also reclaims memory consumed by abandoned actions.
+// expired. Stale entries are dropped from the slice so a refused undo also
+// reclaims memory consumed by abandoned actions.
 func (m *Model) popUndo() (undoEntry, bool) {
 	m.sweepUndo()
 	if len(m.pendingUndo) == 0 {

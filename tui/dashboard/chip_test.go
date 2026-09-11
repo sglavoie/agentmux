@@ -95,16 +95,16 @@ func TestAttentionChipIsColoredLikeTheGroupItSelects(t *testing.T) {
 	if len(attention) != 1 {
 		t.Fatalf("expected one chip, got %v", attention)
 	}
-	want := chipStyle(Parse("!key").Components()[0], nil, false).Render("x")
-	if got := chipStyle(attention[0], nil, false).Render("x"); got != want {
+	want := chipStyle(Parse("!key").Components()[0], nil).Render("x")
+	if got := chipStyle(attention[0], nil).Render("x"); got != want {
 		t.Errorf("!attention chip renders %q, want the attention style %q", got, want)
 	}
 
 	// The other two aliases are deliberately NOT special-cased: their groups
 	// carry no urgency, so a colored chip would claim one.
-	plain := chipStyle(Chip{kind: chipSubstring}, nil, false).Render("x")
+	plain := chipStyle(Chip{kind: chipSubstring}, nil).Render("x")
 	for _, alias := range []string{"active", "idle"} {
-		if got := chipStyle(Parse("!" + alias).Components()[0], nil, false).Render("x"); got != plain {
+		if got := chipStyle(Parse("!" + alias).Components()[0], nil).Render("x"); got != plain {
 			t.Errorf("!%s chip renders %q, want the plain chip style %q", alias, got, plain)
 		}
 	}

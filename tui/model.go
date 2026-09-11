@@ -37,7 +37,6 @@ type Model struct {
 	cfg                *config.Config
 	interval           time.Duration
 	sortMode           string
-	attentionStates    map[string]bool // states the bracket-key nav (]/[ and }/{) jumps to
 	backgroundCommands modelBackgroundCommands
 	daemonCommand      func(protocol.Request) (protocol.Response, error)
 	// now is the render clock. Production uses time.Now; the UI test harness
@@ -122,12 +121,6 @@ type Model struct {
 	// after a failed best-effort clear from repeatedly stealing the cursor.
 	lastSelectionRequestToken string
 
-	// pendingJumpDir holds the direction of a pending bracket-key chord:
-	// 0 = no chord pending, +1 = ] pressed, -1 = [ pressed. Cleared on
-	// chord completion, on Esc, on any unknown follow-up key, and on
-	// transitions out of ModeList via clearJumpChord().
-	pendingJumpDir int
-
 	// mode
 	mode Mode
 
@@ -149,7 +142,6 @@ type Model struct {
 	// the operator back where they were, which is a filter and a selection, not
 	// a filter alone.
 	savedSelection dashboard.CursorIdentity
-	focusedChipIdx int                  // -1 when no chip focused; otherwise index into Components()
 	completion     dashboard.Completion // sigil-aware popup state for ModeSearch
 
 	// terminal dimensions

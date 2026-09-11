@@ -127,7 +127,7 @@ func TestListFooterPositionFragmentAccountsForGroupChrome(t *testing.T) {
 
 	t.Run("scrolled window reports its own range", func(t *testing.T) {
 		m := positionFixtureModel(positionFixtureRows(), 120, 15)
-		m = pressKey(m, "G")
+		m = pressKey(m, keyEnd)
 		if m.listOffset == 0 {
 			t.Fatalf("setup: jumping to the last item did not scroll the window")
 		}

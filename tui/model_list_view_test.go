@@ -12,15 +12,35 @@ import (
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
-// This file is the interaction half of the Projects view: the key and palette
-// entry that switch the arrangement, the collapse keys, and the three things
-// that have to survive a rebuild — which line the cursor is on, which families
-// are folded, and what the preview pane is pointed at.
+// This file is the interaction half of the Projects view: the palette entry
+// that switches the arrangement, Enter's folding, and the three things that
+// have to survive a rebuild — which line the cursor is on, which families are
+// folded, and what the preview pane is pointed at.
+//
+// Both of the vocabularies it used to drive are retired. `v` switched the
+// arrangement and is a palette command now; `←`/`→` folded and unfolded and are
+// Enter alone, which toggles. Enter is unambiguous here because a summary is the
+// one line where it has no session to focus, so the key that means "act on this
+// row" already meant nothing else on the row folding applies to.
 //
 // Every assertion here is written against the item list rather than against a
 // session index. That is the whole point of the projection: under Projects a
 // line is not a session, so a test that counted sessions would agree with the
 // model right up to the first fold and then quietly stop describing the screen.
+
+// toggleView switches the arrangement the way the operator now can: through the
+// palette. It is a helper rather than an inlined call because this file switches
+// views a dozen times and the route is the thing under test in exactly one of
+// them.
+func toggleView(t *testing.T, m Model) Model {
+	t.Helper()
+	return pressDashboardCommand(t, m, commands.ToggleListView)
+}
+
+// foldToggle presses the one key that changes a fold. Enter on a summary toggles
+// it; Enter anywhere else is FocusSession, which is why every caller here parks
+// the cursor on the line it means first.
+func foldToggle(m Model) Model { return pressKey(m, keyEnter) }
 
 // listViewModel returns a model holding two multi-checkout families and one
 // unfamilied session, arranged under the given view.
@@ -134,34 +154,29 @@ func TestListStartsInUrgencyWithEveryFamilyExpanded(t *testing.T) {
 
 	// And the first thing the operator can do about it — switch views — finds
 	// every family open, which is the claim a persisted fold would break.
-	m = pressKey(m, keyToggleView)
+	m = toggleView(t, m)
 	wantLines(t, m, projectLines)
 }
 
-// TestToggleListViewKeyAndPaletteAgree asserts the two entry points are the same
-// switch. They run one method for exactly this reason: a palette entry that
-// flipped a field the key handler did not would leave the projection and the
-// footer describing different lists.
-func TestToggleListViewKeyAndPaletteAgree(t *testing.T) {
+// TestToggleListViewIsReachableOnlyThroughThePalette is the retirement of `v`
+// stated as a test. Two claims: the letter dispatches nothing in ModeList, and
+// the palette entry still performs the whole switch — the field, the projection,
+// and the cursor mapping — so the capability moved rather than went away.
+func TestToggleListViewIsReachableOnlyThroughThePalette(t *testing.T) {
 	byKey, _ := listViewModel(dashboard.ViewUrgency)
-	byKey = pressKey(byKey, keyToggleView)
-	if byKey.listView != dashboard.ViewProjects {
-		t.Fatalf("%q left the list in view %v, want Projects", keyToggleView, byKey.listView)
+	byKey = selectLine(t, byKey, "session:lib")
+	before := itemLines(byKey)
+	after := pressKey(byKey, "v")
+	if after.listView != dashboard.ViewUrgency {
+		t.Fatalf("`v` still switched the list to %v", after.listView)
 	}
-	wantLines(t, byKey, projectLines)
-
-	byKey = pressKey(byKey, keyToggleView)
-	if byKey.listView != dashboard.ViewUrgency {
-		t.Fatalf("%q did not switch back; view = %v", keyToggleView, byKey.listView)
+	wantLines(t, after, before)
+	if after.mode != ModeList {
+		t.Fatalf("`v` left mode %v", after.mode)
 	}
-	wantLines(t, byKey, urgencyLines)
 
-	// The same switch, driven from the palette against a model in the same
-	// state: same projection, same landing line.
-	keyOnce, _ := listViewModel(dashboard.ViewUrgency)
-	keyOnce = selectLine(t, keyOnce, "session:lib")
-	keyOnce = pressKey(keyOnce, keyToggleView)
-
+	// The palette entry is the whole switch: the field, the projection, and the
+	// summary/session cursor mapping that a bare field write would skip.
 	byPalette, _ := listViewModel(dashboard.ViewUrgency)
 	byPalette = selectLine(t, byPalette, "session:lib")
 	cmd := commandByID(t, commands.ToggleListView)
@@ -169,14 +184,20 @@ func TestToggleListViewKeyAndPaletteAgree(t *testing.T) {
 	if !cmd.AvailabilityFor(byPalette, ctx).Available {
 		t.Fatal("the view command is unavailable on a session row")
 	}
-	updated, _ := cmd.Run(byPalette, ctx)
-	if updated.listView != dashboard.ViewProjects {
-		t.Fatalf("the palette entry left the list in view %v, want Projects", updated.listView)
+	byPalette = toggleView(t, byPalette)
+	if byPalette.listView != dashboard.ViewProjects {
+		t.Fatalf("the palette entry left the list in view %v, want Projects", byPalette.listView)
 	}
-	wantLines(t, updated, projectLines)
-	if got, want := selectedLine(updated), selectedLine(keyOnce); got != want {
-		t.Errorf("the palette landed the cursor on %q, the key on %q", got, want)
+	wantLines(t, byPalette, projectLines)
+	if got := selectedLine(byPalette); got != "session:lib" {
+		t.Errorf("the palette landed the cursor on %q, want session:lib", got)
 	}
+
+	byPalette = toggleView(t, byPalette)
+	if byPalette.listView != dashboard.ViewUrgency {
+		t.Fatalf("the palette entry did not switch back; view = %v", byPalette.listView)
+	}
+	wantLines(t, byPalette, urgencyLines)
 }
 
 // TestViewSwitchKeepsAVisibleSelection is the ordinary case: a session is a line
@@ -186,12 +207,12 @@ func TestViewSwitchKeepsAVisibleSelection(t *testing.T) {
 	m, _ := listViewModel(dashboard.ViewUrgency)
 	m = selectLine(t, m, "session:lib")
 
-	m = pressKey(m, keyToggleView)
+	m = toggleView(t, m)
 	if got := selectedLine(m); got != "session:lib" {
 		t.Errorf("switching to Projects moved the selection to %q, want session:lib", got)
 	}
 
-	m = pressKey(m, keyToggleView)
+	m = toggleView(t, m)
 	if got := selectedLine(m); got != "session:lib" {
 		t.Errorf("switching back to Urgency moved the selection to %q, want session:lib", got)
 	}
@@ -205,16 +226,16 @@ func TestSummarySelectionMapsToItsLeadOnReturnToUrgency(t *testing.T) {
 	m, _ := listViewModel(dashboard.ViewProjects)
 
 	m = selectLine(t, m, "summary:monorepo(open)")
-	m = pressKey(m, keyToggleView)
+	m = toggleView(t, m)
 	if got := selectedLine(m); got != "session:api" {
 		t.Errorf("the monorepo summary mapped to %q, want session:api (its attention lead)", got)
 	}
 
 	// toolbox is entirely idle, so its lead is decided by source order rather
 	// than by urgency — which is what makes this the other half of the claim.
-	m = pressKey(m, keyToggleView)
+	m = toggleView(t, m)
 	m = selectLine(t, m, "summary:toolbox(open)")
-	m = pressKey(m, keyToggleView)
+	m = toggleView(t, m)
 	if got := selectedLine(m); got != "session:cli" {
 		t.Errorf("the toolbox summary mapped to %q, want session:cli (its first member)", got)
 	}
@@ -226,14 +247,14 @@ func TestSummarySelectionMapsToItsLeadOnReturnToUrgency(t *testing.T) {
 func TestChildHiddenByAFoldMapsToItsSummary(t *testing.T) {
 	m, _ := listViewModel(dashboard.ViewProjects)
 	m = selectLine(t, m, "summary:monorepo(open)")
-	m = pressKey(m, keyCollapse)
+	m = foldToggle(m)
 
 	// Back in Urgency the folded family's rows are all visible again, so the
 	// operator can select one the Projects view has nowhere to draw.
-	m = pressKey(m, keyToggleView)
+	m = toggleView(t, m)
 	m = selectLine(t, m, "session:web")
 
-	m = pressKey(m, keyToggleView)
+	m = toggleView(t, m)
 	if got := selectedLine(m); got != "summary:monorepo(folded)" {
 		t.Errorf("a child hidden by a fold selected %q, want the monorepo summary", got)
 	}
@@ -242,16 +263,19 @@ func TestChildHiddenByAFoldMapsToItsSummary(t *testing.T) {
 	}
 }
 
-// TestCollapseKeysActOnKind walks the four bindings the Projects view adds. The
-// asymmetry between Left on a summary and Left on a child is the interesting
-// part: the keystroke that hides rows is always pressed while looking at the
-// line that will survive it.
-func TestCollapseKeysActOnKind(t *testing.T) {
-	t.Run("left folds a summary and right unfolds it", func(t *testing.T) {
-		m, _ := listViewModel(dashboard.ViewProjects)
+// TestEnterFoldsOnlyOnASummary walks what is left of the fold vocabulary now
+// that it is one key. The interesting part used to be the asymmetry between Left
+// on a summary and Left on a child; with a toggle there is no asymmetry to have,
+// so the claims that matter are that the key toggles, that it does so without
+// touching Kitty, and that on every line which is not a summary it is
+// FocusSession and nothing else.
+func TestEnterFoldsOnlyOnASummary(t *testing.T) {
+	t.Run("enter toggles the selected family without touching kitty", func(t *testing.T) {
+		m, runner := listViewModel(dashboard.ViewProjects)
+		calls := len(runner.Calls)
 		m = selectLine(t, m, "summary:monorepo(open)")
 
-		m = pressKey(m, keyCollapse)
+		m = foldToggle(m)
 		wantLines(t, m, []string{
 			"summary:monorepo(folded)", "session:etl",
 			"summary:toolbox(open)", "session:cli", "session:lib",
@@ -260,51 +284,53 @@ func TestCollapseKeysActOnKind(t *testing.T) {
 			t.Errorf("folding moved the cursor to %q", got)
 		}
 
-		// Left again is a no-op rather than a fold of something else.
-		before := itemLines(m)
-		m = pressKey(m, keyCollapse)
-		wantLines(t, m, before)
-
-		m = pressKey(m, keyExpand)
+		m = foldToggle(m)
 		wantLines(t, m, projectLines)
 		if got := selectedLine(m); got != "summary:monorepo(open)" {
 			t.Errorf("unfolding moved the cursor to %q", got)
 		}
-	})
-
-	t.Run("enter and space toggle the selected family", func(t *testing.T) {
-		for _, key := range []string{keyEnter, keySpace} {
-			m, runner := listViewModel(dashboard.ViewProjects)
-			calls := len(runner.Calls)
-			m = selectLine(t, m, "summary:toolbox(open)")
-
-			m = pressKey(m, key)
-			if got := selectedLine(m); got != "summary:toolbox(folded)" {
-				t.Errorf("%q left the toolbox summary as %q", key, got)
-			}
-			m = pressKey(m, key)
-			if got := selectedLine(m); got != "summary:toolbox(open)" {
-				t.Errorf("%q did not unfold the toolbox summary; got %q", key, got)
-			}
-			if n := len(runner.Calls); n != calls {
-				t.Errorf("%q made %d Kitty call(s) on a summary: %+v", key, n-calls, runner.Calls[calls:])
-			}
+		if n := len(runner.Calls); n != calls {
+			t.Errorf("folding made %d Kitty call(s) on a summary: %+v", n-calls, runner.Calls[calls:])
 		}
 	})
 
-	t.Run("left on a child selects its family before folding it", func(t *testing.T) {
+	t.Run("enter on a child is a focus, not a fold of its family", func(t *testing.T) {
 		m, _ := listViewModel(dashboard.ViewProjects)
 		m = selectLine(t, m, "session:web")
 
-		m = pressKey(m, keyCollapse)
-		if got := selectedLine(m); got != "summary:monorepo(open)" {
-			t.Errorf("the first left from a child selected %q, want the open summary", got)
+		after := foldToggle(m)
+		wantLines(t, after, projectLines) // nothing folded
+		if len(after.collapsedFamilies) != 0 {
+			t.Errorf("enter on a child folded %v", after.collapsedFamilies)
 		}
-		wantLines(t, m, projectLines) // nothing folded yet
+		if got := selectedLine(after); got != "session:web" {
+			t.Errorf("enter on a child moved the cursor to %q", got)
+		}
+	})
 
-		m = pressKey(m, keyCollapse)
-		if got := selectedLine(m); got != "summary:monorepo(folded)" {
-			t.Errorf("the second left left the summary as %q", got)
+	t.Run("the retired arrow keys fold nothing", func(t *testing.T) {
+		// `←`/`→` were the fold and unfold keys. They are retired outright rather
+		// than rebound, so on a summary — the one line they used to act on — they
+		// must now change neither the list nor the cursor.
+		for _, view := range []dashboard.ViewMode{dashboard.ViewProjects, dashboard.ViewUrgency} {
+			m, _ := listViewModel(view)
+			line := "summary:monorepo(open)"
+			if view == dashboard.ViewUrgency {
+				line = "session:api"
+			}
+			m = selectLine(t, m, line)
+			before, cursor := itemLines(m), m.cursor
+
+			for _, key := range []string{keyLeft, keyRight} {
+				after := pressKey(m, key)
+				wantLines(t, after, before)
+				if after.cursor != cursor {
+					t.Errorf("view %v: %q moved the cursor to %q", view, key, selectedLine(after))
+				}
+				if len(after.collapsedFamilies) != 0 {
+					t.Errorf("view %v: %q folded %v", view, key, after.collapsedFamilies)
+				}
+			}
 		}
 	})
 
@@ -313,24 +339,23 @@ func TestCollapseKeysActOnKind(t *testing.T) {
 		m = selectLine(t, m, "session:etl")
 		before, cursor := itemLines(m), m.cursor
 
-		for _, key := range []string{keyCollapse, keyExpand} {
-			after := pressKey(m, key)
-			wantLines(t, after, before)
-			if after.cursor != cursor {
-				t.Errorf("%q moved the cursor off the unfamilied leaf to %q", key, selectedLine(after))
-			}
+		after := foldToggle(m)
+		wantLines(t, after, before)
+		if after.cursor != cursor {
+			t.Errorf("enter moved the cursor off the unfamilied leaf to %q", selectedLine(after))
+		}
+		if len(after.collapsedFamilies) != 0 {
+			t.Errorf("enter folded %v from an unfamilied leaf", after.collapsedFamilies)
 		}
 	})
 
 	t.Run("the urgency view has nothing to fold", func(t *testing.T) {
 		m, _ := listViewModel(dashboard.ViewUrgency)
 		m = selectLine(t, m, "session:api")
-		for _, key := range []string{keyCollapse, keyExpand} {
-			after := pressKey(m, key)
-			wantLines(t, after, urgencyLines)
-			if len(after.collapsedFamilies) != 0 {
-				t.Errorf("%q folded %v in the urgency view", key, after.collapsedFamilies)
-			}
+		after := foldToggle(m)
+		wantLines(t, after, urgencyLines)
+		if len(after.collapsedFamilies) != 0 {
+			t.Errorf("enter folded %v in the urgency view", after.collapsedFamilies)
 		}
 	})
 }
@@ -342,7 +367,7 @@ func TestCollapseKeysActOnKind(t *testing.T) {
 func TestFoldsSurviveRefreshFilterAndViewSwitch(t *testing.T) {
 	m, _ := listViewModel(dashboard.ViewProjects)
 	m = selectLine(t, m, "summary:monorepo(open)")
-	m = pressKey(m, keyCollapse)
+	m = foldToggle(m)
 	folded := []string{
 		"summary:monorepo(folded)", "session:etl",
 		"summary:toolbox(open)", "session:cli", "session:lib",
@@ -371,9 +396,9 @@ func TestFoldsSurviveRefreshFilterAndViewSwitch(t *testing.T) {
 
 	// And a round trip through the urgency view, which draws no summaries at
 	// all and so has nowhere to record a fold except the map.
-	m = pressKey(m, keyToggleView)
+	m = toggleView(t, m)
 	wantLines(t, m, urgencyLines)
-	m = pressKey(m, keyToggleView)
+	m = toggleView(t, m)
 	wantLines(t, m, folded)
 }
 
@@ -385,7 +410,7 @@ func TestFoldingCopiesTheCollapseMap(t *testing.T) {
 	before, _ := listViewModel(dashboard.ViewProjects)
 	before = selectLine(t, before, "summary:monorepo(open)")
 
-	after := pressKey(before, keyCollapse)
+	after := foldToggle(before)
 	if !after.collapsedFamilies["git:/repo"] {
 		t.Fatal("the fold did not reach the model that pressed the key")
 	}
@@ -397,7 +422,7 @@ func TestFoldingCopiesTheCollapseMap(t *testing.T) {
 	// write in place would land in every copy that shares it rather than only in
 	// the one the update loop is about to return.
 	second := selectLine(t, after, "summary:toolbox(open)")
-	second = pressKey(second, keyCollapse)
+	second = foldToggle(second)
 	if !second.collapsedFamilies["git:/tools"] {
 		t.Fatal("the second fold did not reach the model that pressed the key")
 	}
@@ -413,7 +438,7 @@ func TestFoldingCopiesTheCollapseMap(t *testing.T) {
 
 	// Unfolding deletes rather than storing false, so an unfolded family leaves
 	// no entry claiming anything about it.
-	restored := pressKey(after, keyExpand)
+	restored := foldToggle(selectLine(t, after, "summary:monorepo(folded)"))
 	if _, present := restored.collapsedFamilies["git:/repo"]; present {
 		t.Errorf("unfolding left %v behind; absent must mean expanded", restored.collapsedFamilies)
 	}
@@ -438,28 +463,37 @@ func TestProjectsNavigationAtListBoundaries(t *testing.T) {
 			m, _ := listViewModel(dashboard.ViewProjects)
 			for _, line := range tc.folds {
 				m = selectLine(t, m, line)
-				m = pressKey(m, keyCollapse)
+				m = foldToggle(m)
 			}
 			if got := m.listItemCount(); got != tc.length {
 				t.Fatalf("list holds %d lines (%v), want %d", got, itemLines(m), tc.length)
 			}
 
-			m = pressKey(m, "g")
+			// Home and End, not `g`/`G`: the vi-style pair is retired on the
+			// dashboard and the two named keys are what reach the ends now.
+			m = pressKey(m, keyHome)
 			if m.cursor != 0 {
-				t.Errorf("g left the cursor at %d, want the first line", m.cursor)
+				t.Errorf("home left the cursor at %d, want the first line", m.cursor)
 			}
-			m = pressKey(m, "k")
+			m = pressKey(m, keyK)
 			if m.cursor != 0 {
 				t.Errorf("k at the top wrapped or ran off to %d", m.cursor)
 			}
 
-			m = pressKey(m, "G")
+			m = pressKey(m, keyEnd)
 			if got, want := m.cursor, tc.length-1; got != want {
-				t.Errorf("G left the cursor at %d, want %d", got, want)
+				t.Errorf("end left the cursor at %d, want %d", got, want)
 			}
-			m = pressKey(m, "j")
+			m = pressKey(m, keyJ)
 			if got, want := m.cursor, tc.length-1; got != want {
 				t.Errorf("j at the bottom ran off to %d, want %d", got, want)
+			}
+
+			// And the retired pair moves nothing at all.
+			for _, key := range []string{keyG, keyGG} {
+				if got := pressKey(m, key).cursor; got != m.cursor {
+					t.Errorf("retired key %q moved the cursor from %d to %d", key, m.cursor, got)
+				}
 			}
 
 			// Every line is reachable, and every line the cursor stops on is a
@@ -599,14 +633,14 @@ func TestRefreshRetargetsThePreviewAtTheSelectionItEndedOn(t *testing.T) {
 	// keeping the one it had.
 	m = loadSessions(m, listViewRows())
 	m = selectLine(t, m, "summary:monorepo(open)")
-	m = pressKey(m, keyCollapse)
-	m = pressKey(m, keyToggleView)
+	m = foldToggle(m)
+	m = toggleView(t, m)
 	m = selectLine(t, m, "session:api")
 	m.refreshPreviewForCursor()
 	if m.previewWindowID != 11 {
 		t.Fatalf("setup: the preview tracks window %d, want api's 11", m.previewWindowID)
 	}
-	m = pressKey(m, keyToggleView)
+	m = toggleView(t, m)
 	if got := selectedLine(m); got != "summary:monorepo(folded)" {
 		t.Fatalf("the fold did not swallow the selection; cursor on %q", got)
 	}
@@ -669,11 +703,9 @@ func TestPreviewRejectsAResponseForAnOlderTarget(t *testing.T) {
 	}
 }
 
-// TestKeyboardHelpDocumentsTheProjectsView covers the keys the generated help
-// cannot reach on its own. `v` is a footer-palette entry, so
-// TestHelpDocumentsEveryPaletteKey already renders a line for it; the collapse
-// keys are bound in the list handler and appear in no palette, which is exactly
-// why they need a static section that a test holds in place.
+// TestKeyboardHelpDocumentsTheProjectsView covers what the generated half of the
+// help cannot reach on its own. Folding is bound in the list handler and appears
+// in no palette, so it needs a static section that a test holds in place.
 func TestKeyboardHelpDocumentsTheProjectsView(t *testing.T) {
 	m, _ := listViewModel(dashboard.ViewProjects)
 	m.mode = ModeHelp
@@ -691,25 +723,26 @@ func TestKeyboardHelpDocumentsTheProjectsView(t *testing.T) {
 			t.Errorf("the help overlay does not keep %q distinct:\n%s", phrase, out)
 		}
 	}
-	// The collapse keys are written as the arrows they are printed on, the way
-	// every other cursor key in this overlay is.
-	for _, key := range []string{keyToggleView, "←", "→"} {
-		if !strings.Contains(out, key) {
-			t.Errorf("the help overlay never documents %q:\n%s", key, out)
-		}
-	}
 	// Enter means something different on a summary than on a session, and the
 	// help has to say so rather than promising a focus that will not happen.
 	if !strings.Contains(out, "fold") {
 		t.Errorf("the help overlay never explains folding:\n%s", out)
 	}
+	// And it may not still advertise the three keys the fold and the arrangement
+	// used to be spelled with. `←`/`→` are gone outright; `v` is a palette
+	// command, which the help documents by name rather than by letter.
+	for _, retired := range []string{"←", "→"} {
+		if strings.Contains(out, retired) {
+			t.Errorf("the help overlay still documents the retired fold key %q:\n%s", retired, out)
+		}
+	}
 }
 
 // TestBuiltSummaryOffersOnlyViewActions is the availability claim across all
 // three surfaces the operator can reach an action from, made against a summary
-// the real builder emitted rather than a spliced one. Enter and Space are
-// excluded because on a summary they are no longer session actions at all —
-// TestCollapseKeysActOnKind covers what they do instead.
+// the real builder emitted rather than a spliced one. Enter is excluded because
+// on a summary it is no longer a session action at all — TestEnterFoldsOnlyOnASummary
+// covers what it does instead.
 func TestBuiltSummaryOffersOnlyViewActions(t *testing.T) {
 	forbidDaemonMutations(t)
 	m, runner := listViewModel(dashboard.ViewProjects)
@@ -717,7 +750,7 @@ func TestBuiltSummaryOffersOnlyViewActions(t *testing.T) {
 	calls := len(runner.Calls)
 
 	for _, key := range summaryRowActionKeys {
-		if key == keyEnter || key == keySpace {
+		if key == keyEnter {
 			continue
 		}
 		after, cmd := m.Update(keyPress(key))
@@ -747,12 +780,8 @@ func TestBuiltSummaryOffersOnlyViewActions(t *testing.T) {
 	}
 
 	for _, e := range listFooterBindings() {
-		got := e.availFn(m)
-		if e.section == footerSectionRow && got {
+		if e.section == footerSectionRow && e.availFn(m) {
 			t.Errorf("footer entry %q (%s) is available on a summary", e.key, e.label)
-		}
-		if e.key == keyToggleView && !got {
-			t.Error("the footer hid the view toggle on a summary")
 		}
 	}
 

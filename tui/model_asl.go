@@ -81,7 +81,6 @@ func (m Model) runASLWorkbenchCmd(rowID, planDir, focus string) tea.Cmd {
 // enterASLRuns opens the Runs view. Dashboard filters, query, and selection are
 // untouched so Esc restores exactly the list the operator left.
 func (m Model) enterASLRuns() (tea.Model, tea.Cmd) {
-	m.clearJumpChord()
 	m.mode = ModeASLRuns
 	m.aslErr = nil
 	m.aslNotice = ""

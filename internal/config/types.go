@@ -57,12 +57,12 @@ type Defaults struct {
 	Diagnostics          DiagnosticsConfig    `toml:"diagnostics"`            // private event journal and native/daemon log retention
 	Args                 []string             `toml:"args"`                   // preferred shared launch args
 	ClaudeFlags          []string             `toml:"claude_flags"`           // legacy alias for args
-	ConfirmDestructive   bool                 `toml:"confirm_destructive"`    // direct dashboard r always confirms; when true, close/actions-overlay restart use modal confirm instead of toast paths
+	ConfirmDestructive   bool                 `toml:"confirm_destructive"`    // when true, the actions overlay's close/restart entries use the modal confirm instead of the toast+undo path
 	Notifications        NotificationConfig   `toml:"notifications"`
 	Preview              PreviewConfig        `toml:"preview"`
-	Jump                 JumpConfig           `toml:"jump"`            // bracket-key (]/[ and }/{) attention-state navigation
-	Editor               string               `toml:"editor"`          // overrides $VISUAL/$EDITOR for the `O` keybinding (Open in editor)
-	PlansDirectory       string               `toml:"plans_directory"` // root for the `P` keybinding's plans index; defaults to ~/.local/share/agent-plans
+	Jump                 JumpConfig           `toml:"jump"`            // deprecated: the bracket chords it configured are retired; accepted, validated, and read by nothing
+	Editor               string               `toml:"editor"`          // overrides $VISUAL/$EDITOR for the actions overlay's "open in editor" entry
+	PlansDirectory       string               `toml:"plans_directory"` // root for the Plans browser's index; defaults to ~/.local/share/agent-plans
 	ASL                  ASLConfig            `toml:"asl"`             // optional agent-session-loop bridge integration
 	Release              ReleaseConfig        `toml:"release"`         // paired ASL/Agent Mux release gate
 
@@ -152,11 +152,23 @@ func (d DiagnosticsConfig) NativeLoggingValue() bool {
 	return d.NativeLogging == nil || *d.NativeLogging
 }
 
-// JumpConfig controls which session states the TUI bracket-key navigation
-// (]/[ and }/{) treats as "attention". When AttentionStates is empty,
-// applyDefaults fills it with the canonical set
-// ["key", "error", "warning", "question"]. Validation rejects unknown state
-// names (anything outside palette.StateOrder()).
+// JumpConfig is retired and influences nothing.
+//
+// It named the session states the TUI's bracket navigation (]/[ and }/{)
+// treated as "attention". Those chords are unbound at the dashboard now, and
+// what replaced them takes no configuration: `n`/`N` walk the Needs You group
+// in the order the list already shows it, so the set of states that counts as
+// attention is the grouping rule itself rather than a second, separately
+// configured one that could disagree with it.
+//
+// The field survives so a config written against the old dashboard still loads:
+// applyDefaults still fills AttentionStates with the canonical set
+// ["key", "error", "warning", "question"] when it is empty, and validation
+// still rejects unknown state names (anything outside palette.StateOrder()), so
+// a file that was valid yesterday is valid today and a typo is still reported
+// rather than silently absorbed. Nothing reads the result. Load records a
+// Deprecation for the table whenever it is present, which is what tells the
+// operator the setting has stopped selecting anything; see collectDeprecations.
 type JumpConfig struct {
 	AttentionStates []string `toml:"attention_states"`
 }

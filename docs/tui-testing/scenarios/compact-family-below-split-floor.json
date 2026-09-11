@@ -4,7 +4,7 @@
   "size": { "width": 72, "height": 30 },
   "actions": [
     { "type": "command", "command_id": "explore.toggle-list-view" },
-    { "type": "key", "key": "left" }
+    { "type": "key", "key": "k" }
   ],
   "assertions": [
     { "type": "mode_equals", "mode": "list" },

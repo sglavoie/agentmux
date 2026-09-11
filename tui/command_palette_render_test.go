@@ -110,8 +110,13 @@ func TestCommandPaletteRendersContextDisabledNoResultsAndNoSession(t *testing.T)
 }
 
 func TestCommandPaletteShortcutAlignmentAndWrappedDetail(t *testing.T) {
+	// The alignment half needs a command that still HAS a shortcut. Restart
+	// Session no longer does — `r` is an actions-overlay mnemonic now, and the
+	// palette reads its shortcut column from the dashboard binding table, so a
+	// retired key leaves the column empty and there is nothing to right-align.
+	// Toggle Inspector is one of the eight bindings that survived.
 	m := commandPaletteTestModel(46, 30)
-	m.commandQuery = "restart"
+	m.commandQuery = "inspector"
 	m.recomputeCommandPaletteResults()
 	width := commandPaletteContentWidth(m)
 	palette := commandPaletteResultLayout(m, width)
@@ -123,7 +128,7 @@ func TestCommandPaletteShortcutAlignmentAndWrappedDetail(t *testing.T) {
 	if layout.Width(title) != width {
 		t.Fatalf("title row width = %d, want right-aligned width %d: %q", layout.Width(title), width, title)
 	}
-	if !strings.HasSuffix(title, keyR) {
+	if !strings.HasSuffix(title, keyInspector) {
 		t.Fatalf("title row shortcut is not right-aligned: %q", title)
 	}
 	for _, row := range palette.Rows {

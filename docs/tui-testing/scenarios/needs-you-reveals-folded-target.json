@@ -1,0 +1,22 @@
+{
+  "name": "needs-you-reveals-folded-target",
+  "fixture": "project_families",
+  "size": { "width": 120, "height": 26 },
+  "actions": [
+    { "type": "command", "command_id": "explore.toggle-list-view" },
+    { "type": "key", "key": "k" },
+    { "type": "key", "key": "enter" },
+    { "type": "key", "key": "j" },
+    { "type": "key", "key": "N" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "selected_title", "value": "api" },
+    { "type": "contains_text", "text": "▾ 🔑 api  1 attention · 1 active · 1 idle" },
+    { "type": "contains_text", "text": "n/N needs you" },
+    { "type": "kitty_calls", "op": "FocusTab", "count": 0 },
+    { "type": "kitty_calls", "op": "LaunchOverlayPager", "count": 0 },
+    { "type": "excludes_text", "text": "jump next:" },
+    { "type": "no_layout_issues" }
+  ]
+}

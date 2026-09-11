@@ -3,9 +3,11 @@ package tui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -92,20 +94,6 @@ func runViaPalette(m Model, id commands.ID) bindingOutcome {
 	}
 	updated, cmd := candidate.Execute(m, ctx)
 	return observeBinding(updated, cmd)
-}
-
-// refusedForLock reports whether id would refuse m because the selected
-// session is locked — the single refusal a dashboard key answers out loud.
-func refusedForLock(m Model, id commands.ID) bool {
-	candidate, ok := dashboardCommand(id)
-	if !ok {
-		return false
-	}
-	ctx := dashboardBindingContext(m)
-	if !candidate.IsVisible(m, ctx) {
-		return false
-	}
-	return candidate.AvailabilityFor(m, ctx).Reason == commands.ReasonLocked
 }
 
 func runViaKey(m Model, key string) bindingOutcome {
@@ -208,25 +196,15 @@ func TestDirectKeyAndPaletteAgree(t *testing.T) {
 			if binding.Gate != commands.GateChecked {
 				continue
 			}
-			// enter and space branch on list structure before they reach the
-			// table, and `d` is shared; both are asserted on their own terms.
-			if binding.Binds(keyEnter) || binding.Binds(keySpace) || binding.Binds(keyD) {
+			// enter branches on list structure before it reaches the table, so it
+			// is asserted on its own terms below.
+			if binding.Binds(keyEnter) {
 				continue
 			}
 			key := binding.Key()
 			t.Run(state.name+"/"+key, func(t *testing.T) {
 				viaKey := runViaKey(state.m, key)
 				viaPalette := runViaPalette(state.m, binding.Command)
-				if refusedForLock(state.m, binding.Command) {
-					// The one declared divergence. A lock is a decision the
-					// operator made and can undo, so the key says so out loud
-					// while the palette says it by dimming the row. Nothing
-					// else about the two outcomes may differ.
-					if !strings.Contains(viaKey.toastTexts, "locked") {
-						t.Errorf("%s on a locked row said nothing: toasts %q", binding.Command, viaKey.toastTexts)
-					}
-					viaKey.toastTexts, viaKey.issuedCmd = viaPalette.toastTexts, viaPalette.issuedCmd
-				}
 				if viaKey != viaPalette {
 					t.Errorf("%s diverges:\n  key:     %+v\n  palette: %+v", binding.Command, viaKey, viaPalette)
 				}
@@ -235,10 +213,14 @@ func TestDirectKeyAndPaletteAgree(t *testing.T) {
 	}
 }
 
-// TestUncheckedBindingsRunTheirCommandRegardless states what the three declared
-// exceptions buy. Each either refuses by doing something the operator can see or
-// feel — which a dropped keypress would throw away — or has no state in which it
-// refuses at all, so a gate could only ever be a chance to get that wrong.
+// TestUncheckedBindingsRunTheirCommandRegardless states what the declared
+// exceptions buy: each has no state in which it refuses at all, so a gate could
+// only ever be a chance to get that wrong.
+//
+// UndoClose used to be the third. It kept its unchecked declaration for as long
+// as it had a key, because a refused undo had to say "nothing to undo" rather
+// than look dead; it has no dashboard key now, and the palette says the same
+// thing by dimming the row.
 func TestUncheckedBindingsRunTheirCommandRegardless(t *testing.T) {
 	unchecked := map[commands.ID]bool{}
 	for _, binding := range dashboardBindings() {
@@ -246,7 +228,7 @@ func TestUncheckedBindingsRunTheirCommandRegardless(t *testing.T) {
 			unchecked[binding.Command] = true
 		}
 	}
-	want := map[commands.ID]bool{commands.ToggleInspector: true, commands.SwitchProject: true, commands.UndoClose: true}
+	want := map[commands.ID]bool{commands.ToggleInspector: true, commands.SwitchProject: true}
 	if len(unchecked) != len(want) {
 		t.Fatalf("unchecked bindings: got %v, want %v", unchecked, want)
 	}
@@ -257,72 +239,85 @@ func TestUncheckedBindingsRunTheirCommandRegardless(t *testing.T) {
 	}
 }
 
-// TestLockedRowDeniesWithExactlyOneToast is the lock half of the review item.
-// The three destructive keys refuse a locked session out loud — once — and
-// nothing else about the model moves.
-func TestLockedRowDeniesWithExactlyOneToast(t *testing.T) {
+// TestEveryRefusedBindingIsSilentAndInert is what replaced the lock toast. No
+// dashboard key announces a refusal any more: the three destructive commands
+// that used to need one are reached through the actions overlay and the palette,
+// which draw an unavailable entry dimmed with its reason beside it — before the
+// keystroke rather than after it. So a key whose command refuses must leave the
+// model untouched and say nothing at all.
+func TestEveryRefusedBindingIsSilentAndInert(t *testing.T) {
+	for _, state := range dashboardBindingStates(t) {
+		for _, binding := range dashboardBindings() {
+			if binding.Gate != commands.GateChecked || binding.Binds(keyEnter) {
+				continue
+			}
+			candidate, ok := dashboardCommand(binding.Command)
+			if !ok {
+				continue
+			}
+			ctx := dashboardBindingContext(state.m)
+			if candidate.IsVisible(state.m, ctx) && candidate.AvailabilityFor(state.m, ctx).Available {
+				continue
+			}
+			t.Run(state.name+"/"+binding.Key(), func(t *testing.T) {
+				updated, cmd := state.m.Update(dashboardKeyPress(binding.Key()))
+				out := updated.(Model)
+				if len(out.toasts) != 0 {
+					t.Errorf("refused key %q raised toasts %+v", binding.Key(), out.toasts)
+				}
+				if cmd != nil {
+					t.Errorf("refused key %q issued a command", binding.Key())
+				}
+				if out.mode != ModeList {
+					t.Errorf("refused key %q moved to mode %v", binding.Key(), out.mode)
+				}
+			})
+		}
+	}
+}
+
+// TestLockedRowRefusesThroughTheActionsOverlay is the lock claim restated on the
+// surface that now owns it. The destructive three have no dashboard key, so the
+// question is no longer "does the key say so" but "does the row the operator is
+// choosing from say so" — and it must say so with the lock named.
+func TestLockedRowRefusesThroughTheActionsOverlay(t *testing.T) {
 	locked := withListRows(testModelWithSessions(), session.RunningSession{
 		TabID: 3, WindowID: 13, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt", Locked: true,
 	})
-	for _, key := range []string{keyR, keyClose, keyC} {
-		t.Run(key, func(t *testing.T) {
-			updated, _ := locked.Update(dashboardKeyPress(key))
-			out := updated.(Model)
-			if out.mode != ModeList {
-				t.Errorf("mode moved to %v on a locked row", out.mode)
+	ctx := dashboardBindingContext(locked)
+	for _, id := range []commands.ID{commands.RestartSession, commands.CloseSession, commands.OverrideProfile} {
+		t.Run(string(id), func(t *testing.T) {
+			candidate, ok := dashboardCommand(id)
+			if !ok {
+				t.Fatalf("%s left the catalog; a retired key must not retire its command", id)
 			}
-			if len(out.toasts) != 1 {
-				t.Fatalf("expected exactly 1 denial toast, got %d", len(out.toasts))
+			if dashboardBindings().Display(id) != "" {
+				t.Errorf("%s still advertises a dashboard key", id)
 			}
-			if out.toasts[0].Severity != toastError {
-				t.Errorf("expected toastError, got %v", out.toasts[0].Severity)
+			availability := candidate.AvailabilityFor(locked, ctx)
+			if availability.Available {
+				t.Fatalf("%s is available on a locked row", id)
 			}
-			if !strings.Contains(out.toasts[0].Text, "locked") {
-				t.Errorf("expected a toast naming the lock, got %q", out.toasts[0].Text)
-			}
-		})
-	}
-}
-
-// TestRefusalIsSilentUnlessItIsALock is the other side of that rule: a lock is
-// the one refusal a key announces. Everything else — no target, an inactive
-// pane, an unconfigured project — already shows on the row the cursor is on,
-// and a toast for each would make an ordinary keystroke noisy.
-func TestRefusalIsSilentUnlessItIsALock(t *testing.T) {
-	unconfigured := withListRows(testModelWithSessions(), session.RunningSession{
-		TabID: 4, WindowID: 14, Base: "stray", Account: "nowhere", Directory: "/tmp/stray", State: "",
-	})
-	for _, key := range []string{keyO, keyOpenEditor, keyE, keyClearStatus} {
-		t.Run(key, func(t *testing.T) {
-			updated, cmd := unconfigured.Update(dashboardKeyPress(key))
-			out := updated.(Model)
-			if len(out.toasts) != 0 {
-				t.Errorf("expected a silent refusal, got toasts %+v", out.toasts)
-			}
-			if cmd != nil {
-				t.Errorf("expected no command from a refused key")
-			}
-			if out.mode != ModeList {
-				t.Errorf("mode moved to %v on a refused key", out.mode)
+			if availability.Reason != commands.ReasonLocked {
+				t.Errorf("%s refused with %q, want the lock named", id, availability.Reason)
 			}
 		})
 	}
 }
 
-// TestRestartKeyStillConfirms pins the confirmation half of the review item.
-// The direct key must not have become a one-keystroke restart by routing
-// through a shared body.
-func TestRestartKeyStillConfirms(t *testing.T) {
+// TestRestartStillConfirmsFromThePalette pins the confirmation half of the
+// review item across the move. Restart lost its key, not its confirmation: a
+// command reached by name must still stop at the prompt.
+func TestRestartStillConfirmsFromThePalette(t *testing.T) {
 	m := withListRows(testModelWithSessions(), session.RunningSession{
 		TabID: 7, WindowID: 17, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt",
 	})
 	// A stale return mode from an overlay raised somewhere else must not
 	// survive into this confirmation: answering it has to come back to the
-	// dashboard the key was pressed on.
+	// dashboard the command was run from.
 	m.confirmReturnMode = ModeWorktrees
 
-	updated, _ := m.Update(dashboardKeyPress(keyR))
-	out := updated.(Model)
+	out, _ := runDashboardCommand(t, m, commands.RestartSession)
 	if out.mode != ModeConfirm {
 		t.Fatalf("expected ModeConfirm, got %v", out.mode)
 	}
@@ -341,18 +336,18 @@ func TestRestartKeyStillConfirms(t *testing.T) {
 }
 
 // TestProfileOverlaysReturnToTheDashboard is the overlay-return-context review
-// item for the two config-picker keys, which is where a wrong answer strands
-// the operator in a mode they never opened.
+// item for the two config-picker commands, which is where a wrong answer strands
+// the operator in a mode they never opened. Both are palette-only now, and the
+// palette is raised from the dashboard, so the answer must still be ModeList.
 func TestProfileOverlaysReturnToTheDashboard(t *testing.T) {
-	for _, key := range []string{keyC, keyDashboardLaunch} {
-		t.Run(key, func(t *testing.T) {
+	for _, id := range []commands.ID{commands.OverrideProfile, commands.LaunchAnother} {
+		t.Run(string(id), func(t *testing.T) {
 			m := withListRows(testModelWithSessions(), session.RunningSession{
 				TabID: 8, WindowID: 18, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt",
 			})
 			m.configPickerReturnMode = ModeWorktrees
 
-			updated, _ := m.Update(dashboardKeyPress(key))
-			out := updated.(Model)
+			out, _ := runDashboardCommand(t, m, id)
 			if out.mode != ModeConfigPicker {
 				t.Fatalf("expected ModeConfigPicker, got %v", out.mode)
 			}
@@ -388,26 +383,30 @@ func TestFamilySummaryRefusesEverySessionBinding(t *testing.T) {
 		t.Fatalf("a family summary produced a command target")
 	}
 
-	for _, binding := range dashboardBindings() {
-		candidate, ok := dashboardCommand(binding.Command)
-		if !ok || candidate.Group != commands.GroupSession {
+	// Every session command, not only the bound ones. Enter is the last session
+	// binding left, and it never reaches the table on a summary, so iterating the
+	// table alone would make this vacuous. The palette is where the rest are
+	// reached from now, and the same captured context gates both.
+	for _, candidate := range commandCatalog() {
+		if candidate.Group != commands.GroupSession {
 			continue
 		}
-		key := binding.Key()
-		if key == keyEnter || key == keySpace {
-			continue // enter/space fold the family; asserted below.
-		}
-		t.Run(key, func(t *testing.T) {
-			updated, cmd := m.Update(dashboardKeyPress(key))
-			out := updated.(Model)
-			if out.targetSession.TabID != 0 {
-				t.Errorf("%s captured %d as a target from a summary row", binding.Command, out.targetSession.TabID)
+		t.Run(string(candidate.ID), func(t *testing.T) {
+			if candidate.AvailabilityFor(m, captureCommandContext(m)).Available {
+				t.Errorf("%s is available with the cursor on a family summary", candidate.ID)
 			}
-			if out.mode != ModeList {
-				t.Errorf("%s left the dashboard for %v from a summary row", binding.Command, out.mode)
-			}
-			if cmd != nil {
-				t.Errorf("%s issued a command from a summary row", binding.Command)
+			if key := dashboardBindings().Display(candidate.ID); key != "" && key != keyEnter {
+				updated, cmd := m.Update(dashboardKeyPress(key))
+				out := updated.(Model)
+				if out.targetSession.TabID != 0 {
+					t.Errorf("%s captured %d as a target from a summary row", candidate.ID, out.targetSession.TabID)
+				}
+				if out.mode != ModeList {
+					t.Errorf("%s left the dashboard for %v from a summary row", candidate.ID, out.mode)
+				}
+				if cmd != nil {
+					t.Errorf("%s issued a command from a summary row", candidate.ID)
+				}
 			}
 		})
 	}
@@ -428,45 +427,58 @@ func TestEnterFoldsASummaryBeforeReachingTheTable(t *testing.T) {
 		t.Fatalf("fixture does not put the cursor on a family summary")
 	}
 	before := m.listItemCount()
-	for _, key := range []string{keyEnter, keySpace} {
-		updated, _ := m.Update(dashboardKeyPress(key))
-		if got := updated.(Model).listItemCount(); got == before {
-			t.Errorf("%s did not fold the family: item count stayed at %d", key, got)
+	updated, _ := m.Update(dashboardKeyPress(keyEnter))
+	if got := updated.(Model).listItemCount(); got == before {
+		t.Errorf("enter did not fold the family: item count stayed at %d", got)
+	}
+}
+
+// TestNoDashboardKeyIsSharedIsTheDeclarationOrderInvariant replaced
+// TestSharedKeyDismissesTheBannerFirst. Declaration order in the table used to
+// be a behavior — the deprecation banner claimed `d` while it was visible and
+// yielded it to the detail pane once dismissed — and it is not one any more,
+// because no key is claimed twice. That is worth a test rather than a comment:
+// the dispatcher still loops over every claimant, so the property is enforced
+// here rather than by the loop being impossible to enter twice.
+func TestNoDashboardKeyIsSharedIsTheDeclarationOrderInvariant(t *testing.T) {
+	claimants := map[string][]commands.ID{}
+	for _, binding := range dashboardBindings() {
+		for _, key := range binding.Keys {
+			claimants[key] = append(claimants[key], binding.Command)
+		}
+	}
+	for key, ids := range claimants {
+		if len(ids) > 1 {
+			t.Errorf("key %q is claimed by %v; dispatch order is a behavior again", key, ids)
 		}
 	}
 }
 
-// TestSharedKeyDismissesTheBannerFirst pins the one place where declaration
-// order in the table is a behavior. The banner claims `d` while it is visible
-// and yields it once it is gone.
-func TestSharedKeyDismissesTheBannerFirst(t *testing.T) {
+// TestDeprecationBannerIsDismissedByNameNotByAKey is the capability half of that
+// retirement. The banner is not on the dashboard at all any more, and its
+// dismissal is a palette command; what must not have happened is the command
+// going with the key.
+func TestDeprecationBannerIsDismissedByNameNotByAKey(t *testing.T) {
 	m := withListRows(testModelWithSessions(), session.RunningSession{
 		TabID: 9, WindowID: 19, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt",
 	})
 	m.deprecations = []config.Deprecation{{Key: "accounts", Replacement: "profiles"}}
 
-	first, _ := m.Update(dashboardKeyPress(keyD))
-	afterBanner := first.(Model)
-	if !afterBanner.deprecationDismissed {
-		t.Fatalf("first d did not dismiss the banner")
+	if key := dashboardBindings().Display(commands.DismissDeprecation); key != "" {
+		t.Errorf("the dismissal still advertises key %q", key)
 	}
-	if afterBanner.mode != ModeList {
-		t.Fatalf("first d opened %v instead of dismissing the banner", afterBanner.mode)
+	out := pressDashboardCommand(t, m, commands.DismissDeprecation)
+	if !out.deprecationDismissed {
+		t.Error("running the dismissal by name did not dismiss the warning")
 	}
-
-	second, _ := afterBanner.Update(dashboardKeyPress(keyD))
-	afterDetail := second.(Model)
-	if afterDetail.mode != ModeDetail {
-		t.Errorf("second d opened %v, want ModeDetail", afterDetail.mode)
-	}
-	if afterDetail.detailWindowID != 19 {
-		t.Errorf("detail opened on window %d, want the row under the cursor", afterDetail.detailWindowID)
+	if out.mode != ModeList {
+		t.Errorf("the dismissal left mode %v", out.mode)
 	}
 }
 
-// TestBindingsShareOneCapturedTarget is the captured-target review item. Both
-// claimants of a shared key are offered the same snapshot, so a keypress cannot
-// be gated against one row and executed against another.
+// TestBindingsShareOneCapturedTarget is the captured-target review item: a
+// keypress is gated and executed against one snapshot, so it cannot be checked
+// against one row and run against another.
 func TestBindingsShareOneCapturedTarget(t *testing.T) {
 	m := withListRows(testModelWithSessions(),
 		session.RunningSession{TabID: 1, WindowID: 11, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt"},
@@ -479,12 +491,28 @@ func TestBindingsShareOneCapturedTarget(t *testing.T) {
 		t.Fatalf("captured context = %+v, want the second row", ctx)
 	}
 
-	// Every command reached through the table must act on that snapshot, not on
-	// a cursor re-read after the gates ran.
-	updated, _ := m.Update(dashboardKeyPress(keyOpenTimeline))
-	out := updated.(Model)
-	if out.detailWindowID != 12 {
-		t.Errorf("timeline opened on window %d, want 12", out.detailWindowID)
+	// Enter is the one row-targeted key left, so it is the one that can carry
+	// this claim. The command it reaches focuses the captured tab; running the
+	// returned cmd against a recording client is what shows which row the
+	// execution actually got.
+	client := newUITestKittyClient(nil)
+	m.client = client
+
+	updated, cmd := m.Update(dashboardKeyPress(keyEnter))
+	if out := updated.(Model); out.mode != ModeList {
+		t.Errorf("enter left mode %v", out.mode)
+	}
+	if cmd == nil {
+		t.Fatal("enter issued no command on a session row")
+	}
+	cmd()
+
+	calls := client.CallsFor("FocusTab")
+	if len(calls) != 1 {
+		t.Fatalf("FocusTab calls = %v, want exactly one", calls)
+	}
+	if want := kitty.MatchTabByID(2); calls[0].Match != want {
+		t.Errorf("enter focused %q, want the captured row's %q", calls[0].Match, want)
 	}
 }
 
@@ -507,41 +535,52 @@ func TestProjectSwitcherIsNotADashboardBindingState(t *testing.T) {
 		t.Fatalf("open left mode %v", open.mode)
 	}
 	// The dashboard keymap is not consulted in this mode: the key handler
-	// dispatches on the mode before it reaches the binding table.
-	for _, key := range []string{keyR, keyClose, keyE, keyOpenTimeline} {
+	// dispatches on the mode before it reaches the binding table. The keys named
+	// here are surviving dashboard bindings that the switcher declares nothing
+	// for, so an answer could only have come from the binding table. The other
+	// five — `enter`, `/`, `esc`, `p`, `q` — are the switcher's own keys, and
+	// pressing them here would prove nothing about the guard.
+	for _, key := range []string{keyL, keyInspector, keyQuestion} {
 		after := pressKey(open, key)
 		if after.mode != ModeProjectSwitcher || after.targetSession.TabID != 0 {
-			t.Errorf("%q reached a row binding: mode=%v target=%d", key, after.mode, after.targetSession.TabID)
+			t.Errorf("%q reached a dashboard binding: mode=%v target=%d", key, after.mode, after.targetSession.TabID)
 		}
 	}
 }
 
-// TestFooterDimsALockedRowsDestructiveKeys is the footer half of "preservation
-// of locks". Before the footer derived its availability the three keys rendered
-// live on a locked row and then refused when pressed; now the row says so
-// before the operator commits to the keystroke.
-func TestFooterDimsALockedRowsDestructiveKeys(t *testing.T) {
+// TestFooterDimsWhatTheCursorCannotDo is the footer half of "preservation of
+// locks", restated for a footer that no longer draws a destructive key. The row
+// band is one entry now — `a actions` — and the claim it carries is the same
+// one: the footer says what the cursor can reach before the operator commits to
+// the keystroke, and the overlay behind it is where a locked row's refusal is
+// drawn.
+func TestFooterDimsWhatTheCursorCannotDo(t *testing.T) {
 	locked := withListRows(testModelWithSessions(), session.RunningSession{
 		TabID: 3, WindowID: 13, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt", Locked: true,
 	})
-	unlocked := withListRows(testModelWithSessions(), session.RunningSession{
-		TabID: 3, WindowID: 13, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt",
-	})
+	empty := testModelWithSessions()
 
 	byKey := map[string]footerEntry{}
 	for _, e := range listFooterBindings() {
 		byKey[e.key] = e
 	}
-	for _, key := range []string{keyR, keyC, keyClose} {
-		entry, ok := byKey[key]
-		if !ok {
-			t.Fatalf("footer no longer declares %q", key)
-		}
-		if entry.availFn(locked) {
-			t.Errorf("footer draws %q live on a locked row", key)
-		}
-		if !entry.availFn(unlocked) {
-			t.Errorf("footer dims %q on an unlocked row", key)
+	actions, ok := byKey["a"]
+	if !ok {
+		t.Fatal("the footer no longer declares the actions overlay")
+	}
+	// A locked row is still a row: the overlay opens and refuses inside itself,
+	// which is what TestLockedRowRefusesThroughTheActionsOverlay asserts.
+	if !actions.availFn(locked) {
+		t.Error("footer dims `a` on a locked row; the overlay is where the lock is answered")
+	}
+	if actions.availFn(empty) {
+		t.Error("footer draws `a` live with no row under the cursor")
+	}
+	for _, e := range listFooterBindings() {
+		for _, retired := range []string{keyR, keyC, keyClose, keyE, keyClearStatus, keyLock, keyM} {
+			if e.key == retired {
+				t.Errorf("footer still declares the retired key %q (%s)", e.key, e.label)
+			}
 		}
 	}
 }
@@ -554,13 +593,12 @@ func TestFooterKeysAreTheKeysThatDispatch(t *testing.T) {
 	for _, binding := range bindings {
 		declared[binding.Key()] = true
 	}
-	// The footer also draws things that are not commands — cursor movement, the
-	// chip controls, the jump chords, the actions overlay. Those name keys the
-	// table does not, and they are listed here so a command key that quietly
-	// stops being bound cannot hide among them.
+	// The footer also draws four things that are not commands: cursor movement,
+	// needs-you navigation, the actions overlay, the command palette, and the
+	// pane switch. Those name keys the table does not, and they are listed here
+	// so a command key that quietly stops being bound cannot hide among them.
 	nonCommand := map[string]bool{
-		"j/k": true, "a": true, ":": true, "1-9": true,
-		"tab": true, "]/[": true, "}/{": true, "←/→": true,
+		"j/k": true, "n/N": true, "a": true, ":": true, "tab": true,
 	}
 	for _, e := range listFooterBindings() {
 		if nonCommand[e.key] {
@@ -568,6 +606,152 @@ func TestFooterKeysAreTheKeysThatDispatch(t *testing.T) {
 		}
 		if !declared[e.key] {
 			t.Errorf("footer draws %q (%s), which the binding table does not dispatch", e.key, e.label)
+		}
+	}
+}
+
+// retiredDashboardKeys is every spelling the old dashboard answered and the new
+// one does not, taken from `docs/dashboard-keymap-inventory.md`. It is written
+// out rather than derived, because deriving it from the binding table would
+// make it say only "keys that are not bound", which is true of every key on the
+// keyboard and proves nothing about the ones that used to be.
+//
+// The list is the union of both inventory tables: the command-backed keys whose
+// capability moved to the actions overlay or the palette, and the
+// cursor/structure keys whose capability moved to another key. `g`/`G` are here
+// and `home`/`end` are not, which is the whole substitution.
+var retiredDashboardKeys = []string{
+	// Session actions, now entries in the `a` overlay.
+	"e", "r", "c", "C", "x", "X", "o", "O", "y", "L", "m",
+	// Surfaces, now palette entries.
+	"s", "S", "P", "W", "A", "T", "d", "v", "R", "u", "f", "b",
+	// Cursor and structure keys with a successor spelling.
+	"g", "G", "ctrl+d", "ctrl+u", "left", "right",
+	// The bracket chords and their focus-on-arrival variants.
+	"]", "[", "}", "{",
+	// Chip focus and removal, now editing inside `/`.
+	"backspace", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+	// The second spelling of focus and of fold.
+	keySpace,
+}
+
+// TestEveryRetiredDashboardKeyIsInertAtTheList is the migration's closing
+// assertion, and the one the per-family retirement tests cannot make between
+// them: pressing any retired spelling at the list does nothing observable at
+// all — no mode change, no overlay, no command, no filter edit, no view flip,
+// no toast.
+//
+// Inertness is measured against the untouched model rather than against a list
+// of things that must not happen, so a key that starts doing something new
+// fails here even if nobody thought to check for that particular effect.
+// bindingOutcome is deliberately wider than any one command touches, which is
+// what makes the comparison worth more than its individual fields.
+//
+// Every state in dashboardBindingStates is swept, because several of these keys
+// were guarded rather than unconditional in the old keymap: a key that only
+// fired on a locked row, an unconfigured project, or a visible banner would
+// look inert in the one state a narrower test happened to pick.
+func TestEveryRetiredDashboardKeyIsInertAtTheList(t *testing.T) {
+	bound := map[string]bool{}
+	for _, binding := range dashboardBindings() {
+		for _, key := range binding.Keys {
+			bound[key] = true
+		}
+	}
+
+	for _, key := range retiredDashboardKeys {
+		if bound[key] {
+			t.Errorf("%q is listed as retired but the binding table still declares it", key)
+		}
+	}
+
+	for _, tc := range dashboardBindingStates(t) {
+		for _, key := range retiredDashboardKeys {
+			t.Run(tc.name+"/"+key, func(t *testing.T) {
+				before := observeBinding(tc.m, nil)
+				after := runViaKey(tc.m, key)
+				if after != before {
+					t.Errorf("retired %q is still live:\n  before: %+v\n  after:  %+v", key, before, after)
+				}
+			})
+		}
+	}
+}
+
+// TestEveryCatalogCommandIsAvailableSomewhere is the "no unavailable commands"
+// review item stated as a test. Retiring a direct key moved every one of these
+// capabilities behind the palette, which makes the palette the only way some of
+// them can be reached: a command that is visible-but-never-available there is
+// not a dimmed row the operator can reason about, it is a capability that left
+// the build without anybody noticing.
+//
+// Availability is per state, so the claim is existential rather than universal:
+// each command must pass its gates in at least one of the states swept here. A
+// command that fails is either genuinely unreachable, or gated on a state this
+// list does not build — and the fix for the second is to build that state here,
+// which keeps the list an inventory of what the gates actually depend on.
+func TestEveryCatalogCommandIsAvailableSomewhere(t *testing.T) {
+	states := dashboardBindingStates(t)
+
+	// Two gates need a state the binding sweep has no reason to build: an undo
+	// entry that has not expired, and the Projects projection.
+	closed := withListRows(testModelWithSessions(), session.RunningSession{
+		TabID: 7, WindowID: 17, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt",
+	})
+	closed.pendingUndo = []undoEntry{{
+		snapshot: config.Session{Title: "api", Directory: "/home/user/api"},
+		account:  config.Account{Name: "work", Harness: "claude"},
+		deadline: time.Now().Add(time.Hour),
+		label:    "api",
+	}}
+	states = append(states, struct {
+		name string
+		m    Model
+	}{"pending undo", closed})
+
+	projects := withListRows(testModelWithSessions(), session.RunningSession{
+		TabID: 8, WindowID: 18, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt",
+	})
+	projects.listView = dashboard.ViewProjects
+	states = append(states, struct {
+		name string
+		m    Model
+	}{"projects view", projects})
+
+	for _, candidate := range commandCatalog() {
+		t.Run(string(candidate.ID), func(t *testing.T) {
+			for _, tc := range states {
+				ctx := captureCommandContext(tc.m)
+				if candidate.IsVisible(tc.m, ctx) && candidate.AvailabilityFor(tc.m, ctx).Available {
+					return
+				}
+			}
+			t.Errorf("%s is visible or available in none of the %d swept states, so nothing can run it", candidate.ID, len(states))
+		})
+	}
+}
+
+// TestEveryFinalDashboardBindingDispatches is the positive half of the same
+// claim. Non-dispatch is only half a keymap: a table whose keys were all inert
+// would pass the sweep above perfectly.
+//
+// It asserts reachability rather than effect — that the key is claimed by the
+// dispatcher at all — because what each binding does is already pinned, per
+// state and against the palette, by TestDirectKeyAndPaletteAgree and
+// TestUncheckedBindingsRunTheirCommandRegardless.
+func TestEveryFinalDashboardBindingDispatches(t *testing.T) {
+	// A row under the cursor, so the checked bindings' gates can pass.
+	m := withListRows(testModelWithSessions(), session.RunningSession{
+		TabID: 1, WindowID: 11, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt",
+	})
+
+	for _, binding := range dashboardBindings() {
+		for _, key := range binding.Keys {
+			t.Run(string(binding.Command)+"/"+key, func(t *testing.T) {
+				if _, _, claimed := m.dispatchDashboardBinding(key); !claimed {
+					t.Fatalf("%q (%s) was not claimed by the dispatcher", key, binding.Command)
+				}
+			})
 		}
 	}
 }

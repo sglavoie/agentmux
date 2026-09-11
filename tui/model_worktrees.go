@@ -57,7 +57,6 @@ func worktreeListCmd(m Model, seq int) tea.Cmd {
 }
 
 func (m Model) enterWorktrees() (tea.Model, tea.Cmd) {
-	m.clearJumpChord()
 	m.mode = ModeWorktrees
 	m.worktreeFilterMode = false
 	m.worktreeErr = nil

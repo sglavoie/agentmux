@@ -64,14 +64,19 @@ func TestDashboardSearchNarrowsOnlyAfterSlash(t *testing.T) {
 	}
 }
 
+// A row action is still one keystroke away from a list that is not filtering:
+// `a` opens the overlay against the cursor row, and the mnemonic inside it is
+// the letter the dashboard used to bind. The point this file makes is that the
+// list does not swallow those letters into a type-ahead buffer — the dashboard
+// only starts filtering after `/`.
 func TestRowActionStillWorksWithoutSearchMode(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m.cfg.Defaults.ConfirmDestructive = true
 
-	m = pressKey(m, "r")
+	m = pressRowAction(t, m, keyR)
 
 	if m.mode != ModeConfirm {
-		t.Fatalf("expected ModeConfirm after r, got %d", m.mode)
+		t.Fatalf("expected ModeConfirm after restart, got %d", m.mode)
 	}
 	if m.confirmAction != "restart" {
 		t.Errorf("expected restart confirm, got %q", m.confirmAction)

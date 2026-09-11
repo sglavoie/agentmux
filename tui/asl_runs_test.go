@@ -82,7 +82,10 @@ func TestASLRunsEntryAndExitLeaveDashboardUntouched(t *testing.T) {
 		t.Fatalf("dashboard cursor did not move, so exit cannot be verified")
 	}
 
-	if err := d.Key(keyASLRuns); err != nil {
+	// `A` no longer opens the view from the dashboard — Show Runs is a palette
+	// command now, and `A` survives only inside the view, as the key that closes
+	// the surface it used to open.
+	if err := d.Command(commands.ShowRuns); err != nil {
 		t.Fatalf("entering Runs: %v", err)
 	}
 	if err := d.Key(keyEsc); err != nil {
@@ -97,12 +100,21 @@ func TestASLRunsEntryAndExitLeaveDashboardUntouched(t *testing.T) {
 		t.Fatalf("dashboard changed: cursor %d->%d filter %q->%q rows %d->%d",
 			wantCursor, after.cursor, wantFilter, after.filterText, wantSessions, len(after.filtered))
 	}
-	// The toggle has to work in both directions from the dashboard.
+	// And `A` is inert at the dashboard rather than rebound: pressing it where it
+	// used to open the view leaves the dashboard exactly where esc left it.
 	if err := d.Key(keyASLRuns); err != nil {
+		t.Fatalf("pressing %q at the dashboard: %v", keyASLRuns, err)
+	}
+	if got := d.Model().mode; got != ModeList {
+		t.Fatalf("%q at the dashboard left mode %v, want ModeList", keyASLRuns, got)
+	}
+
+	// Re-entering by name, `A` still closes from inside the view.
+	if err := d.Command(commands.ShowRuns); err != nil {
 		t.Fatalf("re-entering Runs: %v", err)
 	}
 	if got := d.Model().mode; got != ModeASLRuns {
-		t.Fatalf("mode after second %q = %v, want ModeASLRuns", keyASLRuns, got)
+		t.Fatalf("mode after re-entering = %v, want ModeASLRuns", got)
 	}
 	if err := d.Key(keyASLRuns); err != nil {
 		t.Fatalf("toggling Runs off: %v", err)

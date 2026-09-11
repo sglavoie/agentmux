@@ -197,7 +197,6 @@ func (m Model) handleActionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // pane as loading, and returns a command that fetches the event ring from
 // the daemon. Callers must guard against an empty session list.
 func (m Model) enterDetailMode(windowID int, startInTimeline bool) (tea.Model, tea.Cmd) {
-	m.clearJumpChord()
 	m.mode = ModeDetail
 	m.detailWindowID = windowID
 	m.detailEvents = nil

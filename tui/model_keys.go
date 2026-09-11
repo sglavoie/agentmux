@@ -1,7 +1,7 @@
 // This file is the root keyboard dispatch: the top-level handler that routes a
-// keystroke to the mode that owns it, the dashboard list's own key handling
-// with its jump chords, and the two modeless overlays — filter search and the
-// confirm prompt — that any mode can raise.
+// keystroke to the mode that owns it, the dashboard list's own key handling,
+// and the two modeless overlays — filter search and the confirm prompt — that
+// any mode can raise.
 
 package tui
 
@@ -190,80 +190,68 @@ func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// clearJumpChord resets any in-flight bracket-key chord. Callers invoke this
-// before transitioning away from ModeList so the footer hint disappears and
-// the next return to ModeList starts in a clean state.
-func (m *Model) clearJumpChord() {
-	m.pendingJumpDir = 0
-}
-
-// focusSelectedAndPreview focuses the session under the cursor and refreshes
-// the preview for it. The two ]f / [f focus jumps land on a matched item and
-// then act on it, so the target is resolved through selectedSession rather
-// than by indexing: a matcher only ever matches a session leaf today, but a
-// selection that turns out not to be one must move the cursor without issuing
-// a Kitty focus.
-func (m Model) focusSelectedAndPreview() (tea.Model, tea.Cmd) {
-	var cmds []tea.Cmd
-	if s, ok := m.selectedSession(); ok {
-		cmds = append(cmds, commands.Focus(m.client, s.TabID))
+// moveToNeedsYou is `n` and `N`: walk the filtered sessions to the next one that
+// needs the operator and put the cursor on it.
+//
+// It moves and nothing more. No Kitty tab is focused and no status icon is
+// acknowledged — the `}`/`{` jump this replaced did focus a tab, and the
+// keystroke that finds a waiting session is not the keystroke that decides to
+// answer it. Enter is still how a terminal is opened.
+//
+// Pane focus is left exactly as it was found, which is why this is a plain
+// cursor move rather than anything routed through the inspector: an operator
+// reading output who presses `n` wants the next session's output in the pane
+// they are already reading, not the keyboard handed back to the queue.
+//
+// Revealing is part of moving, not an exception to it. A row folded inside a
+// family has no line to select, so the family is unfolded first and the row is
+// then re-resolved against the projection that came out — the navigator answers
+// against the OLD list, and an item index from it names a different line once a
+// fold has changed how many lines there are.
+func (m *Model) moveToNeedsYou(dir int) tea.Cmd {
+	target, ok := dashboard.FindNextNeedsYou(m.items, m.cursor, dir, m.lastActivity, m.idleThreshold)
+	if !ok {
+		return nil
 	}
-	if cmd := m.refreshPreviewForCursor(); cmd != nil {
-		cmds = append(cmds, cmd)
+	if target.Reveal {
+		// The command setFamilyCollapsed hands back retargets the preview at the
+		// cursor the reprojection restored, which is the row the operator was
+		// leaving. It is dropped rather than batched: the cursor moves two lines
+		// below and the preview is asked once, after it has settled.
+		_ = m.setFamilyCollapsed(target.FamilyKey, false)
+		resolved, found := m.items.ResolveRowTarget(target.Row)
+		if !found || resolved.Reveal {
+			// The unfold did not produce a line for the row — a refresh landing
+			// between the walk and the reprojection can take the row away
+			// entirely. Leave the cursor where it is rather than moving it
+			// somewhere that was not asked for.
+			return m.refreshPreviewForCursor()
+		}
+		target = resolved
 	}
-	if len(cmds) == 0 {
-		return m, nil
-	}
-	return m, tea.Batch(cmds...)
+	m.cursor = clamp(target.Item, 0, m.listItemCount()-1)
+	scrollListToCursor(m)
+	return m.refreshPreviewForCursor()
 }
 
 func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.snapshotSeenStates()
 	key := msg.String()
 
-	// The inspector claims the navigation keys and nothing else while it holds
-	// the focus, so every command key below still reaches its binding. It is
-	// asked before the chord intercept because a pending ]/[ chord is a jump
-	// through the QUEUE: arming one while the keys are aimed at the output pane
-	// is the operator's own doing, and the follow-up letter belongs to the chord
-	// either way.
-	if m.pendingJumpDir == 0 && m.inspectorFocused() {
+	// The inspector claims the movement keys and nothing else while it holds the
+	// focus, so every command key below still reaches its binding — and so do
+	// `n`/`N`, which move the queue cursor from either pane.
+	if m.inspectorFocused() {
 		if updated, cmd, claimed := m.handleInspectorKey(key); claimed {
 			return updated, cmd
 		}
 	}
 
-	// Chord intercept. When ]/[ has set pendingJumpDir, the very next key is
-	// the chord follow-up — including q, which would otherwise quit, and
-	// single letters like p/e/a/c that map to existing list actions. The
-	// bracket keys themselves bypass the intercept so their cases can handle
-	// the double-tap (]] / [[) attention jump.
-	if m.pendingJumpDir != 0 && key != keyJumpAttentionPrev && key != keyJumpAttentionNext {
-		dir := m.pendingJumpDir
-		m.pendingJumpDir = 0
-		if key == keyEsc {
-			return m, nil
-		}
-		if matcher := dashboard.ChordStateMatcher(key); matcher != nil {
-			if next := dashboard.FindNextMatching(m.listItems(), m.cursor, dir, matcher); next >= 0 {
-				m.cursor = next
-				scrollListToCursor(&m)
-				if cmd := m.refreshPreviewForCursor(); cmd != nil {
-					return m, cmd
-				}
-			}
-			return m, nil
-		}
-		// Unknown chord key: chord is canceled (pendingJumpDir already
-		// reset); fall through so the keypress hits its normal handler.
-	}
-
 	// What remains in this switch is everything a dashboard key can do that is
-	// not a catalog command: moving the cursor, folding a family, editing the
-	// filter chips, and opening the two surfaces (the palette and the actions
-	// overlay) that offer commands rather than being one. Every other key falls
-	// through to the binding table, which is the same declaration the palette
-	// and the footer read.
+	// not a catalog command: moving the cursor, folding a family, and opening the
+	// two surfaces (the palette and the actions overlay) that offer commands
+	// rather than being one. Every other key falls through to the binding table,
+	// which is the same declaration the palette and the footer read.
 	switch key {
 	case keyJ, keyDown:
 		m.cursor = clamp(m.cursor+1, 0, m.listItemCount()-1)
@@ -279,94 +267,24 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-	case keyJumpAttentionNext:
-		if m.pendingJumpDir == +1 {
-			// Double-tap ]]: perform the attention-set jump.
-			m.pendingJumpDir = 0
-			attn := dashboard.AttentionMatcher(m.attentionStates)
-			if next := dashboard.FindNextMatching(m.listItems(), m.cursor, +1, attn); next >= 0 {
-				m.cursor = next
-				scrollListToCursor(&m)
-				if cmd := m.refreshPreviewForCursor(); cmd != nil {
-					return m, cmd
-				}
-			}
-			return m, nil
-		}
-		// Single-tap ]: arm the chord.
-		m.pendingJumpDir = +1
-		return m, nil
+	case keyNeedsYouNext:
+		return m, m.moveToNeedsYou(+1)
 
-	case keyJumpAttentionPrev:
-		if m.pendingJumpDir == -1 {
-			// Double-tap [[: perform the attention-set jump backward.
-			m.pendingJumpDir = 0
-			attn := dashboard.AttentionMatcher(m.attentionStates)
-			if prev := dashboard.FindNextMatching(m.listItems(), m.cursor, -1, attn); prev >= 0 {
-				m.cursor = prev
-				scrollListToCursor(&m)
-				if cmd := m.refreshPreviewForCursor(); cmd != nil {
-					return m, cmd
-				}
-			}
-			return m, nil
-		}
-		// Single-tap [: arm the chord.
-		m.pendingJumpDir = -1
-		return m, nil
+	case keyNeedsYouPrev:
+		return m, m.moveToNeedsYou(-1)
 
-	case keyJumpAttentionNextFocus:
-		attn := dashboard.AttentionMatcher(m.attentionStates)
-		if next := dashboard.FindNextMatching(m.listItems(), m.cursor, +1, attn); next >= 0 {
-			m.cursor = next
-			scrollListToCursor(&m)
-			return m.focusSelectedAndPreview()
-		}
-		return m, nil
-
-	case keyJumpAttentionPrevFocus:
-		attn := dashboard.AttentionMatcher(m.attentionStates)
-		if prev := dashboard.FindNextMatching(m.listItems(), m.cursor, -1, attn); prev >= 0 {
-			m.cursor = prev
-			scrollListToCursor(&m)
-			return m.focusSelectedAndPreview()
-		}
-		return m, nil
-
-	case keyG:
+	case keyHome:
 		m.cursor = 0
 		scrollListToCursor(&m)
 		if cmd := m.refreshPreviewForCursor(); cmd != nil {
 			return m, cmd
 		}
 
-	case keyGG:
+	case keyEnd:
 		m.cursor = m.listItemCount() - 1
 		if m.cursor < 0 {
 			m.cursor = 0
 		}
-		scrollListToCursor(&m)
-		if cmd := m.refreshPreviewForCursor(); cmd != nil {
-			return m, cmd
-		}
-
-	case keyCtrlD:
-		step := listVisibleHeight(m) / 2
-		if step < 1 {
-			step = 1
-		}
-		m.cursor = clamp(m.cursor+step, 0, m.listItemCount()-1)
-		scrollListToCursor(&m)
-		if cmd := m.refreshPreviewForCursor(); cmd != nil {
-			return m, cmd
-		}
-
-	case keyCtrlU:
-		step := listVisibleHeight(m) / 2
-		if step < 1 {
-			step = 1
-		}
-		m.cursor = clamp(m.cursor-step, 0, m.listItemCount()-1)
 		scrollListToCursor(&m)
 		if cmd := m.refreshPreviewForCursor(); cmd != nil {
 			return m, cmd
@@ -397,22 +315,16 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case keyColon:
 		m.openCommandPalette()
 
-	// enter and space reach the binding table, but only after the two things
-	// they mean on a row that is not a session. A focused chip and a family
-	// summary are list structure rather than targets, and neither is expressible
-	// as a command: the summary in particular must never become one, since a
-	// synthetic row standing for several sessions has no single session to act
-	// on. Both branches answer here and the keypress never reaches FocusSession.
+	// enter reaches the binding table, but only after the one thing it means on
+	// a row that is not a session. A family summary is list structure rather than
+	// a target, and it is not expressible as a command: a synthetic row standing
+	// for several sessions has no single session to act on. That branch answers
+	// here and the keypress never reaches FocusSession.
+	//
+	// Folding is all Enter does to a summary now. The `←`/`→` pair that used to
+	// fold and unfold separately is retired, so this is the only key that changes
+	// a fold and it toggles.
 	case keyEnter:
-		if m.focusedChipIdx >= 0 {
-			return m, m.applyFilterChange(m.activeFilter.RemoveComponent(m.focusedChipIdx))
-		}
-		if m.summarySelected() {
-			return m, m.toggleSelectedFamily()
-		}
-		return m.runDashboardBinding(key)
-
-	case keySpace:
 		if m.summarySelected() {
 			return m, m.toggleSelectedFamily()
 		}
@@ -430,57 +342,19 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case keyCollapse:
-		// ← used to hand the keyboard to the project rail in Urgency view. The
-		// rail is gone and the switcher is a modal reached by `p`, so the key has
-		// nothing to fold outside the Projects view and does nothing there — the
-		// same answer keyExpand already gave.
-		if m.listView == dashboard.ViewUrgency {
-			return m, nil
-		}
-		return m, m.collapseSelection()
-
-	case keyExpand:
-		if m.listView == dashboard.ViewUrgency {
-			return m, nil
-		}
-		return m, m.expandSelection()
-
-	// Tab means "move to the next thing that takes keys". With an inspector on
-	// screen that is the other body pane, and the chip ring gives the key up:
-	// chips remain reachable by 1-9 and removable by backspace, while the two
-	// panes have no other way to hand the keyboard between them. With no
-	// inspector there is nothing to switch to and the chips keep the key.
-	case keyTab:
-		if m.toggleInspectorFocus() {
-			return m, nil
-		}
-		if n := len(m.activeFilter.Components()); n > 0 {
-			if m.focusedChipIdx < 0 {
-				m.focusedChipIdx = 0
-			} else {
-				m.focusedChipIdx = (m.focusedChipIdx + 1) % n
-			}
-		}
-
+	// Tab means "move to the next thing that takes keys", and on the dashboard
+	// that is the other body pane. It used to fall through to a filter-chip ring
+	// when there was no inspector; the ring is retired — a chip is removed by
+	// clicking it or by editing the filter inside `/` — so with one pane on
+	// screen there is nothing to switch to and the key answers nothing.
+	//
 	// Two panes are a cycle of length two, so shift+tab is the same move as tab
 	// rather than its inverse. It is bound anyway: an operator who reaches for
 	// the reverse of a pane switch should land on the pane they meant, not on
 	// nothing.
-	case keyShiftTab:
-		if m.toggleInspectorFocus() {
-			return m, nil
-		}
-		if n := len(m.activeFilter.Components()); n > 0 {
-			if m.focusedChipIdx <= 0 {
-				m.focusedChipIdx = n - 1
-			} else {
-				m.focusedChipIdx--
-			}
-		}
-
-	case keyInspector:
-		return m.toggleInspector()
+	case keyTab, keyShiftTab:
+		m.toggleInspectorFocus()
+		return m, nil
 
 	// The escape ladder, in the order the layers were raised. Overlays have
 	// already had their turn — every one of them owns its own mode and handles
@@ -493,17 +367,6 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m.runDashboardBinding(key)
-
-	case key1, key2, key3, key4, key5, key6, key7, key8, key9:
-		idx := int(key[0] - '1')
-		if idx < len(m.activeFilter.Components()) {
-			return m, m.applyFilterChange(m.activeFilter.RemoveComponent(idx))
-		}
-
-	case keyBackspace:
-		if m.focusedChipIdx >= 0 {
-			return m, m.applyFilterChange(m.activeFilter.RemoveComponent(m.focusedChipIdx))
-		}
 
 	default:
 		if updated, cmd, claimed := m.dispatchDashboardBinding(key); claimed {

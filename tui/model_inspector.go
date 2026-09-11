@@ -253,8 +253,10 @@ func (m *Model) focusPane(target paneFocus) bool {
 
 // toggleInspectorFocus is Tab/Shift+Tab when an inspector is on screen: the two
 // panes are a cycle of length two, so both directions are the same move. It
-// reports whether it moved the keyboard, which is what lets Tab fall through to
-// the filter chips on a dashboard with only one pane.
+// reports whether it moved the keyboard — nothing branches on that answer now
+// that the filter-chip ring Tab used to fall through to is retired, but a focus
+// move that silently declined and a focus move that happened are different
+// enough that the caller is told which it got.
 //
 // It asks inspectorFocused rather than the raw bit so that a Tab pressed on a
 // terminal too narrow to split declines instead of quietly rewriting the focus
@@ -275,13 +277,20 @@ func (m Model) inspectorFocused() bool {
 	return m.paneFocus == focusInspector && m.inspectorActive()
 }
 
-// handleInspectorKey routes the navigation keys to the output viewport while the
+// handleInspectorKey routes the movement keys to the output viewport while the
 // inspector holds the focus, and reports whether it claimed the keystroke.
 //
 // It claims movement and nothing else. Every other dashboard key — the palette,
-// help, the launcher, quit, the row actions — keeps working with the inspector
-// focused, because focus here means "where does j/k go", not "which commands
-// exist".
+// help, the launcher, quit, the actions overlay — keeps working with the
+// inspector focused, because focus here means "where does j/k go", not "which
+// commands exist". `n`/`N` are deliberately not claimed: they move the QUEUE
+// cursor from either pane, which is what "preserving pane focus" means for an
+// operator reading output who wants the next waiting session in front of them.
+//
+// The set is exactly the set the queue answers, which is the whole point of
+// there being a focused pane at all: one vocabulary, aimed by Tab. The
+// half-page keys (`ctrl+d`/`ctrl+u`) and the vi ends (`g`/`G`) are gone from
+// both halves together — `PgUp`/`PgDn` and `Home`/`End` are what remain.
 func (m Model) handleInspectorKey(key string) (tea.Model, tea.Cmd, bool) {
 	rows := m.inspectorOutputRows()
 	latest := dashboard.SplitOutput(m.previewText)
@@ -290,17 +299,13 @@ func (m Model) handleInspectorKey(key string) (tea.Model, tea.Cmd, bool) {
 		m.inspectorViewport = m.inspectorViewport.ScrollDown(rows, 1)
 	case keyK, keyUp:
 		m.inspectorViewport = m.inspectorViewport.ScrollUp(latest, rows, 1)
-	case keyCtrlD:
-		m.inspectorViewport = m.inspectorViewport.ScrollDown(rows, halfPageStep(rows))
-	case keyCtrlU:
-		m.inspectorViewport = m.inspectorViewport.ScrollUp(latest, rows, halfPageStep(rows))
 	case keyPgDown:
 		m.inspectorViewport = m.inspectorViewport.ScrollDown(rows, fullPageStep(rows))
 	case keyPgUp:
 		m.inspectorViewport = m.inspectorViewport.ScrollUp(latest, rows, fullPageStep(rows))
-	case keyHome, keyG:
+	case keyHome:
 		m.inspectorViewport = m.inspectorViewport.Top(latest, rows)
-	case keyEnd, keyGG:
+	case keyEnd:
 		m.inspectorViewport = m.inspectorViewport.Resume()
 	default:
 		return m, nil, false

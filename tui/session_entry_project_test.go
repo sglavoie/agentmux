@@ -8,6 +8,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 func TestListProjectSessionSearchWithReadyCacheDispatchesProjectFilter(t *testing.T) {
@@ -19,8 +20,7 @@ func TestListProjectSessionSearchWithReadyCacheDispatchesProjectFilter(t *testin
 	m.sessionResults = nil
 	seq := m.sessionSearchSeq
 
-	updated, cmd := m.Update(keyPress("s"))
-	got := updated.(Model)
+	got, cmd := runDashboardCommand(t, m, commands.SearchProject)
 
 	if cmd == nil {
 		t.Fatal("project session search with ready cache returned nil cmd; want debounced search")
@@ -74,8 +74,7 @@ func TestListProjectSessionSearchUsesResolvedProjectForWorktreeRow(t *testing.T)
 	m.rebuildItems()
 	m.cursor = 0
 
-	updated, cmd := m.Update(keyPress("s"))
-	got := updated.(Model)
+	got, cmd := runDashboardCommand(t, m, commands.SearchProject)
 
 	if cmd == nil {
 		t.Fatal("project session search returned nil cmd; want debounced search")
@@ -93,8 +92,7 @@ func TestListProjectSessionSearchDuringCacheLoadDoesNotDuplicateWork(t *testing.
 	m.sessionCacheLoadInFlight = true
 	seq := m.sessionSearchSeq
 
-	updated, cmd := m.Update(keyPress("s"))
-	got := updated.(Model)
+	got, cmd := runDashboardCommand(t, m, commands.SearchProject)
 
 	if cmd != nil {
 		t.Fatalf("project session search during cache load returned duplicate cmd %T", cmd)
@@ -116,30 +114,50 @@ func TestListProjectSessionSearchDuringCacheLoadDoesNotDuplicateWork(t *testing.
 	}
 }
 
-func TestListProjectSessionSearchEmptyListIsNoOp(t *testing.T) {
-	m := loadSessions(testModel(), nil)
-	m.sessionQuery = "keep"
-	m.filterHarness = []string{harness.Claude}
-	m.filterProfile = []string{"work"}
-	m.filterProject = []string{"Foo"}
+// An empty list has no project to search, and the palette says so before the
+// keystroke rather than after: the command is offered and disabled, which is
+// what the old bare `s` could not do — it looked identical to a key that does
+// nothing.
+func TestListProjectSessionSearchIsDisabledOnAnEmptyList(t *testing.T) {
+	m := pressKey(loadSessions(testModel(), nil), keyColon)
+	if m.mode != ModeCommandPalette {
+		t.Fatalf("expected the palette to open, got mode %q", uitestModeName(m.mode))
+	}
+	entry := commandByID(t, commands.SearchProject)
+	if availability := entry.AvailabilityFor(m, m.commandContext); availability.Available {
+		t.Fatal("the project history search is available with no session selected")
+	}
+}
 
-	updated, cmd := m.Update(keyPress("s"))
-	got := updated.(Model)
+// TestRetiredProjectSearchKeysAreInertAtTheList is the other half: `s` and `S`
+// were the two direct spellings, and both are unbound now. Their capabilities
+// are palette entries, so a press that still worked would be a second,
+// undocumented route to them.
+func TestRetiredProjectSearchKeysAreInertAtTheList(t *testing.T) {
+	for _, key := range []string{"s", "S"} {
+		t.Run(key, func(t *testing.T) {
+			m := sessionSearchFilterModel(t)
+			m.mode = ModeList
+			m.filtered = []session.RunningSession{{TabID: 1, WindowID: 10, Project: "Foo"}}
+			m.rebuildItems()
+			m.cursor = 0
+			m.sessionQuery = "keep"
+			m.filterProject = []string{"Bar"}
 
-	if cmd != nil {
-		t.Fatalf("project session search on empty list returned cmd %T, want nil", cmd)
-	}
-	if got.mode != ModeList {
-		t.Fatalf("mode = %v, want ModeList", got.mode)
-	}
-	if got.sessionQuery != "keep" {
-		t.Fatalf("sessionQuery = %q, want unchanged keep", got.sessionQuery)
-	}
-	if singleChipValue(got.filterHarness) != harness.Claude ||
-		singleChipValue(got.filterProfile) != "work" ||
-		singleChipValue(got.filterProject) != "Foo" {
-		t.Fatalf("filters changed on no-op: harness=%#v profile=%#v project=%#v",
-			got.filterHarness, got.filterProfile, got.filterProject)
+			updated, cmd := m.Update(keyPress(key))
+			got := updated.(Model)
+
+			if cmd != nil {
+				t.Errorf("%q dispatched %T", key, cmd)
+			}
+			if got.mode != ModeList {
+				t.Errorf("%q left ModeList for %q", key, uitestModeName(got.mode))
+			}
+			if got.sessionQuery != "keep" || singleChipValue(got.filterProject) != "Bar" {
+				t.Errorf("%q touched session-search state: query=%q project=%#v",
+					key, got.sessionQuery, got.filterProject)
+			}
+		})
 	}
 }
 
@@ -157,8 +175,7 @@ func TestListProjectSessionSearchClearsPriorFiltersAndResetsEntryState(t *testin
 	m.sessionOffset = 2
 	m.sessionSearchMode = true
 
-	updated, cmd := m.Update(keyPress("s"))
-	got := updated.(Model)
+	got, cmd := runDashboardCommand(t, m, commands.SearchProject)
 
 	if cmd == nil {
 		t.Fatal("project session search returned nil cmd; want debounced search")
@@ -181,18 +198,17 @@ func TestListProjectSessionSearchClearsPriorFiltersAndResetsEntryState(t *testin
 	}
 }
 
-func TestDashboardUppercaseSDoesNotApplyProjectShortcut(t *testing.T) {
+func TestGlobalSessionSearchDoesNotApplyTheProjectChip(t *testing.T) {
 	m := sessionSearchFilterModel(t)
 	m.mode = ModeList
 	m.filtered = []session.RunningSession{{TabID: 1, WindowID: 10, Project: "Foo"}}
 	m.rebuildItems()
 	m.cursor = 0
 
-	updated, cmd := m.Update(keyPress("S"))
-	got := updated.(Model)
+	got, cmd := runDashboardCommand(t, m, commands.SearchAllSessions)
 
 	if cmd == nil {
-		t.Fatal("dashboard S with warmed cache returned nil cmd; want background refresh")
+		t.Fatal("the global session search returned nil cmd; want background refresh")
 	}
 	if got.mode != ModeSessionSearch {
 		t.Fatalf("mode = %v, want ModeSessionSearch", got.mode)

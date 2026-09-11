@@ -4,7 +4,8 @@
 
 The default TUI opens on the live-session dashboard and selects the session
 from the Kitty tab that opened it when possible. `/` filters the live-session
-list; `S` opens Past Sessions and `P` opens Plans.
+list; `:` opens the command palette, from which **Search All Past Sessions**
+opens Past Sessions and **Search Plans** opens Plans.
 
 The same workflows are scriptable. Machine-readable commands use one
 `{"schema_version":1,"data":...}` success envelope; failures use a structured
@@ -37,32 +38,47 @@ already running. When opened with the bundled `Ctrl+Shift+D` binding, the
 dashboard selects the running session from the Kitty tab that triggered it;
 an unmanaged source tab leaves the current/default dashboard selection alone.
 
-Key flows:
+The dashboard answers a small keymap. Everything else it can do is reached
+through two surfaces it opens: `a` for the row under the cursor, `:` for the
+rest. If you are upgrading from a release with the larger direct keymap, see
+[Upgrading from the old dashboard shortcuts](#upgrading-from-the-old-dashboard-shortcuts)
+below for where each key went.
 
-- `:`: open the command palette from the main dashboard list; type to search,
-  use `↑`/`↓`, `Ctrl+j`/`Ctrl+k`, or `Ctrl+n`/`Ctrl+p` to move, `Backspace`
-  to edit, `Enter` to run, `Esc` to close, and `Ctrl+c` to quit
-- `f`: cycle visible sessions through each currently running profile and back
-  to all profiles
-- `l`: open the launcher
-- `r`: restart the selected running session, after confirmation
-- `c`: restart the selected running session under another profile
-- `C`: launch a new session from the selected row, with profile selection first
-- `s`: search past session transcripts for the selected project
-- `x`: clear the selected session's status icon
-- `X`: close the selected running session
-- `o`: open the selected project's directory in a plain shell tab
+- `j`/`k` or `↑`/`↓`: move the cursor, or scroll the inspector when it has focus
+- `PgUp`/`PgDn`, `Home`/`End`: page, or jump to the ends of the focused pane
+- `Enter`: focus the selected session's Kitty tab; on a family summary, fold or
+  unfold the family instead
+- `n`/`N`: move to the next/previous **Needs you** session. A target inside a
+  folded family unfolds it and lands the cursor on the row; nothing is focused,
+  opened, or marked as read — finding a waiting session is not answering it
+- `Tab`/`Shift+Tab`: switch the focused pane
+- `a`: open the actions overlay for the selected row — focus, peek at the
+  scrollback, restart, restart under another profile, launch another session in
+  the project, clear the status icon, close, open a shell or the configured
+  editor in its directory, copy the title, lock, mute. An entry that cannot
+  apply to the row is dimmed with its reason rather than hidden
+- `:`: open the command palette; type to search, use `↑`/`↓`, `Ctrl+j`/`Ctrl+k`,
+  or `Ctrl+n`/`Ctrl+p` to move, `Backspace` to edit, `Enter` to run, `Esc` to
+  close, and `Ctrl+c` to quit
+- `/`: edit the filter. The editor opens on the filter already on screen, so
+  `Backspace` removes the last component; `Esc` restores what was committed
+- `i`: toggle the session inspector, full-screen when the terminal is too narrow
+  to split
 - `p`: open the project switcher
-- `v`: switch between the urgency order and the Projects view, and back
-- `d`: show the per-session hook event log (scrollable detail pane)
-- `S`: search past session transcripts across every configured profile
-- `P`: search saved agent plans; rows and the viewer show the configured
-  project title, `r` filters by project (including `Unknown`), `Y` copies the
-  full plan path, and the viewer wraps long lines, supports less-style
-  `Ctrl+d/u/f/b` paging, and `y` copies the selected raw line
-- `A`: open the `agent-session-loop` runs view (the intervention cockpit); the
-  command palette lists it as **Show Runs**
+- `l`: open the launcher
 - `?`: show the full keymap
+- `Esc`: close an overlay, then leave inspector focus, then clear the filters
+- `q`, `Ctrl+C`: quit
+
+Notable commands behind `:` include **Search This Project's Past Sessions** and
+**Search All Past Sessions**, **Search Plans** (saved agent plans — rows and the
+viewer show the configured project title, `r` filters by project including
+`Unknown`, `Y` copies the full plan path, and the viewer wraps long lines,
+supports less-style `Ctrl+d/u/f/b` paging, and `y` copies the selected raw
+line), **Manage Worktrees**, **Show Runs** (the `agent-session-loop`
+intervention cockpit), **Show Projects View** / **Show Urgency View**, **Cycle
+Profile Filter**, **Show Session Details** and **Show Session Timeline** (the
+per-session hook event log), **Resort Tabs**, and **Undo Last Close**.
 
 The dashboard profile cycle is an `@profile` filter: it follows
 case-insensitive alphabetical profile order, preserves any active word,
@@ -74,9 +90,45 @@ The command palette searches command titles, descriptions, aliases, and shown
 shortcuts with case-insensitive, whitespace-separated AND terms. Disabled
 commands remain visible with an inline reason and can be selected, but `Enter`
 does nothing on them. Its shortcut labels are references: printable keys edit
-the query while the palette is open. All existing dashboard shortcuts remain
-available directly from the main list, and `:` does not open the palette from
-other modes.
+the query while the palette is open. A command shows a shortcut only when the
+dashboard actually binds one, so the palette never advertises a key that no
+longer dispatches. `:` does not open the palette from other modes.
+
+### Upgrading from the old dashboard shortcuts
+
+The dashboard used to bind roughly thirty keys directly. It binds eight now, and
+the rest of the capabilities moved to the two surfaces above — no capability was
+dropped. A retired key is *unbound* rather than rebound: pressing it does
+nothing at all, so nothing you remember can now mean something else.
+
+| You used to press | Do this instead |
+| --- | --- |
+| `space` (focus) | `Enter` |
+| `e` peek, `r` restart, `c` profile override, `C` launch another, `x` clear icon, `X` close, `o` shell, `O` editor, `y` copy title, `L` lock, `m` mute | `a`, then the same letter. The overlay's mnemonics are unchanged |
+| `u` undo close | `:` → **Undo Last Close** (still inside the 5-second window) |
+| `s` / `S` past sessions | `:` → **Search This Project's Past Sessions** / **Search All Past Sessions** |
+| `P` plans, `W` worktrees, `A` runs | `:` → **Search Plans** / **Manage Worktrees** / **Show Runs** |
+| `d` session detail, `T` timeline | `i` for the inspector, or `:` → **Show Session Details** / **Show Session Timeline** |
+| `v` urgency ↔ projects | `:` → **Show Projects View** / **Show Urgency View** |
+| `f` cycle profile | `:` → **Cycle Profile Filter**, or `/` for any filter component |
+| `R` resort tabs | `:` → **Resort Tabs** |
+| `p` preview | `i` — the inspector absorbed it. `p` is the project switcher now, which is the one key whose meaning changed rather than disappearing |
+| `b` project rail | `p` — the rail is gone; the switcher applies the same scopes |
+| `g` / `G` | `Home` / `End`. Both still work inside the project switcher, the health details overlay, and the detail timeline |
+| `Ctrl+d` / `Ctrl+u` | `PgUp` / `PgDn` |
+| `]`/`[`, `]]`/`[[`, `}`/`{` attention jumps | `n`/`N`. The chord is gone, and so is the variant that focused the terminal on arrival: press `Enter` when you want that |
+| `Tab` chip cycling, `1`–`9` chip removal, `Backspace` on a focused chip | `/`, which now opens on the filter already applied; `Backspace` removes the last component. `Tab` switches panes instead |
+| `←`/`→` to fold a family | `Enter` on the family summary |
+
+Two configuration keys changed meaning with them. `[defaults.jump]` no longer
+selects anything — `n`/`N` walk the Needs You group as displayed — and is
+reported as a deprecated key until you delete it; your config file is never
+rewritten. `[defaults.preview]` still sets the live pane's ratio, refresh, and
+minimum size, now for the dashboard's inspector as well as the launcher's
+preview; `direction` applies to the launcher only.
+
+The full row-by-row record, including which surface each retired key's
+capability went to, is `docs/dashboard-keymap-inventory.md`.
 
 Rows marked with `🔁` have at least one active `agent-session-loop` run whose
 workspace matches the project row. Loop matching canonicalizes the workspace
@@ -275,8 +327,8 @@ when the window closes or the daemon restarts.
 
 ## The agent-session-loop cockpit
 
-`A` opens the runs view: every active or actionable `agent-session-loop` run,
-newest need first. It is an *intervention* surface, not a loop runner. Agent Mux
+**Show Runs** in the command palette opens the runs view: every active or
+actionable `agent-session-loop` run, newest need first. It is an *intervention* surface, not a loop runner. Agent Mux
 never starts, schedules, or tails a loop — start runs with `agent-session-loop`
 directly and use the cockpit to answer and steer the ones already in flight.
 
@@ -289,7 +341,8 @@ Inside the runs view:
 - `w`: open the run's Workbench page in your browser
 - `f`: focus the Kitty window bound to the run
 - `Y`: copy the run's workspace root
-- `?`: show the keymap; `q`, `Esc`, or `A` returns to the dashboard
+- `?`: show the keymap; `q`, `Esc`, or `A` returns to the dashboard (`A` is a
+  runs-view key now — it closes the view it used to open)
 
 The response form shows the question and the replies the run will accept.
 `Tab`/`Shift+Tab` moves between the editor and the buttons, `←`/`→` picks a
@@ -386,16 +439,17 @@ Overrides are useful for cross-harness launches. For example, a project such as
 same project under a Codex profile such as `vta-codex`.
 
 Overrides only affect launcher behavior. They do not rewrite `config.toml`.
-Dashboard `C` uses the same profile picker, but launches from the highlighted
-running row instead of from the launcher list. Pressing `enter` in the launcher
+The dashboard's own **launch new** entry (`a`, then `C`) uses the same profile
+picker, but launches from the highlighted running row instead of from the
+launcher list. Pressing `enter` in the launcher
 is an explicit request for new tab(s): if the selected project/profile is
 already running, Agent Mux opens another instance instead of skipping or
 focusing the existing tab.
 
 ## Managed worktrees
 
-Press `W` from the dashboard, or run **Manage Worktrees** from the command
-palette, to open the Git-authoritative inventory under
+Run **Manage Worktrees** from the command palette (`:`) to open the
+Git-authoritative inventory under
 `~/.local/share/agent-mux/worktrees`. `/` filters by stable ID, project,
 branch, path, profile, harness, and lifecycle labels. `j`/`k`, `g`/`G`, and
 `Ctrl+d/u/f/b` navigate; `Y` copies the canonical checkout path, `o` opens a
@@ -458,9 +512,11 @@ stay visible as invalid recovery records and are never discarded automatically.
 
 ## Past sessions
 
-Press `S` from the dashboard to search past sessions across every configured
-profile and project. Press `s` from the dashboard or launcher to open the same
-view filtered to the highlighted project. Agent Mux warms the filesystem cache
+Run **Search All Past Sessions** from the command palette (`:`) to search past
+sessions across every configured profile and project, or **Search This
+Project's Past Sessions** to open the same view filtered to the highlighted
+project. In the launcher, `s` is still a direct key for the scoped search.
+Agent Mux warms the filesystem cache
 at `~/.local/share/agent-mux/transcripts.json`, then refreshes it from the
 configured Claude, Copilot, and Codex transcript directories in the background.
 Existing rows remain visible during refreshes. The header and sticky status bar
@@ -534,7 +590,8 @@ inherits `keep_days`). Set it to `-1` for an unbounded walk.
 
 ## Plans and local storage
 
-Press `P` to search saved plan directories. Agent Mux loads warm rows from the
+Run **Search Plans** from the command palette (`:`) to search saved plan
+directories. Agent Mux loads warm rows from the
 filesystem cache first and refreshes the configured `plans_directory` in the
 background. A missing or malformed cache is quarantined and rebuilt from the
 plan directories; an unreadable plan never blanks rows that were read

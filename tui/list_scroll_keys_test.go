@@ -74,39 +74,31 @@ func TestHandleListKey_KFollowsCursorBackUp(t *testing.T) {
 	}
 }
 
-func TestHandleListKey_CtrlDAdvancesByHalfPage(t *testing.T) {
-	m := scrollFixtureModel(t, 40, 15)
-	visible := listVisibleHeight(m)
-	step := visible / 2
-	if step < 1 {
-		step = 1
-	}
+// TestHandleListKey_CtrlDAndCtrlUAreRetiredAtTheList replaces the pair of
+// half-page tests. The dashboard's two paging steps are pgup and pgdn now; the
+// half-page chords were a third way to say the same thing, and they are unbound
+// rather than rebound. They remain live in the project switcher and the health
+// overlay, which have their own handlers and their own scroll geometry.
+func TestHandleListKey_CtrlDAndCtrlUAreRetiredAtTheList(t *testing.T) {
+	for _, code := range []rune{'d', 'u'} {
+		t.Run(string(code), func(t *testing.T) {
+			m := scrollFixtureModel(t, 40, 15)
+			// Park the cursor mid-list so a move in either direction would show.
+			m.cursor = listVisibleHeight(m)
+			scrollListToCursor(&m)
+			before, beforeOffset := m.cursor, m.listOffset
 
-	updated, _ := m.Update(tea.KeyPressMsg(tea.Key{Code: 'd', Mod: tea.ModCtrl}))
-	m = updated.(Model)
+			updated, cmd := m.Update(tea.KeyPressMsg(tea.Key{Code: code, Mod: tea.ModCtrl}))
+			m = updated.(Model)
 
-	if m.cursor != step {
-		t.Errorf("ctrl+d cursor: got %d want %d", m.cursor, step)
-	}
-}
-
-func TestHandleListKey_CtrlUMovesUpByHalfPage(t *testing.T) {
-	m := scrollFixtureModel(t, 40, 15)
-	visible := listVisibleHeight(m)
-	step := visible / 2
-	if step < 1 {
-		step = 1
-	}
-
-	// Park the cursor below the half-page step so ctrl+u has somewhere to go.
-	m.cursor = step + 3
-	scrollListToCursor(&m)
-
-	updated, _ := m.Update(tea.KeyPressMsg(tea.Key{Code: 'u', Mod: tea.ModCtrl}))
-	m = updated.(Model)
-
-	if m.cursor != 3 {
-		t.Errorf("ctrl+u cursor: got %d want 3", m.cursor)
+			if m.cursor != before || m.listOffset != beforeOffset {
+				t.Errorf("ctrl+%s moved the list: cursor %d->%d offset %d->%d",
+					string(code), before, m.cursor, beforeOffset, m.listOffset)
+			}
+			if cmd != nil {
+				t.Errorf("ctrl+%s dispatched a command", string(code))
+			}
+		})
 	}
 }
 

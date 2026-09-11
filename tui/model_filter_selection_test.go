@@ -175,10 +175,17 @@ func TestDashboardFilterPreservesSelectionAndRetargetsPreview(t *testing.T) {
 			t.Errorf("committing the filter moved the selection to %q, want the toolbox summary", got)
 		}
 
-		// Re-entering search widens the list back to everything and cancelling
-		// puts both the committed filter and the summary back, with the pane
-		// following the cursor in each direction.
+		// Re-entering search arrives on the committed filter rather than on an
+		// empty buffer, so backspacing it away is what widens the list back to
+		// everything; cancelling then puts both the committed filter and the
+		// summary back, with the pane following the cursor in each direction.
 		m = pressKey(m, "/")
+		if m.filterText != "tool" {
+			t.Fatalf("re-entering search prefilled %q, want the committed \"tool\"", m.filterText)
+		}
+		for range len("tool") {
+			m = pressKey(m, keyBackspace)
+		}
 		m, fetched := pressKeyForPreview(t, m, "a")
 		m = typeString(m, "pi")
 		wantLines(t, m, []string{"session:api"})

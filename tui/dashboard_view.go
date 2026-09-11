@@ -161,7 +161,7 @@ func dashboardScrollInput(m *Model, groupHeadings bool) dashboard.ScrollInput {
 // renderChips renders the filter chip row(s) for the current activeFilter,
 // or "" when the filter is empty (so the area collapses with no blank line).
 func renderChips(m Model, width int) string {
-	return dashboard.RenderChips(m.activeFilter, dashboard.ProfileColorMap(m.cfg), m.focusedChipIdx, width)
+	return dashboard.RenderChips(m.activeFilter, dashboard.ProfileColorMap(m.cfg), width)
 }
 
 // renderCompletion returns the floating menu lines drawn below the search

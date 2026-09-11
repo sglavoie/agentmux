@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/session"
@@ -9,8 +8,8 @@ import (
 )
 
 // lockedTestModel returns a model preloaded with a single locked session
-// at cursor 0 so each direct-key guard test exercises the lock branch
-// rather than the empty-list early return.
+// at cursor 0 so each guard test exercises the lock branch rather than the
+// empty-list early return.
 func lockedTestModel() Model {
 	m := testModelWithSessions()
 	rs := session.RunningSession{
@@ -25,115 +24,116 @@ func lockedTestModel() Model {
 	return loadSessions(m, []session.RunningSession{rs})
 }
 
-// assertLockedDenial verifies that pressing key on a locked row leaves the
-// model in ModeList, surfaces a denial toast, and does not dispatch a
-// destructive command. Shared across the r/X/c cases below so each test
-// captures the same set of guarantees.
+// assertLockedDenial verifies that the destructive entry bound to key is refused
+// on a locked row. The refusal moved with the keymap: it used to be a direct
+// press answered by an error toast, and it is now an overlay entry that draws
+// dim and swallows its own key. That is the better shape for the same guarantee
+// — the operator is told before pressing rather than after — so what this
+// asserts is that the entry reports itself unavailable AND that pressing it
+// anyway does nothing.
 func assertLockedDenial(t *testing.T, key string) {
 	t.Helper()
-	m := lockedTestModel()
-	updated, _ := m.Update(keyPress(key))
+	m := pressKey(lockedTestModel(), keyA)
+	if m.mode != ModeActions {
+		t.Fatalf("%s: expected the actions overlay to open, got mode=%d", key, m.mode)
+	}
+	if !m.targetSession.Locked {
+		t.Fatalf("%s: setup: the overlay targeted an unlocked row", key)
+	}
+
+	var found bool
+	for _, a := range actionsFor(m) {
+		if a.KeyMatch != key {
+			continue
+		}
+		found = true
+		if a.Available(m) {
+			t.Fatalf("%s (%s) is available on a locked row", key, a.Label)
+		}
+	}
+	if !found {
+		t.Fatalf("no actions-overlay entry is bound to %q", key)
+	}
+
+	updated, cmd := m.Update(keyPress(key))
 	m2 := updated.(Model)
-	if m2.mode != ModeList {
-		t.Fatalf("%s on locked row: expected ModeList, got %d", key, m2.mode)
+	if m2.mode != ModeActions {
+		t.Fatalf("%s on locked row: the overlay dispatched and left for mode %d", key, m2.mode)
 	}
-	if len(m2.toasts) != 1 {
-		t.Fatalf("%s on locked row: expected 1 denial toast, got %d", key, len(m2.toasts))
+	if cmd != nil {
+		t.Errorf("%s on locked row: expected no command, got one", key)
 	}
-	if m2.toasts[0].Severity != toastError {
-		t.Errorf("%s on locked row: expected toastError severity, got %d", key, m2.toasts[0].Severity)
-	}
-	if !strings.Contains(m2.toasts[0].Text, "locked") {
-		t.Errorf("%s on locked row: expected toast mentioning lock, got %q", key, m2.toasts[0].Text)
-	}
-	assertStatusBarContains(t, m2, "locked")
 	if len(m2.pendingUndo) != 0 {
 		t.Errorf("%s on locked row: expected no pendingUndo, got %d", key, len(m2.pendingUndo))
 	}
 }
 
-// TestRestartDeniedOnLockedRow verifies a direct r press on a locked row
-// short-circuits before the restart cmd is built.
+// TestRestartDeniedOnLockedRow verifies restart is refused on a locked row.
 func TestRestartDeniedOnLockedRow(t *testing.T) {
-	assertLockedDenial(t, "r")
+	assertLockedDenial(t, keyR)
 }
 
-// TestCloseDeniedOnLockedRow verifies a direct X press on a locked row
-// short-circuits before the close cmd or undo snapshot is created. Also
-// guards against key-remap regressions bypassing the lock check.
+// TestCloseDeniedOnLockedRow verifies close is refused on a locked row before
+// the close cmd or undo snapshot is created.
 func TestCloseDeniedOnLockedRow(t *testing.T) {
-	assertLockedDenial(t, "X")
+	assertLockedDenial(t, keyClose)
 }
 
-// TestOverrideProfileDeniedOnLockedRow verifies a direct c press on a
-// locked row does not open the config picker.
+// TestOverrideProfileDeniedOnLockedRow verifies profile override is refused on
+// a locked row and does not open the config picker.
 func TestOverrideProfileDeniedOnLockedRow(t *testing.T) {
-	m := lockedTestModel()
-	updated, _ := m.Update(keyPress("c"))
-	m2 := updated.(Model)
-	if m2.mode != ModeList {
-		t.Fatalf("c on locked row: expected ModeList, got %d", m2.mode)
-	}
-	if len(m2.toasts) != 1 || m2.toasts[0].Severity != toastError {
-		t.Fatalf("c on locked row: expected one toastError, got %+v", m2.toasts)
-	}
-	if !strings.Contains(m2.toasts[0].Text, "locked") {
-		t.Errorf("c on locked row: expected toast mentioning lock, got %q", m2.toasts[0].Text)
-	}
-	assertStatusBarContains(t, m2, "locked")
+	assertLockedDenial(t, keyC)
 }
 
 func TestDashboardLaunchAllowedOnLockedRow(t *testing.T) {
-	m := lockedTestModel()
-	updated, _ := m.Update(keyPress("C"))
-	m2 := updated.(Model)
-	if m2.mode != ModeConfigPicker {
-		t.Fatalf("C on locked row: expected ModeConfigPicker, got %d", m2.mode)
+	m := pressRowAction(t, lockedTestModel(), keyDashboardLaunch)
+	if m.mode != ModeConfigPicker {
+		t.Fatalf("launch new on locked row: expected ModeConfigPicker, got %d", m.mode)
 	}
-	if m2.configPickerPurpose != launch.ConfigPickerDashboardLaunch {
-		t.Fatalf("C on locked row: expected dashboard-launch purpose, got %d", m2.configPickerPurpose)
+	if m.configPickerPurpose != launch.ConfigPickerDashboardLaunch {
+		t.Fatalf("launch new on locked row: expected dashboard-launch purpose, got %d", m.configPickerPurpose)
 	}
-	if len(m2.toasts) != 0 {
-		t.Fatalf("C on locked row: expected no denial toast, got %+v", m2.toasts)
+	if len(m.toasts) != 0 {
+		t.Fatalf("launch new on locked row: expected no denial toast, got %+v", m.toasts)
 	}
 }
 
 func TestClearStatusAllowedOnLockedAttentionRow(t *testing.T) {
 	m := lockedTestModel()
 	m.filtered[0].State = "key"
-	updated, cmd := m.Update(keyPress("x"))
-	m2 := updated.(Model)
+	m2, cmd := runRowAction(t, m, keyClearStatus)
 	if m2.mode != ModeList {
-		t.Fatalf("x on locked row: expected ModeList, got %d", m2.mode)
+		t.Fatalf("clear icon on locked row: expected ModeList, got %d", m2.mode)
 	}
 	if cmd == nil {
-		t.Fatal("x on locked row: expected clear-status cmd")
+		t.Fatal("clear icon on locked row: expected clear-status cmd")
 	}
 	if len(m2.toasts) != 0 {
-		t.Fatalf("x on locked row: expected no denial toast, got %+v", m2.toasts)
+		t.Fatalf("clear icon on locked row: expected no denial toast, got %+v", m2.toasts)
 	}
 }
 
-func TestClearStatusNoOpOnNonAttentionRow(t *testing.T) {
-	m := lockedTestModel()
-	updated, cmd := m.Update(keyPress("x"))
-	m2 := updated.(Model)
-	if m2.mode != ModeList {
-		t.Fatalf("x on non-attention row: expected ModeList, got %d", m2.mode)
+// Clear icon has nothing to clear on a row carrying no badge, so the overlay
+// dims it. runRowAction refuses a blocked entry, which is what proves the gate.
+func TestClearStatusUnavailableOnNonAttentionRow(t *testing.T) {
+	m := pressKey(lockedTestModel(), keyA)
+	for _, a := range actionsFor(m) {
+		if a.KeyMatch != keyClearStatus {
+			continue
+		}
+		if a.Available(m) {
+			t.Fatal("clear icon is available on a row with no badge to clear")
+		}
+		return
 	}
-	if cmd != nil {
-		t.Fatal("x on non-attention row: expected no clear-status cmd")
-	}
-	if len(m2.toasts) != 0 {
-		t.Fatalf("x on non-attention row: expected no toast, got %+v", m2.toasts)
-	}
+	t.Fatalf("no actions-overlay entry is bound to %q", keyClearStatus)
 }
 
-// TestDirectLockKeyTogglesFromList verifies pressing L from ModeList
-// dispatches a toggle command without opening the actions overlay. The cmd
-// itself is opaque (it bridges to session.Lock/Unlock via the kitty
-// client), so we only assert it was returned and the model stayed put.
-func TestDirectLockKeyTogglesFromList(t *testing.T) {
+// TestLockActionTogglesFromTheOverlay verifies the lock entry dispatches a
+// toggle command and returns to the list. The cmd itself is opaque (it bridges
+// to session.Lock/Unlock via the kitty client), so we only assert it was
+// returned and the overlay closed behind it.
+func TestLockActionTogglesFromTheOverlay(t *testing.T) {
 	m := testModelWithSessions()
 	rs := session.RunningSession{
 		TabID:     1,
@@ -146,39 +146,20 @@ func TestDirectLockKeyTogglesFromList(t *testing.T) {
 	}
 	m = loadSessions(m, []session.RunningSession{rs})
 
-	updated, cmd := m.Update(keyPress("L"))
-	m2 := updated.(Model)
+	m2, cmd := runRowAction(t, m, keyLock)
 	if cmd == nil {
-		t.Fatal("L on list mode: expected toggle cmd, got nil")
+		t.Fatal("lock/unlock: expected toggle cmd, got nil")
 	}
 	if m2.mode != ModeList {
-		t.Errorf("L on list mode: expected ModeList preserved, got %d", m2.mode)
+		t.Errorf("lock/unlock: expected the overlay to close back to ModeList, got %d", m2.mode)
 	}
 	if m2.actionErr != nil {
-		t.Errorf("L on list mode: expected actionErr cleared, got %v", m2.actionErr)
+		t.Errorf("lock/unlock: expected actionErr cleared, got %v", m2.actionErr)
 	}
 }
 
-// TestDirectLockKeyNoOpWhenListEmpty guards against panics when L fires on
-// an empty list — the early-return branch must not dereference the cursor.
-func TestDirectLockKeyNoOpWhenListEmpty(t *testing.T) {
-	m := testModelWithSessions()
-	updated, cmd := m.Update(keyPress("L"))
-	m2 := updated.(Model)
-	if cmd != nil {
-		t.Errorf("L on empty list: expected nil cmd, got %v", cmd)
-	}
-	if m2.mode != ModeList {
-		t.Errorf("L on empty list: expected ModeList, got %d", m2.mode)
-	}
-}
-
-// TestDirectMuteKeyTogglesFromList verifies pressing m from ModeList
-// dispatches a toggle command without opening the actions overlay. The cmd
-// itself is opaque (it bridges to session.Mute/Unmute via the kitty client),
-// so we only assert it was returned and the model stayed put. Mirrors the
-// lock-key direct-press contract above.
-func TestDirectMuteKeyTogglesFromList(t *testing.T) {
+// TestMuteActionTogglesFromTheOverlay mirrors the lock contract above.
+func TestMuteActionTogglesFromTheOverlay(t *testing.T) {
 	m := testModelWithSessions()
 	rs := session.RunningSession{
 		TabID:     1,
@@ -190,29 +171,30 @@ func TestDirectMuteKeyTogglesFromList(t *testing.T) {
 	}
 	m = loadSessions(m, []session.RunningSession{rs})
 
-	updated, cmd := m.Update(keyPress("m"))
-	m2 := updated.(Model)
+	m2, cmd := runRowAction(t, m, keyM)
 	if cmd == nil {
-		t.Fatal("m on list mode: expected toggle cmd, got nil")
+		t.Fatal("mute/unmute: expected toggle cmd, got nil")
 	}
 	if m2.mode != ModeList {
-		t.Errorf("m on list mode: expected ModeList preserved, got %d", m2.mode)
+		t.Errorf("mute/unmute: expected the overlay to close back to ModeList, got %d", m2.mode)
 	}
 	if m2.actionErr != nil {
-		t.Errorf("m on list mode: expected actionErr cleared, got %v", m2.actionErr)
+		t.Errorf("mute/unmute: expected actionErr cleared, got %v", m2.actionErr)
 	}
 }
 
-// TestDirectMuteKeyNoOpWhenListEmpty guards against panics when m fires on
-// an empty list — the early-return branch must not dereference the cursor.
-func TestDirectMuteKeyNoOpWhenListEmpty(t *testing.T) {
+// TestRowActionsAreUnreachableWhenTheListIsEmpty replaces the pair of
+// empty-list no-op tests that pressed L and m directly. There is one guard now
+// rather than one per key: with no row under the cursor the overlay does not
+// open, so no entry in it can be reached at all.
+func TestRowActionsAreUnreachableWhenTheListIsEmpty(t *testing.T) {
 	m := testModelWithSessions()
-	updated, cmd := m.Update(keyPress("m"))
+	updated, cmd := m.Update(keyPress(keyA))
 	m2 := updated.(Model)
-	if cmd != nil {
-		t.Errorf("m on empty list: expected nil cmd, got %v", cmd)
-	}
 	if m2.mode != ModeList {
-		t.Errorf("m on empty list: expected ModeList, got %d", m2.mode)
+		t.Errorf("%q on an empty list: expected ModeList, got %d", keyA, m2.mode)
+	}
+	if cmd != nil {
+		t.Errorf("%q on an empty list: expected nil cmd, got %v", keyA, cmd)
 	}
 }

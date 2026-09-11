@@ -99,7 +99,6 @@ func TestOpenCommandPaletteResetsStateAndCapturesTarget(t *testing.T) {
 		TabID: 7, WindowID: 70, Base: "api", Project: "api", Profile: "work", State: "bolt",
 	}
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{target})
-	m.pendingJumpDir = 1
 	m.commandQuery = "stale"
 	m.commandResults = []commands.Command[Model]{{ID: "stale"}}
 	m.commandCursor = 9
@@ -110,9 +109,6 @@ func TestOpenCommandPaletteResetsStateAndCapturesTarget(t *testing.T) {
 
 	if m.mode != ModeCommandPalette {
 		t.Fatalf("mode = %v, want ModeCommandPalette", m.mode)
-	}
-	if m.pendingJumpDir != 0 {
-		t.Fatalf("pending jump direction = %d, want cleared", m.pendingJumpDir)
 	}
 	if m.commandQuery != "" || m.commandOffset != 0 {
 		t.Fatalf("entry state = query %q offset %d, want reset", m.commandQuery, m.commandOffset)

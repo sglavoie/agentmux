@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 func TestListModeLoopRunKeyIsNoOp(t *testing.T) {
@@ -47,14 +48,16 @@ func TestListModeLoopTailKeyIsNoOp(t *testing.T) {
 	}
 }
 
-func TestListModeTimelineKeyStillOpensDetailTimeline(t *testing.T) {
+// The timeline is reached by name now — `T` was its dashboard key and is
+// retired with the rest of them — but what it opens is unchanged: the detail
+// view for the row under the cursor, already switched to the phase timeline.
+func TestTimelineCommandOpensDetailTimeline(t *testing.T) {
 	m := loadSessions(testModel(), []session.RunningSession{{
 		WindowID:  42,
 		Directory: t.TempDir(),
 	}})
 
-	updated, cmd := m.Update(keyPress("T"))
-	got := updated.(Model)
+	got, cmd := runDashboardCommand(t, m, commands.ShowTimeline)
 	if got.mode != ModeDetail {
 		t.Fatalf("mode = %v, want ModeDetail", got.mode)
 	}
@@ -65,6 +68,22 @@ func TestListModeTimelineKeyStillOpensDetailTimeline(t *testing.T) {
 		t.Fatalf("detailWindowID = %d, want 42", got.detailWindowID)
 	}
 	if cmd == nil {
-		t.Fatal("T returned nil cmd, want detail event load")
+		t.Fatal("Show Timeline returned nil cmd, want detail event load")
+	}
+}
+
+func TestListModeTimelineKeyIsNoOp(t *testing.T) {
+	m := loadSessions(testModel(), []session.RunningSession{{
+		WindowID:  42,
+		Directory: t.TempDir(),
+	}})
+
+	updated, cmd := m.Update(keyPress("T"))
+	got := updated.(Model)
+	if cmd != nil {
+		t.Fatalf("T returned cmd %v, want nil", cmd)
+	}
+	if got.mode != ModeList {
+		t.Fatalf("mode = %v, want ModeList", got.mode)
 	}
 }

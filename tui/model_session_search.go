@@ -79,7 +79,6 @@ type sessionSearchDoneMsg struct {
 // index yet, entry starts or joins that cache-load path instead of kicking a
 // duplicate filesystem refresh.
 func (m Model) enterSessionSearch() (tea.Model, tea.Cmd) {
-	m.clearJumpChord()
 	m.mode = ModeSessionSearch
 	m.sessionCursor = 0
 	m.sessionOffset = 0

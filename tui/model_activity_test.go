@@ -110,7 +110,7 @@ func TestNewModelHonorsConfiguredIdleThreshold(t *testing.T) {
 
 func TestCapitalCKeyOpensDashboardLaunchPicker(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "C")
+	m = pressRowAction(t, m, keyDashboardLaunch)
 	if m.mode != ModeConfigPicker {
 		t.Fatalf("expected ModeConfigPicker after C, got %d", m.mode)
 	}
@@ -132,7 +132,7 @@ func TestCapitalCKeyEmptyListIsNoOp(t *testing.T) {
 
 func TestCapitalCUsesDashboardLaunchPurpose(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "C")
+	m = pressRowAction(t, m, keyDashboardLaunch)
 	if m.mode != ModeConfigPicker {
 		t.Fatalf("expected ModeConfigPicker after C, got %d", m.mode)
 	}
@@ -154,6 +154,8 @@ func TestPickerProfileOverride_Persists(t *testing.T) {
 
 	// Open config picker for dotfiles. Accounts: [work(0), personal(1)].
 	// configPickerCursor starts at 1 (personal matches dotfiles' default profile).
+	// `C` is a direct key here because this is the launcher, which kept its own
+	// keymap; only the dashboard's shrank.
 	m = pressKey(m, "C")
 	if m.mode != ModeConfigPicker {
 		t.Fatalf("expected ModeConfigPicker after C in picker, got %d", m.mode)

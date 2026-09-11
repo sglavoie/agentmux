@@ -380,7 +380,7 @@ func TestRefreshCmdPreservesRuntimeProfileOverrideInConfigPicker(t *testing.T) {
 	}
 
 	m := applySessions(NewModel(cfg, client), msg)
-	m = pressKey(m, "c")
+	m = pressRowAction(t, m, keyC)
 	if m.configPickerCurrent != "tradition-claude" {
 		t.Fatalf("picker current profile = %q, want tradition-claude", m.configPickerCurrent)
 	}

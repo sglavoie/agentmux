@@ -84,10 +84,15 @@ func TestRenderHeaderSpacerSuppressedOutsideModeList(t *testing.T) {
 	}
 }
 
-func TestDigitsRemoveChipsFromExplicitDashboardFilter(t *testing.T) {
+// Removing a single chip from the keyboard is an edit of the query that
+// produced it: `/` reopens the buffer on the committed filter and backspace
+// takes the last component off the end. The chip ring that `1`–`9` used to
+// focus is retired, so this is the whole keyboard route, and it is the reason
+// entering the editor stopped clearing the thing being edited.
+func TestBackspaceInTheFilterEditorRemovesOneChip(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "/")
-	m = typeString(m, "@work")
+	m = typeString(m, "@work api")
 	if m.completion.Visible {
 		m = pressKey(m, "esc")
 	}
@@ -95,12 +100,65 @@ func TestDigitsRemoveChipsFromExplicitDashboardFilter(t *testing.T) {
 	if m.mode != ModeList {
 		t.Fatalf("setup: expected ModeList after enter, got %d", m.mode)
 	}
+	before := m.activeFilter.Components()
+	if len(before) != 2 {
+		t.Fatalf("setup: expected two chips, got %d (%+v)", len(before), m.activeFilter)
+	}
+
+	m = pressKey(m, "/")
+	if m.filterText != "@work api" {
+		t.Fatalf("the editor opened on %q, want the committed filter", m.filterText)
+	}
+	for range len("api") {
+		m = pressKey(m, keyBackspace)
+	}
+	if m.completion.Visible {
+		m = pressKey(m, "esc")
+	}
+	m = pressKey(m, "enter")
+
+	after := m.activeFilter.Components()
+	if len(after) != 1 {
+		t.Fatalf("expected one chip left, got %d (%+v)", len(after), m.activeFilter)
+	}
+	// The chips render in their own order rather than the buffer's, so the
+	// survivor is named rather than indexed: what backspace took off the end of
+	// the text is what must be missing here.
+	if got := after[0].Label(); got != "@work" {
+		t.Errorf("backspacing the last component left the %q chip, want the untouched @work", got)
+	}
+	if m.activeFilter.Substrings != nil {
+		t.Errorf("the substring chip survived as %v", m.activeFilter.Substrings)
+	}
+}
+
+// TestDigitsAreInertAtTheDashboard is the other half: the digits addressed
+// chips by position, and a list that no longer numbers them must not act on one
+// either.
+func TestDigitsAreInertAtTheDashboard(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "/")
+	m = typeString(m, "@work")
+	if m.completion.Visible {
+		m = pressKey(m, "esc")
+	}
+	m = pressKey(m, "enter")
 	before := len(m.activeFilter.Components())
 	if before < 1 {
 		t.Fatalf("setup: expected at least one chip, got %d", before)
 	}
-	m = pressKey(m, "1")
-	if got := len(m.activeFilter.Components()); got != before-1 {
-		t.Errorf("expected chip count to drop from %d to %d, got %d", before, before-1, got)
+
+	for _, key := range []string{"1", "2", "9"} {
+		updated, cmd := m.Update(keyPress(key))
+		got := updated.(Model)
+		if cmd != nil {
+			t.Errorf("%q dispatched a command", key)
+		}
+		if n := len(got.activeFilter.Components()); n != before {
+			t.Errorf("%q changed the chip count %d -> %d", key, before, n)
+		}
+		if got.mode != ModeList {
+			t.Errorf("%q left ModeList for mode=%d", key, got.mode)
+		}
 	}
 }

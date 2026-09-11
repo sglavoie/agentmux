@@ -123,39 +123,15 @@ func (m *Model) setFamilyCollapsed(key string, collapsed bool) tea.Cmd {
 	return m.reprojectList(prior)
 }
 
-// collapseSelection is what Left does in the list.
+// The Left/Right folding pair is retired along with its keys. Left's two-step
+// behavior — step to the summary, then fold — existed because the keystroke that
+// hides rows should be pressed while looking at the line that will remain; Enter
+// gets that for free, since a summary is the only line it can fold and the cursor
+// is already on it.
 //
-// On a summary it folds the family. On a child it does NOT fold anything: it
-// moves the selection up to the family's summary first, so the keystroke that
-// hides a row is always pressed while looking at the line that will remain. A
-// second Left then folds. Anything else — a top-level leaf, a row whose family
-// has no summary, the urgency view where no summary exists — has no family line
-// to move to and does nothing.
-func (m *Model) collapseSelection() tea.Cmd {
-	it, ok := m.selectedItem()
-	if !ok {
-		return nil
-	}
-	if it.Kind == dashboard.ItemFamilySummary {
-		return m.setFamilyCollapsed(it.FamilyKey, true)
-	}
-	return m.selectFamilySummary(it.FamilyKey)
-}
-
-// expandSelection is what Right does in the list: unfold the selected family.
-// A child is already inside an unfolded family, so Right on one does nothing
-// rather than guessing at a deeper level the list does not have.
-func (m *Model) expandSelection() tea.Cmd {
-	it, ok := m.selectedItem()
-	if !ok || it.Kind != dashboard.ItemFamilySummary {
-		return nil
-	}
-	return m.setFamilyCollapsed(it.FamilyKey, false)
-}
-
-// toggleSelectedFamily is what Enter and Space do when the selection is a
-// summary. Those two keys focus a session's Kitty tab on every other line; a
-// summary has no tab to focus, so they fold and unfold instead of refusing.
+// toggleSelectedFamily is what Enter does when the selection is a summary. Enter
+// focuses a session's Kitty tab on every other line; a summary has no tab to
+// focus, so it folds and unfolds instead of refusing.
 func (m *Model) toggleSelectedFamily() tea.Cmd {
 	it, ok := m.selectedItem()
 	if !ok || it.Kind != dashboard.ItemFamilySummary {
@@ -164,23 +140,10 @@ func (m *Model) toggleSelectedFamily() tea.Cmd {
 	return m.setFamilyCollapsed(it.FamilyKey, !it.Collapsed)
 }
 
-// selectFamilySummary moves the cursor onto the summary standing for key. It
-// changes the selection only; the projection is untouched, so this is a cursor
-// move with the same scroll and preview bookkeeping j and k do.
-func (m *Model) selectFamilySummary(key string) tea.Cmd {
-	i := m.items.FamilySummaryIndex(key)
-	if i < 0 || i == m.cursor {
-		return nil
-	}
-	m.cursor = i
-	scrollListToCursor(m)
-	return m.refreshPreviewForCursor()
-}
-
 // summarySelected reports whether the cursor is parked on a family summary. It
 // is the footer's and the palette's question, asked the other way round from
-// hasSelectedSession: some keys are unavailable on a summary, and a few — the
-// collapse keys — are available on nothing else.
+// hasSelectedSession: a summary is the one line Enter folds rather than focuses,
+// and the one line the row-targeted commands are unavailable on.
 func (m Model) summarySelected() bool {
 	it, ok := m.selectedItem()
 	return ok && it.Kind == dashboard.ItemFamilySummary

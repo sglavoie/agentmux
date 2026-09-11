@@ -146,10 +146,10 @@ func TestItemsRebuildOnResort(t *testing.T) {
 // reorders the list around it.
 func TestSelectedSessionSurvivesRefresh(t *testing.T) {
 	m := rebuildTestModel()
-	m = pressKey(m, "G")
+	m = pressKey(m, keyEnd)
 	before, ok := m.selectedSession()
 	if !ok {
-		t.Fatal("no session under the cursor after G")
+		t.Fatal("no session under the cursor after end")
 	}
 
 	// Same sessions, different order, plus a new one ahead of them all.
@@ -175,7 +175,7 @@ func TestSelectedSessionSurvivesRefresh(t *testing.T) {
 // a valid item rather than a dangling index.
 func TestSelectedSessionClearedWhenFilteredOut(t *testing.T) {
 	m := rebuildTestModel()
-	m = pressKey(m, "G")
+	m = pressKey(m, keyEnd)
 	gone, _ := m.selectedSession()
 
 	m = pressKey(m, "/")

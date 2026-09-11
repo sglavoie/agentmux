@@ -200,8 +200,8 @@ func TestListFooterMarksOverflowWhenTruncated(t *testing.T) {
 	if strings.Contains(out, footerHintMore) {
 		t.Errorf("a width that fits the whole palette marked overflow:\n%s", out)
 	}
-	if !strings.Contains(out, "R resort") {
-		t.Errorf("a width that fits the whole palette dropped the last extra-band hint:\n%s", out)
+	if !strings.Contains(out, "l launch") {
+		t.Errorf("a width that fits the whole palette dropped the last hint in declaration order:\n%s", out)
 	}
 }
 
@@ -270,43 +270,27 @@ func isFooterMetadataToken(m Model, tok string) bool {
 	return false
 }
 
-// TestListFooterJumpChordCapsAtTwoRows asserts the pending-bracket footer obeys
-// the same budget as the palette it replaces, in both directions. The heading
-// and `esc cancels` are essential: a chord with no visible escape hatch is a
-// trap, and one with no visible direction is a coin flip.
-func TestListFooterJumpChordCapsAtTwoRows(t *testing.T) {
-	for _, dir := range []int{1, -1} {
-		heading := "jump next:"
-		if dir == -1 {
-			heading = "jump prev:"
+// TestListFooterIsOneRowAtEveryWidth asserts the dashboard footer never grows a
+// second physical row. It replaces the jump-chord budget test: the chord had a
+// footer of its own that could spend two rows, and both the chord and that
+// second row are retired. The widths are the band boundaries — one below and one
+// at each — because the footer picks its vocabulary per band and a regression
+// would land on the edge rather than in the middle.
+func TestListFooterIsOneRowAtEveryWidth(t *testing.T) {
+	for _, width := range []int{79, 80, 119, 120, 160} {
+		m := withListRows(Model{mode: ModeList, width: width, height: 24},
+			session.RunningSession{Base: "a", State: "key", Account: "w"})
+		rows := listFooterRows(m)
+		if len(rows) != 1 {
+			t.Errorf("width %d: footer spent %d rows, want exactly 1:\n%s", width, len(rows), strings.Join(rows, "\n"))
+			continue
 		}
-		for _, width := range []int{79, 80, 119, 120, 160} {
-			m := withListRows(Model{mode: ModeList, width: width, height: 24, pendingJumpDir: dir},
-				session.RunningSession{Base: "a", State: "key", Account: "w"})
-			rows := listFooterRows(m)
-			want := footerHintMaxLines
-			if dashboard.BandFor(width) == dashboard.BandCompact {
-				want = 1
-			}
-			if len(rows) == 0 || len(rows) > want {
-				t.Errorf("dir %d width %d: chord spent %d rows, want 1..%d:\n%s", dir, width, len(rows), want, strings.Join(rows, "\n"))
-			}
-			out := strings.Join(stripAnsiLines(rows), "\n")
-			if dashboard.BandFor(width) == dashboard.BandCompact {
-				continue // the compact chord row has its own abbreviated vocabulary
-			}
-			if !strings.Contains(out, heading) {
-				t.Errorf("dir %d width %d: chord footer lost its heading: %q", dir, width, out)
-			}
-			if !strings.Contains(out, "esc cancels") {
-				t.Errorf("dir %d width %d: chord footer lost its escape hatch: %q", dir, width, out)
-			}
-			// The chord vocabulary replaces the palette; showing both would print
-			// two meanings for `p`, `e`, `a`, `q`, `s`, and `c` at once.
-			for _, leaked := range []string{"j/k up/down", "a actions", "p preview"} {
-				if strings.Contains(out, leaked) {
-					t.Errorf("dir %d width %d: palette hint %q leaked into the chord footer: %q", dir, width, leaked, out)
-				}
+		out := stripAnsi(rows[0])
+		// The chord's vocabulary must not survive anywhere in the footer: these
+		// are the three fragments only the pending-bracket row ever printed.
+		for _, retired := range []string{"jump next:", "jump prev:", "esc cancels"} {
+			if strings.Contains(out, retired) {
+				t.Errorf("width %d: retired chord fragment %q still in the footer: %q", width, retired, out)
 			}
 		}
 	}
@@ -385,7 +369,6 @@ func TestRootFootersHaveZebraRows(t *testing.T) {
 		{name: "message reader", m: Model{mode: ModeMessageDetail, width: 72}},
 		{name: "plan browser", m: Model{mode: ModePlanSearch, width: 72}},
 		{name: "plan viewer", m: Model{mode: ModePlanView, width: 72}},
-		{name: "jump chord", m: Model{mode: ModeList, width: 72, pendingJumpDir: 1}},
 		{
 			name: "active filter",
 			m: Model{
@@ -469,12 +452,19 @@ func assertZebraFooterRows(t *testing.T, rendered string, width int) {
 	}
 }
 
-// TestListFooterKeyHintsAlwaysPresent locks in the discoverability
-// requirement from the brief: `e` (peek), `C` (launch), `x` (clear), and
-// `X` (close) must appear in the footer in every state group, even when dimmed.
-// The models carry no width, which is the state that shows the whole palette:
-// once a terminal size is known these four are in the bands the budget may
-// shed, and the `? more` marker is what carries the requirement instead.
+// TestListFooterKeyHintsAlwaysPresent carries the same discoverability
+// requirement the direct keymap used to: peek, launch, clear icon, and close
+// must be findable from the dashboard in every state group without knowing they
+// exist. What changed is where the footer points. Naming `e`, `C`, `x`, and `X`
+// one by one is what made the row wide enough to need two of them; they are
+// entries in the actions overlay now, so the footer names `a` and the overlay
+// names them — and the overlay, unlike a dim footer key, states the reason a
+// blocked entry is blocked.
+//
+// Both halves are asserted here: the footer offers the route in every state,
+// and the route still reaches all four. A test that only checked the retired
+// spellings were gone would pass just as well if the capabilities had gone with
+// them.
 func TestListFooterKeyHintsAlwaysPresent(t *testing.T) {
 	cases := []struct {
 		name string
@@ -500,17 +490,28 @@ func TestListFooterKeyHintsAlwaysPresent(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			out := strings.Join(stripAnsiLines(listFooterRows(tc.m)), "\n")
-			if !strings.Contains(out, "e peek") {
-				t.Errorf("expected `e peek` in footer; got %q", out)
+			if !strings.Contains(out, "a actions") {
+				t.Errorf("expected the route to the per-row commands in footer; got %q", out)
 			}
-			for _, frag := range []string{"C launch", "x clear", "X close"} {
-				if !strings.Contains(out, frag) {
-					t.Errorf("expected %q in footer; got %q", frag, out)
+			// The direct spellings are retired, and a footer that still named
+			// them would be advertising keys the dispatcher drops.
+			for _, stale := range []string{"e peek", "C launch", "x clear", "X close", "F run plan", "t tail"} {
+				if strings.Contains(out, stale) {
+					t.Errorf("retired hint %q should not be advertised; got %q", stale, out)
 				}
 			}
-			for _, stale := range []string{"F run plan", "t tail"} {
-				if strings.Contains(out, stale) {
-					t.Errorf("stale loop command %q should not be advertised; got %q", stale, out)
+			// And the route arrives: every capability the footer used to spell
+			// out is an entry on the overlay `a` opens.
+			overlay := map[string]string{}
+			for _, a := range actionsFor(tc.m) {
+				overlay[a.KeyMatch] = a.Label
+			}
+			for key, label := range map[string]string{
+				keyE: "peek scrollback", keyDashboardLaunch: "launch new",
+				keyClearStatus: "clear icon", keyClose: "close",
+			} {
+				if got := overlay[key]; got != label {
+					t.Errorf("actions overlay entry %q = %q, want %q", key, got, label)
 				}
 			}
 		})

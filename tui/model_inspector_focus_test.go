@@ -28,21 +28,24 @@ func inspectorFocusModel(t *testing.T) Model {
 	return m
 }
 
-// TestTabCyclesThePanesAndGivesTheKeyBackWhenThereIsOneOfThem pins both halves
-// of Tab's contract. With two panes it is the only way to hand the keyboard
-// between them, so it may not be spent on anything else; with one pane there is
-// nothing to switch to and the filter chips keep the key they used to own.
-func TestTabCyclesThePanesAndGivesTheKeyBackWhenThereIsOneOfThem(t *testing.T) {
+// TestTabCyclesThePanesAndIsInertWhenThereIsOneOfThem pins both halves of Tab's
+// contract. With two panes it is the only way to hand the keyboard between them,
+// so it may not be spent on anything else; with one pane there is nothing to
+// switch to and the key answers nothing at all.
+//
+// The second half used to be the interesting one for a different reason: Tab
+// with a single pane handed the key back to the filter-chip ring, which owned it
+// before the inspector existed. The ring is retired, so there is no second
+// claimant left and the assertion is now that the press changes nothing — which
+// is also why the footer only prints `tab switch pane` while a second pane is
+// on screen.
+func TestTabCyclesThePanesAndIsInertWhenThereIsOneOfThem(t *testing.T) {
 	m := inspectorFocusModel(t)
 	m.activeFilter = dashboard.Parse("@work")
-	m.focusedChipIdx = -1
 
 	m = pressKey(m, keyTab)
 	if !m.inspectorFocused() {
 		t.Fatal("tab did not move the keyboard into the inspector")
-	}
-	if m.focusedChipIdx != -1 {
-		t.Fatalf("tab reached the chip ring as well: focused chip %d", m.focusedChipIdx)
 	}
 	m = pressKey(m, keyTab)
 	if m.inspectorFocused() {
@@ -55,16 +58,22 @@ func TestTabCyclesThePanesAndGivesTheKeyBackWhenThereIsOneOfThem(t *testing.T) {
 		t.Fatal("shift+tab did not switch panes")
 	}
 
-	// Hiding the pane hands the key back: a dashboard with one pane has nothing
-	// to switch to, and the chips are what the key meant before the inspector
-	// existed.
+	// Hiding the pane leaves nothing to switch to, and with the chip ring gone
+	// the key has nowhere else to go: the filter, the cursor, and the mode must
+	// all come through the press untouched.
 	m = pressKey(m, keyInspector)
 	if m.inspectorActive() || m.inspectorFocused() {
 		t.Fatal("i did not hide the inspector")
 	}
+	before := m
 	m = pressKey(m, keyTab)
-	if m.focusedChipIdx != 0 {
-		t.Fatalf("tab with one pane did not reach the chip ring: focused chip %d", m.focusedChipIdx)
+	if m.mode != ModeList || m.cursor != before.cursor || m.activeFilter.Raw != before.activeFilter.Raw {
+		t.Fatalf("tab with one pane was spent on something: mode=%v cursor=%d filter=%q",
+			m.mode, m.cursor, m.activeFilter.Raw)
+	}
+	if m.inspectorActive() || m.inspectorFocused() || m.inspectorDisplay != before.inspectorDisplay {
+		t.Fatalf("tab with one pane disturbed the hidden pane: active=%v focused=%v display=%v",
+			m.inspectorActive(), m.inspectorFocused(), m.inspectorDisplay)
 	}
 }
 

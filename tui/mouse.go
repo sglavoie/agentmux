@@ -228,7 +228,6 @@ func (m Model) handleMouseAction(msg mouseActionMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.snapshotSeenStates()
-	m.clearJumpChord()
 
 	// Every wheel event breaks a pending double-click chain, whichever pane it
 	// scrolled. A scroll moves the rows out from under the pointer, so the click

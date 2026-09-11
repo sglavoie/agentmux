@@ -72,3 +72,42 @@ func pressDashboardCommand(t *testing.T, m Model, id commands.ID) Model {
 	next, _ := runDashboardCommand(t, m, id)
 	return next
 }
+
+// runRowAction reaches a per-row capability the way an operator does now: `a` to
+// open the actions overlay on the cursor row, then the entry's mnemonic. It is
+// the overlay's counterpart to runDashboardCommand, and it exists for the same
+// reason — the mnemonics used to be dashboard keys, and a test that still
+// pressed one of them directly would be asserting against a dashboard that
+// dropped the keystroke rather than against the capability it meant to reach.
+//
+// The overlay is where the availability rule lives, so a blocked entry fails
+// here rather than silently returning an unchanged model.
+func runRowAction(t *testing.T, m Model, key string) (Model, tea.Cmd) {
+	t.Helper()
+	if m.mode != ModeList {
+		t.Fatalf("the actions overlay is unreachable from mode %q: it opens from the session list", uitestModeName(m.mode))
+	}
+	m = pressKey(m, keyA)
+	if m.mode != ModeActions {
+		t.Fatalf("pressing %q left the model in mode %q instead of opening the actions overlay", keyA, uitestModeName(m.mode))
+	}
+	for _, a := range actionsFor(m) {
+		if a.KeyMatch != key {
+			continue
+		}
+		if a.Available != nil && !a.Available(m) {
+			t.Fatalf("action %q (%s) is blocked for the current row", key, a.Label)
+		}
+		updated, cmd := m.Update(keyPress(key))
+		return updated.(Model), cmd
+	}
+	t.Fatalf("no actions-overlay entry is bound to %q", key)
+	return m, nil
+}
+
+// pressRowAction is runRowAction for a caller that only wants the model.
+func pressRowAction(t *testing.T, m Model, key string) Model {
+	t.Helper()
+	next, _ := runRowAction(t, m, key)
+	return next
+}

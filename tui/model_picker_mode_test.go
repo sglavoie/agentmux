@@ -127,19 +127,24 @@ func TestFooterListHintNoSessions(t *testing.T) {
 	if !strings.Contains(footer, "l launch") {
 		t.Errorf("expected l launch in no-session footer, got:\n%s", footer)
 	}
-	if !strings.Contains(footer, "R resort") {
-		t.Errorf("expected R resort in no-session footer, got:\n%s", footer)
+	// An empty dashboard still says how to leave and how to find everything
+	// else, which are the two things no keypress recovers from not knowing.
+	for _, frag := range []string{"q quit", ": commands"} {
+		if !strings.Contains(footer, frag) {
+			t.Errorf("expected %q in no-session footer, got:\n%s", frag, footer)
+		}
 	}
 }
 
-func TestFooterIncludesDirectKeys(t *testing.T) {
+// TestFooterIsTheSmallKeymapAndNothingElse replaces the direct-key inventory
+// this test used to hold. The footer named eleven per-row command keys and four
+// view-switch capitals; all fifteen are retired, and what replaces the list is a
+// closed assertion — the row is exactly the bindings the dashboard declares,
+// with no key on it that is not one of them.
+func TestFooterIsTheSmallKeymapAndNothingElse(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	footer := stripAnsi(renderFooter(m))
-	for _, frag := range []string{"r restart", "C launch", "x clear", "X close"} {
-		if !strings.Contains(footer, frag) {
-			t.Errorf("list footer missing direct key %q, got:\n%s", frag, footer)
-		}
-	}
+
 	// Before the first WindowSizeMsg there is no width to budget against, so the
 	// whole palette rides one unwrapped row rather than being trimmed for a
 	// terminal size nothing has reported yet.
@@ -147,20 +152,28 @@ func TestFooterIncludesDirectKeys(t *testing.T) {
 	if len(lines) != 1 {
 		t.Fatalf("expected a single unwrapped footer row before terminal sizing, got %d lines:\n%s", len(lines), footer)
 	}
-	for _, frag := range []string{
-		"j/k up/down", "C launch", "s project sessions", "x clear", "X close",
-		"l launch", "S sessions", "P plans", "R resort",
-	} {
-		if !strings.Contains(lines[0], frag) {
-			t.Errorf("expected action %q in continuous footer flow", frag)
+	for _, c := range listFooterPalette() {
+		if c.key == "" {
+			continue // the position fragment, which names no key
+		}
+		if c.shownFn != nil && !c.shownFn(m) {
+			continue // withheld in this state rather than dropped for width
+		}
+		label := c.label
+		if c.labelFor != nil {
+			label = c.labelFor(m)
+		}
+		if !strings.Contains(lines[0], c.key+" "+label) {
+			t.Errorf("declared binding %q %q missing from the unbudgeted footer:\n%s", c.key, label, footer)
 		}
 	}
-	if strings.Contains(footer, "a: more actions") {
-		t.Error("actions menu hint should not appear in footer")
-	}
-	for _, stale := range []string{"x close", "C clear"} {
-		if strings.Contains(footer, stale) {
-			t.Errorf("footer should not contain stale hint %q, got:\n%s", stale, footer)
+	for _, retired := range []string{
+		"r restart", "C launch", "x clear", "X close", "e peek", "c profile",
+		"s project sessions", "S sessions", "P plans", "R resort", "W worktrees",
+		"v view", "]/[", "}/{", "1-9", "a: more actions",
+	} {
+		if strings.Contains(footer, retired) {
+			t.Errorf("footer still advertises retired hint %q, got:\n%s", retired, footer)
 		}
 	}
 }
@@ -184,7 +197,7 @@ func TestFooterEscHintShownWhenFiltered(t *testing.T) {
 
 func TestCKeyOpensConfigPicker(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "c")
+	m = pressRowAction(t, m, keyC)
 	if m.mode != ModeConfigPicker {
 		t.Fatalf("expected ModeConfigPicker after c, got %d", m.mode)
 	}
@@ -198,7 +211,7 @@ func TestCKeyOpensConfigPicker(t *testing.T) {
 
 func TestConfigPickerEscReturnsToList(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "c")
+	m = pressRowAction(t, m, keyC)
 	m = pressKey(m, "esc")
 	if m.mode != ModeList {
 		t.Fatalf("expected ModeList after esc from config picker, got %d", m.mode)
@@ -207,7 +220,7 @@ func TestConfigPickerEscReturnsToList(t *testing.T) {
 
 func TestConfigPickerNavigation(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "c") // → ModeConfigPicker, cursor=0
+	m = pressRowAction(t, m, keyC) // → ModeConfigPicker, cursor=0
 	if m.configPickerCursor != 0 {
 		t.Fatalf("expected configPickerCursor=0, got %d", m.configPickerCursor)
 	}
@@ -227,7 +240,7 @@ func TestConfigPickerNavigation(t *testing.T) {
 
 func TestConfigPickerSameAccountNoOp(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "c") // → ModeConfigPicker
+	m = pressRowAction(t, m, keyC) // → ModeConfigPicker
 	// After state-group sort cursor=0 is backend (bolt), account="work".
 	// configPickerCurrent should be "work", cursor at index 0 (work).
 	if m.configPickerPurpose != launch.ConfigPickerRestartProfile {
@@ -264,7 +277,7 @@ func TestConfigPickerCurrentProfileCaseInsensitive(t *testing.T) {
 		{TabID: 1, WindowID: 10, Base: "api", Profile: "Work", Account: "Work"},
 	})
 
-	m = pressKey(m, "c")
+	m = pressRowAction(t, m, keyC)
 	if m.mode != ModeConfigPicker {
 		t.Fatalf("expected ModeConfigPicker after c, got %d", m.mode)
 	}
@@ -286,8 +299,8 @@ func TestConfigPickerCurrentProfileCaseInsensitive(t *testing.T) {
 
 func TestConfigPickerDifferentAccountEmitsCmd(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "c") // → ModeConfigPicker (current=work, cursor=0)
-	m = pressKey(m, "j") // cursor=1 (personal)
+	m = pressRowAction(t, m, keyC) // → ModeConfigPicker (current=work, cursor=0)
+	m = pressKey(m, "j")           // cursor=1 (personal)
 	updated, cmd := m.Update(keyPress("enter"))
 	if updated.(Model).mode != ModeList {
 		t.Fatalf("expected ModeList after selecting different account, got %d", updated.(Model).mode)

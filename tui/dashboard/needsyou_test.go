@@ -38,17 +38,18 @@ func TestNeedsYouIsTheQueueDefinitionNotACopy(t *testing.T) {
 	}
 }
 
-// TestNeedsYouIncludesUnreadCompletions is the half the state-name matcher could
-// not express. "An unseen stop" is not a state name, so it cannot be spelled in
-// the user-editable attention list at all — a finished turn nobody has looked at
-// sat in the top group with no key that reached it.
+// TestNeedsYouIncludesUnreadCompletions is the half the retired state-name
+// matcher could not express. "An unseen stop" is not a state name, so it could
+// not be spelled in the user-editable attention list at all — a finished turn
+// nobody had looked at sat in the top group with no key that reached it.
+//
+// The `Unseen` bit is what carries it, and the pair below is the assertion: the
+// same state name answers differently depending on it, which no predicate over
+// a state name alone can do.
 func TestNeedsYouIncludesUnreadCompletions(t *testing.T) {
 	unread := session.RunningSession{State: "stop", Unseen: true}
 	if !NeedsYou(unread, nil, needsYouThreshold) {
 		t.Error("an unread completion does not need the operator")
-	}
-	if AttentionMatcher(nil)(unread.State) {
-		t.Fatal("the state-name matcher now claims `stop`: this test's premise is gone, re-derive both rules together")
 	}
 
 	seen := session.RunningSession{State: "stop"}
@@ -59,7 +60,7 @@ func TestNeedsYouIncludesUnreadCompletions(t *testing.T) {
 
 // TestNeedsYouExcludesRecoveredToolWarnings is the other half, and the one that
 // removes a stop rather than adding one. `]]` landed on warnings because
-// `warning` is a state name in the default attention set — but the harness
+// `warning` was a state name in the default attention set — but the harness
 // recovered and kept working, so the row needs nothing, and stopping the cursor
 // there is exactly the false alarm the queue is meant to end.
 func TestNeedsYouExcludesRecoveredToolWarnings(t *testing.T) {
@@ -67,8 +68,10 @@ func TestNeedsYouExcludesRecoveredToolWarnings(t *testing.T) {
 	if NeedsYou(warned, nil, needsYouThreshold) {
 		t.Error("a recovered tool warning stops needs-you navigation")
 	}
-	if !AttentionMatcher(nil)(warned.State) {
-		t.Fatal("the state-name matcher no longer claims `warning`: this test's premise is gone")
+	// The row is still drawn, and still outside the queue: the exclusion is a
+	// grouping judgement rather than the navigator's own private list.
+	if StateGroup(warned, nil, needsYouThreshold) == attentionGroup {
+		t.Fatal("a recovered tool warning now groups under Needs you: re-derive the navigator and the heading together")
 	}
 }
 
@@ -137,8 +140,9 @@ func TestNeedsYouFindsNothingWhenNothingWantsYou(t *testing.T) {
 
 // TestNeedsYouFromAnUnplaceableCursorStartsAtAnEnd covers the cursor that names
 // no line: nothing selected yet, or a selection left over from a longer list
-// mid-resize. It answers the same way FindNextMatching does, so the two
-// navigators cannot disagree about a cursor neither of them can place.
+// mid-resize. Forward starts at the top and backward starts by wrapping to the
+// bottom, so an unplaceable cursor costs the operator a landing rather than a
+// refusal.
 func TestNeedsYouFromAnUnplaceableCursorStartsAtAnEnd(t *testing.T) {
 	list := BuildItems(needsYouRows())
 	for _, from := range []int{-1, 99} {
@@ -156,7 +160,7 @@ func TestNeedsYouFromAnUnplaceableCursorStartsAtAnEnd(t *testing.T) {
 // TestNeedsYouReachesARowFoldedInsideAFamily is the case the whole RowTarget
 // vocabulary exists for. In the Projects view a folded family projects to one
 // summary and its members project to nothing, so the blocked prompt inside it has
-// no line to select — and a navigator walking only visible lines would report the
+// no line to select — and a navigator walking only visible lines reported the
 // dashboard as calm while a session waited.
 func TestNeedsYouReachesARowFoldedInsideAFamily(t *testing.T) {
 	folded := map[string]bool{"git:/repo": true}

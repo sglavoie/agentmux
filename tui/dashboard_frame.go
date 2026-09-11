@@ -51,7 +51,7 @@ func renderDashboardFrame(m Model) dashboardFrame {
 	}
 	y += renderedRows(header.text)
 
-	chips := dashboard.RenderChipsWithHits(m.activeFilter, dashboard.ProfileColorMap(m.cfg), m.focusedChipIdx, m.width)
+	chips := dashboard.RenderChipsWithHits(m.activeFilter, dashboard.ProfileColorMap(m.cfg), m.width)
 	sb.WriteString(chips.Text)
 	for _, chip := range chips.Hits {
 		hitMap.clicks = append(hitMap.clicks, mouseHitRegion{

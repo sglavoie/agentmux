@@ -32,9 +32,9 @@ type Chip struct {
 func (c Chip) Label() string { return c.label }
 
 // Components returns the ordered chip list backing the filter: substrings
-// first (in token order), then project, account, harness, and state. Removal
-// keys (1..N) map onto this order so the indices are stable as long as
-// Components and RemoveComponent are kept in sync.
+// first (in token order), then project, account, harness, and state. A chip's
+// index in this order is what a click resolves to, so the indices are stable as
+// long as Components and RemoveComponent are kept in sync.
 func (f Filter) Components() []Chip {
 	var out []Chip
 	for _, s := range f.Substrings {
@@ -91,15 +91,19 @@ func (f Filter) RemoveComponent(idx int) Filter {
 
 // RenderChips renders the filter chip row(s) for f, or "" when the filter is
 // empty (so the area collapses with no blank line). Chips wrap to a second
-// line when the running width would exceed width. focused is the index of the
-// chip carrying keyboard focus, or -1 for none.
-func RenderChips(f Filter, acctColor map[string]string, focused, width int) string {
-	return RenderChipsWithHits(f, acctColor, focused, width).Text
+// line when the running width would exceed width.
+//
+// A chip has no focused form. The keyboard ring that gave it one is retired —
+// filter editing happens inside `/` and a chip is removed by clicking it — so
+// every chip is drawn the same way and the hit rectangles below are the whole of
+// what a chip offers a pointer.
+func RenderChips(f Filter, acctColor map[string]string, width int) string {
+	return RenderChipsWithHits(f, acctColor, width).Text
 }
 
 // RenderChipsWithHits renders chips and returns their wrapped terminal-cell
 // rectangles from the same layout loop.
-func RenderChipsWithHits(f Filter, acctColor map[string]string, focused, width int) ChipRender {
+func RenderChipsWithHits(f Filter, acctColor map[string]string, width int) ChipRender {
 	if f.IsEmpty() {
 		return ChipRender{}
 	}
@@ -114,7 +118,7 @@ func RenderChipsWithHits(f Filter, acctColor map[string]string, focused, width i
 	lineW := 0
 	y := 0
 	for i, c := range comps {
-		chip := renderChip(c, acctColor, i == focused)
+		chip := renderChip(c, acctColor)
 		// A single chip whose label exceeds the terminal is never split by the
 		// wrap loop below, so clamp it to width first.
 		if width > 0 {
@@ -148,21 +152,15 @@ func RenderChipsWithHits(f Filter, acctColor map[string]string, focused, width i
 }
 
 // renderChip renders a single chip body. The leading ▌ glyph and trailing
-// ✕ remove icon share the chip's color so the entire chip reads as one unit.
-// Focused chips wrap the ✕ in brackets — Postel's Law: chip focus is also
-// signaled by the underline overlay in chipStyle, but the bracketed glyph
-// makes the affordance unmistakable.
-func renderChip(c Chip, acctColor map[string]string, focused bool) string {
-	suffix := " ✕"
-	if focused {
-		suffix = " [✕]"
-	}
-	return chipStyle(c, acctColor, focused).Render("▌" + c.label + suffix)
+// ✕ remove icon share the chip's color so the entire chip reads as one unit,
+// and the ✕ is the affordance: clicking the chip removes that component.
+func renderChip(c Chip, acctColor map[string]string) string {
+	return chipStyle(c, acctColor).Render("▌" + c.label + " ✕")
 }
 
-// chipStyle returns the rendering style for a chip, layering the focus
-// underline on top of the kind-specific base color when applicable.
-func chipStyle(c Chip, acctColor map[string]string, focused bool) lipgloss.Style {
+// chipStyle returns the rendering style for a chip: the kind-specific base
+// color, and nothing layered on top of it.
+func chipStyle(c Chip, acctColor map[string]string) lipgloss.Style {
 	var base lipgloss.Style
 	switch c.kind {
 	case chipAccount:
@@ -180,9 +178,6 @@ func chipStyle(c Chip, acctColor map[string]string, focused bool) lipgloss.Style
 		}
 	default:
 		base = styleChip
-	}
-	if focused {
-		base = base.Underline(true)
 	}
 	return base
 }

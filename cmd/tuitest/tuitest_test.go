@@ -330,16 +330,30 @@ func TestTUITestActionsOverlayWidthRegression(t *testing.T) {
 // (commit 1f08e24) through the CLI. The wide_profiles fixture's long home-dir
 // rows overflow the picker box at 120 cols (scenario-failure exit) but fit at
 // 140 cols (clean exit).
+//
+// The picker is reached with `a` then `C`: launch-another is an actions-overlay
+// entry rather than a dashboard key now, so a bare `C` opens nothing. That
+// matters more here than it would in a keymap test — the scenario would exit
+// clean for want of a picker, and a width regression this test exists to catch
+// would read as a pass. The intervening overlay is harmless to the measurement:
+// at 120 the only issue reported is the picker's own overflow, and at 140 both
+// modals fit.
 func TestTUITestConfigPickerWidthRegression(t *testing.T) {
-	_, _, err := runRootArgs(t, "tui-test", "fixture", "wide_profiles",
-		"--width", "120", "--height", "40", "--key", "C", "--json")
+	stdout, _, err := runRootArgs(t, "tui-test", "fixture", "wide_profiles",
+		"--width", "120", "--height", "40", "--key", "a", "--key", "C", "--json")
 	ee := asExitError(t, err)
 	if ee.Code != cli.ExitScenarioFailure {
 		t.Errorf("narrow config picker should exit %d, got %d", cli.ExitScenarioFailure, ee.Code)
 	}
+	// Naming the overflowing modal keeps the failure attributable: without it
+	// the actions overlay could be the one overflowing and the test would not
+	// notice.
+	if !strings.Contains(stdout, "config_picker modal") {
+		t.Errorf("expected the config picker to be the overflowing modal, got %q", stdout)
+	}
 
 	if _, stderr, err := runRootArgs(t, "tui-test", "fixture", "wide_profiles",
-		"--width", "140", "--height", "40", "--key", "C", "--json"); err != nil {
+		"--width", "140", "--height", "40", "--key", "a", "--key", "C", "--json"); err != nil {
 		t.Errorf("wide config picker should exit cleanly, got error %v (stderr=%q)", err, stderr)
 	}
 }

@@ -105,7 +105,7 @@ func renderFooter(m Model) string {
 		))
 	default: // ModeList
 		position := ""
-		if m.pendingJumpDir == 0 && !m.inspectorFullScreenActive() {
+		if !m.inspectorFullScreenActive() {
 			position = listPositionFragment(m)
 		}
 		lines = listModeFooterLines(m, position)
@@ -184,15 +184,12 @@ func nonEmptyFooterLines(lines ...string) []string {
 // width-budgeted row generated from the one palette, because a footer that
 // grows a row is a session the list stops showing, and two hand-maintained
 // spellings of "the essentials" drift apart.
+// It is also always the SAME row. The bracket chord used to replace the palette
+// outright while it was armed, because half its follow-up letters meant
+// something else in the ordinary footer; the chord is retired along with the
+// modal state that made a second spelling necessary, so there is one row and one
+// vocabulary.
 func listModeFooterLines(m Model, position string) []string {
-	if m.pendingJumpDir != 0 {
-		// Bracket chord pending: the chord vocabulary replaces the palette
-		// outright rather than joining it. Half of these letters mean something
-		// else in the normal footer, so showing both at once would print two
-		// contradictory meanings for `p`, `e`, `a`, `q`, `s`, and `c` on one line
-		// while the very keypress that resolves them is pending.
-		return []string{listFooterRow(m, listJumpChordTokens(m))}
-	}
 	return []string{listFooterRow(m, listFooterTokens(m, position))}
 }
 
@@ -300,48 +297,6 @@ func footerShortToken(key string, available bool) footerToken {
 	return footerRenderedToken(style.Render(listFooterShortKey(key)))
 }
 
-// listJumpChordTokens is the wide spelling of the bracket chord: each target
-// named in full, dropped to fit the single row like any other palette.
-//
-// The heading rides on the first chord rather than standing as its own token,
-// because "jump next:" is the sentence the letters complete and a separator
-// between them would read as a third target. Only the heading and the escape
-// hatch are essential: a chord the operator cannot cancel is a trap, while a
-// target they cannot see is a key they will not press.
-func listJumpChordTokens(m Model) []prioritizedFooterToken {
-	arrow := "next"
-	if m.pendingJumpDir == -1 {
-		arrow = "prev"
-	}
-	target := func(key, tail string) prioritizedFooterToken {
-		return prioritizedFooterToken{
-			token:    footerCustomBindingToken(key, "", tail, styleFooter),
-			short:    footerShortToken(key, true),
-			priority: footerPriorityPrimary,
-		}
-	}
-	lead := styleFooter.Render(fmt.Sprintf("jump %s: ", arrow))
-	return []prioritizedFooterToken{
-		{
-			token:    footerRenderedToken(lead + renderFooterBindingWithLabel("p", "", ")perm", styleFooter)),
-			short:    footerRenderedToken(lead + styleFooterKey.Render("p")),
-			priority: footerPriorityEssential,
-		},
-		target("e", ")fail"),
-		target("a", ")active"),
-		target("q", ")question"),
-		target("s", ")stop"),
-		target("c", ")compact"),
-		target("b", ")sub"),
-		target("]]/[[", ")attention"),
-		{
-			token:    footerCustomBindingToken("esc", " ", "cancels", styleFooter),
-			short:    footerShortToken("esc", true),
-			priority: footerPriorityEssential,
-		},
-	}
-}
-
 // zebraFooterLines flattens wrapped footer blocks into physical rows, then
 // applies the shared root-footer zebra treatment. The first row receives the
 // dark background and is padded to the viewport width; the next row retains
@@ -438,10 +393,7 @@ func listFooterBudgetLineCount(m Model) int {
 	maxLineCount := lineCount
 	for range 4 {
 		visible := listVisibleHeightForFooterLines(m, lineCount)
-		nextPosition := ""
-		if m.pendingJumpDir == 0 {
-			nextPosition = listPositionFragmentForVisible(m, visible)
-		}
+		nextPosition := listPositionFragmentForVisible(m, visible)
 		nextLineCount := countFooterPhysicalRows(listModeFooterLines(m, nextPosition))
 		if nextLineCount > maxLineCount {
 			maxLineCount = nextLineCount
@@ -651,7 +603,7 @@ func listFooterPalette() []listFooterCandidate {
 		// is available exactly when focusing is not.
 		listCommandBinding(bindings, commands.FocusSession, footerSectionApp, footerPriorityEssential).
 			availableWhen(footerAlways).
-			respelled(listEnterKey, listEnterLabel).
+			respelled(nil, listEnterLabel).
 			irreducible(),
 		listBinding("a", "actions", footerSectionRow, footerPriorityEssential, hasRow),
 		listBinding(":", "commands", footerSectionApp, footerPriorityEssential, footerAlways).irreducible(),
@@ -669,16 +621,16 @@ func listFooterPalette() []listFooterCandidate {
 		listCommandBinding(bindings, commands.ClearFilters, footerSectionApp, footerPriorityPrimary).
 			availableWhen(footerAlways).
 			shownWhen(listFilterActive),
-		listBinding("1-9", "remove chip", footerSectionApp, footerPriorityPrimary, footerAlways).
-			shownWhen(listHasChips).respelled(listChipRangeKey, nil),
-		// One key, two meanings, and only ever one of them shown. With an
-		// inspector on screen tab hands the keyboard between the panes; with none
-		// it keeps its older job of walking the chip row. Printing both would put
-		// two contradictory glosses for the same key on the same line.
+		// Needs-you navigation is the only motion key here that can have nothing
+		// to move to, so it is the only one that ever dims: on a dashboard where
+		// nothing is waiting, `n` says so rather than looking like a key that
+		// broke.
+		listBinding("n/N", "needs you", footerSectionApp, footerPriorityPrimary, listNeedsYouReachable),
+		// Tab names something only while there is a second pane to hand the
+		// keyboard to. With one pane on screen the key answers nothing, and a
+		// footer entry for it would be advertising a move that cannot happen.
 		listBinding("tab", "switch pane", footerSectionApp, footerPriorityPrimary, footerAlways).
 			shownWhen(listInspectorShown),
-		listBinding("tab", "focus next", footerSectionApp, footerPriorityPrimary, footerAlways).
-			shownWhen(listChipFocusAvailable),
 		// The inspector leads the keys in this band because it is the only one
 		// whose surface is already on screen: it is on before the first keypress,
 		// so the row that names how to turn it off is the only thing on a
@@ -688,51 +640,17 @@ func listFooterPalette() []listFooterCandidate {
 		listCommandBinding(bindings, commands.ToggleInspector, footerSectionApp, footerPriorityPrimary),
 		listCommandBinding(bindings, commands.Quit, footerSectionApp, footerPriorityPrimary),
 		listCommandBinding(bindings, commands.SwitchProject, footerSectionApp, footerPriorityPrimary),
-		// A view action, not a row action: switching the arrangement is available
-		// with the cursor on a summary, on a session, and on an empty list alike.
-		listCommandBinding(bindings, commands.ToggleListView, footerSectionApp, footerPriorityPrimary),
 		listCommandBinding(bindings, commands.OpenLauncher, footerSectionLaunch, footerPriorityPrimary),
-
-		// Secondary: the two jump chords, then the gloss that says what the cursor
-		// row's icon means, then the row actions reached often enough to be worth a
-		// key hint.
-		//
-		// The chords sat in the primary band while the footer could spend two rows
-		// on hints. One row cannot, and they are the two entries in that band with
-		// no surface of their own: every other primary key either names something
-		// already on screen or is the way off the dashboard, while a chord is a
-		// convenience for a motion the arrow keys already perform. Both stay in the
-		// keyboard help sheet and the command palette.
-		listBinding("]/[", "jump chord", footerSectionApp, footerPrioritySecondary, footerAlways),
-		listBinding("}/{", "jump + focus", footerSectionApp, footerPrioritySecondary, footerAlways),
-		listCommandBinding(bindings, commands.PeekScrollback, footerSectionRow, footerPrioritySecondary),
-		listCommandBinding(bindings, commands.ShowTimeline, footerSectionRow, footerPrioritySecondary),
-		listCommandBinding(bindings, commands.ClearStatusIcon, footerSectionRow, footerPrioritySecondary),
-		listCommandBinding(bindings, commands.RestartSession, footerSectionRow, footerPrioritySecondary),
-
-		// Extra: the tail the narrow footer sheds first. Every one of these is also
-		// in the actions overlay or the command palette, both of which the essential
-		// band keeps one keypress away.
-		listCommandBinding(bindings, commands.OverrideProfile, footerSectionRow, footerPriorityExtra),
-		listCommandBinding(bindings, commands.LaunchAnother, footerSectionRow, footerPriorityExtra),
-		listCommandBinding(bindings, commands.SearchProject, footerSectionRow, footerPriorityExtra),
-		listCommandBinding(bindings, commands.CloseSession, footerSectionRow, footerPriorityExtra),
-		listCommandBinding(bindings, commands.OpenDirectoryID, footerSectionRow, footerPriorityExtra),
-		listCommandBinding(bindings, commands.OpenEditorID, footerSectionRow, footerPriorityExtra),
-		listCommandBinding(bindings, commands.CycleProfileFilter, footerSectionLaunch, footerPriorityExtra),
-		listCommandBinding(bindings, commands.SearchAllSessions, footerSectionApp, footerPriorityExtra),
-		listCommandBinding(bindings, commands.SearchPlans, footerSectionApp, footerPriorityExtra),
-		listCommandBinding(bindings, commands.ResortTabs, footerSectionApp, footerPriorityExtra),
 	}
 }
 
-func listEnterKey(m Model) string {
-	if m.summarySelected() {
-		return "enter/←/→"
-	}
-	return "enter"
-}
-
+// listEnterLabel is the one respelling the footer still carries. Enter focuses a
+// session on every line but a family summary, where it folds instead; the key is
+// the same either way, so only the gloss changes.
+//
+// It used to respell the KEY as well — `enter/←/→` on a summary — because the
+// arrows folded and unfolded separately. They are retired, so there is one key
+// and one thing to say about it.
 func listEnterLabel(m Model) string {
 	if m.summarySelected() {
 		return "fold/unfold"
@@ -742,23 +660,14 @@ func listEnterLabel(m Model) string {
 
 func listFilterActive(m Model) bool { return !m.activeFilter.IsEmpty() }
 
-func listHasChips(m Model) bool { return len(m.activeFilter.Components()) > 0 }
-
-// listChipFocusAvailable is the narrower half of tab's split meaning: chip
-// cycling is only what the key does when there is no second pane to hand the
-// keyboard to.
-func listChipFocusAvailable(m Model) bool { return listHasChips(m) && !listInspectorShown(m) }
-
-func listUrgencyView(m Model) bool { return m.listView == dashboard.ViewUrgency }
-
-// listChipRangeKey names the digits that actually remove something. With a
-// single chip the range collapses to "1": "1-1" is a range with one member,
-// which reads as a typo rather than as a fact about the filter.
-func listChipRangeKey(m Model) string {
-	if n := len(m.activeFilter.Components()); n > 1 {
-		return fmt.Sprintf("1-%d", n)
-	}
-	return "1"
+// listNeedsYouReachable reports whether `n`/`N` has anywhere to go. It asks the
+// navigator itself rather than counting rows in the Needs you group, so the
+// footer cannot say "nothing is waiting" about a row the keystroke would in fact
+// land on — including one folded inside a family, which has no line of its own
+// to count.
+func listNeedsYouReachable(m Model) bool {
+	_, ok := dashboard.FindNextNeedsYou(m.items, m.cursor, +1, m.lastActivity, m.idleThreshold)
+	return ok
 }
 
 // listPositionText renders the `start–end of total` fragment the caller already

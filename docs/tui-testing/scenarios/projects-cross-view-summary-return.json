@@ -8,7 +8,8 @@
     { "type": "key", "key": "j" },
     { "type": "key", "key": "j" },
     { "type": "command", "command_id": "explore.toggle-list-view" },
-    { "type": "key", "key": "left" },
+    { "type": "key", "key": "k" },
+    { "type": "key", "key": "k" },
     { "type": "command", "command_id": "explore.toggle-list-view" }
   ],
   "assertions": [

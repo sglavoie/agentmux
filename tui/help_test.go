@@ -97,18 +97,27 @@ func TestRenderHelpReflectsDashboardRemap(t *testing.T) {
 
 	for _, frag := range []string{
 		":         open command palette",
-		"x         clear session icon",
-		"X         close session (confirm)",
-		"C         launch new session with profile selection",
+		// The per-row commands moved behind `a`, and help says so in the
+		// spelling the operator actually types: "a, then <letter>".
+		"a, then x clear session icon",
+		"a, then X close session (confirm)",
+		"a, then C launch another session in the same project",
+		"a, then e peek scrollback (active rows only)",
+		// The launcher kept its own direct keymap; only the dashboard's shrank.
 		"f         cycle profile (dashboard live / launcher default)",
 		"o         open selected launcher directories (highlighted fallback)",
-		"e         peek scrollback (active rows only)",
 	} {
 		if !strings.Contains(out, frag) {
 			t.Errorf("expected help output to contain %q, got:\n%s", frag, out)
 		}
 	}
 	for _, stale := range []string{
+		// The retired dashboard spellings. Each names a key the dispatcher now
+		// drops, so help listing one would be a dead end rather than a typo.
+		"x         clear session icon",
+		"X         close session (confirm)",
+		"C         launch new session with profile selection",
+		"e         peek scrollback (active rows only)",
 		"x         close session (confirm)",
 		"C         clear session icon",
 		"F         run an agent-session-loop plan",

@@ -22,7 +22,6 @@ import (
 // overlay is reachable from the palette in any root view, and a fixed return
 // would drop the operator into a view they never opened.
 func (m *Model) openHealth(returnMode Mode) {
-	m.clearJumpChord()
 	m.healthReturnMode = returnMode
 	m.healthOffset = 0
 	m.mode = ModeHealth

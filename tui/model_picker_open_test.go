@@ -10,6 +10,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 )
 
@@ -305,19 +306,36 @@ func TestFooterPickerOpenEditorHint(t *testing.T) {
 
 // ---- Peek mode tests ----
 
-func TestEKeyReturnsPeekCmd(t *testing.T) {
+func TestPeekActionReturnsPeekCmd(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	_, cmd := m.Update(keyPress("e"))
+	// Peek reads a live pane, so the overlay offers it only on a working row.
+	// Order after sort: backend(bolt) first.
+	_, cmd := runRowAction(t, m, keyE)
 	if cmd == nil {
-		t.Fatal("expected non-nil cmd after e with sessions")
+		t.Fatal("expected non-nil cmd from the peek action")
 	}
 }
 
-func TestEKeyEmptyListIsNoOp(t *testing.T) {
-	m := loadSessions(testModel(), nil)
-	_, cmd := m.Update(keyPress("e"))
-	if cmd != nil {
-		t.Fatal("expected nil cmd after e with no sessions")
+// `e` is retired at the list: peek is an overlay entry now, and the bare key
+// dispatches nothing whether or not there is a row to peek at.
+func TestRetiredPeekKeyIsInertAtTheList(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		sessions []session.RunningSession
+	}{
+		{name: "with sessions", sessions: makeSessions()},
+		{name: "empty list", sessions: nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := loadSessions(testModel(), tc.sessions)
+			updated, cmd := m.Update(keyPress("e"))
+			if cmd != nil {
+				t.Fatal("e still dispatched a command from the list")
+			}
+			if updated.(Model).mode != ModeList {
+				t.Fatalf("e left ModeList for mode=%d", updated.(Model).mode)
+			}
+		})
 	}
 }
 
@@ -329,14 +347,19 @@ func TestPeekDoneMsgErrorSetsActionErr(t *testing.T) {
 	}
 }
 
-func TestFooterListHintIncludesPeek(t *testing.T) {
+// The dashboard footer no longer names peek: it names `a`, and the overlay `a`
+// opens is where peek is offered or dimmed. The picker footer below still names
+// its own keys, because the picker keeps its direct keymap.
+func TestFooterListPointsAtTheOverlayRatherThanPeek(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	// Order after sort: api(""), backend(bolt), dotfiles("") — move
-	// cursor onto the bolt session so the active footer branch fires.
-	m = pressKey(m, "j")
+	// Order after sort: backend(bolt) first — the state that used to switch the
+	// footer into its "active" branch.
 	footer := stripAnsi(renderFooter(m))
-	if !strings.Contains(footer, "e peek") {
-		t.Errorf("list footer missing peek hint, got:\n%s", footer)
+	if strings.Contains(footer, "e peek") {
+		t.Errorf("list footer still advertises the retired peek key, got:\n%s", footer)
+	}
+	if !strings.Contains(footer, "a actions") {
+		t.Errorf("list footer missing the route to peek, got:\n%s", footer)
 	}
 }
 

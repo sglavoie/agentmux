@@ -1,75 +1,24 @@
 {
   "name": "unseen-stop-grouping-wide",
   "fixture": "unseen_stops",
-  "size": {
-    "width": 120,
-    "height": 36
-  },
+  "size": { "width": 120, "height": 36 },
   "actions": [
-    {
-      "type": "key",
-      "key": "b"
-    },
-    {
-      "type": "key",
-      "key": "]"
-    },
-    {
-      "type": "key",
-      "key": "s"
-    }
+    { "type": "key", "key": "j" },
+    { "type": "key", "key": "j" }
   ],
   "assertions": [
-    {
-      "type": "mode_equals",
-      "mode": "list"
-    },
-    {
-      "type": "contains_text",
-      "text": "Needs you (1)"
-    },
-    {
-      "type": "contains_text",
-      "text": "Running (1)"
-    },
-    {
-      "type": "contains_text",
-      "text": "Idle (1)"
-    },
-    {
-      "type": "selected_title",
-      "value": "read"
-    },
-    {
-      "type": "contains_text",
-      "text": "• ▌ unread    Done         —"
-    },
-    {
-      "type": "contains_text",
-      "text": "  ▌ read      Done         —"
-    },
-    {
-      "type": "contains_text",
-      "text": "  ▌ working   Working   0:42"
-    },
-    {
-      "type": "excludes_text",
-      "text": "• ▌ read"
-    },
-    {
-      "type": "excludes_text",
-      "text": "• ▌ working"
-    },
-    {
-      "type": "contains_text",
-      "text": "Agent   claude · work"
-    },
-    {
-      "type": "contains_text",
-      "text": "Dir     ~/projects/read"
-    },
-    {
-      "type": "no_layout_issues"
-    }
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "Needs you (1)" },
+    { "type": "contains_text", "text": "Running (1)" },
+    { "type": "contains_text", "text": "Idle (1)" },
+    { "type": "selected_title", "value": "read" },
+    { "type": "contains_text", "text": "• ▌ unread    Done         —" },
+    { "type": "contains_text", "text": "  ▌ read      Done         —" },
+    { "type": "contains_text", "text": "  ▌ working   Working   0:42" },
+    { "type": "excludes_text", "text": "• ▌ read" },
+    { "type": "excludes_text", "text": "• ▌ working" },
+    { "type": "contains_text", "text": "Agent   claude · work" },
+    { "type": "contains_text", "text": "Dir     ~/projects/read" },
+    { "type": "no_layout_issues" }
   ]
 }

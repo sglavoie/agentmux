@@ -367,7 +367,6 @@ func scrollChipPickerToCursor(m *Model) {
 func (m *Model) applyActiveFilter(prior dashboard.CursorIdentity) tea.Cmd {
 	m.filtered = dashboard.ApplyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
 	dashboard.SortRows(m.filtered, m.lastActivity, m.idleThreshold)
-	m.focusedChipIdx = -1
 	return m.reprojectList(prior)
 }
 
@@ -404,7 +403,6 @@ func (m *Model) cycleDashboardProfile() tea.Cmd {
 // for the mode the list is about to be drawn in rather than the one it is
 // leaving.
 func (m *Model) enterFilter(prefill string) tea.Cmd {
-	m.clearJumpChord()
 	prior := dashboard.CaptureItemIdentity(m.items, m.cursor)
 	m.savedFilter = m.activeFilter
 	m.savedSelection = prior

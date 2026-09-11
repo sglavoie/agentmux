@@ -236,7 +236,13 @@ func TestUITestFixtureConfigPickerOpens(t *testing.T) {
 	}
 	d, _ := newUITestFixtureDriver(fx, UITestSize{})
 	cleanupUITestDriver(t, d)
-	if err := d.Key("C"); err != nil {
+	// `C` is an actions-overlay mnemonic now, not a dashboard key, so the
+	// picker is two presses away: `a` to open the overlay against the cursor
+	// row, `C` to pick the entry that launches another session in its project.
+	if err := d.Key(keyA); err != nil {
+		t.Fatalf("press a: %v", err)
+	}
+	if err := d.Key(keyDashboardLaunch); err != nil {
 		t.Fatalf("press C: %v", err)
 	}
 	obs := d.Observe()

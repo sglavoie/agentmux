@@ -329,7 +329,13 @@ func commandDeclarations() []commands.Command[Model] {
 			Description: "Filter running sessions with the dashboard query language.",
 			Aliases:     []string{"find", "search"},
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
-				cmd := m.enterFilter("")
+				// Prefilled with the filter already on screen, not emptied. The
+				// chip ring is retired, and `/` is what replaced it: backspacing
+				// one component off the end of the buffer is how a single chip is
+				// removed from the keyboard now, so entering the editor had to stop
+				// discarding the thing being edited. Esc still restores the saved
+				// filter, so an entry-and-abort is unchanged.
+				cmd := m.enterFilter(m.activeFilter.Raw)
 				return m, cmd
 			},
 		},

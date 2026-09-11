@@ -90,24 +90,20 @@ func forbidDaemonMutations(t *testing.T) {
 // summaryRowActionKeys is every ModeList key whose handler resolves a session
 // under the cursor and then acts on it. A new row-targeted key that is not
 // added here is left unproven, which is the one way this guarantee decays.
+//
+// It is one key long because the small keymap retired the rest. The dozen
+// direct row shortcuts that used to be listed here — peek, restart, close,
+// reprofile, launch, clear status, lock, mute, open directory, open editor,
+// copy title, detail, timeline, project search — reach their commands through
+// the actions overlay and the command palette now, and both of those resolve
+// their target through the very accessor this fixture proves refuses a summary.
+// That they no longer dispatch AT ALL is asserted in regression_keys_test.go;
+// asserting it here too would prove the keymap rather than the item layer.
+//
+// Enter is not here either, for the opposite reason: on a summary it is not a
+// row action at all but the fold toggle, which is asserted just below.
 var summaryRowActionKeys = []string{
-	keyEnter,                // focus the selected tab
-	keySpace,                // focus the selected tab
-	keyA,                    // open the actions overlay against the selection
-	keyE,                    // peek at the selected window
-	keyR,                    // restart the selected session
-	keyClose,                // close the selected session
-	keyC,                    // reprofile the selected session
-	keyDashboardLaunch,      // launch from the selected session's identity
-	keyClearStatus,          // clear the selected session's icon (daemon)
-	keyLock,                 // toggle the selected session's lock
-	keyM,                    // toggle the selected session's mute
-	keyO,                    // open the selected session's directory
-	keyOpenEditor,           // open the selected session's directory in the editor
-	keyY,                    // copy the selected session's title
-	keyD,                    // open the selected session's detail pane
-	keyOpenTimeline,         // open the selected session's timeline
-	keyProjectSessionSearch, // search the selected session's project history
+	keyA, // open the actions overlay against the selection
 }
 
 // TestSummaryItemRefusesEveryRowAction is the session's central safety claim: a
@@ -138,6 +134,35 @@ func TestSummaryItemRefusesEveryRowAction(t *testing.T) {
 				t.Errorf("key %q made %d Kitty call(s) with the cursor on a family summary: %+v", key, got-setupCalls, runner.Calls[setupCalls:])
 			}
 		})
+	}
+}
+
+// TestSummaryItemEnterFoldsAndReachesNoSession is Enter's half of the same
+// claim. Enter focuses a Kitty tab on every line but this one, and a summary
+// speaks for two sessions at once, so the thing it must never do is pick one of
+// them. It folds instead — a change to the list, not to any session — and the
+// proof is that the fold happened and Kitty was never called.
+func TestSummaryItemEnterFoldsAndReachesNoSession(t *testing.T) {
+	forbidDaemonMutations(t)
+	m, runner, setupCalls := summaryModel(t)
+
+	updated, cmd := m.Update(keyPress(keyEnter))
+	after := updated.(Model)
+	if cmd != nil {
+		cmd()
+	}
+
+	if !after.collapsedFamilies["git:/repo"] {
+		t.Errorf("enter on a family summary did not fold it: %+v", after.collapsedFamilies)
+	}
+	if after.mode != ModeList {
+		t.Errorf("enter left mode %d; folding is not an overlay", after.mode)
+	}
+	if id := after.targetSession.TabID; id != 0 {
+		t.Errorf("enter captured target session tab %d from a summary", id)
+	}
+	if got := len(runner.Calls); got != setupCalls {
+		t.Errorf("enter made %d Kitty call(s) on a family summary: %+v", got-setupCalls, runner.Calls[setupCalls:])
 	}
 }
 
@@ -248,11 +273,11 @@ func TestSummaryItemNavigationReachesItsMembers(t *testing.T) {
 		t.Errorf("command context on a member = %+v, want the first member as target", ctx)
 	}
 
-	// G lands on the last item, which is the second leaf: the item count, not
+	// end lands on the last item, which is the second leaf: the item count, not
 	// the session count, is what the jump is bounded by.
-	m = pressKey(m, "G")
+	m = pressKey(m, keyEnd)
 	if m.cursor != 2 {
-		t.Errorf("G left the cursor at %d, want 2", m.cursor)
+		t.Errorf("end left the cursor at %d, want 2", m.cursor)
 	}
 	if s, ok := m.selectedSession(); !ok || s.TabID != 2 {
 		t.Errorf("last item resolved to %+v (ok=%v), want the second member", s, ok)

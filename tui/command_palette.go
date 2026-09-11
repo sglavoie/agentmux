@@ -18,7 +18,6 @@ import (
 // openCommandPalette captures the current dashboard target and initializes a
 // fresh result set for the dashboard ':' binding.
 func (m *Model) openCommandPalette() {
-	m.clearJumpChord()
 	m.commandQuery = ""
 	m.commandCursor = 0
 	m.commandOffset = 0

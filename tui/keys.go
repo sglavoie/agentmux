@@ -1,49 +1,63 @@
 package tui
 
 // Key string constants used in KeyPressMsg switch cases.
+//
+// A constant here names a keystroke, not a surface. After the dashboard keymap
+// shrank to the eight entries in dashboardBindings() plus the cursor and
+// structure keys handleListKey owns, most of the session mnemonics below —
+// keyE, keyR, keyC, keyDashboardLaunch, keyClearStatus, keyClose, keyO,
+// keyOpenEditor, keyY, keyLock, keyM — are pressed inside the actions overlay
+// (`a`) rather than at the list. The capability each comment describes is
+// unchanged; only the surface in front of it moved. Where a spelling means
+// different things in different modes, the comment says which mode.
 const (
-	keyUp                   = "up"
-	keyDown                 = "down"
-	keyLeft                 = "left"
-	keyRight                = "right"
-	keyJ                    = "j"
-	keyK                    = "k"
-	keyG                    = "g"
-	keyGG                   = "G"
-	keySlash                = "/"
-	keyColon                = ":" // opens ModeCommandPalette from ModeList only
-	keyF                    = "f"
-	keyWorktreeFork         = "w" // Past Sessions search/viewer: confirm an isolated Git worktree fork
-	keyCopySessionID        = "i" // Past Sessions search/viewer: copy the transcript's canonical session ID
-	keyA                    = "a"
-	keyO                    = "o"
-	keyL                    = "l"
-	keyY                    = "y"
-	keyCopyPath             = "Y"
-	keyN                    = "n"
-	keySpace                = "space"
-	keyEnter                = "enter"
-	keyEsc                  = "esc"
-	keyQ                    = "q"
-	keyCtrlC                = "ctrl+c"
-	keyE                    = "e"
-	keyClose                = "X" // closes the highlighted session
-	keyR                    = "r"
-	keyU                    = "u" // undo the most recent destructive action
-	keyBackspace            = "backspace"
-	keyQuestion             = "?" // opens ModeHelp overlay (dashboard, Past Sessions, Plans)
-	keyC                    = "c" // opens ModeConfigPicker for profile override
-	keyDashboardLaunch      = "C" // opens ModeConfigPicker for dashboard launch
-	keyClearStatus          = "x" // clears the highlighted session's icon
-	keyOpenEditor           = "O" // opens the project directory in the configured editor
-	keyResort               = "R" // re-sort tabs in Kitty to repair drifted physical order
-	keyLock                 = "L" // toggle the session lock (blocks close/restart/override)
-	keyM                    = "m" // toggle session mute (suppresses notifications)
-	keyD                    = "d" // dismisses the config deprecation banner; otherwise opens ModeDetail
-	keySessionSearch        = "S" // opens ModeSessionSearch (past harness transcripts)
-	keyPlanSearch           = "P" // opens ModePlanSearch (past agent plans)
-	keyWorktrees            = "W" // opens ModeWorktrees (managed Git worktrees)
-	keyASLRuns              = "A" // toggles ModeASLRuns (agent-session-loop runs)
+	keyUp              = "up"
+	keyDown            = "down"
+	keyLeft            = "left"
+	keyRight           = "right"
+	keyJ               = "j"
+	keyK               = "k"
+	keyG               = "g"
+	keyGG              = "G"
+	keySlash           = "/"
+	keyColon           = ":" // opens ModeCommandPalette from ModeList only
+	keyF               = "f"
+	keyWorktreeFork    = "w" // Past Sessions search/viewer: confirm an isolated Git worktree fork
+	keyCopySessionID   = "i" // Past Sessions search/viewer: copy the transcript's canonical session ID
+	keyA               = "a"
+	keyO               = "o"
+	keyL               = "l"
+	keyY               = "y"
+	keyCopyPath        = "Y"
+	keyN               = "n" // ModeConfirm: decline the prompt
+	keySpace           = "space"
+	keyEnter           = "enter"
+	keyEsc             = "esc"
+	keyQ               = "q"
+	keyCtrlC           = "ctrl+c"
+	keyE               = "e"
+	keyClose           = "X" // closes the highlighted session
+	keyR               = "r"
+	keyBackspace       = "backspace"
+	keyQuestion        = "?" // opens ModeHelp overlay (dashboard, Past Sessions, Plans)
+	keyC               = "c" // opens ModeConfigPicker for profile override
+	keyDashboardLaunch = "C" // opens ModeConfigPicker for dashboard launch
+	keyClearStatus     = "x" // clears the highlighted session's icon
+	keyOpenEditor      = "O" // opens the project directory in the configured editor
+	keyLock            = "L" // toggle the session lock (blocks close/restart/override)
+	keyM               = "m" // toggle session mute (suppresses notifications)
+	// keyD is no longer a dashboard key: the deprecation banner it dismissed is
+	// gone and the detail overlay it opened is reached through the inspector and
+	// the palette. What is left are four overlay-local meanings, each in a mode
+	// with its own handler — close the detail overlay, delete a past session,
+	// remove a worktree, and dismiss a health notice.
+	keyD = "d"
+	// keyASLRuns is now a ModeASLRuns key alone: it closes the view it used to
+	// open. The dashboard side is retired along with `S`, `P`, and `W` — the four
+	// capital letters that opened Past Sessions, Plans, Worktrees, and ASL Runs
+	// are palette entries now, which is where a surface an operator visits rarely
+	// belongs.
+	keyASLRuns              = "A"
 	keyASLWorkbench         = "w" // ModeASLRuns: open the run's Workbench deep link
 	keyASLRespond           = "r" // ModeASLRuns: open the response/resume form for the run
 	keyASLStop              = "s" // ModeASLRuns: confirm stop after the current session
@@ -55,22 +69,13 @@ const (
 	keyPlanOpenEditor       = "e" // ModePlanSearch/ModePlanView: open the plan directory in the editor
 	keyToggleTimeline       = "t" // toggle flat list ↔ timeline in ModeDetail
 	keyToggleTimestamps     = "T" // toggle timestamp column in timeline (ModeDetail)
-	keyPhasePrev            = "[" // jump to previous phase header in timeline
-	keyPhaseNext            = "]" // jump to next phase header in timeline
-	// keyJumpAttentionPrev/Next: in ModeList, jumps the cursor to the
-	// previous/next session whose state is in the attention set. Shares the
-	// same string values as keyPhasePrev/keyPhaseNext above; disambiguation
-	// is by mode, exactly like keyOpenTimeline below.
-	keyJumpAttentionPrev = "["
-	keyJumpAttentionNext = "]"
-	// keyJumpAttentionPrevFocus/NextFocus: jump cursor like
-	// keyJumpAttentionPrev/Next, then focus the Kitty tab. Useful for
-	// "address the next attention item" in one keystroke.
-	keyJumpAttentionPrevFocus = "{"
-	keyJumpAttentionNextFocus = "}"
-	// keyOpenTimeline is the same key string as keyToggleTimestamps; disambiguation is by mode.
-	// In ModeList: open detail pane directly in timeline mode.
-	keyOpenTimeline = "T"
+	// keyPhasePrev/keyPhaseNext belong to the ModeDetail timeline alone. The
+	// dashboard used to spell a jump chord with the same two glyphs — `]`/`[` to
+	// arm it, `]]`/`[[` and `}`/`{` to jump — and that whole vocabulary is
+	// retired: `n`/`N` walks the Needs you queue instead, and neither bracket nor
+	// brace answers anything in ModeList.
+	keyPhasePrev = "[" // jump to previous phase header in timeline
+	keyPhaseNext = "]" // jump to next phase header in timeline
 
 	keyPgUp   = "pgup"   // move up by one page in scrollable views
 	keyPgDown = "pgdown" // move down by one page in scrollable views
@@ -93,35 +98,46 @@ const (
 	keyTogglePreview = "p" // launcher/plans: toggles the split-pane live preview
 	// keyInspector is the same key string as keyCopySessionID; disambiguation is
 	// by mode. In ModeList: show or hide the session inspector.
-	keyInspector  = "i"
-	keyToggleView = "v" // toggles the dashboard list between Urgency and Projects
+	keyInspector = "i"
+	// `v` toggled the list between Urgency and Projects and is retired. The
+	// arrangement is not something an operator changes often enough to spend a
+	// letter on: Toggle List View is a palette command, and the view name in the
+	// header is a click target, so both a keyboard and a mouse route survive.
+	//
 	// keyProjectSwitcher opens the dashboard's project-scope overlay. It is the
 	// same key the launcher and the plans browser spell as keyTogglePreview, and
 	// the dashboard is free to claim it because the preview pane that owned it
 	// here is gone.
 	keyProjectSwitcher = "p"
 
-	// keyCollapse/keyExpand fold and unfold a project family in ModeList.
-	// They reuse keyLeft/keyRight above, which the list has never bound; the
-	// separate names are here so the collapse handler reads as what it does
-	// rather than as a direction.
-	keyCollapse = keyLeft
-	keyExpand   = keyRight
+	// keyNeedsYouNext/keyNeedsYouPrev walk the Needs you queue in ModeList. The
+	// lowercase spelling is the same key string as keyN, which ModeConfirm reads
+	// as "no"; disambiguation is by mode, as it is for keyInspector above.
+	//
+	// They move the cursor and nothing else. Revealing a folded family is part of
+	// moving — a row with no line of its own cannot be selected until its family
+	// is unfolded — but no terminal is focused and no status icon is
+	// acknowledged, which is what separates this from the `}`/`{` jump it
+	// replaced.
+	keyNeedsYouNext = "n"
+	keyNeedsYouPrev = "N"
 
+	// The ModeList arrow-key folding vocabulary — Left to fold a family or step
+	// up to its summary, Right to unfold — is retired. Enter is the one fold key
+	// now: the summary line it acts on is the only line where Enter has nothing
+	// to focus, so there is no ambiguity to resolve with a second pair of keys,
+	// and the footer's `enter fold/unfold` gloss is one key rather than three.
+	//
+	// keyTab/keyShiftTab switch the dashboard between its two body panes. They
+	// used to cycle the filter-chip ring as well; the ring is retired, so on a
+	// dashboard with no inspector on screen there is nothing to switch to and
+	// both keys answer nothing.
 	keyTab      = "tab"
 	keyShiftTab = "shift+tab"
-
-	// Numeric chip-removal keys (ModeList only). 1 removes the first chip,
-	// 2 the second, and so on up to 9.
-	key1 = "1"
-	key2 = "2"
-	key3 = "3"
-	key4 = "4"
-	key5 = "5"
-	key6 = "6"
-	key7 = "7"
-	key8 = "8"
-	key9 = "9"
 )
 
+// keyProjectSessionSearch is a launcher key, not a dashboard one: the picker
+// still has a full direct keymap, and only the dashboard's shrank. The
+// dashboard reaches the same capability through the palette's
+// commands.SearchProject entry.
 const keyProjectSessionSearch = "s" // opens ModeSessionSearch filtered to the selected project

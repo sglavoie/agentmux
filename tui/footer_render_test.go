@@ -173,7 +173,9 @@ func TestListFooterZeroWidthEmitsOneUnwrappedRow(t *testing.T) {
 	if strings.Contains(out, footerHintMore) {
 		t.Errorf("zero width dropped hints and marked overflow: %q", out)
 	}
-	for _, want := range []string{"j/k up/down", "R resort", "O open in editor"} {
+	// One hint from each priority band, so a regression that sheds a whole band
+	// at zero width is what this catches rather than one entry going missing.
+	for _, want := range []string{"j/k up/down", "a actions", "n/N needs you", "l launch"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("zero-width footer missing %q: %q", want, out)
 		}
@@ -184,16 +186,21 @@ func TestListFooterZeroWidthEmitsOneUnwrappedRow(t *testing.T) {
 // cursor row and so are available in every state, including an empty list. They
 // are listed once rather than repeated in every case below, which is what makes
 // a key that quietly becomes cursor-dependent show up as a missing case entry.
+//
+// It is short now because the small keymap is: the per-row command keys the
+// footer used to name one by one (`e`, `r`, `c`, `C`, `x`, `X`, `o`, `O`, …)
+// are entries in the actions overlay behind `a`, and the overlay carries its own
+// per-entry availability. What is left here is the app-level half of the row.
 var cursorIndependentFooterKeys = map[string]bool{
 	"j/k": true, "enter": true, ":": true, "/": true, "?": true,
-	"esc": true, "1-9": true, "tab": true, "]/[": true, "}/{": true,
-	"i": true, "p": true, "v": true, "l": true, "q": true,
-	"f": true, "S": true, "P": true, "R": true,
+	"esc": true, "tab": true,
+	"i": true, "p": true, "l": true, "q": true,
 }
 
-// TestListFooterAvailability verifies the per-entry availability rules: rows
-// in the attention group activate `x`; bolt rows activate `e`; empty lists
-// keep every row-targeted entry unavailable.
+// TestListFooterAvailability verifies the per-entry availability rules for the
+// two candidates whose answer depends on what the cursor row is: `a` opens the
+// actions overlay and needs a row to act on, and `n`/`N` dims when nothing on
+// the dashboard is waiting on a human.
 func TestListFooterAvailability(t *testing.T) {
 	cases := []struct {
 		name string
@@ -203,38 +210,22 @@ func TestListFooterAvailability(t *testing.T) {
 		{
 			name: "empty list — only global actions available",
 			m:    Model{},
-			want: map[string]bool{
-				"a": false, "e": false, "T": false, "r": false, "c": false,
-				"C": false, "s": false, "x": false, "X": false,
-				"o": false, "O": false,
-			},
+			want: map[string]bool{"a": false, "n/N": false},
 		},
 		{
-			name: "attention row — x active, e unavailable",
+			name: "attention row — actions and needs-you both live",
 			m:    withListRows(Model{}, session.RunningSession{State: "key"}),
-			want: map[string]bool{
-				"a": true, "e": false, "T": true, "r": true, "c": true,
-				"C": true, "s": true, "x": true, "X": true,
-				"o": false, "O": false,
-			},
+			want: map[string]bool{"a": true, "n/N": true},
 		},
 		{
-			name: "active row — e active, x unavailable",
+			name: "active row — actions live, nothing waiting to jump to",
 			m:    withListRows(Model{}, session.RunningSession{State: "bolt"}),
-			want: map[string]bool{
-				"a": true, "e": true, "T": true, "r": true, "c": true,
-				"C": true, "s": true, "x": false, "X": true,
-				"o": false, "O": false,
-			},
+			want: map[string]bool{"a": true, "n/N": false},
 		},
 		{
-			name: "idle row — neither e nor x available",
+			name: "idle row — actions live, nothing waiting to jump to",
 			m:    withListRows(Model{}, session.RunningSession{State: ""}),
-			want: map[string]bool{
-				"a": true, "e": false, "T": true, "r": true, "c": true,
-				"C": true, "s": true, "x": false, "X": true,
-				"o": false, "O": false,
-			},
+			want: map[string]bool{"a": true, "n/N": false},
 		},
 	}
 	for _, tc := range cases {

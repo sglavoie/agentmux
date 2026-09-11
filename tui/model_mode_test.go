@@ -139,22 +139,48 @@ func TestNavJK(t *testing.T) {
 	}
 }
 
-func TestNavGTop(t *testing.T) {
+// The two ends of the list are home and end now. `g`/`G` named the same two
+// places with keys that only a vim reader guesses, and they are unbound at the
+// dashboard rather than rebound — see TestNavGAndCapitalGAreRetiredAtTheList.
+// They survive inside the project switcher, the health overlay, and the detail
+// timeline, which have their own handlers and their own scroll geometry.
+func TestNavHomeGoesToTop(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "j")
 	m = pressKey(m, "j")
-	m = pressKey(m, "g")
+	m = pressKey(m, keyHome)
 	if m.cursor != 0 {
-		t.Fatalf("expected cursor=0 after g, got %d", m.cursor)
+		t.Fatalf("expected cursor=0 after home, got %d", m.cursor)
 	}
 }
 
-func TestNavGBottom(t *testing.T) {
+func TestNavEndGoesToBottom(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "G")
+	m = pressKey(m, keyEnd)
 	want := len(m.filtered) - 1
 	if m.cursor != want {
-		t.Fatalf("expected cursor=%d after G, got %d", want, m.cursor)
+		t.Fatalf("expected cursor=%d after end, got %d", want, m.cursor)
+	}
+}
+
+func TestNavGAndCapitalGAreRetiredAtTheList(t *testing.T) {
+	for _, key := range []string{keyG, keyGG} {
+		t.Run(key, func(t *testing.T) {
+			m := loadSessions(testModel(), makeSessions())
+			m = pressKey(m, "j")
+			before := m.cursor
+			updated, cmd := m.Update(keyPress(key))
+			got := updated.(Model)
+			if got.cursor != before {
+				t.Errorf("%q moved the cursor %d->%d", key, before, got.cursor)
+			}
+			if got.mode != ModeList {
+				t.Errorf("%q left ModeList for %q", key, uitestModeName(got.mode))
+			}
+			if cmd != nil {
+				t.Errorf("%q dispatched a command", key)
+			}
+		})
 	}
 }
 
@@ -166,7 +192,7 @@ func TestNavClampAtBounds(t *testing.T) {
 		t.Fatalf("expected cursor=0 after k at top, got %d", m.cursor)
 	}
 	// Pressing j past bottom should stay at last.
-	m = pressKey(m, "G")
+	m = pressKey(m, keyEnd)
 	last := m.cursor
 	m = pressKey(m, "j")
 	if m.cursor != last {
@@ -279,10 +305,14 @@ func TestFooterChangesWithMode(t *testing.T) {
 
 // ---- Confirm mode tests ----
 
+// The confirm prompt is entered from the actions overlay now — `X` and `r` are
+// its entries rather than dashboard keys — but the prompt itself is unchanged,
+// and y/n/esc are still its whole vocabulary.
+
 func TestConfirmNReturnsToList(t *testing.T) {
 	m := loadSessions(modalConfirmModel(), makeSessions())
-	m = pressKey(m, "X") // → ModeConfirm (close)
-	m = pressKey(m, "n") // cancel
+	m = pressRowAction(t, m, keyClose) // → ModeConfirm (close)
+	m = pressKey(m, "n")               // cancel
 	if m.mode != ModeList {
 		t.Fatalf("expected ModeList after n in confirm, got %d", m.mode)
 	}
@@ -290,7 +320,7 @@ func TestConfirmNReturnsToList(t *testing.T) {
 
 func TestConfirmEscReturnsToList(t *testing.T) {
 	m := loadSessions(modalConfirmModel(), makeSessions())
-	m = pressKey(m, "X") // → ModeConfirm
+	m = pressRowAction(t, m, keyClose) // → ModeConfirm
 	m = pressKey(m, "esc")
 	if m.mode != ModeList {
 		t.Fatalf("expected ModeList after esc in confirm, got %d", m.mode)
@@ -299,7 +329,7 @@ func TestConfirmEscReturnsToList(t *testing.T) {
 
 func TestConfirmYEmitsCloseCmd(t *testing.T) {
 	m := loadSessions(modalConfirmModel(), makeSessions())
-	m = pressKey(m, "X") // → ModeConfirm (close)
+	m = pressRowAction(t, m, keyClose) // → ModeConfirm (close)
 	updated, cmd := m.Update(keyPress("y"))
 	if updated.(Model).mode != ModeList {
 		t.Fatalf("expected ModeList after y, got %d", updated.(Model).mode)
@@ -310,8 +340,8 @@ func TestConfirmYEmitsCloseCmd(t *testing.T) {
 }
 
 func TestConfirmYEmitsRestartCmd(t *testing.T) {
-	m := loadSessions(testModelWithSessions(), makeSessions())
-	m = pressKey(m, "r") // → ModeConfirm (restart)
+	m := loadSessions(modalConfirmModel(), makeSessions())
+	m = pressRowAction(t, m, keyR) // → ModeConfirm (restart)
 	updated, cmd := m.Update(keyPress("y"))
 	if updated.(Model).mode != ModeList {
 		t.Fatalf("expected ModeList after y, got %d", updated.(Model).mode)
