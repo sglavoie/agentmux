@@ -1,0 +1,20 @@
+{
+  "name": "held-inspector-survives-launcher-session-search",
+  "fixture": "paused_queue",
+  "size": { "width": 160, "height": 50 },
+  "actions": [
+    { "type": "key", "key": "tab" },
+    { "type": "key", "key": "home" },
+    { "type": "key", "key": "l" },
+    { "type": "key", "key": "p" },
+    { "type": "key", "key": "s" },
+    { "type": "key", "key": "esc" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "selected_title", "value": "charlie" },
+    { "type": "contains_text", "text": "Paused" },
+    { "type": "contains_text", "text": "output line 01" },
+    { "type": "no_layout_issues" }
+  ]
+}

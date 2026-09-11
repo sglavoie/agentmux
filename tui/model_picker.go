@@ -196,7 +196,29 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if origIdx < 0 || origIdx >= len(m.pickerSessions) {
 			return m, nil
 		}
-		return m.enterSessionSearchForProject(m.pickerSessions[origIdx].Title)
+		updated, cmd := m.enterSessionSearchForProject(m.pickerSessions[origIdx].Title)
+		next := updated.(Model)
+		// Past Sessions is a third surface, not a deeper room in the launcher, so
+		// this is a way OUT of the launcher and gives the pane back like the other
+		// two. Leaving the borrow outstanding here would not merely delay the
+		// restore: the dashboard behind Past Sessions is reachable again from that
+		// surface's own esc, so the stash would still be held while the operator
+		// scrolls and resumes the inspector, and the next launcher visit would put
+		// the pre-visit snapshot back over what they did.
+		//
+		// It is returned AFTER entry, for the reason the esc path spells out — the
+		// restore asks which window the DASHBOARD cursor is on and reads the mode
+		// to decide, so it must not run while the mode still says ModePicker. An
+		// entry that refused (an untitled project) leaves the launcher on screen
+		// and is not a way out at all, which is what the guard reads.
+		if next.activeRootMode() == ModePicker {
+			return next, cmd
+		}
+		// Sequenced rather than inlined into the return, for the reason the enter
+		// path states: the restore writes a new chain identity onto next, and Go
+		// does not order a bare operand against a call beside it in the same list.
+		resume := next.returnPreviewToDashboard()
+		return next, tea.Batch(cmd, resume)
 	case keyO:
 		return m, pickerOpenCmd(m, m.pickerOpenTargets())
 	case keyOpenEditor:

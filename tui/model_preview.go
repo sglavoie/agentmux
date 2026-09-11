@@ -659,6 +659,15 @@ func (m *Model) lendPreviewToLauncher(windowID int) {
 // returnPreviewToDashboard is the way out of the launcher: it puts back whatever
 // the launcher borrowed and hands the pane to the dashboard.
 //
+// Every key that takes the launcher off the screen calls it — esc, enter, and
+// the `s` that opens Past Sessions for the row under the cursor. That last one
+// does not land on the dashboard, and it is still an exit: the borrow is scoped
+// to the launcher being the surface on screen, not to the dashboard being the
+// next one. A route that skipped the restore because it was going somewhere else
+// would leave the stash outstanding while the operator reaches the dashboard by
+// another door, reads it, and resumes it — and the next launcher visit would
+// hand that pre-visit snapshot back over everything they did.
+//
 // The restore comes first and is unconditional, because the borrow is undone
 // whether or not the dashboard is going to draw the pane — the inspector's
 // state outlives being off screen, and a hidden inspector that later reopens
