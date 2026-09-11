@@ -128,6 +128,7 @@ func dashboardListInput(m Model, width, height int) dashboard.ListInput {
 		// across. Passing m.filtered here would let a chip rename the rows it kept.
 		Live:          m.sessions,
 		Cursor:        m.cursor,
+		Blurred:       m.inspectorFocused(),
 		Offset:        m.listOffset,
 		Width:         width,
 		Height:        height,

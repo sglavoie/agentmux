@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/tui/dashboard"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // This file is the inspector's focus and its survival: which pane the keyboard
@@ -30,6 +31,60 @@ func inspectorFocusModel(t *testing.T) Model {
 	m.width, m.height = 160, 50
 	requireInspector(t, m)
 	return m
+}
+
+func TestTabMakesTheFocusedPaneVisible(t *testing.T) {
+	m := inspectorFocusModel(t)
+	before := renderDashboardFrame(m)
+	g := dashboardGeometry(m)
+	queueFocused := dashboard.RenderList(dashboardListInput(m, g.listWidth, g.listHeight))
+	assertHeading := func(want string) {
+		t.Helper()
+		frame := renderDashboardFrame(m)
+		rows := strings.Split(frame.text, "\n")
+		heading := rows[frame.hitMap.listPane.Y-1]
+		plain := stripAnsi(heading)
+		if strings.Count(plain, "· focused") != 1 || !strings.Contains(plain, "> "+want+" · focused") {
+			t.Fatalf("ambiguous pane focus: %q", plain)
+		}
+		if layout.StyledWidth(heading) != m.width || frame.hitMap.listPane != before.hitMap.listPane || frame.hitMap.inspectorPane != before.hitMap.inspectorPane {
+			t.Fatal("focus indicator changed pane geometry")
+		}
+		if strings.Index(plain, "Inspector") < g.listWidth {
+			t.Fatalf("inspector heading is not over its pane: %q", plain)
+		}
+		if !strings.Contains(heading, "\x1b[") {
+			t.Fatal("pane heading has no visual styling")
+		}
+	}
+	assertHeading("Sessions")
+	m = pressKey(m, keyTab)
+	assertHeading("Inspector")
+	queueBlurred := dashboard.RenderList(dashboardListInput(m, g.listWidth, g.listHeight))
+	if queueFocused == queueBlurred || stripAnsi(queueFocused) != stripAnsi(queueBlurred) {
+		t.Fatal("moving focus must change the queue's selection styling, preserving its text")
+	}
+	m = pressKey(m, keyShiftTab)
+	assertHeading("Sessions")
+	if got := dashboard.RenderList(dashboardListInput(m, g.listWidth, g.listHeight)); got != queueFocused {
+		t.Fatal("returning focus did not restore the queue's selection styling")
+	}
+}
+
+func TestPaneHeadingFollowsVisibleFocusOnResize(t *testing.T) {
+	m := pressKey(inspectorFocusModel(t), keyTab)
+	updated, _ := m.handleWindowSize(tea.WindowSizeMsg{Width: splitFloor - 1, Height: 50})
+	m = updated.(Model)
+	if heading := stripAnsi(renderHeaderSpacer(m)); !strings.Contains(heading, "> Sessions · focused") || strings.Contains(heading, "Inspector") {
+		t.Fatalf("hidden inspector still claims focus: %q", heading)
+	}
+	if dashboardListInput(m, m.width, 20).Blurred {
+		t.Fatal("visible queue selection is still blurred after inspector disappears")
+	}
+	m = pressKey(m, keyInspector)
+	if heading := stripAnsi(renderHeaderSpacer(m)); !strings.Contains(heading, "> Inspector · focused") || strings.Contains(heading, "Sessions") {
+		t.Fatalf("full-screen inspector lacks focus feedback: %q", heading)
+	}
 }
 
 // TestTabCyclesThePanesAndIsInertWhenThereIsOneOfThem pins both halves of Tab's

@@ -51,7 +51,7 @@ below for where each key went.
 - `n`/`N`: move to the next/previous **Needs you** session. A target inside a
   folded family unfolds it and lands the cursor on the row; nothing is focused,
   opened, or marked as read — finding a waiting session is not answering it
-- `Tab`/`Shift+Tab`: switch the focused pane
+- `Tab`/`Shift+Tab`: switch the focused pane. Its heading is highlighted and marked `focused`; the inactive pane's selection loses its reverse highlight.
 - `a`: open the actions overlay for the selected row — focus, peek at the
   scrollback, restart, restart under another profile, launch another session in
   the project, clear the status icon, close, open a shell or the configured

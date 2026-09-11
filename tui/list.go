@@ -217,13 +217,36 @@ func headerHits(parts []headerSegment, sepW, limit int) []mouseHitRegion {
 	return hits
 }
 
-// renderHeaderSpacer keeps a blank line between the header block and the list.
+// renderHeaderSpacer uses the reserved row above the body for pane headings.
+// Focus has both a text label and reverse video, so it is visible without color.
 // Returns "" outside ModeList so the line collapses cleanly in other modes.
 func renderHeaderSpacer(m Model) string {
 	if m.mode != ModeList {
 		return ""
 	}
-	return "\n"
+	g := dashboardGeometry(m)
+	if g.fullScreen {
+		return renderPaneHeading("Inspector", g.previewWidth, true) + "\n"
+	}
+	queue := paneBlock{text: renderPaneHeading("Sessions", g.listWidth, !m.inspectorFocused()), width: g.listWidth}
+	if !g.split {
+		return queue.text + "\n"
+	}
+	inspector := paneBlock{text: renderPaneHeading("Inspector", g.previewWidth, m.inspectorFocused()), width: g.previewWidth}
+	return joinPanes(1, queue, paneDivider(1), inspector) + "\n"
+}
+
+func renderPaneHeading(title string, width int, focused bool) string {
+	label := "  " + title
+	if focused {
+		label = "> " + title + " · focused"
+	}
+	label = layout.Truncate(label, width, "")
+	label += strings.Repeat(" ", max(0, width-layout.StyledWidth(label)))
+	if focused {
+		return styleSelected.Render(label)
+	}
+	return styleDim.Render(label)
 }
 
 // listMinVisible is the floor on the visible row budget for the session list.
@@ -249,9 +272,8 @@ const statusBarLines = 1
 // builds per frame; the alternative costs correctness at exactly the widths
 // this file exists to get right.
 //
-// The one thing not measured is the header spacer: it is a bare newline, which
-// layout.SectionLines correctly reports as no content, and it is still a
-// physical row on screen.
+// The pane headings occupy one reserved row. Do not render them to measure it:
+// their widths read dashboardGeometry, which in turn reads this budget.
 func chromeAboveListLines(m Model) int {
 	if m.mode == ModeSearch {
 		// ModeSearch replaces the whole header block with the search input and
@@ -261,7 +283,7 @@ func chromeAboveListLines(m Model) int {
 	n := len(layout.SectionLines(renderHeader(m)))
 	n += len(layout.SectionLines(renderChips(m, m.width)))
 	if m.mode == ModeList {
-		n++ // spacer is always one line in ModeList
+		n++ // pane headings always occupy one line in ModeList
 	}
 	return n
 }
