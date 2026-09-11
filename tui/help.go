@@ -80,13 +80,14 @@ var helpSections = []struct {
 		"  space     fold / unfold the selected project",
 		"  (projects start expanded; folds last until amx exits)",
 	}},
-	{"Project rail", []string{
-		"  b         show / hide the project rail (urgency only)",
-		"  ← / →     move focus between rail and session list",
-		"  j/k ↑/↓   move the rail cursor",
-		"  enter     apply the highlighted row as a project filter",
-		"  mouse     click to scope; wheel scrolls the pane under it",
-		"  (responsive hiding never clears an active project filter)",
+	{"Project switcher", []string{
+		"  p         open the project switcher (header control does the same)",
+		"  j/k ↑/↓   move between scopes; g/G jump to the ends",
+		"  /         search the scopes by label",
+		"  enter     apply the highlighted scope as the project filter",
+		"  esc/q/p   close without changing the filter",
+		"  mouse     click a scope row to apply it",
+		"  (All is always offered; every other active filter is preserved)",
 	}},
 	{"Act on row", []string{
 		"  enter     focus the session's tab (a project folds instead)",

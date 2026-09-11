@@ -96,11 +96,11 @@ func TestTriageIntegrationFixturePinsReleaseMatrix(t *testing.T) {
 		labels[strings.ToLower(family.Label)] = true
 	}
 	if got := len(labels); got < 10 {
-		t.Fatalf("canonical label count = %d, want enough to force a short rail to scroll", got)
+		t.Fatalf("canonical label count = %d, want enough to force the switcher to scroll", got)
 	}
 }
 
-func TestTriageIntegrationFixtureRendersPriorityAndRailOrder(t *testing.T) {
+func TestTriageIntegrationFixtureRendersPriorityAndScopeOrder(t *testing.T) {
 	fx, err := uitestFixtureByName("triage_integration")
 	if err != nil {
 		t.Fatalf("triage_integration fixture: %v", err)
@@ -122,21 +122,23 @@ func TestTriageIntegrationFixtureRendersPriorityAndRailOrder(t *testing.T) {
 		t.Fatalf("session priority order = %v, want %v", gotSessions, wantSessions)
 	}
 
-	rows := dashboardRailRows(m)
-	gotLabels := make([]string, len(rows))
-	for i := range rows {
-		gotLabels[i] = rows[i].Label
+	scopes := projectScopes(m)
+	gotLabels := make([]string, len(scopes))
+	for i := range scopes {
+		gotLabels[i] = scopes[i].Label
 	}
 	wantLabels := []string{
-		"All", "Release Guard", "Client Portal", "Finished Work",
+		"All projects", "Release Guard", "Client Portal", "Finished Work",
 		"Watchtower", "Agent Fleet", "Build Farm", "Compact Ops",
 		"Quiet Queue", "Archive", "Legacy Lab", "Spare Parts",
 	}
 	if !reflect.DeepEqual(gotLabels, wantLabels) {
-		t.Fatalf("rail order = %v, want %v", gotLabels, wantLabels)
+		t.Fatalf("scope order = %v, want %v", gotLabels, wantLabels)
 	}
-	if rows[0].Counts != [3]int{4, 5, 3} || rows[2].Counts != [3]int{2, 0, 0} {
-		t.Fatalf("rail tallies: all=%v client=%v", rows[0].Counts, rows[2].Counts)
+	// Client Portal is the case-folded merge: two sessions under two profiles
+	// reporting the same label in two casings aggregate into one scope.
+	if scopes[0].Counts != [3]int{4, 5, 3} || scopes[2].Counts != [3]int{2, 0, 0} {
+		t.Fatalf("scope tallies: all=%v client=%v", scopes[0].Counts, scopes[2].Counts)
 	}
 }
 

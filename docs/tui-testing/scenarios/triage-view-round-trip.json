@@ -1,63 +1,26 @@
 {
-  "name": "triage rail scope survives projects round trip",
+  "name": "triage switcher scope survives projects round trip",
   "fixture": "triage_integration",
   "size": {
     "width": 140,
     "height": 20
   },
   "actions": [
-    {
-      "type": "key",
-      "key": "i"
-    },
-    {
-      "type": "key",
-      "key": "b"
-    },
-    {
-      "type": "key",
-      "key": "left"
-    },
-    {
-      "type": "key",
-      "key": "down"
-    },
-    {
-      "type": "key",
-      "key": "down"
-    },
-    {
-      "type": "key",
-      "key": "enter"
-    },
-    {
-      "type": "key",
-      "key": "v"
-    },
-    {
-      "type": "key",
-      "key": "v"
-    }
+    { "type": "key", "key": "i" },
+    { "type": "key", "key": "p" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "enter" },
+    { "type": "key", "key": "v" },
+    { "type": "key", "key": "v" },
+    { "type": "key", "key": "p" }
   ],
   "assertions": [
-    {
-      "type": "contains_text",
-      "text": "Agent Mux · Urgency"
-    },
-    {
-      "type": "contains_text",
-      "text": "▌#Client Portal ✕"
-    },
-    {
-      "type": "contains_text",
-      "text": " ● 🔑 Client Portal 2 0 0"
-    },
-    {
-      "type": "contains_text",
-      "text": "2/12 visible · 2 attention · 0 active · 0 idle"
-    },
-    {
-      "type": "no_layout_issues"
-    }
+    { "type": "mode_equals", "mode": "project_switcher" },
+    { "type": "contains_text", "text": "Agent Mux · Urgency" },
+    { "type": "contains_text", "text": "▌#Client Portal ✕" },
+    { "type": "contains_text", "text": "›● 🔑 Client Portal                 2   0    0" },
+    { "type": "contains_text", "text": "Switch project: Client Portal" },
+    { "type": "no_layout_issues" }
   ]
 }

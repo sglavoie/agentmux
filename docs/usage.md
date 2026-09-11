@@ -52,8 +52,7 @@ Key flows:
 - `x`: clear the selected session's status icon
 - `X`: close the selected running session
 - `o`: open the selected project's directory in a plain shell tab
-- `p`: toggle the preview pane
-- `b`: toggle the project rail in the urgency view
+- `p`: open the project switcher
 - `v`: switch between the urgency order and the Projects view, and back
 - `d`: show the per-session hook event log (scrollable detail pane)
 - `S`: search past session transcripts across every configured profile
@@ -155,36 +154,44 @@ project it names the project, its bucket tally, and then the context of the
 member that decided its urgency. The strip is always exactly two lines, occupied
 or not, so moving the cursor never moves the bottom edge of the list.
 
-### Project rail
+### Project switcher
 
-The urgency view shows a project rail by default when it can preserve at least
-80 cells for the main list. `b` requests it hidden or shown; `←` moves keyboard
-focus into a visible rail, `↑`/`↓` or `j`/`k` moves its independent cursor, and
-`enter` applies that project as a filter. `→` returns focus to the session list.
-Page and top/bottom navigation use the same keys as the list. A short rail
-scrolls independently and marks omitted rows with `▲`/`▼`.
+The header always carries a project selector reading `p: all projects` or
+`p: <label>`. `p` and a click on that selector both open the same overlay, in
+either list arrangement and at every width; the overlay is a modal, so it dims
+the dashboard rather than taking a column from it.
 
-Each row shows the project label and its Needs Attention/Active/Idle tallies.
-Labels aggregate case-insensitively across live sessions, profiles, and
-repository identities; the highest-priority member supplies the displayed
-casing and state icon. A label such as `Client Portal` is therefore one rail row
-even when another live checkout reports `client portal`.
+Inside it, `↑`/`↓` or `j`/`k` move between scopes, `g`/`G` and the page keys
+reach the ends, `/` searches the scopes by label, `enter` applies the
+highlighted scope, and `esc`, `q`, or `p` closes it without touching the filter.
+Clicking a scope row applies it. A scope list too long for the overlay scrolls
+and marks omitted rows with `▲`/`▼`. `All projects` is offered first and
+survives every search, because it is the way back out of a scope.
 
-The preview is allocated before the rail. If a horizontal preview plus its
-divider cannot leave the 80-cell list floor and the rail's 20–32 cells plus its
-divider, the rail disappears. A vertical preview can coexist at full width.
-Narrowing the terminal can also suppress the rail, but it never clears an
-active project filter; the chip remains the authoritative scope, and widening
-the terminal shows the rail again. The Projects view never draws the rail,
-because it is a different list arrangement rather than a filtering control.
+Each row shows the project label and its Needs Attention/Active/Idle tallies
+under `need`/`act`/`idle` headings, with `›` on the row the keys are on and `●`
+on the scope the dashboard is actually narrowed to — which are different facts
+while the operator is reading the list. Labels aggregate case-insensitively
+across live sessions, profiles, and repository identities; the highest-priority
+member supplies the displayed casing and state icon. A label such as
+`Client Portal` is therefore one row even when another live checkout reports
+`client portal`.
 
-Mouse behavior mirrors these controls: click a rail row to select and apply its
-scope, wheel over the rail to move its cursor, wheel over the list to move the
-session selection, and click a filter chip to remove that exact component. One
-click on a session selects it; a second click on the same session focuses its
-Kitty tab. The view, rail, and preview labels in the header are clickable.
-Terminal-native text selection remains available with Shift-drag; Agent Mux
-does not intercept the modified drag.
+The tallies are contextual. Building them removes only the project selector
+from the active filter, so `#docs` can be swapped for `#api` in one keystroke
+while a `@work` chip or a text term still constrains what the numbers count and
+which scopes are offered at all. Applying a scope likewise replaces only that
+one component and preserves the rest, quoting a label that needs it; cancelling
+changes nothing. The selection is stored as the project's identity rather than
+a row number, so a refresh that reorders or drops scopes under the open overlay
+leaves the highlight on the same project.
+
+Mouse behavior mirrors these controls: click a filter chip to remove that exact
+component, wheel over the list to move the session selection, and wheel over the
+inspector to scroll it. One click on a session selects it; a second click on the
+same session focuses its Kitty tab. The view, project, and inspector labels in
+the header are clickable. Terminal-native text selection remains available with
+Shift-drag; Agent Mux does not intercept the modified drag.
 
 ### Projects view
 

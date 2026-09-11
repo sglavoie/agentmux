@@ -37,7 +37,7 @@ const (
 	ManageWorktrees    ID = "explore.manage-worktrees"
 	ShowRuns           ID = "explore.show-runs"
 	ToggleInspector    ID = "explore.toggle-inspector"
-	ToggleRail         ID = "explore.toggle-project-rail"
+	SwitchProject      ID = "explore.switch-project"
 	ToggleListView     ID = "explore.toggle-list-view"
 	ResortTabs         ID = "app.resort-tabs"
 	UndoClose          ID = "app.undo-close"

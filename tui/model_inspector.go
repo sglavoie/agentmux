@@ -46,8 +46,8 @@ const (
 )
 
 // paneFocus names which of the dashboard's two panes the keyboard is aimed at.
-// The project rail is deliberately not a third value here: it keeps its own
-// railFocused bit and its own ←/→ entry point, because it is a filter control
+// The project switcher is deliberately not a third value here: it is a modal
+// with its own mode and its own key handler, because it is a filter control
 // rather than a body pane and Tab cycling through it would put a scope picker
 // between the queue and the output the operator is reading.
 type paneFocus int
@@ -203,7 +203,6 @@ func (m Model) toggleInspector() (tea.Model, tea.Cmd) {
 		m.inspectorDisplay = inspectorHidden
 		m.paneFocus = focusQueue
 		m.retargetPreview(0)
-		m.syncRailState()
 		scrollListToCursor(&m)
 		return m, nil
 	}
@@ -213,9 +212,6 @@ func (m Model) toggleInspector() (tea.Model, tea.Cmd) {
 		m.inspectorDisplay = inspectorFullScreen
 	}
 	m.paneFocus = focusInspector
-	// Taking the focus means taking it from whoever held it, and the rail is the
-	// other claimant. `i` is reachable from the rail, so this is not hypothetical.
-	m.railFocused = false
 	return m.showInspector()
 }
 
@@ -236,7 +232,6 @@ func inspectorSplitFitsWithDisplay(m Model, display inspectorDisplay) bool {
 func (m Model) showInspector() (tea.Model, tea.Cmd) {
 	m.retargetPreview(m.currentPreviewWindowID())
 	m.clearPreviewNotice()
-	m.syncRailState()
 	scrollListToCursor(&m)
 	read := m.requestPreviewRead()
 	return m, tea.Batch(read, m.startPreviewPoll())
@@ -253,11 +248,6 @@ func (m *Model) focusPane(target paneFocus) bool {
 		return false
 	}
 	m.paneFocus = target
-	if target == focusInspector {
-		// The rail and the inspector are both alternatives to the queue holding
-		// the keys; two of them holding it at once would route a keystroke twice.
-		m.railFocused = false
-	}
 	return true
 }
 
@@ -347,7 +337,6 @@ func (m *Model) escapeInspectorLayer() bool {
 	if m.inspectorFullScreenActive() {
 		m.inspectorDisplay = inspectorAutomatic
 		m.paneFocus = focusQueue
-		m.syncRailState()
 		scrollListToCursor(m)
 		return true
 	}

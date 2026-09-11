@@ -412,28 +412,35 @@ func commandDeclarations() []commands.Command[Model] {
 			// No availability rule. The inspector has no size at which it must
 			// refuse: too narrow for a split means full-screen rather than
 			// nothing, so a dimmed palette row would be stating a limit that does
-			// not exist. Showing the pane can take the width the rail was drawn
-			// in, which is why toggleInspector reconciles the rail itself — the
-			// key and this entry share that body rather than each remembering.
+			// not exist.
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
 				updated, cmd := m.toggleInspector()
 				return updated.(Model), cmd
 			},
 		},
 		{
-			ID: commands.ToggleRail, Group: commands.GroupExplore,
+			ID: commands.SwitchProject, Group: commands.GroupExplore,
+			// The title names the scope the list is in, not the one the command
+			// would switch to, because the command switches to whichever scope the
+			// operator picks — there is no single destination to name. The
+			// no-selector case spells out "all projects" rather than "all" so the
+			// palette row, the header selector, the switcher's own first row, and
+			// the status bar all name that scope with the same words.
 			Title: func(m Model, _ commands.Context) string {
-				if m.railRequested {
-					return "Hide Project Rail"
+				if applied := m.activeFilter.Project; applied != "" {
+					return "Switch Project (" + applied + ")"
 				}
-				return "Show Project Rail"
+				return "Switch Project (all projects)"
 			},
-			Description: "Toggle the project scope rail in Urgency view.",
-			Aliases:     []string{"sidebar", "projects", "scope"},
-			Visible:     func(m Model, _ commands.Context) bool { return m.listView == dashboard.ViewUrgency },
+			Description: "Narrow the dashboard to one project's sessions, or back to all of them.",
+			Aliases:     []string{"projects", "scope", "sidebar", "rail"},
+			// Available in both arrangements and at every width. The project
+			// selector is a filter component, and the Projects view groups by
+			// family rather than replacing the filter, so narrowing to one project
+			// means the same thing on either side of `v`.
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
-				m.toggleRail()
-				return m, nil
+				updated, cmd := m.openProjectSwitcher()
+				return updated.(Model), cmd
 			},
 		},
 		{

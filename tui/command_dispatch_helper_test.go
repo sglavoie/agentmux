@@ -35,9 +35,6 @@ func runDashboardCommand(t *testing.T, m Model, id commands.ID) (Model, tea.Cmd)
 	if m.mode != ModeList {
 		t.Fatalf("command %q is unreachable from mode %q: the palette opens from the session list", id, uitestModeName(m.mode))
 	}
-	if m.railFocused {
-		t.Fatalf("command %q is unreachable while the project rail holds focus, where %q is inert", id, keyColon)
-	}
 	m = pressKey(m, keyColon)
 	if m.mode != ModeCommandPalette {
 		t.Fatalf("pressing %q left the model in mode %q instead of opening the command palette", keyColon, uitestModeName(m.mode))

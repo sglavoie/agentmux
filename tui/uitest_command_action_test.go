@@ -166,12 +166,14 @@ func TestCommandRowResolutionRejectsDuplicateIDs(t *testing.T) {
 	}
 }
 
-// TestCommandActionRefusesWhileTheRailHoldsFocus pins the one dashboard state
-// where the palette is unreachable by key. `:` is not in the rail's keymap, so
-// a scenario that entered the rail and then named a command would otherwise
-// fail with "the palette did not open", which describes the symptom rather than
-// the cause.
-func TestCommandActionRefusesWhileTheRailHoldsFocus(t *testing.T) {
+// TestCommandActionRefusesWhileTheProjectSwitcherIsOpen pins the scope picker
+// as a mode rather than a second dashboard keymap. The rail it replaced was a
+// pane inside ModeList with its own key handler, so the driver needed an
+// explicit guard to say why `:` was inert there. The switcher has a mode of its
+// own, so the ordinary wrong-mode refusal covers it — and this names the mode it
+// refuses under, which is what would break if the switcher were ever folded back
+// into the list mode.
+func TestCommandActionRefusesWhileTheProjectSwitcherIsOpen(t *testing.T) {
 	fx, err := uitestFixtureByName("project_families")
 	if err != nil {
 		t.Fatal(err)
@@ -179,22 +181,15 @@ func TestCommandActionRefusesWhileTheRailHoldsFocus(t *testing.T) {
 	d, _ := newUITestFixtureDriver(fx, fx.Size)
 	cleanupUITestDriver(t, d)
 
-	// The rail is opt-in and stands third in line for columns behind the queue
-	// and the inspector, so reaching the state under test takes a terminal wide
-	// enough for three strips and the operator's own toggle.
-	d.Resize(240, 32)
-	if err := d.Key(keyToggleRail); err != nil {
+	if err := d.Key(keyProjectSwitcher); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.Key(keyLeft); err != nil {
-		t.Fatal(err)
-	}
-	if !d.Model().railFocused {
-		t.Fatal("left did not move focus into the rail")
+	if d.Model().mode != ModeProjectSwitcher {
+		t.Fatalf("%q left the model in mode %q", keyProjectSwitcher, uitestModeName(d.Model().mode))
 	}
 	err = d.Command(commands.SearchPlans)
-	if err == nil || !strings.Contains(err.Error(), "rail") {
-		t.Fatalf("rail-focused error = %v", err)
+	if err == nil || !strings.Contains(err.Error(), "project_switcher") {
+		t.Fatalf("switcher-mode error = %v", err)
 	}
 }
 

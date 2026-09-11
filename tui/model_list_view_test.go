@@ -683,7 +683,10 @@ func TestKeyboardHelpDocumentsTheProjectsView(t *testing.T) {
 	if !strings.Contains(out, "Projects view") {
 		t.Fatalf("the help overlay has no Projects section:\n%s", out)
 	}
-	for _, phrase := range []string{"Project rail", "project filter", "#project"} {
+	// Three surfaces that all narrow by project and must stay legible as three:
+	// the switcher's own section, the filter component it writes, and the DSL
+	// selector the operator can type instead.
+	for _, phrase := range []string{"Project switcher", "project filter", "#project"} {
 		if !strings.Contains(out, phrase) {
 			t.Errorf("the help overlay does not keep %q distinct:\n%s", phrase, out)
 		}

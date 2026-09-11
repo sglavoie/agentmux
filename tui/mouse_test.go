@@ -53,7 +53,18 @@ func TestViewEnablesMouseOnlyForLiveDashboard(t *testing.T) {
 	if view.Content != m.render() {
 		t.Fatal("hit-aware ModeList render changed the existing string-rendering result")
 	}
-	for mode := ModeSearch; mode <= ModeASLResponse; mode++ {
+	// The project switcher is the second mouse-live mode: its scope rows are
+	// clickable, and they are published by the same single render pass that
+	// produces the overlay's text.
+	m.mode = ModeProjectSwitcher
+	view = m.View()
+	if view.MouseMode != tea.MouseModeCellMotion || view.OnMouse == nil {
+		t.Fatalf("ModeProjectSwitcher mouse = mode %v handler %v", view.MouseMode, view.OnMouse != nil)
+	}
+	for mode := ModeSearch; mode <= ModeProjectSwitcher; mode++ {
+		if mode == ModeProjectSwitcher {
+			continue
+		}
 		m.mode = mode
 		view = m.View()
 		if view.MouseMode != tea.MouseModeNone || view.OnMouse != nil {
@@ -66,8 +77,8 @@ func TestMouseSessionSelectionDoubleClickAndInterveningTarget(t *testing.T) {
 	d, client := mouseFixture(t)
 	notes := findMouseHit(t, d.model, mouseHitSession, func(hit mouseHitRegion) bool { return hit.identity.WindowID == 61 })
 	clickHit(t, d, notes)
-	if selected, ok := d.model.selectedSession(); !ok || selected.WindowID != 61 || d.model.railFocused {
-		t.Fatalf("single click selection = %+v ok=%v railFocused=%v", selected, ok, d.model.railFocused)
+	if selected, ok := d.model.selectedSession(); !ok || selected.WindowID != 61 {
+		t.Fatalf("single click selection = %+v ok=%v", selected, ok)
 	}
 	if got := len(client.CallsFor("FocusTab")); got != 0 {
 		t.Fatalf("single click issued %d FocusTab calls", got)
@@ -164,29 +175,36 @@ func TestMouseSummaryBodyAndChevronHaveDistinctActions(t *testing.T) {
 	}
 }
 
-// mouseRailFixture is the mouse fixture with the project rail actually on
-// screen. The rail is opt-in now and third in line for columns behind the queue
-// and the inspector, so putting one there takes both an operator toggle and a
-// terminal wide enough to hold three vertical strips.
-func mouseRailFixture(t *testing.T) *uitestDriver {
+// findRootMouseHit is findMouseHit for a mode composed by renderRootFrame rather
+// than by the dashboard frame alone. The switcher publishes its rows from the
+// root composition because that is where its overlay placement is known.
+func findRootMouseHit(t *testing.T, m Model, kind mouseHitKind, match func(mouseHitRegion) bool) mouseHitRegion {
 	t.Helper()
-	d, _ := mouseFixture(t)
-	d.Resize(240, 32)
-	if err := d.Key(keyToggleRail); err != nil {
-		t.Fatalf("toggle rail: %v", err)
+	hits := renderRootFrame(m).hitMap.clicks
+	for _, hit := range hits {
+		if hit.kind == kind && (match == nil || match(hit)) {
+			return hit
+		}
 	}
-	if g := dashboardGeometry(d.Model()); !g.rail {
-		t.Fatalf("no rail at %dx%d: %+v", d.Model().width, d.Model().height, g)
-	}
-	return d
+	t.Fatalf("root mouse hit kind %v not found in %+v", kind, hits)
+	return mouseHitRegion{}
 }
 
-func TestMouseRailChipHeaderAndWheelRouting(t *testing.T) {
-	d := mouseRailFixture(t)
-	apiRail := findMouseHit(t, d.model, mouseHitRailRow, func(hit mouseHitRegion) bool { return hit.project == "api" })
-	clickHit(t, d, apiRail)
-	if d.model.activeFilter.Project != "api" || !d.model.railFocused {
-		t.Fatalf("rail click filter=%+v focused=%v", d.model.activeFilter, d.model.railFocused)
+// TestMouseProjectSwitcherHeaderChipAndScopeRow walks the pointer through the
+// whole scope path: the header control opens the overlay, a scope row applies
+// itself, and the chip the apply produced removes it again.
+func TestMouseProjectSwitcherHeaderChipAndScopeRow(t *testing.T) {
+	d, _ := mouseFixture(t)
+	d.Resize(240, 32)
+
+	clickHit(t, d, findMouseHit(t, d.model, mouseHitProjectSwitcher, nil))
+	if d.model.mode != ModeProjectSwitcher {
+		t.Fatalf("header control left mode %v", d.model.mode)
+	}
+	apiScope := findRootMouseHit(t, d.model, mouseHitProjectScope, func(hit mouseHitRegion) bool { return hit.project == "api" })
+	clickHit(t, d, apiScope)
+	if d.model.activeFilter.Project != "api" || d.model.mode != ModeList {
+		t.Fatalf("scope click filter=%+v mode=%v", d.model.activeFilter, d.model.mode)
 	}
 	chip := findMouseHit(t, d.model, mouseHitChip, func(hit mouseHitRegion) bool { return hit.chipLabel == "#api" })
 	clickHit(t, d, chip)
@@ -212,16 +230,34 @@ func TestMouseRailChipHeaderAndWheelRouting(t *testing.T) {
 	if d.model.cursor != 3 {
 		t.Fatalf("list wheel cursor = %d, want 3", d.model.cursor)
 	}
-	d.model.railCursor = 0
-	if err := d.Mouse(hitMap.railPane.X, hitMap.railPane.Y, UITestMouseWheelDown); err != nil {
+}
+
+// TestMouseProjectSwitcherIgnoresEverythingButItsOwnRows states the modal
+// boundary for the pointer. While the overlay is up, the dashboard's own hit
+// regions are behind it: a click landing where a session row used to be must do
+// nothing rather than reach through the dimmed base.
+func TestMouseProjectSwitcherIgnoresEverythingButItsOwnRows(t *testing.T) {
+	d, _ := mouseFixture(t)
+	d.Resize(240, 32)
+	sessionHit := findMouseHit(t, d.model, mouseHitSession, nil)
+	before := d.model.cursor
+
+	if err := d.Key(keyProjectSwitcher); err != nil {
 		t.Fatal(err)
 	}
-	if d.model.railCursor != 3 {
-		t.Fatalf("rail wheel cursor = %d, want 3", d.model.railCursor)
+	clickHit(t, d, sessionHit)
+	if d.model.mode != ModeProjectSwitcher || d.model.cursor != before {
+		t.Fatalf("click through the overlay: mode=%v cursor=%d", d.model.mode, d.model.cursor)
+	}
+	if err := d.Mouse(sessionHit.rect.X, sessionHit.rect.Y, UITestMouseWheelDown); err != nil {
+		t.Fatal(err)
+	}
+	if d.model.cursor != before {
+		t.Fatalf("wheel through the overlay moved the list cursor to %d", d.model.cursor)
 	}
 }
 
-func TestMouseGeometryWrappedChipsSuppressedRailAndPreview(t *testing.T) {
+func TestMouseGeometryWrappedChipsAndPreview(t *testing.T) {
 	d, _ := mouseFixture(t)
 	d.model.activeFilter = dashboard.Parse(`界界 alpha beta gamma #"wide project" @personal`)
 	d.model.width = 36
@@ -237,14 +273,6 @@ func TestMouseGeometryWrappedChipsSuppressedRailAndPreview(t *testing.T) {
 	firstChip := findMouseHit(t, d.model, mouseHitChip, nil)
 	if maxChipY <= firstChip.rect.Y {
 		t.Fatal("wide Unicode/ANSI chips did not wrap into multiple hit rows")
-	}
-	if rendered.hitMap.hasRail {
-		t.Fatal("narrow layout exposed a suppressed rail hit pane")
-	}
-	for _, hit := range rendered.hitMap.clicks {
-		if hit.kind == mouseHitRailToggle {
-			t.Fatalf("narrow header exposed omitted control hit kind %v", hit.kind)
-		}
 	}
 	wideChip := findMouseHit(t, d.model, mouseHitChip, func(hit mouseHitRegion) bool { return hit.chipLabel == "/界界" })
 	if err := d.Mouse(wideChip.rect.X+wideChip.rect.Width-1, wideChip.rect.Y, UITestMouseLeft); err != nil {

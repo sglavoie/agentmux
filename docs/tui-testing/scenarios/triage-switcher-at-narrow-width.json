@@ -1,0 +1,18 @@
+{
+  "name": "triage switcher opens at a narrow width",
+  "fixture": "triage_integration",
+  "size": { "width": 106, "height": 20 },
+  "actions": [
+    { "type": "resize", "width": 105, "height": 20 },
+    { "type": "key", "key": "p" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "project_switcher" },
+    { "type": "contains_text", "text": "Agent Mux · Urgency" },
+    { "type": "contains_text", "text": "Project                          need act idle" },
+    { "type": "contains_text", "text": "›● ❗ All projects                  4   5    3" },
+    { "type": "contains_text", "text": "🔑 Client Portal                 2   0    0" },
+    { "type": "contains_text", "text": "Switch project: all projects" },
+    { "type": "no_layout_issues" }
+  ]
+}

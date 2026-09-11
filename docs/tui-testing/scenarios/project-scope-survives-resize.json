@@ -1,0 +1,21 @@
+{
+  "name": "project-scope-survives-resize",
+  "fixture": "project_families",
+  "size": { "width": 120, "height": 26 },
+  "actions": [
+    { "type": "key", "key": "i" },
+    { "type": "key", "key": "p" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "enter" },
+    { "type": "resize", "width": 100, "height": 18 },
+    { "type": "key", "key": "p" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "project_switcher" },
+    { "type": "contains_text", "text": "▌#api ✕" },
+    { "type": "contains_text", "text": "›● 🔑 api" },
+    { "type": "contains_text", "text": "p: api" },
+    { "type": "contains_text", "text": "Switch project: api" },
+    { "type": "no_layout_issues" }
+  ]
+}

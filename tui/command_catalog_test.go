@@ -73,10 +73,10 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 		{commands.ManageWorktrees, commands.GroupExplore, "Manage Worktrees", []string{"git", "branches", "inventory"}, "W"},
 		{commands.ShowRuns, commands.GroupExplore, "Show Runs", []string{"asl", "loop", "needs action"}, "A"},
 		{commands.ToggleInspector, commands.GroupExplore, "Hide Inspector", []string{"hide", "pane", "scrollback", "preview", "output"}, "i"},
-		// Show, not Hide: the rail is opt-in now that the inspector occupies the
-		// columns it used to, so a fresh dashboard's `b` offers it rather than
-		// takes it away.
-		{commands.ToggleRail, commands.GroupExplore, "Show Project Rail", []string{"sidebar", "projects", "scope"}, "b"},
+		// "all projects" rather than a project name: the catalog is read against a
+		// model with no project selector applied, and the title names the scope the
+		// dashboard is currently showing.
+		{commands.SwitchProject, commands.GroupExplore, "Switch Project (all projects)", []string{"projects", "scope", "sidebar", "rail"}, "p"},
 		{commands.ToggleListView, commands.GroupExplore, "Show Projects View", []string{"projects", "families", "urgency", "group"}, "v"},
 		{commands.ResortTabs, commands.GroupApp, "Resort Tabs", []string{"reorder", "tabs"}, "R"},
 		{commands.UndoClose, commands.GroupApp, "Undo Last Close", []string{"restore", "reopen"}, "u"},
@@ -158,7 +158,7 @@ func TestCommandCatalogDashboardShortcutBindings(t *testing.T) {
 		commands.ManageWorktrees:    keyWorktrees,
 		commands.ShowRuns:           keyASLRuns,
 		commands.ToggleInspector:    keyInspector,
-		commands.ToggleRail:         keyToggleRail,
+		commands.SwitchProject:      keyProjectSwitcher,
 		commands.ToggleListView:     keyToggleView,
 		commands.ResortTabs:         keyResort,
 		commands.UndoClose:          keyU,

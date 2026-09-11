@@ -9,8 +9,8 @@
 // to be three separate compositions of the same seven children, and only one of
 // them carried hit regions, so the frame an operator clicked on and the frame a
 // committed scenario asserted were related by convention rather than by
-// construction. A chip that wrapped, a banner that appeared, or a rail that was
-// responsively suppressed had to be taught to all three.
+// construction. A chip that wrapped, a banner that appeared, or an inspector
+// that was responsively suppressed had to be taught to all three.
 
 package tui
 
@@ -33,8 +33,8 @@ type dashboardFrame struct {
 }
 
 // renderDashboardFrame emits the canonical ModeList body: header, deprecation
-// banner, legend, chips, spacer, then the list (with the project rail and the
-// inspector pane when the geometry admits them).
+// banner, legend, chips, spacer, then the list (with the inspector pane when the
+// geometry admits it).
 func renderDashboardFrame(m Model) dashboardFrame {
 	var sb strings.Builder
 	var hitMap mouseHitMap
@@ -77,10 +77,6 @@ func renderDashboardFrame(m Model) dashboardFrame {
 		hitMap.listPane = translateHitRect(panes.hitMap.listPane, 0, y)
 		hitMap.hasList = true
 	}
-	if panes.hitMap.hasRail {
-		hitMap.railPane = translateHitRect(panes.hitMap.railPane, 0, y)
-		hitMap.hasRail = true
-	}
 	if panes.hitMap.hasInspector {
 		hitMap.inspectorPane = translateHitRect(panes.hitMap.inspectorPane, 0, y)
 		hitMap.hasInspector = true
@@ -96,11 +92,11 @@ func renderDashboard(m Model) string {
 	return renderDashboardFrame(m).text
 }
 
-// renderSplitFrame lays out the body row: the project rail, the session list,
-// and the inspector pane, joined according to the resolved geometry and falling
-// back to the plain list when the split does not fit. Hit regions are
-// translated into the joined result here, where the column offsets are known,
-// rather than recovered from it.
+// renderSplitFrame lays out the body row: the session list and the inspector
+// pane, joined according to the resolved geometry and falling back to the plain
+// list when the split does not fit. Hit regions are translated into the joined
+// result here, where the column offsets are known, rather than recovered from
+// it.
 //
 // The full-screen inspector returns before a single list region is produced.
 // That is the mouse contract, not an optimization: no queue column is on screen,
@@ -120,24 +116,10 @@ func renderSplitFrame(m Model) dashboardFrame {
 	list := dashboard.RenderListWithHits(dashboardListInput(m, g.listWidth, g.listHeight))
 	result := dashboardFrame{text: list.Text}
 	blocks := []paneBlock{{text: list.Text, width: g.listWidth}}
-	listX := 0
-
-	var rail dashboard.RailRender
-	if g.rail {
-		rail = dashboard.RenderRailWithHits(dashboard.RailInput{
-			Rows: dashboardRailRows(m), Cursor: m.railCursor, Offset: m.railOffset,
-			Width: g.railWidth, Height: g.railHeight, AppliedProject: m.activeFilter.Project, Focused: m.railFocused,
-		})
-		blocks = append([]paneBlock{{text: rail.Text, width: g.railWidth}, paneDivider(g.listHeight)}, blocks...)
-		listX = g.railWidth + 1
-		result.hitMap.railPane = dashboard.HitRect{Width: g.railWidth, Height: g.railHeight}
-		result.hitMap.hasRail = true
-		for _, hit := range rail.Hits {
-			result.hitMap.clicks = append(result.hitMap.clicks, mouseHitRegion{
-				kind: mouseHitRailRow, rect: hit.Rect, project: hit.Project, railLabel: hit.Label,
-			})
-		}
-	}
+	// The queue is the leftmost pane, and nothing is drawn to its left any more.
+	// The offset stays spelled out because every list rectangle below is stated
+	// against it, and the joined result is where those rectangles are measured.
+	const listX = 0
 
 	for _, hit := range list.Hits {
 		row := translateHitRect(hit.Rect, listX, 0)
@@ -157,9 +139,6 @@ func renderSplitFrame(m Model) dashboardFrame {
 	result.hitMap.hasList = true
 
 	if !g.split {
-		if g.rail {
-			result.text = joinPanes(g.listHeight, blocks...) + "\n"
-		}
 		return result
 	}
 	inspectorX := listX + g.listWidth + 1

@@ -1,0 +1,18 @@
+{
+  "name": "triage selector survives a width change",
+  "fixture": "triage_integration",
+  "size": {
+    "width": 105,
+    "height": 20
+  },
+  "actions": [
+    { "type": "key", "key": "i" },
+    { "type": "resize", "width": 106, "height": 20 }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "p: all projects" },
+    { "type": "contains_text", "text": "Sessions: 12 · 4 attention · 5 active · 3 idle" },
+    { "type": "no_layout_issues" }
+  ]
+}

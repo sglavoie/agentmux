@@ -72,14 +72,19 @@ type Model struct {
 	collapsedFamilies map[string]bool
 	cursor            int
 	listOffset        int // top item index for the scrollable list view in ModeList
-	// railRequested is the operator's process-local preference; geometry may
-	// still suppress the rail when it would leave the session list under its
-	// 80-cell guarantee. railFocused and the cursor/offset belong to the rail's
-	// independent keyboard viewport.
-	railRequested bool
-	railFocused   bool
-	railCursor    int
-	railOffset    int
+	// Project switcher overlay (ModeProjectSwitcher). The scope list itself is
+	// never stored: it is derived from the live session set on every frame and
+	// every keypress, so a refresh landing under the open overlay updates its
+	// tallies in place.
+	//
+	// projectSwitcherKey is therefore the whole of the selection — the
+	// case-folded project identity, empty for All — and the cursor is resolved
+	// from it against the list as it currently stands. An index would name a
+	// different project the moment a refresh reordered the scopes.
+	projectSwitcherKey    string
+	projectSwitcherOffset int
+	projectSwitcherQuery  string
+	projectSwitcherSearch bool
 	// initialSourceWindowID is the Kitty window from which the dashboard was
 	// opened, used to select the matching tab row. It is retained across
 	// refreshes and cleared by the first usable topology result, so a startup
@@ -567,6 +572,7 @@ const (
 	ModeLiveSessionPicker      // ambiguous live Kitty sessions for one target
 	ModeASLRuns                // agent-session-loop active and actionable runs
 	ModeASLResponse            // answer editor and closure buttons for one ASL question
+	ModeProjectSwitcher        // overlay choosing the dashboard's project scope
 )
 
 // LivePickerPurpose names the caller that raised ModeLiveSessionPicker. The

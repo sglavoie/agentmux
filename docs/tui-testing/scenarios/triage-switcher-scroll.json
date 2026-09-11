@@ -1,0 +1,28 @@
+{
+  "name": "triage switcher scrolls its own scope list",
+  "fixture": "triage_integration",
+  "size": {
+    "width": 240,
+    "height": 12
+  },
+  "actions": [
+    { "type": "key", "key": "p" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "down" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "project_switcher" },
+    { "type": "contains_text", "text": "  ▲" },
+    { "type": "contains_text", "text": "›     Quiet Queue                   0   1    0" },
+    { "type": "contains_text", "text": "  ▼" },
+    { "type": "excludes_text", "text": "All projects" },
+    { "type": "contains_text", "text": "Switch project: all projects" },
+    { "type": "no_layout_issues" }
+  ]
+}

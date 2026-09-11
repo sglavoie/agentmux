@@ -54,6 +54,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleDeleteChoiceKey(msg)
 	case ModeChipPicker:
 		return m.handleChipPickerKey(msg)
+	case ModeProjectSwitcher:
+		return m.handleProjectSwitcherKey(msg)
 	default:
 		return m.handleListKey(msg)
 	}
@@ -216,9 +218,6 @@ func (m Model) focusSelectedAndPreview() (tea.Model, tea.Cmd) {
 func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.snapshotSeenStates()
 	key := msg.String()
-	if m.railFocused {
-		return m.handleRailKey(key)
-	}
 
 	// The inspector claims the navigation keys and nothing else while it holds
 	// the focus, so every command key below still reaches its binding. It is
@@ -430,8 +429,11 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case keyCollapse:
+		// ← used to hand the keyboard to the project rail in Urgency view. The
+		// rail is gone and the switcher is a modal reached by `p`, so the key has
+		// nothing to fold outside the Projects view and does nothing there — the
+		// same answer keyExpand already gave.
 		if m.listView == dashboard.ViewUrgency {
-			m.focusRail()
 			return m, nil
 		}
 		return m, m.collapseSelection()

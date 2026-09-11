@@ -1,0 +1,12 @@
+{
+  "name": "project-switcher-narrow-fit",
+  "fixture": "actions",
+  "size": { "width": 60, "height": 32 },
+  "actions": [{ "type": "key", "key": "p" }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "project_switcher" },
+    { "type": "contains_text", "text": "All projects" },
+    { "type": "contains_text", "text": "need act idle" },
+    { "type": "no_layout_issues" }
+  ]
+}

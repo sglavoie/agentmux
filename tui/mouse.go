@@ -16,7 +16,10 @@ type mouseHitKind int
 const (
 	mouseHitNone mouseHitKind = iota
 	mouseHitView
-	mouseHitRailToggle
+	// mouseHitProjectSwitcher is the header control that names the project scope
+	// the list is narrowed to and opens the switcher — the pointer's spelling of
+	// `p`. It runs the same command the key does.
+	mouseHitProjectSwitcher
 	// mouseHitInspectorToggle is the header control that shows or hides the
 	// inspector — the pointer's spelling of `i`.
 	mouseHitInspectorToggle
@@ -30,7 +33,10 @@ const (
 	mouseHitSession
 	mouseHitFamily
 	mouseHitFamilyChevron
-	mouseHitRailRow
+	// mouseHitProjectScope is one scope row inside the open project switcher.
+	// It is the only click target the overlay publishes: there is nothing else
+	// on it to aim at, and a click anywhere else leaves it open.
+	mouseHitProjectScope
 )
 
 type mouseHitRegion struct {
@@ -42,17 +48,15 @@ type mouseHitRegion struct {
 	chipIndex       int
 	chipLabel       string
 	project         string
-	railLabel       string
+	label           string
 	familyCollapsed bool
 }
 
 type mouseHitMap struct {
 	clicks        []mouseHitRegion
 	listPane      dashboard.HitRect
-	railPane      dashboard.HitRect
 	inspectorPane dashboard.HitRect
 	hasList       bool
-	hasRail       bool
 	hasInspector  bool
 }
 
@@ -61,7 +65,6 @@ type mouseActionKind int
 const (
 	mouseActionClick mouseActionKind = iota
 	mouseActionListWheel
-	mouseActionRailWheel
 	mouseActionInspectorWheel
 )
 
@@ -105,9 +108,6 @@ func (m mouseHitMap) clipped(width, height int) mouseHitMap {
 	}
 	if rect, ok := clipHitRect(m.listPane, width, height); ok && m.hasList {
 		out.listPane, out.hasList = rect, true
-	}
-	if rect, ok := clipHitRect(m.railPane, width, height); ok && m.hasRail {
-		out.railPane, out.hasRail = rect, true
 	}
 	if rect, ok := clipHitRect(m.inspectorPane, width, height); ok && m.hasInspector {
 		out.inspectorPane, out.hasInspector = rect, true
@@ -167,9 +167,6 @@ func (m mouseHitMap) handler() func(tea.MouseMsg) tea.Cmd {
 			if m.hasInspector && hitContains(m.inspectorPane, mouse.X, mouse.Y) {
 				return func() tea.Msg { return mouseActionMsg{kind: mouseActionInspectorWheel, delta: delta} }
 			}
-			if m.hasRail && hitContains(m.railPane, mouse.X, mouse.Y) {
-				return func() tea.Msg { return mouseActionMsg{kind: mouseActionRailWheel, delta: delta} }
-			}
 			if m.hasList && hitContains(m.listPane, mouse.X, mouse.Y) {
 				return func() tea.Msg { return mouseActionMsg{kind: mouseActionListWheel, delta: delta} }
 			}
@@ -208,6 +205,23 @@ func (m *Model) clearMouseClickChain() {
 }
 
 func (m Model) handleMouseAction(msg mouseActionMsg) (tea.Model, tea.Cmd) {
+	// The project switcher is the one non-ModeList surface that publishes click
+	// targets, and it publishes exactly one kind. Resolving it here rather than
+	// widening the ModeList guard below keeps every dashboard-body action out of
+	// reach while an overlay owns the screen.
+	if m.mode == ModeProjectSwitcher {
+		if msg.kind != mouseActionClick || msg.target.kind != mouseHitProjectScope {
+			return m, nil
+		}
+		scopes := projectSwitcherScopes(m)
+		for _, scope := range scopes {
+			if scope.Project == msg.target.project && scope.Label == msg.target.label {
+				m.projectSwitcherKey = scope.Key()
+				return m, m.applyProjectScope()
+			}
+		}
+		return m, nil
+	}
 	if m.mode != ModeList {
 		return m, nil
 	}
@@ -229,13 +243,6 @@ func (m Model) handleMouseAction(msg mouseActionMsg) (tea.Model, tea.Cmd) {
 		m.cursor = clamp(m.cursor+msg.delta, 0, m.listItemCount()-1)
 		scrollListToCursor(&m)
 		return m, m.refreshPreviewForCursor()
-	case mouseActionRailWheel:
-		m.clearMouseClickChain()
-		if !dashboardGeometry(m).rail {
-			return m, nil
-		}
-		m.moveRailCursor(msg.delta)
-		return m, nil
 	case mouseActionInspectorWheel:
 		m.clearMouseClickChain()
 		return m.scrollInspectorBy(msg.delta), nil
@@ -248,9 +255,8 @@ func (m Model) handleMouseAction(msg mouseActionMsg) (tea.Model, tea.Cmd) {
 	switch target.kind {
 	case mouseHitView:
 		return m, m.toggleListView()
-	case mouseHitRailToggle:
-		m.toggleRail()
-		return m, nil
+	case mouseHitProjectSwitcher:
+		return m.openProjectSwitcher()
 	case mouseHitInspectorToggle:
 		return m.toggleInspector()
 	case mouseHitInspectorBody:
@@ -265,25 +271,12 @@ func (m Model) handleMouseAction(msg mouseActionMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, m.applyFilterChange(m.activeFilter.RemoveComponent(target.chipIndex))
-	case mouseHitRailRow:
-		if !dashboardGeometry(m).rail {
-			return m, nil
-		}
-		rows := dashboardRailRows(m)
-		for i, row := range rows {
-			if row.Project == target.project && row.Label == target.railLabel {
-				m.railCursor = i
-				return m, m.applyRailSelection()
-			}
-		}
-		return m, nil
 	case mouseHitFamily, mouseHitFamilyChevron:
 		i := findMouseItem(m.items, target.identity)
 		if i < 0 {
 			return m, nil
 		}
 		item, _ := m.items.At(i)
-		m.railFocused = false
 		m.focusPane(focusQueue)
 		if target.kind == mouseHitFamilyChevron {
 			if item.Collapsed != target.familyCollapsed {
@@ -310,7 +303,6 @@ func (m Model) handleMouseAction(msg mouseActionMsg) (tea.Model, tea.Cmd) {
 			m.lastMouseClickAt = now
 		}
 		m.cursor = i
-		m.railFocused = false
 		m.focusPane(focusQueue)
 		scrollListToCursor(&m)
 		var cmds []tea.Cmd

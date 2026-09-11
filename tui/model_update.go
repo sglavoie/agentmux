@@ -54,21 +54,16 @@ func newModel(cfg *config.Config, client kitty.KittyClient, sourceWindowID int, 
 		attn[s] = true
 	}
 	return Model{
-		client:             client,
-		cfg:                cfg,
-		interval:           interval,
-		sortMode:           sort,
-		attentionStates:    attn,
-		backgroundCommands: defaultModelBackgroundCommands(),
-		daemonCommand:      commands.DaemonRequest,
-		now:                time.Now,
-		idleThreshold:      idle,
-		focusedChipIdx:     -1,
-		// The project rail is now opt-in. The inspector took the columns it used
-		// to sit in, and two vertical strips beside the queue is one more than a
-		// terminal has room for. `b` and the palette still bring it back, and the
-		// project filtering it drives is unchanged and reachable without it.
-		railRequested:         false,
+		client:                client,
+		cfg:                   cfg,
+		interval:              interval,
+		sortMode:              sort,
+		attentionStates:       attn,
+		backgroundCommands:    defaultModelBackgroundCommands(),
+		daemonCommand:         commands.DaemonRequest,
+		now:                   time.Now,
+		idleThreshold:         idle,
+		focusedChipIdx:        -1,
 		amxBin:                amxBin,
 		deprecations:          cfg.Deprecations,
 		messageDetailIdx:      -1,
@@ -279,7 +274,7 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	clampMessageDetailScroll(&m)
 	clampListOffset(&m)
 	scrollListToCursor(&m)
-	m.syncRailState()
+	scrollProjectSwitcherToCursor(&m)
 	clampPickerOffset(&m)
 	scrollPickerToCursor(&m)
 	scrollSessionSearchToCursor(&m)

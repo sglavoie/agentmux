@@ -38,7 +38,6 @@ func (m *Model) reprojectList(prior dashboard.CursorIdentity) tea.Cmd {
 	}
 	clampListOffset(m)
 	scrollListToCursor(m)
-	m.syncRailState()
 	return m.refreshPreviewForCursor()
 }
 
@@ -58,7 +57,6 @@ func (m *Model) setListView(view dashboard.ViewMode) tea.Cmd {
 		return nil
 	}
 	prior := m.viewSwitchIdentity(view)
-	m.railFocused = false
 	m.listView = view
 	return m.reprojectList(prior)
 }

@@ -68,14 +68,22 @@ func composeOverlay(base, popup string, baseWidth, baseHeight, startCol, startRo
 // CenterOverlay computes (startCol, startRow) so the popup is centered in the
 // (baseWidth, baseHeight) area, then delegates to composeOverlay.
 func CenterOverlay(base, popup string, baseWidth, baseHeight int, dim bool) string {
+	startCol, startRow := CenterOverlayOrigin(popup, baseWidth, baseHeight)
+	return composeOverlay(base, popup, baseWidth, baseHeight, startCol, startRow, dim)
+}
+
+// CenterOverlayOrigin is the top-left cell CenterOverlay will splice popup at.
+// It exists so a caller that publishes click targets inside a centered popup can
+// read the placement rather than restate it: the rows a pointer is tested
+// against and the rows the operator sees are then the same arithmetic, and a
+// change to the centering moves both at once.
+func CenterOverlayOrigin(popup string, baseWidth, baseHeight int) (startCol, startRow int) {
 	popupW := PopupWidth(popup)
 	popupH := 0
 	if popup != "" {
 		popupH = strings.Count(popup, "\n") + 1
 	}
-	startCol := max((baseWidth-popupW)/2, 0)
-	startRow := max((baseHeight-popupH)/2, 0)
-	return composeOverlay(base, popup, baseWidth, baseHeight, startCol, startRow, dim)
+	return max((baseWidth-popupW)/2, 0), max((baseHeight-popupH)/2, 0)
 }
 
 // TopCenterOverlay horizontally centers the popup but anchors it near the top

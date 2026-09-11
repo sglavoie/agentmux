@@ -95,7 +95,11 @@ const (
 	// by mode. In ModeList: show or hide the session inspector.
 	keyInspector  = "i"
 	keyToggleView = "v" // toggles the dashboard list between Urgency and Projects
-	keyToggleRail = "b" // toggles the project rail in Urgency view
+	// keyProjectSwitcher opens the dashboard's project-scope overlay. It is the
+	// same key the launcher and the plans browser spell as keyTogglePreview, and
+	// the dashboard is free to claim it because the preview pane that owned it
+	// here is gone.
+	keyProjectSwitcher = "p"
 
 	// keyCollapse/keyExpand fold and unfold a project family in ModeList.
 	// They reuse keyLeft/keyRight above, which the list has never bound; the

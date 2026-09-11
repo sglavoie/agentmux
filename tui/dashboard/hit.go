@@ -24,19 +24,6 @@ type ListRender struct {
 	Hits []ListHit
 }
 
-// RailHit names one rendered project scope.
-type RailHit struct {
-	Rect    HitRect
-	Project string
-	Label   string
-}
-
-// RailRender is the hit-aware form of RenderRail.
-type RailRender struct {
-	Text string
-	Hits []RailHit
-}
-
 // ChipHit names one rendered filter component.
 type ChipHit struct {
 	Rect  HitRect

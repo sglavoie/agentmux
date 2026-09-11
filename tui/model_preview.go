@@ -17,7 +17,11 @@ func (m Model) View() tea.View {
 	frame := renderRootFrame(m)
 	v := tea.NewView(frame.text)
 	v.AltScreen = true
-	if m.mode == ModeList {
+	// The two surfaces that publish hit regions are the two that take the mouse.
+	// Asking the frame rather than the mode would be the same answer today, but
+	// this way a mode that grows targets has to say so here as well, and a mode
+	// that has none cannot leave cell-motion reporting on for nothing.
+	if m.mode == ModeList || m.mode == ModeProjectSwitcher {
 		v.MouseMode = tea.MouseModeCellMotion
 		v.OnMouse = frame.hitMap.handler()
 	}
@@ -52,6 +56,17 @@ func renderRootFrame(m Model) rootFrame {
 		return rootFrame{
 			text:   chrome.compose(body.text),
 			hitMap: body.hitMap.clipped(m.width, chrome.bodyHeight()),
+		}
+	}
+	// The project switcher is the one overlay whose popup carries click targets,
+	// so it is composed here rather than in renderRootBody's switch: the regions
+	// are produced by the same call that places the popup, and the placement is
+	// what they are measured from.
+	if m.mode == ModeProjectSwitcher {
+		body, hitMap := renderProjectSwitcherFrame(m, chrome)
+		return rootFrame{
+			text:   chrome.compose(body),
+			hitMap: hitMap.clipped(m.width, chrome.bodyHeight()),
 		}
 	}
 	return rootFrame{text: chrome.compose(renderRootBody(m, chrome))}
@@ -302,11 +317,7 @@ type dashboardGeom struct {
 	// and clamping them against a zero-row window would lose the selection the
 	// operator returns to.
 	fullScreen bool
-	// rail reports that the project rail fits beside the list after the
-	// inspector contract has claimed its space. railWidth is zero otherwise.
-	rail bool
 
-	railWidth, railHeight       int
 	listWidth, listHeight       int
 	previewWidth, previewHeight int
 }
@@ -376,29 +387,13 @@ func dashboardBaseListPaneWidth(m Model) int {
 	return m.width
 }
 
-// dashboardRailWidth applies the rail's responsive rule to the one shared
-// main-list base left by preview resolution. Every caller goes through this
-// helper so a short terminal that later drops its preview cannot make body
-// geometry disagree with the header and footer about whether the rail exists.
-// The divider is charged before checking the 80-cell list guarantee.
-func dashboardRailWidth(m Model) int {
-	if !m.railRequested || m.listView != dashboard.ViewUrgency {
-		return 0
-	}
-	baseListWidth := dashboardBaseListPaneWidth(m)
-	railWidth := dashboard.RailWidth(dashboardRailRows(m))
-	if baseListWidth-railWidth-1 < 80 {
-		return 0
-	}
-	return railWidth
-}
-
+// dashboardListPaneWidth is the width the queue column is drawn at. It is the
+// base width outright: the dashboard body is the queue and the inspector, and
+// nothing else claims a column beside them. The project scopes the vertical rail
+// used to spend twenty of these columns on are an overlay now, which costs the
+// list no width at all.
 func dashboardListPaneWidth(m Model) int {
-	base := dashboardBaseListPaneWidth(m)
-	if railWidth := dashboardRailWidth(m); railWidth > 0 {
-		return base - railWidth - 1
-	}
-	return base
+	return dashboardBaseListPaneWidth(m)
 }
 
 // dashboardGeometry lays the body out: the queue column, and the inspector pane
@@ -432,31 +427,15 @@ func dashboardGeometry(m Model) dashboardGeom {
 
 	listWidth, inspectorWidth, widthsFit := dashboardSplitWidths(m)
 	if !widthsFit || paneHeight < inspectorMinBodyRows {
-		listHeight := clampListHeight(paneHeight)
-		railWidth := dashboardRailWidth(m)
-		return dashboardGeom{
-			rail: railWidth > 0, railWidth: railWidth, railHeight: listHeight,
-			listWidth: width - railWidth - boolWidth(railWidth > 0), listHeight: listHeight,
-		}
+		return dashboardGeom{listWidth: width, listHeight: clampListHeight(paneHeight)}
 	}
-	railWidth := dashboardRailWidth(m)
 	return dashboardGeom{
 		split:         true,
-		rail:          railWidth > 0,
-		railWidth:     railWidth,
-		railHeight:    clampListHeight(paneHeight),
-		listWidth:     listWidth - railWidth - boolWidth(railWidth > 0),
+		listWidth:     listWidth,
 		listHeight:    clampListHeight(paneHeight),
 		previewWidth:  inspectorWidth,
 		previewHeight: paneHeight,
 	}
-}
-
-func boolWidth(on bool) int {
-	if on {
-		return 1
-	}
-	return 0
 }
 
 // clampListHeight floors a computed row budget so a degenerate terminal yields

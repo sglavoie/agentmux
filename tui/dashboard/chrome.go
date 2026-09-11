@@ -80,7 +80,7 @@ var (
 // blurred picks which selection the row wears. It is a parameter rather than two
 // functions because the normalization is the whole point: a caller that reached
 // for the blurred style directly would be a caller that could forget to strip.
-// Surfaces with no focus of their own — the completion popup, the rail — pass
+// Surfaces with no focus of their own — the completion popup — pass
 // false, which is the historical behavior said explicitly.
 func renderSelectedRow(row string, blurred bool) string {
 	if blurred {

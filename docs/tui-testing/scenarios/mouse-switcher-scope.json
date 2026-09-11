@@ -1,0 +1,15 @@
+{
+  "name": "mouse switcher applies project scope",
+  "fixture": "project_families",
+  "size": { "width": 240, "height": 32 },
+  "actions": [
+    { "type": "key", "key": "p" },
+    { "type": "mouse", "x": 100, "y": 13, "event": "left" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "▌#api ✕" },
+    { "type": "excludes_text", "text": "need act idle" },
+    { "type": "no_layout_issues" }
+  ]
+}

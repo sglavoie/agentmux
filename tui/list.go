@@ -36,6 +36,23 @@ type headerSegment struct {
 	kind mouseHitKind
 }
 
+// headerProjectSelectorLabel is the header's project control: the key that
+// opens the switcher and the scope the list is currently narrowed to.
+//
+// It names the applied selector rather than a verb, because the control is the
+// one place on the frame that says which project the dashboard is showing —
+// the chip row says it too, but only while a filter is active, and "all
+// projects" is a scope the operator needs to be able to read as deliberately as
+// any other. The label is bounded so a long project title cannot push the
+// health pips off the right edge; the switcher itself spells it in full.
+func headerProjectSelectorLabel(m Model) string {
+	label := "all projects"
+	if applied := m.activeFilter.Project; applied != "" {
+		label = layout.Truncate(applied, 18, "…")
+	}
+	return keyProjectSwitcher + ": " + label
+}
+
 // renderHeaderWithHits keeps the adaptive admission decisions and the mouse
 // spans in one pass. A control omitted for width contributes no target.
 func renderHeaderWithHits(m Model) headerRender {
@@ -85,16 +102,7 @@ func renderHeaderWithHits(m Model) headerRender {
 		}
 		prependIfFits(styleFooter.Render(label), mouseHitInspectorToggle)
 	}
-	if m.listView == dashboard.ViewUrgency {
-		label := "b: show rail"
-		if m.railRequested {
-			// A requested rail may be responsively suppressed. The toggle still
-			// exists in that state: pressing it disables the request so the rail
-			// does not unexpectedly reappear after a resize.
-			label = "b: hide rail"
-		}
-		prependIfFits(styleFooter.Render(label), mouseHitRailToggle)
-	}
+	prependIfFits(styleFooter.Render(headerProjectSelectorLabel(m)), mouseHitProjectSwitcher)
 	if m.mode == ModeList && dashboard.BandFor(m.width) != dashboard.BandCompact {
 		prependIfFits(styleDim.Render(inlineFilterPlaceholder), mouseHitNone)
 	}

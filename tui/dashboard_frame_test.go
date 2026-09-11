@@ -81,12 +81,6 @@ func TestDashboardHitsStayInsideTheComposedBody(t *testing.T) {
 				t.Fatalf("list pane %+v escapes the %dx%d body", r, m.width, bodyHeight)
 			}
 		}
-		if frame.hitMap.hasRail {
-			r := frame.hitMap.railPane
-			if r.X+r.Width > m.width || r.Y+r.Height > bodyHeight {
-				t.Fatalf("rail pane %+v escapes the %dx%d body", r, m.width, bodyHeight)
-			}
-		}
 	})
 }
 
@@ -114,16 +108,6 @@ func TestSplitPanesAreDrawnWhereTheHitMapSaysTheyAre(t *testing.T) {
 		list := frame.hitMap.listPane
 		row := lines[list.Y]
 
-		if frame.hitMap.hasRail {
-			rail := frame.hitMap.railPane
-			if got := cellAt(row, rail.X+rail.Width); got != "│" {
-				t.Fatalf("rail %+v ends at column %d, which draws %q not the divider",
-					rail, rail.X+rail.Width, got)
-			}
-			if list.X != rail.X+rail.Width+1 {
-				t.Fatalf("queue starts at %d, one past the rail divider is %d", list.X, rail.X+rail.Width+1)
-			}
-		}
 		if !frame.hitMap.hasInspector {
 			return
 		}
@@ -143,14 +127,14 @@ func TestSplitPanesAreDrawnWhereTheHitMapSaysTheyAre(t *testing.T) {
 	}
 
 	responsiveCases(t, check)
-	// The rail is opt-in and stands third in line for columns, so the matrix
-	// above never reaches the three-strip join. This is the case where a stale
-	// queue offset would be charged to the rail's divider instead.
-	t.Run("rail", func(t *testing.T) {
+	// The widest terminal the matrix reaches is still the one where a stale
+	// queue width is most visible, because the inspector's column is largest
+	// there and a short queue leaves the divider furthest from where the hit map
+	// says it is.
+	t.Run("wide split", func(t *testing.T) {
 		m := responsiveModel(240, 40, dashboard.ViewUrgency, true)
-		m.railRequested = true
-		if g := dashboardGeometry(m); !g.rail || !g.split {
-			t.Fatalf("no three-strip join to check: %+v", g)
+		if g := dashboardGeometry(m); !g.split {
+			t.Fatalf("no split to check: %+v", g)
 		}
 		check(t, m)
 	})
@@ -176,14 +160,13 @@ func cellAt(line string, col int) string {
 // single pass is supposed to make trivial. Every region is a terminal-cell
 // rectangle in the composed screen, so the row a session's region names has to
 // be the row that session's text was written to — through a right-aligned
-// header measured in display cells, chips that may have wrapped, a rail joined
-// to the left of the list, and a title whose first grapheme is two cells wide.
-// A region reconstructed from the finished string instead of emitted beside it
-// is exactly what drifts here.
+// header measured in display cells, chips that may have wrapped, an inspector
+// joined to the right of the list, and a title whose first grapheme is two cells
+// wide. A region reconstructed from the finished string instead of emitted
+// beside it is exactly what drifts here.
 func TestDashboardHitRowsNameTheRowTheyLandOn(t *testing.T) {
-	for _, rail := range []bool{false, true} {
-		m := responsiveModel(160, 40, dashboard.ViewUrgency, false)
-		m.railRequested = rail
+	for _, inspector := range []bool{false, true} {
+		m := responsiveModel(160, 40, dashboard.ViewUrgency, inspector)
 		m.activeFilter = dashboard.Parse("@personal busy")
 		frame := renderRootFrame(m)
 		composed := strings.Split(frame.text, "\n")
@@ -201,21 +184,21 @@ func TestDashboardHitRowsNameTheRowTheyLandOn(t *testing.T) {
 			// survives truncation rather than by the full base.
 			want := rowPrefix(hit.identity.Base)
 			if !strings.Contains(line, want) {
-				t.Fatalf("rail=%v: session %q has its region on row %d, which reads %q",
-					rail, hit.identity.Base, hit.rect.Y, line)
+				t.Fatalf("inspector=%v: session %q has its region on row %d, which reads %q",
+					inspector, hit.identity.Base, hit.rect.Y, line)
 			}
 			if strings.HasPrefix(hit.identity.Base, "🧬") {
 				wide = true
 			}
 		}
 		if seen == 0 {
-			t.Fatalf("rail=%v: no session regions to check", rail)
+			t.Fatalf("inspector=%v: no session regions to check", inspector)
 		}
 		// The wide-glyph row is the reason this test names a fixture instead of
 		// running the responsive matrix; a fixture that lost it would leave the
 		// assertion above passing on nothing but ASCII.
 		if !wide {
-			t.Fatalf("rail=%v: the fixture no longer contributes a two-cell title", rail)
+			t.Fatalf("inspector=%v: the fixture no longer contributes a two-cell title", inspector)
 		}
 	}
 }

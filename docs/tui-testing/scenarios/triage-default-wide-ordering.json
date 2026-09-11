@@ -5,26 +5,36 @@
     "width": 140,
     "height": 20
   },
+  "actions": [
+    {
+      "type": "key",
+      "key": "i"
+    },
+    {
+      "type": "key",
+      "key": "p"
+    }
+  ],
   "assertions": [
     {
       "type": "mode_equals",
-      "mode": "list"
+      "mode": "project_switcher"
     },
     {
       "type": "contains_text",
-      "text": "Projects            N A I"
+      "text": "Project                          need act idle"
     },
     {
       "type": "contains_text",
-      "text": "All           4 5 3"
+      "text": "›● ❗ All projects                  4   5    3"
     },
     {
       "type": "contains_text",
-      "text": "Release Guard 1 0 0"
+      "text": "❗ Release Guard                 1   0    0"
     },
     {
       "type": "contains_text",
-      "text": "Client Portal 2 0 0"
+      "text": "🔑 Client Portal                 2   0    0"
     },
     {
       "type": "contains_text",
@@ -55,21 +65,7 @@
       "text": "  ▌ watchtower       Tool failed           —"
     },
     {
-      "type": "contains_text",
-      "text": "Sessions: 12 · 4 attention · 5 active · 3 idle"
-    },
-    {
       "type": "no_layout_issues"
-    }
-  ],
-  "actions": [
-    {
-      "type": "key",
-      "key": "i"
-    },
-    {
-      "type": "key",
-      "key": "b"
     }
   ]
 }

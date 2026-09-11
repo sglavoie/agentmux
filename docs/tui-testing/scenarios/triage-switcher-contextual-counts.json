@@ -1,0 +1,22 @@
+{
+  "name": "triage switcher counts stay contextual",
+  "fixture": "triage_integration",
+  "size": { "width": 140, "height": 24 },
+  "actions": [
+    { "type": "key", "key": "i" },
+    { "type": "key", "key": "/" },
+    { "type": "text", "text": "#\"Client Portal\" portal" },
+    { "type": "key", "key": "enter" },
+    { "type": "key", "key": "enter" },
+    { "type": "key", "key": "p" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "project_switcher" },
+    { "type": "contains_text", "text": "▌/portal ✕  ▌#Client Portal ✕" },
+    { "type": "contains_text", "text": "   🔑 All projects                  2   0    0" },
+    { "type": "contains_text", "text": "›● 🔑 Client Portal                 2   0    0" },
+    { "type": "excludes_text", "text": "Release Guard" },
+    { "type": "excludes_text", "text": "Watchtower" },
+    { "type": "no_layout_issues" }
+  ]
+}

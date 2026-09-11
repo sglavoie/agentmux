@@ -72,6 +72,11 @@ func renderFooter(m Model) string {
 			footerStyledLine(m.width, "  ", renderFooterBinding("enter", "select"), renderFooterBinding("esc/q", "cancel")),
 			footerStyledLine(m.width, "  ", renderFooterBinding("/", "search"), renderFooterBinding("j/k", "up/down"), renderFooterBinding("g/G", "top/bottom"), renderFooterBinding("pgup/pgdn", "page")),
 		)
+	case ModeProjectSwitcher:
+		lines = nonEmptyFooterLines(
+			footerStyledLine(m.width, "  ", renderFooterBinding("enter", "apply scope"), renderFooterBinding("esc/q/p", "cancel")),
+			footerStyledLine(m.width, "  ", renderFooterBinding("/", "search"), renderFooterBinding("j/k", "up/down"), renderFooterBinding("g/G", "top/bottom"), renderFooterBinding("pgup/pgdn", "page")),
+		)
 	case ModeSessionSearch:
 		lines = footerHintLines(m, sessionSearchFooterPalette, footerHintMaxLines)
 	case ModeSessionView:
@@ -553,7 +558,7 @@ const (
 // unavailable style — which is the same thing the key handlers do when they
 // fail to resolve a target.
 func hasRow(m Model) bool {
-	return !m.railFocused && m.hasSelectedSession()
+	return m.hasSelectedSession()
 }
 
 // listFooterCandidate is one thing the regular and spacious ModeList footer may
@@ -664,10 +669,9 @@ func listFooterPalette() []listFooterCandidate {
 		// cannot lead anywhere, so none of them ever drop.
 		listBinding("j/k", "up/down", footerSectionApp, footerPriorityEssential, footerAlways),
 		// enter is not a row action even though it usually acts on one: on a project
-		// summary it folds and on the rail it applies a scope, neither of which is
-		// FocusSession. Its key and label come from the binding, but its
-		// availability cannot, because the two other things it does are available
-		// exactly when focusing is not.
+		// summary it folds, which is not FocusSession. Its key and label come from
+		// the binding, but its availability cannot, because the other thing it does
+		// is available exactly when focusing is not.
 		listCommandBinding(bindings, commands.FocusSession, footerSectionApp, footerPriorityEssential).
 			availableWhen(footerAlways).
 			respelled(listEnterKey, listEnterLabel),
@@ -700,9 +704,7 @@ func listFooterPalette() []listFooterCandidate {
 		listBinding("]/[", "jump chord", footerSectionApp, footerPriorityPrimary, footerAlways),
 		listBinding("}/{", "jump + focus", footerSectionApp, footerPriorityPrimary, footerAlways),
 		listCommandBinding(bindings, commands.ToggleInspector, footerSectionApp, footerPriorityPrimary),
-		listCommandBinding(bindings, commands.ToggleRail, footerSectionApp, footerPriorityPrimary),
-		listBinding("←/→", "switch pane", footerSectionApp, footerPriorityPrimary, listRailVisible).
-			shownWhen(listUrgencyView),
+		listCommandBinding(bindings, commands.SwitchProject, footerSectionApp, footerPriorityPrimary),
 		// A view action, not a row action: switching the arrangement is available
 		// with the cursor on a summary, on a session, and on an empty list alike.
 		listCommandBinding(bindings, commands.ToggleListView, footerSectionApp, footerPriorityPrimary),
@@ -734,9 +736,6 @@ func listFooterPalette() []listFooterCandidate {
 }
 
 func listEnterKey(m Model) string {
-	if m.railFocused {
-		return "enter"
-	}
 	if m.summarySelected() {
 		return "enter/←/→"
 	}
@@ -744,9 +743,6 @@ func listEnterKey(m Model) string {
 }
 
 func listEnterLabel(m Model) string {
-	if m.railFocused {
-		return "apply scope"
-	}
 	if m.summarySelected() {
 		return "fold/unfold"
 	}
@@ -763,10 +759,6 @@ func listHasChips(m Model) bool { return len(m.activeFilter.Components()) > 0 }
 func listChipFocusAvailable(m Model) bool { return listHasChips(m) && !listInspectorShown(m) }
 
 func listUrgencyView(m Model) bool { return m.listView == dashboard.ViewUrgency }
-
-func listRailVisible(m Model) bool {
-	return listUrgencyView(m) && dashboardRailWidth(m) > 0
-}
 
 // listChipRangeKey names the digits that actually remove something. With a
 // single chip the range collapses to "1": "1-1" is a range with one member,
@@ -794,9 +786,6 @@ func listPositionText(_ Model, position string) string {
 // words the legend uses. Rows with no gloss — idle and unknown states — say
 // nothing rather than saying "idle", which is what their bare icon already says.
 func listGlossText(m Model, _ string) string {
-	if m.railFocused {
-		return ""
-	}
 	s, ok := m.selectedSession()
 	if !ok {
 		return ""

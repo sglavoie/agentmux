@@ -43,7 +43,7 @@ type bindingOutcome struct {
 	inspectorDisplay       inspectorDisplay
 	paneFocus              paneFocus
 	previewWindowID        int
-	railRequested          bool
+	projectSwitcherKey     string
 	listView               dashboard.ViewMode
 	deprecationDismissed   bool
 	filterRaw              string
@@ -69,7 +69,7 @@ func observeBinding(m Model, cmd tea.Cmd) bindingOutcome {
 		inspectorDisplay:       m.inspectorDisplay,
 		paneFocus:              m.paneFocus,
 		previewWindowID:        m.previewWindowID,
-		railRequested:          m.railRequested,
+		projectSwitcherKey:     m.projectSwitcherKey,
 		listView:               m.listView,
 		deprecationDismissed:   m.deprecationDismissed,
 		filterRaw:              m.activeFilter.Raw,
@@ -235,9 +235,10 @@ func TestDirectKeyAndPaletteAgree(t *testing.T) {
 	}
 }
 
-// TestUncheckedBindingsRunTheirCommandRegardless states what the two declared
-// exceptions buy. Both commands refuse by doing something the operator can see
-// or feel, which a dropped keypress would throw away.
+// TestUncheckedBindingsRunTheirCommandRegardless states what the three declared
+// exceptions buy. Each either refuses by doing something the operator can see or
+// feel — which a dropped keypress would throw away — or has no state in which it
+// refuses at all, so a gate could only ever be a chance to get that wrong.
 func TestUncheckedBindingsRunTheirCommandRegardless(t *testing.T) {
 	unchecked := map[commands.ID]bool{}
 	for _, binding := range dashboardBindings() {
@@ -245,7 +246,7 @@ func TestUncheckedBindingsRunTheirCommandRegardless(t *testing.T) {
 			unchecked[binding.Command] = true
 		}
 	}
-	want := map[commands.ID]bool{commands.ToggleInspector: true, commands.UndoClose: true}
+	want := map[commands.ID]bool{commands.ToggleInspector: true, commands.SwitchProject: true, commands.UndoClose: true}
 	if len(unchecked) != len(want) {
 		t.Fatalf("unchecked bindings: got %v, want %v", unchecked, want)
 	}
@@ -487,20 +488,30 @@ func TestBindingsShareOneCapturedTarget(t *testing.T) {
 	}
 }
 
-// TestRailFocusTargetsNoSession keeps the rail out of the row bindings. A rail
-// row names a project scope; treating it as a selection would let a key act on
-// whatever session happened to sit at the same index in the list behind it.
-func TestRailFocusTargetsNoSession(t *testing.T) {
+// TestProjectSwitcherIsNotADashboardBindingState is what replaced the rail's
+// "a scope row is not a session" guard. The rail was a pane inside ModeList, so
+// the binding context had to answer for a state in which the keyboard was on a
+// project scope rather than a session. The switcher is its own mode, so no
+// dashboard binding is dispatched while a scope is being chosen at all — and the
+// binding context has exactly one answer again.
+func TestProjectSwitcherIsNotADashboardBindingState(t *testing.T) {
 	m := withListRows(testModelWithSessions(), session.RunningSession{
 		TabID: 1, WindowID: 11, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt",
 	})
-	m.railFocused = true
-	if ctx := dashboardBindingContext(m); ctx.HasTarget {
-		t.Errorf("rail focus produced a session target: %+v", ctx.Target)
+	if ctx := dashboardBindingContext(m); !ctx.HasTarget || ctx.Target.TabID != 1 {
+		t.Fatalf("binding context = %+v", ctx)
 	}
-	for _, id := range []commands.ID{commands.RestartSession, commands.CloseSession, commands.PeekScrollback, commands.ShowTimeline} {
-		if dashboardCommandAvailable(id)(m) {
-			t.Errorf("%s reads as available while the rail holds focus", id)
+	updated, _ := m.openProjectSwitcher()
+	open := updated.(Model)
+	if open.mode != ModeProjectSwitcher {
+		t.Fatalf("open left mode %v", open.mode)
+	}
+	// The dashboard keymap is not consulted in this mode: the key handler
+	// dispatches on the mode before it reaches the binding table.
+	for _, key := range []string{keyR, keyClose, keyE, keyOpenTimeline} {
+		after := pressKey(open, key)
+		if after.mode != ModeProjectSwitcher || after.targetSession.TabID != 0 {
+			t.Errorf("%q reached a row binding: mode=%v target=%d", key, after.mode, after.targetSession.TabID)
 		}
 	}
 }
@@ -561,22 +572,21 @@ func TestFooterKeysAreTheKeysThatDispatch(t *testing.T) {
 	}
 }
 
-// TestInspectorKeySyncsTheRailFromEitherPath is the latent divergence the shared
-// body closed: the direct key reconciled the rail after toggling the pane and
-// the palette entry did not, so the same command left two different models
-// depending on how it was reached.
-func TestInspectorKeySyncsTheRailFromEitherPath(t *testing.T) {
+// TestInspectorKeyMatchesThePaletteFromEitherPath is the latent divergence the
+// shared body closed: the direct key and the palette entry used to reconcile
+// different state after toggling the pane, so the same command left two
+// different models depending on how it was reached.
+func TestInspectorKeyMatchesThePaletteFromEitherPath(t *testing.T) {
 	base := withListRows(testModelWithSessions(), session.RunningSession{
 		TabID: 1, WindowID: 11, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt",
 	})
 	base.width, base.height = 200, 60
 	base.cfg.Defaults.Preview = config.PreviewConfig{MinCols: 80, MinRows: 20, Ratio: 0.4, RefreshMs: 500, Direction: "vertical"}
 	base.listView = dashboard.ViewUrgency
-	base.railRequested = true
 
 	// Both directions, because the two halves of the toggle touch different
-	// state: hiding releases the read target and re-syncs the rail, showing
-	// re-acquires it and takes the focus.
+	// state: hiding releases the read target, showing re-acquires it and takes
+	// the focus.
 	for _, name := range []string{"hide", "show"} {
 		viaKey := runViaKey(base, keyInspector)
 		viaPalette := runViaPalette(base, commands.ToggleInspector)

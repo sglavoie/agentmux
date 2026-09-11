@@ -210,36 +210,18 @@ func TestResponsiveGeometryIsStableUnderRepeatedResolution(t *testing.T) {
 	})
 }
 
-// responsiveRailModel is responsiveModel with the project rail asked for. The
-// rail is opt-in now — the inspector took the columns it used to sit in — so a
-// test about rail geometry has to press its toggle the way an operator would
-// rather than inherit it from the default dashboard.
-func responsiveRailModel(width, height int, view dashboard.ViewMode, inspector bool) Model {
-	m := responsiveModel(width, height, view, inspector)
-	m.railRequested = true
-	return m
-}
-
-func TestResponsiveRailThresholdBandsAndInspectorGeometry(t *testing.T) {
-	base := responsiveRailModel(160, 40, dashboard.ViewUrgency, false)
-	railWidth := dashboard.RailWidth(dashboardRailRows(base))
-	threshold := railWidth + 1 + 80
-
-	below := base
-	below.width = threshold - 1
-	if g := dashboardGeometry(below); g.rail {
-		t.Fatalf("rail visible one cell below threshold: %+v", g)
-	}
-	at := base
-	at.width = threshold
-	if g := dashboardGeometry(at); !g.rail || g.railWidth != railWidth || g.listWidth != 80 {
-		t.Fatalf("threshold geometry = %+v, want rail %d and 80-cell list", g, railWidth)
-	}
+// TestResponsiveBandsAndSplitGeometry is what survived the project rail's
+// removal. The rail was the third vertical strip and the only pane whose
+// visibility had a width threshold of its own, so what is left is the two-strip
+// sum and the band the queue's own width falls into — the facts that decide what
+// a session row is allowed to spell.
+func TestResponsiveBandsAndSplitGeometry(t *testing.T) {
+	base := responsiveModel(160, 40, dashboard.ViewUrgency, false)
 
 	bands := []struct {
 		width int
 		want  dashboard.Band
-	}{{79, dashboard.BandCompact}, {120, dashboard.BandStandard}, {160, dashboard.BandSpacious}}
+	}{{79, dashboard.BandCompact}, {100, dashboard.BandStandard}, {160, dashboard.BandSpacious}}
 	for _, tc := range bands {
 		m := base
 		m.width = tc.width
@@ -249,71 +231,48 @@ func TestResponsiveRailThresholdBandsAndInspectorGeometry(t *testing.T) {
 		}
 	}
 
-	// Three vertical strips on one row: rail, queue, inspector. The sum is the
-	// assertion — an off-by-one in any of the two dividers is a column of the
-	// terminal nobody owns, which the renderer would either leave blank or
-	// overrun.
-	split := responsiveRailModel(240, 40, dashboard.ViewUrgency, true)
+	// Two vertical strips on one row: queue and inspector. The sum is the
+	// assertion — an off-by-one in the divider is a column of the terminal
+	// nobody owns, which the renderer would either leave blank or overrun.
+	split := responsiveModel(240, 40, dashboard.ViewUrgency, true)
 	sg := dashboardGeometry(split)
-	if !sg.split || sg.fullScreen || !sg.rail ||
-		sg.railWidth+1+sg.listWidth+1+sg.previewWidth != split.width || sg.listWidth < 80 {
-		t.Fatalf("rail/queue/inspector geometry = %+v", sg)
+	if !sg.split || sg.fullScreen ||
+		sg.listWidth+1+sg.previewWidth != split.width || sg.listWidth < 80 {
+		t.Fatalf("queue/inspector geometry = %+v", sg)
 	}
 
-	// Full screen is the one state the rail cannot share a row with: there is no
-	// queue column beside it to filter, so the strip would be a scope picker for
-	// a list that is not on screen.
+	// Full screen is the inspector alone: the queue column is gone, so nothing
+	// but the pane owns the row.
 	full := split
 	full.inspectorDisplay = inspectorFullScreen
-	if g := dashboardGeometry(full); !g.fullScreen || g.rail || g.previewWidth != full.width {
+	if g := dashboardGeometry(full); !g.fullScreen || g.previewWidth != full.width {
 		t.Fatalf("full-screen inspector geometry = %+v", g)
-	}
-
-	projects := base
-	projects.listView = dashboard.ViewProjects
-	if g := dashboardGeometry(projects); g.rail {
-		t.Fatalf("Projects view rendered a rail: %+v", g)
 	}
 }
 
-// TestRailChromeAgreesWithGeometryAcrossSizes pins the short-terminal fallback
-// where the body used to admit a rail from the full terminal width while the
-// header and footer rejected it from the width the second pane had already
-// claimed.
-func TestRailChromeAgreesWithGeometryAcrossSizes(t *testing.T) {
+// TestProjectSelectorIsAlwaysOfferedInTheHeader is the header half of the
+// switcher's "no geometry" claim. The rail's control appeared and disappeared
+// with the strip it toggled, and reconciling that against the body's own
+// visibility rule was the bug this matrix was written for. An overlay costs the
+// body no columns, so the selector is unconditional — and what it says is the
+// scope the dashboard is currently showing.
+func TestProjectSelectorIsAlwaysOfferedInTheHeader(t *testing.T) {
 	for width := 90; width <= 200; width++ {
 		for height := 8; height <= 30; height++ {
-			m := responsiveRailModel(width, height, dashboard.ViewUrgency, true)
-			g := dashboardGeometry(m)
-			if visible := listRailVisible(m); visible != g.rail {
-				t.Fatalf("%dx%d rail visibility: geometry=%v chrome=%v geom=%+v",
-					width, height, g.rail, visible, g)
-			}
-			if g.rail {
-				header := stripAnsi(layout.SectionLines(renderHeader(m))[0])
-				if !strings.Contains(header, "b: hide rail") {
-					t.Fatalf("%dx%d paints a rail without its header control: %q", width, height, header)
-				}
+			m := responsiveModel(width, height, dashboard.ViewUrgency, true)
+			header := stripAnsi(layout.SectionLines(renderHeader(m))[0])
+			if !strings.Contains(header, keyProjectSwitcher+": all projects") {
+				t.Fatalf("%dx%d header omits the project selector: %q", width, height, header)
 			}
 		}
 	}
 
-	// At the original 106x9 reproduction the split's reserved queue base is too
-	// narrow for the rail even though the split itself is dropped for height.
-	// The request remains explicit in the header so a later resize cannot make
-	// the rail silently reappear without an operator-visible toggle.
-	m := responsiveRailModel(106, 9, dashboard.ViewUrgency, true)
-	if g := dashboardGeometry(m); g.rail {
-		t.Fatalf("106x9 rail should be suppressed from the shared split base: %+v", g)
-	}
+	// An applied scope is named by the control rather than implied by it.
+	m := responsiveModel(106, 9, dashboard.ViewUrgency, true)
+	m.activeFilter = dashboard.Parse("#api")
 	header := stripAnsi(layout.SectionLines(renderHeader(m))[0])
-	if !strings.Contains(header, "b: hide rail") {
-		t.Fatalf("hidden requested rail has no header control: %q", header)
-	}
-	m.railRequested = false
-	header = stripAnsi(layout.SectionLines(renderHeader(m))[0])
-	if !strings.Contains(header, "b: show rail") {
-		t.Fatalf("non-requested rail has no header control: %q", header)
+	if !strings.Contains(header, keyProjectSwitcher+": api") {
+		t.Fatalf("applied scope missing from header: %q", header)
 	}
 }
 

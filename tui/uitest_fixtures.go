@@ -755,8 +755,8 @@ func projectFamiliesFixture() uitestFixture {
 // narrower fixtures above, it deliberately composes every triage input in one
 // place: every group/subtype rank, zero/equal/distinct presentation clocks,
 // case-folded project identity across profiles and repository families, a label
-// that needs quoted filter syntax, and enough canonical labels to make the rail
-// scroll independently in a short terminal.
+// that needs quoted filter syntax, and enough canonical labels to make the
+// project switcher scroll in a short terminal.
 func triageIntegrationFixture() uitestFixture {
 	cfg := &config.Config{
 		Defaults: config.Defaults{
@@ -803,7 +803,7 @@ func triageIntegrationFixture() uitestFixture {
 	changed := func(d time.Duration) int64 { return uitestFrozenNow.Add(-d).UnixMilli() }
 	return uitestFixture{
 		Name:        "triage_integration",
-		Description: "all triage ranks and presentation-clock tie cases across a scrollable case-folded project rail",
+		Description: "all triage ranks and presentation-clock tie cases across a scrollable case-folded project scope set",
 		Size:        UITestSize{Width: 140, Height: 16},
 		Config:      cfg,
 		Windows:     windows,

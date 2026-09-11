@@ -1,0 +1,16 @@
+{
+  "name": "mouse switcher ignores the wheel and the dashboard under it",
+  "fixture": "project_families",
+  "size": { "width": 240, "height": 32 },
+  "actions": [
+    { "type": "key", "key": "p" },
+    { "type": "mouse", "x": 100, "y": 13, "event": "wheel_down" },
+    { "type": "mouse", "x": 20, "y": 4, "event": "left" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "project_switcher" },
+    { "type": "contains_text", "text": "›● 🔑 All projects" },
+    { "type": "cursor_equals", "cursor": 0 },
+    { "type": "no_layout_issues" }
+  ]
+}

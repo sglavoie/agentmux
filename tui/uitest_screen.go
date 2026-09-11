@@ -146,6 +146,8 @@ func modalBoxRenderer(mode Mode) func(Model) string {
 		return renderLiveSessionPickerBox
 	case ModeASLResponse:
 		return renderASLResponseBox
+	case ModeProjectSwitcher:
+		return renderProjectSwitcherBox
 	default:
 		return nil
 	}
@@ -305,6 +307,12 @@ func uitestCursor(m Model) int {
 		return m.aslCursor
 	case ModeASLResponse:
 		return m.aslResponse.QuestionIdx
+	case ModeProjectSwitcher:
+		// Derived from the stored scope identity rather than stored as an index,
+		// for the same reason the renderer derives it: a refresh that reorders or
+		// drops scopes must not leave a scenario asserting on a row number that
+		// now names a different project.
+		return projectSwitcherCursor(m)
 	default:
 		return m.cursor
 	}
@@ -355,6 +363,8 @@ func uitestModeName(mode Mode) string {
 		return "asl_runs"
 	case ModeASLResponse:
 		return "asl_response"
+	case ModeProjectSwitcher:
+		return "project_switcher"
 	default:
 		return "unknown"
 	}

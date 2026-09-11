@@ -62,20 +62,20 @@ func dashboardBindings() commands.BindingSet {
 		{Keys: []string{keyPlanSearch}, Display: keyPlanSearch, Hint: "plans", Command: commands.SearchPlans},
 		{Keys: []string{keyWorktrees}, Display: keyWorktrees, Command: commands.ManageWorktrees},
 		{Keys: []string{keyASLRuns}, Display: keyASLRuns, Command: commands.ShowRuns},
-		// One of the two unchecked bindings, and the reason is now the opposite of
-		// what it was under `p`. The inspector never refuses: a terminal too
-		// narrow for a split gets the pane full-screen instead, so there is no
-		// state in which the key should read as unavailable and a gate would only
-		// be a chance to get that wrong. `p` is deliberately not bound on the
-		// dashboard at all — session 9 gives it to the project switcher, and a
-		// key that still toggled a pane in the meantime would have to be untaught.
+		// One of the three unchecked bindings. The inspector never refuses: a
+		// terminal too narrow for a split gets the pane full-screen instead, so
+		// there is no state in which the key should read as unavailable and a
+		// gate would only be a chance to get that wrong.
 		{Keys: []string{keyInspector}, Display: keyInspector, Hint: "inspector", Command: commands.ToggleInspector, Gate: commands.GateUnchecked},
-		{Keys: []string{keyToggleRail}, Display: keyToggleRail, Hint: "project rail", Command: commands.ToggleRail},
+		// The second. The switcher always has something to offer — All is a scope
+		// like any other and the aggregation always produces it — so there is no
+		// empty session list at which the key should read as dead.
+		{Keys: []string{keyProjectSwitcher}, Display: keyProjectSwitcher, Hint: "projects", Command: commands.SwitchProject, Gate: commands.GateUnchecked},
 		{Keys: []string{keyToggleView}, Display: keyToggleView, Hint: "group view", Command: commands.ToggleListView},
 
 		// App.
 		{Keys: []string{keyResort}, Display: keyResort, Hint: "resort", Command: commands.ResortTabs},
-		// The other unchecked binding. `undoLastCmd` owns the undo stack: asked
+		// The third unchecked binding. `undoLastCmd` owns the undo stack: asked
 		// for an entry past its deadline it discards it and does nothing, which
 		// is both the refusal and the only thing that prunes a stale entry on
 		// demand. Gating the key would leave the expired entry sitting there
@@ -116,14 +116,13 @@ func dashboardCommand(id commands.ID) (commands.Command[Model], bool) {
 	return candidate, ok
 }
 
-// dashboardBindingContext is the target a dashboard *binding* acts on, which is
-// the captured selection except when the rail holds the keyboard focus. A rail
-// row is a project scope rather than a session, so it targets nothing — the same
-// answer the footer's row section gave before the bindings derived it.
+// dashboardBindingContext is the target a dashboard *binding* acts on: the
+// captured selection, unconditionally. It used to have a second answer for the
+// state where the project rail held the keyboard, because a scope row is not a
+// session and every row-targeted binding had to refuse against it. The switcher
+// is an overlay with its own key handler, so no dashboard binding is dispatched
+// while a scope is being chosen and there is no such state left to answer for.
 func dashboardBindingContext(m Model) commands.Context {
-	if m.railFocused {
-		return commands.Context{}
-	}
 	return captureCommandContext(m)
 }
 

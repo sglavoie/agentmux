@@ -267,13 +267,6 @@ func (d *uitestDriver) Command(id commands.ID) error {
 	if d.model.mode != ModeList {
 		return fmt.Errorf("uitest: command %q is unreachable from mode %q: the palette opens from the session list", id, uitestModeName(d.model.mode))
 	}
-	// The rail is a second keymap the binding table does not describe, and ':'
-	// is not in it. Saying so is worth an error of its own: the alternative is
-	// a scenario reporting that the palette would not open, which is true and
-	// useless.
-	if d.model.railFocused {
-		return fmt.Errorf("uitest: command %q is unreachable while the project rail holds keyboard focus, where %q is inert", id, keyColon)
-	}
 	if err := d.Key(keyColon); err != nil {
 		return err
 	}

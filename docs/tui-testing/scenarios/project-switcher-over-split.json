@@ -1,0 +1,14 @@
+{
+  "name": "project-switcher-over-split",
+  "fixture": "project_families",
+  "size": { "width": 240, "height": 30 },
+  "actions": [{ "type": "key", "key": "p" }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "project_switcher" },
+    { "type": "contains_text", "text": "need act idle" },
+    { "type": "contains_text", "text": "api" },
+    { "type": "contains_text", "text": "Dir     ~/projects/api" },
+    { "type": "contains_text", "text": "i: hide inspector" },
+    { "type": "no_layout_issues" }
+  ]
+}

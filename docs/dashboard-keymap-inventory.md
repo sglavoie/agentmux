@@ -69,8 +69,8 @@ it is named first.
 | `P` | `SearchPlans` | Plans browser | Retires | palette |
 | `W` | `ManageWorktrees` | Managed worktrees | Retires | palette |
 | `A` | `ShowRuns` | ASL Runs | Retires | palette |
-| `p` | `TogglePreview` | Toggle the preview pane | **Retired.** The command is `ToggleInspector` (`explore.toggle-inspector`) on `i`, and `p` answers nothing on the dashboard until the project switcher claims it | inspector `i`; palette |
-| `b` | `ToggleRail` | Toggle the project rail | Retires | project switcher `p`; palette |
+| `p` | `TogglePreview` | Toggle the preview pane | **Retired.** The command is `ToggleInspector` (`explore.toggle-inspector`) on `i`, and `p` has since been claimed by the project switcher (`explore.switch-project`) | inspector `i`; palette |
+| `b` | `ToggleRail` | Toggle the project rail | **Retired.** The rail, its command, and its key are gone; every scope it could apply is reachable from the switcher, which keeps `rail` as a palette alias so the old word still finds it | project switcher `p`; palette |
 | `v` | `ToggleListView` | Urgency ↔ Projects view | Retires | palette (the contract keeps Projects view palette-accessible) |
 | `R` | `ResortTabs` | Resort Kitty tabs | Retires | palette |
 | `u` | `UndoClose` | Undo the last close | Retires | palette |
@@ -97,14 +97,14 @@ successor named here or it has nowhere to go.
 | `enter`/`space` on a summary | Fold/unfold the family | `enter` survives, `space` retires | `Enter` |
 | `a` | Selected-session actions overlay | Survives | `a` |
 | `:` | Command palette | Survives | `:` |
-| `←`/`→` | Fold/unfold a family; `←` focuses the rail in Urgency view | Retires | `Enter` folds; the rail's successor is the project switcher `p` |
+| `←`/`→` | Fold/unfold a family; `←` focuses the rail in Urgency view | **Half retired.** The rail focus is gone, so `←` answers nothing in Urgency view — the same answer `→` already gave; folding still retires | `Enter` folds; the rail's successor is the project switcher `p` |
 | `tab` | Cycle the focused filter chip | Retires the meaning, keeps the key for pane switching | filter editing inside `/` |
 | `1`–`9` | Remove the *n*th filter component | Retires | filter editing inside `/` |
 | `backspace` | Remove the focused chip | Retires | filter editing inside `/` |
 
 ## What the successors still owe
 
-Five capabilities above point at a surface that does not exist yet. Each is a
+Three capabilities above point at a surface that does not exist yet. Each is a
 later session's work; listed here so the retirement and the replacement are
 read together rather than one landing without the other.
 
@@ -112,12 +112,13 @@ read together rather than one landing without the other.
   target inside a folded family and never focusing its terminal.
 - `Tab`/`Shift+Tab` pane switching, which is what makes "focused pane" mean
   something for `j`/`k` and the paging keys.
-- `p` project switcher, changing only the project filter component and
-  preserving the rest.
-- `i` inspector toggle, which absorbs both the preview pane (`p`) and the
-  per-session detail overlay (`d`).
 - Individual chip editing and removal inside `/`, which is where `tab`, `1`–`9`
   and `backspace` go.
+
+Two more have since been built and are no longer owed: the `i` inspector toggle,
+which absorbed both the preview pane (`p`) and the per-session detail overlay
+(`d`), and the `p` project switcher, which changes only the project filter
+component and preserves the rest.
 
 Kitty-level shortcuts and the bindings of every other mode — launcher, history,
 plans, worktrees, Runs — are out of scope and unchanged.

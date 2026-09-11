@@ -40,16 +40,9 @@ func renderListAt(m Model, width, height int) string {
 	return dashboard.RenderList(dashboardListInput(m, width, height))
 }
 
-func dashboardRailRows(m Model) []dashboard.RailRow {
-	contextual := dashboard.ApplyFilter(m.sessions, m.activeFilter.WithoutProject(), m.lastActivity, m.idleThreshold)
-	return dashboard.BuildRailRows(contextual, m.lastActivity, m.idleThreshold)
-}
-
-// The rail has no text-only seam here on purpose. It is drawn from
-// renderSplitFrame through dashboard.RenderRailWithHits, which is the only way
-// into the leaf that produces its row rectangles beside its text; a second
-// adapter that produced the text alone would be a way to draw a rail whose rows
-// nothing can be clicked on.
+// The project scopes have no seam here. They are not a dashboard pane any more:
+// the switcher is a modal with its own controller, so its projection lives in
+// model_project_switcher.go beside the state it reads.
 
 // The selected-item detail strip that used to be reserved here is gone, and
 // with it the two rows below the list. It existed because the session row

@@ -282,6 +282,15 @@ func fallbackStatusText(m Model) string {
 		return "Delete session"
 	case ModeChipPicker:
 		return "Choose " + chipPickerStatusLabel(m.chipPickerKind)
+	case ModeProjectSwitcher:
+		// The applied scope, not the highlighted one. The cursor moves while the
+		// operator reads the list and the filter behind the overlay has not
+		// changed yet; naming the highlight here would say the dashboard is
+		// showing something it is not.
+		if applied := m.activeFilter.Project; applied != "" {
+			return "Switch project: " + applied
+		}
+		return "Switch project: all projects"
 	case ModeMessageDetail:
 		if m.messageDetailIdx >= 0 && m.messageDetailIdx < len(m.viewerMessages) {
 			return fmt.Sprintf("Message detail: %d/%d", m.messageDetailIdx+1, len(m.viewerMessages))

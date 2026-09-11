@@ -132,7 +132,7 @@ amx tui-test fixture wide_profiles --width 140 --key C
 | `paused_output` | one working session whose scrollback is longer than any pane the fixture's size can draw, numbered `output line 01`…`40` | the inspector's follow/hold split: a numbered buffer where following the tail and holding a scrolled position render visibly different lines |
 | `project_families` | two multi-checkout repository families whose members span all three urgency buckets, plus a single-checkout family and a row belonging to no family | the Projects view: summaries, fold/unfold, the singleton that earns no summary, the unfamilied leaf, the project card, and count semantics under a filter |
 | `run_timers` | five busy stretches: sub-minute, multi-minute, hours-long, warning-band, and idle | per-row run timer formatting bands and the `⏳` watchdog warning |
-| `triage_integration` | twelve sessions spanning every triage severity rank, zero/equal/distinct presentation timestamps, eleven canonical project labels, and `Client Portal`/`client portal` across profiles and repository identities | release-level ordering, case-insensitive project aggregation, quoted filtering, contextual completion, rail scrolling and exact responsive thresholds |
+| `triage_integration` | twelve sessions spanning every triage severity rank, zero/equal/distinct presentation timestamps, eleven canonical project labels, and `Client Portal`/`client portal` across profiles and repository identities | release-level ordering, case-insensitive project aggregation, quoted filtering, contextual completion, and project-switcher scrolling and contextual tallies |
 | `triage_vertical` | the exact `triage_integration` data with `direction = "vertical"` configured | proves the dashboard ignores the setting — the inspector is a side-by-side split or it is full screen, and there is no stacked form for the setting to select |
 | `unseen_stops` | two `🛑` rows the daemon separates by seenness, plus one `⚡` row | the unseen-stop demotion: a read `🛑` falls to Idle while an unread one holds Needs you |
 | `wide_profiles` | long profile names and home dirs | stresses the profile/config picker box width |
@@ -188,8 +188,8 @@ the wall clock.
 rows have no clock, two same-rank rows share one timestamp, and the remaining
 rows have distinct timestamps. Its case variants intentionally use different
 profiles and repository-family keys, proving that project completion and the
-rail aggregate by operator-facing label rather than by either implementation
-identity.
+project switcher aggregate by operator-facing label rather than by either
+implementation identity.
 
 ### Asserting the unread-completion marker
 
@@ -288,8 +288,8 @@ the scenario fails without the operation ever being issued:
   guessed at.
 
 The palette opens from the session list only, so a `command` action is also
-refused from inside another screen and while the project rail holds keyboard
-focus (`:` is not in the rail's keymap). Use a `key` action for those, and for
+refused from inside another screen and while the project switcher is open
+(`:` is not in the switcher's keymap). Use a `key` action for those, and for
 any scenario whose subject IS a binding.
 
 Mouse coordinates address the last rendered frame, so clicks and wheel events
@@ -436,14 +436,13 @@ file. The exact inventory is:
 | [`help-modal-narrow-fit.json`](scenarios/help-modal-narrow-fit.json) | `basic` | help remains bounded in a narrow viewport |
 | [`help-modal-scroll-bottom.json`](scenarios/help-modal-scroll-bottom.json) | `basic` | help scroll reaches the final surviving bindings |
 | [`legend-narrow-fit.json`](scenarios/legend-narrow-fit.json) | `actions` | live-session legend remains bounded at narrow width |
-| [`list-preview-narrow-fit.json`](scenarios/list-preview-narrow-fit.json) | `actions` | list+preview falls back to the plain list below the row-column floor |
 | [`mouse-chip-removal.json`](scenarios/mouse-chip-removal.json) | `project_families` | a click on a rendered project chip removes exactly the filter component named by the captured chip identity |
-| [`mouse-header-controls.json`](scenarios/mouse-header-controls.json) | `project_families` | the rendered view, rail, and inspector header controls invoke the same toggles as `v`, `b`, and `i` |
+| [`mouse-header-controls.json`](scenarios/mouse-header-controls.json) | `project_families` | the rendered view, inspector, and project header controls invoke the same toggles as `v`, `i`, and `p`, and the project chip still resolves after hiding the inspector moved it |
 | [`mouse-list-wheel.json`](scenarios/mouse-list-wheel.json) | `project_families` | a wheel event over the session pane moves the selection by three selectable rows |
-| [`mouse-rail-scope.json`](scenarios/mouse-rail-scope.json) | `project_families` | clicking a rendered rail row applies its project scope and moves keyboard focus into the rail |
-| [`mouse-rail-wheel.json`](scenarios/mouse-rail-wheel.json) | `project_families` | a wheel event over the rail moves its independent cursor by three rows before keyboard application |
+| [`mouse-switcher-ignores-wheel.json`](scenarios/mouse-switcher-ignores-wheel.json) | `project_families` | the open switcher publishes click targets only: a wheel over it and a click on the dashboard behind it both do nothing, leaving mode, cursor, and filter untouched |
+| [`mouse-switcher-scope.json`](scenarios/mouse-switcher-scope.json) | `project_families` | clicking a rendered scope row inside the switcher applies that project and closes the overlay |
 | [`mouse-session-select-focus.json`](scenarios/mouse-session-select-focus.json) | `project_families` | one click selects a live session and a second click on the same identity focuses its Kitty tab |
-| [`paused-output-follows-tail.json`](scenarios/paused-output-follows-tail.json) | `paused_output` | `p` opens the inspector over a scrollback longer than the pane: the six-line metadata block is drawn above the divider and the output below it follows the tail, so the last lines are on screen, the first are gone, and nothing says Paused because no key yet holds a position |
+| [`paused-output-follows-tail.json`](scenarios/paused-output-follows-tail.json) | `paused_output` | the inspector opens over a scrollback longer than the pane: the six-line metadata block is drawn above the divider and the output below it follows the tail, so the last lines are on screen, the first are gone, and nothing says Paused because no key yet holds a position |
 | [`picker-dsl-narrow-fit.json`](scenarios/picker-dsl-narrow-fit.json) | `basic` | launcher DSL/help text clamps at narrow width |
 | [`projects-cross-view-selection.json`](scenarios/projects-cross-view-selection.json) | `project_families` | the view toggle carries the selected session across to Projects, where the cursor lands on the same session at its new tree index |
 | [`projects-cross-view-summary-return.json`](scenarios/projects-cross-view-summary-return.json) | `project_families` | toggling back out of Projects from a family summary selects that family's primary session in Urgency rather than losing the cursor |
@@ -453,9 +452,10 @@ file. The exact inventory is:
 | [`projects-summary-action-refusal.json`](scenarios/projects-summary-action-refusal.json) | `project_families` | session actions pressed on a family summary are refused outright — no Kitty focus, launch, close, or pager call is made |
 | [`projects-summary-preview.json`](scenarios/projects-summary-preview.json) | `project_families` | the inspector's family card for a selected family summary lists the family's bucket tally and every checkout with its branch and directory |
 | [`projects-tree-expanded.json`](scenarios/projects-tree-expanded.json) | `project_families` | the view toggle replaces the urgency headings with family summary lines and indented checkout rows, leaving unfamilied and single-checkout rows flat |
-| [`project-rail-horizontal-preview.json`](scenarios/project-rail-horizontal-preview.json) | `project_families` | a wide horizontal preview retains the project rail while preserving the list and preview columns |
-| [`project-rail-keyboard-apply.json`](scenarios/project-rail-keyboard-apply.json) | `project_families` | Left enters the rail and Enter applies its project scope without leaving rail focus |
-| [`project-rail-responsive-suppression.json`](scenarios/project-rail-responsive-suppression.json) | `project_families` | narrowing below the rail threshold returns focus to the list while preserving the active project chip |
+| [`project-scope-survives-resize.json`](scenarios/project-scope-survives-resize.json) | `project_families` | an applied scope survives a narrowing resize and the switcher reopens on it, so the chip, the header selector, and the highlighted row all still name the same project |
+| [`project-switcher-keyboard-apply.json`](scenarios/project-switcher-keyboard-apply.json) | `project_families` | `p` then `↓` then Enter applies a scope and closes the overlay, leaving the chip, the header selector, and the visible tally in agreement |
+| [`project-switcher-narrow-fit.json`](scenarios/project-switcher-narrow-fit.json) | `actions` | the switcher box clamps to a 60-cell terminal without folding a scope row onto a second line |
+| [`project-switcher-over-split.json`](scenarios/project-switcher-over-split.json) | `project_families` | the overlay composites over a wide list+inspector split without disturbing either column underneath it |
 | [`resize-stress.json`](scenarios/resize-stress.json) | `basic` | the dashboard survives a sequence of resizes and ends clean |
 | [`picker-fit.json`](scenarios/picker-fit.json) | `actions` | launch picker rows stay within width after pressing `l` |
 | [`picker-preview-fit.json`](scenarios/picker-preview-fit.json) | `actions` | launch picker list+preview split fits after pressing `l` then `p` |
@@ -475,14 +475,15 @@ file. The exact inventory is:
 | [`session-view-hints-narrow-fit.json`](scenarios/session-view-hints-narrow-fit.json) | `basic` | transcript viewer hints truncate to the row budget and surface the actionable `? more` marker |
 | [`spacious-identity-columns.json`](scenarios/spacious-identity-columns.json) | `wide_profiles` | a profile name too long for any row is carried whole by the detail strip, so the truncated `claude-produc…` the retired identity column produced is nowhere on screen |
 | [`triage-contextual-project-completion.json`](scenarios/triage-contextual-project-completion.json) | `triage_integration` | `%claude #` completes only labels remaining in that harness context and quotes labels containing spaces |
-| [`triage-default-wide-ordering.json`](scenarios/triage-default-wide-ordering.json) | `triage_integration` | the default wide dashboard renders the integrated severity/recency order as aligned Needs you and Running rows, with exact All/project bucket tallies |
-| [`triage-horizontal-preview.json`](scenarios/triage-horizontal-preview.json) | `triage_integration` | a wide side-by-side preview coexists with the rail and the 80-cell main-list floor |
-| [`triage-quoted-scope-hidden-rail.json`](scenarios/triage-quoted-scope-hidden-rail.json) | `triage_integration` | a quoted spaced-label selector aggregates both case variants and remains authoritative after `b` hides the rail |
-| [`triage-rail-scroll.json`](scenarios/triage-rail-scroll.json) | `triage_integration` | a short terminal scrolls the focused rail independently while the list selection and total session count stay fixed |
-| [`triage-rail-threshold-hidden.json`](scenarios/triage-rail-threshold-hidden.json) | `triage_integration` | resizing from the exact threshold to one cell below suppresses the 25-cell natural rail before starving the 80-cell list |
-| [`triage-rail-threshold-visible.json`](scenarios/triage-rail-threshold-visible.json) | `triage_integration` | resizing from one cell below to the exact 106-cell threshold restores that rail |
+| [`triage-default-wide-ordering.json`](scenarios/triage-default-wide-ordering.json) | `triage_integration` | the default wide dashboard renders the integrated severity/recency order as aligned Needs you and Running rows, and the switcher over it carries the exact All/project bucket tallies under their need/act/idle headings |
+| [`triage-horizontal-preview.json`](scenarios/triage-horizontal-preview.json) | `triage_integration` | a wide side-by-side preview coexists with the header project selector and the 80-cell main-list floor |
+| [`triage-quoted-scope-round-trip.json`](scenarios/triage-quoted-scope-round-trip.json) | `triage_integration` | a quoted spaced-label selector aggregates both case variants and survives opening and cancelling the switcher, which restores the list without touching the filter |
+| [`triage-selector-survives-width-change.json`](scenarios/triage-selector-survives-width-change.json) | `triage_integration` | the header project selector is offered on both sides of the old 105/106-cell rail threshold, which no longer suppresses anything |
+| [`triage-switcher-at-narrow-width.json`](scenarios/triage-switcher-at-narrow-width.json) | `triage_integration` | the switcher opens over a 105-cell dashboard with its legend and tallies intact |
+| [`triage-switcher-contextual-counts.json`](scenarios/triage-switcher-contextual-counts.json) | `triage_integration` | with a text chip and a project chip both applied, the switcher drops only the project selector: All reports the text-filtered totals rather than the whole instance, and scopes emptied by the text chip are not offered |
+| [`triage-switcher-scroll.json`](scenarios/triage-switcher-scroll.json) | `triage_integration` | a short terminal scrolls the switcher's scope list with both markers shown while the applied scope named in the status bar stays fixed |
 | [`triage-vertical-direction-ignored.json`](scenarios/triage-vertical-direction-ignored.json) | `triage_vertical` | `direction = "vertical"` selects nothing on the dashboard: the inspector is the same side-by-side split, since the setting now governs only the launcher's preview |
-| [`triage-view-round-trip.json`](scenarios/triage-view-round-trip.json) | `triage_integration` | a rail-applied project scope survives Urgency → Projects → Urgency while keeping the canonical aggregate selected |
+| [`triage-view-round-trip.json`](scenarios/triage-view-round-trip.json) | `triage_integration` | a switcher-applied project scope survives Urgency → Projects → Urgency, and reopening the switcher still lands on the canonical aggregate |
 | [`unseen-stop-grouping-narrow-fit.json`](scenarios/unseen-stop-grouping-narrow-fit.json) | `unseen_stops` | two rows whose Status column both read `Done` split across Needs you and Idle by the daemon's unseen bit, with the unread one leading the list at narrow width and wearing the only `•` the gutter paints |
 | [`unseen-stop-grouping-wide.json`](scenarios/unseen-stop-grouping-wide.json) | `unseen_stops` | the seen 🛑 demotes to Idle while the unseen one holds Needs you, `]s` still reaches the demoted row, and jumping to it neither marks it nor clears the marker on the row that has one |
 | [`worktrees-browse.json`](scenarios/worktrees-browse.json) | `worktrees` | opening the hermetic managed-worktree inventory by name and whitespace-AND filtering narrows to the dirty row without exposing lifecycle mutations |

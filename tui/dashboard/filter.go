@@ -164,7 +164,7 @@ func (f Filter) IsEmpty() bool {
 
 // WithoutProject returns an independent filter with only its project selector
 // removed. It is the contextual source filter shared by project completion and
-// the project rail.
+// the project switcher.
 func (f Filter) WithoutProject() Filter {
 	out := f
 	out.Substrings = append([]string(nil), f.Substrings...)

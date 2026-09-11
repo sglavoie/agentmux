@@ -21,7 +21,7 @@ func SessionDisplayTitle(sess session.RunningSession) string {
 }
 
 // ProjectLabel is the one project identity used by filtering, completion, and
-// the project rail. FamilyLabel names a discovered repository family across
+// the project switcher. FamilyLabel names a discovered repository family across
 // configured projects and profiles; EffectiveProject is the compatibility
 // fallback for sessions without family metadata.
 func ProjectLabel(sess session.RunningSession) string {
