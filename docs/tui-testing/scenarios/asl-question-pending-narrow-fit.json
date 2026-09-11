@@ -10,7 +10,7 @@
     { "type": "excludes_text", "text": "❓ api" },
     { "type": "excludes_text", "text": "│" },
     { "type": "excludes_text", "text": "🔁" },
-    { "type": "contains_text", "text": "j/k · ↵ · : · ?" },
+    { "type": "contains_text", "text": "j/k · ↵ · a · : · / · ?" },
     { "type": "excludes_text", "text": "awaiting response" },
     { "type": "no_layout_issues" }
   ]

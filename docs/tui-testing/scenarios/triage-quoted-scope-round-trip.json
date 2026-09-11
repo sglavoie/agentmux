@@ -13,10 +13,11 @@
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
     { "type": "contains_text", "text": "▌#Client Portal ✕" },
-    { "type": "contains_text", "text": "p: Client Portal" },
+    { "type": "contains_text", "text": "Agent Mux · Urgency · Client Portal" },
     { "type": "contains_text", "text": "portal-work" },
     { "type": "contains_text", "text": "portal-personal" },
-    { "type": "contains_text", "text": "2/12 visible · 2 attention · 0 active · 0 idle" },
+    { "type": "contains_text", "text": "Needs you (2)" },
+    { "type": "excludes_text", "text": "2/12 visible" },
     { "type": "excludes_text", "text": "need act idle" },
     { "type": "no_layout_issues" }
   ]

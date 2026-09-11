@@ -29,8 +29,18 @@ type statusMessage struct {
 	Severity statusSeverity
 }
 
+// renderStatusBar draws the one status row every root composition reserves.
+//
+// On the dashboard the row is a feedback slot rather than a status line, so an
+// empty message renders as a genuinely blank row of the same width instead of
+// falling back to the app's name. The slot has to be legibly empty: a reserved
+// row that always said something is a row the eye stops checking, and the whole
+// point of reserving it is that the next thing to appear there is news.
 func renderStatusBar(m Model) string {
 	msg := currentStatusMessage(m, time.Now())
+	if msg.Text == "" {
+		return statusBarStyle(statusIdle).Render(layout.PadRight("", m.width))
+	}
 	line := fitStatusBarText(msg.Text, m.width)
 	return statusBarStyle(msg.Severity).Render(line)
 }
@@ -74,6 +84,18 @@ func toastStatusSeverity(sev toastSeverity) statusSeverity {
 func fallbackStatusMessage(m Model) statusMessage {
 	if m.actionErr != nil {
 		return statusMessage{Text: "Action error: " + m.actionErr.Error(), Severity: statusError}
+	}
+	if m.mode == ModeList {
+		// The dashboard's slot reports what just happened and nothing else. A
+		// toast or an action error has already been taken above; everything
+		// below this point is standing state, and standing state now has one
+		// place on the frame each. Counts are in the group headings, the row's
+		// state is the row's own icon and the inspector's summary, and every
+		// health reading — the topology outage included, which reaches the issue
+		// model as HealthIssueTopology — is the header's indicator. Repeating
+		// any of them here would cost the slot its meaning: a row that is never
+		// blank cannot announce anything by filling.
+		return statusMessage{}
 	}
 	if msg, ok := topologyStatus(m, modelNow(m)); ok {
 		return msg
@@ -365,58 +387,10 @@ func fallbackStatusText(m Model) string {
 	case ModeLiveSessionPicker:
 		return fmt.Sprintf("Choose live session: %d candidate%s", len(m.livePickerCandidates), plural(len(m.livePickerCandidates)))
 	default:
-		return listStatusText(m)
+		// ModeList is the only mode that reaches here, and it is taken before
+		// fallbackStatusText runs: the dashboard's slot is feedback, not status.
+		return ""
 	}
-}
-
-// listStatusText is the dashboard's own line: how many sessions there are, how
-// many the filter left, and how those break down across the three urgency
-// buckets. The breakdown is what makes the line worth reading in the Projects
-// view, where a collapsed family hides its members' icons — the tally says how
-// many rows are folded away needing attention without unfolding anything.
-//
-// The counts are taken from the VISIBLE SESSIONS (m.filtered) rather than from
-// the projected items, and that is the whole of the count semantics: a family
-// summary is a line, not a session, so counting items would count a two-session
-// family three times in the expanded view and once in the collapsed one, and the
-// same dashboard would report a different number of sessions depending on which
-// families the operator had folded. Sessions are what the operator has; lines
-// are how they are currently drawn.
-//
-// Every bucket decision is dashboard.StateGroup's, so the tally cannot drift
-// from the group headings the rows render under, nor from the `!attention`,
-// `!active`, and `!idle` filters that select each bucket.
-func listStatusText(m Model) string {
-	if topologyLoading(m) {
-		return "Loading sessions…"
-	}
-	total := len(m.sessions)
-	visible := len(m.filtered)
-	if total == 0 {
-		return "No running sessions"
-	}
-	lead := fmt.Sprintf("Sessions: %d", total)
-	if visible != total {
-		lead = fmt.Sprintf("Sessions: %d/%d visible", visible, total)
-	}
-	counts := visibleStateCounts(m)
-	return fmt.Sprintf("%s · %d attention · %d active · %d idle", lead, counts[0], counts[1], counts[2])
-}
-
-// visibleStateCounts tallies the filtered sessions into the three urgency
-// buckets, indexed by group. It reads m.filtered directly: the item projection
-// is a rendering of these rows, and a summary line standing for several of them
-// must never be added to or substituted for its members.
-func visibleStateCounts(m Model) [3]int {
-	var counts [3]int
-	for _, s := range m.filtered {
-		g := dashboard.StateGroup(s, m.lastActivity, m.idleThreshold)
-		if g < 0 || g >= len(counts) {
-			continue
-		}
-		counts[g]++
-	}
-	return counts
 }
 
 func pickerStatusText(m Model) string {

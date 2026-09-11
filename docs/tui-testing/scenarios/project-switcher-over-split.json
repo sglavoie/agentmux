@@ -8,7 +8,8 @@
     { "type": "contains_text", "text": "need act idle" },
     { "type": "contains_text", "text": "api" },
     { "type": "contains_text", "text": "Dir     ~/projects/api" },
-    { "type": "contains_text", "text": "i: hide inspector" },
+    { "type": "contains_text", "text": "Agent Mux · Urgency · all projects" },
+    { "type": "excludes_text", "text": "i: hide inspector" },
     { "type": "no_layout_issues" }
   ]
 }

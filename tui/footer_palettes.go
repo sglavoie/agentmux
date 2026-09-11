@@ -275,8 +275,18 @@ func footerHintTokens(m Model, entries []footerEntry) []prioritizedFooterToken {
 // truncation loop runs, so the loop needs to know nothing about what produced a
 // token — a static footerEntry palette or any other source of rendered tokens.
 type prioritizedFooterToken struct {
-	token    footerToken
-	priority int
+	token footerToken
+	// short is the same binding spelled as a bare key, for a caller that must
+	// fit one physical row and has already dropped everything droppable. It is
+	// optional: a palette that wraps to a row budget never needs it, so only the
+	// dashboard's single-row footer fills it in and only listFooterRow reads it.
+	short footerToken
+	// irreducible marks a token the last-ditch row keeps after every other one
+	// has gone: the controls without which the row names no way forward at all.
+	// Like short it is optional and dashboard-only — a palette with a row budget
+	// never reaches the state that reads it.
+	irreducible bool
+	priority    int
 }
 
 // prioritizedFooterLines renders prioritized rendered tokens into physical

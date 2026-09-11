@@ -9,7 +9,7 @@
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
     { "type": "cursor_equals", "cursor": 0 },
-    { "type": "contains_text", "text": "i: hide inspector" },
+    { "type": "contains_text", "text": "i inspector" },
     { "type": "contains_text", "text": "│▾ api" },
     { "type": "contains_text", "text": "│1 attention · 1 active · 1 idle" },
     { "type": "contains_text", "text": "│🔑 api  work · claude · main* · ~/projects/api" },

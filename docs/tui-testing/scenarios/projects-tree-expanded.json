@@ -16,7 +16,7 @@
     { "type": "excludes_text", "text": "Needs you" },
     { "type": "excludes_text", "text": "Idle (" },
     { "type": "excludes_text", "text": "[work    ]" },
-    { "type": "contains_text", "text": "Sessions: 7 · 2 attention · 2 active · 3 idle" },
+    { "type": "excludes_text", "text": "Sessions: 7 ·" },
     { "type": "no_layout_issues" }
   ]
 }

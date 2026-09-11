@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -9,9 +10,9 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/plans"
-	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/tui/commands"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 func assertStatusBarContains(t *testing.T, m Model, want string) {
@@ -83,9 +84,10 @@ func TestStatusBarIgnoresExpiredToasts(t *testing.T) {
 	}
 }
 
+// Every root mode that still narrates itself. ModeList is deliberately absent:
+// the dashboard's row is a feedback slot, and what it does when nothing has
+// happened is asserted by TestDashboardFeedbackSlotIsBlankWhenIdle.
 func TestStatusBarFallbackBehavior(t *testing.T) {
-	list := loadSessions(testModel(), makeSessions())
-
 	picker := testModel()
 	picker.mode = ModePicker
 	picker.pickerSessions = []config.Session{{Title: "api"}, {Title: "db"}, {Title: "web"}}
@@ -97,7 +99,6 @@ func TestStatusBarFallbackBehavior(t *testing.T) {
 		m    Model
 		want string
 	}{
-		{name: "list counts", m: list, want: "Sessions: 3 · 0 attention · 3 active · 0 idle"},
 		{name: "search", m: Model{mode: ModeSearch, width: 80, filterText: "api"}, want: "Filter sessions: /api"},
 		{name: "confirm", m: Model{mode: ModeConfirm, width: 80, confirmAction: "close session"}, want: "Confirm close session"},
 		{name: "picker selection count", m: picker, want: "Launch Sessions: 2 selected - 2/3 visible"},
@@ -144,82 +145,103 @@ func TestStatusBarFallbackBehavior(t *testing.T) {
 	}
 }
 
-// familyTriageSessions is one repository family of three checkouts spread
-// across all three urgency buckets, plus a single-checkout project. It is the
-// smallest shape in which folding changes the number of LINES without changing
-// the number of SESSIONS, which is what the tally has to survive.
-func familyTriageSessions() []session.RunningSession {
-	fam := func(tab int, base, state string, unseen bool) session.RunningSession {
-		return session.RunningSession{
-			TabID: tab, WindowID: tab * 10, Base: base, Account: "work",
-			Directory: "/home/user/" + base, State: state, Unseen: unseen,
-			FamilyKey: "git:api", FamilyLabel: "api", FamilyIsRepository: true,
-			FamilyPrimaryRoot: "/home/user/api",
+// The dashboard's status row is a feedback slot, not a status line: it reports
+// what just happened and is otherwise blank. The session tally it used to carry
+// is gone — the urgency group headings count their own members and the
+// inspector describes the selected row — and so is the "Health degraded" line,
+// which the header's indicator now names precisely instead of generically.
+func TestDashboardFeedbackSlotIsBlankWhenIdle(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m.width, m.height = 120, 32
+
+	row := renderStatusBar(m)
+	if got := strings.TrimSpace(stripAnsi(row)); got != "" {
+		t.Fatalf("idle feedback slot = %q, want blank", got)
+	}
+	// Blank, but still a full-width row: the slot is reserved, so nothing below
+	// it moves when something finally appears.
+	if got := layout.StyledWidth(row); got != m.width {
+		t.Fatalf("idle feedback row is %d cells wide, want %d", got, m.width)
+	}
+}
+
+// An action error is the reason the slot exists. It must reach it even though
+// nothing else on the dashboard does.
+func TestDashboardFeedbackSlotCarriesActionErrors(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m.width, m.height = 120, 32
+	m.actionErr = errors.New("kitty refused the focus")
+
+	if got := stripAnsi(renderStatusBar(m)); !strings.Contains(got, "kitty refused the focus") {
+		t.Fatalf("feedback slot = %q, want the action error", got)
+	}
+	// And it is on screen, not clipped out of the composed frame.
+	if got := stripAnsi(m.View().Content); !strings.Contains(got, "kitty refused the focus") {
+		t.Fatalf("composed dashboard does not show the action error:\n%s", got)
+	}
+}
+
+// The dashboard rests its feedback row on the list, directly above the footer.
+// Every other root keeps the sticky status line under the footer, so the two
+// readings of the row never appear on one screen.
+func TestFeedbackRowSitsAboveTheFooterOnTheDashboardOnly(t *testing.T) {
+	dash := loadSessions(testModel(), makeSessions())
+	dash.width, dash.height = 120, 32
+	dash.actionErr = errors.New("marker error")
+	lines := strings.Split(stripAnsi(dash.View().Content), "\n")
+	feedback, footer := -1, -1
+	for i, line := range lines {
+		if strings.Contains(line, "marker error") {
+			feedback = i
+		}
+		if strings.Contains(line, "? help") || strings.Contains(line, "? more") {
+			footer = i
 		}
 	}
-	return []session.RunningSession{
-		fam(1, "api", "key", false),
-		fam(2, "api-feat-x", "bolt", false),
-		fam(3, "api-hotfix", "stop", false),
-		{TabID: 4, WindowID: 40, Base: "notes", Account: "personal", Directory: "/home/user/notes", State: "stop"},
+	if feedback < 0 || footer < 0 {
+		t.Fatalf("dashboard frame missing feedback (%d) or footer (%d):\n%s", feedback, footer, strings.Join(lines, "\n"))
+	}
+	if feedback > footer {
+		t.Fatalf("dashboard feedback row %d is below the footer row %d", feedback, footer)
+	}
+	if !dashboardOwnsChrome(dash) {
+		t.Fatal("the dashboard does not claim its own chrome")
+	}
+	// The dashboard's own overlays are the dashboard: each is reachable only
+	// from the list and each `esc`s back to it, so the row underneath them has
+	// to keep reading as the dashboard's feedback slot rather than flipping to
+	// another root's status line for as long as one is open.
+	for _, mode := range []Mode{ModeSearch, ModeProjectSwitcher, ModeActions, ModeDetail} {
+		own := dash
+		own.mode = mode
+		if !dashboardOwnsChrome(own) {
+			t.Fatalf("%s gave up the dashboard's chrome", uitestModeName(mode))
+		}
+	}
+	for _, mode := range []Mode{ModeSessionSearch, ModeSessionView, ModePlanSearch, ModePlanView, ModeWorktrees, ModeASLRuns, ModePicker} {
+		other := dash
+		other.mode = mode
+		if dashboardOwnsChrome(other) {
+			t.Fatalf("%s claims the dashboard's chrome", uitestModeName(mode))
+		}
 	}
 }
 
-func TestListStatusTallyCountsSessionsInGroupOrder(t *testing.T) {
-	m := loadSessions(testModel(), familyTriageSessions())
-	if got := listStatusText(m); got != "Sessions: 4 · 1 attention · 1 active · 2 idle" {
-		t.Fatalf("status = %q", got)
-	}
-}
-
-// TestListStatusTallyIsUnchangedByFoldingAFamily is the count semantics stated
-// as a test. In the Projects view a folded family draws ONE line where three
-// sessions were, so a tally taken from the item projection would report a
-// different number of sessions depending on which families the operator had
-// folded — a number that changes when nothing changed.
-func TestListStatusTallyIsUnchangedByFoldingAFamily(t *testing.T) {
-	m := loadSessions(testModel(), familyTriageSessions())
-	want := listStatusText(m)
-
-	m.toggleListView()
-	m.rebuildItems()
-	if lines := len(m.items.Items); lines != 5 {
-		t.Fatalf("expected 5 projected lines in the expanded Projects view, got %d", lines)
-	}
-	if got := listStatusText(m); got != want {
-		t.Fatalf("switching to Projects changed the tally: %q, want %q", got, want)
-	}
-
-	m.setFamilyCollapsed("git:api", true)
-	m.rebuildItems()
-	if lines := len(m.items.Items); lines != 2 {
-		t.Fatalf("expected the fold to remove three lines, got %d", lines)
-	}
-	if got := listStatusText(m); got != want {
-		t.Fatalf("folding a family changed the tally: %q, want %q", got, want)
-	}
-}
-
-// TestListStatusReportsVisibleOverTotalWhenFiltered pins both halves of the
-// filtered form: the lead becomes V/N, and the tally describes the VISIBLE
-// rows rather than continuing to describe the whole list.
-func TestListStatusReportsVisibleOverTotalWhenFiltered(t *testing.T) {
-	m := loadSessions(testModel(), familyTriageSessions())
-	m.filterText = "!attention"
-	m.reapplyFilterLive()
-
-	if got := listStatusText(m); got != "Sessions: 1/4 visible · 1 attention · 0 active · 0 idle" {
-		t.Fatalf("filtered status = %q", got)
-	}
-}
-
-func TestStatusBarReportsInitialSessionLoad(t *testing.T) {
+// The cold-load and confirmed-empty readings belong to the list body, which
+// already draws each as a hero with the remedy attached. The feedback slot does
+// not repeat them: two copies of "no running sessions" one row apart is the
+// duplication the quiet chrome exists to remove. TestRenderListEmptyHeroNoSessions
+// and TestRenderListInitialLoadDoesNotClaimTheListIsEmpty pin the surviving copy.
+func TestDashboardFeedbackSlotDoesNotRepeatTheEmptyListHero(t *testing.T) {
 	m := testModel()
 	m.width = 80
-	assertStatusBarContains(t, m, "Loading sessions…")
+	assertStatusBarLacks(t, m, "Loading sessions")
 
 	m = loadSessions(m, nil)
-	assertStatusBarContains(t, m, "No running sessions")
+	assertStatusBarLacks(t, m, "No running sessions")
+	if !strings.Contains(stripAnsi(renderList(m)), "No running sessions.") {
+		t.Fatal("the list body dropped the confirmed-empty hero along with the status copy")
+	}
 }
 
 func TestStatusBarPromotesTranscriptScanWithCachedResults(t *testing.T) {

@@ -11,7 +11,6 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
@@ -178,35 +177,131 @@ func nonEmptyFooterLines(lines ...string) []string {
 // listModeFooterLines assembles the unstyled physical blocks for ModeList.
 // position is passed in by callers so layout budgeting can measure the same
 // footer without recursively asking listVisibleHeight for the position text.
+//
+// The dashboard spends exactly one physical row on its footer at every width.
+// The palette reflowed to two rows and the compact band spent one on a
+// separately declared shortlist; both are gone in favour of a single
+// width-budgeted row generated from the one palette, because a footer that
+// grows a row is a session the list stops showing, and two hand-maintained
+// spellings of "the essentials" drift apart.
 func listModeFooterLines(m Model, position string) []string {
-	// The compact band spends one physical row on the footer and no more. Two
-	// full blocks reflow to five or six rows at those widths, which is a third
-	// of a short terminal spent restating keys that are all in the command
-	// palette — and every row it takes is a session the list does not show.
-	compact := dashboard.BandFor(m.width) == dashboard.BandCompact
-	switch {
-	case m.pendingJumpDir != 0 && compact:
-		// The chord's vocabulary is the whole point of the row while a chord is
-		// pending, so it is what the single row carries; the action blocks stay
-		// dropped.
-		return []string{compactFooterRow(m, "  ", compactJumpChordTokens(m), nil)}
-	case compact:
-		required, optional := compactListFooterTokens(m)
-		return []string{compactFooterRow(m, "  ", required, optional)}
-	case m.pendingJumpDir != 0:
+	if m.pendingJumpDir != 0 {
 		// Bracket chord pending: the chord vocabulary replaces the palette
 		// outright rather than joining it. Half of these letters mean something
-		// else in the normal footer, so showing both rows at once would print two
-		// contradictory meanings for `p`, `e`, `a`, `q`, `s`, and `c` on adjacent
-		// lines while the very keypress that resolves them is pending.
-		return prioritizedFooterLines(listJumpChordTokens(m), footerHintIndent, m.width, footerHintMaxLines)
-	default:
-		return prioritizedFooterLines(listFooterTokens(m, position), footerHintIndent, m.width, footerHintMaxLines)
+		// else in the normal footer, so showing both at once would print two
+		// contradictory meanings for `p`, `e`, `a`, `q`, `s`, and `c` on one line
+		// while the very keypress that resolves them is pending.
+		return []string{listFooterRow(m, listJumpChordTokens(m))}
 	}
+	return []string{listFooterRow(m, listFooterTokens(m, position))}
+}
+
+// listFooterRow renders the dashboard's single footer row.
+//
+// Three spellings are tried in order, and the row never mixes them. The
+// labelled palette is dropped from the bottom of the priority ladder until it
+// fits, with footerHintMore appended once anything has been dropped. When only
+// the essentials remain and they still do not fit with the marker, the marker
+// goes: `? help` is on the row already, so losing `? more` costs a hint that
+// something dropped, not the way to reach what dropped. When even the labelled
+// essentials alone overflow, the same survivors are respelled as bare keys —
+// all of them or none, so the operator who learned the row does not have to
+// re-read it to find out which half changed wording.
+func listFooterRow(m Model, tokens []prioritizedFooterToken) string {
+	kept := make([]prioritizedFooterToken, len(tokens))
+	copy(kept, tokens)
+
+	fits := func(line string) bool { return m.width <= 0 || layout.StyledWidth(line) <= m.width }
+	truncated := false
+	for {
+		line := footerSingleRow(kept, footerHintIndent, truncated, false)
+		if fits(line) {
+			return line
+		}
+		drop := prioritizedFooterDropIndex(kept)
+		if drop < 0 {
+			break
+		}
+		kept = append(kept[:drop], kept[drop+1:]...)
+		truncated = true
+	}
+	if line := footerSingleRow(kept, footerHintIndent, false, false); fits(line) {
+		return line
+	}
+	if line := footerSingleRow(kept, footerHintIndent, false, true); fits(line) {
+		return line
+	}
+	// Narrower than the bare-key spelling of the essential band. The band is not
+	// uniform at this width: four of its six controls are how an operator moves,
+	// acts, reaches every other command, and finds out what those are, and a row
+	// that kept any of the other two instead would name a capability while
+	// dropping the way to the rest of them. They go last, in declaration order,
+	// so the row degrades toward the four rather than toward its own left edge.
+	for {
+		drop := -1
+		for i := len(kept) - 1; i >= 0; i-- {
+			if !kept[i].irreducible {
+				drop = i
+				break
+			}
+		}
+		if drop < 0 {
+			break
+		}
+		kept = append(kept[:drop], kept[drop+1:]...)
+		if line := footerSingleRow(kept, footerHintIndent, false, true); fits(line) {
+			return line
+		}
+	}
+	// Nothing left to give up. A clamped row still carries the leading keys.
+	return layout.StyledTruncate(footerSingleRow(kept, footerHintIndent, false, true), m.width, "…")
+}
+
+// footerSingleRow joins tokens onto one physical line, separators included and
+// no wrapping anywhere. short selects the bare-key spelling of every token that
+// has one; the more marker is suppressed in that spelling because the row's own
+// `?` is already the pointer at generated help.
+func footerSingleRow(tokens []prioritizedFooterToken, indent string, truncated, short bool) string {
+	sep := styleFooter.Render(footerHintSeparator)
+	parts := make([]string, 0, len(tokens)+1)
+	for _, t := range tokens {
+		rendered := t.token.rendered
+		if short && t.short.rendered != "" {
+			rendered = t.short.rendered
+		}
+		if rendered == "" {
+			continue
+		}
+		parts = append(parts, rendered)
+	}
+	if truncated && !short {
+		parts = append(parts, renderFooterBinding("?", "more"))
+	}
+	return indent + strings.Join(parts, sep)
+}
+
+// listFooterShortKey is the bare-key spelling of one key. Only a key whose own
+// name is wider than the glyph it prints gets respelled; everything else is
+// already one or three cells and reads the same either way.
+func listFooterShortKey(key string) string {
+	if strings.HasPrefix(key, "enter") {
+		return "↵"
+	}
+	return key
+}
+
+// footerShortToken renders a bare key in the spelling the fallback row uses,
+// keeping an unavailable binding muted exactly as the labelled row does.
+func footerShortToken(key string, available bool) footerToken {
+	style := styleFooterKey
+	if !available {
+		style = styleFooterUnavailableKey
+	}
+	return footerRenderedToken(style.Render(listFooterShortKey(key)))
 }
 
 // listJumpChordTokens is the wide spelling of the bracket chord: each target
-// named in full, capped at the same two rows the palette gets.
+// named in full, dropped to fit the single row like any other palette.
 //
 // The heading rides on the first chord rather than standing as its own token,
 // because "jump next:" is the sentence the letters complete and a separator
@@ -221,13 +316,17 @@ func listJumpChordTokens(m Model) []prioritizedFooterToken {
 	target := func(key, tail string) prioritizedFooterToken {
 		return prioritizedFooterToken{
 			token:    footerCustomBindingToken(key, "", tail, styleFooter),
+			short:    footerShortToken(key, true),
 			priority: footerPriorityPrimary,
 		}
 	}
-	heading := styleFooter.Render(fmt.Sprintf("jump %s: ", arrow)) +
-		renderFooterBindingWithLabel("p", "", ")perm", styleFooter)
+	lead := styleFooter.Render(fmt.Sprintf("jump %s: ", arrow))
 	return []prioritizedFooterToken{
-		{token: footerRenderedToken(heading), priority: footerPriorityEssential},
+		{
+			token:    footerRenderedToken(lead + renderFooterBindingWithLabel("p", "", ")perm", styleFooter)),
+			short:    footerRenderedToken(lead + styleFooterKey.Render("p")),
+			priority: footerPriorityEssential,
+		},
 		target("e", ")fail"),
 		target("a", ")active"),
 		target("q", ")question"),
@@ -237,153 +336,10 @@ func listJumpChordTokens(m Model) []prioritizedFooterToken {
 		target("]]/[[", ")attention"),
 		{
 			token:    footerCustomBindingToken("esc", " ", "cancels", styleFooter),
+			short:    footerShortToken("esc", true),
 			priority: footerPriorityEssential,
 		},
 	}
-}
-
-// compactFooterToken is one binding in the two spellings the compact row may
-// draw it in: the labelled form it prefers, and the bare key it falls back to
-// when the labelled forms together do not fit the terminal.
-//
-// Both spellings name the same key, which is what makes the fallback a change
-// of wording rather than a change of vocabulary — the operator who learned the
-// row at one width has not been shown a different row at another.
-type compactFooterToken struct{ long, short string }
-
-func compactBinding(key, label string) compactFooterToken {
-	return compactBindingKeys(key, label, key)
-}
-
-// compactBindingKeys is the variant for a key whose own name is too long to
-// survive the fallback. "enter" spelled out is five of the nineteen cells the
-// narrowest supported dashboard has; ↵ is one, and it is the glyph the key is
-// printed with on the keyboard the operator is looking at.
-func compactBindingKeys(key, label, shortKey string) compactFooterToken {
-	return compactFooterToken{
-		long:  renderFooterBinding(key, label),
-		short: styleFooterKey.Render(shortKey),
-	}
-}
-
-// compactListFooterTokens splits the compact footer's palette into what the row
-// keeps at any width and what it adds when there is room.
-//
-// The four required tokens are the ones without which the dashboard cannot be
-// operated at all: move the cursor, act on the row, reach every other command,
-// and find out what those are. Everything else — including every row action in
-// listFooterPalette — is reachable through the palette token that is always
-// present, which is what makes dropping it defensible rather than merely
-// necessary.
-func compactListFooterTokens(m Model) (required, optional []compactFooterToken) {
-	focus := compactBindingKeys("enter", "focus", "↵")
-	if m.summarySelected() {
-		// Same substitution the wide footer makes: a summary has no tab to focus,
-		// so enter names the fold it actually performs.
-		focus = compactBindingKeys("enter", "fold", "↵")
-	}
-	required = []compactFooterToken{
-		compactBinding("j/k", "move"),
-		focus,
-		compactBinding(":", "cmds"),
-		compactBinding("?", "help"),
-	}
-	optional = []compactFooterToken{
-		compactBinding("v", "view"),
-		compactBinding("q", "quit"),
-	}
-	return required, optional
-}
-
-// compactJumpChordTokens is the chord vocabulary, abbreviated to the letters
-// themselves. The wide footer spells each target out; at compact widths the
-// spelling is what does not fit, and the letters are what the chord needs.
-//
-// Unlike the list row it has no required subset: a chord is eight targets, and
-// a terminal too narrow for eight letters has nothing to thin down to. It is
-// the one compact row that may still clamp.
-func compactJumpChordTokens(m Model) []compactFooterToken {
-	arrow := "next"
-	if m.pendingJumpDir == -1 {
-		arrow = "prev"
-	}
-	chord := func(key, tail string) compactFooterToken {
-		return compactFooterToken{
-			long:  renderFooterBindingWithLabel(key, "", tail, styleFooter),
-			short: styleFooterKey.Render(key),
-		}
-	}
-	label := styleFooter.Render("jump " + arrow + ":")
-	return []compactFooterToken{
-		{long: label, short: label},
-		chord("p", ")erm"),
-		chord("e", ")rr"),
-		chord("a", ")ctive"),
-		chord("q", ")uestion"),
-		chord("s", ")top"),
-		chord("c", ")ompact"),
-		chord("b", ")sub"),
-		{
-			long:  renderFooterBindingWithLabel("esc", " ", "cancels", styleFooter),
-			short: styleFooterKey.Render("esc"),
-		},
-	}
-}
-
-// compactFooterRow renders exactly one physical row: every required token, then
-// each optional token that fits whole, then a hard clamp.
-//
-// The required tokens are never dropped and never half-drawn. When their
-// labelled spellings do not fit, the whole row falls back to bare keys rather
-// than eliding the tail — a row ending in "…" tells the operator there is
-// something they cannot see, whereas "j/k · enter · : · ?" tells them the four
-// keys, which is the thing the row exists to say. The fallback is all-or-
-// nothing so the row never mixes spellings and implies that the tokens still
-// spelled out are the more important ones.
-//
-// Optional tokens are appended in the same spelling and stop at the first one
-// that does not fit rather than skipping to a narrower later one, so the row is
-// always a prefix of the declared palette and does not reorder itself as the
-// terminal is dragged.
-func compactFooterRow(m Model, indent string, required, optional []compactFooterToken) string {
-	sep := styleFooter.Render(" · ")
-	sepW := layout.StyledWidth(sep)
-
-	spell := func(t compactFooterToken) string { return t.long }
-	if m.width > 0 && compactFooterRowWidth(indent, sepW, required, spell) > m.width {
-		spell = func(t compactFooterToken) string { return t.short }
-	}
-
-	parts := make([]string, 0, len(required))
-	for _, t := range required {
-		parts = append(parts, spell(t))
-	}
-	line := indent + strings.Join(parts, sep)
-	width := layout.StyledWidth(line)
-	for _, t := range optional {
-		cost := sepW + layout.StyledWidth(spell(t))
-		if m.width > 0 && width+cost > m.width {
-			break
-		}
-		line += sep + spell(t)
-		width += cost
-	}
-	if m.width > 0 {
-		line = layout.StyledTruncate(line, m.width, "…")
-	}
-	return line
-}
-
-func compactFooterRowWidth(indent string, sepW int, tokens []compactFooterToken,
-	spell func(compactFooterToken) string) int {
-	w := layout.Width(indent)
-	for i, t := range tokens {
-		if i > 0 {
-			w += sepW
-		}
-		w += layout.StyledWidth(spell(t))
-	}
-	return w
 }
 
 // zebraFooterLines flattens wrapped footer blocks into physical rows, then
@@ -467,6 +423,11 @@ func listPositionFragmentForVisible(m Model, height int) string {
 // same builders as renderFooter. Position text depends on the list height,
 // while list height depends on footer rows, so iterate the small calculation
 // to a stable row count rather than falling back to a hard-coded budget.
+//
+// The dashboard footer is one row at every width today, so the iteration
+// converges on the first pass. It is kept rather than replaced by the constant
+// because listModeFooterLines is the authority on how many rows it draws, and a
+// hard-coded 1 here would be a second claim about that free to drift from it.
 func listFooterBudgetLineCount(m Model) int {
 	// The inspector no longer suppresses the footer, so there is no early return
 	// here and there must not be one: this count is a term in the body-row floor
@@ -595,6 +556,17 @@ type listFooterCandidate struct {
 	// still documents them, because the overlay is where a user who has never
 	// filtered finds out the state exists.
 	shownFn func(Model) bool
+	// irreducibleFlag survives the last drop pass, below the essential band. See
+	// prioritizedFooterToken.irreducible and listFooterRow.
+	irreducibleFlag bool
+}
+
+// irreducible marks a candidate the narrowest row keeps. It is only meaningful
+// on an essential-band entry: everything above that band is already gone by the
+// time the pass that reads it runs.
+func (c listFooterCandidate) irreducible() listFooterCandidate {
+	c.irreducibleFlag = true
+	return c
 }
 
 func listBinding(key, label, section string, priority int, avail func(Model) bool) listFooterCandidate {
@@ -672,18 +644,19 @@ func listFooterPalette() []listFooterCandidate {
 		// at all — move the cursor, act on what it holds, reach every other command,
 		// and find out what those are. Dropping any of them would leave a row that
 		// cannot lead anywhere, so none of them ever drop.
-		listBinding("j/k", "up/down", footerSectionApp, footerPriorityEssential, footerAlways),
+		listBinding("j/k", "up/down", footerSectionApp, footerPriorityEssential, footerAlways).irreducible(),
 		// enter is not a row action even though it usually acts on one: on a project
 		// summary it folds, which is not FocusSession. Its key and label come from
 		// the binding, but its availability cannot, because the other thing it does
 		// is available exactly when focusing is not.
 		listCommandBinding(bindings, commands.FocusSession, footerSectionApp, footerPriorityEssential).
 			availableWhen(footerAlways).
-			respelled(listEnterKey, listEnterLabel),
+			respelled(listEnterKey, listEnterLabel).
+			irreducible(),
 		listBinding("a", "actions", footerSectionRow, footerPriorityEssential, hasRow),
-		listBinding(":", "commands", footerSectionApp, footerPriorityEssential, footerAlways),
+		listBinding(":", "commands", footerSectionApp, footerPriorityEssential, footerAlways).irreducible(),
 		listCommandBinding(bindings, commands.FilterSessions, footerSectionApp, footerPriorityEssential),
-		listCommandBinding(bindings, commands.ShowKeyboardHelp, footerSectionApp, footerPriorityEssential),
+		listCommandBinding(bindings, commands.ShowKeyboardHelp, footerSectionApp, footerPriorityEssential).irreducible(),
 
 		// Primary: where the cursor sits, what is filtering the list, and the rest of
 		// the ways to move or leave. The position fragment leads the band — and so
@@ -706,19 +679,32 @@ func listFooterPalette() []listFooterCandidate {
 			shownWhen(listInspectorShown),
 		listBinding("tab", "focus next", footerSectionApp, footerPriorityPrimary, footerAlways).
 			shownWhen(listChipFocusAvailable),
-		listBinding("]/[", "jump chord", footerSectionApp, footerPriorityPrimary, footerAlways),
-		listBinding("}/{", "jump + focus", footerSectionApp, footerPriorityPrimary, footerAlways),
+		// The inspector leads the keys in this band because it is the only one
+		// whose surface is already on screen: it is on before the first keypress,
+		// so the row that names how to turn it off is the only thing on a
+		// first-run dashboard that does. Quit follows for the same reason in
+		// reverse — a row that cannot say how to leave is the one omission a
+		// newcomer cannot recover from by pressing more keys.
 		listCommandBinding(bindings, commands.ToggleInspector, footerSectionApp, footerPriorityPrimary),
+		listCommandBinding(bindings, commands.Quit, footerSectionApp, footerPriorityPrimary),
 		listCommandBinding(bindings, commands.SwitchProject, footerSectionApp, footerPriorityPrimary),
 		// A view action, not a row action: switching the arrangement is available
 		// with the cursor on a summary, on a session, and on an empty list alike.
 		listCommandBinding(bindings, commands.ToggleListView, footerSectionApp, footerPriorityPrimary),
 		listCommandBinding(bindings, commands.OpenLauncher, footerSectionLaunch, footerPriorityPrimary),
-		listCommandBinding(bindings, commands.Quit, footerSectionApp, footerPriorityPrimary),
 
-		// Secondary: the gloss that says what the cursor row's icon means, then the
-		// row actions reached often enough to be worth a key hint.
-		listMetadata(footerPrioritySecondary, listGlossText),
+		// Secondary: the two jump chords, then the gloss that says what the cursor
+		// row's icon means, then the row actions reached often enough to be worth a
+		// key hint.
+		//
+		// The chords sat in the primary band while the footer could spend two rows
+		// on hints. One row cannot, and they are the two entries in that band with
+		// no surface of their own: every other primary key either names something
+		// already on screen or is the way off the dashboard, while a chord is a
+		// convenience for a motion the arrow keys already perform. Both stay in the
+		// keyboard help sheet and the command palette.
+		listBinding("]/[", "jump chord", footerSectionApp, footerPrioritySecondary, footerAlways),
+		listBinding("}/{", "jump + focus", footerSectionApp, footerPrioritySecondary, footerAlways),
 		listCommandBinding(bindings, commands.PeekScrollback, footerSectionRow, footerPrioritySecondary),
 		listCommandBinding(bindings, commands.ShowTimeline, footerSectionRow, footerPrioritySecondary),
 		listCommandBinding(bindings, commands.ClearStatusIcon, footerSectionRow, footerPrioritySecondary),
@@ -786,22 +772,6 @@ func listPositionText(_ Model, position string) string {
 	return styleFooter.Render(position)
 }
 
-// listGlossText renders the cursor row's state icon and its meaning in the
-// state's accent color, so the icon painted in the list is explained in the
-// words the legend uses. Rows with no gloss — idle and unknown states — say
-// nothing rather than saying "idle", which is what their bare icon already says.
-func listGlossText(m Model, _ string) string {
-	s, ok := m.selectedSession()
-	if !ok {
-		return ""
-	}
-	g := dashboard.StateGloss(s.State)
-	if g == "" {
-		return ""
-	}
-	return stateAccentStyle(s.State).Render(layout.PadIconCell(palette.StateIcon(s.State)) + " " + g)
-}
-
 // listFooterTokens renders the palette into prioritized tokens for the current
 // model, in declaration order. Every candidate is rendered exactly once: as with
 // footerHintTokens, availFn is pure over the Model snapshot, so re-running it per
@@ -814,7 +784,7 @@ func listFooterTokens(m Model, position string) []prioritizedFooterToken {
 		if !ok {
 			continue
 		}
-		tokens = append(tokens, prioritizedFooterToken{token: tok, priority: c.priority})
+		tokens = append(tokens, tok)
 	}
 	return tokens
 }
@@ -823,16 +793,19 @@ func listFooterTokens(m Model, position string) []prioritizedFooterToken {
 // nothing to draw at all. An unavailable binding still draws: keeping the key
 // visible in the muted style is what lets the footer's order stay fixed while
 // the cursor moves.
-func (c listFooterCandidate) render(m Model, position string) (footerToken, bool) {
+func (c listFooterCandidate) render(m Model, position string) (prioritizedFooterToken, bool) {
 	if c.textFor != nil {
 		text := c.textFor(m, position)
 		if text == "" {
-			return footerToken{}, false
+			return prioritizedFooterToken{}, false
 		}
-		return footerRenderedToken(text), true
+		// Metadata has no bare-key spelling: it names no key, so the short row
+		// either carries the same words or drops it like any other token.
+		tok := footerRenderedToken(text)
+		return prioritizedFooterToken{token: tok, short: tok, priority: c.priority}, true
 	}
 	if c.shownFn != nil && !c.shownFn(m) {
-		return footerToken{}, false
+		return prioritizedFooterToken{}, false
 	}
 	key, label := c.key, c.label
 	if c.keyFor != nil {
@@ -841,10 +814,17 @@ func (c listFooterCandidate) render(m Model, position string) (footerToken, bool
 	if c.labelFor != nil {
 		label = c.labelFor(m)
 	}
-	if !c.availFn(m) {
-		return footerUnavailableBindingToken(key, label), true
+	available := c.availFn(m)
+	token := footerBindingToken(key, label)
+	if !available {
+		token = footerUnavailableBindingToken(key, label)
 	}
-	return footerBindingToken(key, label), true
+	return prioritizedFooterToken{
+		token:       token,
+		short:       footerShortToken(key, available),
+		irreducible: c.irreducibleFlag,
+		priority:    c.priority,
+	}, true
 }
 
 // listFooterBindings projects the palette onto the keybindings it declares,

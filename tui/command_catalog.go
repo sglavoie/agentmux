@@ -510,10 +510,17 @@ func commandDeclarations() []commands.Command[Model] {
 		{
 			ID: commands.DismissDeprecation, Group: commands.GroupApp,
 			Title:       commands.StaticTitle[Model]("Dismiss Deprecation Warning"),
-			Description: "Hide the visible configuration deprecation banner.",
+			Description: "Silence the configuration notice for this session.",
 			Aliases:     []string{"banner", "warning"},
+			// The gate is the issue model's, not the raw fields', so this entry
+			// and the overlay's own `d` can only ever offer the same dismissal.
+			// The banner it used to hide is gone: the notice now reads as the
+			// header's health indicator and as one issue in the details overlay,
+			// and both of those recompute from the issue this predicate asks
+			// about.
 			Visible: func(m Model, _ commands.Context) bool {
-				return !m.deprecationDismissed && len(m.deprecations) > 0
+				issue, ok := dashboard.FindHealthIssue(healthIssues(m), dashboard.HealthIssueConfig)
+				return ok && issue.Dismissible && issue.WantsAttention()
 			},
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
 				m.deprecationDismissed = true

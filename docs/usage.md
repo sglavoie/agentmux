@@ -143,21 +143,19 @@ horizontal preview split can put a compact list inside a wide terminal.
   title, and drops the profile, harness, run timer, branch, and directory.
 - Standard is the layout above: a one-letter profile cell such as `[W]`, the
   harness name, and the optional tail columns.
-- Spacious widens the profile cell to the padded profile name, lets the title
-  grow to its content, and adds the icon legend when the terminal is tall
-  enough.
+- Spacious widens the profile cell to the padded profile name and lets the title
+  grow to its content.
 
-Under a compact list a two-line detail strip sits below the rows and carries the
-dropped fields for the **selected item only** — title, profile, harness, and run
-timer on the first line, branch and directory on the second. For a selected
-project it names the project, its bucket tally, and then the context of the
-member that decided its urgency. The strip is always exactly two lines, occupied
-or not, so moving the cursor never moves the bottom edge of the list.
+The dropped fields are not restated anywhere below the list. The inspector says
+all of them, at every width, beside the selected row rather than beneath the
+list, so the compact detail strip that used to carry them is gone. The icon
+legend that used to sit above the list is gone with it — `?` opens the help
+overlay, which is where the state icons are now named.
 
 ### Project switcher
 
-The header always carries a project selector reading `p: all projects` or
-`p: <label>`. `p` and a click on that selector both open the same overlay, in
+The header's third segment is the current scope, reading `all projects` or the
+project label. `p` and a click on that segment both open the same overlay, in
 either list arrangement and at every width; the overlay is a modal, so it dims
 the dashboard rather than taking a column from it.
 
@@ -189,8 +187,9 @@ leaves the highlight on the same project.
 Mouse behavior mirrors these controls: click a filter chip to remove that exact
 component, wheel over the list to move the session selection, and wheel over the
 inspector to scroll it. One click on a session selects it; a second click on the
-same session focuses its Kitty tab. The view, project, and inspector labels in
-the header are clickable. Terminal-native text selection remains available with
+same session focuses its Kitty tab. The three things the header still offers a
+pointer are clickable: the view label, the health reading at the right edge, and
+the scope. Terminal-native text selection remains available with
 Shift-drag; Agent Mux does not intercept the modified drag.
 
 ### Projects view
@@ -230,23 +229,43 @@ view also has no ordering of its own — it is the urgency order, grouped — an
 adds no Git work, since every fact it groups by was already stamped on the row at
 discovery time.
 
-### Status line
+### Header, footer, and the feedback slot
 
-A sticky status row occupies the final terminal line for health, active mode
-summaries, and transient action messages; keybinding hints stay immediately
-above it. With nothing more urgent to report, the dashboard's own line is:
+The dashboard spends three rows on chrome, and each says one kind of thing.
 
-```text
-Sessions: 7 · 2 attention · 2 active · 3 idle
-Sessions: 2/7 visible · 2 attention · 0 active · 0 idle
-```
+The **header** is the first line: the app name, the current view, and the
+current scope on the left — `Agent Mux · Urgency · all projects` — and a single
+health reading at the right edge, such as `● all checks ok`, `▲ sessions 12s
+stale`, or `✖ hooks drifted`. The reading names the one check in the worst
+state, or counts them when several are equally bad; it is clickable, and `:` →
+`health` opens the same details overlay, which is where every check's own
+finding and remediation command lives. When the width runs out the reading
+degrades to its glyph alone before anything on the left is dropped.
 
-The second form appears when a filter is active. The tally counts **sessions**,
-using the same grouping as the headings and the `!attention` / `!active` /
-`!idle` filters, so folding a project in the Projects view never changes it — a
-summary is a line, not a session. Action errors, a delayed Kitty refresh, a
-degraded daemon or hook health check, in-progress work, and transient toasts all
-outrank this line and replace it while they apply.
+Directly below the header sit the active filter chips, when a filter is active,
+and then a blank spacer. Nothing else: the per-check health pips, the icon
+legend, and the deprecation banner that used to live here are retired to the
+health overlay, the help overlay, and the command palette respectively.
+
+The **footer** is the final line and is exactly one row at every size. It is
+generated from the same binding source the command palette reads, ordered by
+priority, and it omits lower-priority hints rather than wrapping — a trailing
+`? more` says hints were dropped, and `?` opens the full list. Six essentials
+are never dropped: movement, the enter binding, `a actions`, `: commands`,
+`/ filter`, and `? help`. When even those will not fit spelled out, the whole
+row falls back at once to its bare-key spelling (`j/k · ↵ · a · : · / · ?`)
+rather than shortening some hints and not others.
+
+Between the list and the footer is the **feedback slot**, one reserved row that
+is genuinely blank when there is nothing to report. Action errors, in-progress
+work, transient toasts, and undo feedback appear there. Standing state never
+does: counts belong to the group headings, a session's state to its own row icon
+and the inspector, and every health reading — a delayed Kitty refresh included —
+to the header. A row that always said something would be a row the eye stops
+checking.
+
+Other roots — Past Sessions, Plans, the launcher, the ASL runs view — keep their
+own footer and status-line behavior unchanged.
 
 The detail pane's event history persists through terminal hooks (`Stop`,
 `SessionEnd`, etc.) and through the watchdog's stale sweep, so you can still

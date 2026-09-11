@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -189,6 +191,28 @@ func helpDashboardSection() []string {
 	return helpPaletteLines([]helpPalette{{"dashboard", listFooterBindings()}})
 }
 
+// helpStateIconSection generates the icon→meaning reference from the same
+// LegendStates and StateGloss the rows themselves paint from.
+//
+// This is where the dashboard's legend strip went. The strip was a reference
+// rather than a status — it taught the icon column once and then stopped being
+// read — but it spent a row above the list on every spacious frame forever, and
+// it was suppressed on exactly the narrow and short terminals where an
+// unfamiliar glyph is hardest to guess at. Generated here it costs no rows, is
+// available at every size, and still cannot drift from what the list draws.
+func helpStateIconSection() []string {
+	var lines []string
+	for _, state := range dashboard.LegendStates {
+		gloss := dashboard.StateGloss(state)
+		icon := palette.StateIcon(state)
+		if gloss == "" || icon == "" {
+			continue
+		}
+		lines = append(lines, "  "+layout.PadRight(layout.PadIconCell(icon), 10)+gloss)
+	}
+	return lines
+}
+
 // helpKeyMeaning pairs a palette scope with the label that palette declares for
 // a key.
 type helpKeyMeaning struct {
@@ -269,6 +293,7 @@ func helpContentLines() []string {
 	// sections first. The static sections below repeat some of these keys where a
 	// fuller explanation earns the space.
 	lines := appendHelpSection(nil, "Dashboard", helpDashboardSection())
+	lines = appendHelpSection(lines, "State icons", helpStateIconSection())
 	for _, sec := range helpSections {
 		lines = appendHelpSection(lines, sec.name, sec.lines)
 	}

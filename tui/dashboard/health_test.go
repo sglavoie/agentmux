@@ -109,8 +109,10 @@ func TestUnobservedChecksAreUnknownRatherThanOK(t *testing.T) {
 	if got := HealthOverall(issues); got != HealthUnknown {
 		t.Fatalf("overall = %s across three unobserved checks, want unknown", got.Label())
 	}
-	if got := HealthCompactLabel(issues); got != "3 issues" {
-		t.Fatalf("compact label = %q, want %q", got, "3 issues")
+	// Three outstanding checks are spelled, not counted: "3 issues" would claim
+	// three things are wrong where nothing has been looked at yet.
+	if got := HealthCompactLabel(issues); got != "checking health" {
+		t.Fatalf("compact label = %q, want %q", got, "checking health")
 	}
 	daemon := healthIssueByID(t, issues, HealthIssueDaemon)
 	if daemon.Observed != "never checked" {

@@ -44,9 +44,13 @@ func TestCompletionEnterInsertsFromExplicitSearch(t *testing.T) {
 	}
 }
 
-// ---- Dashboard filter hint rendering ----
+// ---- Dashboard header spacer ----
 
-func TestRenderHeaderShowsFilterHintBeforeHealthPips(t *testing.T) {
+// The header no longer advertises `/`. The footer's own `/ filter` binding is
+// the one declaration of it, and it is essential-band so it survives every
+// width the footer does; a second spelling in the header was the duplication the
+// quiet header exists to remove.
+func TestRenderHeaderDoesNotRepeatTheFilterBinding(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.width = 100
 	m.daemonAlive = true
@@ -54,38 +58,27 @@ func TestRenderHeaderShowsFilterHintBeforeHealthPips(t *testing.T) {
 	m.hookHealth = commands.HookHealth{InSync: []string{"work"}}
 	m.hookHealthCheckedAt = time.Now()
 
-	firstLine := strings.Split(stripAnsi(renderHeader(m)), "\n")[0]
-	filterIdx := strings.Index(firstLine, inlineFilterPlaceholder)
-	daemonIdx := strings.Index(firstLine, "daemon")
-	if filterIdx < 0 {
-		t.Fatalf("header filter hint missing; header=%q", firstLine)
+	header := stripAnsi(renderHeader(m))
+	if strings.Contains(header, "to filter") {
+		t.Errorf("header still advertises the filter key: %q", header)
 	}
-	if daemonIdx < 0 {
-		t.Fatalf("daemon pip missing; header=%q", firstLine)
-	}
-	if filterIdx > daemonIdx {
-		t.Errorf("filter hint should render before daemon/hooks pips; header=%q", firstLine)
+	if !strings.Contains(stripAnsi(renderFooter(m)), "/ filter") {
+		t.Errorf("footer lost the filter binding the header stopped repeating:\n%s", stripAnsi(renderFooter(m)))
 	}
 }
 
-func TestRenderInlineFilterSpacer(t *testing.T) {
+func TestRenderHeaderSpacerIsOneBlankLine(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	out := stripAnsi(renderInlineFilter(m))
+	out := stripAnsi(renderHeaderSpacer(m))
 	if out != "\n" {
 		t.Errorf("expected one blank spacer line, got %q", out)
 	}
-	if strings.Contains(out, inlineFilterPlaceholder) {
-		t.Errorf("inline spacer should not repeat dashboard filter hint, got %q", out)
-	}
-	if strings.Contains(out, "type to filter") {
-		t.Errorf("dashboard hint should not advertise implicit typing, got %q", out)
-	}
 }
 
-func TestRenderInlineFilterSuppressedOutsideModeList(t *testing.T) {
+func TestRenderHeaderSpacerSuppressedOutsideModeList(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeSearch
-	out := renderInlineFilter(m)
+	out := renderHeaderSpacer(m)
 	if out != "" {
 		t.Errorf("expected spacer empty outside ModeList, got %q", out)
 	}

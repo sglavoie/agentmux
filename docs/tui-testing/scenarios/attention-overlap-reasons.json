@@ -19,7 +19,7 @@
     { "type": "excludes_text", "text": "▌ 2:" },
     { "type": "excludes_text", "text": "[W]" },
     { "type": "excludes_text", "text": "[P]" },
-    { "type": "contains_text", "text": "Sessions: 5 · 4 attention · 1 active · 0 idle" },
+    { "type": "excludes_text", "text": "Sessions: 5 ·" },
     { "type": "no_layout_issues" }
   ]
 }

@@ -9,114 +9,88 @@ import (
 	"github.com/sglavoie/agentmux/tui/commands"
 )
 
-// TestRenderDeprecationBannerShownWhenDeprecationsPresent verifies the
-// banner renders headline + hint when the config has at least one
-// deprecated key and the user has not dismissed it.
-func TestRenderDeprecationBannerShownWhenDeprecationsPresent(t *testing.T) {
+// The deprecation banner and the daemon/hooks pip strip are gone. Their content
+// reaches the operator through the header's single health indicator, which names
+// the worst reading and opens the details overlay carrying the rest. These tests
+// pin what the indicator says, because a quiet header only works if the one
+// thing it still says is right.
+
+// A configuration notice is a health issue like any other, so it reaches the
+// header rather than a banner of its own — and the indicator stays one line and
+// one column-run whether or not the notice is there.
+func TestHeaderHealthIndicatorNamesTheConfigurationNotice(t *testing.T) {
 	m := Model{
-		width: 80,
-		deprecations: []config.Deprecation{
-			{Key: "accounts", Replacement: "profiles", Location: "[[accounts]]"},
-		},
-	}
-	out := stripAnsi(renderDeprecationBanner(m))
-	if !strings.Contains(out, "deprecated keys") {
-		t.Errorf("expected headline; got %q", out)
-	}
-	if !strings.Contains(out, "accounts → profiles") {
-		t.Errorf("expected migration arrow; got %q", out)
-	}
-	if !strings.Contains(out, "press d to dismiss") {
-		t.Errorf("expected dismiss hint; got %q", out)
-	}
-}
-
-// TestRenderDeprecationBannerHiddenWhenDismissed verifies that setting
-// deprecationDismissed suppresses the banner even when deprecations are
-// recorded — the dismissal is session-scoped, not config-scoped.
-func TestRenderDeprecationBannerHiddenWhenDismissed(t *testing.T) {
-	m := Model{
-		width: 80,
-		deprecations: []config.Deprecation{
-			{Key: "accounts", Replacement: "profiles"},
-		},
-		deprecationDismissed: true,
-	}
-	if got := renderDeprecationBanner(m); got != "" {
-		t.Errorf("expected empty banner after dismiss; got %q", got)
-	}
-}
-
-// TestRenderDeprecationBannerHiddenWhenNoDeprecations covers the common
-// case where the user is on a clean canonical config — no banner ever
-// appears.
-func TestRenderDeprecationBannerHiddenWhenNoDeprecations(t *testing.T) {
-	m := Model{width: 80}
-	if got := renderDeprecationBanner(m); got != "" {
-		t.Errorf("expected empty banner with no deprecations; got %q", got)
-	}
-}
-
-// TestRenderHealthPipsHiddenBeforeFirstCheck verifies that the pip strip
-// is suppressed until at least one health refresh has completed so the
-// header doesn't briefly mis-render as "all red" at startup.
-func TestRenderHealthPipsHiddenBeforeFirstCheck(t *testing.T) {
-	m := Model{width: 80}
-	if got := renderHealthPips(m); got != "" {
-		t.Errorf("expected no pips before first check; got %q", got)
-	}
-}
-
-// TestRenderHealthPipsShowsBothPips verifies that after a health refresh
-// both daemon and hooks pips render with their labels.
-func TestRenderHealthPipsShowsBothPips(t *testing.T) {
-	m := Model{
-		width:                 80,
+		width:                 120,
 		daemonAlive:           true,
 		daemonHealthCheckedAt: time.Now(),
 		hookHealth:            commands.HookHealth{InSync: []string{"work"}},
 		hookHealthCheckedAt:   time.Now(),
+		topologyObservedAt:    time.Now(),
+		deprecations: []config.Deprecation{
+			{Key: "accounts", Replacement: "profiles", Location: "[[accounts]]"},
+		},
 	}
-	out := stripAnsi(renderHealthPips(m))
-	if !strings.Contains(out, "daemon") {
-		t.Errorf("expected daemon label; got %q", out)
+	if out := stripAnsi(headerHealthSegment(m).text); !strings.Contains(out, "config deprecated keys") {
+		t.Errorf("indicator = %q, want the configuration notice", out)
 	}
-	if !strings.Contains(out, "hooks") {
-		t.Errorf("expected hooks label; got %q", out)
+	if !strings.Contains(stripAnsi(renderHealthBox(m)), "accounts → profiles") {
+		t.Errorf("details overlay does not carry the migration arrow:\n%s", stripAnsi(renderHealthBox(m)))
 	}
-	if !strings.Contains(out, healthPipGlyph) {
-		t.Errorf("expected pip glyph; got %q", out)
+
+	// Dismissal is session-scoped and silences only this notice.
+	m.deprecationDismissed = true
+	if out := stripAnsi(headerHealthSegment(m).text); !strings.Contains(out, "all checks ok") {
+		t.Errorf("indicator = %q after dismissal, want the clean reading", out)
 	}
 }
 
-// TestRenderHealthHintsShownWhenDegraded verifies that the under-pip hint
-// surfaces both a daemon-down and a hooks-drifted message when applicable,
-// while staying silent when everything is healthy.
-func TestRenderHealthHintsShownWhenDegraded(t *testing.T) {
-	now := time.Now()
-	m := Model{
-		width:                 80,
-		daemonAlive:           false,
-		daemonHealthCheckedAt: now,
-		hookHealth:            commands.HookHealth{Drifted: []string{"work"}},
-		hookHealthCheckedAt:   now,
+// The indicator is a click target. It is the only route a pointer has into the
+// details overlay, and the overlay has no key of its own, so losing the target
+// would leave the reading unreadable to anyone not using the palette.
+func TestHeaderHealthIndicatorIsAClickTarget(t *testing.T) {
+	m := Model{width: 120, daemonAlive: false, daemonHealthCheckedAt: time.Now()}
+	header := renderHeaderWithHits(m)
+	var found bool
+	for _, hit := range header.hits {
+		if hit.kind != mouseHitHealth {
+			continue
+		}
+		found = true
+		if hit.rect.X+hit.rect.Width != m.width {
+			t.Errorf("indicator hit ends at %d, want the right edge %d", hit.rect.X+hit.rect.Width, m.width)
+		}
 	}
-	out := stripAnsi(renderHealthHints(m))
-	if !strings.Contains(out, "daemon down") {
-		t.Errorf("expected daemon-down hint; got %q", out)
+	if !found {
+		t.Fatal("header publishes no health click target")
 	}
-	if !strings.Contains(out, "hooks drifted") {
-		t.Errorf("expected hooks-drifted hint; got %q", out)
-	}
+}
 
-	healthy := Model{
-		width:                 80,
-		daemonAlive:           true,
+// A degraded reading names the worst issue rather than counting, and several
+// degraded readings count rather than picking one. Both remedies stay one click
+// away in the overlay.
+func TestHeaderHealthIndicatorRanksSeverityOverCount(t *testing.T) {
+	now := time.Now()
+	one := Model{
+		width:                 120,
+		daemonAlive:           false,
 		daemonHealthCheckedAt: now,
 		hookHealth:            commands.HookHealth{InSync: []string{"work"}},
 		hookHealthCheckedAt:   now,
+		topologyObservedAt:    now,
 	}
-	if got := renderHealthHints(healthy); got != "" {
-		t.Errorf("expected empty hints when healthy; got %q", got)
+	if out := stripAnsi(headerHealthSegment(one).text); !strings.Contains(out, "daemon down") {
+		t.Errorf("indicator = %q with one issue, want it named", out)
+	}
+
+	two := one
+	two.hookHealth = commands.HookHealth{Drifted: []string{"work"}}
+	if out := stripAnsi(headerHealthSegment(two).text); !strings.Contains(out, "2 issues") {
+		t.Errorf("indicator = %q with two issues, want the count", out)
+	}
+	body := stripAnsi(renderHealthBox(two))
+	for _, remedy := range []string{"amx daemon start", "amx config hooks-sync"} {
+		if !strings.Contains(body, remedy) {
+			t.Errorf("details overlay missing %q:\n%s", remedy, body)
+		}
 	}
 }

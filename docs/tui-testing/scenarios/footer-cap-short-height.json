@@ -4,15 +4,14 @@
   "size": { "width": 120, "height": 14 },
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
-    { "type": "contains_text", "text": "  j/k up/down · enter focus · a actions · : commands · / filter · ? help · 1–4 of 7 · tab switch pane · ]/[ jump chord" },
-    { "type": "contains_text", "text": "  }/{ jump + focus · i inspector · p projects · v group view · l launch · q quit · 🔑 needs permission · e peek · ? more" },
+    { "type": "contains_text", "text": "  j/k up/down · enter focus · a actions · : commands · / filter · ? help · 1–4 of 7 · tab switch pane · ? more" },
     { "type": "excludes_text", "text": "r restart" },
     { "type": "contains_text", "text": "  ▌ api          Needs permission      —" },
     { "type": "contains_text", "text": "• ▌ notes        Done                  —" },
     { "type": "excludes_text", "text": "▌ 1:" },
     { "type": "excludes_text", "text": "│" },
     { "type": "contains_text", "text": "  ▼" },
-    { "type": "contains_text", "text": " Sessions: 7 · 2 attention · 2 active · 3 idle" },
+    { "type": "excludes_text", "text": "Sessions: 7 ·" },
     { "type": "no_layout_issues" }
   ]
 }

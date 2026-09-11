@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/tui/commands"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
 // A sustained Kitty outage is a degradation, not a failure: the rows the
@@ -16,8 +17,16 @@ import (
 // the operator is eventually told how old they are. These tests pin the two
 // halves of that — when the warning appears, and that the red cold-failure
 // error is not what appears instead.
+//
+// The READING is asserted on the health issue and the header indicator that
+// draws it, not on the status bar. On the dashboard the status bar is the
+// feedback slot for what the operator just did; a window tree's age is a
+// standing condition rather than a response to a keypress, so it belongs to the
+// health surface, and asserting it in both places is how the two would drift
+// into two accounts of one outage. Each case below checks the dashboard status
+// bar stays out of it, which is the de-duplication itself under test.
 
-const staleWarningPrefix = "Kitty refresh delayed; showing cached sessions"
+const staleWarningPrefix = "showing cached sessions"
 
 // staleTestEpoch is an arbitrary fixed instant. Every age below is expressed as
 // an offset from it, so nothing here depends on the wall clock.
@@ -44,6 +53,32 @@ func assertStatusBarLacks(t *testing.T, m Model, unwanted string) {
 	}
 }
 
+// topologyIssue is the window tree's current reading, read out of the same issue
+// set the header indicator and the details overlay are built from.
+func topologyIssue(t *testing.T, m Model) dashboard.HealthIssue {
+	t.Helper()
+	issue, ok := dashboard.FindHealthIssue(healthIssues(m), dashboard.HealthIssueTopology)
+	if !ok {
+		t.Fatal("health reading carries no sessions issue")
+	}
+	return issue
+}
+
+func assertTopologyReading(t *testing.T, m Model, state dashboard.HealthState, summary string) {
+	t.Helper()
+	issue := topologyIssue(t, m)
+	if issue.State != state {
+		t.Fatalf("sessions health = %s, want %s (summary %q)", issue.State.Label(), state.Label(), issue.Summary)
+	}
+	if summary != "" && !strings.Contains(issue.Summary, summary) {
+		t.Fatalf("sessions summary = %q, want to contain %q", issue.Summary, summary)
+	}
+	// The dashboard status bar is the feedback slot; a standing condition never
+	// appears there.
+	assertStatusBarLacks(t, m, staleWarningPrefix)
+	assertStatusBarLacks(t, m, "Kitty error")
+}
+
 // TestStaleWarningOnsetIsExactlyTheSharedThreshold pins both edges of the one
 // decision this feature makes. The threshold is protocol.KittySnapshotStaleAfter
 // rather than a second copy of six seconds, so the dashboard and the daemon
@@ -66,13 +101,10 @@ func TestStaleWarningOnsetIsExactlyTheSharedThreshold(t *testing.T) {
 			clock = staleTestEpoch.Add(tc.elapsed)
 
 			if tc.want == "" {
-				assertStatusBarLacks(t, m, staleWarningPrefix)
-				// Silence below the threshold means the ordinary list status,
-				// not a blank bar.
-				assertStatusBarContains(t, m, "Sessions: 3 · ")
+				assertTopologyReading(t, m, dashboard.HealthOK, "refreshed")
 				return
 			}
-			assertStatusBarContains(t, m, tc.want)
+			assertTopologyReading(t, m, dashboard.HealthWarning, tc.want)
 		})
 	}
 }
@@ -88,14 +120,14 @@ func TestStaleWarningAgeAdvancesWithoutAnyRefreshResult(t *testing.T) {
 	for _, elapsed := range []time.Duration{6 * time.Second, 20 * time.Second, 5 * time.Minute} {
 		clock = staleTestEpoch.Add(elapsed)
 		want := fmt.Sprintf("%s (%ds old)", staleWarningPrefix, int(elapsed/time.Second))
-		assertStatusBarContains(t, m, want)
+		assertTopologyReading(t, m, dashboard.HealthWarning, want)
 	}
 
 	// Failing refreshes must not reset the age either: a failure carries no
 	// capture, so the tree on screen is exactly as old as it was.
 	clock = staleTestEpoch.Add(42 * time.Second)
 	m = applyRefreshErr(m, errors.New("kitten @ ls: signal: killed"))
-	assertStatusBarContains(t, m, staleWarningPrefix+" (42s old)")
+	assertTopologyReading(t, m, dashboard.HealthWarning, staleWarningPrefix+" (42s old)")
 }
 
 // TestStaleWarningClearsOnTheNextSuccessfulTopology closes the loop: recovery is
@@ -106,14 +138,13 @@ func TestStaleWarningClearsOnTheNextSuccessfulTopology(t *testing.T) {
 	m := warmDashboard(&clock)
 	clock = staleTestEpoch.Add(30 * time.Second)
 	m = applyRefreshErr(m, errors.New("kitten @ ls: signal: killed"))
-	assertStatusBarContains(t, m, staleWarningPrefix)
+	assertTopologyReading(t, m, dashboard.HealthWarning, staleWarningPrefix)
 
 	m = applySessions(m, commands.SessionsMsg{
 		Sessions: makeSessions(),
 		Topology: commands.TopologyFreshness{Source: commands.TopologyFromDirect, CapturedAt: clock},
 	})
-	assertStatusBarLacks(t, m, staleWarningPrefix)
-	assertStatusBarContains(t, m, "Sessions: 3 · ")
+	assertTopologyReading(t, m, dashboard.HealthOK, "refreshed")
 	if m.err != nil {
 		t.Fatalf("recovery left err = %v, want it cleared", m.err)
 	}
@@ -128,7 +159,7 @@ func TestRecoveryToAnAlreadyStaleSnapshotReportsTheNewAge(t *testing.T) {
 	m := warmDashboard(&clock)
 	clock = staleTestEpoch.Add(90 * time.Second)
 	m = applyRefreshErr(m, errors.New("kitten @ ls: signal: killed"))
-	assertStatusBarContains(t, m, staleWarningPrefix+" (90s old)")
+	assertTopologyReading(t, m, dashboard.HealthWarning, staleWarningPrefix+" (90s old)")
 
 	m = applySessions(m, commands.SessionsMsg{
 		Sessions: makeSessions(),
@@ -138,7 +169,7 @@ func TestRecoveryToAnAlreadyStaleSnapshotReportsTheNewAge(t *testing.T) {
 			Age:    8 * time.Second,
 		},
 	})
-	assertStatusBarContains(t, m, staleWarningPrefix+" (8s old)")
+	assertTopologyReading(t, m, dashboard.HealthWarning, staleWarningPrefix+" (8s old)")
 }
 
 // TestColdRefreshFailureStaysRed is the boundary the warning is carved out of.
@@ -150,9 +181,14 @@ func TestColdRefreshFailureStaysRed(t *testing.T) {
 	m.now = func() time.Time { return staleTestEpoch }
 	m = applyRefreshErr(m, errors.New("kitten @ ls: connection refused"))
 
-	assertStatusBarContains(t, m, "Kitty error: kitten @ ls: connection refused")
-	if msg := currentStatusMessage(m, staleTestEpoch); msg.Severity != statusError {
-		t.Fatalf("cold failure severity = %v, want %v", msg.Severity, statusError)
+	assertTopologyReading(t, m, dashboard.HealthFailed, "no window tree: kitten @ ls: connection refused")
+	// A cold failure is the whole state of the dashboard, so it is what the one
+	// header indicator reads out — not a phrase buried under an overall count.
+	if got := stripAnsi(headerHealthSegment(m).text); !strings.Contains(got, "kitty unavailable") {
+		t.Fatalf("header indicator = %q, want the cold-failure reading", got)
+	}
+	if got := dashboard.HealthOverall(healthIssues(m)); got != dashboard.HealthFailed {
+		t.Fatalf("overall health = %s on a cold failure, want failed", got.Label())
 	}
 }
 
@@ -165,21 +201,20 @@ func TestWarmRefreshFailureIsQuietThenNonfatal(t *testing.T) {
 	clock = staleTestEpoch.Add(2 * time.Second)
 	m = applyRefreshErr(m, errors.New("kitten @ ls: signal: killed"))
 
-	assertStatusBarLacks(t, m, "Kitty error")
-	assertStatusBarLacks(t, m, staleWarningPrefix)
-	assertStatusBarContains(t, m, "Sessions: 3 · ")
+	assertTopologyReading(t, m, dashboard.HealthOK, "refreshed")
 
 	clock = staleTestEpoch.Add(11 * time.Second)
-	assertStatusBarLacks(t, m, "Kitty error")
-	msg := currentStatusMessage(m, clock)
-	if msg.Severity != statusWarning {
-		t.Fatalf("sustained-outage severity = %v, want %v", msg.Severity, statusWarning)
+	assertTopologyReading(t, m, dashboard.HealthWarning, staleWarningPrefix)
+	if got := topologyIssue(t, m).State; got == dashboard.HealthFailed {
+		t.Fatal("a warm outage hardened into a failure")
 	}
 }
 
-// TestStaleWarningNeverDisplacesAnActionError keeps the two apart. An action
-// error reports something the operator just asked for and has no relationship to
-// how old the window tree is, so it outranks the warning.
+// TestStaleWarningNeverDisplacesAnActionError keeps the two surfaces apart. An
+// action error reports something the operator just asked for and has no
+// relationship to how old the window tree is, so it owns the feedback slot; the
+// standing condition stays in the header indicator, where it is still readable
+// at the same moment rather than queued behind the error.
 func TestStaleWarningNeverDisplacesAnActionError(t *testing.T) {
 	clock := staleTestEpoch
 	m := warmDashboard(&clock)
@@ -188,6 +223,9 @@ func TestStaleWarningNeverDisplacesAnActionError(t *testing.T) {
 
 	assertStatusBarContains(t, m, "Action error: close tab: no such window")
 	assertStatusBarLacks(t, m, staleWarningPrefix)
+	if got := stripAnsi(headerHealthSegment(m).text); !strings.Contains(got, "sessions 30s stale") {
+		t.Fatalf("header indicator = %q, want the stale reading beside the action error", got)
+	}
 }
 
 // TestTopologyAgeClampsABackwardsClock covers a clock that moved backwards
@@ -206,7 +244,7 @@ func TestTopologyAgeClampsABackwardsClock(t *testing.T) {
 		t.Fatalf("age = %v under a backwards clock, want 0", age)
 	}
 	clock = staleTestEpoch.Add(-time.Hour)
-	assertStatusBarLacks(t, m, staleWarningPrefix)
+	assertTopologyReading(t, m, dashboard.HealthOK, "refreshed")
 }
 
 // TestStaleTopologyStillRebuildsTheListAndKeepsTheCursor pins the rendering half
@@ -235,7 +273,7 @@ func TestStaleTopologyStillRebuildsTheListAndKeepsTheCursor(t *testing.T) {
 	if got := m.filtered[m.cursor].Base; got != selected {
 		t.Fatalf("cursor landed on %q after a stale rebuild, want %q", got, selected)
 	}
-	assertStatusBarContains(t, m, staleWarningPrefix+" (7s old)")
+	assertTopologyReading(t, m, dashboard.HealthWarning, staleWarningPrefix+" (7s old)")
 }
 
 // TestStaleTopologyConsumesAnUnseenSelectionTokenExactlyOnce is the model-side

@@ -19,7 +19,7 @@
     { "type": "excludes_text", "text": "[work    ]" },
     { "type": "excludes_text", "text": "api-feat-x" },
     { "type": "excludes_text", "text": "🔑 api  1 attention" },
-    { "type": "contains_text", "text": "Sessions: 2/7 visible · 2 attention · 0 active · 0 idle" },
+    { "type": "excludes_text", "text": "Sessions: 2/7 visible" },
     { "type": "no_layout_issues" }
   ]
 }

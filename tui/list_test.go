@@ -463,44 +463,25 @@ func TestQueueRowEmojiTitleColumnAlignment(t *testing.T) {
 	}
 }
 
-// TestRenderLegendVisible asserts the legend strip renders icon→meaning
-// tokens for every known state when the terminal is tall enough and wide
-// enough to spend a row on a reference.
-func TestRenderLegendVisible(t *testing.T) {
-	m := Model{width: 130, height: 30}
-	out := stripAnsi(renderLegend(m))
-	if !strings.Contains(out, "icons:") {
-		t.Errorf("expected legend prefix; got %q", out)
-	}
+// The legend strip is gone from above the list; its content is a generated
+// section of the keyboard help sheet. That is a strict gain in reach: the strip
+// needed both a spacious width and a tall terminal, so it was suppressed on
+// exactly the frames where an unfamiliar glyph is hardest to guess at.
+func TestStateIconReferenceIsGeneratedIntoHelp(t *testing.T) {
+	out := strings.Join(helpStateIconSection(), "\n")
 	for _, state := range dashboard.LegendStates {
 		gloss := dashboard.StateGloss(state)
 		if gloss == "" {
 			continue
 		}
 		if !strings.Contains(out, gloss) {
-			t.Errorf("expected gloss %q in legend; got %q", gloss, out)
+			t.Errorf("state icon reference is missing the gloss %q:\n%s", gloss, out)
+		}
+		if icon := palette.StateIcon(state); icon != "" && !strings.Contains(out, icon) {
+			t.Errorf("state icon reference is missing the icon %q for %q:\n%s", icon, state, out)
 		}
 	}
-}
-
-// TestRenderLegendHiddenWhenShort asserts the legend silently disappears
-// when the terminal lacks enough vertical room to spare a line.
-func TestRenderLegendHiddenWhenShort(t *testing.T) {
-	m := Model{width: 130, height: legendMinHeight - 1}
-	if got := renderLegend(m); got != "" {
-		t.Errorf("expected empty legend for short terminal, got %q", got)
-	}
-}
-
-// TestRenderLegendHiddenBelowSpaciousWidth asserts the other half of the same
-// judgement: a tall terminal that is not wide enough to hold the legend on one
-// or two rows does not render it either. 80 columns is the standard band's
-// floor, and the legend wraps to several rows there to say the same thing.
-func TestRenderLegendHiddenBelowSpaciousWidth(t *testing.T) {
-	for _, width := range []int{36, 79, 80, 119} {
-		m := Model{width: width, height: 40}
-		if got := renderLegend(m); got != "" {
-			t.Errorf("width %d: expected empty legend below the spacious band, got %q", width, got)
-		}
+	if !strings.Contains(stripAnsi(strings.Join(helpContentLines(), "\n")), "State icons") {
+		t.Error("help overlay does not carry the State icons section")
 	}
 }

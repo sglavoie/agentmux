@@ -12,7 +12,7 @@
     },
     {
       "type": "contains_text",
-      "text": "p: all projects"
+      "text": "Agent Mux · Urgency · all projects"
     },
     {
       "type": "contains_text",
@@ -24,7 +24,7 @@
     },
     {
       "type": "contains_text",
-      "text": "i: hide inspector"
+      "text": "i inspector"
     },
     {
       "type": "no_layout_issues"

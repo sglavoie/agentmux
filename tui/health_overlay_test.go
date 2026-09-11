@@ -311,23 +311,24 @@ func TestHealthOffsetSurvivesAResize(t *testing.T) {
 	}
 }
 
-// The header hint strip and the status bar now read the issue model rather than
-// re-walking the raw fields, which is what keeps three surfaces from becoming
-// three accounts of one condition.
+// The header indicator and the status bar's degraded reading both go through the
+// issue model, which is what keeps the surfaces from becoming several accounts of
+// one condition. The header carries the count; the remedies live in the overlay
+// it opens, which is the whole trade the quiet header makes.
 func TestHealthSurfacesAgreeOnOneReading(t *testing.T) {
 	m := healthModel(t)
+	m.width = 120
 	m.daemonAlive = false
 	m.hookHealth = commands.HookHealth{InSync: []string{"work"}, Missing: []string{"personal"}}
 
-	hints := stripAnsi(renderHealthHints(m))
+	header := stripAnsi(headerHealthSegment(m).text)
+	if want := dashboard.HealthCompactLabel(healthIssues(m)); !strings.Contains(header, want) {
+		t.Fatalf("header indicator %q does not carry the compact reading %q", header, want)
+	}
 	body := healthBody(m)
-	for _, want := range []string{"daemon down: amx daemon start", "hooks drifted: amx config hooks-sync"} {
-		if !strings.Contains(hints, want) {
-			t.Fatalf("hint strip missing %q:\n%s", want, hints)
-		}
-		remedy := want[strings.Index(want, ": ")+2:]
+	for _, remedy := range []string{"amx daemon start", "amx config hooks-sync"} {
 		if !strings.Contains(body, remedy) {
-			t.Fatalf("overlay body missing the remedy %q the hint strip advertises:\n%s", remedy, body)
+			t.Fatalf("overlay body missing the remedy %q:\n%s", remedy, body)
 		}
 	}
 	if !daemonHealthDegraded(m) {
@@ -349,8 +350,8 @@ func TestUnobservedHealthIsNotReportedAsDegraded(t *testing.T) {
 	if daemonHealthDegraded(m) || hookHealthDegraded(m) {
 		t.Fatal("an unobserved check is reported as degraded")
 	}
-	if got := stripAnsi(renderHealthHints(m)); got != "" {
-		t.Fatalf("hint strip = %q before any check ran, want silence", got)
+	if got := stripAnsi(headerHealthSegment(m).text); !strings.Contains(got, "checking health") {
+		t.Fatalf("header indicator = %q before any check ran, want the unchecked reading", got)
 	}
 	issues := healthIssues(m)
 	for _, id := range []string{dashboard.HealthIssueDaemon, dashboard.HealthIssueHooks} {
@@ -364,48 +365,64 @@ func TestUnobservedHealthIsNotReportedAsDegraded(t *testing.T) {
 	}
 }
 
-// The pip strip's guard covers the two checks together, so the ordinary startup
-// shows it with one check in and the other outstanding. Each pip has to carry
-// its own observation state: read off the raw fields an unchecked hooks scan has
-// empty buckets and painted the pip of a clean bill of health.
-func TestHealthPipsDistinguishUnobservedFromObserved(t *testing.T) {
+// The header indicator must distinguish an unobserved check from an observed
+// one. Read off the raw fields an unchecked hooks scan has empty buckets and
+// looked like a clean bill of health; read off the issue model an outstanding
+// check is Unknown, and the indicator wears the hollow mark and names the check
+// rather than claiming either a clean bill or a fault.
+func TestHeaderHealthIndicatorSeparatesUnobservedFromObserved(t *testing.T) {
 	hollow := dashboard.HealthUnknown.Glyph()
 
-	// Daemon in, hooks outstanding. The hooks pip must not be a filled one.
+	// Daemon in, hooks outstanding: not a clean reading, and not a fault either.
 	m := healthModel(t)
+	m.width = 120
 	m.hookHealth = commands.HookHealth{}
 	m.hookHealthCheckedAt = time.Time{}
-	out := stripAnsi(renderHealthPips(m))
-	if got := strings.Count(out, healthPipGlyph); got != 1 {
-		t.Fatalf("got %d filled pips with only the daemon observed:\n%q", got, out)
-	}
-	if !strings.Contains(out, hollow+" hooks") {
-		t.Fatalf("unobserved hooks scan does not get the hollow pip:\n%q", out)
+	out := stripAnsi(headerHealthSegment(m).text)
+	if out != hollow+" hooks unchecked" {
+		t.Fatalf("indicator = %q with hooks outstanding, want the unchecked reading", out)
 	}
 
-	// Hooks in, daemon outstanding. The daemon pip must not claim an outage.
+	// Hooks in, daemon outstanding. The indicator must not claim an outage.
 	m = healthModel(t)
+	m.width = 120
 	m.daemonAlive = false
 	m.daemonHealthCheckedAt = time.Time{}
-	out = stripAnsi(renderHealthPips(m))
-	if !strings.Contains(out, hollow+" daemon") {
-		t.Fatalf("unobserved daemon check does not get the hollow pip:\n%q", out)
+	out = stripAnsi(headerHealthSegment(m).text)
+	if out != hollow+" daemon unchecked" {
+		t.Fatalf("indicator = %q with the daemon outstanding, want the unchecked reading", out)
 	}
 
-	// Both observed and clean: two filled pips, no hollow one.
-	out = stripAnsi(renderHealthPips(healthModel(t)))
-	if got := strings.Count(out, healthPipGlyph); got != 2 {
-		t.Fatalf("got %d filled pips from two clean observed checks:\n%q", got, out)
+	// Several outstanding at once are spelled rather than counted: a cold start
+	// is not three faults.
+	cold := healthModel(t)
+	cold.width = 120
+	cold.hookHealthCheckedAt = time.Time{}
+	cold.daemonHealthCheckedAt = time.Time{}
+	cold.topologyObservedAt = time.Time{}
+	out = stripAnsi(headerHealthSegment(cold).text)
+	if out != hollow+" checking health" {
+		t.Fatalf("indicator = %q on a cold start, want the in-progress reading", out)
+	}
+
+	// Both observed and clean: the clean word, and no hollow mark anywhere.
+	clean := healthModel(t)
+	clean.width = 120
+	out = stripAnsi(headerHealthSegment(clean).text)
+	if !strings.Contains(out, "all checks ok") {
+		t.Fatalf("indicator = %q from two clean observed checks", out)
 	}
 	if strings.Contains(out, hollow) {
-		t.Fatalf("observed checks got a hollow pip:\n%q", out)
+		t.Fatalf("observed checks got the hollow mark: %q", out)
 	}
 
-	// Neither observed: the strip stays off entirely, as it always has.
-	blank := loadSessions(testModel(), makeSessions())
-	blank.width, blank.height = 120, 40
-	if got := renderHealthPips(blank); got != "" {
-		t.Fatalf("strip = %q before any check ran, want empty", got)
+	// An observed failure outranks an outstanding check.
+	failing := healthModel(t)
+	failing.width = 120
+	failing.daemonAlive = false
+	out = stripAnsi(headerHealthSegment(failing).text)
+	if !strings.Contains(out, "daemon down") {
+		t.Fatalf("indicator = %q with the daemon observed down", out)
 	}
 }
 

@@ -3,8 +3,8 @@
   "fixture": "project_families",
   "size": { "width": 120, "height": 32 },
   "actions": [
-    { "type": "mouse", "x": 30, "y": 5, "event": "left" },
-    { "type": "mouse", "x": 30, "y": 5, "event": "left" }
+    { "type": "mouse", "x": 30, "y": 4, "event": "left" },
+    { "type": "mouse", "x": 30, "y": 4, "event": "left" }
   ],
   "assertions": [
     { "type": "selected_title", "value": "notes" },

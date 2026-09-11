@@ -15,7 +15,8 @@
     { "type": "excludes_text", "text": "notes (" },
     { "type": "excludes_text", "text": "[W]" },
     { "type": "excludes_text", "text": "[P]" },
-    { "type": "contains_text", "text": "Sessions: 7 · 0 attention · 7 active · 0 idle" },
+    { "type": "contains_text", "text": "Running (7)" },
+    { "type": "excludes_text", "text": "Sessions: 7 ·" },
     { "type": "no_layout_issues" }
   ]
 }

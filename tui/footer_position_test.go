@@ -182,7 +182,7 @@ func TestListFooterPositionFragmentAccountsForGroupChrome(t *testing.T) {
 
 	t.Run("projects view reports the window it overflows into", func(t *testing.T) {
 		m, _ := listViewModel(dashboard.ViewProjects)
-		m.width, m.height = 120, 12
+		m.width, m.height = 120, 11
 		total := m.listItemCount()
 
 		start, end, _, bottom := renderedItemWindow(t, m)

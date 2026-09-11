@@ -327,9 +327,20 @@ func TestDashboardOverlaysReserveStatusBar(t *testing.T) {
 			if !strings.Contains(out, tc.popup) {
 				t.Fatalf("expected popup marker %q in overlay output:\n%s", tc.popup, out)
 			}
-			last := strings.TrimSpace(lines[len(lines)-1])
-			if !strings.Contains(last, tc.status) {
-				t.Fatalf("final row = %q, want status %q", last, tc.status)
+			// The dashboard owns the chrome under its overlays: its footer keeps
+			// the final row it has on the list itself and the status sits
+			// directly above it, so raising an overlay moves neither. An overlay
+			// with no footer of its own leaves the status on the final row.
+			footer := rootFooterLines(m)
+			statusRow := strings.TrimSpace(lines[len(lines)-1-len(footer)])
+			if !strings.Contains(statusRow, tc.status) {
+				t.Fatalf("status row = %q, want status %q (footer %d rows):\n%s", statusRow, tc.status, len(footer), out)
+			}
+			for i, want := range footer {
+				got := strings.TrimSpace(lines[len(lines)-len(footer)+i])
+				if got != strings.TrimSpace(stripAnsi(want)) {
+					t.Fatalf("footer row %d = %q, want %q", i, got, strings.TrimSpace(stripAnsi(want)))
+				}
 			}
 		})
 	}
@@ -346,7 +357,13 @@ func TestDashboardOverlayTinyTerminalDoesNotOverflowStatusBar(t *testing.T) {
 	if len(lines) != m.height {
 		t.Fatalf("rendered line count = %d, want terminal height %d:\n%s", len(lines), m.height, out)
 	}
-	if last := strings.TrimSpace(lines[len(lines)-1]); !strings.Contains(last, "Session actions") {
-		t.Fatalf("final row = %q, want actions status", last)
+	// Three rows is body, feedback slot, footer. The dashboard's chrome keeps its
+	// order under the overlay, so the status is the second row rather than the
+	// last, and neither row is dropped to make the overlay fit.
+	if status := strings.TrimSpace(lines[len(lines)-2]); !strings.Contains(status, "Session actions") {
+		t.Fatalf("feedback row = %q, want actions status:\n%s", status, out)
+	}
+	if last := strings.TrimSpace(lines[len(lines)-1]); last != strings.TrimSpace(stripAnsi(rootFooterLines(m)[0])) {
+		t.Fatalf("final row = %q, want the overlay footer", last)
 	}
 }

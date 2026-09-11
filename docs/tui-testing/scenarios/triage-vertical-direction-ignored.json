@@ -3,7 +3,7 @@
   "fixture": "triage_vertical",
   "size": { "width": 140, "height": 40 },
   "assertions": [
-    { "type": "contains_text", "text": "i: hide inspector" },
+    { "type": "contains_text", "text": "i inspector" },
     { "type": "contains_text", "text": "release-guard    Failed             0:01" },
     { "type": "contains_text", "text": "│Failed · 0:01" },
     { "type": "contains_text", "text": "(no output)" },

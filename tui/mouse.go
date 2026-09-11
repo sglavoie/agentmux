@@ -20,9 +20,11 @@ const (
 	// the list is narrowed to and opens the switcher — the pointer's spelling of
 	// `p`. It runs the same command the key does.
 	mouseHitProjectSwitcher
-	// mouseHitInspectorToggle is the header control that shows or hides the
-	// inspector — the pointer's spelling of `i`.
-	mouseHitInspectorToggle
+	// mouseHitHealth is the header's health indicator. It is the pointer's only
+	// route into the details overlay and the only reason the indicator is a
+	// control rather than a label: the overlay has no key of its own, so a
+	// reading that says something is wrong has to be the thing you click.
+	mouseHitHealth
 	// mouseHitInspectorBody is the inspector pane itself. It is a click target
 	// rather than dead space for two reasons: clicking into a pane is how a
 	// pointer says "aim the keys here", and a click that produced no target at
@@ -257,8 +259,11 @@ func (m Model) handleMouseAction(msg mouseActionMsg) (tea.Model, tea.Cmd) {
 		return m, m.toggleListView()
 	case mouseHitProjectSwitcher:
 		return m.openProjectSwitcher()
-	case mouseHitInspectorToggle:
-		return m.toggleInspector()
+	case mouseHitHealth:
+		// The dashboard is the view esc lands on, which is the same return the
+		// palette entry and the keyboard help sheet take from here.
+		m.openHealth(ModeList)
+		return m, nil
 	case mouseHitInspectorBody:
 		// Clicking into the pane aims the keys at it. Nothing else happens: the
 		// inspector has no selectable rows, and the chain break above is the

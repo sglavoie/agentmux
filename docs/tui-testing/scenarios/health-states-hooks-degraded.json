@@ -7,10 +7,9 @@
   ],
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
-    { "type": "contains_text", "text": "● daemon" },
-    { "type": "contains_text", "text": "● hooks" },
-    { "type": "contains_text", "text": "hooks drifted: amx config hooks-sync" },
-    { "type": "contains_text", "text": "Health degraded" },
+    { "type": "contains_text", "text": "✖ hooks drifted" },
+    { "type": "excludes_text", "text": "● daemon" },
+    { "type": "excludes_text", "text": "Health degraded" },
     { "type": "no_layout_issues" }
   ]
 }

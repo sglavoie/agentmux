@@ -7,16 +7,24 @@ package tui
 import (
 	"strings"
 
-	"github.com/sglavoie/agentmux/internal/palette"
+	"charm.land/lipgloss/v2"
+
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
-// renderHeader renders the dashboard title line. Active filters are surfaced
-// as chips below the header via renderChips, so this line carries the title,
-// the name of the current view, the filter hint, the inspector hint, and the
-// right-aligned daemon/hooks health pips. Error details are surfaced through
-// the sticky status bar.
+// renderHeader renders the dashboard's quiet header: the app name, the view
+// the list is drawn in, the project scope it is narrowed to, and a right-edge
+// health indicator. Active filters are surfaced as chips below it.
+//
+// Everything else this line used to carry is gone rather than moved. The
+// per-check pips and their hint strip, the icon legend, and the deprecation
+// banner were four separate renderings of state that the health issue model and
+// the help sheet already hold; the `/ to filter` and `i: inspector` hints
+// repeated two of the footer's own bindings. What remains is the frame's
+// orientation — where am I, what am I looking at, is anything wrong — and the
+// one control that cannot be spelled any other way, because the health overlay
+// has no key of its own.
 //
 // The view name is here rather than in the footer because it is the one piece
 // of state that changes what every line below means: the same filtered sessions
@@ -36,287 +44,186 @@ type headerSegment struct {
 	kind mouseHitKind
 }
 
-// headerProjectSelectorLabel is the header's project control: the key that
-// opens the switcher and the scope the list is currently narrowed to.
+// headerScopeLabel names the project scope the list is currently narrowed to.
 //
 // It names the applied selector rather than a verb, because the control is the
 // one place on the frame that says which project the dashboard is showing —
 // the chip row says it too, but only while a filter is active, and "all
 // projects" is a scope the operator needs to be able to read as deliberately as
 // any other. The label is bounded so a long project title cannot push the
-// health pips off the right edge; the switcher itself spells it in full.
-func headerProjectSelectorLabel(m Model) string {
-	label := "all projects"
+// health indicator off the right edge; the switcher itself spells it in full.
+func headerScopeLabel(m Model) string {
 	if applied := m.activeFilter.Project; applied != "" {
-		label = layout.Truncate(applied, 18, "…")
+		return layout.Truncate(applied, 18, "…")
 	}
-	return keyProjectSwitcher + ": " + label
+	return "all projects"
+}
+
+// headerHealthSegment is the header's health control: one glyph for the worst
+// reading and one phrase naming it, clickable into the details overlay.
+//
+// It consumes dashboard.HealthOverall and dashboard.HealthCompactLabel rather
+// than re-reading the model's health fields or re-deriving a phrase of its own,
+// so this control and the overlay heading are two renderings of one issue set.
+// The retired pip strip hid itself until the first check landed; the indicator
+// keeps its column from the first frame and lets the leaf say that the checks
+// are still outstanding, so the first real reading does not move the header
+// under the operator.
+func headerHealthSegment(m Model) headerSegment {
+	issues := healthIssues(m)
+	// The leaf returns "" for an empty issue set, which is a reading that was
+	// never built rather than a clean one. The root always builds all four, so
+	// this is the leaf's contract being honoured rather than a state to render.
+	label := dashboard.HealthCompactLabel(issues)
+	if label == "" {
+		return headerSegment{}
+	}
+	state := dashboard.HealthOverall(issues)
+	return headerSegment{
+		text: headerHealthStyle(state).Render(state.Glyph() + " " + label),
+		kind: mouseHitHealth,
+	}
+}
+
+// headerHealthGlyph is the indicator's one-cell form, kept when the phrase will
+// not fit beside the view and the scope. It carries the same state and the same
+// click target; only the wording is deferred to the overlay it opens.
+func headerHealthGlyph(m Model) headerSegment {
+	issues := healthIssues(m)
+	if dashboard.HealthCompactLabel(issues) == "" {
+		return headerSegment{}
+	}
+	state := dashboard.HealthOverall(issues)
+	return headerSegment{
+		text: headerHealthStyle(state).Render(state.Glyph()),
+		kind: mouseHitHealth,
+	}
+}
+
+// headerHealthStyle colors the indicator by severity. The glyph itself comes
+// from the leaf's per-state set, so the shape and the color carry the same
+// reading and a monochrome terminal loses neither.
+func headerHealthStyle(state dashboard.HealthState) lipgloss.Style {
+	switch state {
+	case dashboard.HealthOK:
+		return stylePipOK
+	case dashboard.HealthWarning:
+		return stylePipWarn
+	case dashboard.HealthFailed:
+		return stylePipErr
+	default:
+		return styleDim
+	}
 }
 
 // renderHeaderWithHits keeps the adaptive admission decisions and the mouse
 // spans in one pass. A control omitted for width contributes no target.
+//
+// Health owns the right edge, and what it gives up under pressure is its PHRASE
+// rather than its column: a narrow header keeps the glyph, which still carries
+// the severity by shape as well as by color and is still the click target that
+// opens the details overlay. The phrase is the redundant part — the overlay one
+// click away is where the reading is spelled out — while the view and the scope
+// to its left are the two things no row on the dashboard answers. Only once the
+// glyph form has been taken does the left run start dropping from its tail, so
+// the scope goes before the view and the app name is the last thing standing.
 func renderHeaderWithHits(m Model) headerRender {
-	title := styleHeader.Render("Agent Mux")
-	viewPrefix := styleDim.Render(" · ")
-	viewLabel := styleDim.Render(m.listView.String())
-	left := title + viewPrefix + viewLabel
-	pips := renderHealthPips(m)
-	if m.width <= 0 {
-		return headerRender{
-			text: left + "\n",
-			hits: []mouseHitRegion{{kind: mouseHitView, rect: dashboard.HitRect{
-				X: layout.StyledWidth(title) + layout.StyledWidth(viewPrefix), Width: layout.StyledWidth(viewLabel), Height: 1,
-			}}},
-		}
-	}
+	sep := styleDim.Render(" · ")
+	sepW := layout.StyledWidth(sep)
 
-	// Required health status owns the right edge. Controls are admitted next;
-	// the duplicated filter placeholder is considered last and therefore drops
-	// first. This keeps the current view label stable as a future mouse target.
-	sep := styleFooter.Render("   ")
-	var right []headerSegment
-	if pips != "" {
-		right = append(right, headerSegment{text: pips})
+	left := []headerSegment{
+		{text: styleHeader.Render("Agent Mux")},
+		{text: styleDim.Render(m.listView.String()), kind: mouseHitView},
+		{text: styleFooter.Render(headerScopeLabel(m)), kind: mouseHitProjectSwitcher},
 	}
-	rightText := func(parts []headerSegment) string {
+	join := func(parts []headerSegment) string {
 		texts := make([]string, len(parts))
 		for i := range parts {
 			texts[i] = parts[i].text
 		}
 		return strings.Join(texts, sep)
 	}
-	prependIfFits := func(part string, kind mouseHitKind) {
-		if part == "" {
-			return
-		}
-		candidateParts := append([]headerSegment{{text: part, kind: kind}}, right...)
-		candidate := rightText(candidateParts)
-		if layout.StyledWidth(left)+1+layout.StyledWidth(candidate) <= m.width {
-			right = candidateParts
-		}
-	}
-	if m.cfg != nil {
-		label := "i: inspector"
-		if listInspectorShown(m) {
-			label = "i: hide inspector"
-		}
-		prependIfFits(styleFooter.Render(label), mouseHitInspectorToggle)
-	}
-	prependIfFits(styleFooter.Render(headerProjectSelectorLabel(m)), mouseHitProjectSwitcher)
-	if m.mode == ModeList && dashboard.BandFor(m.width) != dashboard.BandCompact {
-		prependIfFits(styleDim.Render(inlineFilterPlaceholder), mouseHitNone)
+
+	if m.width <= 0 {
+		return headerRender{text: join(left) + "\n", hits: headerHits(left, sepW, -1)}
 	}
 
-	line := left
+	fits := func(parts []headerSegment, right headerSegment) bool {
+		w := layout.StyledWidth(right.text)
+		if w == 0 {
+			return layout.StyledWidth(join(parts)) <= m.width
+		}
+		return layout.StyledWidth(join(parts))+1+w <= m.width
+	}
+	right := headerHealthSegment(m)
+	if !fits(left, right) {
+		right = headerHealthGlyph(m)
+	}
+	kept := left
+	for len(kept) > 1 && !fits(kept, right) {
+		kept = kept[:len(kept)-1]
+	}
+	rightWidth := layout.StyledWidth(right.text)
+	if rightWidth >= m.width {
+		right, rightWidth = headerSegment{}, 0
+	}
+	leftRendered := join(kept)
+	if w := layout.StyledWidth(leftRendered); rightWidth > 0 && w+rightWidth > m.width {
+		leftRendered = layout.StyledTruncate(leftRendered, m.width-rightWidth, "…")
+	}
+	leftWidth := layout.StyledWidth(leftRendered)
+
+	line := leftRendered
 	var hits []mouseHitRegion
-	rightRendered := rightText(right)
-	if rightRendered != "" {
-		rightWidth := layout.StyledWidth(rightRendered)
-		if rightWidth >= m.width {
-			line = layout.StyledTruncate(rightRendered, m.width, "…")
-			left = ""
-		} else {
-			left = layout.StyledTruncate(left, m.width-rightWidth-1, "…")
-			pad := m.width - layout.StyledWidth(left) - rightWidth
-			line = left + strings.Repeat(" ", pad) + rightRendered
-			x := m.width - rightWidth
-			for i, segment := range right {
-				w := layout.StyledWidth(segment.text)
-				if segment.kind != mouseHitNone && w > 0 {
-					hits = append(hits, mouseHitRegion{kind: segment.kind, rect: dashboard.HitRect{X: x, Width: w, Height: 1}})
-				}
-				x += w
-				if i < len(right)-1 {
-					x += layout.StyledWidth(sep)
-				}
+	if rightWidth > 0 {
+		pad := m.width - leftWidth - rightWidth
+		if pad < 0 {
+			pad = 0
+		}
+		line = leftRendered + strings.Repeat(" ", pad) + right.text
+		hits = append(hits, mouseHitRegion{kind: right.kind, rect: dashboard.HitRect{
+			X: m.width - rightWidth, Width: rightWidth, Height: 1,
+		}})
+	}
+	hits = append(hits, headerHits(kept, sepW, leftWidth)...)
+	return headerRender{text: layout.StyledTruncate(line, m.width, "…") + "\n", hits: hits}
+}
+
+// headerHits maps the admitted left-hand segments onto the columns they were
+// drawn at. limit is the width actually painted, or -1 for an unbounded line: a
+// segment past it contributes no target and one straddling it contributes only
+// its visible part, so a click never lands on a control the truncation ate.
+func headerHits(parts []headerSegment, sepW, limit int) []mouseHitRegion {
+	var hits []mouseHitRegion
+	x := 0
+	for i, segment := range parts {
+		if i > 0 {
+			x += sepW
+		}
+		w := layout.StyledWidth(segment.text)
+		if segment.kind != mouseHitNone && w > 0 {
+			visible := w
+			if limit >= 0 && x+w > limit {
+				visible = limit - x
+			}
+			if visible > 0 {
+				hits = append(hits, mouseHitRegion{kind: segment.kind, rect: dashboard.HitRect{
+					X: x, Width: visible, Height: 1,
+				}})
 			}
 		}
+		x += w
 	}
-	viewX := layout.StyledWidth(title) + layout.StyledWidth(viewPrefix)
-	if visible := layout.StyledWidth(left) - viewX; visible > 0 {
-		w := layout.StyledWidth(viewLabel)
-		if w > visible {
-			w = visible
-		}
-		hits = append(hits, mouseHitRegion{kind: mouseHitView, rect: dashboard.HitRect{X: viewX, Width: w, Height: 1}})
-	}
-	line = layout.StyledTruncate(line, m.width, "…")
-	out := line + "\n"
-	if hint := renderHealthHints(m); hint != "" {
-		out += hint
-	}
-	return headerRender{text: out, hits: hits}
+	return hits
 }
 
-// renderHealthPips returns the right-aligned `● daemon   ● hooks` strip
-// drawn at the end of the header. Each pip is colored to reflect liveness;
-// the labels stay in the dim footer color so the eye is drawn to the pip.
-// Returns "" before the first health check completes so the header line
-// doesn't briefly mis-render as "degraded" at startup.
-//
-// The guard covers the two checks TOGETHER, which is why each pip has to carry
-// its own observation state rather than inheriting the strip's. The two land at
-// different cadences, so the ordinary startup has one check in and the other
-// still outstanding — and read off the raw fields, an unchecked hooks scan has
-// empty drifted and missing slices and painted itself the green pip of a clean
-// bill of health, while an unchecked daemon painted the red pip of an outage
-// nobody had observed. Both now go through the issue model, and an unobserved
-// check gets the hollow mark so a filled pip in any color keeps meaning that
-// somebody looked.
-func renderHealthPips(m Model) string {
-	if m.daemonHealthCheckedAt.IsZero() && m.hookHealthCheckedAt.IsZero() {
-		return ""
-	}
-	issues := healthIssues(m)
-	return renderHealthPip(issues, dashboard.HealthIssueDaemon, "daemon") + "   " +
-		renderHealthPip(issues, dashboard.HealthIssueHooks, "hooks")
-}
-
-// renderHealthPip draws one pip. The strip's vocabulary is a FILLED dot whose
-// color carries the severity, which is not the leaf's per-state glyph set, so
-// only the unobserved case borrows a mark from there: every observed state keeps
-// the dot it has always had, and HealthUnknown gets the hollow one.
-func renderHealthPip(issues []dashboard.HealthIssue, id, label string) string {
-	state := dashboard.HealthUnknown
-	if issue, ok := dashboard.FindHealthIssue(issues, id); ok {
-		state = issue.State
-	}
-	glyph, style := healthPipGlyph, stylePipErr
-	switch state {
-	case dashboard.HealthOK:
-		style = stylePipOK
-	case dashboard.HealthWarning:
-		style = stylePipWarn
-	case dashboard.HealthUnknown:
-		glyph, style = dashboard.HealthUnknown.Glyph(), styleDim
-	}
-	return style.Render(glyph) + " " + styleFooter.Render(label)
-}
-
-// renderHealthHints returns the one-line under-pip hint(s) shown when any
-// health signal is in a degraded state. Hints are stacked one per line and
-// right-aligned to sit beneath the pip strip. Returns "" when both
-// daemon and hooks are healthy or no health refresh has run yet.
-//
-// The hints themselves come from the issue model rather than from a second walk
-// of the health fields, so this strip and the details overlay are two renderings
-// of one issue set. Only issues that declare a Hint appear: topology has the
-// status bar and configuration has the banner, and neither needs a third line
-// above the list saying the same thing.
-func renderHealthHints(m Model) string {
-	if m.daemonHealthCheckedAt.IsZero() && m.hookHealthCheckedAt.IsZero() {
-		return ""
-	}
-	hints := dashboard.HealthHints(healthIssues(m))
-	if len(hints) == 0 {
-		return ""
-	}
-	var out strings.Builder
-	for _, h := range hints {
-		styled := styleFooter.Render(h)
-		if m.width > 0 {
-			pad := m.width - layout.StyledWidth(styled)
-			if pad < 0 {
-				pad = 0
-			}
-			out.WriteString(strings.Repeat(" ", pad))
-		}
-		out.WriteString(styled)
-		out.WriteByte('\n')
-	}
-	return out.String()
-}
-
-// healthPipGlyph is the filled pip an OBSERVED check paints. The strip draws
-// dashboard.HealthState.Glyph() rather than this constant, so an unobserved
-// check gets the hollow mark instead; it survives as the name the header tests
-// assert a real reading by.
-const healthPipGlyph = "●"
-
-// renderDeprecationBanner returns a single yellow banner line warning about
-// deprecated config keys. Returns "" when the user has dismissed the
-// banner for this session or the config has no deprecated keys.
-func renderDeprecationBanner(m Model) string {
-	if m.deprecationDismissed || len(m.deprecations) == 0 {
-		return ""
-	}
-	var pairs []string
-	for _, d := range m.deprecations {
-		pairs = append(pairs, d.Key+" → "+d.Replacement)
-	}
-	headline := "⚠ config uses deprecated keys: " + strings.Join(pairs, ", ")
-	hint := "  edit amx config path and replace the keys above · press d to dismiss for this session"
-	// Both lines are clamped for the same reason the header and every footer row
-	// are: the banner's width is the config's, not the terminal's, and one
-	// deprecated key with a long replacement is already wider than a compact
-	// pane.
-	return layout.ClampLine(styleBanner.Render(headline), m.width) + "\n" +
-		layout.ClampLine(styleFooter.Render(hint), m.width) + "\n"
-}
-
-// inlineFilterPlaceholder is the greyed copy shown in the dashboard title row.
-// Filtering is explicit-only from the dashboard: press / to open the search
-// input.
-const inlineFilterPlaceholder = "/ to filter"
-
-// renderInlineFilter keeps a spacer line above the list where the persistent
-// filter hint used to render. Returns "" outside ModeList so the line
-// collapses cleanly in other modes.
-func renderInlineFilter(m Model) string {
+// renderHeaderSpacer keeps a blank line between the header block and the list.
+// Returns "" outside ModeList so the line collapses cleanly in other modes.
+func renderHeaderSpacer(m Model) string {
 	if m.mode != ModeList {
 		return ""
 	}
 	return "\n"
-}
-
-// legendMinHeight is the minimum terminal height (rows) required to render
-// the state legend strip. Below this the line is omitted silently to leave
-// space for sessions.
-const legendMinHeight = 20
-
-// renderLegend returns the icon→meaning legend strip drawn above the list.
-// Returns "" when the terminal is too short to spare a line, when it is too
-// narrow to spend one on a reference, or when no state has a gloss to render.
-// Each token is styled in its state's accent so the user maps icon → meaning at
-// a glance.
-//
-// Both gates are the same judgement made on the two axes. The legend is a
-// reference, not a status: it teaches the icon column and then stops being
-// read. On a short terminal it costs rows the sessions need; on a narrow one it
-// wraps to several rows to say the same thing, which is worse. So it appears
-// only where the terminal can afford it on both axes — a spacious width, and a
-// height above the existing floor.
-func renderLegend(m Model) string {
-	if m.height > 0 && m.height < legendMinHeight {
-		return ""
-	}
-	if dashboard.BandFor(m.width) != dashboard.BandSpacious {
-		return ""
-	}
-	var tokens []footerToken
-	for _, state := range dashboard.LegendStates {
-		gloss := dashboard.StateGloss(state)
-		if gloss == "" {
-			continue
-		}
-		icon := palette.StateIcon(state)
-		if icon == "" {
-			continue
-		}
-		token := layout.PadIconCell(icon) + " " + gloss
-		tokens = append(tokens, footerRenderedToken(stateAccentStyle(state).Render(token)))
-	}
-	if len(tokens) == 0 {
-		return ""
-	}
-	sep := styleFooter.Render("   ")
-	sepW := layout.StyledWidth(sep)
-	for i := 0; i < len(tokens)-1; i++ {
-		tokens[i].sep = sep
-		tokens[i].sepWidth = sepW
-	}
-	lead := "  " + styleFooter.Render("icons:") + "  "
-	return wrapFooterLine(lead, "  ", tokens, m.width) + "\n"
 }
 
 // listMinVisible is the floor on the visible row budget for the session list.
@@ -342,9 +249,9 @@ const statusBarLines = 1
 // builds per frame; the alternative costs correctness at exactly the widths
 // this file exists to get right.
 //
-// The one thing not measured is the spacer where the inline filter hint used to
-// sit: it is a bare newline, which layout.SectionLines correctly reports as no
-// content, and it is still a physical row on screen.
+// The one thing not measured is the header spacer: it is a bare newline, which
+// layout.SectionLines correctly reports as no content, and it is still a
+// physical row on screen.
 func chromeAboveListLines(m Model) int {
 	if m.mode == ModeSearch {
 		// ModeSearch replaces the whole header block with the search input and
@@ -352,8 +259,6 @@ func chromeAboveListLines(m Model) int {
 		return len(layout.SectionLines(renderSearch(m)))
 	}
 	n := len(layout.SectionLines(renderHeader(m)))
-	n += len(layout.SectionLines(renderDeprecationBanner(m)))
-	n += len(layout.SectionLines(renderLegend(m)))
 	n += len(layout.SectionLines(renderChips(m, m.width)))
 	if m.mode == ModeList {
 		n++ // spacer is always one line in ModeList
@@ -366,10 +271,6 @@ func chromeAboveListLines(m Model) int {
 // detail strip that used to live there was retired with dashboard `p`: the
 // inspector carries the selected session's metadata at every width, and two
 // rows restating it under the list were two sessions the list could not show.
-
-func legendLineCount(m Model) int {
-	return len(layout.SectionLines(renderLegend(m)))
-}
 
 // listChromeLines returns the total number of vertical lines the dashboard
 // chrome occupies around the session list in ModeList. It is the complement of

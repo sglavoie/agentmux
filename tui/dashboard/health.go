@@ -280,8 +280,24 @@ func HealthOverall(issues []HealthIssue) HealthState {
 }
 
 // HealthCompactLabel is the reading a header entry point draws: the single
-// issue's own phrase when exactly one wants attention, a count when several do,
-// and the clean word when none do.
+// issue's own phrase when exactly one is at the worst state, a count when
+// several are, and the clean word when none want attention.
+//
+// It counts the WORST band rather than the whole attention set, and that is the
+// load-bearing choice. The set mixes severities by construction — three sources
+// are polled and one is read once at startup — so a straight count reports "two
+// issues" for a deprecated config key sitting beside a window tree that simply
+// has not rendered yet, and sends the operator into the overlay to find out
+// which of the two is the news. Naming the worst band is the same information
+// the severity sort already puts at the top of that overlay, so the one line the
+// header can afford agrees with the first line the overlay opens on. Nothing is
+// hidden: every issue, at every state, is in the list this label was computed
+// from, and HealthOverall still paints the line the worst band's color.
+//
+// Several UNOBSERVED checks are spelled rather than counted, because "3 issues"
+// is a claim that three things are wrong and a cold start is a claim that
+// nothing has been looked at yet. A single unobserved check keeps its own
+// phrase, which is more specific than either.
 //
 // It returns "" for an empty issue list, which is the "nothing has been built
 // yet" case rather than a claim of health.
@@ -289,15 +305,23 @@ func HealthCompactLabel(issues []HealthIssue) string {
 	if len(issues) == 0 {
 		return ""
 	}
-	attention := HealthAttention(issues)
-	switch len(attention) {
-	case 0:
+	state := HealthOverall(issues)
+	if state == HealthOK {
 		return "all checks ok"
-	case 1:
-		return attention[0].Compact
-	default:
-		return fmt.Sprintf("%d issues", len(attention))
 	}
+	var worst []HealthIssue
+	for _, issue := range HealthAttention(issues) {
+		if issue.State == state {
+			worst = append(worst, issue)
+		}
+	}
+	if len(worst) == 1 {
+		return worst[0].Compact
+	}
+	if state == HealthUnknown {
+		return "checking health"
+	}
+	return fmt.Sprintf("%d issues", len(worst))
 }
 
 // HealthHints returns the established one-line header hints, in issue order.

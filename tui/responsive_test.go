@@ -254,15 +254,31 @@ func TestResponsiveBandsAndSplitGeometry(t *testing.T) {
 // switcher's "no geometry" claim. The rail's control appeared and disappeared
 // with the strip it toggled, and reconciling that against the body's own
 // visibility rule was the bug this matrix was written for. An overlay costs the
-// body no columns, so the selector is unconditional — and what it says is the
-// scope the dashboard is currently showing.
+// body no columns, so the scope is unconditional.
+//
+// What the header states is the SCOPE, not the key that changes it: the key is
+// named once, by the footer, and a header that repeated it would be the
+// duplication the quiet chrome exists to remove. The scope stays a click target,
+// which is what keeps the control reachable without the wording.
 func TestProjectSelectorIsAlwaysOfferedInTheHeader(t *testing.T) {
 	for width := 90; width <= 200; width++ {
 		for height := 8; height <= 30; height++ {
 			m := responsiveModel(width, height, dashboard.ViewUrgency, true)
 			header := stripAnsi(layout.SectionLines(renderHeader(m))[0])
-			if !strings.Contains(header, keyProjectSwitcher+": all projects") {
-				t.Fatalf("%dx%d header omits the project selector: %q", width, height, header)
+			if !strings.Contains(header, "all projects") {
+				t.Fatalf("%dx%d header omits the scope: %q", width, height, header)
+			}
+			if strings.Contains(header, keyProjectSwitcher+": ") {
+				t.Fatalf("%dx%d header repeats the switcher key the footer names: %q", width, height, header)
+			}
+			var clickable bool
+			for _, hit := range renderHeaderWithHits(m).hits {
+				if hit.kind == mouseHitProjectSwitcher {
+					clickable = true
+				}
+			}
+			if !clickable {
+				t.Fatalf("%dx%d scope is not a click target", width, height)
 			}
 		}
 	}
@@ -271,8 +287,16 @@ func TestProjectSelectorIsAlwaysOfferedInTheHeader(t *testing.T) {
 	m := responsiveModel(106, 9, dashboard.ViewUrgency, true)
 	m.activeFilter = dashboard.Parse("#api")
 	header := stripAnsi(layout.SectionLines(renderHeader(m))[0])
-	if !strings.Contains(header, keyProjectSwitcher+": api") {
+	if !strings.Contains(header, "api") {
 		t.Fatalf("applied scope missing from header: %q", header)
+	}
+
+	// And the key itself is on screen in the footer, once there is room for it:
+	// it is a primary-band hint, so a narrow row sheds it like any other and the
+	// help sheet keeps it.
+	wide := responsiveModel(160, 24, dashboard.ViewUrgency, true)
+	if got := stripAnsi(rootFooterLines(wide)[0]); !strings.Contains(got, keyProjectSwitcher+" projects") {
+		t.Fatalf("footer does not name the switcher key: %q", got)
 	}
 }
 
@@ -311,8 +335,6 @@ func TestResponsiveInspectorDrawsExactlyWhatItReserved(t *testing.T) {
 func TestResponsiveChromeBudgetMatchesRenderedChrome(t *testing.T) {
 	responsiveCases(t, func(t *testing.T, m Model) {
 		above := len(layout.SectionLines(renderHeader(m))) +
-			len(layout.SectionLines(renderDeprecationBanner(m))) +
-			len(layout.SectionLines(renderLegend(m))) +
 			len(layout.SectionLines(renderChips(m, m.width))) +
 			1 /* spacer */
 		if got := chromeAboveListLines(m); got != above {
@@ -373,9 +395,9 @@ func TestCompactFooterIsOneRowAndKeepsTheRequiredTokens(t *testing.T) {
 	// Each required control, in the labelled spelling and the bare-key one the
 	// row falls back to. The row must carry one of the two for every control.
 	required := [][2]string{
-		{"j/k move", "j/k"},
+		{"j/k up/down", "j/k"},
 		{"enter focus", "↵"},
-		{": cmds", ":"},
+		{": commands", ":"},
 		{"? help", "?"},
 	}
 	for _, width := range []int{dashboard.MinRowWidth(), 36, 60, 79} {
@@ -409,8 +431,8 @@ func TestCompactFooterFallsBackWholesaleRatherThanMixingSpellings(t *testing.T) 
 	for _, width := range []int{dashboard.MinRowWidth(), 24, 36, 48, 60, 79} {
 		m := responsiveModel(width, 24, dashboard.ViewUrgency, false)
 		plain := stripAnsi(rootFooterLines(m)[0])
-		labelled := strings.Contains(plain, "j/k move")
-		for _, label := range []string{"enter focus", ": cmds", "? help"} {
+		labelled := strings.Contains(plain, "j/k up/down")
+		for _, label := range []string{"enter focus", ": commands", "? help"} {
 			if strings.Contains(plain, label) != labelled {
 				t.Errorf("width %d: footer %q mixes labelled and bare spellings", width, plain)
 			}

@@ -11,7 +11,9 @@
     { "type": "excludes_text", "text": "icons:" },
     { "type": "excludes_text", "text": "🦊 claude" },
     { "type": "excludes_text", "text": "│" },
-    { "type": "contains_text", "text": "i: inspector" },
+    { "type": "contains_text", "text": "Agent Mux · Urgency · all projects" },
+    { "type": "contains_text", "text": "  j/k up/down · enter focus · a actions · : commands · / filter · ? help" },
+    { "type": "excludes_text", "text": "i inspector" },
     { "type": "no_layout_issues" }
   ]
 }

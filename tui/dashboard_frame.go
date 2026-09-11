@@ -32,9 +32,12 @@ type dashboardFrame struct {
 	hitMap mouseHitMap
 }
 
-// renderDashboardFrame emits the canonical ModeList body: header, deprecation
-// banner, legend, chips, spacer, then the list (with the inspector pane when the
-// geometry admits it).
+// renderDashboardFrame emits the canonical ModeList body: header, chips,
+// spacer, then the list (with the inspector pane when the geometry admits it).
+// The deprecation banner and the icon legend that used to sit between the
+// header and the chips are gone — the banner to the command palette, the legend
+// to the help overlay — which is what makes the block above the list a fixed
+// two or three rows rather than a reflowing one.
 func renderDashboardFrame(m Model) dashboardFrame {
 	var sb strings.Builder
 	var hitMap mouseHitMap
@@ -48,11 +51,6 @@ func renderDashboardFrame(m Model) dashboardFrame {
 	}
 	y += renderedRows(header.text)
 
-	for _, block := range []string{renderDeprecationBanner(m), renderLegend(m)} {
-		sb.WriteString(block)
-		y += renderedRows(block)
-	}
-
 	chips := dashboard.RenderChipsWithHits(m.activeFilter, dashboard.ProfileColorMap(m.cfg), m.focusedChipIdx, m.width)
 	sb.WriteString(chips.Text)
 	for _, chip := range chips.Hits {
@@ -63,7 +61,7 @@ func renderDashboardFrame(m Model) dashboardFrame {
 	}
 	y += renderedRows(chips.Text)
 
-	spacer := renderInlineFilter(m)
+	spacer := renderHeaderSpacer(m)
 	sb.WriteString(spacer)
 	y += renderedRows(spacer)
 
@@ -242,9 +240,10 @@ const dashboardPaddingLines = 1
 // width, beside the row rather than beneath the list — so the strip had become
 // two rows spent restating what the pane next to it already said.
 type dashboardChrome struct {
-	// above is header, deprecation banner, legend, chips, and the spacer.
+	// above is the header, the chips when a filter is active, and the spacer.
 	above int
-	// footer is the reflowed footer's row count.
+	// footer is the reflowed footer's row count. The reserved feedback row
+	// above it is statusBarLines, which total() charges separately.
 	footer int
 }
 

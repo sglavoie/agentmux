@@ -53,7 +53,9 @@ func TestPlanViewsAdvertiseLessNavigationKeys(t *testing.T) {
 	}
 }
 
-func TestRootRenderPinsStatusBarToFinalRow(t *testing.T) {
+// The dashboard pins its footer to the final row and rests the feedback slot
+// directly on the list above it.
+func TestRootRenderPinsTheDashboardFooterToTheFinalRow(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.width = 140
 	m.height = 20
@@ -66,19 +68,25 @@ func TestRootRenderPinsStatusBarToFinalRow(t *testing.T) {
 
 	last := lines[len(lines)-1]
 	if got := runewidth.StringWidth(last); got != m.width {
-		t.Fatalf("status row width = %d, want %d; row %q", got, m.width, last)
+		t.Fatalf("footer row width = %d, want %d; row %q", got, m.width, last)
 	}
-	if !strings.Contains(strings.TrimSpace(last), "Sessions: 3 · ") {
-		t.Fatalf("final row = %q, want list status", last)
+	for _, want := range []string{"j/k up/down", "q quit", "i inspector"} {
+		if !strings.Contains(last, want) {
+			t.Fatalf("final row missing %q:\n%s", want, last)
+		}
 	}
 
-	// The hint block is capped at two rows, so the keys are spread across the
-	// rows between the list and the status bar rather than pinned to one line.
-	footerBlock := strings.Join(lines[len(lines)-1-footerHintMaxLines:len(lines)-1], "\n")
-	for _, want := range []string{"j/k up/down", "q quit", "i inspector"} {
-		if !strings.Contains(footerBlock, want) {
-			t.Fatalf("footer above status missing %q:\n%s", want, footerBlock)
-		}
+	// One physical row, whatever the palette had to shed to get there.
+	if got := len(rootFooterLines(m)); got != 1 {
+		t.Fatalf("dashboard footer spent %d rows, want 1", got)
+	}
+	// And the reserved feedback slot above it is blank on an idle dashboard.
+	feedback := lines[len(lines)-2]
+	if got := strings.TrimSpace(feedback); got != "" {
+		t.Fatalf("feedback slot = %q on an idle dashboard, want blank", got)
+	}
+	if got := runewidth.StringWidth(feedback); got != m.width {
+		t.Fatalf("feedback row width = %d, want %d", got, m.width)
 	}
 }
 
@@ -92,12 +100,13 @@ func TestRootRenderUsesStatusBarForToasts(t *testing.T) {
 	}
 
 	lines := strings.Split(stripAnsi(m.render()), "\n")
-	if last := strings.TrimSpace(lines[len(lines)-1]); !strings.Contains(last, "launch finished") {
-		t.Fatalf("final row = %q, want latest toast status", last)
+	// The dashboard's feedback slot is the row above the footer.
+	if slot := strings.TrimSpace(lines[len(lines)-2]); !strings.Contains(slot, "launch finished") {
+		t.Fatalf("feedback slot = %q, want latest toast status", slot)
 	}
-	bodyAndFooter := strings.Join(lines[:len(lines)-1], "\n")
-	if strings.Contains(bodyAndFooter, "older toast") {
-		t.Fatalf("older toast rendered outside status bar:\n%s", bodyAndFooter)
+	rest := strings.Join(append(append([]string{}, lines[:len(lines)-2]...), lines[len(lines)-1]), "\n")
+	if strings.Contains(rest, "older toast") {
+		t.Fatalf("older toast rendered outside the feedback slot:\n%s", rest)
 	}
 }
 
@@ -124,14 +133,16 @@ func TestRootRenderListKeepsItsFooterBesideTheInspector(t *testing.T) {
 		t.Fatalf("rendered line count = %d, want terminal height %d:\n%s", len(lines), m.height, out)
 	}
 	last := strings.TrimSpace(lines[len(lines)-1])
-	if !strings.Contains(last, "Sessions: 3 · ") {
-		t.Fatalf("final row = %q, want list status", last)
+	if !strings.Contains(last, "j/k up/down") {
+		t.Fatalf("final row = %q, want the dashboard footer", last)
 	}
 	if !strings.Contains(out, "q") || !strings.Contains(out, "quit") {
 		t.Fatalf("the footer went missing beside the inspector:\n%s", out)
 	}
-	if !strings.Contains(out, "i: hide inspector") {
-		t.Fatalf("the header does not name the key that hides the pane:\n%s", out)
+	// The key that hides the pane is named by the footer now rather than by a
+	// second copy in the header.
+	if !strings.Contains(out, "i inspector") {
+		t.Fatalf("nothing on screen names the key that hides the pane:\n%s", out)
 	}
 }
 

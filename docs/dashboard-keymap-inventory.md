@@ -58,7 +58,7 @@ it is named first.
 | `L` | `ToggleLockID` | Lock/unlock the session | Retires | actions `a`; palette |
 | `m` | `ToggleMuteID` | Mute/unmute notifications | Retires | actions `a`; palette |
 | `s` | `SearchProject` | Past Sessions scoped to this project | Retires | palette only — the actions overlay has no entry for it |
-| `d` | `DismissDeprecation` | Dismiss the config deprecation banner | Retires | palette |
+| `d` | `DismissDeprecation` | Silence the configuration deprecation notice | Retires | palette; the health details overlay's own `d`. The banner this used to hide is gone — the notice reads as the header's health indicator and as one issue in that overlay, and both recompute from the same dismissible issue |
 | `d` | `ShowDetails` | Per-session event detail overlay | Retires | inspector `i`; palette |
 | `T` | `ShowTimeline` | Per-session phase timeline | Retires | palette |
 | `/` | `FilterSessions` | Edit the filter | Survives | `/` |

@@ -17,7 +17,7 @@
     { "type": "contains_text", "text": "  ▌   api-hotfix   Done                  —" },
     { "type": "excludes_text", "text": "[work    ]" },
     { "type": "excludes_text", "text": "▌   2:" },
-    { "type": "contains_text", "text": "Sessions: 7 · 2 attention · 2 active · 3 idle" },
+    { "type": "excludes_text", "text": "Sessions: 7 ·" },
     { "type": "no_layout_issues" }
   ]
 }

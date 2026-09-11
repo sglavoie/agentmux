@@ -12,6 +12,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/tui/commands"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
 // The dashboard half of the cross-layer fault acceptance. Everything else in
@@ -276,19 +277,14 @@ func TestFallbackOutageDegradesThenRecoversWithoutMultiplying(t *testing.T) {
 		t.Fatalf("the outage emptied the dashboard: %+v", m.sessions)
 	}
 	skew = protocol.KittySnapshotStaleAfter + 4*time.Second
-	assertStatusBarContains(t, m, staleWarningPrefix)
-	assertStatusBarLacks(t, m, "Kitty error")
-	if msg := currentStatusMessage(m, m.now()); msg.Severity != statusWarning {
-		t.Fatalf("outage severity = %v, want %v", msg.Severity, statusWarning)
-	}
+	assertTopologyReading(t, m, dashboard.HealthWarning, staleWarningPrefix)
 
 	// Kitty recovers on the next tick, and the warning goes with it.
 	client.heal()
 	skew = 0
 	m = send(m, commands.TickMsg{})
 	m = send(m, dispatcher.run(t))
-	assertStatusBarLacks(t, m, staleWarningPrefix)
-	assertStatusBarLacks(t, m, "Kitty error")
+	assertTopologyReading(t, m, dashboard.HealthOK, "refreshed")
 	if m.err != nil {
 		t.Fatalf("recovery left err = %v, want it cleared", m.err)
 	}

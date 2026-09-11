@@ -30,13 +30,14 @@ func TestListChromeLines_BaselineModeList(t *testing.T) {
 	if renderedLines := len(rootFooterLines(m)); footerLines != renderedLines {
 		t.Fatalf("footer budget = %d, rendered footer rows = %d", footerLines, renderedLines)
 	}
-	// Baseline: header(1) + wrapped legend + spacer(1) + padding row(1)
-	// + the measured reflowed footer + status bar(1). Nothing sits below the
-	// list any more: the selected-item strip that used to be charged here is
-	// gone, and what it carried is in the inspector beside the list instead —
-	// which costs columns rather than rows and so appears in no height budget.
+	// Baseline: header(1) + spacer(1) + padding row(1) + the measured footer
+	// + the feedback row(1). Nothing sits below the list any more: the
+	// selected-item strip that used to be charged here is gone, and what it
+	// carried is in the inspector beside the list instead — which costs columns
+	// rather than rows and so appears in no height budget. The legend and the
+	// deprecation banner that used to be charged above the list are gone too.
 	got := listChromeLines(m)
-	want := 1 + legendLineCount(m) + 1 + 1 + footerLines + statusBarLines
+	want := 1 + 1 + 1 + footerLines + statusBarLines
 	if got != want {
 		t.Errorf("baseline chrome: got %d want %d", got, want)
 	}
@@ -99,60 +100,49 @@ func TestListFooterBudgetMatchesRenderedRowsAcrossStates(t *testing.T) {
 	}
 }
 
-func TestListChromeLines_DeprecationBannerAddsTwoLines(t *testing.T) {
-	m := scrollModel()
-	base := listChromeLines(m)
-	m.deprecations = []config.Deprecation{{Key: "foo", Replacement: "bar"}}
-	got := listChromeLines(m)
-	if got != base+2 {
-		t.Errorf("with deprecation banner: got %d want %d", got, base+2)
-	}
-	// Dismissed banner contributes 0 lines.
-	m.deprecationDismissed = true
-	if got := listChromeLines(m); got != base {
-		t.Errorf("dismissed deprecation banner: got %d want %d", got, base)
-	}
-}
-
-func TestListChromeLines_HealthHintsAddHeaderLines(t *testing.T) {
-	m := scrollModel()
-	base := listChromeLines(m)
+// The quiet header is one line whatever the health reading says. That is the
+// point of consolidating the pips, their hint strip, and the deprecation banner
+// into a single indicator: a condition arriving or clearing used to move every
+// row of the list, so a degrading daemon reflowed the thing the operator was
+// reading.
+func TestListChromeLines_HeaderIsOneLineInEveryHealthState(t *testing.T) {
+	base := scrollModel()
+	base.width = 120
+	baseline := listChromeLines(base)
 	now := time.Now()
-	m.daemonAlive = false
-	m.daemonHealthCheckedAt = now
-	m.hookHealth = commands.HookHealth{Drifted: []string{"work"}}
-	m.hookHealthCheckedAt = now
 
-	got := listChromeLines(m)
-	if got != base+2 {
-		t.Errorf("with daemon and hook health hints: got %d want %d", got, base+2)
-	}
-	if hints := len(layout.SectionLines(renderHealthHints(m))); hints != 2 {
-		t.Errorf("health hint count: got %d want 2", hints)
-	}
-
-	m.daemonAlive = true
-	m.hookHealth = commands.HookHealth{InSync: []string{"work"}}
-	if got := listChromeLines(m); got != base {
-		t.Errorf("healthy pips should not reserve hint lines: got %d want %d", got, base)
-	}
-}
-
-func TestListChromeLines_LegendDroppedBelowLegendMinHeight(t *testing.T) {
-	m := scrollModel()
-	// The legend has a width gate as well as a height one, and scrollModel's
-	// 100 columns are below it. Widen locally so the height gate is the thing
-	// under test rather than a legend that was never going to render.
-	m.width = 120
-	base := listChromeLines(m)
-	if legendLineCount(m) == 0 {
-		t.Fatalf("fixture must render a legend before the height gate is tested")
-	}
-	legendLines := legendLineCount(m)
-	m.height = legendMinHeight - 1 // legend omitted
-	got := listChromeLines(m)
-	if got != base-legendLines {
-		t.Errorf("legend hidden on short term: got %d want %d", got, base-legendLines)
+	for _, tc := range []struct {
+		name  string
+		apply func(Model) Model
+	}{
+		{"deprecated config keys", func(m Model) Model {
+			m.deprecations = []config.Deprecation{{Key: "foo", Replacement: "bar"}}
+			return m
+		}},
+		{"daemon down and hooks drifted", func(m Model) Model {
+			m.daemonAlive = false
+			m.daemonHealthCheckedAt = now
+			m.hookHealth = commands.HookHealth{Drifted: []string{"work"}}
+			m.hookHealthCheckedAt = now
+			return m
+		}},
+		{"everything clean and observed", func(m Model) Model {
+			m.daemonAlive = true
+			m.daemonHealthCheckedAt = now
+			m.hookHealth = commands.HookHealth{InSync: []string{"work"}}
+			m.hookHealthCheckedAt = now
+			return m
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := tc.apply(base)
+			if rows := len(layout.SectionLines(renderHeader(m))); rows != 1 {
+				t.Errorf("header rows = %d, want 1", rows)
+			}
+			if got := listChromeLines(m); got != baseline {
+				t.Errorf("chrome lines = %d, want the baseline %d", got, baseline)
+			}
+		})
 	}
 }
 
@@ -481,12 +471,12 @@ func TestScrollListToCursor_ReservesBottomIndicatorWhenRowsRemain(t *testing.T) 
 	m.cursor = 10
 	m.listOffset = 0
 
-	// Nine: capping the hint block at two rows handed the list three rows back
-	// from the old exhaustive footer, and retiring the always-reserved
-	// selected-item strip handed it the two that strip used to take.
+	// Ten: capping the footer at ONE row handed the list another row back on
+	// top of the three the two-row cap had already recovered from the old
+	// exhaustive footer and the two the retired selected-item strip gave up.
 	visible := listVisibleHeight(m)
-	if visible != 9 {
-		t.Fatalf("test fixture expected visible=9, got %d", visible)
+	if visible != 10 {
+		t.Fatalf("test fixture expected visible=10, got %d", visible)
 	}
 
 	scrollListToCursor(&m)

@@ -230,6 +230,15 @@ type rootChrome struct {
 	// than what the footer asked for.
 	footer []string
 	status string
+	// statusAbove draws the status row above the footer rather than under it.
+	//
+	// That is the dashboard's chrome, and the difference is what the row is for.
+	// Under the footer it is a sticky status line the eye reads as part of the
+	// frame; above it, resting directly on the list, it is a feedback slot —
+	// blank while nothing has happened, and the first thing the eye lands on
+	// when something has. Every other root keeps the sticky line, so the two
+	// readings never appear on one screen.
+	statusAbove bool
 	// height is the terminal height the trim was resolved against. A
 	// non-positive height means "not yet resized": nothing is clipped and the
 	// body keeps its natural length.
@@ -238,9 +247,10 @@ type rootChrome struct {
 
 func newRootChrome(m Model) rootChrome {
 	c := rootChrome{
-		footer: layout.SectionLines(renderFooter(m)),
-		status: renderStatusBar(m),
-		height: m.height,
+		footer:      layout.SectionLines(renderFooter(m)),
+		status:      renderStatusBar(m),
+		statusAbove: dashboardOwnsChrome(m),
+		height:      m.height,
 	}
 	if c.height > 0 {
 		budget := c.height - statusBarLines
@@ -285,9 +295,41 @@ func (c rootChrome) compose(body string) string {
 	for i := 0; i < paddingLines; i++ {
 		lines = append(lines, "")
 	}
-	lines = append(lines, c.footer...)
-	lines = append(lines, c.status)
+	if c.statusAbove {
+		lines = append(lines, c.status)
+		lines = append(lines, c.footer...)
+	} else {
+		lines = append(lines, c.footer...)
+		lines = append(lines, c.status)
+	}
 	return strings.Join(lines, "\n")
+}
+
+// dashboardOwnsChrome reports that the screen belongs to the dashboard — the
+// list itself, its search input, the project switcher, and every overlay raised
+// over any of them, including the full-screen inspector.
+//
+// It asks activeRootMode rather than m.mode so an overlay inherits the chrome of
+// the view it was raised from. An overlay does not redraw the bottom rows, so
+// opening the command palette over the dashboard and over Past Sessions would
+// otherwise shuffle the two rows under it in one case and not the other, which
+// is the frame moving for a reason that has nothing to do with the frame.
+func dashboardOwnsChrome(m Model) bool {
+	switch m.mode {
+	case ModeActions, ModeDetail:
+		// Neither is reachable from anywhere else and both esc back to the list,
+		// so they are dashboard overlays that happen not to record a return mode.
+		// They are named here rather than taught to activeRootMode because that
+		// answer is also what decides which root gets re-rendered underneath, and
+		// these two already answer it correctly.
+		return true
+	}
+	switch m.activeRootMode() {
+	case ModeList, ModeSearch, ModeProjectSwitcher:
+		return true
+	default:
+		return false
+	}
 }
 
 // rootBodyHeight is the body-row budget for callers that are sizing one surface

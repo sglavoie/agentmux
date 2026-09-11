@@ -4,13 +4,13 @@
   "size": { "width": 120, "height": 32 },
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
-    { "type": "contains_text", "text": "i: hide inspector" },
     { "type": "contains_text", "text": "j/k up/down" },
     { "type": "contains_text", "text": "tab switch pane" },
     { "type": "contains_text", "text": "i inspector" },
     { "type": "contains_text", "text": "? more" },
     { "type": "contains_text", "text": "Agent   claude · work" },
-    { "type": "contains_text", "text": " Sessions: 7 · 2 attention · 2 active · 3 idle" },
+    { "type": "excludes_text", "text": "i: hide inspector" },
+    { "type": "excludes_text", "text": "Sessions: 7 ·" },
     { "type": "no_layout_issues" }
   ]
 }

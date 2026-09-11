@@ -10,8 +10,10 @@
     { "type": "mode_equals", "mode": "list" },
     { "type": "contains_text", "text": "▌ api          Needs permission      —" },
     { "type": "contains_text", "text": "▌ api-feat-x   Working            3:07" },
-    { "type": "contains_text", "text": "/ to filter" },
+    { "type": "excludes_text", "text": "/ to filter" },
     { "type": "excludes_text", "text": "icons:" },
+    { "type": "contains_text", "text": "Agent Mux · Urgency · all projects" },
+    { "type": "contains_text", "text": "  j/k up/down · enter focus · a actions · : commands · / filter · ? help · tab switch pane · i inspector · ? more" },
     { "type": "no_layout_issues" }
   ]
 }

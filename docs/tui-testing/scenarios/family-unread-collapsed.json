@@ -19,7 +19,7 @@
     { "type": "excludes_text", "text": "▌   svc-legacy" },
     { "type": "excludes_text", "text": "▌   web-beta" },
     { "type": "contains_text", "text": "  ▌ tmp         Done         —" },
-    { "type": "contains_text", "text": "Sessions: 6 · 1 attention · 2 active · 3 idle" },
+    { "type": "excludes_text", "text": "Sessions: 6 ·" },
     { "type": "no_layout_issues" }
   ]
 }

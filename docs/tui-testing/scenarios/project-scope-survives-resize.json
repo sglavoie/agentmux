@@ -14,7 +14,7 @@
     { "type": "mode_equals", "mode": "project_switcher" },
     { "type": "contains_text", "text": "▌#api ✕" },
     { "type": "contains_text", "text": "›● 🔑 api" },
-    { "type": "contains_text", "text": "p: api" },
+    { "type": "contains_text", "text": "Agent Mux · Urgency · api" },
     { "type": "contains_text", "text": "Switch project: api" },
     { "type": "no_layout_issues" }
   ]

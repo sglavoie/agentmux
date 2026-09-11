@@ -66,16 +66,19 @@ func TestListFooterPaletteOrder(t *testing.T) {
 		for _, tc := range listFooterStates(t, width) {
 			t.Run(fmt.Sprintf("%s/%d", tc.name, width), func(t *testing.T) {
 				out := strings.Join(stripAnsiLines(listFooterRows(tc.m)), "\n")
-				prev := -1
+				prev, dropped := -1, ""
 				for _, frag := range shownFooterFragments(tc.m) {
 					idx := strings.Index(out, frag)
 					if idx < 0 {
-						// Below the drop point the fragment is legitimately absent;
-						// the marker is what promises it is still reachable.
-						if strings.Contains(out, footerHintMore) {
-							break
-						}
-						t.Fatalf("fragment %q missing with no overflow marker: %q", frag, out)
+						// Below the drop point the fragment is legitimately absent.
+						// What is not legitimate is a later one surviving it: the
+						// rendered row must be a PREFIX of the declared sequence, or
+						// the operator is learning a position that moves.
+						dropped = frag
+						continue
+					}
+					if dropped != "" {
+						t.Fatalf("fragment %q rendered after %q was dropped: %q", frag, dropped, out)
 					}
 					if idx <= prev {
 						t.Errorf("fragment %q out of order (idx=%d, prev=%d) in %q", frag, idx, prev, out)
@@ -119,60 +122,86 @@ func stripAnsiLines(lines []string) []string {
 	return out
 }
 
-// TestListFooterCapsHintRowsPerBand asserts the row budget each band spends:
-// exactly one row in compact, and never more than two in standard and spacious.
-// The cap is the whole point of the palette — every row the footer takes is a
-// session the list does not show — so it is asserted per state and per width
-// rather than at one representative size.
-func TestListFooterCapsHintRowsPerBand(t *testing.T) {
-	for _, width := range []int{79, 80, 119, 120, 160} {
-		want := footerHintMaxLines
-		if dashboard.BandFor(width) == dashboard.BandCompact {
-			want = 1
-		}
+// TestListFooterIsExactlyOneRowAtEveryWidth asserts the row budget the dashboard
+// spends on its footer: one, in every band and every cursor state. The cap is
+// the whole point of the palette — every row the footer takes is a session the
+// list does not show — so it is asserted per state and per width rather than at
+// one representative size.
+func TestListFooterIsExactlyOneRowAtEveryWidth(t *testing.T) {
+	for _, width := range []int{20, 40, 60, 79, 80, 119, 120, 160, 300} {
 		for _, tc := range listFooterStates(t, width) {
 			t.Run(fmt.Sprintf("%s/%d", tc.name, width), func(t *testing.T) {
 				rows := listFooterRows(tc.m)
-				if dashboard.BandFor(width) == dashboard.BandCompact {
-					if len(rows) != want {
-						t.Fatalf("compact width %d rendered %d rows, want exactly %d:\n%s", width, len(rows), want, strings.Join(rows, "\n"))
-					}
-					return
+				if len(rows) != 1 {
+					t.Fatalf("width %d rendered %d rows, want exactly 1:\n%s", width, len(rows), strings.Join(rows, "\n"))
 				}
-				if len(rows) == 0 || len(rows) > want {
-					t.Fatalf("width %d rendered %d rows, want 1..%d:\n%s", width, len(rows), want, strings.Join(rows, "\n"))
+				if got := layout.StyledWidth(rows[0]); got > width {
+					t.Fatalf("width %d rendered a %d-cell row: %q", width, got, stripAnsi(rows[0]))
 				}
 			})
 		}
 	}
 }
 
-// TestListFooterMarksOverflowWhenTruncated asserts the two-row budget is honest:
+// The row never mixes the labelled spelling with the bare-key one. A row that
+// abbreviated only the tokens it had to would make the operator re-read it to
+// find out which half changed wording, which is the cost the all-or-nothing rule
+// buys out.
+func TestListFooterFallsBackToBareKeysWholesale(t *testing.T) {
+	m := withListRows(Model{mode: ModeList, height: 24}, session.RunningSession{Base: "a", State: "bolt", Account: "w"})
+	// The narrow end of the sweep starts where the bare-key row still fits: below
+	// that the row is hard-clamped, and a clamped row has no spelling to be
+	// consistent about.
+	for _, width := range []int{26, 40, 60, 71} {
+		m.width = width
+		row := stripAnsi(listFooterRows(m)[0])
+		if strings.Contains(row, "up/down") {
+			continue // still in the labelled spelling
+		}
+		for _, labelled := range []string{"actions", "commands", "filter", "help", "focus"} {
+			if strings.Contains(row, labelled) {
+				t.Errorf("width %d: bare-key row %q kept the label %q", width, row, labelled)
+			}
+		}
+		if !strings.Contains(row, "j/k") || !strings.Contains(row, "?") {
+			t.Errorf("width %d: bare-key row %q dropped an essential key", width, row)
+		}
+	}
+}
+
+// TestListFooterMarksOverflowWhenTruncated asserts the one-row budget is honest:
 // a width that drops candidates says so, and a width wide enough for all of them
 // does not cry overflow.
+//
+// The wide case measures the unbounded row rather than naming a number, so the
+// assertion cannot rot the next time a binding joins the palette.
 func TestListFooterMarksOverflowWhenTruncated(t *testing.T) {
 	m := withListRows(Model{mode: ModeList, height: 24}, session.RunningSession{Base: "a", State: "bolt", Account: "w"})
 
 	narrow := m
-	narrow.width = 80
+	narrow.width = 100
 	out := strings.Join(stripAnsiLines(listFooterRows(narrow)), "\n")
 	if !strings.Contains(out, footerHintMore) {
-		t.Errorf("width 80 fits the whole palette in two rows? got:\n%s", out)
+		t.Errorf("width 100 fits the whole palette on one row? got:\n%s", out)
 	}
 	for _, want := range []string{"j/k up/down", "a actions", ": commands", "/ filter", "? help"} {
 		if !strings.Contains(out, want) {
-			t.Errorf("essential hint %q dropped at width 80: %q", want, out)
+			t.Errorf("essential hint %q dropped at width 100: %q", want, out)
 		}
 	}
 
+	unbounded := m
+	unbounded.width = 0
+	full := listFooterRows(unbounded)[0]
+
 	wide := m
-	wide.width = 300
+	wide.width = layout.StyledWidth(full)
 	out = strings.Join(stripAnsiLines(listFooterRows(wide)), "\n")
 	if strings.Contains(out, footerHintMore) {
-		t.Errorf("width 300 marked overflow with room to spare:\n%s", out)
+		t.Errorf("a width that fits the whole palette marked overflow:\n%s", out)
 	}
 	if !strings.Contains(out, "R resort") {
-		t.Errorf("width 300 dropped the last extra-band hint:\n%s", out)
+		t.Errorf("a width that fits the whole palette dropped the last extra-band hint:\n%s", out)
 	}
 }
 
@@ -187,12 +216,23 @@ func TestListFooterTruncationKeepsTokensWhole(t *testing.T) {
 				for _, frag := range shownFooterFragments(tc.m) {
 					whole[frag] = true
 				}
+				// The bare-key spelling is whole too: a fallback row is every
+				// surviving key and nothing partial.
+				for _, c := range listFooterPalette() {
+					if c.textFor != nil {
+						continue
+					}
+					key := c.key
+					if c.keyFor != nil {
+						key = c.keyFor(tc.m)
+					}
+					if key != "" {
+						whole[listFooterShortKey(key)] = true
+					}
+				}
 				for _, row := range stripAnsiLines(listFooterRows(tc.m)) {
 					if strings.Contains(row, "…") {
 						t.Fatalf("row was hard-clamped instead of dropped: %q", row)
-					}
-					if dashboard.BandFor(width) == dashboard.BandCompact {
-						continue // the compact row has its own abbreviated vocabulary
 					}
 					for _, tok := range strings.Split(strings.TrimSpace(row), strings.TrimSpace(footerHintSeparator)) {
 						tok = strings.TrimSpace(tok)
@@ -310,8 +350,8 @@ func TestListFooterHasNoSpacerAndZebraRowsSpanViewport(t *testing.T) {
 
 	rendered := renderFooter(m)
 	plainLines := strings.Split(stripAnsi(rendered), "\n")
-	if len(plainLines) != footerHintMaxLines {
-		t.Fatalf("expected %d capped footer rows, got %d:\n%s", footerHintMaxLines, len(plainLines), stripAnsi(rendered))
+	if len(plainLines) != 1 {
+		t.Fatalf("expected one dashboard footer row, got %d:\n%s", len(plainLines), stripAnsi(rendered))
 	}
 	for i, line := range plainLines {
 		if strings.TrimSpace(line) == "" {

@@ -6,13 +6,13 @@
     { "type": "mouse", "x": 13, "y": 0, "event": "left" },
     { "type": "mouse", "x": 13, "y": 0, "event": "left" },
     { "type": "mouse", "x": 110, "y": 0, "event": "left" },
-    { "type": "mouse", "x": 95, "y": 0, "event": "left" }
+    { "type": "key", "key": "esc" },
+    { "type": "mouse", "x": 26, "y": 0, "event": "left" }
   ],
   "assertions": [
     { "type": "mode_equals", "mode": "project_switcher" },
     { "type": "contains_text", "text": "Urgency" },
     { "type": "excludes_text", "text": "Mux · Projects" },
-    { "type": "contains_text", "text": "i: inspector" },
     { "type": "contains_text", "text": "need act idle" },
     { "type": "contains_text", "text": "›● 🔑 All projects" },
     { "type": "no_layout_issues" }

@@ -11,8 +11,10 @@
   ],
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
-    { "type": "contains_text", "text": "p: all projects" },
-    { "type": "contains_text", "text": "Sessions: 12 · 4 attention · 5 active · 3 idle" },
+    { "type": "contains_text", "text": "Agent Mux · Urgency · all projects" },
+    { "type": "contains_text", "text": "Needs you (4)" },
+    { "type": "contains_text", "text": "Running (5)" },
+    { "type": "excludes_text", "text": "Sessions: 12 ·" },
     { "type": "no_layout_issues" }
   ]
 }

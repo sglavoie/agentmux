@@ -127,19 +127,17 @@ func TestEmptyListFooterRendersWithoutPanic(t *testing.T) {
 	out := stripAnsi(renderFooter(m))
 	// The essential band must still render — the palette is fixed-order and
 	// reserves space for the row keys in their unavailable style regardless of
-	// selection. Keys below the two-row budget are omitted rather than moved,
+	// selection. Keys below the one-row budget are omitted rather than moved,
 	// and `? more` is what says so.
+	//
+	// `a actions` is the assertion's subject: on an empty list it is
+	// unavailable, and it is essential-band, so it cannot be dropped for width
+	// either. A key that is unavailable still occupies its place in the fixed
+	// order, which is what makes an availability change a restyle rather than a
+	// reflow of the row under the operator's eye.
 	for _, want := range []string{"j/k up/down", "a actions", ": commands", footerHintMore} {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected %q in empty-list footer, got:\n%s", want, out)
 		}
-	}
-	// `e peek` is the last row-targeted key inside the two-row budget at this
-	// width — the inspector's own `i` and tab's pane gloss pushed the ones below
-	// it past the cap. It is the assertion's subject for exactly that reason:
-	// a key that is unavailable still occupies its place in the fixed order, so
-	// availability changes restyle the palette rather than reflow it.
-	if !strings.Contains(out, "e peek") {
-		t.Errorf("expected the unavailable row key `e peek` to hold its slot, got:\n%s", out)
 	}
 }
