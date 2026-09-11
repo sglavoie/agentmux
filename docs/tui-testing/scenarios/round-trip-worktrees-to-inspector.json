@@ -1,0 +1,51 @@
+{
+  "name": "round-trip-worktrees-to-inspector",
+  "fixture": "paused_queue",
+  "size": {
+    "width": 120,
+    "height": 32
+  },
+  "actions": [
+    {
+      "type": "key",
+      "key": "j"
+    },
+    {
+      "type": "command",
+      "command_id": "explore.manage-worktrees"
+    },
+    {
+      "type": "key",
+      "key": "esc"
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "list"
+    },
+    {
+      "type": "selected_title",
+      "value": "alpha"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2502alpha"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2502Working \u00b7 0:42"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2502Agent   claude \u00b7 work"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2502Dir     ~/projects/alpha"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

@@ -271,7 +271,7 @@ func popupLineCount(popup string) int {
 // terminal size the model was rendered at, the active UI mode, the cursor
 // position relevant to that mode, and the normalized screen with any layout
 // issues attached — both the screen-level checks (line/height overflow, invalid
-// UTF-8) and the model-aware modal-fit issues from uitest_modal.go.
+// UTF-8) and the model-aware modal-fit issues detectModalFitIssues reports.
 type UITestObservation struct {
 	Size   UITestSize   `json:"size"`
 	Mode   string       `json:"mode"`
@@ -378,7 +378,7 @@ func uitestModeName(mode Mode) string {
 }
 
 // This file assembles a full harness snapshot of the live model: the normalized
-// screen (uitest_screen.go) with AMX-specific modal-fit issues (uitest_modal.go)
+// screen with AMX-specific modal-fit issues (detectModalFitIssues, below)
 // layered on. Keeping the composition here lets observeUITest stay a thin bridge
 // and gives the scenario runner a single entry point for "capture everything the
 // harness knows about the current frame."

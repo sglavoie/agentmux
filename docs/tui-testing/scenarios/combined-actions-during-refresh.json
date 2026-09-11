@@ -1,0 +1,53 @@
+{
+  "name": "combined-actions-during-refresh",
+  "fixture": "paused_queue",
+  "size": {
+    "width": 120,
+    "height": 32
+  },
+  "actions": [
+    {
+      "type": "key",
+      "key": "j"
+    },
+    {
+      "type": "key",
+      "key": "a"
+    },
+    {
+      "type": "tick",
+      "count": 3
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "actions"
+    },
+    {
+      "type": "contains_text",
+      "text": "Actions for alpha"
+    },
+    {
+      "type": "contains_text",
+      "text": "Health degraded"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2716 daemon down"
+    },
+    {
+      "type": "kitty_calls",
+      "op": "FocusTab",
+      "count": 0
+    },
+    {
+      "type": "kitty_calls",
+      "op": "CloseTab",
+      "count": 0
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

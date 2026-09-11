@@ -317,11 +317,14 @@ func TestCrossModeDetailAndOverlayHeadersPadEmojiIconColumn(t *testing.T) {
 // dashboard view (body + footer + status bar) for the canonical fixture
 // and confirms every row including the status row fits the viewport.
 //
-// The icon legend strip is intentionally allowed to remain a single
-// 102-cell line — that is a pre-existing layout decision flagged by
-// Sessions 4-7 and out of scope for the width-policy enforcement sweep.
-// To exercise narrow widths without tripping on the legend we render at
-// height 18 (one below legendMinHeight) so the legend is suppressed.
+// The height of 18 below is a leftover of the surface this test was written
+// against: the icon legend strip was one 102-cell line that no narrow width
+// could shrink, and 18 rows was where it stopped being drawn. The strip is
+// retired — the reference is generated into the help overlay now — so nothing
+// is being suppressed any more and the height is simply an ordinary short
+// terminal. It is kept rather than raised because a short viewport is the case
+// where the footer and status bar have least room to fit in, which is what this
+// test measures.
 func TestCrossModeFooterAndStatusBarWidthAcrossFixture(t *testing.T) {
 	var running []session.RunningSession
 	for i, tc := range emojiTitleFixture {

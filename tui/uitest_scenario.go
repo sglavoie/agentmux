@@ -630,11 +630,12 @@ const (
 	UITestIssueScreenHeightOverflow UITestLayoutIssueType = "screen_height_overflow"
 	// UITestIssueModalWidthOverflow marks a modal whose natural content is
 	// wider than the width the box was forced to render at, so root
-	// composition squeezes or reflows it (see uitest_modal.go).
+	// composition squeezes or reflows it (see detectModalFitIssues in
+	// uitest_screen.go).
 	UITestIssueModalWidthOverflow UITestLayoutIssueType = "modal_width_overflow"
 	// UITestIssueModalHeightOverflow marks a modal whose rendered height
 	// exceeds the body area root composition gives it, so trailing rows are
-	// dropped (see uitest_modal.go).
+	// dropped (see detectModalFitIssues in uitest_screen.go).
 	UITestIssueModalHeightOverflow UITestLayoutIssueType = "modal_height_overflow"
 	// UITestIssueModalClippedByRoot marks a modal that fits by intrinsic size
 	// but is pushed past the body area by its placement offset (e.g. the

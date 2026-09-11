@@ -1,0 +1,75 @@
+{
+  "name": "combined-reorder-while-paused",
+  "fixture": "paused_queue",
+  "size": {
+    "width": 120,
+    "height": 32
+  },
+  "actions": [
+    {
+      "type": "key",
+      "key": "j"
+    },
+    {
+      "type": "key",
+      "key": "tab"
+    },
+    {
+      "type": "key",
+      "key": "k"
+    },
+    {
+      "type": "key",
+      "key": "k"
+    },
+    {
+      "type": "key",
+      "key": "k"
+    },
+    {
+      "type": "command",
+      "command_id": "explore.toggle-list-view"
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "list"
+    },
+    {
+      "type": "contains_text",
+      "text": "Agent Mux \u00b7 Projects"
+    },
+    {
+      "type": "selected_title",
+      "value": "alpha"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2500\u2500 Paused \u2500\u2500"
+    },
+    {
+      "type": "contains_text",
+      "text": "output line 38"
+    },
+    {
+      "type": "excludes_text",
+      "text": "output line 60"
+    },
+    {
+      "type": "excludes_text",
+      "text": "Needs you (1)"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2022 \u258c charlie        Done         \u2014"
+    },
+    {
+      "type": "contains_text",
+      "text": "  \u258c alpha          Working   0:42"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

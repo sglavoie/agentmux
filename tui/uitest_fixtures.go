@@ -36,10 +36,9 @@ import (
 // selection is explicit and discoverable so later CLI work can list and address
 // them by name.
 //
-// The larger fixtures live beside this one: worktrees in
-// uitest_fixtures_worktrees.go and agent-session-loop runs in
-// uitest_fixtures_asl.go. The recording Kitty client they are all served
-// through is in uitest_kitty_client.go.
+// The builder map below is the whole inventory; the fixtures the redesign added
+// live beside it in uitest_fixtures_redesign.go. The recording Kitty client they
+// are all served through is at the bottom of this file.
 
 // uitestFixture is a deterministic, self-contained data source for a harness
 // run: a prepared config plus the Kitty windows a no-op client should report,
@@ -92,6 +91,18 @@ type uitestFixture struct {
 	// a time, and a fixture that varied by window would be asserting on which
 	// window was asked — which the recording client already captures.
 	Text string
+	// TextFailures makes the first N reads fail instead of answering with Text,
+	// standing in for a `kitten @ get-text` against a window that is gone or a
+	// socket that is not answering yet. It is a count rather than a flag because
+	// the interesting property is recovery: a scenario that only ever failed
+	// could not tell "the pane reports the error" from "the pane is stuck on it",
+	// and the count is what lets a later read in the same run succeed.
+	//
+	// A failure is per read, not per target. Reads are counted in the order they
+	// reach the client, so a fixture wanting the very first paint to fail sets
+	// 1 and every read after it — a reopened inspector, a moved cursor, a poll
+	// that landed — answers with Text.
+	TextFailures int
 	// Health stands in for one daemon/hook health refresh. A nil Health leaves
 	// the hermetic default in place — nothing checked, which reads as a daemon
 	// that is down — so only a fixture with something else to say carries one.
@@ -184,6 +195,9 @@ var uitestFixtureBuilders = map[string]func() uitestFixture{
 	"paused_output":      pausedOutputFixture,
 	"health_states":      healthStatesFixture,
 	"attention_overlap":  attentionOverlapFixture,
+	"no_sessions":        noSessionsFixture,
+	"paused_queue":       pausedQueueFixture,
+	"preview_failure":    previewFailureFixture,
 }
 
 // uitestPreviewDefaults is the Preview block config.Load fills in for an
@@ -354,7 +368,8 @@ func actionsFixture() uitestFixture {
 // run whose supervisor has handed a mailbox question to the user (❓🔁) and a
 // sibling run still working (⚡🔁). It exists so scenarios can exercise the
 // human-actionable presentation — attention grouping, the "awaiting response"
-// gloss, and the `]q` jump — without a daemon painting the state.
+// gloss, and the `n`/`N` jump that replaced the retired `]q` chord — without a
+// daemon painting the state.
 func aslQuestionFixture() uitestFixture {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},

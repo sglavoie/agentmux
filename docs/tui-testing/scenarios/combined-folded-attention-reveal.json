@@ -1,0 +1,59 @@
+{
+  "name": "combined-folded-attention-reveal",
+  "fixture": "family_unread",
+  "size": {
+    "width": 120,
+    "height": 32
+  },
+  "actions": [
+    {
+      "type": "command",
+      "command_id": "explore.toggle-list-view"
+    },
+    {
+      "type": "key",
+      "key": "k"
+    },
+    {
+      "type": "key",
+      "key": "enter"
+    },
+    {
+      "type": "key",
+      "key": "n"
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "list"
+    },
+    {
+      "type": "selected_title",
+      "value": "svc-review"
+    },
+    {
+      "type": "contains_text",
+      "text": "  \u258c \u25be \ud83d\uded1 svc  1 attention \u00b7 1 active \u00b7 1 idle"
+    },
+    {
+      "type": "excludes_text",
+      "text": "\u25b8 \ud83d\uded1 svc"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2502svc-review"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2502\u2022 Done \u00b7 \u2014"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2502Dir     ~/projects/worktrees/svc-review"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

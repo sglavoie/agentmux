@@ -1,0 +1,51 @@
+{
+  "name": "edge-filter-matches-nothing",
+  "fixture": "paused_queue",
+  "size": {
+    "width": 120,
+    "height": 32
+  },
+  "actions": [
+    {
+      "type": "key",
+      "key": "/"
+    },
+    {
+      "type": "text",
+      "text": "zzz"
+    },
+    {
+      "type": "key",
+      "key": "enter"
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "list"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u258c/zzz \u2715"
+    },
+    {
+      "type": "contains_text",
+      "text": "No sessions match the active filter."
+    },
+    {
+      "type": "contains_text",
+      "text": "press  esc  to clear filters     press  ?  for all keys"
+    },
+    {
+      "type": "excludes_text",
+      "text": "No running sessions."
+    },
+    {
+      "type": "excludes_text",
+      "text": "alpha"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

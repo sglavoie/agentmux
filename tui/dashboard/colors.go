@@ -25,9 +25,10 @@ func ProfileColorMap(cfg *config.Config) map[string]string {
 // so the color stays stable across profile overrides.
 //
 // The queue row is no longer one of its readers — a session row carries no
-// harness cell to color, and the selected row's harness is named inside the
-// detail strip's single identity span. What is left is the launcher, which
-// still tells harnesses apart by color while choosing one.
+// harness cell to color, and the selected row's harness is named on the
+// inspector's Agent line, which is uncolored alongside the rest of the metadata
+// block. What is left is the launcher, which still tells harnesses apart by
+// color while choosing one.
 func HarnessColorMap(cfg *config.Config) map[string]string {
 	if cfg == nil {
 		return map[string]string{}

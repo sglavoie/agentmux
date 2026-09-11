@@ -10,9 +10,9 @@ import (
 
 // ageWarningGlyph is appended to the activity text once the time since the
 // last hook event has crossed the 80% warning band. A trailing glyph rather
-// than a color: the text it qualifies is rendered inside the detail strip's
-// single identity span, and a second color inside that span would break it in
-// two for a fact the glyph already carries.
+// than a color: the text it qualifies is the value half of the inspector's
+// Watch line, and the metadata block is uncolored throughout, so a color here
+// would be the one thing in it shouting for a fact the glyph already carries.
 const ageWarningGlyph = "⏳"
 
 // FormatAge returns the detail pane's age label for a single watchdog entry:

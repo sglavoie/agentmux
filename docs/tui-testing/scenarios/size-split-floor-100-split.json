@@ -1,0 +1,36 @@
+{
+  "name": "size-split-floor-100-split",
+  "fixture": "paused_queue",
+  "size": {
+    "width": 99,
+    "height": 32
+  },
+  "actions": [
+    {
+      "type": "resize",
+      "width": 100,
+      "height": 32
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "list"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2502charlie"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2502Agent   codex \u00b7 personal"
+    },
+    {
+      "type": "contains_text",
+      "text": "    Needs you (1)"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

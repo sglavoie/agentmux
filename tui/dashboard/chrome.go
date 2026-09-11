@@ -34,6 +34,13 @@ var (
 	styleAttentionRow    = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
 	styleEmptyHero       = lipgloss.NewStyle().Bold(true)
 
+	// styleHeroKey paints the keys inside the empty hero's hint. It is the
+	// footer's key color deliberately: the hero names two of the same bindings
+	// the footer names, and an operator who has learned to look for teal in the
+	// bottom row should not have to learn a second spelling for the middle of
+	// the screen.
+	styleHeroKey = lipgloss.NewStyle().Foreground(lipgloss.Color("#4ec9b0")).Bold(true)
+
 	// stylePreviewError colors the inline error the scrollback preview pane
 	// renders when a capture fails.
 	stylePreviewError = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))

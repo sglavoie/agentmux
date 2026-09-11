@@ -19,8 +19,7 @@
 // and mute indicators, the supervision marker, the state icon, the blocked-reason
 // tag, the profile cell, the harness cell, the branch column, and the directory
 // are all gone from the row. They are not lost: they are the selected session's
-// context, and they live in the detail strip until the session 6 inspector takes
-// them over.
+// context, and the session inspector is where they live.
 
 package dashboard
 
@@ -320,7 +319,7 @@ func padLeft(text string, width int) string {
 
 // harnessLabel returns the lowercase harness display name, or "" when the
 // harness is unknown or empty. The queue row no longer carries a harness cell;
-// this survives for the selected-session context the detail strip renders.
+// this survives for the selected-session context the inspector renders.
 func harnessLabel(h string) string {
 	switch strings.ToLower(h) {
 	case "claude":

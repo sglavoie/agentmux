@@ -1,0 +1,35 @@
+{
+  "name": "edge-cold-daemon-after-refresh",
+  "fixture": "paused_queue",
+  "size": {
+    "width": 120,
+    "height": 32
+  },
+  "actions": [
+    {
+      "type": "tick",
+      "count": 3
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "list"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2716 daemon down"
+    },
+    {
+      "type": "excludes_text",
+      "text": "\u25cb checking health"
+    },
+    {
+      "type": "contains_text",
+      "text": "    Needs you (1)"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

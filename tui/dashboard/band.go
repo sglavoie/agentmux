@@ -3,15 +3,18 @@
 //
 // It is deliberately a classifier and nothing else. It reads a width and names
 // a band; it does not know what a row is, what chrome costs, or which fields a
-// band drops. Keeping it pure is what lets the row allocator, the selected-item
-// detail strip, the legend gate, and the footer all be responsive to the *same*
-// three presets instead of each rediscovering the boundaries with its own
-// inequality — the failure mode where a pane calls itself narrow while the
-// footer under it still thinks it is wide.
+// band drops. Keeping it pure is what let the surfaces that once asked it — the
+// row allocator, the selected-item detail strip, the legend gate, and the
+// footer — all be responsive to the *same* three presets instead of each
+// rediscovering the boundaries with its own inequality, the failure mode where a
+// pane calls itself narrow while the footer under it still thinks it is wide.
+// The redesign retired every one of those readers but the last, so the band is
+// now a footer input and nothing else; it is kept a classifier because what made
+// it shareable is what would make it shareable again.
 //
 // Which width to hand it is the other half of the contract: root chrome — the
-// legend, the footer, the header — takes the terminal width, because that is the
-// surface it is drawn on.
+// footer, the header — takes the terminal width, because that is the surface it
+// is drawn on.
 //
 // The session row is no longer one of its callers, and that is the point of the
 // queue redesign rather than an omission. A band is a step function, so the same
@@ -29,7 +32,7 @@ type Band int
 
 const (
 	// BandCompact is a pane with no room for anything optional: the footer shows
-	// its shortest key set and the legend is suppressed entirely.
+	// its shortest key set, the bare-key spelling with no labels.
 	BandCompact Band = iota
 	// BandStandard is the ordinary terminal, and the band an unmeasured width
 	// reports.

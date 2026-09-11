@@ -410,36 +410,6 @@ func dashboardSplitWidths(m Model) (listWidth, inspectorWidth int, ok bool) {
 	return m.width - inspectorWidth - inspectorDividerCols, inspectorWidth, true
 }
 
-// dashboardBaseListPaneWidth returns the width the list column is laid out at,
-// and therefore the width its band is judged from. Width-only, for the reason
-// dashboardSplitWidths documents.
-//
-// A short terminal can still drop the split after this returns, which leaves the
-// list wider than the band it was charged for. That direction is safe — a row
-// drawn for a narrower band in a wider column is merely less dense than it could
-// be — and it is the price of the loop staying open.
-func dashboardBaseListPaneWidth(m Model) int {
-	if m.inspectorFullScreenActive() {
-		return 0
-	}
-	if listWidth, _, ok := dashboardSplitWidths(m); ok {
-		return listWidth
-	}
-	if m.width < 0 {
-		return 0
-	}
-	return m.width
-}
-
-// dashboardListPaneWidth is the width the queue column is drawn at. It is the
-// base width outright: the dashboard body is the queue and the inspector, and
-// nothing else claims a column beside them. The project scopes the vertical rail
-// used to spend twenty of these columns on are an overlay now, which costs the
-// list no width at all.
-func dashboardListPaneWidth(m Model) int {
-	return dashboardBaseListPaneWidth(m)
-}
-
 // dashboardGeometry lays the body out: the queue column, and the inspector pane
 // in whichever of its two forms the terminal admits. Every height term the
 // renderer will spend is subtracted here once — the chrome above the list, the

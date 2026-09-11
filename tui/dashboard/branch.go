@@ -15,8 +15,8 @@ import (
 //
 // The queue row no longer draws it: a row is Session / Status / Time, and where a
 // session is belongs to the selected session's context. Two callers remain — the
-// detail strip, which spends its second line on the branch and the directory
-// together, and the name disambiguator, which reaches for the branch first when
+// session inspector, which gives it a labelled Branch line of its own beside the
+// directory, and the name disambiguator, which reaches for the branch first when
 // two live sessions show the same title. Neither reserves a column, so there is
 // no cap here any more: a long branch costs the one line it is drawn on rather
 // than every row in the view.

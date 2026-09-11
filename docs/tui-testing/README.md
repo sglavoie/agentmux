@@ -53,7 +53,8 @@ The harness therefore inspects each open modal's own natural geometry
   index, transcript index, or daemon socket.
 - **Normalized observations**: each step's screen is ANSI-stripped, measured by
   display cells, and annotated with any detected layout issues.
-- **Modal-fit detection** (`tui/uitest_modal.go`): renders the active modal at a
+- **Modal-fit detection** (`detectModalFitIssues`, in `tui/uitest_screen.go`):
+  renders the active modal at a
   large viewport to recover its pre-clamp natural size, then compares against
   what root composition actually gave it.
 
@@ -78,7 +79,10 @@ amx tui-test list-fixtures
 # duplicate_names
 # family_unread
 # health_states
+# no_sessions
 # paused_output
+# paused_queue
+# preview_failure
 # project_families
 # run_timers
 # triage_integration
@@ -122,14 +126,17 @@ amx tui-test fixture wide_profiles --width 140 --key C
 | --- | --- | --- |
 | `basic` | two Claude work projects + a Codex personal project | realistic multi-profile dashboard baseline |
 | `actions` | one session with a very long title | stresses the actions overlay box width |
-| `asl_question` | `basic` with a human-actionable `❓🔁` supervisor handoff and a `⚡🔁` active run | ASL handoff presentation: attention grouping, gloss, `]q` jump |
+| `asl_question` | `basic` with a human-actionable `❓🔁` supervisor handoff and a `⚡🔁` active run | ASL handoff presentation: attention grouping, gloss, and the `n`/`N` jump that replaced the retired `]q` chord |
 | `asl_runs` | four supervisor runs spanning exact, ambiguous, second-exact, and unbound live sessions | Runs view focus outcomes and binding presentation |
 | `attention_overlap` | rows carrying several claims on the operator at once — blocked-and-unread, failed-and-unread, looping-and-asking-and-unread — beside a single-reason unread row and a recoverable tool warning | simultaneous attention reasons: that a row can want the operator for more than one reason, that its Status column names only one of them, and that a tool warning stays in Running rather than joining them |
 | `blocked_reasons` | four blocked rows — two `🔑`, two `❓` — carrying a Codex permission kind, a Claude permission kind, a request-for-input kind, and no kind at all | the Status column: two harnesses' distinct kind strings both reading `Needs permission`, a request for input reading `Needs input`, and an unlabelled blocked row reading `Awaiting reply` rather than going blank |
 | `duplicate_names` | three colliding row names, each pair separated by exactly one thing — only the branch, only the profile, only the session identity — plus one name that occurs once | name disambiguation: each rung of the branch/worktree → profile → stable-identifier ladder in isolation, and the uncollided row a live-set-driven rename must leave alone |
 | `family_unread` | a three-checkout family holding one unread `🛑` beside a seen `🛑` and an `⚡`, a second family with nothing unread, and an unfamilied seen `🛑` | the unread-completion marker inside a family: which row the `•` lands on when the family is folded versus unfolded, that a seen sibling never earns one, and that a family with no unread member stays unmarked in both folds |
 | `health_states` | a live daemon whose hook files are in all three states at once — one profile in sync, one drifted, one missing | health presentation: the degradation that is NOT a dead daemon, which is the only health state the hermetic default cannot produce |
+| `no_sessions` | a configured operator with two projects and no live windows at all | the empty hero, which is a different sentence from the filtered one and unreachable from any populated fixture |
 | `paused_output` | one working session whose scrollback is longer than any pane the fixture's size can draw, numbered `output line 01`…`40` | the inspector's follow/hold split: a numbered buffer where following the tail and holding a scrolled position render visibly different lines |
+| `paused_queue` | five rows spanning all three urgency bands — two working, an unread stop, a seen stop, and a working row with a non-ASCII name and an over-long directory — over a 60-line numbered scrollback, with destructive confirmation turned on | combined runs: a list that can be reordered or refiltered underneath a held inspector, round trips that return to the session inspector, and the only fixture that reaches the confirmation prompt |
+| `preview_failure` | two working rows sharing a 40-line numbered scrollback whose first read fails and whose every read after it succeeds | the inspector's failed-read state and, more importantly, its recovery — that the pane reports the error without latching on it |
 | `project_families` | two multi-checkout repository families whose members span all three urgency buckets, plus a single-checkout family and a row belonging to no family | the Projects view: summaries, fold/unfold, the singleton that earns no summary, the unfamilied leaf, the project card, and count semantics under a filter |
 | `run_timers` | five busy stretches: sub-minute, multi-minute, hours-long, warning-band, and idle | per-row run timer formatting bands and the `⏳` watchdog warning |
 | `triage_integration` | twelve sessions spanning every triage severity rank, zero/equal/distinct presentation timestamps, eleven canonical project labels, and `Client Portal`/`client portal` across profiles and repository identities | release-level ordering, case-insensitive project aggregation, quoted filtering, contextual completion, and project-switcher scrolling and contextual tallies |
@@ -165,9 +172,9 @@ default.
 A fixture may likewise supply the repository-family identity discovery stamps
 onto each row. That stamp normally comes from a Git probe against a directory
 on disk, so a multi-checkout family could otherwise only be built out of real
-temporary repositories — whose paths would then appear in the directory column,
-in the detail strip, and in the project card, which is exactly what a committed
-scenario cannot assert against. `project_families` is the fixture that supplies
+temporary repositories — whose paths would then appear in the inspector's `Dir`
+line and in the project card, which is exactly what a committed scenario cannot
+assert against. `project_families` is the fixture that supplies
 it. Unlike the daemon-state block, a supplied family map is **authoritative for
 every discovered row**, not a patch over what discovery produced: a window it
 does not name has its family fields cleared. That is the only way to express
@@ -190,6 +197,24 @@ rows have distinct timestamps. Its case variants intentionally use different
 profiles and repository-family keys, proving that project completion and the
 project switcher aggregate by operator-facing label rather than by either
 implementation identity.
+
+### Reads that fail
+
+A fixture may also declare that its first `N` pane reads fail rather than
+answering with its scrollback, which is what a `kitten @ get-text` against a
+window that has gone away or a socket that is not answering yet looks like from
+the inspector's side. It is a count rather than a flag because the property
+worth committing a scenario to is recovery: a fixture that failed forever could
+only ever show that the pane *reports* an error, never that it can stop
+reporting one. Failures are counted per read in the order the reads reach the
+client, not per target, so a fixture that sets `1` fails the opening paint and
+answers every later read — a reopened inspector, a moved cursor — normally.
+
+The error sentence is fixed rather than generated, because scenarios assert on
+the line the inspector paints and a message that varied by run would make that
+assertion untestable. `preview_failure` is the fixture that uses this, and the
+pair of scenarios over it is the point: one asserts the error is on screen, the
+other asserts it is gone after a second read.
 
 ### Asserting the unread-completion marker
 
@@ -310,6 +335,7 @@ so it remains part of the attended live checklist in `docs/acceptance.md`.
 | `type` | Fields | Passes when |
 | --- | --- | --- |
 | `no_layout_issues` | — | the final screen has no layout issues attached |
+| `excludes_layout_issue` | `value` | the final screen has no layout issue of the type named by `value` — the narrow form, for a scenario that deliberately provokes one issue and must still forbid another. An unknown issue type fails validation rather than passing vacuously |
 | `contains_text` | `text` | the final screen contains `text` |
 | `excludes_text` | `text` | the final screen does not contain `text` |
 | `mode_equals` | `mode` | the active UI mode equals `mode` |
@@ -319,9 +345,12 @@ so it remains part of the attended live checklist in `docs/acceptance.md`.
 | `kitty_calls` | `op`, `count` | recorded Kitty calls for `op` match `count` (exactly, when set) or number at least one (when `count` is omitted) |
 
 **Mode names**: `list`, `search`, `confirm`, `picker`, `config_picker`,
-`help`, `detail`, `actions`, `session_search`, `session_view`,
+`help`, `health`, `detail`, `actions`, `session_search`, `session_view`,
 `delete_choice`, `chip_picker`, `message_detail`, `plan_search`, `plan_view`,
-`worktrees`, and `command_palette`.
+`worktrees`, `live_session_picker`, `asl_runs`, `asl_response`,
+`project_switcher`, and `command_palette`. An unmapped mode reports `unknown`
+rather than a bare integer, so a `mode_equals` assertion against a mode nobody
+named fails visibly.
 
 **Kitty `op` names** recorded by the no-op client: `LaunchTab`,
 `LaunchOverlay`, `CloseTab`, `MoveTab`, `SetTabColor`, `SetTabTitle`,
@@ -391,10 +420,10 @@ file. The exact inventory is:
 
 | File | Fixture | Covers |
 | --- | --- | --- |
-| [`baseline-layout.json`](scenarios/baseline-layout.json) | `basic` | the default wide dashboard draws one-line Session/Status/Time rows whose opening cell is the name — no tab number, no profile cell, no harness badge — with the selected row's identity carried by the detail strip |
+| [`baseline-layout.json`](scenarios/baseline-layout.json) | `basic` | the default wide dashboard draws one-line Session/Status/Time rows whose opening cell is the name — no tab number, no profile cell, no harness badge — with the selected row's identity — its agent, profile, and directory — carried by the inspector beside the list |
 | [`actions-popup-fit.json`](scenarios/actions-popup-fit.json) | `actions` | actions overlay fits after pressing `a` on a long-titled session |
 | [`asl-abort-confirmation-fit.json`](scenarios/asl-abort-confirmation-fit.json) | `asl_runs` | `a` confirms an abort against the captured run and states the 120-second grace and its degrade-to-stop behavior |
-| [`asl-question-pending-narrow-fit.json`](scenarios/asl-question-pending-narrow-fit.json) | `asl_question` | a human-actionable ASL handoff leads Needs you in a compact pane, reading `Awaiting reply` in its Status column while the `🔁` supervision marker has moved into the detail strip and the `awaiting response` gloss is gone with the rest of the wide footer |
+| [`asl-question-pending-narrow-fit.json`](scenarios/asl-question-pending-narrow-fit.json) | `asl_question` | a human-actionable ASL handoff leads Needs you in a compact pane, reading `Awaiting reply` in its Status column while the `🔁` supervision marker is off screen entirely — 30 cells is below the split floor, so there is no inspector to carry it — and the `awaiting response` gloss is gone with the rest of the wide footer |
 | [`asl-question-pending-wide.json`](scenarios/asl-question-pending-wide.json) | `asl_question` | `n` walks back from an unrelated row to the human-actionable ASL handoff, whose row carries only its name, `Awaiting reply`, and a time — the `🔁` belongs to the strip and the `❓` gloss to the footer |
 | [`asl-response-live-wide.json`](scenarios/asl-response-live-wide.json) | `asl_runs` | `r` opens the live response form with an answer editor, the Reply/Continue/Pause buttons, and the multiple-question counter |
 | [`asl-response-paused-narrow-fit.json`](scenarios/asl-response-paused-narrow-fit.json) | `asl_runs` | a paused run's form offers only reply-and-resume and still fits a narrow terminal while typing |
@@ -405,11 +434,17 @@ file. The exact inventory is:
 | [`band-boundary-80-standard.json`](scenarios/band-boundary-80-standard.json) | `project_families` | exactly at 80 nothing in the chrome moves: the same header line and the same essentials footer, with the retired `/ to filter` hint and the spacious legend both gone for good |
 | [`band-boundary-119-standard.json`](scenarios/band-boundary-119-standard.json) | `project_families` | one cell below the spacious band the rows are unchanged again, the icon legend is gone for good, and the footer has already bought `tab switch pane` and `i inspector` |
 | [`band-boundary-120-spacious.json`](scenarios/band-boundary-120-spacious.json) | `project_families` | exactly at 120 the reclaimed cell buys nothing — the legend is retired, so the header and footer match 119 exactly while the queue rows stay identical to all three narrower bands |
-| [`blocked-reason-column-narrow-fit.json`](scenarios/blocked-reason-column-narrow-fit.json) | `blocked_reasons` | every blocked kind reads as a whole Status phrase at a width too narrow to keep the Time column, with the profile and harness left to the two-line detail strip |
+| [`blocked-reason-column-narrow-fit.json`](scenarios/blocked-reason-column-narrow-fit.json) | `blocked_reasons` | every blocked kind reads as a whole Status phrase at a width too narrow to keep the Time column, with the profile, harness, and directory nowhere on screen — that width is below the split floor, so nothing is left to carry them |
 | [`blocked-reason-column-wide.json`](scenarios/blocked-reason-column-wide.json) | `blocked_reasons` | a Codex and a Claude permission prompt both read `Needs permission`, a request for input reads `Needs input`, an unlabelled blocked row reads `Awaiting reply`, and no raw prompt kind reaches the screen |
-| [`branch-column-narrow-fit.json`](scenarios/branch-column-narrow-fit.json) | `worktree_branches` | at 66 cells the detail strip is still what tells the selected checkout from its sibling, because the branch and directory belong to no row at any width |
+| [`branch-column-narrow-fit.json`](scenarios/branch-column-narrow-fit.json) | `worktree_branches` | at 66 cells no branch is on screen at all: the branch and directory belong to no row at any width, and this width is below the split floor, so the inspector that would carry them is gone and the two checkouts are told apart by name alone |
 | [`branch-column-unreserved.json`](scenarios/branch-column-unreserved.json) | `worktree_branches` | filtering down to the non-repository row leaves no branch anywhere, so the strip's second line is the bare directory rather than a dangling separator |
 | [`branch-column-wide.json`](scenarios/branch-column-wide.json) | `worktree_branches` | the branch is the inspector's, not the row's: only the selected worktree's `amx/feat-x` is on screen, and its siblings' branches are nowhere |
+| [`combined-actions-during-refresh.json`](scenarios/combined-actions-during-refresh.json) | `paused_queue` | three refresh ticks under an open actions overlay leave the overlay open on the row it was opened for: the refresh reaches only the chrome behind it — the health reading goes cold — and neither the refresh nor the captured overlay touches a Kitty tab |
+| [`combined-filter-then-resize.json`](scenarios/combined-filter-then-resize.json) | `paused_queue` | an applied `@work` chip survives narrowing to 80 cells and widening back: the same three rows, the same selection, the chip still in the header, and the inspector's metadata redrawn whole once the split floor is cleared again |
+| [`combined-folded-attention-reveal.json`](scenarios/combined-folded-attention-reveal.json) | `family_unread` | `n` reaches an attention row folded inside a collapsed family, unfolding it on the way, and the inspector swaps from the family card back to the session inspector for the checkout it landed on |
+| [`combined-preview-read-failure.json`](scenarios/combined-preview-read-failure.json) | `preview_failure` | a failed read paints `error: kitty read failed` where the buffer would be, with none of the scrollback on screen, while the metadata block above the divider still names the session the read was for |
+| [`combined-preview-read-recovery.json`](scenarios/combined-preview-read-recovery.json) | `preview_failure` | hiding and reopening the inspector re-reads the same pane, the second read succeeds, and the tail of the numbered buffer replaces the error — the pane recovers rather than latching on the failure |
+| [`combined-reorder-while-paused.json`](scenarios/combined-reorder-while-paused.json) | `paused_queue` | a held inspector keeps its scrolled position while the view toggle rebuilds the queue underneath it into family order: the `── Paused ──` marker and the same buffer line survive a reorder that moves every row on screen |
 | [`command-action-by-name.json`](scenarios/command-action-by-name.json) | `basic` | three `command` actions reach Plans, the worktree inventory, and a live Kitty focus by capability name, each leaving the palette closed behind it |
 | [`command-palette-execute-help.json`](scenarios/command-palette-execute-help.json) | `basic` | palette search executes the safe keyboard-help transition without Kitty mutations |
 | [`command-palette-filter.json`](scenarios/command-palette-filter.json) | `basic` | printable text filters the palette to the matching plans command |
@@ -421,6 +456,11 @@ file. The exact inventory is:
 | [`config-picker-selection-transition.json`](scenarios/config-picker-selection-transition.json) | `wide_profiles` | `l` → `C` → `down` restores the old colored profile row and keeps the new selection within the modal |
 | [`contextual-help-from-session-view.json`](scenarios/contextual-help-from-session-view.json) | `basic` | `?` opens the generated keymap over the truncated transcript viewer, which stays as the backdrop |
 | [`duplicate-names-collisions.json`](scenarios/duplicate-names-collisions.json) | `duplicate_names` | conditional disambiguation: each colliding pair is separated by exactly the thing that differs — `(main)`/`(amx/feat-x)`, `(work)`/`(personal)`, `(#51)`/`(#61)` — and the name that occurs once is left bare |
+| [`edge-cold-daemon-after-refresh.json`](scenarios/edge-cold-daemon-after-refresh.json) | `paused_queue` | refresh ticks against an unreachable daemon settle on `✖ daemon down` rather than staying on the provisional `○ checking health`, and the rows keep rendering from what the fixture supplied |
+| [`edge-filter-matches-nothing.json`](scenarios/edge-filter-matches-nothing.json) | `paused_queue` | a chip that matches nothing reaches the filtered hero — `esc  to clear filters`, not `l  to launch` — with the chip still in the header and no row text behind it |
+| [`edge-long-metadata-truncation.json`](scenarios/edge-long-metadata-truncation.json) | `paused_queue` | a non-ASCII name beside ASCII ones keeps the Status and Time cells aligned, and a directory too long for the pane truncates to `…` in the inspector's Dir line rather than wrapping it |
+| [`edge-single-session.json`](scenarios/edge-single-session.json) | `wide_profiles` | one session is a list of one: a single `Running (1)` heading with neither other bucket printed, and the inspector on the only row there is |
+| [`edge-zero-sessions.json`](scenarios/edge-zero-sessions.json) | `no_sessions` | nothing running at all reaches the other hero — `l  to launch` — and the inspector reads `(no session selected)` rather than going blank |
 | [`family-unread-collapsed.json`](scenarios/family-unread-collapsed.json) | `family_unread` | folding the family moves the unread child's marker onto the summary, which reports the family's own tally while its members — read and unread alike — are hidden, and the family with nothing unread stays unmarked beside it |
 | [`family-unread-expanded.json`](scenarios/family-unread-expanded.json) | `family_unread` | unfolding clears the summary's marker and puts exactly one `•` on the unread checkout, leaving its seen and active siblings aligned underneath |
 | [`footer-cap-79-compact-fit.json`](scenarios/footer-cap-79-compact-fit.json) | `project_families` | one cell below the standard band the single row still spells all six essentials in full and offers no `? more`, because the labelled row fits and nothing above it was dropped |
@@ -466,16 +506,33 @@ file. The exact inventory is:
 | [`plan-search-sort-rebind.json`](scenarios/plan-search-sort-rebind.json) | `basic` | `o` cycles the Plans sort order and the footer advertises `o sort`, not `s sort` |
 | [`plan-view-fit.json`](scenarios/plan-view-fit.json) | `basic` | plan viewer read-error line wraps to width after Plans is opened by name and `enter` selects a row |
 | [`plan-view-narrow-fit.json`](scenarios/plan-view-narrow-fit.json) | `basic` | plan viewer remains bounded at narrow width |
+| [`round-trip-actions-to-inspector.json`](scenarios/round-trip-actions-to-inspector.json) | `paused_queue` | `a` then `esc` closes the actions overlay back onto the inspector without having acted: the overlay is gone, the row is still selected, and no tab was closed |
+| [`round-trip-confirmation-cancel-to-inspector.json`](scenarios/round-trip-confirmation-cancel-to-inspector.json) | `paused_queue` | a cancelled close confirmation returns the same way — the prompt is gone, the inspector is back on the same row, and the tab the prompt named is still open |
+| [`round-trip-health-to-family-card.json`](scenarios/round-trip-health-to-family-card.json) | `family_unread` | the health details overlay over a selected family summary, dismissed, restores the family card whole |
+| [`round-trip-help-to-family-card.json`](scenarios/round-trip-help-to-family-card.json) | `family_unread` | the same round trip through the generated keymap |
+| [`round-trip-history-to-inspector.json`](scenarios/round-trip-history-to-inspector.json) | `paused_queue` | the same round trip through Past Sessions |
+| [`round-trip-launcher-to-inspector.json`](scenarios/round-trip-launcher-to-inspector.json) | `paused_queue` | opening the launcher by capability name and dismissing it returns to the dashboard with the same row selected and the session inspector redrawn whole — name, state and timer, agent, and directory |
+| [`round-trip-plans-to-family-card.json`](scenarios/round-trip-plans-to-family-card.json) | `family_unread` | the other inspector presentation: Plans opened over a selected family summary and dismissed restores the family card, its bucket tally, branch count, and member list included |
+| [`round-trip-runs-to-family-card.json`](scenarios/round-trip-runs-to-family-card.json) | `family_unread` | the same round trip through Runs |
+| [`round-trip-worktrees-to-inspector.json`](scenarios/round-trip-worktrees-to-inspector.json) | `paused_queue` | the same round trip through the managed-worktree inventory |
 | [`run-timer-drop-order.json`](scenarios/run-timer-drop-order.json) | `run_timers` | narrowing to 27 cells drops Time before Status and Status before the name: every timer is gone while every row still says what it is doing |
-| [`run-timer-narrow-fit.json`](scenarios/run-timer-narrow-fit.json) | `run_timers` | at 57 cells all three columns still fit, so every row keeps its aligned timer and only the `⏳` warning has moved into the detail strip |
-| [`run-timer-wide.json`](scenarios/run-timer-wide.json) | `run_timers` | run timers survive refresh ticks, the Time column stays right-aligned across four magnitude bands, and the `⏳` watchdog warning rides the detail strip rather than the row |
+| [`run-timer-narrow-fit.json`](scenarios/run-timer-narrow-fit.json) | `run_timers` | at 57 cells all three columns still fit, so every row keeps its aligned timer and only the `⏳` warning is missing — it belongs to the inspector, which 57 cells does not pay for |
+| [`run-timer-wide.json`](scenarios/run-timer-wide.json) | `run_timers` | run timers survive refresh ticks, the Time column stays right-aligned across four magnitude bands, and the `⏳` watchdog warning rides the inspector's `Watch` line rather than the row |
 | [`search-narrow-fit.json`](scenarios/search-narrow-fit.json) | `basic` | live-list filter rows truncate at a sub-floor terminal after `/` |
 | [`session-fork-continuity.json`](scenarios/session-fork-continuity.json) | `basic` | Past Sessions dispatches a native fork through the shared action registry |
 | [`session-search-chips-fit.json`](scenarios/session-search-chips-fit.json) | `basic` | session-search filter chips clamp to width after Past Sessions is opened by name |
 | [`session-search-header-narrow-fit.json`](scenarios/session-search-header-narrow-fit.json) | `basic` | Past Sessions header and filters fit at narrow width |
 | [`session-view-hints-wide.json`](scenarios/session-view-hints-wide.json) | `basic` | transcript viewer advertises the full continuity palette including `c continue` |
 | [`session-view-hints-narrow-fit.json`](scenarios/session-view-hints-narrow-fit.json) | `basic` | transcript viewer hints truncate to the row budget and surface the actionable `? more` marker |
-| [`spacious-identity-columns.json`](scenarios/spacious-identity-columns.json) | `wide_profiles` | a profile name too long for any row is carried whole by the detail strip, so the truncated `claude-produc…` the retired identity column produced is nowhere on screen |
+| [`size-60x15-triage.json`](scenarios/size-60x15-triage.json) | `triage_integration` | the smallest reviewed terminal |
+| [`size-80x24-triage.json`](scenarios/size-80x24-triage.json) | `triage_integration` | the classic default |
+| [`size-100x24-triage.json`](scenarios/size-100x24-triage.json) | `triage_integration` | exactly at the split floor |
+| [`size-120x30-triage.json`](scenarios/size-120x30-triage.json) | `triage_integration` | a typical wide window |
+| [`size-160x45-triage.json`](scenarios/size-160x45-triage.json) | `triage_integration` | the widest reviewed terminal. These five assert the same two strings — the leading `Needs you (4)` heading and the aligned `release-guard` row — on purpose: what a terminal size buys is chrome and pane count, never row content, and five scenarios agreeing on the same rows is how that claim is committed |
+| [`size-extreme-short-window.json`](scenarios/size-extreme-short-window.json) | `paused_queue` | a four-row viewport keeps the header, one row, and the footer's `1–1 of 5` position token, and drops the inspector rather than drawing a divider it has no rows to fill |
+| [`size-split-floor-99-no-split.json`](scenarios/size-split-floor-99-no-split.json) | `paused_queue` | resizing down across the split's width floor removes the inspector wholesale — no divider anywhere on screen — leaving the queue alone with its rows unchanged |
+| [`size-split-floor-100-split.json`](scenarios/size-split-floor-100-split.json) | `paused_queue` | the same boundary from the other side: 99 → 100 is exactly where the divider and the inspector's metadata appear, so the floor is asserted from both directions rather than assumed |
+| [`spacious-identity-columns.json`](scenarios/spacious-identity-columns.json) | `wide_profiles` | a profile name too long for any row is carried whole by the inspector's `Agent` line, so the truncated `claude-produc…` the retired identity column produced is nowhere on screen |
 | [`triage-contextual-project-completion.json`](scenarios/triage-contextual-project-completion.json) | `triage_integration` | `%claude #` completes only labels remaining in that harness context and quotes labels containing spaces |
 | [`triage-default-wide-ordering.json`](scenarios/triage-default-wide-ordering.json) | `triage_integration` | the default wide dashboard renders the integrated severity/recency order as aligned Needs you and Running rows, and the switcher over it carries the exact All/project bucket tallies under their need/act/idle headings |
 | [`triage-horizontal-preview.json`](scenarios/triage-horizontal-preview.json) | `triage_integration` | a wide side-by-side preview coexists with the header project selector and the 80-cell main-list floor |
@@ -487,7 +544,7 @@ file. The exact inventory is:
 | [`triage-vertical-direction-ignored.json`](scenarios/triage-vertical-direction-ignored.json) | `triage_vertical` | `direction = "vertical"` selects nothing on the dashboard: the inspector is the same side-by-side split, since the setting now governs only the launcher's preview |
 | [`triage-view-round-trip.json`](scenarios/triage-view-round-trip.json) | `triage_integration` | a switcher-applied project scope survives Urgency → Projects → Urgency, and reopening the switcher still lands on the canonical aggregate |
 | [`unseen-stop-grouping-narrow-fit.json`](scenarios/unseen-stop-grouping-narrow-fit.json) | `unseen_stops` | two rows whose Status column both read `Done` split across Needs you and Idle by the daemon's unseen bit, with the unread one leading the list at narrow width and wearing the only `•` the gutter paints |
-| [`unseen-stop-grouping-wide.json`](scenarios/unseen-stop-grouping-wide.json) | `unseen_stops` | the seen 🛑 demotes to Idle while the unseen one holds Needs you, `]s` still reaches the demoted row, and jumping to it neither marks it nor clears the marker on the row that has one |
+| [`unseen-stop-grouping-wide.json`](scenarios/unseen-stop-grouping-wide.json) | `unseen_stops` | the seen 🛑 demotes to Idle while the unseen one holds Needs you, walking the cursor down still reaches the demoted row across the group headings, and landing on it neither marks it nor clears the marker on the row that has one |
 | [`worktrees-browse.json`](scenarios/worktrees-browse.json) | `worktrees` | opening the hermetic managed-worktree inventory by name and whitespace-AND filtering narrows to the dirty row without exposing lifecycle mutations |
 | [`worktrees-cleanup-active-refusal.json`](scenarios/worktrees-cleanup-active-refusal.json) | `worktree_lifecycle` | checkout removal is refused from a snapshot with a live session |
 | [`worktrees-cleanup-dirty-refusal.json`](scenarios/worktrees-cleanup-dirty-refusal.json) | `worktree_lifecycle` | checkout removal is refused from a dirty snapshot |

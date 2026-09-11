@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 func TestRenderHelpNoHeightShowsAll(t *testing.T) {
@@ -356,5 +357,71 @@ func contextualHelpModel(mode Mode) Model {
 		viewerPlan:       &plan,
 		planViewerLines:  []string{"--- plan.md ---", "body"},
 		planViewerCursor: 1,
+	}
+}
+
+// TestHelpKeymapPaintsItsKeysLikeKeys pins the styling the rest of this file
+// cannot see: every assertion around it strips ANSI first, so the keymap could
+// go entirely uniform without one of them noticing.
+//
+// The overlay is the one screen whose whole subject is which key does what, and
+// a reader arrives already knowing what they want to do — they are scanning for
+// a glyph, not reading prose. It was the last surface in the dashboard where a
+// key was not the footer's teal.
+func TestHelpKeymapPaintsItsKeysLikeKeys(t *testing.T) {
+	lines := helpContentLines()
+	joined := strings.Join(lines, "\n")
+
+	// The padding is inside the styled span because the column belongs to the
+	// key, not to the gap after it; asserting on the padded spelling is what
+	// makes this a claim about the column rather than about a substring.
+	for _, key := range []string{"j/k", "enter", "?", "esc", "shift+tab"} {
+		if !strings.Contains(joined, styleFooterKey.Render(fmt.Sprintf("%-*s", helpKeyColumnWidth, key))) {
+			t.Errorf("key %q is not painted as a key anywhere in the keymap", key)
+		}
+	}
+	if !strings.Contains(joined, helpKeyBodyLine(helpFooterMoreLine)) {
+		t.Error("the overflow footnote is not painted like the keys it points at")
+	}
+
+	// Two kinds of line deliberately keep the quiet treatment. A parenthetical
+	// is an aside about the keys above it, and the icon column is a glyph the
+	// daemon paints rather than one anybody presses; styling either like a key
+	// would advertise a binding that does not exist.
+	const aside = "  (n/N move the cursor only — Enter is what opens a terminal)"
+	if got := helpKeyBodyLine(aside); got != styleDim.Render(aside) {
+		t.Errorf("a parenthetical aside grew a key column: %q", got)
+	}
+	// A wrapped aside carries on past the opening parenthesis, so the third and
+	// later lines of one start in the key column without being a key. They are
+	// spelled with a deeper indent, and that is what the renderer reads.
+	const continuation = "   are palette entries — search the palette by name)"
+	if got := helpKeyBodyLine(continuation); got != styleDim.Render(continuation) {
+		t.Errorf("a continuation line grew a key column: %q", got)
+	}
+	for _, line := range helpStateIconSection() {
+		if !strings.Contains(joined, styleDim.Render(line)) {
+			t.Errorf("icon reference line %q is not rendered dim in the overlay", line)
+		}
+	}
+
+	// No key is wider than the column that holds it. The split is positional, so
+	// a binding spelled past the tenth cell would be cut in half and the half
+	// left behind would be painted as prose — a silent corruption a stripped
+	// assertion reads straight through. Checked the way the renderer splits, on
+	// display cells rather than bytes, so a wide glyph counts as what it prints.
+	for _, line := range lines {
+		plain := stripAnsi(line)
+		if !strings.HasPrefix(plain, "  ") || strings.HasPrefix(plain, "  (") || strings.HasPrefix(plain, "   ") {
+			continue
+		}
+		body := plain[2:]
+		if strings.TrimSpace(body) == "" || layout.Width(body) <= helpKeyColumnWidth {
+			continue
+		}
+		if column := layout.Truncate(body, helpKeyColumnWidth, ""); !strings.HasSuffix(column, " ") {
+			t.Errorf("the key column of %q runs past %d cells and is cut at %q",
+				plain, helpKeyColumnWidth, column)
+		}
 	}
 }

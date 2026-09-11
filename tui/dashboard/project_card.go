@@ -349,7 +349,7 @@ func projectCardChildLine(in ProjectCardInput, s session.RunningSession) string 
 	}
 
 	// Profile, harness, branch, directory — the same tokens in the same
-	// drop-priority order the compact band's detail strip uses, from the one
+	// drop-priority order the session inspector lists them in, from the one
 	// helper, so the two surfaces cannot start describing a child differently.
 	parts := joinDetailTokens(sessionContextTokens(s)...)
 	if parts == "" {

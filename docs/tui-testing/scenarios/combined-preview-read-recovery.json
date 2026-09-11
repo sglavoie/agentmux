@@ -1,0 +1,43 @@
+{
+  "name": "combined-preview-read-recovery",
+  "fixture": "preview_failure",
+  "size": {
+    "width": 120,
+    "height": 32
+  },
+  "actions": [
+    {
+      "type": "key",
+      "key": "i"
+    },
+    {
+      "type": "key",
+      "key": "i"
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "list"
+    },
+    {
+      "type": "excludes_text",
+      "text": "error: kitty read failed"
+    },
+    {
+      "type": "contains_text",
+      "text": "output line 40"
+    },
+    {
+      "type": "contains_text",
+      "text": "output line 21"
+    },
+    {
+      "type": "excludes_text",
+      "text": "output line 20"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "name": "size-80x24-triage",
+  "fixture": "triage_integration",
+  "size": {
+    "width": 80,
+    "height": 24
+  },
+  "actions": [],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "list"
+    },
+    {
+      "type": "contains_text",
+      "text": "    Needs you (4)"
+    },
+    {
+      "type": "contains_text",
+      "text": "  \u258c release-guard    Failed             0:01"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

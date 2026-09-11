@@ -47,15 +47,6 @@ var (
 					Foreground(lipgloss.Color("#5a5a5a")).
 					Bold(true)
 
-	// Per-state accent styles used by the footer gloss. bolt picks up the
-	// success/active teal; stop/key/warning reuse the attention orange; terminal
-	// error stays on the stronger red accent.
-	styleStateBolt    = lipgloss.NewStyle().Foreground(lipgloss.Color("#4ec9b0"))
-	styleStateStop    = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
-	styleStateKey     = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
-	styleStateWarning = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
-	styleStateError   = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
-
 	// Status bar styles own the fixed bottom row. Each style sets a
 	// background so the padded row reads as a full-width mode/status strip.
 	styleStatusIdle = lipgloss.NewStyle().
@@ -74,35 +65,16 @@ var (
 				Foreground(lipgloss.Color("#ffe1e1")).
 				Background(lipgloss.Color("#3a1515"))
 
-	// Health pip and deprecation banner styles. OK reuses the active-teal
-	// from styleStateBolt, Warn reuses the attention amber, and Err reuses
-	// the inline error red. styleBanner is a yellow-foreground accent so it
-	// reads as a warning without consuming a full background block.
+	// Health pip and deprecation banner styles. OK is the active teal, Warn the
+	// attention amber, and Err the inline error red — the same three accents the
+	// rest of the dashboard states are painted in. styleBanner is a
+	// yellow-foreground accent so it reads as a warning without consuming a full
+	// background block.
 	stylePipOK   = lipgloss.NewStyle().Foreground(lipgloss.Color("#4ec9b0"))
 	stylePipWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
 	stylePipErr  = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
 	styleBanner  = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00")).Bold(true)
 )
-
-// stateAccentStyle returns the per-state foreground style used to color the
-// gloss text in the footer. Unknown / idle states fall back to the dim footer
-// style so the gloss visually disappears.
-func stateAccentStyle(state string) lipgloss.Style {
-	switch state {
-	case "bolt":
-		return styleStateBolt
-	case "stop":
-		return styleStateStop
-	case "key":
-		return styleStateKey
-	case "warning":
-		return styleStateWarning
-	case "error":
-		return styleStateError
-	default:
-		return styleFooter
-	}
-}
 
 // renderSelectedRow normalizes a selectable row to one continuous selection
 // span. Row renderers may compose semantic foreground, faint, and reset

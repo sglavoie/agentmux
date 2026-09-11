@@ -311,24 +311,74 @@ func helpContentLines() []string {
 	// sent here by `? more` finds the missing key without scrolling past seven
 	// sections first. The static sections below repeat some of these keys where a
 	// fuller explanation earns the space.
-	lines := appendHelpSection(nil, "Dashboard", helpDashboardSection())
-	lines = appendHelpSection(lines, "State icons", helpStateIconSection())
+	lines := appendHelpSection(nil, "Dashboard", helpDashboardSection(), helpKeyBodyLine)
+	// The icon reference is the one section whose left column is a glyph the
+	// daemon paints rather than one the operator presses.
+	lines = appendHelpSection(lines, "State icons", helpStateIconSection(), helpDimBodyLine)
 	for _, sec := range helpSections {
-		lines = appendHelpSection(lines, sec.name, sec.lines)
+		lines = appendHelpSection(lines, sec.name, sec.lines, helpKeyBodyLine)
 	}
 	for _, sec := range helpPaletteSections {
-		lines = appendHelpSection(lines, sec.name, helpPaletteLines(sec.palettes))
+		lines = appendHelpSection(lines, sec.name, helpPaletteLines(sec.palettes), helpKeyBodyLine)
 	}
-	lines = append(lines, styleDim.Render(helpFooterMoreLine))
+	lines = append(lines, helpKeyBodyLine(helpFooterMoreLine))
 	return lines
 }
 
-// appendHelpSection appends one styled header, its dim body lines, and the
-// trailing blank separator the scroll math counts.
-func appendHelpSection(lines []string, name string, body []string) []string {
+// helpKeyColumnWidth is how many cells the key column of a help body line
+// occupies. Every producer in this file lays out to it — the generated palette
+// lines, the hand-written static sections, and the icon reference — which is
+// what lets appendHelpSection split a line positionally instead of guessing at
+// its content.
+const helpKeyColumnWidth = 10
+
+// helpBodyStyler paints one body line of a help section.
+type helpBodyStyler func(string) string
+
+// helpDimBodyLine is the plain treatment: the whole line recedes. It is what a
+// section whose left column is not a key gets, because a key style there would
+// invite the reader to press a glyph that binds nothing.
+func helpDimBodyLine(line string) string { return styleDim.Render(line) }
+
+// helpKeyBodyLine paints the key column in the footer's key style and leaves the
+// meaning dim.
+//
+// The overlay is the one screen whose entire subject is which key does what, and
+// a reader opens it already knowing what they want to do — they are scanning for
+// the glyph to press, not reading prose. Dimming the glyph along with the
+// sentence made the keymap uniformly quiet in the place the key should be the
+// loudest thing on the row, and it was the only surface in the dashboard where a
+// key was not teal. Here it is, so a reader who has learned the footer does not
+// have to learn a second spelling.
+//
+// A parenthetical note has no key column and keeps the dim treatment: those
+// lines are asides about the keys above them, not bindings of their own. Neither
+// does a line indented past the key column, which is how this file spells the
+// continuation of the line above — the words that carry on a sentence are not a
+// binding just because they happen to land where one would start.
+func helpKeyBodyLine(line string) string {
+	const indent = "  "
+	if !strings.HasPrefix(line, indent) || strings.HasPrefix(line, indent+"(") {
+		return helpDimBodyLine(line)
+	}
+	body := line[len(indent):]
+	if strings.HasPrefix(body, " ") {
+		return helpDimBodyLine(line)
+	}
+	key := layout.Truncate(body, helpKeyColumnWidth, "")
+	meaning := body[len(key):]
+	if strings.TrimSpace(key) == "" || meaning == "" {
+		return helpDimBodyLine(line)
+	}
+	return indent + styleFooterKey.Render(key) + styleDim.Render(meaning)
+}
+
+// appendHelpSection appends one styled header, its body lines painted by style,
+// and the trailing blank separator the scroll math counts.
+func appendHelpSection(lines []string, name string, body []string, style helpBodyStyler) []string {
 	lines = append(lines, styleHeader.Render(name))
 	for _, line := range body {
-		lines = append(lines, styleDim.Render(line))
+		lines = append(lines, style(line))
 	}
 	return append(lines, "")
 }

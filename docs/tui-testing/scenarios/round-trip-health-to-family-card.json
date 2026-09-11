@@ -1,0 +1,51 @@
+{
+  "name": "round-trip-health-to-family-card",
+  "fixture": "family_unread",
+  "size": {
+    "width": 120,
+    "height": 32
+  },
+  "actions": [
+    {
+      "type": "command",
+      "command_id": "explore.toggle-list-view"
+    },
+    {
+      "type": "key",
+      "key": "k"
+    },
+    {
+      "type": "command",
+      "command_id": "app.show-health"
+    },
+    {
+      "type": "key",
+      "key": "esc"
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "list"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2502\u25be svc"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u25021 attention \u00b7 1 active \u00b7 1 idle"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2502Branch  3 branches"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2502\u26a1 svc  work \u00b7 claude \u00b7 main \u00b7 ~/projects/svc"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

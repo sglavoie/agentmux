@@ -1,0 +1,34 @@
+{
+  "name": "edge-zero-sessions",
+  "fixture": "no_sessions",
+  "size": {
+    "width": 120,
+    "height": 32
+  },
+  "actions": [],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "list"
+    },
+    {
+      "type": "contains_text",
+      "text": "No running sessions."
+    },
+    {
+      "type": "contains_text",
+      "text": "press  l  to launch     press  ?  for all keys"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2502(no session selected)"
+    },
+    {
+      "type": "excludes_text",
+      "text": "No sessions match the active filter."
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

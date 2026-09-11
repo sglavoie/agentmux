@@ -1,0 +1,30 @@
+{
+  "name": "combined-preview-read-failure",
+  "fixture": "preview_failure",
+  "size": {
+    "width": 120,
+    "height": 32
+  },
+  "actions": [],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "list"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2502error: kitty read failed"
+    },
+    {
+      "type": "excludes_text",
+      "text": "output line 40"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2502neighbour"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

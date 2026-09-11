@@ -1,0 +1,42 @@
+{
+  "name": "edge-single-session",
+  "fixture": "wide_profiles",
+  "size": {
+    "width": 120,
+    "height": 32
+  },
+  "actions": [],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "list"
+    },
+    {
+      "type": "contains_text",
+      "text": "Running (1)"
+    },
+    {
+      "type": "selected_title",
+      "value": "platform-services-monorepo"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2502platform-services-monorepo"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2502Agent   claude \u00b7 claude-production-primary"
+    },
+    {
+      "type": "excludes_text",
+      "text": "Needs you"
+    },
+    {
+      "type": "excludes_text",
+      "text": "Idle ("
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

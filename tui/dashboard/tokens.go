@@ -2,19 +2,17 @@
 // in: the separator that joins secondary facts, the loop marker, the lock and
 // mute glyphs, and the drop-priority order the context tokens are listed in.
 //
-// It sits in its own file because three surfaces now speak it — the session
-// inspector, the project card it swaps with, and the detail strip the inspector
-// is replacing — and the strip is the one of the three that is going away. A
-// vocabulary that lived in the file being retired would make retiring it a
-// rewrite of the two surfaces that outlive it, which is exactly the kind of
-// coupling that gets a replacement half-finished.
+// It sits in its own file because the two surfaces that speak it — the session
+// inspector and the project card it swaps with — are drawn from separate files
+// and neither owns the vocabulary. It outlived a third speaker, the retired
+// detail strip; keeping the words out of any one surface's file is what let
+// that surface go away without rewriting the two that remain.
 
 package dashboard
 
 import (
 	"strings"
 
-	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -25,21 +23,6 @@ const metaSeparator = " · "
 // loopMarkerGlyph is the daemon's own "this session is inside a loop" marker,
 // used when nothing supplied a more specific supervision marker for it.
 const loopMarkerGlyph = "🔁"
-
-// sessionFlagGlyphs renders the session's lock and mute bits, or "" when neither
-// is set. These are indicators, not labels: an unset bit contributes nothing
-// rather than a placeholder, because the surfaces that draw them describe one
-// selected session and have no column to keep aligned with anything.
-func sessionFlagGlyphs(s session.RunningSession) string {
-	var glyphs []string
-	if s.Locked {
-		glyphs = append(glyphs, palette.LockIcon())
-	}
-	if s.Muted {
-		glyphs = append(glyphs, palette.MuteIcon())
-	}
-	return strings.Join(glyphs, " ")
-}
 
 // sessionContextTokens is the context that tells two checkouts of one
 // repository apart, in drop-priority order: profile, harness, branch,

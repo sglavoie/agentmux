@@ -466,6 +466,42 @@ func renderSummaryCounts(counts [3]int) string {
 	return strings.Join(parts, styleDim.Render(" · "))
 }
 
+// heroHintSegment is one run of the hero's hint sentence, marked as prose or as
+// a key to press. The split exists because the two read differently: the prose
+// recedes and the glyph stands out, which is the same contract the footer keeps.
+// An empty dashboard is the one screen with no rows to look at, so the two keys
+// that lead out of it must be findable at a glance rather than buried in a dim
+// sentence that scans as a caption.
+type heroHintSegment struct {
+	text string
+	key  bool
+}
+
+// heroHint is a hint sentence as its segments. The double spaces around each key
+// are part of the copy rather than the styling, so the sentence reads the same
+// on a terminal that drops color as it does on one that keeps it.
+type heroHint []heroHintSegment
+
+// render paints the sentence, key segments in the key style and everything else
+// dim.
+func (h heroHint) render() string {
+	var sb strings.Builder
+	for _, segment := range h {
+		if segment.key {
+			sb.WriteString(styleHeroKey.Render(segment.text))
+			continue
+		}
+		sb.WriteString(styleDim.Render(segment.text))
+	}
+	return sb.String()
+}
+
+// heroAllKeysHint is the trailing half of every hero hint: whatever the empty
+// state is, `?` is how the operator finds everything that is not on the screen.
+func heroAllKeysHint() heroHint {
+	return heroHint{{text: "press  "}, {text: "?", key: true}, {text: "  for all keys"}}
+}
+
 // renderEmptyHero renders a centered hero block when there are no rows to
 // show. The hint copy distinguishes "no sessions running" from "all rows
 // filtered out".
@@ -474,25 +510,24 @@ func renderEmptyHero(in ListInput) string {
 	hasFilters := !in.Filter.IsEmpty()
 
 	title := "No running sessions."
-	var hint string
+	var hint heroHint
 	if in.Loading {
 		title = "Loading sessions…"
-		hint = "press  ?  for all keys"
+		hint = heroAllKeysHint()
 	} else if hasSessions && hasFilters {
 		title = "No sessions match the active filter."
-		hint = "press  esc  to clear filters     press  ?  for all keys"
+		hint = append(heroHint{{text: "press  "}, {text: "esc", key: true}, {text: "  to clear filters     "}}, heroAllKeysHint()...)
 	} else {
-		hint = "press  l  to launch     press  ?  for all keys"
+		hint = append(heroHint{{text: "press  "}, {text: "l", key: true}, {text: "  to launch     "}}, heroAllKeysHint()...)
 	}
 
+	hintLine := hint.render()
 	width := in.Width
 	if width <= 0 {
 		width = layout.StyledWidth(title)
-		if w := layout.StyledWidth(hint); w > width {
+		if w := layout.StyledWidth(hintLine); w > width {
 			width = w
 		}
 	}
-	titleLine := layout.Center(styleEmptyHero.Render(title), width)
-	hintLine := layout.Center(styleDim.Render(hint), width)
-	return titleLine + "\n\n" + hintLine + "\n"
+	return layout.Center(styleEmptyHero.Render(title), width) + "\n\n" + layout.Center(hintLine, width) + "\n"
 }

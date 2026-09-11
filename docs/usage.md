@@ -140,33 +140,37 @@ Finished runs stop counting as active when loop discovery sees
 `run_finished_at` in `state.json`, and the `AgentSessionLoopFinished` hook
 clears active-class icons while reconciling the tab-title `🔁` marker.
 
-The dashboard keeps the profile badge and harness metadata separate from the
-title column, so visible titles are just the project name.
-
-A row reads left to right as tab number, state icon, profile badge, harness,
-title, run timer, branch, and directory:
+The dashboard keeps identity metadata out of the list entirely. A row is three
+cells — the name, a Status phrase saying what it is doing, and the run timer —
+behind a two-column notice gutter and the group's border:
 
 ```
-1: ⚡ [W] 🤖 claude   API     0:42  main*      ~/projects/api
-2: ⚡ [W] 🤖 claude   API     3:07  amx/feat-x ~/…/worktrees/api-feat-x
-3: 🛑 [P] 📜 codex    web     —                ~/projects/web
+    Needs you (1)
+• ▌ charlie        Done         —
+    Running (3)
+  ▌ alpha          Working   0:42
+  ▌ bravo          Working   3:07
+    Idle (1)
+  ▌ delta          Done         —
 ```
 
-The branch column names the Git checkout each row is sitting in, which is what
-tells two managed worktrees of one repository apart once their shared directory
-prefix has truncated away. A `*` after the branch means the checkout has
-modified tracked files. Long branches truncate from the left, like the
-directory, so the distinguishing tail of a name like `amx/feature-name`
-survives.
+The `•` marks a finished turn you have not looked at yet. Its gutter is reserved
+for the whole render pass whenever any row has news, so scrolling toward an
+unread row never shifts the columns under you. `▌` is the group border, and
+each heading carries its own count.
 
-Both the run timer and the branch are reserved only when some row in the current
-view needs them, and the directory column absorbs the difference — so filtering
-down to rows with no branch gives that width straight back to the paths. A blank
-branch cell is the ordinary case rather than an error: the directory is not a
-repository, `HEAD` is detached, the daemon has not probed the row yet, or
+Everything the row does not say, the inspector says about the selected row: the
+harness and profile, the Git branch with its `*` dirty marker, the working
+directory, the watchdog reading, and the pane's live output. `i` shows and hides
+it, and `tab` moves the keys between the two panes.
+
+The branch is what tells two managed worktrees of one repository apart. Because
+it is drawn once for the selected row rather than in a column every row reserves,
+a long branch such as `amx/feature-name` is drawn whole instead of truncated. An
+empty `Branch` line is the ordinary case rather than an error: the directory is
+not a repository, `HEAD` is detached, the daemon has not probed it yet, or
 `git_probe = false` turned the probe off entirely. The facts come from the
-daemon, so a dashboard running with no daemon reachable shows no branch column
-at all.
+daemon, so a dashboard running with no daemon reachable shows no branch at all.
 
 ### Triage order
 
@@ -185,24 +189,27 @@ within an already-selected severity rank.
 
 ### Responsive layout
 
-The list pane is classified into one of three width bands, and every responsive
-decision reads that band rather than a bare column count. Below 80 columns the
-band is compact, 80 through 119 is standard, and 120 and above is spacious. The
-band is taken from the width of the **list pane**, not the terminal, so a
-horizontal preview split can put a compact list inside a wide terminal.
+The row is one shape at every width. It spends its budget down rather than
+switching layouts: the run timer goes first, then the Status phrase, and the
+name is the last thing standing. There are no longer three row presets, and the
+80/120 width bands survive only as an input to the footer, which decides how
+many hints it can afford to spell out.
 
-- Compact keeps the tab number, the state icon, the blocked reason, and the
-  title, and drops the profile, harness, run timer, branch, and directory.
-- Standard is the layout above: a one-letter profile cell such as `[W]`, the
-  harness name, and the optional tail columns.
-- Spacious widens the profile cell to the padded profile name and lets the title
-  grow to its content.
+What a wider terminal actually buys is the second pane. The inspector needs both
+a width floor and at least ten body rows; below either one the dashboard is the
+queue alone, with no divider and no metadata. The width floor is whichever is
+larger of the built-in pane minimums (48 columns of queue, a divider, and 40 of
+inspector) and `[defaults.preview] min_cols`, which defaults to 100 — so 100
+columns of terminal is where the split appears out of the box. A terminal that
+shrinks past a floor drops back to the queue rather than promoting the inspector
+to full screen: losing sight of the session list is not a reasonable answer to a
+resize you did not ask for. Full screen is available, but only because you
+pressed `i` on a terminal too narrow to split.
 
-The dropped fields are not restated anywhere below the list. The inspector says
-all of them, at every width, beside the selected row rather than beneath the
-list, so the compact detail strip that used to carry them is gone. The icon
-legend that used to sit above the list is gone with it — `?` opens the help
-overlay, which is where the state icons are now named.
+Nothing the row drops is restated beneath the list. The inspector says all of it,
+at every width where it fits, beside the selected row. The icon legend that used
+to sit above the list is gone too — `?` opens the help overlay, which is where
+the state icons are now named.
 
 ### Project switcher
 

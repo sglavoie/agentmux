@@ -21,7 +21,12 @@ func StateGloss(state string) string {
 	return stateGlosses[state]
 }
 
-// LegendStates lists the state names rendered in the legend strip above the
-// list, in the order they appear. Mirrors stateGlosses; idle/unknown states
-// have no entry.
+// LegendStates lists the state names the icon reference is generated from, in
+// the order they appear. Mirrors stateGlosses; idle/unknown states have no
+// entry.
+//
+// The reference used to be a strip above the list and is now the help overlay's
+// State icons section. The name is kept because the list is still a legend in
+// the only sense that matters here — icon to meaning, one line each, in a fixed
+// order — and because what it is read by is not this file's business.
 var LegendStates = []string{"bolt", "stop", "key", "warning", "error"}

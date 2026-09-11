@@ -307,8 +307,8 @@ func TestProjectsPaginationChargesOneLinePerItem(t *testing.T) {
 // keeps `notes` from matching the `notes-2` row beside it: the Session column is
 // padded to the pass's widest name whenever anything follows it, so a name is
 // always followed by a space and never by the rest of a longer name. The
-// directory it used to use is on no row at all now — it moved to the detail strip
-// with the rest of the selected session's context.
+// directory it used to use is on no row at all now — it moved to the session
+// inspector with the rest of the selected session's context.
 func expectedRowMarker(list ItemList, i int) string {
 	if s, ok := list.SessionAt(i); ok {
 		return SessionDisplayTitle(s) + " "

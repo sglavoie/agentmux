@@ -41,9 +41,9 @@ import (
 // before launch and skipped. Every other command is tracked to completion (or
 // cancellation) so no filesystem goroutine can outlive cleanup.
 //
-// The driver is built in uitest_driver_hermetic.go (which wires the offline
-// command seams) and populated from a built-in fixture in
-// uitest_driver_fixture.go.
+// Construction lives further down this file: newUITestFixtureDriver populates a
+// driver from a built-in fixture, and newUITestDriverUnder wires the offline
+// command seams every driver runs behind.
 
 const (
 	// uitestDrainMaxSteps bounds how many commands a single action may drain.
@@ -51,6 +51,11 @@ const (
 	// runaway chain rather than an expected limit.
 	uitestDrainMaxSteps = 256
 )
+
+// errUITestPreviewRead is what a fixture's TextFailures answers a read with. The
+// wording is fixed because a scenario asserts on the sentence the inspector
+// paints, and a message that varied by run would make that assertion untestable.
+var errUITestPreviewRead = errors.New("kitty read failed")
 
 // uitestDriver holds a live Model plus the terminal size it is rendered at, and
 // applies scenario actions to it. It never talks to a live Kitty instance; all
@@ -528,6 +533,21 @@ func newUITestFixtureDriver(fx uitestFixture, size UITestSize) (*uitestDriver, *
 	}
 	client := newUITestKittyClient(fx.Windows)
 	client.text = fx.Text
+	if fx.TextFailures > 0 {
+		// Installed rather than counted inside GetText so the plain path stays
+		// exactly what it was: a fixture with no failures never reaches this.
+		remaining, text := fx.TextFailures, fx.Text
+		var mu sync.Mutex
+		client.SetReadBehavior(func(string) (string, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			if remaining > 0 {
+				remaining--
+				return "", errUITestPreviewRead
+			}
+			return text, nil
+		})
+	}
 	d := newUITestDriver(fx.Config, client, size)
 	d.model.backgroundCommands.topologyRefresh = hermeticTopologyRefresh(fx.overlay())
 	if fx.Health != nil {

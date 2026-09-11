@@ -352,9 +352,9 @@ func TestDetailHeaderOverrideBadgeColor(t *testing.T) {
 // TestHarnessColorNoLongerReachesTheSessionRow is the deliberate loss recorded
 // as a test rather than left to be rediscovered. The row used to color the
 // `<emoji> <label>` harness cell with the configured harness color; the cell is
-// gone with the rest of the row's metadata, and the detail strip draws the
-// harness inside one identity span rather than giving it a second color that
-// would break the span in two.
+// gone with the rest of the row's metadata, and the inspector names the harness
+// on its Agent line, uncolored like every other value in that block rather than
+// carrying a second color into a place nothing else is colored.
 //
 // The configured harness colors are NOT dead: dashboard.HarnessColorMap still
 // drives the launcher's rows and its profile overlay, which is where an operator

@@ -1,0 +1,77 @@
+{
+  "name": "combined-filter-then-resize",
+  "fixture": "paused_queue",
+  "size": {
+    "width": 120,
+    "height": 32
+  },
+  "actions": [
+    {
+      "type": "key",
+      "key": "j"
+    },
+    {
+      "type": "key",
+      "key": "/"
+    },
+    {
+      "type": "text",
+      "text": "@work"
+    },
+    {
+      "type": "key",
+      "key": "enter"
+    },
+    {
+      "type": "key",
+      "key": "enter"
+    },
+    {
+      "type": "resize",
+      "width": 80,
+      "height": 24
+    },
+    {
+      "type": "resize",
+      "width": 120,
+      "height": 32
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "list"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u258c@work \u2715"
+    },
+    {
+      "type": "selected_title",
+      "value": "alpha"
+    },
+    {
+      "type": "contains_text",
+      "text": "Running (3)"
+    },
+    {
+      "type": "excludes_text",
+      "text": "charlie"
+    },
+    {
+      "type": "excludes_text",
+      "text": "delta"
+    },
+    {
+      "type": "contains_text",
+      "text": "Dir     ~/projects/alpha"
+    },
+    {
+      "type": "contains_text",
+      "text": "esc clear filters"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

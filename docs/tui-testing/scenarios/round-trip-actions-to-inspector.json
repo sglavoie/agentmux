@@ -1,0 +1,52 @@
+{
+  "name": "round-trip-actions-to-inspector",
+  "fixture": "paused_queue",
+  "size": {
+    "width": 120,
+    "height": 32
+  },
+  "actions": [
+    {
+      "type": "key",
+      "key": "j"
+    },
+    {
+      "type": "key",
+      "key": "a"
+    },
+    {
+      "type": "key",
+      "key": "esc"
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "list"
+    },
+    {
+      "type": "selected_title",
+      "value": "alpha"
+    },
+    {
+      "type": "excludes_text",
+      "text": "Actions for alpha"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2502alpha"
+    },
+    {
+      "type": "contains_text",
+      "text": "\u2502Dir     ~/projects/alpha"
+    },
+    {
+      "type": "kitty_calls",
+      "op": "CloseTab",
+      "count": 0
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

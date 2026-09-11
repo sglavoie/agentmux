@@ -109,3 +109,36 @@ func TestRenderListTimeColumnIsSharedAndRightAligned(t *testing.T) {
 		}
 	}
 }
+
+// TestEmptyHeroPaintsItsKeysLikeKeys is a styling assertion rather than a text
+// one, and it exists because the text assertions beside it cannot fail when the
+// styling is wrong. The empty dashboard is the one screen with no rows to look
+// at, so the two keys that lead out of it are the whole interface; painting them
+// in the same dim as the sentence around them made the only actionable glyphs on
+// the screen the least visible thing on it.
+func TestEmptyHeroPaintsItsKeysLikeKeys(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   ListInput
+		keys []string
+	}{
+		{"no sessions", ListInput{Width: 60}, []string{"l", "?"}},
+		{"loading", ListInput{Width: 60, Loading: true}, []string{"?"}},
+		{"filtered out", ListInput{Width: 60, SessionCount: 3, Filter: Parse("nothing-matches")}, []string{"esc", "?"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out := renderEmptyHero(tc.in)
+			for _, key := range tc.keys {
+				if want := styleHeroKey.Render(key); !strings.Contains(out, want) {
+					t.Errorf("key %q is not painted as a key in %q", key, out)
+				}
+			}
+			// The copy is unchanged by the styling: the double spaces that set a
+			// key apart are in the sentence, so a terminal that drops color still
+			// reads the same. Every assertion elsewhere rests on that.
+			if plain := stripAnsi(out); !strings.Contains(plain, "press  "+tc.keys[0]+"  ") {
+				t.Errorf("the hint copy lost its spacing around %q: %q", tc.keys[0], plain)
+			}
+		})
+	}
+}

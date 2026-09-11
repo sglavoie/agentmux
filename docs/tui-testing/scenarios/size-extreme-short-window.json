@@ -1,0 +1,34 @@
+{
+  "name": "size-extreme-short-window",
+  "fixture": "paused_queue",
+  "size": {
+    "width": 120,
+    "height": 4
+  },
+  "actions": [],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "list"
+    },
+    {
+      "type": "contains_text",
+      "text": "Agent Mux \u00b7 Urgency \u00b7 all projects"
+    },
+    {
+      "type": "contains_text",
+      "text": "1\u20131 of 5"
+    },
+    {
+      "type": "excludes_text",
+      "text": "charlie"
+    },
+    {
+      "type": "excludes_text",
+      "text": "\u2502"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}
