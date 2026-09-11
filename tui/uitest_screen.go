@@ -148,6 +148,8 @@ func modalBoxRenderer(mode Mode) func(Model) string {
 		return renderASLResponseBox
 	case ModeProjectSwitcher:
 		return renderProjectSwitcherBox
+	case ModeHealth:
+		return renderHealthBox
 	default:
 		return nil
 	}
@@ -243,8 +245,11 @@ func detectModalFitIssues(m Model) []UITestLayoutIssue {
 // alternate layout rather than a clipped version of their natural-width
 // content. The command palette deliberately wraps descriptions and disabled
 // reasons to the live content width, so its m.width-4 clamp is not overflow.
+// The health details do the same with their diagnostic lines, and for a sharper
+// reason: half a remedy or half an error is not a shorter reading of the issue,
+// it is a different and wrong one.
 func modalUsesResponsiveWidth(mode Mode) bool {
-	return mode == ModeCommandPalette || mode == ModeLiveSessionPicker || mode == ModeASLResponse
+	return mode == ModeCommandPalette || mode == ModeLiveSessionPicker || mode == ModeASLResponse || mode == ModeHealth
 }
 
 // popupLineCount returns the number of rows a popup box occupies, matching the
@@ -365,6 +370,8 @@ func uitestModeName(mode Mode) string {
 		return "asl_response"
 	case ModeProjectSwitcher:
 		return "project_switcher"
+	case ModeHealth:
+		return "health"
 	default:
 		return "unknown"
 	}

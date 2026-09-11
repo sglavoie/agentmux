@@ -36,6 +36,8 @@ func (m Model) activeRootMode() Mode {
 		return m.configPickerReturnMode
 	case ModeLiveSessionPicker:
 		return m.livePickerReturnMode
+	case ModeHealth:
+		return m.healthReturnMode
 	case ModeASLResponse:
 		return ModeASLRuns
 	default:

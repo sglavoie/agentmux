@@ -1,0 +1,28 @@
+{
+  "name": "health-details-overlay-wide",
+  "fixture": "health_states",
+  "size": { "width": 120, "height": 40 },
+  "actions": [
+    { "type": "tick" },
+    { "type": "key", "key": ":" },
+    { "type": "key", "key": "h" },
+    { "type": "key", "key": "e" },
+    { "type": "key", "key": "a" },
+    { "type": "key", "key": "l" },
+    { "type": "key", "key": "t" },
+    { "type": "key", "key": "h" },
+    { "type": "key", "key": "enter" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "health" },
+    { "type": "no_layout_issues" },
+    { "type": "contains_text", "text": "Health · hooks drifted" },
+    { "type": "contains_text", "text": "Hooks — 1 drifted, 1 missing" },
+    { "type": "contains_text", "text": "counted 1 in sync, 1 drifted, 1 missing" },
+    { "type": "contains_text", "text": "fix: amx config hooks-sync" },
+    { "type": "contains_text", "text": "Daemon — running" },
+    { "type": "contains_text", "text": "Configuration — no deprecated keys" },
+    { "type": "contains_text", "text": "esc/q" },
+    { "type": "contains_text", "text": "Health degraded" }
+  ]
+}

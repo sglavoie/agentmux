@@ -1,0 +1,23 @@
+{
+  "name": "health-details-overlay-narrow",
+  "fixture": "health_states",
+  "size": { "width": 62, "height": 20 },
+  "actions": [
+    { "type": "tick" },
+    { "type": "key", "key": ":" },
+    { "type": "key", "key": "h" },
+    { "type": "key", "key": "e" },
+    { "type": "key", "key": "a" },
+    { "type": "key", "key": "l" },
+    { "type": "key", "key": "t" },
+    { "type": "key", "key": "h" },
+    { "type": "key", "key": "enter" },
+    { "type": "key", "key": "G" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "health" },
+    { "type": "no_layout_issues" },
+    { "type": "contains_text", "text": "Health ·" },
+    { "type": "contains_text", "text": "Configuration" }
+  ]
+}

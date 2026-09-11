@@ -249,6 +249,12 @@ type Model struct {
 	deprecations          []config.Deprecation
 	deprecationDismissed  bool
 
+	// health details overlay. Both fields are viewport state only: the issues it
+	// shows are re-projected from the fields above on every frame, so a health
+	// refresh that lands under the open overlay is visible on the next one.
+	healthReturnMode Mode
+	healthOffset     int
+
 	// preview pane
 	//
 	// previewTargetSeq identifies what the pane is currently pointed at. A window
@@ -573,6 +579,7 @@ const (
 	ModeASLRuns                // agent-session-loop active and actionable runs
 	ModeASLResponse            // answer editor and closure buttons for one ASL question
 	ModeProjectSwitcher        // overlay choosing the dashboard's project scope
+	ModeHealth                 // scrollable details for every health check, from cached facts
 )
 
 // LivePickerPurpose names the caller that raised ModeLiveSessionPicker. The

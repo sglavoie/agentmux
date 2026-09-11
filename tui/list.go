@@ -153,42 +153,61 @@ func renderHeaderWithHits(m Model) headerRender {
 // the labels stay in the dim footer color so the eye is drawn to the pip.
 // Returns "" before the first health check completes so the header line
 // doesn't briefly mis-render as "degraded" at startup.
+//
+// The guard covers the two checks TOGETHER, which is why each pip has to carry
+// its own observation state rather than inheriting the strip's. The two land at
+// different cadences, so the ordinary startup has one check in and the other
+// still outstanding — and read off the raw fields, an unchecked hooks scan has
+// empty drifted and missing slices and painted itself the green pip of a clean
+// bill of health, while an unchecked daemon painted the red pip of an outage
+// nobody had observed. Both now go through the issue model, and an unobserved
+// check gets the hollow mark so a filled pip in any color keeps meaning that
+// somebody looked.
 func renderHealthPips(m Model) string {
 	if m.daemonHealthCheckedAt.IsZero() && m.hookHealthCheckedAt.IsZero() {
 		return ""
 	}
-	daemonPip := stylePipErr.Render(healthPipGlyph)
-	if m.daemonAlive {
-		daemonPip = stylePipOK.Render(healthPipGlyph)
+	issues := healthIssues(m)
+	return renderHealthPip(issues, dashboard.HealthIssueDaemon, "daemon") + "   " +
+		renderHealthPip(issues, dashboard.HealthIssueHooks, "hooks")
+}
+
+// renderHealthPip draws one pip. The strip's vocabulary is a FILLED dot whose
+// color carries the severity, which is not the leaf's per-state glyph set, so
+// only the unobserved case borrows a mark from there: every observed state keeps
+// the dot it has always had, and HealthUnknown gets the hollow one.
+func renderHealthPip(issues []dashboard.HealthIssue, id, label string) string {
+	state := dashboard.HealthUnknown
+	if issue, ok := dashboard.FindHealthIssue(issues, id); ok {
+		state = issue.State
 	}
-	hookPip := stylePipErr.Render(healthPipGlyph)
-	switch {
-	case m.hookHealthErr != nil:
-		hookPip = stylePipWarn.Render(healthPipGlyph)
-	case m.hookHealth.Healthy():
-		hookPip = stylePipOK.Render(healthPipGlyph)
+	glyph, style := healthPipGlyph, stylePipErr
+	switch state {
+	case dashboard.HealthOK:
+		style = stylePipOK
+	case dashboard.HealthWarning:
+		style = stylePipWarn
+	case dashboard.HealthUnknown:
+		glyph, style = dashboard.HealthUnknown.Glyph(), styleDim
 	}
-	return daemonPip + " " + styleFooter.Render("daemon") + "   " +
-		hookPip + " " + styleFooter.Render("hooks")
+	return style.Render(glyph) + " " + styleFooter.Render(label)
 }
 
 // renderHealthHints returns the one-line under-pip hint(s) shown when any
 // health signal is in a degraded state. Hints are stacked one per line and
 // right-aligned to sit beneath the pip strip. Returns "" when both
 // daemon and hooks are healthy or no health refresh has run yet.
+//
+// The hints themselves come from the issue model rather than from a second walk
+// of the health fields, so this strip and the details overlay are two renderings
+// of one issue set. Only issues that declare a Hint appear: topology has the
+// status bar and configuration has the banner, and neither needs a third line
+// above the list saying the same thing.
 func renderHealthHints(m Model) string {
 	if m.daemonHealthCheckedAt.IsZero() && m.hookHealthCheckedAt.IsZero() {
 		return ""
 	}
-	var hints []string
-	if !m.daemonHealthCheckedAt.IsZero() && !m.daemonAlive {
-		hints = append(hints, "daemon down: amx daemon start")
-	}
-	if m.hookHealthErr != nil {
-		hints = append(hints, "hooks check failed: "+m.hookHealthErr.Error())
-	} else if !m.hookHealthCheckedAt.IsZero() && !m.hookHealth.Healthy() {
-		hints = append(hints, "hooks drifted: amx config hooks-sync")
-	}
+	hints := dashboard.HealthHints(healthIssues(m))
 	if len(hints) == 0 {
 		return ""
 	}
@@ -208,6 +227,10 @@ func renderHealthHints(m Model) string {
 	return out.String()
 }
 
+// healthPipGlyph is the filled pip an OBSERVED check paints. The strip draws
+// dashboard.HealthState.Glyph() rather than this constant, so an unobserved
+// check gets the hollow mark instead; it survives as the name the header tests
+// assert a real reading by.
 const healthPipGlyph = "●"
 
 // renderDeprecationBanner returns a single yellow banner line warning about

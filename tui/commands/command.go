@@ -42,6 +42,7 @@ const (
 	ResortTabs         ID = "app.resort-tabs"
 	UndoClose          ID = "app.undo-close"
 	DismissDeprecation ID = "app.dismiss-deprecation"
+	ShowHealth         ID = "app.show-health"
 	ShowKeyboardHelp   ID = "app.show-keyboard-shortcuts"
 	Quit               ID = "app.quit"
 )

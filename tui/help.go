@@ -89,6 +89,14 @@ var helpSections = []struct {
 		"  mouse     click a scope row to apply it",
 		"  (All is always offered; every other active filter is preserved)",
 	}},
+	{"Health details", []string{
+		"  :         then \"Show Health Details\" (no dashboard key of its own)",
+		"  j/k ↑/↓   scroll; g/G jump to the ends; pgup/pgdn page",
+		"  d         dismiss the configuration notice for this session",
+		"  esc/q     close",
+		"  (reads the cached checks; it never triggers a health refresh)",
+		"  (dismissing the notice never silences a daemon or hooks failure)",
+	}},
 	{"Act on row", []string{
 		"  enter     focus the session's tab (a project folds instead)",
 		"  space     focus the session's tab (alternate path)",

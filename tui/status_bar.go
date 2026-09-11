@@ -225,15 +225,38 @@ func sentenceCase(s string) string {
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 
+// daemonHealthDegraded and hookHealthDegraded are the status bar's reading of
+// two named issues. They ask the issue model rather than re-testing the raw
+// fields, so the "Health degraded" line, the header hint strip, and the details
+// overlay cannot disagree about whether a check is degraded.
+//
+// Topology is deliberately NOT folded into them even though it is now an issue
+// of its own: topologyStatus already owns that slot above, with its own cold and
+// warm wordings, and a second claim on the same condition one rank lower would
+// be the duplication this consolidation exists to remove.
+//
+// Configuration is likewise left out. Its notice has a banner and is dismissible,
+// and letting a dismissible warning drive the status line would either survive
+// the dismissal or let the dismissal reach the line that reports real failures.
 func daemonHealthDegraded(m Model) bool {
-	return !m.daemonHealthCheckedAt.IsZero() && !m.daemonAlive
+	return healthIssueDegraded(m, dashboard.HealthIssueDaemon)
 }
 
 func hookHealthDegraded(m Model) bool {
-	if m.hookHealthErr != nil {
-		return true
+	return healthIssueDegraded(m, dashboard.HealthIssueHooks)
+}
+
+// healthIssueDegraded reports whether the named issue has been observed to be in
+// trouble. HealthUnknown is not degraded: a check that has never run is not
+// evidence of a problem any more than it is evidence of health, and reporting it
+// as either is what the session's "unobserved checks reported as healthy"
+// criterion cuts both ways against.
+func healthIssueDegraded(m Model, id string) bool {
+	issue, ok := dashboard.FindHealthIssue(healthIssues(m), id)
+	if !ok {
+		return false
 	}
-	return !m.hookHealthCheckedAt.IsZero() && !m.hookHealth.Healthy()
+	return issue.State == dashboard.HealthWarning || issue.State == dashboard.HealthFailed
 }
 
 func fallbackStatusText(m Model) string {
@@ -282,6 +305,8 @@ func fallbackStatusText(m Model) string {
 		return "Delete session"
 	case ModeChipPicker:
 		return "Choose " + chipPickerStatusLabel(m.chipPickerKind)
+	case ModeHealth:
+		return "Health details"
 	case ModeProjectSwitcher:
 		// The applied scope, not the highlighted one. The cursor moves while the
 		// operator reads the list and the filter behind the overlay has not

@@ -80,6 +80,7 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 		{commands.ToggleListView, commands.GroupExplore, "Show Projects View", []string{"projects", "families", "urgency", "group"}, "v"},
 		{commands.ResortTabs, commands.GroupApp, "Resort Tabs", []string{"reorder", "tabs"}, "R"},
 		{commands.UndoClose, commands.GroupApp, "Undo Last Close", []string{"restore", "reopen"}, "u"},
+		{commands.ShowHealth, commands.GroupApp, "Show Health Details", []string{"daemon", "hooks", "diagnostics", "status"}, ""},
 		{commands.DismissDeprecation, commands.GroupApp, "Dismiss Deprecation Warning", []string{"banner", "warning"}, "d"},
 		{commands.ShowKeyboardHelp, commands.GroupApp, "Show Keyboard Shortcuts", []string{"help", "keys"}, "?"},
 		{commands.Quit, commands.GroupApp, "Quit", []string{"close app", "exit"}, "q / ctrl+c"},
@@ -162,6 +163,9 @@ func TestCommandCatalogDashboardShortcutBindings(t *testing.T) {
 		commands.ToggleListView:     keyToggleView,
 		commands.ResortTabs:         keyResort,
 		commands.UndoClose:          keyU,
+		// No dashboard key of its own: the health details are palette-only until
+		// the compact header entry point lands.
+		commands.ShowHealth:         "",
 		commands.DismissDeprecation: keyD,
 		commands.ShowKeyboardHelp:   keyQuestion,
 		commands.Quit:               keyQ + " / " + keyCtrlC,
@@ -342,7 +346,7 @@ func TestCommandCatalogConditionalVisibility(t *testing.T) {
 			visible++
 		}
 	}
-	if visible != 29 {
-		t.Fatalf("clean catalog has %d visible commands, want 29", visible)
+	if visible != 30 {
+		t.Fatalf("clean catalog has %d visible commands, want 30", visible)
 	}
 }

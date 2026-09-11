@@ -77,6 +77,11 @@ func renderFooter(m Model) string {
 			footerStyledLine(m.width, "  ", renderFooterBinding("enter", "apply scope"), renderFooterBinding("esc/q/p", "cancel")),
 			footerStyledLine(m.width, "  ", renderFooterBinding("/", "search"), renderFooterBinding("j/k", "up/down"), renderFooterBinding("g/G", "top/bottom"), renderFooterBinding("pgup/pgdn", "page")),
 		)
+	case ModeHealth:
+		lines = nonEmptyFooterLines(
+			footerStyledLine(m.width, "  ", renderFooterBinding("j/k", "up/down"), renderFooterBinding("g/G", "top/bottom"), renderFooterBinding("pgup/pgdn", "page")),
+			footerStyledLine(m.width, "  ", healthDismissFooterBinding(m), renderFooterBinding("esc/q", "close")),
+		)
 	case ModeSessionSearch:
 		lines = footerHintLines(m, sessionSearchFooterPalette, footerHintMaxLines)
 	case ModeSessionView:

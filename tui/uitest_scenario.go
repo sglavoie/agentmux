@@ -393,7 +393,7 @@ func uitestSelectedSession(m Model) (session.RunningSession, bool) {
 // never drift on mode names.
 func uitestModeNameSet() map[string]bool {
 	set := make(map[string]bool)
-	for mode := ModeList; mode <= ModeProjectSwitcher; mode++ {
+	for mode := ModeList; mode <= ModeHealth; mode++ {
 		set[uitestModeName(mode)] = true
 	}
 	return set

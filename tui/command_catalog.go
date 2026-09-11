@@ -491,6 +491,23 @@ func commandDeclarations() []commands.Command[Model] {
 			},
 		},
 		{
+			ID: commands.ShowHealth, Group: commands.GroupApp,
+			Title:       commands.StaticTitle[Model]("Show Health Details"),
+			Description: "Open the full daemon, hooks, session-freshness, and configuration reading.",
+			Aliases:     []string{"daemon", "hooks", "diagnostics", "status"},
+			// Always visible and always available. The reading it opens includes
+			// the checks that have not run yet and the ones that are fine, so an
+			// entry that hid itself when nothing was wrong would be missing in
+			// exactly the two cases an operator opens it to distinguish.
+			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
+				// The palette has already returned the model to ModeList, so this
+				// is the view esc lands on — the same return the keyboard help
+				// sheet takes from here.
+				m.openHealth(ModeList)
+				return m, nil
+			},
+		},
+		{
 			ID: commands.DismissDeprecation, Group: commands.GroupApp,
 			Title:       commands.StaticTitle[Model]("Dismiss Deprecation Warning"),
 			Description: "Hide the visible configuration deprecation banner.",

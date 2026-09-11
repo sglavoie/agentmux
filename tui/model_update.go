@@ -267,6 +267,7 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	// operates on the stale value, so the user has to scroll through
 	// dead rows before the viewport reacts.
 	clampDetailScroll(&m)
+	clampHealthScroll(&m)
 	clampHelpOffset(&m)
 	clampActionsOffset(&m)
 	clampCommandPaletteOffset(&m)
@@ -337,6 +338,12 @@ func (m Model) handleHealth(msg commands.HealthMsg) (tea.Model, tea.Cmd) {
 		m.hookHealthErr = msg.HookErr
 		m.hookHealthCheckedAt = now
 	}
+	// A check that resolved can shorten the body under an open details overlay —
+	// a hooks error carries three detail lines and the clean reading carries
+	// none — so the offset is pulled back the same way a resize pulls it back.
+	// This handler still only RECORDS what the tick-driven command observed; it
+	// starts nothing, and the overlay being open changes neither of those things.
+	clampHealthScroll(&m)
 	return m, nil
 }
 
