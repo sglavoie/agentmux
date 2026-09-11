@@ -613,6 +613,93 @@ func (m *Model) reshowPreview() tea.Cmd {
 	return tea.Batch(m.requestPreviewRead(), m.startPreviewPoll())
 }
 
+// dashboardPane is everything the dashboard's inspector is SHOWING: the target
+// it is pointed at, the snapshot on it, what a read has said about that
+// snapshot, and where in it the operator is looking.
+//
+// It is a type rather than five assignments because the launcher borrows the
+// pane rather than owning one. The two surfaces share a target, a read
+// controller, and a polling chain deliberately — one read at a time across the
+// whole program — but they do not share content: the launcher's preview answers
+// "what is on the row under the cursor", which is a different question from the
+// one the inspector is open on. Setting this aside for the length of the visit
+// is what lets the borrow be given back.
+type dashboardPane struct {
+	windowID int
+	text     string
+	err      string
+	loaded   bool
+	viewport dashboard.OutputViewport
+}
+
+// lendPreviewToLauncher points the shared pane at one of the launcher's rows,
+// setting the dashboard inspector's pane aside the first time this visit moves
+// it. Every launcher retarget goes through here rather than calling
+// retargetPreview directly, so "the launcher is currently borrowing the pane" is
+// one fact the model carries rather than an invariant spread over four call
+// sites.
+//
+// The capture is taken once, on the first move, and that is the whole point. A
+// launcher that walks ten rows and toggles its preview twice has moved the pane
+// a dozen times and borrowed it once; a capture per move would overwrite the
+// dashboard's pane with the launcher's own and give back what it took.
+func (m *Model) lendPreviewToLauncher(windowID int) {
+	if m.launcherBorrowedPane == nil {
+		m.launcherBorrowedPane = &dashboardPane{
+			windowID: m.previewWindowID,
+			text:     m.previewText,
+			err:      m.previewError,
+			loaded:   m.previewLoaded,
+			viewport: m.inspectorViewport,
+		}
+	}
+	m.retargetPreview(windowID)
+}
+
+// returnPreviewToDashboard is the way out of the launcher: it puts back whatever
+// the launcher borrowed and hands the pane to the dashboard.
+//
+// The restore comes first and is unconditional, because the borrow is undone
+// whether or not the dashboard is going to draw the pane — the inspector's
+// state outlives being off screen, and a hidden inspector that later reopens
+// must not find the launcher's snapshot in it.
+//
+// What happens after the restore is reshowPreview's question, not this one's,
+// and delegating it is what keeps the two ways back into the pane telling the
+// same story. A selection that did not move keeps its held snapshot and its
+// place in it; one that moved while the launcher was on screen — a topology
+// refresh can reorder the queue under it — goes through retargetPreview and
+// resets to the tail, because that is a different buffer. Either way the read
+// and the poll restart: the chain died when the launcher took the pane, and a
+// pane nothing is feeding would strand an operator who presses End.
+func (m *Model) returnPreviewToDashboard() tea.Cmd {
+	if borrowed := m.launcherBorrowedPane; borrowed != nil {
+		m.launcherBorrowedPane = nil
+		m.previewWindowID = borrowed.windowID
+		m.previewText = borrowed.text
+		m.previewError = borrowed.err
+		m.previewLoaded = borrowed.loaded
+		m.inspectorViewport = borrowed.viewport
+	}
+	if !m.inspectorActive() {
+		return nil
+	}
+	return m.reshowPreview()
+}
+
+// launcherOwnsPreview reports that the shared pane currently belongs to the
+// launcher rather than to the dashboard — the launcher itself and the overlays
+// raised over it, which is exactly what activeRootMode answers.
+//
+// It gates the one path that writes the launcher's pane state without a
+// launcher keypress behind it. A resize reaches disablePickerPreviewWithNotice
+// on the strength of pickerPreviewEnabled alone, and that flag is the launcher's
+// REMEMBERED visibility rather than a statement about what is on screen: it
+// survives the visit that set it. Unasked, a shrink of the dashboard would let a
+// preview that is three views away and invisible retarget the pane the operator
+// is reading.
+func launcherOwnsPreview(m Model) bool { return m.activeRootMode() == ModePicker }
+
 // activePreviewEnabled reports whether the preview pane is enabled for the
 // currently active mode. ModePicker has its own independent flag so that
 // toggling preview inside the picker does not disturb the list's preview state.
@@ -668,7 +755,7 @@ func (m *Model) refreshPreviewForPickerCursor() tea.Cmd {
 	if winID == m.previewWindowID {
 		return nil
 	}
-	m.retargetPreview(winID)
+	m.lendPreviewToLauncher(winID)
 	return m.requestPreviewRead()
 }
 
@@ -693,24 +780,18 @@ func (m *Model) refreshPreviewForCursor() tea.Cmd {
 	return m.requestPreviewRead()
 }
 
-// resumeListPreviewTickCmd reopens the dashboard's polling chain on the way back
-// from a mode that owned the pane itself. It is a pointer method because the
-// chain identity it draws has to survive on the model the caller returns:
-// resuming without the bump is how the picker's exit used to leave the tick it
-// had already scheduled beating beside the one it started.
-func (m *Model) resumeListPreviewTickCmd() tea.Cmd {
-	if !m.inspectorActive() {
-		return nil
-	}
-	return m.startPreviewPoll()
-}
-
 // togglePickerPreview flips the picker's own preview pane on/off, independent
 // of m.previewEnabled (the list's preview flag).
+//
+// Both directions borrow rather than retarget outright. Turning the pane OFF
+// looks like it is giving something back, but it is not: it points the shared
+// target at nothing, and the dashboard inspector behind the launcher owns that
+// target too. The launcher's `p` is a statement about the launcher's pane and
+// may not decide anything about the inspector the operator will return to.
 func (m Model) togglePickerPreview() (tea.Model, tea.Cmd) {
 	if m.pickerPreviewEnabled {
 		m.pickerPreviewEnabled = false
-		m.retargetPreview(0)
+		m.lendPreviewToLauncher(0)
 		scrollPickerToCursor(&m)
 		return m, nil
 	}
@@ -719,7 +800,7 @@ func (m Model) togglePickerPreview() (tea.Model, tea.Cmd) {
 		return m, m.pushPreviewNotice("preview unavailable: terminal too small")
 	}
 	m.pickerPreviewEnabled = true
-	m.retargetPreview(m.pickerCurrentWindowID())
+	m.lendPreviewToLauncher(m.pickerCurrentWindowID())
 	m.clearPreviewNotice()
 	scrollPickerToCursor(&m)
 	// The launcher's pane shares the dashboard's controller, target, and chain —
@@ -735,8 +816,13 @@ func (m Model) togglePickerPreview() (tea.Model, tea.Cmd) {
 // stops being drawn until the terminal can hold one again. A notice would be
 // announcing a decision nothing made.
 
+// disablePickerPreviewWithNotice is the resize's version of turning the
+// launcher's pane off, and it borrows for the same reason the key does. Its
+// caller establishes that the launcher owns the pane — see launcherOwnsPreview —
+// because the flag it fires on is remembered across visits and would otherwise
+// let a dashboard resize reach in here.
 func (m *Model) disablePickerPreviewWithNotice(msg string) tea.Cmd {
 	m.pickerPreviewEnabled = false
-	m.retargetPreview(0)
+	m.lendPreviewToLauncher(0)
 	return m.pushPreviewNotice(msg)
 }

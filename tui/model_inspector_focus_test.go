@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
@@ -395,6 +396,221 @@ func TestAWidthRoundTripStillResetsTheHoldWhenTheSelectionMoved(t *testing.T) {
 	if wide.previewText != "" || wide.previewLoaded {
 		t.Fatalf("the new target kept the previous session's snapshot: loaded=%v text=%q",
 			wide.previewLoaded, firstPreviewLine(wide.previewText))
+	}
+}
+
+// launcherHeldInspectorModel is heldInspectorModel with a launcher that has
+// somewhere else to point: one configured project bound to a running session
+// that is NOT the one the inspector is reading.
+//
+// The two window IDs being different is the whole setup. A launcher whose row
+// resolved to the same window would move the shared pane to where it already
+// was, and every assertion below about "the launcher took the pane" would pass
+// on a model where nothing was ever taken.
+func launcherHeldInspectorModel(t *testing.T) Model {
+	t.Helper()
+	m := heldInspectorModel(t)
+	m.cfg.Sessions = []config.Session{{Title: "web", Account: "work"}}
+	return m
+}
+
+// openLauncherPreview presses `l` then `p` and answers the read that opening
+// the launcher's pane dispatches, leaving the launcher on screen holding the
+// shared pane.
+func openLauncherPreview(t *testing.T, m Model) Model {
+	t.Helper()
+	m = pressKey(m, keyL)
+	if m.mode != ModePicker {
+		t.Fatalf("setup: l opened %v rather than the launcher", m.mode)
+	}
+	updated, cmd := m.Update(keyPress(keyTogglePreview))
+	m = updated.(Model)
+	if !m.pickerPreviewEnabled {
+		t.Fatal("setup: p did not open the launcher's preview")
+	}
+	settlePreviewRead(t, &m, cmd)
+	return m
+}
+
+// TestALauncherVisitLeavesAHeldInspectorHeld is the launcher half of the hold
+// contract, and the same claim TestAWidthRoundTripLeavesAHeldInspectorHeld makes
+// about a resize. Opening the launcher, using its preview, and coming back to the
+// same dashboard selection is not a statement about what the operator wants to
+// read; it may not resume a pane they paused.
+//
+// The launcher's own pane is why this is not the resize case over again. A resize
+// takes the pane away; the launcher POINTS IT SOMEWHERE ELSE and puts its own
+// content on it, so the dashboard's snapshot is gone rather than merely
+// unattended, and coming back means putting it back rather than leaving it alone.
+func TestALauncherVisitLeavesAHeldInspectorHeld(t *testing.T) {
+	m := launcherHeldInspectorModel(t)
+	target, text, window := m.previewWindowID, m.previewText, inspectorWindow(m)
+	poll := m.previewPollSeq
+
+	launcher := openLauncherPreview(t, m)
+	if launcher.previewWindowID == target {
+		t.Fatalf("setup: the launcher never moved the shared pane off window %d", target)
+	}
+
+	updated, back := launcher.Update(keyPress(keyEsc))
+	m = updated.(Model)
+	if m.mode != ModeList {
+		t.Fatalf("esc left mode %v", m.mode)
+	}
+	if !m.inspectorViewport.Paused() {
+		t.Fatal("the launcher visit resumed the pane the operator had paused")
+	}
+	if got := inspectorWindow(m); got != window {
+		t.Fatalf("the launcher visit moved the output under the reader:\ngot  %q\nwant %q",
+			firstPreviewLine(got), firstPreviewLine(window))
+	}
+	if m.previewWindowID != target || m.previewText != text || !m.previewLoaded {
+		t.Fatalf("the launcher kept the pane it borrowed: window %d→%d, text kept=%v, loaded=%v",
+			target, m.previewWindowID, m.previewText == text, m.previewLoaded)
+	}
+	if m.launcherBorrowedPane != nil {
+		t.Fatal("leaving the launcher left the borrow outstanding")
+	}
+
+	// Giving the hold back may not cost the pane its liveness, for the same
+	// reason the resize may not: the chain the launcher opened was the
+	// launcher's, and an operator who presses End must land on live output.
+	if back == nil {
+		t.Fatal("leaving the launcher restarted nothing")
+	}
+	if m.previewPollSeq == poll {
+		t.Fatal("the dashboard came back on the chain the launcher was polling")
+	}
+	if !m.previewReadInFlight && !m.previewReadPending {
+		t.Fatal("the dashboard came back owing no read, so the pane it resumes to is whatever the launcher left")
+	}
+}
+
+// TestTurningTheLauncherPreviewOffAndOnAgainLeavesAHeldInspectorHeld is the same
+// claim through the other spelling of the visit. Turning the launcher's pane OFF
+// looks like giving it back and is not: it points the shared target at nothing,
+// and the inspector behind the launcher is pointed at that same target.
+func TestTurningTheLauncherPreviewOffAndOnAgainLeavesAHeldInspectorHeld(t *testing.T) {
+	m := launcherHeldInspectorModel(t)
+	target, window := m.previewWindowID, inspectorWindow(m)
+
+	launcher := openLauncherPreview(t, m)
+	updated, cmd := launcher.Update(keyPress(keyTogglePreview))
+	launcher = updated.(Model)
+	if launcher.pickerPreviewEnabled {
+		t.Fatal("setup: the second p did not close the launcher's preview")
+	}
+	settlePreviewRead(t, &launcher, cmd)
+
+	updated, _ = launcher.Update(keyPress(keyEsc))
+	m = updated.(Model)
+	if !m.inspectorViewport.Paused() {
+		t.Fatal("closing the launcher's preview resumed the dashboard's")
+	}
+	if got := inspectorWindow(m); got != window || m.previewWindowID != target {
+		t.Fatalf("closing the launcher's preview took the dashboard's target with it: window %d→%d\ngot  %q",
+			target, m.previewWindowID, firstPreviewLine(got))
+	}
+}
+
+// TestTheLauncherPreviewShowsItsOwnTargetWhileItHoldsThePane is the other done
+// criterion, and the guard against the cheap repair. Leaving the dashboard's
+// snapshot on the shared fields while the launcher navigates would preserve the
+// hold perfectly and paint one session's output as another's: the launcher's
+// pane is an answer about the row under ITS cursor.
+func TestTheLauncherPreviewShowsItsOwnTargetWhileItHoldsThePane(t *testing.T) {
+	m := launcherHeldInspectorModel(t)
+	dashboardTarget := m.previewWindowID
+
+	launcher := openLauncherPreview(t, m)
+	if launcher.previewWindowID == dashboardTarget || launcher.previewWindowID == 0 {
+		t.Fatalf("the launcher's preview did not follow its own row: window %d", launcher.previewWindowID)
+	}
+	if launcher.inspectorViewport.Paused() {
+		t.Fatal("the launcher's pane inherited the dashboard's hold, so its own output would not scroll")
+	}
+	if got := stripAnsi(renderPicker(launcher)); strings.Contains(got, "output line 001") {
+		t.Fatalf("the launcher drew the dashboard's held snapshot as its own content:\n%s", got)
+	}
+	if launcher.launcherBorrowedPane == nil {
+		t.Fatal("the launcher moved the shared pane without recording the borrow")
+	}
+}
+
+// TestALauncherVisitStillResetsTheHoldWhenTheSelectionMoved keeps the repair
+// from being "always put it back". The dashboard's selection can move while the
+// launcher is on screen — a topology refresh reorders the queue under it — and a
+// restore that ignored that would hand the new session the old one's snapshot.
+func TestALauncherVisitStillResetsTheHoldWhenTheSelectionMoved(t *testing.T) {
+	m := launcherHeldInspectorModel(t)
+	target := m.previewWindowID
+
+	launcher := openLauncherPreview(t, m)
+	launcher = selectLine(t, launcher, "session:web")
+
+	updated, _ := launcher.Update(keyPress(keyEsc))
+	m = updated.(Model)
+	if m.previewWindowID == target {
+		t.Fatalf("leaving the launcher did not follow the selection that moved while it was away: still %d", target)
+	}
+	if m.inspectorViewport.Paused() {
+		t.Fatal("the new selection inherited the previous session's hold")
+	}
+	if m.previewText != "" || m.previewLoaded {
+		t.Fatalf("the new target kept a snapshot that was never read for it: loaded=%v text=%q",
+			m.previewLoaded, firstPreviewLine(m.previewText))
+	}
+}
+
+// TestADashboardResizeLeavesTheLaunchersRememberedPreviewAlone is the third way
+// the launcher used to reach the inspector, and the one with no keypress behind
+// it at all. pickerPreviewEnabled is the launcher's remembered visibility and
+// outlives the visit that set it, so a resize that consulted it alone let a pane
+// three views away and invisible retarget the one on screen.
+//
+// The configuration is deliberately vertical. Under the horizontal default both
+// surfaces clear their floors at the same column count, so there is no terminal
+// that the launcher's pane does not fit in and the dashboard's does — and the
+// test would be asserting about a resize that changed nothing for either.
+func TestADashboardResizeLeavesTheLaunchersRememberedPreviewAlone(t *testing.T) {
+	m := launcherHeldInspectorModel(t)
+	m.cfg.Defaults.Preview.Direction = "vertical"
+	m.cfg.Defaults.Preview.MinRows = 40
+	// Remembered from an earlier visit; the launcher itself is not on screen.
+	m.pickerPreviewEnabled = true
+	target, top := m.previewWindowID, firstPreviewLine(inspectorWindow(m))
+
+	updated, _ := m.handleWindowSize(tea.WindowSizeMsg{Width: 160, Height: 40})
+	resized := updated.(Model)
+	if !resized.inspectorActive() {
+		t.Fatal("setup: the resize took the dashboard's own split away, so it proves nothing about the launcher's")
+	}
+	if previewFits(resized.width, resized.height, footerBudgetLines(resized),
+		resized.cfg.Defaults.Preview.MinCols, resized.cfg.Defaults.Preview.MinRows,
+		resized.cfg.Defaults.Preview.Direction) {
+		t.Fatal("setup: the launcher's pane still fits, so the disable path was never reached")
+	}
+	if !resized.inspectorViewport.Paused() {
+		t.Fatal("a dashboard resize resumed the pane through the launcher's flag")
+	}
+	if resized.previewWindowID != target {
+		t.Fatalf("a dashboard resize retargeted the pane through the launcher's flag: %d→%d",
+			target, resized.previewWindowID)
+	}
+	// The pane's first visible line rather than its whole window: this resize
+	// changes the row count, so the window legitimately grows or shrinks. Where
+	// the operator is reading FROM is the thing that may not move.
+	if got := firstPreviewLine(inspectorWindow(resized)); got != top {
+		t.Fatalf("a dashboard resize moved the output under the reader: %q, want %q", got, top)
+	}
+	if resized.launcherBorrowedPane != nil {
+		t.Fatal("a dashboard resize borrowed the pane on behalf of a launcher that is not on screen")
+	}
+	// The flag itself is untouched: it records what the launcher looked like when
+	// the operator last left it, and a terminal they resized while looking at the
+	// dashboard is not them changing their mind about the launcher.
+	if !resized.pickerPreviewEnabled {
+		t.Fatal("a dashboard resize decided something about the launcher's preview")
 	}
 }
 

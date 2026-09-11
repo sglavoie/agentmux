@@ -307,6 +307,15 @@ type Model struct {
 	// inspectorViewport is where the inspector's output pane is looking. Its zero
 	// value follows the tail, so a retarget resets it by assignment.
 	inspectorViewport dashboard.OutputViewport
+	// launcherBorrowedPane is the dashboard inspector's pane, set aside for as
+	// long as the launcher is pointing the shared one at a row of its own. It is
+	// non-nil for exactly that interval: nil means the pane above is the
+	// dashboard's own, and a value means those fields currently describe the
+	// launcher's preview and the dashboard's are in here.
+	//
+	// The pointer is never written through, only replaced, which is what makes it
+	// safe on a model every handler copies by value.
+	launcherBorrowedPane *dashboardPane
 	// Mouse double-click state is process-local and identity-bearing. A row's
 	// coordinates are never retained: every click arrives with the identity
 	// captured by the last render and is revalidated against the live items.

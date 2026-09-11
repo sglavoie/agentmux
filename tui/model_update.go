@@ -262,7 +262,12 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, c)
 		}
 	}
-	if m.pickerPreviewEnabled {
+	// Only while the launcher is the surface on screen. pickerPreviewEnabled is
+	// the launcher's remembered visibility and outlives the visit that set it, so
+	// an unguarded check here would let a shrink of the DASHBOARD disable a pane
+	// nobody is looking at — and, because the two share one target, retarget the
+	// inspector the operator is reading.
+	if launcherOwnsPreview(m) && m.pickerPreviewEnabled {
 		if !previewFits(m.width, m.height, footerBudgetLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
 			if c := m.disablePickerPreviewWithNotice("preview disabled: terminal too small"); c != nil {
 				cmds = append(cmds, c)

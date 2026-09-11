@@ -91,14 +91,10 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.pickerProfileOverride = nil
 		m.pickerPinned = nil
 		m.pickerProfileFilter = ""
-		var cmds []tea.Cmd
-		if cmd := m.refreshPreviewForCursor(); cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-		if cmd := m.resumeListPreviewTickCmd(); cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-		return m, tea.Batch(cmds...)
+		// The mode is assigned before the pane is handed back, because handing it
+		// back asks which window the DASHBOARD cursor is on and that question is
+		// answered through the mode.
+		return m, m.returnPreviewToDashboard()
 	case keyCtrlC, keyQ:
 		return m, tea.Quit
 	case keyJ, keyDown:
@@ -240,10 +236,10 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.pickerProfileOverride = nil
 		m.pickerPinned = nil
 		m.pickerProfileFilter = ""
-		// Resumed before the return expression is built, not inside it: the
-		// resume draws a new chain identity onto m, and Go does not order a bare
+		// Returned before the expression is built, not inside it: handing the pane
+		// back draws a new chain identity onto m, and Go does not order a bare
 		// operand against a call in the same expression list.
-		resume := m.resumeListPreviewTickCmd()
+		resume := m.returnPreviewToDashboard()
 		return m, tea.Batch(cmd, resume)
 	case keyBackspace:
 		if r := []rune(m.pickerFilter); len(r) > 0 {
