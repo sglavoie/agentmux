@@ -297,3 +297,80 @@ func TestMouseIgnoresUnsupportedEventsAndOutsideCoordinates(t *testing.T) {
 		}
 	}
 }
+
+// TestMouseInspectorClickTakesTheKeysAndBreaksAPendingDoubleClick is the pane
+// half of mouse targeting. The inspector has no selectable rows, so a click in
+// it does exactly two things: it aims the keyboard at the pane, and it ends
+// whatever double-click chain the queue had going. The second half is the one
+// that would bite — a click in the other pane is the operator's attention
+// leaving the queue, so the next click on a row starts a new chain rather than
+// completing the old one and focusing a terminal nobody asked for.
+func TestMouseInspectorClickTakesTheKeysAndBreaksAPendingDoubleClick(t *testing.T) {
+	d, client := mouseFixture(t)
+	requireInspector(t, d.model)
+
+	row := func() mouseHitRegion {
+		return findMouseHit(t, d.model, mouseHitSession, func(hit mouseHitRegion) bool { return hit.identity.WindowID == 61 })
+	}
+	clickHit(t, d, row())
+	cursor := d.model.cursor
+
+	pane := renderDashboardFrame(d.model).hitMap
+	if !pane.hasInspector {
+		t.Fatal("the split frame published no inspector region")
+	}
+	if err := d.Mouse(pane.inspectorPane.X+1, pane.inspectorPane.Y+1, UITestMouseLeft); err != nil {
+		t.Fatal(err)
+	}
+	if !d.model.inspectorFocused() {
+		t.Fatal("clicking the inspector did not aim the keyboard at it")
+	}
+	if d.model.cursor != cursor {
+		t.Fatalf("clicking the inspector moved the queue cursor to %d", d.model.cursor)
+	}
+
+	clickHit(t, d, row())
+	if got := len(client.CallsFor("FocusTab")); got != 0 {
+		t.Fatalf("the click across the divider left the chain intact: %d FocusTab calls", got)
+	}
+	if d.model.inspectorFocused() {
+		t.Fatal("clicking a queue row left the keyboard in the inspector")
+	}
+}
+
+// TestMouseOverAFullScreenInspectorReachesNoQueueRow is the other targeting
+// rule, and it is about a pane that is not there. Full screen draws no queue
+// column, so no queue row may be clickable — a click at the coordinate a row
+// occupied before the pane took the body would otherwise select whatever the
+// hit map still remembered being there.
+func TestMouseOverAFullScreenInspectorReachesNoQueueRow(t *testing.T) {
+	d, client := mouseFixture(t)
+	requireInspector(t, d.model)
+	row := findMouseHit(t, d.model, mouseHitSession, func(hit mouseHitRegion) bool { return hit.identity.WindowID == 61 })
+
+	d.model.inspectorDisplay = inspectorFullScreen
+	frame := renderDashboardFrame(d.model)
+	if frame.hitMap.hasList {
+		t.Fatal("a full-screen inspector published a queue pane")
+	}
+	for _, hit := range frame.hitMap.clicks {
+		switch hit.kind {
+		case mouseHitSession, mouseHitFamily, mouseHitFamilyChevron:
+			t.Fatalf("a full-screen inspector left a queue region clickable: %+v", hit)
+		}
+	}
+	if !frame.hitMap.hasInspector {
+		t.Fatal("a full-screen inspector published no pane of its own")
+	}
+
+	cursor := d.model.cursor
+	if err := d.Mouse(row.rect.X, row.rect.Y, UITestMouseLeft); err != nil {
+		t.Fatal(err)
+	}
+	if d.model.cursor != cursor {
+		t.Fatalf("a click over the full-screen pane moved the cursor to %d", d.model.cursor)
+	}
+	if got := len(client.CallsFor("FocusTab")); got != 0 {
+		t.Fatalf("a click over the full-screen pane issued %d FocusTab calls", got)
+	}
+}
