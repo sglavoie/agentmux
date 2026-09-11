@@ -196,10 +196,11 @@ func TestUnreadDotSurvivesTheKeypressThatClearsThePulse(t *testing.T) {
 
 	pulsing := stripAnsi(renderList(m))
 	pulsedRow, dottedRow := pulsing, pulsing
-	if lines := strings.Split(strings.TrimRight(pulsing, "\n"), "\n"); len(lines) == 2 {
-		pulsedRow, dottedRow = lines[0], lines[1]
+	// One bucket, so one heading above the two rows.
+	if lines := strings.Split(strings.TrimRight(pulsing, "\n"), "\n"); len(lines) == 3 {
+		pulsedRow, dottedRow = lines[1], lines[2]
 	} else {
-		t.Fatalf("setup: expected 2 rendered rows, got %d:\n%s", len(lines), pulsing)
+		t.Fatalf("setup: expected a heading and 2 rendered rows, got %d:\n%s", len(lines), pulsing)
 	}
 	if !strings.Contains(pulsedRow, dashboard.GroupBorderGlyph) {
 		t.Fatalf("setup: expected the transition pulse in the gutter; got %q", pulsedRow)

@@ -40,179 +40,33 @@ func TestBandForBoundariesAndUnmeasuredWidth(t *testing.T) {
 	}
 }
 
-// bandRowFixture is one session carrying every optional field at once, so a
-// band's decision to keep or drop each of them is visible in a single row.
-func bandRowFixture() session.RunningSession {
-	return session.RunningSession{
-		TabNumber: 3,
-		WindowID:  11,
-		Account:   "engineering",
-		Profile:   "engineering",
-		Harness:   "claude",
-		Base:      "api",
-		Project:   "api-gateway-service",
-		Directory: "/home/user/projects/worktrees/api-gateway-service",
-		Branch:    "amx/feat-x",
-		Dirty:     true,
-		State:     "bolt",
-	}
-}
+// TestBandsNoLongerReachTheSessionRow is the negative half of the queue
+// redesign, and it is a test rather than a comment because the regression it
+// guards is silent: a future band-keyed branch inside the row would restore the
+// step function the queue exists to remove, and every other assertion in the
+// package would still pass. FormatRow takes no band at all now — the type system
+// carries most of this — so what is left to pin is that the row's OUTPUT does not
+// change in kind across a boundary, which TestQueueRowIsContinuousAcrossTheRetiredBandBoundaries
+// asserts, and that the surviving callers are chrome rather than rows.
+//
+// The band remains a real classifier for the footer and the legend; this file
+// keeps its boundary test above for them.
+func TestBandsNoLongerReachTheSessionRow(t *testing.T) {
+	q := QueueRow{Name: "api-gateway-service", Status: statusWorking, Elapsed: "0:42"}
+	cols := ScanQueueColumns([]QueueRow{q})
 
-func bandRowInput(s session.RunningSession, width int) RowInput {
-	band := BandFor(width)
-	rows := []session.RunningSession{s}
-	return RowInput{
-		Session:       s,
-		Band:          band,
-		Width:         width,
-		TabNumberCell: renderTabNumberCell(s.TabNumber, tabNumberColumnWidth(rows)),
-		ActivityCell:  "0:42 ",
-		BranchCell:    renderBranchCell(s, branchColumnWidth(rows)),
-		ProfileWidth:  profileColumnWidth(rows),
-		TitleWidth:    titleColumnWidth(rows, band),
-	}
-}
-
-// TestRowBandDropsAndKeepsTheDocumentedFields is the presets themselves: which
-// fields each band draws, asserted on the rendered row rather than on the
-// allocator, so a field that survives the arithmetic but not the composition
-// (or the reverse) still fails.
-func TestRowBandDropsAndKeepsTheDocumentedFields(t *testing.T) {
-	s := bandRowFixture()
-	for _, width := range bandTestWidths {
-		row := stripAnsi(FormatRow(bandRowInput(s, width)))
-		band := BandFor(width)
-
-		// The title is in every band: it is the field a row exists to carry.
-		if !strings.Contains(row, "api-gate") {
-			t.Errorf("width %d (%s): row lost its title: %q", width, band, row)
-		}
-
-		switch band {
-		case BandCompact:
-			for _, dropped := range []struct{ name, text string }{
-				{"profile", "[E]"},
-				{"full profile", "engineering"},
-				{"harness", "claude"},
-				{"activity", "0:42"},
-				{"branch", "amx/feat-x"},
-				{"directory", "projects"},
-			} {
-				if strings.Contains(row, dropped.text) {
-					t.Errorf("width %d: compact row should not carry the %s (%q): %q",
-						width, dropped.name, dropped.text, row)
-				}
-			}
-		case BandStandard:
-			if !strings.Contains(row, "[E]") {
-				t.Errorf("width %d: standard row should carry the profile initial: %q", width, row)
-			}
-			if strings.Contains(row, "engineering") {
-				t.Errorf("width %d: only a spacious row spells the profile out: %q", width, row)
-			}
-			if !strings.Contains(row, "claude") {
-				t.Errorf("width %d: standard row should carry the harness: %q", width, row)
-			}
-		case BandSpacious:
-			if !strings.Contains(row, "[engineering]") {
-				t.Errorf("width %d: spacious row should spell the profile out: %q", width, row)
-			}
-			if !strings.Contains(row, "claude") {
-				t.Errorf("width %d: spacious row should carry the harness: %q", width, row)
-			}
-			if !strings.Contains(row, "amx/feat-x") {
-				t.Errorf("width %d: spacious row should carry the branch: %q", width, row)
+	// Same tokens at every width that can pay for them: what a band used to decide
+	// is now decided by the row's own budget, so two widths in different bands that
+	// afford the same columns produce the same row.
+	wide := stripAnsi(FormatRow(RowInput{Queue: q, Width: 160, Columns: cols}))
+	standard := stripAnsi(FormatRow(RowInput{Queue: q, Width: 100, Columns: cols}))
+	compact := stripAnsi(FormatRow(RowInput{Queue: q, Width: 60, Columns: cols}))
+	for _, want := range []string{"api-gateway-service", statusWorking, "0:42"} {
+		for name, row := range map[string]string{"spacious": wide, "standard": standard, "compact": compact} {
+			if !strings.Contains(row, want) {
+				t.Errorf("%s row dropped %q: %q", name, want, row)
 			}
 		}
-	}
-}
-
-// TestCompactTitleStaysUsefulAtEveryCompactWidth pins the floor the band's
-// whole point rests on: dropping five fields buys the title room, and a row
-// that spent it and still showed three characters would not have been worth the
-// trade.
-func TestCompactTitleStaysUsefulAtEveryCompactWidth(t *testing.T) {
-	s := bandRowFixture()
-	for width := MinRowWidth(); width < bandStandardMinWidth; width++ {
-		in := bandRowInput(s, width)
-		row := stripAnsi(FormatRow(in))
-		prefixWidth := layout.Width(in.TabNumberCell) + lockColumnWidth + muteColumnWidth +
-			layout.IconCellWidth + 1
-		if got := layout.Width(row) - prefixWidth; got < compactTitleMinWidth-1 {
-			t.Errorf("width %d: compact title got %d cells, want at least %d",
-				width, got, compactTitleMinWidth-1)
-		}
-		if !utf8.ValidString(row) {
-			t.Errorf("width %d: row is not valid UTF-8: %q", width, row)
-		}
-	}
-}
-
-// TestSpaciousTitleExpandsToContentBeforeTheDirectory pins the direction the
-// spacious band spends its surplus in. The standard column is fixed at
-// titleColWidth; spacious grows it to the widest title on screen, so the
-// directory's budget is what shrinks rather than the title's.
-func TestSpaciousTitleExpandsToContentBeforeTheDirectory(t *testing.T) {
-	rows := []session.RunningSession{
-		{Base: "api", Project: "api"},
-		{Base: "long", Project: "an-unusually-long-project-title"},
-	}
-	if got := titleColumnWidth(rows, BandStandard); got != titleColWidth {
-		t.Errorf("standard title column = %d, want the fixed %d", got, titleColWidth)
-	}
-	spacious := titleColumnWidth(rows, BandSpacious)
-	if spacious <= titleColWidth {
-		t.Errorf("spacious title column = %d, want it grown past the fixed %d", spacious, titleColWidth)
-	}
-	if spacious > spaciousTitleMaxWidth {
-		t.Errorf("spacious title column = %d, want it capped at %d", spacious, spaciousTitleMaxWidth)
-	}
-	if got := titleColumnWidth(rows, BandCompact); got != 0 {
-		t.Errorf("compact title column = %d, want none (the title is flexible there)", got)
-	}
-
-	// The same growth, seen through the allocator: at one width, the spacious
-	// title is wider and the directory is narrower by what the title took.
-	in := bandRowInput(rows[1], 160)
-	in.Session = rows[1]
-	in.ProfileWidth = profileColumnWidth(rows)
-	wide := allocateRow(in, 12, 8)
-	in.Band = BandStandard
-	in.TitleWidth = titleColumnWidth(rows, BandStandard)
-	narrow := allocateRow(in, 12, 8)
-	if wide.title <= narrow.title {
-		t.Errorf("spacious title = %d, standard = %d: spacious must expand to content",
-			wide.title, narrow.title)
-	}
-	if wide.dir >= narrow.dir {
-		t.Errorf("spacious dir = %d, standard = %d: the title's growth must come out of the directory",
-			wide.dir, narrow.dir)
-	}
-}
-
-// TestProfileNameCellIsBoundedAndValidUTF8 pins the two things a profile name
-// can do that nothing else in the row can: it is operator-chosen so it has no
-// natural bound, and it can start with a multibyte rune the initial badge would
-// otherwise cut in half.
-func TestProfileNameCellIsBoundedAndValidUTF8(t *testing.T) {
-	long := session.RunningSession{Profile: strings.Repeat("veryverylong", 4)}
-	text, cell := profileCellFor(RowInput{Session: long, Band: BandSpacious,
-		ProfileWidth: profileColumnWidth([]session.RunningSession{long})})
-	if layout.Width(text) > profileNameMaxWidth || cell > profileNameMaxWidth+2 {
-		t.Errorf("spacious profile cell = %q (%d cells), want bounded by %d",
-			text, cell, profileNameMaxWidth)
-	}
-
-	unicode := session.RunningSession{Profile: "élan"}
-	initial, cell := profileCellFor(RowInput{Session: unicode, Band: BandStandard})
-	if cell != profileInitialCellWidth {
-		t.Errorf("standard profile cell width = %d, want %d", cell, profileInitialCellWidth)
-	}
-	if !utf8.ValidString(initial) || initial != "É" {
-		t.Errorf("standard profile initial = %q, want the uppercased first rune", initial)
-	}
-	if _, cell := profileCellFor(RowInput{Session: unicode, Band: BandCompact}); cell != 0 {
-		t.Errorf("compact profile cell width = %d, want none", cell)
 	}
 }
 

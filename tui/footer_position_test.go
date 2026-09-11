@@ -152,11 +152,15 @@ func TestListFooterPositionFragmentAccountsForGroupChrome(t *testing.T) {
 		for i := range rows {
 			rows[i].State = "bolt"
 		}
-		m := positionFixtureModel(rows, 120, 15)
+		// Taller than the multi-group cases above: one bucket still draws its own
+		// heading — the count is a fact about the queue, not a separator between
+		// buckets — so the fixture has to be able to pay for it and still show
+		// every item, which is the condition the suppression rule is about.
+		m := positionFixtureModel(rows, 120, 20)
 
 		start, end, _, _ := renderedItemWindow(t, m)
 		if start != 0 || end != m.listItemCount() {
-			t.Fatalf("setup: one group draws no headings, so all %d items should fit; got [%d,%d)", m.listItemCount(), start, end)
+			t.Fatalf("setup: one group draws one heading, so all %d items should still fit; got [%d,%d)", m.listItemCount(), start, end)
 		}
 		if got := stripAnsi(renderFooter(m)); strings.Contains(got, " of ") {
 			t.Errorf("expected no position fragment when the renderer shows every item; got:\n%s", got)

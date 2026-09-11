@@ -228,22 +228,32 @@ func TestPickerPreviewOverrideHeaderColor(t *testing.T) {
 	}
 }
 
-// TestFormatRowOverrideSplitsColor verifies the main list row keeps the title
-// and account badge on the project's *configured default* profile color while
-// the harness-name cell uses the configured harness color.
-func TestFormatRowOverrideSplitsColor(t *testing.T) {
+// TestSelectedSessionContextUsesTheConfiguredDefaultProfileColor is where the
+// row's identity color went. The queue row draws its name unstyled — a neutral
+// name is what lets the amber status beside it mean something — so the project's
+// color is now carried by the detail strip, which describes the selection.
+//
+// The claim that survives the move is the one that was load-bearing: a session
+// LAUNCHED under an override profile still wears its project's CONFIGURED
+// default color, so the operator's color association with a project is not
+// rewritten by how a particular window happened to start.
+func TestSelectedSessionContextUsesTheConfiguredDefaultProfileColor(t *testing.T) {
 	cfg := &config.Config{
 		HarnessEmojis: map[string]string{"claude": "🦊"},
+		Accounts: []config.Account{
+			{Name: "work", Color: "blue"},
+			{Name: "personal", Color: "yellow"},
+		},
 		Projects: []config.Session{
 			{Title: "api", Account: "personal"},
 		},
 	}
-	acctColor := map[string]string{"work": "blue", "personal": "yellow"}
 	s := session.RunningSession{
 		TabID:     1,
 		WindowID:  42,
 		Account:   "work", // running profile (override)
 		Project:   "api",  // configured default → personal
+		Base:      "api",
 		Harness:   "claude",
 		Directory: "/home/user/api",
 		State:     "bolt",
@@ -253,23 +263,28 @@ func TestFormatRowOverrideSplitsColor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("palette.Lookup(yellow): %v", err)
 	}
-	purple, err := palette.Lookup("purple")
-	if err != nil {
-		t.Fatalf("palette.Lookup(purple): %v", err)
-	}
 	yellowHex := yellow.ForegroundHex()
-	purpleHex := purple.ForegroundHex()
 
-	row := dashboard.FormatRow(dashboard.RowInput{Session: s, Band: dashboard.BandStandard, Width: 100, AcctColor: acctColor, HarnessColor: map[string]string{"claude": "purple"}, Cfg: cfg})
+	items := dashboard.BuildItemsFor(dashboard.ViewUrgency, []session.RunningSession{s}, nil)
+	item, _ := items.At(0)
+	lines := dashboard.RenderDetailStrip(dashboard.DetailStripInput{
+		Width: 100, Items: items, Item: item, Selected: true, Cfg: cfg,
+	})
 
-	if indexColoredSegment(row, yellowHex, "api") < 0 {
-		t.Errorf("expected title 'api' to render in the project default profile color (%s, yellow); row:\n%q", yellowHex, row)
+	if indexColoredSegment(lines[0], yellowHex, "api") < 0 {
+		t.Errorf("expected the selected session's title to keep the project default profile color (%s, yellow); strip:\n%q", yellowHex, lines[0])
 	}
-	if indexColoredSegment(row, yellowHex, "[W]") < 0 {
-		t.Errorf("expected account badge to render in the project default profile color (%s, yellow); row:\n%q", yellowHex, row)
+	if indexColoredSegment(lines[0], yellowHex, "claude") < 0 {
+		t.Errorf("expected the harness to sit inside the same identity span (%s, yellow); strip:\n%q", yellowHex, lines[0])
 	}
-	if indexColoredSegment(row, purpleHex, "🦊 claude") < 0 {
-		t.Errorf("expected harness cell to render in harness purple (%s); row:\n%q", purpleHex, row)
+
+	// The row itself says nothing about the profile, which is the point: the only
+	// color on a queue line is the status's own emphasis.
+	queue := dashboard.BuildQueue(dashboard.QueueInput{Rows: items.Rows})
+	row := dashboard.FormatRow(dashboard.RowInput{Queue: queue[0], Width: 100,
+		Columns: dashboard.ScanQueueColumns(queue)})
+	if indexColoredSegment(row, yellowHex, "api") >= 0 {
+		t.Errorf("the queue row colored its name by profile; row:\n%q", row)
 	}
 }
 
@@ -331,36 +346,42 @@ func TestDetailHeaderOverrideBadgeColor(t *testing.T) {
 	}
 }
 
-// TestFormatRowProfileColor verifies the main list row applies the profile
-// color to the title and the harness color to the "<emoji> <label>" cell.
-func TestFormatRowProfileColor(t *testing.T) {
-	cfg := &config.Config{
-		HarnessEmojis: map[string]string{"claude": "🦊"},
-	}
-	acctColor := map[string]string{"work": "yellow"}
+// TestHarnessColorNoLongerReachesTheSessionRow is the deliberate loss recorded
+// as a test rather than left to be rediscovered. The row used to color the
+// `<emoji> <label>` harness cell with the configured harness color; the cell is
+// gone with the rest of the row's metadata, and the detail strip draws the
+// harness inside one identity span rather than giving it a second color that
+// would break the span in two.
+//
+// The configured harness colors are NOT dead: dashboard.HarnessColorMap still
+// drives the launcher's rows and its profile overlay, which is where an operator
+// picks a harness and therefore where the color still distinguishes something.
+func TestHarnessColorNoLongerReachesTheSessionRow(t *testing.T) {
+	cfg := &config.Config{HarnessEmojis: map[string]string{"claude": "🦊"}}
 	s := session.RunningSession{
-		TabID: 1, Base: "api", Account: "work",
+		TabID: 1, Base: "api", Project: "api", Account: "work",
 		Harness: "claude", Directory: "/home/user/api", State: "bolt",
 	}
 
-	yellow, err := palette.Lookup("yellow")
-	if err != nil {
-		t.Fatalf("palette.Lookup(yellow): %v", err)
-	}
 	blue, err := palette.Lookup("blue")
 	if err != nil {
 		t.Fatalf("palette.Lookup(blue): %v", err)
 	}
-	yellowHex := yellow.ForegroundHex()
 	blueHex := blue.ForegroundHex()
 
-	row := dashboard.FormatRow(dashboard.RowInput{Session: s, Band: dashboard.BandSpacious, Width: 120, AcctColor: acctColor, HarnessColor: map[string]string{"claude": "blue"}, Cfg: cfg})
-
-	if indexColoredSegment(row, yellowHex, "api") < 0 {
-		t.Errorf("expected title 'api' wrapped in yellow (%s); row:\n%q", yellowHex, row)
+	items := dashboard.BuildItemsFor(dashboard.ViewUrgency, []session.RunningSession{s}, nil)
+	queue := dashboard.BuildQueue(dashboard.QueueInput{Rows: items.Rows})
+	row := dashboard.FormatRow(dashboard.RowInput{Queue: queue[0], Width: 120,
+		Columns: dashboard.ScanQueueColumns(queue)})
+	if strings.Contains(stripAnsi(row), "claude") {
+		t.Errorf("the queue row still carries a harness cell; row:\n%q", stripAnsi(row))
 	}
-	if indexColoredSegment(row, blueHex, "🦊 claude") < 0 {
-		t.Errorf("expected '🦊 claude' cell wrapped in harness blue (%s); row:\n%q", blueHex, row)
+	if indexColoredSegment(row, blueHex, "api") >= 0 {
+		t.Errorf("the queue row carries a harness color; row:\n%q", row)
+	}
+
+	if got := dashboard.HarnessColorMap(cfg); got == nil {
+		t.Error("HarnessColorMap returned nil: the launcher still reads it")
 	}
 }
 

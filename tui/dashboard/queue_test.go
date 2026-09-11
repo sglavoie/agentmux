@@ -115,11 +115,16 @@ func TestIconlessRowReadsItsBucket(t *testing.T) {
 }
 
 // TestReasonStatusesCoverEveryPromptKind is the totality guard the untyped wire
-// field cannot give us, and the sentence-length twin of
-// TestReasonTagsCoverEveryPromptKind. state.WindowState.PromptKind is a bare
-// string so Claude and Codex kinds can share it without a shared enum, which
-// means nothing in the type system notices when a tenth kind is added and the
-// queue silently stops refining it.
+// field cannot give us. state.WindowState.PromptKind is a bare string so Claude
+// and Codex kinds can share it without a shared enum, which means nothing in the
+// type system notices when a tenth kind is added and the queue silently stops
+// refining it.
+//
+// It is the sole survivor of a pair: the retired reasonTags glossed the same
+// kinds into a five-cell column the queue row no longer draws, and this assertion
+// inherited its job when that column went. There is only one blocked-reason
+// vocabulary now, which is why the length check below is the whole contract
+// rather than half of a cross-check.
 func TestReasonStatusesCoverEveryPromptKind(t *testing.T) {
 	kinds := []string{
 		string(screenstate.CodexPromptEditApproval),
@@ -135,9 +140,6 @@ func TestReasonStatusesCoverEveryPromptKind(t *testing.T) {
 	for _, kind := range kinds {
 		if reasonStatuses[kind] == "" {
 			t.Errorf("prompt kind %q has no status sentence; decide what it reads as in reasonStatuses", kind)
-		}
-		if reasonTags[kind] == "" {
-			t.Errorf("prompt kind %q has a status sentence but no column tag; the two vocabularies must cover the same kinds", kind)
 		}
 	}
 	if len(reasonStatuses) != len(kinds) {

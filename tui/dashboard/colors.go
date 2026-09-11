@@ -21,8 +21,13 @@ func ProfileColorMap(cfg *config.Config) map[string]string {
 }
 
 // HarnessColorMap maps harness name → palette color name from the
-// [harness_colors] config table. The harness cell is keyed by harness rather
-// than by profile so the column stays stable across profile overrides.
+// [harness_colors] config table. It is keyed by harness rather than by profile
+// so the color stays stable across profile overrides.
+//
+// The queue row is no longer one of its readers — a session row carries no
+// harness cell to color, and the selected row's harness is named inside the
+// detail strip's single identity span. What is left is the launcher, which
+// still tells harnesses apart by color while choosing one.
 func HarnessColorMap(cfg *config.Config) map[string]string {
 	if cfg == nil {
 		return map[string]string{}

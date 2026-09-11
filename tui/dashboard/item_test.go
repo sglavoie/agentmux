@@ -208,22 +208,38 @@ func TestItemGroupCountsMatchRowGroupCounts(t *testing.T) {
 	}
 }
 
-// TestCountGroupsCountsSelectableLinesNotSessions pins the unit the group label
-// speaks in. Two sessions folded into one summary contribute one line, not two.
-func TestCountGroupsCountsSelectableLinesNotSessions(t *testing.T) {
+// TestGroupCountsSpeakInSessionsEvenWhenFolded pins the unit the group heading
+// renders. It is SESSIONS, and the whole reason it is worth a test of its own is
+// that folding must not change it: two members folded behind one summary line
+// still contribute two to the heading above them. A heading that shrank as the
+// operator folded things away would be a count of what is drawn rather than a
+// count of what is waiting, which is the opposite of what an urgency heading is
+// read for.
+//
+// CountGroups is deliberately the other unit — it asks how many distinct buckets
+// are DRAWN, which is a question about lines — so the two are asserted together
+// here to keep the difference deliberate.
+func TestGroupCountsSpeakInSessionsEvenWhenFolded(t *testing.T) {
 	list := summaryList()
 	idle := 10 * time.Minute
 
-	// Summary in Needs Attention (via its member) plus the one remaining leaf,
-	// which carries no state and no activity record and so counts as Active.
+	sessions := [3]int{}
+	for _, row := range list.Rows {
+		sessions[StateGroup(row, nil, idle)]++
+	}
+
+	// Summary in Needs you (via its member) plus the one remaining leaf, which
+	// carries no state and no activity record and so counts as Active.
 	if got, want := list.CountGroups(nil, idle), 2; got != want {
-		t.Errorf("CountGroups = %d, want %d", got, want)
+		t.Errorf("CountGroups = %d, want %d: it counts the buckets drawn, not the sessions", got, want)
 	}
-	if got, want := list.countInGroup(0, nil, idle), 1; got != want {
-		t.Errorf("countInGroup(attention) = %d, want %d: the two members contribute one line", got, want)
+	for group, want := range sessions {
+		if got := list.countInGroup(group, nil, idle); got != want {
+			t.Errorf("countInGroup(%d) = %d, want %d sessions", group, got, want)
+		}
 	}
-	if got, want := list.countInGroup(1, nil, idle), 1; got != want {
-		t.Errorf("countInGroup(active) = %d, want %d", got, want)
+	if list.countInGroup(activeGroup, nil, idle) <= 1 {
+		t.Fatalf("the fixture folds no more than one active session; the folding claim is untested")
 	}
 }
 

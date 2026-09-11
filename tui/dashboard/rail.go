@@ -259,7 +259,10 @@ func renderRailRow(row RailRow, selected, focused bool, appliedProject string, w
 	line := cursor + scope + " " + icon + " " + label + " " + tally
 	line = layout.Truncate(line, width, "…")
 	if selected && focused {
-		return renderSelectedRow(line)
+		// The rail already answers "are the keys here" by falling through to the
+		// ordinary styling when they are not, so it asks for the focused selection
+		// or for none at all.
+		return renderSelectedRow(line, false)
 	}
 	if applied {
 		return styleEmptyHero.Render(line)

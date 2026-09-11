@@ -8,9 +8,9 @@
   ],
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
-    { "type": "contains_text", "text": "▌ 1:     🔑 perm [W] 🦊 claude  api " },
-    { "type": "contains_text", "text": "▌ 2:     ⚡      [W] 🦊 claude  api-feat-x            3:07 amx/feat-x ~/projects/worktrees/api-feat-x" },
-    { "type": "excludes_text", "text": "[work    ]" },
+    { "type": "contains_text", "text": "▌ api          Needs permission      —" },
+    { "type": "contains_text", "text": "▌ api-feat-x   Working            3:07" },
+    { "type": "contains_text", "text": "/ to filter" },
     { "type": "excludes_text", "text": "icons:" },
     { "type": "no_layout_issues" }
   ]

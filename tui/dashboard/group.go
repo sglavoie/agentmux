@@ -128,14 +128,32 @@ func groupLabelStyle(group int) lipgloss.Style {
 	}
 }
 
-// renderGroupLabel emits the left-aligned tag above the first row of a group.
-// The label is indented to line up with the row content (border + space).
-func renderGroupLabel(group, count int) string {
+// renderGroupLabel emits the left-aligned heading above the first row of a
+// group, with the number of SESSIONS in it.
+//
+// indent is the width of whatever the walk prefixes its rows with — the group
+// border and its space, or nothing when the pass draws no borders — passed in
+// rather than assumed, so the heading starts on the same cell as the row content
+// under it in both cases. A heading hard-coded to the border's indent would hang
+// two cells to the right of its own rows whenever the borders were not drawn.
+func renderGroupLabel(group, count, indent int) string {
 	label := fmt.Sprintf("%s (%d)", groupLabels[group], count)
-	return strings.Repeat(" ", groupBorderWidth) + groupLabelStyle(group).Render(label)
+	if indent < 0 {
+		indent = 0
+	}
+	return strings.Repeat(" ", indent) + groupLabelStyle(group).Render(label)
 }
 
-var groupLabels = [3]string{"Needs Attention", "Active", "Idle"}
+// groupLabels name the three urgency buckets in the queue's own voice: what the
+// operator is being asked to DO about the rows under the heading, not what state
+// the harness reported.
+//
+// `Needs you` rather than `Needs Attention` because the queue exists to answer
+// "where do I go next", and the answer is a person's turn rather than a
+// property of the session. `Running` rather than `Active` because a row in that
+// bucket is one the harness is working on and the operator is not — `Active` was
+// ambiguous between the two in exactly the moment the distinction matters.
+var groupLabels = [3]string{"Needs you", "Running", "Idle"}
 
 // compareRowPriority compares the operational priority of two rows. A negative
 // result means a should precede b; zero deliberately leaves their incoming

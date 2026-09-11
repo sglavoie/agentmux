@@ -5,12 +5,14 @@
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
     { "type": "no_layout_issues" },
-    { "type": "contains_text", "text": "api" },
-    { "type": "contains_text", "text": "backend" },
-    { "type": "contains_text", "text": "dotfiles" },
-    { "type": "contains_text", "text": "1:" },
-    { "type": "contains_text", "text": "2:" },
-    { "type": "contains_text", "text": "3:" },
+    { "type": "contains_text", "text": "Running (3)" },
+    { "type": "contains_text", "text": "dotfiles  Subagent      —" },
+    { "type": "contains_text", "text": "api       Active        —" },
+    { "type": "contains_text", "text": "backend   Active        —" },
+    { "type": "contains_text", "text": "dotfiles · personal · codex" },
+    { "type": "excludes_text", "text": "1:" },
+    { "type": "excludes_text", "text": "[P]" },
+    { "type": "excludes_text", "text": "[W]" },
     { "type": "kitty_calls", "op": "LaunchTab", "count": 0 }
   ]
 }

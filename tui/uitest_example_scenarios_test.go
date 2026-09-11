@@ -115,6 +115,7 @@ func TestExampleScenariosParseAndPass(t *testing.T) {
 		"project-rail-keyboard-apply.json":          false,
 		"project-rail-responsive-suppression.json":  false,
 		"resize-stress.json":                        false,
+		"run-timer-drop-order.json":                 false,
 		"run-timer-narrow-fit.json":                 false,
 		"run-timer-wide.json":                       false,
 		"search-narrow-fit.json":                    false,

@@ -179,17 +179,6 @@ func terminalWidth(s string) int {
 	return uniseg.StringWidth(s)
 }
 
-// idxBadge returns the visual cell offset of the first '[' character (the
-// account badge opener) in a rendered row. Returns -1 if no '[' is found.
-func idxBadge(row string) int {
-	plain := ansiRE.ReplaceAllString(row, "")
-	i := strings.IndexByte(plain, '[')
-	if i < 0 {
-		return -1
-	}
-	return terminalWidth(plain[:i])
-}
-
 // stripAnsi removes ANSI CSI escape sequences from a Lipgloss-rendered
 // string so tests can assert against the visible content.
 func stripAnsi(s string) string {
@@ -255,9 +244,9 @@ func TestRenderListEmptyHeroFilteredOut(t *testing.T) {
 	}
 }
 
-// TestRenderListMixedGroupBorders covers a list with two state groups
-// (Needs Attention and Active) and asserts each row carries the left
-// border glyph and that group labels are emitted above each band.
+// TestRenderListMixedGroupBorders covers a list with two urgency groups
+// (Needs you and Running) and asserts each row carries the left border glyph
+// and that group labels are emitted above each band.
 func TestRenderListMixedGroupBorders(t *testing.T) {
 	m := Model{
 		cfg:   &config.Config{},
@@ -270,10 +259,10 @@ func TestRenderListMixedGroupBorders(t *testing.T) {
 	m.filtered = m.sessions
 	m.rebuildItems()
 	out := stripAnsi(renderList(m))
-	if !strings.Contains(out, "Needs Attention (1)") {
+	if !strings.Contains(out, "Needs you (1)") {
 		t.Errorf("expected attention label; got %q", out)
 	}
-	if !strings.Contains(out, "Active (1)") {
+	if !strings.Contains(out, "Running (1)") {
 		t.Errorf("expected active label; got %q", out)
 	}
 	if !strings.Contains(out, dashboard.GroupBorderGlyph) {
@@ -281,10 +270,12 @@ func TestRenderListMixedGroupBorders(t *testing.T) {
 	}
 }
 
-// TestRenderListSingleGroupNoBorder asserts that when every row falls into
-// the same state group, neither the group label nor the left border is
-// drawn — the visual chrome is reserved for multi-group lists.
-func TestRenderListSingleGroupNoBorder(t *testing.T) {
+// TestRenderListSingleGroupKeepsItsHeadingWithoutABorder asserts what the two
+// halves of group chrome now say separately. The heading is a fact about the
+// queue — how many sessions are in this bucket — and stays drawn when the bucket
+// is the only one; the left border exists to tell two adjacent buckets apart, so
+// with nothing to separate it is not drawn at all.
+func TestRenderListSingleGroupKeepsItsHeadingWithoutABorder(t *testing.T) {
 	m := Model{
 		cfg:   &config.Config{},
 		width: 80,
@@ -296,147 +287,117 @@ func TestRenderListSingleGroupNoBorder(t *testing.T) {
 	m.filtered = m.sessions
 	m.rebuildItems()
 	out := stripAnsi(renderList(m))
-	if strings.Contains(out, "Active (") {
-		t.Errorf("single-group list should not render label; got %q", out)
+	if !strings.Contains(out, "Running (2)") {
+		t.Errorf("single-group list should still count its bucket; got %q", out)
 	}
 	if strings.Contains(out, dashboard.GroupBorderGlyph) {
 		t.Errorf("single-group list should not render border; got %q", out)
 	}
 }
 
-// TestFormatRowWarningIconAlignment locks in that a row carrying the ⚠️
-// warning icon aligns column-for-column with a row carrying the ⚡ bolt
-// icon. Terminals render the VS-16 emoji form as two cells, so FormatRow must
-// not add icon-cell padding or every subsequent column shifts right by one.
-// We assert alignment at both the account badge and the title so the check
-// covers the full row tail.
-func TestFormatRowWarningIconAlignment(t *testing.T) {
-	sBolt := session.RunningSession{State: "bolt", Account: "p", Base: "api"}
-	sWarn := session.RunningSession{State: "warning", Account: "p", Base: "api"}
-	rowBolt := dashboard.FormatRow(dashboard.RowInput{Session: sBolt, Band: dashboard.BandStandard, Width: 0})
-	rowWarn := dashboard.FormatRow(dashboard.RowInput{Session: sWarn, Band: dashboard.BandStandard, Width: 0})
-	if plain := stripAnsi(rowWarn); strings.Contains(plain, palette.StateIcon("warning")+"  [") {
-		t.Fatalf("warning icon has an extra padding cell: %q", plain)
-	}
+// queueRowFor projects one session the way a render pass does — build the
+// queue, scan its columns, compose the line — so a row assertion in this package
+// measures the same string RenderList would draw for that session.
+func queueRowFor(s session.RunningSession, width int) string {
+	queue := dashboard.BuildQueue(dashboard.QueueInput{Rows: []session.RunningSession{s}})
+	return stripAnsi(dashboard.FormatRow(dashboard.RowInput{
+		Queue:   queue[0],
+		Width:   width,
+		Columns: dashboard.ScanQueueColumns(queue),
+	}))
+}
 
-	iBoltBadge := idxBadge(rowBolt)
-	iWarnBadge := idxBadge(rowWarn)
-	if iBoltBadge < 0 || iWarnBadge < 0 {
-		t.Fatalf("badge '[' not found: bolt=%d warning=%d (rows: %q / %q)", iBoltBadge, iWarnBadge, rowBolt, rowWarn)
-	}
-	if iBoltBadge != iWarnBadge {
-		t.Errorf("badge column misaligned: bolt=%d, warning=%d", iBoltBadge, iWarnBadge)
-	}
+// TestOperationalPrefixesAreGoneFromTheQueueRow is the negative half of the
+// redesign's first sentence: the row no longer opens with the operational
+// glyphs it used to lead with. The state icon and the account badge were both
+// prefixes — cells spent before the name, in every row, whether or not they had
+// anything to say — and a queue that answers "which session, what is it doing"
+// starts with the answer to the first question.
+//
+// It asserts across every state rather than one, because the icon column was
+// reserved unconditionally: a renderer that dropped the glyph but kept its
+// padding would still push every name one cell right, and only the row that has
+// no icon would reveal it.
+func TestOperationalPrefixesAreGoneFromTheQueueRow(t *testing.T) {
+	for _, state := range []string{"", "bolt", "stop", "key", "warning", "error"} {
+		s := session.RunningSession{Base: "api", Account: "work", State: state, Unseen: state == "stop"}
+		row := queueRowFor(s, 80)
 
-	iBoltTitle := idxTitle(stripAnsi(rowBolt), "api")
-	iWarnTitle := idxTitle(stripAnsi(rowWarn), "api")
-	if iBoltTitle < 0 || iWarnTitle < 0 {
-		t.Fatalf("title not found: bolt=%d warning=%d (rows: %q / %q)", iBoltTitle, iWarnTitle, rowBolt, rowWarn)
-	}
-	if iBoltTitle != iWarnTitle {
-		t.Errorf("title column misaligned: bolt=%d, warning=%d", iBoltTitle, iWarnTitle)
+		if icon := palette.StateIcon(state); icon != "" && strings.Contains(row, icon) {
+			t.Errorf("state %q: the row still draws its state icon %q: %q", state, icon, row)
+		}
+		if strings.Contains(row, "[") {
+			t.Errorf("state %q: the row still draws an account badge: %q", state, row)
+		}
+		if !strings.HasPrefix(row, "api") {
+			t.Errorf("state %q: the row does not open with its name: %q", state, row)
+		}
 	}
 }
 
-// idxTitle returns the visual cell offset of the first occurrence of the
-// given title text in a rendered row. Returns -1 if not found.
-func idxTitle(row, title string) int {
-	plain := ansiRE.ReplaceAllString(row, "")
-	i := strings.Index(plain, title)
-	if i < 0 {
-		return -1
-	}
-	return terminalWidth(plain[:i])
-}
-
-// TestFormatRowHarnessBadge asserts that "<emoji> <label>" appears for each
-// known harness, that empty-harness rows show no label at all, and that the
-// title column lands at the same visual offset across all four cases
-// (always-reserved harness column).
-func TestFormatRowHarnessBadge(t *testing.T) {
+// TestHarnessTravelsWithTheSelectedSessionRatherThanEveryRow covers where the
+// harness went. It was an always-reserved row cell carrying a configured emoji
+// and a label; it is now one token of the selected session's context, spelled in
+// words. The emoji is what the assertion is on: the configured glyph is the
+// thing an operator would notice returning to the row, and a row that quietly
+// reserved its two cells again would go unnoticed by a label-only check.
+func TestHarnessTravelsWithTheSelectedSessionRatherThanEveryRow(t *testing.T) {
 	cfg := &config.Config{
-		HarnessEmojis: map[string]string{
-			"claude":  "🐱",
-			"codex":   "🦊",
-			"copilot": "🐙",
-		},
+		HarnessEmojis: map[string]string{"claude": "🐱", "codex": "🦊", "copilot": "🐙"},
 	}
-	sClaude := session.RunningSession{Base: "api", Account: "work", Harness: "claude"}
-	sCodex := session.RunningSession{Base: "api", Account: "work", Harness: "codex"}
-	sCopilot := session.RunningSession{Base: "api", Account: "work", Harness: "copilot"}
-	sNone := session.RunningSession{Base: "api", Account: "work", Harness: ""}
+	for harness, emoji := range cfg.HarnessEmojis {
+		s := session.RunningSession{Base: "api", Account: "work", Harness: harness}
 
-	rowClaude := stripAnsi(dashboard.FormatRow(dashboard.RowInput{Session: sClaude, Band: dashboard.BandStandard, Width: 0, Cfg: cfg}))
-	rowCodex := stripAnsi(dashboard.FormatRow(dashboard.RowInput{Session: sCodex, Band: dashboard.BandStandard, Width: 0, Cfg: cfg}))
-	rowCopilot := stripAnsi(dashboard.FormatRow(dashboard.RowInput{Session: sCopilot, Band: dashboard.BandStandard, Width: 0, Cfg: cfg}))
-	rowNone := stripAnsi(dashboard.FormatRow(dashboard.RowInput{Session: sNone, Band: dashboard.BandStandard, Width: 0, Cfg: cfg}))
-
-	if !strings.Contains(rowClaude, "🐱 claude") {
-		t.Errorf("expected '🤖 claude' cell for claude harness; got %q", rowClaude)
-	}
-	if strings.Contains(rowClaude, "codex") || strings.Contains(rowClaude, "copilot") {
-		t.Errorf("unexpected non-claude label in claude row; got %q", rowClaude)
-	}
-	if !strings.Contains(rowCodex, "🦊 codex") {
-		t.Errorf("expected '🦊 codex' cell for codex harness; got %q", rowCodex)
-	}
-	if strings.Contains(rowCodex, "claude") || strings.Contains(rowCodex, "copilot") {
-		t.Errorf("unexpected non-codex label in codex row; got %q", rowCodex)
-	}
-	if !strings.Contains(rowCopilot, "🐙 copilot") {
-		t.Errorf("expected '🐙 copilot' cell for copilot harness; got %q", rowCopilot)
-	}
-	if strings.Contains(rowCopilot, "claude") || strings.Contains(rowCopilot, "codex") {
-		t.Errorf("unexpected non-copilot label in copilot row; got %q", rowCopilot)
-	}
-	if strings.Contains(rowNone, "claude") || strings.Contains(rowNone, "codex") || strings.Contains(rowNone, "copilot") {
-		t.Errorf("expected no harness label for empty harness; got %q", rowNone)
-	}
-
-	iClaude := idxTitle(rowClaude, "api")
-	iCodex := idxTitle(rowCodex, "api")
-	iCopilot := idxTitle(rowCopilot, "api")
-	iNone := idxTitle(rowNone, "api")
-	if iClaude < 0 || iCodex < 0 || iCopilot < 0 || iNone < 0 {
-		t.Fatalf("title not found: claude=%d codex=%d copilot=%d none=%d", iClaude, iCodex, iCopilot, iNone)
-	}
-	if iClaude != iCodex || iClaude != iCopilot || iClaude != iNone {
-		t.Errorf("title column misaligned: claude=%d codex=%d copilot=%d none=%d", iClaude, iCodex, iCopilot, iNone)
-	}
-}
-
-// TestFormatRowAcctBadgeUnicode pins the contract that multibyte account
-// names produce a valid UTF-8 badge taken from the first rune, not a
-// truncated invalid byte that lipgloss would render as a replacement glyph.
-func TestFormatRowAcctBadgeUnicode(t *testing.T) {
-	cases := []struct {
-		account string
-		want    string
-	}{
-		{"éscriba", "[É]"},
-		{"中文", "[中]"},
-		{"🐙ctopus", "[🐙]"},
-	}
-	for _, tc := range cases {
-		s := session.RunningSession{Base: "x", Account: tc.account}
-		row := stripAnsi(dashboard.FormatRow(dashboard.RowInput{Session: s, Band: dashboard.BandStandard, Width: 0}))
-		if !strings.Contains(row, tc.want) {
-			t.Errorf("account %q: row %q does not contain expected badge %q", tc.account, row, tc.want)
+		if row := queueRowFor(s, 80); strings.Contains(row, emoji) || strings.Contains(row, harness) {
+			t.Errorf("harness %q still reaches the queue row: %q", harness, row)
 		}
-		if !utf8.ValidString(row) {
-			t.Errorf("account %q: rendered row is not valid UTF-8: %q", tc.account, row)
+
+		items := dashboard.BuildItemsFor(dashboard.ViewUrgency, []session.RunningSession{s}, nil)
+		item, _ := items.At(0)
+		lines := dashboard.RenderDetailStrip(dashboard.DetailStripInput{
+			Width: 100, Items: items, Item: item, Selected: true, Cfg: cfg,
+		})
+		if !strings.Contains(stripAnsi(lines[0]), harness) {
+			t.Errorf("harness %q is named nowhere in the selected context: %q", harness, lines[0])
 		}
 	}
 }
 
-// TestFormatRowEmojiTitleColumnAlignment locks in that rows whose project
-// titles start with the project icon set used in the live dashboard
-// (🐱amX, 🧠BrainNotes, 🗣commscoach, 🧬curator, 🧰dev-helpers, •dotfiles)
-// keep the directory column at the same visual offset, and that
-// pictographic leading graphemes occupy the fixed 2-cell title-icon
-// column. Without grapheme-aware width, FE0F-bearing glyphs and narrow
-// pictographs shift the row tail by one or more cells.
-func TestFormatRowEmojiTitleColumnAlignment(t *testing.T) {
+// TestMultibyteProfileNameSurvivesWholeInTheSelectedContext replaces the badge's
+// first-rune test. The row used to compress a profile to `[É]`, which is why
+// taking that initial by byte rather than by rune was a real hazard; the strip
+// spends a whole token on the name instead, so the contract is now that the name
+// arrives intact and still renders as valid UTF-8 through the identity span's
+// color.
+func TestMultibyteProfileNameSurvivesWholeInTheSelectedContext(t *testing.T) {
+	for _, profile := range []string{"éscriba", "中文", "🐙ctopus"} {
+		s := session.RunningSession{Base: "x", Account: profile}
+		items := dashboard.BuildItemsFor(dashboard.ViewUrgency, []session.RunningSession{s}, nil)
+		item, _ := items.At(0)
+		lines := dashboard.RenderDetailStrip(dashboard.DetailStripInput{
+			Width: 100, Items: items, Item: item, Selected: true, Cfg: &config.Config{},
+		})
+		if !strings.Contains(stripAnsi(lines[0]), profile) {
+			t.Errorf("profile %q is not carried whole by the selected context: %q", profile, lines[0])
+		}
+		if !utf8.ValidString(lines[0]) {
+			t.Errorf("profile %q: rendered context is not valid UTF-8: %q", profile, lines[0])
+		}
+	}
+}
+
+// TestQueueRowEmojiTitleColumnAlignment locks in the redesign's "retain the
+// custom project emoji" against the column that now has to survive it. The icon
+// set is the one the live dashboard uses (🐱amX, 🧠BrainNotes, 🗣commscoach,
+// 🧬curator, 🧰dev-helpers, •dotfiles); the anchor moved from the retired
+// directory column to Status, which follows the Session cell directly and is
+// therefore what a mismeasured name pushes sideways.
+//
+// The rows are composed as ONE pass sharing scanned columns, because that is the
+// only arrangement in which the claim says anything: rows measured individually
+// would align by construction. Without grapheme-aware width, FE0F-bearing glyphs
+// and narrow pictographs pad the Session cell wrongly and the Status column frays.
+func TestQueueRowEmojiTitleColumnAlignment(t *testing.T) {
 	titles := []string{
 		"🐱amX",
 		"🧠BrainNotes",
@@ -445,72 +406,64 @@ func TestFormatRowEmojiTitleColumnAlignment(t *testing.T) {
 		"🧰dev-helpers",
 		"•dotfiles",
 	}
-	const dirText = "/work/project"
-
-	var dirOffset int
+	rows := make([]session.RunningSession, len(titles))
 	for i, title := range titles {
-		s := session.RunningSession{Base: title, Account: "work", Directory: dirText}
-		row := stripAnsi(dashboard.FormatRow(dashboard.RowInput{Session: s, Band: dashboard.BandSpacious, Width: 120}))
+		rows[i] = session.RunningSession{WindowID: i + 1, Base: title, Account: "work", State: "bolt"}
+	}
+	queue := dashboard.BuildQueue(dashboard.QueueInput{Rows: rows})
+	columns := dashboard.ScanQueueColumns(queue)
+	rendered := make([]string, len(titles))
+	for i := range titles {
+		rendered[i] = stripAnsi(dashboard.FormatRow(dashboard.RowInput{
+			Queue: queue[i], Width: 120, Columns: columns,
+		}))
+	}
+
+	var statusOffset int
+	for i, title := range titles {
+		row := rendered[i]
 		if !utf8.ValidString(row) {
 			t.Fatalf("title %q produced invalid UTF-8 row: %q", title, row)
 		}
-		idx := strings.Index(row, dirText)
+		idx := strings.Index(row, queue[i].Status)
 		if idx < 0 {
-			t.Fatalf("directory %q not found in row for title %q: %q", dirText, title, row)
+			t.Fatalf("status %q not found in row for title %q: %q", queue[i].Status, title, row)
 		}
 		offset := layout.Width(row[:idx])
 		if i == 0 {
-			dirOffset = offset
+			statusOffset = offset
 			continue
 		}
-		if offset != dirOffset {
-			t.Errorf("directory column misaligned for %q: got cell %d, want %d (row=%q)", title, offset, dirOffset, row)
+		if offset != statusOffset {
+			t.Errorf("Status column misaligned for %q: got cell %d, want %d (row=%q)", title, offset, statusOffset, row)
 		}
 	}
 
-	// Pictographic-prefixed titles must reserve a 2-cell icon column so
-	// the title body aligns across the dashboard icon set. Bullet-prefixed
-	// titles stay at their measured 1-cell width (the • marker is
-	// intentionally narrow).
-	emojiBodies := map[string]string{
-		"🐱amX":         "amX",
-		"🧠BrainNotes":  "BrainNotes",
-		"🗣commscoach":  "commscoach",
-		"🧬curator":     "curator",
-		"🧰dev-helpers": "dev-helpers",
-	}
+	// Pictographic-prefixed titles must reserve a 2-cell icon column so the
+	// title body aligns across the dashboard icon set. The bullet '•' is
+	// intentionally not promoted to that column — it stays at its measured
+	// 1-cell width so it reads as a narrow marker rather than a chunky icon —
+	// so its body lands one cell earlier than the rest.
+	bodies := []string{"amX", "BrainNotes", "commscoach", "curator", "dev-helpers", "dotfiles"}
 	var bodyOffset int
-	first := true
-	for title, body := range emojiBodies {
-		s := session.RunningSession{Base: title, Account: "work", Directory: dirText}
-		row := stripAnsi(dashboard.FormatRow(dashboard.RowInput{Session: s, Band: dashboard.BandSpacious, Width: 120}))
-		idx := strings.Index(row, body)
+	for i, body := range bodies {
+		idx := strings.Index(rendered[i], body)
 		if idx < 0 {
-			t.Fatalf("title body %q not found in row for title %q: %q", body, title, row)
+			t.Fatalf("title body %q not found in row for title %q: %q", body, titles[i], rendered[i])
 		}
-		offset := layout.Width(row[:idx])
-		if first {
+		offset := layout.Width(rendered[i][:idx])
+		switch {
+		case i == 0:
 			bodyOffset = offset
-			first = false
-			continue
+		case titles[i] == "•dotfiles":
+			if offset != bodyOffset-1 {
+				t.Errorf("bullet-prefixed body offset = %d, want %d (one cell before the emoji bodies; row=%q)",
+					offset, bodyOffset-1, rendered[i])
+			}
+		case offset != bodyOffset:
+			t.Errorf("emoji-prefixed title body offset drift for %q: got %d, want %d (row=%q)",
+				titles[i], offset, bodyOffset, rendered[i])
 		}
-		if offset != bodyOffset {
-			t.Errorf("emoji-prefixed title body offset drift for %q: got %d, want %d (row=%q)", title, offset, bodyOffset, row)
-		}
-	}
-
-	// The bullet '•' is intentionally not promoted to the 2-cell title-icon
-	// column. Its body must therefore land one cell earlier than the
-	// emoji-prefixed bodies above so users still see the bullet as a narrow
-	// marker rather than a chunky icon.
-	sBullet := session.RunningSession{Base: "•dotfiles", Account: "work", Directory: dirText}
-	rowBullet := stripAnsi(dashboard.FormatRow(dashboard.RowInput{Session: sBullet, Band: dashboard.BandSpacious, Width: 120}))
-	bulletBody := strings.Index(rowBullet, "dotfiles")
-	if bulletBody < 0 {
-		t.Fatalf("bullet-prefixed title body not found in row: %q", rowBullet)
-	}
-	if got := layout.Width(rowBullet[:bulletBody]); got != bodyOffset-1 {
-		t.Errorf("bullet-prefixed body offset = %d, want %d (one cell before emoji bodies; row=%q)", got, bodyOffset-1, rowBullet)
 	}
 }
 

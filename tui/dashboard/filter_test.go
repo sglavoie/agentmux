@@ -295,7 +295,7 @@ func TestMatchStateSubagentCompactQuestion(t *testing.T) {
 // filter differently, because only the daemon's unseen bit decides which of
 // them is still asking for a human. A matchState that enumerated icon names —
 // the obvious implementation — would accept both and quietly disagree with the
-// Needs Attention heading the rows are drawn under.
+// Needs you heading the rows are drawn under.
 func TestMatchStateAttentionAliasIsTheGroupNotAnIconSet(t *testing.T) {
 	f := Parse("!attention")
 

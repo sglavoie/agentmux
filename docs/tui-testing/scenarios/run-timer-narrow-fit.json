@@ -5,15 +5,12 @@
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
     { "type": "selected_title", "value": "burst" },
-    { "type": "contains_text", "text": "burst" },
-    { "type": "contains_text", "text": "indexer" },
-    { "type": "contains_text", "text": "review" },
-    { "type": "contains_text", "text": "stale" },
+    { "type": "contains_text", "text": "burst     Working      0:07" },
+    { "type": "contains_text", "text": "indexer   Compacting  12h07" },
+    { "type": "contains_text", "text": "review    Subagent     3:07" },
+    { "type": "contains_text", "text": "stale     Working      9:41" },
     { "type": "contains_text", "text": "burst · work · claude · 0:07" },
     { "type": "contains_text", "text": "~/projects/burst" },
-    { "type": "excludes_text", "text": "3:07" },
-    { "type": "excludes_text", "text": "12h07" },
-    { "type": "excludes_text", "text": "9:41" },
     { "type": "excludes_text", "text": "⏳" },
     { "type": "no_layout_issues" }
   ]

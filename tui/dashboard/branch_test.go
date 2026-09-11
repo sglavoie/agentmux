@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/session"
-	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // TestBranchTextRendersTheDirtyMarkerOnlyOnANamedBranch pins the one asymmetry
@@ -36,147 +35,62 @@ func TestBranchTextRendersTheDirtyMarkerOnlyOnANamedBranch(t *testing.T) {
 	}
 }
 
-// TestBranchColumnWidthIsMeasuredOncePerViewAndDeclinesWhenEmpty pins both
-// halves of the reservation rule: the width is the widest text in the WHOLE
-// filtered view (not per row), and zero — the column not being reserved at all —
-// is what a view with nothing to say returns. The zero return IS the
-// reservation predicate, so there is no second boolean that could disagree.
-func TestBranchColumnWidthIsMeasuredOncePerViewAndDeclinesWhenEmpty(t *testing.T) {
-	none := []session.RunningSession{{Directory: "/tmp"}, {Directory: "/var"}}
-	if got := branchColumnWidth(none); got != 0 {
-		t.Fatalf("width with no branch in view = %d, want 0", got)
-	}
-
-	// A dirty bit with no branch is still nothing to render, so it must not
-	// reserve the column for every other row either.
-	if got := branchColumnWidth([]session.RunningSession{{Dirty: true}}); got != 0 {
-		t.Fatalf("width for a dirty non-repository = %d, want 0", got)
-	}
-
-	mixed := []session.RunningSession{
-		{Branch: "main"},
-		{Branch: "amx/feat-x", Dirty: true}, // 10 + 1 marker = 11, the widest
-		{},                                  // a non-repository row still gets the column
-	}
-	if got, want := branchColumnWidth(mixed), 12; got != want {
-		t.Fatalf("width = %d, want %d (widest text + one trailing space)", got, want)
-	}
-}
-
-// TestBranchColumnWidthCapsOneLongBranch is the reason branchMaxWidth exists.
-// The width is charged to every row's directory budget, not just to the row that
-// set it, so one release branch nobody is looking at must not be able to take
-// forty cells off every other row in the view.
-func TestBranchColumnWidthCapsOneLongBranch(t *testing.T) {
-	rows := []session.RunningSession{
-		{Branch: "main"},
-		{Branch: "release/2026-q3-migration-rollback", Dirty: true},
-	}
-	if got, want := branchColumnWidth(rows), branchMaxWidth+1; got != want {
-		t.Fatalf("width = %d, want %d (cap + one trailing space)", got, want)
-	}
-}
-
-// TestBranchCellTruncatesFromTheLeftAndKeepsTheDirtyMarker is the whole reason
-// the column uses layout.TruncateLeft rather than layout.Truncate: two worktrees
-// of one repository share a prefix and differ in the tail, so cutting from the
-// right would render both as `amx/featu…`. Truncating the branch and its marker
-// as one string is what keeps the marker, since it is the last grapheme and
-// TruncateLeft drops leading ones.
-func TestBranchCellTruncatesFromTheLeftAndKeepsTheDirtyMarker(t *testing.T) {
-	s := session.RunningSession{Branch: "amx/an-extremely-long-topic-branch", Dirty: true}
-	cell := stripAnsi(renderBranchCell(s, branchMaxWidth+1))
-
-	if !strings.HasSuffix(strings.TrimRight(cell, " "), "branch"+dirtyMarker) {
-		t.Fatalf("cell %q should end with the branch tail and the dirty marker", cell)
-	}
-	if !strings.Contains(cell, "…") {
-		t.Fatalf("cell %q should carry the truncation ellipsis", cell)
-	}
-	if strings.Contains(cell, "amx/an-extremely") {
-		t.Fatalf("cell %q should have dropped the shared leading segment", cell)
-	}
-	if got, want := layout.Width(cell), branchMaxWidth+1; got != want {
-		t.Fatalf("truncated cell width = %d, want %d", got, want)
-	}
-}
-
-// TestBranchCellPadsRatherThanCollapsing pins the alignment property the whole
-// once-per-pass measurement exists for: a non-repository row keeps its directory
-// in the same column as the worktree row beside it, so a blank branch reads as a
-// gap in one column rather than as a differently-shaped row. It also pins that a
-// zero width renders nothing at all rather than a single space.
-func TestBranchCellPadsRatherThanCollapsing(t *testing.T) {
-	width := branchColumnWidth([]session.RunningSession{{Branch: "main"}, {}})
-
-	named := renderBranchCell(session.RunningSession{Branch: "main"}, width)
-	blank := renderBranchCell(session.RunningSession{}, width)
-
-	if layout.StyledWidth(named) != width || layout.Width(blank) != width {
-		t.Fatalf("cells disagree on width: named=%d blank=%d want %d",
-			layout.StyledWidth(named), layout.Width(blank), width)
-	}
-	if strings.TrimSpace(blank) != "" {
-		t.Fatalf("blank cell = %q, want only spaces", blank)
-	}
-	if got := renderBranchCell(session.RunningSession{Branch: "main"}, 0); got != "" {
-		t.Fatalf("unreserved cell = %q, want empty", got)
-	}
-}
-
-// TestBranchCellIsDimLikeTheDirectory pins the styling decision. The branch and
-// the directory together answer one question — where is this row — so they are
-// styled alike and neither competes with the state icon for attention.
-func TestBranchCellIsDimLikeTheDirectory(t *testing.T) {
-	cell := renderBranchCell(session.RunningSession{Branch: "main"}, 6)
-	if cell == stripAnsi(cell) {
-		t.Fatalf("branch cell %q carries no styling", cell)
-	}
-	if want := styleDim.Render("main"); !strings.Contains(cell, want) {
-		t.Fatalf("branch cell %q is not rendered with styleDim", cell)
-	}
-}
-
-// TestBranchColumnChargesTheDirectoryAndNotTheViewport is the width audit in
-// test form. The branch column is width the FLEX column gives up, so reserving
-// it must shrink the directory by exactly the cell's width and must leave the
-// composed row's total width unchanged.
-func TestBranchColumnChargesTheDirectoryAndNotTheViewport(t *testing.T) {
-	const width = 100
+// TestBranchReachesTheSelectedSessionContextRatherThanTheRow is where the
+// retired branch column went. The queue row must not name a branch at any width
+// — that was the column's whole cost, charged to every row in the view for a fact
+// about one — and the strip under the list must name it for the selection.
+func TestBranchReachesTheSelectedSessionContextRatherThanTheRow(t *testing.T) {
 	s := session.RunningSession{
-		Account:   "work",
-		Base:      "api",
-		Directory: "/home/user/projects/worktrees/api-feature-x/internal/deep",
+		WindowID: 1, Base: "api", Project: "api",
+		Directory: "/home/user/projects/worktrees/api-feature-x",
+		Branch:    "amx/feat-x", Dirty: true, State: "bolt",
 	}
+	items := BuildItemsFor(ViewUrgency, []session.RunningSession{s}, nil)
+	item, _ := items.At(0)
 
-	without := FormatRow(RowInput{Session: s, Band: BandFor(width), Width: width, TabNumberCell: "1: "})
-	cell := renderBranchCell(session.RunningSession{Branch: "amx/feat-x"}, 11)
-	with := FormatRow(RowInput{Session: s, Band: BandFor(width), Width: width, TabNumberCell: "1: ", BranchCell: cell})
-
-	if layout.StyledWidth(without) != layout.StyledWidth(with) {
-		t.Fatalf("row width changed with the branch column: %d without, %d with",
-			layout.StyledWidth(without), layout.StyledWidth(with))
-	}
-	if !strings.Contains(stripAnsi(with), "amx/feat-x") {
-		t.Fatalf("row %q lost the branch", stripAnsi(with))
-	}
-	if strings.Contains(stripAnsi(without), "amx/feat-x") {
-		t.Fatalf("unreserved row %q gained a branch", stripAnsi(without))
-	}
-
-	// The directory is the only cell that could have paid for those 11 cells.
-	// It is left-truncated onto an ellipsis in both rows and is the row's
-	// suffix, so the text after the last ellipsis IS the directory.
-	dirOf := func(row string) string {
-		stripped := stripAnsi(row)
-		i := strings.LastIndex(stripped, "…")
-		if i < 0 {
-			t.Fatalf("row %q was expected to have a truncated directory", stripped)
+	queue := BuildQueue(QueueInput{Rows: items.Rows})
+	for _, width := range rowTestWidths {
+		row := stripAnsi(FormatRow(RowInput{Queue: queue[0], Width: width, Columns: ScanQueueColumns(queue)}))
+		if strings.Contains(row, "amx/feat-x") {
+			t.Errorf("width %d: the queue row reserved a branch column: %q", width, row)
 		}
-		return stripped[i:]
 	}
-	shrank := layout.Width(dirOf(without)) - layout.Width(dirOf(with))
-	if shrank != 11 {
-		t.Fatalf("directory shrank by %d cells, want 11 (the whole branch cell)", shrank)
+
+	lines := RenderDetailStrip(DetailStripInput{Width: 78, Items: items, Item: item, Selected: true})
+	if got := stripAnsi(lines[1]); !strings.Contains(got, "amx/feat-x"+dirtyMarker) {
+		t.Errorf("strip line 2 %q is missing the branch and its dirty marker", got)
+	}
+}
+
+// TestBranchIsDimAlongsideTheDirectory pins the styling decision that survived
+// the column. The branch and the directory together answer one question — where
+// is this session — so they are styled alike and neither competes with the status
+// beside the name on the line above.
+func TestBranchIsDimAlongsideTheDirectory(t *testing.T) {
+	s := session.RunningSession{WindowID: 1, Base: "api", Project: "api",
+		Directory: "/tmp/api", Branch: "main"}
+	items := BuildItemsFor(ViewUrgency, []session.RunningSession{s}, nil)
+	item, _ := items.At(0)
+	line := RenderDetailStrip(DetailStripInput{Width: 78, Items: items, Item: item, Selected: true})[1]
+	if line == stripAnsi(line) {
+		t.Fatalf("strip line 2 %q carries no styling", line)
+	}
+	if want := styleDim.Render("main"); !strings.Contains(line, want) {
+		t.Fatalf("strip line 2 %q does not render the branch with styleDim", line)
+	}
+}
+
+// TestBranchLongEnoughToHaveNeededACapIsStillDrawnWhole is the negative of the
+// retired branchMaxWidth. The cap existed because the column's width was charged
+// to every row; nothing is charged now, so a release branch is shown in full and
+// only the line's own clamp can shorten it.
+func TestBranchLongEnoughToHaveNeededACapIsStillDrawnWhole(t *testing.T) {
+	s := session.RunningSession{WindowID: 1, Base: "api", Project: "api",
+		Branch: "release/2026-q3-migration-rollback"}
+	items := BuildItemsFor(ViewUrgency, []session.RunningSession{s}, nil)
+	item, _ := items.At(0)
+	line := stripAnsi(RenderDetailStrip(DetailStripInput{Width: 120, Items: items, Item: item, Selected: true})[1])
+	if !strings.Contains(line, s.Branch) {
+		t.Fatalf("strip line 2 %q truncated a branch it had room for", line)
 	}
 }

@@ -5,15 +5,17 @@
   "actions": [{ "type": "tick" }],
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
-    { "type": "contains_text", "text": "Needs Attention (4)" },
-    { "type": "contains_text", "text": "Active (1)" },
-    { "type": "contains_text", "text": "🔑 perm  [P] 🤖 codex   approve" },
-    { "type": "contains_text", "text": "🔑 perm  [W] 🦊 claude  grant" },
-    { "type": "contains_text", "text": "❓ input [P] 🤖 codex   choose" },
-    { "type": "contains_text", "text": "❓       [W] 🦊 claude  silent" },
-    { "type": "contains_text", "text": "⚡       [W] 🦊 claude  working" },
+    { "type": "contains_text", "text": "Needs you (4)" },
+    { "type": "contains_text", "text": "Running (1)" },
+    { "type": "contains_text", "text": "▌ approve   Needs permission      —" },
+    { "type": "contains_text", "text": "▌ choose    Needs input           —" },
+    { "type": "contains_text", "text": "▌ grant     Needs permission      —" },
+    { "type": "contains_text", "text": "▌ silent    Awaiting reply        —" },
+    { "type": "contains_text", "text": "▌ working   Working               —" },
     { "type": "excludes_text", "text": "command_approval" },
     { "type": "excludes_text", "text": "request_user_input" },
+    { "type": "excludes_text", "text": "[P]" },
+    { "type": "excludes_text", "text": "[W]" },
     { "type": "no_layout_issues" }
   ]
 }

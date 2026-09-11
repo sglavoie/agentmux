@@ -45,9 +45,17 @@ func (v ViewMode) String() string {
 // heading would claim to introduce a run of same-group rows that the ordering
 // does not actually produce. The per-row group border stays in both views — it
 // qualifies one row rather than introducing a run of them.
+//
+// The urgency view draws a heading whenever it has anything to head, including
+// for a single group. The old rule suppressed the heading below two groups, on
+// the reasoning that a label introducing the entire list says nothing the list
+// does not — but the redesigned heading carries a COUNT, and `Needs you (3)` over
+// a list of three is the queue's whole answer said in one line. Suppressing it
+// meant the one arrangement where every row wanted the operator was also the one
+// arrangement that never said so.
 func ShowsGroupHeadings(view ViewMode, items ItemList, lastActivity map[int]time.Time, threshold time.Duration) bool {
 	if view == ViewProjects {
 		return false
 	}
-	return items.CountGroups(lastActivity, threshold) > 1
+	return items.Len() > 0
 }

@@ -5,9 +5,11 @@
   "actions": [{ "type": "resize", "width": 79, "height": 26 }],
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
-    { "type": "contains_text", "text": "▌ 1:     🔑 perm api" },
+    { "type": "contains_text", "text": "▌ api          Needs permission      —" },
+    { "type": "contains_text", "text": "▌ api-feat-x   Working            3:07" },
+    { "type": "excludes_text", "text": "/ to filter" },
+    { "type": "excludes_text", "text": "icons:" },
     { "type": "excludes_text", "text": "🦊 claude" },
-    { "type": "excludes_text", "text": "[W]" },
     { "type": "contains_text", "text": "api · work · claude" },
     { "type": "no_layout_issues" }
   ]

@@ -176,10 +176,16 @@ func TestResponsiveSplitNeverStarvesTheListColumn(t *testing.T) {
 }
 
 // TestResponsiveGeometryIsStableUnderRepeatedResolution is the anti-oscillation
-// guard. The detail strip's height charge is derived from the list column's
-// width, so if the width had in turn depended on the height, resolving the
-// geometry from its own output would move. Feeding each resolution's list column
-// back in as the terminal width has to converge in one step.
+// guard, and it now asserts the stronger form of the property it was written
+// for. The strip's height charge used to be derived from the list column's
+// width, which is a quantity the height could have fed back into; it is a
+// constant reservation at every width, so the one input it still reads is
+// whether there is any geometry at all.
+//
+// The unconditional charge is the point rather than a simplification: the queue
+// row carries no profile, harness, branch, directory, supervision, lock, mute,
+// or timer at any width, so a wide terminal has nowhere else to say them and
+// gets exactly the gap a narrow one does.
 func TestResponsiveGeometryIsStableUnderRepeatedResolution(t *testing.T) {
 	responsiveCases(t, func(t *testing.T, m Model) {
 		first := dashboardGeometry(m)
@@ -189,15 +195,9 @@ func TestResponsiveGeometryIsStableUnderRepeatedResolution(t *testing.T) {
 		if got := detailStripBudgetLines(m); got != detailStripBudgetLines(m) {
 			t.Fatal("detail strip budget is not deterministic")
 		}
-		// The charge must follow the pane the list is laid out in, not the
-		// terminal: a split can put a compact column inside a spacious terminal.
-		wantStrip := 0
-		if dashboard.BandFor(dashboardListPaneWidth(m)) == dashboard.BandCompact {
-			wantStrip = dashboard.DetailStripLines
-		}
-		if got := detailStripBudgetLines(m); got != wantStrip {
-			t.Fatalf("detail strip budget = %d, want %d for a %d-cell list column",
-				got, wantStrip, dashboardListPaneWidth(m))
+		if got := detailStripBudgetLines(m); got != dashboard.DetailStripLines {
+			t.Fatalf("detail strip budget = %d, want the constant %d for a %d-cell list column",
+				got, dashboard.DetailStripLines, dashboardListPaneWidth(m))
 		}
 	})
 }

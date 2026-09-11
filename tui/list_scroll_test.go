@@ -31,9 +31,11 @@ func TestListChromeLines_BaselineModeList(t *testing.T) {
 		t.Fatalf("footer budget = %d, rendered footer rows = %d", footerLines, renderedLines)
 	}
 	// Baseline: header(1) + wrapped legend + spacer(1) + padding row(1)
-	// + the measured reflowed footer + status bar(1).
+	// + the selected-item strip + the measured reflowed footer + status bar(1).
+	// The strip is in the baseline at every width now that the queue row carries
+	// no metadata of its own to be a wide terminal's alternative to it.
 	got := listChromeLines(m)
-	want := 1 + legendLineCount(m) + 1 + 1 + footerLines + statusBarLines
+	want := 1 + legendLineCount(m) + 1 + 1 + detailStripBudgetLines(m) + footerLines + statusBarLines
 	if got != want {
 		t.Errorf("baseline chrome: got %d want %d", got, want)
 	}
@@ -445,17 +447,18 @@ func TestScrollListToCursor_PreviewEnabledKeepsCursorVisible(t *testing.T) {
 
 func TestScrollListToCursor_ReservesBottomIndicatorWhenRowsRemain(t *testing.T) {
 	m := scrollModel()
-	m.height = 15 // short-terminal chrome leaves a 9-line list pane
+	m.height = 15 // short-terminal chrome leaves a 7-line list pane
 	m.filtered = makeRowsForScroll(20)
 	m.rebuildItems()
 	m.cursor = 10
 	m.listOffset = 0
 
-	// Nine, not six: capping the hint block at two rows hands the three rows the
-	// old exhaustive footer spent back to the list.
+	// Seven: capping the hint block at two rows handed the list three rows back
+	// from the old exhaustive footer, and the always-reserved selected-item strip
+	// then takes two of them.
 	visible := listVisibleHeight(m)
-	if visible != 9 {
-		t.Fatalf("test fixture expected visible=9, got %d", visible)
+	if visible != 7 {
+		t.Fatalf("test fixture expected visible=7, got %d", visible)
 	}
 
 	scrollListToCursor(&m)

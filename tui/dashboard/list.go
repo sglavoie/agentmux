@@ -40,11 +40,6 @@ const noticeColumnWidth = 2
 // a root test asserting what the composed screen says.
 const UnreadNoticeGlyph = "•"
 
-// activeLoopColumnWidth is the visual width reserved for the active
-// agent-session-loop indicator (🔁 = 2 cells + 1 trailing space). It is only
-// reserved when at least one rendered row has a matching active loop.
-const activeLoopColumnWidth = 3
-
 // childIndentWidth is the horizontal offset one nesting level costs a line in
 // the Projects view. It buys the summary above the child a visible span to be
 // wider than, which is the whole signal that the child belongs to it. It costs
@@ -78,11 +73,23 @@ type ListInput struct {
 	SessionCount int
 	// Filter is the active filter, read only for the empty hero's hint copy.
 	Filter Filter
+	// Live is the full live session set, used for one question only: whether a
+	// row's name collides with another session's and therefore needs a
+	// disambiguating qualifier beside it. It is the LIVE set and not Items.Rows on
+	// purpose — see NewNameDisambiguator — so a filter never renames the rows it
+	// keeps. Nil means the caller has no separate live set and the filtered rows
+	// are all there is.
+	Live []session.RunningSession
 
 	Cursor int
 	Offset int
 	Width  int
 	Height int
+	// Blurred reports that the list is showing a selection the keyboard is not
+	// currently driving. Its zero value is "focused", which is what every caller
+	// with no pane focus of its own means, so the seam costs nothing until
+	// something has a second pane to give the keys to.
+	Blurred bool
 
 	Now           time.Time
 	Cfg           *config.Config
@@ -96,15 +103,6 @@ type ListInput struct {
 	// is daemon-owned state the projection already carries. Nil means no row
 	// pulses.
 	ActivePulse func(windowID int) bool
-	// LoopMarker returns the supervision marker bound to a row, when one is
-	// positively identified. A guessed association would put a wrong state
-	// next to a session, so a row this cannot identify keeps the marker it
-	// already had. Nil means no row has a marker.
-	LoopMarker func(s session.RunningSession) (string, bool)
-}
-
-func (in ListInput) group(s session.RunningSession) int {
-	return StateGroup(s, in.LastActivity, in.IdleThreshold)
 }
 
 // groupAt is the item-indexed form of group, used everywhere the walk is
@@ -115,13 +113,6 @@ func (in ListInput) groupAt(i int) int {
 
 func (in ListInput) pulsing(windowID int) bool {
 	return in.ActivePulse != nil && in.ActivePulse(windowID)
-}
-
-func (in ListInput) marker(s session.RunningSession) (string, bool) {
-	if in.LoopMarker == nil {
-		return "", false
-	}
-	return in.LoopMarker(s)
 }
 
 // RenderList renders the session list with explicit width and height budgets.
@@ -140,17 +131,27 @@ func RenderListWithHits(in ListInput) ListRender {
 		return ListRender{Text: renderEmptyHero(in)}
 	}
 
-	acctColor := ProfileColorMap(in.Cfg)
-	harnessColor := HarnessColorMap(in.Cfg)
-
 	// The two questions the urgency bands answer are separate here. Borders
 	// qualify one row and stay in both views; headings introduce a run of
 	// same-group rows, which is a claim only the urgency ordering makes good on.
 	multiGroup := in.Items.CountGroups(in.LastActivity, in.IdleThreshold) > 1
 	headings := ShowsGroupHeadings(in.View, in.Items, in.LastActivity, in.IdleThreshold)
 	noticeActive := anyItemHasNotice(in)
-	activityActive := anyRowHasActivity(in)
 	now := in.Now
+
+	// What every row SAYS is decided once, here, for the whole projection rather
+	// than for the visible window — the disambiguator has to see every colliding
+	// name and the column scan has to see every cell, or the columns would shift
+	// as the operator paged. Queue entry i describes Items.Rows[i], which is what
+	// lets an item's Row index reach its facts with no second lookup.
+	queue := BuildQueue(QueueInput{
+		Rows:          in.Items.Rows,
+		Live:          in.Live,
+		LastActivity:  in.LastActivity,
+		IdleThreshold: in.IdleThreshold,
+		Now:           now,
+	})
+	columns := ScanQueueColumns(queue)
 
 	total := in.Items.Len()
 	// One implementation of the windowed walk, asked here and asked again by the
@@ -159,30 +160,6 @@ func RenderListWithHits(in ListInput) ListRender {
 	startIdx, endIdx := in.scrollInput(headings).VisibleRange(in.Offset, in.Height)
 	showTop := startIdx > 0
 	showBottom := endIdx < total
-	activeLoopActive := anyVisibleRowHasActiveLoop(in, startIdx, endIdx)
-	tabNumberWidth := tabNumberColumnWidth(in.Items.Rows)
-	var activityWidth int
-	if activityActive {
-		activityWidth = activityColumnWidth(in.Items.Rows, in.Watchdog, now)
-	}
-	// One scan per pass, like the activity and tab-number columns. A zero width
-	// is how the column declines to be reserved at all, so there is no separate
-	// "any row has a reason" predicate to keep in step with the measurement —
-	// the measurement IS the predicate.
-	reasonWidth := reasonColumnWidth(in.Items.Rows, in.group)
-	// Same shape, same argument: a zero width is the branch column declining to
-	// be reserved, so a view where no row sits in a named checkout — no daemon,
-	// git_probe off, or simply no repositories — gives the whole column back to
-	// the directory instead of padding every row around an empty slot.
-	branchWidth := branchColumnWidth(in.Items.Rows)
-	// The band is the pane's, not the row's: it is read once, from the width the
-	// list was given, and every row in the pass is laid out under it. Reading it
-	// per row from the already-reduced row budget would let a group border or a
-	// child indent tip one row into a narrower band than its neighbors and break
-	// the alignment the column scans above exist to produce.
-	band := BandFor(in.Width)
-	profileWidth := profileColumnWidth(in.Items.Rows)
-	titleWidth := titleColumnWidth(in.Items.Rows, band)
 
 	var sb strings.Builder
 	var hits []ListHit
@@ -191,6 +168,17 @@ func RenderListWithHits(in ListInput) ListRender {
 		sb.WriteString(styleDim.Render("  ▲"))
 		sb.WriteByte('\n')
 		y++
+	}
+
+	// The heading and the rows under it start on the same cell, so the heading is
+	// indented by exactly what the walk prefixes its rows with: the notice gutter
+	// and the group border, each only when this pass reserves it.
+	headingIndent := 0
+	if noticeActive {
+		headingIndent += noticeColumnWidth
+	}
+	if multiGroup {
+		headingIndent += groupBorderWidth
 	}
 
 	prevGroup := -1
@@ -203,7 +191,7 @@ func RenderListWithHits(in ListInput) ListRender {
 				sb.WriteByte('\n')
 				y++
 			}
-			sb.WriteString(renderGroupLabel(g, in.Items.countInGroup(g, in.LastActivity, in.IdleThreshold)))
+			sb.WriteString(renderGroupLabel(g, in.Items.countInGroup(g, in.LastActivity, in.IdleThreshold), headingIndent))
 			sb.WriteByte('\n')
 			y++
 			prevGroup = g
@@ -227,31 +215,12 @@ func RenderListWithHits(in ListInput) ListRender {
 		}
 		var row string
 		if isSession {
-			reasonCell := renderReasonCell(s, g, reasonWidth)
-			var activityCell string
-			if activityActive {
-				activityCell = renderActivityCell(s, in.Watchdog[s.WindowID], now, activityWidth)
-			}
-			var activeLoopCell string
-			if activeLoopActive {
-				activeLoopCell = renderLoopCellFor(in, s)
-			}
-			branchCell := renderBranchCell(s, branchWidth)
-			tabNumberCell := renderTabNumberCell(s.TabNumber, tabNumberWidth)
+			// item.Row is in range: ItemList.Session bounds-checks it against the same
+			// row set BuildQueue produced one entry per, in order.
 			row = FormatRow(RowInput{
-				Session:        s,
-				Band:           band,
-				Width:          rowWidth,
-				AcctColor:      acctColor,
-				HarnessColor:   harnessColor,
-				Cfg:            in.Cfg,
-				TabNumberCell:  tabNumberCell,
-				ActiveLoopCell: activeLoopCell,
-				ReasonCell:     reasonCell,
-				ActivityCell:   activityCell,
-				BranchCell:     branchCell,
-				ProfileWidth:   profileWidth,
-				TitleWidth:     titleWidth,
+				Queue:   queue[item.Row],
+				Width:   rowWidth,
+				Columns: columns,
 			})
 		} else {
 			row = renderSummaryRow(in, item, rowWidth)
@@ -266,12 +235,18 @@ func RenderListWithHits(in ListInput) ListRender {
 		var styledRow string
 		switch {
 		case i == in.Cursor:
-			styledRow = renderSelectedRow(row)
+			// The one place the two selections are told apart. Everything below it is
+			// a claim about the ROW; this is a claim about where the keyboard is, and
+			// it outranks them because a selection the operator cannot find is worse
+			// than a row whose urgency they have to read off its status instead.
+			styledRow = renderSelectedRow(row, in.Blurred)
 		case isSession && s.Locked:
 			styledRow = styleDim.Render(row)
-		case g == 0:
-			styledRow = styleAttentionRow.Render(row)
 		default:
+			// The attention accent is gone from the whole row on purpose. The status
+			// cell already wears it, by way of the emphasis BuildQueue assigned, and
+			// painting the name amber as well made every needs-you row shout its
+			// identity when only its status had anything to say.
 			styledRow = row
 		}
 		if multiGroup {
@@ -390,61 +365,6 @@ func (in ListInput) noticeFor(it Item) noticeKind {
 	return noticeNone
 }
 
-// anyVisibleRowHasActiveLoop reports whether the daemon's bulk state snapshot
-// marks any row in the rendered window as looping. The column is reserved for
-// the current window only, so off-screen active loops do not steal horizontal
-// space.
-func anyVisibleRowHasActiveLoop(in ListInput, startIdx, endIdx int) bool {
-	if startIdx < 0 {
-		startIdx = 0
-	}
-	if endIdx > in.Items.Len() {
-		endIdx = in.Items.Len()
-	}
-	for i := startIdx; i < endIdx; i++ {
-		s, ok := in.Items.SessionAt(i)
-		if !ok {
-			continue
-		}
-		if s.Looping {
-			return true
-		}
-		if _, marked := in.marker(s); marked {
-			return true
-		}
-	}
-	return false
-}
-
-// renderLoopCellFor prefers the supervision marker when the run is exactly
-// bound to this session, and otherwise keeps the daemon's own loop marker.
-func renderLoopCellFor(in ListInput, s session.RunningSession) string {
-	if marker, ok := in.marker(s); ok {
-		return layout.PadRight(marker, activeLoopColumnWidth)
-	}
-	return renderActiveLoopCell(s.Looping)
-}
-
-func renderActiveLoopCell(active bool) string {
-	if !active {
-		return strings.Repeat(" ", activeLoopColumnWidth)
-	}
-	return layout.PadRight("🔁", activeLoopColumnWidth)
-}
-
-// anyRowHasActivity reports whether any row is running a busy stretch.
-// Mirrors anyItemHasNotice: the activity column is reserved for the
-// entire render pass when at least one row carries a timer, otherwise the
-// column is omitted so rows recover their full directory budget.
-func anyRowHasActivity(in ListInput) bool {
-	for _, s := range in.Items.Rows {
-		if !s.BusySince.IsZero() {
-			return true
-		}
-	}
-	return false
-}
-
 // noticePrefix returns the gutter cell for one line (+ its trailing space): the
 // state-colored pulse glyph, the attention-colored unread-completion dot, or two
 // spaces for a line with no news, so column alignment is preserved across the
@@ -481,8 +401,11 @@ const (
 )
 
 // summaryCountLabels name the three urgency buckets in a summary's tally. They
-// are the group labels said briefly: a summary reports several buckets on one
-// line, where "Needs Attention" would spend a quarter of a compact pane.
+// are deliberately NOT the group labels: a heading labels one section and can
+// address the operator ("Needs you"), while a summary reports all three buckets
+// on one line and has to say each in a couple of cells. Keeping the two
+// vocabularies apart is also what keeps a family summary from reading as a
+// session row that happens to carry counts.
 var summaryCountLabels = [3]string{"attention", "active", "idle"}
 
 // renderSummaryRow paints a family summary as one line, which is what keeps

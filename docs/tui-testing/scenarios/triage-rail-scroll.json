@@ -17,7 +17,7 @@
     { "type": "contains_text", "text": "  ▲" },
     { "type": "contains_text", "text": "›     Quiet Queue   0 1 0" },
     { "type": "contains_text", "text": "  ▼" },
-    { "type": "contains_text", "text": "1–4 of 12" },
+    { "type": "contains_text", "text": "1–2 of 12" },
     { "type": "no_layout_issues" }
   ]
 }

@@ -285,13 +285,20 @@ func (l ItemList) CountGroups(lastActivity map[int]time.Time, threshold time.Dur
 	return len(seen)
 }
 
-// countInGroup reports how many projected items sit in the given group. This is
-// the number the group label renders, so it counts selectable lines rather than
-// sessions: a collapsed family contributes its summary, not its members.
+// countInGroup reports how many SESSIONS sit in the given group. This is the
+// number the group heading renders.
+//
+// It counts rows rather than projected items, and the difference is the whole
+// reason it is written this way. A folded family projects to one summary line and
+// its members to none, so an item-counted heading would say `Needs you (1)` over
+// a family hiding four sessions that do — the heading would shrink as the
+// operator folded things away, which is the one thing a count above a folded
+// list must not do. Rows is the filtered set, so the heading still answers for
+// what the active filter kept and nothing more.
 func (l ItemList) countInGroup(group int, lastActivity map[int]time.Time, threshold time.Duration) int {
 	n := 0
-	for i := range l.Items {
-		if l.GroupAt(i, lastActivity, threshold) == group {
+	for i := range l.Rows {
+		if StateGroup(l.Rows[i], lastActivity, threshold) == group {
 			n++
 		}
 	}

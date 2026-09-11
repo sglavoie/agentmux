@@ -11,10 +11,12 @@ import (
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
-// TestRenderListActivityColumnAppears verifies that RenderList reserves the
-// activity column when a row carries a busy anchor, and renders the elapsed
-// stretch rather than the time since the last hook event.
-func TestRenderListActivityColumnAppears(t *testing.T) {
+// TestRenderListDrawsTheRunTimerInTheTimeColumn verifies that a rendered list
+// reports the elapsed busy stretch rather than the time since the last hook
+// event. The two are different questions about different moments, and the
+// watchdog entry below is deliberately fresh so a renderer that read it instead
+// would print a much smaller number.
+func TestRenderListDrawsTheRunTimerInTheTimeColumn(t *testing.T) {
 	now := time.Now()
 	in := ListInput{
 		Cfg:   &config.Config{},
@@ -29,15 +31,19 @@ func TestRenderListActivityColumnAppears(t *testing.T) {
 	}
 	out := stripAnsi(RenderList(in))
 	if !strings.Contains(out, "3:07") {
-		t.Errorf("expected \"3:07\" run timer in render; got %q", out)
+		t.Errorf("expected the \"3:07\" run timer in the render; got %q", out)
+	}
+	if !strings.Contains(out, statusWorking) {
+		t.Errorf("expected the status beside the timer; got %q", out)
 	}
 }
 
-// TestRenderListActivityColumnHiddenByDefault asserts that with no busy rows
-// the column is omitted entirely so rows recover their full directory budget.
-// The "—" placeholder must NOT appear because the column itself is not
-// reserved.
-func TestRenderListActivityColumnHiddenByDefault(t *testing.T) {
+// TestRenderListSaysDashForAClockItCannotRead pins the honest rendering of a
+// missing anchor. The Time column stays reserved — the column exists for the
+// pass, not for the row — and the row that has nothing to report says so, rather
+// than borrowing the other clock and printing a number that looks exactly like
+// the truth.
+func TestRenderListSaysDashForAClockItCannotRead(t *testing.T) {
 	in := ListInput{
 		Cfg:   &config.Config{},
 		Width: 80,
@@ -46,66 +52,60 @@ func TestRenderListActivityColumnHiddenByDefault(t *testing.T) {
 			{WindowID: 1, Base: "api", State: "bolt", Account: "work"},
 		}),
 	}
-	if anyRowHasActivity(in) {
-		t.Fatal("baseline input with no busy rows should not reserve the activity column")
-	}
 	out := stripAnsi(RenderList(in))
-	if strings.Contains(out, "—") {
-		t.Errorf("dash placeholder must not appear when column is hidden; got %q", out)
+	if !strings.Contains(out, "—") {
+		t.Errorf("a row with no busy anchor should report the dash placeholder; got %q", out)
 	}
 }
 
-// TestRenderListActivityColumnSharedWidthAcrossRows asserts that once the
-// column is reserved, an idle row renders the "—" placeholder and every row
-// pays the same column width, so the directory column starts at one offset
-// regardless of how wide the busiest row's timer is. The third row carries the
-// widest representation formatRunElapsed can produce, pinning that even a
-// multi-month stretch cannot widen the column past a warning-decorated timer.
-func TestRenderListActivityColumnSharedWidthAcrossRows(t *testing.T) {
+// TestRenderListTimeColumnIsSharedAndRightAligned asserts the property the
+// once-per-pass scan exists for: every row pays the same Time column, and the
+// times are right-aligned inside it so `0:07` and `99d23` can be compared as
+// magnitudes down the column. The third row carries the widest representation
+// formatRunElapsed can produce, which pins that even a multi-month stretch cannot
+// widen the column.
+func TestRenderListTimeColumnIsSharedAndRightAligned(t *testing.T) {
 	now := time.Now()
-	in := ListInput{
-		Cfg:   &config.Config{},
-		Width: 80,
-		Now:   now,
-		Items: BuildItems([]session.RunningSession{
-			{WindowID: 1, Base: "api", State: "bolt", Account: "work", Directory: "~/p", BusySince: now.Add(-(12*time.Hour + 7*time.Minute + 30*time.Second))},
-			{WindowID: 2, Base: "web", State: "bolt", Account: "work", Directory: "~/p"},
-			{WindowID: 3, Base: "etl", State: "bolt", Account: "work", Directory: "~/p", BusySince: now.Add(-(99*24*time.Hour + 23*time.Hour))},
-		}),
-		Watchdog: map[int]protocol.WatchdogState{
-			1: {LastAction: "active", LastEventAt: now.Add(-9 * time.Minute).Unix(), ThresholdSec: 600},
-		},
+	rows := []session.RunningSession{
+		{WindowID: 1, Base: "api", State: "bolt", Account: "work", BusySince: now.Add(-(12*time.Hour + 7*time.Minute + 30*time.Second))},
+		{WindowID: 2, Base: "web", State: "bolt", Account: "work"},
+		{WindowID: 3, Base: "etl", State: "bolt", Account: "work", BusySince: now.Add(-(99*24*time.Hour + 23*time.Hour))},
+	}
+	in := ListInput{Cfg: &config.Config{}, Width: 80, Now: now, Items: BuildItems(rows)}
+
+	if got := ScanQueueColumns(BuildQueue(QueueInput{Rows: rows, Now: now})).Time; got != runTimerMaxCells {
+		t.Fatalf("Time column = %d, want the fixed %d", got, runTimerMaxCells)
 	}
 
-	if got, want := activityColumnWidth(in.Items.Rows, in.Watchdog, now), layout.Width("12h07 "+ageWarningGlyph)+1; got != want {
-		t.Fatalf("activityColumnWidth = %d, want %d (the widest cell of the pass plus its trailing space)", got, want)
-	}
-
+	// One bucket, so one heading above three rows: the urgency heading is drawn
+	// whenever the list has anything in it, because "Running (3)" is a fact about
+	// the queue even when nothing else is competing with it.
 	lines := strings.Split(strings.TrimRight(stripAnsi(RenderList(in)), "\n"), "\n")
-	if len(lines) != 3 {
-		t.Fatalf("expected 3 rendered rows, got %d: %q", len(lines), lines)
+	if len(lines) != 4 {
+		t.Fatalf("expected a heading and 3 rendered rows, got %d: %q", len(lines), lines)
 	}
-	busy, idle, long := lines[0], lines[1], lines[2]
-	if !strings.Contains(busy, "12h07") {
-		t.Errorf("expected \"12h07\" on the busy row; got %q", busy)
-	}
-	if !strings.Contains(idle, "—") {
-		t.Errorf("expected dash placeholder on the idle row; got %q", idle)
-	}
-	if !strings.Contains(long, "99d23") {
-		t.Errorf("expected \"99d23\" on the long-running row; got %q", long)
-	}
-	busyDir := strings.Index(busy, "~/p")
-	for _, row := range []struct {
-		name string
-		line string
-	}{{"idle", idle}, {"long-running", long}} {
-		dir := strings.Index(row.line, "~/p")
-		if busyDir < 0 || dir < 0 {
-			t.Fatalf("directory column missing: busy=%q %s=%q", busy, row.name, row.line)
+	busy, idle, long := lines[1], lines[2], lines[3]
+	for _, tc := range []struct{ name, line, want string }{
+		{"busy", busy, "12h07"},
+		{"no anchor", idle, "—"},
+		{"long-running", long, "99d23"},
+	} {
+		if !strings.Contains(tc.line, tc.want) {
+			t.Errorf("expected %q on the %s row; got %q", tc.want, tc.name, tc.line)
 		}
-		if got, want := layout.Width(row.line[:dir]), layout.Width(busy[:busyDir]); got != want {
-			t.Errorf("directory starts at cell %d on the %s row and %d on the busy row; the activity column must share one width", got, row.name, want)
+	}
+
+	// Right-aligned means the times END together, which is what makes the column
+	// readable as magnitudes. Measuring the end rather than the start is the whole
+	// difference between this column and the two beside it.
+	width := layout.Width(busy)
+	for _, tc := range []struct{ name, line string }{{"no anchor", idle}, {"long-running", long}} {
+		if got := layout.Width(tc.line); got != width {
+			t.Errorf("%s row is %d cells and the busy row is %d: the pass is not aligned",
+				tc.name, got, width)
+		}
+		if strings.HasSuffix(tc.line, " ") {
+			t.Errorf("%s row trails a blank where its time should end: %q", tc.name, tc.line)
 		}
 	}
 }

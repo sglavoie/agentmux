@@ -12,7 +12,11 @@
     { "type": "mode_equals", "mode": "list" },
     { "type": "cursor_equals", "cursor": 0 },
     { "type": "selected_title", "value": "api" },
-    { "type": "contains_text", "text": "Needs Attention (1)" },
+    { "type": "contains_text", "text": "Needs you (1)" },
+    { "type": "contains_text", "text": "▌ api       Awaiting reply      —" },
+    { "type": "excludes_text", "text": "▌ ❓" },
+    { "type": "excludes_text", "text": "▌ 🔁" },
+    { "type": "contains_text", "text": "🔁 api · work · claude" },
     { "type": "contains_text", "text": "❓ awaiting response" },
     { "type": "no_layout_issues" }
   ]

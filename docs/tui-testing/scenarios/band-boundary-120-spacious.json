@@ -8,8 +8,8 @@
   ],
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
-    { "type": "contains_text", "text": "▌ 1:     🔑 perm [work    ] 🦊 claude  api " },
-    { "type": "contains_text", "text": "▌ 6:     🛑      [personal] 🤖 codex   notes " },
+    { "type": "contains_text", "text": "▌ api          Needs permission      —" },
+    { "type": "contains_text", "text": "▌ api-feat-x   Working            3:07" },
     { "type": "contains_text", "text": "icons:" },
     { "type": "no_layout_issues" }
   ]

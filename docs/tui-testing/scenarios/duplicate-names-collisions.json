@@ -5,13 +5,16 @@
   "actions": [],
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
-    { "type": "contains_text", "text": "1:     ⚡ [W] 🦊 claude  api                   0:42 main*      ~/projects/api" },
-    { "type": "contains_text", "text": "2:     ⚡ [W] 🦊 claude  api                   3:07 amx/feat-x ~/projects/worktrees/api-feat-x" },
-    { "type": "contains_text", "text": "3:     ⚡ [W] 🦊 claude  web                   0:12 main       ~/projects/web" },
-    { "type": "contains_text", "text": "4:     ⚡ [P] 🤖 codex   web                   1:05 main       ~/sites/web" },
-    { "type": "contains_text", "text": "5:     ⚡ [P] 🤖 codex   docs                  0:08            ~/projects/docs" },
-    { "type": "contains_text", "text": "6:     ⚡ [P] 🤖 codex   docs                  0:08            ~/projects/docs" },
-    { "type": "contains_text", "text": "7:     ⚡ [P] 🤖 codex   notes                 0:30            ~/notes" },
+    { "type": "contains_text", "text": "api (main)        Working   0:42" },
+    { "type": "contains_text", "text": "api (amx/feat-x)  Working   3:07" },
+    { "type": "contains_text", "text": "web (work)        Working   0:12" },
+    { "type": "contains_text", "text": "web (personal)    Working   1:05" },
+    { "type": "contains_text", "text": "docs (#51)        Working   0:08" },
+    { "type": "contains_text", "text": "docs (#61)        Working   0:08" },
+    { "type": "contains_text", "text": "notes             Working   0:30" },
+    { "type": "excludes_text", "text": "notes (" },
+    { "type": "excludes_text", "text": "[W]" },
+    { "type": "excludes_text", "text": "[P]" },
     { "type": "contains_text", "text": "Sessions: 7 · 0 attention · 7 active · 0 idle" },
     { "type": "no_layout_issues" }
   ]

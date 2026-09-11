@@ -12,8 +12,11 @@
     { "type": "mode_equals", "mode": "list" },
     { "type": "cursor_equals", "cursor": 0 },
     { "type": "contains_text", "text": "▾ 🔑 api  1 attention · 1 active · 1 idle" },
-    { "type": "contains_text", "text": "▌   2:     ⚡      [work    ] 🦊 claude  api-feat-x " },
-    { "type": "contains_text", "text": "▌   3:     🛑      [work    ] 🦊 claude  api-hotfix " },
+    { "type": "contains_text", "text": "  ▌   api          Needs permission      —" },
+    { "type": "contains_text", "text": "  ▌   api-feat-x   Working            3:07" },
+    { "type": "contains_text", "text": "  ▌   api-hotfix   Done                  —" },
+    { "type": "excludes_text", "text": "[work    ]" },
+    { "type": "excludes_text", "text": "▌   2:" },
     { "type": "contains_text", "text": "Sessions: 7 · 2 attention · 2 active · 3 idle" },
     { "type": "no_layout_issues" }
   ]

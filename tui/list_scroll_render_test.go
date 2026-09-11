@@ -136,12 +136,12 @@ func TestRenderListAt_GroupLabelEmittedAtWindowStart(t *testing.T) {
 
 	// Group label should still be present even though the window begins
 	// mid-group: this locks in the prevGroup=-1 initializer.
-	if !strings.Contains(out, "Active (") {
-		t.Errorf("expected Active group label at window start; got %q", out)
+	if !strings.Contains(out, "Running (") {
+		t.Errorf("expected Running group label at window start; got %q", out)
 	}
-	// The "Needs Attention" label belongs to the skipped group 0 rows and
-	// should not appear.
-	if strings.Contains(out, "Needs Attention") {
+	// The "Needs you" label belongs to the skipped group 0 rows and should not
+	// appear.
+	if strings.Contains(out, "Needs you") {
 		t.Errorf("group-0 label must not appear when window starts inside group 1; got %q", out)
 	}
 }

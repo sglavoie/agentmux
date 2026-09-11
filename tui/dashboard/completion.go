@@ -161,7 +161,7 @@ func RenderCompletion(c Completion) string {
 	for i := start; i < end; i++ {
 		body := "  " + completionSelector(c.sigil, c.Candidates[i]) + "  "
 		if i == c.Selected {
-			sb.WriteString(renderSelectedRow(body))
+			sb.WriteString(renderSelectedRow(body, false))
 		} else {
 			sb.WriteString(styleCompletionPopup.Render(body))
 		}

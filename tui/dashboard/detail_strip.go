@@ -1,11 +1,17 @@
-// The compact band's answer to the fields it dropped from every row.
+// The queue's answer to the fields it dropped from every row.
 //
-// A compact row carries the operational prefix and a title and nothing else, so
-// the facts that tell two checkouts of one repository apart — profile, harness,
-// branch, directory, how long the current turn has been running — are not on
-// screen at all. They are still the facts an operator narrows the window to look
-// at, so they move to a fixed strip under the list that describes the SELECTED
-// item only.
+// A queue row is Session / Status / Time at every width, so the facts that tell
+// two checkouts of one repository apart — profile, harness, branch, directory,
+// how long the current turn has been running, who is supervising it, whether it
+// is locked or muted — are on no row at all. They are still the facts an operator
+// narrows in on, so they live in a fixed strip under the list that describes the
+// SELECTED item only.
+//
+// This is the interim inspector. It is deliberately the same shape as the one
+// the redesign replaces it with — one selection, its whole context, nothing about
+// the rows around it — so what moves later is the presentation and not the
+// question. Until then it is the only place this information exists, which is why
+// it is reserved at every width rather than only where a row ran out of room.
 //
 // Two lines, always, whether or not there is anything to put in them. A strip
 // that grew and shrank with its content would move the list's bottom edge on
@@ -21,6 +27,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
@@ -52,6 +59,25 @@ type DetailStripInput struct {
 	IdleThreshold time.Duration
 	Watchdog      map[int]protocol.WatchdogState
 	Now           time.Time
+
+	// LoopMarker returns the supervision marker bound to a session, when one is
+	// positively identified. A guessed association would put a wrong state next to
+	// a session, so a session this cannot identify gets no marker at all. Nil means
+	// nothing is supervised.
+	//
+	// It reads a marker here rather than on the row because supervision is
+	// selected-session context: the queue row answers what the session is doing,
+	// and who is driving it is one of the facts the redesign moves to the
+	// inspector. This is the seam the inspector inherits.
+	LoopMarker func(s session.RunningSession) (string, bool)
+}
+
+// marker is the nil-safe form of the LoopMarker seam.
+func (in DetailStripInput) marker(s session.RunningSession) (string, bool) {
+	if in.LoopMarker == nil {
+		return "", false
+	}
+	return in.LoopMarker(s)
 }
 
 // RenderDetailStrip returns exactly DetailStripLines lines, each clamped to
@@ -75,9 +101,28 @@ func RenderDetailStrip(in DetailStripInput) []string {
 // sessionDetailLines splits a session's context across the strip's two lines:
 // what the session IS on the first, where it is on the second.
 func sessionDetailLines(in DetailStripInput, s session.RunningSession) (string, string) {
-	identity := []string{SessionDisplayTitle(s), s.EffectiveProfile(), harnessLabel(s.Harness)}
+	// The supervision marker leads the line, attached to the title rather than
+	// joined as a token of its own: it qualifies which session this is (one an
+	// agent-session-loop run is driving), and a separated `🔁 · api` would read as
+	// a fact about the project instead.
+	title := SessionDisplayTitle(s)
+	if marker, ok := in.marker(s); ok && marker != "" {
+		title = marker + " " + title
+	} else if s.Looping {
+		title = loopMarkerGlyph + " " + title
+	}
+
+	identity := []string{title, s.EffectiveProfile(), harnessLabel(s.Harness)}
 	if text, _ := activityCellText(s, in.Watchdog[s.WindowID], in.Now); text != "" && !s.BusySince.IsZero() {
 		identity = append(identity, text)
+	}
+	// Lock and mute travel as one token rather than two. They are the row's
+	// retired indicator columns, and they were adjacent glyphs there for the same
+	// reason: each is a single bit about how the session may be acted on, and two
+	// separators between two glyphs would spend more of the line on punctuation
+	// than on facts.
+	if flags := sessionFlagGlyphs(s); flags != "" {
+		identity = append(identity, flags)
 	}
 	first := accountStyle(ProjectIdentityColor(s, ProfileColorMap(in.Cfg), in.Cfg)).
 		Render(joinDetailTokens(identity...))
@@ -133,6 +178,25 @@ func familyDetailLines(in DetailStripInput) (string, string) {
 	second := styleDim.Render(joinDetailTokens(append(
 		[]string{SessionDisplayTitle(lead)}, sessionContextTokens(lead)...)...))
 	return first, second
+}
+
+// loopMarkerGlyph is the daemon's own "this session is inside a loop" marker,
+// used when nothing supplied a more specific supervision marker for it.
+const loopMarkerGlyph = "🔁"
+
+// sessionFlagGlyphs renders the session's lock and mute bits, or "" when neither
+// is set. These are indicators, not labels: an unset bit contributes nothing
+// rather than a placeholder, because the strip describes one selected session
+// and has no column to keep aligned with anything.
+func sessionFlagGlyphs(s session.RunningSession) string {
+	var glyphs []string
+	if s.Locked {
+		glyphs = append(glyphs, palette.LockIcon())
+	}
+	if s.Muted {
+		glyphs = append(glyphs, palette.MuteIcon())
+	}
+	return strings.Join(glyphs, " ")
 }
 
 // sessionContextTokens is the context that tells two checkouts of one

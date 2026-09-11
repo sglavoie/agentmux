@@ -85,14 +85,14 @@ func TestProjectsViewRendersTheTreeAndOmitsHeadings(t *testing.T) {
 	if strings.Contains(projects, "git:/repo") {
 		t.Errorf("the family key leaked into the rendered list:\n%s", projects)
 	}
-	for _, heading := range []string{"Needs Attention (", "Active (", "Idle ("} {
+	for _, heading := range []string{"Needs you (", "Running (", "Idle ("} {
 		if strings.Contains(projects, heading) {
 			t.Errorf("Projects drew the %q heading:\n%s", heading, projects)
 		}
 	}
 
 	urgency := stripAnsi(renderList(projectViewModel(dashboard.ViewUrgency)))
-	if !strings.Contains(urgency, "Needs Attention (") {
+	if !strings.Contains(urgency, "Needs you (") {
 		t.Errorf("the same rows under the urgency view lost their headings:\n%s", urgency)
 	}
 	if strings.Contains(urgency, "monorepo") {

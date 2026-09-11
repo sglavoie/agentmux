@@ -7,7 +7,14 @@ import (
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
-func TestRenderListPrefixesRowsWithTabNumbers(t *testing.T) {
+// TestRenderListRowsOpenWithNamesRatherThanTabNumbers covers the tab-number
+// prefix at the render level, where it used to be drawn. It was the widest of
+// the operational prefixes — a right-aligned number and a colon in front of
+// every row, sized for the widest tab on screen — and the queue opens with the
+// session's name instead. The two-digit fixture is deliberate: a renderer that
+// merely stopped printing the number but still reserved its column would leave
+// the same leading blanks, and only checking the prefix exactly catches that.
+func TestRenderListRowsOpenWithNamesRatherThanTabNumbers(t *testing.T) {
 	m := testModel()
 	m.width = 120
 	m = loadSessions(m, []session.RunningSession{
@@ -16,22 +23,30 @@ func TestRenderListPrefixesRowsWithTabNumbers(t *testing.T) {
 	})
 
 	lines := strings.Split(strings.TrimRight(stripAnsi(renderListAt(m, m.width, 0)), "\n"), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("rendered lines = %d, want 2: %q", len(lines), lines)
+	if len(lines) != 3 {
+		t.Fatalf("rendered lines = %d, want a heading and 2 rows: %q", len(lines), lines)
 	}
-	if !strings.HasPrefix(lines[0], " 2: ") || !strings.Contains(lines[0], "api") {
-		t.Errorf("first row = %q, want tab 2 api row", lines[0])
-	}
-	if !strings.HasPrefix(lines[1], "12: ") || !strings.Contains(lines[1], "backend") {
-		t.Errorf("second row = %q, want tab 12 backend row", lines[1])
+	for i, want := range []string{"api", "backend"} {
+		row := lines[i+1]
+		if !strings.HasPrefix(row, want) {
+			t.Errorf("row %d = %q, want it to open with %q", i, row, want)
+		}
+		if strings.Contains(row, ": ") {
+			t.Errorf("row %d still carries a tab-number prefix: %q", i, row)
+		}
 	}
 }
 
-// TestRenderListLockedRowIsDimmed verifies that the per-row styling switch
-// in renderListAt wraps a locked row in styleDim. Because styleDim emits the
-// Faint (\x1b[2m) ANSI escape and the locked-row case sits above the
-// attention-amber branch, an unlocked row with no other dim spans renders
-// without that escape sequence around the whole row.
+// TestRenderListLockedRowIsDimmed verifies that the per-row styling switch in
+// renderListAt wraps a locked row in styleDim. styleDim emits the Faint
+// (\x1b[2m) escape, and an unlocked row with no other dim spans renders without
+// it around the whole line.
+//
+// The plain text is now IDENTICAL between the two, which is the half of this
+// that changed: the 🔒 glyph had its own reserved row column and is now one
+// token of the selected session's context, so the whole difference a locked row
+// still makes to the queue is the weight it is drawn in. Asserting the equality
+// rather than dropping it keeps the glyph from quietly coming back.
 func TestRenderListLockedRowIsDimmed(t *testing.T) {
 	build := func(locked bool) Model {
 		m := testModel()
@@ -57,10 +72,11 @@ func TestRenderListLockedRowIsDimmed(t *testing.T) {
 	unlocked := renderListAt(build(false), 120, 0)
 	locked := renderListAt(build(true), 120, 0)
 
-	// Plain text must differ because the locked row carries the 🔒 glyph in
-	// the lock column.
-	if stripAnsi(unlocked) == stripAnsi(locked) {
-		t.Fatalf("expected plain text to differ between locked and unlocked rows\nunlocked=%q\nlocked=%q", stripAnsi(unlocked), stripAnsi(locked))
+	if stripAnsi(unlocked) != stripAnsi(locked) {
+		t.Fatalf("the lock changed the row's text; it is context, not a row column\nunlocked=%q\nlocked=%q", stripAnsi(unlocked), stripAnsi(locked))
+	}
+	if strings.Contains(stripAnsi(locked), "🔒") {
+		t.Fatalf("the lock glyph is back in the queue row: %q", stripAnsi(locked))
 	}
 
 	// styleDim renders as \x1b[2m...\x1b[0m. The locked row must contain it.
@@ -69,56 +85,46 @@ func TestRenderListLockedRowIsDimmed(t *testing.T) {
 	}
 }
 
-func TestRenderListActiveLoopColumnAlignsRows(t *testing.T) {
+// TestSupervisionMarkerMovedOffTheRowIntoTheSelectedContext covers the last of
+// the retired row columns. The 🔁 marker used to be a column the whole list paid
+// for whenever any visible row was supervised — which is why the old tests here
+// were about its ALIGNMENT and about omitting it when no visible row matched.
+// Neither question exists now: who is driving a session is selected-session
+// context, so the list never reserves anything for it and the strip says it for
+// the one row the operator is on.
+func TestSupervisionMarkerMovedOffTheRowIntoTheSelectedContext(t *testing.T) {
 	m := testModel()
-	m.width = 120
+	m.width, m.height = 120, 40
 	m = loadSessions(m, []session.RunningSession{
 		{WindowID: 1, Account: "work", Base: "frontend", Directory: "/work/frontend"},
 		{WindowID: 2, Account: "work", Base: "backend", Directory: "/work/backend", Looping: true},
 	})
 
-	out := stripAnsi(renderListAt(m, m.width, 0))
-	if count := strings.Count(out, "🔁"); count != 1 {
-		t.Fatalf("active loop indicator count = %d, want 1 in:\n%s", count, out)
+	if out := stripAnsi(renderListAt(m, m.width, 0)); strings.Contains(out, "🔁") {
+		t.Fatalf("the supervision marker is back in the list:\n%s", out)
 	}
 
-	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("rendered lines = %d, want 2:\n%s", len(lines), out)
+	// Put the cursor on the supervised session; the strip is what answers.
+	for i := range m.items.Items {
+		if s, ok := m.items.Session(m.items.Items[i]); ok && s.Base == "backend" {
+			m.cursor = i
+		}
 	}
-	frontTitle := idxTitle(lines[0], "frontend")
-	backTitle := idxTitle(lines[1], "backend")
-	if frontTitle < 0 || backTitle < 0 {
-		t.Fatalf("title offsets not found: frontend=%d backend=%d lines=%q", frontTitle, backTitle, lines)
+	strip := stripAnsi(renderDetailStripBlock(m))
+	if !strings.Contains(strip, "🔁") {
+		t.Fatalf("the selected supervised session is not marked in its context: %q", strip)
 	}
-	if frontTitle != backTitle {
-		t.Fatalf("title columns differ with active-loop column: frontend=%d backend=%d lines=%q", frontTitle, backTitle, lines)
+	if !strings.Contains(strip, "backend") {
+		t.Fatalf("the strip is describing some other session: %q", strip)
 	}
 }
 
-func TestRenderListOmitsActiveLoopColumnWhenNoVisibleRowMatches(t *testing.T) {
-	m := testModel()
-	m.width = 120
-	m = loadSessions(m, []session.RunningSession{
-		{WindowID: 1, Account: "work", Base: "visible", Directory: "/work/visible"},
-		{WindowID: 2, Account: "work", Base: "middle", Directory: "/work/middle"},
-		{WindowID: 3, Account: "work", Base: "hidden", Directory: "/work/hidden"},
-	})
-	m.sessions[2].Looping = true
-	m.filtered[2].Looping = true
-	m.height = 12
-	m.listOffset = 0
-
-	out := stripAnsi(renderListAt(m, m.width, 2))
-	if strings.Contains(out, "🔁") {
-		t.Fatalf("active loop indicator should be omitted when only off-window rows match:\n%s", out)
-	}
-	if !strings.Contains(out, "visible") {
-		t.Fatalf("test fixture should render the visible row:\n%s", out)
-	}
-}
-
-func TestRenderListActiveLoopColumnFitsNarrowWidth(t *testing.T) {
+// TestRenderListRowsFitNarrowWidth is the surviving half of the retired
+// loop-column test: whatever the list composes, no line may draw past the pane.
+// The fixture keeps the long directory and the two-digit tab number, which are
+// now facts the row does not print — so a renderer that resurrected either
+// column would blow the budget here first.
+func TestRenderListRowsFitNarrowWidth(t *testing.T) {
 	const width = 56
 	m := testModel()
 	m.width = width

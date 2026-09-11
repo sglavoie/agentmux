@@ -1,0 +1,18 @@
+{
+  "name": "run-timer-drop-order",
+  "fixture": "run_timers",
+  "size": { "width": 120, "height": 24 },
+  "actions": [
+    { "type": "resize", "width": 27, "height": 24 }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "burst     Working" },
+    { "type": "contains_text", "text": "indexer   Compacting" },
+    { "type": "contains_text", "text": "idle      Done" },
+    { "type": "excludes_text", "text": "0:07" },
+    { "type": "excludes_text", "text": "12h07" },
+    { "type": "excludes_text", "text": "9:41" },
+    { "type": "no_layout_issues" }
+  ]
+}

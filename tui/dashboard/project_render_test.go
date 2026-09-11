@@ -136,9 +136,9 @@ func TestFamilyChildrenAreIndentedAndSingletonsAreNot(t *testing.T) {
 	// Group borders are drawn here (all four rows are Active, so CountGroups is
 	// 1 and there is no border), which keeps the leading-space comparison about
 	// indentation and nothing else.
-	child := lineWith(t, lines, "/repo/api")
-	singleton := lineWith(t, lines, "/solo")
-	orphan := lineWith(t, lines, "/orphan")
+	child := lineWith(t, lines, "api")
+	singleton := lineWith(t, lines, "solo")
+	orphan := lineWith(t, lines, "orphan")
 
 	indent := leadingSpaces(child) - leadingSpaces(singleton)
 	if indent != childIndentWidth {
@@ -148,9 +148,9 @@ func TestFamilyChildrenAreIndentedAndSingletonsAreNot(t *testing.T) {
 	if got, want := leadingSpaces(orphan), leadingSpaces(singleton); got != want {
 		t.Errorf("an orphan leaf is indented %d, want %d (the same depth as a singleton)", got, want)
 	}
-	// The summary's own leading run is not comparable to a session row's — a
-	// session row opens with the blank tab-number, lock, and mute columns — so
-	// the top-level claim is made against the pane edge instead.
+	// The summary's leading run IS comparable to a session row's now that the
+	// queue row opens with its own name, but the claim being made is about depth
+	// rather than about the two agreeing, so it is stated against the pane edge.
 	summary := lineWith(t, lines, "monorepo")
 	if !strings.HasPrefix(summary, summaryChevronExpanded) {
 		t.Errorf("the summary does not start at the pane edge, so it is not top-level: %q", summary)
@@ -302,9 +302,16 @@ func TestProjectsPaginationChargesOneLinePerItem(t *testing.T) {
 // expectedRowMarker returns a string that appears on the item's rendered line
 // and nowhere else, so "the renderer drew the cursor line" can be asserted
 // without reproducing the row layout.
+//
+// A session's marker is its display title plus one trailing space, which is what
+// keeps `notes` from matching the `notes-2` row beside it: the Session column is
+// padded to the pass's widest name whenever anything follows it, so a name is
+// always followed by a space and never by the rest of a longer name. The
+// directory it used to use is on no row at all now — it moved to the detail strip
+// with the rest of the selected session's context.
 func expectedRowMarker(list ItemList, i int) string {
 	if s, ok := list.SessionAt(i); ok {
-		return s.Directory
+		return SessionDisplayTitle(s) + " "
 	}
 	it, _ := list.At(i)
 	return it.FamilyLabel

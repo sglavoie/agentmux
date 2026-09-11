@@ -64,9 +64,12 @@ func isRowLine(stripped string) bool {
 	if trimmed == "" || trimmed == "▲" || trimmed == "▼" {
 		return false
 	}
-	return !strings.HasPrefix(trimmed, "Needs Attention (") &&
-		!strings.HasPrefix(trimmed, "Active (") &&
-		!strings.HasPrefix(trimmed, "Idle (")
+	for _, label := range groupLabels {
+		if strings.HasPrefix(trimmed, label+" (") {
+			return false
+		}
+	}
+	return true
 }
 
 // rowLines drops the group headings and the scroll indicators, leaving the
@@ -311,11 +314,11 @@ func TestCollapsedFamilyRollsUpUnreadAndAnExpandedOneLeavesItToTheLeaf(t *testin
 	if strings.Contains(summary, UnreadNoticeGlyph) {
 		t.Errorf("an expanded summary duplicated a dot its own child already carries: %q", summary)
 	}
-	child := lineWith(t, expanded, "/repo/web")
+	child := lineWith(t, expanded, "web")
 	if !strings.Contains(child, UnreadNoticeGlyph) {
 		t.Errorf("the unread child of an expanded family carries no dot: %q", child)
 	}
-	if quiet := lineWith(t, expanded, "/repo/api"); strings.Contains(quiet, UnreadNoticeGlyph) {
+	if quiet := lineWith(t, expanded, "api"); strings.Contains(quiet, UnreadNoticeGlyph) {
 		t.Errorf("a working sibling was marked by its family's news: %q", quiet)
 	}
 }
@@ -445,7 +448,7 @@ func TestNoticeGutterChangesNoBucketOrOrder(t *testing.T) {
 			t.Errorf("line %d reads %q with the gutter and %q without", i, got, want)
 		}
 	}
-	for _, want := range []string{"Needs Attention (1)", "Active (1)", "Idle (1)"} {
+	for _, want := range []string{groupLabels[attentionGroup] + " (1)", groupLabels[activeGroup] + " (1)", groupLabels[idleGroup] + " (1)"} {
 		if !strings.Contains(strings.Join(loud, "\n"), want) {
 			t.Errorf("urgency heading %q is missing once the gutter is drawn:\n%s", want, strings.Join(loud, "\n"))
 		}

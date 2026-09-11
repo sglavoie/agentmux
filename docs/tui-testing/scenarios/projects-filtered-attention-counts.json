@@ -14,8 +14,9 @@
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
     { "type": "contains_text", "text": "▌!attention ✕" },
-    { "type": "contains_text", "text": "🔑 perm [work    ] 🦊 claude  api " },
-    { "type": "contains_text", "text": "🛑      [personal] 🤖 codex   notes " },
+    { "type": "contains_text", "text": "  api       Needs permission      —" },
+    { "type": "contains_text", "text": "• notes     Done                  —" },
+    { "type": "excludes_text", "text": "[work    ]" },
     { "type": "excludes_text", "text": "api-feat-x" },
     { "type": "excludes_text", "text": "🔑 api  1 attention" },
     { "type": "contains_text", "text": "Sessions: 2/7 visible · 2 attention · 0 active · 0 idle" },

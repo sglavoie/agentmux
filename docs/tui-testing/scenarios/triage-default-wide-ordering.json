@@ -8,10 +8,13 @@
     { "type": "contains_text", "text": "All           4 5 3" },
     { "type": "contains_text", "text": "Release Guard 1 0 0" },
     { "type": "contains_text", "text": "Client Portal 2 0 0" },
-    { "type": "contains_text", "text": "1:     ❗" },
-    { "type": "contains_text", "text": "2:     🔑" },
-    { "type": "contains_text", "text": "3:     ❓" },
-    { "type": "contains_text", "text": "4:     🛑" },
+    { "type": "contains_text", "text": "    Needs you (4)" },
+    { "type": "contains_text", "text": "  ▌ release-guard    Failed             0:01" },
+    { "type": "contains_text", "text": "  ▌ portal-work      Needs permission   0:02" },
+    { "type": "contains_text", "text": "  ▌ portal-personal  Needs input        0:03" },
+    { "type": "contains_text", "text": "• ▌ finished-work    Done               0:04" },
+    { "type": "contains_text", "text": "    Running (5)" },
+    { "type": "contains_text", "text": "  ▌ watchtower       Tool failed           —" },
     { "type": "contains_text", "text": "Sessions: 12 · 4 attention · 5 active · 3 idle" },
     { "type": "no_layout_issues" }
   ]

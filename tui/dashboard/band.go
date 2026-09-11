@@ -9,11 +9,16 @@
 // inequality — the failure mode where a pane calls itself narrow while the
 // footer under it still thinks it is wide.
 //
-// Which width to hand it is the other half of the contract, and the two halves
-// are not the same number. Row bands take the width of the list pane, because a
-// row is drawn inside that pane and a horizontal preview split can leave a wide
-// terminal with a narrow list. Root chrome — the legend, the footer, the header
-// — takes the terminal width, because that is the surface it is drawn on.
+// Which width to hand it is the other half of the contract: root chrome — the
+// legend, the footer, the header — takes the terminal width, because that is the
+// surface it is drawn on.
+//
+// The session row is no longer one of its callers, and that is the point of the
+// queue redesign rather than an omission. A band is a step function, so the same
+// row said different things on either side of 80 and the operator learned two
+// layouts instead of one; the queue row is continuous instead, dropping Time and
+// then Status against its own budget (see allocateRow). What survives here is
+// chrome that genuinely has presets to choose between.
 
 package dashboard
 
@@ -23,13 +28,13 @@ package dashboard
 type Band int
 
 const (
-	// BandCompact keeps the operational prefix and a title and drops the rest.
+	// BandCompact is a pane with no room for anything optional: the footer shows
+	// its shortest key set and the legend is suppressed entirely.
 	BandCompact Band = iota
-	// BandStandard is the historical dashboard layout: profile initial,
-	// harness cell, fixed-ish title, then the optional tail columns.
+	// BandStandard is the ordinary terminal, and the band an unmeasured width
+	// reports.
 	BandStandard
-	// BandSpacious spends its surplus on identity — the full profile name and
-	// a title grown to its content — before it widens the directory.
+	// BandSpacious has surplus to spend on chrome the narrower bands withhold.
 	BandSpacious
 )
 

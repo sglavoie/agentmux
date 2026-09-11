@@ -53,19 +53,19 @@ func dashboardRailRows(m Model) []dashboard.RailRow {
 // nothing can be clicked on.
 
 // detailStripBudgetLines returns the number of lines reserved below the list
-// for the compact band's selected-item strip: the whole strip when the list
-// column is compact, and nothing otherwise.
+// for the selected-item strip.
 //
-// The band is read from the list column's width, not the terminal's, because
-// the strip exists to carry the fields a compact ROW dropped — a wide terminal
-// whose list column is squeezed by a side-by-side preview dropped them too.
+// It is reserved at every width. The strip used to be the compact band's
+// compensation for a row too narrow to carry its own metadata; the queue row
+// carries none of it at any width, so a wide terminal has exactly the same gap a
+// narrow one does and the strip is the only place profile, harness, branch,
+// directory, supervision, lock, mute, and the watchdog timer are said at all.
+// Session 6's inspector takes the reservation over.
+//
 // Pre-resize (width or height still zero) nothing is reserved: there is no
-// geometry yet to be compact.
+// geometry yet to draw into.
 func detailStripBudgetLines(m Model) int {
 	if m.width <= 0 || m.height <= 0 {
-		return 0
-	}
-	if dashboard.BandFor(dashboardListPaneWidth(m)) != dashboard.BandCompact {
 		return 0
 	}
 	return dashboard.DetailStripLines
@@ -92,6 +92,9 @@ func renderDetailStripBlock(m Model) string {
 		IdleThreshold: m.idleThreshold,
 		Watchdog:      m.watchdog,
 		Now:           modelNow(m),
+		LoopMarker: func(s session.RunningSession) (string, bool) {
+			return aslMarkerFor(m, s)
+		},
 	})
 	return strings.Join(lines[:n], "\n") + "\n"
 }
@@ -163,11 +166,14 @@ func (m Model) hasSelectedSession() bool {
 func dashboardListInput(m Model, width, height int) dashboard.ListInput {
 	now := modelNow(m)
 	return dashboard.ListInput{
-		Items:         m.items,
-		View:          m.listView,
-		Loading:       topologyLoading(m),
-		SessionCount:  len(m.sessions),
-		Filter:        m.activeFilter,
+		Items:        m.items,
+		View:         m.listView,
+		Loading:      topologyLoading(m),
+		SessionCount: len(m.sessions),
+		Filter:       m.activeFilter,
+		// The unfiltered live set, which is what name collisions are measured
+		// across. Passing m.filtered here would let a chip rename the rows it kept.
+		Live:          m.sessions,
 		Cursor:        m.cursor,
 		Offset:        m.listOffset,
 		Width:         width,
@@ -178,9 +184,6 @@ func dashboardListInput(m Model, width, height int) dashboard.ListInput {
 		IdleThreshold: m.idleThreshold,
 		Watchdog:      m.watchdog,
 		ActivePulse:   m.hasActivePulse,
-		LoopMarker: func(s session.RunningSession) (string, bool) {
-			return aslMarkerFor(m, s)
-		},
 	}
 }
 

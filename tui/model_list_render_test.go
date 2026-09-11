@@ -6,31 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/session"
-	"github.com/sglavoie/agentmux/tui/dashboard"
 )
-
-// ---- Icon-first row layout tests ----
-
-func TestFormatRowIconFirst(t *testing.T) {
-	acctColor := map[string]string{"work": "blue"}
-	s := session.RunningSession{
-		TabID: 1, Base: "api", Account: "work",
-		Directory: "/home/user/api", State: "bolt",
-	}
-	row := dashboard.FormatRow(dashboard.RowInput{Session: s, Band: dashboard.BandStandard, Width: 100, AcctColor: acctColor})
-	// The bolt icon (⚡) should appear before the badge [W].
-	boltIdx := strings.Index(row, "⚡")
-	badgeIdx := strings.Index(row, "[W]")
-	if boltIdx < 0 {
-		t.Fatalf("expected bolt icon in row, got: %q", row)
-	}
-	if badgeIdx < 0 {
-		t.Fatalf("expected [W] badge in row, got: %q", row)
-	}
-	if boltIdx > badgeIdx {
-		t.Errorf("expected icon before badge: icon@%d badge@%d in %q", boltIdx, badgeIdx, row)
-	}
-}
 
 // ---- State group sorting tests ----
 
@@ -76,17 +52,17 @@ func TestRenderListGroupDividers(t *testing.T) {
 	m.idleThreshold = time.Second
 	m.lastActivity = map[int]time.Time{13: time.Now().Add(-time.Hour)}
 	output := stripAnsi(renderList(m))
-	if !strings.Contains(output, "Needs Attention (1)") {
+	if !strings.Contains(output, "Needs you (1)") {
 		t.Errorf("expected attention divider, got:\n%s", output)
 	}
-	if !strings.Contains(output, "Active (1)") {
+	if !strings.Contains(output, "Running (1)") {
 		t.Errorf("expected active divider, got:\n%s", output)
 	}
 	if !strings.Contains(output, "Idle (1)") {
 		t.Errorf("expected idle divider, got:\n%s", output)
 	}
 	lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
-	for _, label := range []string{"Active (1)", "Idle (1)"} {
+	for _, label := range []string{"Running (1)", "Idle (1)"} {
 		idx := indexLineContaining(lines, label)
 		if idx < 1 {
 			t.Fatalf("expected %q after a separator line; lines=%q", label, lines)
@@ -109,8 +85,10 @@ func indexLineContaining(lines []string, needle string) int {
 func TestSingleGroupNoDivider(t *testing.T) {
 	m := testModel()
 	m.width, m.height = 120, 40
-	// Both empty-state with no activity record → both go to the Active bucket,
-	// so the renderer should omit the group divider entirely.
+	// Both empty-state with no activity record → both go to the Running bucket,
+	// so the renderer should omit the group divider entirely. The heading above
+	// them stays: it counts the bucket, which is a fact whether or not a second
+	// bucket exists to be separated from.
 	sessions := []session.RunningSession{
 		{TabID: 1, Base: "api", Account: "work", State: ""},
 		{TabID: 2, Base: "backend", Account: "work", State: ""},
@@ -120,21 +98,8 @@ func TestSingleGroupNoDivider(t *testing.T) {
 	if strings.Contains(output, "──") {
 		t.Errorf("expected no dividers when all sessions are in one group, got:\n%s", output)
 	}
-}
-
-func TestFormatRowNoStateIcon(t *testing.T) {
-	acctColor := map[string]string{"work": "blue"}
-	s := session.RunningSession{
-		TabID: 1, Base: "api", Account: "work",
-		Directory: "/home/user/api", State: "",
-	}
-	row := dashboard.FormatRow(dashboard.RowInput{Session: s, Band: dashboard.BandStandard, Width: 100, AcctColor: acctColor})
-	// No state icon, but row should start with 2-space placeholder then space then badge.
-	if !strings.HasPrefix(row, "   ") {
-		t.Errorf("expected row to start with placeholder spaces, got: %q", row)
-	}
-	if !strings.Contains(row, "[W]") {
-		t.Errorf("expected [W] badge in row, got: %q", row)
+	if !strings.Contains(stripAnsi(output), "Running (2)") {
+		t.Errorf("expected the single bucket to still be counted, got:\n%s", output)
 	}
 }
 

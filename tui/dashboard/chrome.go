@@ -15,31 +15,34 @@ import (
 // intended import graph does not draw. Only the attributes the dashboard
 // itself renders are duplicated here.
 var (
-	styleSelected     = lipgloss.NewStyle().Bold(true).Reverse(true)
-	styleDim          = lipgloss.NewStyle().Faint(true)
-	styleFooter       = lipgloss.NewStyle().Faint(true)
-	styleAttentionRow = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
-	styleEmptyHero    = lipgloss.NewStyle().Bold(true)
+	// styleSelected marks the row the keyboard is on. Reverse video and nothing
+	// else: it used to double reverse with bold, which is two claims about the
+	// same row, and "restrained selection" is the redesign's word for spending one.
+	//
+	// Reverse rather than a background color on purpose. A hex background is a bet
+	// on the terminal's own background being dark, and a wrong bet paints dark
+	// text on a dark bar; reverse is defined against whatever the terminal already
+	// uses, so it is legible in both themes without the theme having to be known.
+	styleSelected = lipgloss.NewStyle().Reverse(true)
+	// styleSelectedBlurred marks the same row when the keys are somewhere else.
+	// Weight alone, with no reverse bar: the selection is still where the operator
+	// left it, but the pane it is in will not answer j/k. Distinguishing the two is
+	// what keeps a bar from promising navigation a blurred list cannot perform.
+	styleSelectedBlurred = lipgloss.NewStyle().Bold(true)
+	styleDim             = lipgloss.NewStyle().Faint(true)
+	styleFooter          = lipgloss.NewStyle().Faint(true)
+	styleAttentionRow    = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
+	styleEmptyHero       = lipgloss.NewStyle().Bold(true)
 
 	// stylePreviewError colors the inline error the scrollback preview pane
 	// renders when a capture fails.
 	stylePreviewError = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
 
-	// styleAgeWarning colors the per-row activity cell when a sweep-eligible
-	// session has been silent for >= 80% of its resolved threshold.
-	styleAgeWarning = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
-
 	// styleUnreadNotice colors the notice gutter's unread-completion dot. It
 	// wears the attention accent because an unseen stop is exactly what puts a
-	// row in the Needs Attention bucket: the dot names the reason the row is
-	// where it is, so it must not read as a third, unrelated color.
+	// row in the Needs you bucket: the dot names the reason the row is where it
+	// is, so it must not read as a third, unrelated color.
 	styleUnreadNotice = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
-
-	// styleReasonTag colors the blocked-reason tag beside a Needs Attention
-	// row's icon. Faint rather than accented: the icon and the group border are
-	// already carrying "this row wants you", and a second attention-colored
-	// element one cell away would compete with them instead of qualifying them.
-	styleReasonTag = lipgloss.NewStyle().Faint(true)
 
 	// Per-state accent styles used by the row pulse, the chips, and the
 	// legend gloss.
@@ -73,8 +76,39 @@ var (
 // reverse-video wrapper can terminate the selection early and leave stale
 // inverse cells behind when the cursor moves. The selected copy therefore
 // keeps only its visible content before applying the shared selection style.
-func renderSelectedRow(row string) string {
+//
+// blurred picks which selection the row wears. It is a parameter rather than two
+// functions because the normalization is the whole point: a caller that reached
+// for the blurred style directly would be a caller that could forget to strip.
+// Surfaces with no focus of their own — the completion popup, the rail — pass
+// false, which is the historical behavior said explicitly.
+func renderSelectedRow(row string, blurred bool) string {
+	if blurred {
+		return styleSelectedBlurred.Render(ansi.Strip(row))
+	}
 	return styleSelected.Render(ansi.Strip(row))
+}
+
+// emphasisStyle maps a queue cell's semantic weight onto the attribute it is
+// drawn with. It is the one place the redesign's palette rule — neutral names,
+// muted metadata, amber attention, red failures — becomes terminal attributes,
+// which is what lets queue.go decide the MEANING with no theme in scope and lets
+// a test assert the meaning without a terminal.
+//
+// Neutral is the zero style rather than an explicit foreground. A row that is
+// simply working should read as ordinary text, and an explicit "default"
+// foreground is a color that fights the operator's own terminal theme.
+func emphasisStyle(e Emphasis) lipgloss.Style {
+	switch e {
+	case EmphasisMuted:
+		return styleDim
+	case EmphasisAttention:
+		return styleAttentionRow
+	case EmphasisFailure:
+		return styleStateError
+	default:
+		return lipgloss.NewStyle()
+	}
 }
 
 // accountStyle returns a Lipgloss style with the account's foreground color.

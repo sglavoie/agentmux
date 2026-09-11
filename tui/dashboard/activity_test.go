@@ -5,9 +5,6 @@ import (
 	"testing"
 	"time"
 
-	runewidth "github.com/mattn/go-runewidth"
-
-	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/layout"
@@ -132,77 +129,30 @@ func TestActivityCellTextWarningRequiresTimer(t *testing.T) {
 	}
 }
 
-// TestRenderActivityCellWarningStyled asserts the warning glyph appears and
-// the cell carries lipgloss styling (ANSI escape) when the warning band is
-// hit, that a non-warning cell renders plain text, and that both pad to the
-// width the render pass chose.
-func TestRenderActivityCellWarningStyled(t *testing.T) {
+// TestActivityWarningIsStyledWhereItIsStillDrawn follows the warning into its
+// one surviving surface. The queue row dropped the activity column outright, so
+// the glyph now appears only inside the detail strip's identity span — which is
+// also why it is a glyph rather than a color: a second foreground inside that
+// span would split it in two for a fact the glyph already carries.
+func TestActivityWarningIsStyledWhereItIsStillDrawn(t *testing.T) {
 	now := time.Now()
-	busy := session.RunningSession{WindowID: 1, BusySince: now.Add(-90 * time.Second)}
-	width := 8
+	busy := session.RunningSession{WindowID: 1, Base: "api", Project: "api",
+		Directory: "/tmp/api", BusySince: now.Add(-90 * time.Second)}
+	items := BuildItemsFor(ViewUrgency, []session.RunningSession{busy}, nil)
+	item, _ := items.At(0)
 
-	wsWarn := protocol.WatchdogState{
-		LastAction:   "active",
-		LastEventAt:  now.Add(-9 * time.Minute).Unix(),
-		ThresholdSec: 600,
-	}
-	cell := renderActivityCell(busy, wsWarn, now, width)
-	plain := stripAnsi(cell)
-	if !strings.Contains(plain, ageWarningGlyph) {
-		t.Errorf("warning cell missing ⏳ glyph; got %q", plain)
-	}
-	if cell == plain {
-		t.Errorf("warning cell expected ANSI styling; got plain %q", cell)
-	}
-	if got := runewidth.StringWidth(plain); got != width {
-		t.Errorf("warning cell width = %d, want %d (%q)", got, width, plain)
+	warn := protocol.WatchdogState{LastAction: "active", LastEventAt: now.Add(-9 * time.Minute).Unix(), ThresholdSec: 600}
+	lines := RenderDetailStrip(DetailStripInput{Width: 78, Items: items, Item: item, Selected: true,
+		Watchdog: map[int]protocol.WatchdogState{1: warn}, Now: now})
+	if plain := stripAnsi(lines[0]); !strings.Contains(plain, ageWarningGlyph) {
+		t.Errorf("strip %q is missing the ⏳ warning glyph", plain)
 	}
 
-	wsOk := protocol.WatchdogState{
-		LastAction:   "active",
-		LastEventAt:  now.Add(-1 * time.Minute).Unix(),
-		ThresholdSec: 600,
-	}
-	cellOk := renderActivityCell(busy, wsOk, now, width)
-	if strings.Contains(cellOk, ageWarningGlyph) {
-		t.Errorf("non-warning cell must not include ⏳; got %q", cellOk)
-	}
-	if got := runewidth.StringWidth(stripAnsi(cellOk)); got != width {
-		t.Errorf("non-warning cell width = %d, want %d (%q)", got, width, cellOk)
-	}
-}
-
-// TestAnyRowHasActivityFalseWhenNoRowIsBusy asserts the column reservation
-// predicate ignores watchdog entries entirely: a sweep-eligible row with no
-// busy anchor (a pre-upgrade daemon, or a window paused on a prompt) must not
-// reserve the column.
-func TestAnyRowHasActivityFalseWhenNoRowIsBusy(t *testing.T) {
-	in := ListInput{
-		Cfg: &config.Config{},
-		Items: BuildItems([]session.RunningSession{
-			{WindowID: 1, Base: "a", State: "bolt"},
-		}),
-		Watchdog: map[int]protocol.WatchdogState{
-			1: {LastAction: "active", LastEventAt: time.Now().Unix(), ThresholdSec: 600},
-		},
-	}
-	if anyRowHasActivity(in) {
-		t.Error("anyRowHasActivity must return false when no row carries a BusySince")
-	}
-}
-
-// TestAnyRowHasActivityTrueWhenAnyRowIsBusy asserts the predicate flips to
-// true as soon as one filtered row is running a busy stretch.
-func TestAnyRowHasActivityTrueWhenAnyRowIsBusy(t *testing.T) {
-	in := ListInput{
-		Cfg: &config.Config{},
-		Items: BuildItems([]session.RunningSession{
-			{WindowID: 1, Base: "a", State: "bolt", BusySince: time.Now()},
-			{WindowID: 2, Base: "b", State: ""},
-		}),
-	}
-	if !anyRowHasActivity(in) {
-		t.Error("anyRowHasActivity must return true when at least one row is busy")
+	ok := protocol.WatchdogState{LastAction: "active", LastEventAt: now.Add(-1 * time.Minute).Unix(), ThresholdSec: 600}
+	lines = RenderDetailStrip(DetailStripInput{Width: 78, Items: items, Item: item, Selected: true,
+		Watchdog: map[int]protocol.WatchdogState{1: ok}, Now: now})
+	if plain := stripAnsi(lines[0]); strings.Contains(plain, ageWarningGlyph) {
+		t.Errorf("strip %q carries ⏳ for a row well inside its threshold", plain)
 	}
 }
 

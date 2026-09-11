@@ -476,25 +476,26 @@ func unseenStopsFixture() uitestFixture {
 	}
 }
 
-// blockedReasonsFixture is four Needs Attention rows that a tab title cannot
-// tell apart — two 🔑 and two ❓ — where only the daemon knows what each one is
-// actually waiting for. It covers the three cases the reason column has to get
+// blockedReasonsFixture is four Needs you rows that a tab title cannot tell
+// apart — two 🔑 and two ❓ — where only the daemon knows what each one is
+// actually waiting for. It covers the three cases the Status column has to get
 // right at once:
 //
 //   - a Codex permission prompt and a Claude permission prompt, whose kind
 //     strings are deliberately different (`command_approval` vs `permission`,
 //     because the two harnesses share one untyped field) and which must
-//     nonetheless read as the same `perm` tag: the tag names what is being asked
-//     of the user, not which dialog asked it;
-//   - a Codex request-for-input prompt, whose `input` tag is the widest in the
-//     view and therefore the one that sets the column width for every row;
+//     nonetheless both read `Needs permission`: the status names what is being
+//     asked of the user, not which dialog asked it;
+//   - a Codex request-for-input prompt, which reads `Needs input` rather than
+//     borrowing the permission sentence;
 //   - a blocked row with NO reason at all, which is the ordinary steady state
-//     for a hook-raised icon no screen probe has labelled yet. Its cell must pad
-//     to the same width as the others so the column stays a column.
+//     for a hook-raised icon no screen probe has labelled yet. It falls back to
+//     `Awaiting reply` rather than going blank, because a row in Needs you with
+//     an empty status would be a row that cannot say why it is there.
 //
-// The `working` row holds Active so the reserved-for-the-whole-pass rule is
-// visible too: it is not in the attention group, has nothing to explain, and
-// still keeps its badge and title in the same columns as the rows above it.
+// The `working` row holds Running so the shared-column rule is visible too: it
+// is not in the attention group, has nothing to explain, and still lands its
+// status and time in the same cells as the rows above it.
 //
 // The kinds are written as bare strings rather than screenstate constants
 // because that is exactly what a fixture stands in for: one daemon state query,
@@ -542,25 +543,27 @@ func blockedReasonsFixture() uitestFixture {
 
 // worktreeBranchesFixture is the case managed worktrees make ordinary: three
 // rows sitting in ONE repository and differing only by checkout, plus a fourth
-// that is not a repository at all. It is the fixture for the branch column
-// because it is the situation the column exists for.
+// that is not a repository at all. It is the fixture for the branch because it
+// is the situation a branch exists to resolve.
 //
 // Two of the rows are worktrees of the same project. Their directories share
 // `~/projects/worktrees/api-` and diverge in the tail, which is exactly what the
-// directory column's left truncation surrenders first at a narrow width — so
-// without a branch the two rows are indistinguishable at the sizes an operator
-// actually runs the dashboard at. The narrow scenario is where that shows.
+// strip's left truncation surrenders first at a narrow width — so without a
+// branch the two are indistinguishable at the sizes an operator actually runs
+// the dashboard at.
 //
-// It also carries the three cases the column has to get right at once:
+// Since the queue redesign the branch is the INSPECTOR's and not the row's: it
+// names the selected checkout underneath the queue rather than repeating itself
+// down a column, and the rows themselves are disambiguated by name instead. The
+// cases the fixture carries survive that move:
 //
 //   - a dirty checkout (`main*`), which is the whole of the dirty rendering: a
-//     trailing marker on the branch rather than a color or a second column, so
-//     it survives a monochrome terminal and the harness's own stripAnsi;
-//   - a NON-REPOSITORY row, whose cell is blank and whose directory must
-//     nonetheless start in the same column as the other three. That is the point
-//     of measuring once per pass rather than per row;
-//   - an activity timer on every row, so the column's position — between the
-//     activity cell and the directory — is visible rather than asserted.
+//     trailing marker on the branch rather than a color or a second field, so it
+//     survives a monochrome terminal and the harness's own stripAnsi;
+//   - a NON-REPOSITORY row, whose strip is the bare directory rather than a
+//     leading separator with nothing in front of it;
+//   - an activity timer on every row, so a branch and a timer are seen to be
+//     different facts about the same selection.
 //
 // The branch strings are written as bare values for the reason the blocked
 // reason kinds are: a fixture stands in for one daemon state query, whose Branch

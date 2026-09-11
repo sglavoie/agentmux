@@ -2,18 +2,17 @@ package dashboard
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/session"
-	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // ageWarningGlyph is appended to the activity text once the time since the
-// last hook event has crossed the 80% warning band. Rendered in
-// styleAgeWarning so it reads as "approaching stale" without competing with
-// the row's icon column.
+// last hook event has crossed the 80% warning band. A trailing glyph rather
+// than a color: the text it qualifies is rendered inside the detail strip's
+// single identity span, and a second color inside that span would break it in
+// two for a fact the glyph already carries.
 const ageWarningGlyph = "⏳"
 
 // FormatAge returns the detail pane's age label for a single watchdog entry:
@@ -87,36 +86,4 @@ func activityCellText(s session.RunningSession, ws protocol.WatchdogState, now t
 		return text, false
 	}
 	return text + " " + ageWarningGlyph, true
-}
-
-// activityColumnWidth returns a stable width for every row in the current
-// filtered result set: the widest rendered activity text plus one trailing
-// space. Mirrors tabNumberColumnWidth — one scan per render pass, so the
-// column cannot jitter between rows of the same frame.
-func activityColumnWidth(rows []session.RunningSession, watchdog map[int]protocol.WatchdogState, now time.Time) int {
-	widest := layout.Width("—")
-	for _, s := range rows {
-		text, _ := activityCellText(s, watchdog[s.WindowID], now)
-		if w := layout.Width(text); w > widest {
-			widest = w
-		}
-	}
-	return widest + 1
-}
-
-// renderActivityCell builds one activity cell padded to width. The trailing
-// space is part of the cell so callers can concatenate it before the
-// directory without an extra separator. Warning rows get the warning glyph
-// appended and the whole cell styled in styleAgeWarning.
-func renderActivityCell(s session.RunningSession, ws protocol.WatchdogState, now time.Time, width int) string {
-	text, warning := activityCellText(s, ws, now)
-	pad := width - 1 - layout.Width(text)
-	if pad < 0 {
-		pad = 0
-	}
-	cell := text + strings.Repeat(" ", pad)
-	if warning {
-		cell = styleAgeWarning.Render(cell)
-	}
-	return cell + " "
 }
