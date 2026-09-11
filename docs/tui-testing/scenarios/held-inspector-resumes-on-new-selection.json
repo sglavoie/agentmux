@@ -1,0 +1,20 @@
+{
+  "name": "held-inspector-resumes-on-new-selection",
+  "fixture": "paused_queue",
+  "size": { "width": 120, "height": 32 },
+  "actions": [
+    { "type": "key", "key": "tab" },
+    { "type": "key", "key": "home" },
+    { "type": "resize", "width": 80, "height": 24 },
+    { "type": "key", "key": "j" },
+    { "type": "resize", "width": 120, "height": 32 }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "selected_title", "value": "alpha" },
+    { "type": "excludes_text", "text": "Paused" },
+    { "type": "excludes_text", "text": "output line 01" },
+    { "type": "contains_text", "text": "output line 60" },
+    { "type": "no_layout_issues" }
+  ]
+}

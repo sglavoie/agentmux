@@ -589,6 +589,30 @@ func (m *Model) retargetPreview(windowID int) {
 	m.inspectorViewport = m.inspectorViewport.Resume()
 }
 
+// reshowPreview puts a pane that is on screen again back into service, without
+// deciding on its own that the operator's place in the output has gone stale.
+//
+// It is the counterpart of showInspector for a pane nobody asked to move. The `i`
+// key is a statement about what the operator wants to look at, so it retargets
+// unconditionally; a pane that reappeared because the terminal changed shape is
+// not, and treating a geometry event as a new selection would resume a paused
+// inspector and throw away the snapshot the operator was reading. So the retarget
+// is conditional on the target having actually MOVED: an unchanged dashboard
+// target keeps its held snapshot, its scroll position, and the text already on
+// it, while a selection that changed while the pane was gone still goes through
+// retargetPreview and resets to the tail.
+//
+// The read and the poll restart either way. They are not the hold — the chain
+// died the first time a tick found the pane hidden, and a held viewport ignores
+// every snapshot that lands under it, so reviving the chain costs the hold
+// nothing and is what makes the pane live again the moment the operator resumes.
+func (m *Model) reshowPreview() tea.Cmd {
+	if winID := m.currentPreviewWindowID(); winID != m.previewWindowID {
+		m.retargetPreview(winID)
+	}
+	return tea.Batch(m.requestPreviewRead(), m.startPreviewPoll())
+}
+
 // activePreviewEnabled reports whether the preview pane is enabled for the
 // currently active mode. ModePicker has its own independent flag so that
 // toggling preview inside the picker does not disturb the list's preview state.

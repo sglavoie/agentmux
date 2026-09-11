@@ -252,8 +252,15 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 		// found it hidden and nothing else revives one, so the resize has to — and
 		// startPreviewPoll retires whatever chain the model still names, which is
 		// what keeps a fast shrink/grow cycle from ending with two.
-		m.retargetPreview(m.currentPreviewWindowID())
-		cmds = append(cmds, m.requestPreviewRead(), m.startPreviewPoll())
+		//
+		// It goes through reshowPreview rather than retargetPreview because a
+		// resize is not a selection. Retargeting unconditionally would resume a
+		// paused inspector every time the terminal crossed the split's floor and
+		// came back, losing the place the operator was reading for a reason they
+		// never asked for.
+		if c := m.reshowPreview(); c != nil {
+			cmds = append(cmds, c)
+		}
 	}
 	if m.pickerPreviewEnabled {
 		if !previewFits(m.width, m.height, footerBudgetLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {

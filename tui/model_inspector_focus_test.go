@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -265,6 +267,134 @@ func TestEscapeOnAQueueOnlyDashboardClearsFiltersRatherThanAStandingFocus(t *tes
 	}
 	if m.paneFocus != focusInspector {
 		t.Fatal("escape rewrote the standing pane focus it could not show")
+	}
+}
+
+// heldInspectorModel is a dashboard whose inspector is focused, carries a real
+// snapshot, and has been scrolled to the top of it — a paused pane with a place
+// in the output worth losing.
+//
+// It is built on previewReadModel rather than inspectorFocusModel because the
+// selection has to be able to MOVE to a different window while the pane is gone:
+// the sessions there carry distinct window IDs, so "the target changed" and "the
+// target did not" are two states a test can actually be in.
+func heldInspectorModel(t *testing.T) Model {
+	t.Helper()
+	m := previewReadModel(t)
+	m = pressKey(m, keyTab)
+	if !m.inspectorFocused() {
+		t.Fatal("setup: the inspector does not hold the keyboard")
+	}
+
+	var sb strings.Builder
+	for i := 1; i <= 200; i++ {
+		fmt.Fprintf(&sb, "output line %03d\n", i)
+	}
+	updated, _ := m.Update(previewContentMsg{
+		targetSeq: m.previewTargetSeq, requestSeq: m.previewRequestSeq,
+		windowID: m.previewWindowID, text: sb.String(),
+	})
+	m = updated.(Model)
+	if !m.previewLoaded || m.previewText == "" {
+		t.Fatalf("setup: the snapshot did not land (loaded=%v)", m.previewLoaded)
+	}
+
+	m = pressKey(m, keyHome)
+	if !m.inspectorViewport.Paused() {
+		t.Fatal("setup: home did not hold the snapshot")
+	}
+	return m
+}
+
+// inspectorWindow is the output the pane is actually showing, which is what an
+// operator would see move under them.
+func inspectorWindow(m Model) string {
+	return strings.Join(m.inspectorViewport.Window(dashboard.SplitOutput(m.previewText), m.inspectorOutputRows()), "\n")
+}
+
+// TestAWidthRoundTripLeavesAHeldInspectorHeld is the resize half of the hold
+// contract. The pane pauses on an upward scroll and resumes on End or on a
+// changed selection — a geometry event is neither, so a split that fell below
+// its floors and came back may not quietly hand the operator the tail of a
+// snapshot they had scrolled away from.
+//
+// The assertion is on the visible WINDOW rather than on the Paused bit alone.
+// The bit is what the pane reports; the window is the damage — the operator's
+// place in the output — and a repair that kept the flag while dropping the held
+// copy would pass a test written about the flag.
+func TestAWidthRoundTripLeavesAHeldInspectorHeld(t *testing.T) {
+	m := heldInspectorModel(t)
+	target, text, window := m.previewWindowID, m.previewText, inspectorWindow(m)
+	poll := m.previewPollSeq
+
+	updated, _ := m.handleWindowSize(tea.WindowSizeMsg{Width: 80, Height: 24})
+	narrow := updated.(Model)
+	if narrow.inspectorActive() {
+		t.Fatal("setup: a terminal below the floor still holds a split")
+	}
+
+	updated, cmd := narrow.handleWindowSize(tea.WindowSizeMsg{Width: 160, Height: 50})
+	wide := updated.(Model)
+	if !wide.inspectorActive() {
+		t.Fatal("widening did not restore the split")
+	}
+	if !wide.inspectorViewport.Paused() {
+		t.Fatal("the round trip resumed the pane the operator had paused")
+	}
+	if got := inspectorWindow(wide); got != window {
+		t.Fatalf("the round trip moved the output under the reader:\ngot  %q\nwant %q",
+			firstPreviewLine(got), firstPreviewLine(window))
+	}
+	if wide.previewWindowID != target || wide.previewText != text || !wide.previewLoaded {
+		t.Fatalf("the round trip treated an unchanged target as a new one: window %d→%d, text kept=%v, loaded=%v",
+			target, wide.previewWindowID, wide.previewText == text, wide.previewLoaded)
+	}
+
+	// Keeping the hold may not cost the pane its liveness: the polling chain died
+	// the first time a tick found the split gone, so the widening owes a fresh
+	// chain and a read, and an operator who presses End must land on live output
+	// rather than on a pane nothing is feeding.
+	if cmd == nil {
+		t.Fatal("widening restored the pane without restarting anything")
+	}
+	if wide.previewPollSeq == poll {
+		t.Fatal("widening left the pane with the polling chain the shrink retired")
+	}
+	if !wide.previewReadInFlight && !wide.previewReadPending {
+		t.Fatal("widening owes no read, so the resumed pane would show the snapshot it went away with")
+	}
+}
+
+// TestAWidthRoundTripStillResetsTheHoldWhenTheSelectionMoved is the other half,
+// and the one that keeps the repair from being "never resume". The queue is
+// still on screen below the floor, so the operator can walk it while the pane is
+// gone; coming back to a different session with the previous session's snapshot
+// held would show one session's output under another's metadata.
+func TestAWidthRoundTripStillResetsTheHoldWhenTheSelectionMoved(t *testing.T) {
+	m := heldInspectorModel(t)
+	target := m.previewWindowID
+
+	updated, _ := m.handleWindowSize(tea.WindowSizeMsg{Width: 80, Height: 24})
+	narrow := updated.(Model)
+	if narrow.inspectorActive() {
+		t.Fatal("setup: a terminal below the floor still holds a split")
+	}
+	// The focus bit still says inspector, but the pane is not drawn, so the
+	// movement keys are the queue's again — which is how an operator arrives at
+	// another session without ever seeing the inspector.
+	narrow = selectLine(t, narrow, "session:web")
+
+	updated, _ = narrow.handleWindowSize(tea.WindowSizeMsg{Width: 160, Height: 50})
+	wide := updated.(Model)
+	if wide.previewWindowID == target {
+		t.Fatalf("widening did not follow the selection that moved while the pane was gone: still %d", target)
+	}
+	if wide.inspectorViewport.Paused() {
+		t.Fatal("the new selection inherited the previous session's hold")
+	}
+	if wide.previewText != "" || wide.previewLoaded {
+		t.Fatalf("the new target kept the previous session's snapshot: loaded=%v text=%q",
+			wide.previewLoaded, firstPreviewLine(wide.previewText))
 	}
 }
 

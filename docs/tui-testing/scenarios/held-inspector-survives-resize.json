@@ -1,0 +1,19 @@
+{
+  "name": "held-inspector-survives-resize",
+  "fixture": "paused_queue",
+  "size": { "width": 120, "height": 32 },
+  "actions": [
+    { "type": "key", "key": "tab" },
+    { "type": "key", "key": "home" },
+    { "type": "resize", "width": 80, "height": 24 },
+    { "type": "resize", "width": 120, "height": 32 }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "selected_title", "value": "charlie" },
+    { "type": "contains_text", "text": "Paused" },
+    { "type": "contains_text", "text": "output line 01" },
+    { "type": "excludes_text", "text": "output line 41" },
+    { "type": "no_layout_issues" }
+  ]
+}

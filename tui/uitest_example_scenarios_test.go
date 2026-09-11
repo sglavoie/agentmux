@@ -97,6 +97,8 @@ func TestExampleScenariosParseAndPass(t *testing.T) {
 		"health-details-overlay-narrow.json":               false,
 		"health-details-overlay-wide.json":                 false,
 		"health-states-hooks-degraded.json":                false,
+		"held-inspector-resumes-on-new-selection.json":     false,
+		"held-inspector-survives-resize.json":              false,
 		"help-modal-narrow-fit.json":                       false,
 		"help-modal-scroll-bottom.json":                    false,
 		"legend-narrow-fit.json":                           false,
