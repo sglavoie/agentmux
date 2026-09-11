@@ -99,6 +99,97 @@ func TestTabOnATerminalTooNarrowToSplitLeavesTheStandingFocusAlone(t *testing.T)
 	}
 }
 
+// fullScreenInspectorModel is a dashboard on a terminal too narrow to split,
+// with the inspector opened over the whole body by the key that is the only way
+// in. Pressing `i` rather than assigning inspectorFullScreen is deliberate: the
+// focus the full-screen pane takes on the way in is half of what these tests are
+// about.
+func fullScreenInspectorModel(t *testing.T) Model {
+	t.Helper()
+	m := loadSessions(testModel(), makeSessions())
+	m.width, m.height = splitFloor-1, 24
+	if m.inspectorActive() {
+		t.Fatal("setup: a terminal below the floor already holds a split")
+	}
+	m = pressKey(m, keyInspector)
+	if !m.inspectorFullScreenActive() {
+		t.Fatalf("setup: i left display %v, want full screen", m.inspectorDisplay)
+	}
+	if !m.inspectorFocused() {
+		t.Fatal("setup: the full-screen pane did not take the keyboard")
+	}
+	return m
+}
+
+// TestTabInAFullScreenInspectorKeepsTheKeysOnTheVisiblePane is the other end of
+// the rule TestTabOnATerminalTooNarrowToSplitLeavesTheStandingFocusAlone pins.
+// That one is a queue with no inspector to reach; this is an inspector with no
+// queue to reach, and the cycle is a cycle of length one in both.
+//
+// The failure it forbids is silent by construction. Handing the keys to a queue
+// that is not drawn leaves the operator looking at an inspector while `j` walks
+// the selection behind it — so the assertion is on the SELECTION rather than on
+// the focus bit alone, because a moved cursor is the damage a repaired focus
+// rule exists to prevent.
+func TestTabInAFullScreenInspectorKeepsTheKeysOnTheVisiblePane(t *testing.T) {
+	for _, key := range []string{keyTab, keyShiftTab} {
+		t.Run(key, func(t *testing.T) {
+			m := fullScreenInspectorModel(t)
+			before := m.cursor
+
+			m = pressKey(m, key)
+			if !m.inspectorFocused() {
+				t.Fatalf("%s handed the keyboard to the hidden queue", key)
+			}
+			if !m.inspectorFullScreenActive() {
+				t.Fatalf("%s left full screen: display=%v", key, m.inspectorDisplay)
+			}
+
+			// The pane is still the one taking movement keys, which is the thing an
+			// operator would notice: j scrolls output and does not walk a list they
+			// cannot see.
+			m = pressKey(m, keyJ)
+			if m.cursor != before {
+				t.Fatalf("%s then j moved the hidden selection %d→%d", key, before, m.cursor)
+			}
+			if m.mode != ModeList {
+				t.Fatalf("%s then j left mode %v", key, m.mode)
+			}
+		})
+	}
+}
+
+// TestFullScreenStillLeavesTheSplitAndItsPaneSwitchingIntact is the guard on the
+// repair's blast radius. focusPane now refuses one target as well as the other,
+// and the way that could go wrong is by refusing too much: Escape has to give
+// the keys back on the way out of full screen, and Tab has to keep working once
+// two panes are on screen again.
+func TestFullScreenStillLeavesTheSplitAndItsPaneSwitchingIntact(t *testing.T) {
+	m := fullScreenInspectorModel(t)
+
+	updated, _ := m.handleWindowSize(tea.WindowSizeMsg{Width: 160, Height: 50})
+	m = updated.(Model)
+	m = pressKey(m, keyEsc)
+	if m.inspectorFullScreenActive() || m.inspectorDisplay != inspectorAutomatic {
+		t.Fatalf("escape left full screen for %v, want automatic", m.inspectorDisplay)
+	}
+	if m.inspectorFocused() {
+		t.Fatal("escape left the keyboard in the pane it just shrank")
+	}
+	if !m.inspectorActive() {
+		t.Fatal("a terminal above the floor did not land on the split")
+	}
+
+	m = pressKey(m, keyTab)
+	if !m.inspectorFocused() {
+		t.Fatal("tab no longer reaches the inspector on a real split")
+	}
+	m = pressKey(m, keyTab)
+	if m.inspectorFocused() {
+		t.Fatal("tab no longer returns the keyboard to a visible queue")
+	}
+}
+
 // TestEscapePeelsOverlayThenFullScreenThenFocusThenFilters walks the whole
 // ladder in one model, because the ordering is the contract and each rung is
 // only meaningful relative to the ones above it. An Escape that cleared the

@@ -1,0 +1,20 @@
+{
+  "name": "full-screen-inspector-tab-inert",
+  "fixture": "paused_queue",
+  "size": { "width": 80, "height": 24 },
+  "actions": [
+    { "type": "key", "key": "i" },
+    { "type": "key", "key": "tab" },
+    { "type": "key", "key": "j" },
+    { "type": "key", "key": "shift+tab" },
+    { "type": "key", "key": "home" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "selected_title", "value": "charlie" },
+    { "type": "contains_text", "text": "Paused" },
+    { "type": "contains_text", "text": "output line 01" },
+    { "type": "excludes_text", "text": "switch pane" },
+    { "type": "no_layout_issues" }
+  ]
+}

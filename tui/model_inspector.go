@@ -144,6 +144,20 @@ func listInspectorShown(m Model) bool {
 	return ok
 }
 
+// listBothPanesShown reports that the queue and the inspector are on screen
+// together, which is the only arrangement Tab has a move to make in. It is the
+// footer's reading of what focusPane decides, and it carries listInspectorShown's
+// width-only approximation for the same reason that function exists: the footer's
+// own height is a term in the split's row budget, so it may not ask a question
+// measured in rows.
+//
+// The full-screen half needs no approximation. It is intent alone, so the footer
+// can answer it exactly: a full-screen inspector is one pane no matter how many
+// rows are left.
+func listBothPanesShown(m Model) bool {
+	return listInspectorShown(m) && !m.inspectorFullScreenActive()
+}
+
 // inspectorSplitFits reports whether both panes clear their floors at the
 // current terminal size. The width half is dashboardSplitWidths; the height half
 // is measured here because dashboardSplitWidths is deliberately width-only.
@@ -237,14 +251,30 @@ func (m Model) showInspector() (tea.Model, tea.Cmd) {
 	return m, tea.Batch(read, m.startPreviewPoll())
 }
 
-// focusPane moves the keyboard between the two body panes. Focusing the
-// inspector is refused when there is no inspector on screen to focus, which is
-// what keeps Tab from stranding the keys in a pane the operator cannot see.
+// queueVisible reports whether the session list is drawn at all. It is the
+// mirror of inspectorActive, and the full-screen inspector is the one
+// arrangement that makes it false: that form spends the whole body on the
+// inspector and draws no queue column, which is also why renderSplitFrame
+// publishes no clickable list region under it.
+func (m Model) queueVisible() bool {
+	return !m.inspectorFullScreenActive()
+}
+
+// focusPane moves the keyboard between the two body panes, and refuses to aim
+// it at a pane that is not on screen. Both refusals are the same rule read from
+// its two ends: there is no inspector to focus on a queue-only dashboard, and
+// no queue to focus under a full-screen inspector. Either one would strand the
+// keys in a pane the operator cannot see — the movement keys would answer, but
+// against a list or a viewport that is not being drawn, so the press would look
+// like it did nothing while it moved something out of sight.
 func (m *Model) focusPane(target paneFocus) bool {
 	if target == m.paneFocus {
 		return false
 	}
 	if target == focusInspector && !m.inspectorActive() {
+		return false
+	}
+	if target == focusQueue && !m.queueVisible() {
 		return false
 	}
 	m.paneFocus = target
@@ -261,6 +291,12 @@ func (m *Model) focusPane(target paneFocus) bool {
 // It asks inspectorFocused rather than the raw bit so that a Tab pressed on a
 // terminal too narrow to split declines instead of quietly rewriting the focus
 // the operator set before it shrank.
+//
+// A cycle of length two over ONE visible pane is a cycle of length one, and
+// focusPane is what makes that true in both directions. A full-screen inspector
+// reaches the first branch with a live focus and asks for the queue, which is
+// not drawn: the move is declined and the keys stay on the pane the operator is
+// reading, rather than moving a hidden cursor through a list nobody can see.
 func (m *Model) toggleInspectorFocus() bool {
 	if m.inspectorFocused() {
 		return m.focusPane(focusQueue)

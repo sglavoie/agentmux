@@ -629,8 +629,10 @@ func listFooterPalette() []listFooterCandidate {
 		// Tab names something only while there is a second pane to hand the
 		// keyboard to. With one pane on screen the key answers nothing, and a
 		// footer entry for it would be advertising a move that cannot happen.
+		// A full-screen inspector is one pane as surely as a queue-only dashboard
+		// is, so the entry is withheld there too.
 		listBinding("tab", "switch pane", footerSectionApp, footerPriorityPrimary, footerAlways).
-			shownWhen(listInspectorShown),
+			shownWhen(listBothPanesShown),
 		// The inspector leads the keys in this band because it is the only one
 		// whose surface is already on screen: it is on before the first keypress,
 		// so the row that names how to turn it off is the only thing on a
