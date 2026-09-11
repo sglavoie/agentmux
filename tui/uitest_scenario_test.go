@@ -1,6 +1,10 @@
 package tui
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/sglavoie/agentmux/tui/commands"
+)
 
 func intPtr(n int) *int { return &n }
 
@@ -218,9 +222,11 @@ func TestUITestActionValidation(t *testing.T) {
 		{Type: UITestActionTick, Count: 3},
 		{Type: UITestActionMouse, X: 0, Y: 0, Event: UITestMouseLeft},
 		{Type: UITestActionMouse, X: 10, Y: 5, Event: UITestMouseWheelDown},
+		{Type: UITestActionCommand, CommandID: string(commands.SearchPlans)},
 	}
+	commandIDs := uitestCommandIDSet()
 	for _, a := range ok {
-		if err := validateUITestAction(a); err != nil {
+		if err := validateUITestAction(a, commandIDs); err != nil {
 			t.Errorf("expected %+v valid, got %v", a, err)
 		}
 	}
@@ -234,9 +240,11 @@ func TestUITestActionValidation(t *testing.T) {
 		{Type: UITestActionTick, Count: -1},
 		{Type: UITestActionMouse, X: -1, Y: 0, Event: UITestMouseLeft},
 		{Type: UITestActionMouse, X: 0, Y: 0, Event: "right"},
+		{Type: UITestActionCommand},
+		{Type: UITestActionCommand, CommandID: "session.does-not-exist"},
 	}
 	for _, a := range bad {
-		if err := validateUITestAction(a); err == nil {
+		if err := validateUITestAction(a, commandIDs); err == nil {
 			t.Errorf("expected %+v invalid, got nil", a)
 		}
 	}

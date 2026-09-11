@@ -2,7 +2,7 @@
   "name": "session-search-chips-fit",
   "fixture": "basic",
   "size": { "width": 50, "height": 24 },
-  "actions": [{ "type": "key", "key": "S" }],
+  "actions": [{ "type": "command", "command_id": "explore.search-session-history" }],
   "assertions": [
     { "type": "mode_equals", "mode": "session_search" },
     { "type": "no_layout_issues" }

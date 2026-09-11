@@ -2,7 +2,7 @@
   "name": "projects-tree-expanded",
   "fixture": "project_families",
   "size": { "width": 120, "height": 32 },
-  "actions": [{ "type": "key", "key": "v" }],
+  "actions": [{ "type": "command", "command_id": "explore.toggle-list-view" }],
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
     { "type": "contains_text", "text": "Agent Mux · Projects" },

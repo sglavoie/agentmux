@@ -102,8 +102,9 @@ func validateUITestScenario(sc UITestScenario) error {
 		return fmt.Errorf("%s: size must have positive width and height, got %dx%d", where, sc.Size.Width, sc.Size.Height)
 	}
 
+	commandIDs := uitestCommandIDSet()
 	for i, act := range sc.Actions {
-		if err := validateUITestAction(act); err != nil {
+		if err := validateUITestAction(act, commandIDs); err != nil {
 			return fmt.Errorf("%s: actions[%d]: %w", where, i, err)
 		}
 	}
@@ -118,7 +119,10 @@ func validateUITestScenario(sc UITestScenario) error {
 }
 
 // validateUITestAction checks one action's type and the fields that type reads.
-func validateUITestAction(a UITestAction) error {
+// commandIDs is the set of catalog IDs a command action may name; it is passed
+// in rather than rebuilt per action because the whole scenario is checked
+// against one catalog.
+func validateUITestAction(a UITestAction, commandIDs map[string]bool) error {
 	if !a.Type.Valid() {
 		return fmt.Errorf("unknown action type %q", a.Type)
 	}
@@ -151,8 +155,31 @@ func validateUITestAction(a UITestAction) error {
 		default:
 			return fmt.Errorf("mouse action has unknown event %q", a.Event)
 		}
+	case UITestActionCommand:
+		if a.CommandID == "" {
+			return fmt.Errorf("command action requires a non-empty command_id")
+		}
+		// A typo'd or retired ID is caught here rather than at run time,
+		// because a scenario that names nothing would otherwise report a
+		// missing palette row — which reads like a visibility bug in the
+		// screen under test instead of a broken scenario file.
+		if !commandIDs[a.CommandID] {
+			return fmt.Errorf("command action has unknown command_id %q", a.CommandID)
+		}
 	}
 	return nil
+}
+
+// uitestCommandIDSet is the set of stable IDs a command action may name: the
+// dashboard catalog, which is the complete list of commands the palette can
+// ever offer.
+func uitestCommandIDSet() map[string]bool {
+	catalog := commandCatalog()
+	set := make(map[string]bool, len(catalog))
+	for _, candidate := range catalog {
+		set[string(candidate.ID)] = true
+	}
+	return set
 }
 
 // validateUITestAssertion checks one assertion's type and required fields.
@@ -529,10 +556,19 @@ type UITestSize struct {
 	Height int `json:"height"`
 }
 
-// UITestActionType enumerates the scenario step kinds the first harness
-// version understands. It intentionally omits a generic command action;
-// scenarios drive the model with keys, literal text, resizes, ticks, and
-// mouse events routed through the rendered View.
+// UITestActionType enumerates the scenario step kinds the harness understands.
+// Every one of them is an input an operator could have produced: keys, literal
+// text, resizes, ticks, mouse events routed through the rendered View, and a
+// command named by its stable catalog ID.
+//
+// The command action is deliberately NOT a way to call a model operation
+// directly. It types the palette's own key, walks its cursor with the palette's
+// own navigation keys, and presses enter on the row — so a scenario that names
+// a command still fails when the palette will not open, when the row is hidden
+// or disabled, or when enter stops running it. What it buys is independence
+// from the *spelling* of a dashboard shortcut: a scenario whose subject is
+// another screen says which capability took it there, not which letter did,
+// and survives the key retiring underneath it.
 type UITestActionType string
 
 const (
@@ -546,12 +582,15 @@ const (
 	UITestActionTick UITestActionType = "tick"
 	// UITestActionMouse routes a click or wheel event through the rendered View.
 	UITestActionMouse UITestActionType = "mouse"
+	// UITestActionCommand runs the catalog command named by CommandID through
+	// the command palette, exactly as an operator reaching it by name would.
+	UITestActionCommand UITestActionType = "command"
 )
 
 // Valid reports whether t is one of the recognized action kinds.
 func (t UITestActionType) Valid() bool {
 	switch t {
-	case UITestActionKey, UITestActionText, UITestActionResize, UITestActionTick, UITestActionMouse:
+	case UITestActionKey, UITestActionText, UITestActionResize, UITestActionTick, UITestActionMouse, UITestActionCommand:
 		return true
 	default:
 		return false
@@ -561,15 +600,16 @@ func (t UITestActionType) Valid() bool {
 // UITestAction is a single scenario step. Only the fields relevant to Type are
 // populated; the rest stay zero so the JSON stays compact and reviewable.
 type UITestAction struct {
-	Type   UITestActionType `json:"type"`
-	Key    string           `json:"key,omitempty"`
-	Text   string           `json:"text,omitempty"`
-	Width  int              `json:"width,omitempty"`
-	Height int              `json:"height,omitempty"`
-	Count  int              `json:"count,omitempty"`
-	X      int              `json:"x,omitempty"`
-	Y      int              `json:"y,omitempty"`
-	Event  string           `json:"event,omitempty"`
+	Type      UITestActionType `json:"type"`
+	Key       string           `json:"key,omitempty"`
+	Text      string           `json:"text,omitempty"`
+	Width     int              `json:"width,omitempty"`
+	Height    int              `json:"height,omitempty"`
+	Count     int              `json:"count,omitempty"`
+	X         int              `json:"x,omitempty"`
+	Y         int              `json:"y,omitempty"`
+	Event     string           `json:"event,omitempty"`
+	CommandID string           `json:"command_id,omitempty"`
 }
 
 const (

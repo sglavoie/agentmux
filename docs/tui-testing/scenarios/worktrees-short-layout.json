@@ -3,7 +3,7 @@
   "fixture": "worktree_lifecycle",
   "size": { "width": 100, "height": 10 },
   "actions": [
-    { "type": "key", "key": "W" }
+    { "type": "command", "command_id": "explore.manage-worktrees" }
   ],
   "assertions": [
     { "type": "mode_equals", "mode": "worktrees" },

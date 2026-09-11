@@ -10,6 +10,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/tui/asl"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 func TestASLResponseStaleTargetInvalidatesTheFormAndRefreshes(t *testing.T) {
@@ -19,7 +20,7 @@ func TestASLResponseStaleTargetInvalidatesTheFormAndRefreshes(t *testing.T) {
 	}
 	d, _ := newUITestFixtureDriver(fx, UITestSize{})
 	t.Cleanup(func() { _ = d.Close() })
-	if err := d.Key(keyASLRuns); err != nil {
+	if err := d.Command(commands.ShowRuns); err != nil {
 		t.Fatalf("entering Runs: %v", err)
 	}
 	selectASLRun(t, d, "row-reply")
@@ -50,7 +51,7 @@ func TestASLResponseBridgeRefusalNeverEchoesBridgeText(t *testing.T) {
 	}
 	d, _ := newUITestFixtureDriver(fx, UITestSize{})
 	t.Cleanup(func() { _ = d.Close() })
-	if err := d.Key(keyASLRuns); err != nil {
+	if err := d.Command(commands.ShowRuns); err != nil {
 		t.Fatalf("entering Runs: %v", err)
 	}
 	selectASLRun(t, d, "row-reply")
@@ -78,7 +79,7 @@ func TestASLResponseVanishedQuestionIsRefusedOnFetch(t *testing.T) {
 	delete(fx.ASLQuestionBodies, "q-api-1")
 	d, _ := newUITestFixtureDriver(fx, UITestSize{})
 	t.Cleanup(func() { _ = d.Close() })
-	if err := d.Key(keyASLRuns); err != nil {
+	if err := d.Command(commands.ShowRuns); err != nil {
 		t.Fatalf("entering Runs: %v", err)
 	}
 	selectASLRun(t, d, "row-reply")
@@ -99,7 +100,7 @@ func TestASLResponseDisconnectedBridgeOffersNoActions(t *testing.T) {
 	fx.ASLStatus.MutationsEnabled = false
 	d, _ := newUITestFixtureDriver(fx, UITestSize{})
 	t.Cleanup(func() { _ = d.Close() })
-	if err := d.Key(keyASLRuns); err != nil {
+	if err := d.Command(commands.ShowRuns); err != nil {
 		t.Fatalf("entering Runs: %v", err)
 	}
 	selectASLRun(t, d, "row-reply")

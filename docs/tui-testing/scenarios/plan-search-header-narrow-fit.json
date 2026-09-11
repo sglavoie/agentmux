@@ -2,7 +2,7 @@
   "name": "plan-search-header-narrow-fit",
   "fixture": "basic",
   "size": { "width": 30, "height": 24 },
-  "actions": [{ "type": "key", "key": "P" }],
+  "actions": [{ "type": "command", "command_id": "explore.search-plans" }],
   "assertions": [
     { "type": "mode_equals", "mode": "plan_search" },
     { "type": "no_layout_issues" }

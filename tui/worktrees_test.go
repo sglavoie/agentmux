@@ -187,12 +187,11 @@ func TestWorktreeNavigationFilterAndReturn(t *testing.T) {
 	if m.mode != ModeList {
 		t.Fatalf("second navigation esc = mode %v, want list", m.mode)
 	}
-	updated, cmd := m.Update(keyPress("W"))
-	m = updated.(Model)
+	m, cmd := runDashboardCommand(t, m, commands.ManageWorktrees)
 	if cmd == nil {
 		t.Fatal("re-entering Worktrees returned no refresh command")
 	}
-	updated, _ = m.Update(cmd())
+	updated, _ := m.Update(cmd())
 	m = updated.(Model)
 	if m.mode != ModeWorktrees || m.worktreeFilter != "" || len(m.worktreeFiltered) != len(m.worktreeEntries) {
 		t.Fatalf("re-entry = mode=%v filter=%q results=%d entries=%d", m.mode, m.worktreeFilter, len(m.worktreeFiltered), len(m.worktreeEntries))

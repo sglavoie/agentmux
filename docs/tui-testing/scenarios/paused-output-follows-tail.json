@@ -1,0 +1,17 @@
+{
+  "name": "paused-output-follows-tail",
+  "fixture": "paused_output",
+  "size": { "width": 120, "height": 32 },
+  "actions": [
+    { "type": "key", "key": "p" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "output line 40" },
+    { "type": "contains_text", "text": "output line 17" },
+    { "type": "excludes_text", "text": "output line 16" },
+    { "type": "excludes_text", "text": "output line 01" },
+    { "type": "contains_text", "text": "streaming · work · claude · 0:42" },
+    { "type": "no_layout_issues" }
+  ]
+}

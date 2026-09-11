@@ -22,11 +22,14 @@ func aslRunsDriver(t *testing.T) (*uitestDriver, *uitestKittyClient) {
 func enterASLRunsDriver(t *testing.T) (*uitestDriver, *uitestKittyClient) {
 	t.Helper()
 	d, client := aslRunsDriver(t)
-	if err := d.Key(keyASLRuns); err != nil {
-		t.Fatalf("pressing %q: %v", keyASLRuns, err)
+	// Named rather than typed: this helper's callers are about what the Runs
+	// view does, not about which letter opened it. The literal binding keeps its
+	// own coverage in the toggle test below and in the binding table's tests.
+	if err := d.Command(commands.ShowRuns); err != nil {
+		t.Fatalf("opening Runs: %v", err)
 	}
 	if got := d.Model().mode; got != ModeASLRuns {
-		t.Fatalf("mode after %q = %v, want ModeASLRuns", keyASLRuns, got)
+		t.Fatalf("mode after opening Runs = %v, want ModeASLRuns", got)
 	}
 	if len(d.Model().aslRows) != 5 {
 		t.Fatalf("loaded %d rows, want 5", len(d.Model().aslRows))
@@ -228,7 +231,7 @@ func TestASLRunsUnavailableRatherThanEmpty(t *testing.T) {
 	fx.ASLStatus = aslbridge.Status{Reason: "the agent-session-loop bridge is not running"}
 	d, _ := newUITestFixtureDriver(fx, UITestSize{})
 	defer func() { _ = d.Close() }()
-	if err := d.Key(keyASLRuns); err != nil {
+	if err := d.Command(commands.ShowRuns); err != nil {
 		t.Fatalf("entering Runs: %v", err)
 	}
 

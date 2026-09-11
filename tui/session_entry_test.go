@@ -10,14 +10,14 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 func TestEnterSessionSearchStartsCacheLoadWhenCacheMissing(t *testing.T) {
 	m := testModel()
 
-	updated, cmd := m.Update(keyPress("S"))
-	got := updated.(Model)
+	got, cmd := runDashboardCommand(t, m, commands.SearchAllSessions)
 
 	if got.mode != ModeSessionSearch {
 		t.Fatalf("mode = %v, want ModeSessionSearch", got.mode)
@@ -99,8 +99,7 @@ func TestEnterSessionSearchDuringCacheLoadDoesNotDuplicateWork(t *testing.T) {
 	m := testModel()
 	m.sessionCacheLoadInFlight = true
 
-	updated, cmd := m.Update(keyPress("S"))
-	got := updated.(Model)
+	got, cmd := runDashboardCommand(t, m, commands.SearchAllSessions)
 
 	if got.mode != ModeSessionSearch {
 		t.Fatalf("mode = %v, want ModeSessionSearch", got.mode)
@@ -126,8 +125,7 @@ func TestEnterSessionSearchReusesWarmedResultsOnRepeatedEntry(t *testing.T) {
 	m.sessionResults = m.sessionResults[:1]
 	warmedID := m.sessionResults[0].Meta.ID
 
-	updated, cmd := m.Update(keyPress("S"))
-	got := updated.(Model)
+	got, cmd := runDashboardCommand(t, m, commands.SearchAllSessions)
 
 	if cmd == nil {
 		t.Fatal("first warmed entry returned nil cmd; want background refresh")
@@ -152,8 +150,7 @@ func TestEnterSessionSearchReusesWarmedResultsOnRepeatedEntry(t *testing.T) {
 	}
 
 	got.mode = ModeList
-	updated, cmd = got.Update(keyPress("S"))
-	got = updated.(Model)
+	got, cmd = runDashboardCommand(t, got, commands.SearchAllSessions)
 	if cmd != nil {
 		t.Fatalf("repeated warmed entry returned cmd %T; want no duplicate refresh", cmd)
 	}
@@ -221,8 +218,7 @@ func TestEnterSessionSearchWithWarmCacheRefreshesAndShowsNewTranscript(t *testin
 		sessionResults:    []transcript.Result{{Meta: warmed, Preview: warmed.Snippet}},
 	}
 
-	updated, cmd := m.Update(keyPress("S"))
-	got := updated.(Model)
+	got, cmd := runDashboardCommand(t, m, commands.SearchAllSessions)
 	if cmd == nil {
 		t.Fatal("warm Past Sessions re-entry returned nil cmd; want background refresh for newly written transcripts")
 	}
@@ -248,7 +244,7 @@ func TestEnterSessionSearchWithWarmCacheRefreshesAndShowsNewTranscript(t *testin
 		if msg.searchErr != nil {
 			t.Fatalf("warm refresh search error: %v", msg.searchErr)
 		}
-		updated, _ = got.Update(msg)
+		updated, _ := got.Update(msg)
 		got = updated.(Model)
 	case sessionsRefreshDoneMsg:
 		if msg.err != nil {
@@ -339,8 +335,7 @@ func TestEnterSessionSearchWithPreservedQueryRefreshesMatchingRows(t *testing.T)
 		sessionResults:    []transcript.Result{{Meta: warmed, Preview: warmed.Snippet}},
 	}
 
-	updated, cmd := m.Update(keyPress("S"))
-	got := updated.(Model)
+	got, cmd := runDashboardCommand(t, m, commands.SearchAllSessions)
 	if cmd == nil {
 		t.Fatal("warm Past Sessions re-entry returned nil cmd; want background refresh")
 	}
@@ -368,7 +363,7 @@ func TestEnterSessionSearchWithPreservedQueryRefreshesMatchingRows(t *testing.T)
 		t.Fatalf("warm refresh query results missing newly matching transcript: %+v", msg.results)
 	}
 
-	updated, _ = got.Update(msg)
+	updated, _ := got.Update(msg)
 	got = updated.(Model)
 	if !hasSessionResultID(got.sessionResults, "new") {
 		t.Fatalf("refreshed preserved-query results missing new transcript: %+v", got.sessionResults)

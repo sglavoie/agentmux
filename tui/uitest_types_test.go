@@ -7,17 +7,20 @@ import (
 )
 
 // TestUITestActionTypeValid locks in the closed set of scenario action kinds:
-// the first harness version supports key/text/resize/tick and nothing else.
+// key/text/resize/tick/mouse name an input device, and command names a
+// capability the harness reaches through the palette's own keys. Nothing else
+// is accepted, so a misspelled kind fails the scenario instead of being ignored.
 func TestUITestActionTypeValid(t *testing.T) {
 	valid := []UITestActionType{
 		UITestActionKey, UITestActionText, UITestActionResize, UITestActionTick, UITestActionMouse,
+		UITestActionCommand,
 	}
 	for _, at := range valid {
 		if !at.Valid() {
 			t.Errorf("UITestActionType(%q).Valid() = false, want true", at)
 		}
 	}
-	for _, at := range []UITestActionType{"", "command", "sleep", "KEY"} {
+	for _, at := range []UITestActionType{"", "sleep", "KEY", "COMMAND"} {
 		if at.Valid() {
 			t.Errorf("UITestActionType(%q).Valid() = true, want false", at)
 		}

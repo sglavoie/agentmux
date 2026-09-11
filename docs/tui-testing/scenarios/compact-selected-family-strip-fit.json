@@ -3,7 +3,7 @@
   "fixture": "project_families",
   "size": { "width": 72, "height": 30 },
   "actions": [
-    { "type": "key", "key": "v" },
+    { "type": "command", "command_id": "explore.toggle-list-view" },
     { "type": "key", "key": "left" }
   ],
   "assertions": [

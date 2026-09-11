@@ -3,7 +3,7 @@
   "fixture": "basic",
   "size": { "width": 100, "height": 30 },
   "actions": [
-    { "type": "key", "key": "P" },
+    { "type": "command", "command_id": "explore.search-plans" },
     { "type": "key", "key": "o" }
   ],
   "assertions": [

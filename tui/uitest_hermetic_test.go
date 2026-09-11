@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 func TestUITestDriverSeedsHermeticFilesystemIndexes(t *testing.T) {
@@ -29,7 +31,7 @@ func TestUITestDriverSeedsHermeticFilesystemIndexes(t *testing.T) {
 		t.Fatalf("unexpected fixture database %s: %v", databasePath, err)
 	}
 
-	if err := d.Key("S"); err != nil {
+	if err := d.Command(commands.SearchAllSessions); err != nil {
 		t.Fatalf("enter session search: %v", err)
 	}
 	if got := d.Model().sessionResults; len(got) != 1 || got[0].Meta.ID != "fixture-conversation" {
@@ -38,7 +40,7 @@ func TestUITestDriverSeedsHermeticFilesystemIndexes(t *testing.T) {
 	if err := d.Key("q"); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.Key("P"); err != nil {
+	if err := d.Command(commands.SearchPlans); err != nil {
 		t.Fatalf("enter plan search: %v", err)
 	}
 	if got := d.Model().planResults; len(got) != 1 || got[0].Meta.Name != "fixture plan" {

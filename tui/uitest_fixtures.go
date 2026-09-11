@@ -85,6 +85,19 @@ type uitestFixture struct {
 	// discovery's own answer alone, which for a fixture pointing at directories
 	// that do not exist is a singleton family per configured project.
 	Families map[int]uitestFamily
+	// Text is the scrollback every GetText read answers with, standing in for
+	// one `kitten @ get-text` against the previewed window. It is one string
+	// rather than a per-window map because the pane reads exactly one window at
+	// a time, and a fixture that varied by window would be asserting on which
+	// window was asked — which the recording client already captures.
+	Text string
+	// Health stands in for one daemon/hook health refresh. A nil Health leaves
+	// the hermetic default in place — nothing checked, which reads as a daemon
+	// that is down — so only a fixture with something else to say carries one.
+	// It is a pointer for exactly that reason: the zero HealthMsg is itself a
+	// meaningful world (daemon down, hooks silent) and would otherwise be
+	// indistinguishable from "this fixture has no opinion".
+	Health *commands.HealthMsg
 }
 
 // uitestFamily is one row's repository-family identity, mirroring the four
@@ -166,6 +179,10 @@ var uitestFixtureBuilders = map[string]func() uitestFixture{
 	"triage_integration": triageIntegrationFixture,
 	"triage_vertical":    triageVerticalFixture,
 	"family_unread":      familyUnreadFixture,
+	"duplicate_names":    duplicateNamesFixture,
+	"paused_output":      pausedOutputFixture,
+	"health_states":      healthStatesFixture,
+	"attention_overlap":  attentionOverlapFixture,
 }
 
 // uitestFixtureError reports a request for an unknown built-in fixture and

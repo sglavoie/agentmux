@@ -11,6 +11,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/tui/asl"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 // openASLResponseDriver enters the Runs view, selects a run by ID, and opens its
@@ -359,7 +360,7 @@ func TestASLResponseRetryReusesTheOperationIDForTheSameCall(t *testing.T) {
 func TestASLResponseFitsNarrowTerminals(t *testing.T) {
 	for _, size := range []UITestSize{{Width: 60, Height: 20}, {Width: 80, Height: 24}, {Width: 132, Height: 34}} {
 		d, _ := newUITestFixtureDriver(aslRunsFixture(), size)
-		if err := d.Key(keyASLRuns); err != nil {
+		if err := d.Command(commands.ShowRuns); err != nil {
 			t.Fatalf("entering Runs at %dx%d: %v", size.Width, size.Height, err)
 		}
 		selectASLRun(t, d, "row-reply")

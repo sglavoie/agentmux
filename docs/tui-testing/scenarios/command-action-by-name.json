@@ -1,0 +1,18 @@
+{
+  "name": "command-action-by-name",
+  "fixture": "basic",
+  "size": { "width": 100, "height": 32 },
+  "actions": [
+    { "type": "command", "command_id": "explore.search-plans" },
+    { "type": "key", "key": "esc" },
+    { "type": "command", "command_id": "explore.manage-worktrees" },
+    { "type": "key", "key": "esc" },
+    { "type": "command", "command_id": "session.focus" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "kitty_calls", "op": "FocusTab", "count": 1 },
+    { "type": "excludes_text", "text": "Command Palette" },
+    { "type": "no_layout_issues" }
+  ]
+}

@@ -194,6 +194,8 @@ func (d *uitestDriver) Apply(action UITestAction) error {
 		return d.Err()
 	case UITestActionMouse:
 		return d.Mouse(action.X, action.Y, action.Event)
+	case UITestActionCommand:
+		return d.Command(commands.ID(action.CommandID))
 	default:
 		return fmt.Errorf("uitest: unknown action type %q", action.Type)
 	}
@@ -242,6 +244,116 @@ func (d *uitestDriver) Text(s string) error {
 		}
 	}
 	return nil
+}
+
+// Command runs the catalog command named by id the way an operator reaching it
+// by name does: it opens the palette with the dashboard's own ':' key, walks
+// the palette cursor onto the row with the palette's own navigation keys,
+// checks the row the way the enter handler checks it, and only then presses
+// enter. Nothing here calls a command's Execute directly, so a scenario that
+// names a capability still exercises every gate between a keypress and the
+// operation — and a regression anywhere along that path fails the scenario
+// rather than being stepped over.
+//
+// Every way the path can fail is reported as its own error, because from the
+// screen they are one symptom: enter did nothing. A scenario that could not
+// tell "this command no longer exists" from "this command is correctly
+// disabled here" would be a scenario that passes for the wrong reason the day
+// one of them changes.
+func (d *uitestDriver) Command(id commands.ID) error {
+	if id == "" {
+		return fmt.Errorf("uitest: command action requires a command id")
+	}
+	if d.model.mode != ModeList {
+		return fmt.Errorf("uitest: command %q is unreachable from mode %q: the palette opens from the session list", id, uitestModeName(d.model.mode))
+	}
+	// The rail is a second keymap the binding table does not describe, and ':'
+	// is not in it. Saying so is worth an error of its own: the alternative is
+	// a scenario reporting that the palette would not open, which is true and
+	// useless.
+	if d.model.railFocused {
+		return fmt.Errorf("uitest: command %q is unreachable while the project rail holds keyboard focus, where %q is inert", id, keyColon)
+	}
+	if err := d.Key(keyColon); err != nil {
+		return err
+	}
+	if d.model.mode != ModeCommandPalette {
+		return fmt.Errorf("uitest: pressing %q left the model in mode %q instead of opening the command palette", keyColon, uitestModeName(d.model.mode))
+	}
+	index, err := uitestCommandRowIndex(d.model.commandResults, id, uitestCommandIDSet()[string(id)])
+	if err != nil {
+		return err
+	}
+	if err := d.moveCommandCursor(index); err != nil {
+		return err
+	}
+	// Visibility was already settled by finding a row at all: the palette
+	// filters hidden commands out of its results, so a hidden id never gets
+	// this far. Availability is the gate the enter handler applies, and it is
+	// checked here so a disabled command fails the scenario WITHOUT enter ever
+	// being pressed — the operation must not be issued, not merely refused.
+	candidate := d.model.commandResults[index]
+	if availability := candidate.AvailabilityFor(d.model, d.model.commandContext); !availability.Available {
+		return fmt.Errorf("uitest: command %q is disabled for the current selection: %s", id, availability.Reason)
+	}
+	if err := d.Key(keyEnter); err != nil {
+		return err
+	}
+	if d.model.mode == ModeCommandPalette {
+		return fmt.Errorf("uitest: command %q left the palette open, so enter did not run it", id)
+	}
+	return nil
+}
+
+// moveCommandCursor walks the palette cursor onto index using the palette's own
+// up/down keys rather than assigning the field, so a scenario can only select a
+// row the operator's own navigation reaches. The step bound is what turns a
+// cursor that stops moving into an error instead of a hang.
+func (d *uitestDriver) moveCommandCursor(index int) error {
+	for steps := 0; d.model.commandCursor != index; steps++ {
+		if steps > len(d.model.commandResults) {
+			return fmt.Errorf("uitest: palette cursor stopped at %d walking to row %d", d.model.commandCursor, index)
+		}
+		key := keyDown
+		if d.model.commandCursor > index {
+			key = keyUp
+		}
+		if err := d.Key(key); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// uitestCommandRowIndex resolves the one palette row carrying id, and names
+// every other outcome as the distinct defect it is: an id no catalog entry
+// declares is absent, a declared id the palette filtered out is hidden here,
+// and an id carried by more than one row is ambiguous — the palette would run
+// whichever the cursor happened to land on, which is not a thing a scenario may
+// depend on. declared is whether the catalog declares id at all, which is what
+// separates the first two.
+func uitestCommandRowIndex(rows []commands.Command[Model], id commands.ID, declared bool) (int, error) {
+	found := -1
+	matches := 0
+	for i, row := range rows {
+		if row.ID != id {
+			continue
+		}
+		matches++
+		if found < 0 {
+			found = i
+		}
+	}
+	switch {
+	case matches > 1:
+		return -1, fmt.Errorf("uitest: command %q is ambiguous: %d palette rows carry that id", id, matches)
+	case matches == 1:
+		return found, nil
+	case declared:
+		return -1, fmt.Errorf("uitest: command %q is hidden for the current selection, so the palette offers no row for it", id)
+	default:
+		return -1, fmt.Errorf("uitest: no command with id %q exists", id)
+	}
 }
 
 // Resize changes the terminal viewport and re-renders. A non-positive dimension
@@ -422,8 +534,30 @@ func newUITestFixtureDriver(fx uitestFixture, size UITestSize) (*uitestDriver, *
 		size.Height = fx.Size.Height
 	}
 	client := newUITestKittyClient(fx.Windows)
+	client.text = fx.Text
 	d := newUITestDriver(fx.Config, client, size)
 	d.model.backgroundCommands.topologyRefresh = hermeticTopologyRefresh(fx.overlay())
+	if fx.Health != nil {
+		// Honor the two flags the way commands.Health does, so a fixture cannot
+		// make a daemon-only refresh silently deliver a hook summary. The model
+		// stamps each section's checked-at clock from the flag it asked with,
+		// and a reply that answered more than it was asked would make the
+		// staleness rule untestable.
+		fixtureHealth := *fx.Health
+		d.model.backgroundCommands.health = func(_ Model, checkDaemon, checkHooks bool) tea.Cmd {
+			return func() tea.Msg {
+				msg := commands.HealthMsg{DaemonChecked: checkDaemon, HookChecked: checkHooks}
+				if checkDaemon {
+					msg.DaemonAlive = fixtureHealth.DaemonAlive
+				}
+				if checkHooks {
+					msg.HookSummary = fixtureHealth.HookSummary
+					msg.HookErr = fixtureHealth.HookErr
+				}
+				return msg
+			}
+		}
+	}
 	fixtureWorktrees := append([]actions.WorktreeView(nil), fx.Worktrees...)
 	d.model.backgroundCommands.worktrees = func(_ Model, seq int) tea.Cmd {
 		return func() tea.Msg {

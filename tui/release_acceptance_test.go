@@ -225,7 +225,7 @@ func TestAcceptanceTUIContinuityForkUsesFilesystemSnapshotWithoutDatabase(t *tes
 			t.Errorf("close TUI driver: %v", err)
 		}
 	})
-	if err := driver.Key("S"); err != nil {
+	if err := driver.Command(commands.SearchAllSessions); err != nil {
 		t.Fatalf("open Past Sessions: %v", err)
 	}
 	if err := driver.Key("f"); err != nil {

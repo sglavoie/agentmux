@@ -1,0 +1,18 @@
+{
+  "name": "duplicate-names-collisions",
+  "fixture": "duplicate_names",
+  "size": { "width": 100, "height": 32 },
+  "actions": [],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "1:     ⚡ [W] 🦊 claude  api                   0:42 main*      ~/projects/api" },
+    { "type": "contains_text", "text": "2:     ⚡ [W] 🦊 claude  api                   3:07 amx/feat-x ~/projects/worktrees/api-feat-x" },
+    { "type": "contains_text", "text": "3:     ⚡ [W] 🦊 claude  web                   0:12 main       ~/projects/web" },
+    { "type": "contains_text", "text": "4:     ⚡ [P] 🤖 codex   web                   1:05 main       ~/sites/web" },
+    { "type": "contains_text", "text": "5:     ⚡ [P] 🤖 codex   docs                  0:08            ~/projects/docs" },
+    { "type": "contains_text", "text": "6:     ⚡ [P] 🤖 codex   docs                  0:08            ~/projects/docs" },
+    { "type": "contains_text", "text": "7:     ⚡ [P] 🤖 codex   notes                 0:30            ~/notes" },
+    { "type": "contains_text", "text": "Sessions: 7 · 0 attention · 7 active · 0 idle" },
+    { "type": "no_layout_issues" }
+  ]
+}

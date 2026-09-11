@@ -7,7 +7,7 @@
     { "type": "key", "key": "j" },
     { "type": "key", "key": "j" },
     { "type": "key", "key": "j" },
-    { "type": "key", "key": "v" }
+    { "type": "command", "command_id": "explore.toggle-list-view" }
   ],
   "assertions": [
     { "type": "mode_equals", "mode": "list" },

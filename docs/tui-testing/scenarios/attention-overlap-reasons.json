@@ -1,0 +1,21 @@
+{
+  "name": "attention-overlap-reasons",
+  "fixture": "attention_overlap",
+  "size": { "width": 100, "height": 32 },
+  "actions": [],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "  Needs Attention (4)" },
+    { "type": "contains_text", "text": "  ▌ 2:        ❗       [P] 🤖 codex   failed" },
+    { "type": "contains_text", "text": "  ▌ 1:        🔑 perm  [W] 🦊 claude  blocked" },
+    { "type": "contains_text", "text": "  ▌ 3:     🔁 ❓ input [W] 🦊 claude  looping" },
+    { "type": "contains_text", "text": "• ▌ 4:        🛑       [P] 🤖 codex   unread" },
+    { "type": "contains_text", "text": "  Active (1)" },
+    { "type": "contains_text", "text": "  ▌ 5:        ⚠️       [W] 🦊 claude  warned                0:42" },
+    { "type": "excludes_text", "text": "• ▌ 1:" },
+    { "type": "excludes_text", "text": "• ▌ 2:" },
+    { "type": "excludes_text", "text": "• ▌ 3:" },
+    { "type": "contains_text", "text": "Sessions: 5 · 4 attention · 1 active · 0 idle" },
+    { "type": "no_layout_issues" }
+  ]
+}

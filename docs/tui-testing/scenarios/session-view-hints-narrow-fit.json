@@ -3,7 +3,7 @@
   "fixture": "basic",
   "size": { "width": 60, "height": 32 },
   "actions": [
-    { "type": "key", "key": "S" },
+    { "type": "command", "command_id": "explore.search-session-history" },
     { "type": "key", "key": "enter" }
   ],
   "assertions": [

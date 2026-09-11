@@ -3,7 +3,7 @@
   "fixture": "asl_runs",
   "size": { "width": 132, "height": 34 },
   "actions": [
-    { "type": "key", "key": "A" },
+    { "type": "command", "command_id": "explore.show-runs" },
     { "type": "key", "key": "r" },
     { "type": "text", "text": "after the cutover" }
   ],

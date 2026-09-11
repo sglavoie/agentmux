@@ -3,7 +3,7 @@
   "fixture": "worktrees",
   "size": { "width": 120, "height": 32 },
   "actions": [
-    { "type": "key", "key": "W" },
+    { "type": "command", "command_id": "explore.manage-worktrees" },
     { "type": "key", "key": "/" },
     { "type": "text", "text": "dirty" },
     { "type": "key", "key": "enter" }

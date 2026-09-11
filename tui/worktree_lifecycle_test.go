@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/launch"
 )
 
@@ -11,7 +12,7 @@ func lifecycleDriver(t *testing.T) (*uitestDriver, *uitestKittyClient) {
 	t.Helper()
 	driver, client := newUITestFixtureDriver(worktreeLifecycleFixture(), UITestSize{})
 	cleanupUITestDriver(t, driver)
-	if err := driver.Key("W"); err != nil {
+	if err := driver.Command(commands.ManageWorktrees); err != nil {
 		t.Fatalf("enter Worktrees: %v", err)
 	}
 	return driver, client

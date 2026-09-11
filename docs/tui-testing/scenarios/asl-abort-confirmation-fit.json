@@ -3,7 +3,7 @@
   "fixture": "asl_runs",
   "size": { "width": 80, "height": 24 },
   "actions": [
-    { "type": "key", "key": "A" },
+    { "type": "command", "command_id": "explore.show-runs" },
     { "type": "key", "key": "a" }
   ],
   "assertions": [
