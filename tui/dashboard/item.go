@@ -210,6 +210,68 @@ func unreadStop(s session.RunningSession) bool {
 	return s.State == "stop" && s.Unseen
 }
 
+// RowTarget names where a cursor has to go to reach one underlying row, and
+// what has to happen first.
+//
+// It exists because "the row I want" and "a line I can put the cursor on" are
+// not the same thing in the Projects arrangement: a folded family projects to one
+// summary line and its members project to none, so a row inside it has no line
+// of its own to select. Answering with the summary plus Reveal is what lets the
+// caller fold the family open and then land on the row, rather than either
+// silently selecting the summary (the wrong session for every subsequent action)
+// or reporting that the row is unreachable (it is not — it is one keystroke away).
+type RowTarget struct {
+	// Item is the index of the line to select: the row's own leaf when it has one,
+	// and otherwise the summary standing for the family that hides it.
+	Item int
+	// Row is the index into ItemList.Rows this target was resolved for. It travels
+	// with the target so a caller that reveals a family can ask for the same row
+	// again without remembering which one it asked about.
+	Row int
+	// FamilyKey is the family that must be expanded, and "" when nothing must be.
+	FamilyKey string
+	// Reveal reports that Item is a summary rather than the row itself. A caller
+	// that honors it expands FamilyKey and resolves the same Row again against the
+	// rebuilt projection; a caller that ignores it leaves the cursor on the summary,
+	// which is a legal selection that simply is not the row it asked for.
+	Reveal bool
+}
+
+// ResolveRowTarget resolves one row index to the line that reaches it, reporting
+// false when the projection holds no such line at all.
+//
+// The visible leaf wins outright. Only when the row projects to no line of its
+// own is a collapsed summary consulted, and then only a summary that actually
+// claims the row as a member — a family is never guessed at from the row's own
+// FamilyKey, because a key names a family that the current filter may have
+// reduced to a single leaf or removed entirely.
+//
+// False is the answer for an out-of-range row and for a row that is in the set
+// but in no line's reach, which cannot happen in a projection either builder
+// produced. It is the fail-closed half of the same rule Session and SessionAt
+// keep: a target nothing can resolve is refused rather than approximated.
+func (l ItemList) ResolveRowTarget(row int) (RowTarget, bool) {
+	if row < 0 || row >= len(l.Rows) {
+		return RowTarget{}, false
+	}
+	for i, it := range l.Items {
+		if it.Kind == ItemSession && it.Row == row {
+			return RowTarget{Item: i, Row: row, FamilyKey: it.FamilyKey}, true
+		}
+	}
+	for i, it := range l.Items {
+		if it.Kind != ItemFamilySummary || !it.Collapsed {
+			continue
+		}
+		for _, member := range it.Members {
+			if member == row {
+				return RowTarget{Item: i, Row: row, FamilyKey: it.FamilyKey, Reveal: true}, true
+			}
+		}
+	}
+	return RowTarget{}, false
+}
+
 // CountGroups returns how many distinct urgency groups the projected items
 // span. The list renders group labels and borders only when this is greater
 // than one, so pagination and scroll math charge the same chrome the renderer
