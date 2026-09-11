@@ -77,13 +77,27 @@ func formatRunElapsed(busySince, now time.Time) string {
 // render a bare `— ⏳`.
 func activityCellText(s session.RunningSession, ws protocol.WatchdogState, now time.Time) (text string, warning bool) {
 	text = formatRunElapsed(s.BusySince, now)
-	if s.BusySince.IsZero() || ws.LastAction == "" || ws.ThresholdSec <= 0 {
-		return text, false
-	}
-	elapsed := now.Sub(time.Unix(ws.LastEventAt, 0))
-	threshold := time.Duration(ws.ThresholdSec) * time.Second
-	if elapsed*5 < threshold*4 {
+	if s.BusySince.IsZero() || !watchdogStale(ws, now) {
 		return text, false
 	}
 	return text + " " + ageWarningGlyph, true
+}
+
+// watchdogStale reports whether the time since the window's last hook event has
+// crossed the watchdog's 80%-of-threshold warning band.
+//
+// It is one function rather than a rule each surface restates because two
+// surfaces now draw it — the activity column's trailing glyph and the
+// inspector's watch line — and two copies of `elapsed*5 >= threshold*4` are two
+// moments a window could start looking stale in one place and not the other. An
+// entry with no recorded action and a disabled threshold (ThresholdSec <= 0)
+// both answer false: neither is evidence of silence, it is an absence of
+// evidence about it.
+func watchdogStale(ws protocol.WatchdogState, now time.Time) bool {
+	if ws.LastAction == "" || ws.ThresholdSec <= 0 {
+		return false
+	}
+	elapsed := now.Sub(time.Unix(ws.LastEventAt, 0))
+	threshold := time.Duration(ws.ThresholdSec) * time.Second
+	return elapsed*5 >= threshold*4
 }

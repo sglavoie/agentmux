@@ -22,12 +22,10 @@
 package dashboard
 
 import (
-	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
@@ -36,10 +34,6 @@ import (
 // the strip charges exactly this, and RenderDetailStrip returns exactly this
 // many lines.
 const DetailStripLines = 2
-
-// detailStripSeparator joins the tokens on a strip line. It is dimmed with the
-// tokens rather than on its own so a line reads as one run of secondary text.
-const detailStripSeparator = " · "
 
 // DetailStripInput is every fact the strip reads. Like the list renderer it
 // takes the whole projection plus the selected item, so a family's counts and
@@ -144,8 +138,8 @@ func sessionDetailLines(in DetailStripInput, s session.RunningSession) (string, 
 	}
 	if s.Directory != "" {
 		if second != "" {
-			room -= layout.Width(detailStripSeparator)
-			second += styleDim.Render(detailStripSeparator)
+			room -= layout.Width(metaSeparator)
+			second += styleDim.Render(metaSeparator)
 		}
 		if room > 1 {
 			second += styleDim.Render(layout.TruncateLeft(s.Directory, room, "…"))
@@ -169,7 +163,7 @@ func familyDetailLines(in DetailStripInput) (string, string) {
 	}
 	first := groupLabelStyle(group).Render(label)
 	if tally := renderSummaryCounts(in.Items.SummaryCounts(in.Item, in.LastActivity, in.IdleThreshold)); tally != "" {
-		first += styleDim.Render(detailStripSeparator) + tally
+		first += styleDim.Render(metaSeparator) + tally
 	}
 
 	if !hasLead {
@@ -178,44 +172,4 @@ func familyDetailLines(in DetailStripInput) (string, string) {
 	second := styleDim.Render(joinDetailTokens(append(
 		[]string{SessionDisplayTitle(lead)}, sessionContextTokens(lead)...)...))
 	return first, second
-}
-
-// loopMarkerGlyph is the daemon's own "this session is inside a loop" marker,
-// used when nothing supplied a more specific supervision marker for it.
-const loopMarkerGlyph = "🔁"
-
-// sessionFlagGlyphs renders the session's lock and mute bits, or "" when neither
-// is set. These are indicators, not labels: an unset bit contributes nothing
-// rather than a placeholder, because the strip describes one selected session
-// and has no column to keep aligned with anything.
-func sessionFlagGlyphs(s session.RunningSession) string {
-	var glyphs []string
-	if s.Locked {
-		glyphs = append(glyphs, palette.LockIcon())
-	}
-	if s.Muted {
-		glyphs = append(glyphs, palette.MuteIcon())
-	}
-	return strings.Join(glyphs, " ")
-}
-
-// sessionContextTokens is the context that tells two checkouts of one
-// repository apart, in drop-priority order: profile, harness, branch,
-// directory. Shared with the project card, which orders them the same way for
-// the same reason.
-func sessionContextTokens(s session.RunningSession) []string {
-	return []string{s.EffectiveProfile(), harnessLabel(s.Harness), branchText(s), s.Directory}
-}
-
-// joinDetailTokens joins the non-empty tokens. An omitted token leaves no
-// separator behind, so a session with no harness does not read as one whose
-// harness is blank.
-func joinDetailTokens(tokens ...string) string {
-	kept := tokens[:0:0]
-	for _, t := range tokens {
-		if t != "" {
-			kept = append(kept, t)
-		}
-	}
-	return strings.Join(kept, detailStripSeparator)
 }

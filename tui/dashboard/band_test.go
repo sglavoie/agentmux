@@ -157,14 +157,14 @@ func TestDetailStripOmitsEmptyTokensRatherThanSpacingThem(t *testing.T) {
 	lines := RenderDetailStrip(DetailStripInput{Width: 60, Items: items, Item: item, Selected: true})
 	for i, line := range lines {
 		plain := stripAnsi(line)
-		if strings.HasPrefix(plain, strings.TrimSpace(detailStripSeparator)) ||
-			strings.HasPrefix(plain, detailStripSeparator) {
+		if strings.HasPrefix(plain, strings.TrimSpace(metaSeparator)) ||
+			strings.HasPrefix(plain, metaSeparator) {
 			t.Errorf("line %d leads with a separator for an absent token: %q", i, plain)
 		}
-		if strings.Contains(plain, detailStripSeparator+detailStripSeparator) {
+		if strings.Contains(plain, metaSeparator+metaSeparator) {
 			t.Errorf("line %d doubles its separator around an absent token: %q", i, plain)
 		}
-		if strings.HasSuffix(plain, strings.TrimRight(detailStripSeparator, " ")) {
+		if strings.HasSuffix(plain, strings.TrimRight(metaSeparator, " ")) {
 			t.Errorf("line %d trails a separator: %q", i, plain)
 		}
 	}

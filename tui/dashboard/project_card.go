@@ -1,4 +1,4 @@
-// This file paints what the preview pane shows when the selection is a family
+// This file paints what the inspector shows when the selection is a family
 // summary rather than a session: a project card.
 //
 // It exists because the pane's usual content has no meaning here. Scrollback is
@@ -10,6 +10,18 @@
 // Every fact on it was already stamped on the rows at discovery time, so drawing
 // it costs no Kitty call, no Git probe, and no config lookup beyond the colors —
 // which is the second reason it is a card and not a terminal read.
+//
+// It wears the inspector's GEOMETRY and keeps its own SEMANTICS. Six metadata
+// lines, the same label column on the same cells, one divider, then a body: the
+// pane does not jump when the cursor crosses from a family into one of its
+// children. What changes is every value above the divider, because every one of
+// them is an aggregate. `Agent` is one harness only when all the members agree
+// and a count when they do not; `Branch` is one branch only when the family is
+// checked out once; `Watch` is how MANY members are supervised, locked, or
+// muted rather than whether this one is. A card that borrowed a member's answer
+// for any of those would be the summary-to-arbitrary-session resolution again,
+// wearing a different name. The divider never says Paused: there is no snapshot
+// to hold because there was never a read.
 
 package dashboard
 
@@ -36,6 +48,22 @@ type ProjectCardInput struct {
 	LastActivity  map[int]time.Time
 	IdleThreshold time.Duration
 	Cfg           *config.Config
+
+	// LoopMarker is the same supervision seam the session inspector reads, asked
+	// once per member. The card reports a COUNT rather than a marker, but it has
+	// to ask the same question to get one: a run the daemon's own loop bit has
+	// not caught up with is still a supervised member, and a family that
+	// undercounted them would say nothing is holding a family that something is.
+	// Nil means nothing is supervised.
+	LoopMarker func(s session.RunningSession) (string, bool)
+}
+
+// marker is the nil-safe form of the LoopMarker seam.
+func (in ProjectCardInput) marker(s session.RunningSession) (string, bool) {
+	if in.LoopMarker == nil {
+		return "", false
+	}
+	return in.LoopMarker(s)
 }
 
 // projectCardOverflowReserve is the line the card gives back to "+N more" when
@@ -44,7 +72,7 @@ type ProjectCardInput struct {
 const projectCardOverflowReserve = 1
 
 // RenderProjectCard renders exactly Height lines (no trailing newline), the same
-// contract RenderPreview keeps, so the split view can swap one for the other
+// contract RenderInspector keeps, so the split view can swap one for the other
 // without re-measuring the pane.
 //
 // The card is bounded by the pane rather than by the family: a family with forty
@@ -56,7 +84,49 @@ func RenderProjectCard(in ProjectCardInput) string {
 		return ""
 	}
 
-	lines := make([]string, 0, in.Height)
+	lines := projectCardMetaLines(in)
+	// The divider is only drawn when a member can be drawn under it. A rule with
+	// nothing below it would spend the last line the card had left on the
+	// announcement of a body it is not going to show.
+	if in.Height <= len(lines)+inspectorDividerLines {
+		return strings.Join(projectCardTruncated(in, lines), "\n")
+	}
+	// The rule is drawn through the inspector's own divider so the two panes
+	// share one answer about which cell it starts on. A card is never paused, so
+	// the zero viewport is passed rather than a flag.
+	lines = append(lines, inspectorDivider(InspectorInput{Width: in.Width}))
+	lines = append(lines, projectCardMemberLines(in, in.Height-len(lines))...)
+	return strings.Join(lines[:in.Height], "\n")
+}
+
+// projectCardTruncated cuts the metadata block to a pane too short to hold it,
+// spending the last surviving line on what the card could not draw.
+//
+// A card that named a family and then showed none of it would be the one thing
+// the height bound must never produce: the pane would look like a family with no
+// sessions, which is a claim the projection can also make truthfully. So the
+// overflow notice outranks the last metadata line it displaces — a count of the
+// members is what the reader needs before any aggregate about them.
+//
+// A single-line pane keeps the family's name instead. There is nothing left to
+// trade: `+3 more` more than what, on a card that never said which family.
+func projectCardTruncated(in ProjectCardInput, lines []string) []string {
+	out := make([]string, in.Height)
+	copy(out, lines)
+	hidden := len(projectCardMembers(in))
+	if hidden == 0 || in.Height < 2 {
+		return out
+	}
+	out[len(out)-1] = styleDim.Render(layout.Truncate(fmt.Sprintf("+%d more", hidden), in.Width, "…"))
+	return out
+}
+
+// projectCardMetaLines builds the card's fixed InspectorMetaLines block: what
+// this family is, how its sessions are distributed, and then the four labelled
+// facts read across every member instead of off one.
+func projectCardMetaLines(in ProjectCardInput) []string {
+	lines := make([]string, InspectorMetaLines)
+	members := projectCardMembers(in)
 
 	label := in.Item.FamilyLabel
 	if label == "" {
@@ -72,49 +142,187 @@ func RenderProjectCard(in ProjectCardInput) string {
 	if in.Item.Collapsed {
 		chevron = summaryChevronCollapsed
 	}
-	lines = append(lines, layout.StyledTruncate(groupLabelStyle(group).Render(chevron+" "+label), in.Width, "…"))
+	lines[0] = layout.StyledTruncate(groupLabelStyle(group).Render(chevron+" "+label), in.Width, "…")
 
-	if len(lines) < in.Height {
-		counts := in.Items.SummaryCounts(in.Item, in.LastActivity, in.IdleThreshold)
-		tally := renderSummaryCounts(counts)
-		if tally == "" {
-			tally = styleDim.Render("(no visible sessions)")
-		}
-		lines = append(lines, layout.StyledTruncate(tally, in.Width, "…"))
+	tally := renderSummaryCounts(in.Items.SummaryCounts(in.Item, in.LastActivity, in.IdleThreshold))
+	if tally == "" {
+		tally = styleDim.Render("(no visible sessions)")
 	}
-	if len(lines) < in.Height {
-		lines = append(lines, "")
-	}
+	lines[1] = layout.StyledTruncate(tally, in.Width, "…")
 
-	// Members in projection order, which is the order the expanded tree draws
-	// them in, so the card is a reading of the same list rather than a second
-	// opinion about it.
-	rows := make([]int, 0, len(in.Item.Members))
+	lines[2] = inspectorLabelled(in.Width, "Agent", joinDetailTokens(
+		aggregateToken(memberValues(members, func(s session.RunningSession) string {
+			return harnessLabel(s.Harness)
+		}), "harnesses"),
+		aggregateToken(memberValues(members, func(s session.RunningSession) string {
+			return s.EffectiveProfile()
+		}), "profiles"),
+	))
+	lines[3] = inspectorLabelled(in.Width, "Branch", projectCardBranchText(members))
+	lines[4] = inspectorDirectoryLine(in.Width, projectCardRoot(members))
+	lines[5] = inspectorLabelled(in.Width, "Watch", projectCardWatchText(in, members))
+	return lines
+}
+
+// projectCardMembers resolves the summary's members to sessions, in projection
+// order — the order the expanded tree draws them in, so the card is a reading of
+// the same list rather than a second opinion about it.
+//
+// Every index is bounds-checked rather than trusted, matching GroupAt,
+// SummaryCounts, and HasUnreadNotice: a summary is built beside the row set it
+// points into, but the two travel as separate fields and a caller may pair them
+// wrongly.
+func projectCardMembers(in ProjectCardInput) []session.RunningSession {
+	members := make([]session.RunningSession, 0, len(in.Item.Members))
 	for _, row := range in.Item.Members {
 		if row >= 0 && row < len(in.Items.Rows) {
-			rows = append(rows, row)
+			members = append(members, in.Items.Rows[row])
 		}
 	}
+	return members
+}
 
-	budget := in.Height - len(lines)
-	shown := len(rows)
-	if shown > budget {
-		shown = budget - projectCardOverflowReserve
+// memberValues projects one fact off every member, dropping the empties. The
+// caller's function is what makes this one helper serve harnesses, profiles, and
+// branches without three near-identical loops that could drift apart.
+func memberValues(members []session.RunningSession, of func(session.RunningSession) string) []string {
+	values := make([]string, 0, len(members))
+	for _, s := range members {
+		if v := of(s); v != "" {
+			values = append(values, v)
+		}
+	}
+	return values
+}
+
+// aggregateToken is how a family answers a question a session answers with one
+// value: the value itself when every member agrees, and how many distinct
+// answers there are when they do not.
+//
+// Naming the count rather than listing the values is the aggregate rule said in
+// one line. `2 profiles` is true of the family; `work` would be true of one
+// member and silently wrong about the other, which is the failure mode a card
+// over a summary exists to avoid.
+func aggregateToken(values []string, plural string) string {
+	seen := make(map[string]struct{}, len(values))
+	distinct := make([]string, 0, len(values))
+	for _, v := range values {
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		distinct = append(distinct, v)
+	}
+	switch len(distinct) {
+	case 0:
+		return ""
+	case 1:
+		return distinct[0]
+	default:
+		return fmt.Sprintf("%d %s", len(distinct), plural)
+	}
+}
+
+// projectCardBranchText is the family's checkout answer.
+//
+// The dirty marker is family-wide on purpose. A family checked out once carries
+// its branch and a `*` when ANY member's working tree is modified — the members
+// share that tree, so the bit is a fact about the family rather than about the
+// session that happened to be asked. A family spanning several checkouts reports
+// the count instead and drops the marker: `2 branches*` would attach one tree's
+// state to a name that no longer refers to one tree.
+func projectCardBranchText(members []session.RunningSession) string {
+	branches := aggregateToken(memberValues(members, func(s session.RunningSession) string {
+		return s.Branch
+	}), "branches")
+	if branches == "" || strings.HasSuffix(branches, "branches") {
+		return branches
+	}
+	for _, s := range members {
+		if s.Branch == branches && s.Dirty {
+			return branches + dirtyMarker
+		}
+	}
+	return branches
+}
+
+// projectCardRoot is the family's own directory: the main checkout root a
+// repository family resolved at discovery, or the configured directory for a
+// non-repository. It is the family's fact rather than a member's, which is why
+// it is read off FamilyPrimaryRoot and not off the first member's Directory —
+// the two differ for exactly the case the card exists to describe, a repository
+// whose members sit in separate worktrees.
+func projectCardRoot(members []session.RunningSession) string {
+	for _, s := range members {
+		if s.FamilyPrimaryRoot != "" {
+			return s.FamilyPrimaryRoot
+		}
+	}
+	return ""
+}
+
+// projectCardWatchText counts what the session inspector's watch line states:
+// how many members an agent-session-loop run is holding, how many are locked,
+// how many are muted. Zero of something contributes nothing rather than a `0`,
+// so the line names only what is actually true of the family.
+//
+// There is no watchdog age here, and that is the one fact from the session line
+// with no aggregate form. Silence is per window; the oldest member's would read
+// as the family's, and the average of several would be a number describing
+// nothing.
+func projectCardWatchText(in ProjectCardInput, members []session.RunningSession) string {
+	var supervised, locked, muted int
+	for _, s := range members {
+		if marker, ok := in.marker(s); (ok && marker != "") || s.Looping {
+			supervised++
+		}
+		if s.Locked {
+			locked++
+		}
+		if s.Muted {
+			muted++
+		}
+	}
+	var tokens []string
+	if supervised > 0 {
+		tokens = append(tokens, fmt.Sprintf("%s %d", loopMarkerGlyph, supervised))
+	}
+	if locked > 0 {
+		tokens = append(tokens, fmt.Sprintf("%s %d", palette.LockIcon(), locked))
+	}
+	if muted > 0 {
+		tokens = append(tokens, fmt.Sprintf("%s %d", palette.MuteIcon(), muted))
+	}
+	return joinDetailTokens(tokens...)
+}
+
+// projectCardMemberLines fills the card's body — the region the session
+// inspector spends on terminal output — with the family's members, and says how
+// many it could not draw.
+//
+// It returns exactly height lines, padded, which is what keeps the card's total
+// equal to the pane it was given.
+func projectCardMemberLines(in ProjectCardInput, height int) []string {
+	lines := make([]string, height)
+	if height <= 0 {
+		return nil
+	}
+	members := projectCardMembers(in)
+
+	shown := len(members)
+	if shown > height {
+		shown = height - projectCardOverflowReserve
 		if shown < 0 {
 			shown = 0
 		}
 	}
-	for _, row := range rows[:shown] {
-		lines = append(lines, projectCardChildLine(in, in.Items.Rows[row]))
+	for i, s := range members[:shown] {
+		lines[i] = projectCardChildLine(in, s)
 	}
-	if hidden := len(rows) - shown; hidden > 0 && len(lines) < in.Height {
-		lines = append(lines, styleDim.Render(layout.Truncate(fmt.Sprintf("+%d more", hidden), in.Width, "…")))
+	if hidden := len(members) - shown; hidden > 0 && shown < height {
+		lines[shown] = styleDim.Render(layout.Truncate(fmt.Sprintf("+%d more", hidden), in.Width, "…"))
 	}
-
-	for len(lines) < in.Height {
-		lines = append(lines, "")
-	}
-	return strings.Join(lines[:in.Height], "\n")
+	return lines
 }
 
 // projectCardChildLine renders one member: its state icon and title, then the

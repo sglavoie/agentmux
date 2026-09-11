@@ -288,13 +288,13 @@ func TestSelectedSessionContextUsesTheConfiguredDefaultProfileColor(t *testing.T
 	}
 }
 
-func TestRenderPreviewOverrideHeaderColor(t *testing.T) {
+func TestRenderInspectorOverrideTitleColor(t *testing.T) {
 	cfg := &config.Config{
 		Projects: []config.Session{
 			{Title: "api", Profile: "personal"},
 		},
 	}
-	acctColor := map[string]string{"work": "blue", "personal": "yellow"}
+	cfg.Accounts = []config.Account{{Name: "work", Color: "blue"}, {Name: "personal", Color: "yellow"}}
 	s := session.RunningSession{
 		WindowID:  42,
 		Account:   "work",
@@ -310,9 +310,11 @@ func TestRenderPreviewOverrideHeaderColor(t *testing.T) {
 	}
 	yellowHex := yellow.ForegroundHex()
 
-	out := dashboard.RenderPreview(80, 4, s, "", "", acctColor, cfg)
+	out := dashboard.RenderInspector(dashboard.InspectorInput{
+		Width: 80, Height: 8, Content: dashboard.InspectorReady, Session: s, Cfg: cfg,
+	})
 	if indexColoredSegment(out, yellowHex, "api") < 0 {
-		t.Errorf("expected preview header to keep the project default color (%s, yellow); rendered:\n%s", yellowHex, out)
+		t.Errorf("expected inspector title to keep the project default color (%s, yellow); rendered:\n%s", yellowHex, out)
 	}
 }
 

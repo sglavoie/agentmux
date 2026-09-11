@@ -443,8 +443,10 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
 - `tui/dashboard`: the live-session list — the filter DSL with its removable
   chips and completion menu, row/title/activity formatting, group borders and
   the state gloss, cursor restoration across a rebuilt list, pagination, the
-  preview pane, and profile/harness color assignment (which `history`, `launch`,
-  and the root all read).
+  session inspector (its fixed metadata block, its five output-content states,
+  its family-card form over a summary, and the pure output viewport that holds a
+  snapshot while scrolled back), and profile/harness color assignment (which
+  `history`, `launch`, and the root all read).
 - `tui/history`: the two histories that exist here — the per-session event
   detail overlay with its phase timeline, and Past Sessions transcript history
   (search rows, the transcript viewer, the full-message overlay, the delete

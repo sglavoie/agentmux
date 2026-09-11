@@ -218,39 +218,49 @@ func TestRenderPlanSearchLinesStayWithinWidth(t *testing.T) {
 	}
 }
 
-func TestRenderPreviewLinesStayWithinWidth(t *testing.T) {
+func TestRenderInspectorLinesStayWithinWidth(t *testing.T) {
 	sess := session.RunningSession{
-		WindowID: 7,
-		Base:     "a-very-long-project-name-with-noise",
-		Project:  "a-very-long-project-name-with-noise",
-		Profile:  "work",
-		Harness:  harness.Claude,
+		WindowID:  7,
+		Base:      "a-very-long-project-name-with-noise",
+		Project:   "a-very-long-project-name-with-noise",
+		Profile:   "work",
+		Harness:   harness.Claude,
+		Directory: "/home/user/very/deeply/nested/checkout/a-very-long-project-name-with-noise",
+		Branch:    "feature/a-rather-long-branch-name",
+		Dirty:     true,
 	}
 	cfg := &config.Config{Accounts: []config.Account{{Name: "work", Color: "blue"}}}
-	acctColor := map[string]string{"work": "blue"}
 	text := strings.Repeat("alpha beta gamma delta epsilon zeta eta theta iota kappa\n", 8)
 
 	for _, width := range []int{20, 40, 80} {
 		t.Run("width-"+itoa(width), func(t *testing.T) {
-			out := dashboard.RenderPreview(width, 6, sess, text, "", acctColor, cfg)
+			out := dashboard.RenderInspector(dashboard.InspectorInput{
+				Width: width, Height: 12, Content: dashboard.InspectorReady, Session: sess,
+				Cfg: cfg, Output: dashboard.SplitOutput(text),
+			})
 			assertVisibleWidthAtMost(t, out, width)
 		})
 	}
 
 	t.Run("error path", func(t *testing.T) {
 		errText := strings.Repeat("a very long error message that should be clipped ", 3)
-		out := dashboard.RenderPreview(30, 4, sess, "", errText, acctColor, cfg)
+		out := dashboard.RenderInspector(dashboard.InspectorInput{
+			Width: 30, Height: 10, Content: dashboard.InspectorFailed, Session: sess,
+			Cfg: cfg, Error: errText,
+		})
 		assertVisibleWidthAtMost(t, out, 30)
 	})
 
 	t.Run("not running placeholder", func(t *testing.T) {
 		idle := session.RunningSession{Base: "idle", Project: "idle"}
-		out := dashboard.RenderPreview(20, 3, idle, "", "", acctColor, cfg)
+		out := dashboard.RenderInspector(dashboard.InspectorInput{
+			Width: 20, Height: 9, Content: dashboard.InspectorVanished, Session: idle, Cfg: cfg,
+		})
 		assertVisibleWidthAtMost(t, out, 20)
 	})
 }
 
-func TestRenderPreviewEmojiTitleReservesIconColumn(t *testing.T) {
+func TestRenderInspectorEmojiTitleReservesIconColumn(t *testing.T) {
 	emojiSess := session.RunningSession{
 		WindowID: 1,
 		Base:     "🗣commscoach",
@@ -266,11 +276,16 @@ func TestRenderPreviewEmojiTitleReservesIconColumn(t *testing.T) {
 		Harness:  harness.Claude,
 	}
 	cfg := &config.Config{Accounts: []config.Account{{Name: "work", Color: "blue"}}}
-	acctColor := map[string]string{"work": "blue"}
 
 	const width = 40
-	emojiHeader := strings.SplitN(stripAnsi(dashboard.RenderPreview(width, 1, emojiSess, "", "", acctColor, cfg)), "\n", 2)[0]
-	plainHeader := strings.SplitN(stripAnsi(dashboard.RenderPreview(width, 1, plainSess, "", "", acctColor, cfg)), "\n", 2)[0]
+	title := func(s session.RunningSession) string {
+		out := dashboard.RenderInspector(dashboard.InspectorInput{
+			Width: width, Height: 1, Content: dashboard.InspectorReady, Session: s, Cfg: cfg,
+		})
+		return strings.SplitN(stripAnsi(out), "\n", 2)[0]
+	}
+	emojiHeader := title(emojiSess)
+	plainHeader := title(plainSess)
 
 	// The emoji "🗣" must reserve a 2-cell column without gaining a phantom
 	// space before the title body. Compare the two headers' "body after the

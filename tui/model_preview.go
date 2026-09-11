@@ -498,8 +498,8 @@ func clampListHeight(h int) int {
 // — the exact "resolve a summary to an arbitrary session" the item layer refuses
 // everywhere else. The card is the honest answer to the selection that was made.
 //
-// Any other non-session selection leaves sess at its zero value, which
-// RenderPreview already paints as the empty pane it uses for an empty list.
+// Any other non-session selection resolves to InspectorNoSelection, which is the
+// blank metadata block the pane shows over an empty list.
 func renderPreviewPane(m Model, width, height int) string {
 	if it, ok := m.selectedItem(); ok && it.Kind == dashboard.ItemFamilySummary {
 		return dashboard.RenderProjectCard(dashboard.ProjectCardInput{
@@ -510,10 +510,49 @@ func renderPreviewPane(m Model, width, height int) string {
 			LastActivity:  m.lastActivity,
 			IdleThreshold: m.idleThreshold,
 			Cfg:           m.cfg,
+			LoopMarker: func(s session.RunningSession) (string, bool) {
+				return aslMarkerFor(m, s)
+			},
 		})
 	}
-	sess, _ := m.selectedSession()
-	return dashboard.RenderPreview(width, height, sess, m.previewText, m.previewError, dashboard.ProfileColorMap(m.cfg), m.cfg)
+	sess, ok := m.selectedSession()
+	marker, _ := aslMarkerFor(m, sess)
+	return dashboard.RenderInspector(dashboard.InspectorInput{
+		Width:         width,
+		Height:        height,
+		Content:       inspectorContentFor(m, sess, ok),
+		Session:       sess,
+		Cfg:           m.cfg,
+		LastActivity:  m.lastActivity,
+		IdleThreshold: m.idleThreshold,
+		Watchdog:      m.watchdog[sess.WindowID],
+		Now:           modelNow(m),
+		Supervision:   marker,
+		Output:        dashboard.SplitOutput(m.previewText),
+		Error:         m.previewError,
+		Viewport:      m.inspectorViewport,
+	})
+}
+
+// inspectorContentFor decides which of the inspector's five situations the
+// current selection is in. The order is the order the evidence rules things out:
+// a selection that is not a session has no metadata to draw at all; a session
+// with no live window has metadata but can have no output; a read that failed
+// says so in preference to the empty text it left behind; and only a target that
+// has actually heard back can claim its empty buffer is the session's own.
+func inspectorContentFor(m Model, sess session.RunningSession, selected bool) dashboard.InspectorContent {
+	switch {
+	case !selected:
+		return dashboard.InspectorNoSelection
+	case sess.WindowID == 0:
+		return dashboard.InspectorVanished
+	case m.previewError != "":
+		return dashboard.InspectorFailed
+	case !m.previewLoaded:
+		return dashboard.InspectorLoading
+	default:
+		return dashboard.InspectorReady
+	}
 }
 
 // footerBudgetLines returns the number of footer rows reserved by layout math
@@ -593,6 +632,11 @@ func (m *Model) retargetPreview(windowID int) {
 	m.previewTargetSeq++
 	m.previewText = ""
 	m.previewError = ""
+	m.previewLoaded = false
+	// A new target is a new buffer, so the hold is dropped with it. Keeping a
+	// scroll position across a retarget would show one session's snapshot under
+	// another session's metadata for as long as the read takes to land.
+	m.inspectorViewport = m.inspectorViewport.Resume()
 }
 
 // activePreviewEnabled reports whether the preview pane is enabled for the

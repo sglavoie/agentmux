@@ -263,6 +263,15 @@ type Model struct {
 	previewTargetSeq int
 	previewText      string
 	previewError     string
+	// previewLoaded records that a read has come back for the CURRENT target,
+	// successfully or not. It is the one fact an empty previewText cannot carry:
+	// a session that has printed nothing and a session whose first read is still
+	// in flight both hold "", and the inspector says two different things about
+	// them. Cleared on every retarget, set by the response handler.
+	previewLoaded bool
+	// inspectorViewport is where the inspector's output pane is looking. Its zero
+	// value follows the tail, so a retarget resets it by assignment.
+	inspectorViewport dashboard.OutputViewport
 	// Mouse double-click state is process-local and identity-bearing. A row's
 	// coordinates are never retained: every click arrives with the identity
 	// captured by the last render and is revalidated against the live items.

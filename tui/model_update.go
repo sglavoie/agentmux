@@ -355,6 +355,10 @@ func (m Model) handlePreviewContent(msg previewContentMsg) (tea.Model, tea.Cmd) 
 	if !m.activePreviewEnabled() || msg.seq != m.previewTargetSeq || msg.windowID != m.previewWindowID {
 		return m, nil
 	}
+	// Either outcome is a read that has landed for this target, which is what
+	// previewLoaded records: it separates "nothing has come back yet" from "this
+	// session has printed nothing", and a failure has answered the question too.
+	m.previewLoaded = true
 	if msg.err != nil {
 		m.previewError = msg.err.Error()
 	} else {
