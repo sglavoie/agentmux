@@ -106,4 +106,25 @@ func TestCompactFramesHaveTwoLineHeadersAtEverySize(t *testing.T) {
 	if !strings.Contains(lines[4], "claude") || !strings.Contains(lines[4], "work") {
 		t.Fatalf("second content row must show harness/profile: %q", lines[4])
 	}
+
+	// A viewport with a three-row remainder must leave it below the cards,
+	// not stretch alternating rows into taller boxes.
+	in = viewInput(120, 22, viewSessions(8))
+	in.Compact = true
+	lines = plain(renderLines(t, in))
+	for row := 0; row < 4; row++ {
+		y := gridTop + row*CompactTileMinHeight
+		top, bottom := "╭", "╰"
+		if row == 0 {
+			top, bottom = "┏", "┗"
+		}
+		if !strings.HasPrefix(lines[y], top) || !strings.HasPrefix(lines[y+3], bottom) {
+			t.Errorf("card row %d does not have exactly two content lines: %q .. %q", row, lines[y], lines[y+3])
+		}
+	}
+	for y := 18; y < 21; y++ {
+		if strings.TrimSpace(lines[y]) != "" {
+			t.Errorf("spare row %d contains card content: %q", y, lines[y])
+		}
+	}
 }

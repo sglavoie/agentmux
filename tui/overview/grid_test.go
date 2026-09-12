@@ -144,6 +144,28 @@ func TestSpareSpaceIsDistributedEvenly(t *testing.T) {
 	}
 }
 
+// Compact cards have exactly two content rows plus their borders. A remainder
+// in the terminal height belongs below the grid, never inside one card.
+func TestCompactTilesKeepFixedHeight(t *testing.T) {
+	for _, height := range []int{4, 6, 7, 8, 10, 11, 22, 45} {
+		g := MeasureMode(120, height, true)
+		if g.Capacity() == 0 {
+			t.Fatalf("height %d has no compact tile", height)
+		}
+		wantHeight := min(height-ChromeLines, CompactTileMinHeight)
+		for row := 0; row < g.Rows; row++ {
+			tile, _ := g.Tile(row * g.Cols)
+			if tile.Height != wantHeight || tile.Y != gridTop+row*wantHeight {
+				t.Errorf("height %d row %d: tile at y=%d, height=%d; want y=%d, height=%d",
+					height, row, tile.Y, tile.Height, gridTop+row*wantHeight, wantHeight)
+			}
+		}
+		if g.Rows*wantHeight > height-ChromeLines {
+			t.Fatalf("height %d: compact grid overlaps the hints", height)
+		}
+	}
+}
+
 // TestTileCountBoundaries walks the exact cells where a column and a row appear.
 // A fit test that only sampled round numbers would not notice an off-by-one in
 // the division.

@@ -24,8 +24,8 @@ const (
 	// TileMinWidth and TileMinHeight are the target minimum size of one tile,
 	// INCLUDING its border. They are the size at which a tile is still worth
 	// drawing: 48 by 12 leaves a 44-cell-wide interior after the border and its
-		// padding, and ten interior rows, of which the compact header and its divider
-		// take three and the terminal output takes the remaining seven.
+	// padding, and ten interior rows, of which the compact header and its divider
+	// take three and the terminal output takes the remaining seven.
 	//
 	// They are a target rather than a floor. A terminal too small for even one
 	// such tile still gets one — see fitCount — because a single cramped preview
@@ -81,8 +81,9 @@ type Geometry struct {
 	// nothing fits.
 	Cols, Rows int
 
-	// colWidths and rowHeights hold the per-column and per-row extents, which sum
-	// exactly to the grid's width and height. They are private and copied out
+	// colWidths spans the full width. rowHeights spans the full height in normal
+	// mode; compact tiles keep their two content rows and leave spare rows below
+	// the grid. They are private and copied out
 	// through Tile so a caller cannot resize one column and leave the grid unable
 	// to add up.
 	colWidths  []int
@@ -122,7 +123,14 @@ func MeasureMode(width, height int, compact bool) Geometry {
 	}
 	g.Rows = fitCount(gridHeight, tileHeight)
 	g.colWidths = distribute(width, g.Cols)
-	g.rowHeights = distribute(gridHeight, g.Rows)
+	if compact {
+		g.rowHeights = make([]int, g.Rows)
+		for i := range g.rowHeights {
+			g.rowHeights[i] = min(gridHeight, CompactTileMinHeight)
+		}
+	} else {
+		g.rowHeights = distribute(gridHeight, g.Rows)
+	}
 	return g
 }
 
