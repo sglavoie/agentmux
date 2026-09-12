@@ -361,7 +361,7 @@ the time since that completion. A new agent turn changes the label back to
 Working; an ASL heartbeat alone does not. Run phases can also say verifying,
 waiting, or between turns. Multiple live run phases are separated by `/`.
 
-Idle is bold in the terminal's normal text color; Done is bold green. Permission
+Idle is bold warning yellow; Done is bold green. Permission
 and reply requests retain their amber emphasis, failures remain red, and the
 elapsed time and ASL phase are dim. An unread completion keeps its amber notice
 dot beside the green Done label.

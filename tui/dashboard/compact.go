@@ -38,8 +38,6 @@ import (
 	"strings"
 	"time"
 
-	"charm.land/lipgloss/v2"
-
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/layout"
@@ -196,7 +194,7 @@ func compactStatusLine(in CompactInput) string {
 	style := emphasisStyle(StatusEmphasis(s, group))
 	switch StatusText(s, group) {
 	case statusIdle:
-		style = lipgloss.NewStyle().Bold(true)
+		style = styleStateWarning.Bold(true)
 	case statusDone:
 		style = accountStyle("green").Bold(true)
 	}
