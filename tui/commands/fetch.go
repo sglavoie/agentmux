@@ -13,9 +13,17 @@ import (
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
-// This file is one dashboard topology refresh: where the window tree comes
-// from, what per-window state is overlaid on it, and what the refresh is
-// allowed to write back into Kitty while it is there.
+// This file is one live-topology refresh: where the window tree comes from,
+// what per-window state is overlaid on it, and what the refresh is allowed to
+// write back into Kitty while it is there.
+//
+// Those are two questions, not one, and the file is split along that seam.
+// readLiveSessions answers the first and touches Kitty only to read it;
+// Refresh and RefreshOverview are the same read wearing two different write
+// budgets, the dashboard's full one and the overview's empty one. Nothing that
+// decides which snapshot is admissible, which rows a tree contains, or which
+// daemon state may be trusted is written twice, so the two surfaces cannot
+// disagree about the session universe they are both describing.
 //
 // The daemon is asked first. It already runs `kitten @ ls` on its own schedule
 // and publishes the result as an immutable snapshot, so a dashboard that reads
@@ -23,37 +31,91 @@ import (
 // subprocess racing the daemon's. Listing Kitty from here is the fallback, not
 // the normal path.
 
-// Refresh produces one live-topology refresh carrying seq, which the model's
-// refresh controller uses to recognize its own completion and discard an
-// obsolete one.
+// liveSessions is one read of the live-session universe, and nothing that was
+// done about it. It holds the window tree a refresh resolved, how fresh that
+// tree is, the daemon's per-window state where the instance was proven, the
+// managed rows projected out of the tree with that state already overlaid, the
+// ghost tabs whose anchors no longer exist, and the tab containing the pane the
+// refresh was launched from.
+//
+// Ghosts are reported rather than repaired here, and the raw OSWindows are
+// carried alongside the rows, because both of the writes a refresh can make are
+// derived from them and only one caller is allowed to make those writes. That
+// is the whole point of the split: a reader that cannot write is the thing two
+// surfaces can share, whereas the repairs are the dashboard's alone.
+type liveSessions struct {
+	OSWindows   []kitty.OSWindow
+	Topology    TopologyFreshness
+	Daemon      daemonState
+	Sessions    []session.RunningSession
+	Ghosts      []session.GhostTab
+	SourceTabID int
+}
+
+// readLiveSessions resolves one refresh's view of the live sessions and touches
+// Kitty exactly once, to list it, and only when the daemon could not supply a
+// tree. It is the single place the retrieval policy lives, so a second surface
+// reading the same universe cannot drift from the dashboard's answer about
+// which daemon snapshots are admissible or which rows a tree contains.
 //
 // The window tree is taken from the daemon's cached snapshot whenever the
-// optional block is present, ready, and positively attributed to this
-// dashboard's own Kitty instance — including when the daemon has already marked
-// it stale, because a stale tree still describes the session list far better
-// than no list at all. Direct Kitty I/O happens only when the daemon cannot
-// supply one: the IPC call failed or was rejected, the daemon is new but has
-// never completed a successful list (a cold block), the daemon predates the
-// block entirely and omits it, or the snapshot is not provably this dashboard's
-// — either side unidentified, or the two identities known to differ.
+// optional block is present, ready, and positively attributed to this process's
+// own Kitty instance — including when the daemon has already marked it stale,
+// because a stale tree still describes the session list far better than no list
+// at all. Direct Kitty I/O happens only when the daemon cannot supply one: the
+// IPC call failed or was rejected, the daemon is new but has never completed a
+// successful list (a cold block), the daemon predates the block entirely and
+// omits it, or the snapshot is not provably this process's — either side
+// unidentified, or the two identities known to differ.
 //
 // The daemon's per-window state travels with its tree rather than separately:
 // its icon, loop, busy, activity, and watchdog maps are consumed only when the
 // same instance attribution that admits the tree holds. Those maps are keyed by
 // bare Kitty window IDs, which name a window only inside the instance they were
-// read from, so a daemon that cannot prove its IDs are this dashboard's cannot
-// be allowed to describe this dashboard's rows either.
+// read from, so a daemon that cannot prove its IDs are ours cannot be allowed to
+// describe our rows either.
 //
-// sourceWindowID, when nonzero, is resolved to its containing Kitty tab so the
-// startup update can select that tab's managed row, including when the source
-// is a non-anchor pane in a split tab.
+// sourceWindowID, when nonzero, is resolved to its containing Kitty tab, so the
+// caller can select that tab's managed row including when the source is a
+// non-anchor pane in a split tab.
 //
-// Total failure — no daemon and no listing — returns a sequence-bearing ErrMsg
-// rather than a SessionsMsg, so the model records the error without replacing
-// the sessions it is already showing.
+// Total failure — no daemon and no listing — is an error rather than an empty
+// success, so a caller records it without replacing the sessions it is already
+// showing.
+func readLiveSessions(client kitty.KittyClient, cfg *config.Config, sourceWindowID int) (liveSessions, error) {
+	osWindows, topology, daemon, err := refreshTopology(client)
+	if err != nil {
+		return liveSessions{}, err
+	}
+	live := liveSessions{OSWindows: osWindows, Topology: topology, Daemon: daemon}
+	live.Sessions, live.Ghosts = session.ListFromOSWindowsWithConfig(osWindows, cfg)
+	if daemon.States != nil {
+		ApplyDaemonStates(live.Sessions, daemon.States)
+	}
+	if sourceWindowID > 0 {
+		if tab, _, found := kitty.FindTabByWindowID(osWindows, sourceWindowID); found {
+			live.SourceTabID = tab.ID
+		}
+	}
+	return live, nil
+}
+
+// Refresh produces one live-topology refresh carrying seq, which the model's
+// refresh controller uses to recognize its own completion and discard an
+// obsolete one.
+//
+// Retrieval, attribution, and projection are readLiveSessions'; what is added
+// here is everything the dashboard is uniquely allowed to do with the result.
+// It re-anchors the ghost tabs the projection found, and it both honors and
+// clears the cross-window selection request a launching pane left on itself —
+// writes no other reader of the same tree may make, because they repair state
+// the dashboard owns and consume a request addressed to the dashboard alone.
+//
+// Total failure returns a sequence-bearing ErrMsg rather than a SessionsMsg, so
+// the model records the error without replacing the sessions it is showing.
 func Refresh(client kitty.KittyClient, cfg *config.Config, sortMode string, seq, sourceWindowID int) tea.Cmd {
 	return func() tea.Msg {
-		osWindows, topology, daemon, err := refreshTopology(client)
+		live, err := readLiveSessions(client, cfg, sourceWindowID)
 		if err != nil {
 			return ErrMsg{Seq: seq, Err: err}
 		}
@@ -63,19 +125,13 @@ func Refresh(client kitty.KittyClient, cfg *config.Config, sortMode string, seq,
 		// vanished window is at best wasted and at worst aimed at its
 		// replacement. Both writes are idempotent and their triggers are
 		// re-detected on the next refresh, so skipping them costs a tick.
-		mayWrite := !topology.Stale
-		sessions, ghosts := session.ListFromOSWindowsWithConfig(osWindows, cfg)
-		if mayWrite && len(ghosts) > 0 {
-			session.ReanchorAll(client, ghosts, cfg.Defaults)
+		mayWrite := !live.Topology.Stale
+		if mayWrite && len(live.Ghosts) > 0 {
+			session.ReanchorAll(client, live.Ghosts, cfg.Defaults)
 		}
-		var sourceTabID int
-		if sourceWindowID > 0 {
-			if tab, _, found := kitty.FindTabByWindowID(osWindows, sourceWindowID); found {
-				sourceTabID = tab.ID
-			}
-		}
+		sourceTabID := live.SourceTabID
 		selectionToken := ""
-		if requestedTabID, token, dashboardWindowID := dashboardSelectionRequest(osWindows); requestedTabID > 0 {
+		if requestedTabID, token, dashboardWindowID := dashboardSelectionRequest(live.OSWindows); requestedTabID > 0 {
 			sourceTabID = requestedTabID
 			selectionToken = token
 			if mayWrite {
@@ -84,18 +140,61 @@ func Refresh(client kitty.KittyClient, cfg *config.Config, sortMode string, seq,
 				})
 			}
 		}
-		if daemon.States != nil {
-			ApplyDaemonStates(sessions, daemon.States)
+		return SessionsMsg{
+			Seq:            seq,
+			Sessions:       session.SortRunning(live.Sessions, sortMode),
+			Activity:       live.Daemon.Activity,
+			Watchdog:       live.Daemon.Watchdog,
+			States:         live.Daemon.States,
+			SelectionTabID: sourceTabID,
+			SelectionToken: selectionToken,
+			Topology:       live.Topology,
+		}
+	}
+}
+
+// RefreshOverview produces the same session facts Refresh does and writes
+// nothing. It is Refresh's reader half addressed to a surface that observes the
+// dashboard's universe without owning it, and it reports through the same
+// SessionsMsg and sequence-bearing ErrMsg so a consumer needs no second
+// vocabulary for the same answer.
+//
+// Both writes Refresh can make — the ghost re-anchor and the selection-var
+// clear — are absent by construction rather than behind a flag: the client is
+// used for at most one ListWindows and never for a mutation, so there is no
+// path here that re-anchors a tab, sets a user variable, focuses a window, or
+// acknowledges a notification. It likewise starts none of the history or
+// agent-session-loop discovery the dashboard's own startup runs, because none
+// of that is part of reading the live-session universe.
+//
+// The cross-window selection request is not merely left unconsumed, it is not
+// read at all. That request is addressed to the dashboard — it names the tab the
+// dashboard should select and is cleared by whoever acts on it — so an overview
+// that honored it would steal a selection intended for another window and then
+// leave the request behind to be honored a second time. SelectionTabID therefore
+// comes from sourceWindowID alone, and SelectionToken is always empty: there is
+// no token because there is no request to acknowledge.
+//
+// Freshness policy is shared rather than relaxed. A stale but attributed daemon
+// snapshot is still displayable here, exactly as on the dashboard, and the
+// stale rule costs this path nothing further because it had no writes to defer.
+//
+// Sorting is deliberately not applied: the rows come back in discovery order and
+// the overview's own ordering is its caller's to choose.
+func RefreshOverview(client kitty.KittyClient, cfg *config.Config, seq, sourceWindowID int) tea.Cmd {
+	return func() tea.Msg {
+		live, err := readLiveSessions(client, cfg, sourceWindowID)
+		if err != nil {
+			return ErrMsg{Seq: seq, Err: err}
 		}
 		return SessionsMsg{
 			Seq:            seq,
-			Sessions:       session.SortRunning(sessions, sortMode),
-			Activity:       daemon.Activity,
-			Watchdog:       daemon.Watchdog,
-			States:         daemon.States,
-			SelectionTabID: sourceTabID,
-			SelectionToken: selectionToken,
-			Topology:       topology,
+			Sessions:       live.Sessions,
+			Activity:       live.Daemon.Activity,
+			Watchdog:       live.Daemon.Watchdog,
+			States:         live.Daemon.States,
+			SelectionTabID: live.SourceTabID,
+			Topology:       live.Topology,
 		}
 	}
 }
