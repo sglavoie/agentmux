@@ -73,6 +73,8 @@ const (
 // position at all.
 type CompactInput struct {
 	Width, Height int
+	// SummaryOnly folds the header into two rows and omits divider and output.
+	SummaryOnly bool
 
 	// Content decides which of the five situations the output half is in. It is
 	// the caller's, for the reason it is the caller's in the inspector: only the
@@ -116,6 +118,9 @@ func RenderCompactPreview(in CompactInput) string {
 	if in.Width <= 0 || in.Height <= 0 {
 		return ""
 	}
+	if in.SummaryOnly {
+		return renderCompactSummary(in)
+	}
 	lines := compactMetaLines(in)
 	if in.Height <= len(lines) {
 		return strings.Join(lines[:in.Height], "\n")
@@ -125,6 +130,27 @@ func RenderCompactPreview(in CompactInput) string {
 	// the zero viewport is passed rather than a flag.
 	lines = append(lines, inspectorDivider(InspectorInput{Width: in.Width}))
 	lines = append(lines, compactOutputLines(in, in.Height-len(lines))...)
+	return strings.Join(lines, "\n")
+}
+
+func renderCompactSummary(in CompactInput) string {
+	lines := make([]string, in.Height)
+	if in.Content != InspectorNoSelection {
+		status := compactStatusLine(in)
+		// Reserve status space on the right while retaining some project identity
+		// even for long blocked reasons or ASL phase labels.
+		statusWidth := min(layout.Width(status), max(in.Width*2/3, 0))
+		titleWidth := max(in.Width-statusWidth-2, 0)
+		if titleWidth > 0 {
+			title := layout.StyledTruncate(compactTitleLine(in, in.Session), titleWidth, "…")
+			lines[0] = layout.PadRight(title, titleWidth) + "  " + layout.StyledTruncate(status, statusWidth, "…")
+		} else {
+			lines[0] = layout.StyledTruncate(compactTitleLine(in, in.Session), in.Width, "…")
+		}
+		if in.Height > 1 {
+			lines[1] = layout.StyledTruncate(styleDim.Render(joinDetailTokens(harnessLabel(in.Session.Harness), in.Session.EffectiveProfile())), in.Width, "…")
+		}
+	}
 	return strings.Join(lines, "\n")
 }
 

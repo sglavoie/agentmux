@@ -9,8 +9,8 @@
 // raised over a pane needs none of it and must not pay for any of it. So this
 // file constructs nothing from tui and imports nothing from it: the live-session
 // read arrives through commands.RefreshOverview, which is the dashboard's own
-// reader with its write budget removed, and the one mutation the surface can
-// perform is commands.Focus, reached from exactly one keypress.
+// reader with its write budget removed. Enter focuses a session; c changes only
+// the daemon's in-memory view preference.
 //
 // Every effect is injected. The topology read, the focus action, the interval
 // tick, and the clock are fields on a deps value, so a test drives the whole
@@ -22,6 +22,7 @@
 package overview
 
 import (
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -39,7 +40,7 @@ import (
 // the renderer cuts it to the surface's width. What an operator cannot afford to
 // lose is how to act on a tile and how to leave the surface; which of four
 // equivalent spellings moves the cursor is what a 60-column terminal may drop.
-const hints = "Enter focus · q close · ←↑↓→/hjkl move · Tab next · PgUp/PgDn page · Home/End ends"
+const hints = "Enter focus · q close · c compact · ←↑↓→/hjkl move · Tab next · PgUp/PgDn page · Home/End ends"
 
 // defaultRefreshInterval and defaultIdleThreshold are what an unset
 // configuration means here. They are the dashboard's own defaults, restated
@@ -65,11 +66,12 @@ const firstRefreshSeq = 1
 // binary cannot see each other's recorders, and they are function values rather
 // than an interface because each is one call with no state of its own.
 type deps struct {
+	preferences func(compact *bool) tea.Cmd
 	// topology takes the refresh sequence and the startup source window ID. The
 	// message it produces carries that sequence back, which is what lets the
 	// controller tell its own completion from one that was superseded.
 	topology func(seq, sourceWindowID int) tea.Cmd
-	// focus acts on one Kitty tab. It is the only mutation this package can
+	// focus acts on one Kitty tab. It is the only Kitty mutation this package can
 	// reach, and only Enter calls it.
 	focus func(tabID int) tea.Cmd
 	// tick schedules the next interval. tea.Tick fires once, so every handler
@@ -91,6 +93,7 @@ type deps struct {
 // package that names a clock or builds a command that can reach Kitty.
 func defaultDeps(cfg *config.Config, client kitty.KittyClient) deps {
 	return deps{
+		preferences: commands.OverviewPreferences,
 		topology: func(seq, sourceWindowID int) tea.Cmd {
 			return commands.RefreshOverview(client, cfg, seq, sourceWindowID)
 		},
@@ -123,7 +126,13 @@ type model struct {
 	// the set of terminals does.
 	captureInterval time.Duration
 
-	width, height int
+	width, height         int
+	compact               bool
+	preferenceChanged     bool
+	preferenceSaving      bool
+	preferenceSavingValue bool
+	preferenceErr         error
+	quitAfterPreference   bool
 
 	// sessions is the whole live set in Order's tile order.
 	sessions []session.RunningSession
@@ -220,7 +229,12 @@ func newModel(cfg *config.Config, client kitty.KittyClient, sourceWindowID int) 
 // that is part of showing live panes, and an overview that paid for it would
 // spend an operator's first second on work they cannot see.
 func (m model) Init() tea.Cmd {
+	var preferenceCmd tea.Cmd
+	if m.deps.preferences != nil {
+		preferenceCmd = m.deps.preferences(nil)
+	}
 	return tea.Batch(
+		preferenceCmd,
 		m.deps.topology(m.refreshActiveSeq, m.startupSourceWindowID),
 		m.deps.tick(m.interval),
 		m.deps.captureTick(m.captureInterval),
@@ -234,7 +248,12 @@ func (m model) Init() tea.Cmd {
 // which is what lets a lifecycle test assert on what an operator would see
 // rather than only on what the model holds.
 func (m model) View() tea.View {
+	modeHints := hints
+	if m.compact {
+		modeHints = strings.Replace(hints, "c compact", "c normal", 1)
+	}
 	return tea.NewView(Render(Input{
+		Compact:       m.compact,
 		Width:         m.width,
 		Height:        m.height,
 		Sessions:      m.sessions,
@@ -245,7 +264,7 @@ func (m model) View() tea.View {
 		IdleThreshold: m.idleThreshold,
 		Now:           m.deps.now(),
 		Feedback:      m.feedback(),
-		Hints:         hints,
+		Hints:         modeHints,
 	}))
 }
 

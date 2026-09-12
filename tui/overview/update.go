@@ -5,14 +5,16 @@
 // understands is readable in one screen. There are five, which is the point of a
 // standalone overview — the dashboard's loop consumes several dozen.
 //
-// The keymap divides into three kinds of key, and the division is a safety
+// The keymap separates navigation, presentation, focus, and dismissal:
+// c toggles presentation and saves only the daemon-lifetime view preference.
+// The remaining division is a safety
 // property rather than an organizing one:
 //
 //   - MOVEMENT keys change one integer. They start no command, touch no Kitty
 //     window, and write no metadata anywhere. Every arrow, every hjkl, every
 //     page and every end is in this group, which is what makes "browsing the
 //     overview is observation" true by construction instead of by review.
-//   - ENTER is the one key that acts. It captures the tab currently under the
+//   - ENTER is the one key that acts on a session. It captures the tab currently under the
 //     cursor and dispatches the existing focus action against that captured tab
 //     exactly once.
 //   - DISMISSAL — esc, q, ctrl+c — leaves. It leaves while a refresh is out and
@@ -29,6 +31,8 @@ import (
 // Update routes one message.
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case commands.OverviewPreferencesMsg:
+		return m.handlePreferences(msg)
 	case tea.WindowSizeMsg:
 		return m.handleWindowSize(msg)
 	case commands.TickMsg:
@@ -89,6 +93,8 @@ func (m model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.dismiss()
 	case "enter":
 		return m.requestFocus()
+	case "c":
+		return m.toggleCompact()
 	}
 	if move, ok := moveFor(msg.String()); ok {
 		return m.applyMove(move)
@@ -107,6 +113,10 @@ func (m model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // bounded by their own subprocess deadline rather than by anything here.
 func (m model) dismiss() (tea.Model, tea.Cmd) {
 	m.captures.stop()
+	if m.preferenceSaving {
+		m.quitAfterPreference = true
+		return m, nil
+	}
 	return m, tea.Quit
 }
 
@@ -159,7 +169,7 @@ func (m model) applyMove(move Move) (tea.Model, tea.Cmd) {
 	if len(m.sessions) == 0 {
 		return m, nil
 	}
-	m.selectIndex(Navigate(Measure(m.width, m.height), len(m.sessions), m.selected, move))
+	m.selectIndex(Navigate(MeasureMode(m.width, m.height, m.compact), len(m.sessions), m.selected, move))
 	m.reconcileCaptures()
 	return m, m.pumpCaptures()
 }

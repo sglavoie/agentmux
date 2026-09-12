@@ -32,6 +32,8 @@ const (
 	// is what the operator asked for and an empty grid is not.
 	TileMinWidth  = 48
 	TileMinHeight = 12
+	// Two content lines plus the top and bottom borders.
+	CompactTileMinHeight = 4
 
 	// The three rows the surface reserves before any tile is placed: what this is
 	// and how much of it there is, the last thing that happened, and the keys.
@@ -100,6 +102,11 @@ type Geometry struct {
 // 160-cell grid of three columns comes out 54, 53, 53 rather than 53, 53, 53 and
 // a one-cell gutter of nothing at the right edge.
 func Measure(width, height int) Geometry {
+	return MeasureMode(width, height, false)
+}
+
+// MeasureMode supplies the same geometry to rendering and navigation in either view.
+func MeasureMode(width, height int, compact bool) Geometry {
 	g := Geometry{Width: width, Height: height}
 	if width <= 0 || height <= 0 {
 		return g
@@ -109,7 +116,11 @@ func Measure(width, height int) Geometry {
 		return g
 	}
 	g.Cols = fitCount(width, TileMinWidth)
-	g.Rows = fitCount(gridHeight, TileMinHeight)
+	tileHeight := TileMinHeight
+	if compact {
+		tileHeight = CompactTileMinHeight
+	}
+	g.Rows = fitCount(gridHeight, tileHeight)
 	g.colWidths = distribute(width, g.Cols)
 	g.rowHeights = distribute(gridHeight, g.Rows)
 	return g

@@ -32,6 +32,8 @@ func (h *Handler) Handle(req protocol.Request) protocol.Response {
 		resp = h.handleStateUpdate(req)
 	case protocol.TypeStateQuery:
 		resp = h.handleStateQuery()
+	case protocol.TypeOverviewPreferences:
+		resp = h.handleOverviewPreferences(req)
 	case protocol.TypeSessionDetail:
 		resp = h.handleSessionDetail(req)
 	case protocol.TypeEventsExport:
@@ -52,6 +54,16 @@ func (h *Handler) Handle(req protocol.Request) protocol.Response {
 		resp = protocol.Response{OK: false, Error: "unknown request type: " + string(req.Type)}
 	}
 	return resp
+}
+
+func (h *Handler) handleOverviewPreferences(req protocol.Request) protocol.Response {
+	h.overviewMu.Lock()
+	defer h.overviewMu.Unlock()
+	if req.OverviewCompact != nil {
+		h.overviewCompact = *req.OverviewCompact
+	}
+	compact := h.overviewCompact
+	return protocol.Response{OK: true, OverviewCompact: &compact}
 }
 
 func (h *Handler) handleHealth() protocol.Response {

@@ -622,7 +622,7 @@ func sameOrder(a, b []session.RunningSession) bool {
 // commands, read the clock, and hold the state the renderer is handed.
 var (
 	renderingFiles = []string{"chrome.go", "grid.go", "nav.go", "order.go", "view.go"}
-	lifecycleFiles = []string{"capture.go", "model.go", "refresh.go", "status.go", "update.go"}
+	lifecycleFiles = []string{"capture.go", "model.go", "preferences.go", "refresh.go", "status.go", "update.go"}
 )
 
 // parsePackage parses every non-test file in the package and returns them keyed
@@ -756,15 +756,16 @@ func TestTheRenderingHalfPerformsNoIO(t *testing.T) {
 // the session and config vocabularies, Bubble Tea, the shared commands, and the
 // daemon's protocol constants — and nothing that could read a transcript, a plan,
 // a socket or a file of its own. Second, the calls into tui/commands: only the
-// read (RefreshOverview), the one mutation (Focus), and the ticker (Tick). Every
+// topology and preview reads, Focus, the view preference, and their tickers. Every
 // other command in that package either writes Kitty or asks the daemon for
 // something this surface has no business asking, so the allowlist being short is
 // the whole assertion. A navigation key cannot reach Kitty because there is no
 // call in the package it could reach it through.
 func TestTheLifecycleHalfReachesTheWorldOnlyThroughItsSeams(t *testing.T) {
 	allowedImports := map[string]bool{
-		"fmt":  true,
-		"time": true,
+		"fmt":     true,
+		"strings": true,
+		"time":    true,
 
 		"charm.land/bubbletea/v2": true,
 
@@ -775,9 +776,10 @@ func TestTheLifecycleHalfReachesTheWorldOnlyThroughItsSeams(t *testing.T) {
 		"github.com/sglavoie/agentmux/tui/commands":             true,
 	}
 	allowedCommands := map[string]bool{
-		"commands.RefreshOverview": true,
-		"commands.Focus":           true,
-		"commands.Tick":            true,
+		"commands.OverviewPreferences": true, // only c changes this daemon-lifetime UI setting
+		"commands.RefreshOverview":     true,
+		"commands.Focus":               true,
+		"commands.Tick":                true,
 		// The capture is a READ of a window's terminal text and its cadence. It is
 		// listed beside RefreshOverview rather than beside Focus for that reason:
 		// commands.CaptureOutput runs `kitten @ get-text`, which observes a pane

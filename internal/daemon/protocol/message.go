@@ -15,14 +15,15 @@ import (
 type MessageType string
 
 const (
-	TypeStateUpdate     MessageType = "state_update"
-	TypeHookEvent       MessageType = "hook_event"
-	TypeDiagnosticProbe MessageType = "diagnostic_probe"
-	TypeStateQuery      MessageType = "state_query"
-	TypeSessionDetail   MessageType = "session_detail"
-	TypeEventsExport    MessageType = "events_export"
-	TypeShutdown        MessageType = "shutdown"
-	TypeHealth          MessageType = "health"
+	TypeStateUpdate         MessageType = "state_update"
+	TypeHookEvent           MessageType = "hook_event"
+	TypeDiagnosticProbe     MessageType = "diagnostic_probe"
+	TypeStateQuery          MessageType = "state_query"
+	TypeOverviewPreferences MessageType = "overview_preferences"
+	TypeSessionDetail       MessageType = "session_detail"
+	TypeEventsExport        MessageType = "events_export"
+	TypeShutdown            MessageType = "shutdown"
+	TypeHealth              MessageType = "health"
 
 	// ASL bridge requests. They are answered from daemon memory or forwarded to
 	// the bridge subprocess; every one of them fails cleanly when the optional
@@ -129,6 +130,8 @@ type DeliveryAcknowledgement struct {
 // can leak it. They are exported only because the daemon package that stamps
 // them now lives outside this one.
 type Request struct {
+	// OverviewCompact is nil for a read, or the desired daemon-lifetime setting.
+	OverviewCompact *bool `json:"overview_compact,omitempty"`
 	// CurrentIconState is daemon-internal snapshot context. It is deliberately
 	// not serialized: hook clients must never make the title an input to the
 	// state machine, but event exports can still record the live icon observed
@@ -263,8 +266,9 @@ type ASLResponse struct {
 
 // Response is a JSON message sent by the daemon back to the client.
 type Response struct {
-	OK    bool   `json:"ok"`
-	Error string `json:"error,omitempty"`
+	OverviewCompact *bool  `json:"overview_compact,omitempty"`
+	OK              bool   `json:"ok"`
+	Error           string `json:"error,omitempty"`
 	// Retryable classifies a rejected request without requiring clients to
 	// inspect Error. Delivery is populated for hook and diagnostic-probe ingress.
 	Retryable bool                     `json:"retryable,omitempty"`

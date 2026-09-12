@@ -376,6 +376,12 @@ The overview is a **separate program**, not a dashboard mode. It has its own
 keymap and its own refresh, the dashboard keeps running behind it, and closing
 one does not disturb the other.
 
+- `c`: toggle compact/normal mode. Compact cards show project plus status and
+  elapsed time on line one, harness/profile on line two, and no terminal preview.
+  The selected session stays selected. The daemon remembers the choice across
+  closing and reopening F2; restarting the daemon resets it to normal. No config
+  file is changed. If saving is unavailable, the local toggle still works and
+  the feedback row reports the problem.
 - `←↑↓→` or `h`/`j`/`k`/`l`: move within the page. These are spatial: the end of
   a row is a wall rather than a wrap onto a tile the eye did not expect
 - `Tab`/`Shift+Tab`: the next/previous session in the whole list, crossing rows
@@ -388,15 +394,16 @@ one does not disturb the other.
   state retrying makes sense from
 - `Esc`, `q`, `Ctrl+C`: close, whether or not a read is still out
 
-Nothing else is bound. Every movement key changes one integer and starts no
-command at all, so browsing the overview is observation: it lists windows, reads
-screen text, and focuses a tab, and it writes nothing to Kitty, to the daemon, or
-to the filesystem. `Enter` is the one key that acts.
+Nothing else is bound. Browsing observes sessions and their screen text.
+`Enter` focuses a tab; `c` changes only the daemon's in-memory view preference.
+Closing immediately after a toggle lets its bounded save finish before exiting.
 
 The header counts the sessions and, when more than one page of them exists, says
 which page you are on (`page 2/3`). The grid sizes itself to the terminal — a
 tile targets 48 columns and 12 rows, so a 120x30 window shows four sessions at a
-time and a 160x45 one shows nine. That target is not a floor: a terminal too
+time and a 160x45 one shows nine. Compact mode targets 48 columns and four rows
+(two content rows plus borders), showing 12 and 30 sessions respectively at
+those sizes. Hidden terminal previews are not captured. That target is not a floor: a terminal too
 small for even one full tile still draws one cramped tile rather than an empty
 grid, and a tile too small to wear a box drops the box before it drops the
 session's name. Resizing keeps the selected session selected

@@ -255,6 +255,7 @@ func tabs(m model) []int {
 // its string.
 func overviewInput(m model) Input {
 	return Input{
+		Compact:       m.compact,
 		Width:         m.width,
 		Height:        m.height,
 		Sessions:      m.sessions,

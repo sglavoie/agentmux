@@ -41,6 +41,9 @@ func (m model) feedback() string {
 	if m.focusErr != nil {
 		return "Focus failed: " + m.focusErr.Error()
 	}
+	if m.preferenceErr != nil {
+		return "View preference unavailable: " + m.preferenceErr.Error()
+	}
 	age, warm := m.topologyAge()
 	if !warm {
 		if m.err != nil {

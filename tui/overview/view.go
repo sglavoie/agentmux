@@ -34,7 +34,7 @@ const (
 	// defaults so a surface that forgets to set them still tells an operator what
 	// they are looking at and how to leave it.
 	DefaultTitle = "Live sessions"
-	DefaultHints = "←↑↓→/hjkl move · Tab/⇧Tab next · PgUp/PgDn page · Home/End ends"
+	DefaultHints = "c compact · ←↑↓→/hjkl move · Tab/⇧Tab next · PgUp/PgDn page · Home/End ends"
 
 	// tilePadding is the one cell of space between a tile's border and its
 	// contents, on each side. It costs two of the tile's columns and buys the
@@ -144,6 +144,7 @@ func outputExtent(t Tile) (width, height int) {
 // Input is every fact the overview is drawn from.
 type Input struct {
 	Width, Height int
+	Compact       bool
 
 	// Sessions is the WHOLE live set, already in Order's tile order. It is the
 	// whole set and not a page of it because the name disambiguator is measured
@@ -189,7 +190,7 @@ func Render(in Input) string {
 	if in.Width <= 0 || in.Height <= 0 {
 		return ""
 	}
-	g := Measure(in.Width, in.Height)
+	g := MeasureMode(in.Width, in.Height, in.Compact)
 	count := len(in.Sessions)
 	selected := clamp(in.Selected, 0, max(count-1, 0))
 
@@ -323,6 +324,7 @@ func renderTile(in Input, t Tile, s session.RunningSession, selected bool) []str
 	}
 	preview := in.preview(s)
 	body := dashboard.CompactInput{
+		SummaryOnly:   in.Compact,
 		Content:       preview.Content,
 		Session:       s,
 		Qualifier:     in.qualifier(s),

@@ -330,7 +330,10 @@ func (c *captureController) stop() {
 // left out: there is nothing to show for either, and a read would be spent on a
 // picture that is never drawn.
 func (m model) visibleTiles() []captureTile {
-	g := Measure(m.width, m.height)
+	if m.compact {
+		return nil
+	}
+	g := MeasureMode(m.width, m.height, m.compact)
 	capacity := g.Capacity()
 	if capacity == 0 || len(m.sessions) == 0 {
 		return nil
