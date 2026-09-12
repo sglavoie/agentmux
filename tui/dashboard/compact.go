@@ -3,7 +3,7 @@
 // This is the inspector's small sibling. The overview draws many sessions at
 // once inside boxes of about 46 by 10 cells, and the six-row metadata block is
 // most of that before a single line of terminal output is reached. So the header
-// is cut to THREE rows, and the cut is a choice about which questions a tile is
+// is cut to TWO rows, and the cut is a choice about which questions a tile is
 // answering rather than an even squeeze of the same six.
 //
 // Which session, what is it doing and for how long, and what is running it. The
@@ -14,7 +14,7 @@
 //
 // Layout and status vocabulary are shared with the inspector:
 //
-//   - The block is a FIXED three lines, for the reason the inspector's is fixed
+//   - The block is a FIXED two lines, for the reason the inspector's is fixed
 //     at six. A tile whose divider moved with its content would make a grid of
 //     them ripple every time any one session changed.
 //   - The status helpers are shared, but the tile projects agent work separately
@@ -44,16 +44,15 @@ import (
 )
 
 const (
-	// CompactMetaLines is the height of the compact header: identity, status and
-	// age, and agent. Fixed at every width and for every content state, exactly
-	// as InspectorMetaLines is.
-	CompactMetaLines = 3
+	// CompactMetaLines is the height of the compact header: identity and status
+	// on the first line, then agent. Fixed at every width and for every content
+	// state, exactly as InspectorMetaLines is.
+	CompactMetaLines = 2
 
 	// The fixed row each compact fact occupies, named for the same reason the
 	// inspector's rows are: the geometry is the contract.
-	compactTitleRow  = 0
-	compactStatusRow = 1
-	compactAgentRow  = 2
+	compactTitleRow = 0
+	compactAgentRow = 1
 
 	// CompactChromeLines is what a tile spends before a line of output is drawn.
 	// A caller sizing a tile charges this once; the output region is whatever the
@@ -134,24 +133,39 @@ func RenderCompactPreview(in CompactInput) string {
 func renderCompactSummary(in CompactInput) string {
 	lines := make([]string, in.Height)
 	if in.Content != InspectorNoSelection {
-		status := compactStatusLine(in)
-		// Reserve status space on the right while retaining some project identity
-		// even for long blocked reasons or ASL phase labels.
-		statusWidth := min(layout.StyledWidth(status), max(in.Width*2/3, 0))
-		titleWidth := max(in.Width-statusWidth-2, 0)
-		if titleWidth > 0 {
-			title := layout.StyledTruncate(compactTitleLine(in, in.Session), titleWidth, "…")
-			status = layout.StyledTruncate(status, statusWidth, "…")
-			gap := in.Width - layout.StyledWidth(title) - layout.StyledWidth(status)
-			lines[0] = title + strings.Repeat(" ", gap) + status
-		} else {
-			lines[0] = layout.StyledTruncate(compactTitleLine(in, in.Session), in.Width, "…")
-		}
+		lines[0] = compactHeaderLine(in)
 		if in.Height > 1 {
 			lines[1] = layout.StyledTruncate(styleDim.Render(joinDetailTokens(harnessLabel(in.Session.Harness), in.Session.EffectiveProfile())), in.Width, "…")
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+// compactHeaderLine keeps the current state at the right edge while giving a
+// long status at most two thirds of the row so the session remains identifiable.
+func compactHeaderLine(in CompactInput) string {
+	context, state := compactStatusParts(in)
+	stateWidth := layout.StyledWidth(state)
+	statusWidth := min(layout.StyledWidth(context)+stateWidth+layout.Width(metaSeparator), max(in.Width*2/3, stateWidth))
+	statusWidth = min(statusWidth, max(in.Width-3, 0))
+	titleWidth := max(in.Width-statusWidth-2, 0)
+	if titleWidth <= 0 {
+		return layout.StyledTruncate(compactTitleLine(in, in.Session), in.Width, "…")
+	}
+	title := layout.StyledTruncate(compactTitleLine(in, in.Session), titleWidth, "…")
+	var status string
+	if stateWidth >= statusWidth {
+		status = layout.StyledTruncate(state, statusWidth, "…")
+	} else {
+		contextWidth := statusWidth - stateWidth - layout.Width(metaSeparator)
+		if contextWidth > 0 {
+			status = layout.StyledTruncate(context, contextWidth, "…") + styleDim.Render(metaSeparator) + state
+		} else {
+			status = state
+		}
+	}
+	gap := in.Width - layout.StyledWidth(title) - layout.StyledWidth(status)
+	return title + strings.Repeat(" ", gap) + status
 }
 
 // compactMetaLines builds exactly CompactMetaLines lines, each already clamped
@@ -162,16 +176,17 @@ func compactMetaLines(in CompactInput) []string {
 		return lines
 	}
 	s := in.Session
-	lines[compactTitleRow] = layout.StyledTruncate(compactTitleLine(in, s), in.Width, "…")
-	lines[compactStatusRow] = layout.StyledTruncate(compactStatusLine(in), in.Width, "…")
+	lines[compactTitleRow] = compactHeaderLine(in)
 	lines[compactAgentRow] = layout.StyledTruncate(
 		styleDim.Render(joinDetailTokens(harnessLabel(s.Harness), s.EffectiveProfile())), in.Width, "…")
 	return lines
 }
 
-// compactStatusLine separates the agent's outcome from the supervising run.
+// compactStatusParts separates the agent's outcome from the supervising run.
 // The copy is local: the dashboard and tab still receive their aggregate state.
-func compactStatusLine(in CompactInput) string {
+// Keeping them apart lets the title line shorten elapsed/run context without
+// truncating the state word at its right edge.
+func compactStatusParts(in CompactInput) (context, state string) {
 	s := in.Session
 	group := StateGroup(s, in.LastActivity, in.IdleThreshold)
 	if turn := s.AgentTurn; turn != nil {
@@ -198,11 +213,19 @@ func compactStatusLine(in CompactInput) string {
 	case statusDone:
 		style = accountStyle("green").Bold(true)
 	}
-	line := styledStatusLine(s, group, in.Now, style)
+	context = styleDim.Render(ElapsedText(s, group, in.Now))
 	if run := compactASLStatus(in.Session); run != "" {
-		line += styleDim.Render(" | " + run)
+		context += styleDim.Render(" | " + run)
 	}
-	return line
+	if unreadStop(s) {
+		state = styleUnreadNotice.Render(UnreadNoticeGlyph) + " "
+	}
+	if label := StatusText(s, group); label != "" {
+		state += style.Render(label)
+	} else {
+		state += styleDim.Render(inspectorUnknown)
+	}
+	return context, state
 }
 
 func compactASLStatus(s session.RunningSession) string {

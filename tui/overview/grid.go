@@ -24,8 +24,8 @@ const (
 	// TileMinWidth and TileMinHeight are the target minimum size of one tile,
 	// INCLUDING its border. They are the size at which a tile is still worth
 	// drawing: 48 by 12 leaves a 44-cell-wide interior after the border and its
-	// padding, and ten interior rows, of which the compact header and its divider
-	// take four and the terminal output takes the remaining six.
+		// padding, and ten interior rows, of which the compact header and its divider
+		// take three and the terminal output takes the remaining seven.
 	//
 	// They are a target rather than a floor. A terminal too small for even one
 	// such tile still gets one — see fitCount — because a single cramped preview

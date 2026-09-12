@@ -599,16 +599,16 @@ func TestAcceptanceCompletedAgentRemainsDoneDuringASLContinuation(t *testing.T) 
 		return resp, err
 	}
 	s.deliver(jobTopology)
-	if frame := s.frame(); !strings.Contains(frame, "Done · 0:42 | ASL paused") {
+	if frame := s.frame(); !strings.Contains(frame, "0:42 | ASL paused · Done") {
 		t.Fatalf("completed agent hidden by paused run:\n%s", frame)
 	}
 	r.Apply(protocol.ReducerEvent{Source: run, Phase: state.ASLPhaseTurn, Seq: 2, At: viewNow.Unix() + 1})
 	s.refresh()
-	if frame := s.frame(); !strings.Contains(frame, "Done · 0:42 | ASL running") {
+	if frame := s.frame(); !strings.Contains(frame, "0:42 | ASL running · Done") {
 		t.Fatalf("run heartbeat replaced agent completion:\n%s", frame)
 	}
 	s.resize(60, 15)
-	if frame := s.frame(); !strings.Contains(frame, "Done · 0:42 | ASL running") {
+	if frame := s.frame(); !strings.Contains(frame, "0:42 | ASL running · Done") {
 		t.Fatalf("resizing lost independent status:\n%s", frame)
 	}
 	r.Apply(protocol.ReducerEvent{Source: parent, Action: "active", Seq: 2, At: viewNow.Unix() + 2, TurnID: "second"})

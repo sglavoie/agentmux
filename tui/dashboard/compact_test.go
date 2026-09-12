@@ -25,17 +25,17 @@ func TestCompactSeparatesAgentCompletionFromRunPhase(t *testing.T) {
 			s.Looping = true
 			s.ASLPhases = []string{phase}
 			s.AgentTurn = &protocol.AgentTurnSnapshot{IconState: "stop", FinishedAt: inspectorNow.Add(-42 * time.Second).Unix()}
-			lines := renderCompactLines(t, CompactInput{Content: InspectorReady, Session: s})
-			if got, want := lines[compactStatusRow], "Done · 0:42 | ASL "+label; got != want {
-				t.Fatalf("status = %q; want %q", got, want)
+			lines := renderCompactLines(t, CompactInput{Width: 80, Content: InspectorReady, Session: s})
+			if got, want := lines[compactTitleRow], "0:42 | ASL "+label+" · Done"; !strings.HasSuffix(got, want) {
+				t.Fatalf("header = %q; want suffix %q", got, want)
 			}
 			if s.State != "bolt" || s.AgentTurn.IconState != "stop" {
 				t.Fatal("rendering mutated the session")
 			}
 			s.AgentTurn = &protocol.AgentTurnSnapshot{IconState: "bolt"}
 			lines = renderCompactLines(t, CompactInput{Content: InspectorReady, Session: s})
-			if strings.Contains(lines[compactStatusRow], "Done") || !strings.Contains(lines[compactStatusRow], "Working") {
-				t.Fatalf("resumed agent still looks done: %s", lines[compactStatusRow])
+			if strings.Contains(lines[compactTitleRow], "Done") || !strings.Contains(lines[compactTitleRow], "Working") {
+				t.Fatalf("resumed agent still looks done: %s", lines[compactTitleRow])
 			}
 		})
 	}
@@ -47,14 +47,14 @@ func TestCompactDoesNotCallASLActivityAgentWork(t *testing.T) {
 	s.ASLPhases = []string{"turn"}
 	s.AgentTurn = &protocol.AgentTurnSnapshot{}
 	lines := renderCompactLines(t, CompactInput{Content: InspectorReady, Session: s})
-	if got := lines[compactStatusRow]; got != "Idle · — | ASL running" {
+	if got := lines[compactTitleRow]; !strings.HasSuffix(got, "— | ASL running · Idle") {
 		t.Fatalf("status = %q", got)
 	}
 	// Older daemons cannot separate the facts. Preserve their aggregate status
 	// and say only that ASL is attached, without inventing a phase or completion.
 	s.AgentTurn, s.ASLPhases = nil, nil
 	lines = renderCompactLines(t, CompactInput{Content: InspectorReady, Session: s})
-	if got := lines[compactStatusRow]; got != "Working · 0:42 | ASL" {
+	if got := lines[compactTitleRow]; !strings.HasSuffix(got, "0:42 | ASL · Working") {
 		t.Fatalf("legacy status = %q", got)
 	}
 	for _, width := range []int{1, 5, 20, 46} {
@@ -69,15 +69,36 @@ func TestCompactSummaryRightAlignsStyledStatus(t *testing.T) {
 				in := compactInput(CompactInput{Width: width, Height: 2, SummaryOnly: true,
 					Content: InspectorReady, Session: inspectorSession()})
 				in.Session.State, in.Session.ASLPhases = state, phases
-				status := compactStatusLine(in)
-				statusWidth := min(layout.StyledWidth(status), width*2/3)
-				wantSuffix := ansi.Strip(layout.StyledTruncate(status, statusWidth, "…"))
+				_, stateLabel := compactStatusParts(in)
+				wantSuffix := ansi.Strip(stateLabel)
 				line := strings.Split(RenderCompactPreview(in), "\n")[0]
 				if layout.StyledWidth(line) != width || !strings.HasSuffix(ansi.Strip(line), wantSuffix) {
 					t.Fatalf("state=%s phases=%v width=%d: status must end at right edge: %q", state, phases, width, line)
 				}
 			}
 		}
+	}
+}
+
+func TestCompactCardRightAlignsStateAndKeepsTheTitle(t *testing.T) {
+	s := inspectorSession()
+	s.Project = "a very long project name that cannot fit beside its state"
+	for _, width := range []int{20, 46, 80} {
+		in := compactInput(CompactInput{Width: width, Content: InspectorReady, Session: s})
+		lines := renderCompactLines(t, in)
+		_, stateLabel := compactStatusParts(in)
+		wantSuffix := ansi.Strip(stateLabel)
+		if !strings.HasPrefix(lines[compactTitleRow], "a") || !strings.HasSuffix(lines[compactTitleRow], wantSuffix) {
+			t.Fatalf("width %d: card header must retain its title and end in status: %q", width, lines[compactTitleRow])
+		}
+		if strings.Contains(lines[compactAgentRow], "Working") {
+			t.Fatalf("width %d: state is repeated on agent line: %q", width, lines[compactAgentRow])
+		}
+	}
+	s.State = "key"
+	line := renderCompactLines(t, CompactInput{Width: 20, Content: InspectorReady, Session: s})[compactTitleRow]
+	if !strings.HasSuffix(line, "Needs permission") {
+		t.Fatalf("narrow card truncated a state that fits: %q", line)
 	}
 }
 
@@ -160,13 +181,13 @@ func TestCompactNamesItsThreeFacts(t *testing.T) {
 		Session: inspectorSession(),
 		Output:  SplitOutput("hello\n"),
 	})
-	for i, want := range []string{"api", "Working", "claude · work"} {
-		if !strings.Contains(lines[i], want) {
-			t.Errorf("header line %d = %q, want it to name %q", i, lines[i], want)
+	for _, want := range []string{"api", "Working", "0:42"} {
+		if !strings.Contains(lines[compactTitleRow], want) {
+			t.Errorf("header line = %q, want it to name %q", lines[compactTitleRow], want)
 		}
 	}
-	if !strings.Contains(lines[compactStatusRow], "0:42") {
-		t.Errorf("status row = %q, want it to carry the elapsed time", lines[compactStatusRow])
+	if !strings.Contains(lines[compactAgentRow], "claude · work") {
+		t.Errorf("agent row = %q", lines[compactAgentRow])
 	}
 }
 
@@ -195,12 +216,12 @@ func TestCompactQualifierIsDrawnBesideTheName(t *testing.T) {
 		Qualifier: "feature/queue",
 		Output:    SplitOutput("x\n"),
 	})
-	if got := lines[compactTitleRow]; got != "api (feature/queue)" {
+	if got := lines[compactTitleRow]; !strings.HasPrefix(got, "api (feature/queue)") || !strings.HasSuffix(got, "0:42 · Working") {
 		t.Errorf("title row = %q, want the name and its qualifier", got)
 	}
 
 	plain := renderCompactLines(t, CompactInput{Content: InspectorReady, Session: inspectorSession(), Output: SplitOutput("x\n")})
-	if got := plain[compactTitleRow]; got != "api" {
+	if got := plain[compactTitleRow]; !strings.HasPrefix(got, "api ") || !strings.HasSuffix(got, "0:42 · Working") {
 		t.Errorf("unqualified title row = %q, want the bare name", got)
 	}
 }
@@ -265,8 +286,8 @@ func TestCompactAndInspectorSayTheSameSentences(t *testing.T) {
 			if got, want := tile[CompactMetaLines+1], full[InspectorMetaLines+1]; got != want {
 				t.Errorf("tile says %q where the inspector says %q", got, want)
 			}
-			if got, want := tile[compactStatusRow], full[inspectorStatusRow]; got != want {
-				t.Errorf("tile status %q differs from the inspector's %q", got, want)
+			if st.content != InspectorNoSelection && !strings.HasSuffix(tile[compactTitleRow], "0:42 · Working") {
+				t.Errorf("tile header %q does not end with the agent state", tile[compactTitleRow])
 			}
 		})
 	}
@@ -288,8 +309,8 @@ func TestCompactShowsTheTailOfTheOutput(t *testing.T) {
 	if got := lines[len(lines)-1]; !strings.HasSuffix(got, "39") {
 		t.Errorf("last row = %q, want the newest output line", got)
 	}
-	if got := lines[CompactMetaLines+1]; !strings.HasSuffix(got, "34") {
-		t.Errorf("first output row = %q, want the tail window to start at line 34", got)
+	if got := lines[CompactMetaLines+1]; !strings.HasSuffix(got, "33") {
+		t.Errorf("first output row = %q, want the tail window to start at line 33", got)
 	}
 }
 
@@ -402,8 +423,8 @@ func TestAddingTheCompactPreviewLeftTheInspectorAtSixRows(t *testing.T) {
 	if InspectorChromeLines != 7 {
 		t.Fatalf("InspectorChromeLines = %d, want 7", InspectorChromeLines)
 	}
-	if CompactMetaLines != 3 || CompactChromeLines != 4 {
-		t.Fatalf("compact chrome = %d/%d, want 3 header rows and 4 chrome rows", CompactMetaLines, CompactChromeLines)
+	if CompactMetaLines != 2 || CompactChromeLines != 3 {
+		t.Fatalf("compact chrome = %d/%d, want 2 header rows and 3 chrome rows", CompactMetaLines, CompactChromeLines)
 	}
 	lines := renderInspectorLines(t, inspectorInput(InspectorInput{
 		Content: InspectorReady,
