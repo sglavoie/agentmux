@@ -84,6 +84,21 @@ const (
 	inspectorPausedLabel = "Paused"
 )
 
+// The five sentences a preview shows INSTEAD of terminal output. They are
+// constants in one place because two surfaces now say them — the full inspector
+// and the compact tile the overview draws — and the whole reason the content
+// state is an explicit input rather than an inference from an empty string is
+// that these five situations must stay told apart. Two renderers each spelling
+// their own "(loading…)" would be two places for one of them to quietly start
+// collapsing a pair.
+const (
+	previewNoSelectionText = "(no session selected)"
+	previewVanishedText    = "(session not running)"
+	previewLoadingText     = "(loading…)"
+	previewEmptyText       = "(no output)"
+	previewErrorPrefix     = "error: "
+)
+
 // InspectorContent names what the output half of the inspector is showing. It
 // is decided by the caller, which is the only place that knows whether a read
 // has been issued, has landed, or has failed.
@@ -364,20 +379,19 @@ func inspectorOutputLines(in InspectorInput, height int) []string {
 	}
 	var lines []string
 	switch {
-	case in.Content == InspectorNoSelection:
-		lines = []string{styleDim.Render("(no session selected)")}
-	case in.Content == InspectorVanished:
-		lines = []string{styleDim.Render("(session not running)")}
+	case in.Content == InspectorNoSelection, in.Content == InspectorVanished:
+		// Both outrank the hold: a pane with no session, and a pane whose window
+		// is gone, have nothing to keep holding a snapshot of.
+		text, _ := previewPlaceholder(in.Content, in.Output, in.Error)
+		lines = []string{text}
 	case in.Viewport.Paused():
 		lines = in.Viewport.Window(in.Output, height)
-	case in.Content == InspectorFailed:
-		lines = []string{stylePreviewError.Render("error: " + in.Error)}
-	case in.Content == InspectorLoading:
-		lines = []string{styleDim.Render("(loading…)")}
-	case len(in.Output) == 0:
-		lines = []string{styleDim.Render("(no output)")}
 	default:
-		lines = in.Viewport.Window(in.Output, height)
+		if text, ok := previewPlaceholder(in.Content, in.Output, in.Error); ok {
+			lines = []string{text}
+		} else {
+			lines = in.Viewport.Window(in.Output, height)
+		}
 	}
 
 	out := make([]string, height)
@@ -390,4 +404,30 @@ func inspectorOutputLines(in InspectorInput, height int) []string {
 		}
 	}
 	return out
+}
+
+// previewPlaceholder returns the sentence that stands in for terminal output,
+// and false when the output itself is what should be drawn.
+//
+// Four of the five situations are decided by the content state alone; the fifth
+// — a read that landed on an empty buffer — is the one that needs the output
+// too, and it is exactly the one an inference from emptiness would confuse with
+// a read that has not landed. Reporting a bool rather than "" for "draw the
+// output" is what keeps a legitimately empty buffer from falling through to a
+// blank pane with no sentence in it.
+func previewPlaceholder(content InspectorContent, output []string, errText string) (string, bool) {
+	switch {
+	case content == InspectorNoSelection:
+		return styleDim.Render(previewNoSelectionText), true
+	case content == InspectorVanished:
+		return styleDim.Render(previewVanishedText), true
+	case content == InspectorFailed:
+		return stylePreviewError.Render(previewErrorPrefix + errText), true
+	case content == InspectorLoading:
+		return styleDim.Render(previewLoadingText), true
+	case len(output) == 0:
+		return styleDim.Render(previewEmptyText), true
+	default:
+		return "", false
+	}
 }

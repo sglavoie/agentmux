@@ -1,0 +1,192 @@
+// The selected session, said in a tile.
+//
+// This is the inspector's small sibling. The overview draws many sessions at
+// once inside boxes of about 46 by 10 cells, and the six-row metadata block is
+// most of that before a single line of terminal output is reached. So the header
+// is cut to THREE rows, and the cut is a choice about which questions a tile is
+// answering rather than an even squeeze of the same six.
+//
+// Which session, what is it doing and for how long, and what is running it. The
+// three that survive are the three an operator asks of a session they are not
+// currently looking at. The three that go — branch, directory, and the
+// supervision/lock/mute/watchdog line — are the ones asked of a session that has
+// already been picked, and the full inspector is where picking one leads.
+//
+// Everything else about the pane is deliberately the inspector's, not a second
+// opinion about it:
+//
+//   - The block is a FIXED three lines, for the reason the inspector's is fixed
+//     at six. A tile whose divider moved with its content would make a grid of
+//     them ripple every time any one session changed.
+//   - The status sentence, its emphasis, its clock, and its unread notice come
+//     from the same StatusText, StatusEmphasis, ElapsedText, and unreadStop the
+//     queue row and the inspector read. A tile that phrased `Needs permission`
+//     differently from the row that raised it would read as a different fact.
+//   - The five output situations are told apart by previewPlaceholder, shared
+//     with the inspector: loading, legitimately empty, failed, vanished, and no
+//     selection stay five answers here too.
+//
+// The one fact a tile needs that the inspector does not is the QUALIFIER. The
+// inspector draws one session at a time, so a colliding name is unambiguous by
+// the time it is on screen; a grid draws the collision side by side. The
+// disambiguator is measured across the whole live set, including the sessions on
+// other pages, so it cannot be derived from the tile — the caller supplies it.
+//
+// Nothing here reads a clock, a config file, Kitty, or the daemon.
+
+package dashboard
+
+import (
+	"strings"
+	"time"
+
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/layout"
+)
+
+const (
+	// CompactMetaLines is the height of the compact header: identity, status and
+	// age, and agent. Fixed at every width and for every content state, exactly
+	// as InspectorMetaLines is.
+	CompactMetaLines = 3
+
+	// The fixed row each compact fact occupies, named for the same reason the
+	// inspector's rows are: the geometry is the contract.
+	compactTitleRow  = 0
+	compactStatusRow = 1
+	compactAgentRow  = 2
+
+	// CompactChromeLines is what a tile spends before a line of output is drawn.
+	// A caller sizing a tile charges this once; the output region is whatever the
+	// height leaves after it.
+	CompactChromeLines = CompactMetaLines + inspectorDividerLines
+)
+
+// CompactInput is every fact one tile is drawn from.
+//
+// It is a near-subset of InspectorInput and deliberately not an alias of it. The
+// two panes answer different questions, so the fields the tile does not draw —
+// the watchdog, the supervision marker, the viewport — are absent rather than
+// ignored: a caller that had to supply them would have to decide what a tile
+// does with a paused snapshot, and the answer is that a tile has no scrollback
+// position at all.
+type CompactInput struct {
+	Width, Height int
+
+	// Content decides which of the five situations the output half is in. It is
+	// the caller's, for the reason it is the caller's in the inspector: only the
+	// controller that issued the read knows whether one is outstanding.
+	Content InspectorContent
+
+	// Session is the tile's conversation. Read for every state except
+	// InspectorNoSelection, including InspectorVanished.
+	Session session.RunningSession
+
+	// Qualifier is the disambiguating context measured across the whole live set
+	// — NameDisambiguator.Qualifier's answer — and "" when the name stands alone.
+	// It is supplied rather than derived because a tile can see one session and a
+	// collision is a property of the set.
+	Qualifier string
+
+	Cfg *config.Config
+	// LastActivity and IdleThreshold are StateGroup's inputs, derived here through
+	// the same helper the inspector uses so the two say the same sentence.
+	LastActivity  map[int]time.Time
+	IdleThreshold time.Duration
+	// Now is the clock every elapsed time is measured against.
+	Now time.Time
+
+	// Output is the newest snapshot, one entry per line, already split by
+	// SplitOutput. Empty under InspectorReady is a legitimately empty buffer.
+	Output []string
+	// Error is the failed read's message, read only under InspectorFailed.
+	Error string
+}
+
+// RenderCompactPreview returns exactly Height lines (no trailing newline), the
+// same contract RenderInspector and RenderProjectCard keep, so a grid can size
+// a tile once and trust what comes back to fill it.
+//
+// A tile too short for the chrome draws as much of the header as fits and no
+// output at all, which is the inspector's priority said again at a smaller size:
+// a preview that cannot say which session it is showing is worse than one that
+// cannot show its terminal.
+func RenderCompactPreview(in CompactInput) string {
+	if in.Width <= 0 || in.Height <= 0 {
+		return ""
+	}
+	lines := compactMetaLines(in)
+	if in.Height <= len(lines) {
+		return strings.Join(lines[:in.Height], "\n")
+	}
+	// The rule is drawn through the inspector's own divider so the two panes
+	// share one answer about which cells it covers. A tile is never paused, so
+	// the zero viewport is passed rather than a flag.
+	lines = append(lines, inspectorDivider(InspectorInput{Width: in.Width}))
+	lines = append(lines, compactOutputLines(in, in.Height-len(lines))...)
+	return strings.Join(lines, "\n")
+}
+
+// compactMetaLines builds exactly CompactMetaLines lines, each already clamped
+// to the tile's width.
+func compactMetaLines(in CompactInput) []string {
+	lines := make([]string, CompactMetaLines)
+	if in.Content == InspectorNoSelection {
+		return lines
+	}
+	s := in.Session
+	group := StateGroup(s, in.LastActivity, in.IdleThreshold)
+
+	lines[compactTitleRow] = layout.StyledTruncate(compactTitleLine(in, s), in.Width, "…")
+	lines[compactStatusRow] = layout.StyledTruncate(
+		inspectorStatusLine(InspectorInput{Now: in.Now}, s, group), in.Width, "…")
+	lines[compactAgentRow] = layout.StyledTruncate(
+		styleDim.Render(joinDetailTokens(harnessLabel(s.Harness), s.EffectiveProfile())), in.Width, "…")
+	return lines
+}
+
+// compactTitleLine draws the session's name in its project's identity color,
+// followed by its collision qualifier in muted text.
+//
+// The two halves are styled differently for the reason the queue row styles them
+// differently: the name is the session and the qualifier is the reason two names
+// look alike, and a grid that painted both in the project color would read as a
+// project whose title happens to contain a branch name.
+func compactTitleLine(in CompactInput, s session.RunningSession) string {
+	title := layout.RenderTitleIcon(SessionDisplayTitle(s))
+	line := accountStyle(ProjectIdentityColor(s, ProfileColorMap(in.Cfg), in.Cfg)).Render(title)
+	if in.Qualifier == "" {
+		return line
+	}
+	return line + styleDim.Render(" ("+in.Qualifier+")")
+}
+
+// compactOutputLines returns exactly height lines of output region.
+//
+// The tail is taken through the zero OutputViewport rather than by slicing here.
+// A tile has no scroll position, and following the newest snapshot is precisely
+// what the zero value means — reusing it is what keeps "the bottom line is the
+// newest line" one rule instead of two.
+func compactOutputLines(in CompactInput, height int) []string {
+	if height <= 0 {
+		return nil
+	}
+	var lines []string
+	if text, ok := previewPlaceholder(in.Content, in.Output, in.Error); ok {
+		lines = []string{text}
+	} else {
+		lines = OutputViewport{}.Window(in.Output, height)
+	}
+
+	out := make([]string, height)
+	for i := range out {
+		if i < len(lines) {
+			// StyledTruncate rather than Truncate: a capture carrying escape
+			// sequences is measured by the cells it paints, and a sequence cut in
+			// half would leak out of this tile and into the one beside it.
+			out[i] = layout.StyledTruncate(lines[i], in.Width, "…")
+		}
+	}
+	return out
+}
