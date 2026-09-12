@@ -387,6 +387,12 @@ one does not disturb the other.
 - `Tab`/`Shift+Tab`: the next/previous session in the whole list, crossing rows
   and pages
 - `PgUp`/`PgDn`: one page; `Home`/`End`: the first and last session
+- `n`/`N`: next/previous session that needs you, wrapping across all pages in
+  either compact or normal mode. Uses the dashboard's rules: permission/reply
+  requests, failures, and unread completions qualify; working, idle, recovered
+  tool warnings, and seen completions do not. The jump selects the card without
+  focusing its pane or marking its completion read. No matches leaves selection
+  unchanged.
 - `Enter`: focus the selected session's Kitty tab and leave. The tab is captured
   when you press the key, so a refresh landing during the round trip cannot
   hand you a different pane. A focus that fails leaves you on the overview with

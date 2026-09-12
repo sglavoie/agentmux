@@ -34,7 +34,7 @@ const (
 	// defaults so a surface that forgets to set them still tells an operator what
 	// they are looking at and how to leave it.
 	DefaultTitle = "Live sessions"
-	DefaultHints = "c compact · ←↑↓→/hjkl move · Tab/⇧Tab next · PgUp/PgDn page · Home/End ends"
+	DefaultHints = "c compact · n/N needs you · ←↑↓→/hjkl move · Tab/⇧Tab next · PgUp/PgDn page · Home/End ends"
 
 	// tilePadding is the one cell of space between a tile's border and its
 	// contents, on each side. It costs two of the tile's columns and buys the

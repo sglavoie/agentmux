@@ -774,6 +774,7 @@ func TestTheLifecycleHalfReachesTheWorldOnlyThroughItsSeams(t *testing.T) {
 		"github.com/sglavoie/agentmux/internal/kitty":           true, // the client type, handed to the seams
 		"github.com/sglavoie/agentmux/internal/session":         true,
 		"github.com/sglavoie/agentmux/tui/commands":             true,
+		"github.com/sglavoie/agentmux/tui/dashboard":            true, // shared NeedsYou predicate
 	}
 	allowedCommands := map[string]bool{
 		"commands.OverviewPreferences": true, // only c changes this daemon-lifetime UI setting

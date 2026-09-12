@@ -62,6 +62,25 @@ func TestCompactDoesNotCallASLActivityAgentWork(t *testing.T) {
 	}
 }
 
+func TestCompactSummaryRightAlignsStyledStatus(t *testing.T) {
+	for _, state := range []string{"bolt", "stop"} {
+		for _, phases := range [][]string{nil, {"paused"}} {
+			for _, width := range []int{20, 46, 80} {
+				in := compactInput(CompactInput{Width: width, Height: 2, SummaryOnly: true,
+					Content: InspectorReady, Session: inspectorSession()})
+				in.Session.State, in.Session.ASLPhases = state, phases
+				status := compactStatusLine(in)
+				statusWidth := min(layout.StyledWidth(status), width*2/3)
+				wantSuffix := ansi.Strip(layout.StyledTruncate(status, statusWidth, "…"))
+				line := strings.Split(RenderCompactPreview(in), "\n")[0]
+				if layout.StyledWidth(line) != width || !strings.HasSuffix(ansi.Strip(line), wantSuffix) {
+					t.Fatalf("state=%s phases=%v width=%d: status must end at right edge: %q", state, phases, width, line)
+				}
+			}
+		}
+	}
+}
+
 func compactInput(in CompactInput) CompactInput {
 	if in.Width == 0 {
 		in.Width = 46

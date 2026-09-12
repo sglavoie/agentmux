@@ -19,7 +19,8 @@
 //     session without thinking about geometry, and PgDn is how they skip a
 //     screenful of them.
 //
-// Every move clamps; none wraps. A cursor that jumped from the last session to
+// These positional moves clamp; n/N attention jumps wrap separately. A cursor
+// that jumped from the last session to
 // the first would make "am I at the end" unanswerable without counting, and the
 // overview has a page indicator precisely so that question has a cheap answer.
 package overview

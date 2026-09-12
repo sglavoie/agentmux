@@ -139,11 +139,13 @@ func renderCompactSummary(in CompactInput) string {
 		status := compactStatusLine(in)
 		// Reserve status space on the right while retaining some project identity
 		// even for long blocked reasons or ASL phase labels.
-		statusWidth := min(layout.Width(status), max(in.Width*2/3, 0))
+		statusWidth := min(layout.StyledWidth(status), max(in.Width*2/3, 0))
 		titleWidth := max(in.Width-statusWidth-2, 0)
 		if titleWidth > 0 {
 			title := layout.StyledTruncate(compactTitleLine(in, in.Session), titleWidth, "…")
-			lines[0] = layout.PadRight(title, titleWidth) + "  " + layout.StyledTruncate(status, statusWidth, "…")
+			status = layout.StyledTruncate(status, statusWidth, "…")
+			gap := in.Width - layout.StyledWidth(title) - layout.StyledWidth(status)
+			lines[0] = title + strings.Repeat(" ", gap) + status
 		} else {
 			lines[0] = layout.StyledTruncate(compactTitleLine(in, in.Session), in.Width, "…")
 		}

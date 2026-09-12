@@ -26,6 +26,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/tui/commands"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
 // Update routes one message.
@@ -95,6 +96,10 @@ func (m model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.requestFocus()
 	case "c":
 		return m.toggleCompact()
+	case "n":
+		return m.jumpNeedsYou(1)
+	case "N":
+		return m.jumpNeedsYou(-1)
 	}
 	if move, ok := moveFor(msg.String()); ok {
 		return m.applyMove(move)
@@ -172,6 +177,25 @@ func (m model) applyMove(move Move) (tea.Model, tea.Cmd) {
 	m.selectIndex(Navigate(MeasureMode(m.width, m.height, m.compact), len(m.sessions), m.selected, move))
 	m.reconcileCaptures()
 	return m, m.pumpCaptures()
+}
+
+// jumpNeedsYou uses the dashboard's attention predicate in the overview's tile
+// order. It wraps across the whole list without focusing or acknowledging a pane.
+func (m model) jumpNeedsYou(dir int) (tea.Model, tea.Cmd) {
+	count := len(m.sessions)
+	for step := 1; step <= count; step++ {
+		index := (m.selected + dir*step + count) % count
+		if !dashboard.NeedsYou(m.sessions[index], m.lastActivity, m.idleThreshold) {
+			continue
+		}
+		if index == m.selected {
+			return m, nil
+		}
+		m.selectIndex(index)
+		m.reconcileCaptures()
+		return m, m.pumpCaptures()
+	}
+	return m, nil
 }
 
 // requestFocus is Enter: focus the selected tab, and leave only once Kitty has

@@ -40,7 +40,7 @@ import (
 // the renderer cuts it to the surface's width. What an operator cannot afford to
 // lose is how to act on a tile and how to leave the surface; which of four
 // equivalent spellings moves the cursor is what a 60-column terminal may drop.
-const hints = "Enter focus · q close · c compact · ←↑↓→/hjkl move · Tab next · PgUp/PgDn page · Home/End ends"
+const hints = "Enter focus · q close · c compact · n/N needs you · ←↑↓→/hjkl move · Tab next · PgUp/PgDn page · Home/End ends"
 
 // defaultRefreshInterval and defaultIdleThreshold are what an unset
 // configuration means here. They are the dashboard's own defaults, restated
