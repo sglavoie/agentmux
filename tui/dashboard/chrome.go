@@ -3,69 +3,55 @@ package dashboard
 import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/sglavoie/agentmux/tui/theme"
 
 	"github.com/sglavoie/agentmux/internal/palette"
 )
 
-// The styles below are the dashboard's private copy of the presentation
-// attributes it paints with. They deliberately duplicate the corresponding
-// entries in the root package's theme rather than importing it: the root
-// theme is a ~50-style private surface shared by every TUI mode, and
-// exporting it to serve a leaf would give every leaf a theme edge that the
-// intended import graph does not draw. Only the attributes the dashboard
-// itself renders are duplicated here.
+// Styles stay local to the dashboard while their colors come from the shared
+// fixed palette. Semantic account and attention colors remain independent.
 var (
-	// styleSelected marks the row the keyboard is on. Reverse video and nothing
-	// else: it used to double reverse with bold, which is two claims about the
-	// same row, and "restrained selection" is the redesign's word for spending one.
-	//
-	// Reverse rather than a background color on purpose. A hex background is a bet
-	// on the terminal's own background being dark, and a wrong bet paints dark
-	// text on a dark bar; reverse is defined against whatever the terminal already
-	// uses, so it is legible in both themes without the theme having to be known.
-	styleSelected = lipgloss.NewStyle().Reverse(true)
-	// styleSelectedBlurred marks the same row when the keys are somewhere else.
-	// Weight alone, with no reverse bar: the selection is still where the operator
-	// left it, but the pane it is in will not answer j/k. Distinguishing the two is
-	// what keeps a bar from promising navigation a blurred list cannot perform.
-	styleSelectedBlurred = lipgloss.NewStyle().Bold(true)
-	styleDim             = lipgloss.NewStyle().Faint(true)
-	styleFooter          = lipgloss.NewStyle().Faint(true)
-	styleAttentionRow    = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
-	styleEmptyHero       = lipgloss.NewStyle().Bold(true)
+	// The tinted focused row is one normalized span; blurred focus is quieter.
+	styleSelected        = theme.Selected()
+	styleSelectedBlurred = theme.Blurred()
+	styleText            = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Text))
+	styleDim             = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
+	styleFooter          = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
+	styleAttentionRow    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber))
+	styleEmptyHero       = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Secondary)).Bold(true)
 
 	// styleHeroKey paints the keys inside the empty hero's hint. It is the
 	// footer's key color deliberately: the hero names two of the same bindings
 	// the footer names, and an operator who has learned to look for teal in the
 	// bottom row should not have to learn a second spelling for the middle of
 	// the screen.
-	styleHeroKey = lipgloss.NewStyle().Foreground(lipgloss.Color("#4ec9b0")).Bold(true)
+	styleHeroKey = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Primary)).Bold(true)
 
 	// stylePreviewError colors the inline error the scrollback preview pane
 	// renders when a capture fails.
-	stylePreviewError = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
+	stylePreviewError = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Red))
 
 	// styleUnreadNotice colors the notice gutter's unread-completion dot. It
 	// wears the attention accent because an unseen stop is exactly what puts a
 	// row in the Needs you bucket: the dot names the reason the row is where it
 	// is, so it must not read as a third, unrelated color.
-	styleUnreadNotice = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
+	styleUnreadNotice = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber))
 
 	// Per-state accent styles used by the row pulse, the chips, and the
 	// legend gloss.
-	styleStateBolt    = lipgloss.NewStyle().Foreground(lipgloss.Color("#4ec9b0"))
-	styleStateStop    = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
-	styleStateKey     = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
-	styleStateWarning = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
-	styleStateError   = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
+	styleStateBolt    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Primary))
+	styleStateStop    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber))
+	styleStateKey     = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber))
+	styleStateWarning = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber))
+	styleStateError   = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Red))
 
-	styleGroupBorderAttention = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
-	styleGroupBorderActive    = lipgloss.NewStyle()
-	styleGroupBorderIdle      = lipgloss.NewStyle().Faint(true)
+	styleGroupBorderAttention = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber))
+	styleGroupBorderActive    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Divider))
+	styleGroupBorderIdle      = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
 
-	styleGroupLabelAttention = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00")).Bold(true)
-	styleGroupLabelActive    = lipgloss.NewStyle().Bold(true)
-	styleGroupLabelIdle      = lipgloss.NewStyle().Faint(true).Bold(true)
+	styleGroupLabelAttention = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber)).Bold(true)
+	styleGroupLabelActive    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Secondary)).Bold(true)
+	styleGroupLabelIdle      = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Secondary)).Bold(true)
 
 	// styleChip is the neutral base for substring chips. Account chips use
 	// accountStyle(colorName) on top; state chips with attention semantics
@@ -74,14 +60,14 @@ var (
 
 	// styleCompletionPopup keeps non-selected completion rows dim so the menu
 	// reads as auxiliary UI.
-	styleCompletionPopup = lipgloss.NewStyle().Faint(true)
+	styleCompletionPopup = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
 )
 
 // renderSelectedRow normalizes a selectable row to one continuous selection
 // span. Row renderers may compose semantic foreground, faint, and reset
 // sequences for their normal state; retaining those sequences underneath a
-// reverse-video wrapper can terminate the selection early and leave stale
-// inverse cells behind when the cursor moves. The selected copy therefore
+// background wrapper can terminate the selection early and leave stale
+// tinted cells behind when the cursor moves. The selected copy therefore
 // keeps only its visible content before applying the shared selection style.
 //
 // blurred picks which selection the row wears. It is a parameter rather than two
@@ -102,9 +88,8 @@ func renderSelectedRow(row string, blurred bool) string {
 // which is what lets queue.go decide the MEANING with no theme in scope and lets
 // a test assert the meaning without a terminal.
 //
-// Neutral is the zero style rather than an explicit foreground. A row that is
-// simply working should read as ordinary text, and an explicit "default"
-// foreground is a color that fights the operator's own terminal theme.
+// Neutral app-rendered status uses near-white; captured output never passes
+// through this function and retains its own terminal styling.
 func emphasisStyle(e Emphasis) lipgloss.Style {
 	switch e {
 	case EmphasisMuted:
@@ -114,7 +99,7 @@ func emphasisStyle(e Emphasis) lipgloss.Style {
 	case EmphasisFailure:
 		return styleStateError
 	default:
-		return lipgloss.NewStyle()
+		return styleText
 	}
 }
 

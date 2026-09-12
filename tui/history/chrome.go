@@ -5,46 +5,38 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/sglavoie/agentmux/tui/theme"
 
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
-// The styles below are the history domain's private copy of the presentation
-// attributes it paints with. They deliberately duplicate the corresponding
-// entries in the root package's theme rather than importing it: the root theme
-// is a ~50-style private surface shared by every TUI mode, and exporting it to
-// serve a leaf would give every leaf a theme edge that the intended import
-// graph does not draw. Only the attributes this package itself renders are
-// duplicated here; the timeline and detail-row styles below are no longer
-// duplicated at all, because the history views are their only painters.
+// History keeps its styles local but derives their colors from the shared
+// palette; timeline and detail-row styles remain specific to this view.
 var (
-	styleSelected = lipgloss.NewStyle().Bold(true).Reverse(true)
-	styleError    = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
-	styleDim      = lipgloss.NewStyle().Faint(true)
-	styleSearch   = lipgloss.NewStyle().Bold(true)
-	styleFooter   = lipgloss.NewStyle().Faint(true)
-	styleHeader   = lipgloss.NewStyle().Bold(true)
+	styleSelected = theme.Selected()
+	styleError    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Red))
+	styleDim      = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
+	styleSearch   = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Primary)).Bold(true)
+	styleFooter   = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
+	styleHeader   = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Secondary)).Bold(true)
 	styleChip     = lipgloss.NewStyle()
-	styleBanner   = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00")).Bold(true)
+	styleBanner   = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber)).Bold(true)
 
 	styleFooterKey = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#4ec9b0")).
+			Foreground(lipgloss.Color(theme.Primary)).
 			Bold(true)
 
 	// styleOverlayBox wraps the delete-choice prompt, the event detail pane,
-	// and the timeline in a rounded border with the de-facto accent teal.
+	// and the timeline in a rounded blue border with a dark surface.
 	// Padding adds a single column of breathing room on each side; combined
 	// with the border, the box adds 2 columns + 2 rows of chrome to inner
 	// content.
-	styleOverlayBox = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#4ec9b0")).
-			Padding(0, 1)
+	styleOverlayBox = theme.Popup()
 
 	// styleAssistant colors assistant transcript lines with the active-teal
 	// already established for the `bolt` state.
-	styleAssistant = lipgloss.NewStyle().Foreground(lipgloss.Color("#4ec9b0"))
+	styleAssistant = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Primary))
 
 	// Detail-pane styles (ModeDetail). detailRowStyle is intentionally
 	// neutral so row text inherits the terminal's default foreground;
@@ -53,27 +45,27 @@ var (
 	// active-teal already established for `bolt` so the tool-name column
 	// reads as an accent without introducing a new palette color.
 	detailRowStyle  = lipgloss.NewStyle()
-	detailToolStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#4ec9b0"))
+	detailToolStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Primary))
 )
 
 // Timeline phase header and annotation styles (ModeDetail timeline sub-view).
 var (
-	styleTimelineActive   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#4ec9b0"))
-	styleTimelineCompact  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#ffaa00"))
-	styleTimelineStop     = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
-	styleTimelineError    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#ff5555"))
-	styleTimelineGap      = lipgloss.NewStyle().Faint(true)
-	styleTimelineSep      = lipgloss.NewStyle().Faint(true)
-	styleTimelineTree     = lipgloss.NewStyle().Faint(true)
-	styleTimelineTool     = lipgloss.NewStyle().Foreground(lipgloss.Color("#4ec9b0"))
-	styleTimelineExpanded = lipgloss.NewStyle().Faint(true).Italic(true)
+	styleTimelineActive   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(theme.Primary))
+	styleTimelineCompact  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(theme.Amber))
+	styleTimelineStop     = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber))
+	styleTimelineError    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(theme.Red))
+	styleTimelineGap      = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
+	styleTimelineSep      = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
+	styleTimelineTree     = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
+	styleTimelineTool     = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Primary))
+	styleTimelineExpanded = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted)).Italic(true)
 )
 
 // renderSelectedRow normalizes a selectable row to one continuous selection
 // span. Row renderers may compose semantic foreground, faint, and reset
 // sequences for their normal state; retaining those sequences underneath a
-// reverse-video wrapper can terminate the selection early and leave stale
-// inverse cells behind when the cursor moves. The selected copy therefore
+// background wrapper can terminate the selection early and leave stale
+// tinted cells behind when the cursor moves. The selected copy therefore
 // keeps only its visible content before applying the shared selection style.
 func renderSelectedRow(row string) string {
 	return styleSelected.Render(ansi.Strip(row))

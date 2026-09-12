@@ -38,9 +38,7 @@ func TestRenderListRowsOpenWithNamesRatherThanTabNumbers(t *testing.T) {
 }
 
 // TestRenderListLockedRowIsDimmed verifies that the per-row styling switch in
-// renderListAt wraps a locked row in styleDim. styleDim emits the Faint
-// (\x1b[2m) escape, and an unlocked row with no other dim spans renders without
-// it around the whole line.
+// renderListAt wraps a locked row in the explicit muted foreground.
 //
 // The plain text is now IDENTICAL between the two, which is the half of this
 // that changed: the 🔒 glyph had its own reserved row column and is now one
@@ -79,9 +77,9 @@ func TestRenderListLockedRowIsDimmed(t *testing.T) {
 		t.Fatalf("the lock glyph is back in the queue row: %q", stripAnsi(locked))
 	}
 
-	// styleDim renders as \x1b[2m...\x1b[0m. The locked row must contain it.
-	if !strings.Contains(locked, "\x1b[2m") {
-		t.Fatalf("locked row should carry the dim ANSI escape; got %q", locked)
+	mutedPrefix := strings.Split(styleDim.Render("api"), "api")[0]
+	if !strings.Contains(locked, mutedPrefix) {
+		t.Fatalf("locked row should carry the muted foreground; got %q", locked)
 	}
 }
 

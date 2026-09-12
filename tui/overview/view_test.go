@@ -728,6 +728,7 @@ func TestTheRenderingHalfPerformsNoIO(t *testing.T) {
 		"github.com/sglavoie/agentmux/internal/session": true,
 		"github.com/sglavoie/agentmux/tui/dashboard":    true,
 		"github.com/sglavoie/agentmux/tui/layout":       true,
+		"github.com/sglavoie/agentmux/tui/theme":        true,
 	}
 
 	files := parsePackage(t)

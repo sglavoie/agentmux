@@ -5,45 +5,37 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/sglavoie/agentmux/tui/theme"
 )
 
-// The styles below are this domain's private copy of the presentation
-// attributes it paints with. They deliberately duplicate the corresponding
-// entries in the root package's theme rather than importing it: the root theme
-// is a ~50-style private surface shared by every TUI mode, and exporting it to
-// serve a leaf would give every leaf a theme edge that the intended import
-// graph does not draw. Only the attributes this package itself renders are
-// duplicated here.
+// Command styles stay local while deriving their colors from the shared palette.
 var (
-	styleSelected  = lipgloss.NewStyle().Bold(true).Reverse(true)
-	styleDim       = lipgloss.NewStyle().Faint(true)
-	styleSearch    = lipgloss.NewStyle().Bold(true)
-	styleFooter    = lipgloss.NewStyle().Faint(true)
-	styleHeader    = lipgloss.NewStyle().Bold(true)
+	styleSelected  = theme.Selected()
+	styleDim       = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
+	styleSearch    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Primary)).Bold(true)
+	styleFooter    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
+	styleHeader    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Secondary)).Bold(true)
 	styleFooterKey = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#4ec9b0")).
+			Foreground(lipgloss.Color(theme.Primary)).
 			Bold(true)
 
 	// styleOverlayBox wraps the palette and actions popups in a rounded
 	// border with the de-facto accent teal. Padding adds a single column of
 	// breathing room on each side; combined with the border, the box adds 2
 	// columns + 2 rows of chrome to inner content.
-	styleOverlayBox = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#4ec9b0")).
-			Padding(0, 1)
+	styleOverlayBox = theme.Popup()
 
 	// styleFooterUnavailable renders actions that do not apply to the current
 	// cursor row. The dim grey foreground keeps the key visible while signaling
 	// that pressing it would be a no-op.
-	styleFooterUnavailable = lipgloss.NewStyle().Foreground(lipgloss.Color("#5a5a5a"))
+	styleFooterUnavailable = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Disabled))
 )
 
 // renderSelectedRow normalizes a selectable row to one continuous selection
 // span. Row renderers may compose semantic foreground, faint, and reset
 // sequences for their normal state; retaining those sequences underneath a
-// reverse-video wrapper can terminate the selection early and leave stale
-// inverse cells behind when the cursor moves. The selected copy therefore keeps
+// background wrapper can terminate the selection early and leave stale
+// tinted cells behind when the cursor moves. The selected copy therefore keeps
 // only its visible content before applying the shared selection style.
 func renderSelectedRow(row string) string {
 	return styleSelected.Render(ansi.Strip(row))

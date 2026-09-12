@@ -5,6 +5,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/sglavoie/agentmux/tui/theme"
 )
 
 // The overlays in this package are standalone Bubble Tea programs: each one
@@ -13,28 +14,24 @@ import (
 // the header, dim, and error styles, the selection wrapper, and the footer
 // binding row — without needing the root TUI itself.
 //
-// These are deliberate private copies rather than a shared style dependency.
-// Exporting the root theme to serve three pickers would turn a private
-// vocabulary of ~50 styles into a public contract, and pulling the theme down
-// into a leaf would make every other TUI leaf depend on it. Six lipgloss
-// attributes and two one-line helpers are the cheaper side of that trade.
+// Their styles remain local, with colors derived from the shared palette.
 
 var (
-	styleSelected  = lipgloss.NewStyle().Bold(true).Reverse(true)
-	styleError     = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
-	styleDim       = lipgloss.NewStyle().Faint(true)
-	styleHeader    = lipgloss.NewStyle().Bold(true)
-	styleFooter    = lipgloss.NewStyle().Faint(true)
+	styleSelected  = theme.Selected()
+	styleError     = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Red))
+	styleDim       = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
+	styleHeader    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Secondary)).Bold(true)
+	styleFooter    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
 	styleFooterKey = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#4ec9b0")).
+			Foreground(lipgloss.Color(theme.Primary)).
 			Bold(true)
 )
 
 // renderSelectedRow normalizes a selectable row to one continuous selection
 // span. Row renderers may compose semantic foreground, faint, and reset
 // sequences for their normal state; retaining those sequences underneath a
-// reverse-video wrapper can terminate the selection early and leave stale
-// inverse cells behind when the cursor moves. The selected copy therefore
+// background wrapper can terminate the selection early and leave stale
+// tinted cells behind when the cursor moves. The selected copy therefore
 // keeps only its visible content before applying the shared selection style.
 func renderSelectedRow(row string) string {
 	return styleSelected.Render(ansi.Strip(row))

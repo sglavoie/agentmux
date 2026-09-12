@@ -35,6 +35,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/sglavoie/agentmux/tui/layout"
+	"github.com/sglavoie/agentmux/tui/theme"
 )
 
 // HealthState is what is currently known about one health source.
@@ -576,9 +577,9 @@ func healthPlural(n int) string {
 // ── details overlay ──────────────────────────────────────────────────────────
 
 var (
-	styleHealthOK      = lipgloss.NewStyle().Foreground(lipgloss.Color("#4ec9b0"))
-	styleHealthWarning = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
-	styleHealthFailed  = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
+	styleHealthOK      = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Primary))
+	styleHealthWarning = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber))
+	styleHealthFailed  = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Red))
 )
 
 func healthStateStyle(s HealthState) lipgloss.Style {

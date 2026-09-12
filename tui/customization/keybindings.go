@@ -111,8 +111,8 @@ func (m keybindingsModel) bodyRows() []string {
 			if padding < 1 {
 				padding = 1
 			}
-			line := "    " + key + strings.Repeat(" ", padding) + a.Description
-			logical = append(logical, styleDim.Render(line))
+			line := styleFooterKey.Render("    "+key) + styleDim.Render(strings.Repeat(" ", padding)+a.Description)
+			logical = append(logical, line)
 		}
 	}
 

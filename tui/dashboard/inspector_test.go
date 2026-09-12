@@ -307,6 +307,16 @@ func TestInspectorClipsStyledAndWideOutput(t *testing.T) {
 	}
 }
 
+func TestThemeLeavesCapturedANSIUntouched(t *testing.T) {
+	captured := "\x1b[31magent red\x1b[0m"
+	lines := inspectorOutputLines(InspectorInput{
+		Width: 40, Content: InspectorReady, Output: []string{captured},
+	}, 1)
+	if len(lines) != 1 || lines[0] != captured {
+		t.Fatalf("captured ANSI was restyled: %q", lines)
+	}
+}
+
 // TestInspectorWatchdogWarningMatchesTheActivityColumn guards the one rule this
 // pane shares with the queue row. Two copies of the 80% band would be two
 // moments a window could start looking stale in one place and not the other.

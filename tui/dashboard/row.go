@@ -294,11 +294,11 @@ func renderQueueName(q QueueRow, width int, pad bool) string {
 	var text string
 	var used int
 	if qualifier != "" && layout.Width(name)+layout.Width(qualifier) <= width {
-		text = name + styleDim.Render(qualifier)
+		text = styleText.Render(name) + styleDim.Render(qualifier)
 		used = layout.Width(name) + layout.Width(qualifier)
 	} else {
 		cut := layout.Truncate(name, width, "…")
-		text = cut
+		text = styleText.Render(cut)
 		used = layout.Width(cut)
 	}
 	if pad && used < width {

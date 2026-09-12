@@ -15,72 +15,64 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/tui/layout"
+	"github.com/sglavoie/agentmux/tui/theme"
 )
 
-const footerStripeBackgroundHex = "#2b2b2b"
+const footerStripeBackgroundHex = theme.Footer
 
 var (
-	styleSelected  = lipgloss.NewStyle().Bold(true).Reverse(true)
-	styleError     = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
-	styleDim       = lipgloss.NewStyle().Faint(true)
-	styleSearch    = lipgloss.NewStyle().Bold(true)
-	styleFooter    = lipgloss.NewStyle().Faint(true)
-	styleHeader    = lipgloss.NewStyle().Bold(true)
+	styleSelected  = theme.Selected()
+	styleError     = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Red))
+	styleDim       = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
+	styleSearch    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Primary)).Bold(true)
+	styleFooter    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
+	styleHeader    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Secondary)).Bold(true)
 	styleFooterKey = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#4ec9b0")).
+			Foreground(lipgloss.Color(theme.Primary)).
 			Bold(true)
 
-	// styleOverlayBox wraps overlay popups (chip picker, delete-choice
-	// prompt) in a rounded border with the de-facto accent teal. Padding
-	// adds a single column of breathing room on each side; combined with
-	// the border, the box adds 2 columns + 2 rows of chrome to inner
-	// content.
-	styleOverlayBox = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#4ec9b0")).
-			Padding(0, 1)
+	// Popups retain their existing one-column padding and border geometry.
+	styleOverlayBox = theme.Popup()
 
 	// styleFooterUnavailableKey renders actions that do not apply to the current
 	// cursor row. The dim grey foreground keeps the key visible while signaling
 	// that pressing it would be a no-op.
 	styleFooterUnavailableKey = lipgloss.NewStyle().
-					Foreground(lipgloss.Color("#5a5a5a")).
+					Foreground(lipgloss.Color(theme.Disabled)).
 					Bold(true)
 
 	// Status bar styles own the fixed bottom row. Each style sets a
 	// background so the padded row reads as a full-width mode/status strip.
-	styleStatusIdle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#d4d4d4")).
-			Background(lipgloss.Color("#1f2933"))
+	styleStatusIdle = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Text)).Background(lipgloss.Color(theme.Footer))
 	styleStatusInfo = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#d8f3ff")).
-			Background(lipgloss.Color("#12313b"))
+			Foreground(lipgloss.Color(theme.Secondary)).
+			Background(lipgloss.Color(theme.Footer))
 	styleStatusSuccess = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#d8ffe8")).
-				Background(lipgloss.Color("#123927"))
+				Foreground(lipgloss.Color(theme.Primary)).
+				Background(lipgloss.Color(theme.Footer))
 	styleStatusWarning = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#fff1b8")).
-				Background(lipgloss.Color("#3a2d05"))
+				Foreground(lipgloss.Color(theme.Amber)).
+				Background(lipgloss.Color(theme.Footer))
 	styleStatusError = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#ffe1e1")).
-				Background(lipgloss.Color("#3a1515"))
+				Foreground(lipgloss.Color(theme.Red)).
+				Background(lipgloss.Color(theme.Footer))
 
 	// Health pip and deprecation banner styles. OK is the active teal, Warn the
 	// attention amber, and Err the inline error red — the same three accents the
 	// rest of the dashboard states are painted in. styleBanner is a
 	// yellow-foreground accent so it reads as a warning without consuming a full
 	// background block.
-	stylePipOK   = lipgloss.NewStyle().Foreground(lipgloss.Color("#4ec9b0"))
-	stylePipWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
-	stylePipErr  = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
-	styleBanner  = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00")).Bold(true)
+	stylePipOK   = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Primary))
+	stylePipWarn = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber))
+	stylePipErr  = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Red))
+	styleBanner  = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber)).Bold(true)
 )
 
 // renderSelectedRow normalizes a selectable row to one continuous selection
 // span. Row renderers may compose semantic foreground, faint, and reset
 // sequences for their normal state; retaining those sequences underneath a
-// reverse-video wrapper can terminate the selection early and leave stale
-// inverse cells behind when the cursor moves. The selected copy therefore
+// background wrapper can terminate the selection early and leave stale
+// tinted cells behind when the cursor moves. The selected copy therefore
 // keeps only its visible content before applying the shared selection style.
 func renderSelectedRow(row string) string {
 	return styleSelected.Render(ansi.Strip(row))
