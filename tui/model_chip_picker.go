@@ -21,6 +21,7 @@ const (
 	chipPickerHarness chipPickerKind = iota
 	chipPickerProfile
 	chipPickerProject
+	chipPickerMessageSource
 )
 
 // chipPickerUnknownProjectValue is an internal option value whose display
@@ -62,6 +63,9 @@ func (m Model) enterChipPicker(kind chipPickerKind) (tea.Model, tea.Cmd) {
 			opts = projectTitles(m)
 			current = singleChipValue(m.filterProject)
 		}
+	case chipPickerMessageSource:
+		opts = []string{"user", "harness"}
+		current = m.filterMessageSource
 	}
 	options := make([]string, 0, len(opts)+1)
 	options = append(options, "")
@@ -193,6 +197,8 @@ func (m Model) handleChipPickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 			m.filterProfile = next
 		case chipPickerProject:
 			m.filterProject = next
+		case chipPickerMessageSource:
+			m.filterMessageSource = selected
 		}
 		m.mode = ModeSessionSearch
 		return m, m.dispatchSessionSearch()

@@ -561,7 +561,7 @@ func (m Model) handleViewerMessagesLoaded(msg viewerMessagesLoadedMsg) (tea.Mode
 	m.viewerLoading = false
 	m.viewerLoadErr = msg.err
 	m.viewerMessages = msg.messages
-	m.viewerMatchLines = history.ComputeMatches(m.viewerMessages, m.sessionQuery)
+	m.viewerMatchLines = history.ComputeMatchesForSource(m.viewerMessages, m.sessionQuery, m.filterMessageSource)
 	m.viewerMatchIdx = 0
 	m.viewerScroll = 0
 	m.viewerCursor = 0

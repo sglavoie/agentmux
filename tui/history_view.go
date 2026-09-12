@@ -101,6 +101,7 @@ func historySearchInput(m Model) history.SearchInput {
 		HarnessChip:       singleChipValue(m.filterHarness),
 		ProfileChip:       singleChipValue(m.filterProfile),
 		ProjectChip:       singleChipValue(m.filterProject),
+		MessageSourceChip: m.filterMessageSource,
 		ProfileColors:     dashboard.ProfileColorMap(m.cfg),
 		ContextualMeta:    m.contextualSessionMeta,
 	}

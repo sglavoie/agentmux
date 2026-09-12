@@ -43,6 +43,8 @@ func renderChipPicker(m Model) string {
 		header = "Choose profile"
 	case chipPickerProject:
 		header = "Choose project"
+	case chipPickerMessageSource:
+		header = "Choose message source"
 	}
 	sb.WriteString(styleHeader.Render(header))
 	sb.WriteString(styleDim.Render("  / to filter"))
@@ -120,6 +122,8 @@ func chipPickerPluralLabel(kind chipPickerKind) string {
 		return "profiles"
 	case chipPickerProject:
 		return "projects"
+	case chipPickerMessageSource:
+		return "message sources"
 	}
 	return "options"
 }
@@ -152,6 +156,8 @@ func currentChipValue(m Model) string {
 			return planProjectFilterOption(m.planFilterProject)
 		}
 		return singleChipValue(m.filterProject)
+	case chipPickerMessageSource:
+		return m.filterMessageSource
 	}
 	return ""
 }

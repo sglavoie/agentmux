@@ -263,7 +263,41 @@ func messageFromRecord(rec claudeRecord) (Message, bool) {
 		role = rec.Type
 	}
 	handoffText := flattenClaudeHandoffContent(rec.Message.Content)
-	return Message{Role: role, Text: text, Timestamp: ts, handoffText: &handoffText}, true
+	msg := Message{Role: role, Text: text, Timestamp: ts, handoffText: &handoffText}
+	if rec.Type == "user" {
+		userText, harnessText := splitClaudeUserContent(rec.Message.Content)
+		msg.sourceUserText, msg.sourceHarnessText = &userText, &harnessText
+	} else {
+		empty := ""
+		msg.sourceUserText, msg.sourceHarnessText = &empty, &text
+	}
+	return msg, true
+}
+
+func splitClaudeUserContent(raw json.RawMessage) (string, string) {
+	var plain string
+	if json.Unmarshal(raw, &plain) == nil {
+		return plain, ""
+	}
+	var blocks []map[string]any
+	if json.Unmarshal(raw, &blocks) != nil {
+		return "", ""
+	}
+	var user, harness strings.Builder
+	for _, block := range blocks {
+		switch blockType, _ := block["type"].(string); blockType {
+		case "text":
+			if value, ok := block["text"].(string); ok {
+				appendClaudeContentLine(&user, value)
+			}
+		case "thinking", "tool_use", "tool_result":
+			encoded, err := json.Marshal([]map[string]any{block})
+			if err == nil {
+				appendClaudeContentLine(&harness, flattenClaudeContent(encoded))
+			}
+		}
+	}
+	return user.String(), harness.String()
 }
 
 // flattenClaudeHandoffContent retains ordinary visible text while excluding

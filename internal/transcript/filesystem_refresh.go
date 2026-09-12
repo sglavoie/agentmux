@@ -147,6 +147,10 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 					mergeWarning = errors.Join(mergeWarning, fmt.Errorf("writing transcript search sidecar %s: %w", key, err))
 				}
 				meta.SearchText = ""
+			} else if exists && (existing.FileSize != meta.FileSize || !existing.FileModTime.Equal(meta.FileModTime)) {
+				// A changed transcript with no searchable text must not retain
+				// either a legacy or source-aware sidecar from its old contents.
+				mergeWarning = errors.Join(mergeWarning, i.store.Delete(key))
 			}
 			if !exists || !reflect.DeepEqual(existing, meta) {
 				i.entries[key] = meta

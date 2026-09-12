@@ -40,10 +40,11 @@ type SearchInput struct {
 	// row above the list. Empty collapses the row.
 	Path string
 
-	// Chip values for the harness/profile/project filters. Empty means "any".
-	HarnessChip string
-	ProfileChip string
-	ProjectChip string
+	// Chip values for the harness/profile/project/message filters. Empty means "any".
+	HarnessChip       string
+	ProfileChip       string
+	ProjectChip       string
+	MessageSourceChip string
 
 	// ProfileColors maps a profile name to its palette color name.
 	ProfileColors map[string]string
@@ -155,6 +156,11 @@ func (in SearchInput) renderChips() string {
 		parts = append(parts, styleChip.Render("[r] project: "+v))
 	} else {
 		parts = append(parts, styleDim.Render("[r] project: any"))
+	}
+	if v := in.MessageSourceChip; v != "" {
+		parts = append(parts, styleChip.Render("[m] message: "+v))
+	} else {
+		parts = append(parts, styleDim.Render("[m] message: any"))
 	}
 	chips := "  " + strings.Join(parts, "   ")
 	if in.Width > 0 {

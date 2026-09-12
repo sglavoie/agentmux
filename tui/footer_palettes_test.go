@@ -61,7 +61,7 @@ func TestFooterHintPalettesAdvertiseModeHints(t *testing.T) {
 		{
 			name:    "session search",
 			palette: sessionSearchFooterPalette,
-			wants: []string{"/ filter", "h/p/r chips", "enter view", "c continue", "f fork",
+			wants: []string{"/ filter", "h/p/r/m chips", "enter view", "c continue", "f fork",
 				"w worktree", "H handoff", "E edit handoff", "d delete", "i ID", "Y path", "esc back"},
 		},
 		{
@@ -170,11 +170,11 @@ var footerHintCharacterizations = []struct {
 	want    []string
 }{
 	{
-		name:    "session search/200",
+		name:    "session search/210",
 		entries: sessionSearchFooterPalette,
-		width:   200,
+		width:   210,
 		want: []string{
-			"  / filter · h/p/r chips · enter view · c continue · f fork · w worktree · H handoff · E edit handoff · d delete · i ID · Y path · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
+			"  / filter · h/p/r/m chips · enter view · c continue · f fork · w worktree · H handoff · E edit handoff · d delete · i ID · Y path · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
 		},
 	},
 	{
@@ -182,7 +182,7 @@ var footerHintCharacterizations = []struct {
 		entries: sessionSearchFooterPalette,
 		width:   90,
 		want: []string{
-			"  / filter · h/p/r chips · enter view · c continue · f fork · w worktree · H handoff",
+			"  / filter · h/p/r/m chips · enter view · c continue · f fork · w worktree · H handoff",
 			"  E edit handoff · d delete · i ID · Y path · esc back · j/k up/down · ? more",
 		},
 	},
@@ -200,7 +200,7 @@ var footerHintCharacterizations = []struct {
 		entries: sessionSearchFooterPalette,
 		width:   0,
 		want: []string{
-			"  / filter · h/p/r chips · enter view · c continue · f fork · w worktree · H handoff · E edit handoff · d delete · i ID · Y path · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
+			"  / filter · h/p/r/m chips · enter view · c continue · f fork · w worktree · H handoff · E edit handoff · d delete · i ID · Y path · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
 		},
 	},
 	{

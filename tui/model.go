@@ -374,18 +374,19 @@ type Model struct {
 	// fields hold the current harness/profile/project filters. sessionLoading
 	// covers cache/query result loading; sessionRefreshInFlight tracks the
 	// slower background scan so warmed rows can remain visible while it runs.
-	sessionQuery      string
-	sessionResults    []transcript.Result
-	sessionCursor     int
-	sessionOffset     int
-	sessionSearchMode bool
-	sessionLoading    bool
-	sessionRefreshErr error
-	sessionSearchErr  error
-	sessionSearchSeq  int      // bumps on each Search dispatch; stale msgs are dropped
-	filterHarness     []string // chip filter; "" means "no filter"
-	filterProfile     []string
-	filterProject     []string
+	sessionQuery        string
+	sessionResults      []transcript.Result
+	sessionCursor       int
+	sessionOffset       int
+	sessionSearchMode   bool
+	sessionLoading      bool
+	sessionRefreshErr   error
+	sessionSearchErr    error
+	sessionSearchSeq    int      // bumps on each Search dispatch; stale msgs are dropped
+	filterHarness       []string // chip filter; "" means "no filter"
+	filterProfile       []string
+	filterProject       []string
+	filterMessageSource string // "" (any), "user", or "harness"
 
 	// chip picker overlay (ModeChipPicker) opened from ModeSessionSearch or
 	// ModePlanSearch to choose a categorical filter. chipPickerKind selects

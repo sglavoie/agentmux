@@ -1,6 +1,7 @@
 package transcript
 
 import (
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"log/slog"
@@ -10,15 +11,62 @@ import (
 )
 
 // Query describes a search request against the transcript index. Empty
-// slices mean "no filter on that dimension". MainOnly excludes automated,
-// unknown, and unmigrated legacy entries. An empty Text returns the filtered
-// metadata with no message-level content scan.
+// slices mean "no filter on that dimension". MessageSource narrows text
+// matches to user prompts or harness output; it does not affect an empty
+// text query. MainOnly excludes automated, unknown, and unmigrated legacy
+// entries. An empty Text returns metadata with no message-level scan.
 type Query struct {
-	Text     string
-	Harness  []string
-	Profile  []string
-	Project  []string
-	MainOnly bool
+	Text          string
+	MessageSource string // "", "any", "user", or "harness"
+	Harness       []string
+	Profile       []string
+	Project       []string
+	MainOnly      bool
+}
+
+const sourceSidecarPrefix = "AMXSEARCH2\n"
+
+type sourceSidecar struct {
+	Version int    `json:"version"`
+	Any     string `json:"any"`
+	User    string `json:"user"`
+	Harness string `json:"harness"`
+}
+
+func decodeSourceSidecar(raw string) (sourceSidecar, bool) {
+	if !strings.HasPrefix(raw, sourceSidecarPrefix) {
+		return sourceSidecar{}, false
+	}
+	var data sourceSidecar
+	if json.Unmarshal([]byte(strings.TrimPrefix(raw, sourceSidecarPrefix)), &data) != nil || data.Version != 2 {
+		return sourceSidecar{}, false
+	}
+	return data, true
+}
+
+func sourceSidecarFromMessages(msgs []Message) sourceSidecar {
+	var user, harness strings.Builder
+	for _, msg := range msgs {
+		appendSearchText(&user, msg.SearchTextForSource("user"))
+		appendSearchText(&harness, msg.SearchTextForSource("harness"))
+	}
+	return sourceSidecar{Version: 2, Any: messagesSearchText(msgs), User: user.String(), Harness: harness.String()}
+}
+
+func encodeSourceSidecar(data sourceSidecar) string {
+	encoded, _ := json.Marshal(data)
+	return sourceSidecarPrefix + string(encoded)
+}
+
+func sidecarText(data sourceSidecar, source string) string {
+	switch source {
+	case "user":
+		return data.User
+	case "harness":
+		return data.Harness
+	default:
+		return data.Any
+	}
 }
 
 // Result is one matching session. Matches counts the total number of
@@ -38,8 +86,8 @@ type Result struct {
 // hide them.
 //
 // Filtering happens in two passes: first the cheap chip filters against
-// the in-memory index, then (only when Text is non-empty) a JSONL scan
-// of each survivor via the matching Reader.ReadMessages. Per-session
+// the in-memory index, then (only when Text is non-empty) a sidecar search
+// or JSONL scan of each survivor via the matching Reader.ReadMessages. Per-session
 // read errors are logged at debug level and the session is dropped from
 // the results rather than aborting the whole query.
 func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
@@ -54,6 +102,13 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 	})
 
 	needle := strings.ToLower(strings.TrimSpace(q.Text))
+	source := q.MessageSource
+	if source == "" {
+		source = "any"
+	}
+	if source != "any" && source != "user" && source != "harness" {
+		return nil, errors.New("transcript: invalid message source")
+	}
 	results := make([]Result, 0, len(metas))
 
 	if needle == "" {
@@ -70,17 +125,25 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 		// preference; the result still needs the sidecar or reader scan below so
 		// Matches stays exact.
 		snippetPreview := ""
-		if m.Snippet != "" && strings.Contains(strings.ToLower(m.Snippet), needle) {
+		if source == "any" && m.Snippet != "" && strings.Contains(strings.ToLower(m.Snippet), needle) {
 			snippetPreview = m.Snippet
 		}
-		// Fast path: per-session sidecars hold the lowercased concatenated
-		// transcript body. Substring search and match counting avoid JSONL
-		// reopen/decoding while keeping the in-memory index metadata-only.
+		// Fast path: per-session sidecars hold lowercased transcript text.
+		// Version 2 also stores source-specific text; legacy sidecars are
+		// upgraded when a source-filtered search first needs them.
 		key := IndexKey(m.Harness, m.ID)
 		searchText := m.SearchText
 		var err error
-		if searchText == "" {
+		if searchText == "" || source != "any" {
 			searchText, err = idx.ReadSearchText(key)
+		}
+		if err == nil {
+			if data, ok := decodeSourceSidecar(searchText); ok {
+				searchText = sidecarText(data, source)
+			} else if source != "any" || strings.HasPrefix(searchText, sourceSidecarPrefix) {
+				// Legacy sidecars lack source boundaries; rebuild once.
+				err = fs.ErrNotExist
+			}
 		}
 		if err == nil {
 			count, preview := countMatchesInSearchText(searchText, needle)
@@ -115,11 +178,15 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 				"path", m.Path, "err", err)
 			continue
 		}
-		if err := idx.WriteSearchText(key, messagesSearchText(msgs)); err != nil {
+		updatedText := messagesSearchText(msgs)
+		if source != "any" {
+			updatedText = encodeSourceSidecar(sourceSidecarFromMessages(msgs))
+		}
+		if err := idx.WriteSearchText(key, updatedText); err != nil {
 			slog.Debug("transcript.search: sidecar repair failed",
 				"path", idx.SearchTextPath(key), "err", err)
 		}
-		count, preview := countMatches(msgs, needle)
+		count, preview := countMatchesForSource(msgs, needle, source)
 		if count == 0 {
 			continue
 		}
@@ -131,6 +198,22 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 
 	sortResults(results)
 	return results, nil
+}
+
+func countMatchesForSource(msgs []Message, needle, source string) (int, string) {
+	if source == "any" {
+		return countMatches(msgs, needle)
+	}
+	var total int
+	var preview string
+	for _, msg := range msgs {
+		count, line := countMatchesInSearchText(strings.ToLower(msg.SearchTextForSource(source)), needle)
+		total += count
+		if preview == "" && count > 0 {
+			preview = line
+		}
+	}
+	return total, preview
 }
 
 func messagesSearchText(msgs []Message) string {

@@ -124,6 +124,7 @@ func (m Model) enterAllSessionSearch() (tea.Model, tea.Cmd) {
 	m.filterHarness = nil
 	m.filterProfile = nil
 	m.filterProject = nil
+	m.filterMessageSource = ""
 	m.sessionResults = nil
 	m.sessionSearchSeq++
 
@@ -150,6 +151,7 @@ func (m Model) enterSessionSearchForProject(project string) (tea.Model, tea.Cmd)
 	m.filterHarness = nil
 	m.filterProfile = nil
 	m.filterProject = []string{project}
+	m.filterMessageSource = ""
 
 	updated, cmd := m.enterSessionSearch()
 	m = updated.(Model)
@@ -282,6 +284,8 @@ func (m Model) handleSessionSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 		return m.enterChipPicker(chipPickerProfile)
 	case "r":
 		return m.enterChipPicker(chipPickerProject)
+	case "m":
+		return m.enterChipPicker(chipPickerMessageSource)
 	case keyEnter:
 		if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
 			return m, nil
@@ -416,7 +420,7 @@ func loadTranscriptCache() (*transcript.Index, map[string]transcript.Reader, err
 }
 
 func sessionQueryIsEmpty(q transcript.Query) bool {
-	return q.Text == "" && len(q.Harness) == 0 && len(q.Profile) == 0 && len(q.Project) == 0
+	return q.Text == "" && len(q.Harness) == 0 && len(q.Profile) == 0 && len(q.Project) == 0 && (q.MessageSource == "" || q.MessageSource == "any")
 }
 
 func buildTranscriptReaders() map[string]transcript.Reader {
@@ -504,11 +508,12 @@ func refreshAndPruneSessions(idx *transcript.Index, cfg *config.Config, readers 
 // transcript.Query value the search engine consumes.
 func (m Model) currentSessionQuery() transcript.Query {
 	return transcript.Query{
-		Text:     m.sessionQuery,
-		Harness:  m.filterHarness,
-		Profile:  m.filterProfile,
-		Project:  m.filterProject,
-		MainOnly: true,
+		Text:          m.sessionQuery,
+		MessageSource: m.filterMessageSource,
+		Harness:       m.filterHarness,
+		Profile:       m.filterProfile,
+		Project:       m.filterProject,
+		MainOnly:      true,
 	}
 }
 

@@ -172,6 +172,36 @@ type Message struct {
 	// contain hidden reasoning or tool payloads. A nil value means Text is
 	// already safe for a normal user/assistant transcript handoff.
 	handoffText *string
+	// Claude user records can mix a prompt with tool results. These fields
+	// preserve the source split without changing the displayed Text.
+	sourceUserText    *string
+	sourceHarnessText *string
+}
+
+// SearchTextForSource returns the text eligible for a message-source search.
+// An empty source has the same meaning as "any".
+func (m Message) SearchTextForSource(source string) string {
+	if source == "" || source == "any" {
+		return m.Text
+	}
+	if source == "user" {
+		if m.sourceUserText != nil {
+			return *m.sourceUserText
+		}
+		if strings.EqualFold(m.Role, "user") {
+			return m.Text
+		}
+		return ""
+	}
+	if source == "harness" {
+		if m.sourceHarnessText != nil {
+			return *m.sourceHarnessText
+		}
+		if !strings.EqualFold(m.Role, "user") {
+			return m.Text
+		}
+	}
+	return ""
 }
 
 // TextForHandoff returns only content suitable for a generated context pack.

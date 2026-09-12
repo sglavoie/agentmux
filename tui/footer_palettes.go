@@ -69,7 +69,7 @@ func hasPresentWorktree(m Model) bool {
 
 var sessionSearchFooterPalette = []footerEntry{
 	{"/", "filter", footerSectionApp, footerAlways, footerPrioritySecondary},
-	{"h/p/r", "chips", footerSectionApp, footerAlways, footerPrioritySecondary},
+	{"h/p/r/m", "chips", footerSectionApp, footerAlways, footerPrioritySecondary},
 	{"enter", "view", footerSectionRow, hasSessionResult, footerPriorityEssential},
 	{"c", "continue", footerSectionRow, hasSessionResult, footerPriorityPrimary},
 	{"f", "fork", footerSectionRow, hasSessionResult, footerPriorityPrimary},
