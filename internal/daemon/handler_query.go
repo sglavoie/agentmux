@@ -19,6 +19,8 @@ func (h *Handler) handleStateQuery() protocol.Response {
 			Looping:     st.Looping,
 			LastAction:  st.LastAction,
 			GuardAction: st.GuardAction,
+			AgentTurn:   st.Reducer.AgentTurn(now),
+			ASLPhases:   st.Reducer.ASLPhases(),
 			// The durable bit is projected as-is rather than recomputed: the
 			// daemon's publish path and focus observation are its only writers,
 			// so a query that derived it again would be a second opinion.

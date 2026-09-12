@@ -10,7 +10,39 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/session"
 )
+
+func TestOverviewRetrievesIndependentAgentAndASLState(t *testing.T) {
+	snapshot := protocol.WindowStateSnapshot{
+		IconState: "bolt", Looping: true, ASLPhases: []string{"turn"},
+		AgentTurn: &protocol.AgentTurnSnapshot{IconState: "stop", FinishedAt: 100},
+	}
+	stubLocalKittySocket(t, localKittySocket)
+	stubStateQuery(t, func() (protocol.Response, error) {
+		return protocol.Response{OK: true, States: map[int]protocol.WindowStateSnapshot{42: snapshot},
+			KittySnapshot: readySnapshot(managedWindows(7, 42, "scripts"), false)}, nil
+	})
+	client := &recordingKittyClient{}
+	msg := overviewOnce(t, client, 1, 0).(SessionsMsg)
+	s := msg.Sessions[0]
+	if s.State != "bolt" || !s.Looping || s.AgentTurn == nil || s.AgentTurn.IconState != "stop" || s.AgentTurn.FinishedAt != 100 || !reflect.DeepEqual(s.ASLPhases, []string{"turn"}) {
+		t.Fatalf("independent state lost during retrieval: %+v", s)
+	}
+	s.AgentTurn.IconState = "error"
+	s.ASLPhases[0] = "paused"
+	if snapshot.AgentTurn.IconState != "stop" || snapshot.ASLPhases[0] != "turn" {
+		t.Fatal("session shares mutable state with query response")
+	}
+	rows := []session.RunningSession{s}
+	ApplyDaemonStates(rows, map[int]protocol.WindowStateSnapshot{})
+	if rows[0].AgentTurn != nil || rows[0].ASLPhases != nil {
+		t.Fatal("missing window retained stale independent state")
+	}
+	if client.userVarWrites() != 0 {
+		t.Fatal("overview retrieval wrote to Kitty")
+	}
+}
 
 // These tests are about RefreshOverview, the read-only half of the same
 // retrieval the dashboard runs. Two properties are asserted throughout and are
@@ -467,7 +499,7 @@ func TestRefreshOverviewMatchesTheDashboardsSessionFacts(t *testing.T) {
 		t.Fatalf("topology differs:\n overview  = %+v\n dashboard = %+v",
 			overviewMsg.Topology, dashboardMsg.Topology)
 	}
-	if overviewMsg.States[42] != dashboardMsg.States[42] ||
+	if !reflect.DeepEqual(overviewMsg.States[42], dashboardMsg.States[42]) ||
 		overviewMsg.Watchdog[42] != dashboardMsg.Watchdog[42] ||
 		!overviewMsg.Activity[42].Equal(dashboardMsg.Activity[42]) {
 		t.Fatalf("forwarded daemon maps differ:\n overview  = %+v / %+v / %+v\n dashboard = %+v / %+v / %+v",

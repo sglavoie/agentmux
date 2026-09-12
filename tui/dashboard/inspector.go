@@ -35,6 +35,8 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/lipgloss/v2"
+
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -251,6 +253,12 @@ func inspectorTitleLine(in InspectorInput, s session.RunningSession) string {
 // anyone has looked — and it is exactly why an unread completion sits in Needs
 // you, so the pane describing the selection has to say it somewhere.
 func inspectorStatusLine(in InspectorInput, s session.RunningSession, group int) string {
+	return styledStatusLine(s, group, in.Now, emphasisStyle(StatusEmphasis(s, group)))
+}
+
+// styledStatusLine keeps the status, unread notice, and clock shared while
+// allowing the overview to give completion and idleness their own emphasis.
+func styledStatusLine(s session.RunningSession, group int, now time.Time, style lipgloss.Style) string {
 	var line string
 	if unreadStop(s) {
 		line = styleUnreadNotice.Render(UnreadNoticeGlyph) + " "
@@ -259,9 +267,9 @@ func inspectorStatusLine(in InspectorInput, s session.RunningSession, group int)
 	if status == "" {
 		line += styleDim.Render(inspectorUnknown)
 	} else {
-		line += emphasisStyle(StatusEmphasis(s, group)).Render(status)
+		line += style.Render(status)
 	}
-	return line + styleDim.Render(metaSeparator+ElapsedText(s, group, in.Now))
+	return line + styleDim.Render(metaSeparator+ElapsedText(s, group, now))
 }
 
 // inspectorLabelled draws one labelled metadata line: a dim label in its fixed

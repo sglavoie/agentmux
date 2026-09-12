@@ -9,10 +9,58 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
+
+func TestCompactSeparatesAgentCompletionFromRunPhase(t *testing.T) {
+	for phase, label := range map[string]string{
+		"paused": "paused", "turn": "running", "verification": "verifying",
+		"between": "between turns", "waiting": "waiting",
+	} {
+		t.Run(phase, func(t *testing.T) {
+			s := inspectorSession()
+			s.Looping = true
+			s.ASLPhases = []string{phase}
+			s.AgentTurn = &protocol.AgentTurnSnapshot{IconState: "stop", FinishedAt: inspectorNow.Add(-42 * time.Second).Unix()}
+			lines := renderCompactLines(t, CompactInput{Content: InspectorReady, Session: s})
+			if got, want := lines[compactStatusRow], "Done · 0:42 | ASL "+label; got != want {
+				t.Fatalf("status = %q; want %q", got, want)
+			}
+			if s.State != "bolt" || s.AgentTurn.IconState != "stop" {
+				t.Fatal("rendering mutated the session")
+			}
+			s.AgentTurn = &protocol.AgentTurnSnapshot{IconState: "bolt"}
+			lines = renderCompactLines(t, CompactInput{Content: InspectorReady, Session: s})
+			if strings.Contains(lines[compactStatusRow], "Done") || !strings.Contains(lines[compactStatusRow], "Working") {
+				t.Fatalf("resumed agent still looks done: %s", lines[compactStatusRow])
+			}
+		})
+	}
+}
+
+func TestCompactDoesNotCallASLActivityAgentWork(t *testing.T) {
+	s := inspectorSession()
+	s.Looping = true
+	s.ASLPhases = []string{"turn"}
+	s.AgentTurn = &protocol.AgentTurnSnapshot{}
+	lines := renderCompactLines(t, CompactInput{Content: InspectorReady, Session: s})
+	if got := lines[compactStatusRow]; got != "Idle · — | ASL running" {
+		t.Fatalf("status = %q", got)
+	}
+	// Older daemons cannot separate the facts. Preserve their aggregate status
+	// and say only that ASL is attached, without inventing a phase or completion.
+	s.AgentTurn, s.ASLPhases = nil, nil
+	lines = renderCompactLines(t, CompactInput{Content: InspectorReady, Session: s})
+	if got := lines[compactStatusRow]; got != "Working · 0:42 | ASL" {
+		t.Fatalf("legacy status = %q", got)
+	}
+	for _, width := range []int{1, 5, 20, 46} {
+		renderCompactLines(t, CompactInput{Width: width, Content: InspectorReady, Session: s})
+	}
+}
 
 func compactInput(in CompactInput) CompactInput {
 	if in.Width == 0 {

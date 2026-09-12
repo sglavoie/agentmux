@@ -52,6 +52,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/tui/commands"
 )
@@ -579,6 +580,44 @@ func windowRange(first, count int) []int {
 // every other scenario assumes: eleven sessions across three profiles and eleven
 // projects, read through the daemon's snapshot, laid out four to a page, and
 // drawn with the first page's four reads out and nothing else.
+func TestAcceptanceCompletedAgentRemainsDoneDuringASLContinuation(t *testing.T) {
+	world := newKittyWorld(acceptanceTabs(1))
+	s := newStage(t, world, 120, 30, 0)
+	r := state.NewReducer(state.ReducerConfig{})
+	parent := protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:parent"}
+	run := protocol.SourceID{Kind: protocol.SourceASL, Key: "run"}
+	r.Apply(protocol.ReducerEvent{Source: parent, Action: "stop", Seq: 1, At: viewNow.Add(-42 * time.Second).Unix(), TurnID: "first"})
+	r.Apply(protocol.ReducerEvent{Source: run, Phase: state.ASLPhasePaused, Seq: 1, At: viewNow.Unix()})
+	query := commands.StateQuery
+	commands.StateQuery = func() (protocol.Response, error) {
+		resp, err := query()
+		effective := r.Reduce(s.now.Unix())
+		resp.States = map[int]protocol.WindowStateSnapshot{acceptanceWindowID(0): {
+			IconState: effective.Icon, Looping: effective.Looping,
+			AgentTurn: r.AgentTurn(s.now.Unix()), ASLPhases: r.ASLPhases(),
+		}}
+		return resp, err
+	}
+	s.deliver(jobTopology)
+	if frame := s.frame(); !strings.Contains(frame, "Done · 0:42 | ASL paused") {
+		t.Fatalf("completed agent hidden by paused run:\n%s", frame)
+	}
+	r.Apply(protocol.ReducerEvent{Source: run, Phase: state.ASLPhaseTurn, Seq: 2, At: viewNow.Unix() + 1})
+	s.refresh()
+	if frame := s.frame(); !strings.Contains(frame, "Done · 0:42 | ASL running") {
+		t.Fatalf("run heartbeat replaced agent completion:\n%s", frame)
+	}
+	s.resize(60, 15)
+	if frame := s.frame(); !strings.Contains(frame, "Done · 0:42 | ASL running") {
+		t.Fatalf("resizing lost independent status:\n%s", frame)
+	}
+	r.Apply(protocol.ReducerEvent{Source: parent, Action: "active", Seq: 2, At: viewNow.Unix() + 2, TurnID: "second"})
+	s.refresh()
+	if frame := s.frame(); strings.Contains(frame, "Done") || !strings.Contains(frame, "Working") {
+		t.Fatalf("new agent turn still appears done:\n%s", frame)
+	}
+}
+
 func TestAcceptanceTheSurfaceLoadsAWholeMultiProfileUniverse(t *testing.T) {
 	world := newKittyWorld(acceptanceTabs(11))
 	s := newStage(t, world, 120, 30, 0)

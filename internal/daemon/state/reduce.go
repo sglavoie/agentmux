@@ -1,8 +1,69 @@
 package state
 
 import (
+	"slices"
+
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
+
+// AgentTurn projects the agent's facts independently of ASL. It uses the same
+// precedence, acknowledgement and expiry rules as Reduce, but a live run cannot
+// hide a completed turn or supply agent activity of its own. This is a read-only
+// projection; tab icons and notification policy still use Reduce.
+func (r *Reducer) AgentTurn(now int64) *protocol.AgentTurnSnapshot {
+	if r == nil {
+		return nil
+	}
+	var best *sourceFact
+	bestPrec := -1
+	owner, hasOwner := r.CurrentInteractiveConversation(now)
+	for _, f := range r.facts {
+		if f.source.Kind == protocol.SourceASL {
+			continue
+		}
+		// A supervised pipe-mode worker can share this pane with the interactive
+		// agent. Its activity must not replace that agent's completed turn.
+		if hasOwner && f.source.Kind == protocol.SourceHarness && f.source.Key != owner.Harness+":"+owner.SessionID {
+			continue
+		}
+		if hasOwner && f.source.Kind == protocol.SourceSubagent && f.sessionID != owner.SessionID {
+			continue
+		}
+		icon := r.visibleIcon(f, now)
+		if icon == "" {
+			continue
+		}
+		prec := protocol.IconPrecedence(icon)
+		if prec > bestPrec || (prec == bestPrec && best != nil && moreRecent(f, best)) {
+			best, bestPrec = f, prec
+		}
+	}
+	out := &protocol.AgentTurnSnapshot{}
+	if best != nil {
+		out.IconState = r.visibleIcon(best, now)
+		if best.terminated {
+			out.FinishedAt = best.terminalAt
+		}
+	}
+	return out
+}
+
+// ASLPhases keeps all live runs visible, including paused runs and leases whose
+// icon was acknowledged. Deterministic, deduplicated output stays bounded by the
+// phase vocabulary rather than the number of runs attached to a window.
+func (r *Reducer) ASLPhases() []string {
+	if r == nil {
+		return nil
+	}
+	var phases []string
+	for _, f := range r.facts {
+		if f.source.Kind == protocol.SourceASL && f.leaseLive && f.phase != "" && !slices.Contains(phases, f.phase) {
+			phases = append(phases, f.phase)
+		}
+	}
+	slices.Sort(phases)
+	return phases
+}
 
 // moreRecent breaks a recency tie between two facts. Emitted timestamp is
 // comparable across sources, so it decides first. Facts in the same Unix second

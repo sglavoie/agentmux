@@ -364,6 +364,8 @@ func ApplyDaemonStates(sessions []session.RunningSession, states map[int]protoco
 		state, ok := states[sessions[i].WindowID]
 		if !ok {
 			sessions[i].State = ""
+			sessions[i].AgentTurn = nil
+			sessions[i].ASLPhases = nil
 			sessions[i].Looping = false
 			sessions[i].BusySince = time.Time{}
 			sessions[i].PresentationChangedAt = time.Time{}
@@ -374,6 +376,12 @@ func ApplyDaemonStates(sessions []session.RunningSession, states map[int]protoco
 			continue
 		}
 		sessions[i].State = state.IconState
+		sessions[i].AgentTurn = nil
+		if state.AgentTurn != nil {
+			turn := *state.AgentTurn
+			sessions[i].AgentTurn = &turn
+		}
+		sessions[i].ASLPhases = append([]string(nil), state.ASLPhases...)
 		sessions[i].Looping = state.Looping
 		sessions[i].Unseen = state.Unseen
 		sessions[i].Reason = state.Reason

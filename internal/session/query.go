@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/projectresolve"
@@ -15,16 +16,18 @@ type RunningSession struct {
 	TabNumber             int // 1-based physical position within the containing Kitty OS window
 	WindowID              int
 	Key                   string
-	Title                 string    // raw Kitty tab title (may include icons)
-	Base                  string    // title with all icons stripped (e.g., "api"; older tabs may still be "W:api")
-	State                 string    // "bolt", "stop", "key", "warning", "error", "subagent", "compact", "question", or ""
-	Looping               bool      // daemon-owned loop marker; title-derived only when the daemon is unreachable
-	BusySince             time.Time // daemon-owned start of the current active-class stretch; zero when the row is not busy
-	PresentationChangedAt time.Time // daemon-owned last visible icon/unseen transition; zero when unknown
-	Unseen                bool      // daemon-owned: the row came to rest on a turn the user has not looked at; false (seen) with no daemon
-	Reason                string    // daemon-owned harness prompt kind naming WHY a blocked row is blocked; empty when nothing is blocking it, when no screen probe labelled the prompt, and with no daemon
-	Branch                string    // daemon-owned short Git branch of the row's checkout; empty for a non-repository, a detached HEAD, a disabled/failed probe, and with no daemon
-	Dirty                 bool      // daemon-owned: the row's checkout has modified tracked files; independent of Branch, so a detached HEAD still reports it
+	Title                 string                      // raw Kitty tab title (may include icons)
+	Base                  string                      // title with all icons stripped (e.g., "api"; older tabs may still be "W:api")
+	State                 string                      // "bolt", "stop", "key", "warning", "error", "subagent", "compact", "question", or ""
+	Looping               bool                        // daemon-owned loop marker; title-derived only when the daemon is unreachable
+	AgentTurn             *protocol.AgentTurnSnapshot // agent work independently of ASL; nil with older/unavailable daemons
+	ASLPhases             []string                    // distinct live run phases, independent of AgentTurn
+	BusySince             time.Time                   // daemon-owned start of the current active-class stretch; zero when the row is not busy
+	PresentationChangedAt time.Time                   // daemon-owned last visible icon/unseen transition; zero when unknown
+	Unseen                bool                        // daemon-owned: the row came to rest on a turn the user has not looked at; false (seen) with no daemon
+	Reason                string                      // daemon-owned harness prompt kind naming WHY a blocked row is blocked; empty when nothing is blocking it, when no screen probe labelled the prompt, and with no daemon
+	Branch                string                      // daemon-owned short Git branch of the row's checkout; empty for a non-repository, a detached HEAD, a disabled/failed probe, and with no daemon
+	Dirty                 bool                        // daemon-owned: the row's checkout has modified tracked files; independent of Branch, so a detached HEAD still reports it
 	Starred               bool
 	Locked                bool
 	Muted                 bool

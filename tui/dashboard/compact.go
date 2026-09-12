@@ -12,16 +12,14 @@
 // supervision/lock/mute/watchdog line — are the ones asked of a session that has
 // already been picked, and the full inspector is where picking one leads.
 //
-// Everything else about the pane is deliberately the inspector's, not a second
-// opinion about it:
+// Layout and status vocabulary are shared with the inspector:
 //
 //   - The block is a FIXED three lines, for the reason the inspector's is fixed
 //     at six. A tile whose divider moved with its content would make a grid of
 //     them ripple every time any one session changed.
-//   - The status sentence, its emphasis, its clock, and its unread notice come
-//     from the same StatusText, StatusEmphasis, ElapsedText, and unreadStop the
-//     queue row and the inspector read. A tile that phrased `Needs permission`
-//     differently from the row that raised it would read as a different fact.
+//   - The status helpers are shared, but the tile projects agent work separately
+//     from ASL: a completed turn remains Done beside the run's phase. The full
+//     inspector and queue retain the window's aggregate state.
 //   - The five output situations are told apart by previewPlaceholder, shared
 //     with the inspector: loading, legitimately empty, failed, vanished, and no
 //     selection stay five answers here too.
@@ -39,6 +37,8 @@ package dashboard
 import (
 	"strings"
 	"time"
+
+	"charm.land/lipgloss/v2"
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -136,14 +136,78 @@ func compactMetaLines(in CompactInput) []string {
 		return lines
 	}
 	s := in.Session
-	group := StateGroup(s, in.LastActivity, in.IdleThreshold)
-
 	lines[compactTitleRow] = layout.StyledTruncate(compactTitleLine(in, s), in.Width, "…")
-	lines[compactStatusRow] = layout.StyledTruncate(
-		inspectorStatusLine(InspectorInput{Now: in.Now}, s, group), in.Width, "…")
+	lines[compactStatusRow] = layout.StyledTruncate(compactStatusLine(in), in.Width, "…")
 	lines[compactAgentRow] = layout.StyledTruncate(
 		styleDim.Render(joinDetailTokens(harnessLabel(s.Harness), s.EffectiveProfile())), in.Width, "…")
 	return lines
+}
+
+// compactStatusLine separates the agent's outcome from the supervising run.
+// The copy is local: the dashboard and tab still receive their aggregate state.
+func compactStatusLine(in CompactInput) string {
+	s := in.Session
+	group := StateGroup(s, in.LastActivity, in.IdleThreshold)
+	if turn := s.AgentTurn; turn != nil {
+		if s.State != turn.IconState {
+			s.Unseen = false // an aggregate unread bit cannot describe another fact
+			s.Reason = ""
+			s.BusySince = time.Time{}
+			s.PresentationChangedAt = time.Time{}
+		}
+		s.State = turn.IconState
+		if turn.FinishedAt > 0 {
+			s.PresentationChangedAt = time.Unix(turn.FinishedAt, 0)
+		}
+		group = StateGroup(s, in.LastActivity, in.IdleThreshold)
+		if s.State == "" {
+			group = idleGroup
+			s.PresentationChangedAt = time.Time{}
+		}
+	}
+	style := emphasisStyle(StatusEmphasis(s, group))
+	switch StatusText(s, group) {
+	case statusIdle:
+		style = lipgloss.NewStyle().Bold(true)
+	case statusDone:
+		style = accountStyle("green").Bold(true)
+	}
+	line := styledStatusLine(s, group, in.Now, style)
+	if run := compactASLStatus(in.Session); run != "" {
+		line += styleDim.Render(" | " + run)
+	}
+	return line
+}
+
+func compactASLStatus(s session.RunningSession) string {
+	var labels []string
+	for _, phase := range s.ASLPhases {
+		var label string
+		switch phase {
+		case "starting":
+			label = "starting"
+		case "turn":
+			label = "running"
+		case "verification":
+			label = "verifying"
+		case "between":
+			label = "between turns"
+		case "waiting":
+			label = "waiting"
+		case "paused":
+			label = "paused"
+		default:
+			continue
+		}
+		labels = append(labels, label)
+	}
+	if len(labels) > 0 {
+		return "ASL " + strings.Join(labels, "/")
+	}
+	if s.Looping {
+		return "ASL" // legacy daemon/title: phase unknown
+	}
+	return ""
 }
 
 // compactTitleLine draws the session's name in its project's identity color,

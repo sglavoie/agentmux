@@ -4,15 +4,25 @@ import (
 	"github.com/sglavoie/agentmux/internal/conversation"
 )
 
+// AgentTurnSnapshot describes agent work without ASL's contributions or stop
+// masking. A nil snapshot means this daemon cannot supply that distinction.
+type AgentTurnSnapshot struct {
+	IconState  string `json:"icon_state"`
+	FinishedAt int64  `json:"finished_at,omitempty"`
+}
+
 // WindowStateSnapshot is the daemon-owned state needed by dashboard clients.
 // It is deliberately a value copy: callers must never observe or mutate the
 // handler's live WindowState entries.
 type WindowStateSnapshot struct {
-	IconState   string `json:"icon_state"`
-	Looping     bool   `json:"looping"`
-	LastAction  string `json:"last_action"`
-	LastEventAt int64  `json:"last_event_at"`
-	GuardAction string `json:"guard_action"`
+	IconState   string             `json:"icon_state"`
+	Looping     bool               `json:"looping"`
+	LastAction  string             `json:"last_action"`
+	LastEventAt int64              `json:"last_event_at"`
+	GuardAction string             `json:"guard_action"`
+	AgentTurn   *AgentTurnSnapshot `json:"agent_turn,omitempty"`
+	// ASLPhases contains the distinct phases of runs retaining a live lease.
+	ASLPhases []string `json:"asl_phases,omitempty"`
 	// BusySinceAt is when the window's current active-class stretch began (unix
 	// seconds). Absent while the window is not busy, which also preserves the
 	// former response shape for clients that do not render the stretch.

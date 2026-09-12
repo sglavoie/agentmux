@@ -353,9 +353,24 @@ The header is the full inspector's six-line metadata block cut to the three
 questions asked of a session you are *not* currently looking at. Branch,
 directory, and the supervision/lock/mute line are the ones asked of a session
 already picked, and the inspector is where picking one leads. The status
-sentence, its emphasis, its clock, and its unread marker are the same ones the
-dashboard row and the inspector draw, so a tile never phrases a fact
-differently from the row that raised it.
+vocabulary is shared with the dashboard and inspector. In the overview, the
+agent's turn and its supervising ASL run are shown independently: for example,
+`Done · 0:42 | ASL paused` or `Done · 0:42 | ASL running`. Done means the agent
+finished its turn, not that the whole plan finished. The timer beside Done is
+the time since that completion. A new agent turn changes the label back to
+Working; an ASL heartbeat alone does not. Run phases can also say verifying,
+waiting, or between turns. Multiple live run phases are separated by `/`.
+
+Idle is bold in the terminal's normal text color; Done is bold green. Permission
+and reply requests retain their amber emphasis, failures remain red, and the
+elapsed time and ASL phase are dim. An unread completion keeps its amber notice
+dot beside the green Done label.
+
+This distinction requires the updated daemon as well as the overview binary.
+With an older or unavailable daemon, the overview retains the aggregate status
+and shows `ASL` when a loop marker is present, without guessing a phase or an
+agent completion. The dashboard's grouping, tab icons, and notification rules
+continue to use their existing aggregate state.
 
 The overview is a **separate program**, not a dashboard mode. It has its own
 keymap and its own refresh, the dashboard keeps running behind it, and closing
