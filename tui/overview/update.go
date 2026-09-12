@@ -33,8 +33,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleWindowSize(msg)
 	case commands.TickMsg:
 		return m.handleTick(msg)
+	case commands.CaptureTickMsg:
+		return m.handleCaptureTick(msg)
 	case commands.SessionsMsg:
 		return m.handleSessions(msg)
+	case commands.CaptureOutputMsg:
+		return m.handleCaptureDone(msg)
 	case commands.ErrMsg:
 		return m.handleRefreshErr(msg)
 	case commands.FocusDoneMsg:
@@ -45,15 +49,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleWindowSize records the new surface size and nothing else.
+// handleWindowSize records the new surface size and re-aims the captures at the
+// tiles the new size produced.
 //
-// There is deliberately no clamp and no re-derivation here. A resize changes how
-// many tiles fit and therefore which page the cursor is on, but the page is
-// computed from the selection on every frame, so the selection a resize must
-// preserve is preserved by not being touched.
+// There is deliberately no clamp and no re-derivation of the SELECTION here. A
+// resize changes how many tiles fit and therefore which page the cursor is on,
+// but the page is computed from the selection on every frame, so the selection a
+// resize must preserve is preserved by not being touched.
+//
+// The captures are the other half and cannot be left alone, because a resize
+// changes three things at once: which windows are on the page, how wide a
+// captured line is drawn, and how many lines fit. Reconciling here is what makes
+// a drag of the terminal's corner refetch the tiles that grew, re-cut the ones
+// that shrank, and drop the ones that fell off the page.
 func (m model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.width, m.height = msg.Width, msg.Height
-	return m, nil
+	m.reconcileCaptures()
+	return m, m.pumpCaptures()
 }
 
 // handleTick re-arms the ticker and asks the controller for a refresh.
@@ -74,14 +86,28 @@ func (m model) handleTick(commands.TickMsg) (tea.Model, tea.Cmd) {
 func (m model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q", "ctrl+c":
-		return m, tea.Quit
+		return m.dismiss()
 	case "enter":
 		return m.requestFocus()
 	}
 	if move, ok := moveFor(msg.String()); ok {
-		return m.applyMove(move), nil
+		return m.applyMove(move)
 	}
 	return m, nil
+}
+
+// dismiss leaves the surface.
+//
+// Stopping the scheduler is not housekeeping on the way out: a dismissal arrives
+// with up to four reads outstanding and a queue behind them, and every one of
+// those would otherwise start or complete against a program that is quitting.
+// Stopping it drops the queue, declines the next tick, and makes every late reply
+// release its slot and be ignored — which is the only shutdown available, since
+// the Kitty client offers no cancellation and the reads that are already out are
+// bounded by their own subprocess deadline rather than by anything here.
+func (m model) dismiss() (tea.Model, tea.Cmd) {
+	m.captures.stop()
+	return m, tea.Quit
 }
 
 // moveFor resolves a key to a navigation intent.
@@ -116,18 +142,26 @@ func moveFor(key string) (Move, bool) {
 	return 0, false
 }
 
-// applyMove moves the cursor and re-resolves the identity it addresses.
+// applyMove moves the cursor, re-resolves the identity it addresses, and re-aims
+// the captures if the move changed the page.
 //
 // The identity has to be re-resolved rather than left alone, because it is what
 // the NEXT refresh looks the cursor up by: a move that changed the index without
 // updating the tab would be undone by the following read, which would find the
 // old tab still present and put the cursor back.
-func (m model) applyMove(move Move) model {
+//
+// Reconciling on EVERY move rather than only on a page change is deliberate: the
+// scheduler already answers "did anything change" by comparing targets, so paging
+// is detected where it is defined instead of by a second page computation here
+// that could disagree with the renderer's. A move within a page produces no new
+// generation and no new read.
+func (m model) applyMove(move Move) (tea.Model, tea.Cmd) {
 	if len(m.sessions) == 0 {
-		return m
+		return m, nil
 	}
 	m.selectIndex(Navigate(Measure(m.width, m.height), len(m.sessions), m.selected, move))
-	return m
+	m.reconcileCaptures()
+	return m, m.pumpCaptures()
 }
 
 // requestFocus is Enter: focus the selected tab, and leave only once Kitty has
@@ -171,5 +205,5 @@ func (m model) handleFocusDone(msg commands.FocusDoneMsg) (tea.Model, tea.Cmd) {
 		m.focusErr = msg.Err
 		return m, nil
 	}
-	return m, tea.Quit
+	return m.dismiss()
 }

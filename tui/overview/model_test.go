@@ -37,6 +37,16 @@ type recorder struct {
 	focus    []int
 	ticks    []time.Duration
 	now      time.Time
+
+	// captures is every capture request the scheduler dispatched, in order, and
+	// captureTicks is the separate cadence it re-armed. They are recorded when the
+	// SEAM is called rather than when the command runs, which is what lets a test
+	// assert on what was scheduled without ever producing a reply.
+	captures     []commands.CaptureRequest
+	captureTicks []time.Duration
+	// park, when set, receives every dispatched request instead of answering it,
+	// so a test can release replies in whatever order it likes.
+	park chan commands.CaptureRequest
 }
 
 type topologyAsk struct {
@@ -60,8 +70,42 @@ func (r *recorder) install(m *model) {
 			r.ticks = append(r.ticks, d)
 			return func() tea.Msg { return nil }
 		},
+		capture: func(req commands.CaptureRequest) tea.Cmd {
+			r.captures = append(r.captures, req)
+			park := r.park
+			return func() tea.Msg {
+				if park != nil {
+					park <- req
+				}
+				return nil
+			}
+		},
+		captureTick: func(d time.Duration) tea.Cmd {
+			r.captureTicks = append(r.captureTicks, d)
+			return func() tea.Msg { return nil }
+		},
 		now: func() time.Time { return r.now },
 	}
+}
+
+// captureWindows names the windows the scheduler has asked about so far, which is
+// the form nearly every claim about fairness and bounds is written in.
+func (r *recorder) captureWindows() []int {
+	out := make([]int, 0, len(r.captures))
+	for _, req := range r.captures {
+		out = append(out, req.WindowID)
+	}
+	return out
+}
+
+// lastCaptureFor is the newest request issued for one window.
+func (r *recorder) lastCaptureFor(windowID int) (commands.CaptureRequest, bool) {
+	for i := len(r.captures) - 1; i >= 0; i-- {
+		if r.captures[i].WindowID == windowID {
+			return r.captures[i], true
+		}
+	}
+	return commands.CaptureRequest{}, false
 }
 
 // newTestModel is the model as the constructor leaves it: a startup read armed
@@ -667,9 +711,14 @@ func TestAResizeKeepsTheSelectedSessionAndBringsItsPage(t *testing.T) {
 // harness keeps its tab and gets a new anchor window; the cursor must not move,
 // and the capture of the window that is gone must not survive to be painted as if
 // it were live.
+//
+// It runs on a real terminal size because eviction is the VISIBILITY rule: a
+// surface with no dimensions has no page, so every buffer is off-page and the
+// claim about the two survivors would be true for the wrong reason.
 func TestAnAnchorChangeKeepsTheSelectionAndDropsTheStaleCapture(t *testing.T) {
 	before := viewSessions(3)
 	m, _ := loadedAt(t, before, 1)
+	m = only(t, m, tea.WindowSizeMsg{Width: 160, Height: 45})
 	selected := m.selectedTabID
 	oldWindow := m.selectedWindowID
 
@@ -708,6 +757,7 @@ func TestAnAnchorChangeKeepsTheSelectionAndDropsTheStaleCapture(t *testing.T) {
 func TestPruningDoesNotReachBackIntoAnEarlierModel(t *testing.T) {
 	sessions := viewSessions(3)
 	m, _ := loadedAt(t, sessions, 0)
+	m = only(t, m, tea.WindowSizeMsg{Width: 160, Height: 45})
 	m.previews = map[int]Preview{}
 	for _, s := range sessions {
 		m.previews[s.WindowID] = Preview{Output: []string{"captured"}}
@@ -729,6 +779,7 @@ func TestPruningDoesNotReachBackIntoAnEarlierModel(t *testing.T) {
 func TestAClosedSessionTakesItsCaptureWithIt(t *testing.T) {
 	before := viewSessions(3)
 	m, _ := loadedAt(t, before, 0)
+	m = only(t, m, tea.WindowSizeMsg{Width: 160, Height: 45})
 	m.previews = map[int]Preview{}
 	for _, s := range before {
 		m.previews[s.WindowID] = Preview{Output: []string{"captured"}}

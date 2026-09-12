@@ -69,6 +69,78 @@ type Preview struct {
 	Error string
 }
 
+// readyPreview is a capture that landed.
+//
+// An empty lines slice is a terminal with nothing in it, and it is deliberately
+// NOT the same value as a missing map entry: the renderer draws the first as
+// "(empty)" and the second as "(loading…)", and telling a finished read apart
+// from an outstanding one is the whole reason Content is the caller's to supply.
+func readyPreview(lines []string) Preview {
+	return Preview{Content: dashboard.InspectorReady, Output: lines}
+}
+
+// failedPreview is a capture that did not land. It occupies its own tile and
+// nothing else: a grid in which one window refused to be read still shows the
+// other eight.
+func failedPreview(message string) Preview {
+	return Preview{Content: dashboard.InspectorFailed, Error: message}
+}
+
+// clipPreview re-cuts a stored capture to a tile that has changed size.
+//
+// It runs on a SHRINK, where refetching would be a read the operator cannot see
+// the benefit of: the stored lines already contain everything the smaller tile
+// can show, so cutting them is both the correct picture and the thing that keeps
+// "what is retained is bounded by what is visible" true continuously rather than
+// only until the next capture lands. Growth is the other direction and cannot be
+// served from memory at all — the missing cells were never captured — so the
+// scheduler refetches instead.
+//
+// The result never aliases the input's slice, because the caller is rebuilding a
+// map it may still be sharing with an earlier model.
+func clipPreview(p Preview, width, height int) Preview {
+	if len(p.Output) == 0 {
+		return p
+	}
+	if width <= 0 || height <= 0 {
+		p.Output = nil
+		return p
+	}
+	lines := p.Output
+	if len(lines) > height {
+		lines = lines[len(lines)-height:]
+	}
+	out := make([]string, len(lines))
+	for i, line := range lines {
+		out[i] = layout.StyledTruncate(line, width, "…")
+	}
+	p.Output = out
+	return p
+}
+
+// outputExtent is a tile's terminal-output region: how wide one captured line is
+// drawn and how many of them fit under the compact header.
+//
+// It lives beside renderTile because it is the same arithmetic read backwards. A
+// capture is clipped to what the tile will actually draw, so a scheduler that
+// computed the border's cost or the header's height for itself could clip a read
+// one cell narrower than the tile renders it and leave a column of every preview
+// permanently blank.
+//
+// Zero in either dimension means the tile has no room for output at all, which is
+// true of a tile shorter than its own header. There is nothing to capture for one
+// of those, and nothing is drawn there either.
+func outputExtent(t Tile) (width, height int) {
+	if t.Width <= 0 || t.Height <= 0 {
+		return 0, 0
+	}
+	if t.Width < minBorderedWidth || t.Height < minBorderedHeight {
+		return t.Width, max(t.Height-dashboard.CompactChromeLines, 0)
+	}
+	return t.Width - tileBorderCells - 2*tilePadding,
+		max(t.Height-tileBorderRows-dashboard.CompactChromeLines, 0)
+}
+
 // Input is every fact the overview is drawn from.
 type Input struct {
 	Width, Height int

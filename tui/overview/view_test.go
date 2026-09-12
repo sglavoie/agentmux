@@ -622,7 +622,7 @@ func sameOrder(a, b []session.RunningSession) bool {
 // commands, read the clock, and hold the state the renderer is handed.
 var (
 	renderingFiles = []string{"chrome.go", "grid.go", "nav.go", "order.go", "view.go"}
-	lifecycleFiles = []string{"model.go", "refresh.go", "status.go", "update.go"}
+	lifecycleFiles = []string{"capture.go", "model.go", "refresh.go", "status.go", "update.go"}
 )
 
 // parsePackage parses every non-test file in the package and returns them keyed
@@ -778,6 +778,13 @@ func TestTheLifecycleHalfReachesTheWorldOnlyThroughItsSeams(t *testing.T) {
 		"commands.RefreshOverview": true,
 		"commands.Focus":           true,
 		"commands.Tick":            true,
+		// The capture is a READ of a window's terminal text and its cadence. It is
+		// listed beside RefreshOverview rather than beside Focus for that reason:
+		// commands.CaptureOutput runs `kitten @ get-text`, which observes a pane
+		// without touching it, so adding it leaves the "browsing the overview
+		// cannot change anything" claim exactly where it was.
+		"commands.CaptureOutput": true,
+		"commands.CaptureTick":   true,
 	}
 
 	files := parsePackage(t)

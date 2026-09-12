@@ -20,6 +20,14 @@
 // because a tab whose harness restarted keeps its tab ID and changes its window
 // ID, and it is the window ID that keys a preview.
 //
+// What a fresh list does to the CAPTURES is not decided here. A closed session
+// and a re-anchored one both leave a stored buffer describing a window that no
+// longer exists, but so does paging away from a tile that is still running, and
+// expressing one of those against the live set and the other against the page
+// would be two rules that have to agree. Both are therefore the visibility rule
+// in capture.go, which this calls once the selection — and so the page — is
+// settled.
+//
 // Failure is retention, never truncation. A read that reached neither the daemon
 // nor Kitty leaves the rows, the freshness stamp and the selection exactly as
 // they were and records the error; the surface then ages visibly out of its own
@@ -106,14 +114,18 @@ func (m model) handleSessions(msg commands.SessionsMsg) (tea.Model, tea.Cmd) {
 	m.sessions = Order(msg.Sessions)
 
 	m.reconcileSelection(msg.SelectionTabID)
-	m.prunePreviews()
+	// The selection has been placed, so the page is settled and the capture set
+	// can be re-aimed at it. Doing it HERE rather than before the reconcile is
+	// what lets a read that moved the cursor onto another page start that page's
+	// captures in the same update.
+	m.reconcileCaptures()
 	// The source pane has now been resolved against a real window tree, so the
 	// startup request is spent. Retaining it until HERE — rather than clearing it
 	// when it was dispatched — is what lets a failed first read still select the
 	// caller's tab on the retry.
 	m.startupSourceWindowID = 0
 
-	return m, m.catchUpRefresh()
+	return m, tea.Batch(m.catchUpRefresh(), m.pumpCaptures())
 }
 
 // handleRefreshErr applies one failed read: the error is recorded, the rows and
@@ -185,38 +197,6 @@ func (m *model) selectIndex(index int) {
 	m.selected = index
 	m.selectedTabID = m.sessions[index].TabID
 	m.selectedWindowID = m.sessions[index].WindowID
-}
-
-// prunePreviews drops every capture whose window is no longer in the live set.
-//
-// It covers two different events with one rule, which is why it is expressed
-// against the window set rather than against either event: a session that closed
-// takes its window with it, and a session whose harness restarted gets a NEW
-// anchor window under the same tab. In both cases the old capture describes a
-// window that is gone, and keeping it would show an operator the last frame of a
-// terminal that no longer exists — indistinguishable, on screen, from a live one.
-//
-// It REPLACES the map rather than deleting from it. Every handler here takes the
-// model by value and the map header would be shared with the copy it was called
-// on, so an in-place delete would reach backwards into a model the update loop
-// has already moved past. That is harmless while Bubble Tea discards the old
-// value, and it is exactly the aliasing that makes a test holding two generations
-// of the model unable to tell them apart.
-func (m *model) prunePreviews() {
-	if len(m.previews) == 0 {
-		return
-	}
-	live := make(map[int]struct{}, len(m.sessions))
-	for _, s := range m.sessions {
-		live[s.WindowID] = struct{}{}
-	}
-	kept := make(map[int]Preview, len(m.previews))
-	for windowID, preview := range m.previews {
-		if _, ok := live[windowID]; ok {
-			kept[windowID] = preview
-		}
-	}
-	m.previews = kept
 }
 
 // indexOfTab finds the row for a Kitty tab.

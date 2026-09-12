@@ -75,6 +75,14 @@ type deps struct {
 	// tick schedules the next interval. tea.Tick fires once, so every handler
 	// that consumes a tick re-arms through here.
 	tick func(d time.Duration) tea.Cmd
+	// capture reads one window's terminal output. It is the surface's second
+	// read, and the request it takes carries both identities the scheduler
+	// settles on, which is what lets a test park a reply and deliver it later.
+	capture func(req commands.CaptureRequest) tea.Cmd
+	// captureTick schedules the next capture cadence. It is separate from tick
+	// because the two cadences are different numbers and a shared seam would make
+	// a test unable to say which ticker a model re-armed.
+	captureTick func(d time.Duration) tea.Cmd
 	// now is the clock every freshness reading is measured against.
 	now func() time.Time
 }
@@ -88,7 +96,11 @@ func defaultDeps(cfg *config.Config, client kitty.KittyClient) deps {
 		},
 		focus: func(tabID int) tea.Cmd { return commands.Focus(client, tabID) },
 		tick:  commands.Tick,
-		now:   time.Now,
+		capture: func(req commands.CaptureRequest) tea.Cmd {
+			return commands.CaptureOutput(client, req)
+		},
+		captureTick: commands.CaptureTick,
+		now:         time.Now,
 	}
 }
 
@@ -106,6 +118,10 @@ type model struct {
 
 	interval      time.Duration
 	idleThreshold time.Duration
+	// captureInterval is the preview cadence, read from the preview settings and
+	// run on its own ticker. A terminal's last few lines change far faster than
+	// the set of terminals does.
+	captureInterval time.Duration
 
 	width, height int
 
@@ -120,10 +136,15 @@ type model struct {
 	selectedTabID    int
 	selectedWindowID int
 
-	// previews is keyed by Kitty window ID, the same key tile rendering reads. It
-	// stays empty until session 4 supplies the captures, which is why every tile
-	// currently draws its explicit loading state.
-	previews     map[int]Preview
+	// previews is keyed by Kitty window ID, the same key tile rendering reads: it
+	// is what each tile SHOWS, and an absent entry is the honest loading state of
+	// a window whose first capture has not landed. It is copied on write, so an
+	// earlier generation of the model never sees a later one's captures.
+	previews map[int]Preview
+	// captures is what each tile is READING, and the one piece of state held by
+	// pointer — see capture.go for why the slots are shared where the content is
+	// copied.
+	captures     *captureController
 	lastActivity map[int]time.Time
 
 	// topology and topologyObservedAt are the freshness of the tree on screen:
@@ -177,7 +198,9 @@ func newModel(cfg *config.Config, client kitty.KittyClient, sourceWindowID int) 
 		deps:                  defaultDeps(cfg, client),
 		interval:              interval,
 		idleThreshold:         idle,
+		captureInterval:       captureIntervalFor(cfg),
 		previews:              map[int]Preview{},
+		captures:              newCaptureController(),
 		startupSourceWindowID: sourceWindowID,
 		refreshNextSeq:        firstRefreshSeq,
 		refreshActiveSeq:      firstRefreshSeq,
@@ -185,9 +208,14 @@ func newModel(cfg *config.Config, client kitty.KittyClient, sourceWindowID int) 
 	}
 }
 
-// Init dispatches the refresh newModel armed and starts the interval ticker.
+// Init dispatches the refresh newModel armed and starts the two tickers.
 //
-// It deliberately starts nothing else. The dashboard's Init also warms the
+// It starts no capture. There is nothing to capture yet — no window tree has
+// landed and no terminal size has arrived — so the first reads are scheduled by
+// the first snapshot and the first resize, whichever the runtime delivers first,
+// rather than against a session list that does not exist.
+//
+// It deliberately starts nothing else either. The dashboard's Init also warms the
 // transcript cache, runs a health probe, and discovers active loops; none of
 // that is part of showing live panes, and an overview that paid for it would
 // spend an operator's first second on work they cannot see.
@@ -195,6 +223,7 @@ func (m model) Init() tea.Cmd {
 	return tea.Batch(
 		m.deps.topology(m.refreshActiveSeq, m.startupSourceWindowID),
 		m.deps.tick(m.interval),
+		m.deps.captureTick(m.captureInterval),
 	)
 }
 
