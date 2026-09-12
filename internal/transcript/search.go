@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
+	"sync"
 	"unicode/utf8"
 )
 
@@ -110,6 +111,7 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 		return nil, errors.New("transcript: invalid message source")
 	}
 	results := make([]Result, 0, len(metas))
+	var pending []SessionMeta
 
 	if needle == "" {
 		for _, m := range metas {
@@ -135,12 +137,15 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 		searchText := m.SearchText
 		var err error
 		if searchText == "" || source != "any" {
-			searchText, err = idx.ReadSearchText(key)
-		}
-		if err == nil {
-			if data, ok := decodeSourceSidecar(searchText); ok {
-				searchText = sidecarText(data, source)
-			} else if source != "any" || strings.HasPrefix(searchText, sourceSidecarPrefix) {
+			var sourceAware bool
+			searchText, sourceAware, err = idx.readSearchCorpus(key, m, source)
+			if err == nil && source != "any" && !sourceAware {
+				// The legacy body contains every source. A miss there cannot
+				// become a hit after splitting it, so avoid parsing/upgrading
+				// unrelated transcripts for selective queries.
+				if !strings.Contains(searchText, needle) {
+					continue
+				}
 				// Legacy sidecars lack source boundaries; rebuild once.
 				err = fs.ErrNotExist
 			}
@@ -160,44 +165,114 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 			slog.Debug("transcript.search: sidecar read failed",
 				"path", idx.SearchTextPath(key), "err", err)
 		}
+		if source != "any" {
+			pending = append(pending, m)
+			continue
+		}
 		// Fallback: older/corrupt indexes may lack sidecars. Stream the
 		// file for those — slow but correct — and repair the sidecar after
 		// a successful read so subsequent searches use the fast path.
 		if readers == nil {
 			return nil, errors.New("transcript: Search with text requires readers")
 		}
-		reader, ok := readers[m.Harness]
-		if !ok {
-			slog.Debug("transcript.search: no reader for harness",
-				"harness", m.Harness, "id", m.ID)
-			continue
+		if result, ok := searchFallback(idx, readers, m, needle, source); ok {
+			if snippetPreview != "" {
+				result.Preview = snippetPreview
+			}
+			results = append(results, result)
 		}
-		msgs, err := reader.ReadMessages(m.Path)
-		if err != nil {
-			slog.Debug("transcript.search: read failed",
-				"path", m.Path, "err", err)
-			continue
+	}
+	if len(pending) > 0 {
+		if readers == nil {
+			return nil, errors.New("transcript: Search with text requires readers")
 		}
-		updatedText := messagesSearchText(msgs)
-		if source != "any" {
-			updatedText = encodeSourceSidecar(sourceSidecarFromMessages(msgs))
-		}
-		if err := idx.WriteSearchText(key, updatedText); err != nil {
-			slog.Debug("transcript.search: sidecar repair failed",
-				"path", idx.SearchTextPath(key), "err", err)
-		}
-		count, preview := countMatchesForSource(msgs, needle, source)
-		if count == 0 {
-			continue
-		}
-		if snippetPreview != "" {
-			preview = snippetPreview
-		}
-		results = append(results, Result{Meta: m, Matches: count, Preview: preview})
+		results = append(results, searchFallbacksParallel(idx, readers, pending, needle, source)...)
 	}
 
 	sortResults(results)
 	return results, nil
+}
+
+// Source-aware upgrades can require parsing many legacy transcripts. Bound
+// concurrent reads so the first broad search uses available cores without
+// overwhelming the disk or the UI process.
+const sourceFallbackWorkers = 4
+
+func searchFallbacksParallel(idx *Index, readers map[string]Reader, pending []SessionMeta, needle, source string) []Result {
+	jobs := make(chan SessionMeta)
+	found := make(chan Result, len(pending))
+	var workers sync.WaitGroup
+	n := min(sourceFallbackWorkers, len(pending))
+	workers.Add(n)
+	for range n {
+		go func() {
+			defer workers.Done()
+			for meta := range jobs {
+				if result, ok := searchFallback(idx, readers, meta, needle, source); ok {
+					found <- result
+				}
+			}
+		}()
+	}
+	for _, meta := range pending {
+		jobs <- meta
+	}
+	close(jobs)
+	workers.Wait()
+	close(found)
+	results := make([]Result, 0, len(found))
+	for result := range found {
+		results = append(results, result)
+	}
+	return results
+}
+
+func searchFallback(idx *Index, readers map[string]Reader, meta SessionMeta, needle, source string) (Result, bool) {
+	reader, ok := readers[meta.Harness]
+	if !ok {
+		slog.Debug("transcript.search: no reader for harness", "harness", meta.Harness, "id", meta.ID)
+		return Result{}, false
+	}
+	msgs, err := reader.ReadMessages(meta.Path)
+	if err != nil {
+		slog.Debug("transcript.search: read failed", "path", meta.Path, "err", err)
+		return Result{}, false
+	}
+	updatedText := messagesSearchText(msgs)
+	if source != "any" {
+		updatedText = encodeSourceSidecar(sourceSidecarFromMessages(msgs))
+	}
+	key := IndexKey(meta.Harness, meta.ID)
+	if err := idx.WriteSearchText(key, updatedText); err != nil {
+		slog.Debug("transcript.search: sidecar repair failed", "path", idx.SearchTextPath(key), "err", err)
+	}
+	count, preview := countMatchesForSource(msgs, needle, source)
+	if count == 0 {
+		return Result{}, false
+	}
+	return Result{Meta: meta, Matches: count, Preview: preview}, true
+}
+
+// readSearchCorpus reuses decoded sidecars between keystrokes. A changed
+// transcript metadata generation or sidecar write invalidates the cached text.
+func (idx *Index) readSearchCorpus(key string, meta SessionMeta, source string) (string, bool, error) {
+	if text, sourceAware, ok := idx.searchCache.getSource(key, meta, source); ok {
+		return text, sourceAware, nil
+	}
+	generation := idx.searchCache.version()
+	raw, err := idx.ReadSearchText(key)
+	if err != nil {
+		return "", false, err
+	}
+	if data, ok := decodeSourceSidecar(raw); ok {
+		idx.searchCache.put(key, meta, raw, data, true, generation)
+		return sidecarText(data, source), true, nil
+	}
+	if strings.HasPrefix(raw, sourceSidecarPrefix) {
+		return "", false, fs.ErrNotExist
+	}
+	idx.searchCache.put(key, meta, raw, sourceSidecar{}, false, generation)
+	return raw, false, nil
 }
 
 func countMatchesForSource(msgs []Message, needle, source string) (int, string) {
@@ -335,6 +410,12 @@ func sortResults(rs []Result) {
 		if !rs[a].Meta.LastAt.Equal(rs[b].Meta.LastAt) {
 			return rs[a].Meta.LastAt.After(rs[b].Meta.LastAt)
 		}
-		return rs[a].Meta.StartedAt.After(rs[b].Meta.StartedAt)
+		if !rs[a].Meta.StartedAt.Equal(rs[b].Meta.StartedAt) {
+			return rs[a].Meta.StartedAt.After(rs[b].Meta.StartedAt)
+		}
+		if rs[a].Meta.Harness != rs[b].Meta.Harness {
+			return rs[a].Meta.Harness < rs[b].Meta.Harness
+		}
+		return rs[a].Meta.ID < rs[b].Meta.ID
 	})
 }

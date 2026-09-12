@@ -93,7 +93,7 @@ func (i *Index) migrateLegacySearchText() error {
 		if meta.SearchText == "" {
 			continue
 		}
-		if err := i.store.Write(key, meta.SearchText); err != nil {
+		if err := i.WriteSearchText(key, meta.SearchText); err != nil {
 			warning = errors.Join(warning, fmt.Errorf("migrating transcript search sidecar %s: %w", key, err))
 			continue
 		}

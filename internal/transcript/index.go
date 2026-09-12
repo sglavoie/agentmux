@@ -40,10 +40,11 @@ func IndexKey(harness, id string) string {
 // The mutex guards one instance, while a stable advisory lock coordinates
 // independent instances and processes during filesystem mutations.
 type Index struct {
-	mu      sync.Mutex
-	path    string
-	store   *searchstore.Store
-	entries map[string]SessionMeta
+	mu          sync.Mutex
+	path        string
+	store       *searchstore.Store
+	entries     map[string]SessionMeta
+	searchCache searchCorpusCache
 
 	filesystemBase  map[string]SessionMeta
 	filesystemDirty bool

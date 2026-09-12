@@ -94,6 +94,21 @@ func TestSearchMessageSourceUpgradesLegacySidecar(t *testing.T) {
 	}
 }
 
+func TestSearchMessageSourceSkipsLegacyMissWithoutParsing(t *testing.T) {
+	idx := newTestIndex(t)
+	key := "claude:one"
+	must(t, idx.SetEntryForTest(key, SessionMeta{ID: "one", Harness: "claude", Path: "unavailable"}))
+	must(t, idx.WriteSearchText(key, "ordinary legacy content"))
+	result, err := Search(idx, nil, Query{Text: "absentneedle", MessageSource: "user"})
+	if err != nil || len(result) != 0 {
+		t.Fatalf("legacy miss: %+v, %v", result, err)
+	}
+	raw, err := idx.ReadSearchText(key)
+	if err != nil || raw != "ordinary legacy content" {
+		t.Fatalf("sidecar unexpectedly upgraded: %q, %v", raw, err)
+	}
+}
+
 func TestClaudeMixedUserToolResultSource(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "mixed.jsonl")
 	body := `{"type":"user","message":{"role":"user","content":[{"type":"text","text":"promptneedle"},{"type":"tool_result","content":"toolneedle"}]}}` + "\n"

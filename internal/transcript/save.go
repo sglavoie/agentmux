@@ -23,7 +23,7 @@ func (i *Index) saveLocked() (warning, persistErr error) {
 		}
 		// The caller already holds i.mu, so persist directly through the
 		// sidecar store before writing the metadata cache.
-		if err := i.store.Write(key, meta.SearchText); err != nil {
+		if err := i.WriteSearchText(key, meta.SearchText); err != nil {
 			warning = errors.Join(warning, fmt.Errorf("migrating transcript search sidecar %s: %w", key, err))
 			continue
 		}

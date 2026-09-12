@@ -121,7 +121,7 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 			if _, existedAtSnapshot := snapshot[key]; existedAtSnapshot && !exists {
 				// A concurrent delete won after discovery began. Discovery may
 				// have recreated its sidecar, so remove that disposable artifact.
-				mergeWarning = errors.Join(mergeWarning, i.store.Delete(key))
+				mergeWarning = errors.Join(mergeWarning, i.DeleteSearchText(key))
 				continue
 			}
 			if !discoveredMetaStillFresh(meta) {
@@ -142,15 +142,15 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 			}
 			if meta.SearchText != "" {
 				if meta.HiddenFromIndex {
-					mergeWarning = errors.Join(mergeWarning, i.store.Delete(key))
-				} else if err := i.store.Write(key, meta.SearchText); err != nil {
+					mergeWarning = errors.Join(mergeWarning, i.DeleteSearchText(key))
+				} else if err := i.WriteSearchText(key, meta.SearchText); err != nil {
 					mergeWarning = errors.Join(mergeWarning, fmt.Errorf("writing transcript search sidecar %s: %w", key, err))
 				}
 				meta.SearchText = ""
 			} else if exists && (existing.FileSize != meta.FileSize || !existing.FileModTime.Equal(meta.FileModTime)) {
 				// A changed transcript with no searchable text must not retain
 				// either a legacy or source-aware sidecar from its old contents.
-				mergeWarning = errors.Join(mergeWarning, i.store.Delete(key))
+				mergeWarning = errors.Join(mergeWarning, i.DeleteSearchText(key))
 			}
 			if !exists || !reflect.DeepEqual(existing, meta) {
 				i.entries[key] = meta

@@ -14,7 +14,9 @@ func (i *Index) SearchTextPath(key string) string { return i.store.Path(key) }
 
 // WriteSearchText atomically writes a per-session search-text sidecar.
 func (i *Index) WriteSearchText(key, searchText string) error {
-	return i.store.Write(key, searchText)
+	err := i.store.Write(key, searchText)
+	i.searchCache.invalidate(key)
+	return err
 }
 
 // ReadSearchText reads a per-session search-text sidecar.
@@ -29,7 +31,9 @@ func (i *Index) SearchTextExists(key string) (bool, error) {
 
 // DeleteSearchText removes a per-session search-text sidecar if it exists.
 func (i *Index) DeleteSearchText(key string) error {
-	return i.store.Delete(key)
+	err := i.store.Delete(key)
+	i.searchCache.invalidate(key)
+	return err
 }
 
 // SearchStoreStats returns the number and total byte size of regular sidecar

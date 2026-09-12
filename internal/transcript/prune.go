@@ -47,7 +47,7 @@ func (idx *Index) pruneFilesystem(cfg *config.Config, now time.Time) (hidden int
 			meta.SearchText = ""
 			idx.entries[key] = meta
 			idx.filesystemDirty = true
-			if sidecarErr := idx.store.Delete(key); sidecarErr != nil {
+			if sidecarErr := idx.DeleteSearchText(key); sidecarErr != nil {
 				return errors.Join(warning, sidecarErr)
 			}
 			hidden++

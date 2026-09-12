@@ -304,7 +304,7 @@ func (i *Index) deleteFilesystem(key string, alsoFile bool) error {
 		// Delete the disposable sidecar before the source file. If sidecar
 		// removal fails, the operation must leave both the authoritative source
 		// and the in-memory cache state unchanged.
-		if err := i.store.Delete(key); err != nil {
+		if err := i.DeleteSearchText(key); err != nil {
 			return errors.Join(warning, fmt.Errorf("removing transcript search sidecar %s: %w", i.SearchTextPath(key), err))
 		}
 		sourceDeleted := false
@@ -338,7 +338,7 @@ func (i *Index) setHiddenFilesystem(key string, hidden bool) error {
 			return errors.Join(warning, fmt.Errorf("transcript: no index entry for %q", key))
 		}
 		if hidden {
-			if err := i.store.Delete(key); err != nil {
+			if err := i.DeleteSearchText(key); err != nil {
 				return errors.Join(warning, fmt.Errorf("removing transcript search sidecar %s: %w", i.SearchTextPath(key), err))
 			}
 			entry.SearchText = ""
