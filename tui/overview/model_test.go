@@ -266,7 +266,8 @@ func overviewInput(m model) Input {
 		IdleThreshold: m.idleThreshold,
 		Now:           m.deps.now(),
 		Feedback:      m.feedback(),
-		Hints:         hints,
+		FocusPending:  m.focusTabID != 0,
+		Closing:       m.quitAfterPreference,
 	}
 }
 

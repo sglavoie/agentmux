@@ -29,12 +29,8 @@ import (
 )
 
 const (
-	// DefaultTitle and DefaultHints are what the first and last rows say when the
-	// caller supplies nothing. They are package constants rather than caller
-	// defaults so a surface that forgets to set them still tells an operator what
-	// they are looking at and how to leave it.
+	// DefaultTitle names the surface when the caller supplies no title.
 	DefaultTitle = "Live sessions"
-	DefaultHints = "c compact · n/N needs you · ←↑↓→/hjkl move · Tab/⇧Tab next · PgUp/PgDn page · Home/End ends"
 
 	// tilePadding is the one cell of space between a tile's border and its
 	// contents, on each side. It costs two of the tile's columns and buys the
@@ -145,6 +141,8 @@ func outputExtent(t Tile) (width, height int) {
 type Input struct {
 	Width, Height int
 	Compact       bool
+	FocusPending  bool
+	Closing       bool
 
 	// Sessions is the WHOLE live set, already in Order's tile order. It is the
 	// whole set and not a page of it because the name disambiguator is measured
@@ -171,7 +169,7 @@ type Input struct {
 	Now time.Time
 
 	// Title, Feedback, and Hints are the three reserved rows. Title and Hints
-	// fall back to their package defaults; Feedback is empty until something has
+	// fall back to the default title and state-aware footer; Feedback is empty until something has
 	// happened worth reporting, and its row stays reserved so the grid below it
 	// does not shift when it does.
 	Title    string
@@ -221,14 +219,16 @@ func paintChrome(rows []string, in Input, g Geometry, count, selected int) {
 	}
 	hints := in.Hints
 	if hints == "" {
-		hints = DefaultHints
+		hints = renderFooter(in, g, selected)
+	} else {
+		hints = styleDim.Render(hints)
 	}
 
 	rows[0] = titleLine(title, g, count, selected)
 	if len(rows) < 2 {
 		return
 	}
-	rows[len(rows)-1] = styleDim.Render(hints)
+	rows[len(rows)-1] = hints
 	if len(rows) < 3 {
 		return
 	}

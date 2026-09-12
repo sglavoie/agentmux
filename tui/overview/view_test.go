@@ -621,7 +621,7 @@ func sameOrder(a, b []session.RunningSession) bool {
 // in, and a string comes out. lifecycleFiles are the running program: they start
 // commands, read the clock, and hold the state the renderer is handed.
 var (
-	renderingFiles = []string{"chrome.go", "grid.go", "nav.go", "order.go", "view.go"}
+	renderingFiles = []string{"chrome.go", "footer.go", "grid.go", "nav.go", "order.go", "view.go"}
 	lifecycleFiles = []string{"capture.go", "model.go", "preferences.go", "refresh.go", "status.go", "update.go"}
 )
 

@@ -17,9 +17,11 @@ import (
 // selection rule in one sentence: the overview may paint the box, never what is
 // in it.
 var (
-	styleTitle    = lipgloss.NewStyle().Bold(true)
-	styleDim      = lipgloss.NewStyle().Faint(true)
-	styleFeedback = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
+	styleTitle                = lipgloss.NewStyle().Bold(true)
+	styleDim                  = lipgloss.NewStyle().Faint(true)
+	styleFeedback             = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
+	styleFooterKey            = lipgloss.NewStyle().Foreground(lipgloss.Color("#4ec9b0")).Bold(true)
+	styleFooterUnavailableKey = lipgloss.NewStyle().Foreground(lipgloss.Color("#5a5a5a")).Bold(true)
 
 	// styleBorder is an unselected tile's box: faint, so a screenful of them
 	// reads as a set of panes rather than as a drawing.

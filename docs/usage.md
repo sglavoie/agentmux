@@ -404,6 +404,11 @@ Nothing else is bound. Browsing observes sessions and their screen text.
 `Enter` focuses a tab; `c` changes only the daemon's in-memory view preference.
 Closing immediately after a toggle lets its bounded save finish before exiting.
 
+The footer uses the dashboard's colors: available keys are bold teal, unavailable
+keys are muted gray, and descriptions stay dim. Availability follows the current
+selection and layout, including attention targets, navigation boundaries, and a
+pending focus request. Unavailable actions stay visible in the same positions.
+
 The header counts the sessions and, when more than one page of them exists, says
 which page you are on (`page 2/3`). The grid sizes itself to the terminal — a
 tile targets 48 columns and 12 rows, so a 120x30 window shows four sessions at a

@@ -22,7 +22,6 @@
 package overview
 
 import (
-	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -32,15 +31,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 )
-
-// hints is the overview's last row: what the keys do.
-//
-// Enter and q lead, and the movement keys follow, because the row is truncated
-// from the right on a narrow terminal — the chrome reserves one row for it and
-// the renderer cuts it to the surface's width. What an operator cannot afford to
-// lose is how to act on a tile and how to leave the surface; which of four
-// equivalent spellings moves the cursor is what a 60-column terminal may drop.
-const hints = "Enter focus · q close · c compact · n/N needs you · ←↑↓→/hjkl move · Tab next · PgUp/PgDn page · Home/End ends"
 
 // defaultRefreshInterval and defaultIdleThreshold are what an unset
 // configuration means here. They are the dashboard's own defaults, restated
@@ -248,11 +238,9 @@ func (m model) Init() tea.Cmd {
 // which is what lets a lifecycle test assert on what an operator would see
 // rather than only on what the model holds.
 func (m model) View() tea.View {
-	modeHints := hints
-	if m.compact {
-		modeHints = strings.Replace(hints, "c compact", "c normal", 1)
-	}
 	return tea.NewView(Render(Input{
+		FocusPending:  m.focusTabID != 0,
+		Closing:       m.quitAfterPreference,
 		Compact:       m.compact,
 		Width:         m.width,
 		Height:        m.height,
@@ -264,7 +252,6 @@ func (m model) View() tea.View {
 		IdleThreshold: m.idleThreshold,
 		Now:           m.deps.now(),
 		Feedback:      m.feedback(),
-		Hints:         modeHints,
 	}))
 }
 
