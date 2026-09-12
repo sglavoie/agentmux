@@ -104,6 +104,7 @@ func (m model) handleSessions(msg commands.SessionsMsg) (tea.Model, tea.Cmd) {
 	m.topology = msg.Topology
 	m.topologyObservedAt = m.deps.now()
 	m.err = nil
+	wasLoaded := m.loaded
 	m.loaded = true
 
 	m.lastActivity = msg.Activity
@@ -111,7 +112,11 @@ func (m model) handleSessions(msg commands.SessionsMsg) (tea.Model, tea.Cmd) {
 	// the tile paints is already overlaid onto these rows by the shared reader,
 	// and the watchdog is a dashboard status-bar input the grid has no slot for;
 	// holding either here would be state nothing reads.
-	m.sessions = Order(msg.Sessions)
+	if wasLoaded {
+		m.sessions = RetainOrder(m.sessions, msg.Sessions)
+	} else {
+		m.sessions = OpeningOrder(msg.Sessions, msg.Activity, m.idleThreshold)
+	}
 
 	m.reconcileSelection(msg.SelectionTabID)
 	// The selection has been placed, so the page is settled and the capture set
@@ -144,7 +149,7 @@ func (m model) handleRefreshErr(msg commands.ErrMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// reconcileSelection places the cursor on the freshly ordered list.
+// reconcileSelection places the cursor on the refreshed list.
 //
 // The three cases, in the order they are tried:
 //
@@ -155,8 +160,8 @@ func (m model) handleRefreshErr(msg commands.ErrMsg) (tea.Model, tea.Cmd) {
 //     failed and a navigation happened during the retry — and the request is
 //     consumed by the same read that honors it, so it can win at most once.
 //  2. The prior selection's TAB. Found means the cursor moves to wherever that
-//     session now sits, which is the whole of "survives reordering, metadata
-//     changes and resizes".
+//     session now sits, which survives removal of earlier tabs, metadata
+//     changes and resizes.
 //  3. The prior POSITION, clamped. This is the tab that disappeared under the
 //     cursor: the nearest surviving row is the one at the same place in the list,
 //     or the last row when the list shrank past it. It is also the answer for a

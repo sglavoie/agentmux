@@ -1,20 +1,13 @@
 // What order the tiles come in.
 //
-// The overview's ordering is deliberately NOT the dashboard's. The queue sorts
-// by urgency, which is exactly right for a list an operator scans top-down
-// looking for what needs them; it is exactly wrong for a grid of previews, where
-// the same sort would make a tile jump across the screen the moment its harness
-// started or finished a turn, and the operator would lose the pane they were
-// reading mid-sentence.
+// At opening, the grid surfaces sessions needing attention, then other
+// non-Working sessions, then Working sessions. Within each class its identity
+// order is deterministic. Subsequent reads retain the existing tile positions:
+// a harness starting or finishing a turn must not move the pane being read.
 //
-// So the grid is sorted by IDENTITY and nothing else. A session's position is a
-// function of its project and its Kitty tab, both of which are stable for the
-// life of the tab. Status has no input at all — that is asserted, not assumed —
-// and what changes when a session starts working is the contents of its tile,
-// which is where the operator is already looking.
-//
-// Grouping is by resolved project identity so a repository's checkouts sit
-// together, and groups are ordered by their display label case-insensitively,
+// Within an opening tier, grouping is by resolved project identity so a
+// repository's checkouts sit together when they share a tier. Groups are
+// ordered by their display label case-insensitively,
 // because `API` and `api` are one project to a reader and putting every
 // capitalized name before every lowercase one is the ASCII sort's idea of
 // alphabetical, not a person's.
@@ -23,6 +16,7 @@ package overview
 import (
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -37,7 +31,7 @@ const (
 	labelIdentityPrefix  = "label\x00"
 )
 
-// Order returns the sessions in tile order, leaving the caller's slice alone.
+// Order returns the identity tie-break order, leaving the caller's slice alone.
 //
 // The comparison is a total order on (lowercased label, label, identity, tab,
 // window, key), so the result is the same on every call for the same input and
@@ -51,6 +45,55 @@ func Order(sessions []session.RunningSession) []session.RunningSession {
 	sort.SliceStable(out, func(i, j int) bool {
 		return less(out[i], out[j])
 	})
+	return out
+}
+
+// OpeningOrder ranks the first successful snapshot. Attention uses the same
+// grouping as the dashboard; Working uses the agent turn that the overview's
+// tile actually displays, which can differ from the aggregate ASL state.
+func OpeningOrder(sessions []session.RunningSession, activity map[int]time.Time, idleThreshold time.Duration) []session.RunningSession {
+	out := Order(sessions)
+	sort.SliceStable(out, func(i, j int) bool {
+		return openingRank(out[i], activity, idleThreshold) < openingRank(out[j], activity, idleThreshold)
+	})
+	return out
+}
+
+func openingRank(s session.RunningSession, activity map[int]time.Time, idleThreshold time.Duration) int {
+	if dashboard.StateGroup(s, activity, idleThreshold) == 0 {
+		return 0
+	}
+	state := s.State
+	if s.AgentTurn != nil {
+		state = s.AgentTurn.IconState
+	}
+	if state != "bolt" {
+		return 1
+	}
+	return 2
+}
+
+// RetainOrder refreshes the facts without moving surviving tabs. New sessions
+// join at the end in identity order; closed tabs simply leave their slots.
+func RetainOrder(previous, current []session.RunningSession) []session.RunningSession {
+	ordered := Order(current)
+	byTab := make(map[int][]session.RunningSession, len(ordered))
+	for _, s := range ordered {
+		byTab[s.TabID] = append(byTab[s.TabID], s)
+	}
+	out := make([]session.RunningSession, 0, len(ordered))
+	for _, old := range previous {
+		if rows := byTab[old.TabID]; len(rows) > 0 {
+			out = append(out, rows[0])
+			byTab[old.TabID] = rows[1:]
+		}
+	}
+	for _, s := range ordered {
+		if rows := byTab[s.TabID]; len(rows) > 0 {
+			out = append(out, rows[0])
+			byTab[s.TabID] = rows[1:]
+		}
+	}
 	return out
 }
 

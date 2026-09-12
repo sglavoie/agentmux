@@ -15,6 +15,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -143,8 +144,8 @@ func loadedAt(t *testing.T, sessions []session.RunningSession, index int) (model
 	t.Helper()
 	m, r := started(t, sessions[index].WindowID)
 	m = only(t, m, snapshot(firstRefreshSeq, sessions[index].TabID, sessions))
-	if m.selected != index {
-		t.Fatalf("the fixture selected index %d, want %d", m.selected, index)
+	if m.selectedTabID != sessions[index].TabID {
+		t.Fatalf("the fixture selected tab %d, want %d", m.selectedTabID, sessions[index].TabID)
 	}
 	return m, r
 }
@@ -606,11 +607,8 @@ func TestTheStartupRequestIsSpentByTheFirstSuccess(t *testing.T) {
 	}
 }
 
-// TestTheSelectionFollowsItsTabThroughAReorder is the identity rule. The session
-// list is re-sorted on every read, and a new project that sorts ahead of the
-// selected one moves its index without moving the session an operator is looking
-// at.
-func TestTheSelectionFollowsItsTabThroughAReorder(t *testing.T) {
+// A newly discovered tab cannot move an existing tile under the operator.
+func TestTheSelectionStaysPutWhenANewTabArrives(t *testing.T) {
 	m, _ := started(t, 0)
 	later := viewSession(4, "zzz-later", "work", "claude")
 	earlier := viewSession(5, "aaa-earlier", "personal", "codex")
@@ -622,11 +620,50 @@ func TestTheSelectionFollowsItsTabThroughAReorder(t *testing.T) {
 
 	m = only(t, m, commands.TickMsg{})
 	m = only(t, m, snapshot(m.refreshActiveSeq, 0, []session.RunningSession{later, earlier}))
-	if got := tabs(m); len(got) != 2 || got[0] != 5 || got[1] != 4 {
-		t.Fatalf("the ordered list is %v, want the new project ahead of the selected one", got)
+	if got := tabs(m); len(got) != 2 || got[0] != 4 || got[1] != 5 {
+		t.Fatalf("the ordered list is %v, want the new project after the existing tile", got)
 	}
-	if m.selected != 1 || m.selectedTabID != 4 {
-		t.Fatalf("the selection is index %d/tab %d, want index 1 still on tab 4", m.selected, m.selectedTabID)
+	if m.selected != 0 || m.selectedTabID != 4 {
+		t.Fatalf("the selection is index %d/tab %d, want index 0 still on tab 4", m.selected, m.selectedTabID)
+	}
+}
+
+func TestOpeningSurfacesAttentionAndNonWorkingThenFreezesPositions(t *testing.T) {
+	working := viewSession(1, "alpha", "work", "codex")
+	working.State = "bolt"
+	idle := viewSession(2, "zeta", "work", "codex")
+	idle.State = "stop"
+	attention := viewSession(3, "omega", "work", "codex")
+	attention.State = "question"
+	m, _ := started(t, 0)
+	m = only(t, m, snapshot(firstRefreshSeq, 0, []session.RunningSession{working, idle, attention}))
+	if got, want := tabs(m), []int{3, 2, 1}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("opening tiles = %v, want %v", got, want)
+	}
+	if m.selectedTabID != 3 {
+		t.Fatalf("opening selection = %d, want first attention tab 3", m.selectedTabID)
+	}
+
+	// Changes in both directions do not shuffle the cards, even if another
+	// session is added and Kitty returns the rows in a different order.
+	working.State = "key"
+	attention.State = "bolt"
+	newcomer := viewSession(4, "aardvark", "work", "codex")
+	newcomer.State = "error"
+	m = only(t, m, commands.TickMsg{})
+	m = only(t, m, snapshot(m.refreshActiveSeq, 0, []session.RunningSession{newcomer, attention, working, idle}))
+	if got, want := tabs(m), []int{3, 2, 1, 4}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("refreshed tiles = %v, want stable survivors and appended new tab %v", got, want)
+	}
+	if m.sessions[0].State != "bolt" || m.sessions[2].State != "key" {
+		t.Fatal("the stable positions did not receive the refreshed status")
+	}
+
+	// A new F2 program gets a fresh triage snapshot rather than the old order.
+	reopened, _ := started(t, 0)
+	reopened = only(t, reopened, snapshot(firstRefreshSeq, 0, []session.RunningSession{idle, attention, working, newcomer}))
+	if got, want := tabs(reopened), []int{4, 1, 2, 3}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("reopened tiles = %v, want %v", got, want)
 	}
 }
 
@@ -907,9 +944,8 @@ func TestEnterFocusesTheCapturedTabAndExitsOnlyOnSuccess(t *testing.T) {
 	}
 }
 
-// TestEnterActsOnTheTabItCapturedNotTheOneTheIndexEndsUpOn is why the tab is read
-// at the keypress. A refresh landing during the round trip can reorder the list
-// under the cursor, and an operator who pressed Enter on a pane is owed that pane.
+// The pending focus keeps its tab identity while a new session arrives during
+// the round trip, regardless of the grid's unchanged positions.
 func TestEnterActsOnTheTabItCapturedNotTheOneTheIndexEndsUpOn(t *testing.T) {
 	first := viewSession(4, "zzz-last", "work", "claude")
 	m, r := started(t, first.WindowID)
@@ -920,12 +956,12 @@ func TestEnterActsOnTheTabItCapturedNotTheOneTheIndexEndsUpOn(t *testing.T) {
 		t.Fatalf("Enter dispatched %v, want tab %d", r.focus, first.TabID)
 	}
 
-	// A read lands mid-flight and puts another session ahead of the captured one.
+	// A read lands mid-flight with another session, leaving the existing tile put.
 	earlier := viewSession(5, "aaa-first", "personal", "codex")
 	m = only(t, m, commands.TickMsg{})
 	m = only(t, m, snapshot(m.refreshActiveSeq, 0, []session.RunningSession{first, earlier}))
-	if m.selected != 1 {
-		t.Fatalf("the reorder left the selection at index %d, want 1", m.selected)
+	if m.selected != 0 {
+		t.Fatalf("the refresh left the selection at index %d, want 0", m.selected)
 	}
 	if m.focusTabID != first.TabID {
 		t.Fatalf("the pending focus became tab %d, want the captured %d", m.focusTabID, first.TabID)

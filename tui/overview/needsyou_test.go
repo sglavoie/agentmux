@@ -34,8 +34,9 @@ func TestNeedsYouJumpsAcrossPagesInBothModes(t *testing.T) {
 			{"N", 35}, {"N", 20}, {"N", 10}, {"N", 1}, {"N", 35},
 		} {
 			m = only(t, m, key(t, jump.key))
-			if m.selected != jump.index || m.selectedTabID != sessions[jump.index].TabID || m.selectedWindowID != sessions[jump.index].WindowID {
-				t.Fatalf("compact=%v key=%s: selected=%d, want %d", compact, jump.key, m.selected, jump.index)
+			wantIndex, _ := indexOfTab(m.sessions, sessions[jump.index].TabID)
+			if m.selected != wantIndex || m.selectedTabID != sessions[jump.index].TabID || m.selectedWindowID != sessions[jump.index].WindowID {
+				t.Fatalf("compact=%v key=%s: selected=%d, want %d", compact, jump.key, m.selected, wantIndex)
 			}
 			if !strings.Contains(frameOf(m), sessions[jump.index].Project) {
 				t.Fatal("attention jump did not render the target's page")
@@ -48,7 +49,7 @@ func TestNeedsYouJumpsAcrossPagesInBothModes(t *testing.T) {
 				t.Fatal("compact navigation started preview reads")
 			}
 		}
-		if len(r.focus) != 0 || !reflect.DeepEqual(m.sessions, sessions) || !m.sessions[35].Unseen {
+		if len(r.focus) != 0 || !reflect.DeepEqual(m.sessions, OpeningOrder(sessions, nil, m.idleThreshold)) || !m.sessions[3].Unseen {
 			t.Fatal("attention navigation focused a pane or changed session/unread state")
 		}
 	}

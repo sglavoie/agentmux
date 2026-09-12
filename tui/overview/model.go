@@ -124,7 +124,8 @@ type model struct {
 	preferenceErr         error
 	quitAfterPreference   bool
 
-	// sessions is the whole live set in Order's tile order.
+	// sessions starts in urgency-first opening order, then retains the positions
+	// of surviving tabs for the lifetime of this overview.
 	sessions []session.RunningSession
 	// selected indexes sessions; selectedTabID and selectedWindowID are the row
 	// it last resolved to. The tab is the selection's identity and the window is

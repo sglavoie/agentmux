@@ -3,7 +3,9 @@ package overview
 import (
 	"reflect"
 	"testing"
+	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -164,6 +166,38 @@ func TestStatusNeverReordersATile(t *testing.T) {
 	}
 	if got := names(Order(noisy)); !reflect.DeepEqual(got, quiet) {
 		t.Errorf("a mixed-state set ordered as %v, want %v", got, quiet)
+	}
+}
+
+func TestOpeningOrderRanksAttentionThenNonWorkingThenWorking(t *testing.T) {
+	makeRow := func(tab int, name, state string, unseen bool) session.RunningSession {
+		s := row(tab, tab*10, name)
+		s.State, s.Unseen = state, unseen
+		return s
+	}
+	input := []session.RunningSession{
+		makeRow(1, "a-working", "bolt", false),
+		makeRow(2, "b-done", "stop", false),
+		makeRow(3, "c-question", "question", false),
+		makeRow(4, "d-subagent", "subagent", false),
+		makeRow(5, "e-unread", "stop", true),
+		makeRow(6, "f-tool-failed", "warning", false),
+		makeRow(7, "g-error", "error", false),
+		makeRow(8, "h-working", "bolt", false),
+	}
+	// The aggregate state can say a run is active while the agent has
+	// finished. The tile uses the agent turn's status, so ordering does too.
+	agentDone := makeRow(9, "i-agent-done", "bolt", false)
+	agentDone.AgentTurn = &protocol.AgentTurnSnapshot{IconState: "stop"}
+	input = append(input, agentDone)
+	before := append([]session.RunningSession(nil), input...)
+	got := names(OpeningOrder(input, nil, 5*time.Minute))
+	want := []string{"c-question", "e-unread", "g-error", "b-done", "d-subagent", "f-tool-failed", "i-agent-done", "a-working", "h-working"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("opening order = %v, want %v", got, want)
+	}
+	if !reflect.DeepEqual(input, before) {
+		t.Error("OpeningOrder modified the caller's snapshot")
 	}
 }
 
