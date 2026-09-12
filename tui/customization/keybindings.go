@@ -101,7 +101,10 @@ func (m keybindingsModel) bodyRows() []string {
 	}
 
 	for _, sec := range sections {
-		logical = append(logical, "", styleHeader.Render("  "+sec))
+		if len(logical) > 0 {
+			logical = append(logical, "")
+		}
+		logical = append(logical, styleHeader.Render("  "+sec))
 		for _, a := range kittykeys.Actions {
 			if a.Section != sec {
 				continue
@@ -162,9 +165,11 @@ func (m keybindingsModel) View() tea.View {
 
 	sb.WriteString(styleDim.Render(divider) + "\n")
 	footer := joinFooterBindings(" · ", renderFooterBinding("j/k", "scroll"), renderFooterBinding("g/G", "top/bottom"), renderFooterBinding("q/esc", "close"))
-	sb.WriteString(layout.StyledTruncate(footer, width, "…") + "\n")
+	sb.WriteString(layout.StyledTruncate(footer, width, "…"))
 
-	return tea.NewView(sb.String())
+	view := tea.NewView(sb.String())
+	view.AltScreen = true // Keep the title anchored to the overlay's first row.
+	return view
 }
 
 // RunKeybindingsOverlay renders the keybinding reference and blocks until the

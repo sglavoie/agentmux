@@ -123,7 +123,7 @@ func TestKeybindingsShortViewportIndicatorsAndFinalEntry(t *testing.T) {
 	if strings.Contains(top, "▲") || !strings.Contains(top, "▼") {
 		t.Fatalf("top indicators are incorrect:\n%s", top)
 	}
-	if got := len(strings.Split(strings.TrimSuffix(top, "\n"), "\n")); got != m.height {
+	if got := len(strings.Split(top, "\n")); got != m.height {
 		t.Fatalf("rendered lines = %d, want viewport height %d", got, m.height)
 	}
 
@@ -135,6 +135,34 @@ func TestKeybindingsShortViewportIndicatorsAndFinalEntry(t *testing.T) {
 	lastRow := stripAnsi(m.bodyRows()[len(m.bodyRows())-1])
 	if !strings.Contains(bottom, lastRow) {
 		t.Fatalf("bottom view does not include final reference row %q:\n%s", lastRow, bottom)
+	}
+}
+
+func TestKeybindingsTitleStaysAtFirstRow(t *testing.T) {
+	for _, size := range []struct{ width, height int }{{42, 10}, {24, 8}} {
+		m := keybindingsModel{width: size.width, height: size.height}
+		for _, offset := range []int{0, 1, m.maxOffset()} {
+			m.offset = offset
+			view := m.View()
+			if !view.AltScreen {
+				t.Fatal("keybinding reference must use a fixed screen to anchor its title")
+			}
+			lines := strings.Split(stripAnsi(view.Content), "\n")
+			if got := lines[0]; got != "Keybinding Reference" {
+				t.Fatalf("first row at %dx%d offset %d = %q", size.width, size.height, offset, got)
+			}
+			if got := len(lines); got != size.height {
+				t.Fatalf("rows at %dx%d offset %d = %d, want %d", size.width, size.height, offset, got, size.height)
+			}
+		}
+	}
+}
+
+func TestKeybindingsFirstSectionHasNoLeadingBlankRow(t *testing.T) {
+	m := keybindingsModel{width: 42, height: 10}
+	rows := m.bodyRows()
+	if got := stripAnsi(rows[0]); got != "  Overlays" {
+		t.Fatalf("first body row = %q, want Overlays immediately", got)
 	}
 }
 
