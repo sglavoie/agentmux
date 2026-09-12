@@ -3,6 +3,7 @@ package commands
 import (
 	"errors"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -472,5 +473,186 @@ func TestRefreshOverviewMatchesTheDashboardsSessionFacts(t *testing.T) {
 		t.Fatalf("forwarded daemon maps differ:\n overview  = %+v / %+v / %+v\n dashboard = %+v / %+v / %+v",
 			overviewMsg.States, overviewMsg.Watchdog, overviewMsg.Activity,
 			dashboardMsg.States, dashboardMsg.Watchdog, dashboardMsg.Activity)
+	}
+}
+
+// selectionWorld is one Kitty instance rather than one photograph of one: a
+// user-var write aimed at a window EDITS the tree that every later read — the
+// daemon's published snapshot included — is served from.
+//
+// Every other fixture in this file hands both commands the same immutable tree,
+// which can show the two DISAGREEING about a pending request but cannot show
+// what the overview's answer leaves behind for the next reader. "Left intact"
+// is a claim about consequences, and the only shape it can be asserted in is two
+// reads happening in sequence against one mutable world.
+//
+// It borrows the strict client for the ten methods neither command may call, so
+// a regression that focused a window or launched a tab still fails here exactly
+// as it does everywhere else in the package.
+type selectionWorld struct {
+	*recordingKittyClient
+
+	mu      sync.Mutex
+	windows []kitty.OSWindow
+	lists   int
+	writes  []map[string]string
+}
+
+func newSelectionWorld(windows []kitty.OSWindow) *selectionWorld {
+	return &selectionWorld{recordingKittyClient: &recordingKittyClient{}, windows: windows}
+}
+
+func (w *selectionWorld) ListWindows() ([]kitty.OSWindow, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.lists++
+	return w.copyTree(), nil
+}
+
+// SetUserVars applies the one variable this world models and records every write
+// whatever it carried, so a re-anchor stamp is counted as a write without being
+// invented as a tree edit.
+func (w *selectionWorld) SetUserVars(match string, vars map[string]string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.writes = append(w.writes, vars)
+	value, ok := vars[kitty.DashboardSelectionVar]
+	if !ok {
+		return nil
+	}
+	for i := range w.windows {
+		for j := range w.windows[i].Tabs {
+			for k := range w.windows[i].Tabs[j].Windows {
+				win := &w.windows[i].Tabs[j].Windows[k]
+				if match == kitty.MatchWindowByID(win.ID) {
+					win.UserVars.DashboardSelect = value
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// snapshotTree is what the daemon would have published a moment ago: the same
+// world, read through the same copy, so the daemon-first path and the direct
+// fallback describe one Kitty rather than two.
+func (w *selectionWorld) snapshotTree() []kitty.OSWindow {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.copyTree()
+}
+
+// copyTree deep-copies down to the window, which is the level a write edits, so
+// a consumer holding an earlier answer never observes a later one.
+func (w *selectionWorld) copyTree() []kitty.OSWindow {
+	out := make([]kitty.OSWindow, len(w.windows))
+	for i, osWindow := range w.windows {
+		out[i] = osWindow
+		out[i].Tabs = make([]kitty.Tab, len(osWindow.Tabs))
+		for j, tab := range osWindow.Tabs {
+			out[i].Tabs[j] = tab
+			out[i].Tabs[j].Windows = append([]kitty.Window(nil), tab.Windows...)
+		}
+	}
+	return out
+}
+
+func (w *selectionWorld) writeCount() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return len(w.writes)
+}
+
+func (w *selectionWorld) listCount() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.lists
+}
+
+// pendingSelection is the request as the world currently holds it, which is the
+// fact the two reads below hand to each other.
+func (w *selectionWorld) pendingSelection() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for _, osWindow := range w.windows {
+		for _, tab := range osWindow.Tabs {
+			for _, win := range tab.Windows {
+				if win.UserVars.DashboardSelect != "" {
+					return win.UserVars.DashboardSelect
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// TestOverviewRetrievalLeavesTheRequestForTheDashboardToConsume is the
+// integration claim the two policies exist to make true together: an operator
+// may raise the overview over a launching pane as often as they like, and the
+// selection the launcher addressed to the DASHBOARD is still there, unspent,
+// when the dashboard next reads.
+//
+// The sequence is deliberately the hostile one. The overview reads repeatedly,
+// across both topology sources, and from the request-bearing window itself — the
+// nearest thing to a reader that might think the request was meant for it — and
+// only then does the dashboard read the same world and consume it. A final
+// dashboard read proves the consumption was a clear rather than a report: the
+// request is gone from the world, so it cannot be honored twice.
+func TestOverviewRetrievalLeavesTheRequestForTheDashboardToConsume(t *testing.T) {
+	world := newSelectionWorld(ghostTree())
+	daemonUp := true
+	stubStateQuery(t, func() (protocol.Response, error) {
+		if !daemonUp {
+			return protocol.Response{}, errors.New("daemon unavailable")
+		}
+		return protocol.Response{OK: true, KittySnapshot: readySnapshot(world.snapshotTree(), false)}, nil
+	})
+	stubLocalKittySocket(t, localKittySocket)
+	cfg := ghostConfig()
+
+	for seq := 1; seq <= 3; seq++ {
+		daemonUp = seq != 3 // the third read takes the direct-listing fallback
+		msg, ok := RefreshOverview(world, cfg, seq, 700)().(SessionsMsg)
+		if !ok {
+			t.Fatalf("overview read %d did not produce a session list", seq)
+		}
+		if msg.SelectionTabID != 70 {
+			t.Fatalf("overview read %d selected tab %d, want the source pane's own tab 70",
+				seq, msg.SelectionTabID)
+		}
+		if msg.SelectionToken != "" {
+			t.Fatalf("overview read %d reported token %q, want empty", seq, msg.SelectionToken)
+		}
+	}
+	daemonUp = true
+
+	if got := world.writeCount(); got != 0 {
+		t.Fatalf("three overview reads drove %d writes into Kitty, want 0: %v", got, world.writes)
+	}
+	if got := world.listCount(); got != 1 {
+		t.Fatalf("three overview reads ran %d direct listings, want the single one the daemon outage forced", got)
+	}
+	if got := world.pendingSelection(); got != "7:request-1" {
+		t.Fatalf("the request in the world reads %q, want it untouched as %q", got, "7:request-1")
+	}
+
+	// The handoff. The dashboard reads the world the overview left and finds the
+	// request exactly as the launcher wrote it.
+	consumed := Refresh(world, cfg, cfg.Defaults.Sort, 4, 700)().(SessionsMsg)
+	if consumed.SelectionTabID != 7 || consumed.SelectionToken != "request-1" {
+		t.Fatalf("dashboard selection = tab %d token %q, want tab 7 token request-1",
+			consumed.SelectionTabID, consumed.SelectionToken)
+	}
+	if got := world.pendingSelection(); got != "" {
+		t.Fatalf("the request still reads %q after the dashboard consumed it, want cleared", got)
+	}
+
+	// And it was consumed once. A second dashboard read of the same world falls
+	// back to the pane it was invoked from, which is what proves the overview's
+	// restraint did not merely defer a double honor.
+	again := Refresh(world, cfg, cfg.Defaults.Sort, 5, 700)().(SessionsMsg)
+	if again.SelectionTabID != 70 || again.SelectionToken != "" {
+		t.Fatalf("second dashboard read = tab %d token %q, want the source pane's tab 70 and no token",
+			again.SelectionTabID, again.SelectionToken)
 	}
 }

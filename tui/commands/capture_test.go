@@ -61,18 +61,6 @@ func (c *capturingKittyClient) GetText(matchExpr, extent string) (string, error)
 	return c.text[windowID], nil
 }
 
-func (c *capturingKittyClient) callsFor(windowID int) int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	n := 0
-	for _, id := range c.calls {
-		if id == windowID {
-			n++
-		}
-	}
-	return n
-}
-
 // windowIDOf reverses kitty.MatchWindowByID, so the fake answers the window the
 // command actually asked for rather than one the test assumed it would.
 func windowIDOf(matchExpr string) int {

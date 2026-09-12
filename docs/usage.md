@@ -7,6 +7,10 @@ from the Kitty tab that opened it when possible. `/` filters the live-session
 list; `:` opens the command palette, from which **Search All Past Sessions**
 opens Past Sessions and **Search Plans** opens Plans.
 
+Beside it, `amx overview` (bound to `F2`) opens the
+[live session overview](#live-session-overview): a separate program that shows
+every managed session at once as a grid of live pane previews.
+
 The same workflows are scriptable. Machine-readable commands use one
 `{"schema_version":1,"data":...}` success envelope; failures use a structured
 `error` envelope and ambiguous selectors return candidates instead of guessing.
@@ -331,6 +335,82 @@ The detail pane's event history persists through terminal hooks (`Stop`,
 review what a session did after its icon clears. History is held in memory per
 Kitty window and capped at 5 000 events (oldest dropped); it is released only
 when the window closes or the daemon restarts.
+
+## Live session overview
+
+```bash
+amx overview
+```
+
+`F2` in the bundled Kitty snippet opens the same surface as an overlay. It is a
+grid: one tile per managed session in this Kitty instance, each with a
+three-line header — which session, what it is doing and for how long, and what
+is running it — and a live preview of that pane's screen below a divider. It
+answers "what is every session doing right now" in one glance, which the list
+answers one row at a time.
+
+The header is the full inspector's six-line metadata block cut to the three
+questions asked of a session you are *not* currently looking at. Branch,
+directory, and the supervision/lock/mute line are the ones asked of a session
+already picked, and the inspector is where picking one leads. The status
+sentence, its emphasis, its clock, and its unread marker are the same ones the
+dashboard row and the inspector draw, so a tile never phrases a fact
+differently from the row that raised it.
+
+The overview is a **separate program**, not a dashboard mode. It has its own
+keymap and its own refresh, the dashboard keeps running behind it, and closing
+one does not disturb the other.
+
+- `←↑↓→` or `h`/`j`/`k`/`l`: move within the page. These are spatial: the end of
+  a row is a wall rather than a wrap onto a tile the eye did not expect
+- `Tab`/`Shift+Tab`: the next/previous session in the whole list, crossing rows
+  and pages
+- `PgUp`/`PgDn`: one page; `Home`/`End`: the first and last session
+- `Enter`: focus the selected session's Kitty tab and leave. The tab is captured
+  when you press the key, so a refresh landing during the round trip cannot
+  hand you a different pane. A focus that fails leaves you on the overview with
+  the reason on the feedback row and the same tile selected, which is the only
+  state retrying makes sense from
+- `Esc`, `q`, `Ctrl+C`: close, whether or not a read is still out
+
+Nothing else is bound. Every movement key changes one integer and starts no
+command at all, so browsing the overview is observation: it lists windows, reads
+screen text, and focuses a tab, and it writes nothing to Kitty, to the daemon, or
+to the filesystem. `Enter` is the one key that acts.
+
+The header counts the sessions and, when more than one page of them exists, says
+which page you are on (`page 2/3`). The grid sizes itself to the terminal — a
+tile targets 48 columns and 12 rows, so a 120x30 window shows four sessions at a
+time and a 160x45 one shows nine. That target is not a floor: a terminal too
+small for even one full tile still draws one cramped tile rather than an empty
+grid, and a tile too small to wear a box drops the box before it drops the
+session's name. Resizing keeps the selected session selected
+and re-aims the previews at whatever is now on screen; the page follows the
+selection rather than the other way round.
+
+Previews refresh on their own cadence and are **bounded**: at most four screen
+reads are in flight at once, one per window, queued fairly and coalesced, so a
+screenful of tiles costs a handful of reads rather than one per tile per tick. A
+read that fails is confined to its own tile — the other tiles keep showing their
+output — and a session that disappears takes its tile and its retained text with
+it on the next refresh. A tile whose read has not landed yet says `(loading…)`;
+a pane that has genuinely printed nothing says `(no output)`, which is a
+different answer.
+
+The overview is a singleton. Invoking it again — `F2` from any tab, or `amx
+overview` from a shell — focuses the one already open rather than drawing a
+second copy, and hands it nothing: it already shows every session, so it keeps
+the selection and the page you left it on. Unlike the dashboard and the overlay
+pickers, it reports a Kitty listing or focus failure as an error instead of
+assuming nothing is open, because the degraded answer there is a second
+full-screen surface polling Kitty beside the first.
+
+The topology it draws comes from the daemon's published window snapshot when one
+is available and attributable to this Kitty instance, exactly as the dashboard's
+does, and falls back to listing Kitty directly when it is not. A refresh that is
+delayed says so on the feedback row — `Kitty refresh delayed; showing cached
+sessions (Ns old)` — and keeps drawing the last good list rather than emptying
+the grid.
 
 ## The agent-session-loop cockpit
 

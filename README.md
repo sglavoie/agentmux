@@ -12,6 +12,8 @@ The binary is **`amx`**.
 ## What it does
 
 - manages multiple configured projects from one Bubble Tea dashboard,
+- shows every live session at once as a grid of live pane previews (`F2`, or
+  `amx overview`),
 - supports multiple harness profiles side by side,
 - gives each project a default profile, but lets you override it for one launch,
 - searches filesystem-backed Past Sessions and Plans without a database,
@@ -78,7 +80,16 @@ bindings, including `F2` for the live session overview,
 state icons, and `F7`/`F9` for previous or next managed tabs.
 It also disables Kitty tab bell markers and audible bells for any Kitty
 instance that includes the snippet, so Agent Mux's tab icons remain the
-attention signal.
+attention signal. `F1` opens the same binding reference from inside Kitty, and
+it is generated from the catalog the snippet itself is generated from, so the
+two cannot disagree about what a key does.
+
+Reloading matters for bindings and nothing else. `just install` replaces the
+`amx` binary and restarts the daemon, so a new *behavior* is live immediately;
+a new or changed **keybinding** only reaches a running Kitty once that instance
+reloads its configuration (`Ctrl+Shift+F5`, or restart Kitty). Upgrading from a
+release without `F2` is exactly that case: `amx overview` works from any shell
+straight away, but the key does nothing until Kitty has re-read the snippet.
 
 ### Upgrading the pair
 

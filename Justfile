@@ -43,8 +43,13 @@ fmt-check:
 
 # Run the concurrency-sensitive filesystem persistence, continuity, Kitty
 # read-coordination, daemon, and TUI suites under the race detector.
+#
+# `./tui` does not include its subpackages. `./tui/commands` owns the live
+# topology reads and the package-level seams tests swap, and `./tui/overview`
+# runs its own Bubble Tea program with reads in flight, so both are named here
+# rather than inherited.
 race-core:
-    go test -race ./internal/transcript ./internal/plans ./internal/handoff ./internal/worktree ./internal/kitty ./internal/daemon ./tui
+    go test -race ./internal/transcript ./internal/plans ./internal/handoff ./internal/worktree ./internal/kitty ./internal/daemon ./tui ./tui/commands ./tui/overview
 
 # Run every committed narrow/wide TUI acceptance scenario in isolation.
 tui-scenarios:

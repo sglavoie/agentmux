@@ -494,7 +494,39 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   cannot prove the instance renders the state and loop markers parsed from live
   Kitty titles instead, exactly as it does with no daemon at all. A stale tree is
   still rendered but drives no Kitty write, because the window IDs in it may
-  already be gone.
+  already be gone. It also owns the read-only retrieval boundary:
+  `RefreshOverview` is `Refresh` minus its write budget, and the two share the
+  unexported `readLiveSessions` so the shape of the topology cannot drift between
+  them. The distinction is not an optimization. `Refresh` is allowed to spend a
+  bounded number of Kitty writes reconciling what it found — including consuming
+  the one-time `amx_dashboard_select` request — and only the dashboard may do
+  that, because that request names a selection exactly once and a second surface
+  reading it would swallow it. `RefreshOverview` therefore performs no Kitty
+  write of any kind, and the guarantee is tested from both sides: the overview's
+  recording client records a violation for every write method, and a dedicated
+  test asserts that an overview retrieval leaves a pending selection request
+  intact for the dashboard to consume afterwards.
+- `tui/overview`: the live session overview — the standalone Bubble Tea program
+  `amx overview` and `F2` open, showing every managed session at once as a grid
+  of live pane previews. Like `tui/customization` it is a sibling of the root
+  rather than one of its leaves: `cmd/dashboard` runs it directly and root `tui`
+  does not import it. It reaches the world only through an unexported `deps`
+  struct of six function values (topology, focus, tick, capture, capture tick,
+  clock), which is what lets the package-level acceptance sequences drive the
+  real `Update`/`View` loop against a frozen clock, scripted snapshots, and a
+  recording Kitty client with no sleeps anywhere. Two properties are the package
+  rather than details of it. Its reads are BOUNDED, FAIR, and RECOVERABLE — at
+  most four captures in flight and one per window, queued FIFO and coalesced, a
+  request ID releasing the slot so a lost reply cannot leak one, and a generation
+  gating what may be painted so a late reply cannot repaint a grid that has since
+  been repaged or resized. And it is READ-ONLY against Kitty except for the one
+  focus call `Enter` makes: it retrieves topology through
+  `commands.RefreshOverview` and never `commands.Refresh`, so it cannot consume
+  the dashboard's pending selection request. Its compact three-line tile header
+  (`dashboard.CompactMetaLines`) is deliberately a strict subset of the
+  inspector's six facts — branch, directory, and the supervision/lock/mute line
+  stay in the inspector, because a tile that grew them would be an inspector
+  rendered nine times rather than an overview.
 - `tui/customization`: the standalone color, icon, and keybinding overlays, each
   its own Bubble Tea program. It is a sibling of the root rather than one of its
   leaves: `cmd` launches it directly and root `tui` does not import it.
