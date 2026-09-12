@@ -73,8 +73,9 @@ include agent-mux.conf
 ```
 
 Reload Kitty. The bundled config keeps the dashboard hotkey and tab-navigation
-bindings, including `F4` for the next attention tab, `F8` to clear the current
-tab's markers and state icons, and `F7`/`F9` for previous or next managed tabs.
+bindings, including `F2` for the live session overview,
+`F4` for the next attention tab, `F8` to clear the current tab's markers and
+state icons, and `F7`/`F9` for previous or next managed tabs.
 It also disables Kitty tab bell markers and audible bells for any Kitty
 instance that includes the snippet, so Agent Mux's tab icons remain the
 attention signal.

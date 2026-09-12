@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/sglavoie/agentmux/internal/kittykeys"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -20,6 +21,42 @@ func TestKeybindingsViewIncludesHarnessIconPicker(t *testing.T) {
 		if !strings.Contains(flattened, want) {
 			t.Fatalf("keybinding reference missing %q:\n%s", want, view)
 		}
+	}
+}
+
+// The F1 reference is the only place F2 is advertised, and it derives its rows
+// from the shared catalog — so what it says has to be what the binding actually
+// does: open the overview, or focus the one already open.
+func TestKeybindingsViewIncludesTheLiveSessionOverview(t *testing.T) {
+	view := (keybindingsModel{}).View().Content
+	flattened := strings.ReplaceAll(stripAnsi(view), "\n", "")
+	for _, want := range []string{
+		"Overlays",
+		"f2",
+		"open or focus the live session overview",
+	} {
+		if !strings.Contains(flattened, want) {
+			t.Fatalf("keybinding reference missing %q:\n%s", want, view)
+		}
+	}
+
+	var overview kittykeys.Action
+	for _, action := range kittykeys.Actions {
+		if action.Key == "f2" {
+			overview = action
+		}
+	}
+	if overview.Description == "" {
+		t.Fatal("the shared catalog has no f2 description for the reference to render")
+	}
+	if !strings.Contains(flattened, overview.Description) {
+		t.Fatalf("reference text and catalog description disagree: %q missing from\n%s", overview.Description, view)
+	}
+	// A reference that advertised the singleton while the command opened a second
+	// copy would be worse than one that said nothing, so the sentence and the
+	// command's own description have to make the same promise.
+	if !strings.Contains(overview.Description, "focus") {
+		t.Fatalf("f2 description %q does not advertise focusing an open overview", overview.Description)
 	}
 }
 

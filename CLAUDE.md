@@ -99,11 +99,17 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   a package's own name is not in scope inside its files.
 - `cmd/dashboard`: the interactive surfaces `amx` opens inside Kitty — the
   live-session dashboard, which is what a bare `amx` runs rather than a
-  subcommand of its own, and the color, harness-icon, and keybinding overlays.
+  subcommand of its own, the live session overview behind `amx overview` and its
+  F2 binding, and the color, harness-icon, and keybinding overlays.
   What makes them one family is the singleton rule: each asks Kitty whether its
   surface is already open and focuses that window instead of opening a second
   copy, and the dashboard additionally hands the running instance the tab the
-  caller came from.
+  caller came from. The overview is where that rule is strictest: it hands a
+  running instance nothing, because it shows every session at once and a repeat
+  invocation must not disturb the selection or page the operator left, and it
+  reports a Kitty listing or focus failure as an error instead of degrading to
+  "nothing is open", because the degraded answer is a second full-screen surface
+  polling Kitty beside the first.
 - `cmd/config`: the `amx config` family — the config file's lifecycle (init,
   edit, show, path, validate, including the `$EDITOR` field splitter and the
   project-directory audit) and `asl-sync`, the ordered preflight-migrate-write-

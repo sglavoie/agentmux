@@ -16,6 +16,7 @@ type Action struct {
 var Actions = []Action{
 	// Overlays
 	{Key: "f1", Section: "Overlays", Description: "show this keybinding reference", AmxCommand: "keybindings", LaunchType: "overlay"},
+	{Key: "f2", Section: "Overlays", Description: "open or focus the live session overview", AmxCommand: "overview --window-id @active-kitty-window-id", LaunchType: "overlay"},
 	{Key: "ctrl+shift+d", Section: "Overlays", Description: "open or focus Agent Mux dashboard", AmxCommand: "--window-id @active-kitty-window-id", LaunchType: "overlay"},
 	// Session management
 	{Key: "f5", Section: "Sessions", Description: "set tab harness icon (overlay picker)", AmxCommand: "icon-picker", LaunchType: "overlay"},

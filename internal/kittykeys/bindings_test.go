@@ -32,6 +32,34 @@ func TestDashboardBindingLaunchesAMXRootOverlay(t *testing.T) {
 	}
 }
 
+// F2 is the overview's only keyboard entry point, and the whole singleton
+// contract depends on the argv it launches: `overview` has to be the subcommand
+// (the detector recognizes nothing else) and the source window has to be passed
+// (otherwise the overview cannot preselect the pane the operator came from).
+func TestOverviewBindingLaunchesF2OverlayWithTheSourceWindow(t *testing.T) {
+	overview := findAction(t, "f2")
+
+	if overview.Section != "Overlays" {
+		t.Fatalf("f2 Section = %q, want Overlays", overview.Section)
+	}
+	if overview.LaunchType != "overlay" {
+		t.Fatalf("f2 LaunchType = %q, want overlay", overview.LaunchType)
+	}
+	if overview.AmxCommand != "overview --window-id @active-kitty-window-id" {
+		t.Fatalf("f2 AmxCommand = %q, want the overview command with the active Kitty window ID", overview.AmxCommand)
+	}
+	if overview.Description != "open or focus the live session overview" {
+		t.Fatalf("f2 Description = %q", overview.Description)
+	}
+	const want = "map f2 launch --type=overlay --allow-remote-control amx overview --window-id @active-kitty-window-id"
+	if got := overview.ConfigLine(); got != want {
+		t.Fatalf("f2 ConfigLine() = %q, want %q", got, want)
+	}
+	if first := strings.Fields(overview.AmxCommand)[0]; first != "overview" {
+		t.Fatalf("f2 launches %q, want overview as the subcommand", first)
+	}
+}
+
 func TestIconPickerBindingLaunchesF5Overlay(t *testing.T) {
 	picker := findAction(t, "f5")
 

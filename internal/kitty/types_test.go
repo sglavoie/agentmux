@@ -226,6 +226,114 @@ func TestIsKeybindingsCmdline(t *testing.T) {
 	}
 }
 
+func TestFindOverviewWindow(t *testing.T) {
+	windows := []OSWindow{
+		{ID: 1, Tabs: []Tab{{
+			ID: 10,
+			Windows: []Window{
+				{ID: 100, ForegroundProcesses: []ForegroundProcess{{Cmdline: []string{"amx", "keybindings"}}}},
+				{ID: 101, ForegroundProcesses: []ForegroundProcess{{Cmdline: []string{"claude", "overview"}}}},
+			},
+		}}},
+		{ID: 2, Tabs: []Tab{{
+			ID: 88,
+			Windows: []Window{
+				{ID: 879, ForegroundProcesses: []ForegroundProcess{{Cmdline: []string{"amx", "focus-next", "--window-id", "101"}}}},
+				{ID: 880, ForegroundProcesses: []ForegroundProcess{{Cmdline: []string{"/usr/local/bin/amx", "overview", "--window-id", "101"}}}},
+			},
+		}}},
+	}
+
+	loc, found := FindOverviewWindow(windows, 0)
+	if !found {
+		t.Fatal("expected to find the overview in the second OS window")
+	}
+	if loc.TabID != 88 || loc.WindowID != 880 {
+		t.Fatalf("location = %+v, want tab 88 window 880", loc)
+	}
+	if _, found := FindOverviewWindow(windows, 880); found {
+		t.Fatal("expected self-exclusion to prevent an overview match")
+	}
+	if _, found := FindOverviewWindow(nil, 0); found {
+		t.Fatal("expected no match in nil slice")
+	}
+	if _, found := FindOverviewWindow(windows[:1], 0); found {
+		t.Fatal("expected no match among an unrelated overlay and an unrelated binary")
+	}
+}
+
+func TestIsOverviewCmdline(t *testing.T) {
+	tests := []struct {
+		name    string
+		cmdline []string
+		want    bool
+	}{
+		{"bare amx overview", []string{"amx", "overview"}, true},
+		{"full path", []string{"/usr/local/bin/amx", "overview"}, true},
+		{"F2 binding argv", []string{"amx", "overview", "--window-id", "101"}, true},
+		{"source window equals form", []string{"amx", "overview", "--window-id=101"}, true},
+		{"with debug root flag", []string{"amx", "--debug", "overview"}, true},
+		{"with multiple root flags", []string{"amx", "--debug=false", "-v", "overview", "--window-id", "7"}, true},
+		{"source window flag without value", []string{"amx", "overview", "--window-id"}, false},
+		{"root help invocation", []string{"amx", "--help", "overview"}, false},
+		{"subcommand help invocation", []string{"amx", "overview", "--help"}, false},
+		{"root version invocation", []string{"amx", "--version", "overview"}, false},
+		{"subcommand version invocation", []string{"amx", "overview", "--version"}, false},
+		{"terminator before subcommand", []string{"amx", "--", "overview"}, false},
+		{"terminator after subcommand", []string{"amx", "overview", "--"}, false},
+		// The word is the subcommand or it is nothing: another command carrying
+		// it as an argument must not be focused in the overview's place.
+		{"overview as another command's argument", []string{"amx", "session", "continue", "overview"}, false},
+		{"overview as another flag's value", []string{"amx", "hook-indicator", "--state", "overview"}, false},
+		{"trailing positional argument", []string{"amx", "overview", "api"}, false},
+		{"unknown flag after the subcommand", []string{"amx", "overview", "--json"}, false},
+		{"another overlay", []string{"amx", "keybindings"}, false},
+		{"bare amx", []string{"amx"}, false},
+		{"flag-only no subcommand", []string{"amx", "--debug"}, false},
+		{"different binary", []string{"claude", "overview"}, false},
+		{"empty", []string{}, false},
+		{"nil", nil, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isOverviewCmdline(tt.cmdline); got != tt.want {
+				t.Errorf("isOverviewCmdline(%v) = %v, want %v", tt.cmdline, got, tt.want)
+			}
+		})
+	}
+}
+
+// The root dashboard and the overview are the two surfaces here whose argv
+// carries --window-id, so they are the pair most easily confused: each detector
+// has to claim its own argv and refuse the other's, or F2 and ctrl+shift+d would
+// focus each other's windows.
+func TestTheDashboardAndOverviewDetectorsClaimOnlyTheirOwnArgv(t *testing.T) {
+	tests := []struct {
+		name          string
+		cmdline       []string
+		wantDashboard bool
+		wantOverview  bool
+	}{
+		{"dashboard binding argv", []string{"amx", "--window-id", "101"}, true, false},
+		{"overview binding argv", []string{"amx", "overview", "--window-id", "101"}, false, true},
+		{"bare amx", []string{"amx"}, true, false},
+		{"bare overview", []string{"amx", "overview"}, false, true},
+		{"another overlay", []string{"amx", "keybindings"}, false, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isDashboardCmdline(tt.cmdline); got != tt.wantDashboard {
+				t.Errorf("isDashboardCmdline(%v) = %v, want %v", tt.cmdline, got, tt.wantDashboard)
+			}
+			if got := isOverviewCmdline(tt.cmdline); got != tt.wantOverview {
+				t.Errorf("isOverviewCmdline(%v) = %v, want %v", tt.cmdline, got, tt.wantOverview)
+			}
+		})
+	}
+}
+
 func TestIsColorPickerCmdline(t *testing.T) {
 	tests := []struct {
 		name    string

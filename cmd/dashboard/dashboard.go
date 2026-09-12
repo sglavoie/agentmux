@@ -1,14 +1,19 @@
 // Package dashboard holds the interactive surfaces `amx` opens inside Kitty:
 // the live-session dashboard itself, which is what the bare `amx` invocation
-// runs, and the three customization overlays (color picker, harness icon
-// picker, keybinding reference).
+// runs, the live session overview behind `amx overview` (F2), and the three
+// customization overlays (color picker, harness icon picker, keybinding
+// reference).
 //
 // What makes them one family is not that they all draw something. It is that
 // each of them is a singleton in a Kitty session: before launching, every one
 // asks Kitty whether its surface is already open somewhere and, if it is,
 // focuses that tab and window instead of opening a second copy. The dashboard
 // additionally hands the already-running instance the tab the caller came from,
-// so focusing an existing dashboard still selects the right row.
+// so focusing an existing dashboard still selects the right row; the overview
+// deliberately hands it nothing, because it shows every session at once and a
+// repeat invocation must not disturb the selection or page the operator left.
+// The overview is also the one surface here that REPORTS a Kitty failure rather
+// than degrading to "nothing is open": see focusExistingOverview.
 //
 // There is deliberately no `dashboard` subcommand. The dashboard is the root
 // command's default execution path, so this package exposes Run for the root to

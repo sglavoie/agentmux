@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/kittykeys"
 )
 
 func TestAgentMuxConf_DisablesBellMarkersAndAudioBell(t *testing.T) {
@@ -54,6 +56,43 @@ func TestDashboardBindingPassesActiveWindowID(t *testing.T) {
 	const binding = "map ctrl+shift+d  launch --type=overlay --allow-remote-control amx --window-id @active-kitty-window-id"
 	if !hasActiveConfigLine(string(conf), binding) {
 		t.Fatalf("agent-mux.conf missing dashboard source-window binding %q", binding)
+	}
+}
+
+// The snippet an operator actually includes and the catalog the F1 reference is
+// drawn from are two copies of the same binding, so the shipped line is asserted
+// to be exactly the one the catalog generates rather than merely similar to it.
+func TestAgentMuxConfShipsTheOverviewBindingTheCatalogGenerates(t *testing.T) {
+	conf, err := os.ReadFile("agent-mux.conf")
+	if err != nil {
+		t.Fatalf("ReadFile(agent-mux.conf): %v", err)
+	}
+
+	var overview kittykeys.Action
+	for _, action := range kittykeys.Actions {
+		if action.Key == "f2" {
+			overview = action
+		}
+	}
+	if overview.Key == "" {
+		t.Fatal("the shared binding catalog has no f2 overview binding")
+	}
+
+	const binding = "map f2 launch --type=overlay --allow-remote-control amx overview --window-id @active-kitty-window-id"
+	if got := overview.ConfigLine(); got != binding {
+		t.Fatalf("catalog f2 ConfigLine() = %q, want %q", got, binding)
+	}
+	if !hasActiveConfigLine(string(conf), binding) {
+		t.Fatalf("agent-mux.conf missing active overview binding %q", binding)
+	}
+
+	readme, err := os.ReadFile("README.md")
+	if err != nil {
+		t.Fatalf("ReadFile(README.md): %v", err)
+	}
+	const documented = "`F2` for the live session overview"
+	if !strings.Contains(string(readme), documented) {
+		t.Fatalf("README.md missing documented overview binding %q", documented)
 	}
 }
 

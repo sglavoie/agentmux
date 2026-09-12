@@ -216,6 +216,81 @@ func isKeybindingsCmdline(cmdline []string) bool {
 	return false
 }
 
+// FindOverviewWindow scans all OS windows for a window whose foreground process
+// is amx overview. excludeWindowID is skipped to avoid self-detection (pass the
+// current KITTY_WINDOW_ID): the launcher asking the question is itself an
+// `amx overview` process, so without the exclusion every invocation would find
+// itself and focus the window it is about to replace.
+func FindOverviewWindow(osWindows []OSWindow, excludeWindowID int) (*DashboardLocation, bool) {
+	for i := range osWindows {
+		for j := range osWindows[i].Tabs {
+			tab := &osWindows[i].Tabs[j]
+			for k := range tab.Windows {
+				w := &tab.Windows[k]
+				if w.ID == excludeWindowID {
+					continue
+				}
+				for _, fp := range w.ForegroundProcesses {
+					if isOverviewCmdline(fp.Cmdline) {
+						return &DashboardLocation{TabID: tab.ID, WindowID: w.ID}, true
+					}
+				}
+			}
+		}
+	}
+	return nil, false
+}
+
+// isOverviewCmdline reports whether an argv is a running `amx overview`.
+//
+// The word "overview" has to be the SUBCOMMAND, not merely present: the F2
+// binding ships it beside `--window-id @active-kitty-window-id`, so a matcher
+// that accepted the word anywhere would also accept any other command that
+// happened to carry it as an argument and would focus an unrelated window
+// instead of opening the overview. Hence the two halves below — global flags are
+// tolerated before the subcommand (so `amx --debug overview` is still found, as
+// it is for the other overlays), and after it only overview's own source-window
+// flag may appear.
+func isOverviewCmdline(cmdline []string) bool {
+	if len(cmdline) < 2 || filepath.Base(cmdline[0]) != "amx" {
+		return false
+	}
+
+	foundSubcommand := false
+	for i := 1; i < len(cmdline); i++ {
+		arg := cmdline[i]
+		if arg == "--" || isInfoOnlyRootFlag(arg) {
+			return false
+		}
+		if !foundSubcommand {
+			if strings.HasPrefix(arg, "-") {
+				continue
+			}
+			if arg != "overview" {
+				return false
+			}
+			foundSubcommand = true
+			continue
+		}
+		// `amx overview` takes no positional arguments, so anything that is not
+		// its source-window flag means this argv is something else that merely
+		// spells "overview" — or a help invocation, which draws no surface to
+		// focus.
+		if arg == "--window-id" {
+			if i+1 >= len(cmdline) {
+				return false
+			}
+			i++
+			continue
+		}
+		if strings.HasPrefix(arg, "--window-id=") {
+			continue
+		}
+		return false
+	}
+	return foundSubcommand
+}
+
 // FindColorPickerWindow scans all OS windows for a window whose foreground
 // process is amx color-picker. excludeWindowID is skipped to avoid
 // self-detection (pass the current KITTY_WINDOW_ID).
