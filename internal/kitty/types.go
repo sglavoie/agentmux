@@ -3,6 +3,7 @@ package kitty
 import (
 	"encoding/json"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -168,6 +169,29 @@ func isInfoOnlyRootFlag(arg string) bool {
 	}
 }
 
+// isInheritedRootFlag reports whether arg is a root persistent flag in a form a
+// subcommand's own flag set accepts after the subcommand name. `--debug` is the
+// only one that draws a surface — `--help` and `--version` are info-only and are
+// refused earlier, by isInfoOnlyRootFlag.
+//
+// It is deliberately spelling-exact rather than a "starts with --debug" test.
+// The flag is boolean, so pflag takes its value only when attached, and only
+// when that value parses as a bool: `amx overview --debug=bogus` exits during
+// parsing and is therefore never a running overview, while `amx overview
+// --debug false` leaves `false` as a positional argument the command refuses.
+// Accepting either would mean claiming a window that holds no surface to focus.
+func isInheritedRootFlag(arg string) bool {
+	name, value, attached := strings.Cut(arg, "=")
+	if name != "--debug" {
+		return false
+	}
+	if !attached {
+		return true
+	}
+	_, err := strconv.ParseBool(value)
+	return err == nil
+}
+
 // FindKeybindingsWindow scans all OS windows for a window whose foreground
 // process is amx keybindings. excludeWindowID is skipped to avoid
 // self-detection (pass the current KITTY_WINDOW_ID).
@@ -250,7 +274,13 @@ func FindOverviewWindow(osWindows []OSWindow, excludeWindowID int) (*DashboardLo
 // instead of opening the overview. Hence the two halves below — global flags are
 // tolerated before the subcommand (so `amx --debug overview` is still found, as
 // it is for the other overlays), and after it only overview's own source-window
-// flag may appear.
+// flag and the root's inherited persistent flags may appear.
+//
+// Both positions have to be accepted because Cobra accepts both: `--debug` is a
+// PERSISTENT root flag, so `amx overview --debug` is as valid a running overview
+// as `amx --debug overview` is. Rejecting the trailing spelling would hide a
+// live instance from the singleton check and let the next F2 press draw a second
+// overview beside the first, each polling Kitty on its own.
 func isOverviewCmdline(cmdline []string) bool {
 	if len(cmdline) < 2 || filepath.Base(cmdline[0]) != "amx" {
 		return false
@@ -273,9 +303,12 @@ func isOverviewCmdline(cmdline []string) bool {
 			continue
 		}
 		// `amx overview` takes no positional arguments, so anything that is not
-		// its source-window flag means this argv is something else that merely
-		// spells "overview" — or a help invocation, which draws no surface to
-		// focus.
+		// its source-window flag or an inherited root flag means this argv is
+		// something else that merely spells "overview" — or a help invocation,
+		// which draws no surface to focus.
+		if isInheritedRootFlag(arg) {
+			continue
+		}
 		if arg == "--window-id" {
 			if i+1 >= len(cmdline) {
 				return false

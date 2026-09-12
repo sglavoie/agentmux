@@ -233,6 +233,49 @@ func TestOverviewFocusesAnExistingInstanceWhereverItIs(t *testing.T) {
 	}
 }
 
+// `--debug` is registered on the root as a PERSISTENT flag, so an operator who
+// started the overview with it — before or after the subcommand, on either side
+// of the source-window flag — is running an ordinary overview. The singleton
+// check has to see it, or the next F2 press draws a second surface beside the
+// first and both poll Kitty independently.
+func TestOverviewFocusesAnExistingInstanceStartedWithPersistentFlags(t *testing.T) {
+	argvs := map[string][]string{
+		"trailing boolean":              {"/usr/local/bin/amx", "overview", "--debug"},
+		"trailing false":                {"/usr/local/bin/amx", "overview", "--debug=false"},
+		"after the source window flag":  {"/usr/local/bin/amx", "overview", "--window-id=101", "--debug=true"},
+		"before the source window flag": {"/usr/local/bin/amx", "overview", "--debug", "--window-id", "101"},
+		"before the subcommand":         {"/usr/local/bin/amx", "--debug", "overview", "--window-id", "101"},
+	}
+
+	for name, argv := range argvs {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv(cli.WindowIDEnv, "101")
+			window := overviewWindow(880)
+			window.ForegroundProcesses[0].Cmdline = argv
+			client := &fakeOverviewClient{windows: []kitty.OSWindow{{
+				ID: 2, Tabs: []kitty.Tab{{ID: 88, Windows: []kitty.Window{window}}},
+			}}}
+			started := installOverviewSeams(t, client, &config.Config{}, nil)
+
+			if err := runOverviewCommand(101); err != nil {
+				t.Fatalf("repeat invocation: %v", err)
+			}
+			if started.calls != 0 {
+				t.Fatalf("existing %v started %d duplicate surfaces", argv, started.calls)
+			}
+			if len(client.focusedTabs) != 1 || client.focusedTabs[0] != kitty.MatchTabByID(88) {
+				t.Fatalf("focused tabs = %v, want tab 88", client.focusedTabs)
+			}
+			if len(client.focusedWindows) != 1 || client.focusedWindows[0] != kitty.MatchWindowByID(880) {
+				t.Fatalf("focused windows = %v, want window 880", client.focusedWindows)
+			}
+			if len(client.userVars) != 0 {
+				t.Fatalf("repeat invocation changed user vars: %v", client.userVars)
+			}
+		})
+	}
+}
+
 func TestOverviewFocusFailureIsReportedWithoutASecondSurface(t *testing.T) {
 	focusFailure := errors.New("kitten @ focus-tab: no such tab")
 

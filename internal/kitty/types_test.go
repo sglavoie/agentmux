@@ -274,6 +274,22 @@ func TestIsOverviewCmdline(t *testing.T) {
 		{"source window equals form", []string{"amx", "overview", "--window-id=101"}, true},
 		{"with debug root flag", []string{"amx", "--debug", "overview"}, true},
 		{"with multiple root flags", []string{"amx", "--debug=false", "-v", "overview", "--window-id", "7"}, true},
+		// --debug is PERSISTENT, so Cobra accepts it after the subcommand too,
+		// on either side of overview's own source-window flag. A rejection here
+		// would hide a running overview and let the next F2 press open a second.
+		{"trailing debug flag", []string{"amx", "overview", "--debug"}, true},
+		{"trailing debug true", []string{"amx", "overview", "--debug=true"}, true},
+		{"trailing debug false", []string{"amx", "overview", "--debug=false"}, true},
+		{"trailing debug shorthand value", []string{"amx", "overview", "--debug=0"}, true},
+		{"debug after source window flag", []string{"amx", "overview", "--window-id=101", "--debug=true"}, true},
+		{"debug before source window flag", []string{"amx", "overview", "--debug", "--window-id", "101"}, true},
+		{"debug on both sides of the subcommand", []string{"amx", "--debug", "overview", "--debug=false"}, true},
+		// A boolean flag takes an attached value or none, and pflag refuses one
+		// that does not parse: neither argv below survives parsing, so neither
+		// names a window holding a surface to focus.
+		{"trailing debug with unparsable value", []string{"amx", "overview", "--debug=maybe"}, false},
+		{"trailing debug with a detached value", []string{"amx", "overview", "--debug", "false"}, false},
+		{"debug-lookalike flag", []string{"amx", "overview", "--debugger"}, false},
 		{"source window flag without value", []string{"amx", "overview", "--window-id"}, false},
 		{"root help invocation", []string{"amx", "--help", "overview"}, false},
 		{"subcommand help invocation", []string{"amx", "overview", "--help"}, false},

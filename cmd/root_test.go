@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/cmd/session"
+	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/kittykeys"
 )
 
@@ -141,6 +142,63 @@ func TestTheOverviewBindingMatchesTheRegisteredCommand(t *testing.T) {
 	}
 	if found.Flags().Lookup("window-id") == nil {
 		t.Fatal("amx overview has no --window-id flag for F2 to pass")
+	}
+}
+
+// The overview is a singleton, so the CLI and the detector have to agree on
+// exactly which argv forms are a running overview. Cobra inherits the root's
+// persistent --debug into every subcommand, which makes `amx overview --debug`
+// as runnable as `amx --debug overview`; a detector that refused the trailing
+// spelling would miss the live instance and let F2 open a second one. This is
+// asserted here rather than in either package alone because only the assembled
+// root knows which flags a subcommand really inherits.
+func TestTheOverviewDetectorAcceptsEveryRunnableOverviewArgv(t *testing.T) {
+	runnable := [][]string{
+		{"overview"},
+		{"overview", "--window-id", "101"},
+		{"--debug", "overview"},
+		{"overview", "--debug"},
+		{"overview", "--debug=true"},
+		{"overview", "--debug=false"},
+		{"overview", "--window-id=101", "--debug=true"},
+		{"overview", "--debug", "--window-id", "101"},
+	}
+
+	// Parsing writes into the flag targets the real command shares; restore the
+	// defaults so a later test in this binary sees an unparsed root.
+	t.Cleanup(func() {
+		found, _, err := rootCmd.Find([]string{"overview"})
+		if err != nil {
+			return
+		}
+		_ = found.ParseFlags([]string{"--debug=false", "--window-id=0"})
+	})
+
+	for _, args := range runnable {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			found, remaining, err := rootCmd.Find(args)
+			if err != nil {
+				t.Fatalf("root cannot resolve %v: %v", args, err)
+			}
+			if found.Name() != "overview" {
+				t.Fatalf("%v resolves to %q, want the overview command", args, found.CommandPath())
+			}
+			if err := found.ParseFlags(remaining); err != nil {
+				t.Fatalf("amx %s is not a runnable invocation: %v", strings.Join(args, " "), err)
+			}
+			if positional := found.Flags().Args(); len(positional) != 0 {
+				t.Fatalf("amx %s leaves positional arguments %v, which the command refuses", strings.Join(args, " "), positional)
+			}
+
+			cmdline := append([]string{"/usr/local/bin/amx"}, args...)
+			windows := []kitty.OSWindow{{Tabs: []kitty.Tab{{ID: 88, Windows: []kitty.Window{{
+				ID:                  880,
+				ForegroundProcesses: []kitty.ForegroundProcess{{Cmdline: cmdline}},
+			}}}}}}
+			if _, found := kitty.FindOverviewWindow(windows, 0); !found {
+				t.Fatalf("the runnable argv %v is not detected as an open overview", cmdline)
+			}
+		})
 	}
 }
 
