@@ -611,12 +611,111 @@ func sameOrder(a, b []session.RunningSession) bool {
 	return true
 }
 
-// TestTheOverviewPerformsNoIO is structural rather than behavioral: a renderer
-// that read a file would still return a string, and the only way to be sure is to
-// look at what the package is allowed to import. Anything that could reach a
+// The package has two halves and they are held to two different structural
+// rules, so every file has to be classified as one or the other. The lists below
+// are the classification, and parsePackage fails on a file that is in neither —
+// which is what makes adding a file a deliberate act rather than a way to opt out
+// of both allowlists.
+//
+// renderingFiles are pure: a session slice, a preview map and a supplied Now go
+// in, and a string comes out. lifecycleFiles are the running program: they start
+// commands, read the clock, and hold the state the renderer is handed.
+var (
+	renderingFiles = []string{"chrome.go", "grid.go", "nav.go", "order.go", "view.go"}
+	lifecycleFiles = []string{"model.go", "refresh.go", "status.go", "update.go"}
+)
+
+// parsePackage parses every non-test file in the package and returns them keyed
+// by name, having first checked that the classification above accounts for all of
+// them exactly once.
+//
+// Files are parsed in full rather than imports-only because the callers below
+// walk function bodies.
+func parsePackage(t *testing.T) map[string]*ast.File {
+	t.Helper()
+
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("reading the package directory: %v", err)
+	}
+	onDisk := map[string]bool{}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		onDisk[name] = true
+	}
+	if len(onDisk) == 0 {
+		t.Fatal("no non-test files were found; every structural assertion below would pass vacuously")
+	}
+
+	classified := map[string]bool{}
+	for _, name := range append(append([]string{}, renderingFiles...), lifecycleFiles...) {
+		if classified[name] {
+			t.Errorf("%s is classified twice; it would be held to both rules and to neither exclusively", name)
+		}
+		classified[name] = true
+		if !onDisk[name] {
+			t.Errorf("%s is classified but is not in the package", name)
+		}
+	}
+	for name := range onDisk {
+		if !classified[name] {
+			t.Errorf("%s is in neither renderingFiles nor lifecycleFiles; classify it so it is held to one of the two structural rules", name)
+		}
+	}
+
+	fset := token.NewFileSet()
+	files := make(map[string]*ast.File, len(onDisk))
+	for name := range onDisk {
+		file, err := parser.ParseFile(fset, name, nil, parser.SkipObjectResolution)
+		if err != nil {
+			t.Fatalf("parsing %s: %v", name, err)
+		}
+		files[name] = file
+	}
+	return files
+}
+
+// assertImports checks one file's imports against an allowlist.
+func assertImports(t *testing.T, name string, file *ast.File, allowed map[string]bool, rule string) {
+	t.Helper()
+	for _, imp := range file.Imports {
+		path, err := strconv.Unquote(imp.Path.Value)
+		if err != nil {
+			t.Fatalf("%s: unquoting %s: %v", name, imp.Path.Value, err)
+		}
+		if !allowed[path] {
+			t.Errorf("%s imports %q, which is not on the %s allowlist", name, path, rule)
+		}
+	}
+}
+
+// selectorCalls reports every `pkg.Func(...)` call in a file as "pkg.Func".
+func selectorCalls(file *ast.File) []string {
+	var out []string
+	ast.Inspect(file, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
+			if ident, ok := sel.X.(*ast.Ident); ok {
+				out = append(out, ident.Name+"."+sel.Sel.Name)
+			}
+		}
+		return true
+	})
+	return out
+}
+
+// TestTheRenderingHalfPerformsNoIO is structural rather than behavioral: a
+// renderer that read a file would still return a string, and the only way to be
+// sure is to look at what it is allowed to import. Anything that could reach a
 // disk, a socket, a subprocess, or a clock is absent by construction — Now is a
 // field on Input precisely so this list can stay short.
-func TestTheOverviewPerformsNoIO(t *testing.T) {
+func TestTheRenderingHalfPerformsNoIO(t *testing.T) {
 	allowed := map[string]bool{
 		"fmt":     true, // Sprintf into the title row
 		"sort":    true,
@@ -631,58 +730,81 @@ func TestTheOverviewPerformsNoIO(t *testing.T) {
 		"github.com/sglavoie/agentmux/tui/layout":       true,
 	}
 
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatalf("reading the package directory: %v", err)
-	}
-	fset := token.NewFileSet()
-	parsed := 0
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
+	files := parsePackage(t)
+	for _, name := range renderingFiles {
+		file, ok := files[name]
+		if !ok {
+			continue // parsePackage already reported the missing file
 		}
-		// Parsed in full rather than imports-only, because the clock check below
-		// walks function bodies.
-		file, err := parser.ParseFile(fset, name, nil, parser.SkipObjectResolution)
-		if err != nil {
-			t.Fatalf("parsing %s: %v", name, err)
-		}
-		parsed++
-
-		for _, imp := range file.Imports {
-			path, err := strconv.Unquote(imp.Path.Value)
-			if err != nil {
-				t.Fatalf("%s: unquoting %s: %v", name, imp.Path.Value, err)
-			}
-			if !allowed[path] {
-				t.Errorf("%s imports %q, which is not on the no-I/O allowlist", name, path)
-			}
-		}
+		assertImports(t, name, file, allowed, "no-I/O")
 
 		// time is on the list for its types. A call into it would read the
 		// machine's clock, which is exactly what Input.Now exists to avoid.
-		ast.Inspect(file, func(n ast.Node) bool {
-			call, ok := n.(*ast.CallExpr)
-			if !ok {
-				return true
+		for _, call := range selectorCalls(file) {
+			if call == "time.Now" || call == "time.Since" {
+				t.Errorf("%s calls %s; the renderer's clock is Input.Now", name, call)
 			}
-			sel, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok {
-				return true
-			}
-			ident, ok := sel.X.(*ast.Ident)
-			if !ok {
-				return true
-			}
-			if ident.Name == "time" && (sel.Sel.Name == "Now" || sel.Sel.Name == "Since") {
-				t.Errorf("%s calls time.%s; the clock is Input.Now", name, sel.Sel.Name)
-			}
-			return true
-		})
+		}
 	}
-	if parsed == 0 {
-		t.Fatal("no non-test files were parsed; the allowlist proves nothing")
+}
+
+// TestTheLifecycleHalfReachesTheWorldOnlyThroughItsSeams is the running half's
+// structural rule, and it is the one that pins "browsing the overview cannot
+// change anything".
+//
+// Two claims, both checked by absence. First, the imports: the lifecycle may name
+// the session and config vocabularies, Bubble Tea, the shared commands, and the
+// daemon's protocol constants — and nothing that could read a transcript, a plan,
+// a socket or a file of its own. Second, the calls into tui/commands: only the
+// read (RefreshOverview), the one mutation (Focus), and the ticker (Tick). Every
+// other command in that package either writes Kitty or asks the daemon for
+// something this surface has no business asking, so the allowlist being short is
+// the whole assertion. A navigation key cannot reach Kitty because there is no
+// call in the package it could reach it through.
+func TestTheLifecycleHalfReachesTheWorldOnlyThroughItsSeams(t *testing.T) {
+	allowedImports := map[string]bool{
+		"fmt":  true,
+		"time": true,
+
+		"charm.land/bubbletea/v2": true,
+
+		"github.com/sglavoie/agentmux/internal/config":          true,
+		"github.com/sglavoie/agentmux/internal/daemon/protocol": true, // KittySnapshotStaleAfter
+		"github.com/sglavoie/agentmux/internal/kitty":           true, // the client type, handed to the seams
+		"github.com/sglavoie/agentmux/internal/session":         true,
+		"github.com/sglavoie/agentmux/tui/commands":             true,
+	}
+	allowedCommands := map[string]bool{
+		"commands.RefreshOverview": true,
+		"commands.Focus":           true,
+		"commands.Tick":            true,
+	}
+
+	files := parsePackage(t)
+	clockCallers := map[string]bool{}
+	for _, name := range lifecycleFiles {
+		file, ok := files[name]
+		if !ok {
+			continue
+		}
+		assertImports(t, name, file, allowedImports, "lifecycle")
+
+		for _, call := range selectorCalls(file) {
+			if strings.HasPrefix(call, "commands.") && !allowedCommands[call] {
+				t.Errorf("%s calls %s; the overview observes, and its only mutation is commands.Focus", name, call)
+			}
+			if call == "time.Now" || call == "time.Since" {
+				clockCallers[name] = true
+			}
+		}
+	}
+
+	// The clock is a seam for the same reason the commands are, so it enters the
+	// package in exactly one place: the constructor that binds the seams to the
+	// real world. Anywhere else it would be a reading a test cannot pin.
+	delete(clockCallers, "model.go")
+	for name := range clockCallers {
+		t.Errorf("%s calls the machine clock; the lifecycle's clock is the deps.now seam bound in model.go", name)
 	}
 }
 
