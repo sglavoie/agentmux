@@ -554,8 +554,14 @@ func TestATileTooSmallForABoxDropsTheBoxNotTheSession(t *testing.T) {
 			t.Errorf("a four-cell tile drew the box glyph %q", glyph)
 		}
 	}
-	if !strings.Contains(joined, "a") {
-		t.Errorf("a four-cell tile dropped the session name entirely:\n%q", lines)
+	// The digit now reserves two cells on row two, so the harness is reduced to
+	// "c…" there. The identity row must still retain the compact renderer's text.
+	body := dashboard.RenderCompactPreview(dashboard.CompactInput{
+		Width: 4, Height: 5, Session: sessions[0], Cfg: viewConfig(), Now: viewNow,
+		Content: dashboard.InspectorLoading,
+	})
+	if lines[gridTop] != ansi.Strip(strings.Split(body, "\n")[0]) || strings.TrimSpace(lines[gridTop]) == "" {
+		t.Errorf("a four-cell tile dropped the identity row:\n%q", lines)
 	}
 }
 

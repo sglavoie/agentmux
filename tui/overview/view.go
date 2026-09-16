@@ -282,7 +282,7 @@ func paintGrid(rows []string, in Input, g Geometry, count, selected int) {
 				segments = append(segments, blankTile(t))
 				continue
 			}
-			segments = append(segments, renderTile(in, t, in.Sessions[index], index == selected))
+			segments = append(segments, renderTile(in, t, in.Sessions[index], index, index == selected))
 		}
 		if len(segments) == 0 {
 			continue
@@ -321,7 +321,7 @@ func blankTile(t Tile) []string {
 // output — carried one level up: at four cells wide there is room for a
 // truncated project name and nothing else, and the name is what the operator
 // needs to know a session is there at all.
-func renderTile(in Input, t Tile, s session.RunningSession, selected bool) []string {
+func renderTile(in Input, t Tile, s session.RunningSession, index int, selected bool) []string {
 	if t.Width <= 0 || t.Height <= 0 {
 		return nil
 	}
@@ -341,12 +341,12 @@ func renderTile(in Input, t Tile, s session.RunningSession, selected bool) []str
 
 	if t.Width < minBorderedWidth || t.Height < minBorderedHeight {
 		body.Width, body.Height = t.Width, t.Height
-		return cells(splitExactly(dashboard.RenderCompactPreview(body), t.Height), t.Width)
+		return cells(tileContent(body, index), t.Width)
 	}
 
 	inner := t.Width - tileBorderCells - 2*tilePadding
 	body.Width, body.Height = inner, t.Height-tileBorderRows
-	content := splitExactly(dashboard.RenderCompactPreview(body), body.Height)
+	content := tileContent(body, index)
 
 	source := in.SourceTabID > 0 && s.TabID == in.SourceTabID
 	glyphs, style := borderFor(selected, source)
@@ -367,6 +367,18 @@ func renderTile(in Input, t Tile, s session.RunningSession, selected bool) []str
 	}
 	lines = append(lines, style.Render(glyphs.bottomLeft+rule+glyphs.bottomRight))
 	return cells(lines, t.Width)
+}
+
+// tileContent reserves a digit at the right edge of the existing second metadata
+// row. Later cards have no digit, and a card too short for that row adds no chrome.
+func tileContent(body dashboard.CompactInput, index int) []string {
+	content := splitExactly(dashboard.RenderCompactPreview(body), body.Height)
+	if index < 0 || index >= len(focusDigits) || len(content) < 2 || body.Width <= 0 {
+		return content
+	}
+	metadata := layout.StyledTruncate(content[1], max(body.Width-2, 0), "…")
+	content[1] = fitCell(metadata, body.Width-1) + styleFooterKey.Render(focusDigits[index:index+1])
+	return content
 }
 
 // preview is the nil-safe lookup of what a session's tile is showing. An absent

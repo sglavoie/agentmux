@@ -47,6 +47,7 @@ func renderFooter(in Input, g Geometry, selected int) string {
 	return strings.Join([]string{
 		footerKeys("focus", footerKey{"Enter", count > 0 && !in.FocusPending}),
 		footerKeys("close", footerKey{"q", true}),
+		footerKeys("jump", footerKey{"1–0", count > 0 && !in.FocusPending}),
 		footerKeys(mode, footerKey{"c", !in.Closing}),
 		footerKeys("needs you", footerKey{"n", needsYou}, footerKey{"N", needsYou}),
 		footerKeys("move", footerKey{"←↑↓→/hjkl", spatial}),

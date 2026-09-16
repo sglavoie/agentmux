@@ -22,7 +22,7 @@ func assertFooterKey(t *testing.T, in Input, key string, available bool) {
 
 func TestFooterEmptyAndSingleSessionAvailability(t *testing.T) {
 	in := viewInput(160, 45, nil)
-	for _, key := range []string{"Enter", "n", "N", "←↑↓→/hjkl", "Tab", "PgUp", "PgDn", "Home", "End"} {
+	for _, key := range []string{"Enter", "1–0", "n", "N", "←↑↓→/hjkl", "Tab", "PgUp", "PgDn", "Home", "End"} {
 		assertFooterKey(t, in, key, false)
 	}
 	for _, key := range []string{"q", "c"} {
@@ -30,6 +30,7 @@ func TestFooterEmptyAndSingleSessionAvailability(t *testing.T) {
 	}
 	in.Sessions = viewSessions(1)
 	assertFooterKey(t, in, "Enter", true)
+	assertFooterKey(t, in, "1–0", true)
 	assertFooterKey(t, in, "←↑↓→/hjkl", false)
 	assertFooterKey(t, in, "Tab", false)
 }
@@ -86,9 +87,12 @@ func TestFooterNavigationTracksBothEndsAndGeometry(t *testing.T) {
 func TestFooterDisablesFocusDuringRequestAndRestoresAfterFailure(t *testing.T) {
 	m, _ := atSize(t, viewSessions(2), 0, 160, 45)
 	assertFooterKey(t, overviewInput(m), "Enter", true)
+	assertFooterKey(t, overviewInput(m), "1–0", true)
 	m = only(t, m, key(t, "enter"))
 	assertFooterKey(t, overviewInput(m), "Enter", false)
+	assertFooterKey(t, overviewInput(m), "1–0", false)
 	assertFooterKey(t, overviewInput(m), "q", true)
 	m = only(t, m, commands.FocusDoneMsg{Err: errors.New("focus unavailable")})
 	assertFooterKey(t, overviewInput(m), "Enter", true)
+	assertFooterKey(t, overviewInput(m), "1–0", true)
 }

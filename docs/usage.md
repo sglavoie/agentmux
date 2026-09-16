@@ -404,10 +404,16 @@ one does not disturb the other.
   hand you a different pane. A focus that fails leaves you on the overview with
   the reason on the feedback row and the same tile selected, which is the only
   state retrying makes sense from
+- `1`–`9`, `0`: select and immediately focus the corresponding card among the
+  first ten overall (`0` is the tenth), regardless of the current page. Digits
+  appear at the right end of the existing second information row, in reading
+  order: left to right across each row, then top to bottom. Later cards have no
+  digit; a digit without a matching card does nothing. Like `Enter`, a failed
+  focus leaves the target selected for retry, and pending focus ignores repeats.
 - `Esc`, `q`, `Ctrl+C`: close, whether or not a read is still out
 
 Nothing else is bound. Browsing observes sessions and their screen text.
-`Enter` focuses a tab; `c` changes only the daemon's in-memory view preference.
+`Enter` and digits focus a tab; `c` changes only the daemon's in-memory view preference.
 Closing immediately after a toggle lets its bounded save finish before exiting.
 
 The footer uses the dashboard's colors: available keys are bold teal, unavailable

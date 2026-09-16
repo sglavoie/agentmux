@@ -9,7 +9,7 @@
 // raised over a pane needs none of it and must not pay for any of it. So this
 // file constructs nothing from tui and imports nothing from it: the live-session
 // read arrives through commands.RefreshOverview, which is the dashboard's own
-// reader with its write budget removed. Enter focuses a session; c changes only
+// reader with its write budget removed. Enter and digits focus a session; c changes only
 // the daemon's in-memory view preference.
 //
 // Every effect is injected. The topology read, the focus action, the interval

@@ -25,6 +25,9 @@
 // overview has a page indicator precisely so that question has a cheap answer.
 package overview
 
+// focusDigits follows the overall row-major card order, not the current page.
+const focusDigits = "1234567890"
+
 // Move is one navigation intent. It is a vocabulary rather than a key code: the
 // binding from a keypress to a Move belongs to whatever is running the surface,
 // and this package must stay assertable without one.

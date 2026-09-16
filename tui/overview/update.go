@@ -14,9 +14,9 @@
 //     window, and write no metadata anywhere. Every arrow, every hjkl, every
 //     page and every end is in this group, which is what makes "browsing the
 //     overview is observation" true by construction instead of by review.
-//   - ENTER is the one key that acts on a session. It captures the tab currently under the
+//   - ENTER and DIGITS act on a session. Enter captures the tab currently under the
 //     cursor and dispatches the existing focus action against that captured tab
-//     exactly once.
+//     exactly once; 1–0 select and focus one of the first ten cards overall.
 //   - DISMISSAL — esc, q, ctrl+c — leaves. It leaves while a refresh is out and
 //     while a focus is pending, because an operator who wants out of an overlay
 //     is not asking to wait for a subprocess first.
@@ -100,6 +100,11 @@ func (m model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.jumpNeedsYou(1)
 	case "N":
 		return m.jumpNeedsYou(-1)
+	}
+	for index := range len(focusDigits) {
+		if msg.String() == focusDigits[index:index+1] {
+			return m.focusIndex(index)
+		}
 	}
 	if move, ok := moveFor(msg.String()); ok {
 		return m.applyMove(move)
@@ -198,7 +203,20 @@ func (m model) jumpNeedsYou(dir int) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// requestFocus is Enter: focus the selected tab, and leave only once Kitty has
+// focusIndex jumps to a numbered card, even on another page, then uses the same
+// captured-target and single-flight focus path as Enter. Missing cards do nothing.
+func (m model) focusIndex(index int) (tea.Model, tea.Cmd) {
+	if m.focusTabID != 0 || index < 0 || index >= len(m.sessions) {
+		return m, nil
+	}
+	m.selectIndex(index)
+	m.reconcileCaptures()
+	captureCmd := m.pumpCaptures()
+	next, focusCmd := m.requestFocus()
+	return next, tea.Batch(focusCmd, captureCmd)
+}
+
+// requestFocus handles Enter and digits: focus the selected tab, and leave only once Kitty has
 // confirmed it.
 //
 // The tab is CAPTURED here rather than read again when the answer returns. A
@@ -206,7 +224,7 @@ func (m model) jumpNeedsYou(dir int) (tea.Model, tea.Cmd) {
 // and an operator who pressed Enter on a pane is owed that pane rather than
 // whichever one the index came to address.
 //
-// A second Enter while the first is pending is ignored, not queued. Focus is
+// A second focus key while the first is pending is ignored, not queued. Focus is
 // idempotent from Kitty's side, but a queued duplicate would still be a second
 // command whose completion arrived after the program had already been told to
 // quit on the first.
