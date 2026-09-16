@@ -1023,7 +1023,7 @@ func TestAcceptanceRepeatedTopologyFailuresRetainTheListAndThenRecover(t *testin
 // IS the whole truth about the surface and the row says it. The second property
 // is what happens on the way out: the pane the overview was raised over is not
 // spent by a read that resolved nothing, so whichever read succeeds first still
-// puts the operator on the session they launched from.
+// marks the session they launched from while starting at the top-left card.
 func TestAcceptanceAColdOutageNamesTheErrorAndStillOwesTheSourcePane(t *testing.T) {
 	world := newKittyWorld(acceptanceTabs(11))
 	outage := errors.New("kitten @ ls: signal: killed")
@@ -1046,15 +1046,15 @@ func TestAcceptanceAColdOutageNamesTheErrorAndStillOwesTheSourcePane(t *testing.
 
 	world.setListErr(nil)
 	s.deliver(jobTopology)
-	if s.m.selectedTabID != acceptanceTabID(9) {
-		t.Fatalf("the first successful read selected tab %d, want the source pane's %d still owed",
-			s.m.selectedTabID, acceptanceTabID(9))
+	if s.m.selected != 0 || s.m.sourceTabID != acceptanceTabID(9) {
+		t.Fatalf("first successful read selected index %d and source tab %d, want top-left and source tab %d",
+			s.m.selected, s.m.sourceTabID, acceptanceTabID(9))
 	}
 	if frame := s.frame(); strings.Contains(frame, "Kitty error") {
 		t.Fatalf("the recovered frame still names the outage:\n%s", frame)
 	}
-	if got := s.targetWindows(); !sameInts(got, windowRange(8, 3)) {
-		t.Fatalf("targets after recovery = %v, want the source session's page %v", got, windowRange(8, 3))
+	if got := s.targetWindows(); !sameInts(got, windowRange(0, 4)) {
+		t.Fatalf("targets after recovery = %v, want the first page %v", got, windowRange(0, 4))
 	}
 }
 
@@ -1065,7 +1065,7 @@ func TestAcceptanceAColdOutageNamesTheErrorAndStillOwesTheSourcePane(t *testing.
 // dismissed with reads outstanding and a queue behind them, and every one of
 // those would otherwise complete against something that is quitting. And the
 // overview that opens afterwards is a new program over the same Kitty, so it
-// starts from the pane it was raised over with nothing carried across.
+// starts at the first card with a fresh source marker and nothing carried across.
 func TestAcceptanceDismissalStopsEverythingAndReopeningStartsClean(t *testing.T) {
 	world := newKittyWorld(acceptanceTabs(11))
 	first := newStage(t, world, 120, 30, 0)
@@ -1107,18 +1107,18 @@ func TestAcceptanceDismissalStopsEverythingAndReopeningStartsClean(t *testing.T)
 	}
 
 	// Reopening over a different pane: a new program, a clean start, and the
-	// operator's own session under the cursor.
+	// first card under the cursor and the launching session marked separately.
 	second := newStage(t, world, 120, 30, acceptanceWindowID(6))
 	if len(second.m.previews) != 0 || second.m.loaded {
 		t.Fatal("the reopened overview started with state carried over from the first")
 	}
 	second.deliver(jobTopology)
-	if second.m.selectedTabID != acceptanceTabID(6) {
-		t.Fatalf("the reopened overview selected tab %d, want the source pane's %d",
-			second.m.selectedTabID, acceptanceTabID(6))
+	if second.m.selected != 0 || second.m.sourceTabID != acceptanceTabID(6) {
+		t.Fatalf("reopened overview selected index %d and source tab %d, want top-left and source tab %d",
+			second.m.selected, second.m.sourceTabID, acceptanceTabID(6))
 	}
-	if got := second.targetWindows(); !sameInts(got, windowRange(4, 4)) {
-		t.Fatalf("the reopened overview targets %v, want the source session's page %v", got, windowRange(4, 4))
+	if got := second.targetWindows(); !sameInts(got, windowRange(0, 4)) {
+		t.Fatalf("the reopened overview targets %v, want the first page %v", got, windowRange(0, 4))
 	}
 }
 

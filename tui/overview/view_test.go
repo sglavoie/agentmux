@@ -108,6 +108,41 @@ func plain(lines []string) []string {
 	return out
 }
 
+func TestSourceCardIsDistinctFromKeyboardSelection(t *testing.T) {
+	for _, compact := range []bool{false, true} {
+		for _, selected := range []int{0, 1} {
+			in := viewInput(120, 30, viewSessions(2))
+			in.Compact, in.Selected, in.SourceTabID = compact, selected, 2
+			g := MeasureMode(in.Width, in.Height, compact)
+			lines := plain(renderLines(t, in))
+			for index := range in.Sessions {
+				tile, _ := g.Tile(index)
+				top := string([]rune(lines[tile.Y])[tile.X : tile.X+tile.Width])
+				wantCorner := "╭"
+				if index == selected {
+					wantCorner = "┏"
+				} else if index == 1 {
+					wantCorner = "╔"
+				}
+				if !strings.HasPrefix(top, wantCorner) {
+					t.Fatalf("compact=%v selected=%d card=%d: border %q, want %q", compact, selected, index, top, wantCorner)
+				}
+				if strings.Contains(top, "Opened from here") != (index == 1) {
+					t.Fatalf("compact=%v selected=%d card=%d: incorrect source marker in %q", compact, selected, index, top)
+				}
+			}
+		}
+	}
+}
+
+func TestSourceMarkerKeepsTheSizeContractOnSmallTerminals(t *testing.T) {
+	for width := 1; width <= 40; width++ {
+		in := viewInput(width, 8, viewSessions(1))
+		in.SourceTabID = 1
+		renderLines(t, in)
+	}
+}
+
 // shippedSizes are the terminals session 2 names, plus the two extremes that are
 // not terminals anybody chooses but are both reachable by dragging a window.
 var shippedSizes = [][2]int{

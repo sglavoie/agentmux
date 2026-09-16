@@ -135,6 +135,9 @@ type model struct {
 	selected         int
 	selectedTabID    int
 	selectedWindowID int
+	// sourceTabID marks the managed tab this overview was opened from,
+	// independently of the keyboard selection and across window restarts.
+	sourceTabID int
 
 	// previews is keyed by Kitty window ID, the same key tile rendering reads: it
 	// is what each tile SHOWS, and an absent entry is the honest loading state of
@@ -247,6 +250,7 @@ func (m model) View() tea.View {
 		Height:        m.height,
 		Sessions:      m.sessions,
 		Selected:      m.selected,
+		SourceTabID:   m.sourceTabID,
 		Previews:      m.previews,
 		Cfg:           m.cfg,
 		LastActivity:  m.lastActivity,

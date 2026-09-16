@@ -116,9 +116,17 @@ func (m model) handleSessions(msg commands.SessionsMsg) (tea.Model, tea.Cmd) {
 		m.sessions = RetainOrder(m.sessions, msg.Sessions)
 	} else {
 		m.sessions = OpeningOrder(msg.Sessions, msg.Activity, m.idleThreshold)
+		// Opening always starts at the first card. The source is a separate
+		// marker, resolved only from a managed tab in this successful snapshot.
+		m.selected, m.selectedTabID, m.selectedWindowID = 0, 0, 0
+		if m.startupSourceWindowID != 0 && msg.SelectionTabID > 0 {
+			if _, ok := indexOfTab(m.sessions, msg.SelectionTabID); ok {
+				m.sourceTabID = msg.SelectionTabID
+			}
+		}
 	}
 
-	m.reconcileSelection(msg.SelectionTabID)
+	m.reconcileSelection()
 	// The selection has been placed, so the page is settled and the capture set
 	// can be re-aimed at it. Doing it HERE rather than before the reconcile is
 	// what lets a read that moved the cursor onto another page start that page's
@@ -126,7 +134,7 @@ func (m model) handleSessions(msg commands.SessionsMsg) (tea.Model, tea.Cmd) {
 	m.reconcileCaptures()
 	// The source pane has now been resolved against a real window tree, so the
 	// startup request is spent. Retaining it until HERE — rather than clearing it
-	// when it was dispatched — is what lets a failed first read still select the
+	// when it was dispatched — is what lets a failed first read still mark the
 	// caller's tab on the retry.
 	m.startupSourceWindowID = 0
 
@@ -138,8 +146,8 @@ func (m model) handleSessions(msg commands.SessionsMsg) (tea.Model, tea.Cmd) {
 // retry waits for the next tick.
 //
 // The startup source is deliberately NOT consumed. A first read that could not
-// reach a window tree resolved nothing, so the operator's tab is still owed to
-// them on whichever read succeeds first.
+// reach a window tree resolved nothing, so the source marker is resolved on
+// whichever read succeeds first.
 func (m model) handleRefreshErr(msg commands.ErrMsg) (tea.Model, tea.Cmd) {
 	if !m.settleRefresh(msg.Seq) {
 		return m, nil
@@ -151,36 +159,23 @@ func (m model) handleRefreshErr(msg commands.ErrMsg) (tea.Model, tea.Cmd) {
 
 // reconcileSelection places the cursor on the refreshed list.
 //
-// The three cases, in the order they are tried:
+// The two cases, in the order they are tried:
 //
-//  1. An unspent STARTUP request. The overview was opened from a pane, that
-//     pane's tab is in the list, and the operator is looking at the session they
-//     launched from. This outranks a prior selection because the only way a prior
-//     selection exists while the request is still unspent is that the first read
-//     failed and a navigation happened during the retry — and the request is
-//     consumed by the same read that honors it, so it can win at most once.
-//  2. The prior selection's TAB. Found means the cursor moves to wherever that
+//  1. The prior selection's TAB. Found means the cursor moves to wherever that
 //     session now sits, which survives removal of earlier tabs, metadata
 //     changes and resizes.
-//  3. The prior POSITION, clamped. This is the tab that disappeared under the
+//  2. The prior POSITION, clamped. This is the tab that disappeared under the
 //     cursor: the nearest surviving row is the one at the same place in the list,
 //     or the last row when the list shrank past it. It is also the answer for a
-//     list that was empty a moment ago and for a first read with no startup
-//     request, both of which arrive here with a zero index and select the first
-//     session — the same thing "nearest to position zero" means.
-func (m *model) reconcileSelection(requestedTabID int) {
+//     list that was empty a moment ago and for the first successful read,
+//     both of which arrive here with a zero index and select the first session.
+func (m *model) reconcileSelection() {
 	if len(m.sessions) == 0 {
 		// Everything closed. The cursor has nothing to be on and no identity to
 		// remember; a later non-empty read starts from the first session rather
 		// than from wherever the last surviving pane happened to be.
 		m.selected, m.selectedTabID, m.selectedWindowID = 0, 0, 0
 		return
-	}
-	if m.startupSourceWindowID != 0 && requestedTabID > 0 {
-		if index, ok := indexOfTab(m.sessions, requestedTabID); ok {
-			m.selectIndex(index)
-			return
-		}
 	}
 	if m.selectedTabID > 0 {
 		if index, ok := indexOfTab(m.sessions, m.selectedTabID); ok {

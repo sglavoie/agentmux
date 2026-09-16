@@ -134,16 +134,15 @@ func started(t *testing.T, sourceWindowID int) (model, *recorder) {
 	return m, r
 }
 
-// loadedAt starts the overview from one session's own pane and delivers a single
-// successful read, so a test can begin with a chosen tile under the cursor.
-//
-// It goes through the startup request rather than assigning the selection, because
-// that is the only way a real overview ever arrives at a non-zero initial
-// selection.
+// loadedAt opens from one session's pane, delivers the first snapshot, then
+// navigates from the top-left card to the session the test needs selected.
 func loadedAt(t *testing.T, sessions []session.RunningSession, index int) (model, *recorder) {
 	t.Helper()
 	m, r := started(t, sessions[index].WindowID)
 	m = only(t, m, snapshot(firstRefreshSeq, sessions[index].TabID, sessions))
+	for steps := 0; m.selectedTabID != sessions[index].TabID && steps < len(sessions); steps++ {
+		m = press(t, m, "tab")
+	}
 	if m.selectedTabID != sessions[index].TabID {
 		t.Fatalf("the fixture selected tab %d, want %d", m.selectedTabID, sessions[index].TabID)
 	}
@@ -261,6 +260,7 @@ func overviewInput(m model) Input {
 		Height:        m.height,
 		Sessions:      m.sessions,
 		Selected:      m.selected,
+		SourceTabID:   m.sourceTabID,
 		Previews:      m.previews,
 		Cfg:           m.cfg,
 		LastActivity:  m.lastActivity,
@@ -512,24 +512,21 @@ func TestRepeatedFailuresCostOneReadPerInterval(t *testing.T) {
 	}
 }
 
-// TestTheSourcePaneIsSelectedOnTheFirstSuccessfulRead is the whole point of
-// opening the overview from a pane: the operator is looking at the session they
-// came from.
-func TestTheSourcePaneIsSelectedOnTheFirstSuccessfulRead(t *testing.T) {
+func TestOpeningSelectsTopLeftAndMarksTheSourcePane(t *testing.T) {
 	m, r := started(t, 30)
 	if r.topology[0].sourceWindowID != 30 {
 		t.Fatalf("the startup read asked about window %d, want 30", r.topology[0].sourceWindowID)
 	}
 
 	m = only(t, m, snapshot(firstRefreshSeq, 3, viewSessions(5)))
-	if m.selectedTabID != 3 {
-		t.Fatalf("selected tab %d, want the source pane's tab 3 out of %v", m.selectedTabID, tabs(m))
+	if m.selected != 0 || m.selectedTabID != m.sessions[0].TabID {
+		t.Fatalf("selected index %d/tab %d, want the top-left card", m.selected, m.selectedTabID)
 	}
-	if got, ok := m.selectedSession(); !ok || got.TabID != 3 {
-		t.Fatalf("the index addresses tab %d rather than the selected tab 3", got.TabID)
+	if got, ok := m.selectedSession(); !ok || got.TabID != m.sessions[0].TabID {
+		t.Fatalf("the index addresses tab %d rather than the top-left card", got.TabID)
 	}
-	if m.selected == 0 {
-		t.Fatal("the source tab happens to sort first, so this case is indistinguishable from the fallback")
+	if m.sourceTabID != 3 || m.sourceTabID == m.selectedTabID {
+		t.Fatalf("source tab = %d, want tab 3 independently of selection", m.sourceTabID)
 	}
 }
 
@@ -543,6 +540,9 @@ func TestAnUnmanagedSourceSelectsTheFirstSession(t *testing.T) {
 		m = only(t, m, snapshot(firstRefreshSeq, 0, viewSessions(5)))
 		if m.selected != 0 || m.selectedTabID != m.sessions[0].TabID {
 			t.Errorf("source window %d selected index %d/tab %d, want the first session", sourceWindowID, m.selected, m.selectedTabID)
+		}
+		if m.sourceTabID != 0 {
+			t.Fatalf("unmanaged source marked tab %d", m.sourceTabID)
 		}
 	}
 }
@@ -559,11 +559,14 @@ func TestASourceTabMissingFromTheListSelectsTheFirstSession(t *testing.T) {
 	if m.startupSourceWindowID != 0 {
 		t.Fatal("a resolved-but-absent source tab left the startup request unspent; it would reassert itself later")
 	}
+	if m.sourceTabID != 0 {
+		t.Fatalf("absent source marked tab %d", m.sourceTabID)
+	}
 }
 
 // TestTheStartupRequestSurvivesAFailedFirstLoad is why the request is consumed at
 // the SUCCESS rather than at the dispatch: a first read that reached nothing
-// resolved nothing, so the operator is still owed their tab.
+// resolved nothing, so the source marker still needs resolving.
 func TestTheStartupRequestSurvivesAFailedFirstLoad(t *testing.T) {
 	m, r := started(t, 30)
 	m = only(t, m, commands.ErrMsg{Seq: firstRefreshSeq, Err: errors.New("daemon unreachable")})
@@ -576,8 +579,8 @@ func TestTheStartupRequestSurvivesAFailedFirstLoad(t *testing.T) {
 		t.Fatalf("the retry asked about window %d, want the retained 30", got)
 	}
 	m = only(t, m, snapshot(m.refreshActiveSeq, 3, viewSessions(5)))
-	if m.selectedTabID != 3 {
-		t.Fatalf("the retry selected tab %d, want the source pane's tab 3", m.selectedTabID)
+	if m.selected != 0 || m.selectedTabID != m.sessions[0].TabID || m.sourceTabID != 3 {
+		t.Fatalf("retry selected index %d/tab %d and source %d, want top-left and source tab 3", m.selected, m.selectedTabID, m.sourceTabID)
 	}
 }
 
@@ -593,8 +596,8 @@ func TestTheStartupRequestIsSpentByTheFirstSuccess(t *testing.T) {
 
 	m = press(t, m, "tab")
 	moved := m.selectedTabID
-	if moved == 3 {
-		t.Fatal("Tab did not move the selection off the source tab; the rest of this test proves nothing")
+	if moved == m.sessions[0].TabID {
+		t.Fatal("Tab did not move the selection off the first card; the rest of this test proves nothing")
 	}
 
 	m = only(t, m, commands.TickMsg{})
@@ -604,6 +607,36 @@ func TestTheStartupRequestIsSpentByTheFirstSuccess(t *testing.T) {
 	m = only(t, m, snapshot(m.refreshActiveSeq, 3, viewSessions(5)))
 	if m.selectedTabID != moved {
 		t.Fatalf("a later read reasserted the source tab, moving the selection to %d from %d", m.selectedTabID, moved)
+	}
+	if m.sourceTabID != 3 {
+		t.Fatalf("navigation or refresh changed the source marker to tab %d", m.sourceTabID)
+	}
+}
+
+func TestSourceMarkerSurvivesNavigationAndAnAnchorChange(t *testing.T) {
+	sessions := viewSessions(3)
+	m, _ := started(t, sessions[2].WindowID)
+	m = only(t, m, snapshot(firstRefreshSeq, sessions[2].TabID, sessions))
+	m = only(t, m, tea.WindowSizeMsg{Width: 120, Height: 30})
+	if !strings.Contains(frameOf(m), "Opened from here") {
+		t.Fatal("the opening frame does not identify the launching card")
+	}
+	m = press(t, m, "tab")
+	selected := m.selectedTabID
+	sessions[2].WindowID = 999
+	m = only(t, m, commands.TickMsg{})
+	// Later topology completions cannot replace the original source marker.
+	m = only(t, m, snapshot(m.refreshActiveSeq, sessions[0].TabID, sessions))
+	if m.sourceTabID != sessions[2].TabID || m.selectedTabID != selected {
+		t.Fatalf("refresh changed source or selection: source %d, selected %d", m.sourceTabID, m.selectedTabID)
+	}
+	if !strings.Contains(frameOf(m), "Opened from here") {
+		t.Fatal("the restarted launching card lost its marker")
+	}
+	m = only(t, m, commands.TickMsg{})
+	m = only(t, m, snapshot(m.refreshActiveSeq, 0, sessions[:2]))
+	if strings.Contains(frameOf(m), "Opened from here") {
+		t.Fatal("a closed source left a marker on another card")
 	}
 }
 

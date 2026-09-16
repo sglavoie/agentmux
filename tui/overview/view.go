@@ -154,6 +154,9 @@ type Input struct {
 	// Selected is the index into Sessions the keyboard is on. It is clamped, and
 	// the page shown is derived from it.
 	Selected int
+	// SourceTabID is the managed tab this overview was opened from, or zero
+	// for an unmanaged source. It is independent of the keyboard selection.
+	SourceTabID int
 	// Previews is keyed by Kitty window ID. A session with no entry is showing a
 	// read that has not landed yet — InspectorLoading — which is the true state of
 	// every tile on the first frame and is distinct from a read that came back
@@ -345,14 +348,20 @@ func renderTile(in Input, t Tile, s session.RunningSession, selected bool) []str
 	body.Width, body.Height = inner, t.Height-tileBorderRows
 	content := splitExactly(dashboard.RenderCompactPreview(body), body.Height)
 
-	glyphs, style := borderFor(selected)
+	source := in.SourceTabID > 0 && s.TabID == in.SourceTabID
+	glyphs, style := borderFor(selected, source)
 	pad := strings.Repeat(" ", tilePadding)
 	rule := strings.Repeat(glyphs.horizontal, t.Width-tileBorderCells)
+	topRule := rule
+	const sourceLabel = " Opened from here "
+	if source && len(sourceLabel) <= t.Width-tileBorderCells {
+		topRule = sourceLabel + strings.Repeat(glyphs.horizontal, t.Width-tileBorderCells-len(sourceLabel))
+	}
 	left := style.Render(glyphs.vertical)
 	right := style.Render(glyphs.vertical)
 
 	lines := make([]string, 0, t.Height)
-	lines = append(lines, style.Render(glyphs.topLeft+rule+glyphs.topRight))
+	lines = append(lines, style.Render(glyphs.topLeft+topRule+glyphs.topRight))
 	for _, line := range content {
 		lines = append(lines, left+pad+fitCell(line, inner)+pad+right)
 	}
