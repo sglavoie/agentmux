@@ -58,13 +58,11 @@ func (h *Handler) ReconcileASLLeases(now time.Time, windows []kitty.OSWindow) {
 	if len(windows) == 0 {
 		return
 	}
-	// Paused runs are included: a pause finalizes the loop process, so the
-	// default liveness checks would hide a run that is deliberately holding an
-	// attention icon + 🔁 while it waits for a human.
+	// Paused runs have no loop process. Historical projections must not seed
+	// leases onto new Kitty windows whose IDs happen to match an old run.
 	result, err := daemonLoopDiscoverPlans(agentloop.DiscoverOptions{
-		StateRoot:     h.aslStateRoot(),
-		IncludePaused: true,
-		Cache:         h.aslProjectionCache,
+		StateRoot: h.aslStateRoot(),
+		Cache:     h.aslProjectionCache,
 	})
 	if err != nil {
 		h.recordASLScanFailure(now, err)
@@ -90,7 +88,7 @@ func (h *Handler) reconcileASLDiscovery(now time.Time, windows []kitty.OSWindow,
 	// workspace, reusing the exact matching policy lifecycle fan-out uses so
 	// reconciliation and live events can never disagree about ownership.
 	var seeds []aslSeed
-	for _, candidate := range result.Candidates(true) {
+	for _, candidate := range result.Candidates(false) {
 		// Leases are keyed by run identity only. The pre-identity window-keyed
 		// key is gone with the legacy parser: the projection always carries a
 		// run ID, and a window-keyed lease cannot be matched against evidence,
@@ -217,13 +215,14 @@ func (h *Handler) reconcileASLDiscovery(now time.Time, windows []kitty.OSWindow,
 //   - A live lease is left alone — live events own it.
 //   - A released lease is NOT resurrected: a finish that named this exact run
 //     outranks a discovery scan that may have raced it.
-//   - Paused runs seed a bare lease (phase only, no attention action): 🔁
-//     survives a restart, but a pause prompt the user may have already seen is
-//     not re-alerted from disk.
+//   - Paused runs are never seeded: their loop process has ended.
 //   - A waiting run also seeds a bare lease. Discovery proves the worker is
 //     still blocked, but only a current supervisor projection correlated with
 //     an interactive handoff may re-assert the human-actionable question icon.
 func (h *Handler) seedASLLeaseLocked(now time.Time, seed aslSeed) bool {
+	if seed.candidate.Paused || seed.candidate.Phase == agentloop.PhasePaused {
+		return false
+	}
 	st := h.ensureWindowStateLocked(seed.windowID)
 	if st.Reducer == nil {
 		st.Reducer = state.NewReducer(h.reducerCfg)

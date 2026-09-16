@@ -87,7 +87,7 @@ func ASLHookContractRefusal(event string, payload hookevent.HookPayload) string 
 	switch {
 	case payload.SchemaVersion != ASLHookSchemaVersion:
 		return DecisionReasonHookSchemaUnsupported
-	case payload.ContractSetID != aslcontract.ContractSetID:
+	case !aslcontract.SupportsLoopContract(payload.ContractSetID):
 		return DecisionReasonHookContractMismatch
 	default:
 		return ""

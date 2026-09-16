@@ -110,9 +110,11 @@
   still matches the same workspace and harness. Legacy loop state without a
   recognized harness still matches by CWD, and if no same-harness managed Kitty
   tab is open, Agent Mux falls back to the same workspace rather than updating an
-  unrelated caller tab.
+  unrelated caller tab. Press F8 to dismiss a stranded loop marker that has no
+  live daemon lease. Paused runs have no ongoing loop and do not restore the
+  marker, even if Kitty reuses their former window ID after a reboot.
 - **F8 does nothing from a tab or split pane**: F8 clears a recognized state
-  icon regardless of whether the tab is managed. For a managed tab, inspect
+  icon or stale loop marker regardless of whether the tab is managed. For a managed tab, inspect
   `amx daemon export-events --window <owner-id>` (the managed title owner); for
   an ownerless subprocess tab, inspect the pane that fired F8. Confirm a
   non-suppressed `user_clear` event. An `owner_mismatch` for `user_clear`

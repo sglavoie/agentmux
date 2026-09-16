@@ -322,12 +322,14 @@ func loopMarkerForLifecycleTarget(eventOrAction string, target agentloop.Workspa
 		events.AgentSessionLoopTurnHangCleared, events.AgentSessionLoopTurnFinished,
 		events.AgentSessionLoopVerificationStarted, events.AgentSessionLoopVerificationHeartbeat,
 		events.AgentSessionLoopVerificationFinished, events.AgentSessionLoopWaitStarted,
-		events.AgentSessionLoopWaitEnded, events.AgentSessionLoopPaused:
+		events.AgentSessionLoopWaitEnded:
 		// Every non-final lifecycle event asserts the loop marker: turns and
 		// verification are active work (a suspected or retracted worker hang is
 		// still an executing turn), between-turn signals keep the lease, and
-		// a paused or mailbox-waiting run still owns 🔁 while it is blocked.
+		// a mailbox-waiting run still owns 🔁 while it is blocked.
 		return boolPtr(true)
+	case events.AgentSessionLoopPaused:
+		return boolPtr(false)
 	case events.AgentSessionLoopFinished:
 		if strings.TrimSpace(target.CWD) == "" && target.WindowID <= 0 {
 			slog.Debug("preserving loop marker after loop finish; target directory missing")

@@ -367,3 +367,22 @@ func TestReconcileScanFailureIsRecordedAndChangesNothing(t *testing.T) {
 type errScanFailed struct{}
 
 func (errScanFailed) Error() string { return "scan failed" }
+
+func TestReconcileLostPauseHookReleasesExecutingLease(t *testing.T) {
+	h, windows, projectDir := reconcileTestFixture(t)
+	now := time.Now()
+	candidate := planCandidate(projectDir, "run-A", "/state/a", agentloop.PhaseTurn)
+	stubDaemonDiscoverPlans(t, sweep(presentObservation(candidate)), nil)
+	h.ReconcileASLLeases(now, windows)
+	candidate.Phase, candidate.Paused = agentloop.PhasePaused, true
+	candidate.Generation++
+	paused := presentObservation(candidate)
+	paused.Reason = agentloop.ReasonPaused
+	stubDaemonDiscoverPlans(t, sweep(paused), nil)
+	for i := 1; i <= asl.MissingRunThreshold; i++ {
+		h.ReconcileASLLeases(now.Add(time.Duration(i)*asl.ReconcileInterval), windows)
+	}
+	if looping, _ := windowLoopState(t, h, 42); looping {
+		t.Fatal("lost pause hook left a loop marker with no ongoing process")
+	}
+}

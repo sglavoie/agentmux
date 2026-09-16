@@ -295,8 +295,8 @@ func TestReducerWaitingPausedFallback(t *testing.T) {
 	r := NewReducer(zeroCfg)
 	r.Apply(protocol.ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseWaiting, Seq: 1, At: 10})
 	r.Apply(protocol.ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Action: "failure", Phase: ASLPhasePaused, Seq: 2, At: 11})
-	if got := r.Reduce(100); got.Icon != "warning" || !got.Looping {
-		t.Fatalf("paused out of a wait = %+v; want warning + looping", got)
+	if got := r.Reduce(100); got.Icon != "warning" || got.Looping {
+		t.Fatalf("paused out of a wait = %+v; want warning without looping", got)
 	}
 
 	r.Apply(protocol.ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseFinished, Seq: 3, At: 12})

@@ -148,16 +148,16 @@ func TestReducerBetweenTurnsMasksStopOrderIndependent(t *testing.T) {
 	}
 }
 
-// TestReducerPausedRunHoldsAttentionIconWithLease: paused → matching attention
-// icon plus 🔁.
-func TestReducerPausedRunHoldsAttentionIconWithLease(t *testing.T) {
+// TestReducerPausedRunHoldsAttentionIconWithoutLease: paused → matching attention
+// icon without 🔁.
+func TestReducerPausedRunHoldsAttentionIconWithoutLease(t *testing.T) {
 	paused := protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-A"}, RunID: "run-A", Action: "elicitation", Phase: state.ASLPhasePaused, Seq: 1, At: 100}
-	if got := state.Replay(state.ReducerConfig{}, 101, paused); got.Icon != "question" || !got.Looping {
-		t.Fatalf("paused(question) = %+v; want question + looping", got)
+	if got := state.Replay(state.ReducerConfig{}, 101, paused); got.Icon != "question" || got.Looping {
+		t.Fatalf("paused(question) = %+v; want question without looping", got)
 	}
 	warned := protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-A"}, RunID: "run-A", Action: "failure", Phase: state.ASLPhasePaused, Seq: 1, At: 100}
-	if got := state.Replay(state.ReducerConfig{}, 101, warned); got.Icon != "warning" || !got.Looping {
-		t.Fatalf("paused(failure) = %+v; want warning + looping", got)
+	if got := state.Replay(state.ReducerConfig{}, 101, warned); got.Icon != "warning" || got.Looping {
+		t.Fatalf("paused(failure) = %+v; want warning without looping", got)
 	}
 }
 

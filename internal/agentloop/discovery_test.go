@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/aslcontract"
 )
 
 func TestDiscoverProjectsEveryContractField(t *testing.T) {
@@ -394,5 +396,29 @@ func TestLookupPlanStateRejectsMismatchedEmbeddedPlan(t *testing.T) {
 
 	if _, found, err := LookupPlanState(planDir, root); err == nil || found {
 		t.Fatalf("LookupPlanState mismatch = found %v err %v", found, err)
+	}
+}
+
+func TestDiscoverReviewedLoopContractStillRequiresLiveProcess(t *testing.T) {
+	root, planDir := t.TempDir(), t.TempDir()
+	seedProjection(t, root, planDir, projectionSeed{
+		RunID: "current-run", Phase: PhaseTurn, PID: 123, KittyWindowID: 3,
+		ContractSetID: aslcontract.LoopCompatibleContractSetID,
+	})
+	for _, alive := range []bool{true, false} {
+		result, err := DiscoverPlans(DiscoverOptions{
+			StateRoot: root, PIDRunning: func(int) bool { return alive }, ProcessBirth: matchingBirth(),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		candidates := result.Candidates(false)
+		if alive {
+			if len(candidates) != 1 || candidates[0].RunID != "current-run" || candidates[0].WindowID != 3 {
+				t.Fatalf("live reviewed-contract loop was not discovered: %+v", result)
+			}
+		} else if len(candidates) != 0 || result.Observations[0].Presence != PresenceConfirmedAbsent {
+			t.Fatalf("exited reviewed-contract loop still appears active: %+v", result)
+		}
 	}
 }

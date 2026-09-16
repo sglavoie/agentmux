@@ -471,10 +471,10 @@ func (h *Handler) handleLoopMarkerStateUpdate(req protocol.Request) protocol.Res
 		events.AgentSessionLoopTurnHeartbeat, events.AgentSessionLoopTurnHangSuspected,
 		events.AgentSessionLoopTurnHangCleared, events.AgentSessionLoopTurnFinished,
 		events.AgentSessionLoopVerificationStarted, events.AgentSessionLoopVerificationHeartbeat,
-		events.AgentSessionLoopVerificationFinished, events.AgentSessionLoopPaused:
+		events.AgentSessionLoopVerificationFinished:
 		st.Looping = true
 		st.LoopingSet = true
-	case events.AgentSessionLoopFinished:
+	case events.AgentSessionLoopFinished, events.AgentSessionLoopPaused:
 		st.Looping = false
 		st.LoopingSet = true
 	}

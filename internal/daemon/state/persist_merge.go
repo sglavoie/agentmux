@@ -79,6 +79,9 @@ func sourceFactFromSnapshot(s protocol.SourceFactSnapshot) *sourceFact {
 	if !s.Acked {
 		ackedAt = 0
 	}
+	// Older builds persisted paused runs as live leases. A paused run has no
+	// loop process, so neither restore nor a late merge may revive 🔁.
+	leaseLive := s.LeaseLive && s.Phase != ASLPhasePaused
 	return &sourceFact{
 		source:          s.Source(),
 		set:             true,
@@ -98,7 +101,7 @@ func sourceFactFromSnapshot(s protocol.SourceFactSnapshot) *sourceFact {
 		agents:          s.Agents,
 		runID:           s.RunID,
 		phase:           s.Phase,
-		leaseLive:       s.LeaseLive,
+		leaseLive:       leaseLive,
 		terminated:      s.Terminated,
 		terminalTurn:    s.TerminalTurn,
 		terminalToolUse: s.TerminalToolUse,

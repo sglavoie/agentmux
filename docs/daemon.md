@@ -114,13 +114,18 @@ cross-contamination.
 Because hooks can fire from any pane in a split tab, the daemon applies an
 active-pane route policy rather than writing titles from the indicator:
 
-- **F8 (`user_clear`)** clears the tab's state icon. On a managed tab it is
+- **F8 (`user_clear`)** clears the tab's state icon and any loop marker without
+  a live ASL lease. On a managed tab it is
   retargeted to the title owner from whichever pane pressed the binding —
   owner, managed non-owner, or unmanaged sibling — so the wipe is never dropped
   as an owner mismatch. On an ownerless tab, it clears a recognized state icon
+  or stale loop marker
   from the source pane, including terminal icons left by subprocesses such as
-  `claude -p`; an icon-free ownerless tab remains a no-op. `🔁`, the base title,
-  harness emoji, `★`, and `🔇` are all preserved. On a managed Claude pane,
+  `claude -p`; an icon-free ownerless tab remains a no-op. A live ASL lease keeps
+  `🔁` while executing, waiting for a mailbox reply, or between turns. Pausing
+  ends the loop process and clears `🔁`; old paused runs are not restored onto
+  new tabs. The base title, harness emoji,
+  `★`, and `🔇` are preserved. On a managed Claude pane,
   the clear is transient while Claude's current pane title still carries its
   busy marker: the next 2-second probe tick restores `⚡` from that positive
   activity evidence. This recovery never creates `🔁`; only a live ASL lease

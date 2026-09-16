@@ -199,6 +199,12 @@ func (h *Handler) reduceStateUpdate(req protocol.Request, outcome applyOutcome, 
 	changed := effective != st.Effective
 	// Cutover: the reduced effective state is the visible state.
 	h.publishEffectiveLocked(req.WindowID, st, effective)
+	if n.Action == "user_clear" {
+		// A manual wipe also dismisses a restored or externally stranded loop
+		// marker. Only a live reducer lease keeps the marker authoritative.
+		st.Looping = effective.Looping
+		st.LoopingSet = true
+	}
 
 	// publishEffectiveLocked already stamped Shadow.Effective*; meta is
 	// re-read here only to record divergence evidence.

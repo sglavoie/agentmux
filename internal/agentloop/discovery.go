@@ -41,8 +41,8 @@ type DiscoverOptions struct {
 	ProcessBirth ProcessBirthLookup
 	// IncludePaused also returns paused runs. A pause finalizes the loop
 	// process, so paused runs hold no PID even though they are still awaiting a
-	// human. Only reconciliation opts in: routing and loop marker consumers
-	// must keep seeing live processes only.
+	// human. Routing, reconciliation seeding, and loop marker consumers keep
+	// seeing live processes only; historical plan consumers may opt in.
 	IncludePaused bool
 	// Cache memoizes projection decodes across sweeps. Nil reads through, which
 	// is what a one-shot caller wants; a repeating caller should hold one, since

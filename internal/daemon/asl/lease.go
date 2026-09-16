@@ -83,6 +83,11 @@ func (s Sweep) Evidence(leaseStateDir string, fact protocol.SourceFactSnapshot) 
 		if observation, ok := s.byRunID[fact.RunID]; ok {
 			switch observation.Presence {
 			case agentloop.PresencePresent:
+				if observation.Candidate.Paused || observation.Candidate.Phase == agentloop.PhasePaused {
+					// The plan still exists, but pausing ended its loop process.
+					// A lost pause hook must not leave an executing lease forever.
+					return EvidenceAbsent
+				}
 				return EvidencePresent
 			case agentloop.PresenceConfirmedAbsent:
 				return EvidenceAbsent

@@ -599,8 +599,8 @@ func TestAcceptanceCompletedAgentRemainsDoneDuringASLContinuation(t *testing.T) 
 		return resp, err
 	}
 	s.deliver(jobTopology)
-	if frame := s.frame(); !strings.Contains(frame, "0:42 | ASL paused · Done") {
-		t.Fatalf("completed agent hidden by paused run:\n%s", frame)
+	if frame := s.frame(); !strings.Contains(frame, "0:42 · Done") || strings.Contains(frame, "ASL paused") {
+		t.Fatalf("paused process still appears to supervise the completed agent:\n%s", frame)
 	}
 	r.Apply(protocol.ReducerEvent{Source: run, Phase: state.ASLPhaseTurn, Seq: 2, At: viewNow.Unix() + 1})
 	s.refresh()

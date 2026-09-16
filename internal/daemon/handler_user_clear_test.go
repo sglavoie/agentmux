@@ -2,10 +2,13 @@ package daemon
 
 import (
 	"errors"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -196,7 +199,6 @@ func TestHandler_UserClearOwnerlessTabWithGlyphClearsSource(t *testing.T) {
 		Base:    "api",
 		Starred: true,
 		Muted:   true,
-		Looping: true,
 	})
 	fake := &fakeKittyClient{windows: fakeOSWindowsWithSplitTab(
 		liveTitle,
@@ -307,7 +309,6 @@ func TestHandler_UserClearPreservesForeignTitleParts(t *testing.T) {
 		State:   "",
 		Starred: true,
 		Muted:   true,
-		Looping: true,
 	})
 	fake := &fakeKittyClient{windows: hookEventWindows(liveTitle, []kitty.Window{{
 		ID:       42,
@@ -338,7 +339,7 @@ func TestHandler_UserClearPreservesForeignTitleParts(t *testing.T) {
 	}
 }
 
-func TestHandler_UserClearClearsGuardAndActionButKeepsLoop(t *testing.T) {
+func TestHandler_UserClearClearsGuardActionAndStaleLoop(t *testing.T) {
 	h := newTestHandler()
 	fake := &fakeKittyClient{windows: hookEventWindows(
 		palette.BuildTitleParts(palette.TitleParts{Base: "api", State: "error", Looping: true}),
@@ -372,8 +373,8 @@ func TestHandler_UserClearClearsGuardAndActionButKeepsLoop(t *testing.T) {
 	if st.LastAction != "" || st.LastActiveEvent != "" || st.DesiredIcon != "" {
 		t.Fatalf("state = %+v; want last action/event and desired icon cleared", st)
 	}
-	if !st.Looping || !st.LoopingSet {
-		t.Fatalf("state = %+v; loop state must remain authoritative", st)
+	if st.Looping || !st.LoopingSet {
+		t.Fatalf("state = %+v; stale loop state must be explicitly cleared", st)
 	}
 }
 
@@ -446,5 +447,81 @@ func TestHandler_UserClearThenPromptSetsBolt(t *testing.T) {
 	h.stateMu.Unlock()
 	if st == nil || st.DesiredIcon != "bolt" {
 		t.Fatalf("state = %+v; want bolt after post-clear prompt", st)
+	}
+}
+
+func TestHandler_UserClearLoopOnlyTab(t *testing.T) {
+	for _, managed := range []bool{false, true} {
+		for _, recorded := range []bool{false, true} {
+			t.Run(fmt.Sprintf("managed=%t/recorded=%t", managed, recorded), func(t *testing.T) {
+				h := newTestHandler()
+				win := kitty.Window{ID: 42, IsActive: true}
+				if managed {
+					win.UserVars = kitty.UserVars{Profile: "work", Harness: harness.Codex}
+				}
+				liveTitle := palette.BuildTitleParts(palette.TitleParts{Base: "api", Starred: true, Muted: true, Looping: true})
+				fake := &fakeKittyClient{windows: fakeOSWindowsWithSplitTab(liveTitle, []kitty.Window{win})}
+				h.SetKittyClient(fake)
+				if recorded {
+					h.stateMu.Lock()
+					st := h.ensureWindowStateLocked(42)
+					st.Looping = true
+					st.LoopingSet = true
+					h.stateMu.Unlock()
+				}
+				if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "user_clear"}); !resp.OK {
+					t.Fatalf("user_clear response = %+v", resp)
+				}
+				if h.renderQueue.Empty() {
+					t.Fatal("loop-only clear must render immediately")
+				}
+				h.renderSnapshot(fake.windows)
+				want := palette.BuildTitleParts(palette.TitleParts{Base: "api", Starred: true, Muted: true})
+				calls := fake.titleCalls()
+				if len(calls) != 1 || calls[0].title != want {
+					t.Fatalf("title calls = %+v; want %q", calls, want)
+				}
+				// A later reducer publication must not restore the dismissed marker.
+				h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active"})
+				if got := h.Handle(protocol.Request{Type: protocol.TypeStateQuery}).States[42]; got.Looping {
+					t.Fatalf("later activity restored stale loop: %+v", got)
+				}
+			})
+		}
+	}
+}
+
+func TestHandler_UserClearKeepsLiveLoopLease(t *testing.T) {
+	for _, phase := range []string{state.ASLPhaseTurn, state.ASLPhaseBetween, state.ASLPhaseWaiting} {
+		t.Run(phase, func(t *testing.T) {
+			h := newTestHandler()
+			fake := &fakeKittyClient{windows: hookEventWindows(
+				palette.BuildTitleParts(palette.TitleParts{Base: "api", State: "key", Looping: true}),
+				[]kitty.Window{{ID: 42, IsActive: true, UserVars: kitty.UserVars{Profile: "work", Harness: harness.Claude}}},
+			)}
+			h.SetKittyClient(fake)
+			h.stateMu.Lock()
+			st := h.ensureWindowStateLocked(42)
+			st.Reducer = state.NewReducer(h.reducerCfg)
+			st.Reducer.Apply(protocol.ReducerEvent{
+				Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "live-run"},
+				Phase:  phase, Action: "permission", Seq: 1, At: time.Now().Unix(),
+			})
+			h.publishEffectiveLocked(42, st, st.Reducer.Reduce(time.Now().Unix()))
+			h.stateMu.Unlock()
+			if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "user_clear"}); !resp.OK {
+				t.Fatalf("user_clear response = %+v", resp)
+			}
+			got := h.Handle(protocol.Request{Type: protocol.TypeStateQuery}).States[42]
+			if !got.Looping || got.IconState != "" {
+				t.Fatalf("state = %+v; want live loop without state icon", got)
+			}
+			h.renderSnapshot(fake.windows)
+			calls := fake.titleCalls()
+			want := palette.BuildTitleParts(palette.TitleParts{Base: "api", Looping: true})
+			if len(calls) != 1 || calls[0].title != want {
+				t.Fatalf("title calls = %+v; want %q", calls, want)
+			}
+		})
 	}
 }

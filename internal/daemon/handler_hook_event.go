@@ -356,13 +356,14 @@ func (h *Handler) handleUserClearHookEvent(ctx hookEventContext, eventOrAction, 
 	targetID := 0
 	profile := ""
 	harnessName := ""
-	forceVisibleClear := false
+	liveLooping := ctx.tab != nil && palette.ParseTitleParts(ctx.tab.Title).Looping
+	forceVisibleClear := liveLooping
 	switch {
 	case ctx.owner != nil:
 		targetID = ctx.owner.ID
 		profile = ctx.owner.UserVars.EffectiveProfile()
 		harnessName = ctx.owner.UserVars.EffectiveHarness()
-	case ctx.tab != nil && ctx.win != nil && h.ownerlessSourceHasClearableState(ctx.req.WindowID, ctx.req.CurrentIconState):
+	case ctx.tab != nil && ctx.win != nil && (liveLooping || h.ownerlessSourceHasClearableState(ctx.req.WindowID, ctx.req.CurrentIconState)):
 		// Ownerless harness subprocesses still use the source window's reducer
 		// and render state icons through renderTitleOwnerLocked. Clear that same
 		// source instead of requiring a managed cc_account/cc_harness owner.
@@ -374,7 +375,7 @@ func (h *Handler) handleUserClearHookEvent(ctx hookEventContext, eventOrAction, 
 		// state, which is not a state-to-state visual change, so explicitly
 		// enqueue it below to converge the live title without waiting for the
 		// maintenance interval.
-		forceVisibleClear = ctx.req.CurrentIconState != ""
+		forceVisibleClear = forceVisibleClear || ctx.req.CurrentIconState != ""
 		slog.Debug("user_clear wiping ownerless source pane",
 			"window_id", ctx.req.WindowID,
 			"event", eventOrAction,
@@ -449,7 +450,7 @@ func (h *Handler) handleUserClearHookEvent(ctx hookEventContext, eventOrAction, 
 
 // ownerlessSourceHasClearableState reports whether F8 has anything to dismiss
 // on a tab without a managed title owner. The live parsed icon covers stranded
-// titles; the desired state covers a recorded icon that has not rendered yet.
+// titles; the desired icon and loop state cover markers not rendered yet.
 func (h *Handler) ownerlessSourceHasClearableState(windowID int, liveIcon string) bool {
 	if liveIcon != "" {
 		return true
@@ -457,7 +458,7 @@ func (h *Handler) ownerlessSourceHasClearableState(windowID int, liveIcon string
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	st, ok := h.windowStateLocked(windowID)
-	return ok && rendering.DesiredIcon(st) != ""
+	return ok && (rendering.DesiredIcon(st) != "" || st.Looping)
 }
 
 func (h *Handler) resolveHookEventContext(req protocol.Request) hookEventContext {

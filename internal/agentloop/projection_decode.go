@@ -12,6 +12,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/sglavoie/agentmux/internal/aslcontract"
 )
 
 // ReadProjection reads the projection nested in the state file at path.
@@ -108,10 +110,9 @@ func requireSupportedContract(members map[string]json.RawMessage) (string, error
 	if err != nil {
 		return "", projectionErrorf(ReasonUnsupportedContract, "%v", err)
 	}
-	// Exact, not prefix. A peer built from a different corpus is incompatible
-	// even inside the family, and the result is still indeterminate rather than
-	// absent: an unpaired ASL must never look like a run that ended.
-	if contractSetID != ContractSetID {
+	// Match reviewed exact identities. A change to unrelated bridge methods
+	// does not invalidate identical loop components; unknown peers stay refused.
+	if !aslcontract.SupportsLoopContract(contractSetID) {
 		return "", projectionErrorf(ReasonUnsupportedContract,
 			"contract set %q is not %q", contractSetID, ContractSetID)
 	}

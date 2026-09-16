@@ -69,9 +69,8 @@ type DiscoveryResult struct {
 }
 
 // Candidates returns the present runs, newest-first. IncludePaused selects
-// whether paused runs are included: reconciliation needs them (a paused run
-// still owns its lease), while routing and loop-marker consumers must keep
-// seeing live processes only.
+// whether historical paused runs are included. Routing, reconciliation
+// seeding, and loop-marker consumers must keep seeing live processes only.
 func (r DiscoveryResult) Candidates(includePaused bool) []Candidate {
 	candidates := make([]Candidate, 0, len(r.Observations))
 	for _, observation := range r.Observations {

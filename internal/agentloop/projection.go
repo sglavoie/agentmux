@@ -31,14 +31,9 @@ const (
 	projectionKey = "agent_mux"
 	// ProjectionSchema is the only `agent_mux` schema version this build reads.
 	ProjectionSchema = 1
-	// ContractSetID is the one contract set this build reads a projection under.
-	//
-	// It used to be a family prefix, because AgentMux held no copy of ASL's
-	// corpus and so could not tell a fixture-only edit from an incompatible
-	// peer. It now vendors that corpus at internal/aslcontract, so the digest is
-	// checkable and the family match is not: two builds inside the family whose
-	// digests differ disagree about the wire, which is the whole reason the ID
-	// carries a digest at all.
+	// ContractSetID is the fully vendored contract set. Projection ingestion
+	// also accepts exact identities whose loop components were independently
+	// reviewed as identical (aslcontract.SupportsLoopContract).
 	ContractSetID = aslcontract.ContractSetID
 
 	// ContractSetPrefix remains the family every well-formed ID carries. It is

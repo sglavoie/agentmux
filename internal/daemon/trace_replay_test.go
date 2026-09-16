@@ -281,7 +281,7 @@ func replayTraces(projectDir string) []replayTrace {
 				{"AgentSessionLoopTurnFinished", aslPl(projectDir, "run-1", 4, ""), "", true},
 				{"AgentSessionLoopVerificationStarted", aslPl(projectDir, "run-1", 5, ""), "bolt", true},
 				{"AgentSessionLoopVerificationFinished", aslPl(projectDir, "run-1", 6, ""), "", true},
-				{"AgentSessionLoopPaused", aslPl(projectDir, "run-1", 7, `"pause_reason":"question"`), "question", true},
+				{"AgentSessionLoopPaused", aslPl(projectDir, "run-1", 7, `"pause_reason":"question"`), "question", false},
 				{"AgentSessionLoopTurnStarted", aslPl(projectDir, "run-1", 8, ""), "bolt", true},
 				{"AgentSessionLoopFinished", aslPl(projectDir, "run-1", 9, ""), "stop", false},
 			},

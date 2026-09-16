@@ -177,9 +177,9 @@ func TestUserVarV4RestartEquivalenceAcrossSources(t *testing.T) {
 			t.Fatalf("Reduce(%d) after restart = %+v, want %+v", now, after, before)
 		}
 	}
-	// The ASL pause holds both the attention icon and the loop lease.
-	if eff := got.Reducer.Reduce(131); eff.Icon != "key" || !eff.Looping {
-		t.Fatalf("Reduce(131) = %+v, want key icon with live lease", eff)
+	// The ASL pause holds attention after the loop process has ended.
+	if eff := got.Reducer.Reduce(131); eff.Icon != "key" || eff.Looping {
+		t.Fatalf("Reduce(131) = %+v, want key icon without live lease", eff)
 	}
 }
 

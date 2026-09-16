@@ -21,14 +21,14 @@ import (
 // remains order-independent through Seq; equal-timestamp facts from different
 // sources follow the reducer's source-independent causal application order.
 
-// ASL run phases. A run holds a live loop lease (🔁) from its first non-finished
-// event until it finishes; the phase also selects the run's contributed icon.
+// ASL run phases. Executing and waiting runs hold a live loop lease (🔁).
+// Pausing ends the loop process and releases the lease; attention can persist.
 const (
 	ASLPhaseTurn         = "turn"         // ⚡🔁 — a turn is executing
 	ASLPhaseVerification = "verification" // ⚡🔁 — verification is running
 	ASLPhaseBetween      = "between"      // 🔁 only — idle between turns
 	ASLPhaseWaiting      = "waiting"      // 🔁 only — worker awaits a mailbox reply
-	ASLPhasePaused       = "paused"       // attention icon + 🔁 — awaiting a human
+	ASLPhasePaused       = "paused"       // attention icon — loop process ended
 	ASLPhaseFinished     = "finished"     // 🛑, lease released
 )
 
@@ -123,7 +123,7 @@ func (r *Reducer) resolve(ev protocol.ReducerEvent) (action, icon string, leaseL
 			// supervisor probe owns the human-actionable question icon.
 			return "idle", "", true
 		case ASLPhasePaused:
-			return ev.Action, ActionIcon(ev.Action), true
+			return ev.Action, ActionIcon(ev.Action), false
 		case ASLPhaseFinished:
 			return "stop", "stop", false
 		}

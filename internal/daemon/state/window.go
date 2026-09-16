@@ -421,6 +421,11 @@ func (s *WindowState) restoreReducerV2(uv windowStateUserVar) {
 		Icon:    uv.EffectiveIcon,
 		Looping: uv.EffectiveLooping,
 	}
+	if s.Reducer != nil && s.Reducer.LoopStateKnown() {
+		// Paused leases from older builds were normalized during Restore.
+		// Correct the persisted scalar before compaction can discard old facts.
+		s.Effective.Looping = s.Reducer.Reduce(uv.LastEventAt).Looping
+	}
 	if uv.EffectiveKind != "" {
 		s.Effective.Source = protocol.SourceID{Kind: protocol.SourceKind(uv.EffectiveKind), Key: uv.EffectiveKey}
 	}

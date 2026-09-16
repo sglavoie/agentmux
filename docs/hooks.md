@@ -51,7 +51,7 @@ persisted monotonic source sequence; the mailbox-reply marker uses the physical
 mailbox reply sequence. The daemon keys one lease per run: overlapping runs in
 one workspace hold independent facts, a run's turn/verification phases render
 ⚡🔁, a worker blocked on a supervisor mailbox reply and a between-turns run
-render bare 🔁, paused states add their human-attention icon, and one run
+render bare 🔁, paused states release 🔁 and retain their human-attention icon, and one run
 finishing never changes another run's state (verified live with two overlapping
 runs in a single window). Turn and verification heartbeats re-assert the lease
 every 30 seconds. A worker wait has no stale threshold: it keeps 🔁 until the

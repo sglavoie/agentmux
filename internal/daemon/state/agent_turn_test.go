@@ -8,7 +8,7 @@ import (
 )
 
 func TestAgentTurnIsIndependentOfASL(t *testing.T) {
-	for _, phase := range []string{ASLPhaseBetween, ASLPhaseWaiting, ASLPhasePaused, ASLPhaseTurn, ASLPhaseVerification} {
+	for _, phase := range []string{ASLPhaseBetween, ASLPhaseWaiting, ASLPhaseTurn, ASLPhaseVerification} {
 		t.Run(phase, func(t *testing.T) {
 			r := NewReducer(zeroCfg)
 			r.Apply(protocol.ReducerEvent{Source: harnessSource(), Action: "stop", Seq: 1, At: 100, TurnID: "first"})
@@ -77,7 +77,7 @@ func TestASLPhasesAreDistinctAndExcludeFinishedRuns(t *testing.T) {
 	}
 	r.Apply(protocol.ReducerEvent{Source: aslSource("b"), Phase: ASLPhaseTurn, Seq: 2, At: 101})
 	r.Apply(protocol.ReducerEvent{Source: aslSource("c"), Phase: ASLPhaseFinished, Seq: 2, At: 102})
-	if got := r.ASLPhases(); !reflect.DeepEqual(got, []string{"paused", "turn"}) {
+	if got := r.ASLPhases(); !reflect.DeepEqual(got, []string{"turn"}) {
 		t.Fatalf("phases = %v", got)
 	}
 }

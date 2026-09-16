@@ -97,6 +97,13 @@ nothing else in that state is interpreted — the loop's turn, verification,
 pause, and lock bookkeeping are private to ASL. This is a hard paired cutover:
 Agent Mux keeps no parser for state that predates the projection.
 
+Loop observation also accepts `asl-amx-1.85ec3041b9f03f47`: its projection and
+lifecycle schemas and fixtures match the vendored `asl-amx-1.6f30193cd1744a98`
+components exactly. That release adds bridge methods, so full bridge negotiation
+still requires its own compatibility check. Unknown contract identities remain
+indeterminate, and ongoing loop discovery still authenticates the PID and birth
+token. Paused runs have no loop process and do not restore `🔁` onto new tabs.
+
 An unpaired half does not fail loudly, and it does not fail destructively
 either. State with no projection Agent Mux can read is classified
 *indeterminate*, which means:

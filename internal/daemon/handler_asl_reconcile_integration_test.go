@@ -1,14 +1,18 @@
 package daemon
 
 import (
+	"encoding/json"
 	"errors"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/aslcontract"
 	"github.com/sglavoie/agentmux/internal/daemon/asl"
 	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -63,19 +67,19 @@ func TestReconcileSeedsDiscoveredRun(t *testing.T) {
 	}
 }
 
-// TestReconcileSeedsPausedRunAsBareLease: a paused run keeps 🔁 across a
-// restart but does not re-alert its attention icon from disk.
-func TestReconcileSeedsPausedRunAsBareLease(t *testing.T) {
+// A historical paused run must not seed state onto a reused Kitty window ID.
+func TestReconcileDoesNotResurrectPausedRun(t *testing.T) {
 	h, windows, projectDir := reconcileTestFixture(t)
 	cand := loopCandidate(projectDir, "run-A", agentloop.PhasePaused)
 	cand.Paused = true
+	cand.CWD = ""
+	cand.WindowID = 42 // a previous Kitty session used the same numeric ID
 	stubDaemonLoopDiscover(t, []agentloop.Candidate{cand}, nil)
 
 	h.ReconcileASLLeases(time.Now(), windows)
 
-	looping, icon := windowLoopState(t, h, 42)
-	if !looping || icon != "" {
-		t.Fatalf("seeded paused state = looping=%v icon=%q; want bare 🔁", looping, icon)
+	if h.store[42] != nil {
+		t.Fatal("paused projection created state for a reused window ID")
 	}
 }
 
@@ -220,7 +224,7 @@ func TestHookEventOverlappingRunsKeepIndependentLeases(t *testing.T) {
 }
 
 // TestHookEventPausedRunShowsAttentionIcon: a paused run surfaces the matching
-// attention icon plus 🔁 through the full hook path.
+// attention icon without a loop marker through the full hook path.
 func TestHookEventPausedRunShowsAttentionIcon(t *testing.T) {
 	h, windows, projectDir := reconcileTestFixture(t)
 	fake := &fakeKittyClient{windows: windows}
@@ -228,8 +232,8 @@ func TestHookEventPausedRunShowsAttentionIcon(t *testing.T) {
 
 	aslLifecycleHookRequest(t, h, "AgentSessionLoopTurnStarted", projectDir, hookevent.HookPayload{RunID: "run-A"})
 	aslLifecycleHookRequest(t, h, "AgentSessionLoopPaused", projectDir, hookevent.HookPayload{RunID: "run-A", PauseReason: "question"})
-	if looping, icon := windowLoopState(t, h, 42); !looping || icon != "question" {
-		t.Fatalf("paused run = looping=%v icon=%q; want ❓ + 🔁", looping, icon)
+	if looping, icon := windowLoopState(t, h, 42); looping || icon != "question" {
+		t.Fatalf("paused run = looping=%v icon=%q; want ❓ without 🔁", looping, icon)
 	}
 }
 
@@ -402,5 +406,85 @@ func TestHookEventVerificationPhaseContributesActiveWork(t *testing.T) {
 	aslLifecycleHookRequest(t, h, "AgentSessionLoopVerificationFinished", projectDir, hookevent.HookPayload{RunID: "run-A"})
 	if looping, icon := windowLoopState(t, h, 42); !looping || icon != "" {
 		t.Fatalf("verification finished = looping=%v icon=%q; want bare 🔁 between turns", looping, icon)
+	}
+}
+
+func TestRestoredPausedLeaseNeverRevivesLoopMarker(t *testing.T) {
+	for _, degraded := range []bool{false, true} {
+		name := "startup"
+		if degraded {
+			name = "late-merge"
+		}
+		t.Run(name, func(t *testing.T) {
+			h, windows, projectDir := reconcileTestFixture(t)
+			// The former build persisted this paused lease as live. Its process
+			// ended long ago, and the new Kitty session reused window ID 42.
+			windows[0].Tabs[0].Title = palette.BuildTitleParts(palette.TitleParts{Base: "api", Looping: true})
+			windows[0].Tabs[0].Windows[0].UserVars.AMXState = `{"v":4,"l":true,"el":true,"f":[{"k":"asl","y":"old-run","q":1,"t":1,"ak":true,"aa":1,"p":"paused","ll":true,"r":"old-run"}]}`
+			fake := &fakeKittyClient{windows: windows}
+			h.SetKittyClient(fake)
+			if degraded {
+				h.handleStateUpdate(protocol.Request{WindowID: 42, Action: "active"})
+			}
+			h.restoreFromUserVars(windows, time.Now())
+			cand := loopCandidate(projectDir, "old-run", agentloop.PhasePaused)
+			cand.Paused, cand.CWD, cand.WindowID = true, "", 42
+			stubDaemonLoopDiscover(t, []agentloop.Candidate{cand}, nil)
+			for i := 0; i < 3; i++ {
+				h.ReconcileASLLeases(time.Now(), windows)
+				if looping, _ := windowLoopState(t, h, 42); looping {
+					t.Fatal("restoration or reconciliation revived a historical paused loop")
+				}
+			}
+			if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "user_clear"}); !resp.OK {
+				t.Fatalf("user_clear = %+v", resp)
+			}
+			h.renderSnapshot(windows)
+			calls := fake.titleCalls()
+			if len(calls) == 0 || palette.ParseTitleParts(calls[len(calls)-1].title).Looping {
+				t.Fatalf("stale live title was not cleared: %+v", calls)
+			}
+			// A genuinely resumed run can still assert the marker with new work.
+			h.stateMu.Lock()
+			st := h.store[42]
+			st.Reducer.Apply(protocol.ReducerEvent{
+				Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "old-run"},
+				RunID:  "old-run", Phase: state.ASLPhaseTurn, Seq: 2, At: time.Now().Unix(),
+			})
+			h.publishEffectiveLocked(42, st, st.Reducer.Reduce(time.Now().Unix()))
+			h.stateMu.Unlock()
+			if looping, icon := windowLoopState(t, h, 42); !looping || icon != "bolt" {
+				t.Fatalf("resumed loop = %t %q; want executing loop", looping, icon)
+			}
+		})
+	}
+}
+
+func TestReviewedLoopContractRoutesToExactTabAcrossHarnesses(t *testing.T) {
+	h, windows, projectDir := reconcileTestFixture(t)
+	windows[0].Tabs[0].Windows[0].UserVars.Harness = "codex"
+	fake := &fakeKittyClient{windows: windows}
+	h.SetKittyClient(fake)
+	for i, event := range []string{"AgentSessionLoopTurnStarted", "AgentSessionLoopPaused", "AgentSessionLoopTurnStarted"} {
+		payload := hookevent.HookPayload{
+			Source: "agent_session_loop", SchemaVersion: 2, ContractSetID: aslcontract.LoopCompatibleContractSetID,
+			RunID: "current-run", Harness: "claude", KittyWindowID: 42, CWD: projectDir,
+			SourceSequence: strconv.Itoa(i + 1),
+		}
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: event, PayloadJSON: string(raw)}); !resp.OK {
+			t.Fatalf("%s = %+v", event, resp)
+		}
+		looping, _ := windowLoopState(t, h, 42)
+		if looping != (event != "AgentSessionLoopPaused") {
+			t.Fatalf("%s looping = %t", event, looping)
+		}
+	}
+	h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "user_clear"})
+	if looping, _ := windowLoopState(t, h, 42); !looping {
+		t.Fatal("F8 removed the ongoing loop marker")
 	}
 }
