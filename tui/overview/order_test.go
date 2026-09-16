@@ -169,13 +169,14 @@ func TestStatusNeverReordersATile(t *testing.T) {
 	}
 }
 
-func TestOpeningOrderRanksAttentionThenNonWorkingThenWorking(t *testing.T) {
+func TestOpeningOrderRanksAttentionThenDoneThenNonWorkingThenWorking(t *testing.T) {
 	makeRow := func(tab int, name, state string, unseen bool) session.RunningSession {
 		s := row(tab, tab*10, name)
 		s.State, s.Unseen = state, unseen
 		return s
 	}
 	input := []session.RunningSession{
+		makeRow(10, "a-compacting", "compact", false),
 		makeRow(1, "a-working", "bolt", false),
 		makeRow(2, "b-done", "stop", false),
 		makeRow(3, "c-question", "question", false),
@@ -192,7 +193,7 @@ func TestOpeningOrderRanksAttentionThenNonWorkingThenWorking(t *testing.T) {
 	input = append(input, agentDone)
 	before := append([]session.RunningSession(nil), input...)
 	got := names(OpeningOrder(input, nil, 5*time.Minute))
-	want := []string{"c-question", "e-unread", "g-error", "b-done", "d-subagent", "f-tool-failed", "i-agent-done", "a-working", "h-working"}
+	want := []string{"c-question", "e-unread", "g-error", "b-done", "i-agent-done", "a-compacting", "d-subagent", "f-tool-failed", "a-working", "h-working"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("opening order = %v, want %v", got, want)
 	}

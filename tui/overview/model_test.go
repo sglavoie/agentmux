@@ -628,6 +628,34 @@ func TestTheSelectionStaysPutWhenANewTabArrives(t *testing.T) {
 	}
 }
 
+func TestOpeningPutsDoneBeforeCompacting(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		state     string
+		unseen    bool
+		agentDone bool
+	}{
+		{name: "seen completion", state: "stop"},
+		{name: "unseen completion", state: "stop", unseen: true},
+		{name: "completed agent under active ASL", state: "bolt", agentDone: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			compacting := viewSession(1, "alpha", "work", "codex")
+			compacting.State = "compact"
+			done := viewSession(2, "zeta", "work", "codex")
+			done.State, done.Unseen = tc.state, tc.unseen
+			if tc.agentDone {
+				done.AgentTurn = &protocol.AgentTurnSnapshot{IconState: "stop"}
+			}
+			m, _ := started(t, 0)
+			m = only(t, m, snapshot(firstRefreshSeq, 0, []session.RunningSession{compacting, done}))
+			if got, want := tabs(m), []int{2, 1}; !reflect.DeepEqual(got, want) {
+				t.Fatalf("opening tiles = %v, want Done top-left before Compacting: %v", got, want)
+			}
+		})
+	}
+}
+
 func TestOpeningSurfacesAttentionAndNonWorkingThenFreezesPositions(t *testing.T) {
 	working := viewSession(1, "alpha", "work", "codex")
 	working.State = "bolt"

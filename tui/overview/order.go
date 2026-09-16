@@ -1,7 +1,7 @@
 // What order the tiles come in.
 //
-// At opening, the grid surfaces sessions needing attention, then other
-// non-Working sessions, then Working sessions. Within each class its identity
+// At opening, the grid surfaces sessions needing attention, then Done sessions,
+// then other non-Working sessions, then Working sessions. Within each class its identity
 // order is deterministic. Subsequent reads retain the existing tile positions:
 // a harness starting or finishing a turn must not move the pane being read.
 //
@@ -49,8 +49,8 @@ func Order(sessions []session.RunningSession) []session.RunningSession {
 }
 
 // OpeningOrder ranks the first successful snapshot. Attention uses the same
-// grouping as the dashboard; Working uses the agent turn that the overview's
-// tile actually displays, which can differ from the aggregate ASL state.
+// grouping as the dashboard; Done and Working use the agent turn that the
+// overview's tile actually displays, which can differ from the aggregate ASL state.
 func OpeningOrder(sessions []session.RunningSession, activity map[int]time.Time, idleThreshold time.Duration) []session.RunningSession {
 	out := Order(sessions)
 	sort.SliceStable(out, func(i, j int) bool {
@@ -67,10 +67,15 @@ func openingRank(s session.RunningSession, activity map[int]time.Time, idleThres
 	if s.AgentTurn != nil {
 		state = s.AgentTurn.IconState
 	}
-	if state != "bolt" {
+	// Completed turns need inspection even if the daemon has already marked
+	// them seen. Keep them ahead of mid-task states such as Compacting.
+	if state == "stop" {
 		return 1
 	}
-	return 2
+	if state != "bolt" {
+		return 2
+	}
+	return 3
 }
 
 // RetainOrder refreshes the facts without moving surviving tabs. New sessions
