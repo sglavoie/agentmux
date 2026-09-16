@@ -130,8 +130,11 @@ func TestPickerOKeyOpensAllSelectedProjectsIncludingFilteredRows(t *testing.T) {
 		t.Fatalf("opened directories = %v, want stable picker order %v", gotDirs, wantDirs)
 	}
 	for _, opts := range client.launched {
-		if opts.Directory == "/projects/backend" && opts.Title != "🤖backend" {
-			t.Errorf("backend title = %q, want alternate-profile title %q", opts.Title, "🤖backend")
+		if opts.Directory == "/projects/backend" && opts.Title != "backend" {
+			t.Errorf("backend title = %q, want project title without a harness icon", opts.Title)
+		}
+		if opts.Directory == "/projects/api" && opts.Title != "api" {
+			t.Errorf("api title = %q, want project title without a harness icon", opts.Title)
 		}
 		if opts.Directory == "/projects/dotfiles" {
 			t.Error("opened unselected dotfiles project")

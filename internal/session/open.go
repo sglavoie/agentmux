@@ -15,10 +15,10 @@ import (
 )
 
 // OpenDirectory opens a session's directory in a new Kitty tab as a plain
-// shell (no Claude Code). The tab gets the correct title and account color
+// shell (no harness). The tab gets the project title and account color
 // but no user vars, so it won't appear in the dashboard's session list.
 func OpenDirectory(client kitty.KittyClient, sess config.Session, acc config.Account, cfg *config.Config) error {
-	formattedTitle := FormatTitle(sess, acc, cfg)
+	formattedTitle := sess.Title
 
 	osWindows, err := client.ListWindows()
 	if err != nil {
