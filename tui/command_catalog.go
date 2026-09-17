@@ -80,14 +80,83 @@ func commandCatalog() []commands.Command[Model] {
 	return catalog
 }
 
-// commandDeclarations is the catalog in palette order: every session action
-// first, projected from the shared vocabulary in tui/sessionactions, then the
-// explore and app commands, which act on the dashboard itself rather than on a
-// row and so are declared here in full.
+// commandDeclarations is the catalog in palette order, which is also the order
+// the palette paints its three groups in: the navigation commands, then every
+// session action projected from the shared vocabulary in tui/sessionactions,
+// then the application commands.
+//
+// Group contiguity is a property of this order rather than of the renderer.
+// PaletteResults filters without reordering, so a group split across two
+// stretches of the catalog would be drawn under two headings, and the palette
+// has no way to notice. TestCommandCatalogStableInventory is what reports it.
 func commandDeclarations() []commands.Command[Model] {
-	return append(sessionCommandDeclarations(), []commands.Command[Model]{
+	catalog := navigateCommandDeclarations()
+	catalog = append(catalog, sessionCommandDeclarations()...)
+	return append(catalog, applicationCommandDeclarations()...)
+}
+
+// navigateCommandDeclarations is the Navigate group: the five destinations
+// first, then the commands that change what the dashboard list itself is
+// showing.
+//
+// The five lead because they are what the palette is opened for on a dashboard
+// with nothing selected — a launcher, two histories, the worktree inventory, and
+// the run list are reachable in one keystroke and a glance rather than after a
+// scroll past twelve session actions that a cold list disables anyway. The six
+// below them are filtering and arrangement: still navigation, in that they
+// change which sessions the operator is looking at, but they act on the list in
+// place rather than opening something else.
+func navigateCommandDeclarations() []commands.Command[Model] {
+	return []commands.Command[Model]{
 		{
-			ID: commands.FilterSessions, Group: commands.GroupExplore,
+			ID: commands.OpenLauncher, Group: commands.GroupNavigate,
+			Title:       commands.StaticTitle[Model]("Open Launcher"),
+			Description: "Choose configured projects to launch.",
+			Aliases:     []string{"launch", "projects"},
+			Execute:     openLauncherCommand,
+		},
+		{
+			ID: commands.SearchAllSessions, Group: commands.GroupNavigate,
+			Title:       commands.StaticTitle[Model]("Search All Past Sessions"),
+			Description: "Browse all projects and harnesses by latest activity, with search filters cleared.",
+			Aliases:     []string{"history", "transcripts"},
+			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
+				updated, cmd := m.enterAllSessionSearch()
+				return updated.(Model), cmd
+			},
+		},
+		{
+			ID: commands.SearchPlans, Group: commands.GroupNavigate,
+			Title:       commands.StaticTitle[Model]("Search Plans"),
+			Description: "Search indexed agent-session-loop plans.",
+			Aliases:     []string{"agent plans", "history"},
+			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
+				updated, cmd := m.enterPlanSearch()
+				return updated.(Model), cmd
+			},
+		},
+		{
+			ID: commands.ManageWorktrees, Group: commands.GroupNavigate,
+			Title:       commands.StaticTitle[Model]("Manage Worktrees"),
+			Description: "Browse managed Git worktrees and open their paths.",
+			Aliases:     []string{"git", "branches", "inventory"},
+			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
+				updated, cmd := m.enterWorktrees()
+				return updated.(Model), cmd
+			},
+		},
+		{
+			ID: commands.ShowRuns, Group: commands.GroupNavigate,
+			Title:       commands.StaticTitle[Model]("Show Runs"),
+			Description: "Review active and actionable agent-session-loop runs.",
+			Aliases:     []string{"asl", "loop", "needs action"},
+			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
+				updated, cmd := m.enterASLRuns()
+				return updated.(Model), cmd
+			},
+		},
+		{
+			ID: commands.FilterSessions, Group: commands.GroupNavigate,
 			Title:       commands.StaticTitle[Model]("Filter Sessions"),
 			Description: "Filter running sessions with the dashboard query language.",
 			Aliases:     []string{"find", "search"},
@@ -103,7 +172,7 @@ func commandDeclarations() []commands.Command[Model] {
 			},
 		},
 		{
-			ID: commands.CycleProfileFilter, Group: commands.GroupExplore,
+			ID: commands.CycleProfileFilter, Group: commands.GroupNavigate,
 			Title:       commands.StaticTitle[Model]("Cycle Profile Filter"),
 			Description: "Cycle running sessions by effective profile and back to all profiles.",
 			Aliases:     []string{"account", "filter", "running"},
@@ -112,7 +181,7 @@ func commandDeclarations() []commands.Command[Model] {
 			},
 		},
 		{
-			ID: commands.ClearFilters, Group: commands.GroupExplore,
+			ID: commands.ClearFilters, Group: commands.GroupNavigate,
 			Title:       commands.StaticTitle[Model]("Clear Filters"),
 			Description: "Remove every active dashboard filter chip.",
 			Aliases:     []string{"chips", "reset"},
@@ -122,54 +191,7 @@ func commandDeclarations() []commands.Command[Model] {
 			},
 		},
 		{
-			ID: commands.OpenLauncher, Group: commands.GroupExplore,
-			Title:       commands.StaticTitle[Model]("Open Launcher"),
-			Description: "Choose configured projects to launch.",
-			Aliases:     []string{"launch", "projects"},
-			Execute:     openLauncherCommand,
-		},
-		{
-			ID: commands.SearchAllSessions, Group: commands.GroupExplore,
-			Title:       commands.StaticTitle[Model]("Search All Past Sessions"),
-			Description: "Browse all projects and harnesses by latest activity, with search filters cleared.",
-			Aliases:     []string{"history", "transcripts"},
-			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
-				updated, cmd := m.enterAllSessionSearch()
-				return updated.(Model), cmd
-			},
-		},
-		{
-			ID: commands.SearchPlans, Group: commands.GroupExplore,
-			Title:       commands.StaticTitle[Model]("Search Plans"),
-			Description: "Search indexed agent-session-loop plans.",
-			Aliases:     []string{"agent plans", "history"},
-			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
-				updated, cmd := m.enterPlanSearch()
-				return updated.(Model), cmd
-			},
-		},
-		{
-			ID: commands.ManageWorktrees, Group: commands.GroupExplore,
-			Title:       commands.StaticTitle[Model]("Manage Worktrees"),
-			Description: "Browse managed Git worktrees and open their paths.",
-			Aliases:     []string{"git", "branches", "inventory"},
-			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
-				updated, cmd := m.enterWorktrees()
-				return updated.(Model), cmd
-			},
-		},
-		{
-			ID: commands.ShowRuns, Group: commands.GroupExplore,
-			Title:       commands.StaticTitle[Model]("Show Runs"),
-			Description: "Review active and actionable agent-session-loop runs.",
-			Aliases:     []string{"asl", "loop", "needs action"},
-			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
-				updated, cmd := m.enterASLRuns()
-				return updated.(Model), cmd
-			},
-		},
-		{
-			ID: commands.ToggleInspector, Group: commands.GroupExplore,
+			ID: commands.ToggleInspector, Group: commands.GroupNavigate,
 			Title: func(m Model, _ commands.Context) string {
 				if m.inspectorActive() {
 					return "Hide Inspector"
@@ -188,7 +210,7 @@ func commandDeclarations() []commands.Command[Model] {
 			},
 		},
 		{
-			ID: commands.SwitchProject, Group: commands.GroupExplore,
+			ID: commands.SwitchProject, Group: commands.GroupNavigate,
 			// The title names the scope the list is in, not the one the command
 			// would switch to, because the command switches to whichever scope the
 			// operator picks — there is no single destination to name. The
@@ -213,7 +235,7 @@ func commandDeclarations() []commands.Command[Model] {
 			},
 		},
 		{
-			ID: commands.ToggleListView, Group: commands.GroupExplore,
+			ID: commands.ToggleListView, Group: commands.GroupNavigate,
 			// The title names the arrangement the command switches TO, not the
 			// one the list is in, so the palette entry reads as the action it
 			// performs rather than as a status line.
@@ -230,9 +252,18 @@ func commandDeclarations() []commands.Command[Model] {
 				return m, cmd
 			},
 		},
+	}
+}
 
+// applicationCommandDeclarations is the Application group: the commands that act
+// on the dashboard program itself rather than on a session or on the list. It is
+// last because it is the block an operator reaches for least — and because the
+// two entries in it that are reached often, help and quit, both still carry a
+// direct dashboard key.
+func applicationCommandDeclarations() []commands.Command[Model] {
+	return []commands.Command[Model]{
 		{
-			ID: commands.ResortTabs, Group: commands.GroupApp,
+			ID: commands.ResortTabs, Group: commands.GroupApplication,
 			Title:       commands.StaticTitle[Model]("Resort Tabs"),
 			Description: "Reorder managed Kitty tabs to match the dashboard sort order.",
 			Aliases:     []string{"reorder", "tabs"},
@@ -250,7 +281,7 @@ func commandDeclarations() []commands.Command[Model] {
 			},
 		},
 		{
-			ID: commands.UndoClose, Group: commands.GroupApp,
+			ID: commands.UndoClose, Group: commands.GroupApplication,
 			Title:        commands.StaticTitle[Model]("Undo Last Close"),
 			Description:  "Relaunch the most recently closed session before undo expires.",
 			Aliases:      []string{"restore", "reopen"},
@@ -263,7 +294,7 @@ func commandDeclarations() []commands.Command[Model] {
 			},
 		},
 		{
-			ID: commands.ShowHealth, Group: commands.GroupApp,
+			ID: commands.ShowHealth, Group: commands.GroupApplication,
 			Title:       commands.StaticTitle[Model]("Show Health Details"),
 			Description: "Open the full daemon, hooks, session-freshness, and configuration reading.",
 			Aliases:     []string{"daemon", "hooks", "diagnostics", "status"},
@@ -280,7 +311,7 @@ func commandDeclarations() []commands.Command[Model] {
 			},
 		},
 		{
-			ID: commands.DismissDeprecation, Group: commands.GroupApp,
+			ID: commands.DismissDeprecation, Group: commands.GroupApplication,
 			Title:       commands.StaticTitle[Model]("Dismiss Deprecation Warning"),
 			Description: "Silence the configuration notice for this session.",
 			Aliases:     []string{"banner", "warning"},
@@ -300,7 +331,7 @@ func commandDeclarations() []commands.Command[Model] {
 			},
 		},
 		{
-			ID: commands.ShowKeyboardHelp, Group: commands.GroupApp,
+			ID: commands.ShowKeyboardHelp, Group: commands.GroupApplication,
 			Title:       commands.StaticTitle[Model]("Show Keyboard Shortcuts"),
 			Description: "Open the complete dashboard keyboard reference.",
 			Aliases:     []string{"help", "keys"},
@@ -310,7 +341,7 @@ func commandDeclarations() []commands.Command[Model] {
 			},
 		},
 		{
-			ID: commands.Quit, Group: commands.GroupApp,
+			ID: commands.Quit, Group: commands.GroupApplication,
 			Title:       commands.StaticTitle[Model]("Quit"),
 			Description: "Exit the agentmux dashboard.",
 			Aliases:     []string{"close app", "exit"},
@@ -318,7 +349,7 @@ func commandDeclarations() []commands.Command[Model] {
 				return m, tea.Quit
 			},
 		},
-	}...)
+	}
 }
 
 // sessionCommandDeclarations projects the shared session-action vocabulary onto

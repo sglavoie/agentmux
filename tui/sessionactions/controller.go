@@ -73,11 +73,21 @@ type Origin struct {
 	// the selection outside the window it comes back to.
 	MenuCursor int
 	MenuOffset int
-	// PaletteQuery, PaletteCursor, and PaletteOffset are the palette's typed
-	// query and the row it was sitting on.
-	PaletteQuery  string
-	PaletteCursor int
-	PaletteOffset int
+	// PaletteQuery, PaletteCommand, PaletteCursor, and PaletteOffset are the
+	// palette's typed query and the row it was sitting on.
+	//
+	// The row is recorded twice on purpose, and the identity is the one that
+	// matters. A palette restored from its query re-runs the match against a
+	// model that has moved on — the dashboard refreshed, a session went idle, a
+	// command became visible — so the index the operator was on can now name a
+	// different command. PaletteCommand is what the host looks for first;
+	// PaletteCursor is the fallback for a command that the recomputed results no
+	// longer contain at all, which is the one case where the position is the best
+	// remaining answer.
+	PaletteQuery   string
+	PaletteCommand commands.ID
+	PaletteCursor  int
+	PaletteOffset  int
 }
 
 // Host is the Kitty tab and window the dashboard itself is running in.

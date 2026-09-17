@@ -48,12 +48,23 @@ const (
 )
 
 // Group is both the grouping identity and the user-facing group label.
+//
+// The three are ordered by what an operator opening the palette is most often
+// after. Navigate comes first because it holds the destinations — the launcher,
+// the two histories, the worktree inventory, the run list — and a destination is
+// what a palette opened on a cold dashboard is for; the session block below it
+// needs a selected row to mean anything at all, and the application block is the
+// one an operator reaches for least.
+//
+// The labels are the identities. Renaming one moves the heading and nothing
+// else: a command's stable identity is its ID, which carries its own historical
+// prefix and is deliberately not kept in step with the group it renders under.
 type Group string
 
 const (
-	GroupSession Group = "Session"
-	GroupExplore Group = "Explore"
-	GroupApp     Group = "App"
+	GroupNavigate    Group = "Navigate"
+	GroupSession     Group = "Session"
+	GroupApplication Group = "Application"
 )
 
 // Context captures the dashboard row a command should target. The value is

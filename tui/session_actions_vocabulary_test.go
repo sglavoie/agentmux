@@ -58,19 +58,31 @@ func TestOverlayOffersEveryMenuDefinition(t *testing.T) {
 }
 
 // TestPaletteOffersEverySessionDefinition checks the palette side of the same
-// declaration: the catalog opens with the session actions, in vocabulary order,
-// carrying the vocabulary's own title, description, and aliases.
+// declaration: the catalog's session block is the session actions, in
+// vocabulary order, carrying the vocabulary's own title, description, and
+// aliases.
+//
+// The block is located by group rather than assumed to open the catalog. It is
+// the second of three now — the destinations come first, because a palette
+// opened on a cold dashboard is most often a way to go somewhere — and the
+// property being checked was never about position.
 func TestPaletteOffersEverySessionDefinition(t *testing.T) {
 	target := session.RunningSession{TabID: 1, WindowID: 101, Base: "api", Project: "api", Profile: "work", State: "bolt"}
 	m, ctx, _ := commandTestModel(target)
 
 	definitions := sessionactions.Definitions()
 	catalog := commandCatalog()
-	if len(catalog) < len(definitions) {
-		t.Fatalf("catalog has %d commands, fewer than the %d session actions", len(catalog), len(definitions))
+	var block []commands.Command[Model]
+	for _, candidate := range catalog {
+		if candidate.Group == sessionactions.PaletteGroup {
+			block = append(block, candidate)
+		}
+	}
+	if len(block) != len(definitions) {
+		t.Fatalf("catalog's session group has %d commands, the vocabulary declares %d", len(block), len(definitions))
 	}
 	for i, definition := range definitions {
-		candidate := catalog[i]
+		candidate := block[i]
 		if candidate.ID != definition.ID {
 			t.Errorf("command[%d] id = %q, want %q", i, candidate.ID, definition.ID)
 		}
@@ -90,13 +102,20 @@ func TestPaletteOffersEverySessionDefinition(t *testing.T) {
 			t.Errorf("%q has no executor", definition.ID)
 		}
 	}
-	// Nothing after the session block claims the session group, so "the catalog
-	// opens with the session actions" is the whole of it rather than the first
-	// stretch of a scattering.
-	for _, candidate := range catalog[len(definitions):] {
-		if candidate.Group == sessionactions.PaletteGroup {
-			t.Errorf("command %q is in the session group but outside the shared vocabulary", candidate.ID)
+	// The block is contiguous, so it is one heading in the palette rather than a
+	// scattering of session rows through the other two groups.
+	first, last := -1, -1
+	for i, candidate := range catalog {
+		if candidate.Group != sessionactions.PaletteGroup {
+			continue
 		}
+		if first < 0 {
+			first = i
+		}
+		last = i
+	}
+	if last-first+1 != len(definitions) {
+		t.Errorf("session group spans catalog[%d:%d] for %d commands; it is not contiguous", first, last+1, len(definitions))
 	}
 }
 

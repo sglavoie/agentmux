@@ -87,16 +87,12 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		return m, nil
 
 	case keyUp, keyCtrlK, keyCtrlP:
-		if m.commandCursor > 0 {
-			m.commandCursor--
-		}
+		m.commandCursor = commandPaletteInput(m).MoveCursor(-1)
 		scrollCommandPaletteToCursor(&m)
 		return m, nil
 
 	case keyDown, keyCtrlJ, keyCtrlN:
-		if m.commandCursor+1 < len(m.commandResults) {
-			m.commandCursor++
-		}
+		m.commandCursor = commandPaletteInput(m).MoveCursor(1)
 		scrollCommandPaletteToCursor(&m)
 		return m, nil
 
@@ -134,11 +130,11 @@ func commandPaletteInput(m Model) commands.PaletteInput[Model] {
 
 func commandPaletteContentWidth(m Model) int { return commandPaletteInput(m).ContentWidth() }
 
-func commandPaletteResultLayout(m Model, width int) commands.PaletteLayout {
-	return commandPaletteInput(m).ResultLayout(width)
+func commandPaletteRows(m Model, width int) []commands.PaletteRow {
+	return commandPaletteInput(m).Rows(width)
 }
 
-func commandPaletteScrollBounds(m Model) (commands.PaletteLayout, int) {
+func commandPaletteScrollBounds(m Model) ([]commands.PaletteRow, int) {
 	return commandPaletteInput(m).ScrollBounds()
 }
 

@@ -19,7 +19,8 @@
     { "type": "mode_equals", "mode": "command_palette" },
     { "type": "cursor_equals", "cursor": 10 },
     { "type": "no_layout_issues" },
-    { "type": "contains_text", "text": "Lock Session" },
+    { "type": "contains_text", "text": "Focus Selected Session" },
+    { "type": "contains_text", "text": "Jump to the selected session" },
     { "type": "contains_text", "text": "▲" },
     { "type": "contains_text", "text": "▼" }
   ]

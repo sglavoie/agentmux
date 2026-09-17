@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
 
@@ -186,6 +187,55 @@ func TestCancellingReturnsToThePaletteQuery(t *testing.T) {
 	if got := paletteIndexOf(t, m, commands.RestartSession); m.commandCursor != got {
 		t.Fatalf("cursor = %d, want the restart row at %d", m.commandCursor, got)
 	}
+}
+
+// TestCancellingRestoresThePaletteSelectionByIdentity is why the captured
+// origin carries a command ID and not only a row number.
+//
+// The palette's results are recomputed on restore, against a model that has
+// moved on while the nested interaction was up. A command that became visible
+// above the selection shifts every row below it, so the index the operator was
+// on now names a different command — and putting them back on a command they
+// never chose is a worse answer than the drift it was meant to fix.
+func TestCancellingRestoresThePaletteSelectionByIdentity(t *testing.T) {
+	row := sessionActionRow()
+	m := sessionActionModel(true, row)
+	m.mode = ModeCommandPalette
+	m.commandContext = captureCommandContext(m)
+	m.commandResults = commands.PaletteResults(commandCatalog(), m, m.commandContext, "")
+	m.commandCursor = paletteIndexOf(t, m, commands.RestartSession)
+	before := m.commandCursor
+	scrollCommandPaletteToCursor(&m)
+
+	updated, _ := m.Update(keyPress(keyEnter))
+	m = updated.(Model)
+	if m.mode != ModeConfirm {
+		t.Fatalf("setup: mode = %v, want %v", m.mode, ModeConfirm)
+	}
+
+	// Clear Filters is hidden until a filter is applied, and it sits in the
+	// Navigate block above every session command. Applying one while the
+	// confirmation is up moves the restart row one place down, which is exactly
+	// the drift an index-only restore cannot see.
+	m.activeFilter = dashboard.Parse("api")
+
+	updated, _ = m.Update(keyPress(keyEsc))
+	m = updated.(Model)
+
+	if m.mode != ModeCommandPalette {
+		t.Fatalf("mode = %v, want %v", m.mode, ModeCommandPalette)
+	}
+	want := paletteIndexOf(t, m, commands.RestartSession)
+	if want == before {
+		t.Fatalf("the result set did not shift under the cancellation; this test proves nothing at index %d", before)
+	}
+	if m.commandCursor != want {
+		t.Fatalf("cursor = %d, want the restart row at its new index %d", m.commandCursor, want)
+	}
+	if !m.commandContext.HasTarget || m.commandContext.Target.WindowID != row.WindowID {
+		t.Fatalf("captured target = %+v, want window %d", m.commandContext, row.WindowID)
+	}
+	assertCommandPaletteSelectionVisible(t, m)
 }
 
 // TestCancellingTheProfilePickerReturnsToItsOrigin covers the deeper nesting:

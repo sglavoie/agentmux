@@ -70,12 +70,16 @@ func TestCommandPaletteResultsPreserveCatalogAndGroupOrder(t *testing.T) {
 	ctx := captureCommandContext(m)
 
 	results := commands.PaletteResults(commandCatalog(), m, ctx, "HISTORY")
-	want := []commands.ID{commands.SearchProject, commands.SearchAllSessions, commands.SearchPlans}
+	want := []commands.ID{commands.SearchAllSessions, commands.SearchPlans, commands.SearchProject}
 	if got := commandResultIDs(results); !reflect.DeepEqual(got, want) {
 		t.Fatalf("history result IDs = %v, want %v", got, want)
 	}
-	if results[0].Group != commands.GroupSession || results[1].Group != commands.GroupExplore || results[2].Group != commands.GroupExplore {
-		t.Fatalf("history result groups lost catalog order: %v, %v, %v", results[0].Group, results[1].Group, results[2].Group)
+	wantGroups := []commands.Group{commands.GroupNavigate, commands.GroupNavigate, commands.GroupSession}
+	for i, group := range wantGroups {
+		if results[i].Group != group {
+			t.Fatalf("history result groups lost catalog order: %v, want %v",
+				[]commands.Group{results[0].Group, results[1].Group, results[2].Group}, wantGroups)
+		}
 	}
 
 	results = commands.PaletteResults(commandCatalog(), m, ctx, "no-command-can-match-this")
@@ -116,24 +120,43 @@ func TestOpenCommandPaletteResetsStateAndCapturesTarget(t *testing.T) {
 	if !m.commandContext.HasTarget || m.commandContext.Target.TabID != target.TabID {
 		t.Fatalf("captured context = %+v, want tab %d", m.commandContext, target.TabID)
 	}
-	if len(m.commandResults) == 0 || m.commandResults[m.commandCursor].ID != commands.FocusSession {
-		t.Fatalf("initial selection = cursor %d IDs %v, want focus command", m.commandCursor, commandResultIDs(m.commandResults))
+	// The destinations lead the catalog, so an opened palette selects the
+	// launcher rather than the focus command it used to. That is the point of
+	// putting them first: the five places an operator can go are on screen and
+	// the first of them is under the cursor, with no scrolling past a block of
+	// session actions a cold list disables anyway.
+	if len(m.commandResults) == 0 || m.commandResults[m.commandCursor].ID != commands.OpenLauncher {
+		t.Fatalf("initial selection = cursor %d IDs %v, want the launcher", m.commandCursor, commandResultIDs(m.commandResults))
 	}
 }
 
 func TestOpenCommandPaletteSelectsFirstAvailableOrDisabledResult(t *testing.T) {
 	m := testModelWithSessions()
 	m.openCommandPalette()
-	if got := m.commandResults[m.commandCursor].ID; got != commands.FilterSessions {
-		t.Fatalf("empty-list initial selection = %q, want first available %q", got, commands.FilterSessions)
+	if m.commandCursor != 0 || m.commandResults[0].ID != commands.OpenLauncher {
+		t.Fatalf("empty-list initial selection = cursor %d %q, want the launcher at 0", m.commandCursor, m.commandResults[m.commandCursor].ID)
+	}
+
+	// A filtered set whose leading rows are disabled is where "first available"
+	// still has work to do: `close` matches the session close (no row to close)
+	// and the undo (nothing to undo) before it reaches Quit.
+	updated, _ := m.Update(tea.KeyPressMsg(tea.Key{Code: 'c', Text: "close"}))
+	m = updated.(Model)
+	if got := m.commandResults[m.commandCursor].ID; got != commands.Quit {
+		t.Fatalf("close-filtered selection = %q, want first available %q", got, commands.Quit)
 	}
 	for i := 0; i < m.commandCursor; i++ {
 		if m.commandResults[i].AvailabilityFor(m, m.commandContext).Available {
 			t.Fatalf("result %d (%q) before cursor is unexpectedly available", i, m.commandResults[i].ID)
 		}
 	}
+	if m.commandCursor == 0 {
+		t.Fatal("the close query skipped no disabled row; the first-available rule is vacuous here")
+	}
 
-	updated, _ := m.Update(tea.KeyPressMsg(tea.Key{Code: 'r', Text: "confirm relaunching"}))
+	m = testModelWithSessions()
+	m.openCommandPalette()
+	updated, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'r', Text: "confirm relaunching"}))
 	m = updated.(Model)
 	if len(m.commandResults) != 1 || m.commandResults[0].ID != commands.RestartSession {
 		t.Fatalf("restart-specific results = %v, want restart only", commandResultIDs(m.commandResults))
@@ -167,10 +190,15 @@ func TestCommandPaletteInputIsRuneSafeAndPrintableKeysStayText(t *testing.T) {
 		t.Fatalf("second Backspace query = %q, want empty", m.commandQuery)
 	}
 
-	for _, key := range []string{keyJ, keyK, keyQ} {
+	// Every one of these is a dashboard binding one keystroke outside the
+	// palette: two cursor moves, a quit, and an undo that reopens a closed
+	// session. Inside it they are letters and nothing else, which is what makes
+	// the query typeable — a palette that quit on `q` could never be asked
+	// about "Quit".
+	for _, key := range []string{keyJ, keyK, keyQ, keyUndoClose} {
 		m = pressKey(m, key)
 	}
-	if m.commandQuery != "jkq" || m.mode != ModeCommandPalette {
+	if m.commandQuery != "jkqu" || m.mode != ModeCommandPalette {
 		t.Fatalf("printable navigation-like keys changed mode/state: mode=%v query=%q", m.mode, m.commandQuery)
 	}
 }
@@ -178,21 +206,33 @@ func TestCommandPaletteInputIsRuneSafeAndPrintableKeysStayText(t *testing.T) {
 func TestCommandPaletteNavigationClampsAndVisitsDisabledRows(t *testing.T) {
 	m := testModelWithSessions()
 	m.openCommandPalette()
-	updated, _ := m.Update(tea.KeyPressMsg(tea.Key{Code: 's', Text: "search"}))
+	// `close` is the query with disabled rows AHEAD of the available one now that
+	// the destinations lead the catalog: the session close and the undo both
+	// refuse on a cold list, and Quit never does.
+	updated, _ := m.Update(tea.KeyPressMsg(tea.Key{Code: 'c', Text: "close"}))
 	m = updated.(Model)
 
 	if got := commandResultIDs(m.commandResults); !reflect.DeepEqual(got, []commands.ID{
-		commands.SearchProject, commands.FilterSessions, commands.SearchAllSessions, commands.SearchPlans,
+		commands.CloseSession, commands.ToggleLockID, commands.UndoClose, commands.Quit,
 	}) {
-		t.Fatalf("search result IDs = %v", got)
+		t.Fatalf("close result IDs = %v", got)
 	}
-	if m.commandCursor != 1 {
-		t.Fatalf("initial available search cursor = %d, want 1", m.commandCursor)
+	if want := len(m.commandResults) - 1; m.commandCursor != want {
+		t.Fatalf("initial available close cursor = %d, want %d", m.commandCursor, want)
 	}
 
-	m = pressKey(m, keyUp)
-	if m.commandCursor != 0 || m.commandResults[0].AvailabilityFor(m, m.commandContext).Available {
-		t.Fatalf("Up did not visit disabled first row: cursor=%d", m.commandCursor)
+	// Every row above the selection refuses, and Up walks onto each of them
+	// rather than skipping to the top: a disabled row is worth selecting because
+	// selecting it is how its reason is read.
+	for m.commandCursor > 0 {
+		before := m.commandCursor
+		m = pressKey(m, keyUp)
+		if m.commandCursor != before-1 {
+			t.Fatalf("Up from %d landed on %d", before, m.commandCursor)
+		}
+		if m.commandResults[m.commandCursor].AvailabilityFor(m, m.commandContext).Available {
+			t.Fatalf("result %d (%q) above the first available row is available", m.commandCursor, m.commandResults[m.commandCursor].ID)
+		}
 	}
 	m = pressKey(m, keyUp)
 	if m.commandCursor != 0 {

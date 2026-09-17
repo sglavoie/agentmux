@@ -209,13 +209,40 @@ func restoreSessionActionOrigin(m Model, pending sessionactions.Pending) Model {
 		m.commandContext = pending.Target.Context()
 		m.commandQuery = pending.Origin.PaletteQuery
 		m.commandResults = commands.PaletteResults(commandCatalog(), m, m.commandContext, m.commandQuery)
-		m.commandCursor = clamp(pending.Origin.PaletteCursor, 0, len(m.commandResults)-1)
+		m.commandCursor = paletteRestoreCursor(m.commandResults, pending.Origin)
 		m.commandOffset = pending.Origin.PaletteOffset
 		clampCommandPaletteOffset(&m)
+		// The restored offset is the one the palette was scrolled to, which is
+		// right whenever the list came back the same shape. Re-scrolling to the
+		// cursor is what covers the case where it did not: a command that moved
+		// under a changed result set would otherwise come back selected and off
+		// screen, which reads as the selection having been lost.
+		scrollCommandPaletteToCursor(&m)
 	default:
 		m.mode = ModeList
 	}
 	return m
+}
+
+// paletteRestoreCursor finds the command the origin was sitting on in a freshly
+// recomputed result set.
+//
+// Identity comes first and position is the fallback. The results are recomputed
+// against a model that has moved on since the capture, so the same index can now
+// name a different command — and restoring the operator onto a command they
+// never selected is worse than restoring them onto a neighbour of the one they
+// did. An origin carrying no identity at all (a menu origin, or a palette origin
+// from before the field existed) falls through to the clamped index, which is
+// the behaviour it had.
+func paletteRestoreCursor(results []commands.Command[Model], origin sessionactions.Origin) int {
+	if origin.PaletteCommand != "" {
+		for i, candidate := range results {
+			if candidate.ID == origin.PaletteCommand {
+				return i
+			}
+		}
+	}
+	return clamp(origin.PaletteCursor, 0, len(results)-1)
 }
 
 // clearSessionActionPrompt drops the confirmation and picker fields a pending
@@ -240,12 +267,16 @@ func menuActionOrigin(m Model) sessionactions.Origin {
 // paletteActionOrigin is the palette's query and selection, captured before the
 // palette tears them down to execute.
 func paletteActionOrigin(m Model) sessionactions.Origin {
-	return sessionactions.Origin{
+	origin := sessionactions.Origin{
 		Surface:       sessionactions.SurfacePalette,
 		PaletteQuery:  m.commandQuery,
 		PaletteCursor: m.commandCursor,
 		PaletteOffset: m.commandOffset,
 	}
+	if m.commandCursor >= 0 && m.commandCursor < len(m.commandResults) {
+		origin.PaletteCommand = m.commandResults[m.commandCursor].ID
+	}
+	return origin
 }
 
 // runSessionAction is the one entry point both surfaces dispatch through.

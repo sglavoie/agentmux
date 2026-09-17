@@ -48,7 +48,25 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 		aliases  []string
 		shortcut string
 	}
+	// The order is the palette's reading order, and the first five entries are
+	// the destinations: a palette opened on a cold dashboard is most often a way
+	// to go somewhere, and every session command below them needs a selected row
+	// to mean anything at all.
 	want := []expectedCommand{
+		{commands.OpenLauncher, commands.GroupNavigate, "Open Launcher", []string{"launch", "projects"}, "l"},
+		{commands.SearchAllSessions, commands.GroupNavigate, "Search All Past Sessions", []string{"history", "transcripts"}, keyAllSessions},
+		{commands.SearchPlans, commands.GroupNavigate, "Search Plans", []string{"agent plans", "history"}, ""},
+		{commands.ManageWorktrees, commands.GroupNavigate, "Manage Worktrees", []string{"git", "branches", "inventory"}, ""},
+		{commands.ShowRuns, commands.GroupNavigate, "Show Runs", []string{"asl", "loop", "needs action"}, ""},
+		{commands.FilterSessions, commands.GroupNavigate, "Filter Sessions", []string{"find", "search"}, "/"},
+		{commands.CycleProfileFilter, commands.GroupNavigate, "Cycle Profile Filter", []string{"account", "filter", "running"}, ""},
+		{commands.ClearFilters, commands.GroupNavigate, "Clear Filters", []string{"chips", "reset"}, "esc"},
+		{commands.ToggleInspector, commands.GroupNavigate, "Hide Inspector", []string{"hide", "pane", "scrollback", "preview", "output"}, "i"},
+		// "all projects" rather than a project name: the catalog is read against a
+		// model with no project selector applied, and the title names the scope the
+		// dashboard is currently showing.
+		{commands.SwitchProject, commands.GroupNavigate, "Switch Project (all projects)", []string{"projects", "scope", "sidebar", "rail"}, "p"},
+		{commands.ToggleListView, commands.GroupNavigate, "Show Projects View", []string{"projects", "families", "urgency", "group"}, ""},
 		{commands.FocusSession, commands.GroupSession, "Focus Selected Session", []string{"jump", "tab"}, "enter"},
 		{commands.PeekScrollback, commands.GroupSession, "Peek Scrollback", []string{"pager", "scrollback"}, ""},
 		{commands.RestartSession, commands.GroupSession, "Restart Session", []string{"relaunch"}, ""},
@@ -64,26 +82,12 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 		{commands.SearchProject, commands.GroupSession, "Search This Project's Past Sessions", []string{"history", "project", "transcripts"}, keyProjectSessionSearch},
 		{commands.ShowDetails, commands.GroupSession, "Show Session Details", []string{"events", "hooks"}, ""},
 		{commands.ShowTimeline, commands.GroupSession, "Show Session Timeline", []string{"events", "phases"}, ""},
-		{commands.FilterSessions, commands.GroupExplore, "Filter Sessions", []string{"find", "search"}, "/"},
-		{commands.CycleProfileFilter, commands.GroupExplore, "Cycle Profile Filter", []string{"account", "filter", "running"}, ""},
-		{commands.ClearFilters, commands.GroupExplore, "Clear Filters", []string{"chips", "reset"}, "esc"},
-		{commands.OpenLauncher, commands.GroupExplore, "Open Launcher", []string{"launch", "projects"}, "l"},
-		{commands.SearchAllSessions, commands.GroupExplore, "Search All Past Sessions", []string{"history", "transcripts"}, keyAllSessions},
-		{commands.SearchPlans, commands.GroupExplore, "Search Plans", []string{"agent plans", "history"}, ""},
-		{commands.ManageWorktrees, commands.GroupExplore, "Manage Worktrees", []string{"git", "branches", "inventory"}, ""},
-		{commands.ShowRuns, commands.GroupExplore, "Show Runs", []string{"asl", "loop", "needs action"}, ""},
-		{commands.ToggleInspector, commands.GroupExplore, "Hide Inspector", []string{"hide", "pane", "scrollback", "preview", "output"}, "i"},
-		// "all projects" rather than a project name: the catalog is read against a
-		// model with no project selector applied, and the title names the scope the
-		// dashboard is currently showing.
-		{commands.SwitchProject, commands.GroupExplore, "Switch Project (all projects)", []string{"projects", "scope", "sidebar", "rail"}, "p"},
-		{commands.ToggleListView, commands.GroupExplore, "Show Projects View", []string{"projects", "families", "urgency", "group"}, ""},
-		{commands.ResortTabs, commands.GroupApp, "Resort Tabs", []string{"reorder", "tabs"}, ""},
-		{commands.UndoClose, commands.GroupApp, "Undo Last Close", []string{"restore", "reopen"}, keyUndoClose},
-		{commands.ShowHealth, commands.GroupApp, "Show Health Details", []string{"daemon", "hooks", "diagnostics", "status"}, ""},
-		{commands.DismissDeprecation, commands.GroupApp, "Dismiss Deprecation Warning", []string{"banner", "warning"}, ""},
-		{commands.ShowKeyboardHelp, commands.GroupApp, "Show Keyboard Shortcuts", []string{"help", "keys"}, "?"},
-		{commands.Quit, commands.GroupApp, "Quit", []string{"close app", "exit"}, "q / ctrl+c"},
+		{commands.ResortTabs, commands.GroupApplication, "Resort Tabs", []string{"reorder", "tabs"}, ""},
+		{commands.UndoClose, commands.GroupApplication, "Undo Last Close", []string{"restore", "reopen"}, keyUndoClose},
+		{commands.ShowHealth, commands.GroupApplication, "Show Health Details", []string{"daemon", "hooks", "diagnostics", "status"}, ""},
+		{commands.DismissDeprecation, commands.GroupApplication, "Dismiss Deprecation Warning", []string{"banner", "warning"}, ""},
+		{commands.ShowKeyboardHelp, commands.GroupApplication, "Show Keyboard Shortcuts", []string{"help", "keys"}, "?"},
+		{commands.Quit, commands.GroupApplication, "Quit", []string{"close app", "exit"}, "q / ctrl+c"},
 	}
 
 	m, ctx, _ := commandTestModel(session.RunningSession{
@@ -121,7 +125,7 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 	}
 
 	// Group contiguity is part of stable catalog order, not a renderer concern.
-	wantGroups := []commands.Group{commands.GroupSession, commands.GroupExplore, commands.GroupApp}
+	wantGroups := []commands.Group{commands.GroupNavigate, commands.GroupSession, commands.GroupApplication}
 	var gotGroups []commands.Group
 	for _, candidate := range got {
 		if len(gotGroups) == 0 || gotGroups[len(gotGroups)-1] != candidate.Group {
@@ -252,11 +256,22 @@ func TestCommandCatalogAvailability(t *testing.T) {
 	t.Run("empty list disables every session command", func(t *testing.T) {
 		m := testModelWithSessions()
 		ctx := captureCommandContext(m)
-		for _, candidate := range commandCatalog()[:15] {
+		// Selected by group rather than by a leading slice: the session block no
+		// longer opens the catalog, and a fixed index would have kept passing
+		// against whatever moved into it.
+		checked := 0
+		for _, candidate := range commandCatalog() {
+			if candidate.Group != commands.GroupSession {
+				continue
+			}
+			checked++
 			availability := candidate.AvailabilityFor(m, ctx)
 			if availability.Available || availability.Reason != commands.ReasonNoSession {
 				t.Errorf("%q availability = %+v, want disabled with %q", candidate.ID, availability, commands.ReasonNoSession)
 			}
+		}
+		if checked == 0 {
+			t.Fatal("no session-group command was checked")
 		}
 	})
 

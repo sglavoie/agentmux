@@ -48,7 +48,7 @@ func dashboardBindings() commands.BindingSet {
 		{Keys: []string{keyEnter}, Display: keyEnter, Hint: "focus", Command: commands.FocusSession},
 		{Keys: []string{keyProjectSessionSearch}, Display: keyProjectSessionSearch, Hint: "project history", Command: commands.SearchProject},
 
-		// Explore.
+		// Navigate.
 		{Keys: []string{keyAllSessions}, Display: keyAllSessions, Hint: "past sessions", Command: commands.SearchAllSessions},
 		{Keys: []string{keySlash}, Display: keySlash, Hint: "filter", Command: commands.FilterSessions},
 		{Keys: []string{keyEsc}, Display: keyEsc, Hint: "clear filters", Command: commands.ClearFilters},
@@ -63,7 +63,7 @@ func dashboardBindings() commands.BindingSet {
 		// empty session list at which the key should read as dead.
 		{Keys: []string{keyProjectSwitcher}, Display: keyProjectSwitcher, Hint: "projects", Command: commands.SwitchProject, Gate: commands.GateUnchecked},
 
-		// App. Undo is checked, and the gate is the point: it reads the recovery
+		// Application. Undo is checked, and the gate is the point: it reads the recovery
 		// stack, so the key is live for exactly the seconds a close is still
 		// recoverable and dead — with "nothing to undo" beside it — the rest of
 		// the time. It is the one key here whose availability changes on a timer

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -19,56 +20,72 @@ func commandPaletteTestModel(width, height int) Model {
 	return m
 }
 
-func commandPaletteLayoutText(palette commands.PaletteLayout) string {
-	lines := make([]string, len(palette.Rows))
-	for i, row := range palette.Rows {
+func commandPaletteLayoutText(rows []commands.PaletteRow) string {
+	lines := make([]string, len(rows))
+	for i, row := range rows {
 		lines[i] = row.Text
 	}
 	return strings.Join(lines, "\n")
 }
 
+// commandPaletteRowFor is the display row the cursor is on. It is a search
+// rather than an index because the group rules between the commands mean the
+// two numbering systems do not line up, which is the whole reason PaletteRow
+// carries a command index at all.
+func commandPaletteRowFor(rows []commands.PaletteRow, cursor int) int {
+	for i, row := range rows {
+		if row.CommandIndex == cursor {
+			return i
+		}
+	}
+	return -1
+}
+
 func assertCommandPaletteSelectionVisible(t *testing.T, m Model) {
 	t.Helper()
-	palette, visible := commandPaletteScrollBounds(m)
-	if m.commandCursor < 0 || m.commandCursor >= len(palette.Spans) {
-		t.Fatalf("cursor %d outside %d command spans", m.commandCursor, len(palette.Spans))
+	rows, visible := commandPaletteScrollBounds(m)
+	index := commandPaletteRowFor(rows, m.commandCursor)
+	if index < 0 {
+		t.Fatalf("cursor %d has no display row among %d rows", m.commandCursor, len(rows))
 	}
-	span := palette.Spans[m.commandCursor]
-	if span.End-span.Start > visible {
-		t.Fatalf("test viewport holds %d rows but selected command needs %d", visible, span.End-span.Start)
-	}
-	if span.Start < m.commandOffset || span.End > m.commandOffset+visible {
-		t.Fatalf("selected span [%d,%d) outside window [%d,%d)",
-			span.Start, span.End, m.commandOffset, m.commandOffset+visible)
+	if index < m.commandOffset || index >= m.commandOffset+visible {
+		t.Fatalf("selected row %d outside window [%d,%d)", index, m.commandOffset, m.commandOffset+visible)
 	}
 }
 
+// TestCommandPaletteFullAndFilteredLayouts is the grouped-result assertion in
+// its logical-command form: one rule per group that has a match, in catalog
+// order, and one row per command rather than a title row plus however many rows
+// its description happened to wrap into.
 func TestCommandPaletteFullAndFilteredLayouts(t *testing.T) {
 	m := commandPaletteTestModel(100, 40)
-	palette := commandPaletteResultLayout(m, commandPaletteContentWidth(m))
-	text := commandPaletteLayoutText(palette)
-	for _, group := range []string{"Session", "Explore", "App"} {
-		count := 0
-		for _, row := range palette.Rows {
-			if row.GroupHeader && row.Text == group {
-				count++
-			}
+	rows := commandPaletteRows(m, commandPaletteContentWidth(m))
+	text := commandPaletteLayoutText(rows)
+
+	var seen []commands.Group
+	for _, row := range rows {
+		if row.GroupRule {
+			seen = append(seen, row.Group)
 		}
-		if count != 1 {
-			t.Fatalf("full layout group %q count = %d, want 1\n%s", group, count, text)
-		}
+	}
+	want := []commands.Group{commands.GroupNavigate, commands.GroupSession, commands.GroupApplication}
+	if !reflect.DeepEqual(seen, want) {
+		t.Fatalf("group rules = %v, want %v\n%s", seen, want, text)
+	}
+	if commandRows := len(rows) - len(seen); commandRows != len(m.commandResults) {
+		t.Fatalf("layout has %d command rows for %d results\n%s", commandRows, len(m.commandResults), text)
 	}
 
 	m.commandQuery = "quit"
 	m.recomputeCommandPaletteResults()
-	palette = commandPaletteResultLayout(m, commandPaletteContentWidth(m))
-	text = commandPaletteLayoutText(palette)
-	if !strings.Contains(text, "App") || !strings.Contains(text, "Quit") {
-		t.Fatalf("filtered layout missing App/Quit:\n%s", text)
+	rows = commandPaletteRows(m, commandPaletteContentWidth(m))
+	text = commandPaletteLayoutText(rows)
+	if !strings.Contains(text, string(commands.GroupApplication)) || !strings.Contains(text, "Quit") {
+		t.Fatalf("filtered layout missing Application/Quit:\n%s", text)
 	}
-	for _, hidden := range []string{"Session", "Explore"} {
-		if strings.Contains(text, hidden) {
-			t.Fatalf("filtered layout leaked empty %s header:\n%s", hidden, text)
+	for _, row := range rows {
+		if row.GroupRule && row.Group != commands.GroupApplication {
+			t.Fatalf("filtered layout leaked empty %q rule:\n%s", row.Group, text)
 		}
 	}
 }
@@ -80,10 +97,14 @@ func TestCommandPaletteRendersContextDisabledNoResultsAndNoSession(t *testing.T)
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{locked})
 	m.width, m.height = 80, 30
 	m.openCommandPalette()
-	m.commandQuery = "restart"
+	// `relaunch` rather than `restart`: the word restart also appears in the
+	// descriptions of the two commands beside it, and only one command can be
+	// selected, so the explanation can only be read off a query that lands the
+	// cursor on the row being asked about.
+	m.commandQuery = "relaunch"
 	m.recomputeCommandPaletteResults()
 	out := stripAnsi(renderCommandPalette(m))
-	for _, want := range []string{"Command Palette", "Session: api", ":restart" + commands.PaletteCursorGlyph, "Restart Session", commands.ReasonLocked} {
+	for _, want := range []string{"Command Palette", "Session: api", ":relaunch" + commands.PaletteCursorGlyph, "Restart Session", commands.ReasonLocked} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("locked palette missing %q:\n%s", want, out)
 		}
@@ -99,7 +120,7 @@ func TestCommandPaletteRendersContextDisabledNoResultsAndNoSession(t *testing.T)
 	empty := testModelWithSessions()
 	empty.width, empty.height = 80, 30
 	empty.openCommandPalette()
-	empty.commandQuery = "restart"
+	empty.commandQuery = "relaunch"
 	empty.recomputeCommandPaletteResults()
 	out = stripAnsi(renderCommandPalette(empty))
 	for _, want := range []string{"Session: none", commands.ReasonNoSession} {
@@ -109,7 +130,11 @@ func TestCommandPaletteRendersContextDisabledNoResultsAndNoSession(t *testing.T)
 	}
 }
 
-func TestCommandPaletteShortcutAlignmentAndWrappedDetail(t *testing.T) {
+// TestCommandPaletteShortcutAlignmentAndSelectedExplanation covers the two
+// halves of a browsable row: the command is ONE line with its dashboard key
+// against the right edge, and whatever the cursor is on is explained beneath the
+// list rather than under the row.
+func TestCommandPaletteShortcutAlignmentAndSelectedExplanation(t *testing.T) {
 	// The alignment half needs a command that still HAS a shortcut. Restart
 	// Session no longer does — `r` is an actions-overlay mnemonic now, and the
 	// palette reads its shortcut column from the dashboard binding table, so a
@@ -119,54 +144,81 @@ func TestCommandPaletteShortcutAlignmentAndWrappedDetail(t *testing.T) {
 	m.commandQuery = "inspector"
 	m.recomputeCommandPaletteResults()
 	width := commandPaletteContentWidth(m)
-	palette := commandPaletteResultLayout(m, width)
-	span := palette.Spans[0]
-	if span.End-span.Start < 3 {
-		t.Fatalf("narrow command span has %d rows, want wrapped title plus detail rows", span.End-span.Start)
+	rows := commandPaletteRows(m, width)
+	index := commandPaletteRowFor(rows, 0)
+	if index < 0 {
+		t.Fatalf("no display row for the only result:\n%s", commandPaletteLayoutText(rows))
 	}
-	title := palette.Rows[span.Start].Text
+	if commandRows := len(rows) - 1; commandRows != len(m.commandResults) {
+		t.Fatalf("one command produced %d rows, want exactly one\n%s", commandRows, commandPaletteLayoutText(rows))
+	}
+	title := rows[index].Text
 	if layout.Width(title) != width {
 		t.Fatalf("title row width = %d, want right-aligned width %d: %q", layout.Width(title), width, title)
 	}
 	if !strings.HasSuffix(title, keyInspector) {
 		t.Fatalf("title row shortcut is not right-aligned: %q", title)
 	}
-	for _, row := range palette.Rows {
+	for _, row := range rows {
 		if got := layout.Width(row.Text); got > width {
 			t.Fatalf("display row width = %d, limit %d: %q", got, width, row.Text)
 		}
 	}
 
+	// A locked row refuses Close Session and permits Unlock Session, so `close`
+	// gives the cursor somewhere to move BETWEEN a disabled row and an available
+	// one — which is what makes the explanation's ownership observable.
 	locked := session.RunningSession{TabID: 9, Base: "api", Project: "api", Profile: "work", Locked: true}
 	m = loadSessions(testModelWithSessions(), []session.RunningSession{locked})
 	m.width, m.height = 46, 30
 	m.openCommandPalette()
-	m.commandQuery = "restart"
+	m.commandQuery = "close"
 	m.recomputeCommandPaletteResults()
-	palette = commandPaletteResultLayout(m, commandPaletteContentWidth(m))
-	detail := commandPaletteLayoutText(palette)
-	for _, want := range []string{"unavailable:", commands.ReasonLocked} {
-		if !strings.Contains(detail, want) {
-			t.Fatalf("wrapped disabled detail missing %q:\n%s", want, detail)
+	if m.commandResults[m.commandCursor].ID != commands.ToggleLockID {
+		t.Fatalf("close-filtered selection = %q, want the unlock command", m.commandResults[m.commandCursor].ID)
+	}
+	if out := stripAnsi(renderCommandPalette(m)); strings.Contains(out, commands.ReasonLocked) {
+		t.Fatalf("an available selection was explained with another row's refusal:\n%s", out)
+	}
+
+	m = pressKey(m, keyUp)
+	if m.commandResults[m.commandCursor].ID != commands.CloseSession {
+		t.Fatalf("Up landed on %q, want the disabled close command", m.commandResults[m.commandCursor].ID)
+	}
+	out := stripAnsi(renderCommandPalette(m))
+	for _, want := range []string{"Unavailable:", commands.ReasonLocked} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("selected-command explanation missing %q:\n%s", want, out)
 		}
+	}
+
+	// The explanation belongs to the SELECTION, so moving off the disabled row
+	// has to take its reason with it — a reason that stayed put would be a claim
+	// about whatever the cursor landed on.
+	m = pressKey(m, keyDown)
+	if out := stripAnsi(renderCommandPalette(m)); strings.Contains(out, commands.ReasonLocked) {
+		t.Fatalf("reason survived a cursor move off the disabled row:\n%s", out)
 	}
 }
 
-func TestCommandPaletteWrappedRowScrollingAndResizeClamping(t *testing.T) {
+// TestCommandPaletteScrollingAndResizeClamping windows the display rows the
+// group rules are interleaved into, which is why it asks where the SELECTED
+// COMMAND's row is rather than treating the cursor as a row number.
+func TestCommandPaletteScrollingAndResizeClamping(t *testing.T) {
 	m := commandPaletteTestModel(64, 20)
-	for i := 0; i < 12; i++ {
+	for i := 0; i < 20; i++ {
 		m = pressKey(m, keyDown)
 	}
 	if m.commandOffset == 0 {
-		t.Fatal("navigating through wrapped commands did not scroll the display-row window")
+		t.Fatal("navigating through the catalog did not scroll the display-row window")
 	}
 	assertCommandPaletteSelectionVisible(t, m)
 
 	m.commandOffset = 10_000
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 42, Height: 20})
 	m = updated.(Model)
-	palette, visible := commandPaletteScrollBounds(m)
-	maxOffset := max(len(palette.Rows)-visible, 0)
+	rows, visible := commandPaletteScrollBounds(m)
+	maxOffset := max(len(rows)-visible, 0)
 	if m.commandOffset < 0 || m.commandOffset > maxOffset {
 		t.Fatalf("resize left offset %d outside [0,%d]", m.commandOffset, maxOffset)
 	}
