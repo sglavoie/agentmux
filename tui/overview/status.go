@@ -8,10 +8,14 @@
 //
 // The ranking, highest first, and why each outranks the next:
 //
-//  0. A failed relaunch. It is the one report ABOUT the offer below it, and the
-//     stack puts the entry it names back on that offer, so showing the offer
-//     instead would redraw the row exactly as it looked before the keystroke —
-//     indistinguishable from `u` having been dropped. It names the retry itself.
+//  0. A failed relaunch whose entry is STILL claimable. It is the one report
+//     ABOUT the offer below it, and the stack puts the entry it names back on
+//     that offer, so showing the offer instead would redraw the row exactly as
+//     it looked before the keystroke — indistinguishable from `u` having been
+//     dropped. It names the retry itself, for what is left of that entry's
+//     window. Once the window closes it drops both the retry and this rank and
+//     becomes an ordinary outcome at rank 2, because the reason it outranked the
+//     offer was that it was about the offer.
 //  1. A recoverable close. It outranks even a failed keystroke because it is the
 //     only entry that is IRREVERSIBLY LOST if it is not shown: the offer expires
 //     in five seconds and the session it would restore cannot be reconstructed

@@ -129,10 +129,13 @@ type actionState struct {
 	// messages, so the newest replaces the previous one and expires on its own.
 	report      string
 	reportUntil time.Time
-	// reportOwnsOffer marks the one report that is ABOUT the recovery offer and
-	// therefore takes its place on the row instead of sitting under it. Set only
-	// through withRecoveryReport, which explains why.
-	reportOwnsOffer bool
+	// retryUntil is set only on the report of a FAILED relaunch, and holds the
+	// deadline the released entry kept rather than the report's own expiry. It
+	// is what makes that report the one ABOUT the recovery offer — taking its
+	// place on the row instead of sitting under it — and what withdraws both the
+	// retry it names and that precedence once `u` would no longer take the
+	// entry. Set only through withRecoveryReport, which explains why.
+	retryUntil time.Time
 }
 
 // actionEnv projects the live model onto the value every shared availability
@@ -564,13 +567,14 @@ func sessionLabel(target sessionactions.Target) string {
 func (m model) withReport(text string, ttl time.Duration) model {
 	m.acts.report = text
 	m.acts.reportUntil = m.deps.now().Add(ttl)
-	m.acts.reportOwnsOffer = false
+	m.acts.retryUntil = time.Time{}
 	m.focusErr = nil
 	return m
 }
 
 // withRecoveryReport is withReport for the one sentence that must be shown
-// INSTEAD of the recovery offer rather than beneath it.
+// INSTEAD of the recovery offer rather than beneath it, and it is the only
+// report that names a retry.
 //
 // The offer normally outranks every report, because it is the only thing on that
 // row which expires into something unrecoverable. A relaunch that FAILED is the
@@ -579,26 +583,75 @@ func (m model) withReport(text string, ttl time.Duration) model {
 // fail would put the row back to the same "closed X · u undo" it showed before
 // the keystroke, which is what a dropped keypress looks like. The failure and the
 // retry are one sentence about one entry, so they take the row together.
-func (m model) withRecoveryReport(text string, ttl time.Duration) model {
+//
+// retryUntil is the deadline that released entry KEPT, and it is what makes the
+// exception end when its reason does. The report's own ttl is about how long a
+// failure is worth reading; the entry's deadline is about how long `u` will take
+// it, and the two are independent — a relaunch can fail a moment before expiry,
+// or after it, and in both the sentence would otherwise go on advertising a
+// retry the stack has already stopped granting. Past that deadline the failure
+// drops the retry and stops displacing the offer, which by then may name only
+// OTHER closes that are still recoverable. It does not extend the window: the
+// deadline is carried in, never recomputed here.
+func (m model) withRecoveryReport(text string, ttl time.Duration, retryUntil time.Time) model {
 	m = m.withReport(text, ttl)
-	m.acts.reportOwnsOffer = true
+	m.acts.retryUntil = retryUntil
 	return m
 }
 
 func (m model) clearReport() model {
 	m.acts.report = ""
 	m.acts.reportUntil = time.Time{}
-	m.acts.reportOwnsOffer = false
+	m.acts.retryUntil = time.Time{}
 	return m
 }
 
-// offerOwningReport is the recovery report, if one is current. It is the only
-// report the feedback row places above the offer; see withRecoveryReport.
+// offerOwningReport is the failed-relaunch report together with the retry it is
+// still granting, or "" when there is no current such report or its entry has
+// stopped being claimable. It is the only report the feedback row places above
+// the offer; see withRecoveryReport.
+//
+// The retry is appended HERE rather than baked into the stored sentence, because
+// whether `u` would take the entry is a question about the current time and the
+// row is repainted several times a second. A failure whose retry has lapsed
+// still says what failed — it falls to the rank every other action outcome sits
+// at, under an offer that may still name something restorable.
 func (m model) offerOwningReport() string {
-	if !m.acts.reportOwnsOffer {
+	remaining := m.retryRemaining()
+	if remaining <= 0 {
 		return ""
 	}
-	return m.activeReport()
+	report := m.activeReport()
+	if report == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s · u retry (%s)", report, retryWindowText(remaining))
+}
+
+// retryRemaining is what is left of the released entry's own window, or zero
+// when no failed relaunch is current or its entry is no longer claimable.
+//
+// It is measured against the deadline the report carried in rather than against
+// the stack, because Claim walks to the most RECENT recoverable entry and this
+// sentence is about one particular one: a later close can be claimable while the
+// entry this failure named is not.
+func (m model) retryRemaining() time.Duration {
+	if m.acts.retryUntil.IsZero() {
+		return 0
+	}
+	return m.acts.retryUntil.Sub(m.deps.now())
+}
+
+// retryWindowText spells what is LEFT of a window rather than the window itself,
+// rounded UP so a retry that is still claimable never reads "0s".
+//
+// The asymmetry with undoWindowText is deliberate. An offer is published at the
+// confirmation that starts its five seconds, so the constant is what it has; a
+// retry is published partway through one, and printing the constant there is
+// precisely the promise the stack has already stopped keeping.
+func retryWindowText(remaining time.Duration) string {
+	seconds := int((remaining + time.Second - 1) / time.Second)
+	return fmt.Sprintf("%ds", max(seconds, 1))
 }
 
 // activeReport is the report if it has not expired. Expiry is evaluated on read

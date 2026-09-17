@@ -180,6 +180,24 @@ func (r Recovery) Restored(relaunch RequestID) Recovery {
 	return r.remove(index)
 }
 
+// ClaimDeadline reports when the entry whose relaunch is in flight under this
+// request stops being claimable.
+//
+// It exists so a surface can say how long the retry it is about to advertise
+// will actually be honored for. It is asked BEFORE Release, because releasing
+// clears the relaunch identity the entry was claimed under and there is then
+// nothing left to look it up by. A deadline already in the past comes back as
+// one rather than as a miss: the entry is genuinely released and genuinely no
+// longer claimable, which is exactly the case an advertised retry must not
+// outlive.
+func (r Recovery) ClaimDeadline(relaunch RequestID) (time.Time, bool) {
+	index := r.indexOfRelaunch(relaunch)
+	if index < 0 {
+		return time.Time{}, false
+	}
+	return r.entries[index].deadline, true
+}
+
 // Release puts a claimed entry back after its relaunch failed, with the deadline
 // it already had. The operator may try again, but a failed relaunch does not buy
 // more time: the window is about how long the close stays undoable, and retrying

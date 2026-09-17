@@ -866,6 +866,159 @@ func TestAFailedRelaunchIsOfferedAgainForWhatWasLeftOfItsWindow(t *testing.T) {
 	}
 }
 
+// TestReviewRecoveryRetryFeedbackDeadline is the retry hint against the close's
+// own deadline rather than the report's.
+//
+// A released entry keeps the deadline its CLOSE was confirmed with, so the retry
+// beside a failure has to be withdrawn at that deadline and not when the
+// four-second report expires. The clock is injected, so each arrangement RENDERS
+// the row at a chosen instant rather than asking the stack and trusting the two
+// to agree: a failure inside the window read on both sides of the deadline, a
+// failure that arrives after it, and a lapsed failure beside a close that is
+// still recoverable — where the row has to name the entry `u` would actually
+// take.
+func TestReviewRecoveryRetryFeedbackDeadline(t *testing.T) {
+	t.Run("a failure inside the window loses its retry at the deadline", func(t *testing.T) {
+		sessions := viewSessions(3)
+		m, r := actionModel(t, sessions, 1, hostTabElsewhere)
+		m = closeSelected(t, m, r)
+		confirmedAt := r.now
+
+		// `u` late in the window, and the launch fails with half a second of it
+		// left.
+		r.now = confirmedAt.Add(4 * time.Second)
+		m = press(t, m, "u")
+		r.now = confirmedAt.Add(4500 * time.Millisecond)
+		m = only(t, m, recoveryDoneMsg{
+			request: r.relaunchRequests[0],
+			label:   r.relaunches[0].Label,
+			err:     errors.New("launch failed"),
+		})
+
+		if !m.recoverable() {
+			t.Fatal("the failed relaunch left nothing claimable half a second before the deadline")
+		}
+		got := m.feedback()
+		if !strings.Contains(got, "launch failed") {
+			t.Fatalf("the feedback row says %q, want the failure", got)
+		}
+		if !strings.Contains(got, "u retry (1s)") {
+			t.Fatalf("the feedback row says %q, want the retry named for what is LEFT of the window", got)
+		}
+
+		// Past the close's own deadline. The failure is still worth reading — its
+		// report runs four seconds from the failure — but `u` refuses from here on,
+		// so the row must stop naming it.
+		r.now = confirmedAt.Add(sessionactions.RecoveryWindow + 100*time.Millisecond)
+		if m.recoverable() {
+			t.Fatal("the retry was granted time past the close's deadline")
+		}
+		got = m.feedback()
+		if !strings.Contains(got, "launch failed") {
+			t.Fatalf("the feedback row says %q, want the failure to stay visible", got)
+		}
+		if strings.Contains(got, "retry") {
+			t.Fatalf("the feedback row says %q, want the retry withdrawn with the window", got)
+		}
+		frame := frameOf(m)
+		if !strings.Contains(frame, "launch failed") || strings.Contains(frame, "retry") {
+			t.Fatalf("the frame disagrees with the feedback row:\n%s", frame)
+		}
+	})
+
+	t.Run("a failure after the window names no retry at all", func(t *testing.T) {
+		sessions := viewSessions(3)
+		m, r := actionModel(t, sessions, 1, hostTabElsewhere)
+		m = closeSelected(t, m, r)
+		confirmedAt := r.now
+
+		r.now = confirmedAt.Add(4 * time.Second)
+		m = press(t, m, "u")
+		// The launch takes two seconds to fail, which is one second past the
+		// deadline the claim was made under. The entry is released onto an offer
+		// that has already expired.
+		r.now = confirmedAt.Add(6 * time.Second)
+		m = only(t, m, recoveryDoneMsg{
+			request: r.relaunchRequests[0],
+			label:   r.relaunches[0].Label,
+			err:     errors.New("launch failed"),
+		})
+
+		if m.recoverable() {
+			t.Fatal("releasing an expired entry made it claimable again")
+		}
+		got := m.feedback()
+		if !strings.Contains(got, "launch failed") {
+			t.Fatalf("the feedback row says %q, want the failure", got)
+		}
+		if strings.Contains(got, "retry") {
+			t.Fatalf("the feedback row says %q, want no retry offered for an entry Claim refuses", got)
+		}
+		// And the key agrees with the row it is not advertised on: it takes
+		// nothing, and refusing does not put a retry back.
+		m = press(t, m, "u")
+		if len(r.relaunches) != 1 {
+			t.Fatalf("`u` past the window asked for %d relaunches in total, want the 1 already made", len(r.relaunches))
+		}
+		if got := m.feedback(); strings.Contains(got, "retry") {
+			t.Fatalf("the refused keypress put a retry back on the row: %q", got)
+		}
+	})
+
+	t.Run("a lapsed failure does not displace a close that is still recoverable", func(t *testing.T) {
+		sessions := viewSessions(4)
+		m, r := actionModel(t, sessions, 1, hostTabElsewhere)
+		m = closeSelected(t, m, r)
+		confirmedAt := r.now
+
+		// Claim the first close a second in, then close a second row a second
+		// after that, so the two entries expire two seconds apart.
+		r.now = confirmedAt.Add(time.Second)
+		m = press(t, m, "u")
+		if len(r.relaunches) != 1 {
+			t.Fatalf("`u` asked for %d relaunches, want 1", len(r.relaunches))
+		}
+		r.now = confirmedAt.Add(2 * time.Second)
+		m = press(t, m, "tab")
+		m = closeSelected(t, m, r)
+
+		// The first relaunch fails a second past ITS deadline, while the second
+		// close stays recoverable for another second.
+		r.now = confirmedAt.Add(6 * time.Second)
+		m = only(t, m, recoveryDoneMsg{
+			request: r.relaunchRequests[0],
+			label:   r.relaunches[0].Label,
+			err:     errors.New("launch failed"),
+		})
+
+		restorable, ok := m.acts.recovery.Latest(r.now)
+		if !ok {
+			t.Fatal("the second close stopped being recoverable when the first relaunch failed")
+		}
+		if restorable.Label == r.relaunches[0].Label {
+			t.Fatalf("the fixture claimed the wrong entry: %q is the one that failed", restorable.Label)
+		}
+		got := m.feedback()
+		if strings.Contains(got, "retry") {
+			t.Fatalf("the feedback row says %q, want no retry for the lapsed entry", got)
+		}
+		if !strings.Contains(got, "u undo") || !strings.Contains(got, restorable.Label) {
+			t.Fatalf("the feedback row says %q, want the offer naming %q — the close `u` would actually take", got, restorable.Label)
+		}
+		// And it takes exactly that one.
+		m = press(t, m, "u")
+		if len(r.relaunches) != 2 {
+			t.Fatalf("`u` asked for %d relaunches in total, want 2", len(r.relaunches))
+		}
+		if got := r.relaunches[1].Label; got != restorable.Label {
+			t.Fatalf("`u` restored %q, want the %q the row named", got, restorable.Label)
+		}
+		if got := m.feedback(); !strings.Contains(got, "restoring "+restorable.Label) {
+			t.Fatalf("the feedback row says %q, want the restoration the keystroke just started", got)
+		}
+	})
+}
+
 // TestOnlyAConfirmedCloseIsRecoverable. Relaunching a session that is still
 // running produces a second copy of it rather than an undo, so a close that
 // failed and one nobody could confirm both leave nothing behind.

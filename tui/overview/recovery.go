@@ -140,9 +140,12 @@ func (m *model) undoLastClose() tea.Cmd {
 	if !ok {
 		return nil
 	}
-	m.acts.report = fmt.Sprintf("restoring %s…", claimed.Snapshot.Label)
-	m.acts.reportUntil = now.Add(reportPendingWindow)
-	m.focusErr = nil
+	// Through withReport rather than the fields, so that a retry advertised by a
+	// PREVIOUS failure is withdrawn by the keystroke that takes it: the entry is
+	// claimed again and is off the offer while this relaunch is in flight, so a
+	// sentence still naming `u retry` would be advertising a key that now takes
+	// the close below it.
+	*m = m.withReport(fmt.Sprintf("restoring %s…", claimed.Snapshot.Label), reportPendingWindow)
 	return m.deps.relaunch(claimed.Request, claimed.Snapshot)
 }
 
@@ -151,12 +154,26 @@ func (m *model) undoLastClose() tea.Cmd {
 // A success consumes the entry; a failure releases it with the deadline it
 // already had, so the operator may retry for exactly as long as the close was
 // going to stay undoable and no longer.
+//
+// That deadline is read BEFORE the release — releasing clears the relaunch
+// identity the entry was claimed under — and handed to the report rather than
+// being spelled into it, because the sentence outlives the entry. A relaunch
+// that fails at or after the deadline released nothing claimable and names no
+// retry at all; one that fails just before it loses the retry while the failure
+// is still on screen. Neither buys more time: nothing here recomputes a
+// deadline.
 func (m model) handleRecoveryDone(msg recoveryDoneMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
+		retryUntil, _ := m.acts.recovery.ClaimDeadline(msg.request)
 		m.acts.recovery = m.acts.recovery.Release(msg.request)
-		// The retry is named in the same sentence because the released entry is
-		// back on the offer and the offer is the thing this sentence displaces.
-		m = m.withRecoveryReport(fmt.Sprintf("restore failed for %s: %v · u retry (%s)", msg.label, msg.err, undoWindowText), reportWindow)
+		// The retry is named in the same sentence, for as long as it is granted,
+		// because the released entry is back on the offer and the offer is the
+		// thing this sentence displaces.
+		m = m.withRecoveryReport(
+			fmt.Sprintf("restore failed for %s: %v", msg.label, msg.err),
+			reportWindow,
+			retryUntil,
+		)
 	} else {
 		m.acts.recovery = m.acts.recovery.Restored(msg.request)
 		m = m.withReport(fmt.Sprintf("restored %s", msg.label), reportWindow)
