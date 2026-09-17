@@ -57,6 +57,41 @@ func TestCloseReportsConfirmationAndLockAvailability(t *testing.T) {
 	}
 }
 
+// TestCloseReportsWhetherTheTabWasObservedToClose is the difference a caller
+// offering close recovery reads. Both endings changed something, so Changed
+// cannot carry it and the message must not claim more than was seen.
+func TestCloseReportsWhetherTheTabWasObservedToClose(t *testing.T) {
+	target := session.RunningSession{TabID: 42}
+	registry := DefaultRegistry()
+
+	// An empty listing no longer contains tab 42, so the close is confirmed.
+	gone := kitty.NewClientWithSocket(kitty.NewMockRunner(map[string][]byte{"kitten @ ls": []byte("[]")}), "")
+	result, err := registry.Execute(context.Background(), Dependencies{Kitty: gone}, Close, Request{Session: &target, Confirmed: true})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !CloseConfirmed(result) || result.Message != "closed session" {
+		t.Fatalf("observed close result = %+v, want a confirmed close", result)
+	}
+
+	// A listing that cannot be read is the branch that assumes the tab closed.
+	// It still succeeds, and it still may not say the session was closed.
+	blind := kitty.NewClientWithSocket(kitty.NewMockRunner(nil), "")
+	result, err = registry.Execute(context.Background(), Dependencies{Kitty: blind}, Close, Request{Session: &target, Confirmed: true})
+	if err != nil {
+		t.Fatalf("Execute with an unreadable listing: %v", err)
+	}
+	if CloseConfirmed(result) {
+		t.Fatalf("unobserved close result = %+v, want an unconfirmed close", result)
+	}
+	if !result.Changed {
+		t.Fatalf("unobserved close result = %+v, want the accepted request reported as a change", result)
+	}
+	if result.Message == "closed session" {
+		t.Fatalf("unobserved close claimed %q", result.Message)
+	}
+}
+
 func TestCopyTitleUsesInjectedClipboard(t *testing.T) {
 	var copied string
 	target := session.RunningSession{Project: "api", Base: "W:api"}

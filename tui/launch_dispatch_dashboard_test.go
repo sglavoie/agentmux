@@ -7,7 +7,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
-	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/launch"
 )
 
@@ -63,9 +62,8 @@ func TestDashboardRestartProfile_CrossHarnessUsesConfiguredProjectTemplate(t *te
 	if cmd == nil {
 		t.Fatal("expected non-nil cmd for cross-harness restart")
 	}
-	msg := cmd()
-	if done, ok := msg.(commands.ActionDoneMsg); !ok || done.Err != nil {
-		t.Fatalf("expected successful commands.ActionDoneMsg, got %#v", msg)
+	if done := actionDoneFrom(t, cmd); done.Err != nil {
+		t.Fatalf("expected a successful restart, got %v", done.Err)
 	}
 	if len(client.closed) != 1 {
 		t.Fatalf("dashboard c should close exactly the source tab, closed=%v", client.closed)

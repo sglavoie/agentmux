@@ -488,7 +488,11 @@ func (c Controller[M]) Cancel(m M) (M, Step) {
 // A completion whose request is not in flight is not this controller's — an
 // undo, a direct key, a reply that has already been reported — and is left to
 // the caller to handle, which the false return says.
-func (c Controller[M]) Complete(m M, request RequestID, err error) (M, Result, bool) {
+//
+// The completion is a value rather than an error because an action that did not
+// fail has not necessarily been seen to work; Completion.Outcome is where that
+// distinction is made, once, for every host.
+func (c Controller[M]) Complete(m M, request RequestID, completion Completion) (M, Result, bool) {
 	if !request.Valid() {
 		return m, Result{}, false
 	}
@@ -514,12 +518,12 @@ func (c Controller[M]) Complete(m M, request RequestID, err error) (M, Result, b
 		Action:  dispatch.Action,
 		Request: dispatch.Request,
 		Target:  dispatch.Target,
-		Outcome: OutcomeSucceeded,
+		Profile: dispatch.Profile,
+		Outcome: completion.Outcome(),
 	}
-	if err != nil {
-		result.Outcome = OutcomeFailed
-		result.Err = err
-		result.Detail = err.Error()
+	if completion.Err != nil {
+		result.Err = completion.Err
+		result.Detail = completion.Err.Error()
 	}
 	return m, result, true
 }

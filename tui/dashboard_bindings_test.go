@@ -628,8 +628,11 @@ func TestFooterKeysAreTheKeysThatDispatch(t *testing.T) {
 var retiredDashboardKeys = []string{
 	// Session actions, now entries in the `a` overlay.
 	"e", "r", "c", "C", "x", "X", "o", "O", "y", "L", "m",
-	// Surfaces, now palette entries.
-	"P", "W", "A", "T", "d", "v", "R", "u", "f", "b",
+	// Surfaces, now palette entries. `u` is not among them: undo came back to
+	// the dashboard because the affordance it reaches lasts five seconds, which
+	// is not long enough to open a palette and type a command name. It keeps its
+	// palette entry too — the key is the fast route, not the only one.
+	"P", "W", "A", "T", "d", "v", "R", "f", "b",
 	// Cursor and structure keys with a successor spelling.
 	"g", "G", "ctrl+d", "ctrl+u", "left", "right",
 	// The bracket chords and their focus-on-arrival variants.
@@ -703,12 +706,8 @@ func TestEveryCatalogCommandIsAvailableSomewhere(t *testing.T) {
 	closed := withListRows(testModelWithSessions(), session.RunningSession{
 		TabID: 7, WindowID: 17, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt",
 	})
-	closed.pendingUndo = []undoEntry{{
-		snapshot: config.Session{Title: "api", Directory: "/home/user/api"},
-		account:  config.Account{Name: "work", Harness: "claude"},
-		deadline: time.Now().Add(time.Hour),
-		label:    "api",
-	}}
+	closed.now = func() time.Time { return undoTestNow }
+	closed.recovery = recoveryWith(undoTestNow, "api")
 	states = append(states, struct {
 		name string
 		m    Model

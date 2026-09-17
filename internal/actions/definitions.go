@@ -2,6 +2,7 @@ package actions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -189,10 +190,19 @@ func defaultDefinitions() []Definition {
 				if deps.Kitty == nil {
 					return Result{}, dependencyError(Close, "Kitty client")
 				}
-				if err := session.Close(deps.Kitty, request.Session.TabID); err != nil {
+				observation, err := session.CloseObserved(deps.Kitty, request.Session.TabID)
+				if err != nil && !errors.Is(err, session.ErrCloseTimeout) {
 					return Result{}, err
 				}
-				return Result{Changed: true, Message: "closed session"}, nil
+				// A timed-out poll is not a failed close: Kitty accepted the
+				// request and the tab usually goes shortly after. It is reported
+				// as an accepted-but-unconfirmed close rather than as an error,
+				// which is what lets a caller offer close recovery only for the
+				// closes it can show happened.
+				if !observation.Confirmed() {
+					return Result{Changed: true, Message: "requested session close; the tab was not observed to close", Data: map[string]any{DataCloseConfirmed: false}}, nil
+				}
+				return Result{Changed: true, Message: "closed session", Data: map[string]any{DataCloseConfirmed: true}}, nil
 			},
 		},
 		{

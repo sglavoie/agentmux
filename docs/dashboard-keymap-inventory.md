@@ -90,7 +90,7 @@ named first.
 | `b` | `ToggleRail` | Toggle the project rail | **Retired.** The rail, its command, and its key are gone; every scope it could apply is reachable from the switcher, which keeps `rail` as a palette alias so the old word still finds it | project switcher `p`; palette |
 | `v` | `ToggleListView` | Urgency ↔ Projects view | **Retired** | palette (the contract keeps Projects view palette-accessible) |
 | `R` | `ResortTabs` | Resort Kitty tabs | **Retired** | palette |
-| `u` | `UndoClose` | Undo the last close | **Retired** | palette. The undo toast names `:` rather than `u`, because a toast advertising a retired key would be the only thing on screen claiming it still works |
+| `u` | `UndoClose` | Undo the last close | Survives (restored) | `u`; palette. It came back because what it undoes expires: the recovery window is five seconds, and a capability that has to be reached by name before it lapses is not reachable. The recovery toast names `u` again, and the palette command is unchanged |
 | `?` | `ShowKeyboardHelp` | Keyboard help | Survives | `?` |
 | `q` / `ctrl+c` | `Quit` | Quit the dashboard | Survives | `q`, `Ctrl+C` |
 

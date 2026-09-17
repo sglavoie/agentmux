@@ -256,7 +256,10 @@ func commandDeclarations() []commands.Command[Model] {
 			Aliases:      []string{"restore", "reopen"},
 			Availability: undoCommandAvailability,
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
-				return m, m.undoLastCmd()
+				// Bound first: undoLastCmd claims the entry it relaunches, and
+				// that claim has to be in the model this returns.
+				cmd := m.undoLastCmd()
+				return m, cmd
 			},
 		},
 		{

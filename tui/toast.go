@@ -1,6 +1,19 @@
-// This file is the root's transient feedback: the toast queue that reports
-// what just happened, and the undo stack whose entries those toasts offer to
-// reverse.
+// This file is the root's transient feedback: the toast queue that reports what
+// an action is doing and what became of it, and the close recovery those reports
+// offer.
+//
+// What a toast says is tied to an operation's outcome rather than to its
+// dispatch. A key used to push "closed api" and a recovery entry the moment the
+// close command was handed to Bubble Tea, before Kitty had been asked anything —
+// so a close that failed, and a close nobody could confirm, both read as done,
+// and both left an undo that would have launched a second copy of a session that
+// was still running. Every lifecycle action here now says what it is doing while
+// it is in flight and what happened when it reports back, on one addressable
+// toast channel per dispatch.
+//
+// The recovery stack itself lives in tui/sessionactions, not here: the overview
+// is the second surface that will offer it, and a stack held in this model's own
+// fields could not be handed over.
 
 package tui
 
@@ -15,6 +28,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
+	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
 
 // toastSeverity classifies a toast for styling and ordering.
@@ -84,7 +98,7 @@ func toastTickCmd() tea.Cmd {
 // empty to non-empty; otherwise nil (the existing tick handles TTL).
 func (m *Model) pushToast(t Toast) tea.Cmd {
 	if t.Expires.IsZero() {
-		t.Expires = time.Now().Add(defaultToastTTL)
+		t.Expires = modelNow(*m).Add(defaultToastTTL)
 	}
 	wasEmpty := len(m.toasts) == 0
 	// Newest on top: prepend and trim.
@@ -106,7 +120,7 @@ func (m *Model) pushToast(t Toast) tea.Cmd {
 // transient entry instead of merging with whatever happens to sit in the slot.
 func (m *Model) replaceToastByID(id int, t Toast) tea.Cmd {
 	if t.Expires.IsZero() {
-		t.Expires = time.Now().Add(defaultToastTTL)
+		t.Expires = modelNow(*m).Add(defaultToastTTL)
 	}
 	t.id = id
 	if id != 0 {
@@ -129,7 +143,7 @@ func (m *Model) clearToastByID(id int) {
 	if id == 0 || len(m.toasts) == 0 {
 		return
 	}
-	kept := m.toasts[:0]
+	kept := make([]Toast, 0, len(m.toasts))
 	for _, t := range m.toasts {
 		if t.id != id {
 			kept = append(kept, t)
@@ -141,9 +155,15 @@ func (m *Model) clearToastByID(id int) {
 // sweepToasts drops every toast whose TTL has elapsed. Returns a cmd
 // re-arming the tick when any toast is still alive; nil otherwise so the
 // ticker quiesces when nothing is on screen.
+//
+// Both this and clearToastByID filter into a fresh array rather than compacting
+// with `m.toasts[:0]`. The model is copied by value on every update, so a
+// compaction writes through every copy that shares the backing array — the
+// stale one a pending command still holds included, which would see a toast it
+// never dropped replaced by a later one.
 func (m *Model) sweepToasts() tea.Cmd {
-	now := time.Now()
-	kept := m.toasts[:0]
+	now := modelNow(*m)
+	kept := make([]Toast, 0, len(m.toasts))
 	for _, t := range m.toasts {
 		if now.Before(t.Expires) {
 			kept = append(kept, t)
@@ -156,71 +176,235 @@ func (m *Model) sweepToasts() tea.Cmd {
 	return toastTickCmd()
 }
 
-// undoCloseToastID is the addressable id shared by every close-with-undo
-// toast. Successive closes within the undo window collapse into a single
-// "closed N sessions" message via replaceToastByID.
+// undoCloseToastID is the addressable id shared by every close-recovery toast.
+// Successive recoverable closes collapse into a single "closed N sessions"
+// message via replaceToastByID.
 const undoCloseToastID = -1
 
-// undoWindow is how long a close remains undoable after dispatch. Aligned
-// with the close-toast TTL so the visible affordance and the active window
-// stay in sync.
-const undoWindow = 5 * time.Second
+// undoWindow is how long a close remains undoable. It is the shared vocabulary's
+// window rather than a second declaration of it: the deadline the recovery stack
+// enforces and the lifetime of the toast advertising it have to be the same
+// number or the affordance outlives what it offers.
+const undoWindow = sessionactions.RecoveryWindow
 
-// undoEntry captures everything needed to relaunch a closed session: the
-// reconstructed config.Session snapshot, the resolved account, and the
-// deadline past which the entry is no longer eligible for undo.
-type undoEntry struct {
-	snapshot config.Session
-	account  config.Account
-	deadline time.Time
-	label    string // short label for the toast (typically the row's project title)
+// undoWindowText is how the window is spelled on the toast. It is derived from
+// the window rather than typed beside it, so a toast cannot go on promising five
+// seconds after the stack starts granting some other number.
+var undoWindowText = fmt.Sprintf("%ds", int(undoWindow/time.Second))
+
+// actionFeedbackToastID gives one dispatch its own addressable toast channel, so
+// the in-flight message can be replaced by the outcome instead of stacking
+// beneath it, and so two actions in flight at once do not overwrite each other.
+//
+// The ids are negative and offset by one past the recovery channel, which keeps
+// them clear of both undoCloseToastID and the positive launch-batch ids. A
+// dispatch with no request identity is not addressable and gets id zero, which
+// pushToast treats as an ordinary transient.
+func actionFeedbackToastID(request sessionactions.RequestID) int {
+	if !request.Valid() {
+		return 0
+	}
+	return -int(request) - 1
 }
 
-// closeWithToast snapshots rs, dispatches the close, and pushes the
-// aggregating undo toast. When the running session has no matching
-// account in the loaded config, the snapshot is best-effort: the close
-// still fires but the toast omits the undo affordance.
-func (m *Model) closeWithToast(rs session.RunningSession) tea.Cmd {
-	snapshot := session.SessionFromRunning(rs)
-	acc, hasAcc := commands.FindAccountByName(m.cfg.Accounts, rs.EffectiveProfile())
+// actionFeedback is what one action says about itself at each stage of one
+// dispatch. The four are written side by side because the difference between
+// them is the whole point: succeeded is past tense and may only be said about an
+// operation that reported success, unconfirmed says what was asked for without
+// claiming it happened, and failed names the verb that did not work.
+type actionFeedback struct {
+	pending     string
+	succeeded   string
+	unconfirmed string
+	failed      string
+}
 
-	cmds := []tea.Cmd{commands.Close(m.client, rs.TabID)}
-
-	if !hasAcc {
-		text := fmt.Sprintf("closed %s", dashboard.SessionDisplayTitle(rs))
-		if c := m.pushToast(Toast{Severity: toastInfo, Text: text}); c != nil {
-			cmds = append(cmds, c)
-		}
-		return tea.Batch(cmds...)
+// feedbackFor is the wording table. It covers the four actions that change a
+// session's lifecycle and nothing else: focus, peek, lock, mute, copy, and the
+// surfaces that open something are their own feedback, and a toast for each of
+// them would be three lines of noise over a dashboard that already shows the
+// result.
+//
+// The clear-status wording is deliberately the odd one out. That action asks the
+// daemon to drop its guard and the daemon's renderer owns the title, so the
+// dashboard never learns whether the icon changed; it says what it requested
+// rather than claiming a state it cannot see.
+func feedbackFor(action commands.ID, label, profile string) (actionFeedback, bool) {
+	switch action {
+	case commands.CloseSession:
+		return actionFeedback{
+			pending:     fmt.Sprintf("closing %s…", label),
+			succeeded:   fmt.Sprintf("closed %s", label),
+			unconfirmed: fmt.Sprintf("close requested for %s · not confirmed", label),
+			failed:      fmt.Sprintf("close failed for %s", label),
+		}, true
+	case commands.RestartSession:
+		return actionFeedback{
+			pending:     fmt.Sprintf("restarting %s…", label),
+			succeeded:   fmt.Sprintf("restarted %s", label),
+			unconfirmed: fmt.Sprintf("restart requested for %s · not confirmed", label),
+			failed:      fmt.Sprintf("restart failed for %s", label),
+		}, true
+	case commands.OverrideProfile:
+		return actionFeedback{
+			pending:     fmt.Sprintf("restarting %s under %s…", label, profile),
+			succeeded:   fmt.Sprintf("restarted %s under %s", label, profile),
+			unconfirmed: fmt.Sprintf("restart requested for %s under %s · not confirmed", label, profile),
+			failed:      fmt.Sprintf("restart failed for %s under %s", label, profile),
+		}, true
+	case commands.ClearStatusIcon:
+		requested := fmt.Sprintf("requested status clear on %s", label)
+		return actionFeedback{
+			pending:     fmt.Sprintf("clearing the status icon on %s…", label),
+			succeeded:   requested,
+			unconfirmed: requested,
+			failed:      fmt.Sprintf("status clear failed for %s", label),
+		}, true
+	default:
+		return actionFeedback{}, false
 	}
+}
 
-	m.pendingUndo = append(m.pendingUndo, undoEntry{
-		snapshot: snapshot,
-		account:  acc,
-		deadline: time.Now().Add(undoWindow),
-		label:    dashboard.SessionDisplayTitle(rs),
-	})
-
-	if c := m.replaceToastByID(undoCloseToastID, Toast{
+// beginActionFeedback reports that a dispatched action is in flight. The toast
+// lives on the dispatch's own channel, so the outcome replaces it rather than
+// piling on top of it, and it carries the progress TTL so an operation that
+// never reports back still clears itself.
+func (m *Model) beginActionFeedback(request sessionactions.RequestID, action commands.ID, label, profile string) tea.Cmd {
+	wording, ok := feedbackFor(action, label, profile)
+	if !ok {
+		return nil
+	}
+	ttl := defaultToastTTL
+	if request.Valid() {
+		ttl = progressToastTTL
+	}
+	return m.replaceToastByID(actionFeedbackToastID(request), Toast{
 		Severity: toastInfo,
-		Text:     m.undoToastText(),
-		Expires:  time.Now().Add(undoWindow),
-	}); c != nil {
+		Text:     wording.pending,
+		Expires:  modelNow(*m).Add(ttl),
+	})
+}
+
+// withActionFeedback is what the three lifecycle runners that need no
+// bookkeeping of their own return: the effect, plus the in-flight report on the
+// dispatch's own channel. Close is the exception and is spelled out in
+// closeWithToast, because it also reserves the recovery.
+func (m *Model) withActionFeedback(d sessionactions.Dispatch, cmd tea.Cmd) tea.Cmd {
+	feedback := m.beginActionFeedback(d.Request, d.Action, sessionLabel(d.Target), d.Profile)
+	if feedback == nil {
+		return cmd
+	}
+	return tea.Batch(cmd, feedback)
+}
+
+// reportActionOutcome replaces a dispatch's in-flight toast with what became of
+// it. A result for an action with no wording clears the channel and says
+// nothing, which is what an action that never announced itself should do.
+func (m *Model) reportActionOutcome(result sessionactions.Result) tea.Cmd {
+	id := actionFeedbackToastID(result.Request)
+	wording, ok := feedbackFor(result.Action, sessionLabel(result.Target), result.Profile)
+	if !ok {
+		m.clearToastByID(id)
+		return nil
+	}
+	toast := Toast{Expires: modelNow(*m).Add(defaultToastTTL)}
+	switch result.Outcome {
+	case sessionactions.OutcomeSucceeded:
+		toast.Severity, toast.Text = toastSuccess, wording.succeeded
+	case sessionactions.OutcomeUnconfirmed:
+		toast.Severity, toast.Text = toastWarning, wording.unconfirmed
+	case sessionactions.OutcomeFailed:
+		toast.Severity, toast.Text = toastError, failureText(wording.failed, result.Detail)
+	default:
+		// Refused and cancelled never reach here: they are decided before an
+		// effect runs and reported by the step the controller returns.
+		m.clearToastByID(id)
+		return nil
+	}
+	return m.replaceToastByID(id, toast)
+}
+
+func failureText(verb, detail string) string {
+	if detail == "" {
+		return verb
+	}
+	return verb + ": " + detail
+}
+
+// sessionLabel is what to call a target in a sentence.
+func sessionLabel(target sessionactions.Target) string {
+	return dashboard.SessionDisplayTitle(target.Session)
+}
+
+// closeWithToast dispatches the close, reserves the recovery, and reports that
+// the close is in flight.
+//
+// The reservation is not yet an offer: it captures the snapshot while the row
+// still exists, and applyCloseOutcome promotes it only if the close is confirmed.
+// Capturing later is not an option — the row is by then deliberately gone — and
+// offering earlier is what used to advertise an undo for closes that failed.
+func (m *Model) closeWithToast(rs session.RunningSession, request sessionactions.RequestID) tea.Cmd {
+	cmds := []tea.Cmd{commands.Close(m.client, rs.TabID)}
+	if snapshot, ok := m.recoverySnapshot(rs); ok {
+		m.recovery = m.recovery.Reserve(request, snapshot)
+	}
+	if c := m.beginActionFeedback(request, commands.CloseSession, dashboard.SessionDisplayTitle(rs), ""); c != nil {
 		cmds = append(cmds, c)
 	}
 	return tea.Batch(cmds...)
 }
 
-// restartWithToast dispatches the restart and pushes a transient
-// confirmation toast. Restart is not undoable in this flow because Restart
-// is internally close+launch — there is no separate state to roll back.
-func (m *Model) restartWithToast(rs session.RunningSession) tea.Cmd {
-	cmds := []tea.Cmd{commands.Restart(m.client, rs, m.cfg)}
-	text := fmt.Sprintf("restarted %s", dashboard.SessionDisplayTitle(rs))
-	if c := m.pushToast(Toast{Severity: toastInfo, Text: text}); c != nil {
-		cmds = append(cmds, c)
+// recoverySnapshot reconstructs what a relaunch of rs would need, before the
+// close that makes it unreconstructible.
+//
+// It answers false in two cases, and both mean "there will be no recovery to
+// offer". A profile that is not in the loaded configuration has no launch path.
+// And the tab this dashboard is itself running in takes the dashboard with it:
+// the surface that would show the undo, and the five seconds it would last, both
+// end with the close.
+func (m Model) recoverySnapshot(rs session.RunningSession) (sessionactions.Snapshot, bool) {
+	if m.actionHost.Hosts(sessionactions.Capture(rs)) {
+		return sessionactions.Snapshot{}, false
 	}
-	return tea.Batch(cmds...)
+	var accounts []config.Account
+	if m.cfg != nil {
+		accounts = m.cfg.Accounts
+	}
+	account, ok := commands.FindAccountByName(accounts, rs.EffectiveProfile())
+	if !ok {
+		return sessionactions.Snapshot{}, false
+	}
+	return sessionactions.Snapshot{
+		Session: session.SessionFromRunning(rs),
+		Account: account,
+		Label:   dashboard.SessionDisplayTitle(rs),
+	}, true
+}
+
+// applyCloseOutcome is what a reported close does to the recovery stack and to
+// the operator's feedback. It is the one action with bookkeeping of its own, so
+// it is spelled out rather than routed through reportActionOutcome.
+//
+// Only a confirmed close publishes a recovery. An unconfirmed one — the tab was
+// still listed when the polls ran out, or the listing could not be read — and a
+// failed one both discard the reservation, because relaunching a session that is
+// still running produces a second copy of it rather than an undo.
+func (m *Model) applyCloseOutcome(result sessionactions.Result) tea.Cmd {
+	if result.Outcome != sessionactions.OutcomeSucceeded {
+		m.recovery = m.recovery.Discard(result.Request)
+		return m.reportActionOutcome(result)
+	}
+
+	now := modelNow(*m)
+	recovery, offered := m.recovery.Confirm(result.Request, now.Add(undoWindow))
+	m.recovery = recovery
+	if !offered {
+		return m.reportActionOutcome(result)
+	}
+	// The recovery toast says "closed X" itself, with the undo beside it, so the
+	// per-dispatch channel has nothing left to report.
+	m.clearToastByID(actionFeedbackToastID(result.Request))
+	return m.refreshRecoveryToast(now)
 }
 
 // The "session is locked — press L to unlock" denial toast is gone with the
@@ -231,108 +415,159 @@ func (m *Model) restartWithToast(rs session.RunningSession) tea.Cmd {
 // the tell: it named `L`, which is no longer the unlock key, and a refusal that
 // has to name a key is a refusal arriving too late.
 
-// undoToastText returns the user-facing message for the aggregating undo
-// toast. A single pending entry shows its label; multiple entries collapse
-// into a count with "undo last" so the affordance stays accurate.
+// refreshRecoveryToast rewrites the one toast that names the recoverable closes,
+// or clears it when there are none left. It expires with the last entry it
+// names, so the affordance never outlives what it offers.
+func (m *Model) refreshRecoveryToast(now time.Time) tea.Cmd {
+	text := m.undoToastText()
+	deadline, ok := m.recovery.Deadline(now)
+	if text == "" || !ok {
+		m.clearToastByID(undoCloseToastID)
+		return nil
+	}
+	return m.replaceToastByID(undoCloseToastID, Toast{
+		Severity: toastInfo,
+		Text:     text,
+		Expires:  deadline,
+	})
+}
+
+// undoToastText returns the user-facing message for the recovery toast. A single
+// entry shows its label; several collapse into a count with "undo last" so the
+// affordance stays accurate.
 //
-// It names the palette rather than a key. `u` was the undo shortcut and is
-// retired with the rest of the direct destructive keymap; Undo Last Close is a
-// palette command now, and a toast that still said "u to undo" would be the
-// only thing on screen advertising a key that no longer dispatches. The window
-// is the part worth printing either way — the command's own availability
-// expires with it, so a toast that outlived the window would offer a route that
-// is already closed.
+// It names `u`, which is bound at the dashboard again, and the palette command
+// remains for anyone who reaches for it by name. The window is worth printing
+// either way: both routes expire with the entries, so a toast that outlived them
+// would be offering something already gone.
 func (m *Model) undoToastText() string {
-	active := m.activeUndoEntries()
+	active := m.recovery.Available(modelNow(*m))
 	switch len(active) {
 	case 0:
 		return ""
 	case 1:
-		return fmt.Sprintf("closed %s · %s undo (5s)", active[0].label, keyColon)
+		return fmt.Sprintf("closed %s · %s undo (%s)", active[0].Label, keyUndoClose, undoWindowText)
 	default:
-		return fmt.Sprintf("closed %d sessions · %s undo last (5s)", len(active), keyColon)
+		return fmt.Sprintf("closed %d sessions · %s undo last (%s)", len(active), keyUndoClose, undoWindowText)
 	}
 }
 
-// activeUndoEntries returns the pending entries whose deadline is still in
-// the future. Used both to compose the toast label and to decide whether Undo
-// Last Close is offered at all, so an expired entry is never silently revived.
-func (m *Model) activeUndoEntries() []undoEntry {
-	now := time.Now()
-	out := make([]undoEntry, 0, len(m.pendingUndo))
-	for _, e := range m.pendingUndo {
-		if now.Before(e.deadline) {
-			out = append(out, e)
-		}
-	}
-	return out
+// activeUndoEntries reports the closes that may still be undone. It is what the
+// Undo Last Close command's availability reads, so an expired entry is never
+// silently revived by a palette that had not looked recently.
+func (m Model) activeUndoEntries() []sessionactions.Snapshot {
+	return m.recovery.Available(modelNow(m))
 }
 
-// popUndo removes and returns the most recent pending entry that hasn't yet
-// expired. Stale entries are dropped from the slice so a refused undo also
-// reclaims memory consumed by abandoned actions.
-func (m *Model) popUndo() (undoEntry, bool) {
-	m.sweepUndo()
-	if len(m.pendingUndo) == 0 {
-		return undoEntry{}, false
-	}
-	last := len(m.pendingUndo) - 1
-	entry := m.pendingUndo[last]
-	m.pendingUndo = m.pendingUndo[:last]
-	return entry, true
-}
-
-// sweepUndo drops any entries past their deadline. Called from the
-// toastTickMsg handler so the pending list cannot grow unbounded after
-// repeated rapid closes that the user never undoes.
-func (m *Model) sweepUndo() {
-	if len(m.pendingUndo) == 0 {
+// sweepRecovery drops entries past their deadline and keeps the recovery toast's
+// wording in step with what is left. Called from the toast tick, so the stack
+// cannot accumulate after repeated closes nobody undid.
+func (m *Model) sweepRecovery() {
+	now := modelNow(*m)
+	m.recovery = m.recovery.Sweep(now)
+	if !m.hasToastID(undoCloseToastID) {
 		return
 	}
-	now := time.Now()
-	kept := m.pendingUndo[:0]
-	for _, e := range m.pendingUndo {
-		if now.Before(e.deadline) {
-			kept = append(kept, e)
-		}
-	}
-	m.pendingUndo = kept
+	// The toast list is non-empty here, so refreshRecoveryToast replaces in
+	// place and returns no command; a second tick command would double the
+	// sweeper.
+	m.refreshRecoveryToast(now)
 }
 
-// undoLastCmd consumes the most-recent undoable entry and dispatches a
-// relaunch using the captured snapshot. Updates the aggregating toast so
-// the remaining undo count (or success message) stays accurate.
+func (m Model) hasToastID(id int) bool {
+	for _, t := range m.toasts {
+		if t.id == id {
+			return true
+		}
+	}
+	return false
+}
+
+// recoveryDoneMsg reports one relaunch attempted from the recovery stack.
+//
+// It is the root's own message rather than a commands.ActionDoneMsg because its
+// request identity is minted by the recovery stack, and a request numbered 1
+// there names a different operation from a request numbered 1 in the session
+// action controller. Sharing the message would have the controller correlate the
+// two by accident.
+type recoveryDoneMsg struct {
+	request sessionactions.RequestID
+	label   string
+	err     error
+}
+
+// undoLastCmd claims the most recent recoverable close and relaunches it.
+//
+// The entry is claimed rather than consumed: it is off the offer while the
+// relaunch is in flight, so a second `u` takes the close below it instead of
+// launching the same session twice, and a failed relaunch puts it back with the
+// time it had left.
 func (m *Model) undoLastCmd() tea.Cmd {
-	entry, ok := m.popUndo()
+	now := modelNow(*m)
+	recovery, claimed, ok := m.recovery.Claim(now)
+	m.recovery = recovery
 	if !ok {
-		return nil
+		return m.refreshRecoveryToast(now)
 	}
 
-	sess := entry.snapshot
+	sess := claimed.Snapshot.Session
+	label := claimed.Snapshot.Label
+	request := claimed.Request
 	cfg := m.cfg
 	client := m.client
 	launch := func() tea.Msg {
 		_, err := commands.Registry.Execute(context.Background(), actions.Dependencies{Kitty: client, Config: cfg}, actions.Launch, actions.Request{Project: &sess})
-		return commands.ActionDoneMsg{Err: err}
+		return recoveryDoneMsg{request: request, label: label, err: err}
 	}
 
 	cmds := []tea.Cmd{launch}
+	if c := m.replaceToastByID(undoCloseToastID, Toast{
+		Severity: toastInfo,
+		Text:     fmt.Sprintf("restoring %s…", label),
+		Expires:  now.Add(progressToastTTL),
+	}); c != nil {
+		cmds = append(cmds, c)
+	}
+	return tea.Batch(cmds...)
+}
 
-	if remaining := len(m.activeUndoEntries()); remaining > 0 {
-		if c := m.replaceToastByID(undoCloseToastID, Toast{
-			Severity: toastInfo,
-			Text:     m.undoToastText(),
-			Expires:  time.Now().Add(undoWindow),
+// handleRecoveryDone applies one relaunch's outcome. A success consumes the
+// entry; a failure releases it, keeping the deadline it already had, so the
+// operator may retry for as long as the close was going to stay undoable and no
+// longer.
+func (m Model) handleRecoveryDone(msg recoveryDoneMsg) (tea.Model, tea.Cmd) {
+	now := modelNow(m)
+	var cmds []tea.Cmd
+	if msg.err != nil {
+		m.recovery = m.recovery.Release(msg.request)
+		if c := m.pushToast(Toast{
+			Severity: toastError,
+			Text:     fmt.Sprintf("restore failed for %s: %v", msg.label, msg.err),
 		}); c != nil {
+			cmds = append(cmds, c)
+		}
+		if c := m.refreshRecoveryToast(now); c != nil {
 			cmds = append(cmds, c)
 		}
 	} else {
-		if c := m.replaceToastByID(undoCloseToastID, Toast{
-			Severity: toastSuccess,
-			Text:     fmt.Sprintf("restored %s", entry.label),
-		}); c != nil {
-			cmds = append(cmds, c)
+		m.recovery = m.recovery.Restored(msg.request)
+		restored := Toast{Severity: toastSuccess, Text: fmt.Sprintf("restored %s", msg.label)}
+		if m.undoToastText() == "" {
+			// Nothing is left to undo, so the recovery channel carries the
+			// result rather than being cleared and immediately replaced.
+			if c := m.replaceToastByID(undoCloseToastID, restored); c != nil {
+				cmds = append(cmds, c)
+			}
+		} else {
+			if c := m.refreshRecoveryToast(now); c != nil {
+				cmds = append(cmds, c)
+			}
+			if c := m.pushToast(restored); c != nil {
+				cmds = append(cmds, c)
+			}
 		}
 	}
-	return tea.Batch(cmds...)
+	m.actionErr = msg.err
+	cmds = append(cmds, m.requestTopologyRefresh())
+	return m, tea.Batch(cmds...)
 }

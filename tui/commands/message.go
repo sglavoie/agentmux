@@ -135,9 +135,18 @@ func (e ErrMsg) Error() string { return e.Err.Error() }
 // assuming the only outstanding action is the one it started, which is what
 // keeps a slow close from reporting its error over a restart the operator ran
 // after it.
+//
+// Unconfirmed is the third answer, between the error and the silence: the action
+// was accepted and did not fail, but the effect it was asked for was never
+// observed. A close whose tab was still listed when the polls ran out, or whose
+// listing could not be read at all, reports it. Nothing that is merely slow sets
+// it — it means "nobody looked, or looking said no" — so a consumer may treat it
+// as "do not advertise anything that depends on this having happened" without
+// treating it as a failure.
 type ActionDoneMsg struct {
-	Err     error
-	Request uint64
+	Err         error
+	Request     uint64
+	Unconfirmed bool
 }
 
 // StampRequest marks every ActionDoneMsg a command eventually produces with the

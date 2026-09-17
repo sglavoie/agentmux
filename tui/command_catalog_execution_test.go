@@ -124,7 +124,7 @@ func TestCommandCopyAndClearStatusEffects(t *testing.T) {
 	if clearCmd == nil {
 		t.Fatal("clear status returned nil command")
 	}
-	_ = clearCmd()
+	drainMsgs(t, clearCmd)
 	if request.Action != "user_clear" || request.WindowID != 202 {
 		t.Fatalf("clear-status request = %+v, want user_clear for window 202", request)
 	}
@@ -191,8 +191,10 @@ func TestCommandRowTransitions(t *testing.T) {
 			name: "close without confirmation", id: commands.CloseSession,
 			setup: func(m *Model) { m.cfg.Defaults.ConfirmDestructive = false },
 			check: func(t *testing.T, got Model, cmd tea.Cmd) {
-				if got.mode != ModeList || cmd == nil || len(got.pendingUndo) != 1 || len(got.toasts) != 1 || !strings.Contains(got.toasts[0].Text, "undo") {
-					t.Fatalf("close result: mode=%v cmd=%v undo=%d toasts=%v", got.mode, cmd != nil, len(got.pendingUndo), got.toasts)
+				// The recovery is reserved, not offered: nothing is undoable
+				// until the close reports that the tab was observed to go.
+				if got.mode != ModeList || cmd == nil || len(got.activeUndoEntries()) != 0 || len(got.toasts) != 1 || !strings.Contains(got.toasts[0].Text, "closing") {
+					t.Fatalf("close result: mode=%v cmd=%v undo=%d toasts=%v", got.mode, cmd != nil, len(got.activeUndoEntries()), got.toasts)
 				}
 			},
 		},
@@ -200,8 +202,8 @@ func TestCommandRowTransitions(t *testing.T) {
 			name: "close with confirmation", id: commands.CloseSession,
 			setup: func(m *Model) { m.cfg.Defaults.ConfirmDestructive = true },
 			check: func(t *testing.T, got Model, cmd tea.Cmd) {
-				if got.mode != ModeConfirm || got.confirmAction != "close" || got.confirmConsequence != wantCloseConsequence || got.confirmReturnMode != ModeList || cmd != nil || len(got.pendingUndo) != 0 {
-					t.Fatalf("confirmed close result: mode=%v action=%q return=%v cmd=%v undo=%d", got.mode, got.confirmAction, got.confirmReturnMode, cmd != nil, len(got.pendingUndo))
+				if got.mode != ModeConfirm || got.confirmAction != "close" || got.confirmConsequence != wantCloseConsequence || got.confirmReturnMode != ModeList || cmd != nil || len(got.activeUndoEntries()) != 0 {
+					t.Fatalf("confirmed close result: mode=%v action=%q return=%v cmd=%v undo=%d", got.mode, got.confirmAction, got.confirmReturnMode, cmd != nil, len(got.activeUndoEntries()))
 				}
 			},
 		},
@@ -329,14 +331,13 @@ func TestCommandExploreAndAppExecution(t *testing.T) {
 
 	t.Run("undo", func(t *testing.T) {
 		m, ctx, _ := commandTestModel(target)
-		m.pendingUndo = []undoEntry{{
-			snapshot: config.Session{Title: "api", Directory: "/home/user/api", Profile: "work"},
-			account:  config.Account{Name: "work", Color: "blue"},
-			deadline: time.Now().Add(time.Minute), label: "api",
-		}}
+		m.recovery = recoveryWith(undoTestNow, "api")
+		m.now = func() time.Time { return undoTestNow }
 		got, cmd := commandByID(t, commands.UndoClose).Run(m, ctx)
-		if cmd == nil || len(got.pendingUndo) != 0 || len(got.toasts) != 1 || !strings.Contains(got.toasts[0].Text, "restored") {
-			t.Fatalf("undo result: cmd=%v pending=%d toasts=%v", cmd != nil, len(got.pendingUndo), got.toasts)
+		// The entry is claimed rather than consumed: it comes off the offer
+		// while the relaunch is in flight and is only gone once it succeeds.
+		if cmd == nil || len(got.activeUndoEntries()) != 0 || len(got.toasts) != 1 || !strings.Contains(got.toasts[0].Text, "restoring") {
+			t.Fatalf("undo result: cmd=%v available=%d toasts=%v", cmd != nil, len(got.activeUndoEntries()), got.toasts)
 		}
 	})
 

@@ -148,13 +148,14 @@ var helpSections = []struct {
 	}},
 	{"App", []string{
 		"  :         open command palette — every command, searchable",
+		"  u         undo the last confirmed close (five seconds)",
 		"  ?         show / hide this help",
 		"  i         show / hide the session inspector",
 		"  q         quit",
 		"  ctrl+c    quit",
 		"  (Past Sessions, Plans, Worktrees, Runs, session detail, the phase",
-		"   timeline, health details, undo, resort, and the list arrangement",
-		"   are palette entries — search the palette by name)",
+		"   timeline, health details, resort, and the list arrangement are",
+		"   palette entries — search the palette by name)",
 	}},
 }
 

@@ -182,16 +182,38 @@ func (m Model) handleActiveLoopsMsg(msg commands.ActiveLoopsMsg) (tea.Model, tea
 //
 // A completion carrying a request is one the shared controller dispatched, and
 // it is retired from the correlation record before anything else happens. One
-// that carries none was started outside the controller — an undo, a worktree
-// mutation — and is handled exactly as it always was. Either way the error goes
-// to the header and a refresh follows, because the list is stale in both cases.
+// that carries none was started outside the controller — a worktree mutation, a
+// direct key that predates the controller — and is handled exactly as it always
+// was. Either way the error goes to the header and a refresh follows, because
+// the list is stale in both cases.
+//
+// The correlated Result is what the operator's feedback is built from. It names
+// the action, the row as captured at dispatch, and an outcome that keeps "the
+// tab was seen to go" apart from "nobody could say" — which is the difference
+// between a recovery worth offering and one that would launch a second copy of a
+// session still running.
 func (m Model) handleActionDone(msg commands.ActionDoneMsg) (tea.Model, tea.Cmd) {
-	if updated, _, correlated := sessionActionController(m).Complete(m, sessionactions.RequestID(msg.Request), msg.Err); correlated {
+	var cmds []tea.Cmd
+	completion := sessionactions.Completion{Err: msg.Err, Unconfirmed: msg.Unconfirmed}
+	if updated, result, correlated := sessionActionController(m).Complete(m, sessionactions.RequestID(msg.Request), completion); correlated {
 		m = updated
+		if c := m.applySessionActionResult(result); c != nil {
+			cmds = append(cmds, c)
+		}
 	}
 	m.actionErr = msg.Err
 	// Trigger a refresh so the list reflects the new state.
-	return m, m.requestTopologyRefresh()
+	cmds = append(cmds, m.requestTopologyRefresh())
+	return m, tea.Batch(cmds...)
+}
+
+// applySessionActionResult is what one completed dispatch does to this surface:
+// the close's recovery bookkeeping, and the sentence the operator reads.
+func (m *Model) applySessionActionResult(result sessionactions.Result) tea.Cmd {
+	if result.Action == commands.CloseSession {
+		return m.applyCloseOutcome(result)
+	}
+	return m.reportActionOutcome(result)
 }
 
 // handleCopyDone processes a commands.CopyDoneMsg without refreshing live sessions.

@@ -36,7 +36,41 @@ const (
 	// the action had opened — a profile picker, a confirmation — rather than
 	// answering it.
 	OutcomeCancelled Outcome = "cancelled"
+	// OutcomeUnconfirmed means the action was attempted, reported no failure,
+	// and was never observed to do what it said. A close whose tab was still
+	// listed when the polls ran out is the case this exists for.
+	//
+	// It is separate from Succeeded for the same reason Refused is separate from
+	// Failed: a surface that offers something on the strength of the action
+	// having happened — close recovery, a sentence in the past tense — must be
+	// able to tell "it worked" from "nobody could say". It is separate from
+	// Failed because nothing went wrong, and reporting it as an error would
+	// teach an operator to ignore errors.
+	OutcomeUnconfirmed Outcome = "unconfirmed"
 )
+
+// Completion is what a host reports back about a dispatched action. It is a
+// struct rather than a bare error because "did not fail" and "was seen to work"
+// are two questions, and an error value can only answer the first.
+type Completion struct {
+	// Err is the failure, if the action failed.
+	Err error
+	// Unconfirmed says the action was accepted and its effect never observed.
+	// It is ignored when Err is set: a failure is already the stronger answer.
+	Unconfirmed bool
+}
+
+// Outcome is what the completion means for the dispatch it answers.
+func (c Completion) Outcome() Outcome {
+	switch {
+	case c.Err != nil:
+		return OutcomeFailed
+	case c.Unconfirmed:
+		return OutcomeUnconfirmed
+	default:
+		return OutcomeSucceeded
+	}
+}
 
 // Result reports one dispatched action's fate. It carries the identity of the
 // action, the dispatch, and the row, so a surface can tell which of several
@@ -50,6 +84,10 @@ type Result struct {
 	// Target is the row the action was aimed at, as captured at dispatch — not
 	// re-read at reply time, when the row may be gone.
 	Target Target
+	// Profile is the replacement profile the dispatch carried, empty for the
+	// actions that need none. It is reported back so a surface can name it in
+	// what it says about the result without holding the dispatch itself.
+	Profile string
 	// Outcome is what became of the action.
 	Outcome Outcome
 	// Detail is the operator-facing sentence: the refusal reason, the failure

@@ -63,8 +63,8 @@ func assertLockedDenial(t *testing.T, key string) {
 	if cmd != nil {
 		t.Errorf("%s on locked row: expected no command, got one", key)
 	}
-	if len(m2.pendingUndo) != 0 {
-		t.Errorf("%s on locked row: expected no pendingUndo, got %d", key, len(m2.pendingUndo))
+	if got := m2.activeUndoEntries(); len(got) != 0 {
+		t.Errorf("%s on locked row: expected no recovery entry, got %v", key, got)
 	}
 }
 
@@ -114,8 +114,11 @@ func TestClearStatusAllowedOnLockedAttentionRow(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("clear icon on locked row: expected clear-status cmd")
 	}
-	if len(m2.toasts) != 0 {
-		t.Fatalf("clear icon on locked row: expected no denial toast, got %+v", m2.toasts)
+	// The dispatch reports that it is in flight, which is not a denial: a
+	// refusal is a warning naming the reason, and this is an info-severity
+	// sentence about the request that was made.
+	if len(m2.toasts) != 1 || m2.toasts[0].Severity != toastInfo {
+		t.Fatalf("clear icon on locked row: expected the in-flight toast alone, got %+v", m2.toasts)
 	}
 }
 

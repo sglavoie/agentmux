@@ -105,6 +105,44 @@ func runRowAction(t *testing.T, m Model, key string) (Model, tea.Cmd) {
 	return m, nil
 }
 
+// drainMsgs runs cmd and everything a tea.Batch it produced holds, returning
+// the messages in dispatch order.
+//
+// It exists because a lifecycle action's command is the effect batched with the
+// toast that reports the effect is in flight. A test that ran the command and
+// read its single message used to be reading the effect; it would now be reading
+// whichever of the two Bubble Tea happened to put first.
+func drainMsgs(t *testing.T, cmd tea.Cmd) []tea.Msg {
+	t.Helper()
+	if cmd == nil {
+		return nil
+	}
+	switch msg := cmd().(type) {
+	case tea.BatchMsg:
+		var out []tea.Msg
+		for _, inner := range msg {
+			out = append(out, drainMsgs(t, inner)...)
+		}
+		return out
+	case nil:
+		return nil
+	default:
+		return []tea.Msg{msg}
+	}
+}
+
+// actionDoneFrom is drainMsgs for the one message a caller usually wants.
+func actionDoneFrom(t *testing.T, cmd tea.Cmd) commands.ActionDoneMsg {
+	t.Helper()
+	for _, msg := range drainMsgs(t, cmd) {
+		if done, ok := msg.(commands.ActionDoneMsg); ok {
+			return done
+		}
+	}
+	t.Fatalf("no commands.ActionDoneMsg among the messages the command produced")
+	return commands.ActionDoneMsg{}
+}
+
 // pressRowAction is runRowAction for a caller that only wants the model.
 func pressRowAction(t *testing.T, m Model, key string) Model {
 	t.Helper()

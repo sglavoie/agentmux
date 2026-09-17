@@ -37,11 +37,19 @@ func Focus(client kitty.KittyClient, tabID int) tea.Cmd {
 }
 
 // Close closes a tab by ID and returns ActionDoneMsg.
+//
+// The completion reports whether the tab was observed to close, not merely
+// whether Kitty accepted the request. A close that timed out or could not be
+// checked comes back unconfirmed rather than successful, which is what keeps the
+// dashboard from offering to undo a close it cannot show happened.
 func Close(client kitty.KittyClient, tabID int) tea.Cmd {
 	return func() tea.Msg {
 		target := session.RunningSession{TabID: tabID}
-		_, err := Registry.Execute(context.Background(), actions.Dependencies{Kitty: client}, actions.Close, actions.Request{Session: &target, Confirmed: true})
-		return ActionDoneMsg{Err: err}
+		result, err := Registry.Execute(context.Background(), actions.Dependencies{Kitty: client}, actions.Close, actions.Request{Session: &target, Confirmed: true})
+		if err != nil {
+			return ActionDoneMsg{Err: err}
+		}
+		return ActionDoneMsg{Unconfirmed: !actions.CloseConfirmed(result)}
 	}
 }
 

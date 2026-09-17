@@ -138,6 +138,21 @@ type Request struct {
 	Confirmed    bool
 }
 
+// DataCloseConfirmed is the Close result's Data key: whether the tab was
+// observed to disappear, as opposed to the close merely having been accepted.
+// It is carried as data rather than folded into Changed because both endings
+// changed something — the request was sent either way — and a caller that offers
+// the operator a recovery on the strength of the close needs the narrower fact.
+const DataCloseConfirmed = "close_confirmed"
+
+// CloseConfirmed reads DataCloseConfirmed off a Close result. A result from any
+// other action, or one predating the key, reads as unconfirmed, which is the
+// fail-closed direction: a caller learns nothing it can advertise.
+func CloseConfirmed(result Result) bool {
+	confirmed, _ := result.Data[DataCloseConfirmed].(bool)
+	return confirmed
+}
+
 // Result is presentation-neutral execution output.
 type Result struct {
 	Action  ID             `json:"action"`

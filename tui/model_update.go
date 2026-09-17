@@ -138,8 +138,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case launchProgressMsg:
 		return m.handleLaunchProgress(msg)
 
+	case recoveryDoneMsg:
+		return m.handleRecoveryDone(msg)
+
 	case toastTickMsg:
-		m.sweepUndo()
+		m.sweepRecovery()
 		return m, m.sweepToasts()
 
 	case commands.PickerOpenDoneMsg:

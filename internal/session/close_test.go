@@ -86,3 +86,81 @@ func TestPollClosed_Timeout(t *testing.T) {
 		t.Errorf("PollClosed with persistent tab: got %v, want ErrCloseTimeout", err)
 	}
 }
+
+// TestCloseObservedDistinguishesTheThreeEndings is the reason the observation
+// exists: two of these three endings return no error, and only one of them means
+// the tab actually went away.
+func TestCloseObservedDistinguishesTheThreeEndings(t *testing.T) {
+	tests := []struct {
+		name     string
+		ls       []byte
+		tabID    int
+		want     session.CloseObservation
+		wantErr  error
+		confirms bool
+	}{
+		{
+			name:     "a successful listing without the tab is the confirmed close",
+			ls:       loadFixture(t, "kitty_ls_empty.json"),
+			tabID:    999,
+			want:     session.CloseObservedGone,
+			confirms: true,
+		},
+		{
+			// The listing-error branch that assumes the tab closed. It still
+			// returns nil — Restart depends on that — but it may not claim the
+			// tab is gone, because nothing looked.
+			name:  "a failed listing is unobserved rather than closed",
+			ls:    []byte("not-json"),
+			tabID: 999,
+			want:  session.CloseUnobserved,
+		},
+		{
+			name:    "a tab still present when the polls run out is unobserved",
+			ls:      loadFixture(t, "kitty_ls.json"),
+			tabID:   4,
+			want:    session.CloseUnobserved,
+			wantErr: session.ErrCloseTimeout,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			runner := kitty.NewMockRunner(map[string][]byte{"kitten @ ls": tc.ls})
+			client := kitty.NewClientWithSocket(runner, "")
+
+			observation, err := session.CloseObserved(client, tc.tabID)
+			if observation != tc.want {
+				t.Errorf("observation = %q, want %q", observation, tc.want)
+			}
+			if observation.Confirmed() != tc.confirms {
+				t.Errorf("Confirmed() = %v, want %v", observation.Confirmed(), tc.confirms)
+			}
+			if !errors.Is(err, tc.wantErr) {
+				t.Errorf("err = %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestCloseObservedReportsTheCloseTabFailure keeps the failure of the request
+// itself distinct from the failure to observe its effect.
+func TestCloseObservedReportsTheCloseTabFailure(t *testing.T) {
+	client := kitty.NewClientWithSocket(failingCloseRunner{}, "")
+
+	observation, err := session.CloseObserved(client, 4)
+	if err == nil {
+		t.Fatal("expected the close-tab error to be reported")
+	}
+	if observation != session.CloseUnobserved {
+		t.Errorf("observation = %q, want %q", observation, session.CloseUnobserved)
+	}
+}
+
+// failingCloseRunner fails every kitten call, which is the closest the mock
+// runner gets to a Kitty that will not accept a close-tab.
+type failingCloseRunner struct{}
+
+func (failingCloseRunner) Run(string, ...string) ([]byte, []byte, error) {
+	return nil, []byte("no such tab"), errors.New("kitten failed")
+}

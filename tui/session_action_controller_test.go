@@ -105,8 +105,8 @@ func TestConfirmedCloseRunsTheSameEffectAsAnUnconfirmedOne(t *testing.T) {
 	if directCmd == nil || confirmedCmd == nil {
 		t.Fatalf("commands: direct = %v, confirmed = %v, want both", directCmd != nil, confirmedCmd != nil)
 	}
-	if len(confirmed.pendingUndo) != len(direct.pendingUndo) {
-		t.Fatalf("undo entries: direct %d, confirmed %d", len(direct.pendingUndo), len(confirmed.pendingUndo))
+	if len(confirmed.sessionActions.InFlight()) != len(direct.sessionActions.InFlight()) {
+		t.Fatalf("in-flight dispatches: direct %d, confirmed %d", len(direct.sessionActions.InFlight()), len(confirmed.sessionActions.InFlight()))
 	}
 	if len(confirmed.toasts) != len(direct.toasts) {
 		t.Fatalf("toasts: direct %v, confirmed %v", direct.toasts, confirmed.toasts)
@@ -300,8 +300,8 @@ func TestStaleTargetIsRefusedRatherThanRetargeted(t *testing.T) {
 			t.Fatal("a stale confirmation closed a window")
 		}
 	}
-	if len(m.pendingUndo) != 0 {
-		t.Fatalf("undo entries = %d, want none for a refused action", len(m.pendingUndo))
+	if got := m.activeUndoEntries(); len(got) != 0 {
+		t.Fatalf("undo entries = %v, want none for a refused action", got)
 	}
 	if len(m.toasts) != 1 || m.toasts[0].Severity != toastWarning {
 		t.Fatalf("toasts = %+v, want one warning explaining the refusal", m.toasts)

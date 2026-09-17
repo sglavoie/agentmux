@@ -605,7 +605,7 @@ func TestCompleteCorrelatesWithItsDispatch(t *testing.T) {
 		t.Fatalf("in flight = %+v, want two records", got)
 	}
 
-	h, result, ok := c.Complete(h, second.Request, nil)
+	h, result, ok := c.Complete(h, second.Request, Completion{})
 	if !ok {
 		t.Fatal("completion was not correlated")
 	}
@@ -621,7 +621,7 @@ func TestCompleteCorrelatesWithItsDispatch(t *testing.T) {
 	}
 
 	failure := errors.New("kitty refused")
-	h, result, ok = c.Complete(h, first.Request, failure)
+	h, result, ok = c.Complete(h, first.Request, Completion{Err: failure})
 	if !ok {
 		t.Fatal("failing completion was not correlated")
 	}
@@ -630,6 +630,36 @@ func TestCompleteCorrelatesWithItsDispatch(t *testing.T) {
 	}
 	if got := h.state.InFlight(); len(got) != 0 {
 		t.Fatalf("in flight = %+v, want empty", got)
+	}
+}
+
+// TestUnconfirmedCompletionIsNeitherSuccessNorFailure is the third answer: the
+// action was accepted, nothing failed, and its effect was never observed. A
+// surface that offered close recovery on this would be offering to undo a close
+// that may not have happened.
+func TestUnconfirmedCompletionIsNeitherSuccessNorFailure(t *testing.T) {
+	h := host{env: quietEnv(), live: []session.RunningSession{row(11, 21)}}
+	c := testController(hostEffects(commands.CloseSession))
+	h, dispatched, _ := c.Begin(h, commands.CloseSession, Capture(row(11, 21)), Origin{})
+
+	_, result, ok := c.Complete(h, dispatched.Request, Completion{Unconfirmed: true})
+	if !ok {
+		t.Fatal("unconfirmed completion was not correlated")
+	}
+	if result.Outcome != OutcomeUnconfirmed {
+		t.Fatalf("outcome = %q, want %q", result.Outcome, OutcomeUnconfirmed)
+	}
+	if result.Succeeded() {
+		t.Fatal("an unconfirmed action reported success")
+	}
+	if result.Err != nil || result.Detail != "" {
+		t.Fatalf("result = %+v, want no failure to report", result)
+	}
+
+	// A failure is the stronger answer and wins.
+	failure := errors.New("kitty refused")
+	if got := (Completion{Err: failure, Unconfirmed: true}).Outcome(); got != OutcomeFailed {
+		t.Fatalf("outcome = %q, want %q", got, OutcomeFailed)
 	}
 }
 
@@ -642,7 +672,7 @@ func TestCompleteIgnoresForeignCompletions(t *testing.T) {
 	h, dispatched, _ := c.Begin(h, commands.CloseSession, Capture(row(11, 21)), Origin{})
 
 	for _, request := range []RequestID{0, dispatched.Request + 1} {
-		out, result, ok := c.Complete(h, request, nil)
+		out, result, ok := c.Complete(h, request, Completion{})
 		if ok {
 			t.Fatalf("request %d was correlated: %+v", request, result)
 		}
@@ -653,11 +683,11 @@ func TestCompleteIgnoresForeignCompletions(t *testing.T) {
 
 	// The same completion twice is a foreign one the second time, which is what
 	// keeps a retried reply from being counted as a second action.
-	h, _, ok := c.Complete(h, dispatched.Request, nil)
+	h, _, ok := c.Complete(h, dispatched.Request, Completion{})
 	if !ok {
 		t.Fatal("first completion was not correlated")
 	}
-	if _, _, ok := c.Complete(h, dispatched.Request, nil); ok {
+	if _, _, ok := c.Complete(h, dispatched.Request, Completion{}); ok {
 		t.Fatal("the same completion was correlated twice")
 	}
 }

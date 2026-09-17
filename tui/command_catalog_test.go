@@ -79,7 +79,7 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 		{commands.SwitchProject, commands.GroupExplore, "Switch Project (all projects)", []string{"projects", "scope", "sidebar", "rail"}, "p"},
 		{commands.ToggleListView, commands.GroupExplore, "Show Projects View", []string{"projects", "families", "urgency", "group"}, ""},
 		{commands.ResortTabs, commands.GroupApp, "Resort Tabs", []string{"reorder", "tabs"}, ""},
-		{commands.UndoClose, commands.GroupApp, "Undo Last Close", []string{"restore", "reopen"}, ""},
+		{commands.UndoClose, commands.GroupApp, "Undo Last Close", []string{"restore", "reopen"}, keyUndoClose},
 		{commands.ShowHealth, commands.GroupApp, "Show Health Details", []string{"daemon", "hooks", "diagnostics", "status"}, ""},
 		{commands.DismissDeprecation, commands.GroupApp, "Dismiss Deprecation Warning", []string{"banner", "warning"}, ""},
 		{commands.ShowKeyboardHelp, commands.GroupApp, "Show Keyboard Shortcuts", []string{"help", "keys"}, "?"},
@@ -179,7 +179,7 @@ func TestCommandCatalogDashboardShortcutBindings(t *testing.T) {
 		commands.ShowRuns:           noDashboardKey,
 		commands.ToggleListView:     noDashboardKey,
 		commands.ResortTabs:         noDashboardKey,
-		commands.UndoClose:          noDashboardKey,
+		commands.UndoClose:          keyUndoClose,
 		commands.ShowHealth:         noDashboardKey,
 		commands.DismissDeprecation: noDashboardKey,
 	}
@@ -316,11 +316,13 @@ func TestCommandCatalogAvailability(t *testing.T) {
 	t.Run("undo requires a live deadline", func(t *testing.T) {
 		m, ctx, _ := commandTestModel(base)
 		undo := commandByID(t, commands.UndoClose)
-		m.pendingUndo = []undoEntry{{deadline: time.Now().Add(-time.Second)}}
+		expired := undoTestNow.Add(undoWindow + time.Second)
+		m.now = func() time.Time { return expired }
+		m.recovery = recoveryWith(undoTestNow, "api")
 		if got := undo.AvailabilityFor(m, ctx); got != commands.Unavailable(commands.ReasonNothingToUndo) {
 			t.Fatalf("expired undo availability = %+v", got)
 		}
-		m.pendingUndo = []undoEntry{{deadline: time.Now().Add(time.Minute)}}
+		m.now = func() time.Time { return undoTestNow }
 		if got := undo.AvailabilityFor(m, ctx); got != commands.Available() {
 			t.Fatalf("live undo availability = %+v", got)
 		}

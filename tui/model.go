@@ -352,10 +352,13 @@ type Model struct {
 	launchBatchErrors        int
 	launchBatchQuitOnSuccess bool
 
-	// pendingUndo stacks the most recent destructive actions eligible for
-	// `u`-driven undo. Entries expire at their deadline; sweepUndo trims
-	// them on toast ticks so memory stays bounded.
-	pendingUndo []undoEntry
+	// recovery stacks the confirmed closes that `u` and the Undo Last Close
+	// palette command may still reopen. It is the shared vocabulary's type
+	// rather than a private slice because the overview is the second surface
+	// that will offer the same affordance. Entries expire at their own
+	// deadlines; sweepRecovery trims them on toast ticks so memory stays
+	// bounded even when nothing is ever undone.
+	recovery sessionactions.Recovery
 
 	// helpOffset is the first visible line index in the scrollable help
 	// overlay (ModeHelp). Reset to 0 whenever the overlay is opened or closed.

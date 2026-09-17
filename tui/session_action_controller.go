@@ -77,20 +77,30 @@ func sessionActionRunners() map[commands.ID]sessionactions.Effect[Model] {
 		commands.PeekScrollback: func(m Model, d sessionactions.Dispatch) (Model, tea.Cmd) {
 			return m, commands.Peek(m.client, d.Target.WindowID())
 		},
+		// The four lifecycle effects below write to the model before they return
+		// — a toast, and for close a recovery reservation — so each binds its
+		// command to a variable first. `return m, m.mutate(...)` would return a
+		// model read in an order the specification leaves open, which is how a
+		// reservation made here could be dropped by the copy the update loop
+		// keeps.
 		commands.RestartSession: func(m Model, d sessionactions.Dispatch) (Model, tea.Cmd) {
-			return m, m.restartWithToast(d.Target.Session)
+			cmd := m.withActionFeedback(d, commands.Restart(m.client, d.Target.Session, m.cfg))
+			return m, cmd
 		},
 		commands.OverrideProfile: func(m Model, d sessionactions.Dispatch) (Model, tea.Cmd) {
-			return m, m.restartWithProfileCmd(d.Target.Session, d.Profile)
+			cmd := m.withActionFeedback(d, m.restartWithProfileCmd(d.Target.Session, d.Profile))
+			return m, cmd
 		},
 		commands.LaunchAnother: func(m Model, d sessionactions.Dispatch) (Model, tea.Cmd) {
 			return m, m.dashboardLaunchWithProfileCmd(d.Target.Session, d.Profile)
 		},
 		commands.ClearStatusIcon: func(m Model, d sessionactions.Dispatch) (Model, tea.Cmd) {
-			return m, m.clearStatusCmd(d.Target.Session)
+			cmd := m.withActionFeedback(d, m.clearStatusCmd(d.Target.Session))
+			return m, cmd
 		},
 		commands.CloseSession: func(m Model, d sessionactions.Dispatch) (Model, tea.Cmd) {
-			return m, m.closeWithToast(d.Target.Session)
+			cmd := m.closeWithToast(d.Target.Session, d.Request)
+			return m, cmd
 		},
 		commands.OpenDirectoryID: func(m Model, d sessionactions.Dispatch) (Model, tea.Cmd) {
 			cs, ok := commands.FindConfigSession(m.cfg, d.Target.Session.EffectiveProfile(), d.Target.Session.EffectiveProject())

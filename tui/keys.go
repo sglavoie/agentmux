@@ -76,6 +76,14 @@ const (
 	keyPhasePrev = "[" // jump to previous phase header in timeline
 	keyPhaseNext = "]" // jump to next phase header in timeline
 
+	// keyUndoClose reopens the session most recently closed, for the five
+	// seconds that close stays recoverable. It is a dashboard key rather than a
+	// palette entry alone because what it undoes is measured in seconds: a
+	// recovery reached by opening the palette and typing a command name is one
+	// the operator has already run out of time for. The palette command remains
+	// for anyone who reaches for it by name.
+	keyUndoClose = "u"
+
 	keyPgUp   = "pgup"   // move up by one page in scrollable views
 	keyPgDown = "pgdown" // move down by one page in scrollable views
 	keyHome   = "home"   // jump to the top of a scrollable pane

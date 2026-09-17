@@ -36,8 +36,13 @@ type statusMessage struct {
 // falling back to the app's name. The slot has to be legibly empty: a reserved
 // row that always said something is a row the eye stops checking, and the whole
 // point of reserving it is that the next thing to appear there is news.
+// It reads the model's clock rather than the wall clock, because that is the
+// clock the toasts' deadlines were stamped against. The two used to differ: a
+// toast pushed under an injected clock expired instantly when the row measured
+// it against time.Now(), so a message the model was plainly holding never
+// reached the screen.
 func renderStatusBar(m Model) string {
-	msg := currentStatusMessage(m, time.Now())
+	msg := currentStatusMessage(m, modelNow(m))
 	if msg.Text == "" {
 		return statusBarStyle(statusIdle).Render(layout.PadRight("", m.width))
 	}
