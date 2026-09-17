@@ -59,6 +59,28 @@ type PromptInput struct {
 	Width       int
 }
 
+// ConfirmVerbText is the imperative one confirmation verb is PRINTED as, and
+// false for a verb this package did not name.
+//
+// The three verbs are stable identifiers a host stores while the prompt is up;
+// what they are spelled as on screen is presentation, and it lived in the
+// dashboard's own confirm overlay beside the verbs for worktrees and ASL runs.
+// The overview raises the same three prompts and would have had to spell them a
+// second time, which is exactly the duplication the surface wordings in
+// sessionactions.go exist to prevent. A host with verbs of its own keeps them:
+// the false return says "not one of mine", not "unnameable".
+func ConfirmVerbText(verb string) (string, bool) {
+	switch verb {
+	case ConfirmClose:
+		return "Close", true
+	case ConfirmRestart:
+		return "Restart", true
+	case ConfirmReplaceProfile:
+		return "Restart under a different profile", true
+	}
+	return "", false
+}
+
 // PromptFor builds the input for one confirmation of a session action. It is the
 // pairing Confirm already decided, said in the renderer's vocabulary, so a host
 // that has a pending action and a target does not have to restate either.

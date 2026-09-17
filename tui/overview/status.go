@@ -8,20 +8,30 @@
 //
 // The ranking, highest first, and why each outranks the next:
 //
-//  1. A failed focus. The operator just pressed a key and it did not work.
-//     Nothing the surface could say about itself competes with the report of
-//     something that was asked for.
-//  2. A failed FIRST load. No tree has ever landed, so there is no list to
+//  0. A failed relaunch. It is the one report ABOUT the offer below it, and the
+//     stack puts the entry it names back on that offer, so showing the offer
+//     instead would redraw the row exactly as it looked before the keystroke —
+//     indistinguishable from `u` having been dropped. It names the retry itself.
+//  1. A recoverable close. It outranks even a failed keystroke because it is the
+//     only entry that is IRREVERSIBLY LOST if it is not shown: the offer expires
+//     in five seconds and the session it would restore cannot be reconstructed
+//     afterwards. Everything below it is still true on the next frame.
+//  2. A failed focus, or the report of an action that ran. Both are the outcome
+//     of something the operator just asked for, and nothing the surface could
+//     say about ITSELF competes with that. They cannot both be set — starting an
+//     action clears the focus error — so the ordering between them decides
+//     nothing.
+//  3. A failed FIRST load. No tree has ever landed, so there is no list to
 //     interpret and the error is the entire truth about the surface.
-//  3. Still loading. Same cold state, no error yet: the read is simply out. This
+//  4. Still loading. Same cold state, no error yet: the read is simply out. This
 //     is what an operator sees for the first fraction of a second, and saying
 //     nothing there would be indistinguishable from an empty Kitty.
-//  4. A delayed refresh. A tree HAS landed, so the rows stay and the only
+//  5. A delayed refresh. A tree HAS landed, so the rows stay and the only
 //     question is how old they have become. This outranks emptiness because a
 //     list that cannot be refreshed might be stale about being empty, and "no
 //     running sessions" asserted from a frozen reading would be a claim the
 //     surface cannot back up.
-//  5. No running sessions. The last CONFIRMED reading found nothing, and the
+//  6. No running sessions. The last CONFIRMED reading found nothing, and the
 //     grid is blank for a reason worth naming rather than because it is broken.
 //
 // Below the delay threshold and with sessions to show, the row is empty. A
@@ -38,8 +48,17 @@ import (
 
 // feedback is the ranked sentence, or "" when there is nothing to report.
 func (m model) feedback() string {
+	if report := m.offerOwningReport(); report != "" {
+		return report
+	}
+	if offer := m.recoveryOffer(); offer != "" {
+		return offer
+	}
 	if m.focusErr != nil {
 		return "Focus failed: " + m.focusErr.Error()
+	}
+	if report := m.activeReport(); report != "" {
+		return report
 	}
 	if m.preferenceErr != nil {
 		return "View preference unavailable: " + m.preferenceErr.Error()

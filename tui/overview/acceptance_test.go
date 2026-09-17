@@ -14,10 +14,13 @@
 // The WORLD is one mutable Kitty instance (kittyWorld), serving both the
 // daemon's published snapshot and the direct listing from the same tree, so a
 // tab that closes closes for every reader at once. It answers ListWindows,
-// GetText and FocusTab and RECORDS every other method as a violation rather than
-// panicking, because "the overview wrote nothing to Kitty" is a claim these
-// tests make about a whole session of use and a claim is better evidence than a
-// stack trace.
+// GetText and FocusTab freely; every other method is measured against a PERMIT
+// SET that starts empty and that only the scenario may widen. A write the
+// scenario asked for by running a session action is RECORDED with what it named
+// its target; a write nobody asked for is recorded as a violation rather than
+// panicking, because "the overview wrote nothing to Kitty except what an
+// operator asked it to" is a claim these tests make about a whole session of use
+// and a claim is better evidence than a stack trace.
 //
 // The CONFIGURATION is a TOML file written into the test's own directory and
 // loaded through config.Load, so the profiles, colors, projects and preview
@@ -55,6 +58,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/tui/commands"
+	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
 
 // acceptanceSocket is the Kitty instance every fixture below belongs to. The
@@ -82,15 +86,64 @@ type kittyWorld struct {
 	reads   []int
 	focuses []string
 	// violations is every call to a method neither the retrieval nor the capture
-	// is allowed to make. It is recorded rather than fatal because the assertion
-	// these tests want to make is "over a whole session of use, none happened",
-	// and that reads better as an empty slice than as a panic in a goroutine.
+	// is allowed to make, and which the scenario did not explicitly permit. It is
+	// recorded rather than fatal because the assertion these tests want to make is
+	// "over a whole session of use, none happened", and that reads better as an
+	// empty slice than as a panic in a goroutine.
 	violations []string
+	// permitted names the write methods THIS scenario has asked for by running a
+	// session action, and calls is what those methods were actually called with.
+	//
+	// The permit set is per scenario and starts empty, which is what keeps the
+	// read-only claim intact now that the grid can mutate: a scenario that only
+	// browses permits nothing, so any write it makes is still a violation, and a
+	// scenario that closes a row permits exactly the methods a close performs and
+	// then asserts on the recorded call rather than on the absence of one.
+	permitted map[string]bool
+	calls     []worldCall
+
+	// closeErr, when set, is what CloseTab answers, so a close that Kitty refuses
+	// can be told apart from one it accepted but was never seen to finish.
+	closeErr error
+	// nextTabID is the identity the next launched tab takes. It starts above
+	// every fixture ID so a relaunched session is visibly a NEW tab rather than
+	// the one that was closed.
+	nextTabID int
+}
+
+// worldCall is one write the scenario permitted: which method, and the match
+// expression or title it named its target with.
+type worldCall struct {
+	method string
+	arg    string
 }
 
 func newKittyWorld(tabs []kitty.Tab) *kittyWorld {
-	return &kittyWorld{tabs: tabs, text: map[int]string{}, textErr: map[int]error{}}
+	return &kittyWorld{
+		tabs:      tabs,
+		text:      map[int]string{},
+		textErr:   map[int]error{},
+		permitted: map[string]bool{},
+		nextTabID: 900,
+	}
 }
+
+// permit widens the write set for the rest of the scenario. It is called by the
+// test that is about to run an action, never by the harness, so what a scenario
+// is allowed to do to Kitty is stated in the scenario.
+func (w *kittyWorld) permit(methods ...string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for _, method := range methods {
+		w.permitted[method] = true
+	}
+}
+
+// permitClose and permitLaunch are the two permit sets worth naming, because
+// neither is one method: a close polls the tree after CloseTab, and a launch
+// repaints the new tab's color and may focus a neighbour to place it.
+func (w *kittyWorld) permitClose()  { w.permit("CloseTab") }
+func (w *kittyWorld) permitLaunch() { w.permit("LaunchTab", "SetTabColor") }
 
 func (w *kittyWorld) ListWindows() ([]kitty.OSWindow, error) {
 	w.mu.Lock()
@@ -137,27 +190,93 @@ func (w *kittyWorld) FocusTab(match string) error {
 	return fmt.Errorf("kitten @ focus-tab: no matching tab for %s", match)
 }
 
-func (w *kittyWorld) violate(name string) {
+// record files one write: against the permit set if the scenario asked for it,
+// against the violations if it did not.
+func (w *kittyWorld) record(method, arg string) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.violations = append(w.violations, name)
+	if !w.permitted[method] {
+		w.violations = append(w.violations, method)
+		return false
+	}
+	w.calls = append(w.calls, worldCall{method: method, arg: arg})
+	return true
 }
 
-func (w *kittyWorld) LaunchTab(kitty.LaunchOpts) error     { w.violate("LaunchTab"); return nil }
-func (w *kittyWorld) LaunchOverlay(kitty.LaunchOpts) error { w.violate("LaunchOverlay"); return nil }
-func (w *kittyWorld) CloseTab(string) error                { w.violate("CloseTab"); return nil }
-func (w *kittyWorld) MoveTab(string, int) error            { w.violate("MoveTab"); return nil }
-func (w *kittyWorld) SetTabColor(string, string, string, string, string) error {
-	w.violate("SetTabColor")
+// LaunchTab adds the tab the launch asked for, so the launcher's own
+// find-the-new-tab-and-color-it step succeeds on its first look instead of
+// backing off against a world that never grew one.
+func (w *kittyWorld) LaunchTab(opts kitty.LaunchOpts) error {
+	if !w.record("LaunchTab", opts.Title) {
+		return nil
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	id := w.nextTabID
+	w.nextTabID++
+	w.tabs = append(w.tabs, kitty.Tab{
+		ID:    id,
+		Title: opts.Title,
+		Windows: []kitty.Window{{
+			ID:       id * 10,
+			IsActive: true,
+			UserVars: kitty.UserVars{
+				Profile:      opts.UserVars["amx_profile"],
+				Harness:      opts.UserVars["amx_harness"],
+				Project:      opts.UserVars["amx_project"],
+				AMXDirectory: opts.UserVars["amx_directory"],
+				LaunchID:     opts.UserVars["amx_launch_id"],
+			},
+		}},
+	})
 	return nil
 }
-func (w *kittyWorld) SetTabTitle(string, string) error { w.violate("SetTabTitle"); return nil }
-func (w *kittyWorld) SetUserVars(string, map[string]string) error {
-	w.violate("SetUserVars")
+
+// CloseTab removes the tab, which is what makes the close poll confirm on its
+// first look and what makes the next refresh have to reconcile a selection onto
+// a survivor.
+func (w *kittyWorld) CloseTab(match string) error {
+	if !w.record("CloseTab", match) {
+		return nil
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.closeErr != nil {
+		return w.closeErr
+	}
+	kept := make([]kitty.Tab, 0, len(w.tabs))
+	for _, tab := range w.tabs {
+		if kitty.MatchTabByID(tab.ID) == match {
+			continue
+		}
+		kept = append(kept, tab)
+	}
+	w.tabs = kept
 	return nil
 }
-func (w *kittyWorld) FocusWindow(string) error        { w.violate("FocusWindow"); return nil }
-func (w *kittyWorld) LaunchOverlayPager(string) error { w.violate("LaunchOverlayPager"); return nil }
+
+func (w *kittyWorld) LaunchOverlay(opts kitty.LaunchOpts) error {
+	w.record("LaunchOverlay", opts.Title)
+	return nil
+}
+func (w *kittyWorld) MoveTab(match string, _ int) error { w.record("MoveTab", match); return nil }
+func (w *kittyWorld) SetTabColor(match string, _, _, _, _ string) error {
+	w.record("SetTabColor", match)
+	return nil
+}
+func (w *kittyWorld) SetTabTitle(match, title string) error {
+	w.record("SetTabTitle", match+" "+title)
+	return nil
+}
+func (w *kittyWorld) SetUserVars(match string, _ map[string]string) error {
+	w.record("SetUserVars", match)
+	return nil
+}
+func (w *kittyWorld) FocusWindow(match string) error { w.record("FocusWindow", match); return nil }
+func (w *kittyWorld) LaunchOverlayPager(match string) error {
+	w.record("LaunchOverlayPager", match)
+	return nil
+}
 
 // daemonTree is the same world seen through the daemon's published snapshot. It
 // deliberately does NOT count as a listing: the whole point of the daemon-first
@@ -242,6 +361,31 @@ func (w *kittyWorld) violationList() []string {
 	return append([]string(nil), w.violations...)
 }
 
+// callsOf names the arguments one permitted method was called with, in order.
+func (w *kittyWorld) callsOf(method string) []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	out := []string{}
+	for _, call := range w.calls {
+		if call.method == method {
+			out = append(out, call.arg)
+		}
+	}
+	return out
+}
+
+// tabIDs is the world's tabs as they now stand, which is how a scenario says a
+// close removed one and a relaunch added another.
+func (w *kittyWorld) tabIDs() []int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	out := make([]int, 0, len(w.tabs))
+	for _, tab := range w.tabs {
+		out = append(out, tab.ID)
+	}
+	return out
+}
+
 // acceptanceProfiles are the three launch identities every fixture spreads its
 // sessions across, so no scenario below is accidentally single-profile.
 var acceptanceProfiles = []struct{ name, harnessName string }{
@@ -301,8 +445,12 @@ func acceptanceWindowID(index int) int { return 1000 + index }
 func acceptanceConfig(t *testing.T) *config.Config {
 	t.Helper()
 	var b strings.Builder
-	b.WriteString("[defaults]\nsort = \"alpha\"\nrefresh_interval = 2\nidle_threshold = 300\n\n")
+	b.WriteString("[defaults]\nsort = \"alpha\"\nrefresh_interval = 2\nidle_threshold = 300\nconfirm_destructive = true\n\n")
 	b.WriteString("[defaults.preview]\nrefresh_ms = 400\n\n")
+	// The two writers the launch path runs beside Kitty. They are off because
+	// this test owns a Kitty and a configuration, not a state directory; see the
+	// XDG isolation in newStage for what happens if a default moves.
+	b.WriteString("[defaults.diagnostics]\njournal_enabled = false\nnative_logging = false\n\n")
 	for i, p := range acceptanceProfiles {
 		fmt.Fprintf(&b, "[[profiles]]\nname = %q\nharness = %q\nhome_dir = %q\ncolor = %q\n\n",
 			p.name, p.harnessName, filepath.Join(t.TempDir(), p.name), []string{"blue", "purple", "green"}[i])
@@ -363,6 +511,8 @@ const (
 	jobTopology = "topology"
 	jobCapture  = "capture"
 	jobFocus    = "focus"
+	jobAction   = "action"
+	jobRelaunch = "relaunch"
 )
 
 // stage is one running overview: the model, the world it reads, the frozen
@@ -379,6 +529,13 @@ type stage struct {
 
 	ticks        []time.Duration
 	captureTicks []time.Duration
+
+	// dispatches and relaunches are what the two mutating seams were asked for,
+	// recorded when the seam is CALLED rather than when the parked command runs,
+	// so a scenario can assert what an action aimed at without ever letting it
+	// reach the world.
+	dispatches []sessionactions.Dispatch
+	relaunches []sessionactions.Snapshot
 }
 
 // newStage opens the overview over a world and hands back the surface as it
@@ -388,6 +545,12 @@ type stage struct {
 func newStage(t *testing.T, world *kittyWorld, width, height, sourceWindowID int) *stage {
 	t.Helper()
 	stubOverviewWorld(t, world)
+	// The launch path writes a diagnostics journal and maintains native logs
+	// under the XDG state directory. The configuration below disables both, and
+	// this is the second half of that isolation: a default that flipped, or a
+	// path that stopped consulting the configuration, would write into the
+	// operator's own ~/.local/state rather than into a directory the test owns.
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
 
 	s := &stage{t: t, world: world, cfg: acceptanceConfig(t), now: viewNow}
 	s.m = newModel(s.cfg, world, sourceWindowID)
@@ -401,6 +564,21 @@ func newStage(t *testing.T, world *kittyWorld, width, height, sourceWindowID int
 		},
 		focus: func(tabID int) tea.Cmd {
 			s.park(jobFocus, real.focus(tabID))
+			return nil
+		},
+		// The action is stamped HERE rather than left to the controller. The
+		// controller stamps whatever the seam RETURNS, and this seam returns
+		// nothing so the effect can be parked; stamping the parked command with
+		// the request the dispatch already carries is what keeps a completion
+		// delivered minutes later correlating with the dispatch that asked for it.
+		action: func(d sessionactions.Dispatch) tea.Cmd {
+			s.dispatches = append(s.dispatches, d)
+			s.park(jobAction, commands.StampRequest(real.action(d), uint64(d.Request)))
+			return nil
+		},
+		relaunch: func(request sessionactions.RequestID, snapshot sessionactions.Snapshot) tea.Cmd {
+			s.relaunches = append(s.relaunches, snapshot)
+			s.park(jobRelaunch, real.relaunch(request, snapshot))
 			return nil
 		},
 		capture: func(req commands.CaptureRequest) tea.Cmd {
@@ -422,7 +600,7 @@ func newStage(t *testing.T, world *kittyWorld, width, height, sourceWindowID int
 	// scenario did rather than at each step.
 	t.Cleanup(func() {
 		if got := world.violationList(); len(got) > 0 {
-			t.Errorf("the overview called %v on Kitty; it may only list, read text, and focus a tab", got)
+			t.Errorf("the overview called %v on Kitty; it may only list, read text, focus a tab, and perform the writes this scenario permitted", got)
 		}
 	})
 
@@ -1227,6 +1405,171 @@ func TestAcceptanceSustainedTickBurstsStayBoundedAndResponsive(t *testing.T) {
 	s.press("esc")
 	if !s.quit || !s.m.captures.stopped {
 		t.Fatalf("after the burst, esc left quit=%v stopped=%v", s.quit, s.m.captures.stopped)
+	}
+}
+
+// TestAcceptanceAClosedSessionLeavesTheTreeAndIsRestoredByUndo is the acting
+// half over the real world: the menu, the confirmation, the actual
+// `kitten @ close-tab`, the reconcile onto a survivor, and the relaunch `u`
+// performs — with no seam replaced anywhere along the way.
+//
+// It is the one scenario in this file that is ALLOWED to write to Kitty, and it
+// says so twice: the permit set names exactly the methods a close and a launch
+// perform, and each is then asserted on what it was CALLED with rather than on
+// having happened. A write this scenario did not ask for is still a violation,
+// so "the overview writes only what an operator asked it to" survives the
+// arrival of twelve actions rather than being retired by it.
+func TestAcceptanceAClosedSessionLeavesTheTreeAndIsRestoredByUndo(t *testing.T) {
+	world := newKittyWorld(acceptanceTabs(4))
+	s := newStage(t, world, 120, 30, 0)
+	s.deliver(jobTopology)
+
+	// Aim at the second session, so the survivor the cursor lands on afterwards
+	// is a genuine choice rather than the only row left.
+	s.press("right")
+	closing := s.m.selectedTabID
+	if closing != acceptanceTabID(1) {
+		t.Fatalf("the cursor is on tab %d, want the second session's %d", closing, acceptanceTabID(1))
+	}
+
+	s.press("a")
+	if s.m.acts.surface != surfaceMenu {
+		t.Fatalf("`a` left surface %v, want the menu", s.m.acts.surface)
+	}
+	s.press("X")
+	if s.m.acts.surface != surfaceConfirm {
+		t.Fatalf("`X` left surface %v, want the confirmation", s.m.acts.surface)
+	}
+	if frame := s.frame(); !strings.Contains(frame, "close") {
+		t.Fatalf("the confirmation does not say what it is about to do:\n%s", frame)
+	}
+	if len(world.callsOf("CloseTab")) != 0 {
+		t.Fatal("the confirmation had already closed the tab before it was answered")
+	}
+
+	world.permitClose()
+	s.press("y")
+	if s.pending(jobAction) != 1 {
+		t.Fatalf("the confirmed close parked %d actions, want 1", s.pending(jobAction))
+	}
+	s.deliver(jobAction)
+
+	if got := world.callsOf("CloseTab"); len(got) != 1 || got[0] != kitty.MatchTabByID(closing) {
+		t.Fatalf("Kitty was asked to close %v, want exactly the confirmed tab %d", got, closing)
+	}
+	if got := world.tabIDs(); len(got) != 3 {
+		t.Fatalf("the world holds %v, want the three surviving tabs", got)
+	}
+
+	// The close reported itself, so the next tree reconciles the cursor onto the
+	// row that took the closed one's place.
+	s.deliver(jobTopology)
+	if len(s.m.sessions) != 3 {
+		t.Fatalf("the refresh left %d sessions, want 3", len(s.m.sessions))
+	}
+	if s.m.selectedTabID != acceptanceTabID(2) {
+		t.Fatalf("the cursor landed on tab %d, want the nearest survivor %d", s.m.selectedTabID, acceptanceTabID(2))
+	}
+	if !s.m.recoverable() {
+		t.Fatal("a confirmed close left nothing to undo")
+	}
+	if frame := s.frame(); !strings.Contains(frame, "u undo") {
+		t.Fatalf("the frame does not offer the undo:\n%s", frame)
+	}
+
+	// And `u` relaunches it: a NEW tab, running the closed session's project
+	// under the profile it had.
+	world.permitLaunch()
+	s.press("u")
+	if s.pending(jobRelaunch) != 1 {
+		t.Fatalf("`u` parked %d relaunches, want 1", s.pending(jobRelaunch))
+	}
+	if len(s.relaunches) != 1 || s.relaunches[0].Session.Title != acceptanceProject(1) {
+		t.Fatalf("the relaunch names %v, want the closed project %q", s.relaunches, acceptanceProject(1))
+	}
+	s.deliver(jobRelaunch)
+
+	if got := world.callsOf("LaunchTab"); len(got) != 1 || got[0] != acceptanceProject(1) {
+		t.Fatalf("Kitty launched %v, want one tab titled %q", got, acceptanceProject(1))
+	}
+	if got := len(world.tabIDs()); got != 4 {
+		t.Fatalf("the world holds %d tabs after the restore, want 4", got)
+	}
+
+	// The refresh the restore asked for shows it back, and the offer is spent.
+	s.deliver(jobTopology)
+	if len(s.m.sessions) != 4 {
+		t.Fatalf("the restored surface lists %d sessions, want 4", len(s.m.sessions))
+	}
+	if s.m.recoverable() {
+		t.Fatal("the claimed close is still offered; a second `u` would launch a second copy")
+	}
+	if frame := s.frame(); !strings.Contains(frame, "restored") {
+		t.Fatalf("the frame does not report the restoration:\n%s", frame)
+	}
+}
+
+// TestAcceptanceBrowsingTheMenusWritesNothing is the control for the scenario
+// above, and the reason the permit set starts empty.
+//
+// Every overlay is opened, browsed, and backed out of — including both
+// destructive confirmations and the profile picker — against a world that
+// permits no write at all. What it asserts is not that nothing happened but that
+// nothing was WRITTEN: the surface still lists, still reads text, and still
+// draws, while the violations list stays empty through the stage's own cleanup.
+func TestAcceptanceBrowsingTheMenusWritesNothing(t *testing.T) {
+	world := newKittyWorld(acceptanceTabs(6))
+	for i := 0; i < 6; i++ {
+		world.setText(acceptanceWindowID(i), "output from "+acceptanceProject(i))
+	}
+	s := newStage(t, world, 120, 30, 0)
+	s.deliver(jobTopology)
+	s.deliver(jobCapture)
+	before := append([]int(nil), world.tabIDs()...)
+
+	s.press("a")
+	for _, name := range []string{"j", "j", "G", "g", "down", "up"} {
+		s.press(name)
+	}
+
+	// Into the confirmation and back out, twice: a decline and an escape.
+	s.press("X")
+	s.press("n")
+	s.press("r")
+	s.press("esc")
+
+	// Into the profile picker and back out.
+	s.press("c")
+	if s.m.acts.surface != surfaceProfile {
+		t.Fatalf("`c` in the menu left surface %v, want the profile picker", s.m.acts.surface)
+	}
+	s.press("j")
+	s.press("esc")
+	s.press("esc")
+
+	if s.m.acts.surface != surfaceGrid {
+		t.Fatalf("backing out of every overlay left surface %v, want the grid", s.m.acts.surface)
+	}
+	if s.pending(jobAction) != 0 || s.pending(jobRelaunch) != 0 {
+		t.Fatalf("browsing parked %d actions and %d relaunches", s.pending(jobAction), s.pending(jobRelaunch))
+	}
+	if len(s.dispatches) != 0 {
+		t.Fatalf("browsing dispatched %v", s.dispatches)
+	}
+	if got := world.tabIDs(); !sameInts(got, before) {
+		t.Fatalf("browsing changed the world's tabs to %v, want %v", got, before)
+	}
+
+	// Still a live surface afterwards: the cadence runs and the tiles repaint.
+	world.setText(acceptanceWindowID(0), "still working")
+	s.captureTick()
+	s.deliver(jobCapture)
+	if got := s.m.previews[acceptanceWindowID(0)].Output; len(got) != 1 || got[0] != "still working" {
+		t.Fatalf("the first tile shows %v after the menus closed, want its newest output", got)
+	}
+	s.refresh()
+	if len(s.m.sessions) != 6 {
+		t.Fatalf("the refresh after browsing lists %d sessions, want 6", len(s.m.sessions))
 	}
 }
 

@@ -108,6 +108,11 @@ func (m model) handleSessions(msg commands.SessionsMsg) (tea.Model, tea.Cmd) {
 	m.loaded = true
 
 	m.lastActivity = msg.Activity
+	// The host is re-resolved by every read rather than captured once. It is the
+	// tab this program is running in, which the shared reader looks up fresh each
+	// time, and a destructive action aimed at it has to be warned about even when
+	// the overview was opened from somewhere else entirely.
+	m.hostTabID, m.hostWindowID = msg.HostTabID, msg.HostWindowID
 	// msg.Watchdog and msg.States are deliberately dropped. The per-window state
 	// the tile paints is already overlaid onto these rows by the shared reader,
 	// and the watchdog is a dashboard status-bar input the grid has no slot for;

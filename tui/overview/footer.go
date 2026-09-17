@@ -46,6 +46,8 @@ func renderFooter(in Input, g Geometry, selected int) string {
 	spatial := canMove(MoveLeft) || canMove(MoveRight) || canMove(MoveUp) || canMove(MoveDown)
 	return strings.Join([]string{
 		footerKeys("focus", footerKey{"Enter", count > 0 && !in.FocusPending}),
+		footerKeys("actions", footerKey{"a", count > 0}),
+		footerKeys("undo close", footerKey{"u", in.Recoverable}),
 		footerKeys("close", footerKey{"q", true}),
 		footerKeys("jump", footerKey{"1–0", count > 0 && !in.FocusPending}),
 		footerKeys(mode, footerKey{"c", !in.Closing}),

@@ -26,6 +26,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
+	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
 
 // recorder stands in for the world: it remembers what the model asked for and
@@ -48,6 +49,35 @@ type recorder struct {
 	// park, when set, receives every dispatched request instead of answering it,
 	// so a test can release replies in whatever order it likes.
 	park chan commands.CaptureRequest
+
+	// dispatches is every session action that reached the effect seam, and
+	// relaunches is every close the recovery stack asked to undo. They are the
+	// two mutating seams, and recording them separately from everything above is
+	// what lets a test say "browsing asked for nothing" as an assertion about a
+	// slice rather than about a count that some other seam also moves.
+	dispatches []sessionactions.Dispatch
+	relaunches []sessionactions.Snapshot
+	// relaunchRequests are the recovery request identities the seam was handed,
+	// which is what a test answers a relaunch with.
+	relaunchRequests []sessionactions.RequestID
+}
+
+// actionIDs names the actions dispatched so far, in order, which is the form
+// every claim about what a keypress ran is written in.
+func (r *recorder) actionIDs() []commands.ID {
+	out := make([]commands.ID, 0, len(r.dispatches))
+	for _, d := range r.dispatches {
+		out = append(out, d.Action)
+	}
+	return out
+}
+
+// lastDispatch is the newest action that reached the seam.
+func (r *recorder) lastDispatch() (sessionactions.Dispatch, bool) {
+	if len(r.dispatches) == 0 {
+		return sessionactions.Dispatch{}, false
+	}
+	return r.dispatches[len(r.dispatches)-1], true
 }
 
 type topologyAsk struct {
@@ -65,6 +95,15 @@ func (r *recorder) install(m *model) {
 		},
 		focus: func(tabID int) tea.Cmd {
 			r.focus = append(r.focus, tabID)
+			return func() tea.Msg { return nil }
+		},
+		action: func(d sessionactions.Dispatch) tea.Cmd {
+			r.dispatches = append(r.dispatches, d)
+			return func() tea.Msg { return nil }
+		},
+		relaunch: func(request sessionactions.RequestID, snapshot sessionactions.Snapshot) tea.Cmd {
+			r.relaunchRequests = append(r.relaunchRequests, request)
+			r.relaunches = append(r.relaunches, snapshot)
 			return func() tea.Msg { return nil }
 		},
 		tick: func(d time.Duration) tea.Cmd {
@@ -182,6 +221,8 @@ func key(t *testing.T, name string) tea.KeyPressMsg {
 		return tea.KeyPressMsg(tea.Key{Code: 'c', Mod: tea.ModCtrl})
 	case "ctrl+r":
 		return tea.KeyPressMsg(tea.Key{Code: 'r', Mod: tea.ModCtrl})
+	case "ctrl+d", "ctrl+u", "ctrl+f", "ctrl+b":
+		return tea.KeyPressMsg(tea.Key{Code: rune(name[len(name)-1]), Mod: tea.ModCtrl})
 	case "left":
 		return tea.KeyPressMsg(tea.Key{Code: tea.KeyLeft})
 	case "right":
@@ -269,6 +310,8 @@ func overviewInput(m model) Input {
 		Feedback:      m.feedback(),
 		FocusPending:  m.focusTabID != 0,
 		Closing:       m.quitAfterPreference,
+		Overlay:       m.overlayView(),
+		Recoverable:   m.recoverable(),
 	}
 }
 

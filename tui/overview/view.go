@@ -178,6 +178,16 @@ type Input struct {
 	Title    string
 	Feedback string
 	Hints    string
+
+	// Overlay is the modal composited over the finished frame, or "" for none.
+	// It arrives already rendered because what is IN it — a menu, a profile
+	// picker, a confirmation — is decided by the action layer, and a renderer
+	// that had to know which of the three it was would be a second place the
+	// modal's identity is stated.
+	Overlay string
+	// Recoverable says whether a close can still be undone, which is the only
+	// thing the footer needs to know about the recovery stack.
+	Recoverable bool
 }
 
 // Render returns exactly Height lines (no trailing newline), each at most Width
@@ -205,7 +215,15 @@ func Render(in Input) string {
 	for i, row := range rows {
 		rows[i] = fitCell(row, in.Width)
 	}
-	return strings.Join(rows, "\n")
+	frame := strings.Join(rows, "\n")
+	if in.Overlay == "" {
+		return frame
+	}
+	// The modal is spliced into the FINISHED frame rather than painted as part
+	// of it, so the fixed-size contract above is what the overlay is composited
+	// against: the compositor dims and replaces cells within the same
+	// Width × Height area and returns the same number of lines.
+	return layout.CenterOverlay(frame, in.Overlay, in.Width, in.Height, true)
 }
 
 // paintChrome fills the reserved rows, dropping them from the least useful up

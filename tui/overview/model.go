@@ -30,6 +30,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
+	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
 
 // defaultRefreshInterval and defaultIdleThreshold are what an unset
@@ -61,9 +62,18 @@ type deps struct {
 	// message it produces carries that sequence back, which is what lets the
 	// controller tell its own completion from one that was superseded.
 	topology func(seq, sourceWindowID int) tea.Cmd
-	// focus acts on one Kitty tab. It is the only Kitty mutation this package can
-	// reach, and only Enter calls it.
+	// focus acts on one Kitty tab. It is the read-only surface's one exception,
+	// reached by Enter, by a digit, and by the menu's Open entry.
 	focus func(tabID int) tea.Cmd
+	// action runs one dispatched session action. Every mutation the grid can ask
+	// for goes through here — and only through here — so an acceptance sequence
+	// can park a close, deliver its completion, and assert that browsing the
+	// grid asked for nothing at all.
+	action func(d sessionactions.Dispatch) tea.Cmd
+	// relaunch restores one closed session from the recovery stack. It is
+	// separate from action because its request identity is the stack's rather
+	// than the controller's; see recovery.go.
+	relaunch func(request sessionactions.RequestID, snapshot sessionactions.Snapshot) tea.Cmd
 	// tick schedules the next interval. tea.Tick fires once, so every handler
 	// that consumes a tick re-arms through here.
 	tick func(d time.Duration) tea.Cmd
@@ -88,7 +98,13 @@ func defaultDeps(cfg *config.Config, client kitty.KittyClient) deps {
 			return commands.RefreshOverview(client, cfg, seq, sourceWindowID)
 		},
 		focus: func(tabID int) tea.Cmd { return commands.Focus(client, tabID) },
-		tick:  commands.Tick,
+		action: func(d sessionactions.Dispatch) tea.Cmd {
+			return actionCommand(cfg, client, d)
+		},
+		relaunch: func(request sessionactions.RequestID, snapshot sessionactions.Snapshot) tea.Cmd {
+			return relaunchCmd(cfg, client, request, snapshot)
+		},
+		tick: commands.Tick,
 		capture: func(req commands.CaptureRequest) tea.Cmd {
 			return commands.CaptureOutput(client, req)
 		},
@@ -138,6 +154,18 @@ type model struct {
 	// sourceTabID marks the managed tab this overview was opened from,
 	// independently of the keyboard selection and across window restarts.
 	sourceTabID int
+
+	// hostTabID and hostWindowID are the tab and window this program is itself
+	// running in, re-resolved by every refresh. They are a separate fact from
+	// sourceTabID, which names the tab the operator came FROM and is spent on the
+	// first snapshot: a destructive action aimed at the HOST takes this surface
+	// with it, and that is what the confirmation has to warn about.
+	hostTabID, hostWindowID int
+
+	// acts is the session-action layer: the shared controller's state, the close
+	// recovery stack, whichever modal is over the grid, and the one sentence the
+	// feedback row carries about an operation.
+	acts actionState
 
 	// previews is keyed by Kitty window ID, the same key tile rendering reads: it
 	// is what each tile SHOWS, and an absent entry is the honest loading state of
@@ -257,6 +285,8 @@ func (m model) View() tea.View {
 		IdleThreshold: m.idleThreshold,
 		Now:           m.deps.now(),
 		Feedback:      m.feedback(),
+		Overlay:       m.overlayView(),
+		Recoverable:   m.recoverable(),
 	}))
 }
 

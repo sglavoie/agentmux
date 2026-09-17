@@ -37,13 +37,10 @@ func renderConfirm(m Model) string {
 // stay here rather than being pushed into a package that names neither.
 func confirmVerbAndTitle(m Model) (verb, title string) {
 	title = dashboard.SessionDisplayTitle(m.targetSession)
+	if text, ok := sessionactions.ConfirmVerbText(m.confirmAction); ok {
+		return text, title
+	}
 	switch m.confirmAction {
-	case sessionactions.ConfirmClose:
-		verb = "Close"
-	case sessionactions.ConfirmRestart:
-		verb = "Restart"
-	case sessionactions.ConfirmReplaceProfile:
-		verb = "Restart under a different profile"
 	case "fork worktree":
 		verb = "Fork in new worktree"
 	case "worktree remove":

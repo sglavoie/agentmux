@@ -119,9 +119,10 @@ func TestSourceCardIsDistinctFromKeyboardSelection(t *testing.T) {
 				tile, _ := g.Tile(index)
 				top := string([]rune(lines[tile.Y])[tile.X : tile.X+tile.Width])
 				wantCorner := "╭"
-				if index == selected {
+				switch index {
+				case selected:
 					wantCorner = "┏"
-				} else if index == 1 {
+				case 1:
 					wantCorner = "╔"
 				}
 				if !strings.HasPrefix(top, wantCorner) {
@@ -568,6 +569,12 @@ func TestATileTooSmallForABoxDropsTheBoxNotTheSession(t *testing.T) {
 // TestASurfaceWithNoRoomForAGridStillSaysWhatItIs. Three rows is exactly the
 // chrome; two is the title and the hints; one is the title. The clipping order is
 // the contract, because a surface that cannot say how to leave it is a trap.
+//
+// The hints row is probed by its FIRST entry rather than by one in the middle of
+// it. The footer has always been longer than eighty cells and is truncated there,
+// so a probe further along was asserting the footer's length as much as its
+// presence, and it broke the moment the actions and undo keys were added ahead of
+// it. The leftmost entry is the one truncation can never remove.
 func TestASurfaceWithNoRoomForAGridStillSaysWhatItIs(t *testing.T) {
 	sessions := viewSessions(3)
 
@@ -575,14 +582,14 @@ func TestASurfaceWithNoRoomForAGridStillSaysWhatItIs(t *testing.T) {
 	if !strings.Contains(three[0], DefaultTitle) {
 		t.Errorf("a three-row surface says %q on its first row", three[0])
 	}
-	if !strings.Contains(three[2], "hjkl") {
+	if !strings.Contains(three[2], "Enter focus") {
 		t.Errorf("a three-row surface says %q on its last row", three[2])
 	}
 
 	in := viewInput(80, 2, sessions)
 	in.Feedback = "dropped first"
 	two := plain(renderLines(t, in))
-	if !strings.Contains(two[0], DefaultTitle) || !strings.Contains(two[1], "hjkl") {
+	if !strings.Contains(two[0], DefaultTitle) || !strings.Contains(two[1], "Enter focus") {
 		t.Errorf("a two-row surface is %q / %q, want the title and the hints", two[0], two[1])
 	}
 	if strings.Contains(strings.Join(two, ""), "dropped first") {
@@ -652,18 +659,31 @@ func sameOrder(a, b []session.RunningSession) bool {
 	return true
 }
 
-// The package has two halves and they are held to two different structural
-// rules, so every file has to be classified as one or the other. The lists below
-// are the classification, and parsePackage fails on a file that is in neither —
-// which is what makes adding a file a deliberate act rather than a way to opt out
-// of both allowlists.
+// The package has three halves — the arithmetic is the point — and each is held
+// to its own structural rule, so every file has to be classified as exactly one.
+// The lists below are the classification, and parsePackage fails on a file that
+// is in none, which is what makes adding a file a deliberate act rather than a
+// way to opt out of every allowlist.
 //
 // renderingFiles are pure: a session slice, a preview map and a supplied Now go
-// in, and a string comes out. lifecycleFiles are the running program: they start
-// commands, read the clock, and hold the state the renderer is handed.
+// in, and a string comes out.
+//
+// lifecycleFiles are the running program's OBSERVING half: they start commands,
+// read the clock, and hold the state the renderer is handed. Their allowlist is
+// the one that pins "browsing the overview cannot change anything" — every
+// navigation key, every refresh, and every capture lands in one of these files,
+// and none of them may name a command that writes.
+//
+// actionFiles are the running program's ACTING half, and splitting them out is
+// what keeps that claim assertable now that the grid offers the twelve session
+// actions. The mutations exist, but they exist in exactly three files, they are
+// all reached through a dispatched action, and the observing half still cannot
+// name one of them — which is a sharper statement than the single lifecycle
+// allowlist could make once it had to admit commands.Close.
 var (
 	renderingFiles = []string{"chrome.go", "footer.go", "grid.go", "nav.go", "order.go", "view.go"}
 	lifecycleFiles = []string{"capture.go", "model.go", "preferences.go", "refresh.go", "status.go", "update.go"}
+	actionFiles    = []string{"action_keys.go", "actions.go", "recovery.go"}
 )
 
 // parsePackage parses every non-test file in the package and returns them keyed
@@ -692,9 +712,12 @@ func parsePackage(t *testing.T) map[string]*ast.File {
 	}
 
 	classified := map[string]bool{}
-	for _, name := range append(append([]string{}, renderingFiles...), lifecycleFiles...) {
+	all := append([]string{}, renderingFiles...)
+	all = append(all, lifecycleFiles...)
+	all = append(all, actionFiles...)
+	for _, name := range all {
 		if classified[name] {
-			t.Errorf("%s is classified twice; it would be held to both rules and to neither exclusively", name)
+			t.Errorf("%s is classified twice; it would be held to two rules and to none exclusively", name)
 		}
 		classified[name] = true
 		if !onDisk[name] {
@@ -703,7 +726,7 @@ func parsePackage(t *testing.T) map[string]*ast.File {
 	}
 	for name := range onDisk {
 		if !classified[name] {
-			t.Errorf("%s is in neither renderingFiles nor lifecycleFiles; classify it so it is held to one of the two structural rules", name)
+			t.Errorf("%s is in none of renderingFiles, lifecycleFiles, or actionFiles; classify it so it is held to one of the three structural rules", name)
 		}
 	}
 
@@ -817,6 +840,10 @@ func TestTheLifecycleHalfReachesTheWorldOnlyThroughItsSeams(t *testing.T) {
 		"github.com/sglavoie/agentmux/internal/session":         true,
 		"github.com/sglavoie/agentmux/tui/commands":             true,
 		"github.com/sglavoie/agentmux/tui/dashboard":            true, // shared NeedsYou predicate
+		// The session-action vocabulary is types only on this side: the two
+		// action seams' signatures and the actionState field. Naming it here does
+		// not weaken the rule below, which is about the CALLS a file makes.
+		"github.com/sglavoie/agentmux/tui/sessionactions": true,
 	}
 	allowedCommands := map[string]bool{
 		"commands.OverviewPreferences": true, // only c changes this daemon-lifetime UI setting
@@ -857,6 +884,98 @@ func TestTheLifecycleHalfReachesTheWorldOnlyThroughItsSeams(t *testing.T) {
 	delete(clockCallers, "model.go")
 	for name := range clockCallers {
 		t.Errorf("%s calls the machine clock; the lifecycle's clock is the deps.now seam bound in model.go", name)
+	}
+}
+
+// TestTheActingHalfMutatesOnlyThroughADispatchedAction is the acting half's
+// structural rule.
+//
+// The observing half's rule above says a navigation key cannot reach Kitty
+// because there is no call it could reach it through. This one says where those
+// calls ARE, and it is deliberately an allowlist rather than a permission: every
+// entry is an effect that some session action dispatches, and a command appearing
+// here that no definition names would be a mutation the grid can perform outside
+// the controller — which is precisely the thing the shared controller exists to
+// make impossible.
+//
+// The clock rule is the same as the lifecycle's and matters more here, because
+// two of the things this half decides are timed: how long a report stays on the
+// feedback row, and how long a close stays undoable. Both read deps.now, so an
+// acceptance sequence can advance a frozen clock past a five-second recovery
+// window without sleeping.
+func TestTheActingHalfMutatesOnlyThroughADispatchedAction(t *testing.T) {
+	allowedImports := map[string]bool{
+		"context": true, // the registry's Execute takes one
+		"fmt":     true,
+		"time":    true,
+
+		"charm.land/bubbletea/v2": true,
+
+		"github.com/sglavoie/agentmux/internal/actions":   true, // the shared typed action registry
+		"github.com/sglavoie/agentmux/internal/config":    true,
+		"github.com/sglavoie/agentmux/internal/kitty":     true, // the client type, handed to the seams
+		"github.com/sglavoie/agentmux/internal/session":   true,
+		"github.com/sglavoie/agentmux/tui/commands":       true,
+		"github.com/sglavoie/agentmux/tui/dashboard":      true,
+		"github.com/sglavoie/agentmux/tui/launch":         true, // the model-free profile picker
+		"github.com/sglavoie/agentmux/tui/sessionactions": true,
+	}
+	// Every entry is dispatched by one of the twelve menu definitions, plus the
+	// stamping and correlation the controller requires and the two lookups that
+	// resolve a captured row's configured project.
+	allowedCommands := map[string]bool{
+		"commands.Peek":                     true,
+		"commands.Restart":                  true,
+		"commands.ClearStatus":              true,
+		"commands.Close":                    true,
+		"commands.OpenDirectory":            true,
+		"commands.OpenInEditor":             true,
+		"commands.CopyTitle":                true,
+		"commands.ToggleLock":               true,
+		"commands.ToggleMute":               true,
+		"commands.StampRequest":             true,
+		"commands.FindConfigSession":        true,
+		"commands.FindAccountByName":        true,
+		"commands.DashboardSessionTemplate": true,
+		"commands.SessionWithProfile":       true,
+		"commands.RenderActionsBox":         true,
+	}
+
+	files := parsePackage(t)
+	if len(actionFiles) == 0 {
+		t.Fatal("no files are classified as the acting half; every assertion below would pass vacuously")
+	}
+	for _, name := range actionFiles {
+		file, ok := files[name]
+		if !ok {
+			continue
+		}
+		assertImports(t, name, file, allowedImports, "acting")
+
+		for _, call := range selectorCalls(file) {
+			if strings.HasPrefix(call, "commands.") && !allowedCommands[call] {
+				t.Errorf("%s calls %s; every effect here must be one a session action dispatches", name, call)
+			}
+			if call == "time.Now" || call == "time.Since" {
+				t.Errorf("%s calls the machine clock; the acting half's clock is the deps.now seam", name)
+			}
+		}
+	}
+
+	// The registry is reached from here and nowhere else. Two actions need it —
+	// restarting under another profile and launching a second session — and the
+	// recovery stack's relaunch is the third; a call to it from the observing
+	// half would be a mutation outside a dispatch.
+	for _, name := range append(append([]string{}, renderingFiles...), lifecycleFiles...) {
+		file, ok := files[name]
+		if !ok {
+			continue
+		}
+		for _, call := range selectorCalls(file) {
+			if strings.HasPrefix(call, "actions.") {
+				t.Errorf("%s calls %s; the typed action registry is the acting half's", name, call)
+			}
+		}
 	}
 }
 

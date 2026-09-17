@@ -207,70 +207,17 @@ func actionFeedbackToastID(request sessionactions.RequestID) int {
 	return -int(request) - 1
 }
 
-// actionFeedback is what one action says about itself at each stage of one
-// dispatch. The four are written side by side because the difference between
-// them is the whole point: succeeded is past tense and may only be said about an
-// operation that reported success, unconfirmed says what was asked for without
-// claiming it happened, and failed names the verb that did not work.
-type actionFeedback struct {
-	pending     string
-	succeeded   string
-	unconfirmed string
-	failed      string
-}
-
-// feedbackFor is the wording table. It covers the four actions that change a
-// session's lifecycle and nothing else: focus, peek, lock, mute, copy, and the
-// surfaces that open something are their own feedback, and a toast for each of
-// them would be three lines of noise over a dashboard that already shows the
-// result.
-//
-// The clear-status wording is deliberately the odd one out. That action asks the
-// daemon to drop its guard and the daemon's renderer owns the title, so the
-// dashboard never learns whether the icon changed; it says what it requested
-// rather than claiming a state it cannot see.
-func feedbackFor(action commands.ID, label, profile string) (actionFeedback, bool) {
-	switch action {
-	case commands.CloseSession:
-		return actionFeedback{
-			pending:     fmt.Sprintf("closing %s…", label),
-			succeeded:   fmt.Sprintf("closed %s", label),
-			unconfirmed: fmt.Sprintf("close requested for %s · not confirmed", label),
-			failed:      fmt.Sprintf("close failed for %s", label),
-		}, true
-	case commands.RestartSession:
-		return actionFeedback{
-			pending:     fmt.Sprintf("restarting %s…", label),
-			succeeded:   fmt.Sprintf("restarted %s", label),
-			unconfirmed: fmt.Sprintf("restart requested for %s · not confirmed", label),
-			failed:      fmt.Sprintf("restart failed for %s", label),
-		}, true
-	case commands.OverrideProfile:
-		return actionFeedback{
-			pending:     fmt.Sprintf("restarting %s under %s…", label, profile),
-			succeeded:   fmt.Sprintf("restarted %s under %s", label, profile),
-			unconfirmed: fmt.Sprintf("restart requested for %s under %s · not confirmed", label, profile),
-			failed:      fmt.Sprintf("restart failed for %s under %s", label, profile),
-		}, true
-	case commands.ClearStatusIcon:
-		requested := fmt.Sprintf("requested status clear on %s", label)
-		return actionFeedback{
-			pending:     fmt.Sprintf("clearing the status icon on %s…", label),
-			succeeded:   requested,
-			unconfirmed: requested,
-			failed:      fmt.Sprintf("status clear failed for %s", label),
-		}, true
-	default:
-		return actionFeedback{}, false
-	}
-}
+// The wording itself lives in tui/sessionactions, beside the definitions the
+// palette and the overlay already read. The overview reports the same four
+// operations on its single feedback row, and a table held here would have been
+// copied there and then edited in one place.
 
 // beginActionFeedback reports that a dispatched action is in flight. The toast
 // lives on the dispatch's own channel, so the outcome replaces it rather than
 // piling on top of it, and it carries the progress TTL so an operation that
 // never reports back still clears itself.
 func (m *Model) beginActionFeedback(request sessionactions.RequestID, action commands.ID, label, profile string) tea.Cmd {
-	wording, ok := feedbackFor(action, label, profile)
+	wording, ok := sessionactions.FeedbackFor(action, label, profile)
 	if !ok {
 		return nil
 	}
@@ -280,7 +227,7 @@ func (m *Model) beginActionFeedback(request sessionactions.RequestID, action com
 	}
 	return m.replaceToastByID(actionFeedbackToastID(request), Toast{
 		Severity: toastInfo,
-		Text:     wording.pending,
+		Text:     wording.Pending,
 		Expires:  modelNow(*m).Add(ttl),
 	})
 }
@@ -302,7 +249,7 @@ func (m *Model) withActionFeedback(d sessionactions.Dispatch, cmd tea.Cmd) tea.C
 // nothing, which is what an action that never announced itself should do.
 func (m *Model) reportActionOutcome(result sessionactions.Result) tea.Cmd {
 	id := actionFeedbackToastID(result.Request)
-	wording, ok := feedbackFor(result.Action, sessionLabel(result.Target), result.Profile)
+	wording, ok := sessionactions.FeedbackFor(result.Action, sessionLabel(result.Target), result.Profile)
 	if !ok {
 		m.clearToastByID(id)
 		return nil
@@ -310,11 +257,11 @@ func (m *Model) reportActionOutcome(result sessionactions.Result) tea.Cmd {
 	toast := Toast{Expires: modelNow(*m).Add(defaultToastTTL)}
 	switch result.Outcome {
 	case sessionactions.OutcomeSucceeded:
-		toast.Severity, toast.Text = toastSuccess, wording.succeeded
+		toast.Severity, toast.Text = toastSuccess, wording.Succeeded
 	case sessionactions.OutcomeUnconfirmed:
-		toast.Severity, toast.Text = toastWarning, wording.unconfirmed
+		toast.Severity, toast.Text = toastWarning, wording.Unconfirmed
 	case sessionactions.OutcomeFailed:
-		toast.Severity, toast.Text = toastError, failureText(wording.failed, result.Detail)
+		toast.Severity, toast.Text = toastError, sessionactions.FailureText(wording.Failed, result.Detail)
 	default:
 		// Refused and cancelled never reach here: they are decided before an
 		// effect runs and reported by the step the controller returns.
@@ -322,13 +269,6 @@ func (m *Model) reportActionOutcome(result sessionactions.Result) tea.Cmd {
 		return nil
 	}
 	return m.replaceToastByID(id, toast)
-}
-
-func failureText(verb, detail string) string {
-	if detail == "" {
-		return verb
-	}
-	return verb + ": " + detail
 }
 
 // sessionLabel is what to call a target in a sentence.

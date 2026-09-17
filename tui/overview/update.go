@@ -48,6 +48,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleRefreshErr(msg)
 	case commands.FocusDoneMsg:
 		return m.handleFocusDone(msg)
+	case commands.ActionDoneMsg:
+		return m.handleActionDone(msg)
+	case commands.PickerOpenDoneMsg:
+		return m.handlePickerOpenDone(msg)
+	case commands.PeekDoneMsg:
+		return m.handlePeekDone(msg)
+	case recoveryDoneMsg:
+		return m.handleRecoveryDone(msg)
 	case tea.KeyPressMsg:
 		return m.handleKeyPress(msg)
 	}
@@ -80,6 +88,10 @@ func (m model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 // interval produced a read. The controller decides whether this tick costs a
 // command; the ticker only decides that there will be another tick.
 func (m model) handleTick(commands.TickMsg) (tea.Model, tea.Cmd) {
+	// The recovery stack expires by deadline on every read, so sweeping is not
+	// what keeps the offer honest — it is what keeps the stack from carrying
+	// entries nobody can be shown after a run of closes nobody undid.
+	m.acts.recovery = m.acts.recovery.Sweep(m.deps.now())
 	cmds := []tea.Cmd{m.deps.tick(m.interval)}
 	if cmd := m.requestRefresh(); cmd != nil {
 		cmds = append(cmds, cmd)
@@ -87,13 +99,39 @@ func (m model) handleTick(commands.TickMsg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// handleKeyPress maps a key onto dismissal, focus, or a move.
+// handleKeyPress routes a key to whichever surface is in front.
+//
+// The modal check comes FIRST and the grid's own table is only reached when
+// nothing is over it. That ordering is the whole safety property of this layer
+// rather than a tidiness preference: `c` is the grid's compact toggle and also
+// the menu's mnemonic for restarting under another profile, and the digits that
+// focus a tile are ordinary characters an overlay may want. A router that tried
+// the grid first would answer both from underneath the overlay, which is an
+// operator acting on a surface they cannot see.
 func (m model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch m.acts.surface {
+	case surfaceMenu:
+		return m.handleMenuKey(msg)
+	case surfaceProfile:
+		return m.handleProfileKey(msg)
+	case surfaceConfirm:
+		return m.handleConfirmKey(msg)
+	}
+	return m.handleGridKey(msg)
+}
+
+// handleGridKey maps a key onto dismissal, focus, an action, an undo, or a move.
+func (m model) handleGridKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q", "ctrl+c":
 		return m.dismiss()
 	case "enter":
 		return m.requestFocus()
+	case "a":
+		m.openActionsMenu()
+		return m, nil
+	case "u":
+		return m, m.undoLastClose()
 	case "c":
 		return m.toggleCompact()
 	case "n":
@@ -229,16 +267,26 @@ func (m model) focusIndex(index int) (tea.Model, tea.Cmd) {
 // command whose completion arrived after the program had already been told to
 // quit on the first.
 func (m model) requestFocus() (tea.Model, tea.Cmd) {
-	if m.focusTabID != 0 {
-		return m, nil
-	}
 	target, ok := m.selectedSession()
 	if !ok {
 		return m, nil
 	}
-	m.focusTabID = target.TabID
+	next, cmd := m.focusCapturedTab(target.TabID)
+	return next, cmd
+}
+
+// focusCapturedTab dispatches the focus against a tab that has already been
+// captured. It is the single-flight gate itself, factored out of requestFocus so
+// the menu's Open entry — which captured its tab when the menu opened, possibly
+// several refreshes ago — reaches exactly the same path as Enter rather than a
+// second one that could drift from it.
+func (m model) focusCapturedTab(tabID int) (model, tea.Cmd) {
+	if m.focusTabID != 0 || tabID == 0 {
+		return m, nil
+	}
+	m.focusTabID = tabID
 	m.focusErr = nil
-	return m, m.deps.focus(target.TabID)
+	return m, m.deps.focus(tabID)
 }
 
 // handleFocusDone quits on success and reports the failure otherwise.
