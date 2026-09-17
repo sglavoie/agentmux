@@ -91,6 +91,7 @@ func TestIconPickerRowsUseStableHarnessOrderAndOmitMissing(t *testing.T) {
 	if got, want := m.items, []iconPickerItem{
 		{name: "claude", emoji: "⭕"},
 		{name: "codex", emoji: "📟"},
+		{name: "None (clear icon)"},
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("items = %#v, want %#v", got, want)
 	}
@@ -125,8 +126,8 @@ func TestIconPickerNavigationWrapsAndCancellationDoesNotWrite(t *testing.T) {
 
 	updated, _ := m.Update(iconPickerKey("up"))
 	m = updated.(iconPickerModel)
-	if m.cursor != 2 {
-		t.Fatalf("up from first cursor = %d, want 2", m.cursor)
+	if m.cursor != 3 {
+		t.Fatalf("up from first cursor = %d, want 3", m.cursor)
 	}
 	updated, _ = m.Update(iconPickerKey("down"))
 	m = updated.(iconPickerModel)
@@ -135,8 +136,8 @@ func TestIconPickerNavigationWrapsAndCancellationDoesNotWrite(t *testing.T) {
 	}
 	updated, _ = m.Update(iconPickerKey("k"))
 	m = updated.(iconPickerModel)
-	if m.cursor != 2 {
-		t.Fatalf("k from first cursor = %d, want 2", m.cursor)
+	if m.cursor != 3 {
+		t.Fatalf("k from first cursor = %d, want 3", m.cursor)
 	}
 	updated, _ = m.Update(iconPickerKey("j"))
 	m = updated.(iconPickerModel)
@@ -335,6 +336,55 @@ func TestIconPickerPreservesUnrecognizedLeadingGlyph(t *testing.T) {
 
 	if got, want := client.titleCalls[0].title, "📟🛸project"; got != want {
 		t.Fatalf("title = %q, want %q", got, want)
+	}
+}
+
+func TestIconPickerClearsHarnessIconAndPreservesLiveTitle(t *testing.T) {
+	emojis := map[string]string{"claude": "⭕", "copilot": "🚁", "codex": "📟"}
+	for _, prefix := range []string{"⭕", "🚁", "📟", "", "🛸"} {
+		t.Run(prefix, func(t *testing.T) {
+			liveParts := palette.TitleParts{
+				Base:    prefix + "renamed / live",
+				State:   "warning",
+				Starred: true,
+				Muted:   true,
+				Looping: true,
+			}
+			client := &fakeIconPickerClient{windows: []kitty.OSWindow{{
+				Tabs: []kitty.Tab{{ID: 8, Title: palette.BuildTitleParts(liveParts)}},
+			}}}
+			m := mustIconPickerModel(t, IconContext{
+				Client:        client,
+				TabID:         8,
+				CurrentTitle:  "⭕old-name",
+				HarnessEmojis: emojis,
+			})
+			// Up from the first harness selects the clear option.
+			updated, _ := m.Update(iconPickerKey("up"))
+			m = updated.(iconPickerModel)
+			if view := stripAnsi(m.View().Content); !strings.Contains(view, "None (clear icon)") {
+				t.Fatalf("clear option missing from picker: %q", view)
+			}
+			updated, cmd := m.Update(iconPickerKey("enter"))
+			m = updated.(iconPickerModel)
+			if cmd == nil || !m.applied || m.err != nil {
+				t.Fatalf("clear: cmd nil=%v applied=%v err=%v", cmd == nil, m.applied, m.err)
+			}
+
+			liveParts.Base = "renamed / live"
+			if prefix == "🛸" {
+				liveParts.Base = prefix + liveParts.Base
+			}
+			want := palette.BuildTitleParts(liveParts)
+			if len(client.titleCalls) != 1 || client.titleCalls[0] != (setTabTitleCall{
+				matchExpr: kitty.MatchTabByID(8), title: want,
+			}) {
+				t.Fatalf("title calls = %#v, want tab 8 title %q", client.titleCalls, want)
+			}
+			if client.userWrites != 0 {
+				t.Fatalf("SetUserVars writes = %d, want 0", client.userWrites)
+			}
+		})
 	}
 }
 

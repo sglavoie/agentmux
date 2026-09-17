@@ -37,7 +37,7 @@ type iconPickerModel struct {
 var errNoHarnessIcons = errors.New("no harness icons configured in [harness_emojis]")
 
 func newIconPickerModel(ctx IconContext) (iconPickerModel, error) {
-	items := make([]iconPickerItem, 0, len(harness.Names()))
+	items := make([]iconPickerItem, 0, len(harness.Names())+1)
 	for _, name := range harness.Names() {
 		emoji := ctx.HarnessEmojis[name]
 		if emoji == "" {
@@ -48,11 +48,12 @@ func newIconPickerModel(ctx IconContext) (iconPickerModel, error) {
 	if len(items) == 0 {
 		return iconPickerModel{}, errNoHarnessIcons
 	}
+	items = append(items, iconPickerItem{name: "None (clear icon)"})
 
 	base := palette.ParseTitleParts(ctx.CurrentTitle).Base
 	cursor := 0
 	for i, item := range items {
-		if strings.HasPrefix(base, item.emoji) {
+		if item.emoji != "" && strings.HasPrefix(base, item.emoji) {
 			cursor = i
 			break
 		}

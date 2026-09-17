@@ -25,7 +25,7 @@ func IconPickerCommand() *cobra.Command { return iconPickerCmd }
 
 var iconPickerCmd = &cobra.Command{
 	Use:   "icon-picker",
-	Short: "Set the current tab's harness icon (overlay picker)",
+	Short: "Set or clear the current tab's harness icon (overlay picker)",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newIconPickerClient()
