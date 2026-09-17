@@ -14,10 +14,16 @@ import (
 // the user sees in the overlay (e.g. "⏎"); KeyMatch is the literal msg.String()
 // value the handler compares against (e.g. "enter").
 //
+// ID is the same stable identity the palette files the action under, so an
+// overlay entry and a palette row can be shown to be the same action rather
+// than two things that happen to be worded alike. It is display-irrelevant:
+// dispatch is by KeyMatch, as it has to be for a key the operator presses.
+//
 // Like Command, the type parameter is the root program model: Available reads
 // live model state (last activity, idle threshold, configured project) and Run
 // returns the mutated model plus its effect, both as closures the root owns.
 type Action[M any] struct {
+	ID          ID
 	KeyDisplay  string
 	KeyMatch    string
 	Label       string

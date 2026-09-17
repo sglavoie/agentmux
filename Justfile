@@ -47,9 +47,12 @@ fmt-check:
 # `./tui` does not include its subpackages. `./tui/commands` owns the live
 # topology reads and the package-level seams tests swap, and `./tui/overview`
 # runs its own Bubble Tea program with reads in flight, so both are named here
-# rather than inherited.
+# rather than inherited. `./tui/sessionactions` is named for a different
+# reason: it is one declaration read by two surfaces, and it owes each caller an
+# independent value, so a later attempt to hand out a cached slice or map has to
+# fail here rather than in whichever goroutine happened to write to it.
 race-core:
-    go test -race ./internal/transcript ./internal/plans ./internal/handoff ./internal/worktree ./internal/kitty ./internal/daemon ./tui ./tui/commands ./tui/overview
+    go test -race ./internal/transcript ./internal/plans ./internal/handoff ./internal/worktree ./internal/kitty ./internal/daemon ./tui ./tui/commands ./tui/overview ./tui/sessionactions
 
 # Run every committed narrow/wide TUI acceptance scenario in isolation.
 tui-scenarios:

@@ -506,6 +506,27 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   recording client records a violation for every write method, and a dedicated
   test asserts that an overview retrieval leaves a pending selection request
   intact for the dashboard to consume afterwards.
+- `tui/sessionactions`: what a session action IS, declared once for the two
+  dashboard entry points that offer it — the per-row actions overlay and the
+  command palette. It holds the stable `commands.ID` identity, both surfaces'
+  wordings side by side (the overlay's label and one-line description, the
+  palette's title, description, and aliases) rather than merged into one, the
+  mnemonic, the menu band, and the availability rule that decides whether the
+  action may run against a row. Keeping the two wordings in one declaration is
+  the point: the surfaces are allowed to read differently, but they must not be
+  allowed to disagree about which actions exist or when each one is permitted,
+  which is what two tables of rules had let them do. It also owns the captured
+  `Target` — a row snapshot, from which tab and window identity are read rather
+  than stored beside it, so an action cannot be retargeted by a topology refresh
+  between selection and dispatch — and the `Result` contract carrying action
+  identity, request identity, and an outcome that keeps a refusal distinct from a
+  failure. It names no host model and imports neither `tui` nor any surface
+  above it, so the dependency direction stays `tui` → `tui/sessionactions` →
+  `tui/commands` → `tui/dashboard`. What an action DOES stays in the root, which
+  supplies the runner and the executor for each identity; a definition the root
+  has no implementation for is dropped rather than rendered, and the root's
+  `TestOverlayOffersEveryMenuDefinition` and
+  `TestPaletteOffersEverySessionDefinition` are what report it.
 - `tui/overview`: the live session overview — the standalone Bubble Tea program
   `amx overview` and `F2` open, showing every managed session at once as a grid
   of live pane previews. Like `tui/customization` it is a sibling of the root
