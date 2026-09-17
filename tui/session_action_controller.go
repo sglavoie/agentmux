@@ -179,6 +179,7 @@ func dismissSessionActionSurfaces(m Model) Model {
 	m.closeCommandPalette()
 	m.exitActionsMode()
 	m.actionsOffset = 0
+	m.actionsCursor = 0
 	m.clearSessionActionPrompt()
 	m.mode = ModeList
 	return m
@@ -200,8 +201,9 @@ func restoreSessionActionOrigin(m Model, pending sessionactions.Pending) Model {
 		m.targetSession = pending.Target.Session
 		m.actionsReturnMode = ModeList
 		m.mode = ModeActions
+		m.actionsCursor = pending.Origin.MenuCursor
 		m.actionsOffset = pending.Origin.MenuOffset
-		clampActionsOffset(&m)
+		clampActionsSelection(&m)
 	case sessionactions.SurfacePalette:
 		m.mode = ModeCommandPalette
 		m.commandContext = pending.Target.Context()
@@ -228,7 +230,11 @@ func (m *Model) clearSessionActionPrompt() {
 
 // menuActionOrigin is where the per-row menu is, as an origin to come back to.
 func menuActionOrigin(m Model) sessionactions.Origin {
-	return sessionactions.Origin{Surface: sessionactions.SurfaceMenu, MenuOffset: m.actionsOffset}
+	return sessionactions.Origin{
+		Surface:    sessionactions.SurfaceMenu,
+		MenuCursor: m.actionsCursor,
+		MenuOffset: m.actionsOffset,
+	}
 }
 
 // paletteActionOrigin is the palette's query and selection, captured before the

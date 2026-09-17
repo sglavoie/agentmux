@@ -140,7 +140,7 @@ func paletteWrappedText(text string, width int) []string {
 	if width < 1 {
 		width = 1
 	}
-	logical := wrapText(text, width)
+	logical := layout.WrapWords(text, width)
 	if len(logical) == 0 {
 		return []string{""}
 	}

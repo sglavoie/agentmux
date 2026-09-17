@@ -12,6 +12,7 @@ package tui
 
 import (
 	tea "charm.land/bubbletea/v2"
+	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/sessionactions"
@@ -57,12 +58,13 @@ func actionsFor(_ Model) []commands.Action[Model] {
 		}
 		actions = append(actions, commands.Action[Model]{
 			ID:          definition.ID,
+			Band:        definition.MenuGroup.String(),
 			KeyDisplay:  definition.Mnemonic.Display,
 			KeyMatch:    definition.Mnemonic.Key,
 			Label:       definition.MenuLabel,
 			Description: definition.MenuDescription,
-			Available: func(m Model) bool {
-				return definition.AvailabilityFor(sessionActionEnv(m), overlayTarget(m)).Available
+			Availability: func(m Model) commands.Availability {
+				return definition.AvailabilityFor(sessionActionEnv(m), overlayTarget(m))
 			},
 			Run: run,
 		})
@@ -103,6 +105,18 @@ func (m *Model) exitActionsMode() {
 	m.actionsReturnMode = ModeList
 }
 
+// openActionsMenu captures the row the menu will act on and puts the cursor on
+// the entry sessionactions says a fresh menu opens with. Both entry points into
+// ModeActions go through it, so "which entry is selected when the menu opens" is
+// answered once rather than wherever a mode assignment happens to be written.
+func (m *Model) openActionsMenu(target session.RunningSession) {
+	m.targetSession = target
+	m.actionErr = nil
+	m.actionsOffset = 0
+	m.actionsCursor = sessionactions.MenuIndexOf(sessionactions.InitialSelection())
+	m.mode = ModeActions
+}
+
 // This file is also the seam between the root Bubble Tea model and the actions-
 // overlay half of tui/commands. It projects the model onto the leaf's input
 // value and re-exposes the leaf's geometry, scrolling, and renderers under the
@@ -112,29 +126,42 @@ func (m *Model) exitActionsMode() {
 // actionsInput charges the root's own chrome against the body height before
 // handing it to the leaf, which knows nothing about the header, footer, or
 // status bar surrounding the modal.
+//
+// The qualifier is measured here rather than in the leaf because a name
+// collision is a property of the LIVE SET and the leaf can see one session. Two
+// rows called `api` offer the same twelve actions, and the menu's header is the
+// only place it says which of them is about to be closed.
 func actionsInput(m Model) commands.ActionsInput[Model] {
 	return commands.ActionsInput[Model]{
 		Model:      m,
 		Actions:    actionsFor(m),
 		Title:      dashboard.SessionDisplayTitle(m.targetSession),
+		Qualifier:  dashboard.NewNameDisambiguator(m.sessions).Qualifier(m.targetSession),
+		Context:    dashboard.SessionContextLine(m.targetSession),
+		Cursor:     m.actionsCursor,
 		Offset:     m.actionsOffset,
 		Width:      m.width,
 		BodyHeight: rootBodyHeight(m),
 	}
 }
 
-func renderActions(m Model, descWidth int) string {
-	return commands.RenderActions(actionsInput(m), descWidth)
-}
+func renderActions(m Model) string { return commands.RenderActions(actionsInput(m)) }
 
 func renderActionsBox(m Model) string { return commands.RenderActionsBox(actionsInput(m)) }
 
-func actionsScrollBounds(m Model) (total, visible int) { return actionsInput(m).ScrollBounds() }
-
-func clampActionsOffset(m *Model) {
+// clampActionsSelection confines the cursor to the entries that exist and then
+// scrolls the window to hold it. The two are done together, in that order,
+// because a cursor the window has not been told about is the disappearing
+// selection this menu is required not to have: every path that moves the cursor
+// or resizes the terminal ends here.
+func clampActionsSelection(m *Model) {
 	if m.mode != ModeActions {
+		m.actionsCursor = 0
 		m.actionsOffset = 0
 		return
 	}
-	m.actionsOffset = actionsInput(*m).ClampOffset()
+	in := actionsInput(*m)
+	m.actionsCursor = in.ClampCursor()
+	in.Cursor = m.actionsCursor
+	m.actionsOffset = in.ScrollToCursor()
 }

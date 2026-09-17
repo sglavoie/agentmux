@@ -182,8 +182,15 @@ type Model struct {
 	// last error from a close/restart action
 	actionErr error
 
-	// actionsOffset is the first visible rendered action row in the per-row
-	// actions overlay. Reset to 0 whenever the overlay is opened or closed.
+	// actionsCursor is the selected entry in the per-row session menu, indexing
+	// sessionactions.MenuDefinitions rather than the menu's display rows: a band
+	// rule is not selectable, and an index into rows would move under this model
+	// whenever a band boundary did. A freshly opened menu puts it on
+	// sessionactions.InitialSelection.
+	actionsCursor int
+	// actionsOffset is the first visible rendered menu row. It follows the cursor
+	// rather than being steered on its own, so the selection can never scroll out
+	// of the window; both are reset when the menu is opened or closed.
 	actionsOffset int
 	// actionsReturnMode preserves the source surface behind the generic row
 	// actions overlay. Its zero value is ModeList for legacy callers.

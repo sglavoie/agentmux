@@ -31,7 +31,7 @@ func TestActionsHeaderPadsEmojiTitleIcon(t *testing.T) {
 		{TabID: 1, WindowID: 10, Base: "🗣commscoach", Project: "🗣commscoach", Account: "work", State: "bolt"},
 	})
 	m = openActionsOverlay(t, m)
-	out := stripAnsi(renderActions(m, 80))
+	out := stripAnsi(renderActions(m))
 	if !strings.Contains(out, "Actions for 🗣commscoach") {
 		t.Errorf("expected title-icon column without phantom space in actions header, got:\n%s", out)
 	}

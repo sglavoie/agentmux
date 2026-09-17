@@ -248,8 +248,13 @@ func detectModalFitIssues(m Model) []UITestLayoutIssue {
 // The health details do the same with their diagnostic lines, and for a sharper
 // reason: half a remedy or half an error is not a shorter reading of the issue,
 // it is a different and wrong one.
+// The actions menu is here for the same reason as the palette: it wraps the
+// selected entry's description and its unavailability reason to the live
+// content width and sheds its own chrome rather than rendering a fixed 72-column
+// block and letting the box clip it. A narrow reading of it is a complete menu,
+// not a truncated one.
 func modalUsesResponsiveWidth(mode Mode) bool {
-	return mode == ModeCommandPalette || mode == ModeLiveSessionPicker || mode == ModeASLResponse || mode == ModeHealth
+	return mode == ModeCommandPalette || mode == ModeActions || mode == ModeLiveSessionPicker || mode == ModeASLResponse || mode == ModeHealth
 }
 
 // popupLineCount returns the number of rows a popup box occupies, matching the
@@ -272,11 +277,18 @@ func popupLineCount(popup string) int {
 // position relevant to that mode, and the normalized screen with any layout
 // issues attached — both the screen-level checks (line/height overflow, invalid
 // UTF-8) and the model-aware modal-fit issues detectModalFitIssues reports.
+//
+// SelectedAction names the action the actions menu currently has under its
+// cursor, by shared identity rather than by row number. A scenario that asserted
+// "cursor is 3" would keep passing after the menu's grouping changed underneath
+// it while selecting something else entirely; the identity is what the operator
+// is about to run. It is empty outside ModeActions.
 type UITestObservation struct {
-	Size   UITestSize   `json:"size"`
-	Mode   string       `json:"mode"`
-	Cursor int          `json:"cursor,omitempty"`
-	Screen UITestScreen `json:"screen"`
+	Size           UITestSize   `json:"size"`
+	Mode           string       `json:"mode"`
+	Cursor         int          `json:"cursor,omitempty"`
+	SelectedAction string       `json:"selected_action,omitempty"`
+	Screen         UITestScreen `json:"screen"`
 }
 
 // observeUITest renders m at the given size and normalizes the result into a
@@ -286,11 +298,23 @@ type UITestObservation struct {
 // issues via captureUITestScreen.
 func observeUITest(m Model, size UITestSize) UITestObservation {
 	return UITestObservation{
-		Size:   size,
-		Mode:   uitestModeName(m.mode),
-		Cursor: uitestCursor(m),
-		Screen: captureUITestScreen(m, size),
+		Size:           size,
+		Mode:           uitestModeName(m.mode),
+		Cursor:         uitestCursor(m),
+		SelectedAction: uitestSelectedAction(m),
+		Screen:         captureUITestScreen(m, size),
 	}
+}
+
+// uitestSelectedAction reports the identity of the menu entry under the cursor,
+// and nothing at all in any other mode. It reads the same input value the
+// renderer draws from, so what a scenario asserts and what the operator sees
+// selected cannot come apart.
+func uitestSelectedAction(m Model) string {
+	if m.mode != ModeActions {
+		return ""
+	}
+	return string(actionsInput(m).SelectedID())
 }
 
 // uitestCursor reports the cursor position that matters for the active mode.
@@ -298,6 +322,8 @@ func observeUITest(m Model, size UITestSize) UITestObservation {
 // their own so scenarios can assert on the row the user is actually navigating.
 func uitestCursor(m Model) int {
 	switch m.mode {
+	case ModeActions:
+		return m.actionsCursor
 	case ModePicker:
 		return m.pickerCursor
 	case ModeConfigPicker:

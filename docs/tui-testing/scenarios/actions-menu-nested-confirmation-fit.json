@@ -1,0 +1,19 @@
+{
+  "name": "actions-menu-nested-confirmation-fit",
+  "fixture": "paused_queue",
+  "size": { "width": 80, "height": 24 },
+  "actions": [
+    { "type": "key", "key": "j" },
+    { "type": "key", "key": "j" },
+    { "type": "key", "key": "j" },
+    { "type": "key", "key": "a" },
+    { "type": "key", "key": "X" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "confirm" },
+    { "type": "no_layout_issues" },
+    { "type": "contains_text", "text": "Close \"ρυθμός-δοκιμή\"?" },
+    { "type": "contains_text", "text": "The harness process exits; its transcript is preserved." },
+    { "type": "kitty_calls", "op": "CloseTab", "count": 0 }
+  ]
+}

@@ -32,8 +32,16 @@ func TestRenderActionsBox(t *testing.T) {
 	if !strings.Contains(plain, "Actions for") {
 		t.Errorf("expected 'Actions for' header in box output; got %q", plain)
 	}
-	if !strings.Contains(plain, "esc/q to back out") {
-		t.Errorf("expected refreshed esc/q hint in box output; got %q", plain)
+	if !strings.Contains(plain, "esc/q close") {
+		t.Errorf("expected the dismissal hint in box output; got %q", plain)
+	}
+	// The menu is a list the operator moves through, so the hint has to name the
+	// two keys that do the moving and the running as well as the one that backs
+	// out. A hint that only offered esc would describe the legend this replaced.
+	for _, frag := range []string{"↑/↓ select", "⏎ run"} {
+		if !strings.Contains(plain, frag) {
+			t.Errorf("expected %q in the menu hint; got %q", frag, plain)
+		}
 	}
 }
 
@@ -51,9 +59,13 @@ func TestRenderActionsBoxExpandsForActionRows(t *testing.T) {
 		t.Fatalf("box width = %d, want wider than old 70-column cap:\n%s", w, stripAnsi(raw))
 	}
 
+	// Every entry is one line: the label at the left and its immediate key at
+	// the right edge, with the explanation drawn once for the selection rather
+	// than hanging off each row. The row must therefore carry the label and the
+	// key and nothing else.
 	var editorLine string
 	for _, line := range lines {
-		if strings.Contains(line, "O   open in editor") {
+		if strings.Contains(line, "Open editor") {
 			editorLine = line
 			break
 		}
@@ -61,8 +73,17 @@ func TestRenderActionsBoxExpandsForActionRows(t *testing.T) {
 	if editorLine == "" {
 		t.Fatalf("expected open-in-editor row in output:\n%s", stripAnsi(raw))
 	}
-	if !strings.Contains(editorLine, "$VISUAL/$EDITOR (or defaults.editor)") {
-		t.Fatalf("open-in-editor row should keep description on one line, got %q\nfull output:\n%s", editorLine, stripAnsi(raw))
+	if !strings.HasSuffix(strings.TrimRight(strings.TrimSuffix(strings.TrimRight(editorLine, " "), "│"), " "), "O") {
+		t.Fatalf("open-in-editor row should end with its immediate key, got %q\nfull output:\n%s", editorLine, stripAnsi(raw))
+	}
+	if strings.Contains(editorLine, "$VISUAL/$EDITOR") {
+		t.Fatalf("the row carries a description that belongs in the selection detail block, got %q", editorLine)
+	}
+
+	// The explanation still reaches the operator — it is drawn for whatever is
+	// selected, which on a freshly opened menu is Open session.
+	if !strings.Contains(stripAnsi(raw), "Kitty tab") {
+		t.Fatalf("the selected entry's explanation is missing:\n%s", stripAnsi(raw))
 	}
 }
 

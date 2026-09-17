@@ -1,0 +1,21 @@
+{
+  "name": "actions-menu-disabled-entry-explains",
+  "fixture": "actions",
+  "size": { "width": 100, "height": 24 },
+  "actions": [
+    { "type": "key", "key": "a" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "down" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "actions" },
+    { "type": "no_layout_issues" },
+    { "type": "selected_action", "value": "session.clear-status" },
+    { "type": "contains_text", "text": "Unavailable:" },
+    { "type": "contains_text", "text": "Clear status" }
+  ]
+}

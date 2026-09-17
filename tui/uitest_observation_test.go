@@ -94,31 +94,30 @@ func TestUITestObservationModeNames(t *testing.T) {
 // TestUITestLayoutIssuesIncludeModalFit verifies that observeUITest surfaces
 // modal-fit issues on the observation's screen, so the no_layout_issues
 // assertion (which reads final.Screen.Issues) catches an overlay that needs more
-// columns or rows than the terminal can provide — even though the root screen
-// itself renders clean at that size.
+// rows than the terminal can provide — even though the root screen itself
+// renders clean at that size.
+//
+// The overflowing probe is a terminal four rows tall rather than the 80x24 this
+// test used to assert the actions overlay was clipped at. 80x24 is now a size
+// the menu is REQUIRED to fit, and TestUITestActionsMenuFitsEveryTargetSize
+// asserts it does; what is kept here is the property this test is actually
+// about, which is that a modal issue reaches the observation and fails
+// no_layout_issues rather than being invisible to a scenario.
 func TestUITestLayoutIssuesIncludeModalFit(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
 
-	// Narrow: the actions overlay's widest description row cannot fit, and its
-	// wrapped rows exceed the body area.
+	// Too short: the body area cannot hold the menu's box at all, which is the
+	// one case shedding chrome cannot rescue.
 	narrow := m
-	updated, _ := narrow.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	updated, _ := narrow.Update(tea.WindowSizeMsg{Width: 120, Height: 4})
 	narrow = updated.(Model)
 	narrow = pressKey(narrow, "a")
 	if narrow.mode != ModeActions {
 		t.Fatalf("expected ModeActions after a, got %d", narrow.mode)
 	}
-	obs := observeUITest(narrow, UITestSize{Width: 80, Height: 24})
-
-	// The root screen must not itself overflow — the whole point is that the
-	// modal issue is only visible via the model-aware detector.
-	for _, iss := range obs.Screen.Issues {
-		if iss.Type == UITestIssueLineWidthOverflow {
-			t.Fatalf("did not expect a root line_width_overflow at 80x24: %+v", iss)
-		}
-	}
-	if !hasIssueType(obs.Screen.Issues, UITestIssueModalWidthOverflow) {
-		t.Errorf("expected modal_width_overflow on the observation screen, got %v", obs.Screen.Issues)
+	obs := observeUITest(narrow, UITestSize{Width: 120, Height: 4})
+	if !hasIssueType(obs.Screen.Issues, UITestIssueModalHeightOverflow) {
+		t.Errorf("expected modal_height_overflow on the observation screen, got %v", obs.Screen.Issues)
 	}
 
 	// The no_layout_issues assertion should fail because of the modal issue.
@@ -127,19 +126,22 @@ func TestUITestLayoutIssuesIncludeModalFit(t *testing.T) {
 		t.Error("no_layout_issues should fail when the modal overflows")
 	}
 
-	// Wide: the same overlay fits, so no modal issue is attached and the
-	// assertion passes.
-	wide := m
-	updated, _ = wide.Update(tea.WindowSizeMsg{Width: 140, Height: 50})
-	wide = updated.(Model)
-	wide = pressKey(wide, "a")
-	wobs := observeUITest(wide, UITestSize{Width: 140, Height: 50})
-	if hasIssueType(wobs.Screen.Issues, UITestIssueModalWidthOverflow) ||
-		hasIssueType(wobs.Screen.Issues, UITestIssueModalHeightOverflow) {
-		t.Errorf("actions overlay at 140x50 should not report modal issues, got %v", wobs.Screen.Issues)
-	}
-	if fail := evaluateUITestAssertion(UITestAssertion{Type: UITestAssertNoLayoutIssues}, wobs, wide, nil); fail != nil {
-		t.Errorf("no_layout_issues should pass for a fitting overlay, got %+v", fail)
+	// At every target size the same overlay fits, no modal issue is attached,
+	// and the assertion passes. 80x24 is included deliberately: it is the size
+	// this test used to require an overflow at.
+	for _, size := range []UITestSize{{Width: 80, Height: 24}, {Width: 100, Height: 24}, {Width: 120, Height: 30}, {Width: 160, Height: 45}} {
+		wide := m
+		updated, _ = wide.Update(tea.WindowSizeMsg{Width: size.Width, Height: size.Height})
+		wide = updated.(Model)
+		wide = pressKey(wide, "a")
+		wobs := observeUITest(wide, size)
+		if hasIssueType(wobs.Screen.Issues, UITestIssueModalWidthOverflow) ||
+			hasIssueType(wobs.Screen.Issues, UITestIssueModalHeightOverflow) {
+			t.Errorf("actions overlay at %dx%d should not report modal issues, got %v", size.Width, size.Height, wobs.Screen.Issues)
+		}
+		if fail := evaluateUITestAssertion(UITestAssertion{Type: UITestAssertNoLayoutIssues}, wobs, wide, nil); fail != nil {
+			t.Errorf("no_layout_issues should pass for a fitting overlay at %dx%d, got %+v", size.Width, size.Height, fail)
+		}
 	}
 }
 

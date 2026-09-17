@@ -100,7 +100,7 @@ func TestModalAndStandaloneHintRowsUseFooterBindings(t *testing.T) {
 		view string
 		key  string
 	}{
-		{name: "actions", view: renderActions(Model{}, 46), key: "a key"},
+		{name: "actions", view: renderActions(Model{}), key: "a key"},
 		{name: "command palette", view: renderCommandPalette(commandPaletteTestModel(100, 40)), key: "enter"},
 		{name: "detail", view: detailFooter(Model{}, 10, 10), key: "t"},
 		{name: "timeline", view: renderTimeline(Model{width: 100, height: 30}), key: "t"},

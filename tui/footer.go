@@ -58,7 +58,18 @@ func renderFooter(m Model) string {
 	case ModeHelp:
 		lines = nonEmptyFooterLines(footerStyledLine(m.width, "  ", renderFooterBinding("j/k", "up/down"), renderFooterBinding("g/G", "top/bottom"), renderFooterBinding("esc/?/q", "close help")))
 	case ModeActions:
-		lines = nonEmptyFooterLines(footerStyledLine(m.width, "  ", renderFooterBinding("<key>", "run action"), renderFooterBinding("esc/q", "back")))
+		// The menu is a list the operator moves through, so the footer names the
+		// keys that move and run the selection rather than only the immediate
+		// letters. The letters are not repeated here: they are printed against
+		// the rows they belong to, and the menu's own hint line says so. This
+		// row stays three bindings long because it is the outer chrome of a
+		// modal that already carries a hint, and a fourth wrapped it onto a
+		// second line at 50 columns — which on a three-row terminal cost the
+		// body its only row.
+		lines = nonEmptyFooterLines(footerStyledLine(m.width, "  ",
+			renderFooterBinding("j/k", "select"),
+			renderFooterBinding("enter", "run"),
+			renderFooterBinding("esc/q", "back")))
 	case ModeCommandPalette:
 		lines = nonEmptyFooterLines(footerStyledLine(m.width, " · ", renderFooterBinding("↑/↓ or ctrl+j/k or ctrl+n/p", "move"), renderFooterBinding("enter", "run"), renderFooterBinding("esc", "close"), renderFooterBinding("ctrl+c", "quit")))
 	case ModeDetail:

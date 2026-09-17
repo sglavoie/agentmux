@@ -62,9 +62,16 @@ const (
 type Origin struct {
 	// Surface is the entry point to restore.
 	Surface Surface
-	// MenuOffset is the per-row menu's scroll position. The menu selects by
-	// mnemonic rather than by cursor today, so this is the whole of its
-	// selection state; a menu that grows a cursor adds it here beside this.
+	// MenuCursor and MenuOffset are the per-row menu's selection and scroll
+	// position.
+	//
+	// The cursor is what a cancellation actually has to restore: an operator who
+	// walked down to Close, thought better of it, and pressed n should find the
+	// cursor still on Close rather than back on the entry the menu opened with.
+	// The offset is restored alongside it and then re-derived from the cursor by
+	// the host, so a terminal resized while the confirmation was up cannot put
+	// the selection outside the window it comes back to.
+	MenuCursor int
 	MenuOffset int
 	// PaletteQuery, PaletteCursor, and PaletteOffset are the palette's typed
 	// query and the row it was sitting on.

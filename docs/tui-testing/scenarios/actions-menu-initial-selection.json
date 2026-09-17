@@ -1,0 +1,13 @@
+{
+  "name": "actions-menu-initial-selection",
+  "fixture": "actions",
+  "size": { "width": 80, "height": 24 },
+  "actions": [{ "type": "key", "key": "a" }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "actions" },
+    { "type": "no_layout_issues" },
+    { "type": "selected_action", "value": "session.focus" },
+    { "type": "contains_text", "text": "Open session" },
+    { "type": "contains_text", "text": "Close" }
+  ]
+}

@@ -507,8 +507,8 @@ func TestListFooterKeyHintsAlwaysPresent(t *testing.T) {
 				overlay[a.KeyMatch] = a.Label
 			}
 			for key, label := range map[string]string{
-				keyE: "peek scrollback", keyDashboardLaunch: "launch new",
-				keyClearStatus: "clear icon", keyClose: "close",
+				keyE: "Peek scrollback", keyDashboardLaunch: "Launch another session",
+				keyClearStatus: "Clear status", keyClose: "Close",
 			} {
 				if got := overlay[key]; got != label {
 					t.Errorf("actions overlay entry %q = %q, want %q", key, got, label)

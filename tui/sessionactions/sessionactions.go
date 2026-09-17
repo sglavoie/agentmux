@@ -29,6 +29,7 @@
 package sessionactions
 
 import (
+	"sort"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
@@ -81,6 +82,16 @@ func (g MenuGroup) String() string {
 // the literal key-message spelling a handler compares against; Display is what
 // the menu prints for it, which differs wherever the spelling is not a glyph an
 // operator would recognize on a key cap.
+//
+// Exactly one mnemonic is also the key that runs whatever is SELECTED:
+// commands.MenuExecuteKey, which focus-session declares. The two readings agree
+// where it matters, because focus-session is the entry the menu opens on — enter
+// on an untouched menu focuses the session, as it did before the menu had a
+// cursor — and the selection layer takes the key first, so moving the cursor and
+// pressing enter runs the entry under it rather than focusing. The menu does not
+// PRINT that mnemonic beside its entry (see Action.ImmediateKey): a key whose
+// meaning depends on where the cursor is, drawn against one row, would be a
+// claim that stops being true as soon as the operator moves.
 type Mnemonic struct {
 	Display string
 	Key     string
@@ -199,9 +210,12 @@ func requiresClearableStatus(env Env, target Target) commands.Availability {
 	return commands.Available()
 }
 
-// Definitions returns every session action, in the order both surfaces offer
-// them. The first twelve are the per-row menu, in menu order; the rest are
-// palette-only.
+// Definitions returns every session action in PALETTE order: the first twelve
+// are the ones the per-row menu also offers, the rest are palette-only.
+//
+// This is not menu order. The menu bands its entries, and MenuDefinitions
+// derives that order from MenuGroup rather than reading a second list, so the
+// band an action declares and the position it appears at cannot disagree.
 //
 // A fresh slice is returned per call, and every closure in it reads only its
 // arguments, so this package holds no state two surfaces could race over.
@@ -211,7 +225,7 @@ func Definitions() []Definition {
 			ID:                 commands.FocusSession,
 			MenuGroup:          MenuGroupOpen,
 			Mnemonic:           Mnemonic{Display: "⏎", Key: "enter"},
-			MenuLabel:          "focus tab",
+			MenuLabel:          "Open session",
 			MenuDescription:    "jump to the session's Kitty tab",
 			PaletteTitle:       static("Focus Selected Session"),
 			PaletteDescription: "Jump to the selected session's Kitty tab.",
@@ -222,7 +236,7 @@ func Definitions() []Definition {
 			ID:                 commands.PeekScrollback,
 			MenuGroup:          MenuGroupOpen,
 			Mnemonic:           Mnemonic{Display: "e", Key: "e"},
-			MenuLabel:          "peek scrollback",
+			MenuLabel:          "Peek scrollback",
 			MenuDescription:    "open the session's scrollback in an overlay pager",
 			PaletteTitle:       static("Peek Scrollback"),
 			PaletteDescription: "Open the active session's scrollback in an overlay pager.",
@@ -233,7 +247,7 @@ func Definitions() []Definition {
 			ID:                 commands.RestartSession,
 			MenuGroup:          MenuGroupLifecycle,
 			Mnemonic:           Mnemonic{Display: "r", Key: "r"},
-			MenuLabel:          "restart",
+			MenuLabel:          "Restart",
 			MenuDescription:    "close and relaunch the session",
 			PaletteTitle:       static("Restart Session"),
 			PaletteDescription: "Confirm before closing and relaunching the selected session.",
@@ -244,7 +258,7 @@ func Definitions() []Definition {
 			ID:                 commands.OverrideProfile,
 			MenuGroup:          MenuGroupLifecycle,
 			Mnemonic:           Mnemonic{Display: "c", Key: "c"},
-			MenuLabel:          "override profile",
+			MenuLabel:          "Restart with another profile",
 			MenuDescription:    "restart under a different harness profile",
 			PaletteTitle:       static("Override Profile"),
 			PaletteDescription: "Restart the selected session under a different harness profile.",
@@ -255,7 +269,7 @@ func Definitions() []Definition {
 			ID:                 commands.LaunchAnother,
 			MenuGroup:          MenuGroupOpen,
 			Mnemonic:           Mnemonic{Display: "C", Key: "C"},
-			MenuLabel:          "launch new",
+			MenuLabel:          "Launch another session",
 			MenuDescription:    "pick a profile and launch another session from this row",
 			PaletteTitle:       static("Launch Another Session"),
 			PaletteDescription: "Pick a profile and launch another session from the selected project.",
@@ -266,7 +280,7 @@ func Definitions() []Definition {
 			ID:                 commands.ClearStatusIcon,
 			MenuGroup:          MenuGroupStatus,
 			Mnemonic:           Mnemonic{Display: "x", Key: "x"},
-			MenuLabel:          "clear icon",
+			MenuLabel:          "Clear status",
 			MenuDescription:    "drop the attention/key/stop badge on the tab title",
 			PaletteTitle:       static("Clear Status Icon"),
 			PaletteDescription: "Drop the attention, key, or stop badge from the selected tab.",
@@ -277,7 +291,7 @@ func Definitions() []Definition {
 			ID:                 commands.CloseSession,
 			MenuGroup:          MenuGroupLifecycle,
 			Mnemonic:           Mnemonic{Display: "X", Key: "X"},
-			MenuLabel:          "close",
+			MenuLabel:          "Close",
 			MenuDescription:    "exit the harness process; transcript persists",
 			PaletteTitle:       static("Close Session"),
 			PaletteDescription: "Exit the harness process while preserving its transcript.",
@@ -288,7 +302,7 @@ func Definitions() []Definition {
 			ID:                 commands.OpenDirectoryID,
 			MenuGroup:          MenuGroupOpen,
 			Mnemonic:           Mnemonic{Display: "o", Key: "o"},
-			MenuLabel:          "open dir in shell",
+			MenuLabel:          "Open shell",
 			MenuDescription:    "spawn a plain shell tab at the session's directory",
 			PaletteTitle:       static("Open Directory in Shell"),
 			PaletteDescription: "Open a plain shell tab in the selected project's directory.",
@@ -299,7 +313,7 @@ func Definitions() []Definition {
 			ID:                 commands.OpenEditorID,
 			MenuGroup:          MenuGroupOpen,
 			Mnemonic:           Mnemonic{Display: "O", Key: "O"},
-			MenuLabel:          "open in editor",
+			MenuLabel:          "Open editor",
 			MenuDescription:    "open the project directory in $VISUAL/$EDITOR (or defaults.editor)",
 			PaletteTitle:       static("Open in Editor"),
 			PaletteDescription: "Open the selected project in the configured editor.",
@@ -310,7 +324,7 @@ func Definitions() []Definition {
 			ID:                 commands.CopyTitleID,
 			MenuGroup:          MenuGroupOpen,
 			Mnemonic:           Mnemonic{Display: "y", Key: "y"},
-			MenuLabel:          "copy title",
+			MenuLabel:          "Copy title",
 			MenuDescription:    "copy the session title to the system clipboard",
 			PaletteTitle:       static("Copy Session Title"),
 			PaletteDescription: "Copy the selected session's display title to the clipboard.",
@@ -321,7 +335,7 @@ func Definitions() []Definition {
 			ID:              commands.ToggleLockID,
 			MenuGroup:       MenuGroupStatus,
 			Mnemonic:        Mnemonic{Display: "L", Key: "L"},
-			MenuLabel:       "lock/unlock",
+			MenuLabel:       "Lock/Unlock",
 			MenuDescription: "toggle session lock (prevents close/restart/override)",
 			PaletteTitle: func(target Target) string {
 				if target.HasSession && target.Session.Locked {
@@ -337,7 +351,7 @@ func Definitions() []Definition {
 			ID:              commands.ToggleMuteID,
 			MenuGroup:       MenuGroupStatus,
 			Mnemonic:        Mnemonic{Display: "m", Key: "m"},
-			MenuLabel:       "mute/unmute",
+			MenuLabel:       "Mute/Unmute",
 			MenuDescription: "toggle session mute (suppresses macOS notifications)",
 			PaletteTitle: func(target Target) string {
 				if target.HasSession && target.Session.Muted {
@@ -377,7 +391,20 @@ func Definitions() []Definition {
 	}
 }
 
-// MenuDefinitions returns the actions the per-row menu offers, in menu order.
+// MenuDefinitions returns the actions the per-row menu offers, in menu order:
+// the Open band, then Status, then Lifecycle, and inside each band the order
+// Definitions declares.
+//
+// The band order is derived by a STABLE sort over MenuGroup rather than written
+// out as a second list. A hand-kept menu order would be a third place an action
+// is named — after the definition and the runner table — and the one most likely
+// to be forgotten, since a definition added without touching it lands wherever
+// the palette happens to put it. Sorting means a new entry's band decides where
+// it appears and nothing else has to be edited.
+//
+// Reading the bands in that order is also the safety argument for the menu:
+// nothing in Open is felt by the harness process, so the entries an operator
+// reaches for by reflex are never adjacent to the ones that end a session.
 func MenuDefinitions() []Definition {
 	all := Definitions()
 	menu := make([]Definition, 0, len(all))
@@ -386,7 +413,31 @@ func MenuDefinitions() []Definition {
 			menu = append(menu, definition)
 		}
 	}
+	sort.SliceStable(menu, func(i, j int) bool {
+		return menu[i].MenuGroup < menu[j].MenuGroup
+	})
 	return menu
+}
+
+// InitialSelection is the entry a freshly opened menu selects.
+//
+// Focusing the session is both the most-run action on the list and the one that
+// does the least, so a menu that opens on it is one an operator can dismiss with
+// enter by reflex without consequence. It is also what enter did before the menu
+// had a cursor at all, which is what makes the selectable menu a superset of the
+// old dispatch rather than a change to it.
+func InitialSelection() commands.ID { return commands.FocusSession }
+
+// MenuIndexOf is the position an identity occupies in menu order, or 0 when the
+// menu does not offer it. Zero is the harmless answer: it selects the first
+// entry, which is InitialSelection, rather than an index no entry has.
+func MenuIndexOf(id commands.ID) int {
+	for i, definition := range MenuDefinitions() {
+		if definition.ID == id {
+			return i
+		}
+	}
+	return 0
 }
 
 // Lookup resolves one definition by its identity.

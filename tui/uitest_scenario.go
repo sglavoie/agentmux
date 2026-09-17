@@ -19,6 +19,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
 
 // This file turns declarative JSON scenarios into driver actions, assertions,
@@ -221,6 +222,13 @@ func validateUITestAssertion(a UITestAssertion, modeNames map[string]bool) error
 		if a.Cursor < 0 {
 			return fmt.Errorf("cursor_equals assertion cursor must not be negative")
 		}
+	case UITestAssertSelectedAction:
+		if a.Value == "" {
+			return fmt.Errorf("selected_action assertion requires a value (the action id)")
+		}
+		if !uitestKnownMenuAction(a.Value) {
+			return fmt.Errorf("selected_action assertion has unknown action id %q", a.Value)
+		}
 	}
 	return nil
 }
@@ -339,6 +347,13 @@ func evaluateUITestAssertion(a UITestAssertion, final UITestObservation, m Model
 		if final.Cursor != a.Cursor {
 			return uitestAssertionFail(a, fmt.Sprintf("cursor is %d, want %d", final.Cursor, a.Cursor))
 		}
+	case UITestAssertSelectedAction:
+		if final.Mode != uitestModeName(ModeActions) {
+			return uitestAssertionFail(a, fmt.Sprintf("mode is %q, so no action is selected", final.Mode))
+		}
+		if final.SelectedAction != a.Value {
+			return uitestAssertionFail(a, fmt.Sprintf("selected action is %q, want %q", final.SelectedAction, a.Value))
+		}
 	case UITestAssertSelectedTitle:
 		sess, ok := uitestSelectedSession(m)
 		if !ok {
@@ -366,6 +381,19 @@ func evaluateUITestAssertion(a UITestAssertion, final UITestObservation, m Model
 		}
 	}
 	return nil
+}
+
+// uitestKnownMenuAction reports whether id names an action the menu actually
+// offers. Validating it here means a scenario with a misspelled identity is
+// rejected outright rather than failing later with a message that reads like a
+// selection bug.
+func uitestKnownMenuAction(id string) bool {
+	for _, definition := range sessionactions.MenuDefinitions() {
+		if string(definition.ID) == id {
+			return true
+		}
+	}
+	return false
 }
 
 // uitestAssertionFail builds a failure keyed by the assertion type.
@@ -735,6 +763,11 @@ const (
 	// UITestAssertCursorEquals passes when the final observation's cursor equals
 	// Cursor.
 	UITestAssertCursorEquals UITestAssertionType = "cursor_equals"
+	// UITestAssertSelectedAction passes when the actions menu has the entry named
+	// by Value under its cursor. It names the action by shared identity rather
+	// than by row, because the row number is the one fact about a selection that
+	// regrouping the menu is allowed to change.
+	UITestAssertSelectedAction UITestAssertionType = "selected_action"
 )
 
 // Valid reports whether t is one of the recognized assertion kinds.
@@ -743,7 +776,7 @@ func (t UITestAssertionType) Valid() bool {
 	case UITestAssertNoLayoutIssues, UITestAssertExcludesLayoutIssue,
 		UITestAssertContainsText, UITestAssertExcludesText,
 		UITestAssertModeEquals, UITestAssertSelectedTitle, UITestAssertSelectedProfile,
-		UITestAssertKittyCalls, UITestAssertCursorEquals:
+		UITestAssertKittyCalls, UITestAssertCursorEquals, UITestAssertSelectedAction:
 		return true
 	default:
 		return false
@@ -756,7 +789,7 @@ type UITestAssertion struct {
 	Type   UITestAssertionType `json:"type"`
 	Text   string              `json:"text,omitempty"`   // contains_text / excludes_text
 	Mode   string              `json:"mode,omitempty"`   // mode_equals
-	Value  string              `json:"value,omitempty"`  // selected_title / selected_profile / excludes_layout_issue (issue type)
+	Value  string              `json:"value,omitempty"`  // selected_title / selected_profile / selected_action (action id) / excludes_layout_issue (issue type)
 	Op     string              `json:"op,omitempty"`     // kitty_calls operation name
 	Count  *int                `json:"count,omitempty"`  // kitty_calls: exact count when set; >=1 when nil
 	Cursor int                 `json:"cursor,omitempty"` // cursor_equals

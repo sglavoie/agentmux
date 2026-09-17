@@ -1,13 +1,11 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/tui/asl"
 	"github.com/sglavoie/agentmux/tui/dashboard"
-	"github.com/sglavoie/agentmux/tui/layout"
 	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
 
@@ -23,15 +21,22 @@ import (
 // worse than one naming none.
 const worktreeForkConsequence = "Creates a tracked Git worktree and forks there. Dirty sources are refused; CLI --allow-dirty omits uncommitted changes."
 
-// renderConfirm renders the two-line confirmation overlay:
+// renderConfirm renders the confirmation overlay's interior:
 //
 //	Close "<title>"?
 //	<consequence describing what happens on y>
 //
 // The footer (rendered separately) carries the y/n/esc affordances.
 func renderConfirm(m Model) string {
-	var verb string
-	title := dashboard.SessionDisplayTitle(m.targetSession)
+	return sessionactions.RenderPrompt(confirmPromptInput(m))
+}
+
+// confirmVerbAndTitle resolves what is being confirmed and what it is being
+// confirmed about. It is this model's half of the overlay: the worktree and ASL
+// prompts read targets that have nothing to do with session actions, and they
+// stay here rather than being pushed into a package that names neither.
+func confirmVerbAndTitle(m Model) (verb, title string) {
+	title = dashboard.SessionDisplayTitle(m.targetSession)
 	switch m.confirmAction {
 	case sessionactions.ConfirmClose:
 		verb = "Close"
@@ -59,15 +64,21 @@ func renderConfirm(m Model) string {
 	default:
 		verb = m.confirmAction
 	}
+	return verb, title
+}
 
-	var sb strings.Builder
-	sb.WriteString(styleHeader.Render(fmt.Sprintf("%s %q?", verb, layout.RenderTitleIcon(title))))
-	sb.WriteByte('\n')
-	if m.confirmConsequence != "" {
-		sb.WriteString(styleDim.Render(m.confirmConsequence))
-		sb.WriteByte('\n')
+// confirmPromptInput is the value the shared renderer draws from. The verb and
+// the subject are resolved above, from state only this model holds; everything
+// after that is presentation and lives in tui/sessionactions, where the surface
+// F2 opens can reach it without importing this package.
+func confirmPromptInput(m Model) sessionactions.PromptInput {
+	verb, title := confirmVerbAndTitle(m)
+	return sessionactions.PromptInput{
+		Verb:        verb,
+		Subject:     title,
+		Consequence: m.confirmConsequence,
+		Width:       m.width,
 	}
-	return sb.String()
 }
 
 // aslConfirmationTitle names the captured run. It reads the capture rather than
@@ -96,17 +107,10 @@ func worktreeConfirmationTitle(target *actions.WorktreeView) string {
 	return target.ID
 }
 
-// renderConfirmBox wraps renderConfirm in styleOverlayBox so the y/n confirm
-// prompt can be composited as a centered modal on top of the dimmed
-// dashboard. The inner width is capped at 70 columns and clamped to
-// m.width-4 on narrow terminals.
+// renderConfirmBox composites the prompt as a centered modal over the dimmed
+// dashboard. The width policy — a preferred 70 columns, always two terminal
+// cells of margin — is the shared renderer's, so the box this model draws and
+// the one another host draws cannot end up different sizes.
 func renderConfirmBox(m Model) string {
-	innerWidth := 70
-	if avail := m.width - 4; avail < innerWidth {
-		innerWidth = avail
-	}
-	if innerWidth < 1 {
-		innerWidth = 1
-	}
-	return styleOverlayBox.Width(innerWidth).Render(strings.TrimRight(renderConfirm(m), "\n"))
+	return sessionactions.RenderPromptBox(confirmPromptInput(m))
 }

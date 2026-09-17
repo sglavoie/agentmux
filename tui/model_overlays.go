@@ -131,84 +131,95 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleActionsKey dispatches the per-row actions overlay. Esc/q close the
-// overlay without side effects; any other key that matches an available
-// action's keyMatch runs it. Unavailable or unknown keys are ignored.
+// handleActionsKey dispatches the per-row session menu.
+//
+// The menu owns the keyboard while it is open: every key is answered here, and
+// nothing falls through to the dashboard underneath. That is why the navigation
+// keys are spelled out rather than delegated — j and k move the SELECTION here
+// while they move the dashboard cursor one layer down, and a menu that let
+// either through would move a list the operator cannot see.
+//
+// Three groups of keys, in the order they are taken:
+//
+//   - Dismissal and navigation. The paging and end-navigation aliases the
+//     scrolling overlay answered (PgDn/Ctrl+F, PgUp/Ctrl+B, Ctrl+D/U, g/G) are
+//     all preserved, but they now move the cursor rather than the window: the
+//     window follows the cursor, so scrolling past the selection is a state the
+//     menu no longer has.
+//   - Enter, which runs whatever is SELECTED. It is taken before the mnemonics
+//     because one action declares it as its own — focus-session, which is also
+//     the initial selection, so enter on an untouched menu still focuses the
+//     session and enter after moving runs the entry under the cursor. Letting it
+//     reach the scan below would make it focus the session from any selection,
+//     which is the collision the menu has to resolve rather than inherit.
+//   - The immediate mnemonics, unchanged: a letter still runs its action from
+//     wherever the cursor is.
+//
+// An unavailable entry is selectable but not runnable: both enter and its own
+// mnemonic leave the model alone, and the detail block under the list is where
+// the operator reads why.
 func (m Model) handleActionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	s := msg.String()
-	total, visible := actionsScrollBounds(m)
-	maxOffset := total - visible
-	if maxOffset < 0 {
-		maxOffset = 0
+	in := actionsInput(m)
+	page := in.PageSize()
+
+	move := func(delta int) (tea.Model, tea.Cmd) {
+		m.actionsCursor = in.MoveCursor(delta)
+		clampActionsSelection(&m)
+		return m, nil
 	}
+
 	switch s {
 	case keyEsc, keyQ:
 		m.exitActionsMode()
 		m.actionsOffset = 0
+		m.actionsCursor = 0
 		return m, nil
 	case keyCtrlC:
 		return m, tea.Quit
 	case keyJ, keyDown:
-		if m.actionsOffset < maxOffset {
-			m.actionsOffset++
-		}
-		return m, nil
+		return move(1)
 	case keyK, keyUp:
-		if m.actionsOffset > 0 {
-			m.actionsOffset--
-		}
-		return m, nil
+		return move(-1)
 	case keyPgDown, keyCtrlF:
-		m.actionsOffset += visible
-		if m.actionsOffset > maxOffset {
-			m.actionsOffset = maxOffset
-		}
-		return m, nil
+		return move(page)
 	case keyPgUp, keyCtrlB:
-		m.actionsOffset -= visible
-		if m.actionsOffset < 0 {
-			m.actionsOffset = 0
-		}
-		return m, nil
+		return move(-page)
 	case keyCtrlD:
-		step := visible / 2
-		if step < 1 {
-			step = 1
-		}
-		m.actionsOffset += step
-		if m.actionsOffset > maxOffset {
-			m.actionsOffset = maxOffset
-		}
-		return m, nil
+		return move(max(page/2, 1))
 	case keyCtrlU:
-		step := visible / 2
-		if step < 1 {
-			step = 1
-		}
-		m.actionsOffset -= step
-		if m.actionsOffset < 0 {
-			m.actionsOffset = 0
-		}
-		return m, nil
+		return move(-max(page/2, 1))
 	case keyG:
-		m.actionsOffset = 0
-		return m, nil
+		return move(-len(in.Actions))
 	case keyGG:
-		m.actionsOffset = maxOffset
-		return m, nil
+		return move(len(in.Actions))
+	case commands.MenuExecuteKey:
+		selected, ok := in.SelectedAction()
+		if !ok {
+			return m, nil
+		}
+		return runMenuAction(m, selected)
 	}
-	for _, a := range actionsFor(m) {
+
+	for _, a := range in.Actions {
 		if s != a.KeyMatch {
 			continue
 		}
-		if !a.Available(m) {
-			return m, nil
-		}
-		next, cmd := a.Run(m)
-		next.actionsOffset = 0
-		return next, cmd
+		return runMenuAction(m, a)
 	}
 	return m, nil
+}
+
+// runMenuAction runs one menu entry against the model, refusing an unavailable
+// one. Both the selection key and the immediate mnemonics go through it so the
+// two cannot disagree about what pressing a disabled entry does.
+func runMenuAction(m Model, action commands.Action[Model]) (tea.Model, tea.Cmd) {
+	if !action.Available(m) {
+		return m, nil
+	}
+	next, cmd := action.Run(m)
+	next.actionsOffset = 0
+	return next, cmd
 }
 
 // enterDetailMode switches to ModeDetail for the given window, marks the

@@ -43,6 +43,11 @@ func TestExampleScenariosParseAndPass(t *testing.T) {
 	// prevents the documentation and acceptance recipe from silently diverging.
 	want := map[string]bool{
 		"project-session-shortcut.json":                        false,
+		"actions-menu-disabled-entry-explains.json":            false,
+		"actions-menu-initial-selection.json":                  false,
+		"actions-menu-nested-confirmation-fit.json":            false,
+		"actions-menu-nested-picker-fit.json":                  false,
+		"actions-menu-selection-moves.json":                    false,
 		"actions-popup-fit.json":                               false,
 		"asl-abort-confirmation-fit.json":                      false,
 		"asl-question-pending-narrow-fit.json":                 false,

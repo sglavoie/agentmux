@@ -341,6 +341,7 @@ so it remains part of the attended live checklist in `docs/acceptance.md`.
 | `mode_equals` | `mode` | the active UI mode equals `mode` |
 | `selected_title` | `value` | the selected session's project title equals `value` |
 | `selected_profile` | `value` | the selected session's profile equals `value` |
+| `selected_action` | `value` | the actions menu is open and the highlighted entry's action ID equals `value`. Only meaningful in `actions` mode; asserting it in any other mode fails. `value` must name an action the menu actually offers, so a renamed or retired ID fails validation rather than passing vacuously |
 | `cursor_equals` | `cursor` | the relevant cursor equals `cursor` |
 | `kitty_calls` | `op`, `count` | recorded Kitty calls for `op` match `count` (exactly, when set) or number at least one (when `count` is omitted) |
 
@@ -382,6 +383,8 @@ named fails visibly.
     "final_observation": {
       "size": { "width": 120, "height": 40 },
       "mode": "actions",
+      "cursor": 0,
+      "selected_action": "session.focus",
       "screen": { "size": { "width": 120, "height": 40 }, "lines": ["..."], "width": 118, "height": 40 }
     }
   }
@@ -389,6 +392,9 @@ named fails visibly.
 ```
 
 - `ok` is true only when every assertion passed.
+- `cursor` and `selected_action` are omitted when they carry nothing to say:
+  `selected_action` is present only while the actions menu is open, so its
+  absence is "no menu", not "no selection".
 - `failures` (present only on failure) preserves assertion order, each with a
   `kind` and a `message`.
 - `final_observation` is always the last captured screen.
@@ -421,7 +427,12 @@ file. The exact inventory is:
 | File | Fixture | Covers |
 | --- | --- | --- |
 | [`baseline-layout.json`](scenarios/baseline-layout.json) | `basic` | the default wide dashboard draws one-line Session/Status/Time rows whose opening cell is the name — no tab number, no profile cell, no harness badge — with the selected row's identity — its agent, profile, and directory — carried by the inspector beside the list |
-| [`actions-popup-fit.json`](scenarios/actions-popup-fit.json) | `actions` | actions overlay fits after pressing `a` on a long-titled session |
+| [`actions-popup-fit.json`](scenarios/actions-popup-fit.json) | `actions` | actions menu fits after pressing `a` on a long-titled session |
+| [`actions-menu-initial-selection.json`](scenarios/actions-menu-initial-selection.json) | `actions` | the menu opens on Open session at the narrowest target size, with the last band still drawn — the selection is a named action ID, not a row number, so a reordered menu fails here rather than silently pointing elsewhere |
+| [`actions-menu-selection-moves.json`](scenarios/actions-menu-selection-moves.json) | `actions` | `j` twice walks the selection down the Open band to Launch another session at the widest target size |
+| [`actions-menu-disabled-entry-explains.json`](scenarios/actions-menu-disabled-entry-explains.json) | `actions` | `↓` six times reaches Clear status on a row carrying no badge: a disabled entry is still selectable and the menu states why it will not run rather than hiding it |
+| [`actions-menu-nested-picker-fit.json`](scenarios/actions-menu-nested-picker-fit.json) | `basic` | the profile picker the menu opens for a restart-with-another-profile fits 80×24 — the menu's own fit is only half the claim, since every nested surface it raises has to fit the same terminal |
+| [`actions-menu-nested-confirmation-fit.json`](scenarios/actions-menu-nested-confirmation-fit.json) | `paused_queue` | the close confirmation the menu raises fits 80×24 with a Unicode subject, names that subject, and carries its whole consequence sentence; nothing was closed, because the prompt is still up |
 | [`asl-abort-confirmation-fit.json`](scenarios/asl-abort-confirmation-fit.json) | `asl_runs` | `a` confirms an abort against the captured run and states the 120-second grace and its degrade-to-stop behavior |
 | [`asl-question-pending-narrow-fit.json`](scenarios/asl-question-pending-narrow-fit.json) | `asl_question` | a human-actionable ASL handoff leads Needs you in a compact pane, reading `Awaiting reply` in its Status column while the `🔁` supervision marker is off screen entirely — 30 cells is below the split floor, so there is no inspector to carry it — and the `awaiting response` gloss is gone with the rest of the wide footer |
 | [`asl-question-pending-wide.json`](scenarios/asl-question-pending-wide.json) | `asl_question` | `n` walks back from an unrelated row to the human-actionable ASL handoff, whose row carries only its name, `Awaiting reply`, and a time — the `🔁` belongs to the strip and the `❓` gloss to the footer |
@@ -586,8 +597,21 @@ inventory. Retired palette and Workbench modes are not valid scenario modes.
 
 Modal-open `no_layout_issues` scenarios must size the terminal wide enough for
 the overlay's natural width, or the detector will (correctly) flag
-`modal_width_overflow`. Empirically the actions overlay needs a terminal
-≥ ~100 cols; the `wide_profiles` config picker needs ≥ ~130 cols. Author a
-*negative* scenario by opening a modal at a narrow size and asserting the
-overflow is caught — that is the intended "fails deterministically when an
-overlay needs more columns than the terminal can provide" behavior.
+`modal_width_overflow`. Which modals that constraint binds on is not uniform,
+and the difference is the point rather than a quirk of the detector:
+
+- The **actions menu** is responsive. It clamps to the viewport instead of
+  claiming a natural width, so it fits every target size down to 80×24 and
+  below, and the scenarios above assert that positively rather than asserting
+  it overflows. When it runs out of *rows* it sheds its own decoration before
+  it sheds entries, which is why a short terminal still shows a list; only a
+  viewport too short for even one entry plus a header raises
+  `modal_height_overflow`.
+- The **`wide_profiles` config picker** still claims a natural width and needs
+  ≥ ~130 cols.
+
+Author a *negative* scenario by opening a modal that claims a natural width at
+a narrow size and asserting the overflow is caught — that is the intended
+"fails deterministically when an overlay needs more columns than the terminal
+can provide" behavior, and `config-picker-fit.json` plus the in-package
+`TestUITestModalConfigPickerWidthOverflow` are where it is still guarded.

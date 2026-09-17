@@ -304,25 +304,79 @@ func TestTUITestRunExpandsScenarioGlob(t *testing.T) {
 	}
 }
 
-// TestTUITestActionsOverlayWidthRegression pins the actions-popup sizing fix
-// (commit 26d9545) through the CLI. A terminal too narrow for the overlay's
-// widest row exits with the scenario-failure code and reports modal_width_overflow;
-// a terminal wide enough for the box exits clean. This keeps the regression
-// guarded at the CLI layer, not only the package-level renderer tests.
-func TestTUITestActionsOverlayWidthRegression(t *testing.T) {
-	stdout, _, err := runRootArgs(t, "tui-test", "fixture", "actions",
-		"--width", "80", "--height", "24", "--key", "a", "--json")
-	ee := asExitError(t, err)
-	if ee.Code != cli.ExitScenarioFailure {
-		t.Errorf("narrow actions overlay should exit %d, got %d", cli.ExitScenarioFailure, ee.Code)
+// TestTUITestActionsMenuFitsTargetSizes pins the selectable menu's responsive
+// layout through the CLI: at each of the four target sizes the menu opens, the
+// harness exits clean, and no modal-fit issue is reported.
+//
+// It replaces TestTUITestActionsOverlayWidthRegression, which required the
+// overlay to FAIL at 80x24 with modal_width_overflow. That assertion pinned the
+// old wrapped-description legend, whose widest row could not fit an 80-column
+// terminal, and 80x24 is now a size the menu is required to fit — so the old
+// test would have made "still clipped" the passing state. The regression it was
+// guarding (a modal that clips rather than reflows) is still guarded at the CLI
+// layer by TestTUITestConfigPickerWidthRegression below, which drives a box that
+// genuinely overflows and checks both the scenario-failure exit code and the
+// modal named in the JSON.
+func TestTUITestActionsMenuFitsTargetSizes(t *testing.T) {
+	for _, size := range []struct{ w, h string }{{"80", "24"}, {"100", "24"}, {"120", "30"}, {"160", "45"}} {
+		stdout, stderr, err := runRootArgs(t, "tui-test", "fixture", "actions",
+			"--width", size.w, "--height", size.h, "--key", "a", "--json")
+		if err != nil {
+			t.Errorf("actions menu at %sx%s should exit cleanly, got error %v (stderr=%q)\noutput=%s",
+				size.w, size.h, err, stderr, stdout)
+			continue
+		}
+		for _, issue := range []tui.UITestLayoutIssueType{
+			tui.UITestIssueModalWidthOverflow,
+			tui.UITestIssueModalHeightOverflow,
+			tui.UITestIssueModalClippedByRoot,
+			tui.UITestIssueLineWidthOverflow,
+		} {
+			if strings.Contains(stdout, string(issue)) {
+				t.Errorf("actions menu at %sx%s reports %s:\n%s", size.w, size.h, issue, stdout)
+			}
+		}
+		// The menu is there rather than merely not-overflowing, and the entry a
+		// fresh menu opens on is the one under the cursor.
+		if !strings.Contains(stdout, "Actions for") {
+			t.Errorf("actions menu at %sx%s did not render its header:\n%s", size.w, size.h, stdout)
+		}
+		final := finalObservation(t, stdout)
+		if final.Mode != "actions" {
+			t.Errorf("actions menu at %sx%s left mode %q", size.w, size.h, final.Mode)
+		}
+		if final.SelectedAction != "session.focus" {
+			t.Errorf("actions menu at %sx%s reports %q selected, want session.focus", size.w, size.h, final.SelectedAction)
+		}
 	}
-	if !strings.Contains(stdout, string(tui.UITestIssueModalWidthOverflow)) {
-		t.Errorf("expected %s in narrow-run JSON, got %q", tui.UITestIssueModalWidthOverflow, stdout)
-	}
+}
 
-	if _, stderr, err := runRootArgs(t, "tui-test", "fixture", "actions",
-		"--width", "120", "--height", "40", "--key", "a", "--json"); err != nil {
-		t.Errorf("wide actions overlay should exit cleanly, got error %v (stderr=%q)", err, stderr)
+// finalObservation decodes the harness's per-step observation array and returns
+// the last one, which is the state the keys left the model in.
+func finalObservation(t *testing.T, stdout string) tui.UITestObservation {
+	t.Helper()
+	var obs []tui.UITestObservation
+	if err := json.Unmarshal([]byte(stdout), &obs); err != nil {
+		t.Fatalf("output is not a JSON observation array: %v\noutput=%s", err, stdout)
+	}
+	if len(obs) == 0 {
+		t.Fatalf("no observations in output=%s", stdout)
+	}
+	return obs[len(obs)-1]
+}
+
+// TestTUITestActionsMenuSelectionMoves drives the menu through the CLI the way
+// an operator does — open it, step down twice, and read back which action is
+// selected — so the harness's own report of the selection is exercised end to
+// end rather than only in-package.
+func TestTUITestActionsMenuSelectionMoves(t *testing.T) {
+	stdout, stderr, err := runRootArgs(t, "tui-test", "fixture", "actions",
+		"--width", "100", "--height", "30", "--key", "a", "--key", "j", "--key", "j", "--json")
+	if err != nil {
+		t.Fatalf("stepping through the menu should exit cleanly, got %v (stderr=%q)", err, stderr)
+	}
+	if got := finalObservation(t, stdout).SelectedAction; got != "session.launch-another" {
+		t.Errorf("two steps down from Open session selected %q, want session.launch-another", got)
 	}
 }
 

@@ -40,18 +40,18 @@ func TestDefinitionsInventory(t *testing.T) {
 		aliases  []string
 	}
 	want := []expected{
-		{commands.FocusSession, MenuGroupOpen, Mnemonic{"⏎", "enter"}, "focus tab", "Focus Selected Session", []string{"jump", "tab"}},
-		{commands.PeekScrollback, MenuGroupOpen, Mnemonic{"e", "e"}, "peek scrollback", "Peek Scrollback", []string{"pager", "scrollback"}},
-		{commands.RestartSession, MenuGroupLifecycle, Mnemonic{"r", "r"}, "restart", "Restart Session", []string{"relaunch"}},
-		{commands.OverrideProfile, MenuGroupLifecycle, Mnemonic{"c", "c"}, "override profile", "Override Profile", []string{"account", "profile"}},
-		{commands.LaunchAnother, MenuGroupOpen, Mnemonic{"C", "C"}, "launch new", "Launch Another Session", []string{"duplicate", "new"}},
-		{commands.ClearStatusIcon, MenuGroupStatus, Mnemonic{"x", "x"}, "clear icon", "Clear Status Icon", []string{"attention", "badge", "icon"}},
-		{commands.CloseSession, MenuGroupLifecycle, Mnemonic{"X", "X"}, "close", "Close Session", []string{"exit", "kill"}},
-		{commands.OpenDirectoryID, MenuGroupOpen, Mnemonic{"o", "o"}, "open dir in shell", "Open Directory in Shell", []string{"directory", "shell", "terminal"}},
-		{commands.OpenEditorID, MenuGroupOpen, Mnemonic{"O", "O"}, "open in editor", "Open in Editor", []string{"directory", "edit"}},
-		{commands.CopyTitleID, MenuGroupOpen, Mnemonic{"y", "y"}, "copy title", "Copy Session Title", []string{"clipboard", "yank"}},
-		{commands.ToggleLockID, MenuGroupStatus, Mnemonic{"L", "L"}, "lock/unlock", "Lock Session", []string{"protect", "unlock"}},
-		{commands.ToggleMuteID, MenuGroupStatus, Mnemonic{"m", "m"}, "mute/unmute", "Mute Session", []string{"notifications", "unmute"}},
+		{commands.FocusSession, MenuGroupOpen, Mnemonic{"⏎", "enter"}, "Open session", "Focus Selected Session", []string{"jump", "tab"}},
+		{commands.PeekScrollback, MenuGroupOpen, Mnemonic{"e", "e"}, "Peek scrollback", "Peek Scrollback", []string{"pager", "scrollback"}},
+		{commands.RestartSession, MenuGroupLifecycle, Mnemonic{"r", "r"}, "Restart", "Restart Session", []string{"relaunch"}},
+		{commands.OverrideProfile, MenuGroupLifecycle, Mnemonic{"c", "c"}, "Restart with another profile", "Override Profile", []string{"account", "profile"}},
+		{commands.LaunchAnother, MenuGroupOpen, Mnemonic{"C", "C"}, "Launch another session", "Launch Another Session", []string{"duplicate", "new"}},
+		{commands.ClearStatusIcon, MenuGroupStatus, Mnemonic{"x", "x"}, "Clear status", "Clear Status Icon", []string{"attention", "badge", "icon"}},
+		{commands.CloseSession, MenuGroupLifecycle, Mnemonic{"X", "X"}, "Close", "Close Session", []string{"exit", "kill"}},
+		{commands.OpenDirectoryID, MenuGroupOpen, Mnemonic{"o", "o"}, "Open shell", "Open Directory in Shell", []string{"directory", "shell", "terminal"}},
+		{commands.OpenEditorID, MenuGroupOpen, Mnemonic{"O", "O"}, "Open editor", "Open in Editor", []string{"directory", "edit"}},
+		{commands.CopyTitleID, MenuGroupOpen, Mnemonic{"y", "y"}, "Copy title", "Copy Session Title", []string{"clipboard", "yank"}},
+		{commands.ToggleLockID, MenuGroupStatus, Mnemonic{"L", "L"}, "Lock/Unlock", "Lock Session", []string{"protect", "unlock"}},
+		{commands.ToggleMuteID, MenuGroupStatus, Mnemonic{"m", "m"}, "Mute/Unmute", "Mute Session", []string{"notifications", "unmute"}},
 		{commands.SearchProject, MenuGroupNone, Mnemonic{}, "", "Search This Project's Past Sessions", []string{"history", "project", "transcripts"}},
 		{commands.ShowDetails, MenuGroupNone, Mnemonic{}, "", "Show Session Details", []string{"events", "hooks"}},
 		{commands.ShowTimeline, MenuGroupNone, Mnemonic{}, "", "Show Session Timeline", []string{"events", "phases"}},
@@ -127,12 +127,17 @@ func TestMenuMembershipIsOneFact(t *testing.T) {
 	}
 }
 
+// TestMenuDefinitionsAreTheRowActionsInMenuOrder states the menu's order as
+// data. It is banded — every Open entry, then every Status entry, then every
+// Lifecycle entry — and within a band the declaration order in Definitions()
+// stands, which is why MenuDefinitions sorts stably by band rather than keeping
+// a second hand-written list that could drift from the first.
 func TestMenuDefinitionsAreTheRowActionsInMenuOrder(t *testing.T) {
 	want := []commands.ID{
-		commands.FocusSession, commands.PeekScrollback, commands.RestartSession,
-		commands.OverrideProfile, commands.LaunchAnother, commands.ClearStatusIcon,
-		commands.CloseSession, commands.OpenDirectoryID, commands.OpenEditorID,
-		commands.CopyTitleID, commands.ToggleLockID, commands.ToggleMuteID,
+		commands.FocusSession, commands.PeekScrollback, commands.LaunchAnother,
+		commands.OpenDirectoryID, commands.OpenEditorID, commands.CopyTitleID,
+		commands.ClearStatusIcon, commands.ToggleLockID, commands.ToggleMuteID,
+		commands.RestartSession, commands.OverrideProfile, commands.CloseSession,
 	}
 	var got []commands.ID
 	for _, definition := range MenuDefinitions() {
@@ -143,13 +148,64 @@ func TestMenuDefinitionsAreTheRowActionsInMenuOrder(t *testing.T) {
 	}
 }
 
+// TestMenuDefinitionsAreBanded is the property the order above is an instance
+// of: bands never interleave, so the rule the menu draws at a band change is
+// drawn exactly twice rather than wherever a declaration happened to land.
+func TestMenuDefinitionsAreBanded(t *testing.T) {
+	previous := MenuGroup(0)
+	for _, definition := range MenuDefinitions() {
+		if definition.MenuGroup < previous {
+			t.Fatalf("%q is in band %v after band %v", definition.ID, definition.MenuGroup, previous)
+		}
+		previous = definition.MenuGroup
+	}
+}
+
+// TestInitialSelectionOpensTheMenuOnOpenSession pins what a freshly opened menu
+// has under its cursor. It is the first entry of the first band, which is also
+// what enter did before the menu had a cursor at all: pressing `a` then enter
+// still focuses the session.
+func TestInitialSelectionOpensTheMenuOnOpenSession(t *testing.T) {
+	if got := InitialSelection(); got != commands.FocusSession {
+		t.Fatalf("InitialSelection() = %q, want %q", got, commands.FocusSession)
+	}
+	if got := MenuIndexOf(InitialSelection()); got != 0 {
+		t.Fatalf("MenuIndexOf(InitialSelection()) = %d, want 0", got)
+	}
+	definition, ok := Lookup(InitialSelection())
+	if !ok {
+		t.Fatal("the initial selection is not in the vocabulary")
+	}
+	if !definition.InMenu() {
+		t.Fatalf("the initial selection %q is not offered in the menu", definition.ID)
+	}
+}
+
+// TestMenuIndexOf covers the whole menu and the two ways an index can be asked
+// for something the menu does not offer. Both answer 0 rather than -1, because
+// the caller is positioning a cursor: an out-of-range index would be a menu that
+// opens with nothing selected.
+func TestMenuIndexOf(t *testing.T) {
+	menu := MenuDefinitions()
+	for i, definition := range menu {
+		if got := MenuIndexOf(definition.ID); got != i {
+			t.Errorf("MenuIndexOf(%q) = %d, want %d", definition.ID, got, i)
+		}
+	}
+	for _, id := range []commands.ID{commands.ShowDetails, commands.Quit, commands.ID("nonesuch")} {
+		if got := MenuIndexOf(id); got != 0 {
+			t.Errorf("MenuIndexOf(%q) = %d, want 0 for an action the menu does not offer", id, got)
+		}
+	}
+}
+
 // TestDefinitionsAreIndependentValues guards the fresh-slice contract: two
 // surfaces read this vocabulary, and one mutating its copy must not be visible
 // to the other.
 func TestDefinitionsAreIndependentValues(t *testing.T) {
 	first := Definitions()
 	first[0].MenuLabel = "tampered"
-	if second := Definitions(); second[0].MenuLabel != "focus tab" {
+	if second := Definitions(); second[0].MenuLabel != "Open session" {
 		t.Fatalf("second read saw %q, want the declared label", second[0].MenuLabel)
 	}
 	// The alias slices are handed straight to the palette, so they are part of
@@ -169,7 +225,7 @@ func TestLookup(t *testing.T) {
 	if !ok {
 		t.Fatal("close session is not in the vocabulary")
 	}
-	if definition.MenuLabel != "close" {
+	if definition.MenuLabel != "Close" {
 		t.Fatalf("close session label = %q", definition.MenuLabel)
 	}
 	if _, ok := Lookup(commands.Quit); ok {

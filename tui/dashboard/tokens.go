@@ -32,6 +32,18 @@ func sessionContextTokens(s session.RunningSession) []string {
 	return []string{s.EffectiveProfile(), harnessLabel(s.Harness), branchText(s), s.Directory}
 }
 
+// SessionContextLine is the one-line secondary identity of a session: profile,
+// harness, branch, directory, in the drop-priority order above and joined by the
+// shared separator.
+//
+// It is exported for a surface that draws one session outside this package and
+// has to say which one — the per-row action menu, whose header carries a title
+// that two live rows can share. Nothing here decides how wide the line may be:
+// the caller truncates, because only it knows what it is competing with.
+func SessionContextLine(s session.RunningSession) string {
+	return joinDetailTokens(sessionContextTokens(s)...)
+}
+
 // joinDetailTokens joins the non-empty tokens. An omitted token leaves no
 // separator behind, so a session with no harness does not read as one whose
 // harness is blank.

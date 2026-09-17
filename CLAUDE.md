@@ -444,8 +444,16 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
 - `tui/layout`: terminal geometry, and nothing else — the visible-window slice
   of a flat list, wrap/clamp width math, grapheme-aware display width,
   truncation and padding, and the overlay compositor that splices a popup into
-  a base view. It is the one leaf every other leaf imports and the only package
-  in the repository's TUI tree with no in-repo dependency whatsoever.
+  a base view. It also holds the model-independent row and detail primitives a
+  selectable list is built from: greedy word wrapping with a rune-safe hard
+  break, the label-plus-shortcut row that concatenates to exactly its budget,
+  the optionally labelled band rule, and the fixed-height detail block that
+  marks what it had to clip. They live here rather than beside either caller
+  because `tui/commands` and `tui/sessionactions` both draw with them and the
+  dependency runs one way between those two; the test is that none of them
+  names a model, a session, or an action. It is the one leaf every other leaf
+  imports and the only package in the repository's TUI tree with no in-repo
+  dependency whatsoever.
 - `tui/dashboard`: the live-session list — the filter DSL with its removable
   chips and completion menu, row/title/activity formatting, group borders and
   the state gloss, cursor restoration across a rebuilt list, pagination, the
@@ -520,8 +528,18 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   than stored beside it, so an action cannot be retargeted by a topology refresh
   between selection and dispatch — and the `Result` contract carrying action
   identity, request identity, and an outcome that keeps a refusal distinct from a
-  failure. It names no host model and imports neither `tui` nor any surface
-  above it, so the dependency direction stays `tui` → `tui/sessionactions` →
+  failure. Two presentation answers live here for the same reason the wordings
+  do. The menu's initial selection is declared rather than left as index zero,
+  so opening the menu and pressing enter does what pressing enter on the row
+  did before there was a menu. And the destructive confirmation's rendering
+  (`prompt.go`) is here rather than in the root, because the prompt is the
+  wording an action already decided: the host passes the `ConfirmPrompt` the
+  controller produced and a subject, and gets back a box. Its consequence
+  sentence is WRAPPED, never truncated — half a sentence about what saying yes
+  destroys is a different warning rather than a shorter one, and the operator
+  answers y or n to whichever one they read. It names no host model and imports
+  neither `tui` nor any surface above it, so the dependency direction stays
+  `tui` → `tui/sessionactions` →
   `tui/commands` → `tui/dashboard`. What an action DOES stays in the root, which
   supplies the runner and the executor for each identity; a definition the root
   has no implementation for is dropped rather than rendered, and the root's

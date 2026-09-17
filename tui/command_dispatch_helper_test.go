@@ -95,7 +95,7 @@ func runRowAction(t *testing.T, m Model, key string) (Model, tea.Cmd) {
 		if a.KeyMatch != key {
 			continue
 		}
-		if a.Available != nil && !a.Available(m) {
+		if !a.Available(m) {
 			t.Fatalf("action %q (%s) is blocked for the current row", key, a.Label)
 		}
 		updated, cmd := m.Update(keyPress(key))

@@ -345,10 +345,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// so it keeps its own case. It captures its target the same way the
 		// bindings do, which is what keeps a family summary out of it.
 		if s, ok := m.selectedSession(); ok {
-			m.targetSession = s
-			m.actionErr = nil
-			m.actionsOffset = 0
-			m.mode = ModeActions
+			m.openActionsMenu(s)
 		}
 		return m, nil
 

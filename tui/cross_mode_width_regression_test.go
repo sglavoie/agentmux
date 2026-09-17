@@ -275,7 +275,7 @@ func TestCrossModeDetailAndOverlayHeadersPadEmojiIconColumn(t *testing.T) {
 				{TabID: 1, WindowID: 10, Base: tc.title, Project: tc.title, Account: "work", State: "bolt"},
 			})
 			m = openActionsOverlay(t, m)
-			out := stripAnsi(renderActions(m, 80))
+			out := stripAnsi(renderActions(m))
 			assertContainsRenderedTitle(t, "actions header", out, tc)
 		})
 

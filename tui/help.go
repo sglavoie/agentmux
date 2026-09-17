@@ -84,13 +84,22 @@ var helpSections = []struct {
 	}},
 	// Act on row and the two sections below it name no dashboard letters of
 	// their own, because there are none left to name: the row commands are
-	// reached through the actions overlay and the palette, both of which draw
-	// each entry with its own availability. The keys inside the overlay are its
+	// reached through the actions menu and the palette, both of which draw
+	// each entry with its own availability. The keys inside the menu are its
 	// own mnemonics rather than dashboard bindings, which is why they are listed
 	// as "a, then e" rather than as "e".
+	//
+	// The menu is selectable as well as typeable, and both are listed because
+	// neither replaced the other: j/k and enter reach every entry without
+	// knowing a letter, and the letters still run their entry from anywhere in
+	// the list. Only enter is spelled twice in this section — on the dashboard
+	// it focuses the row, inside the menu it runs the selection — so each is
+	// scoped by the line it appears on.
 	{"Act on row", []string{
 		"  enter     focus the session's tab (a project folds instead)",
-		"  a         open actions overlay for the selected session",
+		"  a         open the actions menu for the selected session",
+		"  j/k ↑/↓   move the selection (in the menu)",
+		"  enter     run the selected action (in the menu)",
 		"  a, then e peek scrollback (active rows only)",
 		"  a, then r restart session (confirm)",
 		"  a, then x clear session icon",
@@ -102,6 +111,7 @@ var helpSections = []struct {
 		"  a, then o open a shell in the session's directory",
 		"  a, then O open the configured editor there",
 		"  (a locked row draws restart, override, and close dimmed; L unlocks it)",
+		"  (a dimmed entry is still selectable; the menu says why it will not run)",
 	}},
 	// The launcher keeps its own direct keymap: it is a modal surface with no
 	// dashboard rows behind it, so its letters collide with nothing. Only the

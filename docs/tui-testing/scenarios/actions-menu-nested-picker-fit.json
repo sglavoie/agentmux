@@ -1,0 +1,15 @@
+{
+  "name": "actions-menu-nested-picker-fit",
+  "fixture": "basic",
+  "size": { "width": 80, "height": 24 },
+  "actions": [
+    { "type": "key", "key": "a" },
+    { "type": "key", "key": "c" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "config_picker" },
+    { "type": "no_layout_issues" },
+    { "type": "contains_text", "text": "work" },
+    { "type": "contains_text", "text": "personal" }
+  ]
+}

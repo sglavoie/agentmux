@@ -1,0 +1,16 @@
+{
+  "name": "actions-menu-selection-moves",
+  "fixture": "actions",
+  "size": { "width": 160, "height": 45 },
+  "actions": [
+    { "type": "key", "key": "a" },
+    { "type": "key", "key": "j" },
+    { "type": "key", "key": "j" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "actions" },
+    { "type": "no_layout_issues" },
+    { "type": "selected_action", "value": "session.launch-another" },
+    { "type": "contains_text", "text": "Launch another session" }
+  ]
+}

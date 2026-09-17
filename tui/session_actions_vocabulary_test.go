@@ -48,8 +48,11 @@ func TestOverlayOffersEveryMenuDefinition(t *testing.T) {
 		if action.Run == nil {
 			t.Errorf("%q has no runner", definition.ID)
 		}
-		if action.Available == nil {
+		if action.Availability == nil {
 			t.Errorf("%q has no availability closure", definition.ID)
+		}
+		if action.Band != definition.MenuGroup.String() {
+			t.Errorf("%q band = %q, want %q", definition.ID, action.Band, definition.MenuGroup.String())
 		}
 	}
 }
@@ -128,6 +131,35 @@ func TestMenuMnemonicsMatchDashboardKeyConstants(t *testing.T) {
 		}
 		if definition.Mnemonic.Key != key {
 			t.Errorf("%q mnemonic = %q, want the key constant %q", definition.ID, definition.Mnemonic.Key, key)
+		}
+	}
+}
+
+// TestMenuNavigationKeysShadowNoMnemonic is the mnemonic-collision guard the
+// selectable menu made necessary. handleActionsKey answers navigation before it
+// scans the mnemonics, so any key in both sets belongs to navigation and its
+// action becomes unreachable by letter — silently, because the menu would still
+// draw the letter against the row. Enter is the one deliberate overlap and is
+// excluded here: the menu takes it, ImmediateKey hides it, and enter on the
+// initial selection still runs focus-session.
+func TestMenuNavigationKeysShadowNoMnemonic(t *testing.T) {
+	navigation := []string{
+		keyEsc, keyQ, keyCtrlC,
+		keyJ, keyK, keyDown, keyUp,
+		keyPgDown, keyPgUp, keyCtrlF, keyCtrlB, keyCtrlD, keyCtrlU,
+		keyG, keyGG,
+	}
+	taken := make(map[string]bool, len(navigation))
+	for _, key := range navigation {
+		taken[key] = true
+	}
+	for _, definition := range sessionactions.MenuDefinitions() {
+		if definition.Mnemonic.Key == commands.MenuExecuteKey {
+			continue
+		}
+		if taken[definition.Mnemonic.Key] {
+			t.Errorf("menu entry %q claims %q, which the menu's navigation answers first",
+				definition.ID, definition.Mnemonic.Key)
 		}
 	}
 }

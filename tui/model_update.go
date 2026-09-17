@@ -285,7 +285,7 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	clampDetailScroll(&m)
 	clampHealthScroll(&m)
 	clampHelpOffset(&m)
-	clampActionsOffset(&m)
+	clampActionsSelection(&m)
 	clampCommandPaletteOffset(&m)
 	scrollCommandPaletteToCursor(&m)
 	clampMessageDetailScroll(&m)

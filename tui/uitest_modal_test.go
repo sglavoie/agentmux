@@ -60,24 +60,30 @@ func TestUITestModalNoIssuesWhenFits(t *testing.T) {
 	}
 }
 
-// TestUITestModalDetectsWidthOverflow verifies that a terminal too narrow for
-// the actions overlay's widest row is reported as modal_width_overflow, with the
-// natural width recorded above the clamped render width — even though the box
-// clamps itself to m.width-4 and the root screen renders clean.
-func TestUITestModalDetectsWidthOverflow(t *testing.T) {
-	narrow := detectModalFitIssues(actionsModalAt(80, 24))
-	if !hasIssueType(narrow, UITestIssueModalWidthOverflow) {
-		t.Fatalf("expected modal_width_overflow for actions at 80x24, got %v", narrow)
-	}
-	for _, iss := range narrow {
-		if iss.Type == UITestIssueModalWidthOverflow {
-			if iss.Actual <= iss.Limit {
-				t.Errorf("width overflow should record natural width (%d) above clamped width (%d)", iss.Actual, iss.Limit)
-			}
+// TestUITestActionsMenuFitsEveryTargetSize is the positive form of the layout
+// guarantee the selectable menu is required to hold: at each of the four target
+// sizes the whole menu is on screen, with no modal-fit issue of any kind and no
+// scrolling.
+//
+// It replaces an assertion that the overlay OVERFLOWED at 80x24. That assertion
+// pinned the old wrapped-description legend, whose widest row could not fit, and
+// leaving it in place would have meant the menu passed its acceptance by
+// continuing to be clipped. The detector itself is unweakened: the genuine
+// clipping cases are TestUITestModalConfigPickerWidthOverflow below, which still
+// reports modal_width_overflow for a real overflowing box, and the synthetic
+// line/height overflow tests in uitest_screen_test.go.
+func TestUITestActionsMenuFitsEveryTargetSize(t *testing.T) {
+	for _, size := range []struct{ w, h int }{{80, 24}, {100, 24}, {120, 30}, {160, 45}} {
+		m := actionsModalAt(size.w, size.h)
+		if iss := detectModalFitIssues(m); len(iss) != 0 {
+			t.Errorf("actions menu at %dx%d reports %v, want it to fit", size.w, size.h, iss)
 		}
-	}
-	if wide := detectModalFitIssues(actionsModalAt(140, 50)); hasIssueType(wide, UITestIssueModalWidthOverflow) {
-		t.Errorf("actions overlay at 140x50 should not overflow width, got %v", wide)
+		in := actionsInput(m)
+		rows, visible := in.ScrollBounds()
+		if visible < len(rows) {
+			t.Errorf("actions menu at %dx%d shows %d of %d rows, want the whole menu without scrolling",
+				size.w, size.h, visible, len(rows))
+		}
 	}
 }
 
@@ -95,15 +101,31 @@ func TestUITestModalConfigPickerWidthOverflow(t *testing.T) {
 
 // TestUITestModalDetectsHeightOverflow verifies that a modal taller than the
 // body area root composition gives it is reported as modal_height_overflow.
+//
+// The probe height moved from 8 rows to 4 because the menu now sheds its own
+// chrome — separator, context line, detail rows, hint — before it will render
+// taller than the body, so 8 rows is a fit rather than an overflow. Four rows
+// leaves a body of two, which cannot hold the box frame itself, and the detector
+// must still say so: this is the case the shed cannot rescue, and suppressing it
+// would be the weakened check. The paired positive assertion is the line below.
 func TestUITestModalDetectsHeightOverflow(t *testing.T) {
-	iss := detectModalFitIssues(actionsModalAt(120, 8))
+	iss := detectModalFitIssues(actionsModalAt(120, 4))
 	if !hasIssueType(iss, UITestIssueModalHeightOverflow) {
-		t.Fatalf("expected modal_height_overflow for actions at 120x8, got %v", iss)
+		t.Fatalf("expected modal_height_overflow for actions at 120x4, got %v", iss)
 	}
 	for _, i := range iss {
 		if i.Type == UITestIssueModalHeightOverflow && i.Actual <= i.Limit {
 			t.Errorf("height overflow should record rendered rows (%d) above body height (%d)", i.Actual, i.Limit)
 		}
+	}
+	// And the shed is real rather than a suppressed report: a viewport with room
+	// for the box fits it, entries and all.
+	if fit := detectModalFitIssues(actionsModalAt(120, 8)); len(fit) != 0 {
+		t.Errorf("actions menu at 120x8 reports %v, want the chrome shed to make it fit", fit)
+	}
+	short := actionsModalAt(120, 8)
+	if _, visible := actionsInput(short).ScrollBounds(); visible < 1 {
+		t.Error("a short viewport shows no entries at all; the shed must leave at least one")
 	}
 }
 
