@@ -680,9 +680,15 @@ func sameOrder(a, b []session.RunningSession) bool {
 // all reached through a dispatched action, and the observing half still cannot
 // name one of them — which is a sharper statement than the single lifecycle
 // allowlist could make once it had to admit commands.Close.
+//
+// The keymap is split along the same line. bindings.go is the lifecycle's,
+// because a table whose entries are dispatchable runners is the routing; help.go
+// is the renderer's, because the overlay it draws is a geometry struct in and a
+// string out; and help_keys.go, which holds the state the two share, is where the
+// keys that move it live.
 var (
-	renderingFiles = []string{"chrome.go", "footer.go", "grid.go", "nav.go", "order.go", "view.go"}
-	lifecycleFiles = []string{"capture.go", "model.go", "preferences.go", "refresh.go", "status.go", "update.go"}
+	renderingFiles = []string{"chrome.go", "footer.go", "grid.go", "help.go", "nav.go", "order.go", "view.go"}
+	lifecycleFiles = []string{"bindings.go", "capture.go", "help_keys.go", "model.go", "preferences.go", "refresh.go", "status.go", "update.go"}
 	actionFiles    = []string{"action_keys.go", "actions.go", "recovery.go"}
 )
 

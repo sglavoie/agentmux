@@ -102,16 +102,17 @@ func TestUITestModalConfigPickerWidthOverflow(t *testing.T) {
 // TestUITestModalDetectsHeightOverflow verifies that a modal taller than the
 // body area root composition gives it is reported as modal_height_overflow.
 //
-// The probe height moved from 8 rows to 4 because the menu now sheds its own
-// chrome — separator, context line, detail rows, hint — before it will render
-// taller than the body, so 8 rows is a fit rather than an overflow. Four rows
-// leaves a body of two, which cannot hold the box frame itself, and the detector
-// must still say so: this is the case the shed cannot rescue, and suppressing it
-// would be the weakened check. The paired positive assertion is the line below.
+// The probe height has moved twice, and both times for the same reason: the
+// case the detector must still report is the one nothing can rescue. It left 8
+// rows when the menu learned to shed its own chrome — separator, context line,
+// detail rows, header — which made 8 a fit; it left 4 when the root footer under
+// the menu went away, which handed the body the row that made 4 a fit too.
+// Three rows leaves a body of two, which cannot hold the box frame itself. The
+// paired positive assertion is the line below.
 func TestUITestModalDetectsHeightOverflow(t *testing.T) {
-	iss := detectModalFitIssues(actionsModalAt(120, 4))
+	iss := detectModalFitIssues(actionsModalAt(120, 3))
 	if !hasIssueType(iss, UITestIssueModalHeightOverflow) {
-		t.Fatalf("expected modal_height_overflow for actions at 120x4, got %v", iss)
+		t.Fatalf("expected modal_height_overflow for actions at 120x3, got %v", iss)
 	}
 	for _, i := range iss {
 		if i.Type == UITestIssueModalHeightOverflow && i.Actual <= i.Limit {

@@ -167,6 +167,12 @@ type model struct {
 	// feedback row carries about an operation.
 	acts actionState
 
+	// help is the keymap overlay. It is deliberately NOT part of acts: help acts
+	// on nothing, captures no row, and starts no command, and a surface that
+	// shared the action layer's state would be able to be raised while an action
+	// was pending.
+	help helpState
+
 	// previews is keyed by Kitty window ID, the same key tile rendering reads: it
 	// is what each tile SHOWS, and an absent entry is the honest loading state of
 	// a window whose first capture has not landed. It is copied on write, so an
@@ -286,7 +292,7 @@ func (m model) View() tea.View {
 		Now:           m.deps.now(),
 		Feedback:      m.feedback(),
 		Overlay:       m.overlayView(),
-		Recoverable:   m.recoverable(),
+		OverlayHints:  m.overlayHints(),
 	}))
 }
 

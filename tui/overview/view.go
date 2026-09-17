@@ -181,13 +181,16 @@ type Input struct {
 
 	// Overlay is the modal composited over the finished frame, or "" for none.
 	// It arrives already rendered because what is IN it — a menu, a profile
-	// picker, a confirmation — is decided by the action layer, and a renderer
-	// that had to know which of the three it was would be a second place the
-	// modal's identity is stated.
+	// picker, a confirmation, the keymap — is decided by the layer that owns it,
+	// and a renderer that had to know which of the four it was would be a second
+	// place the modal's identity is stated.
 	Overlay string
-	// Recoverable says whether a close can still be undone, which is the only
-	// thing the footer needs to know about the recovery stack.
-	Recoverable bool
+	// OverlayHints is what the hint row says while that modal is up: "" for the
+	// three modals that print their keys inside their own box, and the answer
+	// keys for the confirmation, which prints none. It is read only when Overlay
+	// is set, and it is what keeps the base row from going on advertising keys
+	// that mean something else — or nothing — under a modal.
+	OverlayHints string
 }
 
 // Render returns exactly Height lines (no trailing newline), each at most Width
@@ -238,11 +241,18 @@ func paintChrome(rows []string, in Input, g Geometry, count, selected int) {
 	if title == "" {
 		title = DefaultTitle
 	}
-	hints := in.Hints
-	if hints == "" {
+	// The supplied hints win, then the modal's, then the base row. A caller that
+	// spelled its own row is answered first because it asked for exactly that;
+	// the modal comes before the base row because the base row's keys are the
+	// grid's, and the grid is not what the keyboard is talking to.
+	var hints string
+	switch {
+	case in.Hints != "":
+		hints = styleDim.Render(in.Hints)
+	case in.Overlay != "":
+		hints = in.OverlayHints
+	default:
 		hints = renderFooter(in, g, selected)
-	} else {
-		hints = styleDim.Render(hints)
 	}
 
 	rows[0] = titleLine(title, g, count, selected)

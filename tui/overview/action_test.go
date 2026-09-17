@@ -784,8 +784,15 @@ func TestAConfirmedCloseIsOfferedAnUndoAndRelaunches(t *testing.T) {
 	if !strings.HasPrefix(offer, "closed ") || !strings.Contains(offer, "u undo (5s)") {
 		t.Fatalf("the feedback row says %q, want the undo offer", offer)
 	}
-	if !strings.Contains(frameOf(m), "undo close") {
-		t.Fatal("the footer does not offer the undo key while a close is recoverable")
+	// The offer is on the FEEDBACK row and nowhere else. A close is undoable for
+	// five seconds; a permanent footer entry would go on naming `u` for the rest
+	// of the session, which is the advertised-but-dead key this surface is not
+	// allowed to have.
+	if !strings.Contains(frameOf(m), "u undo (5s)") {
+		t.Fatalf("the frame does not carry the undo offer:\n%s", frameOf(m))
+	}
+	if hints := hintRowOf(m); strings.Contains(hints, "undo") {
+		t.Fatalf("the footer advertises the undo: %q", hints)
 	}
 
 	// The grid reconciles onto the nearest survivor when the close lands.
@@ -1027,7 +1034,7 @@ func TestAnEmptyGridKeepsItsHelpItsExitAndItsRecovery(t *testing.T) {
 	}
 
 	frame := frameOf(m)
-	for _, hint := range []string{"Enter focus", "actions", "undo close", "close"} {
+	for _, hint := range []string{"Enter focus", "a actions", "? help", "q exit"} {
 		if !strings.Contains(frame, hint) {
 			t.Fatalf("the empty grid lost the %q hint:\n%s", hint, frame)
 		}

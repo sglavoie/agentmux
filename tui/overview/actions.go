@@ -516,7 +516,14 @@ func (m model) confirmInput() sessionactions.PromptInput {
 }
 
 // overlayView is the modal the grid is drawn under, or "" for no modal.
+//
+// Help is checked first for the reason handleKeyPress checks it first: it is the
+// topmost surface, and naming it here keeps the render order and the routing
+// order readable as the same stack.
 func (m model) overlayView() string {
+	if m.help.open {
+		return m.renderHelpBox()
+	}
 	switch m.acts.surface {
 	case surfaceMenu:
 		return commands.RenderActionsBox(menuInput(m))
@@ -524,6 +531,20 @@ func (m model) overlayView() string {
 		return m.profileInput().RenderBox()
 	case surfaceConfirm:
 		return sessionactions.RenderPromptBox(m.confirmInput())
+	}
+	return ""
+}
+
+// overlayHints is what the hint row says while a modal is up.
+//
+// Three of the four say nothing here because they say it inside their own box:
+// the menu, the profile picker, and the keymap each end with their own key line.
+// The confirmation does not, so its answer keys are the row — which is also the
+// only place on this surface that says a destructive prompt can be backed out
+// of.
+func (m model) overlayHints() string {
+	if !m.help.open && m.acts.surface == surfaceConfirm {
+		return confirmHints()
 	}
 	return ""
 }

@@ -360,7 +360,6 @@ func TestRootFootersHaveZebraRows(t *testing.T) {
 		{name: "session launcher", m: Model{mode: ModePicker, width: 72}},
 		{name: "config picker", m: Model{mode: ModeConfigPicker, width: 72}},
 		{name: "help", m: Model{mode: ModeHelp, width: 72}},
-		{name: "actions", m: Model{mode: ModeActions, width: 72}},
 		{name: "command palette", m: Model{mode: ModeCommandPalette, width: 72}},
 		{name: "session browser", m: Model{mode: ModeSessionSearch, width: 72}},
 		{name: "transcript viewer", m: Model{mode: ModeSessionView, width: 72}},
@@ -392,6 +391,10 @@ func TestFooterZebraExcludesViewsWithoutRootFooter(t *testing.T) {
 		m    Model
 	}{
 		{name: "detail overlay", m: Model{mode: ModeDetail, width: 72}},
+		// The actions menu joined them: its own hint line names select, run, the
+		// letters, and how to close, and a root row repeating those was the same
+		// instructions twice in two wordings.
+		{name: "actions menu", m: Model{mode: ModeActions, width: 72}},
 	}
 
 	for _, tc := range cases {

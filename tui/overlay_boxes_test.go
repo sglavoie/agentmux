@@ -378,13 +378,14 @@ func TestDashboardOverlayTinyTerminalDoesNotOverflowStatusBar(t *testing.T) {
 	if len(lines) != m.height {
 		t.Fatalf("rendered line count = %d, want terminal height %d:\n%s", len(lines), m.height, out)
 	}
-	// Three rows is body, feedback slot, footer. The dashboard's chrome keeps its
-	// order under the overlay, so the status is the second row rather than the
-	// last, and neither row is dropped to make the overlay fit.
-	if status := strings.TrimSpace(lines[len(lines)-2]); !strings.Contains(status, "Session actions") {
-		t.Fatalf("feedback row = %q, want actions status:\n%s", status, out)
+	// Three rows is body and the dashboard's chrome. The menu draws no root
+	// footer — its own hint line is the only statement of its keys — so the
+	// status keeps the final row, which is what the sibling case above calls an
+	// overlay with no footer of its own. Neither row is dropped to fit the box.
+	if footer := rootFooterLines(m); len(footer) != 0 {
+		t.Fatalf("the actions menu drew %d root footer rows, want none: %q", len(footer), footer)
 	}
-	if last := strings.TrimSpace(lines[len(lines)-1]); last != strings.TrimSpace(stripAnsi(rootFooterLines(m)[0])) {
-		t.Fatalf("final row = %q, want the overlay footer", last)
+	if status := strings.TrimSpace(lines[len(lines)-1]); !strings.Contains(status, "Session actions") {
+		t.Fatalf("final row = %q, want the actions status:\n%s", status, out)
 	}
 }

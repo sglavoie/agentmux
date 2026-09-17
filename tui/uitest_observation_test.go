@@ -97,7 +97,7 @@ func TestUITestObservationModeNames(t *testing.T) {
 // rows than the terminal can provide — even though the root screen itself
 // renders clean at that size.
 //
-// The overflowing probe is a terminal four rows tall rather than the 80x24 this
+// The overflowing probe is a terminal three rows tall rather than the 80x24 this
 // test used to assert the actions overlay was clipped at. 80x24 is now a size
 // the menu is REQUIRED to fit, and TestUITestActionsMenuFitsEveryTargetSize
 // asserts it does; what is kept here is the property this test is actually
@@ -109,13 +109,13 @@ func TestUITestLayoutIssuesIncludeModalFit(t *testing.T) {
 	// Too short: the body area cannot hold the menu's box at all, which is the
 	// one case shedding chrome cannot rescue.
 	narrow := m
-	updated, _ := narrow.Update(tea.WindowSizeMsg{Width: 120, Height: 4})
+	updated, _ := narrow.Update(tea.WindowSizeMsg{Width: 120, Height: 3})
 	narrow = updated.(Model)
 	narrow = pressKey(narrow, "a")
 	if narrow.mode != ModeActions {
 		t.Fatalf("expected ModeActions after a, got %d", narrow.mode)
 	}
-	obs := observeUITest(narrow, UITestSize{Width: 120, Height: 4})
+	obs := observeUITest(narrow, UITestSize{Width: 120, Height: 3})
 	if !hasIssueType(obs.Screen.Issues, UITestIssueModalHeightOverflow) {
 		t.Errorf("expected modal_height_overflow on the observation screen, got %v", obs.Screen.Issues)
 	}

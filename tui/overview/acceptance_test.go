@@ -1440,8 +1440,20 @@ func TestAcceptanceAClosedSessionLeavesTheTreeAndIsRestoredByUndo(t *testing.T) 
 	if s.m.acts.surface != surfaceConfirm {
 		t.Fatalf("`X` left surface %v, want the confirmation", s.m.acts.surface)
 	}
-	if frame := s.frame(); !strings.Contains(frame, "close") {
-		t.Fatalf("the confirmation does not say what it is about to do:\n%s", frame)
+	// The prompt itself is what is asserted, not a word that happens to appear
+	// somewhere in the frame: the question names the session, the consequence
+	// says what saying yes destroys, and the hint row — the prompt box carries
+	// none of its own — says how to answer it.
+	frame := s.frame()
+	for _, want := range []string{
+		`Close "svc02"?`,
+		"The harness process exits; its transcript is preserved.",
+		"y confirm",
+		"cancel",
+	} {
+		if !strings.Contains(frame, want) {
+			t.Fatalf("the confirmation does not say %q:\n%s", want, frame)
+		}
 	}
 	if len(world.callsOf("CloseTab")) != 0 {
 		t.Fatal("the confirmation had already closed the tab before it was answered")
@@ -1473,6 +1485,8 @@ func TestAcceptanceAClosedSessionLeavesTheTreeAndIsRestoredByUndo(t *testing.T) 
 	if !s.m.recoverable() {
 		t.Fatal("a confirmed close left nothing to undo")
 	}
+	// The offer is on the FEEDBACK row rather than the footer: `u` is real for
+	// five seconds and the footer would otherwise advertise it forever.
 	if frame := s.frame(); !strings.Contains(frame, "u undo") {
 		t.Fatalf("the frame does not offer the undo:\n%s", frame)
 	}

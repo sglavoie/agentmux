@@ -311,7 +311,7 @@ func overviewInput(m model) Input {
 		FocusPending:  m.focusTabID != 0,
 		Closing:       m.quitAfterPreference,
 		Overlay:       m.overlayView(),
-		Recoverable:   m.recoverable(),
+		OverlayHints:  m.overlayHints(),
 	}
 }
 
@@ -319,6 +319,15 @@ func overviewInput(m model) Input {
 // claim about text can be made against.
 func frameOf(m model) string {
 	return strings.Join(plain(strings.Split(Render(overviewInput(m)), "\n")), "\n")
+}
+
+// hintRowOf is the last line of that frame: the one row the footer is allowed.
+// A claim about what the footer does NOT say has to be made against this rather
+// than against the whole frame, where the feedback row and a modal's own hint
+// line carry key names too.
+func hintRowOf(m model) string {
+	lines := strings.Split(frameOf(m), "\n")
+	return strings.TrimRight(lines[len(lines)-1], " ")
 }
 
 // TestTheConstructorOwnsTheFirstSequenceAndInitOnlyDispatchesIt is the review

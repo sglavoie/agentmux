@@ -93,6 +93,19 @@ func (m model) applyCloseOutcome(result sessionactions.Result) model {
 	return m.clearReport()
 }
 
+// recoverable reports whether `u` would do anything.
+//
+// It used to be what the footer drew a key's availability from, and it is not
+// any more: `u` is off the footer, because a close is undoable for five seconds
+// after a confirmed close and a permanent entry would spend a slot on a key that
+// is dim almost always. What is left is the model's own predicate for the state
+// the offer above describes, which is the vocabulary the recovery tests state
+// their conditions in rather than each reaching into the stack for itself.
+func (m model) recoverable() bool {
+	_, ok := m.acts.recovery.Latest(m.deps.now())
+	return ok
+}
+
 // recoveryOffer is the sentence the feedback row carries while a close can still
 // be undone, or "" when none can.
 //
@@ -109,13 +122,6 @@ func (m model) recoveryOffer() string {
 	default:
 		return fmt.Sprintf("closed %d sessions · u undo last (%s)", len(active), undoWindowText)
 	}
-}
-
-// recoverable reports whether `u` would do anything, which is what the footer
-// draws the key's availability from.
-func (m model) recoverable() bool {
-	_, ok := m.acts.recovery.Latest(m.deps.now())
-	return ok
 }
 
 // undoLastClose claims the most recent recoverable close and relaunches it.

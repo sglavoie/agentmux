@@ -5,7 +5,9 @@
 // understands is readable in one screen. There are five, which is the point of a
 // standalone overview — the dashboard's loop consumes several dozen.
 //
-// The keymap separates navigation, presentation, focus, and dismissal:
+// The keymap itself is declared in bindings.go, which the footer and the help
+// overlay project the same table from; what is here is only the routing. It
+// separates navigation, presentation, focus, and dismissal:
 // c toggles presentation and saves only the daemon-lifetime view preference.
 // The remaining division is a safety
 // property rather than an organizing one:
@@ -101,14 +103,22 @@ func (m model) handleTick(commands.TickMsg) (tea.Model, tea.Cmd) {
 
 // handleKeyPress routes a key to whichever surface is in front.
 //
-// The modal check comes FIRST and the grid's own table is only reached when
+// The overlay checks come FIRST and the grid's own table is only reached when
 // nothing is over it. That ordering is the whole safety property of this layer
 // rather than a tidiness preference: `c` is the grid's compact toggle and also
 // the menu's mnemonic for restarting under another profile, and the digits that
 // focus a tile are ordinary characters an overlay may want. A router that tried
 // the grid first would answer both from underneath the overlay, which is an
 // operator acting on a surface they cannot see.
+//
+// Help is checked before the action surfaces even though the two can never both
+// be up — `?` is a grid binding, so nothing can open help from inside a modal —
+// because reading the router top-down should name the surfaces in the order they
+// stack rather than leave that fact to be inferred from the keymap.
 func (m model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.help.open {
+		return m.handleHelpKey(msg)
+	}
 	switch m.acts.surface {
 	case surfaceMenu:
 		return m.handleMenuKey(msg)
@@ -120,32 +130,22 @@ func (m model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m.handleGridKey(msg)
 }
 
-// handleGridKey maps a key onto dismissal, focus, an action, an undo, or a move.
+// handleGridKey runs whichever binding claims the key, and nothing when none
+// does.
+//
+// The lookup is a walk of gridBindings rather than a switch, which is the whole
+// point of the table: the keys this answers and the keys the footer and the help
+// overlay print are read from the same declaration, so the three cannot drift.
+// Keys are unique across the table — TestNoKeyIsBoundTwice is what keeps them
+// that way — so the walk order decides nothing.
 func (m model) handleGridKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc", "q", "ctrl+c":
-		return m.dismiss()
-	case "enter":
-		return m.requestFocus()
-	case "a":
-		m.openActionsMenu()
-		return m, nil
-	case "u":
-		return m, m.undoLastClose()
-	case "c":
-		return m.toggleCompact()
-	case "n":
-		return m.jumpNeedsYou(1)
-	case "N":
-		return m.jumpNeedsYou(-1)
-	}
-	for index := range len(focusDigits) {
-		if msg.String() == focusDigits[index:index+1] {
-			return m.focusIndex(index)
+	key := msg.String()
+	for _, b := range gridBindings() {
+		for _, bound := range b.keys {
+			if bound == key {
+				return b.run(m, key)
+			}
 		}
-	}
-	if move, ok := moveFor(msg.String()); ok {
-		return m.applyMove(move)
 	}
 	return m, nil
 }

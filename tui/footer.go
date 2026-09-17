@@ -58,18 +58,14 @@ func renderFooter(m Model) string {
 	case ModeHelp:
 		lines = nonEmptyFooterLines(footerStyledLine(m.width, "  ", renderFooterBinding("j/k", "up/down"), renderFooterBinding("g/G", "top/bottom"), renderFooterBinding("esc/?/q", "close help")))
 	case ModeActions:
-		// The menu is a list the operator moves through, so the footer names the
-		// keys that move and run the selection rather than only the immediate
-		// letters. The letters are not repeated here: they are printed against
-		// the rows they belong to, and the menu's own hint line says so. This
-		// row stays three bindings long because it is the outer chrome of a
-		// modal that already carries a hint, and a fourth wrapped it onto a
-		// second line at 50 columns — which on a three-row terminal cost the
-		// body its only row.
-		lines = nonEmptyFooterLines(footerStyledLine(m.width, "  ",
-			renderFooterBinding("j/k", "select"),
-			renderFooterBinding("enter", "run"),
-			renderFooterBinding("esc/q", "back")))
+		// The menu carries its own hint line — select, run, the letters, and how
+		// to close — so this row said the same three things a second time, in a
+		// second wording ("back" for the same key the menu called "close"). It is
+		// blank for the reason ModeDetail's is: the modal is the thing being read,
+		// and the outer chrome repeating it is not a second reminder but a second
+		// source of truth. The menu's hint is now the only statement of its keys,
+		// which is why the shed ladder gives up the header before it.
+		lines = nil
 	case ModeCommandPalette:
 		lines = nonEmptyFooterLines(footerStyledLine(m.width, " · ", renderFooterBinding("↑/↓ or ctrl+j/k or ctrl+n/p", "move"), renderFooterBinding("enter", "run"), renderFooterBinding("esc", "close"), renderFooterBinding("ctrl+c", "quit")))
 	case ModeDetail:

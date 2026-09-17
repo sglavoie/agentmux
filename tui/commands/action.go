@@ -263,9 +263,17 @@ func (c actionsChrome) rows() int {
 //
 // The order is what a menu can least afford to lose, last: the blank separator
 // is decoration, the context line repeats what the dashboard row already showed,
-// a two-line detail block can say most of what a one-line block does, the hint
-// is recoverable by pressing esc, and the header is the only row that says which
-// session the menu is acting on — which is why it goes last of all.
+// a two-line detail block can say most of what a one-line block does, and the
+// header names the session — which the destructive confirmations restate before
+// anything is destroyed.
+//
+// The hint goes last of all. It used to go before the header, which was right
+// while the host's own footer said the same keys underneath: losing it then cost
+// a duplicate. Neither host draws that row any more — repeating a modal's keys in
+// the chrome around it is a second source of truth rather than a second reminder
+// — so this line is now the ONLY statement of how to move, run, and leave the
+// menu, and a modal whose way out is unstated is worse than one that does not
+// name its subject.
 func (c *actionsChrome) shed() bool {
 	switch {
 	case c.blank:
@@ -276,10 +284,10 @@ func (c *actionsChrome) shed() bool {
 		c.detail--
 	case c.detail == 1:
 		c.detail = 0
-	case c.hint:
-		c.hint = false
 	case c.header:
 		c.header = false
+	case c.hint:
+		c.hint = false
 	default:
 		return false
 	}

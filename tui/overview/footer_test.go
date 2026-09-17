@@ -5,6 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
+
+	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 )
 
@@ -17,6 +20,145 @@ func assertFooterKey(t *testing.T, in Input, key string, available bool) {
 	}
 	if !strings.Contains(rows[len(rows)-1], style.Render(key)) {
 		t.Fatalf("key %s available=%v not reflected in footer: %q", key, available, rows[len(rows)-1])
+	}
+}
+
+// footerRow renders the row for a width, stripped, which is the form every
+// claim below about what the row says is made in.
+func footerRow(width int, sessions []session.RunningSession) string {
+	in := viewInput(width, 30, sessions)
+	return ansi.Strip(renderFooter(in, MeasureMode(in.Width, in.Height, false), 0))
+}
+
+// TestFooterGivesUpWholeEntriesAsTheTerminalNarrows is the width ladder.
+//
+// Three things are asserted at every width, and they are the whole contract the
+// single row makes. It FITS, because the chrome reserves one line and a row that
+// overflowed would be clipped mid-binding. What it drops is dropped WHOLE — a
+// truncated entry is not a shorter hint, it is a key that does not exist — which
+// is why the ellipsis is a failure here rather than a fallback. And it is
+// MONOTONE: a narrower terminal says a subset of what a wider one said, so an
+// operator who resizes never sees an entry appear, and never has to re-read the
+// row to find out which half moved.
+func TestFooterGivesUpWholeEntriesAsTheTerminalNarrows(t *testing.T) {
+	labels := []string{"focus", "actions", "help", "exit", "jump", "needs you", "compact", "move", "next", "page", "ends"}
+	essential := map[string]bool{"focus": true, "actions": true, "help": true, "exit": true}
+
+	sessions := viewSessions(40)
+	var previous map[string]bool
+	for _, width := range []int{200, 160, 120, 100, 80, 70, 60, 40} {
+		row := footerRow(width, sessions)
+		if got := ansi.StringWidth(row); got > width {
+			t.Fatalf("at %d columns the row is %d cells wide: %q", width, got, row)
+		}
+		if strings.Contains(row, "…") {
+			t.Fatalf("at %d columns the row truncated an entry: %q", width, row)
+		}
+
+		present := map[string]bool{}
+		for _, label := range labels {
+			if strings.Contains(row, label) {
+				present[label] = true
+			}
+		}
+		for label := range essential {
+			if !present[label] && !strings.Contains(row, bareFooterKeyFor(label)) {
+				t.Fatalf("at %d columns the row lost the essential %q: %q", width, label, row)
+			}
+		}
+		for label := range present {
+			if previous != nil && !previous[label] {
+				t.Fatalf("at %d columns %q appeared after a wider row dropped it: %q", width, label, row)
+			}
+		}
+		previous = present
+	}
+
+	// The widest row says everything the table has for it, so the ladder above
+	// starts from the full set rather than from whatever happened to fit.
+	full := footerRow(200, sessions)
+	for _, label := range labels {
+		if !strings.Contains(full, label) {
+			t.Fatalf("the unconstrained row omits %q: %q", label, full)
+		}
+	}
+}
+
+// bareFooterKeyFor is the last-ditch spelling of an essential entry: the row
+// that has given up its labels still names these four keys.
+func bareFooterKeyFor(label string) string {
+	switch label {
+	case "focus":
+		return "↵"
+	case "actions":
+		return "a"
+	case "help":
+		return "?"
+	default:
+		return "q"
+	}
+}
+
+// TestFooterFallsBackToBareKeysBeforeItLosesAKey is the bottom of the ladder. At
+// a width that cannot hold the labelled essentials, the row respells all four of
+// them as keys rather than dropping any: `↵ · a · ? · q` claims nothing about
+// what the keys do, and that is the point — it is the last spelling that is
+// still true.
+func TestFooterFallsBackToBareKeysBeforeItLosesAKey(t *testing.T) {
+	row := footerRow(20, viewSessions(4))
+	for _, key := range []string{"↵", "a", "?", "q"} {
+		if !strings.Contains(row, key) {
+			t.Fatalf("the bare row lost %q: %q", key, row)
+		}
+	}
+	for _, label := range []string{"focus", "actions", "help", "exit"} {
+		if strings.Contains(row, label) {
+			t.Fatalf("the bare row still carries the label %q: %q", label, row)
+		}
+	}
+}
+
+// TestFooterYieldsToAModalThatSpeaksForItself is the modal-composition rule: the
+// row belongs to the base view, and under a modal none of its keys mean what it
+// says they mean.
+//
+// Each of the four modals is checked for what it is: the three that print their
+// own key line leave the row empty rather than repeating it, and the
+// confirmation — which prints a question, a consequence, and nothing else — is
+// given the keys that answer it. Dismissing the modal brings the base row back.
+func TestFooterYieldsToAModalThatSpeaksForItself(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		open []string
+		want string
+	}{
+		{name: "keymap", open: []string{"?"}},
+		{name: "menu", open: []string{"a"}},
+		{name: "profile picker", open: []string{"a", "C"}},
+		{name: "confirmation", open: []string{"a", "X"}, want: "y confirm · n/esc/q cancel"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, _ := actionModel(t, viewSessions(4), 0, hostTabElsewhere)
+			base := hintRowOf(m)
+			if base == "" {
+				t.Fatal("the base view drew no hint row; the assertions below would be vacuous")
+			}
+			for _, name := range tc.open {
+				m = press(t, m, name)
+			}
+			if got := hintRowOf(m); got != tc.want {
+				t.Fatalf("under the %s the hint row is %q, want %q", tc.name, got, tc.want)
+			}
+			// Backing out is the reverse of opening: a cancelled profile picker
+			// and a cancelled confirmation land back on the menu they were chosen
+			// from, which is still a modal and still owns the row.
+			for range tc.open {
+				m = press(t, m, "esc")
+			}
+			if got := hintRowOf(m); got != base {
+				t.Fatalf("leaving the %s left the row %q, want the base row %q", tc.name, got, base)
+			}
+		})
 	}
 }
 
