@@ -105,6 +105,11 @@ type kittyWorld struct {
 	// closeErr, when set, is what CloseTab answers, so a close that Kitty refuses
 	// can be told apart from one it accepted but was never seen to finish.
 	closeErr error
+	// launchErr, when set, is what LaunchTab answers. It is the refusal a failed
+	// restart is built from: the launch half of a restart runs first, so a Kitty
+	// that refuses it leaves the original session running and makes "the action
+	// failed and said why" a claim about a world that did not change.
+	launchErr error
 	// nextTabID is the identity the next launched tab takes. It starts above
 	// every fixture ID so a relaunched session is visibly a NEW tab rather than
 	// the one that was closed.
@@ -212,6 +217,9 @@ func (w *kittyWorld) LaunchTab(opts kitty.LaunchOpts) error {
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if w.launchErr != nil {
+		return w.launchErr
+	}
 	id := w.nextTabID
 	w.nextTabID++
 	w.tabs = append(w.tabs, kitty.Tab{
@@ -317,8 +325,9 @@ func (w *kittyWorld) closeTab(tabID int) {
 	w.tabs = kept
 }
 
-func (w *kittyWorld) setListErr(err error)  { w.mu.Lock(); w.listErr = err; w.mu.Unlock() }
-func (w *kittyWorld) setFocusErr(err error) { w.mu.Lock(); w.focusErr = err; w.mu.Unlock() }
+func (w *kittyWorld) setListErr(err error)   { w.mu.Lock(); w.listErr = err; w.mu.Unlock() }
+func (w *kittyWorld) setFocusErr(err error)  { w.mu.Lock(); w.focusErr = err; w.mu.Unlock() }
+func (w *kittyWorld) setLaunchErr(err error) { w.mu.Lock(); w.launchErr = err; w.mu.Unlock() }
 func (w *kittyWorld) setText(windowID int, s string) {
 	w.mu.Lock()
 	w.text[windowID] = s
@@ -435,6 +444,61 @@ func acceptanceTabs(n int) []kitty.Tab {
 func acceptanceTabID(index int) int    { return 100 + index }
 func acceptanceWindowID(index int) int { return 1000 + index }
 
+// wideNames are the identities a real corpus has and a padded fixture does not:
+// scripts drawn two cells to the glyph, combining accents, an emoji joined out of
+// several code points, and a name longer than the narrowest shipped tile is wide.
+//
+// They are also, deliberately, names no configured project has. That is the
+// second half of what they are for: the two open-somewhere actions are then
+// genuinely unavailable for every row, so a scenario that browses onto one is
+// looking at a real disabled entry with a real explanation rather than at a
+// synthesised one.
+var wideNames = []string{
+	"日本語プロジェクト",
+	"🚀 launch-and-deploy 🚀",
+	"café—naïve—coöperate",
+	"family 👨‍👩‍👧‍👦 tree",
+	"a-very-long-project-name-that-no-shipped-tile-header-can-hold-intact",
+	"Ωμέγα-υπηρεσία",
+	"서비스-관리자",
+	"emoji-tail-🧪🧪🧪",
+}
+
+// wideTab is acceptanceTab wearing one of those names. Everything else about the
+// session — its tab, its window, its profile — is unchanged, so an assertion can
+// still name it with acceptanceTabID and acceptanceWindowID.
+func wideTab(index int) kitty.Tab {
+	tab := acceptanceTab(index)
+	name := fmt.Sprintf("%s-%02d", wideNames[index%len(wideNames)], index+1)
+	tab.Title = name
+	tab.Windows[0].UserVars.Project = name
+	tab.Windows[0].UserVars.AMXDirectory = "/work/" + name
+	return tab
+}
+
+func wideTabs(n int) []kitty.Tab {
+	out := make([]kitty.Tab, 0, n)
+	for i := 0; i < n; i++ {
+		out = append(out, wideTab(i))
+	}
+	return out
+}
+
+// stubLocalWindow says which Kitty window this process is running in, which is
+// what the retrieval resolves the HOST tab from.
+//
+// newStage points it at no window at all, because the operator's own
+// KITTY_WINDOW_ID would otherwise reach these tests through the real seam and
+// make "the overview is not standing in that tab" depend on the terminal the
+// suite happens to be run from. A scenario that is ABOUT the host tab calls it
+// again with the window it wants to be standing in.
+func stubLocalWindow(t *testing.T, windowID int) {
+	t.Helper()
+	previous := commands.LocalWindowID
+	commands.LocalWindowID = func() int { return windowID }
+	t.Cleanup(func() { commands.LocalWindowID = previous })
+}
+
 // acceptanceConfig is an operator-shaped configuration in the test's own
 // directory: three profiles with the colors the tiles are painted with, a
 // project per profile, and an explicit preview cadence.
@@ -545,6 +609,7 @@ type stage struct {
 func newStage(t *testing.T, world *kittyWorld, width, height, sourceWindowID int) *stage {
 	t.Helper()
 	stubOverviewWorld(t, world)
+	stubLocalWindow(t, 0)
 	// The launch path writes a diagnostics journal and maintains native logs
 	// under the XDG state directory. The configuration below disables both, and
 	// this is the second half of that isolation: a default that flipped, or a
@@ -719,6 +784,72 @@ func (s *stage) refresh() {
 
 // frame is what an operator would see, styling stripped.
 func (s *stage) frame() string { return frameOf(s.m) }
+
+// intact is the drawn frame held to the two rules the host terminal depends on:
+// exactly the geometry it reserved, and no row that ends inside a style.
+//
+// Both are checked on the STYLED output, which is the only form either claim can
+// be made against — renderLines measures display width through the escapes, and
+// the seal is an escape. Every other assertion in this file reads the stripped
+// frame, so this is where an overlay that overflowed its box or leaked a colour
+// into the shell prompt underneath is caught.
+func (s *stage) intact(where string) {
+	s.t.Helper()
+	for i, line := range renderLines(s.t, overviewInput(s.m)) {
+		if strings.Contains(line, "\x1b") && !sealed(line) {
+			s.t.Fatalf("%s: row %d is styled but does not end in a reset: %q", where, i, line)
+		}
+	}
+}
+
+// sealed reports whether a row ends in an SGR reset. Both spellings count: the
+// grid's own rows end in the explicit `0m`, and a row the overlay compositor has
+// re-padded ends in the parameterless form, which is the same reset written
+// shorter. Accepting only one of them would fail on where the escape came from
+// rather than on whether the row leaks.
+func sealed(line string) bool {
+	return strings.HasSuffix(line, "\x1b[0m") || strings.HasSuffix(line, "\x1b[m")
+}
+
+// prose is the frame as a sentence: box drawing dropped, every run of
+// whitespace and every line break collapsed to one space.
+//
+// It is how a claim about a WRAPPED sentence is made. The confirmation's
+// consequence is wrapped rather than truncated on purpose — half a sentence
+// about what saying yes destroys is a different warning, not a shorter one — so
+// where it breaks depends on the terminal, and an assertion against the raw
+// frame would be asserting the width it was written at.
+func (s *stage) prose() string {
+	var b strings.Builder
+	for _, r := range s.frame() {
+		switch {
+		case r >= 0x2500 && r <= 0x257F, r == '\n':
+			b.WriteRune(' ')
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return strings.Join(strings.Fields(b.String()), " ")
+}
+
+// selectMenuEntry walks the menu cursor onto one action the way an operator
+// would, rather than assigning the index. The difference matters: the cursor and
+// the scroll window are moved together by the handler, and a test that wrote the
+// field would be asserting against a menu that had never been scrolled.
+func (s *stage) selectMenuEntry(id commands.ID) {
+	s.t.Helper()
+	if s.m.acts.surface != surfaceMenu {
+		s.t.Fatalf("selecting %q outside the menu; surface is %v", id, s.m.acts.surface)
+	}
+	want := sessionactions.MenuIndexOf(id)
+	s.press("g")
+	for i := 0; i < len(sessionactions.MenuDefinitions()) && s.m.acts.menuCursor != want; i++ {
+		s.press("j")
+	}
+	if s.m.acts.menuCursor != want {
+		s.t.Fatalf("the menu cursor stopped at %d, want %q at %d", s.m.acts.menuCursor, id, want)
+	}
+}
 
 // previewWindows names the windows the surface is currently holding output for,
 // in tile order, which is the form every retention claim below is written in.
@@ -1627,5 +1758,396 @@ func TestAcceptanceEverySessionIsReachableAndReadableByKeyboardAlone(t *testing.
 	}
 	if world.listCount() != 0 {
 		t.Fatalf("browsing the whole universe ran %d direct Kitty listings, want 0", world.listCount())
+	}
+}
+
+// supportedTerminals are the four terminals this plan supports, each paired
+// with a session count from the range it supports. The pairing is deliberate
+// rather than a full cross product: the narrowest terminal is given the
+// smallest corpus and the widest the largest, so every size is exercised at a
+// load that pages and none of them is exercised only at a load that does not.
+//
+// view_test.go's shippedSizes is a different list on purpose — it adds the
+// extremes a dragged window passes through, which are a claim about Render
+// refusing to break rather than about an operator's terminal.
+var supportedTerminals = []struct {
+	width, height, sessions int
+}{
+	{80, 24, 8},
+	{100, 24, 12},
+	{120, 30, 16},
+	{160, 45, 20},
+}
+
+// TestAcceptanceEveryShippedTerminalDrawsEveryOverlayIntact is the layout claim
+// this plan makes, made against the running surface rather than against Render.
+//
+// tui/overview/view_test.go already measures the grid at these sizes with wide
+// graphemes in it. What it cannot reach is an OVERLAY, because an overlay is a
+// string the MODEL computes from state only a sequence of keypresses can put it
+// in: the menu's scroll window, a disabled entry's explanation, the profile
+// picker's cursor, the confirmation's wrapped consequence, and the keymap's own
+// scroll. Each of those is composited into the same frame the host terminal is
+// handed, so each of them can overflow the width, lose a row, or end inside a
+// style — and each is therefore opened here, at every shipped size, over a
+// corpus whose names are two cells to the glyph and longer than any tile.
+func TestAcceptanceEveryShippedTerminalDrawsEveryOverlayIntact(t *testing.T) {
+	for _, size := range supportedTerminals {
+		t.Run(fmt.Sprintf("%dx%d_%dsessions", size.width, size.height, size.sessions), func(t *testing.T) {
+			world := newKittyWorld(wideTabs(size.sessions))
+			for i := 0; i < size.sessions; i++ {
+				// Output that is itself wide, and that leaves a colour open: a
+				// tile must seal what its pane did not.
+				world.setText(acceptanceWindowID(i),
+					"▶ 実行中… 🚀🚀🚀\n\x1b[31mred and never reset\nok")
+			}
+			s := newStage(t, world, size.width, size.height, 0)
+			s.deliver(jobTopology)
+			s.deliver(jobCapture)
+			if len(s.m.sessions) != size.sessions {
+				t.Fatalf("loaded %d sessions, want %d", len(s.m.sessions), size.sessions)
+			}
+			s.intact("the grid")
+
+			// The page a corpus this size has to be read across.
+			s.press("pgdown")
+			s.deliver(jobCapture)
+			s.intact("the second page")
+			s.press("pgup")
+
+			s.press("a")
+			if s.m.acts.surface != surfaceMenu {
+				t.Fatalf("`a` left surface %v, want the menu", s.m.acts.surface)
+			}
+			s.intact("the actions menu")
+
+			// A disabled entry, its explanation, and the refusal pressing its
+			// mnemonic anyway earns. None of the wide-named rows has a configured
+			// project, so this is the real rule refusing rather than a stub.
+			s.selectMenuEntry(commands.OpenDirectoryID)
+			s.intact("a disabled entry")
+			frame := s.frame()
+			if !strings.Contains(frame, "Unavailable") || !strings.Contains(frame, commands.ReasonNoProject) {
+				t.Fatalf("the menu does not explain why the entry is disabled:\n%s", frame)
+			}
+			s.press("o")
+			if s.m.acts.surface != surfaceMenu || len(s.dispatches) != 0 {
+				t.Fatalf("the disabled mnemonic ran something: surface %v, dispatches %v", s.m.acts.surface, s.dispatches)
+			}
+			if got := s.frame(); !strings.Contains(got, commands.ReasonNoProject) {
+				t.Fatalf("pressing the disabled mnemonic reported nothing:\n%s", got)
+			}
+			s.intact("a refused mnemonic")
+
+			s.press("c")
+			if s.m.acts.surface != surfaceProfile {
+				t.Fatalf("`c` left surface %v, want the profile picker", s.m.acts.surface)
+			}
+			s.press("j")
+			s.intact("the profile picker")
+			s.press("esc")
+
+			s.press("X")
+			if s.m.acts.surface != surfaceConfirm {
+				t.Fatalf("`X` left surface %v, want the confirmation", s.m.acts.surface)
+			}
+			s.intact("the confirmation")
+			s.press("n")
+
+			s.press("esc")
+			if s.m.acts.surface != surfaceGrid {
+				t.Fatalf("backing out left surface %v, want the grid", s.m.acts.surface)
+			}
+
+			s.press("?")
+			if !s.m.help.open {
+				t.Fatal("`?` did not open the keymap")
+			}
+			s.intact("the keymap")
+			s.press("G")
+			s.intact("the keymap scrolled to its end")
+			s.press("?")
+
+			// And the same walk again in the compact layout, which is a different
+			// tile geometry rather than the same one drawn smaller.
+			s.press("c")
+			if !s.m.compact {
+				t.Fatal("`c` did not switch to the compact layout")
+			}
+			s.deliver(jobCapture)
+			s.intact("the compact grid")
+			s.press("a")
+			s.intact("the compact actions menu")
+			s.press("X")
+			s.intact("the compact confirmation")
+			s.press("esc")
+			s.press("esc")
+			s.press("?")
+			s.intact("the compact keymap")
+			s.press("?")
+
+			if s.pending(jobAction) != 0 || len(s.dispatches) != 0 {
+				t.Fatalf("drawing the overlays dispatched %v", s.dispatches)
+			}
+		})
+	}
+}
+
+// TestAcceptanceWithConfirmationOffACloseRunsAtOnceAndStillOffersTheUndo is the
+// other half of the confirmation setting.
+//
+// Every destructive scenario above runs with confirm_destructive = true, which
+// is the operator preference that puts a prompt between the keystroke and the
+// close. With it off the prompt is skipped — and the thing worth asserting is
+// what is NOT skipped with it: the recovery is still reserved before the
+// dispatch and still promoted by the confirmed close, because the undo is what
+// makes a prompt-free close survivable rather than a setting that trades one
+// safeguard for none.
+func TestAcceptanceWithConfirmationOffACloseRunsAtOnceAndStillOffersTheUndo(t *testing.T) {
+	world := newKittyWorld(acceptanceTabs(4))
+	s := newStage(t, world, 120, 30, 0)
+	s.cfg.Defaults.ConfirmDestructive = false
+	s.deliver(jobTopology)
+
+	s.press("right")
+	closing := s.m.selectedTabID
+	if closing != acceptanceTabID(1) {
+		t.Fatalf("the cursor is on tab %d, want %d", closing, acceptanceTabID(1))
+	}
+
+	world.permitClose()
+	s.press("a")
+	s.press("X")
+	if s.m.acts.surface != surfaceGrid {
+		t.Fatalf("`X` left surface %v, want the grid: the close was not supposed to ask", s.m.acts.surface)
+	}
+	if s.pending(jobAction) != 1 {
+		t.Fatalf("the prompt-free close parked %d actions, want 1", s.pending(jobAction))
+	}
+	if frame := s.frame(); !strings.Contains(frame, "closing "+acceptanceProject(1)) {
+		t.Fatalf("the close reports nothing while it runs:\n%s", frame)
+	}
+	s.deliver(jobAction)
+
+	if got := world.callsOf("CloseTab"); len(got) != 1 || got[0] != kitty.MatchTabByID(closing) {
+		t.Fatalf("Kitty was asked to close %v, want exactly %d", got, closing)
+	}
+	s.deliver(jobTopology)
+	if !s.m.recoverable() {
+		t.Fatal("a prompt-free close left nothing to undo")
+	}
+	if frame := s.frame(); !strings.Contains(frame, "u undo") {
+		t.Fatalf("the frame does not offer the undo:\n%s", frame)
+	}
+
+	world.permitLaunch()
+	s.press("u")
+	s.deliver(jobRelaunch)
+	if got := world.callsOf("LaunchTab"); len(got) != 1 || got[0] != acceptanceProject(1) {
+		t.Fatalf("Kitty launched %v, want one tab titled %q", got, acceptanceProject(1))
+	}
+	s.deliver(jobTopology)
+	if len(s.m.sessions) != 4 {
+		t.Fatalf("the restored surface lists %d sessions, want 4", len(s.m.sessions))
+	}
+}
+
+// TestAcceptanceClosingTheHostingTabWarnsAndOffersNoUndo is the journey the live
+// checklist cannot rehearse twice: the operator closes the session this overview
+// is itself running beside.
+//
+// Two things are owed and they pull in opposite directions. The action is still
+// offered — refusing would be the surface protecting itself rather than the
+// operator — so the sentence has to arrive BEFORE the keystroke that runs it.
+// And no undo may be offered afterwards, because the process that would carry
+// the offer is the one going away with the tab; an offer drawn into a frame that
+// is about to stop being repainted is a promise nothing can keep.
+func TestAcceptanceClosingTheHostingTabWarnsAndOffersNoUndo(t *testing.T) {
+	world := newKittyWorld(acceptanceTabs(4))
+	s := newStage(t, world, 120, 30, 0)
+	// The overview is standing in the second session's window.
+	stubLocalWindow(t, acceptanceWindowID(1))
+	s.deliver(jobTopology)
+	if s.m.hostTabID != acceptanceTabID(1) {
+		t.Fatalf("the refresh resolved host tab %d, want %d", s.m.hostTabID, acceptanceTabID(1))
+	}
+
+	s.press("right")
+	if s.m.selectedTabID != acceptanceTabID(1) {
+		t.Fatalf("the cursor is on tab %d, want the hosting tab %d", s.m.selectedTabID, acceptanceTabID(1))
+	}
+
+	s.press("a")
+	s.press("X")
+	if s.m.acts.surface != surfaceConfirm {
+		t.Fatalf("`X` left surface %v, want the confirmation", s.m.acts.surface)
+	}
+	// Read as prose, because the consequence is wrapped: the warning arrives
+	// whole or it does not arrive.
+	said := s.prose()
+	for _, want := range []string{
+		`Close "` + acceptanceProject(1) + `"?`,
+		"The harness process exits; its transcript is preserved.",
+		hostTabConsequence,
+	} {
+		if !strings.Contains(said, want) {
+			t.Fatalf("the confirmation does not say %q:\n%s", want, s.frame())
+		}
+	}
+
+	world.permitClose()
+	s.press("y")
+	s.deliver(jobAction)
+	if got := world.callsOf("CloseTab"); len(got) != 1 || got[0] != kitty.MatchTabByID(acceptanceTabID(1)) {
+		t.Fatalf("Kitty was asked to close %v, want the hosting tab", got)
+	}
+
+	s.deliver(jobTopology)
+	if s.m.recoverable() {
+		t.Fatal("the hosting tab's close was offered an undo this process could not survive to run")
+	}
+	if frame := s.frame(); strings.Contains(frame, "u undo") {
+		t.Fatalf("the frame offers an undo for the hosting tab:\n%s", frame)
+	}
+	if frame := s.frame(); !strings.Contains(frame, "closed "+acceptanceProject(1)) {
+		t.Fatalf("the close is not reported:\n%s", frame)
+	}
+}
+
+// TestAcceptanceAProfileReplacementRestartsUnderTheChosenProfile walks the one
+// action that takes a parameter all the way through: choose it, pick a profile,
+// and have the world carry out the two-step restart it means.
+//
+// The assertion that matters is on the ORDER. Launch precedes close in
+// internal/session, so a profile replacement that is interrupted anywhere leaves
+// the operator with two sessions rather than none; the recorded call sequence is
+// where that survives a refactor of either half.
+func TestAcceptanceAProfileReplacementRestartsUnderTheChosenProfile(t *testing.T) {
+	world := newKittyWorld(acceptanceTabs(3))
+	s := newStage(t, world, 120, 30, 0)
+	s.deliver(jobTopology)
+
+	target := s.m.selectedTabID
+	if target != acceptanceTabID(0) {
+		t.Fatalf("the cursor is on tab %d, want the first session's %d", target, acceptanceTabID(0))
+	}
+
+	s.press("a")
+	s.press("c")
+	if s.m.acts.surface != surfaceProfile {
+		t.Fatalf("`c` left surface %v, want the profile picker", s.m.acts.surface)
+	}
+	// Off the row's own profile and onto the next one, which is what makes this a
+	// replacement rather than the no-op the same profile would be.
+	s.press("j")
+	chosen := s.cfg.Accounts[s.m.acts.profileCursor].Name
+	if chosen == acceptanceProfiles[0].name {
+		t.Fatalf("the picker is still on the row's own profile %q", chosen)
+	}
+
+	world.permitLaunch()
+	world.permitClose()
+	s.press("enter")
+	// The picker answers the controller; the confirmation is what the choice
+	// raises next, and it names the profile that was just chosen rather than the
+	// one the row is running.
+	if s.m.acts.surface != surfaceConfirm {
+		t.Fatalf("choosing a profile left surface %v, want the confirmation", s.m.acts.surface)
+	}
+	if said := s.prose(); !strings.Contains(said, "restarts under profile "+fmt.Sprintf("%q", chosen)) {
+		t.Fatalf("the confirmation does not name the chosen profile %q:\n%s", chosen, s.frame())
+	}
+	if len(s.dispatches) != 0 {
+		t.Fatalf("the confirmation had already dispatched %v", s.dispatches)
+	}
+
+	s.press("y")
+	if len(s.dispatches) != 1 || s.dispatches[0].Profile != chosen {
+		t.Fatalf("the dispatch carries %v, want the chosen profile %q", s.dispatches, chosen)
+	}
+	if frame := s.frame(); !strings.Contains(frame, "restarting "+acceptanceProject(0)+" under "+chosen) {
+		t.Fatalf("the replacement does not report itself while it runs:\n%s", frame)
+	}
+	s.deliver(jobAction)
+
+	if got := world.callsOf("LaunchTab"); len(got) != 1 || got[0] != acceptanceProject(0) {
+		t.Fatalf("Kitty launched %v, want one tab for %q", got, acceptanceProject(0))
+	}
+	if got := world.callsOf("CloseTab"); len(got) != 1 || got[0] != kitty.MatchTabByID(target) {
+		t.Fatalf("Kitty closed %v, want the replaced tab %d", got, target)
+	}
+	if len(world.calls) < 2 || world.calls[0].method != "LaunchTab" {
+		t.Fatalf("the replacement closed before it launched: %v", world.calls)
+	}
+
+	s.deliver(jobTopology)
+	if len(s.m.sessions) != 3 {
+		t.Fatalf("the replaced universe lists %d sessions, want 3", len(s.m.sessions))
+	}
+	for _, sess := range s.m.sessions {
+		if sess.TabID == target {
+			t.Fatalf("the replaced tab %d is still listed", target)
+		}
+	}
+	if frame := s.frame(); !strings.Contains(frame, "restarted "+acceptanceProject(0)+" under "+chosen) {
+		t.Fatalf("the replacement does not report its outcome:\n%s", frame)
+	}
+}
+
+// TestAcceptanceARefusedRestartSaysWhyAndChangesNothing is the failure half of
+// the same path.
+//
+// A restart launches before it closes, so a Kitty that refuses the launch leaves
+// the session exactly as it was. What the operator is owed is the reason, on the
+// row, on a surface they are still standing on — the retry is only meaningful
+// from here — and the list underneath must be untouched, because an action that
+// reported a failure and had half happened would be worse than one that failed.
+func TestAcceptanceARefusedRestartSaysWhyAndChangesNothing(t *testing.T) {
+	world := newKittyWorld(acceptanceTabs(3))
+	s := newStage(t, world, 120, 30, 0)
+	s.deliver(jobTopology)
+
+	before := append([]int(nil), world.tabIDs()...)
+	world.permitLaunch()
+	world.permitClose()
+	world.setLaunchErr(errors.New("kitten @ launch: refused"))
+
+	s.press("a")
+	s.press("r")
+	if s.m.acts.surface != surfaceConfirm {
+		t.Fatalf("`r` left surface %v, want the confirmation", s.m.acts.surface)
+	}
+	s.press("y")
+	if frame := s.frame(); !strings.Contains(frame, "restarting "+acceptanceProject(0)) {
+		t.Fatalf("the restart does not report itself while it runs:\n%s", frame)
+	}
+	s.deliver(jobAction)
+
+	frame := s.frame()
+	if !strings.Contains(frame, "restart failed for "+acceptanceProject(0)) {
+		t.Fatalf("the refused restart is not reported as a failure:\n%s", frame)
+	}
+	if !strings.Contains(frame, "refused") {
+		t.Fatalf("the failure does not carry Kitty's reason:\n%s", frame)
+	}
+	if got := world.callsOf("CloseTab"); len(got) != 0 {
+		t.Fatalf("a restart whose launch was refused still closed %v", got)
+	}
+	if got := world.tabIDs(); !sameInts(got, before) {
+		t.Fatalf("the refused restart left the world holding %v, want %v", got, before)
+	}
+
+	s.deliver(jobTopology)
+	if len(s.m.sessions) != 3 {
+		t.Fatalf("the refused restart left %d sessions, want the original 3", len(s.m.sessions))
+	}
+	if s.m.recoverable() {
+		t.Fatal("a failed restart published a recovery offer")
+	}
+	// Still a live surface: the operator retries from here, so the cadence has to
+	// still be running.
+	s.refresh()
+	if s.m.acts.surface != surfaceGrid {
+		t.Fatalf("the failure left surface %v, want the grid", s.m.acts.surface)
 	}
 }

@@ -23,9 +23,20 @@ coverage matrix.
 The command is hidden from `amx --help` on purpose: it is a testing tool, not
 part of the normal user workflow.
 
+Its subject is the **dashboard** model and stays that way. The F2 live session
+overview is a separate Bubble Tea program with its own `Update`/`View` loop, so
+driving it from here would put a second model behind one scenario schema and one
+set of fixtures. Its equivalent evidence is the package-level acceptance suite in
+`tui/overview/acceptance_test.go` — the real loop against a frozen clock,
+scripted snapshots, and a recording Kitty client that counts a write as a
+violation — run with `go test ./tui/overview -run '^TestAcceptance'`. What the
+two surfaces share is the declaration of what a session action is
+(`tui/sessionactions`), and the record that both obey it is the parity matrix in
+[`../acceptance.md`](../acceptance.md#session-actions-across-surfaces).
+
 ## Why it exists
 
-The dashboard composes modals (the actions overlay, the profile/config picker,
+The dashboard composes modals (the actions menu, the profile/config picker,
 confirmations) on top of a base view that clips content to preserve the status
 and footer rows. A modal that renders wider or taller than the terminal can
 provide gets squeezed or truncated by root composition. Screen-wide width and
@@ -125,7 +136,7 @@ amx tui-test fixture wide_profiles --width 140 --key C
 | Name | Shape | Purpose |
 | --- | --- | --- |
 | `basic` | two Claude work projects + a Codex personal project | realistic multi-profile dashboard baseline |
-| `actions` | one session with a very long title | stresses the actions overlay box width |
+| `actions` | one session with a very long title | stresses the actions menu box width |
 | `asl_question` | `basic` with a human-actionable `❓🔁` supervisor handoff and a `⚡🔁` active run | ASL handoff presentation: attention grouping, gloss, and the `n`/`N` jump that replaced the retired `]q` chord |
 | `asl_runs` | four supervisor runs spanning exact, ambiguous, second-exact, and unbound live sessions | Runs view focus outcomes and binding presentation |
 | `attention_overlap` | rows carrying several claims on the operator at once — blocked-and-unread, failed-and-unread, looping-and-asking-and-unread — beside a single-reason unread row and a recoverable tool warning | simultaneous attention reasons: that a row can want the operator for more than one reason, that its Status column names only one of them, and that a tool warning stays in Running rather than joining them |
@@ -450,7 +461,7 @@ file. The exact inventory is:
 | [`branch-column-narrow-fit.json`](scenarios/branch-column-narrow-fit.json) | `worktree_branches` | at 66 cells no branch is on screen at all: the branch and directory belong to no row at any width, and this width is below the split floor, so the inspector that would carry them is gone and the two checkouts are told apart by name alone |
 | [`branch-column-unreserved.json`](scenarios/branch-column-unreserved.json) | `worktree_branches` | filtering down to the non-repository row leaves no branch anywhere, so the strip's second line is the bare directory rather than a dangling separator |
 | [`branch-column-wide.json`](scenarios/branch-column-wide.json) | `worktree_branches` | the branch is the inspector's, not the row's: only the selected worktree's `amx/feat-x` is on screen, and its siblings' branches are nowhere |
-| [`combined-actions-during-refresh.json`](scenarios/combined-actions-during-refresh.json) | `paused_queue` | three refresh ticks under an open actions overlay leave the overlay open on the row it was opened for: the refresh reaches only the chrome behind it — the health reading goes cold — and neither the refresh nor the captured overlay touches a Kitty tab |
+| [`combined-actions-during-refresh.json`](scenarios/combined-actions-during-refresh.json) | `paused_queue` | three refresh ticks under an open actions menu leave the menu open on the row it was opened for: the refresh reaches only the chrome behind it — the health reading goes cold — and neither the refresh nor the captured overlay touches a Kitty tab |
 | [`combined-filter-then-resize.json`](scenarios/combined-filter-then-resize.json) | `paused_queue` | an applied `@work` chip survives narrowing to 80 cells and widening back: the same three rows, the same selection, the chip still in the header, and the inspector's metadata redrawn whole once the split floor is cleared again |
 | [`combined-folded-attention-reveal.json`](scenarios/combined-folded-attention-reveal.json) | `family_unread` | `n` reaches an attention row folded inside a collapsed family, unfolding it on the way, and the inspector swaps from the family card back to the session inspector for the checkout it landed on |
 | [`combined-preview-read-failure.json`](scenarios/combined-preview-read-failure.json) | `preview_failure` | a failed read paints `error: kitty read failed` where the buffer would be, with none of the scrollback on screen, while the metadata block above the divider still names the session the read was for |
@@ -463,7 +474,7 @@ file. The exact inventory is:
 | [`command-palette-wide.json`](scenarios/command-palette-wide.json) | `basic` | wide empty-query palette shows grouped commands and inline disabled reasons |
 | [`compact-below-split-floor.json`](scenarios/compact-below-split-floor.json) | `project_families` | below the split's width floor the dashboard is the queue alone — no divider, no inspector, and no metadata the one-line row cannot carry — and the footer is the six labelled essentials, which is all 72 cells pay for |
 | [`compact-family-below-split-floor.json`](scenarios/compact-family-below-split-floor.json) | `project_families` | the same floor in Projects view: a collapsed family summary carries its own tally and nothing beside it, and the one-cell-wider fold hint tips the footer wholesale into its bare-key spelling |
-| [`config-picker-fit.json`](scenarios/config-picker-fit.json) | `wide_profiles` | profile/config picker fits with long profile names, reached the way the dashboard reaches it now — `a` for the actions overlay, then its `C` entry |
+| [`config-picker-fit.json`](scenarios/config-picker-fit.json) | `wide_profiles` | profile/config picker fits with long profile names, reached the way the dashboard reaches it now — `a` for the actions menu, then its `C` entry |
 | [`config-picker-selection-transition.json`](scenarios/config-picker-selection-transition.json) | `wide_profiles` | `l` → `C` → `down` restores the old colored profile row and keeps the new selection within the modal |
 | [`contextual-help-from-session-view.json`](scenarios/contextual-help-from-session-view.json) | `basic` | `?` opens the generated keymap over the truncated transcript viewer, which stays as the backdrop |
 | [`duplicate-names-collisions.json`](scenarios/duplicate-names-collisions.json) | `duplicate_names` | conditional disambiguation: each colliding pair is separated by exactly the thing that differs — `(main)`/`(amx/feat-x)`, `(work)`/`(personal)`, `(#51)`/`(#61)` — and the name that occurs once is left bare |
@@ -509,7 +520,7 @@ file. The exact inventory is:
 | [`projects-family-collapse.json`](scenarios/projects-family-collapse.json) | `project_families` | `Enter` on a summary folds its family away while the sibling family stays expanded and each summary keeps its own tally, there being no status tally left to disagree with |
 | [`projects-family-expand.json`](scenarios/projects-family-expand.json) | `project_families` | a second `Enter` unfolds the collapsed family and restores every checkout underneath it as an indented Session/Status/Time row, still visibly distinct from the summary above them |
 | [`projects-filtered-attention-counts.json`](scenarios/projects-filtered-attention-counts.json) | `project_families` | the `!attention` chip keeps only the two attention rows and drops the now-empty family summaries, the chip itself being what says the list is filtered now that the `V/N visible` status line is gone |
-| [`projects-summary-action-refusal.json`](scenarios/projects-summary-action-refusal.json) | `project_families` | a family summary refuses session actions by both routes: `a` does not open the actions overlay on it, and the retired `X`/`r`/`e`/`o` spellings pressed afterwards land at the list and do nothing, so no Kitty focus, launch, close, or pager call is made and the model ends where it started |
+| [`projects-summary-action-refusal.json`](scenarios/projects-summary-action-refusal.json) | `project_families` | a family summary refuses session actions by both routes: `a` does not open the actions menu on it, and the retired `X`/`r`/`e`/`o` spellings pressed afterwards land at the list and do nothing, so no Kitty focus, launch, close, or pager call is made and the model ends where it started |
 | [`projects-summary-preview.json`](scenarios/projects-summary-preview.json) | `project_families` | the inspector's family card for a selected family summary lists the family's bucket tally and every checkout with its branch and directory |
 | [`projects-tree-expanded.json`](scenarios/projects-tree-expanded.json) | `project_families` | the view toggle replaces the urgency headings with family summary lines and indented checkout rows, leaving unfamilied and single-checkout rows flat |
 | [`project-scope-survives-resize.json`](scenarios/project-scope-survives-resize.json) | `project_families` | an applied scope survives a narrowing resize and the switcher reopens on it, so the chip, the header selector, and the highlighted row all still name the same project |
@@ -524,7 +535,7 @@ file. The exact inventory is:
 | [`plan-search-sort-rebind.json`](scenarios/plan-search-sort-rebind.json) | `basic` | `o` cycles the Plans sort order and the footer advertises `o sort`, not `s sort` |
 | [`plan-view-fit.json`](scenarios/plan-view-fit.json) | `basic` | plan viewer read-error line wraps to width after Plans is opened by name and `enter` selects a row |
 | [`plan-view-narrow-fit.json`](scenarios/plan-view-narrow-fit.json) | `basic` | plan viewer remains bounded at narrow width |
-| [`round-trip-actions-to-inspector.json`](scenarios/round-trip-actions-to-inspector.json) | `paused_queue` | `a` then `esc` closes the actions overlay back onto the inspector without having acted: the overlay is gone, the row is still selected, and no tab was closed |
+| [`round-trip-actions-to-inspector.json`](scenarios/round-trip-actions-to-inspector.json) | `paused_queue` | `a` then `esc` closes the actions menu back onto the inspector without having acted: the overlay is gone, the row is still selected, and no tab was closed |
 | [`round-trip-confirmation-cancel-to-inspector.json`](scenarios/round-trip-confirmation-cancel-to-inspector.json) | `paused_queue` | a cancelled close confirmation returns the same way — the prompt is gone, the inspector is back on the same row, and the tab the prompt named is still open |
 | [`round-trip-health-to-family-card.json`](scenarios/round-trip-health-to-family-card.json) | `family_unread` | the health details overlay over a selected family summary, dismissed, restores the family card whole |
 | [`round-trip-help-to-family-card.json`](scenarios/round-trip-help-to-family-card.json) | `family_unread` | the same round trip through the generated keymap |

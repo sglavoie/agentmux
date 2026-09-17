@@ -142,17 +142,13 @@ func overlayLineAt(baseLine, overlayStr string, startCol, totalWidth int) string
 
 	left := ""
 	if startCol > 0 {
-		left = ansi.Cut(baseLine, 0, startCol)
-		leftWidth := StyledWidth(left)
-		if leftWidth < startCol {
-			left += strings.Repeat(" ", startCol-leftWidth)
-		}
+		left = cutCells(baseLine, 0, startCol)
 	}
 
 	rightStart := startCol + overlayWidth
 	right := ""
 	if rightStart < totalWidth {
-		right = ansi.Cut(baseLine, rightStart, totalWidth)
+		right = cutCells(baseLine, rightStart, totalWidth)
 	}
 
 	// Clip overlay if it exceeds the available area.
@@ -161,8 +157,48 @@ func overlayLineAt(baseLine, overlayStr string, startCol, totalWidth int) string
 		if avail <= 0 {
 			return left + right
 		}
-		overlayStr = ansi.Cut(overlayStr, 0, avail)
+		overlayStr = cutCells(overlayStr, 0, avail)
 	}
 
 	return left + overlayStr + right
+}
+
+// cutCells slices the cells [from, to) out of a styled line and guarantees the
+// result is exactly to-from cells wide.
+//
+// A cut boundary can land INSIDE a double-width glyph, and no slice can honour
+// that: ansi.Cut keeps such a glyph whole when it straddles the START — one cell
+// too wide — and drops it when it straddles the END — one cell too narrow.
+// Neither is survivable here, because these slices are concatenated with the
+// popup into a row the host was promised an exact width for, and a single extra
+// cell pushes every column to its right out of place for the rest of the frame.
+// A grid of CJK-titled sessions with any modal over it is exactly that case: the
+// popup is centred, so its edges land wherever the tile text happens to be.
+//
+// The straddler is therefore replaced by a blank on the side it straddles —
+// start a cell later and pad in front, or pad behind — and what is lost is half
+// a glyph that the popup's own border is covering anyway.
+func cutCells(line string, from, to int) string {
+	want := to - from
+	if want <= 0 {
+		return ""
+	}
+	lead := 0
+	out := ansi.Cut(line, from, to)
+	for StyledWidth(out) > want && from < to {
+		from, lead = from+1, lead+1
+		out = ansi.Cut(line, from, to)
+	}
+	short := want - StyledWidth(out)
+	if short <= 0 {
+		return out
+	}
+	if lead > 0 {
+		pad := min(lead, short)
+		out, short = strings.Repeat(" ", pad)+out, short-pad
+	}
+	if short > 0 {
+		out += strings.Repeat(" ", short)
+	}
+	return out
 }

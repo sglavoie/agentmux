@@ -232,3 +232,45 @@ func TestComposeOverlayPreservesEmojiAtBoundary(t *testing.T) {
 		t.Errorf("row 1 should contain emoji from popup, got %q", plain)
 	}
 }
+
+// TestComposeOverlayKeepsTheWidthWhenACutLandsInsideAWideGlyph is the rule
+// TestComposeOverlayPreservesEmojiAtBoundary makes about the POPUP, made about
+// the BASE instead.
+//
+// A centred popup lands wherever the content underneath happens to be, so both
+// of its vertical edges can fall inside a double-width glyph. ansi.Cut cannot
+// halve one: it keeps the glyph whole when the cut starts inside it and drops it
+// when the cut ends inside it, so an uncorrected splice returns a row one cell
+// too wide or one too narrow. Either breaks every column to its right for the
+// rest of the frame, which on a grid of CJK-titled sessions is the whole frame.
+func TestComposeOverlayKeepsTheWidthWhenACutLandsInsideAWideGlyph(t *testing.T) {
+	// Every cell of the base is half of a double-width glyph, so each start
+	// column below straddles one.
+	base := strings.Join([]string{
+		strings.Repeat("日", 10),
+		strings.Repeat("本", 10),
+		strings.Repeat("語", 10),
+	}, "\n")
+	for _, startCol := range []int{0, 1, 2, 3, 5, 7, 11, 15} {
+		for _, popup := range []string{"X", "XX", "XXX", "日", "ab日cd"} {
+			got := ComposeOverlay(base, popup, 20, 3, startCol, 1, false)
+			lines := strings.Split(got, "\n")
+			if len(lines) != 3 {
+				t.Fatalf("startCol=%d popup=%q: %d lines, want 3", startCol, popup, len(lines))
+			}
+			for i, line := range lines {
+				if got := Width(stripAnsi(line)); got != 20 {
+					t.Errorf("startCol=%d popup=%q: row %d is %d cells, want 20: %q",
+						startCol, popup, i, got, stripAnsi(line))
+				}
+			}
+			if startCol+Width(popup) > 20 {
+				continue // right-clipped on purpose; only the width claim applies
+			}
+			if !strings.Contains(stripAnsi(lines[1]), stripAnsi(popup)) {
+				t.Errorf("startCol=%d popup=%q: the popup did not survive the splice: %q",
+					startCol, popup, stripAnsi(lines[1]))
+			}
+		}
+	}
+}

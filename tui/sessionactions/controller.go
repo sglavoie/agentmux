@@ -27,7 +27,6 @@ package sessionactions
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -108,9 +107,6 @@ type Host struct {
 	WindowID int
 }
 
-// Known reports whether the hosting tab has been resolved.
-func (h Host) Known() bool { return h.WindowID > 0 || h.TabID > 0 }
-
 // Hosts reports whether target names the tab the dashboard itself lives in, so
 // a surface can say that running this action will take the surface with it.
 func (h Host) Hosts(target Target) bool {
@@ -147,8 +143,6 @@ type Pending struct {
 	Profile string
 	// Origin is where to go back to on cancellation.
 	Origin Origin
-	// StartedAt is when the action was chosen, from the injected clock.
-	StartedAt time.Time
 }
 
 // Dispatch is one action handed to its effect: what to do, to which row, under
@@ -377,23 +371,23 @@ func SameSession(a, b session.RunningSession) bool {
 	return true
 }
 
-// Controller is the shared decision path. It is immutable: every field is a
-// seam or a clock, and the mutable half lives in State on the host model. That
-// is what makes it safe to hold on a Bubble Tea model that is copied by value on
-// every single update.
+// Controller is the shared decision path. It is immutable: its one field is the
+// seam set, and the mutable half lives in State on the host model. That is what
+// makes it safe to hold on a Bubble Tea model that is copied by value on every
+// single update.
+//
+// It holds no clock, and that is a decision rather than an omission. The only
+// thing it ever asked one for was a start timestamp on the pending action, put
+// there for a dispatch timeout that was never built and read by nothing; the two
+// times that ARE load-bearing — the recovery window and the toast deadline —
+// belong to Recovery and to the host's own feedback, which carry their own.
 type Controller[M any] struct {
 	effects Effects[M]
-	now     func() time.Time
 }
 
-// NewController assembles a controller from its effects and its clock. A nil
-// clock is time.Now, which is what production wants and what no test should
-// take.
-func NewController[M any](effects Effects[M], now func() time.Time) Controller[M] {
-	if now == nil {
-		now = time.Now
-	}
-	return Controller[M]{effects: effects, now: now}
+// NewController assembles a controller from its effects.
+func NewController[M any](effects Effects[M]) Controller[M] {
+	return Controller[M]{effects: effects}
 }
 
 // Host state is not carried by the controller. The host owns it, because the
@@ -414,11 +408,10 @@ func (c Controller[M]) Begin(m M, action commands.ID, target Target, origin Orig
 		return c.refuse(m, action, target, origin, detail)
 	}
 	pending := Pending{
-		Active:    true,
-		Action:    action,
-		Target:    target,
-		Origin:    origin,
-		StartedAt: c.now(),
+		Active: true,
+		Action: action,
+		Target: target,
+		Origin: origin,
 	}
 	if NeedsProfile(action) {
 		pending.Stage = StageProfile

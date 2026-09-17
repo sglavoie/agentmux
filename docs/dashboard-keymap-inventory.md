@@ -54,7 +54,7 @@ to pane switching, and `Enter` keeps focusing but no longer shares the job with
 
 ## Command-backed bindings
 
-Each surviving row is one entry in `dashboardBindings()`, which is ten entries
+Each surviving row is one entry in `dashboardBindings()`, which is eleven entries
 long. "Successor" names the surface that reaches the capability now. A palette
 entry exists for every command in this table — the catalog is the complete list
 — so "palette" never means "gone"; where something more direct exists, it is
@@ -62,7 +62,7 @@ named first.
 
 | Key | Command ID | Capability | Disposition | Successor |
 | --- | --- | --- | --- | --- |
-| `enter` / `space` | `FocusSession` | Focus the session's Kitty tab | `enter` survives, `space` **retired** | `Enter`; actions `a` → focus tab; palette |
+| `enter` / `space` | `FocusSession` | Focus the session's Kitty tab | `enter` survives, `space` **retired** | `Enter`; actions `a` → **Open session**; palette |
 | `e` | `PeekScrollback` | Peek at the pane's scrollback | **Retired** | actions `a`; palette |
 | `r` | `RestartSession` | Restart the harness in place | **Retired** | actions `a`; palette |
 | `c` | `OverrideProfile` | Relaunch under a different profile | **Retired** | actions `a`; palette |
@@ -115,7 +115,7 @@ successor named here or it had nowhere to go.
 | `}`/`{` | Jump to an attention row **and** focus its tab | **Retired** | `n`/`N`, then `Enter` — the new keymap never opens a terminal automatically |
 | `enter` on a focused chip | Remove that filter component | **Retired** | filter editing inside `/` |
 | `enter`/`space` on a summary | Fold/unfold the family | `enter` survives, `space` **retired** | `Enter` |
-| `a` | Selected-session actions overlay | Survives | `a` |
+| `a` | Selected-session actions menu | Survives | `a` |
 | `:` | Command palette | Survives | `:` |
 | `←`/`→` | Fold/unfold a family; `←` focuses the rail in Urgency view | **Retired** | `Enter` folds; the rail's successor is the project switcher `p` |
 | `tab` | Cycle the focused filter chip | The meaning retired, the key kept for pane switching | filter editing inside `/` |
@@ -141,6 +141,20 @@ Everything the inventory listed as owed has been built:
 - The `i` inspector toggle absorbed both the preview pane (`p`) and the
   per-session detail overlay (`d`), and the `p` project switcher changes only
   the project filter component and preserves the rest.
+- The two surfaces the retired keys went to are now browsable lists rather than
+  sheets of letters. `a` is a menu with a cursor: `j`/`k` move it, `Enter` runs
+  the selected entry, and every mnemonic in the **Retired** rows above still runs
+  its entry from wherever the cursor is, so both tables stay true at once. A
+  fresh menu opens on **Open session**, which is what keeps `a` `Enter` equal to
+  `Enter` on the row. `:` is one line per command instead of a card.
+- Which actions exist, what each is called on each surface, and when one is
+  allowed are declared once in `tui/sessionactions` and read by the menu, the
+  palette, and the F2 overview. The three surfaces are allowed to word an action
+  differently; they are not allowed to disagree about whether it exists or
+  whether the selected row may run it, which is what two tables of rules had let
+  them do. `tui.TestOverlayOffersEveryMenuDefinition` and
+  `tui.TestPaletteOffersEverySessionDefinition` are what report a definition the
+  root has no implementation for.
 
 One configuration key outlived its feature. `[defaults.jump].attention_states`
 named the states the bracket chords treated as attention; `n`/`N` take no

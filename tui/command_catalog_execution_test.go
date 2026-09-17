@@ -386,7 +386,6 @@ func TestPaletteRestartMatchesActionsOverlay(t *testing.T) {
 
 	m.targetSession = target
 	m.mode = ModeActions
-	m.actionsReturnMode = ModeList
 	actionResult, actionCmd := rowActionRunners()[commands.RestartSession](m)
 	if actionResult.mode != ModeList || actionCmd == nil || len(actionResult.toasts) != 1 {
 		t.Fatalf("actions restart = mode %v cmd %v toasts %d; want the immediate toast path", actionResult.mode, actionCmd != nil, len(actionResult.toasts))

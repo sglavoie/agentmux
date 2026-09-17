@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -33,10 +32,6 @@ type host struct {
 	restores   []Pending
 	ran        []Dispatch
 }
-
-// testClock is the injected clock. A pending action records when it started, and
-// a test that had to sleep to observe that would be a test of the sleep.
-var testClock = time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
 
 // hostEffects wires the seams. Every action named in run gets an effect that
 // records its dispatch and returns a command, so a dispatch is observable
@@ -84,7 +79,7 @@ func hostEffects(run ...commands.ID) Effects[host] {
 }
 
 func testController(effects Effects[host]) Controller[host] {
-	return NewController(effects, func() time.Time { return testClock })
+	return NewController(effects)
 }
 
 // row is a listed, unlocked, attributed session: the ordinary target.
@@ -165,9 +160,6 @@ func TestBeginConfirmsDestructiveAction(t *testing.T) {
 	pending := out.state.Pending()
 	if !pending.Active || pending.Stage != StageConfirm {
 		t.Fatalf("pending = %+v, want an active confirm stage", pending)
-	}
-	if !pending.StartedAt.Equal(testClock) {
-		t.Fatalf("StartedAt = %v, want the injected clock %v", pending.StartedAt, testClock)
 	}
 	if out.dismissals != 0 {
 		t.Fatalf("dismissals = %d, want the menu left standing behind the prompt", out.dismissals)
@@ -572,6 +564,92 @@ func TestUnavailableActionIsRefusedBeforeItStarts(t *testing.T) {
 	}
 }
 
+// The three tests below are about a lock that CHANGES between the moment a row
+// was captured and the moment the action runs, which the availability matrix
+// cannot cover: every case there holds one lock state still. A lock is the one
+// guard an operator is expected to apply from somewhere else — another window,
+// another surface — while a menu or a confirmation is sitting open here, so
+// which of the two readings decides is worth pinning rather than inferring from
+// validate's shape.
+//
+// The answer is that BOTH must permit, in both directions, which is why
+// SameSession deliberately ignores the lock: a lock change is not a different
+// session, so treating it as one would refuse with the wrong sentence.
+
+// TestALockTakenAfterCaptureIsCaughtAtTheLiveRow is the case the captured
+// snapshot cannot see: the row was unlocked when the operator chose the action,
+// so the surface drew the entry available and the captured verdict passes.
+// Only the second, live reading refuses it.
+func TestALockTakenAfterCaptureIsCaughtAtTheLiveRow(t *testing.T) {
+	captured := Capture(row(11, 21))
+	lockedSince := row(11, 21)
+	lockedSince.Locked = true
+	h := host{env: quietEnv(), live: []session.RunningSession{lockedSince}}
+	c := testController(hostEffects(commands.RestartSession))
+
+	out, step, cmd := c.Begin(h, commands.RestartSession, captured, Origin{Surface: SurfaceMenu})
+
+	if step.Kind != StepRefused || step.Detail != commands.ReasonLocked {
+		t.Fatalf("step = %+v, want a refusal naming %q", step, commands.ReasonLocked)
+	}
+	if cmd != nil || len(out.ran) != 0 {
+		t.Fatalf("ran %d effects with cmd %v; want a refusal to dispatch nothing", len(out.ran), cmd != nil)
+	}
+}
+
+// TestALockTakenUnderAConfirmationIsCaughtBeforeDispatch is the same change
+// arriving later still. The confirmation is a surface the operator sits in, so
+// the whole verdict is re-asked when they answer it rather than trusting the
+// one that raised the prompt.
+func TestALockTakenUnderAConfirmationIsCaughtBeforeDispatch(t *testing.T) {
+	captured := Capture(row(11, 21))
+	h := host{env: confirmingEnv(), live: []session.RunningSession{row(11, 21)}}
+	c := testController(hostEffects(commands.CloseSession))
+
+	h, step, _ := c.Begin(h, commands.CloseSession, captured, Origin{Surface: SurfaceMenu})
+	if step.Kind != StepConfirm {
+		t.Fatalf("step = %+v, want the confirmation to be raised first", step)
+	}
+
+	lockedSince := row(11, 21)
+	lockedSince.Locked = true
+	h.live = []session.RunningSession{lockedSince}
+
+	out, step, cmd := c.Confirm(h)
+
+	if step.Kind != StepRefused || step.Detail != commands.ReasonLocked {
+		t.Fatalf("step = %+v, want a refusal naming %q", step, commands.ReasonLocked)
+	}
+	if cmd != nil || len(out.ran) != 0 {
+		t.Fatalf("ran %d effects with cmd %v; want the yes to close nothing", len(out.ran), cmd != nil)
+	}
+	if out.state.Busy() {
+		t.Fatal("controller is still busy after a refusal")
+	}
+}
+
+// TestALockReleasedAfterCaptureStillRefuses is the other direction, and it fails
+// closed on purpose: the captured verdict is asked first, so a row the operator
+// saw as locked stays refused even if the lock has since been dropped. The
+// refusal costs one redraw and a second keypress; honoring the stale capture the
+// other way would restart a session someone locked and has not yet seen
+// unlocked.
+func TestALockReleasedAfterCaptureStillRefuses(t *testing.T) {
+	locked := row(11, 21)
+	locked.Locked = true
+	h := host{env: quietEnv(), live: []session.RunningSession{row(11, 21)}}
+	c := testController(hostEffects(commands.RestartSession))
+
+	out, step, cmd := c.Begin(h, commands.RestartSession, Capture(locked), Origin{Surface: SurfaceMenu})
+
+	if step.Kind != StepRefused || step.Detail != commands.ReasonLocked {
+		t.Fatalf("step = %+v, want a refusal naming %q", step, commands.ReasonLocked)
+	}
+	if cmd != nil || len(out.ran) != 0 {
+		t.Fatalf("ran %d effects with cmd %v; want a refusal to dispatch nothing", len(out.ran), cmd != nil)
+	}
+}
+
 // TestBeginWithUnknownActionIsNoOp keeps an identity the shared vocabulary does
 // not declare from being dispatched by a host that happens to have an effect
 // under that key.
@@ -750,12 +828,6 @@ func TestHostHostsOnlyItsOwnTab(t *testing.T) {
 	}
 	if (Host{TabID: 21}).Hosts(Target{}) {
 		t.Fatal("a target with no session was claimed by the host tab")
-	}
-	if (Host{}).Known() {
-		t.Fatal("the zero host reports itself resolved")
-	}
-	if !(Host{TabID: 21}).Known() {
-		t.Fatal("a resolved host reports itself unknown")
 	}
 }
 

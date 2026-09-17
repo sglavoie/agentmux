@@ -100,9 +100,12 @@ func rowActionRunners() map[commands.ID]func(Model) (Model, tea.Cmd) {
 	return runners
 }
 
+// exitActionsMode leaves the menu for the list. There is one destination rather
+// than a remembered one: the menu is only ever opened from the list, and the
+// field that used to carry a return mode was written by every exit and read by
+// nothing.
 func (m *Model) exitActionsMode() {
 	m.mode = ModeList
-	m.actionsReturnMode = ModeList
 }
 
 // openActionsMenu captures the row the menu will act on and puts the cursor on

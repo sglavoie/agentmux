@@ -157,10 +157,10 @@ func actionHost(m model) sessionactions.Host {
 }
 
 // actionController assembles the controller for one call. It is built per call
-// rather than stored because it is immutable — every field is a seam or the
-// clock — and the state it reads and writes lives on the model.
-func actionController(m model) sessionactions.Controller[model] {
-	return sessionactions.NewController(actionEffects(), m.deps.now)
+// rather than stored because it is immutable — its one field is the seam set —
+// and the state it reads and writes lives on the model.
+func actionController(model) sessionactions.Controller[model] {
+	return sessionactions.NewController(actionEffects())
 }
 
 // actionEffects is what each action DOES here, plus the seams the controller

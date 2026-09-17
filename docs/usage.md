@@ -44,7 +44,10 @@ an unmanaged source tab leaves the current/default dashboard selection alone.
 
 The dashboard answers a small keymap. Everything else it can do is reached
 through two surfaces it opens: `a` for the row under the cursor, `:` for the
-rest. If you are upgrading from a release with the larger direct keymap, see
+rest. Both are browsable lists you move a cursor through rather than sheets of
+letters to aim at, and both read the same declaration of what a session action
+is, so they cannot disagree about which actions exist or when one is allowed.
+If you are upgrading from a release with the larger direct keymap, see
 [Upgrading from the old dashboard shortcuts](#upgrading-from-the-old-dashboard-shortcuts)
 below for where each key went.
 
@@ -56,20 +59,33 @@ below for where each key went.
   folded family unfolds it and lands the cursor on the row; nothing is focused,
   opened, or marked as read — finding a waiting session is not answering it
 - `Tab`/`Shift+Tab`: switch the focused pane. Its heading is highlighted and marked `focused`; the inactive pane's selection loses its reverse highlight.
-- `a`: open the actions overlay for the selected row — focus, peek at the
+- `a`: open the actions menu for the selected row — focus, peek at the
   scrollback, restart, restart under another profile, launch another session in
   the project, clear the status icon, close, open a shell or the configured
-  editor in its directory, copy the title, lock, mute. An entry that cannot
-  apply to the row is dimmed with its reason rather than hidden
-- `:`: open the command palette; type to search, use `↑`/`↓`, `Ctrl+j`/`Ctrl+k`,
-  or `Ctrl+n`/`Ctrl+p` to move, `Backspace` to edit, `Enter` to run, `Esc` to
-  close, and `Ctrl+c` to quit
+  editor in its directory, copy the title, lock, mute. It is a menu you move
+  through, not a sheet of letters: `j`/`k` or `↑`/`↓` move the selection,
+  `PgUp`/`PgDn`, `Ctrl+f`/`Ctrl+b`, `Ctrl+d`/`Ctrl+u`, and `g`/`G` move it
+  further, and `Enter` runs the selected entry. Each entry still answers its own
+  mnemonic immediately, from wherever the cursor happens to be. A fresh menu
+  opens on **Open session**, so `a` then `Enter` does what `Enter` on the row did.
+  An entry that cannot apply to the row is dimmed but still selectable, and the
+  detail block under the list is where its reason is written. `Esc` or `q`
+  closes the menu; `Ctrl+C` quits the dashboard
+- `u`: relaunch the session you just closed, while the five-second recovery
+  window named on the toast is still open
+- `:`: open the command palette; it is one line per command rather than a card,
+  so more of them are on screen at once. Type to search, use `↑`/`↓`,
+  `Ctrl+j`/`Ctrl+k`, or `Ctrl+n`/`Ctrl+p` to move, `Backspace` to edit, `Enter`
+  to run, `Esc` to close, and `Ctrl+c` to quit
 - `/`: edit the filter. The editor opens on the filter already on screen, so
   `Backspace` removes the last component; `Esc` restores what was committed
 - `i`: toggle the session inspector, full-screen when the terminal is too narrow
   to split
 - `p`: open the project switcher
 - `l`: open the launcher
+- `s`: Past Sessions for the selected row's project
+- `S`: Past Sessions across every project, newest activity first; it clears the
+  history filters a previous `s` left behind
 - `?`: show the full keymap
 - `Esc`: close an overlay, then leave inspector focus, then clear the filters
 - `q`, `Ctrl+C`: quit
@@ -100,17 +116,17 @@ longer dispatches. `:` does not open the palette from other modes.
 
 ### Upgrading from the old dashboard shortcuts
 
-The dashboard used to bind roughly thirty keys directly. It binds eight now, and
-the rest of the capabilities moved to the two surfaces above — no capability was
-dropped. A retired key is *unbound* rather than rebound: pressing it does
+The dashboard used to bind roughly thirty keys directly. It binds eleven now,
+and the rest of the capabilities moved to the two surfaces above — no capability
+was dropped. A retired key is *unbound* rather than rebound: pressing it does
 nothing at all, so nothing you remember can now mean something else.
 
 | You used to press | Do this instead |
 | --- | --- |
 | `space` (focus) | `Enter` |
-| `e` peek, `r` restart, `c` profile override, `C` launch another, `x` clear icon, `X` close, `o` shell, `O` editor, `y` copy title, `L` lock, `m` mute | `a`, then the same letter. The overlay's mnemonics are unchanged |
-| `u` undo close | `:` → **Undo Last Close** (still inside the 5-second window) |
-| `s` / `S` past sessions | `:` → **Search This Project's Past Sessions** / **Search All Past Sessions** |
+| `e` peek, `r` restart, `c` profile override, `C` launch another, `x` clear icon, `X` close, `o` shell, `O` editor, `y` copy title, `L` lock, `m` mute | `a`, then the same letter. The menu's mnemonics are unchanged; you can also move to the entry and press `Enter` |
+| `u` undo close | `u` — it came back. What it undoes expires after five seconds, and a capability that has to be found by name before it lapses is not reachable. `:` → **Undo Last Close** still works |
+| `s` / `S` past sessions | `s` / `S` — both came back for browsing. `:` → **Search This Project's Past Sessions** / **Search All Past Sessions** still works |
 | `P` plans, `W` worktrees, `A` runs | `:` → **Search Plans** / **Manage Worktrees** / **Show Runs** |
 | `d` session detail, `T` timeline | `i` for the inspector, or `:` → **Show Session Details** / **Show Session Timeline** |
 | `v` urgency ↔ projects | `:` → **Show Projects View** / **Show Urgency View** |
@@ -380,8 +396,28 @@ continue to use their existing aggregate state.
 
 The overview is a **separate program**, not a dashboard mode. It has its own
 keymap and its own refresh, the dashboard keeps running behind it, and closing
-one does not disturb the other.
+one does not disturb the other. The one thing the two surfaces do share is what
+a session action *is*: `a` here opens the same menu, offering the same entries
+under the same rules and the same confirmations, as `a` on a dashboard row.
 
+- `a`: open the actions menu for the selected session — every entry the
+  dashboard offers on a row, in the same order and with the same mnemonics.
+  `j`/`k` or `↑`/`↓` move the selection, `Enter` runs it, and a mnemonic runs its
+  entry from wherever the cursor is. An entry the selected session cannot run is
+  dimmed with its reason, and pressing its mnemonic anyway says the reason on the
+  feedback row rather than doing nothing. Choosing a restart, a profile
+  replacement, or a close asks for a y/n confirmation when
+  `confirm_destructive = true`; the prompt names the session and what saying yes
+  destroys. `Esc` or `q` backs out; `Ctrl+C` leaves the overview entirely
+- `u`: relaunch the session you just closed from here. It is offered for five
+  seconds after a confirmed close and is named on the feedback row for exactly
+  that long, which is why it is the one real binding that is deliberately not on
+  the footer
+- `?`: show the whole keymap, generated from the same table the footer and the
+  dispatcher read, so it cannot advertise a key that is not bound. It scrolls
+  with `j`/`k`, `Ctrl+f`/`Ctrl+b`, `Ctrl+d`/`Ctrl+u`, and `g`/`G`, and `?`, `Esc`,
+  or `q` closes it. Opening and closing it changes nothing underneath: the same
+  session stays selected, on the same page, with the same reads in flight
 - `c`: toggle compact/normal mode. Compact cards show project plus status and
   elapsed time on line one, harness/profile on line two, and no terminal preview.
   The selected session stays selected. The daemon remembers the choice across
@@ -412,9 +448,22 @@ one does not disturb the other.
   focus leaves the target selected for retry, and pending focus ignores repeats.
 - `Esc`, `q`, `Ctrl+C`: close, whether or not a read is still out
 
-Nothing else is bound. Browsing observes sessions and their screen text.
-`Enter` and digits focus a tab; `c` changes only the daemon's in-memory view preference.
-Closing immediately after a toggle lets its bounded save finish before exiting.
+Browsing itself still only observes sessions and their screen text: moving the
+selection, paging, and `n`/`N` touch nothing, `c` changes only the daemon's
+in-memory view preference, and `Enter` and the digits focus a tab. Everything
+that changes a session is behind `a`, where it is named and — when
+`confirm_destructive = true` — confirmed. Closing immediately after a compact
+toggle lets its bounded save finish before exiting.
+
+Closing or restarting the tab the overview is itself running in is still
+offered — an operator acting on the session they raised the overview beside is
+an ordinary thing to do, and refusing would be the surface protecting itself
+rather than the operator. What changes is that its confirmation says so in an
+extra sentence, and that a close there publishes no undo: `u` would relaunch it
+from a grid that is going away with the tab, so the offer would die before it
+could be used. A profile with no entry in the loaded configuration is the other
+close that offers no undo, for the plainer reason that there is no launch path
+to relaunch it with.
 
 The footer uses the dashboard's colors: available keys are bold teal, unavailable
 keys are muted gray, and descriptions stay dim. Availability follows the current

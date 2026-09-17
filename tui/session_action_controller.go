@@ -38,11 +38,11 @@ import (
 const hostTabConsequence = "This dashboard is running in that tab and closes with it."
 
 // sessionActionController assembles the controller for one call. It is built per
-// call rather than stored on the model because it is immutable — every field is
-// a seam or the clock — and the state it reads and writes lives on the model
-// itself, through the State and SetState seams below.
-func sessionActionController(m Model) sessionactions.Controller[Model] {
-	return sessionactions.NewController(sessionActionEffects(), m.now)
+// call rather than stored on the model because it is immutable — its one field
+// is the seam set — and the state it reads and writes lives on the model itself,
+// through the State and SetState seams below.
+func sessionActionController(Model) sessionactions.Controller[Model] {
+	return sessionactions.NewController(sessionActionEffects())
 }
 
 // sessionActionEffects is what each action DOES in this model, plus the seams
@@ -199,7 +199,6 @@ func restoreSessionActionOrigin(m Model, pending sessionactions.Pending) Model {
 	switch pending.Origin.Surface {
 	case sessionactions.SurfaceMenu:
 		m.targetSession = pending.Target.Session
-		m.actionsReturnMode = ModeList
 		m.mode = ModeActions
 		m.actionsCursor = pending.Origin.MenuCursor
 		m.actionsOffset = pending.Origin.MenuOffset

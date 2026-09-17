@@ -40,10 +40,14 @@ idle_threshold = 300
 #   project args → profile args → defaults.args
 args = []
 
-# Direct dashboard restart (`r`) always prompts for confirmation. When true,
-# close (`X`) and actions-overlay restart (`a` then `r`) also prompt with a
-# modal y/n overlay. When false (default), those paths run immediately and use
-# toasts where available.
+# Whether the three actions that end or replace a live harness process — close,
+# restart, and restart under another profile — stop for a y/n confirmation
+# naming what they destroy. When false (default) they run immediately and report
+# themselves on the feedback row or a toast. The answer is read once and applies
+# wherever the action is reached: the actions menu, the command palette, and the
+# F2 overview all honor it, because a restart reached by name and a restart
+# reached by mnemonic are the same act. Launching another session is not covered:
+# it asks for a profile like a replacement does, but it ends nothing.
 confirm_destructive = false
 
 # Per-directory Git probe. The daemon asks each live session's directory for
@@ -60,7 +64,7 @@ confirm_destructive = false
 # run `amx daemon restart` after changing it.
 # git_probe = true
 
-# Editor command used by the actions overlay's "open in editor" entry (`a`, then
+# Editor command used by the actions menu's "Open editor" entry (`a`, then
 # `O`) and by the worktrees browser's. When unset, falls back to $VISUAL, then
 # $EDITOR, then "vi". Multi-token values like "code --wait" are split on
 # whitespace.

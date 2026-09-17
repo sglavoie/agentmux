@@ -57,11 +57,11 @@ type Defaults struct {
 	Diagnostics          DiagnosticsConfig    `toml:"diagnostics"`            // private event journal and native/daemon log retention
 	Args                 []string             `toml:"args"`                   // preferred shared launch args
 	ClaudeFlags          []string             `toml:"claude_flags"`           // legacy alias for args
-	ConfirmDestructive   bool                 `toml:"confirm_destructive"`    // when true, the actions overlay's close/restart entries use the modal confirm instead of the toast+undo path
+	ConfirmDestructive   bool                 `toml:"confirm_destructive"`    // when true, the close/restart session actions use the modal confirm instead of the toast+undo path, on every surface that offers them
 	Notifications        NotificationConfig   `toml:"notifications"`
 	Preview              PreviewConfig        `toml:"preview"`
 	Jump                 JumpConfig           `toml:"jump"`            // deprecated: the bracket chords it configured are retired; accepted, validated, and read by nothing
-	Editor               string               `toml:"editor"`          // overrides $VISUAL/$EDITOR for the actions overlay's "open in editor" entry
+	Editor               string               `toml:"editor"`          // overrides $VISUAL/$EDITOR for the "Open editor" session action and the worktrees browser
 	PlansDirectory       string               `toml:"plans_directory"` // root for the Plans browser's index; defaults to ~/.local/share/agent-plans
 	ASL                  ASLConfig            `toml:"asl"`             // optional agent-session-loop bridge integration
 	Release              ReleaseConfig        `toml:"release"`         // paired ASL/Agent Mux release gate

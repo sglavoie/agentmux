@@ -254,21 +254,39 @@ func (m *Model) reportActionOutcome(result sessionactions.Result) tea.Cmd {
 		m.clearToastByID(id)
 		return nil
 	}
-	toast := Toast{Expires: modelNow(*m).Add(defaultToastTTL)}
-	switch result.Outcome {
-	case sessionactions.OutcomeSucceeded:
-		toast.Severity, toast.Text = toastSuccess, wording.Succeeded
-	case sessionactions.OutcomeUnconfirmed:
-		toast.Severity, toast.Text = toastWarning, wording.Unconfirmed
-	case sessionactions.OutcomeFailed:
-		toast.Severity, toast.Text = toastError, sessionactions.FailureText(wording.Failed, result.Detail)
-	default:
+	// What the toast SAYS comes from the shared wording — the overview reports the
+	// same outcomes on its feedback row, and a second switch here is how the two
+	// used to be able to describe one close differently. What it LOOKS like is
+	// this surface's own business, which is why the severity is decided beside it
+	// rather than carried in the vocabulary.
+	text, ok := wording.Outcome(result.Outcome, result.Detail)
+	if !ok {
 		// Refused and cancelled never reach here: they are decided before an
 		// effect runs and reported by the step the controller returns.
 		m.clearToastByID(id)
 		return nil
 	}
-	return m.replaceToastByID(id, toast)
+	return m.replaceToastByID(id, Toast{
+		Severity: outcomeSeverity(result.Outcome),
+		Text:     text,
+		Expires:  modelNow(*m).Add(defaultToastTTL),
+	})
+}
+
+// outcomeSeverity is how loudly each reportable outcome is drawn. It covers
+// exactly the three Feedback.Outcome has a sentence for; anything else never
+// reaches a toast, and info is the harmless answer if one ever did.
+func outcomeSeverity(outcome sessionactions.Outcome) toastSeverity {
+	switch outcome {
+	case sessionactions.OutcomeSucceeded:
+		return toastSuccess
+	case sessionactions.OutcomeUnconfirmed:
+		return toastWarning
+	case sessionactions.OutcomeFailed:
+		return toastError
+	default:
+		return toastInfo
+	}
 }
 
 // sessionLabel is what to call a target in a sentence.

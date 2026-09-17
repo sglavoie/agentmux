@@ -3,12 +3,14 @@
 // immediate key the per-row menu answers it with, which band of the menu it
 // sits in, and whether the row captured for it can run it right now.
 //
-// It is one declaration read by two surfaces. The per-row actions overlay and
-// the command palette each used to state the same twelve actions in full, in
-// their own file, with their own availability rule. Two spellings of one fact
-// is what this package removes: an entry added to one surface and forgotten in
-// the other was a silent divergence, and an availability rule corrected in one
-// was a bug left standing in the other.
+// It is one declaration read by three surfaces: the per-row actions overlay,
+// the command palette, and the F2 live session overview's own menu. The first
+// two each used to state the same twelve actions in full, in their own file,
+// with their own availability rule. Two spellings of one fact is what this
+// package removes: an entry added to one surface and forgotten in the other was
+// a silent divergence, and an availability rule corrected in one was a bug left
+// standing in the other. The overview never had a table of its own — it was
+// built against this one, which is why a third surface cost no third rule.
 //
 // What stays with each host is what a choice DOES. The menu keeps its runners
 // and the palette keeps its executors, both keyed by the identity declared

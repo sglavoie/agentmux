@@ -192,9 +192,6 @@ type Model struct {
 	// rather than being steered on its own, so the selection can never scroll out
 	// of the window; both are reset when the menu is opened or closed.
 	actionsOffset int
-	// actionsReturnMode preserves the source surface behind the generic row
-	// actions overlay. Its zero value is ModeList for legacy callers.
-	actionsReturnMode Mode
 
 	// sessionActions is the shared session-action controller's own state: the
 	// action waiting on a picker or a confirmation, the request counter, and the
