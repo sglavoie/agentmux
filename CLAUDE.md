@@ -550,22 +550,37 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   of live pane previews. Like `tui/customization` it is a sibling of the root
   rather than one of its leaves: `cmd/dashboard` runs it directly and root `tui`
   does not import it. It reaches the world only through an unexported `deps`
-  struct of six function values (topology, focus, tick, capture, capture tick,
-  clock), which is what lets the package-level acceptance sequences drive the
+  struct of function values — the topology read, the pane capture and its own
+  cadence, the interval tick, the daemon-held compact preference, the focus
+  call, the session-action dispatch, the close-recovery relaunch, and the
+  clock — which is what lets the package-level acceptance sequences drive the
   real `Update`/`View` loop against a frozen clock, scripted snapshots, and a
-  recording Kitty client with no sleeps anywhere. Two properties are the package
-  rather than details of it. Its reads are BOUNDED, FAIR, and RECOVERABLE — at
-  most four captures in flight and one per window, queued FIFO and coalesced, a
-  request ID releasing the slot so a lost reply cannot leak one, and a generation
-  gating what may be painted so a late reply cannot repaint a grid that has since
-  been repaged or resized. And it is READ-ONLY against Kitty except for the one
-  focus call `Enter` makes: it retrieves topology through
-  `commands.RefreshOverview` and never `commands.Refresh`, so it cannot consume
-  the dashboard's pending selection request. Its compact three-line tile header
-  (`dashboard.CompactMetaLines`) is deliberately a strict subset of the
-  inspector's six facts — branch, directory, and the supervision/lock/mute line
-  stay in the inspector, because a tile that grew them would be an inspector
-  rendered nine times rather than an overview.
+  recording Kitty client with no sleeps anywhere. Three properties are the
+  package rather than details of it. Its reads are BOUNDED, FAIR, and
+  RECOVERABLE — at most four captures in flight and one per window, queued FIFO
+  and coalesced, a request ID releasing the slot so a lost reply cannot leak one,
+  and a generation gating what may be painted so a late reply cannot repaint a
+  grid that has since been repaged or resized. Its retrieval is READ-ONLY: it
+  takes topology through `commands.RefreshOverview` and never `commands.Refresh`,
+  so it cannot consume the dashboard's pending selection request, and startup,
+  every refresh, every navigation key, the `?` help overlay, and browsing the `a`
+  actions menu write nothing to Kitty at all — `c` is no exception either, since
+  it saves only the daemon's in-memory compact preference. Every Kitty MUTATION
+  is therefore one the operator explicitly asked for: the focus call `Enter`, a
+  digit, and the menu's Open entry share, and the twelve session actions the
+  menu dispatches under the same declarations, availability rules, and
+  `confirm_destructive` prompts the dashboard reads from `tui/sessionactions`.
+  The feedback row is where those land, and it names every refusal and every
+  failure — including for the actions that announce nothing on the way out,
+  because a grid that silently declined to do what was asked is the one outcome
+  an operator cannot see. And a close made here is recoverable here — `u`
+  relaunches a CONFIRMED close for five seconds, from a recovery stack local to
+  this program, and the tab the overview is itself running in is never offered,
+  because closing it takes the grid and the offer with it. Its compact
+  three-line tile header (`dashboard.CompactMetaLines`) is deliberately a strict
+  subset of the inspector's six facts — branch, directory, and the
+  supervision/lock/mute line stay in the inspector, because a tile that grew
+  them would be an inspector rendered nine times rather than an overview.
 - `tui/customization`: the standalone color, icon, and keybinding overlays, each
   its own Bubble Tea program. It is a sibling of the root rather than one of its
   leaves: `cmd` launches it directly and root `tui` does not import it.

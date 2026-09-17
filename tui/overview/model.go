@@ -9,16 +9,19 @@
 // raised over a pane needs none of it and must not pay for any of it. So this
 // file constructs nothing from tui and imports nothing from it: the live-session
 // read arrives through commands.RefreshOverview, which is the dashboard's own
-// reader with its write budget removed. Enter and digits focus a session; c changes only
-// the daemon's in-memory view preference.
+// reader with its write budget removed. Enter and digits focus a session; c
+// changes only the daemon's in-memory view preference; and a is the shared
+// actions menu, whose dispatched mutations and the close recovery behind u are
+// the rest of what this surface may do to the world.
 //
-// Every effect is injected. The topology read, the focus action, the interval
-// tick, and the clock are fields on a deps value, so a test drives the whole
-// lifecycle — startup, coalescing, staleness, focus success and failure — with
-// no daemon, no Kitty, and no wall clock. The Kitty client is stored only to be
-// handed to the two default seams, which is why a test may construct the model
-// with a nil client: with the seams replaced there is no path that touches it,
-// and a regression that grew one would panic rather than pass.
+// Every effect is injected — every read, every mutation, both tickers, and the
+// clock are fields on a deps value — so a test drives the whole lifecycle,
+// startup, coalescing, staleness, focus success and failure, and an action
+// parked and completed, with no daemon, no Kitty, and no wall clock. The Kitty
+// client is stored only to be handed to the default seams that reach it, which
+// is why a test may construct the model with a nil client: with the seams
+// replaced there is no path that touches it, and a regression that grew one
+// would panic rather than pass.
 package overview
 
 import (
