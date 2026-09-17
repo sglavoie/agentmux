@@ -220,6 +220,41 @@ func (s State) InFlight() []Dispatch {
 // because the ordinary case comes anywhere near it.
 const maxInFlight = 16
 
+// lifecycleInFlight reports whether a dispatch that ends or replaces a harness
+// process already owns this target's tab. It is what makes a lifecycle action
+// single-flight per tab: without it, a,r,a,r on one row before the first result
+// arrives validates the same unchanged cached row twice and runs Restart twice,
+// and since a restart launches the replacement before closing the original, the
+// operator ends up with two replacements for one row.
+//
+// The tab is the unit rather than the window or the session because the tab is
+// what a close acts on and what a restart replaces, and because close, restart,
+// and profile replacement must exclude EACH OTHER on it, not merely repeats of
+// themselves. An unattributed target — no session, so no tab — is never a
+// conflict: a zero tab names no tab, and treating two of them as the same one
+// would refuse unrelated rows.
+//
+// The record is retired by Complete, so the guard's release is exactly the
+// host's completion report. A host that dispatches a lifecycle effect and never
+// reports its outcome would hold the tab until the bounded record evicts it;
+// both hosts report every completion, including failures and unconfirmed ones,
+// which is what keeps a failed operation retryable.
+func (s State) lifecycleInFlight(action commands.ID, target Target) bool {
+	if !Destructive(action) {
+		return false
+	}
+	tab := target.TabID()
+	if tab == 0 {
+		return false
+	}
+	for _, dispatch := range s.inflight {
+		if Destructive(dispatch.Action) && dispatch.Target.TabID() == tab {
+			return true
+		}
+	}
+	return false
+}
+
 // StepKind is what the host must do about one controller call.
 type StepKind string
 
@@ -258,8 +293,8 @@ type Step struct {
 }
 
 // Refusal reasons the controller adds to the availability vocabulary. They are
-// the three ways a row that WAS a legal target stops being one between the
-// moment it was chosen and the moment the action would run.
+// the ways a row that WAS a legal target stops being one between the moment it
+// was chosen and the moment the action would run.
 const (
 	// ReasonSessionGone is a target the host can no longer find at all.
 	ReasonSessionGone = "the session is no longer listed"
@@ -270,6 +305,11 @@ const (
 	// ReasonNoEffect is a declared action the host supplied no effect for,
 	// which is a programming error rather than a state a dashboard reaches.
 	ReasonNoEffect = "the action is not available here"
+	// ReasonLifecycleInFlight is a tab whose harness process is already being
+	// ended or replaced. Unlike the three above it is not a way the world moved
+	// under the operator: it is what the operator themselves started a keystroke
+	// ago and the reason the row is about to change.
+	ReasonLifecycleInFlight = "a close or restart is already running for this session"
 )
 
 // ConfirmPrompt is the wording a destructive action's confirmation shows: the
@@ -304,10 +344,17 @@ const (
 // surfaces, which is the point: a restart reached by name and a restart reached
 // by mnemonic are the same act.
 //
+// It is also the single-flight set: exactly the actions that end or replace a
+// process are the ones at most one of which may be in flight against a tab. The
+// two questions have the same answer because they are the same property — an
+// action worth confirming is one whose effect the next keystroke cannot take
+// back — so they are spelled once rather than as two tables that could drift.
+//
 // Launching another session is deliberately absent. It needs a profile, so it
 // passes through the same picker a profile replacement does, but it ends
 // nothing: the session it launches is new and the row it was started from is
-// untouched.
+// untouched. It is therefore neither confirmed nor single-flighted: two of them
+// in a row are two deliberate launches, not a double dispatch.
 func Destructive(id commands.ID) bool {
 	switch id {
 	case commands.CloseSession, commands.RestartSession, commands.OverrideProfile:
@@ -633,7 +680,17 @@ func (c Controller[M]) refuse(m M, action commands.ID, target Target, origin Ori
 // CAPTURED one. That split is the whole point: a row that has been locked since
 // it was chosen must be refused, and a row that has moved must not be swapped
 // for whatever is at its old address.
+//
+// Every path that reaches dispatch — Begin, ChooseProfile, and Confirm — passes
+// through here first, in the same synchronous call, which is why the
+// single-flight guard is stated here once instead of at each of them.
 func (c Controller[M]) validate(m M, action commands.ID, target Target, definition Definition) (string, bool) {
+	// Asked before availability: the operator's own in-flight close or restart
+	// is the more useful answer when both apply, because it explains why the
+	// row is about to change rather than describing the changed row.
+	if c.effects.State(m).lifecycleInFlight(action, target) {
+		return ReasonLifecycleInFlight, false
+	}
 	env := c.env(m)
 	if availability := definition.AvailabilityFor(env, target); !availability.Available {
 		return availability.Reason, false
