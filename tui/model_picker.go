@@ -346,17 +346,25 @@ func (m Model) togglePickerPin() (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// restartWithAccountCmd closes and relaunches a session under a different account.
-func (m Model) restartWithAccountCmd(acc config.Account) tea.Cmd {
-	sess := commands.DashboardSessionTemplate(m.cfg, m.targetSession)
+// restartWithProfileCmd closes and relaunches a session under a different
+// profile.
+//
+// It takes the row explicitly rather than reading m.targetSession, because the
+// profile picker is a surface the operator can sit in: the selection behind it
+// may have moved by the time a profile is chosen, and the session being
+// restarted is the one that was captured when the action was chosen. Everything
+// else is unchanged — the project template, the profile parameter, and the
+// registry's own launch-before-close ordering.
+func (m Model) restartWithProfileCmd(rs session.RunningSession, profile string) tea.Cmd {
+	sess := commands.DashboardSessionTemplate(m.cfg, rs)
 	return func() (msg tea.Msg) {
 		defer func() {
 			if r := recover(); r != nil {
-				msg = commands.ActionDoneMsg{Err: fmt.Errorf("panic in restartWithAccount: %v", r)}
+				msg = commands.ActionDoneMsg{Err: fmt.Errorf("panic in restartWithProfile: %v", r)}
 			}
 		}()
 		_, err := commands.Registry.Execute(context.Background(), actions.Dependencies{Kitty: m.client, Config: m.cfg}, actions.Restart, actions.Request{
-			Session: &m.targetSession, Project: &sess, Parameters: map[string]string{"profile": acc.Name}, Confirmed: true,
+			Session: &rs, Project: &sess, Parameters: map[string]string{"profile": profile}, Confirmed: true,
 		})
 		return commands.ActionDoneMsg{Err: err}
 	}
@@ -404,9 +412,12 @@ func (m *Model) launchBatchCmd(todo []launch.Queued, quitOnSuccess bool) tea.Cmd
 	return seq
 }
 
-func (m *Model) dashboardLaunchWithAccountCmd(acc config.Account) tea.Cmd {
-	sess := commands.DashboardSessionTemplate(m.cfg, m.targetSession)
-	sess = commands.SessionWithProfile(sess, acc.Name)
+// dashboardLaunchWithProfileCmd launches another session from a dashboard row
+// under a chosen profile. Like restartWithProfileCmd it takes the row rather
+// than reading the current selection, for the same reason.
+func (m *Model) dashboardLaunchWithProfileCmd(rs session.RunningSession, profile string) tea.Cmd {
+	sess := commands.DashboardSessionTemplate(m.cfg, rs)
+	sess = commands.SessionWithProfile(sess, profile)
 	return m.launchBatchCmd([]launch.Queued{{
 		Session: sess,
 		Title:   configSessionDisplayTitle(sess),

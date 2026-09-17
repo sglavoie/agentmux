@@ -13,12 +13,12 @@ func TestRenderConfirmClose(t *testing.T) {
 	m := Model{
 		mode:               ModeConfirm,
 		confirmAction:      "close",
-		confirmConsequence: closeConsequence,
+		confirmConsequence: wantCloseConsequence,
 		targetSession:      session.RunningSession{Base: "api"},
 	}
 	out := stripAnsi(renderConfirm(m))
 	want1 := `Close "api"?`
-	want2 := closeConsequence
+	want2 := wantCloseConsequence
 	if !strings.Contains(out, want1) {
 		t.Errorf("expected line 1 %q in output; got %q", want1, out)
 	}
@@ -36,12 +36,12 @@ func TestRenderConfirmRestart(t *testing.T) {
 	m := Model{
 		mode:               ModeConfirm,
 		confirmAction:      "restart",
-		confirmConsequence: restartConsequence,
+		confirmConsequence: wantRestartConsequence,
 		targetSession:      session.RunningSession{Base: "dotfiles"},
 	}
 	out := stripAnsi(renderConfirm(m))
 	want1 := `Restart "dotfiles"?`
-	want2 := restartConsequence
+	want2 := wantRestartConsequence
 	if !strings.Contains(out, want1) {
 		t.Errorf("expected line 1 %q in output; got %q", want1, out)
 	}

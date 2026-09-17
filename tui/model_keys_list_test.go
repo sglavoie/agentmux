@@ -100,7 +100,13 @@ func TestDashboardLaunchAllowedOnLockedRow(t *testing.T) {
 
 func TestClearStatusAllowedOnLockedAttentionRow(t *testing.T) {
 	m := lockedTestModel()
+	// The badge is written into both lists because the shared controller
+	// revalidates the captured row against the unfiltered one before it
+	// dispatches. A model whose filtered view claimed a badge the source list
+	// did not would be refused for exactly that reason, and the refusal would
+	// be right — it is the state the dashboard actually has.
 	m.filtered[0].State = "key"
+	m.sessions[0].State = "key"
 	m2, cmd := runRowAction(t, m, keyClearStatus)
 	if m2.mode != ModeList {
 		t.Fatalf("clear icon on locked row: expected ModeList, got %d", m2.mode)

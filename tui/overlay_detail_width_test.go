@@ -45,7 +45,7 @@ func TestConfirmHeaderPadsEmojiTitleIcon(t *testing.T) {
 	m := Model{
 		mode:               ModeConfirm,
 		confirmAction:      "close",
-		confirmConsequence: closeConsequence,
+		confirmConsequence: wantCloseConsequence,
 		targetSession: session.RunningSession{
 			Base:    "🗣commscoach",
 			Project: "🗣commscoach",

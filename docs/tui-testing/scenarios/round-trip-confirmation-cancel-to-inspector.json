@@ -21,6 +21,10 @@
     {
       "type": "key",
       "key": "esc"
+    },
+    {
+      "type": "key",
+      "key": "esc"
     }
   ],
   "assertions": [

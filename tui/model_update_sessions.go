@@ -18,6 +18,7 @@ import (
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/history"
 	tuiplans "github.com/sglavoie/agentmux/tui/plans"
+	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
 
 // The live-topology refresh controller. Every refresh the dashboard performs —
@@ -120,6 +121,13 @@ func (m Model) handleSessionsMsg(msg commands.SessionsMsg) (tea.Model, tea.Cmd) 
 	if msg.SelectionToken != "" {
 		m.lastSelectionRequestToken = msg.SelectionToken
 	}
+	// The hosting tab is republished by every refresh rather than resolved once,
+	// because a window can be moved between tabs while the dashboard is running.
+	// A refresh that could not resolve it at all reports zero, which is "unknown"
+	// and must not overwrite an answer an earlier refresh did have.
+	if msg.HostWindowID > 0 {
+		m.actionHost = sessionactions.Host{WindowID: msg.HostWindowID, TabID: msg.HostTabID}
+	}
 	clampListOffset(&m)
 	scrollListToCursor(&m)
 	// The preview is retargeted last, once the projection, the restored cursor,
@@ -171,7 +179,16 @@ func (m Model) handleActiveLoopsMsg(msg commands.ActiveLoopsMsg) (tea.Model, tea
 
 // handleActionDone processes an commands.ActionDoneMsg: records any action error and
 // triggers an immediate session refresh so the list reflects the new state.
+//
+// A completion carrying a request is one the shared controller dispatched, and
+// it is retired from the correlation record before anything else happens. One
+// that carries none was started outside the controller — an undo, a worktree
+// mutation — and is handled exactly as it always was. Either way the error goes
+// to the header and a refresh follows, because the list is stale in both cases.
 func (m Model) handleActionDone(msg commands.ActionDoneMsg) (tea.Model, tea.Cmd) {
+	if updated, _, correlated := sessionActionController(m).Complete(m, sessionactions.RequestID(msg.Request), msg.Err); correlated {
+		m = updated
+	}
 	m.actionErr = msg.Err
 	// Trigger a refresh so the list reflects the new state.
 	return m, m.requestTopologyRefresh()

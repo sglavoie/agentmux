@@ -24,6 +24,7 @@ import (
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/launch"
+	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
 
 // The root model's state. Construction, Init, and the Update dispatch table
@@ -187,6 +188,28 @@ type Model struct {
 	// actionsReturnMode preserves the source surface behind the generic row
 	// actions overlay. Its zero value is ModeList for legacy callers.
 	actionsReturnMode Mode
+
+	// sessionActions is the shared session-action controller's own state: the
+	// action waiting on a picker or a confirmation, the request counter, and the
+	// dispatches that have not yet reported back. It is held here rather than in
+	// the controller because this model is copied by value on every update, and a
+	// controller with mutable state of its own would be stale in whichever copy
+	// the update loop went on to use.
+	sessionActions sessionactions.State
+	// pendingActionOrigin is where the operator was when they chose the action
+	// about to be dispatched. It is written by the surface that offered the
+	// action — the per-row menu, the palette — and consumed by the first
+	// runSessionAction that follows, which is why it is cleared on read: a
+	// direct dashboard binding must not inherit the palette query of whatever
+	// ran before it.
+	pendingActionOrigin sessionactions.Origin
+	// actionHost is the Kitty tab and window this dashboard is itself running
+	// in, republished by every topology refresh. It answers "would this action
+	// close the surface I am standing on", which is a different question from
+	// every selection the dashboard makes and must not be confused with
+	// initialSourceWindowID, which names the tab to SELECT and is spent by the
+	// first refresh that resolves it.
+	actionHost sessionactions.Host
 
 	// config picker mode
 	configPickerAccounts   []config.Account

@@ -44,15 +44,16 @@ func TestModeRoundTripBackToList(t *testing.T) {
 		// config picker takes two now: `c` is an actions-overlay entry
 		// rather than a dashboard key, so `a` comes first.
 		openKeys []string
-		// extraEsc covers modes where opening immediately shows an overlay
-		// inside the mode, so the first esc closes the overlay and the
-		// second exits the mode.
+		// extraEsc covers modes reached through another surface, so the
+		// first esc returns to that surface and the second leaves it. The
+		// config picker is the case: it is a nested interaction raised from
+		// the actions overlay, and cancelling it restores the overlay.
 		extraEsc bool
 	}{
 		{"search via /", []string{"/"}, false},
 		{"help via ?", []string{"?"}, false},
 		{"actions via a", []string{keyA}, false},
-		{"config-picker via a then c", []string{keyA, keyC}, false},
+		{"config-picker via a then c", []string{keyA, keyC}, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

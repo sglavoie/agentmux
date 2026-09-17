@@ -48,6 +48,15 @@ func (m Model) activeRootMode() Mode {
 func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case keyEsc, keyQ:
+		// A session action waiting on this picker owns the cancellation: it has
+		// a captured origin to return to, which the picker's own return mode
+		// cannot express. Every other purpose keeps the path it had.
+		if m.sessionActionAwaitingProfile() {
+			next, cmd, cancelled := m.cancelSessionAction()
+			if cancelled {
+				return next, cmd
+			}
+		}
 		if m.activeConfigPickerPurpose() == launch.ConfigPickerHandoff {
 			m.handoffConversation = nil
 			m.handoffEdit = false
@@ -71,6 +80,13 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.configPickerCursor >= 0 && m.configPickerCursor < len(m.configPickerAccounts) {
 			acc := m.configPickerAccounts[m.configPickerCursor]
 			purpose := m.activeConfigPickerPurpose()
+			// Same division as Esc above: a pending session action answers its
+			// own profile question, because what follows the answer — a
+			// confirmation, a refusal, a dispatch correlated with a request — is
+			// the controller's to decide and not this handler's.
+			if m.sessionActionAwaitingProfile() {
+				return m.chooseSessionActionProfile(acc.Name)
+			}
 			m.mode = m.configPickerReturnMode
 			if purpose == launch.ConfigPickerHandoff {
 				if m.handoffConversation == nil {
@@ -101,13 +117,15 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
-			if purpose == launch.ConfigPickerRestartProfile && strings.EqualFold(acc.Name, m.configPickerCurrent) {
-				return m, nil
-			}
-			if purpose == launch.ConfigPickerDashboardLaunch {
-				return m, m.dashboardLaunchWithAccountCmd(acc)
-			}
-			return m, m.restartWithAccountCmd(acc)
+			// The restart-profile and dashboard-launch purposes are answered
+			// above, by the controller that opened the picker for them. Reaching
+			// here with one of them means the overlay is open with nothing
+			// pending — the unspecified-purpose fallback resolves to
+			// ConfigPickerRestartProfile — and there is no captured row to
+			// restart, so the picker simply closes. A second dispatch path for a
+			// profile replacement is exactly the duplication the shared
+			// controller exists to remove.
+			return m, nil
 		}
 	}
 	return m, nil

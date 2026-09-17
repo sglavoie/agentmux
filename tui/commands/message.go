@@ -87,6 +87,13 @@ type TopologyFreshness struct {
 // outstanding was superseded before it landed and is discarded, so a slow
 // refresh can never move the list backwards over a newer one. Sequences start
 // at one, which leaves the zero value recognizable as "never issued".
+// HostWindowID and HostTabID name the window this process runs in and the tab
+// containing it, resolved from the same tree the rows came from. They are not
+// the selection: SelectionTabID names a tab the dashboard should MOVE to and is
+// consumed once, while these name the tab the surface LIVES in and are
+// reported by every refresh. A surface that must say "this will close me too"
+// reads these, and a dashboard outside Kitty gets zeros, which is "unknown"
+// rather than "no tab".
 type SessionsMsg struct {
 	Seq            int
 	Sessions       []session.RunningSession
@@ -96,6 +103,8 @@ type SessionsMsg struct {
 	SelectionTabID int
 	SelectionToken string
 	Topology       TopologyFreshness
+	HostWindowID   int
+	HostTabID      int
 }
 
 // ActiveLoopsMsg carries the latest active agent-session-loop discovery result.
@@ -119,7 +128,46 @@ type ErrMsg struct {
 func (e ErrMsg) Error() string { return e.Err.Error() }
 
 // ActionDoneMsg is sent when a close or restart action completes.
-type ActionDoneMsg struct{ Err error }
+//
+// Request names the dispatch this completion answers, or zero when the action
+// was started outside the shared session-action controller — an undo, a
+// worktree mutation, a direct call. A consumer correlates on it rather than
+// assuming the only outstanding action is the one it started, which is what
+// keeps a slow close from reporting its error over a restart the operator ran
+// after it.
+type ActionDoneMsg struct {
+	Err     error
+	Request uint64
+}
+
+// StampRequest marks every ActionDoneMsg a command eventually produces with the
+// request identity it was dispatched under.
+//
+// It descends into a batch because the commands it wraps are routinely batches:
+// a close is the Kitty call and the undo toast together, and a stamp that only
+// looked at the outer message would silently correlate nothing. Every other
+// message passes through untouched, so wrapping a command that reports
+// something else costs nothing but the closure.
+func StampRequest(cmd tea.Cmd, request uint64) tea.Cmd {
+	if cmd == nil || request == 0 {
+		return cmd
+	}
+	return func() tea.Msg {
+		switch msg := cmd().(type) {
+		case ActionDoneMsg:
+			msg.Request = request
+			return msg
+		case tea.BatchMsg:
+			stamped := make(tea.BatchMsg, 0, len(msg))
+			for _, inner := range msg {
+				stamped = append(stamped, StampRequest(inner, request))
+			}
+			return stamped
+		default:
+			return msg
+		}
+	}
+}
 
 // CopyDoneMsg is sent when a viewer copy action completes.
 type CopyDoneMsg struct{ Err error }

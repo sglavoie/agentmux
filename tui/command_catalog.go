@@ -352,110 +352,24 @@ func sessionCommandDeclarations() []commands.Command[Model] {
 }
 
 // sessionCommandExecutors is what a session palette entry DOES, keyed by the
-// shared identity. Each one acts on the context's captured target rather than
-// re-reading the cursor, and records that target on the model where a nested
-// picker or confirmation has to find it afterwards.
+// shared identity.
+//
+// Every entry is the same call the per-row menu makes: hand the identity and the
+// context's captured target to the shared controller. Acting on the capture
+// rather than on the cursor is unchanged; what has gone is this file's own
+// answer to whether a restart confirms, which disagreed with the overlay's, and
+// its own copy of the picker and confirmation bookkeeping.
 func sessionCommandExecutors() map[commands.ID]func(Model, commands.Context) (Model, tea.Cmd) {
-	return map[commands.ID]func(Model, commands.Context) (Model, tea.Cmd){
-		commands.FocusSession: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
-			m.actionErr = nil
-			return m, commands.Focus(m.client, ctx.Target.TabID)
-		},
-		commands.PeekScrollback: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
-			m.actionErr = nil
-			return m, commands.Peek(m.client, ctx.Target.WindowID)
-		},
-		commands.RestartSession: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
-			m.targetSession = ctx.Target
-			m.actionErr = nil
-			m.confirmAction = "restart"
-			m.confirmConsequence = restartConsequence
-			m.confirmReturnMode = ModeList
-			m.mode = ModeConfirm
-			return m, nil
-		},
-		commands.OverrideProfile: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
-			m.targetSession = ctx.Target
-			m.configPickerAccounts = m.cfg.Accounts
-			m.configPickerCurrent = ctx.Target.EffectiveProfile()
-			m.configPickerCursor = launch.AccountIndex(m.cfg.Accounts, ctx.Target.EffectiveProfile())
-			m.configPickerPurpose = launch.ConfigPickerRestartProfile
-			m.configPickerReturnMode = ModeList
-			m.configPickerProjectIdx = -1
-			m.actionErr = nil
-			m.mode = ModeConfigPicker
-			return m, nil
-		},
-		commands.LaunchAnother: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
-			m.targetSession = ctx.Target
-			m.configPickerAccounts = m.cfg.Accounts
-			m.configPickerCurrent = ctx.Target.EffectiveProfile()
-			m.configPickerCursor = launch.AccountIndex(m.cfg.Accounts, ctx.Target.EffectiveProfile())
-			m.configPickerPurpose = launch.ConfigPickerDashboardLaunch
-			m.configPickerReturnMode = ModeList
-			m.configPickerProjectIdx = -1
-			m.actionErr = nil
-			m.mode = ModeConfigPicker
-			return m, nil
-		},
-		commands.ClearStatusIcon: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
-			m.targetSession = ctx.Target
-			m.actionErr = nil
-			return m, m.clearStatusCmd(ctx.Target)
-		},
-		commands.CloseSession: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
-			m.targetSession = ctx.Target
-			m.actionErr = nil
-			if m.cfg.Defaults.ConfirmDestructive {
-				m.confirmAction = "close"
-				m.confirmConsequence = closeConsequence
-				m.confirmReturnMode = ModeList
-				m.mode = ModeConfirm
-				return m, nil
-			}
-			return m, m.closeWithToast(ctx.Target)
-		},
-		commands.OpenDirectoryID: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
-			cs, ok := commands.FindConfigSession(m.cfg, ctx.Target.EffectiveProfile(), ctx.Target.EffectiveProject())
-			if !ok {
-				return m, nil
-			}
-			m.targetSession = ctx.Target
-			m.actionErr = nil
-			return m, commands.OpenDirectory(m.client, m.cfg, cs)
-		},
-		commands.OpenEditorID: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
-			cs, ok := commands.FindConfigSession(m.cfg, ctx.Target.EffectiveProfile(), ctx.Target.EffectiveProject())
-			if !ok {
-				return m, nil
-			}
-			m.targetSession = ctx.Target
-			m.actionErr = nil
-			return m, commands.OpenInEditor(m.client, m.cfg, cs)
-		},
-		commands.CopyTitleID: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
-			m.actionErr = nil
-			return m, commands.CopyTitle(dashboard.SessionDisplayTitle(ctx.Target))
-		},
-		commands.ToggleLockID: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
-			m.actionErr = nil
-			return m, commands.ToggleLock(m.client, ctx.Target)
-		},
-		commands.ToggleMuteID: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
-			m.actionErr = nil
-			return m, commands.ToggleMute(m.client, ctx.Target)
-		},
-		commands.SearchProject: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
-			updated, cmd := m.enterSessionSearchForProject(ctx.Target.EffectiveProject())
-			return updated.(Model), cmd
-		},
-		commands.ShowDetails: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
-			updated, cmd := m.enterDetailMode(ctx.Target.WindowID, false)
-			return updated.(Model), cmd
-		},
-		commands.ShowTimeline: func(m Model, ctx commands.Context) (Model, tea.Cmd) {
-			updated, cmd := m.enterDetailMode(ctx.Target.WindowID, true)
-			return updated.(Model), cmd
-		},
+	effects := sessionActionRunners()
+	executors := make(map[commands.ID]func(Model, commands.Context) (Model, tea.Cmd), len(effects))
+	for _, definition := range sessionactions.Definitions() {
+		if _, ok := effects[definition.ID]; !ok {
+			continue
+		}
+		action := definition.ID
+		executors[action] = func(m Model, ctx commands.Context) (Model, tea.Cmd) {
+			return m.runSessionAction(action, sessionactions.FromContext(ctx))
+		}
 	}
+	return executors
 }

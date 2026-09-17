@@ -274,7 +274,7 @@ func TestRestartConfirmsUnderConfirmDestructive(t *testing.T) {
 	if m2.confirmAction != "restart" {
 		t.Fatalf("expected confirmAction=restart, got %q", m2.confirmAction)
 	}
-	if m2.confirmConsequence != restartConsequence {
+	if m2.confirmConsequence != wantRestartConsequence {
 		t.Fatalf("expected restart consequence, got %q", m2.confirmConsequence)
 	}
 	if len(m2.pendingUndo) != 0 {

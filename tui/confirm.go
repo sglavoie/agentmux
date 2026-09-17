@@ -8,16 +8,20 @@ import (
 	"github.com/sglavoie/agentmux/tui/asl"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
+	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
 
 // Consequence strings shown on line 2 of the confirm overlay so the user
 // understands what pressing `y` will actually do. The transcript path is
 // omitted because RunningSession does not currently expose it.
-const (
-	closeConsequence        = "The Claude process exits; transcript persists."
-	restartConsequence      = "The Claude process restarts; transcript persists and resumes via --resume if configured."
-	worktreeForkConsequence = "Creates a tracked Git worktree and forks there. Dirty sources are refused; CLI --allow-dirty omits uncommitted changes."
-)
+//
+// The close and restart sentences are not here. They belong to the actions that
+// raise them, which both surfaces now reach through the shared controller, so
+// they are declared once in tui/sessionactions beside the verbs they pair with.
+// They also no longer name Claude: they had said so on a Codex or a Copilot row
+// since the second harness landed, and a sentence naming the wrong program is
+// worse than one naming none.
+const worktreeForkConsequence = "Creates a tracked Git worktree and forks there. Dirty sources are refused; CLI --allow-dirty omits uncommitted changes."
 
 // renderConfirm renders the two-line confirmation overlay:
 //
@@ -29,10 +33,12 @@ func renderConfirm(m Model) string {
 	var verb string
 	title := dashboard.SessionDisplayTitle(m.targetSession)
 	switch m.confirmAction {
-	case "close":
+	case sessionactions.ConfirmClose:
 		verb = "Close"
-	case "restart":
+	case sessionactions.ConfirmRestart:
 		verb = "Restart"
+	case sessionactions.ConfirmReplaceProfile:
+		verb = "Restart under a different profile"
 	case "fork worktree":
 		verb = "Fork in new worktree"
 	case "worktree remove":

@@ -276,16 +276,25 @@ func TestCommandPaletteExecutionUsesCapturedTargetAndClearsBeforeTransition(t *t
 		TabID: 7, WindowID: 70, Base: "api", Project: "api", Profile: "work", State: "bolt",
 	}
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{original})
+	// The confirmation is what this test observes the capture through, so it asks
+	// for one. Restart honors confirm_destructive from the palette now, the same
+	// way it always did from the per-row menu.
+	m.cfg.Defaults.ConfirmDestructive = true
 	m.openCommandPalette()
 	updated, _ := m.Update(tea.KeyPressMsg(tea.Key{Code: 'r', Text: "confirm relaunching"}))
 	m = updated.(Model)
 
-	replacement := session.RunningSession{
+	// The refresh adds a row and lands the cursor on it. The captured row is
+	// still listed, which is what makes this a test of the capture rather than of
+	// the staleness refusal: a captured row that had GONE would be refused
+	// outright, and refusing is not the same claim as not retargeting.
+	arrival := session.RunningSession{
 		TabID: 8, WindowID: 80, Base: "backend", Project: "backend", Profile: "work", State: "bolt",
 	}
-	m = applySessions(m, commands.SessionsMsg{Sessions: []session.RunningSession{replacement}})
-	if m.filtered[0].TabID != replacement.TabID {
-		t.Fatalf("background refresh did not replace live row: %+v", m.filtered)
+	m = applySessions(m, commands.SessionsMsg{Sessions: []session.RunningSession{arrival, original}})
+	m.cursor = 0
+	if m.filtered[m.cursor].TabID != arrival.TabID {
+		t.Fatalf("background refresh did not move the cursor off the captured row: %+v", m.filtered)
 	}
 
 	updated, cmd := m.Update(keyPress(keyEnter))

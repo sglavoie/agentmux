@@ -17,6 +17,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/tui/commands"
+	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
 
 // dashboardBindings is the complete ModeList binding table.
@@ -140,6 +141,12 @@ func dashboardCommandAvailable(id commands.ID) func(Model) bool {
 // with their reason, which says it before the keystroke rather than after.
 func (m Model) dispatchDashboardBinding(key string) (tea.Model, tea.Cmd, bool) {
 	ctx := dashboardBindingContext(m)
+	// A direct key is chosen from the list itself, so there is no surface to
+	// return to and the origin is empty. It is cleared rather than left alone
+	// because the field is consumed by the next dispatch: a palette query
+	// abandoned by a command that never reached the controller must not become
+	// the return context of the next keystroke.
+	m.pendingActionOrigin = sessionactions.Origin{}
 	claimed := false
 	for _, binding := range dashboardBindings().For(key) {
 		candidate, ok := dashboardCommand(binding.Command)

@@ -67,6 +67,13 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		if !candidate.IsVisible(m, ctx) || !candidate.AvailabilityFor(m, ctx).Available {
 			return m, nil
 		}
+		// The query and the row it was chosen on are captured before the palette
+		// tears them down. A session command that opens a picker or a
+		// confirmation can be cancelled, and by then there is nothing left in the
+		// model to return to; the capture is what "cancel puts me back where I
+		// was" is restored from. A command that dispatches at once never reads it,
+		// and runSessionAction clears it either way.
+		m.pendingActionOrigin = paletteActionOrigin(m)
 		m.closeCommandPalette()
 		return candidate.Run(m, ctx)
 

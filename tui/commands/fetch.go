@@ -44,12 +44,14 @@ import (
 // is the whole point of the split: a reader that cannot write is the thing two
 // surfaces can share, whereas the repairs are the dashboard's alone.
 type liveSessions struct {
-	OSWindows   []kitty.OSWindow
-	Topology    TopologyFreshness
-	Daemon      daemonState
-	Sessions    []session.RunningSession
-	Ghosts      []session.GhostTab
-	SourceTabID int
+	OSWindows    []kitty.OSWindow
+	Topology     TopologyFreshness
+	Daemon       daemonState
+	Sessions     []session.RunningSession
+	Ghosts       []session.GhostTab
+	SourceTabID  int
+	HostWindowID int
+	HostTabID    int
 }
 
 // readLiveSessions resolves one refresh's view of the live sessions and touches
@@ -95,6 +97,16 @@ func readLiveSessions(client kitty.KittyClient, cfg *config.Config, sourceWindow
 	if sourceWindowID > 0 {
 		if tab, _, found := kitty.FindTabByWindowID(osWindows, sourceWindowID); found {
 			live.SourceTabID = tab.ID
+		}
+	}
+	// The hosting tab is resolved from the same tree, on every refresh, rather
+	// than once at startup. The window this process runs in never changes, but
+	// the tab containing it does: a pane moved to another tab, or a tab closed
+	// out from under a detached window, would leave a value cached at startup
+	// naming a tab this surface no longer lives in.
+	if live.HostWindowID = LocalWindowID(); live.HostWindowID > 0 {
+		if tab, _, found := kitty.FindTabByWindowID(osWindows, live.HostWindowID); found {
+			live.HostTabID = tab.ID
 		}
 	}
 	return live, nil
@@ -149,6 +161,8 @@ func Refresh(client kitty.KittyClient, cfg *config.Config, sortMode string, seq,
 			SelectionTabID: sourceTabID,
 			SelectionToken: selectionToken,
 			Topology:       live.Topology,
+			HostWindowID:   live.HostWindowID,
+			HostTabID:      live.HostTabID,
 		}
 	}
 }
@@ -195,6 +209,8 @@ func RefreshOverview(client kitty.KittyClient, cfg *config.Config, seq, sourceWi
 			States:         live.Daemon.States,
 			SelectionTabID: live.SourceTabID,
 			Topology:       live.Topology,
+			HostWindowID:   live.HostWindowID,
+			HostTabID:      live.HostTabID,
 		}
 	}
 }

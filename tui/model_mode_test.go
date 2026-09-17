@@ -309,21 +309,32 @@ func TestFooterChangesWithMode(t *testing.T) {
 // its entries rather than dashboard keys — but the prompt itself is unchanged,
 // and y/n/esc are still its whole vocabulary.
 
-func TestConfirmNReturnsToList(t *testing.T) {
+// Cancelling a confirmation raised from the per-row menu returns to that menu
+// rather than to the bare list. The nested interaction was entered from the
+// overlay, and the operator who backs out of it has not said they are done with
+// the row — they have said they are done with this one action.
+func TestConfirmNReturnsToTheActionsOverlay(t *testing.T) {
 	m := loadSessions(modalConfirmModel(), makeSessions())
 	m = pressRowAction(t, m, keyClose) // → ModeConfirm (close)
 	m = pressKey(m, "n")               // cancel
-	if m.mode != ModeList {
-		t.Fatalf("expected ModeList after n in confirm, got %d", m.mode)
+	if m.mode != ModeActions {
+		t.Fatalf("expected ModeActions after n in confirm, got %d", m.mode)
+	}
+	// A second esc is what leaves the row entirely.
+	if m = pressKey(m, "esc"); m.mode != ModeList {
+		t.Fatalf("expected ModeList after leaving the overlay, got %d", m.mode)
 	}
 }
 
-func TestConfirmEscReturnsToList(t *testing.T) {
+func TestConfirmEscReturnsToTheActionsOverlay(t *testing.T) {
 	m := loadSessions(modalConfirmModel(), makeSessions())
 	m = pressRowAction(t, m, keyClose) // → ModeConfirm
 	m = pressKey(m, "esc")
-	if m.mode != ModeList {
-		t.Fatalf("expected ModeList after esc in confirm, got %d", m.mode)
+	if m.mode != ModeActions {
+		t.Fatalf("expected ModeActions after esc in confirm, got %d", m.mode)
+	}
+	if m = pressKey(m, "esc"); m.mode != ModeList {
+		t.Fatalf("expected ModeList after leaving the overlay, got %d", m.mode)
 	}
 }
 

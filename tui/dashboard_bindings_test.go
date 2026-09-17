@@ -308,10 +308,15 @@ func TestLockedRowRefusesThroughTheActionsOverlay(t *testing.T) {
 // TestRestartStillConfirmsFromThePalette pins the confirmation half of the
 // review item across the move. Restart lost its key, not its confirmation: a
 // command reached by name must still stop at the prompt.
+//
+// What the prompt is now conditional on is the operator's own preference rather
+// than the surface the command was reached from, so the preference is set here
+// instead of assumed.
 func TestRestartStillConfirmsFromThePalette(t *testing.T) {
 	m := withListRows(testModelWithSessions(), session.RunningSession{
 		TabID: 7, WindowID: 17, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt",
 	})
+	m.cfg.Defaults.ConfirmDestructive = true
 	// A stale return mode from an overlay raised somewhere else must not
 	// survive into this confirmation: answering it has to come back to the
 	// dashboard the command was run from.
@@ -324,7 +329,7 @@ func TestRestartStillConfirmsFromThePalette(t *testing.T) {
 	if out.confirmAction != "restart" {
 		t.Errorf("confirmAction = %q, want restart", out.confirmAction)
 	}
-	if out.confirmConsequence != restartConsequence {
+	if out.confirmConsequence != wantRestartConsequence {
 		t.Errorf("confirmConsequence = %q, want the restart wording", out.confirmConsequence)
 	}
 	if out.confirmReturnMode != ModeList {

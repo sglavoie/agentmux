@@ -209,12 +209,18 @@ func TestCKeyOpensConfigPicker(t *testing.T) {
 	}
 }
 
-func TestConfigPickerEscReturnsToList(t *testing.T) {
+// The profile picker is a nested interaction like the confirmation, so backing
+// out of it returns to the menu it was raised from and a second esc leaves the
+// row.
+func TestConfigPickerEscReturnsToTheActionsOverlay(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m = pressRowAction(t, m, keyC)
 	m = pressKey(m, "esc")
-	if m.mode != ModeList {
-		t.Fatalf("expected ModeList after esc from config picker, got %d", m.mode)
+	if m.mode != ModeActions {
+		t.Fatalf("expected ModeActions after esc from config picker, got %d", m.mode)
+	}
+	if m = pressKey(m, "esc"); m.mode != ModeList {
+		t.Fatalf("expected ModeList after leaving the overlay, got %d", m.mode)
 	}
 }
 

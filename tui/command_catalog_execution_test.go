@@ -160,10 +160,13 @@ func TestCommandRowTransitions(t *testing.T) {
 	}
 	cases := []transitionCase{
 		{
-			name: "restart always confirms", id: commands.RestartSession,
-			setup: func(m *Model) { m.cfg.Defaults.ConfirmDestructive = false },
+			// Restart honors confirm_destructive from the palette exactly as it
+			// does from the per-row menu. It used to confirm regardless of the
+			// preference, which is the drift the shared controller removed.
+			name: "restart confirms when asked to", id: commands.RestartSession,
+			setup: func(m *Model) { m.cfg.Defaults.ConfirmDestructive = true },
 			check: func(t *testing.T, got Model, cmd tea.Cmd) {
-				if got.mode != ModeConfirm || got.confirmAction != "restart" || got.confirmConsequence != restartConsequence || got.confirmReturnMode != ModeList || cmd != nil {
+				if got.mode != ModeConfirm || got.confirmAction != "restart" || got.confirmConsequence != wantRestartConsequence || got.confirmReturnMode != ModeList || cmd != nil {
 					t.Fatalf("restart result: mode=%v action=%q consequence=%q return=%v cmd=%v", got.mode, got.confirmAction, got.confirmConsequence, got.confirmReturnMode, cmd != nil)
 				}
 			},
@@ -197,7 +200,7 @@ func TestCommandRowTransitions(t *testing.T) {
 			name: "close with confirmation", id: commands.CloseSession,
 			setup: func(m *Model) { m.cfg.Defaults.ConfirmDestructive = true },
 			check: func(t *testing.T, got Model, cmd tea.Cmd) {
-				if got.mode != ModeConfirm || got.confirmAction != "close" || got.confirmConsequence != closeConsequence || got.confirmReturnMode != ModeList || cmd != nil || len(got.pendingUndo) != 0 {
+				if got.mode != ModeConfirm || got.confirmAction != "close" || got.confirmConsequence != wantCloseConsequence || got.confirmReturnMode != ModeList || cmd != nil || len(got.pendingUndo) != 0 {
 					t.Fatalf("confirmed close result: mode=%v action=%q return=%v cmd=%v undo=%d", got.mode, got.confirmAction, got.confirmReturnMode, cmd != nil, len(got.pendingUndo))
 				}
 			},
@@ -363,23 +366,29 @@ func TestCommandExploreAndAppExecution(t *testing.T) {
 	})
 }
 
-func TestPaletteRestartDiffersFromActionsOverlay(t *testing.T) {
+// TestPaletteRestartMatchesActionsOverlay is the inversion of the test that used
+// to live here. It asserted that the two surfaces differed — the palette
+// confirmed every restart while the overlay honored confirm_destructive — which
+// was not a decision anybody made twice but one decision spelled twice and then
+// edited once. Both surfaces now reach the shared controller, so with the
+// preference off both dispatch immediately and with it on both stop at the same
+// prompt.
+func TestPaletteRestartMatchesActionsOverlay(t *testing.T) {
 	target := session.RunningSession{TabID: 22, WindowID: 202, Base: "api", Project: "api", Profile: "work"}
 	m, ctx, _ := commandTestModel(target)
 	m.cfg.Defaults.ConfirmDestructive = false
 
 	paletteResult, paletteCmd := commandByID(t, commands.RestartSession).Run(m, ctx)
-	if paletteResult.mode != ModeConfirm || paletteCmd != nil {
-		t.Fatalf("palette restart = mode %v cmd %v; want confirmation", paletteResult.mode, paletteCmd != nil)
+	if paletteResult.mode != ModeList || paletteCmd == nil || len(paletteResult.toasts) != 1 {
+		t.Fatalf("palette restart = mode %v cmd %v toasts %d; want the immediate toast path", paletteResult.mode, paletteCmd != nil, len(paletteResult.toasts))
 	}
 
 	m.targetSession = target
 	m.mode = ModeActions
 	m.actionsReturnMode = ModeList
-	action := actionsFor(m)[2]
-	actionResult, actionCmd := action.Run(m)
+	actionResult, actionCmd := rowActionRunners()[commands.RestartSession](m)
 	if actionResult.mode != ModeList || actionCmd == nil || len(actionResult.toasts) != 1 {
-		t.Fatalf("actions restart = mode %v cmd %v toasts %d; want immediate toast path", actionResult.mode, actionCmd != nil, len(actionResult.toasts))
+		t.Fatalf("actions restart = mode %v cmd %v toasts %d; want the immediate toast path", actionResult.mode, actionCmd != nil, len(actionResult.toasts))
 	}
 }
 

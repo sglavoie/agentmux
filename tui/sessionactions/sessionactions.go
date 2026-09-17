@@ -278,7 +278,7 @@ func Definitions() []Definition {
 			MenuGroup:          MenuGroupLifecycle,
 			Mnemonic:           Mnemonic{Display: "X", Key: "X"},
 			MenuLabel:          "close",
-			MenuDescription:    "exit the Claude process; transcript persists",
+			MenuDescription:    "exit the harness process; transcript persists",
 			PaletteTitle:       static("Close Session"),
 			PaletteDescription: "Exit the harness process while preserving its transcript.",
 			PaletteAliases:     []string{"exit", "kill"},

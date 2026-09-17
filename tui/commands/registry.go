@@ -47,6 +47,21 @@ var StateQuery = func() (protocol.Response, error) {
 // decides what to do with that.
 var LocalKittySocket = kitty.NormalizedListenAddressFromEnv
 
+// LocalWindowID reports the Kitty window this dashboard process is running in.
+//
+// It is the HOSTING window, and it is deliberately not the sourceWindowID a
+// refresh is given. That one names the window an operator launched the
+// dashboard FROM, is consumed by the first refresh that can resolve it, and is
+// re-aimed by a cross-window selection handoff; this one never changes for the
+// life of the process, because a Bubble Tea program does not move between
+// windows. A surface that needs to know whether an action would close the
+// surface itself has to ask this question, not that one.
+//
+// It is a seam for the same reason LocalKittySocket is: a test names a host
+// window by replacing the function rather than by setting process environment
+// every other test in the package would then see.
+var LocalWindowID = kitty.WindowIDFromEnv
+
 // SpawnDaemonDetached is the seam the health probe uses to start a daemon it
 // found unreachable.
 var SpawnDaemonDetached = process.SpawnDetached

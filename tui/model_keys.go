@@ -9,7 +9,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/tui/asl"
-	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
@@ -147,16 +146,21 @@ func (m Model) handleSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case keyY:
+		// A session action waiting here answers for itself. It revalidates the
+		// captured row before it dispatches, correlates the completion with the
+		// request, and runs the same effect an unconfirmed action runs — which is
+		// what this branch used not to do: close and restart were dispatched raw
+		// here, so a confirmed close recorded no undo entry and raised no toast
+		// while an unconfirmed one did both.
+		if m.sessionActionAwaitingConfirm() {
+			return m.confirmSessionAction()
+		}
 		m.mode = m.confirmReturnMode
 		if m.mode == ModeConfirm {
 			m.mode = ModeList
 		}
 		m.confirmReturnMode = ModeList
 		switch m.confirmAction {
-		case "close":
-			return m, commands.Close(m.client, m.targetSession.TabID)
-		case "restart":
-			return m, commands.Restart(m.client, m.targetSession, m.cfg)
 		case "fork worktree":
 			if m.isolatedForkConversation == nil {
 				return m, nil
@@ -176,6 +180,12 @@ func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m.submitASLControl(aslbridge.MethodRunAbort)
 		}
 	case keyN, keyEsc:
+		if m.sessionActionAwaitingConfirm() {
+			next, cmd, cancelled := m.cancelSessionAction()
+			if cancelled {
+				return next, cmd
+			}
+		}
 		m.isolatedForkConversation = nil
 		m.worktreeActionTarget = nil
 		m.aslActionTarget = nil

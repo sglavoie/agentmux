@@ -14,7 +14,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
-	"github.com/sglavoie/agentmux/tui/launch"
 	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
 
@@ -72,109 +71,31 @@ func actionsFor(_ Model) []commands.Action[Model] {
 }
 
 // rowActionRunners is what an overlay entry DOES, keyed by the shared identity.
-// Each runner is the same mutation the entry has always performed, including the
-// mode bookkeeping that returns the operator to the list or hands them to a
-// nested picker or confirmation.
+//
+// Every entry is the same call: hand the identity and the row the overlay was
+// opened against to the shared controller. What used to be here — the
+// confirm_destructive branch, the picker fields, the exitActionsMode bookkeeping
+// — was the half of each runner that the palette also spelled, differently. It
+// lives in tui/sessionactions now, and the effects it dispatches to live in
+// session_action_controller.go, which is the one table both surfaces read.
+//
+// The map is still keyed by identity rather than derived from the effect table
+// because actionsFor drops a definition with no runner: what is offered stays a
+// question this file answers.
 func rowActionRunners() map[commands.ID]func(Model) (Model, tea.Cmd) {
-	return map[commands.ID]func(Model) (Model, tea.Cmd){
-		commands.FocusSession: func(m Model) (Model, tea.Cmd) {
-			cmd := commands.Focus(m.client, m.targetSession.TabID)
-			m.exitActionsMode()
-			return m, cmd
-		},
-		commands.PeekScrollback: func(m Model) (Model, tea.Cmd) {
-			cmd := commands.Peek(m.client, m.targetSession.WindowID)
-			m.exitActionsMode()
-			return m, cmd
-		},
-		commands.RestartSession: func(m Model) (Model, tea.Cmd) {
-			m.actionErr = nil
-			if m.cfg.Defaults.ConfirmDestructive {
-				m.confirmAction = "restart"
-				m.confirmConsequence = restartConsequence
-				m.confirmReturnMode = m.actionsReturnMode
-				m.actionsReturnMode = ModeList
-				m.mode = ModeConfirm
-				return m, nil
-			}
-			m.exitActionsMode()
-			cmd := m.restartWithToast(m.targetSession)
-			return m, cmd
-		},
-		commands.OverrideProfile: func(m Model) (Model, tea.Cmd) {
-			m.configPickerAccounts = m.cfg.Accounts
-			m.configPickerCurrent = m.targetSession.EffectiveProfile()
-			m.configPickerCursor = launch.AccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
-			m.configPickerPurpose = launch.ConfigPickerRestartProfile
-			m.configPickerReturnMode = m.actionsReturnMode
-			m.actionsReturnMode = ModeList
-			m.configPickerProjectIdx = -1
-			m.actionErr = nil
-			m.mode = ModeConfigPicker
-			return m, nil
-		},
-		commands.LaunchAnother: func(m Model) (Model, tea.Cmd) {
-			m.configPickerAccounts = m.cfg.Accounts
-			m.configPickerCurrent = m.targetSession.EffectiveProfile()
-			m.configPickerCursor = launch.AccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
-			m.configPickerPurpose = launch.ConfigPickerDashboardLaunch
-			m.configPickerReturnMode = m.actionsReturnMode
-			m.actionsReturnMode = ModeList
-			m.configPickerProjectIdx = -1
-			m.actionErr = nil
-			m.mode = ModeConfigPicker
-			return m, nil
-		},
-		commands.ClearStatusIcon: func(m Model) (Model, tea.Cmd) {
-			cmd := m.clearStatusCmd(m.targetSession)
-			m.actionErr = nil
-			m.exitActionsMode()
-			return m, cmd
-		},
-		commands.CloseSession: func(m Model) (Model, tea.Cmd) {
-			m.actionErr = nil
-			if m.cfg.Defaults.ConfirmDestructive {
-				m.confirmAction = "close"
-				m.confirmConsequence = closeConsequence
-				m.confirmReturnMode = m.actionsReturnMode
-				m.actionsReturnMode = ModeList
-				m.mode = ModeConfirm
-				return m, nil
-			}
-			m.exitActionsMode()
-			cmd := m.closeWithToast(m.targetSession)
-			return m, cmd
-		},
-		commands.OpenDirectoryID: func(m Model) (Model, tea.Cmd) {
-			cs, ok := commands.FindConfigSession(m.cfg, m.targetSession.EffectiveProfile(), m.targetSession.EffectiveProject())
-			m.exitActionsMode()
-			if !ok {
-				return m, nil
-			}
-			return m, commands.OpenDirectory(m.client, m.cfg, cs)
-		},
-		commands.OpenEditorID: func(m Model) (Model, tea.Cmd) {
-			cs, ok := commands.FindConfigSession(m.cfg, m.targetSession.EffectiveProfile(), m.targetSession.EffectiveProject())
-			m.exitActionsMode()
-			if !ok {
-				return m, nil
-			}
-			return m, commands.OpenInEditor(m.client, m.cfg, cs)
-		},
-		commands.CopyTitleID: func(m Model) (Model, tea.Cmd) {
-			title := dashboard.SessionDisplayTitle(m.targetSession)
-			m.exitActionsMode()
-			return m, commands.CopyTitle(title)
-		},
-		commands.ToggleLockID: func(m Model) (Model, tea.Cmd) {
-			m.exitActionsMode()
-			return m, commands.ToggleLock(m.client, m.targetSession)
-		},
-		commands.ToggleMuteID: func(m Model) (Model, tea.Cmd) {
-			m.exitActionsMode()
-			return m, commands.ToggleMute(m.client, m.targetSession)
-		},
+	effects := sessionActionRunners()
+	runners := make(map[commands.ID]func(Model) (Model, tea.Cmd), len(effects))
+	for _, definition := range sessionactions.MenuDefinitions() {
+		if _, ok := effects[definition.ID]; !ok {
+			continue
+		}
+		action := definition.ID
+		runners[action] = func(m Model) (Model, tea.Cmd) {
+			m.pendingActionOrigin = menuActionOrigin(m)
+			return m.runSessionAction(action, overlayTarget(m))
+		}
 	}
+	return runners
 }
 
 func (m *Model) exitActionsMode() {

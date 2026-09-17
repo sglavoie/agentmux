@@ -14,8 +14,7 @@ import (
 func TestListProjectSessionSearchWithReadyCacheDispatchesProjectFilter(t *testing.T) {
 	m := sessionSearchFilterModel(t)
 	m.mode = ModeList
-	m.filtered = []session.RunningSession{{TabID: 1, WindowID: 10, Base: "Foo", Profile: "work"}}
-	m.rebuildItems()
+	m = withListRows(m, session.RunningSession{TabID: 1, WindowID: 10, Base: "Foo", Profile: "work"})
 	m.cursor = 0
 	m.sessionResults = nil
 	seq := m.sessionSearchSeq
@@ -64,15 +63,14 @@ func TestListProjectSessionSearchWithReadyCacheDispatchesProjectFilter(t *testin
 func TestListProjectSessionSearchUsesResolvedProjectForWorktreeRow(t *testing.T) {
 	m := sessionSearchFilterModel(t)
 	m.mode = ModeList
-	m.filtered = []session.RunningSession{{
+	m = withListRows(m, session.RunningSession{
 		TabID:     1,
 		WindowID:  10,
 		Base:      "vta_ss_oidc_op_worker-security-audit",
 		Project:   "sis",
 		Profile:   "vta-claude",
 		Directory: "/Users/sglavoie/1_dev_projects/vta_ss_oidc_op_worker-security-audit",
-	}}
-	m.rebuildItems()
+	})
 	m.cursor = 0
 
 	entered, cmd := m.Update(keyPress(keyProjectSessionSearch))
@@ -139,8 +137,7 @@ func TestListProjectSessionSearchIsDisabledOnAnEmptyList(t *testing.T) {
 func TestListProjectSessionSearchClearsPriorFiltersAndResetsEntryState(t *testing.T) {
 	m := sessionSearchFilterModel(t)
 	m.mode = ModeList
-	m.filtered = []session.RunningSession{{TabID: 1, WindowID: 10, Project: "Foo"}}
-	m.rebuildItems()
+	m = withListRows(m, session.RunningSession{TabID: 1, WindowID: 10, Project: "Foo"})
 	m.cursor = 0
 	m.sessionQuery = "needle"
 	m.filterHarness = []string{harness.Claude}
@@ -177,8 +174,7 @@ func TestListProjectSessionSearchClearsPriorFiltersAndResetsEntryState(t *testin
 func TestGlobalSessionSearchDoesNotApplyTheProjectChip(t *testing.T) {
 	m := sessionSearchFilterModel(t)
 	m.mode = ModeList
-	m.filtered = []session.RunningSession{{TabID: 1, WindowID: 10, Project: "Foo"}}
-	m.rebuildItems()
+	m = withListRows(m, session.RunningSession{TabID: 1, WindowID: 10, Project: "Foo"})
 	m.cursor = 0
 
 	got, cmd := runDashboardCommand(t, m, commands.SearchAllSessions)

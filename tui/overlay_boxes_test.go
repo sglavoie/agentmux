@@ -84,7 +84,7 @@ func TestRenderConfirmBox(t *testing.T) {
 	m = loadSessions(m, makeSessions())
 	m.targetSession = session.RunningSession{TabID: 1, Base: "api", Account: "work"}
 	m.confirmAction = "close"
-	m.confirmConsequence = closeConsequence
+	m.confirmConsequence = wantCloseConsequence
 	m.mode = ModeConfirm
 	m.width, m.height = 100, 40
 
@@ -96,7 +96,7 @@ func TestRenderConfirmBox(t *testing.T) {
 	if !strings.Contains(plain, "Close") {
 		t.Errorf("expected Close verb in box output; got %q", plain)
 	}
-	if !strings.Contains(plain, "transcript persists") {
+	if !strings.Contains(plain, "transcript is preserved") {
 		t.Errorf("expected consequence text in box output; got %q", plain)
 	}
 }
@@ -281,7 +281,7 @@ func TestDashboardOverlaysReserveStatusBar(t *testing.T) {
 	confirm := loadSessions(modalConfirmModel(), makeSessions())
 	confirm.targetSession = session.RunningSession{TabID: 1, Base: "api", Account: "work"}
 	confirm.confirmAction = "close"
-	confirm.confirmConsequence = closeConsequence
+	confirm.confirmConsequence = wantCloseConsequence
 	confirm.mode = ModeConfirm
 
 	configPicker := loadSessions(testModelWithSessions(), makeSessions())

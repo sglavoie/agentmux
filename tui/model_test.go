@@ -94,8 +94,17 @@ func splitWidthsFit(m Model) bool {
 // projection is a stored field, so a bare assignment leaves the model claiming
 // an empty list and the assertion silently exercises the empty-list branch
 // instead of the one it names.
+// It also seeds the unfiltered list when that is empty, because the shared
+// session-action controller resolves a captured target against m.sessions
+// rather than against the filtered view: a model holding rows the full list
+// never heard of would refuse every action as "no longer listed". A test that
+// has already populated m.sessions itself keeps its own list, which is what
+// lets the filtered-subset cases stay expressible.
 func withListRows(m Model, rows ...session.RunningSession) Model {
 	m.filtered = rows
+	if len(m.sessions) == 0 {
+		m.sessions = rows
+	}
 	m.rebuildItems()
 	return m
 }
