@@ -205,7 +205,11 @@ func (in SearchInput) RenderList(height int) string {
 		if in.ContextualMeta != nil {
 			res.Meta = in.ContextualMeta(res.Meta)
 		}
-		line := FormatRow(res, in.ProfileColors, maxWidth)
+		line := formatRow(res, in.ProfileColors, maxWidth, rowFilters{
+			project: in.ProjectChip,
+			profile: in.ProfileChip,
+			harness: in.HarnessChip,
+		})
 		if i == in.Cursor {
 			sb.WriteString(renderSelectedRow(line))
 		} else {

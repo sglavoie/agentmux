@@ -2,6 +2,7 @@ package history
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/transcript"
@@ -15,6 +16,18 @@ import (
 // which asserts a session row and a plan row truncate identically; that
 // comparison spans two leaves, so it stays in root.
 func FormatRow(res transcript.Result, acctColor map[string]string, maxWidth int) string {
+	return formatRow(res, acctColor, maxWidth, rowFilters{})
+}
+
+// rowFilters identifies labels already supplied by the active filter chips.
+// Keep differing labels (including shared-profile qualifiers) informative.
+type rowFilters struct {
+	project string
+	profile string
+	harness string
+}
+
+func formatRow(res transcript.Result, acctColor map[string]string, maxWidth int, filters rowFilters) string {
 	when := formatSessionWhen(res.Meta.LastAt)
 	project := res.Meta.Project
 	if project == "" {
@@ -22,8 +35,21 @@ func FormatRow(res transcript.Result, acctColor map[string]string, maxWidth int)
 	}
 	project = layout.RenderTitleIcon(project)
 	profile := res.Meta.DisplayProfile()
-	tag := sessionProfileTag(res.Meta)
-	tagColored := accountStyle(acctColor[profile]).Render(tag)
+	profileLabel := sessionProfileLabel(res.Meta)
+	if profileLabel == filters.profile {
+		profileLabel = ""
+	}
+	harnessLabel := res.Meta.Harness
+	if harnessLabel == filters.harness {
+		harnessLabel = ""
+	}
+	var tagParts []string
+	if profileLabel != "" {
+		tagParts = append(tagParts, profileLabel)
+	}
+	if harnessLabel != "" {
+		tagParts = append(tagParts, harnessLabel)
+	}
 
 	var matchFrag string
 	if res.Matches > 0 {
@@ -35,8 +61,14 @@ func FormatRow(res transcript.Result, acctColor map[string]string, maxWidth int)
 		preview = res.Meta.Snippet
 	}
 
-	head := fmt.Sprintf("  %s  %s  ", when, project)
-	body := head + tagColored + matchFrag
+	body := "  " + when
+	if filters.project == "" || res.Meta.Project != filters.project {
+		body += "  " + project
+	}
+	if len(tagParts) > 0 {
+		body += "  " + accountStyle(acctColor[profile]).Render("["+strings.Join(tagParts, "/")+"]")
+	}
+	body += matchFrag
 	if preview != "" {
 		body += "  " + styleDim.Render(layout.Truncate(preview, maxRunes(maxWidth-layout.StyledWidth(body)-2), "…"))
 	}

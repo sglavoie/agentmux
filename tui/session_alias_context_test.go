@@ -88,8 +88,11 @@ func TestSharedProjectAliasRenderingAndViewerDoNotMutateStoredResult(t *testing.
 	}
 
 	filteredRow := stripAnsi(renderSessionSearchList(m, 10))
-	if !strings.Contains(filteredRow, "streamutil") || strings.Contains(filteredRow, "SS") {
-		t.Fatalf("filtered row did not use selected project alias:\n%s", filteredRow)
+	if strings.Contains(filteredRow, "streamutil") || strings.Contains(filteredRow, "SS") {
+		t.Fatalf("filtered row repeated the selected project or its primary alias:\n%s", filteredRow)
+	}
+	if view := stripAnsi(renderSessionSearch(m)); !strings.Contains(view, "[r] project: streamutil") {
+		t.Fatalf("filtered view did not retain selected project chip:\n%s", view)
 	}
 	if !reflect.DeepEqual(m.sessionResults[0], stored) {
 		t.Fatalf("rendering mutated stored result: before %#v after %#v", stored, m.sessionResults[0])

@@ -138,8 +138,11 @@ func TestChipPickerProjectSelectionMatchesSharedDirectoryMembership(t *testing.T
 		t.Fatalf("stored result project = %q, want stable primary Foo", m.sessionResults[0].Meta.Project)
 	}
 	row := stripAnsi(renderSessionSearchList(m, 10))
-	if !strings.Contains(row, "Bar") || strings.Contains(row, "Foo") {
-		t.Fatalf("filtered shared-project row did not use selected alias:\n%s", row)
+	if strings.Contains(row, "Bar") || strings.Contains(row, "Foo") {
+		t.Fatalf("filtered shared-project row repeated project metadata:\n%s", row)
+	}
+	if view := stripAnsi(renderSessionSearch(m)); !strings.Contains(view, "[r] project: Bar") {
+		t.Fatalf("filtered shared-project view did not show selected alias in chip:\n%s", view)
 	}
 }
 
