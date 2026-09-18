@@ -38,13 +38,8 @@ func TestRenderListRowsOpenWithNamesRatherThanTabNumbers(t *testing.T) {
 }
 
 // TestRenderListLockedRowIsDimmed verifies that the per-row styling switch in
-// renderListAt wraps a locked row in the explicit muted foreground.
-//
-// The plain text is now IDENTICAL between the two, which is the half of this
-// that changed: the 🔒 glyph had its own reserved row column and is now one
-// token of the selected session's context, so the whole difference a locked row
-// still makes to the queue is the weight it is drawn in. Asserting the equality
-// rather than dropping it keeps the glyph from quietly coming back.
+// renderListAt wraps a locked row in the explicit muted foreground while also
+// marking its name with the lock glyph.
 func TestRenderListLockedRowIsDimmed(t *testing.T) {
 	build := func(locked bool) Model {
 		m := testModel()
@@ -70,11 +65,11 @@ func TestRenderListLockedRowIsDimmed(t *testing.T) {
 	unlocked := renderListAt(build(false), 120, 0)
 	locked := renderListAt(build(true), 120, 0)
 
-	if stripAnsi(unlocked) != stripAnsi(locked) {
-		t.Fatalf("the lock changed the row's text; it is context, not a row column\nunlocked=%q\nlocked=%q", stripAnsi(unlocked), stripAnsi(locked))
+	if strings.Contains(stripAnsi(unlocked), "🔒") {
+		t.Fatalf("unlocked row carries a lock glyph: %q", stripAnsi(unlocked))
 	}
-	if strings.Contains(stripAnsi(locked), "🔒") {
-		t.Fatalf("the lock glyph is back in the queue row: %q", stripAnsi(locked))
+	if !strings.Contains(stripAnsi(locked), "🔒 api") {
+		t.Fatalf("locked row should mark the session name: %q", stripAnsi(locked))
 	}
 
 	mutedPrefix := strings.Split(styleDim.Render("api"), "api")[0]

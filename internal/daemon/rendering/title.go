@@ -7,10 +7,13 @@ import (
 )
 
 // DesiredTabTitle computes the tab title the renderer wants for the owning
-// window's state, preserving every foreign segment (base, star, mute) from the
-// live title.
+// window's state, preserving foreign segments from the live title and reading
+// the lock from the managed owner's user vars when available.
 func DesiredTabTitle(tab *kitty.Tab, st *state.WindowState) string {
 	parts := palette.ParseTitleParts(tab.Title)
+	if owner, ok := kitty.FindTabTitleOwner(tab); ok {
+		parts.Locked = owner.UserVars.Locked
+	}
 	parts.State = DesiredIcon(st)
 	if st.LoopingSet || st.Looping {
 		parts.Looping = st.Looping

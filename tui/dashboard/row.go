@@ -15,8 +15,7 @@
 // counted by its bytes and a grapheme cluster is never cut in half. And the
 // composed row is at most Width-1 cells, never more — see rowSafetySlack.
 //
-// What is NOT here is the whole point of the redesign. The tab number, the lock
-// and mute indicators, the supervision marker, the state icon, the blocked-reason
+// The tab number, mute indicator, supervision marker, state icon, blocked-reason
 // tag, the profile cell, the harness cell, the branch column, and the directory
 // are all gone from the row. They are not lost: they are the selected session's
 // context, and the session inspector is where they live.
@@ -26,6 +25,7 @@ package dashboard
 import (
 	"strings"
 
+	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -151,9 +151,13 @@ func ScanQueueColumns(queue []QueueRow) QueueColumns {
 // still leaves every name starting on the same cell.
 //
 // This is where "retain custom project emoji" is kept. The emoji is part of the
-// title the operator configured; nothing here adds, substitutes, or strips one.
+// title the operator configured. Locked rows also carry a protection marker.
 func queueNameText(q QueueRow) string {
-	return layout.RenderTitleIcon(q.Name)
+	name := layout.RenderTitleIcon(q.Name)
+	if q.Locked {
+		return palette.LockIcon() + " " + name
+	}
+	return name
 }
 
 // queueQualifierText is the Session cell's disambiguating half, parenthesized

@@ -13,12 +13,14 @@ func TestDesiredTabTitlePreservesForeignSegments(t *testing.T) {
 		Base:    "📟W:renamed",
 		State:   "stop",
 		Starred: true,
+		Locked:  true,
 		Muted:   true,
 	})
 	want := palette.BuildTitleParts(palette.TitleParts{
 		Base:    "📟W:renamed",
 		State:   "bolt",
 		Starred: true,
+		Locked:  true,
 		Muted:   true,
 		Looping: true,
 	})
@@ -27,6 +29,22 @@ func TestDesiredTabTitlePreservesForeignSegments(t *testing.T) {
 
 	if got := DesiredTabTitle(tab, st); got != want {
 		t.Fatalf("DesiredTabTitle = %q, want %q", got, want)
+	}
+}
+
+func TestDesiredTabTitleReflectsOwnerLock(t *testing.T) {
+	for _, locked := range []bool{false, true} {
+		tab := &kitty.Tab{
+			Title:   palette.BuildTitleParts(palette.TitleParts{Base: "api", State: "stop", Locked: !locked}),
+			Windows: []kitty.Window{{ID: 7, UserVars: kitty.UserVars{Profile: "work", Harness: "codex", Locked: locked}}},
+		}
+		want := "⚡api"
+		if locked {
+			want = "🔒⚡api"
+		}
+		if got := DesiredTabTitle(tab, &state.WindowState{DesiredIcon: "bolt"}); got != want {
+			t.Fatalf("locked=%v: DesiredTabTitle = %q, want %q", locked, got, want)
+		}
 	}
 }
 

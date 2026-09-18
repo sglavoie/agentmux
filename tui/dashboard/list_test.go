@@ -7,9 +7,36 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
+
+func TestRenderListShowsLockOnSelectedAndUnselectedRows(t *testing.T) {
+	for _, width := range []int{20, 80, 160} {
+		for _, cursor := range []int{0, 1} {
+			rows := []session.RunningSession{
+				{WindowID: 1, Base: "🦊api", Locked: true},
+				{WindowID: 2, Base: "web"},
+			}
+			in := ListInput{Cfg: &config.Config{}, Width: width, Cursor: cursor, Items: BuildItems(rows)}
+			out := stripAnsi(RenderList(in))
+			if strings.Count(out, palette.LockIcon()) != 1 || !strings.Contains(out, "🦊api") {
+				t.Fatalf("width=%d cursor=%d: locked render = %q", width, cursor, out)
+			}
+			for _, line := range strings.Split(out, "\n") {
+				if layout.Width(line) > width {
+					t.Fatalf("row exceeds %d cells: %q", width, line)
+				}
+			}
+			rows[0].Locked = false
+			in.Items = BuildItems(rows)
+			if out := stripAnsi(RenderList(in)); strings.Contains(out, palette.LockIcon()) {
+				t.Fatalf("unlocked render contains lock: %q", out)
+			}
+		}
+	}
+}
 
 // TestRenderListDrawsTheRunTimerInTheTimeColumn verifies that a rendered list
 // reports the elapsed busy stretch rather than the time since the last hook

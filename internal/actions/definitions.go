@@ -151,7 +151,16 @@ func defaultDefinitions() []Definition {
 				if err != nil {
 					return Result{}, err
 				}
-				return Result{Changed: true, Message: "toggled session lock"}, nil
+				parts := request.Session.TitleParts()
+				parts.Locked = !request.Session.Locked
+				if err := deps.Kitty.SetTabTitle(kitty.MatchTabByWindowID(request.Session.WindowID), palette.BuildTitleParts(parts)); err != nil {
+					return Result{}, err
+				}
+				message := "locked session"
+				if request.Session.Locked {
+					message = "unlocked session"
+				}
+				return Result{Changed: true, Message: message}, nil
 			},
 		},
 		{

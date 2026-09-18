@@ -20,6 +20,7 @@ type TitleParts struct {
 	Base    string
 	State   string
 	Starred bool
+	Locked  bool
 	Muted   bool
 	Looping bool
 }
@@ -55,10 +56,10 @@ func StateOrder() []string {
 }
 
 // ParseTitle parses a tab title into its components.
-// Tab title format: [★][🔇][<state-icon>]<base>
+// Tab title format: [★][🔒][🔇][<state-icon>][🔁]<base>
 // Returns base title, state name
 // ("bolt"/"stop"/"key"/"warning"/"error"/"subagent"/"compact"/"question"/""),
-// and starred flag. Use ParseTitleFull to also recover the muted flag.
+// and starred flag. Use ParseTitleParts to recover every marker.
 func ParseTitle(title string) (base, state string, starred bool) {
 	base, state, starred, _ = ParseTitleFull(title)
 	return
@@ -74,6 +75,9 @@ func ParseTitleParts(title string) TitleParts {
 		case !parts.Starred && ico.Star != "" && strings.HasPrefix(title, ico.Star):
 			parts.Starred = true
 			title = title[len(ico.Star):]
+		case !parts.Locked && ico.Lock != "" && strings.HasPrefix(title, ico.Lock):
+			parts.Locked = true
+			title = title[len(ico.Lock):]
 		case !parts.Muted && ico.Mute != "" && strings.HasPrefix(title, ico.Mute):
 			parts.Muted = true
 			title = title[len(ico.Mute):]
@@ -102,7 +106,8 @@ func ParseTitleParts(title string) TitleParts {
 
 // ParseTitleFull parses a tab title into its components, including the muted
 // flag carried by an optional 🔇 prefix.
-// Tab title format: [★][🔇][<state-icon>][🔁]<base>
+// Tab title format: [★][🔒][🔇][<state-icon>][🔁]<base>.
+// Use ParseTitleParts to also recover the lock and loop flags.
 func ParseTitleFull(title string) (base, state string, starred, muted bool) {
 	parts := ParseTitleParts(title)
 	return parts.Base, parts.State, parts.Starred, parts.Muted
@@ -116,11 +121,14 @@ func BuildTitle(base, state string, starred bool) string {
 }
 
 // BuildTitleParts constructs a tab title from its complete components.
-// Output format: [★][🔇][<state-icon>][🔁]<base>.
+// Output format: [★][🔒][🔇][<state-icon>][🔁]<base>.
 func BuildTitleParts(parts TitleParts) string {
 	var sb strings.Builder
 	if parts.Starred && ico.Star != "" {
 		sb.WriteString(ico.Star)
+	}
+	if parts.Locked && ico.Lock != "" {
+		sb.WriteString(ico.Lock)
 	}
 	if parts.Muted && ico.Mute != "" {
 		sb.WriteString(ico.Mute)

@@ -86,13 +86,14 @@ func (rs RunningSession) EffectiveArgs() string {
 }
 
 // TitleParts returns the title components for the remaining non-daemon title
-// writers (mute/star). State and looping come from first-class fields so a
+// writers (lock/mute/star). State and looping come from first-class fields so a
 // stale tab title cannot overwrite the daemon-owned values.
 func (rs RunningSession) TitleParts() palette.TitleParts {
 	return palette.TitleParts{
 		Base:    rs.Base,
 		State:   rs.State,
 		Starred: rs.Starred,
+		Locked:  rs.Locked,
 		Muted:   rs.Muted,
 		Looping: rs.Looping,
 	}

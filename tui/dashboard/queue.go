@@ -253,6 +253,8 @@ type QueueRow struct {
 	// matches this, and the cursor identity still travels on Base and the Kitty
 	// IDs.
 	Name string
+	// Locked marks a session protected against destructive dashboard actions.
+	Locked bool
 	// Qualifier is the disambiguating context appended when another LIVE session
 	// shows the same name — a branch, a worktree folder, a profile, or the window
 	// ID — and "" when the name stands alone or when nothing separates the
@@ -320,6 +322,7 @@ func BuildQueue(in QueueInput) []QueueRow {
 		queue[i] = QueueRow{
 			Row:       i,
 			Name:      SessionDisplayTitle(s),
+			Locked:    s.Locked,
 			Qualifier: names.Qualifier(s),
 			Status:    StatusText(s, group),
 			Emphasis:  StatusEmphasis(s, group),

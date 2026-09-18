@@ -25,12 +25,14 @@ func TestToggleMuteCmdSetsUserVarAndPushesTitle(t *testing.T) {
 			Base:    "🦊api",
 			State:   "bolt",
 			Starred: true,
+			Locked:  true,
 			Looping: true,
 		}),
 		Base:    "🦊api",
 		State:   "bolt",
 		Looping: true,
 		Starred: true,
+		Locked:  true,
 	}
 
 	cmd := commands.ToggleMute(client, rs)
@@ -73,6 +75,7 @@ func TestToggleMuteCmdSetsUserVarAndPushesTitle(t *testing.T) {
 		Base:    "🦊api",
 		State:   "bolt",
 		Starred: true,
+		Locked:  true,
 		Muted:   true,
 		Looping: true,
 	})
