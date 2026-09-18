@@ -218,7 +218,28 @@ func (s State) InFlight() []Dispatch {
 // are close and restart, one operator keystroke at a time; the bound exists so
 // an effect that never reports back cannot grow the state without limit, not
 // because the ordinary case comes anywhere near it.
+//
+// It is a bound on the EVICTABLE half of the record only. An entry that holds a
+// tab's lifecycle guard is never dropped to make room, because dropping it would
+// permit the second close or restart the guard exists to refuse — a silent double
+// dispatch bought with a smaller slice. The exemption is self-bounding rather
+// than unbounded: the guard is single-flight per tab, so the retained entries can
+// never outnumber the live tabs, and every one of them is retired by the
+// completion its host reports.
 const maxInFlight = 16
+
+// holdsLifecycleGuard reports whether one recorded dispatch is what makes a tab
+// single-flight — the exact condition lifecycleInFlight matches on, asked of a
+// record rather than of a request.
+//
+// It is the rule the correlation bound must not overrule: an entry answering true
+// here is load-bearing state, not bookkeeping, because its presence is the only
+// thing refusing a second lifecycle action against that tab. An unattributed
+// dispatch names no tab and therefore guards nothing, so it stays evictable like
+// any other.
+func (d Dispatch) holdsLifecycleGuard() bool {
+	return Destructive(d.Action) && d.Target.TabID() != 0
+}
 
 // lifecycleInFlight reports whether a dispatch that ends or replaces a harness
 // process already owns this target's tab. It is what makes a lifecycle action
@@ -235,10 +256,16 @@ const maxInFlight = 16
 // would refuse unrelated rows.
 //
 // The record is retired by Complete, so the guard's release is exactly the
-// host's completion report. A host that dispatches a lifecycle effect and never
-// reports its outcome would hold the tab until the bounded record evicts it;
-// both hosts report every completion, including failures and unconfirmed ones,
-// which is what keeps a failed operation retryable.
+// host's completion report — and it is the ONLY release. Nothing expires it and
+// nothing evicts it: appendInFlight makes room among the other entries instead,
+// so an operator who dispatches sixteen unrelated actions while a restart is
+// parked still finds that restart holding its tab. A host that dispatched a
+// lifecycle effect and never reported its outcome would hold that tab for as long
+// as it ran, which is the deliberate direction — a held tab refuses with a
+// sentence naming the operation that holds it, where a released one runs a second
+// restart and leaves two replacements for one row. Both hosts report every
+// completion, including failures and unconfirmed ones, which is what keeps a
+// failed operation retryable.
 func (s State) lifecycleInFlight(action commands.ID, target Target) bool {
 	if !Destructive(action) {
 		return false
@@ -248,7 +275,7 @@ func (s State) lifecycleInFlight(action commands.ID, target Target) bool {
 		return false
 	}
 	for _, dispatch := range s.inflight {
-		if Destructive(dispatch.Action) && dispatch.Target.TabID() == tab {
+		if dispatch.holdsLifecycleGuard() && dispatch.Target.TabID() == tab {
 			return true
 		}
 	}
@@ -752,13 +779,34 @@ func (c Controller[M]) clear(m M) M {
 
 // appendInFlight records a dispatch, copying rather than appending in place so
 // two copies of a value-copied host model cannot write through the same backing
-// array, and dropping the oldest entry once the record is full.
+// array, and dropping the oldest EVICTABLE entry once the record is full.
+//
+// Which entry is dropped is the whole of this function. Dropping the oldest
+// outright is what the record used to do, and it was wrong in a way a leak guard
+// is not allowed to be: the oldest entry is the likeliest to be an unfinished
+// close or restart, and dropping it released that tab's exclusion and threw away
+// the correlation its completion would have arrived under — so sixteen unrelated
+// keystrokes turned a refused second restart into a second running one, and the
+// original result into a completion nobody claimed. The guard entries are
+// therefore skipped over and the oldest ordinary dispatch goes instead, and when
+// every entry is a guard the record is allowed to grow past the bound: it can
+// only do so one entry per live tab, which is a smaller number than any leak the
+// bound was defending against.
 func appendInFlight(existing []Dispatch, dispatch Dispatch) []Dispatch {
-	start := 0
-	if len(existing) >= maxInFlight {
-		start = len(existing) - maxInFlight + 1
+	out := make([]Dispatch, 0, len(existing)+1)
+	out = append(out, existing...)
+	for len(out) >= maxInFlight {
+		evict := -1
+		for i, recorded := range out {
+			if !recorded.holdsLifecycleGuard() {
+				evict = i
+				break
+			}
+		}
+		if evict < 0 {
+			break
+		}
+		out = append(out[:evict], out[evict+1:]...)
 	}
-	out := make([]Dispatch, 0, len(existing)-start+1)
-	out = append(out, existing[start:]...)
 	return append(out, dispatch)
 }
