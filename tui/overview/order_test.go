@@ -202,6 +202,52 @@ func TestOpeningOrderRanksAttentionThenDoneThenNonWorkingThenWorking(t *testing.
 	}
 }
 
+func TestRetainOrderPromotesOnlyAttentionAndPreservesGroupOrder(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		state     string
+		unseen    bool
+		attention bool
+	}{
+		{name: "permission", state: "key", attention: true},
+		{name: "question", state: "question", attention: true},
+		{name: "error", state: "error", attention: true},
+		{name: "unseen completion", state: "stop", unseen: true, attention: true},
+		{name: "seen completion", state: "stop"},
+		{name: "working", state: "bolt"},
+		{name: "warning", state: "warning"},
+		{name: "compacting", state: "compact"},
+		{name: "subagent", state: "subagent"},
+		{name: "iconless"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			previous := []session.RunningSession{row(1, 10, "z-existing"), row(2, 20, "y-running"), row(3, 30, "x-changing"), row(4, 40, "closed")}
+			previous[0].State = "question"
+			previous[1].State, previous[2].State = "bolt", "bolt"
+			current := []session.RunningSession{row(5, 50, "a-new"), previous[2], previous[1], previous[0]}
+			current[0].State = "key"
+			current[1].State, current[1].Unseen = tc.state, tc.unseen
+			current[3].State = "error" // changing severity must not reorder attention cards
+			beforePrevious := append([]session.RunningSession(nil), previous...)
+			beforeCurrent := append([]session.RunningSession(nil), current...)
+			want := []string{"z-existing", "a-new", "y-running", "x-changing"}
+			if tc.attention {
+				want = []string{"z-existing", "x-changing", "a-new", "y-running"}
+			}
+			got := RetainOrder(previous, current, nil, 5*time.Minute)
+			if !reflect.DeepEqual(names(got), want) {
+				t.Fatalf("refresh order = %v, want %v", names(got), want)
+			}
+			if !reflect.DeepEqual(previous, beforePrevious) || !reflect.DeepEqual(current, beforeCurrent) {
+				t.Fatal("RetainOrder modified an input snapshot")
+			}
+			if repeated := RetainOrder(got, current, nil, 5*time.Minute); !reflect.DeepEqual(repeated, got) {
+				t.Fatal("unchanged refresh shuffled cards")
+			}
+		})
+	}
+}
+
 // TestOrderLeavesTheCallerSliceAlone. The caller holds the live set; sorting it
 // underneath them would reorder the model's own list as a side effect of
 // rendering.

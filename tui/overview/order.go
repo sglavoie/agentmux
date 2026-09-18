@@ -2,8 +2,8 @@
 //
 // At opening, the grid surfaces sessions needing attention, then Done sessions,
 // then other non-Working sessions, then Working sessions. Within each class its identity
-// order is deterministic. Subsequent reads retain the existing tile positions:
-// a harness starting or finishing a turn must not move the pane being read.
+// order is deterministic. Subsequent reads surface attention sessions while
+// retaining relative order within the attention and non-attention groups.
 //
 // Within an opening tier, grouping is by resolved project identity so a
 // repository's checkouts sit together when they share a tier. Groups are
@@ -78,9 +78,10 @@ func openingRank(s session.RunningSession, activity map[int]time.Time, idleThres
 	return 3
 }
 
-// RetainOrder refreshes the facts without moving surviving tabs. New sessions
-// join at the end in identity order; closed tabs simply leave their slots.
-func RetainOrder(previous, current []session.RunningSession) []session.RunningSession {
+// RetainOrder refreshes the facts in surviving-tab order, appends new sessions
+// in identity order, then stably moves attention sessions to the front. Status
+// changes within either group do not shuffle its cards; closed tabs disappear.
+func RetainOrder(previous, current []session.RunningSession, activity map[int]time.Time, idleThreshold time.Duration) []session.RunningSession {
 	ordered := Order(current)
 	byTab := make(map[int][]session.RunningSession, len(ordered))
 	for _, s := range ordered {
@@ -99,6 +100,10 @@ func RetainOrder(previous, current []session.RunningSession) []session.RunningSe
 			byTab[s.TabID] = rows[1:]
 		}
 	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return dashboard.StateGroup(out[i], activity, idleThreshold) == 0 &&
+			dashboard.StateGroup(out[j], activity, idleThreshold) != 0
+	})
 	return out
 }
 

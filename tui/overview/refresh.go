@@ -118,7 +118,7 @@ func (m model) handleSessions(msg commands.SessionsMsg) (tea.Model, tea.Cmd) {
 	// and the watchdog is a dashboard status-bar input the grid has no slot for;
 	// holding either here would be state nothing reads.
 	if wasLoaded {
-		m.sessions = RetainOrder(m.sessions, msg.Sessions)
+		m.sessions = RetainOrder(m.sessions, msg.Sessions, msg.Activity, m.idleThreshold)
 	} else {
 		m.sessions = OpeningOrder(msg.Sessions, msg.Activity, m.idleThreshold)
 		// Opening always starts at the first card. The source is a separate

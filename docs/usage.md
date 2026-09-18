@@ -368,8 +368,10 @@ answers one row at a time.
 On opening, the tiles put sessions needing attention first, followed by other
 statuses that are not Working, then Working sessions. Within each tier they use
 project and tab identity order. While the overview remains open, refreshes
-update statuses and previews without moving surviving tiles; new sessions join
-at the end. Closing and reopening F2 takes a fresh triage order.
+update statuses and previews and move sessions needing attention to the top.
+Relative order within the attention and non-attention groups stays stable;
+new sessions join the end of their group. Selection stays on the same session.
+Closing and reopening F2 takes a fresh triage order.
 
 The header is the full inspector's six-line metadata block cut to the three
 questions asked of a session you are *not* currently looking at. Branch,
