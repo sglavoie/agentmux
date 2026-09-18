@@ -26,7 +26,6 @@ var Actions = []Action{
 	{Key: "f4", Section: "Sessions", Description: "focus next tab needing attention", AmxCommand: "focus-next --window-id @active-kitty-window-id", LaunchType: "background"},
 	// Scrollback / terminal
 	{Key: "f3", Section: "Scrollback", Description: "toggle error/failure/warning/deprecated markers", KittyCommand: `toggle_marker iregex 1 \\bError\\b 2 \\bFailed\\b 3 \\bWarning\\b 3 \\bDEPRECATED\\b`},
-	{Key: "f12", Section: "Scrollback", Description: "broadcast input to all windows in tab", KittyCommand: "launch --allow-remote-control kitty +kitten broadcast"},
 	// Tab navigation
 	{Key: "f7", Section: "Navigation", Description: "focus previous managed tab", AmxCommand: "focus-prev-managed --window-id @active-kitty-window-id", LaunchType: "background"},
 	{Key: "f9", Section: "Navigation", Description: "focus next managed tab", AmxCommand: "focus-next-managed --window-id @active-kitty-window-id", LaunchType: "background"},

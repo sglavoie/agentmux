@@ -133,7 +133,6 @@ func TestConfigLineGeneratesAMXRootDashboardLaunch(t *testing.T) {
 func TestConfigLineGeneratesNativeKittyCommands(t *testing.T) {
 	tests := map[string]string{
 		"f3":    `map f3 toggle_marker iregex 1 \\bError\\b 2 \\bFailed\\b 3 \\bWarning\\b 3 \\bDEPRECATED\\b`,
-		"f12":   "map f12 launch --allow-remote-control kitty +kitten broadcast",
 		"cmd+0": "map cmd+0 goto_tab 10",
 		"cmd+l": "map cmd+l goto_tab -1",
 	}
