@@ -151,7 +151,19 @@ func (s *WindowState) PromotedBusyBody() string { return s.promotedBusyBody }
 // arming the one-shot guard against re-promoting from an unchanged stale title.
 func (s *WindowState) SetPromotedBusyBody(body string) { s.promotedBusyBody = body }
 
-// ClearPromotedBusyBody re-arms one-shot busy-body promotion. Only a real
-// hook/ASL event calls it: the probe applies its own fact directly and must not
-// re-arm itself.
-func (s *WindowState) ClearPromotedBusyBody() { s.promotedBusyBody = "" }
+// ClearPromotedBusyBody re-arms one-shot busy-body promotion and releases any
+// operator-clear hold. Only a real hook/ASL event calls it: the probe applies
+// its own fact directly and must not re-arm itself.
+func (s *WindowState) ClearPromotedBusyBody() {
+	s.promotedBusyBody = ""
+	s.busyPromotionHeld = false
+}
+
+// HoldBusyPromotion disarms busy-title promotion until the next real hook/ASL
+// event. An operator clear of a settled icon calls it; an operator clear never
+// calls ClearPromotedBusyBody.
+func (s *WindowState) HoldBusyPromotion() { s.busyPromotionHeld = true }
+
+// BusyPromotionHeld reports whether an operator clear is holding busy-title
+// promotion.
+func (s *WindowState) BusyPromotionHeld() bool { return s.busyPromotionHeld }

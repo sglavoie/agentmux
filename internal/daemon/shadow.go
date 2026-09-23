@@ -146,8 +146,20 @@ func (h *Handler) reduceStateUpdate(req protocol.Request, outcome applyOutcome, 
 	}
 	// A real hook/ASL event is the only evidence that re-arms one-shot busy-body
 	// promotion. The probe applies its own fact directly through st.Reducer.Apply
-	// and never reaches here, so it cannot re-arm itself.
-	st.ClearPromotedBusyBody()
+	// and never reaches here, so it cannot re-arm itself. An operator clear is
+	// not activity and never re-arms. Clearing a settled icon (🛑, attention)
+	// acknowledges whatever the pane shows, stale title included, so it holds
+	// promotion outright — otherwise the unchanged title would re-promote ⚡ on
+	// the next tick and the idle probe would settle that back into the 🛑 just
+	// cleared. Clearing ⚡ leaves the one-shot as it was: a hook-backed turn
+	// still in progress may recover ⚡ from its title, while a title that has
+	// already promoted once stays spent.
+	switch {
+	case n.Action != "user_clear":
+		st.ClearPromotedBusyBody()
+	case st.Effective.Icon != "bolt":
+		st.HoldBusyPromotion()
+	}
 	effectiveBefore := st.Effective
 	// Today's harness payloads carry no source_sequence; assign the window's
 	// receipt sequence so per-source monotonicity (duplicate/reorder handling)

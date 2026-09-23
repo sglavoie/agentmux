@@ -225,7 +225,9 @@ func (h *Handler) stampClaudePromptKind(binding probes.Binding, screens *activit
 // including stop and every attention/error state. Promotion is one-shot per
 // marker body (see WindowState.promotedBusyBody): a title that outlives the turn
 // that produced it recovers ⚡ once, not on every tick after the watchdog expires
-// the promoted fact.
+// the promoted fact. An operator clear of a settled icon holds promotion
+// outright until the next real hook/ASL event (see WindowState.busyPromotionHeld), so a cleared icon
+// stays cleared under a title that has not changed since.
 func (h *Handler) recoverClaudeBusyTitle(
 	now time.Time,
 	binding probes.Binding,
@@ -252,6 +254,9 @@ func (h *Handler) recoverClaudeBusyTitle(
 		// Reset flows own their transient empty state until their cleanup event
 		// commits; the next snapshot tick may recover normally once the flow ends.
 		if st.PendingReset != state.ResetFlowNone {
+			return
+		}
+		if st.BusyPromotionHeld() {
 			return
 		}
 	}

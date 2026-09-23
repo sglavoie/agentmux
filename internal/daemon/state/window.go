@@ -167,6 +167,12 @@ type WindowState struct {
 	// animation frame: keying on the raw title re-arms on frame rotation alone.
 	// Real activity through reduceStateUpdate clears it.
 	promotedBusyBody string
+	// busyPromotionHeld suppresses busy-title promotion entirely after an
+	// operator clears a settled (non-⚡) icon (unexported, never persisted). The
+	// clear acknowledges whatever the pane shows, including a stale title, so
+	// the unchanged title must not re-promote the emptied icon. Real activity through
+	// reduceStateUpdate releases it together with promotedBusyBody.
+	busyPromotionHeld bool
 }
 
 // CurrentConversation derives this window's current parent conversation from
