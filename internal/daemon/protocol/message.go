@@ -207,7 +207,7 @@ type Request struct {
 	// matches ProducerHarness/Harness and its PID/start token are complete.
 	HarnessProcess   *HarnessProcessIdentity `json:"harness_process,omitempty"`
 	WindowID         int                     `json:"window_id,omitempty"`         // KITTY_WINDOW_ID
-	Action           string                  `json:"action,omitempty"`            // active|stop|permission|failure|stop_failure|idle|clear|user_clear
+	Action           string                  `json:"action,omitempty"`            // active|stop|permission|failure|stop_failure|idle|clear|user_clear|user_active
 	Event            string                  `json:"event,omitempty"`             // raw Claude hook event name (e.g. UserPromptSubmit)
 	PayloadJSON      string                  `json:"payload_json,omitempty"`      // raw hook stdin payload for TypeHookEvent
 	ToolName         string                  `json:"tool_name,omitempty"`         // tool name from PreToolUse/PostToolUse hook payloads

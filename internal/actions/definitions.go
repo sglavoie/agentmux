@@ -137,6 +137,18 @@ func defaultDefinitions() []Definition {
 			},
 		},
 		{
+			ID: MarkActive, Label: "mark active", Description: "show the session as working until its next real event", Requires: sessionRequirement,
+			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
+				requestFn := deps.Daemon
+				if requestFn == nil {
+					requestFn = func(req protocol.Request) (protocol.Response, error) { return ipc.NewClient().Send(req) }
+				}
+				// Best effort, exactly like ClearStatus: a later refresh converges.
+				_, _ = requestFn(protocol.Request{Type: protocol.TypeStateUpdate, Action: "user_active", WindowID: request.Session.WindowID, SessionTitle: request.Session.Base})
+				return Result{Changed: true, Message: "marked session active"}, nil
+			},
+		},
+		{
 			ID: ToggleLock, Label: "lock/unlock", Description: "toggle the session lock", Requires: sessionRequirement,
 			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
 				if deps.Kitty == nil {

@@ -32,6 +32,7 @@ const (
 	OpenEditor     ID = "project.open_editor"
 	CopyTitle      ID = "session.copy_title"
 	ClearStatus    ID = "session.clear_status"
+	MarkActive     ID = "session.mark_active"
 	ToggleLock     ID = "session.toggle_lock"
 	ToggleMute     ID = "session.toggle_mute"
 	Close          ID = "session.close"

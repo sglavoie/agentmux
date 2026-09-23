@@ -102,7 +102,12 @@ func (h *Handler) probeScreenIdle(
 		return
 	}
 	st, ok := h.windowStateLocked(targetWindowID)
-	if !ok || st.Reducer == nil {
+	// A ⚡ the operator forced (user_active) is a claim about the pane, not a
+	// stuck hook fact, and it holds until the next real event. Settling a stop
+	// under it would park a 🛑 behind the ⚡ that surfaces the moment it ages out.
+	// A mark landing during the off-lock read bumps ShadowSeq, which the
+	// authoritative-idle freshness check already refuses.
+	if !ok || st.Reducer == nil || st.Effective.Source == protocol.UserActiveSource() {
 		h.clearIdleSampleLocked(activity.Ref{WindowID: targetWindowID, Key: source.Key})
 		h.retractScreenDeclinesLocked(targetWindowID)
 		h.stateMu.Unlock()

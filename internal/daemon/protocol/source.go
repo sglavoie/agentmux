@@ -69,6 +69,13 @@ func UserActionSource() SourceID {
 	return SourceID{Kind: SourceProbe, Key: "user"}
 }
 
+// UserActiveSource is the synthetic source of an operator's user_active (F11)
+// mark. Unlike user_clear, the reducer keeps a real ⚡ fact under it, so the key
+// must be stable: the next real hook/ASL event retires exactly this fact.
+func UserActiveSource() SourceID {
+	return SourceID{Kind: SourceProbe, Key: "user_active"}
+}
+
 // ProbeSource is the explicit synthetic source for the hook-path context-limit
 // probe, which attributes its daemon-synthesized stop_failure promotions to the
 // probe rather than to the harness session.
@@ -205,7 +212,7 @@ func (s *SourceFactSnapshot) ClearHarnessProcessIdentity() {
 // and the legacy grace. TurnID scopes identified terminal suppression.
 type ReducerEvent struct {
 	Source SourceID
-	Action string // active|compact|subagent|stop|elicitation|permission|failure|stop_failure|idle|clear|user_clear
+	Action string // active|compact|subagent|stop|elicitation|permission|failure|stop_failure|idle|clear|user_clear|user_active
 	Seq    uint64
 	TurnID string
 	At     int64

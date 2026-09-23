@@ -27,6 +27,20 @@ func ClearStatusWithDaemon(request func(protocol.Request) (protocol.Response, er
 	}
 }
 
+// MarkActive asks the daemon to show ⚡ via user_active until the session's
+// next real hook/ASL event. Like ClearStatus, the daemon renderer owns the
+// title write and transport errors stay nonfatal.
+func MarkActive(_ kitty.KittyClient, s session.RunningSession) tea.Cmd {
+	return MarkActiveWithDaemon(DaemonRequest, s)
+}
+
+func MarkActiveWithDaemon(request func(protocol.Request) (protocol.Response, error), s session.RunningSession) tea.Cmd {
+	return func() tea.Msg {
+		_, err := Registry.Execute(context.Background(), actions.Dependencies{Daemon: request}, actions.MarkActive, actions.Request{Session: &s})
+		return ActionDoneMsg{Err: err}
+	}
+}
+
 // Focus focuses a tab by ID and returns FocusDoneMsg.
 func Focus(client kitty.KittyClient, tabID int) tea.Cmd {
 	return func() tea.Msg {

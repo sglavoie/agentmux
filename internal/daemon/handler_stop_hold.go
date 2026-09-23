@@ -332,7 +332,8 @@ func (h *Handler) recordBypassedStopHold(pending pendingStopHold) {
 // stop still held before the reducer. Any reducer-visible non-terminal action
 // proves the harness is still working — a fresh prompt (a new turn), a tool
 // call, a subagent, a compaction, a permission or elicitation prompt, a
-// recoverable failure — as does an explicit wipe (user_clear/clear). The held
+// recoverable failure — as does an explicit wipe (user_clear/clear) or the
+// operator marking the tab active (user_active). The held
 // stop is stale in every one of those cases, so it must not paint.
 // Reset-flow cleanup (req.ResetFlow) is deliberately excluded: the held stop is
 // kept so applyResetFlowLocked can fold it into the same user_clear when the
@@ -345,7 +346,7 @@ func supersedesStopHold(req protocol.Request) bool {
 		return true
 	}
 	switch req.Action {
-	case "user_clear", "clear", "active", "subagent", "compact", "permission", "elicitation", "failure":
+	case "user_clear", "user_active", "clear", "active", "subagent", "compact", "permission", "elicitation", "failure":
 		return true
 	default:
 		return false

@@ -21,6 +21,9 @@ type guardEntry struct {
 //	failure / stop_failure (4) > permission (3) > stop / subagent (2) >
 //	active / compact (1) > idle (0) > clear / user_clear (-1).
 //
+// user_active is the operator forcing ⚡: it always replaces the guard with an
+// active one and reports "active", so no stop/permission guard can refuse it.
+//
 // Notes on equal-priority pairs:
 //   - subagent (2) outranks active (1), so the 🤖 icon survives interleaved
 //     parent `active` events; it loses to stop, permission, failure, and
@@ -88,6 +91,10 @@ func (g *StateGuard) TryUpdate(windowID int, action string, isPrompt bool) (allo
 	if action == "idle" || action == "clear" || action == "user_clear" {
 		delete(g.entries, windowID)
 		return true, action
+	}
+	if action == "user_active" {
+		action = "active"
+		delete(g.entries, windowID)
 	}
 
 	entry, exists := g.entries[windowID]

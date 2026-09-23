@@ -40,6 +40,7 @@ func TestReducerActionIconMapping(t *testing.T) {
 		"idle":         "",
 		"clear":        "",
 		"user_clear":   "",
+		"user_active":  "bolt",
 		"nonsense":     "",
 	}
 	for action, want := range cases {
@@ -302,5 +303,60 @@ func TestReducerWaitingPausedFallback(t *testing.T) {
 	r.Apply(protocol.ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseFinished, Seq: 3, At: 12})
 	if got := r.Reduce(100); got.Icon != "stop" || got.Looping {
 		t.Fatalf("finished = %+v; want stop without looping", got)
+	}
+}
+
+// TestReducerUserActiveAcknowledgesAndForcesBolt pins the operator mark: every
+// visible fact is acknowledged exactly as user_clear does, the ⚡ is contributed
+// by the synthetic user_active source rather than the event's own, and the ASL
+// lease survives.
+func TestReducerUserActiveAcknowledgesAndForcesBolt(t *testing.T) {
+	r := NewReducer(zeroCfg)
+	r.Apply(protocol.ReducerEvent{Source: harnessSource(), Action: "permission", Seq: 1, At: 10})
+	r.Apply(protocol.ReducerEvent{Source: aslSource("run-1"), Phase: ASLPhaseWaiting, Seq: 1, At: 11})
+
+	r.Apply(protocol.ReducerEvent{Source: harnessSource(), Action: "user_active", Seq: 0, At: 12})
+	got := r.Reduce(100)
+	if got.Icon != "bolt" || got.Source != protocol.UserActiveSource() {
+		t.Fatalf("after user_active = %+v; want bolt from the user_active source", got)
+	}
+	if !got.Looping {
+		t.Fatal("user_active dropped the ASL lease")
+	}
+	if fact, ok := r.Fact(harnessSource()); !ok || fact.Action != "permission" {
+		t.Fatalf("harness fact = %+v, %v; want the acknowledged permission kept", fact, ok)
+	}
+
+	if !r.RetireUserActive(13) {
+		t.Fatal("RetireUserActive = false; want the live mark retired")
+	}
+	if got := r.Reduce(100); got.Icon != "" {
+		t.Fatalf("after RetireUserActive = %+v; want empty (the permission stays acknowledged)", got)
+	}
+	if traces := r.Traces(); traces[len(traces)-1].Decision != protocol.DecisionAcknowledged {
+		t.Fatalf("last trace decision = %q; want acknowledged", traces[len(traces)-1].Decision)
+	}
+	if r.RetireUserActive(14) {
+		t.Fatal("RetireUserActive = true on an already-retired mark")
+	}
+}
+
+// TestReducerUserActiveSurvivesSnapshotRestore keeps the forced ⚡ across a
+// daemon restart and leaves it retirable afterwards.
+func TestReducerUserActiveSurvivesSnapshotRestore(t *testing.T) {
+	r := NewReducer(zeroCfg)
+	r.Apply(protocol.ReducerEvent{Source: harnessSource(), Action: "stop", Seq: 1, At: 10})
+	r.Apply(protocol.ReducerEvent{Source: harnessSource(), Action: "user_active", Seq: 0, At: 12})
+
+	restored := NewReducer(zeroCfg)
+	restored.Restore(r.Facts())
+	if got := restored.Reduce(100); got.Icon != "bolt" || got.Source != protocol.UserActiveSource() {
+		t.Fatalf("restored = %+v; want the user_active bolt", got)
+	}
+	if !restored.RetireUserActive(13) {
+		t.Fatal("restored mark is not retirable")
+	}
+	if got := restored.Reduce(100); got.Icon != "" {
+		t.Fatalf("after retiring the restored mark = %+v; want empty (the stop stays acknowledged)", got)
 	}
 }

@@ -86,6 +86,7 @@ func TestBackgroundBindingsPassActiveWindowID(t *testing.T) {
 		"f4":  "focus-next --window-id @active-kitty-window-id",
 		"f7":  "focus-prev-managed --window-id @active-kitty-window-id",
 		"f8":  "hook-indicator user_clear --window-id @active-kitty-window-id",
+		"f11": "hook-indicator user_active --window-id @active-kitty-window-id",
 		"f9":  "focus-next-managed --window-id @active-kitty-window-id",
 		"f10": "mute-toggle --window-id @active-kitty-window-id",
 	}

@@ -3,7 +3,7 @@ package hookevent
 import "testing"
 
 func TestResolveAction_DirectActions(t *testing.T) {
-	for _, action := range []string{"active", "stop", "permission", "failure", "stop_failure", "subagent", "compact", "elicitation", "idle", "clear", "user_clear", "loop_marker"} {
+	for _, action := range []string{"active", "stop", "permission", "failure", "stop_failure", "subagent", "compact", "elicitation", "idle", "clear", "user_clear", "user_active", "loop_marker"} {
 		got, ok := ResolveAction(action, HookPayload{})
 		if !ok || got != action {
 			t.Errorf("ResolveAction(%q) = (%q, %v), want (%q, true)", action, got, ok, action)

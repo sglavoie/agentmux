@@ -205,6 +205,27 @@ func (r *Reducer) ExpireFact(source protocol.SourceID, seq uint64, at int64) boo
 	return true
 }
 
+// RetireUserActive acknowledges the operator's forced ⚡ (a user_active fact) so
+// the real event about to be applied decides the tab's icon instead. Probe
+// facts never call it: only a real hook/ASL event outranks the operator's mark.
+// Reports whether a live user_active contribution was withdrawn.
+func (r *Reducer) RetireUserActive(at int64) bool {
+	source := protocol.UserActiveSource()
+	f := r.facts[source]
+	if f == nil || !f.set || f.acked {
+		return false
+	}
+	f.acknowledge(at)
+	r.traces = append(r.traces, ReducerTrace{
+		Source:   source,
+		Seq:      f.seq,
+		Action:   f.action,
+		Decision: protocol.DecisionAcknowledged,
+		Reason:   "real event retired the operator's user_active mark",
+	})
+	return true
+}
+
 // acknowledgeAll marks every fact acknowledged so no icon renders, while
 // leaving ASL loop leases untouched. A subsequent higher-Seq event clears the
 // ack for its source. It also rebalances every identity-less agent multiset:

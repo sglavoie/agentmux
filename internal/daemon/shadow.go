@@ -48,8 +48,10 @@ func reduceNormalizedForRequest(req protocol.Request, outcome applyOutcome) (pro
 		// subagent lifecycle stamps: normalization deliberately rewrote a
 		// clean stop to end the agent's own contribution, and the legacy
 		// machine's "active" repaint must not undo that.
+		// An operator's user_active is never rewritten: it must reach the
+		// reducer as the forced ⚡ it asked for.
 		if outcome.reduceAction != "" && n.Phase == "" && n.Action != "" &&
-			n.Action != outcome.reduceAction &&
+			n.Action != "user_active" && n.Action != outcome.reduceAction &&
 			n.Source.Kind != protocol.SourceSubagent && n.SubagentDelta == 0 {
 			n.Action = outcome.reduceAction
 		}
@@ -105,8 +107,14 @@ func reduceNormalizedForRequest(req protocol.Request, outcome applyOutcome) (pro
 		}
 		return n, true, confidence, untrustedFallback
 	}
+	source := protocol.SourceID{Kind: protocol.SourceLegacy, Key: protocol.WindowKey(req.WindowID)}
+	if action == "user_active" {
+		// The TUI's mark arrives un-stamped; it still needs the synthetic
+		// source a later real event retires.
+		source = protocol.UserActiveSource()
+	}
 	n := protocol.NormalizedEvent{
-		Source: protocol.SourceID{Kind: protocol.SourceLegacy, Key: protocol.WindowKey(req.WindowID)},
+		Source: source,
 		Action: action,
 		Event:  req.Event,
 		Prompt: req.IsPrompt,
@@ -154,9 +162,19 @@ func (h *Handler) reduceStateUpdate(req protocol.Request, outcome applyOutcome, 
 	// cleared. Clearing ⚡ leaves the one-shot as it was: a hook-backed turn
 	// still in progress may recover ⚡ from its title, while a title that has
 	// already promoted once stays spent.
+	//
+	// An operator's user_active (F11) is not activity either: it leaves any
+	// hold in place so the stale title cannot re-promote once the forced ⚡
+	// ages out. Every real event retires that forced ⚡ before it applies, so
+	// the event itself (Stop → 🛑, a prompt → the harness's ⚡) decides the
+	// icon. Probe facts apply directly and never reach here, so they cannot.
 	switch {
+	case n.Action == "user_active":
 	case n.Action != "user_clear":
 		st.ClearPromotedBusyBody()
+		if n.Deliverable() {
+			st.Reducer.RetireUserActive(now.Unix())
+		}
 	case st.Effective.Icon != "bolt":
 		st.HoldBusyPromotion()
 	}

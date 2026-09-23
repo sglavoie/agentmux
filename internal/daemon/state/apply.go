@@ -34,6 +34,9 @@ func (r *Reducer) ApplyNormalized(n protocol.NormalizedEvent) protocol.ReducerDe
 // Ordering rules:
 //   - user_clear acknowledges every currently visible fact but leaves ASL loop
 //     leases live; only a later higher-Seq event or heartbeat reasserts activity.
+//   - user_active acknowledges exactly as user_clear does, then applies an
+//     active (⚡) fact under UserActiveSource. The fact ages out like any ⚡ and
+//     is retired by the next real event (RetireUserActive).
 //   - An event whose Seq is not newer than the source's current fact is a no-op
 //     (duplicate or reordered-older), which makes replay order-independent and
 //     duplicate deliveries idempotent.
@@ -55,6 +58,14 @@ func (r *Reducer) Apply(ev protocol.ReducerEvent) protocol.ReducerDecision {
 			Reason:   "user acknowledged visible facts; ASL leases preserved",
 		})
 		return protocol.DecisionAcknowledged
+	}
+	if ev.Action == "user_active" {
+		r.acknowledgeAll(ev.At)
+		r.clearCutoff.record(ev.Source, ev.At, ev.Seq)
+		// The forced ⚡ is an ordinary active fact from here on; only its
+		// source marks it as the operator's so real events can retire it.
+		ev.Source = protocol.UserActiveSource()
+		ev.Action = "active"
 	}
 
 	f := r.facts[ev.Source]

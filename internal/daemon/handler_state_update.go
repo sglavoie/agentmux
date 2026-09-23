@@ -206,7 +206,7 @@ func (h *Handler) applyStateUpdate(req protocol.Request) (protocol.Response, app
 	// either of them does fire a notification of its own, the notify layer's
 	// cancelPendingLocked supersedes the pending entry (see notify.go MaybeNotify).
 	switch req.Action {
-	case "idle", "clear", "user_clear", "stop", "stop_failure":
+	case "idle", "clear", "user_clear", "user_active", "stop", "stop_failure":
 		h.cancelPendingNotification(req.WindowID)
 	}
 
@@ -226,14 +226,14 @@ func (h *Handler) applyStateUpdate(req protocol.Request) (protocol.Response, app
 	// Window-existence GC in SweepStale drops the entry once Kitty closes the
 	// window.
 	if req.Action == "stop" || req.Action == "stop_failure" || req.Action == "failure" ||
-		req.Action == "idle" || req.Action == "clear" || req.Action == "user_clear" {
+		req.Action == "idle" || req.Action == "clear" || isOperatorAction(req.Action) {
 		h.stateMu.Lock()
 		st := h.ensureWindowStateLocked(req.WindowID)
-		if req.Action == "clear" || req.Action == "user_clear" {
+		if req.Action == "clear" || isOperatorAction(req.Action) {
 			st.CopilotToolPermissionState = state.CopilotToolPermissionNone
 		}
 		st.SubagentCount = 0
-		if req.Action != "user_clear" {
+		if !isOperatorAction(req.Action) {
 			st.PendingReset = state.ResetFlowNone
 		}
 		st.NotifiedStale = false

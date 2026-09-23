@@ -263,12 +263,16 @@ func ASLPausedAttentionAction(reason string) string {
 //   - user_clear is a window-level action; it carries an explicit synthetic
 //     source key (its source is ignored by the reducer, but the key keeps traces
 //     attributable).
+//   - user_active is the operator's forced ⚡; it keys its own synthetic source
+//     so the next real event can retire exactly that fact.
 //   - Everything else is the managed harness session, keyed by harness plus
 //     session id, falling back to the origin window.
 func normalizeSource(event, harnessName, action string, payload hookevent.HookPayload, windowID int) protocol.SourceID {
 	switch {
 	case action == "user_clear":
 		return protocol.UserActionSource()
+	case action == "user_active":
+		return protocol.UserActiveSource()
 	case harness.NormalizeKnown(harnessName) == "":
 		// Missing and unsupported producers must not acquire a harness identity
 		// from payload session data or from configuration's default-to-Claude

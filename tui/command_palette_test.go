@@ -88,8 +88,8 @@ func TestCommandPaletteResultsPreserveCatalogAndGroupOrder(t *testing.T) {
 	}
 
 	results = commands.PaletteResults(commandCatalog(), m, ctx, "")
-	if len(results) != 30 {
-		t.Fatalf("clean empty query returned %d visible commands, want 30", len(results))
+	if len(results) != 31 {
+		t.Fatalf("clean empty query returned %d visible commands, want 31", len(results))
 	}
 	for _, result := range results {
 		if result.ID == commands.ClearFilters || result.ID == commands.DismissDeprecation {

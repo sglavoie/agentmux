@@ -98,6 +98,10 @@ func sessionActionRunners() map[commands.ID]sessionactions.Effect[Model] {
 			cmd := m.withActionFeedback(d, m.clearStatusCmd(d.Target.Session))
 			return m, cmd
 		},
+		commands.MarkActiveIcon: func(m Model, d sessionactions.Dispatch) (Model, tea.Cmd) {
+			cmd := m.withActionFeedback(d, m.markActiveCmd(d.Target.Session))
+			return m, cmd
+		},
 		commands.CloseSession: func(m Model, d sessionactions.Dispatch) (Model, tea.Cmd) {
 			cmd := m.closeWithToast(d.Target.Session, d.Request)
 			return m, cmd

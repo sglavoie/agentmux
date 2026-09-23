@@ -73,6 +73,7 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 		{commands.OverrideProfile, commands.GroupSession, "Override Profile", []string{"account", "profile"}, ""},
 		{commands.LaunchAnother, commands.GroupSession, "Launch Another Session", []string{"duplicate", "new"}, ""},
 		{commands.ClearStatusIcon, commands.GroupSession, "Clear Status Icon", []string{"attention", "badge", "icon"}, ""},
+		{commands.MarkActiveIcon, commands.GroupSession, "Mark Session Active", []string{"bolt", "busy", "working"}, ""},
 		{commands.CloseSession, commands.GroupSession, "Close Session", []string{"exit", "kill"}, ""},
 		{commands.OpenDirectoryID, commands.GroupSession, "Open Directory in Shell", []string{"directory", "shell", "terminal"}, ""},
 		{commands.OpenEditorID, commands.GroupSession, "Open in Editor", []string{"directory", "edit"}, ""},
@@ -169,6 +170,7 @@ func TestCommandCatalogDashboardShortcutBindings(t *testing.T) {
 		commands.OverrideProfile:    noDashboardKey,
 		commands.LaunchAnother:      noDashboardKey,
 		commands.ClearStatusIcon:    noDashboardKey,
+		commands.MarkActiveIcon:     noDashboardKey,
 		commands.CloseSession:       noDashboardKey,
 		commands.OpenDirectoryID:    noDashboardKey,
 		commands.OpenEditorID:       noDashboardKey,
@@ -376,7 +378,7 @@ func TestCommandCatalogConditionalVisibility(t *testing.T) {
 			visible++
 		}
 	}
-	if visible != 30 {
-		t.Fatalf("clean catalog has %d visible commands, want 30", visible)
+	if visible != 31 {
+		t.Fatalf("clean catalog has %d visible commands, want 31", visible)
 	}
 }

@@ -85,7 +85,7 @@ func shouldResetCopilotToolPermissionState(req protocol.Request) bool {
 		return true
 	}
 	switch req.Action {
-	case "clear", "user_clear":
+	case "clear", "user_clear", "user_active":
 		return true
 	default:
 		return false

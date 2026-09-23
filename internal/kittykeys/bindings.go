@@ -22,6 +22,7 @@ var Actions = []Action{
 	{Key: "f5", Section: "Sessions", Description: "set tab harness icon (overlay picker)", AmxCommand: "icon-picker", LaunchType: "overlay"},
 	{Key: "f6", Section: "Sessions", Description: "set tab color (overlay picker)", AmxCommand: "color-picker", LaunchType: "overlay"},
 	{Key: "f8", Section: "Sessions", Description: "clear markers and state icons from tab", AmxCommand: "hook-indicator user_clear --window-id @active-kitty-window-id", LaunchType: "background"},
+	{Key: "f11", Section: "Sessions", Description: "mark tab active (⚡ until the next real event)", AmxCommand: "hook-indicator user_active --window-id @active-kitty-window-id", LaunchType: "background"},
 	{Key: "f10", Section: "Sessions", Description: "toggle mute on the focused tab (suppresses notifications)", AmxCommand: "mute-toggle --window-id @active-kitty-window-id", LaunchType: "background"},
 	{Key: "f4", Section: "Sessions", Description: "focus next tab needing attention", AmxCommand: "focus-next --window-id @active-kitty-window-id", LaunchType: "background"},
 	// Scrollback / terminal

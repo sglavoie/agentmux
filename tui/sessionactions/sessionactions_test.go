@@ -46,6 +46,7 @@ func TestDefinitionsInventory(t *testing.T) {
 		{commands.OverrideProfile, MenuGroupLifecycle, Mnemonic{"c", "c"}, "Restart with another profile", "Override Profile", []string{"account", "profile"}},
 		{commands.LaunchAnother, MenuGroupOpen, Mnemonic{"C", "C"}, "Launch another session", "Launch Another Session", []string{"duplicate", "new"}},
 		{commands.ClearStatusIcon, MenuGroupStatus, Mnemonic{"x", "x"}, "Clear status", "Clear Status Icon", []string{"attention", "badge", "icon"}},
+		{commands.MarkActiveIcon, MenuGroupStatus, Mnemonic{"b", "b"}, "Mark active", "Mark Session Active", []string{"bolt", "busy", "working"}},
 		{commands.CloseSession, MenuGroupLifecycle, Mnemonic{"X", "X"}, "Close", "Close Session", []string{"exit", "kill"}},
 		{commands.OpenDirectoryID, MenuGroupOpen, Mnemonic{"o", "o"}, "Open shell", "Open Directory in Shell", []string{"directory", "shell", "terminal"}},
 		{commands.OpenEditorID, MenuGroupOpen, Mnemonic{"O", "O"}, "Open editor", "Open in Editor", []string{"directory", "edit"}},
@@ -136,7 +137,7 @@ func TestMenuDefinitionsAreTheRowActionsInMenuOrder(t *testing.T) {
 	want := []commands.ID{
 		commands.FocusSession, commands.PeekScrollback, commands.LaunchAnother,
 		commands.OpenDirectoryID, commands.OpenEditorID, commands.CopyTitleID,
-		commands.ClearStatusIcon, commands.ToggleLockID, commands.ToggleMuteID,
+		commands.ClearStatusIcon, commands.MarkActiveIcon, commands.ToggleLockID, commands.ToggleMuteID,
 		commands.RestartSession, commands.OverrideProfile, commands.CloseSession,
 	}
 	var got []commands.ID

@@ -124,14 +124,15 @@ var ignoredEvents = map[string]bool{
 
 // validActions is the set of canonical action names accepted from CLI callers.
 // user_clear is included so the TUI can request a true icon wipe (event-driven
-// idle/clear now preserve the current icon). loop_marker is included so direct
+// idle/clear now preserve the current icon). user_active is its counterpart:
+// the operator marks a tab busy (⚡) until the next real hook/ASL event. loop_marker is included so direct
 // `amx hook-indicator loop_marker` calls (and tests that exercise the action
 // surface) resolve to the daemon-only marker action.
 var validActions = map[string]bool{
 	"active": true, "stop": true, "permission": true,
 	"failure": true, "stop_failure": true,
 	"subagent": true, "compact": true, "elicitation": true,
-	"idle": true, "clear": true, "user_clear": true,
+	"idle": true, "clear": true, "user_clear": true, "user_active": true,
 	"loop_marker": true,
 }
 

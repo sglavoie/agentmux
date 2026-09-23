@@ -130,6 +130,17 @@ active-pane route policy rather than writing titles from the indicator:
   busy marker: the next 2-second probe tick restores `⚡` from that positive
   activity evidence. This recovery never creates `🔁`; only a live ASL lease
   owns the loop marker.
+- **F11 (`user_active`)** is the operator saying "this tab is working". It
+  routes exactly like F8 (owner from any pane; an icon-free ownerless tab is a
+  no-op) and acknowledges every visible fact the same way, then shows `⚡` from
+  its own synthetic `probe:user_active` source. That `⚡` lasts until the next
+  real hook or ASL event for the window — which retires it before applying, so
+  a Stop shows `🛑`, a permission `🔑`, and a prompt the harness's own `⚡` —
+  until F8, or until the ordinary ten-minute active staleness. Probe
+  observations do not retire it: the screen idle probe will not settle `🛑`
+  under it, and it keeps any promotion hold an earlier F8 placed, so a stale
+  Claude busy title cannot re-promote `⚡` once the mark ages out. The dashboard
+  and overview offer the same action as "Mark active" (`b`).
 - **Unmanaged producer routing** lets the active unmanaged pane borrow exactly
   one managed target. A direct user prompt is authoritative focus evidence even
   if the cached Kitty snapshot lags; an exact live ASL candidate also authorizes

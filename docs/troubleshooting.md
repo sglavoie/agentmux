@@ -120,6 +120,12 @@
   non-suppressed `user_clear` event. An `owner_mismatch` for `user_clear`
   indicates that the daemon predates this routing behavior — run
   `amx daemon restart` after `just install`.
+- **F11 does nothing**: on macOS the system claims F11 for Show Desktop unless
+  "Use F1, F2, etc. keys as standard function keys" is enabled; press `fn`+`F11`
+  or change that setting, then reload Kitty's config. If the key reaches Kitty,
+  diagnose it exactly like F8 and look for a non-suppressed `user_active` event
+  on the owner window. A `⚡` that vanished early was retired by a real hook
+  event, which is by design.
 - **A loop running in a split pane doesn't drive the tab**: an
   `agent-session-loop` started in an *unmanaged* sibling pane only routes to the
   managed owner when loop discovery finds a live, unfinished candidate whose

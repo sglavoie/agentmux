@@ -290,6 +290,17 @@ func Definitions() []Definition {
 			Availability:       requiresClearableStatus,
 		},
 		{
+			ID:                 commands.MarkActiveIcon,
+			MenuGroup:          MenuGroupStatus,
+			Mnemonic:           Mnemonic{Display: "b", Key: "b"},
+			MenuLabel:          "Mark active",
+			MenuDescription:    "show ⚡ on the tab until its next real event",
+			PaletteTitle:       static("Mark Session Active"),
+			PaletteDescription: "Show the selected tab as working (⚡) until its next real hook event.",
+			PaletteAliases:     []string{"bolt", "busy", "working"},
+			Availability:       requiresSession,
+		},
+		{
 			ID:                 commands.CloseSession,
 			MenuGroup:          MenuGroupLifecycle,
 			Mnemonic:           Mnemonic{Display: "X", Key: "X"},

@@ -77,7 +77,11 @@ include agent-mux.conf
 Reload Kitty. The bundled config keeps the dashboard hotkey and tab-navigation
 bindings, including `F2` for the live session overview,
 `F4` for the next attention tab, `F8` to clear the current tab's markers and
-state icons, and `F7`/`F9` for previous or next managed tabs.
+state icons, `F11` to mark the current tab active (`⚡` until its next real
+hook event, `F8`, or the usual ten-minute staleness), and `F7`/`F9` for
+previous or next managed tabs. On macOS, `F11` reaches Kitty only with
+"Use F1, F2, etc. keys as standard function keys" enabled or as `fn`+`F11`;
+otherwise the system takes it for Show Desktop.
 It also disables Kitty tab bell markers and audible bells for any Kitty
 instance that includes the snippet, so Agent Mux's tab icons remain the
 attention signal. `F1` opens the same binding reference from inside Kitty, and

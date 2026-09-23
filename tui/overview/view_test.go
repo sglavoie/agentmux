@@ -679,7 +679,7 @@ func sameOrder(a, b []session.RunningSession) bool {
 // and none of them may name a command that writes.
 //
 // actionFiles are the running program's ACTING half, and splitting them out is
-// what keeps that claim assertable now that the grid offers the twelve session
+// what keeps that claim assertable now that the grid offers the thirteen session
 // actions. The mutations exist, but they exist in exactly three files, they are
 // all reached through a dispatched action, and the observing half still cannot
 // name one of them — which is a sharper statement than the single lifecycle
@@ -930,7 +930,7 @@ func TestTheActingHalfMutatesOnlyThroughADispatchedAction(t *testing.T) {
 		"github.com/sglavoie/agentmux/tui/launch":         true, // the model-free profile picker
 		"github.com/sglavoie/agentmux/tui/sessionactions": true,
 	}
-	// Every entry is dispatched by one of the twelve menu definitions, plus the
+	// Every entry is dispatched by one of the thirteen menu definitions, plus the
 	// stamping and correlation the controller requires and the two lookups that
 	// resolve a captured row's configured project.
 	allowedCommands := map[string]bool{
@@ -943,6 +943,7 @@ func TestTheActingHalfMutatesOnlyThroughADispatchedAction(t *testing.T) {
 		"commands.CopyTitle":                true,
 		"commands.ToggleLock":               true,
 		"commands.ToggleMute":               true,
+		"commands.MarkActive":               true,
 		"commands.StampRequest":             true,
 		"commands.FindConfigSession":        true,
 		"commands.FindAccountByName":        true,

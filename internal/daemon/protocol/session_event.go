@@ -161,6 +161,7 @@ var actionPriority = map[string]int{
 	"idle":         0,
 	"loop_marker":  0,
 	"active":       1,
+	"user_active":  1,
 	"compact":      1,
 	"subagent":     2,
 	"stop":         2,
@@ -186,6 +187,7 @@ var actionIconState = map[string]string{
 	"idle":         "",
 	"clear":        "",
 	"user_clear":   "",
+	"user_active":  "bolt",
 	"loop_marker":  IconStatePreserve,
 }
 

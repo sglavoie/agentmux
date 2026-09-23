@@ -131,6 +131,7 @@ func TestMenuMnemonicsMatchDashboardKeyConstants(t *testing.T) {
 		commands.OverrideProfile: keyC,
 		commands.LaunchAnother:   keyDashboardLaunch,
 		commands.ClearStatusIcon: keyClearStatus,
+		commands.MarkActiveIcon:  keyMarkActive,
 		commands.CloseSession:    keyClose,
 		commands.OpenDirectoryID: keyO,
 		commands.OpenEditorID:    keyOpenEditor,

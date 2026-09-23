@@ -765,6 +765,8 @@ func actionCommand(cfg *config.Config, client kitty.KittyClient, d sessionaction
 		return launchWithProfileCmd(cfg, client, target, d.Profile)
 	case commands.ClearStatusIcon:
 		return commands.ClearStatus(client, target)
+	case commands.MarkActiveIcon:
+		return commands.MarkActive(client, target)
 	case commands.CloseSession:
 		return commands.Close(client, d.Target.TabID())
 	case commands.OpenDirectoryID:

@@ -19,6 +19,7 @@ const (
 	OverrideProfile    ID = "session.override-profile"
 	LaunchAnother      ID = "session.launch-another"
 	ClearStatusIcon    ID = "session.clear-status"
+	MarkActiveIcon     ID = "session.mark-active"
 	CloseSession       ID = "session.close"
 	OpenDirectoryID    ID = "session.open-directory"
 	OpenEditorID       ID = "session.open-editor"

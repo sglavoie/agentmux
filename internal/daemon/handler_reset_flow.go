@@ -14,8 +14,19 @@ func isResetCleanupAction(action string) bool {
 	}
 }
 
+// isOperatorAction reports whether an action is an explicit operator request
+// (F8 user_clear, F11 user_active) rather than evidence from the harness.
+func isOperatorAction(action string) bool {
+	return action == "user_clear" || action == "user_active"
+}
+
 func shouldClearPendingReset(req protocol.Request, flow state.ResetFlowState) bool {
 	if flow == state.ResetFlowNone || req.ResetFlow {
+		return false
+	}
+	// Marking a tab active is the operator's claim, not harness progress: it
+	// neither advances nor abandons a reset flow in flight.
+	if req.Action == "user_active" {
 		return false
 	}
 	if req.IsPrompt {

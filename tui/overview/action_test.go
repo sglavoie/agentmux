@@ -1,4 +1,4 @@
-// The acting half's tests: the menu, the two overlays it raises, the twelve
+// The acting half's tests: the menu, the two overlays it raises, the thirteen
 // actions behind them, and the undo the grid offers after a close.
 //
 // They are written against the same recorder the lifecycle tests use, for the
@@ -147,8 +147,8 @@ func TestOverviewMenuOffersEveryDefinition(t *testing.T) {
 	m = openMenu(t, m)
 
 	want := sessionactions.MenuDefinitions()
-	if len(want) != 12 {
-		t.Fatalf("the shared vocabulary offers %d menu actions, want the 12 this surface promises", len(want))
+	if len(want) != 13 {
+		t.Fatalf("the shared vocabulary offers %d menu actions, want the 13 this surface promises", len(want))
 	}
 	got := menuActions(m)
 	if len(got) != len(want) {
@@ -467,7 +467,7 @@ type actionCase struct {
 	settled bool
 }
 
-// menuCases is all twelve, in menu order.
+// menuCases is all thirteen, in menu order.
 func menuCases() []actionCase {
 	return []actionCase{
 		{id: commands.FocusSession, key: "enter", state: "bolt", focus: true, settled: true},
@@ -477,6 +477,7 @@ func menuCases() []actionCase {
 		{id: commands.OpenEditorID, key: "O", state: "bolt", settled: true},
 		{id: commands.CopyTitleID, key: "y", state: "bolt"},
 		{id: commands.ClearStatusIcon, key: "x", state: "key"},
+		{id: commands.MarkActiveIcon, key: "b", state: "stop"},
 		{id: commands.ToggleLockID, key: "L", state: "bolt"},
 		{id: commands.ToggleMuteID, key: "m", state: "bolt"},
 		{id: commands.RestartSession, key: "r", state: "bolt", confirm: true},
@@ -485,7 +486,7 @@ func menuCases() []actionCase {
 	}
 }
 
-// TestEveryMenuActionReachesItsEffectInBothModes is the session's "all twelve
+// TestEveryMenuActionReachesItsEffectInBothModes is the session's "all thirteen
 // actions work in normal and compact F2" written as one sweep.
 //
 // Compact is not a cosmetic variant to check for completeness: the mode key is

@@ -621,6 +621,10 @@ func (m Model) clearStatusCmd(s session.RunningSession) tea.Cmd {
 	return commands.ClearStatusWithDaemon(m.actionDaemon(), s)
 }
 
+func (m Model) markActiveCmd(s session.RunningSession) tea.Cmd {
+	return commands.MarkActiveWithDaemon(m.actionDaemon(), s)
+}
+
 // conversationDependencies collects the injected seams every
 // indexed-conversation action needs. A nil handoff or worktree runner tells the
 // registry to use its real workflow.

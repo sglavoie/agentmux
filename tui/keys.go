@@ -5,7 +5,7 @@ package tui
 // A constant here names a keystroke, not a surface. After the dashboard keymap
 // shrank to the entries in dashboardBindings() plus the cursor and
 // structure keys handleListKey owns, most of the session mnemonics below —
-// keyE, keyR, keyC, keyDashboardLaunch, keyClearStatus, keyClose, keyO,
+// keyE, keyR, keyC, keyDashboardLaunch, keyClearStatus, keyMarkActive, keyClose, keyO,
 // keyOpenEditor, keyY, keyLock, keyM — are pressed inside the actions overlay
 // (`a`) rather than at the list. The capability each comment describes is
 // unchanged; only the surface in front of it moved. Where a spelling means
@@ -44,6 +44,7 @@ const (
 	keyC               = "c" // opens ModeConfigPicker for profile override
 	keyDashboardLaunch = "C" // opens ModeConfigPicker for dashboard launch
 	keyClearStatus     = "x" // clears the highlighted session's icon
+	keyMarkActive      = "b" // marks the highlighted session active (⚡)
 	keyOpenEditor      = "O" // opens the project directory in the configured editor
 	keyLock            = "L" // toggle the session lock (blocks close/restart/override)
 	keyM               = "m" // toggle session mute (suppresses notifications)

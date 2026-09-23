@@ -175,8 +175,8 @@ func (h *Handler) handleHookEvent(req protocol.Request) protocol.Response {
 		}
 	}
 
-	if action == "user_clear" {
-		return h.handleUserClearHookEvent(ctx, eventOrAction, action, payload)
+	if isOperatorAction(action) {
+		return h.handleOperatorHookEvent(ctx, eventOrAction, action, payload)
 	}
 
 	if shouldResolveUnmanagedHookRoute(eventOrAction, ctx) {
@@ -333,11 +333,12 @@ func (h *Handler) shouldPreserveLateCopilotSessionStart(
 	return ok && strings.EqualFold(current.Harness, "copilot") && current.SessionID == sessionID
 }
 
-// handleUserClearHookEvent routes a keybinding/TUI user_clear (F8) to the tab's
-// managed title owner. F8 is bound globally in Kitty, so it can be pressed from
-// any pane in a split tab — the managed owner, a managed non-owner, or an
-// unmanaged sibling. The wipe must always land on the daemon-owned title, never
-// be suppressed as an owner mismatch:
+// handleOperatorHookEvent routes a keybinding/TUI operator action — user_clear
+// (F8) or user_active (F11) — to the tab's managed title owner. Both keys are
+// bound globally in Kitty, so they can be pressed from any pane in a split tab —
+// the managed owner, a managed non-owner, or an unmanaged sibling. The action
+// must always land on the daemon-owned title, never be suppressed as an owner
+// mismatch. Described for the wipe; user_active targets identically:
 //
 //   - From the owner, or any sibling pane, the request is retargeted to the
 //     owner and processed through the normal state-update path, so guard
@@ -352,7 +353,7 @@ func (h *Handler) shouldPreserveLateCopilotSessionStart(
 //   - When the Kitty snapshot could not be read at all, title ownership is
 //     unknown; rather than silently dropping the clear, the wipe falls back to
 //     the source pane that fired F8.
-func (h *Handler) handleUserClearHookEvent(ctx hookEventContext, eventOrAction, action string, payload hookevent.HookPayload) protocol.Response {
+func (h *Handler) handleOperatorHookEvent(ctx hookEventContext, eventOrAction, action string, payload hookevent.HookPayload) protocol.Response {
 	targetID := 0
 	profile := ""
 	harnessName := ""
@@ -376,7 +377,8 @@ func (h *Handler) handleUserClearHookEvent(ctx hookEventContext, eventOrAction, 
 		// enqueue it below to converge the live title without waiting for the
 		// maintenance interval.
 		forceVisibleClear = forceVisibleClear || ctx.req.CurrentIconState != ""
-		slog.Debug("user_clear wiping ownerless source pane",
+		slog.Debug("operator action targeting ownerless source pane",
+			"action", action,
 			"window_id", ctx.req.WindowID,
 			"event", eventOrAction,
 		)
@@ -387,14 +389,16 @@ func (h *Handler) handleUserClearHookEvent(ctx hookEventContext, eventOrAction, 
 		targetID = ctx.req.WindowID
 		profile = ctx.req.Account
 		harnessName = ctx.req.Harness
-		slog.Debug("user_clear kitty lookup failed; wiping source pane as fallback",
+		slog.Debug("operator action kitty lookup failed; targeting source pane as fallback",
+			"action", action,
 			"window_id", ctx.req.WindowID,
 			"event", eventOrAction,
 		)
 	default:
 		// No managed owner, recognized live state icon, or recorded source state:
 		// keep F8 a pure no-op that creates no durable renderer state.
-		slog.Debug("user_clear ignored: tab has no clearable state icon",
+		slog.Debug("operator action ignored: tab has no clearable state icon",
+			"action", action,
 			"window_id", ctx.req.WindowID,
 			"event", eventOrAction,
 		)
@@ -425,10 +429,10 @@ func (h *Handler) handleUserClearHookEvent(ctx hookEventContext, eventOrAction, 
 	switch {
 	case ctx.owner != nil:
 		stateReq.RouteDecision = events.RouteDecisionOwner
-		events.ChooseRoute(ctx.req.RouteEvidence, events.RouteDecisionOwner, "user_clear_owner", ctx.owner)
+		events.ChooseRoute(ctx.req.RouteEvidence, events.RouteDecisionOwner, action+"_owner", ctx.owner)
 	case !ctx.lookupFailed:
 		stateReq.RouteDecision = events.RouteDecisionSource
-		events.ChooseRoute(ctx.req.RouteEvidence, events.RouteDecisionSource, "user_clear_source", ctx.win)
+		events.ChooseRoute(ctx.req.RouteEvidence, events.RouteDecisionSource, action+"_source", ctx.win)
 	case ctx.lookupFailed:
 		stateReq.RouteDecision = events.RouteDecisionSourceFallback
 		events.ChooseRoute(ctx.req.RouteEvidence, events.RouteDecisionSourceFallback, "lookup_fallback", ctx.win)

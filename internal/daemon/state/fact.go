@@ -10,7 +10,7 @@ import (
 // projection any caller reasoning about a reducer outcome must use.
 func ActionIcon(action string) string {
 	switch action {
-	case "active":
+	case "active", "user_active":
 		return "bolt"
 	case "compact":
 		return "compact"

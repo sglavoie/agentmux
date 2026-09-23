@@ -68,6 +68,14 @@ func FeedbackFor(action commands.ID, label, profile string) (Feedback, bool) {
 			Unconfirmed: requested,
 			Failed:      fmt.Sprintf("status clear failed for %s", label),
 		}, true
+	case commands.MarkActiveIcon:
+		requested := fmt.Sprintf("requested active mark on %s", label)
+		return Feedback{
+			Pending:     fmt.Sprintf("marking %s active…", label),
+			Succeeded:   requested,
+			Unconfirmed: requested,
+			Failed:      fmt.Sprintf("active mark failed for %s", label),
+		}, true
 	default:
 		return Feedback{}, false
 	}
