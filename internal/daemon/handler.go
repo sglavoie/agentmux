@@ -37,8 +37,11 @@ type Handler struct {
 	// UI preference lives only in this handler; it is never checkpointed.
 	overviewMu      sync.Mutex
 	overviewCompact bool
-	guard           *activity.StateGuard
-	notifier        *notification.Notifier
+	// overviewCompactSet is true once a client has written the preference;
+	// until then the overview's configured opening mode applies.
+	overviewCompactSet bool
+	guard              *activity.StateGuard
+	notifier           *notification.Notifier
 	// decisionJournal receives complete sanitized core decision records after
 	// the in-memory SessionEvent has been finalized. Nil keeps diagnostics
 	// disabled and every write remains fail-open.

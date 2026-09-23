@@ -37,7 +37,9 @@ func (m model) handlePreferences(msg commands.OverviewPreferencesMsg) (tea.Model
 			return m, nil
 		}
 		m.preferenceErr = msg.Err
-		if msg.Err == nil {
+		// Without an operator toggle this daemon lifetime, the configured
+		// opening mode stands.
+		if msg.Err == nil && msg.Explicit {
 			m.compact = msg.Compact
 			m.reconcileCaptures()
 			return m, m.pumpCaptures()

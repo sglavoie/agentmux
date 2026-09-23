@@ -146,6 +146,13 @@ refresh_ms = 500
 min_cols = 100
 min_rows = 30
 
+# Live session overview (`amx overview`, F2). `compact = true` (the default)
+# opens every tile as the compact summary; `false` opens the full live preview
+# grid. Pressing `c` inside the overview still switches modes, and the daemon
+# remembers that choice for later overviews until it restarts.
+[defaults.overview]
+compact = true
+
 # Watchdog: per-state thresholds (in seconds) after which a session showing
 # the corresponding active icon but receiving no new events is flagged as
 # stale. The daemon clears the icon and (optionally) fires a one-shot

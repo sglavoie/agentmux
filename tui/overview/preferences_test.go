@@ -52,7 +52,7 @@ func TestPreferenceWritesCoalesceAndCloseWaitsForLatest(t *testing.T) {
 		return nil // deliver acknowledgements explicitly
 	}
 	m = only(t, m, key(t, "c"))
-	m = only(t, m, commands.OverviewPreferencesMsg{Read: true, Compact: false})
+	m = only(t, m, commands.OverviewPreferencesMsg{Read: true, Explicit: true, Compact: false})
 	if !m.compact {
 		t.Fatal("late startup load undid the toggle")
 	}
@@ -79,7 +79,7 @@ func TestPreferenceWritesCoalesceAndCloseWaitsForLatest(t *testing.T) {
 
 func TestPreferencesRestoreOnOpenAndReportFailure(t *testing.T) {
 	m, _ := newTestModel(0)
-	m = only(t, m, commands.OverviewPreferencesMsg{Read: true, Compact: true})
+	m = only(t, m, commands.OverviewPreferencesMsg{Read: true, Explicit: true, Compact: true})
 	if !m.compact {
 		t.Fatal("reopened overview did not restore compact mode")
 	}

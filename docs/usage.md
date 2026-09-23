@@ -423,8 +423,9 @@ under the same rules and the same confirmations, as `a` on a dashboard row.
 - `c`: toggle compact/normal mode. Compact cards show project plus status and
   elapsed time on line one, harness/profile on line two, and no terminal preview.
   The selected session stays selected. The daemon remembers the choice across
-  closing and reopening F2; restarting the daemon resets it to normal. No config
-  file is changed. If saving is unavailable, the local toggle still works and
+  closing and reopening F2; restarting the daemon resets it to the configured
+  opening mode, `[defaults.overview] compact` (compact unless set to `false`,
+  which opens the full preview grid). The toggle never edits the config file. If saving is unavailable, the local toggle still works and
   the feedback row reports the problem.
 - `←↑↓→` or `h`/`j`/`k`/`l`: move within the page. These are spatial: the end of
   a row is a wall rather than a wrap onto a tile the eye did not expect

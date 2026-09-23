@@ -13,7 +13,10 @@ import (
 type OverviewPreferencesMsg struct {
 	Read    bool
 	Compact bool
-	Err     error
+	// Explicit is true when the daemon's value came from an operator toggle.
+	// A false Explicit means no toggle yet, so the configured mode applies.
+	Explicit bool
+	Err      error
 }
 
 // A nil value reads; a non-nil value sets the preference. Send is bounded and
@@ -35,6 +38,7 @@ func OverviewPreferences(compact *bool) tea.Cmd {
 		msg := OverviewPreferencesMsg{Read: compact == nil, Err: err}
 		if resp.OverviewCompact != nil {
 			msg.Compact = *resp.OverviewCompact
+			msg.Explicit = resp.OverviewCompactExplicit
 		}
 		return msg
 	}

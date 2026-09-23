@@ -275,7 +275,7 @@ func gridBindings() []gridBinding {
 				}
 				return "compact"
 			},
-			help:     "Switch every tile between the compact summary and the full preview. The footer names the mode the key switches TO. The choice is a view preference and is not written to your configuration.",
+			help:     "Switch every tile between the compact summary and the full preview. The footer names the mode the key switches TO. The overview opens in the mode set by [defaults.overview] compact (compact unless set to false); a toggle is remembered until the daemon restarts and is not written to your configuration.",
 			section:  sectionView,
 			priority: footerPriorityPrimary,
 			onFooter: true,

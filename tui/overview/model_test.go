@@ -1548,4 +1548,41 @@ func TestTheOverviewsDefaultsMatchTheConfigurationsOwn(t *testing.T) {
 	if m.interval != defaultRefreshInterval || m.idleThreshold != defaultIdleThreshold {
 		t.Errorf("an unset config produced %v/%v, want %v/%v", m.interval, m.idleThreshold, defaultRefreshInterval, defaultIdleThreshold)
 	}
+	if !m.compact || !cfg.Defaults.Overview.CompactValue() {
+		t.Errorf("an unset config opened compact=%v (loaded %v), want the compact default", m.compact, cfg.Defaults.Overview.CompactValue())
+	}
+}
+
+// TestTheConfiguredModeIsTheOpeningMode pins how [defaults.overview] compact and
+// the daemon's remembered toggle combine: the configuration decides until the
+// operator has pressed `c` during this daemon's lifetime, and a late read still
+// cannot undo a key pressed in this overview.
+func TestTheConfiguredModeIsTheOpeningMode(t *testing.T) {
+	for _, configured := range []bool{true, false} {
+		cfg := viewConfig()
+		cfg.Defaults.Overview.Compact = &configured
+		m := newModel(cfg, nil, 0)
+		if m.compact != configured {
+			t.Fatalf("configured compact=%v opened compact=%v", configured, m.compact)
+		}
+
+		// No toggle yet this daemon lifetime: the daemon's zero value is not a choice.
+		next, _ := m.handlePreferences(commands.OverviewPreferencesMsg{Read: true, Compact: !configured})
+		if got := next.(model).compact; got != configured {
+			t.Errorf("configured compact=%v: a non-explicit read switched to %v", configured, got)
+		}
+
+		// An operator toggle remembered by the daemon wins over the configuration.
+		next, _ = m.handlePreferences(commands.OverviewPreferencesMsg{Read: true, Explicit: true, Compact: !configured})
+		if got := next.(model).compact; got != !configured {
+			t.Errorf("configured compact=%v: an explicit read left compact=%v", configured, got)
+		}
+
+		// A key pressed before the read lands is never undone by it.
+		toggled, _ := m.toggleCompact()
+		next, _ = toggled.(model).handlePreferences(commands.OverviewPreferencesMsg{Read: true, Explicit: true, Compact: configured})
+		if got := next.(model).compact; got != !configured {
+			t.Errorf("configured compact=%v: a late read undid the toggle (compact=%v)", configured, got)
+		}
+	}
 }

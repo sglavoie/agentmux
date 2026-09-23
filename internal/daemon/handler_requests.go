@@ -61,9 +61,10 @@ func (h *Handler) handleOverviewPreferences(req protocol.Request) protocol.Respo
 	defer h.overviewMu.Unlock()
 	if req.OverviewCompact != nil {
 		h.overviewCompact = *req.OverviewCompact
+		h.overviewCompactSet = true
 	}
 	compact := h.overviewCompact
-	return protocol.Response{OK: true, OverviewCompact: &compact}
+	return protocol.Response{OK: true, OverviewCompact: &compact, OverviewCompactExplicit: h.overviewCompactSet}
 }
 
 func (h *Handler) handleHealth() protocol.Response {

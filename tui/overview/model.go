@@ -235,6 +235,7 @@ func newModel(cfg *config.Config, client kitty.KittyClient, sourceWindowID int) 
 	return model{
 		cfg:                   cfg,
 		client:                client,
+		compact:               cfg.Defaults.Overview.CompactValue(),
 		deps:                  defaultDeps(cfg, client),
 		interval:              interval,
 		idleThreshold:         idle,

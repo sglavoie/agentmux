@@ -266,9 +266,13 @@ type ASLResponse struct {
 
 // Response is a JSON message sent by the daemon back to the client.
 type Response struct {
-	OverviewCompact *bool  `json:"overview_compact,omitempty"`
-	OK              bool   `json:"ok"`
-	Error           string `json:"error,omitempty"`
+	OverviewCompact *bool `json:"overview_compact,omitempty"`
+	// OverviewCompactExplicit reports whether OverviewCompact was set by an
+	// operator toggle during this daemon's lifetime. When false the value is the
+	// zero default and the overview keeps its configured opening mode.
+	OverviewCompactExplicit bool   `json:"overview_compact_explicit,omitempty"`
+	OK                      bool   `json:"ok"`
+	Error                   string `json:"error,omitempty"`
 	// Retryable classifies a rejected request without requiring clients to
 	// inspect Error. Delivery is populated for hook and diagnostic-probe ingress.
 	Retryable bool                     `json:"retryable,omitempty"`

@@ -1132,7 +1132,7 @@ func TestBackgroundWorkContinuesWhileAMenuIsOpen(t *testing.T) {
 
 	// The preference read that startup asked for still applies behind the menu,
 	// and it does so without the menu noticing.
-	m = only(t, m, commands.OverviewPreferencesMsg{Read: true, Compact: true})
+	m = only(t, m, commands.OverviewPreferencesMsg{Read: true, Explicit: true, Compact: true})
 	if !m.compact {
 		t.Fatal("the stored view preference was dropped because a menu was open")
 	}

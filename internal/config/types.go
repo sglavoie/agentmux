@@ -60,6 +60,7 @@ type Defaults struct {
 	ConfirmDestructive   bool                 `toml:"confirm_destructive"`    // when true, the close/restart session actions use the modal confirm instead of the toast+undo path, on every surface that offers them
 	Notifications        NotificationConfig   `toml:"notifications"`
 	Preview              PreviewConfig        `toml:"preview"`
+	Overview             OverviewConfig       `toml:"overview"`        // live session overview (F2) opening mode
 	Jump                 JumpConfig           `toml:"jump"`            // deprecated: the bracket chords it configured are retired; accepted, validated, and read by nothing
 	Editor               string               `toml:"editor"`          // overrides $VISUAL/$EDITOR for the "Open editor" session action and the worktrees browser
 	PlansDirectory       string               `toml:"plans_directory"` // root for the Plans browser's index; defaults to ~/.local/share/agent-plans
@@ -261,6 +262,19 @@ type PreviewConfig struct {
 	MinCols   int     `toml:"min_cols"`   // below this, horizontal split is disabled
 	MinRows   int     `toml:"min_rows"`   // below this, vertical split is disabled
 }
+
+// OverviewConfig configures the live session overview (`amx overview`, F2).
+type OverviewConfig struct {
+	// Compact chooses the mode the overview opens in. *bool so an omitted key
+	// (nil) keeps the compact default while `compact = false` opens the full
+	// preview grid. The `c` toggle still wins once pressed: the daemon remembers
+	// it until it restarts.
+	Compact *bool `toml:"compact"`
+}
+
+// CompactValue reports whether the overview opens compact. An omitted key
+// means compact.
+func (o OverviewConfig) CompactValue() bool { return o.Compact == nil || *o.Compact }
 
 // Account defines a launch profile. Accounts remain as a deprecated internal
 // type name because much of the codebase still uses it while the user-facing

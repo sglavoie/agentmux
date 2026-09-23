@@ -23,9 +23,13 @@ import (
 var viewNow = time.Unix(1_700_000_000, 0)
 
 // viewConfig gives the profiles their required colors, which is what a real
-// operator's config supplies and what the tile's title is painted with.
+// operator's config supplies and what the tile's title is painted with. It opens
+// the full preview grid, which is what most of this suite measures; the compact
+// default is covered by TestTheConfiguredModeIsTheOpeningMode.
 func viewConfig() *config.Config {
+	expanded := false
 	return &config.Config{
+		Defaults: config.Defaults{Overview: config.OverviewConfig{Compact: &expanded}},
 		Profiles: []config.Account{
 			{Name: "work", Harness: harness.Claude, Color: "blue"},
 			{Name: "personal", Harness: harness.Codex, Color: "purple"},

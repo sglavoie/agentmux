@@ -62,6 +62,9 @@ type exampleConfig struct {
 			MinCols   int `toml:"min_cols"`
 			MinRows   int `toml:"min_rows"`
 		}
+		Overview struct {
+			Compact *bool `toml:"compact"`
+		}
 		ASL struct {
 			Enabled *bool  `toml:"enabled"`
 			Command string `toml:"command"`
@@ -200,6 +203,16 @@ func TestExampleConfigIncludesPreviewDefaults(t *testing.T) {
 	}
 	if decoded.Defaults.Preview.MinRows != 30 {
 		t.Fatalf("defaults.preview.min_rows = %d, want 30", decoded.Defaults.Preview.MinRows)
+	}
+}
+
+func TestExampleConfigAdvertisesTheCompactOverviewDefault(t *testing.T) {
+	var decoded exampleConfig
+	if _, err := toml.Decode(ExampleConfig, &decoded); err != nil {
+		t.Fatalf("ExampleConfig is not valid TOML: %v", err)
+	}
+	if c := decoded.Defaults.Overview.Compact; c == nil || !*c {
+		t.Fatal("defaults.overview.compact must be advertised as true, the built-in default")
 	}
 }
 

@@ -511,6 +511,8 @@ func acceptanceConfig(t *testing.T) *config.Config {
 	var b strings.Builder
 	b.WriteString("[defaults]\nsort = \"alpha\"\nrefresh_interval = 2\nidle_threshold = 300\nconfirm_destructive = true\n\n")
 	b.WriteString("[defaults.preview]\nrefresh_ms = 400\n\n")
+	// The scenarios start from the full preview grid and toggle compact with `c`.
+	b.WriteString("[defaults.overview]\ncompact = false\n\n")
 	// The two writers the launch path runs beside Kitty. They are off because
 	// this test owns a Kitty and a configuration, not a state directory; see the
 	// XDG isolation in newStage for what happens if a default moves.

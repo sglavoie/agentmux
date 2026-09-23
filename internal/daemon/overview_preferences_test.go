@@ -9,24 +9,27 @@ import (
 
 func TestOverviewPreferenceSurvivesClientsButNotDaemonLifetime(t *testing.T) {
 	sock := startTestServer(t)
-	query := func(socket string, set *bool, want bool) {
+	query := func(socket string, set *bool, want, explicit bool) {
 		t.Helper()
 		// Each call uses a new client, as reopening the F2 program does.
 		resp, err := ipc.NewClientWithSocket(socket).Send(protocol.Request{
 			Type: protocol.TypeOverviewPreferences, OverviewCompact: set,
 		})
-		if err != nil || !resp.OK || resp.OverviewCompact == nil || *resp.OverviewCompact != want {
-			t.Fatalf("preference want=%v response=%+v err=%v", want, resp, err)
+		if err != nil || !resp.OK || resp.OverviewCompact == nil || *resp.OverviewCompact != want ||
+			resp.OverviewCompactExplicit != explicit {
+			t.Fatalf("preference want=%v explicit=%v response=%+v err=%v", want, explicit, resp, err)
 		}
 	}
-	query(sock, nil, false)
+	// Until a client writes it, the value is not a choice: the overview keeps
+	// its configured opening mode.
+	query(sock, nil, false, false)
 	compact := true
-	query(sock, &compact, true)
-	query(sock, nil, true)
+	query(sock, &compact, true, true)
+	query(sock, nil, true, true)
 	// A newly constructed daemon has no persisted preference to restore.
-	query(startTestServer(t), nil, false)
-	query(sock, nil, true)
+	query(startTestServer(t), nil, false, false)
+	query(sock, nil, true, true)
 	compact = false
-	query(sock, &compact, false)
-	query(sock, nil, false)
+	query(sock, &compact, false, true)
+	query(sock, nil, false, true)
 }
