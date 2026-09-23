@@ -351,6 +351,9 @@ func (h *Handler) applyASLSupervisorQuestionEvidenceLocked(
 	if decision != protocol.DecisionApplied {
 		return nil
 	}
+	// A supervisor question is real evidence: it retires the operator's forced
+	// ⚡ so answering it does not fall back to the mark.
+	st.Reducer.RetireUserActive(now.Unix())
 	st.ShadowSeq++
 	effective := st.Reducer.Reduce(now.Unix())
 	h.publishEffectiveLocked(target.WindowID, st, effective)

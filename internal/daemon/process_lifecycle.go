@@ -169,6 +169,9 @@ func (h *Handler) processLifecycleTick(ctx context.Context, observedAt time.Time
 			bypassedHolds = append(bypassedHolds, dropped)
 			bypassedTerminalHold = dropped.class == stopHoldClassTerminal
 		}
+		// The harness is gone, so the operator's forced ⚡ no longer describes
+		// anything running in the pane.
+		st.Reducer.RetireUserActive(observedAt.Unix())
 		st.ShadowSeq++
 		st.Reducer.Compact(observedAt.Unix())
 		after := st.Reducer.Reduce(observedAt.Unix())

@@ -167,9 +167,12 @@ func (h *Handler) reduceStateUpdate(req protocol.Request, outcome applyOutcome, 
 	// hold in place so the stale title cannot re-promote once the forced ⚡
 	// ages out. Every real event retires that forced ⚡ before it applies, so
 	// the event itself (Stop → 🛑, a prompt → the harness's ⚡) decides the
-	// icon. Probe facts apply directly and never reach here, so they cannot.
+	// icon. Probe facts apply directly and never reach here; the screen probe
+	// retires the mark itself, and only once it has seen the pane working since
+	// the press (see probeScreenIdle).
 	switch {
 	case n.Action == "user_active":
+		st.ResetUserActiveArm()
 	case n.Action != "user_clear":
 		st.ClearPromotedBusyBody()
 		if n.Deliverable() {

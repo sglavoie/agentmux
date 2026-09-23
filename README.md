@@ -78,7 +78,8 @@ Reload Kitty. The bundled config keeps the dashboard hotkey and tab-navigation
 bindings, including `F2` for the live session overview,
 `F4` for the next attention tab, `F8` to clear the current tab's markers and
 state icons, `F11` to mark the current tab active (`⚡` until its next real
-hook event, `F8`, or the usual ten-minute staleness), and `F7`/`F9` for
+hook event, the end of a turn observed after the mark, `F8`, or the usual
+ten-minute staleness), and `F7`/`F9` for
 previous or next managed tabs. On macOS, `F11` reaches Kitty only with
 "Use F1, F2, etc. keys as standard function keys" enabled or as `fn`+`F11`;
 otherwise the system takes it for Show Desktop.

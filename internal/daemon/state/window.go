@@ -173,6 +173,12 @@ type WindowState struct {
 	// the unchanged title must not re-promote the emptied icon. Real activity through
 	// reduceStateUpdate releases it together with promotedBusyBody.
 	busyPromotionHeld bool
+	// userActiveSawWork arms the operator's forced ⚡ (user_active) for probe
+	// retirement (unexported, never persisted). The mark holds against the idle
+	// screen it was pressed on; once a screen probe has seen the pane working
+	// since the press, a later stabilized terminal screen is new evidence and
+	// may settle 🛑 over it. Each user_active resets it.
+	userActiveSawWork bool
 }
 
 // CurrentConversation derives this window's current parent conversation from

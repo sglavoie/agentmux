@@ -167,3 +167,15 @@ func (s *WindowState) HoldBusyPromotion() { s.busyPromotionHeld = true }
 // BusyPromotionHeld reports whether an operator clear is holding busy-title
 // promotion.
 func (s *WindowState) BusyPromotionHeld() bool { return s.busyPromotionHeld }
+
+// ArmUserActive records that a screen probe saw the pane working while the
+// operator's forced ⚡ was in place, so a later terminal screen may retire it.
+func (s *WindowState) ArmUserActive() { s.userActiveSawWork = true }
+
+// UserActiveArmed reports whether the pane has been seen working since the
+// operator last forced ⚡.
+func (s *WindowState) UserActiveArmed() bool { return s.userActiveSawWork }
+
+// ResetUserActiveArm disarms probe retirement of the forced ⚡. A fresh
+// user_active and every retirement of the mark call it.
+func (s *WindowState) ResetUserActiveArm() { s.userActiveSawWork = false }

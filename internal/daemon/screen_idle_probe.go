@@ -11,6 +11,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/internal/screenstate"
 )
 
 // The screen idle probe recovers a managed tab whose ⚡ is stuck on a finished
@@ -67,6 +68,11 @@ type screenIdleFields struct {
 	account      string
 	pipeMode     bool
 	muted        bool
+	// marked reports that the operator's forced ⚡ (user_active) owned the
+	// effective icon when the binding was read. The probe still runs under it,
+	// but a terminal screen may only retire the mark once armed (see
+	// probeScreenIdleWindow).
+	marked bool
 }
 
 // probeScreenIdle runs the whole shared probe for one binding: the pre-read
@@ -102,18 +108,20 @@ func (h *Handler) probeScreenIdle(
 		return
 	}
 	st, ok := h.windowStateLocked(targetWindowID)
-	// A ⚡ the operator forced (user_active) is a claim about the pane, not a
-	// stuck hook fact, and it holds until the next real event. Settling a stop
-	// under it would park a 🛑 behind the ⚡ that surfaces the moment it ages out.
-	// A mark landing during the off-lock read bumps ShadowSeq, which the
-	// authoritative-idle freshness check already refuses.
-	if !ok || st.Reducer == nil || st.Effective.Source == protocol.UserActiveSource() {
+	if !ok || st.Reducer == nil {
 		h.clearIdleSampleLocked(activity.Ref{WindowID: targetWindowID, Key: source.Key})
 		h.retractScreenDeclinesLocked(targetWindowID)
 		h.stateMu.Unlock()
 		return
 	}
 	fields := spec.fields(st, binding, titleParts, userVars)
+	// A ⚡ the operator forced (user_active) is a claim about the pane, so the
+	// probe keeps reading it rather than stepping aside: the idle screen the
+	// mark was pressed on must not settle it, but a turn the probe watched
+	// start and finish afterwards is new evidence and must. A mark landing
+	// during the off-lock read bumps ShadowSeq, which the authoritative-idle
+	// freshness check already refuses.
+	fields.marked = st.Effective.Source == protocol.UserActiveSource()
 	h.stateMu.Unlock()
 
 	screen, err := screens.Screen(binding.SourceWindowID)
@@ -147,6 +155,19 @@ func (h *Handler) probeScreenIdleWindow(
 	// gate compares. Splitting these across boolean shims would let the answers
 	// be computed from different readings of the same capture.
 	obs := activity.ClassifyScreenState(spec.harness, screen)
+	if fields.marked {
+		if obs.State == screenstate.Working {
+			// The pane was seen working since the operator forced ⚡: arm the
+			// mark so the terminal screen that ends this turn may retire it.
+			h.armUserActive(targetWindowID)
+		} else if obs.SettleableTerminal() && !h.userActiveRetirableByProbe(targetWindowID) {
+			// Still the idle screen the mark was pressed on, and no native stop
+			// is being withheld for the probe to confirm: the mark holds, and no
+			// stabilization streak builds toward a settle it would refuse.
+			h.ClearIdleSample(targetWindowID, source)
+			return
+		}
+	}
 	if !obs.SettleableTerminal() {
 		// Still working, a queued-input composer, a blocking prompt, a
 		// context-limited screen, or unrelated output: reset the stabilization
@@ -236,6 +257,30 @@ func (h *Handler) probeScreenIdleWindow(
 		// transition decision.
 		h.ClearScreenProbeDecline(targetWindowID, source)
 	}
+}
+
+// armUserActive records that the pane was seen working under the operator's
+// forced ⚡. Safe to call off the state lock.
+func (h *Handler) armUserActive(windowID int) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	if st, ok := h.windowStateLocked(windowID); ok {
+		st.ArmUserActive()
+	}
+}
+
+// userActiveRetirableByProbe reports whether a terminal screen may proceed
+// toward a settle under the operator's forced ⚡: either the pane was seen
+// working since the press, or a native terminal stop is being withheld and the
+// probe's evidence would confirm it. Safe to call off the state lock.
+func (h *Handler) userActiveRetirableByProbe(windowID int) bool {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	if pending, ok := h.pendingStopHolds[windowID]; ok && pending.class == stopHoldClassTerminal {
+		return true
+	}
+	st, ok := h.windowStateLocked(windowID)
+	return ok && st.UserActiveArmed()
 }
 
 // screenTextCacheFor builds a one-shot per-tick screen capture cache over the

@@ -206,8 +206,9 @@ func (r *Reducer) ExpireFact(source protocol.SourceID, seq uint64, at int64) boo
 }
 
 // RetireUserActive acknowledges the operator's forced ⚡ (a user_active fact) so
-// the real event about to be applied decides the tab's icon instead. Probe
-// facts never call it: only a real hook/ASL event outranks the operator's mark.
+// the real evidence about to be applied decides the tab's icon instead: a real
+// hook/ASL event, a supervisor question, a verified harness exit, or a screen
+// probe settle once the pane has been seen working since the mark.
 // Reports whether a live user_active contribution was withdrawn.
 func (r *Reducer) RetireUserActive(at int64) bool {
 	source := protocol.UserActiveSource()
@@ -221,7 +222,7 @@ func (r *Reducer) RetireUserActive(at int64) bool {
 		Seq:      f.seq,
 		Action:   f.action,
 		Decision: protocol.DecisionAcknowledged,
-		Reason:   "real event retired the operator's user_active mark",
+		Reason:   "new evidence retired the operator's user_active mark",
 	})
 	return true
 }

@@ -136,10 +136,17 @@ active-pane route policy rather than writing titles from the indicator:
   its own synthetic `probe:user_active` source. That `⚡` lasts until the next
   real hook or ASL event for the window — which retires it before applying, so
   a Stop shows `🛑`, a permission `🔑`, and a prompt the harness's own `⚡` —
-  until F8, or until the ordinary ten-minute active staleness. Probe
-  observations do not retire it: the screen idle probe will not settle `🛑`
-  under it, and it keeps any promotion hold an earlier F8 placed, so a stale
-  Claude busy title cannot re-promote `⚡` once the mark ages out. The dashboard
+  until F8, or until the ordinary ten-minute active staleness. An ASL
+  supervisor question and a verified harness exit retire it the same way. The
+  screen idle probe keeps reading the pane under it but holds the mark against
+  the idle screen it was pressed on: only once the probe has seen the pane
+  working since the press does a later stabilized terminal screen settle `🛑`
+  over it (recorded as `bolt→stop`), which is what clears the mark on a tab
+  whose harness delivers no hooks. A native Stop withheld under the mark is
+  still confirmed by the probe rather than waiting out the hold. Each F11
+  forgets work observed under the previous one. The mark keeps any promotion
+  hold an earlier F8 placed, so a stale Claude busy title cannot re-promote `⚡`
+  once the mark ages out. The dashboard
   and overview offer the same action as "Mark active" (`b`).
 - **Unmanaged producer routing** lets the active unmanaged pane borrow exactly
   one managed target. A direct user prompt is authoritative focus evidence even

@@ -310,6 +310,12 @@ func (h *Handler) applyAuthoritativeIdle(obs authoritativeIdle) bool {
 	}
 	// The observation settled: this stabilization stretch is spent.
 	h.clearIdleSampleLocked(ref)
+	// A settle that reached here under the operator's forced ⚡ was only let
+	// through once the pane had been seen working since the press, so the stop
+	// is new evidence: retire the mark so the 🛑 wins instead of parking behind
+	// it.
+	st.Reducer.RetireUserActive(at)
+	st.ResetUserActiveArm()
 
 	st.Reducer.Compact(at)
 	effective := st.Reducer.Reduce(at)
