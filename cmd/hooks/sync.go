@@ -22,9 +22,10 @@ func SyncCommand() *cobra.Command { return configHooksSyncCmd }
 func StatusCommand() *cobra.Command { return configHooksStatusCmd }
 
 var configHooksSyncCmd = &cobra.Command{
-	Use:   "hooks-sync [PROFILE]",
-	Short: "Sync Agent Mux hooks for configured harness profiles",
-	Args:  cobra.MaximumNArgs(1),
+	Use:               "hooks-sync [PROFILE]",
+	Short:             "Sync Agent Mux hooks for configured harness profiles",
+	Args:              cobra.MaximumNArgs(1),
+	ValidArgsFunction: cli.CompleteProfileFirstArg,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {

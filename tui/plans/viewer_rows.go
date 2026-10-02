@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/sglavoie/agentmux/internal/searchquery"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -112,14 +113,13 @@ func (r ViewerRow) isMatch(matchLines []int) bool {
 // returns the indices of matching lines. Returns nil when query is empty so
 // n/N have no effect.
 func ViewerMatches(lines []string, query string) []int {
-	q := strings.TrimSpace(query)
-	if q == "" {
+	terms := searchquery.Parse(query)
+	if terms.Empty() {
 		return nil
 	}
-	needle := strings.ToLower(q)
 	var matches []int
 	for i, line := range lines {
-		if strings.Contains(strings.ToLower(line), needle) {
+		if terms.ContainsAny(strings.ToLower(line)) {
 			matches = append(matches, i)
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sglavoie/agentmux/internal/searchquery"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
@@ -227,14 +228,13 @@ func ComputeMatches(msgs []transcript.Message, query string) []int {
 
 // ComputeMatchesForSource limits match navigation while leaving all messages visible.
 func ComputeMatchesForSource(msgs []transcript.Message, query, source string) []int {
-	q := strings.TrimSpace(query)
-	if q == "" {
+	terms := searchquery.Parse(query)
+	if terms.Empty() {
 		return nil
 	}
-	needle := strings.ToLower(q)
 	var matches []int
 	for i, msg := range msgs {
-		if strings.Contains(strings.ToLower(msg.SearchTextForSource(source)), needle) {
+		if terms.ContainsAny(strings.ToLower(msg.SearchTextForSource(source))) {
 			matches = append(matches, i)
 		}
 	}

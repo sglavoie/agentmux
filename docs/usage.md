@@ -21,8 +21,11 @@ amx session continue codex <session-id>
 amx session fork claude <session-id>
 amx session fork-worktree codex <session-id> --yes
 amx session handoff claude:<session-id> --profile codex-work
-
 ```
+
+`continue`, `fork`, and `fork-worktree` also accept the single
+`<harness>:<session-id>` selector that `handoff` takes, so
+`amx session continue codex:<session-id>` works too.
 
 `session continue` focuses the exact live Kitty owner when one exists and
 otherwise resumes the closed conversation. Native forks are used for Claude
@@ -735,7 +738,10 @@ configuration-backed, so every configured alias stays selectable even when it
 is not the stored primary title.
 
 - `/` enters a free-text query; results scan matching source transcripts on
-  demand and show the per-session match count.
+  demand and show the per-session match count. Words are case-insensitive and
+  ANDed: `auth refactor` finds transcripts that mention both, anywhere and in
+  any order, and `"auth refactor"` keeps a phrase together. The Plans search
+  reads queries the same way.
 - `h`, `p`, and `r` open single-value chip pickers for harness, profile,
   and project; `m` picks the message source (`user` or `harness`).
 - `i` copies the selected session ID, and `Y` copies its transcript path.

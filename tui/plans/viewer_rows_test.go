@@ -1,6 +1,7 @@
 package plans
 
 import (
+	"reflect"
 	"testing"
 
 	runewidth "github.com/mattn/go-runewidth"
@@ -90,6 +91,19 @@ func TestPlanViewerRows_SeparatorsUseLogicalSourceLine(t *testing.T) {
 	}
 	if !seenContent {
 		t.Fatal("wrapped rows did not include the content line")
+	}
+}
+
+// TestPlanViewerMatchesStepToAnyQueryWord pins the viewer half of the
+// multi-word contract: the plan matched because it holds every word, and each
+// line showing any one of them is a place n/N should reach.
+func TestPlanViewerMatchesStepToAnyQueryWord(t *testing.T) {
+	lines := []string{"alpha here", "nothing", "then Beta", "alpha beta"}
+	if got := ViewerMatches(lines, "alpha beta"); !reflect.DeepEqual(got, []int{0, 2, 3}) {
+		t.Fatalf("matches = %v, want [0 2 3]", got)
+	}
+	if got := ViewerMatches(lines, `"alpha beta"`); !reflect.DeepEqual(got, []int{3}) {
+		t.Fatalf("phrase matches = %v, want [3]", got)
 	}
 }
 

@@ -176,6 +176,53 @@ func TestSearch_TextFiltersAndCountsMatches(t *testing.T) {
 	}
 }
 
+// TestSearch_MultiWordQueryRequiresEveryWord pins the multi-term contract:
+// words may sit in different messages and any order, every one must appear
+// somewhere in the transcript, and a quoted phrase stays contiguous.
+func TestSearch_MultiWordQueryRequiresEveryWord(t *testing.T) {
+	idx := newTestIndex(t)
+	for _, id := range []string{"both", "one"} {
+		must(t, idx.SetEntryForTest("claude:"+id, SessionMeta{
+			ID: id, Harness: harness.Claude, Path: "/tmp/" + id + ".jsonl",
+			LastAt: time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC),
+		}))
+	}
+	readers := map[string]Reader{harness.Claude: &dispatchReader{
+		harness: harness.Claude,
+		byPath: map[string][]Message{
+			"/tmp/both.jsonl": {
+				{Role: "user", Text: "plan the Refactor"},
+				{Role: "assistant", Text: "auth first, then auth tests"},
+			},
+			"/tmp/one.jsonl": {
+				{Role: "user", Text: "auth only"},
+			},
+		},
+	}}
+
+	results, err := Search(idx, readers, Query{Text: "auth refactor"})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 1 || results[0].Meta.ID != "both" {
+		t.Fatalf("results = %+v, want only the transcript holding both words", results)
+	}
+	if results[0].Matches != 3 {
+		t.Errorf("Matches = %d, want 3 (refactor×1 + auth×2)", results[0].Matches)
+	}
+	if results[0].Preview != "plan the Refactor" {
+		t.Errorf("Preview = %q, want the first matching line", results[0].Preview)
+	}
+
+	phrase, err := Search(idx, readers, Query{Text: `"auth refactor"`})
+	if err != nil {
+		t.Fatalf("Search phrase: %v", err)
+	}
+	if len(phrase) != 0 {
+		t.Fatalf("quoted phrase matched non-contiguous words: %+v", phrase)
+	}
+}
+
 func TestSearch_TextPreviewMapsFoldedUnicodeOffset(t *testing.T) {
 	idx := newTestIndex(t)
 	must(t, idx.SetEntryForTest("claude:hit", SessionMeta{

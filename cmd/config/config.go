@@ -173,10 +173,9 @@ var configPathCmd = &cobra.Command{
 var configValidateCmd = &cobra.Command{
 	Use:   "validate",
 	Short: "Validate config.toml and project directories",
-	// Failures are already printed by ccerrors.Print; letting cobra print them
-	// again, followed by the usage text, buries the one line that matters.
+	// Failures are already printed by ccerrors.Print; cobra printing them a
+	// second time only repeats the line that matters.
 	SilenceErrors: true,
-	SilenceUsage:  true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {

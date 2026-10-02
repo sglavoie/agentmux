@@ -36,6 +36,12 @@ var rootCmd = &cobra.Command{
 	Use:   "amx",
 	Short: "Agent Mux multi-harness session manager for Kitty",
 	Long:  "Agent Mux is a multi-harness session manager for Kitty. It manages Claude Code, Copilot, Codex, and other supported harness sessions as color-coded tabs with an interactive dashboard.",
+	// A failed command reports its error; it does not reprint its own usage.
+	// The usage block is longer than most errors and pushed the one line that
+	// says what went wrong — and how to answer it — off the top of the screen.
+	// `--help` still prints it, and argument and flag errors still name the
+	// problem.
+	SilenceUsage: true,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		cli.ConfigureLogging(cli.DebugEnabled())
 	},

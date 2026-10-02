@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/sglavoie/agentmux/internal/searchquery"
 )
 
 // SortMode selects the ordering applied to search results. Zero value is
@@ -66,7 +68,7 @@ func Search(idx *Index, q Query) ([]Result, error) {
 		return nil, errors.New("plans: Search requires a non-nil index")
 	}
 	metas := idx.List()
-	needle := strings.ToLower(strings.TrimSpace(q.Text))
+	terms := searchquery.Parse(q.Text)
 	results := make([]Result, 0, len(metas))
 	filtered := metas[:0]
 	for _, meta := range metas {
@@ -76,7 +78,7 @@ func Search(idx *Index, q Query) ([]Result, error) {
 	}
 	metas = filtered
 
-	if needle == "" {
+	if terms.Empty() {
 		for _, m := range metas {
 			results = append(results, Result{Meta: m, Preview: m.Snippet})
 		}
@@ -93,7 +95,7 @@ func Search(idx *Index, q Query) ([]Result, error) {
 		// preview preference; when the sidecar exists, it still supplies
 		// the exact match count for ranking.
 		snippetPreview := ""
-		if m.Snippet != "" && strings.Contains(strings.ToLower(m.Snippet), needle) {
+		if m.Snippet != "" && terms.ContainsAll(strings.ToLower(m.Snippet)) {
 			snippetPreview = m.Snippet
 		}
 		key := PlanKey(m.DirPath)
@@ -117,7 +119,7 @@ func Search(idx *Index, q Query) ([]Result, error) {
 				}
 			}
 		}
-		count, preview := countMatchesInSearchText(searchText, needle)
+		count, preview := countMatchesInSearchText(searchText, terms)
 		if count == 0 {
 			if snippetPreview != "" {
 				results = append(results, Result{Meta: m, Matches: 1, Preview: snippetPreview})
@@ -168,30 +170,18 @@ func readPlanSearchText(meta PlanMeta) (string, error) {
 	return builder.String(), readWarning
 }
 
-// countMatchesInSearchText counts case-insensitive occurrences of needle
-// inside the precomputed (already-lowercased) plan corpus. The preview
-// is the single line containing the first match — necessarily
-// lowercased, since the sidecar is the only source available without
-// re-reading every .md file. needle must already be lowercased.
-func countMatchesInSearchText(searchText, needle string) (int, string) {
-	if needle == "" {
+// countMatchesInSearchText counts case-insensitive occurrences of terms
+// inside the precomputed (already-lowercased) plan corpus, and 0 when any term
+// is absent. The preview is the single line containing the first match —
+// necessarily lowercased, since the sidecar is the only source available
+// without re-reading every .md file.
+func countMatchesInSearchText(searchText string, terms searchquery.Terms) (int, string) {
+	if terms.Empty() {
 		return 0, ""
 	}
-	idx := 0
-	first := -1
-	total := 0
-	for {
-		pos := strings.Index(searchText[idx:], needle)
-		if pos < 0 {
-			break
-		}
-		absolute := idx + pos
-		if first < 0 {
-			first = absolute
-		}
-		total++
-		idx = absolute + len(needle)
-	}
+	tally := terms.NewTally()
+	first := tally.Add(searchText)
+	total := tally.Total()
 	if total == 0 {
 		return 0, ""
 	}

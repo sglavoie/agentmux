@@ -209,7 +209,7 @@ func worktreeCommandError(cmd *cobra.Command, jsonOutput bool, result actions.Re
 	var actionErr *actions.Error
 	if errors.As(err, &actionErr) {
 		if !jsonOutput {
-			return actionErr
+			return cli.ActionErrorText(actionErr)
 		}
 		candidates := make([]cli.Candidate, 0, len(actionErr.Candidates))
 		for _, candidate := range actionErr.Candidates {
@@ -310,6 +310,7 @@ func init() {
 	}
 	worktreeReopenCmd.Flags().String("session", "", "live-session candidate identifier")
 	worktreeReopenCmd.Flags().String("profile", "", "replacement profile for a fresh launch")
+	_ = worktreeReopenCmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
 	worktreeReopenCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
 	worktreeRemoveCmd.Flags().Bool("yes", false, "confirm worktree removal")
 	worktreeRemoveCmd.Flags().Bool("delete-branch", false, "also safely delete the merged worktree branch")

@@ -61,8 +61,9 @@ var sessionContinueCmd = newConversationActionCommand("continue", actions.Contin
 var sessionForkCmd = newConversationActionCommand("fork", actions.Fork, "Fork an indexed conversation (portable for Copilot)")
 
 var sessionForkWorktreeCmd = &cobra.Command{
-	Use:   "fork-worktree <harness> <session-id>",
-	Short: "Fork an indexed conversation in a new managed Git worktree",
+	Use:               "fork-worktree <harness> <session-id> | <harness>:<session-id>",
+	ValidArgsFunction: cli.CompleteHarnessFirstArg,
+	Short:             "Fork an indexed conversation in a new managed Git worktree",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		allowDirty, _ := cmd.Flags().GetBool("allow-dirty")
@@ -139,8 +140,9 @@ var sessionHandoffCmd = &cobra.Command{
 
 func newConversationActionCommand(name string, actionID actions.ID, short string) *cobra.Command {
 	return &cobra.Command{
-		Use:   name + " <harness> <session-id>",
-		Short: short,
+		Use:               name + " <harness> <session-id> | <harness>:<session-id>",
+		ValidArgsFunction: cli.CompleteHarnessFirstArg,
+		Short:             short,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jsonOutput, _ := cmd.Flags().GetBool("json")
 			identity, err := conversationIdentityFromArgs(cmd, jsonOutput, name, args)
@@ -163,7 +165,18 @@ func newConversationActionCommand(name string, actionID actions.ID, short string
 	}
 }
 
+// conversationIdentityFromArgs reads the conversation a continuity command
+// acts on, either as two arguments (`claude abc`) or as the single
+// `claude:abc` selector `session handoff` takes, so a selector copied from one
+// command works in the others.
 func conversationIdentityFromArgs(cmd *cobra.Command, jsonOutput bool, name string, args []string) (conversation.Identity, error) {
+	if len(args) == 1 && strings.Contains(args[0], ":") {
+		identity, ok := parseConversationSelector(args[0])
+		if !ok {
+			return conversation.Identity{}, cli.CommandFailure(cmd, jsonOutput, "invalid_selector", errors.New("conversation must be <harness>:<session-id>"))
+		}
+		return identity, nil
+	}
 	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
 		return conversation.Identity{}, cli.MissingParameter(cmd, jsonOutput, "harness", "source harness (claude, codex, or copilot)")
 	}
@@ -237,10 +250,13 @@ func sessionActionCommandError(cmd *cobra.Command, jsonOutput bool, result actio
 		}
 		return partial
 	}
+	var actionErr *actions.Error
 	if !jsonOutput {
+		if errors.As(err, &actionErr) {
+			return cli.ActionErrorText(actionErr)
+		}
 		return err
 	}
-	var actionErr *actions.Error
 	if errors.As(err, &actionErr) {
 		return cli.WriteJSONError(cmd, cli.JSONError{Code: actionErr.Code, Message: actionErr.Message})
 	}

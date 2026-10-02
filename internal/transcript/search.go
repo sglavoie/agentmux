@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"unicode/utf8"
+
+	"github.com/sglavoie/agentmux/internal/searchquery"
 )
 
 // Query describes a search request against the transcript index. Empty
@@ -102,7 +104,7 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 		MainOnly: q.MainOnly,
 	})
 
-	needle := strings.ToLower(strings.TrimSpace(q.Text))
+	terms := searchquery.Parse(q.Text)
 	source := q.MessageSource
 	if source == "" {
 		source = "any"
@@ -113,7 +115,7 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 	results := make([]Result, 0, len(metas))
 	var pending []SessionMeta
 
-	if needle == "" {
+	if terms.Empty() {
 		for _, m := range metas {
 			results = append(results, Result{Meta: m, Preview: m.Snippet})
 		}
@@ -127,7 +129,7 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 		// preference; the result still needs the sidecar or reader scan below so
 		// Matches stays exact.
 		snippetPreview := ""
-		if source == "any" && m.Snippet != "" && strings.Contains(strings.ToLower(m.Snippet), needle) {
+		if source == "any" && m.Snippet != "" && terms.ContainsAll(strings.ToLower(m.Snippet)) {
 			snippetPreview = m.Snippet
 		}
 		// Fast path: per-session sidecars hold lowercased transcript text.
@@ -143,7 +145,7 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 				// The legacy body contains every source. A miss there cannot
 				// become a hit after splitting it, so avoid parsing/upgrading
 				// unrelated transcripts for selective queries.
-				if !strings.Contains(searchText, needle) {
+				if !terms.ContainsAll(searchText) {
 					continue
 				}
 				// Legacy sidecars lack source boundaries; rebuild once.
@@ -151,7 +153,7 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 			}
 		}
 		if err == nil {
-			count, preview := countMatchesInSearchText(searchText, needle)
+			count, preview := countMatchesInSearchText(searchText, terms)
 			if count == 0 {
 				continue
 			}
@@ -175,7 +177,7 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 		if readers == nil {
 			return nil, errors.New("transcript: Search with text requires readers")
 		}
-		if result, ok := searchFallback(idx, readers, m, needle, source); ok {
+		if result, ok := searchFallback(idx, readers, m, terms, source); ok {
 			if snippetPreview != "" {
 				result.Preview = snippetPreview
 			}
@@ -186,7 +188,7 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 		if readers == nil {
 			return nil, errors.New("transcript: Search with text requires readers")
 		}
-		results = append(results, searchFallbacksParallel(idx, readers, pending, needle, source)...)
+		results = append(results, searchFallbacksParallel(idx, readers, pending, terms, source)...)
 	}
 
 	sortResults(results)
@@ -198,7 +200,7 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 // overwhelming the disk or the UI process.
 const sourceFallbackWorkers = 4
 
-func searchFallbacksParallel(idx *Index, readers map[string]Reader, pending []SessionMeta, needle, source string) []Result {
+func searchFallbacksParallel(idx *Index, readers map[string]Reader, pending []SessionMeta, terms searchquery.Terms, source string) []Result {
 	jobs := make(chan SessionMeta)
 	found := make(chan Result, len(pending))
 	var workers sync.WaitGroup
@@ -208,7 +210,7 @@ func searchFallbacksParallel(idx *Index, readers map[string]Reader, pending []Se
 		go func() {
 			defer workers.Done()
 			for meta := range jobs {
-				if result, ok := searchFallback(idx, readers, meta, needle, source); ok {
+				if result, ok := searchFallback(idx, readers, meta, terms, source); ok {
 					found <- result
 				}
 			}
@@ -227,7 +229,7 @@ func searchFallbacksParallel(idx *Index, readers map[string]Reader, pending []Se
 	return results
 }
 
-func searchFallback(idx *Index, readers map[string]Reader, meta SessionMeta, needle, source string) (Result, bool) {
+func searchFallback(idx *Index, readers map[string]Reader, meta SessionMeta, terms searchquery.Terms, source string) (Result, bool) {
 	reader, ok := readers[meta.Harness]
 	if !ok {
 		slog.Debug("transcript.search: no reader for harness", "harness", meta.Harness, "id", meta.ID)
@@ -246,7 +248,7 @@ func searchFallback(idx *Index, readers map[string]Reader, meta SessionMeta, nee
 	if err := idx.WriteSearchText(key, updatedText); err != nil {
 		slog.Debug("transcript.search: sidecar repair failed", "path", idx.SearchTextPath(key), "err", err)
 	}
-	count, preview := countMatchesForSource(msgs, needle, source)
+	count, preview := countMatchesForSource(msgs, terms, source)
 	if count == 0 {
 		return Result{}, false
 	}
@@ -275,18 +277,21 @@ func (idx *Index) readSearchCorpus(key string, meta SessionMeta, source string) 
 	return raw, false, nil
 }
 
-func countMatchesForSource(msgs []Message, needle, source string) (int, string) {
+func countMatchesForSource(msgs []Message, terms searchquery.Terms, source string) (int, string) {
 	if source == "any" {
-		return countMatches(msgs, needle)
+		return countMatches(msgs, terms)
 	}
-	var total int
+	tally := terms.NewTally()
 	var preview string
 	for _, msg := range msgs {
-		count, line := countMatchesInSearchText(strings.ToLower(msg.SearchTextForSource(source)), needle)
-		total += count
-		if preview == "" && count > 0 {
-			preview = line
+		lower := strings.ToLower(msg.SearchTextForSource(source))
+		if first := tally.Add(lower); preview == "" && first >= 0 {
+			preview = firstMatchLine(lower, first)
 		}
+	}
+	total := tally.Total()
+	if total == 0 {
+		return 0, ""
 	}
 	return total, preview
 }
@@ -299,30 +304,18 @@ func messagesSearchText(msgs []Message) string {
 	return buf.String()
 }
 
-// countMatchesInSearchText counts case-insensitive occurrences of needle
-// inside the precomputed (already-lowercased) search text. The preview is
-// the single line of text containing the first match — necessarily
-// lowercased, since the sidecar is the only source available
-// without re-reading the file. needle must already be lower-cased.
-func countMatchesInSearchText(searchText, needle string) (int, string) {
-	if needle == "" {
+// countMatchesInSearchText counts case-insensitive occurrences of terms
+// inside the precomputed (already-lowercased) search text, and 0 when any term
+// is absent. The preview is the single line of text containing the first
+// match — necessarily lowercased, since the sidecar is the only source
+// available without re-reading the file.
+func countMatchesInSearchText(searchText string, terms searchquery.Terms) (int, string) {
+	if terms.Empty() {
 		return 0, ""
 	}
-	idx := 0
-	first := -1
-	total := 0
-	for {
-		pos := strings.Index(searchText[idx:], needle)
-		if pos < 0 {
-			break
-		}
-		absolute := idx + pos
-		if first < 0 {
-			first = absolute
-		}
-		total++
-		idx = absolute + len(needle)
-	}
+	tally := terms.NewTally()
+	first := tally.Add(searchText)
+	total := tally.Total()
 	if total == 0 {
 		return 0, ""
 	}
@@ -330,26 +323,21 @@ func countMatchesInSearchText(searchText, needle string) (int, string) {
 }
 
 // countMatches walks msgs in order, counting case-insensitive occurrences
-// of needle (which is already lower-cased) across each message's Text.
-// The first line that contains a match is captured as the preview, kept
-// stable so callers see deterministic output for a given input.
-func countMatches(msgs []Message, needle string) (int, string) {
-	total := 0
+// of terms across each message's Text, and returns 0 when any term is absent
+// from the transcript as a whole. The first line that contains a match is
+// captured as the preview, kept stable so callers see deterministic output for
+// a given input.
+func countMatches(msgs []Message, terms searchquery.Terms) (int, string) {
+	tally := terms.NewTally()
 	var preview string
 	for _, msg := range msgs {
-		lower := strings.ToLower(msg.Text)
-		idx := 0
-		for {
-			pos := strings.Index(lower[idx:], needle)
-			if pos < 0 {
-				break
-			}
-			total++
-			if preview == "" {
-				preview = firstMatchLine(msg.Text, originalOffsetForFoldedByte(msg.Text, idx+pos))
-			}
-			idx += pos + len(needle)
+		if first := tally.Add(strings.ToLower(msg.Text)); preview == "" && first >= 0 {
+			preview = firstMatchLine(msg.Text, originalOffsetForFoldedByte(msg.Text, first))
 		}
+	}
+	total := tally.Total()
+	if total == 0 {
+		return 0, ""
 	}
 	return total, preview
 }

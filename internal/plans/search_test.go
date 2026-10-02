@@ -47,6 +47,26 @@ func seedTwoPlans(t *testing.T) (*Index, string, string) {
 	return idx, planA, planB
 }
 
+func TestSearch_MultiWordQueryRequiresEveryWord(t *testing.T) {
+	idx, planA, _ := seedTwoPlans(t)
+
+	results, err := Search(idx, Query{Text: "bar foo"})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 1 || results[0].Meta.DirPath != planA {
+		t.Fatalf("results = %+v, want only the alpha plan (holds both words)", results)
+	}
+
+	mixed, err := Search(idx, Query{Text: "foo widgets"})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(mixed) != 0 {
+		t.Fatalf("words split across two plans matched: %+v", mixed)
+	}
+}
+
 func TestSearch_EmptyQueryReturnsAllByModTimeDesc(t *testing.T) {
 	idx, planA, planB := seedTwoPlans(t)
 

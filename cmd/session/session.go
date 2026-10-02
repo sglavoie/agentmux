@@ -15,7 +15,11 @@
 // files.
 package session
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/spf13/cobra"
+
+	"github.com/sglavoie/agentmux/internal/cli"
+)
 
 // Command returns the `session` command tree so the root command can register
 // it. Root assembly is the only consumer, as it is for the tab-control
@@ -35,6 +39,7 @@ func init() {
 	sessionForkWorktreeCmd.Flags().Bool("yes", false, "confirm creating the isolated fork")
 	sessionForkWorktreeCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
 	sessionHandoffCmd.Flags().String("profile", "", "target configured profile")
+	_ = sessionHandoffCmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
 	sessionHandoffCmd.Flags().Bool("edit", false, "edit the generated handoff before launch")
 	sessionHandoffCmd.Flags().Bool("no-launch", false, "finalize the handoff without launching a target")
 	sessionHandoffCmd.Flags().Bool("json", false, "emit schema-v1 JSON")

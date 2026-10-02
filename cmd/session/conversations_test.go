@@ -275,3 +275,22 @@ func TestSessionContinueCLIUsesExactNativeInvocation(t *testing.T) {
 		t.Fatalf("text output = %q", got)
 	}
 }
+
+func TestConversationIdentityAcceptsBothSelectorShapes(t *testing.T) {
+	for _, args := range [][]string{
+		{"codex", "session-1"},
+		{"codex:session-1"},
+		{" Codex:session-1"},
+	} {
+		identity, err := conversationIdentityFromArgs(sessionContinueCmd, false, "continue", args)
+		if err != nil {
+			t.Fatalf("args %q: %v", args, err)
+		}
+		if identity.Harness != harness.Codex || identity.SessionID != "session-1" {
+			t.Fatalf("args %q: identity = %+v", args, identity)
+		}
+	}
+	if _, err := conversationIdentityFromArgs(sessionContinueCmd, false, "continue", []string{"codex:"}); err == nil {
+		t.Fatal("an empty session ID after the colon must be refused")
+	}
+}
