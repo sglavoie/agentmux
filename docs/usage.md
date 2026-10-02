@@ -767,7 +767,8 @@ amx transcripts rebuild --all
 ```
 
 `status` is read-only and reports metadata, sidecar, missing-sidecar, and
-orphan-sidecar usage. `compact` takes the transcript cache lock, migrates any
+orphan-sidecar usage. All three accept `--json`, which emits the same keys in
+the schema-v1 envelope (`compact` adds `before` and `after` store snapshots). `compact` takes the transcript cache lock, migrates any
 legacy inline search text, persists metadata, and then removes only regular
 hash-named sidecars that are no longer referenced by a cache key. It preserves
 referenced sidecars, transcript source files, temporary files, symlinks,

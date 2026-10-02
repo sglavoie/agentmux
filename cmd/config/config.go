@@ -177,10 +177,17 @@ var configValidateCmd = &cobra.Command{
 	// second time only repeats the line that matters.
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		jsonOutput, _ := cmd.Flags().GetBool("json")
 		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {
+			if jsonOutput {
+				return cli.CommandFailure(cmd, true, "config_invalid", err)
+			}
 			ccerrors.Print(err)
 			return err
+		}
+		if jsonOutput {
+			return writeConfigValidateJSON(cmd, cfg)
 		}
 		// Warnings come first so they are still seen when a project directory
 		// check fails below.
@@ -204,7 +211,54 @@ var configValidateCmd = &cobra.Command{
 	},
 }
 
+// configValidateData is the `config validate --json` payload. A config that
+// loads but names missing project directories is a finding, not a malformed
+// request, so it is reported here with Valid false and a nonzero quiet exit;
+// only a config that cannot be loaded at all uses the error envelope.
+type configValidateData struct {
+	Valid                     bool                   `json:"valid"`
+	Path                      string                 `json:"path"`
+	UnknownKeys               []string               `json:"unknown_keys"`
+	Deprecations              []configDeprecationRow `json:"deprecations"`
+	InvalidProjectDirectories []string               `json:"invalid_project_directories"`
+}
+
+type configDeprecationRow struct {
+	Key         string `json:"key"`
+	Location    string `json:"location"`
+	Replacement string `json:"replacement"`
+}
+
+func writeConfigValidateJSON(cmd *cobra.Command, cfg *config.Config) error {
+	data := configValidateData{
+		Path:                      config.DefaultConfigPath(),
+		UnknownKeys:               append([]string{}, cfg.UnknownKeys...),
+		Deprecations:              []configDeprecationRow{},
+		InvalidProjectDirectories: append([]string{}, projectDirectoryProblems(cfg.Projects)...),
+	}
+	for _, d := range cfg.Deprecations {
+		data.Deprecations = append(data.Deprecations, configDeprecationRow{Key: d.Key, Location: d.Location, Replacement: d.Replacement})
+	}
+	data.Valid = len(data.InvalidProjectDirectories) == 0
+	if err := cli.WriteJSON(cmd, data); err != nil {
+		return err
+	}
+	if !data.Valid {
+		return &cli.ExitError{Code: 1, Err: errors.New("invalid project directories"), Quiet: true}
+	}
+	return nil
+}
+
 func validateProjectDirectories(projects []config.Session) error {
+	if problems := projectDirectoryProblems(projects); len(problems) > 0 {
+		return fmt.Errorf("invalid project directories:\n%s", strings.Join(problems, "\n"))
+	}
+	return nil
+}
+
+// projectDirectoryProblems lists, in config order, every project whose
+// directory is missing, uninspectable, or not a directory.
+func projectDirectoryProblems(projects []config.Session) []string {
 	var errs []string
 	for _, project := range projects {
 		configuredPath := project.Directory
@@ -234,13 +288,11 @@ func validateProjectDirectories(projects []config.Session) error {
 			))
 		}
 	}
-	if len(errs) > 0 {
-		return fmt.Errorf("invalid project directories:\n%s", strings.Join(errs, "\n"))
-	}
-	return nil
+	return errs
 }
 
 func init() {
+	configValidateCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
 	configCmd.AddCommand(
 		configInitCmd,
 		configEditCmd,

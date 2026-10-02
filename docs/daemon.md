@@ -11,6 +11,10 @@ amx daemon export-events
 amx doctor
 ```
 
+`amx daemon status --json` emits the same readiness, build, notification, and
+ASL facts in the schema-v1 envelope, plus `asl_reconcile` when the daemon
+reports it. A stopped daemon is a successful answer with `"alive": false`.
+
 For delivery and state problems, the first-line workflow is offline-first:
 
 ```bash

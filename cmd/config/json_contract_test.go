@@ -1,19 +1,21 @@
 package config
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/spf13/cobra"
 )
 
-// `config asl-sync` is the first config leaf to declare --json, so the family
-// gets its own audit entry rather than joining one of the others: it emits the
-// shared schema-v1 envelope, and its failures use the common structured error
-// envelope with codes that are themselves a consumer contract.
+// Config leaves that share the retained command envelope. `asl-sync` has its
+// own audit in asl_sync_json_test.go; this one covers the rest of the family.
 func TestConfigJSONCommandSurfaceIsVersioned(t *testing.T) {
-	commands := []*cobra.Command{configASLSyncCmd}
-	for _, command := range commands {
+	for _, command := range []*cobra.Command{configValidateCmd} {
 		if command.Flags().Lookup("json") == nil {
 			t.Errorf("%s does not declare --json", command.CommandPath())
 		}
@@ -21,23 +23,64 @@ func TestConfigJSONCommandSurfaceIsVersioned(t *testing.T) {
 	if cli.JSONSchemaVersion != 1 {
 		t.Fatalf("unexpected JSON schema version %d", cli.JSONSchemaVersion)
 	}
-	// Each code names a distinct condition with a distinct remediation. Adding
-	// one is additive; changing or removing one breaks a script that branches
-	// on it.
-	codes := []string{
-		codeASLNotFound, codeASLProbeFailed, codeASLContractMismatch,
-		codeASLStateRoot, codeASLActiveRuns, codeASLMigrationFailed,
-		codeASLConfigAmbiguous, codeASLConfigWrite, codeASLDaemonRestart,
-		codeASLVerifyFailed,
+}
+
+func runConfigValidateJSON(t *testing.T, body string) (configValidateData, error) {
+	t.Helper()
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	path := filepath.Join(tempHome, "config.toml")
+	if err := os.WriteFile(path, []byte(body+validConfigBody(tempHome)), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	seen := make(map[string]bool, len(codes))
-	for _, code := range codes {
-		if code == "" {
-			t.Error("an empty structured error code is not a contract")
-		}
-		if seen[code] {
-			t.Errorf("duplicate error code %q", code)
-		}
-		seen[code] = true
+	t.Setenv("amx_CONFIG", path)
+	if err := configValidateCmd.Flags().Set("json", "true"); err != nil {
+		t.Fatal(err)
+	}
+	oldOut := configValidateCmd.OutOrStdout()
+	t.Cleanup(func() {
+		_ = configValidateCmd.Flags().Set("json", "false")
+		configValidateCmd.SetOut(oldOut)
+	})
+	var out bytes.Buffer
+	configValidateCmd.SetOut(&out)
+	runErr := configValidateCmd.RunE(configValidateCmd, nil)
+	var payload struct {
+		SchemaVersion int                `json:"schema_version"`
+		Data          configValidateData `json:"data"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
+		t.Fatalf("JSON = %v\n%s", err, out.String())
+	}
+	if payload.Data.Path != path {
+		t.Fatalf("path = %q, want %q", payload.Data.Path, path)
+	}
+	return payload.Data, runErr
+}
+
+func TestConfigValidateJSONReportsWarningsOnAValidConfig(t *testing.T) {
+	data, err := runConfigValidateJSON(t, "[defaults]\nrefresh_intervall = 3\nclaude_flags = []\n")
+	if err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+	if !data.Valid || len(data.UnknownKeys) != 1 || data.UnknownKeys[0] != "defaults.refresh_intervall" {
+		t.Fatalf("data = %+v", data)
+	}
+	if len(data.Deprecations) != 1 || data.Deprecations[0].Key != "defaults.claude_flags" {
+		t.Fatalf("deprecations = %+v", data.Deprecations)
+	}
+	if data.InvalidProjectDirectories == nil || len(data.InvalidProjectDirectories) != 0 {
+		t.Fatalf("invalid_project_directories = %#v, want an empty array", data.InvalidProjectDirectories)
+	}
+}
+
+func TestConfigValidateJSONMissingDirectoryIsAFindingWithQuietExit(t *testing.T) {
+	data, err := runConfigValidateJSON(t, "[[projects]]\ntitle = \"gone\"\ndirectory = \"~/gone\"\nprofile = \"work\"\n")
+	var exitErr *cli.ExitError
+	if !errors.As(err, &exitErr) || !exitErr.Quiet || exitErr.Code == 0 {
+		t.Fatalf("err = %v, want a quiet nonzero exit", err)
+	}
+	if data.Valid || len(data.InvalidProjectDirectories) != 1 {
+		t.Fatalf("data = %+v", data)
 	}
 }
