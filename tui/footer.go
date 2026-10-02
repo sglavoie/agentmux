@@ -25,7 +25,7 @@ func renderFooter(m Model) string {
 	switch m.mode {
 	case ModeSearch:
 		lines = nonEmptyFooterLines(
-			footerLine(m.width, " · ", "filter: @profile", "!state (!attention)", "word", "\\@/\\! literal"),
+			footerLine(m.width, " · ", "filter: @profile", "#project", "%harness", "!state (!attention)", "word", "\\@ \\# \\% \\! literal"),
 			footerStyledLine(m.width, "  ", renderFooterBinding("enter", "apply"), renderFooterBinding("esc", "cancel")),
 		)
 	case ModeConfirm:
@@ -39,9 +39,10 @@ func renderFooter(m Model) string {
 			footerStyledLine(m.width, "  ",
 				renderFooterBinding("space", "toggle"), renderFooterBinding("enter", "launch"),
 				renderFooterBinding("f", "profile"), renderFooterBinding("P", "pin"),
-				renderFooterBinding("s", "sessions"), renderFooterBinding("C", "profile"),
+				renderFooterBinding("s", "sessions"), renderFooterBinding("C", "override"),
 				renderFooterBinding("o", "open dirs"), renderFooterBinding("O", "open in editor"),
 				renderFooterBinding("p", "preview"), renderFooterBinding("esc", "clear/exit"),
+				renderFooterBinding("?", "help"),
 			),
 			footerStyledLine(m.width, "  ", styleFooter.Render("DSL: @profile, word"), renderFooterBinding("j/k", "up/down"), renderFooterBinding("g/G", "top/bottom")),
 		)

@@ -712,8 +712,10 @@ func launcherOwnsPreview(m Model) bool { return m.activeRootMode() == ModePicker
 // activePreviewEnabled reports whether the preview pane is enabled for the
 // currently active mode. ModePicker has its own independent flag so that
 // toggling preview inside the picker does not disturb the list's preview state.
+// It asks through launcherOwnsPreview so a detour raised over the launcher —
+// help, the profile-override picker — keeps the launcher's preview.
 func (m Model) activePreviewEnabled() bool {
-	if m.mode == ModePicker {
+	if launcherOwnsPreview(m) {
 		return m.pickerPreviewEnabled
 	}
 	return m.inspectorActive()
@@ -724,7 +726,7 @@ func (m Model) activePreviewEnabled() bool {
 // picker cursor (matching the highlighted config session to a running one);
 // every other mode uses the dashboard cursor.
 func (m Model) currentPreviewWindowID() int {
-	if m.mode == ModePicker {
+	if launcherOwnsPreview(m) {
 		return m.pickerCurrentWindowID()
 	}
 	if s, ok := m.selectedSession(); ok {

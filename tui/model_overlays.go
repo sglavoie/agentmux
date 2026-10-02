@@ -457,14 +457,12 @@ func (m *Model) exitDeleteChoice() {
 // handleDeleteChoiceKey is the keypress dispatcher for ModeDeleteChoice.
 // Three branches: `i` hides the entry from the index (file untouched),
 // `f` removes the entry and the on-disk transcript, `esc` cancels.
-// `ctrl+c`/`q` always quit (mirrors handleConfirmKey).
+// `q` cancels like `esc`, and only `ctrl+c` quits (mirrors handleConfirmKey).
 func (m Model) handleDeleteChoiceKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case keyCtrlC:
 		return m, tea.Quit
-	case keyQ:
-		return m, tea.Quit
-	case keyEsc:
+	case keyEsc, keyQ:
 		m.exitDeleteChoice()
 		return m, nil
 	case "i":

@@ -179,7 +179,7 @@ func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		case asl.ConfirmAbort:
 			return m.submitASLControl(aslbridge.MethodRunAbort)
 		}
-	case keyN, keyEsc:
+	case keyN, keyEsc, keyQ:
 		if m.sessionActionAwaitingConfirm() {
 			next, cmd, cancelled := m.cancelSessionAction()
 			if cancelled {
@@ -194,7 +194,7 @@ func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.mode = ModeList
 		}
 		m.confirmReturnMode = ModeList
-	case keyCtrlC, keyQ:
+	case keyCtrlC:
 		return m, tea.Quit
 	}
 	return m, nil

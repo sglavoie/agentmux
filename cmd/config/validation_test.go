@@ -46,6 +46,42 @@ profile = "work"
 	}
 }
 
+// TestConfigValidateCommandWarnsAboutUnknownAndDeprecatedKeys pins that a
+// misspelled or legacy key is named without failing validation: the config
+// still loads, but the setting the operator meant is not the one in effect.
+func TestConfigValidateCommandWarnsAboutUnknownAndDeprecatedKeys(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	path := filepath.Join(tempHome, "config.toml")
+	body := "[defaults]\nrefresh_intervall = 3\nclaude_flags = []\n" + validConfigBody(tempHome)
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("amx_CONFIG", path)
+
+	oldOut := configValidateCmd.OutOrStdout()
+	t.Cleanup(func() {
+		configValidateCmd.SetOut(oldOut)
+	})
+
+	var out bytes.Buffer
+	configValidateCmd.SetOut(&out)
+
+	if err := configValidateCmd.RunE(configValidateCmd, nil); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+	for _, want := range []string{
+		"warning: unknown key defaults.refresh_intervall",
+		"warning: deprecated defaults.claude_flags in [defaults]; use defaults.args",
+		"config is valid\n",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("output missing %q:\n%s", want, out.String())
+		}
+	}
+}
+
 func TestConfigValidateCommandListsAllInvalidProjectDirectories(t *testing.T) {
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)

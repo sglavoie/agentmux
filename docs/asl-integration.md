@@ -112,7 +112,7 @@ either. State with no projection Agent Mux can read is classified
   run's `🔁` or duplicate its work;
 - no new runs are picked up from disk until the loop restarts under a version
   that publishes the projection;
-- `amx daemon health --json` reports the reason under `asl_reconcile`
+- `amx doctor --json` reports the reason under `daemon.asl_reconcile`
   (`missing_projections`, `unsupported_contracts`, `invalid_projections`).
 
 Live hook events are unaffected throughout, so a run started after both halves

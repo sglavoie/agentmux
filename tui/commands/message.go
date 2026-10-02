@@ -178,8 +178,12 @@ func StampRequest(cmd tea.Cmd, request uint64) tea.Cmd {
 	}
 }
 
-// CopyDoneMsg is sent when a viewer copy action completes.
-type CopyDoneMsg struct{ Err error }
+// CopyDoneMsg is sent when a viewer copy action completes. Text is what was
+// handed to the clipboard, so a success can say what landed there.
+type CopyDoneMsg struct {
+	Err  error
+	Text string
+}
 
 // ResortDoneMsg is sent when a session.Resort call completes.
 type ResortDoneMsg struct{ Err error }

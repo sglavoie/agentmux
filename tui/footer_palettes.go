@@ -29,14 +29,17 @@ const (
 )
 
 // Priority bands shared by the mode palettes. 0 is reserved for entries that
-// must survive any width (esc, enter, `?`); navigation hints go last because
-// they are the most guessable.
+// must survive any width (esc, enter); navigation hints go late because they
+// are the most guessable. `? help` goes first of all, and that is what keeps it
+// reachable rather than what hides it: the first drop appends footerHintMore,
+// which names the same key, so exactly one `?` hint is on screen at any width.
 const (
 	footerPriorityEssential = 0
 	footerPriorityPrimary   = 1
 	footerPrioritySecondary = 2
 	footerPriorityExtra     = 3
 	footerPriorityNav       = 4
+	footerPriorityHelp      = 5
 )
 
 func footerAlways(Model) bool { return true }
@@ -83,6 +86,7 @@ var sessionSearchFooterPalette = []footerEntry{
 	{"Y", "path", footerSectionRow, func(m Model) bool {
 		return selectedSessionSearchPath(m) != ""
 	}, footerPriorityExtra},
+	{"?", "help", footerSectionApp, footerAlways, footerPriorityHelp},
 	{"esc", "back", footerSectionApp, footerAlways, footerPriorityEssential},
 	{"j/k", "up/down", footerSectionApp, footerAlways, footerPriorityNav},
 	{"ctrl+d/u", "half", footerSectionApp, footerAlways, footerPriorityNav},
@@ -108,6 +112,7 @@ var sessionViewFooterPalette = []footerEntry{
 	{"Y", "path", footerSectionRow, func(m Model) bool {
 		return currentSessionViewPath(m) != ""
 	}, footerPriorityExtra},
+	{"?", "help", footerSectionApp, footerAlways, footerPriorityHelp},
 	{"esc", "back", footerSectionApp, footerAlways, footerPriorityEssential},
 	{"ctrl+d/u", "half", footerSectionApp, footerAlways, footerPriorityNav},
 	{"ctrl+f/b", "page", footerSectionApp, footerAlways, footerPriorityNav},
@@ -123,6 +128,7 @@ var planSearchFooterPalette = []footerEntry{
 	{"Y", "path", footerSectionRow, func(m Model) bool {
 		return selectedPlanSearchPath(m) != ""
 	}, footerPriorityExtra},
+	{"?", "help", footerSectionApp, footerAlways, footerPriorityHelp},
 	{"esc", "back", footerSectionApp, footerAlways, footerPriorityEssential},
 	{"j/k", "up/down", footerSectionApp, footerAlways, footerPriorityNav},
 	{"g/G", "top/bot", footerSectionApp, footerAlways, footerPriorityNav},
@@ -144,6 +150,7 @@ var planViewFooterPalette = []footerEntry{
 	{"e", "editor", footerSectionRow, func(m Model) bool {
 		return m.viewerPlan != nil
 	}, footerPriorityPrimary},
+	{"?", "help", footerSectionApp, footerAlways, footerPriorityHelp},
 	{"esc", "back", footerSectionApp, footerAlways, footerPriorityEssential},
 	{"j/k", "scroll", footerSectionApp, footerAlways, footerPriorityNav},
 	{"g/G", "top/bot", footerSectionApp, footerAlways, footerPriorityNav},
@@ -161,7 +168,7 @@ var worktreesFooterPalette = []footerEntry{
 	{"F", "forget", footerSectionRow, hasWorktreeResult, footerPrioritySecondary},
 	{"Y", "path", footerSectionRow, func(m Model) bool { return selectedWorktreePath(m) != "" }, footerPrioritySecondary},
 	{"r", "refresh", footerSectionApp, footerAlways, footerPrioritySecondary},
-	{"?", "help", footerSectionApp, footerAlways, footerPriorityEssential},
+	{"?", "help", footerSectionApp, footerAlways, footerPriorityHelp},
 	{"esc", "back", footerSectionApp, footerAlways, footerPriorityEssential},
 	{"j/k", "up/down", footerSectionApp, footerAlways, footerPriorityNav},
 	{"ctrl+d/u", "half", footerSectionApp, footerAlways, footerPriorityNav},
@@ -179,7 +186,7 @@ var aslRunsFooterPalette = []footerEntry{
 		row, ok := m.selectedASLRow()
 		return ok && row.WorkspaceRoot != ""
 	}, footerPrioritySecondary},
-	{"?", "help", footerSectionApp, footerAlways, footerPriorityEssential},
+	{"?", "help", footerSectionApp, footerAlways, footerPriorityHelp},
 	{"esc", "back", footerSectionApp, footerAlways, footerPriorityEssential},
 	{"j/k", "up/down", footerSectionApp, footerAlways, footerPriorityNav},
 	{"ctrl+d/u", "half", footerSectionApp, footerAlways, footerPriorityNav},

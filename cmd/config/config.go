@@ -173,17 +173,34 @@ var configPathCmd = &cobra.Command{
 var configValidateCmd = &cobra.Command{
 	Use:   "validate",
 	Short: "Validate config.toml and project directories",
+	// Failures are already printed by ccerrors.Print; letting cobra print them
+	// again, followed by the usage text, buries the one line that matters.
+	SilenceErrors: true,
+	SilenceUsage:  true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {
 			ccerrors.Print(err)
 			return err
 		}
+		// Warnings come first so they are still seen when a project directory
+		// check fails below.
+		out := cmd.OutOrStdout()
+		for _, key := range cfg.UnknownKeys {
+			if _, err := fmt.Fprintf(out, "warning: unknown key %s (ignored; check its spelling and section)\n", key); err != nil {
+				return err
+			}
+		}
+		for _, d := range cfg.Deprecations {
+			if _, err := fmt.Fprintf(out, "warning: deprecated %s in %s; use %s\n", d.Key, d.Location, d.Replacement); err != nil {
+				return err
+			}
+		}
 		if err := validateProjectDirectories(cfg.Projects); err != nil {
 			ccerrors.Print(err)
 			return err
 		}
-		_, err = fmt.Fprintln(cmd.OutOrStdout(), "config is valid")
+		_, err = fmt.Fprintln(out, "config is valid")
 		return err
 	},
 }

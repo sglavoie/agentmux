@@ -61,9 +61,9 @@ below for where each key went.
 - `Tab`/`Shift+Tab`: switch the focused pane. Its heading is highlighted and marked `focused`; the inactive pane's selection loses its reverse highlight.
 - `a`: open the actions menu for the selected row — focus, peek at the
   scrollback, restart, restart under another profile, launch another session in
-  the project, clear the status icon, close, open a shell or the configured
-  editor in its directory, copy the title, lock, mute. It is a menu you move
-  through, not a sheet of letters: `j`/`k` or `↑`/`↓` move the selection,
+  the project, clear the status icon, mark it active, close, open a shell or the
+  configured editor in its directory, copy the title, lock, mute. It is a menu
+  you move through, not a sheet of letters: `j`/`k` or `↑`/`↓` move the selection,
   `PgUp`/`PgDn`, `Ctrl+f`/`Ctrl+b`, `Ctrl+d`/`Ctrl+u`, and `g`/`G` move it
   further, and `Enter` runs the selected entry. Each entry still answers its own
   mnemonic immediately, from wherever the cursor happens to be. A fresh menu
@@ -609,6 +609,9 @@ its own badge/metadata columns.
 - `C` chooses a **one-time profile override** for the highlighted project,
 - `o` opens every selected project's directory; with no selection, it opens
   the highlighted project's directory instead.
+- `?` shows the keymap,
+- `esc` clears an active filter first and leaves the launcher on a second
+  press; `q` leaves it in one step. Neither quits Agent Mux — `Ctrl+C` does.
 
 The profile cycle starts at **All** whenever the launcher opens, includes only
 profiles that own configured projects, and follows the launcher's alphabetical

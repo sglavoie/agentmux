@@ -202,6 +202,29 @@ func TestCopyDoneErrorUsesStatusBarToast(t *testing.T) {
 	assertStatusBarContains(t, m, "copy: clipboard unavailable")
 }
 
+func TestCopyDoneSuccessSaysWhatWasCopied(t *testing.T) {
+	m := testModel()
+	updated, cmd := m.Update(commands.CopyDoneMsg{Text: "/tmp/demo.jsonl"})
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("expected copy success to arm toast tick")
+	}
+	assertStatusBarContains(t, m, "copied: /tmp/demo.jsonl")
+}
+
+func TestCopyExcerptKeepsOneBoundedLine(t *testing.T) {
+	cases := map[string]string{
+		"abc":                         "abc",
+		"  first line\nsecond line  ": "first line …",
+		strings.Repeat("x", 80):       strings.Repeat("x", copyExcerptWidth-1) + "…",
+	}
+	for in, want := range cases {
+		if got := copyExcerpt(in); got != want {
+			t.Errorf("copyExcerpt(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestLaunchProgressFinalDashboardLaunchStaysInTUI(t *testing.T) {
 	m := testModel()
 	m.launchBatchID = 8

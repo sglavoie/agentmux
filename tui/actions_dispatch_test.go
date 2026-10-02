@@ -3,6 +3,8 @@ package tui
 import (
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/launch"
 )
@@ -20,6 +22,29 @@ func TestActionsOverlayDispatchClose(t *testing.T) {
 	}
 	if m.confirmAction != "close" {
 		t.Fatalf("expected confirmAction=close, got %q", m.confirmAction)
+	}
+}
+
+// TestConfirmQCancelsWithoutQuitting pins q as a cancel key in the
+// destructive confirmation: it lands exactly where esc does rather than
+// closing amx.
+func TestConfirmQCancelsWithoutQuitting(t *testing.T) {
+	m := loadSessions(testModelWithSessions(), makeSessions())
+	m.cfg.Defaults.ConfirmDestructive = true
+	m = openActionsOverlay(t, m)
+	m = pressKey(m, "X")
+	if m.mode != ModeConfirm {
+		t.Fatalf("setup: expected ModeConfirm after X, got %d", m.mode)
+	}
+	viaEsc := pressKey(m, "esc")
+	updated, cmd := m.Update(keyPress("q"))
+	if cmd != nil {
+		if msg := cmd(); msg == (tea.QuitMsg{}) {
+			t.Fatal("q in confirm quit the program; want cancel")
+		}
+	}
+	if got := updated.(Model); got.mode != viaEsc.mode || got.mode == ModeConfirm {
+		t.Fatalf("q in confirm left mode %d; esc leaves %d", got.mode, viaEsc.mode)
 	}
 }
 

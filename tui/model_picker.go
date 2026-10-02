@@ -65,6 +65,19 @@ func (m Model) handlePickerSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
+// exitPicker returns from the launcher to the dashboard, dropping the
+// launcher's transient override, pin, and profile filter.
+func (m Model) exitPicker() (tea.Model, tea.Cmd) {
+	m.mode = ModeList
+	m.pickerProfileOverride = nil
+	m.pickerPinned = nil
+	m.pickerProfileFilter = ""
+	// The mode is assigned before the pane is handed back, because handing it
+	// back asks which window the DASHBOARD cursor is on and that question is
+	// answered through the mode.
+	return m, m.returnPreviewToDashboard()
+}
+
 // handlePickerNavKey handles input while the picker is in navigation mode
 // (the default). Printable characters other than recognised shortcuts are
 // silently ignored; press `/` to enter search mode and type a filter.
@@ -87,15 +100,14 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		m.mode = ModeList
-		m.pickerProfileOverride = nil
-		m.pickerPinned = nil
-		m.pickerProfileFilter = ""
-		// The mode is assigned before the pane is handed back, because handing it
-		// back asks which window the DASHBOARD cursor is on and that question is
-		// answered through the mode.
-		return m, m.returnPreviewToDashboard()
-	case keyCtrlC, keyQ:
+		return m.exitPicker()
+	case keyQ:
+		// q leaves the launcher in one step, skipping esc's clear-filters stage.
+		return m.exitPicker()
+	case keyQuestion:
+		m.openHelp(ModePicker)
+		return m, nil
+	case keyCtrlC:
 		return m, tea.Quit
 	case keyJ, keyDown:
 		m.pickerCursor = clamp(m.pickerCursor+1, 0, len(m.pickerFilteredIdx)-1)

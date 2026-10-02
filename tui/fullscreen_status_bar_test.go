@@ -29,7 +29,7 @@ func TestFullScreenModesReserveStickyStatusBar(t *testing.T) {
 			name:       "session viewer",
 			m:          fullScreenSessionViewModel(30, 10),
 			status:     "Transcript: api - 30 messages",
-			footer:     "g/G top/bot",
+			footer:     "esc back",
 			absentBody: indexedRowName(3),
 		},
 		{

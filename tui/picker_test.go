@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/tui/launch"
@@ -95,6 +97,32 @@ func TestPickerBackspaceShrinksBuffer(t *testing.T) {
 	}
 	if m.mode != ModePicker {
 		t.Fatalf("backspace on empty buffer must not exit picker, mode=%d", m.mode)
+	}
+}
+
+// TestPickerQReturnsToDashboardInOneStep pins q as "leave the launcher":
+// unlike esc it skips the clear-filters stage, and unlike ctrl+c it never
+// closes amx.
+func TestPickerQReturnsToDashboardInOneStep(t *testing.T) {
+	m := pickerModel(t)
+	m = pressKey(m, "/")
+	m = pressKey(m, "t")
+	m = pressKey(m, "esc") // leave search mode; filter kept
+	if m.pickerFilter == "" || m.mode != ModePicker {
+		t.Fatalf("setup: filter=%q mode=%d; want a kept filter in ModePicker", m.pickerFilter, m.mode)
+	}
+	updated, cmd := m.Update(keyPress("q"))
+	if cmd != nil {
+		if msg := cmd(); msg == (tea.QuitMsg{}) {
+			t.Fatal("q in launcher quit the program; want return to dashboard")
+		}
+	}
+	got := updated.(Model)
+	if got.mode != ModeList {
+		t.Fatalf("expected ModeList after q in launcher, got %d", got.mode)
+	}
+	if got.pickerProfileFilter != "" || got.pickerPinned != nil || got.pickerProfileOverride != nil {
+		t.Fatal("q left launcher transient state behind")
 	}
 }
 

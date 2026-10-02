@@ -30,6 +30,13 @@ type Config struct {
 	// the TUI as a one-line banner pointing the user at the migration.
 	Deprecations []Deprecation `toml:"-"`
 
+	// UnknownKeys lists every TOML key in the file that maps to no setting,
+	// in file order. A misspelled key decodes to nothing and leaves its
+	// setting at the default, so this is the only trace a typo leaves; it is
+	// reported by `amx config validate` rather than refused, because a config
+	// that loaded yesterday must still load today.
+	UnknownKeys []string `toml:"-"`
+
 	harnessEmojiKeyConflicts []string
 	harnessColorKeyConflicts []string
 }

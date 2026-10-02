@@ -103,6 +103,7 @@ var helpSections = []struct {
 		"  a, then e peek scrollback (active rows only)",
 		"  a, then r restart session (confirm)",
 		"  a, then x clear session icon",
+		"  a, then b mark session active (⚡ until its next real event)",
 		"  a, then X close session (confirm)",
 		"  a, then c override session profile",
 		"  a, then L lock / unlock session (blocks restart/close/override)",

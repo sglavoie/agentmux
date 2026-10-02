@@ -36,6 +36,9 @@ func parseConfig(data []byte) (*Config, error) {
 		return nil, err
 	}
 	cfg.Deprecations = collectDeprecations(&cfg, md)
+	for _, key := range md.Undecoded() {
+		cfg.UnknownKeys = append(cfg.UnknownKeys, key.String())
+	}
 	cfg.harnessEmojiKeyConflicts = detectHarnessEmojiKeyConflicts(cfg.HarnessEmojis)
 	cfg.harnessColorKeyConflicts = detectHarnessColorKeyConflicts(cfg.HarnessColors)
 	applyDefaults(&cfg)

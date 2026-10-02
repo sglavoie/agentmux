@@ -174,7 +174,7 @@ var footerHintCharacterizations = []struct {
 		entries: sessionSearchFooterPalette,
 		width:   210,
 		want: []string{
-			"  / filter · h/p/r/m chips · enter view · c continue · f fork · w worktree · H handoff · E edit handoff · d delete · i ID · Y path · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
+			"  / filter · h/p/r/m chips · enter view · c continue · f fork · w worktree · H handoff · E edit handoff · d delete · i ID · Y path · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
 		},
 	},
 	{
@@ -200,7 +200,7 @@ var footerHintCharacterizations = []struct {
 		entries: sessionSearchFooterPalette,
 		width:   0,
 		want: []string{
-			"  / filter · h/p/r/m chips · enter view · c continue · f fork · w worktree · H handoff · E edit handoff · d delete · i ID · Y path · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
+			"  / filter · h/p/r/m chips · enter view · c continue · f fork · w worktree · H handoff · E edit handoff · d delete · i ID · Y path · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
 		},
 	},
 	{
@@ -208,7 +208,7 @@ var footerHintCharacterizations = []struct {
 		entries: sessionViewFooterPalette,
 		width:   200,
 		want: []string{
-			"  j/k move · n/N match · enter view message · c continue · f fork · w worktree · H handoff · E edit handoff · i ID · y copy · Y path · esc back · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
+			"  j/k move · n/N match · enter view message · c continue · f fork · w worktree · H handoff · E edit handoff · i ID · y copy · Y path · ? help · esc back · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
 		},
 	},
 	{
@@ -234,7 +234,7 @@ var footerHintCharacterizations = []struct {
 		entries: sessionViewFooterPalette,
 		width:   0,
 		want: []string{
-			"  j/k move · n/N match · enter view message · c continue · f fork · w worktree · H handoff · E edit handoff · i ID · y copy · Y path · esc back · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
+			"  j/k move · n/N match · enter view message · c continue · f fork · w worktree · H handoff · E edit handoff · i ID · y copy · Y path · ? help · esc back · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
 		},
 	},
 	{
@@ -242,7 +242,7 @@ var footerHintCharacterizations = []struct {
 		entries: planSearchFooterPalette,
 		width:   200,
 		want: []string{
-			"  / filter · r project · enter view · o sort · e editor · Y path · esc back · j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
+			"  / filter · r project · enter view · o sort · e editor · Y path · ? help · esc back · j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
 	{
@@ -250,8 +250,8 @@ var footerHintCharacterizations = []struct {
 		entries: planSearchFooterPalette,
 		width:   90,
 		want: []string{
-			"  / filter · r project · enter view · o sort · e editor · Y path · esc back · j/k up/down",
-			"  g/G top/bot · ctrl+d/u half · ctrl+f/b page",
+			"  / filter · r project · enter view · o sort · e editor · Y path · ? help · esc back",
+			"  j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
 	{
@@ -268,7 +268,7 @@ var footerHintCharacterizations = []struct {
 		entries: planSearchFooterPalette,
 		width:   0,
 		want: []string{
-			"  / filter · r project · enter view · o sort · e editor · Y path · esc back · j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
+			"  / filter · r project · enter view · o sort · e editor · Y path · ? help · esc back · j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
 	{
@@ -276,7 +276,7 @@ var footerHintCharacterizations = []struct {
 		entries: planViewFooterPalette,
 		width:   200,
 		want: []string{
-			"  / search · n/N match · y copy · Y path · e editor · esc back · j/k scroll · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
+			"  / search · n/N match · y copy · Y path · e editor · ? help · esc back · j/k scroll · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
 	{
@@ -284,8 +284,8 @@ var footerHintCharacterizations = []struct {
 		entries: planViewFooterPalette,
 		width:   90,
 		want: []string{
-			"  / search · n/N match · y copy · Y path · e editor · esc back · j/k scroll · g/G top/bot",
-			"  ctrl+d/u half · ctrl+f/b page",
+			"  / search · n/N match · y copy · Y path · e editor · ? help · esc back · j/k scroll",
+			"  g/G top/bot · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
 	{
@@ -302,7 +302,7 @@ var footerHintCharacterizations = []struct {
 		entries: planViewFooterPalette,
 		width:   0,
 		want: []string{
-			"  / search · n/N match · y copy · Y path · e editor · esc back · j/k scroll · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
+			"  / search · n/N match · y copy · Y path · e editor · ? help · esc back · j/k scroll · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
 	{
@@ -319,7 +319,7 @@ var footerHintCharacterizations = []struct {
 		width:   90,
 		want: []string{
 			"  / filter · enter reopen · o shell · O editor · d remove · D delete branch · F forget",
-			"  Y path · r refresh · ? help · esc back · j/k up/down · ctrl+d/u half · ? more",
+			"  Y path · r refresh · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · ? more",
 		},
 	},
 	{
@@ -328,7 +328,7 @@ var footerHintCharacterizations = []struct {
 		width:   40,
 		want: []string{
 			"  enter reopen · o shell · O editor",
-			"  d remove · ? help · esc back · ? more",
+			"  d remove · esc back · ? more",
 		},
 	},
 	{
@@ -362,7 +362,7 @@ var footerHintCharacterizations = []struct {
 		width:   40,
 		want: []string{
 			"  f focus · r respond · s stop · a abort",
-			"  ? help · esc back · ? more",
+			"  w workbench · esc back · ? more",
 		},
 	},
 	{

@@ -2,6 +2,8 @@ package config_test
 
 import (
 	"reflect"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
@@ -277,5 +279,58 @@ claude_flags = []
 		if !keys[want] {
 			t.Errorf("Deprecations missing key %q (got %+v)", want, cfg.Deprecations)
 		}
+	}
+}
+
+func TestLoad_ReportsUnknownKeysWithoutRefusing(t *testing.T) {
+	content := `
+[defaults]
+refresh_intervall = 3
+
+[defaults.preview]
+keep_days = 7
+
+[defaults.notifications]
+stop = true
+`
+	path := writeTempConfig(t, content)
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	want := []string{"defaults.refresh_intervall", "defaults.preview.keep_days"}
+	if !reflect.DeepEqual(cfg.UnknownKeys, want) {
+		t.Fatalf("UnknownKeys = %v, want %v", cfg.UnknownKeys, want)
+	}
+}
+
+// TestExampleConfigHasNoUnknownKeys keeps the shipped template honest: every
+// key a user uncomments from it must be one the decoder reads. Commented
+// sample lines ("# key = value", "# [section]") are uncommented first, so the
+// optional settings are checked as well as the active ones.
+func TestExampleConfigHasNoUnknownKeys(t *testing.T) {
+	sample := regexp.MustCompile(`^# ?(\[\[?[a-z0-9_.-]+\]\]?\s*$|[a-z_]+ = .*)$`)
+	lines := strings.Split(config.ExampleConfig, "\n")
+	uncommented := 0
+	for i, line := range lines {
+		if m := sample.FindStringSubmatch(line); m != nil {
+			lines[i] = m[1]
+			uncommented++
+		}
+	}
+	// Guard against the pattern silently matching nothing after a template
+	// restyle, which would reduce this to a check of the active lines only.
+	if uncommented < 20 {
+		t.Fatalf("uncommented only %d sample lines; has the template's comment style changed?", uncommented)
+	}
+	path := writeTempConfig(t, strings.Join(lines, "\n"))
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.UnknownKeys) != 0 {
+		t.Fatalf("example config has unknown keys: %v", cfg.UnknownKeys)
 	}
 }

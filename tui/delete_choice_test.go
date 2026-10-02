@@ -53,14 +53,34 @@ func TestRenderDeleteChoiceCompactsSharedHomeProfiles(t *testing.T) {
 	}
 }
 
-func TestDeleteChoiceQQuits(t *testing.T) {
+// TestDeleteChoiceQCancels pins q as a way back out of the delete prompt:
+// the prompt asks about destroying a transcript, and a key that means "back"
+// everywhere else must not close amx from here.
+func TestDeleteChoiceQCancels(t *testing.T) {
+	target := transcript.SessionMeta{Harness: "claude", Path: "/tmp/demo.jsonl"}
+	m := Model{mode: ModeDeleteChoice, deleteTarget: &target}
+
+	updated, cmd := m.Update(keyPress("q"))
+	if cmd != nil {
+		if msg := cmd(); msg == (tea.QuitMsg{}) {
+			t.Fatal("q in delete choice quit the program; want cancel")
+		}
+	}
+	got := updated.(Model)
+	if got.mode != ModeSessionSearch || got.deleteTarget != nil {
+		t.Fatalf("q in delete choice: mode=%d target=%v; want ModeSessionSearch with no target", got.mode, got.deleteTarget)
+	}
+}
+
+// TestDeleteChoiceCtrlCQuits keeps ctrl+c as the one quit key in the prompt.
+func TestDeleteChoiceCtrlCQuits(t *testing.T) {
 	m := Model{mode: ModeDeleteChoice}
 
-	_, cmd := m.Update(keyPress("q"))
+	_, cmd := m.Update(keyPress("ctrl+c"))
 	if cmd == nil {
-		t.Fatal("q in delete choice returned nil cmd; want tea.Quit")
+		t.Fatal("ctrl+c in delete choice returned nil cmd; want tea.Quit")
 	}
 	if msg := cmd(); msg != (tea.QuitMsg{}) {
-		t.Fatalf("q in delete choice produced %T; want tea.QuitMsg", msg)
+		t.Fatalf("ctrl+c in delete choice produced %T; want tea.QuitMsg", msg)
 	}
 }

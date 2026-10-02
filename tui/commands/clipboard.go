@@ -23,6 +23,6 @@ func CopyTitle(title string) tea.Cmd {
 // CopyDoneMsg so full-layout viewers do not trigger a live-session refresh.
 func CopyText(text string) tea.Cmd {
 	return func() tea.Msg {
-		return CopyDoneMsg{Err: CopyToClipboard(text)}
+		return CopyDoneMsg{Err: CopyToClipboard(text), Text: text}
 	}
 }

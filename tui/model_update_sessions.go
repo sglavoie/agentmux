@@ -217,11 +217,12 @@ func (m *Model) applySessionActionResult(result sessionactions.Result) tea.Cmd {
 }
 
 // handleCopyDone processes a commands.CopyDoneMsg without refreshing live sessions.
-// Copy errors are rendered as toasts so they remain visible inside full
-// transcript and plan viewer layouts.
+// Both outcomes are rendered as toasts so they remain visible inside full
+// transcript and plan viewer layouts: a clipboard write is otherwise invisible,
+// and a key that seems to do nothing gets pressed again.
 func (m Model) handleCopyDone(msg commands.CopyDoneMsg) (tea.Model, tea.Cmd) {
 	if msg.Err == nil {
-		return m, nil
+		return m, m.pushToast(Toast{Severity: toastSuccess, Text: "copied: " + copyExcerpt(msg.Text)})
 	}
 	if c := m.pushToast(Toast{Severity: toastError, Text: "copy: " + msg.Err.Error()}); c != nil {
 		return m, c

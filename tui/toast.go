@@ -20,6 +20,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -28,6 +29,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
+	"github.com/sglavoie/agentmux/tui/layout"
 	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
 
@@ -528,4 +530,18 @@ func (m Model) handleRecoveryDone(msg recoveryDoneMsg) (tea.Model, tea.Cmd) {
 	m.actionErr = msg.err
 	cmds = append(cmds, m.requestTopologyRefresh())
 	return m, tea.Batch(cmds...)
+}
+
+// copyExcerptWidth bounds the copied text echoed back in the success toast.
+const copyExcerptWidth = 48
+
+// copyExcerpt is the first non-blank line of a copy, trimmed to a toast-sized
+// width and marked when anything was left out.
+func copyExcerpt(text string) string {
+	lines := strings.Split(strings.TrimSpace(text), "\n")
+	first := strings.TrimSpace(lines[0])
+	if len(lines) > 1 {
+		first += " …"
+	}
+	return layout.Truncate(first, copyExcerptWidth, "…")
 }
