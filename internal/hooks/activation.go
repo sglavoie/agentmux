@@ -49,6 +49,19 @@ func newActivationEvaluator(cfg *config.Config, evidence *StatusEvidence, eviden
 	}
 }
 
+// syncIssueMessage names what is wrong with the hook file. The issue code stays
+// keyed on the sync status alone; only the wording separates an absent file
+// from one that exists but carries no Agent Mux hooks.
+func syncIssueMessage(status AccountStatus) string {
+	if status.Status == SyncMissing && status.FilePresent {
+		return "hook file exists but has no Agent Mux hooks; run `amx config hooks-sync`"
+	}
+	if status.Status == SyncMissing {
+		return "hook file does not exist; run `amx config hooks-sync`"
+	}
+	return "installed hook file is " + string(status.Status) + "; run `amx config hooks-sync`"
+}
+
 func (e *activationEvaluator) evaluate(account config.Account, override config.AccountHookOverride, status *AccountStatus) {
 	if status == nil {
 		return
@@ -59,7 +72,7 @@ func (e *activationEvaluator) evaluate(account config.Account, override config.A
 		return
 	}
 	if status.Status != SyncInSync {
-		addActivationIssue(status, ActivationFailure, "hook_file_"+string(status.Status), "installed hook file is "+string(status.Status), status.Path)
+		addActivationIssue(status, ActivationFailure, "hook_file_"+string(status.Status), syncIssueMessage(*status), status.Path)
 	}
 	if len(override.DisabledEvents) > 0 {
 		addActivationIssue(status, ActivationFailure, "events_disabled", "Agent Mux events disabled by profile: "+strings.Join(override.DisabledEvents, ", "), "")

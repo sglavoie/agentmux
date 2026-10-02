@@ -40,7 +40,7 @@ const (
 	keyClose           = "X" // closes the highlighted session
 	keyR               = "r"
 	keyBackspace       = "backspace"
-	keyQuestion        = "?" // opens ModeHelp overlay (dashboard, Past Sessions, Plans)
+	keyQuestion        = "?" // opens ModeHelp overlay (dashboard, Past Sessions, Plans, Worktrees, Runs)
 	keyC               = "c" // opens ModeConfigPicker for profile override
 	keyDashboardLaunch = "C" // opens ModeConfigPicker for dashboard launch
 	keyClearStatus     = "x" // clears the highlighted session's icon
@@ -99,11 +99,11 @@ const (
 	keyCtrlP  = "ctrl+p" // move up in searchable command menus
 	keyCtrlS  = "ctrl+s" // submit a multi-line editor whose Enter inserts a newline
 
-	// keyTogglePreview belongs to the launcher and the plan browser alone. The
-	// dashboard retired it with the preview pane it named: `p` there is reserved
-	// for the project switcher, and the inspector that replaced the preview has
-	// its own key below.
-	keyTogglePreview = "p" // launcher/plans: toggles the split-pane live preview
+	// keyTogglePreview belongs to the launcher alone; the plan browser has no
+	// preview pane to toggle. The dashboard retired it with the preview pane it
+	// named: `p` there is reserved for the project switcher, and the inspector
+	// that replaced the preview has its own key below.
+	keyTogglePreview = "p" // launcher: toggles the split-pane live preview
 	// keyInspector is the same key string as keyCopySessionID; disambiguation is
 	// by mode. In ModeList: show or hide the session inspector.
 	keyInspector = "i"
@@ -113,7 +113,7 @@ const (
 	// header is a click target, so both a keyboard and a mouse route survive.
 	//
 	// keyProjectSwitcher opens the dashboard's project-scope overlay. It is the
-	// same key the launcher and the plans browser spell as keyTogglePreview, and
+	// same key the launcher spells as keyTogglePreview, and
 	// the dashboard is free to claim it because the preview pane that owned it
 	// here is gone.
 	keyProjectSwitcher = "p"

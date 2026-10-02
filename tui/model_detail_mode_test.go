@@ -278,8 +278,9 @@ func TestHelpListsDetailKey(t *testing.T) {
 	m.height = 0
 
 	out := stripAnsi(renderHelp(m))
-	if !strings.Contains(out, "show session detail") {
-		t.Errorf("expected help to list the d-key entry, got:\n%s", out)
+	// `d` is retired; help routes to the palette by the command's exact title.
+	if !strings.Contains(out, `then "Show Session Details" to open it`) {
+		t.Errorf("expected help to name the Show Session Details command, got:\n%s", out)
 	}
 }
 

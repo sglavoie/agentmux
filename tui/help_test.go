@@ -105,7 +105,8 @@ func TestRenderHelpReflectsDashboardRemap(t *testing.T) {
 		"a, then C launch another session in the same project",
 		"a, then e peek scrollback (active rows only)",
 		// The launcher kept its own direct keymap; only the dashboard's shrank.
-		"f         cycle profile (dashboard live / launcher default)",
+		"f         cycle the launch profile (in the launcher)",
+		":         then \"Show Projects View\" to group by project",
 		"o         open selected launcher directories (highlighted fallback)",
 	} {
 		if !strings.Contains(out, frag) {
@@ -116,6 +117,10 @@ func TestRenderHelpReflectsDashboardRemap(t *testing.T) {
 		// The retired dashboard spellings. Each names a key the dispatcher now
 		// drops, so help listing one would be a dead end rather than a typo.
 		"x         clear session icon",
+		// `f` on the dashboard is retired, and the palette has no command
+		// titled "Toggle List View" for `:` to find.
+		"cycle profile (dashboard live",
+		"Toggle List View",
 		"X         close session (confirm)",
 		"C         launch new session with profile selection",
 		"e         peek scrollback (active rows only)",

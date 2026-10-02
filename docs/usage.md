@@ -273,10 +273,11 @@ Shift-drag; Agent Mux does not intercept the modified drag.
 
 ### Projects view
 
-`v` switches the list between the default urgency order and the Projects view,
-and `v` again switches back. The selected session is carried across both ways,
-so the cursor stays on the row you were looking at; switching back out of a
-project summary selects that project's leading session.
+Run **Show Projects View** from the command palette (`:`), or click the view
+name in the header, to switch the list from the default urgency order to the
+Projects view; **Show Urgency View** switches back. The selected session is
+carried across both ways, so the cursor stays on the row you were looking at;
+switching back out of a project summary selects that project's leading session.
 
 The Projects view replaces the **Needs Attention** / **Active** / **Idle**
 headings with one summary line per project, followed by that project's sessions
@@ -699,7 +700,9 @@ stay visible as invalid recovery records and are never discarded automatically.
 Run **Search All Past Sessions** from the command palette (`:`) to search past
 sessions across every configured profile and project, or **Search This
 Project's Past Sessions** to open the same view filtered to the highlighted
-project. In the launcher, `s` is still a direct key for the scoped search.
+project. On the dashboard, `s` opens the scoped search for the selected
+project and `S` opens the all-project search; in the launcher, `s` is the
+direct key for the scoped search.
 Agent Mux warms the filesystem cache
 at `~/.local/share/agent-mux/transcripts.json`, then refreshes it from the
 configured Claude, Copilot, and Codex transcript directories in the background.
@@ -731,7 +734,7 @@ is not the stored primary title.
 - `/` enters a free-text query; results scan matching source transcripts on
   demand and show the per-session match count.
 - `h`, `p`, and `r` open single-value chip pickers for harness, profile,
-  and project.
+  and project; `m` picks the message source (`user` or `harness`).
 - `i` copies the selected session ID, and `Y` copies its transcript path.
 - `enter` opens the transcript viewer; `n`/`N` move between matches,
   `j`/`k`, `g`/`G`, and `Ctrl+d/u/f/b` scroll, `y` copies the selected
@@ -785,8 +788,10 @@ by `Unknown`; equally specific configuration aliases are separate filter
 choices and match the same plans. `/` searches, `o` cycles the result sort
 between match count and recency, `e` opens the selected plan directory in your
 editor, `Y` copies the plan directory, and `enter` opens the viewer. The viewer
-supports `j`/`k`, `g`/`G`, `Ctrl+d/u/f/b`, `y` to copy the selected raw line,
-and `e` to open the plan directory in your editor.
+supports `j`/`k`, `g`/`G`, `Ctrl+d/u/f/b`, `n`/`N` to move between matches,
+`/` to refine the query, `y` to copy the selected raw line, `Y` to copy the plan
+directory, and `e` to open the plan directory in your editor. `esc` returns to
+the plan list, and `q` closes Plans entirely.
 
 Project association is source-backed rather than inferred from plan prose.
 Agent Mux resolves the canonical plan workspace in this order: retained ASL

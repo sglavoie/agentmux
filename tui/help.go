@@ -61,7 +61,7 @@ var helpSections = []struct {
 	}},
 	{"Projects view", []string{
 		"  enter     fold / unfold the selected project",
-		"  :         then \"Toggle List View\" to group by project",
+		"  :         then \"Show Projects View\" to group by project",
 		"  (projects start expanded; folds last until amx exits)",
 		"  (a folded project's members are still reachable with n/N)",
 	}},
@@ -121,7 +121,7 @@ var helpSections = []struct {
 		"  l         open session launcher (live filter + preview)",
 		"  space     select / deselect the highlighted project (in the launcher)",
 		"  enter     launch every selected project (in the launcher)",
-		"  f         cycle profile (dashboard live / launcher default)",
+		"  f         cycle the launch profile (in the launcher)",
 		"  C         choose a profile for this launch (in the launcher)",
 		"  P         pin / unpin highlighted launcher project (in the launcher)",
 		"  p         toggle the launcher's preview pane (in the launcher)",
@@ -138,7 +138,7 @@ var helpSections = []struct {
 	// steps, not the dashboard's retired group jumps; they never collide because
 	// the dashboard no longer binds them at all.
 	{"Session detail", []string{
-		"  :         then \"Show Session Detail\" to show session detail",
+		"  :         then \"Show Session Details\" to open it",
 		"  t         flat event list ↔ phase timeline",
 		"  j/k ↑/↓   scroll; g/G jump to the ends; pgup/pgdn page",
 		"  enter     fold / unfold the phase under the cursor (timeline)",

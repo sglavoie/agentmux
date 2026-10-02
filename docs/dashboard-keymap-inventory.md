@@ -43,6 +43,7 @@ fails there.
 | `s` | Past Sessions for the selected project |
 | `S` | All-project Past Sessions, newest activity first; clears previous history filters |
 | `:` | Command palette |
+| `u` | Undo the last close (five-second window) |
 | `?` | Help |
 | `q`, `Ctrl+C` | Quit dashboard |
 | `Esc` | Close overlay, then leave full-screen/inspector focus, then clear filters |

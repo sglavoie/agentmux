@@ -221,8 +221,6 @@ func (m Model) handlePlanSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 			return m, nil
 		}
 		return m, openPlanInEditorCmd(m.client, m.planResults[m.planCursor].Meta, m.cfg)
-	case keyTogglePreview:
-		return m, nil
 	case keyEnter:
 		if m.planCursor < 0 || m.planCursor >= len(m.planResults) {
 			return m, nil

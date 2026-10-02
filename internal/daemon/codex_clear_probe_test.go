@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -101,6 +102,11 @@ func TestCodexClearProbeDoesNotJournalUnderStateLock(t *testing.T) {
 	notifier := notification.NewNotifier(&config.NotificationConfig{
 		Permission:           true,
 		PermissionDebounceMs: 60_000,
+	})
+	// Pin a fake backend: without one, a host lacking Alerter leaves no
+	// pending notification for the clear observation to cancel.
+	notifier.SetBackend(func(_ context.Context, _ int, _, _, _ string) (bool, error) {
+		return false, nil
 	})
 	h := NewHandler(activity.NewStateGuard(time.Hour), notifier)
 	notifier.MaybeNotifyTraced(42, "W:api", "work", "permission", false, notification.NotificationTrace{

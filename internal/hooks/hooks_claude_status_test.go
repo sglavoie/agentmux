@@ -12,6 +12,25 @@ import (
 
 // Status tests
 
+// assertHookFileIssue checks that a missing verdict keeps its stable issue code
+// while its wording says whether the file itself exists.
+func assertHookFileIssue(t *testing.T, status AccountStatus, present bool, wantPrefix string) {
+	t.Helper()
+	if status.FilePresent != present {
+		t.Errorf("FilePresent = %v, want %v", status.FilePresent, present)
+	}
+	for _, issue := range status.ActivationIssues {
+		if issue.Code != "hook_file_missing" {
+			continue
+		}
+		if !strings.HasPrefix(issue.Message, wantPrefix) {
+			t.Errorf("hook_file_missing message = %q, want prefix %q", issue.Message, wantPrefix)
+		}
+		return
+	}
+	t.Errorf("no hook_file_missing issue in %+v", status.ActivationIssues)
+}
+
 func TestStatusMissingNoFile(t *testing.T) {
 	dir := t.TempDir()
 	accountDir := filepath.Join(dir, "claude")
@@ -27,6 +46,7 @@ func TestStatusMissingNoFile(t *testing.T) {
 	if results[0].Status != SyncMissing {
 		t.Errorf("expected missing, got %q", results[0].Status)
 	}
+	assertHookFileIssue(t, results[0], false, "hook file does not exist")
 }
 
 func TestStatusMissingNoamxHooks(t *testing.T) {
@@ -48,6 +68,7 @@ func TestStatusMissingNoamxHooks(t *testing.T) {
 	if results[0].Status != SyncMissing {
 		t.Errorf("expected missing, got %q", results[0].Status)
 	}
+	assertHookFileIssue(t, results[0], true, "hook file exists but has no Agent Mux hooks")
 }
 
 func TestStatusInSync(t *testing.T) {

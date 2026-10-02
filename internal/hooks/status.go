@@ -51,10 +51,13 @@ type ActivationIssue struct {
 // the per-account check itself failed (e.g. permission denied reading the
 // settings file); Status is undefined in that case.
 type AccountStatus struct {
-	Account            string
-	Harness            string
-	Path               string
-	Status             SyncStatus
+	Account string
+	Harness string
+	Path    string
+	Status  SyncStatus
+	// FilePresent reports whether the hook file exists, which SyncMissing
+	// alone does not: it also covers a file that holds no amx hooks.
+	FilePresent        bool
 	Activation         ActivationVerdict
 	ActivationIssues   []ActivationIssue
 	CLIVersion         string
@@ -192,10 +195,10 @@ func checkStatus(account config.Account, override config.AccountHookOverride, am
 		return AccountStatus{Account: account.Name, Harness: harnessName, Path: path}, err
 	}
 	if bytes.Equal(existingData, newData) {
-		return AccountStatus{Account: account.Name, Harness: harnessName, Path: path, Status: SyncInSync}, nil
+		return AccountStatus{Account: account.Name, Harness: harnessName, Path: path, Status: SyncInSync, FilePresent: true}, nil
 	}
 	if len(installed) == 0 {
-		return AccountStatus{Account: account.Name, Harness: harnessName, Path: path, Status: SyncMissing}, nil
+		return AccountStatus{Account: account.Name, Harness: harnessName, Path: path, Status: SyncMissing, FilePresent: true}, nil
 	}
-	return AccountStatus{Account: account.Name, Harness: harnessName, Path: path, Status: SyncDrifted}, nil
+	return AccountStatus{Account: account.Name, Harness: harnessName, Path: path, Status: SyncDrifted, FilePresent: true}, nil
 }
