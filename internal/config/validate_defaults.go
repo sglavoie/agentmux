@@ -115,6 +115,12 @@ func validateDefaults(d *Defaults) []string {
 	if d.Notifications.PermissionDebounceMs < 0 {
 		errs = append(errs, "defaults.notifications.permission_debounce_ms must be >= 0")
 	}
+	if d.GitProbeTTL < 0 {
+		errs = append(errs, "defaults.git_probe_ttl must be >= 0")
+	}
+	if d.GitProbeTimeout < 0 {
+		errs = append(errs, "defaults.git_probe_timeout must be >= 0")
+	}
 	if d.Notifications.CooldownSeconds < 0 {
 		errs = append(errs, "defaults.notifications.cooldown_seconds must be >= 0")
 	}

@@ -33,6 +33,7 @@ var sessionCmd = &cobra.Command{
 
 func init() {
 	sessionListCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	sessionListCmd.Flags().String("since", "", "only sessions active within this window, e.g. 12h or 7d")
 	sessionContinueCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
 	sessionForkCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
 	sessionForkWorktreeCmd.Flags().Bool("allow-dirty", false, "allow a dirty source; uncommitted changes are not copied")

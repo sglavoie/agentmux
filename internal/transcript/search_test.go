@@ -345,3 +345,16 @@ func (d *dispatchReader) Discover(string, DiscoverOptions) ([]SessionMeta, error
 func (d *dispatchReader) ReadMessages(path string) ([]Message, error) {
 	return d.byPath[path], nil
 }
+
+func TestSearch_SinceDropsOlderSessionsBeforeReadingAnything(t *testing.T) {
+	idx := newTestIndex(t)
+	must(t, idx.SetEntryForTest("claude:old", SessionMeta{ID: "old", Harness: harness.Claude, Snippet: "old", LastAt: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)}))
+	must(t, idx.SetEntryForTest("claude:new", SessionMeta{ID: "new", Harness: harness.Claude, Snippet: "new", LastAt: time.Date(2026, 5, 9, 0, 0, 0, 0, time.UTC)}))
+	results, err := Search(idx, nil, Query{Since: time.Date(2026, 5, 5, 0, 0, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 1 || results[0].Meta.ID != "new" {
+		t.Fatalf("results = %+v, want only the session active after Since", results)
+	}
+}

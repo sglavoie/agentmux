@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/searchstore"
@@ -198,6 +199,10 @@ type ListFilter struct {
 	Project       []string
 	MainOnly      bool
 	IncludeHidden bool
+	// Since, when set, drops entries whose last activity is older. It filters
+	// on metadata alone, before any sidecar is read, so a narrow window is
+	// also the cheap one.
+	Since time.Time
 }
 
 // List returns a copy of all entries that match the filter, sorted by
@@ -209,6 +214,9 @@ func (i *Index) List(filter ListFilter) []SessionMeta {
 	out := make([]SessionMeta, 0, len(i.entries))
 	for _, meta := range i.entries {
 		if meta.HiddenFromIndex && !filter.IncludeHidden {
+			continue
+		}
+		if !filter.Since.IsZero() && meta.LastAt.Before(filter.Since) {
 			continue
 		}
 		if filter.MainOnly && meta.SessionClass != SessionClassMain {

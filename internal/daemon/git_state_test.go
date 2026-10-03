@@ -203,7 +203,7 @@ func TestGitStateDisabledRunsNoProbe(t *testing.T) {
 	git := &scriptedGitState{branches: map[string]string{"/repo/one": "main"}}
 	directories := map[int]string{42: "/repo/one"}
 	h := seedGitStateHandler(t, git, directories)
-	h.SetGitProbe(false)
+	h.SetGitProbe(false, 0, 0)
 	if h.gitState != nil {
 		t.Fatal("SetGitProbe(false) left a cache installed")
 	}

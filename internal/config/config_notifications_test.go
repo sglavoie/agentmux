@@ -217,3 +217,21 @@ func TestParseQuietHours(t *testing.T) {
 		}
 	}
 }
+
+func TestLoad_GitProbeTuning(t *testing.T) {
+	base := "\n[[profiles]]\nname = \"work\"\nhome_dir = \"~/.claude-work\"\ncolor = \"blue\"\n"
+	cfg, err := config.Load(writeTempConfig(t, "[defaults]\ngit_probe_ttl = 30\ngit_probe_timeout = 5\n"+base))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Defaults.GitProbeTTL != 30 || cfg.Defaults.GitProbeTimeout != 5 || len(cfg.UnknownKeys) != 0 {
+		t.Fatalf("git probe tuning = %d/%d unknown=%v", cfg.Defaults.GitProbeTTL, cfg.Defaults.GitProbeTimeout, cfg.UnknownKeys)
+	}
+	cfg, err = config.Load(writeTempConfig(t, "[defaults]\ngit_probe_timeout = -1\n"+base))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if err := config.Validate(cfg); err == nil || !strings.Contains(err.Error(), "git_probe_timeout") {
+		t.Fatalf("Validate = %v, want a git_probe_timeout error", err)
+	}
+}

@@ -387,3 +387,20 @@ func TestSessionViewerSlashReopensTheQuery(t *testing.T) {
 		t.Fatalf("query = %q, viewer messages = %v; want the query kept and the viewer closed", got.sessionQuery, got.viewerMessages)
 	}
 }
+
+// TestMessageDetailYCopiesTheOpenMessage: the full-message overlay is where a
+// long message is read, so it is where copying it has to work.
+func TestMessageDetailYCopiesTheOpenMessage(t *testing.T) {
+	m := Model{
+		mode:             ModeMessageDetail,
+		viewerMessages:   []transcript.Message{{Role: "user", Text: "first"}, {Role: "assistant", Text: "the long one"}},
+		viewerCursor:     1,
+		messageDetailIdx: 1,
+		width:            80,
+		height:           20,
+	}
+	_, cmd := m.Update(keyPress("y"))
+	if got := runViewerCopyCmd(t, cmd); got != "the long one" {
+		t.Fatalf("copied %q, want the message the overlay shows", got)
+	}
+}

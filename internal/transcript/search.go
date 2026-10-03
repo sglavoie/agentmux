@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/sglavoie/agentmux/internal/searchquery"
@@ -25,6 +26,7 @@ type Query struct {
 	Profile       []string
 	Project       []string
 	MainOnly      bool
+	Since         time.Time // drops sessions last active before it; zero → no bound
 }
 
 const sourceSidecarPrefix = "AMXSEARCH2\n"
@@ -102,6 +104,7 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 		Profile:  q.Profile,
 		Project:  q.Project,
 		MainOnly: q.MainOnly,
+		Since:    q.Since,
 	})
 
 	terms := searchquery.Parse(q.Text)

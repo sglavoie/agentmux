@@ -17,6 +17,7 @@ The same workflows are scriptable. Machine-readable commands use one
 
 ```bash
 amx session list --json
+amx session list --since 7d   # only sessions active in the last week (or 12h, 90m, …)
 amx session continue codex <session-id>
 amx session fork claude <session-id>
 amx session fork-worktree codex <session-id> --yes

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
@@ -292,5 +293,18 @@ func TestConversationIdentityAcceptsBothSelectorShapes(t *testing.T) {
 	}
 	if _, err := conversationIdentityFromArgs(sessionContinueCmd, false, "continue", []string{"codex:"}); err == nil {
 		t.Fatal("an empty session ID after the colon must be refused")
+	}
+}
+
+func TestParseSinceWindow(t *testing.T) {
+	for in, want := range map[string]time.Duration{"7d": 7 * 24 * time.Hour, "12h": 12 * time.Hour, " 90m ": 90 * time.Minute} {
+		if got, err := parseSinceWindow(in); err != nil || got != want {
+			t.Errorf("parseSinceWindow(%q) = %v, %v; want %v", in, got, err, want)
+		}
+	}
+	for _, bad := range []string{"", "0d", "-1d", "1.5d", "-2h", "week"} {
+		if _, err := parseSinceWindow(bad); err == nil {
+			t.Errorf("parseSinceWindow(%q) accepted a bad window", bad)
+		}
 	}
 }

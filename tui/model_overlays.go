@@ -417,6 +417,14 @@ func (m Model) handleHelpKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.helpOffset > 0 {
 			m.helpOffset--
 		}
+	case keyPgDown, keyCtrlF:
+		m.helpOffset = clamp(m.helpOffset+visible, 0, max(total-visible, 0))
+	case keyPgUp, keyCtrlB:
+		m.helpOffset = clamp(m.helpOffset-visible, 0, max(total-visible, 0))
+	case keyCtrlD:
+		m.helpOffset = clamp(m.helpOffset+halfPageStep(visible), 0, max(total-visible, 0))
+	case keyCtrlU:
+		m.helpOffset = clamp(m.helpOffset-halfPageStep(visible), 0, max(total-visible, 0))
 	case keyG:
 		m.helpOffset = 0
 	case keyGG:

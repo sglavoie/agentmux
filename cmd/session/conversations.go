@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,6 +32,7 @@ var (
 	sessionCommandsDaemon           = func(req protocol.Request) (protocol.Response, error) { return ipc.NewClient().Send(req) }
 	sessionCommandsNewHandoff       = func() handoff.Runner { return handoff.NewWorkflow() }
 	sessionCommandsNewWorktree      = func() worktree.Runner { return worktree.NewWorkflow() }
+	sessionCommandsNow              = time.Now
 )
 
 var sessionListCmd = &cobra.Command{
@@ -42,11 +44,19 @@ var sessionListCmd = &cobra.Command{
 		if err != nil {
 			return cli.CommandFailure(cmd, jsonOutput, "config_error", err)
 		}
+		filter := transcript.ListFilter{}
+		if value, _ := cmd.Flags().GetString("since"); strings.TrimSpace(value) != "" {
+			window, err := parseSinceWindow(value)
+			if err != nil {
+				return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", err)
+			}
+			filter.Since = sessionCommandsNow().Add(-window)
+		}
 		idx, err := loadRefreshedSessionIndex(cfg, sessionCommandsSessionReaders())
 		if err != nil {
 			return cli.CommandFailure(cmd, jsonOutput, "session_index_unavailable", err)
 		}
-		views := sessionViews(idx.List(transcript.ListFilter{}))
+		views := sessionViews(idx.List(filter))
 		if jsonOutput {
 			return cli.WriteJSON(cmd, sessionListData{Sessions: views})
 		}
@@ -55,6 +65,25 @@ var sessionListCmd = &cobra.Command{
 		}
 		return nil
 	},
+}
+
+// parseSinceWindow reads `--since`: any Go duration ("12h", "90m") or a whole
+// number of days ("7d"), which Go's own parser has no unit for and which is
+// the window people actually think in for past sessions.
+func parseSinceWindow(value string) (time.Duration, error) {
+	value = strings.TrimSpace(value)
+	if days, ok := strings.CutSuffix(value, "d"); ok {
+		n, err := strconv.Atoi(days)
+		if err != nil || n <= 0 {
+			return 0, fmt.Errorf("--since %q: want a positive whole number of days like 7d", value)
+		}
+		return time.Duration(n) * 24 * time.Hour, nil
+	}
+	window, err := time.ParseDuration(value)
+	if err != nil || window <= 0 {
+		return 0, fmt.Errorf("--since %q: want a positive duration like 12h or 7d", value)
+	}
+	return window, nil
 }
 
 var sessionContinueCmd = newConversationActionCommand("continue", actions.Continue, "Focus an exact live conversation or resume its indexed source")

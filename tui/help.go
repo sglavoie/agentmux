@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
@@ -18,10 +19,49 @@ const helpMinVisible = 3
 // openHelp raises the shortcut overlay from returnMode. Every mode that binds
 // `?` goes through here so handleHelpKey has a return target and the footer's
 // `? more` truncation marker always points at a live key.
+//
+// It opens at the section for the view it was raised from: the Plans keys are
+// the eleventh section, and an overlay that always starts at the dashboard
+// made `?` from Plans a scroll before it was an answer. The dashboard itself
+// has no entry here because its section already leads.
 func (m *Model) openHelp(returnMode Mode) {
-	m.helpOffset = 0
 	m.helpReturnMode = returnMode
 	m.mode = ModeHelp
+	m.helpOffset = helpSectionOffset(*m, helpSectionFor[returnMode])
+}
+
+// helpSectionFor names the help section each view's `?` lands on.
+var helpSectionFor = map[Mode]string{
+	ModePicker:        "Launch / open",
+	ModeSessionSearch: "Past Sessions",
+	ModeSessionView:   "Past Sessions",
+	ModePlanSearch:    "Plans",
+	ModePlanView:      "Plans",
+	ModeWorktrees:     "Worktrees",
+	ModeASLRuns:       "Runs",
+}
+
+// helpSectionOffset is the scroll offset, in the same wrapped display rows the
+// overlay windows over, that puts the named section's header at the top —
+// clamped so the window stays full, which is what keeps j/k responsive from
+// the first press. An unnamed or unknown section opens at the top.
+func helpSectionOffset(m Model, section string) int {
+	if section == "" || m.height == 0 {
+		return 0
+	}
+	for row, line := range helpWrappedContentLines(m) {
+		if ansi.Strip(line) == section {
+			total, visible := helpScrollBounds(m, helpVisibleHeight(m))
+			if limit := total - visible; row > limit {
+				row = limit
+			}
+			if row < 0 {
+				row = 0
+			}
+			return row
+		}
+	}
+	return 0
 }
 
 // helpBaseView renders the view the overlay was raised from so the dimmed

@@ -240,8 +240,10 @@ func (m *Model) exitMessageDetail() {
 	m.messageDetailScroll = 0
 }
 
-// handleMessageDetailKey mirrors handleHelpKey: scroll-only navigation
-// with esc/q/enter all closing the overlay. ctrl+c still quits the app.
+// handleMessageDetailKey mirrors handleHelpKey: scroll navigation with
+// esc/q/enter all closing the overlay, plus `y` to copy the message it shows —
+// the full message is what an operator opened the overlay to read, so it is
+// the thing most worth copying from here. ctrl+c still quits the app.
 func (m Model) handleMessageDetailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	total, visible := messageDetailScrollBounds(m)
 	switch msg.String() {
@@ -270,6 +272,18 @@ func (m Model) handleMessageDetailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		m.messageDetailScroll -= visible
 		if m.messageDetailScroll < 0 {
 			m.messageDetailScroll = 0
+		}
+	case keyCtrlF:
+		m.messageDetailScroll = clamp(m.messageDetailScroll+visible, 0, max(total-visible, 0))
+	case keyCtrlB:
+		m.messageDetailScroll = clamp(m.messageDetailScroll-visible, 0, max(total-visible, 0))
+	case keyCtrlD:
+		m.messageDetailScroll = clamp(m.messageDetailScroll+halfPageStep(visible), 0, max(total-visible, 0))
+	case keyCtrlU:
+		m.messageDetailScroll = clamp(m.messageDetailScroll-halfPageStep(visible), 0, max(total-visible, 0))
+	case keyY:
+		if m.messageDetailIdx >= 0 && m.messageDetailIdx < len(m.viewerMessages) {
+			return m, commands.CopyText(m.viewerMessages[m.messageDetailIdx].Text)
 		}
 	case keyG:
 		m.messageDetailScroll = 0

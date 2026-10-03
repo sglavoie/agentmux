@@ -87,6 +87,12 @@ type Defaults struct {
 	// timeout. Anyone paying the second price must be able to buy the column
 	// back out, and the only honest way to do that is to stop running git.
 	GitProbe *bool `toml:"git_probe"`
+	// GitProbeTTL and GitProbeTimeout tune that probe for the same users,
+	// in seconds: how long an answer is reused, and how long one probe may
+	// take. Zero keeps the gitstate defaults (10s and 2s). A slow mount that
+	// still wants the column raises both instead of turning it off.
+	GitProbeTTL     int `toml:"git_probe_ttl"`
+	GitProbeTimeout int `toml:"git_probe_timeout"`
 }
 
 // GitProbeValue reports whether the per-directory Git probe runs. An omitted

@@ -63,6 +63,11 @@ confirm_destructive = false
 # cost round trips instead of microseconds. Read once when the daemon starts:
 # run `amx daemon restart` after changing it.
 # git_probe = true
+# On a slow mount you can keep the column and tune the probe instead, in
+# seconds: how long an answer is reused (default 10) and how long one probe may
+# take before it is abandoned (default 2). 0 keeps the default.
+# git_probe_ttl = 10
+# git_probe_timeout = 2
 
 # Editor command used by the actions menu's "Open editor" entry (`a`, then
 # `O`) and by the worktrees browser's. When unset, falls back to $VISUAL, then

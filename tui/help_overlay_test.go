@@ -338,3 +338,55 @@ func TestOverlayLoadGuardsStillRejectStaleResults(t *testing.T) {
 		}
 	})
 }
+
+// TestHelpOpensAtTheSectionForItsView pins that `?` lands on the keys for the
+// view it was pressed in, with that section's header on the first visible row,
+// and that the dashboard still opens at the top where its section leads.
+func TestHelpOpensAtTheSectionForItsView(t *testing.T) {
+	for mode, section := range map[Mode]string{
+		ModeSessionSearch: "Past Sessions",
+		ModePlanSearch:    "Plans",
+	} {
+		m := contextualHelpModel(mode)
+		m.width, m.height = 100, 30
+		opened := pressKey(m, "?")
+		if opened.helpOffset == 0 {
+			t.Fatalf("%s: help opened at the top, want the %s section", section, section)
+		}
+		rows := helpWrappedContentLines(opened)
+		if got := strings.TrimSpace(stripAnsi(rows[opened.helpOffset])); got != section {
+			// A section near the end may be clamped so the window stays full;
+			// it must still be on screen.
+			_, visible := helpScrollBounds(opened, helpVisibleHeight(opened))
+			window := strings.Join(rows[opened.helpOffset:min(opened.helpOffset+visible, len(rows))], "\n")
+			if !strings.Contains(stripAnsi(window), section) {
+				t.Fatalf("%s: first visible row = %q and the section is not on screen", section, got)
+			}
+		}
+	}
+	dashboard := loadSessions(testModelWithSessions(), makeSessions())
+	dashboard.width, dashboard.height = 100, 30
+	if opened := pressKey(dashboard, "?"); opened.mode == ModeHelp && opened.helpOffset != 0 {
+		t.Fatalf("dashboard help opened at offset %d, want 0", opened.helpOffset)
+	}
+}
+
+func TestHelpPagesWithHalfAndFullPageKeys(t *testing.T) {
+	m := loadSessions(testModelWithSessions(), makeSessions())
+	m.width, m.height = 100, 30
+	m.openHelp(ModeList)
+	m = pressKey(m, "ctrl+d")
+	if m.helpOffset == 0 {
+		t.Fatal("ctrl+d did not scroll the help overlay")
+	}
+	half := m.helpOffset
+	m = pressKey(m, "pgdown")
+	if m.helpOffset <= half {
+		t.Fatalf("pgdown offset = %d, want past %d", m.helpOffset, half)
+	}
+	m = pressKey(m, "ctrl+u")
+	m = pressKey(m, "pgup")
+	if m.helpOffset != 0 {
+		t.Fatalf("paging back up left offset %d, want 0", m.helpOffset)
+	}
+}
