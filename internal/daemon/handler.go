@@ -134,6 +134,11 @@ type Handler struct {
 	kittySockets      map[int]string
 	lastKittyListenOn string
 
+	// focusClient performs focus_window's list-verify-focus sequence. It is
+	// installed once on the startup goroutine by SetFocusClient, before the
+	// server can dispatch a request; nil answers focus_window with an error.
+	focusClient notification.FocusClient
+
 	// snapshots holds the immutable Kitty snapshot cache. The render/restore
 	// loop is the single lister and publishes into it; hook routing reads it
 	// without any Kitty I/O so a slow or wedged ListWindows can never delay a

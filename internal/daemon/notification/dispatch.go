@@ -223,7 +223,7 @@ func (n *Notifier) runDispatch(target NotificationTarget, title, subtitle, actio
 		return
 	}
 	if err := n.focusForClick(focus, target); err != nil {
-		if errors.Is(err, errFocusTargetStale) {
+		if errors.Is(err, ErrFocusTargetStale) {
 			n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "suppressed", Reason: "focus_target_stale"})
 			return
 		}
@@ -234,31 +234,57 @@ func (n *Notifier) runDispatch(target NotificationTarget, title, subtitle, actio
 }
 
 // focusForClick brings the source of a clicked notification back to the
-// foreground. The two-step focus pattern (FocusTab → FocusWindow) mirrors
-// cmd/root.go:47-62. It returns errors so runDispatch can record a precise
-// terminal focus disposition after the notification subprocess exits.
-
-var errFocusTargetStale = errors.New("notification focus target is no longer live")
-
+// foreground through FocusKittyWindow. It returns errors so runDispatch can
+// record a precise terminal focus disposition after the notification
+// subprocess exits.
 func (n *Notifier) focusForClick(focus FocusClient, target NotificationTarget) error {
-	windowID := target.WindowID
-	windows, err := focus.ListWindows(target.KittyListenOn)
+	_, err := FocusKittyWindow(focus, target.KittyListenOn, target.WindowID)
+	return err
+}
+
+// ErrFocusTargetStale reports that the window to focus is no longer in the
+// tree its Kitty instance lists.
+var ErrFocusTargetStale = errors.New("kitty focus target is no longer live")
+
+// KittyWindowLocation names where a focused window lives: the tab that was
+// brought forward and the OS window that holds it.
+type KittyWindowLocation struct {
+	OSWindowID int
+	TabID      int
+	WindowID   int
+}
+
+// FocusKittyWindow focuses windowID in the Kitty instance at socket. It lists
+// that instance first and returns ErrFocusTargetStale without writing anything
+// when the window is gone, then applies the two-step focus pattern — FocusTab
+// before FocusWindow, so a window in a background tab is actually shown. Both
+// steps are attempted even when the first fails; their errors are joined. The
+// location is the one the verifying list reported, and is returned with any
+// focus error so a caller can still name what it tried to focus.
+//
+// It is shared by click-to-focus and the daemon's focus_window request, so the
+// two cannot disagree about what focusing a window means. The caller decides
+// which sockets are acceptable; this function dials the one it is given.
+func FocusKittyWindow(focus FocusClient, socket string, windowID int) (KittyWindowLocation, error) {
+	windows, err := focus.ListWindows(socket)
 	if err != nil {
-		return err
+		return KittyWindowLocation{}, err
 	}
-	if _, _, _, ok := kitty.FindWindowLocationByID(windows, windowID); !ok {
-		return errFocusTargetStale
+	osWindow, tab, _, ok := kitty.FindWindowLocationByID(windows, windowID)
+	if !ok {
+		return KittyWindowLocation{}, ErrFocusTargetStale
 	}
+	loc := KittyWindowLocation{OSWindowID: osWindow.ID, TabID: tab.ID, WindowID: windowID}
 	var errs []error
-	if err := focus.FocusTab(target.KittyListenOn, kitty.MatchTabByWindowID(windowID)); err != nil {
+	if err := focus.FocusTab(socket, kitty.MatchTabByWindowID(windowID)); err != nil {
 		slog.Debug("notifier: focus tab failed", "err", err, "window_id", windowID)
 		errs = append(errs, err)
 	}
-	if err := focus.FocusWindow(target.KittyListenOn, kitty.MatchWindowByID(windowID)); err != nil {
+	if err := focus.FocusWindow(socket, kitty.MatchWindowByID(windowID)); err != nil {
 		slog.Debug("notifier: focus window failed", "err", err, "window_id", windowID)
 		errs = append(errs, err)
 	}
-	return errors.Join(errs...)
+	return loc, errors.Join(errs...)
 }
 
 func (n *Notifier) actionEnabled(action string) bool {

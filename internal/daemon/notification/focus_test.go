@@ -321,3 +321,34 @@ func equalSlice(a, b []string) bool {
 	}
 	return true
 }
+
+// TestFocusKittyWindow pins the shared focus contract click-to-focus and the
+// daemon's focus_window both use: list, verify, then tab before window, all
+// through the one socket given, reporting where the window lives.
+func TestFocusKittyWindow(t *testing.T) {
+	live := []kitty.OSWindow{{ID: 3, Tabs: []kitty.Tab{{ID: 30, Windows: []kitty.Window{{ID: 41}}}, {ID: 31, Windows: []kitty.Window{{ID: 42}}}}}}
+	focus := &fakeFocusClient{live: live}
+
+	loc, err := FocusKittyWindow(focus, "unix:/tmp/kitty-x", 42)
+	if err != nil {
+		t.Fatalf("FocusKittyWindow: %v", err)
+	}
+	if want := (KittyWindowLocation{OSWindowID: 3, TabID: 31, WindowID: 42}); loc != want {
+		t.Fatalf("location = %+v; want %+v", loc, want)
+	}
+	tabs, windows := focus.snapshot()
+	if !equalSlice(tabs, []string{kitty.MatchTabByWindowID(42)}) || !equalSlice(windows, []string{kitty.MatchWindowByID(42)}) {
+		t.Fatalf("focus calls = tabs %v windows %v", tabs, windows)
+	}
+	if !equalSlice(focus.tabSockets, []string{"unix:/tmp/kitty-x"}) || !equalSlice(focus.windowSockets, []string{"unix:/tmp/kitty-x"}) {
+		t.Fatalf("focus sockets = tabs %v windows %v", focus.tabSockets, focus.windowSockets)
+	}
+
+	stale := &fakeFocusClient{live: live}
+	if _, err := FocusKittyWindow(stale, "unix:/tmp/kitty-x", 99); !errors.Is(err, ErrFocusTargetStale) {
+		t.Fatalf("missing window err = %v; want ErrFocusTargetStale", err)
+	}
+	if tabs, windows := stale.snapshot(); len(tabs) != 0 || len(windows) != 0 {
+		t.Fatalf("stale target wrote focus: tabs %v windows %v", tabs, windows)
+	}
+}

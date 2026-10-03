@@ -298,7 +298,13 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   skipping a publish whose digest is unchanged. The `Handler` implements
   `ipc.SubscriptionHandler`: a subscribe registers the sink, replays the latest
   snapshot, and is acknowledged with a 15s heartbeat the hub then sends, and
-  health reports the subscribers as they identified themselves.
+  health reports the subscribers as they identified themselves. The
+  companion's `focus_window` request (`handler_companion.go`) is the one
+  companion request that dials Kitty: it accepts only a socket the daemon
+  learned itself (a `kittySockets` value, `lastKittyListenOn`, or the snapshot's
+  socket), copies that allowlist under `stateMu`, and runs the list, verify,
+  tab, and window steps through `notification.FocusKittyWindow` — the same
+  helper click-to-focus uses — with the lock released.
 - `internal/daemon/protocol`: the daemon wire contract — request/response model,
   command names, durable and exported envelopes, and the serialization
   vocabularies. It holds shapes and pure projections only, and must never import

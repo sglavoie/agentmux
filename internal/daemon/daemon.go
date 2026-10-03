@@ -131,7 +131,9 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	// ListWindows, which a wedged Kitty could hang on before the bounded restore
 	// even runs. The bounded restore below is the authoritative initial snapshot.
 	handler.useKittyClient(kittyClient)
-	notifier.SetFocus(notification.NewKittyFocus(kittyClient))
+	focusClient := notification.NewKittyFocus(kittyClient)
+	notifier.SetFocus(focusClient)
+	handler.SetFocusClient(focusClient)
 	global, perAccount := buildStaleThresholds(cfg)
 	handler.SetStaleThresholds(global, perAccount)
 	hsGlobal, hsPerAccount := buildHookSilenceThresholds(cfg)

@@ -196,6 +196,21 @@ amx debug subscribe --json            # ack, then one schema-v1 record per frame
 amx daemon status                     # companion: N subscribers (client version, ...)
 ```
 
+A companion focuses a session with one `focus_window` request naming a Kitty
+socket and a window ID. The daemon dials the socket only if it already knows it
+— a per-window hook socket, its effective listen address, or the socket its
+published snapshot was read through — and otherwise answers `unknown_socket`
+without dialing anything. It lists that instance, answers `stale_target`
+without writing when the window is gone, and then focuses the tab and the
+window, which is the same sequence a notification click uses
+(`notification.FocusKittyWindow`). All of it runs outside `stateMu`, under a 3s
+connection deadline. A successful answer names the window's tab and OS window:
+
+```bash
+printf '%s\n' '{"type":"focus_window","focus_window":{"kitty_socket":"unix:/tmp/kitty-123","window_id":7}}' \
+  | nc -U ~/.local/share/agent-mux/daemon.sock
+```
+
 ## Investigating hook event flow
 
 `amx daemon export-events` writes a schema v13 JSON snapshot for investigation.
