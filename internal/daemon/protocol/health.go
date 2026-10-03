@@ -14,6 +14,14 @@ type MetricsSnapshot struct {
 	// Ingress queue latency in nanoseconds (last observation / lifetime max).
 	QueueLastWaitNs int64 `json:"queue_last_wait_ns,omitempty"`
 	QueueMaxWaitNs  int64 `json:"queue_max_wait_ns,omitempty"`
+	// Subscription stream counters: subscribers streaming now, subscribes
+	// refused (limit or shutdown), streams ended as slow consumers, frames
+	// written, and frames dropped for exceeding CompanionFrameMaxBytes.
+	SubscribersActive       int64  `json:"subscribers_active,omitempty"`
+	SubscribersRejected     uint64 `json:"subscribers_rejected,omitempty"`
+	SubscribersSlowConsumer uint64 `json:"subscribers_slow_consumer,omitempty"`
+	StreamFramesWritten     uint64 `json:"stream_frames_written,omitempty"`
+	StreamFramesOversize    uint64 `json:"stream_frames_oversize,omitempty"`
 }
 
 // NotificationCapability is the daemon-start snapshot of native notification

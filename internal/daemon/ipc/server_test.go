@@ -15,6 +15,7 @@ func newTestServer() *Server {
 	s := &Server{handler: newTestHandler()}
 	s.dedupe = newDedupeCache(&s.metrics)
 	s.ingress = newIngressQueue(s.handler.Handle, &s.metrics)
+	s.subscribers = newSubscriberRegistry(&s.subscriptionMetrics)
 	return s
 }
 

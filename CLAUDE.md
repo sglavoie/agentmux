@@ -402,10 +402,23 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   at-most-once, the transport's own request-outcome and queue-latency counters,
   and the whole client side: the socket path, the send deadlines, daemon
   auto-start and restart, and the typed health, event-export, and ASL calls. A
-  connection carries exactly one request/response pair; there is no
-  multiplexing and no subscription channel, so a second answer means a second
-  connection. It sees its application only as the three-method `RequestHandler`
-  seam, which is what keeps it — like protocol, state, rendering, events,
+  connection carries exactly one request/response pair and there is no
+  multiplexing, so a second answer means a second connection — except
+  `subscribe`, whose ack opens a stream of server-to-client frames on the same
+  connection (`subscription.go`). That stream is one-directional, bounded, and
+  coalesced, and never carries a second request: client lines after the
+  subscribe are read only to see EOF. A `StreamSink` keeps the latest snapshot
+  in a single slot that the writer drains before a 64-frame queue, so a newer
+  snapshot replaces an unwritten one; a full queue or a frame write exceeding
+  its 2s deadline ends the subscriber as a slow consumer, with a best-effort
+  `bye`; a frame over `protocol.CompanionFrameMaxBytes` is dropped and counted;
+  and a ninth concurrent subscriber is refused with `subscriber_limit`. `Close`
+  ends every live stream with `bye{shutdown}` before it waits on connections,
+  because a stream never ends on its own and would otherwise hold the drain
+  forever. Streams are offered through the optional `SubscriptionHandler`
+  interface; a handler that does not implement it answers subscribe as an
+  unknown request type. It sees its application only as the three-method
+  `RequestHandler` seam, which is what keeps it — like protocol, state, rendering, events,
   activity, probes, process, asl, and eventlog — from ever importing the daemon
   root. It dispatches a request to the application and routes it onto the
   serialized or the inline path; naming the concrete behavior a request type

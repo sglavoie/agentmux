@@ -58,9 +58,11 @@ type RequestHandler interface {
 }
 
 // Server listens on a Unix domain socket and dispatches requests to a
-// RequestHandler. Each connection carries exactly one request/response pair:
-// there is no multiplexing and no subscription channel, so a client that wants
-// a second answer opens a second connection.
+// RequestHandler. Each connection carries exactly one request/response pair
+// and there is no multiplexing, so a client that wants a second answer opens a
+// second connection. The one exception is subscribe (subscription.go): its
+// response opens a bounded server-to-client frame stream on the same
+// connection, which never carries a second request.
 type Server struct {
 	handler     RequestHandler
 	ln          net.Listener
@@ -68,6 +70,10 @@ type Server struct {
 	dedupe      *dedupeCache
 	ingress     *ingressQueue
 	badPayloads atomic.Uint64
+	// subscriptionMetrics and subscribers are the subscribe exception: the
+	// streams this server is writing and the counters health reports for them.
+	subscriptionMetrics subscriptionMetrics
+	subscribers         *subscriberRegistry
 	// registrationMu serializes accepted-connection registration with the
 	// beginning of Close. Once closing is set, no new handler can be added to
 	// wg, so Close may wait and then stop ingress without racing a late submitter.
@@ -120,15 +126,20 @@ func NewServer(socketPath string, handler RequestHandler) (*Server, error) {
 	s := &Server{handler: handler, ln: ln}
 	s.dedupe = newDedupeCache(&s.metrics)
 	s.ingress = newIngressQueue(s.handler.Handle, &s.metrics)
+	s.subscribers = newSubscriberRegistry(&s.subscriptionMetrics)
 	// Health responses report the server's request-outcome counters (queue
-	// saturation, queue latency) so diagnostics can see them over IPC.
-	handler.SetMetricsSource(s.metrics.Snapshot)
+	// saturation, queue latency, subscriptions) so diagnostics can see them
+	// over IPC.
+	handler.SetMetricsSource(s.Metrics)
 	return s, nil
 }
 
-// Metrics returns a snapshot of the server's request-outcome counters.
+// Metrics returns a snapshot of the server's request-outcome and subscription
+// counters.
 func (s *Server) Metrics() protocol.MetricsSnapshot {
-	return s.metrics.Snapshot()
+	snap := s.metrics.Snapshot()
+	s.subscriptionMetrics.fill(&snap)
+	return snap
 }
 
 func disableListenerAutoUnlink(ln net.Listener) {
@@ -157,7 +168,12 @@ func (s *Server) Serve(ctx context.Context) error {
 		}
 	}()
 
-	defer s.wg.Wait()
+	// Subscriptions never end on their own, so they are cancelled before the
+	// drain rather than waited on.
+	defer func() {
+		s.subscribers.close()
+		s.wg.Wait()
+	}()
 
 	for {
 		conn, err := s.ln.Accept()
@@ -207,6 +223,11 @@ func (s *Server) Close() {
 		}
 		s.registrationMu.Unlock()
 
+		// A live subscription would hold its connection in wg forever. Ending
+		// each with a shutdown bye before the drain lets every writer return;
+		// the registry also refuses any subscribe from a connection already
+		// past registration, so none can start after this point.
+		s.subscribers.close()
 		s.wg.Wait()
 		// Stop the reducer consumer only after every connection goroutine has
 		// returned, so no in-flight submit can block on a closed queue.
@@ -265,6 +286,10 @@ func (s *Server) serveConn(r io.Reader, w io.Writer) {
 	}
 	req = events.EnsureRequestTraceID(req)
 	extendDeadline(w, req.Type)
+	if req.Type == protocol.TypeSubscribe {
+		s.serveSubscription(req, scanner, w)
+		return
+	}
 
 	// Deduplicate state-changing retries: a request carrying a stable ID is
 	// applied exactly once, so an ambiguous-timeout resend replays the original
