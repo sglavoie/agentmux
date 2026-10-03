@@ -411,6 +411,32 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   serialized or the inline path; naming the concrete behavior a request type
   means — and every reducer, renderer, and notifier mutation under stateMu —
   stays in the root, which implements `RequestHandler`.
+- `internal/daemon/companion`: what a companion — the native menu bar app, or
+  any other long-lived subscriber — is shown. `Project` is one pure function
+  from values the caller already copied (the per-window state the state query
+  publishes, the per-window Kitty sockets, the cached window tree and the
+  socket it was read through, the notifier's posture, and the ASL supervisor
+  targets and pending questions) to the versioned
+  `protocol.CompanionSnapshot`, and `Digest` is that snapshot's content
+  identity. It reads no clock of its own, performs no Kitty, IPC, filesystem,
+  or journal I/O, and — like protocol, state, rendering, events, activity,
+  probes, process, asl, eventlog, and ipc — must never import the daemon root,
+  so the hub can build a snapshot outside `stateMu` from a copy taken under it;
+  its own tests assert the import list. Three rules are the package rather than
+  details of it. A daemon state is joined to a tree window only when both are
+  provably about the same Kitty instance — window IDs mean something only
+  inside the instance that issued them — and a state recorded against another
+  instance is published as its own tree-less session rather than decorating a
+  window that merely shares its number. The attention bit is
+  `protocol.AttentionStates` over the daemon's icon (falling back to the
+  title's) or Kitty's own flag, the same set `amx focus-next` cycles on, so the
+  menu bar and the CLI cannot disagree about which session is waiting. And the
+  snapshot carries timestamps, never ages, so projecting an unchanged world
+  twice is byte-identical and the hub can skip a publish; truncation at
+  `CompanionSessionCap`, and a measured byte budget under the 1 MiB frame cap,
+  drop idle and working rows before any row a human is waited on. ASL waiting
+  entries name a run and its latest question and never carry a question body
+  or an action token.
 - `internal/diagnostics`: private fail-open causal journals, operational and
   native logs, temporary raw captures, and bounded diagnostic storage.
 - `internal/debugger`: offline-first status, query, explanation, bundle, and

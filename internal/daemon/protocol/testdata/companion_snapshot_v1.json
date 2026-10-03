@@ -1,0 +1,92 @@
+{
+  "v": 1,
+  "daemon": {
+    "pid": 4242,
+    "started_at": 1700000000,
+    "build": {
+      "version": "1.2.3",
+      "revision": "abc1234",
+      "dirty": true,
+      "build_time": "2026-10-03T12:00:00Z",
+      "go_version": "go1.26.2",
+      "binary_hash": "sha256:00ff"
+    },
+    "ready": false,
+    "degraded_reason": "restore_timeout"
+  },
+  "kitty": {
+    "ready": true,
+    "stale": true,
+    "socket": "unix:/tmp/kitty-100",
+    "sockets": [
+      "unix:/tmp/kitty-100",
+      "unix:/tmp/kitty-200"
+    ]
+  },
+  "notification": {
+    "backend": "alerter",
+    "app_connected": true,
+    "snoozed_until": 1700003600,
+    "indefinite": true,
+    "quiet_hours": "22:00-07:00",
+    "quiet_now": true
+  },
+  "dashboard": {
+    "open": true,
+    "kitty_socket": "unix:/tmp/kitty-100",
+    "os_window_id": 1,
+    "tab_id": 5,
+    "window_id": 50
+  },
+  "attention": {
+    "total": 4,
+    "stop": 1,
+    "key": 1,
+    "error": 1,
+    "question": 1,
+    "working": 2,
+    "unseen": 1
+  },
+  "asl": {
+    "waiting": [
+      {
+        "run_id": "run-1",
+        "plan_dir": "/plans/p",
+        "window_id": 101,
+        "unanswered": 2,
+        "latest_question_id": "q-1",
+        "latest_question_created_at": 1700000100
+      }
+    ]
+  },
+  "sessions": [
+    {
+      "window_id": 101,
+      "tab_id": 10,
+      "os_window_id": 1,
+      "kitty_socket": "unix:/tmp/kitty-100",
+      "harness": "claude",
+      "profile": "work",
+      "project": "API",
+      "base_title": "W:api",
+      "conversation": {
+        "harness": "claude",
+        "session_id": "0b5c-session"
+      },
+      "asl_run_id": "run-1",
+      "icon_state": "question",
+      "reason": "supervisor",
+      "unseen": true,
+      "attention": true,
+      "muted": true,
+      "locked": true,
+      "looping": true,
+      "busy_since_at": 1699999000,
+      "last_event_at": 1700000050,
+      "presentation_changed_at_ms": 1700000050123,
+      "branch": "main",
+      "dirty": true
+    }
+  ],
+  "truncated": true
+}

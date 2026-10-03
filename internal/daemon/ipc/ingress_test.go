@@ -156,3 +156,15 @@ func TestMetricsObserveQueueWait(t *testing.T) {
 		t.Fatalf("QueueMaxWaitNs = %d; want the lifetime maximum", snap.QueueMaxWaitNs)
 	}
 }
+
+// TestSerializedRequest_CompanionTypesStayInline pins the companion protocol's
+// promise that none of its requests is serialized behind hook ingress or
+// deduplicated by request ID. A subscribe parked in the ingress queue would
+// hold a queue slot for the life of its stream.
+func TestSerializedRequest_CompanionTypesStayInline(t *testing.T) {
+	for _, typ := range protocol.CompanionMessageTypes {
+		if serializedRequest(typ) {
+			t.Errorf("%s is routed through the serialized ingress path", typ)
+		}
+	}
+}

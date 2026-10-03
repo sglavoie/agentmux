@@ -2,6 +2,7 @@ package session
 
 import (
 	"github.com/sglavoie/agentmux/internal/cli"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -92,13 +93,6 @@ func focusManagedTab(client kitty.KittyClient, windowID, direction int) error {
 	return client.FocusTab(kitty.MatchTabByID(tab.ID))
 }
 
-var attentionStates = map[string]bool{
-	"stop":     true,
-	"key":      true,
-	"error":    true,
-	"question": true,
-}
-
 func runFocusNext(_ *cobra.Command, _ []string) error {
 	windowID := cli.WindowIDOrEnv(focusNextWindowID)
 
@@ -108,6 +102,19 @@ func runFocusNext(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
+	tab, ok := nextAttentionTab(osWindows, windowID)
+	if !ok {
+		return nil
+	}
+	return client.FocusTab(kitty.MatchTabByID(tab.ID))
+}
+
+// nextAttentionTab picks the tab focus-next moves to: the first tab after the
+// one holding windowID, in the same OS window and wrapping around, whose title
+// carries a protocol.AttentionStates icon or which Kitty itself flags. The
+// current tab is never chosen. The predicate is the one the companion snapshot
+// sets its attention bit with, so the two cannot disagree about a tab.
+func nextAttentionTab(osWindows []kitty.OSWindow, windowID int) (kitty.Tab, bool) {
 	var tabs []kitty.Tab
 	currentTabIdx := -1
 	for _, osw := range osWindows {
@@ -132,7 +139,7 @@ func runFocusNext(_ *cobra.Command, _ []string) error {
 
 	n := len(tabs)
 	if n == 0 {
-		return nil
+		return kitty.Tab{}, false
 	}
 
 	start := 0
@@ -144,9 +151,9 @@ func runFocusNext(_ *cobra.Command, _ []string) error {
 		if idx == currentTabIdx {
 			continue
 		}
-		if attentionStates[palette.DetectState(tabs[idx].Title)] || tabs[idx].NeedsAttention {
-			return client.FocusTab(kitty.MatchTabByID(tabs[idx].ID))
+		if protocol.AttentionStates[palette.DetectState(tabs[idx].Title)] || tabs[idx].NeedsAttention {
+			return tabs[idx], true
 		}
 	}
-	return nil
+	return kitty.Tab{}, false
 }

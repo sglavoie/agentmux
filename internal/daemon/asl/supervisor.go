@@ -149,6 +149,25 @@ func (r *SupervisorRegistry) PendingForWindow(windowID int) []PendingQuestion {
 	return pending
 }
 
+// Pending returns every registered lease, on any window, whose cached
+// projection reports unanswered questions — PendingForWindow without the
+// window filter, for a consumer that summarizes the whole daemon at once. The
+// order is unspecified; a caller that publishes it sorts it.
+func (r *SupervisorRegistry) Pending() []PendingQuestion {
+	var pending []PendingQuestion
+	for ref, projection := range r.projections {
+		if projection.UnansweredQuestions <= 0 {
+			continue
+		}
+		target, ok := r.targets[ref]
+		if !ok {
+			continue
+		}
+		pending = append(pending, PendingQuestion{Target: target, Projection: projection})
+	}
+	return pending
+}
+
 // ClosureBlocks reports whether an authoritative closure marker has already
 // retired everything up to seq for this lease. A projection newer than the
 // cutoff supersedes it, and consumes it, so one closure can never suppress an

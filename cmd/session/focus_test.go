@@ -3,7 +3,9 @@ package session
 import (
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/palette"
 )
 
 func TestFocusManagedTab_FocusesRelativeManagedTab(t *testing.T) {
@@ -129,5 +131,50 @@ func testUnmanagedTab(tabID, windowID int, title string) kitty.Tab {
 		Windows: []kitty.Window{{
 			ID: windowID,
 		}},
+	}
+}
+
+// TestNextAttentionTab_UsesSharedAttentionSet pins focus-next to the shared
+// protocol.AttentionStates set: every state in it is a stop for the cycle and
+// every other palette state is passed over. The companion snapshot's attention
+// bit reads the same set, which is what keeps the menu bar's "next attention"
+// and focus-next landing on the same tab.
+func TestNextAttentionTab_UsesSharedAttentionSet(t *testing.T) {
+	for _, state := range []string{"bolt", "stop", "key", "warning", "error", "subagent", "compact", "question", ""} {
+		t.Run("state="+state, func(t *testing.T) {
+			windows := []kitty.OSWindow{{
+				ID: 1,
+				Tabs: []kitty.Tab{
+					{ID: 10, Title: "W:here", Windows: []kitty.Window{{ID: 101}}},
+					{ID: 20, Title: palette.BuildTitleFull("W:there", state, false, false), Windows: []kitty.Window{{ID: 201}}},
+				},
+			}}
+			tab, ok := nextAttentionTab(windows, 101)
+			want := protocol.AttentionStates[state]
+			if ok != want {
+				t.Fatalf("nextAttentionTab ok = %v, want %v", ok, want)
+			}
+			if ok && tab.ID != 20 {
+				t.Fatalf("tab = %d, want 20", tab.ID)
+			}
+		})
+	}
+}
+
+func TestNextAttentionTab_KittyFlagAndCurrentTab(t *testing.T) {
+	windows := []kitty.OSWindow{{
+		ID: 1,
+		Tabs: []kitty.Tab{
+			{ID: 10, Title: palette.BuildTitleFull("W:here", "stop", false, false), Windows: []kitty.Window{{ID: 101}}},
+			{ID: 20, Title: "W:quiet", Windows: []kitty.Window{{ID: 201}}},
+			{ID: 30, Title: "W:flagged", NeedsAttention: true, Windows: []kitty.Window{{ID: 301}}},
+		},
+	}}
+	tab, ok := nextAttentionTab(windows, 101)
+	if !ok || tab.ID != 30 {
+		t.Fatalf("nextAttentionTab = (%d, %v), want (30, true): the current tab is skipped and Kitty's flag counts", tab.ID, ok)
+	}
+	if tab, ok := nextAttentionTab(windows, 999); ok {
+		t.Fatalf("nextAttentionTab from an unknown window = %d, want no target", tab.ID)
 	}
 }

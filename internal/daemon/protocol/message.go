@@ -232,6 +232,13 @@ type Request struct {
 	// separate struct rather than more flat fields so no ASL parameter can be
 	// confused with hook-event state by a generic consumer.
 	ASL *ASLRequest `json:"asl,omitempty"`
+	// The companion parameter blocks, one per companion request type. Like ASL
+	// they are typed structs rather than flat fields, so none of them can be
+	// mistaken for hook-event state by a generic consumer.
+	Subscribe   *SubscribeRequest   `json:"subscribe,omitempty"`
+	FocusWindow *FocusWindowRequest `json:"focus_window,omitempty"`
+	Snooze      *SnoozeRequest      `json:"snooze,omitempty"`
+	Disposition *DispositionRequest `json:"disposition,omitempty"`
 }
 
 // ASLRequest is the typed parameter block for the ASL message types. Text is
@@ -339,6 +346,16 @@ type Response struct {
 	// publishes a non-nil block, cold or not, so nil means "old daemon" rather
 	// than "no snapshot yet".
 	KittySnapshot *KittySnapshot `json:"kitty_snapshot,omitempty"`
+	// Subscription acknowledges TypeSubscribe; the stream's frames follow it on
+	// the same connection.
+	Subscription *SubscriptionAck `json:"subscription,omitempty"`
+	// Focused answers TypeFocusWindow with where the focused window lives.
+	Focused *FocusWindowResult `json:"focused,omitempty"`
+	// Snooze answers TypeNotificationSnooze with the snooze now in force.
+	Snooze *SnoozeState `json:"snooze,omitempty"`
+	// Companion is the TypeHealth view of companion subscribers. It is omitted
+	// by daemons that predate the companion protocol.
+	Companion *CompanionHealth `json:"companion,omitempty"`
 	// Ready reports whether the daemon completed its bounded initial restore
 	// before binding the public socket, or — after a degraded start — later
 	// recovered when a maintenance tick restored durable state from a
