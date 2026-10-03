@@ -2,6 +2,7 @@ package debugger
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -60,12 +61,31 @@ func (p HookProfile) Detail() string {
 	if len(p.Issues) == 0 {
 		return p.Path
 	}
+	// One untrusted Codex install produces an issue per project per hook event,
+	// which ran to hundreds of clauses on a single doctor line and buried every
+	// other finding. A code that repeats past hookDetailRepeatLimit is shown by
+	// its first messages plus a count; Issues keeps every one for JSON.
+	byCode := make(map[string]int, len(p.Issues))
+	for _, issue := range p.Issues {
+		byCode[issue.Code]++
+	}
+	shown := make(map[string]int, len(byCode))
 	parts := make([]string, 0, len(p.Issues))
 	for _, issue := range p.Issues {
-		parts = append(parts, issue.Message)
+		shown[issue.Code]++
+		switch n := shown[issue.Code]; {
+		case n <= hookDetailRepeatLimit:
+			parts = append(parts, issue.Message)
+		case n == hookDetailRepeatLimit+1:
+			parts = append(parts, fmt.Sprintf("and %d more like these", byCode[issue.Code]-hookDetailRepeatLimit))
+		}
 	}
 	return strings.Join(parts, "; ")
 }
+
+// hookDetailRepeatLimit is how many issues sharing one code Detail spells out
+// before summarizing the rest as a count.
+const hookDetailRepeatLimit = 3
 
 // HookDeliveryFailures summarizes terminally dropped hook deliveries in the
 // trailing hour — one count per request whose terminal record reports failure,
