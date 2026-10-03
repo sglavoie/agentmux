@@ -1,7 +1,9 @@
 package agentloop
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -311,5 +313,30 @@ func TestPresenceByRunIDCollapsesConflictingDuplicates(t *testing.T) {
 	}
 	if observation.Presence != PresenceIndeterminate {
 		t.Fatalf("presence = %q, want indeterminate: a duplicate run ID is itself a reason not to assert absence", observation.Presence)
+	}
+}
+
+// A state directory with no state.json is a plan ASL registered but never ran
+// ("empty" in ASL's own pairing report). It is indeterminate, so it can never
+// retire a lease, but it is reported as no-state rather than unreadable: it is
+// not a fault, and a state root with hundreds of them must not look broken.
+func TestDiscoverNeverRunPlanIsNoStateNotUnreadable(t *testing.T) {
+	root := t.TempDir()
+	empty := filepath.Join(root, strings.Repeat("a", 64))
+	if err := os.MkdirAll(empty, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(empty, "operations.jsonl"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := DiscoverPlans(DiscoverOptions{StateRoot: root, PIDRunning: livePIDs, ProcessBirth: matchingBirth()})
+	if err != nil {
+		t.Fatalf("DiscoverPlans: %v", err)
+	}
+	if len(result.Observations) != 1 {
+		t.Fatalf("observations = %+v, want one", result.Observations)
+	}
+	if got := result.Observations[0]; got.Presence != PresenceIndeterminate || got.Reason != ReasonNoState {
+		t.Fatalf("observation = %+v, want indeterminate/%s", got, ReasonNoState)
 	}
 }

@@ -174,7 +174,7 @@ func LookupPlanState(planDir, stateRoot string) (state PlanState, found bool, er
 	projection, err := ReadProjection(statePath)
 	if err != nil {
 		switch ProjectionReason(err) {
-		case ReasonUnreadableState, ReasonMissingProjection:
+		case ReasonNoState, ReasonUnreadableState, ReasonMissingProjection:
 			// No usable state for this plan is an ordinary answer, not a fault.
 			return PlanState{}, false, nil
 		default:

@@ -163,7 +163,7 @@ func TestProjectionCacheReadsThroughWhenTheFileIsGone(t *testing.T) {
 	if err := os.Remove(statePath); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := cache.read(statePath); ProjectionReason(err) != ReasonUnreadableState {
-		t.Fatalf("removed state file reason = %q, want %q", ProjectionReason(err), ReasonUnreadableState)
+	if _, err := cache.read(statePath); ProjectionReason(err) != ReasonNoState {
+		t.Fatalf("removed state file reason = %q, want %q", ProjectionReason(err), ReasonNoState)
 	}
 }

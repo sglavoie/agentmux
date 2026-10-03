@@ -61,6 +61,14 @@ const (
 // off these strings.
 const (
 	// Indeterminate: the projection could not be established.
+	//
+	// ReasonNoState is a state directory with no state.json at all — a plan ASL
+	// registered but never ran, which ASL itself reports as "empty". It stays
+	// indeterminate, so it can never retire a lease, but it is not a fault and
+	// must not be counted with ReasonUnreadableState: a state root holding
+	// hundreds of never-run plans otherwise reports them as unreadable on
+	// every sweep.
+	ReasonNoState             = "no-state"
 	ReasonUnreadableState     = "unreadable-state"
 	ReasonMissingProjection   = "missing-projection"
 	ReasonUnsupportedContract = "unsupported-contract"

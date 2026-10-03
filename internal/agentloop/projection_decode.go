@@ -25,7 +25,7 @@ import (
 func ReadProjection(path string) (Projection, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return Projection{}, projectionErrorf(ReasonUnreadableState, "%s does not exist", path)
+		return Projection{}, projectionErrorf(ReasonNoState, "%s does not exist", path)
 	}
 	if err != nil {
 		return Projection{}, projectionErrorf(ReasonUnreadableState, "reading %s: %v", path, err)

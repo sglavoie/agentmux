@@ -177,11 +177,14 @@ func aslProjectionDimension(in aslIntegrationInputs) doctorASLDimension {
 	if r.SweepErrors > 0 {
 		problems = append(problems, fmt.Sprintf("%d sweep(s) could not read the state root", r.SweepErrors))
 	}
+	// These two counters accumulate across every sweep since the daemon
+	// started, so one bad file counted every ten seconds reads as hundreds of
+	// documents unless the wording says what is being counted.
 	if r.InvalidProjections > 0 {
-		problems = append(problems, fmt.Sprintf("%d invalid projection(s)", r.InvalidProjections))
+		problems = append(problems, fmt.Sprintf("%d invalid projection reading(s) across %d sweep(s)", r.InvalidProjections, r.Sweeps))
 	}
 	if r.UnreadableStates > 0 {
-		problems = append(problems, fmt.Sprintf("%d unreadable state document(s)", r.UnreadableStates))
+		problems = append(problems, fmt.Sprintf("%d unreadable state document reading(s) across %d sweep(s)", r.UnreadableStates, r.Sweeps))
 	}
 	if len(problems) > 0 {
 		dim.Status = aslStatusWarn
