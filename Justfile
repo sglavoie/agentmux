@@ -254,7 +254,9 @@ reliability-stress reps="20" shards="4":
     echo "reliability-stress: ok"
 
 # The daemon scenarios that assert state survives a crash, a restart, or a
-# degraded start. Kept separate from stress_scenarios: those repeat healthy
+# degraded start. TestFault also covers the companion stream: a daemon stop
+# says bye{shutdown} to every subscriber, and a subscriber killed mid-write
+# leaves the daemon healthy. Kept separate from stress_scenarios: those repeat healthy
 # lifecycle paths to shake out ordering races, while these inject a fault and
 # assert the observable state afterwards.
 crash_restart_scenarios := "TestFault|TestFuzzReducerRestartEquivalence|TestTraceReplayRestartEquivalence|TestShadowReducerSurvivesRestart|TestInteractiveOwnershipSurvivesRestart"
@@ -285,9 +287,9 @@ crash-restart:
 
     # Subtest lines are indented, so this counts top-level scenarios only.
     passed=$(grep -c '^--- PASS' "$log" || true)
-    if [ "$passed" -lt 12 ]; then
+    if [ "$passed" -lt 13 ]; then
         echo >&2
-        echo "crash-restart ran only $passed top-level scenarios (expected at least 12)" >&2
+        echo "crash-restart ran only $passed top-level scenarios (expected at least 13)" >&2
         echo "update crash_restart_scenarios if a scenario was intentionally renamed" >&2
         exit 1
     fi

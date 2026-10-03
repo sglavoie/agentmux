@@ -47,11 +47,17 @@ func (r *readinessState) snapshot() (ready bool, degraded string) {
 
 // MarkReady records that the daemon completed its bounded initial
 // snapshot+restore. Exported for daemon.Run.
-func (h *Handler) MarkReady() { h.readiness.markReady() }
+func (h *Handler) MarkReady() {
+	h.readiness.markReady()
+	h.companionDirty()
+}
 
 // MarkDegraded records that the daemon started degraded with the given reason.
 // Exported for daemon.Run.
-func (h *Handler) MarkDegraded(reason string) { h.readiness.markDegraded(reason) }
+func (h *Handler) MarkDegraded(reason string) {
+	h.readiness.markDegraded(reason)
+	h.companionDirty()
+}
 
 // Readiness reports whether the daemon is fully ready and, when not, why it is
 // degraded.

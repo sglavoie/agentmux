@@ -167,6 +167,7 @@ func (h *Handler) publishSnapshotFrom(publication probes.Publication) {
 	h.refreshMutedFromSnapshotLocked(publication.Windows)
 	h.refreshFocusFromSnapshotLocked(publication.Windows, publication.CapturedAt)
 	h.snapshots.Publish(publication)
+	h.companionDirty()
 	h.stateMu.Unlock()
 }
 

@@ -253,6 +253,9 @@ type Health struct {
 	// failed its bounded restore, and folding one into the other would hide
 	// whichever came second.
 	KittySnapshot *protocol.KittySnapshot
+	// Companion lists the connected companion subscribers. Nil against a
+	// daemon that predates the companion protocol.
+	Companion *protocol.CompanionHealth
 }
 
 // Health pings the daemon and returns its liveness, PID and uptime. Never
@@ -281,6 +284,7 @@ func (c *Client) healthBefore(deadline time.Time) Health {
 		ASLHookDelivery: resp.ASLHookDelivery,
 		ScreenPatterns:  resp.ScreenPatterns,
 		KittySnapshot:   resp.KittySnapshot,
+		Companion:       resp.Companion,
 	}
 }
 

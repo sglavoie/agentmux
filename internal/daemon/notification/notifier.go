@@ -189,6 +189,15 @@ func (n *Notifier) Capability() protocol.NotificationCapability {
 	return n.capability
 }
 
+// QuietHoursSpec returns the configured quiet-hours window verbatim, for a
+// companion to show read-only. The configuration is fixed at construction.
+func (n *Notifier) QuietHoursSpec() string {
+	if n.cfg == nil {
+		return ""
+	}
+	return n.cfg.QuietHours
+}
+
 // SetCapability overrides the backend capability resolved at construction. It
 // is the seam the daemon's health tests use to assert that an unavailable
 // Alerter is reported without degrading readiness, which cannot be staged

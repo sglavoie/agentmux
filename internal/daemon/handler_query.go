@@ -11,6 +11,50 @@ import (
 func (h *Handler) handleStateQuery() protocol.Response {
 	h.stateMu.Lock()
 	now := time.Now().Unix()
+	states, snapshot := h.copyStateLocked(now)
+	watchdog := make(map[int]protocol.WatchdogState, len(h.store))
+	for id, st := range h.store {
+		action := st.LastAction
+		if action != "active" && action != "subagent" && action != "compact" {
+			continue
+		}
+		entry := protocol.WatchdogState{LastAction: action}
+		if !st.Activity.IsZero() {
+			entry.LastEventAt = st.Activity.Unix()
+		}
+		if d := h.staleThresholds.Resolve(st.LastAccount, action); d > 0 {
+			entry.ThresholdSec = int(d / time.Second)
+		}
+		watchdog[id] = entry
+	}
+	// Topology is read in the same critical section as the window states, under
+	// the established stateMu → SnapshotStore order. A publication landing
+	// between two separate reads would otherwise hand a dashboard states from
+	// one moment and a window tree from another, which is precisely the
+	// incoherence a single-round-trip refresh exists to avoid.
+	view, listClient, listSocket := h.kittyListSourceLocked()
+	h.stateMu.Unlock()
+	// Sampled after the unlock: kittyClientForList takes stateMu itself, so
+	// scoping the already-captured client here is what keeps the sample off the
+	// lock without re-entering it. These are operational counters for the same
+	// effective socket rather than facts about the publication above, so they
+	// are not required to be coherent with it.
+	status, hasStatus := kittyListStatus(listClient, listSocket)
+	return protocol.Response{
+		OK:            true,
+		Activity:      snapshot,
+		Watchdog:      watchdog,
+		States:        states,
+		KittySnapshot: kittySnapshotBlock(view, status, hasStatus, time.Now(), true),
+	}
+}
+
+// copyStateLocked projects every window's visible state and last-activity
+// instant, keyed by window ID. It is the one copy the state query and the
+// companion hub both publish, so a dashboard and a companion cannot disagree
+// about what a window shows. It clones and does nothing else. Callers hold
+// stateMu.
+func (h *Handler) copyStateLocked(now int64) (map[int]protocol.WindowStateSnapshot, map[int]int64) {
 	states := make(map[int]protocol.WindowStateSnapshot, len(h.store))
 	snapshot := make(map[int]int64, len(h.store))
 	for id, st := range h.store {
@@ -59,41 +103,7 @@ func (h *Handler) handleStateQuery() protocol.Response {
 		state.LastEventAt = st.Activity.Unix()
 		states[id] = state
 	}
-	watchdog := make(map[int]protocol.WatchdogState, len(h.store))
-	for id, st := range h.store {
-		action := st.LastAction
-		if action != "active" && action != "subagent" && action != "compact" {
-			continue
-		}
-		entry := protocol.WatchdogState{LastAction: action}
-		if !st.Activity.IsZero() {
-			entry.LastEventAt = st.Activity.Unix()
-		}
-		if d := h.staleThresholds.Resolve(st.LastAccount, action); d > 0 {
-			entry.ThresholdSec = int(d / time.Second)
-		}
-		watchdog[id] = entry
-	}
-	// Topology is read in the same critical section as the window states, under
-	// the established stateMu → SnapshotStore order. A publication landing
-	// between two separate reads would otherwise hand a dashboard states from
-	// one moment and a window tree from another, which is precisely the
-	// incoherence a single-round-trip refresh exists to avoid.
-	view, listClient, listSocket := h.kittyListSourceLocked()
-	h.stateMu.Unlock()
-	// Sampled after the unlock: kittyClientForList takes stateMu itself, so
-	// scoping the already-captured client here is what keeps the sample off the
-	// lock without re-entering it. These are operational counters for the same
-	// effective socket rather than facts about the publication above, so they
-	// are not required to be coherent with it.
-	status, hasStatus := kittyListStatus(listClient, listSocket)
-	return protocol.Response{
-		OK:            true,
-		Activity:      snapshot,
-		Watchdog:      watchdog,
-		States:        states,
-		KittySnapshot: kittySnapshotBlock(view, status, hasStatus, time.Now(), true),
-	}
+	return states, snapshot
 }
 
 // handleSessionDetail returns the per-window event ring buffer for req.WindowID.

@@ -372,6 +372,7 @@ func (h *Handler) publishEffectiveLocked(windowID int, st *state.WindowState, ef
 	// stops describing anything the instant the reduced icon leaves it. This runs
 	// AFTER the metadata write above because it republishes the same entry.
 	h.retractScreenDeclinesForIconLocked(windowID, effective.Icon)
+	h.companionDirty()
 }
 
 // stampBusySinceLocked maintains the busy-stretch anchor as an idempotent

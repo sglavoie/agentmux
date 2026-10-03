@@ -115,6 +115,7 @@ func (h *Handler) handleHealth() protocol.Response {
 	// `kitten @ ls` look like a broken daemon, and would erase the real
 	// degraded reason a daemon already had.
 	resp.KittySnapshot = h.kittySnapshotStatus(time.Now())
+	resp.Companion = h.companionHealth()
 	return resp
 }
 

@@ -104,6 +104,9 @@ func (h *Handler) reconcileASLDiscovery(now time.Time, windows []kitty.OSWindow,
 
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
+	// Leases, supervisor targets, and question projections all move below; the
+	// signal never blocks, and the hub's copy waits for this section to end.
+	h.companionDirty()
 	h.aslMetrics.RecordSweep(now, result)
 	changedWindows := make(map[int]bool)
 

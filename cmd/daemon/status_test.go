@@ -40,14 +40,16 @@ func TestDaemonStatusCommandWritesToCommandOutput(t *testing.T) {
 			want: "daemon: running (/tmp/amx.sock)\n" +
 				"ready: true\n" +
 				"build: " + build.String() + "\n" +
-				"notifications: ready (alerter 26.5 at /opt/homebrew/bin/alerter)\n",
+				"notifications: ready (alerter 26.5 at /opt/homebrew/bin/alerter)\n" +
+				"companion: unknown (restart older daemon)\n",
 		},
 		{
 			name:   "running degraded",
 			health: ipc.Health{Alive: true, Ready: false, DegradedReason: "initial snapshot timed out"},
 			want: "daemon: running (/tmp/amx.sock)\n" +
 				"ready: false (initial snapshot timed out)\n" +
-				"notifications: unknown (restart older daemon)\n",
+				"notifications: unknown (restart older daemon)\n" +
+				"companion: unknown (restart older daemon)\n",
 		},
 		{
 			name: "notifications unavailable without degrading daemon",
@@ -56,7 +58,31 @@ func TestDaemonStatusCommandWritesToCommandOutput(t *testing.T) {
 			}},
 			want: "daemon: running (/tmp/amx.sock)\n" +
 				"ready: true\n" +
-				"notifications: unavailable (alerter; not_found)\n",
+				"notifications: unavailable (alerter; not_found)\n" +
+				"companion: unknown (restart older daemon)\n",
+		},
+		{
+			name: "companion subscribers",
+			health: ipc.Health{Alive: true, Ready: true, Notification: &notification, Companion: &protocol.CompanionHealth{
+				Subscribers:                  2,
+				NotificationBackendConnected: true,
+				Clients: []protocol.CompanionClient{
+					{SubscriberID: "sub-1", Client: "Agent Mux.app", ClientVersion: "1.0", NotificationBackend: true},
+					{SubscriberID: "sub-2"},
+				},
+			}},
+			want: "daemon: running (/tmp/amx.sock)\n" +
+				"ready: true\n" +
+				"notifications: ready (alerter 26.5 at /opt/homebrew/bin/alerter)\n" +
+				"companion: 2 subscribers (Agent Mux.app 1.0, sub-2); notification backend connected\n",
+		},
+		{
+			name:   "companion idle",
+			health: ipc.Health{Alive: true, Ready: true, Notification: &notification, Companion: &protocol.CompanionHealth{}},
+			want: "daemon: running (/tmp/amx.sock)\n" +
+				"ready: true\n" +
+				"notifications: ready (alerter 26.5 at /opt/homebrew/bin/alerter)\n" +
+				"companion: no subscribers\n",
 		},
 		{
 			name: "not running",
@@ -136,8 +162,11 @@ func TestDaemonStatusRendersASLCapability(t *testing.T) {
 			if err := daemonStatusCmd.RunE(daemonStatusCmd, nil); err != nil {
 				t.Fatalf("RunE: %v", err)
 			}
-			if got := out.String(); got != tc.want {
-				t.Fatalf("output = %q; want %q", got, tc.want)
+			// The companion line follows the ASL line; this daemon reports no
+			// companion block, so it reads as unknown.
+			want := tc.want + "companion: unknown (restart older daemon)\n"
+			if got := out.String(); got != want {
+				t.Fatalf("output = %q; want %q", got, want)
 			}
 		})
 	}

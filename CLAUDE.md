@@ -88,7 +88,7 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   the CLI side. It owns the daemon's lifecycle as a command (`start`, which
   blocks and is the process the detached launch re-execs, plus `stop` and
   `restart` over the lifecycle client seam), the `status` readiness/build/
-  notification/ASL line, and `export-events`, the investigation snapshot with
+  notification/ASL/companion lines, and `export-events`, the investigation snapshot with
   its window resolution, per-window trimming, and schema projection. `audit` is
   registered here but implemented in `cmd/debug`, whose invariant evaluator it
   shares. The family exports exactly one identifier, `Command`, so no daemon
@@ -120,7 +120,9 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   75/2 exit mapping, and the `hooks-sync`/`hooks-status` maintenance leaves the
   config family surfaces.
 - `cmd/debug`: the daemon-state diagnostic surfaces and the vocabulary they
-  share — `amx debug` (status, tail, probe, explain, capture, bundle, replay),
+  share — `amx debug` (status, tail, probe, explain, capture, bundle, replay,
+  and `subscribe`, which opens a companion stream exactly as an app does and
+  prints each frame, one schema-v1 record per line under `--json`),
   `amx doctor` with its stable finding identifiers and versioned report, the
   invariant evaluator both run, and `amx daemon audit`, which is a doctor
   surface wearing a daemon subcommand name. It also owns the export projections
@@ -285,8 +287,18 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   `stateMu`, every reducer mutation taken under it, the single renderer writer,
   and every Kitty and IPC call the daemon makes. Its children hold vocabulary,
   pure projections, and caller-locked trackers; the root decides what an
-  observation *does* to a window. It imports all eleven daemon subpackages and
-  none of them imports it back, which is what keeps the graph acyclic.
+  observation *does* to a window. It imports all twelve daemon subpackages and
+  none of them imports it back, which is what keeps the graph acyclic. It also
+  owns the companion hub (`companion_hub.go`), which follows the same off-lock
+  rule as `git_state.go`: publish paths ring `companionDirty`, a non-blocking
+  send on a one-slot channel that is safe under `stateMu`; the hub debounces it
+  at 100ms (with a 5s safety tick for clock-driven facts), takes one short copy
+  under `stateMu` through `copyStateLocked` — the same copy the state query
+  publishes — and projects, hashes, and fans out with no daemon lock held,
+  skipping a publish whose digest is unchanged. The `Handler` implements
+  `ipc.SubscriptionHandler`: a subscribe registers the sink, replays the latest
+  snapshot, and is acknowledged with a 15s heartbeat the hub then sends, and
+  health reports the subscribers as they identified themselves.
 - `internal/daemon/protocol`: the daemon wire contract — request/response model,
   command names, durable and exported envelopes, and the serialization
   vocabularies. It holds shapes and pure projections only, and must never import
@@ -401,7 +413,9 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   under saturation, the request-ID dedupe cache that makes a retried delivery
   at-most-once, the transport's own request-outcome and queue-latency counters,
   and the whole client side: the socket path, the send deadlines, daemon
-  auto-start and restart, and the typed health, event-export, and ASL calls. A
+  auto-start and restart, the typed health, event-export, and ASL calls, and
+  the subscribe client (`subscription_client.go`), which reads frames until a
+  bye, EOF, or cancellation of its context. A
   connection carries exactly one request/response pair and there is no
   multiplexing, so a second answer means a second connection — except
   `subscribe`, whose ack opens a stream of server-to-client frames on the same

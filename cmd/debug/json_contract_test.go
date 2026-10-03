@@ -15,7 +15,7 @@ func TestDebugJSONCommandSurfaceIsVersioned(t *testing.T) {
 	commands := []*cobra.Command{
 		debugStatusCmd, debugTailCmd, debugProbeCmd, debugExplainCmd,
 		debugCaptureStartCmd, debugCaptureStopCmd, debugCaptureStatusCmd,
-		debugBundleCmd, debugReplayCmd,
+		debugBundleCmd, debugReplayCmd, debugSubscribeCmd,
 	}
 	for _, command := range commands {
 		if command.Flags().Lookup("json") == nil {
@@ -47,6 +47,7 @@ func TestDebugJSONCommandSurfaceIsVersioned(t *testing.T) {
 		{name: "capture", version: debugger.CaptureSchemaVersion, want: 1},
 		{name: "bundle", version: debugger.BundleSchemaVersion, want: 2},
 		{name: "replay", version: debugger.ReplaySchemaVersion, want: 1},
+		{name: "subscribe", version: subscribeSchemaVersion, want: 1},
 	}
 	for _, schema := range schemas {
 		if schema.version != schema.want {

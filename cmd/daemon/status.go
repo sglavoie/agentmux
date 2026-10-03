@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/sglavoie/agentmux/cmd/debug"
 	"github.com/sglavoie/agentmux/internal/aslbridge"
@@ -76,6 +77,9 @@ var daemonStatusCmd = &cobra.Command{
 				return err
 			}
 		}
+		if _, err := fmt.Fprintf(out, "companion: %s\n", companionStatusLine(health.Companion)); err != nil {
+			return err
+		}
 		return nil
 	},
 }
@@ -97,6 +101,7 @@ type daemonStatusData struct {
 	Notification   *protocol.NotificationCapability `json:"notification,omitempty"`
 	ASL            *aslbridge.Status                `json:"asl,omitempty"`
 	ASLReconcile   *protocol.ASLReconcileSnapshot   `json:"asl_reconcile,omitempty"`
+	Companion      *protocol.CompanionHealth        `json:"companion,omitempty"`
 }
 
 func daemonStatusDataFrom(health ipc.Health, socket string) daemonStatusData {
@@ -112,7 +117,44 @@ func daemonStatusDataFrom(health ipc.Health, socket string) daemonStatusData {
 	data.Notification = health.Notification
 	data.ASL = health.ASL
 	data.ASLReconcile = health.ASLReconcile
+	data.Companion = health.Companion
 	return data
+}
+
+// companionStatusLine summarizes the connected companion subscribers: how
+// many, who they said they are, and whether one holds the notification role.
+// Nil means a daemon that predates the companion protocol, which is an
+// unknown rather than zero subscribers.
+func companionStatusLine(c *protocol.CompanionHealth) string {
+	if c == nil {
+		return "unknown (restart older daemon)"
+	}
+	if c.Subscribers == 0 {
+		return "no subscribers"
+	}
+	noun := "subscribers"
+	if c.Subscribers == 1 {
+		noun = "subscriber"
+	}
+	line := fmt.Sprintf("%d %s", c.Subscribers, noun)
+	var names []string
+	for _, client := range c.Clients {
+		name := client.Client
+		if name == "" {
+			name = client.SubscriberID
+		}
+		if client.ClientVersion != "" {
+			name += " " + client.ClientVersion
+		}
+		names = append(names, name)
+	}
+	if len(names) > 0 {
+		line += " (" + strings.Join(names, ", ") + ")"
+	}
+	if c.NotificationBackendConnected {
+		line += "; notification backend connected"
+	}
+	return line
 }
 
 func init() {

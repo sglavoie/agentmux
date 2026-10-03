@@ -327,6 +327,11 @@ type Handler struct {
 	windowTombstones map[int]time.Time
 	tombstoneOrder   []int
 
+	// companion is the companion subscriber hub (companion_hub.go). Nil only
+	// on a hand-built Handler, which then offers no subscribe stream and makes
+	// companionDirty a no-op.
+	companion *companionHub
+
 	// onShutdown is called when a TypeShutdown request is received.
 	onShutdown func()
 
@@ -367,6 +372,7 @@ func NewHandler(guard *activity.StateGuard, notifier *notification.Notifier) *Ha
 		windowMetadata:                 make(map[int]protocol.WindowDebugMetadata),
 		windowTombstones:               make(map[int]time.Time),
 		notificationEffects:            make(map[string]notification.NotificationDisposition),
+		companion:                      newCompanionHub(),
 	}
 	if notifier != nil {
 		notifier.SetObserver(h.recordNotificationDispositionBounded)

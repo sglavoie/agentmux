@@ -257,6 +257,7 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 		}
 	})
 	startLoop(handler.runScreenProbes)
+	startLoop(handler.runCompanionHub)
 	// The ASL bridge is started only here, after the socket is published and
 	// the core loops are running, so a missing, slow, or wedged ASL can never
 	// delay Agent Mux startup or affect readiness.

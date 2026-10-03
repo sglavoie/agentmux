@@ -263,7 +263,11 @@ func (h *Handler) refreshMutedFromSnapshotLocked(windows []kitty.OSWindow) {
 			for k := range windows[i].Tabs[j].Windows {
 				win := windows[i].Tabs[j].Windows[k]
 				if st, ok := h.windowStateLocked(win.ID); ok {
-					st.Muted = tabMuted || win.UserVars.Mute != ""
+					muted := tabMuted || win.UserVars.Mute != ""
+					if st.Muted != muted {
+						h.companionDirty()
+					}
+					st.Muted = muted
 				}
 			}
 		}
@@ -316,6 +320,7 @@ func (h *Handler) refreshFocusFromSnapshotLocked(windows []kitty.OSWindow, obser
 				st.Unseen = false
 				st.PresentationChangedAt = observedAt
 				h.markWindowDirtyLocked(windowID)
+				h.companionDirty()
 			}
 		}
 	}

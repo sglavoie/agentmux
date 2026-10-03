@@ -43,6 +43,7 @@ type aslSupervisorNotification struct {
 // that announced it. Reconciliation remains the fallback when an older producer
 // omits state_path or the path cannot be canonicalized.
 func (h *Handler) registerASLSupervisorLifecycleTarget(windowID, originWindowID int, runID, statePath string) {
+	h.companionDirty()
 	runID = strings.TrimSpace(runID)
 	if windowID <= 0 || runID == "" {
 		return
@@ -95,6 +96,7 @@ func (h *Handler) acceptASLSupervisorProjection(
 	target asl.SupervisorTarget,
 	projection agentloop.SupervisorQuestionProjection,
 ) {
+	h.companionDirty()
 	ref := asl.LeaseRef{WindowID: target.WindowID, Key: target.Candidate.RunID}
 	h.stateMu.Lock()
 	current, exists := h.aslSupervisors.Target(ref)
@@ -149,6 +151,7 @@ func (h *Handler) handleASLSupervisorMailboxQuestion(
 	windows []kitty.OSWindow,
 	now time.Time,
 ) {
+	h.companionDirty()
 	question, ok := asl.ParseMailboxQuestion(payload)
 	if !ok {
 		return
@@ -227,6 +230,7 @@ func (h *Handler) handleASLSupervisorMailboxClosure(
 	payload hookevent.HookPayload,
 	now time.Time,
 ) {
+	h.companionDirty()
 	closure, ok := asl.ParseMailboxClosure(event, payload)
 	if !ok {
 		return
@@ -444,6 +448,7 @@ func (h *Handler) clearASLSupervisorQuestionLocked(
 	now time.Time,
 	reason string,
 ) {
+	h.companionDirty()
 	h.aslSupervisors.ClearProjection(asl.LeaseRef{WindowID: windowID, Key: runID})
 	st, ok := h.windowStateLocked(windowID)
 	if !ok || st.Reducer == nil {
@@ -478,6 +483,7 @@ func (h *Handler) clearASLSupervisorQuestionLocked(
 }
 
 func (h *Handler) finishASLSupervisorQuestion(windowID int, runID string, now time.Time) {
+	h.companionDirty()
 	if windowID <= 0 || runID == "" {
 		return
 	}

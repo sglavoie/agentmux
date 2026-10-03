@@ -174,6 +174,28 @@ checklist, see [Daemon State Acceptance Evidence](daemon_state_acceptance.md).
 The hermetic process-exit fixture and optional installed drill are documented in
 [Process-Lifecycle Acceptance](acceptance-testing.md).
 
+## Companion stream
+
+A long-lived observer — the native menu bar app, or `amx debug subscribe` —
+sends one `subscribe` request and then reads server-to-client frames on the same
+connection: `snapshot` (the whole companion state, replaced wholesale),
+`heartbeat` every 15s, and a final `bye` whose reason is `shutdown` on a daemon
+stop or restart and `slow_consumer` when the subscriber fell behind. A stream
+that ends without a `bye` ended by accident.
+
+Snapshots are built by the daemon's companion hub. Every publish path that can
+change what a companion shows rings a non-blocking signal; the hub waits 100ms
+for the burst to settle, copies the state in one short critical section, and
+projects outside it, so a subscriber never slows hook acknowledgement. An
+unchanged snapshot is not republished, and a 5s safety tick covers facts that
+change with the clock alone (Kitty snapshot staleness, quiet hours).
+
+```bash
+amx debug subscribe --frames 3        # one line per frame
+amx debug subscribe --json            # ack, then one schema-v1 record per frame
+amx daemon status                     # companion: N subscribers (client version, ...)
+```
+
 ## Investigating hook event flow
 
 `amx daemon export-events` writes a schema v13 JSON snapshot for investigation.
