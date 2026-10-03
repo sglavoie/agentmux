@@ -126,8 +126,12 @@ func aslContractDimension(in aslIntegrationInputs) doctorASLDimension {
 		in.Status.ContractSetID != aslcontract.ContractSetID {
 		mismatches = append(mismatches, "the bridge speaks "+in.Status.ContractSetID)
 	}
+	// The state root is judged by the rule the reconciler applies to it, not by
+	// the bridge's exact match: a reviewed predecessor whose projection and
+	// lifecycle-hook components are identical is read normally, and calling it a
+	// mismatch would fail a pairing that is observing correctly.
 	if in.Reconcile != nil && in.Reconcile.ContractSetID != "" &&
-		in.Reconcile.ContractSetID != aslcontract.ContractSetID {
+		!aslcontract.SupportsLoopContract(in.Reconcile.ContractSetID) {
 		mismatches = append(mismatches, "the state root publishes "+in.Reconcile.ContractSetID)
 	}
 	if in.Reconcile != nil && in.Reconcile.UnsupportedContracts > 0 {

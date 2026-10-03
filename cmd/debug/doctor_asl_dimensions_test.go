@@ -50,6 +50,21 @@ func TestAStateRootThatPublishesAnotherContractSetIsCaught(t *testing.T) {
 	}
 }
 
+// A state root still publishing the reviewed predecessor is read normally by
+// the reconciler, so doctor must not call it a mismatch: the two would
+// disagree about a pairing that is observing correctly.
+func TestAStateRootOnTheReviewedPredecessorIsNotAMismatch(t *testing.T) {
+	resetDoctorTestState(t)
+	aslDoctorStat = func(string) error { return nil }
+
+	in := pairedInputs()
+	in.Reconcile.ContractSetID = aslcontract.LoopCompatibleContractSetID
+	dim := dimension(t, evaluateASLIntegration(in), aslDimensionContract)
+	if dim.Status == aslStatusFail {
+		t.Errorf("contract = fail (%s), want the reviewed predecessor accepted", dim.Detail)
+	}
+}
+
 // A single corrupt plan does not break the pairing, and treating it as a
 // strict-doctor failure would make one unreadable directory block a release
 // check forever.

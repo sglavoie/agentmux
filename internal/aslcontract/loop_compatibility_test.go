@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-//go:embed compatibility/85ec3041b9f03f47.json
+//go:embed compatibility/6f30193cd1744a98.json
 var loopCompatibleManifest []byte
 
 func TestReviewedLoopContractComponentsMatchVendoredCorpus(t *testing.T) {

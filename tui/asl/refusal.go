@@ -66,6 +66,10 @@ func MethodLabel(method string) string {
 		return "stop after current"
 	case aslbridge.MethodRunAbort:
 		return "abort"
+	case aslbridge.MethodWorkbenchEnsure:
+		return "workbench"
+	case aslbridge.MethodRunRedirect:
+		return "redirect"
 	default:
 		return method
 	}

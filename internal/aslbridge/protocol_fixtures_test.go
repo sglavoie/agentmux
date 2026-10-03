@@ -65,6 +65,9 @@ func TestTheGoVocabulariesAreTheDeclaredOnes(t *testing.T) {
 		MethodRunStopAfterCurrent,
 		MethodRunAbort,
 		MethodWorkbenchEnsure,
+		MethodRunRedirect,
+		MethodRunRedirectStatus,
+		MethodRunRecoverConversation,
 	}
 	goEvents := []string{EventRunsChanged, EventOperationUpdated}
 
@@ -94,6 +97,32 @@ func TestTheGoVocabulariesAreTheDeclaredOnes(t *testing.T) {
 	for _, method := range MutationMethods {
 		if !contains(goMethods, method) {
 			t.Errorf("mutation method %q is not one of the methods", method)
+		}
+	}
+
+	// The redirect vocabularies are closed the same way. A nullable enum's null
+	// is represented in Go as an absent pointer, so it is dropped from the
+	// declared list before comparing.
+	for _, check := range []struct {
+		definition string
+		mine       []string
+	}{
+		{"RedirectStatus", RedirectStatuses},
+		{"RedirectStage", RedirectStages},
+		{"RedirectJournalState", RedirectJournalStates},
+		{"RedirectReason", RedirectReasons},
+		{"RedirectOutcome", RedirectOutcomes},
+		{"OwnerLiveness", OwnerLiveness},
+		{"RecoveryDecision", RecoveryDecisions},
+	} {
+		var declared []string
+		for _, value := range mustEnum(t, schema, check.definition) {
+			if value != "" {
+				declared = append(declared, value)
+			}
+		}
+		if fmt.Sprint(check.mine) != fmt.Sprint(declared) {
+			t.Errorf("Go %s = %v, schema declares %v", check.definition, check.mine, declared)
 		}
 	}
 

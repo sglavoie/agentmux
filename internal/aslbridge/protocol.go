@@ -145,6 +145,14 @@ const (
 	MethodRunStopAfterCurrent = "run.stop_after_current"
 	MethodRunAbort            = "run.abort"
 	MethodWorkbenchEnsure     = "workbench.ensure"
+	// MethodRunRedirect submits a correction bound to the exact turn a run is
+	// on. MethodRunRedirectStatus and MethodRunRecoverConversation are reads:
+	// the journal's standing for a plan, and which manual recovery a pause is
+	// waiting on. Recovery itself is never performed over the protocol, because
+	// its one-use authorization would then sit in a replayable request.
+	MethodRunRedirect            = "run.redirect"
+	MethodRunRedirectStatus      = "run.redirect_status"
+	MethodRunRecoverConversation = "run.recover_conversation"
 )
 
 // Protocol event names. Protocol 2 publishes these separately from the method
@@ -165,6 +173,7 @@ var MutationMethods = []string{
 	MethodRunResume,
 	MethodRunStopAfterCurrent,
 	MethodRunAbort,
+	MethodRunRedirect,
 }
 
 // Operation statuses. Accepted means durable in ASL's own records; every other

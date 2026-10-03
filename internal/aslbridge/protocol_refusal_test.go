@@ -276,6 +276,33 @@ func refuseFixture(set aslcontract.ContractSet, fixture aslcontract.Fixture) (bo
 			return true, err.Error()
 		}
 		return false, ""
+	case "redirect_receipt_response":
+		var receipt RedirectReceipt
+		if _, err := refuseResponse(doc, &receipt); err != nil {
+			return true, err.Error()
+		}
+		if err := receipt.Validate(); err != nil {
+			return true, err.Error()
+		}
+		return false, ""
+	case "redirect_status_response":
+		var status RedirectStatusResult
+		if _, err := refuseResponse(doc, &status); err != nil {
+			return true, err.Error()
+		}
+		if err := status.Validate(); err != nil {
+			return true, err.Error()
+		}
+		return false, ""
+	case "recovery_options_response":
+		var options RecoveryOptions
+		if _, err := refuseResponse(doc, &options); err != nil {
+			return true, err.Error()
+		}
+		if err := options.Validate(); err != nil {
+			return true, err.Error()
+		}
+		return false, ""
 	default:
 		return true, "unknown root " + fixture.Root
 	}
