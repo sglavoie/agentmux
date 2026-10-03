@@ -250,3 +250,17 @@ func TestCooldownComesFromConfig(t *testing.T) {
 		t.Fatalf("unset cooldown = %v, want the default %v", n.cooldown, defaultCooldown)
 	}
 }
+
+func TestQuietHoursSuppressWithAReason(t *testing.T) {
+	n, rec := newTestNotifier(&config.NotificationConfig{Stop: true, QuietHours: "22:00-08:00"})
+	var reasons []string
+	n.SetObserver(func(d NotificationDisposition) { reasons = append(reasons, d.Stage+":"+d.Outcome+":"+d.Reason) })
+	n.now = func() time.Time { return time.Date(2026, 10, 2, 23, 0, 0, 0, time.Local) }
+	n.MaybeNotifyTraced(1, "W:api", "work", "stop", false, NotificationTrace{})
+	if rec.len() != 0 {
+		t.Fatal("a notification inside quiet hours was dispatched")
+	}
+	if len(reasons) == 0 || reasons[0] != "decision:suppressed:quiet_hours" {
+		t.Fatalf("dispositions = %v, want decision:suppressed:quiet_hours", reasons)
+	}
+}

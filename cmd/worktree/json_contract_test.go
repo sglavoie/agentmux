@@ -13,7 +13,7 @@ func TestWorktreeJSONCommandSurfaceIsVersioned(t *testing.T) {
 	commands := []*cobra.Command{
 		worktreeListCmd, worktreeShowCmd, worktreeReopenCmd,
 		worktreeShellCmd, worktreeEditCmd, worktreeRemoveCmd,
-		worktreeForgetCmd,
+		worktreeForgetCmd, worktreePruneCmd,
 	}
 	for _, command := range commands {
 		if command.Flags().Lookup("json") == nil {

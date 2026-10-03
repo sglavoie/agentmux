@@ -139,6 +139,8 @@ type Notifier struct {
 	nextPendingSeq  uint64
 	debounce        time.Duration
 	cooldown        time.Duration
+	quiet           config.QuietWindow
+	quietSet        bool
 	dispatchTimeout time.Duration
 	cfg             *config.NotificationConfig
 	now             func() time.Time // injectable for tests
@@ -160,7 +162,12 @@ func cooldownFor(cfg *config.NotificationConfig) time.Duration {
 // NewNotifier creates a Notifier with the given notification config.
 func NewNotifier(cfg *config.NotificationConfig) *Notifier {
 	d := selectDispatcher(cfg)
+	// Validation has already refused a malformed window, so a parse error here
+	// can only come from a config built in code; it leaves quiet hours off.
+	quiet, quietSet, _ := config.ParseQuietHours(cfg.QuietHours)
 	return &Notifier{
+		quiet:           quiet,
+		quietSet:        quietSet,
 		last:            make(map[notifyKey]time.Time),
 		pending:         make(map[int]pendingNotification),
 		debounce:        time.Duration(cfg.PermissionDebounceMs) * time.Millisecond,

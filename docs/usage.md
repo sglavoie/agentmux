@@ -684,7 +684,16 @@ amx worktree shell <selector> [--json]
 amx worktree edit <selector> [--json]
 amx worktree remove <selector> --yes [--delete-branch] [--json]
 amx worktree forget <selector> --yes [--json]
+amx worktree prune [--merged] [--yes] [--delete-branch] [--json]
 ```
+
+`prune` selects every worktree `remove` would accept on its own — present,
+valid, clean, unlocked, and used by no live session or loop — and with
+`--merged` only those whose branch is reachable from its source. Without
+`--yes` it lists them and changes nothing. With `--yes` each one goes through
+`remove`, which re-checks everything at that moment, so a worktree that became
+active in the meantime is kept and reported. Branches are kept unless
+`--delete-branch` is given, and even then only merged branches are deleted.
 
 A selector is a full stable ID, unique ID prefix, branch, or canonical path.
 Ambiguous selectors and live sessions return structured candidates rather than

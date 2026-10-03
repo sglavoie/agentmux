@@ -325,6 +325,11 @@ permission_debounce_ms = 500
 # after changing it.
 # cooldown_seconds = 10
 
+# Quiet hours in local 24-hour time; the window may wrap past midnight. Every
+# notification inside it is suppressed (the tab icons still change). Leave
+# unset for no quiet hours. Read once at daemon start.
+# quiet_hours = "22:00-08:00"
+
 
 # ── Harness emojis ────────────────────────────────────────────────────────────
 # One-character marker per harness, prepended to the Kitty tab title just

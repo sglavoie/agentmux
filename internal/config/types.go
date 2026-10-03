@@ -1,7 +1,9 @@
 package config
 
 import (
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/harness"
 )
@@ -252,6 +254,58 @@ type NotificationConfig struct {
 	HookSilence          *bool  `toml:"hook_silence"` // notify on hook-silence detection; nil → default true
 	PermissionDebounceMs int    `toml:"permission_debounce_ms"`
 	CooldownSeconds      int    `toml:"cooldown_seconds"` // minimum gap per (tab, kind); 0 → default 10
+	QuietHours           string `toml:"quiet_hours"`      // "HH:MM-HH:MM" local time, may wrap midnight; "" → never quiet
+}
+
+// QuietWindow is a parsed [defaults.notifications].quiet_hours: minutes after
+// local midnight. End before Start means the window wraps past midnight.
+type QuietWindow struct {
+	Start, End int
+}
+
+// ParseQuietHours reads "HH:MM-HH:MM". The empty string means no quiet hours
+// and returns ok=false with no error. Equal ends are refused: "always quiet"
+// is spelled by turning the categories off, not by a window of no width.
+func ParseQuietHours(spec string) (window QuietWindow, ok bool, err error) {
+	spec = strings.TrimSpace(spec)
+	if spec == "" {
+		return QuietWindow{}, false, nil
+	}
+	from, to, found := strings.Cut(spec, "-")
+	if !found {
+		return QuietWindow{}, false, fmt.Errorf("quiet_hours %q must look like 22:00-08:00", spec)
+	}
+	start, err := parseClockMinutes(from)
+	if err != nil {
+		return QuietWindow{}, false, fmt.Errorf("quiet_hours %q: %w", spec, err)
+	}
+	end, err := parseClockMinutes(to)
+	if err != nil {
+		return QuietWindow{}, false, fmt.Errorf("quiet_hours %q: %w", spec, err)
+	}
+	if start == end {
+		return QuietWindow{}, false, fmt.Errorf("quiet_hours %q starts and ends at the same time", spec)
+	}
+	return QuietWindow{Start: start, End: end}, true, nil
+}
+
+// Contains reports whether the local time t falls inside the window. The start
+// is inclusive and the end exclusive, so 22:00-08:00 is quiet at 22:00 and
+// loud again at 08:00.
+func (w QuietWindow) Contains(t time.Time) bool {
+	minute := t.Hour()*60 + t.Minute()
+	if w.Start < w.End {
+		return minute >= w.Start && minute < w.End
+	}
+	return minute >= w.Start || minute < w.End
+}
+
+func parseClockMinutes(clock string) (int, error) {
+	parsed, err := time.Parse("15:04", strings.TrimSpace(clock))
+	if err != nil {
+		return 0, fmt.Errorf("%q is not a 24-hour HH:MM time", strings.TrimSpace(clock))
+	}
+	return parsed.Hour()*60 + parsed.Minute(), nil
 }
 
 // ElicitationEnabled reports whether "input requested" notifications fire.

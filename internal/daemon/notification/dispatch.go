@@ -84,6 +84,10 @@ func (n *Notifier) MaybeNotifyTracedTarget(target NotificationTarget, sessionTit
 		emit("decision", "suppressed", "config_disabled")
 		return
 	}
+	if n.quietSet && n.quiet.Contains(n.now()) {
+		emit("decision", "suppressed", "quiet_hours")
+		return
+	}
 	n.mu.Lock()
 	dispatchAvailable := n.dispatch != nil
 	focusAvailable := n.focus != nil

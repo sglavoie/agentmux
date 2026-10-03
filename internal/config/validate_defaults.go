@@ -118,6 +118,9 @@ func validateDefaults(d *Defaults) []string {
 	if d.Notifications.CooldownSeconds < 0 {
 		errs = append(errs, "defaults.notifications.cooldown_seconds must be >= 0")
 	}
+	if _, _, err := ParseQuietHours(d.Notifications.QuietHours); err != nil {
+		errs = append(errs, "defaults.notifications."+err.Error())
+	}
 	errs = append(errs, validateASL(&d.ASL)...)
 	return errs
 }

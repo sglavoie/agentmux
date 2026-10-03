@@ -3,6 +3,7 @@ package config_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
 )
@@ -184,5 +185,35 @@ color = "blue"
 	}
 	if err := config.Validate(cfg); err == nil || !strings.Contains(err.Error(), "cooldown_seconds") {
 		t.Fatalf("Validate = %v, want a cooldown_seconds error", err)
+	}
+}
+
+func TestParseQuietHours(t *testing.T) {
+	at := func(h, m int) time.Time { return time.Date(2026, 10, 2, h, m, 0, 0, time.Local) }
+	window, ok, err := config.ParseQuietHours("22:00-08:00")
+	if err != nil || !ok {
+		t.Fatalf("ParseQuietHours = %v, %v", ok, err)
+	}
+	for _, tc := range []struct {
+		t    time.Time
+		want bool
+	}{
+		{at(21, 59), false}, {at(22, 0), true}, {at(3, 0), true}, {at(7, 59), true}, {at(8, 0), false}, {at(12, 0), false},
+	} {
+		if got := window.Contains(tc.t); got != tc.want {
+			t.Errorf("22:00-08:00 contains %s = %v, want %v", tc.t.Format("15:04"), got, tc.want)
+		}
+	}
+	day, _, _ := config.ParseQuietHours("12:30-13:30")
+	if !day.Contains(at(13, 0)) || day.Contains(at(13, 30)) || day.Contains(at(12, 29)) {
+		t.Error("a same-day window must hold 12:30 up to but not including 13:30")
+	}
+	if _, ok, err := config.ParseQuietHours(""); ok || err != nil {
+		t.Errorf("empty spec = %v, %v; want off with no error", ok, err)
+	}
+	for _, bad := range []string{"22:00", "25:00-08:00", "22:00-8", "08:00-08:00", "late-early"} {
+		if _, _, err := config.ParseQuietHours(bad); err == nil {
+			t.Errorf("ParseQuietHours(%q) accepted a malformed window", bad)
+		}
 	}
 }

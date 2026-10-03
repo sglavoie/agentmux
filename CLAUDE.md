@@ -138,8 +138,10 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   unqualified as `session`.
 - `cmd/worktree`: the `amx worktree` family — listing managed Agent Mux Git
   worktrees, showing one, reopening it as a live session, opening a shell or the
-  configured editor in it, and the two bounded destructive leaves (`remove` a
-  clean inactive worktree, `forget` stale metadata). The bounded creation and
+  configured editor in it, and the bounded destructive leaves (`remove` a
+  clean inactive worktree, `forget` stale metadata, and `prune`, which selects
+  every worktree `remove` would accept and removes each through `remove`
+  itself, previewing unless `--yes`). The bounded creation and
   cleanup themselves stay in `internal/worktree`; this is the command surface
   over them, and it may likewise name that import unqualified as `worktree`.
 - `cmd/transcripts`: the `amx transcripts` family — the maintenance surface for
