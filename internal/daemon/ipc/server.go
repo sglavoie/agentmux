@@ -36,8 +36,9 @@ const maxRequestPayloadBytes = 1 << 20
 // (e.g. a hook script emitting garbage) without spamming the log.
 const badPayloadLogInterval = 100
 
-// connDeadline bounds a single request/response handshake on the server side.
-// It leaves a margin over the hook client's 250ms per-exchange deadline.
+// connDeadline bounds reading the request line on the server side, and the
+// whole handshake for every request type deadlineFor does not name. It leaves a
+// margin over the hook client's 250ms per-exchange deadline.
 var connDeadline = time.Second
 
 // RequestHandler is the daemon-side application a Server dispatches to. The
@@ -221,9 +222,10 @@ func (s *Server) handleConn(conn net.Conn) {
 	if s.onConnStart != nil {
 		s.onConnStart()
 	}
-	// Bound the entire request/response handshake so a client that connects
-	// without sending data (or stops reading mid-response) cannot pin this
-	// goroutine for the daemon's lifetime.
+	// Bound the request read so a client that connects without sending data
+	// cannot pin this goroutine for the daemon's lifetime. serveConn re-arms
+	// the deadline per request type once the line is decoded, so a client that
+	// stops reading mid-response is still released.
 	_ = conn.SetDeadline(time.Now().Add(connDeadline))
 	s.serveConn(conn, conn)
 }
@@ -262,6 +264,7 @@ func (s *Server) serveConn(r io.Reader, w io.Writer) {
 		return
 	}
 	req = events.EnsureRequestTraceID(req)
+	extendDeadline(w, req.Type)
 
 	// Deduplicate state-changing retries: a request carrying a stable ID is
 	// applied exactly once, so an ambiguous-timeout resend replays the original

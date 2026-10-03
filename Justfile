@@ -51,8 +51,10 @@ fmt-check:
 # reason: it is one declaration read by two surfaces, and it owes each caller an
 # independent value, so a later attempt to hand out a cached slice or map has to
 # fail here rather than in whichever goroutine happened to write to it.
+# `./internal/daemon/ipc` is likewise not inherited from `./internal/daemon`:
+# it owns the connection goroutines, their deadlines, and the ingress queue.
 race-core:
-    go test -race ./internal/transcript ./internal/plans ./internal/handoff ./internal/worktree ./internal/kitty ./internal/daemon ./tui ./tui/commands ./tui/overview ./tui/sessionactions
+    go test -race ./internal/transcript ./internal/plans ./internal/handoff ./internal/worktree ./internal/kitty ./internal/daemon ./internal/daemon/ipc ./tui ./tui/commands ./tui/overview ./tui/sessionactions
 
 # Run every committed narrow/wide TUI acceptance scenario in isolation.
 tui-scenarios:
