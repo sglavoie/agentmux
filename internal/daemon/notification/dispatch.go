@@ -118,7 +118,7 @@ func (n *Notifier) MaybeNotifyTracedTarget(target NotificationTarget, sessionTit
 	key := notifyKey{windowID: windowID, action: action}
 	now := n.now()
 	if action == "permission" && n.debounce > 0 {
-		if last, ok := n.last[key]; ok && now.Sub(last) < cooldownDuration {
+		if last, ok := n.last[key]; ok && now.Sub(last) < n.cooldown {
 			n.mu.Unlock()
 			for _, disposition := range dispositions {
 				n.emitDisposition(disposition)
@@ -137,7 +137,7 @@ func (n *Notifier) MaybeNotifyTracedTarget(target NotificationTarget, sessionTit
 		return
 	}
 
-	if last, ok := n.last[key]; ok && now.Sub(last) < cooldownDuration {
+	if last, ok := n.last[key]; ok && now.Sub(last) < n.cooldown {
 		n.mu.Unlock()
 		for _, disposition := range dispositions {
 			n.emitDisposition(disposition)
@@ -264,7 +264,7 @@ func (n *Notifier) actionEnabled(action string) bool {
 	case "permission":
 		return n.cfg.Permission
 	case "elicitation":
-		return n.cfg.Permission
+		return n.cfg.ElicitationEnabled()
 	case "failure":
 		return n.cfg.Error
 	case "stop_failure":

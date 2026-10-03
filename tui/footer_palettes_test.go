@@ -208,7 +208,8 @@ var footerHintCharacterizations = []struct {
 		entries: sessionViewFooterPalette,
 		width:   200,
 		want: []string{
-			"  j/k move · n/N match · enter view message · c continue · f fork · w worktree · H handoff · E edit handoff · i ID · y copy · Y path · ? help · esc back · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
+			"  / search · j/k move · n/N match · enter view message · c continue · f fork · w worktree · H handoff · E edit handoff · i ID · y copy · Y path · ? help · esc back · ctrl+d/u half · ctrl+f/b page",
+			"  g/G top/bot",
 		},
 	},
 	{
@@ -216,8 +217,8 @@ var footerHintCharacterizations = []struct {
 		entries: sessionViewFooterPalette,
 		width:   90,
 		want: []string{
-			"  j/k move · n/N match · enter view message · c continue · f fork · w worktree · H handoff",
-			"  E edit handoff · i ID · y copy · Y path · esc back · ctrl+d/u half · ? more",
+			"  / search · j/k move · n/N match · enter view message · c continue · f fork · w worktree",
+			"  H handoff · E edit handoff · i ID · y copy · Y path · esc back · ctrl+d/u half · ? more",
 		},
 	},
 	{
@@ -234,7 +235,7 @@ var footerHintCharacterizations = []struct {
 		entries: sessionViewFooterPalette,
 		width:   0,
 		want: []string{
-			"  j/k move · n/N match · enter view message · c continue · f fork · w worktree · H handoff · E edit handoff · i ID · y copy · Y path · ? help · esc back · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
+			"  / search · j/k move · n/N match · enter view message · c continue · f fork · w worktree · H handoff · E edit handoff · i ID · y copy · Y path · ? help · esc back · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
 		},
 	},
 	{

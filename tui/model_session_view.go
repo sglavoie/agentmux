@@ -81,6 +81,12 @@ func (m Model) handleSessionViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case keyQuestion:
 		m.openHelp(ModeSessionView)
 		return m, nil
+	case keySlash:
+		// Back to the result list with the text query active, as the plan
+		// viewer does, so a query can be refined without esc then /.
+		m.exitSessionView()
+		m.sessionSearchMode = true
+		return m, nil
 	case keyCtrlC:
 		return m, tea.Quit
 	case keyJ, keyDown:

@@ -28,7 +28,7 @@ func (n *Notifier) schedulePermissionLocked(target NotificationTarget, title, su
 
 		key := notifyKey{windowID: windowID, action: "permission"}
 		now := n.now()
-		if last, ok := n.last[key]; ok && now.Sub(last) < cooldownDuration {
+		if last, ok := n.last[key]; ok && now.Sub(last) < n.cooldown {
 			n.mu.Unlock()
 			n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: "permission", Stage: "decision", Outcome: "suppressed", Reason: "cooldown"})
 			return

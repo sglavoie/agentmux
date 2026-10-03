@@ -245,17 +245,29 @@ type NotificationConfig struct {
 	AlerterPath          string `toml:"alerter_path"`
 	Error                bool   `toml:"error"`
 	Permission           bool   `toml:"permission"`
+	Elicitation          *bool  `toml:"elicitation"` // notify when a session asks for input; nil → follows Permission
 	Stop                 bool   `toml:"stop"`
 	StopFailure          *bool  `toml:"stop_failure"`
 	StaleActive          *bool  `toml:"stale_active"` // notify on stale-active detection; nil → default true
 	HookSilence          *bool  `toml:"hook_silence"` // notify on hook-silence detection; nil → default true
 	PermissionDebounceMs int    `toml:"permission_debounce_ms"`
+	CooldownSeconds      int    `toml:"cooldown_seconds"` // minimum gap per (tab, kind); 0 → default 10
+}
+
+// ElicitationEnabled reports whether "input requested" notifications fire.
+// They followed `permission` before they had a key of their own, and an
+// omitted key still does, so existing configs keep their behavior.
+func (c NotificationConfig) ElicitationEnabled() bool {
+	if c.Elicitation == nil {
+		return c.Permission
+	}
+	return *c.Elicitation
 }
 
 // AnyEnabled reports whether at least one native-notification category is
 // enabled. Nil pointer fields retain their backward-compatible default of true.
 func (c NotificationConfig) AnyEnabled() bool {
-	return c.Error || c.Permission || c.Stop ||
+	return c.Error || c.Permission || c.ElicitationEnabled() || c.Stop ||
 		c.StopFailure == nil || *c.StopFailure ||
 		c.StaleActive == nil || *c.StaleActive ||
 		c.HookSilence == nil || *c.HookSilence

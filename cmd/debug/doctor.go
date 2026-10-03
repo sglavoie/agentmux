@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/cli"
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
@@ -53,6 +54,13 @@ var (
 	doctorNow             = time.Now
 	doctorCLIBuild        = buildinfo.Current
 	doctorDiagnosticPaths = diagnostics.DefaultPaths
+	doctorConfigModTime   = func() (time.Time, error) {
+		info, err := os.Stat(config.DefaultConfigPath())
+		if err != nil {
+			return time.Time{}, err
+		}
+		return info.ModTime(), nil
+	}
 )
 
 var (
@@ -201,6 +209,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		if err := writeDoctorKittySnapshot(textOut, health.KittySnapshot, addFinding); err != nil {
 			return err
 		}
+		checkDoctorConfigFreshness(health.Uptime, addFinding)
 	}
 	// The integration section runs whether or not the daemon answered: with the
 	// daemon down, shell resolution is still answerable and is often the thing

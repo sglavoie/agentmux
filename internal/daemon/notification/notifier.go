@@ -17,7 +17,9 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
-const cooldownDuration = 10 * time.Second
+// defaultCooldown is the per-(window, action) gap when the config does not set
+// one — a config built in code rather than loaded, as tests do.
+const defaultCooldown = 10 * time.Second
 
 // notifyableActions lists the actions that may produce macOS notifications.
 var notifyableActions = map[string]bool{
@@ -136,6 +138,7 @@ type Notifier struct {
 	pending         map[int]pendingNotification
 	nextPendingSeq  uint64
 	debounce        time.Duration
+	cooldown        time.Duration
 	dispatchTimeout time.Duration
 	cfg             *config.NotificationConfig
 	now             func() time.Time // injectable for tests
@@ -146,6 +149,14 @@ type Notifier struct {
 	ctx             context.Context // parent ctx for dispatch goroutines; defaults to Background until SetParentContext
 }
 
+// cooldownFor is the configured cooldown, or the default when it is unset.
+func cooldownFor(cfg *config.NotificationConfig) time.Duration {
+	if cfg.CooldownSeconds > 0 {
+		return time.Duration(cfg.CooldownSeconds) * time.Second
+	}
+	return defaultCooldown
+}
+
 // NewNotifier creates a Notifier with the given notification config.
 func NewNotifier(cfg *config.NotificationConfig) *Notifier {
 	d := selectDispatcher(cfg)
@@ -153,6 +164,7 @@ func NewNotifier(cfg *config.NotificationConfig) *Notifier {
 		last:            make(map[notifyKey]time.Time),
 		pending:         make(map[int]pendingNotification),
 		debounce:        time.Duration(cfg.PermissionDebounceMs) * time.Millisecond,
+		cooldown:        cooldownFor(cfg),
 		dispatchTimeout: d.timeout,
 		cfg:             cfg,
 		now:             time.Now,

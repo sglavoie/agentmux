@@ -33,6 +33,7 @@ func resetDoctorTestState(t *testing.T) {
 	oldNow := doctorNow
 	oldCLIBuild := doctorCLIBuild
 	oldDiagnosticPaths := doctorDiagnosticPaths
+	oldConfigModTime := doctorConfigModTime
 	oldJSON := doctorJSON
 	oldStrict := doctorStrict
 	oldLookPath := aslDoctorLookPath
@@ -50,12 +51,16 @@ func resetDoctorTestState(t *testing.T) {
 		doctorNow = oldNow
 		doctorCLIBuild = oldCLIBuild
 		doctorDiagnosticPaths = oldDiagnosticPaths
+		doctorConfigModTime = oldConfigModTime
 		doctorJSON = oldJSON
 		doctorStrict = oldStrict
 		doctorCmd.SetOut(oldOut)
 	})
 	doctorJSON = false
 	doctorStrict = false
+	// The operator's real config.toml must not decide whether a test sees the
+	// config-freshness warning; tests that exercise it install their own.
+	doctorConfigModTime = func() (time.Time, error) { return time.Time{}, os.ErrNotExist }
 	// The ASL integration section reads the environment doctor was started in.
 	// Pinned here so a machine that happens to have `asl` installed and one
 	// that does not produce the same report.

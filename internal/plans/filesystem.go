@@ -244,6 +244,12 @@ func (i *Index) refreshFilesystem(root string, projects []config.Session) error 
 			if !planMetaStillFresh(meta) {
 				continue
 			}
+			// An unchanged cache hit is the common case on every refresh, and
+			// marking it dirty is what used to rewrite plans.json each time the
+			// Plans view opened even though nothing on disk had moved.
+			if current, ok := i.entries[key]; ok && !discoveredSearchText[key] && reflect.DeepEqual(current, meta) {
+				continue
+			}
 			if discoveredSearchText[key] {
 				if err := i.store.Write(key, meta.SearchText); err != nil {
 					mergeWarning = errors.Join(mergeWarning, fmt.Errorf("writing plan search sidecar: %w", err))
@@ -263,7 +269,9 @@ func (i *Index) refreshFilesystem(root string, projects []config.Session) error 
 				mergeWarning = errors.Join(mergeWarning, i.store.Delete(key))
 			}
 		}
-		mergeWarning = errors.Join(mergeWarning, i.persistFilesystemLocked())
+		if i.filesystemDirty || !reflect.DeepEqual(i.entries, i.filesystemBase) {
+			mergeWarning = errors.Join(mergeWarning, i.persistFilesystemLocked())
+		}
 		return nil
 	})
 	return errors.Join(loadWarning, discoveryWarning, mergeWarning, lockErr)

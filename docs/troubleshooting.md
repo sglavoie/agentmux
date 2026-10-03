@@ -45,6 +45,10 @@
   daemon was down clears on restart instead of pinning stale state.
 - **No projects appear**: run `amx config validate` and confirm the config is
   at `~/.config/agent-mux/config.toml`.
+- **A config change has no effect** (a notification toggle, a cooldown, a
+  stop-confirm delay): the daemon reads `config.toml` only when it starts, and
+  `amx doctor` warns `config_changed_since_daemon_start` when the file is newer
+  than the running daemon. Run `amx daemon restart`.
 - **Hooks are missing**: run `amx config hooks-status`, then
   `amx config hooks-sync`.
 - **Doctor reports `owner_mismatch_prompt`, `owner_mismatch_burst`, or

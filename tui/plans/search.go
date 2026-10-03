@@ -141,6 +141,22 @@ func (in SearchInput) renderProjectChip() string {
 	return layout.ClampLine("  "+chip, in.Width)
 }
 
+// emptyHint names the ways out of an empty result list that apply right now:
+// esc clears only the text query, and a project filter survives it.
+func (in SearchInput) emptyHint() string {
+	var ways []string
+	if in.Query != "" {
+		ways = append(ways, "esc clears the query")
+	}
+	if in.FilterProject.Kind != planindex.ProjectAny {
+		ways = append(ways, "r changes the project")
+	}
+	if len(ways) == 0 {
+		return ""
+	}
+	return " — " + strings.Join(ways, " · ")
+}
+
 // RenderList renders the scrollable results list. height is the per-call row
 // budget; non-positive height means "unbounded" and scroll indicators are
 // suppressed.
@@ -152,7 +168,7 @@ func (in SearchInput) RenderList(height int) string {
 		if in.Loading {
 			sb.WriteString(styleDim.Render("  (loading…)"))
 		} else {
-			sb.WriteString(styleDim.Render("  (no plans match)"))
+			sb.WriteString(styleDim.Render(layout.ClampLine("  (no plans match"+in.emptyHint()+")", in.Width)))
 		}
 		sb.WriteByte('\n')
 		return sb.String()

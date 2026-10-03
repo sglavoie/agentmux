@@ -169,6 +169,23 @@ func (in SearchInput) renderChips() string {
 	return chips
 }
 
+// emptyHint names the ways out of an empty result list that apply right now.
+// esc clears only the text query, so a chip left over from an earlier search
+// is the usual reason a list stays empty, and it needs naming separately.
+func (in SearchInput) emptyHint() string {
+	var ways []string
+	if in.Query != "" {
+		ways = append(ways, "esc clears the query")
+	}
+	if in.HarnessChip != "" || in.ProfileChip != "" || in.ProjectChip != "" || in.MessageSourceChip != "" {
+		ways = append(ways, "h/p/r/m change the filters")
+	}
+	if len(ways) == 0 {
+		return ""
+	}
+	return " — " + strings.Join(ways, " · ")
+}
+
 // RenderList renders the scrollable results list. height is the per-call row
 // budget; non-positive height means "unbounded" and scroll indicators are
 // suppressed.
@@ -182,7 +199,7 @@ func (in SearchInput) RenderList(height int) string {
 		} else if in.RefreshInFlight {
 			sb.WriteString(styleDim.Render("  (scanning transcripts…)"))
 		} else {
-			sb.WriteString(styleDim.Render("  (no sessions match)"))
+			sb.WriteString(styleDim.Render(layout.ClampLine("  (no sessions match"+in.emptyHint()+")", in.Width)))
 		}
 		sb.WriteByte('\n')
 		return sb.String()

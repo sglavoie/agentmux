@@ -747,7 +747,8 @@ is not the stored primary title.
 - `i` copies the selected session ID, and `Y` copies its transcript path.
 - `enter` opens the transcript viewer; `n`/`N` move between matches,
   `j`/`k`, `g`/`G`, and `Ctrl+d/u/f/b` scroll, `y` copies the selected
-  message, and `Y` copies the transcript path. The viewer also accepts the
+  message, `Y` copies the transcript path, and `/` returns to the list with
+  the query open for refining. The viewer also accepts the
   `c`, `f`, `w`, `H`, `E`, and `i` actions below for the conversation it has
   open and returns to the viewer once they complete.
 - `c` continues the selected conversation, `f` forks it, `w` creates an

@@ -285,6 +285,9 @@ func applyDefaults(cfg *Config) {
 	if cfg.Defaults.Notifications.PermissionDebounceMs == 0 {
 		cfg.Defaults.Notifications.PermissionDebounceMs = 500
 	}
+	if cfg.Defaults.Notifications.CooldownSeconds == 0 {
+		cfg.Defaults.Notifications.CooldownSeconds = 10
+	}
 	if cfg.Defaults.PlansDirectory == "" {
 		cfg.Defaults.PlansDirectory = "~/.local/share/agent-plans"
 	}

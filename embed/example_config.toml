@@ -293,6 +293,10 @@ native_session_max_mib = 128
 # Notify when a session is waiting for your permission to use a tool.
 permission = true
 
+# Notify when a session asks you a question (Claude's elicitation prompts).
+# Omitted, it follows `permission`.
+# elicitation = true
+
 # Notify when a session stops or exits.
 stop = true
 
@@ -314,6 +318,12 @@ hook_silence = true
 # session reaches a terminal/idle state before the window expires.
 # Set to 1 to disable the debounce and notify immediately.
 permission_debounce_ms = 500
+
+# Minimum seconds between two notifications of the same kind for the same tab.
+# Raise it if a busy session that stops repeatedly is too chatty. Set to 0 to
+# use the default (10). Read once at daemon start: run `amx daemon restart`
+# after changing it.
+# cooldown_seconds = 10
 
 
 # ── Harness emojis ────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
@@ -121,5 +122,67 @@ color = "blue"
 	}
 	if got, want := cfg.Defaults.Notifications.AlerterPath, "/custom/bin/alerter"; got != want {
 		t.Fatalf("AlerterPath: got %q, want %q", got, want)
+	}
+}
+
+func TestLoad_ElicitationFollowsPermissionUntilSet(t *testing.T) {
+	base := `
+[[profiles]]
+name = "work"
+home_dir = "~/.claude-work"
+color = "blue"
+`
+	cases := []struct {
+		name  string
+		block string
+		want  bool
+	}{
+		{"omitted follows permission on", "[defaults.notifications]\npermission = true\n", true},
+		{"omitted follows permission off", "[defaults.notifications]\npermission = false\n", false},
+		{"explicit off overrides permission", "[defaults.notifications]\npermission = true\nelicitation = false\n", false},
+		{"explicit on without permission", "[defaults.notifications]\npermission = false\nelicitation = true\n", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := config.Load(writeTempConfig(t, tc.block+base))
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if got := cfg.Defaults.Notifications.ElicitationEnabled(); got != tc.want {
+				t.Fatalf("ElicitationEnabled = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoad_NotificationCooldown(t *testing.T) {
+	base := `
+[[profiles]]
+name = "work"
+home_dir = "~/.claude-work"
+color = "blue"
+`
+	cfg, err := config.Load(writeTempConfig(t, base))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.Defaults.Notifications.CooldownSeconds; got != 10 {
+		t.Fatalf("default CooldownSeconds = %d, want 10", got)
+	}
+
+	cfg, err = config.Load(writeTempConfig(t, "[defaults.notifications]\ncooldown_seconds = 45\n"+base))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.Defaults.Notifications.CooldownSeconds; got != 45 {
+		t.Fatalf("CooldownSeconds = %d, want 45", got)
+	}
+
+	cfg, err = config.Load(writeTempConfig(t, "[defaults.notifications]\ncooldown_seconds = -1\n"+base))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if err := config.Validate(cfg); err == nil || !strings.Contains(err.Error(), "cooldown_seconds") {
+		t.Fatalf("Validate = %v, want a cooldown_seconds error", err)
 	}
 }

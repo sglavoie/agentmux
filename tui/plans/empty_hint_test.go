@@ -1,0 +1,27 @@
+package plans
+
+import (
+	"strings"
+	"testing"
+
+	planindex "github.com/sglavoie/agentmux/internal/plans"
+)
+
+func TestEmptyPlanResultsNameTheWayOut(t *testing.T) {
+	cases := []struct {
+		name string
+		in   SearchInput
+		want string
+	}{
+		{"nothing to undo", SearchInput{}, "(no plans match)"},
+		{"query only", SearchInput{Query: "x"}, "(no plans match — esc clears the query)"},
+		{"project filter", SearchInput{FilterProject: planindex.ProjectFilter{Kind: planindex.ProjectUnknown}}, "(no plans match — r changes the project)"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.in.RenderList(10); !strings.Contains(got, tc.want) {
+				t.Fatalf("RenderList = %q, want it to contain %q", got, tc.want)
+			}
+		})
+	}
+}

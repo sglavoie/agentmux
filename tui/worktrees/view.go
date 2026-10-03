@@ -127,7 +127,7 @@ func (in ListInput) RenderList(height int) string {
 			return styleDim.Render("  (loading worktrees…)") + "\n"
 		}
 		if len(in.Entries) > 0 {
-			return styleDim.Render("  (no worktrees match)") + "\n"
+			return styleDim.Render(layout.ClampLine("  (no worktrees match — esc clears the filter)", in.Width)) + "\n"
 		}
 		return styleDim.Render("  (no managed worktrees)") + "\n"
 	}

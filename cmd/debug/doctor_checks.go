@@ -296,6 +296,33 @@ func writeDoctorSocketStatus(out io.Writer, reportIssue func(string, ...any)) er
 	return err
 }
 
+// configFreshnessSlack absorbs the gap between a restart writing config (as
+// `config asl-sync` does) and the new daemon recording its start.
+const configFreshnessSlack = 2 * time.Second
+
+// checkDoctorConfigFreshness warns when config.toml changed after the running
+// daemon started. The daemon reads its configuration once, at startup, so an
+// edit made since — a notification toggle, a stop-confirm delay, a pattern
+// override — is not in effect, and nothing else says so. It is a warning, not
+// a failure: plenty of edits (projects, launcher pins) only matter to the CLI
+// and TUI, which read the file fresh. An unreadable config path is not this
+// check's to report; the config checks elsewhere already do.
+func checkDoctorConfigFreshness(uptime time.Duration, addFinding func(severity, check, format string, args ...any)) {
+	if uptime <= 0 {
+		return
+	}
+	modTime, err := doctorConfigModTime()
+	if err != nil {
+		return
+	}
+	started := doctorNow().Add(-uptime)
+	if modTime.After(started.Add(configFreshnessSlack)) {
+		addFinding(severityWarning, "config_changed_since_daemon_start",
+			"config.toml changed %s after the daemon started, and the daemon reads it only at startup; run `amx daemon restart` to apply daemon-side settings",
+			modTime.Sub(started).Round(time.Second))
+	}
+}
+
 func writeDoctorHooks(out io.Writer, reportIssue func(string, ...any), reportUnverified func(string, ...any)) error {
 	cfg, err := doctorLoadConfig()
 	if err != nil {

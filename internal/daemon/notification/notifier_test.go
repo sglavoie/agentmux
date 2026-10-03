@@ -10,6 +10,7 @@ package notification
 import (
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
 )
@@ -227,4 +228,25 @@ func TestNotifier_SessionTitleInNotification(t *testing.T) {
 			t.Errorf("subtitle = %q, want %q", calls.snapshot()[0].subtitle, "Session stopped")
 		}
 	})
+}
+
+func TestElicitationHasItsOwnSwitch(t *testing.T) {
+	off := false
+	n, _ := newTestNotifier(&config.NotificationConfig{Permission: true, Elicitation: &off})
+	if !n.actionEnabled("permission") || n.actionEnabled("elicitation") {
+		t.Fatal("elicitation = false must silence elicitation without touching permission")
+	}
+	n, _ = newTestNotifier(&config.NotificationConfig{Permission: true})
+	if !n.actionEnabled("elicitation") {
+		t.Fatal("an unset elicitation must keep following permission")
+	}
+}
+
+func TestCooldownComesFromConfig(t *testing.T) {
+	if n, _ := newTestNotifier(&config.NotificationConfig{CooldownSeconds: 45}); n.cooldown != 45*time.Second {
+		t.Fatalf("cooldown = %v, want 45s", n.cooldown)
+	}
+	if n, _ := newTestNotifier(&config.NotificationConfig{}); n.cooldown != defaultCooldown {
+		t.Fatalf("unset cooldown = %v, want the default %v", n.cooldown, defaultCooldown)
+	}
 }

@@ -10,6 +10,8 @@ package plans
 // it, so a stale entry can never keep answering searches.
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -282,5 +284,57 @@ func TestRefresh_DropsPlanWhenMarkdownRemoved(t *testing.T) {
 	}
 	if _, err := os.Stat(sidecar); !os.IsNotExist(err) {
 		t.Errorf("sidecar should be deleted after markdown removal; stat err = %v", err)
+	}
+}
+
+// TestRefresh_UnchangedPlansDoNotRewriteTheCache pins that a refresh finding
+// nothing new leaves plans.json alone. The file is rewritten in a compact form
+// between refreshes; a refresh that persisted anyway would put the indented
+// form back, which is the evidence this test reads. A real change must still
+// be written.
+func TestRefresh_UnchangedPlansDoNotRewriteTheCache(t *testing.T) {
+	root := t.TempDir()
+	seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
+		"manifest.md": "# Alpha\nbody",
+	})
+	idx := newTestIndex(t)
+	if err := idx.Refresh(root); err != nil {
+		t.Fatalf("first Refresh: %v", err)
+	}
+	written, err := os.ReadFile(idx.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(written, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	compact, err := json.Marshal(decoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(compact, written) {
+		t.Fatal("setup: the cache must be written indented for the marker to work")
+	}
+	if err := os.WriteFile(idx.path, compact, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := idx.Refresh(root); err != nil {
+		t.Fatalf("second Refresh: %v", err)
+	}
+	if after, _ := os.ReadFile(idx.path); !bytes.Equal(after, compact) {
+		t.Fatal("a refresh that found nothing new rewrote plans.json")
+	}
+
+	seedPlanDir(t, root, "beta-ccdd44556677", map[string]string{"manifest.md": "# Beta\nbody"})
+	if err := idx.Refresh(root); err != nil {
+		t.Fatalf("third Refresh: %v", err)
+	}
+	if after, _ := os.ReadFile(idx.path); bytes.Equal(after, compact) {
+		t.Fatal("a refresh that found a new plan did not persist it")
+	}
+	if got := len(idx.List()); got != 2 {
+		t.Fatalf("entries = %d, want 2", got)
 	}
 }

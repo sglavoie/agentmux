@@ -367,3 +367,23 @@ func TestSessionViewerCopyPathNoOpForNilOrEmptyPath(t *testing.T) {
 		})
 	}
 }
+
+// TestSessionViewerSlashReopensTheQuery mirrors the plan viewer: `/` returns
+// to the result list with the text query being edited, the same query intact.
+func TestSessionViewerSlashReopensTheQuery(t *testing.T) {
+	m := Model{
+		mode:           ModeSessionView,
+		sessionQuery:   "auth refactor",
+		viewerMessages: []transcript.Message{{Role: "user", Text: "auth"}},
+		width:          80,
+		height:         20,
+	}
+	updated, _ := m.Update(keyPress("/"))
+	got := updated.(Model)
+	if got.mode != ModeSessionSearch || !got.sessionSearchMode {
+		t.Fatalf("mode = %d searchMode = %v; want ModeSessionSearch with the query open", got.mode, got.sessionSearchMode)
+	}
+	if got.sessionQuery != "auth refactor" || got.viewerMessages != nil {
+		t.Fatalf("query = %q, viewer messages = %v; want the query kept and the viewer closed", got.sessionQuery, got.viewerMessages)
+	}
+}

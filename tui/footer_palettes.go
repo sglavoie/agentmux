@@ -95,6 +95,7 @@ var sessionSearchFooterPalette = []footerEntry{
 }
 
 var sessionViewFooterPalette = []footerEntry{
+	{"/", "search", footerSectionApp, footerAlways, footerPrioritySecondary},
 	{"j/k", "move", footerSectionApp, footerAlways, footerPriorityNav},
 	{"n/N", "match", footerSectionApp, func(m Model) bool {
 		return len(m.viewerMatchLines) > 0
