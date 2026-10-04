@@ -13,6 +13,7 @@ final class AppSkeletonTests: XCTestCase {
         XCTAssertEqual(NSApp.activationPolicy(), .accessory)
     }
 
+    @MainActor
     func testHostedTestsAreDetected() {
         XCTAssertTrue(AppDelegate.isRunningTests)
         // The guard keeps the hosted app from building its status item or

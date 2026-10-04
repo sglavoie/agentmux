@@ -20,6 +20,10 @@ targets:
     platform: macOS
     sources:
       - path: AgentMux
+      # The palette the Go side paints tab titles with, so the menu bar draws
+      # each state with the same glyph.
+      - path: ../internal/palette/icons.json
+        buildPhase: resources
     settings:
       base:
         # The product is "Agent Mux.app"; the module keeps a space-free name so

@@ -19,6 +19,19 @@ enum DaemonStatus: Equatable {
     }
 }
 
+/// What one focus_window request did.
+enum FocusOutcome: Equatable {
+    case focused(FocusWindowResult)
+    /// The window is gone; the menu was showing a session that has closed.
+    case staleTarget
+    /// The daemon does not know that Kitty socket, so it will not dial it.
+    case unknownSocket
+    /// The daemon predates focus_window.
+    case unsupported
+    case notRunning
+    case failed(String)
+}
+
 /// One-shot requests to the daemon, each on its own connection. Blocking:
 /// call off the main thread.
 struct DaemonClient {
@@ -51,5 +64,37 @@ struct DaemonClient {
         return response.ready
             ? .ready(response.build)
             : .degraded(reason: response.degradedReason, build: response.build)
+    }
+
+    /// The daemon's own deadline for focus_window is 3s; allow for the trip.
+    static let focusTimeout: TimeInterval = 4
+
+    func focusWindow(socket: String, windowID: Int, timeout: TimeInterval = focusTimeout) -> FocusOutcome {
+        let reply: Data
+        do {
+            let request = try JSONEncoder().encode(DaemonRequest.focusing(socket: socket, windowID: windowID))
+            reply = try roundTrip(socketPath, request, timeout)
+        } catch let error as LineSocketError {
+            return error.meansNotRunning ? .notRunning : .failed(error.message)
+        } catch {
+            return .failed(error.localizedDescription)
+        }
+        return Self.focusOutcome(fromReply: reply)
+    }
+
+    static func focusOutcome(fromReply reply: Data) -> FocusOutcome {
+        guard let response = try? JSONDecoder().decode(DaemonResponse.self, from: reply) else {
+            return .failed("unreadable focus_window reply")
+        }
+        if response.ok {
+            return .focused(response.focused ?? FocusWindowResult(windowID: 0))
+        }
+        switch response.error ?? "" {
+        case "stale_target": return .staleTarget
+        case "unknown_socket": return .unknownSocket
+        case "": return .failed("focus_window refused")
+        case let message where message.hasPrefix("unknown request type"): return .unsupported
+        case let message: return .failed(message)
+        }
     }
 }

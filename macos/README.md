@@ -5,9 +5,10 @@ Dock icon) that talks to the always-on amx daemon over its Unix socket and runs
 the `amx` CLI for actions. Kitty stays the terminal: the app never hosts a
 session itself.
 
-This is a first draft. The app currently shows the daemon line and a
-Preferences window. The live session feed, focus, notifications, hotkeys, and
-actions are added in later steps, and this file grows with them.
+The app shows the live managed sessions, with attention counts in the menu bar,
+and a click focuses a session's Kitty tab and brings Kitty to the front.
+Notifications, hotkeys, and actions are added in later steps, and this file
+grows with them.
 
 ## Requirements
 
@@ -117,21 +118,76 @@ Preferences shows which binary was chosen and why.
   unknown command, so the app hides what is missing rather than failing when
   it is used.
 
+## The live feed
+
+The app holds one companion subscription open to
+`~/.local/share/agent-mux/daemon.sock`, the same path `ipc.SocketPath`
+computes (`Daemon/SubscriptionClient.swift`). It sends `subscribe` as the
+client `Agent Mux.app` with its version, reads the ack, and then reads frames.
+Every snapshot frame replaces the menu's state wholesale.
+
+- **Reconnect.** When the stream ends, the client dials again. The delay
+  doubles from 0.5s to 10s and drops back to 0.5s once a subscription is
+  acknowledged. After a `bye` (such as `amx daemon restart`) it retries at
+  0.5s, so a restart reconnects without relaunching the app.
+- **Heartbeat watchdog.** The daemon sends a heartbeat every 15s (the ack's
+  `heartbeat_ms`). If no frame arrives for two intervals, the client treats the
+  socket as half-open and reconnects. A wake from sleep reconnects at once.
+- **Tolerant decoding.** Unknown fields are ignored, and a field of an
+  unexpected type falls back to its default. Unknown frame types are skipped.
+  A line that is not a frame is counted and skipped.
+
+The status item's title shows only the non-zero counts, with the glyphs from
+`internal/palette/icons.json`, which is bundled as a resource: `⚡2 🛑1 🔑1`.
+The menu lists the sessions in three sections:
+
+- **Needs attention**: rows like `🔑 api · claude · 4m · permission`, with the
+  longest-waiting first.
+- **Working**: the `bolt`, `subagent`, and `compact` sessions.
+- **Idle**: everything else. More than 10 rows collapse into a submenu.
+
 ## The daemon line
 
-The menu's first line comes from a one-shot `health` request to
-`~/.local/share/agent-mux/daemon.sock`, the same path `ipc.SocketPath`
-computes. The request is sent on every menu open and every 10 seconds. The line
-reads:
+The menu's first line says where the feed stands:
 
 | Line | Meaning |
 | --- | --- |
-| `ready · 0.8.0 (52189e529adf-dirty)` | The daemon is ready. Shows its version and revision. |
+| `ready · 0.8.0 (52189e529adf-dirty)` | The feed is live and the daemon is ready. Shows its version and revision. |
 | `degraded · <reason>` | The daemon answered but is not ready. |
-| `not running` | There is no socket, or nothing accepts on it. |
+| `not running` | There is no socket, or nothing accepts on it. A **Start daemon** item follows. |
+| `reconnecting · <reason>` | The stream ended; the client is dialing again. |
 | `unresponsive · <reason>` | Something accepted the connection but did not answer in time. |
 
-The app never starts the daemon on its own.
+A daemon older than the companion protocol answers `subscribe` with
+"unknown request type". The menu then shows "daemon too old — run
+`amx daemon restart`". The app falls back to a `health` request every 10
+seconds and on every menu open, and it retries `subscribe` every 10 seconds.
+
+The app never starts the daemon on its own. **Start daemon** runs the resolved
+`amx daemon start` in a session of its own, detached from the app, only when
+the operator chooses it.
+
+## Focus
+
+A click on a session row sends `focus_window` to the daemon. The request names
+a Kitty socket, which the daemon accepts only if it learned that socket itself
+(`Kitty/KittyEndpoint.swift`). The app tries these sockets in order, and moves
+to the next on `unknown_socket`:
+
+1. the session's own socket;
+2. the socket the snapshot's window tree was read through;
+3. `unix:/tmp/kitty-<pid>` for each running `net.kovidgoyal.kitty` process,
+   only when that file exists.
+
+If there is nothing to try, the menu explains that Kitty needs
+`allow_remote_control yes` and `listen_on unix:/tmp/kitty` in `kitty.conf`.
+
+Once the daemon has focused the window, `Kitty/KittyActivator.swift` brings
+the Kitty process that owns the socket to the front. It finds that process from
+the pid in the socket's name, so with two Kitty instances the right one comes
+forward. It calls `NSApp.yieldActivation(to:)` and then asks Kitty to
+activate. A `stale_target` reply means the session has closed. The row is hidden
+until a snapshot no longer lists it, and the menu says so.
 
 ## Single instance and tests
 
