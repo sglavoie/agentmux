@@ -11,6 +11,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
 
     private(set) var statusItem: StatusItemController?
     private var preferencesController: PreferencesWindowController?
+    /// The ASL answer panel, made the first time a question is answered.
+    private var aslPanel: ASLQuestionPanelController?
     let preferencesModel = PreferencesModel()
     private var dashboardHotKey: HotKeyCenter?
     private var attentionHotKey: HotKeyCenter?
@@ -262,7 +264,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
             continueConversation(conversation)
         case let .snooze(choice):
             snooze(choice)
+        case let .answerASL(target):
+            answer(target)
         }
+    }
+
+    // MARK: ASL questions
+
+    /// Answer… on a menu row or a banner: opens the answer panel on that run.
+    func answer(_ target: ASLAnswerTarget) {
+        let controller = aslPanel ?? ASLQuestionPanelController()
+        if aslPanel == nil {
+            controller.onFinish = { [weak self] notice in self?.finishAnswer(notice) }
+            aslPanel = controller
+        }
+        Self.logger.notice("answer panel: run \(target.runID, privacy: .public)")
+        controller.show(target)
+    }
+
+    /// The panel closed itself: answered, or its run moved. The menu is
+    /// rebuilt now; the snapshot that drops the ❓ follows from the daemon.
+    private func finishAnswer(_ notice: String?) {
+        if let notice { store.show(notice: notice) }
+        statusItem?.rebuildMenu()
     }
 
     /// Runs `amx daemon start` detached, only ever because the operator chose
@@ -421,8 +445,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
         case .actionSnooze:
             snooze(.oneHour)
         case .actionAnswer:
-            // The native answer panel arrives with the ASL question panel.
-            Self.logger.notice("notification answer for run \(response.runID, privacy: .public)")
+            guard !response.runID.isEmpty else { return report("Could not answer: the notification names no run.") }
+            answer(ASLAnswerTarget(runID: response.runID, windowID: response.windowID))
         case .delivered, .dismissed, .failed:
             break
         }

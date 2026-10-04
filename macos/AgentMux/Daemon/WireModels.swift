@@ -54,9 +54,10 @@ struct DaemonRequest: Encodable, Equatable {
     var focusWindow: FocusWindowParams?
     var snooze: SnoozeRequest?
     var disposition: DispositionParams?
+    var asl: ASLRequestParams?
 
     enum CodingKeys: String, CodingKey {
-        case type, subscribe, snooze, disposition
+        case type, subscribe, snooze, disposition, asl
         case focusWindow = "focus_window"
     }
 
@@ -76,6 +77,16 @@ struct DaemonRequest: Encodable, Equatable {
 
     static func disposing(_ params: DispositionParams) -> DaemonRequest {
         DaemonRequest(type: "notification_disposition", disposition: params)
+    }
+
+    static let aslSnapshot = DaemonRequest(type: "asl_snapshot")
+
+    static func aslQuestion(planDir: String, questionID: String) -> DaemonRequest {
+        DaemonRequest(type: "asl_question", asl: ASLRequestParams(planDir: planDir, questionID: questionID))
+    }
+
+    static func aslAction(_ params: ASLRequestParams) -> DaemonRequest {
+        DaemonRequest(type: "asl_action", asl: params)
     }
 }
 
@@ -147,17 +158,22 @@ struct DaemonResponse: Decodable, Equatable {
     let subscription: SubscriptionAck?
     let focused: FocusWindowResult?
     let snooze: SnoozeState?
+    let aslResult: ASLResult?
 
     init(ok: Bool, error: String? = nil, subscription: SubscriptionAck? = nil, focused: FocusWindowResult? = nil,
-         snooze: SnoozeState? = nil) {
+         snooze: SnoozeState? = nil, aslResult: ASLResult? = nil) {
         self.ok = ok
         self.error = error
         self.subscription = subscription
         self.focused = focused
         self.snooze = snooze
+        self.aslResult = aslResult
     }
 
-    enum CodingKeys: String, CodingKey { case ok, error, subscription, focused, snooze }
+    enum CodingKeys: String, CodingKey {
+        case ok, error, subscription, focused, snooze
+        case aslResult = "asl_result"
+    }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -166,6 +182,7 @@ struct DaemonResponse: Decodable, Equatable {
         subscription = c.lenient(.subscription)
         focused = c.lenient(.focused)
         snooze = c.lenient(.snooze)
+        aslResult = c.lenient(.aslResult)
     }
 }
 

@@ -8,8 +8,8 @@ session itself.
 The app shows the live managed sessions, with attention counts in the menu bar,
 and a click focuses a session's Kitty tab and brings Kitty to the front. Two
 global shortcuts reach the dashboard and the sessions waiting on you from any
-app. The daemon's notifications arrive as native banners while the app runs.
-The ASL answer panel is added in a later step, and this file grows with it.
+app. The daemon's notifications arrive as native banners while the app runs,
+and ASL supervisor questions are answered in a native panel.
 
 ## Requirements
 
@@ -276,11 +276,55 @@ forward. A dismissal reports `dismissed` (every category sets
 - Mute runs `amx mute-toggle` on that session, unless the session is already
   muted, and only when exactly one listed session has that window ID.
 - Snooze sets the same 1-hour snooze as the Notifications menu.
-- Answer is a placeholder until the ASL answer panel.
+- Answer opens the [ASL answer panel](#asl-answer-panel) on the notice's run.
 
 A `notification_retract` frame removes the banner. A retracted notification
 that is still waiting on the permission prompt, or on `add`, is never shown.
 The `amx debug tail` dispositions name the `app` backend.
+
+## ASL answer panel
+
+An ASL run waiting on its supervisor shows ❓ on its session row, and an
+indented **Answer…** item follows that row (`Answer… (3 questions)` when more
+than one is open). A run binds to the session that names it, else to the one
+listed session with its window ID; a run no listed session claims, or whose
+window ID is ambiguous across Kitty instances, is listed under **Supervisor
+questions** instead. The `amx.asl` banner's Answer… opens the same panel.
+
+The panel (`UI/ASLQuestionPanel.swift`) floats above other windows and does not
+activate the app until the reply editor takes focus. It reads the daemon, never
+`amx`:
+
+1. `asl_snapshot` finds the run's row, its permitted actions, and its action
+   token. The menu's waiting list carries neither a body nor a token.
+2. `asl_question` fetches one question body at a time, as you move between the
+   run's open questions.
+3. `asl_action` sends each submission once. It is never resent automatically.
+
+The rules are ported from `tui/asl` into `Model/ASLResponseState.swift`, so
+the panel and the TUI's Runs view agree:
+
+- A live wait offers **Reply**, **Continue**, and **Pause**. A paused run
+  offers only **Reply and resume**. Reply needs text; ⌘↩ sends it.
+- The form opens only when the daemon reports ASL reachable, the snapshot is
+  not stale, mutations are enabled, the row carries a token, and the row
+  permits the method. Otherwise the panel shows the same fixed sentence the TUI
+  shows, including ASL's own `disabled_reasons`.
+- A failed submission keeps its operation ID, so retrying the same button after
+  an unknown outcome replays the bridge's receipt instead of applying it twice.
+  Another button mints a new ID.
+- After an accepted closure the panel moves on to the run's next open
+  question. That question's fetch re-mints the token, and nothing is sent
+  until it has. The last question, or a resume, closes the panel.
+- A refusal is shown as a fixed sentence chosen by its bridge code, never the
+  bridge's message. A refusal meaning the run moved (a stale token, a closed
+  question, a stale snapshot) closes the panel, shows a notice in the menu,
+  and rebuilds the menu.
+
+The question body and every draft are held only while the panel is open, and
+closing it drops them. `SecretText` and the state's `description`, `dump`
+mirror, and request descriptions are all redacted, so the logs (category
+`asl`) name only methods, run, question, and operation IDs, and refusal codes.
 
 ## Global shortcuts
 

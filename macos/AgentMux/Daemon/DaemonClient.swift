@@ -162,4 +162,62 @@ struct DaemonClient {
         }
         return response.ok ? nil : (response.error ?? "notification_disposition refused")
     }
+
+    // MARK: ASL
+
+    /// `asl.ReadDeadline` (the bridge's 2s read timeout plus 1s), plus the trip.
+    static let aslReadTimeout: TimeInterval = 4
+    /// `asl.ActionDeadline` (the bridge's 5s action timeout plus 1s), plus the
+    /// trip.
+    static let aslActionTimeout: TimeInterval = 7
+
+    /// The daemon's ASL projection, with the tokens an answer is sent under.
+    func aslSnapshot(timeout: TimeInterval = aslReadTimeout) -> Result<ASLResult, ASLRequestError> {
+        aslExchange(.aslSnapshot, timeout: timeout).flatMap { result in
+            result.snapshot == nil ? .failure(.transport("daemon returned no ASL snapshot")) : .success(result)
+        }
+    }
+
+    /// One question's body. The caller holds it only while the panel shows it.
+    func aslQuestion(planDir: String, questionID: String, timeout: TimeInterval = aslReadTimeout) -> Result<ASLQuestionBody, ASLRequestError> {
+        aslExchange(.aslQuestion(planDir: planDir, questionID: questionID), timeout: timeout).flatMap { result in
+            result.question.map { .success($0) } ?? .failure(.transport("daemon returned no question body"))
+        }
+    }
+
+    /// Submits one mutation, exactly once: a timeout is reported as an
+    /// unknown outcome rather than resent.
+    func aslAction(_ params: ASLRequestParams, timeout: TimeInterval = aslActionTimeout) -> Result<ASLOperation, ASLRequestError> {
+        aslExchange(.aslAction(params), timeout: timeout).flatMap { result in
+            result.operation.map { .success($0) } ?? .failure(.transport("daemon returned no operation receipt"))
+        }
+    }
+
+    private func aslExchange(_ request: DaemonRequest, timeout: TimeInterval) -> Result<ASLResult, ASLRequestError> {
+        let reply: Data
+        do {
+            let encoded = try JSONEncoder().encode(request)
+            reply = try roundTrip(socketPath, encoded, timeout)
+        } catch let error as LineSocketError {
+            return .failure(error.meansNotRunning ? .notRunning : .transport(error.message))
+        } catch {
+            return .failure(.transport(error.localizedDescription))
+        }
+        return Self.aslResult(fromReply: reply)
+    }
+
+    static func aslResult(fromReply reply: Data) -> Result<ASLResult, ASLRequestError> {
+        guard let response = try? JSONDecoder().decode(DaemonResponse.self, from: reply) else {
+            return .failure(.transport("unreadable ASL reply"))
+        }
+        guard response.ok else {
+            let message = response.error ?? ""
+            if message.hasPrefix("unknown request type") { return .failure(.unsupported) }
+            return .failure(.refused(message.isEmpty ? "daemon refused the ASL request" : message))
+        }
+        guard let result = response.aslResult else {
+            return .failure(.transport("daemon returned no ASL result"))
+        }
+        return .success(result)
+    }
 }

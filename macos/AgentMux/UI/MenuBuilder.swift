@@ -19,6 +19,8 @@ enum MenuAction: Equatable {
     case launchProject(ProjectEntry)
     case continueConversation(RecentConversation)
     case snooze(SnoozeChoice)
+    /// Opens the answer panel on an ASL run waiting for its supervisor.
+    case answerASL(ASLAnswerTarget)
 }
 
 /// The action submenus the controller keeps as live `NSMenu`s, so a list that
@@ -42,6 +44,9 @@ enum MenuEntry: Equatable {
     case unavailable(String, reason: String)
     /// One of the controller's live submenus; greyed out when `reason` is set.
     case submenuRef(MenuSubmenu, String, reason: String?)
+    /// "Answer…" for an ASL run waiting on its supervisor; indented under the
+    /// session row it belongs to.
+    case answer(ASLAnswerTarget, String, indented: Bool)
     case separator
 }
 
@@ -116,33 +121,99 @@ enum MenuBuilder {
         let working = input.sessions.filter { !$0.attention && $0.isWorking }
         let idle = input.sessions.filter { !$0.attention && !$0.isWorking }
 
+        let waiting = waitingBySession(input.snapshot?.asl.waiting ?? [], sessions: input.sessions)
+        /// A session row, then the Answer… item for its waiting run.
+        func rowEntries(_ session: CompanionSession, showReason: Bool) -> [MenuEntry] {
+            var out: [MenuEntry] = [.session(row(session, showReason: showReason, input: input))]
+            if let run = waiting.bySession[session.windowID] {
+                out.append(.answer(target(run), answerTitle(run), indented: true))
+            }
+            return out
+        }
+
         if input.sessions.isEmpty {
             entries.append(.separator)
             entries.append(.info("No live sessions"))
+            entries += unmatchedWaitingEntries(waiting.unmatched, glyphs: input.glyphs)
             return entries
         }
         if !attention.isEmpty {
             entries.append(.separator)
             entries.append(.header("Needs attention"))
-            entries += attention.map { .session(row($0, showReason: true, input: input)) }
+            entries += attention.flatMap { rowEntries($0, showReason: true) }
         }
         if !working.isEmpty {
             entries.append(.separator)
             entries.append(.header("Working"))
-            entries += working.map { .session(row($0, showReason: false, input: input)) }
+            entries += working.flatMap { rowEntries($0, showReason: false) }
         }
         if !idle.isEmpty {
             entries.append(.separator)
             let rows = idle.map { row($0, showReason: false, input: input) }
             if rows.count > idleInlineLimit {
                 entries.append(.submenu("Idle (\(rows.count))", rows))
+                // A collapsed idle row keeps its Answer… in the menu itself.
+                entries += idle.compactMap { session in
+                    waiting.bySession[session.windowID].map {
+                        MenuEntry.answer(target($0), "\(answerTitle($0)) · \(name(of: session))", indented: false)
+                    }
+                }
             } else {
                 entries.append(.header("Idle"))
-                entries += rows.map { .session($0) }
+                entries += idle.flatMap { rowEntries($0, showReason: false) }
             }
         }
+        entries += unmatchedWaitingEntries(waiting.unmatched, glyphs: input.glyphs)
         if input.snapshot?.truncated == true {
             entries.append(.info("More sessions than the daemon lists"))
+        }
+        return entries
+    }
+
+    // MARK: ASL questions
+
+    /// The waiting runs keyed by the window ID of the listed session each
+    /// belongs to, and the ones no listed session claims. A run binds to a
+    /// session that names it; otherwise to the one session with its window ID
+    /// that names no run — window IDs repeat across Kitty instances, so an
+    /// ambiguous ID binds nothing.
+    static func waitingBySession(_ waiting: [CompanionASLWaiting], sessions: [CompanionSession])
+        -> (bySession: [Int: CompanionASLWaiting], unmatched: [CompanionASLWaiting]) {
+        var bySession: [Int: CompanionASLWaiting] = [:]
+        var unmatched: [CompanionASLWaiting] = []
+        for run in waiting {
+            var owner = sessions.first { !$0.aslRunID.isEmpty && $0.aslRunID == run.runID }
+            if owner == nil, run.windowID > 0 {
+                let sameWindow = sessions.filter { $0.windowID == run.windowID }
+                if sameWindow.count == 1, sameWindow[0].aslRunID.isEmpty { owner = sameWindow[0] }
+            }
+            if let owner, bySession[owner.windowID] == nil {
+                bySession[owner.windowID] = run
+            } else {
+                unmatched.append(run)
+            }
+        }
+        return (bySession, unmatched)
+    }
+
+    static func target(_ run: CompanionASLWaiting) -> ASLAnswerTarget {
+        ASLAnswerTarget(runID: run.runID, planDir: run.planDir, windowID: run.windowID)
+    }
+
+    /// `Answer…`, or `Answer… (3 questions)`.
+    static func answerTitle(_ run: CompanionASLWaiting) -> String {
+        run.unanswered > 1 ? "Answer… (\(run.unanswered) questions)" : "Answer…"
+    }
+
+    /// Waiting runs no listed session shows, under their own header.
+    static func unmatchedWaitingEntries(_ runs: [CompanionASLWaiting], glyphs: Glyphs) -> [MenuEntry] {
+        guard !runs.isEmpty else { return [] }
+        var entries: [MenuEntry] = [.separator, .header("Supervisor questions")]
+        for run in runs {
+            let plan = run.planDir.isEmpty ? run.runID : (run.planDir as NSString).lastPathComponent
+            let glyph = glyphs.glyph(for: "question")
+            let name = glyph.isEmpty ? plan : "\(glyph) \(plan)"
+            entries.append(.answer(target(run), "\(name) · \(answerTitle(run))", indented: false))
         }
         return entries
     }
@@ -409,6 +480,12 @@ enum MenuBuilder {
             case let .unavailable(title, reason):
                 let item = infoItem(title)
                 item.toolTip = reason
+                return [item]
+            case let .answer(answerTarget, title, indented):
+                let item = NSMenuItem(title: title, action: actionSelector, keyEquivalent: "")
+                item.target = target
+                item.representedObject = ActionBox(.answerASL(answerTarget))
+                item.indentationLevel = indented ? 1 : 0
                 return [item]
             case let .submenuRef(kind, title, reason):
                 let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
