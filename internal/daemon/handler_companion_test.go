@@ -16,11 +16,11 @@ import (
 // with the socket it was dialed through. onList runs inside ListWindows so a
 // test can observe what the handler holds while Kitty is being read.
 type recordingFocusClient struct {
-	mu      sync.Mutex
-	live    []kitty.OSWindow
-	calls   []string
+	mu       sync.Mutex
+	live     []kitty.OSWindow
+	calls    []string
 	focusErr error
-	onList  func()
+	onList   func()
 }
 
 func (c *recordingFocusClient) record(call string) {
