@@ -65,7 +65,7 @@ final class SessionStoreTests: XCTestCase {
     func testStaleWindowsHideUntilASnapshotDropsThem() {
         let store = SessionStore()
         store.apply(.frame(.snapshot(seq: 1, snapshot([1, 2]))))
-        store.markStale(windowID: 2)
+        store.markStale(socket: "", windowID: 2)
         XCTAssertEqual(store.sessions.map(\.windowID), [1])
         XCTAssertEqual(store.notice, "That session has closed.")
 
@@ -77,5 +77,58 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertTrue(store.staleWindows.isEmpty)
         store.apply(.frame(.snapshot(seq: 4, snapshot([1, 2]))))
         XCTAssertEqual(store.sessions.map(\.windowID), [1, 2], "a reused window ID shows again")
+    }
+
+    private func sessions(_ pairs: [(String, Int)]) -> CompanionSnapshot {
+        var snapshot = snapshot([])
+        snapshot.sessions = pairs.map { socket, id in
+            var session = CompanionSession(windowID: id)
+            session.kittySocket = socket
+            return session
+        }
+        return snapshot
+    }
+
+    private func listed(_ store: SessionStore) -> [String] {
+        store.sessions.map { "\($0.kittySocket)#\($0.windowID)" }
+    }
+
+    func testStaleTargetIsScopedToKittySocket() {
+        let store = SessionStore()
+        store.apply(snapshot: sessions([("unix:/tmp/kitty-101", 7), ("unix:/tmp/kitty-202", 7)]))
+        store.markStale(socket: "unix:/tmp/kitty-101", windowID: 7)
+        XCTAssertEqual(listed(store), ["unix:/tmp/kitty-202#7"], "only the stale Kitty's window hides")
+
+        store.apply(snapshot: sessions([("unix:/tmp/kitty-202", 7)]))
+        XCTAssertEqual(listed(store), ["unix:/tmp/kitty-202#7"], "the other Kitty's window 7 stays listed")
+        XCTAssertTrue(store.staleWindows.isEmpty, "dropping the stale pair clears its suppression")
+    }
+
+    func testReusedIDInOtherKittyRemainsVisible() {
+        let store = SessionStore()
+        store.apply(snapshot: sessions([("unix:/tmp/kitty-101", 7), ("unix:/tmp/kitty-202", 3)]))
+        store.markStale(socket: "unix:/tmp/kitty-101", windowID: 7)
+        XCTAssertEqual(listed(store), ["unix:/tmp/kitty-202#3"])
+
+        // Another Kitty reuses 7 while the daemon still lists the stale one.
+        store.apply(snapshot: sessions([("unix:/tmp/kitty-101", 7), ("unix:/tmp/kitty-202", 7)]))
+        XCTAssertEqual(listed(store), ["unix:/tmp/kitty-202#7"], "a reused ID in another Kitty shows")
+
+        store.apply(snapshot: sessions([("unix:/tmp/kitty-202", 7)]))
+        XCTAssertTrue(store.staleWindows.isEmpty)
+        store.apply(snapshot: sessions([("unix:/tmp/kitty-101", 7), ("unix:/tmp/kitty-202", 7)]))
+        XCTAssertEqual(listed(store), ["unix:/tmp/kitty-101#7", "unix:/tmp/kitty-202#7"],
+                       "the stale Kitty's reappearing window 7 shows again")
+    }
+
+    func testEmptyRowSocketNamesTheSnapshotSocket() {
+        let store = SessionStore()
+        var snapshot = sessions([("", 4), ("unix:/tmp/kitty-202", 4)])
+        snapshot.kitty.socket = "unix:/tmp/kitty-101"
+        store.apply(snapshot: snapshot)
+        store.markStale(socket: "", windowID: 4)
+        XCTAssertEqual(listed(store), ["unix:/tmp/kitty-202#4"])
+        store.markStale(socket: "unix:/tmp/kitty-202", windowID: 4)
+        XCTAssertTrue(store.sessions.isEmpty)
     }
 }

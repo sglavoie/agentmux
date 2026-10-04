@@ -236,7 +236,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
                 store.show(notice: "Kitty is not running.")
             }
         case .staleTarget:
-            store.markStale(windowID: row.windowID)
+            store.markStale(socket: row.kittySocket, windowID: row.windowID)
             statusItem?.rebuildMenu()
         case .unknownSocket:
             store.show(notice: "The daemon does not know this session's Kitty socket.")

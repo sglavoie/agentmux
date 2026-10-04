@@ -72,8 +72,11 @@ final class SessionStore {
     /// A one-line notice the menu shows until the next snapshot replaces it.
     private(set) var notice: String?
     /// Windows a focus attempt found already closed, hidden until a snapshot
-    /// that no longer lists them arrives.
-    private(set) var staleWindows: Set<Int> = []
+    /// that no longer lists them arrives. A window ID names a window only
+    /// inside the Kitty instance that issued it, so each entry is the
+    /// socket and window together: a stale window in one Kitty never hides a
+    /// live one sharing its number in another.
+    private(set) var staleWindows: Set<AttentionCycler.Key> = []
 
     var onChange: (() -> Void)?
 
@@ -116,7 +119,7 @@ final class SessionStore {
     func apply(snapshot: CompanionSnapshot) {
         feed = .live
         self.snapshot = snapshot
-        let listed = Set(snapshot.sessions.map(\.windowID))
+        let listed = Set(snapshot.sessions.map { AttentionCycler.key($0, snapshotSocket: snapshot.kitty.socket) })
         staleWindows.formIntersection(listed)
         notice = nil
         onChange?()
@@ -131,9 +134,11 @@ final class SessionStore {
         onChange?()
     }
 
-    /// Records that focusing `windowID` found it gone.
-    func markStale(windowID: Int) {
-        staleWindows.insert(windowID)
+    /// Records that focusing `windowID` in the Kitty at `socket` found it
+    /// gone. An empty socket names the snapshot's own, as it does on a row.
+    func markStale(socket: String, windowID: Int) {
+        let socket = socket.isEmpty ? snapshot?.kitty.socket ?? "" : socket
+        staleWindows.insert(AttentionCycler.Key(socket: socket, windowID: windowID))
         notice = "That session has closed."
         onChange?()
     }
@@ -155,7 +160,10 @@ final class SessionStore {
 
     /// The sessions the menu lists.
     var sessions: [CompanionSession] {
-        (snapshot?.sessions ?? []).filter { !staleWindows.contains($0.windowID) }
+        guard let snapshot else { return [] }
+        return snapshot.sessions.filter {
+            !staleWindows.contains(AttentionCycler.key($0, snapshotSocket: snapshot.kitty.socket))
+        }
     }
 
     func title(style: StatusTitleStyle = .glyphs, showWorking: Bool = true, glyphs: Glyphs = .bundled) -> String {
