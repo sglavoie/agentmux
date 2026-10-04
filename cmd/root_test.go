@@ -70,7 +70,8 @@ func TestCommandFamiliesAreRegisteredUnderRoot(t *testing.T) {
 		"color-picker", "config", "daemon", "debug", "doctor",
 		"focus-next", "focus-next-managed", "focus-prev-managed",
 		"hook-indicator", "icon-picker", "keybindings", "mute-toggle",
-		"notifications", "overseer", "overview", "release-gate", "resort",
+		"notifications", "open-dashboard", "overseer", "overview", "project",
+		"release-gate", "resort",
 		"session", "transcripts", "tui-test", "worktree",
 	} {
 		if !registered[name] {

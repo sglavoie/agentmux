@@ -109,7 +109,26 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   invocation must not disturb the selection or page the operator left, and it
   reports a Kitty listing or focus failure as an error instead of degrading to
   "nothing is open", because the degraded answer is a second full-screen surface
-  polling Kitty beside the first.
+  polling Kitty beside the first. `amx open-dashboard` is the dashboard's
+  out-of-terminal entry point, for a caller (the companion app, a script) that
+  wants the dashboard brought forward rather than drawn where it runs: it
+  applies the same singleton rule through the shared `focusDashboardIn`, and
+  only when no dashboard is running launches one in a new tab, reporting
+  `{window_id, tab_id, opened}`. It is strict the way the overview is — a failed
+  listing or a failed focus is an error rather than a reason to open a second
+  dashboard — and it validates the configuration before launching, because a
+  tab that opens only to show a config error and close is worse than refusing.
+- `cmd/project`: the `amx project` family — the command surface over configured
+  projects, the launch templates `[[projects]]` declares. `list` reports each
+  as `{profile, title, harness, directory, groups}`, and `launch` starts a new
+  session from one through `actions.Launch` in `actions.DefaultRegistry()`, the
+  same definition the dashboard's launcher runs, so the two cannot disagree
+  about what launching a project means. A project is identified by its profile
+  and title (titles compare exactly); a title shared by several projects without
+  `--profile`, and a selector matching nothing, are refused with ordered
+  `profile/title` candidates rather than resolved by a guess. A launch reports
+  the new tab's identity only when exactly one new tab carrying the title
+  appeared. Neither leaf rewrites `config.toml`.
 - `cmd/config`: the `amx config` family — the config file's lifecycle (init,
   edit, show, path, validate, including the `$EDITOR` field splitter and the
   project-directory audit) and `asl-sync`, the ordered preflight-migrate-write-

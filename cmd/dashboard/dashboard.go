@@ -2,7 +2,8 @@
 // the live-session dashboard itself, which is what the bare `amx` invocation
 // runs, the live session overview behind `amx overview` (F2), and the three
 // customization overlays (color picker, harness icon picker, keybinding
-// reference).
+// reference). `amx open-dashboard` is the dashboard's entry point for a caller
+// that wants it brought forward rather than drawn in its own terminal.
 //
 // What makes them one family is not that they all draw something. It is that
 // each of them is a singleton in a Kitty session: before launching, every one
@@ -55,9 +56,25 @@ func focusExistingDashboard(client kitty.KittyClient, sourceWindowID int) bool {
 	if err != nil {
 		return false
 	}
+	_, found, err := focusDashboardIn(client, osWindows, sourceWindowID)
+	if !found || err != nil {
+		return false
+	}
+	fmt.Fprintln(os.Stderr, "Agent Mux dashboard already running — focused existing tab.")
+	return true
+}
+
+// focusDashboardIn is the singleton rule itself, over a window tree the caller
+// already listed: find a running dashboard other than the caller's own window,
+// focus its tab, hand it the tab sourceWindowID sits in so it selects that
+// row, and focus its window. It reports where the dashboard is, whether one was
+// found, and a failure to focus its tab — after which the dashboard exists but
+// was not brought forward. Handing over the selection and focusing the window
+// are best effort, as they always were.
+func focusDashboardIn(client kitty.KittyClient, osWindows []kitty.OSWindow, sourceWindowID int) (*kitty.DashboardLocation, bool, error) {
 	loc, found := kitty.FindDashboardWindow(osWindows, cli.WindowIDFromEnv())
 	if !found {
-		return false
+		return nil, false, nil
 	}
 	var sourceTabID int
 	if sourceWindowID > 0 {
@@ -66,7 +83,7 @@ func focusExistingDashboard(client kitty.KittyClient, sourceWindowID int) bool {
 		}
 	}
 	if err := client.FocusTab(kitty.MatchTabByID(loc.TabID)); err != nil {
-		return false
+		return loc, true, fmt.Errorf("focus existing dashboard tab %d: %w", loc.TabID, err)
 	}
 	if sourceTabID > 0 {
 		request := strconv.Itoa(sourceTabID) + ":" + strconv.FormatInt(time.Now().UnixNano(), 10)
@@ -75,6 +92,5 @@ func focusExistingDashboard(client kitty.KittyClient, sourceWindowID int) bool {
 		})
 	}
 	_ = client.FocusWindow(kitty.MatchWindowByID(loc.WindowID))
-	fmt.Fprintln(os.Stderr, "Agent Mux dashboard already running — focused existing tab.")
-	return true
+	return loc, true, nil
 }

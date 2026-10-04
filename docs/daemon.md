@@ -174,7 +174,7 @@ checklist, see [Daemon State Acceptance Evidence](daemon_state_acceptance.md).
 The hermetic process-exit fixture and optional installed drill are documented in
 [Process-Lifecycle Acceptance](acceptance-testing.md).
 
-## Companion stream
+## Companion subscription
 
 A long-lived observer — the native menu bar app, or `amx debug subscribe` —
 sends one `subscribe` request and then reads server-to-client frames on the same
@@ -195,6 +195,82 @@ amx debug subscribe --frames 3        # one line per frame
 amx debug subscribe --json            # ack, then one schema-v1 record per frame
 amx daemon status                     # companion: N subscribers (client version, ...)
 ```
+
+### Frames and versioning
+
+The subscribe request is `{"type":"subscribe","subscribe":{protocol, client,
+client_version, amx_build, features, notification_backend,
+notifications_authorized}}`. The identifying fields are reported in health and
+doctor and never trusted for a decision. The response line is the ack,
+`{protocol, server_protocol_max, subscriber_id, heartbeat_ms, features}`: the
+daemon speaks the lower of the subscriber's `protocol` and its own
+`CompanionProtocolVersion` (today 1), and `server_protocol_max` tells a client
+that is merely older from one that is incompatible. `features` lists
+`snapshot`, `heartbeat`, and `notifications`.
+
+Every later line is a frame `{v, seq, type, data}`. `v` is the protocol version,
+`seq` rises by one per frame on one stream, and `data` depends on `type`:
+
+| `type` | `data` | When |
+| --- | --- | --- |
+| `snapshot` | the `CompanionSnapshot` (its own `version`, today 1) | on subscribe, then whenever the projection changes |
+| `notification` | `{notification_id, window_id, navigable, title, subtitle, action, run_id, session_id, actions[]}` | to the notification backend only |
+| `notification_retract` | `{notification_id, reason}` | a notice still showing is withdrawn |
+| `heartbeat` | none | every 15s |
+| `bye` | `{reason}`: `shutdown` or `slow_consumer` | the last frame of a stream ended on purpose |
+
+Every shape is additive: a reader ignores fields and frame types it does not
+know, and the protocol version moves only for a change a reader could not
+survive by ignoring it. The snapshot is versioned separately so it can change
+shape without renaming the other messages. The stream is server-to-client only;
+anything a companion reports back (a disposition, a snooze, a focus) is a
+separate request on its own connection.
+
+### Limits
+
+| Limit | Value | On overflow |
+| --- | --- | --- |
+| Concurrent subscribers | 8 | the ninth subscribe is refused with `subscriber_limit` |
+| Queued non-snapshot frames per subscriber | 64 | the subscriber is ended with `bye{slow_consumer}` |
+| Snapshot buffering | one slot, latest wins | a newer snapshot replaces an unwritten one |
+| One frame write | 2s | the subscriber is ended with `bye{slow_consumer}` |
+| One encoded frame | 1 MiB | the frame is dropped and counted |
+| Sessions in a snapshot | 512 | idle and working rows are dropped before attention rows |
+| ASL waiting entries in a snapshot | 64 | truncated |
+| Self-reported client strings | 128 bytes | clamped |
+
+Waiting entries name a run and its latest question and never carry a question
+body or an action token. A daemon stop or restart ends every stream with
+`bye{shutdown}` before it waits on connections, so a subscriber never holds
+the drain open.
+
+### The notification backend role
+
+A subscriber that claims `notification_backend` and also reports
+`notifications_authorized` is a backend candidate; a claim without
+authorization is not. The newest candidate holds the role, and when it leaves,
+the newest remaining one inherits it. A delivery stays bound to the subscriber
+it was sent to and ends when that subscriber does. The daemon's
+health answer reports `notification_backend_connected`. What the backend is sent,
+and how it reports back, is described below.
+
+### Request deadlines
+
+Each connection carries one request and one response. The request line is read
+under the 1s connection deadline; once its type is known, a request the daemon
+is known to answer slowly gets a longer window, so the server never cuts a
+connection the client is still waiting on:
+
+| Request | Server deadline | Why |
+| --- | --- | --- |
+| everything else | 1s | hook acknowledgement and state queries stay fast |
+| `focus_window` | 3s | three sequential Kitty remote-control calls |
+| `notification_test` | 5s | waits up to 3s for the app to confirm delivery |
+| `asl_snapshot`, `asl_question` | 3s | the bridge read timeout (2s) plus 1s |
+| `asl_action`, `asl_workbench` | 6s | the bridge action timeout (5s) plus 1s |
+| `subscribe` ack (client side) | 2s | after the ack the stream has no overall deadline |
+
+### Focus, snooze, and notification delivery
 
 A companion focuses a session with one `focus_window` request naming a Kitty
 socket and a window ID. The daemon dials the socket only if it already knows it

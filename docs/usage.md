@@ -638,6 +638,41 @@ is an explicit request for new tab(s): if the selected project/profile is
 already running, Agent Mux opens another instance instead of skipping or
 focusing the existing tab.
 
+### Launching from a shell
+
+The same launch action is available without the dashboard, which is what the
+menu bar companion and scripts use:
+
+```bash
+amx project list                               # PROFILE TITLE HARNESS DIRECTORY GROUPS
+amx project list --json                        # [{profile,title,harness,directory,groups}]
+amx project launch --title API                 # one project titled API
+amx project launch --title API --profile codex-work --json
+```
+
+A project is identified by its profile and title; titles match exactly.
+`--profile` is needed only when several projects share a title. An ambiguous or
+unmatched selector launches nothing and lists the configured projects it could
+have meant (`ambiguous_project` or `not_found`, with `candidates` whose `id` is
+`profile/title`). Like `enter` in the launcher, `project launch` always opens a
+new tab. Its `--json` data is `{action, changed, message, project, tab_id,
+window_id}`; `tab_id` and `window_id` name the new tab when exactly one new tab
+carrying the title appeared, and are omitted otherwise.
+
+`amx open-dashboard` brings the dashboard forward without drawing it in the
+calling terminal: it focuses a running dashboard (the singleton rule) or opens
+one in a new tab, and `--json` reports `{window_id, tab_id, opened}`. It refuses
+rather than opening a second dashboard when Kitty cannot be listed or the
+running one cannot be focused.
+
+Both work from outside Kitty when `KITTY_LISTEN_ON` names the instance's
+remote-control socket:
+
+```bash
+KITTY_LISTEN_ON=unix:/tmp/kitty-12345 amx project launch --title API --json
+KITTY_LISTEN_ON=unix:/tmp/kitty-12345 amx open-dashboard --json
+```
+
 ## Managed worktrees
 
 Run **Manage Worktrees** from the command palette (`:`) to open the
