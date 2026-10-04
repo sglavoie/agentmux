@@ -43,8 +43,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
 
     /// Shows the daemon's notification frames; nil under tests.
     private(set) var notifications: NotificationPresenter?
-    /// The claim the next subscribe carries, read on the subscription thread.
-    private let claim = LockedValue(NotificationClaim())
+    /// What the next subscribe carries: the notification claim and the
+    /// resolved amx build, read on the subscription thread.
+    private let subscribeRequest = SubscribeRequestSource(clientVersion: AppDelegate.appVersion)
     /// Dispositions are reported here, in order, so `delivered` always
     /// reaches the daemon before the click that follows it.
     private let dispositionQueue = DispatchQueue(label: "io.github.sglavoie.agentmux.dispositions", qos: .userInitiated)
@@ -129,14 +130,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
     // MARK: Companion feed
 
     private func startSubscription() {
-        let version = Self.appVersion
-        let claim = self.claim
-        let request = {
-            let current = claim.value
-            return SubscribeParams(clientVersion: version, notificationBackend: current.backend,
-                                   notificationsAuthorized: current.authorized)
-        }
-        let client = SubscriptionClient(request: request) { [weak self] event in
+        let client = SubscriptionClient(request: subscribeRequest.params) { [weak self] event in
             DispatchQueue.main.async {
                 MainActor.assumeIsolated { self?.handle(event) }
             }
@@ -324,12 +318,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
             var snapshot = PreferencesSnapshot()
             snapshot.detectedEnvironment = shell
             var command: AMXCommand?
+            var report: AMXBuildReport?
             switch resolution {
             case let .success(binary):
                 let amx = AMXCommand(binary: binary.url, launchEnvironment: environment)
                 command = amx
                 snapshot.binary = binary
                 snapshot.binaryVersion = AMXVersion.read(binary: binary.url.path)
+                report = AMXBuildReport.of(binary: binary.url, version: snapshot.binaryVersion)
                 snapshot.capabilities = AMXCapabilities.probe(amx)
                 Self.logger.notice("running \(binary.url.path, privacy: .public) (\(String(describing: binary.source), privacy: .public))")
             case let .failure(notFound):
@@ -345,6 +341,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
                         self.recent.state.reset()
                     }
                     self.command = command
+                    // Doctor compares the build subscribe reported with the
+                    // daemon's, so a new selection needs a new subscribe.
+                    if self.subscribeRequest.report(build: report) {
+                        self.subscription?.reconnectNow()
+                    }
                     snapshot.daemonStatus = self.store.daemonStatus
                     self.preferences = snapshot
                     self.publishPreferences()
@@ -406,11 +407,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
             enabled: preferencesModel.preferences.useAppNotifications
         )
         UNUserNotificationCenter.current().delegate = presenter
-        claim.value = presenter.claim
+        subscribeRequest.claim = presenter.claim
         presenter.onClaimChange = { [weak self, unowned presenter] claim in
             guard let self else { return }
             Self.logger.notice("notifications: backend claim \(claim.backend ? "on" : "off", privacy: .public) (\(String(describing: presenter.authorization), privacy: .public))")
-            self.claim.value = claim
+            self.subscribeRequest.claim = claim
             // The role is claimed in subscribe, so a change needs a new one.
             self.subscription?.reconnectNow()
         }

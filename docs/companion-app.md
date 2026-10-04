@@ -115,8 +115,12 @@ amx debug subscribe --frames 5   # the same stream the app reads
 ```
 
 `amx doctor` raises `companion_build_mismatch` (warning) when the app reported
-an `amx` build that is not the daemon's. Preferences shows which `amx` binary
-the app resolved and why.
+an `amx` build that is not the daemon's. The app reports the `amx` it resolved
+in `subscribe.amx_build`, with the full sha256 of the executable rather than
+the prefix `amx --version` prints, and subscribes again whenever a new
+resolution selects a different binary; until one is resolved it reports none
+and nothing is compared. Preferences shows which `amx` binary the app resolved
+and why.
 
 ## Troubleshooting
 

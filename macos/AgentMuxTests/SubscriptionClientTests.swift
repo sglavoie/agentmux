@@ -19,12 +19,16 @@ final class SubscriptionClientTests: XCTestCase {
         try? FileManager.default.removeItem(at: directory)
     }
 
-    private func startClient(_ path: String, backoff: ReconnectBackoff? = nil) -> EventRecorder {
+    private func startClient(
+        _ path: String,
+        backoff: ReconnectBackoff? = nil,
+        request: @escaping () -> SubscribeParams = { SubscribeParams(clientVersion: "test") }
+    ) -> EventRecorder {
         let recorder = EventRecorder()
         let client = SubscriptionClient(
             socketPath: path,
             backoff: backoff ?? fast,
-            request: { SubscribeParams(clientVersion: "test") },
+            request: request,
             onEvent: recorder.record
         )
         self.client = client
@@ -198,6 +202,73 @@ final class SubscriptionClientTests: XCTestCase {
         client?.reconnectNow()
         XCTAssertTrue(recorder.wait { $0.subscribedCount == 2 })
         XCTAssertEqual(recorder.events.disconnects, [.reconnectRequested])
+    }
+
+    /// The app's own request path: the build `resolveBinary` reports goes
+    /// into `SubscribeRequestSource`, whose `params` the client sends, and a
+    /// changed selection is what makes the app subscribe again.
+    func testSubscribeReportsResolvedAMXBuild() throws {
+        let daemonBinary = directory.appendingPathComponent("amx-daemon")
+        let otherBinary = directory.appendingPathComponent("amx-other")
+        try Data("the daemon's amx".utf8).write(to: daemonBinary)
+        try Data("some other amx".utf8).write(to: otherBinary)
+        let daemonHash = try XCTUnwrap(AMXBinaryResolver.sha256(daemonBinary.path))
+        let version = try XCTUnwrap(AMXVersion.parse(
+            "amx version 0.8.0 (revision 52189e529adf-dirty, built 2026-10-03T19:39:22Z, go1.27.1, sha256:\(daemonHash.prefix(12)))"
+        ))
+
+        // A build is only reported with the full content hash; the printed
+        // prefix would never equal the daemon's.
+        XCTAssertNil(AMXBuildReport.of(version: version, binaryHash: nil))
+        XCTAssertNil(AMXBuildReport.of(binary: daemonBinary, version: nil))
+        XCTAssertNil(AMXBuildReport.of(binary: directory.appendingPathComponent("missing"), version: version))
+        let matching = try XCTUnwrap(AMXBuildReport.of(binary: daemonBinary, version: version))
+        XCTAssertEqual(matching.binaryHash, daemonHash)
+        XCTAssertEqual(matching.binaryHash.count, 64)
+        let mismatching = try XCTUnwrap(AMXBuildReport.of(binary: otherBinary, version: version))
+        XCTAssertNotEqual(mismatching.binaryHash, daemonHash)
+
+        let source = SubscribeRequestSource(clientVersion: "test")
+        XCTAssertTrue(source.report(build: matching))
+        XCTAssertFalse(source.report(build: matching), "an unchanged selection needs no new subscribe")
+
+        let requests = Locked<[String]>([])
+        let script: (FakeConnection) -> Void = { conn in
+            if let line = conn.readLine() { requests.set(requests.get() + [line]) }
+            conn.write(WireFixture.ack)
+            Thread.sleep(forTimeInterval: 3)
+            conn.close()
+        }
+        server = try FakeStreamServer(directory: directory, scripts: [script, script, script])
+        let recorder = startClient(server!.path, request: source.params)
+        XCTAssertTrue(recorder.wait { $0.subscribedCount == 1 })
+
+        // The selection changes to another artifact, then to none at all.
+        XCTAssertTrue(source.report(build: mismatching))
+        client?.reconnectNow()
+        XCTAssertTrue(recorder.wait { $0.subscribedCount == 2 })
+        XCTAssertTrue(source.report(build: nil))
+        client?.reconnectNow()
+        XCTAssertTrue(recorder.wait { $0.subscribedCount == 3 })
+
+        let blocks = try requests.get().map { line -> [String: Any] in
+            let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any])
+            return try XCTUnwrap(object["subscribe"] as? [String: Any])
+        }
+        XCTAssertEqual(blocks.count, 3)
+        let first = try XCTUnwrap(blocks[0]["amx_build"] as? [String: Any])
+        XCTAssertEqual(first["binary_hash"] as? String, daemonHash)
+        XCTAssertEqual(first["version"] as? String, "0.8.0")
+        XCTAssertEqual(first["revision"] as? String, "52189e529adf")
+        XCTAssertEqual(first["dirty"] as? Bool, true)
+        XCTAssertEqual(first["build_time"] as? String, "2026-10-03T19:39:22Z")
+        XCTAssertEqual(first["go_version"] as? String, "go1.27.1")
+        let second = try XCTUnwrap(blocks[1]["amx_build"] as? [String: Any])
+        XCTAssertEqual(second["binary_hash"] as? String, mismatching.binaryHash)
+        // With nothing resolved the field is absent, the shape every daemon
+        // since protocol 1 accepts and an older app always sent.
+        XCTAssertNil(blocks[2]["amx_build"])
+        XCTAssertEqual(blocks[2]["client_version"] as? String, "test")
     }
 
     func testStopEndsTheThreadPromptly() throws {

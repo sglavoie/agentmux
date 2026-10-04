@@ -460,18 +460,3 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 }
-
-/// One value shared between the main thread and a worker thread.
-final class LockedValue<Value> {
-    private let lock = NSLock()
-    private var stored: Value
-
-    init(_ value: Value) {
-        stored = value
-    }
-
-    var value: Value {
-        get { lock.lock(); defer { lock.unlock() }; return stored }
-        set { lock.lock(); stored = newValue; lock.unlock() }
-    }
-}

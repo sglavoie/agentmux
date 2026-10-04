@@ -113,6 +113,9 @@ struct SubscribeParams: Encodable, Equatable {
     var protocolVersion: Int = SubscribeParams.protocolVersion
     var client: String = SubscribeParams.clientName
     var clientVersion: String?
+    /// The amx the app runs, so doctor can tell it apart from the daemon's;
+    /// omitted until one is resolved.
+    var amxBuild: AMXBuildReport?
     var notificationBackend: Bool = false
     var notificationsAuthorized: Bool = false
 
@@ -120,8 +123,97 @@ struct SubscribeParams: Encodable, Equatable {
         case protocolVersion = "protocol"
         case client
         case clientVersion = "client_version"
+        case amxBuild = "amx_build"
         case notificationBackend = "notification_backend"
         case notificationsAuthorized = "notifications_authorized"
+    }
+}
+
+/// `buildinfo.Info` for the amx the app resolved, as subscribe reports it.
+///
+/// `amx --version` abbreviates both the revision and the sha256, and
+/// `buildinfo.SameArtifact` compares hashes whole, so the hash here is always
+/// the full one read from the executable itself: a printed prefix would never
+/// equal the daemon's and would report every app as a mismatch.
+struct AMXBuildReport: Encodable, Equatable {
+    let version: String
+    var revision: String?
+    var dirty = false
+    var buildTime: String?
+    var goVersion: String?
+    let binaryHash: String
+
+    enum CodingKeys: String, CodingKey {
+        case version, revision, dirty
+        case buildTime = "build_time"
+        case goVersion = "go_version"
+        case binaryHash = "binary_hash"
+    }
+
+    /// The report for `version`, read from a binary whose content hashes to
+    /// `binaryHash`; nil when either is missing, since a report without the
+    /// hash would be compared on the abbreviated revision and never match.
+    static func of(version: AMXVersion?, binaryHash: String?) -> AMXBuildReport? {
+        guard let version, let hash = binaryHash?.lowercased(), !hash.isEmpty else { return nil }
+        return AMXBuildReport(
+            version: version.version,
+            revision: version.revision,
+            dirty: version.dirty,
+            buildTime: version.built.map { ISO8601DateFormatter().string(from: $0) },
+            goVersion: version.goVersion,
+            binaryHash: hash
+        )
+    }
+
+    /// The report for the executable at `binary`, hashing its content.
+    static func of(binary: URL, version: AMXVersion?) -> AMXBuildReport? {
+        guard version != nil else { return nil }
+        return of(version: version, binaryHash: AMXBinaryResolver.sha256(binary.path))
+    }
+}
+
+/// What the app's subscribe says about itself. The subscription thread reads
+/// it on every (re)subscribe; the main thread updates it, and reconnects when
+/// an update changed what the daemon would be told.
+final class SubscribeRequestSource {
+    let clientVersion: String?
+    private let lock = NSLock()
+    private var currentClaim = NotificationClaim()
+    private var currentBuild: AMXBuildReport?
+
+    init(clientVersion: String?) {
+        self.clientVersion = clientVersion
+    }
+
+    var claim: NotificationClaim {
+        get { lock.lock(); defer { lock.unlock() }; return currentClaim }
+        set { lock.lock(); currentClaim = newValue; lock.unlock() }
+    }
+
+    var build: AMXBuildReport? {
+        lock.lock(); defer { lock.unlock() }
+        return currentBuild
+    }
+
+    /// Records the amx now selected, or nil when none is; true when that
+    /// differs from what the last subscribe reported, so the caller has to
+    /// subscribe again for the daemon's client record to follow.
+    @discardableResult
+    func report(build: AMXBuildReport?) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        guard build != currentBuild else { return false }
+        currentBuild = build
+        return true
+    }
+
+    func params() -> SubscribeParams {
+        lock.lock(); defer { lock.unlock() }
+        return SubscribeParams(
+            clientVersion: clientVersion,
+            amxBuild: currentBuild,
+            notificationBackend: currentClaim.backend,
+            notificationsAuthorized: currentClaim.authorized
+        )
     }
 }
 
