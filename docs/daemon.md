@@ -337,6 +337,50 @@ with its client version) and raises `companion_build_mismatch` (warning) when
 the `amx_build` an app reported is not the daemon's artifact. `amx debug
 subscribe` is not an app and is never reported.
 
+### In-flight dispatches
+
+Each notification that passes every gate runs in its own goroutine, which
+blocks until the notification's interaction settles: up to 3s waiting for the
+app's `delivered`, then up to the dispatch timeout (Alerter's 5-minute
+protocol timeout plus a 1-minute grace) for a click or a dismissal. There is
+deliberately no global cap on how many may be blocked at once. The count is
+already bounded by the cooldown: a `(window, action)` pair dispatches at most
+once per `cooldown_seconds` (default 10), so the worst case is
+`windows × actions × dispatch_timeout / cooldown`, and in practice a turn-end
+notification needs a new turn before it can recur. A goroutine waiting on the
+app holds no process; one waiting on Alerter holds one `alerter` process.
+Every dispatch is cancelled with the daemon's context, so a stop or restart
+ends them all at once (`cancelled/daemon_shutdown`), and an app notice is
+retracted when a newer notification for its window passes the gates.
+
+A cap was considered and rejected. When full, it would have to drop either the
+newest notification, which is the one the operator most needs, or the oldest,
+which kills an Alerter banner the operator may be about to click. Neither is
+better than letting the cooldown bound the set. Revisit this if `alerter`
+processes are seen accumulating in practice (`pgrep -fl alerter`), and
+prefer a per-window supersede (as the app backend already does) over a global
+count.
+
+### Mute lag
+
+The mute lives in Kitty: `amx mute-toggle` writes the window's `cc_mute` user
+var (and mirrors a glyph into the tab title), and the daemon's mute cache is
+recomputed from every Kitty listing. The maintenance loop lists Kitty every
+render cadence (2s), and a hook reads the same cached listing, so a mute made
+from the CLI or the companion app reaches the notifier's mute gate and the
+companion snapshot within about 2s. A notification raised inside that window
+is not yet suppressed.
+
+A `mute_set` request that updates the cache under `stateMu` was evaluated and
+not added. The lag is bounded by a cadence the daemon already runs, and is
+short beside the time it takes an operator to mute after deciding to. More
+importantly, the daemon deliberately never trusts a client's claim about mute
+(hook requests carry a legacy `Muted` field it ignores), because the user var
+is the authority and a cache seeded from a client could disagree with it until
+the next listing anyway. If the lag becomes observable, the change to make is
+a request that asks the daemon to refresh its Kitty listing now, which keeps
+Kitty the only source.
+
 ## Investigating hook event flow
 
 `amx daemon export-events` writes a schema v13 JSON snapshot for investigation.

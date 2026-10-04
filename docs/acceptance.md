@@ -584,6 +584,71 @@ Teardown removed only test resources: the isolated daemon was stopped through
 its own `HOME`, the Kitty instance was killed by PID, and the temporary root was
 removed. The operator's daemon reported the same running build before and after.
 
+### Menu bar companion
+
+The native app in `macos/` has its own hosted XCTest suite, `just mac-test`,
+which runs against fake daemon sockets and a fake `amx` and needs Xcode. It is
+deliberately outside `just check`, `just acceptance`, and the paired release
+gate (`TestMacAppRecipesStayOutOfTheGates`), so a companion change is accepted
+by `just check` for the daemon half, `just mac-test` for the app half, and the
+manual checklist below for everything only a real Kitty, a real Notification
+Center, and a real window server can show. See
+[Menu bar companion](companion-app.md).
+
+Daemon-side evidence, after `just install`:
+
+```bash
+just crash-restart             # includes a subscriber killed mid-write
+just install-restart-smoke
+amx doctor --strict            # companion_app present, no companion_build_mismatch
+amx debug subscribe --frames 5 # ack, then snapshot and heartbeat frames
+```
+
+Then `just mac-install` and, in a real Kitty with at least two managed
+sessions, check each item and record the app version, `amx --version`, and the
+macOS and Kitty versions beside the result:
+
+- [ ] **Counts.** The status item's glyph counts track live sessions: a
+      session that stops, asks for permission, or errors moves into Needs
+      attention within a few seconds, and leaves it once handled.
+- [ ] **Row click.** Clicking a row focuses that session's tab and window and
+      brings Kitty forward, from another app and from another Space.
+- [ ] **Dashboard shortcut.** ⌃⌥⌘A from another app brings the running
+      dashboard forward, or opens one when none runs.
+- [ ] **Attention shortcut.** ⌃⌥⌘N cycles through every waiting session,
+      oldest first, and beeps when nothing waits.
+- [ ] **Actions.** Open Dashboard, Launch Project, Recent (including a
+      conversation already live, which focuses instead of resuming twice), ⌥
+      Mute and Unmute on a row, every Notifications snooze and Resume Now,
+      Start daemon (with the daemon stopped), and Preferences each do what
+      `macos/README.md` says.
+- [ ] **Native notification.** A session notification arrives as a native
+      banner, `amx notifications test` reports it confirmed via the app, and
+      clicking the banner focuses the pane. Mute session and Snooze 1h on the
+      banner work.
+- [ ] **Fallback.** With the app quit, the next notification goes through
+      Alerter, and `amx debug tail` names the `alerter` backend.
+- [ ] **ASL question.** An ASL run waiting on its supervisor shows ❓ and an
+      Answer… item; a reply sent from the panel is accepted, and ❓ clears.
+- [ ] **Daemon restart.** `amx daemon restart` shows `reconnecting` briefly
+      and returns to `ready` without relaunching the app; a snooze set before
+      the restart is restored.
+- [ ] **Sleep and wake.** After sleep, the feed reconnects at once and the
+      counts are current.
+- [ ] **Two Kitty instances.** Sessions from both instances are listed; a row
+      click and ⌃⌥⌘N focus the right instance and bring that one forward; Mute
+      acts only in the row's own instance.
+- [ ] **Older daemon.** Against a daemon built before the companion protocol,
+      the menu shows "daemon too old — run `amx daemon restart`", polls
+      health, and greys out daemon actions instead of failing.
+- [ ] **Missing `listen_on`.** In a Kitty without `listen_on`, the menu
+      explains the `kitty.conf` lines it needs instead of acting.
+
+Known limits are documented rather than tested: macOS may decline to switch
+Spaces for a cooperative activation (see the companion guide's
+troubleshooting), and a mute reaches the daemon's notification gate within
+one 2s render cadence ([Daemon › Mute lag](daemon.md#mute-lag)).
+
 ## Automated versus live-provider evidence
 
 The automated diagnostic fixture has no model usage. It substitutes a local

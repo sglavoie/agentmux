@@ -75,6 +75,41 @@ changes:
 swift macos/scripts/make-icons.swift
 ```
 
+### Notarizing a release build
+
+Notarization needs a Developer ID Application certificate and a notary
+credentials profile, stored once:
+
+```sh
+xcrun notarytool store-credentials agentmux-notary \
+  --apple-id you@example.com --team-id TEAMID --password APP_SPECIFIC_PASSWORD
+AMX_CODESIGN_IDENTITY="Developer ID Application: …" \
+  AMX_NOTARY_PROFILE=agentmux-notary just mac-app Release
+```
+
+`sign.sh` then submits the signed app, waits for the verdict, and staples the
+ticket. An Apple Development build is enough for your own machine; notarize
+only to hand the app to someone else.
+
+## Layout
+
+| Path | Holds |
+| --- | --- |
+| `project.yml` | The XcodeGen spec for the `AgentMux` app and the hosted `AgentMuxTests` target. |
+| `AgentMux/App/` | `main.swift`, `AppDelegate` (wiring), and the single-instance check. |
+| `AgentMux/Daemon/` | The socket path, line-framed socket, request client, subscription client, and the wire and companion models. |
+| `AgentMux/CLI/` | Resolving, describing, and running `amx`: binary resolver, version, `--help` capabilities, action gating, login-shell environment, detached spawn. |
+| `AgentMux/Kitty/` | Choosing a Kitty socket and bringing the owning Kitty forward. |
+| `AgentMux/Model/` | Pure state: the session store, glyphs, attention cycler, project and recent catalogs, snooze, and the ASL response rules. |
+| `AgentMux/Shell/` | macOS integration: hotkeys, preferences storage, notification presenter. |
+| `AgentMux/UI/` | The status item, menu builder, daemon line, Preferences window, and ASL answer panel. |
+| `AgentMux/Resources/` | `Info.plist` and the asset catalog; `internal/palette/icons.json` is bundled from the repository. |
+| `AgentMuxTests/` | XCTest suites, with a fake stream server standing in for the daemon. |
+| `scripts/` | `generate-project.sh`, `build-app.sh`, `sign.sh`, `install-app.sh`, `test-app.sh`, `make-icons.swift`. |
+
+The operator's guide (install, permissions, Kitty requirements,
+troubleshooting) is [docs/companion-app.md](../docs/companion-app.md).
+
 ## Which amx the app runs
 
 `AMXBinaryResolver` picks the first match:

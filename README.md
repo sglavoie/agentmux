@@ -113,6 +113,23 @@ reloads its configuration (`Ctrl+Shift+F5`, or restart Kitty). Upgrading from a
 release without `F2` is exactly that case: `amx overview` works from any shell
 straight away, but the key does nothing until Kitty has re-read the snippet.
 
+### Menu bar companion (optional, macOS)
+
+`Agent Mux.app` puts the live sessions and their attention counts in the menu
+bar, focuses a session from a row or a global shortcut, shows the daemon's
+notifications as native banners, and answers ASL supervisor questions. It
+needs macOS 14+ and Xcode, and `amx` installed first:
+
+```bash
+just install
+just mac-install    # Release build into /Applications, then relaunch
+```
+
+Kitty needs `allow_remote_control yes` and `listen_on unix:/tmp/kitty` for the
+app to focus sessions. See [Menu bar companion](docs/companion-app.md) for
+permissions, shortcuts, and troubleshooting, and
+[`macos/README.md`](macos/README.md) for building and signing.
+
 ### Upgrading the pair
 
 Agent Mux and `agent-session-loop` are released as a pair, and the install order
@@ -186,6 +203,7 @@ The detailed guides are organized by operational area:
 - [Harness hook setup and event contracts](docs/hooks.md)
 - [Daemon lifecycle, routing, diagnostics, and privacy](docs/daemon.md)
 - [Watchdog, tab icons, and stop confirmation](docs/watchdog.md)
+- [Menu bar companion (macOS)](docs/companion-app.md)
 - [Configuration commands and the operator index](docs/operations.md)
 - [Build and test](docs/testing.md)
 - [agent-session-loop rollout](docs/asl-integration.md)

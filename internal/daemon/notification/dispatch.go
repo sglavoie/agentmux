@@ -167,6 +167,10 @@ func (n *Notifier) MaybeNotifyTracedTarget(target NotificationTarget, sessionTit
 		n.emitDisposition(disposition)
 	}
 	emit("decision", "scheduled", "dispatch")
+	// Deliberately uncapped: the cooldown above bounds how many dispatches can
+	// be blocked at once, and a cap would have to drop either the newest
+	// notice or a banner the operator may be about to click. See "In-flight
+	// dispatches" in docs/daemon.md.
 	go n.runDispatch(target, title, subtitle, action, trace)
 }
 
