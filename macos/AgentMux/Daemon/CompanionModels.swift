@@ -52,6 +52,11 @@ struct NotificationRetractFrame: Decodable, Equatable {
         case reason
     }
 
+    init(notificationID: String, reason: String = "") {
+        self.notificationID = notificationID
+        self.reason = reason
+    }
+
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         notificationID = c.lenient(.notificationID, "")

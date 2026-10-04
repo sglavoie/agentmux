@@ -136,4 +136,30 @@ struct DaemonClient {
         if message.hasPrefix("unknown request type") { return .unsupported }
         return .failed(message.isEmpty ? "notification_snooze refused" : message)
     }
+
+    /// The daemon's own deadline for notification_disposition is 1s.
+    static let dispositionTimeout: TimeInterval = 2
+
+    /// Reports what became of one notification. Nil on success, else why it
+    /// did not reach the daemon; the daemon answers ok for a notification it
+    /// is no longer waiting on, so there is nothing to retry.
+    func notificationDisposition(_ params: DispositionParams, timeout: TimeInterval = dispositionTimeout) -> String? {
+        let reply: Data
+        do {
+            let encoded = try JSONEncoder().encode(DaemonRequest.disposing(params))
+            reply = try roundTrip(socketPath, encoded, timeout)
+        } catch let error as LineSocketError {
+            return error.message
+        } catch {
+            return error.localizedDescription
+        }
+        return Self.dispositionError(fromReply: reply)
+    }
+
+    static func dispositionError(fromReply reply: Data) -> String? {
+        guard let response = try? JSONDecoder().decode(DaemonResponse.self, from: reply) else {
+            return "unreadable notification_disposition reply"
+        }
+        return response.ok ? nil : (response.error ?? "notification_disposition refused")
+    }
 }

@@ -1,5 +1,6 @@
 import AppKit
 import os
+import UserNotifications
 
 final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
     private nonisolated static let logger = Logger(subsystem: "io.github.sglavoie.agentmux", category: "app")
@@ -38,6 +39,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
     /// not retried on every snapshot.
     private var snoozeReapplyAttempted: String?
 
+    /// Shows the daemon's notification frames; nil under tests.
+    private(set) var notifications: NotificationPresenter?
+    /// The claim the next subscribe carries, read on the subscription thread.
+    private let claim = LockedValue(NotificationClaim())
+    /// Dispositions are reported here, in order, so `delivered` always
+    /// reaches the daemon before the click that follows it.
+    private let dispositionQueue = DispatchQueue(label: "io.github.sglavoie.agentmux.dispositions", qos: .userInitiated)
+
     /// Health requests and amx runs block, so they run here, one at a time.
     private let work = DispatchQueue(label: "io.github.sglavoie.agentmux.work", qos: .utility)
     /// Focus requests run here, so a click never waits behind a health check.
@@ -67,6 +76,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
         // LSUIElement already keeps the app out of the Dock; this states it
         // for a build run straight from DerivedData.
         NSApp.setActivationPolicy(.accessory)
+        // The delegate must be in place before launch finishes, so a banner
+        // clicked while the app was not running still reaches it.
+        if !Self.isRunningTests { setUpNotifications() }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -87,7 +99,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
         startSubscription()
         refreshDaemonStatus()
         let timer = Timer(timeInterval: Self.healthInterval, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refreshDaemonStatus() }
+            MainActor.assumeIsolated {
+                self?.refreshDaemonStatus()
+                self?.notifications?.refreshAuthorization()
+            }
         }
         RunLoop.main.add(timer, forMode: .common)
         healthTimer = timer
@@ -112,8 +127,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
     // MARK: Companion feed
 
     private func startSubscription() {
-        let params = SubscribeParams(clientVersion: Self.appVersion)
-        let client = SubscriptionClient(request: { params }) { [weak self] event in
+        let version = Self.appVersion
+        let claim = self.claim
+        let request = {
+            let current = claim.value
+            return SubscribeParams(clientVersion: version, notificationBackend: current.backend,
+                                   notificationsAuthorized: current.authorized)
+        }
+        let client = SubscriptionClient(request: request) { [weak self] event in
             DispatchQueue.main.async {
                 MainActor.assumeIsolated { self?.handle(event) }
             }
@@ -125,6 +146,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
     private var lastFeed: FeedState?
 
     private func handle(_ event: SubscriptionClient.Event) {
+        switch event {
+        case let .frame(.notification(_, data)):
+            notifications?.present(frame: data)
+        case let .frame(.notificationRetract(_, frame)):
+            notifications?.retract(frame)
+        default:
+            break
+        }
         store.apply(event)
         if store.feed != lastFeed {
             lastFeed = store.feed
@@ -342,6 +371,70 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
         if old.binaryPath != new.binaryPath || old.environment != new.environment {
             scheduleResolve()
         }
+        notifications?.enabled = new.useAppNotifications
+    }
+
+    // MARK: Notifications
+
+    private func setUpNotifications() {
+        let presenter = NotificationPresenter(
+            center: SystemNotificationCenter(),
+            enabled: preferencesModel.preferences.useAppNotifications
+        )
+        UNUserNotificationCenter.current().delegate = presenter
+        claim.value = presenter.claim
+        presenter.onClaimChange = { [weak self, unowned presenter] claim in
+            guard let self else { return }
+            Self.logger.notice("notifications: backend claim \(claim.backend ? "on" : "off", privacy: .public) (\(String(describing: presenter.authorization), privacy: .public))")
+            self.claim.value = claim
+            // The role is claimed in subscribe, so a change needs a new one.
+            self.subscription?.reconnectNow()
+        }
+        presenter.report = { [weak self] id, disposition, error in
+            self?.dispositionQueue.async {
+                let params = DispositionParams(notificationID: id, disposition: disposition.rawValue, error: error)
+                if let problem = DaemonClient().notificationDisposition(params) {
+                    Self.logger.error("notification \(id, privacy: .public) \(disposition.rawValue, privacy: .public): \(problem, privacy: .public)")
+                }
+            }
+        }
+        presenter.onResponse = { [weak self] response in self?.respond(to: response) }
+        notifications = presenter
+        presenter.refreshAuthorization()
+    }
+
+    /// What the app does after reporting a banner response. The daemon
+    /// focuses the pane on `clicked`; the app brings that Kitty forward, and
+    /// carries out the actions the daemon only names.
+    private func respond(to response: NotificationPresenter.Response) {
+        let session = Self.session(windowID: response.windowID, in: store.sessions)
+        switch response.disposition {
+        case .clicked:
+            guard response.navigable else { return }
+            let socket = session?.kittySocket ?? store.snapshot?.kitty.socket ?? ""
+            _ = KittyActivator.activate(socket: socket)
+        case .actionMute:
+            guard let session else { return report("Could not mute: the session is no longer listed.") }
+            // mute-toggle toggles; a banner's Mute never unmutes.
+            guard !session.muted else { return }
+            toggleMute(MenuSessionRow(title: session.project, windowID: session.windowID, kittySocket: session.kittySocket, toolTip: ""))
+        case .actionSnooze:
+            snooze(.oneHour)
+        case .actionAnswer:
+            // The native answer panel arrives with the ASL question panel.
+            Self.logger.notice("notification answer for run \(response.runID, privacy: .public)")
+        case .delivered, .dismissed, .failed:
+            break
+        }
+    }
+
+    /// The listed session a notice's window names, when exactly one does:
+    /// window IDs repeat across Kitty instances, and a guess could mute or
+    /// raise the wrong one.
+    nonisolated static func session(windowID: Int, in sessions: [CompanionSession]) -> CompanionSession? {
+        guard windowID > 0 else { return nil }
+        let matches = sessions.filter { $0.windowID == windowID }
+        return matches.count == 1 ? matches[0] : nil
     }
 
     private func applyMenuBarPreferences(_ preferences: AppPreferences) {
@@ -491,6 +584,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
     }
 
     func menuWillOpen() {
+        notifications?.refreshAuthorization()
         refreshProjects()
         refreshRecent()
     }

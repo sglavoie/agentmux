@@ -8,8 +8,8 @@ session itself.
 The app shows the live managed sessions, with attention counts in the menu bar,
 and a click focuses a session's Kitty tab and brings Kitty to the front. Two
 global shortcuts reach the dashboard and the sessions waiting on you from any
-app. Notifications and actions are added in later steps, and this file grows
-with them.
+app. The daemon's notifications arrive as native banners while the app runs.
+The ASL answer panel is added in a later step, and this file grows with it.
 
 ## Requirements
 
@@ -231,6 +231,56 @@ The app mirrors the snooze each snapshot reports into `amxSnoozeUntil`
 daemon that has no snooze while the stored one has not run out, the app sends
 the stored snooze to the new daemon. A snooze cleared on the same daemon, for
 example with `amx notifications snooze off`, is adopted rather than undone.
+
+## Notifications
+
+While it runs, the app can be the daemon's notification backend
+(`Shell/NotificationPresenter.swift`). The daemon still applies every gate
+(quiet hours, mute, snooze, cooldown). It then sends each notification that
+passes them as a `notification` frame to the subscriber holding the role, and
+the app shows it through `UNUserNotificationCenter`.
+
+**The role.** The app claims the role in `subscribe` while
+`amxUseAppNotifications` is on and macOS allows its notifications. It also
+claims the role while it has never been asked, because the daemon sends frames
+only to a claimant. It asks for permission when the first frame arrives, not
+at launch. Turning the preference off, a denied prompt, or permission revoked
+in System Settings drops the claim, and the app subscribes again without it.
+The app reads the permission again every 10 seconds and whenever the menu
+opens, because macOS gives no notice of a change.
+
+**Fallback.** The app reports `delivered` once `add` succeeds. A failed `add`,
+a denied permission, or the preference turned off reports `failed`. The daemon
+then sends that notification through Alerter, as it does when no app holds the
+role, or when `delivered` takes longer than 3 seconds. That 3-second limit
+covers the first permission prompt, so the notification that raised the prompt
+usually ends up on Alerter.
+
+**Banners.** Each banner's identifier is the daemon's `notification_id`, and
+its thread is the window ID, so one session's banners group together. The
+category depends on the actions the daemon offered, and a banner never shows
+an action that was not offered:
+
+| Category | Actions | Used for |
+| --- | --- | --- |
+| `amx.session` | Mute session, Snooze 1h | A session notification |
+| `amx.session.snooze` | Snooze 1h | One with no pane to mute |
+| `amx.asl` / `amx.asl.snooze` | Answer…, then the offered session actions | An ASL question |
+| `amx.plain` | none | Permission prompts, which get no actions, and any notification offered none |
+
+**Responses.** A click reports `clicked`, and the daemon focuses the pane
+exactly as it does for an Alerter click. The app then brings that Kitty
+forward. A dismissal reports `dismissed` (every category sets
+`customDismissAction`). An action reports `action_mute`, `action_snooze`, or
+`action_answer`, and the app carries it out:
+- Mute runs `amx mute-toggle` on that session, unless the session is already
+  muted, and only when exactly one listed session has that window ID.
+- Snooze sets the same 1-hour snooze as the Notifications menu.
+- Answer is a placeholder until the ASL answer panel.
+
+A `notification_retract` frame removes the banner. A retracted notification
+that is still waiting on the permission prompt, or on `add`, is never shown.
+The `amx debug tail` dispositions name the `app` backend.
 
 ## Global shortcuts
 

@@ -53,9 +53,10 @@ struct DaemonRequest: Encodable, Equatable {
     var subscribe: SubscribeParams?
     var focusWindow: FocusWindowParams?
     var snooze: SnoozeRequest?
+    var disposition: DispositionParams?
 
     enum CodingKeys: String, CodingKey {
-        case type, subscribe, snooze
+        case type, subscribe, snooze, disposition
         case focusWindow = "focus_window"
     }
 
@@ -71,6 +72,23 @@ struct DaemonRequest: Encodable, Equatable {
 
     static func snoozing(_ request: SnoozeRequest) -> DaemonRequest {
         DaemonRequest(type: "notification_snooze", snooze: request)
+    }
+
+    static func disposing(_ params: DispositionParams) -> DaemonRequest {
+        DaemonRequest(type: "notification_disposition", disposition: params)
+    }
+}
+
+/// `protocol.DispositionRequest`: what became of one notification the app
+/// was asked to show.
+struct DispositionParams: Encodable, Equatable {
+    let notificationID: String
+    let disposition: String
+    var error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case notificationID = "notification_id"
+        case disposition, error
     }
 }
 
