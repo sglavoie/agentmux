@@ -7,6 +7,9 @@ import UserNotifications
 struct AppNotice: Decodable, Equatable {
     var notificationID = ""
     var windowID = 0
+    /// The Kitty instance `windowID` lives in, as the daemon captured it.
+    /// Window IDs repeat across instances; empty when none was recorded.
+    var kittySocket = ""
     /// Whether a click can focus a pane; profile-wide notices have none.
     var navigable = false
     var title = ""
@@ -21,16 +24,18 @@ struct AppNotice: Decodable, Equatable {
     enum CodingKeys: String, CodingKey {
         case notificationID = "notification_id"
         case windowID = "window_id"
+        case kittySocket = "kitty_socket"
         case navigable, title, subtitle, action
         case runID = "run_id"
         case sessionID = "session_id"
         case actions
     }
 
-    init(notificationID: String, windowID: Int = 0, navigable: Bool = false, title: String = "", subtitle: String = "",
+    init(notificationID: String, windowID: Int = 0, kittySocket: String = "", navigable: Bool = false, title: String = "", subtitle: String = "",
          action: String = "", runID: String = "", sessionID: String = "", actions: [String] = []) {
         self.notificationID = notificationID
         self.windowID = windowID
+        self.kittySocket = kittySocket
         self.navigable = navigable
         self.title = title
         self.subtitle = subtitle
@@ -44,6 +49,7 @@ struct AppNotice: Decodable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         notificationID = c.lenient(.notificationID, "")
         windowID = c.lenient(.windowID, 0)
+        kittySocket = c.lenient(.kittySocket, "")
         navigable = c.lenient(.navigable, false)
         title = c.lenient(.title, "")
         subtitle = c.lenient(.subtitle, "")
@@ -255,6 +261,8 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
         let notificationID: String
         let disposition: NotificationDisposition
         let windowID: Int
+        /// The captured Kitty socket; empty for a notice that named none.
+        let kittySocket: String
         let navigable: Bool
         let runID: String
         let sessionID: String
@@ -399,6 +407,7 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
         content.threadIdentifier = notice.windowID > 0 ? String(notice.windowID) : "amx"
         content.userInfo = [
             UserInfoKey.windowID: notice.windowID,
+            UserInfoKey.kittySocket: notice.kittySocket,
             UserInfoKey.navigable: notice.navigable,
             UserInfoKey.runID: notice.runID,
             UserInfoKey.sessionID: notice.sessionID,
@@ -408,6 +417,7 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
 
     enum UserInfoKey {
         static let windowID = "amx_window_id"
+        static let kittySocket = "amx_kitty_socket"
         static let navigable = "amx_navigable"
         static let runID = "amx_run_id"
         static let sessionID = "amx_session_id"
@@ -423,6 +433,7 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
             notificationID: notificationID,
             disposition: disposition,
             windowID: userInfo[UserInfoKey.windowID] as? Int ?? 0,
+            kittySocket: userInfo[UserInfoKey.kittySocket] as? String ?? "",
             navigable: userInfo[UserInfoKey.navigable] as? Bool ?? false,
             runID: userInfo[UserInfoKey.runID] as? String ?? "",
             sessionID: userInfo[UserInfoKey.sessionID] as? String ?? ""

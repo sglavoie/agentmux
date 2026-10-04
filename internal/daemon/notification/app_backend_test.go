@@ -8,6 +8,7 @@ package notification
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 	"sync"
 	"testing"
@@ -524,6 +525,40 @@ func TestTestAppDeliveryReportsTheApp(t *testing.T) {
 		}
 		if ids, _ := silent.retractions(); len(ids) != 1 {
 			t.Fatal("an unconfirmed test notice was not withdrawn")
+		}
+	})
+}
+
+// TestAppNoticePreservesKittySocket: window IDs repeat across Kitty instances,
+// so the notice carries the socket the daemon captured for its target, and the
+// app can raise and mute the pane that actually raised it.
+func TestAppNoticePreservesKittySocket(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		app := newFakeApp()
+		app.respond = deliverThen(protocol.DispositionDismissed)
+		n, _, _ := newAppTestNotifier(t, &config.NotificationConfig{Stop: true}, app)
+		n.SetFocus(&fakeFocusClient{live: focusTestWindows(4)})
+
+		n.MaybeNotifyTracedTarget(focusTarget(4, "work", "unix:/tmp/kitty-b"), "W:api", "stop", false, NotificationTrace{})
+		synctest.Wait()
+
+		notices := app.deliveries()
+		if len(notices) != 1 {
+			t.Fatalf("notices = %+v; want one", notices)
+		}
+		if got := notices[0].KittySocket; got != "unix:/tmp/kitty-b" {
+			t.Fatalf("notice socket = %q; want the target's unix:/tmp/kitty-b", got)
+		}
+		data, err := json.Marshal(notices[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		var wire map[string]any
+		if err := json.Unmarshal(data, &wire); err != nil {
+			t.Fatal(err)
+		}
+		if wire["kitty_socket"] != "unix:/tmp/kitty-b" || wire["window_id"] != float64(4) {
+			t.Fatalf("frame = %s; want kitty_socket and window_id together", data)
 		}
 	})
 }

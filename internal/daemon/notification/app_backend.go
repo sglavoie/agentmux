@@ -43,6 +43,11 @@ var ErrAppBackendUnavailable = errors.New("no companion app holds the notificati
 type AppNotice struct {
 	NotificationID string `json:"notification_id"`
 	WindowID       int    `json:"window_id"`
+	// KittySocket is the Kitty instance WindowID lives in, as the daemon
+	// captured it for the target. Window IDs repeat across instances, so the
+	// app needs both to know which Kitty to raise and which pane to mute. It
+	// is empty when the notice is not navigable or no socket was recorded.
+	KittySocket string `json:"kitty_socket,omitempty"`
 	// Navigable says a click can focus a pane. Profile-wide notices, such as
 	// hook silence, are informational and have no pane to focus.
 	Navigable bool     `json:"navigable"`
@@ -177,16 +182,20 @@ func (n *Notifier) dispatchToApp(parent context.Context, app AppBackend, target 
 	}
 	ctx, cancel := context.WithTimeout(parent, n.dispatchTimeout)
 	defer cancel()
+	navigable := target.Navigable && windowID > 0
 	notice := AppNotice{
 		NotificationID: newNotificationID(),
 		WindowID:       windowID,
-		Navigable:      target.Navigable && windowID > 0,
+		Navigable:      navigable,
 		Title:          title,
 		Subtitle:       subtitle,
 		Action:         action,
 		RunID:          trace.RunID,
 		SessionID:      trace.SessionID,
 		Actions:        appActions(target, action, trace),
+	}
+	if navigable {
+		notice.KittySocket = target.KittyListenOn
 	}
 	interactions, err := app.Deliver(ctx, notice)
 	if err != nil {

@@ -216,7 +216,7 @@ final class NotificationPresenterTests: XCTestCase {
             Report(id: "n-5", disposition: .actionAnswer, error: nil),
         ])
         XCTAssertEqual(responses.first, NotificationPresenter.Response(
-            notificationID: "n-1", disposition: .clicked, windowID: 7, navigable: true, runID: "r1", sessionID: ""))
+            notificationID: "n-1", disposition: .clicked, windowID: 7, kittySocket: "", navigable: true, runID: "r1", sessionID: ""))
         XCTAssertEqual(responses[1].windowID, 0)
         XCTAssertFalse(responses[1].navigable)
     }
@@ -347,5 +347,64 @@ final class NotificationPresenterTests: XCTestCase {
         XCTAssertNil(AppDelegate.session(windowID: 4, in: [a, b, c]), "window IDs repeat across Kitty instances")
         XCTAssertEqual(AppDelegate.session(windowID: 5, in: [a, b, c]), c)
         XCTAssertNil(AppDelegate.session(windowID: 0, in: [c]))
+    }
+
+    func testNotificationSocketSurvivesUserInfoRoundTrip() throws {
+        let json = #"{"notification_id":"n-8","window_id":4,"kitty_socket":"unix:/tmp/kitty-2","navigable":true,"actions":["mute"]}"#
+        let notice = try JSONDecoder().decode(AppNotice.self, from: Data(json.utf8))
+        XCTAssertEqual(notice.kittySocket, "unix:/tmp/kitty-2")
+
+        let presenter = presenter()
+        let userInfo = NotificationPresenter.request(for: notice).content.userInfo
+        presenter.handleResponse(notificationID: "n-8", actionIdentifier: UNNotificationDefaultActionIdentifier, userInfo: userInfo)
+        presenter.handleResponse(notificationID: "n-8", actionIdentifier: "amx.mute", userInfo: userInfo)
+        XCTAssertEqual(responses.map(\.kittySocket), ["unix:/tmp/kitty-2", "unix:/tmp/kitty-2"])
+        XCTAssertEqual(responses.map(\.windowID), [4, 4])
+
+        // A banner posted before the socket existed reads back as none.
+        presenter.handleResponse(notificationID: "n-0", actionIdentifier: "amx.mute",
+                                 userInfo: [NotificationPresenter.UserInfoKey.windowID: 4])
+        XCTAssertEqual(responses.last?.kittySocket, "")
+    }
+
+    func testNotificationResponseUsesCapturedKittySocket() {
+        func response(_ disposition: NotificationDisposition, socket: String, windowID: Int = 4) -> NotificationPresenter.Response {
+            NotificationPresenter.Response(notificationID: "n-1", disposition: disposition, windowID: windowID,
+                                           kittySocket: socket, navigable: true, runID: "", sessionID: "")
+        }
+        var kitty = CompanionKitty()
+        kitty.socket = "unix:/tmp/kitty-1"
+        kitty.sockets = ["unix:/tmp/kitty-1", "unix:/tmp/kitty-2"]
+        // The snapshot instance's row names no socket of its own.
+        let local = CompanionSession(windowID: 4)
+        var foreign = CompanionSession(windowID: 4)
+        foreign.kittySocket = "unix:/tmp/kitty-2"
+
+        // Duplicate IDs: click and mute both follow the captured instance.
+        for disposition in [NotificationDisposition.clicked, .actionMute] {
+            let fromForeign = AppDelegate.origin(of: response(disposition, socket: "unix:/tmp/kitty-2"), in: [local, foreign], snapshotKitty: kitty)
+            XCTAssertEqual(fromForeign, AppDelegate.NoticeOrigin(socket: "unix:/tmp/kitty-2", session: foreign))
+            let fromLocal = AppDelegate.origin(of: response(disposition, socket: "unix:/tmp/kitty-1"), in: [local, foreign], snapshotKitty: kitty)
+            XCTAssertEqual(fromLocal, AppDelegate.NoticeOrigin(socket: "unix:/tmp/kitty-1", session: local))
+        }
+
+        // The origin row is gone and only the other instance's window 4 is
+        // listed: a click still raises the origin, and Mute refuses rather
+        // than muting the unrelated pane.
+        let missing = AppDelegate.origin(of: response(.actionMute, socket: "unix:/tmp/kitty-2"), in: [local], snapshotKitty: kitty)
+        XCTAssertEqual(missing, AppDelegate.NoticeOrigin(socket: "unix:/tmp/kitty-2", session: nil))
+
+        // An old notice with no socket, while two instances are known, names
+        // neither instance nor session.
+        let old = AppDelegate.origin(of: response(.clicked, socket: ""), in: [local, foreign], snapshotKitty: kitty)
+        XCTAssertEqual(old, AppDelegate.NoticeOrigin(socket: nil, session: nil))
+        let oldMissing = AppDelegate.origin(of: response(.actionMute, socket: ""), in: [local], snapshotKitty: kitty)
+        XCTAssertEqual(oldMissing, AppDelegate.NoticeOrigin(socket: nil, session: nil))
+
+        // With a single Kitty there is nothing to confuse it with.
+        var single = CompanionKitty()
+        single.socket = "unix:/tmp/kitty-1"
+        let alone = AppDelegate.origin(of: response(.actionMute, socket: ""), in: [local], snapshotKitty: single)
+        XCTAssertEqual(alone, AppDelegate.NoticeOrigin(socket: "unix:/tmp/kitty-1", session: local))
     }
 }

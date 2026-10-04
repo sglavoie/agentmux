@@ -431,14 +431,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
     /// focuses the pane on `clicked`; the app brings that Kitty forward, and
     /// carries out the actions the daemon only names.
     private func respond(to response: NotificationPresenter.Response) {
-        let session = Self.session(windowID: response.windowID, in: store.sessions)
+        let origin = Self.origin(of: response, in: store.sessions, snapshotKitty: store.snapshot?.kitty ?? CompanionKitty())
         switch response.disposition {
         case .clicked:
-            guard response.navigable else { return }
-            let socket = session?.kittySocket ?? store.snapshot?.kitty.socket ?? ""
+            guard response.navigable, let socket = origin.socket else { return }
             _ = KittyActivator.activate(socket: socket)
         case .actionMute:
-            guard let session else { return report("Could not mute: the session is no longer listed.") }
+            guard let session = origin.session else { return report("Could not mute: the session is no longer listed.") }
             // mute-toggle toggles; a banner's Mute never unmutes.
             guard !session.muted else { return }
             toggleMute(MenuSessionRow(title: session.project, windowID: session.windowID, kittySocket: session.kittySocket, toolTip: ""))
@@ -450,6 +449,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
         case .delivered, .dismissed, .failed:
             break
         }
+    }
+
+    /// Where a notice came from, as far as it can be told apart from every
+    /// other Kitty instance: the socket a click raises, and the listed session
+    /// a Mute acts on. Either is nil when the notice cannot name it safely.
+    struct NoticeOrigin: Equatable {
+        let socket: String?
+        let session: CompanionSession?
+    }
+
+    /// Resolves a response against the listed sessions. Window IDs repeat
+    /// across Kitty instances, so a notice carrying the daemon-captured socket
+    /// matches only a session in that instance (an empty row socket naming
+    /// the snapshot's), and is raised through that socket even when its row
+    /// is gone. A notice with no socket — one from an older daemon — is
+    /// matched by window alone only while the snapshot knows a single Kitty;
+    /// with several it names nothing rather than a guess.
+    nonisolated static func origin(of response: NotificationPresenter.Response, in sessions: [CompanionSession],
+                                   snapshotKitty: CompanionKitty) -> NoticeOrigin {
+        if !response.kittySocket.isEmpty {
+            let wanted = AttentionCycler.Key(socket: response.kittySocket, windowID: response.windowID)
+            let matches = response.windowID > 0
+                ? sessions.filter { AttentionCycler.key($0, snapshotSocket: snapshotKitty.socket) == wanted }
+                : []
+            return NoticeOrigin(socket: response.kittySocket, session: matches.count == 1 ? matches[0] : nil)
+        }
+        var instances = Set(snapshotKitty.sockets.filter { !$0.isEmpty })
+        if !snapshotKitty.socket.isEmpty { instances.insert(snapshotKitty.socket) }
+        for session in sessions where !session.kittySocket.isEmpty { instances.insert(session.kittySocket) }
+        guard instances.count <= 1 else { return NoticeOrigin(socket: nil, session: nil) }
+        let session = Self.session(windowID: response.windowID, in: sessions)
+        return NoticeOrigin(socket: instances.first ?? "", session: session)
     }
 
     /// The listed session a notice's window names, when exactly one does:
