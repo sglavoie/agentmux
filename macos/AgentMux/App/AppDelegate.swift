@@ -781,6 +781,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
         if let reason = gate.unavailableReason(.muteToggle) { return report(reason) }
         let socket = row.kittySocket.isEmpty ? store.snapshot?.kitty.socket ?? "" : row.kittySocket
         guard !socket.isEmpty else { return report(KittyEndpoint.listenOnMissing) }
+        // Shown at once, so a menu reopened before the daemon publishes the
+        // change does not offer the toggle the click already made.
+        store.expectMute(socket: socket, windowID: row.windowID, muted: !row.muted)
         focusQueue.async { [weak self] in
             let result = command.json(MuteToggleResult.self, MuteToggleResult.arguments(windowID: row.windowID), kittyListenOn: socket)
             DispatchQueue.main.async {
@@ -789,14 +792,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
                     switch result {
                     case let .success(value):
                         Self.logger.notice("mute-toggle window \(row.windowID): muted=\(value.muted)")
+                        self.settleExpectedMute(value, socket: socket, windowID: row.windowID)
                     case let .partial(value, _):
+                        self.settleExpectedMute(value, socket: socket, windowID: row.windowID)
                         self.store.show(notice: value.muted ? "Muted, but the tab title was not updated." : "Unmuted, but the tab title was not updated.")
                     case let .failure(error):
                         Self.logger.error("mute-toggle window \(row.windowID): \(error.message, privacy: .public)")
+                        self.store.dropExpectedMute(socket: socket, windowID: row.windowID)
                         self.store.show(notice: "Could not toggle mute: \(error.message)")
                     }
                 }
             }
+        }
+    }
+
+    /// Replaces the guess `toggleMute` showed with what `amx` reports it did;
+    /// a toggle that changed nothing (the window was gone) shows nothing.
+    private func settleExpectedMute(_ value: MuteToggleResult, socket: String, windowID: Int) {
+        if value.changed {
+            store.expectMute(socket: socket, windowID: windowID, muted: value.muted)
+        } else {
+            store.dropExpectedMute(socket: socket, windowID: windowID)
         }
     }
 

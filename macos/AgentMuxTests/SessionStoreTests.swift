@@ -131,4 +131,50 @@ final class SessionStoreTests: XCTestCase {
         store.markStale(socket: "unix:/tmp/kitty-202", windowID: 4)
         XCTAssertTrue(store.sessions.isEmpty)
     }
+    private func mutedSnapshot(_ muted: Bool, socket: String = "unix:/tmp/kitty-101") -> CompanionSnapshot {
+        var snapshot = sessions([(socket, 7)])
+        snapshot.sessions[0].muted = muted
+        return snapshot
+    }
+
+    func testExpectedMuteShowsAtOnceAndYieldsToAnAgreeingSnapshot() {
+        var clock = Date(timeIntervalSince1970: 1_000)
+        let store = SessionStore(now: { clock })
+        store.apply(snapshot: mutedSnapshot(false))
+        store.expectMute(socket: "unix:/tmp/kitty-101", windowID: 7, muted: true)
+        XCTAssertEqual(store.sessions.map(\.muted), [true], "the click shows before the daemon publishes it")
+
+        clock += 1
+        store.apply(snapshot: mutedSnapshot(false))
+        XCTAssertEqual(store.sessions.map(\.muted), [true], "a snapshot taken before the toggle landed does not revert it")
+
+        store.apply(snapshot: mutedSnapshot(true))
+        XCTAssertTrue(store.expectedMutes.isEmpty, "an agreeing snapshot settles the expectation")
+        store.apply(snapshot: mutedSnapshot(false))
+        XCTAssertEqual(store.sessions.map(\.muted), [false], "once settled, snapshots are authoritative again")
+    }
+
+    func testExpectedMuteExpiresAndCanBeDropped() {
+        var clock = Date(timeIntervalSince1970: 1_000)
+        let store = SessionStore(now: { clock })
+        store.apply(snapshot: mutedSnapshot(false))
+        store.expectMute(socket: "unix:/tmp/kitty-101", windowID: 7, muted: true)
+        clock += SessionStore.expectedMuteHold + 1
+        XCTAssertEqual(store.sessions.map(\.muted), [false], "an unconfirmed expectation lapses")
+        store.apply(snapshot: mutedSnapshot(false))
+        XCTAssertTrue(store.expectedMutes.isEmpty)
+
+        store.expectMute(socket: "unix:/tmp/kitty-101", windowID: 7, muted: true)
+        store.dropExpectedMute(socket: "unix:/tmp/kitty-101", windowID: 7)
+        XCTAssertEqual(store.sessions.map(\.muted), [false], "a failed toggle withdraws it")
+    }
+
+    func testExpectedMuteIsScopedToKittySocket() {
+        let store = SessionStore()
+        var snapshot = sessions([("", 7), ("unix:/tmp/kitty-202", 7)])
+        snapshot.kitty.socket = "unix:/tmp/kitty-101"
+        store.apply(snapshot: snapshot)
+        store.expectMute(socket: "", windowID: 7, muted: true)
+        XCTAssertEqual(store.sessions.map(\.muted), [true, false], "only the row's own Kitty shows the mute")
+    }
 }

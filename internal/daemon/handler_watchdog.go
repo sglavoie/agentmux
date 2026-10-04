@@ -1,7 +1,11 @@
 package daemon
 
 import (
+	"errors"
+	"io/fs"
 	"log/slog"
+	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -280,10 +284,10 @@ func (h *Handler) SweepStale(now time.Time) {
 	// Prune eventLog entries for windows that Kitty no longer reports as live.
 	// Runs before the staleness scan so an event-log GC happens every sweep
 	// regardless of whether anyStaleThresholdSet() is true below.
-	if h.kittyClient != nil {
-		if snapshot, err := h.kittyClient.ListWindows(); err == nil {
+	if client, socket := h.kittyListTarget(); client != nil {
+		if snapshot, err := client.ListWindows(); err == nil {
 			windows = snapshot
-			h.pruneClosedWindows(now, liveWindowIDs(windows))
+			h.pruneClosedWindowsFor(now, liveWindowIDs(windows), socket)
 		} else {
 			slog.Debug("sweep: list windows failed for GC prune", "err", err)
 		}
@@ -519,13 +523,163 @@ func (h *Handler) expireStaleFactsLocked(windowID int, st *state.WindowState, no
 // metadata with it) expires after windowTombstoneRetention or once
 // maxWindowTombstones is exceeded.
 func (h *Handler) pruneClosedWindows(now time.Time, liveIDs map[int]bool) {
+	h.pruneClosedWindowsFor(now, liveIDs, "")
+}
+
+// pruneClosedWindowsFor is pruneClosedWindows for a listing read through
+// listedSocket. Window IDs mean something only inside the Kitty instance that
+// issued them, so a listing of one instance says nothing about a window whose
+// hooks named another: such a window is left for pruneForeignWindows, which
+// asks its own instance. An empty listedSocket judges every window, as a
+// listing of unknown provenance always has.
+func (h *Handler) pruneClosedWindowsFor(now time.Time, liveIDs map[int]bool, listedSocket string) {
 	h.stateMu.Lock()
 	closed := make(map[int]struct{})
 	for id := range h.store {
-		if !liveIDs[id] {
+		if !liveIDs[id] && !h.windowOfOtherInstanceLocked(id, listedSocket) {
 			closed[id] = struct{}{}
 		}
 	}
+	h.dropClosedWindowsLocked(now, closed)
+	// A tombstoned ID that Kitty reports live again is a reused window, not a
+	// closed one: resurrect it so its diagnostics resume live and it can count
+	// as renderer drift again.
+	for id := range liveIDs {
+		h.reviveTombstoneLocked(id)
+	}
+	h.expireTombstonesLocked(now)
+	h.stateMu.Unlock()
+	h.finishClosedWindows(closed)
+}
+
+// windowOfOtherInstanceLocked reports whether windowID's hooks named a Kitty
+// socket other than listedSocket. Callers hold stateMu.
+func (h *Handler) windowOfOtherInstanceLocked(windowID int, listedSocket string) bool {
+	if listedSocket == "" {
+		return false
+	}
+	socket := h.kittySockets[windowID]
+	return socket != "" && socket != listedSocket
+}
+
+// maxForeignInstanceLists bounds the extra Kitty listings one maintenance pass
+// may spend on windows of instances other than the listed one.
+const maxForeignInstanceLists = 4
+
+// pruneForeignWindows closes windows of Kitty instances other than the one
+// listedSocket names, each judged by a listing of its own instance: a window
+// that instance no longer reports is closed, and so is every window of an
+// instance whose socket file is gone, since Kitty removes it on exit. A
+// listing that fails for any other reason closes nothing, so a slow or busy
+// instance never loses its state. The listings run without stateMu.
+func (h *Handler) pruneForeignWindows(now time.Time, listedSocket string) {
+	if listedSocket == "" {
+		return
+	}
+	h.stateMu.Lock()
+	bySocket := make(map[string][]int)
+	for id := range h.store {
+		if h.windowOfOtherInstanceLocked(id, listedSocket) {
+			socket := h.kittySockets[id]
+			bySocket[socket] = append(bySocket[socket], id)
+		}
+	}
+	client := h.kittyClient
+	h.stateMu.Unlock()
+	if len(bySocket) == 0 || client == nil {
+		h.setOtherKittyTrees(nil, nil)
+		return
+	}
+	sockets := make([]string, 0, len(bySocket))
+	for socket := range bySocket {
+		sockets = append(sockets, socket)
+	}
+	sort.Strings(sockets)
+	if len(sockets) > maxForeignInstanceLists {
+		sockets = sockets[:maxForeignInstanceLists]
+	}
+
+	candidates := make(map[int]string)
+	trees := make(map[string][]kitty.OSWindow)
+	failed := make(map[string]bool)
+	for _, socket := range sockets {
+		if kittySocketGone(socket) {
+			for _, id := range bySocket[socket] {
+				candidates[id] = socket
+			}
+			continue
+		}
+		windows, err := scopedKittyClient(client, socket).ListWindows()
+		if err != nil {
+			slog.Debug("maintenance: list windows of another kitty instance failed", "socket", socket, "err", err)
+			failed[socket] = true
+			continue
+		}
+		trees[socket] = windows
+		live := liveWindowIDs(windows)
+		for _, id := range bySocket[socket] {
+			if !live[id] {
+				candidates[id] = socket
+			}
+		}
+	}
+	h.setOtherKittyTrees(trees, failed)
+	if len(candidates) == 0 {
+		return
+	}
+
+	h.stateMu.Lock()
+	closed := make(map[int]struct{})
+	for id, socket := range candidates {
+		// A hook that moved the window to another socket while the listing
+		// ran has made this verdict about a different window.
+		if _, ok := h.store[id]; ok && h.kittySockets[id] == socket {
+			closed[id] = struct{}{}
+		}
+	}
+	h.dropClosedWindowsLocked(now, closed)
+	h.stateMu.Unlock()
+	h.finishClosedWindows(closed)
+}
+
+// setOtherKittyTrees replaces the other instances' trees with listed, keeping
+// the previous tree of an instance whose listing failed this pass so one busy
+// listing does not strip its sessions of their titles. Every other instance's
+// tree is dropped. The companion is told whenever there is a set to show or
+// one to withdraw; the hub skips a publish that changed nothing.
+func (h *Handler) setOtherKittyTrees(listed map[string][]kitty.OSWindow, failed map[string]bool) {
+	h.stateMu.Lock()
+	next := make(map[string][]kitty.OSWindow, len(listed))
+	for socket, windows := range listed {
+		next[socket] = windows
+	}
+	for socket := range failed {
+		if previous, ok := h.otherKittyTrees[socket]; ok {
+			next[socket] = previous
+		}
+	}
+	changed := len(next) != 0 || len(h.otherKittyTrees) != 0
+	h.otherKittyTrees = next
+	if changed {
+		h.companionDirty()
+	}
+	h.stateMu.Unlock()
+}
+
+// kittySocketGone reports whether a unix-domain Kitty socket's file no longer
+// exists. Abstract sockets and TCP addresses have no file and are never gone.
+func kittySocketGone(socket string) bool {
+	path, ok := strings.CutPrefix(socket, "unix:")
+	if !ok || path == "" || strings.HasPrefix(path, "@") {
+		return false
+	}
+	_, err := os.Stat(path)
+	return errors.Is(err, fs.ErrNotExist)
+}
+
+// dropClosedWindowsLocked removes every closed window's live state. Callers
+// hold stateMu and run finishClosedWindows after releasing it.
+func (h *Handler) dropClosedWindowsLocked(now time.Time, closed map[int]struct{}) {
 	for id := range closed {
 		delete(h.store, id)
 		delete(h.kittySockets, id)
@@ -553,15 +707,11 @@ func (h *Handler) pruneClosedWindows(now time.Time, liveIDs map[int]bool) {
 		// closure is the only way an entry can become unreachable.
 		h.declines.RetractWindow(id)
 	}
-	// A tombstoned ID that Kitty reports live again is a reused window, not a
-	// closed one: resurrect it so its diagnostics resume live and it can count
-	// as renderer drift again.
-	for id := range liveIDs {
-		h.reviveTombstoneLocked(id)
-	}
-	h.expireTombstonesLocked(now)
-	h.stateMu.Unlock()
+}
 
+// finishClosedWindows cancels the work keyed by each closed window that lives
+// outside stateMu. Callers have released stateMu.
+func (h *Handler) finishClosedWindows(closed map[int]struct{}) {
 	for id := range closed {
 		// The pending render entry for a closed window is cancelled outright;
 		// an in-flight render cannot be cancelled, but its completion

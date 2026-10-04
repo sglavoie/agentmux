@@ -150,6 +150,7 @@ func (h *Handler) copyCompanionStateLocked(now time.Time) companion.Input {
 			Socket:  view.Socket(),
 			Windows: view.Windows(),
 		},
+		Others:     maps.Clone(h.otherKittyTrees),
 		ASLTargets: h.aslSupervisors.Targets(),
 		ASLPending: h.aslSupervisors.Pending(),
 		Now:        now,

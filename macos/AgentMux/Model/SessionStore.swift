@@ -77,10 +77,20 @@ final class SessionStore {
     /// socket and window together: a stale window in one Kitty never hides a
     /// live one sharing its number in another.
     private(set) var staleWindows: Set<AttentionCycler.Key> = []
+    /// Mutes the app has just asked for, shown on their rows until a snapshot
+    /// agrees or `expectedMuteHold` passes. The daemon publishes a mute within
+    /// a second, but a menu reopened before then would show the old state and
+    /// invite a second click that undoes the first.
+    private(set) var expectedMutes: [AttentionCycler.Key: (muted: Bool, until: Date)] = [:]
+    /// How long an expected mute outranks snapshots that do not show it yet.
+    static let expectedMuteHold: TimeInterval = 5
 
     var onChange: (() -> Void)?
+    private let now: () -> Date
 
-    init() {}
+    init(now: @escaping () -> Date = Date.init) {
+        self.now = now
+    }
 
     /// Feeds one subscription event in.
     func apply(_ event: SubscriptionClient.Event) {
@@ -121,6 +131,12 @@ final class SessionStore {
         self.snapshot = snapshot
         let listed = Set(snapshot.sessions.map { AttentionCycler.key($0, snapshotSocket: snapshot.kitty.socket) })
         staleWindows.formIntersection(listed)
+        let current = now()
+        expectedMutes = expectedMutes.filter { key, expected in
+            guard expected.until > current, listed.contains(key) else { return false }
+            let shown = snapshot.sessions.first { AttentionCycler.key($0, snapshotSocket: snapshot.kitty.socket) == key }
+            return shown?.muted != expected.muted
+        }
         notice = nil
         onChange?()
     }
@@ -143,6 +159,22 @@ final class SessionStore {
         onChange?()
     }
 
+    /// Shows `windowID` in the Kitty at `socket` as `muted` right away, ahead
+    /// of the snapshot that will confirm it. An empty socket names the
+    /// snapshot's own, as it does on a row.
+    func expectMute(socket: String, windowID: Int, muted: Bool) {
+        let socket = socket.isEmpty ? snapshot?.kitty.socket ?? "" : socket
+        expectedMutes[AttentionCycler.Key(socket: socket, windowID: windowID)] = (muted, now().addingTimeInterval(Self.expectedMuteHold))
+        onChange?()
+    }
+
+    /// Withdraws an expected mute, for a toggle that failed.
+    func dropExpectedMute(socket: String, windowID: Int) {
+        let socket = socket.isEmpty ? snapshot?.kitty.socket ?? "" : socket
+        guard expectedMutes.removeValue(forKey: AttentionCycler.Key(socket: socket, windowID: windowID)) != nil else { return }
+        onChange?()
+    }
+
     func show(notice: String?) {
         self.notice = notice
         onChange?()
@@ -161,8 +193,14 @@ final class SessionStore {
     /// The sessions the menu lists.
     var sessions: [CompanionSession] {
         guard let snapshot else { return [] }
-        return snapshot.sessions.filter {
-            !staleWindows.contains(AttentionCycler.key($0, snapshotSocket: snapshot.kitty.socket))
+        let current = now()
+        return snapshot.sessions.compactMap { session in
+            let key = AttentionCycler.key(session, snapshotSocket: snapshot.kitty.socket)
+            if staleWindows.contains(key) { return nil }
+            guard let expected = expectedMutes[key], expected.until > current else { return session }
+            var session = session
+            session.muted = expected.muted
+            return session
         }
     }
 

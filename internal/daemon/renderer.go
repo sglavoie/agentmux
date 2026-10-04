@@ -232,7 +232,8 @@ func (h *Handler) runSnapshotTickWithCapture(now time.Time, capture kittySnapsho
 	// watchdog loop owns it, measuring idleness with in-process elapsed time
 	// instead of rewriting activity timestamps after tick gaps.
 	h.publishCapture(capture)
-	h.pruneClosedWindows(now, liveWindowIDs(windows))
+	h.pruneClosedWindowsFor(now, liveWindowIDs(windows), capture.socket)
+	h.pruneForeignWindows(now, capture.socket)
 	// This is the startup reconciliation as well as the periodic one: the
 	// interval gate has never run when the daemon comes up, so the first tick
 	// always sweeps, and every aslReconcileInterval thereafter. Startup restore

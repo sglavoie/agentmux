@@ -188,6 +188,33 @@ func TestProject_MixedSockets(t *testing.T) {
 	}
 }
 
+// TestProject_OtherInstanceTakesItsOwnTree covers a session in a second Kitty
+// instance whose tree the daemon also read: it is named and placed from that
+// tree, as a session in the listed instance is, rather than shown as a bare
+// window number.
+func TestProject_OtherInstanceTakesItsOwnTree(t *testing.T) {
+	listed := kitty.Tab{ID: 10, Title: "W:api", Windows: []kitty.Window{managed(101, "work", "claude")}}
+	other := kitty.Window{ID: 4, UserVars: kitty.UserVars{Profile: "personal", Harness: "claude", Mute: "1"}}
+	otherTree := []kitty.OSWindow{{ID: 2, Tabs: []kitty.Tab{{ID: 3, Title: palette.BuildTitle("W:notes", "", false), Windows: []kitty.Window{other}}}}}
+	snap := Project(Input{
+		Kitty:   tree(sockA, listed),
+		States:  map[int]protocol.WindowStateSnapshot{4: {IconState: "stop"}, 5: {IconState: "key"}},
+		Sockets: map[int]string{4: sockB, 5: sockB},
+		Others:  map[string][]kitty.OSWindow{sockB: otherTree},
+	})
+	s := sessionByWindow(t, snap, sockB, 4)
+	if s.TabID != 3 || s.OSWindowID != 2 || s.BaseTitle != "W:notes" || s.Profile != "personal" || s.Harness != "claude" || !s.Muted {
+		t.Fatalf("other-instance session not taken from its tree: %+v", s)
+	}
+	if s.IconState != "stop" || !s.Attention {
+		t.Fatalf("daemon state not applied over the other tree: %+v", s)
+	}
+	// Window 5 has state on the same instance but is not in its tree yet.
+	if bare := sessionByWindow(t, snap, sockB, 5); bare.TabID != 0 || bare.BaseTitle != "" || bare.IconState != "key" {
+		t.Fatalf("a window missing from its tree should carry state only: %+v", bare)
+	}
+}
+
 // TestProject_UnattributedSocketsJoin covers a single-instance install, where
 // hooks record no socket: refusing the join would blank every session.
 func TestProject_UnattributedSocketsJoin(t *testing.T) {

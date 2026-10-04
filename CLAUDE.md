@@ -533,7 +533,9 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   provably about the same Kitty instance — window IDs mean something only
   inside the instance that issued them — and a state recorded against another
   instance is published as its own tree-less session rather than decorating a
-  window that merely shares its number. The attention bit is
+  window that merely shares its number; when the daemon also read that other
+  instance's tree (the closed-window GC lists each instance a stored window
+  belongs to), the session takes its tab and title from it. The attention bit is
   `protocol.AttentionStates` over the daemon's icon (falling back to the
   title's) or Kitty's own flag, the same set `amx focus-next` cycles on, so the
   menu bar and the CLI cannot disagree about which session is waiting. And the

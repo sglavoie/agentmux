@@ -147,7 +147,8 @@ amx config asl-sync --check
 `install-restart-smoke` stages the binary beside its destination and renames it
 into place, so there is no window where `amx` is absent or half-copied, and a
 running daemon keeps its already-open executable. It then restarts the daemon,
-waits for `ready: true`, and gates on `amx doctor --strict`, which verifies that
+waits for `ready: true` (and, when ASL is required, for the bridge handshake that
+follows it), and gates on `amx doctor --strict`, which verifies that
 the CLI and the daemon are the same artifact by hash and revision.
 
 A pairing preflight refuses whole-root if a live run still carries state the new

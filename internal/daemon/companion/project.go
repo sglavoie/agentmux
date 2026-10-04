@@ -42,7 +42,12 @@ type Input struct {
 	Sockets map[int]string
 	// Kitty is the daemon's cached window tree and the socket it was read
 	// through. A cold tree (Ready false) contributes no sessions.
-	Kitty        KittyTree
+	Kitty KittyTree
+	// Others are the window trees of Kitty instances other than Kitty's,
+	// keyed by the socket each was read through. A state recorded against one
+	// of those sockets takes its tab, title, and identity from that tree; one
+	// whose instance has no tree here is published from its state alone.
+	Others       map[string][]kitty.OSWindow
 	Notification Notification
 	// ASLTargets are the registered supervisor poll targets, which say which
 	// run a window is driving; ASLPending is the subset currently waiting on an
@@ -224,21 +229,7 @@ func treeSessions(in Input, runs map[int]string) []candidate {
 				if socket == "" {
 					socket = in.Sockets[win.ID]
 				}
-				s := protocol.CompanionSession{
-					WindowID:    win.ID,
-					TabID:       tab.ID,
-					OSWindowID:  osw.ID,
-					KittySocket: identifier(socket),
-					Harness:     display(vars.EffectiveHarness()),
-					Profile:     display(vars.EffectiveProfile()),
-					Project:     display(vars.EffectiveProject(parts.Base)),
-					BaseTitle:   display(parts.Base),
-					IconState:   display(parts.State),
-					Muted:       parts.Muted || vars.Mute != "",
-					Locked:      parts.Locked || vars.Locked,
-					Looping:     parts.Looping,
-					ASLRunID:    identifier(runs[win.ID]),
-				}
+				s := windowSession(osw, tab, parts, win, socket, runs)
 				if st, ok := in.States[win.ID]; ok && sameInstance(in.Sockets[win.ID], in.Kitty.Socket) {
 					applyState(&s, st)
 				}
@@ -250,10 +241,31 @@ func treeSessions(in Input, runs map[int]string) []candidate {
 	return out
 }
 
+// windowSession is the session one tree window shows before any daemon state
+// is laid over it.
+func windowSession(osw kitty.OSWindow, tab kitty.Tab, parts palette.TitleParts, win kitty.Window, socket string, runs map[int]string) protocol.CompanionSession {
+	vars := win.UserVars
+	return protocol.CompanionSession{
+		WindowID:    win.ID,
+		TabID:       tab.ID,
+		OSWindowID:  osw.ID,
+		KittySocket: identifier(socket),
+		Harness:     display(vars.EffectiveHarness()),
+		Profile:     display(vars.EffectiveProfile()),
+		Project:     display(vars.EffectiveProject(parts.Base)),
+		BaseTitle:   display(parts.Base),
+		IconState:   display(parts.State),
+		Muted:       parts.Muted || vars.Mute != "",
+		Locked:      parts.Locked || vars.Locked,
+		Looping:     parts.Looping,
+		ASLRunID:    identifier(runs[win.ID]),
+	}
+}
+
 // foreignSessions projects the daemon states recorded against a Kitty instance
-// other than the tree's. The daemon has no tree for that instance, so these
-// carry state and identity only — no tab, no title — ordered by socket and
-// window so the order is stable.
+// other than the tree's, ordered by socket and window so the order is stable.
+// One whose instance's tree is in Others takes its tab and title from it; the
+// rest carry state and identity only.
 func foreignSessions(in Input, runs map[int]string, base int) []candidate {
 	if in.Kitty.Socket == "" {
 		return nil
@@ -284,11 +296,16 @@ func foreignSessions(in Input, runs map[int]string, base int) []candidate {
 			KittySocket: socket,
 			ASLRunID:    identifier(runs[id]),
 		}
+		needsAttention := false
+		if osw, tab, win, ok := kitty.FindWindowLocationByID(in.Others[in.Sockets[id]], id); ok {
+			s = windowSession(*osw, *tab, palette.ParseTitleParts(tab.Title), *win, in.Sockets[id], runs)
+			needsAttention = tab.NeedsAttention
+		}
 		applyState(&s, in.States[id])
-		if s.Conversation != nil {
+		if s.Harness == "" && s.Conversation != nil {
 			s.Harness = display(s.Conversation.Harness)
 		}
-		s.Attention = protocol.AttentionStates[s.IconState]
+		s.Attention = protocol.AttentionStates[s.IconState] || needsAttention
 		out = append(out, candidate{session: s, order: base + len(out)})
 	}
 	return out

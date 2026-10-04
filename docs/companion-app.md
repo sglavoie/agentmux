@@ -176,10 +176,21 @@ log show --last 5m --predicate 'subsystem == "io.github.sglavoie.agentmux"'
 - **Mute lag.** A mute made from the app (or `amx mute-toggle`) is written to
   Kitty at once, but the daemon learns it on its next Kitty listing, at most
   one render cadence (2 seconds) later. A notification raised inside that
-  window is not yet suppressed, and the menu row shows the mute on the next
-  snapshot. See [Daemon › Mute lag](daemon.md#mute-lag) for why there is no
-  `mute_set` request.
+  window is not yet suppressed. The menu row shows a mute made from the app
+  at once and keeps showing it until a snapshot agrees, for up to 5 seconds,
+  so reopening the menu right away does not offer the toggle again. See
+  [Daemon › Mute lag](daemon.md#mute-lag) for why there is no `mute_set`
+  request.
 - **Paused ASL runs** are listed for answering only when their pause left an
   open supervisor question.
 - **One Kitty per window ID.** Window IDs mean something only inside the Kitty
   that issued them, so Mute never tries another instance's socket.
+- **Other Kitty instances.** The daemon lists the instance whose hook it heard
+  last and, on the same cadence, each other instance that has a session, so
+  those sessions are named from their own tabs. Each is kept until its own
+  instance stops reporting the window or that Kitty exits, never because a
+  listing of another instance could not see it. Window IDs are still bare, so
+  two instances' sessions that share a window number share one daemon state.
+- **Codex hooks run in a shared process.** Codex 0.160 runs hooks inside its
+  managed `app-server`, which carries the Kitty window of the pane that started
+  it, so every Codex session's hooks are attributed to that one window.

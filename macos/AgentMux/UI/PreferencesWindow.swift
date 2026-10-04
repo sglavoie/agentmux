@@ -175,6 +175,8 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
     let dashboardRecorder = HotKeyRecorder()
     let attentionRecorder = HotKeyRecorder()
     private(set) lazy var window: NSWindow = makeWindow()
+    /// Kept clear between the window and the screen's visible edges.
+    static let screenMargin: CGFloat = 60
 
     init(model: PreferencesModel) {
         self.model = model
@@ -190,13 +192,23 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
     }
 
     private func makeWindow() -> NSWindow {
-        let window = NSWindow(contentViewController: NSHostingController(
-            rootView: PreferencesView(model: model, dashboardRecorder: dashboardRecorder, attentionRecorder: attentionRecorder)
-        ))
+        let view = PreferencesView(model: model, dashboardRecorder: dashboardRecorder, attentionRecorder: attentionRecorder)
+        // The grouped form's ideal height is all of its content.
+        let contentHeight = NSHostingView(rootView: view.fixedSize(horizontal: false, vertical: true)).fittingSize.height
+        let window = NSWindow(contentViewController: NSHostingController(rootView: view))
         window.title = "Agent Mux Preferences"
-        window.styleMask = [.titled, .closable]
+        window.styleMask = [.titled, .closable, .resizable]
         window.isReleasedWhenClosed = false
         window.delegate = self
+        // Open as tall as the content wants, within the screen less a margin;
+        // the form scrolls whatever does not fit.
+        if let visible = NSScreen.main?.visibleFrame {
+            let chrome = window.frame.height - window.contentLayoutRect.height
+            let height = min(contentHeight + chrome, visible.height - Self.screenMargin)
+            var frame = window.frame
+            frame.size.height = max(height, window.minSize.height)
+            window.setFrame(frame, display: false)
+        }
         window.center()
         return window
     }
@@ -303,8 +315,10 @@ struct PreferencesView: View {
             }
         }
         .formStyle(.grouped)
+        // The grouped form scrolls, so the window can stay shorter than its
+        // content rather than run off a small screen.
         .frame(width: 560)
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(minHeight: 320)
     }
 
     @ViewBuilder

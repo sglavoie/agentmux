@@ -463,6 +463,13 @@ install-restart-smoke: install
         if [ "$i" = "50" ]; then echo "daemon never became ready" >&2; "{{prefix_bin}}/amx" daemon status >&2; exit 1; fi; \
         sleep 0.2; \
     done
+    @# The ASL bridge handshakes after the daemon reports ready. In required mode,
+    @# give it the same bounded window before doctor judges it; if it never
+    @# connects, doctor --strict reports the real failure.
+    @for i in $(seq 1 50); do \
+        if ! "{{prefix_bin}}/amx" daemon status | grep -Eq '^asl: (unavailable|read-only) \(mode required'; then break; fi; \
+        sleep 0.2; \
+    done
     "{{prefix_bin}}/amx" daemon status
     "{{prefix_bin}}/amx" doctor --strict
     @echo "install-restart-smoke: ok"

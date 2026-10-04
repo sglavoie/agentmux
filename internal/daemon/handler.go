@@ -133,6 +133,12 @@ type Handler struct {
 
 	kittySockets      map[int]string
 	lastKittyListenOn string
+	// otherKittyTrees holds the latest window tree of each Kitty instance
+	// other than the listed one that still has windows in the store, keyed by
+	// socket. pruneForeignWindows reads them and the companion projects other
+	// instances' sessions from them. Guarded by stateMu; a stored tree is never
+	// mutated, only replaced.
+	otherKittyTrees map[string][]kitty.OSWindow
 
 	// focusClient performs focus_window's list-verify-focus sequence. It is
 	// installed once on the startup goroutine by SetFocusClient, before the

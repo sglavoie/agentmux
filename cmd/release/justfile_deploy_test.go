@@ -73,6 +73,9 @@ func TestJustInstallRestartSmokeGatesOnReadinessAndStrictDoctor(t *testing.T) {
 	for _, want := range []string{
 		"daemon restart",
 		"ready: true",
+		// A required ASL bridge handshakes after readiness; doctor must not
+		// judge it before the bounded wait for that handshake.
+		"(mode required",
 		"doctor --strict",
 	} {
 		if !strings.Contains(smoke, want) {
