@@ -166,6 +166,18 @@ final class AMXCommandTests: XCTestCase {
         XCTAssertEqual(String(decoding: echo.stderr, as: UTF8.self), "err\n")
     }
 
+    func testChildThatClosesItsPipesStillTimesOut() {
+        let start = Date()
+        XCTAssertNil(ProcessOutput.run("/bin/sh", arguments: ["-c", "exec 1>&- 2>&-; exec sleep 5"], timeout: 0.2))
+        XCTAssertLessThan(Date().timeIntervalSince(start), 1.5)
+    }
+
+    func testChildThatIgnoresTerminateIsKilled() {
+        let start = Date()
+        XCTAssertNil(ProcessOutput.run("/bin/sh", arguments: ["-c", "trap '' TERM; exec 1>&- 2>&-; while :; do sleep 0.05; done"], timeout: 0.2))
+        XCTAssertLessThan(Date().timeIntervalSince(start), 1.5 + ProcessOutput.terminationGrace)
+    }
+
     // MARK: Help probe
 
     static let rootHelp = """
