@@ -4,7 +4,7 @@ import AppKit
 ///
 /// The daemon dials only sockets it learned itself, so the candidates are
 /// tried in order and an `unknown_socket` refusal moves on to the next: the
-/// session's own socket, then the socket the snapshot's window tree was read
+/// socket Preferences names, if any, then the session's own socket, then the socket the snapshot's window tree was read
 /// through, then `unix:/tmp/kitty-<pid>` for every running Kitty whose socket
 /// file exists — the address `listen_on unix:/tmp/kitty` gives each instance.
 enum KittyEndpoint {
@@ -12,6 +12,7 @@ enum KittyEndpoint {
 
     /// What to try for one session; empty when Kitty exposes no socket at all.
     static func candidates(
+        override: String = "",
         rowSocket: String,
         snapshotSocket: String,
         kittyPIDs: [pid_t],
@@ -22,6 +23,7 @@ enum KittyEndpoint {
             let trimmed = socket.trimmingCharacters(in: .whitespaces)
             if !trimmed.isEmpty, !ordered.contains(trimmed) { ordered.append(trimmed) }
         }
+        add(override)
         add(rowSocket)
         add(snapshotSocket)
         for pid in kittyPIDs.sorted() {

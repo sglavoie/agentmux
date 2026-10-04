@@ -10,6 +10,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
 
     private(set) var statusItem: StatusItemController?
     private var preferencesController: PreferencesWindowController?
+    let preferencesModel = PreferencesModel()
+    private var dashboardHotKey: HotKeyCenter?
+    private var attentionHotKey: HotKeyCenter?
+    private var cycler = AttentionCycler()
+    /// The login shell's environment, read once at launch; overrides are
+    /// applied on top of it each time amx is resolved again.
+    private var detectedEnvironment: LaunchEnvironment?
+    private var pendingResolve: DispatchWorkItem?
     private var healthTimer: Timer?
     private var subscription: SubscriptionClient?
     private var wakeObserver: NSObjectProtocol?
@@ -54,6 +62,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
         }
 
         statusItem = StatusItemController(delegate: self)
+        setUpPreferences()
+        setUpHotKeys()
         store.onChange = { [weak self] in self?.storeChanged() }
         startSubscription()
         refreshDaemonStatus()
@@ -105,7 +115,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
     private func storeChanged() {
         statusItem?.refresh()
         preferences.daemonStatus = store.daemonStatus
-        preferencesController?.update(preferences)
+        publishPreferences()
+    }
+
+    /// Hands Preferences what it reports, without republishing an unchanged
+    /// value on every snapshot.
+    private func publishPreferences() {
+        if preferencesModel.snapshot != preferences { preferencesModel.snapshot = preferences }
+        let notification = store.feed == .live ? store.snapshot?.notification : nil
+        if preferencesModel.daemonNotification != notification { preferencesModel.daemonNotification = notification }
     }
 
     // MARK: Daemon health
@@ -134,6 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
 
     func focus(_ row: MenuSessionRow) {
         let candidates = KittyEndpoint.candidates(
+            override: preferencesModel.preferences.kittySocketOverride,
             rowSocket: row.kittySocket,
             snapshotSocket: store.snapshot?.kitty.socket ?? "",
             kittyPIDs: KittyEndpoint.runningKittyPIDs()
@@ -209,13 +228,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
 
     /// Reads the login shell's environment, asks the daemon which build it
     /// runs, resolves amx against both, and probes what it can do. The shell
-    /// can take seconds, so none of it runs on the main thread.
+    /// can take seconds, so none of it runs on the main thread; it is read
+    /// once, and a later resolve (after an override changes) reuses it.
     private func resolveBinary() {
+        let detected = detectedEnvironment
+        let overrides = preferencesModel.preferences.environment
         work.async { [weak self] in
-            let environment = LaunchEnvironment.current()
+            let shell = detected ?? LaunchEnvironment.current()
+            let environment = shell.applying(overrides)
             let build = DaemonClient().health().build
             let resolution = AMXBinaryResolver.live(searchPath: environment.path, daemonBuild: build).resolve()
             var snapshot = PreferencesSnapshot()
+            snapshot.detectedEnvironment = shell
             var command: AMXCommand?
             switch resolution {
             case let .success(binary):
@@ -232,21 +256,169 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     guard let self else { return }
+                    self.detectedEnvironment = shell
                     self.command = command
                     snapshot.daemonStatus = self.store.daemonStatus
                     self.preferences = snapshot
-                    self.preferencesController?.update(snapshot)
+                    self.publishPreferences()
                 }
             }
         }
     }
 
+    /// Resolves again once typing in Preferences pauses, so a binary path or
+    /// environment value typed one key at a time does not run amx per key.
+    private func scheduleResolve() {
+        pendingResolve?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated { self?.resolveBinary() }
+        }
+        pendingResolve = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: item)
+    }
+
+    // MARK: Preferences
+
+    private func setUpPreferences() {
+        let model = preferencesModel
+        // The login item is SMAppService's to keep; the stored choice mirrors
+        // it, so one removed in System Settings is not silently re-added.
+        model.refreshLoginItem()
+        if model.preferences.launchAtLogin != model.launchAtLogin {
+            model.preferences.launchAtLogin = model.launchAtLogin
+        }
+        applyMenuBarPreferences(model.preferences)
+        model.onChange = { [weak self] old, new in self?.preferencesChanged(from: old, to: new) }
+        model.onRecordingChange = { [weak self] recording in
+            guard let self else { return }
+            if recording {
+                self.dashboardHotKey?.unregister()
+                self.attentionHotKey?.unregister()
+            } else {
+                self.registerHotKeys()
+            }
+        }
+    }
+
+    private func preferencesChanged(from old: AppPreferences, to new: AppPreferences) {
+        if old.hotKeyDashboard != new.hotKeyDashboard || old.hotKeyNextAttention != new.hotKeyNextAttention {
+            registerHotKeys()
+        }
+        applyMenuBarPreferences(new)
+        if old.binaryPath != new.binaryPath || old.environment != new.environment {
+            scheduleResolve()
+        }
+    }
+
+    private func applyMenuBarPreferences(_ preferences: AppPreferences) {
+        guard let statusItem else { return }
+        if statusItem.titleStyle != preferences.statusStyle { statusItem.titleStyle = preferences.statusStyle }
+        if statusItem.showWorking != preferences.showWorkingCount { statusItem.showWorking = preferences.showWorkingCount }
+        statusItem.kittySocketOverride = preferences.kittySocketOverride
+    }
+
+    // MARK: Global shortcuts
+
+    private func setUpHotKeys() {
+        let dashboard = HotKeyCenter()
+        dashboard.onPress = { [weak self] in MainActor.assumeIsolated { self?.openDashboard() } }
+        dashboardHotKey = dashboard
+        let attention = HotKeyCenter()
+        attention.onPress = { [weak self] in MainActor.assumeIsolated { self?.focusNextAttention() } }
+        attentionHotKey = attention
+        registerHotKeys()
+    }
+
+    /// Registers both shortcuts from the current preferences, so a change in
+    /// Preferences takes effect at once. The dashboard's wins a tie.
+    private func registerHotKeys() {
+        guard let dashboardHotKey, let attentionHotKey else { return }
+        let preferences = preferencesModel.preferences
+        var problems: [String: String] = [:]
+        problems[HotKeyPreference.dashboard.defaultsKey] = HotKeyConflicts.problem(for: dashboardHotKey.register(preferences.hotKeyDashboard))
+        let earlier = [(label: HotKeyPreference.dashboard.label, combo: preferences.hotKeyDashboard)]
+        if let duplicate = HotKeyConflicts.duplicate(preferences.hotKeyNextAttention, earlier: earlier) {
+            attentionHotKey.unregister()
+            problems[HotKeyPreference.nextAttention.defaultsKey] = duplicate
+        } else {
+            problems[HotKeyPreference.nextAttention.defaultsKey] = HotKeyConflicts.problem(for: attentionHotKey.register(preferences.hotKeyNextAttention))
+        }
+        for problem in problems.values {
+            Self.logger.notice("hotkey: \(problem, privacy: .public)")
+        }
+        preferencesModel.hotKeyProblems = problems
+    }
+
+    /// ⌃⌥⌘A: focuses the running dashboard, or opens one, then brings its
+    /// Kitty forward.
+    func openDashboard() {
+        guard let command else {
+            refuse(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.")
+            return
+        }
+        if let capabilities = preferences.capabilities, !capabilities.openDashboard {
+            refuse("\(command.binary.path) has no open-dashboard command; run `just install`.")
+            return
+        }
+        let candidates = DashboardOpener.candidates(
+            override: preferencesModel.preferences.kittySocketOverride,
+            snapshot: store.snapshot,
+            kittyPIDs: KittyEndpoint.runningKittyPIDs()
+        )
+        focusQueue.async { [weak self] in
+            let outcome = DashboardOpener.open(candidates: candidates) { socket in
+                command.json(OpenDashboardResult.self, ["open-dashboard"], kittyListenOn: socket)
+            }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.finishOpenDashboard(outcome) }
+            }
+        }
+    }
+
+    private func finishOpenDashboard(_ outcome: DashboardOpener.Outcome) {
+        switch outcome {
+        case let .opened(result, socket):
+            Self.logger.notice("dashboard \(result.opened ? "opened" : "focused", privacy: .public) (window \(result.windowID))")
+            if !KittyActivator.activate(socket: socket) {
+                refuse("Kitty is not running.")
+            }
+        case .noSocket:
+            refuse(KittyEndpoint.listenOnMissing)
+        case let .failed(message):
+            refuse("Could not open the dashboard: \(message)")
+        }
+    }
+
+    /// ⌃⌥⌘N: focuses the session that has waited longest, then the next on
+    /// each press, across every Kitty instance.
+    func focusNextAttention() {
+        guard store.feed == .live, let snapshot = store.snapshot else {
+            refuse("The session feed is not live.")
+            return
+        }
+        guard let session = cycler.advance(in: store.sessions, snapshotSocket: snapshot.kitty.socket) else {
+            Self.logger.notice("next attention: nothing is waiting")
+            NSSound.beep()
+            return
+        }
+        Self.logger.notice("next attention: window \(session.windowID) (\(session.iconState, privacy: .public))")
+        focus(MenuSessionRow(title: session.project, windowID: session.windowID, kittySocket: session.kittySocket, toolTip: ""))
+    }
+
+    /// A shortcut that could not act: the menu shows why the next time it
+    /// opens, and the beep says so now.
+    private func refuse(_ message: String) {
+        Self.logger.notice("shortcut: \(message, privacy: .public)")
+        store.show(notice: message)
+        NSSound.beep()
+    }
+
     // MARK: StatusItemDelegate
 
     @objc func showPreferences(_ sender: Any?) {
-        let controller = preferencesController ?? PreferencesWindowController()
+        let controller = preferencesController ?? PreferencesWindowController(model: preferencesModel)
         preferencesController = controller
-        controller.update(preferences)
+        publishPreferences()
         controller.show()
     }
 }

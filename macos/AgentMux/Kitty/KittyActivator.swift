@@ -26,6 +26,13 @@ enum KittyActivator {
     }
 
     /// Activates the Kitty that owns `socket`. Returns whether one was found.
+    ///
+    /// The cooperative handshake alone is not enough when this app was never
+    /// active — a global shortcut pressed over another app, for one — so when
+    /// the target is the only Kitty running it is also opened through
+    /// `NSWorkspace` with `activates`, which brings a running app forward
+    /// regardless. With several Kitty instances that call cannot say which
+    /// one, so it is not made.
     @MainActor
     @discardableResult
     static func activate(socket: String) -> Bool {
@@ -36,6 +43,18 @@ enum KittyActivator {
             return false
         }
         NSApp.yieldActivation(to: app)
-        return app.activate()
+        app.activate()
+        if shouldOpen(running: running), let url = app.bundleURL {
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = true
+            NSWorkspace.shared.openApplication(at: url, configuration: configuration)
+        }
+        return true
+    }
+
+    /// Whether opening Kitty's bundle can only bring the intended instance
+    /// forward: exactly one Kitty runs.
+    static func shouldOpen(running: [RunningKitty]) -> Bool {
+        running.filter { $0.bundleIdentifier == KittyEndpoint.bundleIdentifier }.count == 1
     }
 }

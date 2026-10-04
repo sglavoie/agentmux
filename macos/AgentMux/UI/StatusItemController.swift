@@ -22,6 +22,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     let statusItem: NSStatusItem
     let menu = NSMenu()
     private weak var delegate: StatusItemDelegate?
+    /// How the title summarizes the counts; Preferences sets these.
+    var titleStyle: StatusTitleStyle = .glyphs { didSet { refresh() } }
+    var showWorking = true { didSet { refresh() } }
+    /// A Kitty socket Preferences names, tried before any other.
+    var kittySocketOverride = ""
 
     private let preferencesItem = NSMenuItem(title: "Preferences…", action: #selector(preferences(_:)), keyEquivalent: ",")
     private let quitItem = NSMenuItem(title: "Quit Agent Mux", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -69,7 +74,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     /// Brings the title and tooltip in line with the store.
     func refresh() {
         guard let store = delegate?.store, let button = statusItem.button else { return }
-        let title = store.title()
+        let title = store.title(style: titleStyle, showWorking: showWorking)
         button.title = title
         button.imagePosition = title.isEmpty ? .imageOnly : .imageLeading
         button.toolTip = "Agent Mux — \(daemonLine)"
@@ -80,7 +85,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         let snapshotSocket = store.snapshot?.kitty.socket ?? ""
         var reachable = true
         if !sessions.isEmpty, snapshotSocket.isEmpty, sessions.allSatisfy({ $0.kittySocket.isEmpty }) {
-            reachable = !KittyEndpoint.candidates(rowSocket: "", snapshotSocket: "", kittyPIDs: KittyEndpoint.runningKittyPIDs()).isEmpty
+            reachable = !KittyEndpoint.candidates(
+                override: kittySocketOverride, rowSocket: "", snapshotSocket: "", kittyPIDs: KittyEndpoint.runningKittyPIDs()
+            ).isEmpty
         }
         return MenuBuilder.Input(
             feed: store.feed,

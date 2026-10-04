@@ -6,9 +6,10 @@ the `amx` CLI for actions. Kitty stays the terminal: the app never hosts a
 session itself.
 
 The app shows the live managed sessions, with attention counts in the menu bar,
-and a click focuses a session's Kitty tab and brings Kitty to the front.
-Notifications, hotkeys, and actions are added in later steps, and this file
-grows with them.
+and a click focuses a session's Kitty tab and brings Kitty to the front. Two
+global shortcuts reach the dashboard and the sessions waiting on you from any
+app. Notifications and actions are added in later steps, and this file grows
+with them.
 
 ## Requirements
 
@@ -174,9 +175,10 @@ a Kitty socket, which the daemon accepts only if it learned that socket itself
 (`Kitty/KittyEndpoint.swift`). The app tries these sockets in order, and moves
 to the next on `unknown_socket`:
 
-1. the session's own socket;
-2. the socket the snapshot's window tree was read through;
-3. `unix:/tmp/kitty-<pid>` for each running `net.kovidgoyal.kitty` process,
+1. the Kitty socket set in Preferences, if any;
+2. the session's own socket;
+3. the socket the snapshot's window tree was read through;
+4. `unix:/tmp/kitty-<pid>` for each running `net.kovidgoyal.kitty` process,
    only when that file exists.
 
 If there is nothing to try, the menu explains that Kitty needs
@@ -186,8 +188,67 @@ Once the daemon has focused the window, `Kitty/KittyActivator.swift` brings
 the Kitty process that owns the socket to the front. It finds that process from
 the pid in the socket's name, so with two Kitty instances the right one comes
 forward. It calls `NSApp.yieldActivation(to:)` and then asks Kitty to
-activate. A `stale_target` reply means the session has closed. The row is hidden
+activate. When that is the only Kitty running, it also opens Kitty through
+`NSWorkspace.openApplication` with `activates`, which brings a running app
+forward even when Agent Mux was never active, as after a global shortcut. With
+several Kitty instances that call cannot say which one, so it is skipped. A `stale_target` reply means the session has closed. The row is hidden
 until a snapshot no longer lists it, and the menu says so.
+
+## Global shortcuts
+
+Two Carbon hotkeys (`Shell/HotKey.swift`), which need no Accessibility
+permission:
+
+| Default | Does |
+| --- | --- |
+| ⌃⌥⌘A | Runs `amx open-dashboard --json`, which focuses the running dashboard or opens one, then brings that Kitty forward. |
+| ⌃⌥⌘N | Focuses the next session needing attention (`Model/AttentionCycler.swift`). |
+
+The dashboard shortcut names a Kitty socket the same way focus does: the
+Preferences override, the running dashboard's Kitty, the snapshot's, then each
+`/tmp/kitty-<pid>`. amx dials the socket itself, so only `kitty_unavailable`
+moves on to the next one.
+
+The next-attention shortcut orders the attention rows (stop, key, error,
+question) by the oldest `presentation_changed_at_ms`, the same order as the
+menu's Needs attention section. Each press focuses the one after the session
+the last press focused, and wraps after the last one. A session is its Kitty
+socket plus its window ID, so the cycle spans Kitty instances. When the session
+it last focused no longer waits, the cycle carries on from where that session
+stood instead of starting over. With nothing waiting, it beeps.
+
+A shortcut that cannot act beeps and leaves the reason as the menu's notice.
+Preferences records shortcuts, and a change is registered at once. It warns
+when a shortcut is already used by the other one (the dashboard's wins), is
+held by another app (Carbon's `eventHotKeyExistsErr`), or is one macOS owns in
+System Settings › Keyboard › Keyboard Shortcuts, which Carbon cannot see. While
+a recorder listens, both shortcuts are unregistered so they can be recorded.
+
+## Preferences
+
+Preferences (`UI/PreferencesWindow.swift`, SwiftUI in an NSWindow) saves each
+change as it is made, in the `io.github.sglavoie.agentmux` defaults domain.
+An absent, mistyped, or out-of-range value reads as its default.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `amxBinaryPath` | empty | The amx to run; empty is automatic. Preferences shows the running path and version. |
+| `amxLaunchAtLogin` | false | Mirrors the `SMAppService.mainApp` login item, which survives a logout. |
+| `amxHotKeyDashboard` | `ctrl+opt+cmd+a` | Empty turns it off. |
+| `amxHotKeyNextAttention` | `ctrl+opt+cmd+n` | Empty turns it off. |
+| `amxStatusStyle` | `glyphs` | `glyphs` (`⚡2 🔑1`), `compact` (the attention total), or `iconOnly`. |
+| `amxShowWorkingCount` | true | Includes `⚡N` in the glyph title. |
+| `amxRecentDays` | 7 | How far back the Recent submenu looks (1–90). |
+| `amxRecentLimit` | 15 | How many conversations it lists (1–50). |
+| `amxUseAppNotifications` | true | Offers the app as the daemon's notification backend. |
+| `amxSnoozeUntil` | none | The snooze the app last asked for. The daemon owns the snooze, and Preferences shows the daemon's while the feed is live. |
+| `amxKittySocketOverride` | empty | A Kitty socket tried first by focus and the dashboard shortcut. |
+| `amxEnvironment` | empty | Values amx runs with instead of the login shell's, for `PATH`, `XDG_*`, and `AMX_*`. |
+
+A change to the binary override or an environment value resolves amx again
+once typing pauses; the login shell is not asked twice. The login item is
+SMAppService's to keep. At launch the stored choice is set to match it, so a
+login item removed in System Settings is not added back.
 
 ## Single instance and tests
 
