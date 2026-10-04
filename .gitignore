@@ -1,1 +1,8 @@
-amx
+/amx
+
+# Agent Mux.app build products and caches (macos/README.md). The XcodeGen
+# project is generated from macos/project.yml and never committed.
+macos/build/
+macos/DerivedData/
+macos/*.xcodeproj/
+macos/.cache/

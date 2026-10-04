@@ -467,6 +467,28 @@ install-restart-smoke: install
     "{{prefix_bin}}/amx" doctor --strict
     @echo "install-restart-smoke: ok"
 
+# Build macos/build/Agent Mux.app, the menu bar companion. Debug bundles amx
+# only when AMX_BINARY names one and otherwise finds ~/.local/bin/amx at run
+# time; Release builds amx with `just build` and bundles that. Like mac-test and
+# mac-install it needs Xcode, so none of the three is part of check, acceptance,
+# or paired-release-gate. See macos/README.md.
+mac-app configuration="Debug":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "{{ configuration }}" = Release ]; then
+        just build
+        export AMX_BINARY="{{ root }}/amx"
+    fi
+    ./macos/scripts/build-app.sh {{ configuration }}
+
+# Run the Agent Mux.app XCTest suite with xcodebuild test (outside check)
+mac-test:
+    ./macos/scripts/test-app.sh
+
+# Build the Release Agent Mux.app, install it to /Applications, and relaunch it
+mac-install: (mac-app "Release")
+    ./macos/scripts/install-app.sh
+
 # Remove binary and config
 uninstall:
     rm -f "{{prefix_bin}}/amx"

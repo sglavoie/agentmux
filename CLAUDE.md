@@ -31,6 +31,17 @@ just cockpit-smoke   # real Kitty + installed pair; fails rather than skips
 just overseer-integration asl_root=~/scripts   # installed amx + installed asl, isolated world
 ```
 
+The native menu bar companion lives in `macos/` (Swift, XcodeGen, see
+`macos/README.md`). Its recipes need Xcode and are deliberately outside
+`check`, `acceptance`, and `paired-release-gate`, which
+`TestMacAppRecipesStayOutOfTheGates` in `cmd/release` enforces:
+
+```bash
+just mac-app [Release]   # macos/build/Agent Mux.app; Release bundles `just build`'s amx
+just mac-test            # hosted AgentMuxTests XCTest suite
+just mac-install         # Release build, quit, ditto to /Applications, relaunch
+```
+
 Releases of the Agent Mux / agent-session-loop pair go through
 `just paired-release-gate asl_root=… signing_key=…`, which runs both
 repositories' gates, installs the pair (ASL first), restarts the real daemon,

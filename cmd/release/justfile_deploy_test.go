@@ -83,3 +83,65 @@ func TestJustInstallRestartSmokeGatesOnReadinessAndStrictDoctor(t *testing.T) {
 		t.Error("install-restart-smoke must depend on install")
 	}
 }
+
+// TestMacAppRecipesStayOutOfTheGates keeps the Agent Mux.app recipes opt-in.
+// They need Xcode and sign with the operator's identity, so a machine that can
+// build and release amx must not need either: check, acceptance, and the
+// paired release gate never reach a mac-* recipe or the macos/ tree, directly
+// or through a recipe they depend on.
+func TestMacAppRecipesStayOutOfTheGates(t *testing.T) {
+	justfile := readJustfile(t)
+	for _, name := range []string{"mac-app", "mac-test", "mac-install"} {
+		justfileRecipeWithHeader(t, justfile, name)
+	}
+
+	seen := map[string]bool{}
+	queue := []string{"check", "acceptance", "paired-release-gate"}
+	for len(queue) > 0 {
+		name := queue[0]
+		queue = queue[1:]
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		header, body := justfileRecipeWithHeader(t, justfile, name)
+		for _, forbidden := range []string{"mac-", "macos/"} {
+			if strings.Contains(header+body, forbidden) {
+				t.Errorf("recipe %q reaches %q; the macOS app recipes must stay opt-in:\n%s%s", name, forbidden, header, body)
+			}
+		}
+		// Dependencies follow the colon: `check: acceptance lint`.
+		_, deps, _ := strings.Cut(header, ":")
+		for _, dep := range strings.Fields(deps) {
+			if regexp.MustCompile(`^[a-z][a-z0-9-]*$`).MatchString(dep) {
+				queue = append(queue, dep)
+			}
+		}
+	}
+}
+
+// justfileRecipeWithHeader is justfileRecipe for recipes that take
+// parameters: it returns the header line and the indented body.
+func justfileRecipeWithHeader(t *testing.T, justfile, name string) (string, string) {
+	t.Helper()
+	// Parameters may carry defaults (`configuration="Debug"`), but a `:=`
+	// variable assignment is not a recipe.
+	re := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(name) + `(\s[^\n]*)?:([^=\n][^\n]*)?$`)
+	loc := re.FindStringIndex(justfile)
+	if loc == nil {
+		t.Fatalf("Justfile has no %q recipe", name)
+	}
+	header := justfile[loc[0]:loc[1]]
+	rest := justfile[loc[1]:]
+	end := len(rest)
+	for i, line := range strings.Split(rest, "\n") {
+		if i == 0 {
+			continue
+		}
+		if line != "" && !strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "\t") {
+			end = strings.Index(rest, line)
+			break
+		}
+	}
+	return header, rest[:end]
+}
