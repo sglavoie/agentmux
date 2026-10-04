@@ -1,6 +1,7 @@
 // Package notifications holds the `amx notifications` command family: the
-// operator-facing surface that sends a real notification through the configured
-// backend and reports whether delivery could be confirmed, so a silent daemon
+// operator-facing surface that sends a real notification through the backend a
+// real one would take — the connected companion app, else Alerter — and
+// reports which one confirmed delivery, so a silent daemon
 // can be told apart from a muted operating system, and that sets or clears the
 // running daemon's in-memory snooze.
 package notifications
@@ -10,6 +11,7 @@ import (
 	"fmt"
 
 	"github.com/sglavoie/agentmux/internal/cli"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/spf13/cobra"
@@ -40,6 +42,20 @@ var notificationsTestCmd = &cobra.Command{
 		if state, snoozeErr := notificationsSnoozeClient().NotificationSnooze(protocol.SnoozeRequest{}); snoozeErr == nil && (state.Indefinite || state.SnoozedUntil != 0) {
 			return fmt.Errorf("test notification suppressed: %s Run `amx notifications snooze off` to restore delivery", describeSnooze(state))
 		}
+		// A connected companion app is the backend the daemon prefers, so it is
+		// tested first, through the daemon. Alerter is tested only when no app
+		// confirmed delivery — the same fallback a real notification takes.
+		if app, appErr := notificationsAppTest(); appErr == nil {
+			if app.Delivered {
+				_, err := fmt.Fprintf(cmd.OutOrStdout(), "Notification delivery confirmed via %s. Agent Mux notifications are working.\n", app.Backend)
+				return err
+			}
+			if app.Reason != "" && app.Reason != "app_unavailable" {
+				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "The Agent Mux app did not confirm delivery (%s); falling back to Alerter.\n", app.Reason); err != nil {
+					return err
+				}
+			}
+		}
 		if _, err := fmt.Fprintln(cmd.OutOrStdout(), "Sending a test notification through Alerter…"); err != nil {
 			return err
 		}
@@ -59,6 +75,9 @@ var notificationsTestCmd = &cobra.Command{
 var (
 	notificationsLoadConfig   = cli.LoadRunnableConfig
 	notificationsTestDelivery = notification.TestNotificationDelivery
+	// notificationsAppTest asks the daemon to test the companion app backend.
+	// An unreachable daemon is an error and leaves Alerter as the only test.
+	notificationsAppTest = func() (protocol.NotificationTestResult, error) { return ipc.NewClient().NotificationTest() }
 )
 
 func init() {

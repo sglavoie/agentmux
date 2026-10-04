@@ -381,6 +381,7 @@ func NewHandler(guard *activity.StateGuard, notifier *notification.Notifier) *Ha
 	}
 	if notifier != nil {
 		notifier.SetObserver(h.recordNotificationDispositionBounded)
+		notifier.SetAppBackend(h.companion)
 	}
 	return h
 }

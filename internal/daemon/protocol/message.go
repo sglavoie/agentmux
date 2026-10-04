@@ -353,6 +353,9 @@ type Response struct {
 	Focused *FocusWindowResult `json:"focused,omitempty"`
 	// Snooze answers TypeNotificationSnooze with the snooze now in force.
 	Snooze *SnoozeState `json:"snooze,omitempty"`
+	// NotificationTest answers TypeNotificationTest with the backend that
+	// confirmed a test notification, if any.
+	NotificationTest *NotificationTestResult `json:"notification_test,omitempty"`
 	// Companion is the TypeHealth view of companion subscribers. It is omitted
 	// by daemons that predate the companion protocol.
 	Companion *CompanionHealth `json:"companion,omitempty"`

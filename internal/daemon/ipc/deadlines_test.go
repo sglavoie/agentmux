@@ -88,6 +88,7 @@ func TestDeadlineFor(t *testing.T) {
 		{protocol.TypeASLQuestion, asl.ReadDeadline},
 		{protocol.TypeASLSnapshot, asl.ReadDeadline},
 		{protocol.TypeFocusWindow, FocusWindowDeadline},
+		{protocol.TypeNotificationTest, NotificationTestDeadline},
 		{protocol.TypeHookEvent, connDeadline},
 		{protocol.TypeStateUpdate, connDeadline},
 		{protocol.TypeHealth, connDeadline},

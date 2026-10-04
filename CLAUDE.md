@@ -155,8 +155,9 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   transcript from the configured profiles (`rebuild`). The source transcript
   files themselves are never rewritten.
 - `cmd/notifications`: the `amx notifications` family — the operator-facing
-  surface that sends a real notification through the configured backend and
-  reports whether delivery could be confirmed, so a silent daemon can be told
+  surface that sends a real notification through the backend a real one would
+  take (the connected companion app via the daemon's `notification_test`, else
+  Alerter from the CLI process) and reports which backend confirmed delivery, so a silent daemon can be told
   apart from a muted operating system, and that sets or clears the running
   daemon's in-memory snooze (`snooze 1h|until HH:MM|indefinite|off [--json]`).
   Snooze never auto-starts a daemon, since a snooze held by a daemon that was
@@ -314,7 +315,20 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   helper click-to-focus uses — with the lock released. Its
   `notification_snooze` request sets, clears, or reads the notifier's
   in-memory snooze and rings `companionDirty` on every change; a timed snooze
-  that simply runs out reaches subscribers on the 5s safety tick.
+  that simply runs out reaches subscribers on the 5s safety tick. The hub is
+  also the notifier's `AppBackend` (`companion_backend.go`): the role goes to
+  the NEWEST subscriber that claimed `notification_backend` with
+  `notifications_authorized` and passes to the newest remaining claimant when
+  it leaves; a delivery stays bound to the subscriber it was sent to and ends
+  when that subscriber does. Its `backendMu` is a leaf lock — safe under
+  `stateMu` and `hub.mu`, holding nothing but a send into a buffer that cannot
+  fill — and frames are written after it is released. The
+  `notification_disposition` request settles a delivery idempotently: a
+  repeated `delivered` is ignored, the first terminal disposition wins, a
+  terminal one other than `failed` implies delivery, and an unknown
+  notification ID is answered ok. `notification_test` offers one test notice to
+  the app and never falls back; the CLI tests Alerter itself when no app
+  confirmed one.
 - `internal/daemon/protocol`: the daemon wire contract — request/response model,
   command names, durable and exported envelopes, and the serialization
   vocabularies. It holds shapes and pure projections only, and must never import
@@ -329,9 +343,25 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   debounce, cooldown), the global snooze (`snooze.go`: in memory only, never
   written to config, gated right after quiet hours and re-checked when a
   debounced permission fires), click-to-focus, and the disposition vocabulary.
-  Like
-  protocol and state it must never import the daemon root; the daemon drives it
-  through the `Notifier` seams rather than reaching into its state.
+  It also owns the decision half of the companion app backend
+  (`app_backend.go`): the `AppBackend` seam (`Ready`, `Deliver`, `Retract`) and
+  the `AppNotice` a notification frame carries. Backend selection is per
+  dispatch, inside `runDispatch` and after every gate, so the app path
+  suppresses exactly what the Alerter path does; `backend_unavailable` means
+  neither Alerter nor a ready app exists. A ready app is offered the
+  notification first and has 3s to report `delivered`; anything short of that
+  is withdrawn and recorded as `app_fallback`, and the Alerter path runs as if
+  no app existed. After `delivered` the dispatch waits for the interaction up
+  to the ordinary dispatch timeout: a click runs the same `focusForClick` an
+  Alerter click does, and `action_mute`, `action_snooze`, and `action_answer`
+  are recorded the way `replied` is — the app carries them out, the daemon only
+  names them. A notice still showing is retracted when a newer notification
+  for its window passes every gate (never by one that is suppressed, which
+  would leave the operator with nothing), when `CancelPending` or
+  `CancelPendingDisposition` says the window moved on, and when the window
+  closes. Dispatch and focus dispositions name the backend they came from.
+  Like protocol and state it must never import the daemon root; the daemon
+  drives it through the `Notifier` seams rather than reaching into its state.
 - `internal/daemon/rendering`: the daemon's status presentation — the icon the
   effective state paints, the tab-title text that carries it, the tab's title
   owner, the latest-generation render queue, the presentation cadence, and the

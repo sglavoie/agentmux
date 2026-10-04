@@ -44,7 +44,7 @@ var (
 
 // companionFeatures is what a subscribe ack advertises. A client keys optional
 // behavior on these names rather than on the protocol version.
-var companionFeatures = []string{"snapshot", "heartbeat"}
+var companionFeatures = []string{"snapshot", "heartbeat", "notifications"}
 
 // companionHub holds the subscribers and the last published snapshot. Its own
 // mutex orders a publication against a registration, so a new subscriber is
@@ -61,6 +61,15 @@ type companionHub struct {
 	digest  string
 	publish uint64
 
+	// backendMu guards the notification backend role and the deliveries
+	// awaiting a disposition (companion_backend.go). It is a leaf lock, taken
+	// inside hub.mu by add and remove and never the other way round.
+	backendMu  sync.Mutex
+	backend    *ipc.StreamSink
+	claimants  map[*ipc.StreamSink]uint64
+	claimSeq   uint64
+	deliveries map[string]*appDelivery
+
 	// beforeProject runs after the copy is taken and stateMu released, before
 	// the projection. Tests use it to prove the build happens off the lock.
 	beforeProject func()
@@ -68,8 +77,10 @@ type companionHub struct {
 
 func newCompanionHub() *companionHub {
 	return &companionHub{
-		dirty: make(chan struct{}, 1),
-		sinks: make(map[*ipc.StreamSink]protocol.CompanionClient),
+		dirty:      make(chan struct{}, 1),
+		sinks:      make(map[*ipc.StreamSink]protocol.CompanionClient),
+		claimants:  make(map[*ipc.StreamSink]uint64),
+		deliveries: make(map[string]*appDelivery),
 	}
 }
 
@@ -222,20 +233,25 @@ func (hub *companionHub) heartbeat() {
 	}
 }
 
-// add registers sink and replays the latest snapshot to it.
+// add registers sink and replays the latest snapshot to it. A subscriber that
+// is a notification backend takes the backend role.
 func (hub *companionHub) add(sink *ipc.StreamSink, client protocol.CompanionClient) {
 	hub.mu.Lock()
 	hub.sinks[sink] = client
 	if hub.latest != nil {
 		sink.SetSnapshot(hub.latest)
 	}
+	if client.NotificationBackend {
+		hub.claimBackend(sink)
+	}
 	hub.mu.Unlock()
 }
 
-// remove forgets sink.
+// remove forgets sink, and with it any backend role and deliveries it held.
 func (hub *companionHub) remove(sink *ipc.StreamSink) {
 	hub.mu.Lock()
 	delete(hub.sinks, sink)
+	hub.releaseBackend(sink)
 	hub.mu.Unlock()
 }
 

@@ -50,6 +50,10 @@ func (h *Handler) Handle(req protocol.Request) protocol.Response {
 		resp = h.handleFocusWindow(req)
 	case protocol.TypeNotificationSnooze:
 		resp = h.handleNotificationSnooze(req)
+	case protocol.TypeNotificationDisposition:
+		resp = h.handleNotificationDisposition(req)
+	case protocol.TypeNotificationTest:
+		resp = h.handleNotificationTest()
 	case protocol.TypeHealth:
 		resp = h.handleHealth()
 	case protocol.TypeShutdown:

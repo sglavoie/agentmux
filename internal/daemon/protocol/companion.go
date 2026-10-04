@@ -51,6 +51,7 @@ const (
 	TypeFocusWindow             MessageType = "focus_window"
 	TypeNotificationSnooze      MessageType = "notification_snooze"
 	TypeNotificationDisposition MessageType = "notification_disposition"
+	TypeNotificationTest        MessageType = "notification_test"
 )
 
 // CompanionMessageTypes lists every companion request type, so a transport
@@ -60,6 +61,7 @@ var CompanionMessageTypes = []MessageType{
 	TypeFocusWindow,
 	TypeNotificationSnooze,
 	TypeNotificationDisposition,
+	TypeNotificationTest,
 }
 
 // AttentionStates is the set of icon states that mean a human is being waited
@@ -152,6 +154,64 @@ type DispositionRequest struct {
 	NotificationID string `json:"notification_id"`
 	Disposition    string `json:"disposition"`
 	Error          string `json:"error,omitempty"`
+}
+
+// Notification dispositions a companion reports in DispositionRequest. Delivered
+// is the only non-terminal one: it says the operating system accepted the
+// notification, and the daemon waits for it before treating the companion as
+// the backend that showed it. Every other value is terminal, and the first
+// terminal value the daemon receives for a notification wins. Failed before
+// delivered sends the notification through Alerter instead.
+const (
+	DispositionDelivered    = "delivered"
+	DispositionClicked      = "clicked"
+	DispositionDismissed    = "dismissed"
+	DispositionActionMute   = "action_mute"
+	DispositionActionSnooze = "action_snooze"
+	DispositionActionAnswer = "action_answer"
+	DispositionFailed       = "failed"
+)
+
+// CompanionDispositions lists every disposition a companion may report.
+var CompanionDispositions = []string{
+	DispositionDelivered,
+	DispositionClicked,
+	DispositionDismissed,
+	DispositionActionMute,
+	DispositionActionSnooze,
+	DispositionActionAnswer,
+	DispositionFailed,
+}
+
+// Notification actions a notification frame may offer. The daemon only offers
+// what the companion can carry out itself through requests it already has:
+// muting goes through `amx mute-toggle`, snoozing through notification_snooze,
+// and answering through the ASL question surface. The daemon records which one
+// was chosen and performs none of them.
+const (
+	NotificationActionMute   = "mute"
+	NotificationActionSnooze = "snooze"
+	NotificationActionAnswer = "answer"
+)
+
+// NotificationRetract is the payload of a notification_retract frame: the
+// daemon no longer wants the named notification shown, because something newer
+// replaced it, the session moved on, or its window closed. Reason is
+// informational. A companion removes the notification if it still has it and
+// reports nothing back.
+type NotificationRetract struct {
+	NotificationID string `json:"notification_id"`
+	Reason         string `json:"reason,omitempty"`
+}
+
+// NotificationTestResult answers TypeNotificationTest. Backend names what
+// confirmed delivery — "app" when the connected companion did. Delivered false
+// with a Reason means no companion could confirm one, and the caller is
+// expected to test Alerter itself.
+type NotificationTestResult struct {
+	Backend   string `json:"backend,omitempty"`
+	Delivered bool   `json:"delivered"`
+	Reason    string `json:"reason,omitempty"`
 }
 
 // CompanionHealth is the health-response view of companion subscribers.

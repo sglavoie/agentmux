@@ -79,10 +79,16 @@ func (n *Notifier) HasPending(windowID int) bool {
 // cancelPending removes any pending permission notification for windowID and
 // returns its disposition without invoking the observer. Callers that hold
 // broader locks can therefore defer observer work until those locks are free.
+//
+// The window has moved on, so any companion notice still showing for it is
+// retracted as well: a banner announcing a stop the operator already answered
+// would only send them to a pane that no longer needs them.
 func (n *Notifier) cancelPending(windowID int) (NotificationDisposition, bool) {
 	n.mu.Lock()
 	disposition, cancelled := n.cancelPendingLocked(windowID, "superseded")
+	app, superseded := n.takeAppNoticesLocked(windowID)
 	n.mu.Unlock()
+	retractAll(app, superseded, "superseded")
 	return disposition, cancelled
 }
 

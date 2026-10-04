@@ -65,6 +65,13 @@ const (
 	interactionReplied     interactionOutcome = "replied"
 	interactionUnavailable interactionOutcome = "interaction_unavailable"
 	interactionUnknown     interactionOutcome = "interaction_unknown"
+
+	// The companion app's safe actions and the daemon's own retraction. They
+	// end a notification without a click, the way replied does.
+	interactionActionMute   interactionOutcome = protocol.DispositionActionMute
+	interactionActionSnooze interactionOutcome = protocol.DispositionActionSnooze
+	interactionActionAnswer interactionOutcome = protocol.DispositionActionAnswer
+	interactionRetracted    interactionOutcome = AppRetracted
 )
 
 // dispatchResult keeps successful delivery separate from the user's terminal

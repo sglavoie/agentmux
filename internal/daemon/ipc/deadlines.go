@@ -13,6 +13,11 @@ import (
 // on a busy machine.
 const FocusWindowDeadline = 3 * time.Second
 
+// NotificationTestDeadline bounds a notification_test handshake. The daemon
+// waits up to three seconds for the companion app to confirm delivery before
+// it answers, which a 1s connection deadline would cut short.
+const NotificationTestDeadline = 5 * time.Second
+
 // deadlineFor bounds the rest of a request/response handshake once the request
 // line has been decoded and its type is known. Reading that first line stays
 // under connDeadline, so an idle or stalled peer is still released quickly;
@@ -30,6 +35,8 @@ func deadlineFor(t protocol.MessageType) time.Duration {
 		return asl.ReadDeadline
 	case protocol.TypeFocusWindow:
 		return FocusWindowDeadline
+	case protocol.TypeNotificationTest:
+		return NotificationTestDeadline
 	default:
 		return connDeadline
 	}

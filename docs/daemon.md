@@ -229,6 +229,33 @@ amx notifications snooze off --json     # {"snoozed":false,"indefinite":false}
 amx notifications test                  # reports "suppressed" while snoozed
 ```
 
+A companion that subscribes with `notification_backend` and
+`notifications_authorized` becomes the notification backend; the newest such
+subscriber holds the role. Every notification still passes every gate first.
+The daemon then sends the backend a `notification` frame —
+`{notification_id, window_id, navigable, title, subtitle, action, run_id,
+session_id, actions[]}`, where `actions` offers `mute`, `snooze`, and (for an
+ASL question) `answer`, and a permission prompt offers none — and waits up to
+3s for a `notification_disposition` request reporting `delivered`. Without it
+the notice is retracted, `dispatch:fallback:app_fallback` is recorded, and
+Alerter shows the notification instead; with no app connected Alerter is used
+exactly as before. After `delivered` the app reports one terminal disposition:
+`clicked` (the daemon focuses the pane exactly as an Alerter click does),
+`dismissed`, `action_mute`, `action_snooze`, `action_answer`, or `failed`.
+Reports are idempotent: the first terminal disposition wins and an unknown
+`notification_id` is answered ok. A `notification_retract` frame
+`{notification_id, reason}` withdraws a notice that is still showing when a
+newer notification for its window is dispatched (`superseded`), when the
+window moves on (`superseded`), when it closes (`window_closed`), or when the
+interaction window runs out. Journal dispositions carry the backend in
+`evidence.backend`.
+
+```bash
+printf '%s\n' '{"type":"notification_disposition","disposition":{"notification_id":"n-0123456789abcdef","disposition":"clicked"}}' \
+  | nc -U ~/.local/share/agent-mux/daemon.sock
+amx notifications test   # "confirmed via app" when the app delivered, else Alerter
+```
+
 `amx doctor` reports each connected companion app as `companion_app` (info,
 with its client version) and raises `companion_build_mismatch` (warning) when
 the `amx_build` an app reported is not the daemon's artifact. `amx debug

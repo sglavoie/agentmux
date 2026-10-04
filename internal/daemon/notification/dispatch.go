@@ -97,7 +97,9 @@ func (n *Notifier) MaybeNotifyTracedTarget(target NotificationTarget, sessionTit
 	dispatchAvailable := n.dispatch != nil
 	focusAvailable := n.focus != nil
 	n.mu.Unlock()
-	if !dispatchAvailable {
+	// Either backend can carry the notification; runDispatch chooses between
+	// them when it runs, since the app may come or go during a debounce.
+	if !dispatchAvailable && !n.appReady() {
 		emit("decision", "suppressed", "backend_unavailable")
 		return
 	}
@@ -155,7 +157,12 @@ func (n *Notifier) MaybeNotifyTracedTarget(target NotificationTarget, sessionTit
 		return
 	}
 	n.last[key] = now
+	// The notice about to be shown replaces any app notice still showing for
+	// this window. It is retracted only here, past every gate, so a newer
+	// event that is itself suppressed never leaves the operator with nothing.
+	app, superseded := n.takeAppNoticesLocked(windowID)
 	n.mu.Unlock()
+	retractAll(app, superseded, "superseded")
 	for _, disposition := range dispositions {
 		n.emitDisposition(disposition)
 	}
@@ -163,11 +170,16 @@ func (n *Notifier) MaybeNotifyTracedTarget(target NotificationTarget, sessionTit
 	go n.runDispatch(target, title, subtitle, action, trace)
 }
 
-// runDispatch invokes the configured dispatcher under a bounded context. The
-// dispatcher's underlying process (or test stub) is responsible for honoring
-// ctx.Done — the real Alerter backend does via exec.CommandContext.
-// The complete target is retained so a click can use the exact captured socket
-// and window ID after the backend returns.
+// runDispatch chooses a backend for one notification and records its
+// outcome. A ready companion app is offered the notification first (see
+// app_backend.go); when it does not confirm delivery the app_fallback
+// disposition is recorded and the Alerter path runs as if no app existed.
+//
+// The Alerter dispatcher runs under a bounded context. The dispatcher's
+// underlying process (or test stub) is responsible for honoring ctx.Done — the
+// real Alerter backend does via exec.CommandContext. The complete target is
+// retained so a click can use the exact captured socket and window ID after
+// either backend reports it.
 func (n *Notifier) runDispatch(target NotificationTarget, title, subtitle, action string, trace NotificationTrace) {
 	windowID := target.WindowID
 	account := target.Account
@@ -175,7 +187,14 @@ func (n *Notifier) runDispatch(target NotificationTarget, title, subtitle, actio
 	n.mu.Lock()
 	parent := n.ctx
 	dispatch := n.dispatch
+	app := n.app
 	n.mu.Unlock()
+	if app != nil && app.Ready() {
+		if n.dispatchToApp(parent, app, target, title, subtitle, action, trace) {
+			return
+		}
+		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "dispatch", Outcome: "fallback", Reason: "app_fallback", Backend: BackendApp})
+	}
 	if dispatch == nil {
 		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "dispatch", Outcome: "suppressed", Reason: "backend_unavailable"})
 		return
@@ -192,50 +211,64 @@ func (n *Notifier) runDispatch(target NotificationTarget, title, subtitle, actio
 			reason = "backend_timeout"
 		}
 		slog.Warn("notifier: dispatch did not complete", "err", err, "outcome", outcome, "reason", reason, "title", title, "subtitle", subtitle)
-		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "dispatch", Outcome: outcome, Reason: reason})
+		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "dispatch", Outcome: outcome, Reason: reason, Backend: BackendAlerter})
 		return
 	}
 	if result.delivery != deliveryDelivered {
 		slog.Warn("notifier: backend returned success without delivery", "delivery", result.delivery, "title", title, "subtitle", subtitle)
-		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "dispatch", Outcome: "failed", Reason: "send_failed"})
+		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "dispatch", Outcome: "failed", Reason: "send_failed", Backend: BackendAlerter})
 		return
 	}
-	n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "dispatch", Outcome: "sent", Reason: "send_success"})
-	if result.interaction != interactionClicked {
-		reason := result.interaction
+	n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "dispatch", Outcome: "sent", Reason: "send_success", Backend: BackendAlerter})
+	n.settleInteraction(target, action, trace, result.interaction, BackendAlerter)
+}
+
+// settleInteraction records the terminal interaction with a delivered
+// notification, whichever backend showed it. Only a click focuses anything;
+// every other interaction, including the companion's safe actions, is
+// recorded as a suppressed focus naming what the operator did instead. The
+// actions themselves are carried out by the companion, not here.
+func (n *Notifier) settleInteraction(target NotificationTarget, action string, trace NotificationTrace, interaction interactionOutcome, backend string) {
+	windowID := target.WindowID
+	emit := func(outcome, reason string) {
+		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: outcome, Reason: reason, Backend: backend})
+	}
+	if interaction != interactionClicked {
+		reason := interaction
 		switch reason {
-		case interactionTimeout, interactionDismissed, interactionReplied, interactionUnavailable, interactionUnknown:
+		case interactionTimeout, interactionDismissed, interactionReplied, interactionUnavailable, interactionUnknown,
+			interactionActionMute, interactionActionSnooze, interactionActionAnswer, interactionRetracted:
 		default:
 			reason = interactionUnknown
 		}
-		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "suppressed", Reason: string(reason)})
+		emit("suppressed", string(reason))
 		return
 	}
-	slog.Debug("notifier: clicked", "window_id", windowID, "account", account, "title", title, "subtitle", subtitle)
+	slog.Debug("notifier: clicked", "window_id", windowID, "account", target.Account, "backend", backend)
 	if !target.Navigable || windowID <= 0 {
-		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "suppressed", Reason: "focus_target_missing"})
+		emit("suppressed", "focus_target_missing")
 		return
 	}
 	n.mu.Lock()
 	focus := n.focus
 	n.mu.Unlock()
 	if focus == nil {
-		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "suppressed", Reason: "focus_unavailable"})
+		emit("suppressed", "focus_unavailable")
 		return
 	}
 	if !kitty.IsReusableListenAddress(target.KittyListenOn) {
-		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "suppressed", Reason: "focus_unavailable"})
+		emit("suppressed", "focus_unavailable")
 		return
 	}
 	if err := n.focusForClick(focus, target); err != nil {
 		if errors.Is(err, ErrFocusTargetStale) {
-			n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "suppressed", Reason: "focus_target_stale"})
+			emit("suppressed", "focus_target_stale")
 			return
 		}
-		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "failed", Reason: "focus_failed"})
+		emit("failed", "focus_failed")
 		return
 	}
-	n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "focused", Reason: "focus_success"})
+	emit("focused", "focus_success")
 }
 
 // focusForClick brings the source of a clicked notification back to the
@@ -361,7 +394,9 @@ func (n *Notifier) PurgeWindow(windowID int) {
 		}
 	}
 	disposition, cancelled := n.cancelPendingLocked(windowID, "window_closed")
+	app, closed := n.takeAppNoticesLocked(windowID)
 	n.mu.Unlock()
+	retractAll(app, closed, "window_closed")
 	if cancelled {
 		n.emitDisposition(disposition)
 	}

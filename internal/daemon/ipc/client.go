@@ -408,3 +408,22 @@ func (c *Client) NotificationSnooze(req protocol.SnoozeRequest) (protocol.Snooze
 	}
 	return *resp.Snooze, nil
 }
+
+// NotificationTest asks the daemon to offer one test notification to the
+// companion app holding the notification backend role. A result that is not
+// Delivered names why no app confirmed one; the caller then tests Alerter
+// itself. Like NotificationSnooze it never auto-starts the daemon, since a
+// daemon started just now holds no companion subscriber.
+func (c *Client) NotificationTest() (protocol.NotificationTestResult, error) {
+	resp, err := c.sendWithDeadline(protocol.Request{Type: protocol.TypeNotificationTest}, NotificationTestDeadline)
+	if err != nil {
+		return protocol.NotificationTestResult{}, err
+	}
+	if !resp.OK {
+		return protocol.NotificationTestResult{}, fmt.Errorf("daemon error: %s", resp.Error)
+	}
+	if resp.NotificationTest == nil {
+		return protocol.NotificationTestResult{}, errors.New("daemon answered notification_test without a result (restart an older daemon)")
+	}
+	return *resp.NotificationTest, nil
+}

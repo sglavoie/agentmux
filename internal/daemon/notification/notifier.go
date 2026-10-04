@@ -83,14 +83,24 @@ type NotificationTarget struct {
 // NotificationDisposition is one explicit notification decision or terminal
 // asynchronous outcome. It intentionally excludes notification body content.
 type NotificationDisposition struct {
-	Trace      NotificationTrace
-	WindowID   int
-	Action     string
-	Stage      string
-	Outcome    string
-	Reason     string
+	Trace    NotificationTrace
+	WindowID int
+	Action   string
+	Stage    string
+	Outcome  string
+	Reason   string
+	// Backend names the backend a dispatch or focus outcome came from, once
+	// one was chosen: BackendApp or BackendAlerter. Decision-stage
+	// dispositions leave it empty.
+	Backend    string
 	ObservedAt time.Time
 }
+
+// The backends a disposition can name.
+const (
+	BackendApp     = "app"
+	BackendAlerter = "alerter"
+)
 
 // FocusClient scopes every read/write to the notification's captured socket.
 // The production adapter wraps kitty.SubprocessClient; tests record the socket
@@ -151,6 +161,8 @@ type Notifier struct {
 	focus            FocusClient     // optional; nil when the daemon has no Kitty client wired
 	isMuted          func(int) bool  // optional; nil treats every window as unmuted (tests + pre-wire)
 	ctx              context.Context // parent ctx for dispatch goroutines; defaults to Background until SetParentContext
+	app              AppBackend      // optional companion backend; see app_backend.go
+	appNotices       map[string]int  // outstanding app notification ID -> window ID, for retraction
 }
 
 // cooldownFor is the configured cooldown, or the default when it is unset.
@@ -172,6 +184,7 @@ func NewNotifier(cfg *config.NotificationConfig) *Notifier {
 		quietSet:        quietSet,
 		last:            make(map[notifyKey]time.Time),
 		pending:         make(map[int]pendingNotification),
+		appNotices:      make(map[string]int),
 		debounce:        time.Duration(cfg.PermissionDebounceMs) * time.Millisecond,
 		cooldown:        cooldownFor(cfg),
 		dispatchTimeout: d.timeout,

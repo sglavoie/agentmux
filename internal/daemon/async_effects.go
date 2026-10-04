@@ -154,6 +154,9 @@ func (h *Handler) recordNotificationDisposition(disposition notification.Notific
 		"action":          disposition.Action,
 		"source_event_id": disposition.Trace.SourceEventID,
 	}
+	if disposition.Backend != "" {
+		envelope.Evidence["backend"] = disposition.Backend
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 	h.decisionJournal.TryAppend(ctx, envelope)
