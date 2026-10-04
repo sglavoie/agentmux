@@ -1,7 +1,8 @@
 // Package notifications holds the `amx notifications` command family: the
 // operator-facing surface that sends a real notification through the configured
 // backend and reports whether delivery could be confirmed, so a silent daemon
-// can be told apart from a muted operating system.
+// can be told apart from a muted operating system, and that sets or clears the
+// running daemon's in-memory snooze.
 package notifications
 
 import (
@@ -10,6 +11,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/spf13/cobra"
 )
 
@@ -30,6 +32,13 @@ var notificationsTestCmd = &cobra.Command{
 		cfg, err := notificationsLoadConfig()
 		if err != nil {
 			return err
+		}
+		// The test sends from this process rather than through the daemon, so
+		// it would sail past a snooze the daemon is holding. Ask first, and
+		// report the suppression the daemon would apply. An unreachable daemon
+		// holds no snooze, so the test proceeds as before.
+		if state, snoozeErr := notificationsSnoozeClient().NotificationSnooze(protocol.SnoozeRequest{}); snoozeErr == nil && (state.Indefinite || state.SnoozedUntil != 0) {
+			return fmt.Errorf("test notification suppressed: %s Run `amx notifications snooze off` to restore delivery", describeSnooze(state))
 		}
 		if _, err := fmt.Fprintln(cmd.OutOrStdout(), "Sending a test notification through Alerter…"); err != nil {
 			return err
@@ -53,5 +62,5 @@ var (
 )
 
 func init() {
-	notificationsCmd.AddCommand(notificationsTestCmd)
+	notificationsCmd.AddCommand(notificationsTestCmd, notificationsSnoozeCmd)
 }

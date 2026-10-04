@@ -168,6 +168,7 @@ func (h *Handler) buildCompanionSnapshot(now time.Time) protocol.CompanionSnapsh
 	if h.notifier != nil {
 		in.Notification.Backend = h.notifier.Capability().Backend
 		in.Notification.QuietHours = h.notifier.QuietHoursSpec()
+		in.Notification.Snooze = h.notifier.Snooze()
 	}
 	if h.companion != nil {
 		in.Notification.AppConnected = h.companion.health().NotificationBackendConnected

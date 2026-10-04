@@ -48,6 +48,8 @@ func (h *Handler) Handle(req protocol.Request) protocol.Response {
 		resp = asl.HandleWorkbench(h.aslBridge.Current(), req)
 	case protocol.TypeFocusWindow:
 		resp = h.handleFocusWindow(req)
+	case protocol.TypeNotificationSnooze:
+		resp = h.handleNotificationSnooze(req)
 	case protocol.TypeHealth:
 		resp = h.handleHealth()
 	case protocol.TypeShutdown:

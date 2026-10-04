@@ -18,7 +18,7 @@ func TestMuteToggle_UnmutedToMuted(t *testing.T) {
 		}},
 	}
 
-	if err := muteToggle(client, 101); err != nil {
+	if _, err := muteToggle(client, 101); err != nil {
 		t.Fatalf("muteToggle: %v", err)
 	}
 
@@ -62,7 +62,7 @@ func TestMuteToggle_MutedToUnmuted(t *testing.T) {
 		}},
 	}
 
-	if err := muteToggle(client, 101); err != nil {
+	if _, err := muteToggle(client, 101); err != nil {
 		t.Fatalf("muteToggle: %v", err)
 	}
 
@@ -102,7 +102,7 @@ func TestMuteToggle_UnmanagedIsNoOp(t *testing.T) {
 		}},
 	}
 
-	if err := muteToggle(client, 201); err != nil {
+	if _, err := muteToggle(client, 201); err != nil {
 		t.Fatalf("muteToggle: %v", err)
 	}
 
@@ -117,7 +117,7 @@ func TestMuteToggle_UnmanagedIsNoOp(t *testing.T) {
 func TestMuteToggle_WindowIDZeroIsNoOp(t *testing.T) {
 	client := &fakeMuteClient{}
 
-	if err := muteToggle(client, 0); err != nil {
+	if _, err := muteToggle(client, 0); err != nil {
 		t.Fatalf("muteToggle: %v", err)
 	}
 
@@ -147,11 +147,13 @@ type fakeMuteClient struct {
 	listWindowsCalls int
 	setUserVarsCalls []setUserVarsCall
 	setTabTitleCalls []setTabTitleCall
+	listErr          error
+	titleErr         error
 }
 
 func (f *fakeMuteClient) ListWindows() ([]kitty.OSWindow, error) {
 	f.listWindowsCalls++
-	return f.windows, nil
+	return f.windows, f.listErr
 }
 
 func (f *fakeMuteClient) LaunchTab(kitty.LaunchOpts) error { return nil }
@@ -166,7 +168,7 @@ func (f *fakeMuteClient) SetTabColor(string, string, string, string, string) err
 
 func (f *fakeMuteClient) SetTabTitle(matchExpr, title string) error {
 	f.setTabTitleCalls = append(f.setTabTitleCalls, setTabTitleCall{match: matchExpr, title: title})
-	return nil
+	return f.titleErr
 }
 
 func (f *fakeMuteClient) SetUserVars(matchExpr string, vars map[string]string) error {

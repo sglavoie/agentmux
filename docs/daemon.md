@@ -211,6 +211,29 @@ printf '%s\n' '{"type":"focus_window","focus_window":{"kitty_socket":"unix:/tmp/
   | nc -U ~/.local/share/agent-mux/daemon.sock
 ```
 
+A companion snoozes notifications with one `notification_snooze` request whose
+`snooze.mode` is `until` (with a Unix-second `until` that must lie in the
+future), `indefinite`, or `clear`; an empty mode reads the snooze back. The
+snooze lives in the notifier's memory only: it never rewrites `config.toml`,
+and a daemon restart forgets it. Its gate runs right after quiet hours, so a
+notification inside both is suppressed as `quiet_hours`, otherwise as
+`snoozed`; a permission notification that was already debouncing when the
+snooze was set is held too. Every change rings the companion hub, the health
+answer's `notification` block carries `snoozed_until` / `snooze_indefinite`,
+and the companion snapshot's `notification` block carries the same snooze. The
+operator surface is the same request:
+
+```bash
+amx notifications snooze 1h             # or: until 08:30 | indefinite | off
+amx notifications snooze off --json     # {"snoozed":false,"indefinite":false}
+amx notifications test                  # reports "suppressed" while snoozed
+```
+
+`amx doctor` reports each connected companion app as `companion_app` (info,
+with its client version) and raises `companion_build_mismatch` (warning) when
+the `amx_build` an app reported is not the daemon's artifact. `amx debug
+subscribe` is not an app and is never reported.
+
 ## Investigating hook event flow
 
 `amx daemon export-events` writes a schema v13 JSON snapshot for investigation.

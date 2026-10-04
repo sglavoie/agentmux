@@ -131,24 +131,26 @@ func (f *kittyNotificationFocus) FocusWindow(socket, matchExpr string) error {
 // Notifier tracks per-window cooldowns and fires macOS notifications via
 // the selected Alerter backend when its startup capability probe succeeds.
 type Notifier struct {
-	mu              sync.Mutex
-	observerMu      sync.RWMutex
-	observer        func(NotificationDisposition)
-	last            map[notifyKey]time.Time // last dispatched notification time per (window_id, action)
-	pending         map[int]pendingNotification
-	nextPendingSeq  uint64
-	debounce        time.Duration
-	cooldown        time.Duration
-	quiet           config.QuietWindow
-	quietSet        bool
-	dispatchTimeout time.Duration
-	cfg             *config.NotificationConfig
-	now             func() time.Time // injectable for tests
-	dispatch        dispatchFn       // nil when compatible Alerter is unavailable; injectable for tests
-	capability      protocol.NotificationCapability
-	focus           FocusClient     // optional; nil when the daemon has no Kitty client wired
-	isMuted         func(int) bool  // optional; nil treats every window as unmuted (tests + pre-wire)
-	ctx             context.Context // parent ctx for dispatch goroutines; defaults to Background until SetParentContext
+	mu               sync.Mutex
+	observerMu       sync.RWMutex
+	observer         func(NotificationDisposition)
+	last             map[notifyKey]time.Time // last dispatched notification time per (window_id, action)
+	pending          map[int]pendingNotification
+	nextPendingSeq   uint64
+	debounce         time.Duration
+	cooldown         time.Duration
+	quiet            config.QuietWindow
+	quietSet         bool
+	snoozeUntil      time.Time // zero when no timed snooze is set; see snooze.go
+	snoozeIndefinite bool
+	dispatchTimeout  time.Duration
+	cfg              *config.NotificationConfig
+	now              func() time.Time // injectable for tests
+	dispatch         dispatchFn       // nil when compatible Alerter is unavailable; injectable for tests
+	capability       protocol.NotificationCapability
+	focus            FocusClient     // optional; nil when the daemon has no Kitty client wired
+	isMuted          func(int) bool  // optional; nil treats every window as unmuted (tests + pre-wire)
+	ctx              context.Context // parent ctx for dispatch goroutines; defaults to Background until SetParentContext
 }
 
 // cooldownFor is the configured cooldown, or the default when it is unset.
@@ -181,12 +183,17 @@ func NewNotifier(cfg *config.NotificationConfig) *Notifier {
 	}
 }
 
-// Capability returns the immutable backend capability selected at daemon
-// startup. The value is copied so callers cannot mutate notifier state.
+// Capability returns the backend capability selected at daemon startup, with
+// the snooze in force now stamped onto it. The value is copied so callers
+// cannot mutate notifier state.
 func (n *Notifier) Capability() protocol.NotificationCapability {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	return n.capability
+	capability := n.capability
+	snooze := n.snoozeLocked(n.now())
+	capability.SnoozedUntil = snooze.SnoozedUntil
+	capability.SnoozeIndefinite = snooze.Indefinite
+	return capability
 }
 
 // QuietHoursSpec returns the configured quiet-hours window verbatim, for a

@@ -388,3 +388,23 @@ func (c *Client) restartDetachedBefore(amxBin string, daemonAlive bool, deadline
 	}
 	return nil
 }
+
+// NotificationSnooze sets, clears, or reads the daemon's global notification
+// snooze and returns the snooze now in force. An empty Mode is a read. It never
+// auto-starts the daemon: a snooze lives in a running daemon's memory, so
+// starting one just to snooze it — or to report that nothing is snoozed —
+// would answer a question nobody asked. It uses the state-query budget, since
+// the daemon answers from memory without touching Kitty.
+func (c *Client) NotificationSnooze(req protocol.SnoozeRequest) (protocol.SnoozeState, error) {
+	resp, err := c.sendWithDeadline(protocol.Request{Type: protocol.TypeNotificationSnooze, Snooze: &req}, stateQueryDeadline)
+	if err != nil {
+		return protocol.SnoozeState{}, err
+	}
+	if !resp.OK {
+		return protocol.SnoozeState{}, fmt.Errorf("daemon error: %s", resp.Error)
+	}
+	if resp.Snooze == nil {
+		return protocol.SnoozeState{}, errors.New("daemon answered notification_snooze without a snooze block (restart an older daemon)")
+	}
+	return *resp.Snooze, nil
+}

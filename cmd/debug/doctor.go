@@ -22,6 +22,11 @@ const doctorSuppressionWindow = 15 * time.Minute
 
 // doctorReportSchemaVersion versions the `amx doctor --json` payload.
 //
+// v5 adds the `companion_app` (info) and `companion_build_mismatch` (warning)
+// findings and the additive `daemon.companion` block they are derived from.
+// Neither severity changes what `--strict` exits on; the bump is for the new
+// identifiers, as with v4.
+//
 // v4 adds the `kitty_snapshot_stale` finding, raised when the daemon's cached
 // Kitty topology is older than the shared staleness threshold, and the
 // `daemon.kitty_snapshot` block it is derived from. Its severity is warning,
@@ -42,7 +47,7 @@ const doctorSuppressionWindow = 15 * time.Minute
 // not recognize as fatal would start failing on conditions a v1 daemon never
 // reported. The two identifiers that predate it, `asl_unavailable` and
 // `asl_read_only`, keep their exact names and meanings.
-const doctorReportSchemaVersion = 4
+const doctorReportSchemaVersion = 5
 
 var (
 	newDoctorDaemonClient = cli.NewDaemonExportClient
@@ -110,6 +115,9 @@ type doctorDaemonStatus struct {
 	// predates the block, which is an unknown rather than a cold cache and
 	// raises no finding of its own.
 	KittySnapshot *protocol.KittySnapshot `json:"kitty_snapshot,omitempty"`
+	// Companion lists the connected companion subscribers. Omitted by a daemon
+	// that predates the companion protocol.
+	Companion *protocol.CompanionHealth `json:"companion,omitempty"`
 }
 
 // DoctorCommand returns the `doctor` command so the root command can register
@@ -175,6 +183,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		ASLHookDelivery: health.ASLHookDelivery,
 		ScreenPatterns:  health.ScreenPatterns,
 		KittySnapshot:   health.KittySnapshot,
+		Companion:       health.Companion,
 	}
 	if health.Alive {
 		if _, err := fmt.Fprintf(textOut, "daemon: running (pid %d, uptime %s)\n", health.PID, health.Uptime.Round(time.Second)); err != nil {
@@ -207,6 +216,9 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		// a Kitty that answers this process immediately: the two lines together
 		// are what separate "Kitty is wedged" from "the daemon stopped asking".
 		if err := writeDoctorKittySnapshot(textOut, health.KittySnapshot, addFinding); err != nil {
+			return err
+		}
+		if err := writeDoctorCompanion(textOut, health.Companion, health.Build, addFinding); err != nil {
 			return err
 		}
 		checkDoctorConfigFreshness(health.Uptime, addFinding)

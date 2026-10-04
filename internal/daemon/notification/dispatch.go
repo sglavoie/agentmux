@@ -20,6 +20,7 @@ import (
 // MaybeNotify fires a notification for the given window if:
 //   - the action is notifyable (stop/permission/failure)
 //   - the corresponding config flag is enabled
+//   - neither configured quiet hours nor the in-memory snooze covers now
 //   - the 10s cooldown has elapsed since the last notification for this window
 //   - pipeMode is false (non-interactive Claude/Copilot runs suppress notifications)
 //
@@ -86,6 +87,10 @@ func (n *Notifier) MaybeNotifyTracedTarget(target NotificationTarget, sessionTit
 	}
 	if n.quietSet && n.quiet.Contains(n.now()) {
 		emit("decision", "suppressed", "quiet_hours")
+		return
+	}
+	if n.snoozed(n.now()) {
+		emit("decision", "suppressed", "snoozed")
 		return
 	}
 	n.mu.Lock()

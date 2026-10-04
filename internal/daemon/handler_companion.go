@@ -3,6 +3,7 @@ package daemon
 import (
 	"errors"
 	"log/slog"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -68,4 +69,29 @@ func (h *Handler) knownKittySocket(socket string) bool {
 		}
 	}
 	return false
+}
+
+// handleNotificationSnooze sets, clears, or reads back the global notification
+// snooze. The snooze lives in the notifier's memory only — a companion's
+// request never rewrites config.toml — and every successful change rings the
+// companion hub so subscribers see it without waiting for the safety tick. A
+// timed snooze that simply runs out reaches subscribers on that tick instead,
+// because nothing else happens at the moment it ends.
+//
+// An empty mode is a read: it answers the snooze in force and changes nothing.
+func (h *Handler) handleNotificationSnooze(req protocol.Request) protocol.Response {
+	if h.notifier == nil {
+		return protocol.Response{OK: false, Error: "notification_snooze is unavailable: no notifier"}
+	}
+	params := req.Snooze
+	if params == nil || params.Mode == "" {
+		state := h.notifier.Snooze()
+		return protocol.Response{OK: true, Snooze: &state}
+	}
+	state, err := h.notifier.SetSnooze(params.Mode, time.Unix(params.Until, 0))
+	if err != nil {
+		return protocol.Response{OK: false, Error: "notification_snooze: " + err.Error()}
+	}
+	h.companionDirty()
+	return protocol.Response{OK: true, Snooze: &state}
 }

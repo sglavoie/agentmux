@@ -28,6 +28,13 @@ func (n *Notifier) schedulePermissionLocked(target NotificationTarget, title, su
 
 		key := notifyKey{windowID: windowID, action: "permission"}
 		now := n.now()
+		// A snooze set while the permission was debouncing still holds it:
+		// the operator asked for silence before anything was delivered.
+		if n.snoozedLocked(now) {
+			n.mu.Unlock()
+			n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: "permission", Stage: "decision", Outcome: "suppressed", Reason: "snoozed"})
+			return
+		}
 		if last, ok := n.last[key]; ok && now.Sub(last) < n.cooldown {
 			n.mu.Unlock()
 			n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: "permission", Stage: "decision", Outcome: "suppressed", Reason: "cooldown"})

@@ -13,7 +13,7 @@ import (
 func TestSessionJSONCommandSurfaceIsVersioned(t *testing.T) {
 	commands := []*cobra.Command{
 		sessionListCmd, sessionContinueCmd, sessionForkCmd,
-		sessionForkWorktreeCmd, sessionHandoffCmd,
+		sessionForkWorktreeCmd, sessionHandoffCmd, muteToggleCmd,
 	}
 	for _, command := range commands {
 		if command.Flags().Lookup("json") == nil {

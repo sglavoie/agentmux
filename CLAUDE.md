@@ -135,7 +135,9 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   handoff) and always resolves an exact `(harness, session_id)` before it acts;
   the root-level tab controls work on the live instance instead
   (`focus-prev-managed`, `focus-next-managed`, `focus-next`, `mute-toggle`,
-  `resort`). Both halves reduce to "which session, and what happens to it". Like
+  `resort`). Both halves reduce to "which session, and what happens to it".
+  `mute-toggle --json` reports `{window_id, muted, changed}` for the companion
+  app; a mute whose title write failed is partial durable success. Like
   `cmd/daemon`, a file here may name the imported `internal/session` package
   unqualified as `session`.
 - `cmd/worktree`: the `amx worktree` family — listing managed Agent Mux Git
@@ -155,7 +157,12 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
 - `cmd/notifications`: the `amx notifications` family — the operator-facing
   surface that sends a real notification through the configured backend and
   reports whether delivery could be confirmed, so a silent daemon can be told
-  apart from a muted operating system.
+  apart from a muted operating system, and that sets or clears the running
+  daemon's in-memory snooze (`snooze 1h|until HH:MM|indefinite|off [--json]`).
+  Snooze never auto-starts a daemon, since a snooze held by a daemon that was
+  not running would change nothing; `test` sends from the CLI process rather
+  than through the daemon, so it asks the daemon for the snooze first and
+  reports a snoozed test as suppressed instead of sending past it.
 - `cmd/overseer`: the `amx overseer` family — the authorization surface the ASL
   overseer asks before it reads project or conversation content, prepares a
   mutation, or dispatches an action. `policy` decides nothing: it reads the
@@ -304,7 +311,10 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   learned itself (a `kittySockets` value, `lastKittyListenOn`, or the snapshot's
   socket), copies that allowlist under `stateMu`, and runs the list, verify,
   tab, and window steps through `notification.FocusKittyWindow` — the same
-  helper click-to-focus uses — with the lock released.
+  helper click-to-focus uses — with the lock released. Its
+  `notification_snooze` request sets, clears, or reads the notifier's
+  in-memory snooze and rings `companionDirty` on every change; a timed snooze
+  that simply runs out reaches subscribers on the 5s safety tick.
 - `internal/daemon/protocol`: the daemon wire contract — request/response model,
   command names, durable and exported envelopes, and the serialization
   vocabularies. It holds shapes and pure projections only, and must never import
@@ -316,7 +326,10 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   I/O of its own.
 - `internal/daemon/notification`: notification settings, the Alerter backend
   and its capability probe, the delivery decision pipeline (gates, permission
-  debounce, cooldown), click-to-focus, and the disposition vocabulary. Like
+  debounce, cooldown), the global snooze (`snooze.go`: in memory only, never
+  written to config, gated right after quiet hours and re-checked when a
+  debounced permission fires), click-to-focus, and the disposition vocabulary.
+  Like
   protocol and state it must never import the daemon root; the daemon drives it
   through the `Notifier` seams rather than reaching into its state.
 - `internal/daemon/rendering`: the daemon's status presentation — the icon the

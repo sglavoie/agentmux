@@ -35,6 +35,12 @@ type NotificationCapability struct {
 	Executable  string `json:"executable,omitempty"`
 	Version     string `json:"version,omitempty"`
 	Reason      string `json:"reason,omitempty"`
+	// SnoozedUntil is the Unix second a timed snooze ends, and
+	// SnoozeIndefinite whether a snooze holds until cleared. Neither is part
+	// of the startup probe: they are the in-memory snooze at the moment of
+	// the health answer.
+	SnoozedUntil     int64 `json:"snoozed_until,omitempty"`
+	SnoozeIndefinite bool  `json:"snooze_indefinite,omitempty"`
 }
 
 // ASLReconcileSnapshot is the health-response view of reconciliation state.
