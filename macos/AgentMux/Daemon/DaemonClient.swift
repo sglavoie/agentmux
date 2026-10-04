@@ -32,6 +32,16 @@ enum FocusOutcome: Equatable {
     case failed(String)
 }
 
+/// What one notification_snooze request did.
+enum SnoozeOutcome: Equatable {
+    /// The snooze now in force.
+    case state(SnoozeState)
+    /// The daemon predates notification_snooze.
+    case unsupported
+    case notRunning
+    case failed(String)
+}
+
 /// One-shot requests to the daemon, each on its own connection. Blocking:
 /// call off the main thread.
 struct DaemonClient {
@@ -96,5 +106,34 @@ struct DaemonClient {
         case let message where message.hasPrefix("unknown request type"): return .unsupported
         case let message: return .failed(message)
         }
+    }
+
+    /// The daemon's own deadline for notification_snooze is 1s.
+    static let snoozeTimeout: TimeInterval = 2
+
+    /// Sets, clears, or (with an empty mode) reads the global snooze.
+    func notificationSnooze(_ request: SnoozeRequest, timeout: TimeInterval = snoozeTimeout) -> SnoozeOutcome {
+        let reply: Data
+        do {
+            let encoded = try JSONEncoder().encode(DaemonRequest.snoozing(request))
+            reply = try roundTrip(socketPath, encoded, timeout)
+        } catch let error as LineSocketError {
+            return error.meansNotRunning ? .notRunning : .failed(error.message)
+        } catch {
+            return .failed(error.localizedDescription)
+        }
+        return Self.snoozeOutcome(fromReply: reply)
+    }
+
+    static func snoozeOutcome(fromReply reply: Data) -> SnoozeOutcome {
+        guard let response = try? JSONDecoder().decode(DaemonResponse.self, from: reply) else {
+            return .failed("unreadable notification_snooze reply")
+        }
+        if response.ok {
+            return .state(response.snooze ?? SnoozeState())
+        }
+        let message = response.error ?? ""
+        if message.hasPrefix("unknown request type") { return .unsupported }
+        return .failed(message.isEmpty ? "notification_snooze refused" : message)
     }
 }

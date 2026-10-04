@@ -126,7 +126,12 @@ final class AppPreferencesTests: XCTestCase {
         var notification = CompanionNotification()
         notification.indefinite = true
         model.daemonNotification = notification
-        XCTAssertEqual(model.snoozeDescription, "Snoozed until turned off")
+        XCTAssertEqual(model.snoozeDescription, "Snoozed until resumed")
+        notification.indefinite = false
+        notification.snoozedUntil = Int64(Date().timeIntervalSince1970) + 3600
+        model.daemonNotification = notification
+        XCTAssertTrue(model.snoozeDescription.hasPrefix("Snoozed until "), "snoozed_until is a Unix second")
+        XCTAssertNotEqual(model.snoozeDescription, "Not snoozed")
         model.preferences.kittySocketOverride = "/tmp/kitty"
         XCTAssertNotNil(model.kittySocketProblem)
         model.preferences.kittySocketOverride = "tcp:localhost:1234"

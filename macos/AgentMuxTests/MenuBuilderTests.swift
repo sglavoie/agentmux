@@ -126,7 +126,7 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertTrue(items[1].isSectionHeader)
         XCTAssertEqual((items[2].representedObject as? MenuBuilder.RowBox)?.row, rows[0])
         XCTAssertEqual(items[3].submenu?.items.count, 11)
-        XCTAssertEqual(MenuAction(tag: items[4].tag), .startDaemon)
+        XCTAssertEqual((items[4].representedObject as? MenuBuilder.ActionBox)?.action, .startDaemon)
         XCTAssertTrue(items[5].isSeparatorItem)
     }
 

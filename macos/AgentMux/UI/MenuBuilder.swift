@@ -6,11 +6,27 @@ struct MenuSessionRow: Equatable {
     let windowID: Int
     let kittySocket: String
     let toolTip: String
+    /// Whether the session is muted, which names its ⌥ alternate.
+    var muted = false
+    /// Why the ⌥ Mute alternate is greyed out; nil when it works.
+    var muteUnavailable: String?
 }
 
 /// Something a menu item does besides focusing a session.
 enum MenuAction: Equatable {
     case startDaemon
+    case openDashboard
+    case launchProject(ProjectEntry)
+    case continueConversation(RecentConversation)
+    case snooze(SnoozeChoice)
+}
+
+/// The action submenus the controller keeps as live `NSMenu`s, so a list that
+/// arrives while the menu is open fills in where it is.
+enum MenuSubmenu: CaseIterable, Equatable {
+    case projects
+    case recent
+    case notifications
 }
 
 /// The menu as data, built from the store so it can be tested without AppKit.
@@ -21,6 +37,11 @@ enum MenuEntry: Equatable {
     case session(MenuSessionRow)
     case submenu(String, [MenuSessionRow])
     case action(MenuAction, String)
+    /// An action this amx or daemon cannot run, greyed out with the reason as
+    /// its tooltip.
+    case unavailable(String, reason: String)
+    /// One of the controller's live submenus; greyed out when `reason` is set.
+    case submenuRef(MenuSubmenu, String, reason: String?)
     case separator
 }
 
@@ -42,6 +63,26 @@ enum MenuBuilder {
         var kittyReachable = true
         var now = Date()
         var glyphs: Glyphs = .bundled
+        /// What the resolved amx can do, for the per-row Mute alternates.
+        var gate = ActionGate()
+    }
+
+    /// What the action items and their submenus are built from.
+    struct ActionsInput: Equatable {
+        var gate = ActionGate()
+        var feedLive = false
+        var projects = FetchState<[ProjectEntry]>()
+        var recent = FetchState<[RecentConversation]>()
+        var recentDays = 7
+        var recentLimit = 15
+        /// The conversations live sessions report, so Recent can mark them.
+        var liveConversations: [ConversationIdentity] = []
+        /// The daemon's notification posture; nil when the feed is not live.
+        var notification: CompanionNotification?
+        /// False once the daemon has answered that it has no snooze.
+        var snoozeSupported = true
+        var configPath = ""
+        var now = Date()
     }
 
     static func entries(_ input: Input) -> [MenuEntry] {
@@ -127,7 +168,9 @@ enum MenuBuilder {
             title: title,
             windowID: session.windowID,
             kittySocket: session.kittySocket,
-            toolTip: tip.joined(separator: " · ")
+            toolTip: tip.joined(separator: " · "),
+            muted: session.muted,
+            muteUnavailable: input.gate.unavailableReason(.muteToggle)
         )
     }
 
@@ -148,6 +191,141 @@ enum MenuBuilder {
         }
     }
 
+    // MARK: Actions
+
+    /// The action items after the sessions: Open Dashboard, then the Launch
+    /// Project, Recent, and Notifications submenus.
+    static func actionEntries(_ input: ActionsInput) -> [MenuEntry] {
+        var entries: [MenuEntry] = [.separator]
+        if let reason = input.gate.unavailableReason(.openDashboard) {
+            entries.append(.unavailable("Open Dashboard", reason: reason))
+        } else {
+            entries.append(.action(.openDashboard, "Open Dashboard"))
+        }
+        entries.append(.submenuRef(.projects, "Launch Project", reason: input.gate.unavailableReason(.project)))
+        entries.append(.submenuRef(.recent, "Recent", reason: input.gate.unavailableReason(.sessions)))
+        let notifications: String?
+        if !input.feedLive {
+            notifications = "The daemon is not connected"
+        } else if !input.snoozeSupported {
+            notifications = snoozeUnsupported
+        } else {
+            notifications = nil
+        }
+        entries.append(.submenuRef(.notifications, "Notifications", reason: notifications))
+        return entries
+    }
+
+    static let snoozeUnsupported = "daemon too old to snooze — run `amx daemon restart`"
+
+    static func entries(for submenu: MenuSubmenu, _ input: ActionsInput) -> [MenuEntry] {
+        switch submenu {
+        case .projects: return projectEntries(input.projects)
+        case .recent: return recentEntries(input)
+        case .notifications: return notificationEntries(input)
+        }
+    }
+
+    /// Projects under one header per profile.
+    static func projectEntries(_ state: FetchState<[ProjectEntry]>) -> [MenuEntry] {
+        guard let projects = state.value else {
+            if let error = state.error { return [.info("Could not list projects: \(error)")] }
+            return [.info("Loading…")]
+        }
+        var entries: [MenuEntry] = []
+        if projects.isEmpty {
+            entries.append(.info("No configured projects"))
+        }
+        for (profile, members) in ProjectCatalog.grouped(projects) {
+            entries.append(.header(profile.isEmpty ? "(no profile)" : profile))
+            entries += members.map { .action(.launchProject($0), $0.title) }
+        }
+        if let error = state.error {
+            entries.append(.separator)
+            entries.append(.info("Last refresh failed: \(error)"))
+        }
+        return entries
+    }
+
+    /// The most recently active conversations, newest first.
+    static func recentEntries(_ input: ActionsInput) -> [MenuEntry] {
+        let state = input.recent
+        guard let conversations = state.value else {
+            if let error = state.error { return [.info("Could not list conversations: \(error)")] }
+            return [.info("Loading…")]
+        }
+        var entries: [MenuEntry] = []
+        let top = RecentSessions.top(conversations, limit: input.recentLimit)
+        if top.isEmpty {
+            entries.append(.info(input.recentDays == 1 ? "No conversations in the last day" : "No conversations in the last \(input.recentDays) days"))
+        }
+        for conversation in top {
+            let live = input.liveConversations.contains(conversation.identity)
+            entries.append(.action(.continueConversation(conversation), recentTitle(conversation, live: live, now: input.now)))
+        }
+        if state.loading {
+            entries.append(.info("Refreshing…"))
+        } else if let error = state.error {
+            entries.append(.separator)
+            entries.append(.info("Last refresh failed: \(error)"))
+        }
+        return entries
+    }
+
+    /// `api · claude · 3h · fix the flaky retry test`, with `· live` for a
+    /// conversation a session is running now.
+    static func recentTitle(_ conversation: RecentConversation, live: Bool, now: Date) -> String {
+        var parts: [String] = []
+        let name = conversation.project.isEmpty
+            ? (conversation.cwd as NSString).lastPathComponent
+            : conversation.project
+        parts.append(name.isEmpty ? conversation.id : name)
+        if !conversation.harness.isEmpty { parts.append(conversation.harness) }
+        if live {
+            parts.append("live")
+        } else if let lastAt = conversation.lastAt {
+            parts.append(age(since: lastAt, now: now))
+        }
+        let snippet = conversation.snippet
+            .split(whereSeparator: \.isNewline).first.map(String.init)?
+            .trimmingCharacters(in: .whitespaces) ?? ""
+        if !snippet.isEmpty {
+            parts.append(snippet.count > snippetLimit ? String(snippet.prefix(snippetLimit - 1)) + "…" : snippet)
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    static let snippetLimit = 48
+
+    /// The snooze line and choices, then the read-only quiet hours.
+    static func notificationEntries(_ input: ActionsInput) -> [MenuEntry] {
+        guard let notification = input.notification else {
+            return [.info("The daemon is not connected")]
+        }
+        let snooze = SnoozeState(notification)
+        let snoozed = snooze.isSnoozed(now: input.now)
+        var entries: [MenuEntry] = [.info(snooze.description(now: input.now))]
+        for choice in SnoozeChoice.allCases {
+            if choice == .resume, !snoozed {
+                entries.append(.unavailable(choice.title, reason: "Notifications are not snoozed"))
+            } else if choice == .untilResumed, snooze.indefinite {
+                entries.append(.unavailable(choice.title, reason: "Already snoozed until resumed"))
+            } else {
+                entries.append(.action(.snooze(choice), choice.title))
+            }
+        }
+        entries.append(.separator)
+        if notification.quietHours.isEmpty {
+            entries.append(.info("Quiet hours: off"))
+        } else {
+            entries.append(.info("Quiet hours: \(notification.quietHours)\(notification.quietNow ? " (now)" : "")"))
+        }
+        if !input.configPath.isEmpty {
+            entries.append(.info("Set in \(input.configPath)"))
+        }
+        return entries
+    }
+
     // MARK: AppKit
 
     /// Boxes a row for `NSMenuItem.representedObject`.
@@ -156,62 +334,96 @@ enum MenuBuilder {
         init(_ row: MenuSessionRow) { self.row = row }
     }
 
+    /// Boxes an action for `NSMenuItem.representedObject`.
+    final class ActionBox: NSObject {
+        let action: MenuAction
+        init(_ action: MenuAction) { self.action = action }
+    }
+
+    /// `Mute · 🔑 api · claude · 4m`, shown in place of the row while ⌥ is
+    /// held.
+    static func muteTitle(for row: MenuSessionRow) -> String {
+        "\(row.muted ? "Unmute" : "Mute") · \(row.title)"
+    }
+
     /// The menu items for `entries`. Session items send `sessionAction` and
-    /// carry their row in `representedObject`; action items send
-    /// `actionSelector` with their `MenuAction` tag.
+    /// carry their row in `representedObject`; with a `muteAction`, each is
+    /// followed by its ⌥ alternate, which sends that instead. Action items
+    /// send `actionSelector` and carry their `MenuAction`. A submenu
+    /// reference takes its menu from `submenus`.
     static func items(
         for entries: [MenuEntry],
         target: AnyObject,
         sessionAction: Selector,
-        actionSelector: Selector
+        actionSelector: Selector,
+        muteAction: Selector? = nil,
+        submenus: [MenuSubmenu: NSMenu] = [:]
     ) -> [NSMenuItem] {
-        func sessionItem(_ row: MenuSessionRow) -> NSMenuItem {
+        func sessionItems(_ row: MenuSessionRow) -> [NSMenuItem] {
             let item = NSMenuItem(title: row.title, action: sessionAction, keyEquivalent: "")
             item.target = target
             item.toolTip = row.toolTip
             item.representedObject = RowBox(row)
+            guard let muteAction else { return [item] }
+            // An alternate pairs with the item before it when both share a
+            // key equivalent and differ only in modifiers.
+            item.keyEquivalentModifierMask = []
+            let alternate = NSMenuItem(title: muteTitle(for: row), action: muteAction, keyEquivalent: "")
+            alternate.target = target
+            alternate.keyEquivalentModifierMask = .option
+            alternate.isAlternate = true
+            alternate.representedObject = RowBox(row)
+            if let reason = row.muteUnavailable {
+                alternate.isEnabled = false
+                alternate.toolTip = reason
+            } else {
+                alternate.toolTip = row.toolTip
+            }
+            return [item, alternate]
+        }
+        func infoItem(_ text: String) -> NSMenuItem {
+            let item = NSMenuItem(title: text, action: nil, keyEquivalent: "")
+            item.isEnabled = false
             return item
         }
-        return entries.map { entry in
+        return entries.flatMap { entry -> [NSMenuItem] in
             switch entry {
             case let .info(text):
-                let item = NSMenuItem(title: text, action: nil, keyEquivalent: "")
-                item.isEnabled = false
-                return item
+                return [infoItem(text)]
             case let .header(title):
-                return NSMenuItem.sectionHeader(title: title)
+                return [NSMenuItem.sectionHeader(title: title)]
             case let .session(row):
-                return sessionItem(row)
+                return sessionItems(row)
             case let .submenu(title, rows):
                 let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
                 let submenu = NSMenu(title: title)
                 submenu.autoenablesItems = false
-                rows.forEach { submenu.addItem(sessionItem($0)) }
+                rows.flatMap(sessionItems).forEach(submenu.addItem)
                 item.submenu = submenu
-                return item
+                return [item]
             case let .action(action, title):
                 let item = NSMenuItem(title: title, action: actionSelector, keyEquivalent: "")
                 item.target = target
-                item.tag = action.tag
-                return item
+                item.representedObject = ActionBox(action)
+                return [item]
+            case let .unavailable(title, reason):
+                let item = infoItem(title)
+                item.toolTip = reason
+                return [item]
+            case let .submenuRef(kind, title, reason):
+                let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+                if let reason {
+                    item.isEnabled = false
+                    item.toolTip = reason
+                } else if let menu = submenus[kind] {
+                    // A live menu belongs to one item at a time: the caller
+                    // detaches it from the previous build first.
+                    item.submenu = menu
+                }
+                return [item]
             case .separator:
-                return .separator()
+                return [.separator()]
             }
-        }
-    }
-}
-
-extension MenuAction {
-    var tag: Int {
-        switch self {
-        case .startDaemon: return 1
-        }
-    }
-
-    init?(tag: Int) {
-        switch tag {
-        case 1: self = .startDaemon
-        default: return nil
         }
     }
 }

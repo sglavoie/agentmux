@@ -33,6 +33,39 @@ enum KittyEndpoint {
         return ordered
     }
 
+    /// The socket of the Kitty with process `pid`: a known socket whose
+    /// address names that process, else its default `/tmp/kitty-<pid>` when
+    /// that file exists, else empty.
+    static func socket(
+        forPID pid: pid_t,
+        known: [String],
+        fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    ) -> String {
+        if let match = known.first(where: { Self.pid(fromSocket: $0) == pid }) { return match }
+        let path = "/tmp/kitty-\(pid)"
+        return fileExists(path) ? "unix:" + path : ""
+    }
+
+    /// Where a command that opens something new should land: the Kitty the
+    /// operator used last, when it still runs, ahead of the usual order.
+    static func actionCandidates(
+        override: String,
+        lastActiveKittyPID: pid_t?,
+        snapshot: CompanionSnapshot?,
+        kittyPIDs: [pid_t],
+        fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    ) -> [String] {
+        var front = ""
+        if let pid = lastActiveKittyPID, kittyPIDs.contains(pid) {
+            let known = [snapshot?.kitty.socket ?? ""] + (snapshot?.kitty.sockets ?? [])
+            front = socket(forPID: pid, known: known.filter { !$0.isEmpty }, fileExists: fileExists)
+        }
+        return candidates(
+            override: override, rowSocket: front, snapshotSocket: snapshot?.kitty.socket ?? "",
+            kittyPIDs: kittyPIDs, fileExists: fileExists
+        )
+    }
+
     /// The running Kitty processes.
     static func runningKittyPIDs() -> [pid_t] {
         NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).map(\.processIdentifier)

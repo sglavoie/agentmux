@@ -11,7 +11,13 @@ protocol StatusItemDelegate: AnyObject {
     /// Focuses the session a menu row names and brings its Kitty forward.
     func focus(_ row: MenuSessionRow)
     func perform(_ action: MenuAction)
+    /// Toggles the mute on the session a row names (its ⌥ alternate).
+    func toggleMute(_ row: MenuSessionRow)
     func showPreferences(_ sender: Any?)
+    /// What the action items and submenus show right now.
+    var actionsInput: MenuBuilder.ActionsInput { get }
+    /// The menu is opening: refresh whatever lists are stale.
+    func menuWillOpen()
 }
 
 /// The menu bar icon, its attention counts, and its menu. Any click opens the
@@ -28,6 +34,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     /// A Kitty socket Preferences names, tried before any other.
     var kittySocketOverride = ""
 
+    /// The action submenus, kept across rebuilds so a list that arrives while
+    /// the menu is open fills in where it is.
+    private(set) var submenus: [MenuSubmenu: NSMenu] = [:]
+
     private let preferencesItem = NSMenuItem(title: "Preferences…", action: #selector(preferences(_:)), keyEquivalent: ",")
     private let quitItem = NSMenuItem(title: "Quit Agent Mux", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 
@@ -39,6 +49,12 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         preferencesItem.target = self
         menu.delegate = self
         menu.autoenablesItems = false
+        for kind in MenuSubmenu.allCases {
+            let submenu = NSMenu()
+            submenu.autoenablesItems = false
+            submenu.delegate = self
+            submenus[kind] = submenu
+        }
         statusItem.menu = menu
         rebuildMenu()
 
@@ -95,20 +111,30 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             sessions: sessions,
             snapshot: store.snapshot,
             notice: store.notice,
-            kittyReachable: reachable
+            kittyReachable: reachable,
+            gate: delegate?.actionsInput.gate ?? ActionGate()
         )
     }
 
     func rebuildMenu() {
+        // Detach the live submenus from the items about to be dropped, since
+        // a menu can belong to only one item.
+        for item in menu.items where item.submenu.map({ sub in submenus.values.contains { $0 === sub } }) == true {
+            item.submenu = nil
+        }
         menu.removeAllItems()
-        if let store = delegate?.store {
+        if let store = delegate?.store, let actions = delegate?.actionsInput {
+            let entries = MenuBuilder.entries(menuInput(store)) + MenuBuilder.actionEntries(actions)
             let items = MenuBuilder.items(
-                for: MenuBuilder.entries(menuInput(store)),
+                for: entries,
                 target: self,
                 sessionAction: #selector(sessionClicked(_:)),
-                actionSelector: #selector(actionClicked(_:))
+                actionSelector: #selector(actionClicked(_:)),
+                muteAction: #selector(muteClicked(_:)),
+                submenus: submenus
             )
             items.forEach(menu.addItem)
+            refreshSubmenus(actions)
         }
         menu.addItem(.separator())
         menu.addItem(preferencesItem)
@@ -116,7 +142,26 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(quitItem)
     }
 
+    /// Refills the action submenus; safe while one is open.
+    func refreshSubmenus(_ actions: MenuBuilder.ActionsInput? = nil) {
+        guard let actions = actions ?? delegate?.actionsInput else { return }
+        for (kind, submenu) in submenus {
+            let items = MenuBuilder.items(
+                for: MenuBuilder.entries(for: kind, actions),
+                target: self,
+                sessionAction: #selector(sessionClicked(_:)),
+                actionSelector: #selector(actionClicked(_:))
+            )
+            submenu.items = items
+        }
+    }
+
     func menuNeedsUpdate(_ menu: NSMenu) {
+        guard menu === self.menu else {
+            refreshSubmenus()
+            return
+        }
+        delegate?.menuWillOpen()
         rebuildMenu()
         delegate?.refreshDaemonStatus()
     }
@@ -127,8 +172,13 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     @objc private func actionClicked(_ sender: NSMenuItem) {
-        guard let action = MenuAction(tag: sender.tag) else { return }
-        delegate?.perform(action)
+        guard let box = sender.representedObject as? MenuBuilder.ActionBox else { return }
+        delegate?.perform(box.action)
+    }
+
+    @objc private func muteClicked(_ sender: NSMenuItem) {
+        guard let box = sender.representedObject as? MenuBuilder.RowBox else { return }
+        delegate?.toggleMute(box.row)
     }
 
     @objc private func preferences(_ sender: Any?) { delegate?.showPreferences(sender) }

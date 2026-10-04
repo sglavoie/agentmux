@@ -21,11 +21,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
     private var healthTimer: Timer?
     private var subscription: SubscriptionClient?
     private var wakeObserver: NSObjectProtocol?
+    private var activationObserver: NSObjectProtocol?
+    /// The Kitty the operator used last, where new tabs open.
+    private var lastActiveKittyPID: pid_t?
+
+    private var projects = ProjectCatalog()
+    private var recent = RecentSessions()
+    /// False once the daemon answered that it has no notification_snooze.
+    private var snoozeSupported = true
+    /// The daemon a read-only snooze request has been sent to, which is how
+    /// an old daemon's Notifications submenu is greyed out before it is used.
+    private var snoozeProbedDaemon: String?
+    private var snoozeProbeInFlight = false
+    private var snoozeReapplyInFlight = false
+    /// The daemon a re-apply was last attempted against, so a refused one is
+    /// not retried on every snapshot.
+    private var snoozeReapplyAttempted: String?
 
     /// Health requests and amx runs block, so they run here, one at a time.
     private let work = DispatchQueue(label: "io.github.sglavoie.agentmux.work", qos: .utility)
     /// Focus requests run here, so a click never waits behind a health check.
     private let focusQueue = DispatchQueue(label: "io.github.sglavoie.agentmux.focus", qos: .userInitiated)
+    /// The project and Recent lists load here, so a slow transcript refresh
+    /// never holds up a health check or a click.
+    private let listQueue = DispatchQueue(label: "io.github.sglavoie.agentmux.lists", qos: .utility, attributes: .concurrent)
     private var healthInFlight = false
 
     let store = SessionStore()
@@ -79,6 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
             // the heartbeat watchdog to find out.
             MainActor.assumeIsolated { self?.subscription?.reconnectNow() }
         }
+        trackActiveKitty()
         resolveBinary()
     }
 
@@ -86,6 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
         healthTimer?.invalidate()
         subscription?.stop()
         if let wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver) }
+        if let activationObserver { NSWorkspace.shared.notificationCenter.removeObserver(activationObserver) }
     }
 
     // MARK: Companion feed
@@ -113,6 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
     }
 
     private func storeChanged() {
+        reconcileSnooze()
         statusItem?.refresh()
         preferences.daemonStatus = store.daemonStatus
         publishPreferences()
@@ -203,6 +225,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
         switch action {
         case .startDaemon:
             startDaemon()
+        case .openDashboard:
+            openDashboard()
+        case let .launchProject(project):
+            launch(project)
+        case let .continueConversation(conversation):
+            continueConversation(conversation)
+        case let .snooze(choice):
+            snooze(choice)
         }
     }
 
@@ -257,6 +287,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
                 MainActor.assumeIsolated {
                     guard let self else { return }
                     self.detectedEnvironment = shell
+                    if self.command?.binary != command?.binary || self.command?.launchEnvironment != command?.launchEnvironment {
+                        self.projects.state.reset()
+                        self.recent.state.reset()
+                    }
                     self.command = command
                     snapshot.daemonStatus = self.store.daemonStatus
                     self.preferences = snapshot
@@ -411,6 +445,325 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
         Self.logger.notice("shortcut: \(message, privacy: .public)")
         store.show(notice: message)
         NSSound.beep()
+    }
+
+    // MARK: Actions
+
+    /// Remembers the Kitty that comes to the front, which is where Launch
+    /// Project and Recent open their tabs.
+    private func trackActiveKitty() {
+        if let front = NSWorkspace.shared.frontmostApplication, front.bundleIdentifier == KittyEndpoint.bundleIdentifier {
+            lastActiveKittyPID = front.processIdentifier
+        }
+        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] notification in
+            let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            guard app?.bundleIdentifier == KittyEndpoint.bundleIdentifier, let pid = app?.processIdentifier else { return }
+            MainActor.assumeIsolated { self?.lastActiveKittyPID = pid }
+        }
+    }
+
+    private var gate: ActionGate {
+        ActionGate(
+            capabilities: preferences.capabilities,
+            problem: command == nil ? preferences.binaryProblem : nil,
+            binaryPath: command?.binary.path ?? "amx"
+        )
+    }
+
+    var actionsInput: MenuBuilder.ActionsInput {
+        let live = store.feed == .live
+        let prefs = preferencesModel.preferences
+        return MenuBuilder.ActionsInput(
+            gate: gate,
+            feedLive: live,
+            projects: projects.state,
+            recent: recent.state,
+            recentDays: prefs.recentDays,
+            recentLimit: prefs.recentLimit,
+            liveConversations: store.sessions.compactMap(\.conversation).filter { !$0.sessionID.isEmpty },
+            notification: live ? store.snapshot?.notification : nil,
+            snoozeSupported: snoozeSupported,
+            configPath: AMXConfigPath.resolve(command?.launchEnvironment ?? detectedEnvironment),
+            now: Date()
+        )
+    }
+
+    func menuWillOpen() {
+        refreshProjects()
+        refreshRecent()
+    }
+
+    private func refreshProjects() {
+        guard let command, gate.unavailableReason(.project) == nil,
+              projects.needsRefresh(now: Date()), projects.state.begin() else { return }
+        listQueue.async { [weak self] in
+            let result = ProjectCatalog.fetch(command)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, self.command?.binary == command.binary else { return }
+                    if case let .failure(error) = result {
+                        Self.logger.error("project list: \(error.message, privacy: .public)")
+                    }
+                    self.projects.state.finish(result, at: Date())
+                    self.statusItem?.refreshSubmenus()
+                }
+            }
+        }
+    }
+
+    private func refreshRecent() {
+        guard let command, gate.unavailableReason(.sessions) == nil,
+              recent.needsRefresh(now: Date()), recent.state.begin() else { return }
+        let days = preferencesModel.preferences.recentDays
+        statusItem?.refreshSubmenus()
+        listQueue.async { [weak self] in
+            let result = RecentSessions.fetch(command, days: days)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, self.command?.binary == command.binary else { return }
+                    if case let .failure(error) = result {
+                        Self.logger.error("session list: \(error.message, privacy: .public)")
+                    }
+                    self.recent.state.finish(result, at: Date())
+                    self.statusItem?.refreshSubmenus()
+                }
+            }
+        }
+    }
+
+    /// The sockets a command that opens a new tab tries, the Kitty used last
+    /// first.
+    private func newTabCandidates() -> [String] {
+        KittyEndpoint.actionCandidates(
+            override: preferencesModel.preferences.kittySocketOverride,
+            lastActiveKittyPID: lastActiveKittyPID,
+            snapshot: store.snapshot,
+            kittyPIDs: KittyEndpoint.runningKittyPIDs()
+        )
+    }
+
+    /// Launch Project: `amx project launch` in the Kitty used last, then that
+    /// Kitty is brought forward on the new tab.
+    private func launch(_ project: ProjectEntry) {
+        guard let command else { return report(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.") }
+        if let reason = gate.unavailableReason(.project) { return report(reason) }
+        let candidates = newTabCandidates()
+        let arguments = ProjectCatalog.launchArguments(for: project)
+        focusQueue.async { [weak self] in
+            let outcome = KittyTargetedCommand.run(candidates: candidates) { socket in
+                command.json(ProjectLaunchResult.self, arguments, kittyListenOn: socket)
+            }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    self?.finishOpening(outcome, label: "launch \(project.profile)/\(project.title)") { $0.windowID }
+                }
+            }
+        }
+    }
+
+    /// Recent: a conversation a live session runs is focused where it runs,
+    /// in whichever Kitty that is; any other goes to `amx session continue`,
+    /// which resumes it in the Kitty used last. amx sees only the Kitty it is
+    /// pointed at, so asking it to continue a conversation live in another
+    /// instance would resume a second copy instead of focusing the first.
+    private func continueConversation(_ conversation: RecentConversation) {
+        if let live = store.sessions.first(where: { $0.conversation == conversation.identity }) {
+            focus(MenuSessionRow(title: conversation.selector, windowID: live.windowID, kittySocket: live.kittySocket, toolTip: ""))
+            return
+        }
+        guard let command else { return report(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.") }
+        let candidates = newTabCandidates()
+        let arguments = RecentSessions.continueArguments(for: conversation)
+        focusQueue.async { [weak self] in
+            let outcome = KittyTargetedCommand.run(candidates: candidates) { socket in
+                command.json(SessionContinueResult.self, arguments, kittyListenOn: socket)
+            }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    self?.finishOpening(outcome, label: "continue \(conversation.selector)") { $0.windowID }
+                }
+            }
+        }
+    }
+
+    /// Brings Kitty forward after a launch or continue, on the reported window
+    /// when amx named one and the daemon knows that Kitty.
+    private func finishOpening<T>(_ outcome: KittyTargetedCommand.Outcome<T>, label: String, windowID: @escaping (T) -> Int) {
+        switch outcome {
+        case .noSocket:
+            report(KittyEndpoint.listenOnMissing)
+        case let .unreachable(message):
+            report("Could not reach Kitty: \(message)")
+        case let .done(result, socket):
+            switch result {
+            case let .failure(error):
+                Self.logger.error("\(label, privacy: .public): \(error.message, privacy: .public)")
+                report("Could not \(label): \(error.message)")
+            case let .success(value):
+                Self.logger.notice("\(label, privacy: .public) via \(socket, privacy: .public)")
+                bringForward(socket: socket, windowID: windowID(value))
+            case let .partial(value, status):
+                Self.logger.notice("\(label, privacy: .public) via \(socket, privacy: .public) exited \(status)")
+                store.show(notice: "\(label) finished, but a later step failed.")
+                bringForward(socket: socket, windowID: windowID(value))
+            }
+        }
+    }
+
+    private func bringForward(socket: String, windowID: Int) {
+        focusQueue.async { [weak self] in
+            if windowID > 0 { _ = DaemonClient().focusWindow(socket: socket, windowID: windowID) }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    if !KittyActivator.activate(socket: socket) { self?.store.show(notice: "Kitty is not running.") }
+                }
+            }
+        }
+    }
+
+    /// ⌥ on a session row: `amx mute-toggle` against that row's own Kitty.
+    /// Window IDs mean something only inside the instance that issued them,
+    /// so no other socket is tried.
+    func toggleMute(_ row: MenuSessionRow) {
+        guard let command else { return report(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.") }
+        if let reason = gate.unavailableReason(.muteToggle) { return report(reason) }
+        let socket = row.kittySocket.isEmpty ? store.snapshot?.kitty.socket ?? "" : row.kittySocket
+        guard !socket.isEmpty else { return report(KittyEndpoint.listenOnMissing) }
+        focusQueue.async { [weak self] in
+            let result = command.json(MuteToggleResult.self, MuteToggleResult.arguments(windowID: row.windowID), kittyListenOn: socket)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    switch result {
+                    case let .success(value):
+                        Self.logger.notice("mute-toggle window \(row.windowID): muted=\(value.muted)")
+                    case let .partial(value, _):
+                        self.store.show(notice: value.muted ? "Muted, but the tab title was not updated." : "Unmuted, but the tab title was not updated.")
+                    case let .failure(error):
+                        Self.logger.error("mute-toggle window \(row.windowID): \(error.message, privacy: .public)")
+                        self.store.show(notice: "Could not toggle mute: \(error.message)")
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: Snooze
+
+    /// Notifications ▸: sets or clears the daemon's snooze and mirrors what
+    /// the daemon answers into `amxSnoozeUntil`.
+    private func snooze(_ choice: SnoozeChoice) {
+        guard let daemon = store.snapshot?.daemon, store.feed == .live else {
+            return report("The daemon is not connected.")
+        }
+        let request = choice.request(now: Date())
+        focusQueue.async { [weak self] in
+            let outcome = DaemonClient().notificationSnooze(request)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.finishSnooze(outcome, daemon: SnoozeMirror.identity(of: daemon)) }
+            }
+        }
+    }
+
+    private func finishSnooze(_ outcome: SnoozeOutcome, daemon: String) {
+        switch outcome {
+        case let .state(state):
+            Self.logger.notice("snooze: \(state.description(now: Date()), privacy: .public)")
+            recordSnooze(state.mirrored(now: Date()), daemon: daemon)
+        case .unsupported:
+            snoozeSupported = false
+            report(MenuBuilder.snoozeUnsupported)
+        case .notRunning:
+            store.apply(health: .notRunning)
+        case let .failed(message):
+            Self.logger.error("snooze: \(message, privacy: .public)")
+            report("Could not change the snooze: \(message)")
+        }
+    }
+
+    private func recordSnooze(_ until: Date?, daemon: String) {
+        if !SnoozeMirror.same(preferencesModel.preferences.snoozeUntil, until) {
+            preferencesModel.preferences.snoozeUntil = until
+        }
+        preferencesModel.defaults.set(daemon, forKey: SnoozeMirror.daemonKey)
+    }
+
+    /// Keeps `amxSnoozeUntil` in step with each snapshot, and re-applies the
+    /// snooze to a daemon that restarted without it.
+    private func reconcileSnooze() {
+        guard store.feed == .live, let snapshot = store.snapshot, snapshot.daemon.pid > 0,
+              !snoozeProbeInFlight, !snoozeReapplyInFlight else { return }
+        let daemon = SnoozeMirror.identity(of: snapshot.daemon)
+        guard snoozeProbedDaemon == daemon else { return probeSnooze(daemon) }
+        guard snoozeSupported else { return }
+        let now = Date()
+        let decision = SnoozeMirror.reconcile(
+            daemon: daemon,
+            live: SnoozeState(snapshot.notification),
+            stored: preferencesModel.preferences.snoozeUntil,
+            storedDaemon: preferencesModel.defaults.string(forKey: SnoozeMirror.daemonKey),
+            now: now
+        )
+        switch decision {
+        case .keep:
+            if preferencesModel.defaults.string(forKey: SnoozeMirror.daemonKey) != daemon {
+                preferencesModel.defaults.set(daemon, forKey: SnoozeMirror.daemonKey)
+            }
+        case let .adopt(until):
+            recordSnooze(until, daemon: daemon)
+        case let .reapply(request):
+            guard snoozeReapplyAttempted != daemon else { return }
+            snoozeReapplyAttempted = daemon
+            snoozeReapplyInFlight = true
+            Self.logger.notice("snooze: re-applying to restarted daemon \(daemon, privacy: .public)")
+            focusQueue.async { [weak self] in
+                let outcome = DaemonClient().notificationSnooze(request)
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        guard let self else { return }
+                        self.snoozeReapplyInFlight = false
+                        self.finishSnooze(outcome, daemon: daemon)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Asks a newly seen daemon for its snooze without changing it, then
+    /// reconciles once the answer says whether it has a snooze at all.
+    private func probeSnooze(_ daemon: String) {
+        snoozeProbeInFlight = true
+        focusQueue.async { [weak self] in
+            let outcome = DaemonClient().notificationSnooze(.read)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.snoozeProbeInFlight = false
+                    switch outcome {
+                    case .state:
+                        self.snoozeProbedDaemon = daemon
+                        self.snoozeSupported = true
+                    case .unsupported:
+                        self.snoozeProbedDaemon = daemon
+                        self.snoozeSupported = false
+                        Self.logger.notice("snooze: daemon \(daemon, privacy: .public) has no notification_snooze")
+                    case .notRunning, .failed:
+                        // Asked again with the next snapshot.
+                        return
+                    }
+                    self.reconcileSnooze()
+                }
+            }
+        }
+    }
+
+    /// A menu action that could not run: the menu shows why the next time it
+    /// opens.
+    private func report(_ message: String) {
+        Self.logger.notice("action: \(message, privacy: .public)")
+        store.show(notice: message)
     }
 
     // MARK: StatusItemDelegate

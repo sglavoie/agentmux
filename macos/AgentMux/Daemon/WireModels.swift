@@ -52,9 +52,10 @@ struct DaemonRequest: Encodable, Equatable {
     let type: String
     var subscribe: SubscribeParams?
     var focusWindow: FocusWindowParams?
+    var snooze: SnoozeRequest?
 
     enum CodingKeys: String, CodingKey {
-        case type, subscribe
+        case type, subscribe, snooze
         case focusWindow = "focus_window"
     }
 
@@ -66,6 +67,10 @@ struct DaemonRequest: Encodable, Equatable {
 
     static func focusing(socket: String, windowID: Int) -> DaemonRequest {
         DaemonRequest(type: "focus_window", focusWindow: FocusWindowParams(kittySocket: socket, windowID: windowID))
+    }
+
+    static func snoozing(_ request: SnoozeRequest) -> DaemonRequest {
+        DaemonRequest(type: "notification_snooze", snooze: request)
     }
 }
 
@@ -123,15 +128,18 @@ struct DaemonResponse: Decodable, Equatable {
     let error: String?
     let subscription: SubscriptionAck?
     let focused: FocusWindowResult?
+    let snooze: SnoozeState?
 
-    init(ok: Bool, error: String? = nil, subscription: SubscriptionAck? = nil, focused: FocusWindowResult? = nil) {
+    init(ok: Bool, error: String? = nil, subscription: SubscriptionAck? = nil, focused: FocusWindowResult? = nil,
+         snooze: SnoozeState? = nil) {
         self.ok = ok
         self.error = error
         self.subscription = subscription
         self.focused = focused
+        self.snooze = snooze
     }
 
-    enum CodingKeys: String, CodingKey { case ok, error, subscription, focused }
+    enum CodingKeys: String, CodingKey { case ok, error, subscription, focused, snooze }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -139,6 +147,7 @@ struct DaemonResponse: Decodable, Equatable {
         error = c.lenient(.error)
         subscription = c.lenient(.subscription)
         focused = c.lenient(.focused)
+        snooze = c.lenient(.snooze)
     }
 }
 

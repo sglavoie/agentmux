@@ -39,26 +39,20 @@ enum DashboardOpener {
         case failed(String)
     }
 
-    static let unavailableCode = "kitty_unavailable"
-
     static func open(
         candidates: [String],
         run: (_ socket: String) -> AMXCommandResult<OpenDashboardResult>
     ) -> Outcome {
-        guard !candidates.isEmpty else { return .noSocket }
-        var last = ""
-        for socket in candidates {
-            switch run(socket) {
-            case let .success(result), let .partial(result, _):
-                return .opened(result, socket: socket)
-            case let .failure(.command(error, _)) where error.code == unavailableCode:
-                last = error.message.isEmpty ? error.code : error.message
-                continue
-            case let .failure(error):
-                return .failed(error.message)
-            }
+        switch KittyTargetedCommand.run(candidates: candidates, run) {
+        case .noSocket:
+            return .noSocket
+        case let .unreachable(message):
+            return .failed(message)
+        case let .done(.success(result), socket), let .done(.partial(result, _), socket):
+            return .opened(result, socket: socket)
+        case let .done(.failure(error), _):
+            return .failed(error.message)
         }
-        return .failed(last)
     }
 
     /// The sockets to try: Preferences' override, the running dashboard's own

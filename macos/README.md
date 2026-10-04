@@ -116,8 +116,8 @@ Preferences shows which binary was chosen and why.
 - **Capabilities.** The app reads `--help` once per binary to learn which
   commands the chosen amx offers (`project`, `open-dashboard`,
   `notifications snooze`, `mute-toggle --json`). An older amx refuses an
-  unknown command, so the app hides what is missing rather than failing when
-  it is used.
+  unknown command, so the app greys out what is missing, with the reason as
+  the item's tooltip, rather than failing when it is used.
 
 ## The live feed
 
@@ -194,6 +194,44 @@ forward even when Agent Mux was never active, as after a global shortcut. With
 several Kitty instances that call cannot say which one, so it is skipped. A `stale_target` reply means the session has closed. The row is hidden
 until a snapshot no longer lists it, and the menu says so.
 
+## Menu actions
+
+After the sessions, the menu offers these (`Model/ProjectCatalog.swift`,
+`Model/RecentSessions.swift`, `Model/NotificationSnooze.swift`,
+`CLI/ActionGate.swift`):
+
+| Item | Does |
+| --- | --- |
+| Open Dashboard | The same `amx open-dashboard` the ⌃⌥⌘A shortcut runs. |
+| Launch Project ▸ | Configured projects, one header per profile, from `amx project list --json`. The list is cached and refreshed when the menu opens on one older than 60s. Choosing one runs `amx project launch --title T --profile P --json`. |
+| Recent ▸ | The newest `amxRecentLimit` conversations from `amx session list --since <amxRecentDays>d --json`. The list runs in the background with a 15s timeout, and the menu shows the previous result until it lands. Choosing one runs `amx session continue harness:id --json`. |
+| ⌥ on a session row | Shows `Mute · …` or `Unmute · …`, which runs `amx mute-toggle --window-id N --json` with `KITTY_LISTEN_ON` set to that row's own socket. |
+| Notifications ▸ | Snooze for 1 hour, until tomorrow 08:00, or until resumed, and Resume Now, all through the daemon's `notification_snooze` request. Quiet hours are shown read-only with the config path they come from, because the app never rewrites `config.toml`. |
+
+New tabs open in the Kitty that was frontmost last (the app watches
+application activation), then the Preferences override, the snapshot's Kitty,
+and each `/tmp/kitty-<pid>`. After a launch or a continue, the app asks the
+daemon to focus the window amx reported, when it reported one, and brings that
+Kitty forward. A Recent conversation that a live session already runs is
+focused through `focus_window`, in whichever Kitty runs it, instead of asking
+amx: `session continue` only sees the Kitty it is pointed at, so for a session
+in another instance it would resume a second copy. Mute never tries another
+socket, because window IDs mean something only inside the Kitty that issued
+them.
+
+Items are greyed out when the resolved amx lacks `project` (Launch Project),
+`open-dashboard` (Open Dashboard), or `mute-toggle --json` (the ⌥ Mute
+alternates). Notifications is greyed out while the feed is not live, and when
+the daemon answers that it has no `notification_snooze`.
+
+**Snooze across daemon restarts.** The daemon keeps the snooze in memory only.
+The app mirrors the snooze each snapshot reports into `amxSnoozeUntil`
+(`distantFuture` for "until resumed"), and records which daemon reported it as
+`pid:started_at` in `amxSnoozeDaemon`. When a snapshot comes from a different
+daemon that has no snooze while the stored one has not run out, the app sends
+the stored snooze to the new daemon. A snooze cleared on the same daemon, for
+example with `amx notifications snooze off`, is adopted rather than undone.
+
 ## Global shortcuts
 
 Two Carbon hotkeys (`Shell/HotKey.swift`), which need no Accessibility
@@ -241,7 +279,7 @@ An absent, mistyped, or out-of-range value reads as its default.
 | `amxRecentDays` | 7 | How far back the Recent submenu looks (1–90). |
 | `amxRecentLimit` | 15 | How many conversations it lists (1–50). |
 | `amxUseAppNotifications` | true | Offers the app as the daemon's notification backend. |
-| `amxSnoozeUntil` | none | The snooze the app last asked for. The daemon owns the snooze, and Preferences shows the daemon's while the feed is live. |
+| `amxSnoozeUntil` | none | The last snooze the daemon reported, re-applied after a daemon restart (see Menu actions). The daemon owns the snooze, and Preferences shows the daemon's while the feed is live. |
 | `amxKittySocketOverride` | empty | A Kitty socket tried first by focus and the dashboard shortcut. |
 | `amxEnvironment` | empty | Values amx runs with instead of the login shell's, for `PATH`, `XDG_*`, and `AMX_*`. |
 

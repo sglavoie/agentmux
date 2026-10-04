@@ -145,15 +145,15 @@ final class PreferencesModel: ObservableObject {
     /// The snooze as Preferences shows it: the daemon's when the feed is live,
     /// else what the app last asked for.
     var snoozeDescription: String {
+        let now = Date()
         if let notification = daemonNotification {
-            if notification.indefinite { return "Snoozed until turned off" }
-            if notification.snoozedUntil > 0 {
-                return "Snoozed until " + Self.time(Date(timeIntervalSince1970: TimeInterval(notification.snoozedUntil) / 1000))
-            }
-            return "Not snoozed"
+            return SnoozeState(notification).description(now: now)
         }
-        if let until = preferences.snoozeUntil, until > Date() {
-            return "Snoozed until \(Self.time(until)) (last requested; the daemon is not connected)"
+        if let until = preferences.snoozeUntil, until > now {
+            let state = until == .distantFuture
+                ? SnoozeState(indefinite: true)
+                : SnoozeState(snoozedUntil: Int64(until.timeIntervalSince1970))
+            return state.description(now: now) + " (last requested; re-applied when the daemon is back)"
         }
         return "Not snoozed"
     }
