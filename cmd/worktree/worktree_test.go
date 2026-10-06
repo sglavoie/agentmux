@@ -247,6 +247,7 @@ func resetWorktreeCommandsTestState(t *testing.T) (*commandWorktreeManager, *wor
 	oldLoops := worktreeCommandsActiveLoops
 	oldIndex := worktreeCommandsTranscriptIndex
 	oldReaders := worktreeCommandsReaders
+	oldIsTerminal := worktreeListIsTerminal
 	commands := []*cobra.Command{worktreeListCmd, worktreeShowCmd, worktreeReopenCmd, worktreeShellCmd, worktreeEditCmd, worktreeRemoveCmd, worktreeForgetCmd}
 	outputs := make([]io.Writer, len(commands))
 	for index, command := range commands {
@@ -260,6 +261,7 @@ func resetWorktreeCommandsTestState(t *testing.T) (*commandWorktreeManager, *wor
 		worktreeCommandsActiveLoops = oldLoops
 		worktreeCommandsTranscriptIndex = oldIndex
 		worktreeCommandsReaders = oldReaders
+		worktreeListIsTerminal = oldIsTerminal
 		for index, command := range commands {
 			command.SetOut(outputs[index])
 			_ = command.Flags().Set("json", "false")

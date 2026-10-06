@@ -13,6 +13,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -40,6 +41,7 @@ var (
 	}
 	worktreeCommandsTranscriptIndex = transcript.LoadIndex
 	worktreeCommandsReaders         = cli.TranscriptReaders
+	worktreeListIsTerminal          = cli.IsTerminal
 )
 
 // Command returns the `worktree` command tree so the root command can register
@@ -68,12 +70,36 @@ var worktreeListCmd = &cobra.Command{
 		if jsonOutput {
 			return cli.WriteJSON(cmd, worktreeListData{Worktrees: nonNilWorktreeViews(views), Warnings: nonNilStrings(warnings)})
 		}
+		out := cmd.OutOrStdout()
+		if worktreeListIsTerminal(out) {
+			if err := writeWorktreeTable(out, views); err != nil {
+				return err
+			}
+			writeWorktreeWarnings(cmd, warnings)
+			return nil
+		}
+		// Off a terminal an empty list stays empty: a script reading rows must
+		// not mistake a sentence for a worktree.
 		for _, view := range views {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\t%s\n", view.ID, displayWorktreeProject(view), view.Branch, worktreeState(view), view.Path)
+			_, _ = fmt.Fprintf(out, "%s\t%s\t%s\t%s\t%s\n", view.ID, displayWorktreeProject(view), view.Branch, worktreeState(view), view.Path)
 		}
 		writeWorktreeWarnings(cmd, warnings)
 		return nil
 	},
+}
+
+// writeWorktreeTable is the worktree list for a person. An empty list says so,
+// because printing nothing reads the same as a command that failed silently.
+func writeWorktreeTable(out io.Writer, views []actions.WorktreeView) error {
+	if len(views) == 0 {
+		_, err := fmt.Fprintln(out, "No managed worktrees. Create one with `amx session fork-worktree` or from the dashboard.")
+		return err
+	}
+	rows := make([][]string, 0, len(views))
+	for _, view := range views {
+		rows = append(rows, []string{view.ID, displayWorktreeProject(view), view.Branch, worktreeState(view), view.Path})
+	}
+	return cli.WriteTable(out, []string{"ID", "PROJECT", "BRANCH", "STATE", "PATH"}, rows)
 }
 
 var worktreeShowCmd = newWorktreeSelectorCommand("show", actions.WorktreeShow, "Show one managed worktree")
