@@ -6,15 +6,34 @@ import (
 	"os"
 )
 
-// ProjectDirectoryProblems lists, in config order, every project whose
+// ProjectDirectoryIssue is one configured project whose directory is
+// unusable: the project as profile/title, the directory as configured, and
+// what is wrong with it.
+type ProjectDirectoryIssue struct {
+	Project   string
+	Directory string
+	Problem   string
+}
+
+// String renders the issue with the directory exactly as configured.
+func (i ProjectDirectoryIssue) String() string {
+	return i.Format(i.Directory)
+}
+
+// Format renders the issue naming the directory as directory, so a
+// human-facing caller can shorten it without re-deriving the sentence.
+func (i ProjectDirectoryIssue) Format(directory string) string {
+	return fmt.Sprintf("project %q: directory %q %s", i.Project, directory, i.Problem)
+}
+
+// ProjectDirectoryIssues lists, in config order, every project whose
 // directory is missing, uninspectable, or not a directory. `amx config
-// validate` refuses on any of them and `amx doctor` reports them as one
-// warning, so the two cannot disagree about which projects are broken.
-// Each entry names its project as profile/title, since a project is
-// identified by both and the same title commonly appears under several
-// profiles.
-func ProjectDirectoryProblems(projects []Session) []string {
-	var errs []string
+// validate` and `amx doctor` both report them, so the two cannot disagree
+// about which projects are broken. Each entry names its project as
+// profile/title, since a project is identified by both and the same title
+// commonly appears under several profiles.
+func ProjectDirectoryIssues(projects []Session) []ProjectDirectoryIssue {
+	var issues []ProjectDirectoryIssue
 	for _, project := range projects {
 		problem := ProjectDirectoryProblem(project.Directory)
 		if problem == "" {
@@ -24,9 +43,19 @@ func ProjectDirectoryProblems(projects []Session) []string {
 		if profile := project.EffectiveProfile(); profile != "" {
 			label = profile + "/" + project.Title
 		}
-		errs = append(errs, fmt.Sprintf("project %q: directory %q %s", label, project.Directory, problem))
+		issues = append(issues, ProjectDirectoryIssue{Project: label, Directory: project.Directory, Problem: problem})
 	}
-	return errs
+	return issues
+}
+
+// ProjectDirectoryProblems is ProjectDirectoryIssues rendered as sentences
+// naming each directory as configured.
+func ProjectDirectoryProblems(projects []Session) []string {
+	var problems []string
+	for _, issue := range ProjectDirectoryIssues(projects) {
+		problems = append(problems, issue.String())
+	}
+	return problems
 }
 
 // ProjectDirectoryProblem says what is wrong with one configured project

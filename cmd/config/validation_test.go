@@ -151,6 +151,41 @@ profile = "work"
 	}
 }
 
+// TestConfigValidateCommandShortensProjectDirectories pins that a directory
+// configured as an absolute path under the home directory, trailing slash
+// and all, is named the way `amx project list` names it.
+func TestConfigValidateCommandShortensProjectDirectories(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	path := filepath.Join(tempHome, "config.toml")
+	body := validConfigBody(tempHome) + `
+[[projects]]
+title = "absolute"
+directory = "` + filepath.Join(tempHome, "gone") + `/"
+profile = "work"
+`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("amx_CONFIG", path)
+
+	oldOut := configValidateCmd.OutOrStdout()
+	t.Cleanup(func() {
+		configValidateCmd.SetOut(oldOut)
+	})
+	var out bytes.Buffer
+	configValidateCmd.SetOut(&out)
+
+	err := configValidateCmd.RunE(configValidateCmd, nil)
+	if err == nil {
+		t.Fatal("RunE error = nil; want invalid project directories error")
+	}
+	if want := `project "work/absolute": directory "~/gone" does not exist`; !strings.Contains(err.Error(), want) {
+		t.Fatalf("validation error missing %q:\n%s", want, err.Error())
+	}
+}
+
 func TestLoadRunnableConfigRejectsDuplicateProfiles(t *testing.T) {
 	tempHome := t.TempDir()
 	path := filepath.Join(tempHome, "config.toml")
