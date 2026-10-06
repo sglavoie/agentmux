@@ -22,6 +22,7 @@ amx session list --since 7d   # only sessions active in the last week (or 12h, 9
 amx session list --here -n 5  # the five latest sessions started in this directory or below it
 amx session list --harness codex --profile codex-work   # both repeatable
 amx session list --project amx   # one project's sessions; "amx" reaches "🐱amx" as project launch reads it, and a directory-named project works too (repeatable)
+amx session list --live       # only conversations open in a Kitty tab right now; refused, not empty, when the daemon or Kitty cannot say
 amx session list --all        # also automated sessions (ASL runs, subagents, exec), hidden by default as in Past Sessions
 amx session continue "$(amx session list | fzf | cut -f5)"   # pick by opening prompt
 amx session search race daemon            # conversations mentioning both words, newest first, with match counts

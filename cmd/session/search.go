@@ -92,7 +92,7 @@ line it matched on. The selector flags narrow the search the way they narrow
 	},
 }
 
-// narrowSearchResults applies --project, --here, and --limit to search results, keeping
+// narrowSearchResults applies --project, --here, --live, and --limit to search results, keeping
 // their order, through the same sessionSelection.narrow the list uses.
 func narrowSearchResults(results []transcript.Result, selection sessionSelection) []transcript.Result {
 	metas := make([]transcript.SessionMeta, 0, len(results))

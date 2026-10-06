@@ -70,7 +70,11 @@ var sessionListCmd = &cobra.Command{
 		out := cmd.OutOrStdout()
 		terminal := !jsonOutput && sessionListIsTerminal(out)
 		liveKnown := false
-		if jsonOutput || terminal {
+		if selection.live != nil {
+			// --live already asked, and was refused had nobody answered.
+			markLive(views, selection.live)
+			liveKnown = true
+		} else if jsonOutput || terminal {
 			var live map[string]liveConversation
 			live, liveKnown = sessionCommandsLiveConversations()
 			markLive(views, live)
@@ -114,6 +118,9 @@ type sessionSelection struct {
 	// belonging to any of those names.
 	projectSelectors []string
 	projects         []string
+	// live is the conversations open in Kitty when --live asked for only
+	// those, and nil otherwise.
+	live map[string]liveConversation
 }
 
 // readSessionSelection parses the shared selector flags. The returned code is
@@ -144,11 +151,23 @@ func readSessionSelection(cmd *cobra.Command, cfg *config.Config) (sessionSelect
 		}
 		selection.here = here
 	}
+	if onlyLive, _ := cmd.Flags().GetBool("live"); onlyLive {
+		live, known := sessionCommandsLiveConversations()
+		if !known {
+			// Printing no rows would claim nothing is open; the truth is that
+			// nobody could say.
+			return selection, "live_status_unavailable", errors.New("--live: cannot tell which conversations are open, because the daemon or Kitty did not answer; `amx doctor` says why")
+		}
+		if live == nil {
+			live = map[string]liveConversation{}
+		}
+		selection.live = live
+	}
 	return selection, "", nil
 }
 
-// narrow applies --project, --here, and then --limit to sessions already in
-// the order they will be shown.
+// narrow applies --project, --here, --live, and then --limit to sessions
+// already in the order they will be shown.
 func (s sessionSelection) narrow(metas []transcript.SessionMeta) []transcript.SessionMeta {
 	if s.projects != nil {
 		kept := metas[:0:0]
@@ -161,6 +180,17 @@ func (s sessionSelection) narrow(metas []transcript.SessionMeta) []transcript.Se
 	}
 	if s.here != nil {
 		metas = sessionsUnder(metas, s.here)
+	}
+	if s.live != nil {
+		kept := metas[:0:0]
+		for _, meta := range metas {
+			if key, ok := liveConversationKey(meta.Harness, meta.ID); ok {
+				if _, open := s.live[key]; open {
+					kept = append(kept, meta)
+				}
+			}
+		}
+		metas = kept
 	}
 	if s.limit > 0 && len(metas) > s.limit {
 		metas = metas[:s.limit]
@@ -223,6 +253,7 @@ func (s *sessionSelection) resolveProjects(cfg *config.Config, idx *transcript.I
 func addSessionSelectionFlags(cmd *cobra.Command) {
 	cmd.Flags().String("since", "", "only sessions active within this window, e.g. 12h or 7d")
 	cmd.Flags().Bool("here", false, "only sessions started in the current directory or below it")
+	cmd.Flags().Bool("live", false, "only conversations open in a Kitty tab right now")
 	cmd.Flags().StringSlice("harness", nil, "only sessions of this harness (repeatable)")
 	_ = cmd.RegisterFlagCompletionFunc("harness", cli.CompleteHarnessFirstArg)
 	cmd.Flags().StringSlice("profile", nil, "only sessions visible to this profile (repeatable)")

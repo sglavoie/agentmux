@@ -500,7 +500,7 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 	oldGetwd := sessionListGetwd
 	t.Cleanup(func() {
 		sessionListGetwd = oldGetwd
-		for _, name := range []string{"here", "harness", "profile", "project", "limit", "json"} {
+		for _, name := range []string{"here", "live", "harness", "profile", "project", "limit", "json"} {
 			flag := sessionListCmd.Flags().Lookup(name)
 			if slice, ok := flag.Value.(interface{ Replace([]string) error }); ok {
 				_ = slice.Replace(nil)
@@ -556,7 +556,7 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 
 	run := func(t *testing.T, flags map[string]string) (string, error) {
 		t.Helper()
-		for _, name := range []string{"here", "harness", "profile", "project", "limit", "all"} {
+		for _, name := range []string{"here", "live", "harness", "profile", "project", "limit", "all"} {
 			flag := sessionListCmd.Flags().Lookup(name)
 			if slice, ok := flag.Value.(interface{ Replace([]string) error }); ok {
 				_ = slice.Replace(nil)
@@ -633,6 +633,44 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 			}
 		})
 	}
+
+	// --live keeps the conversations open in Kitty, and does so before
+	// --limit, so the limit counts open conversations rather than cutting the
+	// list first and filtering what was left.
+	t.Run("live keeps open conversations before the limit", func(t *testing.T) {
+		sessionCommandsLiveConversations = func() (map[string]liveConversation, bool) {
+			return map[string]liveConversation{
+				"claude:claude-sub":   {WindowID: 7, TabID: 3},
+				"codex:codex-sibling": {WindowID: 8, TabID: 4},
+			}, true
+		}
+		t.Cleanup(func() {
+			sessionCommandsLiveConversations = func() (map[string]liveConversation, bool) { return nil, false }
+		})
+		out, err := run(t, map[string]string{"live": "true"})
+		if err != nil {
+			t.Fatalf("list: %v", err)
+		}
+		if got := ids(out); got != "claude-sub,codex-sibling" {
+			t.Fatalf("sessions = %s, want claude-sub,codex-sibling\n%s", got, out)
+		}
+		out, err = run(t, map[string]string{"live": "true", "limit": "1"})
+		if err != nil {
+			t.Fatalf("list: %v", err)
+		}
+		if got := ids(out); got != "claude-sub" {
+			t.Fatalf("sessions = %s, want claude-sub\n%s", got, out)
+		}
+	})
+
+	// With nobody to ask, --live refuses rather than printing no rows, which
+	// would read as "nothing is open".
+	t.Run("live refuses when nobody can say what is open", func(t *testing.T) {
+		out, err := run(t, map[string]string{"live": "true"})
+		if err == nil || !strings.Contains(out+err.Error(), "--live: cannot tell which conversations are open") {
+			t.Fatalf("err = %v, output %q, want a refusal", err, out)
+		}
+	})
 
 	t.Run("terminal table carries a bounded summary", func(t *testing.T) {
 		sessionListIsTerminal = func(io.Writer) bool { return true }
