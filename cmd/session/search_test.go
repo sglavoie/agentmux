@@ -218,3 +218,18 @@ func TestSessionSearchFindsConversationsByMessageText(t *testing.T) {
 		})
 	}
 }
+
+// TestSessionSearchWithoutAQueryShowsOne pins that the bare command answers
+// with an example query and the command to use instead, rather than only
+// naming the missing parameter.
+func TestSessionSearchWithoutAQueryShowsOne(t *testing.T) {
+	err := sessionSearchCmd.RunE(sessionSearchCmd, nil)
+	if err == nil {
+		t.Fatal("RunE error = nil; want a missing query error")
+	}
+	for _, want := range []string{"a query is required", "amx session search daemon race", "`amx session list`"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error = %q, missing %q", err.Error(), want)
+		}
+	}
+}

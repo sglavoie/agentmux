@@ -1,6 +1,7 @@
 package session
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -32,6 +33,11 @@ line it matched on. The selector flags narrow the search the way they narrow
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		query := strings.TrimSpace(strings.Join(args, " "))
 		if query == "" {
+			if !jsonOutput {
+				// A person who typed the bare command most likely wants to
+				// know what a query looks like, or wanted the list instead.
+				return errors.New("a query is required, as in: amx session search daemon race; `amx session list` shows recent sessions without one")
+			}
 			return cli.MissingParameter(cmd, jsonOutput, "query", "text to search conversations for")
 		}
 		source, _ := cmd.Flags().GetString("source")
