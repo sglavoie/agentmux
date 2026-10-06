@@ -151,6 +151,11 @@ waits for `ready: true` (and, when ASL is required, for the bridge handshake tha
 follows it), and gates on `amx doctor --strict`, which verifies that
 the CLI and the daemon are the same artifact by hash and revision.
 
+`just update` does the same and also rebuilds and reinstalls the menu bar app
+(it needs Xcode). It installs `amx` and the app before restarting the daemon, so
+`amx doctor --strict` checks the app's bundled `amx` against the daemon too.
+It is the one command to run after pulling or committing in this checkout.
+
 A pairing preflight refuses whole-root if a live run still carries state the new
 build cannot pair with, naming each run. Let those runs finish rather than
 migrating around them.

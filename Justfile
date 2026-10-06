@@ -456,7 +456,21 @@ install: build
 # Build, install atomically, restart the daemon, wait for it to report ready,
 # then gate on strict doctor (which verifies the CLI and daemon are the same
 # artifact by hash/revision and that no invariant is violated).
-install-restart-smoke: install
+install-restart-smoke: install restart-verify
+    @echo "install-restart-smoke: ok"
+
+# The app goes in before the daemon restart so doctor judges the pair as it
+# will run, and a bundled amx from another revision shows up as
+# companion_build_mismatch. Needs Xcode; without it, use install-restart-smoke.
+#
+# Update everything from this checkout: amx, Kitty config, menu bar app, daemon
+update: install mac-install restart-verify
+    @echo "update: ok ($("{{prefix_bin}}/amx" --version))"
+
+# Restart the daemon onto the installed binary, wait for it to report ready,
+# and gate on strict doctor.
+[private]
+restart-verify:
     "{{prefix_bin}}/amx" daemon restart
     @for i in $(seq 1 50); do \
         if "{{prefix_bin}}/amx" daemon status | grep -q '^ready: true'; then break; fi; \
@@ -472,7 +486,6 @@ install-restart-smoke: install
     done
     "{{prefix_bin}}/amx" daemon status
     "{{prefix_bin}}/amx" doctor --strict
-    @echo "install-restart-smoke: ok"
 
 # Build macos/build/Agent Mux.app, the menu bar companion. Debug bundles amx
 # only when AMX_BINARY names one and otherwise finds ~/.local/bin/amx at run

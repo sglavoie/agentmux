@@ -68,7 +68,9 @@ func TestJustInstallReplacesBinaryAtomically(t *testing.T) {
 
 func TestJustInstallRestartSmokeGatesOnReadinessAndStrictDoctor(t *testing.T) {
 	justfile := readJustfile(t)
-	smoke := justfileRecipe(t, justfile, "install-restart-smoke")
+	// The restart and its gates live in the private restart-verify recipe,
+	// which `update` shares, so the smoke is judged through it.
+	smoke := justfileRecipe(t, justfile, "restart-verify")
 
 	for _, want := range []string{
 		"daemon restart",
@@ -79,11 +81,24 @@ func TestJustInstallRestartSmokeGatesOnReadinessAndStrictDoctor(t *testing.T) {
 		"doctor --strict",
 	} {
 		if !strings.Contains(smoke, want) {
-			t.Errorf("install-restart-smoke recipe missing %q:\n%s", want, smoke)
+			t.Errorf("restart-verify recipe missing %q:\n%s", want, smoke)
 		}
 	}
-	if !strings.Contains(justfile, "install-restart-smoke: install") {
-		t.Error("install-restart-smoke must depend on install")
+	if !strings.Contains(justfile, "install-restart-smoke: install restart-verify\n") {
+		t.Error("install-restart-smoke must depend on install, then restart-verify")
+	}
+}
+
+// TestJustUpdateInstallsEverythingBeforeVerifying keeps `just update` in the
+// order that makes its doctor run meaningful: the binary and the app are both
+// installed before the daemon restarts onto them and strict doctor judges the
+// pair. It is an operator convenience, so it must stay out of the gates the way
+// every mac-* recipe does; TestMacAppRecipesStayOutOfTheGates covers that.
+func TestJustUpdateInstallsEverythingBeforeVerifying(t *testing.T) {
+	justfile := readJustfile(t)
+	justfileRecipe(t, justfile, "update")
+	if !strings.Contains(justfile, "\nupdate: install mac-install restart-verify\n") {
+		t.Error("update must depend on install, mac-install, then restart-verify")
 	}
 }
 

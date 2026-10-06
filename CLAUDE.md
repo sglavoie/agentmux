@@ -26,6 +26,7 @@ just test
 just acceptance   # gofmt, tests, core race suites, vet, every TUI scenario
 just check        # acceptance plus golangci-lint
 just install-restart-smoke
+just update          # install-restart-smoke plus mac-install, in one go (needs Xcode)
 just crash-restart   # fault injection and restart equivalence, under -race
 just cockpit-smoke   # real Kitty + installed pair; fails rather than skips
 just overseer-integration asl_root=~/scripts   # installed amx + installed asl, isolated world
