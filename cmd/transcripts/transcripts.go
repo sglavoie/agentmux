@@ -8,6 +8,7 @@ package transcripts
 
 import (
 	"fmt"
+	"io"
 	"strconv"
 
 	"github.com/sglavoie/agentmux/internal/cli"
@@ -100,20 +101,10 @@ var transcriptsRebuildCmd = &cobra.Command{
 			status.Warnings = nonNilWarnings(result.Warnings)
 			return cli.WriteJSON(cmd, status)
 		}
-		size := transcriptSizeFormatter(transcriptsIsTerminal(cmd.OutOrStdout()))
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "rebuilt transcript sidecars\n")
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "metadata_path: %s\n", result.Status.MetadataPath)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "visible_entries: %d\n", result.Status.VisibleEntries)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "hidden_entries: %d\n", result.Status.HiddenEntries)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "empty_entries: %d\n", result.Status.EmptyEntries)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "visible_profile_memberships: %d\n", result.Status.VisibleProfileMemberships)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "hidden_profile_memberships: %d\n", result.Status.HiddenProfileMemberships)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "shared_profile_entries: %d\n", result.Status.SharedProfileEntries)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "sidecar_count: %d\n", result.Status.SidecarCount)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "orphan_sidecars: %d\n", result.Status.OrphanSidecars)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "orphan_sidecar_size: %s\n", size(result.Status.OrphanSidecarSize))
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "missing_sidecars: %d\n", result.Status.MissingSidecars)
-		printTranscriptWarnings(cmd, result.Warnings)
+		status := result.Status
+		status.Warnings = result.Warnings
+		printTranscriptStatus(cmd, status)
 		return nil
 	},
 }
@@ -156,6 +147,41 @@ func printTranscriptStatus(cmd *cobra.Command, status transcript.StoreStatus) {
 		_, _ = fmt.Fprintf(out, "%-*s %s\n", width, field[0]+":", field[1])
 	}
 	printTranscriptWarnings(cmd, status.Warnings)
+	if human {
+		printTranscriptRepairHints(out, status)
+	}
+}
+
+// printTranscriptRepairHints names the command that clears each problem the
+// status counts, so a nonzero count is not left for the reader to interpret.
+// Pipes do not get them: scripts split the key/value lines above.
+func printTranscriptRepairHints(out io.Writer, status transcript.StoreStatus) {
+	if status.MissingSidecars > 0 {
+		// --all, because a conversation older than the configured scan age is
+		// skipped by a plain rebuild and would stay unsearchable.
+		_, _ = fmt.Fprintf(out, "\n%s %s no search text, so search cannot find %s; `amx transcripts rebuild --all` reindexes %s.\n",
+			countOf(status.MissingSidecars, "conversation", "conversations"),
+			byCount(status.MissingSidecars, "has", "have"),
+			byCount(status.MissingSidecars, "it", "them"),
+			byCount(status.MissingSidecars, "it", "them"))
+	}
+	if status.OrphanSidecars > 0 {
+		_, _ = fmt.Fprintf(out, "\n%s no longer %s to a conversation; `amx transcripts compact` removes %s.\n",
+			countOf(status.OrphanSidecars, "search sidecar", "search sidecars"),
+			byCount(status.OrphanSidecars, "belongs", "belong"),
+			byCount(status.OrphanSidecars, "it", "them"))
+	}
+}
+
+func countOf(n int, one, many string) string {
+	return strconv.Itoa(n) + " " + byCount(n, one, many)
+}
+
+func byCount(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }
 
 // transcriptSizeFormatter returns how a byte count is printed: raw bytes for
@@ -251,7 +277,7 @@ func printTranscriptWarnings(cmd *cobra.Command, warnings []string) {
 }
 
 func init() {
-	transcriptsRebuildCmd.Flags().BoolVar(&transcriptsRebuildAll, "all", false, "Ignore configured transcript scan age and rebuild every discoverable sidecar")
+	transcriptsRebuildCmd.Flags().BoolVar(&transcriptsRebuildAll, "all", false, "ignore configured transcript scan age and rebuild every discoverable sidecar")
 	for _, command := range []*cobra.Command{transcriptsStatusCmd, transcriptsCompactCmd, transcriptsRebuildCmd} {
 		command.Flags().Bool("json", false, "emit schema-v1 JSON")
 	}

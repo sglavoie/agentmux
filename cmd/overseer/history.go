@@ -138,15 +138,15 @@ func newHistoryCommand() *cobra.Command {
 		RunE:          runHistory,
 	}
 	flags := historyCmd.Flags()
-	flags.Bool("json", false, "Emit the schema-v1 envelope carrying the versioned overseer history payload")
-	flags.String("plan", "", "Identifier of the plan being authorized, echoed back into the answer")
-	flags.StringArray("repository", nil, "Repository the plan participates in, as alias=path or path (repeatable); the path must be absolute or start with ~")
-	flags.Int("contract-version", historyContractVersion, "Overseer history contract version the caller understands")
-	flags.Int("limit", 0, fmt.Sprintf("Maximum conversations to return (default %d, maximum %d)", transcript.DefaultHistoryConversations, transcript.MaxHistoryConversations))
-	flags.Int("messages", 0, fmt.Sprintf("Maximum messages per conversation, taken from the end (default %d, maximum %d)", transcript.DefaultHistoryMessages, transcript.MaxHistoryMessages))
-	flags.Int("max-chars", 0, fmt.Sprintf("Maximum characters per excerpt (default %d, maximum %d)", transcript.DefaultHistoryExcerptChars, transcript.MaxHistoryExcerptChars))
-	flags.StringArray("harness", nil, "Restrict the answer to this harness (repeatable); omit for all harnesses")
-	flags.String("since", "", "Only consider transcripts modified at or after this RFC 3339 timestamp")
+	flags.Bool("json", false, "emit the schema-v1 envelope carrying the versioned overseer history payload")
+	flags.String("plan", "", "identifier of the plan being authorized, echoed back into the answer")
+	flags.StringArray("repository", nil, "repository the plan participates in, as alias=path or path (repeatable); the path must be absolute or start with ~")
+	flags.Int("contract-version", historyContractVersion, "overseer history contract version the caller understands")
+	flags.Int("limit", 0, fmt.Sprintf("maximum conversations to return (default %d, maximum %d)", transcript.DefaultHistoryConversations, transcript.MaxHistoryConversations))
+	flags.Int("messages", 0, fmt.Sprintf("maximum messages per conversation, taken from the end (default %d, maximum %d)", transcript.DefaultHistoryMessages, transcript.MaxHistoryMessages))
+	flags.Int("max-chars", 0, fmt.Sprintf("maximum characters per excerpt (default %d, maximum %d)", transcript.DefaultHistoryExcerptChars, transcript.MaxHistoryExcerptChars))
+	flags.StringArray("harness", nil, "restrict the answer to this harness (repeatable); omit for all harnesses")
+	flags.String("since", "", "only consider transcripts modified at or after this RFC 3339 timestamp")
 	return historyCmd
 }
 

@@ -45,7 +45,7 @@ daemon that was not running would change nothing.`,
 }
 
 func init() {
-	notificationsSnoozeCmd.Flags().BoolVar(&snoozeJSON, "json", false, "Emit the schema-v1 JSON envelope")
+	notificationsSnoozeCmd.Flags().BoolVar(&snoozeJSON, "json", false, "emit schema-v1 JSON")
 }
 
 // snoozePayload is the `notifications snooze --json` data. SnoozedUntil is a

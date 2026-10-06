@@ -199,6 +199,9 @@ func TestTranscriptsRebuildCommandPrintsProfileMembershipSummary(t *testing.T) {
 	got := out.String()
 	for _, want := range []string{
 		"rebuilt transcript sidecars",
+		"metadata_size: ",
+		"sidecar_dir: ",
+		"sidecar_size: ",
 		"visible_entries: 1",
 		"visible_profile_memberships: 2",
 		"shared_profile_entries: 1",
@@ -270,6 +273,43 @@ func TestTranscriptsStatusReadsAsSizesOnATerminalAndBytesInAPipe(t *testing.T) {
 		"metadata_size:               2.0 KiB\n",
 		"hidden_entries:              0 (removed from Past Sessions)\n",
 		"visible_profile_memberships: 0\n",
+	} {
+		if !strings.Contains(shown, want) {
+			t.Fatalf("terminal status missing %q:\n%s", want, shown)
+		}
+	}
+}
+
+// A nonzero problem count names the command that clears it on a terminal, and
+// stays a bare key/value line in a pipe.
+func TestTranscriptsStatusNamesTheRepairForEachProblemOnATerminal(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "transcripts.json")
+	resetTranscriptsCommandTestState(t, path)
+	key := transcript.IndexKey(harness.Claude, "s1")
+	body := `{"entries":{"` + key + `":{"id":"s1","harness":"claude","profile":"work","message_count":1}}}`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if err := searchstore.New(path).Write("claude:orphan", "junk"); err != nil {
+		t.Fatalf("Write orphan sidecar: %v", err)
+	}
+	run := func(terminal bool) string {
+		t.Helper()
+		transcriptsIsTerminal = func(io.Writer) bool { return terminal }
+		var out bytes.Buffer
+		transcriptsStatusCmd.SetOut(&out)
+		if err := transcriptsStatusCmd.RunE(transcriptsStatusCmd, nil); err != nil {
+			t.Fatalf("RunE: %v", err)
+		}
+		return out.String()
+	}
+	if piped := run(false); strings.Contains(piped, "amx transcripts") {
+		t.Fatalf("piped status must not carry repair hints:\n%s", piped)
+	}
+	shown := run(true)
+	for _, want := range []string{
+		"1 conversation has no search text, so search cannot find it; `amx transcripts rebuild --all` reindexes it.",
+		"1 search sidecar no longer belongs to a conversation; `amx transcripts compact` removes it.",
 	} {
 		if !strings.Contains(shown, want) {
 			t.Fatalf("terminal status missing %q:\n%s", want, shown)

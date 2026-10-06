@@ -89,9 +89,9 @@ Outside Kitty, set KITTY_LISTEN_ON to the instance's remote-control socket.`,
 }
 
 func init() {
-	projectListCmd.Flags().BoolVar(&projectListJSON, "json", false, "Emit the schema-v1 JSON envelope")
-	projectListCmd.Flags().BoolVar(&projectListMissing, "missing", false, "List only projects whose directory is unusable")
-	projectLaunchCmd.Flags().BoolVar(&projectLaunchJSON, "json", false, "Emit the schema-v1 JSON envelope")
+	projectListCmd.Flags().BoolVar(&projectListJSON, "json", false, "emit schema-v1 JSON")
+	projectListCmd.Flags().BoolVar(&projectListMissing, "missing", false, "list only projects whose directory is unusable")
+	projectLaunchCmd.Flags().BoolVar(&projectLaunchJSON, "json", false, "emit schema-v1 JSON")
 	projectLaunchCmd.Flags().StringVar(&projectLaunchTitle, "title", "", "configured project title")
 	projectLaunchCmd.Flags().StringVar(&projectLaunchProfile, "profile", "", "configured profile the project launches with")
 	_ = projectLaunchCmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
@@ -184,21 +184,12 @@ func runProjectLaunch(cmd *cobra.Command, args []string) error {
 		}
 		title = positional
 	}
-	if title == "" && projectLaunchJSON {
-		return cli.MissingParameter(cmd, projectLaunchJSON, "title", "configured project title (see `amx project list`)")
-	}
 	cfg, err := projectLoadConfig()
 	if err != nil {
 		return cli.CommandFailure(cmd, projectLaunchJSON, "config_invalid", err)
 	}
 	if title == "" {
-		// A person who typed the bare command is asking what there is to
-		// launch, so the answer lists it, the way an unmatched title does.
-		return cli.ActionErrorText(&actions.Error{
-			Code: "missing_parameter", Action: actions.Launch,
-			Message:    "a project title is required; `amx project list` shows every project",
-			Candidates: projectCandidates(cfg.Projects),
-		})
+		return projectMissingTitle(cmd, cfg)
 	}
 	project, err := selectProject(cfg, strings.TrimSpace(projectLaunchProfile), title)
 	if err != nil {
@@ -220,6 +211,40 @@ func runProjectLaunch(cmd *cobra.Command, args []string) error {
 	}
 	_, err = fmt.Fprintf(cmd.OutOrStdout(), "Launched %s (%s).\n", project.Title, project.EffectiveProfile())
 	return err
+}
+
+// projectMissingTitle answers the bare command. A person who typed it is
+// asking what there is to launch, so the answer lists it, the way an unmatched
+// title does — but only the projects a launch would accept, since one whose
+// directory is unusable is refused, and offering it would be offering a
+// failure. Those are counted instead and left to `project list --missing`.
+func projectMissingTitle(cmd *cobra.Command, cfg *config.Config) error {
+	launchable := make([]config.Session, 0, len(cfg.Projects))
+	for _, project := range cfg.Projects {
+		if projectDirectoryProblem(project.Directory) == "" {
+			launchable = append(launchable, project)
+		}
+	}
+	message := "a project title is required; `amx project list` shows every project"
+	if unusable := len(cfg.Projects) - len(launchable); unusable > 0 {
+		noun := "projects whose directory is unusable are"
+		if unusable == 1 {
+			noun = "project whose directory is unusable is"
+		}
+		message += fmt.Sprintf(" (%d %s left out; `amx project list --missing` names them)", unusable, noun)
+	}
+	actionErr := &actions.Error{
+		Code: "missing_parameter", Action: actions.Launch,
+		Message: message, Candidates: projectCandidates(launchable),
+	}
+	if projectLaunchJSON {
+		// The text form's positional title needs no flag spelled out; a JSON
+		// caller is told the parameter by name, as every missing_parameter is.
+		actionErr.MissingParameters = []actions.ParameterSchema{{
+			Name: "title", Description: "configured project title (see `amx project list`)", Required: true,
+		}}
+	}
+	return projectActionError(cmd, actionErr)
 }
 
 // projectActionError maps a selection or launch failure onto the caller's

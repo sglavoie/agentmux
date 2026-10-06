@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -364,7 +365,22 @@ func TestEditDistance(t *testing.T) {
 	}
 }
 
+// stubProjectDirectories reports every directory in missing as absent and
+// every other one as usable, so a test does not depend on the disk.
+func stubProjectDirectories(t *testing.T, missing ...string) {
+	t.Helper()
+	old := projectDirectoryProblem
+	t.Cleanup(func() { projectDirectoryProblem = old })
+	projectDirectoryProblem = func(dir string) string {
+		if slices.Contains(missing, dir) {
+			return "does not exist"
+		}
+		return ""
+	}
+}
+
 func TestProjectLaunchMissingTitleTextListsProjects(t *testing.T) {
+	stubProjectDirectories(t)
 	cfg := testConfig()
 	_, err := runProject(t, "launch", cfg, &recordingKittyClient{}, false, "", "")
 	if err == nil {
@@ -375,15 +391,40 @@ func TestProjectLaunchMissingTitleTextListsProjects(t *testing.T) {
 			t.Fatalf("text error lacks %q:\n%s", want, err)
 		}
 	}
+	if strings.Contains(err.Error(), "left out") {
+		t.Fatalf("text error counts unusable projects when there are none:\n%s", err)
+	}
+}
+
+// A launch refuses a project whose directory is unusable, so the bare command
+// does not offer one; it says how many it left out and where to find them.
+func TestProjectLaunchMissingTitleLeavesOutUnusableProjects(t *testing.T) {
+	stubProjectDirectories(t, "/tmp/web")
+	_, err := runProject(t, "launch", testConfig(), &recordingKittyClient{}, false, "", "")
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	if strings.Contains(err.Error(), "work/Web") {
+		t.Fatalf("text error offers a project whose directory is missing:\n%s", err)
+	}
+	if want := "(1 project whose directory is unusable is left out; `amx project list --missing` names them)"; !strings.Contains(err.Error(), want) {
+		t.Fatalf("text error lacks %q:\n%s", want, err)
+	}
 }
 
 func TestProjectLaunchMissingTitle(t *testing.T) {
+	stubProjectDirectories(t, "/tmp/web")
 	out, err := runProject(t, "launch", testConfig(), &recordingKittyClient{}, true, "work", "")
 	if err == nil {
 		t.Fatal("want an error")
 	}
 	if !strings.Contains(out, `"code":"missing_parameter"`) || !strings.Contains(out, `"name":"title"`) {
 		t.Fatalf("json = %s, want missing_parameter title", out)
+	}
+	// The text form's "… and N more (--json lists every candidate)" promises
+	// the JSON form carries the list.
+	if !strings.Contains(out, `"id":"codex-work/API"`) || strings.Contains(out, `"id":"work/Web"`) {
+		t.Fatalf("json = %s, want the launchable projects as candidates", out)
 	}
 }
 

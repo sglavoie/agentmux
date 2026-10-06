@@ -55,7 +55,7 @@ dashboard tab was launched.`,
 }
 
 func init() {
-	openDashboardCmd.Flags().BoolVar(&openDashboardJSON, "json", false, "Emit the schema-v1 JSON envelope")
+	openDashboardCmd.Flags().BoolVar(&openDashboardJSON, "json", false, "emit schema-v1 JSON")
 	openDashboardCmd.Flags().IntVar(&openDashboardSourceWindowID, "window-id", 0, "Kitty window ID whose tab the dashboard should select")
 }
 

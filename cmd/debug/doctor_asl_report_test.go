@@ -105,6 +105,31 @@ func TestTheTextSectionNamesEveryDimensionAndItsRemediation(t *testing.T) {
 	}
 }
 
+// A status wider than "fail" must not push its row's detail, or a remediation
+// line, out of the column the other rows share.
+func TestTheTextSectionAlignsDetailsPastAWideStatus(t *testing.T) {
+	integration := doctorASLIntegration{Mode: "required", Dimensions: []doctorASLDimension{
+		{Name: "contract", Status: aslStatusOK, Detail: "both halves agree"},
+		{Name: "delivery", Status: aslStatusUnknown, Detail: "no hook yet"},
+		{Name: "freshness", Status: aslStatusWarn, Detail: "stale", Remediation: "restart"},
+	}}
+	var out bytes.Buffer
+	if err := writeDoctorASLIntegration(&out, integration, func(string, string, string, ...any) {}); err != nil {
+		t.Fatalf("writeDoctorASLIntegration() = %v", err)
+	}
+	columns := map[int]bool{}
+	for _, line := range strings.Split(strings.TrimRight(out.String(), "\n"), "\n")[1:] {
+		for _, text := range []string{"both halves agree", "no hook yet", "stale", "remediation: restart"} {
+			if i := strings.Index(line, text); i >= 0 {
+				columns[i] = true
+			}
+		}
+	}
+	if len(columns) != 1 {
+		t.Errorf("details start in %d different columns, want 1:\n%s", len(columns), out.String())
+	}
+}
+
 // End to end: the report is schema v2 and carries the block, and a required
 // integration the daemon cannot reach fails `--strict`.
 func TestStrictDoctorFailsForAnUnavailableRequiredIntegration(t *testing.T) {

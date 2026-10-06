@@ -255,12 +255,18 @@ func writeDoctorASLIntegration(out io.Writer, integration doctorASLIntegration, 
 	if _, err := fmt.Fprintf(out, "asl integration: mode %s\n", integration.Mode); err != nil {
 		return err
 	}
+	// The status column is as wide as its widest value, so an "unknown" or a
+	// "not_applicable" row keeps its detail in line with the others.
+	statusWidth := len(aslStatusFail)
 	for _, dim := range integration.Dimensions {
-		if _, err := fmt.Fprintf(out, "  %-19s %-4s %s\n", dim.Name, dim.Status, dim.Detail); err != nil {
+		statusWidth = max(statusWidth, len(dim.Status))
+	}
+	for _, dim := range integration.Dimensions {
+		if _, err := fmt.Fprintf(out, "  %-19s %-*s %s\n", dim.Name, statusWidth, dim.Status, dim.Detail); err != nil {
 			return err
 		}
 		if dim.Remediation != "" && dim.Status != aslStatusUnknown {
-			if _, err := fmt.Fprintf(out, "  %-19s      remediation: %s\n", "", dim.Remediation); err != nil {
+			if _, err := fmt.Fprintf(out, "  %-19s %-*s remediation: %s\n", "", statusWidth, "", dim.Remediation); err != nil {
 				return err
 			}
 		}

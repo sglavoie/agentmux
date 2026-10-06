@@ -26,12 +26,12 @@ var daemonCmd = &cobra.Command{
 }
 
 func init() {
-	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsWindow, "window", 0, "Restrict export to a single Kitty window ID")
-	daemonExportEventsCmd.Flags().BoolVar(&daemonExportEventsCurrentWindow, "current-window", false, "Resolve the target window from $KITTY_WINDOW_ID")
-	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsLast, "last", 0, "Keep only the last N events per exported window (0 = no limit)")
-	daemonExportEventsCmd.Flags().StringVar(&daemonExportEventsOutput, "output", "", "Write JSON to this file instead of stdout")
-	daemonExportEventsCmd.Flags().BoolVar(&daemonExportEventsPretty, "pretty", true, "Pretty-print JSON with 2-space indent")
-	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsSchema, "schema", protocol.EventsExportSchemaVersion, "Export schema version (8, 9, 10, 11, 12, or 13)")
+	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsWindow, "window", 0, "restrict export to a single Kitty window ID")
+	daemonExportEventsCmd.Flags().BoolVar(&daemonExportEventsCurrentWindow, "current-window", false, "resolve the target window from $KITTY_WINDOW_ID")
+	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsLast, "last", 0, "keep only the last N events per exported window (0 = no limit)")
+	daemonExportEventsCmd.Flags().StringVar(&daemonExportEventsOutput, "output", "", "write JSON to this file instead of stdout")
+	daemonExportEventsCmd.Flags().BoolVar(&daemonExportEventsPretty, "pretty", true, "pretty-print JSON with 2-space indent")
+	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsSchema, "schema", protocol.EventsExportSchemaVersion, "export schema version (8, 9, 10, 11, 12, or 13)")
 
 	daemonCmd.AddCommand(debug.AuditCommand())
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd, daemonRestartCmd, daemonExportEventsCmd)

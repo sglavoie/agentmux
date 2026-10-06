@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/sglavoie/agentmux/cmd/session"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/kittykeys"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // runRootArgs drives rootCmd exactly like the real binary (so subcommand and
@@ -232,4 +236,25 @@ func TestRemovedCommandsAreNotRegistered(t *testing.T) {
 			t.Errorf("session command %q remains registered", removed)
 		}
 	}
+}
+
+// Flag help reads as one voice across every family: a description starts in
+// lower case, as cobra's own "help for …" does, unless it opens with a name
+// or an acronym.
+func TestFlagDescriptionsStartInLowerCase(t *testing.T) {
+	var walk func(*cobra.Command)
+	walk = func(command *cobra.Command) {
+		command.LocalFlags().VisitAll(func(flag *pflag.Flag) {
+			first, _ := utf8.DecodeRuneInString(flag.Usage)
+			word, _, _ := strings.Cut(flag.Usage, " ")
+			acronym := len(word) > 1 && strings.ToUpper(word) == word
+			if unicode.IsUpper(first) && !acronym && !strings.HasPrefix(flag.Usage, "Kitty ") && !strings.HasPrefix(flag.Usage, "Agent Mux ") {
+				t.Errorf("%s --%s: description %q starts in upper case", command.CommandPath(), flag.Name, flag.Usage)
+			}
+		})
+		for _, child := range command.Commands() {
+			walk(child)
+		}
+	}
+	walk(rootCmd)
 }

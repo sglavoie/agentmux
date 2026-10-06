@@ -37,7 +37,7 @@ mute state after the command, and changed is false for the no-op.`,
 func init() {
 	muteToggleCmd.Flags().IntVar(&muteToggleWindowID, "window-id", 0,
 		"Kitty window ID of the target tab (defaults to $KITTY_WINDOW_ID)")
-	muteToggleCmd.Flags().BoolVar(&muteToggleJSON, "json", false, "Emit the schema-v1 JSON envelope")
+	muteToggleCmd.Flags().BoolVar(&muteToggleJSON, "json", false, "emit schema-v1 JSON")
 }
 
 // muteToggleResult is the `mute-toggle --json` data. Muted is the state the

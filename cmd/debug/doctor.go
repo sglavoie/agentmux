@@ -343,7 +343,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 }
 
 func init() {
-	doctorCmd.Flags().BoolVar(&doctorJSON, "json", false, "Emit a structured JSON report instead of text")
-	doctorCmd.Flags().BoolVar(&doctorStrict, "strict", false, "Exit nonzero when any health failure is detected")
-	doctorCmd.Flags().BoolVarP(&doctorVerbose, "verbose", "v", false, "List every closed window and every suppression reason instead of summarizing them")
+	doctorCmd.Flags().BoolVar(&doctorJSON, "json", false, "emit a structured JSON report instead of text")
+	doctorCmd.Flags().BoolVar(&doctorStrict, "strict", false, "exit nonzero when any health failure is detected")
+	doctorCmd.Flags().BoolVarP(&doctorVerbose, "verbose", "v", false, "list every closed window and every suppression reason instead of summarizing them")
 }
