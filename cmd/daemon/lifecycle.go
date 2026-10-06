@@ -26,6 +26,10 @@ type daemonLifecycleClient interface {
 
 var newDaemonLifecycleClient = func() daemonLifecycleClient { return ipc.NewClient() }
 
+// daemonRestartBinary is the seam tests swap to stand in for the running
+// executable the restart re-execs.
+var daemonRestartBinary = cli.AmxBinary
+
 var daemonStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start the daemon (blocks until shutdown)",
@@ -86,7 +90,12 @@ var daemonRestartCmd = &cobra.Command{
 		c := newDaemonLifecycleClient()
 		// A daemon that cannot be located re-execs by name off PATH; the
 		// resolution failure is not itself a reason to refuse the restart.
-		amxBin, _ := cli.AmxBinary()
+		amxBin, _ := daemonRestartBinary()
+		// A `go run` build is deleted when this command exits, so the daemon
+		// would come back up from a file that no longer exists.
+		if err := cli.RefuseTransientBinary(amxBin, "restart the daemon"); err != nil {
+			return err
+		}
 		if err := c.RestartDetached(amxBin); err != nil {
 			return err
 		}

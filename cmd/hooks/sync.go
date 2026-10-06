@@ -20,6 +20,9 @@ func SyncCommand() *cobra.Command { return configHooksSyncCmd }
 // StatusCommand returns the `hooks-status` leaf. See SyncCommand.
 func StatusCommand() *cobra.Command { return configHooksStatusCmd }
 
+// hooksBinary is the seam tests swap to stand in for the running executable.
+var hooksBinary = cli.AmxBinary
+
 var configHooksSyncCmd = &cobra.Command{
 	Use:               "hooks-sync [PROFILE]",
 	Short:             "Sync Agent Mux hooks for configured harness profiles",
@@ -30,8 +33,11 @@ var configHooksSyncCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		bin, err := cli.AmxBinary()
+		bin, err := hooksBinary()
 		if err != nil {
+			return err
+		}
+		if err := cli.RefuseTransientBinary(bin, "write hook commands"); err != nil {
 			return err
 		}
 		filter := ""

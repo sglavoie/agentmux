@@ -11,7 +11,9 @@ Managed hook files embed the absolute `amx` path returned by the binary that ran
 `hooks-sync`. Re-run `amx config hooks-sync` when that path changes (for example,
 when switching from a repo-local binary to `~/.local/bin/amx`). If you rebuilt
 or reinstalled the same binary path and only changed Go logic, hook sync is not
-needed.
+needed. `hooks-sync` refuses to run from a `go run` build, because Go deletes
+that binary once the command exits or its build cache is trimmed and every hook
+would silently stop firing; `amx daemon restart` refuses for the same reason.
 
 Hook installation is harness-aware:
 

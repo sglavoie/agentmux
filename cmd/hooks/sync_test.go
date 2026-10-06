@@ -94,3 +94,27 @@ home_dir = "` + homeDir + `"
 color = "blue"
 `
 }
+
+// Hook files embed the binary that ran hooks-sync, and the hook indicator fails
+// open, so a `go run` build — deleted when the command exits — would silently
+// break every hook. The sync is refused before any file is written.
+func TestConfigHooksSyncRefusesAGoRunBuild(t *testing.T) {
+	dir := t.TempDir()
+	home := filepath.Join(dir, "claude-home")
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte(validConfigBody(home)), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("amx_CONFIG", path)
+	oldBinary := hooksBinary
+	t.Cleanup(func() { hooksBinary = oldBinary })
+	hooksBinary = func() (string, error) { return "/tmp/go-build1/b001/exe/agentmux", nil }
+
+	err := configHooksSyncCmd.RunE(configHooksSyncCmd, nil)
+	if err == nil || !strings.Contains(err.Error(), "refusing to write hook commands") {
+		t.Fatalf("RunE error = %v; want a go run refusal", err)
+	}
+	if _, statErr := os.Stat(home); !os.IsNotExist(statErr) {
+		t.Fatalf("hook home %s was touched (stat err %v); want nothing written", home, statErr)
+	}
+}
