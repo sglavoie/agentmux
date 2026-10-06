@@ -31,6 +31,7 @@ amx session search --source user flaky    # only your own prompts (or --source h
 amx session show 09467ec1                 # one conversation: title, directory, ages, whether it is open in Kitty, message count, transcript path, and the commands that continue or fork it
 cd "$(amx session show 09467ec1 --json | jq -r .data.session.cwd)"
 amx session continue codex <session-id>
+amx session continue --here   # the most recently active conversation started in this directory or below it, named on stderr before acting
 amx session fork claude <session-id>
 amx session fork-worktree codex <session-id> --yes
 amx session handoff claude:<session-id> --profile codex-work

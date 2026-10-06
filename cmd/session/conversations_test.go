@@ -693,3 +693,86 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 		}
 	})
 }
+
+// `session continue --here` acts on the newest interactive conversation
+// started in the current directory or below it, and says which one before
+// acting. Newer conversations elsewhere, and automated ones here, are not it.
+func TestSessionContinueHerePicksTheNewestConversationHere(t *testing.T) {
+	resetSessionCommandsTestState(t)
+	oldGetwd := sessionListGetwd
+	t.Cleanup(func() {
+		sessionListGetwd = oldGetwd
+		_ = sessionContinueCmd.Flags().Set("here", "false")
+		sessionContinueCmd.SetErr(nil)
+	})
+	dir := t.TempDir()
+	repo := filepath.Join(dir, "repo")
+	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	sessionCommandsNow = func() time.Time { return now }
+	entry := func(id, cwd string, age time.Duration, title string) transcript.SessionMeta {
+		source := filepath.Join(dir, id+".jsonl")
+		if err := os.WriteFile(source, []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		info, err := os.Stat(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return transcript.SessionMeta{
+			ID: id, Harness: harness.Codex, CWD: cwd, Path: source, Title: title, Snippet: "prompt " + id,
+			FileSize: info.Size(), FileModTime: info.ModTime(), MessageCount: 1,
+			StartedAt: now.Add(-age), LastAt: now.Add(-age),
+		}
+	}
+	discovered := []transcript.SessionMeta{
+		entry("elsewhere", filepath.Join(dir, "other"), time.Minute, "Other work"),
+		automated(entry("asl-run", repo, 2*time.Minute, "")),
+		entry("wanted", filepath.Join(repo, "sub"), 5*time.Minute, "Parser fix"),
+		entry("older", repo, time.Hour, "Older"),
+	}
+	sessionCommandsSessionIndexPath = func() string { return filepath.Join(dir, "transcripts.json") }
+	sessionCommandsLoadConfig = func() (*config.Config, error) {
+		return &config.Config{
+			Profiles: []config.Account{{Name: "work", Harness: harness.Codex, HomeDir: filepath.Join(dir, "codex-home")}},
+			Projects: []config.Session{{Title: "repo", Directory: repo, Profile: "work"}},
+		}, nil
+	}
+	sessionCommandsSessionReaders = func() map[string]transcript.Reader {
+		return map[string]transcript.Reader{harness.Codex: sessionCommandReader{harness: harness.Codex, discovered: discovered}}
+	}
+	client := &sessionCommandKitty{}
+	sessionCommandsNewKitty = func() kitty.KittyClient { return client }
+	sessionCommandsDaemon = func(protocol.Request) (protocol.Response, error) { return protocol.Response{OK: true}, nil }
+	sessionListGetwd = func() (string, error) { return repo, nil }
+	if err := sessionContinueCmd.Flags().Set("here", "true"); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	sessionContinueCmd.SetOut(&out)
+	sessionContinueCmd.SetErr(&errOut)
+
+	if err := sessionContinueCmd.RunE(sessionContinueCmd, nil); err != nil {
+		t.Fatalf("continue --here: %v\n%s", err, out.String())
+	}
+	if len(client.launched) != 1 || !strings.Contains(strings.Join(client.launched[0].Cmdline, " "), " resume wanted") {
+		t.Fatalf("launches = %+v, want a resume of the conversation named wanted", client.launched)
+	}
+	if got, want := errOut.String(), "Picked codex:wanted, active 5m ago: Parser fix\n"; got != want {
+		t.Fatalf("stderr = %q, want %q", got, want)
+	}
+
+	t.Run("a selector beside --here is refused", func(t *testing.T) {
+		err := sessionContinueCmd.RunE(sessionContinueCmd, []string{"older"})
+		if err == nil || !strings.Contains(err.Error(), "pass either --here or a selector") {
+			t.Fatalf("err = %v, want a refusal", err)
+		}
+	})
+
+	t.Run("nothing here is a miss that says where it looked", func(t *testing.T) {
+		sessionListGetwd = func() (string, error) { return filepath.Join(dir, "empty"), nil }
+		err := sessionContinueCmd.RunE(sessionContinueCmd, nil)
+		if err == nil || !strings.Contains(err.Error(), "--here: no conversation was started in") {
+			t.Fatalf("err = %v, want a miss", err)
+		}
+	})
+}

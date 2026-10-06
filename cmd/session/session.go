@@ -41,6 +41,7 @@ func init() {
 	addSessionSelectionFlags(sessionSearchCmd)
 	sessionShowCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
 	sessionContinueCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	sessionContinueCmd.Flags().Bool("here", false, "continue the most recently active conversation started in the current directory or below it")
 	sessionForkCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
 	sessionForkWorktreeCmd.Flags().Bool("allow-dirty", false, "allow a dirty source; uncommitted changes are not copied")
 	sessionForkWorktreeCmd.Flags().Bool("yes", false, "confirm creating the isolated fork")

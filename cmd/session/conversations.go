@@ -512,6 +512,11 @@ func newConversationActionCommand(name string, actionID actions.ID, short string
 		Short:             short,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jsonOutput, _ := cmd.Flags().GetBool("json")
+			// Only the commands that declare --here read it; for the others
+			// GetBool reports the flag as absent and false.
+			if here, _ := cmd.Flags().GetBool("here"); here {
+				return runConversationActionHere(cmd, jsonOutput, name, actionID, args)
+			}
 			identity, err := conversationIdentityFromArgs(cmd, jsonOutput, name, args)
 			if err != nil {
 				return err
@@ -527,6 +532,45 @@ func newConversationActionCommand(name string, actionID actions.ID, short string
 			return executeSessionAction(cmd, jsonOutput, cfg, actionID, actions.Request{Conversation: meta})
 		},
 	}
+}
+
+// runConversationActionHere is `session continue --here`: the action on the
+// most recently active interactive conversation started in the current
+// directory or below it, the same rows `session list --here` shows first. It
+// does not guess between candidates — "most recent" is the rule the flag
+// names — but it says which conversation it picked before acting, so the
+// choice is never invisible. A selector beside the flag is refused rather than
+// one of the two silently winning.
+func runConversationActionHere(cmd *cobra.Command, jsonOutput bool, name string, actionID actions.ID, args []string) error {
+	if len(args) != 0 {
+		return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", fmt.Errorf("session %s --here picks the conversation itself; pass either --here or a selector", name))
+	}
+	cfg, err := sessionCommandsLoadConfig()
+	if err != nil {
+		return cli.CommandFailure(cmd, jsonOutput, "config_error", err)
+	}
+	dirs, err := sessionListHereDirs()
+	if err != nil {
+		return cli.CommandFailure(cmd, jsonOutput, "command_failed", err)
+	}
+	idx, err := loadRefreshedSessionIndex(cfg, sessionCommandsSessionReaders())
+	if err != nil {
+		return cli.CommandFailure(cmd, jsonOutput, "session_index_unavailable", err)
+	}
+	candidates := sessionsUnder(idx.List(transcript.ListFilter{MainOnly: true}), dirs)
+	if len(candidates) == 0 {
+		return cli.CommandFailure(cmd, jsonOutput, "not_found", fmt.Errorf("--here: no conversation was started in %s or below it; `amx session list` shows recent ones elsewhere", cli.DisplayPath(dirs[0])))
+	}
+	meta := candidates[0]
+	if !jsonOutput {
+		summary := oneLine(meta.Title)
+		if summary == "" {
+			summary = oneLine(meta.Snippet)
+		}
+		summary = layout.Truncate(summary, sessionSummaryWidth, "…")
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Picked %s:%s, active %s: %s\n", meta.Harness, meta.ID, formatAgo(meta.LastAt, sessionCommandsNow()), summary)
+	}
+	return executeSessionAction(cmd, jsonOutput, cfg, actionID, actions.Request{Conversation: &meta})
 }
 
 // conversationParameterDescription names every selector form a continuity
