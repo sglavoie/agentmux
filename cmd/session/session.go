@@ -2,8 +2,8 @@
 // the Kitty tab carrying one.
 //
 // Two kinds of leaf live here and they are the same domain seen from two
-// distances. The `amx session` family works on conversation identity — listing
-// and searching indexed conversations and continuing, forking,
+// distances. The `amx session` family works on conversation identity — listing,
+// searching, and showing indexed conversations and continuing, forking,
 // worktree-forking, or handing one off — and always resolves an exact
 // (harness, session_id) before it acts.
 // The root-level tab controls work on the live instance instead: focusing the
@@ -29,7 +29,7 @@ func Command() *cobra.Command { return sessionCmd }
 
 var sessionCmd = &cobra.Command{
 	Use:   "session",
-	Short: "List, search, continue, fork, and hand off conversations",
+	Short: "List, search, show, continue, fork, and hand off conversations",
 }
 
 func init() {
@@ -39,6 +39,7 @@ func init() {
 	sessionSearchCmd.Flags().String("source", "any", "match text from: any, user (your prompts), or harness (the agent's output)")
 	_ = sessionSearchCmd.RegisterFlagCompletionFunc("source", cobra.FixedCompletions([]string{"any", "user", "harness"}, cobra.ShellCompDirectiveNoFileComp))
 	addSessionSelectionFlags(sessionSearchCmd)
+	sessionShowCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
 	sessionContinueCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
 	sessionForkCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
 	sessionForkWorktreeCmd.Flags().Bool("allow-dirty", false, "allow a dirty source; uncommitted changes are not copied")
@@ -49,5 +50,5 @@ func init() {
 	sessionHandoffCmd.Flags().Bool("edit", false, "edit the generated handoff before launch")
 	sessionHandoffCmd.Flags().Bool("no-launch", false, "finalize the handoff without launching a target")
 	sessionHandoffCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
-	sessionCmd.AddCommand(sessionListCmd, sessionSearchCmd, sessionContinueCmd, sessionForkCmd, sessionForkWorktreeCmd, sessionHandoffCmd)
+	sessionCmd.AddCommand(sessionListCmd, sessionSearchCmd, sessionShowCmd, sessionContinueCmd, sessionForkCmd, sessionForkWorktreeCmd, sessionHandoffCmd)
 }

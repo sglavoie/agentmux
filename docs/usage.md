@@ -25,6 +25,8 @@ amx session continue "$(amx session list | fzf | cut -f5)"   # pick by opening p
 amx session search race daemon            # conversations mentioning both words, newest first, with match counts
 amx session search '"race condition"' --here --since 7d   # a quoted phrase; takes every list selector
 amx session search --source user flaky    # only your own prompts (or --source harness for the agent's output)
+amx session show 09467ec1                 # one conversation: directory, ages, message count, transcript path
+cd "$(amx session show 09467ec1 --json | jq -r .data.session.cwd)"
 amx session continue codex <session-id>
 amx session fork claude <session-id>
 amx session fork-worktree codex <session-id> --yes
