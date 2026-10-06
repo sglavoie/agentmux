@@ -143,3 +143,28 @@ func TestSessionTableSummaryPrefersTheTitle(t *testing.T) {
 		t.Fatalf("table = %q, want the title, else the opening prompt", out.String())
 	}
 }
+
+// Off a terminal the title is appended after the opening prompt, so every
+// field a script already reads by position keeps it, and a conversation the
+// harness named nothing ends in an empty field rather than a placeholder.
+func TestSessionLinesEndWithTheTitleAfterThePrompt(t *testing.T) {
+	last := time.Date(2026, 10, 6, 15, 21, 0, 0, time.UTC)
+	views := []sessionView{
+		{Harness: "claude", Profile: "p", Project: "x", LastAt: last, ID: "b03c41a5", Snippet: "Look at\tthe project", Title: "Parser cleanup"},
+		{Harness: "codex", Profile: "q", Project: "y", LastAt: last, ID: "c14d52b6", Snippet: "Look at the project"},
+	}
+	var out bytes.Buffer
+	writeSessionLines(&out, views)
+	lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("lines = %q", lines)
+	}
+	first := strings.Split(lines[0], "\t")
+	if len(first) != 7 || first[4] != "b03c41a5" || first[5] != "Look at the project" || first[6] != "Parser cleanup" {
+		t.Fatalf("titled line fields = %q", first)
+	}
+	second := strings.Split(lines[1], "\t")
+	if len(second) != 7 || second[5] != "Look at the project" || second[6] != "" {
+		t.Fatalf("untitled line fields = %q", second)
+	}
+}

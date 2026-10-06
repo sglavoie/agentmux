@@ -81,16 +81,22 @@ var sessionListCmd = &cobra.Command{
 		if terminal {
 			return writeSessionTable(out, views, abbreviateSessionIDs(idx.List(transcript.ListFilter{})), sessionCommandsNow(), sessionListTerminalWidth(out), liveKnown)
 		}
-		// Off a terminal the output stays headerless and tab-separated with
-		// absolute timestamps: scripts cut and sort it, and a relative age is
-		// stale the moment it is written to a file. The opening prompt comes
-		// last, on one line, so a picker such as fzf has something to match
-		// on and the fields before it keep their positions.
-		for _, item := range views {
-			_, _ = fmt.Fprintf(out, "%s\t%s\t%s\t%s\t%s\t%s\n", item.Harness, item.Profile, item.Project, formatTime(item.LastAt), item.ID, oneLine(item.Snippet))
-		}
+		writeSessionLines(out, views)
 		return nil
 	},
+}
+
+// writeSessionLines is `session list` off a terminal: headerless and
+// tab-separated with absolute timestamps, because scripts cut and sort it and
+// a relative age is stale the moment it is written to a file. The opening
+// prompt and then the title follow the fixed fields, each on one line, so a
+// picker such as fzf has something to match on. The title came last, after
+// the prompt, so every field before it kept its position; it is empty when the
+// harness named the conversation nothing.
+func writeSessionLines(out io.Writer, views []sessionView) {
+	for _, item := range views {
+		_, _ = fmt.Fprintf(out, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", item.Harness, item.Profile, item.Project, formatTime(item.LastAt), item.ID, oneLine(item.Snippet), oneLine(item.Title))
+	}
 }
 
 // sessionSelection is what the selector flags `session list` and `session
