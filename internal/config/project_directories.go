@@ -16,36 +16,38 @@ import (
 func ProjectDirectoryProblems(projects []Session) []string {
 	var errs []string
 	for _, project := range projects {
-		configuredPath := project.Directory
+		problem := ProjectDirectoryProblem(project.Directory)
+		if problem == "" {
+			continue
+		}
 		label := project.Title
 		if profile := project.EffectiveProfile(); profile != "" {
 			label = profile + "/" + project.Title
 		}
-		info, err := os.Stat(ExpandTilde(configuredPath))
-		if err != nil {
-			var reason string
-			if errors.Is(err, os.ErrNotExist) {
-				reason = "does not exist"
-			} else {
-				var pathErr *os.PathError
-				if errors.As(err, &pathErr) {
-					reason = fmt.Sprintf("cannot be inspected: %v", pathErr.Err)
-				} else {
-					reason = fmt.Sprintf("cannot be inspected: %v", err)
-				}
-			}
-			errs = append(errs, fmt.Sprintf(
-				"project %q: directory %q %s",
-				label, configuredPath, reason,
-			))
-			continue
-		}
-		if !info.IsDir() {
-			errs = append(errs, fmt.Sprintf(
-				"project %q: directory %q is not a directory",
-				label, configuredPath,
-			))
-		}
+		errs = append(errs, fmt.Sprintf("project %q: directory %q %s", label, project.Directory, problem))
 	}
 	return errs
+}
+
+// ProjectDirectoryProblem says what is wrong with one configured project
+// directory ("does not exist", "is not a directory", or "cannot be inspected:
+// ..."), or "" when it is usable. It is the single rule behind
+// ProjectDirectoryProblems and `amx project list`, so the list cannot mark a
+// project that validate accepts.
+func ProjectDirectoryProblem(configuredPath string) string {
+	info, err := os.Stat(ExpandTilde(configuredPath))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "does not exist"
+		}
+		var pathErr *os.PathError
+		if errors.As(err, &pathErr) {
+			return fmt.Sprintf("cannot be inspected: %v", pathErr.Err)
+		}
+		return fmt.Sprintf("cannot be inspected: %v", err)
+	}
+	if !info.IsDir() {
+		return "is not a directory"
+	}
+	return ""
 }

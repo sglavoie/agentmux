@@ -76,9 +76,11 @@ func runProjectArgs(t *testing.T, leaf string, cfg *config.Config, client kitty.
 	t.Helper()
 	oldLoad, oldKitty := projectLoadConfig, projectNewKitty
 	oldListJSON, oldLaunchJSON, oldProfile, oldTitle := projectListJSON, projectLaunchJSON, projectLaunchProfile, projectLaunchTitle
+	oldMissing := projectListMissing
 	t.Cleanup(func() {
 		projectLoadConfig, projectNewKitty = oldLoad, oldKitty
 		projectListJSON, projectLaunchJSON, projectLaunchProfile, projectLaunchTitle = oldListJSON, oldLaunchJSON, oldProfile, oldTitle
+		projectListMissing = oldMissing
 	})
 	projectLoadConfig = func() (*config.Config, error) { return cfg, nil }
 	projectNewKitty = func() kitty.KittyClient { return client }
@@ -108,6 +110,61 @@ func TestProjectListJSONContract(t *testing.T) {
 		`{"profile":"work","title":"Web","harness":"claude","directory":"/tmp/web","groups":[]}]}`
 	if got := strings.TrimSpace(out); got != want {
 		t.Fatalf("json = %s\nwant   %s", got, want)
+	}
+}
+
+// withDirectoryProblems makes /tmp/web missing for one test.
+func withDirectoryProblems(t *testing.T) {
+	t.Helper()
+	old := projectDirectoryProblem
+	t.Cleanup(func() { projectDirectoryProblem = old })
+	projectDirectoryProblem = func(dir string) string {
+		if dir == "/tmp/web" {
+			return "does not exist"
+		}
+		return ""
+	}
+}
+
+func TestProjectListMarksUnusableDirectories(t *testing.T) {
+	withDirectoryProblems(t)
+	out, err := runProject(t, "list", testConfig(), &recordingKittyClient{}, true, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, `"directory":"/tmp/web","directory_problem":"does not exist","groups":[]`) ||
+		strings.Count(out, "directory_problem") != 1 {
+		t.Fatalf("json does not mark exactly the missing directory: %s", out)
+	}
+	out, err = runProject(t, "list", testConfig(), &recordingKittyClient{}, false, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "/tmp/web (missing)") || strings.Contains(out, "/tmp/api (") {
+		t.Fatalf("text does not mark exactly the missing directory:\n%s", out)
+	}
+}
+
+func TestProjectListMissingKeepsOnlyUnusableDirectories(t *testing.T) {
+	withDirectoryProblems(t)
+	t.Cleanup(func() { projectListMissing = false })
+	projectListMissing = true
+	out, err := runProject(t, "list", testConfig(), &recordingKittyClient{}, false, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "Web") || strings.Contains(out, "API") {
+		t.Fatalf("--missing output:\n%s", out)
+	}
+
+	projectDirectoryProblem = func(string) string { return "" }
+	projectListMissing = true
+	out, err = runProject(t, "list", testConfig(), &recordingKittyClient{}, false, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(out) != "Every configured project directory is usable." {
+		t.Fatalf("--missing with nothing missing: %q", out)
 	}
 }
 

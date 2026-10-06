@@ -42,6 +42,8 @@ var (
 	// completion: a <Tab> on a broken config suggests nothing rather than
 	// reporting an error at a shell prompt.
 	projectCompletionLoadConfig = config.LoadDefault
+	// projectDirectoryProblem stats a project directory on the operator's disk.
+	projectDirectoryProblem = config.ProjectDirectoryProblem
 )
 
 // Command returns the `project` command tree so the root command can register
@@ -55,6 +57,7 @@ var projectCmd = &cobra.Command{
 
 var (
 	projectListJSON      bool
+	projectListMissing   bool
 	projectLaunchJSON    bool
 	projectLaunchProfile string
 	projectLaunchTitle   string
@@ -88,6 +91,7 @@ Outside Kitty, set KITTY_LISTEN_ON to the instance's remote-control socket.`,
 
 func init() {
 	projectListCmd.Flags().BoolVar(&projectListJSON, "json", false, "Emit the schema-v1 JSON envelope")
+	projectListCmd.Flags().BoolVar(&projectListMissing, "missing", false, "List only projects whose directory is unusable")
 	projectLaunchCmd.Flags().BoolVar(&projectLaunchJSON, "json", false, "Emit the schema-v1 JSON envelope")
 	projectLaunchCmd.Flags().StringVar(&projectLaunchTitle, "title", "", "configured project title")
 	projectLaunchCmd.Flags().StringVar(&projectLaunchProfile, "profile", "", "configured profile the project launches with")
@@ -98,13 +102,16 @@ func init() {
 
 // projectView is one configured project as both leaves report it. Groups is
 // always an array, empty rather than null, so a JSON caller can iterate it
-// without a nil check.
+// without a nil check. DirectoryProblem is filled by `list` only, and only
+// when the directory is unusable; a launch from such a project fails on its
+// own terms.
 type projectView struct {
-	Profile   string   `json:"profile"`
-	Title     string   `json:"title"`
-	Harness   string   `json:"harness"`
-	Directory string   `json:"directory"`
-	Groups    []string `json:"groups"`
+	Profile          string   `json:"profile"`
+	Title            string   `json:"title"`
+	Harness          string   `json:"harness"`
+	Directory        string   `json:"directory"`
+	DirectoryProblem string   `json:"directory_problem,omitempty"`
+	Groups           []string `json:"groups"`
 }
 
 // projectLaunchData is the `project launch --json` payload. TabID and WindowID
@@ -125,18 +132,48 @@ func runProjectList(cmd *cobra.Command, _ []string) error {
 		return cli.CommandFailure(cmd, projectListJSON, "config_invalid", err)
 	}
 	views := projectViews(cfg)
+	kept := views[:0]
+	for _, view := range views {
+		view.DirectoryProblem = projectDirectoryProblem(view.Directory)
+		if !projectListMissing || view.DirectoryProblem != "" {
+			kept = append(kept, view)
+		}
+	}
+	views = kept
 	if projectListJSON {
 		return cli.WriteJSON(cmd, views)
 	}
 	if len(views) == 0 {
-		_, err := fmt.Fprintln(cmd.OutOrStdout(), "No projects are configured.")
+		message := "No projects are configured."
+		if projectListMissing {
+			message = "Every configured project directory is usable."
+		}
+		_, err := fmt.Fprintln(cmd.OutOrStdout(), message)
 		return err
 	}
 	rows := make([][]string, 0, len(views))
 	for _, view := range views {
-		rows = append(rows, []string{view.Profile, view.Title, view.Harness, cli.DisplayPath(view.Directory), strings.Join(view.Groups, ",")})
+		directory := cli.DisplayPath(view.Directory)
+		if view.DirectoryProblem != "" {
+			directory += " (" + projectProblemLabel(view.DirectoryProblem) + ")"
+		}
+		rows = append(rows, []string{view.Profile, view.Title, view.Harness, directory, strings.Join(view.Groups, ",")})
 	}
 	return cli.WriteTable(cmd.OutOrStdout(), []string{"PROFILE", "TITLE", "HARNESS", "DIRECTORY", "GROUPS"}, rows)
+}
+
+// projectProblemLabel shortens a directory problem to fit a table cell; the
+// detail after the colon of "cannot be inspected: ..." is in --json and in
+// `amx config validate`.
+func projectProblemLabel(problem string) string {
+	switch {
+	case problem == "does not exist":
+		return "missing"
+	case strings.HasPrefix(problem, "cannot be inspected"):
+		return "unreadable"
+	default:
+		return problem
+	}
 }
 
 func runProjectLaunch(cmd *cobra.Command, args []string) error {

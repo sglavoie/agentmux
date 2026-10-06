@@ -131,7 +131,9 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   tab that opens only to show a config error and close is worse than refusing.
 - `cmd/project`: the `amx project` family — the command surface over configured
   projects, the launch templates `[[projects]]` declares. `list` reports each
-  as `{profile, title, harness, directory, groups}`, and `launch` starts a new
+  as `{profile, title, harness, directory, groups}` plus a `directory_problem`
+  when its directory is unusable (`--missing` keeps only those, by the same
+  rule `config validate` applies), and `launch` starts a new
   session from one through `actions.Launch` in `actions.DefaultRegistry()`, the
   same definition the dashboard's launcher runs, so the two cannot disagree
   about what launching a project means. A project is identified by its profile
