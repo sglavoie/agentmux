@@ -223,6 +223,10 @@ func writeWorktreeActionResult(cmd *cobra.Command, jsonOutput bool, result actio
 	return nil
 }
 
+// worktreeListHint ends a text error about a selector that named nothing, so
+// the operator learns where the selectable worktrees are listed.
+const worktreeListHint = "`amx worktree list` shows every managed worktree"
+
 func worktreeCommandError(cmd *cobra.Command, jsonOutput bool, result actions.Result, err error) error {
 	var partial *actions.PartialResultError
 	if errors.As(err, &partial) {
@@ -238,6 +242,12 @@ func worktreeCommandError(cmd *cobra.Command, jsonOutput bool, result actions.Re
 	var actionErr *actions.Error
 	if errors.As(err, &actionErr) {
 		if !jsonOutput {
+			var selectorErr *worktree.SelectorError
+			if errors.As(actionErr, &selectorErr) && errors.Is(selectorErr, worktree.ErrSelectorNotFound) {
+				hinted := *actionErr
+				hinted.Message += "; " + worktreeListHint
+				return cli.ActionErrorText(&hinted)
+			}
 			return cli.ActionErrorText(actionErr)
 		}
 		candidates := make([]cli.Candidate, 0, len(actionErr.Candidates))
@@ -255,7 +265,7 @@ func worktreeCommandError(cmd *cobra.Command, jsonOutput bool, result actions.Re
 
 func worktreeSelectorFromArgs(cmd *cobra.Command, jsonOutput bool, name string, args []string) (string, error) {
 	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
-		return "", cli.MissingParameter(cmd, jsonOutput, "selector", "stable ID, unique ID prefix, branch, or canonical path")
+		return "", cli.MissingParameter(cmd, jsonOutput, "selector", "stable ID, unique ID prefix, branch, or canonical path (see `amx worktree list`)")
 	}
 	if len(args) != 1 {
 		return "", cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", fmt.Errorf("worktree %s accepts exactly one selector", name))

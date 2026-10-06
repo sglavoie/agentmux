@@ -169,6 +169,9 @@ type Error struct {
 	Message           string            `json:"message"`
 	MissingParameters []ParameterSchema `json:"missing_parameters,omitempty"`
 	Candidates        []Candidate       `json:"candidates,omitempty"`
+	// Cause is the domain error the action mapped, when there is one, so a
+	// presenter can recognize it with errors.As instead of parsing Message.
+	Cause error `json:"-"`
 }
 
 // Candidate is a presentation-neutral disambiguation choice. CLI callers map
@@ -180,6 +183,8 @@ type Candidate struct {
 }
 
 func (e *Error) Error() string { return e.Message }
+
+func (e *Error) Unwrap() error { return e.Cause }
 
 // PartialResultError reports a requested side effect that completed its
 // durable portion but failed later. Callers must present the accompanying

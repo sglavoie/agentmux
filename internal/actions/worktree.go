@@ -366,7 +366,7 @@ func mapLifecycleError(action ID, err error) *Error {
 		for _, entry := range selectorErr.Candidates {
 			candidates = append(candidates, Candidate{ID: entry.ID, DisplayName: worktreeTitle(entry), CanonicalPath: entry.Path})
 		}
-		return &Error{Code: code, Action: action, Message: err.Error(), Candidates: candidates}
+		return &Error{Code: code, Action: action, Message: err.Error(), Candidates: candidates, Cause: err}
 	}
 	code := "git_unavailable"
 	switch {

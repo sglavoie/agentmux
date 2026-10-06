@@ -161,6 +161,34 @@ func TestWorktreeCLITextAndJSONFailuresShareExitStatus(t *testing.T) {
 	}
 }
 
+func TestWorktreeTextSelectorErrorsPointAtTheList(t *testing.T) {
+	resetWorktreeCommandsTestState(t)
+	if err := worktreeShowCmd.Flags().Set("json", "false"); err != nil {
+		t.Fatal(err)
+	}
+
+	err := worktreeShowCmd.RunE(worktreeShowCmd, nil)
+	if err == nil || !strings.Contains(err.Error(), "`amx worktree list`") {
+		t.Fatalf("missing selector error = %v, want a pointer at `amx worktree list`", err)
+	}
+
+	err = worktreeShowCmd.RunE(worktreeShowCmd, []string{"no-such-worktree"})
+	if err == nil || !strings.Contains(err.Error(), `selector "no-such-worktree" was not found; `+worktreeListHint) {
+		t.Fatalf("unknown selector error = %v, want the list hint", err)
+	}
+
+	var out bytes.Buffer
+	worktreeShowCmd.SetOut(&out)
+	if err := worktreeShowCmd.Flags().Set("json", "true"); err != nil {
+		t.Fatal(err)
+	}
+	err = worktreeShowCmd.RunE(worktreeShowCmd, []string{"no-such-worktree"})
+	payload := decodeWorktreeJSONError(t, out.Bytes(), err)
+	if payload.Error.Code != "not_found" || strings.Contains(payload.Error.Message, "amx worktree list") {
+		t.Fatalf("JSON not-found payload = %+v, want the bare message", payload.Error)
+	}
+}
+
 func TestWorktreeTextHelpers(t *testing.T) {
 	view := actions.WorktreeView{Entry: worktree.Entry{
 		ID: "wt-1", ProjectLabel: "api", GitAvailable: true,
