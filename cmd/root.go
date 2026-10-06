@@ -112,7 +112,7 @@ func init() {
 	buildinfo.SetVersion(version)
 	rootCmd.Version = buildinfo.Current().String()
 	rootCmd.PersistentFlags().BoolVar(&cli.DebugFlag, "debug", false, "enable verbose debug output")
-	rootCmd.Flags().IntVar(&dashboardSourceWindowID, "window-id", 0, "Kitty window ID whose tab should be selected initially")
+	rootCmd.Flags().IntVar(&dashboardSourceWindowID, "window-id", 0, "dashboard only: start with this Kitty window's tab selected (open-dashboard passes it)")
 	// Help groups exist so `amx --help` reads by purpose rather than as one
 	// alphabetical run of two dozen names. Hidden commands take no group.
 	rootCmd.AddGroup(
