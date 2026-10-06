@@ -45,6 +45,7 @@ type HookProfile struct {
 	Activation         hooks.ActivationVerdict `json:"activation"`
 	CLIVersion         string                  `json:"cli_version,omitempty"`
 	VerifiedCLIVersion string                  `json:"verified_cli_version,omitempty"`
+	ContractAhead      bool                    `json:"contract_ahead,omitempty"`
 	LastSeen           *time.Time              `json:"last_seen,omitempty"`
 	LastSeenAgeSeconds int64                   `json:"last_seen_age_seconds,omitempty"`
 	HookSilenceSeconds int64                   `json:"hook_silence_seconds"`
@@ -152,7 +153,7 @@ func hookReportFromStatuses(cfg *config.Config, now time.Time, statuses []hooks.
 		profile := HookProfile{
 			Profile: status.Account, Harness: status.Harness, Path: status.Path,
 			Sync: status.Status, Activation: status.Activation,
-			CLIVersion: status.CLIVersion, VerifiedCLIVersion: status.VerifiedCLIVersion,
+			CLIVersion: status.CLIVersion, VerifiedCLIVersion: status.VerifiedCLIVersion, ContractAhead: status.ContractAhead,
 			HookSilenceSeconds: hookSilenceSeconds(cfg, status.Account), Verdict: VerdictHealthy,
 		}
 		if !status.LastSeen.IsZero() {

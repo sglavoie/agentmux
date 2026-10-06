@@ -31,7 +31,7 @@ func TestSessionSearchFindsConversationsByMessageText(t *testing.T) {
 	oldGetwd := sessionListGetwd
 	oldOut := sessionSearchCmd.OutOrStdout()
 	resetFlags := func() {
-		for _, name := range []string{"here", "harness", "profile", "limit", "since", "json", "source"} {
+		for _, name := range []string{"here", "harness", "profile", "limit", "since", "json", "source", "all"} {
 			flag := sessionSearchCmd.Flags().Lookup(name)
 			if slice, ok := flag.Value.(interface{ Replace([]string) error }); ok {
 				_ = slice.Replace(nil)
@@ -78,6 +78,7 @@ func TestSessionSearchFindsConversationsByMessageText(t *testing.T) {
 	codex := []transcript.SessionMeta{
 		entry("codex-race", harness.Codex, repo, time.Minute, "the daemon has a race condition", "fixed the race\tin the daemon"),
 		entry("codex-old", harness.Codex, repo+"2", 48*time.Hour, "another race, condition unrelated to the daemon"),
+		automated(entry("codex-asl", harness.Codex, repo, 10*time.Second, "# ASL session task packet: audit the race")),
 	}
 	claude := []transcript.SessionMeta{
 		entry("claude-docs", harness.Claude, filepath.Join(repo, "docs"), 2*time.Minute, "rewrite the README", "the race condition is now documented"),
@@ -137,6 +138,7 @@ func TestSessionSearchFindsConversationsByMessageText(t *testing.T) {
 		{"since", map[string]string{"since": "1h"}, []string{"race"}, "codex-race,claude-docs"},
 		{"harness", map[string]string{"harness": "claude"}, []string{"race"}, "claude-docs"},
 		{"limit after narrowing", map[string]string{"here": "true", "limit": "1"}, []string{"race"}, "codex-race"},
+		{"all includes automated sessions", map[string]string{"all": "true", "limit": "1"}, []string{"race"}, "codex-asl"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, err := run(t, tc.flags, tc.args...)

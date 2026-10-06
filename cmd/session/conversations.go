@@ -84,7 +84,10 @@ var sessionListCmd = &cobra.Command{
 
 // sessionSelection is what the selector flags `session list` and `session
 // search` share ask for: the index filter, the --here directories, and the
-// --limit count, which the two apply after their own lookup.
+// --limit count, which the two apply after their own lookup. Without --all the
+// filter keeps only sessions positively classified as interactive, the same
+// rows Past Sessions shows; continuity commands resolve any session by ID
+// regardless.
 type sessionSelection struct {
 	filter transcript.ListFilter
 	here   []string
@@ -105,6 +108,8 @@ func readSessionSelection(cmd *cobra.Command, cfg *config.Config) (sessionSelect
 	if err := applySessionListSelectors(cmd, cfg, &selection.filter); err != nil {
 		return selection, "invalid_arguments", err
 	}
+	all, _ := cmd.Flags().GetBool("all")
+	selection.filter.MainOnly = !all
 	selection.limit, _ = cmd.Flags().GetInt("limit")
 	if selection.limit < 0 {
 		return selection, "invalid_arguments", fmt.Errorf("--limit %d: want 0 (no limit) or a positive count", selection.limit)
@@ -141,6 +146,7 @@ func addSessionSelectionFlags(cmd *cobra.Command) {
 	cmd.Flags().StringSlice("profile", nil, "only sessions visible to this profile (repeatable)")
 	_ = cmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
 	cmd.Flags().IntP("limit", "n", 0, "show at most this many of the most recent sessions (0 for all)")
+	cmd.Flags().BoolP("all", "a", false, "include automated sessions (ASL runs, subagents, exec) and unclassified ones")
 }
 
 // writeSessionTable is the session list for a person: a header, aligned
@@ -421,7 +427,11 @@ func loadRefreshedSessionIndex(cfg *config.Config, readers map[string]transcript
 		return nil, loadWarning
 	}
 	refreshWarning := idx.Refresh(cfg, readers)
-	if warning := errors.Join(loadWarning, refreshWarning); warning != nil {
+	// list and search hide automated sessions by their class, so a legacy
+	// entry that predates classification is classified first, exactly as the
+	// Past Sessions view does, rather than vanishing as unclassified.
+	migrateWarning := idx.MigrateSessionClasses(readers)
+	if warning := errors.Join(loadWarning, refreshWarning, migrateWarning); warning != nil {
 		// Recovering filesystem caches return usable snapshots with warning
 		// errors. Keep continuity available while making degradation visible.
 		slog.Warn("session index refresh completed with warnings", "path", idx.Path(), "err", warning)

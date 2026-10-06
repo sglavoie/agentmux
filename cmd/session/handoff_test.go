@@ -296,7 +296,7 @@ func writeSessionCommandIndex(t *testing.T, indexPath string, metas ...transcrip
 	t.Helper()
 	entries := make(map[string]transcript.SessionMeta, len(metas))
 	for _, meta := range metas {
-		entries[transcript.IndexKey(meta.Harness, meta.ID)] = meta
+		entries[transcript.IndexKey(meta.Harness, meta.ID)] = withMainClass(meta)
 	}
 	body, err := json.Marshal(struct {
 		Entries map[string]transcript.SessionMeta `json:"entries"`

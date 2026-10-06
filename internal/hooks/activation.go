@@ -89,7 +89,9 @@ func (e *activationEvaluator) evaluate(account config.Account, override config.A
 		case !ok:
 			addActivationIssue(status, ActivationUnverified, "cli_version_unparsed", fmt.Sprintf("cannot compare CLI version %q with verified contract %q", version.version, verified), "")
 		case comparison > 0:
-			addActivationIssue(status, ActivationUnverified, "contract_stale", fmt.Sprintf("CLI %s is newer than verified hook contract %s", version.version, verified), "")
+			// Decided after the hook evidence below: a newer CLI that is visibly
+			// delivering hook events is not left unverified on version alone.
+			defer e.settleNewerCLI(account, status, version.version, verified)
 		case comparison < 0:
 			addActivationIssue(status, ActivationUnverified, "cli_older_than_contract", fmt.Sprintf("CLI %s is older than verified hook contract %s", version.version, verified), "")
 		}
@@ -130,6 +132,20 @@ func (e *activationEvaluator) evaluate(account config.Account, override config.A
 			addActivationIssue(status, ActivationUnverified, "last_seen_stale", fmt.Sprintf("last hook evidence for home dir %s is stale (%s ago)", evidenceHome, age.Round(time.Second)), "")
 		}
 	}
+}
+
+// settleNewerCLI decides what a CLI newer than the verified hook contract
+// means for one profile. The version gap alone cannot prove the hooks still
+// fire, so it is unverified unless hook events from this home dir arrived
+// within the verification window; then the hooks are demonstrably running and
+// the gap is recorded as ContractAhead, a note for whoever next re-verifies the
+// contract rather than a warning the operator can do nothing about.
+func (e *activationEvaluator) settleNewerCLI(account config.Account, status *AccountStatus, version, verified string) {
+	if !status.LastSeen.IsZero() && e.now.Sub(status.LastSeen) <= lastSeenWindow(e.cfg, account) {
+		status.ContractAhead = true
+		return
+	}
+	addActivationIssue(status, ActivationUnverified, "contract_stale", fmt.Sprintf("CLI %s is newer than verified hook contract %s", version, verified), "")
 }
 
 func (e *activationEvaluator) versionFor(harnessName string) versionEvidence {

@@ -286,7 +286,7 @@ func doctorVerdict(findings []doctorFinding) string {
 // one per profile.
 func doctorFindingLines(findings []doctorFinding, severity string) []string {
 	const hooksPrefix = "hooks for "
-	infixes := map[string]string{"hooks": " require attention: ", "hooks_unverified": " are unverified: "}
+	infixes := map[string]string{"hooks": " require attention: ", "hooks_unverified": " are unverified: ", "hooks_contract_ahead": " are ahead of the verified contract: "}
 	var lines []string
 	groupLine := map[string]int{}
 	groupProfiles := map[string][]string{}
@@ -398,7 +398,7 @@ func checkDoctorConfigFreshness(uptime time.Duration, addFinding func(severity, 
 	}
 }
 
-func writeDoctorHooks(out io.Writer, reportIssue func(string, ...any), reportUnverified func(string, ...any)) error {
+func writeDoctorHooks(out io.Writer, reportIssue func(string, ...any), reportUnverified func(string, ...any), reportNote func(string, ...any)) error {
 	cfg, err := doctorLoadConfig()
 	if err != nil {
 		if _, writeErr := fmt.Fprintf(out, "hooks: config unavailable (%s)\n", err); writeErr != nil {
@@ -437,6 +437,9 @@ func writeDoctorHooks(out io.Writer, reportIssue func(string, ...any), reportUnv
 			reportIssue("hooks for %s require attention: %s", status.Profile, status.Detail())
 		case debugger.VerdictWarning:
 			reportUnverified("hooks for %s are unverified: %s", status.Profile, status.Detail())
+		}
+		if status.ContractAhead {
+			reportNote("hooks for %s are ahead of the verified contract: CLI %s is newer than verified hook contract %s, and its hook events are arriving", status.Profile, status.CLIVersion, status.VerifiedCLIVersion)
 		}
 	}
 	if failures := report.DeliveryFailures; failures != nil && failures.Count > 0 {

@@ -30,7 +30,13 @@
   [Screen classifier health](screen-classifier-health.md).
   `project_directories` warns once when any configured project points at a
   missing or non-directory path; `amx config validate` lists them and exits 1.
-  In text output, per-profile `hooks` and `hooks_unverified` findings that
+  A harness CLI newer than its verified hook contract is `hooks_unverified`
+  only while no hook event from that profile's home dir has arrived within the
+  verification window; once events are arriving it is the
+  `hooks_contract_ahead` note instead, which leaves the verdict clean and
+  marks the contract as due for re-verification.
+  In text output, per-profile `hooks`, `hooks_unverified`, and
+  `hooks_contract_ahead` findings that
   share the same detail print on one line naming every profile, while
   `--json` keeps one finding per profile. A clean verdict counts its
   warnings, as in `overall: clean (2 warnings)`.

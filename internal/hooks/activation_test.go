@@ -325,7 +325,30 @@ func TestActivationDisabledAgentMuxEventsFail(t *testing.T) {
 	}
 }
 
-func TestActivationNewerCLIIsUnverifiedNotHealthy(t *testing.T) {
+// A newer CLI cannot prove on its version alone that the hooks still fire, so
+// without fresh hook evidence it stays unverified.
+func TestActivationNewerCLIWithoutEvidenceIsUnverified(t *testing.T) {
+	stubActivationEvidence(t, map[string]string{"claude": "2.1.196"})
+	activationEvidenceProbe = func(context.Context, *config.Config) (*StatusEvidence, error) {
+		return NewStatusEvidence(), nil
+	}
+	home := t.TempDir()
+	cfg := &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Claude, HomeDir: home}}}
+	if _, err := MergeAll(cfg, "", testBin); err != nil {
+		t.Fatalf("MergeAll: %v", err)
+	}
+	statuses, err := StatusAll(cfg, testBin)
+	if err != nil {
+		t.Fatalf("StatusAll: %v", err)
+	}
+	if statuses[0].Activation != ActivationUnverified || !hasActivationIssue(statuses[0], "contract_stale") || statuses[0].ContractAhead {
+		t.Fatalf("status = %+v, want contract_stale unverified", statuses[0])
+	}
+}
+
+// Hook events arriving from a newer CLI are the proof the version gap could
+// not give: activation is healthy, and the gap survives as ContractAhead.
+func TestActivationNewerCLIDeliveringEventsIsHealthyAndContractAhead(t *testing.T) {
 	stubActivationEvidence(t, map[string]string{"claude": "2.1.196"})
 	home := t.TempDir()
 	cfg := &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Claude, HomeDir: home}}}
@@ -336,8 +359,8 @@ func TestActivationNewerCLIIsUnverifiedNotHealthy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StatusAll: %v", err)
 	}
-	if statuses[0].Activation != ActivationUnverified || !hasActivationIssue(statuses[0], "contract_stale") {
-		t.Fatalf("status = %+v, want contract_stale unverified", statuses[0])
+	if statuses[0].Activation != ActivationHealthy || hasActivationIssue(statuses[0], "contract_stale") || !statuses[0].ContractAhead {
+		t.Fatalf("status = %+v, want healthy and contract ahead", statuses[0])
 	}
 }
 

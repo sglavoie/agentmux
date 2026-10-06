@@ -48,7 +48,9 @@ type sessionShowData struct {
 }
 
 // writeSessionShow lays the conversation out as labelled lines. Paths are
-// printed whole rather than with ~, so each can be pasted anywhere.
+// printed whole rather than with ~, so each can be pasted anywhere, and the
+// last line is the command that picks the conversation back up, spelled with
+// its exact harness-qualified identity so it cannot become ambiguous later.
 func writeSessionShow(out io.Writer, view sessionView, now time.Time) error {
 	dash := func(value string) string {
 		if value == "" {
@@ -72,6 +74,7 @@ func writeSessionShow(out io.Writer, view sessionView, now time.Time) error {
 		{"messages", strconv.Itoa(view.MessageCount)},
 		{"transcript", dash(view.Path)},
 		{"summary", dash(oneLine(view.Snippet))},
+		{"continue", "amx session continue " + view.Harness + ":" + view.ID},
 	}
 	var b strings.Builder
 	for _, row := range rows {

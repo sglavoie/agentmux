@@ -201,7 +201,7 @@ func TestDoctorReportsVerifiedDisabledHooksAsFailure(t *testing.T) {
 	var failures []string
 	err := writeDoctorHooks(&out, func(format string, args ...any) {
 		failures = append(failures, fmt.Sprintf(format, args...))
-	}, func(string, ...any) {})
+	}, func(string, ...any) {}, func(string, ...any) {})
 	if err != nil {
 		t.Fatalf("writeDoctorHooks: %v", err)
 	}
@@ -263,7 +263,7 @@ func TestDoctorHooksSummarizesDroppedDeliveries(t *testing.T) {
 		t.Errorf("unexpected failure finding: %s", fmt.Sprintf(format, args...))
 	}, func(format string, args ...any) {
 		warnings = append(warnings, fmt.Sprintf(format, args...))
-	})
+	}, func(string, ...any) {})
 	if err != nil {
 		t.Fatalf("writeDoctorHooks: %v", err)
 	}

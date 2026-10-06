@@ -68,6 +68,20 @@ func Execute() {
 	}
 }
 
+const (
+	groupSessions = "sessions"
+	groupTabs     = "tabs"
+	groupSetup    = "setup"
+)
+
+// addGrouped registers commands under root in one help group.
+func addGrouped(group string, commands ...*cobra.Command) {
+	for _, command := range commands {
+		command.GroupID = group
+	}
+	rootCmd.AddCommand(commands...)
+}
+
 func init() {
 	// Version output carries the full artifact identity (VCS revision, dirty
 	// marker, build time, Go version, binary hash) so an installed CLI can be
@@ -76,5 +90,15 @@ func init() {
 	rootCmd.Version = buildinfo.Current().String()
 	rootCmd.PersistentFlags().BoolVar(&cli.DebugFlag, "debug", false, "enable verbose debug output")
 	rootCmd.Flags().IntVar(&dashboardSourceWindowID, "window-id", 0, "Kitty window ID whose tab should be selected initially")
-	rootCmd.AddCommand(dashboard.ColorPickerCommand(), config.Command(), daemon.Command(), debug.Command(), debug.DoctorCommand(), session.FocusNextCommand(), session.FocusNextManagedCommand(), session.FocusPrevManagedCommand(), hooks.IndicatorCommand(), dashboard.IconPickerCommand(), dashboard.KeybindingsCommand(), session.MuteToggleCommand(), notifications.Command(), dashboard.OpenDashboardCommand(), overseer.Command(), dashboard.OverviewCommand(), project.Command(), release.Command(), session.ResortCommand(), session.Command(), transcripts.Command(), tuitest.Command(), worktree.Command())
+	// Help groups exist so `amx --help` reads by purpose rather than as one
+	// alphabetical run of two dozen names. Hidden commands take no group.
+	rootCmd.AddGroup(
+		&cobra.Group{ID: groupSessions, Title: "Sessions and projects:"},
+		&cobra.Group{ID: groupTabs, Title: "Kitty tabs:"},
+		&cobra.Group{ID: groupSetup, Title: "Setup and diagnostics:"},
+	)
+	addGrouped(groupSessions, session.Command(), project.Command(), worktree.Command(), dashboard.OverviewCommand(), dashboard.OpenDashboardCommand())
+	addGrouped(groupTabs, session.FocusNextCommand(), session.FocusNextManagedCommand(), session.FocusPrevManagedCommand(), session.MuteToggleCommand(), session.ResortCommand(), dashboard.ColorPickerCommand(), dashboard.IconPickerCommand(), dashboard.KeybindingsCommand())
+	addGrouped(groupSetup, config.Command(), daemon.Command(), debug.Command(), debug.DoctorCommand(), notifications.Command(), transcripts.Command(), overseer.Command())
+	rootCmd.AddCommand(hooks.IndicatorCommand(), release.Command(), tuitest.Command())
 }

@@ -65,6 +65,8 @@ func resetSessionCommandsTestState(t *testing.T) {
 		sessionForkWorktreeCmd.SetOut(oldForkWorktreeOut)
 		sessionHandoffCmd.SetOut(oldHandoffOut)
 		_ = sessionListCmd.Flags().Set("json", "false")
+		_ = sessionListCmd.Flags().Set("all", "false")
+		_ = sessionSearchCmd.Flags().Set("all", "false")
 		_ = sessionContinueCmd.Flags().Set("json", "false")
 		_ = sessionForkCmd.Flags().Set("json", "false")
 		_ = sessionForkWorktreeCmd.Flags().Set("allow-dirty", "false")
@@ -108,7 +110,25 @@ func (r sessionCommandReader) Discover(string, transcript.DiscoverOptions) ([]tr
 	if r.calls != nil {
 		(*r.calls)++
 	}
-	return r.discovered, r.discoverErr
+	// A real reader classifies every session it discovers; an unclassified
+	// fixture would read as automated-or-unknown and leave list and search.
+	discovered := make([]transcript.SessionMeta, len(r.discovered))
+	for i, meta := range r.discovered {
+		discovered[i] = withMainClass(meta)
+	}
+	return discovered, r.discoverErr
+}
+
+func automated(meta transcript.SessionMeta) transcript.SessionMeta {
+	meta.SessionClass = transcript.SessionClassAutomated
+	return meta
+}
+
+func withMainClass(meta transcript.SessionMeta) transcript.SessionMeta {
+	if meta.SessionClass == "" {
+		meta.SessionClass = transcript.SessionClassMain
+	}
+	return meta
 }
 func (sessionCommandReader) ReadMessages(string) ([]transcript.Message, error) { return nil, nil }
 
@@ -498,6 +518,7 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 		entry("codex-root", harness.Codex, repo, time.Minute, "fix the parser"),
 		// "repo2" shares a string prefix with "repo" and must not count as inside it.
 		entry("codex-sibling", harness.Codex, repo+"2", 3*time.Minute, "unrelated"),
+		automated(entry("codex-asl", harness.Codex, repo, 30*time.Second, "# ASL session task packet")),
 	}
 	claude := []transcript.SessionMeta{
 		entry("claude-sub", harness.Claude, filepath.Join(repo, "sub"), 2*time.Minute, strings.Repeat("long prompt ", 20)),
@@ -519,7 +540,7 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 
 	run := func(t *testing.T, flags map[string]string) (string, error) {
 		t.Helper()
-		for _, name := range []string{"here", "harness", "profile", "limit"} {
+		for _, name := range []string{"here", "harness", "profile", "limit", "all"} {
 			flag := sessionListCmd.Flags().Lookup(name)
 			if slice, ok := flag.Value.(interface{ Replace([]string) error }); ok {
 				_ = slice.Replace(nil)
@@ -557,6 +578,8 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 		{"here includes subdirectories but not prefix siblings", map[string]string{"here": "true"}, "codex-root,claude-sub"},
 		{"limit keeps the most recent", map[string]string{"limit": "1"}, "codex-root"},
 		{"selectors combine", map[string]string{"here": "true", "harness": "claude"}, "claude-sub"},
+		{"all includes automated sessions", map[string]string{"all": "true"}, "codex-asl,codex-root,claude-sub,codex-sibling"},
+		{"all combines with selectors", map[string]string{"all": "true", "limit": "1"}, "codex-asl"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, err := run(t, tc.flags)

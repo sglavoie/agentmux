@@ -59,6 +59,7 @@ line it matched on. The selector flags narrow the search the way they narrow
 			Harness:       selection.filter.Harness,
 			Profile:       selection.filter.Profile,
 			Since:         selection.filter.Since,
+			MainOnly:      selection.filter.MainOnly,
 		})
 		if err != nil {
 			return cli.CommandFailure(cmd, jsonOutput, "command_failed", err)

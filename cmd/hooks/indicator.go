@@ -24,8 +24,9 @@ var runHookIndicator = indicator.Deliver
 func IndicatorCommand() *cobra.Command { return hookIndicatorCmd }
 
 var hookIndicatorCmd = &cobra.Command{
-	Use:   "hook-indicator <event>",
-	Short: "Forward harness hook state to the daemon (internal)",
+	Use:    "hook-indicator <event>",
+	Hidden: true,
+	Short:  "Forward harness hook state to the daemon (internal)",
 	Long: `Called by supported harness hooks to forward raw hook events to the daemon.
 The daemon updates Kitty tab state and triggers notifications based on the
 current session state.

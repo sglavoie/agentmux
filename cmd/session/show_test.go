@@ -56,6 +56,7 @@ func TestSessionShowPrintsOneConversationBySelector(t *testing.T) {
 		"messages:   4\n",
 		"transcript: " + meta.Path + "\n",
 		"summary:    fix the parser\n",
+		"continue:   amx session continue codex:7f67dc81-aaaa\n",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("show output missing %q:\n%s", want, out)

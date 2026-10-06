@@ -63,7 +63,10 @@ type AccountStatus struct {
 	CLIVersion         string
 	VerifiedCLIVersion string
 	LastSeen           time.Time
-	Err                error
+	// ContractAhead reports a CLI newer than VerifiedCLIVersion whose hook
+	// events are nonetheless arriving, which leaves activation healthy.
+	ContractAhead bool
+	Err           error
 }
 
 // ActivationSummary returns a compact rendering of the evidence that prevents

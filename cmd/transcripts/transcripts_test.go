@@ -2,6 +2,8 @@ package transcripts
 
 import (
 	"bytes"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,6 +22,7 @@ func resetTranscriptsCommandTestState(t *testing.T, indexPath string) {
 	oldLoadConfig := transcriptsLoadConfig
 	oldReaders := transcriptsReaders
 	oldRebuildAll := transcriptsRebuildAll
+	oldIsTerminal := transcriptsIsTerminal
 	oldStatusOut := transcriptsStatusCmd.OutOrStdout()
 	oldCompactOut := transcriptsCompactCmd.OutOrStdout()
 	oldRebuildOut := transcriptsRebuildCmd.OutOrStdout()
@@ -30,6 +33,7 @@ func resetTranscriptsCommandTestState(t *testing.T, indexPath string) {
 		transcriptsLoadConfig = oldLoadConfig
 		transcriptsReaders = oldReaders
 		transcriptsRebuildAll = oldRebuildAll
+		transcriptsIsTerminal = oldIsTerminal
 		transcriptsStatusCmd.SetOut(oldStatusOut)
 		transcriptsCompactCmd.SetOut(oldCompactOut)
 		transcriptsRebuildCmd.SetOut(oldRebuildOut)
@@ -237,5 +241,42 @@ func requireTranscriptCommandQuarantineWarning(t *testing.T, output string) {
 	t.Helper()
 	if !strings.Contains(output, "warning: transcript cache quarantined as") {
 		t.Fatalf("command output missing quarantine warning:\n%s", output)
+	}
+}
+
+func TestTranscriptsStatusReadsAsSizesOnATerminalAndBytesInAPipe(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "transcripts.json")
+	resetTranscriptsCommandTestState(t, path)
+	body := `{"entries":{}}` + strings.Repeat(" ", 2048)
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	run := func(terminal bool) string {
+		t.Helper()
+		transcriptsIsTerminal = func(io.Writer) bool { return terminal }
+		var out bytes.Buffer
+		transcriptsStatusCmd.SetOut(&out)
+		if err := transcriptsStatusCmd.RunE(transcriptsStatusCmd, nil); err != nil {
+			t.Fatalf("RunE: %v", err)
+		}
+		return out.String()
+	}
+	piped := run(false)
+	if !strings.Contains(piped, fmt.Sprintf("metadata_size: %d\n", len(body))) || strings.Contains(piped, "Past Sessions") {
+		t.Fatalf("piped status must keep raw bytes and no annotations:\n%s", piped)
+	}
+	shown := run(true)
+	for _, want := range []string{"metadata_size: 2.0 KiB\n", "hidden_entries: 0 (removed from Past Sessions)\n"} {
+		if !strings.Contains(shown, want) {
+			t.Fatalf("terminal status missing %q:\n%s", want, shown)
+		}
+	}
+}
+
+func TestFormatTranscriptBytes(t *testing.T) {
+	for value, want := range map[int64]string{0: "0 B", 1023: "1023 B", 1024: "1.0 KiB", 25645981: "24.5 MiB", 3 << 30: "3.0 GiB"} {
+		if got := formatTranscriptBytes(value); got != want {
+			t.Errorf("formatTranscriptBytes(%d) = %q, want %q", value, got, want)
+		}
 	}
 }

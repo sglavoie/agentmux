@@ -37,6 +37,16 @@ func TestRootHelp(t *testing.T) {
 	if strings.Contains(stdout, "tui-test") {
 		t.Errorf("root help must not list the hidden tui-test command, got:\n%s", stdout)
 	}
+	// Harness hooks call hook-indicator through the binary; an operator never
+	// types it, so it must not crowd the help.
+	if strings.Contains(stdout, "hook-indicator") {
+		t.Errorf("root help must not list the internal hook-indicator command, got:\n%s", stdout)
+	}
+	for _, group := range []string{"Sessions and projects:", "Kitty tabs:", "Setup and diagnostics:"} {
+		if !strings.Contains(stdout, group) {
+			t.Errorf("root help is missing the %q group, got:\n%s", group, stdout)
+		}
+	}
 	// A public command must still be visible so we know help itself rendered.
 	for _, public := range []string{"resort", "overview"} {
 		if !strings.Contains(stdout, public) {

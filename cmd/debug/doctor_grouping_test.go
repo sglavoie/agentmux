@@ -53,6 +53,25 @@ func TestDoctorFindingLinesGroupProfilesSharingAHookDetail(t *testing.T) {
 	}
 }
 
+func TestDoctorFindingLinesGroupContractAheadNotesByVersion(t *testing.T) {
+	note := func(profile, cli, verified string) doctorFinding {
+		return doctorFinding{Severity: severityInfo, Check: "hooks_contract_ahead", Message: "hooks for " + profile +
+			" are ahead of the verified contract: CLI " + cli + " is newer than verified hook contract " + verified + ", and its hook events are arriving"}
+	}
+	findings := []doctorFinding{note("a-claude", "2", "1"), note("a-codex", "9", "8"), note("b-claude", "2", "1")}
+	got := strings.Join(doctorFindingLines(findings, severityInfo), "\n")
+	want := strings.Join([]string{
+		"- [hooks_contract_ahead] hooks for a-claude, b-claude are ahead of the verified contract: CLI 2 is newer than verified hook contract 1, and its hook events are arriving",
+		"- [hooks_contract_ahead] hooks for a-codex are ahead of the verified contract: CLI 9 is newer than verified hook contract 8, and its hook events are arriving",
+	}, "\n")
+	if got != want {
+		t.Fatalf("note lines:\n%s\nwant:\n%s", got, want)
+	}
+	if got := doctorVerdict(findings); got != "overall: clean" {
+		t.Fatalf("doctorVerdict = %q, want notes to leave the verdict clean", got)
+	}
+}
+
 func TestDoctorProjectDirectoriesWarnsOnceForEveryUnusableDirectory(t *testing.T) {
 	resetDoctorTestState(t)
 	present := t.TempDir()

@@ -21,11 +21,12 @@ amx session list --json
 amx session list --since 7d   # only sessions active in the last week (or 12h, 90m, …)
 amx session list --here -n 5  # the five latest sessions started in this directory or below it
 amx session list --harness codex --profile codex-work   # both repeatable
+amx session list --all        # also automated sessions (ASL runs, subagents, exec), hidden by default as in Past Sessions
 amx session continue "$(amx session list | fzf | cut -f5)"   # pick by opening prompt
 amx session search race daemon            # conversations mentioning both words, newest first, with match counts
 amx session search '"race condition"' --here --since 7d   # a quoted phrase; takes every list selector
 amx session search --source user flaky    # only your own prompts (or --source harness for the agent's output)
-amx session show 09467ec1                 # one conversation: directory, ages, message count, transcript path
+amx session show 09467ec1                 # one conversation: directory, ages, message count, transcript path, and the command that continues it
 cd "$(amx session show 09467ec1 --json | jq -r .data.session.cwd)"
 amx session continue codex <session-id>
 amx session fork claude <session-id>
@@ -834,7 +835,9 @@ amx transcripts rebuild --all
 ```
 
 `status` is read-only and reports metadata, sidecar, missing-sidecar, and
-orphan-sidecar usage. All three accept `--json`, which emits the same keys in
+orphan-sidecar usage. In a terminal, sizes read as KiB/MiB, paths use `~`, and
+`hidden_entries` (rows removed from Past Sessions) says so; piped output keeps
+raw byte counts and full paths. All three accept `--json`, which emits the same keys in
 the schema-v1 envelope (`compact` adds `before` and `after` store snapshots). `compact` takes the transcript cache lock, migrates any
 legacy inline search text, persists metadata, and then removes only regular
 hash-named sidecars that are no longer referenced by a cache key. It preserves

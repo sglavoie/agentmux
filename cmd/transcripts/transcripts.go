@@ -8,6 +8,7 @@ package transcripts
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/transcript"
@@ -20,6 +21,7 @@ var (
 	transcriptsIndexPath  = transcript.IndexPath
 	transcriptsLoadConfig = cli.LoadRunnableConfig
 	transcriptsReaders    = cli.TranscriptReaders
+	transcriptsIsTerminal = cli.IsTerminal
 )
 
 // Command returns the `transcripts` command tree so the root command can
@@ -67,13 +69,14 @@ var transcriptsCompactCmd = &cobra.Command{
 				Warnings:                 nonNilWarnings(result.Warnings),
 			})
 		}
+		size := transcriptSizeFormatter(transcriptsIsTerminal(cmd.OutOrStdout()))
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "compacted transcript index\n")
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "legacy_search_text_entries: %d\n", result.LegacyFields)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "metadata_size_before: %d\n", result.StatusBefore.MetadataSize)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "metadata_size_after: %d\n", result.StatusAfter.MetadataSize)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "metadata_size_before: %s\n", size(result.StatusBefore.MetadataSize))
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "metadata_size_after: %s\n", size(result.StatusAfter.MetadataSize))
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "sidecar_count: %d\n", result.StatusAfter.SidecarCount)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "orphan_sidecars_removed: %d\n", result.RemovedOrphanSidecars)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "orphan_sidecar_size_removed: %d\n", result.RemovedOrphanSidecarSize)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "orphan_sidecar_size_removed: %s\n", size(result.RemovedOrphanSidecarSize))
 		printTranscriptWarnings(cmd, result.Warnings)
 		return nil
 	},
@@ -97,6 +100,7 @@ var transcriptsRebuildCmd = &cobra.Command{
 			status.Warnings = nonNilWarnings(result.Warnings)
 			return cli.WriteJSON(cmd, status)
 		}
+		size := transcriptSizeFormatter(transcriptsIsTerminal(cmd.OutOrStdout()))
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "rebuilt transcript sidecars\n")
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "metadata_path: %s\n", result.Status.MetadataPath)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "visible_entries: %d\n", result.Status.VisibleEntries)
@@ -107,7 +111,7 @@ var transcriptsRebuildCmd = &cobra.Command{
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "shared_profile_entries: %d\n", result.Status.SharedProfileEntries)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "sidecar_count: %d\n", result.Status.SidecarCount)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "orphan_sidecars: %d\n", result.Status.OrphanSidecars)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "orphan_sidecar_size: %d\n", result.Status.OrphanSidecarSize)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "orphan_sidecar_size: %s\n", size(result.Status.OrphanSidecarSize))
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "missing_sidecars: %d\n", result.Status.MissingSidecars)
 		printTranscriptWarnings(cmd, result.Warnings)
 		return nil
@@ -116,21 +120,54 @@ var transcriptsRebuildCmd = &cobra.Command{
 
 func printTranscriptStatus(cmd *cobra.Command, status transcript.StoreStatus) {
 	out := cmd.OutOrStdout()
-	_, _ = fmt.Fprintf(out, "metadata_path: %s\n", status.MetadataPath)
-	_, _ = fmt.Fprintf(out, "metadata_size: %d\n", status.MetadataSize)
-	_, _ = fmt.Fprintf(out, "sidecar_dir: %s\n", status.SidecarDir)
-	_, _ = fmt.Fprintf(out, "sidecar_size: %d\n", status.SidecarSize)
+	human := transcriptsIsTerminal(out)
+	size := transcriptSizeFormatter(human)
+	path := func(p string) string { return p }
+	hiddenNote := ""
+	if human {
+		path = cli.DisplayPath
+		hiddenNote = " (removed from Past Sessions)"
+	}
+	_, _ = fmt.Fprintf(out, "metadata_path: %s\n", path(status.MetadataPath))
+	_, _ = fmt.Fprintf(out, "metadata_size: %s\n", size(status.MetadataSize))
+	_, _ = fmt.Fprintf(out, "sidecar_dir: %s\n", path(status.SidecarDir))
+	_, _ = fmt.Fprintf(out, "sidecar_size: %s\n", size(status.SidecarSize))
 	_, _ = fmt.Fprintf(out, "sidecar_count: %d\n", status.SidecarCount)
 	_, _ = fmt.Fprintf(out, "orphan_sidecars: %d\n", status.OrphanSidecars)
-	_, _ = fmt.Fprintf(out, "orphan_sidecar_size: %d\n", status.OrphanSidecarSize)
+	_, _ = fmt.Fprintf(out, "orphan_sidecar_size: %s\n", size(status.OrphanSidecarSize))
 	_, _ = fmt.Fprintf(out, "visible_entries: %d\n", status.VisibleEntries)
-	_, _ = fmt.Fprintf(out, "hidden_entries: %d\n", status.HiddenEntries)
+	_, _ = fmt.Fprintf(out, "hidden_entries: %d%s\n", status.HiddenEntries, hiddenNote)
 	_, _ = fmt.Fprintf(out, "empty_entries: %d\n", status.EmptyEntries)
 	_, _ = fmt.Fprintf(out, "visible_profile_memberships: %d\n", status.VisibleProfileMemberships)
 	_, _ = fmt.Fprintf(out, "hidden_profile_memberships: %d\n", status.HiddenProfileMemberships)
 	_, _ = fmt.Fprintf(out, "shared_profile_entries: %d\n", status.SharedProfileEntries)
 	_, _ = fmt.Fprintf(out, "missing_sidecars: %d\n", status.MissingSidecars)
 	printTranscriptWarnings(cmd, status.Warnings)
+}
+
+// transcriptSizeFormatter returns how a byte count is printed: raw bytes for
+// pipes and scripts, which have always parsed them, and a binary-unit size for
+// a person reading a terminal.
+func transcriptSizeFormatter(human bool) func(int64) string {
+	if !human {
+		return func(v int64) string { return strconv.FormatInt(v, 10) }
+	}
+	return formatTranscriptBytes
+}
+
+func formatTranscriptBytes(v int64) string {
+	const unit = 1024
+	if v < unit {
+		return fmt.Sprintf("%d B", v)
+	}
+	value, suffix := float64(v)/unit, "KiB"
+	for _, next := range []string{"MiB", "GiB", "TiB"} {
+		if value < unit {
+			break
+		}
+		value, suffix = value/unit, next
+	}
+	return fmt.Sprintf("%.1f %s", value, suffix)
 }
 
 // storeStatusData is the JSON form of a transcript store status. Its keys are
