@@ -32,7 +32,11 @@ amx session handoff claude:<session-id> --profile codex-work
 `amx session continue codex:<session-id>` works too. All four also accept a
 bare `<session-id>`: it resolves when exactly one indexed conversation carries
 that ID, and an ID shared across harnesses is refused with the
-harness-qualified candidates rather than guessed.
+harness-qualified candidates rather than guessed. Any of these forms may give
+just the start of the ID, at least four characters, the way a short Git hash
+works: `amx session continue 7f67dc81`. An exact ID always wins over a longer
+one it begins, and a prefix that several conversations share is refused with
+every candidate.
 
 `session continue` focuses the exact live Kitty owner when one exists and
 otherwise resumes the closed conversation. Native forks are used for Claude

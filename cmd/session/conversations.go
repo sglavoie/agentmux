@@ -384,7 +384,7 @@ func loadRefreshedSessionIndex(cfg *config.Config, readers map[string]transcript
 
 // resolveConversationOrFail turns a parsed selector into the indexed
 // conversation it names, reporting a miss, an unreadable index, or an
-// ambiguous bare session ID in the caller's output mode.
+// ambiguous session ID or prefix in the caller's output mode.
 func resolveConversationOrFail(cmd *cobra.Command, jsonOutput bool, cfg *config.Config, readers map[string]transcript.Reader, identity conversation.Identity) (*transcript.SessionMeta, error) {
 	meta, err := resolveIndexedConversation(cfg, readers, identity)
 	if err != nil {
@@ -404,33 +404,51 @@ func resolveConversationOrFail(cmd *cobra.Command, jsonOutput bool, cfg *config.
 	return meta, nil
 }
 
-// resolveIndexedConversation looks an exact identity up in the index. An
-// identity without a harness is a bare session ID: it resolves only when
-// exactly one visible conversation carries that ID, and several matches are
-// refused with their harness-qualified selectors rather than guessed between.
+// sessionIDPrefixMin is the shortest session ID prefix a continuity command
+// accepts in place of the whole ID. Shorter prefixes would match most of the
+// index and answer with a candidate list longer than the list command's.
+const sessionIDPrefixMin = 4
+
+// resolveIndexedConversation finds the one visible indexed conversation an
+// identity names. An exact ID always wins; failing that, an ID of at least
+// sessionIDPrefixMin characters is read as a prefix, the way a short Git hash
+// is. An identity without a harness searches every harness. Either way, more
+// than one match is refused with its harness-qualified selectors rather than
+// settled by a guess.
 func resolveIndexedConversation(cfg *config.Config, readers map[string]transcript.Reader, identity conversation.Identity) (*transcript.SessionMeta, error) {
 	idx, err := loadRefreshedSessionIndex(cfg, readers)
 	if err != nil {
 		return nil, err
 	}
-	if identity.Harness == "" {
-		var matches []transcript.SessionMeta
-		for _, meta := range idx.List(transcript.ListFilter{}) {
-			if meta.ID == identity.SessionID {
-				matches = append(matches, meta)
-			}
+	filter := transcript.ListFilter{}
+	if identity.Harness != "" {
+		filter.Harness = []string{identity.Harness}
+	}
+	var exact, prefixed []transcript.SessionMeta
+	for _, meta := range idx.List(filter) {
+		switch {
+		case meta.ID == identity.SessionID:
+			exact = append(exact, meta)
+		case len(identity.SessionID) >= sessionIDPrefixMin && strings.HasPrefix(meta.ID, identity.SessionID):
+			prefixed = append(prefixed, meta)
 		}
-		switch len(matches) {
-		case 0:
-			return nil, nil
-		case 1:
-			return &matches[0], nil
-		}
-		candidates := make([]actions.Candidate, 0, len(matches))
-		for _, meta := range matches {
-			candidates = append(candidates, actions.Candidate{ID: meta.Harness + ":" + meta.ID, DisplayName: meta.Project, CanonicalPath: meta.CWD})
-		}
-		sort.Slice(candidates, func(i, j int) bool { return candidates[i].ID < candidates[j].ID })
+	}
+	matches := exact
+	if len(matches) == 0 {
+		matches = prefixed
+	}
+	switch len(matches) {
+	case 0:
+		return nil, nil
+	case 1:
+		return &matches[0], nil
+	}
+	candidates := make([]actions.Candidate, 0, len(matches))
+	for _, meta := range matches {
+		candidates = append(candidates, actions.Candidate{ID: meta.Harness + ":" + meta.ID, DisplayName: meta.Project, CanonicalPath: meta.CWD})
+	}
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].ID < candidates[j].ID })
+	if len(exact) > 1 {
 		return nil, &actions.Error{
 			Code:              "ambiguous_conversation",
 			Message:           fmt.Sprintf("%d indexed conversations have session ID %q; qualify it with its harness", len(matches), identity.SessionID),
@@ -438,11 +456,12 @@ func resolveIndexedConversation(cfg *config.Config, readers map[string]transcrip
 			Candidates:        candidates,
 		}
 	}
-	meta, found := idx.Get(transcript.IndexKey(identity.Harness, identity.SessionID))
-	if !found || meta.HiddenFromIndex {
-		return nil, nil
+	return nil, &actions.Error{
+		Code:              "ambiguous_conversation",
+		Message:           fmt.Sprintf("%d indexed conversations have a session ID starting with %q; give more of it", len(matches), identity.SessionID),
+		MissingParameters: []actions.ParameterSchema{{Name: "session-id", Type: "string", Description: "a longer prefix of the session ID, or all of it", Required: true}},
+		Candidates:        candidates,
 	}
-	return &meta, nil
 }
 
 func executeSessionAction(cmd *cobra.Command, jsonOutput bool, cfg *config.Config, actionID actions.ID, request actions.Request) error {

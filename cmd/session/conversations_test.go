@@ -365,6 +365,65 @@ func TestBareSessionIDResolvesAcrossHarnessesAndRefusesToGuess(t *testing.T) {
 	}
 }
 
+func TestSessionIDPrefixResolvesLikeAShortGitHash(t *testing.T) {
+	resetSessionCommandsTestState(t)
+	base, indexPath := sessionCommandMeta(t, harness.Codex)
+	meta := func(harnessName, id string) transcript.SessionMeta {
+		m := base
+		m.Harness, m.ID = harnessName, id
+		return m
+	}
+	codex := []transcript.SessionMeta{meta(harness.Codex, "7f67dc81-aaaa"), meta(harness.Codex, "7f67dc81-bbbb"), meta(harness.Codex, "abcd")}
+	claude := []transcript.SessionMeta{meta(harness.Claude, "7f6799ee"), meta(harness.Claude, "abcdef")}
+	writeSessionCommandIndex(t, indexPath, append(append([]transcript.SessionMeta{}, codex...), claude...)...)
+	cfg := &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Codex}, {Name: "home", Harness: harness.Claude}}}
+	sessionCommandsSessionIndexPath = func() string { return indexPath }
+	readers := map[string]transcript.Reader{
+		harness.Codex:  sessionCommandReader{harness: harness.Codex, discovered: codex},
+		harness.Claude: sessionCommandReader{harness: harness.Claude, discovered: claude},
+	}
+
+	for _, tc := range []struct {
+		name, harness, id, want string
+	}{
+		{"unique prefix", "", "7f67dc81-a", "codex:7f67dc81-aaaa"},
+		{"prefix within a harness", harness.Claude, "7f67", "claude:7f6799ee"},
+		{"an exact ID beats a longer one it prefixes", "", "abcd", "codex:abcd"},
+		{"the harness still scopes the prefix", harness.Claude, "abcd", "claude:abcdef"},
+		{"too short to be a prefix", "", "7f6", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := resolveIndexedConversation(cfg, readers, conversation.Identity{Harness: tc.harness, SessionID: tc.id})
+			if err != nil {
+				t.Fatalf("resolve: %v", err)
+			}
+			selector := ""
+			if got != nil {
+				selector = got.Harness + ":" + got.ID
+			}
+			if selector != tc.want {
+				t.Fatalf("resolved %q, want %q", selector, tc.want)
+			}
+		})
+	}
+
+	_, err := resolveIndexedConversation(cfg, readers, conversation.Identity{SessionID: "7f67"})
+	var actionErr *actions.Error
+	if !errors.As(err, &actionErr) || actionErr.Code != "ambiguous_conversation" {
+		t.Fatalf("shared prefix error = %v, want ambiguous_conversation", err)
+	}
+	var ids []string
+	for _, candidate := range actionErr.Candidates {
+		ids = append(ids, candidate.ID)
+	}
+	if got := strings.Join(ids, ","); got != "claude:7f6799ee,codex:7f67dc81-aaaa,codex:7f67dc81-bbbb" {
+		t.Fatalf("candidates = %s", got)
+	}
+	if len(actionErr.MissingParameters) != 1 || actionErr.MissingParameters[0].Name != "session-id" {
+		t.Fatalf("missing parameters = %+v, want a longer session-id", actionErr.MissingParameters)
+	}
+}
+
 func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 	resetSessionCommandsTestState(t)
 	oldGetwd := sessionListGetwd
