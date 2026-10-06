@@ -55,8 +55,8 @@ func TestIsTerminalIsFalseForBuffersAndPipes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer r.Close()
-	defer w.Close()
+	defer func() { _ = r.Close() }()
+	defer func() { _ = w.Close() }()
 	if IsTerminal(w) {
 		t.Error("a pipe is not a terminal")
 	}

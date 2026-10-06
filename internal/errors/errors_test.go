@@ -148,7 +148,7 @@ func TestColorEnabledHonorsNoColor(t *testing.T) {
 	if err != nil {
 		t.Skip("no controlling terminal")
 	}
-	defer tty.Close()
+	defer func() { _ = tty.Close() }()
 	t.Setenv("NO_COLOR", "1")
 	if colorEnabled(tty) {
 		t.Fatal("NO_COLOR must disable color even on a terminal")
