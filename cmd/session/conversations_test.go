@@ -597,7 +597,11 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 		if len(lines) != 2 || !strings.HasSuffix(lines[0], "SUMMARY") {
 			t.Fatalf("table = %q, want a header ending in SUMMARY and one row", out)
 		}
-		_, summary, _ := strings.Cut(lines[1], "claude-sub  ")
+		// The ID is cut to the prefix that still names it alone in the index.
+		_, summary, found := strings.Cut(lines[1], " claude-s  ")
+		if !found {
+			t.Fatalf("row = %q, want the session ID abbreviated to claude-s", lines[1])
+		}
 		if !strings.HasPrefix(summary, "long prompt") || !strings.HasSuffix(summary, "…") || layout.Width(summary) > sessionSummaryWidth {
 			t.Fatalf("summary = %q, want the prompt cut to %d cells", summary, sessionSummaryWidth)
 		}

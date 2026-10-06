@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -67,7 +68,7 @@ var sessionListCmd = &cobra.Command{
 		}
 		out := cmd.OutOrStdout()
 		if sessionListIsTerminal(out) {
-			return writeSessionTable(out, views, sessionCommandsNow())
+			return writeSessionTable(out, views, abbreviateSessionIDs(idx.List(transcript.ListFilter{})), sessionCommandsNow())
 		}
 		// Off a terminal the output stays headerless and tab-separated with
 		// absolute timestamps: scripts cut and sort it, and a relative age is
@@ -143,8 +144,9 @@ func addSessionSelectionFlags(cmd *cobra.Command) {
 }
 
 // writeSessionTable is the session list for a person: a header, aligned
-// columns, and how long ago each conversation was last active.
-func writeSessionTable(out io.Writer, views []sessionView, now time.Time) error {
+// columns, how long ago each conversation was last active, and each session
+// ID cut to the prefix a continuity command still resolves.
+func writeSessionTable(out io.Writer, views []sessionView, ids sessionIDAbbreviations, now time.Time) error {
 	if len(views) == 0 {
 		_, err := fmt.Fprintln(out, "No indexed sessions match.")
 		return err
@@ -159,7 +161,7 @@ func writeSessionTable(out io.Writer, views []sessionView, now time.Time) error 
 		if summary == "" {
 			summary = "-"
 		}
-		rows = append(rows, []string{item.Harness, item.Profile, project, formatAgo(item.LastAt, now), item.ID, summary})
+		rows = append(rows, []string{item.Harness, item.Profile, project, formatAgo(item.LastAt, now), ids.of(item.ID), summary})
 	}
 	return cli.WriteTable(out, []string{"HARNESS", "PROFILE", "PROJECT", "ACTIVE", "SESSION", "SUMMARY"}, rows)
 }
@@ -457,6 +459,66 @@ func resolveConversationOrFail(cmd *cobra.Command, jsonOutput bool, cfg *config.
 // accepts in place of the whole ID. Shorter prefixes would match most of the
 // index and answer with a candidate list longer than the list command's.
 const sessionIDPrefixMin = 4
+
+// sessionIDDisplayMin is the shortest session ID a table prints. It is longer
+// than sessionIDPrefixMin so a printed prefix rarely needs to grow when the
+// index does.
+const sessionIDDisplayMin = 8
+
+// sessionIDAbbreviations maps each session ID to the shortest prefix, at least
+// sessionIDDisplayMin characters, that resolveIndexedConversation reads back
+// as that conversation alone. It is built from every visible indexed session
+// across harnesses rather than from the rows on screen, because a pasted
+// prefix is resolved against the whole index. An ID shared by two harnesses
+// has no unique prefix and is printed whole. A nil value prints every ID
+// whole.
+type sessionIDAbbreviations map[string]string
+
+func abbreviateSessionIDs(metas []transcript.SessionMeta) sessionIDAbbreviations {
+	ids := make([]string, 0, len(metas))
+	harnessOf := make(map[string]string, len(metas))
+	shared := make(map[string]bool)
+	for _, meta := range metas {
+		ids = append(ids, meta.ID)
+		if seen, ok := harnessOf[meta.ID]; ok && seen != meta.Harness {
+			shared[meta.ID] = true
+		}
+		harnessOf[meta.ID] = meta.Harness
+	}
+	sort.Strings(ids)
+	ids = slices.Compact(ids)
+	out := make(sessionIDAbbreviations, len(ids))
+	for i, id := range ids {
+		if shared[id] {
+			out[id] = id
+			continue
+		}
+		common := 0
+		if i > 0 {
+			common = commonPrefixLen(id, ids[i-1])
+		}
+		if i+1 < len(ids) {
+			common = max(common, commonPrefixLen(id, ids[i+1]))
+		}
+		out[id] = id[:min(len(id), max(sessionIDDisplayMin, common+1))]
+	}
+	return out
+}
+
+func (a sessionIDAbbreviations) of(id string) string {
+	if short, ok := a[id]; ok {
+		return short
+	}
+	return id
+}
+
+func commonPrefixLen(a, b string) int {
+	n := 0
+	for n < len(a) && n < len(b) && a[n] == b[n] {
+		n++
+	}
+	return n
+}
 
 // resolveIndexedConversation finds the one visible indexed conversation an
 // identity names. An exact ID always wins; failing that, an ID of at least
