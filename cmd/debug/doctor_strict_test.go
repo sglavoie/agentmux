@@ -207,7 +207,7 @@ func TestDoctorStrictStaysGreenOnDeliveryFailureWarning(t *testing.T) {
 	for _, want := range []string{
 		"hooks: 1 delivery failure(s) recorded in the trailing hour",
 		"warnings:",
-		"overall: clean",
+		"overall: ok (1 warning)",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("doctor output missing %q:\n%s", want, got)

@@ -97,7 +97,7 @@ func TestDoctorStaleKittySnapshotWarnsWithoutFailingStrict(t *testing.T) {
 		"last_error=timeout",
 		"warnings:",
 		"[kitty_snapshot_stale] daemon Kitty topology is stale: the last successful kitten @ ls completed 9s ago (threshold 6s, generation 12)",
-		"overall: clean (1 warning)",
+		"overall: ok (1 warning)",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("doctor output missing %q:\n%s", want, got)

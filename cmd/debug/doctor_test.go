@@ -151,7 +151,7 @@ func TestDoctorReportsDaemonRendererHookAndSuppressionHealth(t *testing.T) {
 		"hooks: no configured profiles",
 		"renderer drift: none",
 		"recent suppressions (last 15m0s): 1 across 1 reason",
-		"overall: clean",
+		"overall: ok (1 warning)",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("doctor output missing %q:\n%s", want, got)

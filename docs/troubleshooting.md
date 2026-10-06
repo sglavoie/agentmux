@@ -41,8 +41,9 @@
   In text output, per-profile `hooks`, `hooks_unverified`, and
   `hooks_contract_ahead` findings that
   share the same detail print on one line naming every profile, while
-  `--json` keeps one finding per profile. A clean verdict counts its
-  warnings, as in `overall: clean (2 warnings)`.
+  `--json` keeps one finding per profile. A verdict with no failures reads
+  `overall: clean` when nothing warned, and otherwise counts its warnings, as
+  in `overall: ok (2 warnings)`.
 - **Suspected intermittent state bugs**: preserve a causal snapshot with
   `amx debug bundle --mode share`, validate it with `amx debug replay`, then run
   `amx daemon audit --duration 10m --json`. It samples the invariants every

@@ -277,9 +277,9 @@ func doctorVerdict(findings []doctorFinding) string {
 	case 0:
 		return "overall: clean"
 	case 1:
-		return "overall: clean (1 warning)"
+		return "overall: ok (1 warning)"
 	default:
-		return fmt.Sprintf("overall: clean (%d warnings)", warnings)
+		return fmt.Sprintf("overall: ok (%d warnings)", warnings)
 	}
 }
 

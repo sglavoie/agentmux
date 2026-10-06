@@ -19,8 +19,8 @@ func TestDoctorVerdictCountsPrintedWarningLines(t *testing.T) {
 		want     string
 	}{
 		{"none", nil, "overall: clean"},
-		{"grouped into one line", []doctorFinding{warn("a"), warn("b"), warn("c")}, "overall: clean (1 warning)"},
-		{"grouped plus another", []doctorFinding{warn("a"), warn("b"), {Severity: severityWarning, Check: "native_logging", Message: "off"}}, "overall: clean (2 warnings)"},
+		{"grouped into one line", []doctorFinding{warn("a"), warn("b"), warn("c")}, "overall: ok (1 warning)"},
+		{"grouped plus another", []doctorFinding{warn("a"), warn("b"), {Severity: severityWarning, Check: "native_logging", Message: "off"}}, "overall: ok (2 warnings)"},
 		{"failure wins", []doctorFinding{warn("a"), {Severity: severityFailure, Check: "kitty", Message: "down"}}, "overall: issues detected"},
 	} {
 		if got := doctorVerdict(tc.findings); got != tc.want {
