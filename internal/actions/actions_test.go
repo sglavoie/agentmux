@@ -3,8 +3,11 @@ package actions
 import (
 	"context"
 	"errors"
+	"fmt"
+	"path/filepath"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 )
@@ -106,5 +109,28 @@ func TestCopyTitleUsesInjectedClipboard(t *testing.T) {
 	}
 	if copied != "api" || result.Data["title"] != "api" {
 		t.Fatalf("copy result = %+v, copied = %q", result, copied)
+	}
+}
+
+// Kitty does not refuse a --cwd that does not exist; it opens the tab in some
+// other directory, so the harness would start outside its project.
+func TestLaunchRefusesAProjectWhoseDirectoryIsUnusable(t *testing.T) {
+	runner := kitty.NewMockRunner(nil)
+	client := kitty.NewClientWithSocket(runner, "")
+	missing := filepath.Join(t.TempDir(), "gone")
+	cfg := &config.Config{Accounts: []config.Account{{Name: "work", Harness: "claude"}}}
+	project := config.Session{Title: "api", Directory: missing, Profile: "work"}
+
+	_, err := DefaultRegistry().Execute(context.Background(), Dependencies{Kitty: client, Config: cfg}, Launch, Request{Project: &project})
+	var actionErr *Error
+	if !errors.As(err, &actionErr) || actionErr.Code != "directory_unusable" {
+		t.Fatalf("error = %v, want directory_unusable", err)
+	}
+	want := fmt.Sprintf("project %q: directory %q does not exist", "work/api", missing)
+	if actionErr.Message != want {
+		t.Fatalf("message = %q, want %q", actionErr.Message, want)
+	}
+	if len(runner.Calls) != 0 {
+		t.Fatalf("a refused launch called Kitty: %+v", runner.Calls)
 	}
 }

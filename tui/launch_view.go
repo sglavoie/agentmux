@@ -20,6 +20,7 @@ func (m Model) pickerInput() launch.PickerInput {
 	return launch.PickerInput{
 		Sessions:        m.pickerSessions,
 		Running:         m.pickerRunning,
+		DirProblems:     m.pickerDirProblems,
 		Selected:        m.pickerSelected,
 		Pinned:          m.pickerPinned,
 		ProfileOverride: m.pickerProfileOverride,

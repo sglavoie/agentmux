@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/overrides"
 )
 
@@ -21,6 +22,8 @@ func TestMain(m *testing.M) {
 	if err := os.Setenv(overrides.PathEnvVar, filepath.Join(stateRoot, "launch_overrides.json")); err != nil {
 		panic(err)
 	}
+	// Test configurations name project directories that do not exist.
+	actions.ProjectDirectoryProblem = func(string) string { return "" }
 	code := m.Run()
 	if hadPrevious {
 		_ = os.Setenv("XDG_STATE_HOME", previous)

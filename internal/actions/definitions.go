@@ -7,12 +7,18 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/clipboard"
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 )
+
+// ProjectDirectoryProblem is the directory rule Launch refuses on, the same
+// one `amx project list --missing` and `amx config validate` apply. Tests whose
+// configurations name directories that do not exist replace it.
+var ProjectDirectoryProblem = config.ProjectDirectoryProblem
 
 func defaultDefinitions() []Definition {
 	sessionRequirement := []EntityRequirement{{Kind: EntityRunningSession, Description: "live managed session"}}
@@ -46,6 +52,12 @@ func defaultDefinitions() []Definition {
 				account, ok := accountByName(deps.Config, project.EffectiveProfile())
 				if !ok {
 					return Result{}, &Error{Code: "not_found", Action: Launch, Message: fmt.Sprintf("no matching profile %q", project.EffectiveProfile())}
+				}
+				// Kitty does not refuse a missing --cwd; it opens the tab
+				// somewhere else and the harness starts in the wrong project.
+				if problem := ProjectDirectoryProblem(project.Directory); problem != "" {
+					issue := config.ProjectDirectoryIssue{Project: project.EffectiveProfile() + "/" + project.Title, Directory: project.Directory, Problem: problem}
+					return Result{}, &Error{Code: "directory_unusable", Action: Launch, Message: issue.String()}
 				}
 				if err := session.Launch(deps.Kitty, project, account, deps.Config, session.LaunchPolicyAlwaysNewInstance); err != nil {
 					return Result{}, err

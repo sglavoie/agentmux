@@ -38,7 +38,11 @@ func (in PickerInput) RenderPreview(origIdx, width, height int) string {
 		lines = append(lines, layout.StyledTruncate(body, width, "…"))
 	}
 	addField("title", sess.Title)
-	addField("dir", sess.Directory)
+	if problem := in.DirProblems[origIdx]; problem != "" {
+		addField("dir", sess.Directory+" "+styleError.Render("("+problem+")"))
+	} else {
+		addField("dir", sess.Directory)
+	}
 	if sess.EffectiveProfile() != defaultProfile {
 		addField("default profile", defaultProfile)
 		addField("launch profile", sess.EffectiveProfile())

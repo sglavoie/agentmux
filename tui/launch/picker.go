@@ -27,6 +27,10 @@ type PickerInput struct {
 	Sessions []config.Session
 	// Running counts live instances per logical session key.
 	Running map[string]int
+	// DirProblems says, per index, why a project's directory is unusable
+	// ("does not exist", ...); a usable directory has no entry. Launching
+	// such a project is refused, so its row and preview say so up front.
+	DirProblems map[int]string
 	// Selected, Pinned, and ProfileOverride are the launcher's per-project
 	// state: multi-select checkboxes, persistent pins, and one-time profile
 	// choices.
@@ -267,6 +271,9 @@ func (in PickerInput) RenderList(height int) string {
 		if sess.EffectiveProfile() != defaultProfile {
 			line += "  " + styleDim.Render("(override)")
 		}
+		if in.DirProblems[origIdx] != "" {
+			line += "  " + styleError.Render("(missing)")
+		}
 		if runningCount == 1 {
 			line += "  " + styleDim.Render("(running)")
 		} else if runningCount > 1 {
@@ -316,4 +323,17 @@ func (in PickerInput) renderHeader(header string) string {
 		return left + "\n"
 	}
 	return left + strings.Repeat(" ", pad) + right + "\n"
+}
+
+// DirectoryProblems applies problem (config.ProjectDirectoryProblem, or a
+// test's replacement) to every project's directory once, when the launcher
+// opens, so rendering never touches the filesystem.
+func DirectoryProblems(sessions []config.Session, problem func(string) string) map[int]string {
+	problems := make(map[int]string)
+	for i, sess := range sessions {
+		if p := problem(sess.Directory); p != "" {
+			problems[i] = p
+		}
+	}
+	return problems
 }

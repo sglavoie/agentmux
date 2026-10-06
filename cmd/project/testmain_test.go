@@ -3,6 +3,8 @@ package project
 import (
 	"os"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/actions"
 )
 
 func TestMain(m *testing.M) {
@@ -17,6 +19,7 @@ func TestMain(m *testing.M) {
 	// Test configurations name directories that do not exist on purpose; the
 	// directory check is off unless a test installs its own.
 	projectDirectoryProblem = func(string) string { return "" }
+	actions.ProjectDirectoryProblem = projectDirectoryProblem
 	code := m.Run()
 	if hadPrevious {
 		_ = os.Setenv("XDG_STATE_HOME", previous)

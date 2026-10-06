@@ -687,6 +687,12 @@ new tab. Its `--json` data is `{action, changed, message, project, tab_id,
 window_id}`; `tab_id` and `window_id` name the new tab when exactly one new tab
 carrying the title appeared, and are omitted otherwise.
 
+A project whose directory is missing or is not a directory is never launched,
+because Kitty would quietly open the tab somewhere else: `project launch`
+refuses with `directory_unusable`, naming the project and the problem, and the
+launcher marks the row `(missing)` and its preview's `dir:` line with the
+reason. `amx project list --missing` lists every such project.
+
 `amx open-dashboard` brings the dashboard forward without drawing it in the
 calling terminal: it focuses a running dashboard (the singleton rule) or opens
 one in a new tab, and `--json` reports `{window_id, tab_id, opened}`. It refuses

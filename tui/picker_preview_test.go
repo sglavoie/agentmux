@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -319,5 +320,45 @@ func TestPickerExitRestartsListPreviewTicker(t *testing.T) {
 	}
 	if cmd == nil {
 		t.Fatal("expected exiting picker to reschedule the list preview ticker")
+	}
+}
+
+// A project whose directory is unusable cannot be launched, so the launcher
+// says so on its row and in its preview before anyone tries.
+func TestPickerMarksAProjectWhoseDirectoryIsMissing(t *testing.T) {
+	previous := actions.ProjectDirectoryProblem
+	actions.ProjectDirectoryProblem = func(dir string) string {
+		if dir == "/home/user/dotfiles" {
+			return "does not exist"
+		}
+		return ""
+	}
+	t.Cleanup(func() { actions.ProjectDirectoryProblem = previous })
+
+	m := pickerModel(t)
+	m.width, m.height = 120, 40
+	m.cfg.Defaults.Preview = pickerPreviewCfg()
+	m.pickerPreviewEnabled = true
+	out := stripAnsi(renderPicker(m))
+
+	var dotfilesRow, apiRow string
+	for _, line := range strings.Split(out, "\n") {
+		list, _, _ := strings.Cut(line, "│")
+		switch {
+		case strings.Contains(list, "dotfiles"):
+			dotfilesRow = list
+		case strings.Contains(list, "api"):
+			apiRow = list
+		}
+	}
+	if !strings.Contains(dotfilesRow, "(missing)") {
+		t.Errorf("dotfiles row = %q, want a (missing) marker", dotfilesRow)
+	}
+	if strings.Contains(apiRow, "(missing)") {
+		t.Errorf("api row = %q, want no marker", apiRow)
+	}
+	// pickerCursor=0 → first sorted row: "dotfiles" (personal).
+	if !strings.Contains(out, "dir: /home/user/dotfiles (does not exist)") {
+		t.Errorf("preview does not name the problem:\n%s", out)
 	}
 }

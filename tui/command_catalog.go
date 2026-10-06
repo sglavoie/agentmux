@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -53,6 +54,7 @@ func openLauncherCommand(m Model, _ commands.Context) (Model, tea.Cmd) {
 	}
 	m.pickerSessions = launch.SortSessions(sessions)
 	m.pickerRunning = launch.BuildRunning(m.sessions)
+	m.pickerDirProblems = launch.DirectoryProblems(m.pickerSessions, actions.ProjectDirectoryProblem)
 	m.pickerSelected = make(map[int]bool)
 	m.pickerProfileOverride, m.pickerPinned = launch.LoadState(m.pickerSessions)
 	m.pickerCursor = 0

@@ -163,6 +163,7 @@ type Model struct {
 	// picker mode
 	pickerSessions       []config.Session
 	pickerRunning        map[string]int
+	pickerDirProblems    map[int]string // project index -> why its directory is unusable
 	pickerSelected       map[int]bool
 	pickerPinned         map[int]bool // project index -> persistent launcher pin
 	pickerCursor         int
