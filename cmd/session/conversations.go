@@ -62,14 +62,24 @@ var sessionListCmd = &cobra.Command{
 		if err != nil {
 			return cli.CommandFailure(cmd, jsonOutput, "session_index_unavailable", err)
 		}
+		if err := selection.resolveProjects(cfg, idx); err != nil {
+			return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", err)
+		}
 		metas := selection.narrow(idx.List(selection.filter))
 		views := sessionViews(metas)
+		out := cmd.OutOrStdout()
+		terminal := !jsonOutput && sessionListIsTerminal(out)
+		liveKnown := false
+		if jsonOutput || terminal {
+			var live map[string]liveConversation
+			live, liveKnown = sessionCommandsLiveConversations()
+			markLive(views, live)
+		}
 		if jsonOutput {
 			return cli.WriteJSON(cmd, sessionListData{Sessions: views})
 		}
-		out := cmd.OutOrStdout()
-		if sessionListIsTerminal(out) {
-			return writeSessionTable(out, views, abbreviateSessionIDs(idx.List(transcript.ListFilter{})), sessionCommandsNow(), sessionListTerminalWidth(out))
+		if terminal {
+			return writeSessionTable(out, views, abbreviateSessionIDs(idx.List(transcript.ListFilter{})), sessionCommandsNow(), sessionListTerminalWidth(out), liveKnown)
 		}
 		// Off a terminal the output stays headerless and tab-separated with
 		// absolute timestamps: scripts cut and sort it, and a relative age is
@@ -93,6 +103,11 @@ type sessionSelection struct {
 	filter transcript.ListFilter
 	here   []string
 	limit  int
+	// projectSelectors are the --project values as typed, and projects the
+	// project names resolveProjects found for them; narrow keeps the sessions
+	// belonging to any of those names.
+	projectSelectors []string
+	projects         []string
 }
 
 // readSessionSelection parses the shared selector flags. The returned code is
@@ -111,6 +126,7 @@ func readSessionSelection(cmd *cobra.Command, cfg *config.Config) (sessionSelect
 	}
 	all, _ := cmd.Flags().GetBool("all")
 	selection.filter.MainOnly = !all
+	selection.projectSelectors, _ = cmd.Flags().GetStringSlice("project")
 	selection.limit, _ = cmd.Flags().GetInt("limit")
 	if selection.limit < 0 {
 		return selection, "invalid_arguments", fmt.Errorf("--limit %d: want 0 (no limit) or a positive count", selection.limit)
@@ -125,9 +141,18 @@ func readSessionSelection(cmd *cobra.Command, cfg *config.Config) (sessionSelect
 	return selection, "", nil
 }
 
-// narrow applies --here and then --limit to sessions already in the order
-// they will be shown.
+// narrow applies --project, --here, and then --limit to sessions already in
+// the order they will be shown.
 func (s sessionSelection) narrow(metas []transcript.SessionMeta) []transcript.SessionMeta {
+	if s.projects != nil {
+		kept := metas[:0:0]
+		for _, meta := range metas {
+			if meta.MatchesAnyProject(s.projects) {
+				kept = append(kept, meta)
+			}
+		}
+		metas = kept
+	}
 	if s.here != nil {
 		metas = sessionsUnder(metas, s.here)
 	}
@@ -135,6 +160,56 @@ func (s sessionSelection) narrow(metas []transcript.SessionMeta) []transcript.Se
 		metas = metas[:s.limit]
 	}
 	return metas
+}
+
+// resolveProjects turns each --project value into the project names it
+// selects, from the configured titles and the names sessions in the index
+// already carry (a session outside every configured project is named after
+// its directory). An exact name wins; failing one, a name that matches once
+// leading emoji or symbols and case are set aside, as `amx project launch`
+// reads a title, so "amx" selects "🐱amx". Unlike a launch, several such
+// names are all kept, since a filter can show them together. A value naming
+// nothing is refused, so a typo does not read as "no sessions".
+func (s *sessionSelection) resolveProjects(cfg *config.Config, idx *transcript.Index) error {
+	if len(s.projectSelectors) == 0 {
+		return nil
+	}
+	var names []string
+	known := map[string]bool{}
+	add := func(name string) {
+		if name != "" && !known[name] {
+			known[name] = true
+			names = append(names, name)
+		}
+	}
+	for _, project := range cfg.Projects {
+		add(project.Title)
+	}
+	for _, meta := range idx.List(transcript.ListFilter{IncludeHidden: true}) {
+		for _, name := range meta.ProjectNames() {
+			add(name)
+		}
+	}
+	s.projects = []string{}
+	for _, selector := range s.projectSelectors {
+		selector = strings.TrimSpace(selector)
+		if known[selector] {
+			s.projects = append(s.projects, selector)
+			continue
+		}
+		key := config.ProjectTitleKey(selector)
+		matched := false
+		for _, name := range names {
+			if key != "" && config.ProjectTitleKey(name) == key {
+				s.projects = append(s.projects, name)
+				matched = true
+			}
+		}
+		if !matched {
+			return fmt.Errorf("--project %q: no project or indexed session has this title; `amx project list` shows the configured ones", selector)
+		}
+	}
+	return nil
 }
 
 // addSessionSelectionFlags declares the selector flags readSessionSelection
@@ -146,6 +221,7 @@ func addSessionSelectionFlags(cmd *cobra.Command) {
 	_ = cmd.RegisterFlagCompletionFunc("harness", cli.CompleteHarnessFirstArg)
 	cmd.Flags().StringSlice("profile", nil, "only sessions visible to this profile (repeatable)")
 	_ = cmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
+	cmd.Flags().StringSlice("project", nil, "only sessions of this project, by title; \"amx\" also matches \"🐱amx\" (repeatable)")
 	cmd.Flags().IntP("limit", "n", 0, "show at most this many of the most recent sessions (0 for all)")
 	cmd.Flags().BoolP("all", "a", false, "include automated sessions (ASL runs, subagents, exec) and unclassified ones")
 }
@@ -155,12 +231,15 @@ func addSessionSelectionFlags(cmd *cobra.Command) {
 // ID cut to the prefix a continuity command still resolves. The summary is the
 // harness's title for the conversation, else its opening prompt, and takes
 // whatever the terminal, width cells wide, leaves it.
-func writeSessionTable(out io.Writer, views []sessionView, ids sessionIDAbbreviations, now time.Time, width int) error {
+func writeSessionTable(out io.Writer, views []sessionView, ids sessionIDAbbreviations, now time.Time, width int, liveKnown bool) error {
 	if len(views) == 0 {
 		_, err := fmt.Fprintln(out, "No indexed sessions match.")
 		return err
 	}
 	header := []string{"HARNESS", "PROFILE", "PROJECT", "ACTIVE", "SESSION", "SUMMARY"}
+	if liveKnown {
+		header = []string{"HARNESS", "PROFILE", "PROJECT", "ACTIVE", "LIVE", "SESSION", "SUMMARY"}
+	}
 	rows := make([][]string, 0, len(views))
 	for _, item := range views {
 		project := item.Project
@@ -174,10 +253,23 @@ func writeSessionTable(out io.Writer, views []sessionView, ids sessionIDAbbrevia
 		if summary == "" {
 			summary = "-"
 		}
-		rows = append(rows, []string{item.Harness, item.Profile, project, formatAgo(item.LastAt, now), ids.of(item.ID), summary})
+		row := []string{item.Harness, item.Profile, project, formatAgo(item.LastAt, now)}
+		if liveKnown {
+			row = append(row, liveMark(item.Live))
+		}
+		rows = append(rows, append(row, ids.of(item.ID), summary))
 	}
 	fitLastColumn(header, rows, width)
 	return cli.WriteTable(out, header, rows)
+}
+
+// liveMark is a list row's LIVE cell: a dot for a conversation open in a
+// Kitty tab, where `session continue` focuses rather than resumes.
+func liveMark(live *liveConversation) string {
+	if live == nil {
+		return ""
+	}
+	return "●"
 }
 
 // sessionSummaryWidth bounds the table's last column when the terminal's width
@@ -686,6 +778,9 @@ type sessionView struct {
 	MessageCount int       `json:"message_count"`
 	Snippet      string    `json:"snippet"`
 	Title        string    `json:"title,omitempty"`
+	// Live is the Kitty tab the conversation is open in, when the daemon and
+	// Kitty could both be asked and agreed on exactly one.
+	Live *liveConversation `json:"live,omitempty"`
 }
 
 func sessionViews(items []transcript.SessionMeta) []sessionView {

@@ -17,7 +17,7 @@ func TestSessionTableHasAHeaderAndRelativeAges(t *testing.T) {
 		{Harness: "codex", Profile: "work", LastAt: now.Add(-50 * time.Hour), ID: "01a1"},
 	}
 	var out bytes.Buffer
-	if err := writeSessionTable(&out, views, nil, now, 0); err != nil {
+	if err := writeSessionTable(&out, views, nil, now, 0, false); err != nil {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
@@ -48,7 +48,7 @@ func TestSessionTableFitsTheSummaryToTheTerminal(t *testing.T) {
 		{60, sessionSummaryWidth},
 	} {
 		var out bytes.Buffer
-		if err := writeSessionTable(&out, views, nil, now, tc.width); err != nil {
+		if err := writeSessionTable(&out, views, nil, now, tc.width, false); err != nil {
 			t.Fatal(err)
 		}
 		row := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")[1]
@@ -61,7 +61,7 @@ func TestSessionTableFitsTheSummaryToTheTerminal(t *testing.T) {
 
 func TestSessionTableSaysSoWhenEmpty(t *testing.T) {
 	var out bytes.Buffer
-	if err := writeSessionTable(&out, nil, nil, time.Now(), 0); err != nil {
+	if err := writeSessionTable(&out, nil, nil, time.Now(), 0, false); err != nil {
 		t.Fatal(err)
 	}
 	if out.String() != "No indexed sessions match.\n" {
@@ -135,7 +135,7 @@ func TestSessionTableSummaryPrefersTheTitle(t *testing.T) {
 		{Harness: "claude", Profile: "p", Project: "x", LastAt: now, ID: "c14d52b6", Snippet: "Look at the project"},
 	}
 	var out bytes.Buffer
-	if err := writeSessionTable(&out, views, nil, now, 0); err != nil {
+	if err := writeSessionTable(&out, views, nil, now, 0, false); err != nil {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")

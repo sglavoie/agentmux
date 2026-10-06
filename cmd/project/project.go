@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"unicode"
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/cli"
@@ -246,7 +245,7 @@ func projectActionError(cmd *cobra.Command, err error) error {
 // selectProject resolves the configured project a (profile, title) selector
 // names; an empty profile matches any profile. An exact title wins, because
 // titles are operator-authored and are the launch identity. Only when nothing
-// matches exactly is the title compared by its titleKey, so "amx" reaches
+// matches exactly is the title compared by its ProjectTitleKey, so "amx" reaches
 // "🐱amx" but can never shadow a project actually titled "amx". It returns a
 // typed action error, never a guess, when zero or several projects match.
 func selectProject(cfg *config.Config, profile, title string) (config.Session, error) {
@@ -260,9 +259,9 @@ func selectProject(cfg *config.Config, profile, title string) (config.Session, e
 		}
 	}
 	if len(matches) == 0 {
-		key := titleKey(title)
+		key := config.ProjectTitleKey(title)
 		for _, project := range cfg.Projects {
-			if key != "" && titleKey(project.Title) == key && inProfile(project) {
+			if key != "" && config.ProjectTitleKey(project.Title) == key && inProfile(project) {
 				matches = append(matches, project)
 			}
 		}
@@ -283,13 +282,13 @@ func selectProject(cfg *config.Config, profile, title string) (config.Session, e
 			selector += fmt.Sprintf(" and profile %q", profile)
 		}
 		// The near misses — any project, under any profile, whose title
-		// contains what was typed once both are read by their titleKey — are
+		// contains what was typed once both are read by their ProjectTitleKey — are
 		// the projects the caller most likely meant; with none, every
 		// configured project is a candidate.
 		var near []config.Session
-		key := titleKey(title)
+		key := config.ProjectTitleKey(title)
 		for _, project := range cfg.Projects {
-			if strings.Contains(titleKey(project.Title), key) {
+			if strings.Contains(config.ProjectTitleKey(project.Title), key) {
 				near = append(near, project)
 			}
 		}
@@ -315,16 +314,6 @@ func selectProject(cfg *config.Config, profile, title string) (config.Session, e
 	}
 }
 
-// titleKey is how an operator types a title: without the emoji, bullets, and
-// other symbols titles often lead with, and in lower case. "🐱amx", "•amx",
-// and "AMX" all read as "amx".
-func titleKey(title string) string {
-	trimmed := strings.TrimLeftFunc(strings.TrimSpace(title), func(r rune) bool {
-		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
-	})
-	return strings.ToLower(trimmed)
-}
-
 // sameTitle reports whether every project carries one title, so several of
 // them differ only by profile and --profile is what tells them apart.
 func sameTitle(projects []config.Session) bool {
@@ -338,10 +327,10 @@ func sameTitle(projects []config.Session) bool {
 
 // projectCandidates orders candidates by profile then title, so the same
 // configuration always produces the same list. Titles are compared by their
-// titleKey, so a leading emoji or bullet does not move a title away from its
-// alphabetical place ("🐱amx" sorts with "amp", not after every plain
-// title). The ID is the selector pair a caller passes back as --profile and
-// --title.
+// ProjectTitleKey, so a leading emoji or bullet does not move a title away
+// from its alphabetical place ("🐱amx" sorts with "amp", not after every
+// plain title). The ID is the selector pair a caller passes back as --profile
+// and --title.
 func projectCandidates(projects []config.Session) []actions.Candidate {
 	sorted := append([]config.Session(nil), projects...)
 	sort.SliceStable(sorted, func(i, j int) bool {
@@ -349,7 +338,7 @@ func projectCandidates(projects []config.Session) []actions.Candidate {
 		if pi != pj {
 			return pi < pj
 		}
-		if ki, kj := titleKey(sorted[i].Title), titleKey(sorted[j].Title); ki != kj {
+		if ki, kj := config.ProjectTitleKey(sorted[i].Title), config.ProjectTitleKey(sorted[j].Title); ki != kj {
 			return ki < kj
 		}
 		return sorted[i].EffectiveProfile()+"/"+sorted[i].Title < sorted[j].EffectiveProfile()+"/"+sorted[j].Title
@@ -365,10 +354,10 @@ func projectCandidates(projects []config.Session) []actions.Candidate {
 	return candidates
 }
 
-// typoCandidates returns the projects whose titleKey is within a few edits of
-// key — two, or a third of what was typed when that is more — ordered by
-// distance and then as projectCandidates orders them, so "amxx" offers "🐱amx"
-// first. An empty key is no typo of anything.
+// typoCandidates returns the projects whose ProjectTitleKey is within a few
+// edits of key — two, or a third of what was typed when that is more —
+// ordered by distance and then as projectCandidates orders them, so "amxx"
+// offers "🐱amx" first. An empty key is no typo of anything.
 func typoCandidates(projects []config.Session, key string) []actions.Candidate {
 	if key == "" {
 		return nil
@@ -377,7 +366,7 @@ func typoCandidates(projects []config.Session, key string) []actions.Candidate {
 	distance := map[string]int{}
 	var near []config.Session
 	for _, project := range projects {
-		d := editDistance(key, titleKey(project.Title))
+		d := editDistance(key, config.ProjectTitleKey(project.Title))
 		if d <= limit {
 			near = append(near, project)
 			distance[project.EffectiveProfile()+"/"+project.Title] = d

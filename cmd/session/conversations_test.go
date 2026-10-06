@@ -23,6 +23,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
 	"github.com/sglavoie/agentmux/tui/layout"
+	"github.com/spf13/cobra"
 )
 
 type sessionCommandKitty struct {
@@ -39,6 +40,7 @@ func resetSessionCommandsTestState(t *testing.T) {
 	oldReaders := sessionCommandsSessionReaders
 	oldNewKitty := sessionCommandsNewKitty
 	oldDaemon := sessionCommandsDaemon
+	oldLive := sessionCommandsLiveConversations
 	oldNewHandoff := sessionCommandsNewHandoff
 	oldNewWorktree := sessionCommandsNewWorktree
 	oldIsTerminal := sessionListIsTerminal
@@ -55,6 +57,7 @@ func resetSessionCommandsTestState(t *testing.T) {
 		sessionCommandsSessionReaders = oldReaders
 		sessionCommandsNewKitty = oldNewKitty
 		sessionCommandsDaemon = oldDaemon
+		sessionCommandsLiveConversations = oldLive
 		sessionCommandsNewHandoff = oldNewHandoff
 		sessionCommandsNewWorktree = oldNewWorktree
 		sessionListIsTerminal = oldIsTerminal
@@ -76,7 +79,15 @@ func resetSessionCommandsTestState(t *testing.T) {
 		_ = sessionHandoffCmd.Flags().Set("edit", "false")
 		_ = sessionHandoffCmd.Flags().Set("no-launch", "false")
 		_ = sessionHandoffCmd.Flags().Set("json", "false")
+		for _, cmd := range []*cobra.Command{sessionListCmd, sessionSearchCmd} {
+			if value, ok := cmd.Flags().Lookup("project").Value.(interface{ Replace([]string) error }); ok {
+				_ = value.Replace(nil)
+			}
+		}
 	})
+	// Live tabs come from the operator's daemon and Kitty unless a test says
+	// otherwise; by default neither can be asked.
+	sessionCommandsLiveConversations = func() (map[string]liveConversation, bool) { return nil, false }
 }
 
 func (c *sessionCommandKitty) ListWindows() ([]kitty.OSWindow, error) { return c.windows, nil }
@@ -489,7 +500,7 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 	oldGetwd := sessionListGetwd
 	t.Cleanup(func() {
 		sessionListGetwd = oldGetwd
-		for _, name := range []string{"here", "harness", "profile", "limit", "json"} {
+		for _, name := range []string{"here", "harness", "profile", "project", "limit", "json"} {
 			flag := sessionListCmd.Flags().Lookup(name)
 			if slice, ok := flag.Value.(interface{ Replace([]string) error }); ok {
 				_ = slice.Replace(nil)
@@ -533,7 +544,7 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 		return &config.Config{Profiles: []config.Account{
 			{Name: "work", Harness: harness.Codex, HomeDir: filepath.Join(dir, "codex-home")},
 			{Name: "personal", Harness: harness.Claude, HomeDir: filepath.Join(dir, "claude-home")},
-		}}, nil
+		}, Projects: []config.Session{{Title: "🐱repo", Directory: repo, Profile: "work"}}}, nil
 	}
 	sessionCommandsSessionReaders = func() map[string]transcript.Reader {
 		return map[string]transcript.Reader{
@@ -545,7 +556,7 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 
 	run := func(t *testing.T, flags map[string]string) (string, error) {
 		t.Helper()
-		for _, name := range []string{"here", "harness", "profile", "limit", "all"} {
+		for _, name := range []string{"here", "harness", "profile", "project", "limit", "all"} {
 			flag := sessionListCmd.Flags().Lookup(name)
 			if slice, ok := flag.Value.(interface{ Replace([]string) error }); ok {
 				_ = slice.Replace(nil)
@@ -585,6 +596,14 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 		{"selectors combine", map[string]string{"here": "true", "harness": "claude"}, "claude-sub"},
 		{"all includes automated sessions", map[string]string{"all": "true"}, "codex-asl,codex-root,claude-sub,codex-sibling"},
 		{"all combines with selectors", map[string]string{"all": "true", "limit": "1"}, "codex-asl"},
+		// "repo" is no project's exact name, so it is read the way a launch
+		// reads a title and reaches "🐱repo".
+		{"project by typed title", map[string]string{"project": "repo"}, "codex-root,claude-sub"},
+		{"project by exact title", map[string]string{"project": "🐱repo"}, "codex-root,claude-sub"},
+		// A session outside every configured project is named after its
+		// directory, and that name selects it too.
+		{"project named by its directory", map[string]string{"project": "repo2"}, "codex-sibling"},
+		{"projects combine", map[string]string{"project": "repo,repo2", "harness": "codex"}, "codex-root,codex-sibling"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, err := run(t, tc.flags)
@@ -605,6 +624,7 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 		{"unknown harness", map[string]string{"harness": "gemini"}, `--harness "gemini"`},
 		{"unknown profile", map[string]string{"profile": "nobody"}, `--profile "nobody"`},
 		{"negative limit", map[string]string{"limit": "-1"}, "--limit -1"},
+		{"unknown project", map[string]string{"project": "nowhere"}, `--project "nowhere"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, err := run(t, tc.flags)

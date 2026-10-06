@@ -21,12 +21,13 @@ amx session list --json
 amx session list --since 7d   # only sessions active in the last week (or 12h, 90m, …)
 amx session list --here -n 5  # the five latest sessions started in this directory or below it
 amx session list --harness codex --profile codex-work   # both repeatable
+amx session list --project amx   # one project's sessions; "amx" reaches "🐱amx" as project launch reads it, and a directory-named project works too (repeatable)
 amx session list --all        # also automated sessions (ASL runs, subagents, exec), hidden by default as in Past Sessions
 amx session continue "$(amx session list | fzf | cut -f5)"   # pick by opening prompt
 amx session search race daemon            # conversations mentioning both words, newest first, with match counts
 amx session search '"race condition"' --here --since 7d   # a quoted phrase; takes every list selector
 amx session search --source user flaky    # only your own prompts (or --source harness for the agent's output)
-amx session show 09467ec1                 # one conversation: title, directory, ages, message count, transcript path, and the commands that continue or fork it
+amx session show 09467ec1                 # one conversation: title, directory, ages, whether it is open in Kitty, message count, transcript path, and the commands that continue or fork it
 cd "$(amx session show 09467ec1 --json | jq -r .data.session.cwd)"
 amx session continue codex <session-id>
 amx session fork claude <session-id>
@@ -46,7 +47,11 @@ one it begins, and a prefix that several conversations share is refused with
 every candidate.
 
 `session continue` focuses the exact live Kitty owner when one exists and
-otherwise resumes the closed conversation. Native forks are used for Claude
+otherwise resumes the closed conversation. `session list` in a terminal marks
+those conversations with `●` in a LIVE column, `session show` names their
+Kitty window, and both put the tab under `live` in `--json`; when the daemon or
+Kitty cannot be asked, the column and line are left out rather than reporting
+nothing open. Native forks are used for Claude
 and Codex. Copilot forks use a portable handoff because Copilot does not expose
 native fork semantics. Worktree forks create a tracked isolated Git worktree
 and never copy uncommitted changes unless `--allow-dirty` is explicitly

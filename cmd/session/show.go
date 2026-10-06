@@ -3,6 +3,7 @@ package session
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -35,11 +36,14 @@ var sessionShowCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		view := sessionViews([]transcript.SessionMeta{*meta})[0]
+		views := sessionViews([]transcript.SessionMeta{*meta})
+		live, liveKnown := sessionCommandsLiveConversations()
+		markLive(views, live)
+		view := views[0]
 		if jsonOutput {
 			return cli.WriteJSON(cmd, sessionShowData{Session: view})
 		}
-		return writeSessionShow(cmd.OutOrStdout(), view, sessionCommandsNow())
+		return writeSessionShow(cmd.OutOrStdout(), view, sessionCommandsNow(), liveKnown)
 	},
 }
 
@@ -51,8 +55,9 @@ type sessionShowData struct {
 // printed whole rather than with ~, so each can be pasted anywhere, and the
 // last lines are the commands that pick the conversation back up or branch
 // from it, spelled with its exact harness-qualified identity so they cannot
-// become ambiguous later.
-func writeSessionShow(out io.Writer, view sessionView, now time.Time) error {
+// become ambiguous later. The live line, which says whether continue would
+// focus a tab or resume, is left out when the daemon or Kitty could not say.
+func writeSessionShow(out io.Writer, view sessionView, now time.Time, liveKnown bool) error {
 	dash := func(value string) string {
 		if value == "" {
 			return "-"
@@ -72,6 +77,7 @@ func writeSessionShow(out io.Writer, view sessionView, now time.Time) error {
 		{"directory", dash(view.CWD)},
 		{"started", when(view.StartedAt)},
 		{"active", when(view.LastAt)},
+		{"live", liveLine(view.Live)},
 		{"messages", strconv.Itoa(view.MessageCount)},
 		{"transcript", dash(view.Path)},
 		{"title", dash(oneLine(view.Title))},
@@ -79,10 +85,22 @@ func writeSessionShow(out io.Writer, view sessionView, now time.Time) error {
 		{"continue", "amx session continue " + view.Harness + ":" + view.ID},
 		{"fork", "amx session fork " + view.Harness + ":" + view.ID},
 	}
+	if !liveKnown {
+		rows = slices.DeleteFunc(rows, func(row [2]string) bool { return row[0] == "live" })
+	}
 	var b strings.Builder
 	for _, row := range rows {
 		fmt.Fprintf(&b, "%-11s %s\n", row[0]+":", row[1])
 	}
 	_, err := io.WriteString(out, b.String())
 	return err
+}
+
+// liveLine is session show's live value: the Kitty window a conversation is
+// open in, which continue focuses, or "no" when continue would resume it.
+func liveLine(live *liveConversation) string {
+	if live == nil {
+		return "no"
+	}
+	return fmt.Sprintf("open in Kitty window %d (continue focuses it)", live.WindowID)
 }

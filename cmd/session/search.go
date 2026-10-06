@@ -58,6 +58,9 @@ line it matched on. The selector flags narrow the search the way they narrow
 		if err != nil {
 			return cli.CommandFailure(cmd, jsonOutput, "session_index_unavailable", err)
 		}
+		if err := selection.resolveProjects(cfg, idx); err != nil {
+			return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", err)
+		}
 		results, err := transcript.Search(idx, readers, transcript.Query{
 			Text:          query,
 			MessageSource: source,
@@ -89,7 +92,7 @@ line it matched on. The selector flags narrow the search the way they narrow
 	},
 }
 
-// narrowSearchResults applies --here and --limit to search results, keeping
+// narrowSearchResults applies --project, --here, and --limit to search results, keeping
 // their order, through the same sessionSelection.narrow the list uses.
 func narrowSearchResults(results []transcript.Result, selection sessionSelection) []transcript.Result {
 	metas := make([]transcript.SessionMeta, 0, len(results))
