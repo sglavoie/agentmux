@@ -375,6 +375,9 @@ func originalOffsetForFoldedByte(text string, foldedPos int) int {
 // firstMatchLine returns the single line of text containing the byte
 // offset pos, truncated like a snippet. Callers pass the original
 // (non-lowered) text so the returned preview preserves the user's case.
+// A line whose match lies further in than previewLeadContext runes is
+// entered just before the match, marked with a leading ellipsis, so a
+// preview cut to a table column still shows why the session matched.
 func firstMatchLine(text string, pos int) string {
 	if pos < 0 || pos >= len(text) {
 		return truncateSnippet(text)
@@ -391,7 +394,30 @@ func firstMatchLine(text string, pos int) string {
 	} else {
 		end += pos
 	}
-	return truncateSnippet(text[start:end])
+	lead := strings.Join(strings.Fields(text[start:pos]), " ")
+	if lead != "" && strings.ContainsRune(" \t\r", rune(text[pos-1])) {
+		lead += " "
+	}
+	if utf8.RuneCountInString(lead) <= previewLeadContext {
+		return truncateSnippet(text[start:end])
+	}
+	return "…" + truncateSnippet(previewLeadIn(lead)+text[pos:end])
+}
+
+// previewLeadContext is how much of a line a preview keeps before the match
+// it was taken for. It is short so the match lands early in a narrow column,
+// and long enough to say what the match was part of.
+const previewLeadContext = 24
+
+// previewLeadIn keeps the last previewLeadContext runes of lead, dropping a
+// leading partial word when a word boundary lies inside them.
+func previewLeadIn(lead string) string {
+	runes := []rune(lead)
+	kept := string(runes[len(runes)-previewLeadContext:])
+	if _, after, found := strings.Cut(kept, " "); found {
+		return after
+	}
+	return kept
 }
 
 // sortResults orders results by LastAt desc, breaking ties with
