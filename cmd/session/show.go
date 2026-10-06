@@ -72,8 +72,8 @@ func writeSessionShow(out io.Writer, view sessionView, now time.Time, liveKnown 
 	}
 	rows := [][2]string{
 		{"session", view.Harness + ":" + view.ID},
-		{"profile", dash(strings.Join(view.Profiles, ", "))},
-		{"project", dash(strings.Join(view.Projects, ", "))},
+		{plural("profile", len(view.Profiles)), dash(strings.Join(view.Profiles, ", "))},
+		{plural("project", len(view.Projects)), dash(strings.Join(view.Projects, ", "))},
 		{"directory", dash(view.CWD)},
 		{"started", when(view.StartedAt)},
 		{"active", when(view.LastAt)},
@@ -94,6 +94,16 @@ func writeSessionShow(out io.Writer, view sessionView, now time.Time, liveKnown 
 	}
 	_, err := io.WriteString(out, b.String())
 	return err
+}
+
+// plural is a field label for count values: a conversation two profiles share
+// lists both under "profiles". The labels stay within the column the widest
+// one, "transcript", sets.
+func plural(label string, count int) string {
+	if count > 1 {
+		return label + "s"
+	}
+	return label
 }
 
 // liveLine is session show's live value: the Kitty window a conversation is
