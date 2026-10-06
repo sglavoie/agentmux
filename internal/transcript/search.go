@@ -258,6 +258,78 @@ func searchFallback(idx *Index, readers map[string]Reader, meta SessionMeta, ter
 	return Result{Meta: meta, Matches: count, Preview: preview}, true
 }
 
+// RecasePreviews gives each result the preview its transcript would give it in
+// the case it was written in. Search reads previews out of the search
+// sidecars, which hold lowercased text, so a preview found there is
+// lowercased; a caller about to show a bounded set of results passes them
+// here to re-read just those transcripts. A preview that already carries an
+// upper-case letter (the session snippet, or one found by reading the
+// transcript) is kept, as is any preview whose transcript cannot be read
+// again or no longer matches. Re-reading is bounded by previewRereadBudget
+// bytes of transcript, spent on results in order, so an unbounded search over
+// a large corpus re-cases its leading rows and leaves the rest as found. The
+// budget is counted from indexed file sizes, so the same index and query
+// always re-case the same rows. The results keep their order.
+func RecasePreviews(readers map[string]Reader, results []Result, q Query) []Result {
+	terms := searchquery.Parse(q.Text)
+	source := q.MessageSource
+	if source == "" {
+		source = "any"
+	}
+	out := append([]Result(nil), results...)
+	if terms.Empty() || readers == nil {
+		return out
+	}
+	var pending []int
+	budget := int64(previewRereadBudget)
+	for i, result := range out {
+		if result.Matches > 0 && result.Preview != "" && result.Preview == strings.ToLower(result.Preview) {
+			if budget -= max(result.Meta.FileSize, 1); budget < 0 {
+				break
+			}
+			pending = append(pending, i)
+		}
+	}
+	jobs := make(chan int)
+	var workers sync.WaitGroup
+	n := min(previewWorkers, len(pending))
+	workers.Add(n)
+	for range n {
+		go func() {
+			defer workers.Done()
+			for i := range jobs {
+				meta := out[i].Meta
+				reader, ok := readers[meta.Harness]
+				if !ok {
+					continue
+				}
+				msgs, err := reader.ReadMessages(meta.Path)
+				if err != nil {
+					slog.Debug("transcript.search: preview reread failed", "path", meta.Path, "err", err)
+					continue
+				}
+				if _, preview := countMatchesForSource(msgs, terms, source); preview != "" {
+					out[i].Preview = preview
+				}
+			}
+		}()
+	}
+	for _, i := range pending {
+		jobs <- i
+	}
+	close(jobs)
+	workers.Wait()
+	return out
+}
+
+// previewWorkers bounds the concurrent transcript reads RecasePreviews makes,
+// and previewRereadBudget the transcript bytes it reads in all: about a third
+// of a second of parsing on a laptop.
+const (
+	previewWorkers      = 8
+	previewRereadBudget = 64 << 20
+)
+
 // readSearchCorpus reuses decoded sidecars between keystrokes. A changed
 // transcript metadata generation or sidecar write invalidates the cached text.
 func (idx *Index) readSearchCorpus(key string, meta SessionMeta, source string) (string, bool, error) {
@@ -287,9 +359,9 @@ func countMatchesForSource(msgs []Message, terms searchquery.Terms, source strin
 	tally := terms.NewTally()
 	var preview string
 	for _, msg := range msgs {
-		lower := strings.ToLower(msg.SearchTextForSource(source))
-		if first := tally.Add(lower); preview == "" && first >= 0 {
-			preview = firstMatchLine(lower, first)
+		text := msg.SearchTextForSource(source)
+		if first := tally.Add(strings.ToLower(text)); preview == "" && first >= 0 {
+			preview = firstMatchLine(text, originalOffsetForFoldedByte(text, first))
 		}
 	}
 	total := tally.Total()

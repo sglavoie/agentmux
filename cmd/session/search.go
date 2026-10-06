@@ -70,6 +70,7 @@ line it matched on. The selector flags narrow the search the way they narrow
 			return cli.CommandFailure(cmd, jsonOutput, "command_failed", err)
 		}
 		results = narrowSearchResults(results, selection)
+		results = transcript.RecasePreviews(readers, results, transcript.Query{Text: query, MessageSource: source})
 		views := sessionSearchViews(results)
 		if jsonOutput {
 			return cli.WriteJSON(cmd, sessionSearchData{Query: query, Source: source, Results: views})
