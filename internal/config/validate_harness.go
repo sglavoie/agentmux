@@ -128,7 +128,7 @@ func validateHarnessColors(cfg *Config) []string {
 		}
 		if !ValidColor(v) {
 			errs = append(errs, fmt.Sprintf(
-				"[harness_colors].%s: invalid color %q\n  → valid colors: green, blue, red, orange, purple, teal, pink, yellow, gray, cyan",
+				"[harness_colors].%s: invalid color %q"+validColorsHint(),
 				k, v,
 			))
 		}

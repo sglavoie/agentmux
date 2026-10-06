@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/palette"
 )
 
 // Config is the top-level structure for config.toml.
@@ -412,13 +413,6 @@ type AccountHookOverride struct {
 	DisabledEvents []string `toml:"disabled_events"`
 }
 
-// validColors is the set of allowed color names.
-var validColors = map[string]bool{
-	"green": true, "blue": true, "red": true, "orange": true,
-	"purple": true, "teal": true, "pink": true, "yellow": true,
-	"gray": true, "cyan": true,
-}
-
 // validSorts is the set of allowed sort values.
 var validSorts = map[string]bool{
 	"alpha": true, "account": true,
@@ -429,8 +423,19 @@ var validPreviewDirections = map[string]bool{
 	"horizontal": true, "vertical": true,
 }
 
-// ValidColor reports whether s is a valid palette color name.
-func ValidColor(s string) bool { return validColors[s] }
+// ValidColor reports whether s is a valid palette color name. The palette is
+// the only list of colors: a name added to palette.json is valid here without
+// a second edit.
+func ValidColor(s string) bool {
+	_, err := palette.Lookup(s)
+	return err == nil
+}
+
+// validColorsHint is the "→ valid colors: …" line a color error ends with,
+// listing the palette's names in sorted order.
+func validColorsHint() string {
+	return "\n  → valid colors: " + strings.Join(palette.Names(), ", ")
+}
 
 // ValidSort reports whether s is a valid sort value.
 func ValidSort(s string) bool { return validSorts[s] }

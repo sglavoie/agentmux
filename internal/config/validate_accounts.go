@@ -25,12 +25,12 @@ func validateAccounts(accounts []Account) []string {
 		}
 		if a.Color == "" {
 			errs = append(errs, fmt.Sprintf(
-				"profile %q: 'color' is required (e.g. color=\"yellow\")\n  → valid colors: green, blue, red, orange, purple, teal, pink, yellow, gray, cyan",
+				"profile %q: 'color' is required (e.g. color=\"yellow\")"+validColorsHint(),
 				a.Name,
 			))
 		} else if !ValidColor(a.Color) {
 			errs = append(errs, fmt.Sprintf(
-				"profile %q: invalid color %q\n  → valid colors: green, blue, red, orange, purple, teal, pink, yellow, gray, cyan",
+				"profile %q: invalid color %q"+validColorsHint(),
 				a.Name, a.Color,
 			))
 		}
