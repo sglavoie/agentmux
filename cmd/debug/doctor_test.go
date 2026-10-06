@@ -38,10 +38,12 @@ func resetDoctorTestState(t *testing.T) {
 	oldStrict := doctorStrict
 	oldLookPath := aslDoctorLookPath
 	oldASLStat := aslDoctorStat
+	oldBridgeFailure := doctorLastASLBridgeFailure
 	oldOut := doctorCmd.OutOrStdout()
 	t.Cleanup(func() {
 		aslDoctorLookPath = oldLookPath
 		aslDoctorStat = oldASLStat
+		doctorLastASLBridgeFailure = oldBridgeFailure
 		newDoctorDaemonClient = oldClient
 		newDoctorKitty = oldKitty
 		doctorLoadConfig = oldConfig

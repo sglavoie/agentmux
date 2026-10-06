@@ -270,6 +270,7 @@ func (m *Manager) runSession(ctx context.Context) (time.Duration, error) {
 	if err != nil {
 		return 0, err
 	}
+	m.setLaunched(child.Path, child.Source)
 
 	tail := newStderrTail()
 	go tail.consume(child.Stderr)

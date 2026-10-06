@@ -89,6 +89,21 @@ func aslDaemonResolutionDimension(in aslIntegrationInputs) doctorASLDimension {
 		dim.Status = aslStatusNotApplicable
 		dim.Detail = "no agent-session-loop integration is configured and the daemon resolved none"
 		return dim
+	case !in.Status.Available && in.Status.Executable != "":
+		// Resolution worked; the child it started is what fails. Pointing at
+		// asl-sync here would persist the same path and change nothing. The
+		// usual cause is an interpreter the daemon's inherited PATH resolves
+		// differently from the operator's shell.
+		dim.Status = aslSeverityStatus(in.Mode)
+		dim.Detail = fmt.Sprintf("the daemon launched %s but the bridge is not running: %s",
+			in.Status.Executable, reasonOrUnstated(in.Status.Reason))
+		if in.BridgeFailure != "" {
+			dim.Detail += " (last failure in the daemon log: " + in.BridgeFailure + ")"
+		}
+		dim.Remediation = fmt.Sprintf(
+			"make %s run under the daemon's environment (for a script, check that its interpreter resolves on the daemon's PATH, not only your shell's), then run `amx daemon restart`",
+			in.Status.Executable)
+		return dim
 	case !in.Status.Available:
 		dim.Status = aslSeverityStatus(in.Mode)
 		dim.Detail = "the daemon has not resolved an executable: " + reasonOrUnstated(in.Status.Reason)

@@ -69,7 +69,7 @@ fixes. Every non-ok answer carries the exact command that addresses it.
 | Dimension | What it answers |
 | --- | --- |
 | `shell_resolution` | Would the configured command resolve without an environment? A bare name warns even when your shell resolves it — the daemon does not have your shell. |
-| `daemon_resolution` | What the running daemon actually found. An executable found on an inherited `PATH` warns: it works today, and by accident. |
+| `daemon_resolution` | What the running daemon actually found. An executable found on an inherited `PATH` warns: it works today, and by accident. An executable the daemon launched but whose bridge keeps exiting is reported with the last failure from the daemon's private log (`daemon/daemon.jsonl`), because the usual cause is a script interpreter the daemon's `PATH` resolves differently from your shell, which `asl-sync` cannot fix. |
 | `contract` | Whether the bridge and the state root both name this build's contract set. A mismatch fails in every mode; it is terminal by construction. |
 | `projection` | What the reconciliation sweep could not read. Always a warning — one corrupt plan does not break the pairing. |
 | `freshness` | Whether the bridge snapshot or the sweep has gone stale. A stale bridge still serves reads, so nothing else looks wrong. |

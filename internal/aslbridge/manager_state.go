@@ -27,6 +27,18 @@ func (m *Manager) setConnected(executable, source string, hello Hello, c *conn) 
 	m.clearGrantLocked()
 }
 
+// setLaunched records the executable a child was spawned from before it has
+// said anything. A child that dies during the handshake never reaches
+// setConnected, and without this the capability block could not tell "asl was
+// found and keeps crashing" from "asl was never found", which have different
+// fixes.
+func (m *Manager) setLaunched(executable, source string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.executable = executable
+	m.executableSource = source
+}
+
 // setDisconnected disables mutations at once. The last snapshot survives as
 // stale read-only data for StaleWindow and is then dropped by pruneLocked.
 func (m *Manager) setDisconnected(reason string) {

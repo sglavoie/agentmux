@@ -124,6 +124,10 @@ type aslIntegrationInputs struct {
 	Status    *aslbridge.Status
 	Reconcile *protocol.ASLReconcileSnapshot
 	Delivery  *protocol.ASLHookDeliverySnapshot
+	// BridgeFailure is the newest bridge-exit error from the daemon's private
+	// log, unsanitized, or "" when there is none. It is read only when the
+	// daemon reports a launched executable that is not connected.
+	BridgeFailure string
 	// DaemonAlive gates every daemon-sourced dimension: against a dead daemon
 	// they are unknown, not failing.
 	DaemonAlive bool
@@ -154,6 +158,9 @@ func gatherASLIntegrationInputs(health ipc.Health) aslIntegrationInputs {
 	}
 	if in.Mode == "" {
 		in.Mode = string(aslbridge.ModeAuto)
+	}
+	if health.ASL != nil && !health.ASL.Available && health.ASL.Executable != "" {
+		in.BridgeFailure = doctorLastASLBridgeFailure()
 	}
 	// Any of these is the operator having asked: a command they wrote, a mode
 	// they declared, or a bridge that actually connected.

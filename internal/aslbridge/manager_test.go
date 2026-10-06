@@ -269,6 +269,35 @@ func TestStderrTailStaysOutOfPublishedReason(t *testing.T) {
 	}
 }
 
+// A child that dies before its hello still names the executable it was
+// started from, so doctor can tell a crashing bridge from a missing one and
+// stop recommending a re-resolution that would persist the same path.
+func TestAChildThatFailsItsHandshakeStillReportsItsExecutable(t *testing.T) {
+	launcher := func(context.Context) (*Child, error) {
+		fake := newFakeBridge(t, func(f *fakeBridge) {
+			f.writeLine("not a hello")
+			<-f.exited
+		})
+		child := fake.child()
+		child.Path = "/opt/asl/bin/asl"
+		child.Source = SourceConfigured
+		return child, nil
+	}
+	m := startManager(t, Options{
+		Mode: ModeRequired, Command: "/opt/asl/bin/asl", Launcher: launcher,
+		Sleep: func(context.Context, time.Duration) bool { return false },
+	})
+	waitForReason(t, m, "handshake failed")
+
+	status := m.Status()
+	if status.Available {
+		t.Fatal("a child that never said hello is not available")
+	}
+	if status.Executable != "/opt/asl/bin/asl" || status.ExecutableSource != SourceConfigured {
+		t.Fatalf("executable = %q (%s), want the launched path", status.Executable, status.ExecutableSource)
+	}
+}
+
 func TestWorkbenchRejectsUnknownFocus(t *testing.T) {
 	m := New(Options{Mode: ModeAuto, Command: "asl", Logger: discardLogger()})
 	if _, err := m.Workbench(context.Background(), WorkbenchRequest{PlanDir: "/p", Focus: "everything"}); !errors.Is(err, ErrInvalidRequest) {
