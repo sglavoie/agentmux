@@ -128,20 +128,33 @@ func printTranscriptStatus(cmd *cobra.Command, status transcript.StoreStatus) {
 		path = cli.DisplayPath
 		hiddenNote = " (removed from Past Sessions)"
 	}
-	_, _ = fmt.Fprintf(out, "metadata_path: %s\n", path(status.MetadataPath))
-	_, _ = fmt.Fprintf(out, "metadata_size: %s\n", size(status.MetadataSize))
-	_, _ = fmt.Fprintf(out, "sidecar_dir: %s\n", path(status.SidecarDir))
-	_, _ = fmt.Fprintf(out, "sidecar_size: %s\n", size(status.SidecarSize))
-	_, _ = fmt.Fprintf(out, "sidecar_count: %d\n", status.SidecarCount)
-	_, _ = fmt.Fprintf(out, "orphan_sidecars: %d\n", status.OrphanSidecars)
-	_, _ = fmt.Fprintf(out, "orphan_sidecar_size: %s\n", size(status.OrphanSidecarSize))
-	_, _ = fmt.Fprintf(out, "visible_entries: %d\n", status.VisibleEntries)
-	_, _ = fmt.Fprintf(out, "hidden_entries: %d%s\n", status.HiddenEntries, hiddenNote)
-	_, _ = fmt.Fprintf(out, "empty_entries: %d\n", status.EmptyEntries)
-	_, _ = fmt.Fprintf(out, "visible_profile_memberships: %d\n", status.VisibleProfileMemberships)
-	_, _ = fmt.Fprintf(out, "hidden_profile_memberships: %d\n", status.HiddenProfileMemberships)
-	_, _ = fmt.Fprintf(out, "shared_profile_entries: %d\n", status.SharedProfileEntries)
-	_, _ = fmt.Fprintf(out, "missing_sidecars: %d\n", status.MissingSidecars)
+	fields := [][2]string{
+		{"metadata_path", path(status.MetadataPath)},
+		{"metadata_size", size(status.MetadataSize)},
+		{"sidecar_dir", path(status.SidecarDir)},
+		{"sidecar_size", size(status.SidecarSize)},
+		{"sidecar_count", strconv.Itoa(status.SidecarCount)},
+		{"orphan_sidecars", strconv.Itoa(status.OrphanSidecars)},
+		{"orphan_sidecar_size", size(status.OrphanSidecarSize)},
+		{"visible_entries", strconv.Itoa(status.VisibleEntries)},
+		{"hidden_entries", strconv.Itoa(status.HiddenEntries) + hiddenNote},
+		{"empty_entries", strconv.Itoa(status.EmptyEntries)},
+		{"visible_profile_memberships", strconv.Itoa(status.VisibleProfileMemberships)},
+		{"hidden_profile_memberships", strconv.Itoa(status.HiddenProfileMemberships)},
+		{"shared_profile_entries", strconv.Itoa(status.SharedProfileEntries)},
+		{"missing_sidecars", strconv.Itoa(status.MissingSidecars)},
+	}
+	// A terminal reader gets the values in one column; pipes keep the single
+	// space after the colon that scripts have always split on.
+	width := 0
+	if human {
+		for _, field := range fields {
+			width = max(width, len(field[0])+1)
+		}
+	}
+	for _, field := range fields {
+		_, _ = fmt.Fprintf(out, "%-*s %s\n", width, field[0]+":", field[1])
+	}
 	printTranscriptWarnings(cmd, status.Warnings)
 }
 

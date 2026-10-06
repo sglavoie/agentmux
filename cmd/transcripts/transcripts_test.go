@@ -266,7 +266,11 @@ func TestTranscriptsStatusReadsAsSizesOnATerminalAndBytesInAPipe(t *testing.T) {
 		t.Fatalf("piped status must keep raw bytes and no annotations:\n%s", piped)
 	}
 	shown := run(true)
-	for _, want := range []string{"metadata_size: 2.0 KiB\n", "hidden_entries: 0 (removed from Past Sessions)\n"} {
+	for _, want := range []string{
+		"metadata_size:               2.0 KiB\n",
+		"hidden_entries:              0 (removed from Past Sessions)\n",
+		"visible_profile_memberships: 0\n",
+	} {
 		if !strings.Contains(shown, want) {
 			t.Fatalf("terminal status missing %q:\n%s", want, shown)
 		}
