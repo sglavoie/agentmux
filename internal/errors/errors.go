@@ -62,10 +62,10 @@ func (e *KittyError) Unwrap() error {
 	return e.Err
 }
 
-// Fatal prints a red "error: " prefixed message to stderr and exits 1.
+// Fatal prints an "error: " prefixed message to stderr and exits 1.
 func Fatal(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	fmt.Fprintf(os.Stderr, "%serror:%s %s\n", colorRed, colorReset, msg)
+	fmt.Fprintf(os.Stderr, "%s %s\n", errorPrefix(os.Stderr), msg)
 	os.Exit(1)
 }
 
@@ -74,5 +74,28 @@ func Print(err error) {
 	if err == nil {
 		return
 	}
-	fmt.Fprintf(os.Stderr, "%serror:%s %s\n", colorRed, colorReset, err)
+	fmt.Fprintf(os.Stderr, "%s %s\n", errorPrefix(os.Stderr), err)
+}
+
+// errorPrefix is red only when it will be read in a terminal. Redirected
+// output — a log, a pipe into grep, a CI capture — would otherwise carry raw
+// escape sequences, and NO_COLOR (https://no-color.org) opts out entirely.
+func errorPrefix(f *os.File) string {
+	if !colorEnabled(f) {
+		return "error:"
+	}
+	return colorRed + "error:" + colorReset
+}
+
+// colorEnabledFor is a seam for tests, which cannot hand Print a terminal.
+var colorEnabledFor = func(f *os.File) bool {
+	if os.Getenv("NO_COLOR") != "" {
+		return false
+	}
+	info, err := f.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
+}
+
+func colorEnabled(f *os.File) bool {
+	return f != nil && colorEnabledFor(f)
 }

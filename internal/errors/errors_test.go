@@ -120,6 +120,41 @@ func TestPrint_ErrorWritesMessage(t *testing.T) {
 	}
 }
 
+// Redirected stderr is not a terminal, so it must not carry escape sequences.
+func TestPrint_RedirectedOutputIsPlain(t *testing.T) {
+	output := captureStderr(t, func() {
+		Print(errors.New("boom"))
+	})
+	if output != "error: boom\n" {
+		t.Fatalf("Print to a pipe = %q, want plain text", output)
+	}
+}
+
+func TestPrint_TerminalOutputIsRed(t *testing.T) {
+	original := colorEnabledFor
+	colorEnabledFor = func(*os.File) bool { return true }
+	t.Cleanup(func() { colorEnabledFor = original })
+
+	output := captureStderr(t, func() {
+		Print(errors.New("boom"))
+	})
+	if output != colorRed+"error:"+colorReset+" boom\n" {
+		t.Fatalf("Print to a terminal = %q, want a red prefix", output)
+	}
+}
+
+func TestColorEnabledHonorsNoColor(t *testing.T) {
+	tty, err := os.Open("/dev/tty")
+	if err != nil {
+		t.Skip("no controlling terminal")
+	}
+	defer tty.Close()
+	t.Setenv("NO_COLOR", "1")
+	if colorEnabled(tty) {
+		t.Fatal("NO_COLOR must disable color even on a terminal")
+	}
+}
+
 func captureStderr(t *testing.T, fn func()) string {
 	t.Helper()
 
