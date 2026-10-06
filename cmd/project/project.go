@@ -35,6 +35,10 @@ var (
 	projectExecute    = func(ctx context.Context, deps actions.Dependencies, request actions.Request) (actions.Result, error) {
 		return actions.DefaultRegistry().Execute(ctx, deps, actions.Launch, request)
 	}
+	// projectCompletionLoadConfig loads without validating, like the profile
+	// completion: a <Tab> on a broken config suggests nothing rather than
+	// reporting an error at a shell prompt.
+	projectCompletionLoadConfig = config.LoadDefault
 )
 
 // Command returns the `project` command tree so the root command can register
@@ -81,6 +85,7 @@ func init() {
 	projectLaunchCmd.Flags().StringVar(&projectLaunchTitle, "title", "", "configured project title")
 	projectLaunchCmd.Flags().StringVar(&projectLaunchProfile, "profile", "", "configured profile the project launches with")
 	_ = projectLaunchCmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
+	_ = projectLaunchCmd.RegisterFlagCompletionFunc("title", completeProjectTitles)
 	projectCmd.AddCommand(projectListCmd, projectLaunchCmd)
 }
 
@@ -239,6 +244,35 @@ func projectCandidates(projects []config.Session) []actions.Candidate {
 	}
 	sort.SliceStable(candidates, func(i, j int) bool { return candidates[i].ID < candidates[j].ID })
 	return candidates
+}
+
+// completeProjectTitles suggests configured project titles for --title, each
+// described by the profile it launches with. When --profile is already given,
+// only that profile's projects are offered, so the completion never proposes a
+// pair the launch would refuse as unmatched. A title shared by several
+// profiles is offered once.
+func completeProjectTitles(cmd *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cfg, err := projectCompletionLoadConfig()
+	if err != nil || cfg == nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	profile := ""
+	if cmd != nil {
+		profile, _ = cmd.Flags().GetString("profile")
+	}
+	seen := make(map[string]bool)
+	var titles []string
+	for _, project := range cfg.Projects {
+		if !strings.HasPrefix(project.Title, toComplete) || seen[project.Title] {
+			continue
+		}
+		if profile != "" && !strings.EqualFold(project.EffectiveProfile(), profile) {
+			continue
+		}
+		seen[project.Title] = true
+		titles = append(titles, project.Title+"\t"+project.EffectiveProfile())
+	}
+	return titles, cobra.ShellCompDirectiveNoFileComp
 }
 
 func projectViews(cfg *config.Config) []projectView {

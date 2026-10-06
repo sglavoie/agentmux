@@ -7,7 +7,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/debugger"
-	ccerrors "github.com/sglavoie/agentmux/internal/errors"
 	"github.com/sglavoie/agentmux/internal/hooks"
 	"github.com/spf13/cobra"
 )
@@ -29,7 +28,6 @@ var configHooksSyncCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {
-			ccerrors.Print(err)
 			return err
 		}
 		bin, err := cli.AmxBinary()
@@ -42,7 +40,6 @@ var configHooksSyncCmd = &cobra.Command{
 		}
 		results, err := hooks.MergeAll(cfg, filter, bin)
 		if err != nil {
-			ccerrors.Print(err)
 			return err
 		}
 		var failed []string
@@ -78,7 +75,6 @@ var configHooksStatusCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {
-			ccerrors.Print(err)
 			return err
 		}
 		bin, err := cli.AmxBinary()

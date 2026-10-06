@@ -10,9 +10,11 @@
 package worktree
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/agentloop"
@@ -291,6 +293,37 @@ func worktreeState(view actions.WorktreeView) string {
 	}
 }
 
+// worktreeCompletionTimeout bounds the inventory a <Tab> waits for. Listing
+// probes each worktree with git, and a shell prompt that hangs is worse than
+// one that suggests nothing.
+const worktreeCompletionTimeout = 2 * time.Second
+
+// completeWorktreeSelectors suggests managed worktree IDs for the selector
+// argument, each described by its branch and project, and nothing after it.
+// It reads the inventory alone — no configuration, Kitty, or transcript
+// index — and degrades to no suggestions on any failure.
+func completeWorktreeSelectors(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if len(args) > 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), worktreeCompletionTimeout)
+	defer cancel()
+	entries, _ := worktreeCommandsNewManager().List(ctx)
+	var selectors []string
+	for _, entry := range entries {
+		if entry.ID == "" || !strings.HasPrefix(entry.ID, toComplete) {
+			continue
+		}
+		description := strings.TrimSpace(strings.Join([]string{entry.Branch, entry.ProjectLabel}, " "))
+		if description == "" {
+			selectors = append(selectors, entry.ID)
+			continue
+		}
+		selectors = append(selectors, entry.ID+"\t"+description)
+	}
+	return selectors, cobra.ShellCompDirectiveNoFileComp
+}
+
 func nonNilWorktreeViews(values []actions.WorktreeView) []actions.WorktreeView {
 	if values == nil {
 		return []actions.WorktreeView{}
@@ -318,5 +351,8 @@ func init() {
 	worktreeRemoveCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
 	worktreeForgetCmd.Flags().Bool("yes", false, "confirm metadata forgetting")
 	worktreeForgetCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	for _, command := range []*cobra.Command{worktreeShowCmd, worktreeShellCmd, worktreeEditCmd, worktreeReopenCmd, worktreeRemoveCmd, worktreeForgetCmd} {
+		command.ValidArgsFunction = completeWorktreeSelectors
+	}
 	worktreeCmd.AddCommand(worktreeListCmd, worktreeShowCmd, worktreeReopenCmd, worktreeShellCmd, worktreeEditCmd, worktreeRemoveCmd, worktreeForgetCmd)
 }

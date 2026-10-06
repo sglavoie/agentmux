@@ -99,12 +99,12 @@ func resolveDaemonExportWindowID(cmd *cobra.Command) (int, error) {
 var daemonExportEventsCmd = &cobra.Command{
 	Use:   "export-events",
 	Short: "Dump hook event history as JSON for investigation",
-	Long: `Export the daemon's schema-v12 investigation snapshot as JSON.
+	Long: `Export the daemon's schema-v13 investigation snapshot as JSON.
 
 The payload is organized as a per-window array so each entry carries its own
 event list, durable daemon metadata, and best-effort live Kitty/session
-metadata without paired map lookups. Use --schema 11 for the pre-busy-anchor
-shape, --schema 10 for the pre-stop-hold shape, --schema 9 for the previous
+metadata without paired map lookups. Use --schema 12 for the pre-screen-decline
+shape, --schema 11 for the pre-busy-anchor shape, --schema 10 for the pre-stop-hold shape, --schema 9 for the previous
 complete causal shape, or --schema 8 for pre-causal consumers.`,
 	Example: `  amx daemon export-events
   amx daemon export-events --current-window

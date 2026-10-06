@@ -13,7 +13,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/process"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	ccerrors "github.com/sglavoie/agentmux/internal/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -33,7 +32,6 @@ var daemonStartCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {
-			ccerrors.Print(err)
 			return err
 		}
 		logger, closer, logDir, err := daemon.NewOperationalLogger(

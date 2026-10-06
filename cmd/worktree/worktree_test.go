@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -316,4 +317,28 @@ func worktreeCommandExitStatus(err error) int {
 		return exitErr.Code
 	}
 	return 1
+}
+
+func TestCompleteWorktreeSelectorsOffersIDsWithBranchAndProject(t *testing.T) {
+	old := worktreeCommandsNewManager
+	t.Cleanup(func() { worktreeCommandsNewManager = old })
+	manager := &commandWorktreeManager{entries: []worktree.Entry{
+		{ID: "wt-api", Branch: "amx/fix", ProjectLabel: "API"},
+		{ID: "wt-bare"},
+		{ID: "other"},
+	}}
+	worktreeCommandsNewManager = func() actions.WorktreeLifecycle { return manager }
+
+	got, _ := completeWorktreeSelectors(worktreeShowCmd, nil, "wt-")
+	if want := []string{"wt-api\tamx/fix API", "wt-bare"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("completions = %q, want %q", got, want)
+	}
+	if got, _ := completeWorktreeSelectors(worktreeShowCmd, []string{"wt-api"}, ""); got != nil {
+		t.Fatalf("second argument completed %q, want nothing", got)
+	}
+	for _, command := range []*cobra.Command{worktreeShowCmd, worktreeShellCmd, worktreeEditCmd, worktreeReopenCmd, worktreeRemoveCmd, worktreeForgetCmd} {
+		if command.ValidArgsFunction == nil {
+			t.Errorf("worktree %s has no selector completion", command.Name())
+		}
+	}
 }
