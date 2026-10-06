@@ -22,9 +22,9 @@ type SelectorError struct {
 
 func (e *SelectorError) Error() string {
 	if errors.Is(e.Err, ErrSelectorAmbiguous) {
-		return fmt.Sprintf("worktree: selector %q is ambiguous (%d candidates)", e.Selector, len(e.Candidates))
+		return fmt.Sprintf("%q matches %d managed worktrees", e.Selector, len(e.Candidates))
 	}
-	return fmt.Sprintf("worktree: selector %q was not found", e.Selector)
+	return fmt.Sprintf("no managed worktree matches %q", e.Selector)
 }
 
 func (e *SelectorError) Unwrap() error { return e.Err }

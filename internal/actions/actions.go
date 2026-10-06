@@ -180,6 +180,11 @@ type Candidate struct {
 	ID            string `json:"id"`
 	DisplayName   string `json:"display_name"`
 	CanonicalPath string `json:"canonical_path,omitempty"`
+	// Problem says why choosing this candidate would still fail, such as a
+	// project whose directory is missing. It is offered anyway when it is the
+	// likely meaning of what was typed, so the caller learns what to fix
+	// rather than seeing the project vanish from the list.
+	Problem string `json:"problem,omitempty"`
 }
 
 func (e *Error) Error() string { return e.Message }

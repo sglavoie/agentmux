@@ -223,7 +223,7 @@ func writeWorktreeActionResult(cmd *cobra.Command, jsonOutput bool, result actio
 	return nil
 }
 
-// worktreeListHint ends a text error about a selector that named nothing, so
+// worktreeListHint ends an error about a selector that named nothing, so
 // the operator learns where the selectable worktrees are listed.
 const worktreeListHint = "`amx worktree list` shows every managed worktree"
 
@@ -241,13 +241,15 @@ func worktreeCommandError(cmd *cobra.Command, jsonOutput bool, result actions.Re
 	}
 	var actionErr *actions.Error
 	if errors.As(err, &actionErr) {
+		// Both output modes carry the hint: a JSON caller relaying the
+		// message to a person needs the next step as much as a terminal does.
+		var selectorErr *worktree.SelectorError
+		if errors.As(actionErr, &selectorErr) && errors.Is(selectorErr, worktree.ErrSelectorNotFound) {
+			hinted := *actionErr
+			hinted.Message += "; " + worktreeListHint
+			actionErr = &hinted
+		}
 		if !jsonOutput {
-			var selectorErr *worktree.SelectorError
-			if errors.As(actionErr, &selectorErr) && errors.Is(selectorErr, worktree.ErrSelectorNotFound) {
-				hinted := *actionErr
-				hinted.Message += "; " + worktreeListHint
-				return cli.ActionErrorText(&hinted)
-			}
 			return cli.ActionErrorText(actionErr)
 		}
 		candidates := make([]cli.Candidate, 0, len(actionErr.Candidates))

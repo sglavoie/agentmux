@@ -32,8 +32,7 @@ func CompleteProfiles(_ *cobra.Command, _ []string, toComplete string) ([]string
 }
 
 // CompleteHarnessFirstArg suggests harness names for the first positional
-// argument of a conversation command and nothing after it: the session ID is
-// not something completion can list without walking every transcript.
+// argument and nothing after it, as the completion for a --harness flag.
 func CompleteHarnessFirstArg(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	if len(args) > 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp

@@ -471,9 +471,19 @@ func projectCandidates(projects []config.Session) []actions.Candidate {
 			ID:            project.EffectiveProfile() + "/" + project.Title,
 			DisplayName:   project.Title,
 			CanonicalPath: project.Directory,
+			Problem:       candidateProblem(project.Directory),
 		})
 	}
 	return candidates
+}
+
+// candidateProblem names a directory a launch would refuse, the way
+// `project list` labels it, so a near miss that cannot launch says so.
+func candidateProblem(directory string) string {
+	if problem := projectDirectoryProblem(directory); problem != "" {
+		return "directory " + projectProblemLabel(problem)
+	}
+	return ""
 }
 
 // typoCandidates returns the projects whose ProjectTitleKey is within a few

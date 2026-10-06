@@ -228,6 +228,7 @@ func addSessionSelectionFlags(cmd *cobra.Command) {
 	cmd.Flags().StringSlice("profile", nil, "only sessions visible to this profile (repeatable)")
 	_ = cmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
 	cmd.Flags().StringSlice("project", nil, "only sessions of this project, by title; \"amx\" also matches \"🐱amx\" (repeatable)")
+	_ = cmd.RegisterFlagCompletionFunc("project", completeSessionProjects)
 	cmd.Flags().IntP("limit", "n", 0, "show at most this many of the most recent sessions (0 for all)")
 	cmd.Flags().BoolP("all", "a", false, "include automated sessions (ASL runs, subagents, exec) and unclassified ones")
 }
@@ -403,7 +404,7 @@ var sessionForkCmd = newConversationActionCommand("fork", actions.Fork, "Fork an
 
 var sessionForkWorktreeCmd = &cobra.Command{
 	Use:               "fork-worktree <harness> <session-id> | <harness>:<session-id> | <session-id>",
-	ValidArgsFunction: cli.CompleteHarnessFirstArg,
+	ValidArgsFunction: completeConversation,
 	Short:             "Fork an indexed conversation in a new managed Git worktree",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
@@ -430,8 +431,9 @@ var sessionForkWorktreeCmd = &cobra.Command{
 }
 
 var sessionHandoffCmd = &cobra.Command{
-	Use:   "handoff <harness>:<session-id> | <session-id>",
-	Short: "Launch a fresh target profile from a portable handoff pack",
+	Use:               "handoff <harness>:<session-id> | <session-id>",
+	ValidArgsFunction: completeOneConversation,
+	Short:             "Launch a fresh target profile from a portable handoff pack",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		edit, _ := cmd.Flags().GetBool("edit")
@@ -475,7 +477,7 @@ var sessionHandoffCmd = &cobra.Command{
 func newConversationActionCommand(name string, actionID actions.ID, short string) *cobra.Command {
 	return &cobra.Command{
 		Use:               name + " <harness> <session-id> | <harness>:<session-id> | <session-id>",
-		ValidArgsFunction: cli.CompleteHarnessFirstArg,
+		ValidArgsFunction: completeConversation,
 		Short:             short,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jsonOutput, _ := cmd.Flags().GetBool("json")

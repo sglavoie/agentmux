@@ -55,7 +55,11 @@ func writeCandidates(b *strings.Builder, candidates []actions.Candidate) {
 		if name == candidate.ID || strings.HasSuffix(candidate.ID, "/"+name) {
 			name = ""
 		}
-		row := []string{candidate.ID, name, DisplayPath(candidate.CanonicalPath)}
+		path := DisplayPath(candidate.CanonicalPath)
+		if candidate.Problem != "" {
+			path = strings.TrimSpace(path + " (" + candidate.Problem + ")")
+		}
+		row := []string{candidate.ID, name, path}
 		for i, cell := range row {
 			widths[i] = max(widths[i], layout.Width(cell))
 		}

@@ -636,3 +636,25 @@ func TestProjectListSaysWhenNoProjectMatchesTheFilters(t *testing.T) {
 		t.Errorf("output = %q, want %q", out, want)
 	}
 }
+
+// A mistyped title may best match a project whose directory is gone. It stays
+// a candidate, because it is what was meant, but says why launching it would
+// still be refused rather than offering a failure without warning.
+func TestProjectLaunchNotFoundMarksUnusableCandidates(t *testing.T) {
+	stubProjectDirectories(t, "/tmp/web")
+	_, err := runProject(t, "launch", testConfig(), &recordingKittyClient{}, false, "", "webb")
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	if want := "work/Web  /tmp/web (directory missing)"; !strings.Contains(err.Error(), want) {
+		t.Fatalf("text error lacks %q:\n%s", want, err)
+	}
+
+	out, err := runProject(t, "launch", testConfig(), &recordingKittyClient{}, true, "", "webb")
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	if !strings.Contains(out, `"id":"work/Web","display_name":"Web","canonical_path":"/tmp/web","problem":"directory missing"`) {
+		t.Fatalf("json = %s, want the candidate's problem", out)
+	}
+}

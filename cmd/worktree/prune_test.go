@@ -100,7 +100,7 @@ func TestWorktreePruneLeavesAnActiveWorktreeAlone(t *testing.T) {
 	if err := worktreePruneCmd.RunE(worktreePruneCmd, nil); err != nil {
 		t.Fatalf("prune: %v", err)
 	}
-	if len(manager.removeOptions) != 0 || !strings.Contains(out.String(), "nothing to prune") {
+	if len(manager.removeOptions) != 0 || !strings.Contains(out.String(), "Nothing to prune") {
 		t.Fatalf("output = %q, remove calls = %d; want nothing pruned", out.String(), len(manager.removeOptions))
 	}
 }

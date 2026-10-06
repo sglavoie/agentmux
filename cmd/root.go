@@ -9,7 +9,9 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 
 	"github.com/sglavoie/agentmux/cmd/config"
 	"github.com/sglavoie/agentmux/cmd/daemon"
@@ -43,6 +45,8 @@ var rootCmd = &cobra.Command{
 	// `--help` still prints it, and argument and flag errors still name the
 	// problem.
 	SilenceUsage: true,
+	// execute prints every failure itself, exactly once; see there.
+	SilenceErrors: true,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		cli.ConfigureLogging(cli.DebugEnabled())
 	},
@@ -52,20 +56,39 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		var exitErr *cli.ExitError
-		if errors.As(err, &exitErr) {
-			// The command already emitted its own output (and mapped the
-			// failure to a specific code). Only print when it did not present a
-			// complete structured result, so JSON runs are not followed by a
-			// redundant stderr line.
-			if !exitErr.Quiet && exitErr.Err != nil {
-				fmt.Fprintln(os.Stderr, exitErr.Error())
-			}
-			os.Exit(exitErr.Code)
-		}
-		os.Exit(1)
+	if code := execute(os.Stderr); code != 0 {
+		os.Exit(code)
 	}
+}
+
+// execute runs the root command and returns the process status, writing the
+// one stderr line a failure deserves. Cobra's own error printing is silenced
+// on rootCmd so that this is the only place that line comes from: left to
+// cobra, a JSON failure that had already written its envelope was still
+// followed by "Error: ...", and a non-quiet ExitError was printed twice.
+func execute(stderr io.Writer) int {
+	command, err := rootCmd.ExecuteC()
+	if err == nil {
+		return 0
+	}
+	var exitErr *cli.ExitError
+	if errors.As(err, &exitErr) {
+		// The command already emitted its own output (and mapped the
+		// failure to a specific code). Only print when it did not present a
+		// complete structured result, so JSON runs are not followed by a
+		// redundant stderr line.
+		if !exitErr.Quiet && exitErr.Err != nil {
+			_, _ = fmt.Fprintln(stderr, exitErr.Error())
+		}
+		return exitErr.Code
+	}
+	_, _ = fmt.Fprintln(stderr, command.ErrPrefix(), err.Error())
+	// Cobra adds this pointer only when it could not resolve the command;
+	// keep doing the same now that it no longer prints.
+	if strings.HasPrefix(err.Error(), "unknown command") {
+		_, _ = fmt.Fprintf(stderr, "Run '%v --help' for usage.\n", command.CommandPath())
+	}
+	return 1
 }
 
 const (

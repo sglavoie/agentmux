@@ -20,7 +20,7 @@ import (
 // directory to cd into, the transcript to open).
 var sessionShowCmd = &cobra.Command{
 	Use:               "show <harness> <session-id> | <harness>:<session-id> | <session-id>",
-	ValidArgsFunction: cli.CompleteHarnessFirstArg,
+	ValidArgsFunction: completeConversation,
 	Short:             "Show one indexed conversation",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")

@@ -32,6 +32,7 @@ type Candidate struct {
 	ID            string `json:"id"`
 	DisplayName   string `json:"display_name"`
 	CanonicalPath string `json:"canonical_path,omitempty"`
+	Problem       string `json:"problem,omitempty"`
 }
 
 // ParameterHelp lets JSON callers recover from missing input without an

@@ -56,7 +56,7 @@ var worktreePruneCmd = &cobra.Command{
 				_, _ = fmt.Fprintf(out, "would remove %s\t%s\t%s\t%s\n", view.ID, displayWorktreeProject(view), view.Branch, view.Path)
 			}
 			if len(candidates) == 0 {
-				_, _ = fmt.Fprintln(out, "nothing to prune")
+				_, _ = fmt.Fprintln(out, nothingToPrune(views))
 				return nil
 			}
 			_, _ = fmt.Fprintf(out, "re-run with --yes to remove %d worktree(s)\n", len(candidates))
@@ -84,7 +84,7 @@ var worktreePruneCmd = &cobra.Command{
 			}
 		}
 		if !jsonOutput && len(candidates) == 0 {
-			_, _ = fmt.Fprintln(out, "nothing to prune")
+			_, _ = fmt.Fprintln(out, nothingToPrune(views))
 		}
 		if jsonOutput {
 			if err := cli.WriteJSON(cmd, data); err != nil {
@@ -103,6 +103,15 @@ var worktreePruneCmd = &cobra.Command{
 // prunable is the selection rule. It mirrors what remove refuses so a preview
 // does not promise removals that would then fail, but remove stays the
 // authority.
+// nothingToPrune says why a prune found nothing: there is nothing managed at
+// all, or every worktree is kept for a reason the list shows.
+func nothingToPrune(views []actions.WorktreeView) string {
+	if len(views) == 0 {
+		return "No managed worktrees to prune."
+	}
+	return "Nothing to prune; `amx worktree list` shows why each worktree is kept."
+}
+
 func prunable(view actions.WorktreeView, mergedOnly bool) bool {
 	if !view.Exists || !view.Actionable || view.Classification != worktree.ClassificationValid {
 		return false

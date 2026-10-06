@@ -161,7 +161,7 @@ func TestWorktreeCLITextAndJSONFailuresShareExitStatus(t *testing.T) {
 	}
 }
 
-func TestWorktreeTextSelectorErrorsPointAtTheList(t *testing.T) {
+func TestWorktreeSelectorErrorsPointAtTheList(t *testing.T) {
 	resetWorktreeCommandsTestState(t)
 	if err := worktreeShowCmd.Flags().Set("json", "false"); err != nil {
 		t.Fatal(err)
@@ -173,7 +173,7 @@ func TestWorktreeTextSelectorErrorsPointAtTheList(t *testing.T) {
 	}
 
 	err = worktreeShowCmd.RunE(worktreeShowCmd, []string{"no-such-worktree"})
-	if err == nil || !strings.Contains(err.Error(), `selector "no-such-worktree" was not found; `+worktreeListHint) {
+	if err == nil || !strings.Contains(err.Error(), `no managed worktree matches "no-such-worktree"; `+worktreeListHint) {
 		t.Fatalf("unknown selector error = %v, want the list hint", err)
 	}
 
@@ -184,8 +184,10 @@ func TestWorktreeTextSelectorErrorsPointAtTheList(t *testing.T) {
 	}
 	err = worktreeShowCmd.RunE(worktreeShowCmd, []string{"no-such-worktree"})
 	payload := decodeWorktreeJSONError(t, out.Bytes(), err)
-	if payload.Error.Code != "not_found" || strings.Contains(payload.Error.Message, "amx worktree list") {
-		t.Fatalf("JSON not-found payload = %+v, want the bare message", payload.Error)
+	// As the session and project commands do, the JSON message carries the
+	// same pointer, for a caller that relays it to a person.
+	if payload.Error.Code != "not_found" || !strings.HasSuffix(payload.Error.Message, "; "+worktreeListHint) {
+		t.Fatalf("JSON not-found payload = %+v, want the list hint", payload.Error)
 	}
 }
 
