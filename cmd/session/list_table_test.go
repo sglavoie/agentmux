@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 func TestSessionTableHasAHeaderAndRelativeAges(t *testing.T) {
@@ -16,7 +17,7 @@ func TestSessionTableHasAHeaderAndRelativeAges(t *testing.T) {
 		{Harness: "codex", Profile: "work", LastAt: now.Add(-50 * time.Hour), ID: "01a1"},
 	}
 	var out bytes.Buffer
-	if err := writeSessionTable(&out, views, nil, now); err != nil {
+	if err := writeSessionTable(&out, views, nil, now, 0); err != nil {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
@@ -31,9 +32,36 @@ func TestSessionTableHasAHeaderAndRelativeAges(t *testing.T) {
 	}
 }
 
+// The summary fills what a known terminal width leaves it, and falls back to
+// the fixed cut when the width is unknown or leaves too little to read.
+func TestSessionTableFitsTheSummaryToTheTerminal(t *testing.T) {
+	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	long := strings.Repeat("word ", 40)
+	views := []sessionView{{Harness: "claude", Profile: "p", Project: "x", LastAt: now, ID: "b03c41a5", Snippet: long}}
+	// The columns before the summary take 47 cells: HARNESS, PROFILE, and
+	// PROJECT are as wide as their headers, then "just now" and the ID.
+	for _, tc := range []struct {
+		width, want int
+	}{
+		{0, sessionSummaryWidth},
+		{147, 100},
+		{60, sessionSummaryWidth},
+	} {
+		var out bytes.Buffer
+		if err := writeSessionTable(&out, views, nil, now, tc.width); err != nil {
+			t.Fatal(err)
+		}
+		row := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")[1]
+		summary := row[strings.Index(row, "word"):]
+		if got := layout.Width(summary); got != tc.want {
+			t.Errorf("width %d: summary is %d cells, want %d: %q", tc.width, got, tc.want, row)
+		}
+	}
+}
+
 func TestSessionTableSaysSoWhenEmpty(t *testing.T) {
 	var out bytes.Buffer
-	if err := writeSessionTable(&out, nil, nil, time.Now()); err != nil {
+	if err := writeSessionTable(&out, nil, nil, time.Now(), 0); err != nil {
 		t.Fatal(err)
 	}
 	if out.String() != "No indexed sessions match.\n" {

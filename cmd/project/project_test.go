@@ -296,6 +296,21 @@ func TestProjectLaunchNotFoundOffersNearMisses(t *testing.T) {
 	}
 }
 
+func TestProjectLaunchWithNoNearMissPointsAtProjectList(t *testing.T) {
+	cfg := testConfig()
+	out, err := runProject(t, "launch", cfg, &recordingKittyClient{}, true, "", "zzz")
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	var envelope cli.JSONErrorEnvelope
+	if decodeErr := json.Unmarshal([]byte(out), &envelope); decodeErr != nil {
+		t.Fatalf("decode %q: %v", out, decodeErr)
+	}
+	if !strings.Contains(envelope.Error.Message, "`amx project list` shows every project") || len(envelope.Error.Candidates) != len(cfg.Projects) {
+		t.Fatalf("error = %+v, want the project list hint and every project as a candidate", envelope.Error)
+	}
+}
+
 func TestProjectLaunchMissingTitle(t *testing.T) {
 	out, err := runProject(t, "launch", testConfig(), &recordingKittyClient{}, true, "work", "")
 	if err == nil {
@@ -399,7 +414,7 @@ func TestProjectLaunchNotFoundOffersOnlyTitlesContainingTheQuery(t *testing.T) {
 	if err == nil {
 		t.Fatal("want an error")
 	}
-	want := "no configured project matches title \"dot\"\ncandidates:\n  work/•dotfiles  •dotfiles  /tmp/dotfiles"
+	want := "no configured project matches title \"dot\"\ncandidates:\n  work/•dotfiles  /tmp/dotfiles"
 	if err.Error() != want {
 		t.Fatalf("err = %q\nwant  %q", err, want)
 	}

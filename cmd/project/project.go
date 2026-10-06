@@ -284,10 +284,12 @@ func selectProject(cfg *config.Config, profile, title string) (config.Session, e
 				near = append(near, project)
 			}
 		}
+		message := "no configured project matches " + selector
 		if len(near) == 0 {
 			near = cfg.Projects
+			message += "; `amx project list` shows every project"
 		}
-		return config.Session{}, &actions.Error{Code: "not_found", Action: actions.Launch, Message: "no configured project matches " + selector, Candidates: projectCandidates(near)}
+		return config.Session{}, &actions.Error{Code: "not_found", Action: actions.Launch, Message: message, Candidates: projectCandidates(near)}
 	default:
 		return config.Session{}, &actions.Error{
 			Code: "ambiguous_project", Action: actions.Launch,

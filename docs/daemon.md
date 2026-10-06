@@ -300,6 +300,7 @@ and the companion snapshot's `notification` block carries the same snooze. The
 operator surface is the same request:
 
 ```bash
+amx notifications snooze                # the snooze in force; changes nothing
 amx notifications snooze 1h             # or: until 08:30 | indefinite | off
 amx notifications snooze off --json     # {"snoozed":false,"indefinite":false}
 amx notifications test                  # reports "suppressed" while snoozed

@@ -2,6 +2,10 @@ package cli
 
 import (
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/actions"
@@ -33,6 +37,40 @@ func TestActionErrorTextListsCandidates(t *testing.T) {
 	want := "selector \"api\" matches 2 worktrees\ncandidates:\n  wt-1  api-fix  /w/api-fix\n  wt-2"
 	if got := err.Error(); got != want {
 		t.Fatalf("text = %q, want %q", got, want)
+	}
+}
+
+func TestActionErrorTextAlignsCandidatesAndDropsARepeatedTitle(t *testing.T) {
+	home, homeErr := os.UserHomeDir()
+	if homeErr != nil {
+		t.Skip(homeErr)
+	}
+	err := ActionErrorText(&actions.Error{
+		Code: "not_found", Message: `no configured project matches title "x"`,
+		Candidates: []actions.Candidate{
+			{ID: "work/🐱amx", DisplayName: "🐱amx", CanonicalPath: filepath.Join(home, "amx") + "/"},
+			{ID: "personal/API", DisplayName: "API", CanonicalPath: "/srv/api"},
+		},
+	})
+	want := "no configured project matches title \"x\"\ncandidates:\n" +
+		"  work/🐱amx    ~/amx\n" +
+		"  personal/API  /srv/api"
+	if got := err.Error(); got != want {
+		t.Fatalf("text = %q, want %q", got, want)
+	}
+}
+
+func TestActionErrorTextCapsALongCandidateList(t *testing.T) {
+	cause := &actions.Error{Code: "not_found", Message: "no match"}
+	for i := range candidateTextLimit + 3 {
+		cause.Candidates = append(cause.Candidates, actions.Candidate{ID: fmt.Sprintf("c%02d", i)})
+	}
+	text := ActionErrorText(cause).Error()
+	if strings.Contains(text, fmt.Sprintf("c%02d", candidateTextLimit)) {
+		t.Fatalf("text lists a candidate past the limit:\n%s", text)
+	}
+	if !strings.HasSuffix(text, "\n  … and 3 more (--json lists every candidate)") {
+		t.Fatalf("text does not count the hidden candidates:\n%s", text)
 	}
 }
 

@@ -26,10 +26,11 @@ var (
 var snoozeJSON bool
 
 var notificationsSnoozeCmd = &cobra.Command{
-	Use:   "snooze DURATION | until HH:MM | indefinite | off",
+	Use:   "snooze [DURATION | until HH:MM | indefinite | off]",
 	Short: "Silence every notification for a while, or until turned off",
 	Long: `Snoozes every Agent Mux notification in the running daemon.
 
+  amx notifications snooze               show the snooze in force
   amx notifications snooze 1h            for a duration (Go syntax: 30m, 1h30m)
   amx notifications snooze until 08:30   until the next 08:30, local time
   amx notifications snooze indefinite    until turned off
@@ -58,12 +59,14 @@ type snoozePayload struct {
 }
 
 func runNotificationsSnooze(cmd *cobra.Command, args []string) error {
-	if len(args) == 0 {
-		return cli.MissingParameter(cmd, snoozeJSON, "snooze", "a duration such as 1h, `until HH:MM`, `indefinite`, or `off`")
-	}
-	req, err := parseSnoozeArgs(args, notificationsNow())
-	if err != nil {
-		return cli.CommandFailure(cmd, snoozeJSON, "invalid_arguments", err)
+	// With no argument the request carries no mode, which the daemon answers
+	// as a read: the snooze in force, unchanged.
+	var req protocol.SnoozeRequest
+	if len(args) > 0 {
+		var err error
+		if req, err = parseSnoozeArgs(args, notificationsNow()); err != nil {
+			return cli.CommandFailure(cmd, snoozeJSON, "invalid_arguments", err)
+		}
 	}
 	state, err := notificationsSnoozeClient().NotificationSnooze(req)
 	if err != nil {

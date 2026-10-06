@@ -3,6 +3,7 @@ package daemon
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/sglavoie/agentmux/cmd/debug"
 	"github.com/sglavoie/agentmux/internal/aslbridge"
@@ -68,7 +69,7 @@ var daemonStatusCmd = &cobra.Command{
 			if n.Reason != "" && n.Reason != "disabled" {
 				detail += "; " + n.Reason
 			}
-			if _, err := fmt.Fprintf(out, "notifications: %s (%s)\n", state, detail); err != nil {
+			if _, err := fmt.Fprintf(out, "notifications: %s (%s)%s\n", state, detail, snoozeStatusSuffix(n)); err != nil {
 				return err
 			}
 		}
@@ -82,6 +83,20 @@ var daemonStatusCmd = &cobra.Command{
 		}
 		return nil
 	},
+}
+
+// snoozeStatusSuffix names the snooze in force, so a quiet daemon whose
+// backend is ready does not read as one that should be delivering. The daemon
+// reports an expired timed snooze as no snooze at all.
+func snoozeStatusSuffix(n *protocol.NotificationCapability) string {
+	switch {
+	case n.SnoozeIndefinite:
+		return "; snoozed until turned off"
+	case n.SnoozedUntil != 0:
+		return "; snoozed until " + time.Unix(n.SnoozedUntil, 0).Local().Format("2006-01-02 15:04")
+	default:
+		return ""
+	}
 }
 
 // daemonStatusData is the `daemon status --json` payload: the same facts the

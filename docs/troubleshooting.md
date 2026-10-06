@@ -31,7 +31,8 @@
   declined; both are covered in
   [Screen classifier health](screen-classifier-health.md).
   `project_directories` warns once when any configured project points at a
-  missing or non-directory path; `amx config validate` lists them and exits 1.
+  missing or non-directory path; `amx project list --missing` lists them, and
+  `amx config validate` lists them and exits 1.
   A harness CLI newer than its verified hook contract is `hooks_unverified`
   only while no hook event from that profile's home dir has arrived within the
   verification window; once events are arriving it is the

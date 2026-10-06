@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/actions"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // ActionErrorText is the text-mode form of a typed action failure. A JSON
@@ -29,17 +30,60 @@ func ActionErrorText(err *actions.Error) error {
 	}
 	if len(err.Candidates) > 0 {
 		b.WriteString("\ncandidates:")
-		for _, candidate := range err.Candidates {
-			fmt.Fprintf(&b, "\n  %s", candidate.ID)
-			if candidate.DisplayName != "" && candidate.DisplayName != candidate.ID {
-				fmt.Fprintf(&b, "  %s", candidate.DisplayName)
-			}
-			if candidate.CanonicalPath != "" {
-				fmt.Fprintf(&b, "  %s", candidate.CanonicalPath)
-			}
-		}
+		writeCandidates(&b, err.Candidates)
 	}
 	return &textActionError{text: b.String(), cause: err}
+}
+
+// candidateTextLimit bounds the candidates a text caller is shown. A selector
+// that matched nothing near may offer every configured project, and forty
+// lines push the message itself off the screen; --json still carries them all.
+const candidateTextLimit = 10
+
+// writeCandidates lists candidates as aligned columns: the selector to pass
+// back, the display name when it adds something the ID does not already end
+// with, and the path written the way the tables write one.
+func writeCandidates(b *strings.Builder, candidates []actions.Candidate) {
+	shown := candidates
+	if len(shown) > candidateTextLimit {
+		shown = shown[:candidateTextLimit]
+	}
+	rows := make([][]string, 0, len(shown))
+	widths := make([]int, 3)
+	for _, candidate := range shown {
+		name := candidate.DisplayName
+		if name == candidate.ID || strings.HasSuffix(candidate.ID, "/"+name) {
+			name = ""
+		}
+		row := []string{candidate.ID, name, DisplayPath(candidate.CanonicalPath)}
+		for i, cell := range row {
+			widths[i] = max(widths[i], layout.Width(cell))
+		}
+		rows = append(rows, row)
+	}
+	for _, row := range rows {
+		// A column no candidate fills takes no space, and a row ends at its
+		// last filled cell rather than in padding.
+		last := len(row) - 1
+		for last > 0 && row[last] == "" {
+			last--
+		}
+		b.WriteString("\n  ")
+		for i, cell := range row[:last+1] {
+			if widths[i] == 0 {
+				continue
+			}
+			if i == last {
+				b.WriteString(cell)
+				break
+			}
+			b.WriteString(layout.PadRight(cell, widths[i]))
+			b.WriteString(tableGap)
+		}
+	}
+	if hidden := len(candidates) - len(shown); hidden > 0 {
+		fmt.Fprintf(b, "\n  … and %d more (--json lists every candidate)", hidden)
+	}
 }
 
 // textActionError keeps the original *actions.Error reachable through

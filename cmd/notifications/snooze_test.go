@@ -89,6 +89,23 @@ func TestSnoozeCommandSendsRequestAndPrints(t *testing.T) {
 	}
 }
 
+func TestSnoozeCommandWithoutArgumentsReadsTheSnooze(t *testing.T) {
+	until := snoozeTestNow.Add(30 * time.Minute).Unix()
+	client := &fakeSnoozeClient{state: protocol.SnoozeState{SnoozedUntil: until}}
+	useSnoozeClient(t, client)
+
+	out, err := runSnooze(t, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(client.requests) != 1 || client.requests[0] != (protocol.SnoozeRequest{}) {
+		t.Fatalf("requests = %+v; want one read with no mode", client.requests)
+	}
+	if out != "Notifications are snoozed until 2026-10-03 14:30.\n" {
+		t.Fatalf("output = %q", out)
+	}
+}
+
 func TestSnoozeCommandJSONContract(t *testing.T) {
 	until := snoozeTestNow.Add(time.Hour).Unix()
 	cases := map[string]struct {
@@ -99,6 +116,7 @@ func TestSnoozeCommandJSONContract(t *testing.T) {
 		"timed":      {protocol.SnoozeState{SnoozedUntil: until}, []string{"1h"}, `{"schema_version":1,"data":{"snoozed":true,"indefinite":false,"snoozed_until":` + jsonInt(until) + `,"until":"2026-10-03T15:00:00Z"}}`},
 		"indefinite": {protocol.SnoozeState{Indefinite: true}, []string{"indefinite"}, `{"schema_version":1,"data":{"snoozed":true,"indefinite":true}}`},
 		"off":        {protocol.SnoozeState{}, []string{"off"}, `{"schema_version":1,"data":{"snoozed":false,"indefinite":false}}`},
+		"read":       {protocol.SnoozeState{Indefinite: true}, nil, `{"schema_version":1,"data":{"snoozed":true,"indefinite":true}}`},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -125,7 +143,6 @@ func TestSnoozeCommandFailuresUseTheErrorEnvelope(t *testing.T) {
 		args   []string
 		code   string
 	}{
-		"missing":     {&fakeSnoozeClient{}, nil, "missing_parameter"},
 		"invalid":     {&fakeSnoozeClient{}, []string{"soon"}, "invalid_arguments"},
 		"unreachable": {&fakeSnoozeClient{err: errors.New("dial unix: no such file")}, []string{"1h"}, "daemon_unavailable"},
 		"refused":     {&fakeSnoozeClient{err: errors.New("daemon error: notification_snooze: unknown snooze mode")}, []string{"1h"}, "snooze_refused"},

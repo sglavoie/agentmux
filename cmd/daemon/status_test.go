@@ -3,6 +3,7 @@ package daemon
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
@@ -29,6 +30,7 @@ func TestDaemonStatusCommandWritesToCommandOutput(t *testing.T) {
 		Enabled: true, Available: true, Interactive: true, Backend: "alerter",
 		Executable: "/opt/homebrew/bin/alerter", Version: "26.5",
 	}
+	snoozedUntil := time.Date(2026, 10, 3, 15, 0, 0, 0, time.UTC)
 	cases := []struct {
 		name   string
 		health ipc.Health
@@ -41,6 +43,26 @@ func TestDaemonStatusCommandWritesToCommandOutput(t *testing.T) {
 				"ready: true\n" +
 				"build: " + build.String() + "\n" +
 				"notifications: ready (alerter 26.5 at /opt/homebrew/bin/alerter)\n" +
+				"companion: unknown (restart older daemon)\n",
+		},
+		{
+			name: "snoozed until a time",
+			health: ipc.Health{Alive: true, Ready: true, Notification: &protocol.NotificationCapability{
+				Enabled: true, Available: true, Interactive: true, Backend: "alerter", SnoozedUntil: snoozedUntil.Unix(),
+			}},
+			want: "daemon: running (/tmp/amx.sock)\n" +
+				"ready: true\n" +
+				"notifications: ready (alerter); snoozed until " + snoozedUntil.Local().Format("2006-01-02 15:04") + "\n" +
+				"companion: unknown (restart older daemon)\n",
+		},
+		{
+			name: "snoozed indefinitely",
+			health: ipc.Health{Alive: true, Ready: true, Notification: &protocol.NotificationCapability{
+				Enabled: true, Available: true, Interactive: true, Backend: "alerter", SnoozeIndefinite: true,
+			}},
+			want: "daemon: running (/tmp/amx.sock)\n" +
+				"ready: true\n" +
+				"notifications: ready (alerter); snoozed until turned off\n" +
 				"companion: unknown (restart older daemon)\n",
 		},
 		{

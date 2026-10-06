@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/x/term"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -66,6 +67,49 @@ func IsTerminal(w io.Writer) bool {
 	}
 	info, err := f.Stat()
 	return err == nil && info.Mode()&os.ModeCharDevice != 0
+}
+
+// TerminalWidth is how many cells wide the terminal w writes to is, or zero
+// when w is not a terminal or will not say.
+func TerminalWidth(w io.Writer) int {
+	f, ok := w.(*os.File)
+	if !ok {
+		return 0
+	}
+	width, _, err := term.GetSize(f.Fd())
+	if err != nil || width < 0 {
+		return 0
+	}
+	return width
+}
+
+// minLastColumn is the narrowest last column LastColumnWidth will fit a row
+// into; a terminal with less room than that left over gets the fallback.
+const minLastColumn = 20
+
+// LastColumnWidth is how wide the last column of a WriteTable table may be
+// for every row to fit in a terminal width cells wide. Only the cells before
+// the last one are measured, so rows may carry their untruncated last cell.
+// With no width, or too little left over for the last column to read as
+// anything, it answers fallback and lets the terminal wrap the rare row.
+func LastColumnWidth(header []string, rows [][]string, width, fallback int) int {
+	if width <= 0 || len(header) == 0 {
+		return fallback
+	}
+	used := 0
+	for i := range len(header) - 1 {
+		column := layout.Width(header[i])
+		for _, row := range rows {
+			if i < len(row) {
+				column = max(column, layout.Width(row[i]))
+			}
+		}
+		used += column + len(tableGap)
+	}
+	if room := width - used; room >= minLastColumn {
+		return room
+	}
+	return fallback
 }
 
 // DisplayPath is how a human-facing table shows a directory: cleaned, so

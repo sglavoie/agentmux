@@ -377,7 +377,7 @@ func writeDoctorProjectDirectories(out io.Writer, reportMissing func(string, ...
 	if len(problems) == 1 {
 		noun = "project has"
 	}
-	reportMissing("%d configured %s an unusable directory; run `amx config validate` to list them", len(problems), noun)
+	reportMissing("%d configured %s an unusable directory; run `amx project list --missing` to list them", len(problems), noun)
 	return nil
 }
 

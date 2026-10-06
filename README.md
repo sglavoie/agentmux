@@ -34,7 +34,7 @@ The everyday commands beyond the dashboard (`amx`):
 | `amx session list` / `search` / `show` / `continue` / `fork` / `handoff` | conversation continuity |
 | `amx worktree list` / `reopen` / `remove` / `prune` | managed Git worktrees |
 | `amx mute-toggle` | mute or unmute a tab's notifications |
-| `amx notifications snooze` / `test` | snooze or test notifications |
+| `amx notifications snooze` / `test` | show, set, or clear the snooze; test notifications |
 | `amx daemon status` / `restart` | the always-on daemon |
 | `amx doctor --strict` | installation and daemon health |
 | `amx config init` / `edit` / `validate` | configuration |

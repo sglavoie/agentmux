@@ -41,6 +41,7 @@ var (
 	sessionCommandsNewWorktree      = func() worktree.Runner { return worktree.NewWorkflow() }
 	sessionCommandsNow              = time.Now
 	sessionListIsTerminal           = cli.IsTerminal
+	sessionListTerminalWidth        = cli.TerminalWidth
 	sessionListGetwd                = os.Getwd
 )
 
@@ -68,7 +69,7 @@ var sessionListCmd = &cobra.Command{
 		}
 		out := cmd.OutOrStdout()
 		if sessionListIsTerminal(out) {
-			return writeSessionTable(out, views, abbreviateSessionIDs(idx.List(transcript.ListFilter{})), sessionCommandsNow())
+			return writeSessionTable(out, views, abbreviateSessionIDs(idx.List(transcript.ListFilter{})), sessionCommandsNow(), sessionListTerminalWidth(out))
 		}
 		// Off a terminal the output stays headerless and tab-separated with
 		// absolute timestamps: scripts cut and sort it, and a relative age is
@@ -151,32 +152,45 @@ func addSessionSelectionFlags(cmd *cobra.Command) {
 
 // writeSessionTable is the session list for a person: a header, aligned
 // columns, how long ago each conversation was last active, and each session
-// ID cut to the prefix a continuity command still resolves.
-func writeSessionTable(out io.Writer, views []sessionView, ids sessionIDAbbreviations, now time.Time) error {
+// ID cut to the prefix a continuity command still resolves. The summary takes
+// whatever the terminal, width cells wide, leaves it.
+func writeSessionTable(out io.Writer, views []sessionView, ids sessionIDAbbreviations, now time.Time, width int) error {
 	if len(views) == 0 {
 		_, err := fmt.Fprintln(out, "No indexed sessions match.")
 		return err
 	}
+	header := []string{"HARNESS", "PROFILE", "PROJECT", "ACTIVE", "SESSION", "SUMMARY"}
 	rows := make([][]string, 0, len(views))
 	for _, item := range views {
 		project := item.Project
 		if project == "" {
 			project = "-"
 		}
-		summary := layout.Truncate(item.Snippet, sessionSummaryWidth, "…")
+		summary := oneLine(item.Snippet)
 		if summary == "" {
 			summary = "-"
 		}
 		rows = append(rows, []string{item.Harness, item.Profile, project, formatAgo(item.LastAt, now), ids.of(item.ID), summary})
 	}
-	return cli.WriteTable(out, []string{"HARNESS", "PROFILE", "PROJECT", "ACTIVE", "SESSION", "SUMMARY"}, rows)
+	fitLastColumn(header, rows, width)
+	return cli.WriteTable(out, header, rows)
 }
 
-// sessionSummaryWidth bounds the table's last column. Several sessions of one
-// project differ only by ID, and the opening prompt is what tells them apart;
-// a fixed cut keeps a row on one line in an ordinary terminal without asking
-// the terminal for its width.
+// sessionSummaryWidth bounds the table's last column when the terminal's width
+// is unknown or leaves too little room. Several sessions of one project differ
+// only by ID, and the opening prompt is what tells them apart; a fixed cut
+// keeps a row on one line in an ordinary terminal.
 const sessionSummaryWidth = 60
+
+// fitLastColumn truncates each row's last cell to the room a terminal width
+// cells wide leaves it, so a row stays on one line however wide the window.
+func fitLastColumn(header []string, rows [][]string, width int) {
+	limit := cli.LastColumnWidth(header, rows, width, sessionSummaryWidth)
+	for _, row := range rows {
+		last := len(row) - 1
+		row[last] = layout.Truncate(row[last], limit, "…")
+	}
+}
 
 // applySessionListSelectors turns --harness and --profile into the index's own
 // filter. An unknown name is refused rather than matched against nothing,

@@ -9,7 +9,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/transcript"
-	"github.com/sglavoie/agentmux/tui/layout"
 	"github.com/spf13/cobra"
 )
 
@@ -71,7 +70,7 @@ line it matched on. The selector flags narrow the search the way they narrow
 		}
 		out := cmd.OutOrStdout()
 		if sessionListIsTerminal(out) {
-			return writeSessionSearchTable(out, query, views, abbreviateSessionIDs(idx.List(transcript.ListFilter{})), sessionCommandsNow())
+			return writeSessionSearchTable(out, query, views, abbreviateSessionIDs(idx.List(transcript.ListFilter{})), sessionCommandsNow(), sessionListTerminalWidth(out))
 		}
 		// Off a terminal the rows follow `session list`'s piped form, with the
 		// match count before the ID and the matched line last, where a tab or
@@ -125,7 +124,7 @@ func sessionSearchViews(results []transcript.Result) []sessionSearchView {
 	return out
 }
 
-func writeSessionSearchTable(out io.Writer, query string, views []sessionSearchView, ids sessionIDAbbreviations, now time.Time) error {
+func writeSessionSearchTable(out io.Writer, query string, views []sessionSearchView, ids sessionIDAbbreviations, now time.Time, width int) error {
 	if len(views) == 0 {
 		_, err := fmt.Fprintf(out, "No indexed sessions match %s.\n", strconv.Quote(query))
 		return err
@@ -136,13 +135,15 @@ func writeSessionSearchTable(out io.Writer, query string, views []sessionSearchV
 		if project == "" {
 			project = "-"
 		}
-		preview := layout.Truncate(oneLine(item.Preview), sessionSummaryWidth, "…")
+		preview := oneLine(item.Preview)
 		if preview == "" {
 			preview = "-"
 		}
 		rows = append(rows, []string{item.Harness, item.Profile, project, formatAgo(item.LastAt, now), strconv.Itoa(item.Matches), ids.of(item.ID), preview})
 	}
-	return cli.WriteTable(out, []string{"HARNESS", "PROFILE", "PROJECT", "ACTIVE", "MATCHES", "SESSION", "MATCHED"}, rows)
+	header := []string{"HARNESS", "PROFILE", "PROJECT", "ACTIVE", "MATCHES", "SESSION", "MATCHED"}
+	fitLastColumn(header, rows, width)
+	return cli.WriteTable(out, header, rows)
 }
 
 // oneLine collapses runs of whitespace, newlines and tabs included, so a
