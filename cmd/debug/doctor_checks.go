@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -236,7 +237,7 @@ func formatDoctorBytes(value int64) string {
 }
 
 // writeDoctorFindings renders the structured findings grouped by severity.
-func writeDoctorFindings(out io.Writer, findings []doctorFinding) error {
+func writeDoctorFindings(out io.Writer, findings []doctorFinding, verbose bool) error {
 	for _, group := range []struct {
 		severity string
 		heading  string
@@ -251,7 +252,11 @@ func writeDoctorFindings(out io.Writer, findings []doctorFinding) error {
 		if _, err := fmt.Fprintln(out, group.heading); err != nil {
 			return err
 		}
-		for _, line := range doctorFindingLines(findings, group.severity) {
+		lines := doctorFindingLines(findings, group.severity)
+		if !verbose {
+			lines = summarizeClosedTombstones(lines, findings, group.severity)
+		}
+		for _, line := range lines {
 			if _, err := fmt.Fprintln(out, line); err != nil {
 				return err
 			}
@@ -313,6 +318,41 @@ func doctorFindingLines(findings []doctorFinding, severity string) []string {
 		lines = append(lines, fmt.Sprintf("- [%s] %s%s", finding.Check, location, finding.Message))
 	}
 	return lines
+}
+
+// summarizeClosedTombstones replaces the per-window closed_tombstone notes
+// with one line naming the windows. Every window closed since the daemon
+// started leaves one, so after an ordinary day they would be the longest part
+// of the report and the one an operator can do nothing about. The summary
+// takes the place of the first of them; --verbose and the JSON findings keep
+// one per window.
+func summarizeClosedTombstones(lines []string, findings []doctorFinding, severity string) []string {
+	var ids []string
+	for _, finding := range findings {
+		if finding.Severity == severity && finding.Check == checkClosedTombstone && finding.WindowID != 0 {
+			ids = append(ids, strconv.Itoa(finding.WindowID))
+		}
+	}
+	if len(ids) == 0 {
+		return lines
+	}
+	prefix := "- [" + checkClosedTombstone + "] "
+	noun := "closed windows"
+	if len(ids) == 1 {
+		noun = "closed window"
+	}
+	summary := fmt.Sprintf("%s%d %s (%s) retained for post-mortem export; `amx doctor --verbose` lists them",
+		prefix, len(ids), noun, strings.Join(ids, ", "))
+	kept := make([]string, 0, len(lines)-len(ids)+1)
+	for _, line := range lines {
+		if !strings.HasPrefix(line, prefix) {
+			kept = append(kept, line)
+		} else if summary != "" {
+			kept = append(kept, summary)
+			summary = ""
+		}
+	}
+	return kept
 }
 
 // writeDoctorProjectDirectories reports configured projects whose directory
@@ -547,7 +587,11 @@ func writeDoctorRenderer(out io.Writer, snapshot protocol.EventsExport, liveByID
 	return nil
 }
 
-func writeDoctorSuppressions(out io.Writer, snapshot protocol.EventsExport, now time.Time) error {
+// writeDoctorSuppressions reports how many events the daemon suppressed in
+// the trailing window. Suppression is the reducer working as designed, so the
+// ordinary report gives one total; the per-reason breakdown is for whoever is
+// debugging delivery and is printed under --verbose.
+func writeDoctorSuppressions(out io.Writer, snapshot protocol.EventsExport, now time.Time, verbose bool) error {
 	cutoff := now.Add(-doctorSuppressionWindow).Unix()
 	counts := make(map[string]int)
 	for _, events := range snapshot.EventsByWindow {
@@ -562,10 +606,20 @@ func writeDoctorSuppressions(out io.Writer, snapshot protocol.EventsExport, now 
 		return err
 	}
 	reasons := make([]string, 0, len(counts))
-	for reason := range counts {
+	total := 0
+	for reason, count := range counts {
 		reasons = append(reasons, reason)
+		total += count
 	}
 	sort.Strings(reasons)
+	if !verbose {
+		noun := "reasons"
+		if len(reasons) == 1 {
+			noun = "reason"
+		}
+		_, err := fmt.Fprintf(out, "recent suppressions (last %s): %d across %d %s\n", doctorSuppressionWindow, total, len(reasons), noun)
+		return err
+	}
 	if _, err := fmt.Fprintf(out, "recent suppressions (last %s):\n", doctorSuppressionWindow); err != nil {
 		return err
 	}

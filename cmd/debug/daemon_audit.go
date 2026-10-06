@@ -135,7 +135,7 @@ func runDaemonAudit(cmd *cobra.Command, _ []string) error {
 		if _, err := fmt.Fprintf(out, "Agent Mux audit: %d samples over %s\n", report.Samples, auditDuration); err != nil {
 			return err
 		}
-		if err := writeDoctorFindings(out, report.Findings); err != nil {
+		if err := writeDoctorFindings(out, report.Findings, true); err != nil {
 			return err
 		}
 		verdict := "audit: clean"

@@ -69,8 +69,9 @@ var (
 )
 
 var (
-	doctorJSON   bool
-	doctorStrict bool
+	doctorJSON    bool
+	doctorStrict  bool
+	doctorVerbose bool
 )
 
 // doctorReport is the structured `amx doctor --json` payload.
@@ -293,7 +294,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	if err := writeDoctorRenderer(textOut, snapshot, liveByID, kittyOK, reportIssue("renderer_drift")); err != nil {
 		return err
 	}
-	if err := writeDoctorSuppressions(textOut, snapshot, now); err != nil {
+	if err := writeDoctorSuppressions(textOut, snapshot, now, doctorVerbose); err != nil {
 		return err
 	}
 
@@ -302,7 +303,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 			evaluateDaemonInvariants(snapshot, health, report.CLIBuild, liveByID, now)...)
 	}
 
-	if err := writeDoctorFindings(textOut, report.Findings); err != nil {
+	if err := writeDoctorFindings(textOut, report.Findings, doctorVerbose); err != nil {
 		return err
 	}
 
@@ -336,4 +337,5 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 func init() {
 	doctorCmd.Flags().BoolVar(&doctorJSON, "json", false, "Emit a structured JSON report instead of text")
 	doctorCmd.Flags().BoolVar(&doctorStrict, "strict", false, "Exit nonzero when any health failure is detected")
+	doctorCmd.Flags().BoolVarP(&doctorVerbose, "verbose", "v", false, "List every closed window and every suppression reason instead of summarizing them")
 }

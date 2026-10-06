@@ -108,3 +108,45 @@ func TestDoctorProjectDirectoriesWarnsOnceForEveryUnusableDirectory(t *testing.T
 		t.Fatalf("clean projects: text %q, findings %q", out.String(), messages)
 	}
 }
+
+func TestDoctorFindingsSummarizeClosedTombstonesUnlessVerbose(t *testing.T) {
+	tombstone := func(id int) doctorFinding {
+		return doctorFinding{Severity: severityInfo, Check: checkClosedTombstone, WindowID: id, Message: "window closed at 2026-10-06T13:06:51-06:00; metadata retained for post-mortem export only"}
+	}
+	findings := []doctorFinding{
+		{Severity: severityInfo, Check: "companion_app", Message: "companion app connected"},
+		tombstone(6), tombstone(7),
+		{Severity: severityInfo, Check: "acknowledged_state", WindowID: 9, Message: "acknowledged"},
+		tombstone(20),
+	}
+	var out bytes.Buffer
+	if err := writeDoctorFindings(&out, findings, false); err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Join([]string{
+		"notes:",
+		"- [companion_app] companion app connected",
+		"- [closed_tombstone] 3 closed windows (6, 7, 20) retained for post-mortem export; `amx doctor --verbose` lists them",
+		"- [acknowledged_state] window 9: acknowledged",
+		"",
+	}, "\n")
+	if out.String() != want {
+		t.Fatalf("summary:\n%s\nwant:\n%s", out.String(), want)
+	}
+
+	out.Reset()
+	if err := writeDoctorFindings(&out, findings[1:2], false); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "1 closed window (6) retained") {
+		t.Fatalf("single tombstone summary:\n%s", out.String())
+	}
+
+	out.Reset()
+	if err := writeDoctorFindings(&out, findings, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(out.String(), "- [closed_tombstone] window "); got != 3 {
+		t.Fatalf("verbose printed %d per-window tombstones, want 3:\n%s", got, out.String())
+	}
+}

@@ -36,6 +36,7 @@ func resetDoctorTestState(t *testing.T) {
 	oldConfigModTime := doctorConfigModTime
 	oldJSON := doctorJSON
 	oldStrict := doctorStrict
+	oldVerbose := doctorVerbose
 	oldLookPath := aslDoctorLookPath
 	oldASLStat := aslDoctorStat
 	oldBridgeFailure := doctorLastASLBridgeFailure
@@ -56,10 +57,12 @@ func resetDoctorTestState(t *testing.T) {
 		doctorConfigModTime = oldConfigModTime
 		doctorJSON = oldJSON
 		doctorStrict = oldStrict
+		doctorVerbose = oldVerbose
 		doctorCmd.SetOut(oldOut)
 	})
 	doctorJSON = false
 	doctorStrict = false
+	doctorVerbose = false
 	// The operator's real config.toml must not decide whether a test sees the
 	// config-freshness warning; tests that exercise it install their own.
 	doctorConfigModTime = func() (time.Time, error) { return time.Time{}, os.ErrNotExist }
@@ -147,12 +150,24 @@ func TestDoctorReportsDaemonRendererHookAndSuppressionHealth(t *testing.T) {
 		"kitty sockets: unix:/tmp/kitty-42",
 		"hooks: no configured profiles",
 		"renderer drift: none",
-		"- guard_blocked: 1",
+		"recent suppressions (last 15m0s): 1 across 1 reason",
 		"overall: clean",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("doctor output missing %q:\n%s", want, got)
 		}
+	}
+	if strings.Contains(got, "- guard_blocked: 1") {
+		t.Errorf("doctor output lists suppression reasons without --verbose:\n%s", got)
+	}
+
+	doctorVerbose = true
+	out.Reset()
+	if err := doctorCmd.RunE(doctorCmd, nil); err != nil {
+		t.Fatalf("doctor --verbose: %v", err)
+	}
+	if got := out.String(); !strings.Contains(got, "recent suppressions (last 15m0s):\n- guard_blocked: 1\n") {
+		t.Errorf("doctor --verbose output missing the suppression breakdown:\n%s", got)
 	}
 }
 
