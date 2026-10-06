@@ -31,7 +31,7 @@ The everyday commands beyond the dashboard (`amx`):
 | `amx overview` | grid of every live session (`F2`) |
 | `amx open-dashboard` | focus the dashboard, opening it in a new tab if absent |
 | `amx project list` / `launch` | list configured projects; launch one in a new tab |
-| `amx session list` / `continue` / `fork` / `handoff` | conversation continuity |
+| `amx session list` / `search` / `continue` / `fork` / `handoff` | conversation continuity |
 | `amx worktree list` / `reopen` / `remove` / `prune` | managed Git worktrees |
 | `amx mute-toggle` | mute or unmute a tab's notifications |
 | `amx notifications snooze` / `test` | snooze or test notifications |

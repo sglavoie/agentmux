@@ -12,7 +12,7 @@ import (
 // unversioned ad-hoc object.
 func TestSessionJSONCommandSurfaceIsVersioned(t *testing.T) {
 	commands := []*cobra.Command{
-		sessionListCmd, sessionContinueCmd, sessionForkCmd,
+		sessionListCmd, sessionSearchCmd, sessionContinueCmd, sessionForkCmd,
 		sessionForkWorktreeCmd, sessionHandoffCmd, muteToggleCmd,
 	}
 	for _, command := range commands {

@@ -52,38 +52,15 @@ var sessionListCmd = &cobra.Command{
 		if err != nil {
 			return cli.CommandFailure(cmd, jsonOutput, "config_error", err)
 		}
-		filter := transcript.ListFilter{}
-		if value, _ := cmd.Flags().GetString("since"); strings.TrimSpace(value) != "" {
-			window, err := parseSinceWindow(value)
-			if err != nil {
-				return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", err)
-			}
-			filter.Since = sessionCommandsNow().Add(-window)
-		}
-		if err := applySessionListSelectors(cmd, cfg, &filter); err != nil {
-			return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", err)
-		}
-		limit, _ := cmd.Flags().GetInt("limit")
-		if limit < 0 {
-			return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", fmt.Errorf("--limit %d: want 0 (no limit) or a positive count", limit))
-		}
-		var here []string
-		if onlyHere, _ := cmd.Flags().GetBool("here"); onlyHere {
-			if here, err = sessionListHereDirs(); err != nil {
-				return cli.CommandFailure(cmd, jsonOutput, "command_failed", err)
-			}
+		selection, code, err := readSessionSelection(cmd, cfg)
+		if err != nil {
+			return cli.CommandFailure(cmd, jsonOutput, code, err)
 		}
 		idx, err := loadRefreshedSessionIndex(cfg, sessionCommandsSessionReaders())
 		if err != nil {
 			return cli.CommandFailure(cmd, jsonOutput, "session_index_unavailable", err)
 		}
-		metas := idx.List(filter)
-		if here != nil {
-			metas = sessionsUnder(metas, here)
-		}
-		if limit > 0 && len(metas) > limit {
-			metas = metas[:limit]
-		}
+		metas := selection.narrow(idx.List(selection.filter))
 		views := sessionViews(metas)
 		if jsonOutput {
 			return cli.WriteJSON(cmd, sessionListData{Sessions: views})
@@ -100,6 +77,67 @@ var sessionListCmd = &cobra.Command{
 		}
 		return nil
 	},
+}
+
+// sessionSelection is what the selector flags `session list` and `session
+// search` share ask for: the index filter, the --here directories, and the
+// --limit count, which the two apply after their own lookup.
+type sessionSelection struct {
+	filter transcript.ListFilter
+	here   []string
+	limit  int
+}
+
+// readSessionSelection parses the shared selector flags. The returned code is
+// the structured error code for a refusal.
+func readSessionSelection(cmd *cobra.Command, cfg *config.Config) (sessionSelection, string, error) {
+	var selection sessionSelection
+	if value, _ := cmd.Flags().GetString("since"); strings.TrimSpace(value) != "" {
+		window, err := parseSinceWindow(value)
+		if err != nil {
+			return selection, "invalid_arguments", err
+		}
+		selection.filter.Since = sessionCommandsNow().Add(-window)
+	}
+	if err := applySessionListSelectors(cmd, cfg, &selection.filter); err != nil {
+		return selection, "invalid_arguments", err
+	}
+	selection.limit, _ = cmd.Flags().GetInt("limit")
+	if selection.limit < 0 {
+		return selection, "invalid_arguments", fmt.Errorf("--limit %d: want 0 (no limit) or a positive count", selection.limit)
+	}
+	if onlyHere, _ := cmd.Flags().GetBool("here"); onlyHere {
+		here, err := sessionListHereDirs()
+		if err != nil {
+			return selection, "command_failed", err
+		}
+		selection.here = here
+	}
+	return selection, "", nil
+}
+
+// narrow applies --here and then --limit to sessions already in the order
+// they will be shown.
+func (s sessionSelection) narrow(metas []transcript.SessionMeta) []transcript.SessionMeta {
+	if s.here != nil {
+		metas = sessionsUnder(metas, s.here)
+	}
+	if s.limit > 0 && len(metas) > s.limit {
+		metas = metas[:s.limit]
+	}
+	return metas
+}
+
+// addSessionSelectionFlags declares the selector flags readSessionSelection
+// reads, so list and search cannot drift apart in what they accept.
+func addSessionSelectionFlags(cmd *cobra.Command) {
+	cmd.Flags().String("since", "", "only sessions active within this window, e.g. 12h or 7d")
+	cmd.Flags().Bool("here", false, "only sessions started in the current directory or below it")
+	cmd.Flags().StringSlice("harness", nil, "only sessions of this harness (repeatable)")
+	_ = cmd.RegisterFlagCompletionFunc("harness", cli.CompleteHarnessFirstArg)
+	cmd.Flags().StringSlice("profile", nil, "only sessions visible to this profile (repeatable)")
+	_ = cmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
+	cmd.Flags().IntP("limit", "n", 0, "show at most this many of the most recent sessions (0 for all)")
 }
 
 // writeSessionTable is the session list for a person: a header, aligned

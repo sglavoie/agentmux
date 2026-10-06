@@ -161,8 +161,10 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   `daemon export-events` does not see.
 - `cmd/session`: the command surfaces that act on a conversation or on the Kitty
   tab carrying one — the same domain seen from two distances. The `amx session`
-  family works on conversation identity (list, continue, fork, fork-worktree,
-  handoff) and always resolves an exact `(harness, session_id)` before it acts;
+  family works on conversation identity (list, search, continue, fork,
+  fork-worktree, handoff) and always resolves an exact `(harness, session_id)`
+  before it acts; `search` runs the same `transcript.Search` Past Sessions
+  does, and it and `list` share one set of selector flags;
   the root-level tab controls work on the live instance instead
   (`focus-prev-managed`, `focus-next-managed`, `focus-next`, `mute-toggle`,
   `resort`). Both halves reduce to "which session, and what happens to it".

@@ -21,6 +21,9 @@ amx session list --json
 amx session list --since 7d   # only sessions active in the last week (or 12h, 90m, …)
 amx session list --here -n 5  # the five latest sessions started in this directory or below it
 amx session list --harness codex --profile codex-work   # both repeatable
+amx session search race daemon            # conversations mentioning both words, newest first, with match counts
+amx session search '"race condition"' --here --since 7d   # a quoted phrase; takes every list selector
+amx session search --source user flaky    # only your own prompts (or --source harness for the agent's output)
 amx session continue codex <session-id>
 amx session fork claude <session-id>
 amx session fork-worktree codex <session-id> --yes
