@@ -36,6 +36,8 @@ func resetSessionCommandsTestState(t *testing.T) {
 	oldDaemon := sessionCommandsDaemon
 	oldNewHandoff := sessionCommandsNewHandoff
 	oldNewWorktree := sessionCommandsNewWorktree
+	oldIsTerminal := sessionListIsTerminal
+	oldNow := sessionCommandsNow
 	oldListOut := sessionListCmd.OutOrStdout()
 	oldContinueOut := sessionContinueCmd.OutOrStdout()
 	oldForkOut := sessionForkCmd.OutOrStdout()
@@ -50,6 +52,8 @@ func resetSessionCommandsTestState(t *testing.T) {
 		sessionCommandsDaemon = oldDaemon
 		sessionCommandsNewHandoff = oldNewHandoff
 		sessionCommandsNewWorktree = oldNewWorktree
+		sessionListIsTerminal = oldIsTerminal
+		sessionCommandsNow = oldNow
 		sessionListCmd.SetOut(oldListOut)
 		sessionContinueCmd.SetOut(oldContinueOut)
 		sessionForkCmd.SetOut(oldForkOut)

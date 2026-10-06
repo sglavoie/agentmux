@@ -3,6 +3,7 @@ package session
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -33,6 +34,7 @@ var (
 	sessionCommandsNewHandoff       = func() handoff.Runner { return handoff.NewWorkflow() }
 	sessionCommandsNewWorktree      = func() worktree.Runner { return worktree.NewWorkflow() }
 	sessionCommandsNow              = time.Now
+	sessionListIsTerminal           = cli.IsTerminal
 )
 
 var sessionListCmd = &cobra.Command{
@@ -60,11 +62,55 @@ var sessionListCmd = &cobra.Command{
 		if jsonOutput {
 			return cli.WriteJSON(cmd, sessionListData{Sessions: views})
 		}
+		out := cmd.OutOrStdout()
+		if sessionListIsTerminal(out) {
+			return writeSessionTable(out, views, sessionCommandsNow())
+		}
+		// Off a terminal the output stays headerless and tab-separated with
+		// absolute timestamps: scripts cut and sort it, and a relative age is
+		// stale the moment it is written to a file.
 		for _, item := range views {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\t%s\n", item.Harness, item.Profile, item.Project, formatTime(item.LastAt), item.ID)
+			_, _ = fmt.Fprintf(out, "%s\t%s\t%s\t%s\t%s\n", item.Harness, item.Profile, item.Project, formatTime(item.LastAt), item.ID)
 		}
 		return nil
 	},
+}
+
+// writeSessionTable is the session list for a person: a header, aligned
+// columns, and how long ago each conversation was last active.
+func writeSessionTable(out io.Writer, views []sessionView, now time.Time) error {
+	if len(views) == 0 {
+		_, err := fmt.Fprintln(out, "No indexed sessions match.")
+		return err
+	}
+	rows := make([][]string, 0, len(views))
+	for _, item := range views {
+		project := item.Project
+		if project == "" {
+			project = "-"
+		}
+		rows = append(rows, []string{item.Harness, item.Profile, project, formatAgo(item.LastAt, now), item.ID})
+	}
+	return cli.WriteTable(out, []string{"HARNESS", "PROFILE", "PROJECT", "ACTIVE", "SESSION"}, rows)
+}
+
+// formatAgo renders how long ago at was, coarsely: the list is for picking a
+// conversation, and "3h ago" answers that faster than a timestamp does.
+func formatAgo(at, now time.Time) string {
+	if at.IsZero() {
+		return "-"
+	}
+	d := now.Sub(at)
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+	}
 }
 
 // parseSinceWindow reads `--since`: any Go duration ("12h", "90m") or a whole
