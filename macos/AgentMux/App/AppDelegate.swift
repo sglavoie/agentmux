@@ -338,6 +338,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
                     self.detectedEnvironment = shell
                     if self.command?.binary != command?.binary || self.command?.launchEnvironment != command?.launchEnvironment {
                         self.projects.state.reset()
+                        self.projects.missingDirectories = []
                         self.recent.state.reset()
                     }
                     self.command = command
@@ -349,6 +350,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
                     snapshot.daemonStatus = self.store.daemonStatus
                     self.preferences = snapshot
                     self.publishPreferences()
+                    // Listed and surveyed at launch, once the gate knows what
+                    // this amx can do, so the first menu opening already knows
+                    // which projects can be launched.
+                    self.refreshProjects()
                 }
             }
         }
@@ -628,6 +633,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
             gate: gate,
             feedLive: live,
             projects: projects.state,
+            missingProjectDirectories: projects.missingDirectories,
             recent: recent.state,
             recentDays: prefs.recentDays,
             recentLimit: prefs.recentLimit,
@@ -642,6 +648,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
     func menuWillOpen() {
         notifications?.refreshAuthorization()
         refreshProjects()
+        surveyProjectDirectories()
         refreshRecent()
     }
 
@@ -650,6 +657,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
               projects.needsRefresh(now: Date()), projects.state.begin() else { return }
         listQueue.async { [weak self] in
             let result = ProjectCatalog.fetch(command)
+            // Surveyed before it is shown, so a fresh list never offers a
+            // launch into a directory that is not there.
+            let missing = (try? result.get()).map { ProjectCatalog.survey($0) }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     guard let self, self.command?.binary == command.binary else { return }
@@ -657,6 +667,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
                         Self.logger.error("project list: \(error.message, privacy: .public)")
                     }
                     self.projects.state.finish(result, at: Date())
+                    if let missing { self.projects.missingDirectories = missing }
+                    self.statusItem?.refreshSubmenus()
+                }
+            }
+        }
+    }
+
+    /// Re-checks the cached projects' directories each time the menu opens,
+    /// so a checkout cloned or removed since the last list is reflected
+    /// without waiting for the list itself to go stale.
+    private func surveyProjectDirectories() {
+        guard let list = projects.state.value, !list.isEmpty, !projects.surveying else { return }
+        projects.surveying = true
+        listQueue.async { [weak self] in
+            let missing = ProjectCatalog.survey(list)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.projects.surveying = false
+                    guard self.projects.missingDirectories != missing else { return }
+                    self.projects.missingDirectories = missing
                     self.statusItem?.refreshSubmenus()
                 }
             }

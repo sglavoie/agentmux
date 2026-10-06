@@ -20,6 +20,36 @@ final class ProjectCatalogTests: XCTestCase {
         ProcessOutput(status: status, stdout: Data(text.utf8), stderr: Data())
     }
 
+    // MARK: Directory survey
+
+    func testSurveyReportsOnlyDirectoriesThatAreNotThere() {
+        let projects = [
+            ProjectEntry(profile: "work", title: "API", directory: "/src/api"),
+            ProjectEntry(profile: "home", title: "API", directory: "/src/api"),
+            ProjectEntry(profile: "work", title: "Gone", directory: "/src/gone"),
+            ProjectEntry(profile: "work", title: "Anywhere"),
+        ]
+        var asked: [String] = []
+        let missing = ProjectCatalog.survey(projects) { path in
+            asked.append(path)
+            return path == "/src/api"
+        }
+        XCTAssertEqual(missing, ["/src/gone"])
+        XCTAssertEqual(asked.sorted(), ["/src/api", "/src/gone"], "each directory once; a project naming none is not checked")
+    }
+
+    func testDirectoryExistsRejectsFilesAndMissingPaths() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = root.appendingPathComponent("file")
+        try Data().write(to: file)
+
+        XCTAssertTrue(ProjectCatalog.directoryExists(root.path))
+        XCTAssertFalse(ProjectCatalog.directoryExists(file.path), "a file is not a project directory")
+        XCTAssertFalse(ProjectCatalog.directoryExists(root.appendingPathComponent("absent").path))
+    }
+
     // MARK: Cache
 
     func testCatalogRefreshesOnlyWhenOlderThanAMinute() {

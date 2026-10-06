@@ -77,6 +77,8 @@ enum MenuBuilder {
         var gate = ActionGate()
         var feedLive = false
         var projects = FetchState<[ProjectEntry]>()
+        /// Project directories the last survey found missing on disk.
+        var missingProjectDirectories: Set<String> = []
         var recent = FetchState<[RecentConversation]>()
         var recentDays = 7
         var recentLimit = 15
@@ -291,14 +293,15 @@ enum MenuBuilder {
 
     static func entries(for submenu: MenuSubmenu, _ input: ActionsInput) -> [MenuEntry] {
         switch submenu {
-        case .projects: return projectEntries(input.projects)
+        case .projects: return projectEntries(input.projects, missing: input.missingProjectDirectories)
         case .recent: return recentEntries(input)
         case .notifications: return notificationEntries(input)
         }
     }
 
-    /// Projects under one header per profile.
-    static func projectEntries(_ state: FetchState<[ProjectEntry]>) -> [MenuEntry] {
+    /// Projects under one header per profile. A project whose directory is
+    /// missing stays listed, greyed out, with the directory as the reason.
+    static func projectEntries(_ state: FetchState<[ProjectEntry]>, missing: Set<String> = []) -> [MenuEntry] {
         guard let projects = state.value else {
             if let error = state.error { return [.info("Could not list projects: \(error)")] }
             return [.info("Loading…")]
@@ -309,7 +312,11 @@ enum MenuBuilder {
         }
         for (profile, members) in ProjectCatalog.grouped(projects) {
             entries.append(.header(profile.isEmpty ? "(no profile)" : profile))
-            entries += members.map { .action(.launchProject($0), $0.title) }
+            entries += members.map { project in
+                missing.contains(project.directory)
+                    ? .unavailable(project.title, reason: "Directory not found: \(project.directory)")
+                    : .action(.launchProject(project), project.title)
+            }
         }
         if let error = state.error {
             entries.append(.separator)

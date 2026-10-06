@@ -127,8 +127,32 @@ struct ProjectCatalog: Equatable {
     static let listArguments = ["project", "list"]
 
     var state = FetchState<[ProjectEntry]>()
+    /// The project directories the last survey found missing. Configuration
+    /// may name a checkout that is not on this machine (yet); the menu keeps
+    /// such projects listed but greyed out instead of offering a launch that
+    /// would open a tab in a directory that is not there.
+    var missingDirectories: Set<String> = []
+    /// Whether a survey is running, so menu openings do not pile them up.
+    var surveying = false
 
     func needsRefresh(now: Date) -> Bool { state.needsRefresh(now: now, maxAge: Self.maxAge) }
+
+    /// The directories of `projects` that are not directories on disk. A
+    /// project naming no directory is not missing one. It stats the disk, so
+    /// callers run it off the main thread: a stalled network mount must not
+    /// freeze the menu.
+    static func survey(_ projects: [ProjectEntry], isDirectory: (String) -> Bool = directoryExists) -> Set<String> {
+        var missing: Set<String> = []
+        for directory in Set(projects.map(\.directory)) where !directory.isEmpty && !isDirectory(directory) {
+            missing.insert(directory)
+        }
+        return missing
+    }
+
+    static func directoryExists(_ path: String) -> Bool {
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) && isDirectory.boolValue
+    }
 
     /// The projects by profile, profiles in the order configuration first
     /// names them and projects in configuration order within each.

@@ -85,6 +85,25 @@ final class ActionGateTests: XCTestCase {
         XCTAssertEqual(MenuBuilder.projectEntries(state), [.info("No configured projects")])
     }
 
+    func testProjectsWithAMissingDirectoryAreGreyedOutWithTheReason() {
+        var state = FetchState<[ProjectEntry]>()
+        let api = ProjectEntry(profile: "work", title: "API", directory: "/src/api")
+        let gone = ProjectEntry(profile: "work", title: "Gone", directory: "/src/gone")
+        _ = state.begin()
+        state.finish(.success([api, gone]), at: Date())
+        XCTAssertEqual(MenuBuilder.projectEntries(state, missing: ["/src/gone"]), [
+            .header("work"),
+            .action(.launchProject(api), "API"),
+            .unavailable("Gone", reason: "Directory not found: /src/gone"),
+        ])
+
+        var input = MenuBuilder.ActionsInput()
+        input.projects = state
+        input.missingProjectDirectories = ["/src/gone"]
+        XCTAssertEqual(MenuBuilder.entries(for: .projects, input).last, .unavailable("Gone", reason: "Directory not found: /src/gone"),
+                       "the submenu reads the survey from its input")
+    }
+
     // MARK: Mute
 
     func testRowsCarryTheirMuteState() {

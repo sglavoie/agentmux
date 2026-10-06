@@ -238,7 +238,7 @@ After the sessions, the menu offers these (`Model/ProjectCatalog.swift`,
 | Item | Does |
 | --- | --- |
 | Open Dashboard | The same `amx open-dashboard` the ⌃⌥⌘A shortcut runs. |
-| Launch Project ▸ | Configured projects, one header per profile, from `amx project list --json`. The list is cached and refreshed when the menu opens on one older than 60s. Choosing one runs `amx project launch --title T --profile P --json`. |
+| Launch Project ▸ | Configured projects, one header per profile, from `amx project list --json`. The list is fetched at launch, cached, and refreshed when the menu opens on one older than 60s. Each project's directory is checked on disk when the list arrives and every time the menu opens; a project whose directory is missing stays listed but greyed out, with the path in its tooltip. Choosing one runs `amx project launch --title T --profile P --json`. |
 | Recent ▸ | The newest `amxRecentLimit` conversations from `amx session list --since <amxRecentDays>d --json`. The list runs in the background with a 15s timeout, and the menu shows the previous result until it lands. Choosing one runs `amx session continue harness:id --json`. |
 | ⌥ on a session row | Shows `Mute · …` or `Unmute · …`, which runs `amx mute-toggle --window-id N --json` with `KITTY_LISTEN_ON` set to that row's own socket. |
 | Notifications ▸ | Snooze for 1 hour, until tomorrow 08:00, or until resumed, and Resume Now, all through the daemon's `notification_snooze` request. Quiet hours are shown read-only with the config path they come from, because the app never rewrites `config.toml`. |
