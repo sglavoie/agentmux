@@ -28,6 +28,7 @@ func resetDoctorTestState(t *testing.T) {
 	oldKitty := newDoctorKitty
 	oldConfig := doctorLoadConfig
 	oldExecutable := doctorExecutable
+	oldDoctorLookPath := doctorLookPath
 	oldSocketPath := doctorSocketPath
 	oldStat := doctorStat
 	oldNow := doctorNow
@@ -49,6 +50,7 @@ func resetDoctorTestState(t *testing.T) {
 		newDoctorKitty = oldKitty
 		doctorLoadConfig = oldConfig
 		doctorExecutable = oldExecutable
+		doctorLookPath = oldDoctorLookPath
 		doctorSocketPath = oldSocketPath
 		doctorStat = oldStat
 		doctorNow = oldNow
@@ -71,6 +73,9 @@ func resetDoctorTestState(t *testing.T) {
 	// that does not produce the same report.
 	aslDoctorLookPath = func(string) (string, error) { return "", exec.ErrNotFound }
 	aslDoctorStat = func(string) error { return os.ErrNotExist }
+	// Likewise the amx on PATH: an installed amx must not make every test
+	// binary read as a foreign one.
+	doctorLookPath = func(string) (string, error) { return "", exec.ErrNotFound }
 	diagnosticRoot := filepath.Join(t.TempDir(), "diagnostics")
 	doctorDiagnosticPaths = func() (diagnostics.Paths, error) {
 		return diagnostics.PathsForRoot(diagnosticRoot), nil
@@ -339,5 +344,52 @@ func TestDoctorReportsNativeCoverageAndDefersActivePruning(t *testing.T) {
 	}
 	if info, err := os.Stat(activeLog); err != nil || info.Size() != 2<<20 {
 		t.Fatalf("active log was mutated: info=%v err=%v", info, err)
+	}
+}
+
+// A doctor run from a binary other than the amx on PATH says so, since its
+// socket and hook checks are judged against itself; the installed binary,
+// reached through a symlink or not, and a PATH without amx say nothing.
+func TestDoctorNotesABinaryOtherThanTheInstalledOne(t *testing.T) {
+	resetDoctorTestState(t)
+	dir := t.TempDir()
+	installed := filepath.Join(dir, "installed", "amx")
+	dev := filepath.Join(dir, "checkout", "amx")
+	link := filepath.Join(dir, "bin", "amx")
+	for _, path := range []string{installed, dev} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, nil, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(installed, link); err != nil {
+		t.Fatal(err)
+	}
+
+	notes := func(running string, lookPath func(string) (string, error)) []string {
+		doctorExecutable = func() (string, error) { return running, nil }
+		doctorLookPath = lookPath
+		var got []string
+		writeDoctorRunningBinary(func(format string, args ...any) {
+			got = append(got, fmt.Sprintf(format, args...))
+		})
+		return got
+	}
+	onPath := func(string) (string, error) { return link, nil }
+
+	if got := notes(installed, onPath); len(got) != 0 {
+		t.Fatalf("installed binary reached through a symlink noted %q", got)
+	}
+	if got := notes(dev, func(string) (string, error) { return "", exec.ErrNotFound }); len(got) != 0 {
+		t.Fatalf("PATH without amx noted %q", got)
+	}
+	got := notes(dev, onPath)
+	if len(got) != 1 || !strings.Contains(got[0], dev) || !strings.Contains(got[0], link) || !strings.Contains(got[0], "run the installed amx") {
+		t.Fatalf("dev binary notes = %q; want one naming both binaries", got)
 	}
 }

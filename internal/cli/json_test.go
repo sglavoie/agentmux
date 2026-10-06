@@ -171,8 +171,8 @@ func TestMissingParameterStaysPlainForTextCallers(t *testing.T) {
 	cmd, out := newCapturingCommand()
 
 	err := MissingParameter(cmd, false, "branch", "target branch name")
-	if err == nil || err.Error() != "branch is required" {
-		t.Fatalf("err = %v; want a plain requirement message", err)
+	if err == nil || err.Error() != "branch is required: target branch name" {
+		t.Fatalf("err = %v; want the requirement followed by its description", err)
 	}
 	if out.Len() != 0 {
 		t.Fatalf("text mode wrote %q to stdout", out.String())

@@ -329,8 +329,13 @@ func TestConversationIdentityAcceptsBothSelectorShapes(t *testing.T) {
 // for a harness, since a bare session ID or prefix no longer needs one.
 func TestMissingSelectorAsksForTheConversation(t *testing.T) {
 	_, err := conversationIdentityFromArgs(sessionContinueCmd, false, "continue", nil)
-	if err == nil || err.Error() != "conversation is required" {
-		t.Fatalf("text error = %v, want conversation is required", err)
+	if err == nil || !strings.HasPrefix(err.Error(), "conversation is required: ") {
+		t.Fatalf("text error = %v, want conversation is required with its selector forms", err)
+	}
+	for _, want := range []string{"<harness>:<session-id>", "unique prefix", "`amx session list`"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("text error = %v, want it to name %q", err, want)
+		}
 	}
 
 	var out bytes.Buffer

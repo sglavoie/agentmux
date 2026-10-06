@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
@@ -54,6 +55,7 @@ var (
 	newDoctorKitty        = func() cli.KittyWindowLister { return cli.NewKittyClient() }
 	doctorLoadConfig      = cli.LoadRunnableConfig
 	doctorExecutable      = os.Executable
+	doctorLookPath        = exec.LookPath
 	doctorSocketPath      = ipc.SocketPath
 	doctorStat            = os.Stat
 	doctorNow             = time.Now
@@ -232,6 +234,9 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	writeDoctorRunningBinary(func(format string, args ...any) {
+		addFinding(severityInfo, "uninstalled_binary", format, args...)
+	})
 	if err := writeDoctorSocketStatus(textOut, reportIssue("socket")); err != nil {
 		return err
 	}

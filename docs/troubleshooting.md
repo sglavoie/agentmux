@@ -47,6 +47,10 @@
   in `overall: ok (2 warnings)`.
   `shared_profile_homes` notes every home directory that several profiles of
   one harness read; each conversation there is listed under all of them.
+  `uninstalled_binary` notes a doctor run from a binary other than the `amx`
+  on PATH, such as a fresh `./amx` in a checkout: its socket and hook checks
+  are judged against itself, so their failures there say nothing about the
+  installation.
 - **Suspected intermittent state bugs**: preserve a causal snapshot with
   `amx debug bundle --mode share`, validate it with `amx debug replay`, then run
   `amx daemon audit --duration 10m --json`. It samples the invariants every

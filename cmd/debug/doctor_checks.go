@@ -428,6 +428,37 @@ func sharedProfileHomes(profiles []config.Account) []sharedProfileHome {
 	return shared
 }
 
+// writeDoctorRunningBinary notes a doctor that is not the amx on PATH, as a
+// freshly built ./amx in a checkout is not. The socket and hook checks judge
+// against the binary that is running, so that doctor reports every hook file
+// as drifted and the socket as stale although the installed amx is fine; the
+// note names both binaries so those failures read as what they are. A PATH
+// without amx, or a path either side cannot resolve, is left unremarked.
+func writeDoctorRunningBinary(reportNote func(string, ...any)) {
+	running, err := doctorExecutable()
+	if err != nil {
+		return
+	}
+	onPath, err := doctorLookPath("amx")
+	if err != nil {
+		return
+	}
+	resolve := func(path string) string {
+		if abs, err := filepath.Abs(path); err == nil {
+			path = abs
+		}
+		if real, err := filepath.EvalSymlinks(path); err == nil {
+			path = real
+		}
+		return filepath.Clean(path)
+	}
+	if resolve(running) == resolve(onPath) {
+		return
+	}
+	reportNote("this doctor runs %s rather than the amx on PATH (%s); its socket and hook checks are judged against the running binary, so run the installed amx to check the installation",
+		cli.DisplayPath(running), cli.DisplayPath(onPath))
+}
+
 func writeDoctorSocketStatus(out io.Writer, reportIssue func(string, ...any)) error {
 	socketPath := doctorSocketPath()
 	socketInfo, socketErr := doctorStat(socketPath)

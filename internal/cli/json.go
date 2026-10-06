@@ -94,11 +94,15 @@ func CommandFailure(cmd *cobra.Command, jsonOutput bool, code string, err error)
 
 // MissingParameter reports required input that the invocation did not supply,
 // carrying the parameter description so a JSON caller can recover without an
-// interactive prompt.
+// interactive prompt. A person gets the same description in the message, since
+// they have no parameters block to read it from.
 func MissingParameter(cmd *cobra.Command, jsonOutput bool, name, description string) error {
 	message := fmt.Sprintf("%s is required", name)
 	if !jsonOutput {
-		return errors.New(message)
+		if description == "" {
+			return errors.New(message)
+		}
+		return fmt.Errorf("%s: %s", message, description)
 	}
 	return WriteJSONError(cmd, JSONError{
 		Code: "missing_parameter", Message: message,

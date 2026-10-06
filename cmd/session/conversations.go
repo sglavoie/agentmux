@@ -401,7 +401,7 @@ func newConversationActionCommand(name string, actionID actions.ID, short string
 // conversationParameterDescription names every selector form a continuity
 // command accepts, so a missing conversation is reported the same way whether
 // the command takes one selector or the two-argument form too.
-const conversationParameterDescription = "indexed conversation as <harness>:<session-id>, <harness> <session-id>, or a bare session ID or unique prefix"
+const conversationParameterDescription = "indexed conversation as <harness>:<session-id>, <harness> <session-id>, or a bare session ID or unique prefix (see `amx session list`)"
 
 // conversationIdentityFromArgs reads the conversation a continuity command
 // acts on, either as two arguments (`claude abc`), as the single `claude:abc`
