@@ -74,7 +74,18 @@ func TestConfigValidateJSONReportsWarningsOnAValidConfig(t *testing.T) {
 	}
 }
 
-func TestConfigValidateJSONMissingDirectoryIsAFindingWithQuietExit(t *testing.T) {
+func TestConfigValidateJSONMissingDirectoryIsAWarningByDefault(t *testing.T) {
+	data, err := runConfigValidateJSON(t, "[[projects]]\ntitle = \"gone\"\ndirectory = \"~/gone\"\nprofile = \"work\"\n")
+	if err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+	if !data.Valid || len(data.InvalidProjectDirectories) != 1 {
+		t.Fatalf("data = %+v", data)
+	}
+}
+
+func TestConfigValidateJSONStrictMissingDirectoryIsAFindingWithQuietExit(t *testing.T) {
+	setValidateStrict(t)
 	data, err := runConfigValidateJSON(t, "[[projects]]\ntitle = \"gone\"\ndirectory = \"~/gone\"\nprofile = \"work\"\n")
 	var exitErr *cli.ExitError
 	if !errors.As(err, &exitErr) || !exitErr.Quiet || exitErr.Code == 0 {

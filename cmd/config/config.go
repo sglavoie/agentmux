@@ -173,11 +173,19 @@ var configPathCmd = &cobra.Command{
 var configValidateCmd = &cobra.Command{
 	Use:   "validate",
 	Short: "Validate config.toml and project directories",
+	Long: `Validate config.toml and the directory of every configured project.
+
+A config that loads is valid. Unknown and deprecated keys and project
+directories that are missing or not directories are printed as warnings,
+the way amx doctor reports them, because a project checked out on another
+machine is not a broken config. Pass --strict to fail on a project directory
+instead.`,
 	// Failures are already printed by ccerrors.Print; cobra printing them a
 	// second time only repeats the line that matters.
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
+		strict, _ := cmd.Flags().GetBool("strict")
 		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {
 			if jsonOutput {
@@ -187,10 +195,10 @@ var configValidateCmd = &cobra.Command{
 			return err
 		}
 		if jsonOutput {
-			return writeConfigValidateJSON(cmd, cfg)
+			return writeConfigValidateJSON(cmd, cfg, strict)
 		}
-		// Warnings come first so they are still seen when a project directory
-		// check fails below.
+		// Key warnings come first so they are still seen when a strict
+		// project directory check fails below.
 		out := cmd.OutOrStdout()
 		for _, key := range cfg.UnknownKeys {
 			if _, err := fmt.Fprintf(out, "warning: unknown key %s (ignored; check its spelling and section)\n", key); err != nil {
@@ -202,8 +210,22 @@ var configValidateCmd = &cobra.Command{
 				return err
 			}
 		}
-		if err := validateProjectDirectories(cfg.Projects); err != nil {
-			ccerrors.Print(err)
+		if strict {
+			if err := validateProjectDirectories(cfg.Projects); err != nil {
+				ccerrors.Print(err)
+				return err
+			}
+			_, err = fmt.Fprintln(out, "config is valid")
+			return err
+		}
+		issues := config.ProjectDirectoryIssues(cfg.Projects)
+		for _, issue := range issues {
+			if _, err := fmt.Fprintf(out, "warning: %s\n", issue.Format(cli.DisplayPath(issue.Directory))); err != nil {
+				return err
+			}
+		}
+		if len(issues) > 0 {
+			_, err = fmt.Fprintln(out, "config is valid; fix or remove the projects above with `amx config edit`, or pass --strict to fail on them")
 			return err
 		}
 		_, err = fmt.Fprintln(out, "config is valid")
@@ -213,8 +235,9 @@ var configValidateCmd = &cobra.Command{
 
 // configValidateData is the `config validate --json` payload. A config that
 // loads but names missing project directories is a finding, not a malformed
-// request, so it is reported here with Valid false and a nonzero quiet exit;
-// only a config that cannot be loaded at all uses the error envelope.
+// request: the directories are always listed, and only under --strict do they
+// make Valid false with a nonzero quiet exit. Only a config that cannot be
+// loaded at all uses the error envelope.
 type configValidateData struct {
 	Valid                     bool                   `json:"valid"`
 	Path                      string                 `json:"path"`
@@ -229,7 +252,7 @@ type configDeprecationRow struct {
 	Replacement string `json:"replacement"`
 }
 
-func writeConfigValidateJSON(cmd *cobra.Command, cfg *config.Config) error {
+func writeConfigValidateJSON(cmd *cobra.Command, cfg *config.Config, strict bool) error {
 	data := configValidateData{
 		Path:                      config.DefaultConfigPath(),
 		UnknownKeys:               append([]string{}, cfg.UnknownKeys...),
@@ -239,7 +262,7 @@ func writeConfigValidateJSON(cmd *cobra.Command, cfg *config.Config) error {
 	for _, d := range cfg.Deprecations {
 		data.Deprecations = append(data.Deprecations, configDeprecationRow{Key: d.Key, Location: d.Location, Replacement: d.Replacement})
 	}
-	data.Valid = len(data.InvalidProjectDirectories) == 0
+	data.Valid = !strict || len(data.InvalidProjectDirectories) == 0
 	if err := cli.WriteJSON(cmd, data); err != nil {
 		return err
 	}
@@ -264,6 +287,7 @@ func validateProjectDirectories(projects []config.Session) error {
 
 func init() {
 	configValidateCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	configValidateCmd.Flags().Bool("strict", false, "fail when a project directory is missing or not a directory")
 	configCmd.AddCommand(
 		configInitCmd,
 		configEditCmd,

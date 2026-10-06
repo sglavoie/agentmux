@@ -82,7 +82,18 @@ func TestConfigValidateCommandWarnsAboutUnknownAndDeprecatedKeys(t *testing.T) {
 	}
 }
 
+// setValidateStrict sets --strict on the shared validate command for one
+// test and restores it afterwards.
+func setValidateStrict(t *testing.T) {
+	t.Helper()
+	if err := configValidateCmd.Flags().Set("strict", "true"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = configValidateCmd.Flags().Set("strict", "false") })
+}
+
 func TestConfigValidateCommandListsAllInvalidProjectDirectories(t *testing.T) {
+	setValidateStrict(t)
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)
 
@@ -155,6 +166,7 @@ profile = "work"
 // configured as an absolute path under the home directory, trailing slash
 // and all, is named the way `amx project list` names it.
 func TestConfigValidateCommandShortensProjectDirectories(t *testing.T) {
+	setValidateStrict(t)
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)
 
@@ -183,6 +195,47 @@ profile = "work"
 	}
 	if want := `project "work/absolute": directory "~/gone" does not exist`; !strings.Contains(err.Error(), want) {
 		t.Fatalf("validation error missing %q:\n%s", want, err.Error())
+	}
+}
+
+// TestConfigValidateCommandWarnsAboutProjectDirectoriesByDefault pins that
+// an unusable project directory is a warning, as amx doctor reports it, so a
+// config naming a project checked out only on another machine still
+// validates.
+func TestConfigValidateCommandWarnsAboutProjectDirectoriesByDefault(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	path := filepath.Join(tempHome, "config.toml")
+	body := validConfigBody(tempHome) + `
+[[projects]]
+title = "elsewhere"
+directory = "~/elsewhere"
+profile = "work"
+`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("amx_CONFIG", path)
+
+	oldOut := configValidateCmd.OutOrStdout()
+	t.Cleanup(func() {
+		configValidateCmd.SetOut(oldOut)
+	})
+	var out bytes.Buffer
+	configValidateCmd.SetOut(&out)
+
+	if err := configValidateCmd.RunE(configValidateCmd, nil); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+	for _, want := range []string{
+		`warning: project "work/elsewhere": directory "~/elsewhere" does not exist` + "\n",
+		"config is valid; fix or remove the projects above",
+		"--strict",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("output missing %q:\n%s", want, out.String())
+		}
 	}
 }
 

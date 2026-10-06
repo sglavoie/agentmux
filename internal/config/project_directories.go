@@ -28,8 +28,9 @@ func (i ProjectDirectoryIssue) Format(directory string) string {
 
 // ProjectDirectoryIssues lists, in config order, every project whose
 // directory is missing, uninspectable, or not a directory. `amx config
-// validate` and `amx doctor` both report them, so the two cannot disagree
-// about which projects are broken. Each entry names its project as
+// validate` and `amx doctor` both warn about them (validate refuses on them
+// only under --strict), so the two cannot disagree about which projects are
+// broken. Each entry names its project as
 // profile/title, since a project is identified by both and the same title
 // commonly appears under several profiles.
 func ProjectDirectoryIssues(projects []Session) []ProjectDirectoryIssue {

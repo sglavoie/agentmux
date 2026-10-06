@@ -18,6 +18,6 @@ This is the operator index. Each area below has its own guide.
 | `amx config edit` | open the config in `$EDITOR` |
 | `amx config show` | print the parsed config |
 | `amx config path` | print the config path |
-| `amx config validate` | validate the config and configured project directories; warns about unknown and deprecated keys. `--json` reports the same as data, with a nonzero exit when a project directory is invalid |
+| `amx config validate` | validate the config; warns about unknown and deprecated keys and about project directories that are missing or not directories. `--strict` fails on such a directory instead. `--json` reports the same as data, with a nonzero exit only under `--strict` |
 | `amx config hooks-sync` | sync hooks into all configured profiles |
 | `amx config hooks-status` | show hook sync status per profile |
