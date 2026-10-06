@@ -251,7 +251,8 @@ func writeConfigValidateJSON(cmd *cobra.Command, cfg *config.Config) error {
 
 func validateProjectDirectories(projects []config.Session) error {
 	if problems := config.ProjectDirectoryProblems(projects); len(problems) > 0 {
-		return fmt.Errorf("invalid project directories:\n%s", strings.Join(problems, "\n"))
+		return fmt.Errorf("invalid project directories:\n%s\nfix each directory or remove its [[projects]] entry with `amx config edit`",
+			strings.Join(problems, "\n"))
 	}
 	return nil
 }

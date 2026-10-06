@@ -131,9 +131,9 @@ profile = "work"
 
 	msg := err.Error()
 	wantEntries := []string{
-		`project "missing-first": directory "~/missing-first" does not exist`,
-		`project "file-project": directory "~/not-a-directory" is not a directory`,
-		`project "uninspectable-last": directory "~/not-a-directory/child" cannot be inspected`,
+		`project "work/missing-first": directory "~/missing-first" does not exist`,
+		`project "work/file-project": directory "~/not-a-directory" is not a directory`,
+		`project "work/uninspectable-last": directory "~/not-a-directory/child" cannot be inspected`,
 	}
 	prior := -1
 	for _, want := range wantEntries {

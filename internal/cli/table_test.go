@@ -61,3 +61,20 @@ func TestIsTerminalIsFalseForBuffersAndPipes(t *testing.T) {
 		t.Error("a pipe is not a terminal")
 	}
 }
+
+func TestDisplayPathCleansAndAbbreviatesHome(t *testing.T) {
+	t.Setenv("HOME", "/Users/me")
+	for _, tc := range []struct{ in, want string }{
+		{"", ""},
+		{"/Users/me", "~"},
+		{"/Users/me/", "~"},
+		{"/Users/me/projects/api/", "~/projects/api"},
+		{"/Users/meadow/api", "/Users/meadow/api"},
+		{"~/projects/api", "~/projects/api"},
+		{"/srv/app//x/", "/srv/app/x"},
+	} {
+		if got := DisplayPath(tc.in); got != tc.want {
+			t.Errorf("DisplayPath(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}

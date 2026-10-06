@@ -3,6 +3,7 @@ package cli
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/sglavoie/agentmux/tui/layout"
@@ -65,4 +66,26 @@ func IsTerminal(w io.Writer) bool {
 	}
 	info, err := f.Stat()
 	return err == nil && info.Mode()&os.ModeCharDevice != 0
+}
+
+// DisplayPath is how a human-facing table shows a directory: cleaned, so
+// "dir/" and "dir" read alike, and with the home directory written as "~",
+// which is how the config file usually spells it anyway. JSON output and
+// tab-separated output for pipes keep the path as it was.
+func DisplayPath(path string) string {
+	if path == "" {
+		return ""
+	}
+	cleaned := filepath.Clean(path)
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" || home == string(filepath.Separator) {
+		return cleaned
+	}
+	if cleaned == home {
+		return "~"
+	}
+	if rest, ok := strings.CutPrefix(cleaned, home+string(filepath.Separator)); ok {
+		return "~" + string(filepath.Separator) + rest
+	}
+	return cleaned
 }

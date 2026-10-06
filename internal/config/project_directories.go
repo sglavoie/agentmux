@@ -10,10 +10,17 @@ import (
 // directory is missing, uninspectable, or not a directory. `amx config
 // validate` refuses on any of them and `amx doctor` reports them as one
 // warning, so the two cannot disagree about which projects are broken.
+// Each entry names its project as profile/title, since a project is
+// identified by both and the same title commonly appears under several
+// profiles.
 func ProjectDirectoryProblems(projects []Session) []string {
 	var errs []string
 	for _, project := range projects {
 		configuredPath := project.Directory
+		label := project.Title
+		if profile := project.EffectiveProfile(); profile != "" {
+			label = profile + "/" + project.Title
+		}
 		info, err := os.Stat(ExpandTilde(configuredPath))
 		if err != nil {
 			var reason string
@@ -29,14 +36,14 @@ func ProjectDirectoryProblems(projects []Session) []string {
 			}
 			errs = append(errs, fmt.Sprintf(
 				"project %q: directory %q %s",
-				project.Title, configuredPath, reason,
+				label, configuredPath, reason,
 			))
 			continue
 		}
 		if !info.IsDir() {
 			errs = append(errs, fmt.Sprintf(
 				"project %q: directory %q is not a directory",
-				project.Title, configuredPath,
+				label, configuredPath,
 			))
 		}
 	}

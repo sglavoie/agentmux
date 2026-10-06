@@ -126,7 +126,7 @@ func runProjectList(cmd *cobra.Command, _ []string) error {
 	}
 	rows := make([][]string, 0, len(views))
 	for _, view := range views {
-		rows = append(rows, []string{view.Profile, view.Title, view.Harness, view.Directory, strings.Join(view.Groups, ",")})
+		rows = append(rows, []string{view.Profile, view.Title, view.Harness, cli.DisplayPath(view.Directory), strings.Join(view.Groups, ",")})
 	}
 	return cli.WriteTable(cmd.OutOrStdout(), []string{"PROFILE", "TITLE", "HARNESS", "DIRECTORY", "GROUPS"}, rows)
 }

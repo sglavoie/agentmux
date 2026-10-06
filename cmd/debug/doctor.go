@@ -306,17 +306,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 
 	failures := countFindings(report.Findings, severityFailure)
 	report.Healthy = failures == 0
-	if report.Healthy {
-		verdict := "overall: clean"
-		if warnings := countFindings(report.Findings, severityWarning); warnings == 1 {
-			verdict += " (1 warning)"
-		} else if warnings > 1 {
-			verdict += fmt.Sprintf(" (%d warnings)", warnings)
-		}
-		if _, err := fmt.Fprintln(textOut, verdict); err != nil {
-			return err
-		}
-	} else if _, err := fmt.Fprintln(textOut, "overall: issues detected"); err != nil {
+	if _, err := fmt.Fprintln(textOut, doctorVerdict(report.Findings)); err != nil {
 		return err
 	}
 

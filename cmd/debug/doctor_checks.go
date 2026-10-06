@@ -260,6 +260,24 @@ func writeDoctorFindings(out io.Writer, findings []doctorFinding) error {
 	return nil
 }
 
+// doctorVerdict is the closing line of the text report. Its warning count is
+// the number of warning lines printed above rather than the number of
+// findings, because per-profile hook findings share one line and the total
+// should match what the operator just read.
+func doctorVerdict(findings []doctorFinding) string {
+	if countFindings(findings, severityFailure) > 0 {
+		return "overall: issues detected"
+	}
+	switch warnings := len(doctorFindingLines(findings, severityWarning)); warnings {
+	case 0:
+		return "overall: clean"
+	case 1:
+		return "overall: clean (1 warning)"
+	default:
+		return fmt.Sprintf("overall: clean (%d warnings)", warnings)
+	}
+}
+
 // doctorFindingLines renders one severity's findings as text. Per-profile
 // hook findings that differ only in the profile they name — every profile of
 // one harness behind the same CLI version — share one line listing the

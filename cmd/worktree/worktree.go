@@ -97,7 +97,7 @@ func writeWorktreeTable(out io.Writer, views []actions.WorktreeView) error {
 	}
 	rows := make([][]string, 0, len(views))
 	for _, view := range views {
-		rows = append(rows, []string{view.ID, displayWorktreeProject(view), view.Branch, worktreeState(view), view.Path})
+		rows = append(rows, []string{view.ID, displayWorktreeProject(view), view.Branch, worktreeState(view), cli.DisplayPath(view.Path)})
 	}
 	return cli.WriteTable(out, []string{"ID", "PROJECT", "BRANCH", "STATE", "PATH"}, rows)
 }

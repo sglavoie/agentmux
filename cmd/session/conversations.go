@@ -399,7 +399,11 @@ func resolveConversationOrFail(cmd *cobra.Command, jsonOutput bool, cfg *config.
 		if identity.Harness != "" {
 			selector = identity.Harness + ":" + identity.SessionID
 		}
-		return nil, cli.CommandFailure(cmd, jsonOutput, "not_found", fmt.Errorf("indexed conversation %s was not found", selector))
+		hint := "run `amx session list` to see the indexed conversations"
+		if len(identity.SessionID) < sessionIDPrefixMin {
+			hint = fmt.Sprintf("a session ID prefix needs at least %d characters", sessionIDPrefixMin)
+		}
+		return nil, cli.CommandFailure(cmd, jsonOutput, "not_found", fmt.Errorf("indexed conversation %s was not found; %s", selector, hint))
 	}
 	return meta, nil
 }

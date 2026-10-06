@@ -9,6 +9,26 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 )
 
+func TestDoctorVerdictCountsPrintedWarningLines(t *testing.T) {
+	warn := func(profile string) doctorFinding {
+		return doctorFinding{Severity: severityWarning, Check: "hooks_unverified", Message: "hooks for " + profile + " are unverified: CLI 2 is newer than verified hook contract 1"}
+	}
+	for _, tc := range []struct {
+		name     string
+		findings []doctorFinding
+		want     string
+	}{
+		{"none", nil, "overall: clean"},
+		{"grouped into one line", []doctorFinding{warn("a"), warn("b"), warn("c")}, "overall: clean (1 warning)"},
+		{"grouped plus another", []doctorFinding{warn("a"), warn("b"), {Severity: severityWarning, Check: "native_logging", Message: "off"}}, "overall: clean (2 warnings)"},
+		{"failure wins", []doctorFinding{warn("a"), {Severity: severityFailure, Check: "kitty", Message: "down"}}, "overall: issues detected"},
+	} {
+		if got := doctorVerdict(tc.findings); got != tc.want {
+			t.Errorf("%s: doctorVerdict = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
 func TestDoctorFindingLinesGroupProfilesSharingAHookDetail(t *testing.T) {
 	findings := []doctorFinding{
 		{Severity: severityWarning, Check: "hooks_unverified", Message: "hooks for personal-claude are unverified: CLI 2 is newer than verified hook contract 1"},

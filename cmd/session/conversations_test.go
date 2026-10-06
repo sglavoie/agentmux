@@ -422,6 +422,15 @@ func TestSessionIDPrefixResolvesLikeAShortGitHash(t *testing.T) {
 	if len(actionErr.MissingParameters) != 1 || actionErr.MissingParameters[0].Name != "session-id" {
 		t.Fatalf("missing parameters = %+v, want a longer session-id", actionErr.MissingParameters)
 	}
+
+	// A miss says what to do next: a too-short prefix is named as such, and
+	// anything else points at the list.
+	for id, hint := range map[string]string{"7f6": "at least 4 characters", "ffffffff": "amx session list"} {
+		_, err := resolveConversationOrFail(sessionContinueCmd, false, cfg, readers, conversation.Identity{SessionID: id})
+		if err == nil || !strings.Contains(err.Error(), hint) {
+			t.Fatalf("miss for %q = %v, want hint %q", id, err, hint)
+		}
+	}
 }
 
 func TestSessionListSelectorsNarrowTheList(t *testing.T) {
