@@ -26,21 +26,31 @@ const (
 // from the TUI) and is preserved across rescans so old sessions do not
 // resurrect when the underlying file is still present.
 type SessionMeta struct {
-	ID           string       `json:"id"`
-	Harness      string       `json:"harness"`
-	Profile      string       `json:"profile"`
-	Profiles     []string     `json:"profiles,omitempty"`
-	Project      string       `json:"project"`
-	Projects     []string     `json:"projects,omitempty"`
-	CWD          string       `json:"cwd"`
-	StartedAt    time.Time    `json:"started_at"`
-	LastAt       time.Time    `json:"last_at"`
-	Path         string       `json:"path"`
-	FileSize     int64        `json:"file_size"`
-	FileModTime  time.Time    `json:"file_mod_time"`
-	MessageCount int          `json:"message_count"`
-	Snippet      string       `json:"snippet"`
+	ID           string    `json:"id"`
+	Harness      string    `json:"harness"`
+	Profile      string    `json:"profile"`
+	Profiles     []string  `json:"profiles,omitempty"`
+	Project      string    `json:"project"`
+	Projects     []string  `json:"projects,omitempty"`
+	CWD          string    `json:"cwd"`
+	StartedAt    time.Time `json:"started_at"`
+	LastAt       time.Time `json:"last_at"`
+	Path         string    `json:"path"`
+	FileSize     int64     `json:"file_size"`
+	FileModTime  time.Time `json:"file_mod_time"`
+	MessageCount int       `json:"message_count"`
+	Snippet      string    `json:"snippet"`
+	// Title is the name the harness itself gave the conversation: the one
+	// an operator set with /rename, else the one Claude Code generated, or
+	// Codex's thread name. Empty when the harness named it nothing. Unlike
+	// Snippet it can change while the transcript does not, so Codex titles
+	// are reapplied on every discovery rather than trusted from the cache.
+	Title        string       `json:"title,omitempty"`
 	SessionClass SessionClass `json:"session_class,omitempty"`
+	// ReaderVersion is the metadata rules the entry was parsed under. A
+	// cached entry from older rules is reparsed once instead of trusted, so
+	// a new rule reaches unchanged transcripts without a full rebuild.
+	ReaderVersion int `json:"reader_version,omitempty"`
 	// Empty marks a transcript that holds no conversation yet: only bare
 	// slash commands such as /clear and their local output, with no prompt
 	// and no agent reply. List leaves it out the way it leaves out hidden
@@ -55,6 +65,15 @@ type SessionMeta struct {
 	// ReadMessages scan in that case.
 	SearchText      string `json:"search_text,omitempty"`
 	HiddenFromIndex bool   `json:"hidden_from_index,omitempty"`
+}
+
+// Summary is what a list row says a session is about: the harness's title
+// when it gave one, else the opening prompt.
+func (m SessionMeta) Summary() string {
+	if m.Title != "" {
+		return m.Title
+	}
+	return m.Snippet
 }
 
 // DisplayProfile returns the stable profile label to show for a session.

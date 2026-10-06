@@ -140,7 +140,43 @@ func (r CodexReader) Discover(homeDir string, opts DiscoverOptions) ([]SessionMe
 	if err != nil {
 		return nil, err
 	}
+	applyCodexThreadNames(homeDir, out)
 	return out, nil
+}
+
+// codexSessionIndex is the file Codex records thread names in, one
+// {"id","thread_name","updated_at"} line per rename, beside sessions/.
+const codexSessionIndex = "session_index.jsonl"
+
+// applyCodexThreadNames sets each session's Title from Codex's session index.
+// A rename touches only the index, never the rollout, so the title is read on
+// every discovery rather than cached with the parsed transcript. The latest
+// line for an ID is its current name. A missing or unreadable index leaves
+// every title empty: titles decorate a list and are never worth an error.
+func applyCodexThreadNames(homeDir string, metas []SessionMeta) {
+	f, err := os.Open(filepath.Join(homeDir, codexSessionIndex))
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			slog.Debug("transcript.codex: session index unreadable", "home", homeDir, "err", err)
+		}
+		return
+	}
+	defer func() { _ = f.Close() }()
+	names := map[string]string{}
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		var entry struct {
+			ID         string `json:"id"`
+			ThreadName string `json:"thread_name"`
+		}
+		if json.Unmarshal(scanner.Bytes(), &entry) != nil || entry.ID == "" {
+			continue
+		}
+		names[entry.ID] = strings.TrimSpace(entry.ThreadName)
+	}
+	for i := range metas {
+		metas[i].Title = truncateSnippet(names[metas[i].ID])
+	}
 }
 
 // ReadMessages decodes a single transcript into role-tagged Message entries

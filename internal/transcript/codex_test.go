@@ -337,3 +337,65 @@ func TestCodexIDFromFilename(t *testing.T) {
 		}
 	}
 }
+
+// copyCodexFixture copies the Codex fixture home into a temp directory so a
+// test can add a session index beside it.
+func copyCodexFixture(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	err := filepath.WalkDir(codexFixtureRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel, _ := filepath.Rel(codexFixtureRoot, path)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(target, data, 0o644)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+func TestCodexDiscover_TitleComesFromTheLatestThreadName(t *testing.T) {
+	root := copyCodexFixture(t)
+	const id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	index := `{"id":"` + id + `","thread_name":"Magic links","updated_at":"2026-05-24T13:00:00Z"}
+not json
+{"id":"other","thread_name":"Unrelated","updated_at":"2026-05-24T13:00:01Z"}
+{"id":"` + id + `","thread_name":"Magic link auth","updated_at":"2026-05-24T13:00:02Z"}
+`
+	if err := os.WriteFile(filepath.Join(root, codexSessionIndex), []byte(index), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	metas, err := NewCodexReader().Discover(root, DiscoverOptions{})
+	if err != nil || len(metas) != 1 {
+		t.Fatalf("Discover = %d sessions, %v; want 1", len(metas), err)
+	}
+	if metas[0].Title != "Magic link auth" || metas[0].Snippet != "Refactor the auth flow to support magic links." {
+		t.Fatalf("Title, Snippet = %q, %q; want the latest thread name beside the opening prompt", metas[0].Title, metas[0].Snippet)
+	}
+
+	// A rename touches only the index, so a cached entry still takes the
+	// current name rather than the one it was cached with.
+	cached := metas[0]
+	cached.Title = "Magic links"
+	metas, err = NewCodexReader().Discover(root, DiscoverOptions{Cached: func(string, int64, time.Time) (SessionMeta, bool) { return cached, true }})
+	if err != nil || len(metas) != 1 || metas[0].Title != "Magic link auth" {
+		t.Fatalf("cached Discover = %+v, %v; want the current thread name", metas, err)
+	}
+}
+
+func TestCodexDiscover_NoSessionIndexLeavesTitlesEmpty(t *testing.T) {
+	metas, err := NewCodexReader().Discover(codexFixtureRoot, DiscoverOptions{})
+	if err != nil || len(metas) != 1 || metas[0].Title != "" {
+		t.Fatalf("Discover = %+v, %v; want one untitled session", metas, err)
+	}
+}

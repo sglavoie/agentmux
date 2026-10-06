@@ -58,7 +58,7 @@ func formatRow(res transcript.Result, acctColor map[string]string, maxWidth int,
 
 	preview := res.Preview
 	if preview == "" {
-		preview = res.Meta.Snippet
+		preview = res.Meta.Summary()
 	}
 
 	body := "  " + when

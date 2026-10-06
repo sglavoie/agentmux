@@ -26,6 +26,7 @@ func TestSessionShowPrintsOneConversationBySelector(t *testing.T) {
 	meta := base
 	meta.ID = "7f67dc81-aaaa"
 	meta.Snippet = "fix the\nparser"
+	meta.Title = "Parser fix"
 	meta.MessageCount = 4
 	meta.StartedAt, meta.LastAt = now.Add(-3*time.Hour), now.Add(-2*time.Hour)
 	writeSessionCommandIndex(t, indexPath, meta)
@@ -55,6 +56,7 @@ func TestSessionShowPrintsOneConversationBySelector(t *testing.T) {
 		"(2h ago)\n",
 		"messages:   4\n",
 		"transcript: " + meta.Path + "\n",
+		"title:      Parser fix\n",
 		"summary:    fix the parser\n",
 		"continue:   amx session continue codex:7f67dc81-aaaa\n",
 	} {

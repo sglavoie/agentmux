@@ -152,7 +152,8 @@ func addSessionSelectionFlags(cmd *cobra.Command) {
 
 // writeSessionTable is the session list for a person: a header, aligned
 // columns, how long ago each conversation was last active, and each session
-// ID cut to the prefix a continuity command still resolves. The summary takes
+// ID cut to the prefix a continuity command still resolves. The summary is the
+// harness's title for the conversation, else its opening prompt, and takes
 // whatever the terminal, width cells wide, leaves it.
 func writeSessionTable(out io.Writer, views []sessionView, ids sessionIDAbbreviations, now time.Time, width int) error {
 	if len(views) == 0 {
@@ -166,7 +167,10 @@ func writeSessionTable(out io.Writer, views []sessionView, ids sessionIDAbbrevia
 		if project == "" {
 			project = "-"
 		}
-		summary := oneLine(item.Snippet)
+		summary := oneLine(item.Title)
+		if summary == "" {
+			summary = oneLine(item.Snippet)
+		}
 		if summary == "" {
 			summary = "-"
 		}
@@ -681,12 +685,13 @@ type sessionView struct {
 	FileModTime  time.Time `json:"file_mod_time"`
 	MessageCount int       `json:"message_count"`
 	Snippet      string    `json:"snippet"`
+	Title        string    `json:"title,omitempty"`
 }
 
 func sessionViews(items []transcript.SessionMeta) []sessionView {
 	out := make([]sessionView, 0, len(items))
 	for _, item := range items {
-		out = append(out, sessionView{ID: item.ID, Harness: item.Harness, Profile: item.DisplayProfile(), Profiles: append([]string{}, item.ProfileNames()...), Project: item.Project, Projects: append([]string{}, item.ProjectNames()...), CWD: item.CWD, StartedAt: item.StartedAt, LastAt: item.LastAt, Path: item.Path, FileSize: item.FileSize, FileModTime: item.FileModTime, MessageCount: item.MessageCount, Snippet: item.Snippet})
+		out = append(out, sessionView{ID: item.ID, Harness: item.Harness, Profile: item.DisplayProfile(), Profiles: append([]string{}, item.ProfileNames()...), Project: item.Project, Projects: append([]string{}, item.ProjectNames()...), CWD: item.CWD, StartedAt: item.StartedAt, LastAt: item.LastAt, Path: item.Path, FileSize: item.FileSize, FileModTime: item.FileModTime, MessageCount: item.MessageCount, Snippet: item.Snippet, Title: item.Title})
 	}
 	return out
 }

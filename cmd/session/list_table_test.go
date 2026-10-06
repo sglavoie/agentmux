@@ -125,3 +125,21 @@ func TestSessionIDAbbreviationsStayResolvable(t *testing.T) {
 		t.Errorf("nil abbreviations of = %q, want the whole ID", got)
 	}
 }
+
+// The harness's title names a conversation better than its opening prompt,
+// which several sessions often share; the prompt stands in when there is none.
+func TestSessionTableSummaryPrefersTheTitle(t *testing.T) {
+	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	views := []sessionView{
+		{Harness: "claude", Profile: "p", Project: "x", LastAt: now, ID: "b03c41a5", Snippet: "Look at the project", Title: "Parser cleanup"},
+		{Harness: "claude", Profile: "p", Project: "x", LastAt: now, ID: "c14d52b6", Snippet: "Look at the project"},
+	}
+	var out bytes.Buffer
+	if err := writeSessionTable(&out, views, nil, now, 0); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
+	if !strings.HasSuffix(lines[1], "b03c41a5  Parser cleanup") || !strings.HasSuffix(lines[2], "c14d52b6  Look at the project") {
+		t.Fatalf("table = %q, want the title, else the opening prompt", out.String())
+	}
+}

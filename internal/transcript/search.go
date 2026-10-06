@@ -120,7 +120,7 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 
 	if terms.Empty() {
 		for _, m := range metas {
-			results = append(results, Result{Meta: m, Preview: m.Snippet})
+			results = append(results, Result{Meta: m, Preview: m.Summary()})
 		}
 		sortResults(results)
 		return results, nil

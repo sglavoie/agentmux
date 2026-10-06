@@ -16,7 +16,7 @@ The same workflows are scriptable. Machine-readable commands use one
 `error` envelope and ambiguous selectors return candidates instead of guessing.
 
 ```bash
-amx session list              # a table with relative ages, short session IDs any command accepts, and opening prompts in a terminal; tab-separated RFC 3339 rows with full IDs ending in the opening prompt when piped
+amx session list              # a table with relative ages, short session IDs any command accepts, and each conversation's title (its opening prompt when the harness named it nothing) in a terminal; tab-separated RFC 3339 rows with full IDs ending in the opening prompt when piped
 amx session list --json
 amx session list --since 7d   # only sessions active in the last week (or 12h, 90m, …)
 amx session list --here -n 5  # the five latest sessions started in this directory or below it

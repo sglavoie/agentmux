@@ -266,15 +266,16 @@ func TestRefresh_FastPathSkipsUnchangedFiles(t *testing.T) {
 			}
 			parsedPaths = append(parsedPaths, transcriptPath)
 			return []SessionMeta{{
-				ID:           "sess-1",
-				Harness:      harness.Claude,
-				CWD:          "/tmp/foo",
-				Path:         transcriptPath,
-				FileSize:     stat.Size(),
-				FileModTime:  stat.ModTime(),
-				MessageCount: 4,
-				Snippet:      "original",
-				SearchText:   "original",
+				ID:            "sess-1",
+				Harness:       harness.Claude,
+				CWD:           "/tmp/foo",
+				Path:          transcriptPath,
+				FileSize:      stat.Size(),
+				FileModTime:   stat.ModTime(),
+				MessageCount:  4,
+				Snippet:       "original",
+				SearchText:    "original",
+				ReaderVersion: claudeReaderVersion,
 			}}, nil
 		},
 	}
@@ -500,6 +501,7 @@ func TestRefresh_ReparsesClaudeSnippetHoldingCommandMarkup(t *testing.T) {
 					ID: id, Harness: harness.Claude, CWD: "/tmp/foo", Path: path,
 					FileSize: info.Size(), FileModTime: info.ModTime(),
 					MessageCount: 2, Snippet: snippet, SearchText: "real question",
+					ReaderVersion: claudeReaderVersion,
 				}
 			}
 			return []SessionMeta{
@@ -571,8 +573,8 @@ func TestRefresh_LeavesOutEmptyClaudeSessionsUntilTheirFirstPrompt(t *testing.T)
 	if got := idx.List(ListFilter{IncludeHidden: true}); len(got) != 1 {
 		t.Fatalf("List(IncludeHidden) = %d entries, want the empty session surfaced", len(got))
 	}
-	if !claudeSnippetPredatesCommandRule(SessionMeta{Harness: harness.Claude, Snippet: "/clear"}) ||
-		claudeSnippetPredatesCommandRule(SessionMeta{Harness: harness.Claude, Snippet: "/clear", Empty: true}) {
+	if !claudeCachePredatesRules(SessionMeta{Harness: harness.Claude, Snippet: "/clear", ReaderVersion: claudeReaderVersion}) ||
+		claudeCachePredatesRules(SessionMeta{Harness: harness.Claude, Snippet: "/clear", Empty: true, ReaderVersion: claudeReaderVersion}) {
 		t.Fatal("only an unmarked bare-command entry may be reparsed, so a marked one is read from the cache")
 	}
 

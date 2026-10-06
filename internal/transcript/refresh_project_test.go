@@ -170,6 +170,7 @@ func TestRefresh_CachedEntryWithoutCWDKeepsProjectMetadata(t *testing.T) {
 		ID: "sess-no-cwd", Harness: harness.Claude, Profile: "work",
 		Project: "Legacy", Projects: []string{"Legacy", "Legacy Alias"},
 		Path: transcriptPath, FileSize: info.Size(), FileModTime: info.ModTime(),
+		ReaderVersion: claudeReaderVersion,
 	}))
 	fr := &fakeReader{
 		harness: harness.Claude,

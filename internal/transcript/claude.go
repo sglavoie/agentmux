@@ -47,6 +47,8 @@ type claudeRecord struct {
 	PromptSource string          `json:"promptSource"`
 	Message      *claudeMessage  `json:"message"`
 	Summary      string          `json:"summary"`
+	AITitle      string          `json:"aiTitle"`
+	CustomTitle  string          `json:"customTitle"`
 	Content      json.RawMessage `json:"content"`
 }
 
@@ -198,6 +200,7 @@ func (r ClaudeReader) parseFile(path string, info os.FileInfo, encodedDir string
 	}
 	var searchBuf strings.Builder
 	var commandSnippet, replySnippet string
+	var aiTitle, customTitle string
 	classEvidence := sessionClassEvidence{}
 
 	for scanner.Scan() {
@@ -206,6 +209,14 @@ func (r ClaudeReader) parseFile(path string, info os.FileInfo, encodedDir string
 			continue
 		}
 		observeClaudeRecord(&classEvidence, rec)
+		// Claude Code rewrites its title records as a session goes on, so
+		// the latest of each is the current one.
+		switch {
+		case rec.Type == "custom-title" && strings.TrimSpace(rec.CustomTitle) != "":
+			customTitle = rec.CustomTitle
+		case rec.Type == "ai-title" && strings.TrimSpace(rec.AITitle) != "":
+			aiTitle = rec.AITitle
+		}
 		if meta.CWD == "" && rec.CWD != "" {
 			meta.CWD = rec.CWD
 		}
@@ -253,8 +264,14 @@ func (r ClaudeReader) parseFile(path string, info os.FileInfo, encodedDir string
 		meta.Snippet = truncateSnippet(commandSnippet)
 		meta.Empty = true
 	}
+	// A name the operator chose outranks the one Claude Code generated.
+	meta.Title = truncateSnippet(customTitle)
+	if meta.Title == "" {
+		meta.Title = truncateSnippet(aiTitle)
+	}
 	meta.SearchText = searchBuf.String()
 	meta.SessionClass = classEvidence.class()
+	meta.ReaderVersion = claudeReaderVersion
 
 	// Last-resort CWD: decode the project dir name. Claude encodes the
 	// absolute path by replacing path separators with '-', which is lossy
@@ -297,14 +314,21 @@ func claudeSlashCommand(text string) (command string, withArgs, ok bool) {
 	return name, false, true
 }
 
-// claudeSnippetPredatesCommandRule reports a cached Claude entry the reader
-// would no longer produce: a snippet that is raw slash-command markup, or a
-// bare-command snippet without the Empty mark the reader now gives every such
-// entry. Refresh reparses it once instead of trusting the cache, so the rules
+// claudeReaderVersion is the version of the Claude metadata rules parseFile
+// applies. Version 1 added Title.
+const claudeReaderVersion = 1
+
+// claudeCachePredatesRules reports a cached Claude entry the reader
+// would no longer produce: one parsed under an older claudeReaderVersion, a
+// snippet that is raw slash-command markup, or a bare-command snippet without
+// the Empty mark the reader now gives every such entry. Refresh reparses it once instead of trusting the cache, so the rules
 // reach unchanged transcripts without a full rebuild.
-func claudeSnippetPredatesCommandRule(meta SessionMeta) bool {
+func claudeCachePredatesRules(meta SessionMeta) bool {
 	if meta.Harness != harness.Claude {
 		return false
+	}
+	if meta.ReaderVersion < claudeReaderVersion {
+		return true
 	}
 	if strings.HasPrefix(meta.Snippet, "<command-") || strings.HasPrefix(meta.Snippet, "<local-command-") {
 		return true

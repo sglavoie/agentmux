@@ -73,6 +73,7 @@ func writeSessionShow(out io.Writer, view sessionView, now time.Time) error {
 		{"active", when(view.LastAt)},
 		{"messages", strconv.Itoa(view.MessageCount)},
 		{"transcript", dash(view.Path)},
+		{"title", dash(oneLine(view.Title))},
 		{"summary", dash(oneLine(view.Snippet))},
 		{"continue", "amx session continue " + view.Harness + ":" + view.ID},
 	}

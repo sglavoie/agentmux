@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/harness"
 )
 
 const claudeFixtureRoot = "testdata/claude"
@@ -392,5 +394,59 @@ func TestClaudeReader_SnippetSkipsSlashCommandMarkup(t *testing.T) {
 				t.Fatalf("bare-command snippet %q disagrees with Empty = %v", metas[0].Snippet, metas[0].Empty)
 			}
 		})
+	}
+}
+
+func TestClaudeReader_TitlePrefersTheOperatorsLatestName(t *testing.T) {
+	const prompt = `{"type":"user","message":{"role":"user","content":"Tighten the parser"},"timestamp":"2026-05-24T17:37:46.000Z","cwd":"/tmp/p"}`
+	const aiFirst = `{"type":"ai-title","aiTitle":"Parser work","sessionId":"s"}`
+	const aiLater = `{"type":"ai-title","aiTitle":"Parser tightening","sessionId":"s"}`
+	const custom = `{"type":"custom-title","customTitle":"My parser","sessionId":"s"}`
+	const blank = `{"type":"custom-title","customTitle":"  ","sessionId":"s"}`
+
+	cases := []struct {
+		name  string
+		lines []string
+		want  string
+	}{
+		{"no title", []string{prompt}, ""},
+		{"latest generated title", []string{aiFirst, prompt, aiLater}, "Parser tightening"},
+		{"operator name outranks generated", []string{custom, prompt, aiLater}, "My parser"},
+		{"blank name is no name", []string{aiFirst, blank, prompt}, "Parser work"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeTranscript(t, filepath.Join(root, "projects", "-tmp-p", "s.jsonl"), strings.Join(tc.lines, "\n")+"\n")
+			metas, err := NewClaudeReader().Discover(root, DiscoverOptions{})
+			if err != nil || len(metas) != 1 {
+				t.Fatalf("Discover = %d sessions, %v; want 1", len(metas), err)
+			}
+			m := metas[0]
+			if m.Title != tc.want || m.Snippet != "Tighten the parser" || m.ReaderVersion != claudeReaderVersion {
+				t.Fatalf("Title, Snippet, ReaderVersion = %q, %q, %d; want %q, the prompt, %d", m.Title, m.Snippet, m.ReaderVersion, tc.want, claudeReaderVersion)
+			}
+		})
+	}
+}
+
+func TestClaudeCacheFromBeforeTitlesIsReparsed(t *testing.T) {
+	if !claudeCachePredatesRules(SessionMeta{Harness: harness.Claude, Snippet: "Tighten the parser"}) {
+		t.Fatal("a Claude entry with no ReaderVersion predates titles and must be reparsed once")
+	}
+	if claudeCachePredatesRules(SessionMeta{Harness: harness.Claude, Snippet: "Tighten the parser", ReaderVersion: claudeReaderVersion}) {
+		t.Fatal("a current Claude entry must be read from the cache")
+	}
+	if claudeCachePredatesRules(SessionMeta{Harness: harness.Codex, Snippet: "Tighten the parser"}) {
+		t.Fatal("the Claude reader version must not reparse other harnesses")
+	}
+}
+
+func TestSessionMetaSummaryPrefersTitle(t *testing.T) {
+	if got := (SessionMeta{Snippet: "prompt", Title: "title"}).Summary(); got != "title" {
+		t.Fatalf("Summary = %q, want the title", got)
+	}
+	if got := (SessionMeta{Snippet: "prompt"}).Summary(); got != "prompt" {
+		t.Fatalf("Summary = %q, want the opening prompt with no title", got)
 	}
 }
