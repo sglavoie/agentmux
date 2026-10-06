@@ -55,7 +55,9 @@ func TestTranscriptsStatusCommandPrintsStoreStatus(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "transcripts.json")
 	resetTranscriptsCommandTestState(t, path)
 	key := transcript.IndexKey(harness.Claude, "s1")
-	body := `{"entries":{"` + key + `":{"id":"s1","harness":"claude","profile":"work","profiles":["work","personal"],"message_count":1}}}`
+	emptyKey := transcript.IndexKey(harness.Claude, "s2")
+	body := `{"entries":{"` + key + `":{"id":"s1","harness":"claude","profile":"work","profiles":["work","personal"],"message_count":1},` +
+		`"` + emptyKey + `":{"id":"s2","harness":"claude","profile":"work","message_count":0,"snippet":"/clear","empty":true}}}`
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
@@ -71,9 +73,10 @@ func TestTranscriptsStatusCommandPrintsStoreStatus(t *testing.T) {
 	got := out.String()
 	for _, want := range []string{
 		"metadata_path: " + path,
-		"visible_entries: 1",
+		"visible_entries: 2",
 		"hidden_entries: 0",
-		"visible_profile_memberships: 2",
+		"empty_entries: 1",
+		"visible_profile_memberships: 3",
 		"shared_profile_entries: 1",
 		"missing_sidecars: 1",
 		"orphan_sidecars: 1",

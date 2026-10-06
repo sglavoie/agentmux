@@ -41,6 +41,12 @@ type SessionMeta struct {
 	MessageCount int          `json:"message_count"`
 	Snippet      string       `json:"snippet"`
 	SessionClass SessionClass `json:"session_class,omitempty"`
+	// Empty marks a transcript that holds no conversation yet: only bare
+	// slash commands such as /clear and their local output, with no prompt
+	// and no agent reply. List leaves it out the way it leaves out hidden
+	// entries, but unlike HiddenFromIndex it is re-derived on every parse, so
+	// the session reappears as soon as its first prompt is written.
+	Empty bool `json:"empty,omitempty"`
 	// SearchText is the lowercased concatenation of every message body
 	// in the transcript, joined by '\n', persisted so substring search
 	// can run entirely against the in-memory index without reopening

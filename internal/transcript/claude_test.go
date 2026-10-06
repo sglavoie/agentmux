@@ -359,15 +359,18 @@ func TestClaudeReader_SnippetSkipsSlashCommandMarkup(t *testing.T) {
 	const prompt = `{"type":"user","message":{"role":"user","content":"Tighten the parser"},"timestamp":"2026-05-24T17:37:46.000Z","cwd":"/tmp/p"}`
 	const skill = `{"type":"user","message":{"role":"user","content":"<command-name>/plan-iterate</command-name>\n<command-args>plans/a.md</command-args>"},"timestamp":"2026-05-24T17:37:44.000Z","cwd":"/tmp/p"}`
 	const skillBody = `{"type":"user","message":{"role":"user","content":"Base directory for this skill: /x"},"timestamp":"2026-05-24T17:37:45.000Z","cwd":"/tmp/p"}`
+	const reply = `{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Compacted the conversation"}]},"timestamp":"2026-05-24T17:37:46.000Z","cwd":"/tmp/p"}`
 
 	cases := []struct {
-		name  string
-		lines []string
-		want  string
+		name      string
+		lines     []string
+		want      string
+		wantEmpty bool
 	}{
-		{"bare command then prompt", []string{clear, stdout, prompt}, "Tighten the parser"},
-		{"command with args wins", []string{skill, skillBody}, "/plan-iterate plans/a.md"},
-		{"only a bare command", []string{clear, stdout}, "/clear"},
+		{"bare command then prompt", []string{clear, stdout, prompt}, "Tighten the parser", false},
+		{"command with args wins", []string{skill, skillBody}, "/plan-iterate plans/a.md", false},
+		{"only a bare command", []string{clear, stdout}, "/clear", true},
+		{"bare command then a reply", []string{clear, reply}, "Compacted the conversation", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -380,8 +383,13 @@ func TestClaudeReader_SnippetSkipsSlashCommandMarkup(t *testing.T) {
 			if len(metas) != 1 {
 				t.Fatalf("got %d sessions, want 1", len(metas))
 			}
-			if metas[0].Snippet != tc.want {
-				t.Fatalf("Snippet = %q, want %q", metas[0].Snippet, tc.want)
+			if metas[0].Snippet != tc.want || metas[0].Empty != tc.wantEmpty {
+				t.Fatalf("Snippet, Empty = %q, %v; want %q, %v", metas[0].Snippet, metas[0].Empty, tc.want, tc.wantEmpty)
+			}
+			// A bare-command snippet is the mark of an empty session alone,
+			// which is what Refresh relies on to find entries from before Empty.
+			if claudeBareCommandSnippet(metas[0].Snippet) != metas[0].Empty {
+				t.Fatalf("bare-command snippet %q disagrees with Empty = %v", metas[0].Snippet, metas[0].Empty)
 			}
 		})
 	}

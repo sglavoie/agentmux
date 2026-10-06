@@ -526,3 +526,62 @@ func TestRefresh_ReparsesClaudeSnippetHoldingCommandMarkup(t *testing.T) {
 		t.Errorf("kept Snippet = %q, want cached %q", got.Snippet, "cached snippet")
 	}
 }
+
+// A session that holds nothing but /clear is left out of every list until a
+// prompt is written to it. A cache from before Empty existed is reparsed once
+// to learn it, an entry already marked is served from the cache, and the
+// session comes back on the refresh after its file grows.
+func TestRefresh_LeavesOutEmptyClaudeSessionsUntilTheirFirstPrompt(t *testing.T) {
+	tmp := t.TempDir()
+	home := filepath.Join(tmp, "home")
+	clear := `{"type":"user","message":{"role":"user","content":"<command-name>/clear</command-name>"},"timestamp":"2026-05-01T12:00:00.000Z","cwd":"/tmp/foo"}` + "\n"
+	path := filepath.Join(home, "projects", "-tmp-foo", "fresh.jsonl")
+	info := writeTranscript(t, path, clear)
+
+	cfg := &config.Config{Profiles: []config.Account{{Name: "work", Harness: harness.Claude, HomeDir: home}}}
+	legacy := &fakeReader{
+		harness: harness.Claude,
+		discover: func(string, DiscoverOptions) ([]SessionMeta, error) {
+			return []SessionMeta{{
+				ID: "fresh", Harness: harness.Claude, CWD: "/tmp/foo", Path: path,
+				FileSize: info.Size(), FileModTime: info.ModTime(),
+				MessageCount: 1, Snippet: "/clear", SearchText: "/clear",
+			}}, nil
+		},
+	}
+	idx := newTestIndex(t)
+	if err := idx.Refresh(cfg, map[string]Reader{harness.Claude: legacy}); err != nil {
+		t.Fatalf("seed Refresh: %v", err)
+	}
+	if got := idx.List(ListFilter{}); len(got) != 1 {
+		t.Fatalf("legacy entry listed %d times, want once before it is reparsed", len(got))
+	}
+
+	reader := NewClaudeReader()
+	if err := idx.Refresh(cfg, map[string]Reader{harness.Claude: reader}); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	key := IndexKey(harness.Claude, "fresh")
+	if got, _ := idx.Get(key); !got.Empty {
+		t.Fatalf("entry = %+v, want the legacy cache reparsed and marked Empty", got)
+	}
+	if got := idx.List(ListFilter{}); len(got) != 0 {
+		t.Fatalf("List = %+v, want the empty session left out", got)
+	}
+	if got := idx.List(ListFilter{IncludeHidden: true}); len(got) != 1 {
+		t.Fatalf("List(IncludeHidden) = %d entries, want the empty session surfaced", len(got))
+	}
+	if !claudeSnippetPredatesCommandRule(SessionMeta{Harness: harness.Claude, Snippet: "/clear"}) ||
+		claudeSnippetPredatesCommandRule(SessionMeta{Harness: harness.Claude, Snippet: "/clear", Empty: true}) {
+		t.Fatal("only an unmarked bare-command entry may be reparsed, so a marked one is read from the cache")
+	}
+
+	writeTranscript(t, path, clear+`{"type":"user","message":{"role":"user","content":"Real question"},"timestamp":"2026-05-01T12:01:00.000Z","cwd":"/tmp/foo"}`+"\n")
+	if err := idx.Refresh(cfg, map[string]Reader{harness.Claude: reader}); err != nil {
+		t.Fatalf("Refresh after prompt: %v", err)
+	}
+	got := idx.List(ListFilter{})
+	if len(got) != 1 || got[0].Snippet != "Real question" || got[0].Empty {
+		t.Fatalf("List = %+v, want the session back with its prompt", got)
+	}
+}

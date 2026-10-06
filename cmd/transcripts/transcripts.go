@@ -101,6 +101,7 @@ var transcriptsRebuildCmd = &cobra.Command{
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "metadata_path: %s\n", result.Status.MetadataPath)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "visible_entries: %d\n", result.Status.VisibleEntries)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "hidden_entries: %d\n", result.Status.HiddenEntries)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "empty_entries: %d\n", result.Status.EmptyEntries)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "visible_profile_memberships: %d\n", result.Status.VisibleProfileMemberships)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "hidden_profile_memberships: %d\n", result.Status.HiddenProfileMemberships)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "shared_profile_entries: %d\n", result.Status.SharedProfileEntries)
@@ -124,6 +125,7 @@ func printTranscriptStatus(cmd *cobra.Command, status transcript.StoreStatus) {
 	_, _ = fmt.Fprintf(out, "orphan_sidecar_size: %d\n", status.OrphanSidecarSize)
 	_, _ = fmt.Fprintf(out, "visible_entries: %d\n", status.VisibleEntries)
 	_, _ = fmt.Fprintf(out, "hidden_entries: %d\n", status.HiddenEntries)
+	_, _ = fmt.Fprintf(out, "empty_entries: %d\n", status.EmptyEntries)
 	_, _ = fmt.Fprintf(out, "visible_profile_memberships: %d\n", status.VisibleProfileMemberships)
 	_, _ = fmt.Fprintf(out, "hidden_profile_memberships: %d\n", status.HiddenProfileMemberships)
 	_, _ = fmt.Fprintf(out, "shared_profile_entries: %d\n", status.SharedProfileEntries)
@@ -144,6 +146,7 @@ type storeStatusData struct {
 	OrphanSidecarSize         int64    `json:"orphan_sidecar_size"`
 	VisibleEntries            int      `json:"visible_entries"`
 	HiddenEntries             int      `json:"hidden_entries"`
+	EmptyEntries              int      `json:"empty_entries"`
 	VisibleProfileMemberships int      `json:"visible_profile_memberships"`
 	HiddenProfileMemberships  int      `json:"hidden_profile_memberships"`
 	SharedProfileEntries      int      `json:"shared_profile_entries"`
@@ -173,6 +176,7 @@ func storeStatusDataFrom(status transcript.StoreStatus) storeStatusData {
 		OrphanSidecarSize:         status.OrphanSidecarSize,
 		VisibleEntries:            status.VisibleEntries,
 		HiddenEntries:             status.HiddenEntries,
+		EmptyEntries:              status.EmptyEntries,
 		VisibleProfileMemberships: status.VisibleProfileMemberships,
 		HiddenProfileMemberships:  status.HiddenProfileMemberships,
 		SharedProfileEntries:      status.SharedProfileEntries,

@@ -197,7 +197,7 @@ func (r ClaudeReader) parseFile(path string, info os.FileInfo, encodedDir string
 		FileModTime: info.ModTime(),
 	}
 	var searchBuf strings.Builder
-	var commandSnippet string
+	var commandSnippet, replySnippet string
 	classEvidence := sessionClassEvidence{}
 
 	for scanner.Scan() {
@@ -234,12 +234,24 @@ func (r ClaudeReader) parseFile(path string, info os.FileInfo, encodedDir string
 						commandSnippet = command
 					}
 				}
+				if replySnippet == "" && rec.Type == "assistant" {
+					replySnippet = truncateSnippet(text)
+				}
 				appendSearchText(&searchBuf, text)
 			}
 		}
 	}
-	if meta.Snippet == "" {
+	// With no prompt to summarize a session by, the agent's first reply says
+	// what it was about. Only when there is none either is the session
+	// empty, and a bare command is the summary of an empty session alone,
+	// which is what lets Refresh recognize a cache entry from before Empty.
+	switch {
+	case meta.Snippet != "":
+	case replySnippet != "":
+		meta.Snippet = replySnippet
+	case commandSnippet != "":
 		meta.Snippet = truncateSnippet(commandSnippet)
+		meta.Empty = true
 	}
 	meta.SearchText = searchBuf.String()
 	meta.SessionClass = classEvidence.class()
@@ -285,15 +297,26 @@ func claudeSlashCommand(text string) (command string, withArgs, ok bool) {
 	return name, false, true
 }
 
-// claudeSnippetPredatesCommandRule reports a cached Claude entry whose
-// snippet is raw slash-command markup, which the reader no longer produces.
-// Refresh reparses such an entry once instead of trusting the cache, so the
-// fix reaches unchanged transcripts without a full rebuild.
+// claudeSnippetPredatesCommandRule reports a cached Claude entry the reader
+// would no longer produce: a snippet that is raw slash-command markup, or a
+// bare-command snippet without the Empty mark the reader now gives every such
+// entry. Refresh reparses it once instead of trusting the cache, so the rules
+// reach unchanged transcripts without a full rebuild.
 func claudeSnippetPredatesCommandRule(meta SessionMeta) bool {
 	if meta.Harness != harness.Claude {
 		return false
 	}
-	return strings.HasPrefix(meta.Snippet, "<command-") || strings.HasPrefix(meta.Snippet, "<local-command-")
+	if strings.HasPrefix(meta.Snippet, "<command-") || strings.HasPrefix(meta.Snippet, "<local-command-") {
+		return true
+	}
+	return !meta.Empty && claudeBareCommandSnippet(meta.Snippet)
+}
+
+// claudeBareCommandSnippet reports a snippet that is a slash command with no
+// arguments. Claude Code reads a prompt of that shape as a command, so it is
+// never an ordinary prompt.
+func claudeBareCommandSnippet(snippet string) bool {
+	return len(snippet) > 1 && snippet[0] == '/' && !strings.ContainsAny(snippet, " \t\n")
 }
 
 func claudeCommandTag(text, tag string) string {

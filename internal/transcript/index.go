@@ -190,7 +190,8 @@ func (i *Index) SetHidden(key string, hidden bool) error {
 
 // ListFilter narrows the result of List. An empty slice for a field is
 // "no filter on that dimension". IncludeHidden controls whether
-// soft-deleted entries are surfaced (the search view sets this to false; an
+// soft-deleted entries, and Empty ones with no conversation yet, are surfaced
+// (the search view sets this to false; an
 // admin/debug command could set it to true). MainOnly requires an explicit
 // positive main classification, excluding automated, unknown, and legacy rows.
 type ListFilter struct {
@@ -213,7 +214,7 @@ func (i *Index) List(filter ListFilter) []SessionMeta {
 
 	out := make([]SessionMeta, 0, len(i.entries))
 	for _, meta := range i.entries {
-		if meta.HiddenFromIndex && !filter.IncludeHidden {
+		if (meta.HiddenFromIndex || meta.Empty) && !filter.IncludeHidden {
 			continue
 		}
 		if !filter.Since.IsZero() && meta.LastAt.Before(filter.Since) {
