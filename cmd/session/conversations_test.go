@@ -41,6 +41,7 @@ func resetSessionCommandsTestState(t *testing.T) {
 	oldNewKitty := sessionCommandsNewKitty
 	oldDaemon := sessionCommandsDaemon
 	oldLive := sessionCommandsLiveConversations
+	oldCurrentWindow := sessionCommandsCurrentWindow
 	oldNewHandoff := sessionCommandsNewHandoff
 	oldNewWorktree := sessionCommandsNewWorktree
 	oldIsTerminal := sessionListIsTerminal
@@ -58,6 +59,7 @@ func resetSessionCommandsTestState(t *testing.T) {
 		sessionCommandsNewKitty = oldNewKitty
 		sessionCommandsDaemon = oldDaemon
 		sessionCommandsLiveConversations = oldLive
+		sessionCommandsCurrentWindow = oldCurrentWindow
 		sessionCommandsNewHandoff = oldNewHandoff
 		sessionCommandsNewWorktree = oldNewWorktree
 		sessionListIsTerminal = oldIsTerminal
@@ -88,6 +90,7 @@ func resetSessionCommandsTestState(t *testing.T) {
 	// Live tabs come from the operator's daemon and Kitty unless a test says
 	// otherwise; by default neither can be asked.
 	sessionCommandsLiveConversations = func() (map[string]liveConversation, bool) { return nil, false }
+	sessionCommandsCurrentWindow = func() int { return 0 }
 }
 
 func (c *sessionCommandKitty) ListWindows() ([]kitty.OSWindow, error) { return c.windows, nil }

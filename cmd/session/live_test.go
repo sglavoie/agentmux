@@ -65,7 +65,7 @@ func TestSessionTableMarksLiveConversations(t *testing.T) {
 		{Harness: "claude", Profile: "p", Project: "x", LastAt: now, ID: "aaaa1111", Snippet: "open one"},
 		{Harness: "codex", Profile: "p", Project: "x", LastAt: now, ID: "bbbb2222", Snippet: "closed one"},
 	}
-	markLive(views, map[string]liveConversation{"claude:aaaa1111": {WindowID: 1, TabID: 2}})
+	markLive(views, map[string]liveConversation{"claude:aaaa1111": {WindowID: 1, TabID: 2}}, 0)
 
 	var out bytes.Buffer
 	if err := writeSessionTable(&out, views, nil, now, 0, true); err != nil {
@@ -82,5 +82,41 @@ func TestSessionTableMarksLiveConversations(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "LIVE") || strings.Contains(out.String(), "●") {
 		t.Fatalf("table = %q, want no LIVE column when the lookup could not answer", out.String())
+	}
+}
+
+// The conversation open in the window the command runs in reads "here" rather
+// than a dot, in the table and in show, so the operator's own session is not
+// mistaken for a sibling with the same opening prompt. Outside Kitty nothing
+// is marked.
+func TestLiveMarksTheConversationInThisWindow(t *testing.T) {
+	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	live := map[string]liveConversation{
+		"claude:aaaa1111": {WindowID: 7, TabID: 2},
+		"claude:bbbb2222": {WindowID: 9, TabID: 3},
+	}
+	views := []sessionView{
+		{Harness: "claude", Profile: "p", Project: "x", LastAt: now, ID: "aaaa1111", Snippet: "same prompt"},
+		{Harness: "claude", Profile: "p", Project: "x", LastAt: now, ID: "bbbb2222", Snippet: "same prompt"},
+	}
+	markLive(views, live, 7)
+	var out bytes.Buffer
+	if err := writeSessionTable(&out, views, nil, now, 0, true); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
+	if !strings.Contains(lines[1], "here") || !strings.Contains(lines[2], "●") || strings.Contains(lines[2], "here") {
+		t.Fatalf("table = %q, want only window 7's conversation marked here", out.String())
+	}
+	if got, want := liveLine(views[0].Live), "open in this Kitty window (7)"; got != want {
+		t.Fatalf("liveLine = %q; want %q", got, want)
+	}
+	if got := liveLine(views[1].Live); !strings.Contains(got, "window 9 (continue focuses it)") {
+		t.Fatalf("liveLine for another window = %q", got)
+	}
+
+	markLive(views, live, 0)
+	if views[0].Live.Here || views[1].Live.Here {
+		t.Fatal("outside Kitty, no conversation may be marked here")
 	}
 }

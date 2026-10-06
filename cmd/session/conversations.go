@@ -72,12 +72,12 @@ var sessionListCmd = &cobra.Command{
 		liveKnown := false
 		if selection.live != nil {
 			// --live already asked, and was refused had nobody answered.
-			markLive(views, selection.live)
+			markLive(views, selection.live, sessionCommandsCurrentWindow())
 			liveKnown = true
 		} else if jsonOutput || terminal {
 			var live map[string]liveConversation
 			live, liveKnown = sessionCommandsLiveConversations()
-			markLive(views, live)
+			markLive(views, live, sessionCommandsCurrentWindow())
 		}
 		if jsonOutput {
 			return cli.WriteJSON(cmd, sessionListData{Sessions: views})
@@ -302,10 +302,15 @@ func writeSessionTable(out io.Writer, views []sessionView, ids sessionIDAbbrevia
 }
 
 // liveMark is a list row's LIVE cell: a dot for a conversation open in a
-// Kitty tab, where `session continue` focuses rather than resumes.
+// Kitty tab, where `session continue` focuses rather than resumes, and "here"
+// for the one open in the window the command runs in, which is otherwise
+// indistinguishable from its siblings when they share an opening prompt.
 func liveMark(live *liveConversation) string {
 	if live == nil {
 		return ""
+	}
+	if live.Here {
+		return "here"
 	}
 	return "●"
 }

@@ -38,7 +38,7 @@ var sessionShowCmd = &cobra.Command{
 		}
 		views := sessionViews([]transcript.SessionMeta{*meta})
 		live, liveKnown := sessionCommandsLiveConversations()
-		markLive(views, live)
+		markLive(views, live, sessionCommandsCurrentWindow())
 		view := views[0]
 		if jsonOutput {
 			return cli.WriteJSON(cmd, sessionShowData{Session: view})
@@ -111,6 +111,9 @@ func plural(label string, count int) string {
 func liveLine(live *liveConversation) string {
 	if live == nil {
 		return "no"
+	}
+	if live.Here {
+		return fmt.Sprintf("open in this Kitty window (%d)", live.WindowID)
 	}
 	return fmt.Sprintf("open in Kitty window %d (continue focuses it)", live.WindowID)
 }

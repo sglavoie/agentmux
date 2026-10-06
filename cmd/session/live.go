@@ -1,6 +1,7 @@
 package session
 
 import (
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -12,7 +13,15 @@ import (
 type liveConversation struct {
 	WindowID int `json:"window_id"`
 	TabID    int `json:"tab_id"`
+	// Here is set when that tab is the Kitty window this command runs in, so
+	// the conversation is the one the operator is typing into. It is a label
+	// for people only: JSON consumers compare window_id themselves.
+	Here bool `json:"-"`
 }
+
+// sessionCommandsCurrentWindow is the seam the Kitty window this command runs
+// in is read through, so tests never inherit the terminal's KITTY_WINDOW_ID.
+var sessionCommandsCurrentWindow = cli.WindowIDFromEnv
 
 // sessionCommandsLiveConversations is the seam list and show read live tabs
 // through, so their tests never reach the operator's daemon or Kitty.
@@ -65,14 +74,17 @@ func liveConversationKey(harnessName, sessionID string) (string, bool) {
 	return identity.Harness + ":" + identity.SessionID, true
 }
 
-// markLive records on each view the tab its conversation is open in.
-func markLive(views []sessionView, live map[string]liveConversation) {
+// markLive records on each view the tab its conversation is open in, noting
+// the one open in currentWindow, the window this command runs in (0 when it
+// runs outside Kitty).
+func markLive(views []sessionView, live map[string]liveConversation, currentWindow int) {
 	for i := range views {
 		key, ok := liveConversationKey(views[i].Harness, views[i].ID)
 		if !ok {
 			continue
 		}
 		if tab, ok := live[key]; ok {
+			tab.Here = currentWindow != 0 && tab.WindowID == currentWindow
 			views[i].Live = &tab
 		}
 	}
