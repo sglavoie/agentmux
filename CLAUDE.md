@@ -236,7 +236,9 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   its own job — how a failure becomes a process exit status (the `ExitError`
   quiet-exit contract and the nonzero status vocabulary), how a command answers
   a machine caller (the common schema-v1 envelope, the structured error payload,
-  and its candidate/parameter help shapes), how a command assembles the runtime
+  and its candidate/parameter help shapes) and a person (the display-width
+  aligned table and the terminal check that keeps plain output tab-separated
+  for pipes), how a command assembles the runtime
   it acts on (the validated configuration, the Kitty client and the window the
   CLI was invoked from, the daemon export-client seam, the harness transcript
   readers it discovers sources with, and the context its work runs under), and

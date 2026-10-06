@@ -5,7 +5,8 @@
 //
 //   - how a command failure becomes a process exit status (exit.go);
 //   - how a command answers a machine caller through the common schema-v1
-//     envelope (json.go);
+//     envelope (json.go), and a person through width-aware tables that keep
+//     their tab-separated form off a terminal (table.go);
 //   - how a command assembles the runtime it acts on — the validated
 //     configuration (config.go), the Kitty client and the window the CLI was
 //     invoked from (kitty.go), the daemon connection (daemon.go), the harness

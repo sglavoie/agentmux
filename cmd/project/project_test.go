@@ -12,6 +12,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // recordingKittyClient is a Kitty that holds a window tree and grows it: a
@@ -122,6 +123,35 @@ func TestProjectListText(t *testing.T) {
 	for _, want := range []string{"PROFILE", "codex-work", "/tmp/web", "backend"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("text output lacks %q:\n%s", want, out)
+		}
+	}
+}
+
+// Emoji titles are two cells wide in a terminal; the harness column must still
+// start at the same cell on every row.
+func TestProjectListTextAlignsEmojiTitles(t *testing.T) {
+	cfg := testConfig()
+	cfg.Projects[0].Title = "🐱API"
+	cfg.Projects[2].Title = "🗣️Web"
+	out, err := runProject(t, "list", cfg, &recordingKittyClient{}, false, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := -1
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		col := strings.Index(line, "claude")
+		if col < 0 {
+			col = strings.Index(line, "codex ")
+		}
+		if col < 0 {
+			col = strings.Index(line, "HARNESS")
+		}
+		cell := layout.Width(line[:col])
+		if want < 0 {
+			want = cell
+		}
+		if cell != want {
+			t.Errorf("harness column at cell %d in %q, want %d", cell, line, want)
 		}
 	}
 }

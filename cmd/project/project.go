@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/cli"
@@ -125,12 +124,11 @@ func runProjectList(cmd *cobra.Command, _ []string) error {
 		_, err := fmt.Fprintln(cmd.OutOrStdout(), "No projects are configured.")
 		return err
 	}
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "PROFILE\tTITLE\tHARNESS\tDIRECTORY\tGROUPS")
+	rows := make([][]string, 0, len(views))
 	for _, view := range views {
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", view.Profile, view.Title, view.Harness, view.Directory, strings.Join(view.Groups, ","))
+		rows = append(rows, []string{view.Profile, view.Title, view.Harness, view.Directory, strings.Join(view.Groups, ",")})
 	}
-	return w.Flush()
+	return cli.WriteTable(cmd.OutOrStdout(), []string{"PROFILE", "TITLE", "HARNESS", "DIRECTORY", "GROUPS"}, rows)
 }
 
 func runProjectLaunch(cmd *cobra.Command, _ []string) error {
