@@ -208,6 +208,43 @@ final class AMXCommandTests: XCTestCase {
         XCTAssertEqual(help.flags, ["--debug", "--help", "--version"])
     }
 
+    /// cobra command groups, as `amx --help` prints them since its commands
+    /// were grouped: the titles are arbitrary, so every group is read.
+    static let groupedRootHelp = """
+    Agent Mux is a multi-harness session manager for Kitty.
+
+    Usage:
+      amx [flags]
+      amx [command]
+
+    Examples:
+      amx project launch API
+
+    Sessions and projects:
+      open-dashboard     Focus the Agent Mux dashboard
+      project            List configured projects and launch sessions from them
+
+    Kitty tabs:
+      mute-toggle        Toggle mute on the focused Agent Mux tab
+
+    Setup and diagnostics:
+      config             Manage amx configuration
+      notifications      Inspect and test native notifications
+
+    Additional Commands:
+      help               Help about any command
+
+    Flags:
+          --debug           enable verbose debug output
+      -h, --help            help for amx
+    """
+
+    func testHelpParsesGroupedCommands() {
+        let help = AMXHelp(Self.groupedRootHelp)
+        XCTAssertEqual(help.subcommands, ["config", "help", "mute-toggle", "notifications", "open-dashboard", "project"])
+        XCTAssertEqual(help.flags, ["--debug", "--help"])
+    }
+
     func testCapabilitiesFromHelp() {
         let notifications = AMXHelp("Available Commands:\n  snooze      Snooze\n  test        Test\n")
         let mute = AMXHelp("Flags:\n  -h, --help   help\n      --json   JSON output\n\nGlobal Flags:\n      --debug   debug\n")

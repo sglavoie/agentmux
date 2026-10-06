@@ -1,8 +1,10 @@
 import Foundation
 
 /// A cobra `--help` text, read for what it declares: the subcommands under
-/// "Available Commands:" and every `--flag` under "Flags:" or "Global Flags:".
-/// Prose that merely mentions a flag is not a declaration.
+/// "Available Commands:", "Additional Commands:", or any command group title
+/// (cobra lets a group be called anything, such as "Kitty tabs:"), and every
+/// `--flag` under "Flags:" or "Global Flags:". Prose that merely mentions a
+/// flag is not a declaration.
 struct AMXHelp: Equatable {
     let subcommands: Set<String>
     let flags: Set<String>
@@ -22,8 +24,9 @@ struct AMXHelp: Equatable {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if !line.hasPrefix(" ") {
                 switch trimmed {
-                case "Available Commands:", "Additional Commands:": section = .commands
                 case "Flags:", "Global Flags:": section = .flags
+                case _ where Self.nonCommandHeadings.contains(trimmed): section = .other
+                case _ where trimmed.hasSuffix(":"): section = .commands
                 default: section = .other
                 }
                 continue
@@ -49,6 +52,11 @@ struct AMXHelp: Equatable {
         self.subcommands = subcommands
         self.flags = flags
     }
+
+    /// cobra's fixed headings whose indented lines are not subcommands.
+    private static let nonCommandHeadings: Set<String> = [
+        "Usage:", "Aliases:", "Examples:", "Additional help topics:",
+    ]
 }
 
 /// Which of the commands the app relies on the resolved amx offers. An older
