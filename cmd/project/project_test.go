@@ -78,10 +78,12 @@ func runProjectArgs(t *testing.T, leaf string, cfg *config.Config, client kitty.
 	oldLoad, oldKitty := projectLoadConfig, projectNewKitty
 	oldListJSON, oldLaunchJSON, oldProfile, oldTitle := projectListJSON, projectLaunchJSON, projectLaunchProfile, projectLaunchTitle
 	oldMissing := projectListMissing
+	oldProfiles, oldHarnesses, oldGroups := projectListProfiles, projectListHarnesses, projectListGroups
 	t.Cleanup(func() {
 		projectLoadConfig, projectNewKitty = oldLoad, oldKitty
 		projectListJSON, projectLaunchJSON, projectLaunchProfile, projectLaunchTitle = oldListJSON, oldLaunchJSON, oldProfile, oldTitle
 		projectListMissing = oldMissing
+		projectListProfiles, projectListHarnesses, projectListGroups = oldProfiles, oldHarnesses, oldGroups
 	})
 	projectLoadConfig = func() (*config.Config, error) { return cfg, nil }
 	projectNewKitty = func() kitty.KittyClient { return client }
@@ -548,5 +550,89 @@ func TestProjectLaunchRefusesTwoDifferentTitles(t *testing.T) {
 	}
 	if !strings.Contains(out, `"code":"invalid_arguments"`) {
 		t.Fatalf("json = %s, want invalid_arguments", out)
+	}
+}
+
+// listedProjects runs `project list --json` under the given filters and
+// returns each row as profile/title.
+func listedProjects(t *testing.T, profiles, harnesses, groups []string) []string {
+	t.Helper()
+	stubProjectDirectories(t)
+	t.Cleanup(func() { projectListProfiles, projectListHarnesses, projectListGroups = nil, nil, nil })
+	projectListProfiles, projectListHarnesses, projectListGroups = profiles, harnesses, groups
+	out, err := runProject(t, "list", testConfig(), &recordingKittyClient{}, true, "", "")
+	if err != nil {
+		t.Fatalf("project list: %v\n%s", err, out)
+	}
+	var envelope struct {
+		Data []projectView `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatalf("decode %s: %v", out, err)
+	}
+	rows := make([]string, 0, len(envelope.Data))
+	for _, view := range envelope.Data {
+		rows = append(rows, view.Profile+"/"+view.Title)
+	}
+	return rows
+}
+
+func TestProjectListFiltersByProfileHarnessAndGroup(t *testing.T) {
+	for _, tc := range []struct {
+		name                        string
+		profiles, harnesses, groups []string
+		want                        []string
+	}{
+		{name: "none", want: []string{"work/API", "codex-work/API", "work/Web"}},
+		{name: "profile ignores case", profiles: []string{"WORK"}, want: []string{"work/API", "work/Web"}},
+		{name: "profiles are alternatives", profiles: []string{"work", "codex-work"}, want: []string{"work/API", "codex-work/API", "work/Web"}},
+		{name: "harness", harnesses: []string{"codex"}, want: []string{"codex-work/API"}},
+		{name: "group", groups: []string{"backend"}, want: []string{"work/API"}},
+		{name: "flags combine", profiles: []string{"codex-work"}, groups: []string{"backend"}, want: []string{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := listedProjects(t, tc.profiles, tc.harnesses, tc.groups); !slices.Equal(got, tc.want) {
+				t.Errorf("rows = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// An unknown name is refused rather than matched against nothing, so a typo
+// does not read as "no such projects".
+func TestProjectListRefusesAnUnknownFilterName(t *testing.T) {
+	for _, tc := range []struct {
+		name                        string
+		profiles, harnesses, groups []string
+		want                        string
+	}{
+		{name: "profile", profiles: []string{"home"}, want: `--profile \"home\": not a configured profile`},
+		{name: "harness", harnesses: []string{"gemini"}, want: `--harness \"gemini\": want one of`},
+		{name: "group", groups: []string{"frontend"}, want: `--group \"frontend\": want one of backend`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Cleanup(func() { projectListProfiles, projectListHarnesses, projectListGroups = nil, nil, nil })
+			projectListProfiles, projectListHarnesses, projectListGroups = tc.profiles, tc.harnesses, tc.groups
+			out, err := runProject(t, "list", testConfig(), &recordingKittyClient{}, true, "", "")
+			if err == nil {
+				t.Fatalf("want a refusal, got %s", out)
+			}
+			if !strings.Contains(out, `"code":"invalid_arguments"`) || !strings.Contains(out, tc.want) {
+				t.Errorf("json = %s, want invalid_arguments naming %s", out, tc.want)
+			}
+		})
+	}
+}
+
+func TestProjectListSaysWhenNoProjectMatchesTheFilters(t *testing.T) {
+	stubProjectDirectories(t)
+	t.Cleanup(func() { projectListProfiles, projectListGroups = nil, nil })
+	projectListProfiles, projectListGroups = []string{"codex-work"}, []string{"backend"}
+	out, err := runProject(t, "list", testConfig(), &recordingKittyClient{}, false, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "No configured project matches these filters.\n"; out != want {
+		t.Errorf("output = %q, want %q", out, want)
 	}
 }

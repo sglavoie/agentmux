@@ -2,9 +2,9 @@
 // over configured projects, the launch templates `[[projects]]` declares.
 //
 // `list` reports every configured project with the profile, harness, and
-// directory it launches with, and `launch` starts a new session from one of
-// them through the shared actions.Launch definition, exactly as the dashboard's
-// launcher does. A project is identified by its profile and title. A title
+// directory it launches with, narrowed on request by profile, harness, or
+// group, and `launch` starts a new session from one of them through the shared
+// actions.Launch definition, exactly as the dashboard's launcher does. A project is identified by its profile and title. A title
 // that matches no project exactly may still name exactly one project once the
 // leading emoji or symbols are set aside and case is ignored, which is how an
 // operator types it. Selection never guesses: a title shared by several
@@ -19,12 +19,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/spf13/cobra"
 )
@@ -57,6 +59,9 @@ var projectCmd = &cobra.Command{
 var (
 	projectListJSON      bool
 	projectListMissing   bool
+	projectListProfiles  []string
+	projectListHarnesses []string
+	projectListGroups    []string
 	projectLaunchJSON    bool
 	projectLaunchProfile string
 	projectLaunchTitle   string
@@ -91,6 +96,12 @@ Outside Kitty, set KITTY_LISTEN_ON to the instance's remote-control socket.`,
 func init() {
 	projectListCmd.Flags().BoolVar(&projectListJSON, "json", false, "emit schema-v1 JSON")
 	projectListCmd.Flags().BoolVar(&projectListMissing, "missing", false, "list only projects whose directory is unusable")
+	projectListCmd.Flags().StringSliceVar(&projectListProfiles, "profile", nil, "only projects that launch with this profile (repeatable)")
+	projectListCmd.Flags().StringSliceVar(&projectListHarnesses, "harness", nil, "only projects whose profile runs this harness (repeatable)")
+	projectListCmd.Flags().StringSliceVar(&projectListGroups, "group", nil, "only projects in this group (repeatable)")
+	_ = projectListCmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
+	_ = projectListCmd.RegisterFlagCompletionFunc("harness", cli.CompleteHarnessFirstArg)
+	_ = projectListCmd.RegisterFlagCompletionFunc("group", completeProjectGroups)
 	projectLaunchCmd.Flags().BoolVar(&projectLaunchJSON, "json", false, "emit schema-v1 JSON")
 	projectLaunchCmd.Flags().StringVar(&projectLaunchTitle, "title", "", "configured project title")
 	projectLaunchCmd.Flags().StringVar(&projectLaunchProfile, "profile", "", "configured profile the project launches with")
@@ -130,9 +141,16 @@ func runProjectList(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return cli.CommandFailure(cmd, projectListJSON, "config_invalid", err)
 	}
+	filter, err := newProjectListFilter(cfg)
+	if err != nil {
+		return cli.CommandFailure(cmd, projectListJSON, "invalid_arguments", err)
+	}
 	views := projectViews(cfg)
 	kept := views[:0]
 	for _, view := range views {
+		if !filter.keeps(view) {
+			continue
+		}
 		view.DirectoryProblem = projectDirectoryProblem(view.Directory)
 		if !projectListMissing || view.DirectoryProblem != "" {
 			kept = append(kept, view)
@@ -144,7 +162,12 @@ func runProjectList(cmd *cobra.Command, _ []string) error {
 	}
 	if len(views) == 0 {
 		message := "No projects are configured."
-		if projectListMissing {
+		switch {
+		case filter.active() && projectListMissing:
+			message = "Every matching project directory is usable."
+		case filter.active():
+			message = "No configured project matches these filters."
+		case projectListMissing:
 			message = "Every configured project directory is usable."
 		}
 		_, err := fmt.Fprintln(cmd.OutOrStdout(), message)
@@ -159,6 +182,80 @@ func runProjectList(cmd *cobra.Command, _ []string) error {
 		rows = append(rows, []string{view.Profile, view.Title, view.Harness, directory, strings.Join(view.Groups, ",")})
 	}
 	return cli.WriteTable(cmd.OutOrStdout(), []string{"PROFILE", "TITLE", "HARNESS", "DIRECTORY", "GROUPS"}, rows)
+}
+
+// projectListFilter is what --profile, --harness, and --group keep. Values of
+// one flag are alternatives and the flags combine, so `--profile a --profile b
+// --group web` keeps the web projects of either profile. Names compare
+// without regard to case, as a profile lookup does.
+type projectListFilter struct {
+	profiles, harnesses, groups []string
+}
+
+// newProjectListFilter refuses a name the configuration does not know rather
+// than matching it against nothing, since an empty table would read as "no
+// such projects" instead of "no such name" — the same rule `session list`
+// applies to its selectors.
+func newProjectListFilter(cfg *config.Config) (projectListFilter, error) {
+	var filter projectListFilter
+	for _, name := range projectListProfiles {
+		if !slices.ContainsFunc(cfg.Profiles, func(profile config.Account) bool { return strings.EqualFold(profile.Name, name) }) {
+			return filter, fmt.Errorf("--profile %q: not a configured profile", name)
+		}
+		filter.profiles = append(filter.profiles, name)
+	}
+	for _, name := range projectListHarnesses {
+		known := harness.NormalizeKnown(name)
+		if known == "" {
+			return filter, fmt.Errorf("--harness %q: want one of %s", name, strings.Join(harness.Names(), ", "))
+		}
+		filter.harnesses = append(filter.harnesses, known)
+	}
+	configured := projectGroups(cfg)
+	for _, name := range projectListGroups {
+		if !slices.ContainsFunc(configured, func(group string) bool { return strings.EqualFold(group, name) }) {
+			if len(configured) == 0 {
+				return filter, fmt.Errorf("--group %q: no project declares a group", name)
+			}
+			return filter, fmt.Errorf("--group %q: want one of %s", name, strings.Join(configured, ", "))
+		}
+		filter.groups = append(filter.groups, name)
+	}
+	return filter, nil
+}
+
+func (f projectListFilter) active() bool {
+	return len(f.profiles)+len(f.harnesses)+len(f.groups) > 0
+}
+
+func (f projectListFilter) keeps(view projectView) bool {
+	matches := func(wanted []string, have ...string) bool {
+		if len(wanted) == 0 {
+			return true
+		}
+		for _, w := range wanted {
+			if slices.ContainsFunc(have, func(h string) bool { return strings.EqualFold(h, w) }) {
+				return true
+			}
+		}
+		return false
+	}
+	return matches(f.profiles, view.Profile) && matches(f.harnesses, view.Harness) && matches(f.groups, view.Groups...)
+}
+
+// projectGroups is every group a configured project declares, sorted and
+// without duplicates.
+func projectGroups(cfg *config.Config) []string {
+	var groups []string
+	for _, project := range cfg.Projects {
+		for _, group := range project.Groups {
+			if !slices.Contains(groups, group) {
+				groups = append(groups, group)
+			}
+		}
+	}
+	sort.Strings(groups)
+	return groups
 }
 
 // projectProblemLabel shortens a directory problem to fit a table cell; the
@@ -450,6 +547,21 @@ func completeProjectTitles(cmd *cobra.Command, _ []string, toComplete string) ([
 		titles = append(titles, project.Title+"\t"+project.EffectiveProfile())
 	}
 	return titles, cobra.ShellCompDirectiveNoFileComp
+}
+
+// completeProjectGroups offers the groups configured projects declare.
+func completeProjectGroups(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cfg, err := projectCompletionLoadConfig()
+	if err != nil || cfg == nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	var groups []string
+	for _, group := range projectGroups(cfg) {
+		if strings.HasPrefix(group, toComplete) {
+			groups = append(groups, group)
+		}
+	}
+	return groups, cobra.ShellCompDirectiveNoFileComp
 }
 
 // completeProjectTitleArg offers the same titles for the positional TITLE,

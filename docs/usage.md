@@ -669,6 +669,7 @@ menu bar companion and scripts use:
 amx project list                               # PROFILE TITLE HARNESS DIRECTORY GROUPS
 amx project list --json                        # [{profile,title,harness,directory,directory_problem?,groups}]
 amx project list --missing                     # only projects whose directory is unusable
+amx project list --group work --harness codex  # filters combine; each flag repeats, ignoring case
 amx project launch API                         # one project titled API
 amx project launch amx                         # the project titled 🐱amx
 amx project launch --title API --profile codex-work --json

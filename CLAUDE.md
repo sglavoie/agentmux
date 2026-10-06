@@ -134,9 +134,10 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   projects, the launch templates `[[projects]]` declares. `list` reports each
   as `{profile, title, harness, directory, groups}` plus a `directory_problem`
   when its directory is unusable (`--missing` keeps only those, by the same
-  rule `config validate` applies), and `launch` starts a new
-  session from one through `actions.Launch` in `actions.DefaultRegistry()`, the
-  same definition the dashboard's launcher runs, so the two cannot disagree
+  rule `config validate` applies; `--profile`, `--harness`, and `--group`
+  narrow it, refusing a name the configuration does not know), and `launch`
+  starts a new session from one through `actions.Launch` in
+  `actions.DefaultRegistry()`, the same definition the dashboard's launcher runs, so the two cannot disagree
   about what launching a project means. A project is identified by its profile
   and title (an exact title wins; failing one, a title matching exactly one
   project once leading emoji/symbols and case are set aside selects it, so
