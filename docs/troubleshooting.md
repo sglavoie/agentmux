@@ -6,8 +6,12 @@
   binary freshness, `kitten @ ls`, hooks for every configured
   profile, renderer drift, known Kitty sockets, recent suppressions, and the
   reducer/renderer health surface. Its text report totals the suppressions and
-  folds closed-window notes into one line; `amx doctor --verbose` lists each
-  suppression reason and each closed window. Use `amx transcripts status` to
+  folds closed-window notes into one line, and says in one line each that the
+  hooks of several healthy profiles are in sync, that every screen pattern set
+  is embedded, and that a Kitty list coordinator with no failure is ok;
+  `amx doctor --verbose` lists each suppression reason, closed window, and
+  healthy profile, and every coordinator counter (`amx debug status` always
+  prints them). Use `amx transcripts status` to
   inspect the filesystem transcript cache and `amx transcripts rebuild --all`
   to reconstruct it from source transcripts.
   `amx doctor --json` emits a structured report; `--strict` also evaluates the

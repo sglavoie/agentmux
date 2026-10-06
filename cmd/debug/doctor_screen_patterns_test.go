@@ -41,15 +41,16 @@ func TestDoctorReportsEmbeddedScreenPatternSourcesWithoutFinding(t *testing.T) {
 	}
 	got := out.String()
 	for _, want := range []string{
-		"screen patterns:",
-		"- claude: embedded",
-		"- codex: embedded",
-		"- contextlimit: embedded",
+		"screen patterns: embedded (claude, codex, contextlimit)\n",
 		"overall: clean",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("doctor output missing %q:\n%s", want, got)
 		}
+	}
+	// Every set being embedded is said once, not once per set.
+	if strings.Contains(got, "- claude: embedded") {
+		t.Errorf("all-embedded patterns were listed one per line:\n%s", got)
 	}
 	if strings.Contains(got, "screenstate_override_invalid") {
 		t.Errorf("clean pattern load raised the override finding:\n%s", got)

@@ -16,6 +16,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hooks"
@@ -219,7 +220,7 @@ func TestDoctorReportsVerifiedDisabledHooksAsFailure(t *testing.T) {
 
 	var out bytes.Buffer
 	var failures []string
-	err := writeDoctorHooks(&out, func(format string, args ...any) {
+	err := writeDoctorHooks(&out, false, func(format string, args ...any) {
 		failures = append(failures, fmt.Sprintf(format, args...))
 	}, func(string, ...any) {}, func(string, ...any) {})
 	if err != nil {
@@ -279,7 +280,7 @@ func TestDoctorHooksSummarizesDroppedDeliveries(t *testing.T) {
 
 	var out bytes.Buffer
 	var warnings []string
-	err = writeDoctorHooks(&out, func(format string, args ...any) {
+	err = writeDoctorHooks(&out, false, func(format string, args ...any) {
 		t.Errorf("unexpected failure finding: %s", fmt.Sprintf(format, args...))
 	}, func(format string, args ...any) {
 		warnings = append(warnings, fmt.Sprintf(format, args...))
@@ -391,5 +392,41 @@ func TestDoctorNotesABinaryOtherThanTheInstalledOne(t *testing.T) {
 	got := notes(dev, onPath)
 	if len(got) != 1 || !strings.Contains(got[0], dev) || !strings.Contains(got[0], link) || !strings.Contains(got[0], "run the installed amx") {
 		t.Fatalf("dev binary notes = %q; want one naming both binaries", got)
+	}
+}
+
+// Several healthy profiles are counted on one line, leaving the profiles that
+// need a look on lines of their own; --verbose prints every profile, and a
+// lone healthy profile is still named rather than counted.
+func TestDoctorHooksSummarizesHealthyProfiles(t *testing.T) {
+	healthy := func(name string) debugger.HookProfile {
+		return debugger.HookProfile{Profile: name, Harness: harness.Claude, Sync: "in_sync", Activation: "healthy", Verdict: debugger.VerdictHealthy}
+	}
+	unverified := debugger.HookProfile{Profile: "copilot", Harness: harness.Copilot, Sync: "in_sync", Activation: "unverified", Verdict: debugger.VerdictWarning}
+	write := func(profiles []debugger.HookProfile, verbose bool) string {
+		t.Helper()
+		var out bytes.Buffer
+		ignore := func(string, ...any) {}
+		if err := writeDoctorHookProfiles(&out, profiles, verbose, ignore, ignore, ignore); err != nil {
+			t.Fatal(err)
+		}
+		return out.String()
+	}
+
+	ahead := healthy("home")
+	ahead.ContractAhead = true
+	profiles := []debugger.HookProfile{healthy("work"), unverified, ahead}
+	if got, want := write(profiles, false), "hooks: 2 profiles in sync and active (--verbose lists each)\n"+
+		"hooks: copilot (copilot): sync=in_sync activation=unverified\n"; got != want {
+		t.Errorf("summary =\n%s\nwant\n%s", got, want)
+	}
+	if got, want := write(profiles, true), "hooks: work (claude): sync=in_sync activation=healthy\n"+
+		"hooks: copilot (copilot): sync=in_sync activation=unverified\n"+
+		"hooks: home (claude): sync=in_sync activation=healthy\n"; got != want {
+		t.Errorf("verbose =\n%s\nwant\n%s", got, want)
+	}
+	if got, want := write([]debugger.HookProfile{healthy("work"), unverified}, false), "hooks: work (claude): sync=in_sync activation=healthy\n"+
+		"hooks: copilot (copilot): sync=in_sync activation=unverified\n"; got != want {
+		t.Errorf("one healthy profile =\n%s\nwant\n%s", got, want)
 	}
 }

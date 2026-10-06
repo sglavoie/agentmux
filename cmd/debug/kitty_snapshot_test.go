@@ -71,7 +71,7 @@ func TestDoctorReportsAFreshKittySnapshotWithoutAFinding(t *testing.T) {
 	}
 	for _, want := range []string{
 		"kitty snapshot: fresh (generation 12, age 1.5s)",
-		"kitty list coordinator: socket=unix:/tmp/kitty-756 attempts=40 failures=0 timeouts=0 coalesced=0 in_flight=false consecutive_failures=0 last_latency=35ms max_latency=120ms last_error=none",
+		"kitty list coordinator: ok (40 lists, no failures, latency 35ms last / 120ms max)",
 		"overall: clean",
 	} {
 		if !strings.Contains(got, want) {
@@ -80,6 +80,35 @@ func TestDoctorReportsAFreshKittySnapshotWithoutAFinding(t *testing.T) {
 	}
 	if strings.Contains(got, checkKittySnapshotStale) {
 		t.Errorf("a fresh snapshot must raise no finding:\n%s", got)
+	}
+}
+
+// --verbose prints every counter of even a quiet coordinator, the line `debug
+// status` always prints.
+func TestDoctorVerboseReportsEveryKittyCoordinatorCounter(t *testing.T) {
+	var out bytes.Buffer
+	if err := writeKittySnapshot(&out, freshKittySnapshot(), true); err != nil {
+		t.Fatal(err)
+	}
+	want := "kitty list coordinator: socket=unix:/tmp/kitty-756 attempts=40 failures=0 timeouts=0 coalesced=0 in_flight=false consecutive_failures=0 last_latency=35ms max_latency=120ms last_error=none"
+	if !strings.Contains(out.String(), want) {
+		t.Errorf("full output missing %q:\n%s", want, out.String())
+	}
+}
+
+// A coordinator that ever failed keeps its whole line without --verbose: a
+// retained error after a recovery is the recurrence evidence the line is for.
+func TestDoctorKeepsTheFullCoordinatorLineAfterAFailure(t *testing.T) {
+	snapshot := freshKittySnapshot()
+	coordinator := *snapshot.Coordinator
+	coordinator.Failures, coordinator.LastErrorClass = 1, "timeout"
+	snapshot.Coordinator = &coordinator
+	var out bytes.Buffer
+	if err := writeKittySnapshot(&out, snapshot, false); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "failures=1") || !strings.Contains(out.String(), "last_error=timeout") {
+		t.Errorf("a coordinator with a failure was summarized:\n%s", out.String())
 	}
 }
 

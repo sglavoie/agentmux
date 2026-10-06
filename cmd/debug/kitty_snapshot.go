@@ -96,6 +96,24 @@ func kittyCoordinatorSummary(status *protocol.KittyListCoordinatorStatus) string
 	)
 }
 
+// kittyCoordinatorQuiet reports whether a coordinator has nothing to say
+// beyond "it works": no failure or timeout ever counted, none now, and no
+// error retained from a recovery. Only such a coordinator may be summarized,
+// since every other one carries the recurrence evidence the full line exists
+// to show.
+func kittyCoordinatorQuiet(status *protocol.KittyListCoordinatorStatus) bool {
+	return status != nil && status.Failures == 0 && status.Timeouts == 0 &&
+		status.ConsecutiveFailures == 0 && status.LastErrorClass == ""
+}
+
+// kittyCoordinatorBrief is doctor's line for a quiet coordinator: that it is
+// healthy, how much it has done, and how fast, without the zero counters.
+func kittyCoordinatorBrief(status *protocol.KittyListCoordinatorStatus) string {
+	return fmt.Sprintf("ok (%d lists, no failures, latency %s last / %s max)",
+		status.Attempts,
+		time.Duration(status.LastLatencyMS)*time.Millisecond, time.Duration(status.MaxLatencyMS)*time.Millisecond)
+}
+
 // checkKittySnapshotStale is the stable identifier for a daemon whose cached
 // Kitty topology has aged past the shared threshold. It is WARNING severity on
 // purpose: the dashboard still renders that topology and only suppresses the
@@ -118,8 +136,8 @@ const checkKittySnapshotStale = "kitty_snapshot_stale"
 // only place that turns the verdict into a finding. A nil block is a daemon
 // that predates the field: unknown, reported as such, and never a finding,
 // because a version gap is not a health fault.
-func writeDoctorKittySnapshot(out io.Writer, snapshot *protocol.KittySnapshot, addFinding func(string, string, string, ...any)) error {
-	if err := writeKittySnapshot(out, snapshot); err != nil {
+func writeDoctorKittySnapshot(out io.Writer, snapshot *protocol.KittySnapshot, verbose bool, addFinding func(string, string, string, ...any)) error {
+	if err := writeKittySnapshot(out, snapshot, verbose); err != nil {
 		return err
 	}
 	if snapshot == nil || !snapshot.Ready || !snapshot.Stale {
@@ -135,13 +153,22 @@ func writeDoctorKittySnapshot(out io.Writer, snapshot *protocol.KittySnapshot, a
 // the "unreported" line and no coordinator line at all: it has no accounting to
 // report, and printing "no information" under an unreported snapshot would
 // state the same absence twice.
-func writeKittySnapshot(out io.Writer, snapshot *protocol.KittySnapshot) error {
+//
+// full keeps every coordinator counter. `debug status` always asks for it,
+// being the surface an operator reads for detail; doctor asks for it under
+// --verbose and otherwise summarizes a quiet coordinator in one short phrase.
+// A coordinator with anything to report is printed whole either way.
+func writeKittySnapshot(out io.Writer, snapshot *protocol.KittySnapshot, full bool) error {
 	if _, err := fmt.Fprintf(out, "kitty snapshot: %s\n", kittySnapshotSummary(snapshot)); err != nil {
 		return err
 	}
 	if snapshot == nil {
 		return nil
 	}
-	_, err := fmt.Fprintf(out, "kitty list coordinator: %s\n", kittyCoordinatorSummary(snapshot.Coordinator))
+	summary := kittyCoordinatorSummary(snapshot.Coordinator)
+	if !full && kittyCoordinatorQuiet(snapshot.Coordinator) {
+		summary = kittyCoordinatorBrief(snapshot.Coordinator)
+	}
+	_, err := fmt.Fprintf(out, "kitty list coordinator: %s\n", summary)
 	return err
 }

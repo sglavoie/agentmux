@@ -72,6 +72,29 @@ func writeDoctorNotificationCapability(out io.Writer, capability *protocol.Notif
 // fatal.
 const checkScreenPatternOverrideInvalid = "screenstate_override_invalid"
 
+// writeScreenPatternSources lists each pattern set with where it was loaded
+// from. Anything that is not the embedded default is a file on disk, so its
+// path is printed: "override" alone would leave the operator hunting for which
+// file is in force.
+func writeScreenPatternSources(out io.Writer, names []string, sources map[string]string) error {
+	if _, err := fmt.Fprintln(out, "screen patterns:"); err != nil {
+		return err
+	}
+	for _, name := range names {
+		source := sources[name]
+		if source == screenstate.SourceEmbedded {
+			if _, err := fmt.Fprintf(out, "- %s: embedded\n", name); err != nil {
+				return err
+			}
+			continue
+		}
+		if _, err := fmt.Fprintf(out, "- %s: override (%s)\n", name, source); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // writeDoctorScreenPatterns reports which UI-copy pattern set the classifier is
 // actually running per pattern set, and raises a warning for any override the
 // daemon declined. The active source matters on its own: a stale override that
@@ -96,23 +119,18 @@ func writeDoctorScreenPatterns(out io.Writer, patterns *protocol.ScreenPatternsS
 			names = append(names, name)
 		}
 		sort.Strings(names)
-		if _, err := fmt.Fprintln(out, "screen patterns:"); err != nil {
-			return err
-		}
+		allEmbedded := true
 		for _, name := range names {
-			source := patterns.Sources[name]
-			// Anything that is not the embedded default is a file on disk, so
-			// print the path: "override" alone would leave the operator hunting
-			// for which file is in force.
-			if source == screenstate.SourceEmbedded {
-				if _, err := fmt.Fprintf(out, "- %s: embedded\n", name); err != nil {
-					return err
-				}
-				continue
-			}
-			if _, err := fmt.Fprintf(out, "- %s: override (%s)\n", name, source); err != nil {
+			allEmbedded = allEmbedded && patterns.Sources[name] == screenstate.SourceEmbedded
+		}
+		// The usual case says so in one line; a list is only worth its lines
+		// when an override makes the sets differ.
+		if allEmbedded {
+			if _, err := fmt.Fprintf(out, "screen patterns: embedded (%s)\n", strings.Join(names, ", ")); err != nil {
 				return err
 			}
+		} else if err := writeScreenPatternSources(out, names, patterns.Sources); err != nil {
+			return err
 		}
 	}
 	for _, warning := range patterns.Warnings {
@@ -516,7 +534,12 @@ func checkDoctorConfigFreshness(uptime time.Duration, addFinding func(severity, 
 	}
 }
 
-func writeDoctorHooks(out io.Writer, reportIssue func(string, ...any), reportUnverified func(string, ...any), reportNote func(string, ...any)) error {
+// writeDoctorHooks prints one line per profile's hooks. Without verbose,
+// healthy profiles are counted on one line instead when there are several, so
+// the profiles that need a look are the ones left standing on their own. A
+// profile ahead of the verified contract is still healthy and counted: its
+// line never said so, and the note it raises is a finding of its own.
+func writeDoctorHooks(out io.Writer, verbose bool, reportIssue func(string, ...any), reportUnverified func(string, ...any), reportNote func(string, ...any)) error {
 	cfg, err := doctorLoadConfig()
 	if err != nil {
 		if _, writeErr := fmt.Fprintf(out, "hooks: config unavailable (%s)\n", err); writeErr != nil {
@@ -539,7 +562,44 @@ func writeDoctorHooks(out io.Writer, reportIssue func(string, ...any), reportUnv
 			return err
 		}
 	}
-	for _, status := range report.Profiles {
+	if err := writeDoctorHookProfiles(out, report.Profiles, verbose, reportIssue, reportUnverified, reportNote); err != nil {
+		return err
+	}
+	if failures := report.DeliveryFailures; failures != nil && failures.Count > 0 {
+		if _, err := fmt.Fprintf(out, "hooks: %d delivery failure(s) recorded in the trailing hour\n", failures.Count); err != nil {
+			return err
+		}
+		reportUnverified("%d hook delivery failure(s) recorded in the trailing hour; deliveries during daemon restarts are dropped", failures.Count)
+	}
+	if report.Error != "" {
+		reportIssue("hook status errors: %s", report.Error)
+	}
+	return nil
+}
+
+// writeDoctorHookProfiles is writeDoctorHooks' per-profile half, separate so
+// the summary rule can be exercised against any mix of verdicts.
+func writeDoctorHookProfiles(out io.Writer, profiles []debugger.HookProfile, verbose bool, reportIssue func(string, ...any), reportUnverified func(string, ...any), reportNote func(string, ...any)) error {
+	quiet := func(status debugger.HookProfile) bool {
+		return status.CheckError == "" && status.Verdict == debugger.VerdictHealthy
+	}
+	summarized := 0
+	if !verbose {
+		for _, status := range profiles {
+			if quiet(status) {
+				summarized++
+			}
+		}
+		if summarized < 2 {
+			summarized = 0
+		} else if _, err := fmt.Fprintf(out, "hooks: %d profiles in sync and active (--verbose lists each)\n", summarized); err != nil {
+			return err
+		}
+	}
+	for _, status := range profiles {
+		if summarized > 0 && quiet(status) {
+			continue
+		}
 		if status.CheckError != "" {
 			if _, err := fmt.Fprintf(out, "hooks: %s (%s): error (%s)\n", status.Profile, status.Harness, status.CheckError); err != nil {
 				return err
@@ -559,15 +619,6 @@ func writeDoctorHooks(out io.Writer, reportIssue func(string, ...any), reportUnv
 		if status.ContractAhead {
 			reportNote("hooks for %s are ahead of the verified contract: CLI %s is newer than verified hook contract %s, and its hook events are arriving", status.Profile, status.CLIVersion, status.VerifiedCLIVersion)
 		}
-	}
-	if failures := report.DeliveryFailures; failures != nil && failures.Count > 0 {
-		if _, err := fmt.Fprintf(out, "hooks: %d delivery failure(s) recorded in the trailing hour\n", failures.Count); err != nil {
-			return err
-		}
-		reportUnverified("%d hook delivery failure(s) recorded in the trailing hour; deliveries during daemon restarts are dropped", failures.Count)
-	}
-	if report.Error != "" {
-		reportIssue("hook status errors: %s", report.Error)
 	}
 	return nil
 }

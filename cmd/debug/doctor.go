@@ -218,7 +218,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		// `kitten @ ls` below, because a stale daemon snapshot is compatible with
 		// a Kitty that answers this process immediately: the two lines together
 		// are what separate "Kitty is wedged" from "the daemon stopped asking".
-		if err := writeDoctorKittySnapshot(textOut, health.KittySnapshot, addFinding); err != nil {
+		if err := writeDoctorKittySnapshot(textOut, health.KittySnapshot, doctorVerbose, addFinding); err != nil {
 			return err
 		}
 		if err := writeDoctorCompanion(textOut, health.Companion, health.Build, addFinding); err != nil {
@@ -278,7 +278,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	if err := writeDoctorHooks(textOut, reportIssue("hooks"), func(format string, args ...any) {
+	if err := writeDoctorHooks(textOut, doctorVerbose, reportIssue("hooks"), func(format string, args ...any) {
 		addFinding(severityWarning, "hooks_unverified", format, args...)
 	}, func(format string, args ...any) {
 		addFinding(severityInfo, "hooks_contract_ahead", format, args...)
@@ -345,5 +345,5 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 func init() {
 	doctorCmd.Flags().BoolVar(&doctorJSON, "json", false, "emit a structured JSON report instead of text")
 	doctorCmd.Flags().BoolVar(&doctorStrict, "strict", false, "exit nonzero when any health failure is detected")
-	doctorCmd.Flags().BoolVarP(&doctorVerbose, "verbose", "v", false, "list every closed window and every suppression reason instead of summarizing them")
+	doctorCmd.Flags().BoolVarP(&doctorVerbose, "verbose", "v", false, "list every closed window, suppression reason, healthy hook profile, and Kitty coordinator counter instead of summarizing them")
 }
