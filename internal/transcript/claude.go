@@ -197,6 +197,7 @@ func (r ClaudeReader) parseFile(path string, info os.FileInfo, encodedDir string
 		FileModTime: info.ModTime(),
 	}
 	var searchBuf strings.Builder
+	var commandSnippet string
 	classEvidence := sessionClassEvidence{}
 
 	for scanner.Scan() {
@@ -223,11 +224,22 @@ func (r ClaudeReader) parseFile(path string, info os.FileInfo, encodedDir string
 		if !rec.IsMeta && rec.Message != nil && (rec.Type == "user" || rec.Type == "assistant") {
 			if text := flattenClaudeContent(rec.Message.Content); text != "" {
 				if meta.Snippet == "" && rec.Type == "user" {
-					meta.Snippet = truncateSnippet(text)
+					command, withArgs, ok := claudeSlashCommand(text)
+					switch {
+					case !ok:
+						meta.Snippet = truncateSnippet(text)
+					case withArgs:
+						meta.Snippet = truncateSnippet(command)
+					case commandSnippet == "":
+						commandSnippet = command
+					}
 				}
 				appendSearchText(&searchBuf, text)
 			}
 		}
+	}
+	if meta.Snippet == "" {
+		meta.Snippet = truncateSnippet(commandSnippet)
 	}
 	meta.SearchText = searchBuf.String()
 	meta.SessionClass = classEvidence.class()
@@ -241,6 +253,59 @@ func (r ClaudeReader) parseFile(path string, info os.FileInfo, encodedDir string
 	}
 
 	return meta, nil
+}
+
+// claudeSlashCommand recognizes the markup Claude Code records for a slash
+// command typed at the prompt (`<command-name>/clear</command-name>…`) and
+// for the local-command output that follows one. ok reports whether text is
+// such a record; command is what the operator typed, "/name args", or "" for
+// command output; withArgs reports whether the command carried arguments.
+//
+// The snippet rule built on it: a command with arguments is the operator's
+// own words and makes a fine snippet, but a bare one (/clear, /compact) says
+// nothing about the session, so it is used only when no real prompt follows.
+func claudeSlashCommand(text string) (command string, withArgs, ok bool) {
+	trimmed := strings.TrimSpace(text)
+	if strings.HasPrefix(trimmed, "<local-command-") {
+		return "", false, true
+	}
+	if !strings.HasPrefix(trimmed, "<command-name>") && !strings.HasPrefix(trimmed, "<command-message>") {
+		return "", false, false
+	}
+	name := claudeCommandTag(trimmed, "command-name")
+	if name == "" {
+		return "", false, true
+	}
+	if !strings.HasPrefix(name, "/") {
+		name = "/" + name
+	}
+	if args := claudeCommandTag(trimmed, "command-args"); args != "" {
+		return name + " " + args, true, true
+	}
+	return name, false, true
+}
+
+// claudeSnippetPredatesCommandRule reports a cached Claude entry whose
+// snippet is raw slash-command markup, which the reader no longer produces.
+// Refresh reparses such an entry once instead of trusting the cache, so the
+// fix reaches unchanged transcripts without a full rebuild.
+func claudeSnippetPredatesCommandRule(meta SessionMeta) bool {
+	if meta.Harness != harness.Claude {
+		return false
+	}
+	return strings.HasPrefix(meta.Snippet, "<command-") || strings.HasPrefix(meta.Snippet, "<local-command-")
+}
+
+func claudeCommandTag(text, tag string) string {
+	_, rest, found := strings.Cut(text, "<"+tag+">")
+	if !found {
+		return ""
+	}
+	value, _, found := strings.Cut(rest, "</"+tag+">")
+	if !found {
+		return ""
+	}
+	return strings.TrimSpace(value)
 }
 
 // messageFromRecord lifts a single line into a Message when the record is a

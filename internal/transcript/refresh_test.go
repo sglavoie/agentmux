@@ -477,3 +477,52 @@ func TestRefresh_RepairsMissingSearchSidecar(t *testing.T) {
 		t.Fatalf("sidecar = %q, want %q", got, "fresh search body")
 	}
 }
+
+// A cache written before the reader skipped slash-command markup still holds
+// `<command-name>/clear…` snippets for transcripts that never change again.
+// Refresh must reparse those once, and only those.
+func TestRefresh_ReparsesClaudeSnippetHoldingCommandMarkup(t *testing.T) {
+	tmp := t.TempDir()
+	home := filepath.Join(tmp, "home")
+	body := `{"type":"user","message":{"role":"user","content":"<command-name>/clear</command-name>"},"timestamp":"2026-05-01T12:00:00.000Z","cwd":"/tmp/foo"}` + "\n" +
+		`{"type":"user","message":{"role":"user","content":"Real question"},"timestamp":"2026-05-01T12:01:00.000Z","cwd":"/tmp/foo"}` + "\n"
+	stalePath := filepath.Join(home, "projects", "-tmp-foo", "stale.jsonl")
+	keptPath := filepath.Join(home, "projects", "-tmp-foo", "kept.jsonl")
+	staleInfo := writeTranscript(t, stalePath, body)
+	keptInfo := writeTranscript(t, keptPath, body)
+
+	cfg := &config.Config{Profiles: []config.Account{{Name: "work", Harness: harness.Claude, HomeDir: home}}}
+	seed := &fakeReader{
+		harness: harness.Claude,
+		discover: func(string, DiscoverOptions) ([]SessionMeta, error) {
+			entry := func(id, path, snippet string, info os.FileInfo) SessionMeta {
+				return SessionMeta{
+					ID: id, Harness: harness.Claude, CWD: "/tmp/foo", Path: path,
+					FileSize: info.Size(), FileModTime: info.ModTime(),
+					MessageCount: 2, Snippet: snippet, SearchText: "real question",
+				}
+			}
+			return []SessionMeta{
+				entry("stale", stalePath, "<command-name>/clear</command-name>", staleInfo),
+				entry("kept", keptPath, "cached snippet", keptInfo),
+			}, nil
+		},
+	}
+
+	idx := newTestIndex(t)
+	if err := idx.Refresh(cfg, map[string]Reader{harness.Claude: seed}); err != nil {
+		t.Fatalf("seed Refresh: %v", err)
+	}
+	if err := idx.Refresh(cfg, map[string]Reader{harness.Claude: NewClaudeReader()}); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+
+	if got, _ := idx.Get(IndexKey(harness.Claude, "stale")); got.Snippet != "Real question" {
+		t.Errorf("stale Snippet = %q, want reparsed %q", got.Snippet, "Real question")
+	}
+	// The unchanged entry with an ordinary snippet must still come from the
+	// cache, which is what proves the reparse above was targeted.
+	if got, _ := idx.Get(IndexKey(harness.Claude, "kept")); got.Snippet != "cached snippet" {
+		t.Errorf("kept Snippet = %q, want cached %q", got.Snippet, "cached snippet")
+	}
+}

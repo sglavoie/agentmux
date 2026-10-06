@@ -328,3 +328,61 @@ func TestTruncateSnippet(t *testing.T) {
 		t.Errorf("long truncation missing ellipsis: %q", got)
 	}
 }
+
+func TestClaudeSlashCommand(t *testing.T) {
+	cases := []struct {
+		name, text, command string
+		withArgs, ok        bool
+	}{
+		{"prompt", "Fix the login bug", "", false, false},
+		{"bare command", "<command-name>/clear</command-name>\n  <command-message>clear</command-message>\n  <command-args></command-args>", "/clear", false, true},
+		{"command with args", "<command-message>asl</command-message>\n<command-name>/asl</command-name>\n<command-args>asl run plans/x</command-args>", "/asl asl run plans/x", true, true},
+		{"name without slash", "<command-name>compact</command-name>", "/compact", false, true},
+		{"command output", "<local-command-stdout>Compacted</local-command-stdout>", "", false, true},
+		{"caveat", "<local-command-caveat>Caveat: …</local-command-caveat>", "", false, true},
+		{"markup mid-prompt", "explain <command-name> tags", "", false, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			command, withArgs, ok := claudeSlashCommand(tc.text)
+			if command != tc.command || withArgs != tc.withArgs || ok != tc.ok {
+				t.Fatalf("claudeSlashCommand(%q) = (%q, %v, %v), want (%q, %v, %v)",
+					tc.text, command, withArgs, ok, tc.command, tc.withArgs, tc.ok)
+			}
+		})
+	}
+}
+
+func TestClaudeReader_SnippetSkipsSlashCommandMarkup(t *testing.T) {
+	const clear = `{"type":"user","message":{"role":"user","content":"<command-name>/clear</command-name>\n<command-message>clear</command-message>\n<command-args></command-args>"},"timestamp":"2026-05-24T17:37:44.000Z","cwd":"/tmp/p"}`
+	const stdout = `{"type":"user","message":{"role":"user","content":"<local-command-stdout></local-command-stdout>"},"timestamp":"2026-05-24T17:37:45.000Z","cwd":"/tmp/p"}`
+	const prompt = `{"type":"user","message":{"role":"user","content":"Tighten the parser"},"timestamp":"2026-05-24T17:37:46.000Z","cwd":"/tmp/p"}`
+	const skill = `{"type":"user","message":{"role":"user","content":"<command-name>/plan-iterate</command-name>\n<command-args>plans/a.md</command-args>"},"timestamp":"2026-05-24T17:37:44.000Z","cwd":"/tmp/p"}`
+	const skillBody = `{"type":"user","message":{"role":"user","content":"Base directory for this skill: /x"},"timestamp":"2026-05-24T17:37:45.000Z","cwd":"/tmp/p"}`
+
+	cases := []struct {
+		name  string
+		lines []string
+		want  string
+	}{
+		{"bare command then prompt", []string{clear, stdout, prompt}, "Tighten the parser"},
+		{"command with args wins", []string{skill, skillBody}, "/plan-iterate plans/a.md"},
+		{"only a bare command", []string{clear, stdout}, "/clear"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeTranscript(t, filepath.Join(root, "projects", "-tmp-p", "s.jsonl"), strings.Join(tc.lines, "\n")+"\n")
+			metas, err := NewClaudeReader().Discover(root, DiscoverOptions{})
+			if err != nil {
+				t.Fatalf("Discover: %v", err)
+			}
+			if len(metas) != 1 {
+				t.Fatalf("got %d sessions, want 1", len(metas))
+			}
+			if metas[0].Snippet != tc.want {
+				t.Fatalf("Snippet = %q, want %q", metas[0].Snippet, tc.want)
+			}
+		})
+	}
+}
