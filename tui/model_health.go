@@ -97,9 +97,9 @@ func (m Model) handleHealthKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.healthOffset = clamp(m.healthOffset+step, 0, maxOffset)
 	case keyCtrlU:
 		m.healthOffset = clamp(m.healthOffset-step, 0, maxOffset)
-	case keyG:
+	case keyG, keyHome:
 		m.healthOffset = 0
-	case keyGG:
+	case keyGG, keyEnd:
 		m.healthOffset = maxOffset
 	}
 	return m, nil

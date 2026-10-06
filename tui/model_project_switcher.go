@@ -192,10 +192,10 @@ func (m Model) handleProjectSwitcherNavKey(msg tea.KeyPressMsg) (tea.Model, tea.
 	case keyK, keyUp:
 		m.moveProjectSwitcherCursor(-1)
 		return m, nil
-	case keyG:
+	case keyG, keyHome:
 		m.selectProjectScopeAt(0)
 		return m, nil
-	case keyGG:
+	case keyGG, keyEnd:
 		m.selectProjectScopeAt(len(projectSwitcherScopes(m)) - 1)
 		return m, nil
 	case keyPgDown:

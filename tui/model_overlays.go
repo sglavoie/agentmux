@@ -189,9 +189,9 @@ func (m Model) handleActionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return move(max(page/2, 1))
 	case keyCtrlU:
 		return move(-max(page/2, 1))
-	case keyG:
+	case keyG, keyHome:
 		return move(-len(in.Actions))
-	case keyGG:
+	case keyGG, keyEnd:
 		return move(len(in.Actions))
 	case commands.MenuExecuteKey:
 		selected, ok := in.SelectedAction()
@@ -349,9 +349,9 @@ func (m Model) handleDetailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			if m.detailTimelineScroll < 0 {
 				m.detailTimelineScroll = 0
 			}
-		case keyG:
+		case keyG, keyHome:
 			m.detailTimelineScroll = 0
-		case keyGG:
+		case keyGG, keyEnd:
 			m.detailTimelineScroll = tlMax
 		}
 		return m, nil
@@ -376,9 +376,9 @@ func (m Model) handleDetailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.detailScroll < 0 {
 			m.detailScroll = 0
 		}
-	case keyG:
+	case keyG, keyHome:
 		m.detailScroll = 0
-	case keyGG:
+	case keyGG, keyEnd:
 		m.detailScroll = maxOffset
 	}
 	return m, nil
@@ -425,9 +425,9 @@ func (m Model) handleHelpKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.helpOffset = clamp(m.helpOffset+halfPageStep(visible), 0, max(total-visible, 0))
 	case keyCtrlU:
 		m.helpOffset = clamp(m.helpOffset-halfPageStep(visible), 0, max(total-visible, 0))
-	case keyG:
+	case keyG, keyHome:
 		m.helpOffset = 0
-	case keyGG:
+	case keyGG, keyEnd:
 		m.helpOffset = total - visible
 		if m.helpOffset < 0 {
 			m.helpOffset = 0

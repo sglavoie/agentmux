@@ -125,10 +125,10 @@ func (m Model) handleSessionViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.viewerCursor = 0
 		}
 		scrollViewerToCursor(&m)
-	case keyG:
+	case keyG, keyHome:
 		m.viewerCursor = 0
 		scrollViewerToCursor(&m)
-	case keyGG:
+	case keyGG, keyEnd:
 		m.viewerCursor = lastIdx
 		scrollViewerToCursor(&m)
 	case keyN:
@@ -285,9 +285,9 @@ func (m Model) handleMessageDetailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		if m.messageDetailIdx >= 0 && m.messageDetailIdx < len(m.viewerMessages) {
 			return m, commands.CopyText(m.viewerMessages[m.messageDetailIdx].Text)
 		}
-	case keyG:
+	case keyG, keyHome:
 		m.messageDetailScroll = 0
-	case keyGG:
+	case keyGG, keyEnd:
 		m.messageDetailScroll = total - visible
 		if m.messageDetailScroll < 0 {
 			m.messageDetailScroll = 0

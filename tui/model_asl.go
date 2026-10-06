@@ -186,9 +186,9 @@ func (m Model) handleASLRunsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.aslCursor = clamp(m.aslCursor+1, 0, len(m.aslRows)-1)
 	case keyK, keyUp:
 		m.aslCursor = clamp(m.aslCursor-1, 0, len(m.aslRows)-1)
-	case keyG:
+	case keyG, keyHome:
 		m.aslCursor = 0
-	case keyGG:
+	case keyGG, keyEnd:
 		m.aslCursor = clamp(len(m.aslRows)-1, 0, len(m.aslRows)-1)
 	case keyCtrlD:
 		m.aslCursor = clamp(m.aslCursor+halfPageStep(aslVisibleHeight(m)), 0, len(m.aslRows)-1)

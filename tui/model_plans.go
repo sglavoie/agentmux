@@ -179,11 +179,11 @@ func (m Model) handlePlanSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		m.planCursor = clamp(m.planCursor-1, 0, len(m.planResults)-1)
 		scrollPlanSearchToCursor(&m)
 		return m, nil
-	case keyG:
+	case keyG, keyHome:
 		m.planCursor = 0
 		scrollPlanSearchToCursor(&m)
 		return m, nil
-	case keyGG:
+	case keyGG, keyEnd:
 		m.planCursor = len(m.planResults) - 1
 		if m.planCursor < 0 {
 			m.planCursor = 0
@@ -438,10 +438,10 @@ func (m Model) handlePlanViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		pagePlanViewerRows(&m, visible, 1)
 	case keyPgUp, keyCtrlB:
 		pagePlanViewerRows(&m, visible, -1)
-	case keyG:
+	case keyG, keyHome:
 		m.planViewerCursor = 0
 		scrollPlanViewerToCursor(&m)
-	case keyGG:
+	case keyGG, keyEnd:
 		m.planViewerCursor = lastIdx
 		scrollPlanViewerToCursor(&m)
 	case keyN:

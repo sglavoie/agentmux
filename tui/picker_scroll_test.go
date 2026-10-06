@@ -318,3 +318,20 @@ func TestListFooterPositionFragment_AbsentWhenAllFits(t *testing.T) {
 		t.Errorf("expected no position fragment when everything fits; got %q", out)
 	}
 }
+
+// TestHandlePickerKey_HomeAndEndMatchGAndShiftG pins Home/End as aliases of
+// g/G, as they are on the dashboard, so the keys a user learns there keep
+// working once a view opens from it.
+func TestHandlePickerKey_HomeAndEndMatchGAndShiftG(t *testing.T) {
+	m := pickerScrollFixtureModel(t, 40, 15)
+	last := len(m.pickerFilteredIdx) - 1
+
+	m = pressKey(m, "end")
+	if m.pickerCursor != last {
+		t.Fatalf("cursor after end: got %d want %d", m.pickerCursor, last)
+	}
+	m = pressKey(m, "home")
+	if m.pickerCursor != 0 || m.pickerOffset != 0 {
+		t.Fatalf("after home: cursor=%d offset=%d, want 0/0", m.pickerCursor, m.pickerOffset)
+	}
+}

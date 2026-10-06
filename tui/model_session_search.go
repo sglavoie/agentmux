@@ -232,11 +232,11 @@ func (m Model) handleSessionSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 		m.sessionCursor = clamp(m.sessionCursor-1, 0, len(m.sessionResults)-1)
 		scrollSessionSearchToCursor(&m)
 		return m, nil
-	case keyG:
+	case keyG, keyHome:
 		m.sessionCursor = 0
 		scrollSessionSearchToCursor(&m)
 		return m, nil
-	case keyGG:
+	case keyGG, keyEnd:
 		m.sessionCursor = len(m.sessionResults) - 1
 		if m.sessionCursor < 0 {
 			m.sessionCursor = 0

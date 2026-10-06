@@ -156,6 +156,21 @@ func TestWorktreeAttentionOrderingAndWhitespaceANDFilter(t *testing.T) {
 	}
 }
 
+func TestWorktreeHomeAndEndJumpToTheEnds(t *testing.T) {
+	m := enterLoadedWorktrees(t, worktreeTestModel())
+	if len(m.worktreeFiltered) < 2 {
+		t.Fatalf("fixture needs two worktrees, has %d", len(m.worktreeFiltered))
+	}
+	m = pressKey(m, "end")
+	if want := len(m.worktreeFiltered) - 1; m.worktreeCursor != want {
+		t.Fatalf("cursor after end = %d, want %d", m.worktreeCursor, want)
+	}
+	m = pressKey(m, "home")
+	if m.worktreeCursor != 0 {
+		t.Fatalf("cursor after home = %d, want 0", m.worktreeCursor)
+	}
+}
+
 func TestWorktreeNavigationFilterAndReturn(t *testing.T) {
 	m := enterLoadedWorktrees(t, worktreeTestModel())
 	for _, key := range []string{"j", "down", "k", "up", "G", "g", "ctrl+d", "ctrl+u", "pgdown", "pgup", "ctrl+f", "ctrl+b"} {

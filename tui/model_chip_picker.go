@@ -138,11 +138,11 @@ func (m Model) handleChipPickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		m.chipPickerCursor = clamp(m.chipPickerCursor-1, 0, len(m.chipPickerOptions)-1)
 		scrollChipPickerToCursor(&m)
 		return m, nil
-	case keyG:
+	case keyG, keyHome:
 		m.chipPickerCursor = 0
 		scrollChipPickerToCursor(&m)
 		return m, nil
-	case keyGG:
+	case keyGG, keyEnd:
 		m.chipPickerCursor = len(m.chipPickerOptions) - 1
 		if m.chipPickerCursor < 0 {
 			m.chipPickerCursor = 0

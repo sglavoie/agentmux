@@ -160,6 +160,7 @@ var helpSections = []struct {
 	// here is scoped "in the launcher".
 	{"Launch / open", []string{
 		"  l         open session launcher (live filter + preview)",
+		"  /         filter launcher projects (DSL: @profile, word)",
 		"  space     select / deselect the highlighted project (in the launcher)",
 		"  enter     launch every selected project (in the launcher)",
 		"  f         cycle the launch profile (in the launcher)",
@@ -204,9 +205,11 @@ var helpSections = []struct {
 		"  i         show / hide the session inspector",
 		"  q         quit",
 		"  ctrl+c    quit",
-		"  (Past Sessions, Plans, Worktrees, Runs, session detail, the phase",
-		"   timeline, health details, resort, and the list arrangement are",
-		"   palette entries — search the palette by name)",
+		"  s         Past Sessions for the selected row's project",
+		"  S         Past Sessions across every project",
+		"  (Plans, Worktrees, Runs, session detail, the phase timeline,",
+		"   health details, resort, and the list arrangement are palette",
+		"   entries — search the palette by name)",
 	}},
 }
 

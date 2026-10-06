@@ -159,9 +159,9 @@ func (m Model) handleWorktreesKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.worktreeCursor = clamp(m.worktreeCursor+1, 0, len(m.worktreeFiltered)-1)
 	case keyK, keyUp:
 		m.worktreeCursor = clamp(m.worktreeCursor-1, 0, len(m.worktreeFiltered)-1)
-	case keyG:
+	case keyG, keyHome:
 		m.worktreeCursor = 0
-	case keyGG:
+	case keyGG, keyEnd:
 		m.worktreeCursor = len(m.worktreeFiltered) - 1
 		if m.worktreeCursor < 0 {
 			m.worktreeCursor = 0
