@@ -185,12 +185,21 @@ func runProjectLaunch(cmd *cobra.Command, args []string) error {
 		}
 		title = positional
 	}
-	if title == "" {
+	if title == "" && projectLaunchJSON {
 		return cli.MissingParameter(cmd, projectLaunchJSON, "title", "configured project title (see `amx project list`)")
 	}
 	cfg, err := projectLoadConfig()
 	if err != nil {
 		return cli.CommandFailure(cmd, projectLaunchJSON, "config_invalid", err)
+	}
+	if title == "" {
+		// A person who typed the bare command is asking what there is to
+		// launch, so the answer lists it, the way an unmatched title does.
+		return cli.ActionErrorText(&actions.Error{
+			Code: "missing_parameter", Action: actions.Launch,
+			Message:    "a project title is required; `amx project list` shows every project",
+			Candidates: projectCandidates(cfg.Projects),
+		})
 	}
 	project, err := selectProject(cfg, strings.TrimSpace(projectLaunchProfile), title)
 	if err != nil {

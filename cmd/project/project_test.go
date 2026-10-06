@@ -345,6 +345,19 @@ func TestEditDistance(t *testing.T) {
 	}
 }
 
+func TestProjectLaunchMissingTitleTextListsProjects(t *testing.T) {
+	cfg := testConfig()
+	_, err := runProject(t, "launch", cfg, &recordingKittyClient{}, false, "", "")
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	for _, want := range []string{"a project title is required", "`amx project list`", "candidates:", "work/Web", "codex-work/API"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("text error lacks %q:\n%s", want, err)
+		}
+	}
+}
+
 func TestProjectLaunchMissingTitle(t *testing.T) {
 	out, err := runProject(t, "launch", testConfig(), &recordingKittyClient{}, true, "work", "")
 	if err == nil {
