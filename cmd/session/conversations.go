@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -21,6 +23,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
+	"github.com/sglavoie/agentmux/tui/layout"
 	"github.com/spf13/cobra"
 )
 
@@ -37,6 +40,7 @@ var (
 	sessionCommandsNewWorktree      = func() worktree.Runner { return worktree.NewWorkflow() }
 	sessionCommandsNow              = time.Now
 	sessionListIsTerminal           = cli.IsTerminal
+	sessionListGetwd                = os.Getwd
 )
 
 var sessionListCmd = &cobra.Command{
@@ -56,11 +60,31 @@ var sessionListCmd = &cobra.Command{
 			}
 			filter.Since = sessionCommandsNow().Add(-window)
 		}
+		if err := applySessionListSelectors(cmd, cfg, &filter); err != nil {
+			return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", err)
+		}
+		limit, _ := cmd.Flags().GetInt("limit")
+		if limit < 0 {
+			return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", fmt.Errorf("--limit %d: want 0 (no limit) or a positive count", limit))
+		}
+		var here []string
+		if onlyHere, _ := cmd.Flags().GetBool("here"); onlyHere {
+			if here, err = sessionListHereDirs(); err != nil {
+				return cli.CommandFailure(cmd, jsonOutput, "command_failed", err)
+			}
+		}
 		idx, err := loadRefreshedSessionIndex(cfg, sessionCommandsSessionReaders())
 		if err != nil {
 			return cli.CommandFailure(cmd, jsonOutput, "session_index_unavailable", err)
 		}
-		views := sessionViews(idx.List(filter))
+		metas := idx.List(filter)
+		if here != nil {
+			metas = sessionsUnder(metas, here)
+		}
+		if limit > 0 && len(metas) > limit {
+			metas = metas[:limit]
+		}
+		views := sessionViews(metas)
 		if jsonOutput {
 			return cli.WriteJSON(cmd, sessionListData{Sessions: views})
 		}
@@ -91,9 +115,85 @@ func writeSessionTable(out io.Writer, views []sessionView, now time.Time) error 
 		if project == "" {
 			project = "-"
 		}
-		rows = append(rows, []string{item.Harness, item.Profile, project, formatAgo(item.LastAt, now), item.ID})
+		summary := layout.Truncate(item.Snippet, sessionSummaryWidth, "…")
+		if summary == "" {
+			summary = "-"
+		}
+		rows = append(rows, []string{item.Harness, item.Profile, project, formatAgo(item.LastAt, now), item.ID, summary})
 	}
-	return cli.WriteTable(out, []string{"HARNESS", "PROFILE", "PROJECT", "ACTIVE", "SESSION"}, rows)
+	return cli.WriteTable(out, []string{"HARNESS", "PROFILE", "PROJECT", "ACTIVE", "SESSION", "SUMMARY"}, rows)
+}
+
+// sessionSummaryWidth bounds the table's last column. Several sessions of one
+// project differ only by ID, and the opening prompt is what tells them apart;
+// a fixed cut keeps a row on one line in an ordinary terminal without asking
+// the terminal for its width.
+const sessionSummaryWidth = 60
+
+// applySessionListSelectors turns --harness and --profile into the index's own
+// filter. An unknown name is refused rather than matched against nothing,
+// since an empty list would read as "no sessions" instead of "no such name".
+func applySessionListSelectors(cmd *cobra.Command, cfg *config.Config, filter *transcript.ListFilter) error {
+	harnesses, _ := cmd.Flags().GetStringSlice("harness")
+	for _, name := range harnesses {
+		known := harness.NormalizeKnown(name)
+		if known == "" {
+			return fmt.Errorf("--harness %q: want one of %s", name, strings.Join(harness.Names(), ", "))
+		}
+		filter.Harness = append(filter.Harness, known)
+	}
+	profiles, _ := cmd.Flags().GetStringSlice("profile")
+	for _, name := range profiles {
+		if !configHasProfile(cfg, name) {
+			return fmt.Errorf("--profile %q: not a configured profile", name)
+		}
+		filter.Profile = append(filter.Profile, name)
+	}
+	return nil
+}
+
+func configHasProfile(cfg *config.Config, name string) bool {
+	for _, profile := range cfg.Profiles {
+		if profile.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// sessionListHereDirs is the working directory as --here compares it: both
+// as the shell reports it and with symlinks resolved, because a harness
+// records whichever form it was started from.
+func sessionListHereDirs() ([]string, error) {
+	wd, err := sessionListGetwd()
+	if err != nil {
+		return nil, fmt.Errorf("--here: %w", err)
+	}
+	dirs := []string{filepath.Clean(wd)}
+	if resolved, err := filepath.EvalSymlinks(wd); err == nil && filepath.Clean(resolved) != dirs[0] {
+		dirs = append(dirs, filepath.Clean(resolved))
+	}
+	return dirs, nil
+}
+
+// sessionsUnder keeps the sessions whose working directory is one of dirs or
+// lies inside one, so --here run at a repository root also finds the
+// sessions started in its subdirectories.
+func sessionsUnder(metas []transcript.SessionMeta, dirs []string) []transcript.SessionMeta {
+	out := metas[:0:0]
+	for _, meta := range metas {
+		if meta.CWD == "" {
+			continue
+		}
+		cwd := filepath.Clean(meta.CWD)
+		for _, dir := range dirs {
+			if cwd == dir || strings.HasPrefix(cwd, strings.TrimSuffix(dir, string(filepath.Separator))+string(filepath.Separator)) {
+				out = append(out, meta)
+				break
+			}
+		}
+	}
+	return out
 }
 
 // formatAgo renders how long ago at was, coarsely: the list is for picking a

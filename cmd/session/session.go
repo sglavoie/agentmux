@@ -34,6 +34,12 @@ var sessionCmd = &cobra.Command{
 func init() {
 	sessionListCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
 	sessionListCmd.Flags().String("since", "", "only sessions active within this window, e.g. 12h or 7d")
+	sessionListCmd.Flags().Bool("here", false, "only sessions started in the current directory or below it")
+	sessionListCmd.Flags().StringSlice("harness", nil, "only sessions of this harness (repeatable)")
+	_ = sessionListCmd.RegisterFlagCompletionFunc("harness", cli.CompleteHarnessFirstArg)
+	sessionListCmd.Flags().StringSlice("profile", nil, "only sessions visible to this profile (repeatable)")
+	_ = sessionListCmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
+	sessionListCmd.Flags().IntP("limit", "n", 0, "show at most this many of the most recent sessions (0 for all)")
 	sessionContinueCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
 	sessionForkCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
 	sessionForkWorktreeCmd.Flags().Bool("allow-dirty", false, "allow a dirty source; uncommitted changes are not copied")

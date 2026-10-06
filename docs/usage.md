@@ -16,9 +16,11 @@ The same workflows are scriptable. Machine-readable commands use one
 `error` envelope and ambiguous selectors return candidates instead of guessing.
 
 ```bash
-amx session list              # a table with relative ages in a terminal; tab-separated RFC 3339 rows when piped
+amx session list              # a table with relative ages and opening prompts in a terminal; tab-separated RFC 3339 rows when piped
 amx session list --json
 amx session list --since 7d   # only sessions active in the last week (or 12h, 90m, …)
+amx session list --here -n 5  # the five latest sessions started in this directory or below it
+amx session list --harness codex --profile codex-work   # both repeatable
 amx session continue codex <session-id>
 amx session fork claude <session-id>
 amx session fork-worktree codex <session-id> --yes

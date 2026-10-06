@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,6 +22,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 type sessionCommandKitty struct {
@@ -361,4 +363,150 @@ func TestBareSessionIDResolvesAcrossHarnessesAndRefusesToGuess(t *testing.T) {
 	if _, err := conversationIdentityFromArgs(sessionContinueCmd, false, "continue", []string{"Codex"}); err == nil {
 		t.Fatal("a lone harness name must report the missing session ID")
 	}
+}
+
+func TestSessionListSelectorsNarrowTheList(t *testing.T) {
+	resetSessionCommandsTestState(t)
+	oldGetwd := sessionListGetwd
+	t.Cleanup(func() {
+		sessionListGetwd = oldGetwd
+		for _, name := range []string{"here", "harness", "profile", "limit", "json"} {
+			flag := sessionListCmd.Flags().Lookup(name)
+			if slice, ok := flag.Value.(interface{ Replace([]string) error }); ok {
+				_ = slice.Replace(nil)
+			} else {
+				_ = flag.Value.Set(flag.DefValue)
+			}
+			flag.Changed = false
+		}
+	})
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+	repo := filepath.Join(dir, "repo")
+	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	sessionCommandsNow = func() time.Time { return now }
+	entry := func(id, harnessName, cwd string, age time.Duration, snippet string) transcript.SessionMeta {
+		source := filepath.Join(dir, id+".jsonl")
+		if err := os.WriteFile(source, []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		info, err := os.Stat(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return transcript.SessionMeta{
+			ID: id, Harness: harnessName, CWD: cwd, Path: source, Snippet: snippet,
+			FileSize: info.Size(), FileModTime: info.ModTime(), MessageCount: 1,
+			StartedAt: now.Add(-age), LastAt: now.Add(-age),
+		}
+	}
+	codex := []transcript.SessionMeta{
+		entry("codex-root", harness.Codex, repo, time.Minute, "fix the parser"),
+		// "repo2" shares a string prefix with "repo" and must not count as inside it.
+		entry("codex-sibling", harness.Codex, repo+"2", 3*time.Minute, "unrelated"),
+	}
+	claude := []transcript.SessionMeta{
+		entry("claude-sub", harness.Claude, filepath.Join(repo, "sub"), 2*time.Minute, strings.Repeat("long prompt ", 20)),
+	}
+	sessionCommandsSessionIndexPath = func() string { return filepath.Join(dir, "transcripts.json") }
+	sessionCommandsLoadConfig = func() (*config.Config, error) {
+		return &config.Config{Profiles: []config.Account{
+			{Name: "work", Harness: harness.Codex, HomeDir: filepath.Join(dir, "codex-home")},
+			{Name: "personal", Harness: harness.Claude, HomeDir: filepath.Join(dir, "claude-home")},
+		}}, nil
+	}
+	sessionCommandsSessionReaders = func() map[string]transcript.Reader {
+		return map[string]transcript.Reader{
+			harness.Codex:  sessionCommandReader{harness: harness.Codex, discovered: codex},
+			harness.Claude: sessionCommandReader{harness: harness.Claude, discovered: claude},
+		}
+	}
+	sessionListGetwd = func() (string, error) { return repo, nil }
+
+	run := func(t *testing.T, flags map[string]string) (string, error) {
+		t.Helper()
+		for _, name := range []string{"here", "harness", "profile", "limit"} {
+			flag := sessionListCmd.Flags().Lookup(name)
+			if slice, ok := flag.Value.(interface{ Replace([]string) error }); ok {
+				_ = slice.Replace(nil)
+			} else {
+				_ = flag.Value.Set(flag.DefValue)
+			}
+		}
+		for name, value := range flags {
+			if err := sessionListCmd.Flags().Set(name, value); err != nil {
+				t.Fatal(err)
+			}
+		}
+		var out bytes.Buffer
+		sessionListCmd.SetOut(&out)
+		sessionListCmd.SetErr(&out)
+		err := sessionListCmd.RunE(sessionListCmd, nil)
+		return out.String(), err
+	}
+	ids := func(text string) string {
+		var got []string
+		for _, line := range strings.Split(strings.TrimSpace(text), "\n") {
+			fields := strings.Split(line, "\t")
+			got = append(got, fields[len(fields)-1])
+		}
+		return strings.Join(got, ",")
+	}
+
+	for _, tc := range []struct {
+		name  string
+		flags map[string]string
+		want  string
+	}{
+		{"everything, newest first", nil, "codex-root,claude-sub,codex-sibling"},
+		{"harness", map[string]string{"harness": "CODEX"}, "codex-root,codex-sibling"},
+		{"profile", map[string]string{"profile": "personal"}, "claude-sub"},
+		{"here includes subdirectories but not prefix siblings", map[string]string{"here": "true"}, "codex-root,claude-sub"},
+		{"limit keeps the most recent", map[string]string{"limit": "1"}, "codex-root"},
+		{"selectors combine", map[string]string{"here": "true", "harness": "claude"}, "claude-sub"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := run(t, tc.flags)
+			if err != nil {
+				t.Fatalf("list: %v", err)
+			}
+			if got := ids(out); got != tc.want {
+				t.Fatalf("sessions = %s, want %s\n%s", got, tc.want, out)
+			}
+		})
+	}
+
+	for _, tc := range []struct {
+		name  string
+		flags map[string]string
+		want  string
+	}{
+		{"unknown harness", map[string]string{"harness": "gemini"}, `--harness "gemini"`},
+		{"unknown profile", map[string]string{"profile": "nobody"}, `--profile "nobody"`},
+		{"negative limit", map[string]string{"limit": "-1"}, "--limit -1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := run(t, tc.flags)
+			if err == nil || !strings.Contains(out+err.Error(), tc.want) {
+				t.Fatalf("err = %v, output %q, want a refusal naming %s", err, out, tc.want)
+			}
+		})
+	}
+
+	t.Run("terminal table carries a bounded summary", func(t *testing.T) {
+		sessionListIsTerminal = func(io.Writer) bool { return true }
+		t.Cleanup(func() { sessionListIsTerminal = func(io.Writer) bool { return false } })
+		out, err := run(t, map[string]string{"profile": "personal"})
+		if err != nil {
+			t.Fatalf("list: %v", err)
+		}
+		lines := strings.Split(strings.TrimSpace(out), "\n")
+		if len(lines) != 2 || !strings.HasSuffix(lines[0], "SUMMARY") {
+			t.Fatalf("table = %q, want a header ending in SUMMARY and one row", out)
+		}
+		_, summary, _ := strings.Cut(lines[1], "claude-sub  ")
+		if !strings.HasPrefix(summary, "long prompt") || !strings.HasSuffix(summary, "…") || layout.Width(summary) > sessionSummaryWidth {
+			t.Fatalf("summary = %q, want the prompt cut to %d cells", summary, sessionSummaryWidth)
+		}
+	})
 }

@@ -10,7 +10,7 @@ import (
 func TestSessionTableHasAHeaderAndRelativeAges(t *testing.T) {
 	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 	views := []sessionView{
-		{Harness: "claude", Profile: "personal-claude", Project: "🐱amx", LastAt: now.Add(-3 * time.Minute), ID: "b03c41a5"},
+		{Harness: "claude", Profile: "personal-claude", Project: "🐱amx", LastAt: now.Add(-3 * time.Minute), ID: "b03c41a5", Snippet: "Fix the parser"},
 		{Harness: "codex", Profile: "work", LastAt: now.Add(-50 * time.Hour), ID: "01a1"},
 	}
 	var out bytes.Buffer
@@ -21,11 +21,11 @@ func TestSessionTableHasAHeaderAndRelativeAges(t *testing.T) {
 	if len(lines) != 3 || !strings.HasPrefix(lines[0], "HARNESS") {
 		t.Fatalf("table = %q, want a header and two rows", out.String())
 	}
-	if !strings.Contains(lines[1], "3m ago") || !strings.HasSuffix(lines[1], "b03c41a5") {
+	if !strings.Contains(lines[1], "3m ago") || !strings.HasSuffix(lines[1], "b03c41a5  Fix the parser") {
 		t.Errorf("row 1 = %q", lines[1])
 	}
-	if !strings.Contains(lines[2], " - ") || !strings.Contains(lines[2], "2d ago") {
-		t.Errorf("row 2 = %q, want a placeholder project and a day age", lines[2])
+	if !strings.Contains(lines[2], " - ") || !strings.Contains(lines[2], "2d ago") || !strings.HasSuffix(lines[2], "01a1      -") {
+		t.Errorf("row 2 = %q, want placeholder project and summary and a day age", lines[2])
 	}
 }
 
