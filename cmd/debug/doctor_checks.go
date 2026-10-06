@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -250,19 +251,75 @@ func writeDoctorFindings(out io.Writer, findings []doctorFinding) error {
 		if _, err := fmt.Fprintln(out, group.heading); err != nil {
 			return err
 		}
-		for _, finding := range findings {
-			if finding.Severity != group.severity {
-				continue
-			}
-			location := ""
-			if finding.WindowID != 0 {
-				location = fmt.Sprintf("window %d: ", finding.WindowID)
-			}
-			if _, err := fmt.Fprintf(out, "- [%s] %s%s\n", finding.Check, location, finding.Message); err != nil {
+		for _, line := range doctorFindingLines(findings, group.severity) {
+			if _, err := fmt.Fprintln(out, line); err != nil {
 				return err
 			}
 		}
 	}
+	return nil
+}
+
+// doctorFindingLines renders one severity's findings as text. Per-profile
+// hook findings that differ only in the profile they name — every profile of
+// one harness behind the same CLI version — share one line listing the
+// profiles, so a harness upgrade reads as one finding rather than one per
+// profile. The structured findings are untouched: JSON consumers still get
+// one per profile.
+func doctorFindingLines(findings []doctorFinding, severity string) []string {
+	const hooksPrefix = "hooks for "
+	infixes := map[string]string{"hooks": " require attention: ", "hooks_unverified": " are unverified: "}
+	var lines []string
+	groupLine := map[string]int{}
+	groupProfiles := map[string][]string{}
+	for _, finding := range findings {
+		if finding.Severity != severity {
+			continue
+		}
+		if infix, grouped := infixes[finding.Check]; grouped && finding.WindowID == 0 && strings.HasPrefix(finding.Message, hooksPrefix) {
+			if profile, detail, ok := strings.Cut(strings.TrimPrefix(finding.Message, hooksPrefix), infix); ok {
+				key := finding.Check + "\x00" + detail
+				if index, seen := groupLine[key]; seen {
+					groupProfiles[key] = append(groupProfiles[key], profile)
+					lines[index] = fmt.Sprintf("- [%s] %s%s%s%s", finding.Check, hooksPrefix, strings.Join(groupProfiles[key], ", "), infix, detail)
+					continue
+				}
+				groupLine[key] = len(lines)
+				groupProfiles[key] = []string{profile}
+			}
+		}
+		location := ""
+		if finding.WindowID != 0 {
+			location = fmt.Sprintf("window %d: ", finding.WindowID)
+		}
+		lines = append(lines, fmt.Sprintf("- [%s] %s%s", finding.Check, location, finding.Message))
+	}
+	return lines
+}
+
+// writeDoctorProjectDirectories reports configured projects whose directory
+// is gone. A missing directory is a warning rather than a failure: the
+// project cannot launch, but nothing the daemon renders depends on it, and a
+// directory on an unmounted volume may come back. An unreadable config is
+// left to the hooks check, which already reports it.
+func writeDoctorProjectDirectories(out io.Writer, reportMissing func(string, ...any)) error {
+	cfg, err := doctorLoadConfig()
+	if err != nil || cfg == nil {
+		return nil
+	}
+	problems := config.ProjectDirectoryProblems(cfg.Projects)
+	if len(problems) == 0 {
+		_, err := fmt.Fprintf(out, "projects: ok (%d configured)\n", len(cfg.Projects))
+		return err
+	}
+	if _, err := fmt.Fprintf(out, "projects: %d of %d have an unusable directory\n", len(problems), len(cfg.Projects)); err != nil {
+		return err
+	}
+	noun := "projects have"
+	if len(problems) == 1 {
+		noun = "project has"
+	}
+	reportMissing("%d configured %s an unusable directory; run `amx config validate` to list them", len(problems), noun)
 	return nil
 }
 

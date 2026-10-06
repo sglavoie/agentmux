@@ -234,7 +234,7 @@ func writeConfigValidateJSON(cmd *cobra.Command, cfg *config.Config) error {
 		Path:                      config.DefaultConfigPath(),
 		UnknownKeys:               append([]string{}, cfg.UnknownKeys...),
 		Deprecations:              []configDeprecationRow{},
-		InvalidProjectDirectories: append([]string{}, projectDirectoryProblems(cfg.Projects)...),
+		InvalidProjectDirectories: append([]string{}, config.ProjectDirectoryProblems(cfg.Projects)...),
 	}
 	for _, d := range cfg.Deprecations {
 		data.Deprecations = append(data.Deprecations, configDeprecationRow{Key: d.Key, Location: d.Location, Replacement: d.Replacement})
@@ -250,45 +250,10 @@ func writeConfigValidateJSON(cmd *cobra.Command, cfg *config.Config) error {
 }
 
 func validateProjectDirectories(projects []config.Session) error {
-	if problems := projectDirectoryProblems(projects); len(problems) > 0 {
+	if problems := config.ProjectDirectoryProblems(projects); len(problems) > 0 {
 		return fmt.Errorf("invalid project directories:\n%s", strings.Join(problems, "\n"))
 	}
 	return nil
-}
-
-// projectDirectoryProblems lists, in config order, every project whose
-// directory is missing, uninspectable, or not a directory.
-func projectDirectoryProblems(projects []config.Session) []string {
-	var errs []string
-	for _, project := range projects {
-		configuredPath := project.Directory
-		info, err := os.Stat(config.ExpandTilde(configuredPath))
-		if err != nil {
-			var reason string
-			if errors.Is(err, os.ErrNotExist) {
-				reason = "does not exist"
-			} else {
-				var pathErr *os.PathError
-				if errors.As(err, &pathErr) {
-					reason = fmt.Sprintf("cannot be inspected: %v", pathErr.Err)
-				} else {
-					reason = fmt.Sprintf("cannot be inspected: %v", err)
-				}
-			}
-			errs = append(errs, fmt.Sprintf(
-				"project %q: directory %q %s",
-				project.Title, configuredPath, reason,
-			))
-			continue
-		}
-		if !info.IsDir() {
-			errs = append(errs, fmt.Sprintf(
-				"project %q: directory %q is not a directory",
-				project.Title, configuredPath,
-			))
-		}
-	}
-	return errs
 }
 
 func init() {

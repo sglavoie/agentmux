@@ -28,6 +28,12 @@
   minutes, and `screenstate_override_invalid` warns when a pattern override was
   declined; both are covered in
   [Screen classifier health](screen-classifier-health.md).
+  `project_directories` warns once when any configured project points at a
+  missing or non-directory path; `amx config validate` lists them and exits 1.
+  In text output, per-profile `hooks` and `hooks_unverified` findings that
+  share the same detail print on one line naming every profile, while
+  `--json` keeps one finding per profile. A clean verdict counts its
+  warnings, as in `overall: clean (2 warnings)`.
 - **Suspected intermittent state bugs**: preserve a causal snapshot with
   `amx debug bundle --mode share`, validate it with `amx debug replay`, then run
   `amx daemon audit --duration 10m --json`. It samples the invariants every

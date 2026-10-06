@@ -278,6 +278,12 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	if err := writeDoctorProjectDirectories(textOut, func(format string, args ...any) {
+		addFinding(severityWarning, "project_directories", format, args...)
+	}); err != nil {
+		return err
+	}
+
 	var liveByID map[int]protocol.WindowLiveMetadata
 	if kittyOK {
 		liveByID = ExportLiveMetadata(windows, snapshot, 0)
@@ -301,7 +307,13 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	failures := countFindings(report.Findings, severityFailure)
 	report.Healthy = failures == 0
 	if report.Healthy {
-		if _, err := fmt.Fprintln(textOut, "overall: clean"); err != nil {
+		verdict := "overall: clean"
+		if warnings := countFindings(report.Findings, severityWarning); warnings == 1 {
+			verdict += " (1 warning)"
+		} else if warnings > 1 {
+			verdict += fmt.Sprintf(" (%d warnings)", warnings)
+		}
+		if _, err := fmt.Fprintln(textOut, verdict); err != nil {
 			return err
 		}
 	} else if _, err := fmt.Fprintln(textOut, "overall: issues detected"); err != nil {
