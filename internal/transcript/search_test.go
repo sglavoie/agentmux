@@ -359,27 +359,14 @@ func TestSearch_SinceDropsOlderSessionsBeforeReadingAnything(t *testing.T) {
 	}
 }
 
-// A match deep inside a long line must survive a narrow table column, so the
-// preview enters the line just before it; a match near the start keeps the
-// line whole.
-func TestFirstMatchLineEntersALongLineNearTheMatch(t *testing.T) {
+// The preview marks a line entered partway with a leading ellipsis; where the
+// line is entered is searchquery.MatchLine's to decide and test.
+func TestFirstMatchLineMarksALineEnteredNearTheMatch(t *testing.T) {
 	line := "d446830 feat(macos): Add the Agent Mux.app skeleton, toolchain, and packaging for release"
-	got := firstMatchLine("earlier line\n"+line+"\nlater line", len("earlier line\n")+strings.Index(line, "packaging"))
-	if got != "…toolchain, and packaging for release" {
-		t.Fatalf("preview = %q, want it to start a few words before the match", got)
+	if got := firstMatchLine(line, strings.Index(line, "packaging")); got != "…toolchain, and packaging for release" {
+		t.Fatalf("preview = %q, want an ellipsis before the lead-in", got)
 	}
-	if !strings.HasPrefix(got, "…") || strings.Index(got, "packaging") > len("…")+previewLeadContext {
-		t.Fatalf("preview = %q, want the match within the lead context", got)
-	}
-
-	short := "Fix the packaging step"
-	if got := firstMatchLine(short, strings.Index(short, "packaging")); got != short {
-		t.Fatalf("preview = %q, want a near-start match to keep its whole line", got)
-	}
-
-	unbroken := strings.Repeat("x", 40) + "needle"
-	got = firstMatchLine(unbroken, 40)
-	if got != "…"+strings.Repeat("x", previewLeadContext)+"needle" {
-		t.Fatalf("preview = %q, want a lead without spaces cut by runes", got)
+	if got := firstMatchLine("Fix the packaging step", 8); got != "Fix the packaging step" {
+		t.Fatalf("preview = %q, want a near-start match unmarked", got)
 	}
 }

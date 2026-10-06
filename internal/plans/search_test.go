@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/searchquery"
 )
 
 // seedTwoPlans creates two plan dirs under a fresh temp root with
@@ -204,7 +206,9 @@ func TestSearch_BodyOnlyMatchUsesSidecar(t *testing.T) {
 	if !strings.Contains(got.Preview, "foo") {
 		t.Errorf("Preview = %q, want it to contain 'foo'", got.Preview)
 	}
-	if !strings.Contains(got.Preview, "alpha session body") {
+	// The match lies 31 characters into its line, so the preview enters
+	// the line just before it.
+	if got.Preview != "…body talks about foo and bar" {
 		t.Errorf("Preview = %q, want the matching session-1 line", got.Preview)
 	}
 }
@@ -445,5 +449,15 @@ func TestSearch_WhitespaceOnlyQueryTreatedAsEmpty(t *testing.T) {
 		if r.Matches != 0 {
 			t.Errorf("results[%d].Matches = %d, want 0", i, r.Matches)
 		}
+	}
+}
+
+// A plan line matched deep inside is previewed from just before the match, the
+// way transcript search previews are, so a narrow list still shows the match.
+func TestPlanSearchPreviewEntersALongLineNearTheMatch(t *testing.T) {
+	text := "# plan\nthe daemon renderer keeps a single writer and the companion hub debounces its publishes\n"
+	count, preview := countMatchesInSearchText(text, searchquery.Parse("debounces"))
+	if count != 1 || preview != "…and the companion hub debounces its publishes" {
+		t.Fatalf("count = %d, preview = %q; want the line entered near the match", count, preview)
 	}
 }

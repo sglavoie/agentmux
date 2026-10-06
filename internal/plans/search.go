@@ -188,25 +188,15 @@ func countMatchesInSearchText(searchText string, terms searchquery.Terms) (int, 
 	return total, firstMatchLine(searchText, first)
 }
 
-// firstMatchLine returns the single line of text containing the byte
-// offset pos, truncated like a snippet.
+// firstMatchLine returns the line of text containing the byte offset pos,
+// truncated like a snippet, entered just before a deep match the way
+// searchquery.MatchLine decides.
 func firstMatchLine(text string, pos int) string {
-	if pos < 0 || pos >= len(text) {
-		return truncateSnippet(text)
+	line, clipped := searchquery.MatchLine(text, pos)
+	if clipped {
+		return "…" + truncateSnippet(line)
 	}
-	start := strings.LastIndexByte(text[:pos], '\n')
-	if start < 0 {
-		start = 0
-	} else {
-		start++
-	}
-	end := strings.IndexByte(text[pos:], '\n')
-	if end < 0 {
-		end = len(text)
-	} else {
-		end += pos
-	}
-	return truncateSnippet(text[start:end])
+	return truncateSnippet(line)
 }
 
 // SortResults orders rs in place according to mode. Output is stable so

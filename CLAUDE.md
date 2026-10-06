@@ -281,7 +281,9 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   words ANDed together, double-quoted phrases kept whole, matched against
   already-lowercased text. The transcript and plan searches count with it, and
   the transcript and plan viewers step between lines holding any of its terms,
-  so a result and the matches inside it cannot disagree about the query.
+  so a result and the matches inside it cannot disagree about the query. It
+  also picks the line a result is previewed by (`MatchLine`), entering a long
+  line just before a deep match, so both searches show a match the same way.
 - `internal/handoff`: bounded deterministic pack creation, private artifacts,
   and cross-harness launch workflow.
 - `internal/worktree`: bounded managed Git worktree creation and cleanup.
