@@ -27,7 +27,10 @@ amx session handoff claude:<session-id> --profile codex-work
 
 `continue`, `fork`, and `fork-worktree` also accept the single
 `<harness>:<session-id>` selector that `handoff` takes, so
-`amx session continue codex:<session-id>` works too.
+`amx session continue codex:<session-id>` works too. All four also accept a
+bare `<session-id>`: it resolves when exactly one indexed conversation carries
+that ID, and an ID shared across harnesses is refused with the
+harness-qualified candidates rather than guessed.
 
 `session continue` focuses the exact live Kitty owner when one exists and
 otherwise resumes the closed conversation. Native forks are used for Claude

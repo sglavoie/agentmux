@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/handoff"
+	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
@@ -136,7 +138,7 @@ var sessionContinueCmd = newConversationActionCommand("continue", actions.Contin
 var sessionForkCmd = newConversationActionCommand("fork", actions.Fork, "Fork an indexed conversation (portable for Copilot)")
 
 var sessionForkWorktreeCmd = &cobra.Command{
-	Use:               "fork-worktree <harness> <session-id> | <harness>:<session-id>",
+	Use:               "fork-worktree <harness> <session-id> | <harness>:<session-id> | <session-id>",
 	ValidArgsFunction: cli.CompleteHarnessFirstArg,
 	Short:             "Fork an indexed conversation in a new managed Git worktree",
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -151,12 +153,9 @@ var sessionForkWorktreeCmd = &cobra.Command{
 		if err != nil {
 			return cli.CommandFailure(cmd, jsonOutput, "config_error", err)
 		}
-		meta, err := resolveIndexedConversation(cfg, sessionCommandsSessionReaders(), identity)
+		meta, err := resolveConversationOrFail(cmd, jsonOutput, cfg, sessionCommandsSessionReaders(), identity)
 		if err != nil {
-			return cli.CommandFailure(cmd, jsonOutput, "session_index_unavailable", err)
-		}
-		if meta == nil {
-			return cli.CommandFailure(cmd, jsonOutput, "not_found", fmt.Errorf("indexed conversation %s:%s was not found", identity.Harness, identity.SessionID))
+			return err
 		}
 		parameters := map[string]string{}
 		if allowDirty {
@@ -167,7 +166,7 @@ var sessionForkWorktreeCmd = &cobra.Command{
 }
 
 var sessionHandoffCmd = &cobra.Command{
-	Use:   "handoff <conversation>",
+	Use:   "handoff <harness>:<session-id> | <session-id>",
 	Short: "Launch a fresh target profile from a portable handoff pack",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
@@ -178,7 +177,7 @@ var sessionHandoffCmd = &cobra.Command{
 			return cli.CommandFailure(cmd, jsonOutput, "invalid_options", errors.New("--edit cannot be used with --json"))
 		}
 		if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
-			return cli.MissingParameter(cmd, jsonOutput, "conversation", "indexed conversation as <harness>:<session-id>")
+			return cli.MissingParameter(cmd, jsonOutput, "conversation", "indexed conversation as <harness>:<session-id> or a bare session ID")
 		}
 		if len(args) != 1 {
 			return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", errors.New("session handoff accepts exactly one conversation selector"))
@@ -186,21 +185,17 @@ var sessionHandoffCmd = &cobra.Command{
 		if strings.TrimSpace(profile) == "" {
 			return cli.MissingParameter(cmd, jsonOutput, "profile", "target configured profile")
 		}
-		identity, ok := parseConversationSelector(args[0])
-		if !ok {
-			return cli.CommandFailure(cmd, jsonOutput, "invalid_selector", errors.New("conversation must be formatted as <harness>:<session-id>"))
+		identity, err := conversationIdentityFromArgs(cmd, jsonOutput, "handoff", args)
+		if err != nil {
+			return err
 		}
 		cfg, err := sessionCommandsLoadConfig()
 		if err != nil {
 			return cli.CommandFailure(cmd, jsonOutput, "config_error", err)
 		}
-		readers := sessionCommandsSessionReaders()
-		meta, err := resolveIndexedConversation(cfg, readers, identity)
+		meta, err := resolveConversationOrFail(cmd, jsonOutput, cfg, sessionCommandsSessionReaders(), identity)
 		if err != nil {
-			return cli.CommandFailure(cmd, jsonOutput, "session_index_unavailable", err)
-		}
-		if meta == nil {
-			return cli.CommandFailure(cmd, jsonOutput, "not_found", fmt.Errorf("indexed conversation %s:%s was not found", identity.Harness, identity.SessionID))
+			return err
 		}
 		parameters := map[string]string{"profile": profile}
 		if edit {
@@ -215,7 +210,7 @@ var sessionHandoffCmd = &cobra.Command{
 
 func newConversationActionCommand(name string, actionID actions.ID, short string) *cobra.Command {
 	return &cobra.Command{
-		Use:               name + " <harness> <session-id> | <harness>:<session-id>",
+		Use:               name + " <harness> <session-id> | <harness>:<session-id> | <session-id>",
 		ValidArgsFunction: cli.CompleteHarnessFirstArg,
 		Short:             short,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -228,12 +223,9 @@ func newConversationActionCommand(name string, actionID actions.ID, short string
 			if err != nil {
 				return cli.CommandFailure(cmd, jsonOutput, "config_error", err)
 			}
-			meta, err := resolveIndexedConversation(cfg, sessionCommandsSessionReaders(), identity)
+			meta, err := resolveConversationOrFail(cmd, jsonOutput, cfg, sessionCommandsSessionReaders(), identity)
 			if err != nil {
-				return cli.CommandFailure(cmd, jsonOutput, "session_index_unavailable", err)
-			}
-			if meta == nil {
-				return cli.CommandFailure(cmd, jsonOutput, "not_found", fmt.Errorf("indexed conversation %s:%s was not found", identity.Harness, identity.SessionID))
+				return err
 			}
 			return executeSessionAction(cmd, jsonOutput, cfg, actionID, actions.Request{Conversation: meta})
 		},
@@ -241,16 +233,21 @@ func newConversationActionCommand(name string, actionID actions.ID, short string
 }
 
 // conversationIdentityFromArgs reads the conversation a continuity command
-// acts on, either as two arguments (`claude abc`) or as the single
-// `claude:abc` selector `session handoff` takes, so a selector copied from one
-// command works in the others.
+// acts on, either as two arguments (`claude abc`), as the single `claude:abc`
+// selector, or as a bare session ID, so a selector copied from one command
+// works in the others. A bare session ID comes back with an empty harness for
+// resolveConversationOrFail to settle against the index; a lone argument that
+// names a harness is still read as a harness whose session ID is missing.
 func conversationIdentityFromArgs(cmd *cobra.Command, jsonOutput bool, name string, args []string) (conversation.Identity, error) {
 	if len(args) == 1 && strings.Contains(args[0], ":") {
 		identity, ok := parseConversationSelector(args[0])
 		if !ok {
-			return conversation.Identity{}, cli.CommandFailure(cmd, jsonOutput, "invalid_selector", errors.New("conversation must be <harness>:<session-id>"))
+			return conversation.Identity{}, cli.CommandFailure(cmd, jsonOutput, "invalid_selector", errors.New("conversation must be <harness>:<session-id> or a bare session ID"))
 		}
 		return identity, nil
+	}
+	if len(args) == 1 && strings.TrimSpace(args[0]) != "" && !harness.Valid(args[0]) {
+		return conversation.Identity{SessionID: strings.TrimSpace(args[0])}, nil
 	}
 	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
 		return conversation.Identity{}, cli.MissingParameter(cmd, jsonOutput, "harness", "source harness (claude, codex, or copilot)")
@@ -285,10 +282,61 @@ func loadRefreshedSessionIndex(cfg *config.Config, readers map[string]transcript
 	return idx, nil
 }
 
+// resolveConversationOrFail turns a parsed selector into the indexed
+// conversation it names, reporting a miss, an unreadable index, or an
+// ambiguous bare session ID in the caller's output mode.
+func resolveConversationOrFail(cmd *cobra.Command, jsonOutput bool, cfg *config.Config, readers map[string]transcript.Reader, identity conversation.Identity) (*transcript.SessionMeta, error) {
+	meta, err := resolveIndexedConversation(cfg, readers, identity)
+	if err != nil {
+		var actionErr *actions.Error
+		if errors.As(err, &actionErr) {
+			return nil, sessionActionCommandError(cmd, jsonOutput, actions.Result{}, err)
+		}
+		return nil, cli.CommandFailure(cmd, jsonOutput, "session_index_unavailable", err)
+	}
+	if meta == nil {
+		selector := identity.SessionID
+		if identity.Harness != "" {
+			selector = identity.Harness + ":" + identity.SessionID
+		}
+		return nil, cli.CommandFailure(cmd, jsonOutput, "not_found", fmt.Errorf("indexed conversation %s was not found", selector))
+	}
+	return meta, nil
+}
+
+// resolveIndexedConversation looks an exact identity up in the index. An
+// identity without a harness is a bare session ID: it resolves only when
+// exactly one visible conversation carries that ID, and several matches are
+// refused with their harness-qualified selectors rather than guessed between.
 func resolveIndexedConversation(cfg *config.Config, readers map[string]transcript.Reader, identity conversation.Identity) (*transcript.SessionMeta, error) {
 	idx, err := loadRefreshedSessionIndex(cfg, readers)
 	if err != nil {
 		return nil, err
+	}
+	if identity.Harness == "" {
+		var matches []transcript.SessionMeta
+		for _, meta := range idx.List(transcript.ListFilter{}) {
+			if meta.ID == identity.SessionID {
+				matches = append(matches, meta)
+			}
+		}
+		switch len(matches) {
+		case 0:
+			return nil, nil
+		case 1:
+			return &matches[0], nil
+		}
+		candidates := make([]actions.Candidate, 0, len(matches))
+		for _, meta := range matches {
+			candidates = append(candidates, actions.Candidate{ID: meta.Harness + ":" + meta.ID, DisplayName: meta.Project, CanonicalPath: meta.CWD})
+		}
+		sort.Slice(candidates, func(i, j int) bool { return candidates[i].ID < candidates[j].ID })
+		return nil, &actions.Error{
+			Code:              "ambiguous_conversation",
+			Message:           fmt.Sprintf("%d indexed conversations have session ID %q; qualify it with its harness", len(matches), identity.SessionID),
+			MissingParameters: []actions.ParameterSchema{{Name: "harness", Type: "string", Description: "source harness (claude, codex, or copilot)", Required: true}},
+			Candidates:        candidates,
+		}
 	}
 	meta, found := idx.Get(transcript.IndexKey(identity.Harness, identity.SessionID))
 	if !found || meta.HiddenFromIndex {
@@ -333,7 +381,14 @@ func sessionActionCommandError(cmd *cobra.Command, jsonOutput bool, result actio
 		return err
 	}
 	if errors.As(err, &actionErr) {
-		return cli.WriteJSONError(cmd, cli.JSONError{Code: actionErr.Code, Message: actionErr.Message})
+		payload := cli.JSONError{Code: actionErr.Code, Message: actionErr.Message}
+		for _, candidate := range actionErr.Candidates {
+			payload.Candidates = append(payload.Candidates, cli.Candidate(candidate))
+		}
+		for _, parameter := range actionErr.MissingParameters {
+			payload.Parameters = append(payload.Parameters, cli.ParameterHelp{Name: parameter.Name, Description: parameter.Description, Required: parameter.Required})
+		}
+		return cli.WriteJSONError(cmd, payload)
 	}
 	return cli.CommandFailure(cmd, true, "action_failed", err)
 }

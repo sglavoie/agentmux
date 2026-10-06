@@ -258,7 +258,8 @@ func TestSessionCLIRejectsHiddenMissingAndInvalidSelectors(t *testing.T) {
 		t.Fatal(err)
 	}
 	sessionHandoffCmd.SetOut(&out)
-	assertSessionCommandJSONError(t, sessionHandoffCmd, []string{"not-a-conversation"}, &out, "invalid_selector")
+	assertSessionCommandJSONError(t, sessionHandoffCmd, []string{"not-a-conversation"}, &out, "not_found")
+	assertSessionCommandJSONError(t, sessionHandoffCmd, []string{"codex:"}, &out, "invalid_selector")
 }
 
 func assertSessionCommandJSONError(t *testing.T, command *cobra.Command, args []string, out *bytes.Buffer, wantCode string) {

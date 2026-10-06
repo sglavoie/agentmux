@@ -4,14 +4,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -310,5 +313,52 @@ func TestParseSinceWindow(t *testing.T) {
 		if _, err := parseSinceWindow(bad); err == nil {
 			t.Errorf("parseSinceWindow(%q) accepted a bad window", bad)
 		}
+	}
+}
+
+func TestBareSessionIDResolvesAcrossHarnessesAndRefusesToGuess(t *testing.T) {
+	resetSessionCommandsTestState(t)
+	codexMeta, indexPath := sessionCommandMeta(t, harness.Codex)
+	claudeMeta := codexMeta
+	claudeMeta.Harness = harness.Claude
+	uniqueMeta := codexMeta
+	uniqueMeta.ID = "only-codex"
+	writeSessionCommandIndex(t, indexPath, codexMeta, claudeMeta, uniqueMeta)
+	cfg := &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Codex}, {Name: "home", Harness: harness.Claude}}}
+	sessionCommandsSessionIndexPath = func() string { return indexPath }
+	readers := map[string]transcript.Reader{
+		harness.Codex:  sessionCommandReader{harness: harness.Codex, discovered: []transcript.SessionMeta{codexMeta, uniqueMeta}},
+		harness.Claude: sessionCommandReader{harness: harness.Claude, discovered: []transcript.SessionMeta{claudeMeta}},
+	}
+
+	identity, err := conversationIdentityFromArgs(sessionContinueCmd, false, "continue", []string{"only-codex"})
+	if err != nil || identity.Harness != "" || identity.SessionID != "only-codex" {
+		t.Fatalf("bare ID identity = %+v, %v", identity, err)
+	}
+	meta, err := resolveIndexedConversation(cfg, readers, identity)
+	if err != nil || meta == nil || meta.Harness != harness.Codex || meta.ID != "only-codex" {
+		t.Fatalf("unique bare ID resolved to %+v, %v", meta, err)
+	}
+
+	_, err = resolveIndexedConversation(cfg, readers, conversation.Identity{SessionID: "session-1"})
+	var actionErr *actions.Error
+	if !errors.As(err, &actionErr) || actionErr.Code != "ambiguous_conversation" {
+		t.Fatalf("shared bare ID error = %v, want ambiguous_conversation", err)
+	}
+	var ids []string
+	for _, candidate := range actionErr.Candidates {
+		ids = append(ids, candidate.ID)
+	}
+	if got := strings.Join(ids, ","); got != "claude:session-1,codex:session-1" {
+		t.Fatalf("candidates = %s, want ordered harness-qualified selectors", got)
+	}
+
+	if meta, err := resolveIndexedConversation(cfg, readers, conversation.Identity{SessionID: "missing"}); err != nil || meta != nil {
+		t.Fatalf("unknown bare ID = %+v, %v; want a plain miss", meta, err)
+	}
+
+	// A lone harness name is still a harness missing its session ID.
+	if _, err := conversationIdentityFromArgs(sessionContinueCmd, false, "continue", []string{"Codex"}); err == nil {
+		t.Fatal("a lone harness name must report the missing session ID")
 	}
 }
