@@ -311,6 +311,40 @@ func TestProjectLaunchWithNoNearMissPointsAtProjectList(t *testing.T) {
 	}
 }
 
+func TestProjectLaunchTypoOffersClosestProjectsFirst(t *testing.T) {
+	cfg := testConfig()
+	cfg.Projects = append(cfg.Projects, config.Session{Title: "🐱amx", Directory: "/tmp/amx", Profile: "work"}, config.Session{Title: "Amp", Directory: "/tmp/amp", Profile: "work"})
+	out, err := runProject(t, "launch", cfg, &recordingKittyClient{}, true, "", "amxx")
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	var envelope cli.JSONErrorEnvelope
+	if decodeErr := json.Unmarshal([]byte(out), &envelope); decodeErr != nil {
+		t.Fatalf("decode %q: %v", out, decodeErr)
+	}
+	var ids []string
+	for _, candidate := range envelope.Error.Candidates {
+		ids = append(ids, candidate.ID)
+	}
+	if got := strings.Join(ids, ","); got != "work/🐱amx,work/Amp" {
+		t.Fatalf("candidates = %s, want the one-edit 🐱amx before the two-edit Amp and nothing else", got)
+	}
+	if strings.Contains(envelope.Error.Message, "amx project list") {
+		t.Fatalf("message = %q, want no project list hint when typo candidates exist", envelope.Error.Message)
+	}
+}
+
+func TestEditDistance(t *testing.T) {
+	for _, tc := range []struct {
+		a, b string
+		want int
+	}{{"", "", 0}, {"amx", "amx", 0}, {"amxx", "amx", 1}, {"brainote", "brainnotes", 2}, {"kitten", "sitting", 3}, {"", "abc", 3}, {"é", "e", 1}} {
+		if got := editDistance(tc.a, tc.b); got != tc.want {
+			t.Errorf("editDistance(%q, %q) = %d, want %d", tc.a, tc.b, got, tc.want)
+		}
+	}
+}
+
 func TestProjectLaunchMissingTitle(t *testing.T) {
 	out, err := runProject(t, "launch", testConfig(), &recordingKittyClient{}, true, "work", "")
 	if err == nil {

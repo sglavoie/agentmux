@@ -284,12 +284,18 @@ func selectProject(cfg *config.Config, profile, title string) (config.Session, e
 				near = append(near, project)
 			}
 		}
-		message := "no configured project matches " + selector
+		candidates := projectCandidates(near)
+		// A title no project contains is most often a typo of one, so the
+		// projects within a few edits of it come first, closest first.
 		if len(near) == 0 {
-			near = cfg.Projects
+			candidates = typoCandidates(cfg.Projects, key)
+		}
+		message := "no configured project matches " + selector
+		if len(candidates) == 0 {
+			candidates = projectCandidates(cfg.Projects)
 			message += "; `amx project list` shows every project"
 		}
-		return config.Session{}, &actions.Error{Code: "not_found", Action: actions.Launch, Message: message, Candidates: projectCandidates(near)}
+		return config.Session{}, &actions.Error{Code: "not_found", Action: actions.Launch, Message: message, Candidates: candidates}
 	default:
 		return config.Session{}, &actions.Error{
 			Code: "ambiguous_project", Action: actions.Launch,
@@ -335,6 +341,50 @@ func projectCandidates(projects []config.Session) []actions.Candidate {
 	}
 	sort.SliceStable(candidates, func(i, j int) bool { return candidates[i].ID < candidates[j].ID })
 	return candidates
+}
+
+// typoCandidates returns the projects whose titleKey is within a few edits of
+// key — two, or a third of what was typed when that is more — ordered by
+// distance and then as projectCandidates orders them, so "amxx" offers "🐱amx"
+// first. An empty key is no typo of anything.
+func typoCandidates(projects []config.Session, key string) []actions.Candidate {
+	if key == "" {
+		return nil
+	}
+	limit := max(2, len([]rune(key))/3)
+	distance := map[string]int{}
+	var near []config.Session
+	for _, project := range projects {
+		d := editDistance(key, titleKey(project.Title))
+		if d <= limit {
+			near = append(near, project)
+			distance[project.EffectiveProfile()+"/"+project.Title] = d
+		}
+	}
+	candidates := projectCandidates(near)
+	sort.SliceStable(candidates, func(i, j int) bool { return distance[candidates[i].ID] < distance[candidates[j].ID] })
+	return candidates
+}
+
+// editDistance is the Levenshtein distance between a and b, counted in runes.
+func editDistance(a, b string) int {
+	ar, br := []rune(a), []rune(b)
+	row := make([]int, len(br)+1)
+	for j := range row {
+		row[j] = j
+	}
+	for i := 1; i <= len(ar); i++ {
+		diagonal := row[0]
+		row[0] = i
+		for j := 1; j <= len(br); j++ {
+			cost := 1
+			if ar[i-1] == br[j-1] {
+				cost = 0
+			}
+			diagonal, row[j] = row[j], min(row[j]+1, row[j-1]+1, diagonal+cost)
+		}
+	}
+	return row[len(br)]
 }
 
 // completeProjectTitles suggests configured project titles for --title, each
