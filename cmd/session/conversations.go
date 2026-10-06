@@ -317,7 +317,7 @@ var sessionHandoffCmd = &cobra.Command{
 			return cli.CommandFailure(cmd, jsonOutput, "invalid_options", errors.New("--edit cannot be used with --json"))
 		}
 		if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
-			return cli.MissingParameter(cmd, jsonOutput, "conversation", "indexed conversation as <harness>:<session-id> or a bare session ID")
+			return cli.MissingParameter(cmd, jsonOutput, "conversation", conversationParameterDescription)
 		}
 		if len(args) != 1 {
 			return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", errors.New("session handoff accepts exactly one conversation selector"))
@@ -372,6 +372,11 @@ func newConversationActionCommand(name string, actionID actions.ID, short string
 	}
 }
 
+// conversationParameterDescription names every selector form a continuity
+// command accepts, so a missing conversation is reported the same way whether
+// the command takes one selector or the two-argument form too.
+const conversationParameterDescription = "indexed conversation as <harness>:<session-id>, <harness> <session-id>, or a bare session ID or unique prefix"
+
 // conversationIdentityFromArgs reads the conversation a continuity command
 // acts on, either as two arguments (`claude abc`), as the single `claude:abc`
 // selector, or as a bare session ID, so a selector copied from one command
@@ -390,7 +395,7 @@ func conversationIdentityFromArgs(cmd *cobra.Command, jsonOutput bool, name stri
 		return conversation.Identity{SessionID: strings.TrimSpace(args[0])}, nil
 	}
 	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
-		return conversation.Identity{}, cli.MissingParameter(cmd, jsonOutput, "harness", "source harness (claude, codex, or copilot)")
+		return conversation.Identity{}, cli.MissingParameter(cmd, jsonOutput, "conversation", conversationParameterDescription)
 	}
 	if len(args) == 1 || strings.TrimSpace(args[1]) == "" {
 		return conversation.Identity{}, cli.MissingParameter(cmd, jsonOutput, "session-id", "indexed conversation session ID")

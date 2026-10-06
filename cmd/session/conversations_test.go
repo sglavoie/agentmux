@@ -305,6 +305,32 @@ func TestConversationIdentityAcceptsBothSelectorShapes(t *testing.T) {
 	}
 }
 
+// A command run with no selector at all asks for the conversation rather than
+// for a harness, since a bare session ID or prefix no longer needs one.
+func TestMissingSelectorAsksForTheConversation(t *testing.T) {
+	_, err := conversationIdentityFromArgs(sessionContinueCmd, false, "continue", nil)
+	if err == nil || err.Error() != "conversation is required" {
+		t.Fatalf("text error = %v, want conversation is required", err)
+	}
+
+	var out bytes.Buffer
+	sessionShowCmd.SetOut(&out)
+	t.Cleanup(func() { sessionShowCmd.SetOut(nil) })
+	if _, err := conversationIdentityFromArgs(sessionShowCmd, true, "show", []string{" "}); err == nil {
+		t.Fatal("a blank selector must be refused")
+	}
+	var payload cli.JSONErrorEnvelope
+	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
+		t.Fatalf("JSON = %v\n%s", err, out.String())
+	}
+	if payload.Error.Code != "missing_parameter" || len(payload.Error.Parameters) != 1 || payload.Error.Parameters[0].Name != "conversation" {
+		t.Fatalf("payload = %+v, want missing_parameter naming conversation", payload.Error)
+	}
+	if !strings.Contains(payload.Error.Parameters[0].Description, "unique prefix") {
+		t.Fatalf("description = %q, want every selector form named", payload.Error.Parameters[0].Description)
+	}
+}
+
 func TestParseSinceWindow(t *testing.T) {
 	for in, want := range map[string]time.Duration{"7d": 7 * 24 * time.Hour, "12h": 12 * time.Hour, " 90m ": 90 * time.Minute} {
 		if got, err := parseSinceWindow(in); err != nil || got != want {
