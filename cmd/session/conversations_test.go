@@ -207,7 +207,7 @@ func TestSessionListRefreshesFilesystemIndexAndEmitsTextAndJSON(t *testing.T) {
 	if err := sessionListCmd.RunE(sessionListCmd, nil); err != nil {
 		t.Fatalf("text list: %v", err)
 	}
-	if got := out.String(); !strings.Contains(got, "codex\twork\tPrimary\t") || !strings.Contains(got, "\tfresh\n") || strings.Contains(got, "Alias") {
+	if got := out.String(); !strings.Contains(got, "codex\twork\tPrimary\t") || !strings.Contains(got, "\tfresh\t\n") || strings.Contains(got, "Alias") {
 		t.Fatalf("text list = %q", got)
 	}
 	assertNoRetiredDatabaseState(t, home, "session list")
@@ -515,8 +515,7 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 	ids := func(text string) string {
 		var got []string
 		for _, line := range strings.Split(strings.TrimSpace(text), "\n") {
-			fields := strings.Split(line, "\t")
-			got = append(got, fields[len(fields)-1])
+			got = append(got, strings.Split(line, "\t")[4])
 		}
 		return strings.Join(got, ",")
 	}

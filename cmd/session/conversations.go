@@ -71,9 +71,11 @@ var sessionListCmd = &cobra.Command{
 		}
 		// Off a terminal the output stays headerless and tab-separated with
 		// absolute timestamps: scripts cut and sort it, and a relative age is
-		// stale the moment it is written to a file.
+		// stale the moment it is written to a file. The opening prompt comes
+		// last, on one line, so a picker such as fzf has something to match
+		// on and the fields before it keep their positions.
 		for _, item := range views {
-			_, _ = fmt.Fprintf(out, "%s\t%s\t%s\t%s\t%s\n", item.Harness, item.Profile, item.Project, formatTime(item.LastAt), item.ID)
+			_, _ = fmt.Fprintf(out, "%s\t%s\t%s\t%s\t%s\t%s\n", item.Harness, item.Profile, item.Project, formatTime(item.LastAt), item.ID, oneLine(item.Snippet))
 		}
 		return nil
 	},
