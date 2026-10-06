@@ -666,7 +666,8 @@ The same launch action is available without the dashboard, which is what the
 menu bar companion and scripts use:
 
 ```bash
-amx project list                               # PROFILE TITLE HARNESS DIRECTORY GROUPS
+amx project list                               # PROFILE TITLE HARNESS DIRECTORY GROUPS in a terminal; piped, headerless tab-separated rows of profile, title, harness, directory as configured, groups, and a problem field ("missing", …) last
+IFS=$'\t' read -r profile title _ < <(amx project list | fzf) && amx project launch "$title" --profile "$profile"   # pick a project to launch
 amx project list --json                        # [{profile,title,harness,directory,directory_problem?,groups}]
 amx project list --missing                     # only projects whose directory is unusable
 amx project list --group work --harness codex  # filters combine; each flag repeats, ignoring case

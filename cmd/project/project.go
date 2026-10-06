@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"slices"
 	"sort"
 	"strings"
@@ -28,6 +29,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/tui/layout"
 	"github.com/spf13/cobra"
 )
 
@@ -45,6 +47,10 @@ var (
 	projectCompletionLoadConfig = config.LoadDefault
 	// projectDirectoryProblem stats a project directory on the operator's disk.
 	projectDirectoryProblem = config.ProjectDirectoryProblem
+	// projectListIsTerminal and projectListTerminalWidth decide between the
+	// table for a person and the tab-separated rows for a pipe.
+	projectListIsTerminal    = cli.IsTerminal
+	projectListTerminalWidth = cli.TerminalWidth
 )
 
 // Command returns the `project` command tree so the root command can register
@@ -160,6 +166,11 @@ func runProjectList(cmd *cobra.Command, _ []string) error {
 	if projectListJSON {
 		return cli.WriteJSON(cmd, views)
 	}
+	out := cmd.OutOrStdout()
+	if !projectListIsTerminal(out) {
+		writeProjectLines(out, views)
+		return nil
+	}
 	if len(views) == 0 {
 		message := "No projects are configured."
 		switch {
@@ -170,9 +181,10 @@ func runProjectList(cmd *cobra.Command, _ []string) error {
 		case projectListMissing:
 			message = "Every configured project directory is usable."
 		}
-		_, err := fmt.Fprintln(cmd.OutOrStdout(), message)
+		_, err := fmt.Fprintln(out, message)
 		return err
 	}
+	header := []string{"PROFILE", "TITLE", "HARNESS", "DIRECTORY", "GROUPS"}
 	rows := make([][]string, 0, len(views))
 	for _, view := range views {
 		directory := cli.DisplayPath(view.Directory)
@@ -181,7 +193,63 @@ func runProjectList(cmd *cobra.Command, _ []string) error {
 		}
 		rows = append(rows, []string{view.Profile, view.Title, view.Harness, directory, strings.Join(view.Groups, ",")})
 	}
-	return cli.WriteTable(cmd.OutOrStdout(), []string{"PROFILE", "TITLE", "HARNESS", "DIRECTORY", "GROUPS"}, rows)
+	fitProjectDirectories(header, rows, projectListTerminalWidth(out))
+	return cli.WriteTable(out, header, rows)
+}
+
+// writeProjectLines is `project list` off a terminal: headerless and
+// tab-separated, as `session list` and `worktree list` are for pipes, with the
+// directory as configured and its problem in a field of its own rather than
+// appended to the path, so `cut -f4` yields a path. An empty list stays empty,
+// since a script reading rows must not mistake a sentence for a project.
+func writeProjectLines(out io.Writer, views []projectView) {
+	for _, view := range views {
+		problem := ""
+		if view.DirectoryProblem != "" {
+			problem = projectProblemLabel(view.DirectoryProblem)
+		}
+		_, _ = fmt.Fprintf(out, "%s\t%s\t%s\t%s\t%s\t%s\n", view.Profile, view.Title, view.Harness, view.Directory, strings.Join(view.Groups, ","), problem)
+	}
+}
+
+// projectDirectoryColumn is the DIRECTORY column's index in the table, and
+// projectDirectoryMinWidth the narrowest it is cut to: past that the row wraps
+// instead, because a path cut to a few cells names nothing.
+const (
+	projectDirectoryColumn   = 3
+	projectDirectoryMinWidth = 24
+)
+
+// fitProjectDirectories cuts DIRECTORY cells from the left when the table is
+// wider than a terminal width cells wide, keeping the end of each path, which
+// is the part that tells projects apart, and any "(missing)" mark after it.
+// A width of zero is a terminal that would not say, and nothing is cut.
+func fitProjectDirectories(header []string, rows [][]string, width int) {
+	if width <= 0 {
+		return
+	}
+	total := 0
+	directory := 0
+	for i := range header {
+		column := layout.Width(header[i])
+		for _, row := range rows {
+			column = max(column, layout.Width(row[i]))
+		}
+		if i == projectDirectoryColumn {
+			directory = column
+		}
+		total += column
+		if i < len(header)-1 {
+			total += 2
+		}
+	}
+	if total <= width {
+		return
+	}
+	limit := max(projectDirectoryMinWidth, directory-(total-width))
+	for _, row := range rows {
+		row[projectDirectoryColumn] = layout.TruncateLeft(row[projectDirectoryColumn], limit, "…")
+	}
 }
 
 // projectListFilter is what --profile, --harness, and --group keep. Values of

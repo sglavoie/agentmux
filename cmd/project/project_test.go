@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"slices"
 	"strings"
 	"testing"
@@ -79,7 +80,9 @@ func runProjectArgs(t *testing.T, leaf string, cfg *config.Config, client kitty.
 	oldListJSON, oldLaunchJSON, oldProfile, oldTitle := projectListJSON, projectLaunchJSON, projectLaunchProfile, projectLaunchTitle
 	oldMissing := projectListMissing
 	oldProfiles, oldHarnesses, oldGroups := projectListProfiles, projectListHarnesses, projectListGroups
+	oldIsTerminal, oldWidth := projectListIsTerminal, projectListTerminalWidth
 	t.Cleanup(func() {
+		projectListIsTerminal, projectListTerminalWidth = oldIsTerminal, oldWidth
 		projectLoadConfig, projectNewKitty = oldLoad, oldKitty
 		projectListJSON, projectLaunchJSON, projectLaunchProfile, projectLaunchTitle = oldListJSON, oldLaunchJSON, oldProfile, oldTitle
 		projectListMissing = oldMissing
@@ -87,6 +90,18 @@ func runProjectArgs(t *testing.T, leaf string, cfg *config.Config, client kitty.
 	})
 	projectLoadConfig = func() (*config.Config, error) { return cfg, nil }
 	projectNewKitty = func() kitty.KittyClient { return client }
+	// Text output is the table a person reads unless a test installs a pipe.
+	if !projectListPiped {
+		projectListIsTerminal = func(io.Writer) bool { return true }
+	} else {
+		projectListIsTerminal = func(io.Writer) bool { return false }
+	}
+	if projectListWidth == 0 {
+		projectListTerminalWidth = func(io.Writer) int { return 0 }
+	} else {
+		width := projectListWidth
+		projectListTerminalWidth = func(io.Writer) int { return width }
+	}
 	projectListJSON, projectLaunchJSON = jsonOut, jsonOut
 	projectLaunchProfile, projectLaunchTitle = profile, title
 
@@ -178,6 +193,78 @@ func TestProjectListJSONEmptyIsAnArray(t *testing.T) {
 	}
 	if got := strings.TrimSpace(out); got != `{"schema_version":1,"data":[]}` {
 		t.Fatalf("json = %s, want an empty array", got)
+	}
+}
+
+// projectListPiped and projectListWidth are what runProjectArgs tells
+// `project list` about its output: a terminal of unknown width by default.
+var (
+	projectListPiped bool
+	projectListWidth int
+)
+
+// Piped, the list is headerless and tab-separated, with the directory as
+// configured and its problem in a field of its own, so `cut -f4` is a path.
+func TestProjectListPipedIsTabSeparated(t *testing.T) {
+	withDirectoryProblems(t)
+	t.Cleanup(func() { projectListPiped = false })
+	projectListPiped = true
+	out, err := runProject(t, "list", testConfig(), &recordingKittyClient{}, false, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "work\tAPI\tclaude\t/tmp/api\tbackend\t\n" +
+		"codex-work\tAPI\tcodex\t/tmp/api\t\t\n" +
+		"work\tWeb\tclaude\t/tmp/web\t\tmissing\n"
+	if out != want {
+		t.Fatalf("piped output:\n%q\nwant\n%q", out, want)
+	}
+}
+
+// An empty piped list prints nothing, not a sentence a script would read as a
+// row.
+func TestProjectListPipedEmptyPrintsNothing(t *testing.T) {
+	t.Cleanup(func() { projectListPiped = false })
+	projectListPiped = true
+	out, err := runProject(t, "list", &config.Config{}, &recordingKittyClient{}, false, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "" {
+		t.Fatalf("piped empty output = %q, want nothing", out)
+	}
+}
+
+// A table wider than the terminal cuts directories from the left, keeping the
+// end of the path and its mark, rather than wrapping every row.
+func TestProjectListFitsDirectoriesToTheTerminal(t *testing.T) {
+	cfg := testConfig()
+	deep := "/tmp/" + strings.Repeat("deep/", 12) + "web"
+	cfg.Projects[2].Directory = deep
+	old := projectDirectoryProblem
+	t.Cleanup(func() { projectDirectoryProblem = old })
+	projectDirectoryProblem = func(dir string) string {
+		if dir == deep {
+			return "does not exist"
+		}
+		return ""
+	}
+	t.Cleanup(func() { projectListWidth = 0 })
+	projectListWidth = 70
+	out, err := runProject(t, "list", cfg, &recordingKittyClient{}, false, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		if w := layout.Width(line); w > 70 {
+			t.Errorf("line is %d cells wide, want at most 70: %q", w, line)
+		}
+	}
+	if !strings.Contains(out, "…") || !strings.Contains(out, "deep/web (missing)") {
+		t.Fatalf("directory not cut from the left:\n%s", out)
+	}
+	if !strings.Contains(out, "/tmp/api") {
+		t.Fatalf("a short directory was cut:\n%s", out)
 	}
 }
 
