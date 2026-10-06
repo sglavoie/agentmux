@@ -286,6 +286,9 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	}); err != nil {
 		return err
 	}
+	writeDoctorSharedHomes(func(format string, args ...any) {
+		addFinding(severityInfo, "shared_profile_homes", format, args...)
+	})
 
 	var liveByID map[int]protocol.WindowLiveMetadata
 	if kittyOK {

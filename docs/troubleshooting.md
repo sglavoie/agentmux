@@ -44,6 +44,8 @@
   `--json` keeps one finding per profile. A verdict with no failures reads
   `overall: clean` when nothing warned, and otherwise counts its warnings, as
   in `overall: ok (2 warnings)`.
+  `shared_profile_homes` notes every home directory that several profiles of
+  one harness read; each conversation there is listed under all of them.
 - **Suspected intermittent state bugs**: preserve a causal snapshot with
   `amx debug bundle --mode share`, validate it with `amx debug replay`, then run
   `amx daemon audit --duration 10m --json`. It samples the invariants every

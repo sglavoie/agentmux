@@ -3,12 +3,14 @@ package debug
 import (
 	"fmt"
 	"io"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/debugger"
@@ -379,6 +381,51 @@ func writeDoctorProjectDirectories(out io.Writer, reportMissing func(string, ...
 	}
 	reportMissing("%d configured %s an unusable directory; run `amx project list --missing` to list them", len(problems), noun)
 	return nil
+}
+
+// writeDoctorSharedHomes notes every home directory that several profiles of
+// one harness read. Sharing a home is a legitimate way to launch one account
+// under several colors or argument sets, so this is a note rather than a
+// warning, but it explains what is otherwise surprising: each conversation in
+// that home is listed under every one of those profiles, and a list row names
+// one of them. An unreadable config is left to the hooks check.
+func writeDoctorSharedHomes(reportNote func(string, ...any)) {
+	cfg, err := doctorLoadConfig()
+	if err != nil || cfg == nil {
+		return
+	}
+	for _, shared := range sharedProfileHomes(cfg.Profiles) {
+		reportNote("profiles %s share the %s home %s, so each of its sessions is listed under all of them",
+			strings.Join(shared.profiles, ", "), shared.harness, cli.DisplayPath(shared.home))
+	}
+}
+
+type sharedProfileHome struct {
+	harness, home string
+	profiles      []string
+}
+
+// sharedProfileHomes groups profiles by (harness, expanded home directory) and
+// returns the groups holding more than one profile, in configuration order.
+func sharedProfileHomes(profiles []config.Account) []sharedProfileHome {
+	var groups []sharedProfileHome
+	index := map[[2]string]int{}
+	for _, profile := range profiles {
+		key := [2]string{profile.EffectiveHarness(), filepath.Clean(config.ExpandTilde(profile.EffectiveHomeDir()))}
+		if i, ok := index[key]; ok {
+			groups[i].profiles = append(groups[i].profiles, profile.Name)
+			continue
+		}
+		index[key] = len(groups)
+		groups = append(groups, sharedProfileHome{harness: key[0], home: key[1], profiles: []string{profile.Name}})
+	}
+	shared := groups[:0]
+	for _, group := range groups {
+		if len(group.profiles) > 1 {
+			shared = append(shared, group)
+		}
+	}
+	return shared
 }
 
 func writeDoctorSocketStatus(out io.Writer, reportIssue func(string, ...any)) error {

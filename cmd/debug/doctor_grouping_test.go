@@ -2,6 +2,7 @@ package debug
 
 import (
 	"bytes"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -148,5 +149,23 @@ func TestDoctorFindingsSummarizeClosedTombstonesUnlessVerbose(t *testing.T) {
 	}
 	if got := strings.Count(out.String(), "- [closed_tombstone] window "); got != 3 {
 		t.Fatalf("verbose printed %d per-window tombstones, want 3:\n%s", got, out.String())
+	}
+}
+
+func TestDoctorSharedHomesNotesEveryHomeSeveralProfilesRead(t *testing.T) {
+	resetDoctorTestState(t)
+	doctorLoadConfig = func() (*config.Config, error) {
+		return &config.Config{Profiles: []config.Account{
+			{Name: "personal", Harness: "claude", HomeDir: "/h/.claude-personal"},
+			{Name: "solo", Harness: "claude", HomeDir: "/h/.claude"},
+			{Name: "work", Harness: "claude", HomeDir: "/h/.claude-personal/"},
+			{Name: "codex-a", Harness: "codex", HomeDir: "/h/.claude-personal"},
+		}}, nil
+	}
+	var notes []string
+	writeDoctorSharedHomes(func(format string, args ...any) { notes = append(notes, fmt.Sprintf(format, args...)) })
+	want := "profiles personal, work share the claude home /h/.claude-personal, so each of its sessions is listed under all of them"
+	if len(notes) != 1 || notes[0] != want {
+		t.Fatalf("notes = %q, want only %q: a different harness in the same directory is not sharing", notes, want)
 	}
 }
