@@ -4,10 +4,13 @@
 // `list` reports every configured project with the profile, harness, and
 // directory it launches with, and `launch` starts a new session from one of
 // them through the shared actions.Launch definition, exactly as the dashboard's
-// launcher does. A project is identified by its profile and title. Selection
-// never guesses: a title shared by several projects without a --profile to
-// tell them apart, and a selector that matches nothing, both return the
-// configured projects it could have meant as ordered candidates.
+// launcher does. A project is identified by its profile and title. A title
+// that matches no project exactly may still name exactly one project once the
+// leading emoji or symbols are set aside and case is ignored, which is how an
+// operator types it. Selection never guesses: a title shared by several
+// projects without a --profile to tell them apart, and a selector that matches
+// nothing, both return the configured projects it could have meant as ordered
+// candidates.
 //
 // Neither leaf rewrites config.toml.
 package project
@@ -18,6 +21,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/cli"
@@ -64,18 +68,22 @@ var projectListCmd = &cobra.Command{
 }
 
 var projectLaunchCmd = &cobra.Command{
-	Use:   "launch --title TITLE [--profile PROFILE]",
+	Use:   "launch TITLE [--profile PROFILE]",
 	Short: "Launch a new session from a configured project",
-	Long: `Launches a new session from the configured project named by --title, in a
-new Kitty tab, through the same launch action the dashboard uses.
+	Long: `Launches a new session from the configured project named by TITLE (or
+--title), in a new Kitty tab, through the same launch action the dashboard uses.
 
-A project is identified by its profile and title. --profile is needed only when
-several projects share the title; an ambiguous or unmatched selector lists the
-configured projects it could have meant and launches nothing.
+A project is identified by its profile and title. A title that matches no
+project exactly still selects one when it is the only project whose title reads
+the same without its leading emoji or symbols, ignoring case: "amx" launches
+"🐱amx". --profile is needed only when several projects share the title; an
+ambiguous or unmatched selector lists the configured projects it could have
+meant and launches nothing.
 
 Outside Kitty, set KITTY_LISTEN_ON to the instance's remote-control socket.`,
-	Args: cobra.NoArgs,
-	RunE: runProjectLaunch,
+	Args:              cobra.MaximumNArgs(1),
+	ValidArgsFunction: completeProjectTitleArg,
+	RunE:              runProjectLaunch,
 }
 
 func init() {
@@ -131,8 +139,15 @@ func runProjectList(cmd *cobra.Command, _ []string) error {
 	return cli.WriteTable(cmd.OutOrStdout(), []string{"PROFILE", "TITLE", "HARNESS", "DIRECTORY", "GROUPS"}, rows)
 }
 
-func runProjectLaunch(cmd *cobra.Command, _ []string) error {
+func runProjectLaunch(cmd *cobra.Command, args []string) error {
 	title := strings.TrimSpace(projectLaunchTitle)
+	if len(args) == 1 {
+		positional := strings.TrimSpace(args[0])
+		if title != "" && title != positional {
+			return cli.CommandFailure(cmd, projectLaunchJSON, "invalid_arguments", fmt.Errorf("title given twice: %q and --title %q", positional, title))
+		}
+		title = positional
+	}
 	if title == "" {
 		return cli.MissingParameter(cmd, projectLaunchJSON, "title", "configured project title (see `amx project list`)")
 	}
@@ -183,19 +198,35 @@ func projectActionError(cmd *cobra.Command, err error) error {
 }
 
 // selectProject resolves the configured project a (profile, title) selector
-// names. Titles compare exactly, because they are operator-authored and are
-// the launch identity; an empty profile matches any profile. It returns a
+// names; an empty profile matches any profile. An exact title wins, because
+// titles are operator-authored and are the launch identity. Only when nothing
+// matches exactly is the title compared by its titleKey, so "amx" reaches
+// "🐱amx" but can never shadow a project actually titled "amx". It returns a
 // typed action error, never a guess, when zero or several projects match.
 func selectProject(cfg *config.Config, profile, title string) (config.Session, error) {
+	inProfile := func(project config.Session) bool {
+		return profile == "" || strings.EqualFold(project.EffectiveProfile(), profile)
+	}
 	var matches []config.Session
 	for _, project := range cfg.Projects {
-		if project.Title != title {
-			continue
+		if project.Title == title && inProfile(project) {
+			matches = append(matches, project)
 		}
-		if profile != "" && !strings.EqualFold(project.EffectiveProfile(), profile) {
-			continue
+	}
+	if len(matches) == 0 {
+		key := titleKey(title)
+		for _, project := range cfg.Projects {
+			if key != "" && titleKey(project.Title) == key && inProfile(project) {
+				matches = append(matches, project)
+			}
 		}
-		matches = append(matches, project)
+		if len(matches) > 1 && !sameTitle(matches) {
+			return config.Session{}, &actions.Error{
+				Code: "ambiguous_project", Action: actions.Launch,
+				Message:    fmt.Sprintf("%d configured projects match title %q; give the exact title", len(matches), title),
+				Candidates: projectCandidates(matches),
+			}
+		}
 	}
 	switch len(matches) {
 	case 1:
@@ -205,12 +236,14 @@ func selectProject(cfg *config.Config, profile, title string) (config.Session, e
 		if profile != "" {
 			selector += fmt.Sprintf(" and profile %q", profile)
 		}
-		// The near misses — the same title under another profile, or a
-		// differently cased title — are the projects the caller most likely
-		// meant; with none, every configured project is a candidate.
+		// The near misses — any project, under any profile, whose title
+		// contains what was typed once both are read by their titleKey — are
+		// the projects the caller most likely meant; with none, every
+		// configured project is a candidate.
 		var near []config.Session
+		key := titleKey(title)
 		for _, project := range cfg.Projects {
-			if strings.EqualFold(project.Title, title) {
+			if strings.Contains(titleKey(project.Title), key) {
 				near = append(near, project)
 			}
 		}
@@ -221,11 +254,32 @@ func selectProject(cfg *config.Config, profile, title string) (config.Session, e
 	default:
 		return config.Session{}, &actions.Error{
 			Code: "ambiguous_project", Action: actions.Launch,
-			Message:           fmt.Sprintf("%d configured projects are titled %q; choose one with --profile", len(matches), title),
+			Message:           fmt.Sprintf("%d configured projects are titled %q; choose one with --profile", len(matches), matches[0].Title),
 			MissingParameters: []actions.ParameterSchema{{Name: "profile", Type: "string", Description: "configured profile the project launches with", Required: true}},
 			Candidates:        projectCandidates(matches),
 		}
 	}
+}
+
+// titleKey is how an operator types a title: without the emoji, bullets, and
+// other symbols titles often lead with, and in lower case. "🐱amx", "•amx",
+// and "AMX" all read as "amx".
+func titleKey(title string) string {
+	trimmed := strings.TrimLeftFunc(strings.TrimSpace(title), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
+	return strings.ToLower(trimmed)
+}
+
+// sameTitle reports whether every project carries one title, so several of
+// them differ only by profile and --profile is what tells them apart.
+func sameTitle(projects []config.Session) bool {
+	for _, project := range projects[1:] {
+		if project.Title != projects[0].Title {
+			return false
+		}
+	}
+	return true
 }
 
 // projectCandidates orders candidates by profile then title, so the same
@@ -271,6 +325,15 @@ func completeProjectTitles(cmd *cobra.Command, _ []string, toComplete string) ([
 		titles = append(titles, project.Title+"\t"+project.EffectiveProfile())
 	}
 	return titles, cobra.ShellCompDirectiveNoFileComp
+}
+
+// completeProjectTitleArg offers the same titles for the positional TITLE,
+// and nothing once it is given.
+func completeProjectTitleArg(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if len(args) > 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	return completeProjectTitles(cmd, args, toComplete)
 }
 
 func projectViews(cfg *config.Config) []projectView {

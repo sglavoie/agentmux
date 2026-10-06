@@ -135,7 +135,9 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   session from one through `actions.Launch` in `actions.DefaultRegistry()`, the
   same definition the dashboard's launcher runs, so the two cannot disagree
   about what launching a project means. A project is identified by its profile
-  and title (titles compare exactly); a title shared by several projects without
+  and title (an exact title wins; failing one, a title matching exactly one
+  project once leading emoji/symbols and case are set aside selects it, so
+  `amx` reaches `🐱amx`); a title shared by several projects without
   `--profile`, and a selector matching nothing, are refused with ordered
   `profile/title` candidates rather than resolved by a guess. A launch reports
   the new tab's identity only when exactly one new tab carrying the title

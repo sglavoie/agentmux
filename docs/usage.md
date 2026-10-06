@@ -662,15 +662,20 @@ menu bar companion and scripts use:
 ```bash
 amx project list                               # PROFILE TITLE HARNESS DIRECTORY GROUPS
 amx project list --json                        # [{profile,title,harness,directory,groups}]
-amx project launch --title API                 # one project titled API
+amx project launch API                         # one project titled API
+amx project launch amx                         # the project titled 🐱amx
 amx project launch --title API --profile codex-work --json
 ```
 
-A project is identified by its profile and title; titles match exactly.
-`--profile` is needed only when several projects share a title. An ambiguous or
-unmatched selector launches nothing and lists the configured projects it could
-have meant (`ambiguous_project` or `not_found`, with `candidates` whose `id` is
-`profile/title`). Like `enter` in the launcher, `project launch` always opens a
+A project is identified by its profile and title, given as the argument or as
+`--title`. An exact title always wins. Otherwise the title still selects a
+project when it is the only one whose title reads the same without its leading
+emoji or symbols, ignoring case, so `amx` launches `🐱amx`. `--profile` is
+needed only when several projects share a title. An ambiguous or unmatched
+selector launches nothing and lists the configured projects it could have meant
+(`ambiguous_project` or `not_found`, with `candidates` whose `id` is
+`profile/title`); an unmatched title lists only the projects whose titles
+contain it, when there are any. Like `enter` in the launcher, `project launch` always opens a
 new tab. Its `--json` data is `{action, changed, message, project, tab_id,
 window_id}`; `tab_id` and `window_id` name the new tab when exactly one new tab
 carrying the title appeared, and are omitted otherwise.

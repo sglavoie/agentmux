@@ -46,3 +46,15 @@ func TestCompleteProjectTitlesDegradesToNothingOnBrokenConfig(t *testing.T) {
 		t.Fatalf("completions = %q, want none", got)
 	}
 }
+
+func TestCompleteProjectTitleArgStopsAfterOneTitle(t *testing.T) {
+	oldLoad := projectCompletionLoadConfig
+	t.Cleanup(func() { projectCompletionLoadConfig = oldLoad })
+	projectCompletionLoadConfig = func() (*config.Config, error) { return testConfig(), nil }
+	if got, want := func() []string { c, _ := completeProjectTitleArg(projectLaunchCmd, nil, "W"); return c }(), []string{"Web\twork"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("first-argument completions = %q, want %q", got, want)
+	}
+	if got, _ := completeProjectTitleArg(projectLaunchCmd, []string{"Web"}, ""); got != nil {
+		t.Fatalf("second-argument completions = %q, want none", got)
+	}
+}

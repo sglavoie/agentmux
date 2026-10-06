@@ -68,6 +68,12 @@ func testConfig() *config.Config {
 // flags, restoring every seam and flag afterwards.
 func runProject(t *testing.T, leaf string, cfg *config.Config, client kitty.KittyClient, jsonOut bool, profile, title string) (string, error) {
 	t.Helper()
+	return runProjectArgs(t, leaf, cfg, client, jsonOut, profile, title, nil)
+}
+
+// runProjectArgs is runProject with positional arguments.
+func runProjectArgs(t *testing.T, leaf string, cfg *config.Config, client kitty.KittyClient, jsonOut bool, profile, title string, args []string) (string, error) {
+	t.Helper()
 	oldLoad, oldKitty := projectLoadConfig, projectNewKitty
 	oldListJSON, oldLaunchJSON, oldProfile, oldTitle := projectListJSON, projectLaunchJSON, projectLaunchProfile, projectLaunchTitle
 	t.Cleanup(func() {
@@ -87,7 +93,7 @@ func runProject(t *testing.T, leaf string, cfg *config.Config, client kitty.Kitt
 	command.SetOut(&out)
 	t.Cleanup(func() { command.SetOut(nil) })
 	command.SetContext(context.Background())
-	err := command.RunE(command, nil)
+	err := command.RunE(command, args)
 	return out.String(), err
 }
 
@@ -255,5 +261,113 @@ func TestProjectLaunchFailureUsesTheErrorEnvelope(t *testing.T) {
 	}
 	if !strings.Contains(out, `"code":"action_failed"`) || !strings.Contains(out, "kitty refused") {
 		t.Fatalf("json = %s, want action_failed", out)
+	}
+}
+
+// emojiConfig titles its projects the way operators do, behind an emoji or a
+// bullet, with one project whose bare title is another's typed form.
+func emojiConfig() *config.Config {
+	cfg := testConfig()
+	cfg.Projects = []config.Session{
+		{Title: "🐱amx", Directory: "/tmp/amx", Profile: "work"},
+		{Title: "•dotfiles", Directory: "/tmp/dotfiles", Profile: "work"},
+		{Title: "🐱pets", Directory: "/tmp/cats", Profile: "work"},
+		{Title: "🐶Pets", Directory: "/tmp/dogs", Profile: "work"},
+		{Title: "🗣️coach", Directory: "/tmp/coach", Profile: "codex-work"},
+	}
+	return cfg
+}
+
+func TestProjectLaunchMatchesATitleWithoutItsLeadingEmoji(t *testing.T) {
+	for _, typed := range []string{"amx", "AMX", " amx "} {
+		client := &recordingKittyClient{}
+		out, err := runProject(t, "launch", emojiConfig(), client, false, "", typed)
+		if err != nil {
+			t.Fatalf("launch %q: %v", typed, err)
+		}
+		if len(client.launched) != 1 || client.launched[0].Directory != "/tmp/amx" {
+			t.Fatalf("launch %q = %+v, want the 🐱amx project", typed, client.launched)
+		}
+		if want := "Launched 🐱amx (work).\n"; out != want {
+			t.Fatalf("out = %q, want %q", out, want)
+		}
+	}
+	client := &recordingKittyClient{}
+	if _, err := runProject(t, "launch", emojiConfig(), client, false, "codex-work", "coach"); err != nil || len(client.launched) != 1 {
+		t.Fatalf("launch coach = %v, %d tabs; want the 🗣️coach project, variation selector and all", err, len(client.launched))
+	}
+}
+
+func TestProjectLaunchPrefersAnExactTitleOverAnEmojiOne(t *testing.T) {
+	cfg := emojiConfig()
+	cfg.Projects = append(cfg.Projects, config.Session{Title: "amx", Directory: "/tmp/plain-amx", Profile: "work"})
+	client := &recordingKittyClient{}
+	if _, err := runProject(t, "launch", cfg, client, false, "", "amx"); err != nil {
+		t.Fatal(err)
+	}
+	if len(client.launched) != 1 || client.launched[0].Directory != "/tmp/plain-amx" {
+		t.Fatalf("launched = %+v, want the project titled exactly amx", client.launched)
+	}
+}
+
+func TestProjectLaunchRefusesATypedTitleSeveralProjectsShare(t *testing.T) {
+	client := &recordingKittyClient{}
+	out, err := runProject(t, "launch", emojiConfig(), client, true, "", "pets")
+	if err == nil || len(client.launched) != 0 {
+		t.Fatalf("err = %v, launched %d; want a refusal and no tab", err, len(client.launched))
+	}
+	want := `{"schema_version":1,"error":{"code":"ambiguous_project","message":"2 configured projects match title \"pets\"; give the exact title",` +
+		`"candidates":[{"id":"work/🐱pets","display_name":"🐱pets","canonical_path":"/tmp/cats"},{"id":"work/🐶Pets","display_name":"🐶Pets","canonical_path":"/tmp/dogs"}]}}`
+	if got := strings.TrimSpace(out); got != want {
+		t.Fatalf("json = %s\nwant   %s", got, want)
+	}
+}
+
+// A typed title that reaches one title under several profiles is the ordinary
+// shared-title case: --profile, not a longer title, tells them apart.
+func TestProjectLaunchTypedSharedTitleAsksForProfile(t *testing.T) {
+	_, err := runProject(t, "launch", testConfig(), &recordingKittyClient{}, false, "", "api")
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	for _, want := range []string{`2 configured projects are titled "API"; choose one with --profile`, "codex-work/API", "work/API", "missing --profile"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("text error lacks %q:\n%s", want, err)
+		}
+	}
+}
+
+func TestProjectLaunchNotFoundOffersOnlyTitlesContainingTheQuery(t *testing.T) {
+	_, err := runProject(t, "launch", emojiConfig(), &recordingKittyClient{}, false, "", "dot")
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	want := "no configured project matches title \"dot\"\ncandidates:\n  work/•dotfiles  •dotfiles  /tmp/dotfiles"
+	if err.Error() != want {
+		t.Fatalf("err = %q\nwant  %q", err, want)
+	}
+}
+
+func TestProjectLaunchTakesThePositionalTitle(t *testing.T) {
+	client := &recordingKittyClient{}
+	if _, err := runProjectArgs(t, "launch", emojiConfig(), client, false, "", "", []string{"amx"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(client.launched) != 1 || client.launched[0].Directory != "/tmp/amx" {
+		t.Fatalf("launched = %+v, want the 🐱amx project", client.launched)
+	}
+	if _, err := runProjectArgs(t, "launch", emojiConfig(), client, false, "", "amx", []string{"amx"}); err != nil {
+		t.Fatalf("the same title as argument and flag: %v", err)
+	}
+}
+
+func TestProjectLaunchRefusesTwoDifferentTitles(t *testing.T) {
+	client := &recordingKittyClient{}
+	out, err := runProjectArgs(t, "launch", emojiConfig(), client, true, "", "dotfiles", []string{"amx"})
+	if err == nil || len(client.launched) != 0 {
+		t.Fatalf("err = %v, launched %d; want a refusal and no tab", err, len(client.launched))
+	}
+	if !strings.Contains(out, `"code":"invalid_arguments"`) {
+		t.Fatalf("json = %s, want invalid_arguments", out)
 	}
 }
