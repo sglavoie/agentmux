@@ -337,18 +337,31 @@ func sameTitle(projects []config.Session) bool {
 }
 
 // projectCandidates orders candidates by profile then title, so the same
-// configuration always produces the same list. The ID is the selector pair a
-// caller passes back as --profile and --title.
+// configuration always produces the same list. Titles are compared by their
+// titleKey, so a leading emoji or bullet does not move a title away from its
+// alphabetical place ("🐱amx" sorts with "amp", not after every plain
+// title). The ID is the selector pair a caller passes back as --profile and
+// --title.
 func projectCandidates(projects []config.Session) []actions.Candidate {
-	candidates := make([]actions.Candidate, 0, len(projects))
-	for _, project := range projects {
+	sorted := append([]config.Session(nil), projects...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		pi, pj := strings.ToLower(sorted[i].EffectiveProfile()), strings.ToLower(sorted[j].EffectiveProfile())
+		if pi != pj {
+			return pi < pj
+		}
+		if ki, kj := titleKey(sorted[i].Title), titleKey(sorted[j].Title); ki != kj {
+			return ki < kj
+		}
+		return sorted[i].EffectiveProfile()+"/"+sorted[i].Title < sorted[j].EffectiveProfile()+"/"+sorted[j].Title
+	})
+	candidates := make([]actions.Candidate, 0, len(sorted))
+	for _, project := range sorted {
 		candidates = append(candidates, actions.Candidate{
 			ID:            project.EffectiveProfile() + "/" + project.Title,
 			DisplayName:   project.Title,
 			CanonicalPath: project.Directory,
 		})
 	}
-	sort.SliceStable(candidates, func(i, j int) bool { return candidates[i].ID < candidates[j].ID })
 	return candidates
 }
 

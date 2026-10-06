@@ -334,6 +334,25 @@ func TestProjectLaunchTypoOffersClosestProjectsFirst(t *testing.T) {
 	}
 }
 
+// TestProjectCandidatesSortTitlesPastLeadingSymbols pins that a title's
+// leading emoji or bullet does not move it out of alphabetical order in a
+// candidate list.
+func TestProjectCandidatesSortTitlesPastLeadingSymbols(t *testing.T) {
+	var ids []string
+	for _, candidate := range projectCandidates([]config.Session{
+		{Title: "spec", Profile: "work"},
+		{Title: "•dotfiles", Profile: "work"},
+		{Title: "🐱amx", Profile: "work"},
+		{Title: "Lyzma", Profile: "work"},
+		{Title: "api", Profile: "home"},
+	}) {
+		ids = append(ids, candidate.ID)
+	}
+	if got, want := strings.Join(ids, ","), "home/api,work/🐱amx,work/•dotfiles,work/Lyzma,work/spec"; got != want {
+		t.Fatalf("candidates = %s, want %s", got, want)
+	}
+}
+
 func TestEditDistance(t *testing.T) {
 	for _, tc := range []struct {
 		a, b string
