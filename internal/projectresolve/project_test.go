@@ -107,6 +107,13 @@ func TestResolverGitProviderErrorFallsBack(t *testing.T) {
 	if got.Title != "app-security" || got.Profile != "" {
 		t.Fatalf("ResolveOrFallback without git = %#v, want basename fallback", got)
 	}
+
+	// A failed probe costs only the worktree mapping: the configured physical
+	// ancestor still matches.
+	got = resolver.ResolveOrFallback(filepath.Join(string(filepath.Separator), "repos", "app", "pkg"))
+	if got.Title != "Repo" || got.Profile != "repo-profile" {
+		t.Fatalf("ResolveOrFallback(configured ancestor) without git = %#v, want Repo/repo-profile", got)
+	}
 }
 
 func TestGitWorktreeListPorcelainZParsesPathsWithSpaces(t *testing.T) {

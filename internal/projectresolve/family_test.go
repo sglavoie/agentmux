@@ -332,10 +332,12 @@ func TestParseGitRevParseRoots(t *testing.T) {
 	}
 
 	for name, out := range map[string]string{
-		"only toplevel": "/repos/app\n",
-		"extra line":    "/repos/app\n/repos/app/.git\n/repos/app\n",
-		"empty common":  "/repos/app\n\n",
-		"empty output":  "",
+		"only toplevel":  "/repos/app\n",
+		"extra line":     "/repos/app\n/repos/app/.git\n/repos/app\n",
+		"empty common":   "/repos/app\n\n",
+		"empty output":   "",
+		"blank line":     "\n",
+		"empty toplevel": "\n/repos/app/.git\n",
 	} {
 		if _, _, err := parseGitRevParseRoots([]byte(out)); err == nil {
 			t.Errorf("parseGitRevParseRoots(%s) accepted malformed output", name)

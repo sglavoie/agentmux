@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -413,5 +414,31 @@ func TestRefresh_ExpandsTildeInHomeDir(t *testing.T) {
 	want := filepath.Join(home, "transcript-tilde-test-should-not-exist")
 	if got != want {
 		t.Errorf("Discover received homeDir = %q, want %q", got, want)
+	}
+}
+
+func requireGit(t *testing.T) string {
+	t.Helper()
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git unavailable")
+	}
+	return git
+}
+
+func runGit(t *testing.T, git, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command(git, append([]string{"-C", dir}, args...)...)
+	cmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=Agentmux Test",
+		"GIT_AUTHOR_EMAIL=agentmux-test@example.invalid",
+		"GIT_COMMITTER_NAME=Agentmux Test",
+		"GIT_COMMITTER_EMAIL=agentmux-test@example.invalid",
+		"GIT_CONFIG_GLOBAL="+os.DevNull,
+		"GIT_CONFIG_NOSYSTEM=1",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
 }
