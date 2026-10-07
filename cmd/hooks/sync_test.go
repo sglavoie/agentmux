@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,7 @@ func TestConfigHooksStatusCommandWritesToCommandOutput(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 	t.Setenv("amx_CONFIG", path)
+	asTerminal(t, true)
 
 	oldOut := configHooksStatusCmd.OutOrStdout()
 	oldErr := configHooksStatusCmd.ErrOrStderr()
@@ -31,8 +33,11 @@ func TestConfigHooksStatusCommandWritesToCommandOutput(t *testing.T) {
 		t.Fatalf("RunE: %v", err)
 	}
 	got := out.String()
+	if strings.Contains(got, "ACCOUNT") {
+		t.Fatalf("hooks-status still heads the column with the deprecated ACCOUNT:\n%s", got)
+	}
 	for _, want := range []string{
-		"ACCOUNT",
+		"PROFILE",
 		"work",
 		"missing",
 		"hint: run `amx config hooks-sync`",
@@ -80,6 +85,51 @@ func TestConfigHooksStatusCommandWritesErrorsToCommandErrorOutput(t *testing.T) 
 	if got := stderr.String(); !strings.Contains(got, "error:") || !strings.Contains(got, "work") {
 		t.Fatalf("stderr should include status error, got:\n%s", got)
 	}
+}
+
+// Off a terminal hooks-status prints what project, session, and worktree list
+// print for a pipe: headerless tab-separated rows, so `cut -f3` yields the
+// sync state. The hint goes to stderr, where no script reads it as a row.
+func TestConfigHooksStatusCommandPrintsTabSeparatedRowsForAPipe(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	home := filepath.Join(t.TempDir(), "missing-home")
+	if err := os.WriteFile(path, []byte(validConfigBody(home)), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("amx_CONFIG", path)
+	asTerminal(t, false)
+
+	oldOut := configHooksStatusCmd.OutOrStdout()
+	oldErr := configHooksStatusCmd.ErrOrStderr()
+	t.Cleanup(func() {
+		configHooksStatusCmd.SetOut(oldOut)
+		configHooksStatusCmd.SetErr(oldErr)
+	})
+	var out, stderr bytes.Buffer
+	configHooksStatusCmd.SetOut(&out)
+	configHooksStatusCmd.SetErr(&stderr)
+
+	if err := configHooksStatusCmd.RunE(configHooksStatusCmd, nil); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+	lines := strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("piped hooks-status = %q, want exactly one row and no header", out.String())
+	}
+	fields := strings.Split(lines[0], "\t")
+	if len(fields) != 5 || fields[0] != "work" || fields[1] != "claude" || fields[2] != "missing" {
+		t.Fatalf("piped row fields = %q, want work, claude, missing, activation, detail", fields)
+	}
+	if !strings.Contains(stderr.String(), "hint: run `amx config hooks-sync`") {
+		t.Fatalf("stderr = %q, want the hint", stderr.String())
+	}
+}
+
+func asTerminal(t *testing.T, terminal bool) {
+	t.Helper()
+	old := hooksStatusIsTerminal
+	t.Cleanup(func() { hooksStatusIsTerminal = old })
+	hooksStatusIsTerminal = func(io.Writer) bool { return terminal }
 }
 
 func validConfigBody(homeDir string) string {

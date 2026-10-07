@@ -23,6 +23,11 @@ func StatusCommand() *cobra.Command { return configHooksStatusCmd }
 // hooksBinary is the seam tests swap to stand in for the running executable.
 var hooksBinary = cli.AmxBinary
 
+// hooksStatusIsTerminal decides between the table for a person and the
+// tab-separated rows for a pipe; tests swap it, since they cannot hand a
+// command a terminal.
+var hooksStatusIsTerminal = cli.IsTerminal
+
 var configHooksSyncCmd = &cobra.Command{
 	Use:               "hooks-sync [PROFILE]",
 	Short:             "Sync Agent Mux hooks for configured harness profiles",
@@ -90,23 +95,34 @@ var configHooksStatusCmd = &cobra.Command{
 		report := debugger.InspectHooks(cfg, bin, time.Now())
 		out := cmd.OutOrStdout()
 		errOut := cmd.ErrOrStderr()
-		if _, err := fmt.Fprintf(out, "%-20s %-10s %-10s %-12s %s\n", "ACCOUNT", "HARNESS", "SYNC", "ACTIVATION", "DETAIL"); err != nil {
-			return err
-		}
 		needsAttention := false
+		rows := make([][]string, 0, len(report.Profiles))
 		for _, s := range report.Profiles {
 			if s.CheckError != "" {
-				if _, err := fmt.Fprintf(out, "%-20s %-10s %-10s %-12s %s\n", s.Profile, s.Harness, "error", hooks.ActivationFailure, s.CheckError); err != nil {
-					return err
-				}
+				rows = append(rows, []string{s.Profile, s.Harness, "error", string(hooks.ActivationFailure), s.CheckError})
 				needsAttention = true
 				continue
 			}
-			if _, err := fmt.Fprintf(out, "%-20s %-10s %-10s %-12s %s\n", s.Profile, s.Harness, s.Sync, s.Activation, s.Detail()); err != nil {
-				return err
-			}
+			rows = append(rows, []string{s.Profile, s.Harness, string(s.Sync), string(s.Activation), s.Detail()})
 			if s.Verdict != debugger.VerdictHealthy {
 				needsAttention = true
+			}
+		}
+		// A person gets an aligned table and the hint below it; a pipe gets
+		// headerless tab-separated rows, as project, session, and worktree list
+		// give it, with the hint on stderr so it is never read as a row.
+		terminal := hooksStatusIsTerminal(out)
+		hintOut := out
+		if terminal {
+			if err := cli.WriteTable(out, []string{"PROFILE", "HARNESS", "SYNC", "ACTIVATION", "DETAIL"}, rows); err != nil {
+				return err
+			}
+		} else {
+			hintOut = errOut
+			for _, row := range rows {
+				if _, err := fmt.Fprintln(out, strings.Join(row, "\t")); err != nil {
+					return err
+				}
 			}
 		}
 		if report.Error != "" {
@@ -118,10 +134,12 @@ var configHooksStatusCmd = &cobra.Command{
 			}
 		}
 		if needsAttention {
-			if _, err := fmt.Fprintln(out); err != nil {
-				return err
+			if terminal {
+				if _, err := fmt.Fprintln(out); err != nil {
+					return err
+				}
 			}
-			if _, err := fmt.Fprintln(out, "hint: run `amx config hooks-sync` for drifted or missing files; activation details identify disabling settings, launch flags, and trust records, while CLI-version or last-seen gaps remain unverified."); err != nil {
+			if _, err := fmt.Fprintln(hintOut, "hint: run `amx config hooks-sync` for drifted or missing files; activation details identify disabling settings, launch flags, and trust records, while CLI-version or last-seen gaps remain unverified."); err != nil {
 				return err
 			}
 		}
