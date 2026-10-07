@@ -539,7 +539,7 @@ func checkDoctorConfigFreshness(uptime time.Duration, addFinding func(severity, 
 // the profiles that need a look are the ones left standing on their own. A
 // profile ahead of the verified contract is still healthy and counted: its
 // line never said so, and the note it raises is a finding of its own.
-func writeDoctorHooks(out io.Writer, verbose bool, reportIssue func(string, ...any), reportUnverified func(string, ...any), reportNote func(string, ...any)) error {
+func writeDoctorHooks(out io.Writer, verbose bool, daemonStartedAt time.Time, reportIssue func(string, ...any), reportUnverified func(string, ...any), reportNote func(string, ...any), reportDelivery func(severity, format string, args ...any)) error {
 	cfg, err := doctorLoadConfig()
 	if err != nil {
 		if _, writeErr := fmt.Fprintf(out, "hooks: config unavailable (%s)\n", err); writeErr != nil {
@@ -556,7 +556,8 @@ func writeDoctorHooks(out io.Writer, verbose bool, reportIssue func(string, ...a
 		reportIssue("hook status binary unavailable: %s", err)
 		return nil
 	}
-	report := debugger.InspectHooks(cfg, binary, doctorNow())
+	now := doctorNow()
+	report := debugger.InspectHooks(cfg, binary, now)
 	if len(report.Profiles) == 0 {
 		if _, err := fmt.Fprintln(out, "hooks: no configured profiles"); err != nil {
 			return err
@@ -566,10 +567,18 @@ func writeDoctorHooks(out io.Writer, verbose bool, reportIssue func(string, ...a
 		return err
 	}
 	if failures := report.DeliveryFailures; failures != nil && failures.Count > 0 {
-		if _, err := fmt.Fprintf(out, "hooks: %d delivery failure(s) recorded in the trailing hour\n", failures.Count); err != nil {
+		summary := failures.Summary(now, daemonStartedAt)
+		if _, err := fmt.Fprintf(out, "hooks: %s\n", summary); err != nil {
 			return err
 		}
-		reportUnverified("%d hook delivery failure(s) recorded in the trailing hour; deliveries during daemon restarts are dropped", failures.Count)
+		// Drops that all predate the running daemon are the restart gap the
+		// hook client accepts by design, so they are worth knowing about and
+		// not worth acting on.
+		severity := severityWarning
+		if failures.PredateDaemonStart(daemonStartedAt) {
+			severity = severityInfo
+		}
+		reportDelivery(severity, "%s", summary)
 	}
 	if report.Error != "" {
 		reportIssue("hook status errors: %s", report.Error)

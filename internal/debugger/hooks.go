@@ -98,6 +98,51 @@ type HookDeliveryFailures struct {
 	LatestAt *time.Time `json:"latest_at,omitempty"`
 }
 
+// PredateDaemonStart reports whether every counted failure happened before the
+// running daemon started — the restart gap the hook client drops by design, and
+// already over. A zero startedAt (no daemon answered) never qualifies, and
+// neither does a count without a latest time, which cannot be placed.
+func (f *HookDeliveryFailures) PredateDaemonStart(startedAt time.Time) bool {
+	return f != nil && f.LatestAt != nil && !startedAt.IsZero() && !f.LatestAt.After(startedAt)
+}
+
+// Summary is the one sentence doctor and status both print about the failures.
+// It places them in time against the running daemon, because "2 failures in
+// the last hour" reads the same whether the daemon has been flapping all along
+// or was restarted once a minute ago, and only the first needs attention.
+func (f *HookDeliveryFailures) Summary(now, daemonStartedAt time.Time) string {
+	if f == nil || f.Count == 0 {
+		return ""
+	}
+	noun := "deliveries"
+	if f.Count == 1 {
+		noun = "delivery"
+	}
+	if f.PredateDaemonStart(daemonStartedAt) {
+		return fmt.Sprintf("%d hook %s dropped before the daemon started %s; none since", f.Count, noun, deliveryAge(now.Sub(daemonStartedAt)))
+	}
+	message := fmt.Sprintf("%d hook %s failed in the trailing hour", f.Count, noun)
+	if f.LatestAt != nil {
+		message += fmt.Sprintf(", the latest %s", deliveryAge(now.Sub(*f.LatestAt)))
+	}
+	if daemonStartedAt.IsZero() {
+		return message + "; deliveries that cannot reach a daemon are dropped"
+	}
+	return message + ", while the daemon was running"
+}
+
+// deliveryAge renders an elapsed time coarsely, as "just now" or "Nm ago".
+func deliveryAge(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	default:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	}
+}
+
 type HookReport struct {
 	Verdict          Verdict               `json:"verdict"`
 	Profiles         []HookProfile         `json:"profiles"`

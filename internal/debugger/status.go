@@ -180,8 +180,15 @@ func CollectStatus(ctx context.Context, options StatusOptions) (StatusReport, er
 		for _, profile := range report.Hooks.Profiles {
 			report.addHookProfileFinding(profile)
 		}
-		if failures := report.Hooks.DeliveryFailures; failures != nil && failures.Count > 0 {
-			report.add(VerdictWarning, "hook_delivery_failures", fmt.Sprintf("%d hook delivery failure(s) recorded in the trailing hour; deliveries during daemon restarts are dropped", failures.Count))
+		// Failures that all predate the running daemon are the restart gap the
+		// hook client drops by design; the hooks report still counts them, but
+		// they are not a warning about the daemon answering now.
+		var daemonStartedAt time.Time
+		if health.Alive {
+			daemonStartedAt = options.Now.Add(-health.Uptime)
+		}
+		if failures := report.Hooks.DeliveryFailures; failures != nil && failures.Count > 0 && !failures.PredateDaemonStart(daemonStartedAt) {
+			report.add(VerdictWarning, "hook_delivery_failures", failures.Summary(options.Now, daemonStartedAt))
 		}
 	}
 

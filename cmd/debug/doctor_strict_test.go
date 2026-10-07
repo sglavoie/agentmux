@@ -178,7 +178,9 @@ func TestDoctorStrictFailsWhenInteractiveNotificationsUnavailable(t *testing.T) 
 
 func TestDoctorStrictStaysGreenOnDeliveryFailureWarning(t *testing.T) {
 	build := doctorTestBuild
-	health := ipc.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build}
+	// Up for an hour, so the drop ten minutes ago happened while it was
+	// running and stays a warning rather than the restart-gap note.
+	health := ipc.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Hour, Build: &build}
 	now := setUpDoctorFixture(t, health, protocol.EventsExport{})
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	paths, err := diagnostics.DefaultPaths()
@@ -205,7 +207,8 @@ func TestDoctorStrictStaysGreenOnDeliveryFailureWarning(t *testing.T) {
 	}
 	got := out.String()
 	for _, want := range []string{
-		"hooks: 1 delivery failure(s) recorded in the trailing hour",
+		"hooks: 1 hook delivery failed in the trailing hour, the latest 10m ago, while the daemon was running",
+		"[hook_delivery_failures]",
 		"warnings:",
 		"overall: ok (1 warning)",
 	} {

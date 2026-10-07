@@ -94,13 +94,16 @@ hook status reports the `last_seen_horizon` issue instead of claiming
 status hooks report also carries `delivery_failures` (`count`, `latest_at`),
 counting one terminally failed delivery per request in the trailing hour,
 surfaced as the stable warning finding `hook_delivery_failures` and as a doctor
-summary line. Each request is terminalized exactly once: `hook.delivery` is the
+summary line that says how long ago the latest one was. Failures that all
+predate the running daemon's start are the restart gap and are not a warning:
+`debug status` omits the finding (the hooks report still carries the count) and
+doctor reports `hook_delivery_failures` as a note. Each request is terminalized exactly once: `hook.delivery` is the
 authoritative terminal record and its outcome decides success or failure, while
 an error-outcome `hook.failure` marks a request failed only as a legacy fallback
 when no correlated `hook.delivery` exists. Intermediate error-outcome
 `hook.ipc_attempt` records are ignored, so a transient transport error that a
 later successful or duplicate terminal delivery resolves never contributes to
-the count. Expect the warning to fire for up to an hour after a daemon restart:
+the count. Drops are expected around a daemon restart:
 the daemon client performs bounded auto-start retries within the hook
 invocation's auto-start budget, but once that invocation exits there is no
 durable retry queue, so deliveries that never reached a live daemon in time are

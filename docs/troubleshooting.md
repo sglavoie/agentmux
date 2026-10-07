@@ -43,6 +43,10 @@
   verification window; once events are arriving it is the
   `hooks_contract_ahead` note instead, which leaves the verdict clean and
   marks the contract as due for re-verification.
+  Hook deliveries dropped in the trailing hour are `hook_delivery_failures`:
+  a warning when the latest drop happened while the running daemon was up,
+  and a note once every drop predates the daemon's start — the restart gap
+  the prompt-free hook client accepts by design.
   In text output, per-profile `hooks`, `hooks_unverified`, and
   `hooks_contract_ahead` findings that
   share the same detail print on one line naming every profile, while

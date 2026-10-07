@@ -220,9 +220,9 @@ func TestDoctorReportsVerifiedDisabledHooksAsFailure(t *testing.T) {
 
 	var out bytes.Buffer
 	var failures []string
-	err := writeDoctorHooks(&out, false, func(format string, args ...any) {
+	err := writeDoctorHooks(&out, false, time.Time{}, func(format string, args ...any) {
 		failures = append(failures, fmt.Sprintf(format, args...))
-	}, func(string, ...any) {}, func(string, ...any) {})
+	}, func(string, ...any) {}, func(string, ...any) {}, func(string, string, ...any) {})
 	if err != nil {
 		t.Fatalf("writeDoctorHooks: %v", err)
 	}
@@ -278,23 +278,40 @@ func TestDoctorHooksSummarizesDroppedDeliveries(t *testing.T) {
 	doctorLoadConfig = func() (*config.Config, error) { return &config.Config{}, nil }
 	doctorExecutable = func() (string, error) { return filepath.Join(t.TempDir(), "amx"), nil }
 
-	var out bytes.Buffer
-	var warnings []string
-	err = writeDoctorHooks(&out, false, func(format string, args ...any) {
-		t.Errorf("unexpected failure finding: %s", fmt.Sprintf(format, args...))
-	}, func(format string, args ...any) {
-		warnings = append(warnings, fmt.Sprintf(format, args...))
-	}, func(string, ...any) {})
-	if err != nil {
-		t.Fatalf("writeDoctorHooks: %v", err)
-	}
-	if !strings.Contains(out.String(), "hooks: 1 delivery failure(s) recorded in the trailing hour") {
-		t.Fatalf("doctor hook output missing delivery-failure summary:\n%s", out.String())
-	}
-	if !slices.ContainsFunc(warnings, func(message string) bool {
-		return strings.Contains(message, "deliveries during daemon restarts are dropped")
-	}) {
-		t.Fatalf("doctor warnings = %v, want dropped-delivery note", warnings)
+	// The same single drop reads as a warning while the running daemon was
+	// up to receive it, and as a note once it predates the daemon's start:
+	// the restart gap the prompt-free hook client accepts by design.
+	failedAt := time.Now()
+	for _, tc := range []struct {
+		name      string
+		startedAt time.Time
+		severity  string
+		line      string
+	}{
+		{"during uptime", failedAt.Add(-time.Hour), severityWarning, "hooks: 1 hook delivery failed in the trailing hour, the latest just now, while the daemon was running"},
+		{"before restart", failedAt.Add(time.Minute), severityInfo, "hooks: 1 hook delivery dropped before the daemon started"},
+		{"no daemon", time.Time{}, severityWarning, "deliveries that cannot reach a daemon are dropped"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			var severities []string
+			err := writeDoctorHooks(&out, false, tc.startedAt, func(format string, args ...any) {
+				t.Errorf("unexpected failure finding: %s", fmt.Sprintf(format, args...))
+			}, func(format string, args ...any) {
+				t.Errorf("delivery failures reported as hooks_unverified: %s", fmt.Sprintf(format, args...))
+			}, func(string, ...any) {}, func(severity, format string, args ...any) {
+				severities = append(severities, severity)
+			})
+			if err != nil {
+				t.Fatalf("writeDoctorHooks: %v", err)
+			}
+			if !strings.Contains(out.String(), tc.line) {
+				t.Fatalf("doctor hook output missing %q:\n%s", tc.line, out.String())
+			}
+			if !slices.Equal(severities, []string{tc.severity}) {
+				t.Fatalf("hook_delivery_failures severities = %v, want [%s]", severities, tc.severity)
+			}
+		})
 	}
 }
 
