@@ -49,9 +49,10 @@ one it begins, and a prefix that several conversations share is refused with
 every candidate.
 
 `session continue` focuses the exact live Kitty owner when one exists and
-otherwise resumes the closed conversation. `session list` in a terminal marks
-those conversations with `●` in a LIVE column, `session show` names their
-Kitty window, and both put the tab under `live` in `--json`; when the daemon or
+otherwise resumes the closed conversation. `session list` and `session search`
+in a terminal mark those conversations with `●` in a LIVE column, and the one
+open in the window the command runs in with `here`; `session show` names their
+Kitty window, and all three put the tab under `live` in `--json`; when the daemon or
 Kitty cannot be asked, the column and line are left out rather than reporting
 nothing open. Native forks are used for Claude
 and Codex. Copilot forks use a portable handoff because Copilot does not expose

@@ -199,6 +199,28 @@ func TestSessionSearchFindsConversationsByMessageText(t *testing.T) {
 		}
 	})
 
+	t.Run("a terminal table marks the conversation it runs in as here", func(t *testing.T) {
+		// A search run from inside a conversation finds that conversation, so
+		// the table says which row it is, as session list does.
+		sessionListIsTerminal = func(io.Writer) bool { return true }
+		sessionCommandsLiveConversations = func() (map[string]liveConversation, bool) {
+			return map[string]liveConversation{"codex:codex-race": {WindowID: 7, TabID: 2}}, true
+		}
+		sessionCommandsCurrentWindow = func() int { return 7 }
+		t.Cleanup(func() {
+			sessionCommandsLiveConversations = func() (map[string]liveConversation, bool) { return nil, false }
+			sessionCommandsCurrentWindow = func() int { return 0 }
+		})
+		out, err := run(t, nil, "race")
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+		if !strings.Contains(lines[0], " LIVE ") || !strings.Contains(lines[1], " here ") || strings.Contains(strings.Join(lines[2:], "\n"), "here") {
+			t.Fatalf("table = %q, want a LIVE column marking only codex-race here", out)
+		}
+	})
+
 	for _, tc := range []struct {
 		name  string
 		flags map[string]string

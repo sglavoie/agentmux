@@ -69,16 +69,8 @@ var sessionListCmd = &cobra.Command{
 		views := sessionViews(metas)
 		out := cmd.OutOrStdout()
 		terminal := !jsonOutput && sessionListIsTerminal(out)
-		liveKnown := false
-		if selection.live != nil {
-			// --live already asked, and was refused had nobody answered.
-			markLive(views, selection.live, sessionCommandsCurrentWindow())
-			liveKnown = true
-		} else if jsonOutput || terminal {
-			var live map[string]liveConversation
-			live, liveKnown = sessionCommandsLiveConversations()
-			markLive(views, live, sessionCommandsCurrentWindow())
-		}
+		live, liveKnown := selection.liveConversations(jsonOutput || terminal)
+		markLive(views, live, sessionCommandsCurrentWindow())
 		if jsonOutput {
 			return cli.WriteJSON(cmd, sessionListData{Sessions: views})
 		}
@@ -299,6 +291,22 @@ func writeSessionTable(out io.Writer, views []sessionView, ids sessionIDAbbrevia
 	}
 	fitLastColumn(header, rows, width)
 	return cli.WriteTable(out, header, rows)
+}
+
+// liveConversations is what list and search mark rows live from: the tabs
+// --live already asked Kitty for, else a fresh ask when the output shows it
+// (a terminal table or JSON), and nothing for piped rows, which have no LIVE
+// field. known reports whether anyone answered, so a table that could not
+// ask leaves the column out rather than showing every row as closed.
+func (s sessionSelection) liveConversations(shown bool) (live map[string]liveConversation, known bool) {
+	if s.live != nil {
+		// --live already asked, and was refused had nobody answered.
+		return s.live, true
+	}
+	if !shown {
+		return nil, false
+	}
+	return sessionCommandsLiveConversations()
 }
 
 // liveMark is a list row's LIVE cell: a dot for a conversation open in a

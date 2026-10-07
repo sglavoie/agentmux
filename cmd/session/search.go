@@ -75,12 +75,25 @@ line it matched on. The selector flags narrow the search the way they narrow
 		results = narrowSearchResults(results, selection)
 		results = transcript.RecasePreviews(readers, results, transcript.Query{Text: query, MessageSource: source})
 		views := sessionSearchViews(results)
+		out := cmd.OutOrStdout()
+		terminal := !jsonOutput && sessionListIsTerminal(out)
+		// Marked as list marks them, because a search run from inside a
+		// conversation finds that conversation too — the query is in it — and
+		// "here" is what tells it apart from the sessions being looked for.
+		live, liveKnown := selection.liveConversations(jsonOutput || terminal)
+		listed := make([]sessionView, len(views))
+		for i := range views {
+			listed[i] = views[i].sessionView
+		}
+		markLive(listed, live, sessionCommandsCurrentWindow())
+		for i := range views {
+			views[i].sessionView = listed[i]
+		}
 		if jsonOutput {
 			return cli.WriteJSON(cmd, sessionSearchData{Query: query, Source: source, Results: views})
 		}
-		out := cmd.OutOrStdout()
-		if sessionListIsTerminal(out) {
-			return writeSessionSearchTable(out, query, views, abbreviateSessionIDs(idx.List(transcript.ListFilter{})), sessionCommandsNow(), sessionListTerminalWidth(out))
+		if terminal {
+			return writeSessionSearchTable(out, query, views, abbreviateSessionIDs(idx.List(transcript.ListFilter{})), sessionCommandsNow(), sessionListTerminalWidth(out), liveKnown)
 		}
 		// Off a terminal the rows follow `session list`'s piped form, with the
 		// match count before the ID and the matched line last, where a tab or
@@ -134,7 +147,7 @@ func sessionSearchViews(results []transcript.Result) []sessionSearchView {
 	return out
 }
 
-func writeSessionSearchTable(out io.Writer, query string, views []sessionSearchView, ids sessionIDAbbreviations, now time.Time, width int) error {
+func writeSessionSearchTable(out io.Writer, query string, views []sessionSearchView, ids sessionIDAbbreviations, now time.Time, width int, liveKnown bool) error {
 	if len(views) == 0 {
 		_, err := fmt.Fprintf(out, "No indexed sessions match %s.\n", strconv.Quote(query))
 		return err
@@ -149,9 +162,16 @@ func writeSessionSearchTable(out io.Writer, query string, views []sessionSearchV
 		if preview == "" {
 			preview = "-"
 		}
-		rows = append(rows, []string{item.Harness, item.Profile, project, formatAgo(item.LastAt, now), strconv.Itoa(item.Matches), ids.of(item.ID), preview})
+		row := []string{item.Harness, item.Profile, project, formatAgo(item.LastAt, now)}
+		if liveKnown {
+			row = append(row, liveMark(item.Live))
+		}
+		rows = append(rows, append(row, strconv.Itoa(item.Matches), ids.of(item.ID), preview))
 	}
 	header := []string{"HARNESS", "PROFILE", "PROJECT", "ACTIVE", "MATCHES", "SESSION", "MATCHED"}
+	if liveKnown {
+		header = []string{"HARNESS", "PROFILE", "PROJECT", "ACTIVE", "LIVE", "MATCHES", "SESSION", "MATCHED"}
+	}
 	fitLastColumn(header, rows, width)
 	return cli.WriteTable(out, header, rows)
 }
