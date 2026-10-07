@@ -19,6 +19,14 @@ var debugReplayCmd = &cobra.Command{
 	Args:         cobra.ExactArgs(1),
 	SilenceUsage: true,
 	RunE:         runDebugReplay,
+	// The argument is a file, so it keeps the shell's file completion that
+	// root assembly turns off for every command that does not ask for it.
+	ValidArgsFunction: func(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+		if len(args) > 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		return nil, cobra.ShellCompDirectiveDefault
+	},
 }
 
 func init() {

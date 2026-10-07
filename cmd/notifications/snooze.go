@@ -40,8 +40,19 @@ The snooze lives in the daemon's memory only: it never rewrites config.toml,
 and restarting the daemon forgets it. Quiet hours are configuration and are
 unaffected. The daemon is not started on your behalf, because a snooze in a
 daemon that was not running would change nothing.`,
-	Args: cobra.RangeArgs(0, 2),
-	RunE: runNotificationsSnooze,
+	Args:              cobra.RangeArgs(0, 2),
+	ValidArgsFunction: completeSnoozeArgs,
+	RunE:              runNotificationsSnooze,
+}
+
+// completeSnoozeArgs offers the snooze forms parseSnoozeArgs accepts: two
+// common durations and the three words. After `until` comes a HH:MM time,
+// which has nothing useful to suggest, and nothing comes after that.
+func completeSnoozeArgs(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+	if len(args) > 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	return []string{"30m", "1h", "until", "indefinite", "off"}, cobra.ShellCompDirectiveNoFileComp
 }
 
 func init() {

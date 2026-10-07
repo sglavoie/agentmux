@@ -124,4 +124,20 @@ func init() {
 	addGrouped(groupTabs, session.FocusNextCommand(), session.FocusNextManagedCommand(), session.FocusPrevManagedCommand(), session.MuteToggleCommand(), session.ResortCommand(), dashboard.ColorPickerCommand(), dashboard.IconPickerCommand(), dashboard.KeybindingsCommand())
 	addGrouped(groupSetup, config.Command(), daemon.Command(), debug.Command(), debug.DoctorCommand(), notifications.Command(), transcripts.Command(), overseer.Command())
 	rootCmd.AddCommand(hooks.IndicatorCommand(), release.Command(), tuitest.Command())
+	completeNoFilesByDefault(rootCmd)
+}
+
+// completeNoFilesByDefault gives every command that does not say how its
+// arguments complete no argument completion at all. Cobra's default is the
+// shell's file completion, so <Tab> after `amx session list` or `amx doctor`
+// offered the files in the current directory, none of which either takes. A
+// command whose argument really is a path declares a ValidArgsFunction of its
+// own, as debug replay and tui-test run do, and is left alone.
+func completeNoFilesByDefault(command *cobra.Command) {
+	if command.ValidArgsFunction == nil && len(command.ValidArgs) == 0 {
+		command.ValidArgsFunction = cobra.NoFileCompletions
+	}
+	for _, child := range command.Commands() {
+		completeNoFilesByDefault(child)
+	}
 }

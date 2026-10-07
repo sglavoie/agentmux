@@ -2,6 +2,9 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"unicode"
@@ -257,4 +260,55 @@ func TestFlagDescriptionsStartInLowerCase(t *testing.T) {
 		}
 	}
 	walk(rootCmd)
+}
+
+// Shell completion is what <Tab> offers. Cobra's default for a command that
+// does not say is the shell's file completion, which offered the current
+// directory's files after commands that take no path at all; root assembly
+// now turns that off, and the commands whose argument is a path, a snooze, or
+// a debug selector say what to offer instead.
+func TestShellCompletionOffersWhatEachCommandTakes(t *testing.T) {
+	t.Setenv("amx_CONFIG", writeCompletionConfig(t))
+	for _, tc := range []struct {
+		args      []string
+		directive cobra.ShellCompDirective
+		want      []string
+	}{
+		{[]string{"session", "list", ""}, cobra.ShellCompDirectiveNoFileComp, nil},
+		{[]string{"doctor", ""}, cobra.ShellCompDirectiveNoFileComp, nil},
+		{[]string{"worktree", "list", ""}, cobra.ShellCompDirectiveNoFileComp, nil},
+		{[]string{"transcripts", "status", ""}, cobra.ShellCompDirectiveNoFileComp, nil},
+		{[]string{"debug", "replay", ""}, cobra.ShellCompDirectiveDefault, nil},
+		{[]string{"tui-test", "run", ""}, cobra.ShellCompDirectiveDefault, nil},
+		{[]string{"notifications", "snooze", ""}, cobra.ShellCompDirectiveNoFileComp, []string{"30m", "1h", "until", "indefinite", "off"}},
+		{[]string{"notifications", "snooze", "until", ""}, cobra.ShellCompDirectiveNoFileComp, nil},
+		{[]string{"debug", "tail", "--profile", ""}, cobra.ShellCompDirectiveNoFileComp, []string{"work"}},
+		{[]string{"debug", "tail", "--harness", "co"}, cobra.ShellCompDirectiveNoFileComp, []string{"copilot", "codex"}},
+	} {
+		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
+			stdout, _, err := runRootArgs(t, append([]string{cobra.ShellCompNoDescRequestCmd}, tc.args...)...)
+			if err != nil {
+				t.Fatalf("completion: %v", err)
+			}
+			lines := strings.Split(strings.TrimSpace(stdout), "\n")
+			directive := lines[len(lines)-1]
+			if want := fmt.Sprintf(":%d", tc.directive); directive != want {
+				t.Fatalf("directive = %s, want %s\n%s", directive, want, stdout)
+			}
+			got := lines[:len(lines)-1]
+			if strings.Join(got, ",") != strings.Join(tc.want, ",") {
+				t.Fatalf("candidates = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func writeCompletionConfig(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "config.toml")
+	body := "[[profiles]]\nname = \"work\"\nharness = \"claude\"\nhome_dir = \"" + t.TempDir() + "\"\ncolor = \"blue\"\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	return path
 }

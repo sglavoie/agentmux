@@ -68,6 +68,11 @@ var tuiTestRunCmd = &cobra.Command{
 	Use:   "run SCENARIO...",
 	Short: "Run one or more scenario files",
 	Args:  cobra.MinimumNArgs(1),
+	// Scenario files are paths, so this keeps the shell's file completion
+	// that root assembly turns off for commands that do not ask for it.
+	ValidArgsFunction: func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+		return nil, cobra.ShellCompDirectiveDefault
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runTUITestScenarios(cmd, args)
 	},
