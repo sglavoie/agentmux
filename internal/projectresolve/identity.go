@@ -84,16 +84,16 @@ func (r IdentityResolver) ResolveIdentity(path string) (Identity, error) {
 	}
 	abs, err := filepath.Abs(config.ExpandTilde(path))
 	if err != nil {
-		return Identity{}, fmt.Errorf("%w: %s: %v", ErrPathUnresolved, path, err)
+		return Identity{}, fmt.Errorf("%w: %s: %w", ErrPathUnresolved, path, err)
 	}
 	real, err := filepath.EvalSymlinks(abs)
 	if err != nil {
-		return Identity{}, fmt.Errorf("%w: %s: %v", ErrPathUnresolved, abs, err)
+		return Identity{}, fmt.Errorf("%w: %s: %w", ErrPathUnresolved, abs, err)
 	}
 	real = filepath.Clean(real)
 	info, err := os.Stat(real)
 	if err != nil {
-		return Identity{}, fmt.Errorf("%w: %s: %v", ErrPathUnresolved, real, err)
+		return Identity{}, fmt.Errorf("%w: %s: %w", ErrPathUnresolved, real, err)
 	}
 	if !info.IsDir() {
 		return Identity{}, fmt.Errorf("%w: %s is not a directory", ErrPathUnresolved, real)
@@ -104,7 +104,7 @@ func (r IdentityResolver) ResolveIdentity(path string) (Identity, error) {
 		if errors.Is(err, errNotARepository) {
 			return Identity{Path: real}, nil
 		}
-		return Identity{}, fmt.Errorf("%w: %s: %v", ErrIdentityUnresolved, real, err)
+		return Identity{}, fmt.Errorf("%w: %s: %w", ErrIdentityUnresolved, real, err)
 	}
 
 	root := AbsPath(meta.worktreeRoot)
