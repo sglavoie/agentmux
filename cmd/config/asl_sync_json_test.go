@@ -196,7 +196,7 @@ func TestAMigratableCorpusIsMigratedAndCounted(t *testing.T) {
 	if len(fixture.probes) != 2 || !fixture.probes[1] {
 		t.Fatalf("probes = %v, want a survey then a migration", fixture.probes)
 	}
-	if !strings.Contains(fixture.out.String(), "migrated    2 inactive run(s)") {
+	if !strings.Contains(fixture.out.String(), "migrated    2 inactive runs") {
 		t.Errorf("output does not report the migration:\n%s", fixture.out)
 	}
 }

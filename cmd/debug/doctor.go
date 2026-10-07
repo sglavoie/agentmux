@@ -268,7 +268,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		addFinding(severityFailure, "kitty", "kitten @ ls failed: %s", kittyErr)
 	} else {
 		kittyOK = true
-		if _, err := fmt.Fprintf(textOut, "kitty: ok (%d OS windows)\n", len(windows)); err != nil {
+		if _, err := fmt.Fprintf(textOut, "kitty: ok (%s)\n", cli.CountOf(len(windows), "OS window", "OS windows")); err != nil {
 			return err
 		}
 	}
@@ -341,7 +341,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	if doctorStrict && failures > 0 {
 		return &cli.ExitError{
 			Code:  cli.ExitHealthFailure,
-			Err:   fmt.Errorf("doctor: %d health failure(s) detected", failures),
+			Err:   fmt.Errorf("doctor: %s detected", cli.CountOf(failures, "health failure", "health failures")),
 			Quiet: doctorJSON,
 		}
 	}

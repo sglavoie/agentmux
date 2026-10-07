@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -158,12 +159,12 @@ func evaluateDaemonInvariants(snapshot protocol.EventsExport, health ipc.Health,
 		}
 		if promptMismatches > 0 {
 			add(severityFailure, checkOwnerMismatchPrompt, id,
-				"%d prompt event(s) suppressed as owner_mismatch within %s",
-				promptMismatches, doctorSuppressionWindow)
+				"%s suppressed as owner_mismatch within %s",
+				cli.CountOf(promptMismatches, "prompt event", "prompt events"), doctorSuppressionWindow)
 		}
 		if nonPromptMismatches >= ownerMismatchBurstCount {
 			add(severityWarning, checkOwnerMismatchBurst, id,
-				"%d non-prompt event(s) suppressed as owner_mismatch within %s",
+				"%d non-prompt events suppressed as owner_mismatch within %s",
 				nonPromptMismatches, doctorSuppressionWindow)
 		}
 
@@ -216,8 +217,9 @@ func evaluateDaemonInvariants(snapshot protocol.EventsExport, health ipc.Health,
 		}
 		if unknownProducerFacts > 0 {
 			add(severityWarning, checkUnknownProducerFact, id,
-				"%d unacknowledged legacy/window fact(s) contribute an icon or live lease",
-				unknownProducerFacts)
+				"%s %s an icon or live lease",
+				cli.CountOf(unknownProducerFacts, "unacknowledged legacy/window fact", "unacknowledged legacy/window facts"),
+				cli.ByCount(unknownProducerFacts, "contributes", "contribute"))
 		}
 
 		// Process identity is a zero-or-complete persisted triple bound to an
@@ -231,8 +233,9 @@ func evaluateDaemonInvariants(snapshot protocol.EventsExport, health ipc.Health,
 		}
 		if malformedProcessFacts > 0 {
 			add(severityFailure, checkMalformedProcessIdentity, id,
-				"%d source fact(s) contain malformed or source-incompatible harness process identity",
-				malformedProcessFacts)
+				"%s %s malformed or source-incompatible harness process identity",
+				cli.CountOf(malformedProcessFacts, "source fact", "source facts"),
+				cli.ByCount(malformedProcessFacts, "contains", "contain"))
 		}
 
 		// Repeated active_after_terminal suppressions inside the grace period:

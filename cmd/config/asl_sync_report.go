@@ -71,8 +71,10 @@ func displayOrUnknown(value string) string {
 // process they can find.
 func activeRunRefusal(survey aslPairingReport) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%d active agent-session-loop run(s) still carry state this build cannot pair with; "+
-		"nothing was migrated and nothing was stopped", len(survey.ActiveIncompatibleRuns))
+	n := len(survey.ActiveIncompatibleRuns)
+	fmt.Fprintf(&b, "%s still %s state this build cannot pair with; "+
+		"nothing was migrated and nothing was stopped",
+		cli.CountOf(n, "active agent-session-loop run", "active agent-session-loop runs"), cli.ByCount(n, "carries", "carry"))
 	for _, run := range survey.ActiveIncompatibleRuns {
 		fmt.Fprintf(&b, "\n  - pid %d  run %s\n    plan %s\n    %s",
 			run.PID, run.RunID, run.PlanDir, run.Detail)
@@ -181,11 +183,11 @@ func writeASLSyncText(out io.Writer, report aslSyncReport) error {
 			fmt.Sprintf("check only: %s is unchanged", report.ConfigPath),
 		)
 		if report.Migratable > 0 {
-			lines = append(lines, fmt.Sprintf("            an apply would migrate %d inactive run(s)", report.Migratable))
+			lines = append(lines, fmt.Sprintf("            an apply would migrate %s", cli.CountOf(report.Migratable, "inactive run", "inactive runs")))
 		}
 	} else {
 		if report.Migrated > 0 {
-			lines = append(lines, fmt.Sprintf("migrated    %d inactive run(s)", report.Migrated))
+			lines = append(lines, fmt.Sprintf("migrated    %s", cli.CountOf(report.Migrated, "inactive run", "inactive runs")))
 		}
 		switch {
 		case report.RolledBack:

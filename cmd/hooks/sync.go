@@ -69,7 +69,7 @@ var configHooksSyncCmd = &cobra.Command{
 		// updated. Previously the per-account error was only printed to stderr
 		// and the process exited 0, masking the failure.
 		if len(failed) > 0 {
-			return fmt.Errorf("hooks-sync failed for %d profile(s): %s", len(failed), strings.Join(failed, ", "))
+			return fmt.Errorf("hooks-sync failed for %s: %s", cli.CountOf(len(failed), "profile", "profiles"), strings.Join(failed, ", "))
 		}
 		return nil
 	},

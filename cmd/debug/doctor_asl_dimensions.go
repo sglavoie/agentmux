@@ -10,6 +10,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/aslcontract"
+	"github.com/sglavoie/agentmux/internal/cli"
 )
 
 // aslShellResolutionDimension answers "would this command resolve without an
@@ -151,8 +152,8 @@ func aslContractDimension(in aslIntegrationInputs) doctorASLDimension {
 	}
 	if in.Reconcile != nil && in.Reconcile.UnsupportedContracts > 0 {
 		mismatches = append(mismatches, fmt.Sprintf(
-			"%d projection(s) named a contract set this build does not implement",
-			in.Reconcile.UnsupportedContracts))
+			"%s named a contract set this build does not implement",
+			cli.CountOf(in.Reconcile.UnsupportedContracts, "projection", "projections")))
 	}
 	if len(mismatches) > 0 {
 		// A mismatch is terminal by construction: the daemon refuses the peer
@@ -190,16 +191,16 @@ func aslProjectionDimension(in aslIntegrationInputs) doctorASLDimension {
 	r := in.Reconcile
 	var problems []string
 	if r.SweepErrors > 0 {
-		problems = append(problems, fmt.Sprintf("%d sweep(s) could not read the state root", r.SweepErrors))
+		problems = append(problems, fmt.Sprintf("%s could not read the state root", cli.CountOf(r.SweepErrors, "sweep", "sweeps")))
 	}
 	// These two counters accumulate across every sweep since the daemon
 	// started, so one bad file counted every ten seconds reads as hundreds of
 	// documents unless the wording says what is being counted.
 	if r.InvalidProjections > 0 {
-		problems = append(problems, fmt.Sprintf("%d invalid projection reading(s) across %d sweep(s)", r.InvalidProjections, r.Sweeps))
+		problems = append(problems, fmt.Sprintf("%s across %s", cli.CountOf(r.InvalidProjections, "invalid projection reading", "invalid projection readings"), cli.CountOf(r.Sweeps, "sweep", "sweeps")))
 	}
 	if r.UnreadableStates > 0 {
-		problems = append(problems, fmt.Sprintf("%d unreadable state document reading(s) across %d sweep(s)", r.UnreadableStates, r.Sweeps))
+		problems = append(problems, fmt.Sprintf("%s across %s", cli.CountOf(r.UnreadableStates, "unreadable state document reading", "unreadable state document readings"), cli.CountOf(r.Sweeps, "sweep", "sweeps")))
 	}
 	if len(problems) > 0 {
 		dim.Status = aslStatusWarn
@@ -214,7 +215,7 @@ func aslProjectionDimension(in aslIntegrationInputs) doctorASLDimension {
 		return dim
 	}
 	dim.Status = aslStatusOK
-	dim.Detail = fmt.Sprintf("%d plan(s) projected cleanly under %s", r.PlansPresent, r.StateRoot)
+	dim.Detail = fmt.Sprintf("%s projected cleanly under %s", cli.CountOf(r.PlansPresent, "plan", "plans"), r.StateRoot)
 	return dim
 }
 
@@ -273,8 +274,9 @@ func aslDeliveryDimension(in aslIntegrationInputs) doctorASLDimension {
 		// event is one the operator has already lost. That makes this a
 		// failure in required mode rather than a running tally.
 		dim.Status = aslSeverityStatus(in.Mode)
-		dim.Detail = fmt.Sprintf("%d lifecycle hook(s) were quarantined (%s); %d accepted",
-			d.Quarantined, formatQuarantineReasons(d.QuarantinedByReason), d.Accepted)
+		dim.Detail = fmt.Sprintf("%s %s quarantined (%s); %d accepted",
+			cli.CountOf(d.Quarantined, "lifecycle hook", "lifecycle hooks"), cli.ByCount(d.Quarantined, "was", "were"),
+			formatQuarantineReasons(d.QuarantinedByReason), d.Accepted)
 		dim.Remediation = "run `amx config asl-sync --check` to compare contract sets"
 		return dim
 	}
@@ -285,6 +287,6 @@ func aslDeliveryDimension(in aslIntegrationInputs) doctorASLDimension {
 		return dim
 	}
 	dim.Status = aslStatusOK
-	dim.Detail = fmt.Sprintf("%d lifecycle hook(s) accepted, none quarantined", d.Accepted)
+	dim.Detail = fmt.Sprintf("%s accepted, none quarantined", cli.CountOf(d.Accepted, "lifecycle hook", "lifecycle hooks"))
 	return dim
 }

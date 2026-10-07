@@ -78,7 +78,7 @@ func TestDaemonAuditSamplesOnCadenceAndExitsNonzeroOnViolations(t *testing.T) {
 	if n := strings.Count(got, "[asl_active_state]"); n != 1 {
 		t.Errorf("asl_active_state reported %d times; want 1 (deduplicated):\n%s", n, got)
 	}
-	if !strings.Contains(got, "audit: 1 invariant violation(s)") {
+	if !strings.Contains(got, "audit: 1 invariant violation") {
 		t.Errorf("output missing violation verdict:\n%s", got)
 	}
 }

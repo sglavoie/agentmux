@@ -59,7 +59,7 @@ var worktreePruneCmd = &cobra.Command{
 				_, _ = fmt.Fprintln(out, nothingToPrune(views))
 				return nil
 			}
-			_, _ = fmt.Fprintf(out, "re-run with --yes to remove %d worktree(s)\n", len(candidates))
+			_, _ = fmt.Fprintf(out, "re-run with --yes to remove %s\n", cli.CountOf(len(candidates), "worktree", "worktrees"))
 			return nil
 		}
 
@@ -94,7 +94,7 @@ var worktreePruneCmd = &cobra.Command{
 		if len(data.Failed) > 0 {
 			// Partial durable success: what was removed stays removed, and the
 			// status says not everything was.
-			return &cli.ExitError{Code: 1, Err: fmt.Errorf("%d of %d worktree(s) were kept", len(data.Failed), len(candidates)), Quiet: jsonOutput}
+			return &cli.ExitError{Code: 1, Err: fmt.Errorf("%d of %s %s kept", len(data.Failed), cli.CountOf(len(candidates), "worktree", "worktrees"), cli.ByCount(len(data.Failed), "was", "were")), Quiet: jsonOutput}
 		}
 		return nil
 	},

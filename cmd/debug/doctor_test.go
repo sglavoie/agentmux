@@ -152,7 +152,7 @@ func TestDoctorReportsDaemonRendererHookAndSuppressionHealth(t *testing.T) {
 	for _, want := range []string{
 		"daemon: running (pid 4242, uptime 2m0s)",
 		"socket: " + socket + " (current)",
-		"kitty: ok (1 OS windows)",
+		"kitty: ok (1 OS window)",
 		"kitty sockets: unix:/tmp/kitty-42",
 		"hooks: no configured profiles",
 		"renderer drift: none",

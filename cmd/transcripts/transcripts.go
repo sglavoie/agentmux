@@ -160,28 +160,17 @@ func printTranscriptRepairHints(out io.Writer, status transcript.StoreStatus) {
 		// --all, because a conversation older than the configured scan age is
 		// skipped by a plain rebuild and would stay unsearchable.
 		_, _ = fmt.Fprintf(out, "\n%s %s no search text, so search cannot find %s; `amx transcripts rebuild --all` reindexes %s.\n",
-			countOf(status.MissingSidecars, "conversation", "conversations"),
-			byCount(status.MissingSidecars, "has", "have"),
-			byCount(status.MissingSidecars, "it", "them"),
-			byCount(status.MissingSidecars, "it", "them"))
+			cli.CountOf(status.MissingSidecars, "conversation", "conversations"),
+			cli.ByCount(status.MissingSidecars, "has", "have"),
+			cli.ByCount(status.MissingSidecars, "it", "them"),
+			cli.ByCount(status.MissingSidecars, "it", "them"))
 	}
 	if status.OrphanSidecars > 0 {
 		_, _ = fmt.Fprintf(out, "\n%s no longer %s to a conversation; `amx transcripts compact` removes %s.\n",
-			countOf(status.OrphanSidecars, "search sidecar", "search sidecars"),
-			byCount(status.OrphanSidecars, "belongs", "belong"),
-			byCount(status.OrphanSidecars, "it", "them"))
+			cli.CountOf(status.OrphanSidecars, "search sidecar", "search sidecars"),
+			cli.ByCount(status.OrphanSidecars, "belongs", "belong"),
+			cli.ByCount(status.OrphanSidecars, "it", "them"))
 	}
-}
-
-func countOf(n int, one, many string) string {
-	return strconv.Itoa(n) + " " + byCount(n, one, many)
-}
-
-func byCount(n int, one, many string) string {
-	if n == 1 {
-		return one
-	}
-	return many
 }
 
 // transcriptSizeFormatter returns how a byte count is printed: raw bytes for

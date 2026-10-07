@@ -140,7 +140,7 @@ func runDaemonAudit(cmd *cobra.Command, _ []string) error {
 		}
 		verdict := "audit: clean"
 		if failures > 0 {
-			verdict = fmt.Sprintf("audit: %d invariant violation(s)", failures)
+			verdict = fmt.Sprintf("audit: %s", cli.CountOf(failures, "invariant violation", "invariant violations"))
 		}
 		if _, err := fmt.Fprintln(out, verdict); err != nil {
 			return err
@@ -150,7 +150,7 @@ func runDaemonAudit(cmd *cobra.Command, _ []string) error {
 	if failures > 0 {
 		return &cli.ExitError{
 			Code:  cli.ExitHealthFailure,
-			Err:   fmt.Errorf("audit: %d invariant violation(s) detected", failures),
+			Err:   fmt.Errorf("audit: %s detected", cli.CountOf(failures, "invariant violation", "invariant violations")),
 			Quiet: auditJSON,
 		}
 	}

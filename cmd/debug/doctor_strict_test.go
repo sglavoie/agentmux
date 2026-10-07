@@ -236,9 +236,9 @@ func TestDoctorOwnerMismatchTraceRendersSharedFindingsAndFailsStrict(t *testing.
 	got := out.String()
 	for _, want := range []string{
 		"health failures:",
-		"[owner_mismatch_prompt] window 7: 1 prompt event(s) suppressed as owner_mismatch within 15m0s",
+		"[owner_mismatch_prompt] window 7: 1 prompt event suppressed as owner_mismatch within 15m0s",
 		"warnings:",
-		"[owner_mismatch_burst] window 7: 18 non-prompt event(s) suppressed as owner_mismatch within 15m0s",
+		"[owner_mismatch_burst] window 7: 18 non-prompt events suppressed as owner_mismatch within 15m0s",
 		"overall: issues detected",
 	} {
 		if !strings.Contains(got, want) {

@@ -230,10 +230,13 @@ func writeDoctorNativeLogs(out io.Writer, windows []kitty.OSWindow, kittyOK bool
 			return err
 		}
 		if native.Coverage.Degraded > 0 {
-			reportWarning("%d managed session(s) have degraded native logging controls", native.Coverage.Degraded)
+			n := native.Coverage.Degraded
+			reportWarning("%s %s degraded native logging controls", cli.CountOf(n, "managed session", "managed sessions"), cli.ByCount(n, "has", "have"))
 		}
 		if native.Coverage.Unmanaged > 0 {
-			reportWarning("%d harness session(s) are externally launched or lack Agent Mux native logging metadata; coverage cannot be guaranteed", native.Coverage.Unmanaged)
+			n := native.Coverage.Unmanaged
+			reportWarning("%s %s externally launched or %s Agent Mux native logging metadata; coverage cannot be guaranteed",
+				cli.CountOf(n, "harness session", "harness sessions"), cli.ByCount(n, "is", "are"), cli.ByCount(n, "lacks", "lack"))
 		}
 	}
 	if native.Storage.ActiveExcessBytes > 0 {
