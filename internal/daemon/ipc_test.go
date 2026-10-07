@@ -285,9 +285,11 @@ func TestIPC_ShutdownRequest(t *testing.T) {
 		t.Fatalf("shutdown request failed: err=%v resp=%+v", err, resp)
 	}
 
-	// After shutdown, subsequent connects should fail.
-	time.Sleep(50 * time.Millisecond)
-	if _, err := c.Send(protocol.Request{Type: protocol.TypeStateQuery}); err == nil {
-		t.Fatal("expected connection error after shutdown")
-	}
+	// After shutdown, subsequent connects should fail. Shutdown runs
+	// asynchronously through cancel, so wait for it rather than guessing how
+	// long a loaded machine needs.
+	waitFor(t, func() bool {
+		_, err := c.Send(protocol.Request{Type: protocol.TypeStateQuery})
+		return err != nil
+	}, "connections still succeed after shutdown")
 }

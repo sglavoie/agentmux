@@ -30,24 +30,22 @@ func TestRefresh_IdempotentNoSidecarRewrite(t *testing.T) {
 		t.Fatalf("Refresh 1: %v", err)
 	}
 	sidecar := idx.store.Path(PlanKey(planDir))
-	info1, err := os.Stat(sidecar)
-	if err != nil {
-		t.Fatalf("stat sidecar: %v", err)
+	// Back-date the sidecar well past any filesystem's mtime granularity: a
+	// rewrite stamps it with the present, so an unchanged old time proves
+	// there was none, without sleeping and hoping the clock moved.
+	backdated := time.Now().Add(-time.Hour).Truncate(time.Second)
+	if err := os.Chtimes(sidecar, backdated, backdated); err != nil {
+		t.Fatalf("back-date sidecar: %v", err)
 	}
-
-	// Sleep just past filesystem mtime granularity (some FS have 1s
-	// resolution); a rewrite would update mtime, no-op should not.
-	time.Sleep(20 * time.Millisecond)
 	if err := idx.Refresh(root); err != nil {
 		t.Fatalf("Refresh 2: %v", err)
 	}
-	info2, err := os.Stat(sidecar)
+	info, err := os.Stat(sidecar)
 	if err != nil {
 		t.Fatalf("stat sidecar again: %v", err)
 	}
-	if !info1.ModTime().Equal(info2.ModTime()) {
-		t.Errorf("sidecar mtime changed: %v -> %v (expected no rewrite on cache hit)",
-			info1.ModTime(), info2.ModTime())
+	if !info.ModTime().Equal(backdated) {
+		t.Errorf("sidecar mtime changed: %v -> %v (expected no rewrite on cache hit)", backdated, info.ModTime())
 	}
 }
 
