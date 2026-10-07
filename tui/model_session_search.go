@@ -493,7 +493,7 @@ func refreshAndPruneSessions(idx *transcript.Index, cfg *config.Config, readers 
 		slog.Debug("transcript.prune", "hidden", hidden)
 	}
 	if refreshErr != nil && pruneErr != nil {
-		return fmt.Errorf("refresh failed: %v; prune failed: %w", refreshErr, pruneErr)
+		return fmt.Errorf("refresh failed: %w; prune failed: %w", refreshErr, pruneErr)
 	}
 	if refreshErr != nil {
 		return refreshErr

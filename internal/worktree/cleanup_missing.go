@@ -21,7 +21,7 @@ func (i *Inventory) finishMissingCleanup(ctx context.Context, root string, entry
 	}
 	metadata, err := ReadMetadata(entry.MetadataPath)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrMetadataInvalid, err)
+		return fmt.Errorf("%w: %w", ErrMetadataInvalid, err)
 	}
 	if canonicalAdjacentPath(metadata.Path) != entry.Path {
 		return ErrMetadataInvalid
@@ -71,7 +71,7 @@ func (i *Inventory) finishMissingCleanup(ctx context.Context, root string, entry
 			return ErrSourceBranchMissing
 		}
 		if _, err := i.gitRunner()(ctx, control, gitProbeTimeout, "merge-base", "--is-ancestor", branchRef, sourceRef); err != nil {
-			return fmt.Errorf("%w: %v", ErrBranchUnmerged, err)
+			return fmt.Errorf("%w: %w", ErrBranchUnmerged, err)
 		}
 		if _, err := i.gitRunner()(ctx, control, gitCommandTimeout, "branch", "-d", "--", branch); err != nil {
 			return fmt.Errorf("worktree: safely deleting branch %s: %w", branch, err)
@@ -93,19 +93,19 @@ func (i *Inventory) missingControlState(ctx context.Context, metadata Metadata) 
 	git := i.gitRunner()
 	commonDir, err := gitLineWith(ctx, git, control, gitProbeTimeout, "rev-parse", "--path-format=absolute", "--git-common-dir")
 	if err != nil {
-		return "", nil, "", fmt.Errorf("%w: resolving source Git common directory: %v", ErrGitUnavailable, err)
+		return "", nil, "", fmt.Errorf("%w: resolving source Git common directory: %w", ErrGitUnavailable, err)
 	}
 	commonDir, err = canonicalExistingPath(commonDir)
 	if err != nil {
-		return "", nil, "", fmt.Errorf("%w: canonicalizing source Git common directory: %v", ErrGitUnavailable, err)
+		return "", nil, "", fmt.Errorf("%w: canonicalizing source Git common directory: %w", ErrGitUnavailable, err)
 	}
 	porcelain, err := git(ctx, control, gitProbeTimeout, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
-		return "", nil, "", fmt.Errorf("%w: listing Git worktrees: %v", ErrGitUnavailable, err)
+		return "", nil, "", fmt.Errorf("%w: listing Git worktrees: %w", ErrGitUnavailable, err)
 	}
 	records, err := parseWorktreePorcelain(porcelain)
 	if err != nil {
-		return "", nil, "", fmt.Errorf("%w: %v", ErrGitUnavailable, err)
+		return "", nil, "", fmt.Errorf("%w: %w", ErrGitUnavailable, err)
 	}
 	if _, ok := matchingWorktree(records, control); !ok {
 		return "", nil, "", fmt.Errorf("%w: recorded source checkout is not registered", ErrGitUnavailable)
@@ -124,5 +124,5 @@ func (i *Inventory) gitRefExists(ctx context.Context, control, ref string) (bool
 	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
 		return false, nil
 	}
-	return false, fmt.Errorf("%w: checking ref %s: %v", ErrGitUnavailable, ref, err)
+	return false, fmt.Errorf("%w: checking ref %s: %w", ErrGitUnavailable, ref, err)
 }

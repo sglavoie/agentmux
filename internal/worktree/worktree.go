@@ -100,11 +100,11 @@ func (w *Workflow) Create(ctx context.Context, request Request) (Result, error) 
 
 	sourceRoot, err := gitLine(ctx, request.SourceCWD, gitProbeTimeout, "rev-parse", "--path-format=absolute", "--show-toplevel")
 	if err != nil {
-		return Result{}, fmt.Errorf("%w: %v", ErrNotGitCheckout, err)
+		return Result{}, fmt.Errorf("%w: %w", ErrNotGitCheckout, err)
 	}
 	sourceRoot, err = canonicalDirectory(sourceRoot)
 	if err != nil {
-		return Result{}, fmt.Errorf("%w: resolving source checkout: %v", ErrNotGitCheckout, err)
+		return Result{}, fmt.Errorf("%w: resolving source checkout: %w", ErrNotGitCheckout, err)
 	}
 	baseCommit, sourceBranch, gitCommonDir, err := sourceGitIdentity(ctx, sourceRoot)
 	if err != nil {
@@ -396,7 +396,7 @@ func runGit(ctx context.Context, directory string, timeout time.Duration, args .
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
 		if errors.Is(commandCtx.Err(), context.DeadlineExceeded) {
-			return nil, fmt.Errorf("git %s timed out after %s", args[0], timeout)
+			return nil, fmt.Errorf("git %s timed out after %s: %w", args[0], timeout, context.DeadlineExceeded)
 		}
 		if text := strings.TrimSpace(stderr.String()); text != "" {
 			return nil, fmt.Errorf("git %s failed: %w: %s", args[0], err, text)

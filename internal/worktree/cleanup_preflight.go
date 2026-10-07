@@ -40,7 +40,7 @@ func (i *Inventory) revalidatePresentCleanup(ctx context.Context, root string, s
 	git := i.gitRunner()
 	top, err := gitLineWith(ctx, git, path, gitProbeTimeout, "rev-parse", "--path-format=absolute", "--show-toplevel")
 	if err != nil {
-		return cleanupPreflight{}, fmt.Errorf("%w: resolving checkout root: %v", ErrGitUnavailable, err)
+		return cleanupPreflight{}, fmt.Errorf("%w: resolving checkout root: %w", ErrGitUnavailable, err)
 	}
 	top, err = canonicalExistingPath(top)
 	if err != nil || top != path {
@@ -48,19 +48,19 @@ func (i *Inventory) revalidatePresentCleanup(ctx context.Context, root string, s
 	}
 	commonDir, err := gitLineWith(ctx, git, path, gitProbeTimeout, "rev-parse", "--path-format=absolute", "--git-common-dir")
 	if err != nil {
-		return cleanupPreflight{}, fmt.Errorf("%w: resolving Git common directory: %v", ErrGitUnavailable, err)
+		return cleanupPreflight{}, fmt.Errorf("%w: resolving Git common directory: %w", ErrGitUnavailable, err)
 	}
 	commonDir, err = canonicalExistingPath(commonDir)
 	if err != nil {
-		return cleanupPreflight{}, fmt.Errorf("%w: canonicalizing Git common directory: %v", ErrGitUnavailable, err)
+		return cleanupPreflight{}, fmt.Errorf("%w: canonicalizing Git common directory: %w", ErrGitUnavailable, err)
 	}
 	porcelain, err := git(ctx, path, gitProbeTimeout, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
-		return cleanupPreflight{}, fmt.Errorf("%w: listing Git worktrees: %v", ErrGitUnavailable, err)
+		return cleanupPreflight{}, fmt.Errorf("%w: listing Git worktrees: %w", ErrGitUnavailable, err)
 	}
 	records, err := parseWorktreePorcelain(porcelain)
 	if err != nil {
-		return cleanupPreflight{}, fmt.Errorf("%w: %v", ErrGitUnavailable, err)
+		return cleanupPreflight{}, fmt.Errorf("%w: %w", ErrGitUnavailable, err)
 	}
 	record, ok := matchingWorktree(records, path)
 	if !ok {
@@ -74,7 +74,7 @@ func (i *Inventory) revalidatePresentCleanup(ctx context.Context, root string, s
 	}
 	status, err := git(ctx, path, gitProbeTimeout, "status", "--porcelain=v1", "-z")
 	if err != nil {
-		return cleanupPreflight{}, fmt.Errorf("%w: checking checkout status: %v", ErrGitUnavailable, err)
+		return cleanupPreflight{}, fmt.Errorf("%w: checking checkout status: %w", ErrGitUnavailable, err)
 	}
 	if len(status) != 0 {
 		return cleanupPreflight{}, ErrWorktreeDirty
@@ -98,7 +98,7 @@ func (i *Inventory) revalidatePresentCleanup(ctx context.Context, root string, s
 	case ClassificationValid:
 		value, err := ReadMetadata(selected.MetadataPath)
 		if err != nil {
-			return cleanupPreflight{}, fmt.Errorf("%w: %v", ErrMetadataInvalid, err)
+			return cleanupPreflight{}, fmt.Errorf("%w: %w", ErrMetadataInvalid, err)
 		}
 		if canonicalAdjacentPath(value.Path) != path || SidecarPath(path) != selected.MetadataPath ||
 			(!record.Detached && value.Branch != record.Branch) {
@@ -191,13 +191,13 @@ func (i *Inventory) preflightBranchDeletion(ctx context.Context, control string,
 	}
 	branchHead, err := gitLineWith(ctx, i.gitRunner(), control, gitProbeTimeout, "rev-parse", "--verify", branchRef+"^{commit}")
 	if err != nil {
-		return "", fmt.Errorf("%w: resolving checkout branch: %v", ErrGitUnavailable, err)
+		return "", fmt.Errorf("%w: resolving checkout branch: %w", ErrGitUnavailable, err)
 	}
 	if entry.HEAD != "" && branchHead != entry.HEAD {
 		return "", fmt.Errorf("%w: checkout branch moved during cleanup preflight", ErrGitUnavailable)
 	}
 	if _, err := i.gitRunner()(ctx, control, gitProbeTimeout, "merge-base", "--is-ancestor", branchRef, sourceRef); err != nil {
-		return "", fmt.Errorf("%w: %v", ErrBranchUnmerged, err)
+		return "", fmt.Errorf("%w: %w", ErrBranchUnmerged, err)
 	}
 	return branch, nil
 }
