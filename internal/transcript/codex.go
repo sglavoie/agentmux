@@ -140,8 +140,49 @@ func (r CodexReader) Discover(homeDir string, opts DiscoverOptions) ([]SessionMe
 	if err != nil {
 		return nil, err
 	}
+	out = latestCodexSegments(out)
 	applyCodexThreadNames(homeDir, out)
 	return out, nil
+}
+
+// latestCodexSegments keeps one rollout per session ID. Codex's paginated
+// history continues a conversation in a second file named
+// rollout-<ts>-<id>_<segment>.jsonl whose session_meta repeats the original ID,
+// and an index keyed by (harness, id) that saw both would let each refresh
+// overwrite the entry with whichever file it parsed last — dropping the search
+// sidecar whenever the two disagreed. The segment with the latest activity is
+// the conversation as it now stands and the one a resume continues, so it is
+// the one kept; ties fall to the later modification time, then the later path,
+// so the choice does not depend on walk order.
+func latestCodexSegments(metas []SessionMeta) []SessionMeta {
+	kept := make(map[string]int, len(metas))
+	out := metas[:0]
+	for _, meta := range metas {
+		if meta.ID == "" {
+			out = append(out, meta)
+			continue
+		}
+		at, seen := kept[meta.ID]
+		if !seen {
+			kept[meta.ID] = len(out)
+			out = append(out, meta)
+			continue
+		}
+		if codexSegmentIsLater(meta, out[at]) {
+			out[at] = meta
+		}
+	}
+	return out
+}
+
+func codexSegmentIsLater(a, b SessionMeta) bool {
+	if !a.LastAt.Equal(b.LastAt) {
+		return a.LastAt.After(b.LastAt)
+	}
+	if !a.FileModTime.Equal(b.FileModTime) {
+		return a.FileModTime.After(b.FileModTime)
+	}
+	return a.Path > b.Path
 }
 
 // codexSessionIndex is the file Codex records thread names in, one

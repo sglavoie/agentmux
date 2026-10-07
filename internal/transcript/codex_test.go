@@ -6,6 +6,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/harness"
 )
 
 const codexFixtureRoot = "testdata/codex"
@@ -397,5 +400,54 @@ func TestCodexDiscover_NoSessionIndexLeavesTitlesEmpty(t *testing.T) {
 	metas, err := NewCodexReader().Discover(codexFixtureRoot, DiscoverOptions{})
 	if err != nil || len(metas) != 1 || metas[0].Title != "" {
 		t.Fatalf("Discover = %+v, %v; want one untitled session", metas, err)
+	}
+}
+
+// Codex's paginated history continues a conversation in a second rollout,
+// rollout-<ts>-<id>_<segment>.jsonl, whose session_meta repeats the original
+// ID. Discovery keeps the later segment only, and repeated refreshes leave the
+// entry and its search sidecar where they are instead of trading them between
+// the two files.
+func TestCodexContinuationSegmentIsOneConversation(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "sessions", "2026", "10", "04")
+	const id = "01a108ac-75f4-7dd0-bf85-6f583dfa0983"
+	meta := func(ts string) string {
+		return `{"timestamp":"` + ts + `","type":"session_meta","payload":{"id":"` + id + `","timestamp":"` + ts + `","cwd":"/cwd"}}` + "\n"
+	}
+	user := func(ts, text string) string {
+		return `{"timestamp":"` + ts + `","type":"event_msg","payload":{"type":"user_message","message":"` + text + `","images":[]}}` + "\n"
+	}
+	original := filepath.Join(dir, "rollout-2026-10-04T14-48-02-"+id+".jsonl")
+	continued := filepath.Join(dir, "rollout-2026-10-04T14-48-08-"+id+"_01a108ac-8e06-7361-92ac-87b005c3254c.jsonl")
+	writeTranscript(t, original, meta("2026-10-04T20:48:02.000Z")+user("2026-10-04T20:48:03.000Z", "aborted start"))
+	writeTranscript(t, continued, meta("2026-10-04T20:48:08.000Z")+user("2026-10-04T20:48:09.000Z", "the real conversation")+user("2026-10-04T20:55:00.000Z", "and its follow-up"))
+
+	metas, err := NewCodexReader().Discover(root, DiscoverOptions{})
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if len(metas) != 1 || metas[0].ID != id || metas[0].Path != continued {
+		t.Fatalf("Discover = %+v, want only the continuation segment for %s", metas, id)
+	}
+
+	idx, err := LoadIndexAt(filepath.Join(t.TempDir(), "transcripts.json"))
+	if err != nil {
+		t.Fatalf("LoadIndexAt: %v", err)
+	}
+	cfg := &config.Config{Profiles: []config.Account{{Name: "work", Harness: harness.Codex, HomeDir: root}}}
+	readers := map[string]Reader{harness.Codex: NewCodexReader()}
+	for refresh := 1; refresh <= 3; refresh++ {
+		if err := idx.Refresh(cfg, readers); err != nil {
+			t.Fatalf("Refresh %d: %v", refresh, err)
+		}
+		status, err := Status(idx.Path())
+		if err != nil {
+			t.Fatalf("Status: %v", err)
+		}
+		if status.VisibleEntries != 1 || status.MissingSidecars != 0 || status.SidecarCount != 1 {
+			t.Fatalf("after refresh %d: visible %d sidecars %d missing %d, want 1/1/0",
+				refresh, status.VisibleEntries, status.SidecarCount, status.MissingSidecars)
+		}
 	}
 }
