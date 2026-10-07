@@ -488,6 +488,10 @@ func TestSessionIDPrefixResolvesLikeAShortGitHash(t *testing.T) {
 		t.Fatalf("missing parameters = %+v, want a longer session-id", actionErr.MissingParameters)
 	}
 
+	if !actionErr.MissingParameters[0].Positional {
+		t.Fatal("the session ID is an argument, not a flag; its hint must say so")
+	}
+
 	// A miss says what to do next: a too-short prefix is named as such, and
 	// anything else points at the list.
 	for id, hint := range map[string]string{"7f6": "at least 4 characters", "ffffffff": "amx session list"} {
@@ -778,4 +782,42 @@ func TestSessionContinueHerePicksTheNewestConversationHere(t *testing.T) {
 			t.Fatalf("err = %v, want a miss", err)
 		}
 	})
+}
+
+func TestAmbiguousPrefixCandidatesListTheNewestFirst(t *testing.T) {
+	resetSessionCommandsTestState(t)
+	base, indexPath := sessionCommandMeta(t, harness.Codex)
+	now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	meta := func(id string, age time.Duration) transcript.SessionMeta {
+		m := base
+		m.ID, m.LastAt = id, now.Add(-age)
+		return m
+	}
+	metas := []transcript.SessionMeta{meta("beef-old", 48*time.Hour), meta("beef-new", time.Hour), meta("beef-mid", 24*time.Hour), meta("beef-tie", time.Hour)}
+	writeSessionCommandIndex(t, indexPath, metas...)
+	cfg := &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Codex}}}
+	sessionCommandsSessionIndexPath = func() string { return indexPath }
+	readers := map[string]transcript.Reader{harness.Codex: sessionCommandReader{harness: harness.Codex, discovered: metas}}
+
+	_, err := resolveIndexedConversation(cfg, readers, conversation.Identity{SessionID: "beef"})
+	var actionErr *actions.Error
+	if !errors.As(err, &actionErr) {
+		t.Fatalf("error = %v, want an ambiguity", err)
+	}
+	var ids []string
+	for _, candidate := range actionErr.Candidates {
+		ids = append(ids, candidate.ID)
+	}
+	if got, want := strings.Join(ids, ","), "codex:beef-new,codex:beef-tie,codex:beef-mid,codex:beef-old"; got != want {
+		t.Fatalf("candidates = %s, want %s", got, want)
+	}
+}
+
+// fork shares continue's --here path, so it offers the same flag.
+func TestSessionForkOffersHereLikeContinue(t *testing.T) {
+	for _, cmd := range []*cobra.Command{sessionContinueCmd, sessionForkCmd} {
+		if cmd.Flags().Lookup("here") == nil {
+			t.Errorf("session %s does not declare --here", cmd.Name())
+		}
+	}
 }

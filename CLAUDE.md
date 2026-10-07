@@ -143,7 +143,9 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   project once leading emoji/symbols and case are set aside selects it, so
   `amx` reaches `🐱amx`); a title shared by several projects without
   `--profile`, and a selector matching nothing, are refused with ordered
-  `profile/title` candidates rather than resolved by a guess. A launch reports
+  `profile/title` candidates rather than resolved by a guess; such a
+  candidate passed back as the title launches that project, once the whole
+  string has failed to match as a title itself. A launch reports
   the new tab's identity only when exactly one new tab carrying the title
   appeared. Neither leaf rewrites `config.toml`.
 - `cmd/config`: the `amx config` family — the config file's lifecycle (init,

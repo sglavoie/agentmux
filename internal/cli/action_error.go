@@ -23,7 +23,11 @@ func ActionErrorText(err *actions.Error) error {
 			b.WriteString("\nre-run with --yes to confirm")
 			continue
 		}
-		fmt.Fprintf(&b, "\nmissing --%s", parameter.Name)
+		if parameter.Positional {
+			fmt.Fprintf(&b, "\nmissing <%s>", parameter.Name)
+		} else {
+			fmt.Fprintf(&b, "\nmissing --%s", parameter.Name)
+		}
 		if parameter.Description != "" {
 			fmt.Fprintf(&b, ": %s", parameter.Description)
 		}

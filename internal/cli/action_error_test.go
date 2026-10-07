@@ -26,6 +26,16 @@ func TestActionErrorTextNamesTheConfirmationFlag(t *testing.T) {
 	}
 }
 
+func TestActionErrorTextNamesAPositionalParameterWithoutAFlag(t *testing.T) {
+	err := ActionErrorText(&actions.Error{
+		Code: "ambiguous_conversation", Message: "2 conversations match",
+		MissingParameters: []actions.ParameterSchema{{Name: "session-id", Description: "a longer prefix", Required: true, Positional: true}},
+	})
+	if got, want := err.Error(), "2 conversations match\nmissing <session-id>: a longer prefix"; got != want {
+		t.Fatalf("text = %q, want %q", got, want)
+	}
+}
+
 func TestActionErrorTextListsCandidates(t *testing.T) {
 	err := ActionErrorText(&actions.Error{
 		Code: "ambiguous", Message: `selector "api" matches 2 worktrees`,

@@ -770,23 +770,31 @@ func resolveIndexedConversation(cfg *config.Config, readers map[string]transcrip
 	case 1:
 		return &matches[0], nil
 	}
+	// Newest first: a text caller is shown only the first few candidates, and
+	// the conversation meant is far more often a recent one than the
+	// alphabetically first. The ID breaks ties so the order stays stable.
+	sort.Slice(matches, func(i, j int) bool {
+		if !matches[i].LastAt.Equal(matches[j].LastAt) {
+			return matches[i].LastAt.After(matches[j].LastAt)
+		}
+		return matches[i].Harness+":"+matches[i].ID < matches[j].Harness+":"+matches[j].ID
+	})
 	candidates := make([]actions.Candidate, 0, len(matches))
 	for _, meta := range matches {
 		candidates = append(candidates, actions.Candidate{ID: meta.Harness + ":" + meta.ID, DisplayName: meta.Project, CanonicalPath: meta.CWD})
 	}
-	sort.Slice(candidates, func(i, j int) bool { return candidates[i].ID < candidates[j].ID })
 	if len(exact) > 1 {
 		return nil, &actions.Error{
 			Code:              "ambiguous_conversation",
 			Message:           fmt.Sprintf("%d indexed conversations have session ID %q; qualify it with its harness", len(matches), identity.SessionID),
-			MissingParameters: []actions.ParameterSchema{{Name: "harness", Type: "string", Description: "source harness (claude, codex, or copilot)", Required: true}},
+			MissingParameters: []actions.ParameterSchema{{Name: "harness", Type: "string", Description: "qualify the ID as <harness>:<session-id> (claude, codex, or copilot)", Required: true, Positional: true}},
 			Candidates:        candidates,
 		}
 	}
 	return nil, &actions.Error{
 		Code:              "ambiguous_conversation",
 		Message:           fmt.Sprintf("%d indexed conversations have a session ID starting with %q; give more of it", len(matches), identity.SessionID),
-		MissingParameters: []actions.ParameterSchema{{Name: "session-id", Type: "string", Description: "a longer prefix of the session ID, or all of it", Required: true}},
+		MissingParameters: []actions.ParameterSchema{{Name: "session-id", Type: "string", Description: "a longer prefix of the session ID, or all of it", Required: true, Positional: true}},
 		Candidates:        candidates,
 	}
 }

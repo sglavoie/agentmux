@@ -71,6 +71,10 @@ type ParameterSchema struct {
 	Description string   `json:"description,omitempty"`
 	Required    bool     `json:"required"`
 	Enum        []string `json:"enum,omitempty"`
+	// Positional marks a parameter given as a command argument rather than a
+	// flag, so text-mode help does not tell the caller to pass a --flag that
+	// does not exist.
+	Positional bool `json:"positional,omitempty"`
 }
 
 // Confirmation describes an intentional side effect.  The registry never

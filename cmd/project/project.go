@@ -369,7 +369,7 @@ func runProjectLaunch(cmd *cobra.Command, args []string) error {
 	if title == "" {
 		return projectMissingTitle(cmd, cfg)
 	}
-	project, err := selectProject(cfg, strings.TrimSpace(projectLaunchProfile), title)
+	project, err := selectProjectOrPair(cfg, strings.TrimSpace(projectLaunchProfile), title)
 	if err != nil {
 		return projectActionError(cmd, err)
 	}
@@ -517,6 +517,38 @@ func selectProject(cfg *config.Config, profile, title string) (config.Session, e
 	}
 }
 
+// selectProjectOrPair is selectProject that also accepts the "profile/title"
+// form the candidate lists print, so a candidate copied out of an error can be
+// passed straight back. The whole string is tried as a title first, because a
+// title may itself contain a slash; only when that matches nothing, no
+// --profile was given, and the part before the first slash names a configured
+// profile is it read as the pair. Otherwise the first attempt's error stands,
+// with its near-miss candidates.
+func selectProjectOrPair(cfg *config.Config, profile, title string) (config.Session, error) {
+	project, err := selectProject(cfg, profile, title)
+	var actionErr *actions.Error
+	if err == nil || profile != "" || !errors.As(err, &actionErr) || actionErr.Code != "not_found" {
+		return project, err
+	}
+	pairProfile, pairTitle, ok := strings.Cut(title, "/")
+	if !ok || strings.TrimSpace(pairTitle) == "" || !hasProfile(cfg, pairProfile) {
+		return project, err
+	}
+	if paired, pairErr := selectProject(cfg, pairProfile, strings.TrimSpace(pairTitle)); pairErr == nil {
+		return paired, nil
+	}
+	return project, err
+}
+
+func hasProfile(cfg *config.Config, name string) bool {
+	for _, project := range cfg.Projects {
+		if strings.EqualFold(project.EffectiveProfile(), name) {
+			return true
+		}
+	}
+	return false
+}
+
 // sameTitle reports whether every project carries one title, so several of
 // them differ only by profile and --profile is what tells them apart.
 func sameTitle(projects []config.Session) bool {
@@ -533,7 +565,7 @@ func sameTitle(projects []config.Session) bool {
 // ProjectTitleKey, so a leading emoji or bullet does not move a title away
 // from its alphabetical place ("🐱amx" sorts with "amp", not after every
 // plain title). The ID is the selector pair a caller passes back as --profile
-// and --title.
+// and --title, or as the single "profile/title" argument.
 func projectCandidates(projects []config.Session) []actions.Candidate {
 	sorted := append([]config.Session(nil), projects...)
 	sort.SliceStable(sorted, func(i, j int) bool {

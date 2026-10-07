@@ -772,3 +772,19 @@ func TestProjectLaunchNotFoundMarksUnusableCandidates(t *testing.T) {
 		t.Fatalf("json = %s, want the candidate's problem", out)
 	}
 }
+
+// A candidate an error printed, profile/title, launches when passed back.
+func TestProjectLaunchAcceptsTheProfileTitlePairCandidatesPrint(t *testing.T) {
+	client := &recordingKittyClient{}
+	out, err := runProject(t, "launch", testConfig(), client, true, "", "codex-work/API")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(client.launched) != 1 || !strings.Contains(out, `"profile":"codex-work"`) {
+		t.Fatalf("launched = %+v, out = %s; want the codex-work API project", client.launched, out)
+	}
+	// An unknown profile prefix is just a title that matches nothing.
+	if _, err := runProject(t, "launch", testConfig(), &recordingKittyClient{}, false, "", "nobody/API"); err == nil || !strings.Contains(err.Error(), "no configured project matches") {
+		t.Fatalf("err = %v, want a plain miss", err)
+	}
+}
