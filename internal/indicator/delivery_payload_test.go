@@ -79,8 +79,12 @@ func TestDeliverPayloadBoundariesAndEncoding(t *testing.T) {
 	}{
 		{name: "exactly 256 KiB", size: maxRawHookPayloadBytes, wantStatus: DeliveryAccepted, wantReason: "accepted", wantEncoding: "json", wantCalls: 1},
 		{name: "256 KiB plus one", size: maxRawHookPayloadBytes + 1, wantStatus: DeliveryAccepted, wantReason: "accepted", wantEncoding: "json_compact", wantCalls: 1},
-		{name: "exactly 1 MiB", size: maxHookPayloadBytes, wantStatus: DeliveryAccepted, wantReason: "accepted", wantEncoding: "json_compact", wantCalls: 1},
-		{name: "1 MiB plus one", size: maxHookPayloadBytes + 1, wantStatus: DeliveryPermanentFailure, wantReason: "payload_oversized", wantCalls: 0},
+		// Above the daemon's 1 MiB request ceiling, which is what a Claude
+		// PostToolBatch carrying one large tool output looks like: decoded here
+		// and forwarded compact rather than refused.
+		{name: "3 MiB tool batch", size: 3 << 20, wantStatus: DeliveryAccepted, wantReason: "accepted", wantEncoding: "json_compact", wantCalls: 1},
+		{name: "exactly the read limit", size: maxHookPayloadBytes, wantStatus: DeliveryAccepted, wantReason: "accepted", wantEncoding: "json_compact", wantCalls: 1},
+		{name: "read limit plus one", size: maxHookPayloadBytes + 1, wantStatus: DeliveryPermanentFailure, wantReason: "payload_oversized", wantCalls: 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			payload := exactSizedHookPayload(t, tc.size, map[string]any{
@@ -286,7 +290,7 @@ func TestDeliverOverLimitCaptureIsBoundedAndTruncated(t *testing.T) {
 	if err := json.Unmarshal(data, &entry); err != nil {
 		t.Fatal(err)
 	}
-	if !entry.Truncated || len(entry.Payload) != maxHookPayloadBytes+1 {
+	if !entry.Truncated || len(entry.Payload) != maxCapturedHookPayloadBytes {
 		t.Fatalf("capture entry = truncated:%t payload-bytes:%d", entry.Truncated, len(entry.Payload))
 	}
 }

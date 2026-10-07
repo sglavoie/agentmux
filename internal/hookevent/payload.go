@@ -122,15 +122,24 @@ func ReadHookPayload(stdin *os.File) (HookPayload, error) {
 // upstream cannot force this process to buffer unbounded memory before the
 // daemon's own limit would reject the request anyway.
 func DecodeHookPayload(r io.Reader) (HookPayload, error) {
+	return DecodeHookPayloadWithin(r, maxHookPayloadBytes)
+}
+
+// DecodeHookPayloadWithin is DecodeHookPayload with the caller's own bound. The
+// hook client reads the harness's stdin under a larger one than the daemon's:
+// a payload carrying a batch of tool output is decoded there and compacted to
+// its identity fields, so what crosses the socket stays within the daemon's
+// limit however large the tool output was.
+func DecodeHookPayloadWithin(r io.Reader, limit int) (HookPayload, error) {
 	// Read one extra byte past the cap so we can distinguish "exactly at
 	// the limit" (allowed) from "exceeded the limit" (rejected) without
 	// silently truncating mid-token.
-	data, err := io.ReadAll(io.LimitReader(r, maxHookPayloadBytes+1))
+	data, err := io.ReadAll(io.LimitReader(r, int64(limit)+1))
 	if err != nil {
 		return HookPayload{}, fmt.Errorf("read hook payload: %w", err)
 	}
-	if len(data) > maxHookPayloadBytes {
-		return HookPayload{}, fmt.Errorf("hook payload exceeds %d bytes", maxHookPayloadBytes)
+	if len(data) > limit {
+		return HookPayload{}, fmt.Errorf("hook payload exceeds %d bytes", limit)
 	}
 	data = bytes.TrimSpace(data)
 	if len(data) == 0 {

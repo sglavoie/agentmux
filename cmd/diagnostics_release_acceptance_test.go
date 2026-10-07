@@ -192,7 +192,9 @@ func TestAcceptanceDiagnosticPipeline(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventsBeforeOverLimit := len(beforeOverLimit.EventsByWindow[42])
-	overLimitPayload := acceptancePaddedPayload(t, (1<<20)+1, map[string]any{"session_id": "must-not-reach-daemon"})
+	// One byte past the hook client's 16 MiB read limit. Payloads between the
+	// daemon's 1 MiB request ceiling and that limit are compacted and delivered.
+	overLimitPayload := acceptancePaddedPayload(t, (16<<20)+1, map[string]any{"session_id": "must-not-reach-daemon"})
 	strictResult, strictErr := runAcceptanceHookCommandMode(t, "PreToolUse", "acceptance-over-limit-strict", "claude", overLimitPayload, true)
 	var exitErr *cli.ExitError
 	if !errors.As(strictErr, &exitErr) || exitErr.Code != 2 || strictResult.Status != indicator.DeliveryPermanentFailure || strictResult.Reason != "payload_oversized" {

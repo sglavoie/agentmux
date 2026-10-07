@@ -22,9 +22,17 @@ const (
 	// within the daemon's 1 MiB request limit. Payloads through this size are
 	// forwarded byte-for-byte.
 	maxRawHookPayloadBytes = 256 << 10
-	// maxHookPayloadBytes is the largest original hook payload accepted. Larger
-	// valid payloads are compacted before being placed in the daemon envelope.
-	maxHookPayloadBytes = 1 << 20
+	// maxHookPayloadBytes is the largest original hook payload accepted.
+	// Payloads above maxRawHookPayloadBytes are decoded here and compacted to
+	// their identity fields before being placed in the daemon envelope, so this
+	// bounds only the hook process's own memory, never a request. It is well
+	// above the daemon's 1 MiB request ceiling because Claude's PostToolBatch
+	// carries every tool response in the batch, and one large read or command
+	// output pushes it past a megabyte routinely.
+	maxHookPayloadBytes = 16 << 20
+	// maxCapturedHookPayloadBytes bounds what an opted-in raw capture keeps of
+	// one payload; a larger one is captured as a truncated prefix.
+	maxCapturedHookPayloadBytes = 1 << 20
 )
 
 var errHookPayloadOversized = errors.New("hook payload exceeds forwarding limit")
@@ -78,7 +86,7 @@ func deliverFromStdinWithDeps(
 	case errors.Is(err, errHookPayloadOversized):
 		slog.Warn("indicator: rejecting oversized hook payload", "event", event, "err", err)
 		payloadSize, payloadHMAC = recorder.recordPayload([]byte(payloadJSON), "rejected", "payload_oversized")
-		recorder.captureRawPayload(event, windowID, producerHarness, payloadJSON, true)
+		recorder.captureRawPayload(event, windowID, producerHarness, payloadJSON[:min(len(payloadJSON), maxCapturedHookPayloadBytes)], true)
 		recorder.record("hook.validation", "rejected", "payload_oversized", map[string]string{
 			"observed_bytes": fmt.Sprint(payloadSize),
 			"limit_bytes":    fmt.Sprint(maxHookPayloadBytes),
@@ -92,9 +100,13 @@ func deliverFromStdinWithDeps(
 		return finish(resultFor(started, traceID, requestID, DeliveryPermanentFailure, "payload_unreadable", nil))
 	default:
 		payloadSize, payloadHMAC = recorder.recordPayload([]byte(payloadJSON), "success", "payload_read")
-		recorder.captureRawPayload(event, windowID, producerHarness, payloadJSON, false)
+		captured, truncated := payloadJSON, false
+		if len(captured) > maxCapturedHookPayloadBytes {
+			captured, truncated = captured[:maxCapturedHookPayloadBytes], true
+		}
+		recorder.captureRawPayload(event, windowID, producerHarness, captured, truncated)
 	}
-	payload, err := hookevent.DecodeHookPayload(strings.NewReader(payloadJSON))
+	payload, err := hookevent.DecodeHookPayloadWithin(strings.NewReader(payloadJSON), maxHookPayloadBytes)
 	if err != nil {
 		recorder.record("hook.validation", "rejected", "invalid_payload", map[string]string{"error": err.Error()}, 0)
 		return finish(resultFor(started, traceID, requestID, DeliveryPermanentFailure, "invalid_payload", nil))

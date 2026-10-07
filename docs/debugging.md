@@ -223,12 +223,16 @@ never inputs to a bundle.
 
 Hook payload transport has two accepted encodings without changing delivery
 protocol v1. Payloads through 256 KiB are forwarded byte-for-byte with
-`payload_encoding=json`. Larger payloads through 1 MiB are validated in their
+`payload_encoding=json`. Larger payloads through 16 MiB are validated in their
 original form, retain original byte-count/HMAC and authorized raw-capture
-evidence, then forward only an allowlisted semantic representation with
-`payload_encoding=json_compact`; bulk transcript or message text is omitted.
-Payloads above 1 MiB are rejected before process discovery, IPC, or reducer
-mutation with reason `payload_oversized`. Legacy hook entry points remain
+evidence (a payload over 1 MiB is captured as a truncated prefix), then forward
+only an allowlisted semantic representation with
+`payload_encoding=json_compact`; bulk transcript, message, and tool output is
+omitted, so the request stays within the daemon's 1 MiB ceiling. The read limit
+sits well above that ceiling because Claude's `PostToolBatch` carries every
+tool response in the batch and routinely exceeds a megabyte. Payloads above
+16 MiB are rejected before process discovery, IPC, or reducer mutation with
+reason `payload_oversized`. Legacy hook entry points remain
 fail-open, while `hook-indicator --strict` returns exit status 2 for that
 permanent rejection.
 
