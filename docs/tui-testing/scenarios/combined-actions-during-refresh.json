@@ -30,7 +30,7 @@
     },
     {
       "type": "contains_text",
-      "text": "Health degraded"
+      "text": "Daemon health degraded · details"
     },
     {
       "type": "contains_text",

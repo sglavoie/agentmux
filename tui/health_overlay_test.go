@@ -339,6 +339,43 @@ func TestHealthSurfacesAgreeOnOneReading(t *testing.T) {
 	}
 }
 
+// Outside the dashboard the status line is the only health reading on screen,
+// so it names what is degraded and where the full reading is; inside the
+// details it names the part only, because the operator is already there.
+func TestDegradedHealthLineNamesThePartAndTheWayToDetails(t *testing.T) {
+	cases := []struct {
+		name         string
+		daemonDown   bool
+		hooksMissing bool
+		want         string
+	}{
+		{"daemon", true, false, "Daemon health degraded"},
+		{"hooks", false, true, "Hook health degraded"},
+		{"both", true, true, "Daemon and hook health degraded"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := healthModel(t)
+			m.width = 200
+			m.daemonAlive = !tc.daemonDown
+			if tc.hooksMissing {
+				m.hookHealth = commands.HookHealth{InSync: []string{"work"}, Missing: []string{"personal"}}
+			}
+
+			m.mode = ModeWorktrees
+			got := strings.TrimSpace(stripAnsi(renderStatusBar(m)))
+			if want := tc.want + ` · details: ":" Show Health Details on the dashboard`; got != want {
+				t.Fatalf("worktrees status = %q, want %q", got, want)
+			}
+
+			m.openHealth(ModeWorktrees)
+			if got := strings.TrimSpace(stripAnsi(renderStatusBar(m))); got != tc.want {
+				t.Fatalf("health details status = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // An unobserved check is neither degraded nor healthy. The status bar may not
 // report it as degraded — that would be a claim about evidence nobody gathered —
 // and the hint strip stays silent, exactly as it did before the issue model.

@@ -23,6 +23,6 @@
     { "type": "contains_text", "text": "Daemon — running" },
     { "type": "contains_text", "text": "Configuration — no deprecated keys" },
     { "type": "contains_text", "text": "esc/q" },
-    { "type": "contains_text", "text": "Health degraded" }
+    { "type": "contains_text", "text": "Hook health degraded" }
   ]
 }

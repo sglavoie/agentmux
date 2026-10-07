@@ -108,8 +108,8 @@ func fallbackStatusMessage(m Model) statusMessage {
 	if msg, ok := modeErrorStatus(m); ok {
 		return msg
 	}
-	if daemonHealthDegraded(m) || hookHealthDegraded(m) {
-		return statusMessage{Text: "Health degraded", Severity: statusWarning}
+	if text := degradedHealthText(m); text != "" {
+		return statusMessage{Text: text, Severity: statusWarning}
 	}
 	if m.mode == ModeSessionSearch && m.sessionRefreshInFlight {
 		if count := len(m.sessionResults); count > 0 {
@@ -254,7 +254,7 @@ func sentenceCase(s string) string {
 
 // daemonHealthDegraded and hookHealthDegraded are the status bar's reading of
 // two named issues. They ask the issue model rather than re-testing the raw
-// fields, so the "Health degraded" line, the header hint strip, and the details
+// fields, so the degraded-health line, the header hint strip, and the details
 // overlay cannot disagree about whether a check is degraded.
 //
 // Topology is deliberately NOT folded into them even though it is now an issue
@@ -265,6 +265,28 @@ func sentenceCase(s string) string {
 // Configuration is likewise left out. Its notice has a banner and is dismissible,
 // and letting a dismissible warning drive the status line would either survive
 // the dismissal or let the dismissal reach the line that reports real failures.
+// degradedHealthText names which reading is degraded and, outside the health
+// details themselves, where the full reading lives: the line shows on views
+// that have no health indicator of their own, so "Health degraded" alone left
+// the operator to guess both what was wrong and where to look.
+func degradedHealthText(m Model) string {
+	var subject string
+	switch daemon, hooks := daemonHealthDegraded(m), hookHealthDegraded(m); {
+	case daemon && hooks:
+		subject = "Daemon and hook health degraded"
+	case daemon:
+		subject = "Daemon health degraded"
+	case hooks:
+		subject = "Hook health degraded"
+	default:
+		return ""
+	}
+	if m.mode == ModeHealth {
+		return subject
+	}
+	return subject + " · details: \":\" Show Health Details on the dashboard"
+}
+
 func daemonHealthDegraded(m Model) bool {
 	return healthIssueDegraded(m, dashboard.HealthIssueDaemon)
 }
