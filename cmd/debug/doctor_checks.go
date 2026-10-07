@@ -14,6 +14,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/debugger"
+	"github.com/sglavoie/agentmux/internal/hooks"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/screenstate"
 )
@@ -619,7 +620,7 @@ func writeDoctorHookProfiles(out io.Writer, profiles []debugger.HookProfile, ver
 			reportIssue("hooks for %s cannot be checked: %s", status.Profile, status.CheckError)
 			continue
 		}
-		if _, err := fmt.Fprintf(out, "hooks: %s (%s): sync=%s activation=%s\n", status.Profile, status.Harness, status.Sync, status.Activation); err != nil {
+		if _, err := fmt.Fprintf(out, "hooks: %s (%s): %s\n", status.Profile, status.Harness, doctorHookState(status.Sync, status.Activation)); err != nil {
 			return err
 		}
 		switch status.Verdict {
@@ -633,6 +634,33 @@ func writeDoctorHookProfiles(out io.Writer, profiles []debugger.HookProfile, ver
 		}
 	}
 	return nil
+}
+
+// doctorHookState is one profile's sync and activation in the words doctor's
+// summary line uses, "in sync and active", rather than the raw enum pairs
+// `debug status` prints for a reader who greps for them. The remedy is the
+// finding's to name, not every line's.
+func doctorHookState(sync hooks.SyncStatus, activation hooks.ActivationVerdict) string {
+	syncWords := map[hooks.SyncStatus]string{
+		hooks.SyncInSync:  "in sync",
+		hooks.SyncDrifted: "drifted",
+		hooks.SyncMissing: "not installed",
+	}[sync]
+	if syncWords == "" {
+		syncWords = "sync " + string(sync)
+	}
+	activationWords := map[hooks.ActivationVerdict]string{
+		hooks.ActivationHealthy:    "active",
+		hooks.ActivationFailure:    "not active",
+		hooks.ActivationUnverified: "activation unverified",
+	}[activation]
+	if activationWords == "" {
+		activationWords = "activation " + string(activation)
+	}
+	if sync == hooks.SyncInSync && activation == hooks.ActivationHealthy {
+		return "in sync and active"
+	}
+	return syncWords + ", " + activationWords
 }
 
 func writeDoctorRenderer(out io.Writer, snapshot protocol.EventsExport, liveByID map[int]protocol.WindowLiveMetadata, kittyOK bool, reportIssue func(string, ...any)) error {

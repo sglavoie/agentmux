@@ -226,7 +226,7 @@ func TestDoctorReportsVerifiedDisabledHooksAsFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("writeDoctorHooks: %v", err)
 	}
-	if !strings.Contains(out.String(), "activation=failure") {
+	if !strings.Contains(out.String(), "not active") {
 		t.Fatalf("doctor hook output did not report activation failure:\n%s", out.String())
 	}
 	if !slices.ContainsFunc(failures, func(message string) bool {
@@ -434,16 +434,16 @@ func TestDoctorHooksSummarizesHealthyProfiles(t *testing.T) {
 	ahead.ContractAhead = true
 	profiles := []debugger.HookProfile{healthy("work"), unverified, ahead}
 	if got, want := write(profiles, false), "hooks: 2 profiles in sync and active (--verbose lists each)\n"+
-		"hooks: copilot (copilot): sync=in_sync activation=unverified\n"; got != want {
+		"hooks: copilot (copilot): in sync, activation unverified\n"; got != want {
 		t.Errorf("summary =\n%s\nwant\n%s", got, want)
 	}
-	if got, want := write(profiles, true), "hooks: work (claude): sync=in_sync activation=healthy\n"+
-		"hooks: copilot (copilot): sync=in_sync activation=unverified\n"+
-		"hooks: home (claude): sync=in_sync activation=healthy\n"; got != want {
+	if got, want := write(profiles, true), "hooks: work (claude): in sync and active\n"+
+		"hooks: copilot (copilot): in sync, activation unverified\n"+
+		"hooks: home (claude): in sync and active\n"; got != want {
 		t.Errorf("verbose =\n%s\nwant\n%s", got, want)
 	}
-	if got, want := write([]debugger.HookProfile{healthy("work"), unverified}, false), "hooks: work (claude): sync=in_sync activation=healthy\n"+
-		"hooks: copilot (copilot): sync=in_sync activation=unverified\n"; got != want {
+	if got, want := write([]debugger.HookProfile{healthy("work"), unverified}, false), "hooks: work (claude): in sync and active\n"+
+		"hooks: copilot (copilot): in sync, activation unverified\n"; got != want {
 		t.Errorf("one healthy profile =\n%s\nwant\n%s", got, want)
 	}
 }

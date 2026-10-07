@@ -226,14 +226,6 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		}
 		checkDoctorConfigFreshness(health.Uptime, addFinding)
 	}
-	// The integration section runs whether or not the daemon answered: with the
-	// daemon down, shell resolution is still answerable and is often the thing
-	// the operator needs to see.
-	report.ASLIntegration = evaluateASLIntegration(gatherASLIntegrationInputs(health))
-	if err := writeDoctorASLIntegration(textOut, report.ASLIntegration, addFinding); err != nil {
-		return err
-	}
-
 	writeDoctorRunningBinary(func(format string, args ...any) {
 		addFinding(severityInfo, "uninstalled_binary", format, args...)
 	})
@@ -309,6 +301,14 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	if err := writeDoctorSuppressions(textOut, snapshot, now, doctorVerbose); err != nil {
+		return err
+	}
+	// The integration section runs whether or not the daemon answered: with the
+	// daemon down, shell resolution is still answerable and is often the thing
+	// the operator needs to see. It comes after the one-line summaries rather
+	// than among them, because its indented table would otherwise split them.
+	report.ASLIntegration = evaluateASLIntegration(gatherASLIntegrationInputs(health))
+	if err := writeDoctorASLIntegration(textOut, report.ASLIntegration, addFinding); err != nil {
 		return err
 	}
 
