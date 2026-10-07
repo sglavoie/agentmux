@@ -216,7 +216,7 @@ func (m Model) handlePlanSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		m.planCursor = clamp(m.planCursor-step, 0, len(m.planResults)-1)
 		scrollPlanSearchToCursor(&m)
 		return m, nil
-	case keyPlanOpenEditor:
+	case keyPlanOpenEditor, keyOpenEditor:
 		if m.planCursor < 0 || m.planCursor >= len(m.planResults) {
 			return m, nil
 		}
@@ -408,12 +408,10 @@ func (m Model) handlePlanViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg.String() {
-	case keyEsc:
+	case keyEsc, keyQ:
+		// q backs out one level, as it does in the Past Sessions viewer and
+		// in every list; a second q (or esc) leaves Plans from the list.
 		m.exitPlanView()
-		return m, nil
-	case keyQ:
-		m.exitPlanView()
-		m.exitPlanSearch()
 		return m, nil
 	case keyQuestion:
 		m.openHelp(ModePlanView)
@@ -468,7 +466,7 @@ func (m Model) handlePlanViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, commands.CopyText(m.planViewerLines[m.planViewerCursor])
-	case keyPlanOpenEditor:
+	case keyPlanOpenEditor, keyOpenEditor:
 		if m.viewerPlan == nil {
 			return m, nil
 		}

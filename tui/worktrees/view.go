@@ -129,7 +129,7 @@ func (in ListInput) RenderList(height int) string {
 		if len(in.Entries) > 0 {
 			return styleDim.Render(layout.ClampLine("  (no worktrees match — esc clears the filter)", in.Width)) + "\n"
 		}
-		return styleDim.Render("  (no managed worktrees)") + "\n"
+		return styleDim.Render(layout.ClampLine("  (no managed worktrees — w in Past Sessions forks a conversation into one)", in.Width)) + "\n"
 	}
 
 	window := layout.ListWindowFor(len(in.Filtered), in.Offset, height)

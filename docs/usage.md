@@ -883,12 +883,12 @@ successfully. Each row and viewer header shows the associated configured
 project title. Press `r` to filter by the projects represented in the index or
 by `Unknown`; equally specific configuration aliases are separate filter
 choices and match the same plans. `/` searches, `o` cycles the result sort
-between match count and recency, `e` opens the selected plan directory in your
-editor, `Y` copies the plan directory, and `enter` opens the viewer. The viewer
+between match count and recency, `e` (or `O`, the editor key elsewhere) opens
+the selected plan directory in your editor, `Y` copies the plan directory, and `enter` opens the viewer. The viewer
 supports `j`/`k`, `g`/`G`, `Ctrl+d/u/f/b`, `n`/`N` to move between matches,
 `/` to refine the query, `y` to copy the selected raw line, `Y` to copy the plan
-directory, and `e` to open the plan directory in your editor. `esc` returns to
-the plan list, and `q` closes Plans entirely.
+directory, and `e` or `O` to open the plan directory in your editor. `esc` or
+`q` returns to the plan list, and pressing either again there leaves Plans.
 
 Project association is source-backed rather than inferred from plan prose.
 Agent Mux resolves the canonical plan workspace in this order: retained ASL

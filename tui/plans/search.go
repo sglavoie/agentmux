@@ -157,6 +157,17 @@ func (in SearchInput) emptyHint() string {
 	return " — " + strings.Join(ways, " · ")
 }
 
+// emptyText is what an empty list says. With nothing narrowing it the list
+// is empty because no plan was found at all, which is a different problem from
+// a filter that matched nothing, and it points at where plans are read from.
+func (in SearchInput) emptyText() string {
+	hint := in.emptyHint()
+	if hint == "" {
+		return "(no saved plans found — plans_directory in config.toml says where to look)"
+	}
+	return "(no plans match" + hint + ")"
+}
+
 // RenderList renders the scrollable results list. height is the per-call row
 // budget; non-positive height means "unbounded" and scroll indicators are
 // suppressed.
@@ -168,7 +179,7 @@ func (in SearchInput) RenderList(height int) string {
 		if in.Loading {
 			sb.WriteString(styleDim.Render("  (loading…)"))
 		} else {
-			sb.WriteString(styleDim.Render(layout.ClampLine("  (no plans match"+in.emptyHint()+")", in.Width)))
+			sb.WriteString(styleDim.Render(layout.ClampLine("  "+in.emptyText(), in.Width)))
 		}
 		sb.WriteByte('\n')
 		return sb.String()

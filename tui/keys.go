@@ -66,7 +66,7 @@ const (
 	keyForgetWorktree       = "F" // ModeWorktrees: forget missing or invalid sidecar metadata
 	keyPinProject           = "P" // ModePicker: pin/unpin the highlighted configured project
 	keySortPlan             = "o" // ModePlanSearch: cycles the result-sort mode
-	keyPlanOpenEditor       = "e" // ModePlanSearch/ModePlanView: open the plan directory in the editor
+	keyPlanOpenEditor       = "e" // ModePlanSearch/ModePlanView: open the plan directory in the editor (O, as everywhere else, too)
 	keyToggleTimeline       = "t" // toggle flat list ↔ timeline in ModeDetail
 	keyToggleTimestamps     = "T" // toggle timestamp column in timeline (ModeDetail)
 	// keyPhasePrev/keyPhaseNext belong to the ModeDetail timeline alone. The

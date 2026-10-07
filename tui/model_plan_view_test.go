@@ -409,3 +409,15 @@ func TestReadPlanFilesCmd_MissingFileSurfacesError(t *testing.T) {
 		t.Fatal("err = nil, want a read error for missing file")
 	}
 }
+
+// q in the Plans viewer backs out one level, as esc does and as q does in the
+// Past Sessions viewer, rather than leaving Plans altogether.
+func TestPlanViewerQReturnsToThePlanList(t *testing.T) {
+	for _, key := range []string{keyQ, keyEsc} {
+		m := Model{mode: ModePlanView, width: 100, height: 30, viewerPlan: &plans.PlanMeta{Name: "plan", DirPath: "/tmp/plan"}, planViewerLines: []string{"body"}}
+		m = pressKey(m, key)
+		if m.mode != ModePlanSearch || m.viewerPlan != nil {
+			t.Errorf("%s: mode = %v, viewer plan = %v; want the plan list", key, m.mode, m.viewerPlan)
+		}
+	}
+}

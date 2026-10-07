@@ -152,11 +152,11 @@ func (in PickerInput) RenderList(height int) string {
 	}
 
 	if len(in.Sessions) == 0 {
-		sb.WriteString(styleDim.Render("  (no sessions in config)") + "\n")
+		sb.WriteString(styleDim.Render(layout.ClampLine("  (no projects configured — add [[projects]] with `amx config edit`)", in.Width)) + "\n")
 		return sb.String()
 	}
 	if len(in.FilteredIdx) == 0 {
-		sb.WriteString(styleDim.Render("  (no sessions match)") + "\n")
+		sb.WriteString(styleDim.Render(layout.ClampLine("  (no projects match — esc clears the filter)", in.Width)) + "\n")
 		return sb.String()
 	}
 

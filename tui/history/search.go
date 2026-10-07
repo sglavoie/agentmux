@@ -186,6 +186,17 @@ func (in SearchInput) emptyHint() string {
 	return " — " + strings.Join(ways, " · ")
 }
 
+// emptyText is what an empty list says. With nothing narrowing it no
+// transcript was found at all, which points at the profiles' home_dir rather
+// than at a filter.
+func (in SearchInput) emptyText() string {
+	hint := in.emptyHint()
+	if hint == "" {
+		return "(no past sessions found — each profile's home_dir in config.toml says where to look)"
+	}
+	return "(no sessions match" + hint + ")"
+}
+
 // RenderList renders the scrollable results list. height is the per-call row
 // budget; non-positive height means "unbounded" and scroll indicators are
 // suppressed.
@@ -199,7 +210,7 @@ func (in SearchInput) RenderList(height int) string {
 		} else if in.RefreshInFlight {
 			sb.WriteString(styleDim.Render("  (scanning transcripts…)"))
 		} else {
-			sb.WriteString(styleDim.Render(layout.ClampLine("  (no sessions match"+in.emptyHint()+")", in.Width)))
+			sb.WriteString(styleDim.Render(layout.ClampLine("  "+in.emptyText(), in.Width)))
 		}
 		sb.WriteByte('\n')
 		return sb.String()

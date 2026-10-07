@@ -14,7 +14,7 @@ func TestEmptyResultsNameTheWayOut(t *testing.T) {
 		in   SearchInput
 		want string
 	}{
-		{"nothing to undo", SearchInput{}, "(no sessions match)"},
+		{"nothing to undo", SearchInput{}, "(no past sessions found — each profile's home_dir in config.toml says where to look)"},
 		{"query only", SearchInput{Query: "x"}, "(no sessions match — esc clears the query)"},
 		{"chip only", SearchInput{ProjectChip: "api"}, "(no sessions match — h/p/r/m change the filters)"},
 		{"both", SearchInput{Query: "x", HarnessChip: "codex"}, "(no sessions match — esc clears the query · h/p/r/m change the filters)"},

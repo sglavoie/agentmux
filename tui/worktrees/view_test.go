@@ -26,3 +26,9 @@ func TestWorktreeListUsesNormalizedRenderer(t *testing.T) {
 		t.Fatalf("%s directly wraps a styled row with styleSelected", name)
 	}
 }
+
+func TestEmptyWorktreeListSaysHowToMakeOne(t *testing.T) {
+	if got := (ListInput{}).RenderList(10); !strings.Contains(got, "w in Past Sessions") {
+		t.Fatalf("RenderList = %q, want it to say how a worktree is created", got)
+	}
+}
