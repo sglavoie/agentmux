@@ -329,22 +329,8 @@ func (m Model) beginWorktreeRemove(deleteBranch bool) (tea.Model, tea.Cmd) {
 	if !ok || m.worktreeActionInFlight {
 		return m, nil
 	}
-	parameters := map[string]string{}
-	if deleteBranch {
-		parameters["delete_branch"] = "true"
-		if entry.Exists {
-			switch {
-			case entry.ReachableFromSource == nil:
-				return m.worktreeDisabledToast("merge status against the recorded source branch is unavailable")
-			case !*entry.ReachableFromSource:
-				return m.worktreeDisabledToast("branch is not merged into the recorded source branch")
-			}
-		}
-	}
-	request := actions.Request{Worktree: &entry.Entry, Parameters: parameters}
-	availability := commands.Registry.Availability(actions.Dependencies{Config: m.cfg}, actions.WorktreeRemove, request)
-	if !availability.Available {
-		return m.worktreeDisabledToast(availability.Reason)
+	if reason := m.worktreeRemoveRefusal(entry, deleteBranch); reason != "" {
+		return m.worktreeDisabledToast(reason)
 	}
 	m.worktreeActionTarget = &entry
 	m.confirmReturnMode = ModeWorktrees
@@ -360,15 +346,45 @@ func (m Model) beginWorktreeRemove(deleteBranch bool) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// worktreeRemoveRefusal is why d (or D, with deleteBranch) would refuse entry,
+// or "" when it would ask for confirmation. The key handler and the footer
+// both read it, so the footer never offers a removal the handler refuses.
+func (m Model) worktreeRemoveRefusal(entry actions.WorktreeView, deleteBranch bool) string {
+	parameters := map[string]string{}
+	if deleteBranch {
+		parameters["delete_branch"] = "true"
+		if entry.Exists {
+			switch {
+			case entry.ReachableFromSource == nil:
+				return "merge status against the recorded source branch is unavailable"
+			case !*entry.ReachableFromSource:
+				return "branch is not merged into the recorded source branch"
+			}
+		}
+	}
+	request := actions.Request{Worktree: &entry.Entry, Parameters: parameters}
+	if availability := commands.Registry.Availability(actions.Dependencies{Config: m.cfg}, actions.WorktreeRemove, request); !availability.Available {
+		return availability.Reason
+	}
+	return ""
+}
+
+// worktreeForgetRefusal is the same answer for F.
+func (m Model) worktreeForgetRefusal(entry actions.WorktreeView) string {
+	request := actions.Request{Worktree: &entry.Entry}
+	if availability := commands.Registry.Availability(actions.Dependencies{Config: m.cfg}, actions.WorktreeForget, request); !availability.Available {
+		return availability.Reason
+	}
+	return ""
+}
+
 func (m Model) beginWorktreeForget() (tea.Model, tea.Cmd) {
 	entry, ok := m.selectedWorktree()
 	if !ok || m.worktreeActionInFlight {
 		return m, nil
 	}
-	request := actions.Request{Worktree: &entry.Entry}
-	availability := commands.Registry.Availability(actions.Dependencies{Config: m.cfg}, actions.WorktreeForget, request)
-	if !availability.Available {
-		return m.worktreeDisabledToast(availability.Reason)
+	if reason := m.worktreeForgetRefusal(entry); reason != "" {
+		return m.worktreeDisabledToast(reason)
 	}
 	m.worktreeActionTarget = &entry
 	m.confirmReturnMode = ModeWorktrees

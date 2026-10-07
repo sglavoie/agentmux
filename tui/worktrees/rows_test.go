@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/worktree"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 func validView() actions.WorktreeView {
@@ -102,8 +103,30 @@ func TestBadgeTextDropsValidAndFallsBackToClean(t *testing.T) {
 	entry = validView()
 	entry.Classification = worktree.ClassificationMissing
 	entry.Exists = false
-	if got := BadgeText(entry); !strings.HasPrefix(got, "[missing][") {
-		t.Errorf("BadgeText(missing) = %q, want a retained classification badge", got)
+	if got := BadgeText(entry); got != "[missing]" {
+		t.Errorf("BadgeText(missing) = %q, want the classification once", got)
+	}
+
+	entry = validView()
+	entry.Classification = worktree.ClassificationMetadataInvalid
+	if got := BadgeText(entry); strings.Contains(got, "[invalid]") || !strings.HasPrefix(got, "[metadata_invalid]") {
+		t.Errorf("BadgeText(metadata_invalid) = %q, want the classification without a restating [invalid]", got)
+	}
+}
+
+// Long and wide values are fitted to their column, so the age and badge
+// columns start at the same cell on every row.
+func TestFormatRowKeepsColumnsAlignedForLongAndWideValues(t *testing.T) {
+	plain := validView()
+	plain.ProjectLabel, plain.Profile, plain.Harness = "api", "work", "claude"
+	long := plain
+	long.ProjectLabel, long.Profile = "🐱amx", "removed-profile-with-a-long-name"
+	badgeAt := func(v actions.WorktreeView) int {
+		row := FormatRow(v, 200)
+		return layout.Width(row[:strings.Index(row, "[")])
+	}
+	if a, b := badgeAt(plain), badgeAt(long); a != b {
+		t.Fatalf("badge column starts at %d and %d; want the same cell", a, b)
 	}
 }
 

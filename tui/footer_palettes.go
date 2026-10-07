@@ -70,6 +70,21 @@ func hasPresentWorktree(m Model) bool {
 	return hasWorktreeResult(m) && m.worktreeFiltered[m.worktreeCursor].Exists
 }
 
+// worktreeRemovable and worktreeForgettable read the same refusal the d, D,
+// and F handlers do, so the footer never offers a mutation that would only
+// answer with an "Unavailable" toast.
+func worktreeRemovable(deleteBranch bool) func(Model) bool {
+	return func(m Model) bool {
+		entry, ok := m.selectedWorktree()
+		return ok && m.worktreeRemoveRefusal(entry, deleteBranch) == ""
+	}
+}
+
+func worktreeForgettable(m Model) bool {
+	entry, ok := m.selectedWorktree()
+	return ok && m.worktreeForgetRefusal(entry) == ""
+}
+
 var sessionSearchFooterPalette = []footerEntry{
 	{"/", "filter", footerSectionApp, footerAlways, footerPrioritySecondary},
 	{"h/p/r/m", "chips", footerSectionApp, footerAlways, footerPrioritySecondary},
@@ -164,9 +179,9 @@ var worktreesFooterPalette = []footerEntry{
 	{"enter", "reopen", footerSectionRow, hasPresentWorktree, footerPriorityEssential},
 	{"o", "shell", footerSectionRow, hasPresentWorktree, footerPriorityPrimary},
 	{"O", "editor", footerSectionRow, hasPresentWorktree, footerPriorityPrimary},
-	{"d", "remove", footerSectionRow, hasWorktreeResult, footerPriorityPrimary},
-	{"D", "delete branch", footerSectionRow, hasWorktreeResult, footerPrioritySecondary},
-	{"F", "forget", footerSectionRow, hasWorktreeResult, footerPrioritySecondary},
+	{"d", "remove", footerSectionRow, worktreeRemovable(false), footerPriorityPrimary},
+	{"D", "delete branch", footerSectionRow, worktreeRemovable(true), footerPrioritySecondary},
+	{"F", "forget", footerSectionRow, worktreeForgettable, footerPrioritySecondary},
 	{"Y", "path", footerSectionRow, func(m Model) bool { return selectedWorktreePath(m) != "" }, footerPrioritySecondary},
 	{"r", "refresh", footerSectionApp, footerAlways, footerPrioritySecondary},
 	{"?", "help", footerSectionApp, footerAlways, footerPriorityHelp},

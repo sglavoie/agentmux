@@ -732,3 +732,37 @@ func TestPrioritizedFooterLinesDoesNotMutateCallerTokens(t *testing.T) {
 		}
 	}
 }
+
+// The worktree mutations are lit exactly when their key handlers would ask for
+// confirmation rather than answer with an "Unavailable" toast.
+func TestWorktreeFooterOffersOnlyMutationsTheHandlersAccept(t *testing.T) {
+	merged := true
+	healthy := worktree.Entry{Path: "/tmp/wt", Exists: true, Actionable: true, GitAvailable: true, StatusAvailable: true}
+	dirty := healthy
+	dirty.Dirty = true
+	mergedEntry := healthy
+	mergedEntry.ReachableFromSource = &merged
+	for _, tc := range []struct {
+		name                   string
+		view                   actions.WorktreeView
+		remove, branch, forget bool
+	}{
+		{"healthy, merge unknown", actions.WorktreeView{Entry: healthy}, true, false, false},
+		{"healthy and merged", actions.WorktreeView{Entry: mergedEntry}, true, true, false},
+		{"dirty", actions.WorktreeView{Entry: dirty}, false, false, false},
+		{"missing metadata-invalid", actions.WorktreeView{Entry: worktree.Entry{Path: "/tmp/gone", Classification: worktree.ClassificationMetadataInvalid}}, false, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := Model{worktreeCursor: 0, worktreeFiltered: []actions.WorktreeView{tc.view}}
+			if got := worktreeRemovable(false)(m); got != tc.remove {
+				t.Errorf("d lit = %v, want %v", got, tc.remove)
+			}
+			if got := worktreeRemovable(true)(m); got != tc.branch {
+				t.Errorf("D lit = %v, want %v", got, tc.branch)
+			}
+			if got := worktreeForgettable(m); got != tc.forget {
+				t.Errorf("F lit = %v, want %v", got, tc.forget)
+			}
+		})
+	}
+}

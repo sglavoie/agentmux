@@ -48,8 +48,15 @@ func formatRow(entry actions.WorktreeView, width int) string {
 	}
 	age := CompactAge(entry.CreatedAt, time.Now())
 	badges := BadgeText(entry)
-	row := fmt.Sprintf("  %-18s  %-24s  %-18s  %6s  %s", project, branch, identity, age, badges)
+	row := "  " + column(project, 18) + "  " + column(branch, 24) + "  " + column(identity, 18) + "  " + layout.PadLeft(age, 6) + "  " + badges
 	return layout.StyledTruncate(row, width, "…")
+}
+
+// column fits s to exactly width display cells, truncating a long value
+// instead of letting it push every later column right, and measuring by
+// display cells so an emoji title lines up with a plain one.
+func column(s string, width int) string {
+	return layout.PadRight(layout.Truncate(s, width, "…"), width)
 }
 
 // CompactAge renders how long ago created was in the six columns the age
@@ -76,17 +83,32 @@ func CompactAge(created, now time.Time) string {
 }
 
 // BadgeText renders the state labels as bracketed badges. A valid
-// classification is dropped because it is the unremarkable case; a worktree
+// classification is dropped because it is the unremarkable case, and a
+// condition the classification already names ("missing" after missing,
+// "invalid" after metadata_invalid or git_unavailable) is dropped so the
+// rightmost, first-truncated column is not spent saying it twice. A worktree
 // left with nothing to say reads "[clean]" rather than an empty column.
 func BadgeText(entry actions.WorktreeView) string {
 	labels := StateLabels(entry)
 	if len(labels) > 0 && labels[0] == string(worktree.ClassificationValid) {
 		labels = labels[1:]
+	} else if len(labels) > 1 && restatesClassification(worktree.Classification(labels[0]), labels[1]) {
+		labels = append(labels[:1:1], labels[2:]...)
 	}
 	if len(labels) == 0 {
 		labels = []string{"clean"}
 	}
 	return "[" + strings.Join(labels, "][") + "]"
+}
+
+func restatesClassification(classification worktree.Classification, label string) bool {
+	switch classification {
+	case worktree.ClassificationMissing:
+		return label == "missing"
+	case worktree.ClassificationMetadataInvalid, worktree.ClassificationGitUnavailable:
+		return label == "invalid"
+	}
+	return false
 }
 
 // StateLabels returns the worktree's classification followed by every
