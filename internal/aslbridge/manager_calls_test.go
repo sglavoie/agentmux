@@ -95,7 +95,9 @@ func TestRunsChangedTriggersRefresh(t *testing.T) {
 		for {
 			select {
 			case req := <-f.requests:
-				if req["method"] != MethodRunsSnapshot {
+				// An unanswered handshake would hold each refresh for the
+				// full HandshakeTimeout before it reported the snapshot.
+				if f.answerHandshake(req) || req["method"] != MethodRunsSnapshot {
 					continue
 				}
 				generation++

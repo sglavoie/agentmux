@@ -271,19 +271,26 @@ func TestTUITestRunCommittedScenariosEndToEnd(t *testing.T) {
 // is exec'd directly the pattern arrives verbatim, so the command must expand it
 // to the same committed scenario set an interactive shell would have passed.
 func TestTUITestRunExpandsScenarioGlob(t *testing.T) {
-	entries, err := os.ReadDir(committedScenariosDir)
-	if err != nil {
-		t.Fatalf("reading committed scenarios dir: %v", err)
-	}
-	want := 0
-	for _, e := range entries {
-		if !e.IsDir() && filepath.Ext(e.Name()) == ".json" {
-			want++
+	// Expansion is what is under test, so a directory of two scenarios and a
+	// non-matching file is enough; running every committed scenario again is
+	// TestTUITestRunCommittedScenariosEndToEnd's job.
+	dir := t.TempDir()
+	for _, name := range []string{"legend-narrow-fit.json", "footer-gloss-narrow-fit.json"} {
+		body, err := os.ReadFile(filepath.Join(committedScenariosDir, name))
+		if err != nil {
+			t.Fatalf("reading committed scenario %s: %v", name, err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), body, 0o600); err != nil {
+			t.Fatal(err)
 		}
 	}
+	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("not a scenario"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const want = 2
 
 	stdout, stderr, err := runRootArgs(t, "tui-test", "run",
-		filepath.Join(committedScenariosDir, "*.json"), "--json")
+		filepath.Join(dir, "*.json"), "--json")
 	if err != nil {
 		t.Fatalf("glob run returned error: %v (stderr=%q)", err, stderr)
 	}
