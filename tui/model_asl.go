@@ -167,7 +167,7 @@ func (m Model) handleASLRunsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case keyQuestion:
 		m.openHelp(ModeASLRuns)
 		return m, nil
-	case keyF:
+	case keyEnter, keyF:
 		return m.focusSelectedASLRun()
 	case keyASLWorkbench:
 		return m.openSelectedASLWorkbench()

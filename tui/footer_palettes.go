@@ -193,7 +193,7 @@ var worktreesFooterPalette = []footerEntry{
 }
 
 var aslRunsFooterPalette = []footerEntry{
-	{"f", "focus", footerSectionRow, aslFocusAvailable, footerPriorityEssential},
+	{"enter/f", "focus", footerSectionRow, aslFocusAvailable, footerPriorityEssential},
 	{"r", "respond", footerSectionRow, aslRespondAvailable, footerPriorityEssential},
 	{"s", "stop", footerSectionRow, aslStopAvailable, footerPriorityPrimary},
 	{"a", "abort", footerSectionRow, aslAbortAvailable, footerPriorityPrimary},

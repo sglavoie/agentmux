@@ -553,7 +553,7 @@ Inside the runs view:
 - `s`: stop the run after the current session, after confirmation
 - `a`: abort the run, after confirmation
 - `w`: open the run's Workbench page in your browser
-- `f`: focus the Kitty window bound to the run
+- `Enter` or `f`: focus the Kitty window bound to the run
 - `Y`: copy the run's workspace root
 - `?`: show the keymap; `q`, `Esc`, or `A` returns to the dashboard (`A` is a
   runs-view key now — it closes the view it used to open)

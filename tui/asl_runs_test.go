@@ -311,6 +311,21 @@ func TestASLFocusExactBinding(t *testing.T) {
 	}
 }
 
+// TestASLFocusOnEnter keeps Runs in line with every other list, where Enter
+// acts on the selected row: here that action is focus, the same as f.
+func TestASLFocusOnEnter(t *testing.T) {
+	d, client := enterASLRunsDriver(t)
+	if err := d.Key(keyEnter); err != nil {
+		t.Fatalf("focusing with enter: %v", err)
+	}
+	if calls := client.CallsFor("FocusTab"); len(calls) != 1 {
+		t.Fatalf("FocusTab calls = %d, want 1 (%v)", len(calls), calls)
+	}
+	if d.Model().mode != ModeASLRuns {
+		t.Fatalf("enter focus changed mode to %v", d.Model().mode)
+	}
+}
+
 func TestASLFocusFallsBackToASingleWorkspaceAndHarnessMatch(t *testing.T) {
 	d, client := enterASLRunsDriver(t)
 	m := d.Model()
