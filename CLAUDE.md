@@ -18,7 +18,7 @@ services must not invoke `kitten @` directly.
 
 ## Build and acceptance
 
-Requires Go 1.22+, Kitty, and `just`.
+Requires Go 1.26+, Kitty, and `just`.
 
 ```bash
 just build
@@ -80,8 +80,9 @@ failed request.
 
 There is no SQLite runtime or migration path. Never add automatic deletion of
 legacy database files. A one-off operator cleanup must stop the installed
-daemon first and use the exact allowlist documented in README; it must preserve
-caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
+daemon first and use the exact allowlist documented in `docs/usage.md` ("One-off
+cleanup after upgrading from a SQLite release"); it must preserve caches,
+handoffs, worktrees, launch overrides, and ordinary daemon locks.
 
 ### Main packages
 
@@ -570,7 +571,7 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   touching the live installation.
 - `tui`: the Bubble Tea program itself — the `Model`, the mode dispatcher, every
   key handler, the update loop that consumes whatever an effect reports back,
-  the shared theme, one projection seam file per leaf
+  the styles it builds from `tui/theme`, one projection seam file per leaf
   (`tui/dashboard_view.go`, `tui/history_view.go`, `tui/launch_view.go`,
   `tui/plans_view.go`, `tui/worktrees_view.go`, `tui/asl_view.go`, and
   `tui/command_palette.go`, which carries the palette's controller and its
@@ -607,8 +608,11 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
   because `tui/commands` and `tui/sessionactions` both draw with them and the
   dependency runs one way between those two; the test is that none of them
   names a model, a session, or an action. It is the one leaf every other leaf
-  imports and the only package in the repository's TUI tree with no in-repo
-  dependency whatsoever.
+  imports, and it has no in-repo dependency whatsoever.
+- `tui/theme`: the fixed dark-terminal palette every TUI view shares, and the
+  base styles built from it. Like `tui/layout` it has no in-repo dependency;
+  it colors Agent Mux's own chrome only, never the terminal canvas or captured
+  agent output.
 - `tui/dashboard`: the live-session list — the filter DSL with its removable
   chips and completion menu, row/title/activity formatting, group borders and
   the state gloss, cursor restoration across a rebuilt list, pagination, the
@@ -814,8 +818,8 @@ When adding a command:
 
 1. provide dependency seams for filesystem, daemon, and Kitty work;
 2. preserve text and JSON exit-code consistency;
-3. use `missingParameter`, `commandFailure`, and candidate-bearing ambiguity errors;
-4. add the command to the JSON surface audit when it supports `--json`.
+3. use `cli.MissingParameter`, `cli.CommandFailure`, and candidate-bearing ambiguity errors;
+4. add a case to the family's `json_contract_test.go` when it supports `--json`.
 
 ## Testing and diagnostics
 

@@ -224,9 +224,9 @@ daemon, so a dashboard running with no daemon reachable shows no branch at all.
 ### Triage order
 
 The default view sorts by urgency bucket, then by severity inside that bucket,
-then by the time the row's visible state last changed. **Needs Attention** puts
+then by the time the row's visible state last changed. **Needs you** puts
 terminal errors first, permission/input prompts next, and unread completed turns
-last. **Active** puts warnings first, explicit running/subagent/compaction states
+last. **Running** puts warnings first, explicit running/subagent/compaction states
 next, and iconless recent activity last. **Idle** has no severity subdivision.
 Within one severity rank, the newest nonzero transition time leads; rows with no
 transition time follow, and exact ties retain the configured/pinned order.
@@ -308,7 +308,7 @@ Projects view; **Show Urgency View** switches back. The selected session is
 carried across both ways, so the cursor stays on the row you were looking at;
 switching back out of a project summary selects that project's leading session.
 
-The Projects view replaces the **Needs Attention** / **Active** / **Idle**
+The Projects view replaces the **Needs you** / **Running** / **Idle**
 headings with one summary line per project, followed by that project's sessions
 indented underneath it. A summary reads as its state icon, the project label, and
 the bucket tally of its members — `▾ 🔑 api  1 attention · 1 active · 1 idle`.
@@ -936,7 +936,7 @@ agent-mux.db.rebuild-startup.lock
 recovery/
 ```
 
-Install atomically with `just install`, restart with `amx daemon start`, and
+Install atomically with `just install`, restart with `amx daemon restart`, and
 verify `amx daemon status`, `amx doctor --strict`, `amx session list`, Past
 Sessions, and Plans. Recheck the allowlist above afterward; none of the files
 or the `recovery/` directory should be recreated. Future runs never delete
@@ -958,7 +958,7 @@ The list and launcher share the same filter DSL:
 
 `!attention`, `!active`, and `!idle` select exactly the three groups the
 dashboard already sorts rows into, so `!attention` always matches the rows under
-the **Needs Attention** heading and nothing else. They are groups, not shorthand
+the **Needs you** heading and nothing else. They are groups, not shorthand
 for a set of icons: an unseen `🛑` is in the attention group and a `🛑` you have
 already looked at is not, so the two rows carry the same icon and answer
 `!attention` differently.

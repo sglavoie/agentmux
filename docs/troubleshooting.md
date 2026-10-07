@@ -123,8 +123,8 @@
   terminal hook did arrive it is only held, and commits anyway at
   `[defaults.stop_confirm].timeout`. If none arrived, the watchdog is what ends
   the bolt — and `sweepStale` clears a stale window to the **empty** icon, never
-  to `🛑`, so with no `[defaults.watchdog]` threshold configured such a pane can
-  hold `⚡` indefinitely. Run the daemon at debug level and grep
+  to `🛑`, so such a pane holds `⚡` until `[defaults.watchdog].active` runs out
+  (600 seconds unless configured). Run the daemon at debug level and grep
   `screen stop probe: not settleable` to see the veto and fingerprint behind
   each declined observation; that line also carries `decline_streak` and
   `stable_fingerprint`. A bolt that never clears on a pane that has genuinely

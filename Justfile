@@ -509,8 +509,9 @@ mac-test:
 mac-install: (mac-app "Release")
     ./macos/scripts/install-app.sh
 
-# Remove binary and config
+# Stop the daemon, then remove the binary and the Kitty snippet (config.toml and data are kept)
 uninstall:
+    -"{{prefix_bin}}/amx" daemon stop
     rm -f "{{prefix_bin}}/amx"
     rm -f "{{prefix_kitty}}/agent-mux.conf"
     @echo "Removed {{prefix_bin}}/amx"
@@ -518,5 +519,5 @@ uninstall:
 
 # Bump version in cmd/root.go (e.g. just bump 0.4.0)
 bump version:
-    @sed -i '' 's/const version = ".*"/const version = "{{version}}"/' cmd/root.go
+    @perl -pi -e 's/const version = ".*"/const version = "{{version}}"/' cmd/root.go
     @grep 'const version' cmd/root.go

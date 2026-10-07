@@ -43,7 +43,7 @@ Most take `--json` and answer with the schema-v1 envelope.
 
 ## Prerequisites
 
-- Go 1.22+
+- Go 1.26+
 - Kitty with remote control enabled
 - [`just`](https://github.com/casey/just) for the provided build/install tasks
 - [`alerter`](https://github.com/vjeantet/alerter) 26.x or newer on macOS when
@@ -83,7 +83,8 @@ just install
 This builds `amx`, copies it to `~/.local/bin/amx`, symlinks
 `agent-mux.conf` into `~/.config/kitty/`, and seeds
 `~/.config/agent-mux/config.toml` with a starter config if it does not already
-exist.
+exist. `just uninstall` stops the daemon and removes the binary and the Kitty
+snippet; it leaves `config.toml` and everything under `~/.local/share/agent-mux`.
 
 Then add this to `kitty.conf`:
 
@@ -107,7 +108,9 @@ it is generated from the catalog the snippet itself is generated from, so the
 two cannot disagree about what a key does.
 
 Reloading matters for bindings and nothing else. `just install` replaces the
-`amx` binary and restarts the daemon, so a new *behavior* is live immediately;
+`amx` binary, and the daemon restarts itself the next time a hook or CLI
+command reaches it and finds it older than the binary (`amx daemon restart`
+does it now), so a new *behavior* is live without reloading anything;
 a new or changed **keybinding** only reaches a running Kitty once that instance
 reloads its configuration (`Ctrl+Shift+F5`, or restart Kitty). Upgrading from a
 release without `F2` is exactly that case: `amx overview` works from any shell
