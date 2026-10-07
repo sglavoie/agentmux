@@ -203,8 +203,8 @@ var (
 	projectListWidth int
 )
 
-// Piped, the list is headerless and tab-separated, with the directory as
-// configured and its problem in a field of its own, so `cut -f4` is a path.
+// Piped, the list is headerless and tab-separated, with the directory and its
+// problem in a field of its own, so `cut -f4` is a path.
 func TestProjectListPipedIsTabSeparated(t *testing.T) {
 	withDirectoryProblems(t)
 	t.Cleanup(func() { projectListPiped = false })
@@ -218,6 +218,33 @@ func TestProjectListPipedIsTabSeparated(t *testing.T) {
 		"work\tWeb\tclaude\t/tmp/web\t\tmissing\n"
 	if out != want {
 		t.Fatalf("piped output:\n%q\nwant\n%q", out, want)
+	}
+}
+
+// A configured trailing slash is cleaned off the piped directory, so it
+// compares equal to $PWD in the project, and groups are sorted, so projects
+// declaring the same groups in different orders read alike. JSON keeps the
+// groups as configured.
+func TestProjectListPipedCleansDirectoriesAndSortsGroups(t *testing.T) {
+	withDirectoryProblems(t)
+	t.Cleanup(func() { projectListPiped = false })
+	projectListPiped = true
+	cfg := testConfig()
+	cfg.Projects[0].Directory = "/tmp/api/"
+	cfg.Projects[0].Groups = []string{"work", "backend"}
+	out, err := runProject(t, "list", cfg, &recordingKittyClient{}, false, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first := strings.SplitN(out, "\n", 2)[0]; first != "work\tAPI\tclaude\t/tmp/api\tbackend,work\t" {
+		t.Fatalf("first piped row = %q", first)
+	}
+	out, err = runProject(t, "list", cfg, &recordingKittyClient{}, true, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, `"groups":["work","backend"]`) {
+		t.Fatalf("JSON = %s, want groups in configured order", out)
 	}
 }
 

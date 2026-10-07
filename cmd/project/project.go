@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -191,7 +192,7 @@ func runProjectList(cmd *cobra.Command, _ []string) error {
 		if view.DirectoryProblem != "" {
 			directory += " (" + projectProblemLabel(view.DirectoryProblem) + ")"
 		}
-		rows = append(rows, []string{view.Profile, view.Title, view.Harness, directory, strings.Join(view.Groups, ",")})
+		rows = append(rows, []string{view.Profile, view.Title, view.Harness, directory, groupsField(view.Groups)})
 	}
 	fitProjectDirectories(header, rows, projectListTerminalWidth(out))
 	return cli.WriteTable(out, header, rows)
@@ -199,7 +200,8 @@ func runProjectList(cmd *cobra.Command, _ []string) error {
 
 // writeProjectLines is `project list` off a terminal: headerless and
 // tab-separated, as `session list` and `worktree list` are for pipes, with the
-// directory as configured and its problem in a field of its own rather than
+// directory cleaned of a configured trailing slash, so it compares equal to
+// $PWD in the project, and its problem in a field of its own rather than
 // appended to the path, so `cut -f4` yields a path. An empty list stays empty,
 // since a script reading rows must not mistake a sentence for a project.
 func writeProjectLines(out io.Writer, views []projectView) {
@@ -208,8 +210,19 @@ func writeProjectLines(out io.Writer, views []projectView) {
 		if view.DirectoryProblem != "" {
 			problem = projectProblemLabel(view.DirectoryProblem)
 		}
-		_, _ = fmt.Fprintf(out, "%s\t%s\t%s\t%s\t%s\t%s\n", view.Profile, view.Title, view.Harness, view.Directory, strings.Join(view.Groups, ","), problem)
+		directory := view.Directory
+		if directory != "" {
+			directory = filepath.Clean(directory)
+		}
+		_, _ = fmt.Fprintf(out, "%s\t%s\t%s\t%s\t%s\t%s\n", view.Profile, view.Title, view.Harness, directory, groupsField(view.Groups), problem)
 	}
+}
+
+// groupsField is a project's groups as one text field, sorted, so two projects
+// declaring the same groups in a different order read, grep, and sort alike.
+// JSON keeps them in configured order.
+func groupsField(groups []string) string {
+	return strings.Join(slices.Sorted(slices.Values(groups)), ",")
 }
 
 // projectDirectoryColumn is the DIRECTORY column's index in the table, and
