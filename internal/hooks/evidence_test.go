@@ -172,6 +172,27 @@ func TestStatusEvidenceDeliveryFailuresIgnoresTransientAttemptOnlyRequest(t *tes
 	}
 }
 
+// A harness session started outside Kitty still runs the hooks its home
+// installs, and the client declines them as outside_kitty. Nothing was lost, so
+// neither the terminal record nor a legacy hook.failure counts as a dropped
+// delivery, while a real failure beside them still does.
+func TestStatusEvidenceDeliveryFailuresExcludeHooksOutsideKitty(t *testing.T) {
+	now := time.Date(2026, 7, 17, 12, 0, 0, 0, time.UTC)
+	evidence := NewStatusEvidence()
+	for _, envelope := range []diagnostics.TraceEnvelope{
+		{Stage: "hook.delivery", RequestID: "ide", Outcome: "permanent_failure", Reason: "outside_kitty", ObservedAt: now.Add(-3 * time.Minute)},
+		{Stage: "hook.failure", RequestID: "legacy-ide", Outcome: "error", Reason: "outside_kitty", ObservedAt: now.Add(-2 * time.Minute)},
+		{Stage: "hook.delivery", RequestID: "lost", Outcome: "retryable_failure", Reason: "daemon_unavailable", ObservedAt: now.Add(-5 * time.Minute)},
+	} {
+		if err := evidence.Visit(envelope); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if count, latest := evidence.DeliveryFailures(now); count != 1 || !latest.Equal(now.Add(-5*time.Minute)) {
+		t.Fatalf("delivery failures = %d latest %s, want only the daemon_unavailable drop", count, latest)
+	}
+}
+
 func TestStatusAllWithEvidencePreservesMissingUnavailableAndDisabledFindings(t *testing.T) {
 	stubActivationRuntimeWithoutEvidence(t, map[string]string{"claude": "2.1.195"})
 	home := t.TempDir()

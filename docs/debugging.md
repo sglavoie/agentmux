@@ -103,7 +103,9 @@ an error-outcome `hook.failure` marks a request failed only as a legacy fallback
 when no correlated `hook.delivery` exists. Intermediate error-outcome
 `hook.ipc_attempt` records are ignored, so a transient transport error that a
 later successful or duplicate terminal delivery resolves never contributes to
-the count. Drops are expected around a daemon restart:
+the count. Neither does a hook declined as `outside_kitty`: a harness session
+started in an IDE or another terminal still runs the hooks its home installs,
+and there is nothing for Agent Mux to deliver them to. Drops are expected around a daemon restart:
 the daemon client performs bounded auto-start retries within the hook
 invocation's auto-start budget, but once that invocation exits there is no
 durable retry queue, so deliveries that never reached a live daemon in time are

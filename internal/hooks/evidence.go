@@ -128,7 +128,7 @@ func (e *StatusEvidence) observeDelivery(envelope diagnostics.TraceEnvelope) {
 	}
 	if envelope.Stage == "hook.delivery" {
 		terminal.hasDelivery = true
-		terminal.failed = !deliverySuccessOutcome(envelope.Outcome)
+		terminal.failed = !deliverySuccessOutcome(envelope.Outcome) && !deliveryNotForAgentMux(envelope.Reason)
 		if envelope.ObservedAt.After(terminal.observedAt) {
 			terminal.observedAt = envelope.ObservedAt
 		}
@@ -139,7 +139,7 @@ func (e *StatusEvidence) observeDelivery(envelope diagnostics.TraceEnvelope) {
 	if terminal.hasDelivery {
 		return
 	}
-	terminal.failed = true
+	terminal.failed = !deliveryNotForAgentMux(envelope.Reason)
 	if envelope.ObservedAt.After(terminal.observedAt) {
 		terminal.observedAt = envelope.ObservedAt
 	}
@@ -157,6 +157,15 @@ func deliveryRequestKey(envelope diagnostics.TraceEnvelope) string {
 		return "trace:" + id
 	}
 	return ""
+}
+
+// deliveryNotForAgentMux reports a terminal record for a hook that had nothing
+// to deliver to: a harness session started outside Kitty (an IDE, another
+// terminal) still runs the hooks its home directory installs, and the client
+// correctly declines them. Nothing was lost, so they are not failures, while
+// their records still explain the decline to `debug explain`.
+func deliveryNotForAgentMux(reason string) bool {
+	return strings.TrimSpace(reason) == "outside_kitty"
 }
 
 // deliverySuccessOutcome reports whether a hook.delivery outcome is a
