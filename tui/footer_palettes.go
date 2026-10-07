@@ -140,7 +140,7 @@ var planSearchFooterPalette = []footerEntry{
 	{"r", "project", footerSectionApp, footerAlways, footerPrioritySecondary},
 	{"enter", "view", footerSectionRow, hasPlanResult, footerPriorityEssential},
 	{"o", "sort", footerSectionApp, footerAlways, footerPriorityPrimary},
-	{"e", "editor", footerSectionRow, hasPlanResult, footerPriorityPrimary},
+	{"O", "editor", footerSectionRow, hasPlanResult, footerPriorityPrimary},
 	{"Y", "path", footerSectionRow, func(m Model) bool {
 		return selectedPlanSearchPath(m) != ""
 	}, footerPriorityExtra},
@@ -163,7 +163,7 @@ var planViewFooterPalette = []footerEntry{
 	{"Y", "path", footerSectionRow, func(m Model) bool {
 		return currentPlanViewPath(m) != ""
 	}, footerPriorityExtra},
-	{"e", "editor", footerSectionRow, func(m Model) bool {
+	{"O", "editor", footerSectionRow, func(m Model) bool {
 		return m.viewerPlan != nil
 	}, footerPriorityPrimary},
 	{"?", "help", footerSectionApp, footerAlways, footerPriorityHelp},

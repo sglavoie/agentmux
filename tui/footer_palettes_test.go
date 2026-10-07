@@ -73,12 +73,12 @@ func TestFooterHintPalettesAdvertiseModeHints(t *testing.T) {
 		{
 			name:    "plan search",
 			palette: planSearchFooterPalette,
-			wants:   []string{"/ filter", "r project", "enter view", "o sort", "e editor", "Y path", "esc back"},
+			wants:   []string{"/ filter", "r project", "enter view", "o sort", "O editor", "Y path", "esc back"},
 		},
 		{
 			name:    "plan view",
 			palette: planViewFooterPalette,
-			wants:   []string{"/ search", "n/N match", "y copy", "Y path", "e editor", "esc back"},
+			wants:   []string{"/ search", "n/N match", "y copy", "Y path", "O editor", "esc back"},
 		},
 		{
 			name:    "worktrees",
@@ -243,7 +243,7 @@ var footerHintCharacterizations = []struct {
 		entries: planSearchFooterPalette,
 		width:   200,
 		want: []string{
-			"  / filter · r project · enter view · o sort · e editor · Y path · ? help · esc back · j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
+			"  / filter · r project · enter view · o sort · O editor · Y path · ? help · esc back · j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
 	{
@@ -251,7 +251,7 @@ var footerHintCharacterizations = []struct {
 		entries: planSearchFooterPalette,
 		width:   90,
 		want: []string{
-			"  / filter · r project · enter view · o sort · e editor · Y path · ? help · esc back",
+			"  / filter · r project · enter view · o sort · O editor · Y path · ? help · esc back",
 			"  j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
@@ -261,7 +261,7 @@ var footerHintCharacterizations = []struct {
 		width:   40,
 		want: []string{
 			"  / filter · r project · enter view",
-			"  o sort · e editor · esc back · ? more",
+			"  o sort · O editor · esc back · ? more",
 		},
 	},
 	{
@@ -269,7 +269,7 @@ var footerHintCharacterizations = []struct {
 		entries: planSearchFooterPalette,
 		width:   0,
 		want: []string{
-			"  / filter · r project · enter view · o sort · e editor · Y path · ? help · esc back · j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
+			"  / filter · r project · enter view · o sort · O editor · Y path · ? help · esc back · j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
 	{
@@ -277,7 +277,7 @@ var footerHintCharacterizations = []struct {
 		entries: planViewFooterPalette,
 		width:   200,
 		want: []string{
-			"  / search · n/N match · y copy · Y path · e editor · ? help · esc back · j/k scroll · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
+			"  / search · n/N match · y copy · Y path · O editor · ? help · esc back · j/k scroll · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
 	{
@@ -285,7 +285,7 @@ var footerHintCharacterizations = []struct {
 		entries: planViewFooterPalette,
 		width:   90,
 		want: []string{
-			"  / search · n/N match · y copy · Y path · e editor · ? help · esc back · j/k scroll",
+			"  / search · n/N match · y copy · Y path · O editor · ? help · esc back · j/k scroll",
 			"  g/G top/bot · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
@@ -295,7 +295,7 @@ var footerHintCharacterizations = []struct {
 		width:   40,
 		want: []string{
 			"  / search · n/N match · y copy · Y path",
-			"  e editor · esc back · ? more",
+			"  O editor · esc back · ? more",
 		},
 	},
 	{
@@ -303,7 +303,7 @@ var footerHintCharacterizations = []struct {
 		entries: planViewFooterPalette,
 		width:   0,
 		want: []string{
-			"  / search · n/N match · y copy · Y path · e editor · ? help · esc back · j/k scroll · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
+			"  / search · n/N match · y copy · Y path · O editor · ? help · esc back · j/k scroll · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
 	{
@@ -463,7 +463,7 @@ func footerAvailabilityCases() []footerAvailabilityCase {
 			model: Model{planCursor: 0, planResults: []plans.Result{
 				{Meta: plans.PlanMeta{Name: "plan", DirPath: "/tmp/plan"}},
 			}},
-			key: "e", label: "editor",
+			key: "O", label: "editor",
 		},
 		{
 			name:    "plan view",
@@ -473,7 +473,7 @@ func footerAvailabilityCases() []footerAvailabilityCase {
 				planViewerLines:      []string{"body"},
 				planViewerMatchLines: []int{0},
 			},
-			key: "e", label: "editor",
+			key: "O", label: "editor",
 		},
 		{
 			name:    "worktrees",
