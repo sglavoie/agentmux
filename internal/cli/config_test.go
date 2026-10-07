@@ -62,3 +62,13 @@ func TestLoadAndValidateReturnsTheLoadedConfig(t *testing.T) {
 		t.Fatalf("cfg = %p; want the loaded config %p", cfg, loaded)
 	}
 }
+
+func TestUnknownProfileNamesTheConfiguredProfiles(t *testing.T) {
+	cfg := &config.Config{Profiles: []config.Account{{Name: "work"}, {Name: "codex-work"}}}
+	if got, want := UnknownProfile(cfg, "home").Error(), `--profile "home": want one of work, codex-work`; got != want {
+		t.Fatalf("UnknownProfile = %q, want %q", got, want)
+	}
+	if got, want := UnknownProfile(&config.Config{}, "home").Error(), `--profile "home": no profile is configured`; got != want {
+		t.Fatalf("UnknownProfile without profiles = %q, want %q", got, want)
+	}
+}

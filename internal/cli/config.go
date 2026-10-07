@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/sglavoie/agentmux/internal/config"
 )
@@ -27,4 +28,19 @@ func loadAndValidate(load func() (*config.Config, error)) (*config.Config, error
 		return nil, err
 	}
 	return cfg, nil
+}
+
+// UnknownProfile is the refusal for a --profile value that names no configured
+// profile. It lists the names that would have worked, as --harness and --group
+// already do, because the profile is the selector an operator is most likely to
+// misremember and "not a configured profile" alone leaves them to go and look.
+func UnknownProfile(cfg *config.Config, name string) error {
+	if cfg == nil || len(cfg.Profiles) == 0 {
+		return fmt.Errorf("--profile %q: no profile is configured", name)
+	}
+	names := make([]string, 0, len(cfg.Profiles))
+	for _, profile := range cfg.Profiles {
+		names = append(names, profile.Name)
+	}
+	return fmt.Errorf("--profile %q: want one of %s", name, strings.Join(names, ", "))
 }

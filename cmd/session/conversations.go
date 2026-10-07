@@ -354,7 +354,7 @@ func applySessionListSelectors(cmd *cobra.Command, cfg *config.Config, filter *t
 	profiles, _ := cmd.Flags().GetStringSlice("profile")
 	for _, name := range profiles {
 		if !configHasProfile(cfg, name) {
-			return fmt.Errorf("--profile %q: not a configured profile", name)
+			return cli.UnknownProfile(cfg, name)
 		}
 		filter.Profile = append(filter.Profile, name)
 	}

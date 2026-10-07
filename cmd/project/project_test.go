@@ -720,7 +720,7 @@ func TestProjectListRefusesAnUnknownFilterName(t *testing.T) {
 		profiles, harnesses, groups []string
 		want                        string
 	}{
-		{name: "profile", profiles: []string{"home"}, want: `--profile \"home\": not a configured profile`},
+		{name: "profile", profiles: []string{"home"}, want: `--profile \"home\": want one of work, codex-work`},
 		{name: "harness", harnesses: []string{"gemini"}, want: `--harness \"gemini\": want one of`},
 		{name: "group", groups: []string{"frontend"}, want: `--group \"frontend\": want one of backend`},
 	} {

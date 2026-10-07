@@ -629,7 +629,7 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 		want  string
 	}{
 		{"unknown harness", map[string]string{"harness": "gemini"}, `--harness "gemini"`},
-		{"unknown profile", map[string]string{"profile": "nobody"}, `--profile "nobody"`},
+		{"unknown profile", map[string]string{"profile": "nobody"}, `--profile "nobody": want one of`},
 		{"negative limit", map[string]string{"limit": "-1"}, "--limit -1"},
 		{"unknown project", map[string]string{"project": "nowhere"}, `--project "nowhere"`},
 	} {

@@ -281,7 +281,7 @@ func newProjectListFilter(cfg *config.Config) (projectListFilter, error) {
 	var filter projectListFilter
 	for _, name := range projectListProfiles {
 		if !slices.ContainsFunc(cfg.Profiles, func(profile config.Account) bool { return strings.EqualFold(profile.Name, name) }) {
-			return filter, fmt.Errorf("--profile %q: not a configured profile", name)
+			return filter, cli.UnknownProfile(cfg, name)
 		}
 		filter.profiles = append(filter.profiles, name)
 	}
