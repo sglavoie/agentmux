@@ -1291,11 +1291,13 @@ func newHermeticUITestSnapshot(parent string) (hermeticUITestSnapshot, string, e
 		StartedAt:    now.Add(-time.Hour), LastAt: now,
 		Path:         filepath.Join(root, "transcripts", "fixture.jsonl"),
 		MessageCount: 2, Snippet: "deterministic transcript fixture",
+		Ending: "fixture conversation wrapped up",
 	}
 	if err := os.MkdirAll(filepath.Dir(transcriptMeta.Path), 0o700); err != nil {
 		return hermeticUITestSnapshot{}, "", fmt.Errorf("uitest: creating transcript source: %w", err)
 	}
-	if err := os.WriteFile(transcriptMeta.Path, []byte(`{"type":"user","timestamp":"2026-01-02T14:04:05Z","message":{"role":"user","content":"deterministic transcript fixture"}}`+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(transcriptMeta.Path, []byte(`{"type":"user","timestamp":"2026-01-02T14:04:05Z","message":{"role":"user","content":"deterministic transcript fixture"}}`+"\n"+
+		`{"type":"assistant","timestamp":"2026-01-02T15:04:05Z","message":{"role":"assistant","content":[{"type":"text","text":"fixture conversation wrapped up"}]}}`+"\n"), 0o600); err != nil {
 		return hermeticUITestSnapshot{}, "", fmt.Errorf("uitest: writing transcript source: %w", err)
 	}
 	transcriptPath := filepath.Join(root, "data", "transcripts.json")

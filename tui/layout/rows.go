@@ -1,7 +1,8 @@
 // The pieces a selectable list is drawn from, stated without reference to any
 // model: a word wrapper that measures in terminal cells, a one-line row with a
 // right-aligned shortcut, a labelled rule that separates one band of rows from
-// the next, and a detail area that is always the same height.
+// the next, a detail area that is always the same height, and a cell that
+// keeps the second of two texts visible.
 //
 // They live here rather than beside the surface that first needed them because
 // two surfaces need them and neither may import the other: the command palette
@@ -177,4 +178,33 @@ func DetailBlock(paragraphs []string, width, height int) []string {
 		block[last] = Truncate(block[last], max(width-Width(DetailClipMarker), 0), "") + DetailClipMarker
 	}
 	return block
+}
+
+// leadShareNumerator and leadShareDenominator cap the lead of a FitLeadAndTail
+// cell at two fifths of the budget while a tail follows it.
+const (
+	leadShareNumerator   = 2
+	leadShareDenominator = 5
+	// minTailCells is the least room worth giving a tail: below twice this,
+	// a cell shows its lead alone rather than two unreadable stubs.
+	minTailCells = 12
+)
+
+// LeadTailSeparator joins the two texts of a FitLeadAndTail cell. It is one
+// constant so every list that pairs a summary with what followed it — Past
+// Sessions and `amx session list` — reads the same way.
+const LeadTailSeparator = " → "
+
+// FitLeadAndTail fits "lead → tail" into budget cells. While a tail follows,
+// the lead may take at most two fifths of the budget, so a long lead cannot
+// push the tail off the cell; the tail then takes what is left and is cut with
+// an ellipsis. With no tail, or a budget too small to show both, the lead
+// alone fills the budget. A list row uses it when what tells two rows apart is
+// the second half of the cell rather than the first.
+func FitLeadAndTail(lead, tail string, budget int) string {
+	if tail == "" || budget < minTailCells*2 {
+		return Truncate(lead, budget, "…")
+	}
+	leadBudget := min(Width(lead), max(budget*leadShareNumerator/leadShareDenominator, minTailCells))
+	return Truncate(Truncate(lead, leadBudget, "…")+LeadTailSeparator+tail, budget, "…")
 }

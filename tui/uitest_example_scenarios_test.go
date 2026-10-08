@@ -156,6 +156,8 @@ func TestExampleScenariosParseAndPass(t *testing.T) {
 		"search-narrow-fit.json":                               false,
 		"session-fork-continuity.json":                         false,
 		"session-search-chips-fit.json":                        false,
+		"session-search-ending-narrow.json":                    false,
+		"session-search-ending-wide.json":                      false,
 		"session-search-header-narrow-fit.json":                false,
 		"session-view-hints-narrow-fit.json":                   false,
 		"session-view-hints-wide.json":                         false,

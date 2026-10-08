@@ -235,3 +235,22 @@ func TestDetailBlockKeepsEmptyParagraphAsSeparator(t *testing.T) {
 		}
 	}
 }
+
+func TestFitLeadAndTailKeepsTheTailVisible(t *testing.T) {
+	for _, tc := range []struct {
+		lead, tail string
+		budget     int
+		want       string
+	}{
+		{"Short title", "Done.", 40, "Short title → Done."},
+		{"A title long enough to need cutting down", "Committed the fix.", 40, "A title long en… → Committed the fix."},
+		{"Title", "a tail far too long to fit whole in the cell", 30, "Title → a tail far too long t…"},
+		{"Title", "ending", 20, "Title"},
+		{"Title", "", 40, "Title"},
+	} {
+		got := FitLeadAndTail(tc.lead, tc.tail, tc.budget)
+		if got != tc.want || Width(got) > tc.budget {
+			t.Errorf("FitLeadAndTail(%q, %q, %d) = %q (%d cells); want %q", tc.lead, tc.tail, tc.budget, got, Width(got), tc.want)
+		}
+	}
+}

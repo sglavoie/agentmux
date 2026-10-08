@@ -108,3 +108,40 @@ func TestFormatViewerLineGraphemeAtomicOnEmoji(t *testing.T) {
 		t.Fatalf("truncated line width = %d, want <= %d: %q", w, maxRunes(12), line)
 	}
 }
+
+// A row without a search match follows its summary with how the conversation
+// ended, keeping the summary short enough that the ending stays visible; a
+// search match keeps the slot to itself. Results are built the way
+// transcript.Search builds them: an empty query previews the summary.
+func TestFormatSessionRowShowsTheEnding(t *testing.T) {
+	meta := transcript.SessionMeta{
+		Harness: harness.Claude, Project: "amx", Profile: "work",
+		LastAt: time.Now().Add(-2 * time.Hour),
+		Title:  "Project improvement ideas that run on for a very long time indeed",
+		Ending: "Committed 0cf268c3 and installed it.",
+	}
+	for _, width := range []int{80, 160} {
+		t.Run(itoa(width), func(t *testing.T) {
+			row := FormatRow(transcript.Result{Meta: meta, Preview: meta.Summary()}, nil, width)
+			if got := layout.StyledWidth(row); got > width {
+				t.Fatalf("row width = %d > %d: %q", got, width, row)
+			}
+			if !strings.Contains(row, "→ Committed") {
+				t.Fatalf("row lost the ending at width %d: %q", width, row)
+			}
+			if width == 160 && !strings.Contains(row, "Committed 0cf268c3 and installed it.") {
+				t.Fatalf("a wide row cut the ending: %q", row)
+			}
+		})
+	}
+
+	match := FormatRow(transcript.Result{Meta: meta, Preview: "the matched line", Matches: 1}, nil, 160)
+	if strings.Contains(match, "→") || !strings.Contains(match, "the matched line") {
+		t.Fatalf("a search row should show only its match: %q", match)
+	}
+
+	meta.Ending = ""
+	if row := FormatRow(transcript.Result{Meta: meta, Preview: meta.Summary()}, nil, 160); strings.Contains(row, "→") {
+		t.Fatalf("a row with no ending grew a separator: %q", row)
+	}
+}

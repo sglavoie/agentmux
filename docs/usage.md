@@ -120,6 +120,11 @@ below for where each key went.
 - `Esc`: close an overlay, then leave inspector focus, then clear the filters
 - `q`, `Ctrl+C`: quit
 
+Until you type a search, each Past Sessions row follows the conversation's
+title with `→` and the opening of the agent's last reply, so conversations
+started from the same prompt can be told apart without opening them. Once you
+search, the row shows the line that matched instead.
+
 Notable commands behind `:` include **Search This Project's Past Sessions** and
 **Search All Past Sessions**, **Search Plans** (saved agent plans — rows and the
 viewer show the configured project title, `r` filters by project including

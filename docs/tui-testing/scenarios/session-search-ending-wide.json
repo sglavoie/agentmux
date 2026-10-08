@@ -1,0 +1,11 @@
+{
+  "name": "session-search-ending-wide",
+  "fixture": "basic",
+  "size": { "width": 160, "height": 30 },
+  "actions": [{ "type": "key", "key": "S" }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "session_search" },
+    { "type": "contains_text", "text": "→ fixture conversation" },
+    { "type": "no_layout_issues" }
+  ]
+}

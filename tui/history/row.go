@@ -56,7 +56,14 @@ func formatRow(res transcript.Result, acctColor map[string]string, maxWidth int,
 		matchFrag = "  " + styleSearch.Render(fmt.Sprintf("(%d match%s)", res.Matches, matchPlural(res.Matches)))
 	}
 
-	preview := res.Preview
+	// A search match is what the row is in the list for, so it keeps the
+	// preview slot. An unfiltered list (no matches counted; its preview is
+	// the summary) follows the summary with how the conversation ended,
+	// which is what tells apart runs started from the same prompt.
+	preview, ending := res.Preview, ""
+	if res.Matches == 0 {
+		ending = res.Meta.Ending
+	}
 	if preview == "" {
 		preview = res.Meta.Summary()
 	}
@@ -70,7 +77,7 @@ func formatRow(res transcript.Result, acctColor map[string]string, maxWidth int,
 	}
 	body += matchFrag
 	if preview != "" {
-		body += "  " + styleDim.Render(layout.Truncate(preview, maxRunes(maxWidth-layout.StyledWidth(body)-2), "…"))
+		body += "  " + styleDim.Render(layout.FitLeadAndTail(preview, ending, maxRunes(maxWidth-layout.StyledWidth(body)-2)))
 	}
 	return layout.StyledTruncate(body, maxWidth, "…")
 }

@@ -552,6 +552,8 @@ file. The exact inventory is:
 | [`session-search-chips-fit.json`](scenarios/session-search-chips-fit.json) | `basic` | session-search filter chips clamp to width after Past Sessions is opened by name |
 | [`project-session-shortcut.json`](scenarios/project-session-shortcut.json) | `basic` | dashboard `s` opens Past Sessions with the selected project filter |
 | [`session-search-header-narrow-fit.json`](scenarios/session-search-header-narrow-fit.json) | `basic` | Past Sessions header and filters fit at narrow width |
+| [`session-search-ending-wide.json`](scenarios/session-search-ending-wide.json) | `basic` | an unfiltered Past Sessions row follows its summary with `→` and how the conversation ended |
+| [`session-search-ending-narrow.json`](scenarios/session-search-ending-narrow.json) | `basic` | at 60 cells the summary yields room so the ending still shows, and the row fits |
 | [`session-view-hints-wide.json`](scenarios/session-view-hints-wide.json) | `basic` | transcript viewer advertises the full continuity palette including `c continue` |
 | [`session-view-hints-narrow-fit.json`](scenarios/session-view-hints-narrow-fit.json) | `basic` | transcript viewer hints truncate to the row budget and surface the actionable `? more` marker |
 | [`size-60x15-triage.json`](scenarios/size-60x15-triage.json) | `triage_integration` | the smallest reviewed terminal |
