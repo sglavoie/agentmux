@@ -177,6 +177,7 @@ func writeSessionShow(out io.Writer, view sessionView, now time.Time, liveKnown 
 		{"transcript", dash(view.Path)},
 		{"title", dash(oneLine(view.Title))},
 		{"summary", dash(oneLine(view.Snippet))},
+		{"ended", dash(oneLine(view.Ending))},
 		{"continue", "amx session continue " + view.Harness + ":" + view.ID},
 		{"fork", "amx session fork " + view.Harness + ":" + view.ID},
 	}
