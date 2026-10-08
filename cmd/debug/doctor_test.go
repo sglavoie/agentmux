@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -156,7 +157,7 @@ func TestDoctorReportsDaemonRendererHookAndSuppressionHealth(t *testing.T) {
 		"kitty sockets: unix:/tmp/kitty-42",
 		"hooks: no configured profiles",
 		"renderer drift: none",
-		"recent suppressions (last 15m0s): 1 across 1 reason",
+		"recent suppressions (last 15m0s): 1, all guard_blocked",
 		"overall: ok (1 warning)",
 	} {
 		if !strings.Contains(got, want) {
@@ -174,6 +175,28 @@ func TestDoctorReportsDaemonRendererHookAndSuppressionHealth(t *testing.T) {
 	}
 	if got := out.String(); !strings.Contains(got, "recent suppressions (last 15m0s):\n- guard_blocked: 1\n") {
 		t.Errorf("doctor --verbose output missing the suppression breakdown:\n%s", got)
+	}
+}
+
+func TestSuppressionSummaryNamesAMajorityReasonAndPointsAtVerbose(t *testing.T) {
+	for _, tc := range []struct {
+		counts map[string]int
+		want   string
+	}{
+		{map[string]int{"guard_blocked": 3}, "3, all guard_blocked"},
+		{map[string]int{"ignored_event": 159, "terminal_stop_held": 14, "unmanaged_pipe_source": 3}, "176 across 3 reasons, mostly ignored_event (--verbose lists each)"},
+		{map[string]int{"a": 2, "b": 2}, "4 across 2 reasons (--verbose lists each)"},
+	} {
+		reasons := make([]string, 0, len(tc.counts))
+		total := 0
+		for reason, count := range tc.counts {
+			reasons = append(reasons, reason)
+			total += count
+		}
+		sort.Strings(reasons)
+		if got := suppressionSummary(reasons, tc.counts, total); got != tc.want {
+			t.Errorf("suppressionSummary(%v) = %q, want %q", tc.counts, got, tc.want)
+		}
 	}
 }
 

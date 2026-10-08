@@ -83,11 +83,23 @@ func TestDoctorReportsAFreshKittySnapshotWithoutAFinding(t *testing.T) {
 	}
 }
 
-// --verbose prints every counter of even a quiet coordinator, the line `debug
-// status` always prints.
-func TestDoctorVerboseReportsEveryKittyCoordinatorCounter(t *testing.T) {
+// --verbose names the socket and the coalesced waiters of a quiet coordinator
+// but keeps doctor's sentence; the key=value line is `debug status`'s.
+func TestDoctorVerboseDescribesAQuietKittyCoordinatorInASentence(t *testing.T) {
 	var out bytes.Buffer
-	if err := writeKittySnapshot(&out, freshKittySnapshot(), true); err != nil {
+	if err := writeKittySnapshot(&out, freshKittySnapshot(), false, true); err != nil {
+		t.Fatal(err)
+	}
+	want := "kitty list coordinator: ok (40 lists through unix:/tmp/kitty-756, no failures, 0 waiters coalesced, latency 35ms last / 120ms max)"
+	if !strings.Contains(out.String(), want) {
+		t.Errorf("verbose output missing %q:\n%s", want, out.String())
+	}
+}
+
+// debug status prints every counter of even a quiet coordinator.
+func TestDebugStatusReportsEveryKittyCoordinatorCounter(t *testing.T) {
+	var out bytes.Buffer
+	if err := writeKittySnapshot(&out, freshKittySnapshot(), true, false); err != nil {
 		t.Fatal(err)
 	}
 	want := "kitty list coordinator: socket=unix:/tmp/kitty-756 attempts=40 failures=0 timeouts=0 coalesced=0 in_flight=false consecutive_failures=0 last_latency=35ms max_latency=120ms last_error=none"
@@ -104,7 +116,7 @@ func TestDoctorKeepsTheFullCoordinatorLineAfterAFailure(t *testing.T) {
 	coordinator.Failures, coordinator.LastErrorClass = 1, "timeout"
 	snapshot.Coordinator = &coordinator
 	var out bytes.Buffer
-	if err := writeKittySnapshot(&out, snapshot, false); err != nil {
+	if err := writeKittySnapshot(&out, snapshot, false, false); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "failures=1") || !strings.Contains(out.String(), "last_error=timeout") {

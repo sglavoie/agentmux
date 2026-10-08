@@ -195,7 +195,7 @@ func writeDebugStatusText(out io.Writer, report debugger.StatusReport) error {
 	// already printed why it could not be asked, and adding "unreported" under
 	// that would read as an old daemon rather than as no daemon.
 	if report.Daemon.Alive {
-		if err := writeKittySnapshot(out, report.Daemon.KittySnapshot, true); err != nil {
+		if err := writeKittySnapshot(out, report.Daemon.KittySnapshot, true, false); err != nil {
 			return err
 		}
 	}

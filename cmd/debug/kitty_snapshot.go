@@ -108,10 +108,21 @@ func kittyCoordinatorQuiet(status *protocol.KittyListCoordinatorStatus) bool {
 
 // kittyCoordinatorBrief is doctor's line for a quiet coordinator: that it is
 // healthy, how much it has done, and how fast, without the zero counters.
-func kittyCoordinatorBrief(status *protocol.KittyListCoordinatorStatus) string {
-	return fmt.Sprintf("ok (%d lists, no failures, latency %s last / %s max)",
-		status.Attempts,
+// verbose adds the socket and the coalesced waiters, the two facts the zero
+// counters were hiding that are not zero, and stays a sentence: the key=value
+// form is `debug status`'s, where every other line reads that way too.
+func kittyCoordinatorBrief(status *protocol.KittyListCoordinatorStatus, verbose bool) string {
+	latency := fmt.Sprintf("latency %s last / %s max",
 		time.Duration(status.LastLatencyMS)*time.Millisecond, time.Duration(status.MaxLatencyMS)*time.Millisecond)
+	if !verbose {
+		return fmt.Sprintf("ok (%d lists, no failures, %s)", status.Attempts, latency)
+	}
+	waiters := "waiters"
+	if status.CoalescedWaiters == 1 {
+		waiters = "waiter"
+	}
+	return fmt.Sprintf("ok (%d lists through %s, no failures, %d %s coalesced, %s)",
+		status.Attempts, emptyDash(status.Socket), status.CoalescedWaiters, waiters, latency)
 }
 
 // checkKittySnapshotStale is the stable identifier for a daemon whose cached
@@ -137,7 +148,7 @@ const checkKittySnapshotStale = "kitty_snapshot_stale"
 // that predates the field: unknown, reported as such, and never a finding,
 // because a version gap is not a health fault.
 func writeDoctorKittySnapshot(out io.Writer, snapshot *protocol.KittySnapshot, verbose bool, addFinding func(string, string, string, ...any)) error {
-	if err := writeKittySnapshot(out, snapshot, verbose); err != nil {
+	if err := writeKittySnapshot(out, snapshot, false, verbose); err != nil {
 		return err
 	}
 	if snapshot == nil || !snapshot.Ready || !snapshot.Stale {
@@ -155,10 +166,11 @@ func writeDoctorKittySnapshot(out io.Writer, snapshot *protocol.KittySnapshot, v
 // state the same absence twice.
 //
 // full keeps every coordinator counter. `debug status` always asks for it,
-// being the surface an operator reads for detail; doctor asks for it under
-// --verbose and otherwise summarizes a quiet coordinator in one short phrase.
-// A coordinator with anything to report is printed whole either way.
-func writeKittySnapshot(out io.Writer, snapshot *protocol.KittySnapshot, full bool) error {
+// being the surface an operator reads for detail and printing every line as
+// key=value; doctor never does, and summarizes a quiet coordinator in a
+// sentence that verbose lengthens. A coordinator with anything to report is
+// printed whole either way.
+func writeKittySnapshot(out io.Writer, snapshot *protocol.KittySnapshot, full, verbose bool) error {
 	if _, err := fmt.Fprintf(out, "kitty snapshot: %s\n", kittySnapshotSummary(snapshot)); err != nil {
 		return err
 	}
@@ -167,7 +179,7 @@ func writeKittySnapshot(out io.Writer, snapshot *protocol.KittySnapshot, full bo
 	}
 	summary := kittyCoordinatorSummary(snapshot.Coordinator)
 	if !full && kittyCoordinatorQuiet(snapshot.Coordinator) {
-		summary = kittyCoordinatorBrief(snapshot.Coordinator)
+		summary = kittyCoordinatorBrief(snapshot.Coordinator, verbose)
 	}
 	_, err := fmt.Fprintf(out, "kitty list coordinator: %s\n", summary)
 	return err

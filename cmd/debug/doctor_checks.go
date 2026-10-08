@@ -756,6 +756,21 @@ func writeDoctorRenderer(out io.Writer, snapshot protocol.EventsExport, liveByID
 	return nil
 }
 
+// suppressionSummary is the one-line form of the suppression counts: the
+// total, and the reason behind more than half of it when one is, since that is
+// usually the answer to "what were they" and saves a --verbose run.
+func suppressionSummary(reasons []string, counts map[string]int, total int) string {
+	if len(reasons) == 1 {
+		return fmt.Sprintf("%d, all %s", total, reasons[0])
+	}
+	for _, reason := range reasons {
+		if counts[reason]*2 > total {
+			return fmt.Sprintf("%d across %d reasons, mostly %s (--verbose lists each)", total, len(reasons), reason)
+		}
+	}
+	return fmt.Sprintf("%d across %d reasons (--verbose lists each)", total, len(reasons))
+}
+
 // writeDoctorSuppressions reports how many events the daemon suppressed in
 // the trailing window. Suppression is the reducer working as designed, so the
 // ordinary report gives one total; the per-reason breakdown is for whoever is
@@ -782,11 +797,7 @@ func writeDoctorSuppressions(out io.Writer, snapshot protocol.EventsExport, now 
 	}
 	sort.Strings(reasons)
 	if !verbose {
-		noun := "reasons"
-		if len(reasons) == 1 {
-			noun = "reason"
-		}
-		_, err := fmt.Fprintf(out, "recent suppressions (last %s): %d across %d %s\n", doctorSuppressionWindow, total, len(reasons), noun)
+		_, err := fmt.Fprintf(out, "recent suppressions (last %s): %s\n", doctorSuppressionWindow, suppressionSummary(reasons, counts, total))
 		return err
 	}
 	if _, err := fmt.Fprintf(out, "recent suppressions (last %s):\n", doctorSuppressionWindow); err != nil {
