@@ -399,12 +399,16 @@ func writeDoctorProjectDirectories(out io.Writer, reportMissing func(string, ...
 	// are kept for later and offered nowhere, so a gone checkout is expected.
 	problems := config.ProjectDirectoryProblems(cfg.Projects)
 	active := len(config.ActiveProjects(cfg.Projects))
+	// With archived projects in the file, the count says "active" so that
+	// "28 active, 12 archived" is not read as 12 of the 28.
 	archived := ""
+	counted := fmt.Sprintf("%d configured", active)
 	if n := config.ArchivedCount(cfg.Projects); n > 0 {
 		archived = fmt.Sprintf(", %d archived", n)
+		counted = fmt.Sprintf("%d active, %d archived", active, n)
 	}
 	if len(problems) == 0 {
-		_, err := fmt.Fprintf(out, "projects: ok (%d configured%s)\n", active, archived)
+		_, err := fmt.Fprintf(out, "projects: ok (%s)\n", counted)
 		return err
 	}
 	if _, err := fmt.Fprintf(out, "projects: %d of %d have an unusable directory%s\n", len(problems), active, archived); err != nil {

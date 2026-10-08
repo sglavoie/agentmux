@@ -108,6 +108,20 @@ func TestDoctorProjectDirectoriesWarnsOnceForEveryUnusableDirectory(t *testing.T
 	if out.String() != "projects: ok (1 configured)\n" || len(messages) != 0 {
 		t.Fatalf("clean projects: text %q, findings %q", out.String(), messages)
 	}
+
+	doctorLoadConfig = func() (*config.Config, error) {
+		return &config.Config{Projects: []config.Session{
+			{Title: "here", Directory: present},
+			{Title: "kept", Directory: filepath.Join(present, "gone"), Archived: true},
+		}}, nil
+	}
+	out.Reset()
+	if err := writeDoctorProjectDirectories(&out, func(string, ...any) {}); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); got != "projects: ok (1 active, 1 archived)\n" {
+		t.Fatalf("archived projects: text %q", got)
+	}
 }
 
 func TestDoctorFindingsSummarizeClosedTombstonesUnlessVerbose(t *testing.T) {

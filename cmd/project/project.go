@@ -185,8 +185,12 @@ func runProjectList(cmd *cobra.Command, _ []string) error {
 		writeProjectLines(out, views)
 		return nil
 	}
+	note := archivedNote(cfg, filter)
 	if len(views) == 0 {
 		message := "No projects are configured."
+		if note != "" {
+			message = "Every configured project is archived."
+		}
 		switch {
 		case projectListArchived:
 			message = "No project is archived."
@@ -197,7 +201,7 @@ func runProjectList(cmd *cobra.Command, _ []string) error {
 		case projectListMissing:
 			message = "Every configured project directory is usable."
 		}
-		_, err := fmt.Fprintln(out, message)
+		_, err := fmt.Fprint(out, message+"\n"+note)
 		return err
 	}
 	header := []string{"PROFILE", "TITLE", "HARNESS", "DIRECTORY", "GROUPS"}
@@ -210,7 +214,34 @@ func runProjectList(cmd *cobra.Command, _ []string) error {
 		rows = append(rows, []string{view.Profile, view.Title, view.Harness, directory, groupsField(view.Groups)})
 	}
 	fitProjectDirectories(header, rows, projectListTerminalWidth(out))
-	return cli.WriteTable(out, header, rows)
+	if err := cli.WriteTable(out, header, rows); err != nil {
+		return err
+	}
+	_, err = io.WriteString(out, note)
+	return err
+}
+
+// archivedNote is the line under the table that says how many archived
+// projects matching the filters the list left out, so they read as kept
+// rather than gone. --archived lists them, and --missing never judges them,
+// so neither has the note.
+func archivedNote(cfg *config.Config, filter projectListFilter) string {
+	if projectListArchived || projectListMissing {
+		return ""
+	}
+	hidden := 0
+	for _, view := range projectViews(cfg, true) {
+		if filter.keeps(view) {
+			hidden++
+		}
+	}
+	switch hidden {
+	case 0:
+		return ""
+	case 1:
+		return "1 archived project is hidden; --archived lists it.\n"
+	}
+	return fmt.Sprintf("%d archived projects are hidden; --archived lists them.\n", hidden)
 }
 
 // writeProjectLines is `project list` off a terminal: headerless and

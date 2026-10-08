@@ -816,6 +816,27 @@ func TestProjectListLeavesOutArchivedProjects(t *testing.T) {
 	if strings.Contains(out, "Old") {
 		t.Fatalf("plain list shows the archived project:\n%s", out)
 	}
+	if !strings.HasSuffix(out, "\n1 archived project is hidden; --archived lists it.\n") {
+		t.Fatalf("plain list does not say the archived project is hidden:\n%s", out)
+	}
+	allArchived := archivedTestConfig()
+	allArchived.Projects = allArchived.Projects[len(allArchived.Projects)-1:]
+	out, err = runProject(t, "list", allArchived, &recordingKittyClient{}, false, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "Every configured project is archived.\n1 archived project is hidden; --archived lists it.\n" {
+		t.Fatalf("list of only archived projects = %q", out)
+	}
+	projectListProfiles = []string{"codex-work"}
+	out, err = runProject(t, "list", archivedTestConfig(), &recordingKittyClient{}, false, "", "")
+	projectListProfiles = nil
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "archived") {
+		t.Fatalf("a filter the archived project fails still counts it:\n%s", out)
+	}
 	projectListMissing = true
 	out, err = runProject(t, "list", archivedTestConfig(), &recordingKittyClient{}, false, "", "")
 	projectListMissing = false
