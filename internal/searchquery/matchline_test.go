@@ -34,22 +34,49 @@ func TestPreviewAtPrefersTheFirstLineHoldingEveryTerm(t *testing.T) {
 	text := "kitty tabs are colored\nthe socket is closed\nthe kitty socket listens\n"
 	terms := Parse("socket kitty")
 	first := terms.NewTally().Add(text)
-	pos, complete := terms.PreviewAt(text, first)
-	if !complete || !strings.HasPrefix(text[pos:], "kitty socket listens") {
-		t.Fatalf("PreviewAt = %d (%q), %v; want the earliest match on the line holding both", pos, text[pos:], complete)
+	pos, fit := terms.PreviewAt(text, first)
+	if fit != FitWords || !strings.HasPrefix(text[pos:], "kitty socket listens") {
+		t.Fatalf("PreviewAt = %d (%q), %v; want the earliest match on the line holding both", pos, text[pos:], fit)
+	}
+}
+
+// A file name holds both words of `daemon test`, but the sentence about the
+// daemon test is what the searcher meant.
+func TestPreviewAtPrefersALineWhereEveryTermStartsAWord(t *testing.T) {
+	text := "see daemon_state_acceptance_doc_test.go\nthe latest daemon run\ni could not reproduce the daemon test failure\n"
+	terms := Parse("daemon test")
+	first := terms.NewTally().Add(text)
+	pos, fit := terms.PreviewAt(text, first)
+	if fit != FitWords || !strings.HasPrefix(text[pos:], "daemon test failure") {
+		t.Fatalf("PreviewAt = %d (%q), %v; want the line where both words start a word", pos, text[pos:], fit)
+	}
+
+	single := Parse("test")
+	pos, fit = single.PreviewAt(text, single.NewTally().Add(text))
+	if fit != FitWords || !strings.HasPrefix(text[pos:], "test failure") {
+		t.Fatalf("single term PreviewAt = %d (%q), %v; want the first word-start occurrence", pos, text[pos:], fit)
+	}
+}
+
+func TestPreviewAtFallsBackToTheFirstLineHoldingEveryTermInsideWords(t *testing.T) {
+	text := "daemon tabs\nsee daemon_test.go\nmore daemon_test.go\n"
+	terms := Parse("daemon test")
+	pos, fit := terms.PreviewAt(text, 0)
+	if fit != FitLine || !strings.HasPrefix(text[pos:], "daemon_test.go\nmore") {
+		t.Fatalf("PreviewAt = %d (%q), %v; want the first line holding both", pos, text[pos:], fit)
 	}
 }
 
 func TestPreviewAtFallsBackToFirstWhenNoLineHoldsEveryTerm(t *testing.T) {
 	text := "kitty tabs\nsocket closed\n"
 	terms := Parse("kitty socket")
-	if pos, complete := terms.PreviewAt(text, 0); pos != 0 || complete {
-		t.Fatalf("PreviewAt = %d, %v; want first unchanged and incomplete", pos, complete)
+	if pos, fit := terms.PreviewAt(text, 0); pos != 0 || fit != FitFirst {
+		t.Fatalf("PreviewAt = %d, %v; want first unchanged", pos, fit)
 	}
-	if pos, complete := Parse("kitty").PreviewAt(text, 0); pos != 0 || !complete {
-		t.Fatalf("single term PreviewAt = %d, %v; want first, complete", pos, complete)
+	if pos, fit := Parse("kitty").PreviewAt(text, 0); pos != 0 || fit != FitWords {
+		t.Fatalf("single term PreviewAt = %d, %v; want first", pos, fit)
 	}
-	if pos, complete := terms.PreviewAt(text, -1); pos != -1 || complete {
-		t.Fatalf("no match PreviewAt = %d, %v; want -1, incomplete", pos, complete)
+	if pos, fit := terms.PreviewAt(text, -1); pos != -1 || fit != FitFirst {
+		t.Fatalf("no match PreviewAt = %d, %v; want -1", pos, fit)
 	}
 }

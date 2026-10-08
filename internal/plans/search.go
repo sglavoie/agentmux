@@ -172,7 +172,7 @@ func readPlanSearchText(meta PlanMeta) (string, error) {
 
 // countMatchesInSearchText counts case-insensitive occurrences of terms
 // inside the precomputed (already-lowercased) plan corpus, and 0 when any term
-// is absent. The preview is the first line holding every term, else the line
+// is absent. The preview is the line searchquery.PreviewAt prefers, else the line
 // containing the first match — necessarily lowercased, since the sidecar is the
 // only source available without re-reading every .md file.
 func countMatchesInSearchText(searchText string, terms searchquery.Terms) (int, string) {

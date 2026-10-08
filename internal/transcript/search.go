@@ -371,24 +371,25 @@ func countMatchesForSource(msgs []Message, terms searchquery.Terms, source strin
 }
 
 // previewPick chooses a transcript's preview across its messages: the first
-// line holding every term wherever it occurs, else the first line holding any.
+// line where every term starts a word, else the first line holding every
+// term, else the first line holding any.
 type previewPick struct {
-	preview  string
-	complete bool
+	preview string
+	fit     searchquery.PreviewFit
 }
 
 // offer considers one message, given its lowered text and the earliest term
 // occurrence in it.
 func (p *previewPick) offer(terms searchquery.Terms, text, lower string, first int) {
-	if p.complete || first < 0 {
+	if p.fit == searchquery.FitWords || first < 0 {
 		return
 	}
-	pos, complete := terms.PreviewAt(lower, first)
-	if !complete && p.preview != "" {
+	pos, fit := terms.PreviewAt(lower, first)
+	if p.preview != "" && fit <= p.fit {
 		return
 	}
 	p.preview = firstMatchLine(text, originalOffsetForFoldedByte(text, pos))
-	p.complete = complete
+	p.fit = fit
 }
 
 func messagesSearchText(msgs []Message) string {
@@ -401,7 +402,7 @@ func messagesSearchText(msgs []Message) string {
 
 // countMatchesInSearchText counts case-insensitive occurrences of terms
 // inside the precomputed (already-lowercased) search text, and 0 when any term
-// is absent. The preview is the first line holding every term, else the line
+// is absent. The preview is the line searchquery.PreviewAt prefers, else the line
 // containing the first match — necessarily lowercased, since the sidecar is the
 // only source available without re-reading the file.
 func countMatchesInSearchText(searchText string, terms searchquery.Terms) (int, string) {
@@ -420,7 +421,7 @@ func countMatchesInSearchText(searchText string, terms searchquery.Terms) (int, 
 
 // countMatches walks msgs in order, counting case-insensitive occurrences
 // of terms across each message's Text, and returns 0 when any term is absent
-// from the transcript as a whole. The first line holding every term, else the
+// from the transcript as a whole. The line searchquery.PreviewAt prefers, else the
 // first line that contains a match, is captured as the preview, kept stable so
 // callers see deterministic output for a given input.
 func countMatches(msgs []Message, terms searchquery.Terms) (int, string) {
