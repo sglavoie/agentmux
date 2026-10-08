@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/searchstore"
@@ -270,12 +271,19 @@ func TestTranscriptsStatusReadsAsSizesOnATerminalAndBytesInAPipe(t *testing.T) {
 	}
 	shown := run(true)
 	for _, want := range []string{
-		"metadata_size:               2.0 KiB\n",
-		"hidden_entries:              0 (removed from Past Sessions)\n",
-		"visible_profile_memberships: 0\n",
+		"index:    " + cli.DisplayPath(path) + " (2.0 KiB)\n",
+		"sessions: 0 conversations in Past Sessions\n",
+		"profiles: each conversation belongs to one profile\n",
+		"orphaned: none\n",
+		"missing:  none\n",
 	} {
 		if !strings.Contains(shown, want) {
 			t.Fatalf("terminal status missing %q:\n%s", want, shown)
+		}
+	}
+	for _, field := range []string{"metadata_path", "visible_entries", "hidden_entries", "sidecar_count"} {
+		if strings.Contains(shown, field) {
+			t.Fatalf("terminal status still prints the field name %s:\n%s", field, shown)
 		}
 	}
 }
@@ -308,11 +316,44 @@ func TestTranscriptsStatusNamesTheRepairForEachProblemOnATerminal(t *testing.T) 
 	}
 	shown := run(true)
 	for _, want := range []string{
+		"orphaned: 1 sidecar (4 B) belongs to no conversation\n",
+		"missing:  1 conversation without search text\n",
 		"1 conversation has no search text, so search cannot find it; `amx transcripts rebuild --all` reindexes it.",
 		"1 search sidecar no longer belongs to a conversation; `amx transcripts compact` removes it.",
 	} {
 		if !strings.Contains(shown, want) {
 			t.Fatalf("terminal status missing %q:\n%s", want, shown)
+		}
+	}
+}
+
+func TestTranscriptsCompactSummarizesInWordsOnATerminal(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "transcripts.json")
+	resetTranscriptsCommandTestState(t, path)
+	key := transcript.IndexKey(harness.Claude, "legacy")
+	body := `{"entries":{"` + key + `":{"id":"legacy","harness":"claude","message_count":1,"search_text":"body"}}}`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if err := searchstore.New(path).Write("claude:orphan", "unused"); err != nil {
+		t.Fatalf("Write orphan sidecar: %v", err)
+	}
+	transcriptsIsTerminal = func(io.Writer) bool { return true }
+
+	var out bytes.Buffer
+	transcriptsCompactCmd.SetOut(&out)
+	if err := transcriptsCompactCmd.RunE(transcriptsCompactCmd, nil); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+	got := out.String()
+	for _, want := range []string{
+		"Compacted the transcript index.\n",
+		"legacy:   moved the legacy search text of 1 conversation into sidecars\n",
+		"orphaned: removed 1 orphan sidecar (6 B)\n",
+		"search:   1 sidecar remains\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("terminal compact missing %q:\n%s", want, got)
 		}
 	}
 }

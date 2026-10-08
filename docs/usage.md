@@ -852,9 +852,11 @@ amx transcripts rebuild --all
 ```
 
 `status` is read-only and reports metadata, sidecar, missing-sidecar, and
-orphan-sidecar usage. In a terminal, sizes read as KiB/MiB, paths use `~`, and
-`hidden_entries` (rows removed from Past Sessions) says so; piped output keeps
-raw byte counts and full paths. All three accept `--json`, which emits the same keys in
+orphan-sidecar usage. In a terminal it reads as a short summary — what Past
+Sessions holds, how much was removed from it, sizes in KiB/MiB, paths under
+`~`, and the command that clears any orphaned or missing sidecars — and
+`compact` likewise says what it moved and removed. Piped output keeps the
+`key: value` lines with raw byte counts and full paths. All three accept `--json`, which emits the same keys in
 the schema-v1 envelope (`compact` adds `before` and `after` store snapshots). `compact` takes the transcript cache lock, migrates any
 legacy inline search text, persists metadata, and then removes only regular
 hash-named sidecars that are no longer referenced by a cache key. It preserves

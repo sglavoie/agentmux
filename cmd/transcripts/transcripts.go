@@ -70,14 +70,19 @@ var transcriptsCompactCmd = &cobra.Command{
 				Warnings:                 nonNilWarnings(result.Warnings),
 			})
 		}
-		size := transcriptSizeFormatter(transcriptsIsTerminal(cmd.OutOrStdout()))
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "compacted transcript index\n")
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "legacy_search_text_entries: %d\n", result.LegacyFields)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "metadata_size_before: %s\n", size(result.StatusBefore.MetadataSize))
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "metadata_size_after: %s\n", size(result.StatusAfter.MetadataSize))
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "sidecar_count: %d\n", result.StatusAfter.SidecarCount)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "orphan_sidecars_removed: %d\n", result.RemovedOrphanSidecars)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "orphan_sidecar_size_removed: %s\n", size(result.RemovedOrphanSidecarSize))
+		out := cmd.OutOrStdout()
+		if transcriptsIsTerminal(out) {
+			writeCompactSummary(out, result)
+		} else {
+			size := rawBytes
+			_, _ = fmt.Fprintf(out, "compacted transcript index\n")
+			_, _ = fmt.Fprintf(out, "legacy_search_text_entries: %d\n", result.LegacyFields)
+			_, _ = fmt.Fprintf(out, "metadata_size_before: %s\n", size(result.StatusBefore.MetadataSize))
+			_, _ = fmt.Fprintf(out, "metadata_size_after: %s\n", size(result.StatusAfter.MetadataSize))
+			_, _ = fmt.Fprintf(out, "sidecar_count: %d\n", result.StatusAfter.SidecarCount)
+			_, _ = fmt.Fprintf(out, "orphan_sidecars_removed: %d\n", result.RemovedOrphanSidecars)
+			_, _ = fmt.Fprintf(out, "orphan_sidecar_size_removed: %s\n", size(result.RemovedOrphanSidecarSize))
+		}
 		printTranscriptWarnings(cmd, result.Warnings)
 		return nil
 	},
@@ -111,50 +116,101 @@ var transcriptsRebuildCmd = &cobra.Command{
 
 func printTranscriptStatus(cmd *cobra.Command, status transcript.StoreStatus) {
 	out := cmd.OutOrStdout()
-	human := transcriptsIsTerminal(out)
-	size := transcriptSizeFormatter(human)
-	path := func(p string) string { return p }
-	hiddenNote := ""
-	if human {
-		path = cli.DisplayPath
-		hiddenNote = " (removed from Past Sessions)"
+	if transcriptsIsTerminal(out) {
+		writeTranscriptStatusSummary(out, status)
+		printTranscriptWarnings(cmd, status.Warnings)
+		printTranscriptRepairHints(out, status)
+		return
 	}
+	// Pipes keep the key/value lines, with the single space after the colon,
+	// raw byte counts, and full paths that scripts have always split on.
+	size := rawBytes
 	fields := [][2]string{
-		{"metadata_path", path(status.MetadataPath)},
+		{"metadata_path", status.MetadataPath},
 		{"metadata_size", size(status.MetadataSize)},
-		{"sidecar_dir", path(status.SidecarDir)},
+		{"sidecar_dir", status.SidecarDir},
 		{"sidecar_size", size(status.SidecarSize)},
 		{"sidecar_count", strconv.Itoa(status.SidecarCount)},
 		{"orphan_sidecars", strconv.Itoa(status.OrphanSidecars)},
 		{"orphan_sidecar_size", size(status.OrphanSidecarSize)},
 		{"visible_entries", strconv.Itoa(status.VisibleEntries)},
-		{"hidden_entries", strconv.Itoa(status.HiddenEntries) + hiddenNote},
+		{"hidden_entries", strconv.Itoa(status.HiddenEntries)},
 		{"empty_entries", strconv.Itoa(status.EmptyEntries)},
 		{"visible_profile_memberships", strconv.Itoa(status.VisibleProfileMemberships)},
 		{"hidden_profile_memberships", strconv.Itoa(status.HiddenProfileMemberships)},
 		{"shared_profile_entries", strconv.Itoa(status.SharedProfileEntries)},
 		{"missing_sidecars", strconv.Itoa(status.MissingSidecars)},
 	}
-	// A terminal reader gets the values in one column; pipes keep the single
-	// space after the colon that scripts have always split on.
-	width := 0
-	if human {
-		for _, field := range fields {
-			width = max(width, len(field[0])+1)
-		}
-	}
 	for _, field := range fields {
-		_, _ = fmt.Fprintf(out, "%-*s %s\n", width, field[0]+":", field[1])
+		_, _ = fmt.Fprintf(out, "%s: %s\n", field[0], field[1])
 	}
 	printTranscriptWarnings(cmd, status.Warnings)
-	if human {
-		printTranscriptRepairHints(out, status)
+}
+
+// writeTranscriptStatusSummary is the status for a person: what the index
+// holds in words rather than the cache's field names, sizes in binary units,
+// and paths under ~. A problem count reads "none" when there is nothing to do,
+// and the repair hints that follow say what clears it when there is. The
+// per-profile membership counts stay in the piped and JSON forms.
+func writeTranscriptStatusSummary(out io.Writer, status transcript.StoreStatus) {
+	sessions := cli.CountOf(status.VisibleEntries, "conversation", "conversations") + " in Past Sessions"
+	if status.EmptyEntries > 0 {
+		sessions += fmt.Sprintf(" (%d not started yet)", status.EmptyEntries)
+	}
+	if status.HiddenEntries > 0 {
+		sessions += fmt.Sprintf("; %d removed from it", status.HiddenEntries)
+	}
+	profiles := "each conversation belongs to one profile"
+	if status.SharedProfileEntries > 0 {
+		profiles = cli.CountOf(status.SharedProfileEntries, "conversation appears", "conversations appear") + " under more than one profile"
+	}
+	orphans := "none"
+	if status.OrphanSidecars > 0 {
+		orphans = fmt.Sprintf("%s (%s) %s to no conversation", cli.CountOf(status.OrphanSidecars, "sidecar", "sidecars"), cli.FormatBytes(status.OrphanSidecarSize), cli.ByCount(status.OrphanSidecars, "belongs", "belong"))
+	}
+	missing := "none"
+	if status.MissingSidecars > 0 {
+		missing = fmt.Sprintf("%s without search text", cli.CountOf(status.MissingSidecars, "conversation", "conversations"))
+	}
+	rows := [][2]string{
+		{"index", fmt.Sprintf("%s (%s)", cli.DisplayPath(status.MetadataPath), cli.FormatBytes(status.MetadataSize))},
+		{"sessions", sessions},
+		{"profiles", profiles},
+		{"search", fmt.Sprintf("%s in %s (%s)", cli.CountOf(status.SidecarCount, "sidecar", "sidecars"), cli.DisplayPath(status.SidecarDir), cli.FormatBytes(status.SidecarSize))},
+		{"orphaned", orphans},
+		{"missing", missing},
+	}
+	for _, row := range rows {
+		_, _ = fmt.Fprintf(out, "%-9s %s\n", row[0]+":", row[1])
+	}
+}
+
+// writeCompactSummary says what compact changed, in words, for a person; the
+// piped form keeps its key/value lines.
+func writeCompactSummary(out io.Writer, result transcript.CompactResult) {
+	_, _ = fmt.Fprintln(out, "Compacted the transcript index.")
+	legacy := "no legacy search text to move"
+	if result.LegacyFields > 0 {
+		legacy = "moved the legacy search text of " + cli.CountOf(result.LegacyFields, "conversation", "conversations") + " into sidecars"
+	}
+	orphans := "no orphan sidecars to remove"
+	if result.RemovedOrphanSidecars > 0 {
+		orphans = fmt.Sprintf("removed %s (%s)", cli.CountOf(result.RemovedOrphanSidecars, "orphan sidecar", "orphan sidecars"), cli.FormatBytes(result.RemovedOrphanSidecarSize))
+	}
+	rows := [][2]string{
+		{"index", fmt.Sprintf("%s, was %s", cli.FormatBytes(result.StatusAfter.MetadataSize), cli.FormatBytes(result.StatusBefore.MetadataSize))},
+		{"legacy", legacy},
+		{"orphaned", orphans},
+		{"search", cli.CountOf(result.StatusAfter.SidecarCount, "sidecar remains", "sidecars remain")},
+	}
+	for _, row := range rows {
+		_, _ = fmt.Fprintf(out, "%-9s %s\n", row[0]+":", row[1])
 	}
 }
 
 // printTranscriptRepairHints names the command that clears each problem the
 // status counts, so a nonzero count is not left for the reader to interpret.
-// Pipes do not get them: scripts split the key/value lines above.
+// Pipes do not get them: scripts split the key/value lines.
 func printTranscriptRepairHints(out io.Writer, status transcript.StoreStatus) {
 	if status.MissingSidecars > 0 {
 		// --all, because a conversation older than the configured scan age is
@@ -173,15 +229,9 @@ func printTranscriptRepairHints(out io.Writer, status transcript.StoreStatus) {
 	}
 }
 
-// transcriptSizeFormatter returns how a byte count is printed: raw bytes for
-// pipes and scripts, which have always parsed them, and a binary-unit size for
-// a person reading a terminal.
-func transcriptSizeFormatter(human bool) func(int64) string {
-	if !human {
-		return func(v int64) string { return strconv.FormatInt(v, 10) }
-	}
-	return cli.FormatBytes
-}
+// rawBytes is how the piped forms print a byte count: the raw number scripts
+// have always parsed. A terminal gets cli.FormatBytes instead.
+func rawBytes(v int64) string { return strconv.FormatInt(v, 10) }
 
 // storeStatusData is the JSON form of a transcript store status. Its keys are
 // the ones the text form prints, so a script can move between the two without
