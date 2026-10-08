@@ -9,6 +9,7 @@ package debug
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 )
@@ -36,11 +37,14 @@ func ASLStatusLine(s *aslbridge.Status) string {
 		detail += fmt.Sprintf("; asl %s protocol %d", s.Version, s.Protocol)
 	}
 	if s.SnapshotAgeSeconds != nil {
-		age := fmt.Sprintf("; snapshot %ds old", *s.SnapshotAgeSeconds)
+		// The bridge publishes a snapshot only when its runs change, so the age
+		// of a current one says how long nothing has moved, not how far behind
+		// the daemon is. Only a stale snapshot is "old".
 		if s.SnapshotStale {
-			age += " (stale)"
+			detail += fmt.Sprintf("; snapshot %s old (stale)", secondsText(*s.SnapshotAgeSeconds))
+		} else {
+			detail += fmt.Sprintf("; snapshot unchanged for %s", secondsText(*s.SnapshotAgeSeconds))
 		}
-		detail += age
 	}
 	if s.RestartCount > 0 {
 		detail += fmt.Sprintf("; restarts %d", s.RestartCount)
@@ -52,6 +56,20 @@ func ASLStatusLine(s *aslbridge.Status) string {
 		detail += "; " + s.Reason
 	}
 	return fmt.Sprintf("%s (%s)", state, detail)
+}
+
+// secondsText renders a whole number of seconds the way Go prints a duration,
+// without the zero units it pads with: 1802 is "30m2s" and 14400 is "4h"
+// rather than "4h0m0s".
+func secondsText(seconds int64) string {
+	text := (time.Duration(seconds) * time.Second).String()
+	if strings.HasSuffix(text, "m0s") {
+		text = strings.TrimSuffix(text, "0s")
+	}
+	if strings.HasSuffix(text, "h0m") {
+		text = strings.TrimSuffix(text, "0m")
+	}
+	return text
 }
 
 // aslActionOutcomes summarizes how the operator's mutations settled. The status

@@ -209,9 +209,9 @@ func writeDebugStatusText(out io.Writer, report debugger.StatusReport) error {
 		if profile.LastSeen != nil {
 			lastSeen = profile.LastSeen.Format(time.RFC3339)
 		}
-		if _, err := fmt.Fprintf(out, "hooks: %s/%s verdict=%s sync=%s activation=%s cli=%s contract=%s last_seen=%s silence=%ds\n",
+		if _, err := fmt.Fprintf(out, "hooks: %s/%s verdict=%s sync=%s activation=%s cli=%s contract=%s last_seen=%s silence_threshold=%s\n",
 			profile.Profile, profile.Harness, profile.Verdict, profile.Sync, profile.Activation,
-			emptyDash(profile.CLIVersion), emptyDash(profile.VerifiedCLIVersion), lastSeen, profile.HookSilenceSeconds); err != nil {
+			emptyDash(profile.CLIVersion), emptyDash(profile.VerifiedCLIVersion), lastSeen, secondsText(profile.HookSilenceSeconds)); err != nil {
 			return err
 		}
 		for _, issue := range profile.Issues {

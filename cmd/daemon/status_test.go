@@ -135,6 +135,7 @@ func TestDaemonStatusCommandWritesToCommandOutput(t *testing.T) {
 
 func TestDaemonStatusRendersASLCapability(t *testing.T) {
 	age := int64(12)
+	quietAge := int64(1802)
 	cases := []struct {
 		name string
 		asl  *aslbridge.Status
@@ -159,6 +160,16 @@ func TestDaemonStatusRendersASLCapability(t *testing.T) {
 			},
 			want: "daemon: running (/tmp/amx.sock)\nready: true\nnotifications: unknown (restart older daemon)\n" +
 				"asl: ready (mode auto at /usr/local/bin/asl; asl 1.2.3 protocol 1)\n",
+		},
+		{
+			name: "connected with a current snapshot that has not changed",
+			asl: &aslbridge.Status{
+				Mode: string(aslbridge.ModeRequired), Command: "asl", Executable: "/usr/local/bin/asl",
+				Available: true, MutationsEnabled: true, Protocol: 2, Version: "0.2.0",
+				SnapshotAgeSeconds: &quietAge,
+			},
+			want: "daemon: running (/tmp/amx.sock)\nready: true\nnotifications: unknown (restart older daemon)\n" +
+				"asl: ready (mode required at /usr/local/bin/asl; asl 0.2.0 protocol 2; snapshot unchanged for 30m2s)\n",
 		},
 		{
 			name: "connected but serving stale data",
