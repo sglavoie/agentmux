@@ -207,7 +207,7 @@ func writeDebugStatusText(out io.Writer, report debugger.StatusReport) error {
 	for _, profile := range report.Hooks.Profiles {
 		lastSeen := "never"
 		if profile.LastSeen != nil {
-			lastSeen = profile.LastSeen.Format(time.RFC3339)
+			lastSeen = profile.LastSeen.Format(time.RFC3339) + " age=" + statusAge(report.GeneratedAt.Sub(*profile.LastSeen))
 		}
 		if _, err := fmt.Fprintf(out, "hooks: %s/%s verdict=%s sync=%s activation=%s cli=%s contract=%s last_seen=%s silence_threshold=%s\n",
 			profile.Profile, profile.Harness, profile.Verdict, profile.Sync, profile.Activation,
@@ -220,17 +220,19 @@ func writeDebugStatusText(out io.Writer, report debugger.StatusReport) error {
 			}
 		}
 	}
-	if _, err := fmt.Fprintf(out, "journal: %s enabled=%t path=%s files=%d records=%d bytes=%d spool=%d spool_bytes=%d total_bytes=%d corrupt=%d quarantined=%d quota=%d\n",
+	journalTotal := report.Journal.Health.Bytes + report.Journal.Health.SpoolBytes
+	if _, err := fmt.Fprintf(out, "journal: %s enabled=%t path=%s files=%d records=%d bytes=%s spool=%d spool_bytes=%s total_bytes=%s corrupt=%d quarantined=%d quota=%s%s\n",
 		report.Journal.Verdict, report.Journal.Enabled, report.Journal.Path,
-		report.Journal.Health.Files, report.Journal.Health.Records, report.Journal.Health.Bytes,
-		report.Journal.Health.SpoolFiles, report.Journal.Health.SpoolBytes,
-		report.Journal.Health.Bytes+report.Journal.Health.SpoolBytes, report.Journal.Health.CorruptLines,
-		report.Journal.Health.QuarantinedFiles, report.Journal.MaxBytes); err != nil {
+		report.Journal.Health.Files, report.Journal.Health.Records, statusBytes(report.Journal.Health.Bytes),
+		report.Journal.Health.SpoolFiles, statusBytes(report.Journal.Health.SpoolBytes),
+		statusBytes(journalTotal), report.Journal.Health.CorruptLines,
+		report.Journal.Health.QuarantinedFiles, statusBytes(report.Journal.MaxBytes), quotaUsed(journalTotal, report.Journal.MaxBytes)); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(out, "native logs: %s enabled=%t path=%s %s bytes=%d quota=%d active_excess=%d\n",
+	if _, err := fmt.Fprintf(out, "native logs: %s enabled=%t path=%s %s bytes=%s quota=%s%s active_excess=%s\n",
 		report.Native.Verdict, report.Native.Enabled, report.Native.Path, report.Native.Summary(),
-		report.Native.Storage.TotalBytes, report.Native.MaxBytes, report.Native.Storage.ActiveExcessBytes); err != nil {
+		statusBytes(report.Native.Storage.TotalBytes), statusBytes(report.Native.MaxBytes),
+		quotaUsed(report.Native.Storage.TotalBytes, report.Native.MaxBytes), statusBytes(report.Native.Storage.ActiveExcessBytes)); err != nil {
 		return err
 	}
 	if len(report.Native.Sessions) > 0 {

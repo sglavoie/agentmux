@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/internal/cli"
 )
 
 // ASLStatusLine renders the optional ASL capability block for text surfaces.
@@ -70,6 +71,28 @@ func secondsText(seconds int64) string {
 		text = strings.TrimSuffix(text, "0m")
 	}
 	return text
+}
+
+// statusBytes is a byte count as one key=value token for a person: "248.1MiB"
+// rather than 260151084, so a store near its quota looks near it. --json
+// keeps the raw counts.
+func statusBytes(v int64) string {
+	return strings.ReplaceAll(cli.FormatBytes(v), " ", "")
+}
+
+// quotaUsed is the " used=97%" a storage line ends its quota with, or nothing
+// when there is no quota to measure against.
+func quotaUsed(total, quota int64) string {
+	if quota <= 0 {
+		return ""
+	}
+	return fmt.Sprintf(" used=%d%%", total*100/quota)
+}
+
+// statusAge is how long before the report a timestamp was, to the second, as
+// secondsText prints it; a clock that ran backwards reads as 0s.
+func statusAge(age time.Duration) string {
+	return secondsText(max(int64(age/time.Second), 0))
 }
 
 // aslActionOutcomes summarizes how the operator's mutations settled. The status

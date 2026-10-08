@@ -180,22 +180,7 @@ func transcriptSizeFormatter(human bool) func(int64) string {
 	if !human {
 		return func(v int64) string { return strconv.FormatInt(v, 10) }
 	}
-	return formatTranscriptBytes
-}
-
-func formatTranscriptBytes(v int64) string {
-	const unit = 1024
-	if v < unit {
-		return fmt.Sprintf("%d B", v)
-	}
-	value, suffix := float64(v)/unit, "KiB"
-	for _, next := range []string{"MiB", "GiB", "TiB"} {
-		if value < unit {
-			break
-		}
-		value, suffix = value/unit, next
-	}
-	return fmt.Sprintf("%.1f %s", value, suffix)
+	return cli.FormatBytes
 }
 
 // storeStatusData is the JSON form of a transcript store status. Its keys are

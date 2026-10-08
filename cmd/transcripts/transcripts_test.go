@@ -316,11 +316,3 @@ func TestTranscriptsStatusNamesTheRepairForEachProblemOnATerminal(t *testing.T) 
 		}
 	}
 }
-
-func TestFormatTranscriptBytes(t *testing.T) {
-	for value, want := range map[int64]string{0: "0 B", 1023: "1023 B", 1024: "1.0 KiB", 25645981: "24.5 MiB", 3 << 30: "3.0 GiB"} {
-		if got := formatTranscriptBytes(value); got != want {
-			t.Errorf("formatTranscriptBytes(%d) = %q, want %q", value, got, want)
-		}
-	}
-}
