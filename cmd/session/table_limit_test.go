@@ -30,14 +30,33 @@ func TestTerminalTableDefaultLimit(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := writeOmittedFooter(&out, 25, 0); err != nil || out.Len() != 0 {
+	if err := writeOmittedFooter(&out, 25, 0, 0); err != nil || out.Len() != 0 {
 		t.Fatalf("nothing omitted wrote %q, %v", out.String(), err)
 	}
-	if err := writeOmittedFooter(&out, 25, 286); err != nil {
+	if err := writeOmittedFooter(&out, 25, 286, 0); err != nil {
 		t.Fatal(err)
 	}
 	if got, want := out.String(), "Showing the 25 most recent of 311; -n N shows more, -n 0 shows all.\n"; got != want {
 		t.Fatalf("footer = %q, want %q", got, want)
+	}
+
+	// Automated sessions --all would add are counted whether or not the
+	// limit cut anything.
+	for _, tc := range []struct {
+		omitted, hidden int
+		want            string
+	}{
+		{0, 1, "1 automated session is hidden; --all includes it.\n"},
+		{0, 85, "85 automated sessions are hidden; --all includes them.\n"},
+		{311, 85, "Showing the 25 most recent of 336; -n N shows more, -n 0 shows all.\n85 automated sessions are hidden; --all includes them.\n"},
+	} {
+		out.Reset()
+		if err := writeOmittedFooter(&out, 25, tc.omitted, tc.hidden); err != nil {
+			t.Fatal(err)
+		}
+		if out.String() != tc.want {
+			t.Fatalf("footer(%d omitted, %d hidden) = %q, want %q", tc.omitted, tc.hidden, out.String(), tc.want)
+		}
 	}
 }
 

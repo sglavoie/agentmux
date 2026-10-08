@@ -110,7 +110,7 @@ line it matched on. The selector flags narrow the search the way they narrow
 			if err := writeSessionSearchTable(out, query, views, abbreviateSessionIDs(idx.List(transcript.ListFilter{})), sessionCommandsNow(), sessionListTerminalWidth(out), liveKnown); err != nil {
 				return err
 			}
-			return writeOmittedFooter(out, len(views), omitted)
+			return writeOmittedFooter(out, len(views), omitted, 0)
 		}
 		// Off a terminal the rows follow `session list`'s piped form, with the
 		// match count before the ID and the matched line last, where a tab or

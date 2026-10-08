@@ -699,6 +699,23 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 		}
 	})
 
+	// A table that hid automated sessions says how many --all would add,
+	// counted under the same selectors, and says nothing once --all is given.
+	t.Run("terminal table counts the automated sessions it hid", func(t *testing.T) {
+		sessionListIsTerminal = func(io.Writer) bool { return true }
+		t.Cleanup(func() { sessionListIsTerminal = func(io.Writer) bool { return false } })
+		out, err := run(t, nil)
+		if err != nil || !strings.HasSuffix(out, "\n1 automated session is hidden; --all includes it.\n") {
+			t.Fatalf("list = %q, %v", out, err)
+		}
+		for _, flags := range []map[string]string{{"all": "true"}, {"harness": "claude"}} {
+			out, err = run(t, flags)
+			if err != nil || strings.Contains(out, "hidden") {
+				t.Fatalf("list %v = %q, %v", flags, out, err)
+			}
+		}
+	})
+
 	// --here alone says which directory it looked in, the way continue --here
 	// refuses, since "match --here" names no directory.
 	t.Run("terminal here alone names the directory", func(t *testing.T) {

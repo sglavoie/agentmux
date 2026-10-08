@@ -90,7 +90,7 @@ var sessionListCmd = &cobra.Command{
 			if err := writeSessionTable(out, views, abbreviateSessionIDs(idx.List(transcript.ListFilter{})), sessionCommandsNow(), sessionListTerminalWidth(out), liveKnown); err != nil {
 				return err
 			}
-			return writeOmittedFooter(out, len(views), omitted)
+			return writeOmittedFooter(out, len(views), omitted, hiddenAutomated(selection, idx))
 		}
 		writeSessionLines(out, views, liveKnown)
 		return nil
@@ -307,14 +307,38 @@ func tableDefaultLimit(cmd *cobra.Command, n int) (keep, omitted int) {
 	return sessionTableRows, n - sessionTableRows
 }
 
-// writeOmittedFooter says how many rows the default limit left out, so a
-// short table is not read as everything there is.
-func writeOmittedFooter(out io.Writer, shown, omitted int) error {
-	if omitted == 0 {
+// writeOmittedFooter says how many rows the default limit left out, and how
+// many automated sessions the same selectors would have found with --all, so
+// a short table is not read as everything there is.
+func writeOmittedFooter(out io.Writer, shown, omitted, hidden int) error {
+	var lines []string
+	if omitted > 0 {
+		lines = append(lines, fmt.Sprintf("Showing the %d most recent of %d; -n N shows more, -n 0 shows all.", shown, shown+omitted))
+	}
+	switch {
+	case hidden == 1:
+		lines = append(lines, "1 automated session is hidden; --all includes it.")
+	case hidden > 1:
+		lines = append(lines, fmt.Sprintf("%d automated sessions are hidden; --all includes them.", hidden))
+	}
+	if len(lines) == 0 {
 		return nil
 	}
-	_, err := fmt.Fprintf(out, "Showing the %d most recent of %d; -n N shows more, -n 0 shows all.\n", shown, shown+omitted)
+	_, err := fmt.Fprintln(out, strings.Join(lines, "\n"))
 	return err
+}
+
+// hiddenAutomated is how many more sessions the selection would find with
+// --all: the automated and unclassified ones it leaves out, under every
+// other selector it was given and regardless of --limit. It is 0 with --all.
+func hiddenAutomated(selection sessionSelection, idx *transcript.Index) int {
+	if !selection.filter.MainOnly {
+		return 0
+	}
+	selection.limit = 0
+	all := selection.filter
+	all.MainOnly = false
+	return len(selection.narrow(idx.List(all))) - len(selection.narrow(idx.List(selection.filter)))
 }
 
 // noSessionsMessage is an empty list's sentence for a person. It names the
@@ -325,12 +349,7 @@ func writeOmittedFooter(out io.Writer, shown, omitted int) error {
 // --here` refuses with, since "match --here" does not say which directory
 // that was.
 func noSessionsMessage(cmd *cobra.Command, selection sessionSelection, idx *transcript.Index) string {
-	automated := false
-	if selection.filter.MainOnly {
-		filter := selection.filter
-		filter.MainOnly = false
-		automated = len(selection.narrow(idx.List(filter))) > 0
-	}
+	automated := hiddenAutomated(selection, idx) > 0
 	flags := selectionFlagsText(cmd)
 	if flags == "--here" && len(selection.here) > 0 {
 		message := "No conversation was started in " + cli.DisplayPath(selection.here[0]) + " or below it"
