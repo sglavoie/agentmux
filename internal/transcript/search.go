@@ -357,18 +357,38 @@ func countMatchesForSource(msgs []Message, terms searchquery.Terms, source strin
 		return countMatches(msgs, terms)
 	}
 	tally := terms.NewTally()
-	var preview string
+	var pick previewPick
 	for _, msg := range msgs {
 		text := msg.SearchTextForSource(source)
-		if first := tally.Add(strings.ToLower(text)); preview == "" && first >= 0 {
-			preview = firstMatchLine(text, originalOffsetForFoldedByte(text, first))
-		}
+		lower := strings.ToLower(text)
+		pick.offer(terms, text, lower, tally.Add(lower))
 	}
 	total := tally.Total()
 	if total == 0 {
 		return 0, ""
 	}
-	return total, preview
+	return total, pick.preview
+}
+
+// previewPick chooses a transcript's preview across its messages: the first
+// line holding every term wherever it occurs, else the first line holding any.
+type previewPick struct {
+	preview  string
+	complete bool
+}
+
+// offer considers one message, given its lowered text and the earliest term
+// occurrence in it.
+func (p *previewPick) offer(terms searchquery.Terms, text, lower string, first int) {
+	if p.complete || first < 0 {
+		return
+	}
+	pos, complete := terms.PreviewAt(lower, first)
+	if !complete && p.preview != "" {
+		return
+	}
+	p.preview = firstMatchLine(text, originalOffsetForFoldedByte(text, pos))
+	p.complete = complete
 }
 
 func messagesSearchText(msgs []Message) string {
@@ -381,9 +401,9 @@ func messagesSearchText(msgs []Message) string {
 
 // countMatchesInSearchText counts case-insensitive occurrences of terms
 // inside the precomputed (already-lowercased) search text, and 0 when any term
-// is absent. The preview is the single line of text containing the first
-// match — necessarily lowercased, since the sidecar is the only source
-// available without re-reading the file.
+// is absent. The preview is the first line holding every term, else the line
+// containing the first match — necessarily lowercased, since the sidecar is the
+// only source available without re-reading the file.
 func countMatchesInSearchText(searchText string, terms searchquery.Terms) (int, string) {
 	if terms.Empty() {
 		return 0, ""
@@ -394,27 +414,27 @@ func countMatchesInSearchText(searchText string, terms searchquery.Terms) (int, 
 	if total == 0 {
 		return 0, ""
 	}
-	return total, firstMatchLine(searchText, first)
+	pos, _ := terms.PreviewAt(searchText, first)
+	return total, firstMatchLine(searchText, pos)
 }
 
 // countMatches walks msgs in order, counting case-insensitive occurrences
 // of terms across each message's Text, and returns 0 when any term is absent
-// from the transcript as a whole. The first line that contains a match is
-// captured as the preview, kept stable so callers see deterministic output for
-// a given input.
+// from the transcript as a whole. The first line holding every term, else the
+// first line that contains a match, is captured as the preview, kept stable so
+// callers see deterministic output for a given input.
 func countMatches(msgs []Message, terms searchquery.Terms) (int, string) {
 	tally := terms.NewTally()
-	var preview string
+	var pick previewPick
 	for _, msg := range msgs {
-		if first := tally.Add(strings.ToLower(msg.Text)); preview == "" && first >= 0 {
-			preview = firstMatchLine(msg.Text, originalOffsetForFoldedByte(msg.Text, first))
-		}
+		lower := strings.ToLower(msg.Text)
+		pick.offer(terms, msg.Text, lower, tally.Add(lower))
 	}
 	total := tally.Total()
 	if total == 0 {
 		return 0, ""
 	}
-	return total, preview
+	return total, pick.preview
 }
 
 // originalOffsetForFoldedByte maps a byte offset in strings.ToLower(text)

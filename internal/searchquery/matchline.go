@@ -47,3 +47,39 @@ func leadIn(lead string) string {
 	}
 	return kept
 }
+
+// PreviewAt picks the offset a result is previewed by, given first, the
+// earliest occurrence of any term in lower (as Tally.Add reports it). A
+// document matches when it holds every term somewhere, so the line showing
+// the first of them is often a line about only one: searching `kitty socket`
+// previewed a line that said "Kitty" and nothing about sockets. The first line
+// holding every term is preferred, entered at its earliest match, and complete
+// reports that one was found; failing one, first is returned unchanged, since
+// the terms may well sit in different lines or different messages.
+func (t Terms) PreviewAt(lower string, first int) (pos int, complete bool) {
+	if first < 0 || len(t) < 2 {
+		return first, first >= 0
+	}
+	for offset := first; offset < len(lower); {
+		i := strings.Index(lower[offset:], t[0])
+		if i < 0 {
+			break
+		}
+		start := strings.LastIndexByte(lower[:offset+i], '\n') + 1
+		end := len(lower)
+		if j := strings.IndexByte(lower[offset+i:], '\n'); j >= 0 {
+			end = offset + i + j
+		}
+		if line := lower[start:end]; t.ContainsAll(line) {
+			earliest := len(line)
+			for _, term := range t {
+				if k := strings.Index(line, term); k >= 0 && k < earliest {
+					earliest = k
+				}
+			}
+			return start + earliest, true
+		}
+		offset = end + 1
+	}
+	return first, false
+}

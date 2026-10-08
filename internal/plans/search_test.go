@@ -461,3 +461,13 @@ func TestPlanSearchPreviewEntersALongLineNearTheMatch(t *testing.T) {
 		t.Fatalf("count = %d, preview = %q; want the line entered near the match", count, preview)
 	}
 }
+
+// A multi-word query previews the line that holds every word, not the first
+// line that happens to hold one of them.
+func TestPlanSearchPreviewPrefersALineHoldingEveryTerm(t *testing.T) {
+	text := "# plan\nthe daemon owns the renderer\nthe socket is private\nthe daemon socket is 0600\n"
+	count, preview := countMatchesInSearchText(text, searchquery.Parse("socket daemon"))
+	if count != 4 || preview != "the daemon socket is 0600" {
+		t.Fatalf("count = %d, preview = %q; want the line holding both words", count, preview)
+	}
+}

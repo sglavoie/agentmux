@@ -223,6 +223,33 @@ func TestSearch_MultiWordQueryRequiresEveryWord(t *testing.T) {
 	}
 }
 
+// A multi-word query previews the first line holding every word, even when it
+// sits in a later message than the first line holding one of them.
+func TestSearch_MultiWordPreviewPrefersALineHoldingEveryWord(t *testing.T) {
+	idx := newTestIndex(t)
+	must(t, idx.SetEntryForTest("claude:hit", SessionMeta{
+		ID: "hit", Harness: harness.Claude, Path: "/tmp/hit.jsonl",
+		LastAt: time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC),
+	}))
+	readers := map[string]Reader{harness.Claude: &dispatchReader{
+		harness: harness.Claude,
+		byPath: map[string][]Message{
+			"/tmp/hit.jsonl": {
+				{Role: "user", Text: "Kitty tabs are colored\nthe socket is closed"},
+				{Role: "assistant", Text: "first\nthe Kitty socket listens on /tmp"},
+			},
+		},
+	}}
+
+	results, err := Search(idx, readers, Query{Text: "kitty socket"})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 1 || results[0].Preview != "the Kitty socket listens on /tmp" {
+		t.Fatalf("results = %+v, want the line holding both words", results)
+	}
+}
+
 func TestSearch_TextPreviewMapsFoldedUnicodeOffset(t *testing.T) {
 	idx := newTestIndex(t)
 	must(t, idx.SetEntryForTest("claude:hit", SessionMeta{
