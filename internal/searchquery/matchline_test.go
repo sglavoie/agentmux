@@ -67,11 +67,21 @@ func TestPreviewAtFallsBackToTheFirstLineHoldingEveryTermInsideWords(t *testing.
 	}
 }
 
-func TestPreviewAtFallsBackToFirstWhenNoLineHoldsEveryTerm(t *testing.T) {
+func TestPreviewAtFallsBackToAWordWhenNoLineHoldsEveryTerm(t *testing.T) {
 	text := "kitty tabs\nsocket closed\n"
 	terms := Parse("kitty socket")
-	if pos, fit := terms.PreviewAt(text, 0); pos != 0 || fit != FitFirst {
-		t.Fatalf("PreviewAt = %d, %v; want first unchanged", pos, fit)
+	if pos, fit := terms.PreviewAt(text, 0); pos != 0 || fit != FitTerm {
+		t.Fatalf("PreviewAt = %d, %v; want first, which starts a word", pos, fit)
+	}
+	tagged := "<send_user_message_reply>\nthe message was sent\ncount them\n"
+	pos, fit := Parse("message count").PreviewAt(tagged, strings.Index(tagged, "message"))
+	if fit != FitTerm || !strings.HasPrefix(tagged[pos:], "message was sent") {
+		t.Fatalf("PreviewAt = %d (%q), %v; want the first term that starts a word", pos, tagged[pos:], fit)
+	}
+	inside := "send_user_message\nrecount\n"
+	first := strings.Index(inside, "message")
+	if pos, fit := Parse("message count").PreviewAt(inside, first); pos != first || fit != FitFirst {
+		t.Fatalf("PreviewAt = %d, %v; want first unchanged when no term starts a word", pos, fit)
 	}
 	if pos, fit := Parse("kitty").PreviewAt(text, 0); pos != 0 || fit != FitWords {
 		t.Fatalf("single term PreviewAt = %d, %v; want first", pos, fit)

@@ -55,8 +55,12 @@ func leadIn(lead string) string {
 type PreviewFit int
 
 const (
-	// FitFirst is the earliest occurrence of any term; no line holds them all.
+	// FitFirst is the earliest occurrence of any term; no line holds them
+	// all, and no term starts a word anywhere.
 	FitFirst PreviewFit = iota
+	// FitTerm is the earliest occurrence of any term that starts a word; no
+	// line holds them all.
+	FitTerm
 	// FitLine is a line holding every term, though one may sit inside a word.
 	FitLine
 	// FitWords is a line where every term starts a word. Nothing fits better.
@@ -72,9 +76,12 @@ const (
 // previewed the file name daemon_state_acceptance_doc_test.go rather than the
 // sentence about the daemon test. So the first line where every term starts a
 // word is preferred (FitWords), then the first line holding every term
-// (FitLine), each entered at its earliest match; failing both, first is
-// returned unchanged (FitFirst), since the terms may well sit in different
-// lines or different messages.
+// (FitLine), each entered at its earliest match. Failing both, the terms may
+// well sit in different lines or different messages, and the first one that
+// starts a word is returned (FitTerm): searching `message count` previewed a
+// tag named <send_user_message_question_reply> rather than a line about
+// messages. Only when no term starts a word is first returned unchanged
+// (FitFirst).
 func (t Terms) PreviewAt(lower string, first int) (pos int, fit PreviewFit) {
 	if first < 0 || t.Empty() {
 		return first, FitFirst
@@ -102,7 +109,24 @@ func (t Terms) PreviewAt(lower string, first int) (pos int, fit PreviewFit) {
 			pos, fit = start+t.earliest(line), FitLine
 		}
 	}
+	if fit == FitFirst {
+		if at := t.earliestWordStart(lower); at >= 0 {
+			return at, FitTerm
+		}
+	}
 	return pos, fit
+}
+
+// earliestWordStart is the offset of the first occurrence of any term in text
+// that starts a word, or -1.
+func (t Terms) earliestWordStart(text string) int {
+	earliest := -1
+	for _, term := range t {
+		if k := wordStart(text, term); k >= 0 && (earliest < 0 || k < earliest) {
+			earliest = k
+		}
+	}
+	return earliest
 }
 
 // earliest is the offset of the first occurrence of any term in line.
