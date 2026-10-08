@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
@@ -14,6 +16,18 @@ type fakeDaemonLifecycleClient struct {
 	sendCalls    []protocol.Request
 	restartErr   error
 	restartCalls []string
+	// healths is answered in order, the last one repeating.
+	healths     []ipc.Health
+	healthCalls int
+}
+
+func (f *fakeDaemonLifecycleClient) Health() ipc.Health {
+	f.healthCalls++
+	if len(f.healths) == 0 {
+		return ipc.Health{Alive: true, PID: 4242, Ready: true}
+	}
+	i := min(f.healthCalls, len(f.healths)) - 1
+	return f.healths[i]
 }
 
 func (f *fakeDaemonLifecycleClient) Send(req protocol.Request) (protocol.Response, error) {
@@ -32,7 +46,13 @@ func resetDaemonLifecycleTestState(t *testing.T) {
 	oldBinary := daemonRestartBinary
 	oldStopOut := daemonStopCmd.OutOrStdout()
 	oldRestartOut := daemonRestartCmd.OutOrStdout()
+	oldWait, oldNow, oldNap := daemonRestartWait, daemonRestartNow, daemonRestartNap
+	// A fake clock that each nap advances keeps the wait loop free of sleeps.
+	clock := time.Unix(0, 0)
+	daemonRestartNow = func() time.Time { return clock }
+	daemonRestartNap = func(d time.Duration) { clock = clock.Add(d) }
 	t.Cleanup(func() {
+		daemonRestartWait, daemonRestartNow, daemonRestartNap = oldWait, oldNow, oldNap
 		newDaemonLifecycleClient = oldClient
 		daemonRestartBinary = oldBinary
 		daemonStopCmd.SetOut(oldStopOut)
@@ -72,7 +92,7 @@ func TestDaemonRestartCommandWritesToCommandOutput(t *testing.T) {
 	if err := daemonRestartCmd.RunE(daemonRestartCmd, nil); err != nil {
 		t.Fatalf("RunE: %v", err)
 	}
-	if got, want := out.String(), "daemon restarted\n"; got != want {
+	if got, want := out.String(), "daemon restarted (pid 4242)\n"; got != want {
 		t.Fatalf("output = %q; want %q", got, want)
 	}
 	if len(client.restartCalls) != 1 || client.restartCalls[0] == "" {
@@ -95,5 +115,46 @@ func TestDaemonRestartRefusesAGoRunBuild(t *testing.T) {
 	}
 	if len(client.restartCalls) != 0 || len(client.sendCalls) != 0 {
 		t.Fatalf("daemon contacted: restarts=%v sends=%v", client.restartCalls, client.sendCalls)
+	}
+}
+
+// The replacement daemon binds its socket a moment after it is spawned, so
+// restart keeps asking until it answers rather than reporting success first.
+func TestDaemonRestartWaitsForTheNewDaemonToAnswer(t *testing.T) {
+	resetDaemonLifecycleTestState(t)
+	client := &fakeDaemonLifecycleClient{healths: []ipc.Health{
+		{}, {}, {}, {Alive: true, PID: 77, DegradedReason: "initial snapshot timed out"},
+	}}
+	newDaemonLifecycleClient = func() daemonLifecycleClient { return client }
+	daemonRestartBinary = func() (string, error) { return "/usr/local/bin/amx", nil }
+
+	var out bytes.Buffer
+	daemonRestartCmd.SetOut(&out)
+	if err := daemonRestartCmd.RunE(daemonRestartCmd, nil); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+	if got, want := out.String(), "daemon restarted (pid 77; not ready: initial snapshot timed out)\n"; got != want {
+		t.Fatalf("output = %q; want %q", got, want)
+	}
+	if client.healthCalls != 4 {
+		t.Fatalf("health calls = %d; want 4", client.healthCalls)
+	}
+}
+
+func TestDaemonRestartFailsWhenTheNewDaemonNeverAnswers(t *testing.T) {
+	resetDaemonLifecycleTestState(t)
+	client := &fakeDaemonLifecycleClient{healths: []ipc.Health{{}}}
+	newDaemonLifecycleClient = func() daemonLifecycleClient { return client }
+	daemonRestartBinary = func() (string, error) { return "/usr/local/bin/amx", nil }
+	daemonRestartWait = time.Second
+
+	var out bytes.Buffer
+	daemonRestartCmd.SetOut(&out)
+	err := daemonRestartCmd.RunE(daemonRestartCmd, nil)
+	if err == nil || !strings.Contains(err.Error(), "did not answer within 1s") {
+		t.Fatalf("RunE error = %v; want a timeout naming the budget", err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("output = %q; want nothing claiming a restart", out.String())
 	}
 }

@@ -15,6 +15,11 @@ amx doctor
 ASL facts in the schema-v1 envelope, plus `asl_reconcile` when the daemon
 reports it. A stopped daemon is a successful answer with `"alive": false`.
 
+`amx daemon restart` returns once the new daemon answers on its socket and
+names its pid (`daemon restarted (pid 4242)`), adding the degraded reason when
+it came up not ready. A daemon that has not answered within 10 seconds fails
+the restart, so a command run right after it never meets a missing socket.
+
 For delivery and state problems, the first-line workflow is offline-first:
 
 ```bash

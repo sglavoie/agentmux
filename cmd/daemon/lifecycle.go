@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/daemon"
@@ -18,10 +19,11 @@ import (
 
 // daemonLifecycleClient is the seam start/stop/restart drive. It is
 // deliberately narrower than the full IPC client: this family only shuts a
-// daemon down and re-execs a new one.
+// daemon down, re-execs a new one, and asks whether it answers.
 type daemonLifecycleClient interface {
 	Send(protocol.Request) (protocol.Response, error)
 	RestartDetached(amxBin string) error
+	Health() ipc.Health
 }
 
 var newDaemonLifecycleClient = func() daemonLifecycleClient { return ipc.NewClient() }
@@ -29,6 +31,16 @@ var newDaemonLifecycleClient = func() daemonLifecycleClient { return ipc.NewClie
 // daemonRestartBinary is the seam tests swap to stand in for the running
 // executable the restart re-execs.
 var daemonRestartBinary = cli.AmxBinary
+
+// daemonRestartWait bounds how long restart waits for the new daemon to
+// answer, and daemonRestartPoll is the pause between attempts. A daemon
+// normally answers within half a second; the budget covers a slow restore.
+var (
+	daemonRestartWait = 10 * time.Second
+	daemonRestartPoll = 50 * time.Millisecond
+	daemonRestartNow  = time.Now
+	daemonRestartNap  = time.Sleep
+)
 
 var daemonStartCmd = &cobra.Command{
 	Use:   "start",
@@ -99,7 +111,42 @@ var daemonRestartCmd = &cobra.Command{
 		if err := c.RestartDetached(amxBin); err != nil {
 			return err
 		}
-		_, err := fmt.Fprintln(cmd.OutOrStdout(), "daemon restarted")
+		// RestartDetached returns once the replacement is spawned, before it
+		// binds its socket. Saying "restarted" then would send the next
+		// command (a doctor, a status check) to a daemon that is not there yet.
+		health, ok := waitForRestartedDaemon(c)
+		if !ok {
+			return fmt.Errorf("daemon restart requested, but the new daemon did not answer within %s; run `amx daemon status` or check the bootstrap log", daemonRestartWait)
+		}
+		_, err := fmt.Fprintf(cmd.OutOrStdout(), "daemon restarted (%s)\n", restartedDetail(health))
 		return err
 	},
+}
+
+// waitForRestartedDaemon polls health until the spawned daemon answers or the
+// budget runs out.
+func waitForRestartedDaemon(c daemonLifecycleClient) (ipc.Health, bool) {
+	deadline := daemonRestartNow().Add(daemonRestartWait)
+	for {
+		if health := c.Health(); health.Alive {
+			return health, true
+		}
+		if !daemonRestartNow().Before(deadline) {
+			return ipc.Health{}, false
+		}
+		daemonRestartNap(daemonRestartPoll)
+	}
+}
+
+// restartedDetail names the new process and, when it came up degraded, why,
+// so a restart that only half worked does not read as a clean one.
+func restartedDetail(health ipc.Health) string {
+	detail := "pid unknown"
+	if health.PID > 0 {
+		detail = fmt.Sprintf("pid %d", health.PID)
+	}
+	if !health.Ready && health.DegradedReason != "" {
+		detail += "; not ready: " + health.DegradedReason
+	}
+	return detail
 }
