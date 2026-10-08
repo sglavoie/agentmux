@@ -145,3 +145,23 @@ func TestFormatSessionRowShowsTheEnding(t *testing.T) {
 		t.Fatalf("a row with no ending grew a separator: %q", row)
 	}
 }
+
+// A summary opened by a command on a long path keeps the path's last element
+// in the row; a search match is shown as matched, path and all.
+func TestFormatSessionRowCutsLongPathsInTheSummary(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	path := home + "/.local/share/agent-plans/4f4e36c66116-93448e2a42c6/"
+	meta := transcript.SessionMeta{
+		Harness: harness.Claude, Project: "amx", Profile: "work",
+		LastAt: time.Now().Add(-2 * time.Hour), Snippet: "/asl run " + path + " --harness claude",
+	}
+	row := FormatRow(transcript.Result{Meta: meta, Preview: meta.Summary()}, nil, 160)
+	if !strings.Contains(row, "/asl run …/4f4e36c66116-93448e2a42c6/ --harness claude") {
+		t.Fatalf("row = %q, want the plan path cut to its last element", row)
+	}
+	match := FormatRow(transcript.Result{Meta: meta, Preview: "run " + path, Matches: 1}, nil, 200)
+	if !strings.Contains(match, "run "+home+"/.local/share") {
+		t.Fatalf("a search row should keep its matched path whole: %q", match)
+	}
+}

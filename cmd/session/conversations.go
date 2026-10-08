@@ -411,8 +411,9 @@ func shellWord(value string) string {
 // "→" and how the conversation ended, and takes whatever the terminal, width
 // cells wide, leaves it; the title is held to two fifths of that so the
 // ending, which is what differs between runs of the same prompt, stays in
-// view. Pipes keep their fields as they were, so the count is a table column
-// only.
+// view. Long paths in it are cut to their last element, which is what tells
+// apart sessions opened by one command on different plans or files. Pipes
+// keep their fields as they were, so the count is a table column only.
 func writeSessionTable(out io.Writer, views []sessionView, ids sessionIDAbbreviations, now time.Time, width int, liveKnown bool) error {
 	if len(views) == 0 {
 		_, err := fmt.Fprintln(out, "No indexed sessions match.")
@@ -422,6 +423,7 @@ func writeSessionTable(out io.Writer, views []sessionView, ids sessionIDAbbrevia
 	if liveKnown {
 		header = []string{"HARNESS", "PROFILE", "PROJECT", "ACTIVE", "LIVE", "MESSAGES", "SESSION", "SUMMARY"}
 	}
+	home, _ := os.UserHomeDir()
 	rows := make([][]string, 0, len(views))
 	for _, item := range views {
 		project := item.Project
@@ -432,6 +434,7 @@ func writeSessionTable(out io.Writer, views []sessionView, ids sessionIDAbbrevia
 		if summary == "" {
 			summary = oneLine(item.Snippet)
 		}
+		summary = transcript.ShortenPaths(summary, home)
 		if summary == "" {
 			summary = "-"
 		}
@@ -740,11 +743,7 @@ func runConversationActionHere(cmd *cobra.Command, jsonOutput bool, name string,
 	}
 	meta := candidates[0]
 	if !jsonOutput {
-		summary := oneLine(meta.Title)
-		if summary == "" {
-			summary = oneLine(meta.Snippet)
-		}
-		summary = layout.Truncate(summary, sessionSummaryWidth, "…")
+		summary := layout.Truncate(oneLine(meta.ShortSummary()), sessionSummaryWidth, "…")
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Picked %s:%s, active %s: %s\n", meta.Harness, meta.ID, formatAgo(meta.LastAt, sessionCommandsNow()), summary)
 	}
 	return executeSessionAction(cmd, jsonOutput, cfg, actionID, actions.Request{Conversation: &meta})

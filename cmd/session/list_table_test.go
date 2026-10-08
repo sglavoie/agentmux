@@ -60,6 +60,23 @@ func TestSessionTableFitsTheSummaryToTheTerminal(t *testing.T) {
 	}
 }
 
+// A session opened by a command on a long path is told apart from its
+// siblings by the path's last element, which the row keeps in view.
+func TestSessionTableCutsLongPathsInTheSummary(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	views := []sessionView{{Harness: "claude", Profile: "p", Project: "x", LastAt: now, ID: "b03c41a5",
+		Snippet: "/asl run " + home + "/.local/share/agent-plans/4f4e36c66116-93448e2a42c6/ --harness claude"}}
+	var out bytes.Buffer
+	if err := writeSessionTable(&out, views, nil, now, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	if want := "b03c41a5  /asl run …/4f4e36c66116-93448e2a42c6/ --harness claude\n"; !strings.HasSuffix(out.String(), want) {
+		t.Fatalf("table = %q, want the row to end %q", out.String(), want)
+	}
+}
+
 func TestSessionTableSaysSoWhenEmpty(t *testing.T) {
 	var out bytes.Buffer
 	if err := writeSessionTable(&out, nil, nil, time.Now(), 0, false); err != nil {

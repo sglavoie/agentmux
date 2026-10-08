@@ -2,6 +2,7 @@ package history
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -61,11 +62,13 @@ func formatRow(res transcript.Result, acctColor map[string]string, maxWidth int,
 	// the summary) follows the summary with how the conversation ended,
 	// which is what tells apart runs started from the same prompt.
 	preview, ending := res.Preview, ""
-	if res.Matches == 0 {
-		ending = res.Meta.Ending
-	}
 	if preview == "" {
 		preview = res.Meta.Summary()
+	}
+	if res.Matches == 0 {
+		ending = res.Meta.Ending
+		home, _ := os.UserHomeDir()
+		preview = transcript.ShortenPaths(preview, home)
 	}
 
 	body := "  " + when
