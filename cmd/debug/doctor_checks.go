@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -478,7 +479,13 @@ func writeDoctorRunningBinary(reportNote func(string, ...any)) {
 		cli.DisplayPath(running), cli.DisplayPath(installed))
 }
 
-func writeDoctorSocketStatus(out io.Writer, reportIssue func(string, ...any)) error {
+// writeDoctorSocketStatus reports whether the daemon behind the socket is the
+// installed amx. A daemon that reports a content hash is compared with the
+// installed binary's own hash, which is the question "restart daemon" answers;
+// modification times are only the fallback for a daemon that is not running
+// or predates hashing, because a rebuild, a copy, or a touch moves them
+// without changing which build is running.
+func writeDoctorSocketStatus(out io.Writer, daemonBuild *buildinfo.Info, reportIssue func(string, ...any)) error {
 	socketPath := doctorSocketPath()
 	socketInfo, socketErr := doctorStat(socketPath)
 	if socketErr != nil {
@@ -487,11 +494,22 @@ func writeDoctorSocketStatus(out io.Writer, reportIssue func(string, ...any)) er
 		return err
 	}
 
-	binary, binaryErr := doctorExecutable()
+	_, binary, _, binaryErr := doctorExpectedBinary()
 	if binaryErr != nil {
-		_, err := fmt.Fprintf(out, "socket: %s (binary mtime unavailable: %s)\n", socketPath, binaryErr)
-		reportIssue("daemon binary mtime is unavailable: %s", binaryErr)
+		_, err := fmt.Fprintf(out, "socket: %s (binary unavailable: %s)\n", socketPath, binaryErr)
+		reportIssue("installed amx binary is unavailable: %s", binaryErr)
 		return err
+	}
+	if daemonBuild != nil && daemonBuild.BinaryHash != "" {
+		if installedHash := doctorHashFile(binary); installedHash != "" {
+			state := "current"
+			if installedHash != daemonBuild.BinaryHash {
+				state = "daemon runs another build; restart daemon"
+				reportIssue("the daemon is not running the installed amx at %s; run `amx daemon restart`", cli.DisplayPath(binary))
+			}
+			_, err := fmt.Fprintf(out, "socket: %s (%s)\n", socketPath, state)
+			return err
+		}
 	}
 	binaryInfo, binaryStatErr := doctorStat(binary)
 	if binaryStatErr != nil {

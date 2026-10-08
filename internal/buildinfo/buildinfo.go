@@ -88,6 +88,13 @@ func hashExecutable() string {
 	if err != nil {
 		return ""
 	}
+	return HashFile(path)
+}
+
+// HashFile returns the hex SHA-256 of the file at path, the same content hash
+// BinaryHash carries, or "" when the file cannot be read. It lets a caller ask
+// whether a binary on disk is the artifact a running process reported.
+func HashFile(path string) string {
 	f, err := os.Open(path)
 	if err != nil {
 		return ""

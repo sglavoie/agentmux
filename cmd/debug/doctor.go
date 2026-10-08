@@ -58,6 +58,7 @@ var (
 	doctorLookPath        = exec.LookPath
 	doctorSocketPath      = ipc.SocketPath
 	doctorStat            = os.Stat
+	doctorHashFile        = buildinfo.HashFile
 	doctorNow             = time.Now
 	doctorCLIBuild        = buildinfo.Current
 	doctorDiagnosticPaths = diagnostics.DefaultPaths
@@ -229,7 +230,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	writeDoctorRunningBinary(func(format string, args ...any) {
 		addFinding(severityInfo, "uninstalled_binary", format, args...)
 	})
-	if err := writeDoctorSocketStatus(textOut, reportIssue("socket")); err != nil {
+	if err := writeDoctorSocketStatus(textOut, health.Build, reportIssue("socket")); err != nil {
 		return err
 	}
 

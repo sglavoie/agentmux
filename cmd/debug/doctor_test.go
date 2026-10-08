@@ -33,6 +33,7 @@ func resetDoctorTestState(t *testing.T) {
 	oldDoctorLookPath := doctorLookPath
 	oldSocketPath := doctorSocketPath
 	oldStat := doctorStat
+	oldHashFile := doctorHashFile
 	oldNow := doctorNow
 	oldCLIBuild := doctorCLIBuild
 	oldDiagnosticPaths := doctorDiagnosticPaths
@@ -55,6 +56,7 @@ func resetDoctorTestState(t *testing.T) {
 		doctorLookPath = oldDoctorLookPath
 		doctorSocketPath = oldSocketPath
 		doctorStat = oldStat
+		doctorHashFile = oldHashFile
 		doctorNow = oldNow
 		doctorCLIBuild = oldCLIBuild
 		doctorDiagnosticPaths = oldDiagnosticPaths
@@ -78,6 +80,9 @@ func resetDoctorTestState(t *testing.T) {
 	// Likewise the amx on PATH: an installed amx must not make every test
 	// binary read as a foreign one.
 	doctorLookPath = func(string) (string, error) { return "", exec.ErrNotFound }
+	// Test binaries are empty files whose hash no fake daemon reports, so the
+	// socket check falls back to modification times unless a test opts in.
+	doctorHashFile = func(string) string { return "" }
 	diagnosticRoot := filepath.Join(t.TempDir(), "diagnostics")
 	doctorDiagnosticPaths = func() (diagnostics.Paths, error) {
 		return diagnostics.PathsForRoot(diagnosticRoot), nil
@@ -497,3 +502,59 @@ func TestDoctorHooksNamesAnUnusedProfileAsANote(t *testing.T) {
 	}
 }
 
+// The socket check asks whether the daemon runs the installed amx, so it
+// compares content hashes: a newer modification time on an identical build is
+// not a reason to restart, a different build is, and a doctor run from some
+// other build judges the installed amx rather than itself.
+func TestDoctorSocketJudgesTheDaemonBuildAgainstTheInstalledBinary(t *testing.T) {
+	resetDoctorTestState(t)
+	root := t.TempDir()
+	installed := filepath.Join(root, "bin", "amx")
+	dev := filepath.Join(root, "checkout", "amx")
+	socket := filepath.Join(root, "daemon.sock")
+	for _, path := range []string{installed, dev, socket} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, nil, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Both binaries are newer than the socket, which the mtime rule alone
+	// would report as a stale daemon.
+	newer := time.Now().Add(time.Hour)
+	for _, path := range []string{installed, dev} {
+		if err := os.Chtimes(path, newer, newer); err != nil {
+			t.Fatal(err)
+		}
+	}
+	doctorSocketPath = func() string { return socket }
+	doctorExecutable = func() (string, error) { return dev, nil }
+	doctorLookPath = func(string) (string, error) { return installed, nil }
+	hashes := map[string]string{installed: "installed-hash", dev: "dev-hash"}
+	doctorHashFile = func(path string) string { return hashes[path] }
+
+	check := func(daemonHash string) (string, []string) {
+		var out strings.Builder
+		var issues []string
+		build := &buildinfo.Info{BinaryHash: daemonHash}
+		if err := writeDoctorSocketStatus(&out, build, func(format string, args ...any) {
+			issues = append(issues, fmt.Sprintf(format, args...))
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return out.String(), issues
+	}
+
+	if out, issues := check("installed-hash"); !strings.Contains(out, "(current)") || len(issues) != 0 {
+		t.Fatalf("daemon running the installed build: out %q, issues %q; want current with no issue", out, issues)
+	}
+	out, issues := check("dev-hash")
+	if !strings.Contains(out, "restart daemon") || len(issues) != 1 || !strings.Contains(issues[0], "not running the installed amx") {
+		t.Fatalf("daemon running another build: out %q, issues %q; want one restart issue", out, issues)
+	}
+	// A daemon that reports no hash falls back to modification times.
+	if out, issues := check(""); !strings.Contains(out, "older than binary") || len(issues) != 1 {
+		t.Fatalf("hash-less daemon: out %q, issues %q; want the mtime fallback", out, issues)
+	}
+}
