@@ -22,20 +22,23 @@ const (
 // from the TUI) and is preserved across rescans so old sessions do not
 // resurrect when the underlying file is still present.
 type SessionMeta struct {
-	ID           string    `json:"id"`
-	Harness      string    `json:"harness"`
-	Profile      string    `json:"profile"`
-	Profiles     []string  `json:"profiles,omitempty"`
-	Project      string    `json:"project"`
-	Projects     []string  `json:"projects,omitempty"`
-	CWD          string    `json:"cwd"`
-	StartedAt    time.Time `json:"started_at"`
-	LastAt       time.Time `json:"last_at"`
-	Path         string    `json:"path"`
-	FileSize     int64     `json:"file_size"`
-	FileModTime  time.Time `json:"file_mod_time"`
-	MessageCount int       `json:"message_count"`
-	Snippet      string    `json:"snippet"`
+	ID          string    `json:"id"`
+	Harness     string    `json:"harness"`
+	Profile     string    `json:"profile"`
+	Profiles    []string  `json:"profiles,omitempty"`
+	Project     string    `json:"project"`
+	Projects    []string  `json:"projects,omitempty"`
+	CWD         string    `json:"cwd"`
+	StartedAt   time.Time `json:"started_at"`
+	LastAt      time.Time `json:"last_at"`
+	Path        string    `json:"path"`
+	FileSize    int64     `json:"file_size"`
+	FileModTime time.Time `json:"file_mod_time"`
+	// MessageCount is the prompts and replies that carry text, the messages
+	// session show --last prints; tool calls and their results are not
+	// counted.
+	MessageCount int    `json:"message_count"`
+	Snippet      string `json:"snippet"`
 	// Title is the name the harness itself gave the conversation: the one
 	// an operator set with /rename, else the one Claude Code generated, or
 	// Codex's thread name. Empty when the harness named it nothing. Unlike

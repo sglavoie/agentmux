@@ -380,7 +380,9 @@ func (r CodexReader) parseFile(path string, info os.FileInfo) (SessionMeta, erro
 				continue
 			}
 			if text, user := cleanCodexUserMessage(p); user {
-				meta.MessageCount++
+				if text != "" {
+					meta.MessageCount++
+				}
 				if meta.Snippet == "" && text != "" {
 					meta.Snippet = truncateSnippet(text)
 				}
@@ -396,10 +398,10 @@ func (r CodexReader) parseFile(path string, info os.FileInfo) (SessionMeta, erro
 				if p.Role != "assistant" {
 					continue
 				}
-				meta.MessageCount++
 				if text := flattenCodexContent(p.Content); text != "" {
 					appendSearchText(&searchBuf, text)
 					if strings.TrimSpace(text) != "" {
+						meta.MessageCount++
 						meta.Ending = truncateSnippet(strings.TrimSpace(text))
 					}
 				}
@@ -505,5 +507,6 @@ func parseCodexTimestamp(s string) (time.Time, bool) {
 
 // codexReaderVersion is the version of the Codex metadata rules parseFile
 // applies. Version 1 added Ending; entries cached before it carry 0 and are
-// reparsed once by cachePredatesRules.
-const codexReaderVersion = 1
+// reparsed once by cachePredatesRules. Version 2 counts only messages with
+// text, the ones session show --last prints.
+const codexReaderVersion = 2

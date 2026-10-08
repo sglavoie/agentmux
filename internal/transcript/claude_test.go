@@ -519,6 +519,42 @@ func TestClaudeReader_EndingIsTheLastProseReply(t *testing.T) {
 	}
 }
 
+// The message count is the prompts and replies with prose, the same messages
+// session show --last prints. Tool calls, tool results, and turns that only
+// thought are records of their own in a Claude transcript and are left out.
+func TestClaudeReader_MessageCountLeavesOutToolRecords(t *testing.T) {
+	lines := []string{
+		`{"type":"user","message":{"role":"user","content":"Tighten the parser"},"timestamp":"2026-05-24T17:37:46.000Z","cwd":"/tmp/p"}`,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{}}]},"timestamp":"2026-05-24T17:37:47.000Z"}`,
+		`{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]},"timestamp":"2026-05-24T17:37:48.000Z"}`,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"done"}]},"timestamp":"2026-05-24T17:37:49.000Z"}`,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Fixed it."}]},"timestamp":"2026-05-24T17:37:50.000Z"}`,
+	}
+	root := t.TempDir()
+	path := filepath.Join(root, "projects", "-tmp-p", "s.jsonl")
+	writeTranscript(t, path, strings.Join(lines, "\n")+"\n")
+	metas, err := NewClaudeReader().Discover(root, DiscoverOptions{})
+	if err != nil || len(metas) != 1 {
+		t.Fatalf("Discover = %d sessions, %v; want 1", len(metas), err)
+	}
+	if got := metas[0].MessageCount; got != 2 {
+		t.Fatalf("MessageCount = %d, want 2 (the prompt and the prose reply)", got)
+	}
+	messages, err := NewClaudeReader().ReadMessages(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shown := 0
+	for _, message := range messages {
+		if text, ok := message.TextForHandoff(); ok && strings.TrimSpace(text) != "" {
+			shown++
+		}
+	}
+	if shown != metas[0].MessageCount {
+		t.Fatalf("MessageCount = %d, but %d messages have text to show", metas[0].MessageCount, shown)
+	}
+}
+
 func TestCacheFromBeforeEndingsIsReparsedForEveryHarness(t *testing.T) {
 	for _, tc := range []struct {
 		harness string

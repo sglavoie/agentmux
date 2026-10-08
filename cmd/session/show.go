@@ -121,8 +121,7 @@ func lastConversationMessages(messages []transcript.Message, n int) *sessionMess
 }
 
 // writeSessionMessages prints the tail under the metadata: a heading that says
-// how much of the conversation it is (counted in user and assistant messages,
-// since the messages field above also counts tool records), then each message whole behind a role
+// how much of the conversation it is, then each message whole behind a role
 // and time line. Messages are not truncated; asking for them is asking to
 // read them.
 func writeSessionMessages(out io.Writer, tail sessionMessageTail, now time.Time) error {

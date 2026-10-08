@@ -229,7 +229,7 @@ func (r ClaudeReader) parseFile(path string, info os.FileInfo, encodedDir string
 			}
 			meta.LastAt = ts
 		}
-		if !rec.IsMeta && (rec.Type == "user" || rec.Type == "assistant") {
+		if claudeCountsAsMessage(rec) {
 			meta.MessageCount++
 		}
 		if !rec.IsMeta && rec.Message != nil && (rec.Type == "user" || rec.Type == "assistant") {
@@ -324,10 +324,25 @@ func claudeSlashCommand(text string) (command string, withArgs, ok bool) {
 	return name, false, true
 }
 
+// claudeCountsAsMessage reports a record that is one of the conversation's
+// messages: a prompt or a reply with prose in it, the messages session show
+// --last prints. Tool calls and tool results are records of their own in
+// Claude transcripts, and counting them made a short exchange that ran many
+// tools read as a long conversation.
+func claudeCountsAsMessage(rec claudeRecord) bool {
+	msg, ok := messageFromRecord(rec)
+	if !ok {
+		return false
+	}
+	text, ok := msg.TextForHandoff()
+	return ok && strings.TrimSpace(text) != ""
+}
+
 // claudeReaderVersion is the version of the Claude metadata rules parseFile
 // applies. Version 1 added Title; version 2 added Ending; version 3 indexes
-// slash commands and their output as read rather than as tag markup.
-const claudeReaderVersion = 3
+// slash commands and their output as read rather than as tag markup; version
+// 4 counts only messages with prose, leaving out tool calls and results.
+const claudeReaderVersion = 4
 
 // cachePredatesRules reports a cached entry its harness's reader would no
 // longer produce, so Refresh reparses it once instead of trusting the cache.
