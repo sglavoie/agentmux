@@ -87,12 +87,12 @@ const (
 // refuses a settle on screen evidence, and the whole argument for that refusal
 // is what a REAL Copilot pane looks like — a permission prompt Copilot's own
 // transcript structurally cannot report. A screen hand-written here to look
-// like Copilot would assert the daemon against this file's idea of the
-// harness, which is the exact failure CLAUDE.md's capture-first rule exists to
-// prevent ("all three provisional clauses were wrong in kind"). Sharing the one
-// committed capture also means a re-capture for a new Copilot release moves the
-// adapter's fixtures and the daemon's evidence together instead of leaving this
-// package asserting bytes Copilot no longer draws.
+// like Copilot would assert the daemon against this file's idea of the harness,
+// which is the exact failure the capture-first rule in docs/adding-a-harness.md
+// exists to prevent ("all three provisional clauses were wrong in kind").
+// Sharing the one committed capture also means a re-capture for a new Copilot
+// release moves the adapter's fixtures and the daemon's evidence together
+// instead of leaving this package asserting bytes Copilot no longer draws.
 //
 // It fails rather than skips: a missing capture means the shared fixture moved,
 // and silently degrading to "no screen" would turn every refusal assertion

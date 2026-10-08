@@ -1,47 +1,35 @@
 package hookevent
 
-import "testing"
+import (
+	"testing"
 
-// TestResolveAction_CLAUDEMdEventCoverage pins that every hook event listed in
-// CLAUDE.md (the canonical event set Agent Mux installs via hooks-sync)
-// resolves to a non-empty action through ResolveAction. Any event that lands
-// in the installed hooks file but isn't mapped here would silently no-op on
-// fire, masking icon transitions the user expects.
+	"github.com/sglavoie/agentmux/internal/harness"
+)
+
+// TestResolveAction_InstalledClaudeEventCoverage pins that every state-changing
+// event the Claude hook contract installs through hooks-sync resolves to a
+// non-empty action through ResolveAction. An event that lands in the installed
+// hooks file but isn't mapped here would silently no-op on fire, masking icon
+// transitions the user expects.
 //
-// The list is intentionally a literal copy of the CLAUDE.md list, not derived
-// from eventToAction — so a future change that drops an event from the table
-// without removing it from CLAUDE.md surfaces as a test failure.
-func TestResolveAction_CLAUDEMdEventCoverage(t *testing.T) {
-	events := []string{
-		"SessionStart",
-		"Setup",
-		"UserPromptSubmit",
-		"UserPromptExpansion",
-		"PreToolUse",
-		"SubagentStart",
-		"SubagentStop",
-		"PostToolUse",
-		"PostToolUseFailure",
-		"PostToolBatch",
-		"PermissionRequest",
-		"PermissionDenied",
-		"Stop",
-		"StopFailure",
-		"TaskCreated",
-		"TaskCompleted",
-		"TeammateIdle",
-		"SessionEnd",
-		"Notification",
-		"ConfigChange",
-		"PreCompact",
-		"PostCompact",
-		"Elicitation",
-		"ElicitationResult",
+// The events are read from the contract rather than copied here, so adding an
+// installed event without mapping it fails this test. Observer-only events are
+// recorded without changing state and need no action.
+func TestResolveAction_InstalledClaudeEventCoverage(t *testing.T) {
+	var events []string
+	for _, event := range harness.Lookup(harness.Claude).HookContract().EventMatrix() {
+		if event.Installation == harness.HookInstalled && event.Behavior == harness.HookStateChanging {
+			events = append(events, event.CanonicalName)
+		}
+	}
+	// Guards against a contract change that would leave nothing to check.
+	if len(events) < 20 {
+		t.Fatalf("Claude contract installs %d state-changing events, want the full set: %v", len(events), events)
 	}
 	for _, event := range events {
 		action, ok := ResolveAction(event, HookPayload{})
 		if !ok || action == "" {
-			t.Errorf("CLAUDE.md hook event %q does not resolve to an action (got %q, ok=%v)", event, action, ok)
+			t.Errorf("installed Claude hook event %q does not resolve to an action (got %q, ok=%v)", event, action, ok)
 		}
 	}
 }
