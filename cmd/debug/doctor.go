@@ -278,6 +278,8 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		addFinding(severityWarning, "hooks_unverified", format, args...)
 	}, func(format string, args ...any) {
 		addFinding(severityInfo, "hooks_contract_ahead", format, args...)
+	}, func(format string, args ...any) {
+		addFinding(severityInfo, "hooks_unused", format, args...)
 	}, func(severity, format string, args ...any) {
 		addFinding(severity, "hook_delivery_failures", format, args...)
 	}); err != nil {

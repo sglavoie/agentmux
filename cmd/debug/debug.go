@@ -209,10 +209,20 @@ func writeDebugStatusText(out io.Writer, report debugger.StatusReport) error {
 		if profile.LastSeen != nil {
 			lastSeen = profile.LastSeen.Format(time.RFC3339) + " age=" + statusAge(report.GeneratedAt.Sub(*profile.LastSeen))
 		}
-		if _, err := fmt.Fprintf(out, "hooks: %s/%s verdict=%s sync=%s activation=%s cli=%s contract=%s last_seen=%s silence_threshold=%s\n",
-			profile.Profile, profile.Harness, profile.Verdict, profile.Sync, profile.Activation,
+		unused := ""
+		if profile.Unused {
+			unused = " unused=true"
+		}
+		if _, err := fmt.Fprintf(out, "hooks: %s/%s verdict=%s sync=%s activation=%s%s cli=%s contract=%s last_seen=%s silence_threshold=%s\n",
+			profile.Profile, profile.Harness, profile.Verdict, profile.Sync, profile.Activation, unused,
 			emptyDash(profile.CLIVersion), emptyDash(profile.VerifiedCLIVersion), lastSeen, secondsText(profile.HookSilenceSeconds)); err != nil {
 			return err
+		}
+		if profile.Unused {
+			if _, err := fmt.Fprintf(out, "  - %s\n", debugger.UnusedHookProfileDetail); err != nil {
+				return err
+			}
+			continue
 		}
 		for _, issue := range profile.Issues {
 			if _, err := fmt.Fprintf(out, "  - [%s] %s\n", issue.Code, issue.Message); err != nil {

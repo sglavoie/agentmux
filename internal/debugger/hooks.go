@@ -52,12 +52,20 @@ type HookProfile struct {
 	Silent             bool                    `json:"silent"`
 	Issues             []HookIssue             `json:"issues,omitempty"`
 	CheckError         string                  `json:"check_error,omitempty"`
-	Verdict            Verdict                 `json:"verdict"`
+	// Unused marks an installed profile that nothing has exercised: no
+	// configured project launches it and no hook event from its home dir has
+	// ever been observed. Its activation stays unverified, but there is nothing
+	// to verify yet, so the verdict is healthy and surfaces report it as a note.
+	Unused  bool    `json:"unused,omitempty"`
+	Verdict Verdict `json:"verdict"`
 }
 
 func (p HookProfile) Detail() string {
 	if p.CheckError != "" {
 		return p.CheckError
+	}
+	if p.Unused {
+		return UnusedHookProfileDetail
 	}
 	if len(p.Issues) == 0 {
 		return p.Path
@@ -83,6 +91,10 @@ func (p HookProfile) Detail() string {
 	}
 	return strings.Join(parts, "; ")
 }
+
+// UnusedHookProfileDetail is the sentence every surface prints for an Unused
+// profile in place of its evidence gaps.
+const UnusedHookProfileDetail = "not in use: no configured project launches this profile and no hook event from it has been observed"
 
 // hookDetailRepeatLimit is how many issues sharing one code Detail spells out
 // before summarizing the rest as a count.
@@ -222,6 +234,8 @@ func hookReportFromStatuses(cfg *config.Config, now time.Time, statuses []hooks.
 			profile.Verdict = VerdictFailure
 		case status.Status != hooks.SyncInSync || status.Activation == hooks.ActivationFailure:
 			profile.Verdict = VerdictFailure
+		case status.Activation == hooks.ActivationUnverified && unusedProfile(cfg, status):
+			profile.Unused = true
 		case status.Activation == hooks.ActivationUnverified || profile.Silent:
 			profile.Verdict = VerdictWarning
 		}
@@ -232,6 +246,31 @@ func hookReportFromStatuses(cfg *config.Config, now time.Time, statuses []hooks.
 		report.Verdict = VerdictFailure
 	}
 	return report
+}
+
+// unusedProfile reports whether an in-sync profile's only activation gaps are
+// the ones an idle profile always has — no hook evidence yet, and a CLI newer
+// than the contract that no event has confirmed — while no configured project
+// launches it. A real activation problem, any hook event ever seen, or a
+// project that names the profile keeps the warning, because then the operator
+// is relying on these hooks.
+func unusedProfile(cfg *config.Config, status hooks.AccountStatus) bool {
+	if !status.LastSeen.IsZero() {
+		return false
+	}
+	for _, issue := range status.ActivationIssues {
+		switch issue.Code {
+		case "last_seen_missing", "last_seen_horizon", "contract_stale":
+		default:
+			return false
+		}
+	}
+	for _, project := range cfg.Projects {
+		if project.EffectiveProfile() == status.Account {
+			return false
+		}
+	}
+	return true
 }
 
 func hookSilenceSeconds(cfg *config.Config, profile string) int64 {

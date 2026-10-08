@@ -315,7 +315,7 @@ func doctorVerdict(findings []doctorFinding) string {
 // one per profile.
 func doctorFindingLines(findings []doctorFinding, severity string) []string {
 	const hooksPrefix = "hooks for "
-	infixes := map[string]string{"hooks": " require attention: ", "hooks_unverified": " are unverified: ", "hooks_contract_ahead": " are ahead of the verified contract: "}
+	infixes := map[string]string{"hooks": " require attention: ", "hooks_unverified": " are unverified: ", "hooks_contract_ahead": " are ahead of the verified contract: ", "hooks_unused": " are not in use: "}
 	var lines []string
 	groupLine := map[string]int{}
 	groupProfiles := map[string][]string{}
@@ -543,7 +543,7 @@ func checkDoctorConfigFreshness(uptime time.Duration, addFinding func(severity, 
 // the profiles that need a look are the ones left standing on their own. A
 // profile ahead of the verified contract is still healthy and counted: its
 // line never said so, and the note it raises is a finding of its own.
-func writeDoctorHooks(out io.Writer, verbose bool, daemonStartedAt time.Time, reportIssue func(string, ...any), reportUnverified func(string, ...any), reportNote func(string, ...any), reportDelivery func(severity, format string, args ...any)) error {
+func writeDoctorHooks(out io.Writer, verbose bool, daemonStartedAt time.Time, reportIssue func(string, ...any), reportUnverified func(string, ...any), reportNote func(string, ...any), reportUnused func(string, ...any), reportDelivery func(severity, format string, args ...any)) error {
 	cfg, err := doctorLoadConfig()
 	if err != nil {
 		if _, writeErr := fmt.Fprintf(out, "hooks: config unavailable (%s)\n", err); writeErr != nil {
@@ -567,7 +567,7 @@ func writeDoctorHooks(out io.Writer, verbose bool, daemonStartedAt time.Time, re
 			return err
 		}
 	}
-	if err := writeDoctorHookProfiles(out, report.Profiles, verbose, reportIssue, reportUnverified, reportNote); err != nil {
+	if err := writeDoctorHookProfiles(out, report.Profiles, verbose, reportIssue, reportUnverified, reportNote, reportUnused); err != nil {
 		return err
 	}
 	if failures := report.DeliveryFailures; failures != nil && failures.Count > 0 {
@@ -592,9 +592,9 @@ func writeDoctorHooks(out io.Writer, verbose bool, daemonStartedAt time.Time, re
 
 // writeDoctorHookProfiles is writeDoctorHooks' per-profile half, separate so
 // the summary rule can be exercised against any mix of verdicts.
-func writeDoctorHookProfiles(out io.Writer, profiles []debugger.HookProfile, verbose bool, reportIssue func(string, ...any), reportUnverified func(string, ...any), reportNote func(string, ...any)) error {
+func writeDoctorHookProfiles(out io.Writer, profiles []debugger.HookProfile, verbose bool, reportIssue func(string, ...any), reportUnverified func(string, ...any), reportNote func(string, ...any), reportUnused func(string, ...any)) error {
 	quiet := func(status debugger.HookProfile) bool {
-		return status.CheckError == "" && status.Verdict == debugger.VerdictHealthy
+		return status.CheckError == "" && status.Verdict == debugger.VerdictHealthy && !status.Unused
 	}
 	summarized := 0
 	if !verbose {
@@ -618,6 +618,15 @@ func writeDoctorHookProfiles(out io.Writer, profiles []debugger.HookProfile, ver
 				return err
 			}
 			reportIssue("hooks for %s cannot be checked: %s", status.Profile, status.CheckError)
+			continue
+		}
+		if status.Unused {
+			// Healthy, but not "active": nothing has exercised these hooks, so
+			// the summary count would claim more than doctor knows.
+			if _, err := fmt.Fprintf(out, "hooks: %s (%s): in sync, not in use\n", status.Profile, status.Harness); err != nil {
+				return err
+			}
+			reportUnused("hooks for %s are not in use: no configured project launches the profile and no hook event from it has been observed; remove the profile with `amx config edit` if it is not needed", status.Profile)
 			continue
 		}
 		if _, err := fmt.Fprintf(out, "hooks: %s (%s): %s\n", status.Profile, status.Harness, doctorHookState(status.Sync, status.Activation)); err != nil {

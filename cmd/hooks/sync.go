@@ -103,7 +103,11 @@ var configHooksStatusCmd = &cobra.Command{
 				needsAttention = true
 				continue
 			}
-			rows = append(rows, []string{s.Profile, s.Harness, string(s.Sync), string(s.Activation), s.Detail()})
+			activation := string(s.Activation)
+			if s.Unused {
+				activation = "unused"
+			}
+			rows = append(rows, []string{s.Profile, s.Harness, string(s.Sync), activation, s.Detail()})
 			if s.Verdict != debugger.VerdictHealthy {
 				needsAttention = true
 			}

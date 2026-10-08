@@ -245,7 +245,7 @@ func TestDoctorReportsVerifiedDisabledHooksAsFailure(t *testing.T) {
 	var failures []string
 	err := writeDoctorHooks(&out, false, time.Time{}, func(format string, args ...any) {
 		failures = append(failures, fmt.Sprintf(format, args...))
-	}, func(string, ...any) {}, func(string, ...any) {}, func(string, string, ...any) {})
+	}, func(string, ...any) {}, func(string, ...any) {}, func(string, ...any) {}, func(string, string, ...any) {})
 	if err != nil {
 		t.Fatalf("writeDoctorHooks: %v", err)
 	}
@@ -322,7 +322,7 @@ func TestDoctorHooksSummarizesDroppedDeliveries(t *testing.T) {
 				t.Errorf("unexpected failure finding: %s", fmt.Sprintf(format, args...))
 			}, func(format string, args ...any) {
 				t.Errorf("delivery failures reported as hooks_unverified: %s", fmt.Sprintf(format, args...))
-			}, func(string, ...any) {}, func(severity, format string, args ...any) {
+			}, func(string, ...any) {}, func(string, ...any) {}, func(severity, format string, args ...any) {
 				severities = append(severities, severity)
 			})
 			if err != nil {
@@ -447,7 +447,7 @@ func TestDoctorHooksSummarizesHealthyProfiles(t *testing.T) {
 		t.Helper()
 		var out bytes.Buffer
 		ignore := func(string, ...any) {}
-		if err := writeDoctorHookProfiles(&out, profiles, verbose, ignore, ignore, ignore); err != nil {
+		if err := writeDoctorHookProfiles(&out, profiles, verbose, ignore, ignore, ignore, ignore); err != nil {
 			t.Fatal(err)
 		}
 		return out.String()
@@ -468,5 +468,31 @@ func TestDoctorHooksSummarizesHealthyProfiles(t *testing.T) {
 	if got, want := write([]debugger.HookProfile{healthy("work"), unverified}, false), "hooks: work (claude): in sync and active\n"+
 		"hooks: copilot (copilot): in sync, activation unverified\n"; got != want {
 		t.Errorf("one healthy profile =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// An unused profile is healthy but not "active": it is named on its own line
+// rather than counted among the profiles in sync and active, and it is
+// reported as a note, never as hooks_unverified.
+func TestDoctorHooksNamesAnUnusedProfileAsANote(t *testing.T) {
+	healthy := func(name string) debugger.HookProfile {
+		return debugger.HookProfile{Profile: name, Harness: harness.Claude, Sync: "in_sync", Activation: "healthy", Verdict: debugger.VerdictHealthy}
+	}
+	unused := debugger.HookProfile{Profile: "copilot", Harness: harness.Copilot, Sync: "in_sync", Activation: "unverified", Unused: true, Verdict: debugger.VerdictHealthy}
+	var out bytes.Buffer
+	var notes []string
+	fail := func(format string, args ...any) { t.Errorf("unexpected finding: %s", fmt.Sprintf(format, args...)) }
+	err := writeDoctorHookProfiles(&out, []debugger.HookProfile{healthy("work"), healthy("home"), unused}, false, fail, fail, fail, func(format string, args ...any) {
+		notes = append(notes, fmt.Sprintf(format, args...))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := out.String(), "hooks: 2 profiles in sync and active (--verbose lists each)\n"+
+		"hooks: copilot (copilot): in sync, not in use\n"; got != want {
+		t.Errorf("output =\n%s\nwant\n%s", got, want)
+	}
+	if len(notes) != 1 || !strings.HasPrefix(notes[0], "hooks for copilot are not in use: ") {
+		t.Errorf("notes = %q, want one hooks_unused note for copilot", notes)
 	}
 }

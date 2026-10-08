@@ -43,12 +43,17 @@
   verification window; once events are arriving it is the
   `hooks_contract_ahead` note instead, which leaves the verdict clean and
   marks the contract as due for re-verification.
+  A profile whose hooks are in sync but that nothing exercises — no
+  configured project launches it and no hook event from its home dir has ever
+  been observed — is the `hooks_unused` note rather than `hooks_unverified`,
+  since there is nothing to verify yet; `config hooks-status` shows its
+  activation as `unused`, and `debug status` marks it `unused=true`.
   Hook deliveries dropped in the trailing hour are `hook_delivery_failures`:
   a warning when the latest drop happened while the running daemon was up,
   and a note once every drop predates the daemon's start — the restart gap
   the prompt-free hook client accepts by design.
-  In text output, per-profile `hooks`, `hooks_unverified`, and
-  `hooks_contract_ahead` findings that
+  In text output, per-profile `hooks`, `hooks_unverified`,
+  `hooks_contract_ahead`, and `hooks_unused` findings that
   share the same detail print on one line naming every profile, while
   `--json` keeps one finding per profile. A verdict with no failures reads
   `overall: clean` when nothing warned, and otherwise counts its warnings, as
