@@ -299,17 +299,31 @@ func writeOmittedFooter(out io.Writer, shown, omitted int) error {
 // noSessionsMessage is an empty list's sentence for a person. It names the
 // selector flags that emptied the list, as typed, and, when the list hid
 // automated sessions, says whether --all would have found any.
+//
+// --here on its own says where it looked, in the sentence `session continue
+// --here` refuses with, since "match --here" does not say which directory
+// that was.
 func noSessionsMessage(cmd *cobra.Command, selection sessionSelection, idx *transcript.Index) string {
-	message := "No indexed sessions match."
-	if flags := selectionFlagsText(cmd); flags != "" {
-		message = "No indexed sessions match " + flags + "."
-	}
+	automated := false
 	if selection.filter.MainOnly {
 		filter := selection.filter
 		filter.MainOnly = false
-		if len(selection.narrow(idx.List(filter))) > 0 {
-			message += " Automated sessions do; --all shows them."
+		automated = len(selection.narrow(idx.List(filter))) > 0
+	}
+	flags := selectionFlagsText(cmd)
+	if flags == "--here" && len(selection.here) > 0 {
+		message := "No conversation was started in " + cli.DisplayPath(selection.here[0]) + " or below it"
+		if automated {
+			return message + "; automated sessions were, and --all shows them."
 		}
+		return message + "; `amx session list` shows recent ones elsewhere."
+	}
+	message := "No indexed sessions match."
+	if flags != "" {
+		message = "No indexed sessions match " + flags + "."
+	}
+	if automated {
+		message += " Automated sessions do; --all shows them."
 	}
 	return message
 }

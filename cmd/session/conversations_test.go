@@ -699,6 +699,23 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 		}
 	})
 
+	// --here alone says which directory it looked in, the way continue --here
+	// refuses, since "match --here" names no directory.
+	t.Run("terminal here alone names the directory", func(t *testing.T) {
+		sessionListIsTerminal = func(io.Writer) bool { return true }
+		empty := filepath.Join(dir, "empty")
+		sessionListGetwd = func() (string, error) { return empty, nil }
+		t.Cleanup(func() {
+			sessionListIsTerminal = func(io.Writer) bool { return false }
+			sessionListGetwd = func() (string, error) { return repo, nil }
+		})
+		out, err := run(t, map[string]string{"here": "true"})
+		want := "No conversation was started in " + cli.DisplayPath(empty) + " or below it; `amx session list` shows recent ones elsewhere.\n"
+		if err != nil || out != want {
+			t.Fatalf("empty = %q, %v; want %q", out, err, want)
+		}
+	})
+
 	t.Run("terminal table carries a bounded summary", func(t *testing.T) {
 		sessionListIsTerminal = func(io.Writer) bool { return true }
 		t.Cleanup(func() { sessionListIsTerminal = func(io.Writer) bool { return false } })
