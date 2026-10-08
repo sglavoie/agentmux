@@ -27,7 +27,8 @@ case. Wrap words in double quotes to match them as one phrase; the shell needs
 them quoted again, as in: amx session search '"race condition"' daemon.
 
 Results come newest first, with how many times the query matched and the first
-line it matched on. The selector flags narrow the search the way they narrow
+line it matched on. The conversation the search runs from comes last, since
+the query was typed there. The selector flags narrow the search the way they narrow
 ` + "`amx session list`" + `.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
@@ -61,20 +62,28 @@ line it matched on. The selector flags narrow the search the way they narrow
 		if err := selection.resolveProjects(cfg, idx); err != nil {
 			return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", err)
 		}
+		out := cmd.OutOrStdout()
+		terminal := !jsonOutput && sessionListIsTerminal(out)
+		// A terminal table says how many automated sessions match too, as the
+		// list does, so the search takes them in and sets them aside here: one
+		// pass over the sidecars rather than a second search for a count.
+		countHidden := terminal && selection.filter.MainOnly
 		results, err := transcript.Search(idx, readers, transcript.Query{
 			Text:          query,
 			MessageSource: source,
 			Harness:       selection.filter.Harness,
 			Profile:       selection.filter.Profile,
 			Since:         selection.filter.Since,
-			MainOnly:      selection.filter.MainOnly,
+			MainOnly:      selection.filter.MainOnly && !countHidden,
 		})
 		if err != nil {
 			return cli.CommandFailure(cmd, jsonOutput, "command_failed", err)
 		}
+		hidden := 0
+		if countHidden {
+			results, hidden = setAutomatedAside(results, selection)
+		}
 		results = narrowSearchResults(results, selection)
-		out := cmd.OutOrStdout()
-		terminal := !jsonOutput && sessionListIsTerminal(out)
 		omitted := 0
 		if terminal {
 			var keep int
@@ -86,7 +95,9 @@ line it matched on. The selector flags narrow the search the way they narrow
 		// Marked as list marks them, because a search run from inside a
 		// conversation finds that conversation too — the query is in it — and
 		// "here" is what tells it apart from the sessions being looked for.
-		live, liveKnown := selection.liveConversations(jsonOutput || terminal)
+		// Asked even when piped, since an agent searching from its own
+		// conversation reads piped rows, which have no LIVE field.
+		live, liveKnown := selection.liveConversations(true)
 		listed := make([]sessionView, len(views))
 		for i := range views {
 			listed[i] = views[i].sessionView
@@ -95,6 +106,7 @@ line it matched on. The selector flags narrow the search the way they narrow
 		for i := range views {
 			views[i].sessionView = listed[i]
 		}
+		views = currentConversationLast(views)
 		if jsonOutput {
 			return cli.WriteJSON(cmd, sessionSearchData{Query: query, Source: source, Results: views})
 		}
@@ -104,13 +116,19 @@ line it matched on. The selector flags narrow the search the way they narrow
 				if flags := selectionFlagsText(cmd); flags != "" {
 					message = "No indexed sessions match " + strconv.Quote(query) + " with " + flags + "."
 				}
+				if hidden > 0 {
+					message += " Automated sessions do; --all shows them."
+				}
 				_, err := fmt.Fprintln(out, message)
 				return err
 			}
 			if err := writeSessionSearchTable(out, query, views, abbreviateSessionIDs(idx.List(transcript.ListFilter{})), sessionCommandsNow(), sessionListTerminalWidth(out), liveKnown); err != nil {
 				return err
 			}
-			return writeOmittedFooter(out, len(views), omitted, 0)
+			if err := writeOmittedFooter(out, len(views), omitted, 0); err != nil {
+				return err
+			}
+			return writeAutomatedMatches(out, hidden)
 		}
 		// Off a terminal the rows follow `session list`'s piped form, with the
 		// match count before the ID and the matched line last, where a tab or
@@ -120,6 +138,51 @@ line it matched on. The selector flags narrow the search the way they narrow
 		}
 		return nil
 	},
+}
+
+// writeAutomatedMatches is the search's counterpart of the list's hidden
+// automated line: how many automated sessions match the query too, rather
+// than how many there are.
+func writeAutomatedMatches(out io.Writer, hidden int) error {
+	var err error
+	switch {
+	case hidden == 1:
+		_, err = fmt.Fprintln(out, "1 automated session also matches; --all includes it.")
+	case hidden > 1:
+		_, err = fmt.Fprintf(out, "%d automated sessions also match; --all includes them.\n", hidden)
+	}
+	return err
+}
+
+// currentConversationLast moves the conversation the search runs from after
+// the others, keeping their order. It holds the query, since it was typed
+// there, so it matches nearly every search and would otherwise lead a list of
+// the sessions being looked for.
+func currentConversationLast(views []sessionSearchView) []sessionSearchView {
+	out := make([]sessionSearchView, 0, len(views))
+	var here []sessionSearchView
+	for _, view := range views {
+		if view.Live != nil && view.Live.Here {
+			here = append(here, view)
+			continue
+		}
+		out = append(out, view)
+	}
+	return append(out, here...)
+}
+
+// setAutomatedAside keeps the results of main sessions, which is what a search
+// without --all returns, and counts the automated and unclassified ones that
+// the selection's other selectors would have kept, regardless of --limit.
+func setAutomatedAside(results []transcript.Result, selection sessionSelection) ([]transcript.Result, int) {
+	main := make([]transcript.Result, 0, len(results))
+	for _, result := range results {
+		if result.Meta.SessionClass == transcript.SessionClassMain {
+			main = append(main, result)
+		}
+	}
+	selection.limit = 0
+	return main, len(narrowSearchResults(results, selection)) - len(narrowSearchResults(main, selection))
 }
 
 // narrowSearchResults applies --project, --here, --live, and --limit to search results, keeping

@@ -25,7 +25,7 @@ amx session list --project amx   # one project's sessions; "amx" reaches "🐱am
 amx session list --live       # only conversations open in a Kitty tab right now; refused, not empty, when the daemon or Kitty cannot say
 amx session list --all        # also automated sessions (ASL runs, subagents, exec), hidden by default as in Past Sessions
 amx session continue "$(amx session list | fzf | cut -f5)"   # pick by opening prompt
-amx session search race daemon            # conversations mentioning both words, newest first, with match counts
+amx session search race daemon            # conversations mentioning both words, newest first, with match counts and a matched line (one you or the agent wrote before tool output); the conversation you search from comes last, and a terminal says how many automated sessions also match
 amx session search '"race condition"' --here --since 7d   # a quoted phrase; takes every list selector
 amx session search --source user flaky    # only your own prompts (or --source harness for the agent's output, including Claude's background-task notices)
 amx session show 09467ec1                 # one conversation: title, directory, ages, whether it is open in Kitty, message count, transcript path, how it ended, and the commands that continue or fork it

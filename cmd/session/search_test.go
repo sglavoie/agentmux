@@ -219,9 +219,34 @@ func TestSessionSearchFindsConversationsByMessageText(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		// It comes last, too: the query was typed there, so it matches.
 		lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
-		if !strings.Contains(lines[0], " LIVE ") || !strings.Contains(lines[1], " here ") || strings.Contains(strings.Join(lines[2:], "\n"), "here") {
-			t.Fatalf("table = %q, want a LIVE column marking only codex-race here", out)
+		if len(lines) != 5 || !strings.Contains(lines[0], " LIVE ") || !strings.Contains(lines[3], " here ") || strings.Contains(strings.Join(lines[:3], "\n"), "here") {
+			t.Fatalf("table = %q, want a LIVE column marking only codex-race here, as the last row", out)
+		}
+		if lines[4] != "1 automated session also matches; --all includes it." {
+			t.Fatalf("footer = %q, want the automated session matching race", lines[4])
+		}
+
+		sessionListIsTerminal = func(io.Writer) bool { return false }
+		out, err = run(t, nil, "race")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := ids(out); got != "claude-docs,codex-old,codex-race" {
+			t.Fatalf("piped sessions = %q, want the conversation it runs in last", got)
+		}
+	})
+
+	t.Run("a terminal says when only automated sessions match", func(t *testing.T) {
+		sessionListIsTerminal = func(io.Writer) bool { return true }
+		out, err := run(t, nil, "audit")
+		if err != nil || out != "No indexed sessions match \"audit\". Automated sessions do; --all shows them.\n" {
+			t.Fatalf("empty = %q, %v", out, err)
+		}
+		out, err = run(t, nil, "documented")
+		if err != nil || strings.Contains(out, "automated") {
+			t.Fatalf("table = %q, %v, want no automated line when none match", out, err)
 		}
 	})
 
