@@ -123,13 +123,17 @@ troubleshooting) is [docs/companion-app.md](../docs/companion-app.md).
 4. **`PATH`.** The first `amx` on the login shell's `PATH`.
 
 When both a bundled copy and `~/.local/bin/amx` exist, the local copy wins in
-three cases:
+four cases:
 
 - **It matches the daemon.** It is the build the running daemon reports in
   `health.build`. The content hash decides when both sides carry one;
   otherwise version, revision, and dirty marker must all agree.
 - **It is newer.** Its `built` time is later. That field is `vcs.time`, the
   commit time, not the link time.
+- **It is the same clean build.** Both are clean builds of one version and
+  revision, so they differ only by the signature `scripts/sign.sh` puts on the
+  bundled copy. The local copy is the CLI you run, so a daemon the app starts
+  is one `amx doctor` does not report as a `build_mismatch`.
 - **It wins a tie.** On equal commit times, which two dirty builds of one
   commit share, it wins when its content differs and its file was written
   more recently.

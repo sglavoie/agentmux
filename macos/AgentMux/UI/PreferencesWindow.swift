@@ -41,6 +41,7 @@ struct PreferencesSnapshot: Equatable {
         case .localBin: return "~/.local/bin/amx"
         case .localBinMatchingDaemon: return "~/.local/bin/amx, the build the daemon runs"
         case .newerLocalBin: return "~/.local/bin/amx, newer than the bundled copy"
+        case .sameBuildLocalBin: return "~/.local/bin/amx, the same build as the bundled copy"
         case .path: return "the first amx on PATH"
         }
     }

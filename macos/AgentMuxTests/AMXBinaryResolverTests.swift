@@ -198,6 +198,30 @@ final class AMXBinaryResolverTests: XCTestCase {
         XCTAssertEqual(try resolver(facts: facts).resolve().get().source, .bundled)
     }
 
+    func testTieBetweenOneCleanBuildGoesToLocalEvenWhenBundledIsNewer() throws {
+        try makeBinary(bundled)
+        try makeBinary(localBin)
+        var facts = Facts()
+        // `sign.sh` re-signs the bundled copy, so the hash and the file date
+        // both differ from the local copy of the very same build.
+        facts.versions[localBin] = line("aaaaaaaaaaaa", sha: "111111111111")
+        facts.versions[bundled] = line("aaaaaaaaaaaa", sha: "222222222222")
+        facts.hashes = [localBin: "1", bundled: "2"]
+        facts.modified = [localBin: Date(timeIntervalSince1970: 100), bundled: Date(timeIntervalSince1970: 200)]
+        XCTAssertEqual(try resolver(facts: facts).resolve().get(), .init(url: localBin, source: .sameBuildLocalBin))
+    }
+
+    func testTieBetweenDifferentCleanRevisionsKeepsBundled() throws {
+        try makeBinary(bundled)
+        try makeBinary(localBin)
+        var facts = Facts()
+        facts.versions[localBin] = line("aaaaaaaaaaaa")
+        facts.versions[bundled] = line("bbbbbbbbbbbb")
+        facts.hashes = [localBin: "1", bundled: "2"]
+        facts.modified = [localBin: Date(timeIntervalSince1970: 100), bundled: Date(timeIntervalSince1970: 200)]
+        XCTAssertEqual(try resolver(facts: facts).resolve().get().source, .bundled)
+    }
+
     func testUnknownLocalIdentityNeverDisplacesBundled() throws {
         try makeBinary(bundled)
         try makeBinary(localBin)

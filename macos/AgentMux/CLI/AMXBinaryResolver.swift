@@ -7,10 +7,13 @@ import Foundation
 ///
 /// `~/.local/bin/amx` runs instead of a bundled copy when it is the artifact
 /// the running daemon reports, since the CLI and daemon builds are meant to
-/// match, or when it is newer. `built` is the commit time rather than the link
-/// time, so two builds of one dirty tree tie on it; the tie goes to the local
-/// copy only when its content differs and its file is the more recently
-/// written.
+/// match, when it is newer, or when it is the same clean build. `built` is the
+/// commit time rather than the link time, so two builds of one commit tie on
+/// it. A tie between two clean builds of one revision goes to the local copy:
+/// their content differs only by the signature `sign.sh` puts on the bundled
+/// copy, and the local copy is the CLI the operator runs, so a daemon it starts
+/// is one `amx doctor` agrees with. Any other tie goes to the local copy only
+/// when its content differs and its file is the more recently written.
 struct AMXBinaryResolver {
     /// The `UserDefaults` key holding an explicit binary path.
     static let overrideDefaultsKey = "amxBinaryPath"
@@ -24,6 +27,9 @@ struct AMXBinaryResolver {
         case localBinMatchingDaemon
         /// `~/.local/bin/amx`, chosen over an older bundled copy.
         case newerLocalBin
+        /// `~/.local/bin/amx`, chosen over a bundled copy of the same clean
+        /// build, which differs from it only by its code signature.
+        case sameBuildLocalBin
         case path
     }
 
@@ -142,6 +148,9 @@ struct AMXBinaryResolver {
         default:
             // A tie on the commit time, or neither carries one.
             break
+        }
+        if localVersion.sameCleanBuild(as: bundledVersion) {
+            return .sameBuildLocalBin
         }
         guard let localHash = contentHash(local), let bundledHash = contentHash(bundled),
               localHash != bundledHash,

@@ -66,6 +66,19 @@ final class AMXVersionTests: XCTestCase {
         XCTAssertFalse(version.matches(DaemonBuild(version: "0.8.0", revision: "ffff", dirty: true)))
     }
 
+    func testSameCleanBuildIgnoresTheHashButNotDirtOrRevision() throws {
+        let clean = try XCTUnwrap(AMXVersion.parse("amx version 0.8.0 (revision 52189e529adf, sha256:aaaa)"))
+        let resigned = try XCTUnwrap(AMXVersion.parse("amx version 0.8.0 (revision 52189e529adf, sha256:bbbb)"))
+        let dirty = try XCTUnwrap(AMXVersion.parse("amx version 0.8.0 (revision 52189e529adf-dirty)"))
+        let other = try XCTUnwrap(AMXVersion.parse("amx version 0.8.0 (revision ffffffffffff)"))
+        let unstamped = try XCTUnwrap(AMXVersion.parse("amx version 0.8.0 (revision unknown)"))
+        XCTAssertTrue(clean.sameCleanBuild(as: resigned))
+        XCTAssertFalse(clean.sameCleanBuild(as: dirty))
+        XCTAssertFalse(dirty.sameCleanBuild(as: dirty), "two dirty builds share a revision without sharing their source")
+        XCTAssertFalse(clean.sameCleanBuild(as: other))
+        XCTAssertFalse(unstamped.sameCleanBuild(as: unstamped))
+    }
+
     func testReadRunsTheBinary() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("amx-version-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

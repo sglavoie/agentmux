@@ -142,7 +142,8 @@ socket. A wake from sleep reconnects at once.
 that is not the daemon's build, usually after `just install` without
 `just mac-install`, or the reverse. Reinstall the side that is behind. The app
 prefers `~/.local/bin/amx` over its bundled copy when the local one matches
-the daemon or is newer; to pin one, set Preferences › amx binary.
+the daemon, is newer, or is the same clean build; to pin one, set
+Preferences › amx binary.
 
 **Grayed-out menu items.** The resolved `amx` lacks the command
 (`project`, `open-dashboard`, `mute-toggle --json`); the tooltip says which.

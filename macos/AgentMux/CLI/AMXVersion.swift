@@ -92,6 +92,18 @@ struct AMXVersion: Equatable {
         }
     }
 
+    /// Whether both are clean builds of one version and revision, so they were
+    /// compiled from the same source and can differ only by what was done to
+    /// the file afterwards, such as a code signature. A dirty build never
+    /// qualifies: two of them share a revision without sharing their source.
+    func sameCleanBuild(as other: AMXVersion) -> Bool {
+        guard !dirty, !other.dirty, version == other.version,
+              let revision, let otherRevision = other.revision else {
+            return false
+        }
+        return revision.hasPrefix(otherRevision) || otherRevision.hasPrefix(revision)
+    }
+
     /// Runs `binary --version`; nil when it fails, prints something else, or
     /// takes longer than `timeout`.
     static func read(binary: String, timeout: TimeInterval = 2) -> AMXVersion? {
