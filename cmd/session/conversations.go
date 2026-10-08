@@ -269,10 +269,37 @@ func (s *sessionSelection) resolveProjects(cfg *config.Config, idx *transcript.I
 			}
 		}
 		if !matched {
-			return fmt.Errorf("--project %q: no project or indexed session has this title; `amx project list` shows the configured ones", selector)
+			return unknownProjectError(selector, names)
 		}
 	}
 	return nil
+}
+
+// projectSuggestionLimit bounds the names an unknown --project suggests, so a
+// one-letter value that most titles contain stays a one-line error.
+const projectSuggestionLimit = 3
+
+// unknownProjectError refuses a --project value that names nothing, offering
+// the names it most likely meant, as `amx project launch` does for a title.
+// The suggestions are never selected on the caller's behalf.
+func unknownProjectError(selector string, names []string) error {
+	message := fmt.Sprintf("--project %q: no project or indexed session has this title", selector)
+	near := config.ProjectTitleNearMisses(names, selector)
+	if len(near) == 0 {
+		return errors.New(message + "; `amx project list` shows the configured ones")
+	}
+	quoted := make([]string, 0, projectSuggestionLimit)
+	for _, name := range near[:min(len(near), projectSuggestionLimit)] {
+		quoted = append(quoted, strconv.Quote(name))
+	}
+	suggestion := strings.Join(quoted, ", ")
+	if len(quoted) > 1 {
+		suggestion = strings.Join(quoted[:len(quoted)-1], ", ") + " or " + quoted[len(quoted)-1]
+	}
+	if more := len(near) - len(quoted); more > 0 {
+		suggestion += fmt.Sprintf(" (and %d more)", more)
+	}
+	return errors.New(message + "; did you mean " + suggestion + "?")
 }
 
 // addSessionSelectionFlags declares the selector flags readSessionSelection

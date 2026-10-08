@@ -94,3 +94,23 @@ func TestCompleteSessionProjectsJoinsConfiguredAndIndexedNames(t *testing.T) {
 		t.Fatalf("completions for d = %q", got)
 	}
 }
+
+// A shell keeps only suggestions starting with what was typed, so a title
+// reached past its leading emoji is offered as typed plus the rest of it.
+func TestCompleteSessionProjectsReachesTitlesPastTheirEmoji(t *testing.T) {
+	stubCompletionIndex(t, []string{"🐱amx", "🥧Raspberry Pi"}, completionMetas()...)
+	for _, tc := range []struct {
+		typed string
+		want  []string
+	}{
+		{"am", []string{"amx"}},
+		{"🐱", []string{"🐱amx"}},
+		{"ras", []string{"raspberry Pi"}},
+		{"T", []string{"Tt"}},
+		{"x", nil},
+	} {
+		if got, _ := completeSessionProjects(nil, nil, tc.typed); !slices.Equal(got, tc.want) {
+			t.Errorf("completions for %q = %q, want %q", tc.typed, got, tc.want)
+		}
+	}
+}

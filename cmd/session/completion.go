@@ -110,12 +110,14 @@ func conversationDescription(meta transcript.SessionMeta) string {
 
 // completeSessionProjects suggests what --project accepts: configured project
 // titles and the project names indexed conversations carry, which include
-// directories no project is configured for.
+// directories no project is configured for. Like a launch title, each is
+// matched past its leading emoji (config.CompleteProjectTitle).
 func completeSessionProjects(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	seen := map[string]bool{}
 	var names []string
 	add := func(name string) {
-		if name != "" && !seen[name] && strings.HasPrefix(name, toComplete) {
+		name, ok := config.CompleteProjectTitle(name, toComplete)
+		if name != "" && ok && !seen[name] {
 			seen[name] = true
 			names = append(names, name)
 		}

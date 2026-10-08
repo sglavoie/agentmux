@@ -451,6 +451,25 @@ func TestProjectLaunchTypoOffersClosestProjectsFirst(t *testing.T) {
 	}
 }
 
+// TestProjectLaunchTypoOfAFirstWordOffersItsProject pins that a typo of a
+// multi-word title's first word finds it, though the whole title is too many
+// edits away.
+func TestProjectLaunchTypoOfAFirstWordOffersItsProject(t *testing.T) {
+	cfg := testConfig()
+	cfg.Projects = append(cfg.Projects, config.Session{Title: "🥧Raspberry Pi", Directory: "/tmp/pi", Profile: "work"})
+	out, err := runProject(t, "launch", cfg, &recordingKittyClient{}, true, "", "rasberry")
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	var envelope cli.JSONErrorEnvelope
+	if decodeErr := json.Unmarshal([]byte(out), &envelope); decodeErr != nil {
+		t.Fatalf("decode %q: %v", out, decodeErr)
+	}
+	if len(envelope.Error.Candidates) != 1 || envelope.Error.Candidates[0].ID != "work/🥧Raspberry Pi" {
+		t.Fatalf("candidates = %+v, want only work/🥧Raspberry Pi", envelope.Error.Candidates)
+	}
+}
+
 // TestProjectCandidatesSortTitlesPastLeadingSymbols pins that a title's
 // leading emoji or bullet does not move it out of alphabetical order in a
 // candidate list.
@@ -467,17 +486,6 @@ func TestProjectCandidatesSortTitlesPastLeadingSymbols(t *testing.T) {
 	}
 	if got, want := strings.Join(ids, ","), "home/api,work/🐱amx,work/•dotfiles,work/Lyzma,work/spec"; got != want {
 		t.Fatalf("candidates = %s, want %s", got, want)
-	}
-}
-
-func TestEditDistance(t *testing.T) {
-	for _, tc := range []struct {
-		a, b string
-		want int
-	}{{"", "", 0}, {"amx", "amx", 0}, {"amxx", "amx", 1}, {"brainote", "brainnotes", 2}, {"kitten", "sitting", 3}, {"", "abc", 3}, {"é", "e", 1}} {
-		if got := editDistance(tc.a, tc.b); got != tc.want {
-			t.Errorf("editDistance(%q, %q) = %d, want %d", tc.a, tc.b, got, tc.want)
-		}
 	}
 }
 

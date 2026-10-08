@@ -682,20 +682,15 @@ func candidateProblem(directory string) string {
 	return ""
 }
 
-// typoCandidates returns the projects whose ProjectTitleKey is within a few
-// edits of key — two, or a third of what was typed when that is more —
-// ordered by distance and then as projectCandidates orders them, so "amxx"
-// offers "🐱amx" first. An empty key is no typo of anything.
+// typoCandidates returns the projects whose title key is a
+// config.ProjectTitleTypo of key, ordered by distance and then as
+// projectCandidates orders them, so "amxx" offers "🐱amx" first and
+// "rasberry" offers "🥧Raspberry Pi".
 func typoCandidates(projects []config.Session, key string) []actions.Candidate {
-	if key == "" {
-		return nil
-	}
-	limit := max(2, len([]rune(key))/3)
 	distance := map[string]int{}
 	var near []config.Session
 	for _, project := range projects {
-		d := editDistance(key, config.ProjectTitleKey(project.Title))
-		if d <= limit {
+		if d, ok := config.ProjectTitleTypo(key, project.Title); ok {
 			near = append(near, project)
 			distance[project.EffectiveProfile()+"/"+project.Title] = d
 		}
@@ -705,32 +700,13 @@ func typoCandidates(projects []config.Session, key string) []actions.Candidate {
 	return candidates
 }
 
-// editDistance is the Levenshtein distance between a and b, counted in runes.
-func editDistance(a, b string) int {
-	ar, br := []rune(a), []rune(b)
-	row := make([]int, len(br)+1)
-	for j := range row {
-		row[j] = j
-	}
-	for i := 1; i <= len(ar); i++ {
-		diagonal := row[0]
-		row[0] = i
-		for j := 1; j <= len(br); j++ {
-			cost := 1
-			if ar[i-1] == br[j-1] {
-				cost = 0
-			}
-			diagonal, row[j] = row[j], min(row[j]+1, row[j-1]+1, diagonal+cost)
-		}
-	}
-	return row[len(br)]
-}
-
 // completeProjectTitles suggests configured project titles for --title, each
 // described by the profile it launches with. When --profile is already given,
 // only that profile's projects are offered, so the completion never proposes a
 // pair the launch would refuse as unmatched. A title shared by several
-// profiles is offered once.
+// profiles is offered once. What was typed is matched past a title's leading
+// emoji, as config.CompleteProjectTitle reads it, so "ras" reaches
+// "🥧Raspberry Pi".
 func completeProjectTitles(cmd *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	cfg, err := projectCompletionLoadConfig()
 	if err != nil || cfg == nil {
@@ -743,14 +719,15 @@ func completeProjectTitles(cmd *cobra.Command, _ []string, toComplete string) ([
 	seen := make(map[string]bool)
 	var titles []string
 	for _, project := range config.ActiveProjects(cfg.Projects) {
-		if !strings.HasPrefix(project.Title, toComplete) || seen[project.Title] {
+		title, ok := config.CompleteProjectTitle(project.Title, toComplete)
+		if !ok || seen[title] {
 			continue
 		}
 		if profile != "" && !strings.EqualFold(project.EffectiveProfile(), profile) {
 			continue
 		}
-		seen[project.Title] = true
-		titles = append(titles, project.Title+"\t"+project.EffectiveProfile())
+		seen[title] = true
+		titles = append(titles, title+"\t"+project.EffectiveProfile())
 	}
 	return titles, cobra.ShellCompDirectiveNoFileComp
 }

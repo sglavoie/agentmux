@@ -632,7 +632,11 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 		{"unknown harness", map[string]string{"harness": "gemini"}, `--harness "gemini"`},
 		{"unknown profile", map[string]string{"profile": "nobody"}, `--profile "nobody": want one of`},
 		{"negative limit", map[string]string{"limit": "-1"}, "--limit -1"},
-		{"unknown project", map[string]string{"project": "nowhere"}, `--project "nowhere"`},
+		{"unknown project", map[string]string{"project": "nowhere"}, `--project "nowhere": no project or indexed session has this title; ` + "`amx project list`"},
+		// A value that names nothing still suggests what it most likely
+		// meant, without selecting it: a part of a title, then a typo of one.
+		{"part of a project title", map[string]string{"project": "rep"}, `did you mean "🐱repo" or "repo2"?`},
+		{"typo of a project title", map[string]string{"project": "rpeo"}, `did you mean "🐱repo"?`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, err := run(t, tc.flags)

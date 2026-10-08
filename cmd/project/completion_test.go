@@ -41,6 +41,20 @@ func TestCompleteProjectTitlesNarrowsByProfileAndPrefix(t *testing.T) {
 	}
 }
 
+// A launch reads "raspberry" as "🥧Raspberry Pi", so completion reaches it
+// the same way, offering what was typed plus the rest of the title so the
+// shell's prefix filter keeps it.
+func TestCompleteProjectTitlesReachesTitlesPastTheirEmoji(t *testing.T) {
+	cfg := testConfig()
+	cfg.Projects = append(cfg.Projects, config.Session{Title: "🥧Raspberry Pi", Directory: "/tmp/pi", Profile: "work"})
+	if got, want := completeTitles(t, cfg, nil, "", "ras"), []string{"raspberry Pi\twork"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("completions = %q, want %q", got, want)
+	}
+	if got, want := completeTitles(t, cfg, nil, "", "🥧R"), []string{"🥧Raspberry Pi\twork"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("completions = %q, want %q", got, want)
+	}
+}
+
 func TestCompleteProjectTitlesDegradesToNothingOnBrokenConfig(t *testing.T) {
 	if got := completeTitles(t, nil, errors.New("broken"), "", ""); got != nil {
 		t.Fatalf("completions = %q, want none", got)
