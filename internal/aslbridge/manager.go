@@ -43,6 +43,13 @@ var (
 // They are daemon-authored constants, so they are stable across peers and carry
 // nothing a bridge could have chosen.
 const (
+	// ReasonStarting is published from Start until the first child either
+	// handshakes or fails. It is exported because it is the one unavailable
+	// reason that is not a fault: a doctor run in the half second after a
+	// daemon restart must be able to say "still starting" instead of reporting
+	// a required integration as broken.
+	ReasonStarting = "asl bridge is starting; its first handshake has not completed"
+
 	reasonHandshakeIncomplete = "mutations are disabled until session.handshake completes"
 	reasonHandshakeStale      = "mutations are disabled until a fresh snapshot is handshaked"
 	reasonAmbiguousOperation  = "mutations are disabled after an operation with an unknown outcome"
@@ -179,6 +186,7 @@ func (m *Manager) Start(ctx context.Context) {
 			close(m.done)
 			return
 		}
+		m.setReason(ReasonStarting)
 		ctx, cancel := context.WithCancel(ctx)
 		m.cancel = cancel
 		go m.supervise(ctx)

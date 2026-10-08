@@ -100,8 +100,8 @@ func TestDoctorJSONCommandSurfaceIsVersioned(t *testing.T) {
 	// v3 is the screen-classifier bump: `screenstate_persistent_decline` is a
 	// new failure identifier. `screenstate_override_invalid` shipped in the
 	// same work at warning severity and required no bump of its own.
-	if doctorReportSchemaVersion != 5 {
-		t.Fatalf("unexpected doctor JSON schema version %d; want 5", doctorReportSchemaVersion)
+	if doctorReportSchemaVersion != 6 {
+		t.Fatalf("unexpected doctor JSON schema version %d; want 6", doctorReportSchemaVersion)
 	}
 
 	// Every stable finding identifier a doctor report can carry. Adding one is

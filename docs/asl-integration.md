@@ -86,8 +86,16 @@ These dimensions arrived in `doctor --json` schema v2. `asl_unavailable` and
 `asl_read_only` keep their exact names and meanings; the six dimension findings
 (`asl_shell_resolution`, `asl_daemon_resolution`, `asl_contract_mismatch`,
 `asl_projection_errors`, `asl_bridge_stale`, `asl_hook_delivery`) are new, which
-is what that schema bump was for. The report is at v3 today; see
+is what that schema bump was for. The report is at v6 today; see
 [Screen classifier health](screen-classifier-health.md) for what v3 added.
+
+Right after the daemon starts, the bridge has not finished its first
+handshake. The capability block then carries the fixed reason "asl bridge is
+starting; its first handshake has not completed", and doctor reports it as the
+`asl_starting` warning (added in v6) with `daemon_resolution` unknown, instead
+of `asl_unavailable` and a resolution failure. A doctor run in the second after
+`amx daemon restart` therefore passes `--strict`; a bridge that then fails
+publishes its real reason and the failures return.
 
 ## Run presence is a paired cutover
 

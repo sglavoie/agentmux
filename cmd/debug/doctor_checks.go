@@ -175,7 +175,12 @@ func writeDoctorASLCapability(out io.Writer, status *aslbridge.Status, addFindin
 	if _, err := fmt.Fprintf(out, "asl: %s\n", ASLStatusLine(status)); err != nil {
 		return err
 	}
-	if status.Mode == string(aslbridge.ModeRequired) && !status.Available {
+	switch {
+	case !status.Available && status.Reason == aslbridge.ReasonStarting:
+		// The daemon has only just started the bridge. Calling that a failure
+		// would fail the doctor run every restart is followed by.
+		addFinding(severityWarning, "asl_starting", "asl integration is still starting (no handshake yet); run `amx doctor` again in a few seconds")
+	case status.Mode == string(aslbridge.ModeRequired) && !status.Available:
 		addFinding(severityFailure, "asl_unavailable", "asl integration is required but unavailable: %s", status.Reason)
 	}
 	if status.Available && !status.MutationsEnabled {

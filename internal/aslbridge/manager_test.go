@@ -85,6 +85,32 @@ func TestRequiredModeReportsUnavailableWithoutBlocking(t *testing.T) {
 	}
 }
 
+// Between Start and the first child's verdict the block says the bridge is
+// starting rather than carrying no reason at all, which doctor would otherwise
+// have to report as an unexplained failure; the handshake clears it.
+func TestStartPublishesStartingUntilTheFirstHandshake(t *testing.T) {
+	release := make(chan struct{})
+	fake := newFakeBridge(t, serveSnapshots)
+	launch := fake.launcher()
+	m := startManager(t, Options{Mode: ModeRequired, Command: "asl", Launcher: func(ctx context.Context) (*Child, error) {
+		select {
+		case <-release:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		return launch(ctx)
+	}})
+
+	if status := m.Status(); status.Available || status.Reason != ReasonStarting {
+		t.Fatalf("status before the first handshake = %+v; want reason %q", status, ReasonStarting)
+	}
+	close(release)
+	waitFor(t, "available", func() bool { return m.Status().Available })
+	if reason := m.Status().Reason; reason == ReasonStarting {
+		t.Fatalf("reason after the handshake = %q; want the starting reason cleared", reason)
+	}
+}
+
 func TestHandshakePublishesAvailabilityAndMutations(t *testing.T) {
 	fake := newFakeBridge(t, serveSnapshots)
 	m := startManager(t, Options{Mode: ModeAuto, Command: "asl", Launcher: fake.launcher()})

@@ -23,6 +23,11 @@ const doctorSuppressionWindow = 15 * time.Minute
 
 // doctorReportSchemaVersion versions the `amx doctor --json` payload.
 //
+// v6 adds the `asl_starting` (warning) finding, raised instead of
+// `asl_unavailable` while the daemon's bridge has not finished its first
+// handshake, which is the state every daemon restart passes through. Like v5
+// it does not change what `--strict` exits on; the bump is for the identifier.
+//
 // v5 adds the `companion_app` (info) and `companion_build_mismatch` (warning)
 // findings and the additive `daemon.companion` block they are derived from.
 // Neither severity changes what `--strict` exits on; the bump is for the new
@@ -48,7 +53,7 @@ const doctorSuppressionWindow = 15 * time.Minute
 // not recognize as fatal would start failing on conditions a v1 daemon never
 // reported. The two identifiers that predate it, `asl_unavailable` and
 // `asl_read_only`, keep their exact names and meanings.
-const doctorReportSchemaVersion = 5
+const doctorReportSchemaVersion = 6
 
 var (
 	newDoctorDaemonClient = cli.NewDaemonExportClient

@@ -158,8 +158,8 @@ func TestStrictDoctorFailsForAnUnavailableRequiredIntegration(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatalf("decode report: %v\n%s", err, out.String())
 	}
-	if report.SchemaVersion != 5 {
-		t.Errorf("schema_version = %d, want 5", report.SchemaVersion)
+	if report.SchemaVersion != 6 {
+		t.Errorf("schema_version = %d, want 6", report.SchemaVersion)
 	}
 	if report.Healthy {
 		t.Error("healthy = true despite an unavailable required integration")
@@ -230,4 +230,41 @@ func hasFinding(findings []doctorFinding, check, severity string) bool {
 		}
 	}
 	return false
+}
+
+// A required bridge that has not finished its first handshake is the state
+// every daemon restart passes through, not a broken integration: doctor warns
+// that it is still starting and leaves daemon resolution unknown, raising
+// neither ASL failure.
+func TestStrictDoctorPassesWhileARequiredBridgeIsStarting(t *testing.T) {
+	setUpDoctorFixture(t, ipc.Health{
+		Alive: true, Ready: true, PID: 1,
+		ASL: &aslbridge.Status{
+			Mode:       string(aslbridge.ModeRequired),
+			Executable: "/usr/local/bin/asl",
+			Reason:     aslbridge.ReasonStarting,
+		},
+	}, protocol.EventsExport{})
+	doctorJSON = true
+
+	var out bytes.Buffer
+	doctorCmd.SetOut(&out)
+	if err := runDoctor(doctorCmd, nil); err != nil {
+		t.Fatalf("runDoctor() = %v\n%s", err, out.String())
+	}
+	var report doctorReport
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatalf("decode report: %v\n%s", err, out.String())
+	}
+	if !hasFinding(report.Findings, "asl_starting", severityWarning) {
+		t.Errorf("asl_starting warning missing: %+v", report.Findings)
+	}
+	for _, check := range []string{findingASLUnavailable, findingASLDaemonResolution} {
+		if hasFinding(report.Findings, check, severityFailure) {
+			t.Errorf("a starting bridge raised %s: %+v", check, report.Findings)
+		}
+	}
+	if got := dimension(t, report.ASLIntegration, aslDimensionDaemonResolution); got.Status != aslStatusUnknown {
+		t.Errorf("daemon_resolution = %s (%s), want unknown", got.Status, got.Detail)
+	}
 }

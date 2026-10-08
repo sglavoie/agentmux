@@ -86,6 +86,12 @@ func aslDaemonResolutionDimension(in aslIntegrationInputs) doctorASLDimension {
 		dim.Status = aslStatusNotApplicable
 		dim.Detail = "the integration is disabled by defaults.asl.enabled"
 		return dim
+	case !in.Status.Available && in.Status.Reason == aslbridge.ReasonStarting:
+		// Neither a resolution success nor a failure yet: the first child is
+		// still handshaking. asl_starting carries the advice to look again.
+		dim.Status = aslStatusUnknown
+		dim.Detail = "the daemon has started the bridge and is waiting for its first handshake"
+		return dim
 	case !in.Status.Available && !in.Configured:
 		dim.Status = aslStatusNotApplicable
 		dim.Detail = "no agent-session-loop integration is configured and the daemon resolved none"
