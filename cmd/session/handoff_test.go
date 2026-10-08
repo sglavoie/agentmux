@@ -312,13 +312,15 @@ func writeSessionCommandIndex(t *testing.T, indexPath string, metas ...transcrip
 
 // A selector that cannot be a session ID is most likely a word remembered from
 // the conversation, so the miss points at search with that word rather than at
-// the whole list.
+// the whole list — unless it is a configured project's title, when the miss
+// points at that project's conversations.
 func TestSessionCLIPointsAWordSelectorAtSearch(t *testing.T) {
 	resetSessionCommandsTestState(t)
 	meta, indexPath := sessionCommandMeta(t, harness.Codex)
 	writeSessionCommandIndex(t, indexPath, meta)
 	sessionCommandsLoadConfig = func() (*config.Config, error) {
-		return &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Codex}}}, nil
+		return &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Codex}},
+			Projects: []config.Session{{Title: "🐱amx", Profile: "work"}}}, nil
 	}
 	sessionCommandsSessionIndexPath = func() string { return indexPath }
 	sessionCommandsSessionReaders = func() map[string]transcript.Reader {
@@ -338,6 +340,8 @@ func TestSessionCLIPointsAWordSelectorAtSearch(t *testing.T) {
 		{"tab title", "`amx session search \"tab title\"`"},
 		{"deadbeef", "run `amx session list` to see the indexed conversations"},
 		{"abc", "a session ID prefix needs at least 4 characters"},
+		{"amx", "🐱amx is a configured project, not a conversation; `amx session list --project amx` lists its conversations by ID"},
+		{"🐱amx", "`amx session list --project 🐱amx`"},
 	} {
 		assertSessionCommandJSONError(t, sessionContinueCmd, []string{tc.selector}, &out, "not_found")
 		var payload cli.JSONErrorEnvelope

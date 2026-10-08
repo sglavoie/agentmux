@@ -770,6 +770,9 @@ func resolveConversationOrFail(cmd *cobra.Command, jsonOutput bool, cfg *config.
 		}
 		hint := "run `amx session list` to see the indexed conversations"
 		switch {
+		case identity.Harness == "" && configuredProjectTitle(cfg, identity.SessionID) != "":
+			title := configuredProjectTitle(cfg, identity.SessionID)
+			hint = fmt.Sprintf("%s is a configured project, not a conversation; `amx session list --project %s` lists its conversations by ID", title, shellWord(identity.SessionID))
 		case !looksLikeSessionID(identity.SessionID):
 			hint = fmt.Sprintf("to find a conversation by what was said in it, run `amx session search %s`", shellWord(identity.SessionID))
 		case len(identity.SessionID) < sessionIDPrefixMin:
@@ -778,6 +781,32 @@ func resolveConversationOrFail(cmd *cobra.Command, jsonOutput bool, cfg *config.
 		return nil, cli.CommandFailure(cmd, jsonOutput, "not_found", fmt.Errorf("indexed conversation %s was not found; %s", selector, hint))
 	}
 	return meta, nil
+}
+
+// configuredProjectTitle returns the title of the configured project a
+// selector names, by the rule --project reads a title with (exact, or once
+// leading emoji or symbols and case are set aside), or "" when it names none
+// or several. A continuity selector is an ID, so this only shapes the hint for
+// one that is a project instead.
+func configuredProjectTitle(cfg *config.Config, selector string) string {
+	if cfg == nil {
+		return ""
+	}
+	selector = strings.TrimSpace(selector)
+	key := config.ProjectTitleKey(selector)
+	title := ""
+	for _, project := range cfg.Projects {
+		if project.Title == selector {
+			return project.Title
+		}
+		if key != "" && config.ProjectTitleKey(project.Title) == key {
+			if title != "" && title != project.Title {
+				return ""
+			}
+			title = project.Title
+		}
+	}
+	return title
 }
 
 // looksLikeSessionID reports whether a selector could be a session ID or a
