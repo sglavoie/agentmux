@@ -81,13 +81,24 @@ func statusBytes(v int64) string {
 }
 
 // quotaUsed is the " used=97%" a storage line ends its quota with, or nothing
-// when there is no quota to measure against.
+// when there is no quota to measure against. Both stores prune their oldest
+// files to stay under the quota, so a store that has filled up to it sits near
+// 100% for good; from 90% on the token says so, so that reads as the steady
+// state it is rather than as a store about to overflow.
 func quotaUsed(total, quota int64) string {
 	if quota <= 0 {
 		return ""
 	}
-	return fmt.Sprintf(" used=%d%%", total*100/quota)
+	used := total * 100 / quota
+	if used >= quotaPrunedFrom {
+		return fmt.Sprintf(" used=%d%% (oldest pruned to stay under quota)", used)
+	}
+	return fmt.Sprintf(" used=%d%%", used)
 }
+
+// quotaPrunedFrom is the percentage of a quota from which quotaUsed names the
+// pruning that holds a store there.
+const quotaPrunedFrom = 90
 
 // statusAge is how long before the report a timestamp was, to the second, as
 // secondsText prints it; a clock that ran backwards reads as 0s.
