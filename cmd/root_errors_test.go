@@ -83,3 +83,36 @@ func TestUnknownCommandStillPointsAtHelp(t *testing.T) {
 		}
 	}
 }
+
+func TestUnknownCommandNamesTheNestedCommandsItMatches(t *testing.T) {
+	_, stderr, code := executeRootArgs(t, nil, "search")
+	if code != 1 {
+		t.Fatalf("exit = %d, want 1", code)
+	}
+	for _, want := range []string{`Error: unknown command "search" for "amx"`, "Did you mean this?\n\tamx session search\n", "Run 'amx --help' for usage."} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr lacks %q:\n%s", want, stderr)
+		}
+	}
+
+	_, stderr, _ = executeRootArgs(t, nil, "status")
+	for _, want := range []string{"amx daemon status", "amx debug status", "amx transcripts status"} {
+		if !strings.Contains(stderr, "\t"+want+"\n") {
+			t.Errorf("stderr lacks %q:\n%s", want, stderr)
+		}
+	}
+}
+
+func TestUnknownCommandKeepsCobraTypoSuggestionsAlone(t *testing.T) {
+	_, stderr, _ := executeRootArgs(t, nil, "sesion")
+	if got := strings.Count(stderr, "Did you mean this?"); got != 1 {
+		t.Fatalf("stderr offers %d suggestion blocks, want 1:\n%s", got, stderr)
+	}
+}
+
+func TestUnknownCommandWithNoNestedMatchOffersNothing(t *testing.T) {
+	_, stderr, _ := executeRootArgs(t, nil, "no-such-command")
+	if strings.Contains(stderr, "Did you mean") {
+		t.Fatalf("stderr offers a suggestion for a name nothing carries:\n%s", stderr)
+	}
+}

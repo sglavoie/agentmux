@@ -86,9 +86,41 @@ func execute(stderr io.Writer) int {
 	// Cobra adds this pointer only when it could not resolve the command;
 	// keep doing the same now that it no longer prints.
 	if strings.HasPrefix(err.Error(), "unknown command") {
+		if !strings.Contains(err.Error(), "Did you mean") {
+			if paths := nestedCommandPaths(command, err.Error()); len(paths) > 0 {
+				_, _ = fmt.Fprintf(stderr, "\nDid you mean this?\n\t%s\n\n", strings.Join(paths, "\n\t"))
+			}
+		}
 		_, _ = fmt.Fprintf(stderr, "Run '%v --help' for usage.\n", command.CommandPath())
 	}
 	return 1
+}
+
+// nestedCommandPaths answers an unknown command that is the name of a
+// command one or more levels down — `amx search`, `amx status`, `amx prune` —
+// with the full paths that name it. Cobra's own suggestions only catch
+// misspellings of the commands at the level typed, so a leaf typed without its
+// family otherwise got nothing but a pointer at --help.
+func nestedCommandPaths(command *cobra.Command, message string) []string {
+	var name string
+	if _, err := fmt.Sscanf(message, "unknown command %q", &name); err != nil || name == "" {
+		return nil
+	}
+	var paths []string
+	var walk func(*cobra.Command)
+	walk = func(parent *cobra.Command) {
+		for _, child := range parent.Commands() {
+			if !child.IsAvailableCommand() {
+				continue
+			}
+			if child.Name() == name || child.HasAlias(name) {
+				paths = append(paths, child.CommandPath())
+			}
+			walk(child)
+		}
+	}
+	walk(command)
+	return paths
 }
 
 const (
