@@ -72,7 +72,7 @@ func TestSessionTableMarksLiveConversations(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
-	if !strings.Contains(lines[0], " LIVE ") || !strings.Contains(lines[1], "just now  ●     aaaa1111") || strings.Contains(lines[2], "●") {
+	if !strings.Contains(lines[0], " LIVE ") || !strings.Contains(lines[1], "just now  ●     0         aaaa1111") || strings.Contains(lines[2], "●") {
 		t.Fatalf("table = %q, want a LIVE column marking only the open conversation", out.String())
 	}
 

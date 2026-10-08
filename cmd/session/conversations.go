@@ -364,17 +364,20 @@ func shellWord(value string) string {
 
 // writeSessionTable is the session list for a person: a header, aligned
 // columns, how long ago each conversation was last active, and each session
-// ID cut to the prefix a continuity command still resolves. The summary is the
+// ID cut to the prefix a continuity command still resolves. MESSAGES tells
+// apart conversations that opened with the same prompt — a long session and
+// one abandoned after a reply read alike otherwise. The summary is the
 // harness's title for the conversation, else its opening prompt, and takes
-// whatever the terminal, width cells wide, leaves it.
+// whatever the terminal, width cells wide, leaves it. Pipes keep their fields
+// as they were, so the count is a table column only.
 func writeSessionTable(out io.Writer, views []sessionView, ids sessionIDAbbreviations, now time.Time, width int, liveKnown bool) error {
 	if len(views) == 0 {
 		_, err := fmt.Fprintln(out, "No indexed sessions match.")
 		return err
 	}
-	header := []string{"HARNESS", "PROFILE", "PROJECT", "ACTIVE", "SESSION", "SUMMARY"}
+	header := []string{"HARNESS", "PROFILE", "PROJECT", "ACTIVE", "MESSAGES", "SESSION", "SUMMARY"}
 	if liveKnown {
-		header = []string{"HARNESS", "PROFILE", "PROJECT", "ACTIVE", "LIVE", "SESSION", "SUMMARY"}
+		header = []string{"HARNESS", "PROFILE", "PROJECT", "ACTIVE", "LIVE", "MESSAGES", "SESSION", "SUMMARY"}
 	}
 	rows := make([][]string, 0, len(views))
 	for _, item := range views {
@@ -393,7 +396,7 @@ func writeSessionTable(out io.Writer, views []sessionView, ids sessionIDAbbrevia
 		if liveKnown {
 			row = append(row, liveMark(item.Live))
 		}
-		rows = append(rows, append(row, ids.of(item.ID), summary))
+		rows = append(rows, append(row, strconv.Itoa(item.MessageCount), ids.of(item.ID), summary))
 	}
 	fitLastColumn(header, rows, width)
 	return cli.WriteTable(out, header, rows)

@@ -38,13 +38,14 @@ func TestSessionTableFitsTheSummaryToTheTerminal(t *testing.T) {
 	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 	long := strings.Repeat("word ", 40)
 	views := []sessionView{{Harness: "claude", Profile: "p", Project: "x", LastAt: now, ID: "b03c41a5", Snippet: long}}
-	// The columns before the summary take 47 cells: HARNESS, PROFILE, and
-	// PROJECT are as wide as their headers, then "just now" and the ID.
+	// The columns before the summary take 57 cells: HARNESS, PROFILE, and
+	// PROJECT are as wide as their headers, then "just now", MESSAGES, and
+	// the ID.
 	for _, tc := range []struct {
 		width, want int
 	}{
 		{0, sessionSummaryWidth},
-		{147, 100},
+		{157, 100},
 		{60, sessionSummaryWidth},
 	} {
 		var out bytes.Buffer
@@ -166,5 +167,23 @@ func TestSessionLinesEndWithTheTitleAfterThePrompt(t *testing.T) {
 	second := strings.Split(lines[1], "\t")
 	if len(second) != 7 || second[5] != "Look at the project" || second[6] != "" {
 		t.Fatalf("untitled line fields = %q", second)
+	}
+}
+
+// Conversations that opened with the same prompt are told apart by how many
+// messages each holds, which the table shows in its own column.
+func TestSessionTableShowsMessageCounts(t *testing.T) {
+	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	views := []sessionView{
+		{Harness: "claude", Profile: "p", Project: "x", LastAt: now, ID: "aaaa1111", Snippet: "same prompt", MessageCount: 343},
+		{Harness: "claude", Profile: "p", Project: "x", LastAt: now, ID: "bbbb2222", Snippet: "same prompt", MessageCount: 3},
+	}
+	var out bytes.Buffer
+	if err := writeSessionTable(&out, views, nil, now, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
+	if !strings.Contains(lines[0], " MESSAGES ") || !strings.Contains(lines[1], " 343 ") || !strings.Contains(lines[2], " 3 ") {
+		t.Fatalf("table = %q, want a MESSAGES column with each count", out.String())
 	}
 }
