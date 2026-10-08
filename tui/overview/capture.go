@@ -37,6 +37,7 @@
 // reply delivered to another, and a value here would make "four in flight" a
 // property of whichever copy was updated last. Naming the sharing in the type is
 // better than leaving it to be discovered in a map header.
+
 package overview
 
 import (

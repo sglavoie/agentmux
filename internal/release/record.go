@@ -1,5 +1,6 @@
 // The evidence record's shape: the release artifact that outlives the terminal
 // the gate ran in, and every sub-record a consumer reads out of it.
+
 package release
 
 // Step is one planned command. The plan is data rather than control flow so a

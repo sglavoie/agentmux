@@ -1,7 +1,3 @@
-// Package transcript discovers, parses, and searches harness session
-// transcripts (Claude, Copilot, Codex). Each harness writes its own JSONL
-// layout under a per-profile home directory; per-harness Reader
-// implementations expose a uniform view of those files to the rest of amx.
 package transcript
 
 import (

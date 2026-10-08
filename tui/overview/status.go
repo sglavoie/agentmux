@@ -41,6 +41,7 @@
 // Below the delay threshold and with sessions to show, the row is empty. A
 // surface that announced every two-second gap between reads would teach the
 // operator to stop reading it.
+
 package overview
 
 import (

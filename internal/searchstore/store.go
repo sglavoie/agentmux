@@ -1,7 +1,8 @@
-// Package searchstore manages per-key search-text sidecar files. The store
-// derives a directory from an index path (stripping the file extension and
-// appending ".search") and writes each entry as sha256(key)+".txt" so callers
-// can look up content by an opaque string key without coordinating filenames.
+// Package searchstore manages per-key search-text sidecar files, the
+// disposable search storage beside a metadata cache. The store derives a
+// directory from an index path (stripping the file extension and appending
+// ".search") and writes each entry as sha256(key)+".txt" so callers can look
+// up content by an opaque string key without coordinating filenames.
 package searchstore
 
 import (

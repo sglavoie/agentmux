@@ -1,17 +1,3 @@
-// Package companion projects the daemon's state into the CompanionSnapshot a
-// subscribed companion renders. It is a pure function over values the caller
-// has already copied: it performs no Kitty, IPC, filesystem, or journal I/O,
-// reads no clock of its own, and never imports the daemon root, so the hub can
-// run it outside stateMu against a copy taken under it.
-//
-// Two rules make the projection what it is. A session is read from the Kitty
-// window tree first and from daemon state second, and the two are joined only
-// when they are provably about the same Kitty instance — window IDs are
-// meaningful only inside the instance that issued them, so a state recorded
-// against another socket never decorates a tree window that merely shares its
-// number. And the snapshot carries facts rather than ages, so projecting an
-// unchanged world twice yields byte-identical JSON and Digest can tell the hub
-// there is nothing to publish.
 package companion
 
 import (

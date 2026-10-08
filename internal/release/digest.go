@@ -1,5 +1,6 @@
 // Digests and output parsing: the deterministic reductions the evidence record
 // is built from.
+
 package release
 
 import (

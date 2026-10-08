@@ -1,13 +1,3 @@
-// Package dashboard owns the live-session dashboard: what a running session
-// looks like as a row, which rows the active filter keeps, which state group
-// each row belongs to, how many rows fit the current viewport, where the
-// cursor lands after a refresh, and how the resulting list, chips, and
-// completion popup paint.
-//
-// It is a domain leaf. It holds no Bubble Tea model and no program state of
-// its own: every entry point takes the facts it needs explicitly, so the root
-// package keeps ownership of the Model and adapts it at the call site. The
-// package must not import the root tui package.
 package dashboard
 
 import (

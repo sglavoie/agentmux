@@ -1,5 +1,6 @@
 // Publishing a gate run's verdict: the ordering that keeps a record from ever
 // claiming more than the run has actually achieved.
+
 package release
 
 import (

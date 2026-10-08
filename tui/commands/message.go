@@ -1,24 +1,3 @@
-// Package commands owns the TUI's command surface: what the dashboard can be
-// asked to do, whether it may be done right now, and how the doing is carried
-// out away from the Bubble Tea update loop.
-//
-// Three things live here. First, the command and action vocabulary — stable
-// command IDs and groups, the captured target context, the availability
-// verdict with its inline reasons, and the single guarded entry point that
-// refuses a hidden or unavailable command before it can execute. Second, the
-// command palette and the per-row actions overlay: query matching, result
-// ordering, display-row layout, scroll geometry, and the rendering of both.
-// Third, the effect layer — every tea.Cmd the dashboard starts (Kitty
-// enumeration, daemon queries, harness lifecycle, clipboard, editor and shell
-// launches, health probes, agent-session-loop discovery, URL opening) and every
-// tea.Msg those effects report back with.
-//
-// The package is parameterized over the root program model rather than
-// importing it: Command[M] and Action[M] carry the root's own closures, so the
-// gates and the palette evaluate against live model state without this package
-// ever knowing what a model is. Deciding what a command DOES — mutating model
-// fields, switching modes, pushing toasts, wiring the update loop — stays in
-// the root package, which owns the model and every catalog entry's closure.
 package commands
 
 import (

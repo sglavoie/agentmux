@@ -15,6 +15,7 @@
 //
 // Nothing here reads a clock, a config file, Kitty, or the daemon. Now, the
 // sessions, and every preview are supplied.
+
 package overview
 
 import (

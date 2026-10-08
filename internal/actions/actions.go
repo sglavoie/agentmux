@@ -1,7 +1,8 @@
-// Package actions defines the application actions shared by interactive and
-// command-line entry points.  It deliberately contains no Bubble Tea types:
-// callers supply the current entity and the dependencies needed to perform an
-// action, then decide how to present results, confirmations, and errors.
+// Package actions is the typed action registry shared by the CLI and the TUI,
+// so a command-line entry point and an interactive one run the same action
+// definition. It deliberately contains no Bubble Tea types: callers supply the
+// current entity and the dependencies needed to perform an action, then decide
+// how to present results, confirmations, and errors.
 package actions
 
 import (

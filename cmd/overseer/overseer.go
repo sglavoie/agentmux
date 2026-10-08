@@ -8,15 +8,19 @@
 // history` is the one surface in the family that returns conversation content,
 // and it asks that same question twice — once for the plan before anything is
 // discovered, and once per conversation against the working directory its
-// identity metadata names — so a transcript is admitted before it is opened
-// rather than filtered after it is read. Three properties are the whole point of
-// the surface:
+// identity metadata names, which must both lie inside an authorized
+// repository and pass the policy evaluation on its own — so a transcript is
+// admitted before it is opened rather than filtered after it is read. Three
+// properties are the whole point of the surface:
 //
 //   - Configuration is read on every question, not merely on every invocation.
 //     There is no cached evaluator and no daemon in the path, and `history`
-//     reloads and re-decides the plan's whole repository set before each
-//     conversation it opens, so withdrawing an opt-in takes effect on the next
-//     conversation rather than on the next request or the next restart.
+//     reloads configuration and re-decides the plan's whole repository set,
+//     not the conversation's directory alone, before each conversation it
+//     opens, because authorization is per plan and a walk of a corpus takes
+//     long enough for an opt-in to be withdrawn during it. Withdrawing an
+//     opt-in therefore takes effect on the next conversation rather than on
+//     the next request or the next restart.
 //   - An answer is evidence for one question. The payload carries the
 //     configuration fingerprint it was decided against and a digest of the
 //     question itself, and it carries no token, expiry, or grant — there is
@@ -24,13 +28,30 @@
 //   - A refusal exits nonzero in both output modes. A caller that reads only
 //     the process status must never be able to mistake a refusal for consent.
 //
-// The payload is versioned separately from the envelope it travels in. The
+// A withdrawal partway through a `history` request stops it: no further
+// conversation is opened, and the evidence gathered before it is dropped
+// rather than returned beside a refusal, since the client contract is binary
+// and a request half-served under a permission that no longer holds is not
+// half-authorized. Configuration that becomes unreadable mid-request stops it
+// the same way, as an error rather than a decision.
+//
+// `history` reaches the corpus only through transcript.History and never
+// through the transcript index or its search sidecars: a refresh has already
+// read every message body into a sidecar, so a cache lookup would be a way to
+// serve an excluded conversation without asking about it. Its withheld entries
+// name the harness, the session, and the reason and nothing that locates them,
+// because the path, the directory, and the project are what an exclusion is
+// about.
+//
+// Each payload is versioned separately from the envelope it travels in. The
 // common schema-v1 wrapper is shared with every other JSON command and stays
 // where it is; the contract block inside it versions the overseer's own
 // capability surface, so this contract can move without moving a version
 // number that governs commands with nothing to do with authorization. It is
 // likewise independent of the agent-session-loop bridge protocol, which this
-// package does not touch.
+// package does not touch. The two payloads also version independently of each
+// other: overseer_policy and overseer_history, each with its own digest
+// domain.
 package overseer
 
 import (

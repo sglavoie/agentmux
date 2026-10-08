@@ -1,5 +1,7 @@
-// Package diagnostics provides private, fail-open persistence for AgentMux
-// causal traces and operational logs.
+// Package diagnostics provides private, fail-open persistence for Agent Mux
+// diagnostics: the causal journals, the operational and native harness logs,
+// temporary raw-payload captures, and the bounded storage (retention,
+// compaction, and quotas) that keeps all of them from growing without limit.
 package diagnostics
 
 import (

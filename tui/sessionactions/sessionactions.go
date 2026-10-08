@@ -1,7 +1,9 @@
-// Package sessionactions is the vocabulary of the actions a dashboard row
-// offers: what each action is called, what it explains about itself, which
-// immediate key the per-row menu answers it with, which band of the menu it
-// sits in, and whether the row captured for it can run it right now.
+// Package sessionactions declares what a session action IS: the actions a
+// dashboard row offers, each with its stable commands.ID identity, what it is
+// called and what it explains about itself, which immediate key (mnemonic) the
+// per-row menu answers it with, which band of the menu it sits in, and the
+// availability rule that decides whether the row captured for it can run it
+// right now.
 //
 // It is one declaration read by three surfaces: the per-row actions overlay,
 // the command palette, and the F2 live session overview's own menu. The first
@@ -27,7 +29,34 @@
 // description, and aliases are kept beside the menu's label and description
 // rather than merged into one spelling: the two surfaces word themselves
 // differently today, and one declaration per action is the duplication worth
-// removing, not one wording per action.
+// removing, not one wording per action. Keeping both wordings side by side in
+// one declaration is the point: the surfaces are allowed to read differently,
+// but they must not be allowed to disagree about which actions exist or when
+// each one is permitted, which is what two tables of rules had let them do.
+//
+// The package also owns the captured Target and the Result contract. A Target
+// is a row snapshot from which tab and window identity are read rather than
+// stored beside it, so an action cannot be retargeted by a topology refresh
+// between selection and dispatch. A Result carries the action identity, the
+// request identity, and an Outcome that keeps a refusal distinct from a
+// failure.
+//
+// Two presentation answers live here for the same reason the wordings do. The
+// menu's initial selection is declared (InitialSelection) rather than left as
+// index zero, so opening the menu and pressing enter does what pressing enter
+// on the row did before there was a menu. And the destructive confirmation's
+// rendering (prompt.go) is here rather than in the root, because the prompt is
+// the wording an action already decided: the host passes the ConfirmPrompt the
+// controller produced and a subject, and gets back a box. Its consequence
+// sentence is WRAPPED, never truncated — half a sentence about what saying yes
+// destroys is a different warning rather than a shorter one, and the operator
+// answers y or n to whichever one they read.
+//
+// It imports neither the root tui package nor any surface above it, so the
+// dependency direction stays tui → tui/sessionactions → tui/commands →
+// tui/dashboard. A definition the root has no implementation for is dropped
+// rather than rendered, and the root's TestOverlayOffersEveryMenuDefinition
+// and TestPaletteOffersEverySessionDefinition are what report it.
 package sessionactions
 
 import (

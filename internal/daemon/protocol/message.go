@@ -3,7 +3,8 @@
 // serialization-facing vocabularies both sides key on. It holds shapes and the
 // pure functions that project between them — never orchestration, I/O, or
 // clock reads — so a client, an offline debugger, and the daemon itself can all
-// agree on a message without any of them importing the daemon.
+// agree on a message without any of them importing the daemon. It must never
+// import the daemon root.
 package protocol
 
 import (

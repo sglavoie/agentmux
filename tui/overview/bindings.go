@@ -29,6 +29,7 @@
 //     The footer prints `q exit` because the row has eleven entries competing for
 //     one line; the help prints `esc / q / ctrl+c` because it has a column and
 //     the other two keys are real.
+
 package overview
 
 import (

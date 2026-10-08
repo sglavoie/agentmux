@@ -1,27 +1,71 @@
-// The overview's running half: the Bubble Tea model that loads the live
-// sessions, holds the selection, and paints the grid the rest of this package
-// draws.
+// Package overview is the live session overview: the standalone Bubble Tea
+// program that `amx overview` and F2 open, showing every managed session at
+// once as a grid of live pane previews.
 //
-// It is a STANDALONE program rather than a mode of the root dashboard, and that
-// is the design rather than a convenience. The root model warms transcripts,
-// plans, health and agent-session-loop discovery on startup, owns the two Kitty
-// writes a refresh may perform, and carries a dozen modes' state; an overview
-// raised over a pane needs none of it and must not pay for any of it. So this
-// file constructs nothing from tui and imports nothing from it: the live-session
-// read arrives through commands.RefreshOverview, which is the dashboard's own
-// reader with its write budget removed. Enter and digits focus a session; c
-// changes only the daemon's in-memory view preference; and a is the shared
-// actions menu, whose dispatched mutations and the close recovery behind u are
-// the rest of what this surface may do to the world.
+// It has a pure half — the session order, the grid geometry, the page a
+// selection is on, and what a keypress moves the selection to, all functions
+// of their arguments (see grid.go) — and a running half, the Bubble Tea model
+// in this file that loads the live sessions, holds the selection, and paints
+// the grid the rest of the package draws.
 //
-// Every effect is injected — every read, every mutation, both tickers, and the
-// clock are fields on a deps value — so a test drives the whole lifecycle,
-// startup, coalescing, staleness, focus success and failure, and an action
-// parked and completed, with no daemon, no Kitty, and no wall clock. The Kitty
-// client is stored only to be handed to the default seams that reach it, which
-// is why a test may construct the model with a nil client: with the seams
-// replaced there is no path that touches it, and a regression that grew one
-// would panic rather than pass.
+// It is a STANDALONE program rather than a mode of the root dashboard, and
+// that is the design rather than a convenience. Like tui/customization it is a
+// sibling of the root tui package rather than one of its leaves: cmd/dashboard
+// runs it directly, and the root does not import it. The root model warms
+// transcripts, plans, health and agent-session-loop discovery on startup, owns
+// the two Kitty writes a refresh may perform, and carries a dozen modes'
+// state; an overview raised over a pane needs none of it and must not pay for
+// any of it. So this package constructs nothing from tui and imports nothing
+// from it.
+//
+// It reaches the world only through an unexported deps struct of function
+// values — the topology read, the pane capture and its own cadence, the
+// interval tick, the daemon-held compact preference, the focus call, the
+// session-action dispatch, the close-recovery relaunch, and the clock. That is
+// what lets the package-level acceptance sequences drive the real Update/View
+// loop — startup, coalescing, staleness, focus success and failure, and an
+// action parked and completed — against a frozen clock, scripted snapshots,
+// and a recording Kitty client, with no daemon, no wall clock, and no sleeps
+// anywhere. The Kitty client is stored only to be handed to the default seams
+// that reach it, which is why a test may construct the model with a nil
+// client: with the seams replaced there is no path that touches it, and a
+// regression that grew one would panic rather than pass.
+//
+// Three properties are the package rather than details of it.
+//
+// Its reads are BOUNDED, FAIR, and RECOVERABLE: at most four captures in
+// flight and one per window, queued FIFO and coalesced, a request ID releasing
+// the slot so a lost reply cannot leak one, and a generation gating what may
+// be painted so a late reply cannot repaint a grid that has since been
+// repaged or resized.
+//
+// Its retrieval is READ-ONLY. It takes topology through
+// commands.RefreshOverview — the dashboard's own reader with its write budget
+// removed — and never commands.Refresh, so it cannot consume the dashboard's
+// pending selection request. Startup, every refresh, every navigation key, the
+// `?` help overlay, and browsing the `a` actions menu write nothing to Kitty at
+// all, and `c` is no exception either, since it saves only the daemon's
+// in-memory compact preference. Every Kitty MUTATION is therefore one the
+// operator explicitly asked for: the focus call that Enter, a digit, and the
+// menu's Open entry share, and the twelve session actions the menu dispatches
+// under the same declarations, availability rules, and confirm_destructive
+// prompts the dashboard reads from tui/sessionactions. The feedback row is
+// where those land, and it names every refusal and every failure — including
+// for the actions that announce nothing on the way out, because a grid that
+// silently declined to do what was asked is the one outcome an operator
+// cannot see.
+//
+// And a close made here is recoverable here: `u` relaunches a CONFIRMED close
+// for five seconds, from a recovery stack this program holds itself (the
+// Recovery type tui/sessionactions declares for both surfaces), and the tab
+// the overview is itself running in is never offered, because closing it
+// takes the grid and the offer with it.
+//
+// Its compact two-line tile header (dashboard.CompactMetaLines rows, built in
+// tui/dashboard) is deliberately a strict subset of the inspector's six facts:
+// branch, directory, and the supervision/lock/mute line stay in the
+// inspector, because a tile that grew them would be an inspector rendered
+// nine times rather than an overview.
 package overview
 
 import (

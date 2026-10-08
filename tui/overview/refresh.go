@@ -33,6 +33,7 @@
 // they were and records the error; the surface then ages visibly out of its own
 // last successful capture instead of emptying itself because a subprocess timed
 // out.
+
 package overview
 
 import (

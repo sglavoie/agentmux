@@ -1,3 +1,14 @@
+// Package debug holds the daemon-state diagnostic surfaces and the vocabulary
+// they share: `amx debug` (status, tail, probe, explain, capture, bundle,
+// replay, and `subscribe`, which opens a companion stream exactly as an app
+// does and prints each frame, one schema-v1 record per line under --json),
+// `amx doctor` with its stable finding identifiers and versioned report, the
+// invariant evaluator both run, and `amx daemon audit`, which is a doctor
+// surface wearing a daemon subcommand name.
+//
+// It also owns the export projections (ExportWindowIDs, ExportLiveMetadata,
+// ASLStatusLine) that doctor and the cmd/daemon command family must agree on,
+// so a doctor cannot report drift that `daemon export-events` does not see.
 package debug
 
 import (

@@ -1,9 +1,18 @@
 // Package daemon holds the `amx daemon` command family: the always-on local
-// daemon's lifecycle from the CLI side (start, stop, restart), the status
-// surface that reports whether it is running and ready, and the
-// export-events investigation snapshot. `amx daemon audit` is registered here
-// but implemented in cmd/debug, because it shares that family's invariant
+// daemon seen from the CLI side. It owns the daemon's lifecycle as a command —
+// `start`, which blocks and is the process the detached launch re-execs, plus
+// `stop` and `restart` over the lifecycle client seam — the `status` surface
+// with its readiness, build, notification, ASL, and companion lines, and
+// `export-events`, the investigation snapshot with its window resolution,
+// per-window trimming, and schema projection. `amx daemon audit` is registered
+// here but implemented in cmd/debug, because it shares that family's invariant
 // evaluator.
+//
+// The family exports exactly one identifier, Command, so no daemon internal is
+// re-exported through the CLI. Everything it needs from the daemon it takes
+// from internal/daemon, internal/daemon/ipc, internal/daemon/eventlog,
+// internal/daemon/protocol, and internal/daemon/process (the latter only for
+// the detached-launch handshake `start` reads back).
 //
 // A file in this package may name the imported internal/daemon package
 // unqualified as `daemon`: a package's own name is not in scope inside its

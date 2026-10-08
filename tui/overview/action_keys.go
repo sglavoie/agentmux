@@ -12,6 +12,7 @@
 // out of the menu, the picker, and the prompt — but ctrl+c is the operator
 // asking for the program, and a modal that answered it by closing itself would
 // need a second press for every layer they happened to be under.
+
 package overview
 
 import (

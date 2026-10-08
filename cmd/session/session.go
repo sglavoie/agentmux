@@ -2,14 +2,18 @@
 // the Kitty tab carrying one.
 //
 // Two kinds of leaf live here and they are the same domain seen from two
-// distances. The `amx session` family works on conversation identity — listing,
-// searching, and showing indexed conversations and continuing, forking,
-// worktree-forking, or handing one off — and always resolves an exact
-// (harness, session_id) before it acts.
-// The root-level tab controls work on the live instance instead: focusing the
-// previous or next managed tab, focusing the next tab that wants attention,
-// toggling mute on the focused tab, and resorting tabs into the configured
-// order. Both halves reduce to "which session, and what happens to it".
+// distances. The `amx session` family works on conversation identity (list,
+// search, show, continue, fork, fork-worktree, handoff) and always resolves an
+// exact (harness, session_id) before it acts; `search` runs the same
+// transcript.Search Past Sessions does, and it and `list` share one set of
+// selector flags. The root-level tab controls work on the live instance
+// instead: focus-prev-managed and focus-next-managed, focus-next (the next tab
+// that wants attention), mute-toggle on the focused tab, and resort into the
+// configured order. Both halves reduce to "which session, and what happens to
+// it".
+//
+// `mute-toggle --json` reports {window_id, muted, changed} for the companion
+// app; a mute whose title write failed is partial durable success.
 //
 // A file in this package may name the imported internal/session package
 // unqualified as `session`: a package's own name is not in scope inside its

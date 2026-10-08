@@ -1,14 +1,16 @@
 // Package rendering owns the daemon's status presentation: the icon the
 // reducer's effective state paints, the tab title text that carries it, the
 // window that owns a tab's title, the latest-generation render queue that
-// orders presentation work, and the bounded render-generation traces exported
-// as the renderer's aggregate display model.
+// orders presentation work, the presentation cadence, and the bounded
+// render-generation traces exported as the renderer's aggregate display model.
 //
-// It is deliberately not a generic formatting package. Every identifier here
-// describes daemon status presentation; nothing in it knows how to talk to
-// Kitty, how to reduce facts, or how to route events. The daemon root keeps
-// ownership of the render loops, the Kitty writes, and the journal I/O, and
-// drives this package for the decisions those loops present.
+// It is deliberately domain-specific, not a generic formatting utility
+// package. Every identifier here describes daemon status presentation; nothing
+// in it knows how to talk to Kitty, how to reduce facts, or how to route
+// events. It must never import the daemon root, and it performs no Kitty, IPC,
+// or journal I/O: the daemon root keeps ownership of the render loops and
+// every Kitty write, and drives this package for the decisions those loops
+// present.
 package rendering
 
 import "time"

@@ -1,9 +1,15 @@
 // Package notifications holds the `amx notifications` command family: the
 // operator-facing surface that sends a real notification through the backend a
-// real one would take — the connected companion app, else Alerter — and
-// reports which one confirmed delivery, so a silent daemon
-// can be told apart from a muted operating system, and that sets or clears the
-// running daemon's in-memory snooze.
+// real one would take — the connected companion app via the daemon's
+// notification_test request, else Alerter from the CLI process — and reports
+// which backend confirmed delivery, so a silent daemon can be told apart from
+// a muted operating system, and that sets or clears the running daemon's
+// in-memory snooze (`snooze 1h|until HH:MM|indefinite|off [--json]`).
+//
+// Snooze never auto-starts a daemon, since a snooze held by a daemon that was
+// not running would change nothing. `test` sends from the CLI process rather
+// than through the daemon, so it asks the daemon for the snooze first and
+// reports a snoozed test as suppressed instead of sending past it.
 package notifications
 
 import (

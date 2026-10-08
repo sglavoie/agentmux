@@ -23,6 +23,7 @@
 // that jumped from the last session to
 // the first would make "am I at the end" unanswerable without counting, and the
 // overview has a page indicator precisely so that question has a cheap answer.
+
 package overview
 
 // focusDigits follows the overall row-major card order, not the current page.

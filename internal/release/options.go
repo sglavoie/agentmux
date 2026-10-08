@@ -1,5 +1,6 @@
 // Gate inputs: the seams that make a release run testable -- the command
 // runner, the clock -- and the operator-facing options beside them.
+
 package release
 
 import (

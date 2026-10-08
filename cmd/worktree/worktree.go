@@ -1,8 +1,11 @@
 // Package worktree holds the `amx worktree` command family: listing managed
-// Agent Mux Git worktrees, showing one, reopening it as a live session, opening
-// a shell or the configured editor in it, and the bounded destructive leaves —
-// removing a clean inactive worktree, forgetting stale metadata, and pruning
-// every worktree that removal would accept (prune.go).
+// Agent Mux Git worktrees, showing one, reopening it as a live session,
+// opening a shell or the configured editor in it, and the bounded destructive
+// leaves — `remove` a clean inactive worktree, `forget` stale metadata, and
+// `prune` (prune.go), which selects every worktree `remove` would accept and
+// removes each through `remove` itself, previewing unless --yes. The bounded
+// creation and cleanup themselves stay in internal/worktree; this package is
+// only the command surface over them.
 //
 // A file in this package may name the imported internal/worktree package
 // unqualified as `worktree`: a package's own name is not in scope inside its

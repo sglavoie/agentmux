@@ -1,6 +1,7 @@
-// Package cachefile provides the process-safe primitives used by disposable
-// filesystem caches. Locks deliberately live beside the metadata file so all
-// processes derive the same coordination path without another registry.
+// Package cachefile provides the shared process-safe primitives used by
+// disposable filesystem caches: the advisory lock, the atomic write by rename,
+// and corruption quarantine. Locks deliberately live beside the metadata file
+// so all processes derive the same coordination path without another registry.
 package cachefile
 
 import (

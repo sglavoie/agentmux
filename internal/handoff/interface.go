@@ -1,5 +1,11 @@
-// Package handoff builds deterministic, bounded Markdown context packs and
-// persists private draft/final artifacts as standalone files.
+// Package handoff builds deterministic, bounded Markdown context packs,
+// persists private draft/final artifacts as standalone files, and runs the
+// cross-harness launch workflow that hands a pack to a fresh session under
+// another profile (Workflow).
+//
+// Handoff artifacts are independent user assets, not cache internals: a
+// successful handoff survives the launch it fed, and a failed launch leaves
+// the finalized artifact in place (PartialLaunchError).
 package handoff
 
 import (

@@ -27,6 +27,7 @@
 //     controller writes the in-flight record and publishes the state BEFORE it
 //     runs the effect; their own messages then decide only where the operator
 //     ends up.
+
 package overview
 
 import (

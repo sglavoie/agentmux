@@ -1,13 +1,3 @@
-// Package plans owns the TUI's plan listing and plan viewer domain: how a
-// plan's logical lines become the terminal rows the viewer scrolls through,
-// which of those rows are separators or search matches, how far the viewer
-// may scroll, and the labels the Plans header and result rows carry — the
-// active sort mode, its cycle, and a plan's project name.
-//
-// The package holds vocabulary and pure projections only. It knows nothing
-// about the dashboard Model, performs no plan I/O of its own, and must not
-// import the root tui package: deciding what a keystroke does to the viewer's
-// cursor and scroll offset stays with the model that owns them.
 package plans
 
 import (

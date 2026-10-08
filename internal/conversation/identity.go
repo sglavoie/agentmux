@@ -1,6 +1,7 @@
-// Package conversation defines the stable identity shared by transcript,
-// daemon, and session-continuity features. A harness session ID is only unique
-// within its harness, so callers must always carry both fields together.
+// Package conversation defines the canonical (harness, session_id) identity
+// shared by transcript, daemon, and session-continuity features. A harness
+// session ID is only unique within its harness, so callers must always carry
+// both fields together.
 package conversation
 
 import (

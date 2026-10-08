@@ -1,3 +1,6 @@
+// Package release holds the hidden `release-gate` operator command, which
+// drives the paired ASL/Agent Mux release procedure implemented in
+// internal/release.
 package release
 
 import (

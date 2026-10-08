@@ -1,5 +1,6 @@
 // Pair tagging: the two-repository transaction that turns a passing gate into
 // a released pair, and the accounting for the one failure it cannot prevent.
+
 package release
 
 import (

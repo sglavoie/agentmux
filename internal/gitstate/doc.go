@@ -3,6 +3,13 @@
 // dirty bit as data and decides nothing — not which row is interesting, not
 // whether a row should be shown, and not what any of it means.
 //
+// It reads that state through an injectable runner (Executor) with a
+// per-command timeout, and holds the answers in a bounded TTL Cache keyed by
+// absolute directory. What the daemon does with the result — which directories
+// are worth probing, and how a result reaches a window without holding stateMu
+// across a subprocess — stays in internal/daemon (git_state.go), which drives
+// the refresh from the watchdog loop.
+//
 // # The line against internal/worktree
 //
 // This is the first thing to ask about, because internal/worktree already

@@ -1,3 +1,8 @@
+// Package hooks holds harness hook files and hook delivery: the
+// `hook-indicator` entry point harness hooks call, with its fail-open legacy
+// path and its strict 75/2 exit mapping (75 for a retryable failure, 2 for
+// permanent non-delivery), and the `hooks-sync`/`hooks-status` maintenance
+// leaves that the cmd/config family surfaces under `amx config`.
 package hooks
 
 import (

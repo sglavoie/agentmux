@@ -1,6 +1,6 @@
 // Package release implements the paired agent-session-loop / Agent Mux release
-// gate: the procedure that must pass, in order, before the two repositories are
-// tagged as a compatible pair.
+// gate: the ordered step plan that must pass, step by step, before the two
+// repositories are tagged with annotated pair tags as a compatible pair.
 //
 // The two programs are released together because neither is correct alone. ASL
 // owns the compatibility corpus and the bridge protocol; Agent Mux vendors the
@@ -21,7 +21,7 @@
 //
 // Every external command goes through a CommandRunner, and time comes from a
 // clock function. That seam is what makes the gate testable: the isolated test
-// in cmd/ points the whole procedure at throwaway repositories, a fake Kitty,
+// in cmd/release points the whole procedure at throwaway repositories, a fake Kitty,
 // an ephemeral signing key, and a temporary evidence directory, so the gate
 // logic stays continuously exercised without touching the operator's real
 // installation.

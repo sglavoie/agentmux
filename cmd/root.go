@@ -1,9 +1,16 @@
 // Package cmd is the root of the amx CLI and nothing more: the root command
-// itself, the artifact version it reports, the exit-status mapping Execute
-// applies, and the assembly that registers every command family's leaves under
-// it. Every user-facing command lives in a child package; this package owns no
-// command behavior of its own, which is why it is the one package in the cmd
-// tree that no other cmd package may import.
+// (rootCmd) itself, the artifact version it reports, the exit-status mapping
+// Execute applies, and the assembly that registers every command family's
+// leaves under it. Every user-facing command lives in a child package; this
+// package owns no command behavior of its own, which is why it is the one
+// package in the cmd tree that no other cmd package may import.
+//
+// Because assembly is all it does, "did every family reach the user" is the
+// one regression it can hide, so TestCommandFamiliesAreRegisteredUnderRoot in
+// root_test.go is the single root-owned registration assertion rather than one
+// such file per family. Cross-family acceptance tests that name no command
+// symbol (process lifecycle, diagnostics release, the ASL contract) also stay
+// here.
 package cmd
 
 import (

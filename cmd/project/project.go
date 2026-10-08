@@ -1,16 +1,25 @@
 // Package project holds the `amx project` command family: the command surface
 // over configured projects, the launch templates `[[projects]]` declares.
 //
-// `list` reports every configured project with the profile, harness, and
-// directory it launches with, narrowed on request by profile, harness, or
-// group, and `launch` starts a new session from one of them through the shared
-// actions.Launch definition, exactly as the dashboard's launcher does. A project is identified by its profile and title. A title
-// that matches no project exactly may still name exactly one project once the
-// leading emoji or symbols are set aside and case is ignored, which is how an
-// operator types it. Selection never guesses: a title shared by several
-// projects without a --profile to tell them apart, and a selector that matches
-// nothing, both return the configured projects it could have meant as ordered
-// candidates.
+// `list` reports each configured project as {profile, title, harness,
+// directory, groups}, plus a directory_problem when its directory is unusable.
+// --missing keeps only those, by the same rule `config validate` applies;
+// --profile, --harness, and --group narrow the list, refusing a name the
+// configuration does not know. `launch` starts a new session from one project
+// through actions.Launch in actions.DefaultRegistry(), the same definition the
+// dashboard's launcher runs, so the two cannot disagree about what launching a
+// project means.
+//
+// A project is identified by its profile and title. An exact title wins;
+// failing one, a title matching exactly one project once the leading emoji or
+// symbols are set aside and case is ignored selects it, which is how an
+// operator types it (so `amx` reaches `🐱amx`). Selection never guesses: a
+// title shared by several projects without a --profile to tell them apart,
+// and a selector that matches nothing, are both refused with the configured
+// projects it could have meant as ordered profile/title candidates. Such a
+// candidate passed back as the title launches that project, once the whole
+// string has failed to match as a title itself. A launch reports the new
+// tab's identity only when exactly one new tab carrying the title appeared.
 //
 // Neither leaf rewrites config.toml.
 package project

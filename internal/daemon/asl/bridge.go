@@ -1,27 +1,3 @@
-// Package asl is what the daemon knows about an agent-session-loop run, and
-// how it reads it.
-//
-// Two directions of evidence meet here. Outbound, the optional bridge
-// subprocess answers snapshot/question/action/workbench requests, and this
-// package owns the seam, its capability block, and the refusals that carry it.
-// Inbound, ASL publishes durable per-run state that the daemon reads: the
-// projection phase a discovered run is in, the supervisor mailbox records that
-// say a human is being waited on, and the closure markers that say they are
-// not. This package owns that reading — the parsing, the monotonicity rules,
-// the per-run supervision bookkeeping, the lease-evidence decision, and the
-// counters that make a silent pairing legible.
-//
-// It does not own what an ASL observation DOES to a window. Seeding a lease,
-// retiring one, raising the question icon, and notifying about it are reducer
-// mutations under the daemon's stateMu, and they stay in the daemon root with
-// the reducer, the renderer, and the notifier. Like protocol, state, rendering,
-// events, activity, probes, and process, this package must never import the
-// daemon root, and it performs no Kitty, IPC, or journal I/O.
-//
-// Generic hook decoding stays in internal/daemon/events: an ASL lifecycle
-// event is normalized there alongside every other hook, and transport dispatch
-// stays with the daemon's IPC surface. This package supplies the ASL-specific
-// vocabulary and decisions that both of those reach for.
 package asl
 
 import (

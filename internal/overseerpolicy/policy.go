@@ -2,13 +2,19 @@
 // on the repositories of one plan.
 //
 // It is deliberately a second, stricter reader of the same configured projects
-// that internal/projectresolve reads for display, and the two differ in the
-// three places where display is allowed to guess:
+// that internal/projectresolve reads for display, and the boundary between them
+// is the one to keep straight. projectresolve answers "what should this row be
+// called" and is allowed to guess, because a mislabelled row is cosmetic; this
+// package answers "may we act here" and has no degraded form. The two differ in
+// the three places where display is allowed to guess:
 //
 //   - Display picks the most specific match; authorization examines EVERY
 //     declaration that applies to a directory. A nested project cannot grant
 //     what an enclosing declaration withheld, because both are examined and any
-//     exclusion denies.
+//     exclusion denies. Applicability is measured both physically and by
+//     position inside the repository family, so an exclusion on a main
+//     checkout reaches the linked worktree that would otherwise bypass it,
+//     while sibling projects in one monorepo stay independent.
 //   - Display resolves a directory through symlinks, `~`, and linked worktrees
 //     best-effort, and falls back to a basename when nothing works;
 //     authorization has no fallback. An unresolvable path or an unresolvable
@@ -17,9 +23,10 @@
 //     repository a plan participates in must be permitted, so one excluded
 //     repository denies the whole request rather than shrinking it.
 //
-// Nothing here reads project or conversation content, and nothing here writes
-// configuration: enrolling a project is an operator edit, and this package only
-// reports what the operator already wrote.
+// It decides only. Nothing here reads project or conversation content, and
+// nothing here writes configuration — in particular never the asl_overseer key:
+// enrolling a project is an operator edit, and this package only reports what
+// the operator already wrote.
 package overseerpolicy
 
 import (

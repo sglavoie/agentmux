@@ -9,8 +9,8 @@
 // Everything here is pure. The package reads no clock beyond stamping a record,
 // performs no Kitty, IPC, or journal I/O, and never imports the daemon root.
 // The division with that root is deliberate: this package supplies the
-// vocabulary and the evidence, and the root makes the routing decision and acts
-// on it.
+// vocabulary and the evidence, and the root makes the routing decision, owns
+// transport dispatch, and acts on it.
 package events
 
 // This file introduces the normalized hook-event schema. A raw HookPayload is

@@ -2,8 +2,12 @@
 // stored on disk under a configurable root (default
 // ~/.local/share/agent-plans). Each top-level directory is treated as a
 // single plan whose search corpus is the concatenation of every .md file
-// at depth <= 2 inside it. Atomic JSON metadata and search sidecars are
-// disposable caches; the markdown directories remain authoritative.
+// at depth <= 2 inside it. Search is source-backed over that corpus.
+//
+// The markdown directories remain authoritative and are never rewritten here.
+// plans.json and its search sidecars are disposable caches: refresh and
+// corruption quarantine may replace them, always through advisory lock
+// sidecars and atomic renames.
 package plans
 
 import (

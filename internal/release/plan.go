@@ -1,5 +1,6 @@
 // The gate's ordered command plan: what runs, in which repository, in which
 // phase, and why that order is the gate's argument rather than an accident.
+
 package release
 
 import "path/filepath"

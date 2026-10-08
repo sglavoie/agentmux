@@ -1,6 +1,17 @@
-// Package worktree creates explicitly requested isolated Git worktrees. Git
-// and the filesystem are authoritative: successful worktrees are ordinary Git
-// worktrees, while callers retain the returned result for failed-launch cleanup.
+// Package worktree owns bounded managed Git worktree creation and cleanup: it
+// creates explicitly requested isolated worktrees, inventories them, and
+// performs the bounded destructive mutations (Inventory.Remove and
+// Inventory.Forget) that the amx worktree command family surfaces. Git and the
+// filesystem are authoritative: successful worktrees are ordinary Git
+// worktrees that survive launch, while callers retain the returned result for
+// failed-launch cleanup, and compensation may remove only the worktree the
+// failed request created (Workflow.RemoveUnused).
+//
+// Its answers about a checkout are AUTHORITATIVE and EXPENSIVE, because they
+// gate destructive actions. internal/gitstate also reports a branch and a dirty
+// bit, but cheaply, unscoped, and advisory, for painting a dashboard column;
+// use this package to decide something and gitstate to paint a column, never
+// the reverse.
 package worktree
 
 import (

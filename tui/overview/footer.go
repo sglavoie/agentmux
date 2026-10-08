@@ -30,6 +30,7 @@
 // Enter, `a`, and the digits answer nothing at all — so the row is not drawn.
 // What replaces it is the modal's own hint, which is "" for the three that print
 // their keys inside their own box and confirmHints for the one that does not.
+
 package overview
 
 import (

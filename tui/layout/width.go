@@ -1,17 +1,3 @@
-// Package layout owns the TUI's viewport sizing and layout primitives:
-// how wide a rendered string actually is in terminal cells, how it is cut,
-// padded, centered, and wrapped to fit a column budget, how a popup is
-// spliced into a base view, and which slice of a flat list fits a body of a
-// given height.
-//
-// Every visible-cell calculation in the TUI should route through the helpers
-// in this package. Direct production calls to runewidth.StringWidth,
-// runewidth.Truncate, or lipgloss.Width outside these helpers are discouraged
-// so width, truncation, padding, and centering stay consistent across
-// surfaces.
-//
-// The package holds no domain state and no Bubble Tea model. It must not
-// import the root tui package.
 package layout
 
 import (

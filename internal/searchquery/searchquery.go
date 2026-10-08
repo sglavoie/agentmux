@@ -1,5 +1,10 @@
 // Package searchquery is what a typed search query means for the transcript
-// and plan searches and for the viewers that step between their matches.
+// and plan searches and for the viewers that step between their matches. The
+// searches count with it and the transcript and plan viewers step between
+// lines holding any of its terms, so a result and the matches inside it cannot
+// disagree about the query. It also picks the line a result is previewed by
+// (MatchLine), entering a long line just before a deep match, so both searches
+// show a match the same way.
 //
 // A query is a set of terms: whitespace separates words, and a double-quoted
 // span is one term however many words it holds. A document matches when it

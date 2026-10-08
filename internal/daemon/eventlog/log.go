@@ -1,27 +1,3 @@
-// Package eventlog is the daemon's record of what happened: the bounded
-// per-window rows of accepted, suppressed and daemon-synthesized events, the
-// receipt cursor that totally orders them, the durable counters and read
-// projections derived from them, and the journal record that outlives the
-// in-memory ring.
-//
-// The boundary is "the row", not "the decision". Deciding what an event does
-// to a window stays in the daemon root with the reducer, the renderer and the
-// notifier — the same stateMu seam sessions 4 through 9 drew. This package
-// only records, correlates, projects and persists rows, so every function here
-// is either a pure projection or a caller-locked mutation of a window's ring.
-//
-// It deliberately does not absorb the diagnostic tail, cursor and replay code
-// in internal/debugger: that surface reads immutable diagnostics artifacts
-// rather than daemon event rows, it must keep working with no daemon running,
-// and the intended import graph gives internal/debugger no eventlog edge. What
-// this package owns of "replay" is the producer half — the replay evidence
-// stamped onto the durable journal record that internal/debugger decodes — so
-// the persisted format and its replay semantics stay pinned on the side that
-// writes them.
-//
-// Like protocol, state, rendering, events, activity, probes, process and asl
-// it must never import the daemon root, and it performs no Kitty, IPC or
-// journal I/O of its own: it builds the record the root appends.
 package eventlog
 
 import (

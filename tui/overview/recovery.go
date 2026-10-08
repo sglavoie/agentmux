@@ -16,6 +16,7 @@
 // this overview is running in is never recoverable. Closing it takes the grid,
 // the feedback row, and the five seconds the offer would have lasted with it, so
 // an offer made there would be an affordance that dies before it can be used.
+
 package overview
 
 import (

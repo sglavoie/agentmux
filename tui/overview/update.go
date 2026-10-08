@@ -22,6 +22,7 @@
 //   - DISMISSAL — esc, q, ctrl+c — leaves. It leaves while a refresh is out and
 //     while a focus is pending, because an operator who wants out of an overlay
 //     is not asking to wait for a subprocess first.
+
 package overview
 
 import (

@@ -1,5 +1,13 @@
-// Package debugger provides offline-first diagnostic query services shared by
-// the debug CLI, doctor, and hook-status surfaces.
+// Package debugger provides the offline-first diagnostic services — status,
+// query (tail, cursor, and selectors), explanation, bundle, and replay — shared
+// by the debug CLI, doctor, and hook-status surfaces.
+//
+// Offline-first means these services read immutable diagnostics artifacts and
+// work with no daemon running. That is the boundary against
+// internal/daemon/eventlog, which builds the live per-window rows and the
+// daemon.decision journal record this package decodes after the fact, and
+// which deliberately does not absorb the tail, cursor, and replay services
+// kept here.
 package debugger
 
 import (

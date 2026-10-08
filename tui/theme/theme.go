@@ -1,5 +1,8 @@
-// Package theme holds the fixed dark-terminal palette shared by Agent Mux views.
-// It does not color the terminal canvas or captured agent output.
+// Package theme holds the fixed dark-terminal palette every Agent Mux TUI view
+// shares, and the base styles built from it.
+//
+// It colors Agent Mux's own chrome only, never the terminal canvas or captured
+// agent output. Like tui/layout it has no in-repo dependency.
 package theme
 
 import "charm.land/lipgloss/v2"

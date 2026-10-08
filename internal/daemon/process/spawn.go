@@ -1,10 +1,3 @@
-// Package process owns the daemon's own life as an operating-system process:
-// how a new daemon is launched, how it is detached from the terminal that
-// launched it, how exactly one of them is allowed to own a socket, and when a
-// running one has been superseded by a newer binary. It is the counterpart of
-// internal/daemon/probes, which observes processes the daemon did not start;
-// nothing here inspects the process table and nothing here speaks the IPC
-// protocol. Like the daemon's other children it must never import its parent.
 package process
 
 import (

@@ -21,6 +21,7 @@
 // internal/kitty/exec.go — is the one this reuses rather than promising an
 // immediacy the interface cannot deliver. A caller that has stopped caring about
 // a read drops the answer; it does not stop the read.
+
 package commands
 
 import (

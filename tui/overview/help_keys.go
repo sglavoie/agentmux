@@ -10,6 +10,7 @@
 // It is deliberately NOT part of the action state. Help acts on nothing, captures
 // no row, and starts no command; a surface that shared the action layer's state
 // would be able to be raised while an action was pending.
+
 package overview
 
 import (

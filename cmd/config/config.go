@@ -1,3 +1,9 @@
+// Package config holds the `amx config` command family: the config file's
+// lifecycle (init, edit, show, path, validate — including the $EDITOR field
+// splitter and the project-directory audit) and `asl-sync`, the ordered
+// preflight-migrate-write-restart-verify pairing with agent-session-loop and
+// its structured error codes. It registers cmd/hooks' two maintenance leaves
+// (hooks-sync and hooks-status) under itself.
 package config
 
 import (

@@ -1,6 +1,6 @@
-// Package overview is the live overview's pure half: what order the sessions
-// come in, how many tiles fit on a terminal, which page a selection is on, where
-// each tile sits, and what a keypress moves the selection to.
+// The live overview's pure half: what order the sessions come in, how many
+// tiles fit on a terminal, which page a selection is on, where each tile sits,
+// and what a keypress moves the selection to.
 //
 // Everything here is a function of its arguments. No clock is read, no Kitty
 // call is made, no daemon is asked, and no file is opened — a whole overview is
@@ -15,9 +15,10 @@
 // cursor to a tile the renderer did not draw, and the bug would only appear at
 // the widths where the two formulas happened to differ. Both read one Geometry.
 //
-// It depends on tui/dashboard for the tile's contents and tui/layout for cell
-// arithmetic, and on nothing else in the TUI tree. It does not name the root
-// model.
+// The geometry here and the navigation in nav.go import nothing at all; the
+// tile's contents come from tui/dashboard and its cell arithmetic from
+// tui/layout, both at the painting step. Neither names the root model.
+
 package overview
 
 const (
