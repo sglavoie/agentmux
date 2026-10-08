@@ -155,17 +155,17 @@ func TestSessionLinesEndWithTheTitleAfterThePrompt(t *testing.T) {
 		{Harness: "codex", Profile: "q", Project: "y", LastAt: last, ID: "c14d52b6", Snippet: "Look at the project"},
 	}
 	var out bytes.Buffer
-	writeSessionLines(&out, views)
+	writeSessionLines(&out, views, true)
 	lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
 	if len(lines) != 2 {
 		t.Fatalf("lines = %q", lines)
 	}
 	first := strings.Split(lines[0], "\t")
-	if len(first) != 7 || first[4] != "b03c41a5" || first[5] != "Look at the project" || first[6] != "Parser cleanup" {
+	if len(first) != 9 || first[4] != "b03c41a5" || first[5] != "Look at the project" || first[6] != "Parser cleanup" {
 		t.Fatalf("titled line fields = %q", first)
 	}
 	second := strings.Split(lines[1], "\t")
-	if len(second) != 7 || second[5] != "Look at the project" || second[6] != "" {
+	if len(second) != 9 || second[5] != "Look at the project" || second[6] != "" {
 		t.Fatalf("untitled line fields = %q", second)
 	}
 }
@@ -185,5 +185,37 @@ func TestSessionTableShowsMessageCounts(t *testing.T) {
 	lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
 	if !strings.Contains(lines[0], " MESSAGES ") || !strings.Contains(lines[1], " 343 ") || !strings.Contains(lines[2], " 3 ") {
 		t.Fatalf("table = %q, want a MESSAGES column with each count", out.String())
+	}
+}
+
+// Piped rows end with the message count and a LIVE field in words, appended
+// after the title so no earlier field moves, and say "?" rather than closed
+// when nobody could be asked which tabs are open.
+func TestSessionLinesEndWithMessagesAndLive(t *testing.T) {
+	last := time.Date(2026, 10, 6, 15, 21, 0, 0, time.UTC)
+	views := []sessionView{
+		{Harness: "claude", Profile: "p", Project: "x", LastAt: last, ID: "aaaa1111", Snippet: "s", MessageCount: 343, Live: &liveConversation{WindowID: 7, Here: true}},
+		{Harness: "claude", Profile: "p", Project: "x", LastAt: last, ID: "bbbb2222", Snippet: "s", MessageCount: 3, Live: &liveConversation{WindowID: 9}},
+		{Harness: "codex", Profile: "q", Project: "y", LastAt: last, ID: "cccc3333", Snippet: "s", MessageCount: 0},
+	}
+	fields := func(liveKnown bool) [][]string {
+		var out bytes.Buffer
+		writeSessionLines(&out, views, liveKnown)
+		var rows [][]string
+		for _, line := range strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n") {
+			rows = append(rows, strings.Split(line, "\t"))
+		}
+		return rows
+	}
+	for i, want := range [][2]string{{"343", "here"}, {"3", "live"}, {"0", ""}} {
+		row := fields(true)[i]
+		if len(row) != 9 || row[4] != views[i].ID || row[7] != want[0] || row[8] != want[1] {
+			t.Fatalf("row %d = %q, want messages %q and live %q", i, row, want[0], want[1])
+		}
+	}
+	for i, row := range fields(false) {
+		if row[8] != "?" {
+			t.Fatalf("row %d live = %q with nobody asked, want ?", i, row[8])
+		}
 	}
 }

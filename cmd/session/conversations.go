@@ -76,7 +76,8 @@ var sessionListCmd = &cobra.Command{
 			metas = metas[:keep]
 		}
 		views := sessionViews(metas)
-		live, liveKnown := selection.liveConversations(jsonOutput || terminal)
+		// Asked even when piped, since piped rows carry a LIVE field too.
+		live, liveKnown := selection.liveConversations(true)
 		markLive(views, live, sessionCommandsCurrentWindow())
 		if jsonOutput {
 			return cli.WriteJSON(cmd, sessionListData{Sessions: views})
@@ -91,7 +92,7 @@ var sessionListCmd = &cobra.Command{
 			}
 			return writeOmittedFooter(out, len(views), omitted)
 		}
-		writeSessionLines(out, views)
+		writeSessionLines(out, views, liveKnown)
 		return nil
 	},
 }
@@ -100,12 +101,30 @@ var sessionListCmd = &cobra.Command{
 // tab-separated with absolute timestamps, because scripts cut and sort it and
 // a relative age is stale the moment it is written to a file. The opening
 // prompt and then the title follow the fixed fields, each on one line, so a
-// picker such as fzf has something to match on. The title came last, after
-// the prompt, so every field before it kept its position; it is empty when the
-// harness named the conversation nothing.
-func writeSessionLines(out io.Writer, views []sessionView) {
+// picker such as fzf has something to match on. Every field added since was
+// appended, so each one before it kept its position: the title (empty when the
+// harness named the conversation nothing), then the message count and the
+// LIVE field the table shows — "here" for the conversation open in the window
+// the command runs in, "live" for one open in another tab, empty for a closed
+// one, and "?" on every row when the daemon or Kitty could not be asked.
+func writeSessionLines(out io.Writer, views []sessionView, liveKnown bool) {
 	for _, item := range views {
-		_, _ = fmt.Fprintf(out, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", item.Harness, item.Profile, item.Project, formatTime(item.LastAt), item.ID, oneLine(item.Snippet), oneLine(item.Title))
+		_, _ = fmt.Fprintf(out, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\n", item.Harness, item.Profile, item.Project, formatTime(item.LastAt), item.ID, oneLine(item.Snippet), oneLine(item.Title), item.MessageCount, lineLiveField(item.Live, liveKnown))
+	}
+}
+
+// lineLiveField is a piped row's LIVE field, spelled in words rather than the
+// table's dot so a script can match it.
+func lineLiveField(live *liveConversation, known bool) string {
+	switch {
+	case !known:
+		return "?"
+	case live == nil:
+		return ""
+	case live.Here:
+		return "here"
+	default:
+		return "live"
 	}
 }
 
@@ -404,9 +423,10 @@ func writeSessionTable(out io.Writer, views []sessionView, ids sessionIDAbbrevia
 
 // liveConversations is what list and search mark rows live from: the tabs
 // --live already asked Kitty for, else a fresh ask when the output shows it
-// (a terminal table or JSON), and nothing for piped rows, which have no LIVE
-// field. known reports whether anyone answered, so a table that could not
-// ask leaves the column out rather than showing every row as closed.
+// (always for list, and for search a terminal table or JSON, since its piped
+// rows have no LIVE field). known reports whether anyone answered, so a table
+// that could not ask leaves the column out, and a piped list row says "?",
+// rather than showing every row as closed.
 func (s sessionSelection) liveConversations(shown bool) (live map[string]liveConversation, known bool) {
 	if s.live != nil {
 		// --live already asked, and was refused had nobody answered.
