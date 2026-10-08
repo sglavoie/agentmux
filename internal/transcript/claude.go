@@ -253,6 +253,11 @@ func (r ClaudeReader) parseFile(path string, info os.FileInfo, encodedDir string
 						meta.Ending = truncateSnippet(strings.TrimSpace(prose))
 					}
 				}
+				if rec.Type == "user" {
+					if shown, _, ok := claudeUserText(text); ok {
+						text = shown
+					}
+				}
 				appendSearchText(&searchBuf, text)
 			}
 		}
@@ -320,8 +325,9 @@ func claudeSlashCommand(text string) (command string, withArgs, ok bool) {
 }
 
 // claudeReaderVersion is the version of the Claude metadata rules parseFile
-// applies. Version 1 added Title; version 2 added Ending.
-const claudeReaderVersion = 2
+// applies. Version 1 added Title; version 2 added Ending; version 3 indexes
+// slash commands and their output as read rather than as tag markup.
+const claudeReaderVersion = 3
 
 // cachePredatesRules reports a cached entry its harness's reader would no
 // longer produce, so Refresh reparses it once instead of trusting the cache.
@@ -362,6 +368,30 @@ func claudeBareCommandSnippet(snippet string) bool {
 	return len(snippet) > 1 && snippet[0] == '/' && !strings.ContainsAny(snippet, " \t\n")
 }
 
+// claudeUserText reads a user record the way the operator would see it.
+// Claude Code records a slash command as tag markup and wraps a local
+// command's output in tags, and nobody typed either set of tags. shown is the
+// text a viewer or a search shows: the command as typed, or the output without
+// its wrapper. handoff is what may stand for the operator's words in a handoff
+// pack or a message tail: a command with arguments, never a bare command or
+// command output, which say nothing about the work — the snippet rule again.
+// ok is false for an ordinary prompt, which needs no rewriting.
+func claudeUserText(text string) (shown, handoff string, ok bool) {
+	command, withArgs, ok := claudeSlashCommand(text)
+	if !ok {
+		return "", "", false
+	}
+	if command != "" {
+		if withArgs {
+			return command, command, true
+		}
+		return command, "", true
+	}
+	trimmed := strings.TrimSpace(text)
+	tag, _, _ := strings.Cut(strings.TrimPrefix(trimmed, "<"), ">")
+	return claudeCommandTag(trimmed, tag), "", true
+}
+
 func claudeCommandTag(text, tag string) string {
 	_, rest, found := strings.Cut(text, "<"+tag+">")
 	if !found {
@@ -394,6 +424,16 @@ func messageFromRecord(rec claudeRecord) (Message, bool) {
 		role = rec.Type
 	}
 	handoffText := flattenClaudeHandoffContent(rec.Message.Content)
+	if rec.Type == "user" {
+		if shown, handoff, ok := claudeUserText(text); ok {
+			if shown == "" {
+				return Message{}, false
+			}
+			empty := ""
+			return Message{Role: role, Text: shown, Timestamp: ts, handoffText: &handoff,
+				sourceUserText: &shown, sourceHarnessText: &empty}, true
+		}
+	}
 	msg := Message{Role: role, Text: text, Timestamp: ts, handoffText: &handoffText}
 	if rec.Type == "user" {
 		userText, harnessText := splitClaudeUserContent(rec.Message.Content)

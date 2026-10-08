@@ -3,6 +3,7 @@ package transcript
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -394,6 +395,50 @@ func TestClaudeReader_SnippetSkipsSlashCommandMarkup(t *testing.T) {
 				t.Fatalf("bare-command snippet %q disagrees with Empty = %v", metas[0].Snippet, metas[0].Empty)
 			}
 		})
+	}
+}
+
+// A slash command reaches the viewer, the search text, and a handoff as the
+// operator typed it rather than as Claude Code's tag markup. A bare command
+// and command output never stand for the operator's words in a handoff, so a
+// conversation that began with /clear does not hand its markup on as the goal.
+func TestClaudeReader_MessagesReadSlashCommandsAsTyped(t *testing.T) {
+	lines := []string{
+		`{"type":"user","message":{"role":"user","content":"<command-name>/clear</command-name>\n<command-message>clear</command-message>\n<command-args></command-args>"},"timestamp":"2026-05-24T17:37:44.000Z","cwd":"/tmp/p"}`,
+		`{"type":"user","message":{"role":"user","content":"<local-command-stdout></local-command-stdout>"},"timestamp":"2026-05-24T17:37:45.000Z","cwd":"/tmp/p"}`,
+		`{"type":"user","message":{"role":"user","content":"<local-command-stdout>Total cost: $0.42</local-command-stdout>"},"timestamp":"2026-05-24T17:37:46.000Z","cwd":"/tmp/p"}`,
+		`{"type":"user","message":{"role":"user","content":"<command-name>/plan-iterate</command-name>\n<command-args>plans/a.md</command-args>"},"timestamp":"2026-05-24T17:37:47.000Z","cwd":"/tmp/p"}`,
+		`{"type":"user","message":{"role":"user","content":"Tighten the parser"},"timestamp":"2026-05-24T17:37:48.000Z","cwd":"/tmp/p"}`,
+	}
+	path := filepath.Join(t.TempDir(), "projects", "-tmp-p", "s.jsonl")
+	writeTranscript(t, path, strings.Join(lines, "\n")+"\n")
+
+	messages, err := NewClaudeReader().ReadMessages(path)
+	if err != nil {
+		t.Fatalf("ReadMessages: %v", err)
+	}
+	type row struct{ text, handoff string }
+	var got []row
+	for _, message := range messages {
+		handoff, _ := message.TextForHandoff()
+		got = append(got, row{message.Text, handoff})
+	}
+	want := []row{
+		{"/clear", ""},
+		{"Total cost: $0.42", ""},
+		{"/plan-iterate plans/a.md", "/plan-iterate plans/a.md"},
+		{"Tighten the parser", "Tighten the parser"},
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("messages = %q, want %q", got, want)
+	}
+
+	metas, err := NewClaudeReader().Discover(filepath.Dir(filepath.Dir(filepath.Dir(path))), DiscoverOptions{})
+	if err != nil || len(metas) != 1 {
+		t.Fatalf("Discover = %d sessions, %v; want 1", len(metas), err)
+	}
+	if strings.Contains(metas[0].SearchText, "<") {
+		t.Fatalf("search text kept command markup: %q", metas[0].SearchText)
 	}
 }
 
