@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -385,6 +386,38 @@ func TestResolveSelectorExactPrefixBranchPathAndAmbiguity(t *testing.T) {
 	_, err = ResolveSelector(entries, "missing")
 	if !errors.Is(err, ErrSelectorNotFound) {
 		t.Fatalf("not-found error = %v", err)
+	}
+}
+
+func TestResolveSelectorOffersNearMissBranchesWhenNothingMatches(t *testing.T) {
+	entries := []Entry{
+		{ID: "cccccccc-1111", Branch: "amx/fix-plans-footer", Path: "/tmp/one"},
+		{ID: "bbbbbbbb-2222", Branch: "amx/fix-dashboard", Path: "/tmp/two"},
+		{ID: "aaaaaaaa-3333", Branch: "amx/plans", Path: "/tmp/three"},
+		{ID: "dddddddd-4444", Path: "/tmp/detached"},
+	}
+	candidateIDs := func(selector string) []string {
+		t.Helper()
+		_, err := ResolveSelector(entries, selector)
+		var selectorErr *SelectorError
+		if !errors.Is(err, ErrSelectorNotFound) || !errors.As(err, &selectorErr) {
+			t.Fatalf("ResolveSelector(%q) error = %v, want not found", selector, err)
+		}
+		ids := []string{}
+		for _, candidate := range selectorErr.Candidates {
+			ids = append(ids, candidate.ID)
+		}
+		return ids
+	}
+	// Containment ranks ahead of edit distance; ties keep selector order.
+	if got, want := candidateIDs("PLANS"), []string{"aaaaaaaa-3333", "cccccccc-1111"}; !slices.Equal(got, want) {
+		t.Fatalf("substring candidates = %v, want %v", got, want)
+	}
+	if got, want := candidateIDs("amx/plnas"), []string{"aaaaaaaa-3333"}; !slices.Equal(got, want) {
+		t.Fatalf("typo candidates = %v, want %v", got, want)
+	}
+	if got := candidateIDs("unrelated"); len(got) != 0 {
+		t.Fatalf("unrelated selector candidates = %v, want none", got)
 	}
 }
 

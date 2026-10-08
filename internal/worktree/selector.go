@@ -30,7 +30,11 @@ func (e *SelectorError) Error() string {
 func (e *SelectorError) Unwrap() error { return e.Err }
 
 // ResolveSelector resolves exact IDs before unique prefixes, branches, and
-// canonical paths. Ambiguous candidates are sorted independently of input.
+// canonical paths. Ambiguous candidates are sorted independently of input. A
+// selector that matches nothing still carries candidates when some branch is a
+// near miss of it, so a mistyped branch is answered with the one meant rather
+// than only with a pointer at the full list. They are suggestions and nothing
+// more: a not-found selector never resolves to one.
 func ResolveSelector(entries []Entry, selector string) (Entry, error) {
 	selector = strings.TrimSpace(selector)
 	if selector == "" {
@@ -67,7 +71,7 @@ func ResolveSelector(entries []Entry, selector string) (Entry, error) {
 		}
 	}
 	if len(matches) == 0 {
-		return Entry{}, &SelectorError{Selector: selector, Err: ErrSelectorNotFound}
+		return Entry{}, &SelectorError{Selector: selector, Candidates: nearSelectorMisses(entries, selector), Err: ErrSelectorNotFound}
 	}
 	candidates := make([]Entry, 0, len(matches))
 	for _, entry := range matches {
@@ -84,4 +88,57 @@ func sortSelectorCandidates(candidates []Entry) {
 		}
 		return candidates[a].Path < candidates[b].Path
 	})
+}
+
+// nearSelectorMisses returns the worktrees whose branch the selector most
+// likely meant: first every branch containing it, ignoring case, then every
+// branch within a few edits of it — two, or a third of what was typed when that
+// is more — closest first, with ties in selector order.
+func nearSelectorMisses(entries []Entry, selector string) []Entry {
+	typed := strings.ToLower(selector)
+	limit := max(2, len([]rune(typed))/3)
+	rank := make(map[string]int)
+	var near []Entry
+	for _, entry := range entries {
+		branch := strings.ToLower(entry.Branch)
+		if branch == "" {
+			continue
+		}
+		score := -1
+		if strings.Contains(branch, typed) {
+			score = 0
+		} else if d := editDistance(typed, branch); d <= limit {
+			score = d
+		}
+		if score >= 0 {
+			near = append(near, entry)
+			rank[entry.ID+"\x00"+entry.Path] = score
+		}
+	}
+	sortSelectorCandidates(near)
+	sort.SliceStable(near, func(a, b int) bool {
+		return rank[near[a].ID+"\x00"+near[a].Path] < rank[near[b].ID+"\x00"+near[b].Path]
+	})
+	return near
+}
+
+// editDistance is the Levenshtein distance between a and b, counted in runes.
+func editDistance(a, b string) int {
+	ar, br := []rune(a), []rune(b)
+	row := make([]int, len(br)+1)
+	for j := range row {
+		row[j] = j
+	}
+	for i := 1; i <= len(ar); i++ {
+		diagonal := row[0]
+		row[0] = i
+		for j := 1; j <= len(br); j++ {
+			cost := 1
+			if ar[i-1] == br[j-1] {
+				cost = 0
+			}
+			diagonal, row[j] = row[j], min(row[j]+1, row[j-1]+1, diagonal+cost)
+		}
+	}
+	return row[len(br)]
 }
