@@ -416,7 +416,7 @@ func projectMissingTitle(cmd *cobra.Command, cfg *config.Config) error {
 		if unusable == 1 {
 			noun = "project whose directory is unusable is"
 		}
-		message += fmt.Sprintf(" (%d %s left out; `amx project list --missing` names them)", unusable, noun)
+		message += fmt.Sprintf(" (%d %s left out; `amx project list --missing` names them, and `archived = true` keeps one without offering it)", unusable, noun)
 	}
 	actionErr := &actions.Error{
 		Code: "missing_parameter", Action: actions.Launch,

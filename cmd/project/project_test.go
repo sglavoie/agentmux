@@ -523,7 +523,7 @@ func TestProjectLaunchMissingTitleLeavesOutUnusableProjects(t *testing.T) {
 	if strings.Contains(err.Error(), "work/Web") {
 		t.Fatalf("text error offers a project whose directory is missing:\n%s", err)
 	}
-	if want := "(1 project whose directory is unusable is left out; `amx project list --missing` names them)"; !strings.Contains(err.Error(), want) {
+	if want := "(1 project whose directory is unusable is left out; `amx project list --missing` names them, and `archived = true` keeps one without offering it)"; !strings.Contains(err.Error(), want) {
 		t.Fatalf("text error lacks %q:\n%s", want, err)
 	}
 }
