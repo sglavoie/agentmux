@@ -563,13 +563,14 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 
 	run := func(t *testing.T, flags map[string]string) (string, error) {
 		t.Helper()
-		for _, name := range []string{"here", "live", "harness", "profile", "project", "limit", "all"} {
+		for _, name := range []string{"since", "here", "live", "harness", "profile", "project", "limit", "all"} {
 			flag := sessionListCmd.Flags().Lookup(name)
 			if slice, ok := flag.Value.(interface{ Replace([]string) error }); ok {
 				_ = slice.Replace(nil)
 			} else {
 				_ = flag.Value.Set(flag.DefValue)
 			}
+			flag.Changed = false
 		}
 		for name, value := range flags {
 			if err := sessionListCmd.Flags().Set(name, value); err != nil {
@@ -676,6 +677,25 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 		out, err := run(t, map[string]string{"live": "true"})
 		if err == nil || !strings.Contains(out+err.Error(), "--live: cannot tell which conversations are open") {
 			t.Fatalf("err = %v, output %q, want a refusal", err, out)
+		}
+	})
+
+	// An empty table names the filters that emptied it, and says when the
+	// automated sessions it hid would have matched.
+	t.Run("terminal says which filters matched nothing", func(t *testing.T) {
+		sessionListIsTerminal = func(io.Writer) bool { return true }
+		t.Cleanup(func() { sessionListIsTerminal = func(io.Writer) bool { return false } })
+		out, err := run(t, map[string]string{"harness": "claude", "profile": "work"})
+		if err != nil || out != "No indexed sessions match --harness claude --profile work.\n" {
+			t.Fatalf("empty = %q, %v", out, err)
+		}
+		out, err = run(t, map[string]string{"since": "45s"})
+		if err != nil || out != "No indexed sessions match --since 45s. Automated sessions do; --all shows them.\n" {
+			t.Fatalf("empty = %q, %v", out, err)
+		}
+		out, err = run(t, map[string]string{"project": "🐱repo", "harness": "copilot", "here": "true"})
+		if err != nil || out != "No indexed sessions match --here --harness copilot --project 🐱repo.\n" {
+			t.Fatalf("empty = %q, %v", out, err)
 		}
 	})
 

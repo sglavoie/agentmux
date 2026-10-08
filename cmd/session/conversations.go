@@ -66,16 +66,29 @@ var sessionListCmd = &cobra.Command{
 			return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", err)
 		}
 		metas := selection.narrow(idx.List(selection.filter))
-		views := sessionViews(metas)
 		out := cmd.OutOrStdout()
 		terminal := !jsonOutput && sessionListIsTerminal(out)
+		omitted := 0
+		if terminal {
+			var keep int
+			keep, omitted = tableDefaultLimit(cmd, len(metas))
+			metas = metas[:keep]
+		}
+		views := sessionViews(metas)
 		live, liveKnown := selection.liveConversations(jsonOutput || terminal)
 		markLive(views, live, sessionCommandsCurrentWindow())
 		if jsonOutput {
 			return cli.WriteJSON(cmd, sessionListData{Sessions: views})
 		}
 		if terminal {
-			return writeSessionTable(out, views, abbreviateSessionIDs(idx.List(transcript.ListFilter{})), sessionCommandsNow(), sessionListTerminalWidth(out), liveKnown)
+			if len(views) == 0 {
+				_, err := fmt.Fprintln(out, noSessionsMessage(cmd, selection, idx))
+				return err
+			}
+			if err := writeSessionTable(out, views, abbreviateSessionIDs(idx.List(transcript.ListFilter{})), sessionCommandsNow(), sessionListTerminalWidth(out), liveKnown); err != nil {
+				return err
+			}
+			return writeOmittedFooter(out, len(views), omitted)
 		}
 		writeSessionLines(out, views)
 		return nil
@@ -252,8 +265,86 @@ func addSessionSelectionFlags(cmd *cobra.Command) {
 	_ = cmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
 	cmd.Flags().StringSlice("project", nil, "only sessions of this project, by title; \"amx\" also matches \"🐱amx\" (repeatable)")
 	_ = cmd.RegisterFlagCompletionFunc("project", completeSessionProjects)
-	cmd.Flags().IntP("limit", "n", 0, "show at most this many of the most recent sessions (0 for all)")
+	cmd.Flags().IntP("limit", "n", 0, "show at most this many of the most recent sessions (0 for all; a terminal shows 25 unless given)")
 	cmd.Flags().BoolP("all", "a", false, "include automated sessions (ASL runs, subagents, exec) and unclassified ones")
+}
+
+// sessionTableRows is how many sessions a terminal table shows when --limit
+// was not given. A person reading the table wants the recent ones, and a
+// whole index scrolls the newest off the top; piped rows and --json keep
+// every session, since a script asked for them.
+const sessionTableRows = 25
+
+// tableDefaultLimit is how many of n rows a terminal table keeps, and how
+// many it leaves out: all of them when --limit was given, else at most
+// sessionTableRows.
+func tableDefaultLimit(cmd *cobra.Command, n int) (keep, omitted int) {
+	if cmd.Flags().Changed("limit") || n <= sessionTableRows {
+		return n, 0
+	}
+	return sessionTableRows, n - sessionTableRows
+}
+
+// writeOmittedFooter says how many rows the default limit left out, so a
+// short table is not read as everything there is.
+func writeOmittedFooter(out io.Writer, shown, omitted int) error {
+	if omitted == 0 {
+		return nil
+	}
+	_, err := fmt.Fprintf(out, "Showing the %d most recent of %d; -n N shows more, -n 0 shows all.\n", shown, shown+omitted)
+	return err
+}
+
+// noSessionsMessage is an empty list's sentence for a person. It names the
+// selector flags that emptied the list, as typed, and, when the list hid
+// automated sessions, says whether --all would have found any.
+func noSessionsMessage(cmd *cobra.Command, selection sessionSelection, idx *transcript.Index) string {
+	message := "No indexed sessions match."
+	if flags := selectionFlagsText(cmd); flags != "" {
+		message = "No indexed sessions match " + flags + "."
+	}
+	if selection.filter.MainOnly {
+		filter := selection.filter
+		filter.MainOnly = false
+		if len(selection.narrow(idx.List(filter))) > 0 {
+			message += " Automated sessions do; --all shows them."
+		}
+	}
+	return message
+}
+
+// selectionFlagsText is the selector flags the command was given, written
+// back as flags, in the order --help lists them.
+func selectionFlagsText(cmd *cobra.Command) string {
+	var parts []string
+	for _, name := range []string{"since", "here", "live", "harness", "profile", "project"} {
+		flag := cmd.Flags().Lookup(name)
+		if flag == nil || !flag.Changed {
+			continue
+		}
+		switch flag.Value.Type() {
+		case "bool":
+			if flag.Value.String() == "true" {
+				parts = append(parts, "--"+name)
+			}
+		case "stringSlice":
+			if values, _ := cmd.Flags().GetStringSlice(name); len(values) > 0 {
+				parts = append(parts, "--"+name+" "+shellWord(strings.Join(values, ",")))
+			}
+		default:
+			parts = append(parts, "--"+name+" "+shellWord(flag.Value.String()))
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+// shellWord quotes a flag value that would not survive being pasted back
+// into a shell as one word.
+func shellWord(value string) string {
+	if value == "" || strings.ContainsAny(value, " \t'\"\\$`") {
+		return strconv.Quote(value)
+	}
+	return value
 }
 
 // writeSessionTable is the session list for a person: a header, aligned

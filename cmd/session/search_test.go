@@ -197,6 +197,10 @@ func TestSessionSearchFindsConversationsByMessageText(t *testing.T) {
 		if err != nil || out != "No indexed sessions match \"nowhere\".\n" {
 			t.Fatalf("empty = %q, %v", out, err)
 		}
+		out, err = run(t, map[string]string{"harness": "copilot"}, "race")
+		if err != nil || out != "No indexed sessions match \"race\" with --harness copilot.\n" {
+			t.Fatalf("empty with a filter = %q, %v", out, err)
+		}
 	})
 
 	t.Run("a terminal table marks the conversation it runs in as here", func(t *testing.T) {

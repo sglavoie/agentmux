@@ -73,10 +73,16 @@ line it matched on. The selector flags narrow the search the way they narrow
 			return cli.CommandFailure(cmd, jsonOutput, "command_failed", err)
 		}
 		results = narrowSearchResults(results, selection)
-		results = transcript.RecasePreviews(readers, results, transcript.Query{Text: query, MessageSource: source})
-		views := sessionSearchViews(results)
 		out := cmd.OutOrStdout()
 		terminal := !jsonOutput && sessionListIsTerminal(out)
+		omitted := 0
+		if terminal {
+			var keep int
+			keep, omitted = tableDefaultLimit(cmd, len(results))
+			results = results[:keep]
+		}
+		results = transcript.RecasePreviews(readers, results, transcript.Query{Text: query, MessageSource: source})
+		views := sessionSearchViews(results)
 		// Marked as list marks them, because a search run from inside a
 		// conversation finds that conversation too — the query is in it — and
 		// "here" is what tells it apart from the sessions being looked for.
@@ -93,7 +99,18 @@ line it matched on. The selector flags narrow the search the way they narrow
 			return cli.WriteJSON(cmd, sessionSearchData{Query: query, Source: source, Results: views})
 		}
 		if terminal {
-			return writeSessionSearchTable(out, query, views, abbreviateSessionIDs(idx.List(transcript.ListFilter{})), sessionCommandsNow(), sessionListTerminalWidth(out), liveKnown)
+			if len(views) == 0 {
+				message := "No indexed sessions match " + strconv.Quote(query) + "."
+				if flags := selectionFlagsText(cmd); flags != "" {
+					message = "No indexed sessions match " + strconv.Quote(query) + " with " + flags + "."
+				}
+				_, err := fmt.Fprintln(out, message)
+				return err
+			}
+			if err := writeSessionSearchTable(out, query, views, abbreviateSessionIDs(idx.List(transcript.ListFilter{})), sessionCommandsNow(), sessionListTerminalWidth(out), liveKnown); err != nil {
+				return err
+			}
+			return writeOmittedFooter(out, len(views), omitted)
 		}
 		// Off a terminal the rows follow `session list`'s piped form, with the
 		// match count before the ID and the matched line last, where a tab or
