@@ -45,11 +45,36 @@ type claudeRecord struct {
 	AgentID      string          `json:"agentId"`
 	Entrypoint   string          `json:"entrypoint"`
 	PromptSource string          `json:"promptSource"`
+	Origin       json.RawMessage `json:"origin"`
 	Message      *claudeMessage  `json:"message"`
 	Summary      string          `json:"summary"`
 	AITitle      string          `json:"aiTitle"`
 	CustomTitle  string          `json:"customTitle"`
 	Content      json.RawMessage `json:"content"`
+}
+
+// claudeOrigin says who wrote a user record. Claude Code stores what it
+// tells the model on its own, such as a background task's
+// <task-notification>, as a user record too, and only the origin's kind and
+// the record's promptSource "system" set it apart from a prompt.
+type claudeOrigin struct {
+	Kind string `json:"kind"`
+}
+
+// claudeHarnessNotice reports a user record Claude Code wrote rather than the
+// operator: it is not a prompt, so it neither counts as a message nor matches
+// a search of the operator's own words, but stays searchable as harness text.
+func claudeHarnessNotice(rec claudeRecord) bool {
+	if rec.Type != "user" {
+		return false
+	}
+	// Decoded apart from the record so an origin of another shape cannot
+	// cost the whole record.
+	var origin claudeOrigin
+	if json.Unmarshal(rec.Origin, &origin) == nil && normalizedMarker(origin.Kind) == "task-notification" {
+		return true
+	}
+	return normalizedMarker(rec.PromptSource) == "system"
 }
 
 type claudeMessage struct {
@@ -234,7 +259,7 @@ func (r ClaudeReader) parseFile(path string, info os.FileInfo, encodedDir string
 		}
 		if !rec.IsMeta && rec.Message != nil && (rec.Type == "user" || rec.Type == "assistant") {
 			if text := flattenClaudeContent(rec.Message.Content); text != "" {
-				if meta.Snippet == "" && rec.Type == "user" {
+				if meta.Snippet == "" && rec.Type == "user" && !claudeHarnessNotice(rec) {
 					command, withArgs, ok := claudeSlashCommand(text)
 					switch {
 					case !ok:
@@ -341,8 +366,9 @@ func claudeCountsAsMessage(rec claudeRecord) bool {
 // claudeReaderVersion is the version of the Claude metadata rules parseFile
 // applies. Version 1 added Title; version 2 added Ending; version 3 indexes
 // slash commands and their output as read rather than as tag markup; version
-// 4 counts only messages with prose, leaving out tool calls and results.
-const claudeReaderVersion = 4
+// 4 counts only messages with prose, leaving out tool calls and results;
+// version 5 leaves out the notices Claude Code writes as user records.
+const claudeReaderVersion = 5
 
 // cachePredatesRules reports a cached entry its harness's reader would no
 // longer produce, so Refresh reparses it once instead of trusting the cache.
@@ -437,6 +463,11 @@ func messageFromRecord(rec claudeRecord) (Message, bool) {
 	role := rec.Message.Role
 	if role == "" {
 		role = rec.Type
+	}
+	if claudeHarnessNotice(rec) {
+		empty := ""
+		return Message{Role: "system", Text: text, Timestamp: ts, handoffText: &empty,
+			sourceUserText: &empty, sourceHarnessText: &text}, true
 	}
 	handoffText := flattenClaudeHandoffContent(rec.Message.Content)
 	if rec.Type == "user" {

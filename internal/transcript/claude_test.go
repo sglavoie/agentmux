@@ -1,6 +1,7 @@
 package transcript
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -570,5 +571,68 @@ func TestCacheFromBeforeEndingsIsReparsedForEveryHarness(t *testing.T) {
 		if cachePredatesRules(SessionMeta{Harness: tc.harness, Snippet: "x", ReaderVersion: tc.current}) {
 			t.Errorf("current %s entry must be read from the cache", tc.harness)
 		}
+	}
+}
+
+// A background task's <task-notification> is written as a user record, but
+// Claude Code wrote it, not the operator: it is not counted, summarized, handed
+// off, or matched as the operator's words, and stays searchable as harness
+// text.
+func TestClaudeReader_TaskNotificationIsNotAPrompt(t *testing.T) {
+	notice := "<task-notification>\n<task-id>a1</task-id>\n<summary>Agent \"Audit\" finished</summary>\n<result>All clear</result>\n</task-notification>"
+	encoded, err := json.Marshal(notice)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := []string{
+		`{"type":"user","message":{"role":"user","content":` + string(encoded) + `},"origin":{"kind":"task-notification","producer":"session-task"},"promptSource":"system","timestamp":"2026-05-24T17:37:45.000Z","cwd":"/tmp/p"}`,
+		`{"type":"user","message":{"role":"user","content":"Tighten the parser"},"origin":{"kind":"human"},"promptSource":"typed","timestamp":"2026-05-24T17:37:46.000Z"}`,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Fixed it."}]},"timestamp":"2026-05-24T17:37:50.000Z"}`,
+	}
+	root := t.TempDir()
+	path := filepath.Join(root, "projects", "-tmp-p", "s.jsonl")
+	writeTranscript(t, path, strings.Join(lines, "\n")+"\n")
+	metas, err := NewClaudeReader().Discover(root, DiscoverOptions{})
+	if err != nil || len(metas) != 1 {
+		t.Fatalf("Discover = %d sessions, %v; want 1", len(metas), err)
+	}
+	if got := metas[0]; got.MessageCount != 2 || got.Snippet != "Tighten the parser" {
+		t.Fatalf("MessageCount, Snippet = %d, %q; want 2 and the typed prompt", got.MessageCount, got.Snippet)
+	}
+	messages, err := NewClaudeReader().ReadMessages(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) != 3 {
+		t.Fatalf("ReadMessages = %d messages, want 3", len(messages))
+	}
+	got := messages[0]
+	if got.Role != "system" {
+		t.Fatalf("notice role = %q, want system", got.Role)
+	}
+	if _, ok := got.TextForHandoff(); ok {
+		t.Fatal("a task notification must not be handed off as a conversation message")
+	}
+	if text := got.SearchTextForSource("user"); text != "" {
+		t.Fatalf("user-source text = %q, want none", text)
+	}
+	if text := got.SearchTextForSource("harness"); !strings.Contains(text, "All clear") {
+		t.Fatalf("harness-source text = %q, want the notification", text)
+	}
+}
+
+// An origin of a shape the reader does not expect costs only the notice
+// check, never the record.
+func TestClaudeReader_UnexpectedOriginKeepsTheRecord(t *testing.T) {
+	line := `{"type":"user","message":{"role":"user","content":"Tighten the parser"},"origin":"human","timestamp":"2026-05-24T17:37:46.000Z","cwd":"/tmp/p"}`
+	root := t.TempDir()
+	path := filepath.Join(root, "projects", "-tmp-p", "s.jsonl")
+	writeTranscript(t, path, line+"\n")
+	metas, err := NewClaudeReader().Discover(root, DiscoverOptions{})
+	if err != nil || len(metas) != 1 {
+		t.Fatalf("Discover = %d sessions, %v; want 1", len(metas), err)
+	}
+	if got := metas[0]; got.MessageCount != 1 || got.Snippet != "Tighten the parser" {
+		t.Fatalf("MessageCount, Snippet = %d, %q; want 1 and the prompt", got.MessageCount, got.Snippet)
 	}
 }

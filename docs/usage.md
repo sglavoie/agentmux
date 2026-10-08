@@ -16,7 +16,7 @@ The same workflows are scriptable. Machine-readable commands use one
 `error` envelope and ambiguous selectors return candidates instead of guessing.
 
 ```bash
-amx session list              # a table with relative ages, message counts (prompts and replies with text, not tool calls), short session IDs any command accepts, and each conversation's title (its opening prompt when the harness named it nothing) followed by `→` and the opening of the agent's last reply, so runs of the same prompt read apart, in a terminal, the 25 most recent unless -n says otherwise; every session as tab-separated RFC 3339 rows, with full IDs followed by the opening prompt, the title (empty when there is none), the message count, a LIVE field (`here`, `live`, empty when closed, `?` when the daemon or Kitty could not be asked), and that last reply (empty when there was none) when piped
+amx session list              # a table with relative ages, message counts (prompts and replies with text, not tool calls or the background-task notices Claude Code writes as prompts), short session IDs any command accepts, and each conversation's title (its opening prompt when the harness named it nothing) followed by `→` and the opening of the agent's last reply, so runs of the same prompt read apart, in a terminal, the 25 most recent unless -n says otherwise; every session as tab-separated RFC 3339 rows, with full IDs followed by the opening prompt, the title (empty when there is none), the message count, a LIVE field (`here`, `live`, empty when closed, `?` when the daemon or Kitty could not be asked), and that last reply (empty when there was none) when piped
 amx session list --json
 amx session list --since 7d   # only sessions active in the last week (or 12h, 90m, …)
 amx session list --here -n 5  # the five latest sessions started in this directory or below it
@@ -27,7 +27,7 @@ amx session list --all        # also automated sessions (ASL runs, subagents, ex
 amx session continue "$(amx session list | fzf | cut -f5)"   # pick by opening prompt
 amx session search race daemon            # conversations mentioning both words, newest first, with match counts
 amx session search '"race condition"' --here --since 7d   # a quoted phrase; takes every list selector
-amx session search --source user flaky    # only your own prompts (or --source harness for the agent's output)
+amx session search --source user flaky    # only your own prompts (or --source harness for the agent's output, including Claude's background-task notices)
 amx session show 09467ec1                 # one conversation: title, directory, ages, whether it is open in Kitty, message count, transcript path, how it ended, and the commands that continue or fork it
 cd "$(amx session show 09467ec1 --json | jq -r .data.session.cwd)"
 amx session show 09467ec1 --last 4       # the same, then its last 4 user and assistant messages in full, oldest first
