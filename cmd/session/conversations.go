@@ -278,7 +278,7 @@ func (s *sessionSelection) resolveProjects(cfg *config.Config, idx *transcript.I
 // addSessionSelectionFlags declares the selector flags readSessionSelection
 // reads, so list and search cannot drift apart in what they accept.
 func addSessionSelectionFlags(cmd *cobra.Command) {
-	cmd.Flags().String("since", "", "only sessions active within this window, e.g. 12h or 7d")
+	cmd.Flags().String("since", "", "only sessions active within this window, e.g. 12h, 7d, or 2w")
 	cmd.Flags().Bool("here", false, "only sessions started in the current directory or below it")
 	cmd.Flags().Bool("live", false, "only conversations open in a Kitty tab right now")
 	cmd.Flags().StringSlice("harness", nil, "only sessions of this harness (repeatable)")
@@ -582,20 +582,27 @@ func formatAgo(at, now time.Time) string {
 }
 
 // parseSinceWindow reads `--since`: any Go duration ("12h", "90m") or a whole
-// number of days ("7d"), which Go's own parser has no unit for and which is
-// the window people actually think in for past sessions.
+// number of days ("7d") or weeks ("2w"), which Go's own parser has no unit for
+// and which are the windows people actually think in for past sessions.
 func parseSinceWindow(value string) (time.Duration, error) {
 	value = strings.TrimSpace(value)
-	if days, ok := strings.CutSuffix(value, "d"); ok {
-		n, err := strconv.Atoi(days)
-		if err != nil || n <= 0 {
-			return 0, fmt.Errorf("--since %q: want a positive whole number of days like 7d", value)
+	for _, unit := range []struct {
+		suffix, name string
+		length       time.Duration
+	}{{"d", "days like 7d", 24 * time.Hour}, {"w", "weeks like 2w", 7 * 24 * time.Hour}} {
+		count, ok := strings.CutSuffix(value, unit.suffix)
+		if !ok {
+			continue
 		}
-		return time.Duration(n) * 24 * time.Hour, nil
+		n, err := strconv.Atoi(count)
+		if err != nil || n <= 0 {
+			return 0, fmt.Errorf("--since %q: want a positive whole number of %s", value, unit.name)
+		}
+		return time.Duration(n) * unit.length, nil
 	}
 	window, err := time.ParseDuration(value)
 	if err != nil || window <= 0 {
-		return 0, fmt.Errorf("--since %q: want a positive duration like 12h or 7d", value)
+		return 0, fmt.Errorf("--since %q: want a positive duration like 12h, 7d, or 2w", value)
 	}
 	return window, nil
 }

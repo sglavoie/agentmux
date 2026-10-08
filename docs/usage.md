@@ -18,7 +18,7 @@ The same workflows are scriptable. Machine-readable commands use one
 ```bash
 amx session list              # a table with relative ages, message counts (prompts and replies with text, not tool calls or the background-task notices Claude Code writes as prompts), short session IDs any command accepts, and each conversation's title (its opening prompt when the harness named it nothing) followed by `→` and the opening of the agent's last reply, so runs of the same prompt read apart, in a terminal, the 25 most recent unless -n says otherwise; every session as tab-separated RFC 3339 rows, with full IDs followed by the opening prompt, the title (empty when there is none), the message count, a LIVE field (`here`, `live`, empty when closed, `?` when the daemon or Kitty could not be asked), and that last reply (empty when there was none) when piped
 amx session list --json
-amx session list --since 7d   # only sessions active in the last week (or 12h, 90m, …)
+amx session list --since 7d   # only sessions active in the last week (or 2w, 12h, 90m, …)
 amx session list --here -n 5  # the five latest sessions started in this directory or below it
 amx session list --harness codex --profile codex-work   # both repeatable
 amx session list --project amx   # one project's sessions; "amx" reaches "🐱amx" as project launch reads it, and a directory-named project works too (repeatable)
