@@ -30,6 +30,7 @@ amx session search '"race condition"' --here --since 7d   # a quoted phrase; tak
 amx session search --source user flaky    # only your own prompts (or --source harness for the agent's output)
 amx session show 09467ec1                 # one conversation: title, directory, ages, whether it is open in Kitty, message count, transcript path, and the commands that continue or fork it
 cd "$(amx session show 09467ec1 --json | jq -r .data.session.cwd)"
+amx session show 09467ec1 --last 4       # the same, then its last 4 user and assistant messages in full, oldest first
 amx session continue codex <session-id>
 amx session continue --here   # the most recently active conversation started in this directory or below it, named on stderr before acting
 amx session fork claude <session-id>

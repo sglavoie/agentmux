@@ -40,6 +40,7 @@ func init() {
 	_ = sessionSearchCmd.RegisterFlagCompletionFunc("source", cobra.FixedCompletions([]string{"any", "user", "harness"}, cobra.ShellCompDirectiveNoFileComp))
 	addSessionSelectionFlags(sessionSearchCmd)
 	sessionShowCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	sessionShowCmd.Flags().Int("last", 0, "also print the last N user and assistant messages, oldest first")
 	sessionContinueCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
 	sessionContinueCmd.Flags().Bool("here", false, "continue the most recently active conversation started in the current directory or below it")
 	sessionForkCmd.Flags().Bool("json", false, "emit schema-v1 JSON")

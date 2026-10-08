@@ -121,3 +121,89 @@ func TestSessionShowPluralizesSharedProfiles(t *testing.T) {
 		}
 	}
 }
+
+// --last reads the transcript and appends its closing user and assistant
+// messages, oldest first; tool records and empty messages are not counted.
+func TestSessionShowLastPrintsTheClosingMessages(t *testing.T) {
+	resetSessionCommandsTestState(t)
+	oldOut := sessionShowCmd.OutOrStdout()
+	t.Cleanup(func() {
+		sessionShowCmd.SetOut(oldOut)
+		sessionShowCmd.SetErr(oldOut)
+		_ = sessionShowCmd.Flags().Set("json", "false")
+		_ = sessionShowCmd.Flags().Set("last", "0")
+	})
+	base, indexPath := sessionCommandMeta(t, harness.Codex)
+	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	sessionCommandsNow = func() time.Time { return now }
+	meta := base
+	meta.ID = "7f67dc81-aaaa"
+	writeSessionCommandIndex(t, indexPath, meta)
+	sessionCommandsSessionIndexPath = func() string { return indexPath }
+	sessionCommandsLoadConfig = func() (*config.Config, error) {
+		return &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Codex}}}, nil
+	}
+	messages := map[string][]transcript.Message{meta.Path: {
+		{Role: "user", Text: "fix the parser", Timestamp: now.Add(-3 * time.Hour)},
+		{Role: "tool", Text: "go test ./..."},
+		{Role: "assistant", Text: "Fixed it.\n\nTests pass.", Timestamp: now.Add(-2 * time.Hour)},
+		{Role: "assistant", Text: "  "},
+		{Role: "user", Text: "commit it"},
+	}}
+	sessionCommandsSessionReaders = func() map[string]transcript.Reader {
+		return map[string]transcript.Reader{harness.Codex: searchCommandReader{
+			sessionCommandReader{harness: harness.Codex, discovered: []transcript.SessionMeta{meta}}, messages,
+		}}
+	}
+	run := func(jsonOutput bool, last string) (string, error) {
+		_ = sessionShowCmd.Flags().Set("json", map[bool]string{true: "true", false: "false"}[jsonOutput])
+		_ = sessionShowCmd.Flags().Set("last", last)
+		var out bytes.Buffer
+		sessionShowCmd.SetOut(&out)
+		sessionShowCmd.SetErr(&out)
+		err := sessionShowCmd.RunE(sessionShowCmd, []string{"7f67"})
+		return out.String(), err
+	}
+
+	out, err := run(false, "2")
+	if err != nil {
+		t.Fatalf("show --last 2: %v\n%s", err, out)
+	}
+	want := "\nlast 2 of 3 user and assistant messages:\n" +
+		"\n[assistant] " + formatTime(now.Add(-2*time.Hour)) + " (2h ago)\nFixed it.\n\nTests pass.\n" +
+		"\n[user]\ncommit it\n"
+	if !strings.HasSuffix(out, want) {
+		t.Fatalf("show --last 2 output ends with:\n%s\nwant suffix:\n%s", out, want)
+	}
+
+	if out, err = run(false, "10"); err != nil || !strings.Contains(out, "\nall 3 user and assistant messages:\n\n[user] ") {
+		t.Fatalf("show --last 10 = %v:\n%s", err, out)
+	}
+
+	out, err = run(true, "1")
+	if err != nil {
+		t.Fatalf("show --last 1 --json: %v", err)
+	}
+	var envelope struct {
+		Data sessionShowData `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatalf("decode %q: %v", out, err)
+	}
+	got := envelope.Data
+	if got.MessagesTotal == nil || *got.MessagesTotal != 3 || len(got.Messages) != 1 || got.Messages[0].Text != "commit it" || got.Messages[0].Role != "user" {
+		t.Fatalf("--json tail = %+v", got)
+	}
+	if strings.Contains(out, `"timestamp"`) {
+		t.Fatalf("a message without a time carried a zero timestamp:\n%s", out)
+	}
+
+	// Without --last the JSON payload stays exactly as it was.
+	if out, err = run(true, "0"); err != nil || strings.Contains(out, "messages_total") || strings.Contains(out, `"messages":[`) {
+		t.Fatalf("show --json without --last = %v:\n%s", err, out)
+	}
+
+	if _, err := run(false, "-1"); err == nil || !strings.Contains(err.Error(), "--last -1") {
+		t.Fatalf("show --last -1 = %v; want a refusal", err)
+	}
+}
