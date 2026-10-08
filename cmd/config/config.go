@@ -225,7 +225,7 @@ instead.`,
 			}
 		}
 		if len(issues) > 0 {
-			_, err = fmt.Fprintln(out, "config is valid; fix or remove the projects above with `amx config edit`, or pass --strict to fail on them")
+			_, err = fmt.Fprintln(out, "config is valid; fix or remove the projects above with `amx config edit` (or set `archived = true` on the ones to keep), or pass --strict to fail on them")
 			return err
 		}
 		_, err = fmt.Fprintln(out, "config is valid")
@@ -281,7 +281,7 @@ func validateProjectDirectories(projects []config.Session) error {
 	for i, issue := range issues {
 		lines[i] = issue.Format(cli.DisplayPath(issue.Directory))
 	}
-	return fmt.Errorf("invalid project directories:\n%s\nfix each directory or remove its [[projects]] entry with `amx config edit`",
+	return fmt.Errorf("invalid project directories:\n%s\nfix each directory, remove its [[projects]] entry, or set `archived = true` on it, with `amx config edit`",
 		strings.Join(lines, "\n"))
 }
 

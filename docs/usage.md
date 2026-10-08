@@ -673,6 +673,7 @@ amx project list                               # PROFILE TITLE HARNESS DIRECTORY
 IFS=$'\t' read -r profile title _ < <(amx project list | fzf) && amx project launch "$title" --profile "$profile"   # pick a project to launch
 amx project list --json                        # [{profile,title,harness,directory,directory_problem?,groups}]
 amx project list --missing                     # only projects whose directory is unusable
+amx project list --archived                    # only projects marked archived = true, which are otherwise left out
 amx project list --group work --harness codex  # filters combine; each flag repeats, ignoring case
 amx project launch API                         # one project titled API
 amx project launch amx                         # the project titled 🐱amx
@@ -697,6 +698,12 @@ because Kitty would quietly open the tab somewhere else: `project launch`
 refuses with `directory_unusable`, naming the project and the problem, and the
 launcher marks the row `(missing)` and its preview's `dir:` line with the
 reason. `amx project list --missing` lists every such project.
+
+A project marked `archived = true` stays in `config.toml` but is offered
+nowhere: the launcher, `project list`, and `project launch`'s candidates leave
+it out, naming it refuses with `project_archived`, and `config validate` and
+`doctor` do not warn about its directory. Overseer policy still reads it, so
+archiving a project never lifts an `asl_overseer` exclusion.
 
 `amx open-dashboard` brings the dashboard forward without drawing it in the
 calling terminal: it focuses a running dashboard (the singleton rule) or opens

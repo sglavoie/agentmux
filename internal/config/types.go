@@ -387,6 +387,15 @@ type Session struct {
 	Env         map[string]string `toml:"env"`
 	Groups      []string          `toml:"groups"`
 
+	// Archived keeps a project in config.toml without offering it: the
+	// launcher, `project list`, and `project launch` leave it out, and the
+	// directory checks in `config validate` and `doctor` do not warn about
+	// it, since a project kept for later commonly names a checkout that is
+	// gone. It decides nothing about authorization — overseer policy still
+	// reads an archived project's declarations, so archiving one can never
+	// lift an exclusion — and session rows are still labelled by it.
+	Archived bool `toml:"archived"`
+
 	// ASLOverseer is the project's explicit opt-in to overseer supervision of
 	// its agent-session-loop runs. *bool rather than bool because the three
 	// states are not interchangeable to anything that has to justify acting on

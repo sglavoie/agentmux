@@ -37,7 +37,8 @@
   `project_directories` warns once when any configured project points at a
   missing or non-directory path; `amx project list --missing` lists them, and
   `amx config validate` lists them as warnings, and exits 1 on them under
-  `--strict`.
+  `--strict`. A project marked `archived = true` is not judged: keep a project
+  whose checkout is gone that way instead of deleting its entry.
   A harness CLI newer than its verified hook contract is `hooks_unverified`
   only while no hook event from that profile's home dir has arrived within the
   verification window; once events are arriving it is the

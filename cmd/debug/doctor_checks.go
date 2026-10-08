@@ -390,12 +390,19 @@ func writeDoctorProjectDirectories(out io.Writer, reportMissing func(string, ...
 	if err != nil || cfg == nil {
 		return nil
 	}
+	// Archived projects are neither judged nor counted as configured: they
+	// are kept for later and offered nowhere, so a gone checkout is expected.
 	problems := config.ProjectDirectoryProblems(cfg.Projects)
+	active := len(config.ActiveProjects(cfg.Projects))
+	archived := ""
+	if n := config.ArchivedCount(cfg.Projects); n > 0 {
+		archived = fmt.Sprintf(", %d archived", n)
+	}
 	if len(problems) == 0 {
-		_, err := fmt.Fprintf(out, "projects: ok (%d configured)\n", len(cfg.Projects))
+		_, err := fmt.Fprintf(out, "projects: ok (%d configured%s)\n", active, archived)
 		return err
 	}
-	if _, err := fmt.Fprintf(out, "projects: %d of %d have an unusable directory\n", len(problems), len(cfg.Projects)); err != nil {
+	if _, err := fmt.Fprintf(out, "projects: %d of %d have an unusable directory%s\n", len(problems), active, archived); err != nil {
 		return err
 	}
 	noun := "projects have"

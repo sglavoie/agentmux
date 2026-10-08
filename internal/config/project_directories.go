@@ -26,8 +26,25 @@ func (i ProjectDirectoryIssue) Format(directory string) string {
 	return fmt.Sprintf("project %q: directory %q %s", i.Project, directory, i.Problem)
 }
 
-// ProjectDirectoryIssues lists, in config order, every project whose
-// directory is missing, uninspectable, or not a directory. `amx config
+// ActiveProjects returns the projects that are not archived, in config order:
+// the ones a launch surface offers and a directory check judges.
+func ActiveProjects(projects []Session) []Session {
+	active := make([]Session, 0, len(projects))
+	for _, project := range projects {
+		if !project.Archived {
+			active = append(active, project)
+		}
+	}
+	return active
+}
+
+// ArchivedCount reports how many projects are archived.
+func ArchivedCount(projects []Session) int {
+	return len(projects) - len(ActiveProjects(projects))
+}
+
+// ProjectDirectoryIssues lists, in config order, every project that is not
+// archived and whose directory is missing, uninspectable, or not a directory. `amx config
 // validate` and `amx doctor` both warn about them (validate refuses on them
 // only under --strict), so the two cannot disagree about which projects are
 // broken. Each entry names its project as
@@ -35,7 +52,7 @@ func (i ProjectDirectoryIssue) Format(directory string) string {
 // commonly appears under several profiles.
 func ProjectDirectoryIssues(projects []Session) []ProjectDirectoryIssue {
 	var issues []ProjectDirectoryIssue
-	for _, project := range projects {
+	for _, project := range ActiveProjects(projects) {
 		problem := ProjectDirectoryProblem(project.Directory)
 		if problem == "" {
 			continue

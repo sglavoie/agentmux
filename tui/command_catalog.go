@@ -50,7 +50,7 @@ func undoCommandAvailability(m Model, _ commands.Context) commands.Availability 
 func openLauncherCommand(m Model, _ commands.Context) (Model, tea.Cmd) {
 	var sessions []config.Session
 	if m.cfg != nil {
-		sessions = m.cfg.Sessions
+		sessions = config.ActiveProjects(m.cfg.Sessions)
 	}
 	m.pickerSessions = launch.SortSessions(sessions)
 	m.pickerRunning = launch.BuildRunning(m.sessions)

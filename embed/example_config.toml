@@ -431,6 +431,10 @@ codex   = "purple"
 #              Omit or leave empty to inherit the profile's args.
 #   env        Key/value pairs injected into the session's environment.
 #   groups     Arbitrary labels for filtering in the dashboard and launcher.
+#   archived   Keep the project here without offering it: the launcher,
+#              `amx project list`, and `amx project launch` leave it out, and
+#              `amx config validate` and `amx doctor` stop warning when its
+#              directory is gone. `amx project list --archived` lists them.
 #   asl_overseer
 #              Opt this project in to overseer supervision of its
 #              agent-session-loop runs. Only `true` opts in; `false` and an

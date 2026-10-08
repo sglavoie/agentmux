@@ -66,6 +66,7 @@ var projectCmd = &cobra.Command{
 var (
 	projectListJSON      bool
 	projectListMissing   bool
+	projectListArchived  bool
 	projectListProfiles  []string
 	projectListHarnesses []string
 	projectListGroups    []string
@@ -103,6 +104,7 @@ Outside Kitty, set KITTY_LISTEN_ON to the instance's remote-control socket.`,
 func init() {
 	projectListCmd.Flags().BoolVar(&projectListJSON, "json", false, "emit schema-v1 JSON")
 	projectListCmd.Flags().BoolVar(&projectListMissing, "missing", false, "list only projects whose directory is unusable")
+	projectListCmd.Flags().BoolVar(&projectListArchived, "archived", false, "list only projects marked archived = true, which are otherwise left out")
 	projectListCmd.Flags().StringSliceVar(&projectListProfiles, "profile", nil, "only projects that launch with this profile (repeatable)")
 	projectListCmd.Flags().StringSliceVar(&projectListHarnesses, "harness", nil, "only projects whose profile runs this harness (repeatable)")
 	projectListCmd.Flags().StringSliceVar(&projectListGroups, "group", nil, "only projects in this group (repeatable)")
@@ -121,7 +123,8 @@ func init() {
 // always an array, empty rather than null, so a JSON caller can iterate it
 // without a nil check. DirectoryProblem is filled by `list` only, and only
 // when the directory is unusable; a launch from such a project fails on its
-// own terms.
+// own terms. Archived appears only under `list --archived`, the one place an
+// archived project is shown.
 type projectView struct {
 	Profile          string   `json:"profile"`
 	Title            string   `json:"title"`
@@ -129,6 +132,7 @@ type projectView struct {
 	Directory        string   `json:"directory"`
 	DirectoryProblem string   `json:"directory_problem,omitempty"`
 	Groups           []string `json:"groups"`
+	Archived         bool     `json:"archived,omitempty"`
 }
 
 // projectLaunchData is the `project launch --json` payload. TabID and WindowID
@@ -152,7 +156,7 @@ func runProjectList(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return cli.CommandFailure(cmd, projectListJSON, "invalid_arguments", err)
 	}
-	views := projectViews(cfg)
+	views := projectViews(cfg, projectListArchived)
 	kept := views[:0]
 	for _, view := range views {
 		if !filter.keeps(view) {
@@ -175,6 +179,8 @@ func runProjectList(cmd *cobra.Command, _ []string) error {
 	if len(views) == 0 {
 		message := "No projects are configured."
 		switch {
+		case projectListArchived:
+			message = "No project is archived."
 		case filter.active() && projectListMissing:
 			message = "Every matching project directory is usable."
 		case filter.active():
@@ -397,14 +403,15 @@ func runProjectLaunch(cmd *cobra.Command, args []string) error {
 // directory is unusable is refused, and offering it would be offering a
 // failure. Those are counted instead and left to `project list --missing`.
 func projectMissingTitle(cmd *cobra.Command, cfg *config.Config) error {
-	launchable := make([]config.Session, 0, len(cfg.Projects))
-	for _, project := range cfg.Projects {
+	active := config.ActiveProjects(cfg.Projects)
+	launchable := make([]config.Session, 0, len(active))
+	for _, project := range active {
 		if projectDirectoryProblem(project.Directory) == "" {
 			launchable = append(launchable, project)
 		}
 	}
 	message := "a project title is required; `amx project list` shows every project"
-	if unusable := len(cfg.Projects) - len(launchable); unusable > 0 {
+	if unusable := len(active) - len(launchable); unusable > 0 {
 		noun := "projects whose directory is unusable are"
 		if unusable == 1 {
 			noun = "project whose directory is unusable is"
@@ -455,15 +462,18 @@ func selectProject(cfg *config.Config, profile, title string) (config.Session, e
 	inProfile := func(project config.Session) bool {
 		return profile == "" || strings.EqualFold(project.EffectiveProfile(), profile)
 	}
+	// Archived projects are not offered, so they are neither matches nor
+	// candidates; one the selector names is reported as archived instead.
+	projects := config.ActiveProjects(cfg.Projects)
 	var matches []config.Session
-	for _, project := range cfg.Projects {
+	for _, project := range projects {
 		if project.Title == title && inProfile(project) {
 			matches = append(matches, project)
 		}
 	}
 	if len(matches) == 0 {
 		key := config.ProjectTitleKey(title)
-		for _, project := range cfg.Projects {
+		for _, project := range projects {
 			if key != "" && config.ProjectTitleKey(project.Title) == key && inProfile(project) {
 				matches = append(matches, project)
 			}
@@ -484,13 +494,19 @@ func selectProject(cfg *config.Config, profile, title string) (config.Session, e
 		if profile != "" {
 			selector += fmt.Sprintf(" and profile %q", profile)
 		}
+		if archived, ok := archivedProject(cfg, profile, title); ok {
+			return config.Session{}, &actions.Error{
+				Code: "project_archived", Action: actions.Launch,
+				Message: fmt.Sprintf("project %s/%s is archived; remove `archived = true` from its [[projects]] entry to launch it", archived.EffectiveProfile(), archived.Title),
+			}
+		}
 		// The near misses — any project, under any profile, whose title
 		// contains what was typed once both are read by their ProjectTitleKey — are
 		// the projects the caller most likely meant; with none, every
 		// configured project is a candidate.
 		var near []config.Session
 		key := config.ProjectTitleKey(title)
-		for _, project := range cfg.Projects {
+		for _, project := range projects {
 			if strings.Contains(config.ProjectTitleKey(project.Title), key) {
 				near = append(near, project)
 			}
@@ -499,11 +515,11 @@ func selectProject(cfg *config.Config, profile, title string) (config.Session, e
 		// A title no project contains is most often a typo of one, so the
 		// projects within a few edits of it come first, closest first.
 		if len(near) == 0 {
-			candidates = typoCandidates(cfg.Projects, key)
+			candidates = typoCandidates(projects, key)
 		}
 		message := "no configured project matches " + selector
 		if len(candidates) == 0 {
-			candidates = projectCandidates(cfg.Projects)
+			candidates = projectCandidates(projects)
 			message += "; `amx project list` shows every project"
 		}
 		return config.Session{}, &actions.Error{Code: "not_found", Action: actions.Launch, Message: message, Candidates: candidates}
@@ -534,10 +550,37 @@ func selectProjectOrPair(cfg *config.Config, profile, title string) (config.Sess
 	if !ok || strings.TrimSpace(pairTitle) == "" || !hasProfile(cfg, pairProfile) {
 		return project, err
 	}
-	if paired, pairErr := selectProject(cfg, pairProfile, strings.TrimSpace(pairTitle)); pairErr == nil {
+	paired, pairErr := selectProject(cfg, pairProfile, strings.TrimSpace(pairTitle))
+	if pairErr == nil {
 		return paired, nil
 	}
+	if errors.As(pairErr, &actionErr) && actionErr.Code == "project_archived" {
+		return paired, pairErr
+	}
 	return project, err
+}
+
+// archivedProject finds the archived project a selector names, by exact title
+// or, failing that, by ProjectTitleKey, under the same profile rule
+// selectProject applies. It is consulted only once nothing active matched.
+func archivedProject(cfg *config.Config, profile, title string) (config.Session, bool) {
+	key := config.ProjectTitleKey(title)
+	var byKey []config.Session
+	for _, project := range cfg.Projects {
+		if !project.Archived || (profile != "" && !strings.EqualFold(project.EffectiveProfile(), profile)) {
+			continue
+		}
+		if project.Title == title {
+			return project, true
+		}
+		if key != "" && config.ProjectTitleKey(project.Title) == key {
+			byKey = append(byKey, project)
+		}
+	}
+	if len(byKey) == 1 {
+		return byKey[0], true
+	}
+	return config.Session{}, false
 }
 
 func hasProfile(cfg *config.Config, name string) bool {
@@ -659,7 +702,7 @@ func completeProjectTitles(cmd *cobra.Command, _ []string, toComplete string) ([
 	}
 	seen := make(map[string]bool)
 	var titles []string
-	for _, project := range cfg.Projects {
+	for _, project := range config.ActiveProjects(cfg.Projects) {
 		if !strings.HasPrefix(project.Title, toComplete) || seen[project.Title] {
 			continue
 		}
@@ -696,10 +739,14 @@ func completeProjectTitleArg(cmd *cobra.Command, args []string, toComplete strin
 	return completeProjectTitles(cmd, args, toComplete)
 }
 
-func projectViews(cfg *config.Config) []projectView {
+// projectViews is every project that is not archived, or, with archived,
+// every project that is.
+func projectViews(cfg *config.Config, archived bool) []projectView {
 	views := make([]projectView, 0, len(cfg.Projects))
 	for _, project := range cfg.Projects {
-		views = append(views, projectViewOf(cfg, project))
+		if project.Archived == archived {
+			views = append(views, projectViewOf(cfg, project))
+		}
 	}
 	return views
 }
@@ -710,6 +757,7 @@ func projectViewOf(cfg *config.Config, project config.Session) projectView {
 		Title:     project.Title,
 		Directory: project.Directory,
 		Groups:    append([]string{}, project.Groups...),
+		Archived:  project.Archived,
 	}
 	for _, profile := range cfg.Profiles {
 		if strings.EqualFold(profile.Name, view.Profile) {

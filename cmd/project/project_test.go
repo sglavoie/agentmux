@@ -78,14 +78,14 @@ func runProjectArgs(t *testing.T, leaf string, cfg *config.Config, client kitty.
 	t.Helper()
 	oldLoad, oldKitty := projectLoadConfig, projectNewKitty
 	oldListJSON, oldLaunchJSON, oldProfile, oldTitle := projectListJSON, projectLaunchJSON, projectLaunchProfile, projectLaunchTitle
-	oldMissing := projectListMissing
+	oldMissing, oldArchived := projectListMissing, projectListArchived
 	oldProfiles, oldHarnesses, oldGroups := projectListProfiles, projectListHarnesses, projectListGroups
 	oldIsTerminal, oldWidth := projectListIsTerminal, projectListTerminalWidth
 	t.Cleanup(func() {
 		projectListIsTerminal, projectListTerminalWidth = oldIsTerminal, oldWidth
 		projectLoadConfig, projectNewKitty = oldLoad, oldKitty
 		projectListJSON, projectLaunchJSON, projectLaunchProfile, projectLaunchTitle = oldListJSON, oldLaunchJSON, oldProfile, oldTitle
-		projectListMissing = oldMissing
+		projectListMissing, projectListArchived = oldMissing, oldArchived
 		projectListProfiles, projectListHarnesses, projectListGroups = oldProfiles, oldHarnesses, oldGroups
 	})
 	projectLoadConfig = func() (*config.Config, error) { return cfg, nil }
@@ -786,5 +786,80 @@ func TestProjectLaunchAcceptsTheProfileTitlePairCandidatesPrint(t *testing.T) {
 	// An unknown profile prefix is just a title that matches nothing.
 	if _, err := runProject(t, "launch", testConfig(), &recordingKittyClient{}, false, "", "nobody/API"); err == nil || !strings.Contains(err.Error(), "no configured project matches") {
 		t.Fatalf("err = %v, want a plain miss", err)
+	}
+}
+
+// archivedTestConfig is testConfig plus an archived project whose checkout is
+// gone, as a project kept for later commonly is.
+func archivedTestConfig() *config.Config {
+	cfg := testConfig()
+	cfg.Projects = append(cfg.Projects, config.Session{Title: "🦄Old", Directory: "/tmp/old", Profile: "work", Archived: true})
+	return cfg
+}
+
+// An archived project is offered nowhere: the plain list, --missing, and the
+// bare launch's candidates leave it out, and only --archived lists it.
+func TestProjectListLeavesOutArchivedProjects(t *testing.T) {
+	old := projectDirectoryProblem
+	t.Cleanup(func() { projectDirectoryProblem = old })
+	projectDirectoryProblem = func(dir string) string {
+		if dir == "/tmp/old" {
+			return "does not exist"
+		}
+		return ""
+	}
+
+	out, err := runProject(t, "list", archivedTestConfig(), &recordingKittyClient{}, false, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "Old") {
+		t.Fatalf("plain list shows the archived project:\n%s", out)
+	}
+	projectListMissing = true
+	out, err = runProject(t, "list", archivedTestConfig(), &recordingKittyClient{}, false, "", "")
+	projectListMissing = false
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(out) != "Every configured project directory is usable." {
+		t.Fatalf("--missing reports the archived project: %q", out)
+	}
+
+	projectListArchived = true
+	out, err = runProject(t, "list", archivedTestConfig(), &recordingKittyClient{}, true, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"schema_version":1,"data":[{"profile":"work","title":"🦄Old","harness":"claude","directory":"/tmp/old","directory_problem":"does not exist","groups":[],"archived":true}]}`
+	if got := strings.TrimSpace(out); got != want {
+		t.Fatalf("--archived json = %s\nwant          %s", got, want)
+	}
+
+	out, _ = runProject(t, "launch", archivedTestConfig(), &recordingKittyClient{}, false, "", "")
+	if strings.Contains(out, "Old") {
+		t.Fatalf("bare launch offers the archived project:\n%s", out)
+	}
+}
+
+// Naming an archived project launches nothing and says why, by exact title,
+// by the title without its emoji, and by the profile/title pair.
+func TestProjectLaunchRefusesAnArchivedProject(t *testing.T) {
+	for _, title := range []string{"🦄Old", "old", "work/🦄Old"} {
+		client := &recordingKittyClient{}
+		out, err := runProject(t, "launch", archivedTestConfig(), client, true, "", title)
+		if err == nil {
+			t.Fatalf("%q: want an error", title)
+		}
+		var envelope cli.JSONErrorEnvelope
+		if decodeErr := json.Unmarshal([]byte(out), &envelope); decodeErr != nil {
+			t.Fatalf("%q: decode %q: %v", title, out, decodeErr)
+		}
+		if envelope.Error.Code != "project_archived" || !strings.Contains(envelope.Error.Message, "archived = true") {
+			t.Fatalf("%q: error = %+v; want project_archived naming the key", title, envelope.Error)
+		}
+		if len(client.launched) != 0 {
+			t.Fatalf("%q: launched %+v", title, client.launched)
+		}
 	}
 }
