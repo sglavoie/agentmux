@@ -241,7 +241,7 @@ func TestSessionListRefreshesFilesystemIndexAndEmitsTextAndJSON(t *testing.T) {
 	if err := sessionListCmd.RunE(sessionListCmd, nil); err != nil {
 		t.Fatalf("text list: %v", err)
 	}
-	if got := out.String(); !strings.Contains(got, "codex\twork\tPrimary\t") || !strings.Contains(got, "\tfresh\t\t\t1\t?\n") || strings.Contains(got, "Alias") {
+	if got := out.String(); !strings.Contains(got, "codex\twork\tPrimary\t") || !strings.Contains(got, "\tfresh\t\t\t1\t?\t\n") || strings.Contains(got, "Alias") {
 		t.Fatalf("text list = %q", got)
 	}
 	assertNoRetiredDatabaseState(t, home, "session list")

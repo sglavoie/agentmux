@@ -161,11 +161,11 @@ func TestSessionLinesEndWithTheTitleAfterThePrompt(t *testing.T) {
 		t.Fatalf("lines = %q", lines)
 	}
 	first := strings.Split(lines[0], "\t")
-	if len(first) != 9 || first[4] != "b03c41a5" || first[5] != "Look at the project" || first[6] != "Parser cleanup" {
+	if len(first) != 10 || first[4] != "b03c41a5" || first[5] != "Look at the project" || first[6] != "Parser cleanup" {
 		t.Fatalf("titled line fields = %q", first)
 	}
 	second := strings.Split(lines[1], "\t")
-	if len(second) != 9 || second[5] != "Look at the project" || second[6] != "" {
+	if len(second) != 10 || second[5] != "Look at the project" || second[6] != "" {
 		t.Fatalf("untitled line fields = %q", second)
 	}
 }
@@ -209,7 +209,7 @@ func TestSessionLinesEndWithMessagesAndLive(t *testing.T) {
 	}
 	for i, want := range [][2]string{{"343", "here"}, {"3", "live"}, {"0", ""}} {
 		row := fields(true)[i]
-		if len(row) != 9 || row[4] != views[i].ID || row[7] != want[0] || row[8] != want[1] {
+		if len(row) != 10 || row[4] != views[i].ID || row[7] != want[0] || row[8] != want[1] {
 			t.Fatalf("row %d = %q, want messages %q and live %q", i, row, want[0], want[1])
 		}
 	}
@@ -217,5 +217,41 @@ func TestSessionLinesEndWithMessagesAndLive(t *testing.T) {
 		if row[8] != "?" {
 			t.Fatalf("row %d live = %q with nobody asked, want ?", i, row[8])
 		}
+	}
+}
+
+// Runs of the same prompt are told apart by how each ended: the table follows
+// the summary with "→" and the ending, holding the summary short enough that
+// the ending stays in view, and a piped row appends the ending as its last
+// field so every earlier field keeps its position.
+func TestSessionListShowsHowEachConversationEnded(t *testing.T) {
+	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	views := []sessionView{
+		{Harness: "claude", Profile: "p", Project: "x", LastAt: now, ID: "aaaa1111", Title: "Project improvement ideas for the whole repository", Ending: "Committed 0cf268c3 and installed it."},
+		{Harness: "claude", Profile: "p", Project: "x", LastAt: now, ID: "bbbb2222", Title: "Project improvement ideas for the whole repository", Ending: "All 12 projects now have archived = true."},
+		{Harness: "codex", Profile: "q", Project: "y", LastAt: now, ID: "cccc3333", Title: "Never replied"},
+	}
+	var out bytes.Buffer
+	if err := writeSessionTable(&out, views, nil, now, 140, false); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
+	for i, want := range []string{"→ Committed 0cf268c3 and installed it.", "→ All 12 projects now have archived = true."} {
+		if !strings.Contains(lines[i+1], want) || layout.Width(lines[i+1]) > 140 {
+			t.Fatalf("row %d = %q; want %q within 140 cells", i, lines[i+1], want)
+		}
+	}
+	if strings.Contains(lines[3], "→") || !strings.HasSuffix(lines[3], "Never replied") {
+		t.Fatalf("a row with no ending = %q; want its summary alone", lines[3])
+	}
+
+	out.Reset()
+	writeSessionLines(&out, views, true)
+	rows := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
+	if fields := strings.Split(rows[0], "\t"); len(fields) != 10 || fields[9] != "Committed 0cf268c3 and installed it." {
+		t.Fatalf("piped row = %q; want the ending as the 10th field", fields)
+	}
+	if fields := strings.Split(rows[2], "\t"); fields[9] != "" {
+		t.Fatalf("piped row with no ending = %q; want an empty last field", fields)
 	}
 }

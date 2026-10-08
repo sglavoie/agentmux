@@ -106,10 +106,12 @@ var sessionListCmd = &cobra.Command{
 // harness named the conversation nothing), then the message count and the
 // LIVE field the table shows — "here" for the conversation open in the window
 // the command runs in, "live" for one open in another tab, empty for a closed
-// one, and "?" on every row when the daemon or Kitty could not be asked.
+// one, and "?" on every row when the daemon or Kitty could not be asked — and
+// last the opening of the agent's final reply, empty when it never replied in
+// prose.
 func writeSessionLines(out io.Writer, views []sessionView, liveKnown bool) {
 	for _, item := range views {
-		_, _ = fmt.Fprintf(out, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\n", item.Harness, item.Profile, item.Project, formatTime(item.LastAt), item.ID, oneLine(item.Snippet), oneLine(item.Title), item.MessageCount, lineLiveField(item.Live, liveKnown))
+		_, _ = fmt.Fprintf(out, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\n", item.Harness, item.Profile, item.Project, formatTime(item.LastAt), item.ID, oneLine(item.Snippet), oneLine(item.Title), item.MessageCount, lineLiveField(item.Live, liveKnown), oneLine(item.Ending))
 	}
 }
 
@@ -386,9 +388,12 @@ func shellWord(value string) string {
 // ID cut to the prefix a continuity command still resolves. MESSAGES tells
 // apart conversations that opened with the same prompt — a long session and
 // one abandoned after a reply read alike otherwise. The summary is the
-// harness's title for the conversation, else its opening prompt, and takes
-// whatever the terminal, width cells wide, leaves it. Pipes keep their fields
-// as they were, so the count is a table column only.
+// harness's title for the conversation, else its opening prompt, followed by
+// "→" and how the conversation ended, and takes whatever the terminal, width
+// cells wide, leaves it; the title is held to two fifths of that so the
+// ending, which is what differs between runs of the same prompt, stays in
+// view. Pipes keep their fields as they were, so the count is a table column
+// only.
 func writeSessionTable(out io.Writer, views []sessionView, ids sessionIDAbbreviations, now time.Time, width int, liveKnown bool) error {
 	if len(views) == 0 {
 		_, err := fmt.Fprintln(out, "No indexed sessions match.")
@@ -417,7 +422,11 @@ func writeSessionTable(out io.Writer, views []sessionView, ids sessionIDAbbrevia
 		}
 		rows = append(rows, append(row, strconv.Itoa(item.MessageCount), ids.of(item.ID), summary))
 	}
-	fitLastColumn(header, rows, width)
+	limit := cli.LastColumnWidth(header, rows, width, sessionSummaryWidth)
+	for i, row := range rows {
+		last := len(row) - 1
+		row[last] = layout.FitLeadAndTail(row[last], oneLine(views[i].Ending), limit)
+	}
 	return cli.WriteTable(out, header, rows)
 }
 
@@ -1056,6 +1065,9 @@ type sessionView struct {
 	MessageCount int       `json:"message_count"`
 	Snippet      string    `json:"snippet"`
 	Title        string    `json:"title,omitempty"`
+	// Ending is the opening of the agent's final prose reply; see
+	// transcript.SessionMeta.Ending.
+	Ending string `json:"ending,omitempty"`
 	// Live is the Kitty tab the conversation is open in, when the daemon and
 	// Kitty could both be asked and agreed on exactly one.
 	Live *liveConversation `json:"live,omitempty"`
@@ -1064,7 +1076,7 @@ type sessionView struct {
 func sessionViews(items []transcript.SessionMeta) []sessionView {
 	out := make([]sessionView, 0, len(items))
 	for _, item := range items {
-		out = append(out, sessionView{ID: item.ID, Harness: item.Harness, Profile: item.DisplayProfile(), Profiles: append([]string{}, item.ProfileNames()...), Project: item.Project, Projects: append([]string{}, item.ProjectNames()...), CWD: item.CWD, StartedAt: item.StartedAt, LastAt: item.LastAt, Path: item.Path, FileSize: item.FileSize, FileModTime: item.FileModTime, MessageCount: item.MessageCount, Snippet: item.Snippet, Title: item.Title})
+		out = append(out, sessionView{ID: item.ID, Harness: item.Harness, Profile: item.DisplayProfile(), Profiles: append([]string{}, item.ProfileNames()...), Project: item.Project, Projects: append([]string{}, item.ProjectNames()...), CWD: item.CWD, StartedAt: item.StartedAt, LastAt: item.LastAt, Path: item.Path, FileSize: item.FileSize, FileModTime: item.FileModTime, MessageCount: item.MessageCount, Snippet: item.Snippet, Title: item.Title, Ending: item.Ending})
 	}
 	return out
 }
