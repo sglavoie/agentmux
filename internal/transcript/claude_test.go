@@ -450,3 +450,44 @@ func TestSessionMetaSummaryPrefersTitle(t *testing.T) {
 		t.Fatalf("Summary = %q, want the opening prompt with no title", got)
 	}
 }
+
+// The ending is the agent's last prose reply. A later turn that only called a
+// tool or only thought says nothing about how the conversation closed, and a
+// user prompt after the last reply does not replace it.
+func TestClaudeReader_EndingIsTheLastProseReply(t *testing.T) {
+	lines := []string{
+		`{"type":"user","message":{"role":"user","content":"Tighten the parser"},"timestamp":"2026-05-24T17:37:46.000Z","cwd":"/tmp/p"}`,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Looking at it."}]},"timestamp":"2026-05-24T17:37:47.000Z"}`,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"secret plan"},{"type":"text","text":"Committed the fix.\n\nAll   tests pass."}]},"timestamp":"2026-05-24T17:37:48.000Z"}`,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","input":{}}]},"timestamp":"2026-05-24T17:37:49.000Z"}`,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"done"}]},"timestamp":"2026-05-24T17:37:50.000Z"}`,
+		`{"type":"user","message":{"role":"user","content":"thanks"},"timestamp":"2026-05-24T17:37:51.000Z"}`,
+	}
+	root := t.TempDir()
+	writeTranscript(t, filepath.Join(root, "projects", "-tmp-p", "s.jsonl"), strings.Join(lines, "\n")+"\n")
+	metas, err := NewClaudeReader().Discover(root, DiscoverOptions{})
+	if err != nil || len(metas) != 1 {
+		t.Fatalf("Discover = %d sessions, %v; want 1", len(metas), err)
+	}
+	if got, want := metas[0].Ending, "Committed the fix. All tests pass."; got != want {
+		t.Fatalf("Ending = %q; want %q", got, want)
+	}
+}
+
+func TestCacheFromBeforeEndingsIsReparsedForEveryHarness(t *testing.T) {
+	for _, tc := range []struct {
+		harness string
+		current int
+	}{
+		{harness.Claude, claudeReaderVersion},
+		{harness.Codex, codexReaderVersion},
+		{harness.Copilot, copilotReaderVersion},
+	} {
+		if !cachePredatesRules(SessionMeta{Harness: tc.harness, Snippet: "x", ReaderVersion: tc.current - 1}) {
+			t.Errorf("%s entry from before endings must be reparsed once", tc.harness)
+		}
+		if cachePredatesRules(SessionMeta{Harness: tc.harness, Snippet: "x", ReaderVersion: tc.current}) {
+			t.Errorf("current %s entry must be read from the cache", tc.harness)
+		}
+	}
+}

@@ -253,3 +253,14 @@ func TestCopilotDiscover_CacheMissReparses(t *testing.T) {
 		t.Errorf("FileSize = %d, want %d (re-parse should reflect live file)", got.FileSize, info.Size())
 	}
 }
+
+// The tool-only assistant event carries no content and is not an ending.
+func TestCopilotDiscover_EndingIsTheLastAssistantReply(t *testing.T) {
+	metas, err := NewCopilotReader().Discover(copilotFixtureRoot, DiscoverOptions{})
+	if err != nil || len(metas) != 1 {
+		t.Fatalf("Discover = %d sessions, %v; want 1", len(metas), err)
+	}
+	if got := metas[0]; got.Ending != "Done. See the diff above." || got.ReaderVersion != copilotReaderVersion {
+		t.Fatalf("Ending, ReaderVersion = %q, %d; want the closing reply, %d", got.Ending, got.ReaderVersion, copilotReaderVersion)
+	}
+}

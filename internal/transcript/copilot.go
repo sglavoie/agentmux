@@ -298,6 +298,9 @@ func (r CopilotReader) parseFile(path string, info os.FileInfo, dirName string) 
 			if p.Content != "" {
 				meta.MessageCount++
 				appendSearchText(&searchBuf, p.Content)
+				if strings.TrimSpace(p.Content) != "" {
+					meta.Ending = truncateSnippet(strings.TrimSpace(p.Content))
+				}
 			}
 		case "tool.execution_start":
 			var p copilotToolStart
@@ -318,9 +321,15 @@ func (r CopilotReader) parseFile(path string, info os.FileInfo, dirName string) 
 		}
 	}
 	meta.SearchText = searchBuf.String()
+	meta.ReaderVersion = copilotReaderVersion
 
 	return meta, nil
 }
+
+// copilotReaderVersion is the version of the Copilot metadata rules parseFile
+// applies. Version 1 added Ending; entries cached before it carry 0 and are
+// reparsed once by cachePredatesRules.
+const copilotReaderVersion = 1
 
 func parseCopilotTimestamp(s string) (time.Time, bool) {
 	if s == "" {

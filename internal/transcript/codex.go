@@ -399,6 +399,9 @@ func (r CodexReader) parseFile(path string, info os.FileInfo) (SessionMeta, erro
 				meta.MessageCount++
 				if text := flattenCodexContent(p.Content); text != "" {
 					appendSearchText(&searchBuf, text)
+					if strings.TrimSpace(text) != "" {
+						meta.Ending = truncateSnippet(strings.TrimSpace(text))
+					}
 				}
 			case "function_call":
 				if p.Name != "" {
@@ -413,6 +416,7 @@ func (r CodexReader) parseFile(path string, info os.FileInfo) (SessionMeta, erro
 	}
 	meta.SearchText = searchBuf.String()
 	meta.SessionClass = classEvidence.class()
+	meta.ReaderVersion = codexReaderVersion
 
 	// Fallback id: extract the UUID tail from the filename if no
 	// session_meta record was found (corrupt or pre-session_meta vintage).
@@ -498,3 +502,8 @@ func parseCodexTimestamp(s string) (time.Time, bool) {
 	}
 	return time.Time{}, false
 }
+
+// codexReaderVersion is the version of the Codex metadata rules parseFile
+// applies. Version 1 added Ending; entries cached before it carry 0 and are
+// reparsed once by cachePredatesRules.
+const codexReaderVersion = 1

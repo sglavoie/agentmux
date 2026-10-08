@@ -119,9 +119,12 @@ func TestRebuildRepairsBlankCachedCurrentCodexTranscript(t *testing.T) {
 
 	cachePath := filepath.Join(tmp, "transcripts.json")
 	key := IndexKey(harness.Codex, "01a03a5b-ea47-7ae3-b7f3-68f944d707b5")
+	// Stamped with the current reader version, so only the rebuild — not
+	// the once-per-rules reparse an older entry gets — may repair it.
 	blank := SessionMeta{
 		ID: "01a03a5b-ea47-7ae3-b7f3-68f944d707b5", Harness: harness.Codex,
 		Path: sourcePath, FileSize: info.Size(), FileModTime: info.ModTime(),
+		ReaderVersion: codexReaderVersion,
 	}
 	cache, err := json.Marshal(indexFile{Entries: map[string]SessionMeta{key: blank}})
 	if err != nil {

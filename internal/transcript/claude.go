@@ -248,6 +248,11 @@ func (r ClaudeReader) parseFile(path string, info os.FileInfo, encodedDir string
 				if replySnippet == "" && rec.Type == "assistant" {
 					replySnippet = truncateSnippet(text)
 				}
+				if rec.Type == "assistant" {
+					if prose := flattenClaudeHandoffContent(rec.Message.Content); strings.TrimSpace(prose) != "" {
+						meta.Ending = truncateSnippet(strings.TrimSpace(prose))
+					}
+				}
 				appendSearchText(&searchBuf, text)
 			}
 		}
@@ -315,8 +320,22 @@ func claudeSlashCommand(text string) (command string, withArgs, ok bool) {
 }
 
 // claudeReaderVersion is the version of the Claude metadata rules parseFile
-// applies. Version 1 added Title.
-const claudeReaderVersion = 1
+// applies. Version 1 added Title; version 2 added Ending.
+const claudeReaderVersion = 2
+
+// cachePredatesRules reports a cached entry its harness's reader would no
+// longer produce, so Refresh reparses it once instead of trusting the cache.
+// Codex and Copilot entries are judged by reader version alone; Claude has
+// snippet rules of its own as well.
+func cachePredatesRules(meta SessionMeta) bool {
+	switch meta.Harness {
+	case harness.Codex:
+		return meta.ReaderVersion < codexReaderVersion
+	case harness.Copilot:
+		return meta.ReaderVersion < copilotReaderVersion
+	}
+	return claudeCachePredatesRules(meta)
+}
 
 // claudeCachePredatesRules reports a cached Claude entry the reader
 // would no longer produce: one parsed under an older claudeReaderVersion, a

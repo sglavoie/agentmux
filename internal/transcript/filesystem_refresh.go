@@ -55,7 +55,7 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 		if !ok || meta.FileSize != size || !meta.FileModTime.Equal(mtime) {
 			return SessionMeta{}, false
 		}
-		if claudeCachePredatesRules(meta) {
+		if cachePredatesRules(meta) {
 			return SessionMeta{}, false
 		}
 		if meta.SearchText != "" || meta.HiddenFromIndex || meta.MessageCount == 0 {

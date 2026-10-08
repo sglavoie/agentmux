@@ -45,7 +45,13 @@ type SessionMeta struct {
 	// Codex's thread name. Empty when the harness named it nothing. Unlike
 	// Snippet it can change while the transcript does not, so Codex titles
 	// are reapplied on every discovery rather than trusted from the cache.
-	Title        string       `json:"title,omitempty"`
+	Title string `json:"title,omitempty"`
+	// Ending is how the conversation closed: the agent's last prose reply,
+	// with tool calls and hidden reasoning left out, flattened and cut like
+	// Snippet. Conversations started from the same prompt share a snippet
+	// and usually a title, and the ending is what tells them apart. Empty
+	// when the agent never replied in prose.
+	Ending       string       `json:"ending,omitempty"`
 	SessionClass SessionClass `json:"session_class,omitempty"`
 	// ReaderVersion is the metadata rules the entry was parsed under. A
 	// cached entry from older rules is reparsed once instead of trusted, so
