@@ -68,7 +68,7 @@ func formatRow(res transcript.Result, acctColor map[string]string, maxWidth int,
 	if res.Matches == 0 {
 		ending = res.Meta.Ending
 		home, _ := os.UserHomeDir()
-		preview = transcript.ShortenPaths(preview, home)
+		preview = transcript.ShortenSummary(preview, home)
 	}
 
 	body := "  " + when

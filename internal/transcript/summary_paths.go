@@ -6,11 +6,57 @@ import (
 )
 
 // ShortSummary is Summary for a one-line row: the same text with each long
-// absolute path cut to its last element (see ShortenPaths). Rows that list
+// absolute path cut to its last element (see ShortenSummary). Rows that list
 // sessions use it; JSON, piped output, and session show keep Summary whole.
 func (m SessionMeta) ShortSummary() string {
 	home, _ := os.UserHomeDir()
-	return ShortenPaths(m.Summary(), home)
+	return ShortenSummary(m.Summary(), home)
+}
+
+// ShortenSummary is a one-line summary as a row shows it: a command's leading
+// environment assignments set aside (see elideCommandEnv), then each long
+// absolute path cut to its last element (see ShortenPaths).
+func ShortenSummary(text, home string) string {
+	return ShortenPaths(elideCommandEnv(text), home)
+}
+
+// elideCommandEnv writes the environment assignments a summary's command
+// leads with as a single "…". A session opened by `/asl
+// CLAUDE_CONFIG_DIR=~/.claude-personal run <plan>` is summarized by that
+// prompt, and in a row the assignment alone filled the room the plan needed.
+// Only a run of NAME=value words (NAME in upper case, as environment variables
+// are written) at the start of the text, or right after a leading "/command"
+// or Codex "$skill", is elided; an assignment later in a sentence is part of
+// what was said and stays.
+func elideCommandEnv(text string) string {
+	words := strings.Split(text, " ")
+	start := 0
+	if len(words) > 0 && len(words[0]) > 1 && (words[0][0] == '/' || words[0][0] == '$') && !strings.Contains(words[0][1:], "/") {
+		start = 1
+	}
+	end := start
+	for end < len(words) && isEnvAssignment(words[end]) {
+		end++
+	}
+	if end == start {
+		return text
+	}
+	return strings.Join(append(append(words[:start:start], "…"), words[end:]...), " ")
+}
+
+// isEnvAssignment reports whether word is NAME=value with an upper-case
+// environment variable NAME.
+func isEnvAssignment(word string) bool {
+	name, _, ok := strings.Cut(word, "=")
+	if !ok || name == "" || (name[0] >= '0' && name[0] <= '9') {
+		return false
+	}
+	for _, r := range name {
+		if (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' {
+			return false
+		}
+	}
+	return true
 }
 
 // ShortenPaths shortens the absolute paths in a one-line summary. A session

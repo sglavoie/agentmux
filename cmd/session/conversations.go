@@ -461,7 +461,7 @@ func writeSessionTable(out io.Writer, views []sessionView, ids sessionIDAbbrevia
 		if summary == "" {
 			summary = oneLine(item.Snippet)
 		}
-		summary = transcript.ShortenPaths(summary, home)
+		summary = transcript.ShortenSummary(summary, home)
 		if summary == "" {
 			summary = "-"
 		}
