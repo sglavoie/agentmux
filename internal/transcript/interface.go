@@ -252,6 +252,23 @@ func (m Message) TextForHandoff() (string, bool) {
 	return text, true
 }
 
+// proseForSource returns the part of the text a source search reads that the
+// operator or the agent wrote, without tool calls, tool results, reasoning, or
+// command output: the handoff text, kept only when the source reads this
+// message's role. A search previews a result by a line of it when one shows
+// the query, and by the rest of the text only otherwise.
+func (m Message) proseForSource(source string) string {
+	prose, ok := m.TextForHandoff()
+	if !ok {
+		return ""
+	}
+	user := strings.EqualFold(strings.TrimSpace(m.Role), "user")
+	if (source == "user" && !user) || (source == "harness" && user) {
+		return ""
+	}
+	return prose
+}
+
 // LookupFunc lets Discover skip a full parse when the index already has a
 // fresh entry for the file. Implementations return the cached SessionMeta
 // and true when the supplied size and mtime match the cached snapshot.

@@ -82,6 +82,19 @@ func (t Terms) ContainsAny(lower string) bool {
 	return false
 }
 
+// First returns the byte offset of the earliest occurrence of any term in
+// lower, or -1 when none occurs. It is Tally.Add without the counting, for a
+// caller that only needs to know where a piece of a document starts to match.
+func (t Terms) First(lower string) int {
+	first := -1
+	for _, term := range t {
+		if pos := strings.Index(lower, term); pos >= 0 && (first < 0 || pos < first) {
+			first = pos
+		}
+	}
+	return first
+}
+
 // Tally accumulates per-term counts across the pieces of one document — the
 // messages of a transcript, say — so the AND is decided over the document as a
 // whole rather than within each piece.

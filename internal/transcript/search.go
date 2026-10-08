@@ -361,7 +361,7 @@ func countMatchesForSource(msgs []Message, terms searchquery.Terms, source strin
 	for _, msg := range msgs {
 		text := msg.SearchTextForSource(source)
 		lower := strings.ToLower(text)
-		pick.offer(terms, text, lower, tally.Add(lower))
+		pick.offer(terms, text, lower, tally.Add(lower), msg.proseForSource(source))
 	}
 	total := tally.Total()
 	if total == 0 {
@@ -370,26 +370,73 @@ func countMatchesForSource(msgs []Message, terms searchquery.Terms, source strin
 	return total, pick.preview
 }
 
-// previewPick chooses a transcript's preview across its messages: the first
-// line where every term starts a word, else the first line holding every
-// term, else the first line holding any.
+// previewPick chooses a transcript's preview across its messages. A line
+// someone wrote, the operator or the agent, is preferred to a line a tool
+// printed: searching `daemon` previewed the file name
+// daemon_state_acceptance_doc_test.go out of an ls result, and `worktree
+// branch` a line of git log, in conversations that talked about both. Within
+// each, the first line where every term starts a word is preferred, else the
+// first line holding every term. Failing those, the first term that starts a
+// word, written before printed, else the first occurrence of any.
 type previewPick struct {
 	preview string
-	fit     searchquery.PreviewFit
+	rank    int
+	picked  bool
 }
 
-// offer considers one message, given its lowered text and the earliest term
-// occurrence in it.
-func (p *previewPick) offer(terms searchquery.Terms, text, lower string, first int) {
-	if p.fit == searchquery.FitWords || first < 0 {
+// bestPreviewRank is the rank of a written line where every term starts a
+// word; nothing ranks higher.
+const bestPreviewRank = 6
+
+// previewRank orders a preview by its fit and by whether it was written
+// rather than printed by a tool. A printed line holding every term still beats
+// a written line holding one of them.
+func previewRank(fit searchquery.PreviewFit, written bool) int {
+	switch fit {
+	case searchquery.FitWords, searchquery.FitLine:
+		rank := 3 + int(fit-searchquery.FitLine)
+		if written {
+			rank += 2
+		}
+		return rank
+	case searchquery.FitTerm:
+		if written {
+			return 2
+		}
+		return 1
+	}
+	return 0
+}
+
+// offer considers one message, given its lowered text, the earliest term
+// occurrence in it, and the part of text someone wrote (Message.proseForSource).
+func (p *previewPick) offer(terms searchquery.Terms, text, lower string, first int, prose string) {
+	if p.rank == bestPreviewRank || first < 0 {
+		return
+	}
+	if prose == text {
+		p.consider(terms, text, lower, first, true)
+		return
+	}
+	if prose != "" {
+		proseLower := strings.ToLower(prose)
+		p.consider(terms, prose, proseLower, terms.First(proseLower), true)
+	}
+	p.consider(terms, text, lower, first, false)
+}
+
+func (p *previewPick) consider(terms searchquery.Terms, text, lower string, first int, written bool) {
+	if first < 0 {
 		return
 	}
 	pos, fit := terms.PreviewAt(lower, first)
-	if p.preview != "" && fit <= p.fit {
+	rank := previewRank(fit, written)
+	if p.picked && rank <= p.rank {
 		return
 	}
 	p.preview = firstMatchLine(text, originalOffsetForFoldedByte(text, pos))
-	p.fit = fit
+	p.rank = rank
+	p.picked = true
 }
 
 func messagesSearchText(msgs []Message) string {
@@ -429,7 +476,7 @@ func countMatches(msgs []Message, terms searchquery.Terms) (int, string) {
 	var pick previewPick
 	for _, msg := range msgs {
 		lower := strings.ToLower(msg.Text)
-		pick.offer(terms, msg.Text, lower, tally.Add(lower))
+		pick.offer(terms, msg.Text, lower, tally.Add(lower), msg.proseForSource("any"))
 	}
 	total := tally.Total()
 	if total == 0 {

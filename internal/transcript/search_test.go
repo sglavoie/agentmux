@@ -250,6 +250,76 @@ func TestSearch_MultiWordPreviewPrefersALineHoldingEveryWord(t *testing.T) {
 	}
 }
 
+// A result is previewed by a line someone wrote before a line a tool printed,
+// though a printed line holding every word still beats a written line holding
+// one of them.
+func TestSearch_PreviewPrefersWrittenLinesToToolOutput(t *testing.T) {
+	written := func(role, text string) Message {
+		return Message{Role: role, Text: text, handoffText: &text}
+	}
+	printed := func(text string) Message {
+		empty := ""
+		return Message{Role: "user", Text: text, handoffText: &empty}
+	}
+	mixed := func(tool, prose string) Message {
+		return Message{Role: "assistant", Text: tool + "\n" + prose, handoffText: &prose}
+	}
+	cases := []struct {
+		name  string
+		query string
+		msgs  []Message
+		want  string
+	}{
+		{
+			name:  "a later written line beats an earlier printed one",
+			query: "daemon",
+			msgs: []Message{
+				printed("daemon_state_test.go"),
+				written("assistant", "first\nThe daemon restarted cleanly."),
+			},
+			want: "The daemon restarted cleanly.",
+		},
+		{
+			name:  "the written part of a message beats its tool output",
+			query: "worktree branch",
+			msgs: []Message{
+				mixed("5a4c0e83 fix(worktree): Offer near-miss branches", "I checked the branch of each worktree."),
+			},
+			want: "I checked the branch of each worktree.",
+		},
+		{
+			name:  "a printed line holding every word beats a written one holding one",
+			query: "kitty socket",
+			msgs: []Message{
+				written("user", "Kitty tabs are colored"),
+				printed("kitty sockets: unix:/tmp/kitty-690"),
+				written("assistant", "the socket is closed"),
+			},
+			want: "kitty sockets: unix:/tmp/kitty-690",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			idx := newTestIndex(t)
+			must(t, idx.SetEntryForTest("claude:hit", SessionMeta{
+				ID: "hit", Harness: harness.Claude, Path: "/tmp/hit.jsonl",
+				LastAt: time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC),
+			}))
+			readers := map[string]Reader{harness.Claude: &dispatchReader{
+				harness: harness.Claude,
+				byPath:  map[string][]Message{"/tmp/hit.jsonl": tc.msgs},
+			}}
+			results, err := Search(idx, readers, Query{Text: tc.query})
+			if err != nil {
+				t.Fatalf("Search: %v", err)
+			}
+			if len(results) != 1 || results[0].Preview != tc.want {
+				t.Fatalf("results = %+v, want preview %q", results, tc.want)
+			}
+		})
+	}
+}
+
 func TestSearch_TextPreviewMapsFoldedUnicodeOffset(t *testing.T) {
 	idx := newTestIndex(t)
 	must(t, idx.SetEntryForTest("claude:hit", SessionMeta{
