@@ -24,6 +24,8 @@ func Command() *cobra.Command { return notificationsCmd }
 var notificationsCmd = &cobra.Command{
 	Use:   "notifications",
 	Short: "Inspect and test native notifications",
+	Args:  cobra.NoArgs,
+	RunE:  runNotificationsStatus,
 }
 
 var notificationsTestCmd = &cobra.Command{
