@@ -29,7 +29,7 @@ var daemonStatusCmd = &cobra.Command{
 			_, err := fmt.Fprintf(out, "daemon: not running (%s)\n", daemonSocketPath())
 			return err
 		}
-		if _, err := fmt.Fprintf(out, "daemon: running (%s)\n", daemonSocketPath()); err != nil {
+		if _, err := fmt.Fprintf(out, "daemon: running (%s)\n", runningDetail(health, daemonSocketPath())); err != nil {
 			return err
 		}
 		readiness := "true"
@@ -88,6 +88,17 @@ var daemonStatusCmd = &cobra.Command{
 // snoozeStatusSuffix names the snooze in force, so a quiet daemon whose
 // backend is ready does not read as one that should be delivering. The daemon
 // reports an expired timed snooze as no snooze at all.
+// runningDetail is what the running line says about the process: its pid and
+// uptime, the way doctor reports them, ahead of the socket. Uptime is the
+// quickest way to see that a daemon just restarted. A daemon too old to report
+// a pid gets the socket alone.
+func runningDetail(health ipc.Health, socket string) string {
+	if health.PID <= 0 {
+		return socket
+	}
+	return fmt.Sprintf("pid %d, uptime %s, %s", health.PID, health.Uptime.Round(time.Second), socket)
+}
+
 func snoozeStatusSuffix(n *protocol.NotificationCapability) string {
 	switch {
 	case n.SnoozeIndefinite:

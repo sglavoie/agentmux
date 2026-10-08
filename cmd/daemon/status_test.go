@@ -46,6 +46,14 @@ func TestDaemonStatusCommandWritesToCommandOutput(t *testing.T) {
 				"companion: unknown (restart older daemon)\n",
 		},
 		{
+			name:   "running with pid and uptime",
+			health: ipc.Health{Alive: true, Ready: true, PID: 5459, Uptime: 3*time.Minute + 7*time.Second + 400*time.Millisecond},
+			want: "daemon: running (pid 5459, uptime 3m7s, /tmp/amx.sock)\n" +
+				"ready: true\n" +
+				"notifications: unknown (restart older daemon)\n" +
+				"companion: unknown (restart older daemon)\n",
+		},
+		{
 			name: "snoozed until a time",
 			health: ipc.Health{Alive: true, Ready: true, Notification: &protocol.NotificationCapability{
 				Enabled: true, Available: true, Interactive: true, Backend: "alerter", SnoozedUntil: snoozedUntil.Unix(),
