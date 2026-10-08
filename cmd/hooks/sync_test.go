@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/debugger"
+	"github.com/sglavoie/agentmux/internal/hooks"
 )
 
 func TestConfigHooksStatusCommandWritesToCommandOutput(t *testing.T) {
@@ -166,5 +169,40 @@ func TestConfigHooksSyncRefusesAGoRunBuild(t *testing.T) {
 	}
 	if _, statErr := os.Stat(home); !os.IsNotExist(statErr) {
 		t.Fatalf("hook home %s was touched (stat err %v); want nothing written", home, statErr)
+	}
+}
+
+// Each hint names the remedy for a state a row is in: a table whose files are
+// all in sync is not told to run hooks-sync, which would change nothing.
+func TestHooksStatusHintsNameOnlyTheRemediesTheRowsNeed(t *testing.T) {
+	healthy := debugger.HookProfile{Sync: hooks.SyncInSync, Activation: hooks.ActivationHealthy, Verdict: debugger.VerdictHealthy}
+	unused := debugger.HookProfile{Sync: hooks.SyncInSync, Activation: hooks.ActivationUnverified, Unused: true, Verdict: debugger.VerdictHealthy}
+	unverified := debugger.HookProfile{Sync: hooks.SyncInSync, Activation: hooks.ActivationUnverified, Verdict: debugger.VerdictWarning}
+	inactive := debugger.HookProfile{Sync: hooks.SyncInSync, Activation: hooks.ActivationFailure, Verdict: debugger.VerdictFailure}
+	missing := debugger.HookProfile{Sync: hooks.SyncMissing, Activation: hooks.ActivationFailure, Verdict: debugger.VerdictFailure}
+	broken := debugger.HookProfile{CheckError: "unreadable", Verdict: debugger.VerdictFailure}
+
+	for _, tc := range []struct {
+		name     string
+		profiles []debugger.HookProfile
+		want     []string
+	}{
+		{"all healthy", []debugger.HookProfile{healthy, unused}, nil},
+		{"check error only", []debugger.HookProfile{broken}, nil},
+		{"unverified only", []debugger.HookProfile{healthy, unverified}, []string{"a session started with that profile"}},
+		{"inactive", []debugger.HookProfile{inactive}, []string{"switched off"}},
+		{"missing and unverified", []debugger.HookProfile{missing, unverified}, []string{"amx config hooks-sync", "a session started with that profile"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := hooksStatusHints(tc.profiles)
+			if len(got) != len(tc.want) {
+				t.Fatalf("hints = %q, want %d matching %q", got, len(tc.want), tc.want)
+			}
+			for i, want := range tc.want {
+				if !strings.Contains(got[i], want) {
+					t.Fatalf("hint %d = %q, want it to contain %q", i, got[i], want)
+				}
+			}
+		})
 	}
 }

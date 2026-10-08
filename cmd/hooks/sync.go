@@ -95,12 +95,10 @@ var configHooksStatusCmd = &cobra.Command{
 		report := debugger.InspectHooks(cfg, bin, time.Now())
 		out := cmd.OutOrStdout()
 		errOut := cmd.ErrOrStderr()
-		needsAttention := false
 		rows := make([][]string, 0, len(report.Profiles))
 		for _, s := range report.Profiles {
 			if s.CheckError != "" {
 				rows = append(rows, []string{s.Profile, s.Harness, "error", string(hooks.ActivationFailure), s.CheckError})
-				needsAttention = true
 				continue
 			}
 			activation := string(s.Activation)
@@ -108,9 +106,6 @@ var configHooksStatusCmd = &cobra.Command{
 				activation = "unused"
 			}
 			rows = append(rows, []string{s.Profile, s.Harness, string(s.Sync), activation, s.Detail()})
-			if s.Verdict != debugger.VerdictHealthy {
-				needsAttention = true
-			}
 		}
 		// A person gets an aligned table and the hint below it; a pipe gets
 		// headerless tab-separated rows, as project, session, and worktree list
@@ -137,13 +132,14 @@ var configHooksStatusCmd = &cobra.Command{
 				return err
 			}
 		}
-		if needsAttention {
-			if terminal {
-				if _, err := fmt.Fprintln(out); err != nil {
-					return err
-				}
+		hints := hooksStatusHints(report.Profiles)
+		if len(hints) > 0 && terminal {
+			if _, err := fmt.Fprintln(out); err != nil {
+				return err
 			}
-			if _, err := fmt.Fprintln(hintOut, "hint: run `amx config hooks-sync` for drifted or missing files; activation details identify disabling settings, launch flags, and trust records, while CLI-version or last-seen gaps remain unverified."); err != nil {
+		}
+		for _, hint := range hints {
+			if _, err := fmt.Fprintln(hintOut, hint); err != nil {
 				return err
 			}
 		}
@@ -152,4 +148,33 @@ var configHooksStatusCmd = &cobra.Command{
 		}
 		return nil
 	},
+}
+
+// hooksStatusHints names the remedy for each state some profile is actually
+// in, so a table whose files are all in sync is never told to sync them. A row
+// whose check failed gets no hint: its error is the message.
+func hooksStatusHints(profiles []debugger.HookProfile) []string {
+	var drifted, inactive, unverified bool
+	for _, p := range profiles {
+		switch {
+		case p.CheckError != "":
+		case p.Sync != hooks.SyncInSync:
+			drifted = true
+		case p.Activation == hooks.ActivationFailure:
+			inactive = true
+		case p.Verdict != debugger.VerdictHealthy:
+			unverified = true
+		}
+	}
+	var hints []string
+	if drifted {
+		hints = append(hints, "hint: run `amx config hooks-sync` to install the drifted or missing hook files.")
+	}
+	if inactive {
+		hints = append(hints, "hint: hooks that are not active are installed but switched off; DETAIL names the setting, launch flag, or trust record responsible.")
+	}
+	if unverified {
+		hints = append(hints, "hint: unverified hooks are installed but have not been seen working; a session started with that profile records the hook event that verifies them.")
+	}
+	return hints
 }
