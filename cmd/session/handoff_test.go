@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/actions"
@@ -306,5 +307,45 @@ func writeSessionCommandIndex(t *testing.T, indexPath string, metas ...transcrip
 	}
 	if err := os.WriteFile(indexPath, body, 0o600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A selector that cannot be a session ID is most likely a word remembered from
+// the conversation, so the miss points at search with that word rather than at
+// the whole list.
+func TestSessionCLIPointsAWordSelectorAtSearch(t *testing.T) {
+	resetSessionCommandsTestState(t)
+	meta, indexPath := sessionCommandMeta(t, harness.Codex)
+	writeSessionCommandIndex(t, indexPath, meta)
+	sessionCommandsLoadConfig = func() (*config.Config, error) {
+		return &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Codex}}}, nil
+	}
+	sessionCommandsSessionIndexPath = func() string { return indexPath }
+	sessionCommandsSessionReaders = func() map[string]transcript.Reader {
+		return map[string]transcript.Reader{harness.Codex: sessionCommandReader{harness: harness.Codex}}
+	}
+	if err := sessionContinueCmd.Flags().Set("json", "true"); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	sessionContinueCmd.SetOut(&out)
+
+	for _, tc := range []struct {
+		selector string
+		want     string
+	}{
+		{"kitty", "was not found; to find a conversation by what was said in it, run `amx session search kitty`"},
+		{"tab title", "`amx session search \"tab title\"`"},
+		{"deadbeef", "run `amx session list` to see the indexed conversations"},
+		{"abc", "a session ID prefix needs at least 4 characters"},
+	} {
+		assertSessionCommandJSONError(t, sessionContinueCmd, []string{tc.selector}, &out, "not_found")
+		var payload cli.JSONErrorEnvelope
+		if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(payload.Error.Message, tc.want) {
+			t.Errorf("selector %q: message = %q, want it to contain %q", tc.selector, payload.Error.Message, tc.want)
+		}
 	}
 }

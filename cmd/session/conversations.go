@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/cli"
@@ -754,12 +755,28 @@ func resolveConversationOrFail(cmd *cobra.Command, jsonOutput bool, cfg *config.
 			selector = identity.Harness + ":" + identity.SessionID
 		}
 		hint := "run `amx session list` to see the indexed conversations"
-		if len(identity.SessionID) < sessionIDPrefixMin {
+		switch {
+		case !looksLikeSessionID(identity.SessionID):
+			hint = fmt.Sprintf("to find a conversation by what was said in it, run `amx session search %s`", shellWord(identity.SessionID))
+		case len(identity.SessionID) < sessionIDPrefixMin:
 			hint = fmt.Sprintf("a session ID prefix needs at least %d characters", sessionIDPrefixMin)
 		}
 		return nil, cli.CommandFailure(cmd, jsonOutput, "not_found", fmt.Errorf("indexed conversation %s was not found; %s", selector, hint))
 	}
 	return meta, nil
+}
+
+// looksLikeSessionID reports whether a selector could be a session ID or a
+// prefix of one. Every harness names its conversations with UUIDs, so anything
+// else is more likely a word the operator remembers from the conversation,
+// which search can find and an ID lookup never will.
+func looksLikeSessionID(selector string) bool {
+	for _, r := range selector {
+		if r != '-' && !unicode.Is(unicode.ASCII_Hex_Digit, r) {
+			return false
+		}
+	}
+	return selector != ""
 }
 
 // sessionIDPrefixMin is the shortest session ID prefix a continuity command
