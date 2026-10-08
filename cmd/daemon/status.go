@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -16,6 +17,11 @@ import (
 
 var daemonSocketPath = ipc.SocketPath
 
+// errDaemonNotRunning is the quiet nonzero exit for a status that found no
+// daemon, so a script can test `amx daemon status` itself instead of grepping
+// its first line. The report has already been written in either output mode.
+var errDaemonNotRunning = &cli.ExitError{Code: 1, Err: errors.New("daemon not running"), Quiet: true}
+
 var daemonStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show daemon status, readiness, and build identity",
@@ -23,11 +29,19 @@ var daemonStatusCmd = &cobra.Command{
 		out := cmd.OutOrStdout()
 		health := newDaemonExportClient().Health()
 		if jsonOutput, _ := cmd.Flags().GetBool("json"); jsonOutput {
-			return cli.WriteJSON(cmd, daemonStatusDataFrom(health, daemonSocketPath()))
+			if err := cli.WriteJSON(cmd, daemonStatusDataFrom(health, daemonSocketPath())); err != nil {
+				return err
+			}
+			if !health.Alive {
+				return errDaemonNotRunning
+			}
+			return nil
 		}
 		if !health.Alive {
-			_, err := fmt.Fprintf(out, "daemon: not running (%s)\n", daemonSocketPath())
-			return err
+			if _, err := fmt.Fprintf(out, "daemon: not running (%s)\n", daemonSocketPath()); err != nil {
+				return err
+			}
+			return errDaemonNotRunning
 		}
 		if _, err := fmt.Fprintf(out, "daemon: running (%s)\n", runningDetail(health, daemonSocketPath())); err != nil {
 			return err

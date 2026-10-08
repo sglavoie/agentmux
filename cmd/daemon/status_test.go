@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 	"time"
 
@@ -131,9 +132,7 @@ func TestDaemonStatusCommandWritesToCommandOutput(t *testing.T) {
 			var out bytes.Buffer
 			daemonStatusCmd.SetOut(&out)
 
-			if err := daemonStatusCmd.RunE(daemonStatusCmd, nil); err != nil {
-				t.Fatalf("RunE: %v", err)
-			}
+			assertDaemonStatusExit(t, daemonStatusCmd.RunE(daemonStatusCmd, nil), tc.health.Alive)
 			if got := out.String(); got != tc.want {
 				t.Fatalf("output = %q; want %q", got, tc.want)
 			}
@@ -210,5 +209,22 @@ func TestDaemonStatusRendersASLCapability(t *testing.T) {
 				t.Fatalf("output = %q; want %q", got, want)
 			}
 		})
+	}
+}
+
+// assertDaemonStatusExit checks the status exit contract: success while a
+// daemon answers, and a quiet status 1 after the report when none does, so a
+// script can branch on `amx daemon status` alone.
+func assertDaemonStatusExit(t *testing.T, err error, alive bool) {
+	t.Helper()
+	if alive {
+		if err != nil {
+			t.Fatalf("RunE: %v", err)
+		}
+		return
+	}
+	var exitErr *cli.ExitError
+	if !errors.As(err, &exitErr) || exitErr.Code != 1 || !exitErr.Quiet {
+		t.Fatalf("RunE error = %#v; want a quiet exit 1 for a daemon that is not running", err)
 	}
 }

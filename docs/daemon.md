@@ -13,7 +13,9 @@ amx doctor
 
 `amx daemon status --json` emits the same readiness, build, notification, and
 ASL facts in the schema-v1 envelope, plus `asl_reconcile` when the daemon
-reports it. A stopped daemon is a successful answer with `"alive": false`.
+reports it. A stopped daemon is still reported in full (`"alive": false` under
+`--json`), and the command then exits 1 in both output modes, so a script can
+test `amx daemon status` directly instead of matching its first line.
 
 `amx daemon restart` returns once the new daemon answers on its socket and
 names its pid (`daemon restarted (pid 4242)`), adding the degraded reason when

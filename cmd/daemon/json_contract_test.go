@@ -60,9 +60,7 @@ func TestDaemonStatusJSON(t *testing.T) {
 
 			var out bytes.Buffer
 			daemonStatusCmd.SetOut(&out)
-			if err := daemonStatusCmd.RunE(daemonStatusCmd, nil); err != nil {
-				t.Fatalf("RunE: %v", err)
-			}
+			assertDaemonStatusExit(t, daemonStatusCmd.RunE(daemonStatusCmd, nil), tc.health.Alive)
 			if got := out.String(); got != tc.want {
 				t.Fatalf("output =\n%s\nwant\n%s", got, tc.want)
 			}
