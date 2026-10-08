@@ -450,35 +450,32 @@ func sharedProfileHomes(profiles []config.Account) []sharedProfileHome {
 	return shared
 }
 
+// doctorExpectedBinary is the amx the hook and socket checks judge against:
+// the installed amx on PATH whenever this doctor is some other file, as a
+// freshly built ./amx in a checkout is (see hooks.ExpectedBinary). foreign
+// reports that the two differ.
+func doctorExpectedBinary() (running, expected string, foreign bool, err error) {
+	running, err = doctorExecutable()
+	if err != nil {
+		return "", "", false, err
+	}
+	expected, foreign = hooks.ExpectedBinary(running, doctorLookPath)
+	return running, expected, foreign, nil
+}
+
 // writeDoctorRunningBinary notes a doctor that is not the amx on PATH, as a
 // freshly built ./amx in a checkout is not. The socket and hook checks judge
-// against the binary that is running, so that doctor reports every hook file
-// as drifted and the socket as stale although the installed amx is fine; the
-// note names both binaries so those failures read as what they are. A PATH
-// without amx, or a path either side cannot resolve, is left unremarked.
+// the installation, so they look at the installed amx rather than at this
+// build; the note names both binaries so the reader knows which one was
+// judged. A PATH without amx, or a path either side cannot resolve, is left
+// unremarked.
 func writeDoctorRunningBinary(reportNote func(string, ...any)) {
-	running, err := doctorExecutable()
-	if err != nil {
+	running, installed, foreign, err := doctorExpectedBinary()
+	if err != nil || !foreign {
 		return
 	}
-	onPath, err := doctorLookPath("amx")
-	if err != nil {
-		return
-	}
-	resolve := func(path string) string {
-		if abs, err := filepath.Abs(path); err == nil {
-			path = abs
-		}
-		if real, err := filepath.EvalSymlinks(path); err == nil {
-			path = real
-		}
-		return filepath.Clean(path)
-	}
-	if resolve(running) == resolve(onPath) {
-		return
-	}
-	reportNote("this doctor runs %s rather than the amx on PATH (%s); its socket and hook checks are judged against the running binary, so run the installed amx to check the installation",
-		cli.DisplayPath(running), cli.DisplayPath(onPath))
+	reportNote("this doctor runs %s rather than the amx on PATH (%s); its socket and hook checks judge the installed amx, so hook files that name this build would read as drifted",
+		cli.DisplayPath(running), cli.DisplayPath(installed))
 }
 
 func writeDoctorSocketStatus(out io.Writer, reportIssue func(string, ...any)) error {
@@ -552,7 +549,7 @@ func writeDoctorHooks(out io.Writer, verbose bool, daemonStartedAt time.Time, re
 		reportIssue("hook status unavailable: %s", err)
 		return nil
 	}
-	binary, err := doctorExecutable()
+	_, binary, _, err := doctorExpectedBinary()
 	if err != nil {
 		if _, writeErr := fmt.Fprintf(out, "hooks: binary unavailable (%s)\n", err); writeErr != nil {
 			return writeErr

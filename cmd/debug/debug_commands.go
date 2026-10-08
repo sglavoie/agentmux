@@ -16,6 +16,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
+	"github.com/sglavoie/agentmux/internal/hooks"
 	"github.com/spf13/cobra"
 )
 
@@ -163,6 +164,7 @@ func runDebugExplain(cmd *cobra.Command, _ []string) error {
 		policy = cfg.Defaults.Diagnostics
 		bin, executableErr := debugExecutable()
 		if executableErr == nil {
+			bin, _ = hooks.ExpectedBinary(bin, debugLookPath)
 			report := debugger.InspectHooks(cfg, bin, now)
 			hookReport = &report
 		} else {

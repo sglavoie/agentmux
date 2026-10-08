@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -22,6 +23,18 @@ func StatusCommand() *cobra.Command { return configHooksStatusCmd }
 
 // hooksBinary is the seam tests swap to stand in for the running executable.
 var hooksBinary = cli.AmxBinary
+
+// hooksLookPath finds the installed amx, the one hook files are expected to
+// name; tests swap it so the operator's own amx never decides a result.
+var hooksLookPath = exec.LookPath
+
+// hooksSyncThisBinary lets hooks-sync point every hook at a build other than
+// the installed amx, which it otherwise refuses to do.
+var hooksSyncThisBinary bool
+
+func init() {
+	configHooksSyncCmd.Flags().BoolVar(&hooksSyncThisBinary, "this-binary", false, "write hooks that run this amx even though it is not the amx on PATH")
+}
 
 // hooksStatusIsTerminal decides between the table for a person and the
 // tab-separated rows for a pipe; tests swap it, since they cannot hand a
@@ -44,6 +57,9 @@ var configHooksSyncCmd = &cobra.Command{
 		}
 		if err := cli.RefuseTransientBinary(bin, "write hook commands"); err != nil {
 			return err
+		}
+		if installed, foreign := hooks.ExpectedBinary(bin, hooksLookPath); foreign && !hooksSyncThisBinary {
+			return fmt.Errorf("refusing to write hook commands that run %s: it is not the amx on PATH (%s), which is the one hooks are expected to name; run `%s config hooks-sync`, or pass --this-binary to point every hook at this build", cli.DisplayPath(bin), cli.DisplayPath(installed), cli.DisplayPath(installed))
 		}
 		filter := ""
 		if len(args) > 0 {
@@ -88,10 +104,13 @@ var configHooksStatusCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		bin, err := cli.AmxBinary()
+		running, err := hooksBinary()
 		if err != nil {
 			return err
 		}
+		// A build other than the installed amx judges the installation, not
+		// itself: against itself every hook file would read as drifted.
+		bin, foreign := hooks.ExpectedBinary(running, hooksLookPath)
 		report := debugger.InspectHooks(cfg, bin, time.Now())
 		out := cmd.OutOrStdout()
 		errOut := cmd.ErrOrStderr()
@@ -133,6 +152,9 @@ var configHooksStatusCmd = &cobra.Command{
 			}
 		}
 		hints := hooksStatusHints(report.Profiles)
+		if foreign {
+			hints = append(hints, fmt.Sprintf("note: this is %s, so hook files were judged against the installed amx at %s.", cli.DisplayPath(running), cli.DisplayPath(bin)))
+		}
 		if len(hints) > 0 && terminal {
 			if _, err := fmt.Fprintln(out); err != nil {
 				return err

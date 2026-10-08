@@ -28,7 +28,8 @@ func Health(cfg *config.Config, amxBin string, checkDaemon, checkHooks bool) tea
 			}
 		}
 		if checkHooks {
-			summary, err := hooks.OverallHookHealth(cfg, amxBin)
+			hookBin, _ := hooks.ExpectedBinary(amxBin, HookLookPath)
+			summary, err := hooks.OverallHookHealth(cfg, hookBin)
 			if err != nil {
 				msg.HookErr = err
 			} else {

@@ -54,6 +54,9 @@ color = "red"
 	}
 
 	t.Setenv("amx_CONFIG", cfgPath)
+	// An installed amx on the operator's PATH would make this test binary a
+	// foreign build, which hooks-sync refuses before any profile is merged.
+	t.Setenv("PATH", t.TempDir())
 
 	// Drive the cobra command via rootCmd so the subcommand resolution path is
 	// the same as the real binary's. We explicitly pass "config hooks-sync"

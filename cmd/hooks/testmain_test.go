@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"os"
+	"os/exec"
 	"testing"
 )
 
@@ -14,6 +15,8 @@ func TestMain(m *testing.M) {
 	if err := os.Setenv("XDG_STATE_HOME", stateRoot); err != nil {
 		panic(err)
 	}
+	// The operator's installed amx must not make every test binary foreign.
+	hooksLookPath = func(string) (string, error) { return "", exec.ErrNotFound }
 	code := m.Run()
 	if hadPrevious {
 		_ = os.Setenv("XDG_STATE_HOME", previous)

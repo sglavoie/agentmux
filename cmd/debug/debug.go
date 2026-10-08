@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
@@ -18,6 +19,7 @@ var (
 	debugLoadConfig  = cli.LoadRunnableConfig
 	debugPaths       = diagnostics.DefaultPaths
 	debugExecutable  = os.Executable
+	debugLookPath    = exec.LookPath
 	debugNow         = time.Now
 	debugDaemon      = func() debugger.DaemonHealthClient { return ipc.NewClient() }
 	debugKitty       = func() debugger.KittyWindowLister { return cli.NewKittyClient() }

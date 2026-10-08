@@ -430,7 +430,7 @@ func TestDoctorNotesABinaryOtherThanTheInstalledOne(t *testing.T) {
 		t.Fatalf("PATH without amx noted %q", got)
 	}
 	got := notes(dev, onPath)
-	if len(got) != 1 || !strings.Contains(got[0], dev) || !strings.Contains(got[0], link) || !strings.Contains(got[0], "run the installed amx") {
+	if len(got) != 1 || !strings.Contains(got[0], dev) || !strings.Contains(got[0], link) || !strings.Contains(got[0], "judge the installed amx") {
 		t.Fatalf("dev binary notes = %q; want one naming both binaries", got)
 	}
 }
@@ -496,3 +496,4 @@ func TestDoctorHooksNamesAnUnusedProfileAsANote(t *testing.T) {
 		t.Errorf("notes = %q, want one hooks_unused note for copilot", notes)
 	}
 }
+

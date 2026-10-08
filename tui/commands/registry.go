@@ -1,6 +1,8 @@
 package commands
 
 import (
+	"os/exec"
+
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/clipboard"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
@@ -65,6 +67,11 @@ var LocalWindowID = kitty.WindowIDFromEnv
 // SpawnDaemonDetached is the seam the health probe uses to start a daemon it
 // found unreachable.
 var SpawnDaemonDetached = process.SpawnDetached
+
+// HookLookPath finds the installed amx the hook health probe judges hook files
+// against, so a dashboard run from a freshly built ./amx does not report every
+// profile's hooks as drifted (see hooks.ExpectedBinary).
+var HookLookPath = exec.LookPath
 
 // CopyToClipboard is the seam every clipboard-writing command goes through.
 var CopyToClipboard = clipboard.Copy

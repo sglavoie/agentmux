@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/cli"
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/hooks"
 )
@@ -205,4 +207,91 @@ func TestHooksStatusHintsNameOnlyTheRemediesTheRowsNeed(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A build that is not the amx on PATH — a ./amx built in a checkout — would
+// point every hook at a file the next build replaces, so hooks-sync refuses
+// it unless --this-binary says that is the intent.
+func TestConfigHooksSyncRefusesABuildOtherThanTheInstalledAmx(t *testing.T) {
+	dir := t.TempDir()
+	home := filepath.Join(dir, "claude-home")
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte(validConfigBody(home)), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("amx_CONFIG", path)
+	installed := filepath.Join(dir, "bin", "amx")
+	dev := filepath.Join(dir, "checkout", "amx")
+	oldBinary, oldLookPath, oldThis := hooksBinary, hooksLookPath, hooksSyncThisBinary
+	t.Cleanup(func() { hooksBinary, hooksLookPath, hooksSyncThisBinary = oldBinary, oldLookPath, oldThis })
+	hooksBinary = func() (string, error) { return dev, nil }
+	hooksLookPath = func(string) (string, error) { return installed, nil }
+	configHooksSyncCmd.SetOut(io.Discard)
+
+	hooksSyncThisBinary = false
+	err := configHooksSyncCmd.RunE(configHooksSyncCmd, nil)
+	if err == nil || !strings.Contains(err.Error(), "not the amx on PATH") || !strings.Contains(err.Error(), "--this-binary") {
+		t.Fatalf("RunE error = %v; want a foreign-build refusal naming --this-binary", err)
+	}
+	if _, statErr := os.Stat(home); !os.IsNotExist(statErr) {
+		t.Fatalf("hook home %s was touched (stat err %v); want nothing written", home, statErr)
+	}
+
+	hooksSyncThisBinary = true
+	if err := configHooksSyncCmd.RunE(configHooksSyncCmd, nil); err != nil {
+		t.Fatalf("RunE with --this-binary: %v", err)
+	}
+	statuses, err := hooks.StatusAll(mustLoadTestConfig(t), dev)
+	if err != nil || len(statuses) != 1 || statuses[0].Status != hooks.SyncInSync {
+		t.Fatalf("after --this-binary, status against the dev build = %+v, %v; want in sync", statuses, err)
+	}
+}
+
+// hooks-status run from a build other than the installed amx judges the hook
+// files against the installed one, so files the installed amx wrote read as in
+// sync, and it says which binary it judged.
+func TestConfigHooksStatusJudgesTheInstalledAmxFromAnotherBuild(t *testing.T) {
+	dir := t.TempDir()
+	home := filepath.Join(dir, "claude-home")
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte(validConfigBody(home)), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("amx_CONFIG", path)
+	asTerminal(t, true)
+	installed := filepath.Join(dir, "bin", "amx")
+	dev := filepath.Join(dir, "checkout", "amx")
+	if _, err := hooks.MergeAll(mustLoadTestConfig(t), "", installed); err != nil {
+		t.Fatalf("install hooks for the installed amx: %v", err)
+	}
+	oldBinary, oldLookPath := hooksBinary, hooksLookPath
+	oldOut, oldErr := configHooksStatusCmd.OutOrStdout(), configHooksStatusCmd.ErrOrStderr()
+	t.Cleanup(func() {
+		hooksBinary, hooksLookPath = oldBinary, oldLookPath
+		configHooksStatusCmd.SetOut(oldOut)
+		configHooksStatusCmd.SetErr(oldErr)
+	})
+	hooksBinary = func() (string, error) { return dev, nil }
+	hooksLookPath = func(string) (string, error) { return installed, nil }
+	var out bytes.Buffer
+	configHooksStatusCmd.SetOut(&out)
+	configHooksStatusCmd.SetErr(io.Discard)
+
+	_ = configHooksStatusCmd.RunE(configHooksStatusCmd, nil)
+	got := out.String()
+	if strings.Contains(got, "drifted") || !strings.Contains(got, "in_sync") {
+		t.Fatalf("hooks-status from another build reads the installed amx's hooks as drifted:\n%s", got)
+	}
+	if !strings.Contains(got, "judged against the installed amx at "+installed) {
+		t.Fatalf("hooks-status does not say which amx it judged:\n%s", got)
+	}
+}
+
+func mustLoadTestConfig(t *testing.T) *config.Config {
+	t.Helper()
+	cfg, err := cli.LoadRunnableConfig()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	return cfg
 }

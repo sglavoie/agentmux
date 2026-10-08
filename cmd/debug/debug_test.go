@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -60,6 +61,7 @@ func resetDebugTestState(t *testing.T) {
 	oldLoadConfig := debugLoadConfig
 	oldPaths := debugPaths
 	oldExecutable := debugExecutable
+	oldLookPath := debugLookPath
 	oldNow := debugNow
 	oldDaemon := debugDaemon
 	oldKitty := debugKitty
@@ -86,6 +88,7 @@ func resetDebugTestState(t *testing.T) {
 		debugLoadConfig = oldLoadConfig
 		debugPaths = oldPaths
 		debugExecutable = oldExecutable
+		debugLookPath = oldLookPath
 		debugNow = oldNow
 		debugDaemon = oldDaemon
 		debugKitty = oldKitty
@@ -109,6 +112,8 @@ func resetDebugTestState(t *testing.T) {
 		debugExplainCmd.SetOut(oldExplainOut)
 		debugReplayCmd.SetOut(oldReplayOut)
 	})
+	// No test may judge hooks against the operator's installed amx.
+	debugLookPath = func(string) (string, error) { return "", exec.ErrNotFound }
 	debugSelectorFlags = debugSelectorFlagValues{}
 	debugStatusJSON = false
 	debugTailJSON = false

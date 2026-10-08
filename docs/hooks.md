@@ -15,6 +15,14 @@ needed. `hooks-sync` refuses to run from a `go run` build, because Go deletes
 that binary once the command exits or its build cache is trimmed and every hook
 would silently stop firing; `amx daemon restart` refuses for the same reason.
 
+A build that is not the `amx` on `PATH` — a `./amx` from `just build` — is
+judged against the installed one: `hooks-status`, `doctor`, `debug status`, and
+the dashboard's hook pip compare hook files with the commands the installed
+`amx` would write, and say which binary they judged, rather than reporting
+every file as drifted. `hooks-sync` from such a build refuses, naming the
+installed binary to run instead; pass `--this-binary` to point every hook at
+the build deliberately.
+
 Hook installation is harness-aware:
 
 - **Claude**: merges Agent Mux hook commands into that profile's
