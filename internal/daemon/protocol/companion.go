@@ -29,6 +29,21 @@ const CompanionProtocolVersion = 1
 // grow a breaking shape without renaming every other companion message.
 const CompanionSnapshotVersion = 1
 
+// CompanionSnapshotVersionRuntime is the mixed-backend snapshot: every v1
+// field, plus a runtime block on each session an AgentMux runtime session
+// owns, plus the sessions that run on a backend other than Kitty. Those carry
+// no window, tab, OS-window, or socket field at all — a tmux pane has no Kitty
+// identity, and inventing one would let an old client focus the wrong window.
+// A daemon sends it only to a subscriber that asked for
+// CompanionFeatureRuntimeSessions; every other subscriber keeps receiving v1,
+// which lists Kitty sessions only.
+const CompanionSnapshotVersionRuntime = 2
+
+// CompanionFeatureRuntimeSessions is the subscribe feature that negotiates
+// CompanionSnapshotVersionRuntime. The ack echoes it only when the daemon
+// granted it, so a client knows which snapshot shape the stream carries.
+const CompanionFeatureRuntimeSessions = "runtime_sessions"
+
 // CompanionSessionCap bounds how many sessions one snapshot carries. Every
 // field on a session is clamped, so this cap is what keeps a single snapshot
 // frame under CompanionFrameMaxBytes however many windows Kitty holds.
@@ -83,13 +98,15 @@ var AttentionStates = map[string]bool{
 // delivery role, and NotificationsAuthorized says the operating system lets the
 // client actually show one — a claim without authorization is not a backend.
 type SubscribeRequest struct {
-	Protocol                int             `json:"protocol"`
-	Client                  string          `json:"client,omitempty"`
-	ClientVersion           string          `json:"client_version,omitempty"`
-	AMXBuild                *buildinfo.Info `json:"amx_build,omitempty"`
-	Features                []string        `json:"features,omitempty"`
-	NotificationBackend     bool            `json:"notification_backend,omitempty"`
-	NotificationsAuthorized bool            `json:"notifications_authorized,omitempty"`
+	Protocol      int             `json:"protocol"`
+	Client        string          `json:"client,omitempty"`
+	ClientVersion string          `json:"client_version,omitempty"`
+	AMXBuild      *buildinfo.Info `json:"amx_build,omitempty"`
+	// Features names optional behaviors the client understands. Only
+	// CompanionFeatureRuntimeSessions changes what the daemon sends.
+	Features                []string `json:"features,omitempty"`
+	NotificationBackend     bool     `json:"notification_backend,omitempty"`
+	NotificationsAuthorized bool     `json:"notifications_authorized,omitempty"`
 }
 
 // SubscriptionAck is the response line that opens a stream. Protocol is the
@@ -229,6 +246,8 @@ type CompanionClient struct {
 	AMXBuild            *buildinfo.Info `json:"amx_build,omitempty"`
 	NotificationBackend bool            `json:"notification_backend,omitempty"`
 	ConnectedAt         int64           `json:"connected_at,omitempty"`
+	// SnapshotVersion is the snapshot shape this subscriber negotiated.
+	SnapshotVersion int `json:"snapshot_version,omitempty"`
 }
 
 // StreamFrameType names the payload a StreamFrame carries.
@@ -347,18 +366,23 @@ type CompanionASL struct {
 // fetches the body through asl_question when the operator opens it, so the
 // stream never holds prose a subscriber was not asked to show.
 type CompanionASLWaiting struct {
-	RunID                   string `json:"run_id"`
-	PlanDir                 string `json:"plan_dir,omitempty"`
-	WindowID                int    `json:"window_id"`
+	RunID   string `json:"run_id"`
+	PlanDir string `json:"plan_dir,omitempty"`
+	// WindowID is the Kitty window driving the run. A v2 run driven from a
+	// non-Kitty runtime session has none and names RuntimeSessionID instead.
+	WindowID                int    `json:"window_id,omitempty"`
+	RuntimeSessionID        string `json:"runtime_session_id,omitempty"`
 	Unanswered              int    `json:"unanswered"`
 	LatestQuestionID        string `json:"latest_question_id,omitempty"`
 	LatestQuestionCreatedAt int64  `json:"latest_question_created_at,omitempty"`
 }
 
 // CompanionSession is one live managed session. Timestamps are Unix seconds
-// except PresentationChangedAtMS, which mirrors WindowStateSnapshot.
+// except PresentationChangedAtMS, which mirrors WindowStateSnapshot. The Kitty
+// fields are set exactly when the session lives in Kitty; in a v2 snapshot a
+// session on another backend has only Runtime to be addressed by.
 type CompanionSession struct {
-	WindowID                int                    `json:"window_id"`
+	WindowID                int                    `json:"window_id,omitempty"`
 	TabID                   int                    `json:"tab_id,omitempty"`
 	OSWindowID              int                    `json:"os_window_id,omitempty"`
 	KittySocket             string                 `json:"kitty_socket,omitempty"`
@@ -380,4 +404,18 @@ type CompanionSession struct {
 	PresentationChangedAtMS int64                  `json:"presentation_changed_at_ms,omitempty"`
 	Branch                  string                 `json:"branch,omitempty"`
 	Dirty                   bool                   `json:"dirty,omitempty"`
+	// Runtime names the AgentMux runtime session that owns this session. Only
+	// a v2 snapshot carries it.
+	Runtime *CompanionRuntime `json:"runtime,omitempty"`
+}
+
+// CompanionRuntime is a session's AgentMux runtime identity and the backend
+// target it runs at. Pane is the backend's own reference (a Kitty window ID in
+// decimal, a tmux pane ID), opaque to the client.
+type CompanionRuntime struct {
+	SessionID  string `json:"session_id"`
+	Backend    string `json:"backend"`
+	Instance   string `json:"instance,omitempty"`
+	Generation string `json:"generation,omitempty"`
+	Pane       string `json:"pane,omitempty"`
 }

@@ -195,6 +195,14 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 		recorder.record("daemon.snapshot", "degraded", reason, nil)
 	}
 
+	// Runtime-session slots restore after Kitty's, so a Kitty slot whose state
+	// amx_state just rebuilt is rebound to its session, and before the socket
+	// binds, so no event can land in a slot before its checkpoint does.
+	handler.SetRuntimeCheckpointPath(DefaultRuntimeCheckpointPath())
+	if report := handler.restoreRuntimeCheckpoint(time.Now()); report.Corrupt || len(report.Outcomes) > 0 {
+		slog.Info("daemon: runtime checkpoint restored", "corrupt", report.Corrupt, "outcomes", report.Outcomes)
+	}
+
 	server, err := ipc.NewServer(socketPath, handler)
 	if err != nil {
 		return fmt.Errorf("daemon: binding socket %s: %w", socketPath, err)

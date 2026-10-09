@@ -20,7 +20,20 @@
 // publish whose digest is unchanged. The Handler implements
 // ipc.SubscriptionHandler: a subscribe registers the sink, replays the latest
 // snapshot, and is acknowledged with a 15s heartbeat the hub then sends, and
-// health reports the subscribers as they identified themselves.
+// health reports the subscribers as they identified themselves. Each publish
+// projects one copy into two snapshot versions: v1, the Kitty-only contract
+// every existing client reads, and v2, which a subscriber gets only by asking
+// for the runtime_sessions feature and which adds runtime-session identity and
+// the sessions on other backends — never with a synthesized Kitty window ID.
+//
+// Reducer state of runtime-session slots is checkpointed backend-neutrally
+// (runtime_checkpoint.go) beside the runtime-session registry: a Kitty slot
+// records only its binding, since amx_state keeps its state, while a tmux slot
+// records the same amx_state payload in the file. Startup restores the
+// checkpoint after the Kitty restore and before the socket binds; sessions the
+// registry no longer lists live at the same target are dropped, entries it
+// cannot answer for are retried on maintenance, a corrupt file is quarantined,
+// and state a fresh event created first only gains disjoint facts.
 //
 // The companion's focus_window request (handler_companion.go) is the one
 // companion request that dials Kitty. It accepts only a socket the daemon

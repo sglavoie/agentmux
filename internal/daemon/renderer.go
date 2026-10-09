@@ -188,11 +188,15 @@ func (h *Handler) maintenanceTick(now time.Time) {
 	h.maintainCaptureStore(now)
 	client, socket := h.kittyListTarget()
 	if client == nil {
+		// Runtime sessions on other backends still need retiring and
+		// checkpointing when there is no Kitty to list.
+		h.maintainRuntimeSessions(now)
 		return
 	}
 	capture, err := h.captureKittySnapshot(client, socket)
 	if err != nil {
 		slog.Debug("maintenance: list windows failed", "err", err)
+		h.maintainRuntimeSessions(now)
 		return
 	}
 	windows := capture.windows
@@ -234,7 +238,7 @@ func (h *Handler) runSnapshotTickWithCapture(now time.Time, capture kittySnapsho
 	h.publishCapture(capture)
 	h.pruneClosedWindowsFor(now, liveWindowIDs(windows), capture.socket)
 	h.pruneForeignWindows(now, capture.socket)
-	h.retireEndedRuntimeSessions(now)
+	h.maintainRuntimeSessions(now)
 	// This is the startup reconciliation as well as the periodic one: the
 	// interval gate has never run when the daemon comes up, so the first tick
 	// always sweeps, and every aslReconcileInterval thereafter. Startup restore

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"flag"
 	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -13,9 +12,12 @@ import (
 	"github.com/sglavoie/agentmux/internal/conversation"
 )
 
-var updateCompanionGolden = flag.Bool("update-companion-golden", false, "rewrite testdata/companion_snapshot_v1.json")
+var updateCompanionGolden = flag.Bool("update-companion-golden", false, "rewrite testdata/companion_snapshot_v*.json")
 
-const companionGoldenPath = "testdata/companion_snapshot_v1.json"
+const (
+	companionGoldenPath   = "testdata/companion_snapshot_v1.json"
+	companionGoldenV2Path = "testdata/companion_snapshot_v2.json"
+)
 
 // goldenCompanionSnapshot sets every field of a v1 snapshot, so the committed
 // golden names every key a v1 client may read.
@@ -58,41 +60,95 @@ func goldenCompanionSnapshot() CompanionSnapshot {
 	}
 }
 
-// TestCompanionSnapshot_Golden pins the v1 wire shape byte for byte. A change
-// here is a change to what every shipped companion reads: renaming a key is a
-// new snapshot version, adding one is additive and needs only the golden
-// regenerated with -update-companion-golden.
-func TestCompanionSnapshot_Golden(t *testing.T) {
-	got, err := json.MarshalIndent(goldenCompanionSnapshot(), "", "  ")
+// goldenCompanionSnapshotV2 sets every field of a v2 snapshot: the v1 fixture
+// with its Kitty session owned by a runtime session, plus a tmux session that
+// carries no Kitty identity at all and a run waiting on it.
+func goldenCompanionSnapshotV2() CompanionSnapshot {
+	s := goldenCompanionSnapshot()
+	s.V = CompanionSnapshotVersionRuntime
+	s.Sessions[0].Runtime = &CompanionRuntime{
+		SessionID: "rs-0123456789abcdef0123456789abcdef", Backend: "kitty",
+		Instance: "unix:/tmp/kitty-100", Generation: "kitty-gen-1", Pane: "101",
+	}
+	s.Sessions = append(s.Sessions, CompanionSession{
+		Harness: "codex", Profile: "work", Project: "API",
+		Conversation: &conversation.Identity{Harness: "codex", SessionID: "019a-session"},
+		ASLRunID:     "run-2", IconState: "stop", Attention: true, LastEventAt: 1_700_000_060,
+		Runtime: &CompanionRuntime{
+			SessionID: "rs-fedcba9876543210fedcba9876543210", Backend: "tmux",
+			Instance: "/tmp/amx-tmux.sock", Generation: "tmux-gen-1", Pane: "%7",
+		},
+	})
+	s.ASL.Waiting[0].RuntimeSessionID = "rs-0123456789abcdef0123456789abcdef"
+	s.ASL.Waiting = append(s.ASL.Waiting, CompanionASLWaiting{
+		RunID: "run-2", Unanswered: 1, RuntimeSessionID: "rs-fedcba9876543210fedcba9876543210",
+	})
+	return s
+}
+
+func checkCompanionGolden(t *testing.T, path string, snapshot CompanionSnapshot) {
+	t.Helper()
+	got, err := json.MarshalIndent(snapshot, "", "  ")
 	if err != nil {
 		t.Fatal(err)
 	}
 	got = append(got, '\n')
 	if *updateCompanionGolden {
-		if err := os.MkdirAll(filepath.Dir(companionGoldenPath), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(companionGoldenPath, got, 0o644); err != nil {
+		if err := os.WriteFile(path, got, 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	want, err := os.ReadFile(companionGoldenPath)
+	want, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("reading the committed golden (regenerate with -update-companion-golden): %v", err)
 	}
 	if !bytes.Equal(got, want) {
-		t.Fatalf("CompanionSnapshot v1 drifted from %s:\n got: %s\nwant: %s", companionGoldenPath, got, want)
+		t.Fatalf("CompanionSnapshot drifted from %s:\n got: %s\nwant: %s", path, got, want)
 	}
-
-	// The golden decodes back into the identical value, so it is a fixture a
-	// client test can load as well as a byte-level pin.
 	var decoded CompanionSnapshot
 	if err := json.Unmarshal(want, &decoded); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(decoded, goldenCompanionSnapshot()) {
-		t.Fatalf("golden decodes to %+v", decoded)
+	if !reflect.DeepEqual(decoded, snapshot) {
+		t.Fatalf("golden %s decodes to %+v", path, decoded)
 	}
+}
+
+// TestCompanionSnapshotV2_Golden pins the negotiated mixed-backend shape. The
+// tmux session's object holds no window_id, tab_id, os_window_id, or
+// kitty_socket key, and the run waiting on it no window_id.
+func TestCompanionSnapshotV2_Golden(t *testing.T) {
+	checkCompanionGolden(t, companionGoldenV2Path, goldenCompanionSnapshotV2())
+
+	var raw struct {
+		Sessions []map[string]json.RawMessage `json:"sessions"`
+		ASL      struct {
+			Waiting []map[string]json.RawMessage `json:"waiting"`
+		} `json:"asl"`
+	}
+	data, err := os.ReadFile(companionGoldenV2Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"window_id", "tab_id", "os_window_id", "kitty_socket"} {
+		if _, ok := raw.Sessions[1][key]; ok {
+			t.Errorf("tmux session carries Kitty key %q", key)
+		}
+	}
+	if _, ok := raw.ASL.Waiting[1]["window_id"]; ok {
+		t.Error("run waiting on a tmux session carries a window_id")
+	}
+}
+
+// TestCompanionSnapshot_Golden pins the v1 wire shape byte for byte. A change
+// here is a change to what every shipped companion reads: renaming a key is a
+// new snapshot version, adding one is additive and needs only the golden
+// regenerated with -update-companion-golden.
+func TestCompanionSnapshot_Golden(t *testing.T) {
+	checkCompanionGolden(t, companionGoldenPath, goldenCompanionSnapshot())
 }
 
 // TestCompanionSnapshot_GoldenSetsEveryField guards the golden against going
@@ -125,7 +181,9 @@ func TestCompanionSnapshot_GoldenSetsEveryField(t *testing.T) {
 			}
 		}
 	}
-	walk("CompanionSnapshot", reflect.ValueOf(goldenCompanionSnapshot()))
+	// The v2 fixture is the v1 fixture plus every runtime-only field, so
+	// walking it covers both shapes; the v1 golden itself stays free of them.
+	walk("CompanionSnapshot", reflect.ValueOf(goldenCompanionSnapshotV2()))
 }
 
 // TestCompanionSnapshot_ToleratesUnknownFields is the forward direction: a

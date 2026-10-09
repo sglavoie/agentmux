@@ -122,6 +122,18 @@ func (r *runtimeRoutes) syntheticSlot(target runtimeTarget) int {
 	return slot
 }
 
+// forgetUnboundSynthetic drops target's synthetic slot when nothing is bound
+// to it, so a restore that declined the slot does not keep it reserved.
+func (r *runtimeRoutes) forgetUnboundSynthetic(target runtimeTarget) {
+	slot, ok := r.synthetic[target]
+	if !ok {
+		return
+	}
+	if _, bound := r.bySlot[slot]; !bound {
+		delete(r.synthetic, target)
+	}
+}
+
 func (r *runtimeRoutes) snapshot() map[int]runtimeBinding {
 	return maps.Clone(r.bySlot)
 }

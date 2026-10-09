@@ -129,59 +129,77 @@ func (h *Handler) restoreFromUserVars(windows []kitty.OSWindow, now time.Time) {
 				if strings.TrimSpace(win.UserVars.AMXState) == "" {
 					continue
 				}
-				var st state.WindowState
-				if err := st.UnmarshalUserVar(win.UserVars.AMXState); err != nil {
+				st, err := h.restoreWindowPayloadLocked(win.ID, win.UserVars.AMXState, now)
+				if err != nil {
 					slog.Warn("renderer: discarded invalid restored state", "window_id", win.ID, "err", err)
 					continue
 				}
-				if desired := rendering.DesiredIcon(&st); desired != palette.ParseTitleParts(tab.Title).State {
+				if desired := rendering.DesiredIcon(st); desired != palette.ParseTitleParts(tab.Title).State {
 					slog.Warn("renderer: restored state differs from live title", "window_id", win.ID, "desired_icon", desired, "title_icon", palette.ParseTitleParts(tab.Title).State)
 				}
-				if st.GuardExpiresAt.IsZero() || !st.GuardExpiresAt.After(now) {
-					st.GuardAction = ""
-					st.GuardExpiresAt = time.Time{}
-				} else if h.guard != nil {
-					h.guard.Restore(win.ID, st.GuardAction, st.GuardExpiresAt)
-				}
-				if st.Reducer == nil && st.DesiredIcon == "" && st.LastAction != "" {
-					st.DesiredIcon = protocol.IconState(st.LastAction)
-				}
-				if st.Reducer != nil {
-					// Deserialization built the reducer with zero thresholds;
-					// re-bind the daemon's configured ones so staleness and the
-					// legacy grace behave identically after a restart, and move
-					// v1-migrated facts onto the window's live legacy key so
-					// post-restart events collide with the restored fact
-					// (same-source terminal suppression, ASL lease release).
-					st.Reducer.SetConfig(h.reducerCfg)
-					st.RekeyMigratedFacts(win.ID)
-					// Republish from the reducer so the restored visible state
-					// is the reduced state, not the legacy scalar. Without
-					// this, a window whose persisted terminal fact aged past
-					// the tombstone TTL while the daemon was down restores
-					// with an empty reducer but a stale LastAction icon, and —
-					// because effective state is only published on the next
-					// event — an idle window holds that shadow_current_
-					// mismatch forever (observed live on the first installed
-					// restart: three idle windows pinned "stop" against an
-					// empty reducer, failing doctor/audit permanently).
-					st.Reducer.Compact(now.Unix())
-					h.publishEffectiveLocked(win.ID, &st, st.Reducer.Reduce(now.Unix()))
-				}
-				st.Dirty = true
-				st.DirtySince = now
-				st.Seq++
-				// A fact-less payload never reaches publishEffectiveLocked above
-				// yet still restores an icon, so re-assert the anchor invariant
-				// against the icon this window actually restored with: a
-				// pre-upgrade payload self-heals to now and a persisted anchor
-				// that restored onto a non-active icon is dropped.
-				stampBusySinceLocked(&st, rendering.DesiredIcon(&st), now)
-				h.store[win.ID] = &st
-				h.syncRendererMetadataLocked(win.ID)
 			}
 		}
 	}
+}
+
+// restoreWindowPayloadLocked rebuilds slot's state from a persisted amx_state
+// payload and installs it. It is the one restore path for every backend: a
+// Kitty window's payload comes from its user var, a non-Kitty runtime slot's
+// from the runtime checkpoint (runtime_checkpoint.go). The caller has checked
+// that the slot holds no in-process state, which would otherwise win. A slot
+// the runtime routes already bind to a runtime session restores bound to it,
+// so the session's next event keeps the restored facts. Callers hold stateMu.
+func (h *Handler) restoreWindowPayloadLocked(slot int, payload string, now time.Time) (*state.WindowState, error) {
+	var st state.WindowState
+	if err := st.UnmarshalUserVar(payload); err != nil {
+		return nil, err
+	}
+	if st.GuardExpiresAt.IsZero() || !st.GuardExpiresAt.After(now) {
+		st.GuardAction = ""
+		st.GuardExpiresAt = time.Time{}
+	} else if h.guard != nil {
+		h.guard.Restore(slot, st.GuardAction, st.GuardExpiresAt)
+	}
+	if st.Reducer == nil && st.DesiredIcon == "" && st.LastAction != "" {
+		st.DesiredIcon = protocol.IconState(st.LastAction)
+	}
+	if st.Reducer != nil {
+		// Deserialization built the reducer with zero thresholds;
+		// re-bind the daemon's configured ones so staleness and the
+		// legacy grace behave identically after a restart, and move
+		// v1-migrated facts onto the window's live legacy key so
+		// post-restart events collide with the restored fact
+		// (same-source terminal suppression, ASL lease release).
+		st.Reducer.SetConfig(h.reducerCfg)
+		st.RekeyMigratedFacts(slot)
+		if b, ok := h.runtimeRoutes.binding(slot); ok {
+			st.Reducer.BindRuntimeSession(b.runtime)
+		}
+		// Republish from the reducer so the restored visible state
+		// is the reduced state, not the legacy scalar. Without
+		// this, a window whose persisted terminal fact aged past
+		// the tombstone TTL while the daemon was down restores
+		// with an empty reducer but a stale LastAction icon, and —
+		// because effective state is only published on the next
+		// event — an idle window holds that shadow_current_
+		// mismatch forever (observed live on the first installed
+		// restart: three idle windows pinned "stop" against an
+		// empty reducer, failing doctor/audit permanently).
+		st.Reducer.Compact(now.Unix())
+		h.publishEffectiveLocked(slot, &st, st.Reducer.Reduce(now.Unix()))
+	}
+	st.Dirty = true
+	st.DirtySince = now
+	st.Seq++
+	// A fact-less payload never reaches publishEffectiveLocked above
+	// yet still restores an icon, so re-assert the anchor invariant
+	// against the icon this window actually restored with: a
+	// pre-upgrade payload self-heals to now and a persisted anchor
+	// that restored onto a non-active icon is dropped.
+	stampBusySinceLocked(&st, rendering.DesiredIcon(&st), now)
+	h.store[slot] = &st
+	h.syncRendererMetadataLocked(slot)
+	return &st, nil
 }
 
 // mergePersistedFactsLocked folds the disjoint still-live reducer facts carried
@@ -201,23 +219,31 @@ func (h *Handler) mergePersistedFactsLocked(windowID int, st *state.WindowState,
 	if strings.TrimSpace(win.UserVars.AMXState) == "" {
 		return
 	}
-	var persisted state.WindowState
-	if err := persisted.UnmarshalUserVar(win.UserVars.AMXState); err != nil {
+	if err := h.mergePersistedPayloadLocked(windowID, st, win.UserVars.AMXState, now); err != nil {
 		slog.Warn("renderer: discarded invalid restored state on merge", "window_id", windowID, "err", err)
-		return
+	}
+}
+
+// mergePersistedPayloadLocked is mergePersistedFactsLocked for a payload
+// already read from wherever its backend persists it. It reports only a
+// malformed payload; merging nothing is not an error. Callers hold stateMu.
+func (h *Handler) mergePersistedPayloadLocked(windowID int, st *state.WindowState, payload string, now time.Time) error {
+	var persisted state.WindowState
+	if err := persisted.UnmarshalUserVar(payload); err != nil {
+		return err
 	}
 	if persisted.Reducer == nil {
-		return
+		return nil
 	}
 	facts := persisted.Reducer.Facts()
 	if len(facts) == 0 {
-		return
+		return nil
 	}
 	if st.Reducer == nil {
 		st.Reducer = state.NewReducer(h.reducerCfg)
 	}
 	if st.Reducer.MergeDisjoint(facts) == 0 {
-		return
+		return nil
 	}
 	// Re-bind the daemon's configured thresholds (the merged facts arrived from a
 	// zero-threshold deserializer) and move any v1-migrated legacy/ASL facts onto
@@ -247,4 +273,5 @@ func (h *Handler) mergePersistedFactsLocked(windowID int, st *state.WindowState,
 	st.Dirty = true
 	st.Seq++
 	h.syncRendererMetadataLocked(windowID)
+	return nil
 }

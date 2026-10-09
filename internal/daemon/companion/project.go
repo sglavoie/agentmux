@@ -40,11 +40,29 @@ type Input struct {
 	// answer (asl.SupervisorRegistry.Targets and Pending).
 	ASLTargets []asl.SupervisorTarget
 	ASLPending []asl.PendingQuestion
+	// Runtime names the runtime session bound to each slot, keyed like
+	// States. A slot whose Backend is not Kitty is not a Kitty window: v1
+	// never lists it, and v2 lists it by its runtime identity alone.
+	Runtime map[int]RuntimeSlot
+	// SnapshotVersion selects the shape: CompanionSnapshotVersionRuntime
+	// projects v2, anything else the v1 snapshot old clients read.
+	SnapshotVersion int
 	// Now decides only whether the configured quiet hours are in force. It is
 	// never published, so it cannot make two projections of the same world
 	// differ except across a quiet-hours boundary.
 	Now time.Time
 }
+
+// RuntimeSlot is the runtime session holding one slot and its target.
+type RuntimeSlot struct {
+	SessionID  string
+	Backend    string
+	Instance   string
+	Generation string
+	Pane       string
+}
+
+func (r RuntimeSlot) kitty() bool { return r.Backend == "kitty" }
 
 // KittyTree is the window tree a projection reads sessions from.
 type KittyTree struct {
@@ -90,8 +108,13 @@ type candidate struct {
 
 // Project builds the companion snapshot for one moment of daemon state.
 func Project(in Input) protocol.CompanionSnapshot {
+	runtime := in.SnapshotVersion == protocol.CompanionSnapshotVersionRuntime
+	version := protocol.CompanionSnapshotVersion
+	if runtime {
+		version = protocol.CompanionSnapshotVersionRuntime
+	}
 	out := protocol.CompanionSnapshot{
-		V:            protocol.CompanionSnapshotVersion,
+		V:            version,
 		Daemon:       in.Daemon,
 		Notification: projectNotification(in.Notification, in.Now),
 		Kitty: protocol.CompanionKitty{
@@ -107,6 +130,9 @@ func Project(in Input) protocol.CompanionSnapshot {
 	runs := runsByWindow(in.ASLTargets, in.ASLPending)
 	candidates := treeSessions(in, runs)
 	candidates = append(candidates, foreignSessions(in, runs, len(candidates))...)
+	if runtime {
+		candidates = append(candidates, runtimeSessions(in, runs, len(candidates))...)
+	}
 
 	sockets := map[string]bool{}
 	for _, c := range candidates {
@@ -116,7 +142,7 @@ func Project(in Input) protocol.CompanionSnapshot {
 		}
 	}
 	out.Kitty.Sockets = sortedKeys(sockets)
-	out.ASL.Waiting = projectWaiting(in.ASLPending)
+	out.ASL.Waiting = projectWaiting(in, runtime)
 
 	keep := min(len(candidates), protocol.CompanionSessionCap)
 	priority := byPriority(candidates)
@@ -219,6 +245,9 @@ func treeSessions(in Input, runs map[int]string) []candidate {
 				if st, ok := in.States[win.ID]; ok && sameInstance(in.Sockets[win.ID], in.Kitty.Socket) {
 					applyState(&s, st)
 				}
+				if in.SnapshotVersion == protocol.CompanionSnapshotVersionRuntime {
+					s.Runtime = kittyRuntime(in.Runtime, win.ID, in.Kitty.Socket)
+				}
 				s.Attention = protocol.AttentionStates[s.IconState] || tab.NeedsAttention
 				out = append(out, candidate{session: s, order: len(out)})
 			}
@@ -258,6 +287,9 @@ func foreignSessions(in Input, runs map[int]string, base int) []candidate {
 	}
 	var ids []int
 	for id := range in.States {
+		if r, ok := in.Runtime[id]; ok && !r.kitty() {
+			continue
+		}
 		if socket := in.Sockets[id]; socket != "" && socket != in.Kitty.Socket {
 			ids = append(ids, id)
 		}
@@ -291,7 +323,62 @@ func foreignSessions(in Input, runs map[int]string, base int) []candidate {
 		if s.Harness == "" && s.Conversation != nil {
 			s.Harness = display(s.Conversation.Harness)
 		}
+		if in.SnapshotVersion == protocol.CompanionSnapshotVersionRuntime {
+			s.Runtime = kittyRuntime(in.Runtime, id, in.Sockets[id])
+		}
 		s.Attention = protocol.AttentionStates[s.IconState] || needsAttention
+		out = append(out, candidate{session: s, order: base + len(out)})
+	}
+	return out
+}
+
+// kittyRuntime is the runtime block of a Kitty window, when a runtime session
+// of that same Kitty instance holds it.
+func kittyRuntime(slots map[int]RuntimeSlot, windowID int, socket string) *protocol.CompanionRuntime {
+	r, ok := slots[windowID]
+	if !ok || !r.kitty() || !sameInstance(r.Instance, socket) {
+		return nil
+	}
+	return companionRuntime(r)
+}
+
+func companionRuntime(r RuntimeSlot) *protocol.CompanionRuntime {
+	id := identifier(r.SessionID)
+	if id == "" {
+		return nil
+	}
+	return &protocol.CompanionRuntime{
+		SessionID:  id,
+		Backend:    identifier(r.Backend),
+		Instance:   identifier(r.Instance),
+		Generation: identifier(r.Generation),
+		Pane:       identifier(r.Pane),
+	}
+}
+
+// runtimeSessions projects the v2-only sessions: daemon state held by a
+// runtime session on a backend other than Kitty, ordered by runtime-session
+// ID. They are addressed by their runtime block alone; no Kitty field is set,
+// because the session has no Kitty identity to report.
+func runtimeSessions(in Input, runs map[int]string, base int) []candidate {
+	var slots []int
+	for slot, r := range in.Runtime {
+		if _, ok := in.States[slot]; ok && !r.kitty() && identifier(r.SessionID) != "" {
+			slots = append(slots, slot)
+		}
+	}
+	sort.Slice(slots, func(i, j int) bool { return in.Runtime[slots[i]].SessionID < in.Runtime[slots[j]].SessionID })
+	out := make([]candidate, 0, len(slots))
+	for _, slot := range slots {
+		s := protocol.CompanionSession{
+			ASLRunID: identifier(runs[slot]),
+			Runtime:  companionRuntime(in.Runtime[slot]),
+		}
+		applyState(&s, in.States[slot])
+		if s.Conversation != nil {
+			s.Harness = display(s.Conversation.Harness)
+		}
+		s.Attention = protocol.AttentionStates[s.IconState]
 		out = append(out, candidate{session: s, order: base + len(out)})
 	}
 	return out
@@ -336,9 +423,13 @@ func runsByWindow(targets []asl.SupervisorTarget, pending []asl.PendingQuestion)
 	return runs
 }
 
-func projectWaiting(pending []asl.PendingQuestion) []protocol.CompanionASLWaiting {
+// projectWaiting lists the runs waiting on an answer. A run driven from a
+// non-Kitty runtime session is v2-only, and names that session rather than its
+// slot, which is no window ID; v2 also names the runtime session of a run
+// driven from a claimed Kitty window.
+func projectWaiting(in Input, runtime bool) []protocol.CompanionASLWaiting {
 	var out []protocol.CompanionASLWaiting
-	for _, p := range pending {
+	for _, p := range in.ASLPending {
 		run := identifier(p.Target.Candidate.RunID)
 		if run == "" || p.Projection.UnansweredQuestions <= 0 {
 			continue
@@ -350,6 +441,17 @@ func projectWaiting(pending []asl.PendingQuestion) []protocol.CompanionASLWaitin
 			Unanswered:       p.Projection.UnansweredQuestions,
 			LatestQuestionID: identifier(p.Projection.LatestQuestionID),
 		}
+		if r, ok := in.Runtime[p.Target.WindowID]; ok {
+			if !r.kitty() {
+				if !runtime {
+					continue
+				}
+				w.WindowID = 0
+			}
+			if runtime {
+				w.RuntimeSessionID = identifier(r.SessionID)
+			}
+		}
 		if !p.Projection.LatestQuestionCreatedAt.IsZero() {
 			w.LatestQuestionCreatedAt = p.Projection.LatestQuestionCreatedAt.Unix()
 		}
@@ -358,6 +460,9 @@ func projectWaiting(pending []asl.PendingQuestion) []protocol.CompanionASLWaitin
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].WindowID != out[j].WindowID {
 			return out[i].WindowID < out[j].WindowID
+		}
+		if out[i].RuntimeSessionID != out[j].RuntimeSessionID {
+			return out[i].RuntimeSessionID < out[j].RuntimeSessionID
 		}
 		return out[i].RunID < out[j].RunID
 	})

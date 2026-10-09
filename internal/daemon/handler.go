@@ -142,6 +142,16 @@ type Handler struct {
 	// runtimeRoutes binds reducer slots to the runtime sessions that own them
 	// (runtime_routes.go). Guarded by stateMu.
 	runtimeRoutes runtimeRoutes
+	// runtimeCheckpointPath is the backend-neutral reducer checkpoint
+	// (runtime_checkpoint.go), set once at startup; empty disables it.
+	// runtimeRestorePending holds checkpointed sessions the registry could
+	// not yet verify; guarded by stateMu. runtimeCheckpointMu serializes
+	// flushes and guards the digest of the last successful write.
+	runtimeCheckpointPath    string
+	runtimeRestorePending    []runtimeCheckpointEntry
+	runtimeCheckpointMu      sync.Mutex
+	runtimeCheckpointDigest  [32]byte
+	runtimeCheckpointWritten bool
 	// otherKittyTrees holds the latest window tree of each Kitty instance
 	// other than the listed one that still has windows in the store, keyed by
 	// socket. pruneForeignWindows reads them and the companion projects other

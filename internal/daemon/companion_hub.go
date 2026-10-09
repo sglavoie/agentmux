@@ -22,6 +22,7 @@ import (
 	"log/slog"
 	"maps"
 	"os"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -55,10 +56,12 @@ type companionHub struct {
 	// dirty is the one-slot doorbell companionDirty rings.
 	dirty chan struct{}
 
-	mu      sync.Mutex
-	sinks   map[*ipc.StreamSink]protocol.CompanionClient
-	latest  json.RawMessage
-	digest  string
+	mu    sync.Mutex
+	sinks map[*ipc.StreamSink]protocol.CompanionClient
+	// latest and digest hold the last published snapshot of each negotiated
+	// snapshot version; a sink receives only its own version's.
+	latest  map[int]json.RawMessage
+	digest  map[int]string
 	publish uint64
 
 	// backendMu guards the notification backend role and the deliveries
@@ -79,6 +82,8 @@ func newCompanionHub() *companionHub {
 	return &companionHub{
 		dirty:      make(chan struct{}, 1),
 		sinks:      make(map[*ipc.StreamSink]protocol.CompanionClient),
+		latest:     make(map[int]json.RawMessage),
+		digest:     make(map[int]string),
 		claimants:  make(map[*ipc.StreamSink]uint64),
 		deliveries: make(map[string]*appDelivery),
 	}
@@ -151,14 +156,45 @@ func (h *Handler) copyCompanionStateLocked(now time.Time) companion.Input {
 			Windows: view.Windows(),
 		},
 		Others:     maps.Clone(h.otherKittyTrees),
+		Runtime:    h.companionRuntimeSlotsLocked(),
 		ASLTargets: h.aslSupervisors.Targets(),
 		ASLPending: h.aslSupervisors.Pending(),
 		Now:        now,
 	}
 }
 
-// buildCompanionSnapshot copies under stateMu and projects outside it.
+// companionRuntimeSlotsLocked copies the runtime binding of every slot for the
+// projection. Callers hold stateMu.
+func (h *Handler) companionRuntimeSlotsLocked() map[int]companion.RuntimeSlot {
+	if len(h.runtimeRoutes.bySlot) == 0 {
+		return nil
+	}
+	out := make(map[int]companion.RuntimeSlot, len(h.runtimeRoutes.bySlot))
+	for slot, b := range h.runtimeRoutes.bySlot {
+		out[slot] = companion.RuntimeSlot{
+			SessionID:  b.runtime,
+			Backend:    b.target.backend,
+			Instance:   b.target.instance,
+			Generation: b.target.generation,
+			Pane:       b.target.pane,
+		}
+	}
+	return out
+}
+
+// companionSnapshotVersions are the snapshot shapes the hub publishes, oldest
+// first.
+var companionSnapshotVersions = []int{protocol.CompanionSnapshotVersion, protocol.CompanionSnapshotVersionRuntime}
+
+// buildCompanionSnapshot builds the v1 snapshot every pre-runtime client reads.
 func (h *Handler) buildCompanionSnapshot(now time.Time) protocol.CompanionSnapshot {
+	return h.buildCompanionSnapshots(now)[protocol.CompanionSnapshotVersion]
+}
+
+// buildCompanionSnapshots copies under stateMu once and projects every
+// snapshot version from that one copy outside it, so the versions a hub
+// publishes together always describe the same moment.
+func (h *Handler) buildCompanionSnapshots(now time.Time) map[int]protocol.CompanionSnapshot {
 	h.stateMu.Lock()
 	in := h.copyCompanionStateLocked(now)
 	h.stateMu.Unlock()
@@ -185,7 +221,12 @@ func (h *Handler) buildCompanionSnapshot(now time.Time) protocol.CompanionSnapsh
 	if h.companion != nil {
 		in.Notification.AppConnected = h.companion.health().NotificationBackendConnected
 	}
-	return companion.Project(in)
+	out := make(map[int]protocol.CompanionSnapshot, len(companionSnapshotVersions))
+	for _, version := range companionSnapshotVersions {
+		in.SnapshotVersion = version
+		out[version] = companion.Project(in)
+	}
+	return out
 }
 
 // publishCompanionSnapshot builds a snapshot and hands it to every subscriber
@@ -195,29 +236,56 @@ func (h *Handler) publishCompanionSnapshot(now time.Time) {
 	if hub == nil {
 		return
 	}
-	snapshot := h.buildCompanionSnapshot(now)
-	data, err := json.Marshal(snapshot)
-	if err != nil {
-		slog.Warn("daemon: companion snapshot marshal failed", "err", err)
-		return
+	publications := make(map[int]companionPublication, len(companionSnapshotVersions))
+	for version, snapshot := range h.buildCompanionSnapshots(now) {
+		data, err := json.Marshal(snapshot)
+		if err != nil {
+			slog.Warn("daemon: companion snapshot marshal failed", "err", err, "version", version)
+			return
+		}
+		publications[version] = companionPublication{data: data, digest: companion.Digest(snapshot)}
 	}
-	hub.store(data, companion.Digest(snapshot))
+	hub.store(publications)
 }
 
-// store records data as the latest snapshot and fans it out, unless digest
-// matches what was last published.
-func (hub *companionHub) store(data json.RawMessage, digest string) {
+// companionPublication is one encoded snapshot version and its digest.
+type companionPublication struct {
+	data   json.RawMessage
+	digest string
+}
+
+// store records each version's snapshot as its latest and fans it out to that
+// version's subscribers, skipping a version whose digest matches what was last
+// published. publish counts moments that changed anything, not versions.
+func (hub *companionHub) store(publications map[int]companionPublication) {
 	hub.mu.Lock()
 	defer hub.mu.Unlock()
-	if hub.latest != nil && digest == hub.digest {
-		return
+	changed := false
+	for version, p := range publications {
+		if hub.latest[version] != nil && p.digest == hub.digest[version] {
+			continue
+		}
+		changed = true
+		hub.latest[version] = p.data
+		hub.digest[version] = p.digest
+		for sink, client := range hub.sinks {
+			if sinkSnapshotVersion(client) == version {
+				sink.SetSnapshot(p.data)
+			}
+		}
 	}
-	hub.latest = data
-	hub.digest = digest
-	hub.publish++
-	for sink := range hub.sinks {
-		sink.SetSnapshot(data)
+	if changed {
+		hub.publish++
 	}
+}
+
+// sinkSnapshotVersion is the snapshot version a subscriber negotiated; a
+// client recorded without one is a v1 client.
+func sinkSnapshotVersion(client protocol.CompanionClient) int {
+	if client.SnapshotVersion == 0 {
+		return protocol.CompanionSnapshotVersion
+	}
+	return client.SnapshotVersion
 }
 
 // heartbeat sends one heartbeat frame to every subscriber. A full queue ends
@@ -239,8 +307,8 @@ func (hub *companionHub) heartbeat() {
 func (hub *companionHub) add(sink *ipc.StreamSink, client protocol.CompanionClient) {
 	hub.mu.Lock()
 	hub.sinks[sink] = client
-	if hub.latest != nil {
-		sink.SetSnapshot(hub.latest)
+	if latest := hub.latest[sinkSnapshotVersion(client)]; latest != nil {
+		sink.SetSnapshot(latest)
 	}
 	if client.NotificationBackend {
 		hub.claimBackend(sink)
@@ -275,11 +343,16 @@ func (hub *companionHub) health() protocol.CompanionHealth {
 	return out
 }
 
-// latestSnapshot returns the last published snapshot bytes, for tests.
+// latestSnapshot returns the last published v1 snapshot bytes, for tests.
 func (hub *companionHub) latestSnapshot() json.RawMessage {
+	return hub.latestSnapshotVersion(protocol.CompanionSnapshotVersion)
+}
+
+// latestSnapshotVersion returns the last published snapshot bytes of version.
+func (hub *companionHub) latestSnapshotVersion(version int) json.RawMessage {
 	hub.mu.Lock()
 	defer hub.mu.Unlock()
-	return hub.latest
+	return hub.latest[version]
 }
 
 // Subscribe implements ipc.SubscriptionHandler. It registers the sink, replays
@@ -298,6 +371,14 @@ func (h *Handler) Subscribe(req protocol.Request, sink *ipc.StreamSink) protocol
 	if sub.Protocol > 0 && sub.Protocol < negotiated {
 		negotiated = sub.Protocol
 	}
+	// The mixed-backend snapshot is opt-in: a client that did not ask for it
+	// was written against v1 and keeps receiving v1, Kitty sessions only.
+	snapshotVersion := protocol.CompanionSnapshotVersion
+	features := append([]string(nil), companionFeatures...)
+	if slices.Contains(sub.Features, protocol.CompanionFeatureRuntimeSessions) {
+		snapshotVersion = protocol.CompanionSnapshotVersionRuntime
+		features = append(features, protocol.CompanionFeatureRuntimeSessions)
+	}
 	client := protocol.CompanionClient{
 		SubscriberID:  sink.ID(),
 		Client:        clampClientField(sub.Client),
@@ -305,6 +386,7 @@ func (h *Handler) Subscribe(req protocol.Request, sink *ipc.StreamSink) protocol
 		// A claim without operating-system authorization is not a backend.
 		NotificationBackend: sub.NotificationBackend && sub.NotificationsAuthorized,
 		ConnectedAt:         time.Now().Unix(),
+		SnapshotVersion:     snapshotVersion,
 	}
 	if sub.AMXBuild != nil {
 		build := *sub.AMXBuild
@@ -326,7 +408,7 @@ func (h *Handler) Subscribe(req protocol.Request, sink *ipc.StreamSink) protocol
 		ServerProtocolMax: protocol.CompanionProtocolVersion,
 		SubscriberID:      sink.ID(),
 		HeartbeatMS:       companionHeartbeat.Milliseconds(),
-		Features:          append([]string(nil), companionFeatures...),
+		Features:          features,
 	}}
 }
 
