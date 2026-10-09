@@ -1,0 +1,37 @@
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                                        │
+│  ╭─╮╭─╮                            │  Getting started                                                                  │
+│  ╰─╯╰─╯  Copilot v1.0.91 uses AI.  │  Use the tabs above to explore your sessions and pull requests                    │
+│  █ ▘▝ █  Check for mistakes.       │  /init — Initialize Copilot instructions for this repository                      │
+│   ▔▔▔▔                             │  /model — Switch models across providers, or use Auto                             │
+│                                                                                                                        │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+ ● Tip: /app
+   └ Prefer a visual workspace? Try out the GitHub Copilot desktop app
+      https://github.com/features/ai/github-app
+
+ ● MCP Servers reloaded: 1 server connected
+
+ ❯ Reply with only the uppercase concatenation of the words amx, harness and ok. No other text.                      15:35
+
+ ● AMXHARNESSOK
+
+
+
+
+
+
+
+
+
+
+ ~/1_dev_projects/sglavoie_agentmux/macos/.cache/ghostty-harness/runs/.../work-copilot [⎇ main*]     Session: 8.69 AIC used
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ v1.0.95 downloaded · next launch or /     · ← open sidebar· Interactive · Manual        · / commands · ? help · tab next
+ restart                                                     Approval                      tab
+ Claude Sonnet 5

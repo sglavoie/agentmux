@@ -309,14 +309,15 @@ def case_resize(run_dir: Path, tmux: Tmux, viewer: Harness, events: Path) -> dic
 
 
 # The pane asked for modifyOtherKeys 2; tmux (extended-keys-format csi-u)
-# forwards these.
+# forwards these. Level 2 encodes every modified key, so Ctrl+C and Shift+Tab
+# arrive as CSI u rather than as 0x03 and CSI Z.
 MODIFIED_KEYS = [
     ("enter", b"\r"),
     ("shift+enter", b"\x1b[13;2u"),
     ("ctrl+enter", b"\x1b[13;5u"),
     ("alt+enter", b"\x1b[13;3u"),
-    ("shift+tab", b"\x1b[Z"),
-    ("ctrl+c", b"\x03"),
+    ("shift+tab", b"\x1b[9;2u"),
+    ("ctrl+c", b"\x1b[99;5u"),
     ("ctrl+j", b"\x1b[106;5u"),
     ("escape", b"\x1b"),
     ("up", b"\x1b[A"),
@@ -380,8 +381,10 @@ def case_scrolling(run_dir: Path, tmux: Tmux, viewer: Harness) -> dict:
     numbers = [int(n) for n in re.findall(r"probe history line (\d{4})", seen)]
     viewer.cmd("scroll", "-100")
     time.sleep(0.8)
-    viewer.cmd("key", "q")
-    time.sleep(0.5)
+    # Scrolling back to the bottom leaves copy mode by itself; q only if not.
+    if tmux.fmt("probe", "#{pane_in_mode}") == "1":
+        viewer.cmd("key", "q")
+        time.sleep(0.5)
     after_mode = tmux.fmt("probe", "#{pane_in_mode}")
     bottom = viewer.screen(run_dir / "scroll-ghostty-bottom.txt")
     passed = (

@@ -1,0 +1,19 @@
+{"event": "start", "pid": 93491, "cols": 120, "rows": 36}
+{"event": "winch", "cols": 124, "rows": 37}
+{"event": "winch", "cols": 87, "rows": 26}
+{"event": "winch", "cols": 149, "rows": 46}
+{"event": "input", "hex": "0d", "text": "\r"}
+{"event": "input", "hex": "1b5b31333b3275", "text": "\u001b[13;2u"}
+{"event": "input", "hex": "1b5b31333b3575", "text": "\u001b[13;5u"}
+{"event": "input", "hex": "1b5b31333b3375", "text": "\u001b[13;3u"}
+{"event": "input", "hex": "1b5b393b3275", "text": "\u001b[9;2u"}
+{"event": "input", "hex": "1b5b39393b3575", "text": "\u001b[99;5u"}
+{"event": "input", "hex": "1b5b3130363b3575", "text": "\u001b[106;5u"}
+{"event": "input", "hex": "1b", "text": "\u001b"}
+{"event": "input", "hex": "1b5b41", "text": "\u001b[A"}
+{"event": "input", "hex": "1b5b313b3241", "text": "\u001b[1;2A"}
+{"event": "input", "hex": "1b5b313b3544", "text": "\u001b[1;5D"}
+{"event": "input", "hex": "1b5b3230307e", "text": "\u001b[200~"}
+{"event": "input", "hex": "616d78207061737465206c696e65206f6e650a6c696e652074776f20e29c93202771756f746564272024484f4d451b5b3230317e", "text": "amx paste line one\nline two \u2713 'quoted' $HOME\u001b[201~"}
+{"event": "input", "hex": "1b5b39333b3575", "text": "\u001b[93;5u"}
+{"event": "exit"}

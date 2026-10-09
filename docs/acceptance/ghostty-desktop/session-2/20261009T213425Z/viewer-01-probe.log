@@ -1,0 +1,30 @@
+- ready pid=93540 ghostty=1.3.1_(ReleaseFast)
+c1 ok bytes=882
+c2 ok cols=124 rows=37 width_px=2000 height_px=1280
+c3 ok cols=124 rows=37 width_px=2000 height_px=1280
+c4 ok bytes=882
+c5 ok cols=87 rows=26 width_px=1400 height_px=900
+c6 ok cols=87 rows=26 width_px=1400 height_px=900
+c7 ok bytes=618
+c8 ok cols=149 rows=46 width_px=2400 height_px=1600
+c9 ok cols=149 rows=46 width_px=2400 height_px=1600
+c10 ok bytes=1098
+c11 ok keys=1
+c12 ok keys=1
+c13 ok keys=1
+c14 ok keys=1
+c15 ok keys=1
+c16 ok keys=1
+c17 ok keys=1
+c18 ok keys=1
+c19 ok keys=1
+c20 ok keys=1
+c21 ok keys=1
+c22 ok bytes=46
+c23 ok lines=10
+c24 ok bytes=6899
+c25 ok lines=-100
+c26 ok bytes=1098
+c27 ok keys=1
+- child-exited
+- surface-closed

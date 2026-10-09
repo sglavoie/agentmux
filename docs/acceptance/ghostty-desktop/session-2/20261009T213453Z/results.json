@@ -1,0 +1,42 @@
+{
+  "run": "20261009T213453Z",
+  "run_dir": "/Users/sglavoie/1_dev_projects/sglavoie_agentmux/macos/.cache/ghostty-harness/runs/20261009T213453Z",
+  "harness_source_sha256_16": "fa79a5c1a14b65be",
+  "ghosttykit": "ghostty=v1.3.1 zig=0.15.2 target=universal patches=855da15192006691",
+  "tmux": "tmux 3.7c",
+  "tmux_binary": "/opt/homebrew/bin/tmux",
+  "agents": {
+    "claude": "2.1.296 (Claude Code)",
+    "codex": "codex-cli 0.162.0",
+    "copilot": "GitHub Copilot CLI 1.0.91."
+  },
+  "macos": "27.0.1",
+  "cases": {
+    "claude-live": {
+      "argv": [
+        "claude"
+      ],
+      "pane_pid": 95838,
+      "process_command": "claude",
+      "notes": [],
+      "viewer_1_pid": 95842,
+      "answer_in_ghostty": true,
+      "after_kill": {
+        "session_alive": true,
+        "pane_pid": 95838,
+        "process_start": "Fri Oct  9 15:34:53 2026",
+        "attached_clients": 0
+      },
+      "viewer_2_pid": 97119,
+      "answer_visible_after_reattach": true,
+      "follow_up_in_ghostty": true,
+      "after_reattach": {
+        "pane_pid": 95838,
+        "process_start": "Fri Oct  9 15:34:53 2026"
+      },
+      "same_process": true,
+      "status": "passed",
+      "process_start": "Fri Oct  9 15:34:53 2026"
+    }
+  }
+}

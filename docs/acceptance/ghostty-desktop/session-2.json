@@ -1,0 +1,64 @@
+{
+  "session": "2",
+  "status": "passed",
+  "artifact_revision": "agentmux c115025d + macos/GhosttyHarness sources sha256/16 fa79a5c1a14b65be; GhosttyKit ghostty=v1.3.1 zig=0.15.2 target=universal patches=855da15192006691; tmux 3.7c (Homebrew); macOS 27.0.1",
+  "stack": {
+    "ghosttykit": "ghostty=v1.3.1 zig=0.15.2 target=universal patches=855da15192006691",
+    "tmux": "tmux 3.7c",
+    "agents": {
+      "claude": "2.1.296 (Claude Code)",
+      "codex": "codex-cli 0.162.0",
+      "copilot": "GitHub Copilot CLI 1.0.91."
+    },
+    "harness_source_sha256_16": "fa79a5c1a14b65be",
+    "runs": [
+      "20261009T213425Z",
+      "20261009T213453Z",
+      "20261009T213517Z"
+    ]
+  },
+  "cases": {
+    "claude-live": {
+      "status": "passed",
+      "evidence": "2.1.296 (Claude Code) ran as tmux pane pid 95838 on a private server; viewer pid 95842 (embedded Ghostty attach) typed the question, Enter submitted it, and the Ghostty viewport showed the reply AMXHARNESSOK (no startup prompt). After SIGKILL of the viewer and reattach by viewer pid 97119, the reply was still on screen and the follow-up returned amxreattachedok. Artifacts: session-2/20261009T213453Z/claude-2-answer-ghostty.txt, session-2/20261009T213453Z/claude-4-followup-ghostty.txt, session-2/20261009T213453Z/results.json."
+    },
+    "codex-live": {
+      "status": "passed",
+      "evidence": "codex-cli 0.162.0 ran as tmux pane pid 98676 on a private server; viewer pid 98680 (embedded Ghostty attach) typed the question, Enter submitted it, and the Ghostty viewport showed the reply AMXHARNESSOK (no startup prompt). After SIGKILL of the viewer and reattach by viewer pid 99488, the reply was still on screen and the follow-up returned amxreattachedok. Artifacts: session-2/20261009T213517Z/codex-2-answer-ghostty.txt, session-2/20261009T213517Z/codex-4-followup-ghostty.txt, session-2/20261009T213517Z/results.json."
+    },
+    "copilot-live": {
+      "status": "passed",
+      "evidence": "GitHub Copilot CLI 1.0.91. ran as tmux pane pid 150 on a private server; viewer pid 155 (embedded Ghostty attach) typed the question, Enter submitted it, and the Ghostty viewport showed the reply AMXHARNESSOK (answered a folder-trust prompt with enter). After SIGKILL of the viewer and reattach by viewer pid 1870, the reply was still on screen and the follow-up returned amxreattachedok. Artifacts: session-2/20261009T213517Z/copilot-2-answer-ghostty.txt, session-2/20261009T213517Z/copilot-4-followup-ghostty.txt, session-2/20261009T213517Z/results.json."
+    },
+    "capture": {
+      "status": "passed",
+      "evidence": "tmux capture-pane and the Ghostty viewport text (ghostty_surface_read_text) agreed on all 36 rows, including the UTF-8 marker 'PROBE-READY capture marker ✓ éè 中文'. Artifacts: session-2/20261009T213425Z/capture-tmux.txt, session-2/20261009T213425Z/capture-ghostty.txt; Claude/Codex/Copilot captures in their run directories."
+    },
+    "resize": {
+      "status": "passed",
+      "evidence": "Window resizes 1000x640 pt -> Ghostty 124x37, tmux window 124x37, probe SIGWINCH none (size unchanged), screens equal True; 700x450 pt -> Ghostty 87x26, tmux window 87x26, probe SIGWINCH 87x26, screens equal True; 1200x800 pt -> Ghostty 149x46, tmux window 149x46, probe SIGWINCH 149x46, screens equal True. Artifacts: session-2/20261009T213425Z/results.json, session-2/20261009T213425Z/probe-events.jsonl."
+    },
+    "modified-keys": {
+      "status": "passed",
+      "evidence": "With tmux extended-keys on (csi-u) and the pane requesting modifyOtherKeys 2, synthesized AppKit key events reached the pane as: enter=0d, shift+enter=1b5b31333b3275, ctrl+enter=1b5b31333b3575, alt+enter=1b5b31333b3375, shift+tab=1b5b393b3275, ctrl+c=1b5b39393b3575, ctrl+j=1b5b3130363b3575, escape=1b, up=1b5b41, shift+up=1b5b313b3241, ctrl+left=1b5b313b3544; all 11 distinct and matching expectations. Artifacts: session-2/20261009T213425Z/results.json, session-2/20261009T213425Z/probe-events.jsonl."
+    },
+    "paste": {
+      "status": "passed",
+      "evidence": "Cmd+V of a two-line UTF-8 string through the surface's paste_from_clipboard binding arrived bracketed: \"\\x1b[200~amx paste line one\\nline two ✓ 'quoted' $HOME\\x1b[201~\" (LF preserved inside ESC[200~/ESC[201~). Artifacts: session-2/20261009T213425Z/results.json, session-2/20261009T213425Z/probe-events.jsonl."
+    },
+    "scrolling": {
+      "status": "passed",
+      "evidence": "A 10-line wheel-up on the Ghostty surface put tmux into copy-mode (pane_in_mode 0 -> 1, scroll_position 145) and the viewport showed history lines 112-157; wheel-down returned to the bottom and left copy mode (pane_in_mode 0). Artifacts: session-2/20261009T213425Z/scroll-ghostty.txt, session-2/20261009T213425Z/scroll-ghostty-bottom.txt, session-2/20261009T213425Z/results.json."
+    },
+    "viewer-crash-same-process": {
+      "status": "passed",
+      "evidence": "Viewer killed with SIGKILL, then a new viewer reattached; claude: pane pid 95838 started Fri Oct  9 15:34:53 2026, after SIGKILL session alive with 0 clients and same pid/start, after reattach same pid/start; codex: pane pid 98676 started Fri Oct  9 15:35:17 2026, after SIGKILL session alive with 0 clients and same pid/start, after reattach same pid/start; copilot: pane pid 150 started Fri Oct  9 15:35:37 2026, after SIGKILL session alive with 0 clients and same pid/start, after reattach same pid/start. Artifacts: session-2/20261009T213453Z/results.json, session-2/20261009T213453Z/viewer-01-claude.log, session-2/20261009T213453Z/viewer-02-claude.log, session-2/20261009T213517Z/results.json."
+    }
+  },
+  "incompatibilities": [],
+  "notes": [
+    "modifyOtherKeys level 2 makes tmux encode every modified key, including Ctrl+C (ESC[99;5u) and Shift+Tab (ESC[9;2u); this is the requested encoding, not a defect. Claude, Codex, and Copilot all accepted typed input and Enter through the stack.",
+    "Copilot needed its folder-trust prompt accepted; it also downloaded a self-update (v1.0.95) during the run.",
+    "The harness runs agents with KITTY_*, CLAUDECODE/CLAUDE_CODE_*, ASL_*, and AMX_* removed so no Agent Mux hook reports against a live Kitty window."
+  ]
+}

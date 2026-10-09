@@ -1,0 +1,155 @@
+{
+  "run": "20261009T213425Z",
+  "run_dir": "/Users/sglavoie/1_dev_projects/sglavoie_agentmux/macos/.cache/ghostty-harness/runs/20261009T213425Z",
+  "harness_source_sha256_16": "fa79a5c1a14b65be",
+  "ghosttykit": "ghostty=v1.3.1 zig=0.15.2 target=universal patches=855da15192006691",
+  "tmux": "tmux 3.7c",
+  "tmux_binary": "/opt/homebrew/bin/tmux",
+  "agents": {
+    "claude": "2.1.296 (Claude Code)",
+    "codex": "codex-cli 0.162.0",
+    "copilot": "GitHub Copilot CLI 1.0.91."
+  },
+  "macos": "27.0.1",
+  "cases": {
+    "capture": {
+      "status": "passed",
+      "marker_in_tmux": true,
+      "marker_in_ghostty": true,
+      "rows_compared": 36,
+      "rows_equal": true,
+      "artifacts": [
+        "capture-tmux.txt",
+        "capture-ghostty.txt"
+      ]
+    },
+    "resize": {
+      "status": "passed",
+      "steps": [
+        {
+          "window_points": "1000x640",
+          "harness": "cols=124 rows=37 width_px=2000 height_px=1280",
+          "ghostty_grid": "124x37",
+          "tmux_window": "124x37",
+          "probe_winch": null,
+          "screens_equal": true,
+          "ok": true
+        },
+        {
+          "window_points": "700x450",
+          "harness": "cols=87 rows=26 width_px=1400 height_px=900",
+          "ghostty_grid": "87x26",
+          "tmux_window": "87x26",
+          "probe_winch": "87x26",
+          "screens_equal": true,
+          "ok": true
+        },
+        {
+          "window_points": "1200x800",
+          "harness": "cols=149 rows=46 width_px=2400 height_px=1600",
+          "ghostty_grid": "149x46",
+          "tmux_window": "149x46",
+          "probe_winch": "149x46",
+          "screens_equal": true,
+          "ok": true
+        }
+      ]
+    },
+    "modified-keys": {
+      "status": "passed",
+      "extended_keys": "extended-keys on",
+      "all_distinct": true,
+      "steps": [
+        {
+          "key": "enter",
+          "expected_hex": "0d",
+          "received_hex": "0d",
+          "ok": true
+        },
+        {
+          "key": "shift+enter",
+          "expected_hex": "1b5b31333b3275",
+          "received_hex": "1b5b31333b3275",
+          "ok": true
+        },
+        {
+          "key": "ctrl+enter",
+          "expected_hex": "1b5b31333b3575",
+          "received_hex": "1b5b31333b3575",
+          "ok": true
+        },
+        {
+          "key": "alt+enter",
+          "expected_hex": "1b5b31333b3375",
+          "received_hex": "1b5b31333b3375",
+          "ok": true
+        },
+        {
+          "key": "shift+tab",
+          "expected_hex": "1b5b393b3275",
+          "received_hex": "1b5b393b3275",
+          "ok": true
+        },
+        {
+          "key": "ctrl+c",
+          "expected_hex": "1b5b39393b3575",
+          "received_hex": "1b5b39393b3575",
+          "ok": true
+        },
+        {
+          "key": "ctrl+j",
+          "expected_hex": "1b5b3130363b3575",
+          "received_hex": "1b5b3130363b3575",
+          "ok": true
+        },
+        {
+          "key": "escape",
+          "expected_hex": "1b",
+          "received_hex": "1b",
+          "ok": true
+        },
+        {
+          "key": "up",
+          "expected_hex": "1b5b41",
+          "received_hex": "1b5b41",
+          "ok": true
+        },
+        {
+          "key": "shift+up",
+          "expected_hex": "1b5b313b3241",
+          "received_hex": "1b5b313b3241",
+          "ok": true
+        },
+        {
+          "key": "ctrl+left",
+          "expected_hex": "1b5b313b3544",
+          "received_hex": "1b5b313b3544",
+          "ok": true
+        }
+      ]
+    },
+    "paste": {
+      "status": "passed",
+      "pasted": "amx paste line one\nline two ✓ 'quoted' $HOME",
+      "received_hex": "1b5b3230307e616d78207061737465206c696e65206f6e650a6c696e652074776f20e29c93202771756f746564272024484f4d451b5b3230317e",
+      "received_text": "\u001b[200~amx paste line one\nline two ✓ 'quoted' $HOME\u001b[201~",
+      "bracketed": true
+    },
+    "scrolling": {
+      "status": "passed",
+      "pane_in_mode_before": "0",
+      "pane_in_mode_after_wheel": "1",
+      "pane_mode": "copy-mode",
+      "scroll_position": "145",
+      "visible_history_lines": [
+        112,
+        157
+      ],
+      "pane_in_mode_after_exit": "0",
+      "artifacts": [
+        "scroll-ghostty.txt",
+        "scroll-ghostty-bottom.txt"
+      ]
+    }
+  }
+}

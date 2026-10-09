@@ -53,7 +53,8 @@ def main() -> None:
             if not data:
                 break
             record(event="input", hex=data.hex(), text=data.decode("utf-8", "backslashreplace"))
-            if b"\x1d" in data:
+            # Ctrl+], raw or as modifyOtherKeys 2 encodes it.
+            if b"\x1d" in data or b"\x1b[93;5u" in data:
                 break
     finally:
         sys.stdout.write("\x1b[>4;0m\x1b[?2004l")
