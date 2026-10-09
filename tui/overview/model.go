@@ -153,7 +153,7 @@ func defaultDeps(cfg *config.Config, client kitty.KittyClient) deps {
 		},
 		tick: commands.Tick,
 		capture: func(req commands.CaptureRequest) tea.Cmd {
-			return commands.CaptureOutput(client, req)
+			return commands.CaptureScreen(commands.CaptureSources{Kitty: client}, req)
 		},
 		captureTick: commands.CaptureTick,
 		now:         time.Now,
@@ -220,11 +220,11 @@ type model struct {
 	// was pending.
 	help helpState
 
-	// previews is keyed by Kitty window ID, the same key tile rendering reads: it
-	// is what each tile SHOWS, and an absent entry is the honest loading state of
-	// a window whose first capture has not landed. It is copied on write, so an
+	// previews is keyed by capture target (backend and pane), the same key tile
+	// rendering reads: it is what each tile SHOWS, and an absent entry is the
+	// honest loading state of a pane whose first capture has not landed. It is copied on write, so an
 	// earlier generation of the model never sees a later one's captures.
-	previews map[int]Preview
+	previews map[session.PaneTarget]Preview
 	// captures is what each tile is READING, and the one piece of state held by
 	// pointer — see capture.go for why the slots are shared where the content is
 	// copied.
@@ -284,7 +284,7 @@ func newModel(cfg *config.Config, client kitty.KittyClient, sourceWindowID int) 
 		interval:              interval,
 		idleThreshold:         idle,
 		captureInterval:       captureIntervalFor(cfg),
-		previews:              map[int]Preview{},
+		previews:              map[session.PaneTarget]Preview{},
 		captures:              newCaptureController(),
 		startupSourceWindowID: sourceWindowID,
 		refreshNextSeq:        firstRefreshSeq,

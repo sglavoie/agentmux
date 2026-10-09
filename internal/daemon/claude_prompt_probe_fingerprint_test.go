@@ -21,19 +21,22 @@ import (
 
 // claudeTickingWorkScreenFormat is the reported bug in fixture form: a Claude
 // 2.1.x pane that is genuinely working, in the one live shape Layer A still
-// cannot read. Below roughly 20 columns Claude truncates its status line to a
-// bare gerund with no parenthesized timer (session 2 measured the thresholds
-// against 2.1.231), so claudeWorkingStatusLineRE matches nothing, the composer
-// is empty, and the screenstate adapter observes a settleable Terminal. The
-// only thing
-// separating it from a finished pane is that its token count advances every
-// tick.
+// cannot read. While Claude 2.1.296 streams its answer it draws no spinner
+// line at all (tmux captures claude_working_streaming_t0 and _t1 in
+// internal/screenstate/testdata/tmux), so claudeWorkingStatusLineRE matches
+// nothing, the composer is empty, and the screenstate adapter observes a
+// settleable Terminal. The only thing separating it from a finished pane is
+// that its text grows every tick.
 //
-// It was previously a wide `✳ Pouncing… (3m 40s · …)` frame, which the
-// working-line veto now correctly rejects; the shape was replaced rather than
-// the premise assertion below deleted, exactly as that assertion asks.
-const claudeTickingWorkScreenFormat = `✢ Zigzagging… 
-     %d tokens
+// It was previously a wide `✳ Pouncing… (3m 40s · …)` frame and then a narrow
+// timer-less `✢ Zigzagging…` one; the working-line veto now correctly rejects
+// both, and each time the shape was replaced rather than the premise assertion
+// below deleted, exactly as that assertion asks.
+const claudeTickingWorkScreenFormat = `❯ Think carefully, then write an essay.
+
+⏺ Many Rooms in One Window
+
+  At first a terminal looks like one window, %d words in
 ──────────────────
 ❯  
 ──────────────────
@@ -57,7 +60,7 @@ func TestProbeClaudeScreenStop_ChangingScreenNeverSettles(t *testing.T) {
 	for i := range screens {
 		screens[i] = fmt.Sprintf(claudeTickingWorkScreenFormat, 47565+i)
 		// Guard the premise. If a later session teaches the classifier to read a
-		// narrow truncated status line, this fixture stops observing as terminal
+		// streaming turn with no status line, this fixture stops observing as terminal
 		// and the test silently stops proving anything — replace the frames with a
 		// shape the classifier still accepts rather than deleting this assertion.
 		//

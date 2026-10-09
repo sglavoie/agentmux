@@ -66,3 +66,63 @@ func Fingerprint(screen string) int64 {
 	}
 	return sum
 }
+
+// StripANSI removes terminal escape sequences from a capture, leaving the text
+// a plain capture of the same screen would hold. Adapters match text only, so
+// a capture taken with styling (`tmux capture-pane -e`, `kitten @ get-text
+// --ansi`) must pass through here before it is classified or fingerprinted;
+// a plain capture is returned unchanged.
+//
+// It drops CSI sequences (SGR colour, cursor movement), OSC strings (titles,
+// hyperlinks) up to BEL or ST, the other string controls (DCS, SOS, PM, APC),
+// and two- and three-byte escapes such as charset selection. An unterminated
+// sequence at the end of the capture is dropped rather than leaked as text.
+func StripANSI(screen string) string {
+	if !strings.ContainsRune(screen, '\x1b') {
+		return screen
+	}
+	var out strings.Builder
+	out.Grow(len(screen))
+	for i := 0; i < len(screen); {
+		if screen[i] != '\x1b' {
+			out.WriteByte(screen[i])
+			i++
+			continue
+		}
+		i++
+		if i >= len(screen) {
+			break
+		}
+		switch c := screen[i]; {
+		case c == '[':
+			// Parameter and intermediate bytes, then one final byte.
+			i++
+			for i < len(screen) && (screen[i] < 0x40 || screen[i] > 0x7e) {
+				i++
+			}
+			i++
+		case c == ']' || c == 'P' || c == 'X' || c == '^' || c == '_':
+			i++
+			for i < len(screen) {
+				if screen[i] == '\a' {
+					i++
+					break
+				}
+				if screen[i] == '\x1b' && i+1 < len(screen) && screen[i+1] == '\\' {
+					i += 2
+					break
+				}
+				i++
+			}
+		case c >= 0x20 && c <= 0x2f:
+			// Intermediate bytes (charset selection and the like), then a final.
+			for i < len(screen) && screen[i] >= 0x20 && screen[i] <= 0x2f {
+				i++
+			}
+			i++
+		default:
+			i++
+		}
+	}
+	return out.String()
+}

@@ -1,0 +1,40 @@
+=== RUN   TestProbeClaudeScreenStop_ChangingScreenNeverSettles
+--- PASS: TestProbeClaudeScreenStop_ChangingScreenNeverSettles (0.01s)
+=== RUN   TestProbeClaudeScreenStop_SettlesOnceTheScreenStopsChanging
+--- PASS: TestProbeClaudeScreenStop_SettlesOnceTheScreenStopsChanging (0.01s)
+=== RUN   TestScreenProbesNeverSettleOnWithheldObservations
+=== RUN   TestScreenProbesNeverSettleOnWithheldObservations/claude/fresh
+=== RUN   TestScreenProbesNeverSettleOnWithheldObservations/claude/read_failed
+=== RUN   TestScreenProbesNeverSettleOnWithheldObservations/claude/read_failed_but_returned_text
+=== RUN   TestScreenProbesNeverSettleOnWithheldObservations/claude/no_capture_instant
+=== RUN   TestScreenProbesNeverSettleOnWithheldObservations/claude/stale
+=== RUN   TestScreenProbesNeverSettleOnWithheldObservations/claude/another_pane
+=== RUN   TestScreenProbesNeverSettleOnWithheldObservations/claude/another_backend
+=== RUN   TestScreenProbesNeverSettleOnWithheldObservations/claude/exited_program
+=== RUN   TestScreenProbesNeverSettleOnWithheldObservations/codex/fresh
+=== RUN   TestScreenProbesNeverSettleOnWithheldObservations/codex/read_failed
+=== RUN   TestScreenProbesNeverSettleOnWithheldObservations/codex/read_failed_but_returned_text
+=== RUN   TestScreenProbesNeverSettleOnWithheldObservations/codex/no_capture_instant
+=== RUN   TestScreenProbesNeverSettleOnWithheldObservations/codex/stale
+=== RUN   TestScreenProbesNeverSettleOnWithheldObservations/codex/another_pane
+=== RUN   TestScreenProbesNeverSettleOnWithheldObservations/codex/another_backend
+=== RUN   TestScreenProbesNeverSettleOnWithheldObservations/codex/exited_program
+--- PASS: TestScreenProbesNeverSettleOnWithheldObservations (0.13s)
+    --- PASS: TestScreenProbesNeverSettleOnWithheldObservations/claude/fresh (0.01s)
+    --- PASS: TestScreenProbesNeverSettleOnWithheldObservations/claude/read_failed (0.01s)
+    --- PASS: TestScreenProbesNeverSettleOnWithheldObservations/claude/read_failed_but_returned_text (0.01s)
+    --- PASS: TestScreenProbesNeverSettleOnWithheldObservations/claude/no_capture_instant (0.01s)
+    --- PASS: TestScreenProbesNeverSettleOnWithheldObservations/claude/stale (0.01s)
+    --- PASS: TestScreenProbesNeverSettleOnWithheldObservations/claude/another_pane (0.01s)
+    --- PASS: TestScreenProbesNeverSettleOnWithheldObservations/claude/another_backend (0.01s)
+    --- PASS: TestScreenProbesNeverSettleOnWithheldObservations/claude/exited_program (0.01s)
+    --- PASS: TestScreenProbesNeverSettleOnWithheldObservations/codex/fresh (0.01s)
+    --- PASS: TestScreenProbesNeverSettleOnWithheldObservations/codex/read_failed (0.01s)
+    --- PASS: TestScreenProbesNeverSettleOnWithheldObservations/codex/read_failed_but_returned_text (0.01s)
+    --- PASS: TestScreenProbesNeverSettleOnWithheldObservations/codex/no_capture_instant (0.01s)
+    --- PASS: TestScreenProbesNeverSettleOnWithheldObservations/codex/stale (0.01s)
+    --- PASS: TestScreenProbesNeverSettleOnWithheldObservations/codex/another_pane (0.01s)
+    --- PASS: TestScreenProbesNeverSettleOnWithheldObservations/codex/another_backend (0.01s)
+    --- PASS: TestScreenProbesNeverSettleOnWithheldObservations/codex/exited_program (0.01s)
+PASS
+ok  	github.com/sglavoie/agentmux/internal/daemon	0.351s

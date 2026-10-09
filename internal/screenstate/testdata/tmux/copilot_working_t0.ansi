@@ -1,0 +1,36 @@
+ [1m[Current][0m  Sessions  [2m Issues [0m [2m Pull requests [0m  Gists
+
+[2m╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m
+[2m│[0m                                                                                                                    [2m│[0m
+[2m│[0m  ╭──╮╭╮                            [2m│[0m  [1mGetting started[0m                                                              [2m│[0m
+[2m│[0m  ╰──╯╰╯  Copilot v1.0.95 uses AI.  [2m│[0m  Use the tabs above to explore your sessions and pull requests                [2m│[0m
+[2m│[0m  ██ ▘▝▐  Check for mistakes.       [2m│[0m  /init — Initialize Copilot instructions for this repository                  [2m│[0m
+[2m│[0m    ▔▔▔                             [2m│[0m  /model — Switch models across providers, or use Auto                         [2m│[0m
+[2m│[0m                                                                                                                    [2m│[0m
+[2m╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+ ● Tip: /context
+   └ Show context window token usage and visualization
+
+ ❯ Run the shell command: touch made.txt && ls                                                                   17:19
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ /private/tmp/amx-s9/work3                                                                          Session: 0 AIC used
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[0m❯
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[0m ◎ Working [1mesc[0m edit prompt                                                                            Claude Sonnet 5.5

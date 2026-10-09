@@ -1,0 +1,36 @@
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                                    │
+│  ╭─╮╭─╮                            │  Getting started                                                              │
+│  ╰─╯╰─╯  Copilot v1.0.95 uses AI.  │  Use the tabs above to explore your sessions and pull requests                │
+│  █ ▘▝ █  Check for mistakes.       │  /init — Initialize Copilot instructions for this repository                  │
+│   ▔▔▔▔                             │  /model — Switch models across providers, or use Auto                         │
+│                                                                                                                    │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+ ● Tip: /context
+   └ Show context window token usage and visualization
+
+ ❯ Run the shell command: touch made.txt && ls                                                                   17:19
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ /private/tmp/amx-s9/work3                                                                          Session: 0 AIC used
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ◎ Working esc edit prompt                                                                            Claude Sonnet 5.5

@@ -136,7 +136,7 @@ func (h *Handler) probeClaudeContextLimitWindow(
 	// This tick's shared capture: the idle stop probe classifies the very same
 	// frame, so the context-limit banner and the idle composer can never be read
 	// from two different repaints of one pane.
-	screen, err := screens.Screen(binding.SourceWindowID)
+	screen, err := probeScreenText(screens, binding)
 	if err != nil {
 		slog.Debug("claude context-limit probe: get-text failed", "source_window_id", binding.SourceWindowID,
 			"target_window_id", targetWindowID, "err", err)

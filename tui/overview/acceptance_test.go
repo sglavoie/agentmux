@@ -44,6 +44,7 @@ package overview
 import (
 	"errors"
 	"fmt"
+	"github.com/sglavoie/agentmux/internal/session"
 	"os"
 	"path/filepath"
 	"strings"
@@ -858,7 +859,7 @@ func (s *stage) selectMenuEntry(id commands.ID) {
 func (s *stage) previewWindows() []int {
 	out := make([]int, 0, len(s.m.previews))
 	for _, sess := range s.m.sessions {
-		if _, ok := s.m.previews[sess.WindowID]; ok {
+		if _, ok := s.m.previews[session.KittyPaneTarget(sess.WindowID)]; ok {
 			out = append(out, sess.WindowID)
 		}
 	}
@@ -870,7 +871,7 @@ func (s *stage) previewWindows() []int {
 func (s *stage) targetWindows() []int {
 	out := make([]int, 0, len(s.m.captures.targets))
 	for _, sess := range s.m.sessions {
-		if _, ok := s.m.captures.targets[sess.WindowID]; ok {
+		if _, ok := s.m.captures.targets[session.KittyPaneTarget(sess.WindowID)]; ok {
 			out = append(out, sess.WindowID)
 		}
 	}
@@ -1022,7 +1023,7 @@ func TestAcceptanceTheOperatorPagesWhileCapturesAreStillOut(t *testing.T) {
 	if got := s.previewWindows(); !sameInts(got, windowRange(8, 3)) {
 		t.Fatalf("previews = %v, want exactly the visible page's %v", got, windowRange(8, 3))
 	}
-	if got := s.m.previews[acceptanceWindowID(10)].Output; len(got) != 1 || !strings.Contains(got[0], "svc11") {
+	if got := s.m.previews[session.KittyPaneTarget(acceptanceWindowID(10))].Output; len(got) != 1 || !strings.Contains(got[0], "svc11") {
 		t.Fatalf("the last tile shows %v, want its own terminal's output", got)
 	}
 	if world.readCount() != 7 {
@@ -1080,13 +1081,15 @@ func TestAcceptanceAResizeDuringARefreshKeepsTheSelectionAndReaimsTheReads(t *te
 	if narrow == wide {
 		t.Fatalf("the fixture's two sizes produce the same tile width %d; the assertion below proves nothing", narrow)
 	}
-	for windowID, target := range s.m.captures.targets {
+	for windowIDTarget, target := range s.m.captures.targets {
+		windowID := windowIDTarget.KittyWindowID()
 		if target.width != narrow {
 			t.Fatalf("window %d is targeted at width %d, want the resized tile's %d", windowID, target.width, narrow)
 		}
 	}
 	s.deliver(jobCapture)
-	for windowID, preview := range s.m.previews {
+	for windowIDTarget, preview := range s.m.previews {
+		windowID := windowIDTarget.KittyWindowID()
 		for _, line := range preview.Output {
 			if len([]rune(line)) > narrow {
 				t.Fatalf("window %d kept a %d-cell line on a %d-cell tile", windowID, len([]rune(line)), narrow)
@@ -1130,7 +1133,7 @@ func TestAcceptanceASessionDisappearsUnderACaptureAndUnderAFocus(t *testing.T) {
 	world.closeTab(acceptanceTabID(1))
 	s.deliver(jobCapture)
 
-	failed := s.m.previews[acceptanceWindowID(1)]
+	failed := s.m.previews[session.KittyPaneTarget(acceptanceWindowID(1))]
 	if failed.Content != dashboardInspectorFailed() {
 		t.Fatalf("the vanished window's tile shows %v, want the failed read", failed.Content)
 	}
@@ -1138,7 +1141,7 @@ func TestAcceptanceASessionDisappearsUnderACaptureAndUnderAFocus(t *testing.T) {
 		t.Fatalf("the failed tile carries no reason")
 	}
 	for _, index := range []int{0, 2, 3} {
-		if got := s.m.previews[acceptanceWindowID(index)].Output; len(got) == 0 {
+		if got := s.m.previews[session.KittyPaneTarget(acceptanceWindowID(index))].Output; len(got) == 0 {
 			t.Fatalf("window %d lost its output because a sibling failed", acceptanceWindowID(index))
 		}
 	}
@@ -1149,7 +1152,7 @@ func TestAcceptanceASessionDisappearsUnderACaptureAndUnderAFocus(t *testing.T) {
 	if len(s.m.sessions) != 3 {
 		t.Fatalf("the refresh left %d sessions, want 3", len(s.m.sessions))
 	}
-	if _, held := s.m.previews[acceptanceWindowID(1)]; held {
+	if _, held := s.m.previews[session.KittyPaneTarget(acceptanceWindowID(1))]; held {
 		t.Fatalf("the closed window's capture is still retained")
 	}
 	if got := s.targetWindows(); !sameInts(got, []int{acceptanceWindowID(0), acceptanceWindowID(2), acceptanceWindowID(3)}) {
@@ -1308,7 +1311,7 @@ func TestAcceptanceRepeatedTopologyFailuresRetainTheListAndThenRecover(t *testin
 	world.setText(acceptanceWindowID(0), "still working")
 	s.captureTick()
 	s.deliver(jobCapture)
-	if got := s.m.previews[acceptanceWindowID(0)].Output; len(got) != 1 || got[0] != "still working" {
+	if got := s.m.previews[session.KittyPaneTarget(acceptanceWindowID(0))].Output; len(got) != 1 || got[0] != "still working" {
 		t.Fatalf("the first tile shows %v during the outage, want its newest output", got)
 	}
 
@@ -1711,7 +1714,7 @@ func TestAcceptanceBrowsingTheMenusWritesNothing(t *testing.T) {
 	world.setText(acceptanceWindowID(0), "still working")
 	s.captureTick()
 	s.deliver(jobCapture)
-	if got := s.m.previews[acceptanceWindowID(0)].Output; len(got) != 1 || got[0] != "still working" {
+	if got := s.m.previews[session.KittyPaneTarget(acceptanceWindowID(0))].Output; len(got) != 1 || got[0] != "still working" {
 		t.Fatalf("the first tile shows %v after the menus closed, want its newest output", got)
 	}
 	s.refresh()
@@ -1736,7 +1739,8 @@ func TestAcceptanceEverySessionIsReachableAndReadableByKeyboardAlone(t *testing.
 	seen := map[int]string{}
 	for page := 0; page < 3; page++ {
 		s.deliver(jobCapture)
-		for windowID, preview := range s.m.previews {
+		for windowIDTarget, preview := range s.m.previews {
+			windowID := windowIDTarget.KittyWindowID()
 			if len(preview.Output) > 0 {
 				seen[windowID] = preview.Output[len(preview.Output)-1]
 			}

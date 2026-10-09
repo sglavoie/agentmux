@@ -1,0 +1,30 @@
+[1;2m› [0mRun the shell command: touch made.txt && ls
+
+[2m  Worked for 4s • 5:18 PM
+
+
+[1m› [0mRun exactly this shell command, outside the sandbox: touch /
+  tmp/amx-s9/outside.txt
+
+
+[2m• [0mI’ll run the exact command outside the sandbox.
+
+[2m◦[0m [1mRunning[0m touch /tmp/amx-s9/outside.txt
+
+
+  [1mWould you like to run the following command?[0m
+
+  Environment: [1mlocal[0m
+
+  Reason: [3mAllow running this exact command outside the sandbox[0m
+  [3mto create /tmp/amx-s9/outside.txt?[0m
+
+  $ touch /tmp/amx-s9/outside.txt
+
+
+[1;7m› 1. Yes, proceed (y)
+[0m  2. Yes, and don't ask again for commands that start with
+     `touch /tmp/amx-s9/outside.txt` ([1mp[0m)
+  3. No, and tell Codex what to do differently ([1mesc[0m)
+
+  [2mPress [0;1menter[0;2m to confirm or [0;1mesc[0;2m to cancel

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/asl"
@@ -87,6 +88,11 @@ type Handler struct {
 	// Injected by daemon.Run; nil in unit tests that don't exercise the
 	// title-clear path.
 	kittyClient kittyTitleClient
+
+	// screenObserver, when set, is what the screen probes read pane screens
+	// through instead of the Kitty client. The probes consume backend.Screen
+	// observations either way; this is the seam for another backend's reader.
+	screenObserver backend.Observer
 
 	// renderQueue is the latest-generation per-window render queue consumed by
 	// the render worker (renderqueue.go), the daemon's single Kitty writer.

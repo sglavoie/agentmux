@@ -3,6 +3,7 @@ package activity
 import (
 	"path/filepath"
 
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -23,6 +24,20 @@ func ForegroundHarness(win *kitty.Window) (string, bool) {
 	}
 	for i := range win.ForegroundProcesses {
 		if name, pipeMode, ok := harnessInvocationFromCmdline(win.ForegroundProcesses[i].Cmdline); ok {
+			return name, pipeMode
+		}
+	}
+	return "", false
+}
+
+// PaneForegroundHarness is ForegroundHarness for a pane discovered through any
+// backend: the first foreground process whose command line is a known harness.
+// A backend that reports only PIDs (tmux names the pane's root process, not
+// its argv) yields no harness here, and the caller falls back to the pane's
+// launch metadata.
+func PaneForegroundHarness(pane backend.Pane) (string, bool) {
+	for i := range pane.Foreground {
+		if name, pipeMode, ok := harnessInvocationFromCmdline(pane.Foreground[i].Argv); ok {
 			return name, pipeMode
 		}
 	}

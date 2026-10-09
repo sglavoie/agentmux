@@ -1,0 +1,62 @@
+=== RUN   TestPaneStoreEpochs
+=== RUN   TestPaneStoreEpochs/muted
+=== RUN   TestPaneStoreEpochs/profile_changed
+=== RUN   TestPaneStoreEpochs/harness_changed
+=== RUN   TestPaneStoreEpochs/moved_group
+=== RUN   TestPaneStoreEpochs/program_exited
+=== RUN   TestPaneStoreEpochs/process_changed
+--- PASS: TestPaneStoreEpochs (0.00s)
+    --- PASS: TestPaneStoreEpochs/muted (0.00s)
+    --- PASS: TestPaneStoreEpochs/profile_changed (0.00s)
+    --- PASS: TestPaneStoreEpochs/harness_changed (0.00s)
+    --- PASS: TestPaneStoreEpochs/moved_group (0.00s)
+    --- PASS: TestPaneStoreEpochs/program_exited (0.00s)
+    --- PASS: TestPaneStoreEpochs/process_changed (0.00s)
+=== RUN   TestPaneStoreServerRestartInvalidatesEveryPane
+--- PASS: TestPaneStoreServerRestartInvalidatesEveryPane (0.00s)
+=== RUN   TestPaneObservationScreenExpectation
+--- PASS: TestPaneObservationScreenExpectation (0.00s)
+=== RUN   TestPaneHarnessProcess
+--- PASS: TestPaneHarnessProcess (0.00s)
+=== RUN   TestCheckScreen
+=== RUN   TestCheckScreen/fresh
+=== RUN   TestCheckScreen/read_error
+=== RUN   TestCheckScreen/zero_observation
+=== RUN   TestCheckScreen/no_capture_instant
+=== RUN   TestCheckScreen/another_pane
+=== RUN   TestCheckScreen/restarted_server
+=== RUN   TestCheckScreen/generation_not_reported
+=== RUN   TestCheckScreen/another_server
+=== RUN   TestCheckScreen/another_backend
+=== RUN   TestCheckScreen/exited_program
+=== RUN   TestCheckScreen/older_than_the_default_bound
+=== RUN   TestCheckScreen/at_the_default_bound
+=== RUN   TestCheckScreen/older_than_the_caller's_bound
+=== RUN   TestCheckScreen/captured_before_the_caller's_evidence
+=== RUN   TestCheckScreen/captured_after_the_caller's_evidence
+=== RUN   TestCheckScreen/exited_on_a_restarted_server
+--- PASS: TestCheckScreen (0.00s)
+    --- PASS: TestCheckScreen/fresh (0.00s)
+    --- PASS: TestCheckScreen/read_error (0.00s)
+    --- PASS: TestCheckScreen/zero_observation (0.00s)
+    --- PASS: TestCheckScreen/no_capture_instant (0.00s)
+    --- PASS: TestCheckScreen/another_pane (0.00s)
+    --- PASS: TestCheckScreen/restarted_server (0.00s)
+    --- PASS: TestCheckScreen/generation_not_reported (0.00s)
+    --- PASS: TestCheckScreen/another_server (0.00s)
+    --- PASS: TestCheckScreen/another_backend (0.00s)
+    --- PASS: TestCheckScreen/exited_program (0.00s)
+    --- PASS: TestCheckScreen/older_than_the_default_bound (0.00s)
+    --- PASS: TestCheckScreen/at_the_default_bound (0.00s)
+    --- PASS: TestCheckScreen/older_than_the_caller's_bound (0.00s)
+    --- PASS: TestCheckScreen/captured_before_the_caller's_evidence (0.00s)
+    --- PASS: TestCheckScreen/captured_after_the_caller's_evidence (0.00s)
+    --- PASS: TestCheckScreen/exited_on_a_restarted_server (0.00s)
+=== RUN   TestBindingScreenExpectation
+--- PASS: TestBindingScreenExpectation (0.00s)
+=== RUN   TestReadScreenNeverSettlesAWithheldCapture
+--- PASS: TestReadScreenNeverSettlesAWithheldCapture (0.00s)
+=== RUN   TestReadScreenStripsStyling
+--- PASS: TestReadScreenStripsStyling (0.00s)
+PASS
+ok  	github.com/sglavoie/agentmux/internal/daemon/probes	0.158s

@@ -9,6 +9,14 @@
 // path, the derived per-tab and per-pane freshness epochs, and the
 // producer/source/target probe binding with its receipt and epoch validation.
 //
+// A third kind is backend-neutral and applies to Kitty and tmux alike. A
+// backend.Screen observation is checked by CheckScreen before any classifier
+// reads it, so a capture that failed, is stale, describes another pane or
+// server generation, or was left behind by a dead program is withheld instead
+// of read (screen.go). Panes a backend reports through backend.Discoverer get
+// their own freshness epochs in PaneStore, and PaneHarnessProcess combines a
+// pane's discovery with the process table's answer (pane.go).
+//
 // It must never import the daemon root, and it performs no Kitty, IPC, or
 // journal I/O of its own — it interprets a captured tree rather than fetching
 // one. It never decides what an observation MEANS for a window: that stays in

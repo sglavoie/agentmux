@@ -1,0 +1,36 @@
+  in seconds: windows named, panes split, and commands started. Copy mode lets you scroll back, search, and copy text
+  from output without touching the mouse. Plugins add things like saving sessions across reboots and showing status
+  information.
+
+  Multiplexers have critics. Modern terminal emulators already have tabs and splits, and tiling window managers can
+  arrange terminals well. Nested prefix keys, odd behavior with color and clipboard support, and a real learning curve
+  all add friction. On a local machine, a multiplexer can be more than you need.
+
+  Still, none of those alternatives keeps your work alive on a remote server after the connection drops. As long as
+  people work on machines they reach over a network, terminal multiplexers will keep their place. What began as a fix
+  for unreliable phone lines now shapes how many developers work at the command line.
+
+✻ Sautéed for 13s · done 5:15 PM
+
+❯ Read notes.txt, then think hard about 3 different ways to reverse its contents, then answer in one line.
+
+  Read 1 file
+
+⏺ notes.txt contains only hello: rev notes.txt and Python's open('notes.txt').read().strip()[::-1] both give olleh,
+  while tac notes.txt reverses line order and leaves hello unchanged because there's only one line.
+
+✻ Churned for 4s · done 5:16 PM
+
+❯ Create a new file named out.txt containing the single word ok, using the Write tool.
+
+⏺ Write(out.txt)
+  ⎿  User rejected write to out.txt
+      1 ok
+
+✻ Crunched for 1s · done 5:16 PM
+                                                                                                    ◐ medium · /effort
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  94.7 max 5h 15/35 8:29pm 7d 53/81 oct11|12:59am
+  ⏸ manual mode on · ← 1 agent

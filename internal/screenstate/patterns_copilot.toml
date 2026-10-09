@@ -58,7 +58,12 @@ harness = "copilot"
 # footer advertises with "← open sidebar" is the known candidate — stops
 # matching and reads composer_busy. That is the fail-closed direction: a
 # withheld reading, never a settled one.
-composer_line = '(?m)^\x{2503}[\t \x{00a0}]*$'
+#
+# Copilot 1.0.95 replaced the bar with a bare ❯ prompt between two horizontal
+# rules (tmux capture copilot_idle_bare_composer), so ❯ alone in column 0 is the
+# second form. The transcript echoes a submitted prompt as " ❯ text", indented
+# and followed by text, so it cannot match.
+composer_line = '(?m)^[\x{2503}\x{276f}][\t \x{00a0}]*$'
 
 # choice_line matches the selected option of an open modal prompt
 # ("│ ❯ 1. Yes"). It is half the blocking-prompt veto and the half that survives
@@ -128,7 +133,21 @@ choice_line = '(?m)^[\t \x{00a0}]*[\x{2502}\x{2503}][\t \x{00a0}]*[\x{276f}\x{20
 # soon as the cancel is requested while the turn is still winding down. That gap
 # is a lost refusal on an unusual screen, never a settle — this adapter has no
 # Terminal branch to reach.
-working_status_line = '^[\t \x{00a0}]*[\x{25cb}\x{25ce}\x{25c9}\x{25cf}][\t \x{00a0}]+\p{Lu}[\p{L}\p{M}]*(?:[\t \x{00a0}]+\x{00b7}[\t \x{00a0}]+[\d.]+[\t \x{00a0}]*[KMGT]?i?B)?(?:[\t \x{00a0}]+esc[\t \x{00a0}]+interrupt)?[\t \x{00a0}]{2,}\S.*\([\t \x{00a0}]*\d+%[\t \x{00a0}]*\)[\t \x{00a0}]*$'
+#
+# Copilot 1.0.95 dropped the effort and the percentage from the right segment,
+# which is now the model name alone, and shows "esc edit prompt" before the
+# first byte arrives (tmux captures copilot_working_t0/t1):
+#
+#   ◎ Working esc edit prompt                     Claude Sonnet 5.5
+#   ◎ Working · 2.0 KiB esc interrupt             Claude Sonnet 5.5
+#
+# With no percentage left to pin, the second alternative pins the esc
+# affordance instead: glyph, one capitalized word, optional bytes, then
+# "esc interrupt" or "esc edit prompt", the column gap, and a right segment.
+# Bullet prose does not end a word with an esc affordance followed by column
+# padding. Accepted cost: a 1.0.95 cancel that drops the affordance loses this
+# veto, which again is a lost refusal and never a settle.
+working_status_line = '^[\t \x{00a0}]*[\x{25cb}\x{25ce}\x{25c9}\x{25cf}][\t \x{00a0}]+\p{Lu}[\p{L}\p{M}]*(?:[\t \x{00a0}]+\x{00b7}[\t \x{00a0}]+[\d.]+[\t \x{00a0}]*[KMGT]?i?B)?(?:(?:[\t \x{00a0}]+esc[\t \x{00a0}]+interrupt)?[\t \x{00a0}]{2,}\S.*\([\t \x{00a0}]*\d+%[\t \x{00a0}]*\)|[\t \x{00a0}]+esc[\t \x{00a0}]+(?:interrupt|edit[\t \x{00a0}]+prompt)[\t \x{00a0}]{2,}\S.*)[\t \x{00a0}]*$'
 
 [phrases]
 

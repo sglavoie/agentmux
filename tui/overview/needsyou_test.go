@@ -1,6 +1,7 @@
 package overview
 
 import (
+	"github.com/sglavoie/agentmux/internal/session"
 	"reflect"
 	"strings"
 	"testing"
@@ -42,7 +43,7 @@ func TestNeedsYouJumpsAcrossPagesInBothModes(t *testing.T) {
 				t.Fatal("attention jump did not render the target's page")
 			}
 			if !compact {
-				if _, ok := m.captures.targets[sessions[jump.index].WindowID]; !ok {
+				if _, ok := m.captures.targets[session.KittyPaneTarget(sessions[jump.index].WindowID)]; !ok {
 					t.Fatal("jump did not retarget the visible previews")
 				}
 			} else if len(m.captures.targets) != 0 {

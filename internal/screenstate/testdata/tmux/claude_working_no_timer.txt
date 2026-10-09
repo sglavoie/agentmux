@@ -1,0 +1,36 @@
+  windows, which work like tabs. Each window can be split into panes, which put several shells side by side. A developer
+  might keep an editor in one pane, a test runner in another, and server logs in a third, all inside one SSH
+  connection. You control all of this with a prefix key, such as Ctrl-b in tmux, followed by a short command. Your hands
+  stay on the keyboard and never reach for the mouse.
+
+  The most important feature is still detaching. You can start a database migration, a model training run, or a large
+  file transfer, then detach and close your laptop. The job keeps running. Hours later, from another machine, you
+  reattach and find it exactly where you left it. This persistence makes the multiplexer a kind of home on the server
+  rather than a temporary visit. Several people can also attach to the same session, which makes it easy to pair program
+  or debug together on a production box.
+
+  Multiplexers are also highly scriptable. Shell scripts or tools like tmuxinator can create a full development layout
+  in seconds: windows named, panes split, and commands started. Copy mode lets you scroll back, search, and copy text
+  from output without touching the mouse. Plugins add things like saving sessions across reboots and showing status
+  information.
+
+  Multiplexers have critics. Modern terminal emulators already have tabs and splits, and tiling window managers can
+  arrange terminals well. Nested prefix keys, odd behavior with color and clipboard support, and a real learning curve
+  all add friction. On a local machine, a multiplexer can be more than you need.
+
+  Still, none of those alternatives keeps your work alive on a remote server after the connection drops. As long as
+  people work on machines they reach over a network, terminal multiplexers will keep their place. What began as a fix
+  for unreliable phone lines now shapes how many developers work at the command line.
+
+✻ Sautéed for 13s · done 5:15 PM
+
+❯ Read notes.txt, then think hard about 3 different ways to reverse its contents, then answer in one line.
+
+✳ Moseying…
+  ⎿  Tip: Running multiple Claude sessions? Use /color and /rename to tell them apart at a glance.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  94.6 max 5h 15/35 8:29pm 7d 53/81 oct11|12:59am
+  ⏸ manual mode on · ← 1 agent

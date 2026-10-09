@@ -47,13 +47,31 @@ interrupted_status_line = '(?i)^[^\p{L}\p{N}]*(?:request\s+)?interrupted\b'
 # randomizes it) and "esc to interrupt" is not required (2.1.x dropped it —
 # that removal is this whole bug). The ellipsis plus the parenthesized LIVE
 # elapsed timer, on the same line, is the discriminator.
-working_status_line = '^[^\p{L}\p{N}]*\p{L}[\p{L}\p{M}]*\x{2026}\s*\(\s*\d+[hms]\b'
+#
+# Claude 2.1.296 also draws the spinner line with NO timer for its first
+# second or so ("✳ Moseying…" — tmux capture claude_working_no_timer), and
+# without a second form that live screen read as a quiescent finished turn.
+# The second alternative accepts a glyph-led single word ending in the
+# ellipsis and nothing after it. It needs the leading glyph so an indented
+# "Reading 1 file…" tool line does not count; the accepted cost is that a
+# transcript line consisting of one glyph-led word and an ellipsis ("⏺ Hmm…")
+# also vetoes while it is the latest status line, which withholds a stop
+# rather than granting one.
+working_status_line = '^(?:[^\p{L}\p{N}]*\p{L}[\p{L}\p{M}]*\x{2026}\s*\(\s*\d+[hms]\b|\s*[^\s\p{L}\p{N}]\s+\p{L}[\p{L}\p{M}]*\x{2026}\s*$)'
 
 # completed_status_line is the past-tense analog of codex's worked-for line.
 # Claude randomizes the verb, so only the SHAPE is pinned: one leading word,
 # " for ", a duration, END OF LINE. The end anchor is what makes this safe as
 # positive evidence — without it, "Waited for 3s (see above)" matches, and so
 # does the "thought for 5s" segment inside a working line's parentheses.
+#
+# Claude 2.1.296 appends the wall-clock finish time ("✻ Crunched for 5s · done
+# 5:14 PM", tmux capture claude_idle_completed_t0), which this pattern does
+# NOT accept, on purpose: such a pane reads as quiescent, the weakest tier.
+# Accepting the suffix would promote tmux captures claude_working_streaming_t0
+# and _t1 — a live turn streaming text with no spinner line, under the previous
+# turn's finished line — from quiescent to terminal_shape, and so spend fewer
+# stabilization samples on a screen that is not finished.
 completed_status_line = '^[^\p{L}\p{N}]*\p{L}[\p{L}\p{M}]*\s+for\s+(?:\d+[hms]\s*)+$'
 
 [phrases]
@@ -92,7 +110,13 @@ prompt_permission = [
 # "Do you trust the files in this folder?", Claude's startup workspace-trust
 # dialog. It is its own kind rather than a permission because nothing in the
 # session is waiting on it — the session has not started.
-prompt_trust = ["do you trust"]
+# Claude 2.1.296 rewords the dialog as "Is this a project you created or one you
+# trust?" with a "Yes, I trust this folder" option (tmux capture
+# claude_trust_prompt), which no longer contains "do you trust".
+prompt_trust = [
+    "do you trust",
+    "yes, i trust this folder",
+]
 
 # "Do you want to make this edit to app.go?", "Do you want to create foo.txt?" —
 # a write to the filesystem, which is the prompt a user most often wants named,

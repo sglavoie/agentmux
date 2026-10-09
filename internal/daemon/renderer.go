@@ -26,7 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
@@ -75,13 +74,13 @@ func (h *Handler) runScreenProbes(ctx context.Context) {
 }
 
 func (h *Handler) runScreenProbesWithSnapshot(now time.Time, snapshot probes.Snapshot) {
-	// One `--extent=screen` capture per source pane for the whole tick. Beyond
+	// One visible-screen observation per source pane for the whole tick. Beyond
 	// halving Kitty round-trips for a Claude pane (two probes) and a bolted
 	// Codex pane (prompt then idle), this is what makes the probes below
 	// classify the SAME frame — closing the race where the context-limit veto
 	// inside the idle classifier was evaluated against a different capture than
 	// the one that decided the banner.
-	screens := activity.NewScreenTextCache(h.kittyClient)
+	screens := h.screenTextCacheFor()
 	h.probeCodexScreenPromptsWithSnapshot(now, snapshot, screens)
 	// Context-limit probing runs before the idle stop probe so a
 	// context-limited Claude tab is settled to the error state first; the idle

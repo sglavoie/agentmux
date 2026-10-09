@@ -1,6 +1,7 @@
 package session
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/backend"
@@ -256,3 +257,52 @@ func (r RunningSession) PaneRef() backend.Ref {
 
 // PaneRef is the backend pane (Kitty window) the ghost tab is anchored to.
 func (g GhostTab) PaneRef() backend.Ref { return kitty.PaneRef(g.WindowID) }
+
+// PaneTarget names one session pane without saying how to reach it: the
+// backend that hosts it and the pane's reference there. It is comparable, so a
+// reader can key its schedule and its buffers on it, and two backends that
+// happen to use the same pane ID never collide.
+type PaneTarget struct {
+	Backend runtimesession.BackendKind
+	Pane    backend.Ref
+}
+
+// KittyPaneTarget is the pane target of a Kitty window. A non-positive window
+// ID yields the zero target, which names nothing.
+func KittyPaneTarget(windowID int) PaneTarget {
+	if windowID <= 0 {
+		return PaneTarget{}
+	}
+	return PaneTarget{Backend: runtimesession.BackendKitty, Pane: kitty.PaneRef(windowID)}
+}
+
+// PaneTarget is the session's pane in its recorded backend. A session with no
+// addressable pane yields the zero target.
+func (r RunningSession) PaneTarget() PaneTarget {
+	if r.BackendKind() == runtimesession.BackendKitty {
+		return KittyPaneTarget(r.WindowID)
+	}
+	if r.Pane.Scope != backend.ScopePane || r.Pane.ID == "" {
+		return PaneTarget{}
+	}
+	return PaneTarget{Backend: r.BackendKind(), Pane: r.Pane}
+}
+
+// IsZero reports a target that names no pane.
+func (t PaneTarget) IsZero() bool { return t == PaneTarget{} }
+
+// KittyWindowID is the Kitty window ID of a Kitty target, and zero for any
+// other backend or a reference that is not a canonical window ID.
+func (t PaneTarget) KittyWindowID() int {
+	if t.Backend != runtimesession.BackendKitty || t.Pane.Scope != backend.ScopePane {
+		return 0
+	}
+	id, err := strconv.Atoi(t.Pane.ID)
+	if err != nil || id <= 0 || strconv.Itoa(id) != t.Pane.ID {
+		return 0
+	}
+	return id
+}
+
+// String renders a target for diagnostics.
+func (t PaneTarget) String() string { return string(t.Backend) + "/" + t.Pane.String() }

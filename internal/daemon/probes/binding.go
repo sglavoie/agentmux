@@ -1,9 +1,13 @@
 package probes
 
 import (
+	"strconv"
+
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
 // Binding is the immutable routing and freshness evidence shared by the periodic
@@ -39,6 +43,23 @@ type Binding struct {
 	TerminalAt          int64
 	RecoverySource      protocol.SourceID
 	RecoveryAt          int64
+}
+
+// SourcePane names the producer pane as a backend reference, which is how the
+// screen readers address it. A Binding is built from the Kitty window tree, so
+// the reference is that window's ID.
+func (b Binding) SourcePane() backend.Ref {
+	return backend.PaneID(strconv.Itoa(b.SourceWindowID))
+}
+
+// ScreenExpectation is what a screen read for this binding must describe: the
+// producer pane, on Kitty. The binding's epochs already tie it to one Kitty
+// window tree, so no address or generation is named here.
+func (b Binding) ScreenExpectation() ScreenExpectation {
+	return ScreenExpectation{
+		Instance: runtimesession.BackendInstance{Kind: runtimesession.BackendKitty},
+		Pane:     b.SourcePane(),
+	}
 }
 
 // Valid reports whether the binding is internally coherent. It is the

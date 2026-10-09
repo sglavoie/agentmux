@@ -1,0 +1,30 @@
+=== RUN   TestBackendContract
+=== RUN   TestBackendContract/capabilities
+=== RUN   TestBackendContract/launch_is_discoverable
+=== RUN   TestBackendContract/capture_reads_pane_output
+=== RUN   TestBackendContract/metadata_round_trips
+=== RUN   TestBackendContract/presentation_follows_capabilities
+=== RUN   TestBackendContract/close_ends_only_the_target
+=== RUN   TestBackendContract/invalid_refs_are_refused_before_acting
+=== RUN   TestBackendContract/discover_returns_independent_copies
+--- PASS: TestBackendContract (0.55s)
+    --- PASS: TestBackendContract/capabilities (0.02s)
+    --- PASS: TestBackendContract/launch_is_discoverable (0.05s)
+    --- PASS: TestBackendContract/capture_reads_pane_output (0.06s)
+    --- PASS: TestBackendContract/metadata_round_trips (0.09s)
+    --- PASS: TestBackendContract/presentation_follows_capabilities (0.07s)
+    --- PASS: TestBackendContract/close_ends_only_the_target (0.14s)
+    --- PASS: TestBackendContract/invalid_refs_are_refused_before_acting (0.06s)
+    --- PASS: TestBackendContract/discover_returns_independent_copies (0.06s)
+=== RUN   TestObserveReportsScreenWithItsProvenance
+    observe_test.go:66: observed: 80x24 pane %0 of generation 30531-1791589456 captured 24 rows identical to Capture(screen)
+--- PASS: TestObserveReportsScreenWithItsProvenance (0.07s)
+=== RUN   TestObserveHandlesWrapAnsiAndAlternateScreen
+    observe_test.go:112: observed: 80 columns; a 100-char line captured as rows of 80 and 20 chars; the plain capture held no SGR bytes; alternate_on=1 captured only the alternate screen
+--- PASS: TestObserveHandlesWrapAnsiAndAlternateScreen (0.06s)
+=== RUN   TestObserveNeverAnswersForAnotherPaneOrGeneration
+    observe_test.go:164: restarted server did not reuse %1 (got %0)
+    observe_test.go:169: observed: exited pane Exited=true; group ref ErrInvalidRef; missing and closed panes error; dead server ErrServerNotRunning; pane %1 of generation 30569-1791589457 became pane %0 of generation 30583-1791589457
+--- PASS: TestObserveNeverAnswersForAnotherPaneOrGeneration (0.14s)
+PASS
+ok  	github.com/sglavoie/agentmux/internal/tmux	1.124s

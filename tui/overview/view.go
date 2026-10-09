@@ -162,7 +162,7 @@ type Input struct {
 	// read that has not landed yet — InspectorLoading — which is the true state of
 	// every tile on the first frame and is distinct from a read that came back
 	// empty.
-	Previews map[int]Preview
+	Previews map[session.PaneTarget]Preview
 
 	Cfg *config.Config
 	// LastActivity and IdleThreshold are StateGroup's inputs, passed through to
@@ -414,7 +414,7 @@ func tileContent(body dashboard.CompactInput, index int) []string {
 // entry is a read that has not landed, which is the true state of every tile
 // before the first one comes back.
 func (in Input) preview(s session.RunningSession) Preview {
-	if p, ok := in.Previews[s.WindowID]; ok {
+	if p, ok := in.Previews[s.PaneTarget()]; ok {
 		return p
 	}
 	return Preview{Content: dashboard.InspectorLoading}

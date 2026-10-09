@@ -1,0 +1,278 @@
+=== RUN   TestTmuxFixturesAreAllRegistered
+--- PASS: TestTmuxFixturesAreAllRegistered (0.00s)
+=== RUN   TestTmuxFixtureClassification
+=== RUN   TestTmuxFixtureClassification/claude_trust_prompt
+=== RUN   TestTmuxFixtureClassification/claude_idle_bare_composer
+=== RUN   TestTmuxFixtureClassification/claude_permission_prompt
+=== RUN   TestTmuxFixtureClassification/claude_permission_prompt_narrow
+=== RUN   TestTmuxFixtureClassification/claude_working_t0
+=== RUN   TestTmuxFixtureClassification/claude_working_t1
+=== RUN   TestTmuxFixtureClassification/claude_working_no_timer
+=== RUN   TestTmuxFixtureClassification/claude_working_streaming_t0
+=== RUN   TestTmuxFixtureClassification/claude_working_streaming_t1
+=== RUN   TestTmuxFixtureClassification/claude_idle_completed_t0
+=== RUN   TestTmuxFixtureClassification/claude_idle_completed_t1
+=== RUN   TestTmuxFixtureClassification/claude_interrupted
+=== RUN   TestTmuxFixtureClassification/claude_rejected_tool
+=== RUN   TestTmuxFixtureClassification/claude_interrupted_restored_input
+=== RUN   TestTmuxFixtureClassification/claude_exited_pane_dead
+=== RUN   TestTmuxFixtureClassification/codex_trust_prompt
+=== RUN   TestTmuxFixtureClassification/codex_idle_bare_composer
+=== RUN   TestTmuxFixtureClassification/codex_permission_prompt
+=== RUN   TestTmuxFixtureClassification/codex_permission_prompt_narrow
+=== RUN   TestTmuxFixtureClassification/codex_working_t0
+=== RUN   TestTmuxFixtureClassification/codex_working_t1
+=== RUN   TestTmuxFixtureClassification/codex_idle_completed_t0
+=== RUN   TestTmuxFixtureClassification/codex_idle_completed_t1
+=== RUN   TestTmuxFixtureClassification/codex_rejected_command
+=== RUN   TestTmuxFixtureClassification/copilot_trust_prompt
+=== RUN   TestTmuxFixtureClassification/copilot_idle_bare_composer
+=== RUN   TestTmuxFixtureClassification/copilot_permission_prompt
+=== RUN   TestTmuxFixtureClassification/copilot_permission_prompt_narrow
+=== RUN   TestTmuxFixtureClassification/copilot_working_t0
+=== RUN   TestTmuxFixtureClassification/copilot_working_t1
+=== RUN   TestTmuxFixtureClassification/copilot_working_streaming
+=== RUN   TestTmuxFixtureClassification/copilot_working_interrupt_hint
+=== RUN   TestTmuxFixtureClassification/copilot_idle_completed_t0
+=== RUN   TestTmuxFixtureClassification/copilot_idle_completed_t1
+=== RUN   TestTmuxFixtureClassification/copilot_interrupted
+=== RUN   TestTmuxFixtureClassification/copilot_rejected_command
+--- PASS: TestTmuxFixtureClassification (0.01s)
+    --- PASS: TestTmuxFixtureClassification/claude_trust_prompt (0.00s)
+    --- PASS: TestTmuxFixtureClassification/claude_idle_bare_composer (0.00s)
+    --- PASS: TestTmuxFixtureClassification/claude_permission_prompt (0.00s)
+    --- PASS: TestTmuxFixtureClassification/claude_permission_prompt_narrow (0.00s)
+    --- PASS: TestTmuxFixtureClassification/claude_working_t0 (0.00s)
+    --- PASS: TestTmuxFixtureClassification/claude_working_t1 (0.00s)
+    --- PASS: TestTmuxFixtureClassification/claude_working_no_timer (0.00s)
+    --- PASS: TestTmuxFixtureClassification/claude_working_streaming_t0 (0.00s)
+    --- PASS: TestTmuxFixtureClassification/claude_working_streaming_t1 (0.00s)
+    --- PASS: TestTmuxFixtureClassification/claude_idle_completed_t0 (0.00s)
+    --- PASS: TestTmuxFixtureClassification/claude_idle_completed_t1 (0.00s)
+    --- PASS: TestTmuxFixtureClassification/claude_interrupted (0.00s)
+    --- PASS: TestTmuxFixtureClassification/claude_rejected_tool (0.00s)
+    --- PASS: TestTmuxFixtureClassification/claude_interrupted_restored_input (0.00s)
+    --- PASS: TestTmuxFixtureClassification/claude_exited_pane_dead (0.00s)
+    --- PASS: TestTmuxFixtureClassification/codex_trust_prompt (0.00s)
+    --- PASS: TestTmuxFixtureClassification/codex_idle_bare_composer (0.00s)
+    --- PASS: TestTmuxFixtureClassification/codex_permission_prompt (0.00s)
+    --- PASS: TestTmuxFixtureClassification/codex_permission_prompt_narrow (0.00s)
+    --- PASS: TestTmuxFixtureClassification/codex_working_t0 (0.00s)
+    --- PASS: TestTmuxFixtureClassification/codex_working_t1 (0.00s)
+    --- PASS: TestTmuxFixtureClassification/codex_idle_completed_t0 (0.00s)
+    --- PASS: TestTmuxFixtureClassification/codex_idle_completed_t1 (0.00s)
+    --- PASS: TestTmuxFixtureClassification/codex_rejected_command (0.00s)
+    --- PASS: TestTmuxFixtureClassification/copilot_trust_prompt (0.00s)
+    --- PASS: TestTmuxFixtureClassification/copilot_idle_bare_composer (0.00s)
+    --- PASS: TestTmuxFixtureClassification/copilot_permission_prompt (0.00s)
+    --- PASS: TestTmuxFixtureClassification/copilot_permission_prompt_narrow (0.00s)
+    --- PASS: TestTmuxFixtureClassification/copilot_working_t0 (0.00s)
+    --- PASS: TestTmuxFixtureClassification/copilot_working_t1 (0.00s)
+    --- PASS: TestTmuxFixtureClassification/copilot_working_streaming (0.00s)
+    --- PASS: TestTmuxFixtureClassification/copilot_working_interrupt_hint (0.00s)
+    --- PASS: TestTmuxFixtureClassification/copilot_idle_completed_t0 (0.00s)
+    --- PASS: TestTmuxFixtureClassification/copilot_idle_completed_t1 (0.00s)
+    --- PASS: TestTmuxFixtureClassification/copilot_interrupted (0.00s)
+    --- PASS: TestTmuxFixtureClassification/copilot_rejected_command (0.00s)
+=== RUN   TestTmuxFixturesCoverEveryBehaviour
+--- PASS: TestTmuxFixturesCoverEveryBehaviour (0.00s)
+=== RUN   TestTmuxFixtureGeometry
+=== RUN   TestTmuxFixtureGeometry/claude_trust_prompt
+=== RUN   TestTmuxFixtureGeometry/claude_idle_bare_composer
+=== RUN   TestTmuxFixtureGeometry/claude_permission_prompt
+=== RUN   TestTmuxFixtureGeometry/claude_permission_prompt_narrow
+=== RUN   TestTmuxFixtureGeometry/claude_working_t0
+=== RUN   TestTmuxFixtureGeometry/claude_working_t1
+=== RUN   TestTmuxFixtureGeometry/claude_working_no_timer
+=== RUN   TestTmuxFixtureGeometry/claude_working_streaming_t0
+=== RUN   TestTmuxFixtureGeometry/claude_working_streaming_t1
+=== RUN   TestTmuxFixtureGeometry/claude_idle_completed_t0
+=== RUN   TestTmuxFixtureGeometry/claude_idle_completed_t1
+=== RUN   TestTmuxFixtureGeometry/claude_interrupted
+=== RUN   TestTmuxFixtureGeometry/claude_rejected_tool
+=== RUN   TestTmuxFixtureGeometry/claude_interrupted_restored_input
+=== RUN   TestTmuxFixtureGeometry/claude_exited_pane_dead
+=== RUN   TestTmuxFixtureGeometry/codex_trust_prompt
+=== RUN   TestTmuxFixtureGeometry/codex_idle_bare_composer
+=== RUN   TestTmuxFixtureGeometry/codex_permission_prompt
+=== RUN   TestTmuxFixtureGeometry/codex_permission_prompt_narrow
+=== RUN   TestTmuxFixtureGeometry/codex_working_t0
+=== RUN   TestTmuxFixtureGeometry/codex_working_t1
+=== RUN   TestTmuxFixtureGeometry/codex_idle_completed_t0
+=== RUN   TestTmuxFixtureGeometry/codex_idle_completed_t1
+=== RUN   TestTmuxFixtureGeometry/codex_rejected_command
+=== RUN   TestTmuxFixtureGeometry/copilot_trust_prompt
+=== RUN   TestTmuxFixtureGeometry/copilot_idle_bare_composer
+=== RUN   TestTmuxFixtureGeometry/copilot_permission_prompt
+=== RUN   TestTmuxFixtureGeometry/copilot_permission_prompt_narrow
+=== RUN   TestTmuxFixtureGeometry/copilot_working_t0
+=== RUN   TestTmuxFixtureGeometry/copilot_working_t1
+=== RUN   TestTmuxFixtureGeometry/copilot_working_streaming
+=== RUN   TestTmuxFixtureGeometry/copilot_working_interrupt_hint
+=== RUN   TestTmuxFixtureGeometry/copilot_idle_completed_t0
+=== RUN   TestTmuxFixtureGeometry/copilot_idle_completed_t1
+=== RUN   TestTmuxFixtureGeometry/copilot_interrupted
+=== RUN   TestTmuxFixtureGeometry/copilot_rejected_command
+--- PASS: TestTmuxFixtureGeometry (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/claude_trust_prompt (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/claude_idle_bare_composer (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/claude_permission_prompt (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/claude_permission_prompt_narrow (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/claude_working_t0 (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/claude_working_t1 (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/claude_working_no_timer (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/claude_working_streaming_t0 (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/claude_working_streaming_t1 (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/claude_idle_completed_t0 (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/claude_idle_completed_t1 (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/claude_interrupted (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/claude_rejected_tool (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/claude_interrupted_restored_input (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/claude_exited_pane_dead (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/codex_trust_prompt (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/codex_idle_bare_composer (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/codex_permission_prompt (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/codex_permission_prompt_narrow (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/codex_working_t0 (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/codex_working_t1 (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/codex_idle_completed_t0 (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/codex_idle_completed_t1 (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/codex_rejected_command (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/copilot_trust_prompt (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/copilot_idle_bare_composer (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/copilot_permission_prompt (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/copilot_permission_prompt_narrow (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/copilot_working_t0 (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/copilot_working_t1 (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/copilot_working_streaming (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/copilot_working_interrupt_hint (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/copilot_idle_completed_t0 (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/copilot_idle_completed_t1 (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/copilot_interrupted (0.00s)
+    --- PASS: TestTmuxFixtureGeometry/copilot_rejected_command (0.00s)
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/claude_trust_prompt
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/claude_idle_bare_composer
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/claude_permission_prompt
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/claude_permission_prompt_narrow
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/claude_working_t0
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/claude_working_t1
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/claude_working_no_timer
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/claude_working_streaming_t0
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/claude_working_streaming_t1
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/claude_idle_completed_t0
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/claude_idle_completed_t1
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/claude_interrupted
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/claude_rejected_tool
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/claude_interrupted_restored_input
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/claude_exited_pane_dead
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/codex_trust_prompt
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/codex_idle_bare_composer
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/codex_permission_prompt
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/codex_permission_prompt_narrow
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/codex_working_t0
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/codex_working_t1
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/codex_idle_completed_t0
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/codex_idle_completed_t1
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/codex_rejected_command
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/copilot_trust_prompt
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/copilot_idle_bare_composer
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/copilot_permission_prompt
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/copilot_permission_prompt_narrow
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/copilot_working_t0
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/copilot_working_t1
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/copilot_working_streaming
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/copilot_working_interrupt_hint
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/copilot_idle_completed_t0
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/copilot_idle_completed_t1
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/copilot_interrupted
+=== RUN   TestTmuxAnsiCapturesReadLikePlainOnes/copilot_rejected_command
+--- PASS: TestTmuxAnsiCapturesReadLikePlainOnes (0.01s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/claude_trust_prompt (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/claude_idle_bare_composer (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/claude_permission_prompt (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/claude_permission_prompt_narrow (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/claude_working_t0 (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/claude_working_t1 (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/claude_working_no_timer (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/claude_working_streaming_t0 (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/claude_working_streaming_t1 (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/claude_idle_completed_t0 (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/claude_idle_completed_t1 (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/claude_interrupted (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/claude_rejected_tool (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/claude_interrupted_restored_input (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/claude_exited_pane_dead (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/codex_trust_prompt (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/codex_idle_bare_composer (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/codex_permission_prompt (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/codex_permission_prompt_narrow (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/codex_working_t0 (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/codex_working_t1 (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/codex_idle_completed_t0 (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/codex_idle_completed_t1 (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/codex_rejected_command (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/copilot_trust_prompt (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/copilot_idle_bare_composer (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/copilot_permission_prompt (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/copilot_permission_prompt_narrow (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/copilot_working_t0 (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/copilot_working_t1 (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/copilot_working_streaming (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/copilot_working_interrupt_hint (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/copilot_idle_completed_t0 (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/copilot_idle_completed_t1 (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/copilot_interrupted (0.00s)
+    --- PASS: TestTmuxAnsiCapturesReadLikePlainOnes/copilot_rejected_command (0.00s)
+=== RUN   TestStripANSI
+--- PASS: TestStripANSI (0.00s)
+=== RUN   TestTmuxNarrowCapturesKeepTheirReading
+=== RUN   TestTmuxNarrowCapturesKeepTheirReading/claude
+=== RUN   TestTmuxNarrowCapturesKeepTheirReading/codex
+=== RUN   TestTmuxNarrowCapturesKeepTheirReading/copilot
+--- PASS: TestTmuxNarrowCapturesKeepTheirReading (0.00s)
+    --- PASS: TestTmuxNarrowCapturesKeepTheirReading/claude (0.00s)
+    --- PASS: TestTmuxNarrowCapturesKeepTheirReading/codex (0.00s)
+    --- PASS: TestTmuxNarrowCapturesKeepTheirReading/copilot (0.00s)
+=== RUN   TestTmuxFingerprintPairs
+--- PASS: TestTmuxFingerprintPairs (0.00s)
+=== RUN   TestTmuxClaudeSpinnerWithoutTimerIsWorking
+--- PASS: TestTmuxClaudeSpinnerWithoutTimerIsWorking (0.00s)
+=== RUN   TestTmuxClaudeStreamingTurnIsOnlyHeldByItsFingerprint
+--- PASS: TestTmuxClaudeStreamingTurnIsOnlyHeldByItsFingerprint (0.00s)
+=== RUN   TestTmuxExitedPaneScreenIsNotAFinishedTurn
+--- PASS: TestTmuxExitedPaneScreenIsNotAFinishedTurn (0.00s)
+=== RUN   TestBackendFixtureParity
+=== RUN   TestBackendFixtureParity/claude/prompt
+=== RUN   TestBackendFixtureParity/claude/permission
+=== RUN   TestBackendFixtureParity/claude/busy
+=== RUN   TestBackendFixtureParity/claude/completion
+=== RUN   TestBackendFixtureParity/claude/failure
+=== RUN   TestBackendFixtureParity/codex/prompt
+=== RUN   TestBackendFixtureParity/codex/permission
+=== RUN   TestBackendFixtureParity/codex/busy
+=== RUN   TestBackendFixtureParity/codex/completion
+=== RUN   TestBackendFixtureParity/codex/failure
+=== RUN   TestBackendFixtureParity/copilot/prompt
+=== RUN   TestBackendFixtureParity/copilot/permission
+=== RUN   TestBackendFixtureParity/copilot/busy
+=== RUN   TestBackendFixtureParity/copilot/completion
+=== RUN   TestBackendFixtureParity/copilot/failure
+--- PASS: TestBackendFixtureParity (0.00s)
+    --- PASS: TestBackendFixtureParity/claude/prompt (0.00s)
+    --- PASS: TestBackendFixtureParity/claude/permission (0.00s)
+    --- PASS: TestBackendFixtureParity/claude/busy (0.00s)
+    --- PASS: TestBackendFixtureParity/claude/completion (0.00s)
+    --- PASS: TestBackendFixtureParity/claude/failure (0.00s)
+    --- PASS: TestBackendFixtureParity/codex/prompt (0.00s)
+    --- PASS: TestBackendFixtureParity/codex/permission (0.00s)
+    --- PASS: TestBackendFixtureParity/codex/busy (0.00s)
+    --- PASS: TestBackendFixtureParity/codex/completion (0.00s)
+    --- PASS: TestBackendFixtureParity/codex/failure (0.00s)
+    --- PASS: TestBackendFixtureParity/copilot/prompt (0.00s)
+    --- PASS: TestBackendFixtureParity/copilot/permission (0.00s)
+    --- PASS: TestBackendFixtureParity/copilot/busy (0.00s)
+    --- PASS: TestBackendFixtureParity/copilot/completion (0.00s)
+    --- PASS: TestBackendFixtureParity/copilot/failure (0.00s)
+PASS
+ok  	github.com/sglavoie/agentmux/internal/screenstate	0.180s

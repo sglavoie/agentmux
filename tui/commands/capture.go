@@ -25,12 +25,17 @@
 package commands
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
+	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
@@ -60,6 +65,11 @@ func CaptureTick(d time.Duration) tea.Cmd {
 // released. A caller that settled on the generation alone would strand the slot
 // of every read it had already stopped wanting.
 type CaptureRequest struct {
+	// Target is the pane to read, in whichever backend hosts it. It is the
+	// identity the scheduler keys on.
+	Target session.PaneTarget
+	// WindowID is the Kitty window ID of a Kitty target and zero for any other;
+	// it is what the Kitty read matches on.
 	WindowID   int
 	Generation int
 	RequestID  int
@@ -67,6 +77,45 @@ type CaptureRequest struct {
 	// reply is clipped to them, so they are also the bound on what the caller
 	// ends up holding.
 	Width, Height int
+}
+
+// ErrCaptureUnavailable reports a target whose backend has no reader wired
+// here. It is a failed read like any other: the reply still releases its slot,
+// and the tile shows the failure instead of content.
+var ErrCaptureUnavailable = errors.New("capture unavailable for this backend")
+
+// CaptureSources is what the surface can read panes through: the Kitty client
+// and, per other backend, a capturer.
+type CaptureSources struct {
+	Kitty kitty.KittyClient
+	Panes map[runtimesession.BackendKind]backend.Capturer
+}
+
+// CaptureScreen reads one target's scrollback through the source for its
+// backend and returns its clipped tail. A Kitty target is read exactly as
+// CaptureOutput reads it; any other goes through that backend's capturer; a
+// target with no source fails with ErrCaptureUnavailable. Every path replies.
+func CaptureScreen(sources CaptureSources, req CaptureRequest) tea.Cmd {
+	if req.Target.Backend == runtimesession.BackendKitty || req.Target.IsZero() {
+		if sources.Kitty == nil {
+			return func() tea.Msg { return CaptureOutputMsg{Request: req, Err: ErrCaptureUnavailable} }
+		}
+		if !req.Target.IsZero() {
+			req.WindowID = req.Target.KittyWindowID()
+		}
+		return CaptureOutput(sources.Kitty, req)
+	}
+	return func() tea.Msg {
+		capturer := sources.Panes[req.Target.Backend]
+		if capturer == nil {
+			return CaptureOutputMsg{Request: req, Err: fmt.Errorf("%w: %s", ErrCaptureUnavailable, req.Target.Backend)}
+		}
+		text, err := capturer.Capture(req.Target.Pane, backend.ExtentAll)
+		if err != nil {
+			return CaptureOutputMsg{Request: req, Err: err}
+		}
+		return CaptureOutputMsg{Request: req, Lines: ClipCapture(text, req.Width, req.Height)}
+	}
 }
 
 // CaptureOutputMsg is one completed read. It always comes back — the request it

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -124,7 +125,7 @@ func (h *Handler) probeScreenIdle(
 	fields.marked = st.Effective.Source == protocol.UserActiveSource()
 	h.stateMu.Unlock()
 
-	screen, err := screens.Screen(binding.SourceWindowID)
+	screen, err := probeScreenText(screens, binding)
 	if err != nil {
 		slog.Debug("screen stop probe: get screen failed", "harness", spec.harness,
 			"source_window_id", binding.SourceWindowID, "target_window_id", targetWindowID, "err", err)
@@ -283,13 +284,34 @@ func (h *Handler) userActiveRetirableByProbe(windowID int) bool {
 	return ok && st.UserActiveArmed()
 }
 
-// screenTextCacheFor builds a one-shot per-tick screen capture cache over the
-// handler's Kitty client, for an entry point that drives a single probe outside
-// the shared tick. Those paths keep the same "one read per pane" guarantee
-// without reaching for a nil check at every call site. The cache itself lives in
-// internal/daemon/activity; this is the binding to the daemon's Kitty client.
+// screenTextCacheFor builds a per-tick screen observation cache: one for the
+// shared probe tick, or a one-shot one for an entry point that drives a single
+// probe outside it. Those paths keep the same "one read per pane" guarantee
+// without reaching for a nil check at every call site. The cache itself lives
+// in internal/daemon/activity; this binds it to the handler's screen observer,
+// which is the Kitty client unless SetScreenObserver installed another.
 func (h *Handler) screenTextCacheFor() *activity.ScreenTextCache {
+	if h.screenObserver != nil {
+		return activity.NewScreenObservationCache(h.screenObserver)
+	}
 	return activity.NewScreenTextCache(h.kittyClient)
+}
+
+// SetScreenObserver makes the screen probes read pane screens through
+// observer. Passing nil restores the Kitty client.
+func (h *Handler) SetScreenObserver(observer backend.Observer) {
+	h.screenObserver = observer
+}
+
+// probeScreenText returns this tick's screen of the binding's producer pane,
+// through the backend-neutral observation the cache holds. It is the one place
+// a probe turns an observation into text to classify, and it refuses anything
+// probes.CheckScreen does not find fresh — a failed read, another pane, an
+// exited program, a capture held too long — with an error, which every probe
+// already treats as "no evidence this tick".
+func probeScreenText(screens *activity.ScreenTextCache, binding probes.Binding) (string, error) {
+	screen, err := screens.Observe(binding.SourcePane())
+	return probes.FreshScreenText(screen, err, binding.ScreenExpectation(), time.Now())
 }
 
 // Handler-side entry points for screen-probe declines. The counters, the

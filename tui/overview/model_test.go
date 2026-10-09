@@ -885,9 +885,9 @@ func TestAnAnchorChangeKeepsTheSelectionAndDropsTheStaleCapture(t *testing.T) {
 	selected := m.selectedTabID
 	oldWindow := m.selectedWindowID
 
-	m.previews = map[int]Preview{}
+	m.previews = map[session.PaneTarget]Preview{}
 	for _, s := range before {
-		m.previews[s.WindowID] = Preview{Output: []string{"captured"}}
+		m.previews[session.KittyPaneTarget(s.WindowID)] = Preview{Output: []string{"captured"}}
 	}
 
 	after := viewSessions(3)
@@ -905,7 +905,7 @@ func TestAnAnchorChangeKeepsTheSelectionAndDropsTheStaleCapture(t *testing.T) {
 	if m.selectedWindowID != oldWindow+1000 {
 		t.Fatalf("the selection's anchor window is %d, want the new %d", m.selectedWindowID, oldWindow+1000)
 	}
-	if _, ok := m.previews[oldWindow]; ok {
+	if _, ok := m.previews[session.KittyPaneTarget(oldWindow)]; ok {
 		t.Fatalf("the capture of the retired window %d survived; it would be painted as a live terminal", oldWindow)
 	}
 	if len(m.previews) != 2 {
@@ -921,9 +921,9 @@ func TestPruningDoesNotReachBackIntoAnEarlierModel(t *testing.T) {
 	sessions := viewSessions(3)
 	m, _ := loadedAt(t, sessions, 0)
 	m = only(t, m, tea.WindowSizeMsg{Width: 160, Height: 45})
-	m.previews = map[int]Preview{}
+	m.previews = map[session.PaneTarget]Preview{}
 	for _, s := range sessions {
-		m.previews[s.WindowID] = Preview{Output: []string{"captured"}}
+		m.previews[session.KittyPaneTarget(s.WindowID)] = Preview{Output: []string{"captured"}}
 	}
 	previous := m
 
@@ -943,15 +943,15 @@ func TestAClosedSessionTakesItsCaptureWithIt(t *testing.T) {
 	before := viewSessions(3)
 	m, _ := loadedAt(t, before, 0)
 	m = only(t, m, tea.WindowSizeMsg{Width: 160, Height: 45})
-	m.previews = map[int]Preview{}
+	m.previews = map[session.PaneTarget]Preview{}
 	for _, s := range before {
-		m.previews[s.WindowID] = Preview{Output: []string{"captured"}}
+		m.previews[session.KittyPaneTarget(s.WindowID)] = Preview{Output: []string{"captured"}}
 	}
 	gone := before[2]
 
 	m = only(t, m, commands.TickMsg{})
 	m = only(t, m, snapshot(m.refreshActiveSeq, 0, before[:2]))
-	if _, ok := m.previews[gone.WindowID]; ok {
+	if _, ok := m.previews[session.KittyPaneTarget(gone.WindowID)]; ok {
 		t.Fatalf("the closed session's capture at window %d survived", gone.WindowID)
 	}
 	if len(m.previews) != 2 {
@@ -1000,7 +1000,7 @@ func TestTheSelectedSessionVanishingSelectsTheNearestSurvivor(t *testing.T) {
 func TestTheEmptyTransitionsBothWays(t *testing.T) {
 	all := viewSessions(4)
 	m, _ := loadedAt(t, all, 3)
-	m.previews = map[int]Preview{all[3].WindowID: {Output: []string{"captured"}}}
+	m.previews = map[session.PaneTarget]Preview{session.KittyPaneTarget(all[3].WindowID): {Output: []string{"captured"}}}
 
 	m = only(t, m, commands.TickMsg{})
 	m = only(t, m, snapshot(m.refreshActiveSeq, 0, nil))

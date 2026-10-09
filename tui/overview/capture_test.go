@@ -56,7 +56,7 @@ func visibleWindows(m model) []int {
 	tiles := m.visibleTiles()
 	out := make([]int, 0, len(tiles))
 	for _, tile := range tiles {
-		out = append(out, tile.windowID)
+		out = append(out, tile.target.KittyWindowID())
 	}
 	return out
 }
@@ -132,7 +132,7 @@ func TestNineVisibleTilesStartFourReads(t *testing.T) {
 func tileExtents(m model) map[int][2]int {
 	out := map[int][2]int{}
 	for _, tile := range m.visibleTiles() {
-		out[tile.windowID] = [2]int{tile.width, tile.height}
+		out[tile.target.KittyWindowID()] = [2]int{tile.width, tile.height}
 	}
 	return out
 }
@@ -292,12 +292,14 @@ func TestTheBoundHoldsThroughPagesResizesAndFreshTrees(t *testing.T) {
 		for _, windowID := range visibleWindows(m) {
 			visible[windowID] = true
 		}
-		for windowID := range m.previews {
+		for windowIDTarget := range m.previews {
+			windowID := windowIDTarget.KittyWindowID()
 			if !visible[windowID] {
 				t.Fatalf("round %d retained a capture of window %d, which is not on screen", round, windowID)
 			}
 		}
-		for _, windowID := range m.captures.queue {
+		for _, windowIDTarget := range m.captures.queue {
+			windowID := windowIDTarget.KittyWindowID()
 			if !visible[windowID] {
 				t.Fatalf("round %d left window %d queued, which is not on screen", round, windowID)
 			}
@@ -478,7 +480,8 @@ func TestAShrunkTileIsRecutRatherThanRefetched(t *testing.T) {
 	if len(m.previews) != 4 {
 		t.Fatalf("%d captures survived a shrink, want all 4", len(m.previews))
 	}
-	for windowID, p := range m.previews {
+	for windowIDTarget, p := range m.previews {
+		windowID := windowIDTarget.KittyWindowID()
 		extent := after[windowID]
 		if len(p.Output) != extent[1] {
 			t.Fatalf("window %d holds %d lines in a %d-line tile", windowID, len(p.Output), extent[1])
@@ -510,9 +513,10 @@ func TestRetainedTextNeverOutgrowsItsTile(t *testing.T) {
 
 		extents := map[int][2]int{}
 		for _, tile := range m.visibleTiles() {
-			extents[tile.windowID] = [2]int{tile.width, tile.height}
+			extents[tile.target.KittyWindowID()] = [2]int{tile.width, tile.height}
 		}
-		for windowID, p := range m.previews {
+		for windowIDTarget, p := range m.previews {
+			windowID := windowIDTarget.KittyWindowID()
 			extent, ok := extents[windowID]
 			if !ok {
 				t.Fatalf("at %dx%d a capture of the invisible window %d is retained", size[0], size[1], windowID)
@@ -556,7 +560,7 @@ func TestADuplicateReplyReleasesNothing(t *testing.T) {
 	if m.captures.inFlight() != maxCapturesInFlight {
 		t.Fatalf("duplicate replies left %d reads in flight, want %d", m.captures.inFlight(), maxCapturesInFlight)
 	}
-	if got := m.previews[req.WindowID].Output; len(got) != 1 || got[0] != "once" {
+	if got := m.previews[session.KittyPaneTarget(req.WindowID)].Output; len(got) != 1 || got[0] != "once" {
 		t.Fatalf("window %d shows %q; a duplicate repainted a settled tile", req.WindowID, got)
 	}
 }
@@ -596,7 +600,7 @@ func TestAFailedReadOccupiesItsOwnTileAndIsRetriedOnTheCadence(t *testing.T) {
 	m = reply(t, m, broken, nil, errors.New("no matching window"))
 	m = reply(t, m, healthy, []string{"still working"}, nil)
 
-	failed := m.previews[broken.WindowID]
+	failed := m.previews[session.KittyPaneTarget(broken.WindowID)]
 	if failed.Content != dashboard.InspectorFailed {
 		t.Fatalf("the failed window shows content state %v, want InspectorFailed", failed.Content)
 	}
@@ -606,7 +610,7 @@ func TestAFailedReadOccupiesItsOwnTileAndIsRetriedOnTheCadence(t *testing.T) {
 	if len(failed.Output) != 0 {
 		t.Fatalf("the failed tile kept %q", failed.Output)
 	}
-	ok := m.previews[healthy.WindowID]
+	ok := m.previews[session.KittyPaneTarget(healthy.WindowID)]
 	if ok.Content != dashboard.InspectorReady || len(ok.Output) != 1 {
 		t.Fatalf("the healthy tile beside a failure shows %v/%q", ok.Content, ok.Output)
 	}
@@ -650,14 +654,14 @@ func TestAnEmptyCaptureIsNotLoading(t *testing.T) {
 	empty := r.captures[0]
 	m = reply(t, m, empty, nil, nil)
 
-	landed, ok := m.previews[empty.WindowID]
+	landed, ok := m.previews[session.KittyPaneTarget(empty.WindowID)]
 	if !ok {
 		t.Fatal("an empty capture stored nothing, so its tile is indistinguishable from one still loading")
 	}
 	if landed.Content != dashboard.InspectorReady {
 		t.Fatalf("an empty capture stored content state %v, want InspectorReady", landed.Content)
 	}
-	if _, pending := m.previews[r.captures[1].WindowID]; pending {
+	if _, pending := m.previews[session.KittyPaneTarget(r.captures[1].WindowID)]; pending {
 		t.Fatal("the tile whose read has not landed already holds a capture")
 	}
 
@@ -686,13 +690,13 @@ func TestAClosedSessionsReplyIsDroppedAndItsSlotReleased(t *testing.T) {
 	}
 	m = only(t, m, commands.TickMsg{})
 	m = only(t, m, snapshot(m.refreshActiveSeq, 0, survivors))
-	if _, still := m.captures.targets[doomed.WindowID]; still {
+	if _, still := m.captures.targets[session.KittyPaneTarget(doomed.WindowID)]; still {
 		t.Fatalf("window %d is still a capture target after its session closed", doomed.WindowID)
 	}
 
 	before := m.captures.inFlight()
 	m = reply(t, m, doomed, []string{"from a window that is gone"}, nil)
-	if p, painted := m.previews[doomed.WindowID]; painted {
+	if p, painted := m.previews[session.KittyPaneTarget(doomed.WindowID)]; painted {
 		t.Fatalf("the closed window's reply was painted: %+v", p)
 	}
 	for _, req := range r.captures {
@@ -735,10 +739,10 @@ func TestAnAnchorChangeInvalidatesTheReadThatWasOut(t *testing.T) {
 	}
 
 	m = reply(t, m, outstanding, []string{"from the retired window"}, nil)
-	if _, painted := m.previews[oldWindow]; painted {
+	if _, painted := m.previews[session.KittyPaneTarget(oldWindow)]; painted {
 		t.Fatalf("the retired window %d holds a capture", oldWindow)
 	}
-	if _, stolen := m.previews[newWindow]; stolen {
+	if _, stolen := m.previews[session.KittyPaneTarget(newWindow)]; stolen {
 		t.Fatalf("the retired window's text was painted into its replacement %d", newWindow)
 	}
 }
@@ -757,7 +761,8 @@ func TestAnOldSnapshotCannotPaintAnotherSession(t *testing.T) {
 			t.Fatalf("%d replies produced %d captures", i+1, got)
 		}
 	}
-	for windowID, p := range m.previews {
+	for windowIDTarget, p := range m.previews {
+		windowID := windowIDTarget.KittyWindowID()
 		want := "belongs to window " + itoa(windowID)
 		if len(p.Output) != 1 || p.Output[0] != want {
 			t.Fatalf("window %d shows %q, want %q", windowID, p.Output, want)
@@ -919,7 +924,8 @@ func TestRepliesReleasedInArbitraryOrderUnderRealGoroutines(t *testing.T) {
 	if len(m.previews) != len(sessions) {
 		t.Fatalf("%d tiles hold a capture, want all %d", len(m.previews), len(sessions))
 	}
-	for windowID, p := range m.previews {
+	for windowIDTarget, p := range m.previews {
+		windowID := windowIDTarget.KittyWindowID()
 		if len(p.Output) != 1 || p.Output[0] != "window "+itoa(windowID) {
 			t.Fatalf("window %d shows %q", windowID, p.Output)
 		}

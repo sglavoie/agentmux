@@ -1,0 +1,16 @@
+=== RUN   TestTmuxTilesAreScheduledLikeKittyOnes
+--- PASS: TestTmuxTilesAreScheduledLikeKittyOnes (0.00s)
+=== RUN   TestTheSamePaneIDInTwoBackendsIsTwoTargets
+--- PASS: TestTheSamePaneIDInTwoBackendsIsTwoTargets (0.00s)
+=== RUN   TestUnavailableAndStaleTmuxCapturesPaintNothing
+--- PASS: TestUnavailableAndStaleTmuxCapturesPaintNothing (0.00s)
+PASS
+ok  	github.com/sglavoie/agentmux/tui/overview	0.185s
+=== RUN   TestCaptureScreenReadsAKittyTargetThroughKitty
+--- PASS: TestCaptureScreenReadsAKittyTargetThroughKitty (0.00s)
+=== RUN   TestCaptureScreenReadsAnotherBackendThroughItsCapturer
+--- PASS: TestCaptureScreenReadsAnotherBackendThroughItsCapturer (0.00s)
+=== RUN   TestCaptureScreenFailuresReplyWithoutContent
+--- PASS: TestCaptureScreenFailuresReplyWithoutContent (0.00s)
+PASS
+ok  	github.com/sglavoie/agentmux/tui/commands	0.176s

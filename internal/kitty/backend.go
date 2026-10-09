@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
@@ -120,6 +121,23 @@ func (b *Backend) Capture(ref backend.Ref, extent backend.Extent) (string, error
 		return "", fmt.Errorf("kitty: unknown capture extent %q", extent)
 	}
 	return b.client.GetText(MatchWindowByID(id), string(extent))
+}
+
+// Observe reads a window's visible screen. Kitty's get-text reports neither
+// the window size nor the screen mode, and a Kitty window closes with its
+// program, so those fields stay zero; the instance is named by kind only
+// because the client does not expose which socket it talks to.
+func (b *Backend) Observe(ref backend.Ref) (backend.Screen, error) {
+	text, err := b.Capture(ref, backend.ExtentScreen)
+	if err != nil {
+		return backend.Screen{}, err
+	}
+	return backend.Screen{
+		Instance:   runtimesession.BackendInstance{Kind: runtimesession.BackendKitty},
+		Pane:       ref,
+		Text:       text,
+		CapturedAt: time.Now(),
+	}, nil
 }
 
 // SetMetadata writes Kitty user vars onto a window.

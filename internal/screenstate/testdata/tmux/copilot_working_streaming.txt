@@ -1,0 +1,36 @@
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+│  █ ▘▝ █  Check for mistakes.       │  /init — Initialize Copilot instructions for this repository                  │ ┃
+│   ▔▔▔▔                             │  /model — Switch models across providers, or use Auto                         │ ┃
+│                                                                                                                    │ ┃
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯ ┃
+                                                                                                                       █
+ ● Tip: /context                                                                                                       █
+   └ Show context window token usage and visualization                                                                 █
+                                                                                                                       █
+ ❯ Run the shell command: touch made.txt && ls                                                                   17:19 █
+                                                                                                                       █
+ ✗ Shell Create made.txt and list files Operation aborted by user                                                  13s █
+   touch made.txt && ls                                                                                                █
+                                                                                                                       █
+ ● MCP Servers reloaded: 1 server connected                                                                            █
+                                                                                                                       █
+ ● Operation cancelled by user                                                                                         █
+                                                                                                                       █
+ ❯ Write a 300-word paragraph about lighthouses. Do not use any tools.                                           17:20 █
+                                                                                                                       █
+ ● Lighthouses stand as some of humanity's most enduring symbols of guidance, safety, and perseverance. Built on rocky █
+   headlands, remote islands, and treacherous shoals, these towers have warned sailors of danger for thousands of      █
+   years. The ancient Pharos of Alexandria, constructed in the third century BCE, set the template: a tall structure   █
+   topped with a fire whose glow could be seen far out at sea. Over the centuries, builders refined the design,        █
+   learning to craft towers that could withstand relentless waves, howling winds, and crushing storms. John Smeaton's  █
+   Eddystone Lighthouse, completed in 1759, introduced interlocking granite blocks inspired by the shape of an oak     █
+   tree, a technique that influenced engineers for generations. The light itself evolved just as dramatically. Open    █
+   flames gave way to oil lamps, then to the revolutionary Fresnel lens, invented in the 1820s, which concentrated     █
+   light into a powerful beam using concentric rings of glass prisms. A single lamp could su                           █
+                                                                                                                       █
+ /private/tmp/amx-s9/work3                                                                       Session: 7.57 AIC used
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ◎ Working · 2.0 KiB esc interrupt                                                                    Claude Sonnet 5.5

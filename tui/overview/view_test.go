@@ -385,11 +385,11 @@ func TestTheSelectedTileKeepsItsContentsSemanticColors(t *testing.T) {
 func TestTheFiveOutputSituationsReachTheTiles(t *testing.T) {
 	sessions := viewSessions(4)
 	in := viewInput(160, 45, sessions)
-	in.Previews = map[int]Preview{
-		sessions[0].WindowID: {Content: dashboard.InspectorReady, Output: dashboard.SplitOutput("building the index\n")},
-		sessions[1].WindowID: {Content: dashboard.InspectorReady},
-		sessions[2].WindowID: {Content: dashboard.InspectorFailed, Error: "kitty: no such window"},
-		sessions[3].WindowID: {Content: dashboard.InspectorVanished},
+	in.Previews = map[session.PaneTarget]Preview{
+		session.KittyPaneTarget(sessions[0].WindowID): {Content: dashboard.InspectorReady, Output: dashboard.SplitOutput("building the index\n")},
+		session.KittyPaneTarget(sessions[1].WindowID): {Content: dashboard.InspectorReady},
+		session.KittyPaneTarget(sessions[2].WindowID): {Content: dashboard.InspectorFailed, Error: "kitty: no such window"},
+		session.KittyPaneTarget(sessions[3].WindowID): {Content: dashboard.InspectorVanished},
 	}
 	joined := strings.Join(plain(renderLines(t, in)), "\n")
 	for _, want := range []string{"building the index", "(no output)", "error: kitty: no such window", "(session not running)"} {
@@ -457,9 +457,9 @@ func TestStylingDoesNotLeakBetweenTiles(t *testing.T) {
 	sessions := Order([]session.RunningSession{left, right})
 
 	in := viewInput(100, 24, sessions) // two columns, one row
-	in.Previews = map[int]Preview{
-		left.WindowID:  {Content: dashboard.InspectorReady, Output: []string{"\x1b[31mbleeding red"}},
-		right.WindowID: {Content: dashboard.InspectorReady, Output: []string{"innocent"}},
+	in.Previews = map[session.PaneTarget]Preview{
+		session.KittyPaneTarget(left.WindowID):  {Content: dashboard.InspectorReady, Output: []string{"\x1b[31mbleeding red"}},
+		session.KittyPaneTarget(right.WindowID): {Content: dashboard.InspectorReady, Output: []string{"innocent"}},
 	}
 	lines := renderLines(t, in)
 
@@ -501,9 +501,9 @@ func TestStylingDoesNotLeakBetweenTiles(t *testing.T) {
 func TestEveryTileRowIsSealed(t *testing.T) {
 	sessions := viewSessions(6)
 	in := viewInput(160, 45, sessions)
-	in.Previews = map[int]Preview{}
+	in.Previews = map[session.PaneTarget]Preview{}
 	for i, s := range sessions {
-		in.Previews[s.WindowID] = Preview{
+		in.Previews[session.KittyPaneTarget(s.WindowID)] = Preview{
 			Content: dashboard.InspectorReady,
 			Output:  []string{fmt.Sprintf("\x1b[3%dmunclosed %d", i%8, i)},
 		}
@@ -532,9 +532,9 @@ func TestWideGraphemesDoNotBreakTheGrid(t *testing.T) {
 
 	for _, size := range [][2]int{{60, 15}, {100, 24}, {120, 30}, {160, 45}, {12, 6}} {
 		in := viewInput(size[0], size[1], sessions)
-		in.Previews = map[int]Preview{}
+		in.Previews = map[session.PaneTarget]Preview{}
 		for _, s := range sessions {
-			in.Previews[s.WindowID] = Preview{
+			in.Previews[session.KittyPaneTarget(s.WindowID)] = Preview{
 				Content: dashboard.InspectorReady,
 				Output:  []string{"▶ 実行中… 🚀🚀🚀", "ok"},
 			}
@@ -630,8 +630,8 @@ func TestRenderClampsASelectionItCannotHonor(t *testing.T) {
 func TestRenderIsPure(t *testing.T) {
 	sessions := viewSessions(5)
 	in := viewInput(120, 30, sessions)
-	in.Previews = map[int]Preview{
-		sessions[0].WindowID: {Content: dashboard.InspectorReady, Output: dashboard.SplitOutput("one\ntwo\n")},
+	in.Previews = map[session.PaneTarget]Preview{
+		session.KittyPaneTarget(sessions[0].WindowID): {Content: dashboard.InspectorReady, Output: dashboard.SplitOutput("one\ntwo\n")},
 	}
 	in.Selected = 2
 
@@ -860,12 +860,13 @@ func TestTheLifecycleHalfReachesTheWorldOnlyThroughItsSeams(t *testing.T) {
 		"commands.RefreshOverview":     true,
 		"commands.Focus":               true,
 		"commands.Tick":                true,
-		// The capture is a READ of a window's terminal text and its cadence. It is
+		// The capture is a READ of a pane's terminal text and its cadence. It is
 		// listed beside RefreshOverview rather than beside Focus for that reason:
-		// commands.CaptureOutput runs `kitten @ get-text`, which observes a pane
+		// commands.CaptureScreen reads through the pane's backend (`kitten @
+		// get-text` on Kitty, a backend capturer elsewhere), which observes a pane
 		// without touching it, so adding it leaves the "browsing the overview
 		// cannot change anything" claim exactly where it was.
-		"commands.CaptureOutput": true,
+		"commands.CaptureScreen": true,
 		"commands.CaptureTick":   true,
 	}
 

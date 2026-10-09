@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
@@ -216,6 +217,44 @@ type Terminator interface {
 // Capturer reads terminal text from a pane.
 type Capturer interface {
 	Capture(ref Ref, extent Extent) (string, error)
+}
+
+// Screen is one observation of a pane's visible screen. It is what screen
+// classifiers, freshness checks, and capture schedulers consume, so none of
+// them needs to know which backend produced it.
+//
+// An observation is evidence only about the pane, instance generation, and
+// instant it names. A consumer decides whether that is still the pane it meant
+// to read; a Screen never says so itself.
+type Screen struct {
+	// Instance is the backend instance the pane ID belongs to, with the
+	// generation current at capture time. A backend that cannot name its
+	// instance leaves Address and Generation empty.
+	Instance runtimesession.BackendInstance
+	// Pane is the pane that was read.
+	Pane Ref
+	// Text is the visible screen as plain text, one line per terminal row,
+	// without escape sequences. A soft-wrapped line is two rows and so two
+	// lines.
+	Text string
+	// Cols and Rows are the pane's size at capture time, or zero when the
+	// backend does not report it.
+	Cols, Rows int
+	// AlternateScreen reports that the program had switched to the alternate
+	// screen, so Text is that screen and not the scrollback-backed one.
+	AlternateScreen bool
+	// Exited reports that the pane's program has ended and Text is the screen
+	// it left behind. Such a screen describes no running turn.
+	Exited bool
+	// CapturedAt is when the read completed.
+	CapturedAt time.Time
+}
+
+// Observer reads one pane's visible screen together with the facts needed to
+// judge the read: which instance generation answered, the pane's size and
+// screen mode, and whether its program is still running.
+type Observer interface {
+	Observe(ref Ref) (Screen, error)
 }
 
 // MetadataWriter writes pane metadata. An empty map is a no-op; an empty value

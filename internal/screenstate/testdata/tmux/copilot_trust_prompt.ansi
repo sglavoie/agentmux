@@ -1,0 +1,36 @@
+ [1m[Current][0m  Sessions  [2m Issues [0m [2m Pull requests [0m  Gists
+
+[2m╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m
+[2m│[0m                                                                                                                    [2m│[0m
+[2m│[0m  ╭─╮╭─╮                            [2m│[0m  [1mGetting started[0m                                                              [2m│[0m
+[2m│[0m  ╰─╯╰─╯  Copilot v1.0.95 uses AI.  [2m│[0m  Use the tabs above to explore your sessions and pull requests                [2m│[0m
+[2m│[0m  █ ▘▝ █  Check for mistakes.       [2m│[0m  /init — Initialize Copilot instructions for this repository                  [2m│[0m
+[2m│[0m   ▔▔▔▔                             [2m│[0m  /model — Switch models across providers, or use Auto                         [2m│[0m
+[2m│[0m                                                                                                                    [2m│[0m
+[2m╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+ ● Tip: /context
+   └ Show context window token usage and visualization
+
+
+
+
+
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ [1mConfirm folder trust[0m                                                                                                 │
+│ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────── │
+│ ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮ │
+│ │ /private/tmp/amx-s9/work3                                                                                        │ │
+│ ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯ │
+│                                                                                                                      │
+│ Copilot can read files in this folder and, with your permission, edit them or run code and shell commands. It will   │
+│ remember your permissions for the rest of this session.                                                              │
+│                                                                                                                      │
+│ Do you trust the files in this folder?                                                                               │
+│                                                                                                                      │
+│ ❯ 1. Yes                                                                                                             │
+│   2. Yes, and remember this folder for future sessions                                                               │
+│   3. No (Esc)                                                                                                        │
+│                                                                                                                      │
+│ [1m↑/↓[0m to navigate · [1menter[0m to select · [1mesc[0m to cancel                                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯

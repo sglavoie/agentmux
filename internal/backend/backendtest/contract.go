@@ -229,6 +229,31 @@ func testCapture(t *testing.T, c *contract) {
 	if _, err := c.Backend.Capture(l.pane.Group, backend.ExtentScreen); !errors.Is(err, backend.ErrInvalidRef) {
 		t.Errorf("Capture(group ref) err = %v, want ErrInvalidRef", err)
 	}
+
+	// A backend that also observes reports the same screen, for that pane and
+	// its own kind, with a capture instant.
+	observer, ok := c.Backend.(backend.Observer)
+	if !ok {
+		return
+	}
+	before := time.Now()
+	screen, err := observer.Observe(l.pane.Ref)
+	if err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	if !strings.Contains(screen.Text, l.marker) {
+		t.Errorf("Observe text = %q, want it to contain %q", screen.Text, l.marker)
+	}
+	if screen.Pane != l.pane.Ref || screen.Instance.Kind != c.Backend.Kind() || screen.Exited {
+		t.Errorf("Observe = pane %v kind %q exited %v, want %v %q false",
+			screen.Pane, screen.Instance.Kind, screen.Exited, l.pane.Ref, c.Backend.Kind())
+	}
+	if screen.CapturedAt.Before(before) || screen.CapturedAt.After(time.Now()) {
+		t.Errorf("Observe CapturedAt = %v, outside the read", screen.CapturedAt)
+	}
+	if _, err := observer.Observe(l.pane.Group); !errors.Is(err, backend.ErrInvalidRef) {
+		t.Errorf("Observe(group ref) err = %v, want ErrInvalidRef", err)
+	}
 }
 
 func testMetadata(t *testing.T, c *contract) {

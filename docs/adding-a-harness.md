@@ -23,6 +23,16 @@ The checklist for adding a harness to Agent Mux. `CLAUDE.md` points here.
    header comment: the version identifies which capture must be re-taken when a
    release moves the copy.
 
+   Take the same screens on tmux as well, with
+   `internal/screenstate/testdata/tmux/capture.sh` against a live pane on a
+   private server running the production configuration. It writes the plain
+   capture the tmux backend returns, the styled (`-e`) capture, and the pane
+   geometry and screen mode tmux reported, under
+   `internal/screenstate/testdata/tmux/`. Include one capture after a live
+   resize to a narrow pane. Register each in `tmux_fixture_test.go` and add a
+   row per behaviour to its Kitty/tmux parity table: the two sets must read
+   alike, and a difference is a finding about the adapter, not about tmux.
+
    Do not borrow patterns from an existing set. All three provisional Copilot
    clauses, written by analogy to Claude and Codex, were wrong in kind rather
    than mis-tuned — the composer had no prompt indicator at all, the status line

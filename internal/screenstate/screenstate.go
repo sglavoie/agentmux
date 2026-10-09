@@ -200,9 +200,11 @@ type Adapter interface {
 	// Harness is the canonical lowercase harness name, matching
 	// harness.Impl.Name().
 	Harness() string
-	// Classify reads a raw `kitten @ get-text --extent=screen` capture. It must
-	// compute vetoes first and unconditionally, and must consult positive
-	// terminal evidence only on a veto-free screen.
+	// Classify reads a plain-text capture of a pane's visible screen, one line
+	// per terminal row: `kitten @ get-text --extent=screen` on Kitty,
+	// `capture-pane -p` on tmux. Text captured with styling goes through
+	// StripANSI first. It must compute vetoes first and unconditionally, and
+	// must consult positive terminal evidence only on a veto-free screen.
 	Classify(screen string) Observation
 }
 

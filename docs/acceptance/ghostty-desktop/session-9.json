@@ -1,0 +1,38 @@
+{
+  "session": "9",
+  "status": "passed",
+  "artifact_revision": "agentmux ab5839fb + session-9 working tree; tmux 3.7c (Homebrew /opt/homebrew/bin/tmux) on a private server with internal/tmux.Config; Claude Code 2.1.296, codex-cli 0.162.0, GitHub Copilot CLI 1.0.95; macOS 27.0.1",
+  "logs": [
+    "session-9/screenstate-tmux-fixtures-v.log",
+    "session-9/tmux-observe-v.log",
+    "session-9/probes-screen-v.log",
+    "session-9/daemon-withheld-observations-v.log",
+    "session-9/overview-capture-backends-v.log"
+  ],
+  "cases": {
+    "claude-capture-fixtures": {
+      "status": "passed",
+      "evidence": "15 live captures of Claude Code 2.1.296 taken with internal/screenstate/testdata/tmux/capture.sh (plain capture-pane -p, styled -e, and tmux-reported geometry per capture) are committed and registered: trust dialog -> blocked; permission dialog at 120x36 and 64x30 -> blocked; spinner with timer (t0/t1) and spinner without a timer -> working; streaming text with no spinner line (t0/t1) -> terminal/quiescent with differing fingerprints; finished turn (t0/t1) -> terminal with equal fingerprints; interrupted -> terminal/explicit; rejected tool -> terminal; interrupt that restored the prompt into the composer -> unknown/composer_busy; fresh composer holding placeholder text -> unknown/composer_busy; dead pane retaining the trust dialog -> blocked, never settleable. The captures exposed two adapter gaps, fixed in patterns_claude.toml: a timer-less spinner line ('✳ Moseying…') read as a finished turn, and the reworded trust dialog was not a blocking prompt. TestTmuxFixtureClassification/claude_* and the three named trap tests PASS. Log: session-9/screenstate-tmux-fixtures-v.log."
+    },
+    "codex-capture-fixtures": {
+      "status": "passed",
+      "evidence": "9 live captures of codex-cli 0.162.0 are committed and registered: command approval at 120x36 and 64x30 -> blocked; working (t0/t1) -> working with differing fingerprints; finished turn (t0/t1) -> terminal/explicit with equal fingerprints; rejected command ('Conversation interrupted') -> terminal/explicit; fresh composer -> unknown with no veto; folder-trust dialog -> unknown/composer_busy (not blocked: no Codex prompt kind names it; it never settles). No Codex pattern needed changing. TestTmuxFixtureClassification/codex_* PASS. Log: session-9/screenstate-tmux-fixtures-v.log."
+    },
+    "copilot-capture-fixtures": {
+      "status": "passed",
+      "evidence": "12 live captures of GitHub Copilot CLI 1.0.95 are committed and registered: folder-trust dialog -> blocked; command permission at 120x36 and 64x30 -> blocked; '◎ Working esc edit prompt' (t0/t1), '◎ Working · 2.0 KiB esc interrupt' and a later interrupt-hint frame -> working; finished turn (t0/t1), interrupted, rejected command and fresh composer -> unknown with no veto, because the Copilot adapter has no terminal branch on any backend. The captures showed 1.0.95 dropped the '(NN%)' footer segment and replaced the '┃' composer bar with a bare '❯', so every 1.0.95 working screen read unknown/composer_busy; patterns_copilot.toml gained a second working-line form and composer form. TestTmuxFixtureClassification/copilot_* PASS. Log: session-9/screenstate-tmux-fixtures-v.log."
+    },
+    "dimensions-wrap-ansi-alternate-screen": {
+      "status": "passed",
+      "evidence": "TestTmuxFixtureGeometry: all 36 captures have exactly as many rows as tmux reported for the pane (36 or 30), no row wider than its columns (120 or 64), and the recorded screen mode — 34 on the alternate screen (alternate_on=1), 2 on the primary (Claude's pre-TUI trust dialog and the dead pane). TestTmuxNarrowCapturesKeepTheirReading: each harness's permission dialog re-wrapped at 64 columns after a live resize reads blocked with the same vetoes as at 120, with a different fingerprint. TestTmuxAnsiCapturesReadLikePlainOnes: every styled capture, passed through StripANSI, has the same normalized lines, fingerprint and reading as its plain capture (27 of 36 styled captures contain escape bytes). Against a real tmux 3.7c server, internal/tmux.TestObserveHandlesWrapAnsiAndAlternateScreen observed a 100-character line captured as rows of 80 and 20, no SGR bytes in the plain capture, and alternate_on=1 capturing only the alternate screen; TestObserveReportsScreenWithItsProvenance observed 80x24 with 24 rows identical to Capture(screen). Logs: session-9/screenstate-tmux-fixtures-v.log, session-9/tmux-observe-v.log."
+    },
+    "both-backend-state-parity": {
+      "status": "passed",
+      "evidence": "TestBackendFixtureParity PASS for 15 rows (claude, codex, copilot x prompt, permission, busy, completion, failure): each Kitty get-text capture and its tmux capture-pane counterpart read the same state, agree on whether the screen is a settleable finished turn, and agree on the deciding veto (blocking_prompt / live_status_line). Claude and Codex are blocked/working/terminal/terminal on both sets; Copilot completion and failure are unknown on both, since its screen is never completion evidence. Claude and Codex have no Kitty capture of a startup dialog, so their prompt rows pair the tmux capture with Claude's Kitty permission dialog (both blocked) and Codex's Kitty ready composer after a turn (both terminal). The existing Kitty fixture suite and the daemon probe suites still pass with the pattern changes. Log: session-9/screenstate-tmux-fixtures-v.log."
+    },
+    "stale-and-unavailable-capture": {
+      "status": "passed",
+      "evidence": "internal/daemon.TestScreenProbesNeverSettleOnWithheldObservations drove the real Claude and Codex stop probes with the real tmux finished-turn captures through an injected backend.Observer: a fresh observation settled a stabilized stop; a failed read, a failed read that still returned text, an observation with no capture instant, one captured a minute earlier, one of another pane, one from another backend, and one of an exited program each left the tab at the working bolt for 8 ticks with no stop fact and no ScreenStopProbe row (16 subtests PASS). internal/daemon/probes TestCheckScreen (16 verdict cases, including a restarted tmux server reusing the pane ID and an unreported generation) and TestReadScreenNeverSettlesAWithheldCapture PASS; TestPaneStoreServerRestartInvalidatesEveryPane PASS. Against a real server, internal/tmux.TestObserveNeverAnswersForAnotherPaneOrGeneration observed Exited=true for a dead pane, errors for missing and closed panes, ErrServerNotRunning after SIGKILL, and a new generation for the restarted server. tui/overview TestUnavailableAndStaleTmuxCapturesPaintNothing: an unavailable capture showed a failed tile with no output and a reply for a retargeted tile released its slot and painted nothing. Logs: session-9/daemon-withheld-observations-v.log, session-9/probes-screen-v.log, session-9/tmux-observe-v.log, session-9/overview-capture-backends-v.log."
+    }
+  }
+}

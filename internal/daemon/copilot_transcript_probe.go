@@ -497,7 +497,7 @@ func (h *Handler) copilotScreenRefusesSettle(
 		// point from silently opting out of the refusal by omission.
 		return true, copilotScreenReadFailedReason, evidence
 	}
-	screen, err := screens.Screen(binding.SourceWindowID)
+	screen, err := probeScreenText(screens, binding)
 	if err != nil {
 		slog.Debug("copilot transcript probe: get screen failed",
 			"source_window_id", binding.SourceWindowID, "target_window_id", binding.TargetWindowID, "err", err)

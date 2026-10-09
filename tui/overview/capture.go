@@ -46,6 +46,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 )
 
@@ -84,10 +85,11 @@ func captureIntervalFor(cfg *config.Config) time.Duration {
 	return d
 }
 
-// captureTile is one visible tile's capture target: the window to read and the
-// exact output region it will be drawn into.
+// captureTile is one visible tile's capture target: the pane to read, in
+// whichever backend hosts it, and the exact output region it will be drawn
+// into.
 type captureTile struct {
-	windowID      int
+	target        session.PaneTarget
 	width, height int
 }
 
@@ -108,20 +110,20 @@ type captureController struct {
 	// the whole of "is this worth reading": a window with no target is off-page,
 	// closed, or in a tile too small to draw output, and none of those may start a
 	// read or keep a buffer.
-	targets map[int]captureTarget
+	targets map[session.PaneTarget]captureTarget
 
 	// queue is the fair order waiting for a slot and queued is its membership, so
 	// a repeated request collapses into the entry already there instead of adding
 	// a second turn for the same window.
-	queue  []int
-	queued map[int]struct{}
+	queue  []session.PaneTarget
+	queued map[session.PaneTarget]struct{}
 
-	// byRequest maps a live request to the window it was issued for, and byWindow
+	// byRequest maps a live request to the pane it was issued for, and byPane
 	// is its inverse. byRequest alone is what bounds the world — its size is the
 	// global in-flight count — and it is keyed by REQUEST precisely so a read for
 	// a window that has since vanished can still find and release its slot.
-	byRequest map[int]int
-	byWindow  map[int]int
+	byRequest map[int]session.PaneTarget
+	byPane    map[session.PaneTarget]int
 
 	nextRequestID  int
 	nextGeneration int
@@ -135,10 +137,10 @@ type captureController struct {
 
 func newCaptureController() *captureController {
 	return &captureController{
-		targets:   map[int]captureTarget{},
-		queued:    map[int]struct{}{},
-		byRequest: map[int]int{},
-		byWindow:  map[int]int{},
+		targets:   map[session.PaneTarget]captureTarget{},
+		queued:    map[session.PaneTarget]struct{}{},
+		byRequest: map[int]session.PaneTarget{},
+		byPane:    map[session.PaneTarget]int{},
 	}
 }
 
@@ -162,28 +164,28 @@ func newCaptureController() *captureController {
 // queued turns go with them and their in-flight reads are left to release their
 // own slots on arrival.
 func (c *captureController) retarget(visible []captureTile) {
-	next := make(map[int]captureTarget, len(visible))
-	var fresh []int
+	next := make(map[session.PaneTarget]captureTarget, len(visible))
+	var fresh []session.PaneTarget
 	for _, tile := range visible {
-		existing, ok := c.targets[tile.windowID]
+		existing, ok := c.targets[tile.target]
 		grew := tile.width > existing.width || tile.height > existing.height
 		if !ok || grew {
 			c.nextGeneration++
-			next[tile.windowID] = captureTarget{
+			next[tile.target] = captureTarget{
 				generation: c.nextGeneration,
 				width:      tile.width,
 				height:     tile.height,
 			}
-			fresh = append(fresh, tile.windowID)
+			fresh = append(fresh, tile.target)
 			continue
 		}
 		existing.width, existing.height = tile.width, tile.height
-		next[tile.windowID] = existing
+		next[tile.target] = existing
 	}
 	c.targets = next
 	c.dropQueuedWithoutTarget()
-	for _, windowID := range fresh {
-		c.enqueue(windowID)
+	for _, target := range fresh {
+		c.enqueue(target)
 	}
 }
 
@@ -196,21 +198,21 @@ func (c *captureController) retarget(visible []captureTile) {
 // last is why a tick during a slow read costs nothing: the request is dropped
 // here, and the reply that releases the slot is followed by the next tick asking
 // again.
-func (c *captureController) enqueue(windowID int) {
+func (c *captureController) enqueue(pane session.PaneTarget) {
 	if c.stopped {
 		return
 	}
-	if _, ok := c.targets[windowID]; !ok {
+	if _, ok := c.targets[pane]; !ok {
 		return
 	}
-	if _, ok := c.queued[windowID]; ok {
+	if _, ok := c.queued[pane]; ok {
 		return
 	}
-	if _, ok := c.byWindow[windowID]; ok {
+	if _, ok := c.byPane[pane]; ok {
 		return
 	}
-	c.queued[windowID] = struct{}{}
-	c.queue = append(c.queue, windowID)
+	c.queued[pane] = struct{}{}
+	c.queue = append(c.queue, pane)
 }
 
 // dropQueuedWithoutTarget removes the turns of windows that are no longer
@@ -223,14 +225,14 @@ func (c *captureController) dropQueuedWithoutTarget() {
 	if len(c.queue) == 0 {
 		return
 	}
-	kept := make([]int, 0, len(c.queue))
-	queued := make(map[int]struct{}, len(c.queue))
-	for _, windowID := range c.queue {
-		if _, ok := c.targets[windowID]; !ok {
+	kept := make([]session.PaneTarget, 0, len(c.queue))
+	queued := make(map[session.PaneTarget]struct{}, len(c.queue))
+	for _, pane := range c.queue {
+		if _, ok := c.targets[pane]; !ok {
 			continue
 		}
-		kept = append(kept, windowID)
-		queued[windowID] = struct{}{}
+		kept = append(kept, pane)
+		queued[pane] = struct{}{}
 	}
 	c.queue, c.queued = kept, queued
 }
@@ -249,23 +251,24 @@ func (c *captureController) dispatch() []commands.CaptureRequest {
 	}
 	var out []commands.CaptureRequest
 	for len(c.queue) > 0 && len(c.byRequest) < maxCapturesInFlight {
-		windowID := c.queue[0]
+		pane := c.queue[0]
 		c.queue = c.queue[1:]
-		delete(c.queued, windowID)
+		delete(c.queued, pane)
 
-		target, ok := c.targets[windowID]
+		target, ok := c.targets[pane]
 		if !ok {
 			continue
 		}
-		if _, busy := c.byWindow[windowID]; busy {
+		if _, busy := c.byPane[pane]; busy {
 			continue
 		}
 
 		c.nextRequestID++
-		c.byRequest[c.nextRequestID] = windowID
-		c.byWindow[windowID] = c.nextRequestID
+		c.byRequest[c.nextRequestID] = pane
+		c.byPane[pane] = c.nextRequestID
 		out = append(out, commands.CaptureRequest{
-			WindowID:   windowID,
+			Target:     pane,
+			WindowID:   pane.KittyWindowID(),
 			Generation: target.generation,
 			RequestID:  c.nextRequestID,
 			Width:      target.width,
@@ -286,13 +289,13 @@ func (c *captureController) dispatch() []commands.CaptureRequest {
 // window whose read was superseded may already have a newer request against it,
 // and the older reply must not free the newer one's place.
 func (c *captureController) release(requestID int) bool {
-	windowID, ok := c.byRequest[requestID]
+	pane, ok := c.byRequest[requestID]
 	if !ok {
 		return false
 	}
 	delete(c.byRequest, requestID)
-	if current, held := c.byWindow[windowID]; held && current == requestID {
-		delete(c.byWindow, windowID)
+	if current, held := c.byPane[pane]; held && current == requestID {
+		delete(c.byPane, pane)
 	}
 	return true
 }
@@ -303,7 +306,7 @@ func (c *captureController) accepts(req commands.CaptureRequest) bool {
 	if c.stopped {
 		return false
 	}
-	target, ok := c.targets[req.WindowID]
+	target, ok := c.targets[req.Target]
 	return ok && target.generation == req.Generation
 }
 
@@ -318,7 +321,7 @@ func (c *captureController) inFlight() int { return len(c.byRequest) }
 // release them through the ordinary path instead of a second one.
 func (c *captureController) stop() {
 	c.stopped = true
-	c.queue, c.queued = nil, map[int]struct{}{}
+	c.queue, c.queued = nil, map[session.PaneTarget]struct{}{}
 }
 
 // visibleTiles is the page on screen, in reading order, with each tile's output
@@ -356,11 +359,11 @@ func (m model) visibleTiles() []captureTile {
 		if width <= 0 || height <= 0 {
 			continue
 		}
-		windowID := m.sessions[index].WindowID
-		if windowID <= 0 {
+		target := m.sessions[index].PaneTarget()
+		if target.IsZero() {
 			continue
 		}
-		out = append(out, captureTile{windowID: windowID, width: width, height: height})
+		out = append(out, captureTile{target: target, width: width, height: height})
 	}
 	return out
 }
@@ -383,9 +386,9 @@ func (m *model) reconcileCaptures() {
 	if len(m.previews) == 0 {
 		return
 	}
-	kept := make(map[int]Preview, len(m.previews))
-	for windowID, preview := range m.previews {
-		target, ok := m.captures.targets[windowID]
+	kept := make(map[session.PaneTarget]Preview, len(m.previews))
+	for pane, preview := range m.previews {
+		target, ok := m.captures.targets[pane]
 		if !ok {
 			// Off-page, closed, or re-anchored. The buffer is evicted with the
 			// tile, which is both the memory bound and the correctness rule: a
@@ -394,7 +397,7 @@ func (m *model) reconcileCaptures() {
 			// been running unobserved in the meantime.
 			continue
 		}
-		kept[windowID] = clipPreview(preview, target.width, target.height)
+		kept[pane] = clipPreview(preview, target.width, target.height)
 	}
 	m.previews = kept
 }
@@ -428,7 +431,7 @@ func (m model) handleCaptureTick(commands.CaptureTickMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	for _, tile := range m.visibleTiles() {
-		m.captures.enqueue(tile.windowID)
+		m.captures.enqueue(tile.target)
 	}
 	cmds := []tea.Cmd{m.deps.captureTick(m.captureInterval)}
 	if cmd := m.pumpCaptures(); cmd != nil {
@@ -458,7 +461,7 @@ func (m model) handleCaptureDone(msg commands.CaptureOutputMsg) (tea.Model, tea.
 		return m, nil
 	}
 	if !m.captures.accepts(msg.Request) {
-		m.captures.enqueue(msg.Request.WindowID)
+		m.captures.enqueue(msg.Request.Target)
 		return m, m.pumpCaptures()
 	}
 	preview := readyPreview(msg.Lines)
@@ -470,19 +473,19 @@ func (m model) handleCaptureDone(msg commands.CaptureOutputMsg) (tea.Model, tea.
 	// so an accepted reply can legitimately be wider or taller than the tile it is
 	// about to be stored for, and the bound on retained text is the tile on screen
 	// now rather than the one the read was issued against.
-	target := m.captures.targets[msg.Request.WindowID]
-	m.previews = withPreview(m.previews, msg.Request.WindowID, clipPreview(preview, target.width, target.height))
+	target := m.captures.targets[msg.Request.Target]
+	m.previews = withPreview(m.previews, msg.Request.Target, clipPreview(preview, target.width, target.height))
 	return m, m.pumpCaptures()
 }
 
 // withPreview returns the preview map with one entry replaced, copying rather
 // than writing through the shared header for the reason reconcileCaptures
 // rebuilds it.
-func withPreview(previews map[int]Preview, windowID int, preview Preview) map[int]Preview {
-	next := make(map[int]Preview, len(previews)+1)
+func withPreview(previews map[session.PaneTarget]Preview, pane session.PaneTarget, preview Preview) map[session.PaneTarget]Preview {
+	next := make(map[session.PaneTarget]Preview, len(previews)+1)
 	for id, p := range previews {
 		next[id] = p
 	}
-	next[windowID] = preview
+	next[pane] = preview
 	return next
 }

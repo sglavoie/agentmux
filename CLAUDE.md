@@ -121,7 +121,11 @@ Shared and domain packages (`internal/...`):
 - `internal/backend`: narrow terminal-backend interfaces (discover, launch,
   close, capture, metadata, presentation), opaque group/pane refs, capability
   errors; `internal/backend/backendtest` is the shared contract every adapter
-  runs (`internal/kitty.Backend` is the Kitty adapter).
+  runs (`internal/kitty.Backend` is the Kitty adapter). `backend.Screen` is
+  the backend-neutral screen observation (`Observer.Observe`): text plus the
+  instance generation, pane size, alternate-screen and exit state, and capture
+  time. Screen probes read it only through `probes.CheckScreen`, so a failed,
+  stale, wrong-pane, wrong-generation, or exited-pane capture is never read.
 - `internal/tmux`: the private tmux backend — AgentMux's own socket and
   configuration (never the operator's server or `~/.tmux.conf`), one session
   and one agent pane per runtime session, exited panes retained until

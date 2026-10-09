@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/cachefile"
@@ -292,6 +293,53 @@ func (b *Backend) Capture(ref backend.Ref, extent backend.Extent) (string, error
 		return "", fmt.Errorf("tmux: unknown capture extent %q", extent)
 	}
 	return b.server.run(args)
+}
+
+// observeFields is the pane state Observe reads in the same client invocation
+// as the capture, so the screen and the facts that qualify it are one moment.
+var observeFields = []string{
+	"#{pane_id}",
+	"#{pid}",
+	"#{start_time}",
+	"#{pane_width}",
+	"#{pane_height}",
+	"#{alternate_on}",
+	"#{pane_dead}",
+}
+
+// Observe reads a pane's visible screen with the server generation, pane size,
+// screen mode, and exit state that were current for that read. capture-pane
+// reads whichever screen the pane is showing, so a program on the alternate
+// screen is captured as it appears.
+func (b *Backend) Observe(ref backend.Ref) (backend.Screen, error) {
+	if err := paneOnly(ref); err != nil {
+		return backend.Screen{}, err
+	}
+	out, err := b.server.runChain([][]string{
+		{"display-message", "-p", "-t", ref.ID, strings.Join(observeFields, fieldSep)},
+		{"capture-pane", "-p", "-t", ref.ID},
+	})
+	if err != nil {
+		return backend.Screen{}, err
+	}
+	head, text, _ := strings.Cut(out, "\n")
+	f := strings.Split(head, fieldSep)
+	// display-message answers for another pane when the target is gone.
+	if len(f) != len(observeFields) || f[0] != ref.ID || f[1] == "" || f[2] == "" {
+		return backend.Screen{}, fmt.Errorf("tmux: pane %s not observable: %q", ref.ID, head)
+	}
+	cols, _ := strconv.Atoi(f[3])
+	rows, _ := strconv.Atoi(f[4])
+	return backend.Screen{
+		Instance:        b.server.instance(f[1], f[2]),
+		Pane:            ref,
+		Text:            text,
+		Cols:            cols,
+		Rows:            rows,
+		AlternateScreen: f[5] == "1",
+		Exited:          f[6] == "1",
+		CapturedAt:      time.Now(),
+	}, nil
 }
 
 // SetMetadata merges vars into the pane's metadata; an empty value removes a

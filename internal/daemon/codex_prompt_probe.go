@@ -593,7 +593,7 @@ func (h *Handler) probeCodexWindow(
 		return
 	}
 
-	screen, err := screens.Screen(binding.SourceWindowID)
+	screen, err := probeScreenText(screens, binding)
 	if err != nil {
 		slog.Debug("codex prompt probe: get-text failed", "source_window_id", binding.SourceWindowID,
 			"target_window_id", targetWindowID, "err", err)
@@ -733,7 +733,7 @@ func (h *Handler) probeCodexClearWindow(
 		return
 	}
 
-	screen, err := screens.Screen(binding.SourceWindowID)
+	screen, err := probeScreenText(screens, binding)
 	if err != nil {
 		slog.Debug("codex clear probe: get screen failed", "source_window_id", binding.SourceWindowID,
 			"target_window_id", targetWindowID, "err", err)

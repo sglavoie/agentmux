@@ -185,7 +185,7 @@ func (h *Handler) stampClaudePromptKind(binding probes.Binding, screens *activit
 	}
 	h.stateMu.Unlock()
 
-	screen, err := screens.Screen(binding.SourceWindowID)
+	screen, err := probeScreenText(screens, binding)
 	if err != nil {
 		slog.Debug("claude prompt kind: get screen failed",
 			"source_window_id", binding.SourceWindowID, "target_window_id", targetWindowID, "err", err)
