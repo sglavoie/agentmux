@@ -112,6 +112,9 @@ Shared and domain packages (`internal/...`):
   `cmd` package; reaches the daemon only through `internal/daemon/ipc`.
 - `internal/actions`: typed action registry shared by CLI and TUI.
 - `internal/conversation`: canonical `(harness, session_id)` identity.
+- `internal/runtimesession`: opaque AgentMux runtime-session IDs and the
+  durable registry mapping them to generation- and fingerprint-checked
+  backend targets. Not yet wired into launch, hooks, or the daemon.
 - `internal/session`, `internal/harness`: Kitty-backed lifecycle and harness
   argv/capabilities.
 - `internal/transcript`, `internal/plans`: discovery, metadata caches, search,
