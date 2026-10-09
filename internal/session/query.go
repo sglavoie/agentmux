@@ -3,6 +3,7 @@ package session
 import (
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -218,3 +219,12 @@ func FindByWindowID(sessions []RunningSession, windowID int) (RunningSession, bo
 	}
 	return RunningSession{}, false
 }
+
+// GroupRef is the backend group (Kitty tab) hosting the session.
+func (r RunningSession) GroupRef() backend.Ref { return kitty.GroupRef(r.TabID) }
+
+// PaneRef is the backend pane (Kitty window) the session is anchored to.
+func (r RunningSession) PaneRef() backend.Ref { return kitty.PaneRef(r.WindowID) }
+
+// PaneRef is the backend pane (Kitty window) the ghost tab is anchored to.
+func (g GhostTab) PaneRef() backend.Ref { return kitty.PaneRef(g.WindowID) }

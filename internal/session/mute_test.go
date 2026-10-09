@@ -13,7 +13,7 @@ func TestMute_Argv(t *testing.T) {
 	runner := kitty.NewMockRunner(map[string][]byte{})
 	client := kitty.NewClientWithSocket(runner, "")
 
-	if err := session.Mute(client, 7); err != nil {
+	if err := session.Mute(kitty.NewBackend(client), kitty.PaneRef(7)); err != nil {
 		t.Fatalf("Mute: %v", err)
 	}
 	if len(runner.Calls) != 1 {
@@ -37,7 +37,7 @@ func TestUnmute_Argv(t *testing.T) {
 	runner := kitty.NewMockRunner(map[string][]byte{})
 	client := kitty.NewClientWithSocket(runner, "")
 
-	if err := session.Unmute(client, 7); err != nil {
+	if err := session.Unmute(kitty.NewBackend(client), kitty.PaneRef(7)); err != nil {
 		t.Fatalf("Unmute: %v", err)
 	}
 	if len(runner.Calls) != 1 {

@@ -7,8 +7,11 @@
 // (harness, session_id) pair from internal/conversation.
 //
 // Dedup policy, launch identity, and worktree and handoff compensation are
-// AgentMux decisions that stay here when launching becomes backend-neutral;
-// the Kitty calls they make today are terminal operations that move behind a
-// backend seam. docs/backend-migration.md records that split and the
-// workflows that depend on it.
+// AgentMux decisions that stay here when launching becomes backend-neutral.
+// Every terminal command this package issues (launch, close, focus, title,
+// colors, metadata, reorder) goes through internal/backend; it still reads
+// Kitty's window tree to project RunningSession values, and RunningSession's
+// GroupRef/PaneRef are where a Kitty tab or window ID becomes a backend.Ref.
+// docs/backend-migration.md records that split and the workflows that depend
+// on it.
 package session

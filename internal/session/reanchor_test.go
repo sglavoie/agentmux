@@ -40,7 +40,7 @@ func TestReanchorTab_InvokesSetUserVars(t *testing.T) {
 	runner := kitty.NewMockRunner(map[string][]byte{})
 	client := kitty.NewClientWithSocket(runner, "")
 
-	if err := session.ReanchorTab(client, ghost, defaults); err != nil {
+	if err := session.ReanchorTab(kitty.NewBackend(client), ghost, defaults); err != nil {
 		t.Fatalf("ReanchorTab: %v", err)
 	}
 
@@ -103,7 +103,7 @@ func TestReanchorAll_ProcessesEveryGhost(t *testing.T) {
 	runner := kitty.NewMockRunner(map[string][]byte{})
 	client := kitty.NewClientWithSocket(runner, "")
 
-	session.ReanchorAll(client, ghosts, defaults)
+	session.ReanchorAll(kitty.NewBackend(client), ghosts, defaults)
 
 	if len(runner.Calls) != 2 {
 		t.Fatalf("expected 2 kitten calls (one per ghost), got %d", len(runner.Calls))

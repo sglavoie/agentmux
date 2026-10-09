@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -67,7 +68,7 @@ func TestApplyColorWithRetry_PropagatesSetTabColorFailure(t *testing.T) {
 	}
 	client := kitty.NewClientWithSocket(runner, "")
 
-	err := applyColorWithRetry(client, map[int]bool{}, "newproject", palette.Color{
+	err := applyColorWithRetry(kitty.NewBackend(client), map[backend.Ref]bool{}, "newproject", palette.Color{
 		ActiveBg: "#000000", InactiveBg: "#ffffff",
 	})
 	if err == nil {
@@ -93,7 +94,7 @@ func TestApplyColorWithRetry_ReportsMissingTab(t *testing.T) {
 	}
 	client := kitty.NewClientWithSocket(runner, "")
 
-	err := applyColorWithRetry(client, map[int]bool{}, "absent", palette.Color{})
+	err := applyColorWithRetry(kitty.NewBackend(client), map[backend.Ref]bool{}, "absent", palette.Color{})
 	if err == nil {
 		t.Fatal("expected non-nil error when the tab never appears")
 	}
@@ -208,7 +209,7 @@ func TestApplyColorWithRetry_NoSleepAfterFinalAttempt(t *testing.T) {
 	client := kitty.NewClientWithSocket(runner, "")
 
 	start := time.Now()
-	err := applyColorWithRetry(client, map[int]bool{}, "absent", palette.Color{})
+	err := applyColorWithRetry(kitty.NewBackend(client), map[backend.Ref]bool{}, "absent", palette.Color{})
 	elapsed := time.Since(start)
 
 	if err == nil {
@@ -239,7 +240,7 @@ func TestApplyColorWithRetry_ReturnsNilOnSuccess(t *testing.T) {
 	}
 	client := kitty.NewClientWithSocket(runner, "")
 
-	err := applyColorWithRetry(client, map[int]bool{}, "newproject", palette.Color{
+	err := applyColorWithRetry(kitty.NewBackend(client), map[backend.Ref]bool{}, "newproject", palette.Color{
 		ActiveBg: "#000000", InactiveBg: "#ffffff",
 	})
 	if err != nil {
@@ -276,8 +277,8 @@ func TestApplyColorWithRetry_DoesNotPaintPreexistingTab(t *testing.T) {
 	// full set of pre-launch tabs, not just managed ones. The retry loop
 	// must NOT call SetTabColor on tab 42 and must report the new tab as
 	// missing instead.
-	beforeIDs := map[int]bool{42: true}
-	err := applyColorWithRetry(client, beforeIDs, "newproject", palette.Color{
+	beforeIDs := map[backend.Ref]bool{kitty.GroupRef(42): true}
+	err := applyColorWithRetry(kitty.NewBackend(client), beforeIDs, "newproject", palette.Color{
 		ActiveBg: "#000000", InactiveBg: "#ffffff",
 	})
 	if err == nil {

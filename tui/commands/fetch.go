@@ -139,7 +139,7 @@ func Refresh(client kitty.KittyClient, cfg *config.Config, sortMode string, seq,
 		// re-detected on the next refresh, so skipping them costs a tick.
 		mayWrite := !live.Topology.Stale
 		if mayWrite && len(live.Ghosts) > 0 {
-			session.ReanchorAll(client, live.Ghosts, cfg.Defaults)
+			session.ReanchorAll(kitty.NewBackend(client), live.Ghosts, cfg.Defaults)
 		}
 		sourceTabID := live.SourceTabID
 		selectionToken := ""

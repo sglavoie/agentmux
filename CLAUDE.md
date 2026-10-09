@@ -13,8 +13,10 @@ GitHub Copilot CLI, and OpenAI Codex. The `amx` binary owns:
 - filesystem-backed transcript and plan caches with disposable search sidecars;
 - an always-on local daemon that reduces hook events and exclusively renders Kitty state.
 
-Kitty operations stay behind `internal/kitty` and session/action seams. Domain
-services must not invoke `kitten @` directly.
+Kitty operations stay behind `internal/kitty` and the `internal/backend` seams.
+Domain services must not invoke `kitten @` or spell Kitty match expressions;
+`TestDomainServicesIssueNoTerminalCommands` enforces this for
+`internal/session` and `internal/actions`.
 
 ## Build and acceptance
 
@@ -115,7 +117,12 @@ Shared and domain packages (`internal/...`):
 - `internal/runtimesession`: opaque AgentMux runtime-session IDs and the
   durable registry mapping them to generation- and fingerprint-checked
   backend targets. Not yet wired into launch, hooks, or the daemon.
-- `internal/session`, `internal/harness`: Kitty-backed lifecycle and harness
+- `internal/backend`: narrow terminal-backend interfaces (discover, launch,
+  close, capture, metadata, presentation), opaque group/pane refs, capability
+  errors; `internal/backend/backendtest` is the shared contract every adapter
+  runs (`internal/kitty.Backend` is the Kitty adapter).
+- `internal/session`, `internal/harness`: lifecycle (still reading Kitty
+  topology, issuing commands through `internal/backend`) and harness
   argv/capabilities.
 - `internal/transcript`, `internal/plans`: discovery, metadata caches, search,
   recovery. `transcript.History` is the overseer's metadata-only admission path

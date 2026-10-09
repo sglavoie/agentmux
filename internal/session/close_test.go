@@ -17,7 +17,7 @@ func TestClose_CallsCloseTab(t *testing.T) {
 	})
 	client := kitty.NewClientWithSocket(runner, "")
 
-	err := session.Close(client, 4)
+	err := session.Close(kitty.NewBackend(client), kitty.GroupRef(4))
 	if err != nil {
 		t.Fatalf("Close: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestPollClosed_TabGoneImmediately(t *testing.T) {
 	})
 	client := kitty.NewClientWithSocket(runner, "")
 
-	err := session.PollClosed(client, 999)
+	err := session.PollClosed(kitty.NewBackend(client), kitty.GroupRef(999))
 	if err != nil {
 		t.Errorf("PollClosed with absent tab: got %v, want nil", err)
 	}
@@ -61,7 +61,7 @@ func TestPollClosed_NoSleepOnFirstSuccess(t *testing.T) {
 	client := kitty.NewClientWithSocket(runner, "")
 
 	start := time.Now()
-	if err := session.PollClosed(client, 999); err != nil {
+	if err := session.PollClosed(kitty.NewBackend(client), kitty.GroupRef(999)); err != nil {
 		t.Fatalf("PollClosed with absent tab: got %v, want nil", err)
 	}
 	elapsed := time.Since(start)
@@ -81,7 +81,7 @@ func TestPollClosed_Timeout(t *testing.T) {
 	})
 	client := kitty.NewClientWithSocket(runner, "")
 
-	err := session.PollClosed(client, 4)
+	err := session.PollClosed(kitty.NewBackend(client), kitty.GroupRef(4))
 	if !errors.Is(err, session.ErrCloseTimeout) {
 		t.Errorf("PollClosed with persistent tab: got %v, want ErrCloseTimeout", err)
 	}
@@ -129,7 +129,7 @@ func TestCloseObservedDistinguishesTheThreeEndings(t *testing.T) {
 			runner := kitty.NewMockRunner(map[string][]byte{"kitten @ ls": tc.ls})
 			client := kitty.NewClientWithSocket(runner, "")
 
-			observation, err := session.CloseObserved(client, tc.tabID)
+			observation, err := session.CloseObserved(kitty.NewBackend(client), kitty.GroupRef(tc.tabID))
 			if observation != tc.want {
 				t.Errorf("observation = %q, want %q", observation, tc.want)
 			}
@@ -148,7 +148,7 @@ func TestCloseObservedDistinguishesTheThreeEndings(t *testing.T) {
 func TestCloseObservedReportsTheCloseTabFailure(t *testing.T) {
 	client := kitty.NewClientWithSocket(failingCloseRunner{}, "")
 
-	observation, err := session.CloseObserved(client, 4)
+	observation, err := session.CloseObserved(kitty.NewBackend(client), kitty.GroupRef(4))
 	if err == nil {
 		t.Fatal("expected the close-tab error to be reported")
 	}

@@ -7,9 +7,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
@@ -148,13 +148,13 @@ func reopenWorktree(ctx context.Context, deps Dependencies, request Request) (Re
 	if requestedSession != "" {
 		for _, candidate := range matches {
 			if liveSessionView(candidate).ID == requestedSession {
-				return focusWorktreeSession(deps.Kitty, candidate)
+				return focusWorktreeSession(deps.terminal(), candidate)
 			}
 		}
 		return Result{}, &Error{Code: "not_found", Action: WorktreeReopen, Message: fmt.Sprintf("live-session candidate %q was not found", requestedSession), Candidates: liveSessionCandidates(matches)}
 	}
 	if len(matches) == 1 {
-		return focusWorktreeSession(deps.Kitty, matches[0])
+		return focusWorktreeSession(deps.terminal(), matches[0])
 	}
 	if len(matches) > 1 {
 		return Result{}, &Error{Code: "ambiguous_live_sessions", Action: WorktreeReopen, Message: "multiple live sessions are inside this worktree", Candidates: liveSessionCandidates(matches)}
@@ -186,8 +186,8 @@ func reopenWorktree(ctx context.Context, deps Dependencies, request Request) (Re
 	return launchFreshWorktree(deps, entry, project, strings.TrimSpace(request.Parameters["profile"]), warnings)
 }
 
-func focusWorktreeSession(client kitty.KittyClient, running session.RunningSession) (Result, error) {
-	if err := client.FocusTab(kitty.MatchTabByID(running.TabID)); err != nil {
+func focusWorktreeSession(term backend.Presenter, running session.RunningSession) (Result, error) {
+	if err := term.Focus(running.GroupRef()); err != nil {
 		return Result{}, err
 	}
 	return Result{Changed: true, Message: "focused live worktree session", Data: map[string]any{
@@ -290,7 +290,7 @@ func openWorktree(ctx context.Context, deps Dependencies, request Request, edito
 			}
 			err = session.OpenPathInEditor(deps.Kitty, entry.Path, title, deps.Config)
 		} else {
-			err = deps.Kitty.LaunchTab(kitty.LaunchOpts{Title: title, Directory: entry.Path})
+			err = deps.terminal().Launch(backend.LaunchSpec{Title: title, Directory: entry.Path})
 		}
 	}
 	if err != nil {

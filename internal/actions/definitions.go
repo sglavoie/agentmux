@@ -10,7 +10,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 )
@@ -29,10 +28,11 @@ func defaultDefinitions() []Definition {
 		{
 			ID: Focus, Label: "focus tab", Description: "focus the session's Kitty tab", Requires: sessionRequirement,
 			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
-				if deps.Kitty == nil {
+				term := deps.terminal()
+				if term == nil {
 					return Result{}, dependencyError(Focus, "Kitty client")
 				}
-				if err := deps.Kitty.FocusTab(kitty.MatchTabByID(request.Session.TabID)); err != nil {
+				if err := term.Focus(request.Session.GroupRef()); err != nil {
 					return Result{}, err
 				}
 				return Result{Changed: true, Message: "focused session tab"}, nil
@@ -163,21 +163,22 @@ func defaultDefinitions() []Definition {
 		{
 			ID: ToggleLock, Label: "lock/unlock", Description: "toggle the session lock", Requires: sessionRequirement,
 			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
-				if deps.Kitty == nil {
+				term := deps.terminal()
+				if term == nil {
 					return Result{}, dependencyError(ToggleLock, "Kitty client")
 				}
 				var err error
 				if request.Session.Locked {
-					err = session.Unlock(deps.Kitty, request.Session.WindowID)
+					err = session.Unlock(term, request.Session.PaneRef())
 				} else {
-					err = session.Lock(deps.Kitty, request.Session.WindowID)
+					err = session.Lock(term, request.Session.PaneRef())
 				}
 				if err != nil {
 					return Result{}, err
 				}
 				parts := request.Session.TitleParts()
 				parts.Locked = !request.Session.Locked
-				if err := deps.Kitty.SetTabTitle(kitty.MatchTabByWindowID(request.Session.WindowID), palette.BuildTitleParts(parts)); err != nil {
+				if err := term.SetTitle(request.Session.PaneRef(), palette.BuildTitleParts(parts)); err != nil {
 					return Result{}, err
 				}
 				message := "locked session"
@@ -190,21 +191,22 @@ func defaultDefinitions() []Definition {
 		{
 			ID: ToggleMute, Label: "mute/unmute", Description: "toggle session notification mute", Requires: sessionRequirement,
 			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
-				if deps.Kitty == nil {
+				term := deps.terminal()
+				if term == nil {
 					return Result{}, dependencyError(ToggleMute, "Kitty client")
 				}
 				var err error
 				if request.Session.Muted {
-					err = session.Unmute(deps.Kitty, request.Session.WindowID)
+					err = session.Unmute(term, request.Session.PaneRef())
 				} else {
-					err = session.Mute(deps.Kitty, request.Session.WindowID)
+					err = session.Mute(term, request.Session.PaneRef())
 				}
 				if err != nil {
 					return Result{}, err
 				}
 				parts := request.Session.TitleParts()
 				parts.Muted = !request.Session.Muted
-				if err := deps.Kitty.SetTabTitle(kitty.MatchTabByWindowID(request.Session.WindowID), palette.BuildTitleParts(parts)); err != nil {
+				if err := term.SetTitle(request.Session.PaneRef(), palette.BuildTitleParts(parts)); err != nil {
 					return Result{}, err
 				}
 				return Result{Changed: true, Message: "toggled session mute"}, nil
@@ -220,10 +222,11 @@ func defaultDefinitions() []Definition {
 				return Availability{Available: true}
 			},
 			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
-				if deps.Kitty == nil {
+				term := deps.terminal()
+				if term == nil {
 					return Result{}, dependencyError(Close, "Kitty client")
 				}
-				observation, err := session.CloseObserved(deps.Kitty, request.Session.TabID)
+				observation, err := session.CloseObserved(term, request.Session.GroupRef())
 				if err != nil && !errors.Is(err, session.ErrCloseTimeout) {
 					return Result{}, err
 				}

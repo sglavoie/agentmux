@@ -7,8 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -27,7 +27,8 @@ func OpenDirectory(client kitty.KittyClient, sess config.Session, acc config.Acc
 	// Include every tab (managed and unmanaged) so the color retry below
 	// cannot repaint a pre-existing tab whose title coincides with
 	// formattedTitle.
-	beforeIDs := allTabIDs(osWindows)
+	beforeGroups := allGroupRefs(osWindows)
+	term := kitty.NewBackend(client)
 
 	loc, prevTabID, err := ComputeInsertLocation(client, cfg.Defaults.Sort, effectiveSessionProfile(sess, acc), formattedTitle)
 	if err != nil {
@@ -35,24 +36,21 @@ func OpenDirectory(client kitty.KittyClient, sess config.Session, acc config.Acc
 		prevTabID = 0
 	}
 
-	if (loc == "after" || loc == "before") && prevTabID != 0 {
-		_ = client.FocusTab(kitty.MatchTabByID(prevTabID))
-		time.Sleep(100 * time.Millisecond)
-	}
+	focusInsertReference(term, loc, prevTabID)
 
-	launchOpts := kitty.LaunchOpts{
+	spec := backend.LaunchSpec{
 		Title:     formattedTitle,
 		Directory: config.ExpandTilde(sess.Directory),
-		Location:  locationArg(loc),
+		Placement: placementArg(loc),
 	}
 
-	if err := client.LaunchTab(launchOpts); err != nil {
+	if err := term.Launch(spec); err != nil {
 		return fmt.Errorf("opening directory for %q: %w", formattedTitle, err)
 	}
 
 	colorName := acc.Color
 	if color, err := palette.Lookup(colorName); err == nil {
-		if colorErr := applyColorWithRetry(client, beforeIDs, formattedTitle, color); colorErr != nil {
+		if colorErr := applyColorWithRetry(term, beforeGroups, formattedTitle, color); colorErr != nil {
 			slog.Warn("applying tab color after open",
 				"title", formattedTitle,
 				"account", acc.Name,
@@ -107,7 +105,8 @@ func OpenInEditor(client kitty.KittyClient, sess config.Session, acc config.Acco
 	if err != nil {
 		return fmt.Errorf("listing running sessions: %w", err)
 	}
-	beforeIDs := allTabIDs(osWindows)
+	beforeGroups := allGroupRefs(osWindows)
+	term := kitty.NewBackend(client)
 
 	loc, prevTabID, err := ComputeInsertLocation(client, cfg.Defaults.Sort, effectiveSessionProfile(sess, acc), formattedTitle)
 	if err != nil {
@@ -115,10 +114,7 @@ func OpenInEditor(client kitty.KittyClient, sess config.Session, acc config.Acco
 		prevTabID = 0
 	}
 
-	if (loc == "after" || loc == "before") && prevTabID != 0 {
-		_ = client.FocusTab(kitty.MatchTabByID(prevTabID))
-		time.Sleep(100 * time.Millisecond)
-	}
+	focusInsertReference(term, loc, prevTabID)
 
 	name, editorArgs, err := resolveEditor(cfg.Defaults.Editor)
 	if err != nil {
@@ -126,20 +122,20 @@ func OpenInEditor(client kitty.KittyClient, sess config.Session, acc config.Acco
 	}
 
 	expandedDir := config.ExpandTilde(sess.Directory)
-	launchOpts := kitty.LaunchOpts{
+	spec := backend.LaunchSpec{
 		Title:     formattedTitle,
 		Directory: expandedDir,
-		Location:  locationArg(loc),
-		Cmdline:   append([]string{name}, append(editorArgs, expandedDir)...),
+		Placement: placementArg(loc),
+		Argv:      append([]string{name}, append(editorArgs, expandedDir)...),
 	}
 
-	if err := client.LaunchTab(launchOpts); err != nil {
+	if err := term.Launch(spec); err != nil {
 		return fmt.Errorf("opening editor for %q: %w", formattedTitle, err)
 	}
 
 	colorName := acc.Color
 	if color, err := palette.Lookup(colorName); err == nil {
-		if colorErr := applyColorWithRetry(client, beforeIDs, formattedTitle, color); colorErr != nil {
+		if colorErr := applyColorWithRetry(term, beforeGroups, formattedTitle, color); colorErr != nil {
 			slog.Warn("applying tab color after open-in-editor",
 				"title", formattedTitle,
 				"account", acc.Name,
@@ -168,13 +164,14 @@ func OpenPathInEditor(client kitty.KittyClient, path, title string, cfg *config.
 	if info, statErr := os.Stat(expandedPath); statErr == nil && !info.IsDir() {
 		directory = filepath.Dir(expandedPath)
 	}
-	launchOpts := kitty.LaunchOpts{
+	term := kitty.NewBackend(client)
+	spec := backend.LaunchSpec{
 		Title:     title,
 		Directory: directory,
-		Cmdline:   append([]string{name}, append(editorArgs, expandedPath)...),
+		Argv:      append([]string{name}, append(editorArgs, expandedPath)...),
 	}
 
-	if err := client.LaunchTab(launchOpts); err != nil {
+	if err := term.Launch(spec); err != nil {
 		return fmt.Errorf("opening editor for %q: %w", title, err)
 	}
 	return nil

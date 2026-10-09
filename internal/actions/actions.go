@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/handoff"
@@ -107,8 +108,14 @@ type Definition struct {
 
 // Dependencies are the injected seams an action can use.  Actions do not
 // construct Kitty clients, read configuration files, or reach into Bubble Tea.
+//
+// Terminal operations on a live session (focus, title, metadata, close,
+// launch) go through Terminal. Kitty remains the topology source for the
+// session-package helpers that still read Kitty's window tree, and when
+// Terminal is nil the Kitty adapter over it serves as the terminal.
 type Dependencies struct {
 	Kitty           kitty.KittyClient
+	Terminal        backend.Backend
 	Config          *config.Config
 	Clipboard       func(string) error
 	Daemon          func(protocol.Request) (protocol.Response, error)
@@ -214,4 +221,16 @@ func (e *PartialResultError) Unwrap() error {
 		return nil
 	}
 	return e.ActionError
+}
+
+// terminal returns the backend for terminal operations, or nil when neither
+// Terminal nor Kitty is injected.
+func (d Dependencies) terminal() backend.Backend {
+	if d.Terminal != nil {
+		return d.Terminal
+	}
+	if d.Kitty == nil {
+		return nil
+	}
+	return kitty.NewBackend(d.Kitty)
 }

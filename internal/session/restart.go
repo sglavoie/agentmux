@@ -28,7 +28,7 @@ func Restart(client kitty.KittyClient, running RunningSession, cfg *config.Confi
 		return err
 	}
 
-	closeErr := Close(client, running.TabID)
+	closeErr := Close(kitty.NewBackend(client), running.GroupRef())
 	// ErrCloseTimeout is non-fatal — the tab likely closed shortly after.
 	if closeErr != nil && !errors.Is(closeErr, ErrCloseTimeout) {
 		return fmt.Errorf("closing tab %d: %w", running.TabID, closeErr)
@@ -72,7 +72,7 @@ func RestartWithAccountTemplate(client kitty.KittyClient, running RunningSession
 		return launchErr
 	}
 
-	closeErr := Close(client, running.TabID)
+	closeErr := Close(kitty.NewBackend(client), running.GroupRef())
 	debugLog.Printf("RestartWithAccount: Close err=%v", closeErr)
 	if closeErr != nil && !errors.Is(closeErr, ErrCloseTimeout) {
 		return fmt.Errorf("closing tab %d: %w", running.TabID, closeErr)

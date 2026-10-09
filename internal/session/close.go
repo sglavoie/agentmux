@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/backend"
 )
 
 const (
@@ -43,31 +43,38 @@ const (
 // Confirmed reports whether the tab was seen to disappear.
 func (o CloseObservation) Confirmed() bool { return o == CloseObservedGone }
 
-// Close closes the tab with the given ID and polls until it disappears.
-// Returns ErrCloseTimeout (non-fatal) if the tab is still present after
+// CloseBackend is what closing a session needs from a terminal backend: the
+// close itself and a discovery read to observe it.
+type CloseBackend interface {
+	backend.Terminator
+	backend.Discoverer
+}
+
+// Close closes the group (a Kitty tab) and polls until it disappears.
+// Returns ErrCloseTimeout (non-fatal) if the group is still present after
 // closePollMax polls; callers may ignore this error.
-func Close(client kitty.KittyClient, tabID int) error {
-	_, err := CloseObserved(client, tabID)
+func Close(term CloseBackend, group backend.Ref) error {
+	_, err := CloseObserved(term, group)
 	return err
 }
 
 // CloseObserved is Close with the poll's observation reported beside its error.
 // It returns exactly the error Close returns; the observation is the extra fact,
 // not a change to the existing contract.
-func CloseObserved(client kitty.KittyClient, tabID int) (CloseObservation, error) {
-	closeDebug.Printf("CloseTab: sending close for tabID=%d", tabID)
-	if err := client.CloseTab(kitty.MatchTabByID(tabID)); err != nil {
+func CloseObserved(term CloseBackend, group backend.Ref) (CloseObservation, error) {
+	closeDebug.Printf("CloseTab: sending close for group=%s", group)
+	if err := term.Close(group); err != nil {
 		closeDebug.Printf("CloseTab: error=%v", err)
 		return CloseUnobserved, err
 	}
 	closeDebug.Printf("CloseTab: success, starting PollClosed")
-	return PollClosedObserved(client, tabID)
+	return PollClosedObserved(term, group)
 }
 
-// PollClosed waits for the tab with tabID to disappear from kitten @ ls.
-// Returns nil once the tab is gone, ErrCloseTimeout after closePollMax polls.
-func PollClosed(client kitty.KittyClient, tabID int) error {
-	_, err := PollClosedObserved(client, tabID)
+// PollClosed waits for group to disappear from backend discovery.
+// Returns nil once the group is gone, ErrCloseTimeout after closePollMax polls.
+func PollClosed(term backend.Discoverer, group backend.Ref) error {
+	_, err := PollClosedObserved(term, group)
 	return err
 }
 
@@ -88,34 +95,23 @@ func PollClosed(client kitty.KittyClient, tabID int) error {
 // here is only what such a poll is allowed to CLAIM — it reports CloseUnobserved,
 // so a caller that needs the tab to actually be gone can tell that case apart
 // from a tab seen to disappear.
-func PollClosedObserved(client kitty.KittyClient, tabID int) (CloseObservation, error) {
+func PollClosedObserved(term backend.Discoverer, group backend.Ref) (CloseObservation, error) {
 	for i := range closePollMax {
 		if i > 0 {
 			time.Sleep(closePollDelay)
 		}
-		closeDebug.Printf("PollClosed: poll %d/%d for tabID=%d", i+1, closePollMax, tabID)
-		osWindows, err := client.ListWindows()
+		closeDebug.Printf("PollClosed: poll %d/%d for group=%s", i+1, closePollMax, group)
+		panes, err := term.Discover()
 		if err != nil {
-			closeDebug.Printf("PollClosed: ListWindows error=%v, assuming closed", err)
+			closeDebug.Printf("PollClosed: Discover error=%v, assuming closed", err)
 			return CloseUnobserved, nil
 		}
-		if !tabPresent(osWindows, tabID) {
-			closeDebug.Printf("PollClosed: tab %d gone", tabID)
+		if !backend.GroupPresent(panes, group) {
+			closeDebug.Printf("PollClosed: group %s gone", group)
 			return CloseObservedGone, nil
 		}
-		closeDebug.Printf("PollClosed: tab %d still present", tabID)
+		closeDebug.Printf("PollClosed: group %s still present", group)
 	}
-	closeDebug.Printf("PollClosed: timeout for tabID=%d", tabID)
+	closeDebug.Printf("PollClosed: timeout for group=%s", group)
 	return CloseUnobserved, ErrCloseTimeout
-}
-
-func tabPresent(osWindows []kitty.OSWindow, tabID int) bool {
-	for _, osw := range osWindows {
-		for _, tab := range osw.Tabs {
-			if tab.ID == tabID {
-				return true
-			}
-		}
-	}
-	return false
 }

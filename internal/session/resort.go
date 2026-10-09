@@ -3,6 +3,7 @@ package session
 import (
 	"fmt"
 
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -17,20 +18,21 @@ func Resort(client kitty.KittyClient, mode string) error {
 		return err
 	}
 	origFocusedTabID := focusedTabID(osWindows)
+	term := kitty.NewBackend(client)
 
 	for _, osw := range osWindows {
-		if err := resortWindow(client, osw.Tabs, mode); err != nil {
+		if err := resortWindow(term, osw.Tabs, mode); err != nil {
 			return err
 		}
 	}
 
 	if origFocusedTabID != 0 {
-		_ = client.FocusTab(kitty.MatchTabByID(origFocusedTabID))
+		_ = term.Focus(kitty.GroupRef(origFocusedTabID))
 	}
 	return nil
 }
 
-func resortWindow(client kitty.KittyClient, tabs []kitty.Tab, mode string) error {
+func resortWindow(term backend.Presenter, tabs []kitty.Tab, mode string) error {
 	running, _ := runningSessionsFromTabs(tabs, projectMatchContext{})
 	desired := SortRunning(running, mode)
 	if len(desired) < 2 {
@@ -73,7 +75,7 @@ func resortWindow(client kitty.KittyClient, tabs []kitty.Tab, mode string) error
 		if moves >= maxMoves {
 			return fmt.Errorf("session: Resort exceeded %d move budget", maxMoves)
 		}
-		if err := client.MoveTab(kitty.MatchTabByID(desiredIDs[i]), delta); err != nil {
+		if err := term.Move(kitty.GroupRef(desiredIDs[i]), delta); err != nil {
 			return err
 		}
 		moves++

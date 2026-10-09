@@ -10,7 +10,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
@@ -53,7 +52,7 @@ func continueConversation(deps Dependencies, meta transcript.SessionMeta) (Resul
 		return Result{}, &Error{Code: "ambiguous_conversation", Action: Continue, Message: "multiple live tabs claim this conversation; refusing to focus or resume"}
 	}
 	if status == session.LiveConversationExact {
-		if err := deps.Kitty.FocusTab(kitty.MatchTabByID(live.TabID)); err != nil {
+		if err := deps.terminal().Focus(live.GroupRef()); err != nil {
 			return Result{}, err
 		}
 		return Result{

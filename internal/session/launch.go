@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -194,7 +195,8 @@ func launchInvocation(client kitty.KittyClient, sess config.Session, acc config.
 	// (managed and unmanaged) so a pre-existing tab whose title coincides with
 	// formattedTitle cannot be misidentified as the newly launched tab and
 	// repainted by applyColorWithRetry.
-	beforeIDs := allTabIDs(osWindows)
+	beforeGroups := allGroupRefs(osWindows)
+	term := kitty.NewBackend(client)
 
 	// Compute insert location for sorted insertion.
 	loc, prevTabID, err := ComputeInsertLocation(client, cfg.Defaults.Sort, effectiveSessionProfile(sess, acc), formattedTitle)
@@ -205,10 +207,7 @@ func launchInvocation(client kitty.KittyClient, sess config.Session, acc config.
 	}
 
 	// Focus the reference tab so Kitty inserts relative to it.
-	if (loc == "after" || loc == "before") && prevTabID != 0 {
-		_ = client.FocusTab(kitty.MatchTabByID(prevTabID))
-		time.Sleep(100 * time.Millisecond)
-	}
+	focusInsertReference(term, loc, prevTabID)
 
 	harnessName := acc.EffectiveHarness()
 	userVars := buildLaunchUserVars(sess, acc, cfg.Defaults, invocation)
@@ -218,17 +217,17 @@ func launchInvocation(client kitty.KittyClient, sess config.Session, acc config.
 	if shell == "" {
 		shell = "/bin/zsh"
 	}
-	launchOpts := kitty.LaunchOpts{
+	spec := backend.LaunchSpec{
 		Title:     formattedTitle,
 		Directory: invocation.CWD,
-		Location:  locationArg(loc),
+		Placement: placementArg(loc),
 		Env:       invocation.Environment,
-		UserVars:  userVars,
-		Cmdline:   []string{shell, "-lic", shellCmd},
+		Vars:      userVars,
+		Argv:      []string{shell, "-lic", shellCmd},
 	}
 
-	launchDebug.Printf("Launch: calling LaunchTab: title=%q dir=%q harness=%q loc=%q env=%v cmd=%v", launchOpts.Title, launchOpts.Directory, harnessName, launchOpts.Location, launchOpts.Env, launchOpts.Cmdline)
-	if err := client.LaunchTab(launchOpts); err != nil {
+	launchDebug.Printf("Launch: calling LaunchTab: title=%q dir=%q harness=%q loc=%q env=%v cmd=%v", spec.Title, spec.Directory, harnessName, spec.Placement, spec.Env, spec.Argv)
+	if err := term.Launch(spec); err != nil {
 		launchDebug.Printf("Launch: LaunchTab error: %v", err)
 		recordHarnessLaunch(cfg, sess, acc, invocation, "error", err.Error(), nativeReport)
 		return fmt.Errorf("launching session %q: %w", formattedTitle, err)
@@ -240,7 +239,7 @@ func launchInvocation(client kitty.KittyClient, sess config.Session, acc config.
 	// inactive profile accent; active colors reset to kitty.conf so the focused
 	// tab remains prominent even when the tab has a profile color.
 	if color, err := palette.Lookup(acc.Color); err == nil {
-		if colorErr := applyColorWithRetry(client, beforeIDs, formattedTitle, color); colorErr != nil {
+		if colorErr := applyColorWithRetry(term, beforeGroups, formattedTitle, color); colorErr != nil {
 			slog.Warn("applying tab color after launch",
 				"title", formattedTitle,
 				"account", acc.Name,
@@ -350,54 +349,79 @@ func effectiveSessionProfile(sess config.Session, acc config.Account) string {
 	return acc.Name
 }
 
-// locationArg converts a logical location to the kitten @ launch --location
-// value. Returns "" for default behavior.
-func locationArg(loc string) string {
+// placementArg converts a logical insert location to a backend placement.
+// Returns the default placement for anything unrecognized.
+func placementArg(loc string) backend.Placement {
 	switch loc {
-	case "first", "after", "before":
-		return loc
+	case "first":
+		return backend.PlacementFirst
+	case "after":
+		return backend.PlacementAfter
+	case "before":
+		return backend.PlacementBefore
 	default:
-		return ""
+		return backend.PlacementDefault
 	}
 }
 
-// allTabIDs returns the set of every tab ID present in osWindows, including
-// unmanaged tabs. The color-retry path uses this set to detect "tabs that
-// existed before Launch" so it never repaints a pre-existing tab whose title
-// happens to match the new session's formattedTitle.
-func allTabIDs(osWindows []kitty.OSWindow) map[int]bool {
-	ids := make(map[int]bool)
+// focusInsertReference focuses the tab a relative placement is computed
+// against, then gives the terminal a moment to apply it before the launch.
+func focusInsertReference(term backend.Presenter, loc string, prevTabID int) {
+	if (loc == "after" || loc == "before") && prevTabID != 0 {
+		_ = term.Focus(kitty.GroupRef(prevTabID))
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+// allGroupRefs returns every tab present in osWindows as a backend group,
+// including unmanaged tabs. The color-retry path uses this set to detect
+// "tabs that existed before Launch" so it never repaints a pre-existing tab
+// whose title happens to match the new session's formattedTitle.
+func allGroupRefs(osWindows []kitty.OSWindow) map[backend.Ref]bool {
+	refs := make(map[backend.Ref]bool)
 	for _, osw := range osWindows {
 		for _, tab := range osw.Tabs {
-			ids[tab.ID] = true
+			refs[kitty.GroupRef(tab.ID)] = true
 		}
 	}
-	return ids
+	return refs
+}
+
+// colorTarget is what the post-launch color pass needs from a backend.
+type colorTarget interface {
+	backend.Discoverer
+	backend.Presenter
 }
 
 // applyColorWithRetry polls for the newly created tab and sets its color.
 // It retries with exponential backoff to handle Kitty's registration delay.
 // Returns nil once the color is applied or the last error encountered if
 // every retry attempt fails; callers should treat the error as cosmetic.
-func applyColorWithRetry(client kitty.KittyClient, beforeIDs map[int]bool, formattedTitle string, color palette.Color) error {
+func applyColorWithRetry(term colorTarget, beforeGroups map[backend.Ref]bool, formattedTitle string, color palette.Color) error {
 	delay := colorInitialDelay
 	var lastErr error
+	colors := backend.Colors{
+		ActiveBg:   backend.ColorReset,
+		InactiveBg: color.InactiveBg,
+		ActiveFg:   backend.ColorReset,
+		InactiveFg: palette.InactiveFg,
+	}
 	for i := range colorMaxRetries {
-		osWindows, err := client.ListWindows()
+		panes, err := term.Discover()
 		if err != nil {
 			lastErr = fmt.Errorf("listing windows for color apply: %w", err)
 		} else {
 			lastErr = fmt.Errorf("new tab %q not visible in any kitty window", formattedTitle)
-			for _, osw := range osWindows {
-				for _, tab := range osw.Tabs {
-					if !beforeIDs[tab.ID] && palette.StripIcons(tab.Title) == formattedTitle {
-						matchExpr := kitty.MatchTabByID(tab.ID)
-						if setErr := client.SetTabColor(matchExpr, kitty.TabColorDefault, color.InactiveBg, kitty.TabColorDefault, palette.InactiveFg); setErr != nil {
-							lastErr = fmt.Errorf("setting tab color: %w", setErr)
-						} else {
-							return nil
-						}
-					}
+			tried := make(map[backend.Ref]bool)
+			for _, pane := range panes {
+				if beforeGroups[pane.Group] || tried[pane.Group] || palette.StripIcons(pane.GroupTitle) != formattedTitle {
+					continue
+				}
+				tried[pane.Group] = true
+				if setErr := term.SetColors(pane.Group, colors); setErr != nil {
+					lastErr = fmt.Errorf("setting tab color: %w", setErr)
+				} else {
+					return nil
 				}
 			}
 		}

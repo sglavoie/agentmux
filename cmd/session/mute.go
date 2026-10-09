@@ -79,10 +79,11 @@ func muteToggle(client kitty.KittyClient, windowID int) (muteToggleResult, error
 		return result, nil
 	}
 	result.Muted = rs.Muted
+	term := kitty.NewBackend(client)
 	if rs.Muted {
-		err = session.Unmute(client, rs.WindowID)
+		err = session.Unmute(term, rs.PaneRef())
 	} else {
-		err = session.Mute(client, rs.WindowID)
+		err = session.Mute(term, rs.PaneRef())
 	}
 	if err != nil {
 		return result, err
@@ -94,5 +95,5 @@ func muteToggle(client kitty.KittyClient, windowID int) (muteToggleResult, error
 	parts := rs.TitleParts()
 	parts.Muted = !rs.Muted
 	newTitle := palette.BuildTitleParts(parts)
-	return result, client.SetTabTitle(kitty.MatchTabByWindowID(rs.WindowID), newTitle)
+	return result, term.SetTitle(rs.PaneRef(), newTitle)
 }
