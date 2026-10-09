@@ -5,4 +5,10 @@
 // Live instance identity is the freshly validated Kitty window and title
 // owner, never a remembered one; conversation identity is the
 // (harness, session_id) pair from internal/conversation.
+//
+// Dedup policy, launch identity, and worktree and handoff compensation are
+// AgentMux decisions that stay here when launching becomes backend-neutral;
+// the Kitty calls they make today are terminal operations that move behind a
+// backend seam. docs/backend-migration.md records that split and the
+// workflows that depend on it.
 package session

@@ -1,0 +1,192 @@
+[
+  {
+    "method": "ListWindows",
+    "argv": [
+      "kitten",
+      "@",
+      "--to",
+      "unix:/tmp/kitty-baseline",
+      "ls"
+    ]
+  },
+  {
+    "method": "LaunchTab",
+    "argv": [
+      "kitten",
+      "@",
+      "--to",
+      "unix:/tmp/kitty-baseline",
+      "launch",
+      "--type=tab",
+      "--no-response",
+      "--tab-title=W:api",
+      "--cwd=/projects/api",
+      "--location=after",
+      "--env=CLAUDE_CONFIG_DIR=/home/work",
+      "--env=KITTY_LISTEN_ON=unix:/tmp/kitty-baseline",
+      "--var=amx_harness=claude",
+      "--var=amx_profile=work",
+      "--var=amx_project=api",
+      "--",
+      "/bin/zsh",
+      "-lc",
+      "claude --resume x"
+    ]
+  },
+  {
+    "method": "LaunchOverlay",
+    "argv": [
+      "kitten",
+      "@",
+      "--to",
+      "unix:/tmp/kitty-baseline",
+      "launch",
+      "--type=overlay",
+      "--no-response",
+      "--hold",
+      "--title=amx",
+      "--cwd=/projects/api",
+      "--env=AMX_CONFIG=/cfg.toml",
+      "--var=amx_overlay=dashboard",
+      "--",
+      "amx",
+      "overview",
+      "--window-id",
+      "7"
+    ]
+  },
+  {
+    "method": "CloseTab",
+    "argv": [
+      "kitten",
+      "@",
+      "--to",
+      "unix:/tmp/kitty-baseline",
+      "close-tab",
+      "--no-response",
+      "--match=id:3"
+    ]
+  },
+  {
+    "method": "MoveTab",
+    "argv": [
+      "kitten",
+      "@",
+      "--to",
+      "unix:/tmp/kitty-baseline",
+      "focus-tab",
+      "--match=id:3"
+    ]
+  },
+  {
+    "method": "MoveTab",
+    "argv": [
+      "kitten",
+      "@",
+      "--to",
+      "unix:/tmp/kitty-baseline",
+      "action",
+      "move_tab_backward"
+    ]
+  },
+  {
+    "method": "MoveTab",
+    "argv": [
+      "kitten",
+      "@",
+      "--to",
+      "unix:/tmp/kitty-baseline",
+      "action",
+      "move_tab_backward"
+    ]
+  },
+  {
+    "method": "SetTabColor",
+    "argv": [
+      "kitten",
+      "@",
+      "--to",
+      "unix:/tmp/kitty-baseline",
+      "set-tab-color",
+      "--match=window_id:7",
+      "active_bg=#112233",
+      "inactive_bg=#445566",
+      "active_fg=#ffffff",
+      "inactive_fg=#cccccc"
+    ]
+  },
+  {
+    "method": "SetTabTitle",
+    "argv": [
+      "kitten",
+      "@",
+      "--to",
+      "unix:/tmp/kitty-baseline",
+      "set-tab-title",
+      "--match=window_id:7",
+      "--",
+      "⚡ W:api"
+    ]
+  },
+  {
+    "method": "SetUserVars",
+    "argv": [
+      "kitten",
+      "@",
+      "--to",
+      "unix:/tmp/kitty-baseline",
+      "set-user-vars",
+      "--match=id:7",
+      "amx_locked=1",
+      "amx_state={}"
+    ]
+  },
+  {
+    "method": "FocusTab",
+    "argv": [
+      "kitten",
+      "@",
+      "--to",
+      "unix:/tmp/kitty-baseline",
+      "focus-tab",
+      "--match=title:W:api"
+    ]
+  },
+  {
+    "method": "FocusWindow",
+    "argv": [
+      "kitten",
+      "@",
+      "--to",
+      "unix:/tmp/kitty-baseline",
+      "focus-window",
+      "--match=var:^amx_profile$=^work$"
+    ]
+  },
+  {
+    "method": "GetText",
+    "argv": [
+      "kitten",
+      "@",
+      "--to",
+      "unix:/tmp/kitty-baseline",
+      "get-text",
+      "--extent=screen",
+      "--match=id:7"
+    ]
+  },
+  {
+    "method": "LaunchOverlayPager",
+    "argv": [
+      "kitten",
+      "@",
+      "--to",
+      "unix:/tmp/kitty-baseline",
+      "launch",
+      "--type=overlay",
+      "--source-window=id:7",
+      "--stdin-source=@screen_scrollback",
+      "less"
+    ]
+  }
+]
