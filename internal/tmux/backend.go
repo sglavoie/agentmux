@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -25,7 +26,7 @@ type Backend struct {
 	server *Server
 }
 
-var _ backend.Backend = (*Backend)(nil)
+var _ backend.TargetLauncher = (*Backend)(nil)
 
 // NewBackend wraps server.
 func NewBackend(server *Server) *Backend {
@@ -138,12 +139,7 @@ func parsePane(line string) (backend.Pane, error) {
 }
 
 // Launched is what one launch created.
-type Launched struct {
-	Group    backend.Ref
-	Pane     backend.Ref
-	PID      int
-	Instance runtimesession.BackendInstance
-}
+type Launched = backend.Launched
 
 // Launch starts spec in a new session.
 func (b *Backend) Launch(spec backend.LaunchSpec) error {
@@ -333,6 +329,24 @@ func (b *Backend) SetMetadata(ref backend.Ref, vars map[string]string) error {
 		}
 		return err
 	})
+}
+
+// Instance identifies the running server; see Server.Instance.
+func (b *Backend) Instance() (runtimesession.BackendInstance, error) { return b.server.Instance() }
+
+// AttachCommand is the interactive client that attaches a terminal to the
+// session holding pane. It detaches every other client of that session, so
+// attaching transfers interactive ownership (input and size) instead of
+// sharing it; the agent itself is untouched. The caller connects the
+// command's standard streams to a terminal and runs it.
+func (b *Backend) AttachCommand(pane backend.Ref) (*exec.Cmd, error) {
+	if err := paneOnly(pane); err != nil {
+		return nil, err
+	}
+	// #nosec G204 -- the binary was resolved at NewServer and the target is a canonical pane ID.
+	c := exec.Command(b.server.binary, "-S", b.server.socket, "-f", b.server.config, "attach-session", "-d", "-t", pane.ID)
+	c.Env = clientEnv(os.Environ())
+	return c, nil
 }
 
 // Focus is unsupported: the server has no view of its own.

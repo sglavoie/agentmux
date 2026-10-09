@@ -39,6 +39,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/tui/layout"
 	"github.com/spf13/cobra"
 )
@@ -96,6 +97,9 @@ var projectLaunchCmd = &cobra.Command{
 	Short: "Launch a new session from a configured project",
 	Long: `Launches a new session from the configured project named by TITLE (or
 --title), in a new Kitty tab, through the same launch action the dashboard uses.
+--backend tmux launches it on AgentMux's private tmux server instead; the
+agent keeps running when no terminal shows it, and the JSON payload carries
+the runtime_session_id that ` + "`amx attach`" + ` takes.
 
 A project is identified by its profile and title. A title that matches no
 project exactly still selects one when it is the only project whose title reads
@@ -104,7 +108,8 @@ the same without its leading emoji or symbols, ignoring case: "amx" launches
 ambiguous or unmatched selector lists the configured projects it could have
 meant and launches nothing.
 
-Outside Kitty, set KITTY_LISTEN_ON to the instance's remote-control socket.`,
+Outside Kitty, set KITTY_LISTEN_ON to the instance's remote-control socket
+(a tmux launch needs no Kitty).`,
 	Args:              cobra.MaximumNArgs(1),
 	ValidArgsFunction: completeProjectTitleArg,
 	RunE:              runProjectLaunch,
@@ -125,6 +130,7 @@ func init() {
 	projectLaunchCmd.Flags().StringVar(&projectLaunchProfile, "profile", "", "configured profile the project launches with")
 	_ = projectLaunchCmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
 	_ = projectLaunchCmd.RegisterFlagCompletionFunc("title", completeProjectTitles)
+	cli.AddBackendFlag(projectLaunchCmd)
 	projectCmd.AddCommand(projectListCmd, projectLaunchCmd)
 }
 
@@ -154,6 +160,10 @@ type projectLaunchData struct {
 	Project  projectView `json:"project"`
 	TabID    int         `json:"tab_id,omitempty"`
 	WindowID int         `json:"window_id,omitempty"`
+	// Backend is where the session launched; RuntimeSessionID is the runtime
+	// session it registered (tmux launches), which `amx attach` takes.
+	Backend          string `json:"backend"`
+	RuntimeSessionID string `json:"runtime_session_id,omitempty"`
 }
 
 func runProjectList(cmd *cobra.Command, _ []string) error {
@@ -420,13 +430,27 @@ func runProjectLaunch(cmd *cobra.Command, args []string) error {
 		return projectActionError(cmd, err)
 	}
 
-	client := projectNewKitty()
-	before := tabIDs(client)
-	result, err := projectExecute(cli.CommandContext(cmd), actions.Dependencies{Kitty: client, Config: cfg}, actions.Request{Project: &project})
+	deps := actions.Dependencies{Config: cfg}
+	if err := cli.SelectBackend(cmd, &deps); err != nil {
+		return projectActionError(cmd, err)
+	}
+	// Only a Kitty launch reads Kitty: a tmux launch must work with no Kitty
+	// running at all.
+	var client kitty.KittyClient
+	var before map[int]bool
+	if deps.Backend == runtimesession.BackendKitty {
+		client = projectNewKitty()
+		deps.Kitty = client
+		before = tabIDs(client)
+	}
+	result, err := projectExecute(cli.CommandContext(cmd), deps, actions.Request{Project: &project})
 	if err != nil {
 		return projectActionError(cmd, err)
 	}
-	data := projectLaunchData{Action: result.Action, Changed: result.Changed, Message: result.Message, Project: projectViewOf(cfg, project)}
+	data := projectLaunchData{Action: result.Action, Changed: result.Changed, Message: result.Message, Project: projectViewOf(cfg, project), Backend: string(deps.Backend)}
+	if id, ok := result.Data["runtime_session_id"].(string); ok {
+		data.RuntimeSessionID = id
+	}
 	if before != nil {
 		data.TabID, data.WindowID = launchedTab(client, before, project.Title)
 	}

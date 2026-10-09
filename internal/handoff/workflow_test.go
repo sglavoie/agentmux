@@ -3,6 +3,9 @@ package handoff
 import (
 	"context"
 	"errors"
+	"github.com/sglavoie/agentmux/internal/backend"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
+	"github.com/sglavoie/agentmux/internal/session"
 	"os"
 	"path/filepath"
 	"strings"
@@ -47,9 +50,11 @@ func testWorkflow(t *testing.T, launch func(kitty.KittyClient, config.Session, c
 		builder:           NewBuilderWithGit(workflowGit{}),
 		artifactDirectory: func() (string, error) { return artifactDirectory, nil },
 		edit:              edit,
-		launch:            launch,
-		now:               func() time.Time { return time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC) },
-		newID:             func() (string, error) { return "handoff-test", nil },
+		launch: func(rt session.Runtime, sess config.Session, acc config.Account, cfg *config.Config, prompt string) error {
+			return launch(rt.Kitty, sess, acc, cfg, prompt)
+		},
+		now:   func() time.Time { return time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC) },
+		newID: func() (string, error) { return "handoff-test", nil },
 	}
 }
 
@@ -163,6 +168,44 @@ func TestWorkflowRetainsFinalArtifactWhenLaunchFails(t *testing.T) {
 		t.Fatalf("final artifact was not retained: %v", statErr)
 	}
 }
+
+// TestWorkflowLaunchesOnSelectedRuntime pins that the handoff target launches
+// on the backend the request selects, and that a failed launch there still
+// retains the finalized artifact instead of retrying or launching elsewhere.
+func TestWorkflowLaunchesOnSelectedRuntime(t *testing.T) {
+	cwd := t.TempDir()
+	sourcePath := filepath.Join(cwd, "source.jsonl")
+	if err := os.WriteFile(sourcePath, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	selected := session.Runtime{Tmux: selectedTmux{}}
+	workflow := testWorkflow(t, nil, nil)
+	var launches []session.Runtime
+	workflow.launch = func(rt session.Runtime, _ config.Session, _ config.Account, _ *config.Config, _ string) error {
+		launches = append(launches, rt)
+		return errors.New("tmux launch failed")
+	}
+	result, err := workflow.Run(context.Background(), Request{
+		Source:        transcript.SessionMeta{ID: "source-1", Harness: harness.Claude, Profile: "source", Project: "api", CWD: cwd, Path: sourcePath},
+		Reader:        workflowReader{harness: harness.Claude, messages: []transcript.Message{{Role: "user", Text: "Original goal"}}},
+		Config:        &config.Config{Accounts: []config.Account{{Name: "source", Harness: harness.Claude}, {Name: "target", Harness: harness.Codex}}},
+		TargetProfile: "target", Runtime: selected,
+	})
+	var partial *PartialLaunchError
+	if !errors.As(err, &partial) {
+		t.Fatalf("error = %v, want PartialLaunchError", err)
+	}
+	if len(launches) != 1 || launches[0].Kind() != runtimesession.BackendTmux {
+		t.Fatalf("launches = %+v, want exactly one tmux launch", launches)
+	}
+	if _, statErr := os.Stat(result.Artifact.Path); statErr != nil {
+		t.Fatalf("final artifact was not retained: %v", statErr)
+	}
+}
+
+// selectedTmux only marks a runtime as tmux; the injected launch never
+// reaches it.
+type selectedTmux struct{ backend.TargetLauncher }
 
 func TestProjectLabelPrefersTranscriptThenRepositoryThenSession(t *testing.T) {
 	tests := []struct {

@@ -57,5 +57,8 @@ func init() {
 	sessionHandoffCmd.Flags().Bool("edit", false, "edit the generated handoff before launch")
 	sessionHandoffCmd.Flags().Bool("no-launch", false, "finalize the handoff without launching a target")
 	sessionHandoffCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	for _, launcher := range []*cobra.Command{sessionContinueCmd, sessionForkCmd, sessionForkWorktreeCmd, sessionHandoffCmd} {
+		cli.AddBackendFlag(launcher)
+	}
 	sessionCmd.AddCommand(sessionListCmd, sessionSearchCmd, sessionShowCmd, sessionContinueCmd, sessionForkCmd, sessionForkWorktreeCmd, sessionHandoffCmd)
 }

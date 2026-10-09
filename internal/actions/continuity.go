@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
@@ -21,8 +22,9 @@ import (
 // live owner exists, the persisted transcript source is validated before a
 // native resume starts in a new tab.
 func continueConversation(deps Dependencies, meta transcript.SessionMeta) (Result, error) {
-	if deps.Kitty == nil || deps.Config == nil {
-		return Result{}, dependencyError(Continue, "Kitty client and configuration")
+	rt, err := deps.launchRuntime(Continue)
+	if err != nil {
+		return Result{}, err
 	}
 	identity, err := conversationIdentity(meta, Continue)
 	if err != nil {
@@ -43,9 +45,14 @@ func continueConversation(deps Dependencies, meta transcript.SessionMeta) (Resul
 		}
 		return Result{}, &Error{Code: "live_lookup_unavailable", Action: Continue, Message: message}
 	}
-	windows, err := deps.Kitty.ListWindows()
-	if err != nil {
-		return Result{}, &Error{Code: "live_lookup_unavailable", Action: Continue, Message: fmt.Sprintf("listing Kitty windows: %v", err)}
+	// A tmux launch without Kitty has no Kitty tab to find; the registry
+	// still refuses to resume a conversation another runtime session runs.
+	var windows []kitty.OSWindow
+	if deps.Kitty != nil {
+		windows, err = deps.Kitty.ListWindows()
+		if err != nil {
+			return Result{}, &Error{Code: "live_lookup_unavailable", Action: Continue, Message: fmt.Sprintf("listing Kitty windows: %v", err)}
+		}
 	}
 	live, status := session.ResolveLiveConversationStatus(identity, response.States, windows)
 	if status == session.LiveConversationAmbiguous {
@@ -65,21 +72,23 @@ func continueConversation(deps Dependencies, meta transcript.SessionMeta) (Resul
 	if err != nil {
 		return Result{}, err
 	}
-	if err := session.LaunchContinuity(deps.Kitty, project, account, deps.Config, harness.InvocationResume, identity.SessionID, ""); err != nil {
+	launched, err := session.LaunchContinuityOn(rt, project, account, deps.Config, harness.InvocationResume, identity.SessionID, "")
+	if err != nil {
 		return Result{}, continuityLaunchError(Continue, err)
 	}
 	return Result{
 		Changed: true,
 		Message: "resumed indexed conversation",
-		Data:    map[string]any{"continuation": "resumed", "harness": identity.Harness, "session_id": identity.SessionID},
+		Data:    launchData(map[string]any{"continuation": "resumed", "harness": identity.Harness, "session_id": identity.SessionID}, launched),
 	}, nil
 }
 
 // forkConversation always creates a new native harness branch. It never
 // focuses, closes, or otherwise changes a live source conversation.
 func forkConversation(deps Dependencies, meta transcript.SessionMeta) (Result, error) {
-	if deps.Kitty == nil || deps.Config == nil {
-		return Result{}, dependencyError(Fork, "Kitty client and configuration")
+	rt, err := deps.launchRuntime(Fork)
+	if err != nil {
+		return Result{}, err
 	}
 	identity, err := conversationIdentity(meta, Fork)
 	if err != nil {
@@ -92,13 +101,14 @@ func forkConversation(deps Dependencies, meta transcript.SessionMeta) (Result, e
 	if err != nil {
 		return Result{}, err
 	}
-	if err := session.LaunchContinuity(deps.Kitty, project, account, deps.Config, harness.InvocationFork, identity.SessionID, ""); err != nil {
+	launched, err := session.LaunchContinuityOn(rt, project, account, deps.Config, harness.InvocationFork, identity.SessionID, "")
+	if err != nil {
 		return Result{}, continuityLaunchError(Fork, err)
 	}
 	return Result{
 		Changed: true,
 		Message: "forked indexed conversation",
-		Data:    map[string]any{"continuation": "forked", "harness": identity.Harness, "session_id": identity.SessionID},
+		Data:    launchData(map[string]any{"continuation": "forked", "harness": identity.Harness, "session_id": identity.SessionID}, launched),
 	}, nil
 }
 
@@ -106,8 +116,12 @@ func handoffConversation(ctx context.Context, deps Dependencies, meta transcript
 	if deps.Config == nil {
 		return Result{}, dependencyError(Handoff, "configuration")
 	}
-	if !noLaunch && deps.Kitty == nil {
-		return Result{}, dependencyError(Handoff, "Kitty client")
+	var rt session.Runtime
+	if !noLaunch {
+		var err error
+		if rt, err = deps.launchRuntime(Handoff); err != nil {
+			return Result{}, err
+		}
 	}
 	identity, err := conversationIdentity(meta, Handoff)
 	if err != nil {
@@ -126,7 +140,7 @@ func handoffConversation(ctx context.Context, deps Dependencies, meta transcript
 	}
 	workflowResult, err := runner.Run(ctx, handoff.Request{
 		Source: meta, Reader: reader, Config: deps.Config, TargetProfile: targetProfile,
-		LaunchDirectory: launchDirectory, Edit: edit, NoLaunch: noLaunch, Label: label, Kitty: deps.Kitty,
+		LaunchDirectory: launchDirectory, Edit: edit, NoLaunch: noLaunch, Label: label, Kitty: deps.Kitty, Runtime: rt,
 	})
 	result := resultFromHandoff(workflowResult)
 	if strings.HasPrefix(label, "Portable") {
@@ -154,8 +168,9 @@ func handoffConversation(ctx context.Context, deps Dependencies, meta transcript
 // remains separate: it never creates Git state and keeps its existing launch
 // context unchanged.
 func forkConversationInWorktree(ctx context.Context, deps Dependencies, meta transcript.SessionMeta, allowDirty bool) (Result, error) {
-	if deps.Kitty == nil || deps.Config == nil {
-		return Result{}, dependencyError(ForkWorktree, "Kitty client and configuration")
+	rt, err := deps.launchRuntime(ForkWorktree)
+	if err != nil {
+		return Result{}, err
 	}
 	identity, err := conversationIdentity(meta, ForkWorktree)
 	if err != nil {
@@ -198,13 +213,14 @@ func forkConversationInWorktree(ctx context.Context, deps Dependencies, meta tra
 		return addIsolatedWorktreeResult(result, isolated), nil
 	}
 	project.Directory = isolated.Path
-	if err := session.LaunchContinuity(deps.Kitty, project, account, deps.Config, harness.InvocationFork, identity.SessionID, ""); err != nil {
+	launched, err := session.LaunchContinuityOn(rt, project, account, deps.Config, harness.InvocationFork, identity.SessionID, "")
+	if err != nil {
 		return cleanup(continuityLaunchError(ForkWorktree, err), Result{})
 	}
 	return addIsolatedWorktreeResult(Result{
 		Changed: true,
 		Message: "forked indexed conversation in isolated worktree",
-		Data:    map[string]any{"continuation": "forked", "harness": identity.Harness, "session_id": identity.SessionID, "fork_kind": "isolated"},
+		Data:    launchData(map[string]any{"continuation": "forked", "harness": identity.Harness, "session_id": identity.SessionID, "fork_kind": "isolated"}, launched),
 	}, isolated), nil
 }
 

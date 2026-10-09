@@ -23,6 +23,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
 	"github.com/sglavoie/agentmux/tui/layout"
@@ -1036,7 +1037,14 @@ func resolveIndexedConversation(cfg *config.Config, readers map[string]transcrip
 
 func executeSessionAction(cmd *cobra.Command, jsonOutput bool, cfg *config.Config, actionID actions.ID, request actions.Request) error {
 	deps := actions.Dependencies{
-		Kitty: sessionCommandsNewKitty(), Config: cfg, Readers: sessionCommandsSessionReaders(), Daemon: sessionCommandsDaemon, Handoff: sessionCommandsNewHandoff(), Worktree: sessionCommandsNewWorktree(),
+		Config: cfg, Readers: sessionCommandsSessionReaders(), Daemon: sessionCommandsDaemon, Handoff: sessionCommandsNewHandoff(), Worktree: sessionCommandsNewWorktree(),
+	}
+	if err := cli.SelectBackend(cmd, &deps); err != nil {
+		return sessionActionCommandError(cmd, jsonOutput, actions.Result{Action: actionID}, err)
+	}
+	// A tmux launch must work with no Kitty running, so it never reads Kitty.
+	if deps.Backend != runtimesession.BackendTmux {
+		deps.Kitty = sessionCommandsNewKitty()
 	}
 	result, err := actions.DefaultRegistry().Execute(cli.CommandContext(cmd), deps, actionID, request)
 	if err != nil {

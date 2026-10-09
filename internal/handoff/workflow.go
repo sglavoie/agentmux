@@ -34,6 +34,20 @@ type Request struct {
 	NoLaunch        bool
 	Label           string
 	Kitty           kitty.KittyClient
+	// Runtime selects the backend the target launches on. When it selects
+	// no backend, Kitty is the backend.
+	Runtime session.Runtime
+}
+
+// launchRuntime is the backend the target launches on, or false when none.
+func (r Request) launchRuntime() (session.Runtime, bool) {
+	if r.Runtime.Tmux != nil || r.Runtime.Kitty != nil {
+		return r.Runtime, true
+	}
+	if r.Kitty == nil {
+		return session.Runtime{}, false
+	}
+	return session.KittyRuntime(r.Kitty), true
 }
 
 // Result describes the finalized handoff and, when requested, the fresh
@@ -78,7 +92,7 @@ type Workflow struct {
 	builder           *Builder
 	artifactDirectory func() (string, error)
 	edit              func(string, *config.Config) error
-	launch            func(kitty.KittyClient, config.Session, config.Account, *config.Config, string) error
+	launch            func(session.Runtime, config.Session, config.Account, *config.Config, string) error
 	now               func() time.Time
 	newID             func() (string, error)
 }
@@ -88,7 +102,7 @@ func NewWorkflow() *Workflow {
 		builder:           NewBuilder(),
 		artifactDirectory: DefaultDirectory,
 		edit:              session.EditPath,
-		launch:            session.LaunchFresh,
+		launch:            launchFresh,
 		now:               time.Now,
 		newID:             newArtifactID,
 	}
@@ -120,7 +134,8 @@ func (w *Workflow) Run(ctx context.Context, request Request) (Result, error) {
 	if strings.TrimSpace(request.Source.CWD) == "" {
 		return Result{}, errors.New("handoff: source conversation has no working directory")
 	}
-	if !request.NoLaunch && request.Kitty == nil {
+	runtime, canLaunch := request.launchRuntime()
+	if !request.NoLaunch && !canLaunch {
 		return Result{}, errors.New("handoff: Kitty client is required when launching a target session")
 	}
 
@@ -204,7 +219,7 @@ func (w *Workflow) Run(ctx context.Context, request Request) (Result, error) {
 		launchSession.Directory = directory
 	}
 	prompt := launchPrompt(final.Path)
-	if err := w.launch(request.Kitty, launchSession, target, request.Config, prompt); err != nil {
+	if err := w.launch(runtime, launchSession, target, request.Config, prompt); err != nil {
 		return result, &PartialLaunchError{Err: err}
 	}
 	result.Launched = true
@@ -308,4 +323,9 @@ func newArtifactID() (string, error) {
 		return "", err
 	}
 	return "handoff-" + hex.EncodeToString(bytes), nil
+}
+
+func launchFresh(rt session.Runtime, sess config.Session, acc config.Account, cfg *config.Config, prompt string) error {
+	_, err := session.LaunchFreshOn(rt, sess, acc, cfg, prompt)
+	return err
 }

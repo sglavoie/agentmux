@@ -17,23 +17,30 @@ var debugLog = newFileLogger("/tmp/amx-debug.log", "[restart] ")
 // dashboard overlay is on top of the tab being closed, the new tab is
 // already committed in Kitty before the dashboard process is torn down.
 func Restart(client kitty.KittyClient, running RunningSession, cfg *config.Config) error {
+	_, err := RestartOn(KittyRuntime(client), running, cfg)
+	return err
+}
+
+// RestartOn is Restart on the backend that hosts running, which rt must
+// select. The replacement launches before the original closes on every
+// backend; a launch failure leaves the original untouched.
+func RestartOn(rt Runtime, running RunningSession, cfg *config.Config) (LaunchResult, error) {
+	result := LaunchResult{Backend: rt.Kind()}
+	if err := rt.Owns(running); err != nil {
+		return result, err
+	}
 	acc, found := findAccount(cfg, running.EffectiveProfile())
 	if !found {
-		return fmt.Errorf("profile %q not found in config", running.EffectiveProfile())
+		return result, fmt.Errorf("profile %q not found in config", running.EffectiveProfile())
 	}
 
 	sess := SessionFromRunning(running)
 
-	if err := Launch(client, sess, acc, cfg, LaunchPolicyAlwaysNewInstance); err != nil {
-		return err
+	result, err := launchFresh(rt, sess, acc, cfg, "", lineage{parent: running.RuntimeSessionID}, LaunchPolicyAlwaysNewInstance)
+	if err != nil {
+		return result, err
 	}
-
-	closeErr := Close(kitty.NewBackend(client), running.GroupRef())
-	// ErrCloseTimeout is non-fatal — the tab likely closed shortly after.
-	if closeErr != nil && !errors.Is(closeErr, ErrCloseTimeout) {
-		return fmt.Errorf("closing tab %d: %w", running.TabID, closeErr)
-	}
-	return nil
+	return result, closeReplaced(rt, running)
 }
 
 // RestartWithAccount relaunches a running session under a different profile's
@@ -51,14 +58,25 @@ func RestartWithAccount(client kitty.KittyClient, running RunningSession, target
 // recomputes target-profile args/env instead of inheriting source-harness
 // resolved values from the running tab.
 func RestartWithAccountTemplate(client kitty.KittyClient, running RunningSession, template config.Session, targetAcc config.Account, cfg *config.Config) error {
+	_, err := RestartWithAccountTemplateOn(KittyRuntime(client), running, template, targetAcc, cfg)
+	return err
+}
+
+// RestartWithAccountTemplateOn is RestartWithAccountTemplate on the backend
+// that hosts running, which rt must select.
+func RestartWithAccountTemplateOn(rt Runtime, running RunningSession, template config.Session, targetAcc config.Account, cfg *config.Config) (LaunchResult, error) {
+	result := LaunchResult{Backend: rt.Kind()}
 	debugLog.Printf("RestartWithAccount: running=%+v targetAcc=%+v", running, targetAcc)
+	if err := rt.Owns(running); err != nil {
+		return result, err
+	}
 	// Case-insensitive compare: profile names get lowercased in SessionKey and
 	// duplicates differing only in case are rejected by config validation, so a
 	// case-sensitive equality check here would re-launch the session needlessly
 	// when the user var case differs from the config name.
 	if strings.EqualFold(running.EffectiveProfile(), targetAcc.Name) {
 		debugLog.Printf("RestartWithAccount: same account, no-op")
-		return nil
+		return result, nil
 	}
 
 	sess := template
@@ -66,18 +84,26 @@ func RestartWithAccountTemplate(client kitty.KittyClient, running RunningSession
 	sess.Account = targetAcc.Name
 	debugLog.Printf("RestartWithAccount: session=%+v", sess)
 
-	launchErr := Launch(client, sess, targetAcc, cfg, LaunchPolicyAlwaysNewInstance)
+	result, launchErr := launchFresh(rt, sess, targetAcc, cfg, "", lineage{parent: running.RuntimeSessionID}, LaunchPolicyAlwaysNewInstance)
 	debugLog.Printf("RestartWithAccount: Launch err=%v", launchErr)
 	if launchErr != nil {
-		return launchErr
+		return result, launchErr
 	}
+	return result, closeReplaced(rt, running)
+}
 
-	closeErr := Close(kitty.NewBackend(client), running.GroupRef())
-	debugLog.Printf("RestartWithAccount: Close err=%v", closeErr)
+// closeReplaced closes the session a restart replaced and ends its runtime
+// session. ErrCloseTimeout is non-fatal — the tab likely closed shortly after.
+func closeReplaced(rt Runtime, running RunningSession) error {
+	closeErr := Close(rt.Terminal(), running.GroupRef())
+	debugLog.Printf("Restart: Close err=%v", closeErr)
 	if closeErr != nil && !errors.Is(closeErr, ErrCloseTimeout) {
-		return fmt.Errorf("closing tab %d: %w", running.TabID, closeErr)
+		if running.Backend == "" {
+			return fmt.Errorf("closing tab %d: %w", running.TabID, closeErr)
+		}
+		return fmt.Errorf("closing %s session %s: %w", running.Backend, running.GroupRef().ID, closeErr)
 	}
-	return nil
+	return EndRuntimeSession(rt, running.RuntimeSessionID)
 }
 
 func findAccount(cfg *config.Config, name string) (config.Account, bool) {

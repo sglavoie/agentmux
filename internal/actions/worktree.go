@@ -210,13 +210,18 @@ func resumeWorktreeConversation(deps Dependencies, entry worktree.Entry, project
 	}
 	project.Directory = entry.Path
 	project.Profile, project.Account = account.Name, account.Name
-	if err := session.LaunchContinuity(deps.Kitty, project, account, deps.Config, harness.InvocationResume, identity.SessionID, ""); err != nil {
+	rt, err := deps.launchRuntime(WorktreeReopen)
+	if err != nil {
+		return Result{}, err
+	}
+	launched, err := session.LaunchContinuityOn(rt, project, account, deps.Config, harness.InvocationResume, identity.SessionID, "")
+	if err != nil {
 		return Result{}, &Error{Code: "launch_failed", Action: WorktreeReopen, Message: err.Error()}
 	}
-	return Result{Changed: true, Message: "resumed newest worktree conversation", Data: map[string]any{
+	return Result{Changed: true, Message: "resumed newest worktree conversation", Data: launchData(map[string]any{
 		"continuation": "resumed", "harness": identity.Harness, "session_id": identity.SessionID,
 		"warnings": warnings,
-	}}, nil
+	}, launched)}, nil
 }
 
 func launchFreshWorktree(deps Dependencies, entry worktree.Entry, project config.Session, replacement string, warnings []string) (Result, error) {
@@ -237,12 +242,17 @@ func launchFreshWorktree(deps Dependencies, entry worktree.Entry, project config
 	}
 	project.Directory = entry.Path
 	project.Profile, project.Account = account.Name, account.Name
-	if err := session.Launch(deps.Kitty, project, account, deps.Config, session.LaunchPolicyAlwaysNewInstance); err != nil {
+	rt, err := deps.launchRuntime(WorktreeReopen)
+	if err != nil {
+		return Result{}, err
+	}
+	launched, err := session.LaunchOn(rt, project, account, deps.Config, session.LaunchPolicyAlwaysNewInstance)
+	if err != nil {
 		return Result{}, &Error{Code: "launch_failed", Action: WorktreeReopen, Message: err.Error()}
 	}
-	return Result{Changed: true, Message: "launched fresh worktree session", Data: map[string]any{
+	return Result{Changed: true, Message: "launched fresh worktree session", Data: launchData(map[string]any{
 		"continuation": "fresh", "profile": account.Name, "harness": account.EffectiveHarness(), "warnings": warnings,
-	}}, nil
+	}, launched)}, nil
 }
 
 func profileRequiredError(message string) error {

@@ -191,6 +191,22 @@ type Launcher interface {
 	Launch(spec LaunchSpec) error
 }
 
+// Launched is the exact target one launch created, so a runtime session can
+// be committed without searching for it.
+type Launched struct {
+	Group    Ref
+	Pane     Ref
+	PID      int
+	Instance runtimesession.BackendInstance
+}
+
+// TargetLauncher is a backend that reports the target each launch created.
+// Backends that can only report success (Kitty) implement Launcher alone.
+type TargetLauncher interface {
+	Backend
+	LaunchTarget(spec LaunchSpec) (Launched, error)
+}
+
 // Terminator ends the group addressed by ref. A pane ref ends the group that
 // contains it, since AgentMux runs one agent per group.
 type Terminator interface {

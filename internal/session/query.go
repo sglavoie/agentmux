@@ -9,6 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/projectresolve"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
 // RunningSession is a currently open managed harness tab in Kitty.
@@ -63,6 +64,23 @@ type RunningSession struct {
 	NativeOverride     string
 	HarnessSessionID   string
 	ASLRunID           string
+	// Backend is the terminal backend hosting the session. Empty means Kitty,
+	// whose rows are addressed by TabID and WindowID.
+	Backend runtimesession.BackendKind
+	// Group and Pane address a non-Kitty session inside its backend.
+	Group backend.Ref
+	Pane  backend.Ref
+	// RuntimeSessionID is the runtime session the launch registered, when it
+	// registered one.
+	RuntimeSessionID runtimesession.ID
+}
+
+// BackendKind is the backend hosting the session; Kitty when unrecorded.
+func (rs RunningSession) BackendKind() runtimesession.BackendKind {
+	if rs.Backend == "" {
+		return runtimesession.BackendKitty
+	}
+	return rs.Backend
 }
 
 func (rs RunningSession) EffectiveProfile() string {
@@ -221,10 +239,20 @@ func FindByWindowID(sessions []RunningSession, windowID int) (RunningSession, bo
 }
 
 // GroupRef is the backend group (Kitty tab) hosting the session.
-func (r RunningSession) GroupRef() backend.Ref { return kitty.GroupRef(r.TabID) }
+func (r RunningSession) GroupRef() backend.Ref {
+	if !r.Group.IsZero() {
+		return r.Group
+	}
+	return kitty.GroupRef(r.TabID)
+}
 
 // PaneRef is the backend pane (Kitty window) the session is anchored to.
-func (r RunningSession) PaneRef() backend.Ref { return kitty.PaneRef(r.WindowID) }
+func (r RunningSession) PaneRef() backend.Ref {
+	if !r.Pane.IsZero() {
+		return r.Pane
+	}
+	return kitty.PaneRef(r.WindowID)
+}
 
 // PaneRef is the backend pane (Kitty window) the ghost tab is anchored to.
 func (g GhostTab) PaneRef() backend.Ref { return kitty.PaneRef(g.WindowID) }

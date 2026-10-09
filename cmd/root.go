@@ -159,7 +159,7 @@ func init() {
 		&cobra.Group{ID: groupTabs, Title: "Kitty tabs:"},
 		&cobra.Group{ID: groupSetup, Title: "Setup and diagnostics:"},
 	)
-	addGrouped(groupSessions, session.Command(), project.Command(), worktree.Command(), dashboard.OverviewCommand(), dashboard.OpenDashboardCommand())
+	addGrouped(groupSessions, session.Command(), project.Command(), session.AttachCommand(), worktree.Command(), dashboard.OverviewCommand(), dashboard.OpenDashboardCommand())
 	addGrouped(groupTabs, session.FocusNextCommand(), session.FocusNextManagedCommand(), session.FocusPrevManagedCommand(), session.MuteToggleCommand(), session.ResortCommand(), dashboard.ColorPickerCommand(), dashboard.IconPickerCommand(), dashboard.KeybindingsCommand())
 	addGrouped(groupSetup, config.Command(), daemon.Command(), debug.Command(), debug.DoctorCommand(), notifications.Command(), transcripts.Command(), overseer.Command())
 	rootCmd.AddCommand(hooks.IndicatorCommand(), release.Command(), tuitest.Command())

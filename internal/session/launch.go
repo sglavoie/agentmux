@@ -11,10 +11,12 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
 var launchDebug = newFileLogger("/tmp/amx-debug.log", "[launch] ")
@@ -105,7 +107,13 @@ func buildLaunchUserVars(sess config.Session, acc config.Account, defaults confi
 // LaunchPolicyDedupExisting, which returns nil silently if the session is
 // already running.
 func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, cfg *config.Config, policies ...LaunchPolicy) error {
-	return launchFresh(client, sess, acc, cfg, "", policies...)
+	_, err := LaunchOn(KittyRuntime(client), sess, acc, cfg, policies...)
+	return err
+}
+
+// LaunchOn is Launch on the backend rt selects.
+func LaunchOn(rt Runtime, sess config.Session, acc config.Account, cfg *config.Config, policies ...LaunchPolicy) (LaunchResult, error) {
+	return launchFresh(rt, sess, acc, cfg, "", lineage{}, policies...)
 }
 
 // LaunchFresh starts a new harness conversation with an optional initial
@@ -113,20 +121,44 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 // callers use it for a new handoff or another explicitly requested fresh
 // session, where an existing tab for the same project is not a substitute.
 func LaunchFresh(client kitty.KittyClient, sess config.Session, acc config.Account, cfg *config.Config, initialPrompt string) error {
-	return launchFresh(client, sess, acc, cfg, initialPrompt, LaunchPolicyAlwaysNewInstance)
+	_, err := LaunchFreshOn(KittyRuntime(client), sess, acc, cfg, initialPrompt)
+	return err
 }
 
-func launchFresh(client kitty.KittyClient, sess config.Session, acc config.Account, cfg *config.Config, initialPrompt string, policies ...LaunchPolicy) error {
+// LaunchFreshOn is LaunchFresh on the backend rt selects.
+func LaunchFreshOn(rt Runtime, sess config.Session, acc config.Account, cfg *config.Config, initialPrompt string) (LaunchResult, error) {
+	return launchFresh(rt, sess, acc, cfg, initialPrompt, lineage{}, LaunchPolicyAlwaysNewInstance)
+}
+
+func launchFresh(rt Runtime, sess config.Session, acc config.Account, cfg *config.Config, initialPrompt string, lin lineage, policies ...LaunchPolicy) (LaunchResult, error) {
 	formattedTitle := FormatTitle(sess, acc, cfg)
 	policy := LaunchPolicyDedupExisting
 	if len(policies) > 0 {
 		policy = policies[0]
 	}
-	launchDebug.Printf("Launch: title=%q acc=%q dir=%q policy=%s", formattedTitle, acc.Name, sess.Directory, policy)
+	launchDebug.Printf("Launch: title=%q acc=%q dir=%q policy=%s backend=%s", formattedTitle, acc.Name, sess.Directory, policy, rt.Kind())
+	build := func() (harness.Invocation, error) {
+		// Build the structured fresh invocation before rendering it through
+		// the shared shell-quoting boundary. Resume/fork callers use the same
+		// seam.
+		invocation, err := buildLaunchInvocation(sess, acc, cfg.Defaults, harness.InvocationFresh, "", initialPrompt)
+		if err != nil {
+			return harness.Invocation{}, fmt.Errorf("building fresh invocation for %q: %w", formattedTitle, err)
+		}
+		return invocation, nil
+	}
+	if rt.Kind() == runtimesession.BackendTmux {
+		return launchTmux(rt, sess, acc, cfg, formattedTitle, build, policy, lin)
+	}
+	result := LaunchResult{Backend: runtimesession.BackendKitty}
+	client := rt.Kitty
+	if client == nil {
+		return result, errNoKittyClient
+	}
 
 	osWindows, err := client.ListWindows()
 	if err != nil {
-		return fmt.Errorf("listing running sessions: %w", err)
+		return result, fmt.Errorf("listing running sessions: %w", err)
 	}
 	running, _ := runningSessionsFromOSWindows(osWindows, cfg)
 	launchDebug.Printf("Launch: %d running sessions", len(running))
@@ -136,21 +168,19 @@ func launchFresh(client kitty.KittyClient, sess config.Session, acc config.Accou
 
 	if policy != LaunchPolicyAlwaysNewInstance {
 		profileName := effectiveSessionProfile(sess, acc)
-		if _, exists := FindByKey(running, SessionKey(profileName, sess.Title)); exists {
+		if existing, exists := FindByKey(running, SessionKey(profileName, sess.Title)); exists {
 			launchDebug.Printf("Launch: dedup hit, returning nil")
-			return nil
+			return result.deduplicated(existing), nil
 		}
 	} else {
 		launchDebug.Printf("Launch: dedup skipped")
 	}
 
-	// Build the structured fresh invocation before rendering it through the
-	// shared shell-quoting boundary. Resume/fork callers use the same seam.
-	invocation, err := buildLaunchInvocation(sess, acc, cfg.Defaults, harness.InvocationFresh, "", initialPrompt)
+	invocation, err := build()
 	if err != nil {
-		return fmt.Errorf("building fresh invocation for %q: %w", formattedTitle, err)
+		return result, err
 	}
-	return launchInvocation(client, sess, acc, cfg, formattedTitle, invocation, policy)
+	return result, launchInvocation(client, sess, acc, cfg, formattedTitle, invocation, policy)
 }
 
 // LaunchContinuity launches a native resume or fork in a new Kitty tab. The
@@ -168,18 +198,55 @@ func LaunchContinuity(
 	sessionID string,
 	initialPrompt string,
 ) error {
+	_, err := LaunchContinuityOn(KittyRuntime(client), sess, acc, cfg, kind, sessionID, initialPrompt)
+	return err
+}
+
+// LaunchContinuityOn is LaunchContinuity on the backend rt selects. On tmux a
+// resume registers the resumed conversation with its runtime session, so a
+// conversation already live in another runtime session is refused instead of
+// running twice.
+func LaunchContinuityOn(
+	rt Runtime,
+	sess config.Session,
+	acc config.Account,
+	cfg *config.Config,
+	kind harness.InvocationKind,
+	sessionID string,
+	initialPrompt string,
+) (LaunchResult, error) {
+	result := LaunchResult{Backend: rt.Kind()}
 	if kind != harness.InvocationResume && kind != harness.InvocationFork {
-		return fmt.Errorf("launching continuity session: unsupported operation %q", kind)
+		return result, fmt.Errorf("launching continuity session: unsupported operation %q", kind)
 	}
 	if cfg == nil {
-		return fmt.Errorf("launching continuity session: configuration is required")
+		return result, fmt.Errorf("launching continuity session: configuration is required")
 	}
 	formattedTitle := FormatTitle(sess, acc, cfg)
-	invocation, err := buildLaunchInvocation(sess, acc, cfg.Defaults, kind, sessionID, initialPrompt)
-	if err != nil {
-		return fmt.Errorf("building %s invocation for %q: %w", kind, formattedTitle, err)
+	build := func() (harness.Invocation, error) {
+		invocation, err := buildLaunchInvocation(sess, acc, cfg.Defaults, kind, sessionID, initialPrompt)
+		if err != nil {
+			return harness.Invocation{}, fmt.Errorf("building %s invocation for %q: %w", kind, formattedTitle, err)
+		}
+		return invocation, nil
 	}
-	return launchInvocation(client, sess, acc, cfg, formattedTitle, invocation, LaunchPolicyAlwaysNewInstance)
+	if rt.Kind() == runtimesession.BackendTmux {
+		var lin lineage
+		if kind == harness.InvocationResume {
+			if identity, ok := conversation.New(acc.EffectiveHarness(), sessionID); ok {
+				lin.conversation = &identity
+			}
+		}
+		return launchTmux(rt, sess, acc, cfg, formattedTitle, build, LaunchPolicyAlwaysNewInstance, lin)
+	}
+	if rt.Kitty == nil {
+		return result, errNoKittyClient
+	}
+	invocation, err := build()
+	if err != nil {
+		return result, err
+	}
+	return result, launchInvocation(rt.Kitty, sess, acc, cfg, formattedTitle, invocation, LaunchPolicyAlwaysNewInstance)
 }
 
 // launchInvocation carries the Kitty-facing half shared by normal and
@@ -253,6 +320,12 @@ func launchInvocation(client kitty.KittyClient, sess config.Session, acc config.
 }
 
 func maintainNativeBeforeLaunch(cfg *config.Config, windows []kitty.OSWindow, launchID string) diagnostics.NativeReport {
+	return maintainNativeForActive(cfg, activeLaunchIDs(windows), launchID)
+}
+
+// maintainNativeForActive prunes native logs while keeping every launch in
+// active, plus the one about to start.
+func maintainNativeForActive(cfg *config.Config, active map[string]struct{}, launchID string) diagnostics.NativeReport {
 	if cfg == nil || !cfg.Defaults.Diagnostics.NativeLoggingValue() {
 		return diagnostics.NativeReport{}
 	}
@@ -260,7 +333,6 @@ func maintainNativeBeforeLaunch(cfg *config.Config, windows []kitty.OSWindow, la
 	if err != nil {
 		return diagnostics.NativeReport{Errors: []string{err.Error()}}
 	}
-	active := activeLaunchIDs(windows)
 	if launchID != "" {
 		active[launchID] = struct{}{}
 	}

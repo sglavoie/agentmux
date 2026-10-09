@@ -117,7 +117,7 @@ Shared and domain packages (`internal/...`):
 - `internal/runtimesession`: opaque AgentMux runtime-session IDs and the
   durable registry mapping them to generation- and fingerprint-checked
   backend targets. Hooks and the daemon read it (`AMX_RUNTIME_SESSION_ID`,
-  `Reader`); launch does not register sessions yet.
+  `Reader`); tmux launches register in it (Kitty launches do not yet).
 - `internal/backend`: narrow terminal-backend interfaces (discover, launch,
   close, capture, metadata, presentation), opaque group/pane refs, capability
   errors; `internal/backend/backendtest` is the shared contract every adapter
@@ -126,10 +126,16 @@ Shared and domain packages (`internal/...`):
   configuration (never the operator's server or `~/.tmux.conf`), one session
   and one agent pane per runtime session, exited panes retained until
   `Close`, generation-checked `Instance`. Its tests run a real tmux and skip
-  only when tmux is not installed.
+  only when tmux is not installed; `internal/tmux/tmuxtest` gives other
+  packages the same isolated server, a registry, and a stand-in agent shell.
 - `internal/session`, `internal/harness`: lifecycle (still reading Kitty
   topology, issuing commands through `internal/backend`) and harness
-  argv/capabilities.
+  argv/capabilities. `session.Runtime` selects the launch backend (Kitty by
+  default; `--backend tmux` on launch entrypoints): tmux launches dedup,
+  register (`Begin`, launch, `Commit`), and compensate under one lock beside
+  the registry, and actions on a live session follow its recorded backend.
+  `amx attach <runtime-session-id>` (`cmd/session/attach.go`) transfers
+  interactive ownership with `tmux attach-session -d`; it never relaunches.
 - `internal/transcript`, `internal/plans`: discovery, metadata caches, search,
   recovery. `transcript.History` is the overseer's metadata-only admission path
   and never touches the index or search sidecars.

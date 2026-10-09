@@ -28,7 +28,7 @@ func defaultDefinitions() []Definition {
 		{
 			ID: Focus, Label: "focus tab", Description: "focus the session's Kitty tab", Requires: sessionRequirement,
 			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
-				term := deps.terminal()
+				term := deps.sessionTerminal(*request.Session)
 				if term == nil {
 					return Result{}, dependencyError(Focus, "Kitty client")
 				}
@@ -42,8 +42,9 @@ func defaultDefinitions() []Definition {
 			ID: Launch, Label: "launch new", Description: "launch a new session from a configured project", Requires: projectRequirement,
 			Parameters: []ParameterSchema{{Name: "profile", Type: "string", Description: "optional profile override"}},
 			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
-				if deps.Kitty == nil || deps.Config == nil {
-					return Result{}, dependencyError(Launch, "Kitty client and configuration")
+				rt, err := deps.launchRuntime(Launch)
+				if err != nil {
+					return Result{}, err
 				}
 				project := *request.Project
 				if profile := strings.TrimSpace(request.Parameters["profile"]); profile != "" {
@@ -59,10 +60,11 @@ func defaultDefinitions() []Definition {
 					issue := config.ProjectDirectoryIssue{Project: project.EffectiveProfile() + "/" + project.Title, Directory: project.Directory, Problem: problem}
 					return Result{}, &Error{Code: "directory_unusable", Action: Launch, Message: issue.String()}
 				}
-				if err := session.Launch(deps.Kitty, project, account, deps.Config, session.LaunchPolicyAlwaysNewInstance); err != nil {
+				launched, err := session.LaunchOn(rt, project, account, deps.Config, session.LaunchPolicyAlwaysNewInstance)
+				if err != nil {
 					return Result{}, err
 				}
-				return Result{Changed: true, Message: "launched session"}, nil
+				return Result{Changed: true, Message: "launched session", Data: launchData(nil, launched)}, nil
 			},
 		},
 		{
@@ -163,7 +165,7 @@ func defaultDefinitions() []Definition {
 		{
 			ID: ToggleLock, Label: "lock/unlock", Description: "toggle the session lock", Requires: sessionRequirement,
 			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
-				term := deps.terminal()
+				term := deps.sessionTerminal(*request.Session)
 				if term == nil {
 					return Result{}, dependencyError(ToggleLock, "Kitty client")
 				}
@@ -191,7 +193,7 @@ func defaultDefinitions() []Definition {
 		{
 			ID: ToggleMute, Label: "mute/unmute", Description: "toggle session notification mute", Requires: sessionRequirement,
 			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
-				term := deps.terminal()
+				term := deps.sessionTerminal(*request.Session)
 				if term == nil {
 					return Result{}, dependencyError(ToggleMute, "Kitty client")
 				}
@@ -222,7 +224,7 @@ func defaultDefinitions() []Definition {
 				return Availability{Available: true}
 			},
 			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
-				term := deps.terminal()
+				term := deps.sessionTerminal(*request.Session)
 				if term == nil {
 					return Result{}, dependencyError(Close, "Kitty client")
 				}
@@ -238,6 +240,13 @@ func defaultDefinitions() []Definition {
 				if !observation.Confirmed() {
 					return Result{Changed: true, Message: "requested session close; the tab was not observed to close", Data: map[string]any{DataCloseConfirmed: false}}, nil
 				}
+				// A confirmed close ends the runtime session the launch
+				// registered; the registry is otherwise left to retirement.
+				if request.Session.RuntimeSessionID != "" {
+					if rt, rtErr := deps.runtimeFor(Close, *request.Session); rtErr == nil {
+						_ = session.EndRuntimeSession(rt, request.Session.RuntimeSessionID)
+					}
+				}
 				return Result{Changed: true, Message: "closed session", Data: map[string]any{DataCloseConfirmed: true}}, nil
 			},
 		},
@@ -252,8 +261,9 @@ func defaultDefinitions() []Definition {
 				return Availability{Available: true}
 			},
 			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
-				if deps.Kitty == nil || deps.Config == nil {
-					return Result{}, dependencyError(Restart, "Kitty client and configuration")
+				rt, err := deps.runtimeFor(Restart, *request.Session)
+				if err != nil {
+					return Result{}, err
 				}
 				if profile := strings.TrimSpace(request.Parameters["profile"]); profile != "" {
 					account, ok := accountByName(deps.Config, profile)
@@ -264,15 +274,17 @@ func defaultDefinitions() []Definition {
 					if request.Project != nil {
 						template = *request.Project
 					}
-					if err := session.RestartWithAccountTemplate(deps.Kitty, *request.Session, template, account, deps.Config); err != nil {
+					launched, err := session.RestartWithAccountTemplateOn(rt, *request.Session, template, account, deps.Config)
+					if err != nil {
 						return Result{}, err
 					}
-					return Result{Changed: true, Message: "restarted session"}, nil
+					return Result{Changed: true, Message: "restarted session", Data: launchData(nil, launched)}, nil
 				}
-				if err := session.Restart(deps.Kitty, *request.Session, deps.Config); err != nil {
+				launched, err := session.RestartOn(rt, *request.Session, deps.Config)
+				if err != nil {
 					return Result{}, err
 				}
-				return Result{Changed: true, Message: "restarted session"}, nil
+				return Result{Changed: true, Message: "restarted session", Data: launchData(nil, launched)}, nil
 			},
 		},
 		{

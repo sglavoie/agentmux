@@ -7,6 +7,7 @@ package actions
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/backend"
@@ -14,6 +15,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
@@ -113,9 +115,20 @@ type Definition struct {
 // launch) go through Terminal. Kitty remains the topology source for the
 // session-package helpers that still read Kitty's window tree, and when
 // Terminal is nil the Kitty adapter over it serves as the terminal.
+//
+// New agents launch on the backend Backend selects: Kitty by default, or the
+// private tmux server in Tmux. Actions on an existing session always use the
+// backend that session records, whatever Backend says.
 type Dependencies struct {
-	Kitty           kitty.KittyClient
-	Terminal        backend.Backend
+	Kitty    kitty.KittyClient
+	Terminal backend.Backend
+	// Backend selects where launches go. Empty means Kitty.
+	Backend runtimesession.BackendKind
+	// Tmux is the private tmux server, required to launch on tmux or to act
+	// on a tmux-hosted session.
+	Tmux backend.TargetLauncher
+	// Runtimes is the runtime-session registry; nil means the default file.
+	Runtimes        *runtimesession.Store
 	Config          *config.Config
 	Clipboard       func(string) error
 	Daemon          func(protocol.Request) (protocol.Response, error)
@@ -233,4 +246,63 @@ func (d Dependencies) terminal() backend.Backend {
 		return nil
 	}
 	return kitty.NewBackend(d.Kitty)
+}
+
+// launchRuntime is the backend new agents launch on.
+func (d Dependencies) launchRuntime(id ID) (session.Runtime, error) {
+	switch d.Backend {
+	case "", runtimesession.BackendKitty:
+		if d.Kitty == nil || d.Config == nil {
+			return session.Runtime{}, dependencyError(id, "Kitty client and configuration")
+		}
+		return session.Runtime{Kitty: d.Kitty, Registry: d.Runtimes}, nil
+	case runtimesession.BackendTmux:
+		if d.Tmux == nil || d.Config == nil {
+			return session.Runtime{}, dependencyError(id, "tmux server and configuration")
+		}
+		return session.Runtime{Kitty: d.Kitty, Tmux: d.Tmux, Registry: d.Runtimes}, nil
+	default:
+		return session.Runtime{}, &Error{Code: "invalid_backend", Action: id, Message: fmt.Sprintf("unknown session backend %q (kitty or tmux)", d.Backend)}
+	}
+}
+
+// runtimeFor is the backend hosting running.
+func (d Dependencies) runtimeFor(id ID, running session.RunningSession) (session.Runtime, error) {
+	if running.BackendKind() == runtimesession.BackendTmux {
+		if d.Tmux == nil || d.Config == nil {
+			return session.Runtime{}, dependencyError(id, "tmux server and configuration")
+		}
+		return session.Runtime{Kitty: d.Kitty, Tmux: d.Tmux, Registry: d.Runtimes}, nil
+	}
+	if d.Kitty == nil || d.Config == nil {
+		return session.Runtime{}, dependencyError(id, "Kitty client and configuration")
+	}
+	return session.Runtime{Kitty: d.Kitty, Registry: d.Runtimes}, nil
+}
+
+// sessionTerminal is the terminal of the backend hosting running, or nil.
+func (d Dependencies) sessionTerminal(running session.RunningSession) backend.Backend {
+	if running.BackendKind() == runtimesession.BackendTmux {
+		if d.Tmux == nil {
+			return nil
+		}
+		return d.Tmux
+	}
+	return d.terminal()
+}
+
+// launchData records where a launch went. Backend is always reported so a
+// caller reads the same shape from either backend; the runtime session is
+// reported when the launch registered one.
+func launchData(data map[string]any, launched session.LaunchResult) map[string]any {
+	if data == nil {
+		data = map[string]any{}
+	}
+	if launched.Backend != "" {
+		data["backend"] = string(launched.Backend)
+	}
+	if launched.RuntimeSessionID != "" {
+		data["runtime_session_id"] = string(launched.RuntimeSessionID)
+	}
+	return data
 }
