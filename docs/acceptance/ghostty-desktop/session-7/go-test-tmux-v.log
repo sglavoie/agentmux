@@ -1,0 +1,63 @@
+tmux 3.7c
+27.0.1
+9d19b320
+=== RUN   TestBackendContract
+=== RUN   TestBackendContract/capabilities
+=== RUN   TestBackendContract/launch_is_discoverable
+=== RUN   TestBackendContract/capture_reads_pane_output
+=== RUN   TestBackendContract/metadata_round_trips
+=== RUN   TestBackendContract/presentation_follows_capabilities
+=== RUN   TestBackendContract/close_ends_only_the_target
+=== RUN   TestBackendContract/invalid_refs_are_refused_before_acting
+=== RUN   TestBackendContract/discover_returns_independent_copies
+--- PASS: TestBackendContract (0.53s)
+    --- PASS: TestBackendContract/capabilities (0.02s)
+    --- PASS: TestBackendContract/launch_is_discoverable (0.05s)
+    --- PASS: TestBackendContract/capture_reads_pane_output (0.06s)
+    --- PASS: TestBackendContract/metadata_round_trips (0.08s)
+    --- PASS: TestBackendContract/presentation_follows_capabilities (0.07s)
+    --- PASS: TestBackendContract/close_ends_only_the_target (0.14s)
+    --- PASS: TestBackendContract/invalid_refs_are_refused_before_acting (0.06s)
+    --- PASS: TestBackendContract/discover_returns_independent_copies (0.06s)
+=== RUN   TestLaunchTargetMatchesDiscovery
+    backend_test.go:188: observed: launch $0/%0 pid 43750 on instance 43749-1791585756 matches discovery
+--- PASS: TestLaunchTargetMatchesDiscovery (0.06s)
+=== RUN   TestPersonalConfigIsolation
+    backend_test.go:232: observed: with personal ~/.tmux.conf and XDG tmux.conf setting @amx_personal/prefix C-a/remain-on-exit off/history-limit 7, the private server reports @amx_personal unset, prefix None, remain-on-exit on, history-limit 50000; pane env has TMUX=/var/folders/p3/qvz3zdtn5ggfs6pk_6jqbwhh0000gn/T/amxtmux1668795970/srv/tmux.sock and no parent TMUX/KITTY_*/AMX_RUNTIME_SESSION_ID; TMUX_TMPDIR stayed empty
+--- PASS: TestPersonalConfigIsolation (0.09s)
+=== RUN   TestPersonalConfigIsolationRejectsSharedDirectory
+--- PASS: TestPersonalConfigIsolationRejectsSharedDirectory (0.00s)
+=== RUN   TestProfileEnvironmentsArePreservedPerSession
+    backend_test.go:288: observed: two sessions with different AMX_PROFILE_HOME (one with a space) and an AMX_OTHER_ONLY only in the first each saw exactly their own values; a value with quotes, $HOME, #{session_name} and a trailing ';' and argv entries ending in ';' and '\;' arrived byte-for-byte; the global environment holds neither
+--- PASS: TestProfileEnvironmentsArePreservedPerSession (0.07s)
+=== RUN   TestRetainedExitUntilExplicitClose
+    backend_test.go:337: observed: exit 7 -> Exit{Status:7}; kill -TERM -> Exit{Signal:"term"}; missing program -> Exit{Status:1}; the exited pane stayed discoverable 300ms later with its output captured and metadata writable; Close removed only it
+--- PASS: TestRetainedExitUntilExplicitClose (0.43s)
+=== RUN   TestServerDisappearance
+    backend_test.go:397: observed: SIGKILL of server pid 43839 left a stale socket; Discover returned no panes and nil error; Instance/Close/SetMetadata/SetTitle/Capture returned ErrServerNotRunning; the next launch started generation 43852-1791585757 (was 43839-1791585756) at the same socket; old group ref $0 new group ref $0
+--- PASS: TestServerDisappearance (0.16s)
+=== RUN   TestPartialLaunchFailureLeavesNothing
+=== RUN   TestPartialLaunchFailureLeavesNothing/client_fails_after_create
+    backend_test.go:480: observed: client_fails_after_create -> Launch error "tmux: launch failed (partial session amx-1912f1857f161677 removed): tmux new-session -d -s amx-1912f1857f161677 -P -F #{session_id}\x1f#{pane_id}\x1f#{pane_pid}\x1f#{pid}\x1f#{start_time} -c /var/folders/p3/qvz3zdtn5ggfs6pk_6jqbwhh0000gn/T/TestPartialLaunchFailureLeavesNothingclient_fails_after_create1257479213/005 -- /bin/sh -c printf '%s\\n' \"$1\"; exec sleep 600 amx-echo doomed ; set-option -t =amx-1912f1857f161677: @amx_title ZG9vbWVk ; set-option -p -t =amx-1912f1857f161677: @amx_vars eyJhbXhfbGF1bmNoX2lkIjoiZG9vbWVkIn0: injected failure" after 48ms; sessions before "$0", after "$0"
+=== RUN   TestPartialLaunchFailureLeavesNothing/client_hangs_after_create
+    backend_test.go:480: observed: client_hangs_after_create -> Launch error "tmux: launch failed (partial session amx-d35cf4fb8b430896 removed): tmux new-session -d -s amx-d35cf4fb8b430896 -P -F #{session_id}\x1f#{pane_id}\x1f#{pane_pid}\x1f#{pid}\x1f#{start_time} -c /var/folders/p3/qvz3zdtn5ggfs6pk_6jqbwhh0000gn/T/TestPartialLaunchFailureLeavesNothingclient_hangs_after_create1358845816/005 -- /bin/sh -c printf '%s\\n' \"$1\"; exec sleep 600 amx-echo doomed ; set-option -t =amx-d35cf4fb8b430896: @amx_title ZG9vbWVk ; set-option -p -t =amx-d35cf4fb8b430896: @amx_vars eyJhbXhfbGF1bmNoX2lkIjoiZG9vbWVkIn0: timed out after 700ms: context deadline exceeded" after 738ms; sessions before "$0", after "$0"
+=== RUN   TestPartialLaunchFailureLeavesNothing/server_dies_during_launch
+    backend_test.go:497: observed: server killed between session creation and the client's answer -> Launch error "tmux: launch failed (partial session amx-85a5fb1e5be9bbbc removed): tmux new-session -d -s amx-85a5fb1e5be9bbbc -P -F #{session_id}\x1f#{pane_id}\x1f#{pane_pid}\x1f#{pid}\x1f#{start_time} -c /var/folders/p3/qvz3zdtn5ggfs6pk_6jqbwhh0000gn/T/TestPartialLaunchFailureLeavesNothingserver_dies_during_launch4154939488/004 -- /bin/sh -c printf '%s\\n' \"$1\"; exec sleep 600 amx-echo doomed ; set-option -t =amx-85a5fb1e5be9bbbc: @amx_title ZG9vbWVk ; set-option -p -t =amx-85a5fb1e5be9bbbc: @amx_vars eyJhbXhfbGF1bmNoX2lkIjoiZG9vbWVkIn0: exit status 1"; Discover empty
+=== RUN   TestPartialLaunchFailureLeavesNothing/refused_before_tmux_runs
+--- PASS: TestPartialLaunchFailureLeavesNothing (1.27s)
+    --- PASS: TestPartialLaunchFailureLeavesNothing/client_fails_after_create (0.20s)
+    --- PASS: TestPartialLaunchFailureLeavesNothing/client_hangs_after_create (0.88s)
+    --- PASS: TestPartialLaunchFailureLeavesNothing/server_dies_during_launch (0.17s)
+    --- PASS: TestPartialLaunchFailureLeavesNothing/refused_before_tmux_runs (0.02s)
+=== RUN   TestSetMetadataMergesUnderConcurrency
+--- PASS: TestSetMetadataMergesUnderConcurrency (0.16s)
+=== RUN   TestRefsRejectForeignTargetSyntax
+--- PASS: TestRefsRejectForeignTargetSyntax (0.00s)
+=== RUN   TestClientEnvStripsTerminalIdentity
+--- PASS: TestClientEnvStripsTerminalIdentity (0.00s)
+=== RUN   TestCommandErrorRedactsLaunchEnvironment
+--- PASS: TestCommandErrorRedactsLaunchEnvironment (0.03s)
+=== RUN   TestEscapeArgKeepsTrailingSemicolon
+--- PASS: TestEscapeArgKeepsTrailingSemicolon (0.00s)
+PASS
+ok  	github.com/sglavoie/agentmux/internal/tmux	2.967s

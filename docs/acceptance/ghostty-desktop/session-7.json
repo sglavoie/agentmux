@@ -1,0 +1,32 @@
+{
+  "session": "7",
+  "status": "passed",
+  "artifact_revision": "agentmux 9d19b320 + session-7 working tree (internal/tmux/*.go + internal/backend/backend.go sha256/16 cdaff961800ad2bc); tmux 3.7c (Homebrew /opt/homebrew/bin/tmux); macOS 27.0.1",
+  "log": "session-7/go-test-tmux-v.log",
+  "cases": {
+    "real-tmux-contracts": {
+      "status": "passed",
+      "evidence": "internal/tmux.TestBackendContract ran the shared backendtest.Run contract (all 8 subtests PASS: capabilities, launch_is_discoverable, capture_reads_pane_output, metadata_round_trips, presentation_follows_capabilities, close_ends_only_the_target, invalid_refs_are_refused_before_acting, discover_returns_independent_copies) against a fresh real tmux 3.7c server on a private socket per subtest; TestLaunchTargetMatchesDiscovery observed launch $0/%0 with pane pid matching discovery, Instance generation <server pid>-<start_time>, and exactly one pane in the session. Log: session-7/go-test-tmux-v.log."
+    },
+    "personal-config-isolation": {
+      "status": "passed",
+      "evidence": "TestPersonalConfigIsolation planted a personal ~/.tmux.conf and $XDG_CONFIG_HOME/tmux/tmux.conf setting @amx_personal, prefix C-a, remain-on-exit off, history-limit 7 and a global env marker; the private server (started with -S <dir>/tmux.sock -f <dir>/tmux.conf, dir mode 0700) reported @amx_personal unset, prefix None, remain-on-exit on, history-limit 50000 and no marker in its global environment; the pane saw TMUX=<private socket> and none of the parent's TMUX, TMUX_PANE, KITTY_*, AMX_RUNTIME_SESSION_ID; TMUX_TMPDIR (the default server location) stayed empty. Every other test in the package ran with the same planted personal config. Log: session-7/go-test-tmux-v.log."
+    },
+    "profile-environments": {
+      "status": "passed",
+      "evidence": "TestProfileEnvironmentsArePreservedPerSession launched two sessions with different AMX_PROFILE_HOME values (one containing a space) and AMX_OTHER_ONLY only in the first; each pane wrote exactly its own values (second saw AMX_OTHER_ONLY unset); a value containing quotes, $HOME, #{session_name} and a trailing ';' and argv entries ending in ';' and '\\;' arrived byte-for-byte; show-environment -g held none of the profile variables. TestCommandErrorRedactsLaunchEnvironment observed error text naming AMX_SECRET=<redacted> instead of the value. Log: session-7/go-test-tmux-v.log."
+    },
+    "retained-exit": {
+      "status": "passed",
+      "evidence": "TestRetainedExitUntilExplicitClose observed exit 7 -> Pane.Exit{Status:7}, kill -TERM -> Exit{Status:-1 Signal:\"term\"}, a missing program -> Exit{Status:1} (tmux 3.7c reports 1 for an execvp failure); 300ms later the exited pane was still discovered, Capture(all) still returned its output, and SetMetadata still worked; Close removed only that group while the other exited and live groups remained. Log: session-7/go-test-tmux-v.log."
+    },
+    "server-disappearance": {
+      "status": "passed",
+      "evidence": "TestServerDisappearance SIGKILLed the private server, leaving a stale socket: Discover returned no panes and a nil error, Instance/Close/SetMetadata/SetTitle/Capture returned ErrServerNotRunning, and the next launch started a new server on the same socket with a different generation (e.g. 43852-1791585757 vs 43839-1791585756) while reusing group ref $0, which is why targets are generation-checked; after the last session closed gracefully the server exited and Discover again returned nothing without error. Log: session-7/go-test-tmux-v.log."
+    },
+    "partial-launch-failure": {
+      "status": "passed",
+      "evidence": "TestPartialLaunchFailureLeavesNothing drove real tmux through a wrapper binary: (a) client exits 1 after the server created the session, (b) client hangs past the 700ms command timeout after creation, (c) the server is killed between creation and the client's answer. In each, Launch returned an error reporting the partial session removed, list-sessions showed only the pre-existing survivor session ($0 before and after), and Discover had no pane for the failed launch; (d) invalid specs (missing/relative directory, no program, bad env key, unknown placement) were refused before tmux ran (no socket created). Log: session-7/go-test-tmux-v.log."
+    }
+  }
+}

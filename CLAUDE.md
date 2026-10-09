@@ -122,6 +122,11 @@ Shared and domain packages (`internal/...`):
   close, capture, metadata, presentation), opaque group/pane refs, capability
   errors; `internal/backend/backendtest` is the shared contract every adapter
   runs (`internal/kitty.Backend` is the Kitty adapter).
+- `internal/tmux`: the private tmux backend — AgentMux's own socket and
+  configuration (never the operator's server or `~/.tmux.conf`), one session
+  and one agent pane per runtime session, exited panes retained until
+  `Close`, generation-checked `Instance`. Its tests run a real tmux and skip
+  only when tmux is not installed.
 - `internal/session`, `internal/harness`: lifecycle (still reading Kitty
   topology, issuing commands through `internal/backend`) and harness
   argv/capabilities.

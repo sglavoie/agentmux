@@ -90,6 +90,19 @@ type Pane struct {
 	// GroupActive is true for the selected group of its window or client.
 	GroupActive bool
 	Foreground  []Process
+	// Exit is set once the pane's program has ended and the backend retains
+	// the pane (and its screen) until the group is closed. Backends that
+	// remove a pane when its program ends never set it.
+	Exit *Exit
+}
+
+// Exit is how a pane's program ended.
+type Exit struct {
+	// Status is the exit status of a normal exit, or -1 when the program was
+	// killed by a signal or the backend has not collected the status yet.
+	Status int
+	// Signal names the signal that killed the program, if one did.
+	Signal string
 }
 
 // Placement says where a launched group goes relative to the current one.
