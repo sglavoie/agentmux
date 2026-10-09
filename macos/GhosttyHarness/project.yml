@@ -1,0 +1,50 @@
+# XcodeGen spec for the Session 2 Ghostty + tmux feasibility harness. It is a
+# project of its own so Agent Mux.app and `just mac-test` neither link nor see
+# GhosttyKit; scripts/build.sh generates it into macos/.cache/ghostty-harness.
+name: GhosttyHarness
+options:
+  bundleIdPrefix: io.github.sglavoie
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+targets:
+  GhosttyHarness:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+      # Ghostty's terminfo and shell integration, found beside the terminfo
+      # sentinel; vendored by scripts/vendor-ghosttykit.sh.
+      - path: ../.cache/ghostty-harness/Vendor/resources/ghostty
+        type: folder
+        buildPhase: resources
+      - path: ../.cache/ghostty-harness/Vendor/resources/terminfo
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_NAME: GhosttyHarness
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.sglavoie.agentmux.ghostty-harness
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_NSPrincipalClass: NSApplication
+        MARKETING_VERSION: "0.0.1"
+        CURRENT_PROJECT_VERSION: "1"
+        # libghostty.a carries C++ objects but no autolink entries.
+        OTHER_LDFLAGS: ["-lc++"]
+    dependencies:
+      - framework: ../.cache/ghostty-harness/Vendor/GhosttyKit.xcframework
+        embed: false
+      - sdk: Metal.framework
+      - sdk: MetalKit.framework
+      - sdk: Carbon.framework
+      - sdk: CoreText.framework
+      - sdk: IOSurface.framework
+      - sdk: QuartzCore.framework
+      - sdk: UniformTypeIdentifiers.framework
