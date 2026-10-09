@@ -23,6 +23,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/screenstate"
 )
 
@@ -134,6 +135,13 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	focusClient := notification.NewKittyFocus(kittyClient)
 	notifier.SetFocus(focusClient)
 	handler.SetFocusClient(focusClient)
+	// Managed hooks route through the runtime-session registry. The reader
+	// never writes or locks it; a missing file is an empty registry.
+	if store, err := runtimesession.NewStore(runtimesession.DefaultRegistryPath()); err == nil {
+		handler.SetRuntimeSessionDirectory(runtimesession.NewReader(store))
+	} else {
+		slog.Warn("daemon: runtime-session registry unavailable; managed hooks will be refused", "err", err)
+	}
 	global, perAccount := buildStaleThresholds(cfg)
 	handler.SetStaleThresholds(global, perAccount)
 	hsGlobal, hsPerAccount := buildHookSilenceThresholds(cfg)

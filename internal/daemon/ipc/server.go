@@ -298,7 +298,7 @@ func (s *Server) serveConn(r io.Reader, w io.Writer) {
 	// admission so a resend never consumes a second reducer slot.
 	var resp protocol.Response
 	if serializedRequest(req.Type) {
-		resp = s.dedupe.doObserved(req.RequestID, func(saturated bool) protocol.Response {
+		resp = s.dedupe.doObserved(dedupeKey(req), func(saturated bool) protocol.Response {
 			if saturated {
 				req.SaturationReason = appendSaturationReason(req.SaturationReason, "dedupe_cache")
 			}

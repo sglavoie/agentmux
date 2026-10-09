@@ -108,3 +108,29 @@ func TestHookIndicatorLegacyModeRemainsFailOpen(t *testing.T) {
 		t.Fatalf("legacy hook returned %v, want fail-open nil", err)
 	}
 }
+
+func TestHookIndicatorForwardsRuntimeSession(t *testing.T) {
+	oldRun := runHookIndicator
+	oldRuntime := hookRuntimeSession
+	t.Cleanup(func() {
+		runHookIndicator = oldRun
+		hookRuntimeSession = oldRuntime
+		_ = hookIndicatorCmd.Flags().Set("runtime-session", "")
+		hookIndicatorCmd.Flags().Lookup("runtime-session").Changed = false
+	})
+	var got string
+	runHookIndicator = func(_ string, _ int, _, _ string, options indicator.DeliveryOptions) indicator.DeliveryResult {
+		got = options.RuntimeSessionID
+		return indicator.DeliveryResult{Status: indicator.DeliveryAccepted}
+	}
+	const runtime = "rs-0123456789abcdef0123456789abcdef"
+	if err := hookIndicatorCmd.ParseFlags([]string{"Stop", "--runtime-session=" + runtime}); err != nil {
+		t.Fatal(err)
+	}
+	if err := hookIndicatorCmd.RunE(hookIndicatorCmd, hookIndicatorCmd.Flags().Args()); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+	if got != runtime {
+		t.Fatalf("forwarded runtime session = %q, want %q", got, runtime)
+	}
+}

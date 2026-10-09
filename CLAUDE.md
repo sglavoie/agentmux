@@ -116,7 +116,8 @@ Shared and domain packages (`internal/...`):
 - `internal/conversation`: canonical `(harness, session_id)` identity.
 - `internal/runtimesession`: opaque AgentMux runtime-session IDs and the
   durable registry mapping them to generation- and fingerprint-checked
-  backend targets. Not yet wired into launch, hooks, or the daemon.
+  backend targets. Hooks and the daemon read it (`AMX_RUNTIME_SESSION_ID`,
+  `Reader`); launch does not register sessions yet.
 - `internal/backend`: narrow terminal-backend interfaces (discover, launch,
   close, capture, metadata, presentation), opaque group/pane refs, capability
   errors; `internal/backend/backendtest` is the shared contract every adapter
@@ -167,7 +168,11 @@ TUI (`tui/...`):
 ### Identity and safety rules
 
 - Conversation identity is `(harness, session_id)`; live instance identity is
-  the freshly validated Kitty window/title owner.
+  the freshly validated Kitty window/title owner, or for a managed hook its
+  runtime session. The daemon translates every hook to a reducer slot
+  (`internal/daemon/runtime_routes.go`): a slot belongs to one runtime session
+  at a time, and deliveries from another session, another backend instance,
+  or an ended session are refused rather than merged.
 - Configured projects are launch templates identified by profile and title;
   continuity actions use exact transcript identities.
 - Ambiguous selectors return ordered candidates and never guess.

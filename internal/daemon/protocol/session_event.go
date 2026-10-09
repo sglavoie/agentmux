@@ -41,6 +41,11 @@ type SessionEvent struct {
 	// event originated, which may differ from the exported target window when an
 	// unmanaged sibling borrows a managed title owner.
 	OriginWindowID int `json:"origin_window_id,omitempty"`
+	// Origin is the translated runtime provenance of a hook delivery: which
+	// runtime session and backend target produced it and which reducer slot it
+	// was routed to. Absent on synthetic events and on events from daemons that
+	// predate runtime-session routing.
+	Origin *HookOrigin `json:"origin,omitempty"`
 
 	// Causal decision fields correlate hook ingress, sanitized normalization,
 	// routing, and the authoritative reducer transition. These fields are

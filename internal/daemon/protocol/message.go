@@ -105,21 +105,22 @@ type HarnessProcessIdentity struct {
 // hook delivery. It contains identifiers and routing metadata only; raw hook
 // payloads never appear in acknowledgements.
 type DeliveryAcknowledgement struct {
-	SchemaVersion   int    `json:"schema_version"`
-	Status          string `json:"status"`
-	Reason          string `json:"reason,omitempty"`
-	TraceID         string `json:"trace_id,omitempty"`
-	RequestID       string `json:"request_id,omitempty"`
-	SourceEventID   string `json:"source_event_id,omitempty"`
-	Attempt         int    `json:"attempt,omitempty"`
-	ProducerHarness string `json:"producer_harness,omitempty"`
-	TargetHarness   string `json:"target_harness,omitempty"`
-	Profile         string `json:"profile,omitempty"`
-	SourceWindowID  int    `json:"source_window_id,omitempty"`
-	TargetWindowID  int    `json:"target_window_id,omitempty"`
-	RouteDecision   string `json:"route_decision,omitempty"`
-	SnapshotReady   bool   `json:"snapshot_ready,omitempty"`
-	WindowFound     bool   `json:"window_found,omitempty"`
+	SchemaVersion    int    `json:"schema_version"`
+	Status           string `json:"status"`
+	Reason           string `json:"reason,omitempty"`
+	TraceID          string `json:"trace_id,omitempty"`
+	RequestID        string `json:"request_id,omitempty"`
+	SourceEventID    string `json:"source_event_id,omitempty"`
+	Attempt          int    `json:"attempt,omitempty"`
+	ProducerHarness  string `json:"producer_harness,omitempty"`
+	TargetHarness    string `json:"target_harness,omitempty"`
+	Profile          string `json:"profile,omitempty"`
+	RuntimeSessionID string `json:"runtime_session_id,omitempty"`
+	SourceWindowID   int    `json:"source_window_id,omitempty"`
+	TargetWindowID   int    `json:"target_window_id,omitempty"`
+	RouteDecision    string `json:"route_decision,omitempty"`
+	SnapshotReady    bool   `json:"snapshot_ready,omitempty"`
+	WindowFound      bool   `json:"window_found,omitempty"`
 }
 
 // Request is a JSON message sent by a client to the daemon over the Unix socket.
@@ -160,6 +161,11 @@ type Request struct {
 	ParseOutcome         string           `json:"-"`
 	NormalizationOutcome string           `json:"-"`
 	RouteEvidence        *RoutingEvidence `json:"-"`
+	// Origin is the daemon's translation of the delivery's runtime identity:
+	// the runtime session, backend target, and reducer slot WindowID was
+	// rewritten to. Daemon-internal: a client names its runtime session, never
+	// its slot.
+	Origin *HookOrigin `json:"-"`
 	// EventRef links the legacy event-log append to the reducer finalization for
 	// this request without relying on "last event" ordering. It is process-local
 	// and never serialized.
@@ -206,25 +212,30 @@ type Request struct {
 	ProducerConfigDir string `json:"producer_config_dir,omitempty"`
 	// HarnessProcess is optional and accepted only when its canonical harness
 	// matches ProducerHarness/Harness and its PID/start token are complete.
-	HarnessProcess   *HarnessProcessIdentity `json:"harness_process,omitempty"`
-	WindowID         int                     `json:"window_id,omitempty"`         // KITTY_WINDOW_ID
-	Action           string                  `json:"action,omitempty"`            // active|stop|permission|failure|stop_failure|idle|clear|user_clear|user_active
-	Event            string                  `json:"event,omitempty"`             // raw Claude hook event name (e.g. UserPromptSubmit)
-	PayloadJSON      string                  `json:"payload_json,omitempty"`      // raw hook stdin payload for TypeHookEvent
-	ToolName         string                  `json:"tool_name,omitempty"`         // tool name from PreToolUse/PostToolUse hook payloads
-	Source           string                  `json:"source,omitempty"`            // raw source payload field
-	IsPrompt         bool                    `json:"is_prompt,omitempty"`         // true if event is a user prompt submission
-	PreservesIcon    bool                    `json:"preserves_icon,omitempty"`    // true if a non-terminal child-complete event should preserve current icon/guard semantics
-	Account          string                  `json:"account,omitempty"`           // profile name from amx_profile or cc_account
-	Harness          string                  `json:"harness,omitempty"`           // event-producing harness; unknown/legacy producers may be empty
-	SessionTitle     string                  `json:"session_title,omitempty"`     // tab base title (e.g. "W:api")
-	PipeMode         bool                    `json:"pipe_mode,omitempty"`         // suppress notifications when claude -p
-	KittyListenOn    string                  `json:"kitty_listen_on,omitempty"`   // KITTY_LISTEN_ON for daemon-side Kitty writes
-	NotificationType string                  `json:"notification_type,omitempty"` // normalized notification_type / notificationType payload field
-	StopReason       string                  `json:"stop_reason,omitempty"`       // normalized stop_reason / stopReason payload field
-	Reason           string                  `json:"reason,omitempty"`            // normalized reason payload field
-	ContextLimit     bool                    `json:"context_limit,omitempty"`     // true when indicator detected a context-limit stop/failure
-	ResetFlow        bool                    `json:"reset_flow,omitempty"`        // true when the event belongs to a user-initiated session reset flow
+	HarnessProcess *HarnessProcessIdentity `json:"harness_process,omitempty"`
+	// RuntimeSessionID is the AgentMux runtime session a managed hook runs in
+	// (runtimesession.EnvVar). When present it is the routing identity and
+	// WindowID/KittyListenOn are provenance only; the daemon resolves the
+	// session's registered target and rewrites WindowID to its reducer slot.
+	RuntimeSessionID string `json:"runtime_session_id,omitempty"`
+	WindowID         int    `json:"window_id,omitempty"`         // KITTY_WINDOW_ID, or the daemon-assigned slot after translation
+	Action           string `json:"action,omitempty"`            // active|stop|permission|failure|stop_failure|idle|clear|user_clear|user_active
+	Event            string `json:"event,omitempty"`             // raw Claude hook event name (e.g. UserPromptSubmit)
+	PayloadJSON      string `json:"payload_json,omitempty"`      // raw hook stdin payload for TypeHookEvent
+	ToolName         string `json:"tool_name,omitempty"`         // tool name from PreToolUse/PostToolUse hook payloads
+	Source           string `json:"source,omitempty"`            // raw source payload field
+	IsPrompt         bool   `json:"is_prompt,omitempty"`         // true if event is a user prompt submission
+	PreservesIcon    bool   `json:"preserves_icon,omitempty"`    // true if a non-terminal child-complete event should preserve current icon/guard semantics
+	Account          string `json:"account,omitempty"`           // profile name from amx_profile or cc_account
+	Harness          string `json:"harness,omitempty"`           // event-producing harness; unknown/legacy producers may be empty
+	SessionTitle     string `json:"session_title,omitempty"`     // tab base title (e.g. "W:api")
+	PipeMode         bool   `json:"pipe_mode,omitempty"`         // suppress notifications when claude -p
+	KittyListenOn    string `json:"kitty_listen_on,omitempty"`   // KITTY_LISTEN_ON for daemon-side Kitty writes
+	NotificationType string `json:"notification_type,omitempty"` // normalized notification_type / notificationType payload field
+	StopReason       string `json:"stop_reason,omitempty"`       // normalized stop_reason / stopReason payload field
+	Reason           string `json:"reason,omitempty"`            // normalized reason payload field
+	ContextLimit     bool   `json:"context_limit,omitempty"`     // true when indicator detected a context-limit stop/failure
+	ResetFlow        bool   `json:"reset_flow,omitempty"`        // true when the event belongs to a user-initiated session reset flow
 	// QuestionPreview is the ASL mailbox question summary, already collapsed and
 	// bounded by hookevent decoding. It reaches the TUI detail view through
 	// SessionEvent only and is deliberately never folded into reducer facts.

@@ -273,6 +273,10 @@ type NormalizedEvent struct {
 	// distinct from the reducer window: unmanaged panes can borrow a managed
 	// target while their facts retain the producer pane for route continuity.
 	OriginWindowID int
+	// RuntimeSessionID is the runtime session the daemon resolved the event's
+	// origin to, empty for an unclaimed legacy origin. A reducer bound to one
+	// runtime session refuses events stamped with another.
+	RuntimeSessionID string
 
 	// Prompt marks a direct user prompt submission — authoritative recovery
 	// from terminal states. ToolUse carries the event's tool-use identity so a

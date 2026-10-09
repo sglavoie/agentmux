@@ -73,6 +73,7 @@ func deliverFromStdinWithDeps(
 		requestID = traceID
 	}
 	recorder := newDeliveryRecorder(traceID, requestID, event, producerHarness, windowID)
+	recorder.runtimeSessionID = strings.TrimSpace(options.RuntimeSessionID)
 	finish := func(result DeliveryResult) DeliveryResult {
 		result.LatencyMS = float64(time.Since(started)) / float64(time.Millisecond)
 		recorder.complete(result)

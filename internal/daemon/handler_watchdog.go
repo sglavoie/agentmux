@@ -536,6 +536,11 @@ func (h *Handler) pruneClosedWindowsFor(now time.Time, liveIDs map[int]bool, lis
 	h.stateMu.Lock()
 	closed := make(map[int]struct{})
 	for id := range h.store {
+		// A non-Kitty runtime slot is never in a Kitty listing; its runtime
+		// session's end retires it (retireEndedRuntimeSessions).
+		if isRuntimeSyntheticSlot(id) {
+			continue
+		}
 		if !liveIDs[id] && !h.windowOfOtherInstanceLocked(id, listedSocket) {
 			closed[id] = struct{}{}
 		}

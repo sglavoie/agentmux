@@ -33,6 +33,12 @@ const (
 	DecisionReasonTerminalStopHeld          = "terminal_stop_held"
 	DecisionReasonTerminalStopSuperseded    = "terminal_stop_superseded"
 	DecisionReasonTerminalStopBypassed      = "terminal_stop_bypassed"
+	// DecisionReasonRuntimeSessionMismatch: the event belongs to a runtime
+	// session other than the one bound to the reducer slot.
+	DecisionReasonRuntimeSessionMismatch = "runtime_session_mismatch"
+	// DecisionReasonRuntimeSessionReplaced: a new runtime session claimed the
+	// slot, so the previous session's facts were discarded.
+	DecisionReasonRuntimeSessionReplaced = "runtime_session_replaced"
 )
 
 const (

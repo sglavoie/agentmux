@@ -18,6 +18,7 @@ import (
 var hookWindowID int
 var hookHarness string
 var hookRequestID string
+var hookRuntimeSession string
 var hookJSON bool
 var hookStrict bool
 
@@ -33,18 +34,21 @@ var hookIndicatorCmd = &cobra.Command{
 	Hidden: true,
 	Short:  "Forward harness hook state to the daemon (internal)",
 	Long: `Called by supported harness hooks to forward raw hook events to the daemon.
-The daemon updates Kitty tab state and triggers notifications based on the
-current session state.
+The daemon updates session state and triggers notifications based on it.
 
 The first argument must be a harness event name (e.g. Stop, PermissionRequest,
 UserPromptSubmit). Unknown events are recorded as permanent non-delivery
 evidence while legacy hook invocations remain fail-open.
 
-Hooks that fire outside Kitty (for example from another Copilot or Codex CLI
-surface sharing the same harness home) are treated as successful no-ops.
+Agents launched by AgentMux inherit AMX_RUNTIME_SESSION_ID (or receive
+--runtime-session), and their hooks route by that runtime session alone, on
+any terminal backend; Kitty variables are ignored for them.
 
-For hooks running inside Kitty, KITTY_WINDOW_ID must be set in the environment
-(provided automatically by harness hooks), or supplied via --window-id.`,
+Other hooks are legacy Kitty hooks. Those that fire outside Kitty (for example
+from another Copilot or Codex CLI surface sharing the same harness home) are
+treated as successful no-ops. For hooks running inside Kitty, KITTY_WINDOW_ID
+must be set in the environment (provided automatically by harness hooks), or
+supplied via --window-id.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Non-fatal: on failure AmxBinary yields the bare command name and the
@@ -54,7 +58,8 @@ For hooks running inside Kitty, KITTY_WINDOW_ID must be set in the environment
 			ccerrors.Print(err)
 		}
 		result := runHookIndicator(args[0], hookWindowID, hookHarness, amxBin, indicator.DeliveryOptions{
-			RequestID: hookRequestID,
+			RequestID:        hookRequestID,
+			RuntimeSessionID: hookRuntimeSession,
 		})
 		if hookJSON {
 			if err := json.NewEncoder(cmd.OutOrStdout()).Encode(result); err != nil {
@@ -81,6 +86,8 @@ func init() {
 		"Kitty window ID (defaults to $KITTY_WINDOW_ID)")
 	hookIndicatorCmd.Flags().StringVar(&hookHarness, "harness", "",
 		"event-producing harness (claude, codex, or copilot)")
+	hookIndicatorCmd.Flags().StringVar(&hookRuntimeSession, "runtime-session", "",
+		"runtime session ID of a managed agent (defaults to $AMX_RUNTIME_SESSION_ID)")
 	hookIndicatorCmd.Flags().StringVar(&hookRequestID, "request-id", "",
 		"stable delivery request ID (generated when omitted)")
 	hookIndicatorCmd.Flags().BoolVar(&hookJSON, "json", false,

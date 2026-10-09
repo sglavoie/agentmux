@@ -171,4 +171,9 @@ func PropagateIngressTrace(dst *protocol.Request, src protocol.Request) {
 	dst.NormalizationOutcome = src.NormalizationOutcome
 	dst.RouteEvidence = CloneRoutingEvidence(src.RouteEvidence)
 	dst.SaturationReason = src.SaturationReason
+	dst.RuntimeSessionID = src.RuntimeSessionID
+	if src.Origin != nil {
+		origin := *src.Origin
+		dst.Origin = &origin
+	}
 }

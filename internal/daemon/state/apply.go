@@ -27,7 +27,48 @@ func (r *Reducer) ApplyNormalized(n protocol.NormalizedEvent) protocol.ReducerDe
 		})
 		return protocol.DecisionQuarantined
 	}
+	if n.RuntimeSessionID != "" {
+		if r.runtimeSession != "" && r.runtimeSession != n.RuntimeSessionID {
+			r.traces = append(r.traces, ReducerTrace{
+				Source:   n.Source,
+				Seq:      n.Seq,
+				Action:   n.Action,
+				Decision: protocol.DecisionQuarantined,
+				Reason:   protocol.DecisionReasonRuntimeSessionMismatch,
+			})
+			return protocol.DecisionQuarantined
+		}
+		r.runtimeSession = n.RuntimeSessionID
+	}
 	return r.Apply(n.ReducerEvent())
+}
+
+// RuntimeSession returns the runtime session bound to this reducer, if any.
+func (r *Reducer) RuntimeSession() string { return r.runtimeSession }
+
+// BindRuntimeSession binds the reducer to runtime session id. A reducer with no
+// binding adopts id and keeps its facts, which were reduced from the same pane
+// before it was claimed. Binding a different session discards every fact and
+// supersession watermark, because they describe an agent that is gone; it
+// reports true in that case. An empty id is ignored.
+func (r *Reducer) BindRuntimeSession(id string) bool {
+	if id == "" || id == r.runtimeSession {
+		return false
+	}
+	previous := r.runtimeSession
+	r.runtimeSession = id
+	if previous == "" {
+		return false
+	}
+	r.facts = make(map[protocol.SourceID]*sourceFact)
+	r.clearCutoff = supersessionMark{}
+	r.promptCutoff = supersessionMark{}
+	r.interactiveCutoff = supersessionMark{}
+	r.traces = append(r.traces, ReducerTrace{
+		Decision: protocol.DecisionAcknowledged,
+		Reason:   protocol.DecisionReasonRuntimeSessionReplaced,
+	})
+	return true
 }
 
 // Apply folds one event into the reducer and records an audit trace entry.

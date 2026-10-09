@@ -24,11 +24,22 @@ func (h *Handler) Handle(req protocol.Request) protocol.Response {
 	switch req.Type {
 	case protocol.TypeHookEvent:
 		h.captureHookPayload(req)
-		resp = h.handleHookEvent(req)
-		resp = h.attachHookDeliveryAcknowledgement(req, resp)
+		translated, rejection := h.translateHookOrigin(req)
+		if rejection != nil {
+			resp = h.rejectHookOrigin(translated, rejection)
+			break
+		}
+		resp = h.handleHookEvent(translated)
+		resp = h.attachHookDeliveryAcknowledgement(translated, resp)
 	case protocol.TypeDiagnosticProbe:
 		resp = h.handleDiagnosticProbe(req)
 	case protocol.TypeStateUpdate:
+		if isRuntimeSyntheticSlot(req.WindowID) {
+			// Runtime slots are assigned by hook translation, never named by a
+			// client; a direct update could otherwise write into a session.
+			resp = protocol.Response{OK: false, Error: protocol.OriginReasonTargetConflict}
+			break
+		}
 		resp = h.handleStateUpdate(req)
 	case protocol.TypeStateQuery:
 		resp = h.handleStateQuery()

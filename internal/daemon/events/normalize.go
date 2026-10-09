@@ -52,12 +52,15 @@ const (
 	ReasonIgnoredEvent = "ignored_event"
 )
 
-// NormalizedFromHookRequest centralizes request validation and process-identity
-// stamping for every hook-routing path. NormalizedFromHook stays pure and
+// NormalizedFromHookRequest centralizes request validation and process- and
+// runtime-identity stamping for every hook-routing path. NormalizedFromHook stays pure and
 // transport-agnostic for reducer tests and replay; this seam adds a complete
 // validated identity only to ordinary harness, legacy, and subagent facts.
 func NormalizedFromHookRequest(event string, req protocol.Request, windowID int) protocol.NormalizedEvent {
 	normalized := NormalizedFromHook(event, req.Harness, req.PayloadJSON, windowID, req.PipeMode)
+	if req.Origin != nil {
+		normalized.RuntimeSessionID = req.Origin.RuntimeSessionID
+	}
 	switch normalized.Source.Kind {
 	case protocol.SourceHarness, protocol.SourceLegacy, protocol.SourceSubagent:
 		if identity := protocol.ValidatedHarnessProcessIdentity(req.Harness, req.HarnessProcess); identity != nil {

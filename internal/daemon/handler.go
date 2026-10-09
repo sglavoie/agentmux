@@ -133,6 +133,15 @@ type Handler struct {
 
 	kittySockets      map[int]string
 	lastKittyListenOn string
+
+	// runtimeDirectory resolves the runtime session a managed hook names. It
+	// is installed once at startup by SetRuntimeSessionDirectory, before the
+	// server dispatches a request, and is internally synchronized. Nil refuses
+	// managed hooks as retryable; legacy hooks never consult it.
+	runtimeDirectory RuntimeSessionDirectory
+	// runtimeRoutes binds reducer slots to the runtime sessions that own them
+	// (runtime_routes.go). Guarded by stateMu.
+	runtimeRoutes runtimeRoutes
 	// otherKittyTrees holds the latest window tree of each Kitty instance
 	// other than the listed one that still has windows in the store, keyed by
 	// socket. pruneForeignWindows reads them and the companion projects other

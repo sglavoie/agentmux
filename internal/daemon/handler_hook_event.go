@@ -246,7 +246,8 @@ func (h *Handler) handleHookEvent(req protocol.Request) protocol.Response {
 	// now a targeted asynchronous probe: dispatch the base event immediately and
 	// let the probe upgrade the icon to error if the banner is present, so a slow
 	// GetText can never delay the acknowledgement.
-	probeContextLimit := !contextLimitDetected && hookevent.ShouldProbeWindowForContextLimit(eventOrAction, action) && h.kittyClient != nil
+	probeContextLimit := !contextLimitDetected && hookevent.ShouldProbeWindowForContextLimit(eventOrAction, action) && h.kittyClient != nil &&
+		!isRuntimeSyntheticSlot(ctx.req.WindowID)
 
 	// The source pane is the state target on this path, so record its snapshot
 	// mute now (notification suppression consults it inside handleStateUpdate).

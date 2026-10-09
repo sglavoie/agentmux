@@ -78,6 +78,13 @@ type Reducer struct {
 	traces          []ReducerTrace
 	nextCausalOrder uint64
 
+	// runtimeSession is the AgentMux runtime session whose facts this reducer
+	// holds, empty until the first runtime-stamped event or explicit bind.
+	// Facts never outlive the session they were reduced for: binding another
+	// session discards them, and events stamped with any other session are
+	// refused. In-process only; legacy unstamped events are unaffected.
+	runtimeSession string
+
 	// mergeCausalFloor is the highest causal order imported by MergeDisjoint.
 	// Facts above it are the in-process generation and are shifted when a later
 	// merge introduces a wider persisted order range. It is in-process only: a

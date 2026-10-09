@@ -14,6 +14,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
 const DeliveryResultSchemaVersion = 1
@@ -31,6 +32,9 @@ const (
 // An empty RequestID allocates a fresh UUID before stdin is inspected.
 type DeliveryOptions struct {
 	RequestID string
+	// RuntimeSessionID names the AgentMux runtime session explicitly. Empty
+	// falls back to runtimesession.EnvVar, which managed launches export.
+	RuntimeSessionID string
 }
 
 var captureHookPayload = func(ctx context.Context, request diagnostics.CapturePayloadRequest) (diagnostics.CaptureWriteResult, error) {
@@ -80,6 +84,8 @@ type deliveryRecorder struct {
 	payloadHMAC             string
 	payloadSize             int64
 	windowID                int
+	// runtimeSessionID is the explicitly supplied runtime session, if any.
+	runtimeSessionID string
 }
 
 func newDeliveryRecorder(traceID, requestID, event, producerHarness string, windowID int) *deliveryRecorder {
@@ -337,22 +343,43 @@ func deliverPayloadWithDeps(
 	recorder *deliveryRecorder,
 	started time.Time,
 ) DeliveryResult {
-	rawListenOn := strings.TrimSpace(getenv("KITTY_LISTEN_ON"))
-	if rawListenOn == "" {
-		recorder.record("hook.kitty_detection", "rejected", "outside_kitty", nil, 0)
-		return resultFor(started, traceID, requestID, DeliveryPermanentFailure, "outside_kitty", nil)
+	// A managed hook identifies its runtime session and routes by it alone; the
+	// daemon resolves where that session runs. Kitty variables are not read for
+	// it at all: a pane in a tmux server started from some Kitty window
+	// inherits that window's KITTY_WINDOW_ID, which names the wrong place.
+	runtimeSessionID := ""
+	if recorder != nil {
+		runtimeSessionID = recorder.runtimeSessionID
 	}
-	recorder.record("hook.kitty_detection", "success", "kitty_detected", nil, 0)
-
-	resolvedWindowID, err := resolveHookWindowID(windowID)
-	if err != nil {
-		recorder.record("hook.window_resolution", "rejected", "invalid_window", map[string]string{"error": err.Error()}, 0)
-		return resultFor(started, traceID, requestID, DeliveryPermanentFailure, "invalid_window", nil)
+	if runtimeSessionID == "" {
+		runtimeSessionID = strings.TrimSpace(getenv(runtimesession.EnvVar))
 	}
-	recorder.windowID = resolvedWindowID
-	recorder.record("hook.window_resolution", "success", "window_resolved", nil, 0)
+	resolvedWindowID, listenOn := 0, ""
+	if runtimeSessionID != "" {
+		if _, err := runtimesession.ParseID(runtimeSessionID); err != nil {
+			recorder.record("hook.runtime_session", "rejected", "invalid_runtime_session", nil, 0)
+			return resultFor(started, traceID, requestID, DeliveryPermanentFailure, "invalid_runtime_session", nil)
+		}
+		recorder.record("hook.runtime_session", "success", "runtime_session_identified", nil, 0)
+	} else {
+		rawListenOn := strings.TrimSpace(getenv("KITTY_LISTEN_ON"))
+		if rawListenOn == "" {
+			recorder.record("hook.kitty_detection", "rejected", "outside_kitty", nil, 0)
+			return resultFor(started, traceID, requestID, DeliveryPermanentFailure, "outside_kitty", nil)
+		}
+		recorder.record("hook.kitty_detection", "success", "kitty_detected", nil, 0)
 
-	listenOn := kitty.NormalizedListenAddressFromEnv()
+		var err error
+		resolvedWindowID, err = resolveHookWindowID(windowID)
+		if err != nil {
+			recorder.record("hook.window_resolution", "rejected", "invalid_window", map[string]string{"error": err.Error()}, 0)
+			return resultFor(started, traceID, requestID, DeliveryPermanentFailure, "invalid_window", nil)
+		}
+		recorder.windowID = resolvedWindowID
+		recorder.record("hook.window_resolution", "success", "window_resolved", nil, 0)
+		listenOn = kitty.NormalizedListenAddressFromEnv()
+	}
+
 	rawProducer := strings.TrimSpace(producerHarness)
 	producerHarness = harness.NormalizeKnown(rawProducer)
 	if rawProducer != "" && producerHarness == "" {
@@ -375,6 +402,7 @@ func deliverPayloadWithDeps(
 		ProducerHarness:   producerHarness,
 		ProducerConfigDir: recorder.producerConfigDir(),
 		HarnessProcess:    harnessProcess,
+		RuntimeSessionID:  runtimeSessionID,
 		WindowID:          resolvedWindowID,
 		Event:             event,
 		Harness:           producerHarness,
@@ -391,6 +419,7 @@ func deliverPayloadWithDeps(
 		}, stage.LatencyMS)
 	}
 	var resp protocol.Response
+	var err error
 	if observed, ok := client.(observedDaemonClient); ok {
 		resp, err = observed.SendWithAutoStartObserved(req, amxBin, observer)
 	} else {

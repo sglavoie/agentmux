@@ -52,6 +52,10 @@ func SessionEventFromRequest(req protocol.Request, action, resultIconState, curr
 		RouteEvidence:        CloneRoutingEvidence(req.RouteEvidence),
 		EventRef:             req.EventRef,
 	}
+	if req.Origin != nil {
+		origin := *req.Origin
+		ev.Origin = &origin
+	}
 	// The normalized stamp carries the source-scoped identity resolved from the
 	// raw payload; legacy clients and synthetic requests have none. A
 	// quarantined stamp keeps its identity fields for attribution — the reducer

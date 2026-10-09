@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"log/slog"
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/daemon/events"
@@ -20,7 +21,7 @@ func baseDeliveryAcknowledgement(req protocol.Request, status, reason string) *p
 			producer = strings.TrimSpace(req.Harness)
 		}
 	}
-	return &protocol.DeliveryAcknowledgement{
+	ack := &protocol.DeliveryAcknowledgement{
 		SchemaVersion:   protocol.DeliveryAcknowledgementSchemaVersion,
 		Status:          status,
 		Reason:          reason,
@@ -32,6 +33,34 @@ func baseDeliveryAcknowledgement(req protocol.Request, status, reason string) *p
 		SourceWindowID:  req.WindowID,
 		TargetWindowID:  req.WindowID,
 		RouteDecision:   events.RouteDecisionSource,
+	}
+	ack.RuntimeSessionID = strings.TrimSpace(req.RuntimeSessionID)
+	if req.Origin != nil && req.Origin.RuntimeSessionID != "" {
+		ack.RuntimeSessionID = req.Origin.RuntimeSessionID
+	}
+	if isRuntimeSyntheticSlot(req.WindowID) {
+		// A non-Kitty slot is a daemon-internal key, not a window anyone can
+		// address; the runtime session ID is the routing identity on the wire.
+		ack.SourceWindowID, ack.TargetWindowID = 0, 0
+	}
+	return ack
+}
+
+// rejectHookOrigin answers a delivery whose runtime identity could not be
+// translated to a slot. Nothing is reduced, logged to a window, or rendered:
+// the delivery has no slot it is entitled to touch.
+func (h *Handler) rejectHookOrigin(req protocol.Request, rejection *originRejection) protocol.Response {
+	slog.Debug("hook delivery refused at origin translation",
+		"reason", rejection.reason,
+		"runtime_session_id", strings.TrimSpace(req.RuntimeSessionID),
+		"window_id", req.WindowID,
+		"event", req.Event,
+	)
+	return protocol.Response{
+		OK:        false,
+		Error:     rejection.reason,
+		Retryable: rejection.retryable,
+		Delivery:  baseDeliveryAcknowledgement(req, protocol.DeliveryAcknowledgementRejected, rejection.reason),
 	}
 }
 

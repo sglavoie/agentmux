@@ -171,8 +171,25 @@ func (c *dedupeCache) doObserved(id string, compute func(saturated bool) protoco
 	e.resp = resp
 	e.completedAt = c.now()
 	close(e.done)
+	if resp.Retryable && c.entries[id] == e {
+		// A retryable refusal applied nothing. Concurrent duplicates already
+		// waiting share it, but a later retry must be evaluated afresh rather
+		// than replayed the same refusal for the whole TTL.
+		delete(c.entries, id)
+	}
 	c.mu.Unlock()
 	return resp
+}
+
+// dedupeKey scopes a request's idempotency key. A managed hook's request ID is
+// unique only within its runtime session, so two sessions that happen to reuse
+// one ID can never have one session's event answered with the other's
+// response. Legacy requests keep their bare request ID.
+func dedupeKey(req protocol.Request) string {
+	if req.RequestID == "" || req.RuntimeSessionID == "" {
+		return req.RequestID
+	}
+	return "rs:" + req.RuntimeSessionID + "\x00" + req.RequestID
 }
 
 // sweepLocked removes completed entries older than the TTL. The caller must

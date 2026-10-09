@@ -234,6 +234,7 @@ func (h *Handler) runSnapshotTickWithCapture(now time.Time, capture kittySnapsho
 	h.publishCapture(capture)
 	h.pruneClosedWindowsFor(now, liveWindowIDs(windows), capture.socket)
 	h.pruneForeignWindows(now, capture.socket)
+	h.retireEndedRuntimeSessions(now)
 	// This is the startup reconciliation as well as the periodic one: the
 	// interval gate has never run when the daemon comes up, so the first tick
 	// always sweeps, and every aslReconcileInterval thereafter. Startup restore
