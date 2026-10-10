@@ -139,6 +139,7 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	// never writes or locks it; a missing file is an empty registry.
 	if store, err := runtimesession.NewStore(runtimesession.DefaultRegistryPath()); err == nil {
 		handler.SetRuntimeSessionDirectory(runtimesession.NewReader(store))
+		handler.SetRuntimeSessionLabeler(TmuxRuntimeSessionLabel)
 	} else {
 		slog.Warn("daemon: runtime-session registry unavailable; managed hooks will be refused", "err", err)
 	}
@@ -202,6 +203,9 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	if report := handler.restoreRuntimeCheckpoint(time.Now()); report.Corrupt || len(report.Outcomes) > 0 {
 		slog.Info("daemon: runtime checkpoint restored", "corrupt", report.Corrupt, "outcomes", report.Outcomes)
 	}
+	// Restored tmux sessions are labeled before the socket binds, so the first
+	// snapshot a companion gets already says which project and profile each is.
+	handler.labelRuntimeSessions(time.Now())
 
 	server, err := ipc.NewServer(socketPath, handler)
 	if err != nil {

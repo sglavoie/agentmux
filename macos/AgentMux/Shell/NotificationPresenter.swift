@@ -18,6 +18,11 @@ struct AppNotice: Decodable, Equatable {
     var action = ""
     var runID = ""
     var sessionID = ""
+    /// The runtime session the notice is about, when the daemon names one.
+    var runtimeSessionID = ""
+    /// That session's backend; a notice for one other than Kitty has no
+    /// window to focus, and a click shows its terminal in the workspace.
+    var backend = ""
     /// What the notice offers besides its click: `mute`, `snooze`, `answer`.
     var actions: [String] = []
 
@@ -28,7 +33,8 @@ struct AppNotice: Decodable, Equatable {
         case navigable, title, subtitle, action
         case runID = "run_id"
         case sessionID = "session_id"
-        case actions
+        case runtimeSessionID = "runtime_session_id"
+        case backend, actions
     }
 
     init(notificationID: String, windowID: Int = 0, kittySocket: String = "", navigable: Bool = false, title: String = "", subtitle: String = "",
@@ -45,6 +51,12 @@ struct AppNotice: Decodable, Equatable {
         self.actions = actions
     }
 
+    /// The runtime session whose terminal a click shows in the workspace;
+    /// empty for a Kitty session, which a click focuses in Kitty.
+    var embeddedRuntimeSessionID: String {
+        backend.isEmpty || backend == CompanionRuntime.kittyBackend ? "" : runtimeSessionID
+    }
+
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         notificationID = c.lenient(.notificationID, "")
@@ -56,6 +68,8 @@ struct AppNotice: Decodable, Equatable {
         action = c.lenient(.action, "")
         runID = c.lenient(.runID, "")
         sessionID = c.lenient(.sessionID, "")
+        runtimeSessionID = c.lenient(.runtimeSessionID, "")
+        backend = c.lenient(.backend, "")
         actions = c.lenient(.actions, [])
     }
 }
@@ -266,6 +280,8 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
         let navigable: Bool
         let runID: String
         let sessionID: String
+        /// Set when the notice is about a session the workspace embeds.
+        var embeddedRuntimeSessionID = ""
     }
 
     private let center: NotificationCenterClient
@@ -411,6 +427,7 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
             UserInfoKey.navigable: notice.navigable,
             UserInfoKey.runID: notice.runID,
             UserInfoKey.sessionID: notice.sessionID,
+            UserInfoKey.embeddedRuntimeSessionID: notice.embeddedRuntimeSessionID,
         ]
         return UNNotificationRequest(identifier: notice.notificationID, content: content, trigger: nil)
     }
@@ -421,6 +438,7 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
         static let navigable = "amx_navigable"
         static let runID = "amx_run_id"
         static let sessionID = "amx_session_id"
+        static let embeddedRuntimeSessionID = "amx_embedded_runtime_session_id"
     }
 
     // MARK: Responses
@@ -436,7 +454,8 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
             kittySocket: userInfo[UserInfoKey.kittySocket] as? String ?? "",
             navigable: userInfo[UserInfoKey.navigable] as? Bool ?? false,
             runID: userInfo[UserInfoKey.runID] as? String ?? "",
-            sessionID: userInfo[UserInfoKey.sessionID] as? String ?? ""
+            sessionID: userInfo[UserInfoKey.sessionID] as? String ?? "",
+            embeddedRuntimeSessionID: userInfo[UserInfoKey.embeddedRuntimeSessionID] as? String ?? ""
         ))
     }
 

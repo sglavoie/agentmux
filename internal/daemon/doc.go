@@ -25,6 +25,11 @@
 // every existing client reads, and v2, which a subscriber gets only by asking
 // for the runtime_sessions feature and which adds runtime-session identity and
 // the sessions on other backends — never with a synthesized Kitty window ID.
+// Such a session has no tab to name its project and profile, so the root
+// labels it (runtime_labels.go): the project from its registry record as soon
+// as it claims a slot, and the profile from its pane metadata, read off
+// stateMu once per binding — after the checkpoint restore, before the socket
+// binds, and on maintenance for sessions that arrived since.
 //
 // Reducer state of runtime-session slots is checkpointed backend-neutrally
 // (runtime_checkpoint.go) beside the runtime-session registry: a Kitty slot

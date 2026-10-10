@@ -1,0 +1,34 @@
+[defaults]
+sort = "alpha"
+refresh_interval = 1
+plans_directory = "/tmp/amxs13/plans"
+
+[[profiles]]
+name = "work"
+harness = "claude"
+home_dir = "/tmp/amxs13/home/.claude-a"
+color = "blue"
+
+[[profiles]]
+name = "personal"
+harness = "claude"
+home_dir = "/tmp/amxs13/home/.claude-b"
+color = "green"
+
+[[projects]]
+title = "alpha"
+directory = "/tmp/amxs13/proj/alpha"
+profile = "work"
+
+[[projects]]
+title = "alpha"
+directory = "/tmp/amxs13/proj/alpha"
+profile = "personal"
+
+[[projects]]
+title = "beta"
+directory = "/tmp/amxs13/proj/beta"
+profile = "work"
+
+[harness_emojis]
+claude = "🟠"

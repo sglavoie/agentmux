@@ -249,9 +249,14 @@ struct CompanionASL: Decodable, Equatable {
 }
 
 struct CompanionASLWaiting: Decodable, Equatable {
+    init() {}
+
     var runID = ""
     var planDir = ""
     var windowID = 0
+    /// The runtime session the run belongs to, when the daemon knows one; a
+    /// tmux session has no window ID to name it by.
+    var runtimeSessionID = ""
     var unanswered = 0
     var latestQuestionID = ""
     var latestQuestionCreatedAt: Int64 = 0
@@ -261,6 +266,7 @@ struct CompanionASLWaiting: Decodable, Equatable {
         case runID = "run_id"
         case planDir = "plan_dir"
         case windowID = "window_id"
+        case runtimeSessionID = "runtime_session_id"
         case latestQuestionID = "latest_question_id"
         case latestQuestionCreatedAt = "latest_question_created_at"
     }
@@ -270,6 +276,7 @@ struct CompanionASLWaiting: Decodable, Equatable {
         runID = c.lenient(.runID, "")
         planDir = c.lenient(.planDir, "")
         windowID = c.lenient(.windowID, 0)
+        runtimeSessionID = c.lenient(.runtimeSessionID, "")
         unanswered = c.lenient(.unanswered, 0)
         latestQuestionID = c.lenient(.latestQuestionID, "")
         latestQuestionCreatedAt = c.lenient(.latestQuestionCreatedAt, 0)
@@ -298,6 +305,40 @@ struct ConversationIdentity: Decodable, Equatable {
     }
 }
 
+/// `protocol.CompanionRuntime`: the runtime session a listed session is, and
+/// the backend target it runs on. Only a snapshot negotiated with the
+/// `runtime_sessions` feature carries it.
+struct CompanionRuntime: Decodable, Equatable {
+    /// The backend whose sessions are windows of another app.
+    static let kittyBackend = "kitty"
+
+    var sessionID = ""
+    var backend = ""
+    var instance = ""
+    var generation = ""
+    var pane = ""
+
+    init(sessionID: String = "", backend: String = "", pane: String = "") {
+        self.sessionID = sessionID
+        self.backend = backend
+        self.pane = pane
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case backend, instance, generation, pane
+        case sessionID = "session_id"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        sessionID = c.lenient(.sessionID, "")
+        backend = c.lenient(.backend, "")
+        instance = c.lenient(.instance, "")
+        generation = c.lenient(.generation, "")
+        pane = c.lenient(.pane, "")
+    }
+}
+
 /// `protocol.CompanionSession`: one live managed session.
 struct CompanionSession: Decodable, Equatable {
     var windowID = 0
@@ -322,6 +363,9 @@ struct CompanionSession: Decodable, Equatable {
     var presentationChangedAtMS: Int64 = 0
     var branch = ""
     var dirty = false
+    /// The session's runtime identity; nil for a Kitty session no runtime
+    /// session claims, and on a v1 snapshot.
+    var runtime: CompanionRuntime?
 
     init(windowID: Int = 0) {
         self.windowID = windowID
@@ -329,6 +373,7 @@ struct CompanionSession: Decodable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case harness, profile, project, conversation, reason, unseen, attention, muted, locked, looping, branch, dirty
+        case runtime
         case windowID = "window_id"
         case tabID = "tab_id"
         case osWindowID = "os_window_id"
@@ -365,6 +410,16 @@ struct CompanionSession: Decodable, Equatable {
         presentationChangedAtMS = c.lenient(.presentationChangedAtMS, 0)
         branch = c.lenient(.branch, "")
         dirty = c.lenient(.dirty, false)
+        runtime = c.lenient(.runtime)
+    }
+
+    /// The runtime session whose terminal the workspace embeds: one on a
+    /// backend other than Kitty. A Kitty session, with or without a runtime
+    /// session, is a window of Kitty's and is focused there.
+    var embeddedRuntimeSessionID: String? {
+        guard let runtime, !runtime.sessionID.isEmpty, !runtime.backend.isEmpty,
+              runtime.backend != CompanionRuntime.kittyBackend else { return nil }
+        return runtime.sessionID
     }
 
     /// When the session last changed what it shows, falling back to its last

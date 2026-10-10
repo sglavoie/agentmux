@@ -54,7 +54,13 @@ and patches pinned in `macos/GHOSTTY_VERSION` and `macos/patches/ghostty/`, and
 vendored into the gitignored `macos/Vendor/`; the build reads no other
 checkout. One `Ghostty.App` serves any number of `Ghostty.SurfaceView`s, each
 with its own `Ghostty.SurfaceConfiguration` (program, arguments, environment);
-the app configuration names no command.
+the app configuration names no command. The workspace window
+(`macos/AgentMux/UI/WorkspaceWindow.swift`) lists every live session from the
+daemon's v2 companion snapshot, grouped by project and labeled by profile, and
+embeds one `amx attach` terminal per tmux session; a Kitty session is focused
+in Kitty. A session is keyed by Kitty socket and window, or by runtime-session
+ID when it has no window (`AttentionCycler.Key`); never key one by window ID
+alone.
 
 Releases of the Agent Mux / agent-session-loop pair go through
 `just paired-release-gate asl_root=… signing_key=…`, which runs both

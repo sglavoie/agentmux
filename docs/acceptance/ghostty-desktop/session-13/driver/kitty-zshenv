@@ -1,0 +1,6 @@
+# Kitty starts launched tabs through login(1), which resets HOME to the real
+# one. Put the isolated world back before anything else in this shell runs.
+export HOME=/tmp/amxs13/home TMPDIR=/tmp/amxs13/tmp
+export XDG_STATE_HOME=$HOME/.local/state XDG_CONFIG_HOME=$HOME/.config XDG_DATA_HOME=$HOME/.local/share
+export PATH=/tmp/amxs13/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
+export AGENT_PLANS_DIR=/tmp/amxs13/plans

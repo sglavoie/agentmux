@@ -212,3 +212,13 @@ func TestAttachNeedsATerminal(t *testing.T) {
 		t.Fatalf("err = %v, want a terminal requirement", err)
 	}
 }
+
+// TestAttachedClientOutlivesAHangup: closing the terminal hangs up amx along
+// with the tmux client it runs. amx must survive that to release its
+// ownership, so a hangup delivered while the client runs does not end it.
+func TestAttachedClientOutlivesAHangup(t *testing.T) {
+	client := exec.Command("/bin/sh", "-c", "kill -HUP $PPID; sleep 0.2")
+	if err := runAttachedClient(client); err != nil {
+		t.Fatalf("client: %v", err)
+	}
+}

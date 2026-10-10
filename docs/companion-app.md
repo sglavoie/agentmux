@@ -4,10 +4,12 @@
 shows the live managed sessions with attention counts in the menu bar, focuses
 a session's Kitty tab from a menu row or a global shortcut, shows the daemon's
 notifications as native banners, and answers ASL supervisor questions in a
-native panel. Kitty stays the terminal, and the daemon stays the source of
-truth: the app subscribes to the daemon's companion stream and runs the `amx`
-CLI for actions. Nothing in Agent Mux depends on it, and quitting it returns
-every behavior to what it was without it.
+native panel. Kitty stays the terminal for Kitty sessions; sessions launched
+on the tmux backend open in the app's own [workspace window](#workspace). The
+daemon stays the source of truth: the app subscribes to the daemon's companion
+stream and runs the `amx` CLI for actions. Nothing in Agent Mux depends on it,
+and quitting it returns every behavior to what it was without it; agents on
+tmux keep running and `amx attach` reaches them from any terminal.
 
 This page is the operator's guide. How the app is built, signed, and laid out,
 and how each feature works inside, is in [`macos/README.md`](../macos/README.md).
@@ -79,12 +81,33 @@ The daemon accepts a `focus_window` only for a socket it learned itself, so a
 Kitty instance that has never run a managed session is not focusable until it
 has.
 
+## Workspace
+
+**Open Workspace** in the menu shows a window with every live session in a
+sidebar, grouped by project and labeled by profile, with the same state glyphs
+the tab titles use and a count of waiting sessions beside each project.
+
+- A click on a **tmux** session shows its terminal in the window and puts the
+  keyboard in it. The terminal is a view of the agent, not the agent: closing
+  the window, quitting the app, or attaching to the session somewhere else
+  (`amx attach`, the dashboard) leaves the agent running. A view that lost
+  its session to another terminal says **Detached** and offers **Reattach**.
+- A click on a **Kitty** session brings Kitty forward on its window, as the
+  menu does. Its row is marked `Kitty`. Moving through the sidebar with the
+  arrow keys only selects; it never switches apps.
+- If the daemon stops, the sidebar keeps its sessions, dimmed, and says so at
+  the bottom; the terminals keep working. Everything is current again when
+  the daemon is back.
+
+While the window is open the app has a Dock icon and a menu bar; closing the
+window makes it a menu bar app again.
+
 ## Global shortcuts
 
 | Default | Does |
 | --- | --- |
 | ⌃⌥⌘A | Brings the running dashboard forward, or opens one (`amx open-dashboard`). |
-| ⌃⌥⌘N | Focuses the next session needing attention, oldest first, across Kitty instances. Beeps when nothing waits. |
+| ⌃⌥⌘N | Focuses the next session needing attention, oldest first, across Kitty instances and the workspace: a tmux session opens in the workspace, a Kitty session in Kitty. Beeps when nothing waits. |
 
 Change or clear them in Preferences. They are Carbon hotkeys and need no
 Accessibility permission. Preferences warns when a shortcut is taken by the

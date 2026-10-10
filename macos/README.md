@@ -4,8 +4,8 @@ A native macOS menu bar companion for Agent Mux. It is an accessory app (no
 Dock icon) that talks to the always-on amx daemon over its Unix socket and runs
 the `amx` CLI for actions. Kitty stays the terminal for Kitty sessions. For
 tmux sessions the app embeds Ghostty (`AgentMux/Ghostty/`, see
-[Embedded terminals](#embedded-terminals)); the runtime is linked and tested,
-and the workspace window that shows its terminals is not built yet.
+[Embedded terminals](#embedded-terminals)) and shows each session's terminal
+in its [workspace window](#workspace), beside a sidebar of every live session.
 
 The app shows the live managed sessions, with attention counts in the menu bar,
 and a click focuses a session's Kitty tab and brings Kitty to the front. Two
@@ -141,9 +141,9 @@ only to hand the app to someone else.
 | `AgentMux/CLI/` | Resolving, describing, and running `amx`: binary resolver, version, `--help` capabilities, action gating, login-shell environment, detached spawn. |
 | `AgentMux/Kitty/` | Choosing a Kitty socket and bringing the owning Kitty forward. |
 | `AgentMux/Ghostty/` | The libghostty embedding: the app object and its runtime callbacks, layered configuration, per-surface configuration, the surface view, and its input handling. |
-| `AgentMux/Model/` | Pure state: the session store, glyphs, attention cycler, project and recent catalogs, snooze, and the ASL response rules. |
+| `AgentMux/Model/` | Pure state: the session store, glyphs, attention cycler, the workspace sidebar and its selection, project and recent catalogs, snooze, and the ASL response rules. |
 | `AgentMux/Shell/` | macOS integration: hotkeys, preferences storage, notification presenter. |
-| `AgentMux/UI/` | The status item, menu builder, daemon line, Preferences window, and ASL answer panel. |
+| `AgentMux/UI/` | The status item, menu builder, daemon line, workspace window and its main menu, Preferences window, and ASL answer panel. |
 | `AgentMux/Resources/` | `Info.plist` and the asset catalog; `internal/palette/icons.json` is bundled from the repository. |
 | `AgentMuxTests/` | XCTest suites, with a fake stream server standing in for the daemon. |
 | `scripts/` | `build-ghosttykit.sh`, `generate-project.sh`, `build-app.sh`, `sign.sh`, `install-app.sh`, `test-app.sh`, `make-icons.swift`. |
@@ -204,6 +204,56 @@ runs without embedded terminals.
 several at once, each with its own program, environment, and directory, freed
 in any order, with the programs' pids checked afterwards.
 
+## Workspace
+
+**Open Workspace** in the status menu shows the workspace window
+(`UI/WorkspaceWindow.swift`): a native sidebar of the live sessions beside the
+terminal of the selected one. Opening the app again while it runs (Finder,
+Spotlight, `open`) shows it too, and
+`defaults write io.github.sglavoie.agentmux amxOpenWorkspaceAtLaunch -bool YES`
+opens it at launch. While the window is open the app is a regular app, with a
+Dock icon and a main menu (`UI/WorkspaceMenu.swift`); closing it returns the
+app to the menu bar accessory. The status item, the global shortcuts, and the
+ASL answer panel work the same either way.
+
+- **Which sessions.** The app subscribes with the `runtime_sessions` feature,
+  so the daemon sends v2 snapshots: Kitty sessions as before, plus the
+  sessions on other backends, each with its runtime identity
+  (`CompanionSession.runtime`). A daemon that does not know the feature keeps
+  sending v1 and the sidebar lists Kitty sessions only. A session is
+  identified by its Kitty socket and window, or, when it has no window, by its
+  runtime-session ID (`AttentionCycler.Key`).
+- **Sidebar.** `Model/WorkspaceSidebar.swift` builds it as data: one group per
+  project, sorted by name, and under it one row per session labeled with its
+  profile, sorted by profile. A row shows the state glyph the tab title and
+  the menu use, the harness, branch, age, and the reason it waits; a Kitty
+  session is marked `Kitty`. A project's line counts its sessions that wait on
+  you. The order never follows attention, so a session keeps its place while
+  its state changes.
+- **Selecting and focusing.** Selecting a row (arrow keys, **Session ›
+  Select Next/Previous Session**) shows what there is to show and never leaves
+  the app: a tmux session's terminal, or a note that the session is a Kitty
+  window. Focusing a row (a click, a status-menu row, the next-attention
+  shortcut, a banner) goes where the session is: the keyboard moves into the
+  embedded terminal, or the daemon focuses the Kitty window and Kitty comes
+  forward, exactly as a status-menu click does.
+- **Terminals.** Each embedded session has at most one `Ghostty.SurfaceView`,
+  running `amx attach <runtime-session-id>`, made the first time the session
+  is selected and kept, hidden, while another is shown. A terminal is let go
+  when its `amx attach` ends (the session was attached somewhere else, or
+  detached with **F12**; the pane then offers **Reattach** instead of taking
+  the session back by itself), when a live snapshot no longer lists its
+  session, or when the window closes. None of those ends the agent.
+- **Losing the daemon.** `WorkspaceState` replaces its rows only from a live
+  snapshot. While the feed is down the last rows stay listed, dimmed, with the
+  daemon line under them; the selection and every terminal stay as they are,
+  since tmux holds the sessions and `amx attach` does not need the daemon.
+  The first snapshot after the reconnect then decides what is still there.
+- **Main menu.** The terminals offer every key equivalent to the main menu
+  before encoding it for their program, so the menu is the list of shortcuts
+  the workspace keeps: ⌘C/⌘V/⌘A, ⌘+/⌘-/⌘0, ⌘⇧A (next needing attention),
+  ⌘⇧] and ⌘⇧[ (next and previous session), ⌘W, ⌘M, ⌘1, ⌘, and ⌘Q.
+
 ## Which amx the app runs
 
 `AMXBinaryResolver` picks the first match:
@@ -257,8 +307,9 @@ Preferences shows which binary was chosen and why.
 The app holds one companion subscription open to
 `~/.local/share/agent-mux/daemon.sock`, the same path `ipc.SocketPath`
 computes (`Daemon/SubscriptionClient.swift`). It sends `subscribe` as the
-client `Agent Mux.app` with its version, reads the ack, and then reads frames.
-Every snapshot frame replaces the menu's state wholesale.
+client `Agent Mux.app` with its version and the `runtime_sessions` feature,
+reads the ack, and then reads frames. Every snapshot frame replaces the menu's
+state wholesale.
 
 - **Reconnect.** When the stream ends, the client dials again. The delay
   doubles from 0.5s to 10s and drops back to 0.5s once a subscription is
@@ -302,6 +353,10 @@ The app never starts the daemon on its own. **Start daemon** runs the resolved
 the operator chooses it.
 
 ## Focus
+
+A row for a session on tmux opens the [workspace](#workspace) on its terminal;
+it has no Kitty window, and **Mute** on it is greyed out because
+`amx mute-toggle` names one. Everything below is for a Kitty session.
 
 A click on a session row sends `focus_window` to the daemon. The request names
 a Kitty socket, which the daemon accepts only if it learned that socket itself

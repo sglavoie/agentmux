@@ -37,7 +37,7 @@ func mixedInput(version int) Input {
 		Sockets: map[int]string{7: sockA},
 		Runtime: map[int]RuntimeSlot{
 			7:        {SessionID: kittyRS, Backend: "kitty", Instance: sockA, Generation: "k1", Pane: "7"},
-			tmuxSlot: {SessionID: tmuxRS, Backend: "tmux", Instance: tmuxAddress, Generation: "t1", Pane: "%3"},
+			tmuxSlot: {SessionID: tmuxRS, Backend: "tmux", Instance: tmuxAddress, Generation: "t1", Pane: "%3", Project: "API", Profile: "work"},
 		},
 		ASLTargets: []asl.SupervisorTarget{target(tmuxSlot, "run-t")},
 		ASLPending: []asl.PendingQuestion{{
@@ -95,6 +95,8 @@ func TestProject_V2ListsRuntimeSessionsWithoutKittyIDs(t *testing.T) {
 	tmux := snap.Sessions[1]
 	want := protocol.CompanionSession{
 		Harness:      "codex",
+		Profile:      "work",
+		Project:      "API",
 		Conversation: &conversation.Identity{Harness: "codex", SessionID: "tmux-conv"},
 		ASLRunID:     "run-t",
 		IconState:    "key",

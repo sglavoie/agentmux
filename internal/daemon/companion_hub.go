@@ -171,12 +171,15 @@ func (h *Handler) companionRuntimeSlotsLocked() map[int]companion.RuntimeSlot {
 	}
 	out := make(map[int]companion.RuntimeSlot, len(h.runtimeRoutes.bySlot))
 	for slot, b := range h.runtimeRoutes.bySlot {
+		label := h.runtimeLabels[b.runtime]
 		out[slot] = companion.RuntimeSlot{
 			SessionID:  b.runtime,
 			Backend:    b.target.backend,
 			Instance:   b.target.instance,
 			Generation: b.target.generation,
 			Pane:       b.target.pane,
+			Project:    label.project,
+			Profile:    label.profile,
 		}
 	}
 	return out

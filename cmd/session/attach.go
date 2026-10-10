@@ -12,7 +12,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/charmbracelet/x/term"
@@ -33,13 +35,23 @@ var (
 	attachNewTmux      = func() (backend.TargetLauncher, error) { return cli.NewTmuxBackend() }
 	attachNewKitty     = func() kitty.KittyClient { return cli.NewKittyClient() }
 	attachIsTerminal   = func() bool { return term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()) }
-	attachRunClient    = func(c *exec.Cmd) error {
-		c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
-		return c.Run()
-	}
-	attachFingerprint = session.ProcessFingerprint
-	attachNow         = time.Now
+	attachRunClient    = runAttachedClient
+	attachFingerprint  = session.ProcessFingerprint
+	attachNow          = time.Now
 )
+
+// runAttachedClient runs the interactive client on this terminal. A terminal
+// that closes (a desktop view dismissed, a window shut) hangs up its whole
+// foreground group: the tmux client detaches on that, and amx has to outlive it
+// to release the ownership it recorded, so the hangup is taken here instead
+// of ending the process.
+func runAttachedClient(c *exec.Cmd) error {
+	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
+	hangup := make(chan os.Signal, 1)
+	signal.Notify(hangup, syscall.SIGHUP)
+	defer signal.Stop(hangup)
+	return c.Run()
+}
 
 var attachJSON bool
 

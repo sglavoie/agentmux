@@ -1,0 +1,14 @@
+=== RUN   TestRuntimeSessionsAreLabeledForCompanions
+--- PASS: TestRuntimeSessionsAreLabeledForCompanions (0.01s)
+=== RUN   TestTmuxRuntimeSessionLabelReadsPaneMetadata
+--- PASS: TestTmuxRuntimeSessionLabelReadsPaneMetadata (0.09s)
+PASS
+ok  	github.com/sglavoie/agentmux/internal/daemon	0.329s
+=== RUN   TestProject_V2ListsRuntimeSessionsWithoutKittyIDs
+--- PASS: TestProject_V2ListsRuntimeSessionsWithoutKittyIDs (0.00s)
+PASS
+ok  	github.com/sglavoie/agentmux/internal/daemon/companion	0.170s
+=== RUN   TestAttachedClientOutlivesAHangup
+--- PASS: TestAttachedClientOutlivesAHangup (0.21s)
+PASS
+ok  	github.com/sglavoie/agentmux/cmd/session	0.402s

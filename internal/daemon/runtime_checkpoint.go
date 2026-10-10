@@ -388,6 +388,7 @@ func (h *Handler) flushRuntimeCheckpoint() error {
 func (h *Handler) maintainRuntimeSessions(now time.Time) {
 	h.retireEndedRuntimeSessions(now)
 	h.retryDeferredRuntimeRestore(now)
+	h.labelRuntimeSessions(now)
 	if err := h.flushRuntimeCheckpoint(); err != nil {
 		slog.Warn("maintenance: runtime checkpoint write failed", "err", err)
 	}

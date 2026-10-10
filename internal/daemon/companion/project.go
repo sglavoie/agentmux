@@ -60,6 +60,11 @@ type RuntimeSlot struct {
 	Instance   string
 	Generation string
 	Pane       string
+	// Project and Profile label a session on a backend other than Kitty,
+	// which has no tab to read them from; empty until the daemon has read
+	// them. A Kitty session's come from its tab, never from here.
+	Project string
+	Profile string
 }
 
 func (r RuntimeSlot) kitty() bool { return r.Backend == "kitty" }
@@ -371,6 +376,8 @@ func runtimeSessions(in Input, runs map[int]string, base int) []candidate {
 	out := make([]candidate, 0, len(slots))
 	for _, slot := range slots {
 		s := protocol.CompanionSession{
+			Profile:  display(in.Runtime[slot].Profile),
+			Project:  display(in.Runtime[slot].Project),
 			ASLRunID: identifier(runs[slot]),
 			Runtime:  companionRuntime(in.Runtime[slot]),
 		}

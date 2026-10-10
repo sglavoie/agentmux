@@ -8,29 +8,39 @@ import Foundation
 /// past the session the previous press focused and wraps after the last one.
 ///
 /// A window ID names a window only inside the Kitty instance that issued it,
-/// so a session is identified by its socket and window together and the cycle
-/// spans every Kitty instance the snapshot lists.
+/// so a Kitty session is identified by its socket and window together and the
+/// cycle spans every Kitty instance the snapshot lists. A session on another
+/// backend has no window; its runtime session ID alone identifies it.
 struct AttentionCycler {
-    /// One session across Kitty instances.
+    /// One session across Kitty instances and backends.
     struct Key: Hashable {
         let socket: String
         let windowID: Int
+        /// Set, with no socket or window, for a session the workspace embeds.
+        var runtimeSessionID = ""
+
+        /// The key of the embedded session `runtimeSessionID` names.
+        static func embedded(_ runtimeSessionID: String) -> Key {
+            Key(socket: "", windowID: 0, runtimeSessionID: runtimeSessionID)
+        }
     }
 
     /// The session the last press focused, and where it stood in the order.
     private(set) var last: (key: Key, position: Position)?
 
-    /// Where a session sorts: oldest change first, then socket and window so
-    /// the order is total and stable between snapshots.
+    /// Where a session sorts: oldest change first, then socket, window, and
+    /// runtime session so the order is total and stable between snapshots.
     struct Position: Comparable {
         let changedAt: Date
         let socket: String
         let windowID: Int
+        var runtimeSessionID = ""
 
         static func < (lhs: Position, rhs: Position) -> Bool {
             if lhs.changedAt != rhs.changedAt { return lhs.changedAt < rhs.changedAt }
             if lhs.socket != rhs.socket { return lhs.socket < rhs.socket }
-            return lhs.windowID < rhs.windowID
+            if lhs.windowID != rhs.windowID { return lhs.windowID < rhs.windowID }
+            return lhs.runtimeSessionID < rhs.runtimeSessionID
         }
     }
 
@@ -39,13 +49,15 @@ struct AttentionCycler {
     /// The session a row is, naming the snapshot's socket when the row has
     /// none of its own.
     static func key(_ session: CompanionSession, snapshotSocket: String) -> Key {
-        Key(socket: session.kittySocket.isEmpty ? snapshotSocket : session.kittySocket, windowID: session.windowID)
+        if let embedded = session.embeddedRuntimeSessionID { return .embedded(embedded) }
+        return Key(socket: session.kittySocket.isEmpty ? snapshotSocket : session.kittySocket, windowID: session.windowID)
     }
 
     static func position(_ session: CompanionSession, snapshotSocket: String) -> Position {
         let key = key(session, snapshotSocket: snapshotSocket)
         // A row with no timestamp has no age to rank by; it goes last.
-        return Position(changedAt: session.changedAt ?? .distantFuture, socket: key.socket, windowID: key.windowID)
+        return Position(changedAt: session.changedAt ?? .distantFuture, socket: key.socket, windowID: key.windowID,
+                        runtimeSessionID: key.runtimeSessionID)
     }
 
     /// The attention rows in cycle order.

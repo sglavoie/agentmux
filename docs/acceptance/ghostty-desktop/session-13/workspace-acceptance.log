@@ -1,0 +1,535 @@
+
+##### the app under test is started fresh: workspace opened at launch, no terminal attached yet [02:14:33Z]
+PASS: the app subscribed to the world's daemon
+PASS: the workspace opened
+PASS: nothing is attached to the private tmux server
+
+--- app log since launch ---
+20:14:34.437 [io.github.sglavoie.agentmux:workspace] workspace: opened
+20:14:34.527 [io.github.sglavoie.agentmux:app] feed: connecting
+20:14:34.527 [io.github.sglavoie.agentmux:app] feed: live
+20:14:34.527 [io.github.sglavoie.agentmux:app] daemon: ready · 0.8.0 (ab5e12455ade-dirty)
+20:14:34.528 [io.github.sglavoie.agentmux:workspace] workspace: rows current (3 session(s), selection none)
+20:14:34.608 [io.github.sglavoie.agentmux:app] running /tmp/amxs13/shim/amx (userDefaultsOverride)
+20:14:34.667 [io.github.sglavoie.agentmux:workspace] workspace: rows held from the last snapshot (3 session(s), selection none)
+20:14:34.669 [io.github.sglavoie.agentmux:app] feed: reconnecting("reconnecting")
+20:14:34.681 [io.github.sglavoie.agentmux:workspace] workspace: rows current (3 session(s), selection none)
+20:14:34.681 [io.github.sglavoie.agentmux:app] feed: live
+
+##### environment [02:14:37Z]
+
+--- host ---
+ProductName:		macOS
+ProductVersion:		27.0.1
+BuildVersion:		26A434
+
+--- amx under test (this checkout, built into the world) ---
+amx version 0.8.0 (revision ab5e12455ade-dirty, built 2026-10-10T01:23:38Z, go1.27.1, sha256:7d3d8c866b7e)
+
+--- app under test ---
+io.github.sglavoie.agentmux.acceptance13
+pid 58516
+/tmp/amxs13/app/Agent Mux.app/Contents/MacOS/Agent Mux
+
+--- the app's preferences (its own domain) ---
+{
+    "NSWindow Frame AgentMuxWorkspace" = "10 440 800 600 0 0 1920 1049 ";
+    amxBinaryPath = "/tmp/amxs13/shim/amx";
+    amxEnvironment =     {
+        PATH = "/tmp/amxs13/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+        "XDG_CONFIG_HOME" = "/tmp/amxs13/home/.config";
+        "XDG_DATA_HOME" = "/tmp/amxs13/home/.local/share";
+        "XDG_STATE_HOME" = "/tmp/amxs13/home/.local/state";
+    };
+    amxHotKeyDashboard = "ctrl+opt+shift+cmd+d";
+    amxHotKeyNextAttention = "ctrl+opt+shift+cmd+n";
+    amxOpenWorkspaceAtLaunch = 1;
+    amxSnoozeDaemon = "58258:1791598471";
+    amxUseAppNotifications = 0;
+}
+
+--- kitty (separate instance, pid 58206, socket unix:/tmp/amxs13/kitty-58206) ---
+kitty 0.49.1 created by Kovid Goyal
+
+--- tmux ---
+tmux 3.7c
+
+--- asl (the installed one, linked into the world) ---
+asl answers on the world PATH
+
+--- world daemon ---
+58258 amx daemon start
+
+--- runtime-session registry ---
+rs-654dae45f23341c495a5dbbf4193c40a live alpha tmux %0 detached
+rs-2dc25429eea41c02ba052c7a4defc7c4 live alpha tmux %1 detached
+
+--- private tmux server panes ---
+amx-a0e54ff4a8f4fa11 %1 pid=58280 dead=0
+amx-a5e4734737906e6b %0 pid=58272 dead=0
+
+--- kitty tree ---
+tab 1 title='/tmp/amxs13'
+   window 1 focused=False vars={}
+tab 2 [active] title='🟠beta'
+   window 2 focused=False vars={'amx_harness': 'claude', 'amx_profile': 'work', 'amx_project': 'beta'}
+sessions: alpha/work = rs-654dae45f23341c495a5dbbf4193c40a on tmux %0; alpha/personal = rs-2dc25429eea41c02ba052c7a4defc7c4 on tmux %1; beta/work = Kitty window 2
+
+##### S1 project-profile-sidebar: the sidebar groups the daemon's sessions by project and labels each with its profile [02:14:37Z]
+
+--- the daemon's v2 snapshot ---
+snapshot v2 features=['snapshot', 'heartbeat', 'notifications', 'runtime_sessions'] kitty.socket=unix:/tmp/amxs13/kitty-58206
+  beta   work      claude  icon=-         attention=False window=2 runtime=-  
+  alpha  personal  claude  icon=-         attention=False window=0 runtime=tmux %1 rs-2dc25429eea41c02ba052c7a4defc7c4
+  alpha  work      claude  icon=-         attention=False window=0 runtime=tmux %0 rs-654dae45f23341c495a5dbbf4193c40a
+
+--- sidebar as accessibility reads it (' > ' marks the selected row) ---
+   alpha
+   alpha, personal, working, claude · <1m
+   alpha, work, working, claude · <1m
+   beta
+   beta, work, working, claude · master · <1m · Kitty
+
+PASS: row 1 is the project line alpha
+PASS: row 2 is alpha's session on profile personal
+PASS: row 3 is alpha's session on profile work
+PASS: row 4 is the project line beta
+PASS: row 5 is beta's session on profile work, marked as a Kitty window
+PASS: there are exactly five rows
+
+##### S2 attention: a tmux session and the Kitty session each raise a permission prompt [02:14:43Z]
+PASS: alpha/personal reads as needing attention
+PASS: beta/work reads as needing attention
+
+--- sidebar ---
+   alpha, 1 waiting
+   alpha, personal, needs attention, claude · <1m
+   alpha, work, working, claude · <1m
+   beta, 1 waiting
+   beta, work, needs attention, claude · master · <1m · Kitty
+
+
+--- alpha project line: name and waiting count ---
+alpha, 1
+
+--- alpha/personal row: glyph, profile, detail ---
+🔑, personal, claude · <1m
+
+--- alpha/work row: glyph, profile, detail ---
+⚡, work, claude · <1m
+
+--- beta project line: name and waiting count ---
+beta, 1
+
+--- beta/work row: glyph, profile, detail ---
+🔑, work, claude · master · <1m · Kitty
+PASS: alpha's line counts one waiting session
+PASS: alpha/personal shows the key glyph
+PASS: alpha/work still shows the working glyph
+PASS: beta/work shows the key glyph and its Kitty mark
+
+--- status item title (attention counts in the menu bar) ---
+⚡1 🔑2
+screenshot: sidebar-attention.png (window at 10, 40, size 800, 600)
+PASS: after both agents resume, no row needs attention
+
+##### F1 mixed-backend-focus: a click on a tmux session embeds its terminal and gives it the keyboard [02:14:49Z]
+
+--- tmux clients before (expect none or earlier ones) ---
+PASS: the app attached a terminal to alpha/work
+PASS: the private tmux server has a Ghostty client on alpha/work's pane
+PASS: the registry records the attachment
+PASS: the sidebar selection is alpha/work
+PASS: the window is titled for the session
+PASS: keys typed with no further click reach alpha/work's agent
+
+--- alpha/work pane ---
+working (3)
+typed-into-work
+echo[4]: typed-into-work
+
+--- tmux clients ---
+59273 amx-a5e4734737906e6b pane=%0 term=xterm-ghostty
+
+--- app log ---
+20:14:51.818 [io.github.sglavoie.agentmux:app] embedded terminals use Ghostty 1.3.1 (ReleaseFast)
+20:14:51.826 [io.github.sglavoie.agentmux:workspace] workspace: attached a terminal to rs-654dae45f23341c495a5dbbf4193c40a
+20:14:51.826 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-654dae45f23341c495a5dbbf4193c40a")
+20:14:51.830 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-654dae45f23341c495a5dbbf4193c40a
+
+##### F2 a second tmux session gets its own terminal; the first stays attached, hidden [02:14:54Z]
+PASS: the app attached a terminal to alpha/personal
+PASS: both panes have a Ghostty client
+PASS: keys now reach alpha/personal's agent
+PASS: and not alpha/work's
+PASS: coming back to alpha/work focuses it
+PASS: without attaching again (same clients)
+PASS: no second terminal was made for it
+PASS: keys reach alpha/work again
+
+--- tmux clients ---
+59273 amx-a5e4734737906e6b pane=%0 term=xterm-ghostty
+59449 amx-a0e54ff4a8f4fa11 pane=%1 term=xterm-ghostty
+screenshot: focus-embedded.png (window at 10, 40, size 800, 600)
+
+##### F3 a click on the Kitty session raises Kitty on its window and embeds nothing [02:15:01Z]
+
+--- kitty tree before (tab 1 active, beta's tab not) ---
+tab 1 [active] title='/tmp/amxs13'
+   window 1 focused=False vars={}
+tab 2 title='⚡🟠beta'
+   window 2 focused=False vars={'amx_harness': 'claude', 'amx_profile': 'work', 'amx_project': 'beta'}
+PASS: before the click the app has the keyboard
+PASS: the app focused the Kitty window externally
+PASS: Kitty focused beta's window
+PASS: the separate Kitty instance (pid 58206) came to the front
+PASS: no terminal was attached for it (same tmux clients)
+
+--- kitty tree after ---
+tab 1 title='/tmp/amxs13'
+   window 1 focused=True vars={}
+tab 2 [active] title='⚡🟠beta'
+   window 2 focused=True vars={'amx_harness': 'claude', 'amx_profile': 'work', 'amx_project': 'beta'}
+
+--- app log ---
+20:15:03.139 [io.github.sglavoie.agentmux:workspace] workspace: showing external(AgentMux.AttentionCycler.Key(socket: "unix:/tmp/amxs13/kitty-58206", windowID: 2, runtimeSessionID: ""))
+20:15:03.140 [io.github.sglavoie.agentmux:workspace] workspace: focus Kitty window 2 externally
+
+--- the pane beside the sidebar ---
+beta runs in Kitty
+Its terminal is a Kitty window. Agent Mux brings Kitty forward on it.
+
+PASS: the pane says the session runs in Kitty
+PASS: the sidebar selection is beta/work
+screenshot: focus-kitty.png (window at 10, 40, size 800, 600)
+
+##### A1 next-attention: three sessions wait, oldest first alpha/personal (tmux), beta/work (Kitty), alpha/work (tmux) [02:15:07Z]
+PASS: all three need attention
+
+--- snapshot ---
+snapshot v2 features=['snapshot', 'heartbeat', 'notifications', 'runtime_sessions'] kitty.socket=unix:/tmp/amxs13/kitty-58206
+  beta   work      claude  icon=key       attention=True  window=2 runtime=-  
+  alpha  personal  claude  icon=key       attention=True  window=0 runtime=tmux %1 rs-2dc25429eea41c02ba052c7a4defc7c4
+  alpha  work      claude  icon=key       attention=True  window=0 runtime=tmux %0 rs-654dae45f23341c495a5dbbf4193c40a
+PASS: Kitty has the keyboard, on tab 1, before the first press
+
+##### A2 global shortcut ⌃⌥⇧⌘N pressed over Kitty: the tmux session that waited longest opens in the workspace [02:15:13Z]
+PASS: the app picked alpha/personal's pane
+PASS: the workspace focused its embedded terminal
+PASS: the app came to the front
+PASS: the sidebar selection is alpha/personal
+PASS: alpha/personal's pane has a Ghostty client
+
+--- app log ---
+20:15:14.482 [io.github.sglavoie.agentmux:app] next attention: tmux %1 (key)
+20:15:14.488 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-2dc25429eea41c02ba052c7a4defc7c4
+20:15:14.488 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-2dc25429eea41c02ba052c7a4defc7c4")
+
+##### A3 second press: the Kitty session is raised in Kitty [02:15:17Z]
+PASS: the app picked beta's Kitty window
+PASS: Kitty focused beta's window
+PASS: Kitty came to the front
+
+--- app log ---
+20:15:18.749 [io.github.sglavoie.agentmux:app] next attention: window 2 (key)
+
+##### A4 third press, over Kitty: the other tmux session opens in the workspace [02:15:20Z]
+PASS: the app picked alpha/work's pane
+PASS: the workspace focused its embedded terminal
+PASS: the app came to the front
+PASS: the sidebar selection is alpha/work
+PASS: the keyboard is in alpha/work's terminal
+
+--- app log ---
+20:15:21.539 [io.github.sglavoie.agentmux:app] next attention: tmux %0 (key)
+20:15:21.543 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-654dae45f23341c495a5dbbf4193c40a
+20:15:21.543 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-654dae45f23341c495a5dbbf4193c40a")
+screenshot: next-attention.png (window at 10, 40, size 800, 600)
+
+##### A5 fourth press wraps to the oldest; then the Session menu's Next Needing Attention continues the same cycle [02:15:25Z]
+PASS: the cycle wrapped to alpha/personal
+PASS: the sidebar selection is alpha/personal
+PASS: the menu item went on to beta's Kitty window
+PASS: Kitty came to the front
+
+--- app log ---
+20:15:29.333 [io.github.sglavoie.agentmux:app] next attention: window 2 (key)
+
+##### A6 a session that stops waiting leaves the cycle [02:15:31Z]
+PASS: alpha/work no longer needs attention
+PASS: the next press skips it and wraps to alpha/personal
+PASS: then beta again, never alpha/work
+PASS: with nothing waiting the shortcut focuses nothing
+
+--- app log ---
+20:15:37.249 [io.github.sglavoie.agentmux:app] next attention: nothing is waiting
+
+##### R1 daemon-reconnect: alpha/work is selected with the keyboard in its terminal, alpha/personal attached behind it [02:15:40Z]
+PASS: alpha/work is selected
+PASS: both tmux sessions have a Ghostty client
+
+--- tmux clients before ---
+59273 amx-a5e4734737906e6b pane=%0 term=xterm-ghostty
+59449 amx-a0e54ff4a8f4fa11 pane=%1 term=xterm-ghostty
+
+--- sidebar before ---
+   alpha
+   alpha, personal, working, claude · <1m
+ > alpha, work, working, claude · <1m
+   beta
+   beta, work, working, claude · master · <1m · Kitty
+
+
+--- agent processes before ---
+%1 pid=58280 dead=0
+%0 pid=58272 dead=0
+
+##### R2 the daemon stops [02:15:45Z]
+PASS: the feed reports the daemon gone
+PASS: the workspace holds its rows and its selection
+PASS: the sidebar lists the same sessions with the same selection
+PASS: the sidebar says why it is not current
+PASS: both terminals are still attached (same tmux clients)
+PASS: no terminal was detached
+PASS: the selected terminal still takes keys with no daemon
+
+--- sidebar while the daemon is down ---
+   alpha
+   alpha, personal, working, claude · <1m
+ > alpha, work, working, claude · <1m
+   beta
+   beta, work, working, claude · master · <1m · Kitty
+
+
+--- pane and footer texts ---
+Daemon: not running
+
+screenshot: daemon-down.png (window at 10, 40, size 800, 600)
+PASS: another held row can still be selected and typed into
+PASS: its keys reach alpha/personal
+PASS: back on alpha/work
+
+--- app log while down ---
+20:15:46.888 [io.github.sglavoie.agentmux:workspace] workspace: rows held from the last snapshot (3 session(s), selection rs-654dae45f23341c495a5dbbf4193c40a)
+20:15:46.889 [io.github.sglavoie.agentmux:app] feed: reconnecting("daemon shutdown")
+20:15:46.904 [io.github.sglavoie.agentmux:app] daemon: not running
+20:15:47.463 [io.github.sglavoie.agentmux:app] feed: notRunning
+20:15:52.831 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-2dc25429eea41c02ba052c7a4defc7c4")
+20:15:52.831 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-2dc25429eea41c02ba052c7a4defc7c4
+20:15:54.683 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-654dae45f23341c495a5dbbf4193c40a")
+20:15:54.684 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-654dae45f23341c495a5dbbf4193c40a
+
+##### R3 the daemon starts again [02:15:56Z]
+PASS: the feed is live again
+PASS: the rows are current again with the selection kept
+PASS: the sidebar lists the same sessions, grouped and labeled as before, with the same selection
+PASS: the not-current notice is gone
+PASS: both terminals are the same attachments as before the restart
+PASS: the agents are the same processes
+PASS: nothing was attached again or detached
+PASS: the keyboard is still in alpha/work's terminal
+
+--- snapshot from the new daemon ---
+snapshot v2 features=['snapshot', 'heartbeat', 'notifications', 'runtime_sessions'] kitty.socket=unix:/tmp/amxs13/kitty-58206
+  beta   work      claude  icon=bolt      attention=False window=2 runtime=-  
+  alpha  personal  claude  icon=bolt      attention=False window=0 runtime=tmux %1 rs-2dc25429eea41c02ba052c7a4defc7c4
+  alpha  work      claude  icon=bolt      attention=False window=0 runtime=tmux %0 rs-654dae45f23341c495a5dbbf4193c40a
+
+--- sidebar after ---
+   alpha
+   alpha, personal, working, claude · <1m
+ > alpha, work, working, claude · <1m
+   beta
+   beta, work, working, claude · master · <1m · Kitty
+
+
+--- tmux clients after ---
+59273 amx-a5e4734737906e6b pane=%0 term=xterm-ghostty
+59449 amx-a0e54ff4a8f4fa11 pane=%1 term=xterm-ghostty
+
+--- app log across the restart ---
+20:16:02.696 [io.github.sglavoie.agentmux:app] feed: live
+20:16:02.698 [io.github.sglavoie.agentmux:workspace] workspace: rows current (3 session(s), selection rs-654dae45f23341c495a5dbbf4193c40a)
+screenshot: daemon-back.png (window at 10, 40, size 800, 600)
+
+##### R4 attention raised after the reconnect still reaches the same rows [02:16:10Z]
+PASS: alpha/personal reads as needing attention
+
+##### M1 retained menu bar companion: with the workspace open, the status item still lists the sessions and its actions [02:16:11Z]
+
+--- status item title ---
+⚡2 🔑1
+
+--- status menu items ('----' is a separator; each session row is followed by its ⌥ Mute alternate) ---
+Daemon: ready · 0.8.0 (ab5e12455ade-dirty)
+----
+Needs attention
+🔑 alpha · claude · <1m
+Mute · 🔑 alpha · claude · <1m
+----
+Working
+⚡ beta · claude · <1m
+Mute · ⚡ beta · claude · <1m
+⚡ alpha · claude · <1m
+Mute · ⚡ alpha · claude · <1m
+----
+Open Workspace
+Open Dashboard
+Launch Project
+Recent
+Notifications
+----
+Preferences…
+----
+Quit Agent Mux
+
+PASS: the menu has: Needs attention
+PASS: the menu has: Working
+PASS: the menu has: Open Workspace
+PASS: the menu has: Open Dashboard
+PASS: the menu has: Launch Project
+PASS: the menu has: Recent
+PASS: the menu has: Notifications
+PASS: the menu has: Preferences…
+PASS: the menu has: Quit Agent Mux
+PASS: the waiting tmux session is listed with its glyph
+PASS: the Kitty session is listed
+PASS: clicking the tmux session's menu row focuses it in the workspace
+PASS: the sidebar selection follows
+
+--- app log ---
+20:16:17.576 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-2dc25429eea41c02ba052c7a4defc7c4
+20:16:17.577 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-2dc25429eea41c02ba052c7a4defc7c4")
+
+##### M2 retained shortcut: the dashboard shortcut ⌃⌥⇧⌘D still opens the dashboard in Kitty [02:16:20Z]
+PASS: the app reports the dashboard opened or focused
+PASS: Kitty came to the front
+
+--- kitty tree (the dashboard tab) ---
+tab 1 title='/tmp/amxs13'
+   window 1 focused=True vars={}
+tab 2 title='⚡🟠beta'
+   window 2 focused=True vars={'amx_harness': 'claude', 'amx_profile': 'work', 'amx_project': 'beta'}
+tab 3 [active] title='Agent Mux'
+   window 3 focused=True vars={}
+
+--- app log ---
+20:16:22.918 [io.github.sglavoie.agentmux:app] dashboard opened (window 3)
+
+##### M3 retained ASL answer panel: a real asl run inside the tmux session alpha/work asks its supervisor [02:16:25Z]
+PASS: the worker turn started
+the supervisor surfaced question: 9b61cc0a-60bf-469c-839e-91b668d169a9
+PASS: a question was surfaced by asl outbox wait run as the session
+PASS: the daemon lists the run as waiting on the tmux session
+
+--- snapshot ---
+snapshot v2 features=['snapshot', 'heartbeat', 'notifications', 'runtime_sessions'] kitty.socket=unix:/tmp/amxs13/kitty-58206
+  beta   work      claude  icon=bolt      attention=False window=2 runtime=-  
+  alpha  personal  claude  icon=bolt      attention=False window=0 runtime=tmux %1 rs-2dc25429eea41c02ba052c7a4defc7c4
+  alpha  work      claude  icon=question  attention=True  window=0 runtime=tmux %0 rs-654dae45f23341c495a5dbbf4193c40a
+  asl waiting run=20261010T021626880251Z-62870 unanswered=1 runtime=rs-654dae45f23341c495a5dbbf4193c40a
+PASS: the sidebar row shows the question
+
+--- alpha/work row ---
+❓, work, claude · <1m
+
+--- status menu items ---
+Daemon: ready · 0.8.0 (ab5e12455ade-dirty)
+----
+Needs attention
+❓ alpha · claude · <1m
+Mute · ❓ alpha · claude · <1m
+Answer…
+----
+Working
+⚡ beta · claude · <1m
+Mute · ⚡ beta · claude · <1m
+⚡ alpha · claude · <1m
+Mute · ⚡ alpha · claude · <1m
+----
+Open Workspace
+Open Dashboard
+Launch Project
+Recent
+Notifications
+----
+Preferences…
+----
+Quit Agent Mux
+
+PASS: the menu offers Answer… under the tmux session
+PASS: the app opened the answer panel on the run
+
+--- the app's windows ---
+, Agent Mux — Supervisor question, alpha — personal
+PASS: the panel shows the plan and the worker's question
+
+--- answer panel texts ---
+demo, Waiting on its supervisor · asked 2026-10-10T02:16:27.394065+00:00, Your reply
+Proceed with the fixture change?
+
+--- answer panel buttons enabled (Close, Reply, Continue, Pause): Reply is off until there is text ---
+true, false, true, true
+PASS: the workspace is still open behind the panel, on the same session
+screenshot: asl-answer-panel.png (window at 150, 90, size 520, 464)
+PASS: the reply editor holds the typed text
+PASS: Reply is enabled now
+PASS: the app sent the reply to the daemon and it was accepted
+PASS: the worker's ask returned with the reply typed in the panel
+PASS: the worker went on (its ask exited 0)
+PASS: the daemon no longer lists the run as waiting
+PASS: the panel closed itself
+
+--- the worker's ask result ---
+{"answered": true, "command": "ask", "consumed": true, "created": true, "delivery_state": "consumed", "mailbox_path": "/private/tmp/amxs13/home/.local/state/agent-session-loop/4ac50d736afe1ee23d23ff9c56e0f238fc8b17b7131e5183a4631e86d612ce38/mailbox.jsonl", "ok": true, "pause_required": false, "plan_dir": "/private/tmp/amxs13/plans/demo", "question": {"created_at": "2026-10-10T02:16:27.394065+00:00", "delivery_mode": "wait", "id": "9b61cc0a-60bf-469c-839e-91b668d169a9", "kind": "question", "run_id": "20261010T021626880251Z-62870", "seq": 1, "session_id": "1", "text": "Proceed with the fixture change?", "turn_index": 1, "version": 4, "waiter_origin": "worker"}, "question_id": "9b61cc0a-60bf-469c-839e-91b668d169a9", "receipt": {"closure_id": "af3dab1e-9d54-4801-a0d2-0d9f91a52707", "created_at": "2026-10-10T02:16:43.424650+00:00", "id": "94378845-0a2a-4125-9fae-1dedbfc168aa", "kind": "receipt", "seq": 4, "to": "9b61cc0a-60bf-469c-839e-91b668d169a9", "version": 4, "wait_id": "b9788506-8017-4f5f-980a-f8f90a6968b9"}, "reply": {"created_at": "2026-10-10T02:16:42.014977+00:00", "id": "af3dab1e-9d54-4801-a0d2-0d9f91a52707", "kind": "reply", "seq": 3, "text": "Go ahead, from the answer panel.", "to": "9b61cc0a-60bf-469c-839e-91b668d169a9", "version": 4}, "resolution": null, "resolved": false, "timed_out": false, "wait_start": {"created_at": "2026-10-10T02:16:27.394087+00:00", "id": "b9788506-8017-4f5f-980a-f8f90a6968b9", "kind": "wait-start", "seq": 2, "to": "9b61cc0a-60bf-469c-839e-91b668d169a9", "version": 4}, "wait_timeout": 600.0, "waited": true}
+
+--- worker log ---
+worker turn for /private/tmp/amxs13/plans/demo (runtime session rs-654dae45f23341c495a5dbbf4193c40a)
+ask returned 0
+
+--- app log ---
+20:16:41.993 [io.github.sglavoie.agentmux:asl] asl_action ASLRequestParams{method:question.reply run:20261010T021626880251Z-62870 question:9b61cc0a-60bf-469c-839e-91b668d169a9 operation:amx-8eeab3756b10550604cd1486e95e9464 text:32b}
+20:16:42.028 [io.github.sglavoie.agentmux:asl] asl_action amx-8eeab3756b10550604cd1486e95e9464: accepted
+screenshot: workspace-after-answer.png (window at 10, 40, size 800, 600)
+
+##### C1 closing the workspace detaches every view and ends no agent; the menu bar companion remains [02:16:46Z]
+
+--- tmux clients before ---
+59273 amx-a5e4734737906e6b pane=%0 term=xterm-ghostty
+59449 amx-a0e54ff4a8f4fa11 pane=%1 term=xterm-ghostty
+PASS: the workspace closed and let go of its terminals
+PASS: no client is attached to the private tmux server
+PASS: the agents are the same live processes
+PASS: the registry still records both runtime sessions live
+
+--- registry ---
+rs-654dae45f23341c495a5dbbf4193c40a live alpha tmux %0 attached
+rs-2dc25429eea41c02ba052c7a4defc7c4 live alpha tmux %1 attached
+
+--- app log ---
+20:16:48.010 [io.github.sglavoie.agentmux:workspace] workspace: closed, detaching 2 terminal(s)
+
+--- the app's menu bars after closing (the status item's) ---
+⚡2 🛑1
+
+##### C2 Open Workspace in the status menu brings it back on the remembered session [02:16:50Z]
+PASS: the workspace opened again
+PASS: it attached the remembered session's terminal again
+
+--- sidebar ---
+   alpha, 1 waiting
+ > alpha, personal, working, claude · <1m
+   alpha, work, needs attention, <1m
+   beta
+   beta, work, working, claude · master · 1m · Kitty
+
+
+--- tmux clients ---
+63835 amx-a0e54ff4a8f4fa11 pane=%1 term=xterm-ghostty
+
+--- app log ---
+20:16:54.246 [io.github.sglavoie.agentmux:workspace] workspace: opened
+20:16:54.266 [io.github.sglavoie.agentmux:workspace] workspace: attached a terminal to rs-2dc25429eea41c02ba052c7a4defc7c4
+20:16:54.267 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-2dc25429eea41c02ba052c7a4defc7c4")
+
+##### fresh env sidebar focus attention reconnect retained close: 0 failed check(s)

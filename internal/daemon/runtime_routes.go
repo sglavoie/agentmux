@@ -215,6 +215,9 @@ func (h *Handler) translateHookOrigin(req protocol.Request) (protocol.Request, *
 
 	h.stateMu.Lock()
 	closed, rejection := h.claimRuntimeSlotLocked(slot, string(id), target, occupant, occupantLive)
+	if rejection == nil && isRuntimeSyntheticSlot(slot) {
+		h.noteRuntimeProjectLocked(string(id), record.Project)
+	}
 	h.stateMu.Unlock()
 	if rejection != nil {
 		return req, rejection

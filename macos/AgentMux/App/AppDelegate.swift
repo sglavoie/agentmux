@@ -2,7 +2,7 @@ import AppKit
 import os
 import UserNotifications
 
-final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, WorkspaceDelegate {
     private nonisolated static let logger = Logger(subsystem: "io.github.sglavoie.agentmux", category: "app")
 
     /// How often the daemon line is refreshed while the companion feed is
@@ -13,6 +13,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
     private var preferencesController: PreferencesWindowController?
     /// The ASL answer panel, made the first time a question is answered.
     private var aslPanel: ASLQuestionPanelController?
+    /// The workspace window, made the first time it is shown.
+    private(set) var workspace: WorkspaceWindowController?
+    /// `defaults write io.github.sglavoie.agentmux amxOpenWorkspaceAtLaunch
+    /// -bool YES` shows the workspace as soon as the app starts.
+    static let openWorkspaceAtLaunchKey = "amxOpenWorkspaceAtLaunch"
     let preferencesModel = PreferencesModel()
     private var dashboardHotKey: HotKeyCenter?
     private var attentionHotKey: HotKeyCenter?
@@ -122,6 +127,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
         }
         trackActiveKitty()
         resolveBinary()
+        if UserDefaults.standard.bool(forKey: Self.openWorkspaceAtLaunchKey) { showWorkspace() }
+    }
+
+    /// The app was opened again while running (from Finder, Spotlight, or
+    /// `open`): that asks for its window.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        guard !Self.isRunningTests else { return false }
+        showWorkspace()
+        return false
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -164,6 +178,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
         )
     }
 
+    // MARK: Workspace
+
+    /// Shows the workspace window, on `runtimeSessionID`'s terminal when one
+    /// is named.
+    func showWorkspace(focusing runtimeSessionID: String? = nil) {
+        let controller = workspace ?? WorkspaceWindowController(delegate: self)
+        workspace = controller
+        // The terminals offer their shortcuts to the main menu first, and a
+        // regular app needs one; the accessory never shows it.
+        if NSApp.mainMenu == nil { NSApp.mainMenu = WorkspaceMenu.make(target: self) }
+        if let runtimeSessionID {
+            controller.focus(runtimeSessionID: runtimeSessionID)
+        } else {
+            controller.show()
+        }
+    }
+
+    func makeTerminal(runtimeSessionID: String) -> Result<WorkspaceTerminal, WorkspaceTerminalProblem> {
+        guard let configuration = attachmentConfiguration(runtimeSessionID: runtimeSessionID) else {
+            return .failure(WorkspaceTerminalProblem(message: preferences.binaryProblem ?? "amx is still being resolved."))
+        }
+        guard let runtime = terminalRuntime() else {
+            return .failure(WorkspaceTerminalProblem(message: "The embedded terminal could not start. See the log for why."))
+        }
+        guard let surface = runtime.makeSurface(configuration) else {
+            return .failure(WorkspaceTerminalProblem(message: "The terminal could not be created."))
+        }
+        surface.delegate = workspace
+        return .success(WorkspaceTerminal(view: surface) { surface.close() })
+    }
+
+    func focusExternally(_ row: WorkspaceRow) {
+        guard case let .kitty(socket, windowID) = row.target else { return }
+        focus(MenuSessionRow(title: row.project, windowID: windowID, kittySocket: socket, toolTip: ""))
+    }
+
+    /// While the workspace is open the app is a regular one, with a Dock icon
+    /// and a menu bar, so its window takes the keyboard like any other; with
+    /// it closed the app is the menu bar accessory again.
+    func workspaceVisibilityChanged(_ visible: Bool) {
+        NSApp.setActivationPolicy(visible ? .regular : .accessory)
+    }
+
+    @objc func openWorkspace(_ sender: Any?) { showWorkspace() }
+    @objc func nextAttention(_ sender: Any?) { focusNextAttention() }
+    @objc func selectNextSession(_ sender: Any?) { workspace?.selectNeighbor(1) }
+    @objc func selectPreviousSession(_ sender: Any?) { workspace?.selectNeighbor(-1) }
+    @objc func openDashboardFromMenu(_ sender: Any?) { openDashboard() }
+
     // MARK: Companion feed
 
     private func startSubscription() {
@@ -198,6 +261,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
     private func storeChanged() {
         reconcileSnooze()
         statusItem?.refresh()
+        workspace?.refresh()
         preferences.daemonStatus = store.daemonStatus
         publishPreferences()
     }
@@ -234,7 +298,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
 
     // MARK: Focus
 
+    /// Focuses a session where it is: an embedded one in the workspace, a
+    /// Kitty one in Kitty, which is then brought forward.
     func focus(_ row: MenuSessionRow) {
+        if !row.runtimeSessionID.isEmpty {
+            showWorkspace(focusing: row.runtimeSessionID)
+            return
+        }
         let candidates = KittyEndpoint.candidates(
             override: preferencesModel.preferences.kittySocketOverride,
             rowSocket: row.kittySocket,
@@ -287,6 +357,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
         switch action {
         case .startDaemon:
             startDaemon()
+        case .openWorkspace:
+            showWorkspace()
         case .openDashboard:
             openDashboard()
         case let .launchProject(project):
@@ -379,6 +451,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
                         self.recent.state.reset()
                     }
                     self.command = command
+                    self.workspace?.retryTerminal()
                     // Doctor compares the build subscribe reported with the
                     // daemon's, so a new selection needs a new subscribe.
                     if self.subscribeRequest.report(build: report) {
@@ -477,13 +550,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
         let origin = Self.origin(of: response, in: store.sessions, snapshotKitty: store.snapshot?.kitty ?? CompanionKitty())
         switch response.disposition {
         case .clicked:
+            if !response.embeddedRuntimeSessionID.isEmpty {
+                return showWorkspace(focusing: response.embeddedRuntimeSessionID)
+            }
             guard response.navigable, let socket = origin.socket else { return }
             _ = KittyActivator.activate(socket: socket)
         case .actionMute:
             guard let session = origin.session else { return report("Could not mute: the session is no longer listed.") }
             // mute-toggle toggles; a banner's Mute never unmutes.
             guard !session.muted else { return }
-            toggleMute(MenuSessionRow(title: session.project, windowID: session.windowID, kittySocket: session.kittySocket, toolTip: ""))
+            toggleMute(.focusing(session))
         case .actionSnooze:
             snooze(.oneHour)
         case .actionAnswer:
@@ -615,7 +691,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
     }
 
     /// ⌃⌥⌘N: focuses the session that has waited longest, then the next on
-    /// each press, across every Kitty instance.
+    /// each press, across every Kitty instance and the workspace's own
+    /// sessions.
     func focusNextAttention() {
         guard store.feed == .live, let snapshot = store.snapshot else {
             refuse("The session feed is not live.")
@@ -626,8 +703,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
             NSSound.beep()
             return
         }
-        Self.logger.notice("next attention: window \(session.windowID) (\(session.iconState, privacy: .public))")
-        focus(MenuSessionRow(title: session.project, windowID: session.windowID, kittySocket: session.kittySocket, toolTip: ""))
+        Self.logger.notice("next attention: \(MenuBuilder.place(of: session), privacy: .public) (\(session.iconState, privacy: .public))")
+        focus(.focusing(session))
     }
 
     /// A shortcut that could not act: the menu shows why the next time it
@@ -788,7 +865,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
     /// instance would resume a second copy instead of focusing the first.
     private func continueConversation(_ conversation: RecentConversation) {
         if let live = store.sessions.first(where: { $0.conversation == conversation.identity }) {
-            focus(MenuSessionRow(title: conversation.selector, windowID: live.windowID, kittySocket: live.kittySocket, toolTip: ""))
+            focus(.focusing(live, title: conversation.selector))
             return
         }
         guard let command else { return report(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.") }
@@ -845,6 +922,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
     /// Window IDs mean something only inside the instance that issued them,
     /// so no other socket is tried.
     func toggleMute(_ row: MenuSessionRow) {
+        guard row.runtimeSessionID.isEmpty else { return report(MenuBuilder.muteNeedsKitty) }
         guard let command else { return report(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.") }
         if let reason = gate.unavailableReason(.muteToggle) { return report(reason) }
         let socket = row.kittySocket.isEmpty ? store.snapshot?.kitty.socket ?? "" : row.kittySocket

@@ -109,6 +109,10 @@ struct SubscribeParams: Encodable, Equatable {
     static let protocolVersion = 1
     /// What the app calls itself to health and doctor.
     static let clientName = "Agent Mux.app"
+    /// `protocol.CompanionFeatureRuntimeSessions`: asks for snapshots that
+    /// also list sessions on backends other than Kitty, each with its runtime
+    /// identity. A daemon that does not know the feature keeps sending v1.
+    static let runtimeSessionsFeature = "runtime_sessions"
 
     var protocolVersion: Int = SubscribeParams.protocolVersion
     var client: String = SubscribeParams.clientName
@@ -118,10 +122,11 @@ struct SubscribeParams: Encodable, Equatable {
     var amxBuild: AMXBuildReport?
     var notificationBackend: Bool = false
     var notificationsAuthorized: Bool = false
+    var features: [String] = [SubscribeParams.runtimeSessionsFeature]
 
     enum CodingKeys: String, CodingKey {
         case protocolVersion = "protocol"
-        case client
+        case client, features
         case clientVersion = "client_version"
         case amxBuild = "amx_build"
         case notificationBackend = "notification_backend"

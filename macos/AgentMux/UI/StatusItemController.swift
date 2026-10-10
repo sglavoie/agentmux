@@ -96,11 +96,18 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         button.toolTip = "Agent Mux — \(daemonLine)"
     }
 
+    /// Whether focusing these sessions needs a Kitty socket nothing has named
+    /// yet. Only a Kitty session needs one; an embedded one is shown here.
+    nonisolated static func needsKittySocket(_ sessions: [CompanionSession], snapshotSocket: String) -> Bool {
+        let inKitty = sessions.filter { $0.embeddedRuntimeSessionID == nil }
+        return !inKitty.isEmpty && snapshotSocket.isEmpty && inKitty.allSatisfy { $0.kittySocket.isEmpty }
+    }
+
     func menuInput(_ store: SessionStore) -> MenuBuilder.Input {
         let sessions = store.sessions
         let snapshotSocket = store.snapshot?.kitty.socket ?? ""
         var reachable = true
-        if !sessions.isEmpty, snapshotSocket.isEmpty, sessions.allSatisfy({ $0.kittySocket.isEmpty }) {
+        if Self.needsKittySocket(sessions, snapshotSocket: snapshotSocket) {
             reachable = !KittyEndpoint.candidates(
                 override: kittySocketOverride, rowSocket: "", snapshotSocket: "", kittyPIDs: KittyEndpoint.runningKittyPIDs()
             ).isEmpty

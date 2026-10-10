@@ -10,11 +10,22 @@ struct MenuSessionRow: Equatable {
     var muted = false
     /// Why the ⌥ Mute alternate is greyed out; nil when it works.
     var muteUnavailable: String?
+    /// Set for a session the workspace embeds: focusing it shows its terminal
+    /// there, and it has no Kitty window to name.
+    var runtimeSessionID = ""
+
+    /// The row a click on `session` focuses, with nothing to display.
+    static func focusing(_ session: CompanionSession, title: String? = nil) -> MenuSessionRow {
+        MenuSessionRow(title: title ?? session.project, windowID: session.windowID, kittySocket: session.kittySocket,
+                       toolTip: "", runtimeSessionID: session.embeddedRuntimeSessionID ?? "")
+    }
 }
 
 /// Something a menu item does besides focusing a session.
 enum MenuAction: Equatable {
     case startDaemon
+    /// Shows the workspace window, where tmux sessions' terminals are.
+    case openWorkspace
     case openDashboard
     case launchProject(ProjectEntry)
     case continueConversation(RecentConversation)
@@ -123,11 +134,12 @@ enum MenuBuilder {
         let working = input.sessions.filter { !$0.attention && $0.isWorking }
         let idle = input.sessions.filter { !$0.attention && !$0.isWorking }
 
-        let waiting = waitingBySession(input.snapshot?.asl.waiting ?? [], sessions: input.sessions)
+        let snapshotSocket = input.snapshot?.kitty.socket ?? ""
+        let waiting = waitingBySession(input.snapshot?.asl.waiting ?? [], sessions: input.sessions, snapshotSocket: snapshotSocket)
         /// A session row, then the Answer… item for its waiting run.
         func rowEntries(_ session: CompanionSession, showReason: Bool) -> [MenuEntry] {
             var out: [MenuEntry] = [.session(row(session, showReason: showReason, input: input))]
-            if let run = waiting.bySession[session.windowID] {
+            if let run = waiting.bySession[AttentionCycler.key(session, snapshotSocket: snapshotSocket)] {
                 out.append(.answer(target(run), answerTitle(run), indented: true))
             }
             return out
@@ -156,7 +168,7 @@ enum MenuBuilder {
                 entries.append(.submenu("Idle (\(rows.count))", rows))
                 // A collapsed idle row keeps its Answer… in the menu itself.
                 entries += idle.compactMap { session in
-                    waiting.bySession[session.windowID].map {
+                    waiting.bySession[AttentionCycler.key(session, snapshotSocket: snapshotSocket)].map {
                         MenuEntry.answer(target($0), "\(answerTitle($0)) · \(name(of: session))", indented: false)
                     }
                 }
@@ -174,23 +186,27 @@ enum MenuBuilder {
 
     // MARK: ASL questions
 
-    /// The waiting runs keyed by the window ID of the listed session each
-    /// belongs to, and the ones no listed session claims. A run binds to a
-    /// session that names it; otherwise to the one session with its window ID
-    /// that names no run — window IDs repeat across Kitty instances, so an
-    /// ambiguous ID binds nothing.
-    static func waitingBySession(_ waiting: [CompanionASLWaiting], sessions: [CompanionSession])
-        -> (bySession: [Int: CompanionASLWaiting], unmatched: [CompanionASLWaiting]) {
-        var bySession: [Int: CompanionASLWaiting] = [:]
+    /// The waiting runs keyed by the listed session each belongs to, and the
+    /// ones no listed session claims. A run binds to a session that names it,
+    /// then to the session its runtime session ID names; otherwise to the one
+    /// session with its window ID that names no run — window IDs repeat across
+    /// Kitty instances, so an ambiguous ID binds nothing.
+    static func waitingBySession(_ waiting: [CompanionASLWaiting], sessions: [CompanionSession], snapshotSocket: String = "")
+        -> (bySession: [AttentionCycler.Key: CompanionASLWaiting], unmatched: [CompanionASLWaiting]) {
+        var bySession: [AttentionCycler.Key: CompanionASLWaiting] = [:]
         var unmatched: [CompanionASLWaiting] = []
         for run in waiting {
             var owner = sessions.first { !$0.aslRunID.isEmpty && $0.aslRunID == run.runID }
+            if owner == nil, !run.runtimeSessionID.isEmpty {
+                owner = sessions.first { $0.runtime?.sessionID == run.runtimeSessionID && $0.aslRunID.isEmpty }
+            }
             if owner == nil, run.windowID > 0 {
                 let sameWindow = sessions.filter { $0.windowID == run.windowID }
                 if sameWindow.count == 1, sameWindow[0].aslRunID.isEmpty { owner = sameWindow[0] }
             }
-            if let owner, bySession[owner.windowID] == nil {
-                bySession[owner.windowID] = run
+            let key = owner.map { AttentionCycler.key($0, snapshotSocket: snapshotSocket) }
+            if let key, bySession[key] == nil {
+                bySession[key] = run
             } else {
                 unmatched.append(run)
             }
@@ -231,7 +247,8 @@ enum MenuBuilder {
         if !glyph.isEmpty { title = "\(glyph) \(title)" }
         if session.muted { title += " \(input.glyphs.mute)" }
 
-        var tip = ["window \(session.windowID)"]
+        let embedded = session.embeddedRuntimeSessionID
+        var tip = [embedded == nil ? "window \(session.windowID)" : place(of: session)]
         if !session.profile.isEmpty { tip.append("profile \(session.profile)") }
         if !session.branch.isEmpty { tip.append("branch \(session.branch)\(session.dirty ? "*" : "")") }
         if (input.snapshot?.kitty.sockets.count ?? 0) > 1, !session.kittySocket.isEmpty {
@@ -243,14 +260,26 @@ enum MenuBuilder {
             kittySocket: session.kittySocket,
             toolTip: tip.joined(separator: " · "),
             muted: session.muted,
-            muteUnavailable: input.gate.unavailableReason(.muteToggle)
+            muteUnavailable: embedded == nil ? input.gate.unavailableReason(.muteToggle) : muteNeedsKitty,
+            runtimeSessionID: embedded ?? ""
         )
     }
+
+    /// `amx mute-toggle` names a Kitty window.
+    static let muteNeedsKitty = "Mute from the menu works for Kitty sessions only"
 
     static func name(of session: CompanionSession) -> String {
         if !session.project.isEmpty { return session.project }
         if !session.baseTitle.isEmpty { return session.baseTitle }
-        return "window \(session.windowID)"
+        return place(of: session)
+    }
+
+    /// Where a session runs, in a few words: `window 4`, or `tmux %7`.
+    static func place(of session: CompanionSession) -> String {
+        guard session.embeddedRuntimeSessionID != nil, let runtime = session.runtime else {
+            return "window \(session.windowID)"
+        }
+        return runtime.pane.isEmpty ? runtime.backend : "\(runtime.backend) \(runtime.pane)"
     }
 
     /// `<1m`, `4m`, `2h`, `3d`.
@@ -266,10 +295,10 @@ enum MenuBuilder {
 
     // MARK: Actions
 
-    /// The action items after the sessions: Open Dashboard, then the Launch
-    /// Project, Recent, and Notifications submenus.
+    /// The action items after the sessions: Open Workspace and Open Dashboard,
+    /// then the Launch Project, Recent, and Notifications submenus.
     static func actionEntries(_ input: ActionsInput) -> [MenuEntry] {
-        var entries: [MenuEntry] = [.separator]
+        var entries: [MenuEntry] = [.separator, .action(.openWorkspace, "Open Workspace")]
         if let reason = input.gate.unavailableReason(.openDashboard) {
             entries.append(.unavailable("Open Dashboard", reason: reason))
         } else {

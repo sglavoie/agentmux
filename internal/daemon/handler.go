@@ -148,6 +148,13 @@ type Handler struct {
 	// runtimeRoutes binds reducer slots to the runtime sessions that own them
 	// (runtime_routes.go). Guarded by stateMu.
 	runtimeRoutes runtimeRoutes
+	// runtimeLabeler reads a non-Kitty runtime session's label from its
+	// backend (runtime_labels.go). Installed once at startup; nil labels a
+	// session with its registry project alone.
+	runtimeLabeler RuntimeSessionLabeler
+	// runtimeLabels is the project and profile of each non-Kitty runtime
+	// session bound to a slot, by runtime-session ID. Guarded by stateMu.
+	runtimeLabels map[string]runtimeLabel
 	// runtimeCheckpointPath is the backend-neutral reducer checkpoint
 	// (runtime_checkpoint.go), set once at startup; empty disables it.
 	// runtimeRestorePending holds checkpointed sessions the registry could

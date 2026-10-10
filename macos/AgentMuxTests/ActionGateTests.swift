@@ -41,6 +41,7 @@ final class ActionGateTests: XCTestCase {
         let entries = MenuBuilder.actionEntries(input)
         XCTAssertEqual(entries, [
             .separator,
+            .action(.openWorkspace, "Open Workspace"),
             .unavailable("Open Dashboard", reason: "amx has no `open-dashboard`; run `just install`"),
             .submenuRef(.projects, "Launch Project", reason: "amx has no `project`; run `just install`"),
             .submenuRef(.recent, "Recent", reason: nil),
@@ -53,6 +54,7 @@ final class ActionGateTests: XCTestCase {
         input.gate = ActionGate(capabilities: full)
         XCTAssertEqual(MenuBuilder.actionEntries(input), [
             .separator,
+            .action(.openWorkspace, "Open Workspace"),
             .action(.openDashboard, "Open Dashboard"),
             .submenuRef(.projects, "Launch Project", reason: nil),
             .submenuRef(.recent, "Recent", reason: nil),
