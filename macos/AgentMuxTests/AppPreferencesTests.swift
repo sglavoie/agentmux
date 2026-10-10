@@ -21,13 +21,37 @@ final class AppPreferencesTests: XCTestCase {
         XCTAssertNil(preferences.snoozeUntil)
         XCTAssertEqual(preferences.kittySocketOverride, "")
         XCTAssertEqual(preferences.environment, [:])
+        XCTAssertEqual(preferences.launchBackend, .automatic)
+        XCTAssertFalse(preferences.openWorkspaceAtLaunch)
+    }
+
+    func testWorkspacePreferencesRoundTripAndRejectUnknownValues() {
+        let defaults = freshDefaults()
+        var preferences = AppPreferences()
+        preferences.launchBackend = .workspace
+        preferences.openWorkspaceAtLaunch = true
+        preferences.save(to: defaults)
+        XCTAssertEqual(defaults.string(forKey: "amxLaunchBackend"), "workspace")
+        XCTAssertEqual(AppPreferences.load(from: defaults), preferences)
+
+        // The hidden default earlier builds read is the same key, so an
+        // operator who set it by hand keeps the window opening at launch.
+        let earlier = freshDefaults()
+        earlier.set(true, forKey: "amxOpenWorkspaceAtLaunch")
+        XCTAssertTrue(AppPreferences.load(from: earlier).openWorkspaceAtLaunch)
+
+        defaults.set("ghostty", forKey: "amxLaunchBackend")
+        defaults.set("yes", forKey: "amxOpenWorkspaceAtLaunch")
+        let stray = AppPreferences.load(from: defaults)
+        XCTAssertEqual(stray.launchBackend, .automatic)
+        XCTAssertFalse(stray.openWorkspaceAtLaunch)
     }
 
     func testKeysAreThePlannedNames() {
         XCTAssertEqual(AppPreferences.Key.all, [
             "amxBinaryPath", "amxLaunchAtLogin", "amxHotKeyDashboard", "amxHotKeyNextAttention", "amxStatusStyle",
             "amxShowWorkingCount", "amxRecentDays", "amxRecentLimit", "amxUseAppNotifications", "amxSnoozeUntil",
-            "amxKittySocketOverride", "amxEnvironment",
+            "amxKittySocketOverride", "amxEnvironment", "amxLaunchBackend", "amxOpenWorkspaceAtLaunch",
         ])
     }
 

@@ -1,6 +1,9 @@
 #!/usr/bin/env sh
 #
-# Sign Agent Mux.app inside out: the bundled amx, then the app. By default with
+# Sign Agent Mux.app inside out: the bundled amx and tmux, then the app. Once
+# tmux carries its final signature its runtime's checksums are written
+# (Resources/tmux/SHA256SUMS), which amx verifies before it installs or runs
+# the runtime, and which the app's own seal then covers. By default with
 # this Mac's first Apple Development identity, else ad-hoc; either runs on this
 # Mac only. A certificate gives the app a designated requirement that survives a
 # rebuild, so privacy grants (notifications) are asked for once
@@ -62,8 +65,24 @@ bundled="$app/Contents/Resources/bin/amx"
 if [ -f "$bundled" ]; then
 	codesign "$@" --identifier io.github.sglavoie.agentmux.cli "$bundled"
 fi
+runtime="$app/Contents/Resources/tmux"
+if [ -f "$runtime/bin/tmux" ]; then
+	require_tool shasum
+	codesign "$@" --identifier io.github.sglavoie.agentmux.tmux "$runtime/bin/tmux"
+	sums=$(mktemp)
+	(
+		cd "$runtime"
+		rm -f SHA256SUMS
+		find . -type f | sed 's|^\./||' | LC_ALL=C sort | while IFS= read -r file; do
+			shasum -a 256 "$file"
+		done
+	) >"$sums"
+	cp "$sums" "$runtime/SHA256SUMS"
+	chmod 644 "$runtime/SHA256SUMS"
+	rm -f "$sums"
+fi
 codesign "$@" "$app"
-codesign --verify --strict --verbose=1 "$app"
+codesign --verify --strict --deep --verbose=1 "$app"
 
 if [ "$identity" = - ]; then
 	echo "Signed $app ad-hoc"

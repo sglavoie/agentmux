@@ -20,9 +20,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     private var isTerminating = false
     /// Session status questions asked before amx was resolved.
     private var statusQuestions: [(String, @MainActor (WorkspaceSessionStatus) -> Void)] = []
-    /// `defaults write io.github.sglavoie.agentmux amxOpenWorkspaceAtLaunch
-    /// -bool YES` shows the workspace as soon as the app starts.
-    static let openWorkspaceAtLaunchKey = "amxOpenWorkspaceAtLaunch"
     let preferencesModel = PreferencesModel()
     private var dashboardHotKey: HotKeyCenter?
     private var attentionHotKey: HotKeyCenter?
@@ -144,7 +141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// running is reported, not replaced.
     private func restoreWorkspace() {
         let restoration = WorkspaceRestoration.load()
-        guard restoration.windowOpen || UserDefaults.standard.bool(forKey: Self.openWorkspaceAtLaunchKey) else { return }
+        guard restoration.windowOpen || preferencesModel.preferences.openWorkspaceAtLaunch else { return }
         Self.logger.notice("workspace: reopening at launch (was open: \(restoration.windowOpen), place: \(restoration.place?.encoded ?? "none", privacy: .public))")
         let controller = workspaceController()
         controller.show()
@@ -546,6 +543,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
 
     // MARK: amx
 
+    /// Records the backend setup amx reported, so a missing or refused tmux is
+    /// in the log with its fix, not only in Preferences.
+    nonisolated private static func log(_ setup: BackendSetup) {
+        switch setup {
+        case .unknown:
+            break
+        case let .unavailable(reason):
+            logger.error("backend: amx could not report the setup: \(reason, privacy: .public)")
+        case let .status(status):
+            logger.notice("backend: \(status.tmuxLine, privacy: .public) at \(status.tmux.path, privacy: .public); session server: \(status.serverLine, privacy: .public)")
+            for problem in status.problems {
+                let line = "backend: \(problem.severity) \(problem.code): \(problem.text)"
+                if problem.needsAttention {
+                    logger.error("\(line, privacy: .public)")
+                } else {
+                    logger.notice("\(line, privacy: .public)")
+                }
+            }
+        }
+    }
+
     /// Reads the login shell's environment, asks the daemon which build it
     /// runs, resolves amx against both, and probes what it can do. The shell
     /// can take seconds, so none of it runs on the main thread; it is read
@@ -555,7 +573,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         let overrides = preferencesModel.preferences.environment
         work.async { [weak self] in
             let shell = detected ?? LaunchEnvironment.current()
-            let environment = shell.applying(overrides)
+            let environment = shell.applying(overrides).namingBundledRuntime(resources: Bundle.main.resourceURL)
             let build = DaemonClient().health().build
             let resolution = AMXBinaryResolver.live(searchPath: environment.path, daemonBuild: build).resolve()
             var snapshot = PreferencesSnapshot()
@@ -570,6 +588,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
                 snapshot.binaryVersion = AMXVersion.read(binary: binary.url.path)
                 report = AMXBuildReport.of(binary: binary.url, version: snapshot.binaryVersion)
                 snapshot.capabilities = AMXCapabilities.probe(amx)
+                snapshot.backend = BackendSetup(BackendStatus.fetch(amx))
+                Self.log(snapshot.backend)
                 Self.logger.notice("running \(binary.url.path, privacy: .public) (\(String(describing: binary.source), privacy: .public))")
             case let .failure(notFound):
                 snapshot.binaryProblem = notFound.message
@@ -986,12 +1006,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
 
     /// Launch Project: `amx project launch` in the Kitty used last, then that
     /// Kitty is brought forward on the new tab. With no Kitty to open a tab
-    /// in, the project launches on tmux and the workspace shows it.
+    /// in, or when Preferences says so, the project launches on tmux and the
+    /// workspace shows it.
     private func launch(_ project: ProjectEntry) {
         guard let command else { return report(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.") }
         if let reason = gate.unavailableReason(.project) { return report(reason) }
         let candidates = newTabCandidates()
-        if candidates.isEmpty { return launchInWorkspace(project, command: command) }
+        if preferencesModel.preferences.launchBackend.launchesInWorkspace(kittyAvailable: !candidates.isEmpty) {
+            return launchInWorkspace(project, command: command)
+        }
         let arguments = ProjectCatalog.launchArguments(for: project)
         focusQueue.async { [weak self] in
             let outcome = KittyTargetedCommand.run(candidates: candidates) { socket in

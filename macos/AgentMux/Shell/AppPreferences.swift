@@ -19,10 +19,13 @@ struct AppPreferences: Equatable {
         static let snoozeUntil = "amxSnoozeUntil"
         static let kittySocketOverride = "amxKittySocketOverride"
         static let environment = "amxEnvironment"
+        static let launchBackend = "amxLaunchBackend"
+        static let openWorkspaceAtLaunch = "amxOpenWorkspaceAtLaunch"
 
         static let all = [
             binaryPath, launchAtLogin, hotKeyDashboard, hotKeyNextAttention, statusStyle, showWorkingCount,
             recentDays, recentLimit, useAppNotifications, snoozeUntil, kittySocketOverride, environment,
+            launchBackend, openWorkspaceAtLaunch,
         ]
     }
 
@@ -52,6 +55,11 @@ struct AppPreferences: Equatable {
     var kittySocketOverride = ""
     /// Values amx runs with in place of the login shell's.
     var environment: [String: String] = [:]
+    /// `amxLaunchBackend`: where Launch Project starts an agent.
+    var launchBackend: LaunchBackendPreference = .automatic
+    /// `amxOpenWorkspaceAtLaunch`: show the workspace window as soon as the
+    /// app starts, even when it was closed last time.
+    var openWorkspaceAtLaunch = false
 
     init() {}
 
@@ -69,6 +77,9 @@ struct AppPreferences: Equatable {
         preferences.snoozeUntil = defaults.object(forKey: Key.snoozeUntil) as? Date
         preferences.kittySocketOverride = trimmed(defaults.string(forKey: Key.kittySocketOverride))
         preferences.environment = EnvironmentOverrides.load(from: defaults)
+        preferences.launchBackend = defaults.string(forKey: Key.launchBackend)
+            .flatMap(LaunchBackendPreference.init(rawValue:)) ?? .automatic
+        preferences.openWorkspaceAtLaunch = bool(defaults, Key.openWorkspaceAtLaunch) ?? false
         return preferences
     }
 
@@ -91,6 +102,8 @@ struct AppPreferences: Equatable {
         }
         Self.setString(kittySocketOverride, Key.kittySocketOverride, defaults)
         EnvironmentOverrides.save(environment, to: defaults)
+        defaults.set(launchBackend.rawValue, forKey: Key.launchBackend)
+        defaults.set(openWorkspaceAtLaunch, forKey: Key.openWorkspaceAtLaunch)
     }
 
     static func clamp(_ value: Int, _ range: ClosedRange<Int>) -> Int {

@@ -84,7 +84,7 @@ func TestCommandFamiliesAreRegisteredUnderRoot(t *testing.T) {
 		registered[command.Name()] = true
 	}
 	for _, name := range []string{
-		"color-picker", "config", "daemon", "debug", "doctor",
+		"backend", "color-picker", "config", "daemon", "debug", "doctor",
 		"focus-next", "focus-next-managed", "focus-prev-managed",
 		"hook-indicator", "icon-picker", "keybindings", "mute-toggle",
 		"notifications", "open-dashboard", "overseer", "overview", "project",

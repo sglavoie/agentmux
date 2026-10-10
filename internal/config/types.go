@@ -76,6 +76,8 @@ type Defaults struct {
 	PlansDirectory       string               `toml:"plans_directory"` // root for the Plans browser's index; defaults to ~/.local/share/agent-plans
 	ASL                  ASLConfig            `toml:"asl"`             // optional agent-session-loop bridge integration
 	Release              ReleaseConfig        `toml:"release"`         // paired ASL/Agent Mux release gate
+	LaunchBackend        string               `toml:"launch_backend"`  // "kitty" (default) or "tmux": where launches go when --backend is not given
+	Tmux                 TmuxConfig           `toml:"tmux"`            // the private tmux backend's executable
 
 	// GitProbe enables the cheap per-directory Git probe behind the dashboard's
 	// branch column (internal/gitstate). *bool so the load path can distinguish
@@ -99,6 +101,44 @@ type Defaults struct {
 // GitProbeValue reports whether the per-directory Git probe runs. An omitted
 // key means enabled, matching the other *bool toggles here.
 func (d Defaults) GitProbeValue() bool { return d.GitProbe == nil || *d.GitProbe }
+
+// TmuxConfig configures the private tmux backend.
+type TmuxConfig struct {
+	// Path names the tmux executable to run, instead of the one bundled with
+	// Agent Mux.app or found on PATH. It must be absolute (a leading ~ is
+	// expanded). When set it is the only one tried.
+	Path string `toml:"path"`
+}
+
+// The launch backends `launch_backend` and --backend accept.
+const (
+	LaunchBackendKitty = "kitty"
+	LaunchBackendTmux  = "tmux"
+)
+
+// LaunchBackendOrDefault is where a launch goes when nothing on the command
+// line says otherwise: `[defaults] launch_backend`, else Kitty, so a
+// configuration written before the tmux backend existed keeps launching into
+// Kitty.
+func (c *Config) LaunchBackendOrDefault() string {
+	if c != nil && strings.EqualFold(strings.TrimSpace(c.Defaults.LaunchBackend), LaunchBackendTmux) {
+		return LaunchBackendTmux
+	}
+	return LaunchBackendKitty
+}
+
+// TmuxPath is `[defaults.tmux] path` with a leading ~ expanded; empty when
+// the operator named no executable.
+func (c *Config) TmuxPath() string {
+	if c == nil {
+		return ""
+	}
+	path := strings.TrimSpace(c.Defaults.Tmux.Path)
+	if path == "" {
+		return ""
+	}
+	return ExpandTilde(path)
+}
 
 // ReleaseConfig configures the paired release gate. It is operator tooling, not
 // a runtime feature: nothing in the daemon, the dashboard, or any session path

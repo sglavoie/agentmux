@@ -1,0 +1,22 @@
+[defaults]
+sort = "alpha"
+refresh_interval = 1
+
+[[profiles]]
+name = "work"
+harness = "claude"
+home_dir = "/tmp/amxs17/home/.claude-w"
+color = "blue"
+
+[[projects]]
+title = "alpha"
+directory = "/tmp/amxs17/proj/alpha"
+profile = "work"
+
+[[projects]]
+title = "beta"
+directory = "/tmp/amxs17/proj/beta"
+profile = "work"
+
+[harness_emojis]
+claude = "🟠"

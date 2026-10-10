@@ -500,9 +500,10 @@ restart-verify:
 
 # Build macos/build/Agent Mux.app, the menu bar companion. Debug bundles amx
 # only when AMX_BINARY names one and otherwise finds ~/.local/bin/amx at run
-# time; Release builds amx with `just build` and bundles that. Like mac-test,
-# mac-install, and mac-ghosttykit it needs Xcode, so none of them is part of
-# check, acceptance, or paired-release-gate. See macos/README.md.
+# time; Release builds amx with `just build` and bundles that. Both bundle the
+# pinned tmux runtime. Like mac-test, mac-install, and mac-ghosttykit it needs
+# Xcode, so none of them is part of check, acceptance, or paired-release-gate.
+# See macos/README.md.
 mac-app configuration="Debug":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -520,9 +521,20 @@ mac-test configuration="Debug":
 mac-ghosttykit:
     ./macos/scripts/build-ghosttykit.sh
 
-# Build the Release Agent Mux.app, install it to /Applications, and relaunch it
+# Build the pinned tmux runtime the app bundles into macos/Vendor/tmux (a no-op when current; mac-app runs it itself)
+mac-tmux:
+    ./macos/scripts/build-tmux.sh
+
+# Running agents are not touched: they live in a tmux server that outlives the
+# app, and the installer fails if it finds that server changed.
+#
+# Build the Release Agent Mux.app, install or update it in /Applications, and relaunch it
 mac-install: (mac-app "Release")
     ./macos/scripts/install-app.sh
+
+# Remove Agent Mux.app; agents keep running and data stays unless asked: --end-sessions, --remove-app-data, --yes
+mac-uninstall *flags:
+    ./macos/scripts/uninstall-app.sh {{ flags }}
 
 # Stop the daemon, then remove the binary and the Kitty snippet (config.toml and data are kept)
 uninstall:

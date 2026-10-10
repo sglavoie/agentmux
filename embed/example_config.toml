@@ -78,6 +78,13 @@ confirm_destructive = false
 # Filesystem root scanned by the Plans browser (`:`, then "Search Plans").
 # Each top-level directory under this root is treated as one plan.
 # plans_directory = "~/.local/share/agent-plans"
+
+# Where a launch goes when the command gives no --backend: "kitty" (a new Kitty
+# tab, the default) or "tmux" (the private tmux server, whose agents outlive
+# every terminal and are shown by Agent Mux.app's workspace or `amx attach`).
+# Agent Mux.app launches into tmux whenever there is no Kitty to launch into,
+# whatever is set here; its own Preferences can make that the rule.
+# launch_backend = "kitty"
 # Plans in that directory and harness transcript files remain authoritative.
 # Agent Mux keeps only disposable filesystem caches at:
 #   ~/.local/share/agent-mux/transcripts.json + transcripts.search/
@@ -129,6 +136,13 @@ confirm_destructive = false
 # <pair-id>.json.sig; see docs/paired-releases.md for how to verify one.
 [defaults.release]
 # evidence_dir = "~/.local/share/agent-mux/release-evidence"
+
+# The tmux executable the private server runs. Leave it unset: Agent Mux.app
+# brings a pinned tmux of its own, and a standalone amx uses the tmux on PATH
+# (3.5 or newer). Set it to run one particular tmux instead; it is then the
+# only one tried. `amx backend status` shows which tmux is in use and why.
+[defaults.tmux]
+# path = "/opt/homebrew/bin/tmux"
 
 # Live pane geometry, shared by the dashboard's session inspector (`i`) and the
 # launcher's preview (`p`, inside the launcher). Ratio is the fraction of the

@@ -10,6 +10,8 @@
 #   remote-ui.sh run PATH ARG... syncs, then runs the repo-relative PATH there
 #   remote-ui.sh sh COMMAND      syncs nothing; runs a shell command in the remote copy
 #   remote-ui.sh dir             prints the remote copy's path, relative to the remote home
+#   remote-ui.sh put LOCAL PATH  copies a local file or directory to the repo-relative PATH there
+#   remote-ui.sh get PATH LOCAL  copies the repo-relative PATH from there into the local directory LOCAL
 #
 # Environment:
 #   AMX_MAC_TEST_HOST         user@host of the Mac that runs UI. Unset: UI runs here.
@@ -79,9 +81,8 @@ sync() {
 	verify
 	dir=$(remote_dir)
 	remote "mkdir -p '$dir'"
-	rsh="ssh -o StrictHostKeyChecking=yes -o ConnectTimeout=20"
 	# Build products and caches stay on each side; the vendored GhosttyKit
-	# travels, so the remote Mac does not build it again.
+	# and tmux runtime travel, so the remote Mac does not build them again.
 	rsync -a --delete -e "$rsh" \
 		--exclude '/.git/' --exclude '/amx' \
 		--exclude '/macos/DerivedData/' --exclude '/macos/build/' --exclude '/macos/.cache/' \
@@ -91,6 +92,32 @@ sync() {
 		remote "mkdir -p '$dir/macos/.cache'"
 		rsync -a -e "$rsh" "$tool" "$host:$dir/macos/.cache/" </dev/null
 	done
+}
+
+rsh="ssh -o StrictHostKeyChecking=yes -o ConnectTimeout=20"
+
+# Inside the remote copy and nowhere else: no absolute path, no way up.
+inside() {
+	case "$1" in
+	"" | /* | .. | ../* | */.. | */../*) fail "$1 is not a path inside the remote copy" ;;
+	esac
+}
+
+put() {
+	inside "$2"
+	[ -e "$1" ] || fail "$1 does not exist"
+	verify
+	dir=$(remote_dir)
+	remote "mkdir -p '$dir/$(dirname -- "$2")'"
+	rsync -a -e "$rsh" "$1" "$host:$dir/$2" </dev/null
+}
+
+get() {
+	inside "$1"
+	verify
+	dir=$(remote_dir)
+	mkdir -p "$2"
+	rsync -a --delete -e "$rsh" "$host:$dir/$1" "$2/" </dev/null
 }
 
 # Quotes one word for the remote shell.
@@ -130,7 +157,15 @@ sh)
 	verify
 	run_shell "$1"
 	;;
+put)
+	[ $# -eq 2 ] || fail "usage: remote-ui.sh put LOCAL PATH"
+	put "$1" "$2"
+	;;
+get)
+	[ $# -eq 2 ] || fail "usage: remote-ui.sh get PATH LOCAL"
+	get "$1" "$2"
+	;;
 *)
-	fail "usage: remote-ui.sh mode|dir|sync|run PATH ARG...|sh COMMAND"
+	fail "usage: remote-ui.sh mode|dir|sync|run PATH ARG...|sh COMMAND|put LOCAL PATH|get PATH LOCAL"
 	;;
 esac

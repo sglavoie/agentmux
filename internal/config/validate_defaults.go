@@ -60,6 +60,20 @@ func validateDefaults(d *Defaults) []string {
 	if d.SessionArchive.ScanMaxAgeDays < -1 {
 		errs = append(errs, "defaults.session_archive.scan_max_age_days must be >= -1")
 	}
+	switch strings.ToLower(strings.TrimSpace(d.LaunchBackend)) {
+	case "", LaunchBackendKitty, LaunchBackendTmux:
+	default:
+		errs = append(errs, fmt.Sprintf(
+			"defaults.launch_backend %q: must be %q or %q",
+			d.LaunchBackend, LaunchBackendKitty, LaunchBackendTmux,
+		))
+	}
+	if path := strings.TrimSpace(d.Tmux.Path); path != "" && !filepath.IsAbs(ExpandTilde(path)) {
+		errs = append(errs, fmt.Sprintf(
+			"defaults.tmux.path %q: must be an absolute path to a tmux executable\n  → leave it unset to use the tmux bundled with Agent Mux.app or found on PATH",
+			d.Tmux.Path,
+		))
+	}
 	if d.Handoff.MaxBytes < 0 {
 		errs = append(errs, "defaults.handoff.max_bytes must be >= 0")
 	}

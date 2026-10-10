@@ -1,77 +1,114 @@
 #!/usr/bin/env sh
 #
 # Install macos/build/Agent Mux.app (built by `just mac-app Release`) into
-# /Applications, replacing an earlier copy. A running copy is quit first and
-# the installed one is launched afterwards: the app is a menu bar companion that
-# holds no state of its own, so replacing it under a live process loses nothing
-# a relaunch does not restore.
+# /Applications, as a first install or as an update over an earlier copy.
+#
+# Agents do not run in the app: they run in a private tmux server that
+# outlives it, started from a copy of the tmux runtime kept outside the bundle
+# (~/.local/share/agent-mux/runtime). So an update quits and replaces the app
+# and nothing else:
+#
+#   - the new bundle is checked first (signature, bundled amx, tmux runtime
+#     against its checksums) and its runtime is installed beside any earlier
+#     one, never over it;
+#   - the app is staged next to its destination and renamed into place, so the
+#     installed copy is always a whole bundle;
+#   - a running tmux server is never stopped, restarted, or handed another
+#     executable. Its identity is read before and after, and an update that
+#     finds it changed fails loudly rather than report success.
+#
+# Agents that were running keep running and are there when the new app opens.
 #
 # Environment:
+#   AMX_APP_SOURCE          the bundle to install (default macos/build/Agent Mux.app)
 #   AMX_APP_INSTALL_DIR     destination directory (default /Applications)
 #   AMX_APP_NO_LAUNCH=1     install without launching the new copy
 
 set -eu
 
-require_tool() {
-	if ! command -v "$1" >/dev/null 2>&1; then
-		echo "required tool not found: $1" >&2
-		exit 1
-	fi
-}
-
 script_dir=$(CDPATH="" cd -- "$(dirname -- "$0")" && pwd)
 macos_dir=$(dirname -- "$script_dir")
+# shellcheck disable=SC1091
+. "$script_dir/app-lib.sh"
 
 require_tool ditto
 require_tool codesign
+require_tool shasum
+require_tool plutil
 require_tool osascript
 require_tool open
 
-app="$macos_dir/build/Agent Mux.app"
-if [ ! -x "$app/Contents/Resources/bin/amx" ]; then
-	echo "$app has no bundled amx; build it with \`just mac-app Release\`" >&2
-	exit 1
-fi
-codesign --verify --strict "$app"
-
+app="${AMX_APP_SOURCE:-$macos_dir/build/Agent Mux.app}"
 install_dir="${AMX_APP_INSTALL_DIR:-/Applications}"
 dest="$install_dir/Agent Mux.app"
-bundle_id=io.github.sglavoie.agentmux
 
-# --- Quit a running copy ---------------------------------------------------------
+# --- Check the new bundle, and make its runtime ready -----------------------------
 #
-# Asked politely through Apple Events, then waited for, so ditto never writes
-# under a live process. Any copy is quit, not only the one at $dest: the app is
-# single-instance, so a copy left running elsewhere would make the new one exit.
+# Asking the new amx for the backend status verifies the bundled runtime and
+# installs it under the data directory, before the app that carries it is in
+# place. A bundle whose runtime cannot be used is not installed at all.
 
-running() {
-	pgrep -f "/Agent Mux.app/Contents/MacOS/Agent Mux" >/dev/null 2>&1
-}
-
-if running; then
-	echo "Quitting the running Agent Mux.app..."
-	osascript -e "tell application id \"$bundle_id\" to quit" >/dev/null 2>&1 || true
-	i=0
-	while running; do
-		i=$((i + 1))
-		if [ "$i" -ge 50 ]; then
-			echo "Agent Mux.app did not quit within 10s; quit it from its menu and rerun" >&2
-			exit 1
-		fi
-		sleep 0.2
-	done
+check_bundle "$app"
+before=$(backend_status "$app/Contents/Resources/bin/amx")
+if [ "$(status_field "$before" tmux.available)" != true ]; then
+	echo "the tmux runtime in $app cannot be used on this Mac:" >&2
+	"$app/Contents/Resources/bin/amx" backend status >&2 || true
+	exit 1
 fi
+server_before=$(status_field "$before" server.generation)
+agents_before=$(status_field "$before" server.agents)
+if [ -n "$server_before" ]; then
+	echo "A session server is running with ${agents_before:-0} agent(s); it is left running."
+fi
+
+quit_app
 
 # --- Install -------------------------------------------------------------------
 
 mkdir -p "$install_dir"
-rm -rf "$dest"
-ditto "$app" "$dest"
+staged="$install_dir/.Agent Mux.app.installing"
+previous="$install_dir/.Agent Mux.app.previous"
+rm -rf "$staged" "$previous"
+ditto "$app" "$staged"
+if ! codesign --verify --strict --deep "$staged"; then
+	rm -rf "$staged"
+	echo "the staged copy at $staged does not pass signature verification; nothing was replaced" >&2
+	exit 1
+fi
+updated=
+if [ -e "$dest" ]; then
+	updated=1
+	mv "$dest" "$previous"
+fi
+if ! mv "$staged" "$dest"; then
+	[ -z "$updated" ] || mv "$previous" "$dest"
+	rm -rf "$staged"
+	echo "could not move the new copy into $dest; the earlier copy is back in place" >&2
+	exit 1
+fi
+rm -rf "$previous"
 lsregister=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 if [ -x "$lsregister" ]; then
 	"$lsregister" -f "$dest"
 fi
-echo "Installed $dest"
+if [ -n "$updated" ]; then
+	echo "Updated $dest"
+else
+	echo "Installed $dest"
+fi
+
+# --- The session server is the one that was running -----------------------------
+
+if [ -n "$server_before" ]; then
+	after=$(backend_status "$dest/Contents/Resources/bin/amx")
+	server_after=$(status_field "$after" server.generation)
+	if [ "$server_after" != "$server_before" ]; then
+		echo "the session server changed during the update (was $server_before, now ${server_after:-not running});" >&2
+		echo "agents that were running may have been lost. This is a bug: please report it." >&2
+		exit 1
+	fi
+	echo "The session server is unchanged ($server_after); $(status_field "$after" server.agents) agent(s) running."
+fi
 
 if [ "${AMX_APP_NO_LAUNCH:-0}" != 1 ]; then
 	open "$dest"

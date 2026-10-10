@@ -1,0 +1,15 @@
+ok  	github.com/sglavoie/agentmux/internal/config	0.445s
+ok  	github.com/sglavoie/agentmux/internal/cli	0.478s
+ok  	github.com/sglavoie/agentmux/internal/release	13.438s
+ok  	github.com/sglavoie/agentmux/cmd/release	0.443s
+--- runtime resolution, backend command, and every package that opens the tmux backend
+ok  	github.com/sglavoie/agentmux	0.272s
+ok  	github.com/sglavoie/agentmux/internal/tmux	9.747s
+?   	github.com/sglavoie/agentmux/internal/tmux/tmuxtest	[no test files]
+ok  	github.com/sglavoie/agentmux/cmd/session	3.142s
+ok  	github.com/sglavoie/agentmux/cmd/project	0.866s
+ok  	github.com/sglavoie/agentmux/cmd/dashboard	0.757s
+ok  	github.com/sglavoie/agentmux/cmd	7.321s
+ok  	github.com/sglavoie/agentmux/internal/daemon	18.159s
+ok  	github.com/sglavoie/agentmux/internal/session	17.939s
+ok  	github.com/sglavoie/agentmux/internal/actions	1.853s

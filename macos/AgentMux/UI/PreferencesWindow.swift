@@ -11,6 +11,8 @@ struct PreferencesSnapshot: Equatable {
     var daemonStatus: DaemonStatus?
     /// What the login shell reported at launch, before any override.
     var detectedEnvironment: LaunchEnvironment?
+    /// What amx reports about the tmux backend.
+    var backend: BackendSetup = .unknown
 
     var lines: [(String, String)] {
         var rows: [(String, String)] = []
@@ -267,6 +269,21 @@ struct PreferencesView: View {
                 Toggle("Use app notifications", isOn: $model.preferences.useAppNotifications)
                 note("Delivers the daemon's notifications through Agent Mux; off leaves them to Alerter.")
                 LabeledContent("Snooze") { Text(model.snoozeDescription).foregroundStyle(.secondary) }
+            }
+
+            Section("Workspace") {
+                Picker("Launch projects in", selection: $model.preferences.launchBackend) {
+                    ForEach(LaunchBackendPreference.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+                note("Agents launched in the workspace run on Agent Mux's own tmux server: they keep running "
+                    + "when the window closes, when the app quits, and across app updates.")
+                Toggle("Open the workspace at launch", isOn: $model.preferences.openWorkspaceAtLaunch)
+                ForEach(model.snapshot.backend.lines, id: \.0) { row in
+                    LabeledContent(row.0) { Text(row.1).foregroundStyle(.secondary).textSelection(.enabled) }
+                }
+                ForEach(model.snapshot.backend.notes, id: \.text) { item in
+                    note(item.text, warning: item.warning)
+                }
             }
 
             Section("amx") {

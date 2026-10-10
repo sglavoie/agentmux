@@ -20,8 +20,8 @@ Domain services must not invoke `kitten @` or spell Kitty match expressions;
 
 ## Build and acceptance
 
-Requires Go 1.26+, Kitty, and `just`. tmux is needed for the tmux backend and
-its tests (they skip without it).
+Requires Go 1.26+, Kitty, and `just`. tmux 3.5 or newer is needed for the tmux
+backend and its tests (they skip without it); Agent Mux.app brings its own.
 
 ```bash
 just build
@@ -44,8 +44,30 @@ The native menu bar companion lives in `macos/` (Swift, XcodeGen, see
 just mac-app [Release]   # macos/build/Agent Mux.app; Release bundles `just build`'s amx
 just mac-test [Release]  # hosted AgentMuxTests XCTest suite
 just mac-ghosttykit      # pinned GhosttyKit into macos/Vendor; mac-app and mac-test run it
-just mac-install         # Release build, quit, ditto to /Applications, relaunch
+just mac-tmux            # pinned tmux runtime into macos/Vendor/tmux; mac-app runs it
+just mac-install         # Release build, then install or update /Applications and relaunch
+just mac-uninstall       # remove the app; --end-sessions and --remove-app-data are opt-in
 ```
+
+The app bundles the tmux its session server runs (`Contents/Resources/tmux`):
+`macos/scripts/build-tmux.sh` builds it from the checksummed tarballs pinned
+in `macos/TMUX_VERSION`, statically linked so it loads only `/usr/lib`, and
+`sign.sh` writes its `SHA256SUMS` after signing. `internal/tmux/runtime.go`
+picks the tmux a server runs: `[defaults.tmux] path` or `AMX_TMUX` (final when
+set), then the bundled runtime (`AMX_TMUX_RUNTIME`, or `../tmux` beside a
+bundled amx), verified and copied to `~/.local/share/agent-mux/runtime/`, then
+a supported `tmux` on `PATH`. Two rules hold installs together and must
+survive any change here: the copy outside the bundle is what runs, and a
+running server keeps the executable recorded beside its socket
+(`tmux.binary`) whatever would be resolved now. `install-app.sh` never stops
+or replaces the server and fails if its generation changed across an update;
+`uninstall-app.sh` removes the app only, unless asked. `amx backend status`
+(`internal/cli/backend_status.go`) is the one report of all this, read by the
+app's Preferences and by both scripts; `amx backend stop --yes` is the only
+command that ends every agent.
+
+With `AMX_MAC_TEST_HOST` set, `just mac-app` also runs Xcode on that Mac and
+brings the signed bundle back to `macos/build/`.
 
 The app embeds Ghostty for tmux sessions (`macos/AgentMux/Ghostty/`, ported
 from Ghostty's macOS app; `macos/NOTICE-ghostty`). GhosttyKit is built from
@@ -186,8 +208,8 @@ Shared and domain packages (`internal/...`):
   packages the same isolated server, a registry, and a stand-in agent shell.
 - `internal/session`, `internal/harness`: lifecycle (still reading Kitty
   topology, issuing commands through `internal/backend`) and harness
-  argv/capabilities. `session.Runtime` selects the launch backend (Kitty by
-  default; `--backend tmux` on launch entrypoints): tmux launches dedup,
+  argv/capabilities. `session.Runtime` selects the launch backend (`--backend`
+  on launch entrypoints, else `[defaults] launch_backend`, else Kitty): tmux launches dedup,
   register (`Begin`, launch, `Commit`), and compensate under one lock beside
   the registry, and actions on a live session follow its recorded backend.
   `amx attach <runtime-session-id>` (`cmd/session/attach.go`) transfers

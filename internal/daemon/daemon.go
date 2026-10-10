@@ -25,6 +25,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/screenstate"
+	"github.com/sglavoie/agentmux/internal/tmux"
 )
 
 // Run starts the daemon, blocks until it shuts down, and cleans up the socket.
@@ -47,6 +48,10 @@ type runDependencies struct {
 }
 
 func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr error) {
+	// The daemon only ever reads servers that already run, with the tmux each
+	// was started with; the configured one matters for a server whose record
+	// of that is missing.
+	tmux.SetConfiguredBinary(cfg.TmuxPath())
 	socketPath := ipc.SocketPath()
 	if err := os.MkdirAll(filepath.Dir(socketPath), 0o755); err != nil {
 		return fmt.Errorf("daemon: creating socket directory: %w", err)

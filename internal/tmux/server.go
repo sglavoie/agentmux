@@ -9,6 +9,13 @@
 // reports. Exited panes stay in place (remain-on-exit) with their exit status
 // and screen until AgentMux closes the group explicitly.
 //
+// The tmux executable is chosen here too (runtime.go): an explicit choice,
+// the runtime bundled with the desktop app (verified against its checksums
+// and copied out of the bundle), or a supported tmux on PATH. A server that is
+// running always keeps the executable it was started with, recorded beside
+// its socket, so installing another tmux never changes what live sessions run
+// on or what talks to them.
+//
 // This package is the only place that spells tmux commands or targets.
 package tmux
 
@@ -162,7 +169,9 @@ var ErrServerNotRunning = errors.New("tmux: server not running")
 
 // Options configures a Server. Zero values select the defaults.
 type Options struct {
-	// Binary is the tmux executable. Default: tmux on PATH.
+	// Binary is the tmux executable. Default: the one the running server was
+	// started with, else what ResolveRuntime picks (the app's bundled
+	// runtime, or a supported tmux on PATH).
 	Binary string
 	// Dir holds the socket, the configuration, and the metadata lock. It is
 	// created 0700 and must not be accessible to anyone else. Default:
@@ -197,14 +206,6 @@ func DefaultDir() string {
 // NewServer prepares the private directory and configuration. It does not
 // start the server.
 func NewServer(opts Options) (*Server, error) {
-	binary := opts.Binary
-	if binary == "" {
-		binary = "tmux"
-	}
-	resolved, err := exec.LookPath(binary)
-	if err != nil {
-		return nil, fmt.Errorf("tmux: finding %s: %w", binary, err)
-	}
 	dir := opts.Dir
 	if dir == "" {
 		dir = DefaultDir()
@@ -215,6 +216,20 @@ func NewServer(opts Options) (*Server, error) {
 	dir = filepath.Clean(dir)
 	if err := ensurePrivateDir(dir); err != nil {
 		return nil, err
+	}
+	var resolved string
+	if opts.Binary != "" {
+		found, err := exec.LookPath(opts.Binary)
+		if err != nil {
+			return nil, fmt.Errorf("tmux: finding %s: %w", opts.Binary, err)
+		}
+		resolved = found
+	} else {
+		chosen, err := serverBinary(dir, filepath.Join(dir, "tmux.sock"))
+		if err != nil {
+			return nil, err
+		}
+		resolved = chosen
 	}
 	s := &Server{
 		binary:  resolved,

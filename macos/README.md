@@ -39,11 +39,13 @@ and `cmd/release`'s `TestMacAppRecipesStayOutOfTheGates` keeps it that way.
 
 | Recipe | What it does |
 | --- | --- |
-| `just mac-app` | Debug build to `macos/build/Agent Mux.app`. It bundles `amx` only when `AMX_BINARY` names one. |
-| `just mac-app Release` | Runs `just build`, then builds Release and bundles that `amx` at `Contents/Resources/bin/amx`. |
+| `just mac-app` | Debug build to `macos/build/Agent Mux.app`. It bundles `amx` only when `AMX_BINARY` names one, and always the tmux runtime. With `AMX_MAC_TEST_HOST` set, Xcode runs on that Mac and the product is brought back. |
+| `just mac-app Release` | Runs `just build`, then builds Release and bundles that `amx` at `Contents/Resources/bin/amx` and the tmux runtime at `Contents/Resources/tmux`. |
 | `just mac-test` | Runs the hosted `AgentMuxTests` XCTest suite (`xcodebuild test`). `just mac-test Release` runs it against the optimized app, built with testability into `macos/DerivedData/ReleaseTests`. A run that executes no test fails. With `AMX_MAC_TEST_HOST=user@host` set the suite runs on that Mac instead (see below). |
 | `just mac-ghosttykit` | Builds the pinned GhosttyKit into `macos/Vendor/`. `mac-app` and `mac-test` run it themselves; it does nothing when the vendored build is current. |
-| `just mac-install` | Release build. It quits a running copy, `ditto`s the app to `/Applications`, re-registers it with Launch Services, and relaunches it. |
+| `just mac-tmux` | Builds the pinned tmux runtime into `macos/Vendor/tmux/`. `mac-app` runs it itself; it does nothing when the vendored build is current. |
+| `just mac-install` | Release build, then `scripts/install-app.sh`: a first install or an update of `/Applications/Agent Mux.app` that leaves the session server and its agents running (see [Install, update, uninstall](#install-update-uninstall)). |
+| `just mac-uninstall [flags]` | `scripts/uninstall-app.sh`: removes the app. Agents keep running and data stays unless `--end-sessions` or `--remove-app-data` says otherwise. |
 
 The project file `macos/AgentMux.xcodeproj` is generated from `project.yml` and
 is gitignored, so edit `project.yml` instead. `macos/build/`,
@@ -83,6 +85,52 @@ The Swift sources under `AgentMux/Ghostty/` are ported and trimmed from
 Ghostty's macOS app. `NOTICE-ghostty` carries its MIT license and is bundled
 into the app.
 
+### The tmux runtime
+
+The app ships the tmux its session server runs, so a Mac needs nothing
+installed. `scripts/build-tmux.sh` builds it from the release tarballs pinned
+in `macos/TMUX_VERSION` (tmux, libevent, ncurses, utf8proc, jemalloc), each
+checked against its sha256 before it is unpacked, with no pkg-config lookup
+and a `PATH` of system directories only, so nothing from a package manager
+can be linked. The four libraries are linked statically: the result is one
+executable that loads only `/usr/lib` (the script fails if `otool -L` says
+otherwise, or if the binary does not report the pinned version), built for
+this Mac's architecture and the app's deployment target. jemalloc is there
+because tmux asks for it on macOS, whose `calloc` it found unreliable; the
+whole archive is force-loaded so its zone registration is linked in. A
+matching stamp in `macos/Vendor/tmux/.stamp` (versions, architecture, a digest
+of the pins and of the script) skips the build; a cold one takes a few
+minutes. Terminal descriptions come from the system's terminfo database.
+
+`build-app.sh` copies `bin/tmux`, `VERSION`, and `licenses/` to
+`Contents/Resources/tmux`. `sign.sh` signs the executable and then writes
+`SHA256SUMS` over every file of the runtime, so the checksums are of the
+signed files and are themselves under the app's seal.
+
+At run time `internal/tmux` (`runtime.go`) decides which tmux a server runs:
+
+1. `[defaults.tmux] path` in `config.toml`, else `AMX_TMUX`. An explicit
+   choice is final: if it cannot be used nothing else is tried.
+2. The bundled runtime: the directory `AMX_TMUX_RUNTIME` names, which the app
+   sets for every amx it runs, or `../tmux` beside the directory of the amx
+   executable, which is where a bundled amx finds it with no environment at
+   all. Every file is checked against `SHA256SUMS`, then the runtime is copied
+   to `~/.local/share/agent-mux/runtime/tmux-<version>-<digest>/` and checked
+   again there. **The copy is what runs.** A copy that is missing or altered
+   is installed again; the directory it replaces is renamed aside, never
+   written over.
+3. `tmux` on `PATH`, if it is 3.5 or newer: what a standalone amx uses.
+4. A runtime an earlier run installed, for an amx started without the app on
+   a Mac with no tmux.
+
+**A running server keeps its tmux.** The executable chosen for a server is
+recorded beside its socket (`tmux.binary`), and while a server answers on the
+socket that executable is used for every client, whatever the list above
+would pick now. So an update that ships another tmux changes nothing for live
+sessions: neither their server nor the clients that talk to it.
+`amx backend status` reports the tmux in use, where it came from, and whether
+the running server is on an earlier one.
+
 ### Signing
 
 `scripts/sign.sh` signs inside out: the bundled `amx` first (identifier
@@ -104,6 +152,40 @@ into the app.
 - `AMX_MACOS_CACHE`: the cache root (default `macos/.cache`).
 - `AMX_APP_INSTALL_DIR`: the install destination (default `/Applications`).
 - `AMX_APP_NO_LAUNCH=1`: install without relaunching.
+- `AMX_APP_SOURCE`: the bundle `install-app.sh` installs (default
+  `macos/build/Agent Mux.app`).
+- `TMUX_RUNTIME_FORCE=1`: rebuild the tmux runtime even when its stamp matches.
+
+### Install, update, uninstall
+
+`scripts/install-app.sh` treats a first install and an update alike, and is
+written around one fact: agents run in the session server, which the app
+neither contains nor owns.
+
+1. The new bundle is checked before anything is touched: its seal
+   (`codesign --verify --strict --deep`), its `amx`, and its tmux runtime
+   against `SHA256SUMS`.
+2. The new bundle's `amx` is asked for `backend status`. That verifies and
+   installs the runtime under the data directory, and reports the running
+   server's generation (its PID and start time) and agent count.
+3. The app is quit through an Apple event and waited for.
+4. The bundle is copied to `.Agent Mux.app.installing` beside its
+   destination, verified there, and renamed into place; the earlier copy is
+   moved aside first and put back if the rename fails. Nothing is ever copied
+   over a bundle in place.
+5. The server's generation is read again. If a server was running and it is
+   not the same one, the installer exits nonzero: an update that lost agents
+   must not report success.
+
+`scripts/uninstall-app.sh` removes the bundle and nothing else by default.
+`--end-sessions` ends the session server (`amx backend stop --yes`, asked of
+the installed bundle's amx before it is removed); without it the script
+reports how many agents it left running and prints the command that ends them
+with the recorded tmux alone. `--remove-app-data` removes the app's defaults
+domain, its saved window state, and the installed runtime, and is refused
+while a server runs from that runtime unless `--end-sessions` is given too.
+Neither script touches `~/.config/agent-mux` or anything else under
+`~/.local/share/agent-mux`. `scripts/app-lib.sh` holds what the two share.
 
 ### Icons
 
@@ -146,7 +228,7 @@ only to hand the app to someone else.
 | `AgentMux/UI/` | The status item, menu builder, daemon line, workspace window and its main menu, Preferences window, and ASL answer panel. |
 | `AgentMux/Resources/` | `Info.plist` and the asset catalog; `internal/palette/icons.json` is bundled from the repository. |
 | `AgentMuxTests/` | XCTest suites, with a fake stream server standing in for the daemon. |
-| `scripts/` | `build-ghosttykit.sh`, `generate-project.sh`, `build-app.sh`, `sign.sh`, `install-app.sh`, `test-app.sh`, `remote-ui.sh`, `make-icons.swift`. |
+| `scripts/` | `build-ghosttykit.sh`, `build-tmux.sh`, `generate-project.sh`, `build-app.sh`, `sign.sh`, `install-app.sh`, `uninstall-app.sh`, `app-lib.sh`, `test-app.sh`, `remote-ui.sh`, `make-icons.swift`. |
 | `GHOSTTY_VERSION`, `patches/ghostty/`, `NOTICE-ghostty` | The GhosttyKit pins, the build patches, and Ghostty's license notice. |
 | `GhosttyHarness/` | The Session 2 feasibility harness: a separate app with the wrapper as first ported, linking the same vendored GhosttyKit. Not part of any recipe. |
 
@@ -209,9 +291,8 @@ in any order, with the programs' pids checked afterwards.
 **Open Workspace** in the status menu shows the workspace window
 (`UI/WorkspaceWindow.swift`): a native sidebar of the live sessions beside the
 terminal of the selected one. Opening the app again while it runs (Finder,
-Spotlight, `open`) shows it too, and
-`defaults write io.github.sglavoie.agentmux amxOpenWorkspaceAtLaunch -bool YES`
-opens it at launch. While the window is open the app is a regular app, with a
+Spotlight, `open`) shows it too, and Preferences › Open the workspace at
+launch (`amxOpenWorkspaceAtLaunch`) opens it at launch. While the window is open the app is a regular app, with a
 Dock icon and a main menu (`UI/WorkspaceMenu.swift`); closing it returns the
 app to the menu bar accessory. The status item, the global shortcuts, and the
 ASL answer panel work the same either way.
@@ -620,6 +701,18 @@ An absent, mistyped, or out-of-range value reads as its default.
 | `amxSnoozeUntil` | none | The last snooze the daemon reported, re-applied after a daemon restart (see Menu actions). The daemon owns the snooze, and Preferences shows the daemon's while the feed is live. |
 | `amxKittySocketOverride` | empty | A Kitty socket tried first by focus and the dashboard shortcut. |
 | `amxEnvironment` | empty | Values amx runs with instead of the login shell's, for `PATH`, `XDG_*`, and `AMX_*`. |
+| `amxLaunchBackend` | `automatic` | Where Launch Project starts an agent: `automatic` (a Kitty tab when a Kitty is running, else the workspace), `kitty`, or `workspace` (always the private tmux server). An explicit choice is never overridden by what happens to be running. |
+| `amxOpenWorkspaceAtLaunch` | false | Shows the workspace window when the app starts, even if it was closed last time. |
+
+Preferences › Workspace also shows the backend setup, read from
+`amx backend status --json` each time amx is resolved
+(`Model/BackendSetup.swift`): which tmux runs and where it came from, whether
+the session server is running and with how many agents, and every problem amx
+reports with what to do about it. A missing tmux is shown there before a
+launch fails on it; when a launch does fail, its message carries the same
+places tried and the same fix. The app names the bundle's runtime to every
+amx it runs through `AMX_TMUX_RUNTIME`, so `~/.local/bin/amx`, when the
+resolver prefers it, still runs the pinned tmux.
 
 A change to the binary override or an environment value resolves amx again
 once typing pauses; the login shell is not asked twice. The login item is

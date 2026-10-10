@@ -1,0 +1,494 @@
+
+##### clean-supported-mac-install: a Mac with no tmux and no Agent Mux.app; the Release bundle is installed with the installer and used [18:21:17Z]
+--- the Mac ---
+Seb’s MacBook Pro
+27.0.1
+arm64
+PATH inside the world: /tmp/amxs17/bin:/usr/bin:/bin:/usr/sbin:/sbin
+--- tmux anywhere on this Mac ---
+the user's login shell: none
+the world: none
+ls: /opt/homebrew/bin/tmux: No such file or directory
+ls: /opt/local/bin/tmux: No such file or directory
+ls: /usr/local/bin/tmux: No such file or directory
+PASS: no tmux is installed: not on the user's login PATH, not in the world, not from a package manager
+PASS: no Agent Mux.app is installed, in /Applications or in the install root
+PASS: the app has never run for this user: it has no preferences
+PASS: no session server, runtime, or registry exists yet
+--- the bundle under test ---
+/Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo/macos/build/Agent Mux.app
+0.1.0
+amx version 0.8.0 (revision 4e8b6136951d-dirty, built 2026-10-10T17:49:36Z, go1.27.1, sha256:fda676b051d6)
+tmux=3.7c
+libevent=2.1.13-stable
+ncurses=6.6
+utf8proc=2.12.0
+jemalloc=5.4.0
+arch=arm64
+min_macos=14.0
+--- install-app.sh (first install) ---
+Installed /tmp/amxs17/Applications/Agent Mux.app
+(exit 0)
+PASS: the installer succeeded
+PASS: it reports a first install, not an update
+PASS: the app is in the install root as a whole bundle
+PASS: nothing was left staged beside it
+PASS: the installer made the tmux runtime ready before the app ever ran
+PASS: the installed app runs, from the install root
+PASS: it chose the amx inside its own bundle
+PASS: it found its own tmux: bundled, verified
+PASS: a daemon started by the bundled amx is up and the app's feed is live
+--- amx project launch alpha --backend tmux (the bundled amx) ---
+{"schema_version":1,"data":{"action":"session.launch","changed":true,"message":"launched session","project":{"profile":"work","title":"alpha","harness":"claude","directory":"/tmp/amxs17/proj/alpha","groups":[]},"backend":"tmux","runtime_session_id":"rs-80c5335051bd7aa98ba282f30edcd805"}}
+(exit 0)
+PASS: an agent launched on the tmux backend
+PASS: the launch reports the tmux backend and a runtime session
+PASS: the agent is running and counting
+PASS: the daemon lists it, as the app's feed carries it
+--- registry ---
+rs-80c5335051bd7aa98ba282f30edcd805 live alpha %0 pid=29002 generation=29001-1791656489 reason=-
+--- amx backend status ---
+launch backend: kitty
+tmux: /tmp/amxs17/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux (3.7c, from bundled, checksums verified)
+server: running at /tmp/amxs17/tmp/agent-mux-504/tmux.sock, 1 session, 1 running agent
+server tmux: /tmp/amxs17/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux
+--- the app's log ---
+12:21:25.145 [io.github.sglavoie.agentmux:app] feed: connecting
+12:21:25.145 [io.github.sglavoie.agentmux:app] feed: notRunning
+12:21:25.145 [io.github.sglavoie.agentmux:app] daemon: not running
+12:21:25.317 [io.github.sglavoie.agentmux:app] backend: tmux 3.7c (bundled with Agent Mux, verified) at /tmp/amxs17/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux; session server: Not running; the first workspace launch starts it
+12:21:25.317 [io.github.sglavoie.agentmux:app] running /private/tmp/amxs17/Applications/Agent Mux.app/Contents/Resources/bin/amx (bundled)
+12:21:28.542 [io.github.sglavoie.agentmux:app] feed: live
+
+##### bundled-tmux-and-libraries: the tmux that runs is the pinned one from the bundle, complete in itself, verified, and outside the app [18:21:34Z]
+--- the runtime in the bundle ---
+bin
+licenses
+SHA256SUMS
+VERSION
+
+./bin:
+tmux
+
+./licenses:
+jemalloc
+libevent
+ncurses
+tmux
+utf8proc
+tmux=3.7c
+libevent=2.1.13-stable
+ncurses=6.6
+utf8proc=2.12.0
+jemalloc=5.4.0
+arch=arm64
+min_macos=14.0
+4f5ca8803d85eacd308f4da3c907893b2eb686952694452d0c619012fc0d31eb  VERSION
+fb421000337b050b00f0bb3c938af2c4e6bb3971a96b74ba0ca75e5c25abd802  bin/tmux
+94aa2caa98c25d942f58b956c71dba6a99ff98fc3a31cbc669fe2a4cd0268b53  licenses/jemalloc
+ff02effc9b331edcdac387d198691bfa3e575e7d244ad10cb826aa51ef085670  licenses/libevent
+708999f95527e1ffa670c6fce288c6c600cb477dd04afcc1171422b3dd4ee226  licenses/ncurses
+2116115d46eeb1e736acfa562eed14fe6c34760794bc5b484642fe694adde0fd  licenses/tmux
+3b510150d34f248a221bb88e1d811238d6c6c18b51231822c42974c39bb07256  licenses/utf8proc
+--- the bundle's checksums, checked ---
+VERSION: OK
+bin/tmux: OK
+licenses/jemalloc: OK
+licenses/libevent: OK
+licenses/ncurses: OK
+licenses/tmux: OK
+licenses/utf8proc: OK
+(exit 0)
+PASS: every file of the bundled runtime matches its recorded checksum
+--- the libraries the bundled tmux loads ---
+/tmp/amxs17/Applications/Agent Mux.app/Contents/Resources/tmux/bin/tmux:
+	/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)
+	/usr/lib/libresolv.9.dylib (compatibility version 1.0.0, current version 1.0.0)
+(exit 0)
+PASS: it loads system libraries only: its own are linked into it
+--- what it reports ---
+tmux 3.7c
+arm64
+ platform MACOS
+    minos 14.0
+(exit 0)
+PASS: it is the pinned release, built for this architecture and macOS 14
+PASS: libevent, ncurses, utf8proc, and jemalloc are in it, with their licenses beside it
+--- the installed copy ---
+/tmp/amxs17/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810
+/tmp/amxs17/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810:
+total 16
+drwx------  6 sglavoie  wheel  192 Oct 10 12:21 .
+drwx------  4 sglavoie  wheel  128 Oct 10 12:21 ..
+drwx------  3 sglavoie  wheel   96 Oct 10 12:21 bin
+drwx------  7 sglavoie  wheel  224 Oct 10 12:21 licenses
+-rw-------  1 sglavoie  wheel  564 Oct 10 12:21 SHA256SUMS
+-rw-------  1 sglavoie  wheel  102 Oct 10 12:21 VERSION
+
+/tmp/amxs17/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin:
+total 3784
+drwx------  3 sglavoie  wheel       96 Oct 10 12:21 .
+drwx------  6 sglavoie  wheel      192 Oct 10 12:21 ..
+-rwx------  1 sglavoie  wheel  1933648 Oct 10 12:21 tmux
+tmux-3.7c-858d25c2c2d4f810
+--- the installed copy's checksums, checked ---
+VERSION: OK
+bin/tmux: OK
+licenses/jemalloc: OK
+licenses/libevent: OK
+licenses/ncurses: OK
+licenses/tmux: OK
+licenses/utf8proc: OK
+(exit 0)
+PASS: the copy amx installed matches the same checksums
+PASS: amx reports the bundled runtime as the tmux in use, verified
+--- the session server process ---
+29001 Sat Oct 10 18:21:29 2026
+/tmp/amxs17/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux
+recorded: /tmp/amxs17/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux
+PASS: the session server runs the installed copy, not a file inside the app
+PASS: the executable it was started with is recorded beside its socket
+--- the allocator in the running server (vmmap names the process's malloc zones) ---
+malloc zone jemalloc_zone_0x105047088
+(exit 0)
+PASS: the server's allocator is the jemalloc linked into it
+PASS: the agent's terminal is described by the system's terminfo (TERM=tmux-256color resolves)
+
+##### signed-bundle: the installed bundle and both executables in it verify, and a bundle that does not is not installed [18:21:41Z]
+--- codesign --verify --strict --deep (installed bundle) ---
+/tmp/amxs17/Applications/Agent Mux.app: valid on disk
+/tmp/amxs17/Applications/Agent Mux.app: satisfies its Designated Requirement
+(exit 0)
+PASS: the installed bundle passes strict, deep verification
+--- the three signatures ---
+Identifier=io.github.sglavoie.agentmux
+CodeDirectory v=20400 size=40596 flags=0x2(adhoc) hashes=1262+3 location=embedded
+Signature=adhoc
+TeamIdentifier=not set
+verifies: /tmp/amxs17/Applications/Agent Mux.app
+Identifier=io.github.sglavoie.agentmux.cli
+CodeDirectory v=20400 size=42744 flags=0x2(adhoc) hashes=1330+2 location=embedded
+Signature=adhoc
+TeamIdentifier=not set
+verifies: /tmp/amxs17/Applications/Agent Mux.app/Contents/Resources/bin/amx
+Identifier=io.github.sglavoie.agentmux.tmux
+CodeDirectory v=20400 size=3961 flags=0x2(adhoc) hashes=118+2 location=embedded
+Signature=adhoc
+TeamIdentifier=not set
+verifies: /tmp/amxs17/Applications/Agent Mux.app/Contents/Resources/tmux/bin/tmux
+     0 valid identities found
+(exit 0)
+PASS: the app, its amx, and its tmux each carry their own identifier
+PASS: each of the three verifies on its own
+NOTE: this Mac has no signing certificate (0 valid identities), so the signature is ad-hoc: it proves the bundle is intact, not who built it.
+PASS: the runtime's checksums are under the app's seal
+--- install-app.sh with a bundle whose tmux was altered ---
+the tmux runtime in /tmp/amxs17/tampered/Agent Mux.app does not match its checksums
+(exit 1)
+PASS: the installer refuses it
+PASS: and installed nothing
+--- install-app.sh with a bundle whose sealed resource was altered ---
+/tmp/amxs17/tampered/Agent Mux.app: a sealed resource is missing or invalid
+/tmp/amxs17/tampered/Agent Mux.app does not pass signature verification
+(exit 1)
+PASS: the installer refuses that too
+PASS: and installed nothing
+--- amx given a runtime that was altered and its checksums rewritten to match (the app's seal no longer holds) ---
+/tmp/amxs17/tampered/Agent Mux.app: a sealed resource is missing or invalid
+/tmp/amxs17/tampered/Agent Mux.app does not pass signature verification
+(exit 1)
+PASS: the installer refuses it by the seal
+--- amx itself, pointed at a runtime that does not match its checksums ---
+launch backend: kitty
+tmux: not available (need 3.5 or newer)
+server: running at /tmp/amxs17/tmp/agent-mux-504/tmux.sock, 1 session, 1 running agent
+server tmux: /tmp/amxs17/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux
+
+warning: Agents can be launched while the running server lasts, but no tmux was found to start another one: no supported tmux found (need 3.5 or newer):
+  bundled runtime (/tmp/amxs17/tampered/Agent Mux.app/Contents/Resources/tmux): bin/tmux does not match its checksum (got 34183180bc69a5be591ca206d140d8453b7faac54ac6fe86f5bc4a9e7f081f46, recorded fb421000337b050b00f0bb3c938af2c4e6bb3971a96b74ba0ca75e5c25abd802)
+  PATH: tmux not found
+  → Install tmux 3.5 or newer (`brew install tmux`), set [defaults.tmux] path in config.toml, or run Agent Mux.app, which bundles one.
+ls: /tmp/amxs17/home3/.local/share/agent-mux/runtime: No such file or directory
+(exit 1)
+PASS: amx refuses to run or install it, and says which file
+
+##### dependency-failure-diagnostics: with no usable tmux, every surface says what was tried and what to do [18:21:48Z]
+a standalone amx (a copy outside any bundle), a HOME with no runtime, a TMPDIR with no session server, and no tmux on PATH:
+--- amx backend status ---
+launch backend: kitty
+tmux: not available (need 3.5 or newer)
+server: not running (the first tmux launch starts it)
+
+warning: The tmux backend cannot start agents: no supported tmux found (need 3.5 or newer):
+  bundled runtime: not present (this amx was not started by Agent Mux.app)
+  PATH: tmux not found
+  → Install tmux 3.5 or newer (`brew install tmux`), set [defaults.tmux] path in config.toml, or run Agent Mux.app, which bundles one.
+(exit 0)
+PASS: status succeeds and explains: tmux is not available, each place tried, and the fix
+--- amx backend status --check --json ---
+{"schema_version":1,"data":{"launch_backend":"kitty","tmux":{"available":false,"verified":false,"min_version":"3.5","candidates":[{"source":"bundled","problem":"not present (this amx was not started by Agent Mux.app)"},{"source":"path","problem":"tmux not found"}]},"server":{"directory":"/tmp/amxs17/tmp2/agent-mux-504","socket":"/tmp/amxs17/tmp2/agent-mux-504/tmux.sock","running":false,"sessions":0,"agents":0},"problems":[{"code":"tmux_unavailable","severity":"warning","message":"The tmux backend cannot start agents: no supported tmux found (need 3.5 or newer):\n  bundled runtime: not present (this amx was not started by Agent Mux.app)\n  PATH: tmux not found","hint":"Install tmux 3.5 or newer (`brew install tmux`), set [defaults.tmux] path in config.toml, or run Agent Mux.app, which bundles one."}]}}
+(exit 1)
+PASS: --check exits 1 and the report names the problem by code
+--- amx project launch alpha --backend tmux --json ---
+{"schema_version":1,"error":{"code":"backend_unavailable","message":"tmux backend unavailable: no supported tmux found (need 3.5 or newer):\n  bundled runtime: not present (this amx was not started by Agent Mux.app)\n  PATH: tmux not found\nInstall tmux 3.5 or newer (`brew install tmux`), set [defaults.tmux] path in config.toml, or run Agent Mux.app, which bundles one."}}
+(exit 1)
+PASS: a tmux launch fails as backend_unavailable with the same explanation
+PASS: the failed launch started nothing and registered nothing
+--- amx project launch (text) ---
+Error: tmux backend unavailable: no supported tmux found (need 3.5 or newer):
+  bundled runtime: not present (this amx was not started by Agent Mux.app)
+  PATH: tmux not found
+Install tmux 3.5 or newer (`brew install tmux`), set [defaults.tmux] path in config.toml, or run Agent Mux.app, which bundles one.
+(exit 1)
+PASS: the text form says the same
+a tmux on PATH that is too old:
+--- amx backend status (tmux 3.3a on PATH) ---
+launch backend: kitty
+tmux: not available (need 3.5 or newer)
+server: not running (the first tmux launch starts it)
+
+warning: The tmux backend cannot start agents: no supported tmux found (need 3.5 or newer):
+  bundled runtime: not present (this amx was not started by Agent Mux.app)
+  PATH (/tmp/amxs17/old/tmux): tmux 3.3a is older than 3.5
+  → Install tmux 3.5 or newer (`brew install tmux`), set [defaults.tmux] path in config.toml, or run Agent Mux.app, which bundles one.
+(exit 0)
+PASS: it is refused by version, not run
+a configured tmux that does not exist:
+--- amx backend status ([defaults.tmux] path = /nonexistent/tmux) ---
+launch backend: kitty
+tmux: not available (need 3.5 or newer)
+server: not running (the first tmux launch starts it)
+
+warning: The tmux backend cannot start agents: no supported tmux found (need 3.5 or newer):
+  [defaults.tmux] path (/nonexistent/tmux): not an executable file
+  → Install tmux 3.5 or newer (`brew install tmux`), set [defaults.tmux] path in config.toml, or run Agent Mux.app, which bundles one.
+(exit 0)
+PASS: the configured path is the only one tried, and the bundled runtime is not silently used instead
+a configuration that names an unknown backend:
+--- amx backend status (launch_backend = ghostty) ---
+launch backend: kitty
+tmux: not available (need 3.5 or newer)
+server: not running (the first tmux launch starts it)
+
+error: The configuration could not be loaded: defaults.launch_backend "ghostty": must be "kitty" or "tmux"
+  → Fix /tmp/amxs17/home2/.config/agent-mux/config.toml (`amx config validate` lists every error), or create one with `amx config init`.
+
+warning: The tmux backend cannot start agents: no supported tmux found (need 3.5 or newer):
+  bundled runtime: not present (this amx was not started by Agent Mux.app)
+  PATH: tmux not found
+  → Install tmux 3.5 or newer (`brew install tmux`), set [defaults.tmux] path in config.toml, or run Agent Mux.app, which bundles one.
+(exit 0)
+PASS: the configuration error is reported with the value and how to see every error
+the app, given a tmux it cannot use (AMX_TMUX in its environment preference):
+PASS: the app records the problem and its fix where an operator looks
+--- the app's log ---
+12:21:54.554 [io.github.sglavoie.agentmux:app] backend: Not available (needs 3.5 or newer) at ; session server: Running, 1 agent running
+12:21:54.554 [io.github.sglavoie.agentmux:app] backend: warning tmux_unavailable: Agents can be launched while the running server lasts, but no tmux was found to start another one: no supported tmux found (need 3.5 or newer):
+PASS: with the preference removed the app is back on its own tmux
+PASS: the agent launched earlier was not disturbed by any of this
+PASS: nothing was started in the standalone world
+
+##### update-preserves-agent: the app is updated by the installer while an agent runs detached; the agent never notices [18:22:01Z]
+before: agent (pid, start UTC) 29002 Sat Oct 10 18:21:29 2026; runtime session rs-80c5335051bd7aa98ba282f30edcd805
+before: session server (pid, start UTC) 29001 Sat Oct 10 18:21:29 2026; generation 29001-1791656489; executable /tmp/amxs17/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux
+before: app pid 30009, version 0.1.0; daemon pid 28959; last count 35 29002 1791656526 12:22:06
+PASS: no terminal is attached to the agent: it is detached
+--- the update is built: another version, and a tmux runtime with other checksums, signed by sign.sh ---
+/tmp/amxs17/v2/Agent Mux.app: valid on disk
+/tmp/amxs17/v2/Agent Mux.app: satisfies its Designated Requirement
+Signed /tmp/amxs17/v2/Agent Mux.app ad-hoc
+0.1.1
+build=acceptance-update
+858d25c2c2d4f810f051a8670284fb2caca51e49a3144aa353c6388451da06f3  /Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo/macos/build/Agent Mux.app/Contents/Resources/tmux/SHA256SUMS
+bddf340e84175725ea434ec0885775e8251d5b0bd71894048f14e1e4d9490569  /tmp/amxs17/v2/Agent Mux.app/Contents/Resources/tmux/SHA256SUMS
+(exit 0)
+PASS: the update is version 0.1.1
+--- install-app.sh (update, with the app running) ---
+A session server is running with 1 agent(s); it is left running.
+Quitting the running Agent Mux.app...
+Updated /tmp/amxs17/Applications/Agent Mux.app
+The session server is unchanged (29001-1791656489); 1 agent(s) running.
+(exit 0)
+PASS: the installer succeeded
+PASS: it saw the running server and said it would leave it
+PASS: it quit the running app
+PASS: it reports an update
+PASS: it confirmed the server is the one that was running
+PASS: the installed bundle is the new version, whole and verified
+PASS: the old app process is gone
+PASS: the agent is the same process
+PASS: its registry record is unchanged: live, same pane, same pid, same server generation
+PASS: its count never started over or skipped through the update
+PASS: and never paused: no two counts are more than 3 seconds apart
+after: agent 29002 Sat Oct 10 18:21:29 2026; last count 44 29002 1791656535 12:22:15
+PASS: the updated app runs, on its own bundled amx
+PASS: its feed is live and carries the same session
+--- amx attach --json from the updated bundle (what the app runs before it shows a session) ---
+{"schema_version":1,"data":{"runtime_session_id":"rs-80c5335051bd7aa98ba282f30edcd805","backend":"tmux","project":"alpha","state":"live","pane":"%0","pid":29002,"clients":0,"command":["/tmp/amxs17/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux","-S","/tmp/amxs17/tmp/agent-mux-504/tmux.sock","-f","/tmp/amxs17/tmp/agent-mux-504/tmux.conf","source-file","/tmp/amxs17/tmp/agent-mux-504/tmux.conf",";","attach-session","-d","-t","%0"]}}
+(exit 0)
+PASS: the updated amx finds the agent live, same pid, with no terminal attached
+--- the daemon through the update ---
+pid before 28959, now 28959
+28959 Sat Oct 10 12:21:27 2026     /tmp/amxs17/Applications/Agent Mux.app/Contents/Resources/bin/amx
+--- the app's log ---
+12:22:17.436 [io.github.sglavoie.agentmux:app] feed: connecting
+12:22:17.436 [io.github.sglavoie.agentmux:app] feed: live
+12:22:17.436 [io.github.sglavoie.agentmux:app] daemon: degraded · initial kitty snapshot failed: kitty command failed: kitten @ ls
+  error: exec: "kitten": executable file not found in $PATH
+12:22:17.617 [io.github.sglavoie.agentmux:app] backend: tmux 3.7c (bundled with Agent Mux, verified) at /tmp/amxs17/home/.local/share/agent-mux/runtime/tmux-3.7c-bddf340e84175725/bin/tmux; session server: Running, 1 agent running
+12:22:17.617 [io.github.sglavoie.agentmux:app] backend: info server_keeps_previous_tmux: The running server keeps the tmux it was started with (/tmp/amxs17/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux). /tmp/amxs17/home/.local/share/agent-mux/runtime/tmux-3.7c-bddf340e84175725/bin/tmux is used once its last agent has ended.
+12:22:17.617 [io.github.sglavoie.agentmux:app] running /private/tmp/amxs17/Applications/Agent Mux.app/Contents/Resources/bin/amx (bundled)
+12:22:17.685 [io.github.sglavoie.agentmux:app] feed: reconnecting("reconnecting")
+12:22:17.688 [io.github.sglavoie.agentmux:app] feed: live
+
+##### live-server-not-replaced: the update shipped another tmux runtime; the running server is the same process on the same executable [18:22:22Z]
+PASS: the session server is the same process: same pid, same start time
+PASS: its generation, which every session's target is bound to, is unchanged
+PASS: it still runs the executable it was started with
+PASS: that executable is still there, untouched, and still matches its checksums
+--- runtimes installed now ---
+/tmp/amxs17/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810
+/tmp/amxs17/home/.local/share/agent-mux/runtime/tmux-3.7c-bddf340e84175725
+current: tmux-3.7c-bddf340e84175725
+recorded for the server: /tmp/amxs17/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux
+PASS: the update's runtime was installed beside it, not over it
+PASS: the record beside the socket still names the server's own executable
+--- amx backend status (updated bundle) ---
+launch backend: kitty
+tmux: /tmp/amxs17/home/.local/share/agent-mux/runtime/tmux-3.7c-bddf340e84175725/bin/tmux (3.7c, from bundled, checksums verified)
+server: running at /tmp/amxs17/tmp/agent-mux-504/tmux.sock, 1 session, 1 running agent
+server tmux: /tmp/amxs17/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux
+
+info: The running server keeps the tmux it was started with (/tmp/amxs17/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux). /tmp/amxs17/home/.local/share/agent-mux/runtime/tmux-3.7c-bddf340e84175725/bin/tmux is used once its last agent has ended.
+(exit 0)
+PASS: amx says so: the server keeps its tmux, and the new one waits for the last agent to end
+PASS: the updated app says the same in its log
+--- a second agent launched after the update ---
+{"schema_version":1,"data":{"action":"session.launch","changed":true,"message":"launched session","project":{"profile":"work","title":"beta","harness":"claude","directory":"/tmp/amxs17/proj/beta","groups":[]},"backend":"tmux","runtime_session_id":"rs-2ef3f4cab416c5fb10ed07036f4e134c"}}
+(exit 0)
+PASS: launching still works against the running server
+PASS: the new agent runs in the same server, beside the first
+PASS: and the first agent still counts without a gap
+--- registry ---
+rs-80c5335051bd7aa98ba282f30edcd805 live alpha %0 pid=29002 generation=29001-1791656489 reason=-
+rs-2ef3f4cab416c5fb10ed07036f4e134c live beta %1 pid=30941 generation=29001-1791656489 reason=-
+
+##### uninstall-preserves-data: removing the app removes the app; ending agents and removing data are separate, explicit choices [18:22:29Z]
+before: user data digest db49d69316b04a33; agent alpha 29002 Sat Oct 10 18:21:29 2026; server 29001 Sat Oct 10 18:21:29 2026
+--- the operator's files ---
+.config/agent-mux
+.config/agent-mux/config.toml
+.local/share/agent-mux
+.local/share/agent-mux/daemon.autostart.lock
+.local/share/agent-mux/daemon.lock
+.local/share/agent-mux/daemon.sock
+.local/share/agent-mux/handoffs
+.local/share/agent-mux/handoffs/keep.md
+.local/share/agent-mux/launch_overrides.json
+.local/share/agent-mux/runtime
+.local/share/agent-mux/runtime-sessions.json
+.local/share/agent-mux/runtime-sessions.json.launch.lock
+.local/share/agent-mux/runtime-sessions.json.lock
+.local/share/agent-mux/runtime-state.json
+.local/share/agent-mux/runtime/current
+.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810
+.local/share/agent-mux/runtime/tmux-3.7c-bddf340e84175725
+.local/share/agent-mux/transcripts.json
+.local/share/agent-mux/worktrees
+.local/share/agent-mux/worktrees/keep
+1. asking to remove the app's data while agents run on its runtime, without asking to end them:
+--- uninstall-app.sh --remove-app-data --yes ---
+A session server is running with 2 agent(s), started from the tmux runtime --remove-app-data would remove.
+End them too with --end-sessions, or uninstall without --remove-app-data.
+(exit 1)
+PASS: it is refused, and says what to choose
+PASS: nothing was removed: the app, its preferences, and the runtime are all there
+2. the default: remove the app, nothing else:
+--- uninstall-app.sh ---
+Quitting the running Agent Mux.app...
+Removed /tmp/amxs17/Applications/Agent Mux.app
+Kept the app's preferences (io.github.sglavoie.agentmux) and its tmux runtime (/tmp/amxs17/home/.local/share/agent-mux/runtime); --remove-app-data removes them.
+Left running: the session server and its 2 agent(s).
+  Reach them again by installing the app, or with any amx: amx attach <runtime-session-id>
+  End them without amx: '/tmp/amxs17/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux' -S '/tmp/amxs17/tmp/agent-mux-504/tmux.sock' kill-server
+Kept: your configuration (~/.config/agent-mux) and data (/tmp/amxs17/home/.local/share/agent-mux): conversations' indexes, handoffs, worktrees, and the session registry.
+(exit 0)
+PASS: the uninstaller succeeded
+PASS: it says what it removed and what it left
+PASS: it prints the one command that ends the agents later without amx
+PASS: the app is gone and no longer running
+PASS: the agents were not ended: alpha is the same process
+PASS: the session server is the same process
+PASS: both agents kept counting through the uninstall
+PASS: the operator's files are byte for byte what they were
+PASS: the session registry is still there, with both sessions live
+PASS: the app's preferences and both runtimes were kept
+3. ending the agents is its own choice, and asks:
+--- uninstall-app.sh --end-sessions (no --yes, no terminal to ask on) ---
+End the session server and its 2 running agent(s)? needs confirmation: rerun with --yes
+(exit 1)
+PASS: without confirmation nothing is ended
+PASS: alpha is still the same process
+--- uninstall-app.sh --end-sessions --yes (the app is already gone: the server is asked with its own recorded tmux) ---
+Stopped the session server and its 2 running agent(s).
+No app at /tmp/amxs17/Applications/Agent Mux.app
+Kept the app's preferences (io.github.sglavoie.agentmux) and its tmux runtime (/tmp/amxs17/home/.local/share/agent-mux/runtime); --remove-app-data removes them.
+Kept: your configuration (~/.config/agent-mux) and data (/tmp/amxs17/home/.local/share/agent-mux): conversations' indexes, handoffs, worktrees, and the session registry.
+(exit 0)
+PASS: it ended the server and said how many agents
+PASS: the server and both agents are gone
+PASS: the operator's files are still what they were
+PASS: the preferences and runtimes are still kept: only the agents were asked for
+4. installed again, a new server starts on the update's runtime; then everything the app owns is removed on request:
+--- install-app.sh (the update again, as a first install) ---
+Installed /tmp/amxs17/Applications/Agent Mux.app
+(exit 0)
+PASS: it installs, with no server to preserve
+--- amx project launch beta --backend tmux ---
+{"schema_version":1,"data":{"action":"session.launch","changed":true,"message":"launched session","project":{"profile":"work","title":"beta","harness":"claude","directory":"/tmp/amxs17/proj/beta","groups":[]},"backend":"tmux","runtime_session_id":"rs-a5c6d316661a726715f9884079d56ed2"}}
+(exit 0)
+PASS: a new server is running
+PASS: the new server runs the update's runtime: the earlier one was kept only for the server that had started on it
+--- uninstall-app.sh --end-sessions --remove-app-data --yes ---
+Stopped the private tmux server and 1 running agent.
+Removed /tmp/amxs17/Applications/Agent Mux.app
+Removed the app's preferences (io.github.sglavoie.agentmux) and /tmp/amxs17/home/.local/share/agent-mux/runtime
+Kept: your configuration (~/.config/agent-mux) and data (/tmp/amxs17/home/.local/share/agent-mux): conversations' indexes, handoffs, worktrees, and the session registry.
+(exit 0)
+PASS: it did all three and said so
+--- after removing everything the app owns ---
+ls: /tmp/amxs17/Applications/Agent Mux.app: No such file or directory
+ls: /tmp/amxs17/home/.local/share/agent-mux/runtime: No such file or directory
+{
+}
+-rw-------@ 1 sglavoie  staff  42 Oct 10 12:22 /Users/sglavoie/Library/Preferences/io.github.sglavoie.agentmux.plist
+PASS: the app, every preference it had saved, and its runtimes are gone
+PASS: the agent it was asked to end is gone
+PASS: the operator's files are still byte for byte what they were
+PASS: the registry file is kept as well
+--- what is left ---
+.config/agent-mux
+.config/agent-mux/config.toml
+.local/share/agent-mux
+.local/share/agent-mux/daemon.autostart.lock
+.local/share/agent-mux/daemon.lock
+.local/share/agent-mux/daemon.sock
+.local/share/agent-mux/handoffs
+.local/share/agent-mux/handoffs/keep.md
+.local/share/agent-mux/launch_overrides.json
+.local/share/agent-mux/runtime-sessions.json
+.local/share/agent-mux/runtime-sessions.json.launch.lock
+.local/share/agent-mux/runtime-sessions.json.lock
+.local/share/agent-mux/runtime-state.json
+.local/share/agent-mux/transcripts.json
+.local/share/agent-mux/worktrees
+.local/share/agent-mux/worktrees/keep
+
+##### the world is taken down and the MacBook is as it was [18:22:49Z]
+PASS: no process of the world is left
+PASS: the app left no preference behind
+PASS: nothing was installed in /Applications
+PASS: the MacBook user's own amx, configuration, and data were never touched
+PASS: the world is removed
+
+RESULT: 107 passed, 0 failed

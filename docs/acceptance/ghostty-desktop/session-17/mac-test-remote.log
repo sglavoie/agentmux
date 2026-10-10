@@ -1,0 +1,25 @@
+	 Executed 4 tests, with 0 failures (0 unexpected) in 11.409 (11.411) seconds
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.565 (0.566) seconds
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.273 (0.276) seconds
+	 Executed 12 tests, with 0 failures (0 unexpected) in 2.256 (2.261) seconds
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.583 (0.586) seconds
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.015 (0.016) seconds
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.012 (0.013) seconds
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.008 (0.011) seconds
+	 Executed 22 tests, with 0 failures (0 unexpected) in 0.015 (0.019) seconds
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.008 (0.010) seconds
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.008 (0.010) seconds
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.007 (0.009) seconds
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.006 (0.008) seconds
+	 Executed 11 tests, with 0 failures (0 unexpected) in 3.417 (3.430) seconds
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.589 (0.593) seconds
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.005 (0.018) seconds
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.010 (0.010) seconds
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.007 (0.009) seconds
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.008 (0.009) seconds
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.460 (0.463) seconds
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.543 (0.546) seconds
+	 Executed 377 tests, with 0 failures (0 unexpected) in 25.589 (25.744) seconds
+Test Suite 'All tests' passed at 2026-10-10 12:11:13.677.
+	 Executed 377 tests, with 0 failures (0 unexpected) in 25.589 (25.745) seconds
+** TEST SUCCEEDED **

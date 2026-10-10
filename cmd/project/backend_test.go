@@ -20,7 +20,7 @@ func selectBackend(t *testing.T, value string) {
 	if err := projectLaunchCmd.Flags().Set(cli.BackendFlag, value); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = projectLaunchCmd.Flags().Set(cli.BackendFlag, "kitty") })
+	t.Cleanup(func() { _ = projectLaunchCmd.Flags().Set(cli.BackendFlag, "") })
 }
 
 // useTmux points tmux launches at a private server and the default registry

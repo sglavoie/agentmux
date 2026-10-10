@@ -24,7 +24,7 @@ See [GhosttyKit](../macos/README.md#ghosttykit).
 
 ```bash
 just install        # amx and the daemon first: the app needs a daemon that streams
-just mac-install    # Release build, quit any running copy, copy to /Applications, relaunch
+just mac-install    # Release build, then install or update /Applications/Agent Mux.app and relaunch it
 ```
 
 Install `amx` first. The app talks to whichever daemon is running, and a
@@ -34,9 +34,51 @@ the app too, so its bundled `amx` and the installed one stay close.
 
 The app must live in `/Applications` for the login item to work, which is
 where `just mac-install` puts it (`AMX_APP_INSTALL_DIR` overrides it, at the
-cost of the login item). To remove it, quit it from its menu and delete
-`/Applications/Agent Mux.app`; its preferences are in the
-`io.github.sglavoie.agentmux` defaults domain.
+cost of the login item).
+
+**Nothing else needs installing.** The bundle carries its own `amx` and its
+own tmux: a pinned release, built from checksummed sources and linked
+statically, so the app runs on a Mac with no Homebrew and no tmux. Before
+`amx` runs that tmux it checks every file of it against the checksums sealed
+into the bundle and copies it to `~/.local/share/agent-mux/runtime/`. The copy
+is what runs, so the tmux a session server was started from is never inside
+the app.
+
+### Updating
+
+`just mac-install` again. The installer checks the new bundle (signature,
+`amx`, tmux against its checksums), quits the app, stages the new copy beside
+the old one, and renames it into place.
+
+**Agents keep running through an update.** They live in the session server,
+not in the app, and the installer never stops, restarts, or replaces that
+server: it reads the server's identity before and after and fails if it
+changed. When the new app opens, the same agents are in its sidebar. If the
+update ships a newer tmux, the running server keeps the tmux it was started
+with until its last agent has ended; the next server starts with the new one.
+`amx backend status` shows which is in use.
+
+### Removing
+
+```bash
+just mac-uninstall                                # the app only
+just mac-uninstall --end-sessions                 # and end every running agent
+just mac-uninstall --end-sessions --remove-app-data --yes
+```
+
+Removing the app removes the app. What else happens is yours to choose:
+
+- **Running agents keep running** unless you pass `--end-sessions`. Without
+  it the uninstaller says how many it left, and prints the one command that
+  ends them later without `amx`.
+- **Your data stays.** `config.toml`, conversations and their indexes,
+  handoffs, worktrees, and the session registry are never touched.
+  `--remove-app-data` removes only what is the app's alone: its preferences
+  (the `io.github.sglavoie.agentmux` defaults domain), its saved window
+  state, and the tmux runtime it installed. It is refused while agents run on
+  that runtime unless you end them too.
+
+Both choices ask before acting; `--yes` answers for a script.
 
 ## Permissions
 
@@ -269,6 +311,15 @@ that is not the daemon's build, usually after `just install` without
 prefers `~/.local/bin/amx` over its bundled copy when the local one matches
 the daemon, is newer, or is the same clean build; to pin one, set
 Preferences › amx binary.
+
+**"no supported tmux found".** A workspace launch needs tmux, and none could
+be used. The app's own tmux is used whenever the bundle has one, so this
+means a build without it (a hand-made Debug build), a bundle whose tmux no
+longer matches its checksums (reinstall the app), or a
+`[defaults.tmux] path` in `config.toml` that names something that is not a
+tmux 3.5 or newer: an explicit path is the only one tried. Preferences ›
+Workspace shows which tmux is in use and, when none is, each place that was
+tried and why it was refused; `amx backend status` prints the same.
 
 **Grayed-out menu items.** The resolved `amx` lacks the command
 (`project`, `open-dashboard`, `mute-toggle --json`); the tooltip says which.

@@ -686,6 +686,35 @@ operator's: it has its own socket and configuration and never reads
 
 `amx overview` takes the same `--backend` flag and follows the same table.
 
+The launch commands (`amx project launch`, `amx session continue|fork|
+fork-worktree|handoff`) take `--backend` too. Without it they launch where
+`[defaults] launch_backend` says, which is `kitty` unless you set it to
+`tmux`, so a configuration written before the tmux backend existed keeps
+launching into Kitty.
+
+**Which tmux.** The private server needs tmux 3.5 or newer. `amx` uses, in
+order: `[defaults.tmux] path` from `config.toml` or `AMX_TMUX`, either of
+which is the only one tried when set; the tmux bundled with Agent Mux.app,
+verified against its checksums; `tmux` on `PATH`; and a runtime the app
+installed earlier. A server that is already running keeps the tmux it was
+started with, so installing another one never disturbs live agents.
+
+```bash
+amx backend status          # the launch backend, the tmux in use and where it came from, the server, and any problem with its fix
+amx backend status --json   # the same as data; --check exits 1 when a tmux launch would not work
+amx backend stop --yes      # end the private server and every agent in it; nothing else does
+```
+
+When no tmux can be used, a tmux launch fails with `backend_unavailable` and a
+message that names each place tried and what to do:
+
+```text
+tmux backend unavailable: no supported tmux found (need 3.5 or newer):
+  bundled runtime: not present (this amx was not started by Agent Mux.app)
+  PATH: tmux not found
+Install tmux 3.5 or newer (`brew install tmux`), set [defaults.tmux] path in config.toml, or run Agent Mux.app, which bundles one.
+```
+
 Agent Mux.app embeds both as views of its workspace window (see
 [the companion app](companion-app.md#dashboard-and-utility-views)). Hosted
 there they launch on tmux, and what would take over the terminal elsewhere —
