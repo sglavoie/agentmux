@@ -80,6 +80,12 @@ var (
 		recurring_issue_count redaction_policy rejected runs runs_correlated runs_exported runs_matched
 		runs_without_journal scanned section seq session sha256 state state_available state_reason state_root_present
 		state_schema_version stop_after_current text_chars total total_sessions turn_index updated_at
+		runtime reconcile capture tmux_client interval_seconds passes failures consecutive_failures age_seconds
+		last_duration_ms max_duration_ms failure_class ended released detached known live tmux servers attached
+		unattached reads limit commands timeouts in_flight max_in_flight queued max_queue_ms
+		backend launch_backend server running agents min_version problems severity candidates verified
+		versions amx go kitty notifier notifier_version companion_app tmux_source tmux_min
+		duration_ms live_sessions attached_sessions
 	`)
 )
 
@@ -257,9 +263,15 @@ func isShareEvidenceScalar(key, value string) bool {
 	switch key {
 	case "attempt", "daemon_sequence", "generation", "render_generation", "source_sequence", "process_pid",
 		"withdrawn_facts", "cleared_subagents", "process_exits", "last_process_exit_at",
-		"attempted_processes", "unknown_processes", "origin_window_id":
+		"attempted_processes", "unknown_processes", "origin_window_id",
+		// Runtime reconciliation edges: counts of sessions and of what a
+		// pass changed.
+		"live_sessions", "attached_sessions", "servers", "ended", "released", "detached", "consecutive_failures":
 		_, err := strconv.ParseUint(value, 10, 64)
 		return err == nil
+	case "duration_ms":
+		number, err := strconv.ParseFloat(value, 64)
+		return err == nil && number >= 0 && len(value) <= 16
 	case "pipe_mode", "before_looping", "after_looping", "synthesized_stop":
 		_, err := strconv.ParseBool(value)
 		return err == nil
@@ -324,6 +336,9 @@ func isShareStringField(key string) bool {
 		"process_harness", "process_observation", "process_mode", "terminal_hook_evidence", "last_process_exit_reason",
 		"last_process_exit_observation", "before_icon", "after_icon", "before_source_kind", "after_source_kind",
 		"journal_detail",
+		// Backend and runtime health: fixed vocabularies and release numbers.
+		"failure_class", "launch_backend", "severity", "min_version", "amx", "go", "tmux", "kitty", "daemon",
+		"notifier", "notifier_version", "companion_app", "tmux_source", "tmux_min",
 		// Closed enums published by the ASL diagnostics export and by the
 		// cross-system correlation derived from it. Each is a fixed vocabulary
 		// on both sides of the pairing, and each is still gated on the safe

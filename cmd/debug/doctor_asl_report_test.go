@@ -158,8 +158,8 @@ func TestStrictDoctorFailsForAnUnavailableRequiredIntegration(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatalf("decode report: %v\n%s", err, out.String())
 	}
-	if report.SchemaVersion != 6 {
-		t.Errorf("schema_version = %d, want 6", report.SchemaVersion)
+	if report.SchemaVersion != 7 {
+		t.Errorf("schema_version = %d, want 7", report.SchemaVersion)
 	}
 	if report.Healthy {
 		t.Error("healthy = true despite an unavailable required integration")

@@ -127,9 +127,9 @@ func TestDoctorBrokenScreenPatternOverrideWarnsWithoutFailingStrict(t *testing.T
 	// v3 was bumped for screenstate_persistent_decline, a FAILURE identifier,
 	// v4 for kitty_snapshot_stale, and v5 for the companion identifiers. This
 	// warning-severity finding is not what moved any of them and must never
-	// move the version again.
-	if report.SchemaVersion != 6 {
-		t.Errorf("schema_version = %d; want 6", report.SchemaVersion)
+	// move the version again (v7 is the backend and runtime identifiers).
+	if report.SchemaVersion != 7 {
+		t.Errorf("schema_version = %d; want 7", report.SchemaVersion)
 	}
 	if !report.Healthy {
 		t.Errorf("a warning-severity finding must not make the report unhealthy: %+v", report.Findings)

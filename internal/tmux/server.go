@@ -16,6 +16,11 @@
 // its socket, so installing another tmux never changes what live sessions run
 // on or what talks to them.
 //
+// Every command is one short-lived tmux client process, and a program runs at
+// most MaxClientCommands of them at once (gate.go); the rest wait, inside the
+// command's own timeout. Stats reports that activity and FailureClass names a
+// failure in a fixed vocabulary, which is all a diagnostic may publish of one.
+//
 // This package is the only place that spells tmux commands or targets.
 package tmux
 
@@ -348,8 +353,15 @@ func (s *Server) runChain(cmds [][]string) (string, error) {
 			shown = append(shown, a)
 		}
 	}
+	// The timeout covers the wait for a client slot as well as the client
+	// itself, so a caller never waits longer than it would have for a server
+	// that did not answer.
 	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
 	defer cancel()
+	release, err := clients.acquire(ctx)
+	if err != nil {
+		return "", &CommandError{Args: shown, Err: fmt.Errorf("timed out after %s: %w", s.timeout, err)}
+	}
 	c := exec.CommandContext(ctx, s.binary, args...)
 	c.Env = clientEnv(os.Environ())
 	c.Dir = s.dir
@@ -357,10 +369,12 @@ func (s *Server) runChain(cmds [][]string) (string, error) {
 	var stdout, stderr bytes.Buffer
 	c.Stdout = &stdout
 	c.Stderr = &stderr
-	err := c.Run()
-	if ctx.Err() != nil {
+	err = c.Run()
+	timedOut := ctx.Err() != nil
+	if timedOut {
 		err = fmt.Errorf("timed out after %s: %w", s.timeout, ctx.Err())
 	}
+	release(err != nil, timedOut)
 	if err != nil {
 		return stdout.String(), &CommandError{Args: shown, Stderr: stderr.String(), Err: err}
 	}

@@ -23,6 +23,16 @@ const doctorSuppressionWindow = 15 * time.Minute
 
 // doctorReportSchemaVersion versions the `amx doctor --json` payload.
 //
+// v7 adds the top-level `backend` and `versions` blocks, `daemon.runtime`,
+// and the findings derived from them: `backend_tmux_unavailable`,
+// `backend_server_unreadable`, `backend_server_binary_unknown`,
+// `backend_server_keeps_previous_tmux` (the codes of `amx backend status`,
+// prefixed), `runtime_reconcile_stale`, `runtime_reconcile_failing`,
+// `screen_capture_failing`, and `tmux_client_timeouts`. Two of them can be
+// failures (a tmux that cannot be used, or a server that does not answer,
+// where launches go to tmux), which is the case the policy below bumps for.
+// No identifier that predates v7 changed.
+//
 // v6 adds the `asl_starting` (warning) finding, raised instead of
 // `asl_unavailable` while the daemon's bridge has not finished its first
 // handshake, which is the state every daemon restart passes through. Like v5
@@ -53,7 +63,7 @@ const doctorSuppressionWindow = 15 * time.Minute
 // not recognize as fatal would start failing on conditions a v1 daemon never
 // reported. The two identifiers that predate it, `asl_unavailable` and
 // `asl_read_only`, keep their exact names and meanings.
-const doctorReportSchemaVersion = 6
+const doctorReportSchemaVersion = 7
 
 var (
 	newDoctorDaemonClient = cli.NewDaemonExportClient
@@ -67,6 +77,7 @@ var (
 	doctorNow             = time.Now
 	doctorCLIBuild        = buildinfo.Current
 	doctorDiagnosticPaths = diagnostics.DefaultPaths
+	doctorGetenv          = os.Getenv
 	doctorConfigModTime   = func() (time.Time, error) {
 		info, err := os.Stat(config.DefaultConfigPath())
 		if err != nil {
@@ -89,6 +100,11 @@ type doctorReport struct {
 	Daemon        doctorDaemonStatus `json:"daemon"`
 	CLIBuild      buildinfo.Info     `json:"cli_build"`
 	Findings      []doctorFinding    `json:"findings"`
+	// Backend is the tmux backend setup as `amx backend status` reports it,
+	// read by this process, so it is present with the daemon down.
+	Backend cli.BackendStatus `json:"backend"`
+	// Versions names every release this installation depends on.
+	Versions doctorVersions `json:"versions"`
 	// ASLIntegration answers the six pairing dimensions separately. It is
 	// always present, because "there is no integration configured" is one of
 	// the answers rather than a reason to omit the block.
@@ -127,6 +143,10 @@ type doctorDaemonStatus struct {
 	// Companion lists the connected companion subscribers. Omitted by a daemon
 	// that predates the companion protocol.
 	Companion *protocol.CompanionHealth `json:"companion,omitempty"`
+	// Runtime is the daemon's runtime-session and backend work:
+	// reconciliation, attachment, screen reads, and tmux client activity.
+	// Omitted by a daemon that predates the block.
+	Runtime *protocol.RuntimeHealth `json:"runtime,omitempty"`
 }
 
 // DoctorCommand returns the `doctor` command so the root command can register
@@ -135,7 +155,7 @@ func DoctorCommand() *cobra.Command { return doctorCmd }
 
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
-	Short: "Diagnose daemon, Kitty, hook, renderer, and invariant health",
+	Short: "Diagnose daemon, Kitty, backend, hook, renderer, and invariant health",
 	Args:  cobra.NoArgs,
 	// A strict-mode health failure is a structured result (cli.ExitError), not a
 	// usage problem; Execute owns the stderr line and process status.
@@ -193,6 +213,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		ScreenPatterns:  health.ScreenPatterns,
 		KittySnapshot:   health.KittySnapshot,
 		Companion:       health.Companion,
+		Runtime:         health.Runtime,
 	}
 	if health.Alive {
 		if _, err := fmt.Fprintf(textOut, "daemon: running (pid %d, uptime %s)\n", health.PID, health.Uptime.Round(time.Second)); err != nil {
@@ -257,9 +278,21 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
+	// The backend is read by this process and so is reported with the daemon
+	// down. It is read before Kitty is asked because it decides what a Kitty
+	// that does not answer means.
+	report.Backend = doctorBackendStatus()
+
 	var kittyErr error
 	windows, kittyErr = newDoctorKitty().ListWindows()
-	if kittyErr != nil {
+	if kittyErr != nil && kittyNotInUse(report.Backend) {
+		// Launches go to tmux and this is not a Kitty window: there is no
+		// Kitty to ask, which is how a desktop-only installation looks.
+		if _, err := fmt.Fprintln(textOut, "kitty: not in use (launches go to tmux, and no Kitty is listening here)"); err != nil {
+			return err
+		}
+		addFinding(severityInfo, "kitty", "Kitty was not asked for its windows: launches go to tmux and KITTY_LISTEN_ON is not set")
+	} else if kittyErr != nil {
 		if _, err := fmt.Fprintf(textOut, "kitty: unavailable (%s)\n", kittyErr); err != nil {
 			return err
 		}
@@ -269,6 +302,19 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		if _, err := fmt.Fprintf(textOut, "kitty: ok (%s)\n", cli.CountOf(len(windows), "OS window", "OS windows")); err != nil {
 			return err
 		}
+	}
+	// What the daemon does for the backend's sessions follows when it answered.
+	if err := writeDoctorBackend(textOut, report.Backend, addFinding); err != nil {
+		return err
+	}
+	if health.Alive {
+		if err := writeDoctorRuntime(textOut, health.Runtime, addFinding); err != nil {
+			return err
+		}
+	}
+	report.Versions = collectDoctorVersions(report.CLIBuild, health, report.Backend)
+	if _, err := fmt.Fprintf(textOut, "versions: %s\n", report.Versions.summary()); err != nil {
+		return err
 	}
 	if err := writeDoctorNativeLogs(textOut, windows, kittyOK, func(format string, args ...any) {
 		addFinding(severityWarning, "native_logging", format, args...)

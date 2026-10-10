@@ -1,0 +1,30 @@
+$ AMX_PERF_TESTS=1 AMX_TMUX=macos/Vendor/tmux/bin/tmux go test -count=1 -v -run TestPerformance_ ./internal/daemon
+# 2026-10-10T19:04:50Z Apple M2 Ultra, 24 cores, macOS 27.0.1 arm64; packaged tmux sha256 51f8bc96377bb9c7 tmux 3.7c
+=== RUN   TestPerformance_FleetBudgets
+=== RUN   TestPerformance_FleetBudgets/1-sessions-idle
+    performance_fleet_test.go:306: tmux 3.7c: launch 77ms; pass p50 5.0ms p95 5.5ms max 6.1ms (1.00 tmux clients per pass); read p50 4.8ms p95 5.3ms max 5.3ms; sweep of 1 p95 5.3ms; 4-wide round p95 5.1ms; tick p95 10.8ms of 2s; at most 1 clients at once; server 4.0% CPU, 4.4 MiB; clients 150ms CPU over 250ms
+=== RUN   TestPerformance_FleetBudgets/1-sessions-output
+    performance_fleet_test.go:306: tmux 3.7c: launch 51ms; pass p50 5.6ms p95 6.0ms max 6.5ms (1.00 tmux clients per pass); read p50 5.5ms p95 6.0ms max 6.0ms; sweep of 1 p95 6.0ms; 4-wide round p95 6.2ms; tick p95 12.0ms of 2s; at most 1 clients at once; server 98.0% CPU, 28.9 MiB; clients 174ms CPU over 286ms
+=== RUN   TestPerformance_FleetBudgets/10-sessions-idle
+    performance_fleet_test.go:306: tmux 3.7c: launch 469ms; pass p50 5.3ms p95 5.6ms max 6.0ms (1.00 tmux clients per pass); read p50 4.8ms p95 5.3ms max 5.7ms; sweep of 10 p95 50.2ms; 4-wide round p95 18.3ms; tick p95 55.8ms of 2s; at most 4 clients at once; server 4.9% CPU, 4.6 MiB; clients 715ms CPU over 821ms
+=== RUN   TestPerformance_FleetBudgets/10-sessions-output
+    performance_fleet_test.go:306: tmux 3.7c: launch 502ms; pass p50 7.6ms p95 8.3ms max 8.6ms (1.00 tmux clients per pass); read p50 6.6ms p95 7.2ms max 7.6ms; sweep of 10 p95 68.4ms; 4-wide round p95 25.7ms; tick p95 76.7ms of 2s; at most 4 clients at once; server 99.4% CPU, 254.3 MiB; clients 802ms CPU over 1127ms
+=== RUN   TestPerformance_FleetBudgets/30-sessions-idle
+    performance_fleet_test.go:306: tmux 3.7c: launch 1485ms; pass p50 6.0ms p95 6.8ms max 7.7ms (1.00 tmux clients per pass); read p50 4.9ms p95 5.4ms max 9.0ms; sweep of 30 p95 153.7ms; 4-wide round p95 48.6ms; tick p95 160.5ms of 2s; at most 4 clients at once; server 7.9% CPU, 4.9 MiB; clients 2021ms CPU over 2146ms
+=== RUN   TestPerformance_FleetBudgets/30-sessions-output
+    performance_fleet_test.go:306: tmux 3.7c: launch 1793ms; pass p50 13.7ms p95 14.6ms max 14.8ms (1.00 tmux clients per pass); read p50 9.6ms p95 10.4ms max 10.9ms; sweep of 30 p95 293.4ms; 4-wide round p95 86.4ms; tick p95 308.0ms of 2s; at most 4 clients at once; server 100.0% CPU, 702.5 MiB; clients 2178ms CPU over 4121ms
+--- PASS: TestPerformance_FleetBudgets (18.17s)
+    --- PASS: TestPerformance_FleetBudgets/1-sessions-idle (0.42s)
+    --- PASS: TestPerformance_FleetBudgets/1-sessions-output (1.41s)
+    --- PASS: TestPerformance_FleetBudgets/10-sessions-idle (1.49s)
+    --- PASS: TestPerformance_FleetBudgets/10-sessions-output (2.88s)
+    --- PASS: TestPerformance_FleetBudgets/30-sessions-idle (4.14s)
+    --- PASS: TestPerformance_FleetBudgets/30-sessions-output (7.83s)
+=== RUN   TestPerformance_StartupPublicationBudgetWithHugeMalformedIndex
+    performance_test.go:89: startup publication with huge malformed index: 44.655625ms
+--- PASS: TestPerformance_StartupPublicationBudgetWithHugeMalformedIndex (0.07s)
+=== RUN   TestPerformance_ShutdownJoinBudget
+    performance_test.go:141: shutdown request to joined Run return: 34.357292ms
+--- PASS: TestPerformance_ShutdownJoinBudget (0.20s)
+PASS
+ok  	github.com/sglavoie/agentmux/internal/daemon	18.699s

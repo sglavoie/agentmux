@@ -151,6 +151,9 @@ func (h *Handler) handleHealth() protocol.Response {
 	// degraded reason a daemon already had.
 	resp.KittySnapshot = h.kittySnapshotStatus(time.Now())
 	resp.Companion = h.companionHealth()
+	// Published unconditionally, like the Kitty block: a daemon with no
+	// runtime session still says that its reconciliation runs.
+	resp.Runtime = h.runtimeHealthSnapshot(time.Now())
 	return resp
 }
 

@@ -1,0 +1,113 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-10-10T19:09:26.798418Z",
+  "mode": "share",
+  "local_only": false,
+  "selector": {
+    "after": "[redacted]",
+    "before": "[redacted]"
+  },
+  "entries": [
+    {
+      "member": "status.json",
+      "source": "debug status snapshot",
+      "decision": "included",
+      "transform": "structured redaction",
+      "bytes": 26969
+    },
+    {
+      "member": "doctor.json",
+      "source": "doctor snapshot",
+      "decision": "included",
+      "transform": "structured redaction",
+      "bytes": 11777
+    },
+    {
+      "member": "versions.json",
+      "source": "CLI and daemon build facts",
+      "decision": "included",
+      "transform": "identifiers hashed in share mode",
+      "bytes": 632
+    },
+    {
+      "member": "configuration.json",
+      "source": "effective configuration facts",
+      "decision": "included",
+      "transform": "names and paths omitted",
+      "bytes": 413
+    },
+    {
+      "member": "causal-records.json",
+      "source": "diagnostic journal",
+      "decision": "included",
+      "transform": "tolerant read and structured redaction",
+      "bytes": 995299
+    },
+    {
+      "member": "asl-records.json",
+      "source": "applicable diagnostic journal records",
+      "decision": "included",
+      "transform": "ASL/run filter and structured redaction",
+      "bytes": 22743
+    },
+    {
+      "member": "asl-export.json",
+      "source": "agent-session-loop public sanitized diagnostics export",
+      "decision": "unavailable",
+      "reason": "not-requested"
+    },
+    {
+      "member": "asl-correlation.json",
+      "source": "cross-system causal correlation",
+      "decision": "included",
+      "transform": "derived join over this bundle's own journal window and the ASL export",
+      "bytes": 1338
+    },
+    {
+      "member": "(none)",
+      "source": "agent-session-loop internal state files",
+      "decision": "dropped",
+      "reason": "state.json, events.jsonl and mailbox.jsonl are private formats; only the public sanitized export is read"
+    },
+    {
+      "member": "explanation.json",
+      "source": "causal explanation",
+      "decision": "included",
+      "transform": "bounded pure offline explanation and structured redaction",
+      "bytes": 20892
+    },
+    {
+      "member": "native-excerpts.jsonl",
+      "source": "managed native logs",
+      "decision": "unavailable",
+      "reason": "no matching recognized redacted records"
+    },
+    {
+      "member": "(none)",
+      "source": "raw hook captures",
+      "decision": "dropped",
+      "reason": "raw capture material is never an archive input"
+    },
+    {
+      "member": "(none)",
+      "source": "raw native logs",
+      "decision": "transformed",
+      "reason": "only redacted excerpts may be included"
+    },
+    {
+      "member": "manifest.json",
+      "source": "redaction and inclusion manifest",
+      "decision": "included",
+      "transform": "controlled metadata"
+    }
+  ],
+  "redaction_policy": [
+    "drop structured fields outside the share allowlist",
+    "drop prompt tool message transcript payload credential and secret fields",
+    "HMAC identifiers with the private local diagnostic key",
+    "replace filesystem paths with root aliases without retaining path tails",
+    "extract only controlled timestamp level status error-class and hashed component values from native logs"
+  ],
+  "truncated": false,
+  "raw_sources": "raw hook captures and raw native logs are always excluded"
+}

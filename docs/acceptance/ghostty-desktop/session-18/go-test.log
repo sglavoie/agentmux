@@ -1,0 +1,25 @@
+$ go test -count=1 ./internal/diagnostics/... ./internal/debugger/... ./cmd/debug/... ./internal/tmux/... ./internal/daemon/... ./internal/cli/... ./cmd/session/... ./tui/overview/... .
+# 2026-10-10T19:12:01Z working tree on a3c3cfbb
+ok  	github.com/sglavoie/agentmux/internal/diagnostics	9.999s
+ok  	github.com/sglavoie/agentmux/internal/debugger	9.078s
+ok  	github.com/sglavoie/agentmux/cmd/debug	3.018s
+ok  	github.com/sglavoie/agentmux/internal/tmux	12.169s
+?   	github.com/sglavoie/agentmux/internal/tmux/tmuxtest	[no test files]
+ok  	github.com/sglavoie/agentmux/internal/daemon	22.478s
+ok  	github.com/sglavoie/agentmux/internal/daemon/activity	0.402s
+ok  	github.com/sglavoie/agentmux/internal/daemon/asl	0.322s
+ok  	github.com/sglavoie/agentmux/internal/daemon/companion	0.345s
+ok  	github.com/sglavoie/agentmux/internal/daemon/eventlog	0.362s
+ok  	github.com/sglavoie/agentmux/internal/daemon/events	0.463s
+ok  	github.com/sglavoie/agentmux/internal/daemon/ipc	5.741s
+ok  	github.com/sglavoie/agentmux/internal/daemon/notification	0.956s
+ok  	github.com/sglavoie/agentmux/internal/daemon/probes	0.429s
+ok  	github.com/sglavoie/agentmux/internal/daemon/process	0.910s
+ok  	github.com/sglavoie/agentmux/internal/daemon/protocol	0.295s
+ok  	github.com/sglavoie/agentmux/internal/daemon/rendering	0.422s
+ok  	github.com/sglavoie/agentmux/internal/daemon/state	0.507s
+ok  	github.com/sglavoie/agentmux/internal/cli	0.469s
+ok  	github.com/sglavoie/agentmux/cmd/session	4.374s
+ok  	github.com/sglavoie/agentmux/tui/overview	3.407s
+ok  	github.com/sglavoie/agentmux	0.515s
+exit 0

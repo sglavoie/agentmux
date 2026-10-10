@@ -46,6 +46,10 @@ type StatusOptions struct {
 	CLIBuild    buildinfo.Info
 	Now         time.Time
 	Selector    Selector
+	// Backend is the tmux backend setup as `amx backend status` reports it,
+	// read by the caller. It is carried through as given, so this package
+	// needs to know nothing of tmux; nil omits the block.
+	Backend any
 }
 
 type DaemonReport struct {
@@ -70,6 +74,12 @@ type DaemonReport struct {
 	// Kitty read cannot change this report's verdict out from under a consumer
 	// that has always branched on daemon liveness and build identity.
 	KittySnapshot *protocol.KittySnapshot `json:"kitty_snapshot,omitempty"`
+	// Runtime is the daemon's runtime-session and backend work as health
+	// reports it: reconciliation, attachment, screen reads, and tmux client
+	// activity, all counts, durations, and fixed words. Like the snapshot
+	// above it is reported and not judged here; `amx doctor` owns the
+	// findings. Nil means the daemon predates the block.
+	Runtime *protocol.RuntimeHealth `json:"runtime,omitempty"`
 }
 
 type JournalReport struct {
@@ -88,6 +98,7 @@ type StatusReport struct {
 	Verdict         Verdict                        `json:"verdict"`
 	Healthy         bool                           `json:"healthy"`
 	Daemon          DaemonReport                   `json:"daemon"`
+	Backend         any                            `json:"backend,omitempty"`
 	Hooks           HookReport                     `json:"hooks"`
 	Journal         JournalReport                  `json:"journal"`
 	JournalSnapshot diagnostics.SnapshotStatistics `json:"journal_snapshot"`
@@ -126,8 +137,9 @@ func CollectStatus(ctx context.Context, options StatusOptions) (StatusReport, er
 		Verdict: VerdictHealthy, Alive: health.Alive, Ready: health.Ready,
 		DegradedReason: health.DegradedReason, PID: health.PID,
 		UptimeSeconds: int64(health.Uptime / time.Second), Build: health.Build, CLIBuild: options.CLIBuild,
-		KittySnapshot: health.KittySnapshot,
+		KittySnapshot: health.KittySnapshot, Runtime: health.Runtime,
 	}
+	report.Backend = options.Backend
 	if !health.Alive {
 		report.Daemon.Verdict = VerdictWarning
 		report.add(VerdictWarning, "daemon_unavailable", "daemon is unavailable; persisted diagnostics remain queryable")

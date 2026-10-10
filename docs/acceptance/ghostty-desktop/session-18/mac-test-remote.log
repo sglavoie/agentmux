@@ -1,0 +1,11 @@
+./macos/scripts/test-app.sh Debug
+remote-ui: running 'macos/scripts/test-app.sh' 'Debug' on sglavoie@sebs-macbook-pro.local
+GhosttyKit up to date (ghostty=v1.3.1 commit=332b2aefc6e72d363aa93ab6ecfc86eeeeb5ed28 zig=0.15.2 target=universal patches=855da15192006691)
+** TEST SUCCEEDED **
+	 Executed 377 tests, with 0 failures (0 unexpected) in 25.345 (25.497) seconds
+on Seb’s MacBook Pro; full log: /Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo/macos/DerivedData/test-Debug.log
+exit 0
+
+# excerpt of the full log on the MacBook (grep testAHiddenOrDetachedSurfaceStopsRendering test-Debug.log), read over SSH:
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testAHiddenOrDetachedSurfaceStopsRendering]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testAHiddenOrDetachedSurfaceStopsRendering]' passed (0.055 seconds).

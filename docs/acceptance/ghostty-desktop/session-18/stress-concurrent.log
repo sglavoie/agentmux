@@ -1,0 +1,9 @@
+# The concurrent phase of `just reliability-stress` (the full suite as load, four shards of 'TestRun_|TestServer_|TestHandler_Concurrent' x20 racing it), run alone after TestServer_GoroutinesDrainAfterShutdownRequest was repaired.
+# 2026-10-10T19:21:42Z working tree on a3c3cfbb
+background load suite (go test -count=1 ./...) exited 0
+suite packages ok: 82
+shard 1: ok  	github.com/sglavoie/agentmux/internal/daemon	123.996s
+shard 2: ok  	github.com/sglavoie/agentmux/internal/daemon	123.982s
+shard 3: ok  	github.com/sglavoie/agentmux/internal/daemon	124.031s
+shard 4: ok  	github.com/sglavoie/agentmux/internal/daemon	124.044s
+shards failed: 0

@@ -1,0 +1,117 @@
+{
+  "schema_version": 7,
+  "generated_at": 1791659456,
+  "daemon": {
+    "alive": false,
+    "ready": false
+  },
+  "cli_build": {
+    "version": "0.8.0",
+    "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+    "dirty": true,
+    "build_time": "2026-10-10T18:33:17Z",
+    "go_version": "go1.27.1",
+    "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+  },
+  "findings": [
+    {
+      "severity": "failure",
+      "check": "daemon_unreachable",
+      "message": "daemon is unreachable"
+    },
+    {
+      "severity": "failure",
+      "check": "socket",
+      "message": "daemon socket is unavailable: stat /tmp/amxs18/home2/.local/share/agent-mux/daemon.sock: no such file or directory"
+    },
+    {
+      "severity": "info",
+      "check": "kitty",
+      "message": "Kitty was not asked for its windows: launches go to tmux and KITTY_LISTEN_ON is not set"
+    },
+    {
+      "severity": "failure",
+      "check": "backend_tmux_unavailable",
+      "message": "The tmux backend cannot start agents: no supported tmux found (need 3.5 or newer):\n  bundled runtime: not present (this amx was not started by Agent Mux.app)\n  PATH: tmux not found Install tmux 3.5 or newer (`brew install tmux`), set [defaults.tmux] path in config.toml, or run Agent Mux.app, which bundles one."
+    },
+    {
+      "severity": "failure",
+      "check": "hooks",
+      "message": "hooks for work require attention: installed hook file is drifted; run `amx config hooks-sync`; claude CLI is not on PATH; no hook event has been observed in the diagnostic journal for home dir /tmp/amxs18/home/.claude-w"
+    }
+  ],
+  "backend": {
+    "launch_backend": "tmux",
+    "tmux": {
+      "available": false,
+      "verified": false,
+      "min_version": "3.5",
+      "candidates": [
+        {
+          "source": "bundled",
+          "problem": "not present (this amx was not started by Agent Mux.app)"
+        },
+        {
+          "source": "path",
+          "problem": "tmux not found"
+        }
+      ]
+    },
+    "server": {
+      "directory": "/tmp/amxs18/tmp2/agent-mux-501",
+      "socket": "/tmp/amxs18/tmp2/agent-mux-501/tmux.sock",
+      "running": false,
+      "sessions": 0,
+      "agents": 0
+    },
+    "problems": [
+      {
+        "code": "tmux_unavailable",
+        "severity": "error",
+        "message": "The tmux backend cannot start agents: no supported tmux found (need 3.5 or newer):\n  bundled runtime: not present (this amx was not started by Agent Mux.app)\n  PATH: tmux not found",
+        "hint": "Install tmux 3.5 or newer (`brew install tmux`), set [defaults.tmux] path in config.toml, or run Agent Mux.app, which bundles one."
+      }
+    ]
+  },
+  "versions": {
+    "amx": "0.8.0",
+    "go": "go1.27.1",
+    "tmux_min": "3.5"
+  },
+  "asl_integration": {
+    "mode": "disabled",
+    "dimensions": [
+      {
+        "name": "shell_resolution",
+        "status": "not_applicable",
+        "detail": "the integration is disabled by defaults.asl.enabled"
+      },
+      {
+        "name": "daemon_resolution",
+        "status": "not_applicable",
+        "detail": "the integration is disabled by defaults.asl.enabled"
+      },
+      {
+        "name": "contract",
+        "status": "not_applicable",
+        "detail": "the integration is disabled by defaults.asl.enabled"
+      },
+      {
+        "name": "projection",
+        "status": "not_applicable",
+        "detail": "the integration is disabled by defaults.asl.enabled"
+      },
+      {
+        "name": "freshness",
+        "status": "not_applicable",
+        "detail": "the integration is disabled by defaults.asl.enabled"
+      },
+      {
+        "name": "delivery",
+        "status": "not_applicable",
+        "detail": "the integration is disabled by defaults.asl.enabled"
+      }
+    ]
+  },
+  "healthy": false
+}

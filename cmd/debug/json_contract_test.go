@@ -100,8 +100,11 @@ func TestDoctorJSONCommandSurfaceIsVersioned(t *testing.T) {
 	// v3 is the screen-classifier bump: `screenstate_persistent_decline` is a
 	// new failure identifier. `screenstate_override_invalid` shipped in the
 	// same work at warning severity and required no bump of its own.
-	if doctorReportSchemaVersion != 6 {
-		t.Fatalf("unexpected doctor JSON schema version %d; want 6", doctorReportSchemaVersion)
+	//
+	// v7 is the backend bump: `backend_tmux_unavailable` and
+	// `backend_server_unreadable` can be failures where launches go to tmux.
+	if doctorReportSchemaVersion != 7 {
+		t.Fatalf("unexpected doctor JSON schema version %d; want 7", doctorReportSchemaVersion)
 	}
 
 	// Every stable finding identifier a doctor report can carry. Adding one is
@@ -117,6 +120,10 @@ func TestDoctorJSONCommandSurfaceIsVersioned(t *testing.T) {
 		checkMalformedProcessIdentity, checkStopHoldStuck,
 		checkScreenPersistentDecline, checkScreenPatternOverrideInvalid,
 		checkKittySnapshotStale, checkCompanionApp, checkCompanionBuildMismatch,
+		checkRuntimeReconcileStale, checkRuntimeReconcileFailing,
+		checkScreenCaptureFailing, checkTmuxClientTimeouts,
+		checkBackendPrefix + "tmux_unavailable", checkBackendPrefix + "server_unreadable",
+		checkBackendPrefix + "server_binary_unknown", checkBackendPrefix + "server_keeps_previous_tmux",
 	}
 	seen := make(map[string]bool, len(checks))
 	for _, check := range checks {

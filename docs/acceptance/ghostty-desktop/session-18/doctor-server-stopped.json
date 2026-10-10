@@ -1,0 +1,574 @@
+{
+  "schema_version": 7,
+  "generated_at": 1791659413,
+  "daemon": {
+    "alive": true,
+    "ready": false,
+    "degraded_reason": "initial kitty snapshot failed: kitty command failed: kitten @ ls\n  error: exec: \"kitten\": executable file not found in $PATH",
+    "pid": 35416,
+    "uptime_seconds": 280,
+    "build": {
+      "version": "0.8.0",
+      "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+      "dirty": true,
+      "build_time": "2026-10-10T18:33:17Z",
+      "go_version": "go1.27.1",
+      "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+    },
+    "metrics": {
+      "accepted": 164,
+      "duplicate": 0,
+      "rejected": 0,
+      "queue_full": 0,
+      "expired_dedupe": 0,
+      "queue_last_wait_ns": 2250,
+      "queue_max_wait_ns": 38667
+    },
+    "notification": {
+      "enabled": false,
+      "available": false,
+      "interactive": false,
+      "backend": "none",
+      "reason": "disabled"
+    },
+    "asl": {
+      "mode": "disabled",
+      "command": "asl",
+      "available": false,
+      "mutations_enabled": false,
+      "restart_count": 0,
+      "reason": "disabled by defaults.asl.enabled",
+      "metrics": {
+        "frames_read": 0,
+        "frames_written": 0,
+        "bytes_read": 0,
+        "bytes_written": 0,
+        "restarts": 0,
+        "refusals": 0
+      }
+    },
+    "asl_reconcile": {
+      "state_root": "/tmp/amxs18/home/.local/state/agent-session-loop",
+      "lag_seconds": 4.700078292,
+      "max_gap_seconds": 14.000006167,
+      "interval_seconds": 10,
+      "sweeps": 25,
+      "sweep_errors": 0,
+      "plans_present": 0,
+      "plans_confirmed_absent": 0,
+      "plans_indeterminate": 0,
+      "invalid_projections": 0,
+      "unsupported_contracts": 0,
+      "unreadable_states": 0,
+      "missing_projections": 0,
+      "process_unverified": 0,
+      "confirmed_misses": 0,
+      "indeterminate_leases": 0,
+      "retired_leases": 0,
+      "stale_observations": 0
+    },
+    "asl_hook_delivery": {
+      "accepted": 0,
+      "quarantined": 0
+    },
+    "screen_patterns": {
+      "sources": {
+        "claude": "embedded",
+        "codex": "embedded",
+        "contextlimit": "embedded",
+        "copilot": "embedded"
+      }
+    },
+    "kitty_snapshot": {
+      "ready": false,
+      "age_ms": 0,
+      "coordinator": {
+        "attempts": 133,
+        "failures": 133,
+        "consecutive_failures": 133,
+        "last_failure_at": 1791659413,
+        "last_error_class": "command"
+      }
+    },
+    "companion": {
+      "subscribers": 0,
+      "notification_backend_connected": false
+    },
+    "runtime": {
+      "reconcile": {
+        "enabled": true,
+        "interval_seconds": 30,
+        "passes": 122,
+        "failures": 4,
+        "consecutive_failures": 4,
+        "age_seconds": 6.695754042,
+        "last_duration_ms": 6002.03,
+        "max_duration_ms": 6002.445,
+        "failure_class": "timeout",
+        "ended": 52,
+        "released": 0,
+        "detached": 0
+      },
+      "sessions": {
+        "known": true,
+        "live": 30,
+        "tmux": 30,
+        "servers": 1,
+        "attached": 0,
+        "unattached": 30
+      },
+      "capture": {
+        "reads": 0,
+        "failures": 0,
+        "consecutive_failures": 0,
+        "last_duration_ms": 0,
+        "max_duration_ms": 0
+      },
+      "tmux_client": {
+        "limit": 4,
+        "commands": 285,
+        "failures": 9,
+        "timeouts": 4,
+        "in_flight": 0,
+        "max_in_flight": 1,
+        "queued": 0,
+        "max_queue_ms": 0,
+        "max_duration_ms": 6001.379
+      }
+    }
+  },
+  "cli_build": {
+    "version": "0.8.0",
+    "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+    "dirty": true,
+    "build_time": "2026-10-10T18:33:17Z",
+    "go_version": "go1.27.1",
+    "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+  },
+  "findings": [
+    {
+      "severity": "warning",
+      "check": "daemon_degraded",
+      "message": "daemon started degraded: initial kitty snapshot failed: kitty command failed: kitten @ ls\n  error: exec: \"kitten\": executable file not found in $PATH"
+    },
+    {
+      "severity": "info",
+      "check": "kitty",
+      "message": "Kitty was not asked for its windows: launches go to tmux and KITTY_LISTEN_ON is not set"
+    },
+    {
+      "severity": "failure",
+      "check": "backend_server_unreadable",
+      "message": "The private tmux server is running but did not answer: tmux list-sessions -F #{pid}\u001f#{start_time}: timed out after 5s: context deadline exceeded Run `amx backend status` again; if it keeps failing, `amx backend stop --yes` ends the server and every agent in it."
+    },
+    {
+      "severity": "warning",
+      "check": "runtime_reconcile_failing",
+      "message": "the last 4 reconciliation passes failed (timeout): agents that exit or lose their terminal are not noticed until one succeeds. `amx backend status` reads the server directly"
+    },
+    {
+      "severity": "info",
+      "check": "tmux_client_timeouts",
+      "message": "4 of the daemon's 285 tmux client commands timed out since it started (longest wait for a slot 0ms, slowest command 6001ms)"
+    },
+    {
+      "severity": "warning",
+      "check": "hooks_unverified",
+      "message": "hooks for work are unverified: CLI 2.1.0 is older than verified hook contract 2.1.195"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627776,
+      "message": "window closed at 2026-10-10T13:06:11-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627777,
+      "message": "window closed at 2026-10-10T13:06:49-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627778,
+      "message": "window closed at 2026-10-10T13:07:27-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627779,
+      "message": "window closed at 2026-10-10T13:07:27-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627780,
+      "message": "window closed at 2026-10-10T13:07:27-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627781,
+      "message": "window closed at 2026-10-10T13:07:27-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627782,
+      "message": "window closed at 2026-10-10T13:07:27-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627783,
+      "message": "window closed at 2026-10-10T13:07:27-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627784,
+      "message": "window closed at 2026-10-10T13:07:27-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627785,
+      "message": "window closed at 2026-10-10T13:07:27-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627786,
+      "message": "window closed at 2026-10-10T13:07:27-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627787,
+      "message": "window closed at 2026-10-10T13:07:27-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627788,
+      "message": "window closed at 2026-10-10T13:08:07-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627789,
+      "message": "window closed at 2026-10-10T13:08:07-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627790,
+      "message": "window closed at 2026-10-10T13:08:07-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627791,
+      "message": "window closed at 2026-10-10T13:08:07-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627792,
+      "message": "window closed at 2026-10-10T13:08:07-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627793,
+      "message": "window closed at 2026-10-10T13:08:07-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627794,
+      "message": "window closed at 2026-10-10T13:08:07-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627795,
+      "message": "window closed at 2026-10-10T13:08:07-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627796,
+      "message": "window closed at 2026-10-10T13:08:07-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627797,
+      "message": "window closed at 2026-10-10T13:08:07-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627798,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627799,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627800,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627801,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627802,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627803,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627804,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627805,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627806,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627807,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627808,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627809,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627810,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627811,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627812,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627813,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627814,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627815,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627816,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627817,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627818,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627819,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627820,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627821,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627822,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627823,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627824,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627825,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627826,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    },
+    {
+      "severity": "info",
+      "check": "closed_tombstone",
+      "window_id": 1099511627827,
+      "message": "window closed at 2026-10-10T13:08:47-06:00; metadata retained for post-mortem export only"
+    }
+  ],
+  "backend": {
+    "launch_backend": "tmux",
+    "tmux": {
+      "available": true,
+      "path": "/tmp/amxs18/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux",
+      "version": "3.7c",
+      "source": "bundled",
+      "verified": true,
+      "min_version": "3.5",
+      "candidates": [
+        {
+          "source": "bundled",
+          "path": "/tmp/amxs18/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux",
+          "version": "3.7c"
+        },
+        {
+          "source": "path",
+          "problem": "tmux not found"
+        }
+      ]
+    },
+    "server": {
+      "directory": "/tmp/amxs18/tmp/agent-mux-501",
+      "socket": "/tmp/amxs18/tmp/agent-mux-501/tmux.sock",
+      "running": true,
+      "binary": "/tmp/amxs18/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux",
+      "sessions": 0,
+      "agents": 0
+    },
+    "problems": [
+      {
+        "code": "server_unreadable",
+        "severity": "error",
+        "message": "The private tmux server is running but did not answer: tmux list-sessions -F #{pid}\u001f#{start_time}: timed out after 5s: context deadline exceeded",
+        "hint": "Run `amx backend status` again; if it keeps failing, `amx backend stop --yes` ends the server and every agent in it."
+      }
+    ]
+  },
+  "versions": {
+    "amx": "0.8.0",
+    "daemon": "0.8.0",
+    "go": "go1.27.1",
+    "tmux": "3.7c",
+    "tmux_source": "bundled",
+    "tmux_min": "3.5"
+  },
+  "asl_integration": {
+    "mode": "disabled",
+    "dimensions": [
+      {
+        "name": "shell_resolution",
+        "status": "not_applicable",
+        "detail": "the integration is disabled by defaults.asl.enabled"
+      },
+      {
+        "name": "daemon_resolution",
+        "status": "not_applicable",
+        "detail": "the integration is disabled by defaults.asl.enabled"
+      },
+      {
+        "name": "contract",
+        "status": "not_applicable",
+        "detail": "the integration is disabled by defaults.asl.enabled"
+      },
+      {
+        "name": "projection",
+        "status": "not_applicable",
+        "detail": "the integration is disabled by defaults.asl.enabled"
+      },
+      {
+        "name": "freshness",
+        "status": "not_applicable",
+        "detail": "the integration is disabled by defaults.asl.enabled"
+      },
+      {
+        "name": "delivery",
+        "status": "not_applicable",
+        "detail": "the integration is disabled by defaults.asl.enabled"
+      }
+    ]
+  },
+  "healthy": false
+}

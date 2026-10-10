@@ -147,6 +147,9 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 		handler.SetRuntimeSessionDirectory(reader)
 		handler.SetRuntimeSessionLabeler(TmuxRuntimeSessionLabel)
 		handler.SetRuntimeSessionReconciler(NewTmuxRuntimeReconciler(store, reader))
+		if recorder != nil {
+			handler.SetRuntimeJournal(recorder.record)
+		}
 	} else {
 		slog.Warn("daemon: runtime-session registry unavailable; managed hooks will be refused", "err", err)
 	}

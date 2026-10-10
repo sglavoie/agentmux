@@ -116,3 +116,89 @@ type ScreenPatternsSnapshot struct {
 	Sources  map[string]string      `json:"sources"`
 	Warnings []ScreenPatternWarning `json:"warnings,omitempty"`
 }
+
+// RuntimeHealth is the health-response view of the runtime sessions and the
+// backend work the daemon does for them: how current its reconciliation with
+// the private servers is, how many sessions it holds and how many have a
+// terminal attached, how its screen reads are going, and how many tmux client
+// processes it has had outstanding. Every field is a count, a duration, or a
+// word from a fixed vocabulary: nothing here is read from a pane, a prompt,
+// or a launch environment, so the block is safe to export as it is.
+type RuntimeHealth struct {
+	Reconcile  RuntimeReconcileHealth `json:"reconcile"`
+	Sessions   RuntimeSessionHealth   `json:"sessions"`
+	Capture    ScreenCaptureHealth    `json:"capture"`
+	TmuxClient TmuxClientHealth       `json:"tmux_client"`
+}
+
+// RuntimeReconcileHealth describes the passes that bring the runtime-session
+// registry in line with the backends.
+type RuntimeReconcileHealth struct {
+	// Enabled is false for a daemon running without a registry, which
+	// reconciles nothing and whose other fields are zero.
+	Enabled bool `json:"enabled"`
+	// IntervalSeconds is how long after a pass the next is due: two seconds,
+	// and up to thirty while passes keep failing.
+	IntervalSeconds float64 `json:"interval_seconds"`
+	Passes          uint64  `json:"passes"`
+	Failures        uint64  `json:"failures"`
+	// ConsecutiveFailures is zero as soon as one pass reads every server.
+	ConsecutiveFailures uint64 `json:"consecutive_failures"`
+	// AgeSeconds is how long ago the last pass finished, computed at read
+	// time; omitted before the first one.
+	AgeSeconds     *float64 `json:"age_seconds,omitempty"`
+	LastDurationMs float64  `json:"last_duration_ms"`
+	MaxDurationMs  float64  `json:"max_duration_ms"`
+	// FailureClass is the kind of the most recent failure, from
+	// tmux.FailureClass or "registry_unreadable"; empty when the last pass
+	// succeeded.
+	FailureClass string `json:"failure_class,omitempty"`
+	// Ended, Released, and Detached total what the passes changed: agents
+	// found exited or lost, ownerships released because the terminal was
+	// gone, and competing terminals detached.
+	Ended    uint64 `json:"ended"`
+	Released uint64 `json:"released"`
+	Detached uint64 `json:"detached"`
+}
+
+// RuntimeSessionHealth counts the live runtime sessions as of the last pass.
+type RuntimeSessionHealth struct {
+	// Known is false until a pass has read the registry, and again whenever
+	// the last one could not.
+	Known bool `json:"known"`
+	Live  int  `json:"live"`
+	Tmux  int  `json:"tmux"`
+	// Servers counts the distinct private servers those sessions run on.
+	Servers int `json:"servers"`
+	// Attached counts sessions a terminal owns; Unattached the rest, which
+	// run with nobody looking.
+	Attached   int `json:"attached"`
+	Unattached int `json:"unattached"`
+}
+
+// ScreenCaptureHealth describes the daemon's own reads of pane screens (the
+// screen probes), whichever backend they went to.
+type ScreenCaptureHealth struct {
+	Reads               uint64 `json:"reads"`
+	Failures            uint64 `json:"failures"`
+	ConsecutiveFailures uint64 `json:"consecutive_failures"`
+	// AgeSeconds is how long ago a read last succeeded; omitted when none
+	// has. A daemon with no active agent reads no screen, so an old capture
+	// is not by itself a fault.
+	AgeSeconds     *float64 `json:"age_seconds,omitempty"`
+	LastDurationMs float64  `json:"last_duration_ms"`
+	MaxDurationMs  float64  `json:"max_duration_ms"`
+}
+
+// TmuxClientHealth is the daemon's tmux client activity (tmux.ClientStats).
+type TmuxClientHealth struct {
+	Limit         int     `json:"limit"`
+	Commands      uint64  `json:"commands"`
+	Failures      uint64  `json:"failures"`
+	Timeouts      uint64  `json:"timeouts"`
+	InFlight      int     `json:"in_flight"`
+	MaxInFlight   int     `json:"max_in_flight"`
+	Queued        uint64  `json:"queued"`
+	MaxQueueMs    float64 `json:"max_queue_ms"`
+	MaxDurationMs float64 `json:"max_duration_ms"`
+}

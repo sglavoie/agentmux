@@ -168,11 +168,11 @@ func TestServer_GoroutinesDrainAfterShutdownRequest(t *testing.T) {
 
 	c := ipc.NewClientWithSocket(socketPath)
 	for i := 0; i < 5; i++ {
-		if _, err := c.Send(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: i + 1, Action: "active"}); err != nil {
+		if _, err := sendWithinGrace(c, protocol.Request{Type: protocol.TypeStateUpdate, WindowID: i + 1, Action: "active"}); err != nil {
 			t.Fatalf("state update %d: %v", i+1, err)
 		}
 	}
-	if resp, err := c.Send(protocol.Request{Type: protocol.TypeShutdown}); err != nil {
+	if resp, err := sendWithinGrace(c, protocol.Request{Type: protocol.TypeShutdown}); err != nil {
 		t.Fatalf("shutdown Send: %v", err)
 	} else if !resp.OK {
 		t.Fatalf("shutdown response: %+v", resp)

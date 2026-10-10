@@ -51,6 +51,13 @@ import (
 type ScreenTextCache struct {
 	observer backend.Observer
 	entries  map[backend.Ref]screenEntry
+	onRead   func(elapsed time.Duration, err error)
+}
+
+// OnRead has fn told of every read that reaches the backend: how long it
+// took and whether it failed. A cached answer reports nothing.
+func (c *ScreenTextCache) OnRead(fn func(elapsed time.Duration, err error)) {
+	c.onRead = fn
 }
 
 // TextReader is the one Kitty capability the Kitty-backed cache needs: read
@@ -83,7 +90,11 @@ func (c *ScreenTextCache) Observe(pane backend.Ref) (backend.Screen, error) {
 	if entry, ok := c.entries[pane]; ok {
 		return entry.screen, entry.err
 	}
+	started := time.Now()
 	screen, err := c.observer.Observe(pane)
+	if c.onRead != nil {
+		c.onRead(time.Since(started), err)
+	}
 	c.entries[pane] = screenEntry{screen: screen, err: err}
 	return screen, err
 }

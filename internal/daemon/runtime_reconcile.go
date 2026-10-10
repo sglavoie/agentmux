@@ -23,6 +23,30 @@ import (
 // runtimeReconcileInterval bounds how often the private servers are read.
 const runtimeReconcileInterval = 2 * time.Second
 
+// runtimeReconcileSlack is how much sooner than its interval a pass may run.
+// The pass is asked for by the maintenance tick, which has the same period:
+// measured against the full interval, a tick that arrives a microsecond early
+// is refused and the servers are read every four seconds instead of two.
+const runtimeReconcileSlack = 200 * time.Millisecond
+
+// runtimeReconcileMaxBackoff is the longest wait between passes while they
+// keep failing. A pass against a server that does not answer holds the
+// maintenance loop for the whole of a client timeout, so asking again every
+// two seconds would leave that loop little time for anything else. The wait
+// doubles with each consecutive failure up to this, and one good pass
+// restores the interval.
+const runtimeReconcileMaxBackoff = 30 * time.Second
+
+// runtimeReconcileWait is how long after a pass the next one is due, given
+// how many passes in a row have failed.
+func runtimeReconcileWait(consecutiveFailures uint64) time.Duration {
+	wait := runtimeReconcileInterval
+	for ; consecutiveFailures > 0 && wait < runtimeReconcileMaxBackoff; consecutiveFailures-- {
+		wait *= 2
+	}
+	return min(wait, runtimeReconcileMaxBackoff)
+}
+
 // RuntimeSessionReconciler brings the runtime-session registry in line with
 // the backends. It runs off stateMu and may start subprocesses.
 type RuntimeSessionReconciler func(now time.Time) (tmux.Report, error)
@@ -46,11 +70,15 @@ func (h *Handler) reconcileRuntimeSessions(now time.Time) {
 	if h.runtimeReconciler == nil {
 		return
 	}
-	if !h.lastRuntimeReconcile.IsZero() && now.Sub(h.lastRuntimeReconcile) < runtimeReconcileInterval && !now.Before(h.lastRuntimeReconcile) {
+	wait := runtimeReconcileWait(h.runtimeReconcileFailures)
+	if !h.lastRuntimeReconcile.IsZero() && now.Sub(h.lastRuntimeReconcile) < wait-runtimeReconcileSlack && !now.Before(h.lastRuntimeReconcile) {
 		return
 	}
 	h.lastRuntimeReconcile = now
+	started := time.Now()
 	report, err := h.runtimeReconciler(now)
+	finished := time.Now()
+	h.runtimeReconcileFailures = h.recordRuntimeReconcile(finished, finished.Sub(started), report, err)
 	if err != nil {
 		slog.Debug("maintenance: runtime session reconciliation incomplete", "err", err)
 	}

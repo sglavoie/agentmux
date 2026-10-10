@@ -194,7 +194,9 @@ overseer-integration asl_root:
 
 # Daemon lifecycle scenarios whose determinism this repository stresses:
 # startup publication, owned-loop shutdown drain, and the concurrent handler
-# state paths. Extend this pattern as new fault scenarios land.
+# state paths, which include health asked while maintenance reconciles a real
+# private tmux server and the probes read its panes. Extend this pattern as new
+# fault scenarios land.
 stress_scenarios := "TestRun_|TestServer_|TestHandler_Concurrent"
 
 # Reliability stress gate. Repeats the daemon lifecycle scenarios in isolation,
@@ -253,8 +255,18 @@ reliability-stress reps="20" shards="4":
     # Budgets last and alone: everything above has finished, so the machine is
     # quiet and a measured overrun means the daemon got slower, not that the
     # stress run was still competing with itself.
+    #
+    # The fleet budgets (1, 10, and 30 tmux agents, idle and printing) are
+    # measured against the tmux the app ships when one has been built
+    # (`just mac-tmux`), so the numbers are of the packaged runtime; without
+    # one they use whatever tmux the runtime resolves, and skip without any.
     echo "== latency budgets (quiet machine) =="
-    AMX_PERF_TESTS=1 go test -count=1 -run 'TestPerformance_' ./internal/daemon
+    packaged_tmux="{{ justfile_directory() }}/macos/Vendor/tmux/bin/tmux"
+    if [ -z "${AMX_TMUX:-}" ] && [ -x "$packaged_tmux" ]; then
+        export AMX_TMUX="$packaged_tmux"
+        echo "-- fleet budgets against the packaged $("$packaged_tmux" -V)"
+    fi
+    AMX_PERF_TESTS=1 go test -count=1 -v -run 'TestPerformance_' ./internal/daemon
 
     echo "reliability-stress: ok"
 

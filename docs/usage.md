@@ -715,6 +715,45 @@ tmux backend unavailable: no supported tmux found (need 3.5 or newer):
 Install tmux 3.5 or newer (`brew install tmux`), set [defaults.tmux] path in config.toml, or run Agent Mux.app, which bundles one.
 ```
 
+`amx doctor` reads the same setup, and with a daemon running adds what the
+daemon is doing for the sessions:
+
+```text
+backend: launches go to tmux; tmux 3.7c (bundled, verified); server running with 30 agents in 30 sessions
+runtime sessions: 30 live (30 on tmux, 1 server), 4 with a terminal attached, 26 unattached; reconciled 1.2s ago in 15ms (412 passes, 0 failed)
+screen captures: 320 read, 2 failed, last good one 1.2s ago (slowest 31ms); tmux clients: 1450 run, at most 2 at once (limit 4), 0 timed out
+versions: amx 0.8.0, daemon 0.8.0, go1.26.0, tmux 3.7c (needs 3.5 or newer), kitty 0.43.1
+```
+
+The `backend:` and `versions:` lines are read by `doctor` itself, so they are
+there with the daemon down. `amx debug status` prints the same lines, and
+`doctor --json` carries them as `backend`, `versions`, and `daemon.runtime`.
+What they can raise, each under a stable identifier:
+
+| Finding | Severity | Means |
+| --- | --- | --- |
+| `backend_tmux_unavailable` | failure where launches go to tmux; warning while a server still runs; a note otherwise | No tmux can be used. The message names each place tried and the fix. |
+| `backend_server_unreadable` | failure where launches go to tmux, else warning | A server is listening but does not answer. Its agents are not counted and not given up on. |
+| `backend_server_binary_unknown` | warning | The running server's tmux is not recorded or no longer exists. |
+| `backend_server_keeps_previous_tmux` | note | The server runs the tmux it was started with; a newer one is used after its last agent ends. |
+| `runtime_reconcile_failing` | warning | Three or more passes in a row could not read a server or the registry (`failure_class` says which: `timeout`, `command_failed`, `registry_unreadable`, ...). Agents that stop are not noticed until one succeeds. |
+| `runtime_reconcile_stale` | warning | No pass finished for thirty seconds past its due time: the daemon's maintenance loop is stalled. |
+| `screen_capture_failing` | warning | The last ten screen reads all failed. |
+| `tmux_client_timeouts` | note | Some of the daemon's tmux clients timed out since it started. |
+
+The daemon reads the private server once every two seconds, with one tmux
+client however many agents there are, and spaces failing passes out to thirty
+seconds so a server that does not answer cannot hold its maintenance loop. No
+program runs more than four tmux clients at once; the rest wait their turn.
+A Kitty that does not answer is a failure wherever Kitty is in use, and a note
+(`kitty`) where launches go to tmux and `KITTY_LISTEN_ON` is not set.
+
+None of this reads a pane. The lines, the JSON, the `daemon.runtime_reconcile`
+journal records (one when passes start failing, one when they recover, one for
+each pass that found an agent stopped), and a share-mode `amx debug bundle`
+hold counts, durations, releases, and words from fixed vocabularies; a bundle
+keeps a problem's code and severity and drops its text and every path.
+
 Agent Mux.app embeds both as views of its workspace window (see
 [the companion app](companion-app.md#dashboard-and-utility-views)). Hosted
 there they launch on tmux, and what would take over the terminal elsewhere —

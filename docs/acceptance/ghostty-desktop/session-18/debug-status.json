@@ -1,0 +1,767 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-10-10T19:09:26.723191Z",
+  "selector": {
+    "after": "0001-01-01T00:00:00Z",
+    "before": "0001-01-01T00:00:00Z"
+  },
+  "verdict": "warning",
+  "healthy": false,
+  "daemon": {
+    "verdict": "warning",
+    "alive": true,
+    "ready": false,
+    "degraded_reason": "initial kitty snapshot failed: kitty command failed: kitten @ ls\n  error: exec: \"kitten\": executable file not found in $PATH",
+    "pid": 35416,
+    "uptime_seconds": 233,
+    "build": {
+      "version": "0.8.0",
+      "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+      "dirty": true,
+      "build_time": "2026-10-10T18:33:17Z",
+      "go_version": "go1.27.1",
+      "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+    },
+    "cli_build": {
+      "version": "0.8.0",
+      "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+      "dirty": true,
+      "build_time": "2026-10-10T18:33:17Z",
+      "go_version": "go1.27.1",
+      "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+    },
+    "build_matches": true,
+    "kitty_snapshot": {
+      "ready": false,
+      "age_ms": 0,
+      "coordinator": {
+        "attempts": 117,
+        "failures": 117,
+        "consecutive_failures": 117,
+        "last_failure_at": 1791659365,
+        "last_error_class": "command"
+      }
+    },
+    "runtime": {
+      "reconcile": {
+        "enabled": true,
+        "interval_seconds": 2,
+        "passes": 117,
+        "failures": 0,
+        "consecutive_failures": 0,
+        "age_seconds": 1.539948375,
+        "last_duration_ms": 14.016,
+        "max_duration_ms": 54.269,
+        "ended": 52,
+        "released": 0,
+        "detached": 0
+      },
+      "sessions": {
+        "known": true,
+        "live": 30,
+        "tmux": 30,
+        "servers": 1,
+        "attached": 0,
+        "unattached": 30
+      },
+      "capture": {
+        "reads": 0,
+        "failures": 0,
+        "consecutive_failures": 0,
+        "last_duration_ms": 0,
+        "max_duration_ms": 0
+      },
+      "tmux_client": {
+        "limit": 4,
+        "commands": 280,
+        "failures": 5,
+        "timeouts": 0,
+        "in_flight": 0,
+        "max_in_flight": 1,
+        "queued": 0,
+        "max_queue_ms": 0,
+        "max_duration_ms": 47.571
+      }
+    }
+  },
+  "backend": {
+    "launch_backend": "tmux",
+    "tmux": {
+      "available": true,
+      "path": "/tmp/amxs18/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux",
+      "version": "3.7c",
+      "source": "bundled",
+      "verified": true,
+      "min_version": "3.5",
+      "candidates": [
+        {
+          "source": "bundled",
+          "path": "/tmp/amxs18/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux",
+          "version": "3.7c"
+        },
+        {
+          "source": "path",
+          "problem": "tmux not found"
+        }
+      ]
+    },
+    "server": {
+      "directory": "/tmp/amxs18/tmp/agent-mux-501",
+      "socket": "/tmp/amxs18/tmp/agent-mux-501/tmux.sock",
+      "running": true,
+      "binary": "/tmp/amxs18/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux",
+      "generation": "40729-1791659327",
+      "sessions": 30,
+      "agents": 30
+    },
+    "problems": []
+  },
+  "hooks": {
+    "verdict": "warning",
+    "profiles": [
+      {
+        "profile": "work",
+        "harness": "claude",
+        "path": "/tmp/amxs18/home/.claude-w/settings.json",
+        "sync": "in_sync",
+        "activation": "unverified",
+        "cli_version": "2.1.0",
+        "verified_cli_version": "2.1.195",
+        "last_seen": "2026-10-10T19:08:49.702322Z",
+        "last_seen_age_seconds": 37,
+        "hook_silence_seconds": 14400,
+        "silent": false,
+        "issues": [
+          {
+            "verdict": "unverified",
+            "code": "cli_older_than_contract",
+            "message": "CLI 2.1.0 is older than verified hook contract 2.1.195"
+          }
+        ],
+        "verdict": "warning"
+      }
+    ],
+    "delivery_failures": {
+      "count": 0
+    }
+  },
+  "journal": {
+    "verdict": "healthy",
+    "enabled": true,
+    "path": "/tmp/amxs18/home/.local/state/agent-mux/journal",
+    "health": {
+      "files": 1,
+      "bytes": 708901,
+      "spool_files": 0,
+      "spool_bytes": 0,
+      "oldest_spool_mod_time": "0001-01-01T00:00:00Z",
+      "legacy_claim_files": 0,
+      "quarantined_files": 0,
+      "corrupt_lines": 0,
+      "records": 512,
+      "earliest_observed_at": "2026-10-10T19:05:33.158543Z",
+      "latest_observed_at": "2026-10-10T19:08:49.872198Z",
+      "observed_schemas": [
+        1
+      ]
+    },
+    "max_bytes": 268435456
+  },
+  "journal_snapshot": {
+    "segment_files_read": 1,
+    "promoted_spool_files_read": 0,
+    "spool_files_read": 0,
+    "bytes_scanned": 708901,
+    "records_scanned": 512,
+    "records_matched": 512,
+    "duplicates_omitted": 0,
+    "corrupt_lines": 0
+  },
+  "native": {
+    "verdict": "warning",
+    "enabled": true,
+    "kitty_available": false,
+    "path": "/tmp/amxs18/home/.local/state/agent-mux/native",
+    "coverage": {
+      "managed": 0,
+      "external": 0,
+      "degraded": 0,
+      "disabled": 0,
+      "unmanaged": 0
+    },
+    "sessions": [],
+    "storage": {
+      "Launches": 82,
+      "ActiveLaunches": 0,
+      "TotalBytes": 0,
+      "ExcessBytes": 0,
+      "ActiveExcessBytes": 0,
+      "RemovedLaunches": 0,
+      "RemovedFiles": 0,
+      "RemovedBytes": 0,
+      "TrimmedFiles": 0,
+      "Errors": []
+    },
+    "max_bytes": 1073741824,
+    "launch_max_bytes": 134217728
+  },
+  "last_seen_events": [
+    {
+      "schema_version": 1,
+      "trace_id": "327c7ce0c446eb54a3e5b47a59759f6b",
+      "span_id": "eb3fe2eb9bea64c76ab5d298bb235231",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 248,
+      "window_id": 1099511627837,
+      "stage": "daemon.renderer.rendered",
+      "outcome": "success",
+      "reason": "runtime_checkpoint",
+      "observed_at": "2026-10-10T19:08:49.790158Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "generation": "4",
+        "request_ids": "",
+        "source_event_ids": "",
+        "source_generations": "4",
+        "trace_ids": ""
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "5712487130a8fde91e395f8fd7ac0f81",
+      "span_id": "6ff950176fee16a37cd4621c1cc21a78",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 249,
+      "window_id": 1099511627841,
+      "stage": "daemon.renderer.rendered",
+      "outcome": "success",
+      "reason": "runtime_checkpoint",
+      "observed_at": "2026-10-10T19:08:49.794329Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "generation": "4",
+        "request_ids": "",
+        "source_event_ids": "",
+        "source_generations": "4",
+        "trace_ids": ""
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "fc8ac46dfe7c47466e7209edc5b45e50",
+      "span_id": "85151d1a9774a7441a99454cf821b1fa",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 250,
+      "window_id": 1099511627847,
+      "stage": "daemon.renderer.rendered",
+      "outcome": "success",
+      "reason": "runtime_checkpoint",
+      "observed_at": "2026-10-10T19:08:49.798561Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "generation": "4",
+        "request_ids": "",
+        "source_event_ids": "",
+        "source_generations": "4",
+        "trace_ids": ""
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "a8b5e3b4f67b5f4af724249fcd2f563d",
+      "span_id": "4a5ec340c0b6ef745e6b9db98b139685",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 251,
+      "window_id": 1099511627851,
+      "stage": "daemon.renderer.rendered",
+      "outcome": "success",
+      "reason": "runtime_checkpoint",
+      "observed_at": "2026-10-10T19:08:49.803244Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "generation": "4",
+        "request_ids": "",
+        "source_event_ids": "",
+        "source_generations": "4",
+        "trace_ids": ""
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "a987c5738842ee538299906dc049f32f",
+      "span_id": "338ea690b7dab81ed8ff58c8caa459c4",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 252,
+      "window_id": 1099511627852,
+      "stage": "daemon.renderer.rendered",
+      "outcome": "success",
+      "reason": "runtime_checkpoint",
+      "observed_at": "2026-10-10T19:08:49.807144Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "generation": "4",
+        "request_ids": "",
+        "source_event_ids": "",
+        "source_generations": "4",
+        "trace_ids": ""
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "215be356801b4fe3640027b31b3386aa",
+      "span_id": "e9db53f5efef89ff2e44b3d547609e89",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 253,
+      "window_id": 1099511627845,
+      "stage": "daemon.renderer.rendered",
+      "outcome": "success",
+      "reason": "runtime_checkpoint",
+      "observed_at": "2026-10-10T19:08:49.81135Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "generation": "4",
+        "request_ids": "",
+        "source_event_ids": "",
+        "source_generations": "4",
+        "trace_ids": ""
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "49ff81c9a35417960fe73245104a54af",
+      "span_id": "80d163f3907110fc2da469600337c978",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 254,
+      "window_id": 1099511627839,
+      "stage": "daemon.renderer.rendered",
+      "outcome": "success",
+      "reason": "runtime_checkpoint",
+      "observed_at": "2026-10-10T19:08:49.815614Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "generation": "4",
+        "request_ids": "",
+        "source_event_ids": "",
+        "source_generations": "4",
+        "trace_ids": ""
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "7d6bb22d5ae3800af9236843405f9309",
+      "span_id": "1b68eb9475d75b1733aedeef6508501b",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 255,
+      "window_id": 1099511627830,
+      "stage": "daemon.renderer.rendered",
+      "outcome": "success",
+      "reason": "runtime_checkpoint",
+      "observed_at": "2026-10-10T19:08:49.820186Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "generation": "4",
+        "request_ids": "",
+        "source_event_ids": "",
+        "source_generations": "4",
+        "trace_ids": ""
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "2e2b83428f1160772699b7155bb36c74",
+      "span_id": "0575c1a5bbe25c6cfdf5a9c5cd576ad6",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 256,
+      "window_id": 1099511627854,
+      "stage": "daemon.renderer.rendered",
+      "outcome": "success",
+      "reason": "runtime_checkpoint",
+      "observed_at": "2026-10-10T19:08:49.82411Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "generation": "4",
+        "request_ids": "",
+        "source_event_ids": "",
+        "source_generations": "4",
+        "trace_ids": ""
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "4ce5847bfe0b6d6117ad3a8d4862aa65",
+      "span_id": "b5485323bd4ac1e1b895ec4155bb59c7",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 257,
+      "window_id": 1099511627833,
+      "stage": "daemon.renderer.rendered",
+      "outcome": "success",
+      "reason": "runtime_checkpoint",
+      "observed_at": "2026-10-10T19:08:49.828317Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "generation": "4",
+        "request_ids": "",
+        "source_event_ids": "",
+        "source_generations": "4",
+        "trace_ids": ""
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "fd154d77777eb95726da0d66b49efa82",
+      "span_id": "25e0dce2f022db548457565ccce81245",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 258,
+      "window_id": 1099511627838,
+      "stage": "daemon.renderer.rendered",
+      "outcome": "success",
+      "reason": "runtime_checkpoint",
+      "observed_at": "2026-10-10T19:08:49.832593Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "generation": "4",
+        "request_ids": "",
+        "source_event_ids": "",
+        "source_generations": "4",
+        "trace_ids": ""
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "03e0486121e203d2c4e14e6ff2a52d95",
+      "span_id": "ec332856c8d79762f286778a43e85b67",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 259,
+      "window_id": 1099511627836,
+      "stage": "daemon.renderer.rendered",
+      "outcome": "success",
+      "reason": "runtime_checkpoint",
+      "observed_at": "2026-10-10T19:08:49.837331Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "generation": "4",
+        "request_ids": "",
+        "source_event_ids": "",
+        "source_generations": "4",
+        "trace_ids": ""
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "fb194063c28fa2693665ad3d30d76476",
+      "span_id": "e60cf75ecdb0ad0e7e4f5ad99735ddf2",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 260,
+      "window_id": 1099511627835,
+      "stage": "daemon.renderer.rendered",
+      "outcome": "success",
+      "reason": "runtime_checkpoint",
+      "observed_at": "2026-10-10T19:08:49.841536Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "generation": "4",
+        "request_ids": "",
+        "source_event_ids": "",
+        "source_generations": "4",
+        "trace_ids": ""
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "3af2ad66629b369845686613b956ed2e",
+      "span_id": "b83f21d8056b0527f8b3e0a60ad9972f",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 261,
+      "window_id": 1099511627842,
+      "stage": "daemon.renderer.rendered",
+      "outcome": "success",
+      "reason": "runtime_checkpoint",
+      "observed_at": "2026-10-10T19:08:49.846308Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "generation": "4",
+        "request_ids": "",
+        "source_event_ids": "",
+        "source_generations": "4",
+        "trace_ids": ""
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "7a6b193c691a058b00f9e7d68b539df7",
+      "span_id": "73c84652d3cfcdbbcf327056e1125e55",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 262,
+      "window_id": 1099511627846,
+      "stage": "daemon.renderer.rendered",
+      "outcome": "success",
+      "reason": "runtime_checkpoint",
+      "observed_at": "2026-10-10T19:08:49.850652Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "generation": "4",
+        "request_ids": "",
+        "source_event_ids": "",
+        "source_generations": "4",
+        "trace_ids": ""
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "7939d328f804819a8dc740933ef80005",
+      "span_id": "0088c951e5d47867e9d500d0ac171a57",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 263,
+      "window_id": 1099511627844,
+      "stage": "daemon.renderer.rendered",
+      "outcome": "success",
+      "reason": "runtime_checkpoint",
+      "observed_at": "2026-10-10T19:08:49.855176Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "generation": "4",
+        "request_ids": "",
+        "source_event_ids": "",
+        "source_generations": "4",
+        "trace_ids": ""
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "e0b64d1462055b3c9b01edefc8b39fdf",
+      "span_id": "bafc133a6bb06feba7b298264af09c8e",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 264,
+      "window_id": 1099511627848,
+      "stage": "daemon.renderer.rendered",
+      "outcome": "success",
+      "reason": "runtime_checkpoint",
+      "observed_at": "2026-10-10T19:08:49.85919Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "generation": "4",
+        "request_ids": "",
+        "source_event_ids": "",
+        "source_generations": "4",
+        "trace_ids": ""
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "78968781e9459448d4910cdeb1fe3ddb",
+      "span_id": "65e147c03c766b6dbf39986e273ebf11",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 265,
+      "window_id": 1099511627829,
+      "stage": "daemon.renderer.rendered",
+      "outcome": "success",
+      "reason": "runtime_checkpoint",
+      "observed_at": "2026-10-10T19:08:49.863289Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "generation": "4",
+        "request_ids": "",
+        "source_event_ids": "",
+        "source_generations": "4",
+        "trace_ids": ""
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "2f5fbacb5d4d18ffd71f8ae0105bf1a0",
+      "span_id": "0389e762d023e2a5dcd88c1c9d0d0e60",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 266,
+      "window_id": 1099511627856,
+      "stage": "daemon.renderer.rendered",
+      "outcome": "success",
+      "reason": "runtime_checkpoint",
+      "observed_at": "2026-10-10T19:08:49.867553Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "generation": "4",
+        "request_ids": "",
+        "source_event_ids": "",
+        "source_generations": "4",
+        "trace_ids": ""
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "5eae2dac0458eeeb05e405e37f5b9049",
+      "span_id": "44cf689711632b4e6ef96feba79a6877",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 267,
+      "window_id": 1099511627849,
+      "stage": "daemon.renderer.rendered",
+      "outcome": "success",
+      "reason": "runtime_checkpoint",
+      "observed_at": "2026-10-10T19:08:49.872198Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "generation": "4",
+        "request_ids": "",
+        "source_event_ids": "",
+        "source_generations": "4",
+        "trace_ids": ""
+      }
+    }
+  ],
+  "findings": [
+    {
+      "verdict": "warning",
+      "check": "daemon_degraded",
+      "message": "daemon is not ready: initial kitty snapshot failed: kitty command failed: kitten @ ls\n  error: exec: \"kitten\": executable file not found in $PATH"
+    },
+    {
+      "verdict": "warning",
+      "check": "hooks_profile",
+      "message": "CLI 2.1.0 is older than verified hook contract 2.1.195"
+    },
+    {
+      "verdict": "warning",
+      "check": "kitty_unavailable",
+      "message": "kitty command failed: kitten @ ls\n  error: exec: \"kitten\": executable file not found in $PATH"
+    }
+  ]
+}

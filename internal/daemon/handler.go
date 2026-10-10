@@ -157,6 +157,14 @@ type Handler struct {
 	// and is touched only by the maintenance goroutine and startup.
 	runtimeReconciler    RuntimeSessionReconciler
 	lastRuntimeReconcile time.Time
+	// runtimeReconcileFailures is how many passes in a row have failed, which
+	// spaces the next one out; same goroutines as lastRuntimeReconcile.
+	runtimeReconcileFailures uint64
+	// runtimeHealth tallies the passes and the screen reads for health, and
+	// runtimeJournal records their edges (runtime_health.go). The journal
+	// writer is installed once at startup; nil writes nothing.
+	runtimeHealth  runtimeHealthTally
+	runtimeJournal runtimeJournal
 	// runtimeLabels is the project and profile of each non-Kitty runtime
 	// session bound to a slot, by runtime-session ID. Guarded by stateMu.
 	runtimeLabels map[string]runtimeLabel

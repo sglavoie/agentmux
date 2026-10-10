@@ -291,10 +291,16 @@ func (h *Handler) userActiveRetirableByProbe(windowID int) bool {
 // in internal/daemon/activity; this binds it to the handler's screen observer,
 // which is the Kitty client unless SetScreenObserver installed another.
 func (h *Handler) screenTextCacheFor() *activity.ScreenTextCache {
+	var screens *activity.ScreenTextCache
 	if h.screenObserver != nil {
-		return activity.NewScreenObservationCache(h.screenObserver)
+		screens = activity.NewScreenObservationCache(h.screenObserver)
+	} else {
+		screens = activity.NewScreenTextCache(h.kittyClient)
 	}
-	return activity.NewScreenTextCache(h.kittyClient)
+	// Every read through to a backend is tallied for health; a cached answer
+	// is not a read.
+	screens.OnRead(h.recordScreenRead)
+	return screens
 }
 
 // SetScreenObserver makes the screen probes read pane screens through

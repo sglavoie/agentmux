@@ -389,6 +389,22 @@ executed in-package; keep the documented scenario inventory exact.
 `amx doctor` must retain the existing daemon/reducer/renderer invariants when
 new checks are added. Stable finding identifiers are JSON consumer contracts.
 
+The tmux backend is diagnosed from two sources that fail apart
+(`cmd/debug/doctor_backend.go`): `cli.BackendStatus`, read by the CLI and so
+reported with the daemon down, and the daemon's `protocol.RuntimeHealth`
+(`internal/daemon/runtime_health.go`): reconciliation passes, attachment,
+screen reads, tmux client activity. Everything in the daemon's block and in
+the `daemon.runtime_reconcile` journal rows is a count, a duration, or a word
+from a fixed vocabulary (`tmux.FailureClass`): never put pane text, an error
+string, or a path in them. The CLI's report does carry paths and messages for
+the operator; a share bundle keeps its codes, counts, and releases and drops
+the rest (`internal/debugger/redact.go`). Every tmux client of
+a process passes one gate (`internal/tmux/gate.go`, four at a time), a
+maintenance pass is one client however many agents there are, and a tmux slot
+settles through the runtime checkpoint rather than the Kitty render queue.
+`internal/daemon/performance_fleet_test.go` holds the measured fleet table and
+the budgets `just reliability-stress` enforces.
+
 ## Adding a harness
 
 Follow `docs/adding-a-harness.md`. Its screen-adapter step (capture-first,

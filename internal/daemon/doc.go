@@ -49,6 +49,19 @@
 // session's owner is detached. The registry stays the one authority: retiring
 // a slot, dropping a session from the snapshot, and what `amx attach` answers
 // all follow from it. Reconciling starts no server and launches no agent.
+// A pass is one tmux client per server however many agents it holds, runs on
+// every maintenance tick, and is spaced out to thirty seconds while passes
+// fail, so a server that does not answer cannot hold the loop.
+//
+// What that work looks like from outside is runtime_health.go: a tally of the
+// passes, the sessions and how many have a terminal attached, the screen
+// reads, and the tmux clients, published through health as
+// protocol.RuntimeHealth, with a daemon.runtime_reconcile journal record for
+// each edge (passes start failing, they recover, a pass found an agent
+// stopped). It holds counts, durations, and failure classes only, never what
+// a pane or an error said. A slot of a non-Kitty backend is never queued for
+// the Kitty writer: the runtime checkpoint is its durable state and is what
+// ends its dirty stretch (runtime_checkpoint.go).
 //
 // The companion's focus_window request (handler_companion.go) is the one
 // companion request that dials Kitty. It accepts only a socket the daemon

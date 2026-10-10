@@ -1,0 +1,33 @@
+Agent Mux doctor
+daemon: unreachable
+socket: unavailable (stat /tmp/amxs18/home2/.local/share/agent-mux/daemon.sock: no such file or directory)
+kitty: not in use (launches go to tmux, and no Kitty is listening here)
+backend: launches go to tmux; no usable tmux; no server running
+versions: amx 0.8.0, go1.27.1, tmux not found (needs 3.5 or newer), kitty not found
+native logs: /tmp/amxs18/home2/.local/state/agent-mux/native (0 B across 0 launches; 0 active)
+native privacy: raw local logs; managed directories are 0700 and files are created with umask 077; bundles redact them
+native coverage: unavailable (Kitty is unreachable)
+hooks: work (claude): drifted, not active
+projects: ok (30 configured)
+kitty sockets: none reported
+renderer drift: unavailable (Kitty is unreachable)
+recent suppressions (last 15m0s): none
+asl integration: mode disabled
+  shell_resolution    not_applicable the integration is disabled by defaults.asl.enabled
+  daemon_resolution   not_applicable the integration is disabled by defaults.asl.enabled
+  contract            not_applicable the integration is disabled by defaults.asl.enabled
+  projection          not_applicable the integration is disabled by defaults.asl.enabled
+  freshness           not_applicable the integration is disabled by defaults.asl.enabled
+  delivery            not_applicable the integration is disabled by defaults.asl.enabled
+health failures:
+- [daemon_unreachable] daemon is unreachable
+- [socket] daemon socket is unavailable: stat /tmp/amxs18/home2/.local/share/agent-mux/daemon.sock: no such file or directory
+- [backend_tmux_unavailable] The tmux backend cannot start agents: no supported tmux found (need 3.5 or newer):
+  bundled runtime: not present (this amx was not started by Agent Mux.app)
+  PATH: tmux not found Install tmux 3.5 or newer (`brew install tmux`), set [defaults.tmux] path in config.toml, or run Agent Mux.app, which bundles one.
+- [hooks] hooks for work require attention: installed hook file is drifted; run `amx config hooks-sync`; claude CLI is not on PATH; no hook event has been observed in the diagnostic journal for home dir /tmp/amxs18/home/.claude-w
+notes:
+- [kitty] Kitty was not asked for its windows: launches go to tmux and KITTY_LISTEN_ON is not set
+overall: issues detected
+doctor: 4 health failures detected
+exit 2

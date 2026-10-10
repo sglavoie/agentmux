@@ -72,6 +72,9 @@ type exampleConfig struct {
 		Release struct {
 			EvidenceDir string `toml:"evidence_dir"`
 		} `toml:"release"`
+		Tmux struct {
+			Path string `toml:"path"`
+		} `toml:"tmux"`
 	}
 	HarnessEmojis map[string]string `toml:"harness_emojis"`
 	HarnessColors map[string]string `toml:"harness_colors"`

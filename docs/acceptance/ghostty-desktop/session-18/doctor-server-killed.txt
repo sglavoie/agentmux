@@ -1,0 +1,40 @@
+Agent Mux doctor
+daemon: running (pid 35416, uptime 5m22s)
+notifications: disabled (none)
+asl: disabled (mode disabled via asl; disabled by defaults.asl.enabled)
+screen patterns: embedded (claude, codex, contextlimit, copilot)
+kitty snapshot: cold (no successful kitten @ ls yet)
+kitty list coordinator: socket=- attempts=154 failures=154 timeouts=0 coalesced=0 in_flight=false consecutive_failures=154 last_latency=0s max_latency=0s last_error=command
+companion: no app connected
+socket: /tmp/amxs18/home/.local/share/agent-mux/daemon.sock (current)
+daemon export: ok
+kitty: not in use (launches go to tmux, and no Kitty is listening here)
+backend: launches go to tmux; tmux 3.7c (bundled, verified); no server running
+runtime sessions: 0 live; reconciled 100ms ago in 29ms (135 passes, 4 failed)
+screen captures: no screen read yet; tmux clients: 298 run, at most 1 at once (limit 4), 4 timed out
+versions: amx 0.8.0, daemon 0.8.0, go1.27.1, tmux 3.7c (needs 3.5 or newer), kitty not found
+native logs: /tmp/amxs18/home/.local/state/agent-mux/native (0 B across 82 launches; 0 active)
+native privacy: raw local logs; managed directories are 0700 and files are created with umask 077; bundles redact them
+native coverage: unavailable (Kitty is unreachable)
+hooks: work (claude): in sync, activation unverified
+projects: ok (30 configured)
+kitty sockets: none reported
+renderer drift: unavailable (Kitty is unreachable)
+recent suppressions (last 15m0s): none
+asl integration: mode disabled
+  shell_resolution    not_applicable the integration is disabled by defaults.asl.enabled
+  daemon_resolution   not_applicable the integration is disabled by defaults.asl.enabled
+  contract            not_applicable the integration is disabled by defaults.asl.enabled
+  projection          not_applicable the integration is disabled by defaults.asl.enabled
+  freshness           not_applicable the integration is disabled by defaults.asl.enabled
+  delivery            not_applicable the integration is disabled by defaults.asl.enabled
+warnings:
+- [daemon_degraded] daemon started degraded: initial kitty snapshot failed: kitty command failed: kitten @ ls
+  error: exec: "kitten": executable file not found in $PATH
+- [hooks_unverified] hooks for work are unverified: CLI 2.1.0 is older than verified hook contract 2.1.195
+notes:
+- [kitty] Kitty was not asked for its windows: launches go to tmux and KITTY_LISTEN_ON is not set
+- [tmux_client_timeouts] 4 of the daemon's 298 tmux client commands timed out since it started (longest wait for a slot 0ms, slowest command 6001ms)
+- [closed_tombstone] 52 closed windows (1099511627776, 1099511627777, 1099511627778, 1099511627779, 1099511627780, 1099511627781, 1099511627782, 1099511627783, 1099511627784, 1099511627785, 1099511627786, 1099511627787, 1099511627788, 1099511627789, 1099511627790, 1099511627791, 1099511627792, 1099511627793, 1099511627794, 1099511627795, 1099511627796, 1099511627797, 1099511627798, 1099511627799, 1099511627800, 1099511627801, 1099511627802, 1099511627803, 1099511627804, 1099511627805, 1099511627806, 1099511627807, 1099511627808, 1099511627809, 1099511627810, 1099511627811, 1099511627812, 1099511627813, 1099511627814, 1099511627815, 1099511627816, 1099511627817, 1099511627818, 1099511627819, 1099511627820, 1099511627821, 1099511627822, 1099511627823, 1099511627824, 1099511627825, 1099511627826, 1099511627827) retained for post-mortem export; `amx doctor --verbose` lists them
+overall: ok (2 warnings)
+exit 0

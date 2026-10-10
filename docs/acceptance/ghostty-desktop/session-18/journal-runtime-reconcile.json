@@ -1,0 +1,240 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-10-10T19:10:54.2183Z",
+  "selector": {
+    "stages": [
+      "daemon.runtime_reconcile"
+    ],
+    "after": "0001-01-01T00:00:00Z",
+    "before": "0001-01-01T00:00:00Z"
+  },
+  "journal_snapshot": {
+    "segment_files_read": 1,
+    "promoted_spool_files_read": 0,
+    "spool_files_read": 0,
+    "bytes_scanned": 713997,
+    "records_scanned": 518,
+    "records_matched": 7,
+    "duplicates_omitted": 0,
+    "corrupt_lines": 0
+  },
+  "records": [
+    {
+      "schema_version": 1,
+      "trace_id": "e724f7493b02d29af70548eda73163d3",
+      "span_id": "8c54bdb85919048eb88d8e832951773f",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 14,
+      "run_id": "daemon-35416-1791659133158536000",
+      "stage": "daemon.runtime_reconcile",
+      "outcome": "success",
+      "reason": "sessions_changed",
+      "observed_at": "2026-10-10T19:06:11.248726Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "attached_sessions": "0",
+        "consecutive_failures": "0",
+        "detached": "0",
+        "duration_ms": "40.1",
+        "ended": "1",
+        "ended_0": "rs-7d06d4024c8ec7f385417a10b8cb8895 lost",
+        "live_sessions": "0",
+        "released": "0",
+        "servers": "0"
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "e724f7493b02d29af70548eda73163d3",
+      "span_id": "373705092ff8cfe52dcb8aa5f84f5275",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 20,
+      "run_id": "daemon-35416-1791659133158536000",
+      "stage": "daemon.runtime_reconcile",
+      "outcome": "success",
+      "reason": "sessions_changed",
+      "observed_at": "2026-10-10T19:06:49.247175Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "attached_sessions": "0",
+        "consecutive_failures": "0",
+        "detached": "0",
+        "duration_ms": "38.5",
+        "ended": "1",
+        "ended_0": "rs-fd362578dd85c983a42cef978c2fe3f5 lost",
+        "live_sessions": "0",
+        "released": "0",
+        "servers": "0"
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "e724f7493b02d29af70548eda73163d3",
+      "span_id": "a59137c9afd343fa464b4910cb427142",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 51,
+      "run_id": "daemon-35416-1791659133158536000",
+      "stage": "daemon.runtime_reconcile",
+      "outcome": "success",
+      "reason": "sessions_changed",
+      "observed_at": "2026-10-10T19:07:27.235Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "attached_sessions": "0",
+        "consecutive_failures": "0",
+        "detached": "0",
+        "duration_ms": "26.4",
+        "ended": "10",
+        "ended_0": "rs-ee37c69e9b17df530de130afa4892474 lost",
+        "ended_1": "rs-eb0c92ffbc2a0ea830452f1931f90203 lost",
+        "ended_2": "rs-e152ceb75ef46c9b99a8a550baf6f7dd lost",
+        "ended_3": "rs-680bc80efc77f6de24b379adf446d40c lost",
+        "live_sessions": "0",
+        "released": "0",
+        "servers": "0"
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "e724f7493b02d29af70548eda73163d3",
+      "span_id": "02fa40fe7653dfada5f0525515104ba0",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 84,
+      "run_id": "daemon-35416-1791659133158536000",
+      "stage": "daemon.runtime_reconcile",
+      "outcome": "success",
+      "reason": "sessions_changed",
+      "observed_at": "2026-10-10T19:08:07.262566Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "attached_sessions": "0",
+        "consecutive_failures": "0",
+        "detached": "0",
+        "duration_ms": "54.3",
+        "ended": "10",
+        "ended_0": "rs-686f4749d541b54bc1adad36165870f1 lost",
+        "ended_1": "rs-c2cae4ed80a7ebc91664ee25571f632a lost",
+        "ended_2": "rs-27d4ba2b6537861c77fd7ff8f0cc76fa lost",
+        "ended_3": "rs-e3937b655406a8a89a21d69237600375 lost",
+        "live_sessions": "0",
+        "released": "0",
+        "servers": "0"
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "e724f7493b02d29af70548eda73163d3",
+      "span_id": "b00393328927b0c6712c676bdea4206c",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 177,
+      "run_id": "daemon-35416-1791659133158536000",
+      "stage": "daemon.runtime_reconcile",
+      "outcome": "success",
+      "reason": "sessions_changed",
+      "observed_at": "2026-10-10T19:08:47.251764Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "attached_sessions": "0",
+        "consecutive_failures": "0",
+        "detached": "0",
+        "duration_ms": "42.8",
+        "ended": "30",
+        "ended_0": "rs-9fcd9e2de588b50c161efd668986e096 lost",
+        "ended_1": "rs-eb96170906c3cae430ee440c712b4fd1 lost",
+        "ended_2": "rs-387561a065d9529469bbf4b0860eb719 lost",
+        "ended_3": "rs-491e0d493c66c75ffa006f39e1f12336 lost",
+        "live_sessions": "0",
+        "released": "0",
+        "servers": "0"
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "e724f7493b02d29af70548eda73163d3",
+      "span_id": "5da8454ddaca4dd1c6fce5ad4a301ab6",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 270,
+      "run_id": "daemon-35416-1791659133158536000",
+      "stage": "daemon.runtime_reconcile",
+      "outcome": "error",
+      "reason": "reconcile_failed",
+      "observed_at": "2026-10-10T19:09:35.211564Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "attached_sessions": "0",
+        "duration_ms": "6002.4",
+        "failure_class": "timeout",
+        "live_sessions": "30",
+        "servers": "1"
+      }
+    },
+    {
+      "schema_version": 1,
+      "trace_id": "e724f7493b02d29af70548eda73163d3",
+      "span_id": "dfb741b51d549fb0e71b691c22f8f77e",
+      "source_id": "3a3771efc5eda9569bf65a0e24c52868",
+      "source_sequence": 271,
+      "run_id": "daemon-35416-1791659133158536000",
+      "stage": "daemon.runtime_reconcile",
+      "outcome": "success",
+      "reason": "reconcile_recovered",
+      "observed_at": "2026-10-10T19:10:31.22414Z",
+      "build": {
+        "version": "0.8.0",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "dirty": true,
+        "build_time": "2026-10-10T18:33:17Z",
+        "go_version": "go1.27.1",
+        "binary_hash": "efd425550366e0a7bb86309e270294cbb8bc6b5634c1ee98876b587c573586fa"
+      },
+      "evidence": {
+        "attached_sessions": "0",
+        "duration_ms": "15.7",
+        "live_sessions": "30",
+        "servers": "1"
+      }
+    }
+  ]
+}

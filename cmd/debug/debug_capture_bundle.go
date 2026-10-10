@@ -236,6 +236,7 @@ func runDebugBundle(cmd *cobra.Command, _ []string) error {
 		Config: cfg, ConfigError: configErr, Paths: paths, Journal: journal,
 		Daemon: debugDaemon(), Kitty: debugKitty(), AMXBin: bin,
 		CLIBuild: buildinfo.Current(), Now: now, Selector: selector,
+		Backend: doctorBackendStatus(),
 	})
 	if err != nil {
 		return err

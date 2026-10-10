@@ -279,8 +279,10 @@ func TestDoctorJSONEmitsStructuredReport(t *testing.T) {
 	// daemon.companion block; v4 with the kitty_snapshot_stale warning
 	// identifier and the daemon.kitty_snapshot block; v3 with the
 	// screenstate_persistent_decline failure identifier.
-	if report.SchemaVersion != 6 || report.Healthy {
-		t.Fatalf("report = schema %d healthy %t; want schema 6 healthy=false", report.SchemaVersion, report.Healthy)
+	// v7 adds the backend and runtime identifiers with the backend, versions,
+	// and daemon.runtime blocks.
+	if report.SchemaVersion != 7 || report.Healthy {
+		t.Fatalf("report = schema %d healthy %t; want schema 7 healthy=false", report.SchemaVersion, report.Healthy)
 	}
 	if doctorReportSchemaVersion != report.SchemaVersion {
 		t.Fatalf("doctorReportSchemaVersion = %d; the emitted report must carry the constant", doctorReportSchemaVersion)

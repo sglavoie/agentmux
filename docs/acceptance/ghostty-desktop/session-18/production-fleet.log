@@ -1,0 +1,160 @@
+$ docs/acceptance/ghostty-desktop/session-18/driver/run.sh . docs/acceptance/ghostty-desktop/session-18
+# started 2026-10-10T19:05:31Z
+
+== world ==
+repo: a3c3cfbb (with uncommitted changes)
+machine: Apple M2 Ultra, 24 cores, macOS 27.0.1 arm64
+amx: amx version 0.8.0 (revision a3c3cfbb7fd1-dirty, built 2026-10-10T18:33:17Z, go1.27.1, sha256:efd425550366)
+packaged tmux: tmux=3.7c sha256 fb421000337b050b
+ok   - the world's amx validates its configuration
+ok   - the profile's hooks are installed
+ok   - the world's daemon is up (pid 35416)
+ok   - it is not the operator's daemon: its executable is the world's
+backend: tmux 3.7c from bundled, verified=True, at /tmp/amxs18/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux
+ok   - the tmux in use is the packaged runtime, verified, installed outside the app
+
+== 1 sessions, idle ==
+ok   - 1 agents launched on the tmux backend and registered live
+over 30s: daemon 0.40% CPU (120ms), 23.6 MiB; tmux server 0.00% CPU (0ms), 4.3 MiB
+reconciliation: 15 passes, last 20.22ms, slowest since start 27.329ms, 0 failed; 15 tmux clients started by the daemon, at most 1 at once
+daemon sees: {"known": true, "live": 1, "tmux": 1, "servers": 1, "attached": 0, "unattached": 1}
+ok   - the daemon counts 1 live tmux sessions on one server
+ok   - reconciliation kept its two-second cadence: 15 passes in 30s
+ok   - no pass failed
+ok   - a pass is one tmux client however many agents: 15 clients for 15 passes
+ok   - never more than 4 tmux clients at once (saw 1)
+ok   - the daemon used under 2% of one core (0.40%)
+ok   - the fleet was ended and the daemon recorded every agent as stopped
+
+== 1 sessions, output ==
+ok   - 1 agents launched on the tmux backend and registered live
+over 30s: daemon 0.10% CPU (30ms), 24.5 MiB; tmux server 99.79% CPU (30020ms), 22.4 MiB
+reconciliation: 15 passes, last 8.18ms, slowest since start 40.1ms, 0 failed; 15 tmux clients started by the daemon, at most 1 at once
+daemon sees: {"known": true, "live": 1, "tmux": 1, "servers": 1, "attached": 0, "unattached": 1}
+ok   - the daemon counts 1 live tmux sessions on one server
+ok   - reconciliation kept its two-second cadence: 15 passes in 30s
+ok   - no pass failed
+ok   - a pass is one tmux client however many agents: 15 clients for 15 passes
+ok   - never more than 4 tmux clients at once (saw 1)
+ok   - the daemon used under 2% of one core (0.10%)
+ok   - the fleet was ended and the daemon recorded every agent as stopped
+
+== 10 sessions, idle ==
+ok   - 10 agents launched on the tmux backend and registered live
+over 30s: daemon 0.23% CPU (70ms), 25.9 MiB; tmux server 0.03% CPU (10ms), 4.4 MiB
+reconciliation: 15 passes, last 23.411ms, slowest since start 51.879ms, 0 failed; 15 tmux clients started by the daemon, at most 1 at once
+daemon sees: {"known": true, "live": 10, "tmux": 10, "servers": 1, "attached": 0, "unattached": 10}
+ok   - the daemon counts 10 live tmux sessions on one server
+ok   - reconciliation kept its two-second cadence: 15 passes in 30s
+ok   - no pass failed
+ok   - a pass is one tmux client however many agents: 15 clients for 15 passes
+ok   - never more than 4 tmux clients at once (saw 1)
+ok   - the daemon used under 2% of one core (0.23%)
+ok   - the fleet was ended and the daemon recorded every agent as stopped
+
+== 10 sessions, output ==
+ok   - 10 agents launched on the tmux backend and registered live
+over 30s: daemon 0.13% CPU (40ms), 27.1 MiB; tmux server 99.96% CPU (30080ms), 179.8 MiB
+reconciliation: 15 passes, last 9.099ms, slowest since start 51.879ms, 0 failed; 15 tmux clients started by the daemon, at most 1 at once
+daemon sees: {"known": true, "live": 10, "tmux": 10, "servers": 1, "attached": 0, "unattached": 10}
+ok   - the daemon counts 10 live tmux sessions on one server
+ok   - reconciliation kept its two-second cadence: 15 passes in 30s
+ok   - no pass failed
+ok   - a pass is one tmux client however many agents: 15 clients for 15 passes
+ok   - never more than 4 tmux clients at once (saw 1)
+ok   - the daemon used under 2% of one core (0.13%)
+ok   - the fleet was ended and the daemon recorded every agent as stopped
+
+== 30 sessions, idle ==
+ok   - 30 agents launched on the tmux backend and registered live
+over 30s: daemon 0.56% CPU (170ms), 30.0 MiB; tmux server 0.13% CPU (40ms), 4.6 MiB
+reconciliation: 15 passes, last 18.46ms, slowest since start 54.269ms, 0 failed; 15 tmux clients started by the daemon, at most 1 at once
+daemon sees: {"known": true, "live": 30, "tmux": 30, "servers": 1, "attached": 0, "unattached": 30}
+ok   - the daemon counts 30 live tmux sessions on one server
+ok   - reconciliation kept its two-second cadence: 15 passes in 30s
+ok   - no pass failed
+ok   - a pass is one tmux client however many agents: 15 clients for 15 passes
+ok   - never more than 4 tmux clients at once (saw 1)
+ok   - the daemon used under 2% of one core (0.56%)
+ok   - the fleet was ended and the daemon recorded every agent as stopped
+
+== 30 sessions, output ==
+ok   - 30 agents launched on the tmux backend and registered live
+over 30s: daemon 0.17% CPU (50ms), 30.9 MiB; tmux server 99.96% CPU (30070ms), 527.6 MiB
+reconciliation: 15 passes, last 14.016ms, slowest since start 54.269ms, 0 failed; 15 tmux clients started by the daemon, at most 1 at once
+daemon sees: {"known": true, "live": 30, "tmux": 30, "servers": 1, "attached": 0, "unattached": 30}
+ok   - the daemon counts 30 live tmux sessions on one server
+ok   - reconciliation kept its two-second cadence: 15 passes in 30s
+ok   - no pass failed
+ok   - a pass is one tmux client however many agents: 15 clients for 15 passes
+ok   - never more than 4 tmux clients at once (saw 1)
+ok   - the daemon used under 2% of one core (0.17%)
+
+== diagnostics (30 sessions, output) ==
+daemon: running (pid 35416, uptime 3m53s)
+kitty snapshot: cold (no successful kitten @ ls yet)
+kitty list coordinator: socket=- attempts=117 failures=117 timeouts=0 coalesced=0 in_flight=false consecutive_failures=117 last_latency=0s max_latency=0s last_error=command
+daemon export: ok
+kitty: not in use (launches go to tmux, and no Kitty is listening here)
+backend: launches go to tmux; tmux 3.7c (bundled, verified); server running with 30 agents in 30 sessions
+runtime sessions: 30 live (30 on tmux, 1 server), 0 with a terminal attached, 30 unattached; reconciled 1.2s ago in 14ms (117 passes, 0 failed)
+screen captures: no screen read yet; tmux clients: 280 run, at most 1 at once (limit 4), 0 timed out
+versions: amx 0.8.0, daemon 0.8.0, go1.27.1, tmux 3.7c (needs 3.5 or newer), kitty not found
+kitty sockets: none reported
+overall: ok (2 warnings)
+ok   - doctor --strict passes with 30 tmux agents printing and no Kitty: exit 0
+ok   - no tmux session is reported as a renderer that fell behind
+ok   - doctor reports the backend, the sessions and their attachment, captures, and versions
+ok   - doctor --json carries backend, versions, and daemon.runtime at schema 7
+ok   - no Kitty in this world is a note, not a failure
+ok   - debug status prints the same backend and runtime lines
+ok   - the share bundle carries the runtime block and the backend setup
+
+== privacy ==
+read pane %25: 13 lines 
+ok   - the check is not vacuous: a pane's screen holds the prompt and the credential
+ok   - and every agent sent them through the hook path (30 UserPromptSubmit hooks delivered)
+ok   - no canary in doctor, debug status, or the bundle result
+ok   - no canary in any member of the share bundle
+ok   - no canary in the journals, the daemon log, or anything under the state directory
+ok   - no canary in the registry, the checkpoint, or anything under the data directory
+state directory: 9 files; bundle members: asl-correlation.json asl-records.json causal-records.json configuration.json doctor.json explanation.json manifest.json status.json versions.json 
+ok   - the bundle names no home directory or socket path
+
+== backend failure: the server stops answering ==
+tmux server 40729 stopped (SIGSTOP) at 13:09:27; every client now times out after 5s
+backend: launches go to tmux; tmux 3.7c (bundled, verified); server running but not answering
+runtime sessions: 30 live (30 on tmux, 1 server), 0 with a terminal attached, 30 unattached; reconciled 600ms ago in 6002ms (122 passes, 4 failed); last pass failed: timeout
+screen captures: no screen read yet; tmux clients: 285 run, at most 1 at once (limit 4), 4 timed out
+- [backend_server_unreadable] The private tmux server is running but did not answer: tmux list-sessions -F #{pid}#{start_time}: timed out after 5s: context deadline exceeded Run `amx backend status` again; if it keeps failing, `amx backend stop --yes` ends the server and every agent in it.
+- [runtime_reconcile_failing] the last 4 reconciliation passes failed (timeout): agents that exit or lose their terminal are not noticed until one succeeds. `amx backend status` reads the server directly
+- [tmux_client_timeouts] 4 of the daemon's 285 tmux client commands timed out since it started (longest wait for a slot 0ms, slowest command 6001ms)
+overall: issues detected
+ok   - doctor says the server is running but not answering, not that it is empty
+ok   - doctor --strict fails (exit 2) and names the server that does not answer
+ok   - the daemon's side is named too: passes failing by timeout, and clients that timed out
+ok   - no agent was given up on while the server could not be read
+ok   - the daemon itself still answers and is not degraded by it
+tmux server continued at 13:10:20
+ok   - after it answers again doctor --strict passes (exit 0) with the same 30 agents
+journal daemon.runtime_reconcile records: sessions_changed: sessions_changed: sessions_changed: sessions_changed: sessions_changed: reconcile_failed:timeout reconcile_recovered:
+ok   - the journal holds one failure edge (timeout) and one recovery for the whole outage
+
+== backend failure: the server is killed ==
+backend: launches go to tmux; tmux 3.7c (bundled, verified); no server running
+runtime sessions: 0 live; reconciled 100ms ago in 29ms (135 passes, 4 failed)
+ok   - every agent is recorded as stopped, none relaunched
+ok   - doctor says no server is running and no session is live
+ok   - the journal records the pass that found 30 agents gone
+ok   - no canary in the journal or in any recorded output after the failures either
+
+== backend failure: no usable tmux, daemon down ==
+daemon: unreachable
+backend: launches go to tmux; no usable tmux; no server running
+versions: amx 0.8.0, go1.27.1, tmux not found (needs 3.5 or newer), kitty not found
+- [backend_tmux_unavailable] The tmux backend cannot start agents: no supported tmux found (need 3.5 or newer):
+ok   - with no daemon and no tmux, doctor --strict fails (exit 2) on backend_tmux_unavailable and says how to get one
+
+== result ==
+78 checks, 0 failed
+driver exit 0

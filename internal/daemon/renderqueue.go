@@ -43,7 +43,12 @@ func (h *Handler) enqueueRenderLocked(windowID int, st *state.WindowState) {
 		st.QueuedGen = st.Seq
 	}
 	trace := h.markRenderStageLocked(windowID, st.Seq, rendering.StageQueued, "pending", "latest_generation", true)
-	if h.renderQueue != nil {
+	// A slot of another backend has no Kitty tab, so there is nothing for the
+	// Kitty writer to do for it, and queueing it would have the worker list
+	// Kitty's windows on its behalf for as long as it stayed dirty. Its
+	// durable state is the runtime checkpoint, which settles the generation
+	// (settleRuntimeSlots).
+	if h.renderQueue != nil && !isRuntimeSyntheticSlot(windowID) {
 		h.renderQueue.Enqueue(windowID, trace)
 	}
 }

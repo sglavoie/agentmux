@@ -19,7 +19,7 @@ suite does not have:
 | Recipe | Needs | Answers |
 | --- | --- | --- |
 | `just crash-restart` | tmux | Does state survive a crash, a restart, or a degraded start? Fault injection plus restart-equivalence replay, under `-race`. Its tmux scenarios run real agents on a private server: the same process after a daemon restart, a killed viewer, or a change of owner; exited or lost, and never relaunched, when the agent or its server dies. |
-| `just reliability-stress` | a quiet machine | Do the daemon lifecycle scenarios still hold under repetition and contention, and are the latency budgets met? |
+| `just reliability-stress` | a quiet machine; tmux for the fleet budgets | Do the daemon lifecycle scenarios still hold under repetition and contention (including health asked while maintenance reconciles a real tmux server), and are the latency budgets met? The budgets include the fleet ones: one, ten, and thirty tmux agents, idle and printing, against the packaged tmux when `just mac-tmux` has built it (`internal/daemon/performance_fleet_test.go` holds the measured table and the ceilings). |
 | `just cockpit-smoke` | a real Kitty window and an installed pair | Does the cockpit observe a live window through the real daemon? |
 
 `crash-restart` counts the scenarios that ran and fails if the count collapses.

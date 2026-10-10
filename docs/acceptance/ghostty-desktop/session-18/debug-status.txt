@@ -1,0 +1,40 @@
+Agent Mux debug status (schema 2)
+overall: warning
+daemon: warning (pid 35416, ready=false, uptime=3m53s)
+daemon build: 0.8.0 (revision a3c3cfbb7fd1-dirty, built 2026-10-10T18:33:17Z, go1.27.1, sha256:efd425550366) (matches CLI=true)
+kitty snapshot: cold (no successful kitten @ ls yet)
+kitty list coordinator: socket=- attempts=117 failures=117 timeouts=0 coalesced=0 in_flight=false consecutive_failures=117 last_latency=0s max_latency=0s last_error=command
+backend: launches go to tmux; tmux 3.7c (bundled, verified); server running with 30 agents in 30 sessions
+runtime sessions: 30 live (30 on tmux, 1 server), 0 with a terminal attached, 30 unattached; reconciled 1.5s ago in 14ms (117 passes, 0 failed)
+screen captures: no screen read yet; tmux clients: 280 run, at most 1 at once (limit 4), 0 timed out
+hooks: work/claude verdict=warning sync=in_sync activation=unverified cli=2.1.0 contract=2.1.195 last_seen=2026-10-10T19:08:49Z age=36s silence_threshold=4h
+  - [cli_older_than_contract] CLI 2.1.0 is older than verified hook contract 2.1.195
+journal: healthy enabled=true path=/tmp/amxs18/home/.local/state/agent-mux/journal files=1 records=512 bytes=692.3KiB spool=0 spool_bytes=0B total_bytes=692.3KiB corrupt=0 quarantined=0 quota=256.0MiB used=0%
+native logs: warning enabled=true path=/tmp/amxs18/home/.local/state/agent-mux/native managed=0 external=0 degraded=0 disabled=0 unmanaged=0 bytes=0B quota=1.0GiB used=0% active_excess=0B
+last-seen events:
+- 2026-10-10T19:08:49.790158Z stage=daemon.renderer.rendered outcome=success reason=runtime_checkpoint harness=- profile=- window=1099511627837 session=- asl_run=- event=- request=- trace=327c7ce0c446eb54a3e5b47a59759f6b
+- 2026-10-10T19:08:49.794329Z stage=daemon.renderer.rendered outcome=success reason=runtime_checkpoint harness=- profile=- window=1099511627841 session=- asl_run=- event=- request=- trace=5712487130a8fde91e395f8fd7ac0f81
+- 2026-10-10T19:08:49.798561Z stage=daemon.renderer.rendered outcome=success reason=runtime_checkpoint harness=- profile=- window=1099511627847 session=- asl_run=- event=- request=- trace=fc8ac46dfe7c47466e7209edc5b45e50
+- 2026-10-10T19:08:49.803244Z stage=daemon.renderer.rendered outcome=success reason=runtime_checkpoint harness=- profile=- window=1099511627851 session=- asl_run=- event=- request=- trace=a8b5e3b4f67b5f4af724249fcd2f563d
+- 2026-10-10T19:08:49.807144Z stage=daemon.renderer.rendered outcome=success reason=runtime_checkpoint harness=- profile=- window=1099511627852 session=- asl_run=- event=- request=- trace=a987c5738842ee538299906dc049f32f
+- 2026-10-10T19:08:49.81135Z stage=daemon.renderer.rendered outcome=success reason=runtime_checkpoint harness=- profile=- window=1099511627845 session=- asl_run=- event=- request=- trace=215be356801b4fe3640027b31b3386aa
+- 2026-10-10T19:08:49.815614Z stage=daemon.renderer.rendered outcome=success reason=runtime_checkpoint harness=- profile=- window=1099511627839 session=- asl_run=- event=- request=- trace=49ff81c9a35417960fe73245104a54af
+- 2026-10-10T19:08:49.820186Z stage=daemon.renderer.rendered outcome=success reason=runtime_checkpoint harness=- profile=- window=1099511627830 session=- asl_run=- event=- request=- trace=7d6bb22d5ae3800af9236843405f9309
+- 2026-10-10T19:08:49.82411Z stage=daemon.renderer.rendered outcome=success reason=runtime_checkpoint harness=- profile=- window=1099511627854 session=- asl_run=- event=- request=- trace=2e2b83428f1160772699b7155bb36c74
+- 2026-10-10T19:08:49.828317Z stage=daemon.renderer.rendered outcome=success reason=runtime_checkpoint harness=- profile=- window=1099511627833 session=- asl_run=- event=- request=- trace=4ce5847bfe0b6d6117ad3a8d4862aa65
+- 2026-10-10T19:08:49.832593Z stage=daemon.renderer.rendered outcome=success reason=runtime_checkpoint harness=- profile=- window=1099511627838 session=- asl_run=- event=- request=- trace=fd154d77777eb95726da0d66b49efa82
+- 2026-10-10T19:08:49.837331Z stage=daemon.renderer.rendered outcome=success reason=runtime_checkpoint harness=- profile=- window=1099511627836 session=- asl_run=- event=- request=- trace=03e0486121e203d2c4e14e6ff2a52d95
+- 2026-10-10T19:08:49.841536Z stage=daemon.renderer.rendered outcome=success reason=runtime_checkpoint harness=- profile=- window=1099511627835 session=- asl_run=- event=- request=- trace=fb194063c28fa2693665ad3d30d76476
+- 2026-10-10T19:08:49.846308Z stage=daemon.renderer.rendered outcome=success reason=runtime_checkpoint harness=- profile=- window=1099511627842 session=- asl_run=- event=- request=- trace=3af2ad66629b369845686613b956ed2e
+- 2026-10-10T19:08:49.850652Z stage=daemon.renderer.rendered outcome=success reason=runtime_checkpoint harness=- profile=- window=1099511627846 session=- asl_run=- event=- request=- trace=7a6b193c691a058b00f9e7d68b539df7
+- 2026-10-10T19:08:49.855176Z stage=daemon.renderer.rendered outcome=success reason=runtime_checkpoint harness=- profile=- window=1099511627844 session=- asl_run=- event=- request=- trace=7939d328f804819a8dc740933ef80005
+- 2026-10-10T19:08:49.85919Z stage=daemon.renderer.rendered outcome=success reason=runtime_checkpoint harness=- profile=- window=1099511627848 session=- asl_run=- event=- request=- trace=e0b64d1462055b3c9b01edefc8b39fdf
+- 2026-10-10T19:08:49.863289Z stage=daemon.renderer.rendered outcome=success reason=runtime_checkpoint harness=- profile=- window=1099511627829 session=- asl_run=- event=- request=- trace=78968781e9459448d4910cdeb1fe3ddb
+- 2026-10-10T19:08:49.867553Z stage=daemon.renderer.rendered outcome=success reason=runtime_checkpoint harness=- profile=- window=1099511627856 session=- asl_run=- event=- request=- trace=2f5fbacb5d4d18ffd71f8ae0105bf1a0
+- 2026-10-10T19:08:49.872198Z stage=daemon.renderer.rendered outcome=success reason=runtime_checkpoint harness=- profile=- window=1099511627849 session=- asl_run=- event=- request=- trace=5eae2dac0458eeeb05e405e37f5b9049
+findings:
+- [warning/daemon_degraded] daemon is not ready: initial kitty snapshot failed: kitty command failed: kitten @ ls
+  error: exec: "kitten": executable file not found in $PATH
+- [warning/hooks_profile] CLI 2.1.0 is older than verified hook contract 2.1.195
+- [warning/kitty_unavailable] kitty command failed: kitten @ ls
+  error: exec: "kitten": executable file not found in $PATH

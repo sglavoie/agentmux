@@ -256,6 +256,11 @@ type Health struct {
 	// Companion lists the connected companion subscribers. Nil against a
 	// daemon that predates the companion protocol.
 	Companion *protocol.CompanionHealth
+	// Runtime is the daemon's runtime-session and backend work: how current
+	// reconciliation is, how many sessions have a terminal attached, how the
+	// screen reads are going, and its tmux client activity. Nil against a
+	// daemon that predates the block.
+	Runtime *protocol.RuntimeHealth
 }
 
 // Health pings the daemon and returns its liveness, PID and uptime. Never
@@ -285,6 +290,7 @@ func (c *Client) healthBefore(deadline time.Time) Health {
 		ScreenPatterns:  resp.ScreenPatterns,
 		KittySnapshot:   resp.KittySnapshot,
 		Companion:       resp.Companion,
+		Runtime:         resp.Runtime,
 	}
 }
 

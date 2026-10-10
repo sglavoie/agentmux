@@ -22,6 +22,18 @@ import (
 // performance_test.go, where they are measured deliberately.
 const testLivenessGrace = 30 * time.Second
 
+// sendWithinGrace sends one request and waits for its answer for as long as a
+// lifecycle test waits for anything else the daemon owns. Client.Send gives up
+// after ipc.NormalAckBudget, the 250ms a hook may wait: that is a latency
+// ceiling, and holding a request to it inside a scenario that asserts
+// something else fails the scenario on a contended machine for a reason that
+// says nothing about it. The ceiling itself is measured in performance_test.go.
+func sendWithinGrace(c *ipc.Client, req protocol.Request) (protocol.Response, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), testLivenessGrace)
+	defer cancel()
+	return c.SendWithContext(ctx, req)
+}
+
 // startPublishedDaemon runs the daemon and returns once it has completed its
 // own startup publication — the health round-trip that proves the socket is
 // bound, serving, and answered by this process. Waiting on that barrier instead
@@ -112,7 +124,7 @@ func TestRun_RemovesSocketOnShutdown(t *testing.T) {
 
 	// Send shutdown request via real socket round-trip.
 	c := ipc.NewClientWithSocket(socketPath)
-	resp, err := c.Send(protocol.Request{Type: protocol.TypeShutdown})
+	resp, err := sendWithinGrace(c, protocol.Request{Type: protocol.TypeShutdown})
 	if err != nil {
 		t.Fatalf("shutdown Send: %v", err)
 	}
@@ -159,7 +171,7 @@ func TestRun_ShutdownAcceptedDuringStartupReturnsCleanly(t *testing.T) {
 		t.Fatal("Run did not reach startup confirmation")
 	}
 
-	resp, err := ipc.NewClientWithSocket(ipc.SocketPath()).Send(protocol.Request{Type: protocol.TypeShutdown})
+	resp, err := sendWithinGrace(ipc.NewClientWithSocket(ipc.SocketPath()), protocol.Request{Type: protocol.TypeShutdown})
 	if err != nil {
 		t.Fatalf("shutdown Send during startup: %v", err)
 	}
@@ -252,7 +264,7 @@ func TestRun_DuplicateStartExitsWithoutTouchingLiveSocket(t *testing.T) {
 	}
 
 	c := ipc.NewClientWithSocket(socketPath)
-	resp, err := c.Send(protocol.Request{Type: protocol.TypeHealth})
+	resp, err := sendWithinGrace(c, protocol.Request{Type: protocol.TypeHealth})
 	if err != nil {
 		t.Fatalf("live daemon not reachable after duplicate start: %v", err)
 	}
@@ -260,7 +272,7 @@ func TestRun_DuplicateStartExitsWithoutTouchingLiveSocket(t *testing.T) {
 		t.Fatalf("health response after duplicate start = %+v, want OK with PID", resp)
 	}
 
-	if resp, err := c.Send(protocol.Request{Type: protocol.TypeShutdown}); err != nil {
+	if resp, err := sendWithinGrace(c, protocol.Request{Type: protocol.TypeShutdown}); err != nil {
 		t.Fatalf("shutdown Send: %v", err)
 	} else if !resp.OK {
 		t.Fatalf("shutdown response: %+v", resp)

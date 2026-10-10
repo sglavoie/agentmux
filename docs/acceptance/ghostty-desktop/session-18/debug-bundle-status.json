@@ -1,0 +1,696 @@
+{
+  "backend": {
+    "launch_backend": "tmux",
+    "problems": [],
+    "server": {
+      "agents": 30,
+      "running": true,
+      "sessions": 30
+    },
+    "tmux": {
+      "available": true,
+      "candidates": [
+        {
+          "path": "[HOME]",
+          "source": "bundled",
+          "version": "3.7c"
+        },
+        {
+          "source": "path"
+        }
+      ],
+      "min_version": "3.5",
+      "path": "[HOME]",
+      "source": "bundled",
+      "verified": true,
+      "version": "3.7c"
+    }
+  },
+  "daemon": {
+    "alive": true,
+    "build": {
+      "binary_hash": "hmac-sha256:f968d5a980e71a49f5dfcf7bf123672cff02089fe4d1b7959d26dbefab60b721",
+      "build_time": "2026-10-10T18:33:17Z",
+      "dirty": true,
+      "go_version": "go1.27.1",
+      "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+      "version": "0.8.0"
+    },
+    "build_matches": true,
+    "cli_build": {
+      "binary_hash": "hmac-sha256:f968d5a980e71a49f5dfcf7bf123672cff02089fe4d1b7959d26dbefab60b721",
+      "build_time": "2026-10-10T18:33:17Z",
+      "dirty": true,
+      "go_version": "go1.27.1",
+      "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+      "version": "0.8.0"
+    },
+    "degraded_reason": "[redacted]",
+    "pid": 35416,
+    "ready": false,
+    "runtime": {
+      "capture": {
+        "consecutive_failures": 0,
+        "failures": 0,
+        "last_duration_ms": 0,
+        "max_duration_ms": 0,
+        "reads": 0
+      },
+      "reconcile": {
+        "age_seconds": 1.6144239169999999,
+        "consecutive_failures": 0,
+        "detached": 0,
+        "enabled": true,
+        "ended": 52,
+        "failures": 0,
+        "interval_seconds": 2,
+        "last_duration_ms": 14.016,
+        "max_duration_ms": 54.269,
+        "passes": 117,
+        "released": 0
+      },
+      "sessions": {
+        "attached": 0,
+        "known": true,
+        "live": 30,
+        "servers": 1,
+        "tmux": 30,
+        "unattached": 30
+      },
+      "tmux_client": {
+        "commands": 280,
+        "failures": 5,
+        "in_flight": 0,
+        "limit": 4,
+        "max_duration_ms": 47.571,
+        "max_in_flight": 1,
+        "max_queue_ms": 0,
+        "queued": 0,
+        "timeouts": 0
+      }
+    },
+    "uptime_seconds": 233,
+    "verdict": "warning"
+  },
+  "findings": [
+    {
+      "check": "daemon_degraded",
+      "verdict": "warning"
+    },
+    {
+      "check": "hooks_profile",
+      "verdict": "warning"
+    },
+    {
+      "check": "kitty_unavailable",
+      "verdict": "warning"
+    }
+  ],
+  "generated_at": "2026-10-10T19:09:26.798418Z",
+  "healthy": false,
+  "hooks": {
+    "delivery_failures": {
+      "count": 0
+    },
+    "profiles": [
+      {
+        "activation": "[redacted]",
+        "cli_version": "[redacted]",
+        "harness": "claude",
+        "hook_silence_seconds": 14400,
+        "issues": [
+          {
+            "code": "cli_older_than_contract",
+            "verdict": "unverified"
+          }
+        ],
+        "last_seen": "[redacted]",
+        "last_seen_age_seconds": 37,
+        "path": "[HOME]",
+        "profile": "hmac-sha256:90828781fe68d1d9708aa971f3b5e40adc23f7006807d22ab47c935102dd8d15",
+        "silent": false,
+        "sync": "[redacted]",
+        "verdict": "warning",
+        "verified_cli_version": "[redacted]"
+      }
+    ],
+    "verdict": "warning"
+  },
+  "journal": {
+    "enabled": true,
+    "health": {
+      "bytes": 708901,
+      "corrupt_lines": 0,
+      "earliest_observed_at": "2026-10-10T19:05:33.158543Z",
+      "files": 1,
+      "latest_observed_at": "2026-10-10T19:08:49.872198Z",
+      "legacy_claim_files": 0,
+      "observed_schemas": [
+        1
+      ],
+      "oldest_spool_mod_time": "0001-01-01T00:00:00Z",
+      "quarantined_files": 0,
+      "records": 512,
+      "spool_bytes": 0,
+      "spool_files": 0
+    },
+    "max_bytes": 268435456,
+    "path": "[STATE]",
+    "verdict": "healthy"
+  },
+  "journal_snapshot": {
+    "bytes_scanned": 708901,
+    "corrupt_lines": 0,
+    "duplicates_omitted": 0,
+    "promoted_spool_files_read": 0,
+    "records_matched": 512,
+    "records_scanned": 512,
+    "segment_files_read": 1,
+    "spool_files_read": 0
+  },
+  "last_seen_events": [
+    {
+      "build": {
+        "binary_hash": "hmac-sha256:f968d5a980e71a49f5dfcf7bf123672cff02089fe4d1b7959d26dbefab60b721",
+        "build_time": "2026-10-10T18:33:17Z",
+        "dirty": true,
+        "go_version": "go1.27.1",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "version": "0.8.0"
+      },
+      "evidence": {
+        "request_ids": "",
+        "source_event_ids": "",
+        "trace_ids": ""
+      },
+      "observed_at": "2026-10-10T19:08:49.790158Z",
+      "outcome": "success",
+      "reason": "hmac-sha256:283a86e8e22e3323b390d9795b4e5374c743776aa922a6d251da2e1aeb7cff72",
+      "schema_version": 1,
+      "source_id": "hmac-sha256:2115d1387008fd528608d07bef089a5d9b5ae53080f6ec19c96ccdc894ae768e",
+      "source_sequence": 248,
+      "span_id": "hmac-sha256:910b663bd4cfbc24df3f3941cb42cb3ac806a2c9b00a71bb40b7a126baf1dcda",
+      "stage": "daemon.renderer.rendered",
+      "trace_id": "hmac-sha256:d4433217eb78c77f9fef47acd7048ab2c9df9f4614a28d72fe040cce2296830c",
+      "window_id": "hmac-sha256:ec45df253d89e1652dd270e54288eb7cc70cfa22c5e0c9d2c628d8f1f1f41eea"
+    },
+    {
+      "build": {
+        "binary_hash": "hmac-sha256:f968d5a980e71a49f5dfcf7bf123672cff02089fe4d1b7959d26dbefab60b721",
+        "build_time": "2026-10-10T18:33:17Z",
+        "dirty": true,
+        "go_version": "go1.27.1",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "version": "0.8.0"
+      },
+      "evidence": {
+        "request_ids": "",
+        "source_event_ids": "",
+        "trace_ids": ""
+      },
+      "observed_at": "2026-10-10T19:08:49.794329Z",
+      "outcome": "success",
+      "reason": "hmac-sha256:283a86e8e22e3323b390d9795b4e5374c743776aa922a6d251da2e1aeb7cff72",
+      "schema_version": 1,
+      "source_id": "hmac-sha256:2115d1387008fd528608d07bef089a5d9b5ae53080f6ec19c96ccdc894ae768e",
+      "source_sequence": 249,
+      "span_id": "hmac-sha256:8a0f132b64125b40807a45acbecbe42e6b0eb690353bf35933f86e79405e8e1b",
+      "stage": "daemon.renderer.rendered",
+      "trace_id": "hmac-sha256:04a0da4def2630d9f9398933f77e0530be495584403b93c538603cdd8d08bf54",
+      "window_id": "hmac-sha256:d898289dcca886e0980c96a8991dd90fde588ad4c9ba1a00dd33a1aa52d3ed73"
+    },
+    {
+      "build": {
+        "binary_hash": "hmac-sha256:f968d5a980e71a49f5dfcf7bf123672cff02089fe4d1b7959d26dbefab60b721",
+        "build_time": "2026-10-10T18:33:17Z",
+        "dirty": true,
+        "go_version": "go1.27.1",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "version": "0.8.0"
+      },
+      "evidence": {
+        "request_ids": "",
+        "source_event_ids": "",
+        "trace_ids": ""
+      },
+      "observed_at": "2026-10-10T19:08:49.798561Z",
+      "outcome": "success",
+      "reason": "hmac-sha256:283a86e8e22e3323b390d9795b4e5374c743776aa922a6d251da2e1aeb7cff72",
+      "schema_version": 1,
+      "source_id": "hmac-sha256:2115d1387008fd528608d07bef089a5d9b5ae53080f6ec19c96ccdc894ae768e",
+      "source_sequence": 250,
+      "span_id": "hmac-sha256:f6c2c67020ac4dd305e95beab1fa58ad193639f180c5be7d4122455b27de60c9",
+      "stage": "daemon.renderer.rendered",
+      "trace_id": "hmac-sha256:fba03b84bb31301109af5db5c1d4836fc8627bab084ecaf1e1d103a9d70dc207",
+      "window_id": "hmac-sha256:bc0814f056f7789e6d6526f96bc932db3b6530ff34aa404bb983a202c7ea2a3b"
+    },
+    {
+      "build": {
+        "binary_hash": "hmac-sha256:f968d5a980e71a49f5dfcf7bf123672cff02089fe4d1b7959d26dbefab60b721",
+        "build_time": "2026-10-10T18:33:17Z",
+        "dirty": true,
+        "go_version": "go1.27.1",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "version": "0.8.0"
+      },
+      "evidence": {
+        "request_ids": "",
+        "source_event_ids": "",
+        "trace_ids": ""
+      },
+      "observed_at": "2026-10-10T19:08:49.803244Z",
+      "outcome": "success",
+      "reason": "hmac-sha256:283a86e8e22e3323b390d9795b4e5374c743776aa922a6d251da2e1aeb7cff72",
+      "schema_version": 1,
+      "source_id": "hmac-sha256:2115d1387008fd528608d07bef089a5d9b5ae53080f6ec19c96ccdc894ae768e",
+      "source_sequence": 251,
+      "span_id": "hmac-sha256:4ce8b4029b8c744a3b3482470f2bb6fdcc0c71937afbfee1716a7337b33ac986",
+      "stage": "daemon.renderer.rendered",
+      "trace_id": "hmac-sha256:6809607f8af7f45716a594c81c4d8ebebf81b44c145065d7fe2fcec90ba62d0b",
+      "window_id": "hmac-sha256:9ec87269df85f382274968c6a643e001ec5b278b672347c1684855a7e7120162"
+    },
+    {
+      "build": {
+        "binary_hash": "hmac-sha256:f968d5a980e71a49f5dfcf7bf123672cff02089fe4d1b7959d26dbefab60b721",
+        "build_time": "2026-10-10T18:33:17Z",
+        "dirty": true,
+        "go_version": "go1.27.1",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "version": "0.8.0"
+      },
+      "evidence": {
+        "request_ids": "",
+        "source_event_ids": "",
+        "trace_ids": ""
+      },
+      "observed_at": "2026-10-10T19:08:49.807144Z",
+      "outcome": "success",
+      "reason": "hmac-sha256:283a86e8e22e3323b390d9795b4e5374c743776aa922a6d251da2e1aeb7cff72",
+      "schema_version": 1,
+      "source_id": "hmac-sha256:2115d1387008fd528608d07bef089a5d9b5ae53080f6ec19c96ccdc894ae768e",
+      "source_sequence": 252,
+      "span_id": "hmac-sha256:660f6050875a6cae6a45121ad02befc609112fcebd8d9818243d0329d6f0f92c",
+      "stage": "daemon.renderer.rendered",
+      "trace_id": "hmac-sha256:c13d10e64e14d277b2e297246492b2c944a08084c35ff2689c53b9fbc4e94d4f",
+      "window_id": "hmac-sha256:a1abced08be4ab6632258ee1934feb2a8fd44f32a4f8ffefd92da17ecd62b02c"
+    },
+    {
+      "build": {
+        "binary_hash": "hmac-sha256:f968d5a980e71a49f5dfcf7bf123672cff02089fe4d1b7959d26dbefab60b721",
+        "build_time": "2026-10-10T18:33:17Z",
+        "dirty": true,
+        "go_version": "go1.27.1",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "version": "0.8.0"
+      },
+      "evidence": {
+        "request_ids": "",
+        "source_event_ids": "",
+        "trace_ids": ""
+      },
+      "observed_at": "2026-10-10T19:08:49.81135Z",
+      "outcome": "success",
+      "reason": "hmac-sha256:283a86e8e22e3323b390d9795b4e5374c743776aa922a6d251da2e1aeb7cff72",
+      "schema_version": 1,
+      "source_id": "hmac-sha256:2115d1387008fd528608d07bef089a5d9b5ae53080f6ec19c96ccdc894ae768e",
+      "source_sequence": 253,
+      "span_id": "hmac-sha256:6abf23a47a085e3d1e25d6284c997a919844dbc0c9aa03b31aac2a376acfc2b1",
+      "stage": "daemon.renderer.rendered",
+      "trace_id": "hmac-sha256:48d3f3c9e6959f791fcb2609745f04245a64e49439b9c183d9a6ab849b9974c3",
+      "window_id": "hmac-sha256:57e58715f4bdff65d41b298c5bf66c141a5fbfbdd8415da08a983511cdb83a38"
+    },
+    {
+      "build": {
+        "binary_hash": "hmac-sha256:f968d5a980e71a49f5dfcf7bf123672cff02089fe4d1b7959d26dbefab60b721",
+        "build_time": "2026-10-10T18:33:17Z",
+        "dirty": true,
+        "go_version": "go1.27.1",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "version": "0.8.0"
+      },
+      "evidence": {
+        "request_ids": "",
+        "source_event_ids": "",
+        "trace_ids": ""
+      },
+      "observed_at": "2026-10-10T19:08:49.815614Z",
+      "outcome": "success",
+      "reason": "hmac-sha256:283a86e8e22e3323b390d9795b4e5374c743776aa922a6d251da2e1aeb7cff72",
+      "schema_version": 1,
+      "source_id": "hmac-sha256:2115d1387008fd528608d07bef089a5d9b5ae53080f6ec19c96ccdc894ae768e",
+      "source_sequence": 254,
+      "span_id": "hmac-sha256:4e05c0c6fd4b855666dae9856b7fbb3babdc6242e60c1af235457054701902e0",
+      "stage": "daemon.renderer.rendered",
+      "trace_id": "hmac-sha256:eec864de99b823c28eaffad74403e5d90e3174f00a774ef6ea06061470b425ed",
+      "window_id": "hmac-sha256:cb772690b8e4c2cfb85a181ddcfaac2cad6c1ad5e437a6798ef9c8e95bc40a29"
+    },
+    {
+      "build": {
+        "binary_hash": "hmac-sha256:f968d5a980e71a49f5dfcf7bf123672cff02089fe4d1b7959d26dbefab60b721",
+        "build_time": "2026-10-10T18:33:17Z",
+        "dirty": true,
+        "go_version": "go1.27.1",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "version": "0.8.0"
+      },
+      "evidence": {
+        "request_ids": "",
+        "source_event_ids": "",
+        "trace_ids": ""
+      },
+      "observed_at": "2026-10-10T19:08:49.820186Z",
+      "outcome": "success",
+      "reason": "hmac-sha256:283a86e8e22e3323b390d9795b4e5374c743776aa922a6d251da2e1aeb7cff72",
+      "schema_version": 1,
+      "source_id": "hmac-sha256:2115d1387008fd528608d07bef089a5d9b5ae53080f6ec19c96ccdc894ae768e",
+      "source_sequence": 255,
+      "span_id": "hmac-sha256:ee7c0f071efd40e848ebcd947e8be3a9a09a3a4e18d4e06a6d28584916ebea82",
+      "stage": "daemon.renderer.rendered",
+      "trace_id": "hmac-sha256:cce1e62465a436302a3cfff7e93900d276dd11749a0f402fe3c8b78aa0897058",
+      "window_id": "hmac-sha256:91e66c245f67166dd28bc119cc5ec21a323bee01cff37abb72bc857f610f0af2"
+    },
+    {
+      "build": {
+        "binary_hash": "hmac-sha256:f968d5a980e71a49f5dfcf7bf123672cff02089fe4d1b7959d26dbefab60b721",
+        "build_time": "2026-10-10T18:33:17Z",
+        "dirty": true,
+        "go_version": "go1.27.1",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "version": "0.8.0"
+      },
+      "evidence": {
+        "request_ids": "",
+        "source_event_ids": "",
+        "trace_ids": ""
+      },
+      "observed_at": "2026-10-10T19:08:49.82411Z",
+      "outcome": "success",
+      "reason": "hmac-sha256:283a86e8e22e3323b390d9795b4e5374c743776aa922a6d251da2e1aeb7cff72",
+      "schema_version": 1,
+      "source_id": "hmac-sha256:2115d1387008fd528608d07bef089a5d9b5ae53080f6ec19c96ccdc894ae768e",
+      "source_sequence": 256,
+      "span_id": "hmac-sha256:353e4927b642be3b7c4f0bb574d5ff84b0ef96575e06cad0c284e575e38f77b0",
+      "stage": "daemon.renderer.rendered",
+      "trace_id": "hmac-sha256:0a75d87a18cc43bfec67aefa49e93f1265ef05f4e28ef7e239c697ed28e63e62",
+      "window_id": "hmac-sha256:91990d92f2090f9e8ea39ab89bfc8d4e0bbaeb81e369a7a6fb70a46bbcfe87d3"
+    },
+    {
+      "build": {
+        "binary_hash": "hmac-sha256:f968d5a980e71a49f5dfcf7bf123672cff02089fe4d1b7959d26dbefab60b721",
+        "build_time": "2026-10-10T18:33:17Z",
+        "dirty": true,
+        "go_version": "go1.27.1",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "version": "0.8.0"
+      },
+      "evidence": {
+        "request_ids": "",
+        "source_event_ids": "",
+        "trace_ids": ""
+      },
+      "observed_at": "2026-10-10T19:08:49.828317Z",
+      "outcome": "success",
+      "reason": "hmac-sha256:283a86e8e22e3323b390d9795b4e5374c743776aa922a6d251da2e1aeb7cff72",
+      "schema_version": 1,
+      "source_id": "hmac-sha256:2115d1387008fd528608d07bef089a5d9b5ae53080f6ec19c96ccdc894ae768e",
+      "source_sequence": 257,
+      "span_id": "hmac-sha256:fc4997ec80aec92c9df77647eac151aff04c97b50421aeccd44fdd93744974fb",
+      "stage": "daemon.renderer.rendered",
+      "trace_id": "hmac-sha256:a58f02d650d73c49ce182fee69115a74ce67639e46bf171a9c3ff2a150a2c20d",
+      "window_id": "hmac-sha256:65e96e6af975a5bef6732659495a83ba2f170f812c5e1dd087ee3fa2f100ec10"
+    },
+    {
+      "build": {
+        "binary_hash": "hmac-sha256:f968d5a980e71a49f5dfcf7bf123672cff02089fe4d1b7959d26dbefab60b721",
+        "build_time": "2026-10-10T18:33:17Z",
+        "dirty": true,
+        "go_version": "go1.27.1",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "version": "0.8.0"
+      },
+      "evidence": {
+        "request_ids": "",
+        "source_event_ids": "",
+        "trace_ids": ""
+      },
+      "observed_at": "2026-10-10T19:08:49.832593Z",
+      "outcome": "success",
+      "reason": "hmac-sha256:283a86e8e22e3323b390d9795b4e5374c743776aa922a6d251da2e1aeb7cff72",
+      "schema_version": 1,
+      "source_id": "hmac-sha256:2115d1387008fd528608d07bef089a5d9b5ae53080f6ec19c96ccdc894ae768e",
+      "source_sequence": 258,
+      "span_id": "hmac-sha256:32479f0f46798b8309e981b79f970c535cffb59d91ff1c73cd15c5cdb3555e01",
+      "stage": "daemon.renderer.rendered",
+      "trace_id": "hmac-sha256:c1845fda567856ae367919f4915b098bce1dc050d180d605049e3dea0fc9482c",
+      "window_id": "hmac-sha256:a3333abc894d526b5291c1b9a0e414d32c944a90a0f01b9a9fe6084604f1c092"
+    },
+    {
+      "build": {
+        "binary_hash": "hmac-sha256:f968d5a980e71a49f5dfcf7bf123672cff02089fe4d1b7959d26dbefab60b721",
+        "build_time": "2026-10-10T18:33:17Z",
+        "dirty": true,
+        "go_version": "go1.27.1",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "version": "0.8.0"
+      },
+      "evidence": {
+        "request_ids": "",
+        "source_event_ids": "",
+        "trace_ids": ""
+      },
+      "observed_at": "2026-10-10T19:08:49.837331Z",
+      "outcome": "success",
+      "reason": "hmac-sha256:283a86e8e22e3323b390d9795b4e5374c743776aa922a6d251da2e1aeb7cff72",
+      "schema_version": 1,
+      "source_id": "hmac-sha256:2115d1387008fd528608d07bef089a5d9b5ae53080f6ec19c96ccdc894ae768e",
+      "source_sequence": 259,
+      "span_id": "hmac-sha256:62edcd314c5fa730cd6d9657abb56e7dd54037512db96ec5f0077830866a0b31",
+      "stage": "daemon.renderer.rendered",
+      "trace_id": "hmac-sha256:1766837e5cb93d79dfd6d4a8c1dab8a5c1d36332420ecad1e7cfb9e9e3f8e478",
+      "window_id": "hmac-sha256:c1722b852c97834d26cce8c910c0332b05767d2f15a03c43afcfce472e197b79"
+    },
+    {
+      "build": {
+        "binary_hash": "hmac-sha256:f968d5a980e71a49f5dfcf7bf123672cff02089fe4d1b7959d26dbefab60b721",
+        "build_time": "2026-10-10T18:33:17Z",
+        "dirty": true,
+        "go_version": "go1.27.1",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "version": "0.8.0"
+      },
+      "evidence": {
+        "request_ids": "",
+        "source_event_ids": "",
+        "trace_ids": ""
+      },
+      "observed_at": "2026-10-10T19:08:49.841536Z",
+      "outcome": "success",
+      "reason": "hmac-sha256:283a86e8e22e3323b390d9795b4e5374c743776aa922a6d251da2e1aeb7cff72",
+      "schema_version": 1,
+      "source_id": "hmac-sha256:2115d1387008fd528608d07bef089a5d9b5ae53080f6ec19c96ccdc894ae768e",
+      "source_sequence": 260,
+      "span_id": "hmac-sha256:6f496ea2b6ff3c75f807c7d8f6b2a1688e5fd36bf9574c03fbe69b7f2dff240a",
+      "stage": "daemon.renderer.rendered",
+      "trace_id": "hmac-sha256:9caca4da560700def47bc61261c48a782c3cb92175b32c74a7ab5734ed8e3da6",
+      "window_id": "hmac-sha256:f59c6213325dbdd651c19fbf7b69601285240882b97c43d7ad7bc3f7ea4db973"
+    },
+    {
+      "build": {
+        "binary_hash": "hmac-sha256:f968d5a980e71a49f5dfcf7bf123672cff02089fe4d1b7959d26dbefab60b721",
+        "build_time": "2026-10-10T18:33:17Z",
+        "dirty": true,
+        "go_version": "go1.27.1",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "version": "0.8.0"
+      },
+      "evidence": {
+        "request_ids": "",
+        "source_event_ids": "",
+        "trace_ids": ""
+      },
+      "observed_at": "2026-10-10T19:08:49.846308Z",
+      "outcome": "success",
+      "reason": "hmac-sha256:283a86e8e22e3323b390d9795b4e5374c743776aa922a6d251da2e1aeb7cff72",
+      "schema_version": 1,
+      "source_id": "hmac-sha256:2115d1387008fd528608d07bef089a5d9b5ae53080f6ec19c96ccdc894ae768e",
+      "source_sequence": 261,
+      "span_id": "hmac-sha256:da11fde64cdf5c24c458539d45085e1c8f046d0ae92d55f411442d8f52b724c5",
+      "stage": "daemon.renderer.rendered",
+      "trace_id": "hmac-sha256:2862a877dd2f70ba190154dbe623bd596f1c12f2a4ecacba4cfebc7e0a61638b",
+      "window_id": "hmac-sha256:fc8bd1ddca91b89046023cad1baecec5642860ba37f57667fd5eeb387a84fda6"
+    },
+    {
+      "build": {
+        "binary_hash": "hmac-sha256:f968d5a980e71a49f5dfcf7bf123672cff02089fe4d1b7959d26dbefab60b721",
+        "build_time": "2026-10-10T18:33:17Z",
+        "dirty": true,
+        "go_version": "go1.27.1",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "version": "0.8.0"
+      },
+      "evidence": {
+        "request_ids": "",
+        "source_event_ids": "",
+        "trace_ids": ""
+      },
+      "observed_at": "2026-10-10T19:08:49.850652Z",
+      "outcome": "success",
+      "reason": "hmac-sha256:283a86e8e22e3323b390d9795b4e5374c743776aa922a6d251da2e1aeb7cff72",
+      "schema_version": 1,
+      "source_id": "hmac-sha256:2115d1387008fd528608d07bef089a5d9b5ae53080f6ec19c96ccdc894ae768e",
+      "source_sequence": 262,
+      "span_id": "hmac-sha256:35d8a97541ec6a6a3ad2db9d9669c0673ec23f4744c9b5244778582413c4e6c6",
+      "stage": "daemon.renderer.rendered",
+      "trace_id": "hmac-sha256:dcc4fdec9c14f9b00e7ca191386d8b8fc3eead0edd95987ebb970fcf388844c8",
+      "window_id": "hmac-sha256:9a531c3553e9a1f86daf42385e13f18ddf28d6b98e603da8d1298ddcc2316e45"
+    },
+    {
+      "build": {
+        "binary_hash": "hmac-sha256:f968d5a980e71a49f5dfcf7bf123672cff02089fe4d1b7959d26dbefab60b721",
+        "build_time": "2026-10-10T18:33:17Z",
+        "dirty": true,
+        "go_version": "go1.27.1",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "version": "0.8.0"
+      },
+      "evidence": {
+        "request_ids": "",
+        "source_event_ids": "",
+        "trace_ids": ""
+      },
+      "observed_at": "2026-10-10T19:08:49.855176Z",
+      "outcome": "success",
+      "reason": "hmac-sha256:283a86e8e22e3323b390d9795b4e5374c743776aa922a6d251da2e1aeb7cff72",
+      "schema_version": 1,
+      "source_id": "hmac-sha256:2115d1387008fd528608d07bef089a5d9b5ae53080f6ec19c96ccdc894ae768e",
+      "source_sequence": 263,
+      "span_id": "hmac-sha256:1b942cb0c995743d9e707ca1b00cd51cd0e07af3022d48c5cb7491f2065c295e",
+      "stage": "daemon.renderer.rendered",
+      "trace_id": "hmac-sha256:fb0de3b7553616ef63efa97a60de615c26464ea3ad0a28369de389ba564f97da",
+      "window_id": "hmac-sha256:1e75191b5512cf64ce651e0c75e881eef4f3302f6705939a0f4f05f55368b084"
+    },
+    {
+      "build": {
+        "binary_hash": "hmac-sha256:f968d5a980e71a49f5dfcf7bf123672cff02089fe4d1b7959d26dbefab60b721",
+        "build_time": "2026-10-10T18:33:17Z",
+        "dirty": true,
+        "go_version": "go1.27.1",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "version": "0.8.0"
+      },
+      "evidence": {
+        "request_ids": "",
+        "source_event_ids": "",
+        "trace_ids": ""
+      },
+      "observed_at": "2026-10-10T19:08:49.85919Z",
+      "outcome": "success",
+      "reason": "hmac-sha256:283a86e8e22e3323b390d9795b4e5374c743776aa922a6d251da2e1aeb7cff72",
+      "schema_version": 1,
+      "source_id": "hmac-sha256:2115d1387008fd528608d07bef089a5d9b5ae53080f6ec19c96ccdc894ae768e",
+      "source_sequence": 264,
+      "span_id": "hmac-sha256:095edb983fad69985dcb346a0ecc8e40d64422602447e82d2b89fdbd623a05b0",
+      "stage": "daemon.renderer.rendered",
+      "trace_id": "hmac-sha256:8a38f582998dc649d049b34229f42fa3cccc49b530a18237281274605af74512",
+      "window_id": "hmac-sha256:96f758dee198ea85622a1e2a6f479314c11b42ce31e5fea4998fdaaff333d515"
+    },
+    {
+      "build": {
+        "binary_hash": "hmac-sha256:f968d5a980e71a49f5dfcf7bf123672cff02089fe4d1b7959d26dbefab60b721",
+        "build_time": "2026-10-10T18:33:17Z",
+        "dirty": true,
+        "go_version": "go1.27.1",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "version": "0.8.0"
+      },
+      "evidence": {
+        "request_ids": "",
+        "source_event_ids": "",
+        "trace_ids": ""
+      },
+      "observed_at": "2026-10-10T19:08:49.863289Z",
+      "outcome": "success",
+      "reason": "hmac-sha256:283a86e8e22e3323b390d9795b4e5374c743776aa922a6d251da2e1aeb7cff72",
+      "schema_version": 1,
+      "source_id": "hmac-sha256:2115d1387008fd528608d07bef089a5d9b5ae53080f6ec19c96ccdc894ae768e",
+      "source_sequence": 265,
+      "span_id": "hmac-sha256:fc2ebfd6726d1d7ac10f81cf937008f3908b91d00f667d00e336b4287c51e49b",
+      "stage": "daemon.renderer.rendered",
+      "trace_id": "hmac-sha256:46e5a91e75ff422b5986043aad4d8a39fed38b36c3631db5a480d48e2e869689",
+      "window_id": "hmac-sha256:718d826829a7c06e4227f2d510ed9f0794467b50a398057991275be2057c9932"
+    },
+    {
+      "build": {
+        "binary_hash": "hmac-sha256:f968d5a980e71a49f5dfcf7bf123672cff02089fe4d1b7959d26dbefab60b721",
+        "build_time": "2026-10-10T18:33:17Z",
+        "dirty": true,
+        "go_version": "go1.27.1",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "version": "0.8.0"
+      },
+      "evidence": {
+        "request_ids": "",
+        "source_event_ids": "",
+        "trace_ids": ""
+      },
+      "observed_at": "2026-10-10T19:08:49.867553Z",
+      "outcome": "success",
+      "reason": "hmac-sha256:283a86e8e22e3323b390d9795b4e5374c743776aa922a6d251da2e1aeb7cff72",
+      "schema_version": 1,
+      "source_id": "hmac-sha256:2115d1387008fd528608d07bef089a5d9b5ae53080f6ec19c96ccdc894ae768e",
+      "source_sequence": 266,
+      "span_id": "hmac-sha256:ad1dc2cda315e322148ccff54c549ac51e3a082fa02574425a8489fa14b3c5a1",
+      "stage": "daemon.renderer.rendered",
+      "trace_id": "hmac-sha256:a0e3b39f2b7712348d96c08dcc4b37a7c84e663086d7f499c06f3d451f071c16",
+      "window_id": "hmac-sha256:7a8f2f2cac5f94f48ffcce85ee3a1c1574cc1343444abdc0c2456b37b5dc59cf"
+    },
+    {
+      "build": {
+        "binary_hash": "hmac-sha256:f968d5a980e71a49f5dfcf7bf123672cff02089fe4d1b7959d26dbefab60b721",
+        "build_time": "2026-10-10T18:33:17Z",
+        "dirty": true,
+        "go_version": "go1.27.1",
+        "revision": "a3c3cfbb7fd120681ee9b3202db2d12aa994cd46",
+        "version": "0.8.0"
+      },
+      "evidence": {
+        "request_ids": "",
+        "source_event_ids": "",
+        "trace_ids": ""
+      },
+      "observed_at": "2026-10-10T19:08:49.872198Z",
+      "outcome": "success",
+      "reason": "hmac-sha256:283a86e8e22e3323b390d9795b4e5374c743776aa922a6d251da2e1aeb7cff72",
+      "schema_version": 1,
+      "source_id": "hmac-sha256:2115d1387008fd528608d07bef089a5d9b5ae53080f6ec19c96ccdc894ae768e",
+      "source_sequence": 267,
+      "span_id": "hmac-sha256:f14e61e64ec0f3f6474af223a30ef17936ec64300cca185c66caa2b19dd520c5",
+      "stage": "daemon.renderer.rendered",
+      "trace_id": "hmac-sha256:c45010cc197cdd941a4253af05cd55c0720e19722f00ff656502757e163ec36d",
+      "window_id": "hmac-sha256:b156314e723bb578958bafbe853e0f17f8581cc45e8d6cee0bd044c086df080a"
+    }
+  ],
+  "native": {
+    "coverage": {
+      "degraded": 0,
+      "disabled": 0,
+      "external": 0,
+      "managed": 0,
+      "unmanaged": 0
+    },
+    "enabled": true,
+    "kitty_available": false,
+    "launch_max_bytes": 134217728,
+    "max_bytes": 1073741824,
+    "path": "[STATE]",
+    "sessions": [],
+    "storage": {},
+    "verdict": "warning"
+  },
+  "schema_version": 2,
+  "selector": {
+    "after": "[redacted]",
+    "before": "[redacted]"
+  },
+  "verdict": "warning"
+}

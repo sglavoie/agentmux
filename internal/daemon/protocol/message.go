@@ -372,6 +372,11 @@ type Response struct {
 	// publishes a non-nil block, cold or not, so nil means "old daemon" rather
 	// than "no snapshot yet".
 	KittySnapshot *KittySnapshot `json:"kitty_snapshot,omitempty"`
+	// Runtime reports the runtime sessions and the backend work done for
+	// them: reconciliation, attachment, screen reads, and tmux client
+	// activity. Populated for TypeHealth and omitted by daemons that predate
+	// it, which a consumer reports as unknown.
+	Runtime *RuntimeHealth `json:"runtime,omitempty"`
 	// Subscription acknowledges TypeSubscribe; the stream's frames follow it on
 	// the same connection.
 	Subscription *SubscriptionAck `json:"subscription,omitempty"`

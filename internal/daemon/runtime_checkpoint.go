@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/cachefile"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
@@ -354,13 +356,26 @@ func (h *Handler) runtimeCheckpointEntriesLocked() []runtimeCheckpointEntry {
 // the last successful write. The copy is taken under stateMu; encoding and the
 // atomic write run off it.
 func (h *Handler) flushRuntimeCheckpoint() error {
+	h.stateMu.Lock()
+	entries := h.runtimeCheckpointEntriesLocked()
+	captured := h.runtimeSlotGenerationsLocked()
+	capturedAt := time.Now()
+	h.stateMu.Unlock()
+
+	if err := h.writeRuntimeCheckpoint(entries); err != nil {
+		return err
+	}
+	h.settleRuntimeSlots(captured, capturedAt)
+	return nil
+}
+
+// writeRuntimeCheckpoint encodes entries and replaces the file when its
+// content changed since the last successful write. No path means no
+// checkpoint is kept, which is not a failure.
+func (h *Handler) writeRuntimeCheckpoint(entries []runtimeCheckpointEntry) error {
 	if h.runtimeCheckpointPath == "" {
 		return nil
 	}
-	h.stateMu.Lock()
-	entries := h.runtimeCheckpointEntriesLocked()
-	h.stateMu.Unlock()
-
 	data, err := json.Marshal(runtimeCheckpointFile{SchemaVersion: runtimeCheckpointSchemaVersion, Sessions: entries})
 	if err != nil {
 		return err
@@ -380,6 +395,69 @@ func (h *Handler) flushRuntimeCheckpoint() error {
 	h.runtimeCheckpointDigest = sum
 	h.runtimeCheckpointWritten = true
 	return nil
+}
+
+// A Kitty window's state is durable once it is written to the window, and
+// that write is what ends its dirty stretch. A slot of another backend has no
+// window to write to: its state is durable once the runtime checkpoint holds
+// it, and it is presented by whoever reads the daemon (a companion snapshot),
+// not by a tab title. So the checkpoint is what settles such a slot. Without
+// this it would stay dirty for as long as it lived, and doctor would report
+// every tmux session as a renderer that fell behind.
+
+// runtimeSlotGenerationsLocked is the generation of every slot of another
+// backend with unsettled state, as the checkpoint being built captures it.
+// Callers hold stateMu.
+func (h *Handler) runtimeSlotGenerationsLocked() map[int]uint64 {
+	var captured map[int]uint64
+	for slot := range h.runtimeRoutes.bySlot {
+		if !isRuntimeSyntheticSlot(slot) {
+			continue
+		}
+		st, ok := h.windowStateLocked(slot)
+		if !ok || (!st.Dirty && st.RenderedGen >= st.Seq) {
+			continue
+		}
+		if captured == nil {
+			captured = make(map[int]uint64)
+		}
+		captured[slot] = st.Seq
+	}
+	return captured
+}
+
+// settleRuntimeSlots records that the checkpoint holds the captured
+// generations. A slot that changed again since the capture stays dirty, from
+// the capture on: what came before it is durable.
+func (h *Handler) settleRuntimeSlots(captured map[int]uint64, capturedAt time.Time) {
+	if len(captured) == 0 {
+		return
+	}
+	type settled struct {
+		slot  int
+		trace protocol.RenderGenerationTrace
+	}
+	traces := make([]settled, 0, len(captured))
+	h.stateMu.Lock()
+	for slot, seq := range captured {
+		st, ok := h.windowStateLocked(slot)
+		if !ok {
+			continue
+		}
+		st.PersistedGen = max(st.PersistedGen, seq)
+		st.RenderedGen = max(st.RenderedGen, seq)
+		if st.Seq == seq {
+			st.Dirty = false
+			st.DirtySince = time.Time{}
+		} else if st.DirtySince.Before(capturedAt) {
+			st.DirtySince = capturedAt
+		}
+		traces = append(traces, settled{slot, h.markRenderStageLocked(slot, seq, rendering.StageRendered, "success", "runtime_checkpoint", false)})
+	}
+	h.stateMu.Unlock()
+	for _, s := range traces {
+		h.recordRenderGenerationBounded(s.trace, s.slot)
+	}
 }
 
 // maintainRuntimeSessions is the runtime-session half of maintenance:

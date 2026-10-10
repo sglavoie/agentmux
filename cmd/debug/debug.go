@@ -178,6 +178,7 @@ func runDebugStatus(cmd *cobra.Command, _ []string) error {
 		Config: cfg, ConfigError: configErr, Paths: paths, PathsError: pathsErr,
 		Daemon: debugDaemon(), Kitty: debugKitty(), AMXBin: bin,
 		CLIBuild: buildinfo.Current(), Now: now, Selector: selector,
+		Backend: doctorBackendStatus(),
 	})
 	if err != nil {
 		return err
@@ -209,6 +210,18 @@ func writeDebugStatusText(out io.Writer, report debugger.StatusReport) error {
 	// that would read as an old daemon rather than as no daemon.
 	if report.Daemon.Alive {
 		if err := writeKittySnapshot(out, report.Daemon.KittySnapshot, true, false); err != nil {
+			return err
+		}
+	}
+	// The same lines doctor prints, without its findings: status describes.
+	discard := func(string, string, string, ...any) {}
+	if backend, ok := report.Backend.(cli.BackendStatus); ok {
+		if err := writeDoctorBackend(out, backend, discard); err != nil {
+			return err
+		}
+	}
+	if report.Daemon.Alive {
+		if err := writeDoctorRuntime(out, report.Daemon.Runtime, discard); err != nil {
 			return err
 		}
 	}
