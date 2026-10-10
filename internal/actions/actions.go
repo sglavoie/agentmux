@@ -137,6 +137,10 @@ type Dependencies struct {
 	Worktree        worktree.Runner
 	WorktreeManager WorktreeLifecycle
 	LiveSessions    func(*config.Config) ([]session.RunningSession, error)
+	// Launched, when set, is told about every launch or dedup that ended on a
+	// registered runtime session, so a surface can show the agent where its
+	// host shows agents. It is a notification: it cannot fail the action.
+	Launched        func(session.LaunchResult)
 	ActiveLoops     func() ([]agentloop.Candidate, error)
 	TranscriptIndex func() (*transcript.Index, error)
 }
@@ -293,8 +297,11 @@ func (d Dependencies) sessionTerminal(running session.RunningSession) backend.Ba
 
 // launchData records where a launch went. Backend is always reported so a
 // caller reads the same shape from either backend; the runtime session is
-// reported when the launch registered one.
-func launchData(data map[string]any, launched session.LaunchResult) map[string]any {
+// reported when the launch registered one, and Launched is told about it.
+func (d Dependencies) launchData(data map[string]any, launched session.LaunchResult) map[string]any {
+	if d.Launched != nil && launched.RuntimeSessionID != "" {
+		d.Launched(launched)
+	}
 	if data == nil {
 		data = map[string]any{}
 	}

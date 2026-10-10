@@ -252,7 +252,44 @@ ASL answer panel work the same either way.
 - **Main menu.** The terminals offer every key equivalent to the main menu
   before encoding it for their program, so the menu is the list of shortcuts
   the workspace keeps: ⌘C/⌘V/⌘A, ⌘+/⌘-/⌘0, ⌘⇧A (next needing attention),
-  ⌘⇧] and ⌘⇧[ (next and previous session), ⌘W, ⌘M, ⌘1, ⌘, and ⌘Q.
+  ⌘⇧] and ⌘⇧[ (next and previous session), ⌘D (Dashboard), ⌘O (Overview),
+  ⌘T (new shell), ⌘⇧W (close view), ⌘W, ⌘M, ⌘1, ⌘, and ⌘Q.
+
+### Dashboard and utility views
+
+The sidebar's first section, **Workspace**, lists utility views
+(`Model/WorkspaceViews.swift`): the Dashboard and the Overview always, and a
+shell, editor, or pager while one is open. A utility view is a
+`Ghostty.SurfaceView` running `amx workspace-view <kind> [target]`
+(`cmd/dashboard/workspace_view.go`); the app passes a kind and a target and
+never a command line, and amx decides the program and removes every session
+and Kitty variable from its environment before running it.
+
+- **Not sessions.** A `WorkspaceUtilityView` has no `AttentionCycler.Key` and
+  nothing about it comes from a snapshot, so it cannot be counted as waiting,
+  appear in the status menu, or be reached by the attention shortcut. The
+  window keeps `viewSelection` beside `WorkspaceState.selection`; only one of
+  the two is ever set.
+- **Routing.** The app subscribes with the `workspace_views` feature. The
+  embedded dashboard and overview send the daemon a `workspace_view` request
+  when they launch or focus a session or want a utility view; the daemon
+  validates it and forwards it as a `workspace_view` frame
+  (`StreamFrame.workspaceView`), and `WorkspaceWindowController.open(_:)` acts
+  on it: a session request focuses that session's own `amx attach` terminal,
+  a just-launched one (`await`) is held until a snapshot lists it or
+  `awaitLimit` passes, and a utility request opens its view. A request that
+  arrives while the window is closed is dropped. If no workspace is connected
+  the daemon refuses and the surface shows the view in its own terminal.
+- **Lifetime.** A utility terminal is made when its view is first shown. A
+  shell, editor, or pager that exits unlists its view and the pane goes back
+  to where it was; the Dashboard or the Overview that quits stays listed and
+  offers **Reopen**. Closing the window hides utility terminals without ending
+  them, unlike attachments.
+- **The dashboard shortcut.** `DashboardOpener.destination(for:)` sends it to
+  the workspace's Dashboard only when there is no Kitty socket to try; a Kitty
+  that answered with a failure, or sockets nobody answers on, are still
+  reported. **Launch Project** with no Kitty socket runs
+  `amx project launch --backend tmux` and shows the session in the workspace.
 
 ## Which amx the app runs
 

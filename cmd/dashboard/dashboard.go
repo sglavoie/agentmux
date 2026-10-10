@@ -27,6 +27,12 @@
 // configuration before launching, because a tab that opens only to show a
 // config error and close is worse than refusing.
 //
+// `amx workspace-view` (workspace_view.go, hidden) is what the desktop
+// workspace runs in the terminals it embeds beside the agents: the dashboard
+// and the overview hosted by the workspace, and the shell, editor, and pager
+// utility views. It strips every session and Kitty variable first, so a view
+// never needs Kitty and never speaks as a managed session.
+//
 // There is deliberately no `dashboard` subcommand. The dashboard is the root
 // command's default execution path, so this package exposes Run for the root
 // to call rather than a *cobra.Command of its own.

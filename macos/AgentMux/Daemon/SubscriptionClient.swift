@@ -9,6 +9,8 @@ enum StreamFrame: Equatable {
     /// notification presenter owns that shape.
     case notification(seq: UInt64, Data)
     case notificationRetract(seq: UInt64, NotificationRetractFrame)
+    /// A view a surface the workspace embeds asked the daemon to have shown.
+    case workspaceView(seq: UInt64, WorkspaceViewRequest)
     /// A frame type this app does not know; a reader skips it.
     case unknown(seq: UInt64, type: String)
 }
@@ -318,6 +320,9 @@ final class SubscriptionClient {
         case "notification_retract":
             guard let payload = try? decoder.decode(StreamFramePayload<NotificationRetractFrame>.self, from: line) else { return nil }
             return .notificationRetract(seq: header.seq, payload.data)
+        case "workspace_view":
+            guard let payload = try? decoder.decode(StreamFramePayload<WorkspaceViewRequest>.self, from: line) else { return nil }
+            return .workspaceView(seq: header.seq, payload.data)
         default:
             return .unknown(seq: header.seq, type: header.type)
         }

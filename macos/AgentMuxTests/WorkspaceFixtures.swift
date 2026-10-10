@@ -102,6 +102,19 @@ final class FakeWorkspaceApp: WorkspaceDelegate {
         })
     }
 
+    /// The utility views a terminal was made for, by id, and those let go.
+    private(set) var madeViews: [String] = []
+    private(set) var closedViews: [String] = []
+    /// Set to refuse every utility terminal with this message.
+    var viewProblem: String?
+
+    func makeUtilityTerminal(_ view: WorkspaceUtilityView) -> Result<WorkspaceTerminal, WorkspaceTerminalProblem> {
+        if let viewProblem { return .failure(WorkspaceTerminalProblem(message: viewProblem)) }
+        let terminal = FocusableView()
+        madeViews.append(view.id)
+        return .success(WorkspaceTerminal(view: terminal) { [weak self] in self?.closedViews.append(view.id) })
+    }
+
     func focusExternally(_ row: WorkspaceRow) { external.append(row) }
     func workspaceVisibilityChanged(_ visible: Bool) { visibility.append(visible) }
 }

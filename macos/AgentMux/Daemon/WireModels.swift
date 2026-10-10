@@ -113,6 +113,10 @@ struct SubscribeParams: Encodable, Equatable {
     /// also list sessions on backends other than Kitty, each with its runtime
     /// identity. A daemon that does not know the feature keeps sending v1.
     static let runtimeSessionsFeature = "runtime_sessions"
+    /// `protocol.CompanionFeatureWorkspaceViews`: this client hosts workspace
+    /// views, so the daemon forwards it the `workspace_view` requests of the
+    /// surfaces it embeds. A daemon that does not know the feature sends none.
+    static let workspaceViewsFeature = "workspace_views"
 
     var protocolVersion: Int = SubscribeParams.protocolVersion
     var client: String = SubscribeParams.clientName
@@ -122,7 +126,7 @@ struct SubscribeParams: Encodable, Equatable {
     var amxBuild: AMXBuildReport?
     var notificationBackend: Bool = false
     var notificationsAuthorized: Bool = false
-    var features: [String] = [SubscribeParams.runtimeSessionsFeature]
+    var features: [String] = [SubscribeParams.runtimeSessionsFeature, SubscribeParams.workspaceViewsFeature]
 
     enum CodingKeys: String, CodingKey {
         case protocolVersion = "protocol"

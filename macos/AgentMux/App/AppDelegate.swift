@@ -178,21 +178,74 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         )
     }
 
+    /// What a utility view's terminal runs: `amx workspace-view …`, which
+    /// decides the program and strips every session and Kitty variable from
+    /// its environment first. Nil until amx is resolved.
+    func utilityConfiguration(for view: WorkspaceUtilityView) -> Ghostty.SurfaceConfiguration? {
+        guard let command else { return nil }
+        return Ghostty.SurfaceConfiguration(
+            program: command.binary,
+            arguments: view.arguments,
+            environment: command.launchEnvironment.commandEnvironment
+        )
+    }
+
     // MARK: Workspace
 
     /// Shows the workspace window, on `runtimeSessionID`'s terminal when one
-    /// is named.
+    /// is named. Opened on nothing in particular, it lands on the Dashboard.
     func showWorkspace(focusing runtimeSessionID: String? = nil) {
+        let controller = workspaceController()
+        if let runtimeSessionID {
+            controller.focus(runtimeSessionID: runtimeSessionID)
+        } else {
+            controller.show()
+            if controller.state.selection == nil, controller.viewSelection == nil {
+                controller.showView(WorkspaceUtilityView.dashboard.id)
+            }
+        }
+    }
+
+    private func workspaceController() -> WorkspaceWindowController {
         let controller = workspace ?? WorkspaceWindowController(delegate: self)
         workspace = controller
         // The terminals offer their shortcuts to the main menu first, and a
         // regular app needs one; the accessory never shows it.
         if NSApp.mainMenu == nil { NSApp.mainMenu = WorkspaceMenu.make(target: self) }
-        if let runtimeSessionID {
-            controller.focus(runtimeSessionID: runtimeSessionID)
-        } else {
-            controller.show()
+        return controller
+    }
+
+    /// Shows one of the workspace's utility views, opening the window for it.
+    func showWorkspaceView(_ view: WorkspaceUtilityView) {
+        let controller = workspaceController()
+        controller.show()
+        controller.open(view)
+    }
+
+    /// A view a surface the workspace embeds asked for, forwarded by the
+    /// daemon. Such a surface lives in the workspace window, so a request
+    /// that arrives while the window is closed is from nothing on screen and
+    /// is dropped rather than raising the app.
+    private func handle(_ request: WorkspaceViewRequest) {
+        guard let workspace, workspace.isOpen else {
+            Self.logger.notice("workspace view request (\(request.kind, privacy: .public)) with no workspace open; ignored")
+            return
         }
+        workspace.open(request)
+    }
+
+    func makeUtilityTerminal(_ view: WorkspaceUtilityView) -> Result<WorkspaceTerminal, WorkspaceTerminalProblem> {
+        guard let configuration = utilityConfiguration(for: view) else {
+            return .failure(WorkspaceTerminalProblem(message: preferences.binaryProblem ?? "amx is still being resolved."))
+        }
+        guard let runtime = terminalRuntime() else {
+            return .failure(WorkspaceTerminalProblem(message: "The embedded terminal could not start. See the log for why."))
+        }
+        guard let surface = runtime.makeSurface(configuration) else {
+            return .failure(WorkspaceTerminalProblem(message: "The terminal could not be created."))
+        }
+        surface.delegate = workspace
+        return .success(WorkspaceTerminal(view: surface) { surface.close() })
     }
 
     func makeTerminal(runtimeSessionID: String) -> Result<WorkspaceTerminal, WorkspaceTerminalProblem> {
@@ -225,7 +278,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     @objc func nextAttention(_ sender: Any?) { focusNextAttention() }
     @objc func selectNextSession(_ sender: Any?) { workspace?.selectNeighbor(1) }
     @objc func selectPreviousSession(_ sender: Any?) { workspace?.selectNeighbor(-1) }
-    @objc func openDashboardFromMenu(_ sender: Any?) { openDashboard() }
+    /// The workspace's own Dashboard: the main menu's, as opposed to the
+    /// global shortcut, which prefers a dashboard already running in Kitty.
+    @objc func openDashboardFromMenu(_ sender: Any?) { showWorkspaceView(.dashboard) }
+    @objc func openOverviewFromMenu(_ sender: Any?) { showWorkspaceView(.overview) }
+    @objc func newShellFromMenu(_ sender: Any?) {
+        let home = command?.launchEnvironment.home ?? NSHomeDirectory()
+        showWorkspaceView(WorkspaceUtilityView(kind: .shell, target: home, title: "Shell"))
+    }
+    @objc func closeWorkspaceView(_ sender: Any?) { workspace?.closeSelectedView() }
 
     // MARK: Companion feed
 
@@ -247,6 +308,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             notifications?.present(frame: data)
         case let .frame(.notificationRetract(_, frame)):
             notifications?.retract(frame)
+        case let .frame(.workspaceView(_, request)):
+            handle(request)
         default:
             break
         }
@@ -651,7 +714,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     }
 
     /// ⌃⌥⌘A: focuses the running dashboard, or opens one, then brings its
-    /// Kitty forward.
+    /// Kitty forward. With no Kitty to ask, the dashboard is the workspace's
+    /// own.
     func openDashboard() {
         guard let command else {
             refuse(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.")
@@ -677,14 +741,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     }
 
     private func finishOpenDashboard(_ outcome: DashboardOpener.Outcome) {
-        switch outcome {
-        case let .opened(result, socket):
+        switch DashboardOpener.destination(for: outcome) {
+        case let .kitty(result, socket):
             Self.logger.notice("dashboard \(result.opened ? "opened" : "focused", privacy: .public) (window \(result.windowID))")
             if !KittyActivator.activate(socket: socket) {
                 refuse("Kitty is not running.")
             }
-        case .noSocket:
-            refuse(KittyEndpoint.listenOnMissing)
+        case .workspace:
+            Self.logger.notice("dashboard: no Kitty socket to ask; showing the workspace's own")
+            showWorkspaceView(.dashboard)
         case let .failed(message):
             refuse("Could not open the dashboard: \(message)")
         }
@@ -840,11 +905,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     }
 
     /// Launch Project: `amx project launch` in the Kitty used last, then that
-    /// Kitty is brought forward on the new tab.
+    /// Kitty is brought forward on the new tab. With no Kitty to open a tab
+    /// in, the project launches on tmux and the workspace shows it.
     private func launch(_ project: ProjectEntry) {
         guard let command else { return report(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.") }
         if let reason = gate.unavailableReason(.project) { return report(reason) }
         let candidates = newTabCandidates()
+        if candidates.isEmpty { return launchInWorkspace(project, command: command) }
         let arguments = ProjectCatalog.launchArguments(for: project)
         focusQueue.async { [weak self] in
             let outcome = KittyTargetedCommand.run(candidates: candidates) { socket in
@@ -853,6 +920,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     self?.finishOpening(outcome, label: "launch \(project.profile)/\(project.title)") { $0.windowID }
+                }
+            }
+        }
+    }
+
+    /// Launches a project on the private tmux server and shows the workspace
+    /// on it: the session's own view as soon as the daemon lists it, and the
+    /// window meanwhile.
+    private func launchInWorkspace(_ project: ProjectEntry, command: AMXCommand) {
+        let arguments = ProjectCatalog.workspaceLaunchArguments(for: project)
+        let label = "launch \(project.profile)/\(project.title)"
+        focusQueue.async { [weak self] in
+            let result = command.json(ProjectLaunchResult.self, arguments)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    switch result {
+                    case let .failure(error):
+                        Self.logger.error("\(label, privacy: .public) on tmux: \(error.message, privacy: .public)")
+                        self.report("Could not \(label): \(error.message)")
+                    case let .success(value), let .partial(value, _):
+                        Self.logger.notice("\(label, privacy: .public) on tmux as \(value.runtimeSessionID, privacy: .public)")
+                        let controller = self.workspaceController()
+                        controller.show()
+                        controller.open(WorkspaceViewRequest(
+                            kind: WorkspaceViewRequest.sessionKind, runtimeSessionID: value.runtimeSessionID, awaited: true
+                        ))
+                    }
                 }
             }
         }

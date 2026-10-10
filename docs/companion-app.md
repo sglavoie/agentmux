@@ -102,6 +102,38 @@ the tab titles use and a count of waiting sessions beside each project.
 While the window is open the app has a Dock icon and a menu bar; closing the
 window makes it a menu bar app again.
 
+### Dashboard and utility views
+
+Above the projects the sidebar lists the workspace's own views. They are
+terminals of their own beside the agents, and none of them needs Kitty.
+
+- **Dashboard** (⌘D) is the `amx` dashboard, embedded. The workspace opens on
+  it. Everything the dashboard does in a terminal it does here: launching,
+  Past Sessions, Plans, Worktrees, Runs, the action menu. What changes is
+  where things show. Launching an agent, resuming or forking a conversation,
+  restarting a session, or pressing Enter on a row takes you to that session's
+  own view in the workspace, and the Dashboard stays where it was behind it.
+  New agents launch on tmux.
+- **Overview** (⌘O) is the live session overview. Enter on a tile goes to the
+  session's view the same way.
+- **Shell**, **editor**, and **scrollback** views open when the Dashboard asks
+  for them (*Open shell*, *Open editor*, *Peek scrollback*, the plan and
+  worktree editors) and from **View › New Shell** (⌘T). Each is listed while
+  its program runs and goes away when it exits; **View › Close View** (⌘⇧W)
+  ends one.
+
+A view is not a session. It is never counted as waiting, never shown in the
+status menu, and skipped by the next-attention shortcut. Its program runs
+without any session's identity, so a harness you start by hand in a shell
+view is not mistaken for a managed agent. Closing the window detaches the
+session terminals but leaves a running shell, editor, or the Dashboard alone;
+they end when they exit, when their view is closed, or when the app quits.
+
+The global dashboard shortcut still prefers Kitty when a Kitty is running: it
+focuses the dashboard there, or opens one. With no Kitty to ask it shows the
+workspace's Dashboard, and **Launch Project** in the menu launches on tmux and
+shows the new session in the workspace.
+
 ## Global shortcuts
 
 | Default | Does |

@@ -686,6 +686,13 @@ operator's: it has its own socket and configuration and never reads
 
 `amx overview` takes the same `--backend` flag and follows the same table.
 
+Agent Mux.app embeds both as views of its workspace window (see
+[the companion app](companion-app.md#dashboard-and-utility-views)). Hosted
+there they launch on tmux, and what would take over the terminal elsewhere —
+attaching to a session, the scrollback pager, a project shell, the editor —
+opens as a view of the workspace instead, so the dashboard stays on screen. If
+the app is not connected to the daemon they behave as in any other terminal.
+
 What changes for a tmux session, and only for it:
 
 - **Focus attaches.** `enter` hands this terminal to the session

@@ -1,0 +1,30 @@
+[defaults]
+sort = "alpha"
+refresh_interval = 1
+plans_directory = "/tmp/amxs14/plans"
+editor = "/tmp/amxs14/bin/edit-standin"
+
+[[profiles]]
+name = "work"
+harness = "claude"
+home_dir = "/tmp/amxs14/home/.claude-a"
+color = "blue"
+
+[[profiles]]
+name = "personal"
+harness = "claude"
+home_dir = "/tmp/amxs14/home/.claude-b"
+color = "green"
+
+[[projects]]
+title = "alpha"
+directory = "/tmp/amxs14/proj/alpha"
+profile = "work"
+
+[[projects]]
+title = "beta"
+directory = "/tmp/amxs14/proj/beta"
+profile = "work"
+
+[harness_emojis]
+claude = "🟠"

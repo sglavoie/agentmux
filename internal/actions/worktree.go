@@ -239,7 +239,7 @@ func resumeWorktreeConversation(deps Dependencies, entry worktree.Entry, project
 	if err != nil {
 		return Result{}, &Error{Code: "launch_failed", Action: WorktreeReopen, Message: err.Error()}
 	}
-	return Result{Changed: true, Message: "resumed newest worktree conversation", Data: launchData(map[string]any{
+	return Result{Changed: true, Message: "resumed newest worktree conversation", Data: deps.launchData(map[string]any{
 		"continuation": "resumed", "harness": identity.Harness, "session_id": identity.SessionID,
 		"warnings": warnings,
 	}, launched)}, nil
@@ -271,7 +271,7 @@ func launchFreshWorktree(deps Dependencies, entry worktree.Entry, project config
 	if err != nil {
 		return Result{}, &Error{Code: "launch_failed", Action: WorktreeReopen, Message: err.Error()}
 	}
-	return Result{Changed: true, Message: "launched fresh worktree session", Data: launchData(map[string]any{
+	return Result{Changed: true, Message: "launched fresh worktree session", Data: deps.launchData(map[string]any{
 		"continuation": "fresh", "profile": account.Name, "harness": account.EffectiveHarness(), "warnings": warnings,
 	}, launched)}, nil
 }

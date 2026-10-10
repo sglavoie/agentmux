@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -48,6 +49,12 @@ type PortableTerminals struct {
 	// Attach builds the command that attaches this terminal to a portable
 	// session. It returns when the operator detaches.
 	Attach func(session.RunningSession) (*exec.Cmd, error)
+	// Desktop hands a view to the desktop workspace hosting this surface, by
+	// way of the daemon. Nil for a surface in an ordinary terminal. When it
+	// is set, showing a session, a pager, a shell, or an editor asks the
+	// workspace for a view of its own, and only a refusal falls back to
+	// taking over this terminal.
+	Desktop func(protocol.WorkspaceViewRequest) error
 }
 
 // Portable is the process's portable terminal set, installed once by the
@@ -123,6 +130,18 @@ func TerminalDependencies(client kitty.KittyClient, cfg *config.Config) actions.
 		Backend:  Portable.Launch,
 		Tmux:     Portable.Tmux,
 		Runtimes: Portable.Registry,
+	}
+	if desktop := Portable.Desktop; desktop != nil {
+		// A Kitty launch leaves the operator in the tab it opened. Hosted by
+		// the workspace, the equivalent is the new agent's native view, which
+		// the workspace shows as soon as the daemon lists the session.
+		deps.Launched = func(launched session.LaunchResult) {
+			_ = desktop(protocol.WorkspaceViewRequest{
+				Kind:             protocol.WorkspaceViewSession,
+				RuntimeSessionID: string(launched.RuntimeSessionID),
+				Await:            true,
+			})
+		}
 	}
 	if Portable.Tmux != nil {
 		// The actions' own live-session probe reads Kitty alone. With a
@@ -240,9 +259,28 @@ func overlayPortableState(sessions []session.RunningSession, resp *protocol.Resp
 // or the attach could not start.
 type AttachDoneMsg struct{ Err error }
 
-// Attach hands this terminal to a portable session until the operator
-// detaches, then gives it back to the surface.
+// Attach shows a portable session. Hosted by the desktop workspace, that is
+// the workspace's own view of the session, and this surface carries on at
+// once. Anywhere else, or when the workspace cannot show it, this terminal is
+// handed to the session until the operator detaches.
 func Attach(rs session.RunningSession) tea.Cmd {
+	here := attachHere(rs)
+	desktop := Portable.Desktop
+	if desktop == nil || rs.RuntimeSessionID == "" {
+		return here
+	}
+	view := protocol.WorkspaceViewRequest{Kind: protocol.WorkspaceViewSession, RuntimeSessionID: string(rs.RuntimeSessionID)}
+	return func() tea.Msg {
+		if err := desktop(view); err != nil {
+			return here()
+		}
+		return AttachDoneMsg{}
+	}
+}
+
+// attachHere hands this terminal to a portable session until the operator
+// detaches, then gives it back to the surface.
+func attachHere(rs session.RunningSession) tea.Cmd {
 	if Portable.Attach == nil {
 		return func() tea.Msg { return AttachDoneMsg{Err: errNoAttach} }
 	}
@@ -251,6 +289,32 @@ func Attach(rs session.RunningSession) tea.Cmd {
 		return func() tea.Msg { return AttachDoneMsg{Err: err} }
 	}
 	return tea.ExecProcess(cmd, func(err error) tea.Msg { return AttachDoneMsg{Err: err} })
+}
+
+// inWorkspace asks the desktop workspace for a utility view and reports done
+// when it took it; otherwise it runs here, which shows the same thing in this
+// terminal. With no workspace hosting the surface it is here unchanged.
+func inWorkspace(view protocol.WorkspaceViewRequest, done func(error) tea.Msg, here tea.Cmd) tea.Cmd {
+	desktop := Portable.Desktop
+	if desktop == nil {
+		return here
+	}
+	return func() tea.Msg {
+		if err := desktop(view); err != nil {
+			return here()
+		}
+		return done(nil)
+	}
+}
+
+// utilityPath is a directory or file as a workspace view names it: absolute
+// and clean, or empty when it cannot be made so.
+func utilityPath(path string) string {
+	abs, err := filepath.Abs(config.ExpandTilde(path))
+	if err != nil {
+		return ""
+	}
+	return abs
 }
 
 // ReadScrollback reads the whole scrollback of the pane a window ID names: a
@@ -290,15 +354,29 @@ func pagerCommand(path string) *exec.Cmd {
 	return exec.Command("less", "-R", "+G", path)
 }
 
-// peekPortable pages a portable session's scrollback in this terminal: the
-// text is captured through the backend and handed to the operator's pager.
+// peekPortable pages a portable session's scrollback: the text is captured
+// through the backend and handed to a pager, in a view of the desktop
+// workspace when one hosts this surface and in this terminal otherwise.
 func peekPortable(rs session.RunningSession) tea.Cmd {
-	capturer := Portable.Tmux
-	if capturer == nil {
-		return func() tea.Msg { return PeekDoneMsg{Err: ErrNoTerminal} }
+	done := func(err error) tea.Msg { return PeekDoneMsg{Err: err} }
+	here := func() tea.Msg { return PeekDoneMsg{Err: ErrNoTerminal} }
+	if capturer := Portable.Tmux; capturer != nil {
+		here = tea.Exec(NewScrollbackView(func() (string, error) { return capturer.Capture(rs.PaneRef(), backend.ExtentAll) }), done)
 	}
-	view := &scrollbackView{capture: func() (string, error) { return capturer.Capture(rs.PaneRef(), backend.ExtentAll) }}
-	return tea.Exec(view, func(err error) tea.Msg { return PeekDoneMsg{Err: err} })
+	if rs.RuntimeSessionID == "" {
+		return here
+	}
+	return inWorkspace(protocol.WorkspaceViewRequest{
+		Kind:             protocol.WorkspaceViewPager,
+		RuntimeSessionID: string(rs.RuntimeSessionID),
+		Title:            rs.EffectiveProject(),
+	}, done, here)
+}
+
+// NewScrollbackView returns a utility view that pages what capture reads. Its
+// Run needs the terminal: give it one with SetStdin, SetStdout and SetStderr.
+func NewScrollbackView(capture func() (string, error)) tea.ExecCommand {
+	return &scrollbackView{capture: capture}
 }
 
 // scrollbackView is a utility view that captures a pane's scrollback and
@@ -360,11 +438,10 @@ func utilityEditor(cfg *config.Config) []string {
 	return []string{"vi"}
 }
 
-// openHere runs argv in dir in this terminal and reports through
-// PickerOpenDoneMsg with Stay set, because nothing took the operator away.
-func openHere(dir string, argv []string) tea.Cmd {
-	return RunHere(dir, argv, func(err error) tea.Msg { return PickerOpenDoneMsg{Err: err, Stay: true} })
-}
+// openedHere is how a utility view opened for a project reports: through
+// PickerOpenDoneMsg with Stay set, because nothing took the operator away from
+// this surface.
+func openedHere(err error) tea.Msg { return PickerOpenDoneMsg{Err: err, Stay: true} }
 
 // RunHere runs argv in dir as a utility view in this terminal: the surface is
 // suspended while it runs and done reports how it ended.
@@ -375,15 +452,31 @@ func RunHere(dir string, argv []string, done func(error) tea.Msg) tea.Cmd {
 	return tea.ExecProcess(cmd, done)
 }
 
-// ShellHere opens a shell in dir in this terminal.
+// ShellHere opens a shell in dir: a shell view of the desktop workspace when
+// one hosts this surface, and otherwise a shell in this terminal.
 func ShellHere(dir string, done func(error) tea.Msg) tea.Cmd {
-	return RunHere(dir, []string{utilityShell()}, done)
+	here := RunHere(dir, []string{utilityShell()}, done)
+	target := utilityPath(dir)
+	if target == "" {
+		return here
+	}
+	return inWorkspace(protocol.WorkspaceViewRequest{
+		Kind: protocol.WorkspaceViewShell, Directory: target, Title: filepath.Base(target),
+	}, done, here)
 }
 
-// EditHere opens path in the configured editor in this terminal.
+// EditHere opens path in the configured editor: an editor view of the desktop
+// workspace when one hosts this surface, and otherwise in this terminal.
 func EditHere(cfg *config.Config, path string, done func(error) tea.Msg) tea.Cmd {
 	path = config.ExpandTilde(path)
-	return RunHere(path, append(utilityEditor(cfg), path), done)
+	here := RunHere(path, append(utilityEditor(cfg), path), done)
+	target := utilityPath(path)
+	if target == "" {
+		return here
+	}
+	return inWorkspace(protocol.WorkspaceViewRequest{
+		Kind: protocol.WorkspaceViewEditor, Path: target, Title: filepath.Base(target),
+	}, done, here)
 }
 
 var portableConversations = struct {

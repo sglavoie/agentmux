@@ -65,7 +65,7 @@ func defaultDefinitions() []Definition {
 				if err != nil {
 					return Result{}, err
 				}
-				return Result{Changed: true, Message: "launched session", Data: launchData(nil, launched)}, nil
+				return Result{Changed: true, Message: "launched session", Data: deps.launchData(nil, launched)}, nil
 			},
 		},
 		{
@@ -279,13 +279,13 @@ func defaultDefinitions() []Definition {
 					if err != nil {
 						return Result{}, err
 					}
-					return Result{Changed: true, Message: "restarted session", Data: launchData(nil, launched)}, nil
+					return Result{Changed: true, Message: "restarted session", Data: deps.launchData(nil, launched)}, nil
 				}
 				launched, err := session.RestartOn(rt, *request.Session, deps.Config)
 				if err != nil {
 					return Result{}, err
 				}
-				return Result{Changed: true, Message: "restarted session", Data: launchData(nil, launched)}, nil
+				return Result{Changed: true, Message: "restarted session", Data: deps.launchData(nil, launched)}, nil
 			},
 		},
 		{

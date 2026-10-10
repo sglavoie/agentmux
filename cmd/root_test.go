@@ -89,7 +89,7 @@ func TestCommandFamiliesAreRegisteredUnderRoot(t *testing.T) {
 		"hook-indicator", "icon-picker", "keybindings", "mute-toggle",
 		"notifications", "open-dashboard", "overseer", "overview", "project",
 		"release-gate", "resort",
-		"session", "transcripts", "tui-test", "worktree",
+		"session", "transcripts", "tui-test", "workspace-view", "worktree",
 	} {
 		if !registered[name] {
 			t.Errorf("root command %q is not registered", name)

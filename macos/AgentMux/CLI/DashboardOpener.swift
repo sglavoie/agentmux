@@ -55,6 +55,28 @@ enum DashboardOpener {
         }
     }
 
+    /// Where the dashboard shortcut ends up.
+    enum Destination: Equatable {
+        /// A dashboard in the Kitty at `socket`, to bring forward.
+        case kitty(OpenDashboardResult, socket: String)
+        /// The workspace's own Dashboard view.
+        case workspace
+        case failed(String)
+    }
+
+    /// Only the absence of any Kitty to ask sends the shortcut to the
+    /// workspace. A Kitty that was reached and refused, or sockets that
+    /// exist and that nobody answers on, stay the failures they are: the
+    /// operator has a Kitty and should hear what is wrong with it, not find
+    /// a second dashboard somewhere else.
+    static func destination(for outcome: Outcome) -> Destination {
+        switch outcome {
+        case let .opened(result, socket): return .kitty(result, socket: socket)
+        case .noSocket: return .workspace
+        case let .failed(message): return .failed(message)
+        }
+    }
+
     /// The sockets to try: Preferences' override, the running dashboard's own
     /// Kitty, the snapshot's, then every running Kitty's default address.
     static func candidates(override: String, snapshot: CompanionSnapshot?, kittyPIDs: [pid_t],

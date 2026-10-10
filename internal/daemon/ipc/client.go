@@ -427,3 +427,24 @@ func (c *Client) NotificationTest() (protocol.NotificationTestResult, error) {
 	}
 	return *resp.NotificationTest, nil
 }
+
+// WorkspaceView asks the daemon to have the desktop workspace show a view. A
+// refusal is returned as an error whose text is the daemon's refusal code
+// (protocol.WorkspaceViewError...), which is also what an older daemon's
+// "unknown request type" becomes: either way the caller shows the view itself.
+// It never auto-starts the daemon, since a daemon started just now has no
+// workspace connected, and it uses the state-query budget because the daemon
+// answers without touching a terminal.
+func (c *Client) WorkspaceView(view protocol.WorkspaceViewRequest) (protocol.WorkspaceViewResult, error) {
+	resp, err := c.sendWithDeadline(protocol.Request{Type: protocol.TypeWorkspaceView, WorkspaceView: &view}, stateQueryDeadline)
+	if err != nil {
+		return protocol.WorkspaceViewResult{}, err
+	}
+	if !resp.OK {
+		return protocol.WorkspaceViewResult{}, errors.New(resp.Error)
+	}
+	if resp.WorkspaceView == nil {
+		return protocol.WorkspaceViewResult{}, nil
+	}
+	return *resp.WorkspaceView, nil
+}

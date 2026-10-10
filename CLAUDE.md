@@ -60,7 +60,13 @@ daemon's v2 companion snapshot, grouped by project and labeled by profile, and
 embeds one `amx attach` terminal per tmux session; a Kitty session is focused
 in Kitty. A session is keyed by Kitty socket and window, or by runtime-session
 ID when it has no window (`AttentionCycler.Key`); never key one by window ID
-alone.
+alone. The workspace's Dashboard and Overview are the existing TUI in
+terminals of their own, and shells, editors, and pagers open beside them as
+utility views (`macos/AgentMux/Model/WorkspaceViews.swift`); each runs the
+hidden `amx workspace-view <kind> [target]` (`cmd/dashboard/workspace_view.go`),
+which strips every session and Kitty variable before running anything. A
+utility view is never a session: it has no key, comes from no snapshot, and
+must never count toward attention.
 
 Releases of the Agent Mux / agent-session-loop pair go through
 `just paired-release-gate asl_root=… signing_key=…`, which runs both
@@ -206,6 +212,14 @@ TUI (`tui/...`):
   terminal (`commands.Attach`, **F12** detaches) and the surface keeps running;
   Kitty-only actions report why they are unavailable. Build action dependencies
   with `commands.TerminalDependencies`, never a bare `actions.Dependencies{Kitty: …}`.
+- Hosted by the desktop workspace (`commands.Portable.Desktop`, set only by
+  `amx workspace-view`), the TUI asks the daemon to have the workspace show
+  things instead of taking over its own terminal: `commands.Attach`, the pager,
+  `ShellHere`, `EditHere`, and every launch (`actions.Dependencies.Launched`)
+  send a `workspace_view` request. The daemon validates and forwards it to the
+  subscribers that named the `workspace_views` feature
+  (`internal/daemon/workspace_view.go`); a refusal falls back to this terminal.
+  The request names a kind and a target, never a command line.
 
 ### Identity and safety rules
 

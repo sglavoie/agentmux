@@ -42,26 +42,27 @@ final class WorkspaceWindowTests: XCTestCase {
     }
 
     func testSidebarListsProjectsThenTheirSessions() throws {
-        XCTAssertEqual(workspace.items, [])
+        // The workspace's own views are always listed, above the projects.
+        XCTAssertEqual(workspace.items, [.section("Workspace"), .view(.dashboard), .view(.overview)])
         XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "No live sessions")
 
         app.store.apply(snapshot: F.snapshot(sessions))
-        XCTAssertEqual(workspace.sidebar.numberOfRows, 5)
-        guard case let .group(api) = workspace.items[0], case let .group(web) = workspace.items[3] else {
+        XCTAssertEqual(workspace.sidebar.numberOfRows, 8)
+        guard case let .group(api) = workspace.items[3], case let .group(web) = workspace.items[6] else {
             return XCTFail("expected a project line before its sessions: \(workspace.items)")
         }
         XCTAssertEqual([api.project, web.project], ["api", "web"])
-        XCTAssertTrue(workspace.tableView(workspace.sidebar, isGroupRow: 0))
-        XCTAssertFalse(workspace.tableView(workspace.sidebar, shouldSelectRow: 0), "a project line is not a session")
-        XCTAssertTrue(workspace.tableView(workspace.sidebar, shouldSelectRow: 1))
+        XCTAssertTrue(workspace.tableView(workspace.sidebar, isGroupRow: 3))
+        XCTAssertFalse(workspace.tableView(workspace.sidebar, shouldSelectRow: 3), "a project line is not a session")
+        XCTAssertTrue(workspace.tableView(workspace.sidebar, shouldSelectRow: 4))
 
-        let header = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 0) as? WorkspaceGroupCellView)
+        let header = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 3) as? WorkspaceGroupCellView)
         XCTAssertEqual(header.nameLabel.stringValue, "api")
         XCTAssertEqual(header.countLabel.stringValue, "1", "one of the project's sessions waits")
-        let cell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 1) as? WorkspaceRowCellView)
+        let cell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 4) as? WorkspaceRowCellView)
         XCTAssertEqual(cell.titleLabel.stringValue, "personal")
         XCTAssertEqual(cell.glyphLabel.stringValue, "🛑")
-        let kitty = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 4) as? WorkspaceRowCellView)
+        let kitty = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 7) as? WorkspaceRowCellView)
         XCTAssertEqual(kitty.titleLabel.stringValue, "work")
         XCTAssertTrue(kitty.detailLabel.stringValue.hasSuffix("Kitty"))
 
@@ -162,7 +163,7 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.feedLabel.stringValue, "Daemon: not running")
         XCTAssertFalse(workspace.feedLabel.isHidden)
         XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(1)))
-        XCTAssertEqual(workspace.sidebar.selectedRow, 2)
+        XCTAssertEqual(workspace.sidebar.selectedRow, try index(of: .embedded(F.runtimeID(1))))
         XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)))
         XCTAssertTrue(workspace.terminalView(for: F.runtimeID(1)) === terminal)
         XCTAssertFalse(terminal.isHidden)
@@ -383,7 +384,7 @@ final class WorkspaceStreamTests: XCTestCase {
         client.start()
 
         ghosttyWait("the first snapshot") { self.workspace.state.rows.count == 3 }
-        XCTAssertTrue(try XCTUnwrap(subscribe.get()).contains(#""features":["runtime_sessions"]"#))
+        XCTAssertTrue(try XCTUnwrap(subscribe.get()).contains(#""features":["runtime_sessions","workspace_views"]"#))
         XCTAssertTrue(workspace.state.current)
 
         let (work, personal) = (F.runtimeID(1), F.runtimeID(2))

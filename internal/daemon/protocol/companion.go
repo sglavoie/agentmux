@@ -77,6 +77,7 @@ var CompanionMessageTypes = []MessageType{
 	TypeNotificationSnooze,
 	TypeNotificationDisposition,
 	TypeNotificationTest,
+	TypeWorkspaceView,
 }
 
 // AttentionStates is the set of icon states that mean a human is being waited
@@ -102,8 +103,9 @@ type SubscribeRequest struct {
 	Client        string          `json:"client,omitempty"`
 	ClientVersion string          `json:"client_version,omitempty"`
 	AMXBuild      *buildinfo.Info `json:"amx_build,omitempty"`
-	// Features names optional behaviors the client understands. Only
-	// CompanionFeatureRuntimeSessions changes what the daemon sends.
+	// Features names optional behaviors the client understands:
+	// CompanionFeatureRuntimeSessions selects the snapshot shape, and
+	// CompanionFeatureWorkspaceViews asks for workspace_view frames.
 	Features                []string `json:"features,omitempty"`
 	NotificationBackend     bool     `json:"notification_backend,omitempty"`
 	NotificationsAuthorized bool     `json:"notifications_authorized,omitempty"`
@@ -248,6 +250,8 @@ type CompanionClient struct {
 	ConnectedAt         int64           `json:"connected_at,omitempty"`
 	// SnapshotVersion is the snapshot shape this subscriber negotiated.
 	SnapshotVersion int `json:"snapshot_version,omitempty"`
+	// WorkspaceViews reports a subscriber that hosts workspace views.
+	WorkspaceViews bool `json:"workspace_views,omitempty"`
 }
 
 // StreamFrameType names the payload a StreamFrame carries.
@@ -418,4 +422,85 @@ type CompanionRuntime struct {
 	Instance   string `json:"instance,omitempty"`
 	Generation string `json:"generation,omitempty"`
 	Pane       string `json:"pane,omitempty"`
+}
+
+// TypeWorkspaceView asks the desktop workspace to show something: the native
+// view of a session, its Dashboard or Overview, or a utility terminal. It is
+// how a surface the workspace embeds (the dashboard, the overview) hands a
+// launch or a focus to the workspace instead of taking over its own terminal.
+// The daemon validates the request and forwards it as a FrameWorkspaceView to
+// every subscriber that asked for CompanionFeatureWorkspaceViews; it shows
+// nothing itself. Like the other companion requests it stays off the hook
+// ingress queue.
+const TypeWorkspaceView MessageType = "workspace_view"
+
+// CompanionFeatureWorkspaceViews is the subscribe feature a client that hosts
+// workspace views names. Only such a subscriber is sent workspace_view frames,
+// and a workspace_view request is refused while none is connected.
+const CompanionFeatureWorkspaceViews = "workspace_views"
+
+// FrameWorkspaceView carries one WorkspaceViewRequest to a workspace.
+const FrameWorkspaceView StreamFrameType = "workspace_view"
+
+// Workspace view kinds. A session view shows a managed agent and is the only
+// kind tied to a runtime session's identity. The others are utility views:
+// terminals the workspace runs beside the agents, which are never sessions,
+// never counted as waiting, and never carry a runtime session of their own.
+// A pager names the session whose scrollback it reads, nothing more.
+const (
+	WorkspaceViewSession   = "session"
+	WorkspaceViewDashboard = "dashboard"
+	WorkspaceViewOverview  = "overview"
+	WorkspaceViewShell     = "shell"
+	WorkspaceViewEditor    = "editor"
+	WorkspaceViewPager     = "pager"
+)
+
+// WorkspaceViewKinds lists every kind a workspace_view request may name.
+var WorkspaceViewKinds = []string{
+	WorkspaceViewSession,
+	WorkspaceViewDashboard,
+	WorkspaceViewOverview,
+	WorkspaceViewShell,
+	WorkspaceViewEditor,
+	WorkspaceViewPager,
+}
+
+// Workspace view refusal codes, in Response.Error.
+const (
+	// WorkspaceViewErrorUnavailable: no workspace is connected to show it.
+	WorkspaceViewErrorUnavailable = "workspace_unavailable"
+	// WorkspaceViewErrorInvalid: the request names no known kind or lacks
+	// what its kind needs.
+	WorkspaceViewErrorInvalid = "invalid_view"
+	// WorkspaceViewErrorSessionUnknown: the runtime session is not a live
+	// session a workspace can embed.
+	WorkspaceViewErrorSessionUnknown = "runtime_session_unknown"
+	// WorkspaceViewErrorSessionNotListed: the session is live but the daemon
+	// has not heard from it, so no workspace lists it yet.
+	WorkspaceViewErrorSessionNotListed = "session_not_listed"
+)
+
+// WorkspaceViewRequest names one view. It never carries a command line: the
+// workspace decides what each kind runs, so a request can open a shell or an
+// editor where the operator already could and nothing else.
+type WorkspaceViewRequest struct {
+	Kind string `json:"kind"`
+	// RuntimeSessionID is the session a session view shows or a pager reads.
+	RuntimeSessionID string `json:"runtime_session_id,omitempty"`
+	// Await marks a session that was just launched: a workspace that does not
+	// list it yet shows it once it does, instead of the request being refused.
+	Await bool `json:"await,omitempty"`
+	// Directory is where a shell starts. Absolute.
+	Directory string `json:"directory,omitempty"`
+	// Path is what an editor opens. Absolute.
+	Path string `json:"path,omitempty"`
+	// Title labels a utility view in the workspace.
+	Title string `json:"title,omitempty"`
+}
+
+// WorkspaceViewResult answers TypeWorkspaceView: how many workspaces were
+// handed the request.
+type WorkspaceViewResult struct {
+	Delivered int `json:"delivered"`
 }

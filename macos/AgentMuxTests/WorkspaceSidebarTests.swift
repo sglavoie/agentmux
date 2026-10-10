@@ -17,7 +17,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         let data = try JSONEncoder().encode(DaemonRequest.subscribing(SubscribeParams()))
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let params = try XCTUnwrap(object["subscribe"] as? [String: Any])
-        XCTAssertEqual(params["features"] as? [String], ["runtime_sessions"])
+        XCTAssertEqual(params["features"] as? [String], ["runtime_sessions", "workspace_views"])
         XCTAssertEqual(params["protocol"] as? Int, 1, "the feature rides protocol 1")
     }
 

@@ -1,0 +1,7 @@
+./macos/scripts/test-app.sh Debug
+GhosttyKit up to date (ghostty=v1.3.1 commit=332b2aefc6e72d363aa93ab6ecfc86eeeeb5ed28 zig=0.15.2 target=universal patches=855da15192006691)
+2026-10-09 20:38:01.826 xcodebuild[98348:5752082] [MT] IDETestOperationsObserverDebug: 12.285 elapsed -- Testing started completed.
+2026-10-09 20:38:01.826 xcodebuild[98348:5752082] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-10-09 20:38:01.826 xcodebuild[98348:5752082] [MT] IDETestOperationsObserverDebug: 12.285 sec, +12.285 sec -- end
+Testing started
+exit 0

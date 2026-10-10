@@ -70,6 +70,36 @@ func TestLaunchActionOnTmuxReportsRuntimeSession(t *testing.T) {
 	}
 }
 
+// TestLaunchAndRestartAnnounceTheRuntimeSession: a surface hosted somewhere
+// that shows agents is told which runtime session each launch ended on, with
+// the same identity the result reports.
+func TestLaunchAndRestartAnnounceTheRuntimeSession(t *testing.T) {
+	f := tmuxtest.New(t)
+	cfg := continuityConfig(harness.Claude)
+	cfg.Projects[0].Directory = t.TempDir()
+	project := cfg.Projects[0]
+	deps := tmuxDeps(f, cfg)
+	var announced []session.LaunchResult
+	deps.Launched = func(launched session.LaunchResult) { announced = append(announced, launched) }
+
+	result, err := DefaultRegistry().Execute(context.Background(), deps, Launch, Request{Project: &project})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(announced) != 1 || string(announced[0].RuntimeSessionID) != result.Data["runtime_session_id"] {
+		t.Fatalf("announced %+v; want the launched runtime session %v", announced, result.Data["runtime_session_id"])
+	}
+	running := tmuxSessions(t, f, cfg)
+	restarted, err := DefaultRegistry().Execute(context.Background(), deps, Restart, Request{Session: &running[0], Confirmed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(announced) != 2 || string(announced[1].RuntimeSessionID) != restarted.Data["runtime_session_id"] ||
+		announced[1].RuntimeSessionID == announced[0].RuntimeSessionID {
+		t.Fatalf("announced %+v; want the restart's new runtime session %v", announced, restarted.Data["runtime_session_id"])
+	}
+}
+
 // TestSessionActionsFollowTheRecordedBackend restarts and then closes a
 // tmux-hosted session through dependencies whose launch backend is Kitty:
 // both act on tmux because that is where the session runs.

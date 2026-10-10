@@ -101,12 +101,12 @@ func SessionWithProfile(sess config.Session, profileName string) config.Session 
 }
 
 // OpenDirectory opens a config session's directory in a plain shell tab, or,
-// outside Kitty, in a shell run in this terminal.
+// outside Kitty, in a shell view (ShellHere).
 // Emits PickerOpenDoneMsg so the model can quit on success or surface the
 // error in the dashboard otherwise.
 func OpenDirectory(client kitty.KittyClient, cfg *config.Config, cs config.Session) tea.Cmd {
 	if client == nil {
-		return openHere(cs.Directory, []string{utilityShell()})
+		return ShellHere(cs.Directory, openedHere)
 	}
 	return func() tea.Msg {
 		_, err := Registry.Execute(context.Background(), actions.Dependencies{Kitty: client, Config: cfg}, actions.OpenDirectory, actions.Request{Project: &cs})
@@ -116,12 +116,12 @@ func OpenDirectory(client kitty.KittyClient, cfg *config.Config, cs config.Sessi
 
 // OpenInEditor opens a config session's directory in a new Kitty tab running
 // the configured editor (defaults.editor → $VISUAL → $EDITOR → vi); outside
-// Kitty the editor runs in this terminal. Emits
+// Kitty the editor runs in an editor view (EditHere). Emits
 // PickerOpenDoneMsg so the model can quit on success or surface the error in
 // the dashboard otherwise.
 func OpenInEditor(client kitty.KittyClient, cfg *config.Config, cs config.Session) tea.Cmd {
 	if client == nil {
-		return openHere(cs.Directory, append(utilityEditor(cfg), config.ExpandTilde(cs.Directory)))
+		return EditHere(cfg, cs.Directory, openedHere)
 	}
 	return func() tea.Msg {
 		_, err := Registry.Execute(context.Background(), actions.Dependencies{Kitty: client, Config: cfg}, actions.OpenEditor, actions.Request{Project: &cs})

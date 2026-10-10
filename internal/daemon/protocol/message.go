@@ -251,6 +251,9 @@ type Request struct {
 	FocusWindow *FocusWindowRequest `json:"focus_window,omitempty"`
 	Snooze      *SnoozeRequest      `json:"snooze,omitempty"`
 	Disposition *DispositionRequest `json:"disposition,omitempty"`
+	// WorkspaceView is the view a TypeWorkspaceView request asks a desktop
+	// workspace to show.
+	WorkspaceView *WorkspaceViewRequest `json:"workspace_view,omitempty"`
 }
 
 // ASLRequest is the typed parameter block for the ASL message types. Text is
@@ -379,6 +382,9 @@ type Response struct {
 	// NotificationTest answers TypeNotificationTest with the backend that
 	// confirmed a test notification, if any.
 	NotificationTest *NotificationTestResult `json:"notification_test,omitempty"`
+	// WorkspaceView answers TypeWorkspaceView with how many workspaces were
+	// handed the view.
+	WorkspaceView *WorkspaceViewResult `json:"workspace_view,omitempty"`
 	// Companion is the TypeHealth view of companion subscribers. It is omitted
 	// by daemons that predate the companion protocol.
 	Companion *CompanionHealth `json:"companion,omitempty"`

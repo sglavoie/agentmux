@@ -79,7 +79,7 @@ func continueConversation(deps Dependencies, meta transcript.SessionMeta) (Resul
 	return Result{
 		Changed: true,
 		Message: "resumed indexed conversation",
-		Data:    launchData(map[string]any{"continuation": "resumed", "harness": identity.Harness, "session_id": identity.SessionID}, launched),
+		Data:    deps.launchData(map[string]any{"continuation": "resumed", "harness": identity.Harness, "session_id": identity.SessionID}, launched),
 	}, nil
 }
 
@@ -108,7 +108,7 @@ func forkConversation(deps Dependencies, meta transcript.SessionMeta) (Result, e
 	return Result{
 		Changed: true,
 		Message: "forked indexed conversation",
-		Data:    launchData(map[string]any{"continuation": "forked", "harness": identity.Harness, "session_id": identity.SessionID}, launched),
+		Data:    deps.launchData(map[string]any{"continuation": "forked", "harness": identity.Harness, "session_id": identity.SessionID}, launched),
 	}, nil
 }
 
@@ -220,7 +220,7 @@ func forkConversationInWorktree(ctx context.Context, deps Dependencies, meta tra
 	return addIsolatedWorktreeResult(Result{
 		Changed: true,
 		Message: "forked indexed conversation in isolated worktree",
-		Data:    launchData(map[string]any{"continuation": "forked", "harness": identity.Harness, "session_id": identity.SessionID, "fork_kind": "isolated"}, launched),
+		Data:    deps.launchData(map[string]any{"continuation": "forked", "harness": identity.Harness, "session_id": identity.SessionID, "fork_kind": "isolated"}, launched),
 	}, isolated), nil
 }
 

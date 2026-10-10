@@ -64,4 +64,12 @@
 // notification ID is answered ok. notification_test offers one test notice to
 // the app and never falls back; the CLI tests Alerter itself when no app
 // confirmed one.
+//
+// The workspace_view request (workspace_view.go) is how a surface the desktop
+// workspace embeds hands a launch or a focus to the workspace's native views.
+// The daemon validates it — a known kind, a live session on a backend a
+// workspace embeds, canonical absolute paths, never a command line — and
+// forwards it as a workspace_view frame to the subscribers that named the
+// workspace_views feature. With none connected it answers
+// workspace_unavailable, and the surface shows the view in its own terminal.
 package daemon

@@ -382,6 +382,11 @@ func (h *Handler) Subscribe(req protocol.Request, sink *ipc.StreamSink) protocol
 		snapshotVersion = protocol.CompanionSnapshotVersionRuntime
 		features = append(features, protocol.CompanionFeatureRuntimeSessions)
 	}
+	// Workspace view requests go only to a client that said it hosts them.
+	workspaceViews := slices.Contains(sub.Features, protocol.CompanionFeatureWorkspaceViews)
+	if workspaceViews {
+		features = append(features, protocol.CompanionFeatureWorkspaceViews)
+	}
 	client := protocol.CompanionClient{
 		SubscriberID:  sink.ID(),
 		Client:        clampClientField(sub.Client),
@@ -390,6 +395,7 @@ func (h *Handler) Subscribe(req protocol.Request, sink *ipc.StreamSink) protocol
 		NotificationBackend: sub.NotificationBackend && sub.NotificationsAuthorized,
 		ConnectedAt:         time.Now().Unix(),
 		SnapshotVersion:     snapshotVersion,
+		WorkspaceViews:      workspaceViews,
 	}
 	if sub.AMXBuild != nil {
 		build := *sub.AMXBuild

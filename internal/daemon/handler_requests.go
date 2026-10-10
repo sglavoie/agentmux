@@ -79,6 +79,8 @@ func (h *Handler) Handle(req protocol.Request) protocol.Response {
 		resp = h.handleNotificationDisposition(req)
 	case protocol.TypeNotificationTest:
 		resp = h.handleNotificationTest()
+	case protocol.TypeWorkspaceView:
+		resp = h.handleWorkspaceView(req)
 	case protocol.TypeHealth:
 		resp = h.handleHealth()
 	case protocol.TypeShutdown:

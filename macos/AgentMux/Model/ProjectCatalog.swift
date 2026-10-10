@@ -93,19 +93,25 @@ struct ProjectLaunchResult: Decodable, Equatable {
     var project: ProjectEntry?
     var tabID = 0
     var windowID = 0
+    /// The runtime session a launch on the tmux backend registered; empty
+    /// for a Kitty launch, which reports a tab and a window instead.
+    var runtimeSessionID = ""
 
-    init(changed: Bool = true, message: String = "", project: ProjectEntry? = nil, tabID: Int = 0, windowID: Int = 0) {
+    init(changed: Bool = true, message: String = "", project: ProjectEntry? = nil, tabID: Int = 0, windowID: Int = 0,
+         runtimeSessionID: String = "") {
         self.changed = changed
         self.message = message
         self.project = project
         self.tabID = tabID
         self.windowID = windowID
+        self.runtimeSessionID = runtimeSessionID
     }
 
     enum CodingKeys: String, CodingKey {
         case changed, message, project
         case tabID = "tab_id"
         case windowID = "window_id"
+        case runtimeSessionID = "runtime_session_id"
     }
 
     init(from decoder: Decoder) throws {
@@ -115,6 +121,7 @@ struct ProjectLaunchResult: Decodable, Equatable {
         project = c.lenient(.project)
         tabID = c.lenient(.tabID, 0)
         windowID = c.lenient(.windowID, 0)
+        runtimeSessionID = c.lenient(.runtimeSessionID, "")
     }
 }
 
@@ -172,6 +179,12 @@ struct ProjectCatalog: Equatable {
         var arguments = ["project", "launch", "--title", project.title]
         if !project.profile.isEmpty { arguments += ["--profile", project.profile] }
         return arguments
+    }
+
+    /// The same launch on the private tmux server, for the workspace to
+    /// embed: what Launch Project runs when there is no Kitty to open a tab in.
+    static func workspaceLaunchArguments(for project: ProjectEntry) -> [String] {
+        launchArguments(for: project) + ["--backend", "tmux"]
     }
 
     static func fetch(_ command: AMXCommand) -> Result<[ProjectEntry], AMXCommandError> {

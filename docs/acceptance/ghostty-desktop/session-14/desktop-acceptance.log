@@ -1,0 +1,1215 @@
+
+##### the app under test starts with the workspace open; its environment carries the identity of the live session beta [03:30:50Z]
+PASS: the app subscribed to the world's daemon
+PASS: the workspace opened
+PASS: it landed on the Dashboard view and started its terminal
+PASS: the Dashboard is the existing TUI, drawn in that terminal
+PASS: the TUI lists the tmux session beta
+PASS: no terminal is attached to any agent yet
+
+--- app log since launch ---
+21:30:51.602 [io.github.sglavoie.agentmux:workspace] workspace: opened
+21:30:51.662 [io.github.sglavoie.agentmux:workspace] workspace: showing viewUnavailable(id: "dashboard", "amx is still being resolved.")
+21:30:51.706 [io.github.sglavoie.agentmux:app] feed: connecting
+21:30:51.706 [io.github.sglavoie.agentmux:app] feed: live
+21:30:51.706 [io.github.sglavoie.agentmux:app] daemon: degraded · initial kitty snapshot failed: kitty command failed: kitten @ ls
+  output: Error: open /dev/tty: device not configured
+  error: exit status 1
+21:30:51.707 [io.github.sglavoie.agentmux:workspace] workspace: rows current (1 session(s), selection none)
+21:30:51.800 [io.github.sglavoie.agentmux:app] running /tmp/amxs14/shim/amx (userDefaultsOverride)
+21:30:51.802 [io.github.sglavoie.agentmux:app] embedded terminals use Ghostty 1.3.1 (ReleaseFast)
+21:30:51.810 [io.github.sglavoie.agentmux:workspace] workspace: started view dashboard
+21:30:51.811 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "dashboard")
+21:30:51.832 [io.github.sglavoie.agentmux:workspace] workspace: rows held from the last snapshot (1 session(s), selection none)
+21:30:51.834 [io.github.sglavoie.agentmux:app] feed: reconnecting("reconnecting")
+21:30:51.836 [io.github.sglavoie.agentmux:workspace] workspace: rows current (1 session(s), selection none)
+21:30:51.836 [io.github.sglavoie.agentmux:app] feed: live
+
+--- sidebar (accessibility) ---
+   Workspace
+ > Dashboard, dashboard view
+   Overview, overview view
+   beta
+   beta, work, claude · <1m
+
+
+=== dashboard view: the embedded Dashboard after launch [03:30:56Z] ===
+Agent Mux · Urgency · all projects                                                     ✖ hooks drifted
+> Sessions · focused                              │  Inspector
+Running (1)                                       │beta
+beta      Active      —                           │Active · —
+                                                  │Agent   claude · work
+                                                  │Branch  —
+                                                  │Dir     /tmp/amxs14/proj/beta
+                                                  │Watch   —
+                                                  │───────────────────────────────────────────────────
+                                                  │stand-in claude pid 72745 in /tmp/amxs14/proj/beta
+                                                  │runtime session: rs-f30a685b2da38378f61add7f44c3e4…
+                                                  │conversation: standin-72745
+                                                  │args: --debug-file /tmp/amxs14/home/.local/state/a…
+                                                  │4d09-b025-27406bafd2e6/claude-debug.log
+                                                  │hook SessionStart exit 0
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+
+  j/k up/down · enter focus · a actions · : commands · / filter · ? help · n/N needs you · ? more
+screenshot: dashboard-embedded.png (window at 10, 40, size 1060, 660)
+
+##### environment: no Kitty in this world [03:30:56Z]
+
+--- host ---
+ProductName:		macOS
+ProductVersion:		27.0.1
+BuildVersion:		26A434
+
+--- amx under test (this checkout, built into the world) ---
+amx version 0.8.0 (revision 9f989606b1fd-dirty, built 2026-10-10T02:22:12Z, go1.27.1, sha256:cb68ea6e2296)
+
+--- app under test ---
+io.github.sglavoie.agentmux.acceptance14
+pid 72831
+/tmp/amxs14/app/Agent Mux.app/Contents/MacOS/Agent Mux
+
+--- the app's preferences (its own domain) ---
+{
+    "NSWindow Frame AgentMuxWorkspace" = "10 740 1060 660 0 0 2560 1409 ";
+    amxBinaryPath = "/tmp/amxs14/shim/amx";
+    amxEnvironment =     {
+        PATH = "/tmp/amxs14/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+        "XDG_CONFIG_HOME" = "/tmp/amxs14/home/.config";
+        "XDG_DATA_HOME" = "/tmp/amxs14/home/.local/share";
+        "XDG_STATE_HOME" = "/tmp/amxs14/home/.local/state";
+    };
+    amxHotKeyDashboard = "ctrl+opt+shift+cmd+d";
+    amxHotKeyNextAttention = "ctrl+opt+shift+cmd+n";
+    amxOpenWorkspaceAtLaunch = 1;
+    amxSnoozeDaemon = "72728:1791603049";
+    amxUseAppNotifications = 0;
+}
+
+--- tmux ---
+tmux 3.7c
+
+--- world daemon ---
+72728 amx daemon start
+
+--- daemon health: subscribers and Kitty ---
+subscriber sub-6 client='Agent Mux.app' snapshot_version=2 workspace_views=True
+kitty_snapshot.ready=False
+
+--- runtime-session registry ---
+rs-f30a685b2da38378f61add7f44c3e4d5 live fresh beta tmux %0 conv=None parent=None
+
+--- private tmux server panes (agents only) ---
+amx-ee7696c017e212b3 %0 pid=72745 dead=0
+
+--- observer tmux sessions (utility views only) ---
+dashboard attached=1
+
+--- process tree under the app ---
+72856 /usr/bin/login -q -flp sglavoie /bin/bash --noprofile --norc -c exec -l '/usr/bin/env' '/tmp/amxs14/shim/amx' 'workspace-view' 'dashboard'
+
+  72858 /opt/homebrew/bin/tmux -S /tmp/amxs14/obs.sock -f /dev/null new-session -s dashboard . /tmp/amxs14/tmp/view-env.72858; rm -f /tmp/amxs14/tmp/view-env.
+
+--- what the app's terminals inherited, as logged by the shim before amx ran ---
+dashboard view: args=[workspace-view dashboard] inherited AMX_RUNTIME_SESSION_ID=rs-f30a685b2da38378f61add7f44c3e4d5 KITTY_WINDOW_ID=999 CLAUDECODE=1
+PASS: the daemon has no Kitty (kitty_snapshot.ready=False)
+PASS: the app is the one subscriber hosting workspace views
+PASS: the app's terminal runs the shim's 'workspace-view dashboard'
+PASS: which is 'amx workspace-view dashboard' in the observer
+PASS: the Dashboard's terminal inherited the borrowed session identity
+PASS: yet the dashboard launched nothing through Kitty and drew its sessions from tmux
+
+##### launch from the embedded Dashboard: the daemon routes the new agent to its native view (W01, W18) [03:30:57Z]
+PASS: the launcher opened in the Dashboard
+
+=== dashboard view: launcher [03:31:00Z] ===
+Launch Sessions  [profile: All]                                                      press / to filter
+
+  [ ]    alpha  🟠 work/claude
+  [ ]    beta   🟠 work/claude  (running)
+
+  space toggle  enter launch  f profile  P pin  s sessions  C override  o open dirs  O open in editor
+  p preview  esc clear/exit  ? help
+  DSL: @profile, word  j/k up/down  g/G top/bottom
+ Hook health degraded · details: ":" Show Health Details on the dashboard
+PASS: the dashboard reports the launch and stays up
+launched: alpha/work = rs-eb6fd0e6861ff0e79299f632bd18a510 on tmux %1
+PASS: one more live runtime session is registered, on tmux
+PASS: the workspace was asked to show it once listed (await)
+PASS: the workspace showed it when the daemon listed it
+PASS: by attaching a terminal of its own to it
+PASS: the window is on the session's native view
+PASS: the sidebar selection is the alpha session row
+PASS: exactly one client is attached to alpha's pane
+PASS: the Dashboard view kept running behind it
+PASS: and lists both sessions
+
+--- app log for the launch ---
+21:31:00.478 [io.github.sglavoie.agentmux:workspace] workspace: awaiting just-launched session rs-eb6fd0e6861ff0e79299f632bd18a510
+21:31:00.619 [io.github.sglavoie.agentmux:workspace] workspace: awaited session rs-eb6fd0e6861ff0e79299f632bd18a510 is listed; showing it
+21:31:00.619 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-eb6fd0e6861ff0e79299f632bd18a510
+21:31:00.622 [io.github.sglavoie.agentmux:workspace] workspace: attached a terminal to rs-eb6fd0e6861ff0e79299f632bd18a510
+21:31:00.622 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-eb6fd0e6861ff0e79299f632bd18a510")
+
+--- registry ---
+rs-f30a685b2da38378f61add7f44c3e4d5 live fresh beta tmux %0 conv=None parent=None
+rs-eb6fd0e6861ff0e79299f632bd18a510 live fresh alpha tmux %1 conv=None parent=None
+
+--- private tmux clients ---
+73346 amx-05b462cb087a8a70 pane=%1 term=xterm-ghostty
+
+--- sidebar ---
+   Workspace
+   Dashboard, dashboard view
+   Overview, overview view
+   alpha
+ > alpha, work, claude · <1m
+   beta
+   beta, work, claude · <1m
+
+screenshot: launch-native-view.png (window at 10, 40, size 1060, 660)
+
+##### the native view has the keyboard: a line typed into the app reaches the agent, and its hook shows in the sidebar [03:31:06Z]
+PASS: the typed line reached alpha's agent
+PASS: the daemon lists alpha as needing permission
+PASS: the sidebar says so on the session row
+PASS: the project heading counts one waiting
+
+--- alpha's pane ---
+stand-in claude pid 73300 in /tmp/amxs14/proj/alpha
+runtime session: rs-eb6fd0e6861ff0e79299f632bd18a510  kitty window: none
+conversation: standin-73300
+args: --debug-file /tmp/amxs14/home/.local/state/agent-mux/native/e6308835-4732-40df-a260-9ae69d1780ad
+/claude-debug.log
+hook SessionStart exit 0
+ask
+hook PermissionRequest exit 0
+asked (1)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+--- snapshot ---
+snapshot v2 kitty.ready=False kitty.socket=None attention.total=1
+  alpha  work      claude  icon=key       attention=True  muted=False locked=False looping=False window=0 runtime=tmux %1 rs-eb6fd0e6861ff0e79299f632bd18a510
+  beta   work      claude  icon=-         attention=False muted=False locked=False looping=False window=0 runtime=tmux %0 rs-f30a685b2da38378f61add7f44c3e4d5
+
+--- sidebar ---
+   Workspace
+   Dashboard, dashboard view
+   Overview, overview view
+   alpha, 1 waiting
+ > alpha, work, needs attention, claude · <1m
+   beta
+   beta, work, claude · <1m
+
+screenshot: launch-attention.png (window at 10, 40, size 1060, 660)
+
+##### focus from the embedded Dashboard: Enter on a row goes through the daemon to that session's native view (W03, W18) [03:31:11Z]
+PASS: the workspace received a view request for beta
+PASS: and attached its own terminal to beta
+PASS: the window is on beta's native view
+PASS: beta's pane has exactly one client
+PASS: alpha's view stayed attached behind it
+PASS: the Dashboard did not take over its own terminal: it still shows the list
+PASS: the dashboard process has no child: it attached nothing itself
+
+--- app log for the focus ---
+21:31:14.165 [io.github.sglavoie.agentmux:workspace] workspace: view request for session rs-f30a685b2da38378f61add7f44c3e4d5
+21:31:14.165 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-f30a685b2da38378f61add7f44c3e4d5
+21:31:14.168 [io.github.sglavoie.agentmux:workspace] workspace: attached a terminal to rs-f30a685b2da38378f61add7f44c3e4d5
+21:31:14.168 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-f30a685b2da38378f61add7f44c3e4d5")
+
+--- private tmux clients ---
+73346 amx-05b462cb087a8a70 pane=%1 term=xterm-ghostty
+74180 amx-ee7696c017e212b3 pane=%0 term=xterm-ghostty
+
+--- process tree under the app ---
+72856 /usr/bin/login -q -flp sglavoie /bin/bash --noprofile --norc -c exec -l '/usr/bin/env' '/tmp/amxs14/shim/amx' 'workspace-view' 'dashboard'
+
+  72858 /opt/homebrew/bin/tmux -S /tmp/amxs14/obs.sock -f /dev/null new-session -s dashboard . /tmp/amxs14/tmp/view-env.72858; rm -f /tmp/amxs14/tmp/view-env.
+73322 /usr/bin/login -q -flp sglavoie /bin/bash --noprofile --norc -c exec -l '/usr/bin/env' '/tmp/amxs14/shim/amx' 'attach' 'rs-eb6fd0e6861ff0e79299f632bd1
+  73328 /tmp/amxs14/bin/amx attach rs-eb6fd0e6861ff0e79299f632bd18a510
+
+    73346 /opt/homebrew/bin/tmux -S /tmp/amxs14/tmp/agent-mux-501/tmux.sock -f /tmp/amxs14/tmp/agent-mux-501/tmux.conf bind-key -n F12 detach-client ; attach-se
+74080 /usr/bin/login -q -flp sglavoie /bin/bash --noprofile --norc -c exec -l '/usr/bin/env' '/tmp/amxs14/shim/amx' 'attach' 'rs-f30a685b2da38378f61add7f44c
+  74176 /tmp/amxs14/bin/amx attach rs-f30a685b2da38378f61add7f44c3e4d5
+
+    74180 /opt/homebrew/bin/tmux -S /tmp/amxs14/tmp/agent-mux-501/tmux.sock -f /tmp/amxs14/tmp/agent-mux-501/tmux.conf bind-key -n F12 detach-client ; attach-se
+screenshot: focus-native-view.png (window at 10, 40, size 1060, 660)
+
+##### focusing a session that already has a view makes no second attachment [03:31:17Z]
+PASS: the workspace received a view request for alpha
+PASS: the window is back on alpha's view
+PASS: no new terminal was attached
+PASS: alpha's pane still has exactly one client
+
+##### the Overview is a utility view of its own, and its focus goes to the native session view (W20) [03:31:27Z]
+PASS: the workspace started the Overview view
+PASS: it is the live session overview, with a tile per tmux session
+PASS: including beta
+PASS: the sidebar selection is the Overview
+PASS: it runs as 'amx workspace-view overview'
+
+=== overview view: tiles with previews captured from the tmux panes [03:31:33Z] ===
+Live sessions  2
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓╭─────────────────────────────────────────────────╮
+┃ beta                                   — · Idle ┃│ alpha                            0:22 · Working │
+┃ claude · work                                 1 ┃│ claude · work                                 2 │
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛╰─────────────────────────────────────────────────╯
+
+Enter focus · a actions · ? help · q exit · 1–0 jump · n/N needs you · c normal · ←↑↓→/hjkl move
+screenshot: overview-view.png (window at 10, 40, size 1060, 660)
+PASS: previewing attached nothing: the client list is unchanged
+PASS: Enter on a tile sent a view request to the workspace
+PASS: the window left the Overview for a session's native view
+PASS: the Overview keeps running behind it
+
+--- app log for the overview ---
+21:31:35.126 [io.github.sglavoie.agentmux:workspace] workspace: view request for session rs-f30a685b2da38378f61add7f44c3e4d5
+21:31:35.126 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-f30a685b2da38378f61add7f44c3e4d5
+21:31:35.127 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-f30a685b2da38378f61add7f44c3e4d5")
+
+##### the scrollback pager is a utility view (W21) [03:31:36Z]
+PASS: the workspace opened a pager view for alpha
+PASS: the pager shows the end of alpha's scrollback
+PASS: with the text the agent printed
+PASS: the sidebar lists it under Workspace as a pager view
+PASS: the pager attached nothing to the agent
+PASS: the Dashboard was not suspended for it
+
+=== pager view: alpha's scrollback in less [03:31:41Z] ===
+runtime session: rs-eb6fd0e6861ff0e79299f632bd18a510  kitty window: none
+conversation: standin-73300
+args: --debug-file /tmp/amxs14/home/.local/state/agent-mux/native/e6308835-4732-40df-a260-9ae69d1780ad
+/claude-debug.log
+hook SessionStart exit 0
+ask
+hook PermissionRequest exit 0
+asked (1)
+work
+hook UserPromptSubmit exit 0
+working (2)
+pager-marker-line
+echo[3]: pager-marker-line
+work
+hook UserPromptSubmit exit 0
+working (4)
+
+/tmp/amxs14/tmp/amx-scrollback-3434699216.txt (END)
+
+--- sidebar ---
+   Workspace
+   Dashboard, dashboard view
+   Overview, overview view
+ > alpha, pager view
+   alpha
+   alpha, work, working, claude · <1m
+   beta
+   beta, work, claude · <1m
+
+screenshot: pager-view.png (window at 10, 40, size 1060, 660)
+PASS: quitting the pager ended its view
+PASS: and returned the pane to the Dashboard
+PASS: the pager row is gone from the sidebar
+
+##### a project shell is a utility view (W21, W19) [03:31:46Z]
+PASS: the workspace opened a shell view in the project directory
+PASS: the sidebar lists it under Workspace as a shell view
+PASS: it is a shell
+PASS: in the project directory
+PASS: the Dashboard was not suspended for it
+
+=== shell view: the shell view [03:31:52Z] ===
+view alpha % pwd; echo SHELL_UTILITY_VIEW
+/private/tmp/amxs14/proj/alpha
+SHELL_UTILITY_VIEW
+view alpha %
+
+screenshot: shell-view.png (window at 10, 40, size 1060, 660)
+
+##### the editor is a utility view (W21, W19) [03:31:53Z]
+PASS: the workspace opened an editor view on the project directory
+PASS: it runs the configured editor on that path
+PASS: the sidebar lists it under Workspace as an editor view
+PASS: the editor's environment carries no session or Kitty identity
+
+=== edit view: the editor view [03:31:58Z] ===
+EDITOR VIEW (stand-in editor) in /private/tmp/amxs14/proj/alpha
+editing: /tmp/amxs14/proj/alpha
+identity variables in the editor's environment: 0
+press enter to close the editor:
+
+
+--- sidebar with the Dashboard, the Overview, a shell and an editor beside two sessions ---
+   Workspace
+   Dashboard, dashboard view
+   Overview, overview view
+   alpha, shell view
+ > alpha, editor view
+   alpha
+   alpha, work, working, claude · <1m
+   beta
+   beta, work, claude · 1m
+
+screenshot: editor-view.png (window at 10, 40, size 1060, 660)
+PASS: closing the editor ended its view
+PASS: the editor row is gone from the sidebar
+
+##### utility processes are not managed agents: no borrowed identity, no session, no attention [03:32:02Z]
+
+--- before: snapshot ---
+snapshot v2 kitty.ready=False kitty.socket=None attention.total=0
+  alpha  work      claude  icon=bolt      attention=False muted=False locked=False looping=False window=0 runtime=tmux %1 rs-eb6fd0e6861ff0e79299f632bd18a510
+  beta   work      claude  icon=bolt      attention=False muted=False locked=False looping=False window=0 runtime=tmux %0 rs-f30a685b2da38378f61add7f44c3e4d5
+
+--- before: registry ---
+rs-f30a685b2da38378f61add7f44c3e4d5 live fresh beta tmux %0 conv=None parent=None
+rs-eb6fd0e6861ff0e79299f632bd18a510 live fresh alpha tmux %1 conv=None parent=None
+
+--- what each view's terminal inherited from the app (shim log) ---
+dashboard view: args=[workspace-view dashboard] inherited AMX_RUNTIME_SESSION_ID=rs-f30a685b2da38378f61add7f44c3e4d5 KITTY_WINDOW_ID=999 CLAUDECODE=1
+overview view: args=[workspace-view overview] inherited AMX_RUNTIME_SESSION_ID=rs-f30a685b2da38378f61add7f44c3e4d5 KITTY_WINDOW_ID=999 CLAUDECODE=1
+pager view: args=[workspace-view pager rs-eb6fd0e6861ff0e79299f632bd18a510] inherited AMX_RUNTIME_SESSION_ID=rs-f30a685b2da38378f61add7f44c3e4d5 KITTY_WINDOW_ID=999 CLAUDECODE=1
+shell view: args=[workspace-view shell /tmp/amxs14/proj/alpha] inherited AMX_RUNTIME_SESSION_ID=rs-f30a685b2da38378f61add7f44c3e4d5 KITTY_WINDOW_ID=999 CLAUDECODE=1
+edit view: args=[workspace-view edit /tmp/amxs14/proj/alpha] inherited AMX_RUNTIME_SESSION_ID=rs-f30a685b2da38378f61add7f44c3e4d5 KITTY_WINDOW_ID=999 CLAUDECODE=1
+PASS: the shell view's terminal inherited beta's runtime session and a Kitty window ID
+PASS: the shell view is shown again, still running
+PASS: the shell's environment carries none of them
+
+##### a harness started by hand in the shell view reports as nobody [03:32:07Z]
+PASS: the hand-started harness sees no runtime session and no Kitty window
+PASS: it sent a PermissionRequest hook
+
+=== shell view: a harness run by hand in the shell view [03:32:10Z] ===
+view alpha % pwd; echo SHELL_UTILITY_VIEW
+/private/tmp/amxs14/proj/alpha
+SHELL_UTILITY_VIEW
+view alpha % echo IDENTITY_VARS=$(env | grep -cE '^(KITTY_|AMX_RUNTIME_SESSION_ID=|TMUX|CLAUDECODE=)')
+
+IDENTITY_VARS=0
+view alpha % claude
+stand-in claude pid 77288 in /private/tmp/amxs14/proj/alpha
+runtime session: none  kitty window: none
+conversation: standin-77288
+args:
+ask
+hook SessionStart exit 0
+hook PermissionRequest exit 0
+asked (1)
+
+PASS: no session was added to the daemon's list
+PASS: nothing waits on anyone: attention total is still 0
+PASS: beta, whose identity the app carried, is untouched
+PASS: no runtime session was registered
+PASS: the private tmux server holds the same panes: a view is not on it
+PASS: the sidebar counts nothing waiting
+
+--- after: snapshot ---
+snapshot v2 kitty.ready=False kitty.socket=None attention.total=0
+  alpha  work      claude  icon=bolt      attention=False muted=False locked=False looping=False window=0 runtime=tmux %1 rs-eb6fd0e6861ff0e79299f632bd18a510
+  beta   work      claude  icon=bolt      attention=False muted=False locked=False looping=False window=0 runtime=tmux %0 rs-f30a685b2da38378f61add7f44c3e4d5
+
+--- after: sidebar ---
+   Workspace
+   Dashboard, dashboard view
+   Overview, overview view
+ > alpha, shell view
+   alpha
+   alpha, work, working, claude · <1m
+   beta
+   beta, work, working, claude · <1m
+
+
+##### control: the same hook from a process that does carry beta's identity reaches beta [03:32:12Z]
+PASS: with the identity, the hook marks beta as waiting
+
+--- control: snapshot ---
+snapshot v2 kitty.ready=False kitty.socket=None attention.total=1
+  alpha  work      claude  icon=bolt      attention=False muted=False locked=False looping=False window=0 runtime=tmux %1 rs-eb6fd0e6861ff0e79299f632bd18a510
+  beta   work      claude  icon=key       attention=True  muted=False locked=False looping=False window=0 runtime=tmux %0 rs-f30a685b2da38378f61add7f44c3e4d5
+
+##### the menu bar and the attention shortcut see sessions only [03:32:13Z]
+
+--- status menu ---
+Daemon: degraded · initial kitty snapshot failed: kitty command failed: kitten @ ls
+  output: Error: open /dev/tty: device not configured
+  error: exit status 1
+----
+Working
+⚡ alpha · claude · 1m
+Mute · ⚡ alpha · claude · 1m
+⚡ beta · claude · <1m
+Mute · ⚡ beta · claude · <1m
+----
+Open Workspace
+Open Dashboard
+Launch Project
+Recent
+Notifications
+----
+Preferences…
+----
+Quit Agent Mux
+
+PASS: the status menu lists the two sessions
+PASS: and no utility view
+PASS: the next-attention shortcut left the shell view for the waiting session
+PASS: and focused alpha's native view
+
+--- app log for the shortcut ---
+21:32:21.538 [io.github.sglavoie.agentmux:app] next attention: tmux %1 (key)
+21:32:21.544 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-eb6fd0e6861ff0e79299f632bd18a510
+21:32:21.544 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-eb6fd0e6861ff0e79299f632bd18a510")
+
+##### a utility view ends with its program and goes back where it came from [03:32:23Z]
+PASS: exiting the shell ended its view
+PASS: the shell row is gone
+PASS: both agents are still attached and running
+
+##### every baseline workflow assigned to the desktop, reached from the embedded Dashboard with no Kitty [03:32:29Z]
+
+##### W19 session actions: clear status, mark active, lock, mute [03:32:29Z]
+PASS: Clear status cleared alpha's attention
+PASS: Mark active set alpha working
+PASS: Lock shows on the row
+
+--- alpha's pane metadata after lock and mute ---
+"amx_locked":"true"
+"cc_mute":"1"}
+PASS: lock and mute are recorded on the tmux pane
+
+=== dashboard view: after clear, mark active, lock, mute [03:32:41Z] ===
+Agent Mux · Urgency · all projects                                                     ✖ hooks drifted
+> Sessions · focused                              │  Inspector
+Running (2)                                       │alpha
+🔒 alpha  Working   0:07                          │Working · 0:07
+beta      Working   0:28                          │Agent   claude · work
+                                                  │Branch  —
+                                                  │Dir     /tmp/amxs14/proj/alpha
+                                                  │Watch   🔒 · 🔇 · last event 0m
+                                                  │───────────────────────────────────────────────────
+                                                  │hook SessionStart exit 0
+                                                  │ask
+                                                  │hook PermissionRequest exit 0
+                                                  │asked (1)
+                                                  │work
+                                                  │hook UserPromptSubmit exit 0
+                                                  │working (2)
+                                                  │pager-marker-line
+                                                  │echo[3]: pager-marker-line
+                                                  │work
+                                                  │hook UserPromptSubmit exit 0
+                                                  │working (4)
+                                                  │work
+                                                  │hook UserPromptSubmit exit 0
+                                                  │working (5)
+                                                  │ask
+                                                  │hook PermissionRequest exit 0
+                                                  │asked (6)
+                                                  │work
+                                                  │hook UserPromptSubmit exit 0
+                                                  │working (7)
+                                                  │ask
+                                                  │hook PermissionRequest exit 0
+                                                  │asked (8)
+
+  j/k up/down · enter focus · a actions · : commands · / filter · ? help · n/N needs you · ? more
+
+##### W21 keybinding reference; W10 a Kitty-only command explains itself; the Kitty tab pickers refuse [03:32:48Z]
+PASS: the keyboard reference opens inside the Dashboard
+
+=== dashboard view: keyboard reference [03:32:50Z] ===
+Agent Mux · Urgency · all projects                                                     ✖ hooks drifted
+Running (2)                                       │alpha
+alpha     Workin╭────────────────────────────────────────────────────────────────────╮
+beta      Workin│ Keyboard Shortcuts                                                 │
+                │                                                                    │
+                │                                                                    │
+                │ Dashboard                                                          │
+                │   j/k       up/down                                                │────────────────
+                │   enter     focus                                                  │
+                │   a         actions                                                │
+                │   :         commands                                               │
+                │   /         filter                                                 │
+                │   ?         help                                                   │
+                │   esc       clear filters                                          │
+                │   n/N       needs you                                              │
+                │   tab       switch pane                                            │
+                │   i         inspector                                              │
+                │   q         quit                                                   │
+                │   p         projects                                               │
+                │   l         launch                                                 │
+                │   S         past sessions                                          │
+                │   s         project history                                        │
+                │                                                                    │
+                │ State icons                                                        │
+                │   ⚡        active                                                 │
+                │   🛑        stopped                                                │
+                │   🔑        needs permission                                       │
+                │   ⚠️        last tool failed                                       │
+                │   ❗        stopped with failure                                   │
+                │                                                                    │
+                │   ▼                                                                │
+                ╰────────────────────────────────────────────────────────────────────╯
+
+ Hook health degraded · details: ":" Show Health Details on the dashboard
+  j/k up/down  g/G top/bottom  esc/?/q close help
+PASS: Resort Tabs says why it is unavailable
+
+=== dashboard view: palette: Resort Tabs unavailable [03:32:51Z] ===
+Agent Mux · Urgency · all projects                                                     ✖ hooks drifted
+Running (2)                                       │alpha
+alpha     Working   0:17                          │Working · 0:17
+beta      Working   0:38                          │Agent   claude · work
+                                                  │Branch  —
+                                                  │Dir     /tmp/amxs14/proj/alpha
+                                                  │Watch   last event 0m
+                                                  │───────────────────────────────────────────────────
+                                                  │hook SessionStart exit 0
+                                                  │ask
+                                                  │hook PermissionRequest exit 0
+       ╭──────────────────────────────────────────────────────────────────────────────────────╮
+       │ Command Palette                                                                      │
+       │ Session: alpha · work                                                                │
+       │ :resort▌                                                                             │
+       │ ─ Application ────────────────────────────────────────────────────────────────────── │
+       │ ▸ Resort Tabs                                                                        │
+       │                                                                                      │
+       │ Unavailable: there are no Kitty tabs to reorder                                      │
+       │ Reorder managed Kitty tabs to match the dashboard sort order.                        │
+       │   ↑/↓ move · enter run · esc close                                                   │
+       ╰──────────────────────────────────────────────────────────────────────────────────────╯
+                                                  │working (5)
+                                                  │ask
+                                                  │hook PermissionRequest exit 0
+                                                  │asked (6)
+                                                  │work
+                                                  │hook UserPromptSubmit exit 0
+                                                  │working (7)
+                                                  │ask
+                                                  │hook PermissionRequest exit 0
+                                                  │asked (8)
+
+  ↑/↓ or ctrl+j/k or ctrl+n/p move · enter run · esc close · ctrl+c quit
+ Hook health degraded · details: ":" Show Health Details on the dashboard
+
+--- amx color-picker outside Kitty ---
+Error: color-picker sets a Kitty tab's color, and this terminal is not Kitty: sessions on the tmux backend have no tab color to set
+exit=1
+
+--- amx icon-picker outside Kitty ---
+Error: icon-picker sets a Kitty tab's icon, and this terminal is not Kitty: sessions on the tmux backend have no tab icon to set
+exit=1
+PASS: the color picker refuses with a reason instead of needing Kitty
+
+##### W02 a fresh second instance of a running project [03:32:52Z]
+PASS: the dashboard asks which profile the new instance runs as
+PASS: a second alpha session is registered
+PASS: the workspace showed the new instance's native view
+PASS: the first alpha session is untouched
+
+--- registry ---
+rs-f30a685b2da38378f61add7f44c3e4d5 live fresh beta tmux %0 conv=None parent=None
+rs-eb6fd0e6861ff0e79299f632bd18a510 live fresh alpha tmux %1 conv=None parent=None
+rs-a67d8ccbc163ea5d68bff864e7516f6f live fresh alpha tmux %2 conv=None parent=None
+
+--- sidebar ---
+   Workspace
+   Dashboard, dashboard view
+   Overview, overview view
+   alpha
+   alpha, work, working, <1m
+ > alpha, work, claude · <1m
+   beta
+   beta, work, working, claude · <1m
+
+
+##### W09 close the second instance: its agent ends, its view goes, the others stay [03:32:57Z]
+
+=== dashboard view: after Close was asked [03:33:01Z] ===
+Agent Mux · Urgency · all projects                                                     ✖ hooks drifted
+> Sessions · focused                              │  Inspector
+Running (2)                                       │alpha
+beta      Working   0:48                          │Active · —
+alpha     Active       —                          │Agent   claude · work
+                                                  │Branch  —
+                                                  │Dir     /tmp/amxs14/proj/alpha
+                                                  │Watch   —
+                                                  │───────────────────────────────────────────────────
+                                                  │stand-in claude pid 80045 in /tmp/amxs14/proj/alpha
+                                                  │runtime session: rs-a67d8ccbc163ea5d68bff864e7516f…
+                                                  │conversation: standin-80045
+                                                  │args: --debug-file /tmp/amxs14/home/.local/state/a…
+                                                  │/claude-debug.log
+                                                  │hook SessionStart exit 0
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+
+ closed alpha · u undo (5s)
+  j/k up/down · enter focus · a actions · : commands · / filter · ? help · n/N needs you · ? more
+PASS: one runtime session ended
+closed: rs-eb6fd0e6861ff0e79299f632bd18a510 (the alpha row the dashboard had selected)
+PASS: it is one of the two alpha sessions and is recorded ended
+PASS: its pane is gone from the private server
+PASS: the workspace let go of its terminal
+PASS: the other alpha session is still attached
+PASS: beta is untouched
+
+--- registry ---
+rs-f30a685b2da38378f61add7f44c3e4d5 live fresh beta tmux %0 conv=None parent=None
+rs-eb6fd0e6861ff0e79299f632bd18a510 ended fresh alpha tmux %1 conv=None parent=None
+rs-a67d8ccbc163ea5d68bff864e7516f6f live fresh alpha tmux %2 conv=None parent=None
+
+##### W08 restart: a new agent, a new runtime session, and its native view [03:33:02Z]
+PASS: the registry records a restart whose parent is the old session
+PASS: the old runtime session is ended
+PASS: the workspace showed the restarted agent's native view
+PASS: and let go of the old one's terminal
+
+--- registry ---
+rs-f30a685b2da38378f61add7f44c3e4d5 live fresh beta tmux %0 conv=None parent=None
+rs-eb6fd0e6861ff0e79299f632bd18a510 ended fresh alpha tmux %1 conv=None parent=None
+rs-a67d8ccbc163ea5d68bff864e7516f6f ended fresh alpha tmux %2 conv=None parent=None
+rs-725d5f210cda747c07bf48519595363a live restart alpha tmux %3 conv=None parent=rs-a67d8ccbc163ea5d68bff864e7516f6f
+
+--- app log for the restart ---
+21:33:05.684 [io.github.sglavoie.agentmux:workspace] workspace: the terminal for rs-a67d8ccbc163ea5d68bff864e7516f6f ended; detached
+21:33:05.690 [io.github.sglavoie.agentmux:workspace] workspace: awaiting just-launched session rs-725d5f210cda747c07bf48519595363a
+21:33:05.806 [io.github.sglavoie.agentmux:workspace] workspace: awaited session rs-725d5f210cda747c07bf48519595363a is listed; showing it
+21:33:05.806 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-725d5f210cda747c07bf48519595363a
+21:33:05.808 [io.github.sglavoie.agentmux:workspace] workspace: attached a terminal to rs-725d5f210cda747c07bf48519595363a
+21:33:05.808 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-725d5f210cda747c07bf48519595363a")
+
+##### W22 Past Sessions; W04 resume a closed conversation; continuing it again focuses the live one [03:33:08Z]
+PASS: Past Sessions lists the closed conversation
+
+=== dashboard view: Past Sessions in the embedded Dashboard [03:33:10Z] ===
+Past Sessions  [1 result]
+  [h] harness: any   [p] profile: any   [r] project: any   [m] message: any
+press / to search · enter view · c continue · f fork · w worktree fork · H handoff · E edit handoff
+  session path: /tmp/amxs14/home/.claude-a/projects/-tmp-amxs14-proj-alpha/11111111-1111-4111-8111-11…
+
+  15h   ago  alpha  [work/claude]  acceptance fixture prompt → acceptance fixture answer
+
+  / filter · h/p/r/m chips · enter view · c continue · f fork · w worktree · H handoff
+  E edit handoff · d delete · i ID · Y path · esc back · j/k up/down · ctrl+d/u half · ? more
+ Hook health degraded · details: ":" Show Health Details on the dashboard
+PASS: the conversation was resumed as a new tmux session
+PASS: the agent was started with --resume for that conversation
+PASS: the registry binds the runtime session to the conversation
+PASS: the workspace showed the resumed agent's native view
+
+--- registry ---
+rs-f30a685b2da38378f61add7f44c3e4d5 live fresh beta tmux %0 conv=None parent=None
+rs-eb6fd0e6861ff0e79299f632bd18a510 ended fresh alpha tmux %1 conv=None parent=None
+rs-a67d8ccbc163ea5d68bff864e7516f6f ended fresh alpha tmux %2 conv=None parent=None
+rs-725d5f210cda747c07bf48519595363a live restart alpha tmux %3 conv=None parent=rs-a67d8ccbc163ea5d68bff864e7516f6f
+rs-2d061745af2064c051d0b0178f095db5 live fresh alpha tmux %4 conv=11111111-1111-4111-8111-111111111111 parent=None
+PASS: continuing it again asked the workspace for the live session
+PASS: and resumed nothing twice
+
+##### W05 native fork [03:33:18Z]
+PASS: the fork launched a new tmux session
+PASS: started with --fork-session
+PASS: the source session is untouched
+PASS: the workspace showed the fork's native view
+
+##### W06 fork into an isolated worktree; W22 Worktrees view; reopen focuses the live session; shell view in the worktree [03:33:22Z]
+PASS: the worktree fork asks for confirmation
+PASS: the worktree fork launched a new tmux session
+PASS: in a managed worktree of the repository
+PASS: the workspace showed its native view
+
+--- git worktrees ---
+/private/tmp/amxs14/proj/alpha                                                                40a5d0b [master]
+/private/tmp/amxs14/home/.local/share/agent-mux/worktrees/alpha/11111111-111-20261010T032917Z 40a5d0b [amx/alpha/11111111-111-20261010T032917Z] prunable
+/private/tmp/amxs14/home/.local/share/agent-mux/worktrees/alpha/11111111-111-20261010T033325Z 40a5d0b [amx/alpha/11111111-111-20261010T033325Z]
+PASS: the Worktrees view lists it
+
+=== dashboard view: Worktrees view [03:33:32Z] ===
+Worktrees  [1/1 visible]
+press / to filter worktrees
+  worktree path: /private/tmp/amxs14/home/.local/share/agent-mux/worktrees/alpha/11111111-111-2026101…
+
+  alpha               amx/alpha/11111111-111-…  work/claude            now  [live][clean][merged]
+
+  / filter · enter reopen · o shell · O editor · d remove · D delete branch · F forget · Y path
+  r refresh · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bot
+ Hook health degraded · details: ":" Show Health Details on the dashboard
+PASS: reopen asked the workspace for the live worktree session
+PASS: and launched nothing
+PASS: the worktree shell opened as a shell view
+PASS: in the worktree
+
+=== shell view: shell view in the managed worktree [03:33:39Z] ===
+view 11111111-111-20261010T033325Z % pwd; echo WORKTREE_SHELL_VIEW
+/private/tmp/amxs14/home/.local/share/agent-mux/worktrees/alpha/11111111-111-20261010T033325Z
+WORKTREE_SHELL_VIEW
+view 11111111-111-20261010T033325Z %
+
+
+##### W07 cross-profile handoff [03:33:43Z]
+PASS: the handoff asks for the target profile
+
+=== dashboard view: handoff: target picker [03:33:46Z] ===
+Past Sessions  [1 result]
+  [h] harness: any  ╭───────────────────────────────────────────────────────────╮
+press / to search · │ Handoff to profile: alpha                                 │f · E edit handoff
+  session path: /tmp│                                                           │11-1111-4111-8111-11…
+                    │ work      🟠 claude  /tmp/amxs14/home/.claude-a (current) │
+  15h   ago  alpha  │ personal  🟠 claude  /tmp/amxs14/home/.claude-b           │ answer
+                    ╰───────────────────────────────────────────────────────────╯
+
+  enter select  esc/q cancel
+  j/k up/down
+ Returned from worktree
+PASS: the handoff launched its target on tmux
+PASS: a handoff pack was written
+PASS: the target agent was told to read it
+PASS: under the other profile
+
+--- handoff artifacts ---
+handoff-105c991767ae9650deea11f7.md
+
+--- the handoff target's pane ---
+stand-in claude pid 83183 in /tmp/amxs14/proj/alpha
+runtime session: rs-e926b923bb2396b763051d7614f2edef  kitty window: none
+conversation: standin-83183
+args: --debug-file /tmp/amxs14/home/.local/state/agent-mux/native/d869987d-4af6-
+4d7c-b2ee-3089cbc01c12/claude-debug.log Read the handoff pack at "/tmp/amxs14/ho
+me/.local/share/agent-mux/handoffs/handoff-105c991767ae9650deea11f7.md" before t
+aking action. Verify all assumptions, repository state, and stale details yourse
+lf; the pack may be stale.
+hook SessionStart exit 0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+--- registry ---
+rs-f30a685b2da38378f61add7f44c3e4d5 live fresh beta tmux %0 conv=None parent=None
+rs-eb6fd0e6861ff0e79299f632bd18a510 ended fresh alpha tmux %1 conv=None parent=None
+rs-a67d8ccbc163ea5d68bff864e7516f6f ended fresh alpha tmux %2 conv=None parent=None
+rs-725d5f210cda747c07bf48519595363a live restart alpha tmux %3 conv=None parent=rs-a67d8ccbc163ea5d68bff864e7516f6f
+rs-2d061745af2064c051d0b0178f095db5 live fresh alpha tmux %4 conv=11111111-1111-4111-8111-111111111111 parent=None
+rs-6b9083290b377d8a1945f7b816c3c093 live fresh alpha tmux %5 conv=None parent=None
+rs-6f7aca2cdc94c7201a95f88b0290a6e8 live fresh alpha tmux %6 conv=None parent=None
+rs-e926b923bb2396b763051d7614f2edef live fresh alpha tmux %7 conv=None parent=None
+PASS: the Dashboard lists the handoff target with the others
+
+=== dashboard view: sessions after resume, fork, worktree fork and handoff [03:33:52Z] ===
+Agent Mux · Urgency · all projects                                                     ✖ hooks drifted
+> Sessions · focused                              │  Inspector
+Running (6)                                       │alpha
+beta             Working   1:39                   │Active · —
+alpha (tmux %7)  Active       —                   │Agent   claude · work
+alpha (tmux %5)  Active       —                   │Branch  —
+alpha (tmux %3)  Active       —                   │Dir     /tmp/amxs14/proj/alpha
+alpha (tmux %6)  Active       —                   │Watch   —
+alpha (tmux %4)  Active       —                   │───────────────────────────────────────────────────
+                                                  │stand-in claude pid 80714 in /tmp/amxs14/proj/alpha
+                                                  │runtime session: rs-725d5f210cda747c07bf4851959536…
+                                                  │conversation: standin-80714
+                                                  │args: --debug-file /tmp/amxs14/home/.local/state/a…
+                                                  │/claude-debug.log
+                                                  │hook SessionStart exit 0
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+
+  j/k up/down · enter focus · a actions · : commands · / filter · ? help · n/N needs you · ? more
+
+##### W22 Plans view and its editor, as an editor view [03:33:53Z]
+PASS: the Plans view lists the saved plan
+
+=== dashboard view: Plans view [03:33:56Z] ===
+Plans  [1 result · sort: matches]
+  [r] project: any
+press / to search plan content
+  plan path: /tmp/amxs14/plans/demo
+
+   3m   ago  [Unknown]  demo  4 files
+
+  / filter · r project · enter view · o sort · O editor · Y path · ? help · esc back · j/k up/down
+  g/G top/bot · ctrl+d/u half · ctrl+f/b page
+ Scanning plans…
+PASS: the plan editor opened as an editor view
+PASS: on the plan directory
+
+##### W27 ASL: a real asl run inside a tmux session shows on its row and in Runs; Enter on the run focuses the hosting session [03:34:02Z]
+PASS: the daemon marks beta as looping
+
+=== dashboard view: dashboard while the run executes [03:34:06Z] ===
+Agent Mux · Urgency · all projects                                                     ✖ hooks drifted
+> Sessions · focused                              │  Inspector
+Running (6)                                       │alpha
+beta             Working   1:53                   │Active · —
+alpha (tmux %7)  Active       —                   │Agent   claude · work
+alpha (tmux %5)  Active       —                   │Branch  —
+alpha (tmux %3)  Active       —                   │Dir     /tmp/amxs14/proj/alpha
+alpha (tmux %6)  Active       —                   │Watch   —
+alpha (tmux %4)  Active       —                   │───────────────────────────────────────────────────
+                                                  │stand-in claude pid 80714 in /tmp/amxs14/proj/alpha
+                                                  │runtime session: rs-725d5f210cda747c07bf4851959536…
+                                                  │conversation: standin-80714
+                                                  │args: --debug-file /tmp/amxs14/home/.local/state/a…
+                                                  │/claude-debug.log
+                                                  │hook SessionStart exit 0
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+                                                  │
+
+ Scanning plans…
+  j/k up/down · enter focus · a actions · : commands · / filter · ? help · n/N needs you · ? more
+PASS: the Runs view shows the run, bound to beta
+
+=== dashboard view: Runs view [03:34:10Z] ===
+Runs  [0 need action / 1 runs]  [live]
+
+    running           demo                      1/running               claude      now  (unknown wor…
+
+  binding: beta
+
+  enter/f focus · r respond · s stop · a abort · w workbench · Y path · ? help · esc back
+  j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bot
+ Hook health degraded · details: ":" Show Health Details on the dashboard
+PASS: Enter on the run asked the workspace for the session hosting it
+PASS: the window is on beta's native view
+
+--- asl run log (tail) ---
+[2026-10-09 21:34:03] run started: harness claude; run 20261010T033403240179Z-83971; 0/1 sessions complete; 1 pending; next session 1; approval unsafe-bypass; run dir /private/tmp/amxs14/home/.local/state/agent-session-loop/dacc7f4dd38e3f3d0e96cb701a9973290f540f614e8f92f646f15903a28eda9a/runs/20261010T033403240179Z-83971; state /private/tmp/amxs14/home/.local/state/agent-session-loop/dacc7f4dd38e3f3d0e96cb701a9973290f540f614e8f92f646f15903a28eda9a/state.json; events /private/tmp/amxs14/home/.local/state/agent-session-loop/dacc7f4dd38e3f3d0e96cb701a9973290f540f614e8f92f646f15903a28eda9a/events.jsonl
+[2026-10-09 21:34:03] session 1/1 started
+
+--- snapshot ---
+snapshot v2 kitty.ready=False kitty.socket=None attention.total=0
+  alpha  work      claude  icon=-         attention=False muted=False locked=False looping=False window=0 runtime=tmux %4 rs-2d061745af2064c051d0b0178f095db5
+  alpha  work      claude  icon=-         attention=False muted=False locked=False looping=False window=0 runtime=tmux %5 rs-6b9083290b377d8a1945f7b816c3c093
+  alpha  work      claude  icon=-         attention=False muted=False locked=False looping=False window=0 runtime=tmux %6 rs-6f7aca2cdc94c7201a95f88b0290a6e8
+  alpha  work      claude  icon=-         attention=False muted=False locked=False looping=False window=0 runtime=tmux %3 rs-725d5f210cda747c07bf48519595363a
+  alpha  personal  claude  icon=-         attention=False muted=False locked=False looping=False window=0 runtime=tmux %7 rs-e926b923bb2396b763051d7614f2edef
+  beta   work      claude  icon=bolt      attention=False muted=False locked=False looping=True  window=0 runtime=tmux %0 rs-f30a685b2da38378f61add7f44c3e4d5
+screenshot: workflows-end.png (window at -53, 48, size 1060, 660)
+
+--- sidebar at the end ---
+   Workspace
+ > Dashboard, dashboard view
+   Overview, overview view
+   alpha
+   alpha, personal, claude · <1m
+   alpha, work, claude · 1m
+   alpha, work, claude · <1m
+   alpha, work, claude · <1m
+   alpha, work, claude · 1m
+   beta
+   beta, work, working, claude · 1m
+
+
+--- registry at the end ---
+rs-f30a685b2da38378f61add7f44c3e4d5 live fresh beta tmux %0 conv=None parent=None
+rs-eb6fd0e6861ff0e79299f632bd18a510 ended fresh alpha tmux %1 conv=None parent=None
+rs-a67d8ccbc163ea5d68bff864e7516f6f ended fresh alpha tmux %2 conv=None parent=None
+rs-725d5f210cda747c07bf48519595363a live restart alpha tmux %3 conv=None parent=rs-a67d8ccbc163ea5d68bff864e7516f6f
+rs-2d061745af2064c051d0b0178f095db5 live fresh alpha tmux %4 conv=11111111-1111-4111-8111-111111111111 parent=None
+rs-6b9083290b377d8a1945f7b816c3c093 live fresh alpha tmux %5 conv=None parent=None
+rs-6f7aca2cdc94c7201a95f88b0290a6e8 live fresh alpha tmux %6 conv=None parent=None
+rs-e926b923bb2396b763051d7614f2edef live fresh alpha tmux %7 conv=None parent=None
+
+##### nothing in this run used Kitty [03:34:17Z]
+
+--- daemon health ---
+subscriber sub-6 client='Agent Mux.app' snapshot_version=2 workspace_views=True
+kitty_snapshot.ready=False
+
+--- world processes and whether any was given a Kitty socket ---
+   1 84729 ps eww -axo pid
+   1 84056 /bin/sh
+   1 83971 /opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python
+   1 83183 /bin/sh
+   1 82031 /opt/homebrew/bin/tmux -
+   1 82001 /tmp/amxs14/bin/amx attach rs-
+   1 81989 /usr/bin/login -q -flp sglavoie
+   1 81969 /bin/sh
+   1 81715 /opt/homebrew/bin/tmux -
+   1 81711 /tmp/amxs14/bin/amx attach rs-
+   1 81710 /usr/bin/login -q -flp sglavoie
+   1 81679 /bin/sh
+   1 81131 /opt/homebrew/bin/tmux -
+   1 81122 /tmp/amxs14/bin/amx attach rs-
+   1 81121 /usr/bin/login -q -flp sglavoie
+   1 81100 /bin/sh
+   1 80761 /opt/homebrew/bin/tmux -
+   1 80753 /tmp/amxs14/bin/amx attach rs-
+   1 80751 /usr/bin/login -q -flp sglavoie
+   1 80714 /bin/sh
+PASS: the daemon never had a Kitty
+PASS: no process of the world carries KITTY_LISTEN_ON
+PASS: the app never asked for a Kitty window to be focused
+PASS: every agent of the run lives on the private tmux server
+PASS: the Dashboard and the Overview are still running in the app
+
+--- views started during the run (shim log) ---
+dashboard view: args=[workspace-view dashboard] inherited AMX_RUNTIME_SESSION_ID=rs-f30a685b2da38378f61add7f44c3e4d5 KITTY_WINDOW_ID=999 CLAUDECODE=1
+overview view: args=[workspace-view overview] inherited AMX_RUNTIME_SESSION_ID=rs-f30a685b2da38378f61add7f44c3e4d5 KITTY_WINDOW_ID=999 CLAUDECODE=1
+pager view: args=[workspace-view pager rs-eb6fd0e6861ff0e79299f632bd18a510] inherited AMX_RUNTIME_SESSION_ID=rs-f30a685b2da38378f61add7f44c3e4d5 KITTY_WINDOW_ID=999 CLAUDECODE=1
+shell view: args=[workspace-view shell /tmp/amxs14/proj/alpha] inherited AMX_RUNTIME_SESSION_ID=rs-f30a685b2da38378f61add7f44c3e4d5 KITTY_WINDOW_ID=999 CLAUDECODE=1
+edit view: args=[workspace-view edit /tmp/amxs14/proj/alpha] inherited AMX_RUNTIME_SESSION_ID=rs-f30a685b2da38378f61add7f44c3e4d5 KITTY_WINDOW_ID=999 CLAUDECODE=1
+shell view: args=[workspace-view shell /private/tmp/amxs14/home/.local/share/agent-mux/worktrees/alpha/11111111-111-20261010T033325Z] inherited AMX_RUNTIME_SESSION_ID=rs-f30a685b2da38378f61add7f44c3e4d5 KITTY_WINDOW_ID=999 CLAUDECODE=1
+edit view: args=[workspace-view edit /tmp/amxs14/plans/demo] inherited AMX_RUNTIME_SESSION_ID=rs-f30a685b2da38378f61add7f44c3e4d5 KITTY_WINDOW_ID=999 CLAUDECODE=1
+
+--- app log, whole run ---
+21:30:51.602 [io.github.sglavoie.agentmux:workspace] workspace: opened
+21:30:51.662 [io.github.sglavoie.agentmux:workspace] workspace: showing viewUnavailable(id: "dashboard", "amx is still being resolved.")
+21:30:51.706 [io.github.sglavoie.agentmux:app] feed: connecting
+21:30:51.706 [io.github.sglavoie.agentmux:app] feed: live
+21:30:51.706 [io.github.sglavoie.agentmux:app] daemon: degraded · initial kitty snapshot failed: kitty command failed: kitten @ ls
+  output: Error: open /dev/tty: device not configured
+  error: exit status 1
+21:30:51.707 [io.github.sglavoie.agentmux:workspace] workspace: rows current (1 session(s), selection none)
+21:30:51.800 [io.github.sglavoie.agentmux:app] running /tmp/amxs14/shim/amx (userDefaultsOverride)
+21:30:51.802 [io.github.sglavoie.agentmux:app] embedded terminals use Ghostty 1.3.1 (ReleaseFast)
+21:30:51.810 [io.github.sglavoie.agentmux:workspace] workspace: started view dashboard
+21:30:51.811 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "dashboard")
+21:30:51.832 [io.github.sglavoie.agentmux:workspace] workspace: rows held from the last snapshot (1 session(s), selection none)
+21:30:51.834 [io.github.sglavoie.agentmux:app] feed: reconnecting("reconnecting")
+21:30:51.836 [io.github.sglavoie.agentmux:workspace] workspace: rows current (1 session(s), selection none)
+21:30:51.836 [io.github.sglavoie.agentmux:app] feed: live
+21:30:57.631 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:31:00.478 [io.github.sglavoie.agentmux:workspace] workspace: awaiting just-launched session rs-eb6fd0e6861ff0e79299f632bd18a510
+21:31:00.619 [io.github.sglavoie.agentmux:workspace] workspace: awaited session rs-eb6fd0e6861ff0e79299f632bd18a510 is listed; showing it
+21:31:00.619 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-eb6fd0e6861ff0e79299f632bd18a510
+21:31:00.622 [io.github.sglavoie.agentmux:workspace] workspace: attached a terminal to rs-eb6fd0e6861ff0e79299f632bd18a510
+21:31:00.622 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-eb6fd0e6861ff0e79299f632bd18a510")
+21:31:11.639 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:31:11.639 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "dashboard")
+21:31:14.165 [io.github.sglavoie.agentmux:workspace] workspace: view request for session rs-f30a685b2da38378f61add7f44c3e4d5
+21:31:14.165 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-f30a685b2da38378f61add7f44c3e4d5
+21:31:14.168 [io.github.sglavoie.agentmux:workspace] workspace: attached a terminal to rs-f30a685b2da38378f61add7f44c3e4d5
+21:31:14.168 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-f30a685b2da38378f61add7f44c3e4d5")
+21:31:17.671 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:31:17.671 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "dashboard")
+21:31:25.101 [io.github.sglavoie.agentmux:workspace] workspace: view request for session rs-eb6fd0e6861ff0e79299f632bd18a510
+21:31:25.101 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-eb6fd0e6861ff0e79299f632bd18a510
+21:31:25.101 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-eb6fd0e6861ff0e79299f632bd18a510")
+21:31:28.164 [io.github.sglavoie.agentmux:workspace] workspace: opening overview view overview
+21:31:28.167 [io.github.sglavoie.agentmux:workspace] workspace: started view overview
+21:31:28.167 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "overview")
+21:31:35.126 [io.github.sglavoie.agentmux:workspace] workspace: view request for session rs-f30a685b2da38378f61add7f44c3e4d5
+21:31:35.126 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-f30a685b2da38378f61add7f44c3e4d5
+21:31:35.127 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-f30a685b2da38378f61add7f44c3e4d5")
+21:31:37.300 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:31:37.301 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "dashboard")
+21:31:39.878 [io.github.sglavoie.agentmux:workspace] workspace: opening pager view pager:rs-eb6fd0e6861ff0e79299f632bd18a510
+21:31:39.881 [io.github.sglavoie.agentmux:workspace] workspace: started view pager:rs-eb6fd0e6861ff0e79299f632bd18a510
+21:31:39.881 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "pager:rs-eb6fd0e6861ff0e79299f632bd18a510")
+21:31:43.984 [io.github.sglavoie.agentmux:workspace] workspace: the program of view pager:rs-eb6fd0e6861ff0e79299f632bd18a510 ended
+21:31:43.990 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "dashboard")
+21:31:46.670 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:31:49.162 [io.github.sglavoie.agentmux:workspace] workspace: opening shell view shell:/tmp/amxs14/proj/alpha
+21:31:49.165 [io.github.sglavoie.agentmux:workspace] workspace: started view shell:/tmp/amxs14/proj/alpha
+21:31:49.165 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "shell:/tmp/amxs14/proj/alpha")
+21:31:53.290 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:31:53.290 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "dashboard")
+21:31:56.226 [io.github.sglavoie.agentmux:workspace] workspace: opening editor view editor:/tmp/amxs14/proj/alpha
+21:31:56.230 [io.github.sglavoie.agentmux:workspace] workspace: started view editor:/tmp/amxs14/proj/alpha
+21:31:56.230 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "editor:/tmp/amxs14/proj/alpha")
+21:32:00.499 [io.github.sglavoie.agentmux:workspace] workspace: the program of view editor:/tmp/amxs14/proj/alpha ended
+21:32:00.504 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "dashboard")
+21:32:02.672 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:32:06.955 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "shell:/tmp/amxs14/proj/alpha")
+21:32:21.538 [io.github.sglavoie.agentmux:app] next attention: tmux %1 (key)
+21:32:21.544 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-eb6fd0e6861ff0e79299f632bd18a510
+21:32:21.544 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-eb6fd0e6861ff0e79299f632bd18a510")
+21:32:26.105 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "shell:/tmp/amxs14/proj/alpha")
+21:32:27.960 [io.github.sglavoie.agentmux:workspace] workspace: the program of view shell:/tmp/amxs14/proj/alpha ended
+21:32:27.965 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "dashboard")
+21:32:30.269 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:32:32.787 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:32:35.343 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:32:37.535 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:32:41.512 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:32:44.969 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:32:48.384 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:32:52.266 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:32:55.180 [io.github.sglavoie.agentmux:workspace] workspace: awaiting just-launched session rs-a67d8ccbc163ea5d68bff864e7516f6f
+21:32:55.319 [io.github.sglavoie.agentmux:workspace] workspace: awaited session rs-a67d8ccbc163ea5d68bff864e7516f6f is listed; showing it
+21:32:55.319 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-a67d8ccbc163ea5d68bff864e7516f6f
+21:32:55.322 [io.github.sglavoie.agentmux:workspace] workspace: attached a terminal to rs-a67d8ccbc163ea5d68bff864e7516f6f
+21:32:55.322 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-a67d8ccbc163ea5d68bff864e7516f6f")
+21:32:57.453 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:32:57.454 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "dashboard")
+21:33:00.411 [io.github.sglavoie.agentmux:workspace] workspace: the terminal for rs-eb6fd0e6861ff0e79299f632bd18a510 ended; detached
+21:33:02.698 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:33:05.684 [io.github.sglavoie.agentmux:workspace] workspace: the terminal for rs-a67d8ccbc163ea5d68bff864e7516f6f ended; detached
+21:33:05.690 [io.github.sglavoie.agentmux:workspace] workspace: awaiting just-launched session rs-725d5f210cda747c07bf48519595363a
+21:33:05.806 [io.github.sglavoie.agentmux:workspace] workspace: awaited session rs-725d5f210cda747c07bf48519595363a is listed; showing it
+21:33:05.806 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-725d5f210cda747c07bf48519595363a
+21:33:05.808 [io.github.sglavoie.agentmux:workspace] workspace: attached a terminal to rs-725d5f210cda747c07bf48519595363a
+21:33:05.808 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-725d5f210cda747c07bf48519595363a")
+21:33:08.642 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:33:08.642 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "dashboard")
+21:33:11.484 [io.github.sglavoie.agentmux:workspace] workspace: awaiting just-launched session rs-2d061745af2064c051d0b0178f095db5
+21:33:11.622 [io.github.sglavoie.agentmux:workspace] workspace: awaited session rs-2d061745af2064c051d0b0178f095db5 is listed; showing it
+21:33:11.622 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-2d061745af2064c051d0b0178f095db5
+21:33:11.625 [io.github.sglavoie.agentmux:workspace] workspace: attached a terminal to rs-2d061745af2064c051d0b0178f095db5
+21:33:11.625 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-2d061745af2064c051d0b0178f095db5")
+21:33:15.024 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:33:15.024 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "dashboard")
+21:33:17.566 [io.github.sglavoie.agentmux:workspace] workspace: view request for session rs-2d061745af2064c051d0b0178f095db5
+21:33:17.566 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-2d061745af2064c051d0b0178f095db5
+21:33:17.567 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-2d061745af2064c051d0b0178f095db5")
+21:33:18.614 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:33:18.614 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "dashboard")
+21:33:21.235 [io.github.sglavoie.agentmux:workspace] workspace: awaiting just-launched session rs-6b9083290b377d8a1945f7b816c3c093
+21:33:21.369 [io.github.sglavoie.agentmux:workspace] workspace: awaited session rs-6b9083290b377d8a1945f7b816c3c093 is listed; showing it
+21:33:21.369 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-6b9083290b377d8a1945f7b816c3c093
+21:33:21.371 [io.github.sglavoie.agentmux:workspace] workspace: attached a terminal to rs-6b9083290b377d8a1945f7b816c3c093
+21:33:21.371 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-6b9083290b377d8a1945f7b816c3c093")
+21:33:22.634 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:33:22.635 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "dashboard")
+21:33:25.440 [io.github.sglavoie.agentmux:workspace] workspace: awaiting just-launched session rs-6f7aca2cdc94c7201a95f88b0290a6e8
+21:33:25.578 [io.github.sglavoie.agentmux:workspace] workspace: awaited session rs-6f7aca2cdc94c7201a95f88b0290a6e8 is listed; showing it
+21:33:25.578 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-6f7aca2cdc94c7201a95f88b0290a6e8
+21:33:25.581 [io.github.sglavoie.agentmux:workspace] workspace: attached a terminal to rs-6f7aca2cdc94c7201a95f88b0290a6e8
+21:33:25.581 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-6f7aca2cdc94c7201a95f88b0290a6e8")
+21:33:26.719 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:33:26.719 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "dashboard")
+21:33:33.103 [io.github.sglavoie.agentmux:workspace] workspace: view request for session rs-6f7aca2cdc94c7201a95f88b0290a6e8
+21:33:33.103 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-6f7aca2cdc94c7201a95f88b0290a6e8
+21:33:33.103 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-6f7aca2cdc94c7201a95f88b0290a6e8")
+21:33:34.129 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:33:34.129 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "dashboard")
+21:33:36.940 [io.github.sglavoie.agentmux:workspace] workspace: opening shell view shell:/private/tmp/amxs14/home/.local/share/agent-mux/worktrees/alpha/11111111-111-20261010T033325Z
+21:33:36.944 [io.github.sglavoie.agentmux:workspace] workspace: started view shell:/private/tmp/amxs14/home/.local/share/agent-mux/worktrees/alpha/11111111-111-20261010T033325Z
+21:33:36.944 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "shell:/private/tmp/amxs14/home/.local/share/agent-mux/worktrees/alpha/11111111-111-20261010T033325Z")
+21:33:39.322 [io.github.sglavoie.agentmux:workspace] workspace: the program of view shell:/private/tmp/amxs14/home/.local/share/agent-mux/worktrees/alpha/11111111-111-20261010T033325Z ended
+21:33:39.325 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "dashboard")
+21:33:41.041 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:33:43.714 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:33:50.410 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:33:53.222 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:33:57.735 [io.github.sglavoie.agentmux:workspace] workspace: opening editor view editor:/tmp/amxs14/plans/demo
+21:33:57.738 [io.github.sglavoie.agentmux:workspace] workspace: started view editor:/tmp/amxs14/plans/demo
+21:33:57.739 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "editor:/tmp/amxs14/plans/demo")
+21:33:58.616 [io.github.sglavoie.agentmux:workspace] workspace: the program of view editor:/tmp/amxs14/plans/demo ended
+21:33:58.620 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "dashboard")
+21:34:00.341 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:34:03.844 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:34:11.627 [io.github.sglavoie.agentmux:workspace] workspace: view request for session rs-f30a685b2da38378f61add7f44c3e4d5
+21:34:11.627 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-f30a685b2da38378f61add7f44c3e4d5
+21:34:11.628 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-f30a685b2da38378f61add7f44c3e4d5")
+21:34:12.996 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+21:34:12.996 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "dashboard")
+
+##### RESULT: 0 check(s) failed [fresh env launch focus overview pager shell editor isolation workflows nokitty]
+
+##### after the run: screenshots
+The log above names three screenshots that are not kept: dashboard-embedded.png,
+launch-native-view.png and workflows-end.png. A screenshot is a capture of a
+screen region, and at those three moments a window of the operator's own
+desktop was in front of the app, so they showed that window instead. They were
+deleted unpublished. With the world still up and nothing else changed, the app
+was brought forward and two were taken in their place:
+screenshot: dashboard-view.png (the embedded Dashboard at the end of the run; the window had been moved partly off the left edge of the screen, so the sidebar is cut)
+screenshot: session-native-view.png (beta's native view at the end of the run, same framing)
+The other six screenshots were taken during the run and show the app only.
+shot() in driver/lib.sh now brings the app forward before every capture.
