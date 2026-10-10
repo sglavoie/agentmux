@@ -284,6 +284,12 @@ type ASLResponse struct {
 }
 
 // Response is a JSON message sent by the daemon back to the client.
+// RuntimeSlot is the runtime session bound to one state slot.
+type RuntimeSlot struct {
+	RuntimeSessionID string `json:"runtime_session_id"`
+	Backend          string `json:"backend"`
+}
+
 type Response struct {
 	OverviewCompact *bool `json:"overview_compact,omitempty"`
 	// OverviewCompactExplicit reports whether OverviewCompact was set by an
@@ -303,6 +309,11 @@ type Response struct {
 	Activity map[int]int64               `json:"activity,omitempty"` // window_id → unix seconds of last activity
 	Watchdog map[int]WatchdogState       `json:"watchdog,omitempty"` // window_id → watchdog state for age-aware TUI rendering
 	States   map[int]WindowStateSnapshot `json:"states,omitempty"`   // window_id → daemon-owned visible state
+	// RuntimeSlots names the runtime session bound to each slot that has one,
+	// so a client can find a session's entry in the three maps above by its
+	// runtime-session ID instead of by a Kitty window ID. Omitted when no slot
+	// is bound, which is also the shape older daemons answer with.
+	RuntimeSlots map[int]RuntimeSlot `json:"runtime_slots,omitempty"`
 	// Fields populated for TypeSessionDetail:
 	Events []SessionEvent `json:"events,omitempty"` // per-window hook event ring buffer (oldest first)
 	// Fields populated for TypeEventsExport. Mutually exclusive with Events:

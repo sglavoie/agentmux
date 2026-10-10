@@ -153,7 +153,7 @@ func defaultDeps(cfg *config.Config, client kitty.KittyClient) deps {
 		},
 		tick: commands.Tick,
 		capture: func(req commands.CaptureRequest) tea.Cmd {
-			return commands.CaptureScreen(commands.CaptureSources{Kitty: client}, req)
+			return commands.CaptureScreen(commands.OverviewCaptureSources(client), req)
 		},
 		captureTick: commands.CaptureTick,
 		now:         time.Now,

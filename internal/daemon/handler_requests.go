@@ -34,6 +34,17 @@ func (h *Handler) Handle(req protocol.Request) protocol.Response {
 	case protocol.TypeDiagnosticProbe:
 		resp = h.handleDiagnosticProbe(req)
 	case protocol.TypeStateUpdate:
+		if req.RuntimeSessionID != "" {
+			// An operator action on a session the dashboard knows only by its
+			// runtime session: the daemon, not the client, names the slot.
+			resolved, ok := h.operatorRuntimeUpdate(req)
+			if !ok {
+				resp = protocol.Response{OK: false, Error: protocol.OriginReasonRuntimeSessionUnknown}
+				break
+			}
+			resp = h.handleStateUpdate(resolved)
+			break
+		}
 		if isRuntimeSyntheticSlot(req.WindowID) {
 			// Runtime slots are assigned by hook translation, never named by a
 			// client; a direct update could otherwise write into a session.
@@ -46,6 +57,9 @@ func (h *Handler) Handle(req protocol.Request) protocol.Response {
 	case protocol.TypeOverviewPreferences:
 		resp = h.handleOverviewPreferences(req)
 	case protocol.TypeSessionDetail:
+		if req.RuntimeSessionID != "" {
+			req.WindowID = h.runtimeSessionSlot(req.RuntimeSessionID)
+		}
 		resp = h.handleSessionDetail(req)
 	case protocol.TypeEventsExport:
 		resp = h.handleEventsExport(req)

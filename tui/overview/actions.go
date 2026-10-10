@@ -734,6 +734,9 @@ func (m model) handlePickerOpenDone(msg commands.PickerOpenDoneMsg) (tea.Model, 
 	if msg.Err != nil {
 		return m.withReport("open failed: "+msg.Err.Error(), reportWindow), nil
 	}
+	if msg.Stay {
+		return m, nil
+	}
 	return m.dismiss()
 }
 
@@ -769,7 +772,7 @@ func actionCommand(cfg *config.Config, client kitty.KittyClient, d sessionaction
 	case commands.MarkActiveIcon:
 		return commands.MarkActive(client, target)
 	case commands.CloseSession:
-		return commands.Close(client, d.Target.TabID())
+		return commands.CloseSessionRow(client, cfg, target)
 	case commands.OpenDirectoryID:
 		if cs, ok := commands.FindConfigSession(cfg, target.EffectiveProfile(), target.EffectiveProject()); ok {
 			return commands.OpenDirectory(client, cfg, cs)
@@ -806,7 +809,7 @@ func restartWithProfileCmd(cfg *config.Config, client kitty.KittyClient, rs sess
 		}()
 		_, err := commands.Registry.Execute(
 			context.Background(),
-			actions.Dependencies{Kitty: client, Config: cfg},
+			commands.TerminalDependencies(client, cfg),
 			actions.Restart,
 			actions.Request{
 				Session:    &rs,
@@ -835,7 +838,7 @@ func launchWithProfileCmd(cfg *config.Config, client kitty.KittyClient, rs sessi
 		}()
 		_, err := commands.Registry.Execute(
 			context.Background(),
-			actions.Dependencies{Kitty: client, Config: cfg},
+			commands.TerminalDependencies(client, cfg),
 			actions.Launch,
 			actions.Request{Project: &template},
 		)

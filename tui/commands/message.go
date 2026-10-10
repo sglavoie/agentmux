@@ -171,7 +171,13 @@ type ResortDoneMsg struct{ Err error }
 // open-in-editor action, complete from any entry point (list, picker, actions
 // overlay). The model quits on success (Err == nil) and surfaces Err in the
 // header otherwise.
-type PickerOpenDoneMsg struct{ Err error }
+type PickerOpenDoneMsg struct {
+	Err error
+	// Stay is set when nothing took the operator to another tab: the launch
+	// went to a portable backend, or the view ran in this terminal. The
+	// surface then keeps running instead of quitting.
+	Stay bool
+}
 
 // FocusDoneMsg is sent when a focus-tab action completes.
 type FocusDoneMsg struct{ Err error }

@@ -295,7 +295,17 @@ func (m Model) runPlansRefreshCmd(idx *plans.Index, cfg *config.Config, seq int)
 
 // openPlanInEditorCmd invokes session.OpenPathInEditor against the plan's
 // directory and surfaces an error back to the model on failure.
+//
+// Outside Kitty the editor runs in this terminal instead of a new tab.
 func openPlanInEditorCmd(client kitty.KittyClient, meta plans.PlanMeta, cfg *config.Config) tea.Cmd {
+	if client == nil {
+		return commands.EditHere(cfg, meta.DirPath, func(err error) tea.Msg {
+			if err != nil {
+				return planEditorErrMsg{err: err}
+			}
+			return nil
+		})
+	}
 	return func() tea.Msg {
 		if err := session.OpenPathInEditor(client, meta.DirPath, "plan: "+meta.Name, cfg); err != nil {
 			return planEditorErrMsg{err: err}

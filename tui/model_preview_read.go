@@ -53,6 +53,9 @@ func (m *Model) startPreviewRead() tea.Cmd {
 	m.previewReadActiveSeq = m.previewRequestSeq
 	m.previewReadInFlight = true
 	m.previewReadPending = false
+	if read := m.backgroundCommands.scrollback; read != nil {
+		return fetchPreviewWith(read, m.previewWindowID, m.previewTargetSeq, m.previewReadActiveSeq)
+	}
 	return fetchPreviewCmd(m.client, m.previewWindowID, m.previewTargetSeq, m.previewReadActiveSeq)
 }
 

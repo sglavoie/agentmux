@@ -443,3 +443,39 @@ func (h *Handler) releaseEndedRuntimeLocked(ended map[int]string, now time.Time)
 	h.dropClosedWindowsLocked(now, closed)
 	return closed
 }
+
+// runtimeSlotsLocked projects the slot table for state-query clients. Callers
+// hold stateMu.
+func (h *Handler) runtimeSlotsLocked() map[int]protocol.RuntimeSlot {
+	if len(h.runtimeRoutes.bySlot) == 0 {
+		return nil
+	}
+	slots := make(map[int]protocol.RuntimeSlot, len(h.runtimeRoutes.bySlot))
+	for slot, b := range h.runtimeRoutes.bySlot {
+		slots[slot] = protocol.RuntimeSlot{RuntimeSessionID: b.runtime, Backend: b.target.backend}
+	}
+	return slots
+}
+
+// runtimeSessionSlot returns the slot bound to a runtime session, or zero.
+func (h *Handler) runtimeSessionSlot(id string) int {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	return h.runtimeRoutes.byRuntime[id]
+}
+
+// operatorRuntimeUpdate addresses an operator state update (clear, mark
+// active) to the slot of the runtime session it names. Any other action, and
+// a session with no slot, is refused: hooks reach a slot only through
+// translateHookOrigin.
+func (h *Handler) operatorRuntimeUpdate(req protocol.Request) (protocol.Request, bool) {
+	if req.Action != "user_clear" && req.Action != "user_active" {
+		return req, false
+	}
+	slot := h.runtimeSessionSlot(req.RuntimeSessionID)
+	if slot <= 0 {
+		return req, false
+	}
+	req.WindowID = slot
+	return req, true
+}

@@ -482,6 +482,20 @@ func TestInstalledBridgeRoutesRunsByRuntimeSession(t *testing.T) {
 	t.Logf("OBSERVED tmux-asl: run %s delivered lifecycle hooks as runtime session %s; lease live on non-Kitty slot (base+%d), daemon has no Kitty client",
 		tmuxRun, onTmux, tmuxSlot-runtimeSlotBase)
 
+	// What a dashboard outside Kitty binds the run on: the state query names
+	// the runtime session holding the slot and the run leasing it, so the row
+	// discovered from tmux and the bridge's run row meet without a window ID.
+	query := first.h.Handle(protocol.Request{Type: protocol.TypeStateQuery})
+	slotOwner := query.RuntimeSlots[tmuxSlot]
+	if !query.OK || slotOwner.RuntimeSessionID != string(onTmux) || slotOwner.Backend != "tmux" {
+		t.Fatalf("state query runtime_slots[%d] = %+v (ok %v), want runtime %s on tmux", tmuxSlot, slotOwner, query.OK, onTmux)
+	}
+	if runs := query.States[tmuxSlot].ASLRunIDs; len(runs) != 1 || runs[0] != tmuxRun {
+		t.Fatalf("state query asl_run_ids for the tmux slot = %v, want [%s]", runs, tmuxRun)
+	}
+	t.Logf("OBSERVED dashboard-binding: state query ties slot base+%d to runtime session %s (backend %s) and to run %s, phases %v — the keys a dashboard with no Kitty client binds a tmux row and its ASL run on",
+		tmuxSlot-runtimeSlotBase, slotOwner.RuntimeSessionID, slotOwner.Backend, tmuxRun, query.States[tmuxSlot].ASLPhases)
+
 	// The worker asks; the supervisor in the same session surfaces it.
 	tmuxQuestion := w.surfaceQuestion(onTmux, tmuxPlan)
 	waitUntil(t, "the tmux session to show the supervisor question", 30*time.Second, func() bool {

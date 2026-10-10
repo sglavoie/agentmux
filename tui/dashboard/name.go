@@ -211,6 +211,12 @@ func qualifierText(s session.RunningSession, level qualifierLevel) string {
 		}
 		return checkout + qualifierSeparator + profile
 	case qualifierWindow:
+		// A session outside Kitty has no window number an operator could
+		// recognize; its pane in its own backend is the fact that tells two
+		// such rows apart.
+		if !s.Pane.IsZero() && s.Backend != "" {
+			return string(s.Backend) + " " + s.Pane.ID
+		}
 		if s.WindowID <= 0 {
 			return ""
 		}

@@ -17,11 +17,13 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/plans"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
@@ -50,7 +52,14 @@ type uitestFixture struct {
 	Size        UITestSize
 	Config      *config.Config
 	Windows     []kitty.OSWindow
-	Worktrees   []actions.WorktreeView
+	// Portable is the sessions a non-Kitty backend hosts, already carrying the
+	// process-local IDs discovery would give them. NoKitty additionally runs
+	// the dashboard with no Kitty client at all, the way it runs in any other
+	// terminal: such a fixture has no Windows, and every Kitty-only command
+	// has to say why it is unavailable instead of reaching for the client.
+	Portable  []session.RunningSession
+	NoKitty   bool
+	Worktrees []actions.WorktreeView
 	// States and Watchdog stand in for one daemon state query, keyed by Kitty
 	// window ID. They carry the state a tab title cannot express — the busy
 	// anchor above all — so a fixture can pin the dashboard's daemon-owned
@@ -198,6 +207,7 @@ var uitestFixtureBuilders = map[string]func() uitestFixture{
 	"no_sessions":        noSessionsFixture,
 	"paused_queue":       pausedQueueFixture,
 	"preview_failure":    previewFailureFixture,
+	"portable_tmux":      portableTmuxFixture,
 }
 
 // uitestPreviewDefaults is the Preview block config.Load fills in for an
@@ -426,6 +436,52 @@ func wideProfilesFixture() uitestFixture {
 		Size:        UITestSize{Width: 140, Height: 36},
 		Config:      cfg,
 		Windows:     windows,
+	}
+}
+
+// portableTmuxFixture is the dashboard as it runs in a stock terminal: no Kitty
+// client, and three sessions hosted by the private tmux server. One needs the
+// operator, one is working, one is at rest, so the queue's buckets, the
+// selection, and the inspector are all exercised against rows no Kitty window
+// stands behind.
+func portableTmuxFixture() uitestFixture {
+	cfg := &config.Config{
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		HarnessEmojis: map[string]string{"claude": "🦊", "codex": "🤖"},
+		HarnessColors: map[string]string{"claude": "blue", "codex": "green"},
+		Accounts: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "~/.claude-work", Color: "blue"},
+			{Name: "codex-work", Harness: "codex", HomeDir: "~/.codex-work", Color: "green"},
+		},
+		Sessions: []config.Session{
+			{Title: "api", Directory: "~/projects/api", Profile: "work"},
+			{Title: "web", Directory: "~/projects/web", Profile: "work"},
+			{Title: "docs", Directory: "~/projects/docs", Profile: "codex-work"},
+		},
+	}
+	row := func(n int, project, profile, harness string) session.RunningSession {
+		id := commands.PortableIDBase + n
+		return session.RunningSession{
+			TabID: id, WindowID: id, Title: project, Base: project, Project: project,
+			Profile: profile, Account: profile, Harness: harness, Directory: "~/projects/" + project,
+			Backend: runtimesession.BackendTmux,
+			Group:   backend.GroupID(fmt.Sprintf("$%d", n)), Pane: backend.PaneID(fmt.Sprintf("%%%d", n)),
+			RuntimeSessionID: runtimesession.ID(fmt.Sprintf("rs-%032d", n)),
+		}
+	}
+	busySince := uitestFrozenNow.Add(-95 * time.Second).Unix()
+	return uitestFixture{
+		Name:        "portable_tmux",
+		Description: "three tmux-hosted sessions and no Kitty client, as in a stock terminal",
+		Size:        UITestSize{Width: 140, Height: 36},
+		Config:      cfg,
+		NoKitty:     true,
+		Portable:    []session.RunningSession{row(0, "api", "work", "claude"), row(1, "web", "work", "claude"), row(2, "docs", "codex-work", "codex")},
+		States: map[int]protocol.WindowStateSnapshot{
+			commands.PortableIDBase:     {IconState: "key"},
+			commands.PortableIDBase + 1: {IconState: "bolt", BusySinceAt: busySince},
+		},
+		Text: "tmux pane output line 1\ntmux pane output line 2\n",
 	}
 }
 

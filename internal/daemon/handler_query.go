@@ -1,11 +1,13 @@
 package daemon
 
 import (
+	"slices"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/eventlog"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
+	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 func (h *Handler) handleStateQuery() protocol.Response {
@@ -33,6 +35,7 @@ func (h *Handler) handleStateQuery() protocol.Response {
 	// one moment and a window tree from another, which is precisely the
 	// incoherence a single-round-trip refresh exists to avoid.
 	view, listClient, listSocket := h.kittyListSourceLocked()
+	runtimeSlots := h.runtimeSlotsLocked()
 	h.stateMu.Unlock()
 	// Sampled after the unlock: kittyClientForList takes stateMu itself, so
 	// scoping the already-captured client here is what keeps the sample off the
@@ -45,6 +48,7 @@ func (h *Handler) handleStateQuery() protocol.Response {
 		Activity:      snapshot,
 		Watchdog:      watchdog,
 		States:        states,
+		RuntimeSlots:  runtimeSlots,
 		KittySnapshot: kittySnapshotBlock(view, status, hasStatus, time.Now(), true),
 	}
 }
@@ -65,6 +69,7 @@ func (h *Handler) copyStateLocked(now int64) (map[int]protocol.WindowStateSnapsh
 			GuardAction: st.GuardAction,
 			AgentTurn:   st.Reducer.AgentTurn(now),
 			ASLPhases:   st.Reducer.ASLPhases(),
+			ASLRunIDs:   liveASLRunIDs(st.Reducer),
 			// The durable bit is projected as-is rather than recomputed: the
 			// daemon's publish path and focus observation are its only writers,
 			// so a query that derived it again would be a second opinion.
@@ -186,3 +191,18 @@ func (h *Handler) exportEnrichLocked(windowID int, meta protocol.WindowDebugMeta
 // SetReducerConfig installs the shadow reducer thresholds. Existing per-window
 // reducers are re-bound too, so a restore that ran before configuration (unit
 // tests, degraded startups) still ends up on the configured thresholds.
+
+// liveASLRunIDs lists the runs holding a live lease on one slot, sorted.
+func liveASLRunIDs(reducer *state.Reducer) []string {
+	if reducer == nil {
+		return nil
+	}
+	var runs []string
+	for _, fact := range reducer.Facts() {
+		if fact.Kind == protocol.SourceASL && fact.LeaseLive && fact.RunID != "" && !slices.Contains(runs, fact.RunID) {
+			runs = append(runs, fact.RunID)
+		}
+	}
+	slices.Sort(runs)
+	return runs
+}

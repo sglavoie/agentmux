@@ -22,7 +22,10 @@ var (
 	}
 )
 
-var overviewSourceWindowID int
+var (
+	overviewSourceWindowID int
+	overviewBackend        string
+)
 
 // OverviewCommand returns the `overview` command so the root command can
 // register it. Root assembly is the only consumer.
@@ -42,6 +45,7 @@ var overviewCmd = &cobra.Command{
 }
 
 func init() {
+	overviewCmd.Flags().StringVar(&overviewBackend, cli.BackendFlag, "", BackendFlagUsage)
 	overviewCmd.Flags().IntVar(&overviewSourceWindowID, "window-id", 0, "Kitty window ID whose session should be selected initially")
 }
 
@@ -56,7 +60,19 @@ func init() {
 // operator who has just broken their config file should still be able to reach
 // the overview they already have open.
 func runOverviewCommand(sourceWindowID int) error {
-	client := newOverviewClient()
+	client, err := selectTerminalsWith(overviewBackend, newOverviewClient)
+	if err != nil {
+		return err
+	}
+	// Outside Kitty there is no window tree in which a second overview could
+	// be found, and no source window to select.
+	if client == nil {
+		cfg, err := loadOverviewConfig()
+		if err != nil {
+			return err
+		}
+		return runOverview(cfg, nil, 0)
+	}
 
 	focused, err := focusExistingOverview(client)
 	if err != nil {

@@ -1,0 +1,416 @@
+package commands
+
+import (
+	"errors"
+	"io"
+	"os"
+	"os/exec"
+	"strings"
+	"sync"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/sglavoie/agentmux/internal/actions"
+	"github.com/sglavoie/agentmux/internal/backend"
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/conversation"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
+	"github.com/sglavoie/agentmux/internal/session"
+)
+
+// This file is what the TUI needs in order to run outside Kitty, or beside a
+// second backend inside it. A Kitty session is a tab the surface can ask Kitty
+// to bring forward; a session on the private tmux server has no tab anywhere,
+// so the surface discovers it itself, reads its screen through the backend,
+// and shows it by attaching this terminal to it.
+//
+// Every surface in this tree was written against integer Kitty tab and window
+// IDs: the selection, the preview target, the scheduler keys, and the daemon's
+// state maps are all keyed by them. A portable session is therefore given a
+// process-local integer of its own, far above any Kitty ID, and the daemon's
+// state for it is re-keyed onto that integer as it arrives. Nothing outside
+// this process ever sees the number; anything sent out names the session's
+// backend reference or its runtime session.
+
+// PortableTerminals is the non-Kitty half of the terminals a surface works
+// with. The zero value is a Kitty-only surface.
+type PortableTerminals struct {
+	// Tmux is the private tmux server. Nil means tmux sessions are neither
+	// listed nor launched.
+	Tmux backend.TargetLauncher
+	// Launch is the backend new agents start on. Empty means Kitty.
+	Launch runtimesession.BackendKind
+	// Registry records tmux launches. Nil means the default registry file.
+	Registry *runtimesession.Store
+	// Attach builds the command that attaches this terminal to a portable
+	// session. It returns when the operator detaches.
+	Attach func(session.RunningSession) (*exec.Cmd, error)
+}
+
+// Portable is the process's portable terminal set, installed once by the
+// command that starts a surface, before its program runs. Like StateQuery and
+// LocalKittySocket it is a package seam rather than a parameter: every effect
+// builder here takes the Kitty client it has always taken, and the portable
+// half rides beside it.
+var Portable PortableTerminals
+
+// ErrNoTerminal reports an action that needs a terminal backend this surface
+// was not started with.
+var ErrNoTerminal = errors.New("no terminal backend is available for this action")
+
+// errNoAttach reports a portable session with no way to show it here.
+var errNoAttach = errors.New("this session cannot be attached from here")
+
+// PortableIDBase is the first process-local ID given to a portable session.
+// It sits above the daemon's own synthetic slots so the two can never be
+// confused in a log.
+const PortableIDBase = 1 << 41
+
+var portableIDs = struct {
+	sync.Mutex
+	byKey map[string]int
+	// listed is the last discovery, by process-local ID. It is what lets an
+	// effect that was handed only a tab or window ID find the session behind
+	// a portable one.
+	listed map[int]session.RunningSession
+}{byKey: map[string]int{}}
+
+// PortableSession returns the portable session the last discovery listed
+// under id.
+func PortableSession(id int) (session.RunningSession, bool) {
+	if id < PortableIDBase {
+		return session.RunningSession{}, false
+	}
+	portableIDs.Lock()
+	defer portableIDs.Unlock()
+	rs, ok := portableIDs.listed[id]
+	return rs, ok
+}
+
+// portableID returns the process-local ID of a portable session, stable for
+// the life of the process. A registered session is keyed by its runtime
+// session, which survives nothing but is never reused; an unregistered one by
+// its backend and pane.
+func portableID(rs session.RunningSession) int {
+	key := string(rs.RuntimeSessionID)
+	if key == "" {
+		key = rs.PaneTarget().String()
+	}
+	portableIDs.Lock()
+	defer portableIDs.Unlock()
+	if id, ok := portableIDs.byKey[key]; ok {
+		return id
+	}
+	id := PortableIDBase + len(portableIDs.byKey)
+	portableIDs.byKey[key] = id
+	return id
+}
+
+// IsPortable reports a session hosted outside Kitty.
+func IsPortable(rs session.RunningSession) bool {
+	return rs.BackendKind() != runtimesession.BackendKitty
+}
+
+// TerminalDependencies is the dependency set every terminal action starts
+// from: the Kitty client when there is one, and the portable half beside it.
+func TerminalDependencies(client kitty.KittyClient, cfg *config.Config) actions.Dependencies {
+	deps := actions.Dependencies{
+		Kitty:    client,
+		Config:   cfg,
+		Backend:  Portable.Launch,
+		Tmux:     Portable.Tmux,
+		Runtimes: Portable.Registry,
+	}
+	if Portable.Tmux != nil {
+		// The actions' own live-session probe reads Kitty alone. With a
+		// portable backend in play, "is anything running here" has to count
+		// its sessions too.
+		deps.LiveSessions = func(cfg *config.Config) ([]session.RunningSession, error) {
+			var running []session.RunningSession
+			if client != nil {
+				listed, _, err := session.ListWithConfig(client, cfg)
+				if err != nil {
+					return nil, err
+				}
+				running = listed
+			}
+			portable, err := portableSessions(cfg)
+			if err != nil {
+				return nil, err
+			}
+			return append(running, portable...), nil
+		}
+	}
+	return deps
+}
+
+// LaunchesInKitty reports whether a launch opens a Kitty tab, which takes the
+// operator away from this surface. A portable launch leaves them here.
+func LaunchesInKitty() bool {
+	return Portable.Launch == "" || Portable.Launch == runtimesession.BackendKitty
+}
+
+// portableSessions lists the sessions on the portable backends, each carrying
+// its process-local ID as both tab and window ID.
+func portableSessions(cfg *config.Config) ([]session.RunningSession, error) {
+	if Portable.Tmux == nil {
+		return nil, nil
+	}
+	panes, err := Portable.Tmux.Discover()
+	if err != nil {
+		return nil, err
+	}
+	sessions := session.RunningSessionsFromPanes(runtimesession.BackendTmux, panes, cfg)
+	listed := make(map[int]session.RunningSession, len(sessions))
+	for i := range sessions {
+		id := portableID(sessions[i])
+		sessions[i].WindowID, sessions[i].TabID = id, id
+		listed[id] = sessions[i]
+	}
+	portableIDs.Lock()
+	portableIDs.listed = listed
+	portableIDs.Unlock()
+	return sessions, nil
+}
+
+// overlayPortableState copies the daemon's state for each portable session
+// onto the ID this process gave it, and applies it to the rows. The daemon
+// keys that state by a slot only it can name; RuntimeSlots is what ties a slot
+// to a runtime session, and a runtime session is globally unique, so this
+// needs none of the instance proof Kitty window IDs do. A session the daemon
+// has not heard from yet simply has no state.
+func overlayPortableState(sessions []session.RunningSession, resp *protocol.Response, into *daemonState) {
+	if resp == nil || len(sessions) == 0 {
+		return
+	}
+	slots := make(map[string]int, len(resp.RuntimeSlots))
+	for slot, bound := range resp.RuntimeSlots {
+		slots[bound.RuntimeSessionID] = slot
+	}
+	states := make(map[int]protocol.WindowStateSnapshot, len(sessions))
+	conversations := make(map[conversation.Identity]int)
+	defer func() {
+		portableConversations.Lock()
+		portableConversations.byIdentity = conversations
+		portableConversations.Unlock()
+	}()
+	for _, rs := range sessions {
+		slot, ok := slots[string(rs.RuntimeSessionID)]
+		if !ok || rs.RuntimeSessionID == "" {
+			continue
+		}
+		if state, ok := resp.States[slot]; ok {
+			states[rs.WindowID] = state
+			if state.Conversation != nil {
+				conversations[*state.Conversation] = rs.WindowID
+			}
+			if into.States == nil {
+				into.States = map[int]protocol.WindowStateSnapshot{}
+			}
+			into.States[rs.WindowID] = state
+		}
+		if secs, ok := resp.Activity[slot]; ok {
+			if into.Activity == nil {
+				into.Activity = map[int]time.Time{}
+			}
+			into.Activity[rs.WindowID] = time.Unix(secs, 0)
+		}
+		if watchdog, ok := resp.Watchdog[slot]; ok {
+			if into.Watchdog == nil {
+				into.Watchdog = map[int]protocol.WatchdogState{}
+			}
+			into.Watchdog[rs.WindowID] = watchdog
+		}
+	}
+	ApplyDaemonStates(sessions, states)
+	// A Kitty row learns its ASL run from a user variable the daemon writes
+	// on the window. A portable row has no such variable, so the run comes
+	// from the same state entry.
+	for i := range sessions {
+		if runs := states[sessions[i].WindowID].ASLRunIDs; len(runs) > 0 {
+			sessions[i].ASLRunID = runs[0]
+		}
+	}
+}
+
+// AttachDoneMsg reports that an attached view ended: the operator detached,
+// or the attach could not start.
+type AttachDoneMsg struct{ Err error }
+
+// Attach hands this terminal to a portable session until the operator
+// detaches, then gives it back to the surface.
+func Attach(rs session.RunningSession) tea.Cmd {
+	if Portable.Attach == nil {
+		return func() tea.Msg { return AttachDoneMsg{Err: errNoAttach} }
+	}
+	cmd, err := Portable.Attach(rs)
+	if err != nil {
+		return func() tea.Msg { return AttachDoneMsg{Err: err} }
+	}
+	return tea.ExecProcess(cmd, func(err error) tea.Msg { return AttachDoneMsg{Err: err} })
+}
+
+// ReadScrollback reads the whole scrollback of the pane a window ID names: a
+// Kitty window through Kitty, a portable session through its backend.
+func ReadScrollback(client kitty.KittyClient, windowID int) (string, error) {
+	if rs, ok := PortableSession(windowID); ok {
+		if Portable.Tmux == nil {
+			return "", ErrNoTerminal
+		}
+		return Portable.Tmux.Capture(rs.PaneRef(), backend.ExtentAll)
+	}
+	if client == nil || windowID >= PortableIDBase {
+		return "", ErrNoTerminal
+	}
+	return client.GetText(kitty.MatchWindowByID(windowID), "all")
+}
+
+// SessionDetailRequest is the event-log request for the session a window ID
+// names. A portable session is named to the daemon by its runtime session.
+func SessionDetailRequest(windowID int) protocol.Request {
+	req := protocol.Request{Type: protocol.TypeSessionDetail, WindowID: windowID}
+	if rs, ok := PortableSession(windowID); ok {
+		req.WindowID, req.RuntimeSessionID = 0, string(rs.RuntimeSessionID)
+	}
+	return req
+}
+
+// UtilityDoneMsg reports that a utility view run in this terminal ended.
+type UtilityDoneMsg struct{ Err error }
+
+// pagerCommand is the pager a portable scrollback view runs. It is less, the
+// program Kitty's own overlay pager runs, opened at the end of the text;
+// $PAGER is not consulted because it is routinely set to something that is
+// not a general pager.
+func pagerCommand(path string) *exec.Cmd {
+	// #nosec G204 -- fixed program; path is a file this process just wrote.
+	return exec.Command("less", "-R", "+G", path)
+}
+
+// peekPortable pages a portable session's scrollback in this terminal: the
+// text is captured through the backend and handed to the operator's pager.
+func peekPortable(rs session.RunningSession) tea.Cmd {
+	capturer := Portable.Tmux
+	if capturer == nil {
+		return func() tea.Msg { return PeekDoneMsg{Err: ErrNoTerminal} }
+	}
+	view := &scrollbackView{capture: func() (string, error) { return capturer.Capture(rs.PaneRef(), backend.ExtentAll) }}
+	return tea.Exec(view, func(err error) tea.Msg { return PeekDoneMsg{Err: err} })
+}
+
+// scrollbackView is a utility view that captures a pane's scrollback and
+// pages it. The capture happens inside Run, once the surface has released the
+// terminal, so one command covers the read, the pager, and the cleanup.
+type scrollbackView struct {
+	capture        func() (string, error)
+	stdin          io.Reader
+	stdout, stderr io.Writer
+}
+
+func (v *scrollbackView) SetStdin(r io.Reader)  { v.stdin = r }
+func (v *scrollbackView) SetStdout(w io.Writer) { v.stdout = w }
+func (v *scrollbackView) SetStderr(w io.Writer) { v.stderr = w }
+
+func (v *scrollbackView) Run() error {
+	text, err := v.capture()
+	if err != nil {
+		return err
+	}
+	file, err := os.CreateTemp("", "amx-scrollback-*.txt")
+	if err != nil {
+		return err
+	}
+	path := file.Name()
+	defer func() { _ = os.Remove(path) }()
+	_, err = file.WriteString(text)
+	if cerr := file.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return err
+	}
+	pager := pagerCommand(path)
+	pager.Stdin, pager.Stdout, pager.Stderr = v.stdin, v.stdout, v.stderr
+	return pager.Run()
+}
+
+// utilityShell is the program a directory view runs.
+func utilityShell() string {
+	if shell := os.Getenv("SHELL"); shell != "" {
+		return shell
+	}
+	return "/bin/sh"
+}
+
+// utilityEditor resolves the editor the way the Kitty path does:
+// defaults.editor, then $VISUAL, then $EDITOR, then vi.
+func utilityEditor(cfg *config.Config) []string {
+	candidates := []string{os.Getenv("VISUAL"), os.Getenv("EDITOR"), "vi"}
+	if cfg != nil {
+		candidates = append([]string{cfg.Defaults.Editor}, candidates...)
+	}
+	for _, candidate := range candidates {
+		if fields := strings.Fields(candidate); len(fields) > 0 {
+			return fields
+		}
+	}
+	return []string{"vi"}
+}
+
+// openHere runs argv in dir in this terminal and reports through
+// PickerOpenDoneMsg with Stay set, because nothing took the operator away.
+func openHere(dir string, argv []string) tea.Cmd {
+	return RunHere(dir, argv, func(err error) tea.Msg { return PickerOpenDoneMsg{Err: err, Stay: true} })
+}
+
+// RunHere runs argv in dir as a utility view in this terminal: the surface is
+// suspended while it runs and done reports how it ended.
+func RunHere(dir string, argv []string, done func(error) tea.Msg) tea.Cmd {
+	// #nosec G204 -- the operator's configured shell or editor.
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Dir = config.ExpandTilde(dir)
+	return tea.ExecProcess(cmd, done)
+}
+
+// ShellHere opens a shell in dir in this terminal.
+func ShellHere(dir string, done func(error) tea.Msg) tea.Cmd {
+	return RunHere(dir, []string{utilityShell()}, done)
+}
+
+// EditHere opens path in the configured editor in this terminal.
+func EditHere(cfg *config.Config, path string, done func(error) tea.Msg) tea.Cmd {
+	path = config.ExpandTilde(path)
+	return RunHere(path, append(utilityEditor(cfg), path), done)
+}
+
+var portableConversations = struct {
+	sync.Mutex
+	byIdentity map[conversation.Identity]int
+}{}
+
+// LivePortableConversation returns the portable session the daemon last
+// reported as running a conversation. It is what lets "continue" show a
+// conversation that is already live on a backend Kitty cannot see, instead of
+// trying to resume it a second time.
+func LivePortableConversation(identity conversation.Identity) (session.RunningSession, bool) {
+	portableConversations.Lock()
+	id, ok := portableConversations.byIdentity[identity]
+	portableConversations.Unlock()
+	if !ok {
+		return session.RunningSession{}, false
+	}
+	return PortableSession(id)
+}
+
+// OverviewCaptureSources is what a grid of live tiles reads panes through:
+// Kitty for Kitty windows and the portable backend for its own panes.
+func OverviewCaptureSources(client kitty.KittyClient) CaptureSources {
+	sources := CaptureSources{Kitty: client}
+	if Portable.Tmux != nil {
+		sources.Panes = map[runtimesession.BackendKind]backend.Capturer{runtimesession.BackendTmux: Portable.Tmux}
+	}
+	return sources
+}

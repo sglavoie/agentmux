@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
@@ -255,12 +256,21 @@ func previewTickCmd(d time.Duration, pollSeq int) tea.Cmd {
 // back — the short circuit answers immediately and a real read is bounded by the
 // Kitty runner's own subprocess deadline (internal/kitty/exec.go) — which is
 // what lets the controller treat a stamped reply as the release of its slot.
+//
+// The read goes through commands.ReadScrollback, which reaches a Kitty window
+// through Kitty and a portable session through its own backend.
 func fetchPreviewCmd(client kitty.KittyClient, windowID, targetSeq, requestSeq int) tea.Cmd {
+	return fetchPreviewWith(func(id int) (string, error) { return commands.ReadScrollback(client, id) }, windowID, targetSeq, requestSeq)
+}
+
+// fetchPreviewWith is fetchPreviewCmd over an explicit reader, which is the
+// seam the in-process UI harness answers from.
+func fetchPreviewWith(read func(int) (string, error), windowID, targetSeq, requestSeq int) tea.Cmd {
 	return func() tea.Msg {
 		if windowID == 0 {
 			return previewContentMsg{targetSeq: targetSeq, requestSeq: requestSeq, windowID: 0, text: "", err: nil}
 		}
-		text, err := client.GetText(kitty.MatchWindowByID(windowID), "all")
+		text, err := read(windowID)
 		return previewContentMsg{targetSeq: targetSeq, requestSeq: requestSeq, windowID: windowID, text: text, err: err}
 	}
 }

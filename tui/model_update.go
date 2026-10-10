@@ -154,6 +154,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case commands.PeekDoneMsg:
 		return m.handlePeekDone(msg)
 
+	case commands.AttachDoneMsg:
+		return m.handleAttachDone(msg)
+
 	case commands.DetailEventsMsg:
 		return m.handleDetailEvents(msg)
 

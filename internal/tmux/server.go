@@ -43,6 +43,10 @@ set -g prefix None
 set -g prefix2 None
 unbind-key -a -T prefix
 
+# The one key tmux keeps: it detaches the viewing client, which is how an
+# attached terminal gets back to whatever attached it. The agent keeps running.
+bind-key -n F12 detach-client
+
 # Forward modified keys (shift+enter, ctrl+enter, alt+arrows) in the form the
 # pane program asked for, rather than collapsing them to legacy bytes.
 set -s extended-keys on
@@ -71,6 +75,9 @@ set -g remain-on-exit on
 set -g allow-rename off
 set -g automatic-rename off
 `
+
+// DetachKey is the key that detaches an attached terminal from a session.
+const DetachKey = "F12"
 
 // ErrServerNotRunning reports that no server answers on the socket: it was
 // never started, it exited with its last session, or it died and left a

@@ -47,12 +47,23 @@ import (
 // dashboard if there is one, and otherwise start the Bubble Tea program in this
 // window. sourceWindowID is the Kitty window whose tab should be selected
 // initially; a non-positive value falls back to the ambient KITTY_WINDOW_ID.
-func Run(sourceWindowID int) error {
+//
+// backendName is --backend. Outside Kitty the dashboard runs on the tmux
+// backend with no Kitty client at all: there is no other dashboard to find,
+// so the singleton rule does not apply, and every Kitty tab action is replaced
+// by its in-terminal counterpart.
+func Run(sourceWindowID int, backendName string) error {
 	cfg, err := cli.LoadRunnableConfig()
 	if err != nil {
 		return err
 	}
-	client := cli.NewKittyClient()
+	client, err := selectTerminals(backendName)
+	if err != nil {
+		return err
+	}
+	if client == nil {
+		return tui.RunFromWindow(cfg, nil, 0)
+	}
 	if sourceWindowID <= 0 {
 		sourceWindowID = cli.WindowIDFromEnv()
 	}

@@ -28,6 +28,9 @@ var iconPickerCmd = &cobra.Command{
 	Short: "Set or clear the current tab's harness icon (overlay picker)",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := requireKittyTab("icon-picker", "icon"); err != nil {
+			return err
+		}
 		client := newIconPickerClient()
 		if focusExistingIconPicker(client) {
 			return nil

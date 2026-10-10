@@ -1,0 +1,16 @@
+{
+  "name": "portable-kitty-only-command-explains",
+  "fixture": "portable_tmux",
+  "size": { "width": 80, "height": 24 },
+  "actions": [
+    { "type": "key", "key": ":" },
+    { "type": "text", "text": "resort" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "command_palette" },
+    { "type": "contains_text", "text": "▸ Resort Tabs" },
+    { "type": "contains_text", "text": "Unavailable: there are no Kitty tabs to reorder" },
+    { "type": "contains_text", "text": "Session: api" },
+    { "type": "no_layout_issues" }
+  ]
+}

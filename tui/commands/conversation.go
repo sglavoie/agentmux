@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/actions"
+	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
@@ -14,6 +15,13 @@ import (
 // validates and launches only a native branch. Both preserve the session-search
 // screen rather than overloading Enter's viewer.
 func ConversationAction(deps actions.Dependencies, meta transcript.SessionMeta, actionID actions.ID) tea.Cmd {
+	if actionID == actions.Continue {
+		if identity, ok := conversation.New(meta.Harness, meta.ID); ok {
+			if rs, live := LivePortableConversation(identity); live {
+				return Attach(rs)
+			}
+		}
+	}
 	return func() tea.Msg {
 		_, err := Registry.Execute(context.Background(), deps, actionID, actions.Request{Conversation: &meta})
 		return ActionDoneMsg{Err: err}

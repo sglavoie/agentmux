@@ -84,8 +84,13 @@ type liveSessions struct {
 // Total failure — no daemon and no listing — is an error rather than an empty
 // success, so a caller records it without replacing the sessions it is already
 // showing.
+//
+// Portable sessions join the same universe here. They are discovered through
+// their own backend, never through Kitty, and a surface started without a
+// Kitty client lists them alone: there, a failed discovery is the total
+// failure. Beside Kitty a failed portable discovery costs only those rows.
 func readLiveSessions(client kitty.KittyClient, cfg *config.Config, sourceWindowID int) (liveSessions, error) {
-	osWindows, topology, daemon, err := refreshTopology(client)
+	osWindows, topology, daemon, resp, err := refreshTopology(client)
 	if err != nil {
 		return liveSessions{}, err
 	}
@@ -94,6 +99,12 @@ func readLiveSessions(client kitty.KittyClient, cfg *config.Config, sourceWindow
 	if daemon.States != nil {
 		ApplyDaemonStates(live.Sessions, daemon.States)
 	}
+	portable, err := portableSessions(cfg)
+	if err != nil && client == nil {
+		return liveSessions{}, err
+	}
+	overlayPortableState(portable, resp, &live.Daemon)
+	live.Sessions = append(live.Sessions, portable...)
 	if sourceWindowID > 0 {
 		if tab, _, found := kitty.FindTabByWindowID(osWindows, sourceWindowID); found {
 			live.SourceTabID = tab.ID
@@ -138,7 +149,7 @@ func Refresh(client kitty.KittyClient, cfg *config.Config, sortMode string, seq,
 		// replacement. Both writes are idempotent and their triggers are
 		// re-detected on the next refresh, so skipping them costs a tick.
 		mayWrite := !live.Topology.Stale
-		if mayWrite && len(live.Ghosts) > 0 {
+		if mayWrite && client != nil && len(live.Ghosts) > 0 {
 			session.ReanchorAll(kitty.NewBackend(client), live.Ghosts, cfg.Defaults)
 		}
 		sourceTabID := live.SourceTabID
@@ -146,7 +157,7 @@ func Refresh(client kitty.KittyClient, cfg *config.Config, sortMode string, seq,
 		if requestedTabID, token, dashboardWindowID := dashboardSelectionRequest(live.OSWindows); requestedTabID > 0 {
 			sourceTabID = requestedTabID
 			selectionToken = token
-			if mayWrite {
+			if mayWrite && client != nil {
 				_ = client.SetUserVars(kitty.MatchWindowByID(dashboardWindowID), map[string]string{
 					kitty.DashboardSelectionVar: "",
 				})
@@ -235,22 +246,34 @@ type daemonState struct {
 // disagree about: a daemon that has proven the instance but has no tree yet
 // still owns the state of the windows a direct listing finds, while a daemon
 // that has proven nothing owns neither.
-func refreshTopology(client kitty.KittyClient) ([]kitty.OSWindow, TopologyFreshness, daemonState, error) {
+//
+// The response itself is returned beside them, unfiltered, for the one reader
+// that needs no instance proof: portable sessions are matched by runtime
+// session, never by window ID. A surface with no Kitty client has no window
+// tree to resolve and reports an empty, fresh one.
+func refreshTopology(client kitty.KittyClient) ([]kitty.OSWindow, TopologyFreshness, daemonState, *protocol.Response, error) {
 	var state daemonState
-	if resp, err := StateQuery(); err == nil && snapshotDescribesLocalKitty(resp.KittySnapshot) {
-		state = decodeDaemonState(resp)
-		if snapshot := resp.KittySnapshot; snapshot.Ready {
-			return snapshot.Windows, daemonTopologyFreshness(snapshot), state, nil
+	var answered *protocol.Response
+	if resp, err := StateQuery(); err == nil {
+		answered = &resp
+		if client != nil && snapshotDescribesLocalKitty(resp.KittySnapshot) {
+			state = decodeDaemonState(resp)
+			if snapshot := resp.KittySnapshot; snapshot.Ready {
+				return snapshot.Windows, daemonTopologyFreshness(snapshot), state, answered, nil
+			}
 		}
+	}
+	if client == nil {
+		return nil, TopologyFreshness{Source: TopologyFromDirect, CapturedAt: time.Now()}, state, answered, nil
 	}
 	osWindows, err := client.ListWindows()
 	if err != nil {
-		return nil, TopologyFreshness{}, state, err
+		return nil, TopologyFreshness{}, state, answered, err
 	}
 	// A listing this process just completed is as fresh as topology gets, so
 	// it is stamped with its own completion time rather than inheriting the
 	// daemon's capture time or being reported as ageless.
-	return osWindows, TopologyFreshness{Source: TopologyFromDirect, CapturedAt: time.Now()}, state, nil
+	return osWindows, TopologyFreshness{Source: TopologyFromDirect, CapturedAt: time.Now()}, state, answered, nil
 }
 
 // snapshotDescribesLocalKitty reports whether a daemon snapshot is positively

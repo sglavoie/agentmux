@@ -23,6 +23,10 @@ type WindowStateSnapshot struct {
 	AgentTurn   *AgentTurnSnapshot `json:"agent_turn,omitempty"`
 	// ASLPhases contains the distinct phases of runs retaining a live lease.
 	ASLPhases []string `json:"asl_phases,omitempty"`
+	// ASLRunIDs names those runs. A Kitty window also carries its run in a
+	// user variable; a session with no Kitty window is tied to its run only
+	// here.
+	ASLRunIDs []string `json:"asl_run_ids,omitempty"`
 	// BusySinceAt is when the window's current active-class stretch began (unix
 	// seconds). Absent while the window is not busy, which also preserves the
 	// former response shape for clients that do not render the stretch.

@@ -669,6 +669,48 @@ is an explicit request for new tab(s): if the selected project/profile is
 already running, Agent Mux opens another instance instead of skipping or
 focusing the existing tab.
 
+### Outside Kitty: the tmux backend
+
+The dashboard and the overview also run in any other terminal — stock Ghostty,
+or Kitty without its tab integration — by hosting agents on AgentMux's private
+tmux server instead of in Kitty tabs. Nothing about that server is the
+operator's: it has its own socket and configuration and never reads
+`~/.tmux.conf`.
+
+| Where `amx` runs | New agents launch on | Sessions listed |
+| --- | --- | --- |
+| inside Kitty | Kitty tabs | Kitty tabs, plus tmux sessions once the private server exists |
+| inside Kitty, `amx --backend tmux` | tmux | both |
+| any other terminal (tmux installed) | tmux | tmux sessions |
+| any other terminal, `amx --backend kitty` | Kitty | Kitty, through `KITTY_LISTEN_ON` as before |
+
+`amx overview` takes the same `--backend` flag and follows the same table.
+
+What changes for a tmux session, and only for it:
+
+- **Focus attaches.** `enter` hands this terminal to the session
+  (`amx attach`), and **F12** detaches and returns to the dashboard or
+  overview, which keeps running instead of quitting. The agent is untouched by
+  either; attaching from a second terminal takes the view over.
+- **Launching stays put.** A tmux launch opens no tab, so the dashboard does not
+  quit: the new row appears on the next refresh.
+- **Utility views run in this terminal.** Peek pages the pane's scrollback in
+  `less`; open-shell, open-editor, the plan editor, and the worktree shell and
+  editor suspend the dashboard, run in place, and return to it. Inside Kitty a
+  Kitty session keeps its native overlay pager and new tabs.
+- **Kitty presentations are unavailable and say so.** `Resort Tabs` reports that
+  there are no Kitty tabs to reorder; `amx color-picker` and `amx icon-picker`
+  refuse outside Kitty, because a tab color and a tab icon are things only Kitty
+  draws. `amx keybindings` opens in place.
+- **Continue shows a live conversation.** Continuing a conversation that is
+  already running in a tmux session attaches to it rather than resuming it a
+  second time. Past Sessions, Plans, Worktrees (fork, reopen, shell, editor),
+  and the agent-session-loop Runs view work unchanged.
+
+Restart, close, lock, mute, clear, and mark-active act on whichever backend
+hosts the row, so one dashboard can hold Kitty tabs and tmux sessions side by
+side.
+
 ### Launching from a shell
 
 The same launch action is available without the dashboard, which is what the

@@ -18,6 +18,11 @@ var keybindingsCmd = &cobra.Command{
 	Use:   "keybindings",
 	Short: "Show the Kitty keybinding reference as an overlay",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Outside Kitty there is no other instance to find: the reference
+		// simply opens in this terminal.
+		if !insideKitty() {
+			return customization.RunKeybindingsOverlay()
+		}
 		client := cli.NewKittyClient()
 		if focusExistingKeybindings(client) {
 			return nil

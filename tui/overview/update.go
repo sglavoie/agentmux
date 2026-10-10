@@ -57,6 +57,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handlePickerOpenDone(msg)
 	case commands.PeekDoneMsg:
 		return m.handlePeekDone(msg)
+	case commands.AttachDoneMsg:
+		return m.handleAttachDone(msg)
 	case recoveryDoneMsg:
 		return m.handleRecoveryDone(msg)
 	case tea.KeyPressMsg:
@@ -297,6 +299,16 @@ func (m model) focusCapturedTab(tabID int) (model, tea.Cmd) {
 // still selected, which is the only state from which retrying makes sense. A
 // completion arriving with nothing pending is dropped — the surface already dealt
 // with that attempt.
+// handleAttachDone settles an attach to a portable session. The attached view
+// ran in this terminal and has now given it back, so unlike a Kitty focus
+// there is nowhere else the operator went: the overview stays up, with any
+// failure on the feedback row.
+func (m model) handleAttachDone(msg commands.AttachDoneMsg) (tea.Model, tea.Cmd) {
+	m.focusTabID = 0
+	m.focusErr = msg.Err
+	return m, nil
+}
+
 func (m model) handleFocusDone(msg commands.FocusDoneMsg) (tea.Model, tea.Cmd) {
 	if m.focusTabID == 0 {
 		return m, nil

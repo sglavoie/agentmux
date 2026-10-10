@@ -13,7 +13,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
-	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/tui/commands"
@@ -390,10 +389,7 @@ func (m Model) handleDetailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // indefinitely.
 func sessionDetailCmd(windowID int) tea.Cmd {
 	return func() tea.Msg {
-		resp, err := ipc.NewClient().Send(protocol.Request{
-			Type:     protocol.TypeSessionDetail,
-			WindowID: windowID,
-		})
+		resp, err := ipc.NewClient().Send(commands.SessionDetailRequest(windowID))
 		if err != nil {
 			return commands.DetailEventsMsg{WindowID: windowID, Err: err}
 		}

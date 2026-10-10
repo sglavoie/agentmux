@@ -36,10 +36,7 @@ type worktreeActionDoneMsg struct {
 
 func worktreeListCmd(m Model, seq int) tea.Cmd {
 	return func() tea.Msg {
-		result, err := commands.Registry.Execute(context.Background(), actions.Dependencies{
-			Kitty:  m.client,
-			Config: m.cfg,
-		}, actions.WorktreeList, actions.Request{})
+		result, err := commands.Registry.Execute(context.Background(), commands.TerminalDependencies(m.client, m.cfg), actions.WorktreeList, actions.Request{})
 		if err != nil {
 			return worktreesLoadedMsg{seq: seq, err: err}
 		}
@@ -282,6 +279,18 @@ func (m Model) openSelectedWorktree(action actions.ID) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.actionErr = nil
+	if m.client == nil {
+		// Outside Kitty there is no tab to open the checkout in, so the shell
+		// or editor runs in this terminal and returns here.
+		done := func(err error) tea.Msg {
+			return worktreeActionDoneMsg{action: action, result: actions.Result{Message: "Returned from worktree"}, err: err}
+		}
+		m.worktreeActionInFlight = true
+		if action == actions.WorktreeEditor {
+			return m, commands.EditHere(m.cfg, entry.Path, done)
+		}
+		return m, commands.ShellHere(entry.Path, done)
+	}
 	return m, m.runWorktreeActionCmd(action, actions.Request{Worktree: &entry.Entry})
 }
 
@@ -291,9 +300,9 @@ func worktreeLifecycleActionCmd(m Model, action actions.ID, request actions.Requ
 		readers = buildTranscriptReaders()
 	}
 	return func() tea.Msg {
-		result, err := commands.Registry.Execute(context.Background(), actions.Dependencies{
-			Kitty: m.client, Config: m.cfg, Readers: readers,
-		}, action, request)
+		deps := commands.TerminalDependencies(m.client, m.cfg)
+		deps.Readers = readers
+		result, err := commands.Registry.Execute(context.Background(), deps, action, request)
 		return worktreeActionDoneMsg{action: action, result: result, err: err}
 	}
 }
@@ -449,6 +458,13 @@ func (m Model) handleWorktreeReopenDone(msg worktreeActionDoneMsg) (tea.Model, t
 	if msg.err == nil {
 		m.actionErr = nil
 		m.worktreeActionTarget = nil
+		// A live session on a backend with no view of its own was found, not
+		// focused: show it by attaching this terminal.
+		if msg.result.Data["continuation"] == actions.DataContinuationAttach {
+			if live, ok := msg.result.Data["session"].(actions.WorktreeLiveSession); ok {
+				return m, commands.Focus(m.client, live.TabID)
+			}
+		}
 		text := msg.result.Message
 		if text == "" {
 			text = "Worktree reopened"

@@ -42,11 +42,33 @@ func MarkActiveWithDaemon(request func(protocol.Request) (protocol.Response, err
 }
 
 // Focus focuses a tab by ID and returns FocusDoneMsg.
+//
+// A portable session has no tab to focus: it is shown by attaching this
+// terminal to it, and the attached view reports through AttachDoneMsg when the
+// operator comes back.
 func Focus(client kitty.KittyClient, tabID int) tea.Cmd {
+	if rs, ok := PortableSession(tabID); ok {
+		return Attach(rs)
+	}
 	return func() tea.Msg {
 		target := session.RunningSession{TabID: tabID}
 		_, err := Registry.Execute(context.Background(), actions.Dependencies{Kitty: client}, actions.Focus, actions.Request{Session: &target})
 		return FocusDoneMsg{Err: err}
+	}
+}
+
+// CloseSessionRow closes a session through the backend that hosts it and
+// reports exactly as Close does.
+func CloseSessionRow(client kitty.KittyClient, cfg *config.Config, rs session.RunningSession) tea.Cmd {
+	if !IsPortable(rs) {
+		return Close(client, rs.TabID)
+	}
+	return func() tea.Msg {
+		result, err := Registry.Execute(context.Background(), TerminalDependencies(client, cfg), actions.Close, actions.Request{Session: &rs, Confirmed: true})
+		if err != nil {
+			return ActionDoneMsg{Err: err}
+		}
+		return ActionDoneMsg{Unconfirmed: !actions.CloseConfirmed(result)}
 	}
 }
 
@@ -70,7 +92,7 @@ func Close(client kitty.KittyClient, tabID int) tea.Cmd {
 // Restart closes and relaunches a session and returns ActionDoneMsg.
 func Restart(client kitty.KittyClient, running session.RunningSession, cfg *config.Config) tea.Cmd {
 	return func() tea.Msg {
-		_, err := Registry.Execute(context.Background(), actions.Dependencies{Kitty: client, Config: cfg}, actions.Restart, actions.Request{Session: &running, Confirmed: true})
+		_, err := Registry.Execute(context.Background(), TerminalDependencies(client, cfg), actions.Restart, actions.Request{Session: &running, Confirmed: true})
 		return ActionDoneMsg{Err: err}
 	}
 }
@@ -79,12 +101,25 @@ func Restart(client kitty.KittyClient, running session.RunningSession, cfg *conf
 // returns ResortDoneMsg.
 func Resort(client kitty.KittyClient, sortMode string) tea.Cmd {
 	return func() tea.Msg {
+		if client == nil {
+			// Tab order is a Kitty presentation; there are no tabs to move.
+			return ResortDoneMsg{}
+		}
 		return ResortDoneMsg{Err: session.Resort(client, sortMode)}
 	}
 }
 
 // Peek launches a Kitty overlay pager for the given window's scrollback.
+//
+// A portable session, which Kitty cannot read, is captured through its
+// backend and paged in this terminal instead.
 func Peek(client kitty.KittyClient, windowID int) tea.Cmd {
+	if rs, ok := PortableSession(windowID); ok {
+		return peekPortable(rs)
+	}
+	if client == nil {
+		return func() tea.Msg { return PeekDoneMsg{Err: ErrNoTerminal} }
+	}
 	return func() tea.Msg {
 		return PeekDoneMsg{Err: client.LaunchOverlayPager(kitty.MatchWindowByID(windowID))}
 	}
@@ -94,7 +129,7 @@ func Peek(client kitty.KittyClient, windowID int) tea.Cmd {
 // sessions reject close/restart/override from the dashboard.
 func ToggleLock(client kitty.KittyClient, rs session.RunningSession) tea.Cmd {
 	return func() tea.Msg {
-		_, err := Registry.Execute(context.Background(), actions.Dependencies{Kitty: client}, actions.ToggleLock, actions.Request{Session: &rs})
+		_, err := Registry.Execute(context.Background(), TerminalDependencies(client, nil), actions.ToggleLock, actions.Request{Session: &rs})
 		return ActionDoneMsg{Err: err}
 	}
 }
@@ -107,7 +142,7 @@ func ToggleLock(client kitty.KittyClient, rs session.RunningSession) tea.Cmd {
 // seeds it.
 func ToggleMute(client kitty.KittyClient, rs session.RunningSession) tea.Cmd {
 	return func() tea.Msg {
-		_, err := Registry.Execute(context.Background(), actions.Dependencies{Kitty: client}, actions.ToggleMute, actions.Request{Session: &rs})
+		_, err := Registry.Execute(context.Background(), TerminalDependencies(client, nil), actions.ToggleMute, actions.Request{Session: &rs})
 		return ActionDoneMsg{Err: err}
 	}
 }

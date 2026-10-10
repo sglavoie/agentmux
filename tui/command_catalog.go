@@ -269,6 +269,14 @@ func applicationCommandDeclarations() []commands.Command[Model] {
 			Title:       commands.StaticTitle[Model]("Resort Tabs"),
 			Description: "Reorder managed Kitty tabs to match the dashboard sort order.",
 			Aliases:     []string{"reorder", "tabs"},
+			// Tab order is a Kitty presentation. A dashboard running in any
+			// other terminal has no tabs to move.
+			Availability: func(m Model, _ commands.Context) commands.Availability {
+				if m.client == nil {
+					return commands.Unavailable(commands.ReasonNoKittyTabs)
+				}
+				return commands.Available()
+			},
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
 				m.actionErr = nil
 				cmds := []tea.Cmd{commands.Resort(m.client, m.sortMode)}

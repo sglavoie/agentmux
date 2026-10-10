@@ -304,7 +304,7 @@ func sessionLabel(target sessionactions.Target) string {
 // Capturing later is not an option — the row is by then deliberately gone — and
 // offering earlier is what used to advertise an undo for closes that failed.
 func (m *Model) closeWithToast(rs session.RunningSession, request sessionactions.RequestID) tea.Cmd {
-	cmds := []tea.Cmd{commands.Close(m.client, rs.TabID)}
+	cmds := []tea.Cmd{commands.CloseSessionRow(m.client, m.cfg, rs)}
 	if snapshot, ok := m.recoverySnapshot(rs); ok {
 		m.recovery = m.recovery.Reserve(request, snapshot)
 	}
@@ -476,7 +476,7 @@ func (m *Model) undoLastCmd() tea.Cmd {
 	cfg := m.cfg
 	client := m.client
 	launch := func() tea.Msg {
-		_, err := commands.Registry.Execute(context.Background(), actions.Dependencies{Kitty: client, Config: cfg}, actions.Launch, actions.Request{Project: &sess})
+		_, err := commands.Registry.Execute(context.Background(), commands.TerminalDependencies(client, cfg), actions.Launch, actions.Request{Project: &sess})
 		return recoveryDoneMsg{request: request, label: label, err: err}
 	}
 

@@ -868,6 +868,10 @@ func TestTheLifecycleHalfReachesTheWorldOnlyThroughItsSeams(t *testing.T) {
 		// cannot change anything" claim exactly where it was.
 		"commands.CaptureScreen": true,
 		"commands.CaptureTick":   true,
+		// Which sources those reads go through: Kitty, and the portable
+		// backend's capturer for sessions Kitty cannot see. It builds a value
+		// and reaches nothing.
+		"commands.OverviewCaptureSources": true,
 	}
 
 	files := parsePackage(t)
@@ -938,7 +942,8 @@ func TestTheActingHalfMutatesOnlyThroughADispatchedAction(t *testing.T) {
 		"commands.Peek":                     true,
 		"commands.Restart":                  true,
 		"commands.ClearStatus":              true,
-		"commands.Close":                    true,
+		"commands.CloseSessionRow":          true, // close, through the session's own backend
+		"commands.TerminalDependencies":     true, // assembles the terminals an action runs against
 		"commands.OpenDirectory":            true,
 		"commands.OpenInEditor":             true,
 		"commands.CopyTitle":                true,

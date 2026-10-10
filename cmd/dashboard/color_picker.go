@@ -20,6 +20,9 @@ var colorPickerCmd = &cobra.Command{
 	Use:   "color-picker",
 	Short: "Set the current tab's color (overlay picker)",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := requireKittyTab("color-picker", "color"); err != nil {
+			return err
+		}
 		client := cli.NewKittyClient()
 		if focusExistingColorPicker(client) {
 			return nil

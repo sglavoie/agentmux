@@ -258,7 +258,22 @@ func (m Model) handlePickerOpenDone(msg commands.PickerOpenDoneMsg) (tea.Model, 
 		m.actionErr = msg.Err
 		return m, m.requestTopologyRefresh()
 	}
+	// A view that ran in this terminal took the operator nowhere, so there is
+	// no other tab to leave them in.
+	if msg.Stay {
+		return m, m.requestTopologyRefresh()
+	}
 	return m, tea.Quit
+}
+
+// handleAttachDone processes a commands.AttachDoneMsg: the operator came back
+// from an attached session, so the dashboard carries on and re-reads a list
+// that may have changed while it was not looking.
+func (m Model) handleAttachDone(msg commands.AttachDoneMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		m.actionErr = msg.Err
+	}
+	return m, m.requestTopologyRefresh()
 }
 
 // handleFocusDone processes a commands.FocusDoneMsg: quits on success or records the
@@ -630,14 +645,12 @@ func (m Model) markActiveCmd(s session.RunningSession) tea.Cmd {
 // indexed-conversation action needs. A nil handoff or worktree runner tells the
 // registry to use its real workflow.
 func (m Model) conversationDependencies(readers map[string]transcript.Reader) actions.Dependencies {
-	return actions.Dependencies{
-		Kitty:    m.client,
-		Config:   m.cfg,
-		Readers:  readers,
-		Daemon:   m.actionDaemon(),
-		Handoff:  m.handoffRunner,
-		Worktree: m.worktreeRunner,
-	}
+	deps := commands.TerminalDependencies(m.client, m.cfg)
+	deps.Readers = readers
+	deps.Daemon = m.actionDaemon()
+	deps.Handoff = m.handoffRunner
+	deps.Worktree = m.worktreeRunner
+	return deps
 }
 
 func (m Model) conversationActionCmd(readers map[string]transcript.Reader, meta transcript.SessionMeta, actionID actions.ID) tea.Cmd {
@@ -682,6 +695,10 @@ type modelBackgroundCommands struct {
 	// aslAction submits one explicit mutation. The request carries the operator's
 	// answer, so no layer between here and the protocol writer may format it.
 	aslAction func(Model, int, bool, string, aslbridge.ActionRequest) tea.Cmd
+	// scrollback reads one pane's scrollback for the inspector. Nil is
+	// production: the read goes to the backend hosting the pane. The UI harness
+	// sets it for a fixture whose sessions no fake Kitty client can answer for.
+	scrollback func(windowID int) (string, error)
 }
 
 func defaultModelBackgroundCommands() modelBackgroundCommands {

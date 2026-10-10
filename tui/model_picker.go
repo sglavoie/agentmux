@@ -237,10 +237,7 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if len(m.pickerFilteredIdx) > 0 {
 			origIdx := m.pickerFilteredIdx[m.pickerCursor]
 			sess := m.pickerSessionWithResolvedProfile(origIdx)
-			return m, func() tea.Msg {
-				_, err := commands.Registry.Execute(context.Background(), actions.Dependencies{Kitty: m.client, Config: m.cfg}, actions.OpenEditor, actions.Request{Project: &sess})
-				return commands.PickerOpenDoneMsg{Err: err}
-			}
+			return m, pickerOpenEditorCmd(m, sess)
 		}
 		return m, nil
 	case keyDashboardLaunch:
@@ -375,7 +372,7 @@ func (m Model) restartWithProfileCmd(rs session.RunningSession, profile string) 
 				msg = commands.ActionDoneMsg{Err: fmt.Errorf("panic in restartWithProfile: %v", r)}
 			}
 		}()
-		_, err := commands.Registry.Execute(context.Background(), actions.Dependencies{Kitty: m.client, Config: m.cfg}, actions.Restart, actions.Request{
+		_, err := commands.Registry.Execute(context.Background(), commands.TerminalDependencies(m.client, m.cfg), actions.Restart, actions.Request{
 			Session: &rs, Project: &sess, Parameters: map[string]string{"profile": profile}, Confirmed: true,
 		})
 		return commands.ActionDoneMsg{Err: err}
@@ -413,7 +410,7 @@ func (m *Model) launchBatchCmd(todo []launch.Queued, quitOnSuccess bool) tea.Cmd
 		sess := q.Session
 		title := q.Title
 		launchCmds = append(launchCmds, func() tea.Msg {
-			_, err := commands.Registry.Execute(context.Background(), actions.Dependencies{Kitty: m.client, Config: m.cfg}, actions.Launch, actions.Request{Project: &sess})
+			_, err := commands.Registry.Execute(context.Background(), commands.TerminalDependencies(m.client, m.cfg), actions.Launch, actions.Request{Project: &sess})
 			return launchProgressMsg{batchID: batchID, total: total, title: title, err: err}
 		})
 	}
@@ -482,7 +479,9 @@ func (m Model) handleLaunchProgress(msg launchProgressMsg) (tea.Model, tea.Cmd) 
 	}); c != nil {
 		cmds = append(cmds, c)
 	}
-	if batchDone && m.launchBatchErrors == 0 && m.launchBatchQuitOnSuccess {
+	// Quitting hands the operator to the tab Kitty just opened. A portable
+	// launch opens none, so the dashboard stays and lists the new session.
+	if batchDone && m.launchBatchErrors == 0 && m.launchBatchQuitOnSuccess && commands.LaunchesInKitty() {
 		cmds = append(cmds, tea.Quit)
 	} else if c := m.requestTopologyRefresh(); c != nil {
 		cmds = append(cmds, c)
@@ -498,16 +497,38 @@ func pickerOpenCmd(m Model, targets []config.Session) tea.Cmd {
 	if len(targets) == 0 {
 		return nil
 	}
+	if m.client == nil {
+		return pickerOpenHereCmd(m, targets)
+	}
 	return func() tea.Msg {
 		errs := make([]error, 0)
 		for i := range targets {
 			sess := targets[i]
-			_, err := commands.Registry.Execute(context.Background(), actions.Dependencies{Kitty: m.client, Config: m.cfg}, actions.OpenDirectory, actions.Request{Project: &sess})
+			_, err := commands.Registry.Execute(context.Background(), commands.TerminalDependencies(m.client, m.cfg), actions.OpenDirectory, actions.Request{Project: &sess})
 			if err != nil {
 				errs = append(errs, fmt.Errorf("%s: %w", configSessionDisplayTitle(sess), err))
 			}
 		}
 		return commands.PickerOpenDoneMsg{Err: errors.Join(errs...)}
+	}
+}
+
+// pickerOpenHereCmd is pickerOpenCmd outside Kitty: with no tab to open, the
+// first target's directory is opened in a shell in this terminal.
+func pickerOpenHereCmd(m Model, targets []config.Session) tea.Cmd {
+	if len(targets) == 0 {
+		return nil
+	}
+	return commands.OpenDirectory(nil, m.cfg, targets[0])
+}
+
+func pickerOpenEditorCmd(m Model, sess config.Session) tea.Cmd {
+	if m.client == nil {
+		return commands.OpenInEditor(nil, m.cfg, sess)
+	}
+	return func() tea.Msg {
+		_, err := commands.Registry.Execute(context.Background(), commands.TerminalDependencies(m.client, m.cfg), actions.OpenEditor, actions.Request{Project: &sess})
+		return commands.PickerOpenDoneMsg{Err: err}
 	}
 }
 

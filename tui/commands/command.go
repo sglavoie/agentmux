@@ -139,6 +139,7 @@ const (
 	ReasonNoProject       = "project is not configured"
 	ReasonPreviewTooSmall = "terminal is too small for preview"
 	ReasonNothingToUndo   = "nothing to undo"
+	ReasonNoKittyTabs     = "there are no Kitty tabs to reorder"
 )
 
 // Available is the affirmative availability verdict.

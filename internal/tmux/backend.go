@@ -387,12 +387,16 @@ func (b *Backend) Instance() (runtimesession.BackendInstance, error) { return b.
 // attaching transfers interactive ownership (input and size) instead of
 // sharing it; the agent itself is untouched. The caller connects the
 // command's standard streams to a terminal and runs it.
+//
+// The detach key is bound again in the same invocation, because a server
+// started by an earlier build read a configuration that did not have it.
 func (b *Backend) AttachCommand(pane backend.Ref) (*exec.Cmd, error) {
 	if err := paneOnly(pane); err != nil {
 		return nil, err
 	}
 	// #nosec G204 -- the binary was resolved at NewServer and the target is a canonical pane ID.
-	c := exec.Command(b.server.binary, "-S", b.server.socket, "-f", b.server.config, "attach-session", "-d", "-t", pane.ID)
+	c := exec.Command(b.server.binary, "-S", b.server.socket, "-f", b.server.config,
+		"bind-key", "-n", DetachKey, "detach-client", ";", "attach-session", "-d", "-t", pane.ID)
 	c.Env = clientEnv(os.Environ())
 	return c, nil
 }

@@ -550,6 +550,14 @@ func newUITestFixtureDriver(fx uitestFixture, size UITestSize) (*uitestDriver, *
 	}
 	d := newUITestDriver(fx.Config, client, size)
 	d.model.backgroundCommands.topologyRefresh = hermeticTopologyRefresh(fx.overlay())
+	if len(fx.Portable) > 0 || fx.NoKitty {
+		portable, text := fx.Portable, fx.Text
+		d.model.backgroundCommands.topologyRefresh = hermeticPortableRefresh(fx.overlay(), portable)
+		d.model.backgroundCommands.scrollback = func(int) (string, error) { return text, nil }
+	}
+	if fx.NoKitty {
+		d.model.client = nil
+	}
 	if fx.Health != nil {
 		// Honor the two flags the way commands.Health does, so a fixture cannot
 		// make a daemon-only refresh silently deliver a hook summary. The model
@@ -653,7 +661,7 @@ func newUITestFixtureDriver(fx uitestFixture, size UITestSize) (*uitestDriver, *
 			return msg
 		}
 	}
-	d.loadSessionsFrom(client, fx.Config, fx.overlay())
+	d.loadSessionsWith(client, fx.Config, fx.overlay(), fx.Portable)
 	return d, client
 }
 
@@ -854,6 +862,37 @@ func hermeticTopologyRefresh(overlay uitestSessionOverlay) func(Model, int, int)
 	}
 }
 
+// hermeticPortableRefresh is hermeticTopologyRefresh for a fixture with
+// sessions on a portable backend: the fixture's rows are listed beside
+// whatever the fake Kitty client reports, and a model with no Kitty client
+// lists them alone, exactly as commands.Refresh does outside Kitty.
+func hermeticPortableRefresh(overlay uitestSessionOverlay, portable []session.RunningSession) func(Model, int, int) tea.Cmd {
+	return func(m Model, seq, _ int) tea.Cmd {
+		return func() tea.Msg {
+			var sessions []session.RunningSession
+			if m.client != nil {
+				windows, err := m.client.ListWindows()
+				if err != nil {
+					return commands.ErrMsg{Seq: seq, Err: err}
+				}
+				sessions, _ = session.ListFromOSWindowsWithConfig(windows, m.cfg)
+			}
+			sessions = append(sessions, portable...)
+			overlay.apply(sessions)
+			return commands.SessionsMsg{
+				Seq:      seq,
+				Sessions: session.SortRunning(sessions, m.sortMode),
+				Watchdog: overlay.Watchdog,
+				States:   overlay.States,
+				Topology: commands.TopologyFreshness{
+					Source:     commands.TopologyFromDirect,
+					CapturedAt: m.now(),
+				},
+			}
+		}
+	}
+}
+
 func hermeticModelBackgroundCommands() modelBackgroundCommands {
 	return modelBackgroundCommands{
 		topologyRefresh: hermeticTopologyRefresh(uitestSessionOverlay{}),
@@ -936,10 +975,16 @@ func newUITestConfigDriver(root, srcConfigPath string, windows []kitty.OSWindow,
 // would produce — which is why both go through the same overlay. A query error
 // leaves the model with an empty list rather than failing driver construction.
 func (d *uitestDriver) loadSessionsFrom(client kitty.KittyClient, cfg *config.Config, overlay uitestSessionOverlay) {
+	d.loadSessionsWith(client, cfg, overlay, nil)
+}
+
+// loadSessionsWith is loadSessionsFrom plus the rows a portable backend hosts.
+func (d *uitestDriver) loadSessionsWith(client kitty.KittyClient, cfg *config.Config, overlay uitestSessionOverlay, portable []session.RunningSession) {
 	sessions, _, err := session.ListWithConfig(client, cfg)
 	if err != nil {
 		return
 	}
+	sessions = append(sessions, portable...)
 	overlay.apply(sessions)
 	// This load stands in for the startup refresh the constructor armed, so it
 	// carries that refresh's sequence: settling it is what lets the first tick

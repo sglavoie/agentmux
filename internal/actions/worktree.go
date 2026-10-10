@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
@@ -118,8 +119,8 @@ func reopenWorktree(ctx context.Context, deps Dependencies, request Request) (Re
 	if !entry.Exists {
 		return Result{}, &Error{Code: "metadata_invalid", Action: WorktreeReopen, Message: "worktree checkout is missing"}
 	}
-	if deps.Kitty == nil || deps.Config == nil {
-		return Result{}, dependencyError(WorktreeReopen, "Kitty client and configuration")
+	if _, err := deps.launchRuntime(WorktreeReopen); err != nil {
+		return Result{}, err
 	}
 	project, ok := configuredWorktreeProject(deps.Config, entry)
 	if !ok {
@@ -129,6 +130,11 @@ func reopenWorktree(ctx context.Context, deps Dependencies, request Request) (Re
 	liveProbe := deps.LiveSessions
 	if liveProbe == nil {
 		liveProbe = func(cfg *config.Config) ([]session.RunningSession, error) {
+			// A tmux launch without Kitty has no Kitty tab to find; the
+			// launch itself refuses a project that is already running.
+			if deps.Kitty == nil {
+				return nil, nil
+			}
 			running, _, err := session.ListWithConfig(deps.Kitty, cfg)
 			return running, err
 		}
@@ -148,13 +154,13 @@ func reopenWorktree(ctx context.Context, deps Dependencies, request Request) (Re
 	if requestedSession != "" {
 		for _, candidate := range matches {
 			if liveSessionView(candidate).ID == requestedSession {
-				return focusWorktreeSession(deps.terminal(), candidate)
+				return focusWorktreeSession(deps.sessionTerminal(candidate), candidate)
 			}
 		}
 		return Result{}, &Error{Code: "not_found", Action: WorktreeReopen, Message: fmt.Sprintf("live-session candidate %q was not found", requestedSession), Candidates: liveSessionCandidates(matches)}
 	}
 	if len(matches) == 1 {
-		return focusWorktreeSession(deps.terminal(), matches[0])
+		return focusWorktreeSession(deps.sessionTerminal(matches[0]), matches[0])
 	}
 	if len(matches) > 1 {
 		return Result{}, &Error{Code: "ambiguous_live_sessions", Action: WorktreeReopen, Message: "multiple live sessions are inside this worktree", Candidates: liveSessionCandidates(matches)}
@@ -186,7 +192,22 @@ func reopenWorktree(ctx context.Context, deps Dependencies, request Request) (Re
 	return launchFreshWorktree(deps, entry, project, strings.TrimSpace(request.Parameters["profile"]), warnings)
 }
 
+// DataContinuationAttach is the continuation a reopen reports when the live
+// session runs on a backend with no view of its own: nothing was focused, and
+// the caller shows the session by attaching a terminal to it.
+const DataContinuationAttach = "attach"
+
 func focusWorktreeSession(term backend.Presenter, running session.RunningSession) (Result, error) {
+	if running.BackendKind() != runtimesession.BackendKitty {
+		data := map[string]any{"continuation": DataContinuationAttach, "session": liveSessionView(running), "backend": string(running.BackendKind())}
+		if running.RuntimeSessionID != "" {
+			data["runtime_session_id"] = string(running.RuntimeSessionID)
+		}
+		return Result{Message: "live worktree session is running; attach to view it", Data: data}, nil
+	}
+	if term == nil {
+		return Result{}, dependencyError(WorktreeReopen, "Kitty client")
+	}
 	if err := term.Focus(running.GroupRef()); err != nil {
 		return Result{}, err
 	}

@@ -1,0 +1,331 @@
+# AgentMux session 11 — legacy Kitty backend actions through the dashboard (no --backend flag, no tmux server)
+# Real, separate Kitty instance: kitty 0.49.1 created by Kovid Goyal, started with --config NONE, allow_remote_control=yes, its own --listen-on socket; driven and read with kitten @ (send-text / send-key / get-text / ls).
+# Kitty starts launched tabs through login(1), which resets HOME; a private ZDOTDIR puts the isolated HOME and PATH back so the stand-in harness and this checkout's amx are the ones that run.
+# Harness: stand-in 'claude' shell script (no model). Isolated HOME/TMPDIR under /tmp/amxs11. 2026-10-10T00:52:25Z
+
+##### environment
+
+--- kitty ---
+kitty 0.49.1 created by Kovid Goyal
+
+--- amx build ---
+amx version 0.8.0 (revision f0b8512d147e-dirty, built 2026-10-10T00:05:42Z, go1.27.1, sha256:91b2c70f5d00)
+
+--- kitty window tree before anything ---
+tab 1 [active] title='sh'
+   window 1 overlay=False fg=['/bin/sh'] vars={}
+
+--- private tmux server (expect none) ---
+error connecting to /tmp/amxs11/tmp/agent-mux-501/tmux.sock (No such file or directory)
+
+##### L1 bare amx inside Kitty: dashboard on the Kitty backend, no sessions
+
+=== empty dashboard in Kitty (kitty window 1) [00:50:45Z] ===
+Agent Mux · Urgency · all projects                                                                                      ✖ 2 issues
+> Sessions · focused                                            │  Inspector
+                      No running sessions.                      │
+                                                                │
+         press  l  to launch     press  ?  for all keys         │
+                                                                │
+                                                                │
+                                                                │
+                                                                │─────────────────────────────────────────────────────────────────
+                                                                │(no session selected)
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+
+  j/k up/down · enter focus · a actions · : commands · / filter · ? help · n/N needs you · tab switch pane · i inspector · ? more
+
+##### L2 launch on the Kitty backend: a new Kitty tab, the dashboard quits and Kitty shows the tab
+
+--- kitty window tree after launch ---
+tab 1 title='sh'
+   window 1 overlay=False fg=['/bin/sh'] vars={}
+tab 3 [active] title='🟠alpha'
+   window 3 overlay=False fg=['/bin/sh /tmp/amxs11/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs11/home/.claude-a claude --debug-file /tmp/amxs11/home/.local/state/agent-mux/native/2bcc8973-714e-4bf8-bdaa-560e3d119de0/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_profile': 'work', 'amx_project': 'alpha'}
+
+=== the launched agent in its own Kitty tab (kitty window 3) [00:50:51Z] ===
+stand-in claude pid 82996 in /tmp/amxs11/proj/alpha
+runtime session: none  kitty window: 3
+conversation: standin-82996
+args: --debug-file /tmp/amxs11/home/.local/state/agent-mux/native/2bcc8973-714e-4bf8-bdaa-560e3d119de0/claude-debug.log
+
+--- private tmux server (expect none: Kitty launch) ---
+error connecting to /tmp/amxs11/tmp/agent-mux-501/tmux.sock (No such file or directory)
+
+--- runtime-session registry (expect absent: Kitty launches do not register) ---
+ls: /tmp/amxs11/home/.local/share/agent-mux/runtime-sessions.json: No such file or directory
+
+##### L3 legacy hook from the Kitty tab: the daemon renders the tab title
+
+--- kitty window tree after the PermissionRequest hook ---
+tab 1 title='sh'
+   window 1 overlay=False fg=['/bin/sh'] vars={}
+tab 3 [active] title='🔑🟠alpha'
+   window 3 overlay=False fg=['/bin/sh /tmp/amxs11/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs11/home/.claude-a claude --debug-file /tmp/amxs11/home/.local/state/agent-mux/native/2bcc8973-714e-4bf8-bdaa-560e3d119de0/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_profile': 'work', 'amx_project': 'alpha'}
+
+##### L4 dashboard reopened in Kitty lists the Kitty session with daemon state
+
+=== dashboard: Kitty session needing permission (kitty window 1) [00:50:55Z] ===
+Agent Mux · Urgency · all projects                                                                                 ✖ hooks drifted
+> Sessions · focused                                            │  Inspector
+Needs you (1)                                                   │alpha
+alpha     Needs permission   0:03                               │Needs permission · 0:03
+                                                                │Agent   claude · work
+                                                                │Branch  main
+                                                                │Dir     /tmp/amxs11/proj/alpha
+                                                                │Watch   —
+                                                                │─────────────────────────────────────────────────────────────────
+                                                                │stand-in claude pid 82996 in /tmp/amxs11/proj/alpha
+                                                                │runtime session: none  kitty window: 3
+                                                                │conversation: standin-82996
+                                                                │args: --debug-file /tmp/amxs11/home/.local/state/agent-mux/nativ…
+                                                                │ask
+                                                                │asked (1)
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+
+  j/k up/down · enter focus · a actions · : commands · / filter · ? help · n/N needs you · tab switch pane · i inspector · ? more
+
+##### L5 session actions on the Kitty row: clear, mark active, lock, mute
+
+=== actions menu for a Kitty session (kitty window 1) [00:50:55Z] ===
+Agent Mux · Urgency · all projects                                                                                 ✖ hooks drifted
+Needs you (1)                                                   │alpha
+alpha     Needs permission   0:03                               │Needs permission · 0:03
+                                                                │Agent   claude · work
+                                                                │Branch  main
+                                                                │Dir     /tmp/amxs11/proj/alpha
+                                                                │Watch   —
+                             ╭──────────────────────────────────────────────────────────────────────╮─────────────────────────────
+                             │ Actions for alpha                                                    │xs11/proj/alpha
+                             │ work · claude · main · /tmp/amxs11/proj/alpha                        │ 3
+                             │ ▸ Open session                                                       │
+                             │   Peek scrollback                                                  e │.local/state/agent-mux/nativ…
+                             │   Launch another session                                           C │
+                             │   Open shell                                                       o │
+                             │   Open editor                                                      O │
+                             │   Copy title                                                       y │
+                             │ ─ Status ─────────────────────────────────────────────────────────── │
+                             │   Clear status                                                     x │
+                             │   Mark active                                                      b │
+                             │   Lock/Unlock                                                      L │
+                             │   Mute/Unmute                                                      m │
+                             │ ─ Lifecycle ──────────────────────────────────────────────────────── │
+                             │   Restart                                                          r │
+                             │   Restart with another profile                                     c │
+                             │   Close                                                            X │
+                             │                                                                      │
+                             │ jump to the session's Kitty tab, or attach to it here if it runs in  │
+                             │ tmux                                                                 │
+                             │                                                                      │
+                             │   ↑/↓ select · ⏎ run · a key runs it · esc/q close                   │
+                             ╰──────────────────────────────────────────────────────────────────────╯
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+
+ Hook health degraded · details: ":" Show Health Details on the dashboard
+
+--- tree after Clear status ---
+tab 1 [active] title='sh'
+   window 1 overlay=False fg=['amx'] vars={}
+tab 3 title='🟠alpha'
+   window 3 overlay=False fg=['/bin/sh /tmp/amxs11/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs11/home/.claude-a claude --debug-file /tmp/amxs11/home/.local/state/agent-mux/native/2bcc8973-714e-4bf8-bdaa-560e3d119de0/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_profile': 'work', 'amx_project': 'alpha'}
+
+--- tree after Mark active ---
+tab 1 [active] title='sh'
+   window 1 overlay=False fg=['amx'] vars={}
+tab 3 title='⚡🟠alpha'
+   window 3 overlay=False fg=['/bin/sh /tmp/amxs11/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs11/home/.claude-a claude --debug-file /tmp/amxs11/home/.local/state/agent-mux/native/2bcc8973-714e-4bf8-bdaa-560e3d119de0/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_profile': 'work', 'amx_project': 'alpha'}
+
+--- tree after Lock ---
+tab 1 [active] title='sh'
+   window 1 overlay=False fg=['amx'] vars={}
+tab 3 title='🔒⚡🟠alpha'
+   window 3 overlay=False fg=['/bin/sh /tmp/amxs11/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs11/home/.claude-a claude --debug-file /tmp/amxs11/home/.local/state/agent-mux/native/2bcc8973-714e-4bf8-bdaa-560e3d119de0/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_locked': 'true', 'amx_profile': 'work', 'amx_project': 'alpha'}
+
+--- tree after Mute ---
+tab 1 [active] title='sh'
+   window 1 overlay=False fg=['amx'] vars={}
+tab 3 title='🔒🔇⚡🟠alpha'
+   window 3 overlay=False fg=['/bin/sh /tmp/amxs11/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs11/home/.claude-a claude --debug-file /tmp/amxs11/home/.local/state/agent-mux/native/2bcc8973-714e-4bf8-bdaa-560e3d119de0/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_locked': 'true', 'amx_profile': 'work', 'amx_project': 'alpha', 'cc_mute': '1'}
+
+=== dashboard after lock + mute (kitty window 1) [00:51:04Z] ===
+Agent Mux · Urgency · all projects                                                                                 ✖ hooks drifted
+> Sessions · focused                                            │  Inspector
+Running (1)                                                     │alpha
+🔒 alpha  Working   0:07                                        │Working · 0:07
+                                                                │Agent   claude · work
+                                                                │Branch  main
+                                                                │Dir     /tmp/amxs11/proj/alpha
+                                                                │Watch   🔒 · 🔇 · last event 0m
+                                                                │─────────────────────────────────────────────────────────────────
+                                                                │stand-in claude pid 82996 in /tmp/amxs11/proj/alpha
+                                                                │runtime session: none  kitty window: 3
+                                                                │conversation: standin-82996
+                                                                │args: --debug-file /tmp/amxs11/home/.local/state/agent-mux/nativ…
+                                                                │ask
+                                                                │asked (1)
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+
+  j/k up/down · enter focus · a actions · : commands · / filter · ? help · n/N needs you · tab switch pane · i inspector · ? more
+
+##### L6 peek keeps the native Kitty overlay pager
+
+--- tree with the overlay pager (less) over the agent window ---
+tab 1 [active] title='less'
+   window 1 overlay=False fg=['amx'] vars={}
+   window 4 overlay=False fg=['less'] vars={}
+tab 3 title='⚡🟠alpha'
+   window 3 overlay=False fg=['/bin/sh /tmp/amxs11/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs11/home/.claude-a claude --debug-file /tmp/amxs11/home/.local/state/agent-mux/native/2bcc8973-714e-4bf8-bdaa-560e3d119de0/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_locked': '', 'amx_profile': 'work', 'amx_project': 'alpha', 'cc_mute': ''}
+
+=== native overlay pager (kitty window 4) [00:51:13Z] ===
+stand-in claude pid 82996 in /tmp/amxs11/proj/alpha
+runtime session: none  kitty window: 3
+conversation: standin-82996
+args: --debug-file /tmp/amxs11/home/.local/state/agent-mux/native/2bcc8973-714e-4bf8-bdaa-560e3d119de0/claude-debug.log
+ask
+asked (1)
+
+:
+
+##### L7 restart replaces the Kitty tab's agent
+
+--- tree after Restart (agent window was 3) ---
+tab 1 title='sh'
+   window 1 overlay=False fg=['amx'] vars={}
+tab 4 [active] title='🟠alpha'
+   window 5 overlay=False fg=['/bin/sh /tmp/amxs11/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs11/home/.claude-a claude --debug-file /tmp/amxs11/home/.local/state/agent-mux/native/c3d4e09e-8856-4e6b-a240-4203d5ffef06/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_profile': 'work', 'amx_project': 'alpha'}
+
+##### L8 focus (enter) brings the Kitty tab forward and the dashboard quits
+
+=== dashboard after restart, row refreshed (kitty window 1) [00:51:21Z] ===
+Agent Mux · Urgency · all projects                                                                                 ✖ hooks drifted
+> Sessions · focused                                            │  Inspector
+Running (1)                                                     │alpha
+alpha     Active      —                                         │Active · —
+                                                                │Agent   claude · work
+                                                                │Branch  main
+                                                                │Dir     /tmp/amxs11/proj/alpha
+                                                                │Watch   —
+                                                                │─────────────────────────────────────────────────────────────────
+                                                                │stand-in claude pid 84294 in /tmp/amxs11/proj/alpha
+                                                                │runtime session: none  kitty window: 5
+                                                                │conversation: standin-84294
+                                                                │args: --debug-file /tmp/amxs11/home/.local/state/agent-mux/nativ…
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+                                                                │
+
+  j/k up/down · enter focus · a actions · : commands · / filter · ? help · n/N needs you · tab switch pane · i inspector · ? more
+
+--- tree after focus: the agent tab is active ---
+tab 1 title='sh'
+   window 1 overlay=False fg=['/bin/sh'] vars={}
+tab 4 [active] title='🟠alpha'
+   window 5 overlay=False fg=['/bin/sh /tmp/amxs11/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs11/home/.claude-a claude --debug-file /tmp/amxs11/home/.local/state/agent-mux/native/c3d4e09e-8856-4e6b-a240-4203d5ffef06/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_profile': 'work', 'amx_project': 'alpha'}
+
+=== dashboard window after focus: back at the shell (kitty window 1) [00:51:24Z] ===
+sh-3.2$ amx
+sh-3.2$ amx
+sh-3.2$
+
+##### L9 overview inside Kitty
+
+=== overview in Kitty with one Kitty session (kitty window 1) [00:51:27Z] ===
+Live sessions  1
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ alpha                                                — · Idle ┃
+┃ claude · work                                               1 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+Enter focus · a actions · ? help · q exit · 1–0 jump · n/N needs you · c normal · ←↑↓→/hjkl move · Tab next · PgUp/PgDn page
+
+##### RESULT: 0 step(s) failed

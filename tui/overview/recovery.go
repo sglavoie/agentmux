@@ -196,7 +196,7 @@ func relaunchCmd(cfg *config.Config, client kitty.KittyClient, request sessionac
 		}()
 		_, err := commands.Registry.Execute(
 			context.Background(),
-			actions.Dependencies{Kitty: client, Config: cfg},
+			commands.TerminalDependencies(client, cfg),
 			actions.Launch,
 			actions.Request{Project: &sess},
 		)

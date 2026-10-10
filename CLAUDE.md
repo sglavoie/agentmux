@@ -20,7 +20,8 @@ Domain services must not invoke `kitten @` or spell Kitty match expressions;
 
 ## Build and acceptance
 
-Requires Go 1.26+, Kitty, and `just`.
+Requires Go 1.26+, Kitty, and `just`. tmux is needed for the tmux backend and
+its tests (they skip without it).
 
 ```bash
 just build
@@ -179,6 +180,16 @@ TUI (`tui/...`):
 - The whole TUI tree reaches the daemon only through `internal/daemon/ipc`,
   `process`, and `protocol`. Only the dashboard's `commands.Refresh` may write to
   Kitty or consume `amx_dashboard_select`; `RefreshOverview` writes nothing.
+- The TUI also runs without Kitty (`tui/commands/portable.go`).
+  `commands.Portable`, installed once by `cmd/dashboard` (`selectTerminals`),
+  is the tmux half of the terminals a surface works with; the Kitty client is
+  nil outside Kitty, so guard any direct use of it. A tmux session is listed
+  under a process-local integer ID (`PortableIDBase` and up) that stands in for
+  the tab and window ID everywhere in the tree, and the daemon's state for it
+  is re-keyed from `Response.RuntimeSlots`. Focus on such a row attaches this
+  terminal (`commands.Attach`, **F12** detaches) and the surface keeps running;
+  Kitty-only actions report why they are unavailable. Build action dependencies
+  with `commands.TerminalDependencies`, never a bare `actions.Dependencies{Kitty: …}`.
 
 ### Identity and safety rules
 
