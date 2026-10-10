@@ -6,3 +6,7 @@ macos/build/
 macos/DerivedData/
 macos/*.xcodeproj/
 macos/.cache/
+
+# The vendored GhosttyKit is built by macos/scripts/build-ghosttykit.sh from
+# the pins in macos/GHOSTTY_VERSION and never committed.
+macos/Vendor/

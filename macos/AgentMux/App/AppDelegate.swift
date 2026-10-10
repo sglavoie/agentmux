@@ -64,6 +64,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
     /// Set once the binary is resolved; amx commands run through it.
     private(set) var command: AMXCommand?
 
+    /// The embedded terminal runtime, made the first time a terminal is
+    /// wanted: a companion used only beside Kitty never starts Ghostty.
+    private(set) var terminals: Ghostty.App?
+
     /// A hosted test bundle launches this app too; it must not start the
     /// status item, spawn amx, or quit because the installed copy is running.
     nonisolated static var isRunningTests: Bool {
@@ -121,10 +125,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // Before anything else goes: freeing a surface detaches its view,
+        // and the sessions themselves live on in tmux.
+        terminals?.shutdown()
         healthTimer?.invalidate()
         subscription?.stop()
         if let wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver) }
         if let activationObserver { NSWorkspace.shared.notificationCenter.removeObserver(activationObserver) }
+    }
+
+    // MARK: Embedded terminals
+
+    /// The runtime every embedded terminal is made from, or nil when Ghostty
+    /// could not start. Surfaces come from its `makeSurface(_:)`, each with
+    /// its own command and environment.
+    func terminalRuntime() -> Ghostty.App? {
+        if let terminals { return terminals }
+        let runtime = Ghostty.App()
+        guard runtime.readiness == .ready else {
+            Self.logger.error("embedded terminals are unavailable: Ghostty did not start")
+            return nil
+        }
+        runtime.delegate = self
+        terminals = runtime
+        Self.logger.notice("embedded terminals use Ghostty \(Ghostty.versionDescription, privacy: .public)")
+        return runtime
+    }
+
+    /// What a terminal attached to a runtime session runs: the resolved amx,
+    /// with the environment every other amx invocation gets. Nil until amx is
+    /// resolved.
+    func attachmentConfiguration(runtimeSessionID: String) -> Ghostty.SurfaceConfiguration? {
+        guard let command else { return nil }
+        return .attachment(
+            amx: command.binary,
+            runtimeSessionID: runtimeSessionID,
+            environment: command.launchEnvironment.commandEnvironment
+        )
     }
 
     // MARK: Companion feed
@@ -970,5 +1007,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate {
         preferencesController = controller
         publishPreferences()
         controller.show()
+    }
+}
+
+extension AppDelegate: GhosttyAppDelegate {
+    /// A `quit` binding typed into a terminal closes nothing: the companion
+    /// and its other terminals outlive any one of them.
+    nonisolated func ghosttyAppDidRequestQuit(_ app: Ghostty.App) {
+        Self.logger.debug("ignored a quit request from a terminal")
     }
 }

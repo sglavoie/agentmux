@@ -6,13 +6,18 @@ the terminal stack before production code depends on it, and is not part of
 Agent Mux.app, `just mac-test`, or any gate.
 
 ```bash
-macos/GhosttyHarness/scripts/build.sh            # vendor pinned GhosttyKit from ../sglavoie_tt, build the app
+macos/GhosttyHarness/scripts/build.sh            # vendor the pinned GhosttyKit (macos/Vendor), build the app
 python3 -I macos/GhosttyHarness/scripts/run_matrix.py --tmux "$(command -v tmux)"
 python3 -I macos/GhosttyHarness/scripts/run_matrix.py --skip-probe --agents claude
 ```
 
-- `scripts/vendor-ghosttykit.sh` copies tt's vendored GhosttyKit only when its
-  stamp matches `GHOSTTY_VERSION`; tt is never written.
+- GhosttyKit is the one Agent Mux.app links: `macos/scripts/build-ghosttykit.sh`
+  builds it from the pins in `macos/GHOSTTY_VERSION`. The Session 2 evidence
+  was recorded against a copy of sglavoie/tt's build of the same tag, Zig, and
+  patches; no checkout outside this repository is read any more.
+- `Sources/Ghostty/` is the wrapper as first ported. The production copy,
+  generalized for several surfaces, is `macos/AgentMux/Ghostty/`; the license
+  notice for both is `macos/NOTICE-ghostty`.
 - `scripts/run_matrix.py` runs the capture, resize, modified-keys, paste, and
   scrolling cases against `scripts/probe.py`, then asks Claude, Codex, and
   Copilot a question, SIGKILLs the viewer, reattaches a new one, and checks the

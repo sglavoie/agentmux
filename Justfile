@@ -494,9 +494,9 @@ restart-verify:
 
 # Build macos/build/Agent Mux.app, the menu bar companion. Debug bundles amx
 # only when AMX_BINARY names one and otherwise finds ~/.local/bin/amx at run
-# time; Release builds amx with `just build` and bundles that. Like mac-test and
-# mac-install it needs Xcode, so none of the three is part of check, acceptance,
-# or paired-release-gate. See macos/README.md.
+# time; Release builds amx with `just build` and bundles that. Like mac-test,
+# mac-install, and mac-ghosttykit it needs Xcode, so none of them is part of
+# check, acceptance, or paired-release-gate. See macos/README.md.
 mac-app configuration="Debug":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -506,9 +506,13 @@ mac-app configuration="Debug":
     fi
     ./macos/scripts/build-app.sh {{ configuration }}
 
-# Run the Agent Mux.app XCTest suite with xcodebuild test (outside check)
-mac-test:
-    ./macos/scripts/test-app.sh
+# Run the Agent Mux.app XCTest suite with xcodebuild test (outside check); `just mac-test Release` runs it against the optimized app
+mac-test configuration="Debug":
+    ./macos/scripts/test-app.sh {{ configuration }}
+
+# Build the pinned GhosttyKit into macos/Vendor (a no-op when current; mac-app and mac-test run it themselves)
+mac-ghosttykit:
+    ./macos/scripts/build-ghosttykit.sh
 
 # Build the Release Agent Mux.app, install it to /Applications, and relaunch it
 mac-install: (mac-app "Release")

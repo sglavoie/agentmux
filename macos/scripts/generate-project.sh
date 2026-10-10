@@ -1,8 +1,8 @@
 #!/usr/bin/env sh
 #
-# Prepare macos/AgentMux.xcodeproj: ensure the pinned XcodeGen and generate
-# the project from macos/project.yml.
-# build-app.sh and test-app.sh both start here.
+# Prepare macos/AgentMux.xcodeproj: vendor GhosttyKit (build-ghosttykit.sh, a
+# no-op when current), ensure the pinned XcodeGen, and generate the project
+# from macos/project.yml. build-app.sh and test-app.sh both start here.
 #
 # Environment:
 #   AMX_MACOS_CACHE         cache root (default macos/.cache, gitignored)
@@ -33,6 +33,8 @@ require_tool unzip
 . "$macos_dir/XCODEGEN_VERSION"
 : "${XCODEGEN_VERSION:?missing in XCODEGEN_VERSION}"
 : "${XCODEGEN_SHA256:?missing in XCODEGEN_VERSION}"
+
+"$script_dir/build-ghosttykit.sh"
 
 cache_root="${AMX_MACOS_CACHE:-$macos_dir/.cache}"
 mkdir -p "$cache_root"

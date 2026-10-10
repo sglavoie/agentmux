@@ -109,7 +109,7 @@ func TestJustUpdateInstallsEverythingBeforeVerifying(t *testing.T) {
 // or through a recipe they depend on.
 func TestMacAppRecipesStayOutOfTheGates(t *testing.T) {
 	justfile := readJustfile(t)
-	for _, name := range []string{"mac-app", "mac-test", "mac-install"} {
+	for _, name := range []string{"mac-app", "mac-test", "mac-install", "mac-ghosttykit"} {
 		justfileRecipeWithHeader(t, justfile, name)
 	}
 

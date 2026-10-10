@@ -22,6 +22,10 @@ final class AppSkeletonTests: XCTestCase {
         XCTAssertNotNil(delegate)
         XCTAssertNil(delegate?.statusItem)
         XCTAssertNil(delegate?.command)
+        // No terminal is wanted yet, so Ghostty has no app object either, and
+        // an attachment has nothing to run until amx is resolved.
+        XCTAssertNil(delegate?.terminals)
+        XCTAssertNil(delegate?.attachmentConfiguration(runtimeSessionID: "rs-0123456789abcdef0123456789abcdef"))
     }
 
     func testAppIconShipsInTheBundle() throws {

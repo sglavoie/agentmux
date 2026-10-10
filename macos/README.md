@@ -2,8 +2,10 @@
 
 A native macOS menu bar companion for Agent Mux. It is an accessory app (no
 Dock icon) that talks to the always-on amx daemon over its Unix socket and runs
-the `amx` CLI for actions. Kitty stays the terminal: the app never hosts a
-session itself.
+the `amx` CLI for actions. Kitty stays the terminal for Kitty sessions. For
+tmux sessions the app embeds Ghostty (`AgentMux/Ghostty/`, see
+[Embedded terminals](#embedded-terminals)); the runtime is linked and tested,
+and the workspace window that shows its terminals is not built yet.
 
 The app shows the live managed sessions, with attention counts in the menu bar,
 and a click focuses a session's Kitty tab and brings Kitty to the front. Two
@@ -16,6 +18,10 @@ and ASL supervisor questions are answered in a native panel.
 - macOS 14 or later.
 - Xcode (the `xcodebuild` command line tools), `curl`, `shasum`, `unzip`, and
   `ditto`.
+- For the first build, or after a Ghostty bump: `git`, `tar`, network access,
+  and about 5 GB under `macos/.cache/` to build GhosttyKit (see
+  [GhosttyKit](#ghosttykit)). Xcode's Metal Toolchain component is downloaded
+  if it is missing.
 - The rest of the repository's toolchain (Go, `just`) for a Release build,
   which bundles `amx`.
 
@@ -35,13 +41,47 @@ and `cmd/release`'s `TestMacAppRecipesStayOutOfTheGates` keeps it that way.
 | --- | --- |
 | `just mac-app` | Debug build to `macos/build/Agent Mux.app`. It bundles `amx` only when `AMX_BINARY` names one. |
 | `just mac-app Release` | Runs `just build`, then builds Release and bundles that `amx` at `Contents/Resources/bin/amx`. |
-| `just mac-test` | Runs the hosted `AgentMuxTests` XCTest suite (`xcodebuild test`). |
+| `just mac-test` | Runs the hosted `AgentMuxTests` XCTest suite (`xcodebuild test`). `just mac-test Release` runs it against the optimized app, built with testability into `macos/DerivedData/ReleaseTests`. |
+| `just mac-ghosttykit` | Builds the pinned GhosttyKit into `macos/Vendor/`. `mac-app` and `mac-test` run it themselves; it does nothing when the vendored build is current. |
 | `just mac-install` | Release build. It quits a running copy, `ditto`s the app to `/Applications`, re-registers it with Launch Services, and relaunches it. |
 
 The project file `macos/AgentMux.xcodeproj` is generated from `project.yml` and
 is gitignored, so edit `project.yml` instead. `macos/build/`,
-`macos/DerivedData/`, and `macos/.cache/` are gitignored as well, so a build
-leaves `git status` clean for the paired release gate.
+`macos/DerivedData/`, `macos/Vendor/`, and `macos/.cache/` are gitignored as
+well, so a build leaves `git status` clean for the paired release gate.
+
+### GhosttyKit
+
+The embedded terminal is libghostty, linked statically as
+`GhosttyKit.xcframework`. Nothing prebuilt is committed or fetched:
+`scripts/build-ghosttykit.sh` builds it from source and vendors it, with
+`ghostty.h` and the resources the app bundles (themes, shell integration,
+terminfo), into `macos/Vendor/`. The build reads no checkout outside this
+repository.
+
+- **Pins.** `GHOSTTY_VERSION` names the Ghostty tag, the commit that tag must
+  resolve to, the Zig version, and the checksums of the Zig tarballs. A tag
+  that resolves to another commit is refused.
+- **Patches.** `patches/ghostty/*.patch` are applied to a clean checkout of the
+  pinned commit before every build. Each exists because the pinned tag needs
+  it on a current Xcode; re-check them on a bump.
+- **Stamp.** `Vendor/.stamp` records the tag, commit, Zig version, target, and
+  a digest of the patches. A matching stamp skips the build, so changing any
+  pin or patch rebuilds. `GHOSTTYKIT_FORCE=1` rebuilds regardless.
+- **Zig.** A `zig` on `PATH` is used only if it reports the pinned version,
+  then `mise` if installed, else the checksummed tarball unpacked into
+  `macos/.cache/zig/`. On an SDK whose stubs Zig cannot link against, the
+  script builds an SDK shim under `macos/.cache/sdk-shim/` for host tools.
+- **Target.** `GHOSTTYKIT_TARGET=native` builds for this Mac's architecture
+  only; the default `universal` is what a distributed app needs.
+
+The first build takes several minutes. The pins, patches, and script began as a
+copy of [sglavoie/tt](https://github.com/sglavoie/tt)'s and are kept
+byte-identical to its pins and patches while both embed the same tag.
+
+The Swift sources under `AgentMux/Ghostty/` are ported and trimmed from
+Ghostty's macOS app. `NOTICE-ghostty` carries its MIT license and is bundled
+into the app.
 
 ### Signing
 
@@ -100,15 +140,69 @@ only to hand the app to someone else.
 | `AgentMux/Daemon/` | The socket path, line-framed socket, request client, subscription client, and the wire and companion models. |
 | `AgentMux/CLI/` | Resolving, describing, and running `amx`: binary resolver, version, `--help` capabilities, action gating, login-shell environment, detached spawn. |
 | `AgentMux/Kitty/` | Choosing a Kitty socket and bringing the owning Kitty forward. |
+| `AgentMux/Ghostty/` | The libghostty embedding: the app object and its runtime callbacks, layered configuration, per-surface configuration, the surface view, and its input handling. |
 | `AgentMux/Model/` | Pure state: the session store, glyphs, attention cycler, project and recent catalogs, snooze, and the ASL response rules. |
 | `AgentMux/Shell/` | macOS integration: hotkeys, preferences storage, notification presenter. |
 | `AgentMux/UI/` | The status item, menu builder, daemon line, Preferences window, and ASL answer panel. |
 | `AgentMux/Resources/` | `Info.plist` and the asset catalog; `internal/palette/icons.json` is bundled from the repository. |
 | `AgentMuxTests/` | XCTest suites, with a fake stream server standing in for the daemon. |
-| `scripts/` | `generate-project.sh`, `build-app.sh`, `sign.sh`, `install-app.sh`, `test-app.sh`, `make-icons.swift`. |
+| `scripts/` | `build-ghosttykit.sh`, `generate-project.sh`, `build-app.sh`, `sign.sh`, `install-app.sh`, `test-app.sh`, `make-icons.swift`. |
+| `GHOSTTY_VERSION`, `patches/ghostty/`, `NOTICE-ghostty` | The GhosttyKit pins, the build patches, and Ghostty's license notice. |
+| `GhosttyHarness/` | The Session 2 feasibility harness: a separate app with the wrapper as first ported, linking the same vendored GhosttyKit. Not part of any recipe. |
 
 The operator's guide (install, permissions, Kitty requirements,
 troubleshooting) is [docs/companion-app.md](../docs/companion-app.md).
+
+## Embedded terminals
+
+`Ghostty.App` owns the one `ghostty_app_t`. `AppDelegate.terminalRuntime()`
+makes it the first time a terminal is wanted, so a companion used only beside
+Kitty never starts Ghostty, and `applicationWillTerminate` shuts it down.
+`main.swift` runs `ghostty_init` once at launch; if that fails the companion
+runs without embedded terminals.
+
+- **Surfaces.** `Ghostty.App.makeSurface(_:)` returns a `Ghostty.SurfaceView`,
+  an `NSView` hosting one `ghostty_surface_t`. Any number share the app. A
+  surface holds its app strongly and the app lists its surfaces weakly, so the
+  app is never freed under a surface. `close()` frees the surface, which ends
+  the program it ran; releasing the view does the same; `shutdown()` closes
+  every surface, then frees the app. A closed view is inert.
+- **What a surface runs.** `Ghostty.SurfaceConfiguration` carries a program,
+  arguments, environment, working directory, and font size per surface.
+  `attachment(amx:runtimeSessionID:environment:)` is `amx attach <id>`, and
+  `AppDelegate.attachmentConfiguration(runtimeSessionID:)` fills in the
+  resolved amx and the login-shell environment every other amx run gets.
+  Ghostty runs a surface's command as `bash -c "exec -l …"` under `login(1)`;
+  the command goes through `/usr/bin/env` so the program keeps a plain
+  `argv[0]`, and every word is quoted. `TERM`, `COLORTERM`, `TERM_PROGRAM`,
+  and `TERMINFO` are Ghostty's and are dropped from a caller's environment.
+- **Configuration.** Three layers: Ghostty's defaults, then
+  `~/.config/agent-mux/ghostty.conf` if it exists, then the overrides the app
+  forces (`confirm-close-surface = false`, and a font size when one is set).
+  Ghostty.app's own config is not read; the file may
+  `config-file = ~/.config/ghostty/config` to share it. The app configuration
+  names no command. `reloadConfig()` rebuilds the layers and hands the result
+  to every surface; a manually zoomed surface keeps its zoom until reset.
+- **Callbacks.** Runtime actions are sorted by `Ghostty.disposition(of:)`. The
+  app answers quit (passed to `GhosttyAppDelegate`, which ignores it), open
+  URL, open and reload config, and the bell. A surface-targeted title,
+  working directory, pointer, background, notification, child exit, or close
+  request goes to the surface it names and from there to its
+  `GhosttySurfaceDelegate`, on the main thread and after Ghostty's callback
+  has returned, so a delegate may close the surface in response. Tabs,
+  splits, extra windows, and Ghostty's own chrome are refused.
+- **Exit.** A surface with its own program stays open after the program exits;
+  the delegate hears `surfaceChildDidExit` and closes it. No exit status is
+  reported, because Ghostty only sees `login(1)`'s.
+- **Scale, visibility, focus.** A surface follows its window's backing scale
+  and screen. It stops rendering when its window is not visible, when it or an
+  ancestor is hidden, or when it leaves a window; the terminal keeps running.
+  Focus is first responder in the key window, so at most one surface in a
+  window has it.
+
+`AgentMuxTests/Ghostty*Tests.swift` drive real surfaces in offscreen windows:
+several at once, each with its own program, environment, and directory, freed
+in any order, with the programs' pids checked afterwards.
 
 ## Which amx the app runs
 

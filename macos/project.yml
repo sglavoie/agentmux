@@ -24,6 +24,18 @@ targets:
       # each state with the same glyph.
       - path: ../internal/palette/icons.json
         buildPhase: resources
+      # Ghostty's license notice, for the sources ported under AgentMux/Ghostty
+      # and the themes bundled below.
+      - path: NOTICE-ghostty
+        buildPhase: resources
+      # Ghostty's themes, shell integration, and terminfo, found by libghostty
+      # beside the terminfo sentinel; vendored by scripts/build-ghosttykit.sh.
+      - path: Vendor/resources/ghostty
+        type: folder
+        buildPhase: resources
+      - path: Vendor/resources/terminfo
+        type: folder
+        buildPhase: resources
     settings:
       base:
         # The product is "Agent Mux.app"; the module keeps a space-free name so
@@ -35,10 +47,23 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
+        # libghostty.a is built by Zig and carries C++ objects but no autolink
+        # entries, so its runtime dependencies are spelled here.
+        OTHER_LDFLAGS: ["-lc++"]
     dependencies:
+      # Static library: linked, never embedded. Its Headers/module.modulemap
+      # exposes `import GhosttyKit`, so no bridging header is needed.
+      - framework: Vendor/GhosttyKit.xcframework
+        embed: false
       - sdk: Carbon.framework
       - sdk: ServiceManagement.framework
       - sdk: UserNotifications.framework
+      - sdk: Metal.framework
+      - sdk: MetalKit.framework
+      - sdk: CoreText.framework
+      - sdk: IOSurface.framework
+      - sdk: QuartzCore.framework
+      - sdk: UniformTypeIdentifiers.framework
     scheme:
       testTargets:
         - AgentMuxTests
@@ -56,3 +81,8 @@ targets:
         BUNDLE_LOADER: "$(TEST_HOST)"
     dependencies:
       - target: AgentMux
+      # For `import GhosttyKit` in tests. The hosting app already links the
+      # static library, so linking it again would duplicate its symbols.
+      - framework: Vendor/GhosttyKit.xcframework
+        link: false
+        embed: false

@@ -1,0 +1,14 @@
+diff --git a/build.zig b/build.zig
+index f9d861b..6c41ba2 100644
+--- a/build.zig
++++ b/build.zig
+@@ -116,7 +116,8 @@ pub fn build(b: *std.Build) !void {
+         );
+     };
+     libghostty_vt_shared.install(libvt_step);
+-    libghostty_vt_shared.install(b.getInstallStep());
++    // tt.app: libghostty-vt is built by `zig build lib-vt` only; its bundled
++    // libc++ does not compile against the macOS 27 SDK and the app never uses it.
+ 
+     // Helpgen
+     if (config.emit_helpgen) deps.help_strings.install();

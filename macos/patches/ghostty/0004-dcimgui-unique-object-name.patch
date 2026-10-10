@@ -1,0 +1,30 @@
+diff --git a/pkg/dcimgui/build.zig b/pkg/dcimgui/build.zig
+index 2a13898..a98b086 100644
+--- a/pkg/dcimgui/build.zig
++++ b/pkg/dcimgui/build.zig
+@@ -168,7 +168,7 @@ pub fn build(b: *std.Build) !void {
+         });
+         lib.addCSourceFiles(.{
+             .root = b.path(""),
+-            .files = &.{"ext.cpp"},
++            .files = &.{"dcimgui_ext.cpp"},
+             .flags = flags.items,
+         });
+ 
+diff --git a/pkg/dcimgui/ext.cpp b/pkg/dcimgui/dcimgui_ext.cpp
+similarity index 100%
+rename from pkg/dcimgui/ext.cpp
+rename to pkg/dcimgui/dcimgui_ext.cpp
+diff --git a/pkg/dcimgui/main.zig b/pkg/dcimgui/main.zig
+index 40a4325..565cbb0 100644
+--- a/pkg/dcimgui/main.zig
++++ b/pkg/dcimgui/main.zig
+@@ -66,7 +66,7 @@ pub extern fn ImGui_DockBuilderCopyNode(src_node_id: c.ImGuiID, dst_node_id: c.I
+ pub extern fn ImGui_DockBuilderCopyWindowSettings(src_name: [*:0]const u8, dst_name: [*:0]const u8) callconv(.c) void;
+ pub extern fn ImGui_DockBuilderFinish(node_id: c.ImGuiID) callconv(.c) void;
+ 
+-// Extension functions from ext.cpp
++// Extension functions from dcimgui_ext.cpp
+ pub const ext = struct {
+     pub extern fn ImFontConfig_ImFontConfig(self: *c.ImFontConfig) callconv(.c) void;
+     pub extern fn ImGuiStyle_ImGuiStyle(self: *c.ImGuiStyle) callconv(.c) void;

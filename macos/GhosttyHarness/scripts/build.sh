@@ -1,8 +1,9 @@
 #!/usr/bin/env sh
 #
 # Build GhosttyHarness.app (Debug) into macos/.cache/ghostty-harness/build:
-# vendor the pinned GhosttyKit, generate the project with Agent Mux's pinned
-# XcodeGen, and run xcodebuild. Nothing it writes is tracked.
+# vendor the pinned GhosttyKit (macos/scripts/build-ghosttykit.sh, shared with
+# Agent Mux.app), generate the project with Agent Mux's pinned XcodeGen, and
+# run xcodebuild. Nothing it writes is tracked.
 #
 # Environment:
 #   AMX_MACOS_CACHE         cache root (default macos/.cache, gitignored)
@@ -15,7 +16,7 @@ macos_dir=$(dirname -- "$harness_dir")
 cache_root="${AMX_MACOS_CACHE:-$macos_dir/.cache}"
 out="$cache_root/ghostty-harness"
 
-"$script_dir/vendor-ghosttykit.sh"
+"$macos_dir/scripts/build-ghosttykit.sh"
 
 # shellcheck disable=SC1091
 . "$macos_dir/XCODEGEN_VERSION"

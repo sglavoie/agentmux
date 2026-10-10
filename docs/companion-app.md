@@ -15,7 +15,10 @@ and how each feature works inside, is in [`macos/README.md`](../macos/README.md)
 ## Install
 
 Requirements: macOS 14 or later, Xcode command line tools, and the
-repository's usual toolchain (Go, `just`).
+repository's usual toolchain (Go, `just`). The first build also builds the
+embedded terminal engine from source, which needs `git`, network access,
+several minutes, and about 5 GB under `macos/.cache/`; later builds reuse it.
+See [GhosttyKit](../macos/README.md#ghosttykit).
 
 ```bash
 just install        # amx and the daemon first: the app needs a daemon that streams

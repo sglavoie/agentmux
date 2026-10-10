@@ -1,6 +1,8 @@
-The Swift sources under macos/GhosttyHarness/Sources/Ghostty/ (by way of sglavoie/tt's macos/TTApp/Ghostty/) are ported and trimmed from Ghostty's
-macOS app (https://github.com/ghostty-org/ghostty, the tag GhosttyHarness/GHOSTTY_VERSION
-pins), distributed under the following license:
+The Swift sources under macos/AgentMux/Ghostty/ and
+macos/GhosttyHarness/Sources/Ghostty/ (by way of sglavoie/tt's
+macos/TTApp/Ghostty/) are ported and trimmed from Ghostty's macOS app
+(https://github.com/ghostty-org/ghostty, the tag macos/GHOSTTY_VERSION pins),
+distributed under the following license:
 
 MIT License
 

@@ -42,9 +42,19 @@ The native menu bar companion lives in `macos/` (Swift, XcodeGen, see
 
 ```bash
 just mac-app [Release]   # macos/build/Agent Mux.app; Release bundles `just build`'s amx
-just mac-test            # hosted AgentMuxTests XCTest suite
+just mac-test [Release]  # hosted AgentMuxTests XCTest suite
+just mac-ghosttykit      # pinned GhosttyKit into macos/Vendor; mac-app and mac-test run it
 just mac-install         # Release build, quit, ditto to /Applications, relaunch
 ```
+
+The app embeds Ghostty for tmux sessions (`macos/AgentMux/Ghostty/`, ported
+from Ghostty's macOS app; `macos/NOTICE-ghostty`). GhosttyKit is built from
+source by `macos/scripts/build-ghosttykit.sh` at the tag, commit, Zig version,
+and patches pinned in `macos/GHOSTTY_VERSION` and `macos/patches/ghostty/`, and
+vendored into the gitignored `macos/Vendor/`; the build reads no other
+checkout. One `Ghostty.App` serves any number of `Ghostty.SurfaceView`s, each
+with its own `Ghostty.SurfaceConfiguration` (program, arguments, environment);
+the app configuration names no command.
 
 Releases of the Agent Mux / agent-session-loop pair go through
 `just paired-release-gate asl_root=… signing_key=…`, which runs both

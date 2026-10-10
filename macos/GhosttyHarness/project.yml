@@ -1,6 +1,7 @@
 # XcodeGen spec for the Session 2 Ghostty + tmux feasibility harness. It is a
-# project of its own so Agent Mux.app and `just mac-test` neither link nor see
-# GhosttyKit; scripts/build.sh generates it into macos/.cache/ghostty-harness.
+# project of its own, with its own copy of the ported wrapper as it stood when
+# the stack was proved; it links the same vendored GhosttyKit as Agent Mux.app
+# (macos/Vendor, built by macos/scripts/build-ghosttykit.sh).
 name: GhosttyHarness
 options:
   bundleIdPrefix: io.github.sglavoie
@@ -21,11 +22,11 @@ targets:
     sources:
       - path: Sources
       # Ghostty's terminfo and shell integration, found beside the terminfo
-      # sentinel; vendored by scripts/vendor-ghosttykit.sh.
-      - path: ../.cache/ghostty-harness/Vendor/resources/ghostty
+      # sentinel; vendored by macos/scripts/build-ghosttykit.sh.
+      - path: ../Vendor/resources/ghostty
         type: folder
         buildPhase: resources
-      - path: ../.cache/ghostty-harness/Vendor/resources/terminfo
+      - path: ../Vendor/resources/terminfo
         type: folder
         buildPhase: resources
     settings:
@@ -39,7 +40,7 @@ targets:
         # libghostty.a carries C++ objects but no autolink entries.
         OTHER_LDFLAGS: ["-lc++"]
     dependencies:
-      - framework: ../.cache/ghostty-harness/Vendor/GhosttyKit.xcframework
+      - framework: ../Vendor/GhosttyKit.xcframework
         embed: false
       - sdk: Metal.framework
       - sdk: MetalKit.framework
