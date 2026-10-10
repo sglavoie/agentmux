@@ -103,7 +103,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// Whether the window is on screen; terminals exist only while it is.
     private(set) var isOpen = false
 
-    let sidebar = NSTableView()
+    let sidebar = WorkspaceSidebarView()
     let feedLabel = NSTextField(labelWithString: "")
     let placeholder = WorkspacePlaceholderView()
     private let pane = NSView()
@@ -648,7 +648,21 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     /// A click on a row focuses it.
     @objc private func rowClicked(_ sender: Any?) {
-        let index = sidebar.clickedRow
+        focusItem(at: sidebar.clickedRow)
+    }
+
+    /// Gives the keyboard to the session list: the arrow keys then move the
+    /// selection and Return goes into what is selected.
+    func focusSidebar() {
+        window.makeFirstResponder(sidebar)
+    }
+
+    /// Return in the session list: focuses the selected row, as a click does.
+    func focusSelectedItem() {
+        focusItem(at: sidebar.selectedRow)
+    }
+
+    private func focusItem(at index: Int) {
         guard index >= 0, index < items.count else { return }
         switch items[index] {
         case let .row(row): activate(row)
@@ -674,6 +688,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         sidebar.delegate = self
         sidebar.target = self
         sidebar.action = #selector(rowClicked(_:))
+        sidebar.onReturn = { [weak self] in self?.focusSelectedItem() }
         sidebar.setAccessibilityLabel("Sessions")
 
         let scroll = NSScrollView()
@@ -738,6 +753,23 @@ extension WorkspaceWindowController: GhosttySurfaceDelegate {
 
     nonisolated func surfaceDidRequestClose(_ surface: Ghostty.SurfaceView, needsConfirm: Bool) {
         MainActor.assumeIsolated { terminalEnded(surface) }
+    }
+}
+
+/// The session list. It keeps the keys a list needs — the arrows, and Return
+/// to go into the selected row — and nothing typed here reaches a program.
+@MainActor
+final class WorkspaceSidebarView: NSTableView {
+    var onReturn: (() -> Void)?
+
+    override func keyDown(with event: NSEvent) {
+        let returnKeys: Set<UInt16> = [36, 76]
+        if returnKeys.contains(event.keyCode),
+           event.modifierFlags.isDisjoint(with: [.command, .control, .option]) {
+            onReturn?()
+            return
+        }
+        super.keyDown(with: event)
     }
 }
 

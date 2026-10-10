@@ -51,7 +51,9 @@ bind-key -n F12 detach-client
 # pane program asked for, rather than collapsing them to legacy bytes.
 set -s extended-keys on
 set -s extended-keys-format csi-u
-set -as terminal-features 'xterm-ghostty:extkeys:RGB:clipboard:focus:sync'
+# An indexed entry, not an append: the configuration is sourced again at every
+# attach, and that must not grow the list.
+set -s terminal-features[20] 'xterm-ghostty:extkeys:RGB:clipboard:focus:sync:hyperlinks'
 set -s escape-time 10
 set -s focus-events on
 set -s set-clipboard on
@@ -74,10 +76,84 @@ set -s exit-unattached off
 set -g remain-on-exit on
 set -g allow-rename off
 set -g automatic-rename off
+
+# History is held here, in the server, so it outlives every viewer: lines that
+# scrolled off a pane are tmux's (history-limit above), and a full-screen
+# program keeps its own transcript in a process this server holds. A viewer
+# asks for history with the keys below, which no keyboard produces: the app
+# sends them for its menu items, so nobody needs a prefix or a tmux key.
+#
+# Page up and down go to whichever holds the history: tmux's copy mode, or a
+# full-screen program's own Page Up and Page Down. Copy mode entered with -e
+# ends by itself at the bottom; Escape, q, and Enter leave it too. The vi key
+# table is used because its searches leave the cursor at the start of a match,
+# so stepping to the previous match always moves.
+set -g mode-keys vi
+set -s user-keys[0] "\e[5001~"
+set -s user-keys[1] "\e[5002~"
+set -s user-keys[2] "\e[5003~"
+set -s user-keys[3] "\e[5004~"
+set -s user-keys[4] "\e[5005~"
+set -s user-keys[5] "\e[5006~"
+set -s user-keys[6] "\e[5007~"
+bind-key -n User0 if-shell -F '#{pane_in_mode}' { send-keys -X page-up } { if-shell -F '#{alternate_on}' { send-keys PPage } { copy-mode -eu } }
+bind-key -n User1 if-shell -F '#{pane_in_mode}' { send-keys -X page-down } { if-shell -F '#{alternate_on}' { send-keys NPage } }
+bind-key -n User2 if-shell -F '#{||:#{pane_in_mode},#{!:#{alternate_on}}}' { copy-mode -e ; send-keys -X history-top }
+bind-key -n User3 if-shell -F '#{pane_in_mode}' { send-keys -X cancel }
+bind-key -n User4 { copy-mode -e ; command-prompt -i -T search -p "find:" { send-keys -X search-backward-incremental -- "%%" } }
+bind-key -n User5 if-shell -F '#{pane_in_mode}' { send-keys -X search-again }
+bind-key -n User6 if-shell -F '#{pane_in_mode}' { send-keys -X search-reverse }
+bind-key -T copy-mode-vi Escape send-keys -X cancel
+
+# The mouse selects, scrolls, and reaches a program that asked for it. tmux's
+# own menus and pane shuffling are removed: a right click must never offer to
+# kill, respawn, or split an agent's pane.
+bind-key -n MouseDown3Pane if-shell -F -t = '#{||:#{mouse_any_flag},#{pane_in_mode}}' { select-pane -t = ; send-keys -M }
+unbind-key -n M-MouseDown3Pane
+unbind-key -n MouseDown3Status
+unbind-key -n M-MouseDown3Status
+unbind-key -n MouseDown3StatusLeft
+unbind-key -n M-MouseDown3StatusLeft
+unbind-key -n C-MouseDown1Pane
+unbind-key -n C-MouseDown1Status
+unbind-key -n MouseDown1Status
+unbind-key -n MouseDown1Control8
+unbind-key -n MouseDown1Control9
+unbind-key -n WheelUpStatus
+unbind-key -n WheelDownStatus
 `
 
 // DetachKey is the key that detaches an attached terminal from a session.
 const DetachKey = "F12"
+
+// ViewerKey is something a viewer asks the server to do with a pane's history.
+// Each is one of the configuration's user keys: an escape sequence no keyboard
+// produces, which a viewer writes to its tmux client.
+type ViewerKey int
+
+// The history requests, in user-key order.
+const (
+	ViewerPageUp ViewerKey = iota
+	ViewerPageDown
+	ViewerTop
+	ViewerBottom
+	ViewerFind
+	ViewerFindNext
+	ViewerFindPrevious
+	viewerKeyCount
+)
+
+// CSI is what follows the CSI introducer (ESC [) in the key's sequence.
+func (k ViewerKey) CSI() string { return strconv.Itoa(5001+int(k)) + "~" }
+
+// ViewerKeys lists every history request.
+func ViewerKeys() []ViewerKey {
+	keys := make([]ViewerKey, viewerKeyCount)
+	for i := range keys {
+		keys[i] = ViewerKey(i)
+	}
+	return keys
+}
 
 // ErrServerNotRunning reports that no server answers on the socket: it was
 // never started, it exited with its last session, or it died and left a

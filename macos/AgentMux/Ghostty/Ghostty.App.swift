@@ -315,6 +315,10 @@ extension Ghostty {
             }
         }
 
+        /// Opens a link a terminal asked for. Replaced in tests, which must
+        /// not open anything on the machine they run on.
+        static var openLink: (URL) -> Void = { NSWorkspace.shared.open($0) }
+
         private static func openURL(_ v: ghostty_action_open_url_s) -> Bool {
             guard let ptr = v.url else { return false }
             let data = Data(bytes: ptr, count: Int(v.len))
@@ -325,7 +329,8 @@ extension Ghostty {
             } else {
                 url = URL(fileURLWithPath: (str as NSString).expandingTildeInPath)
             }
-            NSWorkspace.shared.open(url)
+            Ghostty.logger.notice("opening a link with scheme \(url.scheme ?? "none", privacy: .public)")
+            Ghostty.onMain { openLink(url) }
             return true
         }
 

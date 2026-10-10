@@ -156,14 +156,9 @@ extension Ghostty.SurfaceView {
             return ghostty_surface_key_is_binding(surface, keyEvent, &flags)
         }
         if isBinding {
-            // A consumed binding the main menu also owns is the menu's, as
-            // upstream arbitrates it: Cmd+, is Ghostty's open_config and the
-            // app's Preferences. `all` and `performable` bindings stay the
-            // surface's.
-            let consumed = flags.rawValue & GHOSTTY_BINDING_FLAGS_CONSUMED.rawValue != 0
-            let surfaceOwned = flags.rawValue
-                & (GHOSTTY_BINDING_FLAGS_ALL.rawValue | GHOSTTY_BINDING_FLAGS_PERFORMABLE.rawValue) != 0
-            if consumed, !surfaceOwned,
+            // A consumed binding the main menu also owns is the menu's:
+            // Cmd+, is Ghostty's open_config and the app's Preferences.
+            if Ghostty.menuMayClaim(flags),
                let menu = NSApp.mainMenu,
                Ghostty.MenuShortcut.perform(for: event, in: menu) {
                 return true
@@ -288,6 +283,12 @@ extension Ghostty.SurfaceView {
 
     override func mouseDown(with event: NSEvent) {
         guard let surface else { return }
+        // The press says where it is. Ghostty anchors a selection, and
+        // reports a click, at the last position it was told, which is only
+        // this one when a move happened to precede the press: a click that
+        // first had to focus the window, or input from an assistive tool,
+        // arrives without one.
+        sendMousePosition(event)
         ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_LEFT, Ghostty.ghosttyMods(event.modifierFlags))
     }
 
@@ -303,6 +304,7 @@ extension Ghostty.SurfaceView {
 
     override func otherMouseDown(with event: NSEvent) {
         guard let surface else { return }
+        sendMousePosition(event)
         let button = Ghostty.mouseButton(fromNSEventButtonNumber: event.buttonNumber)
         ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_PRESS, button, Ghostty.ghosttyMods(event.modifierFlags))
     }
@@ -314,6 +316,7 @@ extension Ghostty.SurfaceView {
     }
 
     override func rightMouseDown(with event: NSEvent) {
+        sendMousePosition(event)
         guard let surface,
               ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_RIGHT, Ghostty.ghosttyMods(event.modifierFlags))
         else { return super.rightMouseDown(with: event) }
@@ -428,6 +431,8 @@ extension Ghostty.SurfaceView: NSMenuItemValidation {
         case #selector(copy(_:)):
             guard let surface else { return false }
             return ghostty_surface_has_selection(surface)
+        case #selector(find(_:)), #selector(findNext(_:)), #selector(findPrevious(_:)):
+            return surface != nil && Ghostty.HistoryRequest.find.bindingAction(for: scrollback) != nil
         default:
             return true
         }

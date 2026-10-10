@@ -68,6 +68,22 @@ which strips every session and Kitty variable before running anything. A
 utility view is never a session: it has no key, comes from no snapshot, and
 must never count toward attention.
 
+A session's terminal only views a pane the private tmux server holds, so its
+scrollback is the server's (`Ghostty.Scrollback.server`): the View and Edit
+menus' paging and Find items write tmux user keys to the client
+(`SurfaceView+History.swift`, bound in `internal/tmux`'s `Config`), and
+`TestViewerKeysMatchTheApp` holds the two sides together. Ghostty's own paging
+and search keys are `performable` bindings; `Ghostty.menuMayClaim` offers them
+to the main menu first, or they act on a buffer a session view does not have.
+tmux tracks the mouse in every session view, so there a link opens with
+⌘⇧-click, and only for modifiers Ghostty saw pressed as keys.
+
+Driving the real app with synthetic input changes the operator's machine.
+Read `docs/acceptance/ghostty-desktop/session-15/driver/README.md` first: a
+modifier-flagged mouse event posted from the HID-system event source leaves
+that modifier held system-wide, and modifiers carried only on mouse events
+stop opening links after the first plain pointer move.
+
 Releases of the Agent Mux / agent-session-loop pair go through
 `just paired-release-gate asl_root=… signing_key=…`, which runs both
 repositories' gates, installs the pair (ASL first), restarts the real daemon,

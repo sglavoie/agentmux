@@ -1,0 +1,52 @@
+[defaults]
+sort = "alpha"
+refresh_interval = 1
+
+[[profiles]]
+name = "claude"
+harness = "claude"
+home_dir = "/tmp/amxs15/home/.claude-w"
+color = "blue"
+
+[[profiles]]
+name = "codex"
+harness = "codex"
+home_dir = "/tmp/amxs15/home/.codex-w"
+color = "purple"
+
+[[profiles]]
+name = "copilot"
+harness = "copilot"
+home_dir = "/tmp/amxs15/home/.copilot-w"
+color = "green"
+
+[[profiles]]
+name = "plain"
+harness = "claude"
+home_dir = "/tmp/amxs15/home/.claude-p"
+color = "yellow"
+
+[[projects]]
+title = "claude"
+directory = "/tmp/amxs15/proj/claude"
+profile = "claude"
+
+[[projects]]
+title = "codex"
+directory = "/tmp/amxs15/proj/codex"
+profile = "codex"
+
+[[projects]]
+title = "copilot"
+directory = "/tmp/amxs15/proj/copilot"
+profile = "copilot"
+
+[[projects]]
+title = "history"
+directory = "/tmp/amxs15/proj/history"
+profile = "plain"
+
+[harness_emojis]
+claude = "🟠"
+codex = "🔵"
+copilot = "🟣"

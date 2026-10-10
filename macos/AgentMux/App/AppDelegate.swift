@@ -259,6 +259,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             return .failure(WorkspaceTerminalProblem(message: "The terminal could not be created."))
         }
         surface.delegate = workspace
+        // An attachment only views a session the tmux server holds.
+        surface.scrollback = .server
         return .success(WorkspaceTerminal(view: surface) { surface.close() })
     }
 
@@ -287,6 +289,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         showWorkspaceView(WorkspaceUtilityView(kind: .shell, target: home, title: "Shell"))
     }
     @objc func closeWorkspaceView(_ sender: Any?) { workspace?.closeSelectedView() }
+    @objc func focusSessionList(_ sender: Any?) {
+        showWorkspace()
+        workspace?.focusSidebar()
+    }
 
     // MARK: Companion feed
 

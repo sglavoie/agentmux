@@ -102,6 +102,10 @@ extension Ghostty {
         /// The pointer the terminal last asked for.
         var pointerCursor: NSCursor = .iBeam
 
+        /// Who holds what scrolled off this terminal; see
+        /// SurfaceView+History.swift.
+        var scrollback: Scrollback = .terminal
+
         private var eventMonitor: Any?
 
         override var acceptsFirstResponder: Bool { surface != nil }

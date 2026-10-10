@@ -134,6 +134,61 @@ focuses the dashboard there, or opens one. With no Kitty to ask it shows the
 workspace's Dashboard, and **Launch Project** in the menu launches on tmux and
 shows the new session in the workspace.
 
+### Keys, history, and the mouse in a terminal
+
+Whatever has the keyboard decides where a key goes.
+
+- In a **session's terminal** every key without ⌘ is the agent's: Return,
+  Shift+Return, Escape, Tab, the arrows, Page Up, the function keys, and
+  every Control and Option chord. The one exception is **F12**, which
+  detaches the view (the agent keeps running and never sees that key).
+- In the **Dashboard** or any other utility view the same keys go to the
+  program running there.
+- In the **session list** the arrow keys move the selection and Return goes
+  into the selected row. Nothing typed there reaches a program.
+  **Window › Session List** (⌘⇧L) puts the keyboard there.
+- Every shortcut of the menu bar holds ⌘, so none is taken from a program,
+  with two exceptions: Shift+Page Up and Shift+Page Down. The global
+  shortcuts work whatever has the keyboard.
+
+**History** belongs to the session, not to the window showing it, so it is
+all still there after the window was closed, the app was quit, or another
+terminal attached. Nothing here needs a tmux key or prefix.
+
+| Menu | Key | In a session's terminal |
+| --- | --- | --- |
+| View › Page Up / Page Down | ⇧Page Up / ⇧Page Down | One page through the history |
+| View › Scroll to Top | ⌘Home | The oldest line tmux holds |
+| View › Scroll to Bottom | ⌘End | Back to the live screen |
+| Edit › Find… | ⌘F | Asks for text at the bottom of the terminal and jumps to the nearest match above |
+| Edit › Find Next / Find Previous | ⌘G / ⇧⌘G | The match before, or back toward the newest |
+
+Escape, `q`, or scrolling back down to the bottom also returns to the live
+screen. The wheel scrolls the same history.
+
+An agent that draws its own full screen, as Claude Code, Codex, and Copilot
+do, keeps its transcript itself. There, paging and the wheel are handed to
+the agent, which scrolls its own transcript, and **Find** covers only what is
+on screen: use the agent's own search for the rest (in Claude Code, Control+O
+and then `/`; in Codex, F3).
+
+In a utility view the paging items scroll that terminal's own buffer, and
+Find is not offered.
+
+**Selecting and copying.** Hold Shift and drag to select text in any
+terminal, then **Edit › Copy** (⌘C). In a session whose program does not use
+the mouse, a plain drag selects and copies on release. An agent that uses the
+mouse receives plain clicks and drags itself. **Edit › Paste** (⌘V) pastes as one block: a pasted line break is not
+a Return. A right click never opens a tmux menu.
+
+**Links.** ⌘-click opens a link where the program is not using the mouse,
+such as a shell view. Where a program does use the mouse it receives plain
+and ⌘ clicks itself, and a link opens with ⌘⇧-click: that is every session's
+terminal, and any utility view whose program tracks the mouse.
+
+**Input methods** compose at the cursor; the agent receives the text when it
+is committed.
+
 ## Global shortcuts
 
 | Default | Does |
@@ -232,6 +287,8 @@ log show --last 5m --predicate 'subsystem == "io.github.sglavoie.agentmux"'
 
 ## Known limits
 
+- **Find in a full-screen agent** reaches only the visible screen; the rest
+  of the conversation is in the agent's own transcript and search.
 - **Mute lag.** A mute made from the app (or `amx mute-toggle`) is written to
   Kitty at once, but the daemon learns it on its next Kitty listing, at most
   one render cadence (2 seconds) later. A notification raised inside that

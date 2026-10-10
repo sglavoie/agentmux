@@ -1,0 +1,637 @@
+import AppKit
+import GhosttyKit
+import XCTest
+@testable import AgentMux
+
+/// A key as a keyboard sends it: the hardware key code, the characters with
+/// and without modifiers, and the modifier flags.
+struct TestKey {
+    var keyCode: UInt16
+    var characters: String
+    var unmodified: String
+    var flags: NSEvent.ModifierFlags = []
+
+    func event(timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime) -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: flags, timestamp: timestamp,
+            windowNumber: 0, context: nil, characters: characters,
+            charactersIgnoringModifiers: unmodified, isARepeat: false, keyCode: keyCode)!
+    }
+
+    static func function(_ key: Int, keyCode: UInt16, _ flags: NSEvent.ModifierFlags = []) -> TestKey {
+        let text = String(Character(UnicodeScalar(key)!))
+        return TestKey(keyCode: keyCode, characters: text, unmodified: text, flags: flags.union(.function))
+    }
+
+    static let pageUp = function(NSPageUpFunctionKey, keyCode: 116)
+    static let pageDown = function(NSPageDownFunctionKey, keyCode: 121)
+    static let home = function(NSHomeFunctionKey, keyCode: 115)
+    static let end = function(NSEndFunctionKey, keyCode: 119)
+    static let f12 = function(NSF12FunctionKey, keyCode: 111)
+    static let left = function(NSLeftArrowFunctionKey, keyCode: 123)
+
+    func with(_ extra: NSEvent.ModifierFlags) -> TestKey {
+        var key = self
+        key.flags.formUnion(extra)
+        return key
+    }
+
+    /// ⌘ with a US-layout key; `shifted` is what Shift types on that key.
+    static func command(_ plain: String, keyCode: UInt16, shifted: String? = nil) -> TestKey {
+        if let shifted {
+            return TestKey(keyCode: keyCode, characters: shifted, unmodified: shifted, flags: [.command, .shift])
+        }
+        return TestKey(keyCode: keyCode, characters: plain, unmodified: plain, flags: .command)
+    }
+}
+
+/// Real surfaces whose program records every byte its terminal delivers, so
+/// what a key, a composition, or a menu item sends is read back exactly.
+final class GhosttyInteractionTests: XCTestCase {
+    private var ghostty: Ghostty.App!
+    private var window: GhosttyTestWindow!
+    private var view: Ghostty.SurfaceView!
+    private var dir: URL!
+    private var out: URL!
+
+    override func setUpWithError() throws {
+        ghostty = Ghostty.App { Ghostty.Config(userConfig: nil) }
+        dir = FileManager.default.temporaryDirectory.appendingPathComponent("amx-ghostty-keys-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        out = dir.appendingPathComponent("bytes")
+        window = GhosttyTestWindow.offscreen()
+        view = try XCTUnwrap(ghostty.makeSurface(Ghostty.SurfaceConfiguration(
+            program: URL(fileURLWithPath: "/bin/sh"),
+            arguments: ["-c", #"stty raw -echo; : > "$OUT.ready"; exec cat > "$OUT""#],
+            environment: ["OUT": out.path]
+        )))
+        window.contentView = view
+        XCTAssertTrue(window.makeFirstResponder(view))
+        window.reportsKey = true
+        XCTAssertTrue(view.focused)
+        ghosttyWait("the recorder to start") { FileManager.default.fileExists(atPath: self.out.path + ".ready") }
+    }
+
+    override func tearDownWithError() throws {
+        window.contentView = nil
+        view = nil
+        window.close()
+        window = nil
+        ghostty.shutdown()
+        ghostty = nil
+        try? FileManager.default.removeItem(at: dir)
+    }
+
+    private var received: String {
+        (try? Data(contentsOf: out)).map { String(decoding: $0, as: UTF8.self) } ?? ""
+    }
+
+    private func expect(_ bytes: String, _ what: String, file: StaticString = #filePath, line: UInt = #line) {
+        ghosttyWait("\(what): \(bytes.debugDescription), have \(received.debugDescription)", timeout: 5, file: file, line: line) {
+            self.received == bytes
+        }
+    }
+
+    /// Delivers a key the way AppKit does when no menu claims it: offered as
+    /// a key equivalent first, then as a key press.
+    private func press(_ key: TestKey) {
+        let event = key.event()
+        if !view.performKeyEquivalent(with: event) {
+            view.keyDown(with: event)
+        }
+    }
+
+    // MARK: Keys that are the program's
+
+    func testModifiedKeysReachTheProgramDistinctFromTheirPlainForms() {
+        var sent = ""
+        func check(_ key: TestKey, _ bytes: String, _ what: String, line: UInt = #line) {
+            press(key)
+            sent += bytes
+            expect(sent, what, line: line)
+        }
+        check(TestKey(keyCode: 0, characters: "a", unmodified: "a"), "a", "a")
+        check(TestKey(keyCode: 36, characters: "\r", unmodified: "\r"), "\r", "Return")
+        check(TestKey(keyCode: 36, characters: "\r", unmodified: "\r", flags: .shift), "\u{1b}[27;2;13~", "Shift+Return")
+        check(TestKey(keyCode: 36, characters: "\r", unmodified: "\r", flags: .control), "\u{1b}[27;5;13~", "Control+Return")
+        check(TestKey(keyCode: 8, characters: "\u{3}", unmodified: "c", flags: .control), "\u{3}", "Control+C")
+        check(TestKey(keyCode: 38, characters: "\n", unmodified: "j", flags: .control), "\n", "Control+J")
+        check(TestKey(keyCode: 48, characters: "\u{19}", unmodified: "\u{19}", flags: .shift), "\u{1b}[Z", "Shift+Tab")
+        check(TestKey(keyCode: 53, characters: "\u{1b}", unmodified: "\u{1b}"), "\u{1b}", "Escape")
+        check(.left.with(.option), "\u{1b}b", "Option+Left")
+        check(.pageUp, "\u{1b}[5~", "Page Up")
+        check(.f12, "\u{1b}[24~", "F12")
+    }
+
+    // MARK: History
+
+    func testASessionViewAsksTheServerForHistory() {
+        view.scrollback = .server
+        var sent = ""
+        for (action, request) in [
+            (#selector(NSResponder.scrollPageUp(_:)), Ghostty.HistoryRequest.pageUp),
+            (#selector(NSResponder.scrollPageDown(_:)), .pageDown),
+            (#selector(NSResponder.scrollToBeginningOfDocument(_:)), .top),
+            (#selector(NSResponder.scrollToEndOfDocument(_:)), .bottom),
+            (#selector(Ghostty.SurfaceView.find(_:)), .find),
+            (#selector(Ghostty.SurfaceView.findNext(_:)), .findNext),
+            (#selector(Ghostty.SurfaceView.findPrevious(_:)), .findPrevious),
+        ] {
+            let item = NSMenuItem(title: "", action: action, keyEquivalent: "")
+            XCTAssertTrue(view.responds(to: action))
+            XCTAssertTrue(view.validateMenuItem(item), "\(request) is offered on a session view")
+            _ = view.perform(action, with: item)
+            sent += "\u{1b}[\(request.serverKey)"
+            expect(sent, "\(request)")
+        }
+        XCTAssertEqual(sent, "\u{1b}[5001~\u{1b}[5002~\u{1b}[5003~\u{1b}[5004~\u{1b}[5005~\u{1b}[5006~\u{1b}[5007~")
+    }
+
+    func testAUtilityViewScrollsItsOwnBufferAndSendsItsProgramNothing() {
+        XCTAssertEqual(view.scrollback, .terminal)
+        for request in [Ghostty.HistoryRequest.pageUp, .pageDown, .top, .bottom] {
+            XCTAssertTrue(view.perform(request), "\(request) scrolls Ghostty's buffer")
+        }
+        for action in [#selector(Ghostty.SurfaceView.find(_:)), #selector(Ghostty.SurfaceView.findNext(_:)),
+                       #selector(Ghostty.SurfaceView.findPrevious(_:))] {
+            XCTAssertFalse(view.validateMenuItem(NSMenuItem(title: "", action: action, keyEquivalent: "")))
+        }
+        XCTAssertFalse(view.perform(.find))
+        // A marker typed afterwards is the first thing the program hears.
+        press(TestKey(keyCode: 0, characters: "a", unmodified: "a"))
+        expect("a", "only the marker")
+    }
+
+    /// Ghostty's own paging and search keys are `performable` bindings, which
+    /// act on a buffer a session view does not have. Read from the linked
+    /// library: each must still be offered to the menu, whose items ask the
+    /// server instead.
+    func testTheMenuMayClaimGhosttysPagingAndSearchKeys() throws {
+        let surface = try XCTUnwrap(view.surface)
+        func flags(_ key: TestKey) -> ghostty_binding_flags_e? {
+            let event = key.event()
+            var keyEvent = event.ghosttyKeyEvent(GHOSTTY_ACTION_PRESS)
+            var flags = ghostty_binding_flags_e(0)
+            let bound = (event.characters ?? "").withCString { ptr -> Bool in
+                keyEvent.text = ptr
+                return ghostty_surface_key_is_binding(surface, keyEvent, &flags)
+            }
+            return bound ? flags : nil
+        }
+        let history: [(String, TestKey)] = [
+            ("Shift+Page Up", .pageUp.with(.shift)), ("Shift+Page Down", .pageDown.with(.shift)),
+            ("Command+Home", .home.with(.command)), ("Command+End", .end.with(.command)),
+            ("Command+F", .command("f", keyCode: 3)), ("Command+G", .command("g", keyCode: 5)),
+            ("Command+Shift+G", .command("g", keyCode: 5, shifted: "G")),
+        ]
+        var performable = 0
+        for (name, key) in history {
+            let found = try XCTUnwrap(flags(key), "\(name) is one of Ghostty's default bindings")
+            XCTAssertTrue(Ghostty.menuMayClaim(found), "\(name) must be offered to the menu")
+            if found.rawValue & GHOSTTY_BINDING_FLAGS_PERFORMABLE.rawValue != 0 { performable += 1 }
+        }
+        XCTAssertGreaterThan(performable, 0, "none of these is performable any more; the reason for the rule is gone")
+
+        XCTAssertFalse(Ghostty.menuMayClaim(GHOSTTY_BINDING_FLAGS_ALL), "an unconsumed binding is not the menu's")
+        XCTAssertFalse(Ghostty.menuMayClaim(ghostty_binding_flags_e(
+            GHOSTTY_BINDING_FLAGS_CONSUMED.rawValue | GHOSTTY_BINDING_FLAGS_ALL.rawValue)))
+        XCTAssertTrue(Ghostty.menuMayClaim(ghostty_binding_flags_e(
+            GHOSTTY_BINDING_FLAGS_CONSUMED.rawValue | GHOSTTY_BINDING_FLAGS_PERFORMABLE.rawValue)))
+        // A key Ghostty does not bind is not this rule's business.
+        XCTAssertNil(flags(TestKey(keyCode: 0, characters: "a", unmodified: "a")))
+    }
+
+    func testHistoryRequestsNameTheServersUserKeys() {
+        XCTAssertEqual(Ghostty.HistoryRequest.allCases.map(\.serverKey),
+                       ["5001~", "5002~", "5003~", "5004~", "5005~", "5006~", "5007~"])
+        XCTAssertEqual(Ghostty.HistoryRequest.find.bindingAction(for: .server), "csi:5005~")
+        XCTAssertEqual(Ghostty.HistoryRequest.pageUp.bindingAction(for: .terminal), "scroll_page_up")
+        XCTAssertNil(Ghostty.HistoryRequest.findNext.bindingAction(for: .terminal))
+    }
+
+    // MARK: Input methods
+
+    /// A composition is the input method's until it commits: the program
+    /// hears nothing while text is marked, then exactly the committed text.
+    func testACompositionReachesTheProgramOnlyWhenCommitted() throws {
+        let none = NSRange(location: NSNotFound, length: 0)
+        view.setMarkedText("k", selectedRange: NSRange(location: 1, length: 0), replacementRange: none)
+        XCTAssertTrue(view.hasMarkedText())
+        view.setMarkedText("か", selectedRange: NSRange(location: 1, length: 0), replacementRange: none)
+        view.setMarkedText("かんじ", selectedRange: NSRange(location: 3, length: 0), replacementRange: none)
+        XCTAssertEqual(view.markedRange(), NSRange(location: 0, length: 3))
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        XCTAssertEqual(received, "", "marked text is not input")
+
+        // The candidate window is placed at the cursor, inside the view.
+        let rect = view.firstRect(forCharacterRange: NSRange(location: 0, length: 3), actualRange: nil)
+        let frame = window.convertToScreen(view.convert(view.bounds, to: nil))
+        XCTAssertTrue(frame.insetBy(dx: -1, dy: -40).intersects(rect), "\(rect) is not at the terminal \(frame)")
+
+        // A commit made inside a key press rides that key, so nothing is
+        // written until the key is; one made outside (a candidate picked
+        // with the pointer) is written at once.
+        try withCurrentEvent {
+            view.keyTextAccumulator = []
+            view.insertText("漢字", replacementRange: none)
+            XCTAssertFalse(view.hasMarkedText(), "a commit ends the composition")
+            XCTAssertEqual(view.keyTextAccumulator, ["漢字"])
+            view.keyTextAccumulator = nil
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+            XCTAssertEqual(received, "")
+
+            view.setMarkedText("にほん", selectedRange: NSRange(location: 3, length: 0), replacementRange: none)
+            view.insertText(NSAttributedString(string: "日本"), replacementRange: none)
+            XCTAssertFalse(view.hasMarkedText())
+        }
+        expect("日本", "the committed text, once")
+    }
+
+    /// `insertText` is only honoured while AppKit is delivering an event, as
+    /// an input method's commit always is.
+    private func withCurrentEvent(_ body: () throws -> Void) throws {
+        let marker = try XCTUnwrap(NSEvent.otherEvent(
+            with: .applicationDefined, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+            context: nil, subtype: 0x5a15, data1: 0, data2: 0))
+        NSApp.postEvent(marker, atStart: true)
+        let taken = NSApp.nextEvent(matching: .applicationDefined, until: Date().addingTimeInterval(2), inMode: .default, dequeue: true)
+        XCTAssertNotNil(taken)
+        XCTAssertNotNil(NSApp.currentEvent)
+        try body()
+    }
+
+    func testACancelledCompositionSendsNothing() {
+        let none = NSRange(location: NSNotFound, length: 0)
+        view.setMarkedText("にほ", selectedRange: NSRange(location: 2, length: 0), replacementRange: none)
+        XCTAssertTrue(view.hasMarkedText())
+        view.unmarkText()
+        XCTAssertFalse(view.hasMarkedText())
+        XCTAssertEqual(view.markedRange(), NSRange())
+        press(TestKey(keyCode: 0, characters: "a", unmodified: "a"))
+        expect("a", "only what was typed after the composition was dropped")
+    }
+}
+
+/// Who owns a shortcut: the workspace's main menu, or the program in the
+/// focused terminal. Every menu shortcut holds ⌘ (or is Shift+Page Up/Down),
+/// so nothing an agent or the Dashboard binds is taken from it.
+@MainActor
+final class WorkspaceShortcutTests: XCTestCase {
+    private var menu: NSMenu!
+
+    override func setUp() async throws {
+        let delegate = try XCTUnwrap(NSApp.delegate as? AppDelegate)
+        let windows = NSApp.windowsMenu
+        menu = WorkspaceMenu.make(target: delegate)
+        NSApp.windowsMenu = windows
+    }
+
+    private func owner(_ key: TestKey) -> String? {
+        Ghostty.MenuShortcut.item(in: menu, matching: key.event())?.title
+    }
+
+    func testEveryMenuShortcutIsClaimedForItsKey() {
+        let expected: [(TestKey, String)] = [
+            (.command(",", keyCode: 43), "Preferences…"),
+            (.command("q", keyCode: 12), "Quit Agent Mux"),
+            (.command("c", keyCode: 8), "Copy"),
+            (.command("v", keyCode: 9), "Paste"),
+            (.command("a", keyCode: 0), "Select All"),
+            (.command("f", keyCode: 3), "Find…"),
+            (.command("g", keyCode: 5), "Find Next"),
+            (.command("g", keyCode: 5, shifted: "G"), "Find Previous"),
+            (.command("=", keyCode: 24, shifted: "+"), "Bigger"),
+            (.command("-", keyCode: 27), "Smaller"),
+            (.command("0", keyCode: 29), "Actual Size"),
+            (.pageUp.with(.shift), "Page Up"),
+            (.pageDown.with(.shift), "Page Down"),
+            (.home.with(.command), "Scroll to Top"),
+            (.end.with(.command), "Scroll to Bottom"),
+            (.command("d", keyCode: 2), "Dashboard"),
+            (.command("o", keyCode: 31), "Overview"),
+            (.command("t", keyCode: 17), "New Shell"),
+            (.command("w", keyCode: 13, shifted: "W"), "Close View"),
+            (.command("a", keyCode: 0, shifted: "A"), "Next Needing Attention"),
+            (.command("]", keyCode: 30, shifted: "}"), "Select Next Session"),
+            (.command("[", keyCode: 33, shifted: "{"), "Select Previous Session"),
+            (.command("m", keyCode: 46), "Minimize"),
+            (.command("w", keyCode: 13), "Close"),
+            (.command("1", keyCode: 18), "Workspace"),
+            (.command("l", keyCode: 37, shifted: "L"), "Session List"),
+        ]
+        for (key, title) in expected {
+            XCTAssertEqual(owner(key), title, "\(key.flags.rawValue) \(key.unmodified)")
+        }
+        // Nothing in the menu is left out of the table above.
+        var listed = 0
+        func count(_ menu: NSMenu) {
+            for item in menu.items {
+                if let submenu = item.submenu { count(submenu) } else if !item.keyEquivalent.isEmpty { listed += 1 }
+            }
+        }
+        count(menu)
+        XCTAssertEqual(listed, expected.count + 1, "a menu shortcut is missing from this test (Hide is the one not listed)")
+    }
+
+    func testOnlyCommandAndTheTwoPagingKeysAreTheMenus() {
+        func check(_ menu: NSMenu) {
+            for item in menu.items {
+                if let submenu = item.submenu { check(submenu); continue }
+                guard !item.keyEquivalent.isEmpty else { continue }
+                let mask = item.keyEquivalentModifierMask
+                if mask.contains(.command) {
+                    XCTAssertTrue(mask.isDisjoint(with: [.control, .option]), item.title)
+                } else {
+                    XCTAssertEqual(mask, .shift, item.title)
+                    XCTAssertTrue(["Page Up", "Page Down"].contains(item.title), item.title)
+                }
+            }
+        }
+        check(menu)
+    }
+
+    func testKeysAProgramBindsAreNeverTheMenus() {
+        let programs: [TestKey] = [
+            TestKey(keyCode: 0, characters: "a", unmodified: "a"),
+            TestKey(keyCode: 36, characters: "\r", unmodified: "\r"),
+            TestKey(keyCode: 36, characters: "\r", unmodified: "\r", flags: .shift),
+            TestKey(keyCode: 36, characters: "\r", unmodified: "\r", flags: .control),
+            TestKey(keyCode: 36, characters: "\r", unmodified: "\r", flags: .option),
+            TestKey(keyCode: 8, characters: "\u{3}", unmodified: "c", flags: .control),
+            TestKey(keyCode: 31, characters: "\u{f}", unmodified: "o", flags: .control),
+            TestKey(keyCode: 17, characters: "\u{14}", unmodified: "t", flags: .control),
+            TestKey(keyCode: 3, characters: "\u{6}", unmodified: "f", flags: .control),
+            TestKey(keyCode: 5, characters: "\u{7}", unmodified: "g", flags: .control),
+            TestKey(keyCode: 2, characters: "\u{4}", unmodified: "d", flags: .control),
+            TestKey(keyCode: 3, characters: "ƒ", unmodified: "f", flags: .option),
+            TestKey(keyCode: 48, characters: "\t", unmodified: "\t"),
+            TestKey(keyCode: 48, characters: "\u{19}", unmodified: "\u{19}", flags: .shift),
+            TestKey(keyCode: 53, characters: "\u{1b}", unmodified: "\u{1b}"),
+            .pageUp, .pageDown, .home, .end, .f12, .left, .left.with(.option), .left.with(.shift),
+            .pageUp.with(.control), .home.with(.shift),
+        ]
+        for key in programs {
+            XCTAssertNil(owner(key), "\(key.flags.rawValue) \(key.unmodified.debugDescription) is claimed by the menu")
+        }
+    }
+}
+
+/// Where a drag selection starts. Each case runs on a surface of its own: a
+/// press with Shift, or on a surface that already has a selection, extends
+/// what is there instead of starting where it lands.
+final class GhosttySelectionTests: XCTestCase {
+    private func mouse(_ type: NSEvent.EventType, _ p: NSPoint, in window: NSWindow) -> NSEvent {
+        NSEvent.mouseEvent(with: type, location: p, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                           windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+    }
+
+    private func selectedText(_ view: Ghostty.SurfaceView) -> String? {
+        guard let surface = view.surface else { return nil }
+        var text = ghostty_text_s()
+        guard ghostty_surface_read_selection(surface, &text) else { return nil }
+        defer { ghostty_surface_free_text(surface, &text) }
+        return String(cString: text.text)
+    }
+
+    /// Drags along the first row of `LINE 2990 needle-2990` from `fraction`
+    /// of the way across cell `column` to past the end of the line, and
+    /// returns what ended up selected.
+    private func dragSelection(fromColumn column: Int, at fraction: Double, moveFirst: Bool = true) throws -> String? {
+        let ghostty = Ghostty.App { Ghostty.Config(userConfig: nil) }
+        defer { ghostty.shutdown() }
+        let window = GhosttyTestWindow.offscreen()
+        defer { window.close() }
+        let view = try XCTUnwrap(ghostty.makeSurface(Ghostty.SurfaceConfiguration(
+            program: URL(fileURLWithPath: "/bin/sh"),
+            arguments: ["-c", "printf 'LINE 2990 needle-2990\\n'; exec cat"])))
+        window.contentView = view
+        defer { window.contentView = nil }
+        XCTAssertTrue(window.makeFirstResponder(view))
+        window.reportsKey = true
+        ghosttyWait("the line to be drawn") {
+            view.performBindingAction("select_all")
+            return self.selectedText(view)?.contains("needle-2990") == true
+        }
+        // A plain click away from the text drops that selection and leaves
+        // the pointer, as Ghostty knows it, far from where the drag starts.
+        let away = NSPoint(x: view.bounds.width - 20, y: 20)
+        view.mouseMoved(with: mouse(.mouseMoved, away, in: window))
+        view.mouseDown(with: mouse(.leftMouseDown, away, in: window))
+        view.mouseUp(with: mouse(.leftMouseUp, away, in: window))
+        XCTAssertNil(selectedText(view), "a plain click clears the selection")
+
+        // Ghostty's default padding is 2pt; the view's origin is bottom left.
+        let cell = view.cellSize
+        let y = view.bounds.height - 2 - cell.height / 2
+        let start = NSPoint(x: 2 + (Double(column) + fraction) * cell.width, y: y)
+        let end = NSPoint(x: 2 + 21.5 * cell.width, y: y)
+        if moveFirst { view.mouseMoved(with: mouse(.mouseMoved, start, in: window)) }
+        view.mouseDown(with: mouse(.leftMouseDown, start, in: window))
+        for step in 1...40 {
+            let x = start.x + (end.x - start.x) * Double(step) / 40
+            view.mouseDragged(with: mouse(.leftMouseDragged, NSPoint(x: x, y: y), in: window))
+        }
+        view.mouseUp(with: mouse(.leftMouseUp, end, in: window))
+        return selectedText(view)
+    }
+
+    func testASelectionStartsAtTheCellThePressIsIn() throws {
+        XCTAssertEqual(try dragSelection(fromColumn: 0, at: 0.25), "LINE 2990 needle-2990")
+        XCTAssertEqual(try dragSelection(fromColumn: 0, at: 0.5), "LINE 2990 needle-2990")
+        XCTAssertEqual(try dragSelection(fromColumn: 5, at: 0.25), "2990 needle-2990")
+        XCTAssertEqual(try dragSelection(fromColumn: 5, at: 0.5), "2990 needle-2990")
+    }
+
+    /// Ghostty's own rule, pinned so a new pin that moves it is noticed: a
+    /// press well past the middle of a cell starts at the next one.
+    func testAPressLateInACellStartsAtTheNextCell() throws {
+        XCTAssertEqual(try dragSelection(fromColumn: 0, at: 0.75), "INE 2990 needle-2990")
+        XCTAssertEqual(try dragSelection(fromColumn: 5, at: 0.75), "990 needle-2990")
+    }
+
+    /// The press carries its own position. Without that, a press no move
+    /// preceded was anchored wherever the pointer was last reported, and the
+    /// drag selected nothing.
+    func testAPressWithNoMoveBeforeItStillAnchorsWhereItLands() throws {
+        XCTAssertEqual(try dragSelection(fromColumn: 5, at: 0.5, moveFirst: false), "2990 needle-2990")
+        XCTAssertEqual(try dragSelection(fromColumn: 0, at: 0.25, moveFirst: false), "LINE 2990 needle-2990")
+    }
+}
+
+/// Which click opens a link. Nothing is opened on the machine running the
+/// tests: the app's opener is replaced for each case.
+final class GhosttyLinkTests: XCTestCase {
+    private static let link = "http://127.0.0.1:47615/s15-link"
+    private var savedOpener: ((URL) -> Void)!
+
+    override func setUp() {
+        savedOpener = Ghostty.App.openLink
+    }
+
+    override func tearDown() {
+        Ghostty.App.openLink = savedOpener
+    }
+
+    private func mouse(_ type: NSEvent.EventType, _ p: NSPoint, _ flags: NSEvent.ModifierFlags, in window: NSWindow) -> NSEvent {
+        NSEvent.mouseEvent(with: type, location: p, modifierFlags: flags, timestamp: ProcessInfo.processInfo.systemUptime,
+                           windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+    }
+
+    /// Clicks the link with `flags` held, on a surface of its own whose
+    /// program first turns on the given mouse-tracking modes, and returns
+    /// what the app was asked to open and whether the program had the mouse.
+    private func click(_ flags: NSEvent.ModifierFlags, mouseModes: [Int] = []) throws -> (opened: [String], captured: Bool) {
+        var opened: [String] = []
+        Ghostty.App.openLink = { opened.append($0.absoluteString) }
+        let ghostty = Ghostty.App { Ghostty.Config(userConfig: nil) }
+        defer { ghostty.shutdown() }
+        let window = GhosttyTestWindow.offscreen()
+        defer { window.close() }
+        let enable = mouseModes.isEmpty ? "" : "printf '" + mouseModes.map { "\\033[?\($0)h" }.joined() + "'; "
+        let view = try XCTUnwrap(ghostty.makeSurface(Ghostty.SurfaceConfiguration(
+            program: URL(fileURLWithPath: "/bin/sh"),
+            arguments: ["-c", enable + "printf 'link: \(Self.link)\\n'; exec cat"])))
+        window.contentView = view
+        defer { window.contentView = nil }
+        XCTAssertTrue(window.makeFirstResponder(view))
+        window.reportsKey = true
+        let surface = try XCTUnwrap(view.surface)
+        ghosttyWait("the link to be drawn") {
+            view.performBindingAction("select_all")
+            var text = ghostty_text_s()
+            guard ghostty_surface_read_selection(surface, &text) else { return false }
+            defer { ghostty_surface_free_text(surface, &text) }
+            return String(cString: text.text).contains("s15-link")
+        }
+        if !mouseModes.isEmpty {
+            ghosttyWait("the program to take the mouse") { ghostty_surface_mouse_captured(surface) }
+        }
+        let captured = ghostty_surface_mouse_captured(surface)
+        // The link starts at column 6; this is well inside it, on row 0.
+        let cell = view.cellSize
+        let p = NSPoint(x: 2 + 18.5 * cell.width, y: view.bounds.height - 2 - cell.height / 2)
+        view.mouseMoved(with: mouse(.mouseMoved, NSPoint(x: p.x - 3, y: p.y), flags, in: window))
+        view.mouseMoved(with: mouse(.mouseMoved, p, flags, in: window))
+        RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+        view.mouseDown(with: mouse(.leftMouseDown, p, flags, in: window))
+        view.mouseUp(with: mouse(.leftMouseUp, p, flags, in: window))
+        RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+        return (opened, captured)
+    }
+
+    func testCommandClickOpensALinkAndAPlainClickDoesNot() throws {
+        let commanded = try click(.command)
+        XCTAssertFalse(commanded.captured)
+        XCTAssertEqual(commanded.opened, [Self.link])
+        XCTAssertEqual(try click([]).opened, [])
+    }
+
+    /// A program that tracks the mouse is sent the click instead, Command
+    /// held or not; Shift is what takes a click back from it. tmux tracks the
+    /// mouse for every session view (1002 or 1003 with 1006), so there the
+    /// link gesture is Command+Shift+click.
+    func testUnderAMouseTrackingProgramShiftIsNeededToOpenALink() throws {
+        for modes in [[1000, 1006], [1002, 1006], [1003, 1006]] {
+            let plain = try click(.command, mouseModes: modes)
+            XCTAssertTrue(plain.captured, "\(modes)")
+            XCTAssertEqual(plain.opened, [], "Command+click under modes \(modes) goes to the program")
+            XCTAssertEqual(try click([.command, .shift], mouseModes: modes).opened, [Self.link], "modes \(modes)")
+        }
+        XCTAssertEqual(try click(.shift, mouseModes: [1002, 1006]).opened, [], "Shift alone selects; it opens nothing")
+    }
+
+    /// One surface under mouse tracking: a first Command+Shift+click that
+    /// opens the link, then `between`, then a second one. Returns how many
+    /// links each click opened.
+    private func clickTwice(
+        between: (Ghostty.SurfaceView, NSWindow, (Double, Int) -> NSPoint) -> Void
+    ) throws -> (first: Int, second: Int) {
+        var opened = 0
+        Ghostty.App.openLink = { _ in opened += 1 }
+        let ghostty = Ghostty.App { Ghostty.Config(userConfig: nil) }
+        defer { ghostty.shutdown() }
+        let window = GhosttyTestWindow.offscreen()
+        defer { window.close() }
+        let view = try XCTUnwrap(ghostty.makeSurface(Ghostty.SurfaceConfiguration(
+            program: URL(fileURLWithPath: "/bin/sh"),
+            arguments: ["-c", "printf '\\033[?1002h\\033[?1006h'; printf 'LINE 2990 needle-2990\\nlink: \(Self.link)\\n'; stty raw -echo; exec cat > /dev/null"])))
+        window.contentView = view
+        defer { window.contentView = nil }
+        XCTAssertTrue(window.makeFirstResponder(view))
+        window.reportsKey = true
+        let surface = try XCTUnwrap(view.surface)
+        ghosttyWait("the link to be drawn") {
+            view.performBindingAction("select_all")
+            var text = ghostty_text_s()
+            guard ghostty_surface_read_selection(surface, &text) else { return false }
+            defer { ghostty_surface_free_text(surface, &text) }
+            return String(cString: text.text).contains("s15-link")
+        }
+        ghosttyWait("the program to take the mouse") { ghostty_surface_mouse_captured(surface) }
+        let cell = view.cellSize
+        let at: (Double, Int) -> NSPoint = { column, row in
+            NSPoint(x: 2 + column * cell.width, y: view.bounds.height - 2 - (Double(row) + 0.5) * cell.height)
+        }
+        let link = at(18.5, 1)
+        let held: NSEvent.ModifierFlags = [.command, .shift]
+        func clickLink() -> Int {
+            let before = opened
+            view.mouseMoved(with: mouse(.mouseMoved, NSPoint(x: link.x - 3, y: link.y), held, in: window))
+            view.mouseMoved(with: mouse(.mouseMoved, link, held, in: window))
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            view.mouseDown(with: mouse(.leftMouseDown, link, held, in: window))
+            view.mouseUp(with: mouse(.leftMouseUp, link, held, in: window))
+            RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+            return opened - before
+        }
+        let first = clickLink()
+        between(view, window, at)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        return (first, clickLink())
+    }
+
+    private func press(_ flags: NSEvent.ModifierFlags, keyCode: UInt16, on view: Ghostty.SurfaceView, in window: NSWindow) {
+        view.flagsChanged(with: NSEvent.keyEvent(
+            with: .flagsChanged, location: .zero, modifierFlags: flags, timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "",
+            isARepeat: false, keyCode: keyCode)!)
+    }
+
+    /// The ordinary way to click a link: the pointer wanders without any
+    /// modifier, then Command and Shift are pressed, then the click. The
+    /// view must pass the key presses on (`flagsChanged`), because under
+    /// mouse tracking Ghostty takes a click back from the program only for
+    /// modifiers it saw pressed as keys.
+    func testALinkOpensAfterThePointerMovedWithoutModifiersOnceTheKeysArePressed() throws {
+        let wandered = try clickTwice { view, window, at in
+            view.mouseMoved(with: self.mouse(.mouseMoved, at(40, 1), [], in: window))
+            self.press(.command, keyCode: 0x37, on: view, in: window)
+            self.press([.command, .shift], keyCode: 0x38, on: view, in: window)
+        }
+        XCTAssertEqual(wandered.first, 1)
+        XCTAssertEqual(wandered.second, 1)
+
+        // Hover the link, press the keys, click without moving again.
+        let hovered = try clickTwice { view, window, at in
+            view.mouseMoved(with: self.mouse(.mouseMoved, at(18.5, 1), [], in: window))
+            self.press(.command, keyCode: 0x37, on: view, in: window)
+            self.press([.command, .shift], keyCode: 0x38, on: view, in: window)
+        }
+        XCTAssertEqual(hovered.second, 1)
+    }
+
+    /// Ghostty's rule, pinned because it is easy to mistake for a broken
+    /// link: once the pointer has moved with no modifier held, modifiers
+    /// that only ride on mouse events (as an automation tool sends them, with
+    /// no key press) no longer open a link. Anything that drives the app with
+    /// synthetic clicks has to press the keys too.
+    func testModifiersOnMouseEventsAloneStopOpeningLinksAfterAPlainMove() throws {
+        let untouched = try clickTwice { _, _, _ in }
+        XCTAssertEqual(untouched.second, 1, "with no plain move in between, the second click still opens")
+        let plainMove = try clickTwice { view, window, at in
+            view.mouseMoved(with: self.mouse(.mouseMoved, at(40, 1), [], in: window))
+        }
+        XCTAssertEqual(plainMove.first, 1)
+        XCTAssertEqual(plainMove.second, 0)
+    }
+}

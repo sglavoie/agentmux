@@ -68,6 +68,21 @@ extension Ghostty {
 }
 
 extension Ghostty {
+    /// Whether the main menu may take a key Ghostty has a binding for.
+    ///
+    /// A `performable` binding is one Ghostty consumes only when its action
+    /// can be carried out. Its default paging and search keys are such
+    /// bindings, and in a session's terminal they can never be: the
+    /// scrollback is the tmux server's, not Ghostty's. The menu item for the
+    /// same key knows who holds the history, and `MenuShortcut.perform` runs
+    /// it only when it validates as enabled, so the menu goes first and a
+    /// disabled item still leaves the key to Ghostty. An `all` binding is
+    /// delivered to every surface and is never the menu's.
+    static func menuMayClaim(_ flags: ghostty_binding_flags_e) -> Bool {
+        flags.rawValue & GHOSTTY_BINDING_FLAGS_CONSUMED.rawValue != 0
+            && flags.rawValue & GHOSTTY_BINDING_FLAGS_ALL.rawValue == 0
+    }
+
     /// Lets the main menu claim a shortcut a Ghostty binding also owns. From
     /// sglavoie/tt's main menu, not from Ghostty.
     enum MenuShortcut {
@@ -75,19 +90,35 @@ extension Ghostty {
 
         /// The item in `menu`, at any depth, whose shortcut is exactly `event`'s
         /// key and modifiers, or nil when the menu owns no such shortcut. An
-        /// uppercase key equivalent carries an implied Shift.
+        /// uppercase key equivalent carries an implied Shift, and so does a
+        /// symbol only Shift types: `}` is Shift+`]`, as AppKit matches it.
         static func item(in menu: NSMenu, matching event: NSEvent) -> NSMenuItem? {
             guard let key = event.charactersIgnoringModifiers?.lowercased(), !key.isEmpty else { return nil }
             let mods = event.modifierFlags.intersection(modifiers)
+            return item(in: menu, key: key, mods: mods, shiftTyped: shiftTyped(key, in: event))
+        }
+
+        /// Whether Shift is what made `event` type `key`, rather than a
+        /// modifier held beside it.
+        private static func shiftTyped(_ key: String, in event: NSEvent) -> Bool {
+            guard event.modifierFlags.contains(.shift),
+                  let plain = event.characters(byApplyingModifiers: [])?.lowercased(), !plain.isEmpty
+            else { return false }
+            return plain != key
+        }
+
+        private static func item(
+            in menu: NSMenu, key: String, mods: NSEvent.ModifierFlags, shiftTyped: Bool
+        ) -> NSMenuItem? {
             for item in menu.items {
                 if let submenu = item.submenu {
-                    if let found = self.item(in: submenu, matching: event) { return found }
+                    if let found = self.item(in: submenu, key: key, mods: mods, shiftTyped: shiftTyped) { return found }
                     continue
                 }
                 let equivalent = item.keyEquivalent
                 guard !equivalent.isEmpty, equivalent.lowercased() == key else { continue }
                 var itemMods = item.keyEquivalentModifierMask.intersection(modifiers)
-                if equivalent != equivalent.lowercased() { itemMods.insert(.shift) }
+                if equivalent != equivalent.lowercased() || shiftTyped { itemMods.insert(.shift) }
                 if itemMods == mods { return item }
             }
             return nil

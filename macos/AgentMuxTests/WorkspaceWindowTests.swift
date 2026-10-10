@@ -99,6 +99,32 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(app.external, [])
     }
 
+    /// The session list keeps the keys of a list: Return goes into the
+    /// selected row, and nothing typed there is a terminal's.
+    func testReturnInTheSessionListFocusesTheSelectedRow() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let key = try row("api", "work").key
+        workspace.select(key)
+        workspace.focusSidebar()
+        XCTAssertTrue(workspace.window.firstResponder === workspace.sidebar)
+        let terminal = try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1)))
+
+        let returnKey = try XCTUnwrap(NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+            characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36))
+        workspace.sidebar.keyDown(with: returnKey)
+        XCTAssertTrue(workspace.window.firstResponder === terminal, "Return gives the selected session the keyboard")
+
+        workspace.focusSidebar()
+        XCTAssertTrue(workspace.window.firstResponder === workspace.sidebar)
+        XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)), "the terminal stays shown")
+
+        workspace.showView(WorkspaceUtilityView.dashboard.id, focus: false)
+        workspace.focusSidebar()
+        workspace.sidebar.keyDown(with: returnKey)
+        XCTAssertTrue(workspace.window.firstResponder === workspace.utilityTerminalView(for: WorkspaceUtilityView.dashboard.id))
+    }
+
     func testAKittySessionIsRaisedInKittyOnlyWhenFocused() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let (work, kitty) = (try row("api", "work"), try row("web", "work"))
