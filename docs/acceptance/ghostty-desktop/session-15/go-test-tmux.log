@@ -1,0 +1,17 @@
+=== RUN   TestViewerKeysReachHistoryHeldByTheServer
+    viewer_test.go:146: observed: page up/down, find, find next/previous, top and bottom moved through 577 lines of tmux history; a replacement viewer found line 1
+--- PASS: TestViewerKeysReachHistoryHeldByTheServer (0.72s)
+=== RUN   TestViewerPagingReachesAFullScreenProgram
+--- PASS: TestViewerPagingReachesAFullScreenProgram (0.10s)
+=== RUN   TestMouseBindingsOfferNothingDestructive
+--- PASS: TestMouseBindingsOfferNothingDestructive (0.04s)
+=== RUN   TestAttachBringsAnOlderServerUpToDate
+--- PASS: TestAttachBringsAnOlderServerUpToDate (0.18s)
+=== RUN   TestWheelReachesHistoryOrTheProgram
+--- PASS: TestWheelReachesHistoryOrTheProgram (0.24s)
+PASS
+ok  	github.com/sglavoie/agentmux/internal/tmux	1.687s
+=== RUN   TestViewerKeysMatchTheApp
+--- PASS: TestViewerKeysMatchTheApp (0.00s)
+PASS
+ok  	github.com/sglavoie/agentmux	0.339s

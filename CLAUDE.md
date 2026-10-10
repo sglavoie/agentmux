@@ -78,11 +78,16 @@ to the main menu first, or they act on a buffer a session view does not have.
 tmux tracks the mouse in every session view, so there a link opens with
 ⌘⇧-click, and only for modifiers Ghostty saw pressed as keys.
 
-Driving the real app with synthetic input changes the operator's machine.
-Read `docs/acceptance/ghostty-desktop/session-15/driver/README.md` first: a
-modifier-flagged mouse event posted from the HID-system event source leaves
-that modifier held system-wide, and modifiers carried only on mouse events
-stop opening links after the first plain pointer move.
+Anything that shows or drives UI can run on another Mac, and under an
+operator's remote-only rule must: with `AMX_MAC_TEST_HOST=user@host`,
+`just mac-test` runs there (`macos/scripts/remote-ui.sh`), and with
+`AMX_UI_TEST_REMOTE_ONLY=1` it never runs locally, whatever fails. Live
+acceptance of the app is driven the same way: read
+`docs/acceptance/ghostty-desktop/session-15/driver/README.md` first. Its
+driver sends keys and pointer through a headless VNC client and reads state
+over SSH, because synthetic input posted on the machine itself has side
+effects: a modifier-flagged mouse event from the HID-system event source
+leaves that modifier held system-wide.
 
 Releases of the Agent Mux / agent-session-loop pair go through
 `just paired-release-gate asl_root=… signing_key=…`, which runs both

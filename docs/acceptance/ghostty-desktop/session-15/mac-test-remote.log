@@ -1,0 +1,96 @@
+# just mac-test, routed by macos/scripts/remote-ui.sh to Seb's MacBook Pro (AMX_MAC_TEST_HOST, AMX_UI_TEST_REMOTE_ONLY=1).
+# Suite and test-case verdict lines of that run's xcodebuild log, first line: the log's size in bytes.
+  254446
+Test Suite 'AMXBinaryResolverTests' passed at 2026-10-10 09:44:13.112.
+	 Executed 20 tests, with 0 failures (0 unexpected) in 0.062 (0.067) seconds
+Test Suite 'AMXCommandTests' passed at 2026-10-10 09:44:14.388.
+	 Executed 20 tests, with 0 failures (0 unexpected) in 1.266 (1.276) seconds
+Test Suite 'AMXVersionTests' passed at 2026-10-10 09:44:14.730.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.337 (0.341) seconds
+Test Suite 'ASLQuestionFlowTests' passed at 2026-10-10 09:44:14.751.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.017 (0.020) seconds
+Test Suite 'ASLResponseStateTests' passed at 2026-10-10 09:44:14.787.
+	 Executed 27 tests, with 0 failures (0 unexpected) in 0.027 (0.036) seconds
+Test Suite 'ASLWireTests' passed at 2026-10-10 09:44:14.796.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.006 (0.008) seconds
+Test Suite 'ActionGateTests' passed at 2026-10-10 09:44:14.811.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.013 (0.015) seconds
+Test Suite 'AppPreferencesTests' passed at 2026-10-10 09:44:14.835.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.021 (0.023) seconds
+Test Suite 'AppSkeletonTests' passed at 2026-10-10 09:44:14.845.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.009 (0.010) seconds
+Test Suite 'AttentionCyclerTests' passed at 2026-10-10 09:44:14.850.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
+Test Suite 'CompanionFrameTests' passed at 2026-10-10 09:44:14.858.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.007 (0.009) seconds
+Test Suite 'DaemonClientTests' passed at 2026-10-10 09:44:16.894.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 2.030 (2.035) seconds
+Test Suite 'DashboardOpenerTests' passed at 2026-10-10 09:44:16.902.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.005 (0.008) seconds
+Test Suite 'GhosttyConfigTests' passed at 2026-10-10 09:44:16.933.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.027 (0.031) seconds
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testACancelledCompositionSendsNothing]' passed (0.228 seconds).
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testACompositionReachesTheProgramOnlyWhenCommitted]' passed (0.419 seconds).
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testASessionViewAsksTheServerForHistory]' passed (0.110 seconds).
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testAUtilityViewScrollsItsOwnBufferAndSendsItsProgramNothing]' passed (0.070 seconds).
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testAWheelTurnIsReportedToAMouseTrackingProgram]' passed (0.129 seconds).
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testHistoryRequestsNameTheServersUserKeys]' passed (0.067 seconds).
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testModifiedKeysReachTheProgramDistinctFromTheirPlainForms]' passed (0.088 seconds).
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testTheMenuMayClaimGhosttysPagingAndSearchKeys]' passed (0.067 seconds).
+Test Suite 'GhosttyInteractionTests' passed at 2026-10-10 09:44:18.115.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 1.178 (1.181) seconds
+Test Case '-[AgentMuxTests.GhosttyLinkTests testALinkOpensAfterThePointerMovedWithoutModifiersOnceTheKeysArePressed]' passed (2.635 seconds).
+Test Case '-[AgentMuxTests.GhosttyLinkTests testCommandClickOpensALinkAndAPlainClickDoesNot]' passed (1.345 seconds).
+Test Case '-[AgentMuxTests.GhosttyLinkTests testModifiersOnMouseEventsAloneStopOpeningLinksAfterAPlainMove]' passed (2.652 seconds).
+Test Case '-[AgentMuxTests.GhosttyLinkTests testUnderAMouseTrackingProgramShiftIsNeededToOpenALink]' passed (4.698 seconds).
+Test Suite 'GhosttyLinkTests' passed at 2026-10-10 09:44:29.447.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 11.329 (11.332) seconds
+Test Case '-[AgentMuxTests.GhosttySelectionTests testAPressLateInACellStartsAtTheNextCell]' passed (0.168 seconds).
+Test Case '-[AgentMuxTests.GhosttySelectionTests testAPressWithNoMoveBeforeItStillAnchorsWhereItLands]' passed (0.136 seconds).
+Test Case '-[AgentMuxTests.GhosttySelectionTests testASelectionStartsAtTheCellThePressIsIn]' passed (0.274 seconds).
+Test Suite 'GhosttySelectionTests' passed at 2026-10-10 09:44:30.026.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.578 (0.579) seconds
+Test Suite 'GhosttySurfaceConfigurationTests' passed at 2026-10-10 09:44:30.304.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.274 (0.277) seconds
+Test Suite 'GhosttySurfaceLifecycleTests' passed at 2026-10-10 09:44:32.514.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 2.205 (2.210) seconds
+Test Suite 'GhosttySurfaceTests' passed at 2026-10-10 09:44:33.092.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.574 (0.577) seconds
+Test Suite 'HotKeyTests' passed at 2026-10-10 09:44:33.110.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.017 (0.018) seconds
+Test Suite 'LaunchEnvironmentTests' passed at 2026-10-10 09:44:33.123.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.012 (0.013) seconds
+Test Suite 'MenuBuilderTests' passed at 2026-10-10 09:44:33.138.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.008 (0.015) seconds
+Test Suite 'NotificationPresenterTests' passed at 2026-10-10 09:44:33.158.
+	 Executed 22 tests, with 0 failures (0 unexpected) in 0.014 (0.019) seconds
+Test Suite 'ProjectCatalogTests' passed at 2026-10-10 09:44:33.168.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.008 (0.010) seconds
+Test Suite 'RecentSessionsTests' passed at 2026-10-10 09:44:33.178.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.008 (0.010) seconds
+Test Suite 'SessionStoreTests' passed at 2026-10-10 09:44:33.187.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.007 (0.009) seconds
+Test Suite 'SnoozeTests' passed at 2026-10-10 09:44:33.195.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.006 (0.008) seconds
+Test Suite 'SubscriptionClientTests' passed at 2026-10-10 09:44:36.207.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 2.998 (3.012) seconds
+Test Case '-[AgentMuxTests.WorkspaceShortcutTests testEveryMenuShortcutIsClaimedForItsKey]' passed (0.035 seconds).
+Test Case '-[AgentMuxTests.WorkspaceShortcutTests testKeysAProgramBindsAreNeverTheMenus]' passed (0.007 seconds).
+Test Case '-[AgentMuxTests.WorkspaceShortcutTests testOnlyCommandAndTheTwoPagingKeysAreTheMenus]' passed (0.003 seconds).
+Test Suite 'WorkspaceShortcutTests' passed at 2026-10-10 09:44:36.255.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.045 (0.047) seconds
+Test Suite 'WorkspaceSidebarTests' passed at 2026-10-10 09:44:36.274.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.014 (0.018) seconds
+Test Suite 'WorkspaceStreamTests' passed at 2026-10-10 09:44:36.643.
+Test Suite 'WorkspaceViewsModelTests' passed at 2026-10-10 09:44:36.649.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.004 (0.006) seconds
+Test Suite 'WorkspaceViewsWindowTests' passed at 2026-10-10 09:44:37.119.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.464 (0.467) seconds
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testReturnInTheSessionListFocusesTheSelectedRow]' passed (0.046 seconds).
+Test Suite 'WorkspaceWindowTests' passed at 2026-10-10 09:44:37.580.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.458 (0.461) seconds
+Test Suite 'AgentMuxTests.xctest' passed at 2026-10-10 09:44:37.580.
+	 Executed 347 tests, with 0 failures (0 unexpected) in 24.399 (24.535) seconds
+Test Suite 'All tests' passed at 2026-10-10 09:44:37.581.
+	 Executed 347 tests, with 0 failures (0 unexpected) in 24.399 (24.536) seconds
+** TEST SUCCEEDED **

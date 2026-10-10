@@ -1,21 +1,19 @@
 #!/bin/sh
-# Installed as the world's `claude`, `codex`, and `copilot`: what AgentMux
-# launches in a tmux pane for a session of that harness.
+# Installed on the MacBook as the world's `claude`, `codex`, and `copilot`:
+# what AgentMux launches in a tmux pane for a session of that harness.
 #
-# It first reports the session to the world's daemon with one managed
-# SessionStart hook, so the session is listed in the app's sidebar. Then it
-# becomes the operator's REAL harness, with the operator's own home,
-# credentials, and PATH (recorded by setup.sh), and with the AgentMux session
-# identity removed: the real harness's own hooks therefore reach no daemon,
-# neither the world's nor the operator's. Everything typed, pasted, clicked,
-# and scrolled in the acceptance run reaches that real program.
+# It reports the session to the world's daemon with one managed SessionStart
+# hook, so the session is listed in the app's sidebar, and then becomes the
+# pane end of bridge.py. The REAL harness runs on the Studio, where it is
+# signed in, and its terminal is carried here over SSH: the driver starts it
+# once this pane is listening. The harness never sees the AgentMux session
+# identity, so its own hooks reach no daemon on either machine.
 #
 # In the `history` project it is instead a plain line printer that stays on
 # the main screen, so its output scrolls into tmux's history.
 R=/tmp/amxs15
 name=$(basename "$0")
-real=$(cat "$R/real/$name")
-case "$1" in --version|-V|-v|--help|-h) exec "$real" "$@" ;; esac
+case "$1" in --version|-V|-v) echo "bridged $name"; exit 0 ;; esac
 sid="s15-$name-$$"
 hook() {
   printf '{"session_id":"%s","hook_event_name":"%s","cwd":"%s"%s}' "$sid" "$1" "$(pwd)" "$2" \
@@ -40,8 +38,4 @@ case "$(pwd -P)" in
   done
   exit 0 ;;
 esac
-for v in $(env | grep -E '^(AMX_|KITTY_|CLAUDE_|CODEX_|COPILOT_|TMUX)' | cut -d= -f1); do
-  case "$v" in TMUX|TMUX_PANE) ;; *) unset "$v" ;; esac
-done
-. "$R/real/env"
-exec "$real" "$@"
+exec /usr/bin/python3 "$R/bridge.py" pane "$R/bridge/$name.sock"

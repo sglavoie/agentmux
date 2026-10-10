@@ -1,0 +1,1029 @@
+
+##### the app copy starts on the MacBook with its workspace open; nothing is shown or driven on the Studio [16:44:11Z]
+
+--- machines ---
+driver: Sébastien’s Mac Studio
+app, tmux, daemon, input, pictures: Seb’s MacBook Pro (app pid 48861)
+PASS: the app subscribed to the world's daemon
+PASS: the workspace opened on the Dashboard
+PASS: the daemon lists four tmux sessions and no Kitty
+PASS: no terminal is attached to any agent yet
+PASS: claude runs headless on the Studio (pid 19614) behind the pane process on the MacBook (pid 48713)
+PASS: codex runs headless on the Studio (pid 19617) behind the pane process on the MacBook (pid 48727)
+PASS: copilot runs headless on the Studio (pid 19613) behind the pane process on the MacBook (pid 48742)
+
+--- daemon snapshot ---
+snapshot v2 kitty.ready=False attention.total=0
+  copilot  copilot  icon=-         attention=False runtime=tmux %2 rs-70c749ed8950f5c6f0d5e69a8c4f2fca
+  codex    codex    icon=-         attention=False runtime=tmux %1 rs-854410d2f0580a83d0aff1d3f0ddff37
+  history  claude   icon=-         attention=False runtime=tmux %3 rs-9db4094faebd015cc05944a813a6e5cd
+  claude   claude   icon=-         attention=False runtime=tmux %0 rs-e3c77b18cd5b0492dcda58e032d446d8
+
+--- panes ---
+claude: alternate=1 mouse=1 in_history=0 position= history=0 pid=48713 dead=0
+codex: alternate=1 mouse=1 in_history=0 position= history=0 pid=48727 dead=0
+copilot: alternate=1 mouse=1 in_history=0 position= history=0 pid=48742 dead=0
+history: alternate=0 mouse=0 in_history=0 position= history=2979 pid=48757 dead=0
+screenshot: workspace-start.png (the workspace window's rectangle on the MacBook)
+
+##### claude: interaction matrix through the embedded terminal [16:44:21Z]
+PASS: claude: a click on its row attached exactly one terminal to its pane
+PASS: claude: the app logged the focus
+PASS: claude: the pane's grid is the viewer's (107x39, not the 80x24 it was launched with)
+PASS: claude: its composer is on screen
+
+=== claude screen: ready [16:44:29Z] ===
+
+ ▐▛███▛█   Claude Code v2.1.296
+▝▜██████▀  Opus 5.5 · Claude Max
+ ▝▝   ▝▝   /private/tmp/amxs15r/proj/claude
+
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ Try "fix typecheck errors"
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  100.0 max 5h 8/48 1:19pm 7d 59/91 oct11|12:59am
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← 1 agent
+PASS: claude: typed text reaches the composer
+PASS: claude: Control+A moved to the start of the line (Y typed there)
+PASS: claude: Control+E moved to the end (Z typed there)
+PASS: claude: shift+Return made a new line: the two lines sit one above the other in the composer
+PASS: claude: and nothing was submitted
+
+=== claude screen: after typing, Control+A, Control+E, and shift+Return [16:44:40Z] ===
+
+ ▐▛███▛█   Claude Code v2.1.296
+▝▜██████▀  Opus 5.5 · Claude Max
+ ▝▝   ▝▝   /private/tmp/amxs15r/proj/claude
+
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ Yalpha betaZ
+  second
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  100.0 max 5h 8/48 1:19pm 7d 59/91 oct11|12:59am
+  ⏵⏵ auto mode on (shift+tab to cycle)
+PASS: claude: the composer was cleared with its editing keys
+PASS: claude: Command+V pasted both lines
+PASS: claude: the pasted line break submitted nothing
+
+=== claude screen: after Command+V of two lines [16:44:51Z] ===
+
+ ▐▛███▛█   Claude Code v2.1.296
+▝▜██████▀  Opus 5.5 · Claude Max
+ ▝▝   ▝▝   /private/tmp/amxs15r/proj/claude
+
+                                                                                   ctrl+g to edit in Nvim
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ S15 paste one
+  S15 paste two
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  100.0 max 5h 8/48 1:19pm 7d 59/91 oct11|12:59am
+  ⏵⏵ auto mode on (shift+tab to cycle)
+PASS: claude: Return submitted the prompt and the answer reached line 150
+PASS: claude: the same harness process produced it (Studio pid 19614)
+claude: pane state alternate=1 mouse=1 in_history=0 position= history=0 pid=48713 dead=0
+PASS: claude: it draws its own full screen with the mouse on (tmux holds no history for it)
+PASS: claude: a real wheel turn scrolled its transcript back (line 150 left the screen)
+PASS: claude: the wheel went to the harness, not into tmux's copy mode
+
+=== claude screen: after wheel up [16:45:21Z] ===
+❯ Print the integers 1 through 150, one per line, with the word S15MARK before each. No tools, no comment…
+  S15MARK 83
+  S15MARK 84
+  S15MARK 85
+  S15MARK 86
+  S15MARK 87
+  S15MARK 88
+  S15MARK 89
+  S15MARK 90
+  S15MARK 91
+  S15MARK 92
+  S15MARK 93
+  S15MARK 94
+  S15MARK 95
+  S15MARK 96
+  S15MARK 97
+  S15MARK 98
+  S15MARK 99
+  S15MARK 100
+  S15MARK 101
+  S15MARK 102
+  S15MARK 103
+  S15MARK 104
+  S15MARK 105
+  S15MARK 106
+  S15MARK 107
+  S15MARK 108
+  S15MARK 109
+  S15MARK 110
+  S15MARK 111
+  S15MARK 112
+  S15MARK 113
+  S15MARK 114                             Jump to bottom (click) ↓
+
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  100.0 max 5h 8/48 1:19pm 7d 59/91 oct11|12:59am
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← 1 agent
+PASS: claude: turning the wheel back down returned to the last line
+PASS: claude: Shift+Page Up (View > Page Up) paged its transcript to the first lines
+PASS: claude: paging did not enter tmux's copy mode
+
+=== claude screen: after Shift+Page Up to the top [16:45:30Z] ===
+
+ ▐▛███▛█   Claude Code v2.1.296
+▝▜██████▀  Opus 5.5 · Claude Max
+ ▝▝   ▝▝   /private/tmp/amxs15r/proj/claude
+
+❯ Print the integers 1 through 150, one per line, with the word S15MARK before each. No tools, no
+  commentary.
+
+⏺ S15MARK 1
+  S15MARK 2
+  S15MARK 3
+  S15MARK 4
+  S15MARK 5
+  S15MARK 6
+  S15MARK 7
+  S15MARK 8
+  S15MARK 9
+  S15MARK 10
+  S15MARK 11
+  S15MARK 12
+  S15MARK 13
+  S15MARK 14
+  S15MARK 15
+  S15MARK 16
+  S15MARK 17
+  S15MARK 18
+  S15MARK 19
+  S15MARK 20
+  S15MARK 21
+  S15MARK 22
+  S15MARK 23
+  S15MARK 24                              Jump to bottom (click) ↓
+
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  100.0 max 5h 8/48 1:19pm 7d 59/91 oct11|12:59am
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← 1 agent
+PASS: claude: Shift+Page Down (View > Page Down) returned to the last line (8 presses)
+claude: clipboard after Shift+drag over a line and Command+C: [S15MARK 149]
+PASS: claude: Shift+drag selected the line and Command+C copied exactly it
+screenshot: claude-selection.png (the workspace window's rectangle on the MacBook)
+PASS: claude: Command+F (Edit > Find) opened tmux's find over the screen
+PASS: claude: find landed on the typed text
+PASS: claude: Escape returned to the live screen
+PASS: claude: a click and a right click left the same pane process running (MacBook pid 48713)
+PASS: claude: and the same harness (Studio pid 19614)
+screenshot: claude-matrix.png (the workspace window's rectangle on the MacBook)
+
+##### codex: interaction matrix through the embedded terminal [16:46:05Z]
+PASS: codex: a click on its row attached exactly one terminal to its pane
+PASS: codex: the app logged the focus
+PASS: codex: the pane's grid is the viewer's (107x39, not the 80x24 it was launched with)
+PASS: codex: its composer is on screen
+
+=== codex screen: ready [16:46:14Z] ===
+
+  >_ OpenAI Codex (v0.162.1)
+     /private/tmp/amxs15r/proj/codex
+
+  To get started, describe a task or try one of these commands:
+
+  /init - create an AGENTS.md file with instructions for Codex
+  /status - show current session configuration
+  /permissions - choose what Codex is allowed to do
+  /model - choose what model and reasoning effort to use
+  /review - review any changes and find issues
+
+› Ask Codex to do anything
+
+  GPT-6-Astra high · /private/tmp/amxs15r/proj/codex · Ready · granular · Context 0% used · weekly 73% lef…
+  ← for agents · ? for shortcuts
+PASS: codex: typed text reaches the composer
+PASS: codex: Control+A moved to the start of the line (Y typed there)
+PASS: codex: Control+E moved to the end (Z typed there)
+PASS: codex: ctrl+j made a new line: the two lines sit one above the other in the composer
+PASS: codex: and nothing was submitted
+
+=== codex screen: after typing, Control+A, Control+E, and ctrl+j [16:46:26Z] ===
+
+  >_ OpenAI Codex (v0.162.1)
+     /private/tmp/amxs15r/proj/codex
+
+  To get started, describe a task or try one of these commands:
+
+  /init - create an AGENTS.md file with instructions for Codex
+  /status - show current session configuration
+  /permissions - choose what Codex is allowed to do
+  /model - choose what model and reasoning effort to use
+  /review - review any changes and find issues
+
+› Yalpha betaZ
+  second
+
+  GPT-6-Astra high · /private/tmp/amxs15r/proj/codex · Ready · granular · Context 0% used · weekly 73% lef…
+
+PASS: codex: the composer was cleared with its editing keys
+PASS: codex: Command+V pasted both lines
+PASS: codex: the pasted line break submitted nothing
+
+=== codex screen: after Command+V of two lines [16:46:36Z] ===
+
+  >_ OpenAI Codex (v0.162.1)
+     /private/tmp/amxs15r/proj/codex
+
+  To get started, describe a task or try one of these commands:
+
+  /init - create an AGENTS.md file with instructions for Codex
+  /status - show current session configuration
+  /permissions - choose what Codex is allowed to do
+  /model - choose what model and reasoning effort to use
+  /review - review any changes and find issues
+
+› S15 paste one
+  S15 paste two
+
+  GPT-6-Astra high · /private/tmp/amxs15r/proj/codex · Ready · granular · Context 0% used · weekly 73% lef…
+
+PASS: codex: Return submitted the prompt and the answer reached line 150
+PASS: codex: the same harness process produced it (Studio pid 19617)
+codex: pane state alternate=1 mouse=1 in_history=0 position= history=0 pid=48727 dead=0
+PASS: codex: it draws its own full screen with the mouse on (tmux holds no history for it)
+PASS: codex: a real wheel turn scrolled its transcript back (line 150 left the screen)
+PASS: codex: the wheel went to the harness, not into tmux's copy mode
+
+=== codex screen: after wheel up [16:47:14Z] ===
+› Print the integers 1 through 150, one per line, with the word S15MARK before each. No tools, no comment…
+  S15MARK 85
+  S15MARK 86
+  S15MARK 87
+  S15MARK 88
+  S15MARK 89
+  S15MARK 90
+  S15MARK 91
+  S15MARK 92
+  S15MARK 93
+  S15MARK 94
+  S15MARK 95
+  S15MARK 96
+  S15MARK 97
+  S15MARK 98
+  S15MARK 99
+  S15MARK 100
+  S15MARK 101
+  S15MARK 102
+  S15MARK 103
+  S15MARK 104
+  S15MARK 105
+  S15MARK 106
+  S15MARK 107
+  S15MARK 108
+  S15MARK 109
+  S15MARK 110
+  S15MARK 111
+  S15MARK 112
+  S15MARK 113
+  S15MARK 114
+  S15MARK 115
+  S15MARK 116
+                                          ↓ Back to bottom · esc
+
+› Ask Codex to do anything
+
+  GPT-6-Astra high · /private/tmp/amxs15r/proj/codex · Ready · granular · Context 3% used · weekly 73% lef…
+  enter/esc latest · ? shortcuts
+PASS: codex: turning the wheel back down returned to the last line
+PASS: codex: Shift+Page Up (View > Page Up) paged its transcript to the first lines
+PASS: codex: paging did not enter tmux's copy mode
+
+=== codex screen: after Shift+Page Up to the top [16:47:23Z] ===
+
+  >_ OpenAI Codex (v0.162.1)
+     /private/tmp/amxs15r/proj/codex
+
+  To get started, describe a task or try one of these commands:
+
+  /init - create an AGENTS.md file with instructions for Codex
+  /status - show current session configuration
+  /permissions - choose what Codex is allowed to do
+  /model - choose what model and reasoning effort to use
+  /review - review any changes and find issues
+
+› Print the integers 1 through 150, one per line, with the word S15MARK before each. No tools, no
+  commentary.
+
+• S15MARK 1
+  S15MARK 2
+  S15MARK 3
+  S15MARK 4
+  S15MARK 5
+  S15MARK 6
+  S15MARK 7
+  S15MARK 8
+  S15MARK 9
+  S15MARK 10
+  S15MARK 11
+  S15MARK 12
+  S15MARK 13
+  S15MARK 14
+  S15MARK 15
+  S15MARK 16
+                                          ↓ Back to bottom · esc
+
+› Ask Codex to do anything
+
+  GPT-6-Astra high · /private/tmp/amxs15r/proj/codex · Ready · granular · Context 3% used · weekly 73% lef…
+  enter/esc latest · ? shortcuts
+PASS: codex: Shift+Page Down (View > Page Down) returned to the last line (5 presses)
+codex: clipboard after Shift+drag over a line and Command+C: [S15MARK 149]
+PASS: codex: Shift+drag selected the line and Command+C copied exactly it
+screenshot: codex-selection.png (the workspace window's rectangle on the MacBook)
+PASS: codex: Command+F (Edit > Find) opened tmux's find over the screen
+PASS: codex: find landed on the typed text
+PASS: codex: Escape returned to the live screen
+PASS: codex: a click and a right click left the same pane process running (MacBook pid 48727)
+PASS: codex: and the same harness (Studio pid 19617)
+screenshot: codex-matrix.png (the workspace window's rectangle on the MacBook)
+
+##### copilot: interaction matrix through the embedded terminal [16:47:56Z]
+PASS: copilot: a click on its row attached exactly one terminal to its pane
+PASS: copilot: the app logged the focus
+PASS: copilot: the pane's grid is the viewer's (107x39, not the 80x24 it was launched with)
+copilot: answered its folder-trust prompt with Return
+PASS: copilot: its composer is on screen
+
+=== copilot screen: ready [16:48:09Z] ===
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                       │
+│  ╭─╮╭─╮                            │  Getting started                                                 │
+│  ╰─╯╰─╯  Copilot v1.0.95 uses AI.  │  Use the tabs above to explore your sessions and pull requests   │
+│  █ ▘▝ █  Check for mistakes.       │  /init — Initialize Copilot instructions for this repository     │
+│   ▔▔▔▔                             │  /model — Switch models across providers, or use Auto            │
+│                                                                                                       │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+ ● Tip: /review
+   └ Run code review agent to analyze changes
+
+ /private/tmp/amxs15r/proj/copilot                                                     Session: 0 AIC used
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ← open sidebar · Interactive · Manual Approval · / commands · ? help · tab next tab     Claude Sonnet 5.5
+PASS: copilot: typed text reaches the composer
+PASS: copilot: Control+A moved to the start of the line (Y typed there)
+PASS: copilot: Control+E moved to the end (Z typed there)
+PASS: copilot: shift+Return made a new line: the two lines sit one above the other in the composer
+PASS: copilot: and nothing was submitted
+
+=== copilot screen: after typing, Control+A, Control+E, and shift+Return [16:48:21Z] ===
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                       │
+│  ╭─╮╭─╮                            │  Getting started                                                 │
+│  ╰─╯╰─╯  Copilot v1.0.95 uses AI.  │  Use the tabs above to explore your sessions and pull requests   │
+│  █ ▘▝ █  Check for mistakes.       │  /init — Initialize Copilot instructions for this repository     │
+│   ▔▔▔▔                             │  /model — Switch models across providers, or use Auto            │
+│                                                                                                       │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+ ● Tip: /review
+   └ Run code review agent to analyze changes
+
+ ● MCP Servers reloaded: 1 server connected
+
+ /private/tmp/amxs15r/proj/copilot                                                     Session: 0 AIC used
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ Yalpha betaZ
+  second
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Interactive · Manual Approval · @ files · # issues                                      Claude Sonnet 5.5
+PASS: copilot: the composer was cleared with its editing keys
+PASS: copilot: Command+V pasted both lines
+PASS: copilot: the pasted line break submitted nothing
+
+=== copilot screen: after Command+V of two lines [16:48:31Z] ===
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                       │
+│  ╭─╮╭─╮                            │  Getting started                                                 │
+│  ╰─╯╰─╯  Copilot v1.0.95 uses AI.  │  Use the tabs above to explore your sessions and pull requests   │
+│  █ ▘▝ █  Check for mistakes.       │  /init — Initialize Copilot instructions for this repository     │
+│   ▔▔▔▔                             │  /model — Switch models across providers, or use Auto            │
+│                                                                                                       │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+ ● Tip: /review
+   └ Run code review agent to analyze changes
+
+ ● MCP Servers reloaded: 1 server connected
+
+ /private/tmp/amxs15r/proj/copilot                                                     Session: 0 AIC used
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ S15 paste one
+  S15 paste two
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Interactive · Manual Approval · @ files · # issues                                      Claude Sonnet 5.5
+PASS: copilot: Return submitted the prompt and the answer reached line 150
+PASS: copilot: the same harness process produced it (Studio pid 19613)
+copilot: pane state alternate=1 mouse=1 in_history=0 position= history=0 pid=48742 dead=0
+PASS: copilot: it draws its own full screen with the mouse on (tmux holds no history for it)
+PASS: copilot: a real wheel turn scrolled its transcript back (line 150 left the screen)
+PASS: copilot: the wheel went to the harness, not into tmux's copy mode
+
+=== copilot screen: after wheel up [16:49:00Z] ===
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+   S15MARK 12                                                                                             ┃
+   S15MARK 13                                                                                             ┃
+   S15MARK 14                                                                                             ┃
+   S15MARK 15                                                                                             ┃
+   S15MARK 16                                                                                             ┃
+   S15MARK 17                                                                                             █
+   S15MARK 18                                                                                             █
+   S15MARK 19                                                                                             █
+   S15MARK 20                                                                                             █
+   S15MARK 21                                                                                             █
+   S15MARK 22                                                                                             █
+   S15MARK 23                                                                                             ┃
+   S15MARK 24                                                                                             ┃
+   S15MARK 25                                                                                             ┃
+   S15MARK 26                                                                                             ┃
+   S15MARK 27                                                                                             ┃
+   S15MARK 28                                                                                             ┃
+   S15MARK 29                                                                                             ┃
+   S15MARK 30                                                                                             ┃
+   S15MARK 31                                                                                             ┃
+   S15MARK 32                                                                                             ┃
+   S15MARK 33                                                                                             ┃
+   S15MARK 34                                                                                             ┃
+   S15MARK 35                                                                                             ┃
+   S15MARK 36                                                                                             ┃
+   S15MARK 37                                                                                             ┃
+   S15MARK 38                                                                                             ┃
+   S15MARK 39                                                                                             ┃
+   S15MARK 40                                                                                             ┃
+   S15MARK 41                                                                                             ┃
+   S15MARK 42                                                                                             ┃
+   S15MARK 43                                                                                             ┃
+ /private/tmp/amxs15r/proj/copilot                                                  Session: 8.69 AIC used
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ← open sidebar · Interactive · Manual Approval · / commands · ? help · tab next tab     Claude Sonnet 5.5
+PASS: copilot: turning the wheel back down returned to the last line
+PASS: copilot: Shift+Page Up (View > Page Up) paged its transcript to the first lines
+PASS: copilot: paging did not enter tmux's copy mode
+
+=== copilot screen: after Shift+Page Up to the top [16:49:08Z] ===
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────╮ █
+│                                                                                                       │ █
+│  ╭─╮╭─╮                            │  Getting started                                                 │ █
+│  ╰─╯╰─╯  Copilot v1.0.95 uses AI.  │  Use the tabs above to explore your sessions and pull requests   │ █
+│  █ ▘▝ █  Check for mistakes.       │  /init — Initialize Copilot instructions for this repository     │ █
+│   ▔▔▔▔                             │  /model — Switch models across providers, or use Auto            │ █
+│                                                                                                       │ ┃
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────╯ ┃
+                                                                                                          ┃
+ ● Tip: /review                                                                                           ┃
+   └ Run code review agent to analyze changes                                                             ┃
+                                                                                                          ┃
+ ● MCP Servers reloaded: 1 server connected                                                               ┃
+                                                                                                          ┃
+ ❯ Print the integers 1 through 150, one per line, with the word S15MARK before each. No tools, no  10:48 ┃
+   commentary.                                                                                            ┃
+                                                                                                          ┃
+ ● S15MARK 1                                                                                              ┃
+   S15MARK 2                                                                                              ┃
+   S15MARK 3                                                                                              ┃
+   S15MARK 4                                                                                              ┃
+   S15MARK 5                                                                                              ┃
+   S15MARK 6                                                                                              ┃
+   S15MARK 7                                                                                              ┃
+   S15MARK 8                                                                                              ┃
+   S15MARK 9                                                                                              ┃
+   S15MARK 10                                                                                             ┃
+   S15MARK 11                                                                                             ┃
+   S15MARK 12                                                                                             ┃
+   S15MARK 13                                                                                             ┃
+   S15MARK 14                                                                                             ┃
+   S15MARK 15                                                                                             ┃
+ /private/tmp/amxs15r/proj/copilot                                                  Session: 8.69 AIC used
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ← open sidebar · Interactive · Manual Approval · / commands · ? help · tab next tab     Claude Sonnet 5.5
+PASS: copilot: Shift+Page Down (View > Page Down) returned to the last line (5 presses)
+copilot: clipboard after Shift+drag over a line and Command+C: [S15MARK 149]
+PASS: copilot: Shift+drag selected the line and Command+C copied exactly it
+screenshot: copilot-selection.png (the workspace window's rectangle on the MacBook)
+PASS: copilot: Command+F (Edit > Find) opened tmux's find over the screen
+PASS: copilot: find landed on the typed text
+PASS: copilot: Escape returned to the live screen
+PASS: copilot: a click and a right click left the same pane process running (MacBook pid 48742)
+PASS: copilot: and the same harness (Studio pid 19613)
+screenshot: copilot-matrix.png (the workspace window's rectangle on the MacBook)
+
+##### history held by tmux: a program on the main screen whose 3000 lines scrolled away [16:49:40Z]
+PASS: its terminal is attached
+PASS: tmux holds its history (2964 lines) and it does not use the mouse
+PASS: Shift+Page Up entered the history
+PASS: a second Shift+Page Up went a page further (from 37 to 74)
+PASS: Shift+Page Down back to the bottom returned to the live screen
+PASS: Command+Home reached the oldest line (position 2964 of 2964)
+PASS: the view is on the first line: [LINE 0001 needle-0001]
+screenshot: history-top.png (the workspace window's rectangle on the MacBook)
+PASS: Command+End returned to the live screen
+PASS: Command+F opened find
+PASS: find landed on line 42 of 2964: [LINE 0042 needle-0042]
+screenshot: history-find.png (the workspace window's rectangle on the MacBook)
+PASS: Command+G stepped to the match before (LINE 0099 needle-0099 then LINE 0098 needle-0098)
+PASS: Shift+Command+G stepped back
+PASS: Escape returned to the live screen
+PASS: a real wheel turn scrolled into the history (position 85)
+PASS: turning it back to the bottom returned to the live screen
+clipboard after a plain drag over a line: [LINE 2988 needle-2988]
+PASS: a plain drag selected the line and copied it on release, with no prompt
+PASS: and the pane is back on the live screen
+clipboard after Shift+drag and Command+C: [LINE 2990 needle-2990]
+PASS: Shift+drag selected the line and Command+C copied exactly it
+screenshot: history-selection.png (the workspace window's rectangle on the MacBook)
+PASS: a right click left the pane alone: live, one pane per session, same process
+PASS: no tmux binding on the private server opens a menu or kills, respawns, or splits a pane
+screenshot: history-right-click.png (the workspace window's rectangle on the MacBook)
+PASS: none of the real input events left a modifier held on the MacBook
+
+##### a link printed in a session opens with Command+Shift+click (tmux tracks the mouse there) [16:50:42Z]
+PASS: the link target on the MacBook answers and logs
+the MacBook's default browser for http is Firefox; running before the click: no
+PASS: Command+click alone went to tmux and opened nothing
+PASS: Command+Shift+click made the app open the link
+PASS: and the MacBook handed the link to its default browser (fetched from the link target, or the browser was started for it)
+
+--- link target log, and the browser process ---
+firefox pid 58772 started Sat Oct 10 10:50:54 2026    
+Sat Oct 10 10:50:57 CST 2026
+the browser the link started was closed again
+PASS: the pane is unchanged
+
+##### a real input method composes at the cursor and commits to the agent (keys posted as real events on the MacBook) [16:51:04Z]
+
+--- input sources before ---
+com.apple.CharacterPaletteIM
+com.apple.keylayout.ABC
+current: com.apple.keylayout.ABC
+PASS: claude: the Japanese input method is selected on the MacBook
+PASS: claude: while composing, the agent has received nothing
+screenshot: ime-claude-composing.png (the workspace window's rectangle on the MacBook)
+PASS: claude: Return committed the composition and the agent received か
+PASS: claude: committing submitted nothing
+PASS: claude: a second composition (nihon) is held back the same way
+PASS: claude: and committed: the agent received the converted word after か
+claude: the composer now reads: か日本
+
+=== claude screen: after two compositions [16:51:32Z] ===
+  S15MARK 120
+  S15MARK 121
+  S15MARK 122
+  S15MARK 123
+  S15MARK 124
+  S15MARK 125
+  S15MARK 126
+  S15MARK 127
+  S15MARK 128
+  S15MARK 129
+  S15MARK 130
+  S15MARK 131
+  S15MARK 132
+  S15MARK 133
+  S15MARK 134
+  S15MARK 135
+  S15MARK 136
+  S15MARK 137
+  S15MARK 138
+  S15MARK 139
+  S15MARK 140
+  S15MARK 141
+  S15MARK 142
+  S15MARK 143
+  S15MARK 144
+  S15MARK 145
+  S15MARK 146
+  S15MARK 147
+  S15MARK 148
+  S15MARK 149
+  S15MARK 150
+
+✻ Churned for 8s · done 10:45 AM
+
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ か日本
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  100.0 max 5h 8/48 1:19pm 7d 59/91 oct11|12:59am
+  ⏵⏵ auto mode on (shift+tab to cycle)
+screenshot: ime-claude-committed.png (the workspace window's rectangle on the MacBook)
+PASS: claude: back on the original layout, a plain key types plainly
+PASS: claude: nothing was submitted
+PASS: codex: the Japanese input method is selected on the MacBook
+PASS: codex: while composing, the agent has received nothing
+screenshot: ime-codex-composing.png (the workspace window's rectangle on the MacBook)
+PASS: codex: Return committed the composition and the agent received か
+PASS: codex: committing submitted nothing
+PASS: codex: a second composition (nihon) is held back the same way
+PASS: codex: and committed: the agent received the converted word after か
+codex: the composer now reads: か日本
+
+=== codex screen: after two compositions [16:52:08Z] ===
+› Print the integers 1 through 150, one per line, with the word S15MARK before each. No tools, no comment…
+  S15MARK 121
+  S15MARK 122
+  S15MARK 123
+  S15MARK 124
+  S15MARK 125
+  S15MARK 126
+  S15MARK 127
+  S15MARK 128
+  S15MARK 129
+  S15MARK 130
+  S15MARK 131
+  S15MARK 132
+  S15MARK 133
+  S15MARK 134
+  S15MARK 135
+  S15MARK 136
+  S15MARK 137
+  S15MARK 138
+  S15MARK 139
+  S15MARK 140
+  S15MARK 141
+  S15MARK 142
+  S15MARK 143
+  S15MARK 144
+  S15MARK 145
+  S15MARK 146
+  S15MARK 147
+  S15MARK 148
+  S15MARK 149
+  S15MARK 150
+
+  Worked for 16s • 10:47 AM
+
+› か日本
+
+  GPT-6-Astra high · /private/tmp/amxs15r/proj/codex · Ready · granular · Context 3% used · weekly 73% lef…
+
+screenshot: ime-codex-committed.png (the workspace window's rectangle on the MacBook)
+PASS: codex: back on the original layout, a plain key types plainly
+PASS: codex: nothing was submitted
+PASS: copilot: the Japanese input method is selected on the MacBook
+PASS: copilot: while composing, the agent has received nothing
+screenshot: ime-copilot-composing.png (the workspace window's rectangle on the MacBook)
+PASS: copilot: Return committed the composition and the agent received か
+PASS: copilot: committing submitted nothing
+PASS: copilot: a second composition (nihon) is held back the same way
+PASS: copilot: and committed: the agent received the converted word after か
+copilot: the composer now reads: か日本
+
+=== copilot screen: after two compositions [16:52:44Z] ===
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+   S15MARK 120                                                                                            ┃
+   S15MARK 121                                                                                            ┃
+   S15MARK 122                                                                                            ┃
+   S15MARK 123                                                                                            ┃
+   S15MARK 124                                                                                            ┃
+   S15MARK 125                                                                                            ┃
+   S15MARK 126                                                                                            ┃
+   S15MARK 127                                                                                            ┃
+   S15MARK 128                                                                                            ┃
+   S15MARK 129                                                                                            ┃
+   S15MARK 130                                                                                            ┃
+   S15MARK 131                                                                                            ┃
+   S15MARK 132                                                                                            ┃
+   S15MARK 133                                                                                            ┃
+   S15MARK 134                                                                                            ┃
+   S15MARK 135                                                                                            ┃
+   S15MARK 136                                                                                            ┃
+   S15MARK 137                                                                                            ┃
+   S15MARK 138                                                                                            ┃
+   S15MARK 139                                                                                            ┃
+   S15MARK 140                                                                                            ┃
+   S15MARK 141                                                                                            ┃
+   S15MARK 142                                                                                            ┃
+   S15MARK 143                                                                                            ┃
+   S15MARK 144                                                                                            ┃
+   S15MARK 145                                                                                            ┃
+   S15MARK 146                                                                                            █
+   S15MARK 147                                                                                            █
+   S15MARK 148                                                                                            █
+   S15MARK 149                                                                                            █
+   S15MARK 150                                                                                            █
+                                                                                                          █
+ /private/tmp/amxs15r/proj/copilot                                                  Session: 8.69 AIC used
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ か日本
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Interactive · Manual Approval · @ files · # issues                                      Claude Sonnet 5.5
+screenshot: ime-copilot-committed.png (the workspace window's rectangle on the MacBook)
+PASS: copilot: back on the original layout, a plain key types plainly
+PASS: copilot: nothing was submitted
+PASS: the MacBook's input sources are as they were
+PASS: none of the real key events left a modifier held on the MacBook
+
+##### who gets a key depends on what has the keyboard: the app's shortcuts, the Dashboard, the agent, the session list [16:52:56Z]
+PASS: session terminal focused: plain keys are the agent's
+PASS: Command+D is the app's: the Dashboard took the pane
+PASS: and the agent received nothing of it
+
+=== claude screen: while the Dashboard has the keyboard [16:53:12Z] ===
+  S15MARK 120
+  S15MARK 121
+  S15MARK 122
+  S15MARK 123
+  S15MARK 124
+  S15MARK 125
+  S15MARK 126
+  S15MARK 127
+  S15MARK 128
+  S15MARK 129
+  S15MARK 130
+  S15MARK 131
+  S15MARK 132
+  S15MARK 133
+  S15MARK 134
+  S15MARK 135
+  S15MARK 136
+  S15MARK 137
+  S15MARK 138
+  S15MARK 139
+  S15MARK 140
+  S15MARK 141
+  S15MARK 142
+  S15MARK 143
+  S15MARK 144
+  S15MARK 145
+  S15MARK 146
+  S15MARK 147
+  S15MARK 148
+  S15MARK 149
+  S15MARK 150
+
+✻ Churned for 8s · done 10:45 AM
+
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ in-claude
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  100.0 max 5h 8/48 1:19pm 7d 59/91 oct11|12:59am
+  ⏵⏵ auto mode on (shift+tab to cycle)
+
+--- dashboard after ? ---
+Agent Mux · Urgency · all projects                                                          ✖ hooks drifted
+Idle (4)                                             │claude
+claude    Idle    ╭────────────────────────────────────────────────────────────────────╮
+codex     Idle    │ Keyboard Shortcuts                                                 │
+copilot   Idle    │                                                                    │
+history   Idle    │                                                                    │
+                  │ Dashboard                                                          │
+                  │   j/k       up/down                                                │───────────────────
+                  │   enter     focus                                                  │
+                  │   a         actions                                                │
+                  │   :         commands                                               │
+                  │   /         filter                                                 │
+                  │   ?         help                                                   │
+                  │   esc       clear filters                                          │
+                  │   n/N       needs you                                              │
+                  │   tab       switch pane                                            │
+                  │   i         inspector                                              │
+                  │   q         quit                                                   │
+                  │   p         projects                                               │
+                  │   l         launch                                                 │
+PASS: Dashboard focused: a plain key is the Dashboard's (its help opened)
+PASS: and it did not reach the agent
+screenshot: priority-dashboard.png (the workspace window's rectangle on the MacBook)
+PASS: Command+Shift+] is the app's from the Dashboard too: it selected a session and focused its terminal
+the session selected by Command+Shift+]: claude
+PASS: and the keyboard is in that session's terminal (claude)
+PASS: Command+Shift+L gave the keyboard to the session list: typing reaches no agent
+PASS: the Down arrow moved the selection to the next session (codex) and the keyboard stayed in the list
+PASS: typing still reaches no agent
+PASS: Return in the session list went into the selected session (codex): typing reaches its agent
+
+=== claude screen: after Control+O [16:54:12Z] ===
+  S15MARK 117
+  S15MARK 118
+  S15MARK 119
+  S15MARK 120
+  S15MARK 121
+  S15MARK 122
+  S15MARK 123
+  S15MARK 124
+  S15MARK 125
+  S15MARK 126
+  S15MARK 127
+  S15MARK 128
+  S15MARK 129
+  S15MARK 130
+  S15MARK 131
+  S15MARK 132
+  S15MARK 133
+  S15MARK 134
+  S15MARK 135
+  S15MARK 136
+  S15MARK 137
+  S15MARK 138
+  S15MARK 139
+  S15MARK 140
+  S15MARK 141
+  S15MARK 142
+  S15MARK 143
+  S15MARK 144
+  S15MARK 145
+  S15MARK 146
+  S15MARK 147
+  S15MARK 148
+  S15MARK 149
+  S15MARK 150
+
+✻ Churned for 8s · done 10:45 AM
+
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Showing detailed transcript · ctrl+o to toggle · ↑↓ scroll · v to open in nvim · ? for shortcuts verbose
+PASS: Control+O reached Claude (its transcript view opened)
+PASS: and the app's Command+O Overview did not open
+PASS: F12 detached the view (the app shows Detached)
+PASS: no terminal is attached to Claude's pane
+PASS: the agent is still running (Studio pid 19614) and never saw F12
+screenshot: priority-detached.png (the workspace window's rectangle on the MacBook)
+PASS: Reattach attached the terminal again
+PASS: and the keyboard is back with the agent
+PASS: the history session asked for attention (a real PermissionRequest hook)
+PASS: the global next-attention shortcut, pressed while typing to Claude, focused the waiting session
+PASS: and Claude received nothing of the chord
+screenshot: priority-attention.png (the workspace window's rectangle on the MacBook)
+
+##### long output and reattachment: the view is replaced, the history and the agents are not [16:55:08Z]
+PASS: claude: before: the 150-line answer is still there
+PASS: codex: before: the 150-line answer is still there
+PASS: copilot: before: the 150-line answer is still there
+
+##### the window is closed (Command+W): every terminal detaches [16:55:21Z]
+PASS: the app logged the window closing and detaching its terminals
+PASS: no client is attached to any pane
+PASS: claude: same pane process and same harness with no viewer
+PASS: codex: same pane process and same harness with no viewer
+PASS: copilot: same pane process and same harness with no viewer
+
+##### the app is quit and started again: a new viewer process [16:55:28Z]
+PASS: a different app process (was 48861, now 64746)
+PASS: claude: the new viewer attached to the same pane
+PASS: claude: the pane process is the same (MacBook pid 48713) and so is the harness (Studio pid 19614)
+PASS: claude: the end of the long answer is on screen again
+PASS: claude: after reattachment Shift+Page Up still reaches the first lines of the answer
+
+=== claude screen: the top of the transcript after reattachment [16:55:41Z] ===
+
+ ▐▛███▛█   Claude Code v2.1.296
+▝▜██████▀  Opus 5.5 · Claude Max
+ ▝▝   ▝▝   /private/tmp/amxs15r/proj/claude
+
+❯ Print the integers 1 through 150, one per line, with the word S15MARK before each. No tools, no
+  commentary.
+
+⏺ S15MARK 1
+  S15MARK 2
+  S15MARK 3
+  S15MARK 4
+  S15MARK 5
+  S15MARK 6
+  S15MARK 7
+  S15MARK 8
+  S15MARK 9
+  S15MARK 10
+  S15MARK 11
+  S15MARK 12
+  S15MARK 13
+  S15MARK 14
+  S15MARK 15
+  S15MARK 16
+  S15MARK 17
+  S15MARK 18
+  S15MARK 19
+  S15MARK 20
+  S15MARK 21
+  S15MARK 22
+  S15MARK 23
+  S15MARK 24                              Jump to bottom (click) ↓
+
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  100.0 max 5h 8/51 1:19pm 7d 59/91 oct11|12:59am
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← 1 agent
+PASS: claude: and Shift+Page Down returns to the end
+PASS: claude: typing reaches the same agent
+PASS: codex: the new viewer attached to the same pane
+PASS: codex: the pane process is the same (MacBook pid 48727) and so is the harness (Studio pid 19617)
+PASS: codex: the end of the long answer is on screen again
+PASS: codex: after reattachment Shift+Page Up still reaches the first lines of the answer
+
+=== codex screen: the top of the transcript after reattachment [16:56:13Z] ===
+
+  >_ OpenAI Codex (v0.162.1)
+     /private/tmp/amxs15r/proj/codex
+
+  To get started, describe a task or try one of these commands:
+
+  /init - create an AGENTS.md file with instructions for Codex
+  /status - show current session configuration
+  /permissions - choose what Codex is allowed to do
+  /model - choose what model and reasoning effort to use
+  /review - review any changes and find issues
+
+› Print the integers 1 through 150, one per line, with the word S15MARK before each. No tools, no
+  commentary.
+
+• S15MARK 1
+  S15MARK 2
+  S15MARK 3
+  S15MARK 4
+  S15MARK 5
+  S15MARK 6
+  S15MARK 7
+  S15MARK 8
+  S15MARK 9
+  S15MARK 10
+  S15MARK 11
+  S15MARK 12
+  S15MARK 13
+  S15MARK 14
+  S15MARK 15
+  S15MARK 16
+                                          ↓ Back to bottom · esc
+
+› Ask Codex to do anything
+
+  GPT-6-Astra high · /private/tmp/amxs15r/proj/codex · Ready · granular · Context 3% used · weekly 73% lef…
+  enter/esc latest · ? shortcuts
+PASS: codex: and Shift+Page Down returns to the end
+PASS: codex: typing reaches the same agent
+PASS: copilot: the new viewer attached to the same pane
+PASS: copilot: the pane process is the same (MacBook pid 48742) and so is the harness (Studio pid 19613)
+PASS: copilot: the end of the long answer is on screen again
+PASS: copilot: after reattachment Shift+Page Up still reaches the first lines of the answer
+
+=== copilot screen: the top of the transcript after reattachment [16:56:41Z] ===
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────╮ █
+│                                                                                                       │ █
+│  ╭─╮╭─╮                            │  Getting started                                                 │ █
+│  ╰─╯╰─╯  Copilot v1.0.95 uses AI.  │  Use the tabs above to explore your sessions and pull requests   │ █
+│  █ ▘▝ █  Check for mistakes.       │  /init — Initialize Copilot instructions for this repository     │ █
+│   ▔▔▔▔                             │  /model — Switch models across providers, or use Auto            │ █
+│                                                                                                       │ ┃
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────╯ ┃
+                                                                                                          ┃
+ ● Tip: /review                                                                                           ┃
+   └ Run code review agent to analyze changes                                                             ┃
+                                                                                                          ┃
+ ● MCP Servers reloaded: 1 server connected                                                               ┃
+                                                                                                          ┃
+ ❯ Print the integers 1 through 150, one per line, with the word S15MARK before each. No tools, no  10:48 ┃
+   commentary.                                                                                            ┃
+                                                                                                          ┃
+ ● S15MARK 1                                                                                              ┃
+   S15MARK 2                                                                                              ┃
+   S15MARK 3                                                                                              ┃
+   S15MARK 4                                                                                              ┃
+   S15MARK 5                                                                                              ┃
+   S15MARK 6                                                                                              ┃
+   S15MARK 7                                                                                              ┃
+   S15MARK 8                                                                                              ┃
+   S15MARK 9                                                                                              ┃
+   S15MARK 10                                                                                             ┃
+   S15MARK 11                                                                                             ┃
+   S15MARK 12                                                                                             ┃
+   S15MARK 13                                                                                             ┃
+   S15MARK 14                                                                                             ┃
+   S15MARK 15                                                                                             ┃
+ /private/tmp/amxs15r/proj/copilot                                                  Session: 8.69 AIC used
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ← open sidebar · Interactive · Manual Approval · / commands · ? help · tab next tab     Claude Sonnet 5.5
+PASS: copilot: and Shift+Page Down returns to the end
+PASS: copilot: typing reaches the same agent
+PASS: history: tmux still holds all 2966 lines after the viewer was replaced
+PASS: history: Command+F in the new viewer finds line 7: [LINE 0007 needle-0007]
+screenshot: reattached.png (the workspace window's rectangle on the MacBook)
+
+RESULT: 0 check(s) failed in: fresh claude codex copilot history link ime priority reattach

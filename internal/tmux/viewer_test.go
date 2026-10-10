@@ -214,3 +214,39 @@ func TestAttachBringsAnOlderServerUpToDate(t *testing.T) {
 		t.Errorf("terminal-features changed when the configuration was applied again:\n%s\nwas:\n%s", got, features)
 	}
 }
+
+// TestWheelReachesHistoryOrTheProgram feeds the viewer the report a terminal
+// sends for a wheel turn while tmux has the mouse (SGR button 64 up, 65
+// down). Over a pane with no mouse program it scrolls tmux's history and
+// leaves it again at the bottom; a program that tracks the mouse is sent the
+// report itself.
+func TestWheelReachesHistoryOrTheProgram(t *testing.T) {
+	f := newFixture(t, Options{})
+	l := f.launch(t, "wheel", []string{"/bin/sh", "-c", historyLines}, nil)
+	v := attachViewer(t, f, l.Pane)
+	v.wait("the output to scroll into history", func() bool { return v.format("#{history_size}") != "0" })
+	const up, down = "\x1b[<64;10;5M", "\x1b[<65;10;5M"
+	v.send(up)
+	v.wait("a wheel turn up to enter history", v.inHistory)
+	v.send(up)
+	v.wait("a second turn to scroll further", func() bool { return v.format("#{scroll_position}") != "0" && v.format("#{scroll_position}") != "" })
+	for i := 0; i < 8 && v.inHistory(); i++ {
+		v.send(down)
+		time.Sleep(50 * time.Millisecond)
+	}
+	v.wait("turning back down to the bottom to leave history", func() bool { return !v.inHistory() })
+
+	out := filepath.Join(f.dir, "mouse.out")
+	m := f.launch(t, "wheelprogram", []string{"/bin/sh", "-c",
+		`printf '\033[?1049h\033[?1000h\033[?1006h'; stty raw -echo; exec cat > "$1"`, "sh", out}, nil)
+	mv := attachViewer(t, f, m.Pane)
+	mv.wait("the program to track the mouse", func() bool { return mv.format("#{mouse_any_flag}") == "1" })
+	mv.send(up)
+	mv.wait("the program to receive the wheel report", func() bool {
+		data, _ := os.ReadFile(out)
+		return strings.HasPrefix(string(data), "\x1b[<64;")
+	})
+	if mv.inHistory() {
+		t.Fatal("a wheel turn over a mouse-tracking program entered copy mode")
+	}
+}

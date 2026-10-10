@@ -209,6 +209,42 @@ final class GhosttyInteractionTests: XCTestCase {
         XCTAssertNil(Ghostty.HistoryRequest.findNext.bindingAction(for: .terminal))
     }
 
+    // MARK: Wheel
+
+    /// A wheel turn over a program that tracks the mouse, as tmux does for
+    /// every session view, is reported to it (SGR button 64 up, 65 down) at
+    /// the pointer's cell rather than scrolling the terminal's own buffer.
+    func testAWheelTurnIsReportedToAMouseTrackingProgram() throws {
+        window.contentView = nil
+        view.close()
+        view = try XCTUnwrap(ghostty.makeSurface(Ghostty.SurfaceConfiguration(
+            program: URL(fileURLWithPath: "/bin/sh"),
+            arguments: ["-c", #"printf '\033[?1000h\033[?1006h'; stty raw -echo; : > "$OUT.tracking"; exec cat > "$OUT""#],
+            environment: ["OUT": out.path]
+        )))
+        window.contentView = view
+        XCTAssertTrue(window.makeFirstResponder(view))
+        let surface = try XCTUnwrap(view.surface)
+        ghosttyWait("the program to take the mouse") { ghostty_surface_mouse_captured(surface) }
+
+        let inside = NSPoint(x: 100, y: view.bounds.height - 60)
+        view.mouseMoved(with: try XCTUnwrap(NSEvent.mouseEvent(
+            with: .mouseMoved, location: inside, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
+            context: nil, eventNumber: 0, clickCount: 0, pressure: 0)))
+        func turn(_ lines: Int32) throws {
+            let wheel = try XCTUnwrap(CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 1, wheel1: lines, wheel2: 0, wheel3: 0))
+            view.scrollWheel(with: try XCTUnwrap(NSEvent(cgEvent: wheel)))
+        }
+        try turn(3)
+        ghosttyWait("a wheel-up report: have \(received.debugDescription)", timeout: 5) { self.received.hasPrefix("\u{1b}[<64;") }
+        let afterUp = received
+        try turn(-3)
+        ghosttyWait("a wheel-down report: have \(received.debugDescription)", timeout: 5) {
+            self.received.dropFirst(afterUp.count).contains("\u{1b}[<65;")
+        }
+        XCTAssertTrue(received.hasSuffix("M"), "each report is a press: \(received.debugDescription)")
+    }
+
     // MARK: Input methods
 
     /// A composition is the input method's until it commits: the program

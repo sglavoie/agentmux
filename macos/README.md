@@ -41,7 +41,7 @@ and `cmd/release`'s `TestMacAppRecipesStayOutOfTheGates` keeps it that way.
 | --- | --- |
 | `just mac-app` | Debug build to `macos/build/Agent Mux.app`. It bundles `amx` only when `AMX_BINARY` names one. |
 | `just mac-app Release` | Runs `just build`, then builds Release and bundles that `amx` at `Contents/Resources/bin/amx`. |
-| `just mac-test` | Runs the hosted `AgentMuxTests` XCTest suite (`xcodebuild test`). `just mac-test Release` runs it against the optimized app, built with testability into `macos/DerivedData/ReleaseTests`. |
+| `just mac-test` | Runs the hosted `AgentMuxTests` XCTest suite (`xcodebuild test`). `just mac-test Release` runs it against the optimized app, built with testability into `macos/DerivedData/ReleaseTests`. A run that executes no test fails. With `AMX_MAC_TEST_HOST=user@host` set the suite runs on that Mac instead (see below). |
 | `just mac-ghosttykit` | Builds the pinned GhosttyKit into `macos/Vendor/`. `mac-app` and `mac-test` run it themselves; it does nothing when the vendored build is current. |
 | `just mac-install` | Release build. It quits a running copy, `ditto`s the app to `/Applications`, re-registers it with Launch Services, and relaunches it. |
 
@@ -146,7 +146,7 @@ only to hand the app to someone else.
 | `AgentMux/UI/` | The status item, menu builder, daemon line, workspace window and its main menu, Preferences window, and ASL answer panel. |
 | `AgentMux/Resources/` | `Info.plist` and the asset catalog; `internal/palette/icons.json` is bundled from the repository. |
 | `AgentMuxTests/` | XCTest suites, with a fake stream server standing in for the daemon. |
-| `scripts/` | `build-ghosttykit.sh`, `generate-project.sh`, `build-app.sh`, `sign.sh`, `install-app.sh`, `test-app.sh`, `make-icons.swift`. |
+| `scripts/` | `build-ghosttykit.sh`, `generate-project.sh`, `build-app.sh`, `sign.sh`, `install-app.sh`, `test-app.sh`, `remote-ui.sh`, `make-icons.swift`. |
 | `GHOSTTY_VERSION`, `patches/ghostty/`, `NOTICE-ghostty` | The GhosttyKit pins, the build patches, and Ghostty's license notice. |
 | `GhosttyHarness/` | The Session 2 feasibility harness: a separate app with the wrapper as first ported, linking the same vendored GhosttyKit. Not part of any recipe. |
 
@@ -613,6 +613,24 @@ A second copy of the app exits at launch if one is already running. The tests
 run hosted inside the app. When the app sees XCTest in its environment, it
 skips the single-instance check and the status item, and it never spawns
 `amx`. This means `just mac-test` works while the installed app is running.
+
+### Running the UI on another Mac
+
+The hosted tests launch the app, so they show windows on the Mac that runs
+them. To keep that off the machine you are working at:
+
+```bash
+AMX_MAC_TEST_HOST=user@other-mac just mac-test
+```
+
+`scripts/remote-ui.sh` copies this checkout to a directory of its own under
+that user's `Library/Caches/agent-mux-remote-ui/` on the other Mac, runs the
+same `test-app.sh` there, and reports its result and which Mac ran it. It
+refuses a host that cannot be reached or that turns out to be this Mac. With
+`AMX_UI_TEST_REMOTE_ONLY=1` the suite never runs locally: no host, or a host
+that fails, is an error rather than a fallback. SSH takes its credentials from
+your agent or askpass helper and is given no terminal. The other Mac needs
+Xcode; GhosttyKit and XcodeGen travel with the copy.
 
 ## Logs
 
