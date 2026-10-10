@@ -249,6 +249,25 @@ ASL answer panel work the same either way.
   daemon line under them; the selection and every terminal stay as they are,
   since tmux holds the sessions and `amx attach` does not need the daemon.
   The first snapshot after the reconnect then decides what is still there.
+  A wake from sleep reconnects the feed at once; the terminals are local
+  processes and are not touched.
+- **Coming back.** `WorkspaceRestoration` (`Model/WorkspaceRecovery.swift`)
+  keeps two preferences: whether the window was open (`amxWorkspaceWindowOpen`)
+  and where its pane was (`amxWorkspacePlace`: `session:<id>`,
+  `kitty:<window>:<socket>`, or `view:dashboard|overview`). The controller
+  reports every move (`workspacePlaceChanged`); quitting does not count as
+  closing the window. At launch the app reopens the window if it was open and
+  calls `restore(_:)`: a view is shown at once; a session is shown once a live
+  snapshot lists it **and** `amx attach <id> --json` (which checks and never
+  attaches) says no terminal is attached to it. A session that has one is
+  restored **Detached**: coming back never takes a session from whoever
+  attached meanwhile. The pane says `Restoring` until then.
+- **Agents that stopped.** When a live snapshot no longer lists the session
+  the pane was on, or the session being restored, the app asks amx what
+  became of it (`WorkspaceSessionStatus`) and the pane says **Agent exited**
+  (`runtime_session_exited`: its process ended, with the status) or **Agent
+  lost** (`runtime_session_lost`: its pane or server is gone). The only thing
+  offered is the Dashboard. No code path in the workspace launches an agent.
 - **Main menu.** The terminals offer every key equivalent to the main menu
   before encoding it for their program, so the menu is the list of shortcuts
   the workspace keeps: ⌘C/⌘V/⌘A, ⌘+/⌘-/⌘0, ⌘⇧A (next needing attention),

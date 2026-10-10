@@ -1,0 +1,569 @@
+
+##### Taking the world down [17:41:12Z]
+left running on the MacBook: []; the app's preferences file exists: no
+
+##### A fresh world on the MacBook: daemon, three stand-in agents on the private tmux server, the app [17:41:13Z]
+Seb’s MacBook Pro
+27.0.1
+amx version 0.8.0 (revision 2454a0f5c022-dirty, built 2026-10-10T17:06:57Z, go1.27.1, sha256:ae215d219204)
+tmux 3.7c
+PASS: the daemon lists the three sessions
+PASS: the app is running with its feed live
+PASS: no terminal is attached to any agent yet
+--- registry ---
+rs-bf49f43f2580c15b851291d78f3ef94a live alpha %0 pid=98563 owner=none reason=-
+rs-debd5544fecb5f2677064761c83ce6b1 live beta %1 pid=98570 owner=none reason=-
+rs-4e5feaf48752f294970355ffcd6efc4d live gamma %2 pid=98577 owner=none reason=-
+--- panes on the private tmux server ---
+%1 pid=98570 dead=0 status= size=80x24
+%2 pid=98577 dead=0 status= size=80x24
+%0 pid=98563 dead=0 status= size=80x24
+--- terminals attached to the private tmux server ---
+--- what the daemon lists ---
+snapshot v2 daemon.pid=98546 attention.total=0
+  gamma  icon=-         attention=False runtime=tmux %2 rs-4e5feaf48752f294970355ffcd6efc4d
+  alpha  icon=-         attention=False runtime=tmux %0 rs-bf49f43f2580c15b851291d78f3ef94a
+  beta   icon=-         attention=False runtime=tmux %1 rs-debd5544fecb5f2677064761c83ce6b1
+--- the app's saved workspace ---
+window_open=1 place=view:dashboard
+
+##### app-crash-same-agent: the app is killed outright while its terminal is on alpha, then started again [17:41:21Z]
+{"ok": true, "workspace_view": {"delivered": 1}}
+PASS: the app's terminal is the one terminal on alpha
+PASS: the app itself saved where it is
+alpha's agent before the crash (pid, start time UTC): 98563 Sat Oct 10 17:41:14 2026; pane size 107x40; client_pid=98985 tty=/dev/ttys005 pane=%0 size=107x40
+--- registry before the crash ---
+rs-bf49f43f2580c15b851291d78f3ef94a live alpha %0 pid=98563 owner=amx_attach_(pid_98980) reason=-
+killed the app (pid 98622) with SIGKILL at 17:41:27Z
+PASS: the app is gone
+PASS: its terminal left the server
+PASS: the ownership it held was released without it (amx outlived the hangup)
+PASS: alpha's agent is the same process
+PASS: alpha's pane kept the size its owner last gave it
+alpha's own count with no app: 14 98563 1791654089 11:41:29 -> 18 98563 1791654093 11:41:33
+PASS: the agent kept counting while no app ran
+PASS: the saved workspace still says: open, on alpha
+PASS: the new app reopens its window at launch
+PASS: it asks amx whether alpha still runs and is free
+PASS: it reattaches alpha's terminal
+PASS: one terminal is on alpha again
+PASS: it is a new terminal of a new app process
+PASS: alpha's agent is still the same process
+PASS: its count never started over or skipped
+PASS: no session was launched: three registrations, three panes
+alpha's agent after the restart: 98563 Sat Oct 10 17:41:14 2026; pane size 107x40; client_pid=99433 tty=/dev/ttys003 pane=%0 size=107x40
+--- the app's log since the last mark ---
+11:41:34.518 [io.github.sglavoie.agentmux:app] workspace: reopening at launch (was open: true, place: session:rs-bf49f43f2580c15b851291d78f3ef94a)
+11:41:34.540 [io.github.sglavoie.agentmux:workspace] workspace: opened
+11:41:34.605 [io.github.sglavoie.agentmux:workspace] workspace: restoring session:rs-bf49f43f2580c15b851291d78f3ef94a
+11:41:34.605 [io.github.sglavoie.agentmux:workspace] workspace: showing restoring(runtimeSessionID: "rs-bf49f43f2580c15b851291d78f3ef94a")
+11:41:34.629 [io.github.sglavoie.agentmux:app] running /tmp/amxs16/shim/amx (userDefaultsOverride)
+11:41:34.659 [io.github.sglavoie.agentmux:app] feed: connecting
+11:41:34.660 [io.github.sglavoie.agentmux:app] feed: live
+11:41:34.660 [io.github.sglavoie.agentmux:app] daemon: degraded · initial kitty snapshot failed: kitty command failed: kitten @ ls
+  error: exec: "kitten": executable file not found in $PATH
+11:41:34.660 [io.github.sglavoie.agentmux:workspace] workspace: rows current (3 session(s), selection none)
+11:41:34.710 [io.github.sglavoie.agentmux:app] session rs-bf49f43f2580c15b851291d78f3ef94a: live(clients: 0)
+11:41:34.710 [io.github.sglavoie.agentmux:workspace] workspace: restored rs-bf49f43f2580c15b851291d78f3ef94a; reattaching its terminal
+11:41:34.712 [io.github.sglavoie.agentmux:app] embedded terminals use Ghostty 1.3.1 (ReleaseFast)
+11:41:34.720 [io.github.sglavoie.agentmux:workspace] workspace: attached a terminal to rs-bf49f43f2580c15b851291d78f3ef94a
+11:41:34.720 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-bf49f43f2580c15b851291d78f3ef94a")
+11:41:34.770 [io.github.sglavoie.agentmux:workspace] workspace: rows held from the last snapshot (3 session(s), selection rs-bf49f43f2580c15b851291d78f3ef94a)
+11:41:34.772 [io.github.sglavoie.agentmux:app] feed: reconnecting("reconnecting")
+11:41:34.791 [io.github.sglavoie.agentmux:workspace] workspace: rows current (3 session(s), selection rs-bf49f43f2580c15b851291d78f3ef94a)
+11:41:34.792 [io.github.sglavoie.agentmux:app] feed: live
+--- registry ---
+rs-bf49f43f2580c15b851291d78f3ef94a live alpha %0 pid=98563 owner=amx_attach_(pid_99430) reason=-
+rs-debd5544fecb5f2677064761c83ce6b1 live beta %1 pid=98570 owner=none reason=-
+rs-4e5feaf48752f294970355ffcd6efc4d live gamma %2 pid=98577 owner=none reason=-
+--- panes on the private tmux server ---
+%1 pid=98570 dead=0 status= size=80x24
+%2 pid=98577 dead=0 status= size=80x24
+%0 pid=98563 dead=0 status= size=107x40
+--- terminals attached to the private tmux server ---
+client_pid=99433 tty=/dev/ttys003 pane=%0 size=107x40
+--- what the daemon lists ---
+snapshot v2 daemon.pid=98546 attention.total=0
+  gamma  icon=-         attention=False runtime=tmux %2 rs-4e5feaf48752f294970355ffcd6efc4d
+  alpha  icon=-         attention=False runtime=tmux %0 rs-bf49f43f2580c15b851291d78f3ef94a
+  beta   icon=-         attention=False runtime=tmux %1 rs-debd5544fecb5f2677064761c83ce6b1
+--- the app's saved workspace ---
+window_open=1 place=session:rs-bf49f43f2580c15b851291d78f3ef94a
+
+##### daemon-restart-same-agent: the daemon is killed outright while the app shows alpha, then started again [17:41:46Z]
+PASS: beta asked for permission and the daemon shows it waiting
+agents before (pid, start time UTC): 98563 Sat Oct 10 17:41:14 2026 98570 Sat Oct 10 17:41:14 2026 98577 Sat Oct 10 17:41:14 2026
+terminals before: client_pid=99433 tty=/dev/ttys003 pane=%0 size=107x40; daemon pid 98546
+killed the daemon (pid 98546) with SIGKILL at 17:41:55Z
+PASS: the app notices the feed is gone
+PASS: it keeps its rows from the last snapshot
+PASS: with no daemon the app's terminal is still the one on alpha
+PASS: with no daemon every agent is the same process
+--- the app's log with the daemon down ---
+11:41:55.614 [io.github.sglavoie.agentmux:workspace] workspace: rows held from the last snapshot (3 session(s), selection rs-bf49f43f2580c15b851291d78f3ef94a)
+11:41:55.617 [io.github.sglavoie.agentmux:app] feed: reconnecting("connection closed before a reply")
+11:41:55.622 [io.github.sglavoie.agentmux:app] daemon: not running
+11:41:56.185 [io.github.sglavoie.agentmux:app] feed: notRunning
+11:41:59.343 [io.github.sglavoie.agentmux:app] feed: live
+11:41:59.348 [io.github.sglavoie.agentmux:workspace] workspace: rows current (3 session(s), selection rs-bf49f43f2580c15b851291d78f3ef94a)
+started a new daemon: pid 363
+PASS: it is another daemon process
+PASS: the app's feed is live again
+PASS: its rows are current again, on the same selection
+PASS: the new daemon lists the same three runtime sessions
+PASS: beta's waiting state came back from the checkpoint
+PASS: no hook arrived after the restart: the state was restored, not re-reported
+PASS: the app made no new terminal and let none go
+PASS: the same terminal is still the one on alpha
+PASS: every agent is still the same process
+PASS: no count started over or skipped
+PASS: no session was launched
+--- the app's log since the last mark ---
+11:41:55.614 [io.github.sglavoie.agentmux:workspace] workspace: rows held from the last snapshot (3 session(s), selection rs-bf49f43f2580c15b851291d78f3ef94a)
+11:41:55.617 [io.github.sglavoie.agentmux:app] feed: reconnecting("connection closed before a reply")
+11:41:55.622 [io.github.sglavoie.agentmux:app] daemon: not running
+11:41:56.185 [io.github.sglavoie.agentmux:app] feed: notRunning
+11:41:59.343 [io.github.sglavoie.agentmux:app] feed: live
+11:41:59.348 [io.github.sglavoie.agentmux:workspace] workspace: rows current (3 session(s), selection rs-bf49f43f2580c15b851291d78f3ef94a)
+--- registry ---
+rs-bf49f43f2580c15b851291d78f3ef94a live alpha %0 pid=98563 owner=amx_attach_(pid_99430) reason=-
+rs-debd5544fecb5f2677064761c83ce6b1 live beta %1 pid=98570 owner=none reason=-
+rs-4e5feaf48752f294970355ffcd6efc4d live gamma %2 pid=98577 owner=none reason=-
+--- panes on the private tmux server ---
+%1 pid=98570 dead=0 status= size=80x24
+%2 pid=98577 dead=0 status= size=80x24
+%0 pid=98563 dead=0 status= size=107x40
+--- terminals attached to the private tmux server ---
+client_pid=99433 tty=/dev/ttys003 pane=%0 size=107x40
+--- what the daemon lists ---
+snapshot v2 daemon.pid=363 attention.total=1
+  gamma  icon=-         attention=False runtime=tmux %2 rs-4e5feaf48752f294970355ffcd6efc4d
+  alpha  icon=-         attention=False runtime=tmux %0 rs-bf49f43f2580c15b851291d78f3ef94a
+  beta   icon=key       attention=True  runtime=tmux %1 rs-debd5544fecb5f2677064761c83ce6b1
+--- the app's saved workspace ---
+window_open=1 place=session:rs-bf49f43f2580c15b851291d78f3ef94a
+
+##### ownership-transfer: a second terminal attaches to alpha while the app's terminal is on it [17:42:13Z]
+before: client_pid=99433 tty=/dev/ttys003 pane=%0 size=107x40; pane size 107x40; agent 98563 Sat Oct 10 17:41:14 2026
+PASS: the second terminal (90x25) is the one terminal on alpha
+PASS: it is not the app's terminal
+PASS: alpha's pane took the new owner's size
+PASS: the app's terminal ended
+PASS: the app shows alpha as detached and does not take it back
+--- registry: the owner is the second terminal's amx attach ---
+rs-bf49f43f2580c15b851291d78f3ef94a live alpha %0 pid=98563 owner=amx_attach_(pid_1651) reason=-
+PASS: five seconds on, still exactly one terminal, the second one
+PASS: the app attached nothing meanwhile
+PASS: alpha's agent is the same process
+--- the app's log since the last mark ---
+11:42:17.480 [io.github.sglavoie.agentmux:workspace] workspace: the terminal for rs-bf49f43f2580c15b851291d78f3ef94a ended; detached
+11:42:17.484 [io.github.sglavoie.agentmux:workspace] workspace: showing detached(runtimeSessionID: "rs-bf49f43f2580c15b851291d78f3ef94a")
+
+The app is quit and started again while the second terminal owns alpha.
+PASS: the new app finds alpha attached elsewhere
+PASS: it restores the selection without taking the session
+PASS: the second terminal is still the only one, at its size
+--- the app's log since the last mark ---
+11:42:31.093 [io.github.sglavoie.agentmux:app] workspace: reopening at launch (was open: true, place: session:rs-bf49f43f2580c15b851291d78f3ef94a)
+11:42:31.116 [io.github.sglavoie.agentmux:workspace] workspace: opened
+11:42:31.188 [io.github.sglavoie.agentmux:workspace] workspace: restoring session:rs-bf49f43f2580c15b851291d78f3ef94a
+11:42:31.188 [io.github.sglavoie.agentmux:workspace] workspace: showing restoring(runtimeSessionID: "rs-bf49f43f2580c15b851291d78f3ef94a")
+11:42:31.205 [io.github.sglavoie.agentmux:app] running /tmp/amxs16/shim/amx (userDefaultsOverride)
+11:42:31.242 [io.github.sglavoie.agentmux:app] feed: connecting
+11:42:31.242 [io.github.sglavoie.agentmux:app] feed: live
+11:42:31.242 [io.github.sglavoie.agentmux:app] daemon: degraded · initial kitty snapshot failed: kitty command failed: kitten @ ls
+  error: exec: "kitten": executable file not found in $PATH
+11:42:31.244 [io.github.sglavoie.agentmux:workspace] workspace: rows current (3 session(s), selection none)
+11:42:31.294 [io.github.sglavoie.agentmux:app] session rs-bf49f43f2580c15b851291d78f3ef94a: live(clients: 1)
+11:42:31.294 [io.github.sglavoie.agentmux:workspace] workspace: rs-bf49f43f2580c15b851291d78f3ef94a is attached elsewhere (1 terminal(s)); restored detached
+11:42:31.295 [io.github.sglavoie.agentmux:workspace] workspace: showing detached(runtimeSessionID: "rs-bf49f43f2580c15b851291d78f3ef94a")
+11:42:31.345 [io.github.sglavoie.agentmux:workspace] workspace: rows held from the last snapshot (3 session(s), selection rs-bf49f43f2580c15b851291d78f3ef94a)
+11:42:31.347 [io.github.sglavoie.agentmux:app] feed: reconnecting("reconnecting")
+11:42:31.370 [io.github.sglavoie.agentmux:workspace] workspace: rows current (3 session(s), selection rs-bf49f43f2580c15b851291d78f3ef94a)
+11:42:31.371 [io.github.sglavoie.agentmux:app] feed: live
+
+The second terminal is closed.
+PASS: no terminal is on alpha
+PASS: its ownership was released
+PASS: with nobody attached the pane keeps the last owner's size
+PASS: alpha's agent is the same process
+
+The app is quit and started again with alpha free.
+PASS: the new app finds alpha free and reattaches
+PASS: the app's terminal is the one terminal on alpha, at the app's size
+PASS: alpha's agent is the same process after two changes of owner
+PASS: its count never started over or skipped
+--- the app's log since the last mark ---
+11:42:39.594 [io.github.sglavoie.agentmux:app] workspace: reopening at launch (was open: true, place: session:rs-bf49f43f2580c15b851291d78f3ef94a)
+11:42:39.616 [io.github.sglavoie.agentmux:workspace] workspace: opened
+11:42:39.685 [io.github.sglavoie.agentmux:workspace] workspace: restoring session:rs-bf49f43f2580c15b851291d78f3ef94a
+11:42:39.685 [io.github.sglavoie.agentmux:workspace] workspace: showing restoring(runtimeSessionID: "rs-bf49f43f2580c15b851291d78f3ef94a")
+11:42:39.705 [io.github.sglavoie.agentmux:app] running /tmp/amxs16/shim/amx (userDefaultsOverride)
+11:42:39.719 [io.github.sglavoie.agentmux:app] feed: connecting
+11:42:39.719 [io.github.sglavoie.agentmux:app] daemon: degraded · initial kitty snapshot failed: kitty command failed: kitten @ ls
+  error: exec: "kitten": executable file not found in $PATH
+11:42:39.719 [io.github.sglavoie.agentmux:app] feed: live
+11:42:39.720 [io.github.sglavoie.agentmux:workspace] workspace: rows current (3 session(s), selection none)
+11:42:39.776 [io.github.sglavoie.agentmux:app] session rs-bf49f43f2580c15b851291d78f3ef94a: live(clients: 0)
+11:42:39.776 [io.github.sglavoie.agentmux:workspace] workspace: restored rs-bf49f43f2580c15b851291d78f3ef94a; reattaching its terminal
+11:42:39.778 [io.github.sglavoie.agentmux:app] embedded terminals use Ghostty 1.3.1 (ReleaseFast)
+11:42:39.786 [io.github.sglavoie.agentmux:workspace] workspace: attached a terminal to rs-bf49f43f2580c15b851291d78f3ef94a
+11:42:39.786 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-bf49f43f2580c15b851291d78f3ef94a")
+11:42:39.847 [io.github.sglavoie.agentmux:workspace] workspace: rows held from the last snapshot (3 session(s), selection rs-bf49f43f2580c15b851291d78f3ef94a)
+11:42:39.849 [io.github.sglavoie.agentmux:app] feed: reconnecting("reconnecting")
+11:42:39.870 [io.github.sglavoie.agentmux:workspace] workspace: rows current (3 session(s), selection rs-bf49f43f2580c15b851291d78f3ef94a)
+11:42:39.871 [io.github.sglavoie.agentmux:app] feed: live
+--- registry ---
+rs-bf49f43f2580c15b851291d78f3ef94a live alpha %0 pid=98563 owner=amx_attach_(pid_2554) reason=-
+rs-debd5544fecb5f2677064761c83ce6b1 live beta %1 pid=98570 owner=none reason=-
+rs-4e5feaf48752f294970355ffcd6efc4d live gamma %2 pid=98577 owner=none reason=-
+--- panes on the private tmux server ---
+%1 pid=98570 dead=0 status= size=80x24
+%2 pid=98577 dead=0 status= size=80x24
+%0 pid=98563 dead=0 status= size=107x40
+--- terminals attached to the private tmux server ---
+client_pid=2557 tty=/dev/ttys003 pane=%0 size=107x40
+--- what the daemon lists ---
+snapshot v2 daemon.pid=363 attention.total=1
+  gamma  icon=-         attention=False runtime=tmux %2 rs-4e5feaf48752f294970355ffcd6efc4d
+  alpha  icon=-         attention=False runtime=tmux %0 rs-bf49f43f2580c15b851291d78f3ef94a
+  beta   icon=key       attention=True  runtime=tmux %1 rs-debd5544fecb5f2677064761c83ce6b1
+--- the app's saved workspace ---
+window_open=1 place=session:rs-bf49f43f2580c15b851291d78f3ef94a
+
+##### passive-preview-no-resize: the Overview and the Dashboard read every pane while the app's terminal owns alpha [17:42:46Z]
+before: pane sizes 107x40 80x24 80x24; terminals: client_pid=2557 tty=/dev/ttys003 pane=%0 size=107x40
+{"ok": true, "workspace_view": {"delivered": 1}}
+PASS: the app opened its Overview
+PASS: the Overview shows what each of the three panes has on its screen
+previews read at first: tick 87 pid 98570;tick 88 pid 98563;tick 88 pid 98570;tick 89 pid 98563;tick 89 pid 98570;tick 89 pid 98577;tick 90 pid 98563;tick 90 pid 98570;tick 90 pid 98577;tick 91 pid 98563;tick 91 pid 98570;tick 91 pid 98577;tick 92 pid 98563;tick 92 pid 98570;tick 92 pid 98577;tick 93 pid 98563;tick 93 pid 98570;tick 93 pid 98577;tick 94 pid 98563;tick 94 pid 98570;tick 94 pid 98577;tick 95 pid 98563;tick 95 pid 98577;
+previews six seconds later: tick 100 pid 98563;tick 100 pid 98570;tick 100 pid 98577;tick 101 pid 98563;tick 101 pid 98570;tick 101 pid 98577;tick 94 pid 98563;tick 94 pid 98570;tick 95 pid 98563;tick 95 pid 98570;tick 95 pid 98577;tick 96 pid 98563;tick 96 pid 98570;tick 96 pid 98577;tick 97 pid 98563;tick 97 pid 98570;tick 97 pid 98577;tick 98 pid 98563;tick 98 pid 98570;tick 98 pid 98577;tick 99 pid 98563;tick 99 pid 98570;tick 99 pid 98577;
+PASS: the previews are live: they were read again
+--- the Overview as the app shows it (read from the observer) ---
+Live sessions  3
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓╭───────────────────────────────────────────────────╮
+┃ beta                       1:11 · Needs permission ┃│ alpha                                    — · Idle │
+┃ claude · work                                    1 ┃│ claude · work                                   2 │
+┃ ────────────────────────────────────────────────── ┃│ ───────────────────────────────────────────────── │
+┃ tick 94 pid 98570 at 11:42:52                      ┃│ tick 94 pid 98563 at 11:42:52                     │
+┃ tick 95 pid 98570 at 11:42:53                      ┃│ tick 95 pid 98563 at 11:42:53                     │
+┃ tick 96 pid 98570 at 11:42:54                      ┃│ tick 96 pid 98563 at 11:42:54                     │
+┃ tick 97 pid 98570 at 11:42:55                      ┃│ tick 97 pid 98563 at 11:42:55                     │
+┃ tick 98 pid 98570 at 11:42:56                      ┃│ tick 98 pid 98563 at 11:42:56                     │
+┃ tick 99 pid 98570 at 11:42:57                      ┃│ tick 99 pid 98563 at 11:42:57                     │
+┃ tick 100 pid 98570 at 11:42:58                     ┃│ tick 100 pid 98563 at 11:42:58                    │
+┃ tick 101 pid 98570 at 11:42:59                     ┃│ tick 101 pid 98563 at 11:42:59                    │
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛╰───────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────╮
+│ gamma                                     — · Idle │
+│ claude · work                                    3 │
+│ ────────────────────────────────────────────────── │
+│ tick 95 pid 98577 at 11:42:53                      │
+│ tick 96 pid 98577 at 11:42:54                      │
+│ tick 97 pid 98577 at 11:42:55                      │
+│ tick 98 pid 98577 at 11:42:56                      │
+│ tick 99 pid 98577 at 11:42:57                      │
+│ tick 100 pid 98577 at 11:42:58                     │
+│ tick 101 pid 98577 at 11:42:59                     │
+╰────────────────────────────────────────────────────╯
+
+Enter focus · a actions · ? help · q exit · 1–0 jump · n/N needs you · c compact · ←↑↓→/hjkl move
+{"ok": true, "workspace_view": {"delivered": 1}}
+PASS: the Dashboard's preview shows a pane's screen too
+PASS: every pane has the size it had
+PASS: the only terminal is still the app's one on alpha: reading attached nothing
+PASS: beta and gamma, which nobody ever attached to, are still 80x24 with no terminal
+PASS: no ownership was recorded or changed
+PASS: nothing typed reached an agent: no pane shows an echo
+{"ok": true, "workspace_view": {"delivered": 1}}
+--- the app's log since the last mark ---
+11:42:50.414 [io.github.sglavoie.agentmux:workspace] workspace: opening overview view overview
+11:42:50.419 [io.github.sglavoie.agentmux:workspace] workspace: started view overview
+11:42:50.419 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "overview")
+11:42:50.423 [io.github.sglavoie.agentmux:app] workspace: now on view:overview
+11:43:00.369 [io.github.sglavoie.agentmux:workspace] workspace: opening dashboard view dashboard
+11:43:00.374 [io.github.sglavoie.agentmux:workspace] workspace: started view dashboard
+11:43:00.374 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "dashboard")
+11:43:00.378 [io.github.sglavoie.agentmux:app] workspace: now on view:dashboard
+11:43:03.560 [io.github.sglavoie.agentmux:workspace] workspace: view request for session rs-bf49f43f2580c15b851291d78f3ef94a
+11:43:03.560 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-bf49f43f2580c15b851291d78f3ef94a
+11:43:03.564 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-bf49f43f2580c15b851291d78f3ef94a")
+11:43:03.567 [io.github.sglavoie.agentmux:app] workspace: now on session:rs-bf49f43f2580c15b851291d78f3ef94a
+--- registry ---
+rs-bf49f43f2580c15b851291d78f3ef94a live alpha %0 pid=98563 owner=amx_attach_(pid_2554) reason=-
+rs-debd5544fecb5f2677064761c83ce6b1 live beta %1 pid=98570 owner=none reason=-
+rs-4e5feaf48752f294970355ffcd6efc4d live gamma %2 pid=98577 owner=none reason=-
+--- panes on the private tmux server ---
+%1 pid=98570 dead=0 status= size=80x24
+%2 pid=98577 dead=0 status= size=80x24
+%0 pid=98563 dead=0 status= size=107x40
+--- terminals attached to the private tmux server ---
+client_pid=2557 tty=/dev/ttys003 pane=%0 size=107x40
+--- what the daemon lists ---
+snapshot v2 daemon.pid=363 attention.total=1
+  gamma  icon=-         attention=False runtime=tmux %2 rs-4e5feaf48752f294970355ffcd6efc4d
+  alpha  icon=-         attention=False runtime=tmux %0 rs-bf49f43f2580c15b851291d78f3ef94a
+  beta   icon=key       attention=True  runtime=tmux %1 rs-debd5544fecb5f2677064761c83ce6b1
+--- the app's saved workspace ---
+window_open=1 place=session:rs-bf49f43f2580c15b851291d78f3ef94a
+
+##### detached-operation: the app is quit; the agents and the daemon carry on with no window and no terminal [17:43:06Z]
+PASS: the app quit
+PASS: no terminal is attached to anything
+PASS: alpha has no owner on record
+PASS: quitting left the workspace saved as open, on alpha
+PASS: alpha asked for permission with nothing attached, and the daemon shows it waiting
+alpha's own count with no app and no terminal: 114 98563 1791654192 11:43:12 -> 122 98563 1791654201 11:43:21
+PASS: alpha kept working
+PASS: every agent is the same process
+PASS: alpha's pane kept its size
+--- what the daemon lists with no app running ---
+snapshot v2 daemon.pid=363 attention.total=2
+  gamma  icon=-         attention=False runtime=tmux %2 rs-4e5feaf48752f294970355ffcd6efc4d
+  alpha  icon=key       attention=True  runtime=tmux %0 rs-bf49f43f2580c15b851291d78f3ef94a
+  beta   icon=key       attention=True  runtime=tmux %1 rs-debd5544fecb5f2677064761c83ce6b1
+--- alpha's screen, read with nothing attached ---
+tick 120 pid 98563 at 11:43:19
+tick 121 pid 98563 at 11:43:20
+tick 122 pid 98563 at 11:43:21
+tick 123 pid 98563 at 11:43:22
+tick 124 pid 98563 at 11:43:23
+
+PASS: started again, the app returns to alpha
+PASS: its terminal is the one terminal on alpha
+PASS: every agent is still the same process
+PASS: no count started over or skipped
+--- the app's log since the last mark ---
+11:43:24.393 [io.github.sglavoie.agentmux:app] workspace: reopening at launch (was open: true, place: session:rs-bf49f43f2580c15b851291d78f3ef94a)
+11:43:24.415 [io.github.sglavoie.agentmux:workspace] workspace: opened
+11:43:24.470 [io.github.sglavoie.agentmux:workspace] workspace: restoring session:rs-bf49f43f2580c15b851291d78f3ef94a
+11:43:24.470 [io.github.sglavoie.agentmux:workspace] workspace: showing restoring(runtimeSessionID: "rs-bf49f43f2580c15b851291d78f3ef94a")
+11:43:24.503 [io.github.sglavoie.agentmux:app] running /tmp/amxs16/shim/amx (userDefaultsOverride)
+11:43:24.524 [io.github.sglavoie.agentmux:app] feed: connecting
+11:43:24.525 [io.github.sglavoie.agentmux:app] feed: live
+11:43:24.525 [io.github.sglavoie.agentmux:app] daemon: degraded · initial kitty snapshot failed: kitty command failed: kitten @ ls
+  error: exec: "kitten": executable file not found in $PATH
+11:43:24.526 [io.github.sglavoie.agentmux:workspace] workspace: rows current (3 session(s), selection none)
+11:43:24.581 [io.github.sglavoie.agentmux:app] session rs-bf49f43f2580c15b851291d78f3ef94a: live(clients: 0)
+11:43:24.581 [io.github.sglavoie.agentmux:workspace] workspace: restored rs-bf49f43f2580c15b851291d78f3ef94a; reattaching its terminal
+11:43:24.583 [io.github.sglavoie.agentmux:app] embedded terminals use Ghostty 1.3.1 (ReleaseFast)
+11:43:24.589 [io.github.sglavoie.agentmux:workspace] workspace: attached a terminal to rs-bf49f43f2580c15b851291d78f3ef94a
+11:43:24.590 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-bf49f43f2580c15b851291d78f3ef94a")
+11:43:24.645 [io.github.sglavoie.agentmux:workspace] workspace: rows held from the last snapshot (3 session(s), selection rs-bf49f43f2580c15b851291d78f3ef94a)
+11:43:24.647 [io.github.sglavoie.agentmux:app] feed: reconnecting("reconnecting")
+11:43:24.668 [io.github.sglavoie.agentmux:workspace] workspace: rows current (3 session(s), selection rs-bf49f43f2580c15b851291d78f3ef94a)
+11:43:24.670 [io.github.sglavoie.agentmux:app] feed: live
+--- registry ---
+rs-bf49f43f2580c15b851291d78f3ef94a live alpha %0 pid=98563 owner=amx_attach_(pid_4746) reason=-
+rs-debd5544fecb5f2677064761c83ce6b1 live beta %1 pid=98570 owner=none reason=-
+rs-4e5feaf48752f294970355ffcd6efc4d live gamma %2 pid=98577 owner=none reason=-
+--- panes on the private tmux server ---
+%1 pid=98570 dead=0 status= size=80x24
+%2 pid=98577 dead=0 status= size=80x24
+%0 pid=98563 dead=0 status= size=107x40
+--- terminals attached to the private tmux server ---
+client_pid=4765 tty=/dev/ttys003 pane=%0 size=107x40
+--- what the daemon lists ---
+snapshot v2 daemon.pid=363 attention.total=2
+  gamma  icon=-         attention=False runtime=tmux %2 rs-4e5feaf48752f294970355ffcd6efc4d
+  alpha  icon=key       attention=True  runtime=tmux %0 rs-bf49f43f2580c15b851291d78f3ef94a
+  beta   icon=key       attention=True  runtime=tmux %1 rs-debd5544fecb5f2677064761c83ce6b1
+--- the app's saved workspace ---
+window_open=1 place=session:rs-bf49f43f2580c15b851291d78f3ef94a
+
+##### sleep-wake: the MacBook is put to sleep and woken while the app shows alpha [17:43:31Z]
+before: agents 98563 Sat Oct 10 17:41:14 2026 98570 Sat Oct 10 17:41:14 2026 98577 Sat Oct 10 17:41:14 2026; client_pid=4765 tty=/dev/ttys003 pane=%0 size=107x40; daemon pid 363; alpha's count 136 98563 1791654216 11:43:36
+asked the MacBook to sleep at 2026-10-10 11:43:37, its time (pmset sleepnow); it is left alone for 60 s
+the MacBook answered at 2026-10-10 11:44:39, its time, on attempt 1
+PASS: the MacBook answers again
+--- the MacBook's power log since the request: its sleeps and wakes (pmset -g log) ---
+2026-10-10 11:43:44 -0600 Sleep               	Entering Sleep state due to 'Software Sleep pid=5507':TCPKeepAlive=active Using AC (Charge:100%) 31 secs   
+2026-10-10 11:43:46 -0600 Wake Requests       	[process=mDNSResponder request=Maintenance deltaSecs=7198 wakeAt=2026-10-10 13:43:44 info="upkeep wake"] [*process=dasd request=SleepService deltaSecs=95
+2026-10-10 11:44:15 -0600 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty/ Using AC (Charge:100%) 10 secs   
+2026-10-10 11:44:25 -0600 Sleep               	Entering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=active Using AC (Charge:100%) 12 secs   
+2026-10-10 11:44:26 -0600 Wake Requests       	[process=mDNSResponder request=Maintenance deltaSecs=7198 wakeAt=2026-10-10 13:44:25 info="upkeep wake"] [process=dasd request=SleepService deltaSecs=907
+2026-10-10 11:44:37 -0600 DarkWake            	DarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt SMC.OutboxNotEmpty/ Using AC (Charge:100%) 1 secs    
+2026-10-10 11:44:38 -0600 Wake                	DarkWake to FullWake from Deep Idle [CDNVA] : due to HID Activity Using AC (Charge:100%)           
+PASS: the power log has a sleep after the request
+PASS: and a full wake after it
+the longest pause between two of alpha's counts: 29s (a count is a second apart while the machine is awake)
+PASS: alpha's clock jumped while its count did not: the process was suspended with the machine
+PASS: its count did not start over or skip: it was not replaced
+PASS: the app noticed the wake and reconnected its feed
+PASS: its feed came back live
+PASS: the daemon lists the three sessions
+PASS: it is the same daemon
+PASS: every agent is the same process
+PASS: the same terminal is the one on alpha, at the same size
+PASS: the app made no new terminal and let none go
+alpha's count after the wake: 183 98563 1791654303 11:45:03 -> 187 98563 1791654307 11:45:07
+PASS: alpha is counting again
+PASS: no session was launched
+--- the app's log since the last mark ---
+11:44:14.882 [io.github.sglavoie.agentmux:workspace] workspace: rows held from the last snapshot (3 session(s), selection rs-bf49f43f2580c15b851291d78f3ef94a)
+11:44:14.885 [io.github.sglavoie.agentmux:app] feed: reconnecting("no heartbeat")
+11:44:15.407 [io.github.sglavoie.agentmux:workspace] workspace: rows current (3 session(s), selection rs-bf49f43f2580c15b851291d78f3ef94a)
+11:44:15.411 [io.github.sglavoie.agentmux:app] feed: live
+11:44:38.667 [io.github.sglavoie.agentmux:app] woke from sleep; reconnecting the feed
+11:44:38.734 [io.github.sglavoie.agentmux:workspace] workspace: rows held from the last snapshot (3 session(s), selection rs-bf49f43f2580c15b851291d78f3ef94a)
+11:44:38.736 [io.github.sglavoie.agentmux:app] feed: reconnecting("reconnecting")
+11:44:38.739 [io.github.sglavoie.agentmux:workspace] workspace: rows current (3 session(s), selection rs-bf49f43f2580c15b851291d78f3ef94a)
+11:44:38.739 [io.github.sglavoie.agentmux:app] feed: live
+--- registry ---
+rs-bf49f43f2580c15b851291d78f3ef94a live alpha %0 pid=98563 owner=amx_attach_(pid_4746) reason=-
+rs-debd5544fecb5f2677064761c83ce6b1 live beta %1 pid=98570 owner=none reason=-
+rs-4e5feaf48752f294970355ffcd6efc4d live gamma %2 pid=98577 owner=none reason=-
+--- panes on the private tmux server ---
+%1 pid=98570 dead=0 status= size=80x24
+%2 pid=98577 dead=0 status= size=80x24
+%0 pid=98563 dead=0 status= size=107x40
+--- terminals attached to the private tmux server ---
+client_pid=4765 tty=/dev/ttys003 pane=%0 size=107x40
+--- what the daemon lists ---
+snapshot v2 daemon.pid=363 attention.total=2
+  gamma  icon=-         attention=False runtime=tmux %2 rs-4e5feaf48752f294970355ffcd6efc4d
+  alpha  icon=key       attention=True  runtime=tmux %0 rs-bf49f43f2580c15b851291d78f3ef94a
+  beta   icon=key       attention=True  runtime=tmux %1 rs-debd5544fecb5f2677064761c83ce6b1
+--- the app's saved workspace ---
+window_open=1 place=session:rs-bf49f43f2580c15b851291d78f3ef94a
+
+##### lost-versus-exited, the exit: gamma's agent ends with status 3 while the app shows it [17:45:12Z]
+{"ok": true, "workspace_view": {"delivered": 1}}
+PASS: the app's terminal is on gamma
+stand-in agent processes before: 3; gamma's is 98577 Sat Oct 10 17:41:14 2026
+gamma's agent was told to exit with status 3 at 17:45:18Z
+PASS: the server keeps gamma's pane, dead, with status 3
+PASS: the registry records it as exited, with the status
+PASS: the daemon no longer lists gamma
+PASS: the app is told it exited
+PASS: the app says so in the pane and relaunches nothing
+PASS: the pane shows the session as gone
+--- what amx answers about gamma ---
+error runtime_session_exited: the agent of runtime session rs-4e5feaf48752f294970355ffcd6efc4d is no longer running: agent exited (status 3)
+PASS: amx attach refuses it as exited
+PASS: nothing was started in its place: one stand-in fewer, three registrations, three panes
+PASS: the other agents were not touched
+PASS: the app no longer saves gamma as the place to return to
+--- the app's log since the last mark ---
+11:45:22.339 [io.github.sglavoie.agentmux:workspace] workspace: selected session rs-4e5feaf48752f294970355ffcd6efc4d is no longer listed
+11:45:22.355 [io.github.sglavoie.agentmux:app] workspace: now on nothing
+11:45:22.358 [io.github.sglavoie.agentmux:workspace] workspace: showing gone(runtimeSessionID: "rs-4e5feaf48752f294970355ffcd6efc4d", nil)
+11:45:22.385 [io.github.sglavoie.agentmux:app] session rs-4e5feaf48752f294970355ffcd6efc4d: exited("the agent of runtime session rs-4e5feaf48752f294970355ffcd6efc4d is no longer running: agent exited (status 3)")
+11:45:22.385 [io.github.sglavoie.agentmux:workspace] workspace: rs-4e5feaf48752f294970355ffcd6efc4d is not running: exited("the agent of runtime session rs-4e5feaf48752f294970355ffcd6efc4d is no longer running: agent exited (status 3)"); nothing is relaunched
+11:45:22.386 [io.github.sglavoie.agentmux:workspace] workspace: showing gone(runtimeSessionID: "rs-4e5feaf48752f294970355ffcd6efc4d", Optional(AgentMux.WorkspaceSessionStatus.exited("the agent of runtime session rs-4e5feaf48752f294970355ffcd6efc4d is no longer running: agent exited (status 3)")))
+--- registry ---
+rs-bf49f43f2580c15b851291d78f3ef94a live alpha %0 pid=98563 owner=amx_attach_(pid_4746) reason=-
+rs-debd5544fecb5f2677064761c83ce6b1 live beta %1 pid=98570 owner=none reason=-
+rs-4e5feaf48752f294970355ffcd6efc4d stale gamma %2 pid=98577 owner=none reason=agent_exited_(status_3)
+--- panes on the private tmux server ---
+%1 pid=98570 dead=0 status= size=80x24
+%2 pid=98577 dead=1 status=3 size=107x40
+%0 pid=98563 dead=0 status= size=107x40
+--- terminals attached to the private tmux server ---
+client_pid=4765 tty=/dev/ttys003 pane=%0 size=107x40
+--- what the daemon lists ---
+snapshot v2 daemon.pid=363 attention.total=2
+  alpha  icon=key       attention=True  runtime=tmux %0 rs-bf49f43f2580c15b851291d78f3ef94a
+  beta   icon=key       attention=True  runtime=tmux %1 rs-debd5544fecb5f2677064761c83ce6b1
+--- the app's saved workspace ---
+window_open=1 place=unset
+
+##### absent-agent-not-relaunched: beta's agent dies while the app is not running; the app is then started [17:45:40Z]
+{"ok": true, "workspace_view": {"delivered": 1}}
+PASS: the app saved beta as where it is
+PASS: the app quit
+killed beta's agent (pid 98570) with SIGKILL at 17:45:46Z, with no app running; stand-in agents before: 2
+PASS: the daemon, alone, records beta as exited by that signal
+PASS: and stops listing it
+PASS: the saved workspace still points at beta
+PASS: the app reopens, heading for beta
+PASS: it finds beta is not listed and asks what became of it
+PASS: it reports the agent as not running and relaunches nothing
+PASS: the app made no terminal for it
+PASS: no terminal is attached to beta's pane
+PASS: nothing was started: one stand-in fewer, three registrations, three panes
+PASS: beta's process ID names no process
+asking for it by name changes nothing either:
+{"ok": false, "error": "runtime_session_unknown"}
+--- what amx answers about beta ---
+error runtime_session_exited: the agent of runtime session rs-debd5544fecb5f2677064761c83ce6b1 is no longer running: agent exited (signal kill)
+PASS: amx attach refuses it and starts nothing
+PASS: the app no longer saves beta as the place to return to
+--- the app's log since the last mark ---
+11:45:53.319 [io.github.sglavoie.agentmux:app] workspace: reopening at launch (was open: true, place: session:rs-debd5544fecb5f2677064761c83ce6b1)
+11:45:53.342 [io.github.sglavoie.agentmux:workspace] workspace: opened
+11:45:53.411 [io.github.sglavoie.agentmux:workspace] workspace: restoring session:rs-debd5544fecb5f2677064761c83ce6b1
+11:45:53.411 [io.github.sglavoie.agentmux:workspace] workspace: showing restoring(runtimeSessionID: "rs-debd5544fecb5f2677064761c83ce6b1")
+11:45:53.434 [io.github.sglavoie.agentmux:app] running /tmp/amxs16/shim/amx (userDefaultsOverride)
+11:45:53.467 [io.github.sglavoie.agentmux:app] feed: connecting
+11:45:53.467 [io.github.sglavoie.agentmux:app] feed: live
+11:45:53.467 [io.github.sglavoie.agentmux:app] daemon: degraded · initial kitty snapshot failed: kitty command failed: kitten @ ls
+  error: exec: "kitten": executable file not found in $PATH
+11:45:53.469 [io.github.sglavoie.agentmux:workspace] workspace: rows current (1 session(s), selection none)
+11:45:53.469 [io.github.sglavoie.agentmux:workspace] workspace: rs-debd5544fecb5f2677064761c83ce6b1 is not listed after the restart; asking what became of it
+11:45:53.469 [io.github.sglavoie.agentmux:app] workspace: now on nothing
+11:45:53.470 [io.github.sglavoie.agentmux:workspace] workspace: showing gone(runtimeSessionID: "rs-debd5544fecb5f2677064761c83ce6b1", nil)
+11:45:53.504 [io.github.sglavoie.agentmux:app] session rs-debd5544fecb5f2677064761c83ce6b1: exited("the agent of runtime session rs-debd5544fecb5f2677064761c83ce6b1 is no longer running: agent exited (signal kill)")
+11:45:53.504 [io.github.sglavoie.agentmux:workspace] workspace: rs-debd5544fecb5f2677064761c83ce6b1 is not running: exited("the agent of runtime session rs-debd5544fecb5f2677064761c83ce6b1 is no longer running: agent exited (signal kill)"); nothing is relaunched
+11:45:53.504 [io.github.sglavoie.agentmux:workspace] workspace: showing gone(runtimeSessionID: "rs-debd5544fecb5f2677064761c83ce6b1", Optional(AgentMux.WorkspaceSessionStatus.exited("the agent of runtime session rs-debd5544fecb5f2677064761c83ce6b1 is no longer running: agent exited (signal kill)")))
+11:45:53.572 [io.github.sglavoie.agentmux:workspace] workspace: rows held from the last snapshot (1 session(s), selection none)
+11:45:53.573 [io.github.sglavoie.agentmux:app] feed: reconnecting("reconnecting")
+11:45:53.588 [io.github.sglavoie.agentmux:workspace] workspace: rows current (1 session(s), selection none)
+11:45:53.589 [io.github.sglavoie.agentmux:app] feed: live
+--- registry ---
+rs-bf49f43f2580c15b851291d78f3ef94a live alpha %0 pid=98563 owner=none reason=-
+rs-debd5544fecb5f2677064761c83ce6b1 stale beta %1 pid=98570 owner=none reason=agent_exited_(signal_kill)
+rs-4e5feaf48752f294970355ffcd6efc4d stale gamma %2 pid=98577 owner=none reason=agent_exited_(status_3)
+--- panes on the private tmux server ---
+%1 pid=98570 dead=1 status= size=107x40
+%2 pid=98577 dead=1 status=3 size=107x40
+%0 pid=98563 dead=0 status= size=107x40
+--- terminals attached to the private tmux server ---
+--- what the daemon lists ---
+snapshot v2 daemon.pid=363 attention.total=1
+  alpha  icon=key       attention=True  runtime=tmux %0 rs-bf49f43f2580c15b851291d78f3ef94a
+--- the app's saved workspace ---
+window_open=1 place=unset
+
+##### lost-versus-exited, the loss: the private tmux server is killed outright while the app shows alpha [17:46:18Z]
+{"ok": true, "workspace_view": {"delivered": 1}}
+PASS: the app's terminal is on alpha
+killed the private tmux server (pid 98562) with SIGKILL at 17:46:24Z; alpha's agent was pid 98563
+PASS: the app's terminal ended with the server
+PASS: the registry records alpha as lost, not exited
+PASS: the daemon no longer lists alpha
+PASS: the app is told it was lost
+PASS: the app says so in the pane and relaunches nothing
+--- what amx answers about alpha (lost) and gamma (exited) ---
+error runtime_session_lost: runtime session rs-bf49f43f2580c15b851291d78f3ef94a was lost (backend generation changed); its agent is not running where it was started
+error runtime_session_exited: the agent of runtime session rs-4e5feaf48752f294970355ffcd6efc4d is no longer running: agent exited (status 3)
+PASS: amx attach refuses alpha as lost
+PASS: and still refuses gamma as exited: the two are told apart
+PASS: no tmux server was started in its place
+PASS: no agent was started: no stand-in runs, and the registry still has three registrations
+PASS: the app attached nothing after the loss
+--- the registry at the end: one exited by status, one exited by signal, one lost ---
+rs-bf49f43f2580c15b851291d78f3ef94a stale alpha %0 pid=98563 owner=none reason=backend_generation_changed
+rs-debd5544fecb5f2677064761c83ce6b1 stale beta %1 pid=98570 owner=none reason=agent_exited_(signal_kill)
+rs-4e5feaf48752f294970355ffcd6efc4d stale gamma %2 pid=98577 owner=none reason=agent_exited_(status_3)
+--- the app's log since the last mark ---
+11:46:24.972 [io.github.sglavoie.agentmux:workspace] workspace: the terminal for rs-bf49f43f2580c15b851291d78f3ef94a ended; detached
+11:46:24.977 [io.github.sglavoie.agentmux:workspace] workspace: showing detached(runtimeSessionID: "rs-bf49f43f2580c15b851291d78f3ef94a")
+11:46:32.347 [io.github.sglavoie.agentmux:workspace] workspace: selected session rs-bf49f43f2580c15b851291d78f3ef94a is no longer listed
+11:46:32.348 [io.github.sglavoie.agentmux:app] workspace: now on nothing
+11:46:32.352 [io.github.sglavoie.agentmux:workspace] workspace: showing gone(runtimeSessionID: "rs-bf49f43f2580c15b851291d78f3ef94a", nil)
+11:46:32.390 [io.github.sglavoie.agentmux:app] session rs-bf49f43f2580c15b851291d78f3ef94a: lost("runtime session rs-bf49f43f2580c15b851291d78f3ef94a was lost (backend generation changed); its agent is not running where it was started")
+11:46:32.390 [io.github.sglavoie.agentmux:workspace] workspace: rs-bf49f43f2580c15b851291d78f3ef94a is not running: lost("runtime session rs-bf49f43f2580c15b851291d78f3ef94a was lost (backend generation changed); its agent is not running where it was started"); nothing is relaunched
+11:46:32.390 [io.github.sglavoie.agentmux:workspace] workspace: showing gone(runtimeSessionID: "rs-bf49f43f2580c15b851291d78f3ef94a", Optional(AgentMux.WorkspaceSessionStatus.lost("runtime session rs-bf49f43f2580c15b851291d78f3ef94a was lost (backend generation changed); its agent is not running where it was started")))
+--- what the daemon lists ---
+snapshot v2 daemon.pid=363 attention.total=0
+--- the daemon's own log of what it found ---
+11:45:19 maintenance: runtime session is no longer running runtime_session=rs-4e5feaf48752f294970355ffcd6efc4d outcome=exited reason=agent exited (status 3)
+11:45:49 maintenance: runtime session is no longer running runtime_session=rs-debd5544fecb5f2677064761c83ce6b1 outcome=exited reason=agent exited (signal kill)
+11:46:27 maintenance: runtime session is no longer running runtime_session=rs-bf49f43f2580c15b851291d78f3ef94a outcome=lost reason=backend generation changed
+
+##### Taking the world down [17:46:51Z]
+left running on the MacBook: []; the app's preferences file exists: no
+
+checks passed: 126, failed: 0

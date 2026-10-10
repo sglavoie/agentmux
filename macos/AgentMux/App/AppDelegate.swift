@@ -15,6 +15,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     private var aslPanel: ASLQuestionPanelController?
     /// The workspace window, made the first time it is shown.
     private(set) var workspace: WorkspaceWindowController?
+    /// Set once the app is quitting, so the windows it takes down with it are
+    /// not recorded as closed by the operator.
+    private var isTerminating = false
+    /// Session status questions asked before amx was resolved.
+    private var statusQuestions: [(String, @MainActor (WorkspaceSessionStatus) -> Void)] = []
     /// `defaults write io.github.sglavoie.agentmux amxOpenWorkspaceAtLaunch
     /// -bool YES` shows the workspace as soon as the app starts.
     static let openWorkspaceAtLaunchKey = "amxOpenWorkspaceAtLaunch"
@@ -123,11 +128,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         ) { [weak self] _ in
             // A socket held across sleep may be half-open; do not wait for
             // the heartbeat watchdog to find out.
-            MainActor.assumeIsolated { self?.subscription?.reconnectNow() }
+            MainActor.assumeIsolated {
+                Self.logger.notice("woke from sleep; reconnecting the feed")
+                self?.subscription?.reconnectNow()
+            }
         }
         trackActiveKitty()
         resolveBinary()
-        if UserDefaults.standard.bool(forKey: Self.openWorkspaceAtLaunchKey) { showWorkspace() }
+        restoreWorkspace()
+    }
+
+    /// Comes back to the workspace as the app last left it: open if it was
+    /// open (after a quit, a crash, or an upgrade alike), on the session or
+    /// view it was on. Nothing is started for it: a session that is no longer
+    /// running is reported, not replaced.
+    private func restoreWorkspace() {
+        let restoration = WorkspaceRestoration.load()
+        guard restoration.windowOpen || UserDefaults.standard.bool(forKey: Self.openWorkspaceAtLaunchKey) else { return }
+        Self.logger.notice("workspace: reopening at launch (was open: \(restoration.windowOpen), place: \(restoration.place?.encoded ?? "none", privacy: .public))")
+        let controller = workspaceController()
+        controller.show()
+        if let place = restoration.place {
+            controller.restore(place)
+        } else if controller.state.selection == nil, controller.viewSelection == nil {
+            controller.showView(WorkspaceUtilityView.dashboard.id)
+        }
     }
 
     /// The app was opened again while running (from Finder, Spotlight, or
@@ -138,7 +163,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         return false
     }
 
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // A window that closes because the app is quitting was open: the
+        // next launch reopens it.
+        isTerminating = true
+        return .terminateNow
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
+        isTerminating = true
         // Before anything else goes: freeing a surface detaches its view,
         // and the sessions themselves live on in tmux.
         terminals?.shutdown()
@@ -274,6 +307,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// it closed the app is the menu bar accessory again.
     func workspaceVisibilityChanged(_ visible: Bool) {
         NSApp.setActivationPolicy(visible ? .regular : .accessory)
+        guard !Self.isRunningTests, !isTerminating else { return }
+        WorkspaceRestoration.saveWindowOpen(visible)
+    }
+
+    func workspacePlaceChanged(_ place: WorkspaceRestoration.Place?) {
+        guard !Self.isRunningTests, !isTerminating else { return }
+        Self.logger.notice("workspace: now on \(place?.encoded ?? "nothing", privacy: .public)")
+        WorkspaceRestoration.savePlace(place)
+    }
+
+    /// Asks amx what the registry and the private tmux server say about a
+    /// session. `amx attach --json` checks and reports; it attaches nothing.
+    func sessionStatus(runtimeSessionID: String, completion: @escaping @MainActor (WorkspaceSessionStatus) -> Void) {
+        guard let command else {
+            // At launch the workspace can ask before amx is found. The
+            // question waits for it instead of being answered "unknown".
+            if let problem = preferences.binaryProblem {
+                completion(.unknown(problem))
+            } else {
+                statusQuestions.append((runtimeSessionID, completion))
+            }
+            return
+        }
+        focusQueue.async {
+            let status = WorkspaceSessionStatus.from(command.json(AttachCheck.self, ["attach", runtimeSessionID]))
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    Self.logger.notice("session \(runtimeSessionID, privacy: .public): \(String(describing: status), privacy: .public)")
+                    completion(status)
+                }
+            }
+        }
     }
 
     @objc func openWorkspace(_ sender: Any?) { showWorkspace() }
@@ -521,6 +586,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
                     }
                     self.command = command
                     self.workspace?.retryTerminal()
+                    let waiting = self.statusQuestions
+                    self.statusQuestions = []
+                    for (id, completion) in waiting {
+                        if command == nil {
+                            completion(.unknown(self.preferences.binaryProblem ?? "amx was not found."))
+                        } else {
+                            self.sessionStatus(runtimeSessionID: id, completion: completion)
+                        }
+                    }
                     // Doctor compares the build subscribe reported with the
                     // daemon's, so a new selection needs a new subscribe.
                     if self.subscribeRequest.report(build: report) {

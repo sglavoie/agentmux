@@ -152,6 +152,11 @@ type Handler struct {
 	// backend (runtime_labels.go). Installed once at startup; nil labels a
 	// session with its registry project alone.
 	runtimeLabeler RuntimeSessionLabeler
+	// runtimeReconciler brings the registry in line with the backends; nil
+	// leaves the registry to its writers. lastRuntimeReconcile throttles it
+	// and is touched only by the maintenance goroutine and startup.
+	runtimeReconciler    RuntimeSessionReconciler
+	lastRuntimeReconcile time.Time
 	// runtimeLabels is the project and profile of each non-Kitty runtime
 	// session bound to a slot, by runtime-session ID. Guarded by stateMu.
 	runtimeLabels map[string]runtimeLabel

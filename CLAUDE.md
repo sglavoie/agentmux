@@ -68,6 +68,14 @@ which strips every session and Kitty variable before running anything. A
 utility view is never a session: it has no key, comes from no snapshot, and
 must never count toward attention.
 
+The workspace comes back where it was (`Model/WorkspaceRecovery.swift`): the
+app saves whether the window was open and which session or view its pane was
+on, and at launch `WorkspaceWindowController.restore(_:)` returns there once a
+live snapshot lists the session and `amx attach --json` reports no terminal
+attached to it. Restoring never takes a session from another terminal, and
+nothing in the workspace launches an agent: one that stopped is shown as
+exited or lost, with the Dashboard as the only way on.
+
 A session's terminal only views a pane the private tmux server holds, so its
 scrollback is the server's (`Ghostty.Scrollback.server`): the View and Edit
 menus' paging and Find items write tmux user keys to the client
@@ -183,7 +191,15 @@ Shared and domain packages (`internal/...`):
   register (`Begin`, launch, `Commit`), and compensate under one lock beside
   the registry, and actions on a live session follow its recorded backend.
   `amx attach <runtime-session-id>` (`cmd/session/attach.go`) transfers
-  interactive ownership with `tmux attach-session -d`; it never relaunches.
+  interactive ownership with `tmux attach-session -d`; it never relaunches,
+  and refuses an agent that stopped as `runtime_session_exited` (its process
+  ended) or `runtime_session_lost` (its pane or server is gone). One terminal
+  owns a session: it has the keyboard and sets the size, reading a pane
+  attaches nothing, and the size stays when the owner leaves
+  (`internal/tmux/ownership.go`). The registry learns of agents that stop,
+  owners whose terminal died, and competing terminals from
+  `tmux.Reconciler`, which the daemon runs on maintenance and before it
+  restores its checkpoint; it never starts a server or an agent.
 - `internal/transcript`, `internal/plans`: discovery, metadata caches, search,
   recovery. `transcript.History` is the overseer's metadata-only admission path
   and never touches the index or search sidecars.

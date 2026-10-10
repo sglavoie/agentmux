@@ -92,6 +92,18 @@ the tab titles use and a count of waiting sessions beside each project.
   the window, quitting the app, or attaching to the session somewhere else
   (`amx attach`, the dashboard) leaves the agent running. A view that lost
   its session to another terminal says **Detached** and offers **Reattach**.
+  Each session has one owner at a time: the terminal that attached last has
+  the keyboard and sets the size, and the agent keeps that size when nobody
+  is attached. Previews and the Overview only read the screen.
+- The window comes back where it was. If it was open when the app last ran
+  (it quit, crashed, or was upgraded), it reopens on the same session or view.
+  The agents were running in tmux all along and are simply shown again. A
+  session that another terminal attached to meanwhile is shown **Detached**
+  rather than taken back.
+- An agent that is no longer running is never started again by the app. The
+  pane says what happened instead: **Agent exited** when the agent ended on
+  its own (with its exit status), **Agent lost** when the terminal it ran in
+  is gone, as after a reboot. Starting or resuming is done from the Dashboard.
 - A click on a **Kitty** session brings Kitty forward on its window, as the
   menu does. Its row is marked `Kitty`. Moving through the sidebar with the
   arrow keys only selects; it never switches apps.

@@ -1,0 +1,846 @@
+# just mac-test (macos/scripts/test-app.sh Debug), run on Seb's MacBook Pro through macos/scripts/remote-ui.sh; the lines xcodebuild wrote about suites and cases
+Test Suite 'All tests' started at 2026-10-10 11:23:20.839.
+Test Suite 'AgentMuxTests.xctest' started at 2026-10-10 11:23:20.840.
+Test Suite 'AMXBinaryResolverTests' started at 2026-10-10 11:23:20.840.
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testBlankOverrideIsUnset]' started.
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testBlankOverrideIsUnset]' passed (0.003 seconds).
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testBundledBeatsLocalBinAndPathWhenNothingIsKnown]' started.
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testBundledBeatsLocalBinAndPathWhenNothingIsKnown]' passed (0.003 seconds).
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testBundledMatchingTheDaemonIsKeptOverAnOlderLocalBin]' started.
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testBundledMatchingTheDaemonIsKeptOverAnOlderLocalBin]' passed (0.004 seconds).
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testInvalidOverrideFailsClosed]' started.
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testInvalidOverrideFailsClosed]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testLocalBinBeatsPath]' started.
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testLocalBinBeatsPath]' passed (0.003 seconds).
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testLocalBinMatchingTheDaemonWins]' started.
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testLocalBinMatchingTheDaemonWins]' passed (0.003 seconds).
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testNewerLocalBinWins]' started.
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testNewerLocalBinWins]' passed (0.003 seconds).
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testNotFoundListsEveryCandidateOnce]' started.
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testNotFoundListsEveryCandidateOnce]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testOlderLocalBinLoses]' started.
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testOlderLocalBinLoses]' passed (0.004 seconds).
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testOneSidedBuildTimeKeepsBundled]' started.
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testOneSidedBuildTimeKeepsBundled]' passed (0.003 seconds).
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testOverrideExpandsTilde]' started.
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testOverrideExpandsTilde]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testOverrideWinsOverEverything]' started.
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testOverrideWinsOverEverything]' passed (0.004 seconds).
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testPathInOrderSkippingNonExecutablesAndDirectories]' started.
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testPathInOrderSkippingNonExecutablesAndDirectories]' passed (0.003 seconds).
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testSHA256OfAFile]' started.
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testSHA256OfAFile]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testTieBetweenDifferentCleanRevisionsKeepsBundled]' started.
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testTieBetweenDifferentCleanRevisionsKeepsBundled]' passed (0.004 seconds).
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testTieBetweenOneCleanBuildGoesToLocalEvenWhenBundledIsNewer]' started.
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testTieBetweenOneCleanBuildGoesToLocalEvenWhenBundledIsNewer]' passed (0.004 seconds).
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testTieGoesToADifferentNewerLocalFile]' started.
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testTieGoesToADifferentNewerLocalFile]' passed (0.004 seconds).
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testTieKeepsBundledWhenTheContentIsTheSame]' started.
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testTieKeepsBundledWhenTheContentIsTheSame]' passed (0.004 seconds).
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testTieKeepsBundledWhenTheLocalFileIsOlder]' started.
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testTieKeepsBundledWhenTheLocalFileIsOlder]' passed (0.003 seconds).
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testUnknownLocalIdentityNeverDisplacesBundled]' started.
+Test Case '-[AgentMuxTests.AMXBinaryResolverTests testUnknownLocalIdentityNeverDisplacesBundled]' passed (0.003 seconds).
+Test Suite 'AMXBinaryResolverTests' passed at 2026-10-10 11:23:20.906.
+	 Executed 20 tests, with 0 failures (0 unexpected) in 0.062 (0.067) seconds
+Test Suite 'AMXCommandTests' started at 2026-10-10 11:23:20.907.
+Test Case '-[AgentMuxTests.AMXCommandTests testBareArrayData]' started.
+Test Case '-[AgentMuxTests.AMXCommandTests testBareArrayData]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AMXCommandTests testCapabilitiesFromHelp]' started.
+Test Case '-[AgentMuxTests.AMXCommandTests testCapabilitiesFromHelp]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AMXCommandTests testChildEnvironmentStripsInheritedKittyAndSetsTheSocket]' started.
+Test Case '-[AgentMuxTests.AMXCommandTests testChildEnvironmentStripsInheritedKittyAndSetsTheSocket]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AMXCommandTests testChildEnvironmentWithoutASocketCarriesNoKittyAtAll]' started.
+Test Case '-[AgentMuxTests.AMXCommandTests testChildEnvironmentWithoutASocketCarriesNoKittyAtAll]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AMXCommandTests testChildThatClosesItsPipesStillTimesOut]' started.
+Test Case '-[AgentMuxTests.AMXCommandTests testChildThatClosesItsPipesStillTimesOut]' passed (0.206 seconds).
+Test Case '-[AgentMuxTests.AMXCommandTests testChildThatIgnoresTerminateIsKilled]' started.
+Test Case '-[AgentMuxTests.AMXCommandTests testChildThatIgnoresTerminateIsKilled]' passed (0.712 seconds).
+Test Case '-[AgentMuxTests.AMXCommandTests testDataOfTheWrongShapeIsUndecodable]' started.
+Test Case '-[AgentMuxTests.AMXCommandTests testDataOfTheWrongShapeIsUndecodable]' passed (0.005 seconds).
+Test Case '-[AgentMuxTests.AMXCommandTests testErrorEnvelopeIsAFailureEvenWithAZeroExit]' started.
+Test Case '-[AgentMuxTests.AMXCommandTests testErrorEnvelopeIsAFailureEvenWithAZeroExit]' passed (0.003 seconds).
+Test Case '-[AgentMuxTests.AMXCommandTests testErrorEnvelopeWithCandidatesAndParameters]' started.
+Test Case '-[AgentMuxTests.AMXCommandTests testErrorEnvelopeWithCandidatesAndParameters]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.AMXCommandTests testFirstLineOfMultiLineOutput]' started.
+Test Case '-[AgentMuxTests.AMXCommandTests testFirstLineOfMultiLineOutput]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AMXCommandTests testHelpParsesCommandsAndFlags]' started.
+Test Case '-[AgentMuxTests.AMXCommandTests testHelpParsesCommandsAndFlags]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AMXCommandTests testHelpParsesGroupedCommands]' started.
+Test Case '-[AgentMuxTests.AMXCommandTests testHelpParsesGroupedCommands]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AMXCommandTests testJSONAppendsTheFlagOnceAndPassesTheSocket]' started.
+Test Case '-[AgentMuxTests.AMXCommandTests testJSONAppendsTheFlagOnceAndPassesTheSocket]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AMXCommandTests testPartialSuccessKeepsTheData]' started.
+Test Case '-[AgentMuxTests.AMXCommandTests testPartialSuccessKeepsTheData]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AMXCommandTests testProbeAsksOnlyForWhatTheRootLists]' started.
+Test Case '-[AgentMuxTests.AMXCommandTests testProbeAsksOnlyForWhatTheRootLists]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AMXCommandTests testRealProcessTimesOut]' started.
+Test Case '-[AgentMuxTests.AMXCommandTests testRealProcessTimesOut]' passed (0.330 seconds).
+Test Case '-[AgentMuxTests.AMXCommandTests testSuccessEnvelope]' started.
+Test Case '-[AgentMuxTests.AMXCommandTests testSuccessEnvelope]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.AMXCommandTests testTextOutputIsUndecodableWithStderrDetail]' started.
+Test Case '-[AgentMuxTests.AMXCommandTests testTextOutputIsUndecodableWithStderrDetail]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AMXCommandTests testTimeoutOrLaunchFailure]' started.
+Test Case '-[AgentMuxTests.AMXCommandTests testTimeoutOrLaunchFailure]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AMXCommandTests testUnsupportedSchemaVersion]' started.
+Test Case '-[AgentMuxTests.AMXCommandTests testUnsupportedSchemaVersion]' passed (0.002 seconds).
+Test Suite 'AMXCommandTests' passed at 2026-10-10 11:23:22.192.
+	 Executed 20 tests, with 0 failures (0 unexpected) in 1.274 (1.285) seconds
+Test Suite 'AMXVersionTests' started at 2026-10-10 11:23:22.192.
+Test Case '-[AgentMuxTests.AMXVersionTests testCleanBuildHasNoDirtyMarker]' started.
+Test Case '-[AgentMuxTests.AMXVersionTests testCleanBuildHasNoDirtyMarker]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.AMXVersionTests testMatchesDaemonByHashPrefix]' started.
+Test Case '-[AgentMuxTests.AMXVersionTests testMatchesDaemonByHashPrefix]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.AMXVersionTests testMatchesDaemonByRevisionWithoutHash]' started.
+Test Case '-[AgentMuxTests.AMXVersionTests testMatchesDaemonByRevisionWithoutHash]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AMXVersionTests testOnlyTheFirstLineCounts]' started.
+Test Case '-[AgentMuxTests.AMXVersionTests testOnlyTheFirstLineCounts]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AMXVersionTests testParsesEveryPart]' started.
+Test Case '-[AgentMuxTests.AMXVersionTests testParsesEveryPart]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.AMXVersionTests testReadRunsTheBinary]' started.
+Test Case '-[AgentMuxTests.AMXVersionTests testReadRunsTheBinary]' passed (0.328 seconds).
+Test Case '-[AgentMuxTests.AMXVersionTests testRejectsOtherOutput]' started.
+Test Case '-[AgentMuxTests.AMXVersionTests testRejectsOtherOutput]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.AMXVersionTests testSameCleanBuildIgnoresTheHashButNotDirtOrRevision]' started.
+Test Case '-[AgentMuxTests.AMXVersionTests testSameCleanBuildIgnoresTheHashButNotDirtOrRevision]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.AMXVersionTests testUnstampedBuildHasNoRevisionOrTime]' started.
+Test Case '-[AgentMuxTests.AMXVersionTests testUnstampedBuildHasNoRevisionOrTime]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AMXVersionTests testVersionWithoutParentheses]' started.
+Test Case '-[AgentMuxTests.AMXVersionTests testVersionWithoutParentheses]' passed (0.002 seconds).
+Test Suite 'AMXVersionTests' passed at 2026-10-10 11:23:22.540.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.343 (0.348) seconds
+Test Suite 'ASLQuestionFlowTests' started at 2026-10-10 11:23:22.541.
+Test Case '-[AgentMuxTests.ASLQuestionFlowTests testARunThatMovedClosesThePanelWithANotice]' started.
+Test Case '-[AgentMuxTests.ASLQuestionFlowTests testARunThatMovedClosesThePanelWithANotice]' passed (0.004 seconds).
+Test Case '-[AgentMuxTests.ASLQuestionFlowTests testCancelDropsTheFormAndLateReplies]' started.
+Test Case '-[AgentMuxTests.ASLQuestionFlowTests testCancelDropsTheFormAndLateReplies]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLQuestionFlowTests testPausedRunOffersReplyAndResume]' started.
+Test Case '-[AgentMuxTests.ASLQuestionFlowTests testPausedRunOffersReplyAndResume]' passed (0.009 seconds).
+Test Case '-[AgentMuxTests.ASLQuestionFlowTests testRefusalsShowTheFixedSentence]' started.
+Test Case '-[AgentMuxTests.ASLQuestionFlowTests testRefusalsShowTheFixedSentence]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLQuestionFlowTests testRemainingQuestionsAreAnsweredInTurn]' started.
+Test Case '-[AgentMuxTests.ASLQuestionFlowTests testRemainingQuestionsAreAnsweredInTurn]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLQuestionFlowTests testReopeningTheSameRunKeepsTheDraft]' started.
+Test Case '-[AgentMuxTests.ASLQuestionFlowTests testReopeningTheSameRunKeepsTheDraft]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLQuestionFlowTests testReplyIsAcceptedAndThePanelCloses]' started.
+Test Case '-[AgentMuxTests.ASLQuestionFlowTests testReplyIsAcceptedAndThePanelCloses]' passed (0.002 seconds).
+Test Suite 'ASLQuestionFlowTests' passed at 2026-10-10 11:23:22.562.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.018 (0.021) seconds
+Test Suite 'ASLResponseStateTests' started at 2026-10-10 11:23:22.562.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testABodyForAnotherQuestionClosesTheForm]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testABodyForAnotherQuestionClosesTheForm]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testAnswerTargetFindsItsRow]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testAnswerTargetFindsItsRow]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testBlankAnswerIsRefused]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testBlankAnswerIsRefused]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testButtonSets]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testButtonSets]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testClosingClearsTheBodyAndEveryDraft]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testClosingClearsTheBodyAndEveryDraft]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testContinueAndPauseNeedNoAnswer]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testContinueAndPauseNeedNoAnswer]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testDoubleSubmitIsRefusedWhileInFlight]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testDoubleSubmitIsRefusedWhileInFlight]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testEveryRowActionHasAnOperatorLabel]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testEveryRowActionHasAnOperatorLabel]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testFaultRefusalKeepsTheFormWithItsSentence]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testFaultRefusalKeepsTheFormWithItsSentence]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testKindForAndGateMethod]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testKindForAndGateMethod]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testLateRepliesAreIgnored]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testLateRepliesAreIgnored]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testLiveReplySubmitsCapturedTarget]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testLiveReplySubmitsCapturedTarget]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testMovingDropsThePendingOperation]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testMovingDropsThePendingOperation]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testNavigatesQuestionsAndFetchesEachBodySeparately]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testNavigatesQuestionsAndFetchesEachBodySeparately]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testOpenBindsTheRowsSelectedQuestion]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testOpenBindsTheRowsSelectedQuestion]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testOpenRefusesWithTheFixedSentences]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testOpenRefusesWithTheFixedSentences]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testOperationIDsAreUnique]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testOperationIDsAreUnique]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testOperationStates]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testOperationStates]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testPausedRunOffersOnlyReplyAndResume]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testPausedRunOffersOnlyReplyAndResume]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testQuestionIDs]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testQuestionIDs]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testReauthorizingFetchWithoutATokenClosesTheForm]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testReauthorizingFetchWithoutATokenClosesTheForm]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testRedactsBodiesAndDraftsInEveryFormatting]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testRedactsBodiesAndDraftsInEveryFormatting]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testRefusalTextCoversEveryDeclaredErrorCode]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testRefusalTextCoversEveryDeclaredErrorCode]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testRetryReusesTheOperationIDForTheSameCall]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testRetryReusesTheOperationIDForTheSameCall]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testStaleRefusalsCloseTheForm]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testStaleRefusalsCloseTheForm]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testSubmitsTwoQuestionsEndToEnd]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testSubmitsTwoQuestionsEndToEnd]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLResponseStateTests testViewFromAFreshSnapshot]' started.
+Test Case '-[AgentMuxTests.ASLResponseStateTests testViewFromAFreshSnapshot]' passed (0.001 seconds).
+Test Suite 'ASLResponseStateTests' passed at 2026-10-10 11:23:22.605.
+	 Executed 27 tests, with 0 failures (0 unexpected) in 0.032 (0.042) seconds
+Test Suite 'ASLWireTests' started at 2026-10-10 11:23:22.605.
+Test Case '-[AgentMuxTests.ASLWireTests testAnswerBindsByWindowOnlyWhenUnambiguous]' started.
+Test Case '-[AgentMuxTests.ASLWireTests testAnswerBindsByWindowOnlyWhenUnambiguous]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLWireTests testAnswerFollowsTheSessionItsRunBelongsTo]' started.
+Test Case '-[AgentMuxTests.ASLWireTests testAnswerFollowsTheSessionItsRunBelongsTo]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLWireTests testAnswerItemSendsItsTarget]' started.
+Test Case '-[AgentMuxTests.ASLWireTests testAnswerItemSendsItsTarget]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLWireTests testClientSendsOneRequestPerCall]' started.
+Test Case '-[AgentMuxTests.ASLWireTests testClientSendsOneRequestPerCall]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLWireTests testDecodesAGoShapedSnapshotReply]' started.
+Test Case '-[AgentMuxTests.ASLWireTests testDecodesAGoShapedSnapshotReply]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLWireTests testDecodesQuestionAndOperationReplies]' started.
+Test Case '-[AgentMuxTests.ASLWireTests testDecodesQuestionAndOperationReplies]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLWireTests testRefusalsAndFailures]' started.
+Test Case '-[AgentMuxTests.ASLWireTests testRefusalsAndFailures]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLWireTests testRequestsEncodeAsTheDaemonReadsThem]' started.
+Test Case '-[AgentMuxTests.ASLWireTests testRequestsEncodeAsTheDaemonReadsThem]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ASLWireTests testUnlistedRunsGetTheirOwnSection]' started.
+Test Case '-[AgentMuxTests.ASLWireTests testUnlistedRunsGetTheirOwnSection]' passed (0.001 seconds).
+Test Suite 'ASLWireTests' passed at 2026-10-10 11:23:22.615.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.007 (0.010) seconds
+Test Suite 'ActionGateTests' started at 2026-10-10 11:23:22.615.
+Test Case '-[AgentMuxTests.ActionGateTests testActionEntriesOnACurrentAmx]' started.
+Test Case '-[AgentMuxTests.ActionGateTests testActionEntriesOnACurrentAmx]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ActionGateTests testAnOlderAmxGreysOutWhatItLacks]' started.
+Test Case '-[AgentMuxTests.ActionGateTests testAnOlderAmxGreysOutWhatItLacks]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ActionGateTests testCapabilitiesFromHelpGateTheMenu]' started.
+Test Case '-[AgentMuxTests.ActionGateTests testCapabilitiesFromHelpGateTheMenu]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ActionGateTests testConfigPathFollowsAmxConfig]' started.
+Test Case '-[AgentMuxTests.ActionGateTests testConfigPathFollowsAmxConfig]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ActionGateTests testEachSessionItemHasAnOptionAlternate]' started.
+Test Case '-[AgentMuxTests.ActionGateTests testEachSessionItemHasAnOptionAlternate]' passed (0.005 seconds).
+Test Case '-[AgentMuxTests.ActionGateTests testEveryFeatureIsAvailableOnACurrentAmx]' started.
+Test Case '-[AgentMuxTests.ActionGateTests testEveryFeatureIsAvailableOnACurrentAmx]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ActionGateTests testMuteToggleRunsAgainstTheRowSocket]' started.
+Test Case '-[AgentMuxTests.ActionGateTests testMuteToggleRunsAgainstTheRowSocket]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ActionGateTests testProjectEntriesAreGroupedByProfile]' started.
+Test Case '-[AgentMuxTests.ActionGateTests testProjectEntriesAreGroupedByProfile]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ActionGateTests testProjectsWithAMissingDirectoryAreGreyedOutWithTheReason]' started.
+Test Case '-[AgentMuxTests.ActionGateTests testProjectsWithAMissingDirectoryAreGreyedOutWithTheReason]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ActionGateTests testRowsCarryTheirMuteState]' started.
+Test Case '-[AgentMuxTests.ActionGateTests testRowsCarryTheirMuteState]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ActionGateTests testSubmenuReferencesAndUnavailableItems]' started.
+Test Case '-[AgentMuxTests.ActionGateTests testSubmenuReferencesAndUnavailableItems]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ActionGateTests testUnresolvedAmxGreysOutEverything]' started.
+Test Case '-[AgentMuxTests.ActionGateTests testUnresolvedAmxGreysOutEverything]' passed (0.001 seconds).
+Test Suite 'ActionGateTests' passed at 2026-10-10 11:23:22.629.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.012 (0.014) seconds
+Test Suite 'AppPreferencesTests' started at 2026-10-10 11:23:22.629.
+Test Case '-[AgentMuxTests.AppPreferencesTests testDefaults]' started.
+Test Case '-[AgentMuxTests.AppPreferencesTests testDefaults]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AppPreferencesTests testEnvironmentOverridesApply]' started.
+Test Case '-[AgentMuxTests.AppPreferencesTests testEnvironmentOverridesApply]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AppPreferencesTests testKeysAreThePlannedNames]' started.
+Test Case '-[AgentMuxTests.AppPreferencesTests testKeysAreThePlannedNames]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AppPreferencesTests testMistypedAndOutOfRangeValuesReadAsDefaults]' started.
+Test Case '-[AgentMuxTests.AppPreferencesTests testMistypedAndOutOfRangeValuesReadAsDefaults]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.AppPreferencesTests testModelDescribesTheSnooze]' started.
+Test Case '-[AgentMuxTests.AppPreferencesTests testModelDescribesTheSnooze]' passed (0.003 seconds).
+Test Case '-[AgentMuxTests.AppPreferencesTests testModelSavesEachChangeAndReportsIt]' started.
+Test Case '-[AgentMuxTests.AppPreferencesTests testModelSavesEachChangeAndReportsIt]' passed (0.008 seconds).
+Test Case '-[AgentMuxTests.AppPreferencesTests testRoundTrip]' started.
+Test Case '-[AgentMuxTests.AppPreferencesTests testRoundTrip]' passed (0.003 seconds).
+Test Case '-[AgentMuxTests.AppPreferencesTests testSaveClampsCounts]' started.
+Test Case '-[AgentMuxTests.AppPreferencesTests testSaveClampsCounts]' passed (0.002 seconds).
+Test Suite 'AppPreferencesTests' passed at 2026-10-10 11:23:22.652.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.020 (0.022) seconds
+Test Suite 'AppSkeletonTests' started at 2026-10-10 11:23:22.652.
+Test Case '-[AgentMuxTests.AppSkeletonTests testAppIconShipsInTheBundle]' started.
+Test Case '-[AgentMuxTests.AppSkeletonTests testAppIconShipsInTheBundle]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AppSkeletonTests testAppIsAnAccessoryWithoutADockIcon]' started.
+Test Case '-[AgentMuxTests.AppSkeletonTests testAppIsAnAccessoryWithoutADockIcon]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AppSkeletonTests testHostBundleIdentity]' started.
+Test Case '-[AgentMuxTests.AppSkeletonTests testHostBundleIdentity]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AppSkeletonTests testHostedTestsAreDetected]' started.
+Test Case '-[AgentMuxTests.AppSkeletonTests testHostedTestsAreDetected]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AppSkeletonTests testSingleInstanceIgnoresItself]' started.
+Test Case '-[AgentMuxTests.AppSkeletonTests testSingleInstanceIgnoresItself]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AppSkeletonTests testStatusIconIsTheTemplateAsset]' started.
+Test Case '-[AgentMuxTests.AppSkeletonTests testStatusIconIsTheTemplateAsset]' passed (0.006 seconds).
+Test Suite 'AppSkeletonTests' passed at 2026-10-10 11:23:22.662.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.009 (0.010) seconds
+Test Suite 'AttentionCyclerTests' started at 2026-10-10 11:23:22.662.
+Test Case '-[AgentMuxTests.AttentionCyclerTests testContinuesFromWhereASettledSessionStood]' started.
+Test Case '-[AgentMuxTests.AttentionCyclerTests testContinuesFromWhereASettledSessionStood]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AttentionCyclerTests testCyclesAndWrapsAround]' started.
+Test Case '-[AgentMuxTests.AttentionCyclerTests testCyclesAndWrapsAround]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AttentionCyclerTests testOrdersOldestChangeFirstAndSkipsRowsNotWaiting]' started.
+Test Case '-[AgentMuxTests.AttentionCyclerTests testOrdersOldestChangeFirstAndSkipsRowsNotWaiting]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AttentionCyclerTests testSpansKittyInstances]' started.
+Test Case '-[AgentMuxTests.AttentionCyclerTests testSpansKittyInstances]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.AttentionCyclerTests testTiesBreakBySocketThenWindow]' started.
+Test Case '-[AgentMuxTests.AttentionCyclerTests testTiesBreakBySocketThenWindow]' passed (0.000 seconds).
+Test Suite 'AttentionCyclerTests' passed at 2026-10-10 11:23:22.667.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
+Test Suite 'CompanionFrameTests' started at 2026-10-10 11:23:22.667.
+Test Case '-[AgentMuxTests.CompanionFrameTests testAckClassification]' started.
+Test Case '-[AgentMuxTests.CompanionFrameTests testAckClassification]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.CompanionFrameTests testBadLinesAreNotFrames]' started.
+Test Case '-[AgentMuxTests.CompanionFrameTests testBadLinesAreNotFrames]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.CompanionFrameTests testDecodingToleratesUnknownMissingAndMistypedFields]' started.
+Test Case '-[AgentMuxTests.CompanionFrameTests testDecodingToleratesUnknownMissingAndMistypedFields]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.CompanionFrameTests testFocusOutcomes]' started.
+Test Case '-[AgentMuxTests.CompanionFrameTests testFocusOutcomes]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.CompanionFrameTests testFocusWindowRoundTrip]' started.
+Test Case '-[AgentMuxTests.CompanionFrameTests testFocusWindowRoundTrip]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.CompanionFrameTests testFullSessionDecodes]' started.
+Test Case '-[AgentMuxTests.CompanionFrameTests testFullSessionDecodes]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.CompanionFrameTests testOtherFrameTypes]' started.
+Test Case '-[AgentMuxTests.CompanionFrameTests testOtherFrameTypes]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.CompanionFrameTests testRequestsEncodeOnlyTheirOwnBlock]' started.
+Test Case '-[AgentMuxTests.CompanionFrameTests testRequestsEncodeOnlyTheirOwnBlock]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.CompanionFrameTests testSnapshotFrameDecodes]' started.
+Test Case '-[AgentMuxTests.CompanionFrameTests testSnapshotFrameDecodes]' passed (0.001 seconds).
+Test Suite 'CompanionFrameTests' passed at 2026-10-10 11:23:22.675.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.006 (0.008) seconds
+Test Suite 'DaemonClientTests' started at 2026-10-10 11:23:22.675.
+Test Case '-[AgentMuxTests.DaemonClientTests testDegradedReply]' started.
+Test Case '-[AgentMuxTests.DaemonClientTests testDegradedReply]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.DaemonClientTests testGarbageReplyIsUnresponsive]' started.
+Test Case '-[AgentMuxTests.DaemonClientTests testGarbageReplyIsUnresponsive]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.DaemonClientTests testHealthRoundTrip]' started.
+Test Case '-[AgentMuxTests.DaemonClientTests testHealthRoundTrip]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.DaemonClientTests testLiveDefaultUsesThisProcessHome]' started.
+Test Case '-[AgentMuxTests.DaemonClientTests testLiveDefaultUsesThisProcessHome]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.DaemonClientTests testMissingSocketIsNotRunning]' started.
+Test Case '-[AgentMuxTests.DaemonClientTests testMissingSocketIsNotRunning]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.DaemonClientTests testOverlongPathIsRefusedBeforeConnecting]' started.
+Test Case '-[AgentMuxTests.DaemonClientTests testOverlongPathIsRefusedBeforeConnecting]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.DaemonClientTests testOversizeLineIsRefused]' started.
+Test Case '-[AgentMuxTests.DaemonClientTests testOversizeLineIsRefused]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.DaemonClientTests testReadLineSplitsBufferedLines]' started.
+Test Case '-[AgentMuxTests.DaemonClientTests testReadLineSplitsBufferedLines]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.DaemonClientTests testReadyReply]' started.
+Test Case '-[AgentMuxTests.DaemonClientTests testReadyReply]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.DaemonClientTests testRefusedHealthIsDegraded]' started.
+Test Case '-[AgentMuxTests.DaemonClientTests testRefusedHealthIsDegraded]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.DaemonClientTests testSilentDaemonTimesOut]' started.
+Test Case '-[AgentMuxTests.DaemonClientTests testSilentDaemonTimesOut]' passed (2.015 seconds).
+Test Case '-[AgentMuxTests.DaemonClientTests testSocketPathMatchesTheDaemon]' started.
+Test Case '-[AgentMuxTests.DaemonClientTests testSocketPathMatchesTheDaemon]' passed (0.005 seconds).
+Test Case '-[AgentMuxTests.DaemonClientTests testStaleSocketFileIsNotRunning]' started.
+Test Case '-[AgentMuxTests.DaemonClientTests testStaleSocketFileIsNotRunning]' passed (0.005 seconds).
+Test Case '-[AgentMuxTests.DaemonClientTests testStatusLineWording]' started.
+Test Case '-[AgentMuxTests.DaemonClientTests testStatusLineWording]' passed (0.004 seconds).
+Test Suite 'DaemonClientTests' passed at 2026-10-10 11:23:24.718.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 2.037 (2.043) seconds
+Test Suite 'DashboardOpenerTests' started at 2026-10-10 11:23:24.718.
+Test Case '-[AgentMuxTests.DashboardOpenerTests testCandidatesPreferTheOverrideThenTheRunningDashboard]' started.
+Test Case '-[AgentMuxTests.DashboardOpenerTests testCandidatesPreferTheOverrideThenTheRunningDashboard]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.DashboardOpenerTests testDecodesTheCommandData]' started.
+Test Case '-[AgentMuxTests.DashboardOpenerTests testDecodesTheCommandData]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.DashboardOpenerTests testOpensKittyOnlyWhenOneRuns]' started.
+Test Case '-[AgentMuxTests.DashboardOpenerTests testOpensKittyOnlyWhenOneRuns]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.DashboardOpenerTests testOtherFailuresStop]' started.
+Test Case '-[AgentMuxTests.DashboardOpenerTests testOtherFailuresStop]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.DashboardOpenerTests testTriesTheNextSocketOnlyWhenKittyIsUnavailable]' started.
+Test Case '-[AgentMuxTests.DashboardOpenerTests testTriesTheNextSocketOnlyWhenKittyIsUnavailable]' passed (0.001 seconds).
+Test Suite 'DashboardOpenerTests' passed at 2026-10-10 11:23:24.727.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.006 (0.008) seconds
+Test Suite 'GhosttyConfigTests' started at 2026-10-10 11:23:24.727.
+Test Case '-[AgentMuxTests.GhosttyConfigTests testAppCreatesGhosttyAppObject]' started.
+Test Case '-[AgentMuxTests.GhosttyConfigTests testAppCreatesGhosttyAppObject]' passed (0.004 seconds).
+Test Case '-[AgentMuxTests.GhosttyConfigTests testBundledThemeSuppliesItsColors]' started.
+Test Case '-[AgentMuxTests.GhosttyConfigTests testBundledThemeSuppliesItsColors]' passed (0.003 seconds).
+Test Case '-[AgentMuxTests.GhosttyConfigTests testDefaultsApplyWithoutAUserFile]' started.
+Test Case '-[AgentMuxTests.GhosttyConfigTests testDefaultsApplyWithoutAUserFile]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.GhosttyConfigTests testGhosttyInitializedInTheHostingApp]' started.
+Test Case '-[AgentMuxTests.GhosttyConfigTests testGhosttyInitializedInTheHostingApp]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.GhosttyConfigTests testGhosttyLicenseNoticeShipsInTheBundle]' started.
+Test Case '-[AgentMuxTests.GhosttyConfigTests testGhosttyLicenseNoticeShipsInTheBundle]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.GhosttyConfigTests testOpeningTheConfigNeverRewritesAnExistingFile]' started.
+Test Case '-[AgentMuxTests.GhosttyConfigTests testOpeningTheConfigNeverRewritesAnExistingFile]' passed (0.003 seconds).
+Test Case '-[AgentMuxTests.GhosttyConfigTests testOverridesForceOnlyWhatTheHostOwns]' started.
+Test Case '-[AgentMuxTests.GhosttyConfigTests testOverridesForceOnlyWhatTheHostOwns]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.GhosttyConfigTests testTabSplitQuickTerminalAndNewWindowActionsAreIgnored]' started.
+Test Case '-[AgentMuxTests.GhosttyConfigTests testTabSplitQuickTerminalAndNewWindowActionsAreIgnored]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.GhosttyConfigTests testUserConfigDiagnosticsAreReported]' started.
+Test Case '-[AgentMuxTests.GhosttyConfigTests testUserConfigDiagnosticsAreReported]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.GhosttyConfigTests testUserConfigLivesBesideAmxConfig]' started.
+Test Case '-[AgentMuxTests.GhosttyConfigTests testUserConfigLivesBesideAmxConfig]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.GhosttyConfigTests testUserFileLoadsAfterDefaultsAndBeforeOverrides]' started.
+Test Case '-[AgentMuxTests.GhosttyConfigTests testUserFileLoadsAfterDefaultsAndBeforeOverrides]' passed (0.003 seconds).
+Test Suite 'GhosttyConfigTests' passed at 2026-10-10 11:23:24.758.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.027 (0.031) seconds
+Test Suite 'GhosttyInteractionTests' started at 2026-10-10 11:23:24.758.
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testACancelledCompositionSendsNothing]' started.
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testACancelledCompositionSendsNothing]' passed (0.247 seconds).
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testACompositionReachesTheProgramOnlyWhenCommitted]' started.
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testACompositionReachesTheProgramOnlyWhenCommitted]' passed (0.426 seconds).
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testASessionViewAsksTheServerForHistory]' started.
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testASessionViewAsksTheServerForHistory]' passed (0.107 seconds).
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testAUtilityViewScrollsItsOwnBufferAndSendsItsProgramNothing]' started.
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testAUtilityViewScrollsItsOwnBufferAndSendsItsProgramNothing]' passed (0.071 seconds).
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testAWheelTurnIsReportedToAMouseTrackingProgram]' started.
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testAWheelTurnIsReportedToAMouseTrackingProgram]' passed (0.130 seconds).
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testHistoryRequestsNameTheServersUserKeys]' started.
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testHistoryRequestsNameTheServersUserKeys]' passed (0.069 seconds).
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testModifiedKeysReachTheProgramDistinctFromTheirPlainForms]' started.
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testModifiedKeysReachTheProgramDistinctFromTheirPlainForms]' passed (0.068 seconds).
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testTheMenuMayClaimGhosttysPagingAndSearchKeys]' started.
+Test Case '-[AgentMuxTests.GhosttyInteractionTests testTheMenuMayClaimGhosttysPagingAndSearchKeys]' passed (0.068 seconds).
+Test Suite 'GhosttyInteractionTests' passed at 2026-10-10 11:23:25.947.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 1.186 (1.189) seconds
+Test Suite 'GhosttyLinkTests' started at 2026-10-10 11:23:25.948.
+Test Case '-[AgentMuxTests.GhosttyLinkTests testALinkOpensAfterThePointerMovedWithoutModifiersOnceTheKeysArePressed]' started.
+Test Case '-[AgentMuxTests.GhosttyLinkTests testALinkOpensAfterThePointerMovedWithoutModifiersOnceTheKeysArePressed]' passed (2.647 seconds).
+Test Case '-[AgentMuxTests.GhosttyLinkTests testCommandClickOpensALinkAndAPlainClickDoesNot]' started.
+Test Case '-[AgentMuxTests.GhosttyLinkTests testCommandClickOpensALinkAndAPlainClickDoesNot]' passed (1.352 seconds).
+Test Case '-[AgentMuxTests.GhosttyLinkTests testModifiersOnMouseEventsAloneStopOpeningLinksAfterAPlainMove]' started.
+Test Case '-[AgentMuxTests.GhosttyLinkTests testModifiersOnMouseEventsAloneStopOpeningLinksAfterAPlainMove]' passed (2.680 seconds).
+Test Case '-[AgentMuxTests.GhosttyLinkTests testUnderAMouseTrackingProgramShiftIsNeededToOpenALink]' started.
+Test Case '-[AgentMuxTests.GhosttyLinkTests testUnderAMouseTrackingProgramShiftIsNeededToOpenALink]' passed (4.806 seconds).
+Test Suite 'GhosttyLinkTests' passed at 2026-10-10 11:23:37.436.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 11.485 (11.489) seconds
+Test Suite 'GhosttySelectionTests' started at 2026-10-10 11:23:37.437.
+Test Case '-[AgentMuxTests.GhosttySelectionTests testAPressLateInACellStartsAtTheNextCell]' started.
+Test Case '-[AgentMuxTests.GhosttySelectionTests testAPressLateInACellStartsAtTheNextCell]' passed (0.151 seconds).
+Test Case '-[AgentMuxTests.GhosttySelectionTests testAPressWithNoMoveBeforeItStillAnchorsWhereItLands]' started.
+Test Case '-[AgentMuxTests.GhosttySelectionTests testAPressWithNoMoveBeforeItStillAnchorsWhereItLands]' passed (0.140 seconds).
+Test Case '-[AgentMuxTests.GhosttySelectionTests testASelectionStartsAtTheCellThePressIsIn]' started.
+Test Case '-[AgentMuxTests.GhosttySelectionTests testASelectionStartsAtTheCellThePressIsIn]' passed (0.273 seconds).
+Test Suite 'GhosttySelectionTests' passed at 2026-10-10 11:23:38.002.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.564 (0.565) seconds
+Test Suite 'GhosttySurfaceConfigurationTests' started at 2026-10-10 11:23:38.002.
+Test Case '-[AgentMuxTests.GhosttySurfaceConfigurationTests testAProgramPathWithAnEqualsSignStillRuns]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceConfigurationTests testAProgramPathWithAnEqualsSignStillRuns]' passed (0.198 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceConfigurationTests testAttachmentRunsAmxAttachForOneRuntimeSession]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceConfigurationTests testAttachmentRunsAmxAttachForOneRuntimeSession]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceConfigurationTests testEnvironmentDropsWhatGhosttyOwnsOrCannotCarry]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceConfigurationTests testEnvironmentDropsWhatGhosttyOwnsOrCannotCarry]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceConfigurationTests testEveryWordSurvivesTheShellIntact]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceConfigurationTests testEveryWordSurvivesTheShellIntact]' passed (0.066 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceConfigurationTests testSurfaceConfigCarriesEveryField]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceConfigurationTests testSurfaceConfigCarriesEveryField]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceConfigurationTests testTheProgramDoesNotSeeTheLoginDash]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceConfigurationTests testTheProgramDoesNotSeeTheLoginDash]' passed (0.070 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceConfigurationTests testWithoutAProgramNothingIsOverridden]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceConfigurationTests testWithoutAProgramNothingIsOverridden]' passed (0.002 seconds).
+Test Suite 'GhosttySurfaceConfigurationTests' passed at 2026-10-10 11:23:38.349.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.342 (0.347) seconds
+Test Suite 'GhosttySurfaceLifecycleTests' started at 2026-10-10 11:23:38.349.
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testADelegateMayCloseTheSurfaceFromItsCloseRequest]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testADelegateMayCloseTheSurfaceFromItsCloseRequest]' passed (0.131 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testAHiddenOrDetachedSurfaceStopsRendering]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testAHiddenOrDetachedSurfaceStopsRendering]' passed (0.055 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testAnAppOutlivesEverySurfaceMadeFromIt]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testAnAppOutlivesEverySurfaceMadeFromIt]' passed (0.065 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testAProgramsTitleAndExitAreReportedForItsOwnSurface]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testAProgramsTitleAndExitAreReportedForItsOwnSurface]' passed (1.139 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testAReloadReachesEverySurface]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testAReloadReachesEverySurface]' passed (0.091 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testClosingIsIdempotentAndLeavesAnInertView]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testClosingIsIdempotentAndLeavesAnInertView]' passed (0.074 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testEachSurfaceRunsItsOwnCommandEnvironmentAndDirectory]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testEachSurfaceRunsItsOwnCommandEnvironmentAndDirectory]' passed (0.084 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testOnlyTheFirstResponderOfTheKeyWindowIsFocused]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testOnlyTheFirstResponderOfTheKeyWindowIsFocused]' passed (0.062 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testReleasingAViewFreesItsSurface]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testReleasingAViewFreesItsSurface]' passed (0.063 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testShutdownClosesEverySurfaceAndRefusesNewOnes]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testShutdownClosesEverySurfaceAndRefusesNewOnes]' passed (0.098 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testSurfaceActionsReachOnlyTheSurfaceTheyTarget]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testSurfaceActionsReachOnlyTheSurfaceTheyTarget]' passed (0.190 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testSurfacesAreDestroyedIndependentlyInAnyOrder]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceLifecycleTests testSurfacesAreDestroyedIndependentlyInAnyOrder]' passed (0.186 seconds).
+Test Suite 'GhosttySurfaceLifecycleTests' passed at 2026-10-10 11:23:40.591.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 2.237 (2.242) seconds
+Test Suite 'GhosttySurfaceTests' started at 2026-10-10 11:23:40.591.
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testAPerSurfaceFontSizeOverridesTheAppConfiguration]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testAPerSurfaceFontSizeOverridesTheAppConfiguration]' passed (0.045 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testBackingChangeKeepsTheFramebufferAtTheDisplaysScale]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testBackingChangeKeepsTheFramebufferAtTheDisplaysScale]' passed (0.052 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testColorSchemeFollowsTheAppearance]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testColorSchemeFollowsTheAppearance]' passed (0.028 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testDisplayIDComesFromTheScreenNumber]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testDisplayIDComesFromTheScreenNumber]' passed (0.051 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testFocusFollowsFirstResponderInTheKeyWindow]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testFocusFollowsFirstResponderInTheKeyWindow]' passed (0.053 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testFramebufferTracksTheViewInBackingPixels]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testFramebufferTracksTheViewInBackingPixels]' passed (0.052 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testPixelSizeRoundsDownAndNeverReachesZero]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testPixelSizeRoundsDownAndNeverReachesZero]' passed (0.052 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testReloadedFontSizeAppliesToAZoomedSurfaceOnReset]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testReloadedFontSizeAppliesToAZoomedSurfaceOnReset]' passed (0.090 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testRendererInstallsItsOwnLayer]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testRendererInstallsItsOwnLayer]' passed (0.026 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testResizeChangesTheGridBothWays]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testResizeChangesTheGridBothWays]' passed (0.044 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testSurfaceIsCreatedRegisteredAndHostsItself]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testSurfaceIsCreatedRegisteredAndHostsItself]' passed (0.052 seconds).
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testTheSurfaceAcceptsDroppedFilesURLsAndText]' started.
+Test Case '-[AgentMuxTests.GhosttySurfaceTests testTheSurfaceAcceptsDroppedFilesURLsAndText]' passed (0.052 seconds).
+Test Suite 'GhosttySurfaceTests' passed at 2026-10-10 11:23:41.192.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.597 (0.600) seconds
+Test Suite 'HotKeyTests' started at 2026-10-10 11:23:41.192.
+Test Case '-[AgentMuxTests.HotKeyTests testCarbonRefusals]' started.
+Test Case '-[AgentMuxTests.HotKeyTests testCarbonRefusals]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.HotKeyTests testDefaultsAndSpelling]' started.
+Test Case '-[AgentMuxTests.HotKeyTests testDefaultsAndSpelling]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.HotKeyTests testDuplicateOfTheAppsOwnShortcut]' started.
+Test Case '-[AgentMuxTests.HotKeyTests testDuplicateOfTheAppsOwnShortcut]' passed (0.000 seconds).
+Test Case '-[AgentMuxTests.HotKeyTests testPreferenceLoadAndSave]' started.
+Test Case '-[AgentMuxTests.HotKeyTests testPreferenceLoadAndSave]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.HotKeyTests testSystemCombosAreReadable]' started.
+Test Case '-[AgentMuxTests.HotKeyTests testSystemCombosAreReadable]' passed (0.012 seconds).
+Test Case '-[AgentMuxTests.HotKeyTests testSystemShortcutConflict]' started.
+Test Case '-[AgentMuxTests.HotKeyTests testSystemShortcutConflict]' passed (0.001 seconds).
+Test Suite 'HotKeyTests' passed at 2026-10-10 11:23:41.209.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.016 (0.018) seconds
+Test Suite 'LaunchEnvironmentTests' started at 2026-10-10 11:23:41.209.
+Test Case '-[AgentMuxTests.LaunchEnvironmentTests testExtractReportIgnoresProfileNoiseAndKeepsNewlines]' started.
+Test Case '-[AgentMuxTests.LaunchEnvironmentTests testExtractReportIgnoresProfileNoiseAndKeepsNewlines]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.LaunchEnvironmentTests testReportScriptRunsInARealShell]' started.
+Test Case '-[AgentMuxTests.LaunchEnvironmentTests testReportScriptRunsInARealShell]' passed (0.010 seconds).
+Test Case '-[AgentMuxTests.LaunchEnvironmentTests testResolveForwardsXDGAndAMXFromTheShellOverTheProcess]' started.
+Test Case '-[AgentMuxTests.LaunchEnvironmentTests testResolveForwardsXDGAndAMXFromTheShellOverTheProcess]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.LaunchEnvironmentTests testResolveWithoutAShellFallsBackToTheProcess]' started.
+Test Case '-[AgentMuxTests.LaunchEnvironmentTests testResolveWithoutAShellFallsBackToTheProcess]' passed (0.000 seconds).
+Test Suite 'LaunchEnvironmentTests' passed at 2026-10-10 11:23:41.226.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.011 (0.016) seconds
+Test Suite 'MenuBuilderTests' started at 2026-10-10 11:23:41.226.
+Test Case '-[AgentMuxTests.MenuBuilderTests testActivatorPicksTheInstanceTheSocketNames]' started.
+Test Case '-[AgentMuxTests.MenuBuilderTests testActivatorPicksTheInstanceTheSocketNames]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.MenuBuilderTests testAges]' started.
+Test Case '-[AgentMuxTests.MenuBuilderTests testAges]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.MenuBuilderTests testBundledGlyphsMatchThePalette]' started.
+Test Case '-[AgentMuxTests.MenuBuilderTests testBundledGlyphsMatchThePalette]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.MenuBuilderTests testEmptyAndTruncated]' started.
+Test Case '-[AgentMuxTests.MenuBuilderTests testEmptyAndTruncated]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.MenuBuilderTests testEndpointCandidates]' started.
+Test Case '-[AgentMuxTests.MenuBuilderTests testEndpointCandidates]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.MenuBuilderTests testFeedStates]' started.
+Test Case '-[AgentMuxTests.MenuBuilderTests testFeedStates]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.MenuBuilderTests testManyIdleRowsCollapseIntoASubmenu]' started.
+Test Case '-[AgentMuxTests.MenuBuilderTests testManyIdleRowsCollapseIntoASubmenu]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.MenuBuilderTests testMenuItemsCarryTheirRows]' started.
+Test Case '-[AgentMuxTests.MenuBuilderTests testMenuItemsCarryTheirRows]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.MenuBuilderTests testNoticeAndMissingListenOn]' started.
+Test Case '-[AgentMuxTests.MenuBuilderTests testNoticeAndMissingListenOn]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.MenuBuilderTests testRowFormat]' started.
+Test Case '-[AgentMuxTests.MenuBuilderTests testRowFormat]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.MenuBuilderTests testSectionsFromASnapshot]' started.
+Test Case '-[AgentMuxTests.MenuBuilderTests testSectionsFromASnapshot]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.MenuBuilderTests testSocketPIDs]' started.
+Test Case '-[AgentMuxTests.MenuBuilderTests testSocketPIDs]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.MenuBuilderTests testTitleStyles]' started.
+Test Case '-[AgentMuxTests.MenuBuilderTests testTitleStyles]' passed (0.001 seconds).
+Test Suite 'MenuBuilderTests' passed at 2026-10-10 11:23:41.237.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.008 (0.011) seconds
+Test Suite 'NotificationPresenterTests' started at 2026-10-10 11:23:41.237.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testAuthorizedFrameIsAddedThenReportedDelivered]' started.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testAuthorizedFrameIsAddedThenReportedDelivered]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.NotificationPresenterTests testCategoriesAreRegisteredWithTheirActions]' started.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testCategoriesAreRegisteredWithTheirActions]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.NotificationPresenterTests testCategoryFollowsTheOffer]' started.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testCategoryFollowsTheOffer]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.NotificationPresenterTests testClaimFollowsPreferenceAndAuthorization]' started.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testClaimFollowsPreferenceAndAuthorization]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.NotificationPresenterTests testDeniedPermissionReportsFailedAndDropsTheClaim]' started.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testDeniedPermissionReportsFailedAndDropsTheClaim]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.NotificationPresenterTests testDisabledOrDeniedReportsFailedWithoutShowing]' started.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testDisabledOrDeniedReportsFailedWithoutShowing]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.NotificationPresenterTests testDispositionReplies]' started.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testDispositionReplies]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.NotificationPresenterTests testDispositionRequestEncodesAsTheDaemonReadsIt]' started.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testDispositionRequestEncodesAsTheDaemonReadsIt]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.NotificationPresenterTests testFailedAddReportsFailed]' started.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testFailedAddReportsFailed]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.NotificationPresenterTests testFrameDataIsDecodedAndAMalformedOneIgnored]' started.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testFrameDataIsDecodedAndAMalformedOneIgnored]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.NotificationPresenterTests testFrameDecodes]' started.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testFrameDecodes]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.NotificationPresenterTests testNotificationResponseUsesCapturedKittySocket]' started.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testNotificationResponseUsesCapturedKittySocket]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.NotificationPresenterTests testNotificationSocketSurvivesUserInfoRoundTrip]' started.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testNotificationSocketSurvivesUserInfoRoundTrip]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.NotificationPresenterTests testPermissionIsAskedOnTheFirstFrameNotAtLaunch]' started.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testPermissionIsAskedOnTheFirstFrameNotAtLaunch]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.NotificationPresenterTests testRequestCarriesIdentityAndThread]' started.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testRequestCarriesIdentityAndThread]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.NotificationPresenterTests testResponseIdentifiersMapToDispositions]' started.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testResponseIdentifiersMapToDispositions]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.NotificationPresenterTests testResponsesAreReportedAndHandedToTheApp]' started.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testResponsesAreReportedAndHandedToTheApp]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.NotificationPresenterTests testRetractRemovesTheBanner]' started.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testRetractRemovesTheBanner]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.NotificationPresenterTests testRetractWhileAddingRemovesItOnceAdded]' started.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testRetractWhileAddingRemovesItOnceAdded]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.NotificationPresenterTests testRetractWhileAwaitingPermissionNeverShows]' started.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testRetractWhileAwaitingPermissionNeverShows]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.NotificationPresenterTests testSessionLookupRefusesAmbiguousWindows]' started.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testSessionLookupRefusesAmbiguousWindows]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.NotificationPresenterTests testSubscribeCarriesTheClaim]' started.
+Test Case '-[AgentMuxTests.NotificationPresenterTests testSubscribeCarriesTheClaim]' passed (0.001 seconds).
+Test Suite 'NotificationPresenterTests' passed at 2026-10-10 11:23:41.256.
+	 Executed 22 tests, with 0 failures (0 unexpected) in 0.014 (0.018) seconds
+Test Suite 'ProjectCatalogTests' started at 2026-10-10 11:23:41.256.
+Test Case '-[AgentMuxTests.ProjectCatalogTests testAnOlderAmxWithoutProjectFailsUndecodable]' started.
+Test Case '-[AgentMuxTests.ProjectCatalogTests testAnOlderAmxWithoutProjectFailsUndecodable]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ProjectCatalogTests testCatalogRefreshesOnlyWhenOlderThanAMinute]' started.
+Test Case '-[AgentMuxTests.ProjectCatalogTests testCatalogRefreshesOnlyWhenOlderThanAMinute]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ProjectCatalogTests testDirectoryExistsRejectsFilesAndMissingPaths]' started.
+Test Case '-[AgentMuxTests.ProjectCatalogTests testDirectoryExistsRejectsFilesAndMissingPaths]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ProjectCatalogTests testFailedRefreshKeepsTheCachedList]' started.
+Test Case '-[AgentMuxTests.ProjectCatalogTests testFailedRefreshKeepsTheCachedList]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ProjectCatalogTests testFetchDecodesTheProjectList]' started.
+Test Case '-[AgentMuxTests.ProjectCatalogTests testFetchDecodesTheProjectList]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ProjectCatalogTests testGroupedKeepsConfigurationOrder]' started.
+Test Case '-[AgentMuxTests.ProjectCatalogTests testGroupedKeepsConfigurationOrder]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ProjectCatalogTests testLaunchErrorsDecode]' started.
+Test Case '-[AgentMuxTests.ProjectCatalogTests testLaunchErrorsDecode]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ProjectCatalogTests testLaunchNamesTitleAndProfileAndTheKittySocket]' started.
+Test Case '-[AgentMuxTests.ProjectCatalogTests testLaunchNamesTitleAndProfileAndTheKittySocket]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ProjectCatalogTests testLaunchWithoutATabIdentityDecodes]' started.
+Test Case '-[AgentMuxTests.ProjectCatalogTests testLaunchWithoutATabIdentityDecodes]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ProjectCatalogTests testNewTabsGoToTheKittyUsedLast]' started.
+Test Case '-[AgentMuxTests.ProjectCatalogTests testNewTabsGoToTheKittyUsedLast]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ProjectCatalogTests testSurveyReportsOnlyDirectoriesThatAreNotThere]' started.
+Test Case '-[AgentMuxTests.ProjectCatalogTests testSurveyReportsOnlyDirectoriesThatAreNotThere]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.ProjectCatalogTests testTargetedCommandMovesOnOnlyFromAnUnreachableKitty]' started.
+Test Case '-[AgentMuxTests.ProjectCatalogTests testTargetedCommandMovesOnOnlyFromAnUnreachableKitty]' passed (0.000 seconds).
+Test Suite 'ProjectCatalogTests' passed at 2026-10-10 11:23:41.266.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.008 (0.011) seconds
+Test Suite 'RecentSessionsTests' started at 2026-10-10 11:23:41.267.
+Test Case '-[AgentMuxTests.RecentSessionsTests testArguments]' started.
+Test Case '-[AgentMuxTests.RecentSessionsTests testArguments]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.RecentSessionsTests testCacheKeepsTheLastResultWhileRefreshing]' started.
+Test Case '-[AgentMuxTests.RecentSessionsTests testCacheKeepsTheLastResultWhileRefreshing]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.RecentSessionsTests testContinueResultDecodesBothOutcomes]' started.
+Test Case '-[AgentMuxTests.RecentSessionsTests testContinueResultDecodesBothOutcomes]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.RecentSessionsTests testFetchRunsWithTheRecentTimeout]' started.
+Test Case '-[AgentMuxTests.RecentSessionsTests testFetchRunsWithTheRecentTimeout]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.RecentSessionsTests testListDecodesGoTimes]' started.
+Test Case '-[AgentMuxTests.RecentSessionsTests testListDecodesGoTimes]' passed (0.003 seconds).
+Test Case '-[AgentMuxTests.RecentSessionsTests testRecentEntries]' started.
+Test Case '-[AgentMuxTests.RecentSessionsTests testRecentEntries]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.RecentSessionsTests testTopIsNewestFirstAndBounded]' started.
+Test Case '-[AgentMuxTests.RecentSessionsTests testTopIsNewestFirstAndBounded]' passed (0.002 seconds).
+Test Suite 'RecentSessionsTests' passed at 2026-10-10 11:23:41.276.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.008 (0.010) seconds
+Test Suite 'SessionStoreTests' started at 2026-10-10 11:23:41.276.
+Test Case '-[AgentMuxTests.SessionStoreTests testDisconnects]' started.
+Test Case '-[AgentMuxTests.SessionStoreTests testDisconnects]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.SessionStoreTests testEmptyRowSocketNamesTheSnapshotSocket]' started.
+Test Case '-[AgentMuxTests.SessionStoreTests testEmptyRowSocketNamesTheSnapshotSocket]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.SessionStoreTests testExpectedMuteExpiresAndCanBeDropped]' started.
+Test Case '-[AgentMuxTests.SessionStoreTests testExpectedMuteExpiresAndCanBeDropped]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.SessionStoreTests testExpectedMuteIsScopedToKittySocket]' started.
+Test Case '-[AgentMuxTests.SessionStoreTests testExpectedMuteIsScopedToKittySocket]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.SessionStoreTests testExpectedMuteShowsAtOnceAndYieldsToAnAgreeingSnapshot]' started.
+Test Case '-[AgentMuxTests.SessionStoreTests testExpectedMuteShowsAtOnceAndYieldsToAnAgreeingSnapshot]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.SessionStoreTests testHealthNotRunningClearsALiveFeed]' started.
+Test Case '-[AgentMuxTests.SessionStoreTests testHealthNotRunningClearsALiveFeed]' passed (0.003 seconds).
+Test Case '-[AgentMuxTests.SessionStoreTests testReusedIDInOtherKittyRemainsVisible]' started.
+Test Case '-[AgentMuxTests.SessionStoreTests testReusedIDInOtherKittyRemainsVisible]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.SessionStoreTests testSnapshotsDriveTheFeedAndTitle]' started.
+Test Case '-[AgentMuxTests.SessionStoreTests testSnapshotsDriveTheFeedAndTitle]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.SessionStoreTests testStaleTargetIsScopedToKittySocket]' started.
+Test Case '-[AgentMuxTests.SessionStoreTests testStaleTargetIsScopedToKittySocket]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.SessionStoreTests testStaleWindowsHideUntilASnapshotDropsThem]' started.
+Test Case '-[AgentMuxTests.SessionStoreTests testStaleWindowsHideUntilASnapshotDropsThem]' passed (0.001 seconds).
+Test Suite 'SessionStoreTests' passed at 2026-10-10 11:23:41.288.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.009 (0.011) seconds
+Test Suite 'SnoozeTests' started at 2026-10-10 11:23:41.288.
+Test Case '-[AgentMuxTests.SnoozeTests testAdoptsWhatTheSameDaemonReports]' started.
+Test Case '-[AgentMuxTests.SnoozeTests testAdoptsWhatTheSameDaemonReports]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.SnoozeTests testChoicesBuildTheirRequests]' started.
+Test Case '-[AgentMuxTests.SnoozeTests testChoicesBuildTheirRequests]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.SnoozeTests testClientSendsOneSnoozeRequest]' started.
+Test Case '-[AgentMuxTests.SnoozeTests testClientSendsOneSnoozeRequest]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.SnoozeTests testDaemonIdentity]' started.
+Test Case '-[AgentMuxTests.SnoozeTests testDaemonIdentity]' passed (0.000 seconds).
+Test Case '-[AgentMuxTests.SnoozeTests testExpiredSnoozeIsNotReapplied]' started.
+Test Case '-[AgentMuxTests.SnoozeTests testExpiredSnoozeIsNotReapplied]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.SnoozeTests testNotificationEntries]' started.
+Test Case '-[AgentMuxTests.SnoozeTests testNotificationEntries]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.SnoozeTests testReappliesASnoozeANewDaemonLost]' started.
+Test Case '-[AgentMuxTests.SnoozeTests testReappliesASnoozeANewDaemonLost]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.SnoozeTests testRequestsEncodeAsTheDaemonReadsThem]' started.
+Test Case '-[AgentMuxTests.SnoozeTests testRequestsEncodeAsTheDaemonReadsThem]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.SnoozeTests testSnoozeOutcomes]' started.
+Test Case '-[AgentMuxTests.SnoozeTests testSnoozeOutcomes]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.SnoozeTests testStateMirrorsIntoAmxSnoozeUntil]' started.
+Test Case '-[AgentMuxTests.SnoozeTests testStateMirrorsIntoAmxSnoozeUntil]' passed (0.001 seconds).
+Test Suite 'SnoozeTests' passed at 2026-10-10 11:23:41.296.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.006 (0.008) seconds
+Test Suite 'SubscriptionClientTests' started at 2026-10-10 11:23:41.296.
+Test Case '-[AgentMuxTests.SubscriptionClientTests testBackoffDoublesFromHalfASecondToTen]' started.
+Test Case '-[AgentMuxTests.SubscriptionClientTests testBackoffDoublesFromHalfASecondToTen]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.SubscriptionClientTests testByeReconnectsAndResubscribes]' started.
+Test Case '-[AgentMuxTests.SubscriptionClientTests testByeReconnectsAndResubscribes]' passed (0.073 seconds).
+Test Case '-[AgentMuxTests.SubscriptionClientTests testEOFWithoutByeReconnects]' started.
+Test Case '-[AgentMuxTests.SubscriptionClientTests testEOFWithoutByeReconnects]' passed (0.202 seconds).
+Test Case '-[AgentMuxTests.SubscriptionClientTests testHeartbeatsKeepTheStreamAlive]' started.
+Test Case '-[AgentMuxTests.SubscriptionClientTests testHeartbeatsKeepTheStreamAlive]' passed (0.879 seconds).
+Test Case '-[AgentMuxTests.SubscriptionClientTests testHeartbeatWatchdogCatchesASilentStream]' started.
+Test Case '-[AgentMuxTests.SubscriptionClientTests testHeartbeatWatchdogCatchesASilentStream]' passed (0.471 seconds).
+Test Case '-[AgentMuxTests.SubscriptionClientTests testNoSocketIsNotRunningAndBacksOff]' started.
+Test Case '-[AgentMuxTests.SubscriptionClientTests testNoSocketIsNotRunningAndBacksOff]' passed (0.452 seconds).
+Test Case '-[AgentMuxTests.SubscriptionClientTests testOldDaemonIsReportedUnsupportedAndRetriedSlowly]' started.
+Test Case '-[AgentMuxTests.SubscriptionClientTests testOldDaemonIsReportedUnsupportedAndRetriedSlowly]' passed (0.018 seconds).
+Test Case '-[AgentMuxTests.SubscriptionClientTests testReconnectNowDropsTheConnection]' started.
+Test Case '-[AgentMuxTests.SubscriptionClientTests testReconnectNowDropsTheConnection]' passed (0.265 seconds).
+Test Case '-[AgentMuxTests.SubscriptionClientTests testStopEndsTheThreadPromptly]' started.
+Test Case '-[AgentMuxTests.SubscriptionClientTests testStopEndsTheThreadPromptly]' passed (0.419 seconds).
+Test Case '-[AgentMuxTests.SubscriptionClientTests testSubscribeReportsResolvedAMXBuild]' started.
+Test Case '-[AgentMuxTests.SubscriptionClientTests testSubscribeReportsResolvedAMXBuild]' passed (0.543 seconds).
+Test Case '-[AgentMuxTests.SubscriptionClientTests testSubscribesSendsTheRequestAndDeliversFrames]' started.
+Test Case '-[AgentMuxTests.SubscriptionClientTests testSubscribesSendsTheRequestAndDeliversFrames]' passed (0.028 seconds).
+Test Suite 'SubscriptionClientTests' passed at 2026-10-10 11:23:44.658.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 3.350 (3.363) seconds
+Test Suite 'WorkspaceRecoveryTests' started at 2026-10-10 11:23:44.659.
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testAKittySessionThatClosesLeavesThePaneEmpty]' started.
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testAKittySessionThatClosesLeavesThePaneEmpty]' passed (0.117 seconds).
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testALostAgentIsSaidToBeLostAfterItsTerminalEnded]' started.
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testALostAgentIsSaidToBeLostAfterItsTerminalEnded]' passed (0.050 seconds).
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testAnAbsentAgentIsReportedAndNeverRelaunched]' started.
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testAnAbsentAgentIsReportedAndNeverRelaunched]' passed (0.052 seconds).
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testAnAgentThatExitsIsSaidToHaveExited]' started.
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testAnAgentThatExitsIsSaidToHaveExited]' passed (0.053 seconds).
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testASessionThatCannotBeCheckedIsShownButNotAttached]' started.
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testASessionThatCannotBeCheckedIsShownButNotAttached]' passed (0.054 seconds).
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testClosingTheWindowForgetsWhatThePaneWasSaying]' started.
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testClosingTheWindowForgetsWhatThePaneWasSaying]' passed (0.049 seconds).
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testEveryMoveOfThePaneIsReportedOnce]' started.
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testEveryMoveOfThePaneIsReportedOnce]' passed (0.052 seconds).
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testRestoringASessionWaitsForTheDaemonThenReattachesTheSameSession]' started.
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testRestoringASessionWaitsForTheDaemonThenReattachesTheSameSession]' passed (0.032 seconds).
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testRestoringAViewShowsItAndAKittySessionIsSelectedNotRaised]' started.
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testRestoringAViewShowsItAndAKittySessionIsSelectedNotRaised]' passed (0.048 seconds).
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testRestoringNeverTakesASessionFromATerminalThatAttachedMeanwhile]' started.
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testRestoringNeverTakesASessionFromATerminalThatAttachedMeanwhile]' passed (0.036 seconds).
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testTheOperatorGoingElsewhereEndsARestore]' started.
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testTheOperatorGoingElsewhereEndsARestore]' passed (0.033 seconds).
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testTheSessionIsAskedAboutOnceWhileTheAnswerIsPending]' started.
+Test Case '-[AgentMuxTests.WorkspaceRecoveryTests testTheSessionIsAskedAboutOnceWhileTheAnswerIsPending]' passed (0.048 seconds).
+Test Suite 'WorkspaceRecoveryTests' passed at 2026-10-10 11:23:45.286.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.623 (0.627) seconds
+Test Suite 'WorkspaceRestorationTests' started at 2026-10-10 11:23:45.286.
+Test Case '-[AgentMuxTests.WorkspaceRestorationTests testAnAttachCheckSaysWhetherTheAgentRunsExitedOrWasLost]' started.
+Test Case '-[AgentMuxTests.WorkspaceRestorationTests testAnAttachCheckSaysWhetherTheAgentRunsExitedOrWasLost]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.WorkspaceRestorationTests testAStringThatIsNotAPlaceRestoresNothing]' started.
+Test Case '-[AgentMuxTests.WorkspaceRestorationTests testAStringThatIsNotAPlaceRestoresNothing]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.WorkspaceRestorationTests testExitedAndLostAreSaidDifferentlyAndNeitherPromisesARestart]' started.
+Test Case '-[AgentMuxTests.WorkspaceRestorationTests testExitedAndLostAreSaidDifferentlyAndNeitherPromisesARestart]' passed (0.000 seconds).
+Test Case '-[AgentMuxTests.WorkspaceRestorationTests testPlacesRoundTripThroughTheirPreferenceString]' started.
+Test Case '-[AgentMuxTests.WorkspaceRestorationTests testPlacesRoundTripThroughTheirPreferenceString]' passed (0.000 seconds).
+Test Case '-[AgentMuxTests.WorkspaceRestorationTests testTheWindowAndThePlaceAreKeptInDefaults]' started.
+Test Case '-[AgentMuxTests.WorkspaceRestorationTests testTheWindowAndThePlaceAreKeptInDefaults]' passed (0.002 seconds).
+Test Suite 'WorkspaceRestorationTests' passed at 2026-10-10 11:23:45.292.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.005 (0.006) seconds
+Test Suite 'WorkspaceShortcutTests' started at 2026-10-10 11:23:45.292.
+Test Case '-[AgentMuxTests.WorkspaceShortcutTests testEveryMenuShortcutIsClaimedForItsKey]' started.
+Test Case '-[AgentMuxTests.WorkspaceShortcutTests testEveryMenuShortcutIsClaimedForItsKey]' passed (0.011 seconds).
+Test Case '-[AgentMuxTests.WorkspaceShortcutTests testKeysAProgramBindsAreNeverTheMenus]' started.
+Test Case '-[AgentMuxTests.WorkspaceShortcutTests testKeysAProgramBindsAreNeverTheMenus]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.WorkspaceShortcutTests testOnlyCommandAndTheTwoPagingKeysAreTheMenus]' started.
+Test Case '-[AgentMuxTests.WorkspaceShortcutTests testOnlyCommandAndTheTwoPagingKeysAreTheMenus]' passed (0.001 seconds).
+Test Suite 'WorkspaceShortcutTests' passed at 2026-10-10 11:23:45.306.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.013 (0.014) seconds
+Test Suite 'WorkspaceSidebarTests' started at 2026-10-10 11:23:45.306.
+Test Case '-[AgentMuxTests.WorkspaceSidebarTests testANoticeForATmuxSessionOpensItInTheWorkspace]' started.
+Test Case '-[AgentMuxTests.WorkspaceSidebarTests testANoticeForATmuxSessionOpensItInTheWorkspace]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.WorkspaceSidebarTests testFeedNotice]' started.
+Test Case '-[AgentMuxTests.WorkspaceSidebarTests testFeedNotice]' passed (0.000 seconds).
+Test Case '-[AgentMuxTests.WorkspaceSidebarTests testGroupsByProjectAndLabelsByProfile]' started.
+Test Case '-[AgentMuxTests.WorkspaceSidebarTests testGroupsByProjectAndLabelsByProfile]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.WorkspaceSidebarTests testMenuListsTmuxSessionsWithTheirAnswerItems]' started.
+Test Case '-[AgentMuxTests.WorkspaceSidebarTests testMenuListsTmuxSessionsWithTheirAnswerItems]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.WorkspaceSidebarTests testNeighborWrapsInSidebarOrder]' started.
+Test Case '-[AgentMuxTests.WorkspaceSidebarTests testNeighborWrapsInSidebarOrder]' passed (0.000 seconds).
+Test Case '-[AgentMuxTests.WorkspaceSidebarTests testNextAttentionCyclesAcrossBackendsOldestFirst]' started.
+Test Case '-[AgentMuxTests.WorkspaceSidebarTests testNextAttentionCyclesAcrossBackendsOldestFirst]' passed (0.003 seconds).
+Test Case '-[AgentMuxTests.WorkspaceSidebarTests testOnlyKittySessionsNeedAKittySocket]' started.
+Test Case '-[AgentMuxTests.WorkspaceSidebarTests testOnlyKittySessionsNeedAKittySocket]' passed (0.000 seconds).
+Test Case '-[AgentMuxTests.WorkspaceSidebarTests testStateHoldsRowsAndSelectionWhileTheFeedIsDown]' started.
+Test Case '-[AgentMuxTests.WorkspaceSidebarTests testStateHoldsRowsAndSelectionWhileTheFeedIsDown]' passed (0.000 seconds).
+Test Case '-[AgentMuxTests.WorkspaceSidebarTests testSubscribeAsksForRuntimeSessions]' started.
+Test Case '-[AgentMuxTests.WorkspaceSidebarTests testSubscribeAsksForRuntimeSessions]' passed (0.000 seconds).
+Test Case '-[AgentMuxTests.WorkspaceSidebarTests testTwoTmuxSessionsOfOneProjectAndProfileStayApart]' started.
+Test Case '-[AgentMuxTests.WorkspaceSidebarTests testTwoTmuxSessionsOfOneProjectAndProfileStayApart]' passed (0.005 seconds).
+Test Case '-[AgentMuxTests.WorkspaceSidebarTests testV2SnapshotDecodesRuntimeIdentity]' started.
+Test Case '-[AgentMuxTests.WorkspaceSidebarTests testV2SnapshotDecodesRuntimeIdentity]' passed (0.001 seconds).
+Test Suite 'WorkspaceSidebarTests' passed at 2026-10-10 11:23:45.320.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.012 (0.014) seconds
+Test Suite 'WorkspaceStreamTests' started at 2026-10-10 11:23:45.320.
+Test Case '-[AgentMuxTests.WorkspaceStreamTests testSidebarAndTerminalsStayConsistentAcrossAReconnect]' started.
+Test Case '-[AgentMuxTests.WorkspaceStreamTests testSidebarAndTerminalsStayConsistentAcrossAReconnect]' passed (0.311 seconds).
+Test Suite 'WorkspaceStreamTests' passed at 2026-10-10 11:23:45.632.
+Test Suite 'WorkspaceViewsModelTests' started at 2026-10-10 11:23:45.632.
+Test Case '-[AgentMuxTests.WorkspaceViewsModelTests testALaunchWithNoKittyGoesToTmuxAndReportsItsRuntimeSession]' started.
+Test Case '-[AgentMuxTests.WorkspaceViewsModelTests testALaunchWithNoKittyGoesToTmuxAndReportsItsRuntimeSession]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.WorkspaceViewsModelTests testARequestThatNamesNoUsableTargetIsNotAView]' started.
+Test Case '-[AgentMuxTests.WorkspaceViewsModelTests testARequestThatNamesNoUsableTargetIsNotAView]' passed (0.000 seconds).
+Test Case '-[AgentMuxTests.WorkspaceViewsModelTests testDecodesAForwardedViewFrame]' started.
+Test Case '-[AgentMuxTests.WorkspaceViewsModelTests testDecodesAForwardedViewFrame]' passed (0.002 seconds).
+Test Case '-[AgentMuxTests.WorkspaceViewsModelTests testEveryViewRunsAmxWithAKindAndATargetOnly]' started.
+Test Case '-[AgentMuxTests.WorkspaceViewsModelTests testEveryViewRunsAmxWithAKindAndATargetOnly]' passed (0.001 seconds).
+Test Case '-[AgentMuxTests.WorkspaceViewsModelTests testTheAppAsksForWorkspaceViews]' started.
+Test Case '-[AgentMuxTests.WorkspaceViewsModelTests testTheAppAsksForWorkspaceViews]' passed (0.000 seconds).
+Test Case '-[AgentMuxTests.WorkspaceViewsModelTests testTheDashboardAndOverviewAreAlwaysListedAndOpenedViewsAreUnique]' started.
+Test Case '-[AgentMuxTests.WorkspaceViewsModelTests testTheDashboardAndOverviewAreAlwaysListedAndOpenedViewsAreUnique]' passed (0.000 seconds).
+Test Case '-[AgentMuxTests.WorkspaceViewsModelTests testTheShortcutGoesToTheWorkspaceOnlyWhenThereIsNoKittyToAsk]' started.
+Test Case '-[AgentMuxTests.WorkspaceViewsModelTests testTheShortcutGoesToTheWorkspaceOnlyWhenThereIsNoKittyToAsk]' passed (0.007 seconds).
+Test Suite 'WorkspaceViewsModelTests' passed at 2026-10-10 11:23:45.645.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.012 (0.013) seconds
+Test Suite 'WorkspaceViewsWindowTests' started at 2026-10-10 11:23:45.645.
+Test Case '-[AgentMuxTests.WorkspaceViewsWindowTests testAFocusRequestFromTheDashboardShowsTheNativeSessionView]' started.
+Test Case '-[AgentMuxTests.WorkspaceViewsWindowTests testAFocusRequestFromTheDashboardShowsTheNativeSessionView]' passed (0.047 seconds).
+Test Case '-[AgentMuxTests.WorkspaceViewsWindowTests testALaunchedSessionIsShownOnceTheDaemonListsIt]' started.
+Test Case '-[AgentMuxTests.WorkspaceViewsWindowTests testALaunchedSessionIsShownOnceTheDaemonListsIt]' passed (0.030 seconds).
+Test Case '-[AgentMuxTests.WorkspaceViewsWindowTests testAnAwaitedSessionDoesNotPullTheOperatorBack]' started.
+Test Case '-[AgentMuxTests.WorkspaceViewsWindowTests testAnAwaitedSessionDoesNotPullTheOperatorBack]' passed (0.051 seconds).
+Test Case '-[AgentMuxTests.WorkspaceViewsWindowTests testAQuitDashboardSaysSoAndReopens]' started.
+Test Case '-[AgentMuxTests.WorkspaceViewsWindowTests testAQuitDashboardSaysSoAndReopens]' passed (0.056 seconds).
+Test Case '-[AgentMuxTests.WorkspaceViewsWindowTests testAViewThatCannotStartSaysWhyAndIsRetriedOnlyWhenAsked]' started.
+Test Case '-[AgentMuxTests.WorkspaceViewsWindowTests testAViewThatCannotStartSaysWhyAndIsRetriedOnlyWhenAsked]' passed (0.060 seconds).
+Test Case '-[AgentMuxTests.WorkspaceViewsWindowTests testClosingTheWindowKeepsUtilityProgramsAndDetachesSessions]' started.
+Test Case '-[AgentMuxTests.WorkspaceViewsWindowTests testClosingTheWindowKeepsUtilityProgramsAndDetachesSessions]' passed (0.042 seconds).
+Test Case '-[AgentMuxTests.WorkspaceViewsWindowTests testShellEditorAndPagerOpenAsViewsAndGoBackWhenTheyEnd]' started.
+Test Case '-[AgentMuxTests.WorkspaceViewsWindowTests testShellEditorAndPagerOpenAsViewsAndGoBackWhenTheyEnd]' passed (0.060 seconds).
+Test Case '-[AgentMuxTests.WorkspaceViewsWindowTests testTheDashboardIsATerminalOfItsOwnStartedWhenShown]' started.
+Test Case '-[AgentMuxTests.WorkspaceViewsWindowTests testTheDashboardIsATerminalOfItsOwnStartedWhenShown]' passed (0.033 seconds).
+Test Case '-[AgentMuxTests.WorkspaceViewsWindowTests testTheEmptyPaneOffersTheDashboard]' started.
+Test Case '-[AgentMuxTests.WorkspaceViewsWindowTests testTheEmptyPaneOffersTheDashboard]' passed (0.041 seconds).
+Test Case '-[AgentMuxTests.WorkspaceViewsWindowTests testUtilityViewsAreNeverSessionsAndNeverWait]' started.
+Test Case '-[AgentMuxTests.WorkspaceViewsWindowTests testUtilityViewsAreNeverSessionsAndNeverWait]' passed (0.036 seconds).
+Test Suite 'WorkspaceViewsWindowTests' passed at 2026-10-10 11:23:46.104.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.456 (0.459) seconds
+Test Suite 'WorkspaceWindowTests' started at 2026-10-10 11:23:46.104.
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testAHalfOpenFeedKeepsItsSnapshotAndTheWorkspace]' started.
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testAHalfOpenFeedKeepsItsSnapshotAndTheWorkspace]' passed (0.032 seconds).
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testAKittySessionIsRaisedInKittyOnlyWhenFocused]' started.
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testAKittySessionIsRaisedInKittyOnlyWhenFocused]' passed (0.046 seconds).
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testAnEndedAttachmentIsNotRemadeUntilAskedFor]' started.
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testAnEndedAttachmentIsNotRemadeUntilAskedFor]' passed (0.034 seconds).
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testATerminalThatCannotBeMadeSaysWhyAndIsRetriedOnlyWhenAsked]' started.
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testATerminalThatCannotBeMadeSaysWhyAndIsRetriedOnlyWhenAsked]' passed (0.045 seconds).
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testClosingTheWindowDetachesEveryTerminalAndReopeningReattaches]' started.
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testClosingTheWindowDetachesEveryTerminalAndReopeningReattaches]' passed (0.050 seconds).
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testFocusFromOutsideSelectsTheSessionAndStepsStayInside]' started.
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testFocusFromOutsideSelectsTheSessionAndStepsStayInside]' passed (0.047 seconds).
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testOnlyALiveSnapshotRetiresASession]' started.
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testOnlyALiveSnapshotRetiresASession]' passed (0.032 seconds).
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testReturnInTheSessionListFocusesTheSelectedRow]' started.
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testReturnInTheSessionListFocusesTheSelectedRow]' passed (0.035 seconds).
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testRowsSelectionAndTerminalsSurviveTheDaemonGoingAway]' started.
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testRowsSelectionAndTerminalsSurviveTheDaemonGoingAway]' passed (0.049 seconds).
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testSelectingATmuxSessionShowsItsTerminalAndKeepsTheOthers]' started.
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testSelectingATmuxSessionShowsItsTerminalAndKeepsTheOthers]' passed (0.057 seconds).
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testSidebarListsProjectsThenTheirSessions]' started.
+Test Case '-[AgentMuxTests.WorkspaceWindowTests testSidebarListsProjectsThenTheirSessions]' passed (0.047 seconds).
+Test Suite 'WorkspaceWindowTests' passed at 2026-10-10 11:23:46.583.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.475 (0.479) seconds
+Test Suite 'AgentMuxTests.xctest' passed at 2026-10-10 11:23:46.583.
+	 Executed 364 tests, with 0 failures (0 unexpected) in 25.605 (25.743) seconds
+Test Suite 'All tests' passed at 2026-10-10 11:23:46.583.
+	 Executed 364 tests, with 0 failures (0 unexpected) in 25.605 (25.744) seconds
+** TEST SUCCEEDED **

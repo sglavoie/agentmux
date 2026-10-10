@@ -40,17 +40,22 @@ var (
 	attachNow          = time.Now
 )
 
-// runAttachedClient runs the interactive client on this terminal. A terminal
-// that closes (a desktop view dismissed, a window shut) hangs up its whole
-// foreground group: the tmux client detaches on that, and amx has to outlive it
-// to release the ownership it recorded, so the hangup is taken here instead
-// of ending the process.
+// runAttachedClient runs the interactive client on this terminal.
 func runAttachedClient(c *exec.Cmd) error {
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
+	return c.Run()
+}
+
+// outliveHangup makes amx survive its terminal closing until the returned
+// function is called. A terminal that closes (a desktop view dismissed, a
+// window shut, an app that crashed) hangs up its whole foreground group, and
+// an embedded terminal keeps hanging it up until the group is gone: the tmux
+// client detaches on the first, and amx has to outlive every one of them to
+// release the ownership it recorded.
+func outliveHangup() (restore func()) {
 	hangup := make(chan os.Signal, 1)
 	signal.Notify(hangup, syscall.SIGHUP)
-	defer signal.Stop(hangup)
-	return c.Run()
+	return func() { signal.Stop(hangup) }
 }
 
 var attachJSON bool
@@ -83,19 +88,22 @@ func AttachCommand() *cobra.Command { return attachCmd }
 
 // attachData is the `attach --json` payload.
 type attachData struct {
-	RuntimeSessionID string   `json:"runtime_session_id"`
-	Backend          string   `json:"backend"`
-	Project          string   `json:"project"`
-	State            string   `json:"state"`
-	Pane             string   `json:"pane"`
-	PID              int      `json:"pid"`
-	Command          []string `json:"command,omitempty"`
+	RuntimeSessionID string `json:"runtime_session_id"`
+	Backend          string `json:"backend"`
+	Project          string `json:"project"`
+	State            string `json:"state"`
+	Pane             string `json:"pane"`
+	PID              int    `json:"pid"`
+	// Clients counts the terminals attached to the session right now. One
+	// means the session has an interactive owner, which attaching would
+	// detach; none means attaching takes nothing from anyone.
+	Clients int      `json:"clients"`
+	Command []string `json:"command,omitempty"`
 }
 
 // tmuxAttacher is what attaching needs from the tmux backend.
 type tmuxAttacher interface {
-	backend.Discoverer
-	Instance() (runtimesession.BackendInstance, error)
+	Survey() (tmux.Survey, error)
 	AttachCommand(pane backend.Ref) (*exec.Cmd, error)
 }
 
@@ -120,11 +128,7 @@ func runAttach(cmd *cobra.Command, args []string) error {
 		return cli.CommandFailure(cmd, attachJSON, "not_found", fmt.Errorf("no runtime session %s", id))
 	}
 	if record.State != runtimesession.StateLive {
-		code := "runtime_session_ended"
-		if record.State == runtimesession.StatePending {
-			code = "runtime_session_pending"
-		}
-		return cli.CommandFailure(cmd, attachJSON, code, fmt.Errorf("runtime session %s is %s", id, record.State))
+		return cli.CommandFailure(cmd, attachJSON, notLiveCode(record), notLiveError(record))
 	}
 	data := attachData{
 		RuntimeSessionID: string(id), Backend: string(record.Target.Instance.Kind), Project: record.Project,
@@ -149,9 +153,14 @@ func attachTmux(cmd *cobra.Command, store *runtimesession.Store, record runtimes
 	if !ok {
 		return cli.CommandFailure(cmd, attachJSON, "backend_unavailable", errors.New("tmux backend cannot attach terminals"))
 	}
-	if err := validateTmux(store, server, record); err != nil {
-		return cli.CommandFailure(cmd, attachJSON, "runtime_session_stale", err)
+	survey, stale, err := validateTmux(store, server, record)
+	if err != nil {
+		return cli.CommandFailure(cmd, attachJSON, "backend_unavailable", err)
 	}
+	if stale.State != runtimesession.StateLive {
+		return cli.CommandFailure(cmd, attachJSON, notLiveCode(stale), notLiveError(stale))
+	}
+	data.Clients = len(survey.ClientsOf(backend.PaneID(record.Target.Ref)))
 	client, err := server.AttachCommand(backend.PaneID(record.Target.Ref))
 	if err != nil {
 		return cli.CommandFailure(cmd, attachJSON, "invalid_target", err)
@@ -167,6 +176,7 @@ func attachTmux(cmd *cobra.Command, store *runtimesession.Store, record runtimes
 	if err != nil {
 		return err
 	}
+	defer outliveHangup()()
 	// Recording ownership first means a view that attached earlier, and
 	// detaches late, cannot release this one.
 	if err := store.Update(func(registry *runtimesession.Registry) error {
@@ -191,47 +201,52 @@ func attachTmux(cmd *cobra.Command, store *runtimesession.Store, record runtimes
 	return detachErr
 }
 
+// notLiveCode names why a session cannot be attached. An agent that exited
+// and an agent that was lost are different answers: the first ended where it
+// ran and left its exit status, the second's terminal is gone and what became
+// of it was not seen. Neither is ever relaunched from here.
+func notLiveCode(record runtimesession.Record) string {
+	if record.State == runtimesession.StatePending {
+		return "runtime_session_pending"
+	}
+	return "runtime_session_" + string(record.Outcome())
+}
+
+func notLiveError(record runtimesession.Record) error {
+	switch record.Outcome() {
+	case runtimesession.OutcomeExited:
+		return fmt.Errorf("the agent of runtime session %s is no longer running: %s", record.ID, record.StaleReason)
+	case runtimesession.OutcomeLost:
+		return fmt.Errorf("runtime session %s was lost (%s); its agent is not running where it was started", record.ID, record.StaleReason)
+	}
+	return fmt.Errorf("runtime session %s is %s", record.ID, record.State)
+}
+
 // validateTmux confirms the registered pane still holds the registered
 // process on the same server generation, marking the session stale in the
-// registry when it does not, so nothing ever attaches to a reused pane ID.
-func validateTmux(store *runtimesession.Store, server tmuxAttacher, record runtimesession.Record) error {
-	observation := runtimesession.Observation{Instance: runtimesession.BackendInstance{
-		Kind: runtimesession.BackendTmux, Address: record.Target.Instance.Address,
-	}}
-	// A server that is not running is observed as having no generation, which
+// registry when it does not, so nothing ever attaches to a reused pane ID. It
+// returns the record as it stands afterwards: still live, or stale with why.
+func validateTmux(store *runtimesession.Store, server tmuxAttacher, record runtimesession.Record) (tmux.Survey, runtimesession.Record, error) {
+	// A server that is not running is surveyed as having no generation, which
 	// marks every session registered on it stale.
-	if instance, err := server.Instance(); err == nil {
-		observation.Instance = instance
-	} else if !errors.Is(err, tmux.ErrServerNotRunning) {
-		return fmt.Errorf("reading tmux server: %w", err)
-	}
-	if observation.Instance.Address != record.Target.Instance.Address {
-		return fmt.Errorf("runtime session %s belongs to tmux server %s, not %s", record.ID, record.Target.Instance.Address, observation.Instance.Address)
-	}
-	panes, err := server.Discover()
+	survey, err := server.Survey()
 	if err != nil {
-		return fmt.Errorf("listing tmux panes: %w", err)
+		return tmux.Survey{}, record, fmt.Errorf("reading tmux server: %w", err)
 	}
-	if pane, ok := backend.FindPane(panes, backend.PaneID(record.Target.Ref)); ok {
-		observation.Present = true
-		if pane.Exit == nil && len(pane.Foreground) > 0 {
-			if process, err := attachFingerprint(pane.Foreground[0].PID); err == nil {
-				observation.Process = &process
-			}
-		}
+	if survey.Instance.Address != record.Target.Instance.Address {
+		return tmux.Survey{}, record, fmt.Errorf("runtime session %s belongs to tmux server %s, not %s", record.ID, record.Target.Instance.Address, survey.Instance.Address)
 	}
-	var stale error
+	observation := survey.Observation(record, attachFingerprint)
+	current := record
 	err = store.Update(func(registry *runtimesession.Registry) error {
-		_, stale = registry.Validate(record.ID, observation, attachNow())
-		if stale != nil && !errors.Is(stale, runtimesession.ErrStaleTarget) {
-			return stale
+		validated, err := registry.Validate(record.ID, observation, attachNow())
+		if err == nil || errors.Is(err, runtimesession.ErrStaleTarget) || errors.Is(err, runtimesession.ErrInvalidState) {
+			current = validated
+			return nil
 		}
-		return nil
-	})
-	if err != nil {
 		return err
-	}
-	return stale
+	})
+	return survey, current, err
 }
 
 func attachKitty(cmd *cobra.Command, record runtimesession.Record, data attachData) error {

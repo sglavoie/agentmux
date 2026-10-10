@@ -698,7 +698,17 @@ What changes for a tmux session, and only for it:
 - **Focus attaches.** `enter` hands this terminal to the session
   (`amx attach`), and **F12** detaches and returns to the dashboard or
   overview, which keeps running instead of quitting. The agent is untouched by
-  either; attaching from a second terminal takes the view over.
+  either; attaching from a second terminal takes the view over. A session
+  has one owner at a time: the terminal that attached last has the keyboard
+  and sets the size, and the size stays as it was when nobody is attached.
+- **An agent that stopped is not attached, and not restarted.** `amx attach`
+  refuses with `runtime_session_exited` when the agent's process ended (the
+  message carries its exit status or signal), `runtime_session_lost` when the
+  pane or the tmux server it ran in is gone (a reboot, a killed server), and
+  `runtime_session_ended` when the session was closed on purpose. The daemon
+  records the same thing by itself within a couple of seconds and stops
+  listing the session. `amx attach ID --json` also reports `clients`: how
+  many terminals are attached right now.
 - **Launching stays put.** A tmux launch opens no tab, so the dashboard does not
   quit: the new row appears on the next refresh.
 - **Utility views run in this terminal.** Peek pages the pane's scrollback in

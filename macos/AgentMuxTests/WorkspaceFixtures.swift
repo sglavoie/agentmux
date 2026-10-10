@@ -117,4 +117,34 @@ final class FakeWorkspaceApp: WorkspaceDelegate {
 
     func focusExternally(_ row: WorkspaceRow) { external.append(row) }
     func workspaceVisibilityChanged(_ visible: Bool) { visibility.append(visible) }
+
+    /// Every place the workspace reported moving to, in order.
+    private(set) var places: [WorkspaceRestoration.Place?] = []
+    func workspacePlaceChanged(_ place: WorkspaceRestoration.Place?) { places.append(place) }
+
+    /// What amx says about each session; one that is not named is running
+    /// with no terminal attached.
+    var statuses: [String: WorkspaceSessionStatus] = [:]
+    /// The sessions amx was asked about, in order.
+    private(set) var asked: [String] = []
+    /// Set to hold every answer until `answer()` is called.
+    var holdsAnswers = false
+    private var held: [() -> Void] = []
+
+    func sessionStatus(runtimeSessionID: String, completion: @escaping @MainActor (WorkspaceSessionStatus) -> Void) {
+        asked.append(runtimeSessionID)
+        let status = statuses[runtimeSessionID] ?? .live(clients: 0)
+        if holdsAnswers {
+            held.append { completion(status) }
+        } else {
+            completion(status)
+        }
+    }
+
+    /// Delivers the held answers, oldest first.
+    func answer() {
+        let pending = held
+        held = []
+        pending.forEach { $0() }
+    }
 }

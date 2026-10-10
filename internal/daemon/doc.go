@@ -40,6 +40,16 @@
 // cannot answer for are retried on maintenance, a corrupt file is quarantined,
 // and state a fresh event created first only gains disjoint facts.
 //
+// Nothing tells the daemon when a tmux agent stops, so on maintenance, and
+// once at startup before the checkpoint is read, it has the registry
+// reconciled with what the private servers hold (runtime_reconcile.go,
+// internal/tmux.Reconciler): an agent whose pane is dead is recorded as
+// exited with how it ended, one whose pane or server is gone as lost, an owner
+// whose terminal is gone is released, and a terminal that attached beside a
+// session's owner is detached. The registry stays the one authority: retiring
+// a slot, dropping a session from the snapshot, and what `amx attach` answers
+// all follow from it. Reconciling starts no server and launches no agent.
+//
 // The companion's focus_window request (handler_companion.go) is the one
 // companion request that dials Kitty. It accepts only a socket the daemon
 // learned itself (a kittySockets value, lastKittyListenOn, or the snapshot's

@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"os"
 	"os/exec"
 	"runtime"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -193,14 +196,172 @@ func TestAttachRefusesWithStructuredErrors(t *testing.T) {
 	if err := f.Backend.Close(launched.Group); err != nil {
 		t.Fatal(err)
 	}
-	if out, err := attachRun(t, string(launched.RuntimeSessionID), "--json"); err == nil || decode(out) != "runtime_session_stale" {
+	if out, err := attachRun(t, string(launched.RuntimeSessionID), "--json"); err == nil || decode(out) != "runtime_session_lost" {
 		t.Fatalf("closed target: %v %s", err, out)
 	}
 	if record, _ := f.Load(t).Get(launched.RuntimeSessionID); record.State != runtimesession.StateStale {
 		t.Fatalf("record = %+v, want stale", record)
 	}
-	if out, err := attachRun(t, string(launched.RuntimeSessionID), "--json"); err == nil || decode(out) != "runtime_session_ended" {
+	if out, err := attachRun(t, string(launched.RuntimeSessionID), "--json"); err == nil || decode(out) != "runtime_session_lost" {
 		t.Fatalf("stale record: %v %s", err, out)
+	}
+}
+
+// attachFailure runs attach and returns the structured error it answered with.
+func attachFailure(t *testing.T, args ...string) (code, message string) {
+	t.Helper()
+	out, err := attachRun(t, append(args, "--json")...)
+	if err == nil {
+		t.Fatalf("attach %v succeeded: %s", args, out)
+	}
+	var envelope struct {
+		Error struct{ Code, Message string } `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatalf("decode %q: %v", out, err)
+	}
+	return envelope.Error.Code, envelope.Error.Message
+}
+
+// An agent that exited where it ran and an agent whose terminal is gone are
+// told apart, and neither is brought back by asking for it.
+func TestAttachTellsExitedFromLostAndRelaunchesNeither(t *testing.T) {
+	f, launched := attachLaunchAgent(t)
+	attachRunClient = func(*exec.Cmd) error { t.Fatal("attached an agent that is not running"); return nil }
+	id := string(launched.RuntimeSessionID)
+	pid := attachAgentPID(t, f, launched.Pane)
+
+	// The agent's process ends; the server keeps its pane and exit status.
+	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		panes, err := f.Backend.Discover()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if pane, ok := backend.FindPane(panes, launched.Pane); ok && pane.Exit != nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the agent's pane never showed its exit")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	for range 2 {
+		code, message := attachFailure(t, id)
+		if code != "runtime_session_exited" || !strings.Contains(message, "agent exited (signal term)") {
+			t.Fatalf("exited agent: %s %q", code, message)
+		}
+	}
+	record, _ := f.Load(t).Get(launched.RuntimeSessionID)
+	if record.State != runtimesession.StateStale || record.Outcome() != runtimesession.OutcomeExited || record.Attachment != nil {
+		t.Fatalf("record = %+v, want stale and exited", record)
+	}
+	panes, err := f.Backend.Discover()
+	if err != nil || len(panes) != 1 || panes[0].Exit == nil {
+		t.Fatalf("panes after asking for an exited agent = %+v, %v; want only its retained pane", panes, err)
+	}
+}
+
+func TestAttachToAServerThatDiedIsLostAndStartsNothing(t *testing.T) {
+	f, launched := attachLaunchAgent(t)
+	attachRunClient = func(*exec.Cmd) error { t.Fatal("attached an agent that is not running"); return nil }
+	if err := f.Server.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		code, message := attachFailure(t, string(launched.RuntimeSessionID))
+		if code != "runtime_session_lost" || !strings.Contains(message, "was lost") {
+			t.Fatalf("agent of a dead server: %s %q", code, message)
+		}
+	}
+	if record, _ := f.Load(t).Get(launched.RuntimeSessionID); record.Outcome() != runtimesession.OutcomeLost {
+		t.Fatalf("record = %+v, want lost", record)
+	}
+	survey, err := f.Backend.Survey()
+	if err != nil || survey.Running {
+		t.Fatalf("survey after asking for a lost agent = %+v, %v; want no server started", survey, err)
+	}
+}
+
+func TestAttachJSONCountsTheTerminalsAttached(t *testing.T) {
+	f, launched := attachLaunchAgent(t)
+	attachRunClient = func(*exec.Cmd) error { t.Fatal("--json attached a client"); return nil }
+	clients := func() int {
+		t.Helper()
+		out, err := attachRun(t, string(launched.RuntimeSessionID), "--json")
+		if err != nil {
+			t.Fatalf("attach --json: %v\n%s", err, out)
+		}
+		var envelope struct {
+			Data attachData `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+			t.Fatal(err)
+		}
+		return envelope.Data.Clients
+	}
+	if got := clients(); got != 0 {
+		t.Fatalf("clients with nobody attached = %d", got)
+	}
+	client, err := f.Backend.AttachCommand(launched.Pane)
+	if err != nil {
+		t.Fatal(err)
+	}
+	viewer := tmuxtest.StartViewer(t, client, 90, 24)
+	deadline := time.Now().Add(5 * time.Second)
+	for clients() != 1 {
+		if time.Now().After(deadline) {
+			t.Fatal("the attached terminal was never counted")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	viewer.Close()
+	for clients() != 0 {
+		if time.Now().After(deadline.Add(5 * time.Second)) {
+			t.Fatal("the closed terminal stayed counted")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// A terminal that closes keeps hanging up its foreground group. amx must
+// live through all of it, or the ownership it recorded is never released.
+func TestAttachOutlivesHangupsUntilOwnershipIsReleased(t *testing.T) {
+	f, launched := attachLaunchAgent(t)
+	id := launched.RuntimeSessionID
+	clientDone := false
+	attachRunClient = func(*exec.Cmd) error {
+		// The first hangup is the one that ends the client.
+		_ = syscall.Kill(os.Getpid(), syscall.SIGHUP)
+		time.Sleep(5 * time.Millisecond)
+		clientDone = true
+		return nil
+	}
+	previousNow := attachNow
+	t.Cleanup(func() { attachNow = previousNow })
+	hangups := 0
+	// The registry reads the clock inside the update that releases ownership:
+	// a hangup landing right there is one that arrives after the client ended
+	// and before amx is done. Unhandled, it ends this process.
+	attachNow = func() time.Time {
+		if clientDone {
+			hangups++
+			_ = syscall.Kill(os.Getpid(), syscall.SIGHUP)
+			time.Sleep(5 * time.Millisecond)
+		}
+		return time.Now()
+	}
+	if _, err := attachRun(t, string(id)); err != nil {
+		t.Fatalf("attach: %v", err)
+	}
+	if hangups == 0 {
+		t.Fatal("no hangup was delivered while ownership was being released")
+	}
+	if after, _ := f.Load(t).Get(id); after.State != runtimesession.StateLive || after.Attachment != nil {
+		t.Fatalf("after the terminal hung up = %+v, want live and unowned", after)
 	}
 }
 
@@ -217,6 +378,7 @@ func TestAttachNeedsATerminal(t *testing.T) {
 // with the tmux client it runs. amx must survive that to release its
 // ownership, so a hangup delivered while the client runs does not end it.
 func TestAttachedClientOutlivesAHangup(t *testing.T) {
+	defer outliveHangup()()
 	client := exec.Command("/bin/sh", "-c", "kill -HUP $PPID; sleep 0.2")
 	if err := runAttachedClient(client); err != nil {
 		t.Fatalf("client: %v", err)

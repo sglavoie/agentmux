@@ -243,13 +243,14 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)))
 
         // The selected one ended: nothing is selected, and no other session
-        // is picked for the operator.
+        // is picked for the operator. The pane says what became of it.
+        app.statuses[F.runtimeID(1)] = .ended("runtime session is ended")
         app.store.apply(snapshot: F.snapshot([sessions[2]]))
         XCTAssertEqual(app.closed, [F.runtimeID(2), F.runtimeID(1)])
         XCTAssertNil(workspace.state.selection)
         XCTAssertEqual(workspace.sidebar.selectedRow, -1)
-        XCTAssertEqual(workspace.content, .empty)
-        XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "No session selected")
+        XCTAssertEqual(workspace.content, .gone(runtimeSessionID: F.runtimeID(1), .ended("runtime session is ended")))
+        XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "Session ended")
         XCTAssertTrue(workspace.window.firstResponder === workspace.sidebar)
         XCTAssertEqual(workspace.window.title, "Agent Mux")
     }

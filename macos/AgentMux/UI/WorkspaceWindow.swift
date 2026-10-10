@@ -28,6 +28,12 @@ protocol WorkspaceDelegate: AnyObject {
     func focusExternally(_ row: WorkspaceRow)
     /// The window was shown or closed.
     func workspaceVisibilityChanged(_ visible: Bool)
+    /// The pane moved to another session or view, or to none.
+    func workspacePlaceChanged(_ place: WorkspaceRestoration.Place?)
+    /// Asks whether a session's agent is running and whether a terminal is
+    /// attached to it. It only asks: nothing is attached and nothing started.
+    /// The answer arrives on the main actor, possibly before this returns.
+    func sessionStatus(runtimeSessionID: String, completion: @escaping @MainActor (WorkspaceSessionStatus) -> Void)
 }
 
 /// The workspace window: a native sidebar of the live sessions, grouped by
@@ -44,6 +50,13 @@ protocol WorkspaceDelegate: AnyObject {
 /// selected and kept, hidden, while another is shown. A terminal is let go
 /// when its `amx attach` ends, when a live snapshot no longer lists its
 /// session, or when the window closes. None of those ends the agent.
+///
+/// The workspace only ever shows agents that are running. It comes back to
+/// where it was after a crash or a restart (`restore(_:)`), keeps its rows and
+/// terminals while the daemon is away, and when a session it was on is gone
+/// it says whether the agent exited or was lost. It never starts an agent to
+/// fill the gap, and restoring never takes a session from a terminal that
+/// attached to it meanwhile.
 ///
 /// Above the projects the sidebar lists the workspace's own views: the
 /// Dashboard and the Overview, which are the existing TUI in a terminal of
@@ -83,6 +96,12 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         /// listed: it was attached elsewhere, or detached with F12.
         case detached(runtimeSessionID: String)
         case unavailable(runtimeSessionID: String, String)
+        /// The session the workspace is coming back to is not known to be
+        /// running yet: the daemon has not said, or amx is being asked.
+        case restoring(runtimeSessionID: String)
+        /// The session the pane was on is no longer running. The status says
+        /// whether its agent exited or was lost; nil while that is asked.
+        case gone(runtimeSessionID: String, WorkspaceSessionStatus?)
         /// A utility view's terminal.
         case view(id: String)
         /// The Dashboard or the Overview after its program exited.
@@ -130,6 +149,19 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// Set while the table is brought in line with `state`, so its selection
     /// callbacks are not taken for the operator's.
     private var applying = false
+    /// The place the workspace is coming back to after a launch, until a live
+    /// snapshot and amx have said what is there, or the operator goes
+    /// somewhere else.
+    private(set) var restoring: WorkspaceRestoration.Place?
+    /// The session the pane was on when it stopped running, and what became
+    /// of it once amx has answered.
+    private(set) var gone: (runtimeSessionID: String, name: String, status: WorkspaceSessionStatus?)?
+    /// Counts status questions, so an answer to one that was overtaken by
+    /// the operator, or by a newer question, is dropped.
+    private var statusQuestion = 0
+    /// True while amx is being asked about the session being restored.
+    private var restoreChecking = false
+    private var reportedPlace: WorkspaceRestoration.Place?
 
     private let glyphs: Glyphs
     private let now: () -> Date
@@ -183,6 +215,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         // or a running shell is not an attachment that can simply be remade.
         for terminal in viewTerminals.values { terminal.view.isHidden = true }
         awaited = nil
+        leaveRecovery()
         content = .empty
         delegate?.workspaceVisibilityChanged(false)
     }
@@ -198,12 +231,16 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
         let wasCurrent = state.current
         let previous = state.selection
+        let previousName = state.selectedRow.map { "\($0.project) — \($0.label)" }
         let lost = state.apply(live)
         if state.current != wasCurrent {
             Self.logger.notice("workspace: rows \(self.state.current ? "current" : "held from the last snapshot", privacy: .public) (\(self.state.rows.count) session(s), selection \(Self.describe(self.state.selection), privacy: .public))")
         }
         if lost {
             Self.logger.notice("workspace: selected session \(Self.describe(previous), privacy: .public) is no longer listed")
+            if let previous, !previous.runtimeSessionID.isEmpty {
+                sessionGone(previous.runtimeSessionID, name: previousName ?? "This session")
+            }
         }
         if state.current {
             // Only a live snapshot says a session is gone.
@@ -230,7 +267,145 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
                 self.awaited = nil
             }
         }
+        continueRestoring()
         updateContent(focus: false)
+    }
+
+    // MARK: Recovery
+
+    /// Comes back to where the workspace was when the app last ran. A view is
+    /// shown at once. A session is shown once a live snapshot lists it and
+    /// amx confirms nobody else attached to it meanwhile; until then the pane
+    /// says it is waiting. A session that is not running any more is reported
+    /// as exited or lost. Nothing is ever started.
+    func restore(_ place: WorkspaceRestoration.Place) {
+        Self.logger.notice("workspace: restoring \(place.encoded, privacy: .public)")
+        switch place {
+        case let .view(id):
+            if !showView(id, focus: true) { showView(WorkspaceUtilityView.dashboard.id) }
+        case .session, .kitty:
+            state.select(nil)
+            viewSelection = nil
+            gone = nil
+            restoring = place
+            reportedPlace = place
+            syncSidebarSelection()
+            continueRestoring()
+            updateContent(focus: false)
+        }
+    }
+
+    /// Takes the next step of a restore once the feed is live.
+    private func continueRestoring() {
+        guard let place = restoring, !restoreChecking, state.current, let key = place.sessionKey else { return }
+        guard case let .session(id) = place else {
+            // A Kitty session is selected, never raised: coming back must not
+            // pull another app forward.
+            restoring = nil
+            if state.row(key) != nil {
+                Self.logger.notice("workspace: restored the selection of Kitty window \(key.windowID)")
+                select(key)
+            } else {
+                Self.logger.notice("workspace: Kitty window \(key.windowID) is no longer listed; nothing restored")
+                reportPlace()
+            }
+            return
+        }
+        let listed = state.row(key) != nil
+        let name = state.row(key).map { "\($0.project) — \($0.label)" } ?? "The session this window was on"
+        restoring = nil
+        if !listed {
+            Self.logger.notice("workspace: \(id, privacy: .public) is not listed after the restart; asking what became of it")
+            sessionGone(id, name: name)
+            return
+        }
+        // Listed, so running. Whether this window may take it is the server's
+        // to say: a terminal that attached while the app was away owns it now.
+        statusQuestion += 1
+        let question = statusQuestion
+        restoring = place
+        restoreChecking = true
+        delegate?.sessionStatus(runtimeSessionID: id) { [weak self] status in
+            guard let self, question == self.statusQuestion, self.restoring == place else { return }
+            self.restoring = nil
+            self.restoreChecking = false
+            guard self.state.row(key) != nil else {
+                self.sessionGone(id, name: name)
+                self.updateContent(focus: false)
+                return
+            }
+            switch status {
+            case let .live(clients) where clients > 0:
+                Self.logger.notice("workspace: \(id, privacy: .public) is attached elsewhere (\(clients) terminal(s)); restored detached")
+                self.detached.insert(id)
+                self.select(key)
+            case .live:
+                Self.logger.notice("workspace: restored \(id, privacy: .public); reattaching its terminal")
+                self.select(key, focus: true)
+            case .exited, .lost, .ended:
+                self.sessionGone(id, name: name, known: status)
+                self.updateContent(focus: false)
+            case let .unknown(why):
+                // amx could not say. The session is listed, so it is shown,
+                // but its terminal waits to be asked for.
+                Self.logger.notice("workspace: could not check \(id, privacy: .public) (\(why, privacy: .public)); restored detached")
+                self.detached.insert(id)
+                self.select(key)
+            }
+        }
+    }
+
+    /// The session the pane was on stopped being listed: asks what became of
+    /// it and says so in the pane, until the operator goes somewhere else.
+    private func sessionGone(_ id: String, name: String, known: WorkspaceSessionStatus? = nil) {
+        guard isOpen else { return }
+        discardTerminal(id)
+        detached.remove(id)
+        statusQuestion += 1
+        let question = statusQuestion
+        gone = (id, name, known)
+        if let known {
+            Self.logger.notice("workspace: \(id, privacy: .public) is not running: \(String(describing: known), privacy: .public); nothing is relaunched")
+            reportPlace()
+            return
+        }
+        delegate?.sessionStatus(runtimeSessionID: id) { [weak self] status in
+            guard let self, question == self.statusQuestion, self.gone?.runtimeSessionID == id else { return }
+            Self.logger.notice("workspace: \(id, privacy: .public) is not running: \(String(describing: status), privacy: .public); nothing is relaunched")
+            self.gone?.status = status
+            self.updateContent(focus: false)
+        }
+        reportPlace()
+    }
+
+    /// The operator went somewhere: whatever the pane was waiting to say or
+    /// to come back to is over.
+    private func leaveRecovery() {
+        statusQuestion += 1
+        restoring = nil
+        restoreChecking = false
+        gone = nil
+    }
+
+    /// Tells the app where the pane is, when that changed. While a restore
+    /// is pending the place it is heading for stays the reported one.
+    private func reportPlace() {
+        guard isOpen else { return }
+        let now: WorkspaceRestoration.Place?
+        if let restoring {
+            now = restoring
+        } else if let viewSelection {
+            now = views.view(viewSelection)?.isPermanent == true ? .view(id: viewSelection) : reportedPlace
+        } else if let key = state.selection {
+            now = key.runtimeSessionID.isEmpty
+                ? .kitty(socket: key.socket, windowID: key.windowID)
+                : .session(runtimeSessionID: key.runtimeSessionID)
+        } else {
+            now = nil
+        }
+        guard now != reportedPlace else { return }
+        reportedPlace = now
+        delegate?.workspacePlaceChanged(now)
     }
 
     /// Selects a listed session and shows what there is to show for it. With
@@ -240,6 +415,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         guard state.select(key) else { return false }
         viewSelection = nil
         awaited = nil
+        leaveRecovery()
         syncSidebarSelection()
         updateContent(focus: focus)
         return true
@@ -280,6 +456,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         state.select(nil)
         viewSelection = id
         awaited = nil
+        leaveRecovery()
         syncSidebarSelection()
         updateContent(focus: focus)
         return true
@@ -444,7 +621,11 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     private func wantedContent(retry: Bool) -> Content {
         if let view = views.view(viewSelection) { return wantedViewContent(view, retry: retry) }
-        guard let row = state.selectedRow else { return .empty }
+        guard let row = state.selectedRow else {
+            if let gone { return .gone(runtimeSessionID: gone.runtimeSessionID, gone.status) }
+            if case let .session(id)? = restoring { return .restoring(runtimeSessionID: id) }
+            return .empty
+        }
         guard let id = row.embeddedRuntimeSessionID else { return .external(row.key) }
         if detached.contains(id) { return .detached(runtimeSessionID: id) }
         if terminals[id] != nil { return .terminal(runtimeSessionID: id) }
@@ -494,6 +675,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             // shown had it: the sidebar takes it, so the arrow keys work.
             window.makeFirstResponder(sidebar)
         }
+        reportPlace()
     }
 
     private func fillPlaceholder(_ content: Content) {
@@ -526,6 +708,23 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             ) { [weak self] in
                 guard let self, let row = self.state.selectedRow else { return }
                 self.activate(row)
+            }
+        case .restoring:
+            placeholder.show(
+                title: "Restoring",
+                message: state.current
+                    ? "Checking that the session this window was on is still running."
+                    : "Waiting for the daemon to say whether the session this window was on is still running. Nothing is started meanwhile.",
+                button: "Open Dashboard"
+            ) { [weak self] in self?.showView(WorkspaceUtilityView.dashboard.id) }
+        case let .gone(_, status):
+            let name = gone?.name ?? "This session"
+            let notice = status?.notice(for: name)
+                ?? ("No longer listed", status == nil
+                    ? "\(name) is no longer running. Checking what became of it."
+                    : "\(name) is no longer listed by the daemon. Nothing was restarted.")
+            placeholder.show(title: notice.0, message: notice.1, button: "Open Dashboard") { [weak self] in
+                self?.showView(WorkspaceUtilityView.dashboard.id)
             }
         case let .detached(id):
             placeholder.show(

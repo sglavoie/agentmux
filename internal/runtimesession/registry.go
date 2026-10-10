@@ -437,6 +437,45 @@ type Observation struct {
 	// Process is the fingerprint of the agent process at the target, when
 	// one was found.
 	Process *ProcessFingerprint
+	// Exited reports that the target is still there but the agent in it has
+	// ended: a pane its backend retains after its program exits. ExitDetail
+	// says how ("status 1", "signal term") when the backend knows.
+	Exited     bool
+	ExitDetail string
+}
+
+// StaleReasonExited starts the stale reason of a session whose agent ended
+// where it ran, as opposed to one whose target could no longer be found.
+const StaleReasonExited = "agent exited"
+
+// Outcome says how a runtime session that is no longer live came to be so.
+type Outcome string
+
+const (
+	// OutcomeExited: the agent's own process ended and its backend saw it.
+	OutcomeExited Outcome = "exited"
+	// OutcomeLost: the place the agent ran is gone or holds something else
+	// (the backend restarted, the target vanished), so what became of the
+	// agent was not observed.
+	OutcomeLost Outcome = "lost"
+	// OutcomeEnded: the session was ended on purpose, or never started.
+	OutcomeEnded Outcome = "ended"
+)
+
+// Outcome classifies a record that is not live; it is empty for a pending or
+// live one. A session is never both: exited is something that was seen, lost
+// is the absence of anything to see.
+func (r Record) Outcome() Outcome {
+	switch r.State {
+	case StateStale:
+		if strings.HasPrefix(r.StaleReason, StaleReasonExited) {
+			return OutcomeExited
+		}
+		return OutcomeLost
+	case StateEnded, StateAbandoned:
+		return OutcomeEnded
+	}
+	return ""
 }
 
 // Validate compares a live session's registration with a fresh backend
@@ -461,6 +500,11 @@ func (r *Registry) Validate(id ID, observed Observation, now time.Time) (Record,
 		reason = "backend generation changed"
 	case !observed.Present:
 		reason = "target is gone"
+	case observed.Exited:
+		reason = StaleReasonExited
+		if detail := strings.TrimSpace(observed.ExitDetail); detail != "" {
+			reason += " (" + detail + ")"
+		}
 	case observed.Process == nil:
 		reason = "no process at target"
 	case *observed.Process != *record.Process:

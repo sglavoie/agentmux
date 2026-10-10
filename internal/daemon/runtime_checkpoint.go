@@ -382,10 +382,12 @@ func (h *Handler) flushRuntimeCheckpoint() error {
 	return nil
 }
 
-// maintainRuntimeSessions is the runtime-session half of maintenance: retire
-// ended sessions, retry deferred restores, and checkpoint what is left. It
-// needs no backend listing, so it runs whether or not Kitty answered.
+// maintainRuntimeSessions is the runtime-session half of maintenance:
+// reconcile the registry with the backends, retire the sessions it no longer
+// lists as live, retry deferred restores, and checkpoint what is left. It
+// needs no Kitty listing, so it runs whether or not Kitty answered.
 func (h *Handler) maintainRuntimeSessions(now time.Time) {
+	h.reconcileRuntimeSessions(now)
 	h.retireEndedRuntimeSessions(now)
 	h.retryDeferredRuntimeRestore(now)
 	h.labelRuntimeSessions(now)

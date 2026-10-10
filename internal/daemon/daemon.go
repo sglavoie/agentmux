@@ -138,8 +138,10 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	// Managed hooks route through the runtime-session registry. The reader
 	// never writes or locks it; a missing file is an empty registry.
 	if store, err := runtimesession.NewStore(runtimesession.DefaultRegistryPath()); err == nil {
-		handler.SetRuntimeSessionDirectory(runtimesession.NewReader(store))
+		reader := runtimesession.NewReader(store)
+		handler.SetRuntimeSessionDirectory(reader)
 		handler.SetRuntimeSessionLabeler(TmuxRuntimeSessionLabel)
+		handler.SetRuntimeSessionReconciler(NewTmuxRuntimeReconciler(store, reader))
 	} else {
 		slog.Warn("daemon: runtime-session registry unavailable; managed hooks will be refused", "err", err)
 	}
@@ -200,6 +202,10 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	// amx_state just rebuilt is rebound to its session, and before the socket
 	// binds, so no event can land in a slot before its checkpoint does.
 	handler.SetRuntimeCheckpointPath(DefaultRuntimeCheckpointPath())
+	// The registry is reconciled first: an agent that exited or was lost
+	// while no daemon ran is recorded as such before its checkpoint entry is
+	// looked at, so it is dropped rather than restored as running.
+	handler.reconcileRuntimeSessions(time.Now())
 	if report := handler.restoreRuntimeCheckpoint(time.Now()); report.Corrupt || len(report.Outcomes) > 0 {
 		slog.Info("daemon: runtime checkpoint restored", "corrupt", report.Corrupt, "outcomes", report.Outcomes)
 	}

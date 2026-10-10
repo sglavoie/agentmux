@@ -1,0 +1,40 @@
+=== RUN   TestSurveyOfAServerThatIsNotRunning
+--- PASS: TestSurveyOfAServerThatIsNotRunning (0.03s)
+=== RUN   TestOwnerSetsTheSizeAndLosingItKeepsTheSize
+--- PASS: TestOwnerSetsTheSizeAndLosingItKeepsTheSize (0.09s)
+=== RUN   TestReadingAPaneNeitherAttachesNorResizes
+--- PASS: TestReadingAPaneNeitherAttachesNorResizes (0.18s)
+=== RUN   TestAttachingElsewhereTransfersOwnership
+--- PASS: TestAttachingElsewhereTransfersOwnership (0.12s)
+=== RUN   TestACompetingClientIsFoundAndDetached
+--- PASS: TestACompetingClientIsFoundAndDetached (1.30s)
+=== RUN   TestReconcileTellsExitedFromLostAndLaunchesNothing
+--- PASS: TestReconcileTellsExitedFromLostAndLaunchesNothing (0.15s)
+=== RUN   TestReconcileReleasesAnOwnerWithNoTerminal
+--- PASS: TestReconcileReleasesAnOwnerWithNoTerminal (0.13s)
+=== RUN   TestReconcileDetachesCompetingClients
+--- PASS: TestReconcileDetachesCompetingClients (1.26s)
+PASS
+ok  	github.com/sglavoie/agentmux/internal/tmux	3.446s
+=== RUN   TestAttachTransfersOwnershipWithoutRestarting
+--- PASS: TestAttachTransfersOwnershipWithoutRestarting (0.15s)
+=== RUN   TestAttachRealClientKeepsAgentRunning
+--- PASS: TestAttachRealClientKeepsAgentRunning (0.20s)
+=== RUN   TestAttachJSONReportsCommandWithoutAttaching
+--- PASS: TestAttachJSONReportsCommandWithoutAttaching (0.10s)
+=== RUN   TestAttachRefusesWithStructuredErrors
+--- PASS: TestAttachRefusesWithStructuredErrors (0.10s)
+=== RUN   TestAttachTellsExitedFromLostAndRelaunchesNeither
+--- PASS: TestAttachTellsExitedFromLostAndRelaunchesNeither (0.12s)
+=== RUN   TestAttachToAServerThatDiedIsLostAndStartsNothing
+--- PASS: TestAttachToAServerThatDiedIsLostAndStartsNothing (0.11s)
+=== RUN   TestAttachJSONCountsTheTerminalsAttached
+--- PASS: TestAttachJSONCountsTheTerminalsAttached (0.18s)
+=== RUN   TestAttachOutlivesHangupsUntilOwnershipIsReleased
+--- PASS: TestAttachOutlivesHangupsUntilOwnershipIsReleased (0.13s)
+=== RUN   TestAttachNeedsATerminal
+--- PASS: TestAttachNeedsATerminal (0.09s)
+=== RUN   TestAttachedClientOutlivesAHangup
+--- PASS: TestAttachedClientOutlivesAHangup (0.21s)
+PASS
+ok  	github.com/sglavoie/agentmux/cmd/session	1.595s

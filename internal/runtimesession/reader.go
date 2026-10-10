@@ -100,3 +100,19 @@ func (r *Reader) refreshLocked() {
 	maps.Copy(records, registry.sessions)
 	r.records, r.loaded, r.info, r.err = records, true, info, nil
 }
+
+// Live returns every live record of the current registry version, in no
+// particular order. Like Lookup it keeps answering from the previous good
+// version when the file cannot be read, and reports that error.
+func (r *Reader) Live() ([]Record, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.refreshLocked()
+	var live []Record
+	for _, record := range r.records {
+		if record.State == StateLive {
+			live = append(live, cloneRecord(record))
+		}
+	}
+	return live, r.err
+}

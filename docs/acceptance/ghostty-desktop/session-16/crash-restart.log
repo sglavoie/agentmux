@@ -1,0 +1,161 @@
+=== RUN   TestFaultDaemonRestartSendsByeShutdown
+--- PASS: TestFaultDaemonRestartSendsByeShutdown (0.01s)
+=== RUN   TestFaultSubscriberKilledMidWrite
+--- PASS: TestFaultSubscriberKilledMidWrite (0.18s)
+=== RUN   TestFaultDroppedASLFinishRepairedByReconciliation
+--- PASS: TestFaultDroppedASLFinishRepairedByReconciliation (0.01s)
+=== RUN   TestFaultDroppedASLStartSeededByReconciliation
+--- PASS: TestFaultDroppedASLStartSeededByReconciliation (0.01s)
+=== RUN   TestFaultDiscoveryFailurePreservesLeases
+--- PASS: TestFaultDiscoveryFailurePreservesLeases (0.01s)
+=== RUN   TestFaultResponseLossRetryAppliesOnce
+2026/10/10 11:41:09 WARN daemon: response write failed err="write unix /tmp/amx-dedupe-4239719224/d.sock->: write: broken pipe" written=0 total=65
+--- PASS: TestFaultResponseLossRetryAppliesOnce (0.02s)
+=== RUN   TestFaultDaemonRestartLeavesTmuxAgentAndItsOwnerUnchanged
+--- PASS: TestFaultDaemonRestartLeavesTmuxAgentAndItsOwnerUnchanged (0.27s)
+=== RUN   TestFaultViewerCrashLeavesAgentRunningAtItsSize
+2026/10/10 11:41:10 INFO maintenance: released the ownership of a runtime session whose terminal is gone runtime_session=rs-415d9a4e239f553f044f3026012e3fa9
+--- PASS: TestFaultViewerCrashLeavesAgentRunningAtItsSize (0.28s)
+=== RUN   TestFaultOwnershipTransferLeavesOneOwnerAndTheSameAgent
+2026/10/10 11:41:11 INFO maintenance: detached a terminal competing with a session's owner client=/dev/ttys018 session=$0
+--- PASS: TestFaultOwnershipTransferLeavesOneOwnerAndTheSameAgent (1.46s)
+=== RUN   TestFaultAgentExitIsRetiredAsExitedAndNotRelaunched
+2026/10/10 11:41:12 INFO maintenance: runtime session is no longer running runtime_session=rs-65c89d9f8395b880d36630714e8386a5 outcome=exited reason="agent exited (signal term)"
+--- PASS: TestFaultAgentExitIsRetiredAsExitedAndNotRelaunched (0.25s)
+=== RUN   TestFaultTmuxServerLossIsRetiredAsLostAndNothingIsRelaunched
+2026/10/10 11:41:12 INFO maintenance: runtime session is no longer running runtime_session=rs-23dad15bfe430e4763bae2d8f2366bf5 outcome=lost reason="backend generation changed"
+--- PASS: TestFaultTmuxServerLossIsRetiredAsLostAndNothingIsRelaunched (0.25s)
+=== RUN   TestFaultWedgedKittyListNeverBlocksHookIngestion
+--- PASS: TestFaultWedgedKittyListNeverBlocksHookIngestion (0.02s)
+=== RUN   TestFaultFailingKittyListLeavesRenderPendingThenConverges
+--- PASS: TestFaultFailingKittyListLeavesRenderPendingThenConverges (0.01s)
+=== RUN   TestFaultFlappingTitleWritesEventuallyConverge
+--- PASS: TestFaultFlappingTitleWritesEventuallyConverge (0.01s)
+=== RUN   TestFaultCrashBetweenPersistAndTitleRestoresDesiredState
+2026/10/10 11:41:12 WARN renderer: restored state differs from live title window_id=42 desired_icon=key title_icon=""
+--- PASS: TestFaultCrashBetweenPersistAndTitleRestoresDesiredState (0.02s)
+=== RUN   TestFaultDegradedStartupStillAppliesEvents
+--- PASS: TestFaultDegradedStartupStillAppliesEvents (0.04s)
+=== RUN   TestFaultMalformedPersistedStateIsolatedPerWindow
+2026/10/10 11:41:12 WARN renderer: discarded invalid restored state window_id=1 err="invalid character 'b' looking for beginning of object key string"
+2026/10/10 11:41:12 WARN renderer: restored state differs from live title window_id=2 desired_icon=bolt title_icon=""
+2026/10/10 11:41:12 WARN renderer: restored state differs from live title window_id=3 desired_icon=key title_icon=""
+--- PASS: TestFaultMalformedPersistedStateIsolatedPerWindow (0.01s)
+=== RUN   TestShadowReducerSurvivesRestartViaUserVar
+2026/10/10 11:41:12 WARN renderer: restored state differs from live title window_id=42 desired_icon=key title_icon=""
+--- PASS: TestShadowReducerSurvivesRestartViaUserVar (0.02s)
+=== RUN   TestTraceReplayRestartEquivalenceEveryPrefix
+=== RUN   TestTraceReplayRestartEquivalenceEveryPrefix/claude-single-turn
+2026/10/10 11:41:12 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:12 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:12 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:12 WARN renderer: restored state differs from live title window_id=42 desired_icon=stop title_icon=""
+=== RUN   TestTraceReplayRestartEquivalenceEveryPrefix/claude-pipe-process-owned-active
+2026/10/10 11:41:12 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+=== RUN   TestTraceReplayRestartEquivalenceEveryPrefix/claude-permission-then-new-turn
+2026/10/10 11:41:12 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:12 WARN renderer: restored state differs from live title window_id=42 desired_icon=key title_icon=""
+2026/10/10 11:41:12 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:12 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:12 WARN renderer: restored state differs from live title window_id=42 desired_icon=stop title_icon=""
+=== RUN   TestTraceReplayRestartEquivalenceEveryPrefix/claude-terminal-failure-then-prompt-recovery
+2026/10/10 11:41:12 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:12 WARN renderer: restored state differs from live title window_id=42 desired_icon=error title_icon=""
+2026/10/10 11:41:12 WARN renderer: restored state differs from live title window_id=42 desired_icon=error title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+=== RUN   TestTraceReplayRestartEquivalenceEveryPrefix/claude-stop-then-reprompt
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=stop title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+=== RUN   TestTraceReplayRestartEquivalenceEveryPrefix/codex-single-turn
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=stop title_icon=""
+=== RUN   TestTraceReplayRestartEquivalenceEveryPrefix/codex-compaction-auto-and-manual
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=compact title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=compact title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=stop title_icon=""
+=== RUN   TestTraceReplayRestartEquivalenceEveryPrefix/codex-session-replacement
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=stop title_icon=""
+=== RUN   TestTraceReplayRestartEquivalenceEveryPrefix/claude-compaction-matcher-split
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=compact title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=compact title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=stop title_icon=""
+=== RUN   TestTraceReplayRestartEquivalenceEveryPrefix/copilot-permission-and-stop
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=key title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=stop title_icon=""
+=== RUN   TestTraceReplayRestartEquivalenceEveryPrefix/copilot-stop-then-reprompt
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=stop title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+=== RUN   TestTraceReplayRestartEquivalenceEveryPrefix/multi-agent-clean-and-failing
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=subagent title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=subagent title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=subagent title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=error title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=error title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+=== RUN   TestTraceReplayRestartEquivalenceEveryPrefix/multi-agent-fallback-to-parent
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=subagent title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:13 WARN renderer: restored state differs from live title window_id=42 desired_icon=stop title_icon=""
+=== RUN   TestTraceReplayRestartEquivalenceEveryPrefix/asl-claude-finish-without-native-stop
+2026/10/10 11:41:14 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:14 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:14 WARN renderer: restored state differs from live title window_id=42 desired_icon=stop title_icon=""
+2026/10/10 11:41:14 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+=== RUN   TestTraceReplayRestartEquivalenceEveryPrefix/asl-codex-finish-without-native-stop
+2026/10/10 11:41:14 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:14 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:14 WARN renderer: restored state differs from live title window_id=42 desired_icon=stop title_icon=""
+2026/10/10 11:41:14 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+=== RUN   TestTraceReplayRestartEquivalenceEveryPrefix/asl-copilot-finish-without-native-stop
+2026/10/10 11:41:14 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:14 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:14 WARN renderer: restored state differs from live title window_id=42 desired_icon=stop title_icon=""
+2026/10/10 11:41:14 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+=== RUN   TestTraceReplayRestartEquivalenceEveryPrefix/asl-run-lifecycle
+2026/10/10 11:41:14 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:14 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:14 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:14 WARN renderer: restored state differs from live title window_id=42 desired_icon=question title_icon=""
+2026/10/10 11:41:14 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:14 WARN renderer: restored state differs from live title window_id=42 desired_icon=stop title_icon=""
+=== RUN   TestTraceReplayRestartEquivalenceEveryPrefix/asl-overlapping-runs
+2026/10/10 11:41:14 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:14 WARN renderer: restored state differs from live title window_id=42 desired_icon=bolt title_icon=""
+2026/10/10 11:41:14 WARN renderer: restored state differs from live title window_id=42 desired_icon=stop title_icon=""
+--- PASS: TestTraceReplayRestartEquivalenceEveryPrefix (1.90s)
+    --- PASS: TestTraceReplayRestartEquivalenceEveryPrefix/claude-single-turn (0.10s)
+    --- PASS: TestTraceReplayRestartEquivalenceEveryPrefix/claude-pipe-process-owned-active (0.05s)
+    --- PASS: TestTraceReplayRestartEquivalenceEveryPrefix/claude-permission-then-new-turn (0.11s)
+    --- PASS: TestTraceReplayRestartEquivalenceEveryPrefix/claude-terminal-failure-then-prompt-recovery (0.10s)
+    --- PASS: TestTraceReplayRestartEquivalenceEveryPrefix/claude-stop-then-reprompt (0.09s)
+    --- PASS: TestTraceReplayRestartEquivalenceEveryPrefix/codex-single-turn (0.12s)
+    --- PASS: TestTraceReplayRestartEquivalenceEveryPrefix/codex-compaction-auto-and-manual (0.11s)
+    --- PASS: TestTraceReplayRestartEquivalenceEveryPrefix/codex-session-replacement (0.07s)
+    --- PASS: TestTraceReplayRestartEquivalenceEveryPrefix/claude-compaction-matcher-split (0.11s)
+    --- PASS: TestTraceReplayRestartEquivalenceEveryPrefix/copilot-permission-and-stop (0.13s)
+    --- PASS: TestTraceReplayRestartEquivalenceEveryPrefix/copilot-stop-then-reprompt (0.08s)
+    --- PASS: TestTraceReplayRestartEquivalenceEveryPrefix/multi-agent-clean-and-failing (0.15s)
+    --- PASS: TestTraceReplayRestartEquivalenceEveryPrefix/multi-agent-fallback-to-parent (0.10s)
+    --- PASS: TestTraceReplayRestartEquivalenceEveryPrefix/asl-claude-finish-without-native-stop (0.09s)
+    --- PASS: TestTraceReplayRestartEquivalenceEveryPrefix/asl-codex-finish-without-native-stop (0.09s)
+    --- PASS: TestTraceReplayRestartEquivalenceEveryPrefix/asl-copilot-finish-without-native-stop (0.09s)
+    --- PASS: TestTraceReplayRestartEquivalenceEveryPrefix/asl-run-lifecycle (0.19s)
+    --- PASS: TestTraceReplayRestartEquivalenceEveryPrefix/asl-overlapping-runs (0.11s)
+PASS
+ok  	github.com/sglavoie/agentmux/internal/daemon	6.175s
+crash-restart: ok (19 scenarios)

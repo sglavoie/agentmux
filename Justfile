@@ -261,7 +261,10 @@ reliability-stress reps="20" shards="4":
 # The daemon scenarios that assert state survives a crash, a restart, or a
 # degraded start. TestFault also covers the companion stream: a daemon stop
 # says bye{shutdown} to every subscriber, and a subscriber killed mid-write
-# leaves the daemon healthy. Kept separate from stress_scenarios: those repeat healthy
+# leaves the daemon healthy. It also covers tmux-hosted agents against a real
+# private tmux server: the same process after a daemon restart, a killed
+# viewer, or a change of owner; exited or lost, and never relaunched, after
+# the agent or its server dies. Kept separate from stress_scenarios: those repeat healthy
 # lifecycle paths to shake out ordering races, while these inject a fault and
 # assert the observable state afterwards.
 crash_restart_scenarios := "TestFault|TestFuzzReducerRestartEquivalence|TestTraceReplayRestartEquivalence|TestShadowReducerSurvivesRestart|TestInteractiveOwnershipSurvivesRestart"
@@ -292,9 +295,12 @@ crash-restart:
 
     # Subtest lines are indented, so this counts top-level scenarios only.
     passed=$(grep -c '^--- PASS' "$log" || true)
-    if [ "$passed" -lt 13 ]; then
+    # The tmux scenarios skip when tmux is not installed, which leaves the
+    # count short: a fault gate that passes without them proves nothing about
+    # the agents the desktop app keeps alive.
+    if [ "$passed" -lt 19 ]; then
         echo >&2
-        echo "crash-restart ran only $passed top-level scenarios (expected at least 13)" >&2
+        echo "crash-restart ran only $passed top-level scenarios (expected at least 19; the tmux scenarios need tmux)" >&2
         echo "update crash_restart_scenarios if a scenario was intentionally renamed" >&2
         exit 1
     fi
