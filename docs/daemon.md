@@ -320,7 +320,10 @@ The daemon then sends the backend a `notification` frame —
 `{notification_id, window_id, navigable, title, subtitle, action, run_id,
 session_id, actions[]}`, where `actions` offers `mute`, `snooze`, and (for an
 ASL question) `answer`, and a permission prompt offers none — and waits up to
-3s for a `notification_disposition` request reporting `delivered`. Without it
+3s for a `notification_disposition` request reporting `delivered`. A notice
+about a runtime session also carries `runtime_session_id` and `backend`; when
+the backend is not Kitty, `window_id` is 0, `navigable` is false, and `mute`
+is not offered, because no Kitty window stands behind the session. Without it
 the notice is retracted, `dispatch:fallback:app_fallback` is recorded, and
 Alerter shows the notification instead; with no app connected Alerter is used
 exactly as before. After `delivered` the app reports one terminal disposition:

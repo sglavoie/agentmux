@@ -188,6 +188,11 @@ TUI (`tui/...`):
   (`internal/daemon/runtime_routes.go`): a slot belongs to one runtime session
   at a time, and deliveries from another session, another backend instance,
   or an ended session are refused rather than merged.
+- An ASL run in a managed session is routed by that session's slot
+  (`internal/daemon/handler_asl_runtime.go`): lease, supervisor question,
+  notification, and attention clearing never consult Kitty topology, so they
+  work for tmux sessions and with no viewer. Workspace matching is for legacy
+  hooks only and never receives a run a runtime session has claimed.
 - Configured projects are launch templates identified by profile and title;
   continuity actions use exact transcript identities.
 - Ambiguous selectors return ordered candidates and never guess.

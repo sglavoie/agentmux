@@ -1,0 +1,16 @@
+=== RUN   TestInstalledBridgeServesTheContractSet
+--- PASS: TestInstalledBridgeServesTheContractSet (1.37s)
+PASS
+ok  	github.com/sglavoie/agentmux/internal/aslbridge	1.519s
+=== RUN   TestInstalledBridgeRoutesRunsByRuntimeSession
+    asl_installed_integration_test.go:482: OBSERVED tmux-asl: run 20261010T000249795444Z-67009 delivered lifecycle hooks as runtime session rs-09001ad17cb8b1b1d0a610e6b6c97506; lease live on non-Kitty slot (base+0), daemon has no Kitty client
+    asl_installed_integration_test.go:498: OBSERVED viewer-absent: question 3212341a-a29c-465c-8042-8162be844c3d raised the question icon and 1 notification on the tmux slot with no Kitty client, no companion app, and zero clients attached to the private tmux server (list-clients empty); target runtime_session=rs-09001ad17cb8b1b1d0a610e6b6c97506 backend=tmux navigable=false
+    asl_installed_integration_test.go:523: OBSERVED notification-deduplication (same daemon): question resurfaced by a second `asl outbox wait` plus three reconcile/refresh sweeps over the real state root left exactly 1 notification
+    asl_installed_integration_test.go:576: OBSERVED stale-token-refusal: run.stop_after_current for run 20261010T000249795444Z-67009 with a stale action token was refused through the daemon with "stale-action-token: action token does not match current plan state; refresh the snapshot" (row state running); no receipt recorded, question and lease unchanged
+    asl_installed_integration_test.go:622: OBSERVED daemon-restart: new daemon restored runtime session rs-09001ad17cb8b1b1d0a610e6b6c97506 on a non-Kitty slot with run 20261010T000249795444Z-67009's lease live (icon after restore "question"); the question resurfaced by `asl outbox wait` shows the question icon again with 0 new notifications
+    asl_installed_integration_test.go:684: OBSERVED kitty-asl: run 20261010T000258523813Z-67241 delivered lifecycle hooks as Kitty runtime session rs-f02fcbfad13c35e21e2d1b29b88db543; lease and question fabb6605-c032-463f-8155-6ae62925507a on its registered window 43, 1 notification, click target socket unix:/tmp/amx-s10-kitty
+    asl_installed_integration_test.go:711: OBSERVED notification-deduplication (across sessions and restart): daemon A dispatched 1 notification (tmux question), daemon B dispatched 1 (Kitty question); decoy Kitty windows 41 and 42 sharing the runs' directories hold no lease, icon, or notification
+    asl_installed_integration_test.go:740: OBSERVED misrouting check: replies cleared each session's question independently; both runs ended and released their leases on their own slots (tmux harness log: "turn started for /private/tmp/amxs103307771417/plans/plan-tmux\nask returned 0"; kitty harness log: "turn started for /private/tmp/amxs103307771417/plans/plan-kitty\nask returned 0")
+--- PASS: TestInstalledBridgeRoutesRunsByRuntimeSession (16.99s)
+PASS
+ok  	github.com/sglavoie/agentmux/internal/daemon	17.219s

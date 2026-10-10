@@ -70,14 +70,24 @@ type NotificationTrace struct {
 	RunID         string
 }
 
-// NotificationTarget identifies the only Kitty pane a click may focus.
-// Navigable is false for profile-wide informational notifications such as
-// hook-silence alerts, which intentionally have no arbitrary pane fallback.
+// NotificationTarget identifies what a notification is about and the only
+// Kitty pane a click may focus. WindowID is the daemon's slot for the session:
+// it keys cooldown, debounce, mute, and retraction, and is a Kitty window ID
+// only when Navigable is true. Navigable is false for profile-wide
+// informational notifications such as hook-silence alerts, which intentionally
+// have no arbitrary pane fallback, and for a runtime session on a backend with
+// no Kitty window to focus.
+//
+// RuntimeSessionID and Backend name the runtime session holding the slot, when
+// one does. They are identity, not a focus target: a notice carries them so a
+// viewer that knows runtime sessions can open the right one.
 type NotificationTarget struct {
-	WindowID      int
-	Account       string
-	KittyListenOn string
-	Navigable     bool
+	WindowID         int
+	Account          string
+	KittyListenOn    string
+	Navigable        bool
+	RuntimeSessionID string
+	Backend          string
 }
 
 // NotificationDisposition is one explicit notification decision or terminal

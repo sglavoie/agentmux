@@ -698,6 +698,11 @@ func (h *Handler) dropClosedWindowsLocked(now time.Time, closed map[int]struct{}
 	}
 	h.aslMissStreak.Retain(func(ref asl.LeaseRef) bool { return stillOpen(ref.WindowID) })
 	h.aslSupervisors.RetainWindows(stillOpen)
+	for runID, slot := range h.aslRuntimeRuns {
+		if !stillOpen(slot) {
+			delete(h.aslRuntimeRuns, runID)
+		}
+	}
 	for id := range closed {
 		// Idle-sample stabilization streaks are per-window: a closed window's
 		// pane can produce no further screen evidence, so its streaks (and the

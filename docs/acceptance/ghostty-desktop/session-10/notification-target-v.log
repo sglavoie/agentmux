@@ -1,0 +1,8 @@
+=== RUN   TestAppNoticePreservesKittySocket
+--- PASS: TestAppNoticePreservesKittySocket (0.01s)
+=== RUN   TestAppNoticeForANonKittyRuntimeSessionCarriesNoKittyTarget
+--- PASS: TestAppNoticeForANonKittyRuntimeSessionCarriesNoKittyTarget (0.01s)
+=== RUN   TestAppNoticeForAKittyRuntimeSessionKeepsItsWindow
+--- PASS: TestAppNoticeForAKittyRuntimeSessionKeepsItsWindow (0.01s)
+PASS
+ok  	github.com/sglavoie/agentmux/internal/daemon/notification	0.176s

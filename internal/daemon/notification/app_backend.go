@@ -57,7 +57,17 @@ type AppNotice struct {
 	RunID     string   `json:"run_id,omitempty"`
 	SessionID string   `json:"session_id,omitempty"`
 	Actions   []string `json:"actions,omitempty"`
+	// RuntimeSessionID and Backend name the AgentMux runtime session the
+	// notice is about, when one holds its slot. For a session whose backend is
+	// not Kitty they are the notice's only target: WindowID is zero, because
+	// the daemon's slot for such a session is not a window any Kitty has.
+	RuntimeSessionID string `json:"runtime_session_id,omitempty"`
+	Backend          string `json:"backend,omitempty"`
 }
+
+// BackendKindKitty is the NotificationTarget.Backend of a Kitty session, the
+// only backend whose slot is a window ID an app can hand back to Kitty.
+const BackendKindKitty = "kitty"
 
 // AppInteraction is one report about a delivered notice. Disposition is a
 // protocol.Disposition* value, or one of the two the backend synthesizes
@@ -184,15 +194,20 @@ func (n *Notifier) dispatchToApp(parent context.Context, app AppBackend, target 
 	defer cancel()
 	navigable := target.Navigable && windowID > 0
 	notice := AppNotice{
-		NotificationID: newNotificationID(),
-		WindowID:       windowID,
-		Navigable:      navigable,
-		Title:          title,
-		Subtitle:       subtitle,
-		Action:         action,
-		RunID:          trace.RunID,
-		SessionID:      trace.SessionID,
-		Actions:        appActions(target, action, trace),
+		NotificationID:   newNotificationID(),
+		WindowID:         windowID,
+		Navigable:        navigable,
+		Title:            title,
+		Subtitle:         subtitle,
+		Action:           action,
+		RunID:            trace.RunID,
+		SessionID:        trace.SessionID,
+		Actions:          appActions(target, action, trace),
+		RuntimeSessionID: target.RuntimeSessionID,
+		Backend:          target.Backend,
+	}
+	if target.Backend != "" && target.Backend != BackendKindKitty {
+		notice.WindowID = 0
 	}
 	if navigable {
 		notice.KittySocket = target.KittyListenOn

@@ -1,0 +1,18 @@
+=== RUN   TestASLRunInTmuxSessionRoutesToItsRuntimeSlot
+--- PASS: TestASLRunInTmuxSessionRoutesToItsRuntimeSlot (0.02s)
+=== RUN   TestASLRunInKittyRuntimeSessionRoutesToItsOwnWindow
+--- PASS: TestASLRunInKittyRuntimeSessionRoutesToItsOwnWindow (0.02s)
+=== RUN   TestASLRunStaysRoutedWithNoKitty
+--- PASS: TestASLRunStaysRoutedWithNoKitty (0.04s)
+=== RUN   TestASLReconcileNeverSeedsAClaimedRunOntoAKittyTab
+--- PASS: TestASLReconcileNeverSeedsAClaimedRunOntoAKittyTab (0.02s)
+=== RUN   TestASLReconcileWithoutSnapshotLeavesKittyLeasesAlone
+--- PASS: TestASLReconcileWithoutSnapshotLeavesKittyLeasesAlone (0.01s)
+=== RUN   TestOperatorClearReachesARuntimeSlot
+=== RUN   TestOperatorClearReachesARuntimeSlot/kitty=true
+=== RUN   TestOperatorClearReachesARuntimeSlot/kitty=false
+--- PASS: TestOperatorClearReachesARuntimeSlot (0.01s)
+    --- PASS: TestOperatorClearReachesARuntimeSlot/kitty=true (0.01s)
+    --- PASS: TestOperatorClearReachesARuntimeSlot/kitty=false (0.01s)
+PASS
+ok  	github.com/sglavoie/agentmux/internal/daemon	0.324s

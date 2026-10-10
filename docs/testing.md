@@ -46,6 +46,16 @@ clean shutdown. When it is asked for, a missing or protocol-incompatible ASL
 fails it rather than skipping — a silent skip would report a compatible pair
 that was never actually checked.
 
+Its second half (`internal/daemon`, `TestInstalledBridgeRoutesRunsByRuntimeSession`)
+runs two real `asl run`s with a stand-in harness in a throwaway HOME: one in a
+pane of a private tmux server, one as a Kitty runtime session. The `amx` ASL
+finds on `PATH` is built from the checkout and dials a socket the test serves,
+so real lifecycle and mailbox hooks reach this build's handler. It checks that
+each run's lease, question, notification, and reply stay with its own session
+across a daemon restart and with no viewer attached, that a stale action token
+is refused, and that no question is announced twice. It needs `tmux` as well
+as `asl`, and fails rather than skips without either.
+
 ## Live Kitty worktree smoke checklist
 
 The automated gate uses hermetic Kitty and Git fixtures. Before a release, run

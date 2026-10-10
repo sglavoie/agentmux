@@ -204,6 +204,13 @@ func (h *Handler) maybeNotifyTraced(windowID int, sessionTitle, account, action 
 	h.notifier.MaybeNotifyTracedTarget(h.notificationTarget(windowID, account), sessionTitle, action, pipeMode, trace)
 }
 
+// notificationTarget names what a notification for slot is about and what a
+// click on it may focus. The runtime session holding the slot travels with the
+// target so a notice can be traced, and acted on, by session identity. Only a
+// Kitty pane is navigable: its click focuses the exact window through the
+// socket the daemon learned for it. A session on another backend has no Kitty
+// window behind its slot, so its notification is delivered all the same but
+// carries no focus target, and never a slot number dressed as a window ID.
 func (h *Handler) notificationTarget(windowID int, account string) notification.NotificationTarget {
 	target := notification.NotificationTarget{WindowID: windowID, Account: account, Navigable: windowID > 0}
 	if windowID <= 0 {
@@ -211,7 +218,16 @@ func (h *Handler) notificationTarget(windowID int, account string) notification.
 	}
 	h.stateMu.Lock()
 	target.KittyListenOn = h.kittySockets[windowID]
+	if binding, bound := h.runtimeRoutes.binding(windowID); bound {
+		target.RuntimeSessionID = binding.runtime
+		target.Backend = binding.target.backend
+	}
 	h.stateMu.Unlock()
+	if isRuntimeSyntheticSlot(windowID) {
+		target.Navigable = false
+		target.KittyListenOn = ""
+		return target
+	}
 	if !isReusableKittySocket(target.KittyListenOn) {
 		target.KittyListenOn = ""
 	}

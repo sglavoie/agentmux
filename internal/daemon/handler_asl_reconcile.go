@@ -47,15 +47,19 @@ func (h *Handler) maybeReconcileASLLeases(now time.Time, windows []kitty.OSWindo
 
 // ReconcileASLLeases reconciles immediately, bypassing the interval gate.
 // Discovery runs outside stateMu so a slow filesystem scan cannot block state
-// handlers. An empty snapshot skips reconciliation entirely: without windows,
+// handlers. An empty snapshot says nothing about Kitty windows: without them,
 // candidates cannot be attributed to owners, and missing evidence must
-// preserve leases rather than revoke them.
+// preserve leases rather than revoke them, so Kitty leases are left exactly as
+// they are. Runtime sessions on other backends do not depend on the snapshot —
+// their runs are attributed by identity — so the sweep still runs for them, and
+// is skipped entirely only when there are none.
 func (h *Handler) ReconcileASLLeases(now time.Time, windows []kitty.OSWindow) {
 	h.stateMu.Lock()
 	h.lastASLReconcileAt = now
+	runtimeState := h.hasRuntimeASLStateLocked()
 	h.stateMu.Unlock()
 
-	if len(windows) == 0 {
+	if len(windows) == 0 && !runtimeState {
 		return
 	}
 	// Paused runs have no loop process. Historical projections must not seed
@@ -77,6 +81,9 @@ type aslSeed struct {
 	windowID  int
 	key       string
 	candidate agentloop.Candidate
+	// runtime marks a seed attributed by a runtime session's claim on the run
+	// rather than by workspace matching.
+	runtime bool
 }
 
 // reconcileASLDiscovery folds one successful sweep into the per-window
@@ -87,8 +94,10 @@ func (h *Handler) reconcileASLDiscovery(now time.Time, windows []kitty.OSWindow,
 	// Attribute each present candidate to the managed owner window(s) of its
 	// workspace, reusing the exact matching policy lifecycle fan-out uses so
 	// reconciliation and live events can never disagree about ownership.
+	kittyEvidence := len(windows) > 0
+	present := result.Candidates(false)
 	var seeds []aslSeed
-	for _, candidate := range result.Candidates(false) {
+	for _, candidate := range present {
 		// Leases are keyed by run identity only. The pre-identity window-keyed
 		// key is gone with the legacy parser: the projection always carries a
 		// run ID, and a window-keyed lease cannot be matched against evidence,
@@ -110,6 +119,25 @@ func (h *Handler) reconcileASLDiscovery(now time.Time, windows []kitty.OSWindow,
 	h.aslMetrics.RecordSweep(now, result)
 	changedWindows := make(map[int]bool)
 
+	// A run a runtime session claimed belongs to that session's slot and to no
+	// other window. The claim replaces whatever workspace matching proposed for
+	// it above, which was computed off the lock and cannot see claims.
+	claims := h.aslRuntimeClaimsLocked()
+	if len(claims) > 0 {
+		kept := seeds[:0]
+		for _, seed := range seeds {
+			if _, claimed := claims[seed.key]; !claimed {
+				kept = append(kept, seed)
+			}
+		}
+		seeds = kept
+		for _, candidate := range present {
+			if slot, claimed := claims[candidate.RunID]; claimed && candidate.RunID != "" {
+				seeds = append(seeds, aslSeed{windowID: slot, key: candidate.RunID, candidate: candidate, runtime: true})
+			}
+		}
+	}
+
 	for _, seed := range seeds {
 		// Reject a scan that describes an older position for this run than one
 		// already folded in. Two independent counters make that decidable: the
@@ -124,7 +152,7 @@ func (h *Handler) reconcileASLDiscovery(now time.Time, windows []kitty.OSWindow,
 		}
 		h.aslSupervisors.Register(asl.SupervisorTarget{
 			WindowID:       seed.windowID,
-			OriginWindowID: seed.candidate.WindowID,
+			OriginWindowID: seed.supervisorOriginWindowID(),
 			Candidate:      seed.candidate,
 		})
 		if h.seedASLLeaseLocked(now, seed) {
@@ -146,6 +174,23 @@ func (h *Handler) reconcileASLDiscovery(now time.Time, windows []kitty.OSWindow,
 				continue
 			}
 			ref := asl.LeaseRef{WindowID: windowID, Key: fact.Key}
+			if holder, claimed := claims[fact.RunID]; claimed && holder != windowID {
+				// Workspace matching placed this lease before the run's own
+				// session claimed it. The claim is identity; the match was a
+				// guess, and it is withdrawn at once rather than after two misses
+				// because the run is not missing — it is somewhere else.
+				h.releaseASLLeaseLocked(now, windowID, st, fact, changedWindows, "lease_reattributed",
+					"run "+fact.RunID+" belongs to another runtime session; misattributed lease released",
+					"ASL run belongs to another runtime session; supervisor question projection retired")
+				continue
+			}
+			if !kittyEvidence && !isRuntimeSyntheticSlot(windowID) {
+				// No snapshot, no verdict on a Kitty window's lease.
+				if h.aslMissStreak.Streak(ref) > 0 {
+					liveRefs[ref] = true
+				}
+				continue
+			}
 			switch sweep.Evidence(h.aslSupervisors.StateDir(ref), fact) {
 			case asl.EvidencePresent:
 				h.aslMissStreak.Clear(ref)
@@ -166,34 +211,9 @@ func (h *Handler) reconcileASLDiscovery(now time.Time, windows []kitty.OSWindow,
 				liveRefs[ref] = true
 				continue
 			}
-			h.aslMissStreak.Clear(ref)
-			h.aslSupervisors.Retire(ref)
-			h.clearASLSupervisorQuestionLocked(
-				windowID,
-				fact.RunID,
-				fact.Seq+1,
-				now,
-				"ASL run missing from consecutive discoveries; supervisor question projection retired",
-			)
-			st.ShadowSeq++
-			st.Reducer.Apply(protocol.ReducerEvent{
-				Source:         protocol.SourceID{Kind: protocol.SourceASL, Key: fact.Key},
-				Seq:            st.ShadowSeq,
-				At:             now.Unix(),
-				OriginWindowID: fact.OriginWindowID,
-				RunID:          fact.RunID,
-				Phase:          state.ASLPhaseFinished,
-			})
-			changedWindows[windowID] = true
-			h.aslMetrics.RecordRetiredLease()
-			h.appendWatchdogEventLocked(windowID, fact.OriginWindowID, now, eventASLReconciled, "lease_released",
-				string(protocol.SourceASL)+":"+fact.Key,
-				"run "+fact.RunID+" confirmed absent by consecutive discoveries; lease released")
-			slog.Debug("asl reconcile released confirmed-absent run lease",
-				"window_id", windowID,
-				"run_id", fact.RunID,
-				"key", fact.Key,
-			)
+			h.releaseASLLeaseLocked(now, windowID, st, fact, changedWindows, "lease_released",
+				"run "+fact.RunID+" confirmed absent by consecutive discoveries; lease released",
+				"ASL run missing from consecutive discoveries; supervisor question projection retired")
 		}
 	}
 	h.aslMissStreak.Retain(func(ref asl.LeaseRef) bool { return liveRefs[ref] })
@@ -207,6 +227,70 @@ func (h *Handler) reconcileASLDiscovery(now time.Time, windows []kitty.OSWindow,
 		h.syncRendererMetadataLocked(windowID)
 		h.markWindowDirtyLocked(windowID)
 	}
+}
+
+// originWindowID names the pane a seeded run reports from. A run attributed by
+// a runtime session's claim originates from that session's slot; the window ID
+// its projection may carry is Kitty's and does not locate it.
+func (s aslSeed) originWindowID() int {
+	if s.runtime || s.candidate.WindowID <= 0 {
+		return s.windowID
+	}
+	return s.candidate.WindowID
+}
+
+// supervisorOriginWindowID is originWindowID without the fallback: a
+// workspace-matched run whose projection names no window keeps reporting none.
+func (s aslSeed) supervisorOriginWindowID() int {
+	if s.runtime {
+		return s.windowID
+	}
+	return s.candidate.WindowID
+}
+
+// releaseASLLeaseLocked converts one live lease into the finished fact its
+// lost finish event would have produced, and retires the run's supervision on
+// that window. Callers hold stateMu.
+func (h *Handler) releaseASLLeaseLocked(
+	now time.Time,
+	windowID int,
+	st *state.WindowState,
+	fact protocol.SourceFactSnapshot,
+	changedWindows map[int]bool,
+	action string,
+	reason string,
+	questionReason string,
+) {
+	ref := asl.LeaseRef{WindowID: windowID, Key: fact.Key}
+	h.aslMissStreak.Clear(ref)
+	h.aslSupervisors.Retire(ref)
+	h.releaseASLRunLocked(fact.RunID, windowID)
+	h.clearASLSupervisorQuestionLocked(
+		windowID,
+		fact.RunID,
+		fact.Seq+1,
+		now,
+		questionReason,
+	)
+	st.ShadowSeq++
+	st.Reducer.Apply(protocol.ReducerEvent{
+		Source:         protocol.SourceID{Kind: protocol.SourceASL, Key: fact.Key},
+		Seq:            st.ShadowSeq,
+		At:             now.Unix(),
+		OriginWindowID: fact.OriginWindowID,
+		RunID:          fact.RunID,
+		Phase:          state.ASLPhaseFinished,
+	})
+	changedWindows[windowID] = true
+	h.aslMetrics.RecordRetiredLease()
+	h.appendWatchdogEventLocked(windowID, fact.OriginWindowID, now, eventASLReconciled, action,
+		string(protocol.SourceASL)+":"+fact.Key, reason)
+	slog.Debug("asl reconcile released run lease",
+		"window_id", windowID,
+		"run_id", fact.RunID,
+		"key", fact.Key,
+		"action", action,
+	)
 }
 
 // seedASLLeaseLocked asserts one discovered run's lease on its owner window.
@@ -235,10 +319,7 @@ func (h *Handler) seedASLLeaseLocked(now time.Time, seed aslSeed) bool {
 		return false
 	}
 	phase := asl.PhaseForDiscovered(seed.candidate.Phase)
-	originWindowID := seed.candidate.WindowID
-	if originWindowID <= 0 {
-		originWindowID = seed.windowID
-	}
+	originWindowID := seed.originWindowID()
 	decision := st.Reducer.Apply(protocol.ReducerEvent{
 		Source:         protocol.SourceID{Kind: protocol.SourceASL, Key: seed.key},
 		Seq:            0,

@@ -13,7 +13,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/palette"
 )
 
 // The Handler half of ASL supervision: polling registered lease records,
@@ -156,22 +155,12 @@ func (h *Handler) handleASLSupervisorMailboxQuestion(
 	if !ok {
 		return
 	}
-	targets, _ := loopLifecycleTargets(windows, payload)
+	targets, _ := aslHookTargets(baseReq, windows, payload)
 	for _, routeTarget := range targets {
-		parts := palette.ParseTitleParts(routeTarget.tab.Title)
-		profile := ""
-		harnessName := ""
-		muted := parts.Muted
-		if routeTarget.win != nil {
-			profile = routeTarget.win.UserVars.EffectiveProfile()
-			harnessName = routeTarget.win.UserVars.EffectiveHarness()
-			muted = muted || routeTarget.win.UserVars.Mute != ""
-		}
-		h.setMutedFromSnapshot(routeTarget.windowID, muted)
-		originWindowID := baseReq.WindowID
-		if payloadWindowID := payload.EffectiveKittyWindowID(); payloadWindowID > 0 {
-			originWindowID = payloadWindowID
-		}
+		targetCtx := h.loopTargetContextFor(routeTarget)
+		profile := targetCtx.profile
+		harnessName := targetCtx.harness
+		originWindowID := aslHookOriginWindow(baseReq, payload)
 		target := question.Target(routeTarget.windowID, originWindowID)
 		projection := question.Projection(now)
 
@@ -186,7 +175,7 @@ func (h *Handler) handleASLSupervisorMailboxQuestion(
 			st.Reducer = state.NewReducer(h.reducerCfg)
 		}
 		if st.LastSessionTitle == "" {
-			st.LastSessionTitle = parts.Base
+			st.LastSessionTitle = targetCtx.sessionTitle
 		}
 		if st.LastAccount == "" {
 			st.LastAccount = profile

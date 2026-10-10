@@ -1,0 +1,37 @@
+{
+  "session": "10",
+  "status": "passed",
+  "artifact_revision": "agentmux 121d29ac + session-10 working tree; installed asl 0.2.0 (/Users/sglavoie/.local/bin/asl) serving contract set asl-amx-1.85ec3041b9f03f47, bridge protocol 2; tmux 3.7c on a private server; macOS 27.0.1",
+  "method": "`just asl-integration` equivalent run verbosely: AMX_ASL_INTEGRATION=1 go test -count=1 -v -run TestInstalledBridge ./internal/aslbridge ./internal/daemon. TestInstalledBridgeRoutesRunsByRuntimeSession builds this checkout's amx into a throwaway HOME, serves that HOME's daemon socket from an in-process daemon Handler over the real IPC server, and runs two real `asl run`s (throwaway plans, throwaway Git repositories, isolated state root) whose lifecycle and mailbox hooks arrive through the real `amx hook-indicator` client. Real: asl and its mailbox/hooks/projection/bridge, the amx hook client and IPC dedupe, the daemon handler/reducer/notifier decision path, the private tmux server and pane, the runtime-session registry and checkpoint. Stand-ins: the harness is a script that asks one mailbox question with `asl ask --wait` and then completes its session; the notification backend is a recorder (no macOS alert is shown); the Kitty instance is a fixed window listing, because Kitty launches do not register runtime sessions yet and an isolated test must not drive the operator's Kitty. No desktop viewer exists yet, so viewer absence is a daemon with no Kitty client, no companion subscriber, and no client attached to the tmux server.",
+  "logs": [
+    "session-10/asl-integration-v.log",
+    "session-10/daemon-runtime-asl-v.log",
+    "session-10/notification-target-v.log"
+  ],
+  "cases": {
+    "tmux-asl": {
+      "status": "passed",
+      "evidence": "A real `asl run` executing as the pane process of a tmux runtime session (launched with session.LaunchOn on a private tmux 3.7c server, registered in a real runtime-session registry) delivered its lifecycle hooks as runtime session rs-09001ad17cb8b1b1d0a610e6b6c97506: run 20261010T000249795444Z-67009's lease went live on that session's non-Kitty slot while the daemon had no Kitty client at all. Its worker's mailbox question, surfaced by `asl outbox wait` from the same session, raised the question icon on that slot; `asl inbox reply` cleared it; the run's end released the lease. Hermetic counterpart TestASLRunInTmuxSessionRoutesToItsRuntimeSlot additionally shows a managed Kitty tab in the same directory and harness, and an inherited kitty_window_id naming it, receive no state. Logs: session-10/asl-integration-v.log (OBSERVED tmux-asl, misrouting check), session-10/daemon-runtime-asl-v.log."
+    },
+    "kitty-asl": {
+      "status": "passed",
+      "evidence": "A second real `asl run`, started with the environment of a Kitty-kind runtime session registered at window 43 of instance unix:/tmp/amx-s10-kitty, delivered run 20261010T000258523813Z-67241's lifecycle hooks as runtime session rs-f02fcbfad13c35e21e2d1b29b88db543. The lease and question fabb6605-c032-463f-8155-6ae62925507a landed on window 43 only, with exactly 1 notification titled for that window's tab and a navigable click target carrying the registered socket; managed decoy windows 41 and 42 in the two runs' directories received no lease, icon, or notification through two reconcile sweeps over the real state root. The Kitty instance was a fixed window listing, not a running Kitty (see method). Hermetic counterpart TestASLRunInKittyRuntimeSessionRoutesToItsOwnWindow covers two managed tabs in one directory. Logs: session-10/asl-integration-v.log (OBSERVED kitty-asl), session-10/daemon-runtime-asl-v.log."
+    },
+    "viewer-absent": {
+      "status": "passed",
+      "evidence": "With no Kitty client, no companion app subscriber, and `tmux list-clients` on the private server printing nothing, the tmux run's lifecycle was observed (lease live, loop marker), its question 3212341a-a29c-465c-8042-8162be844c3d raised the question icon, and exactly 1 notification was dispatched; its target named runtime_session rs-09001ad17cb8b1b1d0a610e6b6c97506, backend tmux, navigable=false, no Kitty socket. Three snapshot-less maintenance ticks then reconciled the run against the real ASL state root and kept its supervision registered. TestASLRunStaysRoutedWithNoKitty and TestOperatorClearReachesARuntimeSlot/kitty=false show the same for the snapshot-less maintenance path and F8 attention clearing; TestAppNoticeForANonKittyRuntimeSessionCarriesNoKittyTarget shows the companion notice carries runtime_session_id/backend with window_id 0 and never reaches the Kitty focus client. Logs: session-10/asl-integration-v.log (OBSERVED viewer-absent), session-10/daemon-runtime-asl-v.log, session-10/notification-target-v.log."
+    },
+    "daemon-restart": {
+      "status": "passed",
+      "evidence": "While the tmux run was still blocked on its question, the first daemon flushed its runtime checkpoint and stopped serving; a new Handler restored the checkpoint and served the same socket. Observed after restart: runtime session rs-09001ad17cb8b1b1d0a610e6b6c97506 bound to a non-Kitty slot again, run 20261010T000249795444Z-67009's lease live, icon after restore \"question\". The still-open question, resurfaced to the new daemon by `asl outbox wait` and followed by a reconcile sweep, showed the question icon with 0 new notifications; the later reply and the run's end were both applied by the restarted daemon. Log: session-10/asl-integration-v.log (OBSERVED daemon-restart, misrouting check)."
+    },
+    "stale-token-refusal": {
+      "status": "passed",
+      "evidence": "Through the daemon's asl_action request to the installed `asl bridge serve`, run.stop_after_current for the live tmux run with action token 0000000000000000000000000000dead was refused: response not ok, error \"stale-action-token: action token does not match current plan state; refresh the snapshot\" (bridge row state running, real action token present). No receipt was recorded for the operation ID, and the run's question icon and live lease were unchanged afterwards. TestInstalledBridgeServesTheContractSet in the same recipe passed its own stale-token, idempotent-receipt, body-free-snapshot, and contract-set identity checks against the same installed asl. Log: session-10/asl-integration-v.log (OBSERVED stale-token-refusal; --- PASS: TestInstalledBridgeServesTheContractSet)."
+    },
+    "notification-deduplication": {
+      "status": "passed",
+      "evidence": "One question, surfaced twice by `asl outbox wait` and polled through three reconcile/refresh sweeps of the run's real lease projection, produced exactly 1 notification on the first daemon (1 dispatched in total). After the restart the same still-open question, surfaced again, produced 0 notifications on the second daemon, whose only dispatch (1 in total) was the Kitty run's distinct question on window 43. No decoy window was notified. TestASLRunInTmuxSessionRoutesToItsRuntimeSlot shows a redelivered handoff dispatching nothing further. Log: session-10/asl-integration-v.log (both OBSERVED notification-deduplication lines), session-10/daemon-runtime-asl-v.log."
+    }
+  }
+}

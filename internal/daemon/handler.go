@@ -242,6 +242,11 @@ type Handler struct {
 	// reasserting a question after an authoritative mailbox reply or
 	// resolution. Guarded by stateMu.
 	aslSupervisors asl.SupervisorRegistry
+	// aslRuntimeRuns maps each ASL run a managed hook delivered to the slot of
+	// the runtime session that delivered it. It is what keeps a run routed by
+	// its session's identity out of Kitty workspace matching. Guarded by
+	// stateMu.
+	aslRuntimeRuns map[string]int
 
 	// idleSamples counts, per window probe source, how many consecutive
 	// stabilized idle screen samples an adapter has observed before an

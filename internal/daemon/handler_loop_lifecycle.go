@@ -11,7 +11,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/palette"
 )
 
 // daemonLoopDiscoverPlans is the tri-state discovery seam reconciliation uses:
@@ -31,10 +30,15 @@ var (
 )
 
 type loopLifecycleTarget struct {
-	windowID  int
+	windowID int
+	// tab and win are the Kitty tab and window of the target. Both are nil for
+	// a runtime session on another backend, or one Kitty does not list.
 	tab       *kitty.Tab
 	win       *kitty.Window
 	workspace agentloop.WorkspaceTarget
+	// runtime names the runtime session whose managed hook selected this
+	// target; it is empty for a target chosen by workspace matching.
+	runtime string
 }
 
 func (h *Handler) handleLoopLifecycleHookEvent(
@@ -44,7 +48,7 @@ func (h *Handler) handleLoopLifecycleHookEvent(
 	baseReq protocol.Request,
 	windows []kitty.OSWindow,
 ) bool {
-	targets, openTargets := loopLifecycleTargets(windows, payload)
+	targets, openTargets := aslHookTargets(baseReq, windows, payload)
 	if len(targets) == 0 {
 		return false
 	}
@@ -69,27 +73,18 @@ func (h *Handler) handleLoopLifecycleTarget(
 	target loopLifecycleTarget,
 	openTargets []agentloop.WorkspaceTarget,
 ) {
-	parts := palette.ParseTitleParts(target.tab.Title)
-	profile := ""
-	harnessName := ""
-	muted := parts.Muted
-	if target.win != nil {
-		profile = target.win.UserVars.EffectiveProfile()
-		harnessName = target.win.UserVars.EffectiveHarness()
-		muted = muted || target.win.UserVars.Mute != ""
-	}
-	h.setMutedFromSnapshot(target.windowID, muted)
+	targetCtx := h.loopTargetContextFor(target)
 
 	req := events.BuildHookStateUpdateRequest(
 		target.windowID,
 		action,
 		eventOrAction,
 		payload,
-		parts.Base,
-		profile,
+		targetCtx.sessionTitle,
+		targetCtx.profile,
 		baseReq.Harness,
-		harnessName,
-		parts.State,
+		targetCtx.harness,
+		targetCtx.currentIcon,
 		baseReq.PipeMode,
 		false,
 		false,
@@ -104,14 +99,18 @@ func (h *Handler) handleLoopLifecycleTarget(
 	req.RouteEvidence.RejectedAlternatives = nil
 	req.RouteEvidence.ASLMatches = 1
 	events.PopulateRoutingCandidates(req.RouteEvidence, target.tab, events.RoutingWindowByID(target.tab, baseReq.WindowID), target.win)
-	events.ChooseRoute(req.RouteEvidence, events.RouteDecisionOwner, "asl_workspace", target.win)
-	req.RouteDecision = events.RouteDecisionOwner
+	if target.runtime != "" {
+		// The session's own slot is both source and target; no workspace was
+		// matched to find it.
+		events.ChooseRoute(req.RouteEvidence, events.RouteDecisionSource, "asl_runtime_session", target.win)
+		req.RouteDecision = events.RouteDecisionSource
+	} else {
+		events.ChooseRoute(req.RouteEvidence, events.RouteDecisionOwner, "asl_workspace", target.win)
+		req.RouteDecision = events.RouteDecisionOwner
+	}
 	// The fact lands on the managed target but retains the pane identified by
 	// the request/payload as its origin for route-aware probes and diagnostics.
-	originWindowID := baseReq.WindowID
-	if payloadWindowID := payload.EffectiveKittyWindowID(); payloadWindowID > 0 {
-		originWindowID = payloadWindowID
-	}
+	originWindowID := aslHookOriginWindow(baseReq, payload)
 	normalized := events.NormalizedFromHookRequest(eventOrAction, baseReq, originWindowID)
 	req.Normalized = &normalized
 	req.NormalizationOutcome = events.NormalizationOutcomeFor(normalized)
@@ -125,6 +124,15 @@ func (h *Handler) handleLoopLifecycleTarget(
 		)
 	}
 	runID := payload.EffectiveRunID()
+	if target.runtime != "" {
+		h.stateMu.Lock()
+		if eventOrAction == events.AgentSessionLoopFinished {
+			h.releaseASLRunLocked(runID, target.windowID)
+		} else {
+			h.claimASLRunLocked(runID, target.windowID)
+		}
+		h.stateMu.Unlock()
+	}
 	if eventOrAction == events.AgentSessionLoopFinished {
 		h.finishASLSupervisorQuestion(target.windowID, runID, time.Now())
 	} else {
@@ -136,7 +144,7 @@ func (h *Handler) handleLoopLifecycleTarget(
 		)
 	}
 
-	if marker := loopMarkerForLifecycleTarget(eventOrAction, target.workspace, openTargets); marker != nil {
+	if marker := loopMarkerForLifecycleTarget(eventOrAction, target, openTargets); marker != nil {
 		h.stateMu.Lock()
 		st := h.ensureWindowStateLocked(target.windowID)
 		// The reducer's per-run leases are authoritative once any ASL fact has
@@ -315,7 +323,8 @@ func normalizeKnownLoopHarness(raw string) string {
 	}
 }
 
-func loopMarkerForLifecycleTarget(eventOrAction string, target agentloop.WorkspaceTarget, openTargets []agentloop.WorkspaceTarget) *bool {
+func loopMarkerForLifecycleTarget(eventOrAction string, lifecycleTarget loopLifecycleTarget, openTargets []agentloop.WorkspaceTarget) *bool {
+	target := lifecycleTarget.workspace
 	switch eventOrAction {
 	case events.AgentSessionLoopStarted, events.AgentSessionLoopTurnStarted,
 		events.AgentSessionLoopTurnHeartbeat, events.AgentSessionLoopTurnHangSuspected,
@@ -331,6 +340,12 @@ func loopMarkerForLifecycleTarget(eventOrAction string, target agentloop.Workspa
 	case events.AgentSessionLoopPaused:
 		return boolPtr(false)
 	case events.AgentSessionLoopFinished:
+		if lifecycleTarget.runtime != "" {
+			// The finish came from this session's own run. Whether another run
+			// shares its directory says nothing about this session, so the
+			// workspace comparison below does not apply.
+			return boolPtr(false)
+		}
 		if strings.TrimSpace(target.CWD) == "" && target.WindowID <= 0 {
 			slog.Debug("preserving loop marker after loop finish; target directory missing")
 			return nil

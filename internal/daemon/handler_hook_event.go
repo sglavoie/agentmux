@@ -359,6 +359,8 @@ func (h *Handler) handleOperatorHookEvent(ctx hookEventContext, eventOrAction, a
 	profile := ""
 	harnessName := ""
 	liveLooping := ctx.tab != nil && palette.ParseTitleParts(ctx.tab.Title).Looping
+	_, managed := managedHookOrigin(ctx.req)
+	runtimeSlot := false
 	forceVisibleClear := liveLooping
 	switch {
 	case ctx.owner != nil:
@@ -383,6 +385,15 @@ func (h *Handler) handleOperatorHookEvent(ctx hookEventContext, eventOrAction, a
 			"window_id", ctx.req.WindowID,
 			"event", eventOrAction,
 		)
+	case ctx.tab == nil && managed:
+		// A managed hook names its runtime session, and that session's slot is
+		// the target whether or not any Kitty snapshot lists it: a session on
+		// another backend has no tab to resolve an owner from, and its
+		// attention must still be clearable with no Kitty running.
+		targetID = ctx.req.WindowID
+		profile = ctx.req.Account
+		harnessName = ctx.req.TargetHarness
+		runtimeSlot = true
 	case ctx.lookupFailed:
 		// The list failed, so we cannot resolve the title owner. Retain a safe
 		// fallback: wipe the source pane instead of dropping the clear entirely.
@@ -431,6 +442,9 @@ func (h *Handler) handleOperatorHookEvent(ctx hookEventContext, eventOrAction, a
 	case ctx.owner != nil:
 		stateReq.RouteDecision = events.RouteDecisionOwner
 		events.ChooseRoute(ctx.req.RouteEvidence, events.RouteDecisionOwner, action+"_owner", ctx.owner)
+	case runtimeSlot:
+		stateReq.RouteDecision = events.RouteDecisionSource
+		events.ChooseRoute(ctx.req.RouteEvidence, events.RouteDecisionSource, action+"_runtime_session", nil)
 	case !ctx.lookupFailed:
 		stateReq.RouteDecision = events.RouteDecisionSource
 		events.ChooseRoute(ctx.req.RouteEvidence, events.RouteDecisionSource, action+"_source", ctx.win)

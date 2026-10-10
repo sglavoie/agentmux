@@ -188,14 +188,17 @@ func (h *Handler) maintenanceTick(now time.Time) {
 	client, socket := h.kittyListTarget()
 	if client == nil {
 		// Runtime sessions on other backends still need retiring and
-		// checkpointing when there is no Kitty to list.
+		// checkpointing when there is no Kitty to list, and their ASL runs
+		// still need reconciling and their supervisor questions polling.
 		h.maintainRuntimeSessions(now)
+		h.maintainASLWithoutSnapshot(now)
 		return
 	}
 	capture, err := h.captureKittySnapshot(client, socket)
 	if err != nil {
 		slog.Debug("maintenance: list windows failed", "err", err)
 		h.maintainRuntimeSessions(now)
+		h.maintainASLWithoutSnapshot(now)
 		return
 	}
 	windows := capture.windows
@@ -219,6 +222,25 @@ func (h *Handler) maintenanceTick(now time.Time) {
 	if recovering {
 		h.MarkReady()
 	}
+}
+
+// maintainASLWithoutSnapshot is the ASL half of a maintenance tick that has no
+// Kitty snapshot. Reconciliation without windows touches only runtime sessions
+// on other backends and never judges a Kitty window's lease; the supervisor
+// refresh reads only the registered lease records, which no terminal is needed
+// for. Together they keep a run's loop marker, question, and notification
+// current while no viewer — and no Kitty — is running.
+func (h *Handler) maintainASLWithoutSnapshot(now time.Time) {
+	h.stateMu.Lock()
+	runtimeState := h.hasRuntimeASLStateLocked()
+	h.stateMu.Unlock()
+	if runtimeState {
+		// Gated on there being something to reconcile: a skipped sweep would
+		// still restart the interval and delay the first real one after Kitty
+		// answers again.
+		h.maybeReconcileASLLeases(now, nil)
+	}
+	h.refreshASLSupervisorQuestions(now)
 }
 
 // runSnapshotTickWithCapture runs one maintenance pass over a completed

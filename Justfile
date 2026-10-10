@@ -66,8 +66,13 @@ tui-scenarios:
 # asked for, an ASL that is missing or speaks a different protocol fails here
 # rather than skipping: a silent skip would report a compatible pair that was
 # never actually checked.
+#
+# Two packages hold a half each. internal/aslbridge checks the bridge protocol
+# against a state corpus. internal/daemon drives real `asl run`s — one inside a
+# private tmux session, one inside a Kitty runtime session — through this
+# checkout's hook client and daemon handler, so it additionally needs tmux.
 asl-integration:
-    AMX_ASL_INTEGRATION=1 go test -count=1 -run TestInstalledBridge ./internal/aslbridge
+    AMX_ASL_INTEGRATION=1 go test -count=1 -run TestInstalledBridge ./internal/aslbridge ./internal/daemon
 
 # Compare the vendored compatibility corpus against the canonical one in an ASL
 # checkout. `just test` already proves the vendored bytes and the pinned

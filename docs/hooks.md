@@ -76,6 +76,19 @@ different latest question arrives, and that new question is allowed to alert
 even inside the ordinary notification cooldown. The question icon ties
 permission priority, remains below errors, and outranks warnings and activity.
 
+A run inside a managed runtime session is placed by that session's identity,
+not by the terminal. Its lifecycle and mailbox hooks carry
+`AMX_RUNTIME_SESSION_ID` like any managed hook, so the lease, the question
+icon, its notification, and an F8 clear all land on the session's own slot —
+a tmux pane or a Kitty window alike — with no Kitty snapshot consulted, and
+therefore also when Kitty or every viewer is closed. Workspace matching
+(same directory, compatible harness) remains the route for legacy hooks only,
+and a run a runtime session has claimed is excluded from it: reconciliation
+attributes that run to the claiming slot and withdraws a lease that matching
+had placed on a Kitty tab sharing its directory. A notification for a session
+with no Kitty window is delivered as usual but is not navigable; its companion
+notice names `runtime_session_id` and `backend` and carries no window ID.
+
 ASL supervisor lease schema v2 remains the fixed-size, text-free compatibility
 path (`run_id`, mailbox projection sequence, count, latest question ID, and
 timestamp). Agent Mux refreshes registered live runs on its two-second
