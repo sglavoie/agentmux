@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "gate": "desktop",
+  "record_id": "amx-desktop-1.2b121d3db8f65750",
+  "generated_at": "2026-10-10T19:57:35Z",
+  "result": "pending",
+  "pending_reason": "UI may not run on this Mac and no other Mac is named (AMX_MAC_TEST_HOST)",
+  "rehearsal": true,
+  "notarized_required": false,
+  "repository": {
+    "repo": "agentmux",
+    "root": "/Users/sglavoie/1_dev_projects/sglavoie_agentmux",
+    "revision": "fcd31c0bcfa4260a800ddb6ed35b47d0f00a991c",
+    "describe": "fcd31c0b-dirty",
+    "clean": false,
+    "dirty": [
+      "M CLAUDE.md",
+      "M Justfile",
+      "M backend_migration_doc_test.go",
+      "M cmd/release/justfile_deploy_test.go",
+      "M cmd/root.go",
+      "M cmd/root_test.go",
+      "M docs/acceptance.md",
+      "M docs/backend-migration.md",
+      "M docs/paired-releases.md",
+      "M docs/testing.md",
+      "M internal/release/evidence.go",
+      "M internal/release/gate.go",
+      "M internal/release/steps.go",
+      "M macos/README.md",
+      "?? cmd/release/desktop.go",
+      "?? docs/acceptance/ghostty-desktop/session-19/",
+      "?? docs/desktop-releases.md",
+      "?? internal/release/desktop.go",
+      "?? internal/release/desktop_test.go",
+      "?? macos/scripts/release-gate.sh"
+    ]
+  },
+  "tree_sha256": "7fabb94df0186d299a7a49617920881755ab10aa65e8e01883e6ca58f2e3f97f",
+  "environment": {
+    "os": "darwin",
+    "arch": "arm64",
+    "os_version": "27.0.1",
+    "go": "go1.27.1",
+    "toolchain": []
+  },
+  "bundle": [],
+  "steps": [
+    {
+      "name": "os-version",
+      "repo": "agentmux",
+      "phase": "environment",
+      "command": [
+        "sw_vers",
+        "-productVersion"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 10
+    },
+    {
+      "name": "toolchain",
+      "repo": "agentmux",
+      "phase": "toolchain",
+      "command": [
+        "macos/scripts/release-gate.sh",
+        "toolchain"
+      ],
+      "status": "pending",
+      "exit_code": 75,
+      "duration_ms": 32,
+      "output_tail": "remote-ui: AMX_UI_TEST_REMOTE_ONLY=1 and AMX_MAC_TEST_HOST is unset: UI may not run on this Mac\nroute: refuse\npending: UI may not run on this Mac and no other Mac is named (AMX_MAC_TEST_HOST)"
+    },
+    {
+      "name": "build-app",
+      "repo": "agentmux",
+      "phase": "build",
+      "command": [
+        "just",
+        "mac-app",
+        "Release"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    },
+    {
+      "name": "bundle",
+      "repo": "agentmux",
+      "phase": "build",
+      "command": [
+        "macos/scripts/release-gate.sh",
+        "bundle"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    },
+    {
+      "name": "hosted-tests-debug",
+      "repo": "agentmux",
+      "phase": "verify",
+      "command": [
+        "just",
+        "mac-test"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    },
+    {
+      "name": "hosted-tests-release",
+      "repo": "agentmux",
+      "phase": "verify",
+      "command": [
+        "just",
+        "mac-test",
+        "Release"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    }
+  ],
+  "signature": {
+    "signed": false,
+    "namespace": "agentmux-desktop-release"
+  },
+  "path": "/Users/sglavoie/1_dev_projects/sglavoie_agentmux/docs/acceptance/ghostty-desktop/session-19/desktop-release/pending-no-mac/amx-desktop-1.2b121d3db8f65750.json"
+}

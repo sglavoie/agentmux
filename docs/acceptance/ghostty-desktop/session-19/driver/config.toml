@@ -1,0 +1,24 @@
+[defaults]
+sort = "alpha"
+refresh_interval = 1
+plans_directory = "/tmp/amxs19/home/plans"
+editor = "/tmp/amxs19/bin/edit-standin"
+
+[[profiles]]
+name = "work"
+harness = "claude"
+home_dir = "/tmp/amxs19/home/.claude-a"
+color = "blue"
+
+[[projects]]
+title = "alpha"
+directory = "/tmp/amxs19/proj/alpha"
+profile = "work"
+
+[[projects]]
+title = "beta"
+directory = "/tmp/amxs19/proj/beta"
+profile = "work"
+
+[harness_emojis]
+claude = "🟠"

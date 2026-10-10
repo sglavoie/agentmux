@@ -1,0 +1,264 @@
+== just check (2026-10-10T19:57:42Z, fcd31c0b + working tree)
+go test ./...
+ok  	github.com/sglavoie/agentmux	0.376s
+ok  	github.com/sglavoie/agentmux/cmd	11.182s
+ok  	github.com/sglavoie/agentmux/cmd/config	2.185s
+ok  	github.com/sglavoie/agentmux/cmd/daemon	0.410s
+ok  	github.com/sglavoie/agentmux/cmd/dashboard	0.405s
+ok  	github.com/sglavoie/agentmux/cmd/debug	9.473s
+ok  	github.com/sglavoie/agentmux/cmd/hooks	0.383s
+ok  	github.com/sglavoie/agentmux/cmd/notifications	0.335s
+ok  	github.com/sglavoie/agentmux/cmd/overseer	7.295s
+ok  	github.com/sglavoie/agentmux/cmd/project	1.840s
+ok  	github.com/sglavoie/agentmux/cmd/release	0.541s
+ok  	github.com/sglavoie/agentmux/cmd/session	10.235s
+ok  	github.com/sglavoie/agentmux/cmd/transcripts	1.236s
+ok  	github.com/sglavoie/agentmux/cmd/tuitest	21.254s
+ok  	github.com/sglavoie/agentmux/cmd/worktree	2.690s
+ok  	github.com/sglavoie/agentmux/embed	0.527s
+ok  	github.com/sglavoie/agentmux/internal/actions	6.248s
+ok  	github.com/sglavoie/agentmux/internal/agentloop	(cached)
+ok  	github.com/sglavoie/agentmux/internal/aslbridge	6.126s
+ok  	github.com/sglavoie/agentmux/internal/aslcontract	(cached)
+ok  	github.com/sglavoie/agentmux/internal/aslexport	(cached)
+ok  	github.com/sglavoie/agentmux/internal/atomicfile	(cached)
+ok  	github.com/sglavoie/agentmux/internal/backend	(cached)
+ok  	github.com/sglavoie/agentmux/internal/backend/backendtest	(cached)
+ok  	github.com/sglavoie/agentmux/internal/buildinfo	(cached)
+?   	github.com/sglavoie/agentmux/internal/cachefile	[no test files]
+ok  	github.com/sglavoie/agentmux/internal/cli	0.598s
+ok  	github.com/sglavoie/agentmux/internal/clipboard	1.119s
+ok  	github.com/sglavoie/agentmux/internal/config	4.478s
+ok  	github.com/sglavoie/agentmux/internal/contextlimit	(cached)
+ok  	github.com/sglavoie/agentmux/internal/conversation	(cached)
+ok  	github.com/sglavoie/agentmux/internal/daemon	28.455s
+ok  	github.com/sglavoie/agentmux/internal/daemon/activity	0.630s
+ok  	github.com/sglavoie/agentmux/internal/daemon/asl	0.433s
+ok  	github.com/sglavoie/agentmux/internal/daemon/companion	0.399s
+ok  	github.com/sglavoie/agentmux/internal/daemon/eventlog	0.388s
+ok  	github.com/sglavoie/agentmux/internal/daemon/events	0.336s
+ok  	github.com/sglavoie/agentmux/internal/daemon/ipc	7.096s
+ok  	github.com/sglavoie/agentmux/internal/daemon/notification	1.333s
+ok  	github.com/sglavoie/agentmux/internal/daemon/probes	0.262s
+ok  	github.com/sglavoie/agentmux/internal/daemon/process	(cached)
+ok  	github.com/sglavoie/agentmux/internal/daemon/protocol	0.228s
+ok  	github.com/sglavoie/agentmux/internal/daemon/rendering	0.230s
+ok  	github.com/sglavoie/agentmux/internal/daemon/state	0.217s
+ok  	github.com/sglavoie/agentmux/internal/debugger	16.593s
+ok  	github.com/sglavoie/agentmux/internal/diagnostics	(cached)
+ok  	github.com/sglavoie/agentmux/internal/errors	(cached)
+ok  	github.com/sglavoie/agentmux/internal/gitstate	(cached)
+ok  	github.com/sglavoie/agentmux/internal/handoff	2.505s
+ok  	github.com/sglavoie/agentmux/internal/harness	(cached)
+ok  	github.com/sglavoie/agentmux/internal/hookevent	(cached)
+ok  	github.com/sglavoie/agentmux/internal/hooks	10.686s
+ok  	github.com/sglavoie/agentmux/internal/indicator	6.984s
+ok  	github.com/sglavoie/agentmux/internal/kitty	0.933s
+ok  	github.com/sglavoie/agentmux/internal/kittykeys	(cached)
+ok  	github.com/sglavoie/agentmux/internal/overrides	(cached)
+ok  	github.com/sglavoie/agentmux/internal/overseerpolicy	2.064s
+ok  	github.com/sglavoie/agentmux/internal/palette	(cached)
+ok  	github.com/sglavoie/agentmux/internal/patternset	(cached)
+ok  	github.com/sglavoie/agentmux/internal/plans	11.216s
+ok  	github.com/sglavoie/agentmux/internal/projectresolve	6.850s
+ok  	github.com/sglavoie/agentmux/internal/release	29.276s
+ok  	github.com/sglavoie/agentmux/internal/runtimesession	2.175s
+ok  	github.com/sglavoie/agentmux/internal/screenstate	1.237s
+ok  	github.com/sglavoie/agentmux/internal/searchquery	(cached)
+ok  	github.com/sglavoie/agentmux/internal/searchstore	(cached)
+ok  	github.com/sglavoie/agentmux/internal/session	23.089s
+ok  	github.com/sglavoie/agentmux/internal/tmux	16.510s
+?   	github.com/sglavoie/agentmux/internal/tmux/tmuxtest	[no test files]
+ok  	github.com/sglavoie/agentmux/internal/transcript	13.879s
+ok  	github.com/sglavoie/agentmux/internal/worktree	21.429s
+ok  	github.com/sglavoie/agentmux/tui	39.281s
+ok  	github.com/sglavoie/agentmux/tui/asl	0.167s
+ok  	github.com/sglavoie/agentmux/tui/commands	1.873s
+ok  	github.com/sglavoie/agentmux/tui/customization	(cached)
+ok  	github.com/sglavoie/agentmux/tui/dashboard	0.569s
+ok  	github.com/sglavoie/agentmux/tui/history	0.240s
+ok  	github.com/sglavoie/agentmux/tui/launch	0.182s
+ok  	github.com/sglavoie/agentmux/tui/layout	(cached)
+ok  	github.com/sglavoie/agentmux/tui/overview	4.953s
+ok  	github.com/sglavoie/agentmux/tui/plans	0.204s
+ok  	github.com/sglavoie/agentmux/tui/sessionactions	0.276s
+ok  	github.com/sglavoie/agentmux/tui/theme	(cached)
+ok  	github.com/sglavoie/agentmux/tui/worktrees	0.218s
+go test -race ./internal/transcript ./internal/plans ./internal/handoff ./internal/worktree ./internal/kitty ./internal/daemon ./internal/daemon/ipc ./tui ./tui/commands ./tui/overview ./tui/sessionactions
+ok  	github.com/sglavoie/agentmux/internal/transcript	6.752s
+ok  	github.com/sglavoie/agentmux/internal/plans	3.476s
+ok  	github.com/sglavoie/agentmux/internal/handoff	1.869s
+ok  	github.com/sglavoie/agentmux/internal/worktree	14.076s
+ok  	github.com/sglavoie/agentmux/internal/kitty	1.684s
+ok  	github.com/sglavoie/agentmux/internal/daemon	24.837s
+ok  	github.com/sglavoie/agentmux/internal/daemon/ipc	6.584s
+ok  	github.com/sglavoie/agentmux/tui	104.940s
+ok  	github.com/sglavoie/agentmux/tui/commands	2.499s
+ok  	github.com/sglavoie/agentmux/tui/overview	15.428s
+ok  	github.com/sglavoie/agentmux/tui/sessionactions	1.321s
+go vet ./...
+go run . tui-test run docs/tui-testing/scenarios/*.json
+time=2026-10-10T14:00:25.792-06:00 level=WARN msg="applying tab color after launch" title=🦊api account=work harness=claude profile_color=blue error="new tab \"🦊api\" not visible in any kitty window"
+PASS actions-menu-disabled-entry-explains
+PASS actions-menu-initial-selection
+PASS actions-menu-nested-confirmation-fit
+PASS actions-menu-nested-picker-fit
+PASS actions-menu-selection-moves
+PASS actions-popup-fit
+PASS asl-abort-confirmation-fit
+PASS asl-question-pending-narrow-fit
+PASS asl-question-pending-wide
+PASS asl-response-live-wide
+PASS asl-response-paused-narrow-fit
+PASS asl-runs-narrow-fit
+PASS asl-runs-wide
+PASS attention-overlap-reasons
+PASS band-boundary-119-standard
+PASS band-boundary-120-spacious
+PASS band-boundary-79-compact-fit
+PASS band-boundary-80-standard
+PASS baseline-layout
+PASS blocked-reason-column-narrow-fit
+PASS blocked-reason-column-wide
+PASS branch-column-narrow-fit
+PASS branch-column-unreserved
+PASS branch-column-wide
+PASS combined-actions-during-refresh
+PASS combined-filter-then-resize
+PASS combined-folded-attention-reveal
+PASS combined-preview-read-failure
+PASS combined-preview-read-recovery
+PASS combined-reorder-while-paused
+PASS command-action-by-name
+PASS command-palette-execute-help
+PASS command-palette-filter
+PASS command-palette-narrow-scroll
+PASS command-palette-wide
+PASS compact-below-split-floor
+PASS compact-family-below-split-floor
+PASS config-picker-fit
+PASS config-picker-selection-transition
+PASS contextual-help-from-session-view
+PASS duplicate-names-collisions
+PASS edge-cold-daemon-after-refresh
+PASS edge-filter-matches-nothing
+PASS edge-long-metadata-truncation
+PASS edge-single-session
+PASS edge-zero-sessions
+PASS family-unread-collapsed
+PASS family-unread-expanded
+PASS footer-cap-119-standard
+PASS footer-cap-120-spacious
+PASS footer-cap-79-compact-fit
+PASS footer-cap-80-standard
+PASS footer-cap-short-height
+PASS footer-filter-chips-active
+PASS footer-gloss-narrow-fit
+PASS footer-survives-inspector
+PASS full-screen-inspector-tab-inert
+PASS health-details-overlay-narrow
+PASS health-details-overlay-wide
+PASS health-states-hooks-degraded
+PASS held-inspector-resumes-on-new-selection
+PASS held-inspector-survives-launcher-preview-toggle
+PASS held-inspector-survives-launcher-preview
+PASS held-inspector-survives-launcher-session-search
+PASS held-inspector-survives-resize
+PASS help-modal-narrow-fit
+PASS help-modal-scroll-bottom
+PASS launcher-session-search-leaves-no-stale-hold
+PASS legend-narrow-fit
+PASS mouse chip removal
+PASS mouse header controls
+PASS mouse list wheel moves three rows
+PASS mouse session select and focus
+PASS mouse switcher ignores the wheel and the dashboard under it
+PASS mouse switcher applies project scope
+PASS needs-you-reveals-folded-target
+PASS paused-output-follows-tail
+PASS picker-dsl-narrow-fit
+PASS picker-fit
+PASS picker-preview-fit
+PASS plan-search-header-narrow-fit
+PASS plan-search-narrow-fit
+PASS plan-search-sort-rebind
+PASS plan-view-fit
+PASS plan-view-narrow-fit
+PASS portable-dashboard-narrow-fit
+PASS portable-dashboard-wide
+PASS portable-kitty-only-command-explains
+PASS project-scope-survives-resize
+PASS project-session-shortcut
+PASS project-switcher-keyboard-apply
+PASS project-switcher-narrow-fit
+PASS project-switcher-over-split
+PASS projects-cross-view-selection
+PASS projects-cross-view-summary-return
+PASS projects-family-collapse
+PASS projects-family-expand
+PASS projects-filtered-attention-counts
+PASS projects-summary-action-refusal
+PASS projects-summary-preview
+PASS projects-tree-expanded
+PASS resize-stress
+PASS round-trip-actions-to-inspector
+PASS round-trip-confirmation-cancel-to-inspector
+PASS round-trip-health-to-family-card
+PASS round-trip-help-to-family-card
+PASS round-trip-history-to-inspector
+PASS round-trip-launcher-to-inspector
+PASS round-trip-plans-to-family-card
+PASS round-trip-runs-to-family-card
+PASS round-trip-worktrees-to-inspector
+PASS run-timer-drop-order
+PASS run-timer-narrow-fit
+PASS run-timer-wide
+PASS search-narrow-fit
+PASS session-fork-continuity
+PASS session-search-chips-fit
+PASS session-search-ending-narrow
+PASS session-search-ending-wide
+PASS session-search-header-narrow-fit
+PASS session-view-hints-narrow-fit
+PASS session-view-hints-wide
+PASS size-100x24-triage
+PASS size-120x30-triage
+PASS size-160x45-triage
+PASS size-60x15-triage
+PASS size-80x24-triage
+PASS size-extreme-short-window
+PASS size-split-floor-100-split
+PASS size-split-floor-99-no-split
+PASS spacious-identity-columns
+PASS triage contextual project completion
+PASS triage default wide ordering and tallies
+PASS triage horizontal preview keeps list and inspector
+PASS triage quoted scope survives a switcher round trip
+PASS triage selector survives a width change
+PASS triage switcher opens at a narrow width
+PASS triage switcher counts stay contextual
+PASS triage switcher scrolls its own scope list
+PASS triage vertical direction is ignored by the dashboard
+PASS triage switcher scope survives projects round trip
+PASS unseen-stop-grouping-narrow-fit
+PASS unseen-stop-grouping-wide
+PASS worktrees-browse
+PASS worktrees-cleanup-active-refusal
+PASS worktrees-cleanup-dirty-refusal
+PASS worktrees-cleanup-looping-refusal
+PASS worktrees-delete-merged-branch
+PASS worktrees-delete-unmerged-refusal
+PASS worktrees-forget-invalid
+PASS worktrees-forget-missing
+PASS worktrees-partial-recovery
+PASS worktrees-picker-narrow-fit
+PASS worktrees-remove-retain-branch
+PASS worktrees-reopen-ambiguous
+PASS worktrees-reopen-fresh
+PASS worktrees-reopen-live
+PASS worktrees-reopen-replacement-profile
+PASS worktrees-reopen-resume
+PASS worktrees-short-layout
+golangci-lint run --allow-parallel-runners
+0 issues.
+== exit 0 (2026-10-10T20:00:31Z)

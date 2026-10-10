@@ -513,9 +513,9 @@ restart-verify:
 # Build macos/build/Agent Mux.app, the menu bar companion. Debug bundles amx
 # only when AMX_BINARY names one and otherwise finds ~/.local/bin/amx at run
 # time; Release builds amx with `just build` and bundles that. Both bundle the
-# pinned tmux runtime. Like mac-test, mac-install, and mac-ghosttykit it needs
-# Xcode, so none of them is part of check, acceptance, or paired-release-gate.
-# See macos/README.md.
+# pinned tmux runtime. Like mac-test, mac-install, mac-ghosttykit, and
+# mac-release-gate it needs Xcode, so none of them is part of check,
+# acceptance, or paired-release-gate. See macos/README.md.
 mac-app configuration="Debug":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -543,6 +543,22 @@ mac-tmux:
 # Build the Release Agent Mux.app, install or update it in /Applications, and relaunch it
 mac-install: (mac-app "Release")
     ./macos/scripts/install-app.sh
+
+# It builds the Release app (on the Mac AMX_MAC_TEST_HOST names, when one is
+# named), checks the bundle's seal, its tmux runtime, and that its amx is the
+# one this checkout built, runs the hosted suite against the Debug and the
+# Release app, and writes its own evidence record. It installs nothing and
+# restarts nothing. Like every mac-* recipe it needs Xcode and stays outside
+# check, acceptance, and paired-release-gate; when there is no Xcode to be had
+# the record says pending and the recipe fails. See docs/desktop-releases.md.
+#
+#   just mac-release-gate --signing-key ~/.ssh/amx_release
+#   just mac-release-gate --notarized --signing-key ~/.ssh/amx_release
+#   just mac-release-gate --rehearsal --evidence-dir /tmp/evidence
+#
+# Run the Agent Mux.app release gate and write its evidence record (outside check)
+mac-release-gate *flags:
+    go run . desktop-release-gate --amx-root "{{ root }}" {{ flags }}
 
 # Remove Agent Mux.app; agents keep running and data stays unless asked: --end-sessions, --remove-app-data, --yes
 mac-uninstall *flags:

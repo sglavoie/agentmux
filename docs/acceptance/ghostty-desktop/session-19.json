@@ -1,0 +1,54 @@
+{
+ "session": "19",
+ "status": "pending",
+ "artifact_revision": "agentmux fcd31c0b + the session-19 working tree, uncommitted. Agent Mux.app 0.1.0 Release, built and ad-hoc signed on the MacBook Pro by `just mac-app Release` through the remote route. The live runs used the bundle built first (bundled amx 0.8.0, revision fcd31c0bcfa4-dirty, sha256:e7bc1fcbe50d, Go build ID ZHUdiL_y…1iQR64wYtl3zk4NE5kI7); the desktop gate rebuilt it later from the tree identified by tree_sha256 in session-19/desktop-release/amx-desktop-1.4b6470abacb26353.json (bundled amx sha256:9dab63589d5d), after Go changes confined to internal/release and cmd/release. Bundled tmux 3.7c (bin/tmux sha256 fb421000337b…, SHA256SUMS sha256 858d25c2c2d4f810…). Kitty 0.48.2. Installed asl on the Studio: the wrapper ~/.local/bin/asl.",
+ "method": "Go gates on the Mac Studio, headless. Everything that shows or drives UI on Seb's MacBook Pro (macOS 27.0.1, arm64, Xcode 27.0), by the operator's rule: the Release build, the hosted suite, a real Kitty window, the packaged app. The MacBook world lived under /tmp/amxs19 with its own HOME and TMPDIR, held no amx and no tmux but the ones inside the installed bundle, and was removed afterwards; the MacBook user's own amx, AgentMux directories, Kitty configuration, and app preferences were compared before and after and were unchanged (session-19/live/teardown.log). Agents were stand-ins (no model, no network) that send real hooks. No input was synthesized on either Mac except text and keys sent to the run's own Kitty through `kitten @` and to an observer tmux; the app was moved with workspace_view requests. Passes that are not the record, and why, are in session-19/driver/README.md.",
+ "limits": "The status is pending, not passed: two cases are pending and the per-row record in docs/backend-migration.md marks 9 of 32 workflows pending. The bundle is ad-hoc signed (the MacBook has 0 signing identities): a Developer ID signature and notarization were not observed, and `just mac-release-gate --notarized` reports pending there. The desktop gate ran as a rehearsal over an uncommitted tree; its record is not a release record. `just paired-release-gate` was not run. `just install-restart-smoke` and `just cockpit-smoke` were only rehearsed in the isolated world (session-19/live/isolated-install-cockpit.log): the first exits 0 once the world is prepared, the second passes its Kitty, daemon, live-window and invariants steps and stops at the ASL pairing preflight because the world has no agent-session-loop. No real Claude, Codex, or Copilot agent ran in this session. The gate's record keeps no test counts for passing steps.",
+ "logs": [
+  "session-19/go-check.log",
+  "session-19/go-crash-restart.log",
+  "session-19/go-reliability-stress.log",
+  "session-19/go-asl-integration.log",
+  "session-19/live/isolated-kitty-legacy.log",
+  "session-19/live/isolated-kitty-tmux.log",
+  "session-19/live/isolated-tmux.log",
+  "session-19/packaged/install-acceptance.log",
+  "session-19/live/packaged-workspace.log",
+  "session-19/live/isolated-install-cockpit.log",
+  "session-19/live/teardown.log",
+  "session-19/desktop-release/gate-run.log",
+  "session-19/desktop-release/amx-desktop-1.4b6470abacb26353.json",
+  "session-19/desktop-release/pending-runs.log",
+  "session-19/driver/README.md"
+ ],
+ "cases": {
+  "cross-repository-contracts": {
+   "status": "pending",
+   "evidence": "Observed: `just asl-integration` against the installed asl passed on the Studio (session-19/go-asl-integration.log: TestInstalledBridgeServesTheContractSet and TestInstalledBridgeRoutesRunsByRuntimeSession PASS, exit 0), and the vendored corpus is self-consistent in `just check`. NOT observed: `just asl-contract-sync` (the vendored corpus against the corpus ASL publishes) and `just overseer-integration` (the installed pair). Both need an agent-session-loop source checkout that was outside this session's read scope, and the second needs an installed pair that is not the operator's. Pending until that scope exists."
+  },
+  "real-isolated-kitty": {
+   "status": "passed",
+   "evidence": "Observed on the MacBook Pro in a Kitty 0.48.2 process of the run's own (--config NONE, own socket and instance group), driven with kitten @. Kitty backend, session-19/live/isolated-kitty-legacy.log, 31 passed, 0 failed: a launch made a new Kitty tab and no tmux server or registry; a legacy hook retitled the tab '🔑🟠alpha'; clear, mark active, lock, and mute gave the titles '🟠alpha', '⚡🟠alpha', '🔒⚡🟠alpha', '🔒🔇⚡🟠alpha'; Peek opened a Kitty overlay pager; Restart moved alpha to another window with one alpha tab left; Enter made its tab active; the overview showed it. tmux hosted by the same Kitty, session-19/live/isolated-kitty-tmux.log, 30 passed, 0 failed: a launch with --backend tmux made a pane on the private server and no Kitty tab; the Kitty window attached as xterm-kitty and F12 left no client; the pager of a tmux row opened no Kitty window; the overview showed both backends with no terminal attached; each row closed through its own backend."
+  },
+  "real-isolated-tmux": {
+   "status": "passed",
+   "evidence": "Observed on the MacBook Pro with no Kitty variable in the surface's environment, the packaged amx, and the packaged tmux 3.7c running from its copy outside the app: session-19/live/isolated-tmux.log, 72 passed, 0 failed, over twelve workflows. Launch made one live tmux runtime session; Enter attached one terminal and F12 left none with the agent still running; a hook typed in the agent showed as Needs permission; lock and mute were recorded in the pane's metadata; pager, shell, and editor opened as utility views; Resort Tabs and the two pickers said why they need Kitty; Restart left one live session with relation restart and the old one ended; Past Sessions resumed the conversation in a second pane and continuing it again attached instead of adding a pane; a worktree fork ran in a third pane; the overview showed three tiles and read previews with no client attached; Close ended exactly one agent."
+  },
+  "packaged-desktop": {
+   "status": "passed",
+   "evidence": "Observed on the MacBook Pro with the Release bundle built there. Installation, session-19/packaged/install-acceptance.log, 107 passed, 0 failed: the Session 17 run repeated against this bundle (first install on a Mac with no tmux, bundled runtime and checksums, seal and refusal of three altered bundles, dependency diagnostics, update with the agent the same process, server not replaced, uninstall keeping data). Workspace, session-19/live/packaged-workspace.log, 36 passed, 0 failed: the installed app found its bundled tmux verified and its feed went live; a workspace_view request put alpha in an embedded terminal, seen as one xterm-ghostty client on alpha's pane run by the bundle's `amx attach` under the app; moving to beta added one terminal there and left alpha's agent the same process; alpha's hook showed as attention in the daemon's snapshot; Overview and Dashboard ran as the bundle's amx under the app; quitting detached every terminal with both agents and the server the same processes and the app reopened on beta by itself; killed with SIGKILL and started again it returned to beta."
+  },
+  "complete-acceptance-matrix": {
+   "status": "pending",
+   "evidence": "Observed: the per-row record in docs/backend-migration.md ('Session 19 acceptance record') gives 23 of 32 workflows as passed with the tests and logs that show it, and `just check` holds every cited test and file to exist. NOT complete: 9 rows are pending and each says what is missing: W01 (no comparison of JSON and exit codes across backends), W05 (portable fork on tmux), W08 (launch-before-close order unasserted), W15 (tmux list degrading instead of emptying), W17 (context limit and stop hold on tmux), W21 (dashboard singleton and pickers without Kitty), W26 (attention clearing on attach), W28 (overseer smoke and contract sync), W30 (export-events selection by runtime session is not implemented)."
+  },
+  "desktop-release-evidence": {
+   "status": "passed",
+   "evidence": "Observed: `just mac-release-gate --rehearsal` exited 0 (session-19/desktop-release/gate-run.log) and wrote session-19/desktop-release/amx-desktop-1.4b6470abacb26353.json with gate desktop, result passed, rehearsal true, the tree digest, the toolchain (route remote, Seb's MacBook Pro, macOS 27.0.1, Xcode 27.0, 0 Developer ID identities), the bundle facts (0.1.0, amx build ID equal to the checkout's, tmux 3.7c, signature ad-hoc, distribution this-mac-only), and six steps passed: os-version, toolchain, build-app, bundle, hosted-tests-debug, hosted-tests-release. Missing infrastructure was observed twice as pending, never passed (session-19/desktop-release/pending-runs.log): with no remote Mac named, and with --notarized on a keychain with no Developer ID; each wrote a record with result pending and every later step not-run, and the recipe failed. It is a rehearsal record over an uncommitted tree, unsigned."
+  },
+  "core-gates-xcode-independent": {
+   "status": "passed",
+   "evidence": "Observed: `just check` passed on the Studio with no Xcode step in it (session-19/go-check.log), including TestMacAppRecipesStayOutOfTheGates and TestJustMacReleaseGateIsTheDesktopGateAndNothingElse (cmd/release: check, acceptance, and paired-release-gate reach no mac-* recipe, no macos/ path, no desktop-release-gate, no xcodebuild) and TestTheTwoGatesStayApart (internal/release: the paired gate's step plan names nothing of the app, and the desktop gate's plan installs, restarts, and tags nothing). `just crash-restart` (19 scenarios), `just reliability-stress`, and `just asl-integration` also passed there without Xcode (session-19/go-crash-restart.log, go-reliability-stress.log, go-asl-integration.log)."
+  }
+ }
+}

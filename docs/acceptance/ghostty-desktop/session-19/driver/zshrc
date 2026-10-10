@@ -1,0 +1,4 @@
+# A login shell's system profile puts the system directories first: the
+# world's bin goes back in front. The prompt names nobody.
+export PATH=/tmp/amxs19/bin:/usr/bin:/bin:/usr/sbin:/sbin
+PS1='s19 %1~ %# '

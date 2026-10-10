@@ -181,6 +181,10 @@ type gate struct {
 	// the rewrite that adds the tag list is not mistaken for an overwrite of a
 	// previous release's evidence.
 	published bool
+	// pendingExit is the exit status by which a step says it had nothing to
+	// work with. Only the desktop gate has one; zero means no status is read
+	// that way.
+	pendingExit int
 }
 
 // Run executes the paired release gate.

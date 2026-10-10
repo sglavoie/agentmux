@@ -1,0 +1,22 @@
+PASS: no process of the world is left
+PASS: the MacBook user's own amx, AgentMux directories, Kitty configuration, app preferences, and Kitty processes are what they were before the run
+/Users/sglavoie/.local/bin/amx 17564898 1790467200
+/Users/sglavoie/.config/agent-mux 128 1789425407
+34a212cae55fca57
+/Users/sglavoie/.local/share/agent-mux 160 1790919304
+c6111446958ac5c1
+/Users/sglavoie/.local/state/agent-mux 288 1790725084
+2b9884c834dc6f6f
+/Users/sglavoie/.config/kitty 31 1790466564
+8e8f4088e70d4af8
+/Applications/Agent Mux.app absent
+preferences: e3b0c44298fc1c14
+kitty processes: 0
+FAIL: /tmp/amxs19 is still there
+
+ADDENDUM (recorded by hand, same session): the recorded teardown above could not
+remove /tmp/amxs19 because the Go module cache the cockpit rehearsal had filled
+under its home is read-only. It was then removed with `chmod -R u+w /tmp/amxs19
+&& rm -rf /tmp/amxs19`, together with the amx the rehearsal's `just install` had
+built in the checkout copy; `ls -d /tmp/amxs19` then reported no such file and
+`pgrep -lf amxs19` nothing. driver/down.sh now does both itself.

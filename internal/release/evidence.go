@@ -378,6 +378,11 @@ func LoadEvidence(path string) (*Evidence, error) {
 	if ev.SchemaVersion != SchemaVersion {
 		return nil, fmt.Errorf("release: evidence %s has schema version %d, expected %d", path, ev.SchemaVersion, SchemaVersion)
 	}
+	// The evidence directory also holds desktop records, which share the
+	// schema number and the result vocabulary and describe no pair.
+	if !strings.HasPrefix(ev.PairID, PairIDPrefix) {
+		return nil, fmt.Errorf("release: evidence %s is not a paired release record", path)
+	}
 	return &ev, nil
 }
 

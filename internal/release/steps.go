@@ -60,9 +60,12 @@ func (g *gate) runStep(ctx context.Context, step Step) (StepResult, string) {
 		result.Status = StatusFailed
 		result.OutputTail = tail(output)
 	}
-	if result.Status == StatusPassed {
+	switch {
+	case result.Status == StatusPassed:
 		g.logf("ok   %s (%s)", step.Name, elapsed.Round(time.Millisecond))
-	} else {
+	case g.pendingExit != 0 && result.ExitCode == g.pendingExit:
+		// The desktop gate reports this one itself, as pending.
+	default:
 		g.logf("FAIL %s (exit %d)", step.Name, result.ExitCode)
 	}
 	return result, output
@@ -77,11 +80,14 @@ func (g *gate) rootFor(repo string) string {
 
 // readRepositories records the revision, description, and cleanliness of both
 // checkouts. The order is fixed -- Agent Mux, then ASL -- because the pair ID
-// folds the two revisions in that order.
-func (g *gate) readRepositories(ctx context.Context) ([]RepoEvidence, error) {
-	repos := []RepoEvidence{
-		{Repo: AgentMuxRepo, Root: g.opts.AgentMuxRoot},
-		{Repo: ASLRepo, Root: g.opts.ASLRoot},
+// folds the two revisions in that order. The desktop gate names the one
+// checkout it releases instead.
+func (g *gate) readRepositories(ctx context.Context, repos ...RepoEvidence) ([]RepoEvidence, error) {
+	if len(repos) == 0 {
+		repos = []RepoEvidence{
+			{Repo: AgentMuxRepo, Root: g.opts.AgentMuxRoot},
+			{Repo: ASLRepo, Root: g.opts.ASLRoot},
+		}
 	}
 	for i := range repos {
 		root := repos[i].Root

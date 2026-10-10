@@ -598,6 +598,13 @@ manual checklist below for everything only a real Kitty, a real Notification
 Center, and a real window server can show. See
 [Menu bar companion](companion-app.md).
 
+Releasing the app has a gate of its own for the same reason:
+`just mac-release-gate` builds the Release bundle, checks it, runs the hosted
+suite against the Debug and the Release app, and writes its own evidence
+record, separate from the pair's. Where there is no Xcode to build with it
+reports `pending` and fails, never a pass. See
+[Desktop releases](desktop-releases.md).
+
 Daemon-side evidence, after `just install`:
 
 ```bash

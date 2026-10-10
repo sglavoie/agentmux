@@ -109,7 +109,7 @@ func TestJustUpdateInstallsEverythingBeforeVerifying(t *testing.T) {
 // or through a recipe they depend on.
 func TestMacAppRecipesStayOutOfTheGates(t *testing.T) {
 	justfile := readJustfile(t)
-	for _, name := range []string{"mac-app", "mac-test", "mac-install", "mac-uninstall", "mac-ghosttykit", "mac-tmux"} {
+	for _, name := range []string{"mac-app", "mac-test", "mac-install", "mac-uninstall", "mac-ghosttykit", "mac-tmux", "mac-release-gate"} {
 		justfileRecipeWithHeader(t, justfile, name)
 	}
 
@@ -123,7 +123,7 @@ func TestMacAppRecipesStayOutOfTheGates(t *testing.T) {
 		}
 		seen[name] = true
 		header, body := justfileRecipeWithHeader(t, justfile, name)
-		for _, forbidden := range []string{"mac-", "macos/"} {
+		for _, forbidden := range []string{"mac-", "macos/", "desktop-release-gate", "xcodebuild"} {
 			if strings.Contains(header+body, forbidden) {
 				t.Errorf("recipe %q reaches %q; the macOS app recipes must stay opt-in:\n%s%s", name, forbidden, header, body)
 			}
@@ -162,4 +162,33 @@ func justfileRecipeWithHeader(t *testing.T, justfile, name string) (string, stri
 		}
 	}
 	return header, rest[:end]
+}
+
+// TestJustMacReleaseGateIsTheDesktopGateAndNothingElse keeps the desktop gate
+// a gate of its own: its recipe runs the hidden desktop-release-gate command
+// over this checkout, passes the operator's flags through, and reaches none of
+// the recipes that install, restart, or release the pair.
+func TestJustMacReleaseGateIsTheDesktopGateAndNothingElse(t *testing.T) {
+	justfile := readJustfile(t)
+	header, body := justfileRecipeWithHeader(t, justfile, "mac-release-gate")
+	if !strings.Contains(body, `desktop-release-gate --amx-root "{{ root }}" {{ flags }}`) {
+		t.Errorf("mac-release-gate does not run the desktop gate over this checkout with the caller's flags:\n%s", body)
+	}
+	if _, deps, _ := strings.Cut(header, ":"); strings.TrimSpace(deps) != "" {
+		t.Errorf("mac-release-gate depends on %q; the gate runs its own steps so its record lists them", deps)
+	}
+	for _, forbidden := range []string{"install", "restart", "paired-release-gate", "release-gate --asl-root", "--tag"} {
+		if strings.Contains(body, forbidden) {
+			t.Errorf("mac-release-gate reaches %q:\n%s", forbidden, body)
+		}
+	}
+
+	for _, name := range []string{"amx-root", "signing-key", "evidence-dir", "notarized", "rehearsal", "force", "json"} {
+		if desktopGateCmd.Flags().Lookup(name) == nil {
+			t.Errorf("desktop-release-gate does not declare --%s", name)
+		}
+	}
+	if !desktopGateCmd.Hidden || !desktopGateCmd.SilenceErrors || !desktopGateCmd.SilenceUsage {
+		t.Error("desktop-release-gate must be hidden and map its own outcomes to exit codes")
+	}
 }

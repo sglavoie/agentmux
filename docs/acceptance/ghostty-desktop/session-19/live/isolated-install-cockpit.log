@@ -1,0 +1,848 @@
+
+##### before: what is installed in the world, and the MacBook user's own amx [19:50:14Z]
+
+--- the world's ~/.local/bin and ~/.config/kitty ---
+/tmp/amxs19/home/.config/kitty:
+total 0
+drwxr-xr-x@ 3 sglavoie  wheel   96 Oct 10 13:49 .
+drwxr-xr-x  4 sglavoie  wheel  128 Oct 10 13:49 ..
+lrwxr-xr-x@ 1 sglavoie  wheel   83 Oct 10 13:49 agent-mux.conf -> /Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo/agent-mux.conf
+
+/tmp/amxs19/home/.local/bin:
+total 43152
+drwxr-xr-x@ 3 sglavoie  wheel        96 Oct 10 13:49 .
+drwx------  5 sglavoie  wheel       160 Oct 10 13:49 ..
+-rwxr-xr-x@ 1 sglavoie  wheel  22092578 Oct 10 13:49 amx
+
+--- the MacBook user's own amx (must not change) ---
+/Users/sglavoie/.local/bin/amx 17564898 1790467200
+
+--- tools the recipes need, outside the world's PATH ---
+lrwxr-xr-x  1 sglavoie  admin  26 Sep 26 17:40 /opt/homebrew/bin/go -> ../Cellar/go/1.27.1/bin/go
+lrwxr-xr-x  1 sglavoie  admin  30 Sep 26 17:40 /opt/homebrew/bin/just -> ../Cellar/just/1.58.0/bin/just
+go version go1.27.1 darwin/arm64
+
+##### first pass: just install-restart-smoke, typed in the world's Kitty window [19:50:15Z]
+install-restart-smoke finished
+
+=== the Kitty window after install-restart-smoke ===
+s19 amxs19 % echo "HOME=$HOME KITTY_WINDOW_ID=$KITTY_WINDOW_ID $(command -v amx)"
+HOME=/tmp/amxs19/home KITTY_WINDOW_ID=1 /tmp/amxs19/bin/amx
+s19 amxs19 % amx
+s19 amxs19 % amx
+s19 amxs19 % amx overview
+Live sessions  1
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ alpha                                 — · Idle ┃
+┃ claude · work                                1 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+s19 amxs19 % amx --backend tmux
+[detached (from session amx-c649df885a4334da)]
+s19 amxs19 % amx overview --backend tmux
+Live sessions  2
+
+s19 amxs19 % cd /Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo && PATH=$PATH:/opt/homebrew/bin just install-restart-smoke; echo SMOKE_EXIT=$?
+go build -o amx .
+go: downloading github.com/spf13/cobra v1.10.2
+go: downloading github.com/charmbracelet/x/term v0.2.2
+go: downloading github.com/spf13/pflag v1.0.9
+go: downloading golang.org/x/sys v0.47.0
+go: downloading charm.land/lipgloss/v2 v2.0.3
+go: downloading github.com/charmbracelet/x/ansi v0.11.8
+go: downloading github.com/mattn/go-runewidth v0.0.24
+go: downloading github.com/rivo/uniseg v0.4.7
+go: downloading github.com/BurntSushi/toml v1.6.0
+go: downloading charm.land/bubbletea/v2 v2.0.9
+go: downloading github.com/clipperhouse/uax29/v2 v2.7.0
+go: downloading github.com/charmbracelet/colorprofile v0.4.3
+go: downloading github.com/charmbracelet/ultraviolet v0.0.0-20260901015450-b2b0f8d1567b
+go: downloading github.com/lucasb-eyer/go-colorful v1.4.1
+go: downloading github.com/muesli/cancelreader v0.2.2
+go: downloading github.com/clipperhouse/displaywidth v0.11.0
+go: downloading github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e
+go: downloading github.com/charmbracelet/x/windows v0.2.2
+go: downloading golang.org/x/sync v0.22.0
+go: downloading github.com/charmbracelet/x/termios v0.1.1
+cp amx "/tmp/amxs19/home/.local/bin/.amx.staging"
+mv -f "/tmp/amxs19/home/.local/bin/.amx.staging" "/tmp/amxs19/home/.local/bin/amx"
+ln -sf "/Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo/agent-mux.conf" "/tmp/amxs19/home/.config/kitty/agent-mux.conf"
+Installed /tmp/amxs19/home/.local/bin/amx
+Symlinked /tmp/amxs19/home/.config/kitty/agent-mux.conf
+"/tmp/amxs19/home/.local/bin/amx" daemon restart
+daemon restarted (pid 63188)
+"/tmp/amxs19/home/.local/bin/amx" daemon status
+daemon: running (pid 63188, uptime 0s, /tmp/amxs19/home/.local/share/agent-mux/daemon.sock)
+ready: true
+build: 0.8.0 (revision unknown, go1.27.1, sha256:c9a95fbb3ca5)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+companion: no subscribers
+"/tmp/amxs19/home/.local/bin/amx" doctor --strict
+Agent Mux doctor
+daemon: running (pid 63188, uptime 0s)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+screen patterns: embedded (claude, codex, contextlimit, copilot)
+kitty snapshot: fresh (generation 1, age 158ms)
+kitty list coordinator: ok (1 lists, no failures, latency 29ms last / 29ms max)
+companion: no app connected
+socket: /tmp/amxs19/home/.local/share/agent-mux/daemon.sock (daemon runs another build; restart daemon)
+daemon export: ok
+kitty: ok (1 OS window)
+backend: launches go to kitty; tmux 3.7c (installed, verified); no server running
+s19 repo % PATH=$PATH:/opt/homebrew/bin just cockpit-smoke; echo COCKPIT_EXIT=$?
+== kitty ==
+kitty 0.48.2 created by Kovid Goyal
+kitten @ ls: ok
+== daemon ==
+daemon: running (pid 63188, uptime 1s, /tmp/amxs19/home/.local/share/agent-mux/daemon.sock)
+ready: true
+build: 0.8.0 (revision unknown, go1.27.1, sha256:c9a95fbb3ca5)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+companion: no subscribers
+== live window events ==
+export-events --current-window: ok
+== invariants ==
+Agent Mux doctor
+daemon: running (pid 63188, uptime 1s)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+screen patterns: embedded (claude, codex, contextlimit, copilot)
+kitty snapshot: fresh (generation 1, age 1.955s)
+kitty list coordinator: ok (1 lists, no failures, latency 29ms last / 29ms max)
+companion: no app connected
+socket: /tmp/amxs19/home/.local/share/agent-mux/daemon.sock (daemon runs another build; restart daemon)
+daemon export: ok
+kitty: ok (1 OS window)
+backend: launches go to kitty; tmux 3.7c (installed, verified); no server running
+runtime sessions: 0 live; reconciled 1.9s ago in 0ms (1 pass, 0 failed)
+s19 amxs19 % cd /Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo && PATH=$PATH:/opt/homebrew/bin just install-restart-smoke; echo SMOKE_EXIT=$?
+go build -o amx .
+cp amx "/tmp/amxs19/home/.local/bin/.amx.staging"
+mv -f "/tmp/amxs19/home/.local/bin/.amx.staging" "/tmp/amxs19/home/.local/bin/amx"
+ln -sf "/Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo/agent-mux.conf" "/tmp/amxs19/home/.config/kitty/agent-mux.conf"
+Installed /tmp/amxs19/home/.local/bin/amx
+Symlinked /tmp/amxs19/home/.config/kitty/agent-mux.conf
+"/tmp/amxs19/home/.local/bin/amx" daemon restart
+daemon restarted (pid 63480)
+"/tmp/amxs19/home/.local/bin/amx" daemon status
+daemon: running (pid 63480, uptime 0s, /tmp/amxs19/home/.local/share/agent-mux/daemon.sock)
+ready: true
+build: 0.8.0 (revision unknown, go1.27.1, sha256:c9a95fbb3ca5)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+companion: no subscribers
+"/tmp/amxs19/home/.local/bin/amx" doctor --strict
+Agent Mux doctor
+daemon: running (pid 63480, uptime 0s)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+screen patterns: embedded (claude, codex, contextlimit, copilot)
+kitty snapshot: fresh (generation 1, age 130ms)
+kitty list coordinator: ok (1 lists, no failures, latency 21ms last / 21ms max)
+companion: no app connected
+socket: /tmp/amxs19/home/.local/share/agent-mux/daemon.sock (daemon runs another build; restart daemon)
+daemon export: ok
+kitty: ok (1 OS window)
+backend: launches go to kitty; tmux 3.7c (installed, verified); no server running
+runtime sessions: 0 live; reconciled 100ms ago in 0ms (1 pass, 0 failed)
+screen captures: no screen read yet; tmux clients: 0 run, at most 0 at once (limit 4), 0 timed out
+versions: amx 0.8.0, daemon 0.8.0, go1.27.1, tmux 3.7c (needs 3.5 or newer), kitty 0.48.2
+native logs: /tmp/amxs19/home/.local/state/agent-mux/native (0 B across 0 launches; 0 active)
+native privacy: raw local logs; managed directories are 0700 and files are created with umask 077; bundles redact them
+native coverage: managed=0 external=0 degraded=0 disabled=0 unmanaged=0
+hooks: work (claude): not installed, not active
+projects: ok (2 configured)
+kitty sockets: none reported
+renderer drift: none
+recent suppressions (last 15m0s): none
+asl integration: mode auto
+  shell_resolution    warn           defaults.asl.command is the bare name "asl" and it is not on this shell's PATH either
+                                     remediation: install agent-session-loop, then run `amx config asl-sync`
+  daemon_resolution   warn           the daemon has not resolved an executable: asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH
+                                     remediation: run `amx config asl-sync` to resolve and persist an absolute path
+  contract            unknown        no peer has announced a contract set; this build implements asl-amx-1.85ec3041b9f03f47
+  projection          unknown        no reconciliation sweep has completed yet under /tmp/amxs19/home/.local/state/agent-session-loop
+  freshness           not_applicable no bridge is connected, so there is no snapshot to age
+  delivery            unknown        no lifecycle hook has been delivered since this daemon started
+health failures:
+- [notifications_unavailable] interactive notifications are enabled but unavailable: not_found
+- [socket] the daemon is not running the installed amx at /tmp/amxs19/bin/amx; run `amx daemon restart`
+- [hooks] hooks for work require attention: hook file does not exist; run `amx config hooks-sync`; journal horizon (38s) is shorter than the hook verification window (4h); older hook evidence for home dir /tmp/amxs19/home/.claude-a may have been pruned; CLI 2.1.296 is newer than verified hook contract 2.1.195
+warnings:
+- [asl_shell_resolution] defaults.asl.command is the bare name "asl" and it is not on this shell's PATH either; remediation: install agent-session-loop, then run `amx config asl-sync`
+- [asl_daemon_resolution] the daemon has not resolved an executable: asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH; remediation: run `amx config asl-sync` to resolve and persist an absolute path
+notes:
+- [uninstalled_binary] this doctor runs ~/.local/bin/amx rather than the amx on PATH (/tmp/amxs19/bin/amx); its socket and hook checks judge the installed amx, so hook files that name this build would read as drifted
+overall: issues detected
+doctor: 3 health failures detected
+error: recipe `restart-verify` failed on line 511 with exit code 2
+SMOKE_EXIT=2
+s19 repo %
+
+--- the world's ~/.local/bin and ~/.config/kitty afterwards ---
+/tmp/amxs19/home/.config/kitty:
+total 0
+drwxr-xr-x@ 3 sglavoie  wheel   96 Oct 10 13:50 .
+drwxr-xr-x  4 sglavoie  wheel  128 Oct 10 13:49 ..
+lrwxr-xr-x@ 1 sglavoie  wheel   83 Oct 10 13:50 agent-mux.conf -> /Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo/agent-mux.conf
+
+/tmp/amxs19/home/.local/bin:
+total 43152
+drwxr-xr-x@ 3 sglavoie  wheel        96 Oct 10 13:50 .
+drwx------  5 sglavoie  wheel       160 Oct 10 13:49 ..
+-rwxr-xr-x@ 1 sglavoie  wheel  22092578 Oct 10 13:50 amx
+
+--- the installed amx ---
+amx version 0.8.0 (revision unknown, go1.27.1, sha256:c9a95fbb3ca5)
+
+--- the world's daemon ---
+daemon: running (pid 63480, uptime 0s, /tmp/amxs19/home/.local/share/agent-mux/daemon.sock)
+ready: true
+build: 0.8.0 (revision unknown, go1.27.1, sha256:c9a95fbb3ca5)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+companion: no subscribers
+
+##### first pass: just cockpit-smoke, typed in the same window [19:50:17Z]
+cockpit-smoke finished
+
+=== the Kitty window after cockpit-smoke ===
+s19 amxs19 % echo "HOME=$HOME KITTY_WINDOW_ID=$KITTY_WINDOW_ID $(command -v amx)"
+HOME=/tmp/amxs19/home KITTY_WINDOW_ID=1 /tmp/amxs19/bin/amx
+s19 amxs19 % amx
+s19 amxs19 % amx
+s19 amxs19 % amx overview
+Live sessions  1
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ alpha                                 — · Idle ┃
+┃ claude · work                                1 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+s19 amxs19 % amx --backend tmux
+[detached (from session amx-c649df885a4334da)]
+s19 amxs19 % amx overview --backend tmux
+Live sessions  2
+
+s19 amxs19 % cd /Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo && PATH=$PATH:/opt/homebrew/bin just install-restart-smoke; echo SMOKE_EXIT=$?
+go build -o amx .
+go: downloading github.com/spf13/cobra v1.10.2
+go: downloading github.com/charmbracelet/x/term v0.2.2
+go: downloading github.com/spf13/pflag v1.0.9
+go: downloading golang.org/x/sys v0.47.0
+go: downloading charm.land/lipgloss/v2 v2.0.3
+go: downloading github.com/charmbracelet/x/ansi v0.11.8
+go: downloading github.com/mattn/go-runewidth v0.0.24
+go: downloading github.com/rivo/uniseg v0.4.7
+go: downloading github.com/BurntSushi/toml v1.6.0
+go: downloading charm.land/bubbletea/v2 v2.0.9
+go: downloading github.com/clipperhouse/uax29/v2 v2.7.0
+go: downloading github.com/charmbracelet/colorprofile v0.4.3
+go: downloading github.com/charmbracelet/ultraviolet v0.0.0-20260901015450-b2b0f8d1567b
+go: downloading github.com/lucasb-eyer/go-colorful v1.4.1
+go: downloading github.com/muesli/cancelreader v0.2.2
+go: downloading github.com/clipperhouse/displaywidth v0.11.0
+go: downloading github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e
+go: downloading github.com/charmbracelet/x/windows v0.2.2
+go: downloading golang.org/x/sync v0.22.0
+go: downloading github.com/charmbracelet/x/termios v0.1.1
+cp amx "/tmp/amxs19/home/.local/bin/.amx.staging"
+mv -f "/tmp/amxs19/home/.local/bin/.amx.staging" "/tmp/amxs19/home/.local/bin/amx"
+ln -sf "/Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo/agent-mux.conf" "/tmp/amxs19/home/.config/kitty/agent-mux.conf"
+Installed /tmp/amxs19/home/.local/bin/amx
+Symlinked /tmp/amxs19/home/.config/kitty/agent-mux.conf
+"/tmp/amxs19/home/.local/bin/amx" daemon restart
+daemon restarted (pid 63188)
+"/tmp/amxs19/home/.local/bin/amx" daemon status
+daemon: running (pid 63188, uptime 0s, /tmp/amxs19/home/.local/share/agent-mux/daemon.sock)
+ready: true
+build: 0.8.0 (revision unknown, go1.27.1, sha256:c9a95fbb3ca5)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+companion: no subscribers
+"/tmp/amxs19/home/.local/bin/amx" doctor --strict
+Agent Mux doctor
+daemon: running (pid 63188, uptime 0s)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+screen patterns: embedded (claude, codex, contextlimit, copilot)
+kitty snapshot: fresh (generation 1, age 158ms)
+kitty list coordinator: ok (1 lists, no failures, latency 29ms last / 29ms max)
+companion: no app connected
+socket: /tmp/amxs19/home/.local/share/agent-mux/daemon.sock (daemon runs another build; restart daemon)
+daemon export: ok
+kitty: ok (1 OS window)
+backend: launches go to kitty; tmux 3.7c (installed, verified); no server running
+s19 repo % PATH=$PATH:/opt/homebrew/bin just cockpit-smoke; echo COCKPIT_EXIT=$?
+== kitty ==
+kitty 0.48.2 created by Kovid Goyal
+kitten @ ls: ok
+== daemon ==
+daemon: running (pid 63188, uptime 1s, /tmp/amxs19/home/.local/share/agent-mux/daemon.sock)
+ready: true
+build: 0.8.0 (revision unknown, go1.27.1, sha256:c9a95fbb3ca5)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+companion: no subscribers
+== live window events ==
+export-events --current-window: ok
+== invariants ==
+Agent Mux doctor
+daemon: running (pid 63188, uptime 1s)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+screen patterns: embedded (claude, codex, contextlimit, copilot)
+kitty snapshot: fresh (generation 1, age 1.955s)
+kitty list coordinator: ok (1 lists, no failures, latency 29ms last / 29ms max)
+companion: no app connected
+socket: /tmp/amxs19/home/.local/share/agent-mux/daemon.sock (daemon runs another build; restart daemon)
+daemon export: ok
+kitty: ok (1 OS window)
+backend: launches go to kitty; tmux 3.7c (installed, verified); no server running
+runtime sessions: 0 live; reconciled 1.9s ago in 0ms (1 pass, 0 failed)
+s19 amxs19 % cd /Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo && PATH=$PATH:/opt/homebrew/bin just install-restart-smoke; echo SMOKE_EXIT=$?
+go build -o amx .
+cp amx "/tmp/amxs19/home/.local/bin/.amx.staging"
+mv -f "/tmp/amxs19/home/.local/bin/.amx.staging" "/tmp/amxs19/home/.local/bin/amx"
+ln -sf "/Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo/agent-mux.conf" "/tmp/amxs19/home/.config/kitty/agent-mux.conf"
+Installed /tmp/amxs19/home/.local/bin/amx
+Symlinked /tmp/amxs19/home/.config/kitty/agent-mux.conf
+"/tmp/amxs19/home/.local/bin/amx" daemon restart
+daemon restarted (pid 63480)
+"/tmp/amxs19/home/.local/bin/amx" daemon status
+daemon: running (pid 63480, uptime 0s, /tmp/amxs19/home/.local/share/agent-mux/daemon.sock)
+ready: true
+build: 0.8.0 (revision unknown, go1.27.1, sha256:c9a95fbb3ca5)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+companion: no subscribers
+"/tmp/amxs19/home/.local/bin/amx" doctor --strict
+Agent Mux doctor
+daemon: running (pid 63480, uptime 0s)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+screen patterns: embedded (claude, codex, contextlimit, copilot)
+kitty snapshot: fresh (generation 1, age 130ms)
+kitty list coordinator: ok (1 lists, no failures, latency 21ms last / 21ms max)
+companion: no app connected
+socket: /tmp/amxs19/home/.local/share/agent-mux/daemon.sock (daemon runs another build; restart daemon)
+daemon export: ok
+kitty: ok (1 OS window)
+backend: launches go to kitty; tmux 3.7c (installed, verified); no server running
+s19 repo % PATH=$PATH:/opt/homebrew/bin just cockpit-smoke; echo COCKPIT_EXIT=$?
+== kitty ==
+kitty 0.48.2 created by Kovid Goyal
+kitten @ ls: ok
+== daemon ==
+daemon: running (pid 63480, uptime 1s, /tmp/amxs19/home/.local/share/agent-mux/daemon.sock)
+ready: true
+build: 0.8.0 (revision unknown, go1.27.1, sha256:c9a95fbb3ca5)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+companion: no subscribers
+== live window events ==
+export-events --current-window: ok
+== invariants ==
+Agent Mux doctor
+daemon: running (pid 63480, uptime 1s)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+screen patterns: embedded (claude, codex, contextlimit, copilot)
+kitty snapshot: fresh (generation 1, age 1.861s)
+kitty list coordinator: ok (1 lists, no failures, latency 21ms last / 21ms max)
+companion: no app connected
+socket: /tmp/amxs19/home/.local/share/agent-mux/daemon.sock (daemon runs another build; restart daemon)
+daemon export: ok
+kitty: ok (1 OS window)
+backend: launches go to kitty; tmux 3.7c (installed, verified); no server running
+runtime sessions: 0 live; reconciled 1.9s ago in 0ms (1 pass, 0 failed)
+screen captures: no screen read yet; tmux clients: 0 run, at most 0 at once (limit 4), 0 timed out
+versions: amx 0.8.0, daemon 0.8.0, go1.27.1, tmux 3.7c (needs 3.5 or newer), kitty 0.48.2
+native logs: /tmp/amxs19/home/.local/state/agent-mux/native (0 B across 0 launches; 0 active)
+native privacy: raw local logs; managed directories are 0700 and files are created with umask 077; bundles redact them
+native coverage: managed=0 external=0 degraded=0 disabled=0 unmanaged=0
+hooks: work (claude): not installed, not active
+projects: ok (2 configured)
+kitty sockets: none reported
+renderer drift: none
+recent suppressions (last 15m0s): none
+asl integration: mode auto
+  shell_resolution    warn           defaults.asl.command is the bare name "asl" and it is not on this shell's PATH either
+                                     remediation: install agent-session-loop, then run `amx config asl-sync`
+  daemon_resolution   warn           the daemon has not resolved an executable: asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH
+                                     remediation: run `amx config asl-sync` to resolve and persist an absolute path
+  contract            unknown        no peer has announced a contract set; this build implements asl-amx-1.85ec3041b9f03f47
+  projection          unknown        no reconciliation sweep has completed yet under /tmp/amxs19/home/.local/state/agent-session-loop
+  freshness           not_applicable no bridge is connected, so there is no snapshot to age
+  delivery            unknown        no lifecycle hook has been delivered since this daemon started
+health failures:
+- [notifications_unavailable] interactive notifications are enabled but unavailable: not_found
+- [socket] the daemon is not running the installed amx at /tmp/amxs19/bin/amx; run `amx daemon restart`
+- [hooks] hooks for work require attention: hook file does not exist; run `amx config hooks-sync`; journal horizon (39s) is shorter than the hook verification window (4h); older hook evidence for home dir /tmp/amxs19/home/.claude-a may have been pruned; CLI 2.1.296 is newer than verified hook contract 2.1.195
+warnings:
+- [asl_shell_resolution] defaults.asl.command is the bare name "asl" and it is not on this shell's PATH either; remediation: install agent-session-loop, then run `amx config asl-sync`
+- [asl_daemon_resolution] the daemon has not resolved an executable: asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH; remediation: run `amx config asl-sync` to resolve and persist an absolute path
+notes:
+- [uninstalled_binary] this doctor runs ~/.local/bin/amx rather than the amx on PATH (/tmp/amxs19/bin/amx); its socket and hook checks judge the installed amx, so hook files that name this build would read as drifted
+overall: issues detected
+doctor: 3 health failures detected
+error: recipe `cockpit-smoke` failed with exit code 2
+COCKPIT_EXIT=2
+s19 repo %
+
+##### OBSERVED (first pass): install-restart-smoke exit 2; cockpit-smoke exit 2
+
+##### between the passes: the world is prepared as doctor asked [19:50:18Z]
+
+--- amx config validate (the installed amx) ---
+config is valid
+
+--- amx config hooks-sync (the installed amx, first on PATH) ---
+  created  /tmp/amxs19/home/.claude-a/settings.json
+
+##### second pass: just install-restart-smoke, typed in the world's Kitty window [19:50:19Z]
+install-restart-smoke finished
+
+=== the Kitty window after install-restart-smoke ===
+Live sessions  1
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ alpha                                 — · Idle ┃
+┃ claude · work                                1 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+s19 amxs19 % amx --backend tmux
+[detached (from session amx-c649df885a4334da)]
+s19 amxs19 % amx overview --backend tmux
+Live sessions  2
+
+s19 amxs19 % cd /Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo && PATH=$PATH:/opt/homebrew/bin just install-restart-smoke; echo SMOKE_EXIT=$?
+go build -o amx .
+go: downloading github.com/spf13/cobra v1.10.2
+go: downloading github.com/charmbracelet/x/term v0.2.2
+go: downloading github.com/spf13/pflag v1.0.9
+go: downloading golang.org/x/sys v0.47.0
+go: downloading charm.land/lipgloss/v2 v2.0.3
+go: downloading github.com/charmbracelet/x/ansi v0.11.8
+go: downloading github.com/mattn/go-runewidth v0.0.24
+go: downloading github.com/rivo/uniseg v0.4.7
+go: downloading github.com/BurntSushi/toml v1.6.0
+go: downloading charm.land/bubbletea/v2 v2.0.9
+go: downloading github.com/clipperhouse/uax29/v2 v2.7.0
+go: downloading github.com/charmbracelet/colorprofile v0.4.3
+go: downloading github.com/charmbracelet/ultraviolet v0.0.0-20260901015450-b2b0f8d1567b
+go: downloading github.com/lucasb-eyer/go-colorful v1.4.1
+go: downloading github.com/muesli/cancelreader v0.2.2
+go: downloading github.com/clipperhouse/displaywidth v0.11.0
+go: downloading github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e
+go: downloading github.com/charmbracelet/x/windows v0.2.2
+go: downloading golang.org/x/sync v0.22.0
+go: downloading github.com/charmbracelet/x/termios v0.1.1
+cp amx "/tmp/amxs19/home/.local/bin/.amx.staging"
+mv -f "/tmp/amxs19/home/.local/bin/.amx.staging" "/tmp/amxs19/home/.local/bin/amx"
+ln -sf "/Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo/agent-mux.conf" "/tmp/amxs19/home/.config/kitty/agent-mux.conf"
+Installed /tmp/amxs19/home/.local/bin/amx
+Symlinked /tmp/amxs19/home/.config/kitty/agent-mux.conf
+"/tmp/amxs19/home/.local/bin/amx" daemon restart
+daemon restarted (pid 63188)
+"/tmp/amxs19/home/.local/bin/amx" daemon status
+daemon: running (pid 63188, uptime 0s, /tmp/amxs19/home/.local/share/agent-mux/daemon.sock)
+ready: true
+build: 0.8.0 (revision unknown, go1.27.1, sha256:c9a95fbb3ca5)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+companion: no subscribers
+"/tmp/amxs19/home/.local/bin/amx" doctor --strict
+Agent Mux doctor
+daemon: running (pid 63188, uptime 0s)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+screen patterns: embedded (claude, codex, contextlimit, copilot)
+kitty snapshot: fresh (generation 1, age 158ms)
+kitty list coordinator: ok (1 lists, no failures, latency 29ms last / 29ms max)
+companion: no app connected
+socket: /tmp/amxs19/home/.local/share/agent-mux/daemon.sock (daemon runs another build; restart daemon)
+daemon export: ok
+kitty: ok (1 OS window)
+backend: launches go to kitty; tmux 3.7c (installed, verified); no server running
+s19 repo % PATH=$PATH:/opt/homebrew/bin just cockpit-smoke; echo COCKPIT_EXIT=$?
+== kitty ==
+kitty 0.48.2 created by Kovid Goyal
+kitten @ ls: ok
+== daemon ==
+daemon: running (pid 63188, uptime 1s, /tmp/amxs19/home/.local/share/agent-mux/daemon.sock)
+ready: true
+build: 0.8.0 (revision unknown, go1.27.1, sha256:c9a95fbb3ca5)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+companion: no subscribers
+== live window events ==
+export-events --current-window: ok
+== invariants ==
+Agent Mux doctor
+daemon: running (pid 63188, uptime 1s)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+screen patterns: embedded (claude, codex, contextlimit, copilot)
+kitty snapshot: fresh (generation 1, age 1.955s)
+kitty list coordinator: ok (1 lists, no failures, latency 29ms last / 29ms max)
+companion: no app connected
+socket: /tmp/amxs19/home/.local/share/agent-mux/daemon.sock (daemon runs another build; restart daemon)
+daemon export: ok
+kitty: ok (1 OS window)
+backend: launches go to kitty; tmux 3.7c (installed, verified); no server running
+runtime sessions: 0 live; reconciled 1.9s ago in 0ms (1 pass, 0 failed)
+s19 amxs19 % cd /Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo && PATH=$PATH:/opt/homebrew/bin just install-restart-smoke; echo SMOKE_EXIT=$?
+go build -o amx .
+cp amx "/tmp/amxs19/home/.local/bin/.amx.staging"
+mv -f "/tmp/amxs19/home/.local/bin/.amx.staging" "/tmp/amxs19/home/.local/bin/amx"
+ln -sf "/Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo/agent-mux.conf" "/tmp/amxs19/home/.config/kitty/agent-mux.conf"
+Installed /tmp/amxs19/home/.local/bin/amx
+Symlinked /tmp/amxs19/home/.config/kitty/agent-mux.conf
+"/tmp/amxs19/home/.local/bin/amx" daemon restart
+daemon restarted (pid 63480)
+"/tmp/amxs19/home/.local/bin/amx" daemon status
+daemon: running (pid 63480, uptime 0s, /tmp/amxs19/home/.local/share/agent-mux/daemon.sock)
+ready: true
+build: 0.8.0 (revision unknown, go1.27.1, sha256:c9a95fbb3ca5)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+companion: no subscribers
+"/tmp/amxs19/home/.local/bin/amx" doctor --strict
+Agent Mux doctor
+daemon: running (pid 63480, uptime 0s)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+screen patterns: embedded (claude, codex, contextlimit, copilot)
+kitty snapshot: fresh (generation 1, age 130ms)
+kitty list coordinator: ok (1 lists, no failures, latency 21ms last / 21ms max)
+companion: no app connected
+socket: /tmp/amxs19/home/.local/share/agent-mux/daemon.sock (daemon runs another build; restart daemon)
+daemon export: ok
+kitty: ok (1 OS window)
+backend: launches go to kitty; tmux 3.7c (installed, verified); no server running
+s19 repo % PATH=$PATH:/opt/homebrew/bin just cockpit-smoke; echo COCKPIT_EXIT=$?
+== kitty ==
+kitty 0.48.2 created by Kovid Goyal
+kitten @ ls: ok
+== daemon ==
+daemon: running (pid 63480, uptime 1s, /tmp/amxs19/home/.local/share/agent-mux/daemon.sock)
+ready: true
+build: 0.8.0 (revision unknown, go1.27.1, sha256:c9a95fbb3ca5)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+companion: no subscribers
+== live window events ==
+export-events --current-window: ok
+== invariants ==
+Agent Mux doctor
+daemon: running (pid 63480, uptime 1s)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+screen patterns: embedded (claude, codex, contextlimit, copilot)
+kitty snapshot: fresh (generation 1, age 1.861s)
+kitty list coordinator: ok (1 lists, no failures, latency 21ms last / 21ms max)
+companion: no app connected
+socket: /tmp/amxs19/home/.local/share/agent-mux/daemon.sock (daemon runs another build; restart daemon)
+daemon export: ok
+kitty: ok (1 OS window)
+backend: launches go to kitty; tmux 3.7c (installed, verified); no server running
+s19 repo % cd /Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo && PATH=/tmp/amxs19/home/.local/bin:$PATH:/opt/homebrew/bin just install-restart-smoke; echo SMOKE_EXIT=$?
+go build -o amx .
+cp amx "/tmp/amxs19/home/.local/bin/.amx.staging"
+mv -f "/tmp/amxs19/home/.local/bin/.amx.staging" "/tmp/amxs19/home/.local/bin/amx"
+ln -sf "/Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo/agent-mux.conf" "/tmp/amxs19/home/.config/kitty/agent-mux.conf"
+Installed /tmp/amxs19/home/.local/bin/amx
+Symlinked /tmp/amxs19/home/.config/kitty/agent-mux.conf
+"/tmp/amxs19/home/.local/bin/amx" daemon restart
+daemon restarted (pid 63647)
+"/tmp/amxs19/home/.local/bin/amx" daemon status
+daemon: running (pid 63647, uptime 0s, /tmp/amxs19/home/.local/share/agent-mux/daemon.sock)
+ready: true
+build: 0.8.0 (revision unknown, go1.27.1, sha256:c9a95fbb3ca5)
+notifications: disabled (none)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+companion: no subscribers
+"/tmp/amxs19/home/.local/bin/amx" doctor --strict
+Agent Mux doctor
+daemon: running (pid 63647, uptime 0s)
+notifications: disabled (none)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+screen patterns: embedded (claude, codex, contextlimit, copilot)
+kitty snapshot: fresh (generation 1, age 166ms)
+kitty list coordinator: ok (1 lists, no failures, latency 24ms last / 24ms max)
+companion: no app connected
+socket: /tmp/amxs19/home/.local/share/agent-mux/daemon.sock (current)
+daemon export: ok
+kitty: ok (1 OS window)
+backend: launches go to kitty; tmux 3.7c (installed, verified); no server running
+runtime sessions: 0 live; reconciled 200ms ago in 0ms (1 pass, 0 failed)
+screen captures: no screen read yet; tmux clients: 0 run, at most 0 at once (limit 4), 0 timed out
+versions: amx 0.8.0, daemon 0.8.0, go1.27.1, tmux 3.7c (needs 3.5 or newer), kitty 0.48.2
+native logs: /tmp/amxs19/home/.local/state/agent-mux/native (0 B across 0 launches; 0 active)
+native privacy: raw local logs; managed directories are 0700 and files are created with umask 077; bundles redact them
+native coverage: managed=0 external=0 degraded=0 disabled=0 unmanaged=0
+hooks: work (claude): in sync, activation unverified
+projects: ok (2 configured)
+kitty sockets: none reported
+renderer drift: none
+recent suppressions (last 15m0s): none
+asl integration: mode auto
+  shell_resolution    warn           defaults.asl.command is the bare name "asl" and it is not on this shell's PATH either
+                                     remediation: install agent-session-loop, then run `amx config asl-sync`
+  daemon_resolution   warn           the daemon has not resolved an executable: asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH
+                                     remediation: run `amx config asl-sync` to resolve and persist an absolute path
+  contract            unknown        no peer has announced a contract set; this build implements asl-amx-1.85ec3041b9f03f47
+  projection          unknown        no reconciliation sweep has completed yet under /tmp/amxs19/home/.local/state/agent-session-loop
+  freshness           not_applicable no bridge is connected, so there is no snapshot to age
+  delivery            unknown        no lifecycle hook has been delivered since this daemon started
+warnings:
+- [hooks_unverified] hooks for work are unverified: journal horizon (42s) is shorter than the hook verification window (4h); older hook evidence for home dir /tmp/amxs19/home/.claude-a may have been pruned; CLI 2.1.296 is newer than verified hook contract 2.1.195
+- [asl_shell_resolution] defaults.asl.command is the bare name "asl" and it is not on this shell's PATH either; remediation: install agent-session-loop, then run `amx config asl-sync`
+- [asl_daemon_resolution] the daemon has not resolved an executable: asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH; remediation: run `amx config asl-sync` to resolve and persist an absolute path
+overall: ok (3 warnings)
+install-restart-smoke: ok
+SMOKE_EXIT=0
+s19 repo %
+
+--- the world's ~/.local/bin and ~/.config/kitty afterwards ---
+/tmp/amxs19/home/.config/kitty:
+total 0
+drwxr-xr-x@ 3 sglavoie  wheel   96 Oct 10 13:50 .
+drwxr-xr-x  4 sglavoie  wheel  128 Oct 10 13:49 ..
+lrwxr-xr-x@ 1 sglavoie  wheel   83 Oct 10 13:50 agent-mux.conf -> /Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo/agent-mux.conf
+
+/tmp/amxs19/home/.local/bin:
+total 43152
+drwxr-xr-x@ 3 sglavoie  wheel        96 Oct 10 13:50 .
+drwx------  5 sglavoie  wheel       160 Oct 10 13:49 ..
+-rwxr-xr-x@ 1 sglavoie  wheel  22092578 Oct 10 13:50 amx
+
+--- the installed amx ---
+amx version 0.8.0 (revision unknown, go1.27.1, sha256:c9a95fbb3ca5)
+
+--- the world's daemon ---
+daemon: running (pid 63647, uptime 0s, /tmp/amxs19/home/.local/share/agent-mux/daemon.sock)
+ready: true
+build: 0.8.0 (revision unknown, go1.27.1, sha256:c9a95fbb3ca5)
+notifications: disabled (none)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+companion: no subscribers
+
+##### second pass: just cockpit-smoke, typed in the same window [19:50:22Z]
+cockpit-smoke finished
+
+=== the Kitty window after cockpit-smoke ===
+go: downloading github.com/rivo/uniseg v0.4.7
+go: downloading github.com/BurntSushi/toml v1.6.0
+go: downloading charm.land/bubbletea/v2 v2.0.9
+go: downloading github.com/clipperhouse/uax29/v2 v2.7.0
+go: downloading github.com/charmbracelet/colorprofile v0.4.3
+go: downloading github.com/charmbracelet/ultraviolet v0.0.0-20260901015450-b2b0f8d1567b
+go: downloading github.com/lucasb-eyer/go-colorful v1.4.1
+go: downloading github.com/muesli/cancelreader v0.2.2
+go: downloading github.com/clipperhouse/displaywidth v0.11.0
+go: downloading github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e
+go: downloading github.com/charmbracelet/x/windows v0.2.2
+go: downloading golang.org/x/sync v0.22.0
+go: downloading github.com/charmbracelet/x/termios v0.1.1
+cp amx "/tmp/amxs19/home/.local/bin/.amx.staging"
+mv -f "/tmp/amxs19/home/.local/bin/.amx.staging" "/tmp/amxs19/home/.local/bin/amx"
+ln -sf "/Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo/agent-mux.conf" "/tmp/amxs19/home/.config/kitty/agent-mux.conf"
+Installed /tmp/amxs19/home/.local/bin/amx
+Symlinked /tmp/amxs19/home/.config/kitty/agent-mux.conf
+"/tmp/amxs19/home/.local/bin/amx" daemon restart
+daemon restarted (pid 63188)
+"/tmp/amxs19/home/.local/bin/amx" daemon status
+daemon: running (pid 63188, uptime 0s, /tmp/amxs19/home/.local/share/agent-mux/daemon.sock)
+ready: true
+build: 0.8.0 (revision unknown, go1.27.1, sha256:c9a95fbb3ca5)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+companion: no subscribers
+"/tmp/amxs19/home/.local/bin/amx" doctor --strict
+Agent Mux doctor
+daemon: running (pid 63188, uptime 0s)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+screen patterns: embedded (claude, codex, contextlimit, copilot)
+kitty snapshot: fresh (generation 1, age 158ms)
+kitty list coordinator: ok (1 lists, no failures, latency 29ms last / 29ms max)
+companion: no app connected
+socket: /tmp/amxs19/home/.local/share/agent-mux/daemon.sock (daemon runs another build; restart daemon)
+daemon export: ok
+kitty: ok (1 OS window)
+backend: launches go to kitty; tmux 3.7c (installed, verified); no server running
+s19 repo % PATH=$PATH:/opt/homebrew/bin just cockpit-smoke; echo COCKPIT_EXIT=$?
+== kitty ==
+kitty 0.48.2 created by Kovid Goyal
+kitten @ ls: ok
+== daemon ==
+daemon: running (pid 63188, uptime 1s, /tmp/amxs19/home/.local/share/agent-mux/daemon.sock)
+ready: true
+build: 0.8.0 (revision unknown, go1.27.1, sha256:c9a95fbb3ca5)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+companion: no subscribers
+== live window events ==
+export-events --current-window: ok
+== invariants ==
+Agent Mux doctor
+daemon: running (pid 63188, uptime 1s)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+screen patterns: embedded (claude, codex, contextlimit, copilot)
+kitty snapshot: fresh (generation 1, age 1.955s)
+kitty list coordinator: ok (1 lists, no failures, latency 29ms last / 29ms max)
+companion: no app connected
+socket: /tmp/amxs19/home/.local/share/agent-mux/daemon.sock (daemon runs another build; restart daemon)
+daemon export: ok
+kitty: ok (1 OS window)
+backend: launches go to kitty; tmux 3.7c (installed, verified); no server running
+runtime sessions: 0 live; reconciled 1.9s ago in 0ms (1 pass, 0 failed)
+s19 amxs19 % cd /Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo && PATH=$PATH:/opt/homebrew/bin just install-restart-smoke; echo SMOKE_EXIT=$?
+go build -o amx .
+cp amx "/tmp/amxs19/home/.local/bin/.amx.staging"
+mv -f "/tmp/amxs19/home/.local/bin/.amx.staging" "/tmp/amxs19/home/.local/bin/amx"
+ln -sf "/Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo/agent-mux.conf" "/tmp/amxs19/home/.config/kitty/agent-mux.conf"
+Installed /tmp/amxs19/home/.local/bin/amx
+Symlinked /tmp/amxs19/home/.config/kitty/agent-mux.conf
+"/tmp/amxs19/home/.local/bin/amx" daemon restart
+daemon restarted (pid 63480)
+"/tmp/amxs19/home/.local/bin/amx" daemon status
+daemon: running (pid 63480, uptime 0s, /tmp/amxs19/home/.local/share/agent-mux/daemon.sock)
+ready: true
+build: 0.8.0 (revision unknown, go1.27.1, sha256:c9a95fbb3ca5)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+companion: no subscribers
+"/tmp/amxs19/home/.local/bin/amx" doctor --strict
+Agent Mux doctor
+daemon: running (pid 63480, uptime 0s)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+screen patterns: embedded (claude, codex, contextlimit, copilot)
+kitty snapshot: fresh (generation 1, age 130ms)
+kitty list coordinator: ok (1 lists, no failures, latency 21ms last / 21ms max)
+companion: no app connected
+socket: /tmp/amxs19/home/.local/share/agent-mux/daemon.sock (daemon runs another build; restart daemon)
+daemon export: ok
+kitty: ok (1 OS window)
+backend: launches go to kitty; tmux 3.7c (installed, verified); no server running
+s19 repo % PATH=$PATH:/opt/homebrew/bin just cockpit-smoke; echo COCKPIT_EXIT=$?
+== kitty ==
+kitty 0.48.2 created by Kovid Goyal
+kitten @ ls: ok
+== daemon ==
+daemon: running (pid 63480, uptime 1s, /tmp/amxs19/home/.local/share/agent-mux/daemon.sock)
+ready: true
+build: 0.8.0 (revision unknown, go1.27.1, sha256:c9a95fbb3ca5)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+companion: no subscribers
+== live window events ==
+export-events --current-window: ok
+== invariants ==
+Agent Mux doctor
+daemon: running (pid 63480, uptime 1s)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+screen patterns: embedded (claude, codex, contextlimit, copilot)
+kitty snapshot: fresh (generation 1, age 1.861s)
+kitty list coordinator: ok (1 lists, no failures, latency 21ms last / 21ms max)
+companion: no app connected
+socket: /tmp/amxs19/home/.local/share/agent-mux/daemon.sock (daemon runs another build; restart daemon)
+daemon export: ok
+kitty: ok (1 OS window)
+backend: launches go to kitty; tmux 3.7c (installed, verified); no server running
+s19 repo % cd /Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo && PATH=/tmp/amxs19/home/.local/bin:$PATH:/opt/homebrew/bin just install-restart-smoke; echo SMOKE_EXIT=$?
+go build -o amx .
+cp amx "/tmp/amxs19/home/.local/bin/.amx.staging"
+mv -f "/tmp/amxs19/home/.local/bin/.amx.staging" "/tmp/amxs19/home/.local/bin/amx"
+ln -sf "/Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo/agent-mux.conf" "/tmp/amxs19/home/.config/kitty/agent-mux.conf"
+Installed /tmp/amxs19/home/.local/bin/amx
+Symlinked /tmp/amxs19/home/.config/kitty/agent-mux.conf
+"/tmp/amxs19/home/.local/bin/amx" daemon restart
+daemon restarted (pid 63647)
+"/tmp/amxs19/home/.local/bin/amx" daemon status
+daemon: running (pid 63647, uptime 0s, /tmp/amxs19/home/.local/share/agent-mux/daemon.sock)
+ready: true
+build: 0.8.0 (revision unknown, go1.27.1, sha256:c9a95fbb3ca5)
+notifications: disabled (none)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+companion: no subscribers
+"/tmp/amxs19/home/.local/bin/amx" doctor --strict
+Agent Mux doctor
+daemon: running (pid 63647, uptime 0s)
+notifications: disabled (none)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+s19 repo % PATH=/tmp/amxs19/home/.local/bin:$PATH:/opt/homebrew/bin just cockpit-smoke; echo COCKPIT_EXIT=$?
+== kitty ==
+kitty 0.48.2 created by Kovid Goyal
+kitten @ ls: ok
+== daemon ==
+daemon: running (pid 63647, uptime 1s, /tmp/amxs19/home/.local/share/agent-mux/daemon.sock)
+ready: true
+build: 0.8.0 (revision unknown, go1.27.1, sha256:c9a95fbb3ca5)
+notifications: disabled (none)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+companion: no subscribers
+== live window events ==
+export-events --current-window: ok
+== invariants ==
+Agent Mux doctor
+daemon: running (pid 63647, uptime 2s)
+notifications: disabled (none)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+screen patterns: embedded (claude, codex, contextlimit, copilot)
+kitty snapshot: fresh (generation 1, age 1.976s)
+kitty list coordinator: ok (1 lists, no failures, latency 24ms last / 24ms max)
+companion: no app connected
+socket: /tmp/amxs19/home/.local/share/agent-mux/daemon.sock (current)
+daemon export: ok
+kitty: ok (1 OS window)
+backend: launches go to kitty; tmux 3.7c (installed, verified); no server running
+runtime sessions: 0 live; reconciled 2s ago in 0ms (1 pass, 0 failed)
+screen captures: no screen read yet; tmux clients: 0 run, at most 0 at once (limit 4), 0 timed out
+versions: amx 0.8.0, daemon 0.8.0, go1.27.1, tmux 3.7c (needs 3.5 or newer), kitty 0.48.2
+native logs: /tmp/amxs19/home/.local/state/agent-mux/native (0 B across 0 launches; 0 active)
+native privacy: raw local logs; managed directories are 0700 and files are created with umask 077; bundles redact them
+native coverage: managed=0 external=0 degraded=0 disabled=0 unmanaged=0
+hooks: work (claude): in sync, activation unverified
+projects: ok (2 configured)
+kitty sockets: none reported
+renderer drift: none
+recent suppressions (last 15m0s): none
+asl integration: mode auto
+  shell_resolution    warn           defaults.asl.command is the bare name "asl" and it is not on this shell's PATH either
+                                     remediation: install agent-session-loop, then run `amx config asl-sync`
+  daemon_resolution   warn           the daemon has not resolved an executable: asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH
+                                     remediation: run `amx config asl-sync` to resolve and persist an absolute path
+  contract            unknown        no peer has announced a contract set; this build implements asl-amx-1.85ec3041b9f03f47
+  projection          unknown        no reconciliation sweep has completed yet under /tmp/amxs19/home/.local/state/agent-session-loop
+  freshness           not_applicable no bridge is connected, so there is no snapshot to age
+  delivery            unknown        no lifecycle hook has been delivered since this daemon started
+warnings:
+- [hooks_unverified] hooks for work are unverified: journal horizon (44s) is shorter than the hook verification window (4h); older hook evidence for home dir /tmp/amxs19/home/.claude-a may have been pruned; CLI 2.1.296 is newer than verified hook contract 2.1.195
+- [asl_shell_resolution] defaults.asl.command is the bare name "asl" and it is not on this shell's PATH either; remediation: install agent-session-loop, then run `amx config asl-sync`
+- [asl_daemon_resolution] the daemon has not resolved an executable: asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH; remediation: run `amx config asl-sync` to resolve and persist an absolute path
+overall: ok (3 warnings)
+== asl pairing preflight ==
+Error: asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH
+remediation: install agent-session-loop, or pass --command with the path to its executable
+error: recipe `cockpit-smoke` failed with exit code 1
+COCKPIT_EXIT=1
+s19 repo %
+
+##### OBSERVED (second pass): install-restart-smoke exit 0; cockpit-smoke exit 1
+
+--- the MacBook user's own amx afterwards ---
+/Users/sglavoie/.local/bin/amx 17564898 1790467200
+
+--- asl in the world ---
+no asl on the world PATH
+daemon stopped

@@ -46,6 +46,7 @@ and `cmd/release`'s `TestMacAppRecipesStayOutOfTheGates` keeps it that way.
 | `just mac-tmux` | Builds the pinned tmux runtime into `macos/Vendor/tmux/`. `mac-app` runs it itself; it does nothing when the vendored build is current. |
 | `just mac-install` | Release build, then `scripts/install-app.sh`: a first install or an update of `/Applications/Agent Mux.app` that leaves the session server and its agents running (see [Install, update, uninstall](#install-update-uninstall)). |
 | `just mac-uninstall [flags]` | `scripts/uninstall-app.sh`: removes the app. Agents keep running and data stays unless `--end-sessions` or `--remove-app-data` says otherwise. |
+| `just mac-release-gate [flags]` | The app's release gate: builds the Release bundle, checks it with `scripts/release-gate.sh` (seal, tmux runtime, that its `amx` is this checkout's, how it is signed), runs the hosted suite against the Debug and the Release app, and writes an evidence record. It installs nothing. With no Xcode to be had the record says `pending` and the recipe fails. See [Desktop releases](../docs/desktop-releases.md). |
 
 The project file `macos/AgentMux.xcodeproj` is generated from `project.yml` and
 is gitignored, so edit `project.yml` instead. `macos/build/`,

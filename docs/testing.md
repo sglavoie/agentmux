@@ -38,6 +38,11 @@ lane is deliberately partial. Neither lane runs `cockpit-smoke` — no hosted
 runner has a real Kitty — so that boundary is exercised only by an operator, in
 `just paired-release-gate`.
 
+The app's suite, `just mac-test`, needs Xcode and is outside every gate above.
+Its release gate is `just mac-release-gate`, which records its own evidence and
+reports a machine with no Xcode as pending rather than passed; see
+[Desktop releases](desktop-releases.md).
+
 `just asl-integration` is separate and opt-in. Every other recipe is hermetic
 and needs no `agent-session-loop` installed; this one launches the real bridge
 against a throwaway plan and state root and checks the handshake, capabilities,

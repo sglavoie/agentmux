@@ -1,0 +1,148 @@
+
+##### the packaged app and a fresh world: the daemon and two agents on the private tmux server, all from the bundle's own amx and tmux [19:48:52Z]
+--- the Mac ---
+Seb’s MacBook Pro
+27.0.1
+arm64
+--- the installed bundle ---
+/tmp/amxs19/Applications/Agent Mux.app
+0.1.0
+amx version 0.8.0 (revision fcd31c0bcfa4-dirty, built 2026-10-10T19:30:19Z, go1.27.1, sha256:e7bc1fcbe50d)
+tmux 3.7c
+/tmp/amxs19/Applications/Agent Mux.app: valid on disk
+/tmp/amxs19/Applications/Agent Mux.app: satisfies its Designated Requirement
+PASS: the installed bundle passes strict signature verification
+PASS: the app is not running and has no preferences yet
+PASS: the daemon started by the bundled amx answers
+PASS: the daemon lists both agents on the tmux backend
+PASS: no terminal is attached to either agent
+alpha rs-4cd5b739cfc9d34ec994bacafa06ade1: 61803 Sat Oct 10 19:48:54 2026 ; beta rs-a98df9dedaf9ff0cd20a8a37013678de: 61817 Sat Oct 10 19:48:54 2026 ; server pid 61802
+PASS: the packaged app runs from the install root
+PASS: its feed from the daemon is live
+PASS: it found the tmux it bundles, verified
+PASS: its workspace window opened
+--- the app's log so far ---
+13:48:55.524 [io.github.sglavoie.agentmux:app] workspace: reopening at launch (was open: false, place: none)
+13:48:55.546 [io.github.sglavoie.agentmux:workspace] workspace: opened
+13:48:55.601 [io.github.sglavoie.agentmux:workspace] workspace: showing viewUnavailable(id: "dashboard", "amx is still being resolved.")
+13:48:55.601 [io.github.sglavoie.agentmux:app] workspace: now on view:dashboard
+13:48:55.636 [io.github.sglavoie.agentmux:app] feed: connecting
+13:48:55.637 [io.github.sglavoie.agentmux:app] feed: live
+13:48:55.637 [io.github.sglavoie.agentmux:app] daemon: degraded · initial kitty snapshot failed: kitty command failed: kitten @ ls
+  output: Error: open /dev/tty: device not configured
+  error: exit status 1
+13:48:55.637 [io.github.sglavoie.agentmux:workspace] workspace: rows current (2 session(s), selection none)
+13:48:55.915 [io.github.sglavoie.agentmux:app] backend: tmux 3.7c (bundled with Agent Mux, verified) at /tmp/amxs19/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux; session server: Running, 2 agents running
+13:48:55.915 [io.github.sglavoie.agentmux:app] running /tmp/amxs19/shim/amx (userDefaultsOverride)
+13:48:55.916 [io.github.sglavoie.agentmux:app] embedded terminals use Ghostty 1.3.1 (ReleaseFast)
+13:48:55.927 [io.github.sglavoie.agentmux:workspace] workspace: started view dashboard
+13:48:55.927 [io.github.sglavoie.agentmux:workspace] workspace: showing view(id: "dashboard")
+13:48:56.029 [io.github.sglavoie.agentmux:workspace] workspace: rows held from the last snapshot (2 session(s), selection none)
+13:48:56.031 [io.github.sglavoie.agentmux:app] feed: reconnecting("reconnecting")
+13:48:56.050 [io.github.sglavoie.agentmux:workspace] workspace: rows current (2 session(s), selection none)
+13:48:56.051 [io.github.sglavoie.agentmux:app] feed: live
+
+##### embedded terminal: the workspace shows alpha in an embedded Ghostty terminal attached to the agent's pane [19:48:58Z]
+--- workspace_view session alpha ---
+{"ok": true, "workspace_view": {"delivered": 1}}
+PASS: one terminal is attached to alpha's pane
+--- terminals attached ---
+client_pid=62013 term=xterm-ghostty pane=%0 size=107x40
+PASS: it is the app's embedded Ghostty (xterm-ghostty)
+--- the attaching process and its ancestry ---
+62009 62007 /tmp/amxs19/Applications/Agent Mux.app/Contents/Resources/bin/amx attach rs-4cd5b739cfc9d34ec994bacafa06ade1
+62007 61883 /usr/bin/login -q -flp sglavoie /bin/bash --noprofile --norc -c exec -l '/usr/bin/env' '/tmp/amxs19/shim/amx' 'attach' 'rs-4cd5b739cfc9d34ec994bacaf
+61883     1 /private/tmp/amxs19/Applications/Agent Mux.app/Contents/MacOS/Agent Mux
+PASS: the terminal runs the bundled amx attach, started by the app
+PASS: the app saved where it is
+PASS: beta has no terminal: showing one session takes nothing from another
+
+##### attention while viewing another session: alpha asks for permission while the workspace is moved to beta [19:48:59Z]
+--- workspace_view session beta ---
+{"ok": true, "workspace_view": {"delivered": 1}}
+PASS: the app's terminal is now on beta
+PASS: alpha keeps its one terminal and its agent is the process it was
+PASS: the daemon's feed marks alpha as needing attention while the workspace shows beta
+--- what the daemon lists ---
+snapshot v2 daemon.pid=61793 attention.total=1
+  alpha  icon=key        attention=True  runtime=tmux %0 rs-4cd5b739cfc9d34ec994bacafa06ade1
+  beta   icon=-          attention=False runtime=tmux %1 rs-a98df9dedaf9ff0cd20a8a37013678de
+
+##### utility views: the Overview and the Dashboard run as the bundled amx in terminals of the app [19:49:00Z]
+--- workspace_view overview ---
+{"ok": true, "workspace_view": {"delivered": 1}}
+PASS: an Overview process runs under the app
+PASS: the session terminals are still one per session, none added
+--- workspace_view dashboard ---
+{"ok": true, "workspace_view": {"delivered": 1}}
+PASS: a Dashboard process runs under the app
+--- the app's amx processes ---
+61910 /tmp/amxs19/Applications/Agent Mux.app/Contents/Resources/bin/amx workspace-view dashboard
+62009 /tmp/amxs19/Applications/Agent Mux.app/Contents/Resources/bin/amx attach rs-4cd5b739cfc9d34ec994bacafa06ade1
+62127 /tmp/amxs19/Applications/Agent Mux.app/Contents/Resources/bin/amx attach rs-a98df9dedaf9ff0cd20a8a37013678de
+62220 /tmp/amxs19/Applications/Agent Mux.app/Contents/Resources/bin/amx workspace-view overview
+PASS: both agents are the processes they were
+
+##### quit and reopen: quitting the app ends no agent, and it comes back where it was [19:49:00Z]
+{"ok": true, "workspace_view": {"delivered": 1}}
+PASS: the workspace is back on beta
+PASS: the app saved that
+PASS: the app quit
+PASS: quitting detached every terminal
+PASS: both agents are the processes they were, in the same server
+PASS: the registry still holds both sessions live
+PASS: the app is running again with its feed live
+PASS: it reopened its workspace on beta by itself
+--- the app's log after reopening ---
+13:49:01.753 [io.github.sglavoie.agentmux:app] workspace: reopening at launch (was open: true, place: session:rs-a98df9dedaf9ff0cd20a8a37013678de)
+13:49:01.776 [io.github.sglavoie.agentmux:workspace] workspace: opened
+13:49:01.852 [io.github.sglavoie.agentmux:workspace] workspace: restoring session:rs-a98df9dedaf9ff0cd20a8a37013678de
+13:49:01.852 [io.github.sglavoie.agentmux:workspace] workspace: showing restoring(runtimeSessionID: "rs-a98df9dedaf9ff0cd20a8a37013678de")
+13:49:01.905 [io.github.sglavoie.agentmux:app] feed: connecting
+13:49:01.905 [io.github.sglavoie.agentmux:app] feed: live
+13:49:01.905 [io.github.sglavoie.agentmux:app] daemon: degraded · initial kitty snapshot failed: kitty command failed: kitten @ ls
+  output: Error: open /dev/tty: device not configured
+  error: exit status 1
+13:49:01.906 [io.github.sglavoie.agentmux:workspace] workspace: rows current (2 session(s), selection none)
+13:49:01.913 [io.github.sglavoie.agentmux:app] backend: tmux 3.7c (bundled with Agent Mux, verified) at /tmp/amxs19/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux; session server: Running, 2 agents running
+13:49:01.913 [io.github.sglavoie.agentmux:app] running /tmp/amxs19/shim/amx (userDefaultsOverride)
+13:49:01.972 [io.github.sglavoie.agentmux:app] session rs-a98df9dedaf9ff0cd20a8a37013678de: live(clients: 0)
+13:49:01.972 [io.github.sglavoie.agentmux:workspace] workspace: restored rs-a98df9dedaf9ff0cd20a8a37013678de; reattaching its terminal
+13:49:01.975 [io.github.sglavoie.agentmux:app] embedded terminals use Ghostty 1.3.1 (ReleaseFast)
+13:49:01.983 [io.github.sglavoie.agentmux:workspace] workspace: attached a terminal to rs-a98df9dedaf9ff0cd20a8a37013678de
+13:49:01.983 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-a98df9dedaf9ff0cd20a8a37013678de")
+13:49:02.007 [io.github.sglavoie.agentmux:workspace] workspace: rows held from the last snapshot (2 session(s), selection rs-a98df9dedaf9ff0cd20a8a37013678de)
+13:49:02.008 [io.github.sglavoie.agentmux:app] feed: reconnecting("reconnecting")
+13:49:02.011 [io.github.sglavoie.agentmux:workspace] workspace: rows current (2 session(s), selection rs-a98df9dedaf9ff0cd20a8a37013678de)
+13:49:02.011 [io.github.sglavoie.agentmux:app] feed: live
+
+##### killed outright: the app is killed with its terminal on beta, and started again [19:49:03Z]
+PASS: the app is gone
+PASS: its terminal went with it and the agent did not
+PASS: started again, it returns to beta
+PASS: both agents are still the processes they were at the start
+--- registry ---
+rs-4cd5b739cfc9d34ec994bacafa06ade1 live fresh tmux %0 project=alpha pid=61803 conv=None parent=None
+rs-a98df9dedaf9ff0cd20a8a37013678de live fresh tmux %1 project=beta pid=61817 conv=None parent=None
+--- panes on the private tmux server ---
+%1 pid=61817 dead=0 size=107x40
+%0 pid=61803 dead=0 size=107x40
+--- terminals attached to the private tmux server ---
+client_pid=62545 term=xterm-ghostty pane=%1 size=107x40
+--- what the daemon lists ---
+snapshot v2 daemon.pid=61793 attention.total=1
+  alpha  icon=key        attention=True  runtime=tmux %0 rs-4cd5b739cfc9d34ec994bacafa06ade1
+  beta   icon=-          attention=False runtime=tmux %1 rs-a98df9dedaf9ff0cd20a8a37013678de
+--- the app's saved workspace ---
+window_open=1 place=session:rs-a98df9dedaf9ff0cd20a8a37013678de
+
+##### teardown of this run: the app is quit, the agents ended through the bundled amx, the daemon stopped [19:49:04Z]
+PASS: the app quit
+--- amx backend stop --yes ---
+Stopped the private tmux server and 2 running agents.
+--- amx daemon stop ---
+daemon stopped
+PASS: no private tmux server is left
+PASS: the app's preferences are removed again
+
+##### RESULT: 36 passed, 0 failed

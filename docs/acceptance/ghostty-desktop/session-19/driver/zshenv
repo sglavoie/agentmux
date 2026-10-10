@@ -1,0 +1,5 @@
+# Kitty and libghostty start a shell through login(1), which resets HOME to
+# the account's real one. Put the world back before anything else runs.
+export HOME=/tmp/amxs19/home TMPDIR=/tmp/amxs19/tmp
+export PATH=/tmp/amxs19/bin:/usr/bin:/bin:/usr/sbin:/sbin
+unset XDG_STATE_HOME XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME AMX_CONFIG

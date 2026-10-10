@@ -1,0 +1,944 @@
+
+##### environment
+
+--- the Mac ---
+Seb’s MacBook Pro
+27.0.1
+arm64
+
+--- the surface's environment: no Kitty variable ---
+HOME=/tmp/amxs19/home
+PATH=/tmp/amxs19/bin:/usr/bin:/bin:/usr/sbin:/sbin
+TERM=xterm-256color
+TMPDIR=/tmp/amxs19/tmp
+KITTY variables: 0
+
+--- amx build (the packaged amx) ---
+amx version 0.8.0 (revision fcd31c0bcfa4-dirty, built 2026-10-10T19:30:19Z, go1.27.1, sha256:e7bc1fcbe50d)
+
+--- amx backend status ---
+launch backend: kitty
+tmux: /tmp/amxs19/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux (3.7c, from bundled, checksums verified)
+server: not running (the first tmux launch starts it)
+PASS: no Kitty process runs in this world
+PASS: the private tmux server does not exist before the first launch
+
+##### W1 dashboard starts outside Kitty with no sessions
+PASS: on screen: No running sessions
+
+=== empty dashboard [19:44:26Z] ===
+Agent Mux · Urgency · all projects                                                                                                ✖ 2 issues
+> Sessions · focused                                                 │  Inspector
+                        No running sessions.                         │
+                                                                     │
+           press  l  to launch     press  ?  for all keys            │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │──────────────────────────────────────────────────────────────────────
+                                                                     │(no session selected)
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+
+  j/k up/down · enter focus · a actions · : commands · / filter · ? help · n/N needs you · tab switch pane · i inspector · q quit · ? more
+
+##### W2 launch a configured project on the tmux backend from the launcher
+PASS: on screen: Launch Sessions
+
+=== launcher [19:44:26Z] ===
+Launch Sessions  [profile: All]                                                                                            press / to filter
+
+  [ ]    alpha  🟠 work/claude
+  [ ]    beta   🟠 work/claude
+
+  space toggle  enter launch  f profile  P pin  s sessions  C override  o open dirs  O open in editor  p preview  esc clear/exit  ? help
+  DSL: @profile, word  j/k up/down  g/G top/bottom
+ Daemon and hook health degraded · details: ":" Show Health Details on the dashboard
+PASS: on screen: Launched 1/1
+PASS: on screen: stand-in claude pid
+
+=== dashboard after launch: row + live inspector preview [19:44:27Z] ===
+Agent Mux · Urgency · all projects                                                                                                ✖ 2 issues
+> Sessions · focused                                                 │  Inspector
+Running (1)                                                          │alpha
+alpha     Active      —                                              │Active · —
+                                                                     │Agent   claude · work
+                                                                     │Branch  —
+                                                                     │Dir     /tmp/amxs19/proj/alpha
+                                                                     │Watch   —
+                                                                     │──────────────────────────────────────────────────────────────────────
+                                                                     │stand-in claude pid 55476 in /tmp/amxs19/proj/alpha
+                                                                     │runtime session: rs-58f0aedea60a5fefa841a47f148c4613  kitty window: n…
+                                                                     │conversation: standin-55476
+                                                                     │args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/397…
+                                                                     │4a13-929a-d22c9fdf7030/claude-debug.log
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+
+ Launched 1/1 · alpha
+  j/k up/down · enter focus · a actions · : commands · / filter · ? help · n/N needs you · tab switch pane · i inspector · q quit · ? more
+
+--- private tmux server after launch ---
+amx-01c2296befc9fc52 %0 pid=55476 dead=0 /private/tmp/amxs19/proj/alpha
+
+--- runtime-session registry ---
+rs-58f0aedea60a5fefa841a47f148c4613 live fresh tmux %0 project=alpha pid=55476 conv=None parent=None
+PASS: one agent pane runs on the private server
+PASS: the registry holds one live tmux session for alpha
+PASS: the server runs the packaged tmux, from the copy outside the app
+
+##### W3 focus = attach this terminal to the session; hook state; F12 detaches back to the dashboard
+PASS: on screen: conversation: standin-
+
+=== attached view of the agent pane [19:44:27Z] ===
+stand-in claude pid 55476 in /tmp/amxs19/proj/alpha
+runtime session: rs-58f0aedea60a5fefa841a47f148c4613  kitty window: none
+conversation: standin-55476
+args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/397447a9-c639-4a13-929a-d22c9fdf7030/claude-debug.log
+
+
+--- private server clients while attached ---
+amx-01c2296befc9fc52 tmux-256color
+PASS: one terminal is attached to the private server
+PASS: on screen: asked (1)
+
+=== attached: agent emitted a PermissionRequest hook [19:44:28Z] ===
+stand-in claude pid 55476 in /tmp/amxs19/proj/alpha
+runtime session: rs-58f0aedea60a5fefa841a47f148c4613  kitty window: none
+conversation: standin-55476
+args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/397447a9-c639-4a13-929a-d22c9fdf7030/claude-debug.log
+ask
+asked (1)
+
+PASS: on screen: Needs permission
+
+=== back on the dashboard: Needs you / Needs permission from the managed hook [19:44:28Z] ===
+Agent Mux · Urgency · all projects                                                                                                ✖ 2 issues
+> Sessions · focused                                                 │  Inspector
+  Needs you (1)                                                      │alpha
+▌ alpha     Needs permission   0:00                                  │Needs permission · 0:00
+                                                                     │Agent   claude · work
+                                                                     │Branch  —
+                                                                     │Dir     /tmp/amxs19/proj/alpha
+                                                                     │Watch   —
+                                                                     │──────────────────────────────────────────────────────────────────────
+                                                                     │stand-in claude pid 55476 in /tmp/amxs19/proj/alpha
+                                                                     │runtime session: rs-58f0aedea60a5fefa841a47f148c4613  kitty window: n…
+                                                                     │conversation: standin-55476
+                                                                     │args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/397…
+                                                                     │ask
+                                                                     │asked (1)
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+
+ Launched 1/1 · alpha
+  j/k up/down · enter focus · a actions · : commands · / filter · ? help · n/N needs you · tab switch pane · i inspector · q quit · ? more
+PASS: no terminal is attached after F12
+PASS: the agent kept running through attach and detach
+
+##### W4 session actions on the tmux row: clear, mark active, lock, mute, peek, shell and editor utility views
+PASS: on screen: Actions for alpha
+
+=== actions menu for a tmux session [19:44:28Z] ===
+Agent Mux · Urgency · all projects                                                                                                ✖ 2 issues
+Needs you (1)                                                        │alpha
+alpha     Needs permission   0:00                                    │Needs permission · 0:00
+                                                                     │Agent   claude · work
+                                                                     │Branch  —
+                                                                     │Dir     /tmp/amxs19/proj/alpha
+                                                                     │Watch   —
+                                  ╭──────────────────────────────────────────────────────────────────────╮──────────────────────────────────
+                                  │ Actions for alpha                                                    │xs19/proj/alpha
+                                  │ work · claude · /tmp/amxs19/proj/alpha                               │a841a47f148c4613  kitty window: n…
+                                  │ ▸ Open session                                                       │
+                                  │   Peek scrollback                                                  e │.local/state/agent-mux/native/397…
+                                  │   Launch another session                                           C │
+                                  │   Open shell                                                       o │
+                                  │   Open editor                                                      O │
+                                  │   Copy title                                                       y │
+                                  │ ─ Status ─────────────────────────────────────────────────────────── │
+                                  │   Clear status                                                     x │
+                                  │   Mark active                                                      b │
+                                  │   Lock/Unlock                                                      L │
+                                  │   Mute/Unmute                                                      m │
+                                  │ ─ Lifecycle ──────────────────────────────────────────────────────── │
+                                  │   Restart                                                          r │
+                                  │   Restart with another profile                                     c │
+                                  │   Close                                                            X │
+                                  │                                                                      │
+                                  │ jump to the session's Kitty tab, or attach to it here if it runs in  │
+                                  │ tmux                                                                 │
+                                  │                                                                      │
+                                  │   ↑/↓ select · ⏎ run · a key runs it · esc/q close                   │
+                                  ╰──────────────────────────────────────────────────────────────────────╯
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+
+ Launched 1/1 · alpha
+PASS: on screen: requested status clear
+
+=== after Clear status [19:44:30Z] ===
+Agent Mux · Urgency · all projects                                                                                                ✖ 2 issues
+> Sessions · focused                                                 │  Inspector
+  Running (1)                                                        │alpha
+▌ alpha     Active      —                                            │Active · —
+                                                                     │Agent   claude · work
+                                                                     │Branch  —
+                                                                     │Dir     /tmp/amxs19/proj/alpha
+                                                                     │Watch   —
+                                                                     │──────────────────────────────────────────────────────────────────────
+                                                                     │stand-in claude pid 55476 in /tmp/amxs19/proj/alpha
+                                                                     │runtime session: rs-58f0aedea60a5fefa841a47f148c4613  kitty window: n…
+                                                                     │conversation: standin-55476
+                                                                     │args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/397…
+                                                                     │ask
+                                                                     │asked (1)
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+
+ requested status clear on alpha
+  j/k up/down · enter focus · a actions · : commands · / filter · ? help · n/N needs you · tab switch pane · i inspector · q quit · ? more
+PASS: on screen: Actions for alpha
+PASS: on screen: Working
+
+=== after Mark active [19:44:30Z] ===
+Agent Mux · Urgency · all projects                                                                                                ✖ 2 issues
+> Sessions · focused                                                 │  Inspector
+  Running (1)                                                        │alpha
+▌ alpha     Working   0:00                                           │Working · 0:00
+                                                                     │Agent   claude · work
+                                                                     │Branch  —
+                                                                     │Dir     /tmp/amxs19/proj/alpha
+                                                                     │Watch   last event 0m
+                                                                     │──────────────────────────────────────────────────────────────────────
+                                                                     │stand-in claude pid 55476 in /tmp/amxs19/proj/alpha
+                                                                     │runtime session: rs-58f0aedea60a5fefa841a47f148c4613  kitty window: n…
+                                                                     │conversation: standin-55476
+                                                                     │args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/397…
+                                                                     │ask
+                                                                     │asked (1)
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+
+ requested active mark on alpha
+  j/k up/down · enter focus · a actions · : commands · / filter · ? help · n/N needs you · tab switch pane · i inspector · q quit · ? more
+PASS: on screen: Actions for alpha
+PASS: on screen: 🔒
+
+=== after Lock [19:44:31Z] ===
+Agent Mux · Urgency · all projects                                                                                                ✖ 2 issues
+> Sessions · focused                                                 │  Inspector
+Running (1)                                                          │alpha
+🔒 alpha  Working   0:01                                             │Working · 0:01
+                                                                     │Agent   claude · work
+                                                                     │Branch  —
+                                                                     │Dir     /tmp/amxs19/proj/alpha
+                                                                     │Watch   🔒 · last event 0m
+                                                                     │──────────────────────────────────────────────────────────────────────
+                                                                     │stand-in claude pid 55476 in /tmp/amxs19/proj/alpha
+                                                                     │runtime session: rs-58f0aedea60a5fefa841a47f148c4613  kitty window: n…
+                                                                     │conversation: standin-55476
+                                                                     │args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/397…
+                                                                     │ask
+                                                                     │asked (1)
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+
+ requested active mark on alpha
+  j/k up/down · enter focus · a actions · : commands · / filter · ? help · n/N needs you · tab switch pane · i inspector · q quit · ? more
+PASS: on screen: Actions for alpha
+
+=== after Mute [19:44:33Z] ===
+Agent Mux · Urgency · all projects                                                                                           ✖ hooks drifted
+> Sessions · focused                                                 │  Inspector
+Running (1)                                                          │alpha
+🔒 alpha  Working   0:03                                             │Working · 0:03
+                                                                     │Agent   claude · work
+                                                                     │Branch  —
+                                                                     │Dir     /tmp/amxs19/proj/alpha
+                                                                     │Watch   🔒 · 🔇 · last event 0m
+                                                                     │──────────────────────────────────────────────────────────────────────
+                                                                     │stand-in claude pid 55476 in /tmp/amxs19/proj/alpha
+                                                                     │runtime session: rs-58f0aedea60a5fefa841a47f148c4613  kitty window: n…
+                                                                     │conversation: standin-55476
+                                                                     │args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/397…
+                                                                     │ask
+                                                                     │asked (1)
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+
+ requested active mark on alpha
+  j/k up/down · enter focus · a actions · : commands · / filter · ? help · n/N needs you · tab switch pane · i inspector · q quit · ? more
+
+--- pane metadata after lock+mute ---
+"amx_locked":"true"
+"cc_mute":"1"}
+PASS: the pane's metadata records the lock and the mute
+PASS: on screen: Actions for alpha
+PASS: on screen: (END)
+
+=== Peek scrollback: less utility view in this terminal [19:44:34Z] ===
+runtime session: rs-58f0aedea60a5fefa841a47f148c4613  kitty window: none
+conversation: standin-55476
+args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/397447a9-c639-4a13-929a-d22c9fdf7030/claude-debug.log
+ask
+asked (1)
+
+/tmp/amxs19/tmp/amx-scrollback-2363958799.txt (END)
+PASS: on screen: Sessions
+PASS: on screen: Actions for alpha
+PASS: on screen: Actions for alpha
+PASS: on screen: Actions for alpha
+PASS: on screen: SHELL_UTILITY_VIEW
+
+=== Open shell: utility view in this terminal [19:44:41Z] ===
+[detached (from session amx-01c2296befc9fc52)]
+s19 alpha % pwd; echo SHELL_UTILITY_VIEW
+/tmp/amxs19/proj/alpha
+SHELL_UTILITY_VIEW
+s19 alpha %
+
+PASS: on screen: Sessions
+PASS: on screen: Actions for alpha
+PASS: on screen: EDITOR VIEW
+
+=== Open editor: utility view in this terminal [19:44:42Z] ===
+[detached (from session amx-01c2296befc9fc52)]
+s19 alpha % pwd; echo SHELL_UTILITY_VIEW
+/tmp/amxs19/proj/alpha
+SHELL_UTILITY_VIEW
+s19 alpha % exit
+EDITOR VIEW (stand-in editor) in /tmp/amxs19/proj/alpha
+editing: /tmp/amxs19/proj/alpha
+press enter to close the editor:
+
+PASS: on screen: Sessions
+
+=== dashboard resumed after the utility views [19:44:42Z] ===
+Agent Mux · Urgency · all projects                                                                                           ✖ hooks drifted
+> Sessions · focused                                                 │  Inspector
+Running (1)                                                          │alpha
+alpha     Working   0:12                                             │Working · 0:12
+                                                                     │Agent   claude · work
+                                                                     │Branch  —
+                                                                     │Dir     /tmp/amxs19/proj/alpha
+                                                                     │Watch   last event 0m
+                                                                     │──────────────────────────────────────────────────────────────────────
+                                                                     │stand-in claude pid 55476 in /tmp/amxs19/proj/alpha
+                                                                     │runtime session: rs-58f0aedea60a5fefa841a47f148c4613  kitty window: n…
+                                                                     │conversation: standin-55476
+                                                                     │args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/397…
+                                                                     │ask
+                                                                     │asked (1)
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+
+  j/k up/down · enter focus · a actions · : commands · / filter · ? help · n/N needs you · tab switch pane · i inspector · q quit · ? more
+
+##### W5 capability-aware command: Resort Tabs explains itself without Kitty
+PASS: on screen: there are no Kitty tabs to reorder
+
+=== palette: Resort Tabs unavailable with reason [19:44:43Z] ===
+Agent Mux · Urgency · all projects                                                                                           ✖ hooks drifted
+Running (1)                                                          │alpha
+alpha     Working   0:12                                             │Working · 0:12
+                                                                     │Agent   claude · work
+                                                                     │Branch  —
+                                                                     │Dir     /tmp/amxs19/proj/alpha
+                                                                     │Watch   last event 0m
+                                                                     │──────────────────────────────────────────────────────────────────────
+                                                                     │stand-in claude pid 55476 in /tmp/amxs19/proj/alpha
+                                                                     │runtime session: rs-58f0aedea60a5fefa841a47f148c4613  kitty window: n…
+                                                                     │conversation: standin-55476
+                                                                     │args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/397…
+                                                                     │ask
+                          ╭──────────────────────────────────────────────────────────────────────────────────────╮
+                          │ Command Palette                                                                      │
+                          │ Session: alpha · work                                                                │
+                          │ :resort▌                                                                             │
+                          │ ─ Application ────────────────────────────────────────────────────────────────────── │
+                          │ ▸ Resort Tabs                                                                        │
+                          │                                                                                      │
+                          │ Unavailable: there are no Kitty tabs to reorder                                      │
+                          │ Reorder managed Kitty tabs to match the dashboard sort order.                        │
+                          │   ↑/↓ move · enter run · esc close                                                   │
+                          ╰──────────────────────────────────────────────────────────────────────────────────────╯
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+
+  ↑/↓ or ctrl+j/k or ctrl+n/p move · enter run · esc close · ctrl+c quit
+ Hook health degraded · details: ":" Show Health Details on the dashboard
+
+##### W6 restart on the recorded backend (new runtime session, old one ended)
+PASS: on screen: Actions for alpha
+PASS: on screen: restarted alpha
+
+=== after Restart [19:44:46Z] ===
+Agent Mux · Urgency · all projects                                                                                           ✖ hooks drifted
+> Sessions · focused                                                 │  Inspector
+Running (1)                                                          │alpha
+alpha     Active      —                                              │Active · —
+                                                                     │Agent   claude · work
+                                                                     │Branch  —
+                                                                     │Dir     /tmp/amxs19/proj/alpha
+                                                                     │Watch   —
+                                                                     │──────────────────────────────────────────────────────────────────────
+                                                                     │stand-in claude pid 56171 in /tmp/amxs19/proj/alpha
+                                                                     │runtime session: rs-b405f90a88ce08392934e7113ce136c4  kitty window: n…
+                                                                     │conversation: standin-56171
+                                                                     │args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/dd2…
+                                                                     │4832-a07c-2800a80c8777/claude-debug.log
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+
+ restarted alpha
+  j/k up/down · enter focus · a actions · : commands · / filter · ? help · n/N needs you · tab switch pane · i inspector · q quit · ? more
+
+--- registry after restart ---
+rs-58f0aedea60a5fefa841a47f148c4613 ended fresh tmux %0 project=alpha pid=55476 conv=None parent=None
+rs-b405f90a88ce08392934e7113ce136c4 live restart tmux %1 project=alpha pid=56171 conv=None parent=rs-58f0aedea60a5fefa841a47f148c4613
+PASS: the restart is a new live runtime session and the old one is ended
+PASS: exactly one agent runs for alpha
+
+##### W7 history and continuity: Past Sessions lists the conversation; continue resumes it on tmux; continuing again attaches to the live session
+PASS: on screen: Past Sessions  [1 result]
+
+=== Past Sessions outside Kitty [19:44:46Z] ===
+Past Sessions  [1 result]
+  [h] harness: any   [p] profile: any   [r] project: any   [m] message: any
+press / to search · enter view · c continue · f fork · w worktree fork · H handoff · E edit handoff
+  session path: /tmp/amxs19/home/.claude-a/projects/-tmp-amxs19-proj-alpha/11111111-1111-4111-8111-111111111111.jsonl
+
+   1d   ago  alpha  [work/claude]  acceptance fixture prompt → acceptance fixture answer
+
+  / filter · h/p/r/m chips · enter view · c continue · f fork · w worktree · H handoff · E edit handoff · d delete · i ID · Y path · ? help
+  esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bot
+ restarted alpha
+
+--- private tmux server after continue ---
+amx-369b2ec9f0187643 %1 pid=56171 dead=0 /private/tmp/amxs19/proj/alpha
+amx-87139f86f07e3427 %2 pid=56286 dead=0 /private/tmp/amxs19/proj/alpha
+PASS: the resumed conversation runs in a second pane
+PASS: it was resumed with its own conversation ID
+PASS: on screen: conversation: 11111111-1111-4111-8111-111111111111
+
+=== continue on a conversation live in tmux: attached to it instead of resuming twice [19:44:52Z] ===
+stand-in claude pid 56286 in /tmp/amxs19/proj/alpha
+runtime session: rs-4c34e5f0699d9863538572e250fecc58  kitty window: none
+conversation: 11111111-1111-4111-8111-111111111111
+args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/0d8fe4fc-6767-42eb-80b1-17649821e608/claude-debug.log --resume 11111111-11
+11-4111-8111-111111111111
+
+PASS: continuing a live conversation created no new pane
+PASS: on screen: Past Sessions
+
+##### W8 worktrees: fork the conversation into a managed worktree on tmux; Worktrees view; reopen attaches; shell view
+PASS: on screen: Fork in new worktree
+
+=== worktree fork confirmation [19:44:52Z] ===
+Past Sessions  [1 result]
+  [h] harness: any   [p] profile: any   [r] project: any   [m] message: any
+press / to search · enter view · c continue · f fork · w worktree fork · H handoff · E edit handoff
+  session path: /tmp/amxs19/home/.claude-a/projects/-tmp-amxs19-proj-alpha/11111111-1111-4111-8111-111111111111.jsonl
+
+   1d   ago  alpha  [work/claude]  acceptance fixture prompt → acceptance fixture answer
+
+                                   ╭────────────────────────────────────────────────────────────────────╮
+                                   │ Fork in new worktree "alpha"?                                      │
+                                   │ Creates a tracked Git worktree and forks there. Dirty sources are  │
+                                   │ refused; CLI --allow-dirty omits uncommitted changes.              │
+                                   ╰────────────────────────────────────────────────────────────────────╯
+
+  [y]es   [n]o   [esc] cancel
+ Hook health degraded · details: ":" Show Health Details on the dashboard
+
+--- private tmux server after worktree fork ---
+amx-369b2ec9f0187643 %1 pid=56171 dead=0 /private/tmp/amxs19/proj/alpha
+amx-87139f86f07e3427 %2 pid=56286 dead=0 /private/tmp/amxs19/proj/alpha
+amx-89067f43abe87cdb %3 pid=56479 dead=0 /private/tmp/amxs19/home/.local/share/agent-mux/worktrees/alpha/11111111-111-20261010T194452Z
+PASS: the fork runs in a third pane, inside a managed worktree
+PASS: on screen: Worktrees  [1/1 visible]
+
+=== Worktrees view outside Kitty: live managed worktree [19:45:02Z] ===
+Worktrees  [1/1 visible]
+press / to filter worktrees
+  worktree path: /private/tmp/amxs19/home/.local/share/agent-mux/worktrees/alpha/11111111-111-20261010T194452Z
+
+  alpha               amx/alpha/11111111-111-…  work/claude            now  [live][clean][merged]
+
+  / filter · enter reopen · o shell · O editor · d remove · D delete branch · F forget · Y path · r refresh · ? help · esc back
+  j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bot
+ Hook health degraded · details: ":" Show Health Details on the dashboard
+PASS: on screen: --fork-session
+
+=== worktree reopen: attached to the live worktree session [19:45:02Z] ===
+stand-in claude pid 56479 in /private/tmp/amxs19/home/.local/share/agent-mux/worktrees/alpha/11111111-111-20261010T194452Z
+runtime session: rs-2c4aef57b111d5485324fd2739032866  kitty window: none
+conversation: fork-56479
+args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/cafb83aa-3e55-4f25-bcde-b26efc8536ab/claude-debug.log --resume 11111111-11
+11-4111-8111-111111111111 --fork-session
+
+PASS: on screen: Worktrees  [
+PASS: on screen: WORKTREE_SHELL_VIEW
+
+=== worktree shell utility view [19:45:04Z] ===
+[detached (from session amx-01c2296befc9fc52)]
+s19 alpha % pwd; echo SHELL_UTILITY_VIEW
+/tmp/amxs19/proj/alpha
+SHELL_UTILITY_VIEW
+s19 alpha % exit
+EDITOR VIEW (stand-in editor) in /tmp/amxs19/proj/alpha
+editing: /tmp/amxs19/proj/alpha
+press enter to close the editor:
+[detached (from session amx-87139f86f07e3427)]
+[detached (from session amx-89067f43abe87cdb)]
+s19 11111111-111-20261010T194452Z % pwd; echo WORKTREE_SHELL_VIEW
+/private/tmp/amxs19/home/.local/share/agent-mux/worktrees/alpha/11111111-111-20261010T194452Z
+WORKTREE_SHELL_VIEW
+s19 11111111-111-20261010T194452Z %
+
+PASS: on screen: Worktrees  [
+
+##### W9 plans: Plans view lists the plan; its editor opens in this terminal
+PASS: on screen: demo-plan
+
+=== Plans view outside Kitty [19:45:06Z] ===
+Plans  [1 result · sort: matches]
+  [r] project: any
+press / to search plan content
+  plan path: /tmp/amxs19/home/plans/demo-plan
+
+   2m   ago  [Unknown]  demo-plan  3 files
+
+  / filter · r project · enter view · o sort · O editor · Y path · ? help · esc back · j/k up/down · g/G top/bot · ctrl+d/u half
+  ctrl+f/b page
+ Scanning plans…
+PASS: on screen: EDITOR VIEW
+
+=== plan editor utility view [19:45:06Z] ===
+[detached (from session amx-01c2296befc9fc52)]
+s19 alpha % pwd; echo SHELL_UTILITY_VIEW
+/tmp/amxs19/proj/alpha
+SHELL_UTILITY_VIEW
+s19 alpha % exit
+EDITOR VIEW (stand-in editor) in /tmp/amxs19/proj/alpha
+editing: /tmp/amxs19/proj/alpha
+press enter to close the editor:
+[detached (from session amx-87139f86f07e3427)]
+[detached (from session amx-89067f43abe87cdb)]
+s19 11111111-111-20261010T194452Z % pwd; echo WORKTREE_SHELL_VIEW
+/private/tmp/amxs19/home/.local/share/agent-mux/worktrees/alpha/11111111-111-20261010T194452Z
+WORKTREE_SHELL_VIEW
+s19 11111111-111-20261010T194452Z % exit
+EDITOR VIEW (stand-in editor) in /tmp/amxs19/home/plans/demo-plan
+editing: /tmp/amxs19/home/plans/demo-plan
+press enter to close the editor:
+
+PASS: on screen: Plans  [
+
+##### W10 overview on the tmux backend: tiles, previews read from the panes, attach and back; no viewer is left behind
+PASS: on screen: Sessions
+PASS: on screen: Live sessions  3
+
+=== overview: three tmux sessions [19:45:08Z] ===
+Live sessions  3
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓╭────────────────────────────────────────────────────────────────────╮
+┃ alpha (tmux %1)                                           — · Idle ┃│ alpha (tmux %2)                                           — · Idle │
+┃ claude · work                                                    1 ┃│ claude · work                                                    2 │
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛╰────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────────────────────╮
+│ alpha (tmux %3)                                           — · Idle │
+│ claude · work                                                    3 │
+╰────────────────────────────────────────────────────────────────────╯
+
+Enter focus · a actions · ? help · q exit · 1–0 jump · n/N needs you · c normal · ←↑↓→/hjkl move · Tab next · PgUp/PgDn page · Home/End ends
+PASS: reading the sessions for the overview attached no terminal
+PASS: on screen: stand-in claude pid
+
+=== overview: previews captured from the panes [19:45:10Z] ===
+Live sessions  3
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓╭────────────────────────────────────────────────────────────────────╮
+┃ alpha (tmux %1)                                           — · Idle ┃│ alpha (tmux %2)                                           — · Idle │
+┃ claude · work                                                    1 ┃│ claude · work                                                    2 │
+┃ ────────────────────────────────────────────────────────────────── ┃│ ────────────────────────────────────────────────────────────────── │
+┃ stand-in claude pid 56171 in /tmp/amxs19/proj/alpha                ┃│ stand-in claude pid 56286 in /tmp/amxs19/proj/alpha                │
+┃ runtime session: rs-b405f90a88ce08392934e7113ce136c4  kitty windo… ┃│ runtime session: rs-4c34e5f0699d9863538572e250fecc58  kitty windo… │
+┃ conversation: standin-56171                                        ┃│ conversation: 11111111-1111-4111-8111-111111111111                 │
+┃ args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native… ┃│ args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native… │
+┃ 4832-a07c-2800a80c8777/claude-debug.log                            ┃│ 11-4111-8111-111111111111                                          │
+┃                                                                    ┃│                                                                    │
+┃                                                                    ┃│                                                                    │
+┃                                                                    ┃│                                                                    │
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛╰────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────────────────────╮
+│ alpha (tmux %3)                                           — · Idle │
+│ claude · work                                                    3 │
+│ ────────────────────────────────────────────────────────────────── │
+│ stand-in claude pid 56479 in /private/tmp/amxs19/home/.local/shar… │
+│ runtime session: rs-2c4aef57b111d5485324fd2739032866  kitty windo… │
+│ conversation: fork-56479                                           │
+│ args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native… │
+│ 11-4111-8111-111111111111 --fork-session                           │
+│                                                                    │
+│                                                                    │
+╰────────────────────────────────────────────────────────────────────╯
+
+Enter focus · a actions · ? help · q exit · 1–0 jump · n/N needs you · c compact · ←↑↓→/hjkl move · Tab next · PgUp/PgDn page
+PASS: previews acquired no input or resize ownership: still no client
+PASS: no longer on screen: Live sessions
+PASS: on screen: conversation: 
+
+=== overview: attached to the selected session [19:45:11Z] ===
+stand-in claude pid 56171 in /tmp/amxs19/proj/alpha
+runtime session: rs-b405f90a88ce08392934e7113ce136c4  kitty window: none
+conversation: standin-56171
+args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/dd2ee919-942b-4832-a07c-2800a80c8777/claude-debug.log
+
+PASS: the overview's Enter attached one terminal
+PASS: on screen: Live sessions
+PASS: on screen: OVERVIEW_EXIT=0
+PASS: no terminal is attached after leaving the overview
+
+##### W11 Kitty-only commands refuse outside Kitty and say why
+
+--- amx color-picker ---
+Error: color-picker sets a Kitty tab's color, and this terminal is not Kitty: sessions on the tmux backend have no tab color to set
+exit status: 1
+
+--- amx icon-picker ---
+Error: icon-picker sets a Kitty tab's icon, and this terminal is not Kitty: sessions on the tmux backend have no tab icon to set
+exit status: 1
+PASS: color-picker refuses with a nonzero status
+PASS: icon-picker refuses with a nonzero status
+
+##### W12 close ends the session and its runtime record; the dashboard quits cleanly
+PASS: on screen: Sessions
+
+=== actions menu before close [19:45:13Z] ===
+Agent Mux · Urgency · all projects                                                                                           ✖ hooks drifted
+Running (3)                                                          │alpha
+alpha (tmux %1)  Active      —                                       │Active · —
+alpha (tmux %2)  Active      —                                       │Agent   claude · work
+alpha (tmux %3)  Active      —                                       │Branch  —
+                                                                     │Dir     /tmp/amxs19/proj/alpha
+                                                                     │Watch   —
+                                  ╭──────────────────────────────────────────────────────────────────────╮──────────────────────────────────
+                                  │ Actions for alpha (tmux %1)                                          │xs19/proj/alpha
+                                  │ work · claude · /tmp/amxs19/proj/alpha                               │2934e7113ce136c4  kitty window: n…
+                                  │ ▸ Open session                                                       │
+                                  │   Peek scrollback                                                  e │.local/state/agent-mux/native/dd2…
+                                  │   Launch another session                                           C │
+                                  │   Open shell                                                       o │
+                                  │   Open editor                                                      O │
+                                  │   Copy title                                                       y │
+                                  │ ─ Status ─────────────────────────────────────────────────────────── │
+                                  │   Clear status                                                     x │
+                                  │   Mark active                                                      b │
+                                  │   Lock/Unlock                                                      L │
+                                  │   Mute/Unmute                                                      m │
+                                  │ ─ Lifecycle ──────────────────────────────────────────────────────── │
+                                  │   Restart                                                          r │
+                                  │   Restart with another profile                                     c │
+                                  │   Close                                                            X │
+                                  │                                                                      │
+                                  │ jump to the session's Kitty tab, or attach to it here if it runs in  │
+                                  │ tmux                                                                 │
+                                  │                                                                      │
+                                  │   ↑/↓ select · ⏎ run · a key runs it · esc/q close                   │
+                                  ╰──────────────────────────────────────────────────────────────────────╯
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+
+ Scanning plans…
+
+=== after Close [19:45:17Z] ===
+Agent Mux · Urgency · all projects                                                                                           ✖ hooks drifted
+> Sessions · focused                                                 │  Inspector
+Running (2)                                                          │alpha
+alpha (alpha)                          Active      —                 │Active · —
+alpha (11111111-111-20261010T194452Z)  Active      —                 │Agent   claude · work
+                                                                     │Branch  —
+                                                                     │Dir     /tmp/amxs19/proj/alpha
+                                                                     │Watch   —
+                                                                     │──────────────────────────────────────────────────────────────────────
+                                                                     │stand-in claude pid 56286 in /tmp/amxs19/proj/alpha
+                                                                     │runtime session: rs-4c34e5f0699d9863538572e250fecc58  kitty window: n…
+                                                                     │conversation: 11111111-1111-4111-8111-111111111111
+                                                                     │args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/0d8…
+                                                                     │11-4111-8111-111111111111
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+                                                                     │
+
+ closed alpha · u undo (5s)
+  j/k up/down · enter focus · a actions · : commands · / filter · ? help · n/N needs you · tab switch pane · i inspector · q quit · ? more
+
+--- registry at the end ---
+rs-58f0aedea60a5fefa841a47f148c4613 ended fresh tmux %0 project=alpha pid=55476 conv=None parent=None
+rs-b405f90a88ce08392934e7113ce136c4 ended restart tmux %1 project=alpha pid=56171 conv=None parent=rs-58f0aedea60a5fefa841a47f148c4613
+rs-4c34e5f0699d9863538572e250fecc58 live fresh tmux %2 project=alpha pid=56286 conv=11111111-1111-4111-8111-111111111111 parent=None
+rs-2c4aef57b111d5485324fd2739032866 live fresh tmux %3 project=alpha pid=56479 conv=None parent=None
+PASS: closing ended exactly one agent
+PASS: on screen: SURFACE_EXIT=0
+
+=== after q: the surface exited [19:45:17Z] ===
+[detached (from session amx-01c2296befc9fc52)]
+s19 alpha % pwd; echo SHELL_UTILITY_VIEW
+/tmp/amxs19/proj/alpha
+SHELL_UTILITY_VIEW
+s19 alpha % exit
+EDITOR VIEW (stand-in editor) in /tmp/amxs19/proj/alpha
+editing: /tmp/amxs19/proj/alpha
+press enter to close the editor:
+[detached (from session amx-87139f86f07e3427)]
+[detached (from session amx-89067f43abe87cdb)]
+s19 11111111-111-20261010T194452Z % pwd; echo WORKTREE_SHELL_VIEW
+/private/tmp/amxs19/home/.local/share/agent-mux/worktrees/alpha/11111111-111-20261010T194452Z
+WORKTREE_SHELL_VIEW
+s19 11111111-111-20261010T194452Z % exit
+EDITOR VIEW (stand-in editor) in /tmp/amxs19/home/plans/demo-plan
+editing: /tmp/amxs19/home/plans/demo-plan
+press enter to close the editor:
+SURFACE_EXIT=0
+
+
+--- daemon state: runtime slots, and no Kitty ---
+slot 1099511627778 tmux rs-4c34e5f0699d9863538572e250fecc58 icon=''
+slot 1099511627779 tmux rs-2c4aef57b111d5485324fd2739032866 icon=''
+kitty_snapshot.ready= False
+
+##### teardown of this run: the agents are ended through amx, the daemon stopped
+
+--- amx backend stop --yes ---
+Stopped the private tmux server and 2 running agents.
+
+--- amx daemon stop ---
+daemon stopped
+PASS: no private tmux server is left
+
+##### RESULT: 72 passed, 0 failed

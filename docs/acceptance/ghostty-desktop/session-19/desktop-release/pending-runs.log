@@ -1,0 +1,47 @@
+$ AMX_MAC_TEST_HOST= just mac-release-gate --rehearsal --evidence-dir docs/acceptance/ghostty-desktop/session-19/desktop-release/pending-no-mac
+go run . desktop-release-gate --amx-root "/Users/sglavoie/1_dev_projects/sglavoie_agentmux" --rehearsal --evidence-dir /Users/sglavoie/1_dev_projects/sglavoie_agentmux/docs/acceptance/ghostty-desktop/session-19/desktop-release/pending-no-mac
+run  os-version [agentmux] sw_vers -productVersion
+ok   os-version (10ms)
+run  toolchain [agentmux] macos/scripts/release-gate.sh toolchain
+PENDING toolchain: UI may not run on this Mac and no other Mac is named (AMX_MAC_TEST_HOST)
+evidence /Users/sglavoie/1_dev_projects/sglavoie_agentmux/docs/acceptance/ghostty-desktop/session-19/desktop-release/pending-no-mac/amx-desktop-1.2b121d3db8f65750.json
+evidence is unsigned (no signing key given)
+desktop rehearsal amx-desktop-1.2b121d3db8f65750 (pending)
+  pending: UI may not run on this Mac and no other Mac is named (AMX_MAC_TEST_HOST)
+  agentmux  fcd31c0bcfa4 dirty (20 paths), tree 7fabb94df018
+  passed   os-version           0.0s
+  pending  toolchain            0.0s
+  not-run  build-app            -
+  not-run  bundle               -
+  not-run  hosted-tests-debug   -
+  not-run  hosted-tests-release -
+  evidence /Users/sglavoie/1_dev_projects/sglavoie_agentmux/docs/acceptance/ghostty-desktop/session-19/desktop-release/pending-no-mac/amx-desktop-1.2b121d3db8f65750.json
+  signature none (unsigned record)
+desktop release gate is pending: nothing was judged: UI may not run on this Mac and no other Mac is named (AMX_MAC_TEST_HOST)
+exit status 2
+error: recipe `mac-release-gate` failed on line 561 with exit code 1
+exit status: 1
+
+$ just mac-release-gate --rehearsal --notarized --evidence-dir docs/acceptance/ghostty-desktop/session-19/desktop-release/pending-notarized
+go run . desktop-release-gate --amx-root "/Users/sglavoie/1_dev_projects/sglavoie_agentmux" --rehearsal --notarized --evidence-dir /Users/sglavoie/1_dev_projects/sglavoie_agentmux/docs/acceptance/ghostty-desktop/session-19/desktop-release/pending-notarized
+run  os-version [agentmux] sw_vers -productVersion
+ok   os-version (9ms)
+run  toolchain [agentmux] macos/scripts/release-gate.sh toolchain --notarized
+PENDING toolchain: a notarized release needs a Developer ID Application identity on the Mac that builds, and it has none
+evidence /Users/sglavoie/1_dev_projects/sglavoie_agentmux/docs/acceptance/ghostty-desktop/session-19/desktop-release/pending-notarized/amx-desktop-1.c6e9c2c76dff6d31.json
+evidence is unsigned (no signing key given)
+desktop rehearsal amx-desktop-1.c6e9c2c76dff6d31 (pending)
+  pending: a notarized release needs a Developer ID Application identity on the Mac that builds, and it has none
+  agentmux  fcd31c0bcfa4 dirty (20 paths), tree 07a1ecde247a
+  passed   os-version           0.0s
+  pending  toolchain            1.2s
+  not-run  build-app            -
+  not-run  bundle               -
+  not-run  hosted-tests-debug   -
+  not-run  hosted-tests-release -
+  evidence /Users/sglavoie/1_dev_projects/sglavoie_agentmux/docs/acceptance/ghostty-desktop/session-19/desktop-release/pending-notarized/amx-desktop-1.c6e9c2c76dff6d31.json
+  signature none (unsigned record)
+desktop release gate is pending: nothing was judged: a notarized release needs a Developer ID Application identity on the Mac that builds, and it has none
+exit status 2
+error: recipe `mac-release-gate` failed on line 561 with exit code 1
+exit status: 1

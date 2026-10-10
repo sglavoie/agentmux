@@ -1,0 +1,209 @@
+{
+  "schema_version": 1,
+  "gate": "desktop",
+  "record_id": "amx-desktop-1.4b6470abacb26353",
+  "generated_at": "2026-10-10T19:54:53Z",
+  "result": "passed",
+  "rehearsal": true,
+  "notarized_required": false,
+  "repository": {
+    "repo": "agentmux",
+    "root": "/Users/sglavoie/1_dev_projects/sglavoie_agentmux",
+    "revision": "fcd31c0bcfa4260a800ddb6ed35b47d0f00a991c",
+    "describe": "fcd31c0b-dirty",
+    "clean": false,
+    "dirty": [
+      "M CLAUDE.md",
+      "M Justfile",
+      "M backend_migration_doc_test.go",
+      "M cmd/release/justfile_deploy_test.go",
+      "M cmd/root.go",
+      "M cmd/root_test.go",
+      "M docs/acceptance.md",
+      "M docs/paired-releases.md",
+      "M docs/testing.md",
+      "M internal/release/evidence.go",
+      "M internal/release/gate.go",
+      "M internal/release/steps.go",
+      "M macos/README.md",
+      "?? cmd/release/desktop.go",
+      "?? docs/acceptance/ghostty-desktop/session-19/",
+      "?? docs/desktop-releases.md",
+      "?? internal/release/desktop.go",
+      "?? internal/release/desktop_test.go",
+      "?? macos/scripts/release-gate.sh"
+    ]
+  },
+  "tree_sha256": "2da8138cf7b4f94f22c43ee28f7400324bf0dc3b3f8e0dee719c13b9c6aab354",
+  "environment": {
+    "os": "darwin",
+    "arch": "arm64",
+    "os_version": "27.0.1",
+    "go": "go1.27.1",
+    "toolchain": [
+      {
+        "name": "route",
+        "value": "remote"
+      },
+      {
+        "name": "remote_host",
+        "value": "sglavoie@sebs-macbook-pro.local"
+      },
+      {
+        "name": "build_host",
+        "value": "Seb’s MacBook Pro"
+      },
+      {
+        "name": "build_os_version",
+        "value": "27.0.1"
+      },
+      {
+        "name": "build_arch",
+        "value": "arm64"
+      },
+      {
+        "name": "xcode",
+        "value": "Xcode 27.0 Build version 27A266a"
+      },
+      {
+        "name": "developer_id_identities",
+        "value": "0"
+      }
+    ]
+  },
+  "bundle": [
+    {
+      "name": "bundle_version",
+      "value": "0.1.0"
+    },
+    {
+      "name": "bundle_build",
+      "value": "1"
+    },
+    {
+      "name": "bundle_minimum_os",
+      "value": "14.0"
+    },
+    {
+      "name": "bundle_executable_sha256",
+      "value": "827e3e11c8e01fc803edfa3c9e83b4113e18b37a51b2e8299d43fcfe2a3d55b9"
+    },
+    {
+      "name": "amx_version",
+      "value": "amx version 0.8.0 (revision fcd31c0bcfa4-dirty, built 2026-10-10T19:30:19Z, go1.27.1, sha256:9dab63589d5d)"
+    },
+    {
+      "name": "amx_sha256",
+      "value": "9dab63589d5d55027da7f5668d5df78a49157f3dfa1e567853cf92116434728f"
+    },
+    {
+      "name": "amx_go_build_id",
+      "value": "hqXnOgXo21xAULAlsKDf/8eFZqw-7io6dRRIJVWWS/eHeHjC3Nmy_BS0BRDAy4/2jl_sOSr2m68onJmvr47"
+    },
+    {
+      "name": "tmux_version",
+      "value": "tmux 3.7c"
+    },
+    {
+      "name": "tmux_sha256",
+      "value": "fb421000337b050b00f0bb3c938af2c4e6bb3971a96b74ba0ca75e5c25abd802"
+    },
+    {
+      "name": "tmux_checksums_sha256",
+      "value": "858d25c2c2d4f810f051a8670284fb2caca51e49a3144aa353c6388451da06f3"
+    },
+    {
+      "name": "signature",
+      "value": "ad-hoc"
+    },
+    {
+      "name": "notarization_stapled",
+      "value": "no"
+    },
+    {
+      "name": "distribution",
+      "value": "this-mac-only"
+    }
+  ],
+  "steps": [
+    {
+      "name": "os-version",
+      "repo": "agentmux",
+      "phase": "environment",
+      "command": [
+        "sw_vers",
+        "-productVersion"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 9
+    },
+    {
+      "name": "toolchain",
+      "repo": "agentmux",
+      "phase": "toolchain",
+      "command": [
+        "macos/scripts/release-gate.sh",
+        "toolchain"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 1010
+    },
+    {
+      "name": "build-app",
+      "repo": "agentmux",
+      "phase": "build",
+      "command": [
+        "just",
+        "mac-app",
+        "Release"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 11656
+    },
+    {
+      "name": "bundle",
+      "repo": "agentmux",
+      "phase": "build",
+      "command": [
+        "macos/scripts/release-gate.sh",
+        "bundle"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 1143
+    },
+    {
+      "name": "hosted-tests-debug",
+      "repo": "agentmux",
+      "phase": "verify",
+      "command": [
+        "just",
+        "mac-test"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 32078
+    },
+    {
+      "name": "hosted-tests-release",
+      "repo": "agentmux",
+      "phase": "verify",
+      "command": [
+        "just",
+        "mac-test",
+        "Release"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 68816
+    }
+  ],
+  "signature": {
+    "signed": false,
+    "namespace": "agentmux-desktop-release"
+  },
+  "path": "/Users/sglavoie/1_dev_projects/sglavoie_agentmux/docs/acceptance/ghostty-desktop/session-19/desktop-release/amx-desktop-1.4b6470abacb26353.json"
+}

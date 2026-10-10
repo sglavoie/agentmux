@@ -47,6 +47,7 @@ just mac-ghosttykit      # pinned GhosttyKit into macos/Vendor; mac-app and mac-
 just mac-tmux            # pinned tmux runtime into macos/Vendor/tmux; mac-app runs it
 just mac-install         # Release build, then install or update /Applications and relaunch
 just mac-uninstall       # remove the app; --end-sessions and --remove-app-data are opt-in
+just mac-release-gate    # the app's own release gate and evidence record; --rehearsal, --notarized
 ```
 
 The app bundles the tmux its session server runs (`Contents/Resources/tmux`):
@@ -125,6 +126,15 @@ repositories' gates, installs the pair (ASL first), restarts the real daemon,
 drives a real Kitty smoke, and writes a signed evidence record. The gate lives
 in `internal/release` and is tested in isolation; see
 `docs/paired-releases.md`.
+
+The app is released through a separate gate, `just mac-release-gate` (the
+hidden `desktop-release-gate`, `internal/release/desktop.go`): it builds the
+Release bundle, checks it (`macos/scripts/release-gate.sh`), runs the hosted
+suite against the Debug and Release app, and writes its own record. It
+installs nothing. When there is no Xcode to be had, or `--notarized` is asked
+of a keychain with no Developer ID, the record says `pending` and the command
+fails: missing infrastructure is never a pass. The paired gate must stay free
+of it (`TestTheTwoGatesStayApart`); see `docs/desktop-releases.md`.
 
 Use `amx doctor --strict`, `amx transcripts status`, and `amx --version` when
 validating an installed artifact. The CLI and daemon build identities must
@@ -235,7 +245,8 @@ Shared and domain packages (`internal/...`):
   Unlike `internal/projectresolve`, it has no degraded answer.
 - `internal/diagnostics`, `internal/debugger`: journals and logs; offline debug
   services.
-- `internal/release`: the paired release gate, behind injectable runner/clock.
+- `internal/release`: the paired release gate and the desktop release gate,
+  behind injectable runner/clock.
 
 Daemon (`internal/daemon/...`):
 
@@ -345,7 +356,7 @@ families likewise emit command-specific reports directly rather than using the
 common `data` wrapper: `status`, `tail`, `explain`, and `bundle` use schema v2,
 while `probe`, `capture`, and `replay` remain on schema v1. `debug tail
 --follow --json` emits one schema-v2 record wrapper per JSON line. The hidden
-`release-gate --json` likewise emits its evidence record directly: the record is
+`release-gate --json` (and `desktop-release-gate --json`) likewise emits its evidence record directly: the record is
 the release artifact and carries its own `schema_version`, so wrapping it would
 put a second, unrelated version number in front of the one that governs it.
 `overseer policy --json` and `overseer history --json` keep the common `data`

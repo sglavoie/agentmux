@@ -88,7 +88,7 @@ func TestCommandFamiliesAreRegisteredUnderRoot(t *testing.T) {
 		"focus-next", "focus-next-managed", "focus-prev-managed",
 		"hook-indicator", "icon-picker", "keybindings", "mute-toggle",
 		"notifications", "open-dashboard", "overseer", "overview", "project",
-		"release-gate", "resort",
+		"desktop-release-gate", "release-gate", "resort",
 		"session", "transcripts", "tui-test", "workspace-view", "worktree",
 	} {
 		if !registered[name] {

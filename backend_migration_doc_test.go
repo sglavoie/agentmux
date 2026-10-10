@@ -1,7 +1,10 @@
 package main
 
 import (
+	"io/fs"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -102,4 +105,120 @@ func markdownTable(t *testing.T, doc, headerPrefix string) [][]string {
 		rows = append(rows, cells)
 	}
 	return rows
+}
+
+// TestBackendMigrationSession19RecordCoversEveryWorkflow guards the Session 19
+// acceptance record in docs/backend-migration.md. Every workflow of the matrix
+// has exactly one row in it, marked passed or pending; a pending row says what
+// is missing; and what a row cites exists: every test it names is a test in
+// this repository and every file it names is a file. It does not prove a cited
+// test passed, which is what the gates and the logs beside the record are for.
+func TestBackendMigrationSession19RecordCoversEveryWorkflow(t *testing.T) {
+	data, err := os.ReadFile("docs/backend-migration.md")
+	if err != nil {
+		t.Fatalf("ReadFile(docs/backend-migration.md): %v", err)
+	}
+	doc := string(data)
+
+	want := map[string]bool{}
+	for _, row := range markdownTable(t, doc, "| ID | Workflow | Area |") {
+		want[row[0]] = true
+	}
+	tests := repositoryTestNames(t)
+
+	seen := map[string]bool{}
+	for _, row := range markdownTable(t, doc, "| ID | Session 19 | Evidence |") {
+		if len(row) != 3 {
+			t.Fatalf("record row has %d cells, want 3: %q", len(row), row)
+		}
+		id, status, evidence := row[0], row[1], row[2]
+		if !want[id] {
+			t.Errorf("%s: the record has a row for a workflow the matrix does not have", id)
+		}
+		if seen[id] {
+			t.Errorf("%s: the record has two rows", id)
+		}
+		seen[id] = true
+		switch status {
+		case "passed":
+		case "pending":
+			if !strings.Contains(evidence, "Pending: ") {
+				t.Errorf("%s: a pending row must say what is missing, after %q", id, "Pending: ")
+			}
+		default:
+			t.Errorf("%s: status %q must be passed or pending", id, status)
+		}
+		if evidence == "" {
+			t.Errorf("%s: no evidence", id)
+		}
+		for _, cited := range backticked(evidence) {
+			switch {
+			case strings.HasPrefix(cited, "Test") || strings.HasPrefix(cited, "test"):
+				if !tests[cited] {
+					t.Errorf("%s: cites %s, which is not a test in this repository", id, cited)
+				}
+			case strings.HasPrefix(cited, "docs/"):
+				if _, err := os.Stat(cited); err != nil {
+					t.Errorf("%s: cites %s: %v", id, cited, err)
+				}
+			}
+		}
+	}
+	for id := range want {
+		if !seen[id] {
+			t.Errorf("%s: the record has no row", id)
+		}
+	}
+}
+
+// backticked returns the code spans of a table cell.
+func backticked(cell string) []string {
+	var spans []string
+	parts := strings.Split(cell, "`")
+	for i := 1; i < len(parts); i += 2 {
+		spans = append(spans, parts[i])
+	}
+	return spans
+}
+
+// repositoryTestNames collects every Go test function and every hosted Swift
+// test method in the tree, by name.
+func repositoryTestNames(t *testing.T) map[string]bool {
+	t.Helper()
+	goTest := regexp.MustCompile(`(?m)^func (Test\w+)\(`)
+	swiftTest := regexp.MustCompile(`func (test\w+)\(`)
+	names := map[string]bool{}
+	skip := map[string]bool{".git": true, ".claude": true, "Vendor": true, "DerivedData": true, "build": true, ".cache": true, "node_modules": true}
+	err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if skip[d.Name()] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		var re *regexp.Regexp
+		switch {
+		case strings.HasSuffix(path, "_test.go"):
+			re = goTest
+		case strings.HasSuffix(path, ".swift") && strings.Contains(path, "AgentMuxTests"):
+			re = swiftTest
+		default:
+			return nil
+		}
+		source, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		for _, match := range re.FindAllStringSubmatch(string(source), -1) {
+			names[match[1]] = true
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("collecting test names: %v", err)
+	}
+	return names
 }

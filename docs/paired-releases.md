@@ -31,6 +31,10 @@ are positional, `tag=` has to come third: `asl_root=… tag=yes` puts `tag=yes` 
 the signing-key slot, and the recipe refuses that rather than reading it as a key
 path and quietly dropping the tag request.
 
+The gate never needs Xcode. Agent Mux.app is released through a gate of its
+own, `just mac-release-gate`, with its own evidence record; see
+[Desktop releases](desktop-releases.md).
+
 ## What the gate runs
 
 The order is the argument, not an implementation detail. A step that fails stops
