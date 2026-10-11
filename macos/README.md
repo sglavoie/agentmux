@@ -270,7 +270,7 @@ runs without embedded terminals.
   applies it immediately to all open terminals, including hidden views.
   Reset removes that override and restores the config's `font-size`.
   **⌘+** (or **⌘=**) and **⌘−** adjust only the focused terminal;
-  **⌘0** restores the saved default. New terminals start at that default;
+  **⌘⇧-** restores the saved default. New terminals start at that default;
   shortcut changes are not persisted.
 - **Callbacks.** Runtime actions are sorted by `Ghostty.disposition(of:)`. The
   app answers quit (passed to `GhosttyAppDelegate`, which ignores it), open
@@ -358,9 +358,12 @@ ASL answer panel work the same either way.
   offered is the Dashboard. No code path in the workspace launches an agent.
 - **Main menu.** The terminals offer every key equivalent to the main menu
   before encoding it for their program, so the menu is the list of shortcuts
-  the workspace keeps: ⌘C/⌘V/⌘A, ⌘+/⌘-/⌘0, ⌘⇧A (next needing attention),
-  ⌘⇧] and ⌘⇧[ (next and previous session), ⌘D (Dashboard), ⌘O (Overview),
-  ⌘T (new shell), ⌘⇧W (close view), ⌘W, ⌘M, ⌘1, ⌘, and ⌘Q.
+  the workspace keeps: ⌘C/⌘V/⌘A, ⌘+/⌘-/⌘⇧-, ⌘⇧A (next needing attention),
+  ⌘] and ⌘[ (next and previous session), ⌘1 or ⌘D (Dashboard), ⌘2 or ⌘O
+  (Overview), ⌘3 to ⌘0 (the first eight sessions in sidebar order,
+  `WorkspaceMenu.sessionKeys`), the same keys with Shift (a Kitty session is
+  raised in Kitty rather than selected here), ⌘T (new shell), ⌘⇧W (close view), ⌘W, ⌘M,
+  ⌘, and ⌘Q.
 
 ### Dashboard and utility views
 
@@ -710,7 +713,7 @@ An absent, mistyped, or out-of-range value reads as its default.
 | `amxEnvironment` | empty | Values amx runs with instead of the login shell's, for `PATH`, `XDG_*`, and `AMX_*`. |
 | `amxLaunchBackend` | `automatic` | Where Launch Project starts an agent: `automatic` (a Kitty tab when a Kitty is running, else the workspace), `kitty`, or `workspace` (always the private tmux server). An explicit choice is never overridden by what happens to be running. |
 | `amxOpenWorkspaceAtLaunch` | false | Shows the workspace window when the app starts, even if it was closed last time. |
-| `amxDefaultFontSize` | none | Default terminal zoom in points (6–72); unset uses the Ghostty config. Changes apply to all open terminals; ⌘0 resets to this size. |
+| `amxDefaultFontSize` | none | Default terminal zoom in points (6–72); unset uses the Ghostty config. Changes apply to all open terminals; ⌘⇧- resets to this size. |
 
 Preferences › Workspace also shows the backend setup, read from
 `amx backend status --json` each time amx is resolved

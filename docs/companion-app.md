@@ -161,14 +161,14 @@ window makes it a menu bar app again.
 Above the projects the sidebar lists the workspace's own views. They are
 terminals of their own beside the agents, and none of them needs Kitty.
 
-- **Dashboard** (⌘D) is the `amx` dashboard, embedded. The workspace opens on
+- **Dashboard** (⌘1, or ⌘D) is the `amx` dashboard, embedded. The workspace opens on
   it. Everything the dashboard does in a terminal it does here: launching,
   Past Sessions, Plans, Worktrees, Runs, the action menu. What changes is
   where things show. Launching an agent, resuming or forking a conversation,
   restarting a session, or pressing Enter on a row takes you to that session's
   own view in the workspace, and the Dashboard stays where it was behind it.
   New agents launch on tmux.
-- **Overview** (⌘O) is the live session overview. Enter on a tile goes to the
+- **Overview** (⌘2, or ⌘O) is the live session overview. Enter on a tile goes to the
   session's view the same way.
 - **Shell**, **editor**, and **scrollback** views open when the Dashboard asks
   for them (*Open shell*, *Open editor*, *Peek scrollback*, the plan and
@@ -201,6 +201,16 @@ Whatever has the keyboard decides where a key goes.
 - In the **session list** the arrow keys move the selection and Return goes
   into the selected row. Nothing typed there reaches a program.
   **Window › Session List** (⌘⇧L) puts the keyboard there.
+- **⌘3** to **⌘0** go to the first eight sessions in the order the sidebar
+  lists them, top to bottom: ⌘3 is the first session and ⌘0 the eighth.
+  Shells and other opened views are not counted. **⌘]** and **⌘[** step to
+  the next and the previous session, wrapping.
+- Those keys never leave the app: a session that lives in Kitty is selected
+  and its pane says where it is. Add Shift (**⌘⇧3** to **⌘⇧0**, **⌘⇧]**,
+  **⌘⇧[**) and such a session comes forward in Kitty instead, as a click on
+  its row does. A session embedded here is focused here either way. macOS
+  takes ⌘⇧3, ⌘⇧4, and ⌘⇧5 for screenshots before any app sees them, unless
+  those are turned off in System Settings › Keyboard › Keyboard Shortcuts.
 - Every shortcut of the menu bar holds ⌘, so none is taken from a program,
   with two exceptions: Shift+Page Up and Shift+Page Down. The global
   shortcuts work whatever has the keyboard.

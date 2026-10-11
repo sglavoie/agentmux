@@ -61,7 +61,7 @@ struct AppPreferences: Equatable {
     /// `amxOpenWorkspaceAtLaunch`: show the workspace window as soon as the
     /// app starts, even when it was closed last time.
     var openWorkspaceAtLaunch = false
-    /// The terminal size at launch and on ⌘0; nil uses the Ghostty config.
+    /// The terminal size at launch and on ⌘⇧-; nil uses the Ghostty config.
     var defaultFontSize: Float?
 
     init() {}

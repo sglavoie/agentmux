@@ -346,6 +346,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     @objc func nextAttention(_ sender: Any?) { focusNextAttention() }
     @objc func selectNextSession(_ sender: Any?) { workspace?.selectNeighbor(1) }
     @objc func selectPreviousSession(_ sender: Any?) { workspace?.selectNeighbor(-1) }
+    @objc func showNextSessionInKitty(_ sender: Any?) { workspace?.selectNeighbor(1, raising: true) }
+    @objc func showPreviousSessionInKitty(_ sender: Any?) { workspace?.selectNeighbor(-1, raising: true) }
+    /// ⌘3 to ⌘0: the item's tag is the session's place in the sidebar.
+    @objc func goToSession(_ sender: Any?) {
+        guard let item = sender as? NSMenuItem else { return }
+        workspace?.selectSession(at: item.tag)
+    }
+    /// ⌘⇧3 to ⌘⇧0.
+    @objc func showSessionInKitty(_ sender: Any?) {
+        guard let item = sender as? NSMenuItem else { return }
+        workspace?.selectSession(at: item.tag, raising: true)
+    }
     /// The workspace's own Dashboard: the main menu's, as opposed to the
     /// global shortcut, which prefers a dashboard already running in Kitty.
     @objc func openDashboardFromMenu(_ sender: Any?) { showWorkspaceView(.dashboard) }
@@ -684,7 +696,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         notifications?.enabled = new.useAppNotifications
     }
 
-    /// Reload first so ⌘0 uses the new default, then reset even manually
+    /// Reload first so ⌘⇧- uses the new default, then reset even manually
     /// zoomed terminals, including the workspace's hidden session views.
     private func applyDefaultFontSize() {
         terminals?.reloadConfig(resetFontSize: true)

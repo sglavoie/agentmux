@@ -134,7 +134,7 @@ final class GhosttyInteractionTests: XCTestCase {
             XCTAssertGreaterThan(bigger, initial, key.characters)
             for _ in 0..<3 { zoomKey(.command("-", keyCode: 27)) }
             XCTAssertLessThan(ghostty_surface_size(surface).cell_width_px, bigger)
-            zoomKey(.command("0", keyCode: 29))
+            zoomKey(.command("-", keyCode: 27, shifted: "_"))
             XCTAssertEqual(ghostty_surface_size(surface).cell_width_px, initial)
         }
         press(TestKey(keyCode: 0, characters: "a", unmodified: "a"))
@@ -379,21 +379,40 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("=", keyCode: 24, shifted: "+"), "Bigger"),
             (.command("=", keyCode: 24), "Bigger"),
             (.command("-", keyCode: 27), "Smaller"),
-            (.command("0", keyCode: 29), "Actual Size"),
+            (.command("-", keyCode: 27, shifted: "_"), "Actual Size"),
             (.pageUp.with(.shift), "Page Up"),
             (.pageDown.with(.shift), "Page Down"),
             (.home.with(.command), "Scroll to Top"),
             (.end.with(.command), "Scroll to Bottom"),
+            (.command("1", keyCode: 18), "Dashboard"),
+            (.command("2", keyCode: 19), "Overview"),
             (.command("d", keyCode: 2), "Dashboard"),
             (.command("o", keyCode: 31), "Overview"),
             (.command("t", keyCode: 17), "New Shell"),
             (.command("w", keyCode: 13, shifted: "W"), "Close View"),
             (.command("a", keyCode: 0, shifted: "A"), "Next Needing Attention"),
-            (.command("]", keyCode: 30, shifted: "}"), "Select Next Session"),
-            (.command("[", keyCode: 33, shifted: "{"), "Select Previous Session"),
+            (.command("]", keyCode: 30), "Select Next Session"),
+            (.command("[", keyCode: 33), "Select Previous Session"),
+            (.command("]", keyCode: 30, shifted: "}"), "Next Session in Kitty"),
+            (.command("[", keyCode: 33, shifted: "{"), "Previous Session in Kitty"),
+            (.command("3", keyCode: 20, shifted: "#"), "Session 1 in Kitty"),
+            (.command("4", keyCode: 21, shifted: "$"), "Session 2 in Kitty"),
+            (.command("5", keyCode: 23, shifted: "%"), "Session 3 in Kitty"),
+            (.command("6", keyCode: 22, shifted: "^"), "Session 4 in Kitty"),
+            (.command("7", keyCode: 26, shifted: "&"), "Session 5 in Kitty"),
+            (.command("8", keyCode: 28, shifted: "*"), "Session 6 in Kitty"),
+            (.command("9", keyCode: 25, shifted: "("), "Session 7 in Kitty"),
+            (.command("0", keyCode: 29, shifted: ")"), "Session 8 in Kitty"),
+            (.command("3", keyCode: 20), "Session 1"),
+            (.command("4", keyCode: 21), "Session 2"),
+            (.command("5", keyCode: 23), "Session 3"),
+            (.command("6", keyCode: 22), "Session 4"),
+            (.command("7", keyCode: 26), "Session 5"),
+            (.command("8", keyCode: 28), "Session 6"),
+            (.command("9", keyCode: 25), "Session 7"),
+            (.command("0", keyCode: 29), "Session 8"),
             (.command("m", keyCode: 46), "Minimize"),
             (.command("w", keyCode: 13), "Close"),
-            (.command("1", keyCode: 18), "Workspace"),
             (.command("l", keyCode: 37, shifted: "L"), "Session List"),
         ]
         for (key, title) in expected {

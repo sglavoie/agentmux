@@ -171,6 +171,49 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.content, .external(try row("web", "work").key))
     }
 
+    func testADigitGoesToTheSessionAtThatPlaceInTheSidebar() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        // Sidebar order: api/personal, api/work, web/work.
+        workspace.selectSession(at: 1)
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(1)))
+        XCTAssertTrue(workspace.window.firstResponder === workspace.terminalView(for: F.runtimeID(1)))
+        workspace.selectSession(at: 0)
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(2)))
+        // A Kitty session is shown here: the digit alone never leaves the app.
+        workspace.selectSession(at: 2)
+        XCTAssertEqual(workspace.content, .external(try row("web", "work").key))
+        XCTAssertEqual(app.external, [])
+        // No session is listed there: nothing moves.
+        workspace.selectSession(at: 3)
+        XCTAssertEqual(workspace.content, .external(try row("web", "work").key))
+        // A view is not a place among the sessions.
+        workspace.showView(WorkspaceUtilityView.dashboard.id)
+        workspace.selectSession(at: 0)
+        XCTAssertNil(workspace.viewSelection)
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(2)))
+    }
+
+    func testShiftRaisesAKittySessionInKitty() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        // An embedded session has nowhere else to go: it is focused here.
+        workspace.selectSession(at: 1, raising: true)
+        XCTAssertTrue(workspace.window.firstResponder === workspace.terminalView(for: F.runtimeID(1)))
+        XCTAssertEqual(app.external, [])
+        workspace.selectSession(at: 2, raising: true)
+        XCTAssertEqual(workspace.content, .external(try row("web", "work").key))
+        XCTAssertEqual(app.external.map(\.target), [.kitty(socket: "", windowID: 4)])
+        workspace.selectSession(at: 3, raising: true)
+        XCTAssertEqual(app.external.count, 1)
+
+        // Stepping with Shift does the same: api/personal, api/work, web/work.
+        workspace.selectNeighbor(1, raising: true)
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(2)))
+        XCTAssertEqual(app.external.count, 1)
+        workspace.selectNeighbor(-1, raising: true)
+        XCTAssertEqual(workspace.content, .external(try row("web", "work").key))
+        XCTAssertEqual(app.external.count, 2)
+    }
+
     func testRowsSelectionAndTerminalsSurviveTheDaemonGoingAway() throws {
         app.store.apply(.subscribed(SubscriptionAck()))
         app.store.apply(snapshot: F.snapshot(sessions))

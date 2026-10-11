@@ -548,10 +548,29 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     /// Moves the selection `offset` rows, wrapping. A Kitty row is selected,
-    /// not raised: stepping through the sidebar never leaves the app.
-    func selectNeighbor(_ offset: Int) {
+    /// not raised: stepping through the sidebar never leaves the app, unless
+    /// `raising` asks for the row to come forward in Kitty.
+    func selectNeighbor(_ offset: Int, raising: Bool = false) {
         guard let row = state.neighbor(offset) else { return }
-        select(row.key, focus: row.embeddedRuntimeSessionID != nil)
+        go(to: row, raising: raising)
+    }
+
+    /// Goes to the session at `index` in sidebar order; nothing when fewer
+    /// sessions are listed. A Kitty row stays in the app unless `raising`.
+    func selectSession(at index: Int, raising: Bool = false) {
+        let rows = state.rows
+        guard rows.indices.contains(index) else { return }
+        go(to: rows[index], raising: raising)
+    }
+
+    /// An embedded session takes the keyboard either way. A Kitty session is
+    /// only selected here, or with `raising` focused as a click does.
+    private func go(to row: WorkspaceRow, raising: Bool) {
+        if raising {
+            activate(row)
+        } else {
+            select(row.key, focus: row.embeddedRuntimeSessionID != nil)
+        }
     }
 
     /// A terminal's program ended, or it asked to be closed: its attachment

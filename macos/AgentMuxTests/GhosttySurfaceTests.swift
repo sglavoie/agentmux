@@ -237,7 +237,7 @@ final class GhosttySurfaceTests: XCTestCase {
 
         view.zoomIn(nil)
         view.resetZoom(nil)
-        XCTAssertEqual(try surfaceSize().cell_width_px, reset, "⌘0 uses the saved default")
+        XCTAssertEqual(try surfaceSize().cell_width_px, reset, "⌘⇧- uses the saved default")
         overrides.fontSize = nil
         XCTAssertTrue(ghostty.reloadConfig(resetFontSize: true))
         XCTAssertLessThan(try surfaceSize().cell_width_px, reset, "Reset restores the config's font size")

@@ -293,7 +293,7 @@ struct PreferencesView: View {
                     ? "Uses the Ghostty config's font size. "
                     : "Overrides the Ghostty config's font-size. ")
                     + "Changing this updates all open terminals. ⌘+ and ⌘− zoom the focused terminal; "
-                    + "⌘0 returns to this size. New terminals start at this size.")
+                    + "⌘⇧- returns to this size. New terminals start at this size.")
                 Picker("Launch projects in", selection: $model.preferences.launchBackend) {
                     ForEach(LaunchBackendPreference.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
