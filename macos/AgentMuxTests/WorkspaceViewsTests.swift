@@ -42,6 +42,11 @@ final class WorkspaceViewsModelTests: XCTestCase {
         XCTAssertEqual(editor?.title, "main.go")
         let pager = WorkspaceUtilityView.from(WorkspaceViewRequest(kind: "pager", runtimeSessionID: F.runtimeID(2), title: "api"))
         XCTAssertEqual(pager?.arguments, ["workspace-view", "pager", F.runtimeID(2)])
+        var views = WorkspaceViews()
+        let terminal = views.openTerminal(beside: F.runtimeID(2))
+        XCTAssertEqual(terminal.arguments, ["workspace-view", "session-shell", F.runtimeID(2)])
+        XCTAssertNil(WorkspaceUtilityView.from(WorkspaceViewRequest(kind: "terminal", runtimeSessionID: F.runtimeID(2))),
+                     "a terminal beside a session is the operator's to open, not a request's")
     }
 
     func testARequestThatNamesNoUsableTargetIsNotAView() {
@@ -272,6 +277,71 @@ final class WorkspaceViewsWindowTests: XCTestCase {
         XCTAssertEqual(app.madeViews.filter { $0 == pager }.count, 2)
         XCTAssertEqual(app.closedViews.filter { $0 == pager }.count, 1)
         XCTAssertEqual(app.made, [F.runtimeID(1)], "a pager reads the session's scrollback and attaches nothing")
+    }
+
+    func testATerminalOpensRightBelowItsSessionAndIsNotASession() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let rowsBefore = workspace.state.rows
+
+        // Nothing to open one beside: a view, then a Kitty session.
+        workspace.showView("dashboard")
+        workspace.openTerminalBesideSession()
+        workspace.select(rowsBefore[2].key)
+        workspace.openTerminalBesideSession()
+        XCTAssertEqual(app.madeViews, ["dashboard"])
+
+        workspace.select(.embedded(F.runtimeID(1)), focus: true)
+        workspace.openTerminalBesideSession()
+        let first = "terminal:\(F.runtimeID(1))#1"
+        XCTAssertEqual(workspace.viewSelection, first)
+        XCTAssertEqual(workspace.content, .view(id: first))
+        XCTAssertTrue(workspace.window.firstResponder === workspace.utilityTerminalView(for: first))
+        XCTAssertEqual(workspace.state.rows, rowsBefore, "a terminal adds no session")
+        XCTAssertEqual(workspace.attachedRuntimeSessionIDs, [F.runtimeID(1)], "it is not a second attachment")
+
+        // It is listed right under its session; another follows it.
+        workspace.openTerminalBesideSession()
+        let second = "terminal:\(F.runtimeID(1))#2"
+        let session = try XCTUnwrap(workspace.items.firstIndex { item in
+            if case let .row(row) = item { return row.embeddedRuntimeSessionID == F.runtimeID(1) }
+            return false
+        })
+        XCTAssertEqual(try index(ofView: first), session + 1)
+        XCTAssertEqual(try index(ofView: second), session + 2)
+        XCTAssertEqual(workspace.sidebar.selectedRow, session + 2)
+        let cell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: session + 2) as? WorkspaceRowCellView)
+        XCTAssertEqual(cell.titleLabel.stringValue, "Terminal 2")
+
+        // The digits count sessions only. Stepping stops at every session
+        // and every terminal under one, in sidebar order, and wraps.
+        workspace.selectSession(at: 1)
+        XCTAssertEqual(workspace.state.selection, rowsBefore[1].key)
+        XCTAssertEqual(rowsBefore[1].embeddedRuntimeSessionID, F.runtimeID(1))
+        workspace.selectNeighbor(1)
+        XCTAssertEqual(workspace.viewSelection, first)
+        XCTAssertTrue(workspace.window.firstResponder === workspace.utilityTerminalView(for: first))
+        workspace.selectNeighbor(1)
+        XCTAssertEqual(workspace.viewSelection, second)
+        workspace.selectNeighbor(1)
+        XCTAssertNil(workspace.viewSelection)
+        XCTAssertEqual(workspace.state.selection, rowsBefore[2].key)
+        workspace.selectNeighbor(1)
+        XCTAssertEqual(workspace.state.selection, rowsBefore[0].key, "past the last one is the first")
+        workspace.selectNeighbor(-1)
+        workspace.selectNeighbor(-1)
+        XCTAssertEqual(workspace.viewSelection, second)
+        XCTAssertEqual(workspace.state.rows, rowsBefore)
+
+        // Its shell exits: it is unlisted and the pane goes back.
+        workspace.showView(second)
+        workspace.terminalEnded(try XCTUnwrap(workspace.utilityTerminalView(for: second)))
+        XCTAssertNil(workspace.views.view(second))
+        XCTAssertEqual(app.closedViews, [second])
+
+        // Its session ends: the shell keeps running, among the workspace's views.
+        app.store.apply(snapshot: F.snapshot([sessions[1], sessions[2]]))
+        XCTAssertEqual(app.closedViews, [second])
+        XCTAssertEqual(try index(ofView: first), 3)
     }
 
     func testUtilityViewsAreNeverSessionsAndNeverWait() throws {

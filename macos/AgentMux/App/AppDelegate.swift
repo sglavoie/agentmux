@@ -366,6 +366,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         let home = command?.launchEnvironment.home ?? NSHomeDirectory()
         showWorkspaceView(WorkspaceUtilityView(kind: .shell, target: home, title: "Shell"))
     }
+    /// ⌘↩: a shell beside the session the workspace is on.
+    @objc func newSessionTerminal(_ sender: Any?) { workspace?.openTerminalBesideSession() }
     @objc func closeWorkspaceView(_ sender: Any?) { workspace?.closeSelectedView() }
     @objc func focusSessionList(_ sender: Any?) {
         showWorkspace()

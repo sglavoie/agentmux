@@ -66,6 +66,11 @@ protocol WorkspaceDelegate: AnyObject {
 /// view's program belongs to its view, so unlike an attachment it keeps
 /// running while the window is closed and ends only when it exits, when its
 /// view is closed, or when the app quits.
+///
+/// A terminal opened beside a session is such a view too, listed under that
+/// session's row instead of above the projects. It can be clicked and reached
+/// with the arrow keys or by stepping to the next or previous session; the
+/// digits count sessions only.
 @MainActor
 final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate {
     private nonisolated static let logger = Logger(subsystem: "io.github.sglavoie.agentmux", category: "workspace")
@@ -515,6 +520,19 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
     }
 
+    /// Opens a shell where the session the pane is on is working, listed
+    /// right below that session, and gives it the keyboard. From one of a
+    /// session's terminals it opens another beside the same session. A Kitty
+    /// session has its terminals in Kitty, so there is nothing to do for one.
+    func openTerminalBesideSession() {
+        let id = views.view(viewSelection)?.besideRuntimeSessionID ?? state.selectedRow?.embeddedRuntimeSessionID
+        guard let id, state.row(.embedded(id)) != nil else {
+            Self.logger.notice("workspace: no embedded session is shown; no terminal opened beside one")
+            return
+        }
+        open(views.openTerminal(beside: id))
+    }
+
     /// Where the pane is now.
     private var place: Place? {
         if let viewSelection { return .view(viewSelection) }
@@ -547,12 +565,35 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         terminal.close()
     }
 
-    /// Moves the selection `offset` rows, wrapping. A Kitty row is selected,
-    /// not raised: stepping through the sidebar never leaves the app, unless
-    /// `raising` asks for the row to come forward in Kitty.
+    /// Moves `offset` places through the sessions and the terminals listed
+    /// under them, in sidebar order, wrapping; from anywhere else, to the
+    /// first (or last) of them. A Kitty row is selected, not raised: stepping
+    /// through the sidebar never leaves the app, unless `raising` asks for the
+    /// row to come forward in Kitty.
     func selectNeighbor(_ offset: Int, raising: Bool = false) {
-        guard let row = state.neighbor(offset) else { return }
-        go(to: row, raising: raising)
+        let listed = state.embeddedRuntimeSessionIDs
+        let stops = items.filter { item in
+            switch item {
+            case .row: return true
+            case let .view(view): return view.besideRuntimeSessionID.map(listed.contains) ?? false
+            case .section, .group: return false
+            }
+        }
+        guard !stops.isEmpty else { return }
+        let here = stops.firstIndex { item in
+            switch item {
+            case let .row(row): return viewSelection == nil && row.key == state.selection
+            case let .view(view): return view.id == viewSelection
+            case .section, .group: return false
+            }
+        }
+        let next = here.map { (($0 + offset) % stops.count + stops.count) % stops.count }
+            ?? (offset < 0 ? stops.count - 1 : 0)
+        switch stops[next] {
+        case let .row(row): go(to: row, raising: raising)
+        case let .view(view): showView(view.id, focus: true)
+        case .section, .group: break
+        }
     }
 
     /// Goes to the session at `index` in sidebar order; nothing when fewer
@@ -779,8 +820,16 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     // MARK: Sidebar
 
     private func reloadSidebar() {
-        let wanted = [Item.section(Self.viewsSection)] + views.all.map(Item.view)
-            + state.groups.flatMap { [Item.group($0)] + $0.rows.map(Item.row) }
+        // A session's terminals follow its row. One whose session is no
+        // longer listed keeps running, among the workspace's own views.
+        let listed = state.embeddedRuntimeSessionIDs
+        let own = views.all.filter { view in view.besideRuntimeSessionID.map { !listed.contains($0) } ?? true }
+        let wanted = [Item.section(Self.viewsSection)] + own.map(Item.view)
+            + state.groups.flatMap { group in
+                [Item.group(group)] + group.rows.flatMap { row in
+                    [Item.row(row)] + views.terminals(beside: row.embeddedRuntimeSessionID).map(Item.view)
+                }
+            }
         let dimmed: CGFloat = state.current ? 1 : 0.5
         if wanted != items || sidebar.alphaValue != dimmed {
             items = wanted

@@ -251,6 +251,29 @@ func TestWorkspacePagerReadsOnlyTheNamedLiveSession(t *testing.T) {
 		}
 	}
 
+	// A shell beside the session starts where its pane is, as a login shell.
+	var program string
+	workspaceViewExec = func(path string, _, environ []string) error {
+		program = path
+		requireNoBorrowedIdentity(t, environ)
+		return nil
+	}
+	t.Chdir(t.TempDir())
+	if err := runWorkspaceView(t, "session-shell", string(launched.RuntimeSessionID)); err != nil || program == "" {
+		t.Fatalf("shell beside a live session: err=%v ran=%q", err, program)
+	}
+	want, err := filepath.EvalSymlinks(project.Directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cwd, _ := os.Getwd(); cwd != want {
+		t.Fatalf("the session's shell starts in %q; want %q", cwd, want)
+	}
+	program = ""
+	if err := runWorkspaceView(t, "session-shell", string(unknown)); err == nil || program != "" {
+		t.Fatalf("a shell was opened beside an unknown session: err=%v ran=%q", err, program)
+	}
+
 	// The registry still says live, but the pane is gone: a reference alone
 	// is not enough to read a pane.
 	if err := f.Backend.Close(launched.Group); err != nil {

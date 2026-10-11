@@ -48,10 +48,11 @@ struct WorkspaceViewRequest: Decodable, Equatable {
 /// runtime session of its own, and no state glyph; nothing about it is read
 /// from a snapshot, so it can never be counted as waiting or be the target of
 /// the next-attention shortcut. A pager names the session whose scrollback it
-/// reads and is still not that session.
+/// reads and is still not that session, and so does a terminal opened beside
+/// one: it is a shell where that session's agent works, listed under it.
 struct WorkspaceUtilityView: Equatable {
     enum Kind: String, Equatable {
-        case dashboard, overview, shell, editor, pager
+        case dashboard, overview, shell, editor, pager, terminal
     }
 
     let kind: Kind
@@ -60,9 +61,19 @@ struct WorkspaceUtilityView: Equatable {
     let target: String
     /// The sidebar label.
     let title: String
+    /// Tells apart the terminals opened beside one session, from 1; 0 for
+    /// every other kind.
+    var ordinal = 0
 
     /// What tells one view from another: its kind and what it is about.
-    var id: String { target.isEmpty ? kind.rawValue : "\(kind.rawValue):\(target)" }
+    var id: String {
+        if target.isEmpty { return kind.rawValue }
+        return ordinal == 0 ? "\(kind.rawValue):\(target)" : "\(kind.rawValue):\(target)#\(ordinal)"
+    }
+
+    /// The runtime session a terminal was opened beside; nil for every other
+    /// kind.
+    var besideRuntimeSessionID: String? { kind == .terminal ? target : nil }
 
     /// The Dashboard and the Overview are always listed; the others exist
     /// only while their program runs.
@@ -77,6 +88,7 @@ struct WorkspaceUtilityView: Equatable {
         case .shell: return ["workspace-view", "shell", target]
         case .editor: return ["workspace-view", "edit", target]
         case .pager: return ["workspace-view", "pager", target]
+        case .terminal: return ["workspace-view", "session-shell", target]
         }
     }
 
@@ -84,7 +96,7 @@ struct WorkspaceUtilityView: Equatable {
         switch kind {
         case .dashboard: return "▦"
         case .overview: return "▤"
-        case .shell: return "❯"
+        case .shell, .terminal: return "❯"
         case .editor: return "✎"
         case .pager: return "≡"
         }
@@ -98,6 +110,7 @@ struct WorkspaceUtilityView: Equatable {
         case .shell: return "Shell · \(Self.abbreviated(target))"
         case .editor: return "Editor · \(Self.abbreviated(target))"
         case .pager: return "Scrollback"
+        case .terminal: return "Shell"
         }
     }
 
@@ -129,6 +142,9 @@ struct WorkspaceUtilityView: Equatable {
             guard isRuntimeSessionID(request.runtimeSessionID) else { return nil }
             return WorkspaceUtilityView(kind: .pager, target: request.runtimeSessionID,
                                         title: label.isEmpty ? "Scrollback" : label)
+        case .terminal:
+            // Only the operator opens one, from the workspace itself.
+            return nil
         }
     }
 
@@ -167,6 +183,21 @@ struct WorkspaceViews: Equatable {
         if let listed = self.view(view.id) { return listed }
         opened.append(view)
         return view
+    }
+
+    /// The terminals opened beside a session, in the order they were.
+    func terminals(beside runtimeSessionID: String?) -> [WorkspaceUtilityView] {
+        guard let runtimeSessionID else { return [] }
+        return opened.filter { $0.besideRuntimeSessionID == runtimeSessionID }
+    }
+
+    /// Lists one more terminal beside a session, after the ones it has.
+    mutating func openTerminal(beside runtimeSessionID: String) -> WorkspaceUtilityView {
+        let ordinal = (terminals(beside: runtimeSessionID).map(\.ordinal).max() ?? 0) + 1
+        return open(WorkspaceUtilityView(
+            kind: .terminal, target: runtimeSessionID,
+            title: ordinal == 1 ? "Terminal" : "Terminal \(ordinal)", ordinal: ordinal
+        ))
     }
 
     /// Drops an opened view; the Dashboard and the Overview stay.

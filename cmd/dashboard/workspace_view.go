@@ -22,7 +22,7 @@ import (
 
 // `amx workspace-view` is what the desktop workspace runs inside the terminals
 // it embeds beside the agents: its Dashboard, its Overview, and the utility
-// views — a shell, an editor, a pager — those two ask it for. The workspace
+// views — a shell, an editor, a pager — those two or the operator ask it for. The workspace
 // names a kind and a target and nothing else; what each kind runs is decided
 // here, so the request that travels through the daemon never carries a
 // command line.
@@ -108,6 +108,12 @@ func init() {
 			Short: "A login shell in a directory",
 			Args:  cobra.ExactArgs(1),
 			RunE:  func(_ *cobra.Command, args []string) error { return runWorkspaceShell(args[0]) },
+		},
+		&cobra.Command{
+			Use:   "session-shell RUNTIME_SESSION_ID",
+			Short: "A login shell where a session's agent is working",
+			Args:  cobra.ExactArgs(1),
+			RunE:  func(_ *cobra.Command, args []string) error { return runWorkspaceSessionShell(args[0]) },
 		},
 		&cobra.Command{
 			Use:   "edit PATH",
@@ -201,54 +207,74 @@ func runWorkspaceEditor(path string) error {
 	return workspaceViewEdit(path, cfg)
 }
 
+// runWorkspaceSessionShell is a shell view in the directory a session's agent
+// is working in. The workspace knows the session, not where it is; the pane
+// says, and only while it is that very session's.
+func runWorkspaceSessionShell(raw string) error {
+	scrubUtilityEnvironment()
+	_, pane, err := heldSessionPane(raw)
+	if err != nil {
+		return fmt.Errorf("shell view: %w", err)
+	}
+	if pane.CWD == "" {
+		return errors.New("shell view: the session's pane reports no directory")
+	}
+	return runWorkspaceShell(pane.CWD)
+}
+
 // runWorkspacePager pages the scrollback of the session a runtime-session ID
-// names. The pane is read only when the private server still holds it for
-// that very session: a reference alone could name another agent's pane after
-// a server restart.
+// names.
 func runWorkspacePager(raw string) error {
 	scrubUtilityEnvironment()
-	id, err := runtimesession.ParseID(strings.TrimSpace(raw))
+	server, pane, err := heldSessionPane(raw)
 	if err != nil {
 		return fmt.Errorf("pager view: %w", err)
+	}
+	return workspaceViewPage(func() (string, error) { return server.Capture(pane.Ref, backend.ExtentAll) })
+}
+
+// heldSessionPane finds the tmux pane of the session a runtime-session ID
+// names. The pane is returned only when the private server still holds it for
+// that very session: a reference alone could name another agent's pane after
+// a server restart.
+func heldSessionPane(raw string) (backend.TargetLauncher, backend.Pane, error) {
+	id, err := runtimesession.ParseID(strings.TrimSpace(raw))
+	if err != nil {
+		return nil, backend.Pane{}, err
 	}
 	store, err := runtimesession.NewStore(workspaceViewRegistry())
 	if err != nil {
-		return fmt.Errorf("pager view: %w", err)
+		return nil, backend.Pane{}, err
 	}
 	registry, err := store.Load()
 	if err != nil {
-		return fmt.Errorf("pager view: %w", err)
+		return nil, backend.Pane{}, err
 	}
 	record, err := registry.Get(id)
 	if err != nil {
-		return fmt.Errorf("pager view: no runtime session %s", id)
+		return nil, backend.Pane{}, fmt.Errorf("no runtime session %s", id)
 	}
 	if record.State != runtimesession.StateLive || record.Target == nil {
-		return fmt.Errorf("pager view: runtime session %s is %s", id, record.State)
+		return nil, backend.Pane{}, fmt.Errorf("runtime session %s is %s", id, record.State)
 	}
 	if record.Target.Instance.Kind != runtimesession.BackendTmux {
-		return fmt.Errorf("pager view: runtime session %s runs on %s, which has its own pager", id, record.Target.Instance.Kind)
+		return nil, backend.Pane{}, fmt.Errorf("runtime session %s runs on %s, not in the workspace", id, record.Target.Instance.Kind)
 	}
 	server, err := openTmux()
 	if err != nil {
-		return fmt.Errorf("pager view: tmux backend unavailable: %w", err)
+		return nil, backend.Pane{}, fmt.Errorf("tmux backend unavailable: %w", err)
 	}
 	pane := backend.PaneID(record.Target.Ref)
 	panes, err := server.Discover()
 	if err != nil {
-		return fmt.Errorf("pager view: %w", err)
+		return nil, backend.Pane{}, err
 	}
-	held := false
 	for _, listed := range panes {
 		if listed.Ref == pane && listed.Vars[session.RuntimeSessionVar] == string(id) {
-			held = true
-			break
+			return server, listed, nil
 		}
 	}
-	if !held {
-		return fmt.Errorf("pager view: runtime session %s is no longer at pane %s", id, pane.ID)
-	}
-	return workspaceViewPage(func() (string, error) { return server.Capture(pane, backend.ExtentAll) })
+	return nil, backend.Pane{}, fmt.Errorf("runtime session %s is no longer at pane %s", id, pane.ID)
 }
 
 // pageScrollback captures and pages on this terminal.

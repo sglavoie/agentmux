@@ -175,6 +175,13 @@ terminals of their own beside the agents, and none of them needs Kitty.
   worktree editors) and from **View › New Shell** (⌘T). Each is listed while
   its program runs and goes away when it exits; **View › Close View** (⌘⇧W)
   ends one.
+- **Session › New Terminal Below** (⌘↩) opens a shell where the session you
+  are on is working and lists it right under that session; pressed again, it
+  adds another. Click one to go back to it, or step to it: ⌘] and ⌘[ stop
+  at every session and every terminal under one, in sidebar order. The digits
+  (⌘3 to ⌘0) count sessions only. It applies to sessions whose terminal
+  is in the workspace, not to Kitty sessions. If the session ends first, the
+  shell keeps running and moves up to the **Workspace** section.
 
 A view is not a session. It is never counted as waiting, never shown in the
 status menu, and skipped by the next-attention shortcut. Its program runs

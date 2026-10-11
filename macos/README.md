@@ -362,7 +362,7 @@ ASL answer panel work the same either way.
   ⌘] and ⌘[ (next and previous session), ⌘1 or ⌘D (Dashboard), ⌘2 or ⌘O
   (Overview), ⌘3 to ⌘0 (the first eight sessions in sidebar order,
   `WorkspaceMenu.sessionKeys`), the same keys with Shift (a Kitty session is
-  raised in Kitty rather than selected here), ⌘T (new shell), ⌘⇧W (close view), ⌘W, ⌘M,
+  raised in Kitty rather than selected here), ⌘T (new shell), ⌘↩ (a terminal below the session shown), ⌘⇧W (close view), ⌘W, ⌘M,
   ⌘, and ⌘Q.
 
 ### Dashboard and utility views
@@ -395,6 +395,15 @@ and Kitty variable from its environment before running it.
   to where it was; the Dashboard or the Overview that quits stays listed and
   offers **Reopen**. Closing the window hides utility terminals without ending
   them, unlike attachments.
+- **Terminals beside a session.** ⌘↩ (`openTerminalBesideSession`) opens a
+  `.terminal` view: `amx workspace-view session-shell <runtime-session-id>`,
+  a login shell in the directory of that session's pane, which amx reads only
+  while the private server holds the pane for that session. The sidebar lists
+  it under the session's row (`reloadSidebar`) rather than in **Workspace**,
+  and moves it there if a live snapshot stops listing the session. It is a
+  utility view in every other respect: `WorkspaceState.rows` never holds it,
+  so the digit shortcuts cannot land on it; `selectNeighbor` walks the
+  sidebar's sessions and the terminals under them, so ⌘] and ⌘[ do.
 - **The dashboard shortcut.** `DashboardOpener.destination(for:)` sends it to
   the workspace's Dashboard only when there is no Kitty socket to try; a Kitty
   that answered with a failure, or sockets nobody answers on, are still
