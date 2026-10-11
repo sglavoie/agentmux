@@ -201,9 +201,44 @@ final class AppPreferencesTests: XCTestCase {
         model.daemonNotification = notification
         XCTAssertTrue(model.snoozeDescription.hasPrefix("Snoozed until "), "snoozed_until is a Unix second")
         XCTAssertNotEqual(model.snoozeDescription, "Not snoozed")
+        XCTAssertTrue(model.isSnoozed)
         model.preferences.kittySocketOverride = "/tmp/kitty"
         XCTAssertNotNil(model.kittySocketProblem)
         model.preferences.kittySocketOverride = "tcp:localhost:1234"
         XCTAssertNil(model.kittySocketProblem)
+    }
+
+    @MainActor
+    func testResumeClearsTheSnoozePreferencesShows() {
+        let defaults = freshDefaults()
+        let model = PreferencesModel(defaults: defaults)
+        var asked = 0
+        model.onResumeSnooze = { asked += 1 }
+        XCTAssertFalse(model.isSnoozed)
+
+        // With the feed live the snooze is the daemon's, and the app clears it.
+        var notification = CompanionNotification()
+        notification.indefinite = true
+        model.daemonNotification = notification
+        model.preferences.snoozeUntil = .distantFuture
+        XCTAssertTrue(model.isSnoozed)
+        model.resumeSnooze()
+        XCTAssertEqual(asked, 1)
+        XCTAssertEqual(model.preferences.snoozeUntil, .distantFuture, "the daemon's answer is what gets mirrored")
+        model.daemonNotification = CompanionNotification()
+        XCTAssertFalse(model.isSnoozed, "the daemon's snooze outranks the stored one")
+
+        // With no feed there is only the stored snooze to forget.
+        model.daemonNotification = nil
+        XCTAssertTrue(model.isSnoozed)
+        model.resumeSnooze()
+        XCTAssertEqual(asked, 1, "nothing is sent to a daemon that is not there")
+        XCTAssertNil(model.preferences.snoozeUntil)
+        XCTAssertNil(defaults.object(forKey: "amxSnoozeUntil"), "so a restarted daemon is not snoozed again")
+        XCTAssertFalse(model.isSnoozed)
+        XCTAssertEqual(model.snoozeDescription, "Not snoozed")
+
+        model.preferences.snoozeUntil = Date().addingTimeInterval(-60)
+        XCTAssertFalse(model.isSnoozed, "a snooze that ran out is not one to clear")
     }
 }

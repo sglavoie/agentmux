@@ -82,6 +82,8 @@ final class PreferencesModel: ObservableObject {
     /// True while a recorder listens, so the live shortcuts step aside and can
     /// be recorded like any other key.
     var onRecordingChange: ((Bool) -> Void)?
+    /// Asks the app to clear the daemon's snooze.
+    var onResumeSnooze: (() -> Void)?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -154,13 +156,40 @@ final class PreferencesModel: ObservableObject {
         if let notification = daemonNotification {
             return SnoozeState(notification).description(now: now)
         }
-        if let until = preferences.snoozeUntil, until > now {
-            let state = until == .distantFuture
-                ? SnoozeState(indefinite: true)
-                : SnoozeState(snoozedUntil: Int64(until.timeIntervalSince1970))
+        if let state = pendingSnooze(now: now) {
             return state.description(now: now) + " (last requested; re-applied when the daemon is back)"
         }
         return "Not snoozed"
+    }
+
+    /// True while there is a snooze to clear: the daemon's, or the one the
+    /// app would re-apply when the daemon is back.
+    var isSnoozed: Bool {
+        let now = Date()
+        if let notification = daemonNotification {
+            return SnoozeState(notification).isSnoozed(now: now)
+        }
+        return pendingSnooze(now: now) != nil
+    }
+
+    /// Clears the snooze `snoozeDescription` shows. The daemon's is the
+    /// app's to clear, through `onResumeSnooze`; with no live feed there is
+    /// only the stored one, and forgetting it is what stops it being
+    /// re-applied.
+    func resumeSnooze() {
+        if daemonNotification != nil {
+            onResumeSnooze?()
+        } else {
+            preferences.snoozeUntil = nil
+        }
+    }
+
+    /// The stored snooze, while it has not run out.
+    private func pendingSnooze(now: Date) -> SnoozeState? {
+        guard let until = preferences.snoozeUntil, until > now else { return nil }
+        return until == .distantFuture
+            ? SnoozeState(indefinite: true)
+            : SnoozeState(snoozedUntil: Int64(until.timeIntervalSince1970))
     }
 
     static func time(_ date: Date) -> String {
@@ -273,7 +302,14 @@ struct PreferencesView: View {
                 }
                 Toggle("Use app notifications", isOn: $model.preferences.useAppNotifications)
                 note("Delivers the daemon's notifications through Agent Mux; off leaves them to Alerter.")
-                LabeledContent("Snooze") { Text(model.snoozeDescription).foregroundStyle(.secondary) }
+                LabeledContent("Snooze") {
+                    HStack {
+                        Text(model.snoozeDescription).foregroundStyle(.secondary)
+                        if model.isSnoozed {
+                            Button(SnoozeChoice.resume.title) { model.resumeSnooze() }
+                        }
+                    }
+                }
             }
 
             Section("Workspace") {

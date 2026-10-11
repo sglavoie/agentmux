@@ -601,6 +601,11 @@ daemon that has no snooze while the stored one has not run out, the app sends
 the stored snooze to the new daemon. A snooze cleared on the same daemon, for
 example with `amx notifications snooze off`, is adopted rather than undone.
 
+Preferences shows the snooze under General with a Resume Now button while one
+is in force. With the feed live it clears the daemon's snooze, as the menu
+item does; with the daemon away it forgets the stored snooze, so nothing is
+re-applied when a daemon comes back.
+
 ## Notifications
 
 While it runs, the app can be the daemon's notification backend

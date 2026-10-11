@@ -799,6 +799,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         }
         applyMenuBarPreferences(model.preferences)
         model.onChange = { [weak self] old, new in self?.preferencesChanged(from: old, to: new) }
+        model.onResumeSnooze = { [weak self] in self?.snooze(.resume) }
         model.onRecordingChange = { [weak self] recording in
             guard let self else { return }
             if recording {
@@ -1329,8 +1330,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
 
     // MARK: Snooze
 
-    /// Notifications ▸: sets or clears the daemon's snooze and mirrors what
-    /// the daemon answers into `amxSnoozeUntil`.
+    /// Notifications ▸, and Preferences' Resume Now: sets or clears the
+    /// daemon's snooze and mirrors what the daemon answers into
+    /// `amxSnoozeUntil`.
     private func snooze(_ choice: SnoozeChoice) {
         guard let daemon = store.snapshot?.daemon, store.feed == .live else {
             return report("The daemon is not connected.")
