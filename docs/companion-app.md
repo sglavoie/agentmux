@@ -161,14 +161,14 @@ window makes it a menu bar app again.
 Above the projects the sidebar lists the workspace's own views. They are
 terminals of their own beside the agents, and none of them needs Kitty.
 
-- **Dashboard** (⌘1, or ⌘D) is the `amx` dashboard, embedded. The workspace opens on
+- **Dashboard** (⌘D) is the `amx` dashboard, embedded. The workspace opens on
   it. Everything the dashboard does in a terminal it does here: launching,
   Past Sessions, Plans, Worktrees, Runs, the action menu. What changes is
   where things show. Launching an agent, resuming or forking a conversation,
   restarting a session, or pressing Enter on a row takes you to that session's
   own view in the workspace, and the Dashboard stays where it was behind it.
   New agents launch on tmux.
-- **Overview** (⌘2, or ⌘O) is the live session overview. Enter on a tile goes to the
+- **Overview** (⌘O) is the live session overview. Enter on a tile goes to the
   session's view the same way.
 - **Shell**, **editor**, and **scrollback** views open when the Dashboard asks
   for them (*Open shell*, *Open editor*, *Peek scrollback*, the plan and
@@ -184,7 +184,7 @@ terminals of their own beside the agents, and none of them needs Kitty.
   adds another. Click one to go back to it, or step to it: ⌘] and ⌘[ stop
   at every session and every terminal under one, in sidebar order; ⌘⇧] and
   ⌘⇧[ go from session to session, passing over the terminals. The digits
-  (⌘3 to ⌘0) count sessions only. It applies to sessions whose terminal
+  (⌘1 to ⌘0) count sessions only. It applies to sessions whose terminal
   is in the workspace, not to Kitty sessions. If the session ends first, the
   shell keeps running and moves up to the **Workspace** section.
 
@@ -214,14 +214,17 @@ Whatever has the keyboard decides where a key goes.
 - In the **session list** the arrow keys move the selection and Return goes
   into the selected row. Nothing typed there reaches a program.
   **Window › Session List** (⌘⇧L) puts the keyboard there.
-- **⌘3** to **⌘0** go to the first eight sessions in the order the sidebar
-  lists them, top to bottom: ⌘3 is the first session and ⌘0 the eighth.
+- The button in the title bar, or **View › Toggle Sidebar** (⌘B), hides the
+  sidebar so the terminal has the whole window, and brings it back; ⌘⇧L
+  shows it too. The choice is kept across launches.
+- **⌘1** to **⌘0** go to the first ten sessions in the order the sidebar
+  lists them, top to bottom: ⌘1 is the first session and ⌘0 the tenth.
   Shells and other opened views are not counted. **⌘]** and **⌘[** step to
   the next and the previous session or terminal under one, wrapping; **⌘⇧]**
   and **⌘⇧[** step to the next and the previous session, skipping the
   terminals. From a terminal, the previous session is the one it is under.
 - Without Shift those keys never leave the app: a session that lives in
-  Kitty is selected and its pane says where it is. Add Shift (**⌘⇧3** to **⌘⇧0**, **⌘⇧]**,
+  Kitty is selected and its pane says where it is. Add Shift (**⌘⇧1** to **⌘⇧0**, **⌘⇧]**,
   **⌘⇧[**) and such a session comes forward in Kitty instead, as a click on
   its row does. A session embedded here is focused here either way. macOS
   takes ⌘⇧3, ⌘⇧4, and ⌘⇧5 for screenshots before any app sees them, unless

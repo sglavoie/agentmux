@@ -122,6 +122,10 @@ final class FakeWorkspaceApp: WorkspaceDelegate {
     private(set) var places: [WorkspaceRestoration.Place?] = []
     func workspacePlaceChanged(_ place: WorkspaceRestoration.Place?) { places.append(place) }
 
+    /// Every time the sidebar was hidden (true) or shown, in order.
+    private(set) var sidebarCollapses: [Bool] = []
+    func workspaceSidebarCollapsedChanged(_ collapsed: Bool) { sidebarCollapses.append(collapsed) }
+
     /// What amx says about each session; one that is not named is running
     /// with no terminal attached.
     var statuses: [String: WorkspaceSessionStatus] = [:]

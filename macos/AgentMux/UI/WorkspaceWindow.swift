@@ -30,6 +30,8 @@ protocol WorkspaceDelegate: AnyObject {
     func workspaceVisibilityChanged(_ visible: Bool)
     /// The pane moved to another session or view, or to none.
     func workspacePlaceChanged(_ place: WorkspaceRestoration.Place?)
+    /// The sidebar was hidden or shown.
+    func workspaceSidebarCollapsedChanged(_ collapsed: Bool)
     /// Asks whether a session's agent is running and whether a terminal is
     /// attached to it. It only asks: nothing is attached and nothing started.
     /// The answer arrives on the main actor, possibly before this returns.
@@ -139,6 +141,13 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private(set) var isOpen = false
 
     let sidebar = WorkspaceSidebarView()
+    /// Hides the sidebar and brings it back, from the title bar, so that
+    /// neither the sidebar nor the pane gives up anything to it.
+    let sidebarToggle = WorkspaceWindowController.makeSidebarToggle()
+    /// What the delegate was last told, so it hears of each change once.
+    private var reportedCollapsed = false
+    private var sidebarItem: NSSplitViewItem?
+    private var sidebarObservation: NSKeyValueObservation?
     let feedLabel = NSTextField(labelWithString: "")
     let placeholder = WorkspacePlaceholderView()
     private let pane = NSView()
@@ -1037,9 +1046,60 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     /// Gives the keyboard to the session list: the arrow keys then move the
-    /// selection and Return goes into what is selected.
+    /// selection and Return goes into what is selected. A hidden list is
+    /// shown first.
     func focusSidebar() {
+        setSidebarCollapsed(false)
         window.makeFirstResponder(sidebar)
+    }
+
+    /// Whether the sidebar is hidden and the pane has the whole window.
+    var isSidebarCollapsed: Bool {
+        _ = window
+        return sidebarItem?.isCollapsed ?? false
+    }
+
+    @objc func toggleSidebar(_ sender: Any? = nil) {
+        setSidebarCollapsed(!isSidebarCollapsed, animated: true)
+    }
+
+    func setSidebarCollapsed(_ collapsed: Bool, animated: Bool = false) {
+        guard collapsed != isSidebarCollapsed, let sidebarItem else { return }
+        if animated, !AppDelegate.isRunningTests {
+            sidebarItem.animator().isCollapsed = collapsed
+        } else {
+            sidebarItem.isCollapsed = collapsed
+        }
+    }
+
+    /// The sidebar was hidden or shown, by its buttons, the menu, or a drag
+    /// of the divider.
+    private func sidebarCollapseChanged() {
+        let collapsed = sidebarItem?.isCollapsed ?? false
+        guard collapsed != reportedCollapsed else { return }
+        reportedCollapsed = collapsed
+        if collapsed, window.firstResponder === window
+            || (window.firstResponder as? NSView)?.isDescendant(of: sidebar) == true {
+            // A list that cannot be seen does not keep the keyboard.
+            var shown: NSView?
+            if case let .terminal(id) = content { shown = terminals[id]?.view }
+            if case let .view(id) = content { shown = viewTerminals[id]?.view }
+            if let shown { window.makeFirstResponder(shown) }
+        }
+        delegate?.workspaceSidebarCollapsedChanged(collapsed)
+    }
+
+    private static func makeSidebarToggle() -> NSButton {
+        let button = NSButton(title: "", target: nil, action: nil)
+        button.image = NSImage(systemSymbolName: "line.3.horizontal", accessibilityDescription: "Toggle Sidebar")?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 13, weight: .regular))
+        button.imagePosition = .imageOnly
+        button.isBordered = false
+        button.contentTintColor = .secondaryLabelColor
+        button.refusesFirstResponder = true
+        button.toolTip = "Toggle Sidebar (⌘B)"
+        button.translatesAutoresizingMaskIntoConstraints = false
+        return button
     }
 
     /// Return in the session list: focuses the selected row, as a click does.
@@ -1111,7 +1171,12 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarController)
         sidebarItem.minimumThickness = 180
         sidebarItem.maximumThickness = 420
-        sidebarItem.canCollapse = false
+        sidebarItem.canCollapse = true
+        sidebarItem.canCollapseFromWindowResize = false
+        self.sidebarItem = sidebarItem
+        sidebarObservation = sidebarItem.observe(\.isCollapsed) { [weak self] _, _ in
+            MainActor.assumeIsolated { self?.sidebarCollapseChanged() }
+        }
         let paneItem = NSSplitViewItem(viewController: paneController)
         paneItem.minimumThickness = 320
         split.addSplitViewItem(sidebarItem)
@@ -1127,6 +1192,21 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         window.center()
         if !AppDelegate.isRunningTests { window.setFrameAutosaveName("AgentMuxWorkspace") }
         split.splitView.setPosition(240, ofDividerAt: 0)
+
+        sidebarToggle.target = self
+        sidebarToggle.action = #selector(toggleSidebar(_:))
+        let holder = NSView(frame: NSRect(x: 0, y: 0, width: 32, height: 28))
+        holder.addSubview(sidebarToggle)
+        NSLayoutConstraint.activate([
+            sidebarToggle.centerXAnchor.constraint(equalTo: holder.centerXAnchor),
+            sidebarToggle.centerYAnchor.constraint(equalTo: holder.centerYAnchor),
+            sidebarToggle.widthAnchor.constraint(equalToConstant: 24),
+            sidebarToggle.heightAnchor.constraint(equalToConstant: 22),
+        ])
+        let accessory = NSTitlebarAccessoryViewController()
+        accessory.view = holder
+        accessory.layoutAttribute = .leading
+        window.addTitlebarAccessoryViewController(accessory)
         return window
     }
 }

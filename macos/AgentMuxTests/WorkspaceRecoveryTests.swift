@@ -41,8 +41,12 @@ final class WorkspaceRestorationTests: XCTestCase {
                        WorkspaceRestoration(windowOpen: true, place: .session(runtimeSessionID: F.runtimeID(2))))
         XCTAssertEqual(defaults.string(forKey: WorkspaceRestoration.placeKey), "session:" + F.runtimeID(2))
 
+        WorkspaceRestoration.saveSidebarCollapsed(true, to: defaults)
+        XCTAssertTrue(WorkspaceRestoration.load(from: defaults).sidebarCollapsed)
+
         WorkspaceRestoration.savePlace(nil, to: defaults)
         WorkspaceRestoration.saveWindowOpen(false, to: defaults)
+        WorkspaceRestoration.saveSidebarCollapsed(false, to: defaults)
         XCTAssertEqual(WorkspaceRestoration.load(from: defaults), WorkspaceRestoration())
 
         defaults.set("session:garbage", forKey: WorkspaceRestoration.placeKey)

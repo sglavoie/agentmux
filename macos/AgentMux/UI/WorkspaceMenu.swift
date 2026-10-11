@@ -11,17 +11,17 @@ import AppKit
 /// session's terminal gives it to the agent, the Dashboard's to the TUI, and
 /// the session list keeps the arrow keys and Return for itself.
 ///
-/// The digits are places in the sidebar: ⌘1 the Dashboard, ⌘2 the Overview,
-/// then the sessions from the top down. Going to a session with ⌘ alone stays
+/// The digits are the sessions' places in the sidebar, from the top down; the
+/// Dashboard and the Overview have ⌘D and ⌘O. Going to a session with ⌘ alone stays
 /// in the workspace; with Shift, a session that lives in Kitty comes forward
 /// there. ⌘] and ⌘[ stop at every session and every terminal under one; with
 /// Shift they go from session to session.
 enum WorkspaceMenu {
-    /// The keys of the first sessions in the sidebar, in its order: ⌘3 is the
-    /// first one listed and ⌘0 the eighth.
-    static let sessionKeys = ["3", "4", "5", "6", "7", "8", "9", "0"]
+    /// The keys of the first sessions in the sidebar, in its order: ⌘1 is the
+    /// first one listed and ⌘0 the tenth.
+    static let sessionKeys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
     /// What Shift types on each of `sessionKeys`.
-    static let shiftedSessionKeys = ["#", "$", "%", "^", "&", "*", "(", ")"]
+    static let shiftedSessionKeys = ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")"]
 
     @MainActor
     static func make(target: AppDelegate) -> NSMenu {
@@ -51,7 +51,7 @@ enum WorkspaceMenu {
         bigger.allowsKeyEquivalentWhenHidden = true
         view.addItem(bigger)
         view.addItem(item("Smaller", #selector(Ghostty.SurfaceView.zoomOut(_:)), "-"))
-        // ⌘0 and ⌘⇧0 are the eighth session's.
+        // ⌘0 and ⌘⇧0 are the tenth session's.
         view.addItem(item("Actual Size", #selector(Ghostty.SurfaceView.resetZoom(_:)), "_"))
         view.addItem(.separator())
         view.addItem(item("Page Up", #selector(NSResponder.scrollPageUp(_:)), key(NSPageUpFunctionKey), mask: .shift))
@@ -59,18 +59,11 @@ enum WorkspaceMenu {
         view.addItem(item("Scroll to Top", #selector(NSResponder.scrollToBeginningOfDocument(_:)), key(NSHomeFunctionKey)))
         view.addItem(item("Scroll to Bottom", #selector(NSResponder.scrollToEndOfDocument(_:)), key(NSEndFunctionKey)))
         view.addItem(.separator())
-        view.addItem(item("Dashboard", #selector(AppDelegate.openDashboardFromMenu(_:)), "1", target: target))
-        view.addItem(item("Overview", #selector(AppDelegate.openOverviewFromMenu(_:)), "2", target: target))
-        // ⌘D and ⌘O still go where they did before the digits.
-        for (title, action, key) in [
-            ("Dashboard", #selector(AppDelegate.openDashboardFromMenu(_:)), "d"),
-            ("Overview", #selector(AppDelegate.openOverviewFromMenu(_:)), "o"),
-        ] {
-            let earlier = item(title, action, key, target: target)
-            earlier.isHidden = true
-            earlier.allowsKeyEquivalentWhenHidden = true
-            view.addItem(earlier)
-        }
+        view.addItem(item("Toggle Sidebar", #selector(AppDelegate.toggleWorkspaceSidebar(_:)), "b", target: target))
+        view.addItem(.separator())
+        // The digits are all the sessions'.
+        view.addItem(item("Dashboard", #selector(AppDelegate.openDashboardFromMenu(_:)), "d", target: target))
+        view.addItem(item("Overview", #selector(AppDelegate.openOverviewFromMenu(_:)), "o", target: target))
         view.addItem(item("New Shell", #selector(AppDelegate.newShellFromMenu(_:)), "t", target: target))
         view.addItem(.separator())
         view.addItem(item("Close View", #selector(AppDelegate.closeWorkspaceView(_:)), "W", target: target))

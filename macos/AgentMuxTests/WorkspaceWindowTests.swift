@@ -125,6 +125,33 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertTrue(workspace.window.firstResponder === workspace.utilityTerminalView(for: WorkspaceUtilityView.dashboard.id))
     }
 
+    /// Hidden, the sidebar takes no room and gives up the keyboard; the title
+    /// bar's button brings it back, and asking for the list shows it again.
+    func testTheSidebarCollapsesToNothingAndComesBack() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.select(try row("api", "work").key)
+        workspace.focusSidebar()
+        let terminal = try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1)))
+        XCTAssertFalse(workspace.isSidebarCollapsed)
+
+        workspace.sidebarToggle.performClick(nil)
+        workspace.window.layoutIfNeeded()
+        XCTAssertTrue(workspace.isSidebarCollapsed)
+        XCTAssertTrue(workspace.sidebar.isHiddenOrHasHiddenAncestor)
+        XCTAssertEqual(terminal.frame.width, workspace.window.contentLayoutRect.width, "the pane has the whole window")
+        XCTAssertTrue(workspace.window.firstResponder === terminal, "a hidden list does not keep the keyboard")
+        XCTAssertEqual(app.sidebarCollapses, [true])
+
+        workspace.sidebarToggle.performClick(nil)
+        XCTAssertFalse(workspace.isSidebarCollapsed)
+
+        workspace.setSidebarCollapsed(true)
+        workspace.focusSidebar()
+        XCTAssertFalse(workspace.isSidebarCollapsed, "Session List shows the list it goes to")
+        XCTAssertTrue(workspace.window.firstResponder === workspace.sidebar)
+        XCTAssertEqual(app.sidebarCollapses, [true, false, true, false])
+    }
+
     func testAKittySessionIsRaisedInKittyOnlyWhenFocused() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let (work, kitty) = (try row("api", "work"), try row("web", "work"))

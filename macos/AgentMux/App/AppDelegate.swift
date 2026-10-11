@@ -241,8 +241,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     }
 
     private func workspaceController() -> WorkspaceWindowController {
-        let controller = workspace ?? WorkspaceWindowController(delegate: self)
+        if let workspace { return workspace }
+        let controller = WorkspaceWindowController(delegate: self)
         workspace = controller
+        if !Self.isRunningTests {
+            controller.setSidebarCollapsed(WorkspaceRestoration.load().sidebarCollapsed)
+        }
         // The terminals offer their shortcuts to the main menu first, and a
         // regular app needs one; the accessory never shows it.
         if NSApp.mainMenu == nil { NSApp.mainMenu = WorkspaceMenu.make(target: self) }
@@ -318,6 +322,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         WorkspaceRestoration.savePlace(place)
     }
 
+    func workspaceSidebarCollapsedChanged(_ collapsed: Bool) {
+        guard !Self.isRunningTests, !isTerminating else { return }
+        WorkspaceRestoration.saveSidebarCollapsed(collapsed)
+    }
+
     /// Asks amx what the registry and the private tmux server say about a
     /// session. `amx attach --json` checks and reports; it attaches nothing.
     func sessionStatus(runtimeSessionID: String, completion: @escaping @MainActor (WorkspaceSessionStatus) -> Void) {
@@ -366,12 +375,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     @objc func selectPreviousSession(_ sender: Any?) { workspace?.selectNeighbor(-1) }
     @objc func showNextSessionInKitty(_ sender: Any?) { workspace?.selectNeighbor(1, raising: true) }
     @objc func showPreviousSessionInKitty(_ sender: Any?) { workspace?.selectNeighbor(-1, raising: true) }
-    /// ⌘3 to ⌘0: the item's tag is the session's place in the sidebar.
+    /// ⌘1 to ⌘0: the item's tag is the session's place in the sidebar.
     @objc func goToSession(_ sender: Any?) {
         guard let item = sender as? NSMenuItem else { return }
         workspace?.selectSession(at: item.tag)
     }
-    /// ⌘⇧3 to ⌘⇧0.
+    /// ⌘⇧1 to ⌘⇧0.
     @objc func showSessionInKitty(_ sender: Any?) {
         guard let item = sender as? NSMenuItem else { return }
         workspace?.selectSession(at: item.tag, raising: true)
@@ -387,6 +396,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// ⌘↩: a shell beside the session the workspace is on.
     @objc func newSessionTerminal(_ sender: Any?) { workspace?.openTerminalBesideSession() }
     @objc func closeWorkspaceView(_ sender: Any?) { workspace?.closeSelectedView() }
+    @objc func toggleWorkspaceSidebar(_ sender: Any?) { workspace?.toggleSidebar() }
     @objc func focusSessionList(_ sender: Any?) {
         showWorkspace()
         workspace?.focusSidebar()
