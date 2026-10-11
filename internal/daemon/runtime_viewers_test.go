@@ -180,3 +180,48 @@ func TestViewerObservationLeavesKittySlotsAndSeenSessionsAlone(t *testing.T) {
 		t.Fatal("an already seen session was rewritten by a later observation")
 	}
 }
+
+// A tmux session's mute is what the reconciliation pass read from its pane:
+// it reaches notification suppression and the state query, survives the
+// session's own hooks (which carry no Kitty snapshot to read a mute from),
+// and never touches a Kitty slot, whose mute is Kitty's to report.
+func TestMuteObservationIsTheMuteOfASessionWithNoKittyWindow(t *testing.T) {
+	h, directory := newRuntimeTestHandler(t)
+	onKitty, onTmux := newRuntimeID(t), newRuntimeID(t)
+	directory.put(onKitty, runtimesession.StateLive, runtimesession.BackendKitty, kittyA, "kitty-a-1", "7")
+	directory.put(onTmux, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%7")
+	for _, runtime := range []runtimesession.ID{onKitty, onTmux} {
+		requireAccepted(t, h.Handle(runtimeHook(t, runtime, "PermissionRequest", hookevent.HookPayload{SessionID: "conv-" + string(runtime)})))
+	}
+	kittySlot, tmuxSlot := slotOf(t, h, onKitty), slotOf(t, h, onTmux)
+
+	h.observeRuntimeMutes([]tmux.Muted{
+		{ID: onTmux, Muted: true},
+		{ID: onKitty, Muted: true},
+		{ID: newRuntimeID(t), Muted: true},
+	})
+	if !h.IsMuted(tmuxSlot) {
+		t.Fatal("the tmux session's mute was not recorded")
+	}
+	if h.IsMuted(kittySlot) {
+		t.Fatal("a Kitty slot took its mute from the tmux observation")
+	}
+	h.stateMu.Lock()
+	states, _ := h.copyStateLocked(time.Now().Unix())
+	h.stateMu.Unlock()
+	if !states[tmuxSlot].Muted {
+		t.Fatal("the state query does not carry the mute the companion publishes")
+	}
+
+	// The session's next hook has no Kitty tab, so no snapshot mute: the
+	// observed one stands.
+	requireAccepted(t, h.Handle(runtimeHook(t, onTmux, "Stop", hookevent.HookPayload{SessionID: "conv-" + string(onTmux)})))
+	if !h.IsMuted(tmuxSlot) {
+		t.Fatal("a hook from the muted session unmuted it")
+	}
+
+	h.observeRuntimeMutes([]tmux.Muted{{ID: onTmux, Muted: false}})
+	if h.IsMuted(tmuxSlot) {
+		t.Fatal("the session stayed muted after its pane was read unmuted")
+	}
+}

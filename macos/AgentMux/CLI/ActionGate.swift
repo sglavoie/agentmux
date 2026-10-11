@@ -69,6 +69,12 @@ struct MuteToggleResult: Decodable, Equatable {
     static func arguments(windowID: Int) -> [String] {
         ["mute-toggle", "--window-id", String(windowID)]
     }
+
+    /// A session the workspace embeds has no window; its runtime session
+    /// names it.
+    static func arguments(runtimeSessionID: String) -> [String] {
+        ["mute-toggle", "--runtime-session", runtimeSessionID]
+    }
 }
 
 /// An amx command that dials Kitty itself, run against each candidate socket

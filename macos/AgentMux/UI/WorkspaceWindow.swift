@@ -178,6 +178,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// Where the pane was when an opened view took it, to go back to when
     /// that view ends.
     private var returnPlaces: [String: Place] = [:]
+    /// Where the pane is and where it was before that, which ⌘L goes between.
+    /// An overlay view is neither: it is passed through.
+    private var recent: (here: Place?, before: Place?)
     /// A session that was just launched and is shown once a snapshot lists
     /// it, unless the operator goes somewhere else first.
     private(set) var awaited: (runtimeSessionID: String, until: Date)?
@@ -643,6 +646,52 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         open(views.openTerminal(beside: id))
     }
 
+    /// The session the pane is on, or the one the terminal, pager, or picker
+    /// it shows is about: what the session function keys act on.
+    var shownSessionRow: WorkspaceRow? {
+        if let view = views.view(viewSelection) {
+            return view.aboutRuntimeSessionID.flatMap { state.row(.embedded($0)) }
+        }
+        return state.selectedRow
+    }
+
+    /// F5 and F6: opens the icon or color picker for the embedded session the
+    /// pane is on, and reports whether there was one. A Kitty session has its
+    /// pickers in Kitty.
+    @discardableResult
+    func openPicker(_ kind: WorkspaceUtilityView.Kind) -> Bool {
+        guard let id = shownSessionRow?.embeddedRuntimeSessionID,
+              let picker = WorkspaceUtilityView.picker(kind, runtimeSessionID: id) else {
+            Self.logger.notice("workspace: no embedded session is shown; no picker opened")
+            return false
+        }
+        open(picker)
+        return true
+    }
+
+    /// Notes where the pane is, keeping where it was before.
+    private func notePlace() {
+        guard let here = place, here != recent.here else { return }
+        if case let .view(id) = here, views.view(id)?.isOverlay == true { return }
+        recent = (here, recent.here)
+    }
+
+    /// ⌘L: goes back to where the pane was before it came here, so that
+    /// pressing it again returns. Reports whether that place is still there.
+    @discardableResult
+    func toggleRecentPlace() -> Bool {
+        switch recent.before {
+        case let .session(key)?:
+            guard let row = state.row(key) else { return false }
+            go(to: row, raising: false)
+        case let .view(id)?:
+            guard showView(id, focus: true) else { return false }
+        case nil:
+            return false
+        }
+        return true
+    }
+
     /// Where the pane is now.
     private var place: Place? {
         if let viewSelection { return .view(viewSelection) }
@@ -682,18 +731,20 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     ///
     /// With `raising` the step is from session to session: terminals are
     /// passed over, one of them counts as standing just below its session,
-    /// and a Kitty row comes forward in Kitty.
-    func selectNeighbor(_ offset: Int, raising: Bool = false) {
+    /// and a Kitty row comes forward in Kitty. With `sessionsOnly` the step
+    /// is the same one and stays in the app, as F7 and F9 do.
+    func selectNeighbor(_ offset: Int, raising: Bool = false, sessionsOnly: Bool = false) {
         let listed = state.embeddedRuntimeSessionIDs
+        let skipping = raising || sessionsOnly
         let stops = items.filter { item in
             switch item {
             case .row: return true
-            case let .view(view): return !raising && view.besideRuntimeSessionID.map(listed.contains) ?? false
+            case let .view(view): return !skipping && view.besideRuntimeSessionID.map(listed.contains) ?? false
             case .section, .group: return false
             }
         }
         guard !stops.isEmpty else { return }
-        let beside = raising ? views.view(viewSelection)?.besideRuntimeSessionID : nil
+        let beside = skipping ? views.view(viewSelection)?.besideRuntimeSessionID : nil
         let here = stops.firstIndex { item in
             switch item {
             case let .row(row):
@@ -834,6 +885,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// window is open, so a closed window shows nothing.
     private func updateContent(focus: Bool, retry: Bool = false) {
         guard isOpen else { return }
+        notePlace()
         let wanted = wantedContent(retry: retry)
         if wanted != content {
             content = wanted

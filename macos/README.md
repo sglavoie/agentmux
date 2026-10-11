@@ -370,8 +370,23 @@ ASL answer panel work the same either way.
   ⌘] and ⌘[ (next and previous session or terminal under one), ⌘D (Dashboard), ⌘O
   (Overview), ⌘1 to ⌘0 (the first ten sessions in sidebar order,
   `WorkspaceMenu.sessionKeys`), the same keys with Shift (a Kitty session is
-  raised in Kitty rather than selected here, and ⌘⇧] and ⌘⇧[ pass over terminals), ⌘B (hide or show the sidebar), ⌘T (new shell), ⌘↩ (a terminal below the session shown), ⌘⇧W (close view), ⌘W, ⌘M,
+  raised in Kitty rather than selected here, and ⌘⇧] and ⌘⇧[ pass over terminals), ⌘L (back to the place shown before, `toggleRecentPlace`), ⌘B (hide or show the sidebar), ⌘T (new shell), ⌘↩ (a terminal below the session shown), ⌘⇧W (close view), ⌘W, ⌘M,
   ⌘, and ⌘Q.
+- **Function keys.** F1 to F11 are the menu's too, with no modifier
+  (`WorkspaceMenu.functionKeys`, listed under **Session › Function Keys**):
+  the keys Kitty binds for its tabs (`internal/kittykeys`), acting on the
+  session the pane is on (`shownSessionRow`). A surface declines an unbound
+  function key, so AppKit offers it to the menu. F1, F5, and F6 open overlay
+  views (`isOverlay`): `amx workspace-view keybindings`, `icon-picker
+  <runtime-session-id>`, and `color-picker <runtime-session-id>`, which go
+  back to where the pane was when their program ends and are never one of
+  ⌘L's two places. F8 and F11 run `amx hook-indicator user_clear|user_active`
+  and F10 `amx mute-toggle`, naming an embedded session by `--runtime-session`
+  and a Kitty one by window and socket. F3 has no target: it is
+  `SurfaceView.toggleMarkers`, the eighth history request, disabled where
+  there is no server to ask. F1's list is `kittykeys.Workspace` on the Go
+  side, and `TestWorkspaceFunctionKeysMatchTheApp` fails when the two lists
+  name different keys.
 
 ### Dashboard and utility views
 

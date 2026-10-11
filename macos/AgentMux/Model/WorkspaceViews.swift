@@ -50,9 +50,16 @@ struct WorkspaceViewRequest: Decodable, Equatable {
 /// the next-attention shortcut. A pager names the session whose scrollback it
 /// reads and is still not that session, and so does a terminal opened beside
 /// one: it is a shell where that session's agent works, listed under it.
+///
+/// The keybinding reference and the icon and color pickers are what Kitty
+/// shows as overlays. Here each is a view that takes the pane until its
+/// program ends, and then the pane goes back to where it was.
 struct WorkspaceUtilityView: Equatable {
     enum Kind: String, Equatable {
         case dashboard, overview, shell, editor, pager, terminal
+        case keybindings
+        case iconPicker = "icon-picker"
+        case colorPicker = "color-picker"
     }
 
     let kind: Kind
@@ -75,6 +82,19 @@ struct WorkspaceUtilityView: Equatable {
     /// kind.
     var besideRuntimeSessionID: String? { kind == .terminal ? target : nil }
 
+    /// The runtime session the view is about: the one a terminal is beside,
+    /// a pager reads, or a picker edits. Nil for every other kind.
+    var aboutRuntimeSessionID: String? {
+        switch kind {
+        case .terminal, .pager, .iconPicker, .colorPicker: return target
+        case .dashboard, .overview, .shell, .editor, .keybindings: return nil
+        }
+    }
+
+    /// A view that stands in for a Kitty overlay: it is passed through, not
+    /// somewhere the operator was, so going back never lands on one.
+    var isOverlay: Bool { kind == .keybindings || kind == .iconPicker || kind == .colorPicker }
+
     /// The Dashboard and the Overview are always listed; the others exist
     /// only while their program runs.
     var isPermanent: Bool { kind == .dashboard || kind == .overview }
@@ -89,6 +109,9 @@ struct WorkspaceUtilityView: Equatable {
         case .editor: return ["workspace-view", "edit", target]
         case .pager: return ["workspace-view", "pager", target]
         case .terminal: return ["workspace-view", "session-shell", target]
+        case .keybindings: return ["workspace-view", "keybindings"]
+        case .iconPicker: return ["workspace-view", "icon-picker", target]
+        case .colorPicker: return ["workspace-view", "color-picker", target]
         }
     }
 
@@ -99,6 +122,8 @@ struct WorkspaceUtilityView: Equatable {
         case .shell, .terminal: return "❯"
         case .editor: return "✎"
         case .pager: return "≡"
+        case .keybindings: return "⌨"
+        case .iconPicker, .colorPicker: return "◉"
         }
     }
 
@@ -111,11 +136,24 @@ struct WorkspaceUtilityView: Equatable {
         case .editor: return "Editor · \(Self.abbreviated(target))"
         case .pager: return "Scrollback"
         case .terminal: return "Shell"
+        case .keybindings: return "What the function keys do"
+        case .iconPicker: return "Harness icon"
+        case .colorPicker: return "Session color"
         }
     }
 
     static let dashboard = WorkspaceUtilityView(kind: .dashboard, target: "", title: "Dashboard")
     static let overview = WorkspaceUtilityView(kind: .overview, target: "", title: "Overview")
+    static let keybindings = WorkspaceUtilityView(kind: .keybindings, target: "", title: "Keybindings")
+
+    /// The icon or color picker for a session; nil for any other kind.
+    static func picker(_ kind: Kind, runtimeSessionID: String) -> WorkspaceUtilityView? {
+        switch kind {
+        case .iconPicker: return WorkspaceUtilityView(kind: kind, target: runtimeSessionID, title: "Icon")
+        case .colorPicker: return WorkspaceUtilityView(kind: kind, target: runtimeSessionID, title: "Color")
+        default: return nil
+        }
+    }
 
     static func abbreviated(_ path: String, home: String = NSHomeDirectory()) -> String {
         if path == home { return "~" }
@@ -142,7 +180,7 @@ struct WorkspaceUtilityView: Equatable {
             guard isRuntimeSessionID(request.runtimeSessionID) else { return nil }
             return WorkspaceUtilityView(kind: .pager, target: request.runtimeSessionID,
                                         title: label.isEmpty ? "Scrollback" : label)
-        case .terminal:
+        case .terminal, .keybindings, .iconPicker, .colorPicker:
             // Only the operator opens one, from the workspace itself.
             return nil
         }

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/kittykeys"
 	"github.com/sglavoie/agentmux/internal/tmux"
 )
 
@@ -30,6 +31,7 @@ func TestViewerKeysMatchTheApp(t *testing.T) {
 		{"find", tmux.ViewerFind},
 		{"findNext", tmux.ViewerFindNext},
 		{"findPrevious", tmux.ViewerFindPrevious},
+		{"markers", tmux.ViewerMarkers},
 	}
 	keys := tmux.ViewerKeys()
 	if len(keys) != len(want) {
@@ -88,6 +90,57 @@ func TestViewerKeysMatchTheApp(t *testing.T) {
 		}
 		if !strings.Contains(tmux.Config, "bind-key -n User"+strconv.Itoa(i)+" ") {
 			t.Errorf("the tmux configuration binds nothing to User%d (%s)", i, w.swift)
+		}
+	}
+}
+
+// TestWorkspaceFunctionKeysMatchTheApp holds the reference F1 shows in the
+// app's workspace (kittykeys.Workspace, rendered by amx) to the function keys
+// the app's main menu really binds (macos/AgentMux/UI/WorkspaceMenu.swift).
+// The two are written in different languages and built apart, so a key added
+// to one side only would be advertised and dead, or live and undocumented.
+func TestWorkspaceFunctionKeysMatchTheApp(t *testing.T) {
+	const path = "macos/AgentMux/UI/WorkspaceMenu.swift"
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// (5, "Set Session Icon…", #selector(AppDelegate.pickSessionIcon(_:))),
+	entries := regexp.MustCompile(`(?m)^\s*\((\d+), "[^"]+", #selector\(`).FindAllStringSubmatch(string(data), -1)
+	if len(entries) == 0 {
+		t.Fatalf("%s no longer lists its function keys one tuple a line", path)
+	}
+	bound := map[string]bool{}
+	for _, entry := range entries {
+		key := "f" + entry[1]
+		if bound[key] {
+			t.Errorf("the app binds %s twice", key)
+		}
+		bound[key] = true
+	}
+
+	listed := map[string]bool{}
+	for _, action := range kittykeys.Workspace {
+		if action.ConfigLine() != "" {
+			t.Errorf("%s: a workspace key is the app's to run, yet it has the Kitty line %q", action.Key, action.ConfigLine())
+		}
+		if regexp.MustCompile(`^f\d+$`).MatchString(action.Key) {
+			listed[action.Key] = true
+			if !bound[action.Key] {
+				t.Errorf("the reference lists %s (%s), which the app does not bind", action.Key, action.Description)
+			}
+		}
+	}
+	for key := range bound {
+		if !listed[key] {
+			t.Errorf("the app binds %s, which the reference does not list", key)
+		}
+	}
+
+	// Every function key Kitty binds for its tabs works in the app too.
+	for _, action := range kittykeys.Actions {
+		if regexp.MustCompile(`^f\d+$`).MatchString(action.Key) && !bound[action.Key] {
+			t.Errorf("Kitty binds %s (%s) and the app does not", action.Key, action.Description)
 		}
 	}
 }

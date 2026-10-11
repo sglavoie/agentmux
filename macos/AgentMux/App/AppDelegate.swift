@@ -397,6 +397,95 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     @objc func newSessionTerminal(_ sender: Any?) { workspace?.openTerminalBesideSession() }
     @objc func closeWorkspaceView(_ sender: Any?) { workspace?.closeSelectedView() }
     @objc func toggleWorkspaceSidebar(_ sender: Any?) { workspace?.toggleSidebar() }
+    @objc func toggleRecentPlace(_ sender: Any?) {
+        if workspace?.toggleRecentPlace() != true { NSSound.beep() }
+    }
+
+    // MARK: Function keys
+
+    // F1 to F11 do in the workspace what Kitty binds them to for its tabs.
+    // The ones about a session act on the one the pane is on.
+
+    @objc func showKeybindings(_ sender: Any?) { showWorkspaceView(.keybindings) }
+    @objc func focusNextSession(_ sender: Any?) { workspace?.selectNeighbor(1, sessionsOnly: true) }
+    @objc func focusPreviousSession(_ sender: Any?) { workspace?.selectNeighbor(-1, sessionsOnly: true) }
+    @objc func pickSessionIcon(_ sender: Any?) { openPicker(.iconPicker) }
+    @objc func pickSessionColor(_ sender: Any?) { openPicker(.colorPicker) }
+    @objc func clearSessionState(_ sender: Any?) { sendOperatorEvent("user_clear") }
+    @objc func markSessionActive(_ sender: Any?) { sendOperatorEvent("user_active") }
+
+    static let noSessionShown = "No session is shown in the workspace."
+    static let pickerNeedsEmbedded = "The icon and color pickers open here for sessions the workspace embeds; a Kitty session has them in Kitty."
+
+    private func openPicker(_ kind: WorkspaceUtilityView.Kind) {
+        guard let workspace, workspace.shownSessionRow != nil else { return refuse(Self.noSessionShown) }
+        if !workspace.openPicker(kind) { refuse(Self.pickerNeedsEmbedded) }
+    }
+
+    /// What `amx hook-indicator` is given to name a session: its runtime
+    /// session, or its window in the Kitty that issued it.
+    nonisolated static func hookTarget(_ target: WorkspaceTarget) -> [String] {
+        switch target {
+        case let .embedded(id): return ["--runtime-session", id]
+        case let .kitty(_, windowID): return ["--window-id", String(windowID)]
+        }
+    }
+
+    /// F8 and F11: tells the daemon the operator cleared the shown session's
+    /// state, or marked it active, the way Kitty's own keys do.
+    private func sendOperatorEvent(_ event: String) {
+        guard let row = workspace?.shownSessionRow else { return refuse(Self.noSessionShown) }
+        guard let command else { return refuse(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.") }
+        var socket: String?
+        if case let .kitty(rowSocket, _) = row.target {
+            socket = rowSocket.isEmpty ? store.snapshot?.kitty.socket ?? "" : rowSocket
+            guard socket?.isEmpty == false else { return refuse(KittyEndpoint.listenOnMissing) }
+        }
+        let arguments = ["hook-indicator", event] + Self.hookTarget(row.target) + ["--strict"]
+        focusQueue.async { [weak self] in
+            let result = command.run(arguments, kittyListenOn: socket)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    switch result {
+                    case let .success(output) where output.status == 0:
+                        Self.logger.notice("\(event, privacy: .public) sent for \(row.project, privacy: .public)")
+                    case let .success(output):
+                        Self.logger.error("\(event, privacy: .public): amx exited \(output.status)")
+                        self.store.show(notice: "The daemon did not take the change; is it running?")
+                    case let .failure(error):
+                        self.store.show(notice: error.message)
+                    }
+                }
+            }
+        }
+    }
+
+    /// F10: toggles the mute of the shown session.
+    @objc func toggleSessionMute(_ sender: Any?) {
+        guard let row = workspace?.shownSessionRow else { return refuse(Self.noSessionShown) }
+        switch row.target {
+        case let .kitty(socket, windowID):
+            toggleMute(MenuSessionRow(title: row.project, windowID: windowID, kittySocket: socket, toolTip: "", muted: row.muted))
+        case let .embedded(id):
+            guard let command else { return refuse(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.") }
+            focusQueue.async { [weak self] in
+                let result = command.json(MuteToggleResult.self, MuteToggleResult.arguments(runtimeSessionID: id))
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        switch result {
+                        case let .success(value), let .partial(value, _):
+                            Self.logger.notice("mute-toggle \(id, privacy: .public): muted=\(value.muted)")
+                        case let .failure(error):
+                            Self.logger.error("mute-toggle \(id, privacy: .public): \(error.message, privacy: .public)")
+                            self?.store.show(notice: "Could not toggle mute: \(error.message)")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     @objc func focusSessionList(_ sender: Any?) {
         showWorkspace()
         workspace?.focusSidebar()

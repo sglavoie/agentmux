@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
@@ -62,6 +63,14 @@ type Viewed struct {
 	At time.Time
 }
 
+// Muted is one live session and whether its pane carries the operator's mute
+// (cc_mute). A session is listed only when the pass read its pane, so one
+// left out says nothing either way.
+type Muted struct {
+	ID    runtimesession.ID
+	Muted bool
+}
+
 // Report is what one pass changed, and who it found looking.
 type Report struct {
 	// Ended lists the sessions marked stale, with whether the agent was seen
@@ -75,6 +84,9 @@ type Report struct {
 	// Viewed lists the live sessions a terminal is attached to. It is an
 	// observation, not a change: Empty ignores it.
 	Viewed []Viewed
+	// Mutes says, for every live session the pass read, whether it is muted.
+	// Like Viewed it is an observation.
+	Mutes []Muted
 }
 
 // Empty reports whether the pass changed nothing.
@@ -146,6 +158,9 @@ func (r *Reconciler) reconcileServer(address string, records []runtimesession.Re
 			changes[record.ID] = change{observation: observation}
 			continue
 		}
+		if pane, ok := backend.FindPane(survey.Panes, recordPane(record)); ok {
+			report.Mutes = append(report.Mutes, Muted{ID: record.ID, Muted: pane.Vars[muteVar] != ""})
+		}
 		if at, ok := lastViewed(survey.ClientsOf(recordPane(record))); ok {
 			report.Viewed = append(report.Viewed, Viewed{ID: record.ID, At: at})
 		}
@@ -186,6 +201,10 @@ func (r *Reconciler) reconcileServer(address string, records []runtimesession.Re
 		return nil
 	})
 }
+
+// muteVar is the pane variable that mutes a session's notifications
+// (session.Mute writes it; this package cannot import that one).
+const muteVar = "cc_mute"
 
 // lastViewed is the latest moment any of a session's terminals attached or
 // was used.

@@ -108,6 +108,7 @@ set -s user-keys[3] "\e[5004~"
 set -s user-keys[4] "\e[5005~"
 set -s user-keys[5] "\e[5006~"
 set -s user-keys[6] "\e[5007~"
+set -s user-keys[7] "\e[5008~"
 bind-key -n User0 if-shell -F '#{pane_in_mode}' { send-keys -X page-up } { if-shell -F '#{alternate_on}' { send-keys PPage } { copy-mode -eu } }
 bind-key -n User1 if-shell -F '#{pane_in_mode}' { send-keys -X page-down } { if-shell -F '#{alternate_on}' { send-keys NPage } }
 bind-key -n User2 if-shell -F '#{||:#{pane_in_mode},#{!:#{alternate_on}}}' { copy-mode -e ; send-keys -X history-top }
@@ -115,6 +116,13 @@ bind-key -n User3 if-shell -F '#{pane_in_mode}' { send-keys -X cancel }
 bind-key -n User4 { copy-mode -e ; command-prompt -i -T search -p "find:" { send-keys -X search-backward-incremental -- "%%" } }
 bind-key -n User5 if-shell -F '#{pane_in_mode}' { send-keys -X search-again }
 bind-key -n User6 if-shell -F '#{pane_in_mode}' { send-keys -X search-reverse }
+# Marks what went wrong: every error, failure, warning, and deprecation in the
+# history is highlighted, from the last one up, and the same key again goes
+# back to the live screen. A pattern with no capital matches any case, and
+# the parentheses are what make tmux read it as a regular expression. A
+# full-screen program keeps its own transcript, so there the key is handed on
+# as the F3 the viewer pressed, which is that program's own search.
+bind-key -n User7 if-shell -F '#{pane_in_mode}' { send-keys -X cancel } { if-shell -F '#{alternate_on}' { send-keys F3 } { copy-mode -e ; send-keys -X search-backward -- "(error|failed|warning|deprecated)" } }
 bind-key -T copy-mode-vi Escape send-keys -X cancel
 
 # The mouse selects, scrolls, and reaches a program that asked for it. tmux's
@@ -152,6 +160,7 @@ const (
 	ViewerFind
 	ViewerFindNext
 	ViewerFindPrevious
+	ViewerMarkers
 	viewerKeyCount
 )
 

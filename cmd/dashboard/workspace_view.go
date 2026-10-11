@@ -15,15 +15,18 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/kittykeys"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
+	"github.com/sglavoie/agentmux/tui/customization"
 )
 
 // `amx workspace-view` is what the desktop workspace runs inside the terminals
 // it embeds beside the agents: its Dashboard, its Overview, and the utility
-// views — a shell, an editor, a pager — those two or the operator ask it for. The workspace
-// names a kind and a target and nothing else; what each kind runs is decided
+// views — a shell, an editor, a pager — those two or the operator ask it for,
+// and the keybinding reference and the icon and color pickers its function
+// keys open. The workspace names a kind and a target and nothing else; what each kind runs is decided
 // here, so the request that travels through the daemon never carries a
 // command line.
 //
@@ -58,6 +61,7 @@ var (
 	workspaceViewConfig   = cli.LoadRunnableConfig
 	workspaceViewRegistry = runtimesession.DefaultRegistryPath
 	workspaceViewPage     = pageScrollback
+	workspaceViewKeys     = func() error { return customization.RunKeybindingsReference(kittykeys.Workspace) }
 	workspaceViewEnviron  = os.Environ
 	workspaceViewUnsetenv = os.Unsetenv
 )
@@ -126,6 +130,31 @@ func init() {
 			Short: "A session's scrollback in a pager",
 			Args:  cobra.ExactArgs(1),
 			RunE:  func(_ *cobra.Command, args []string) error { return runWorkspacePager(args[0]) },
+		},
+		&cobra.Command{
+			Use:   "keybindings",
+			Short: "The workspace's keybinding reference",
+			Args:  cobra.NoArgs,
+			RunE: func(*cobra.Command, []string) error {
+				scrubUtilityEnvironment()
+				return workspaceViewKeys()
+			},
+		},
+		&cobra.Command{
+			Use:   "icon-picker RUNTIME_SESSION_ID",
+			Short: "The harness icon picker for a session",
+			Args:  cobra.ExactArgs(1),
+			RunE: func(_ *cobra.Command, args []string) error {
+				return runWorkspacePicker("icon-picker", args[0], loadIconPickerConfig, pickIcon)
+			},
+		},
+		&cobra.Command{
+			Use:   "color-picker RUNTIME_SESSION_ID",
+			Short: "The color picker for a session",
+			Args:  cobra.ExactArgs(1),
+			RunE: func(_ *cobra.Command, args []string) error {
+				return runWorkspacePicker("color-picker", args[0], loadPickerConfig, pickColor)
+			},
 		},
 	)
 }
@@ -231,6 +260,26 @@ func runWorkspacePager(raw string) error {
 		return fmt.Errorf("pager view: %w", err)
 	}
 	return workspaceViewPage(func() (string, error) { return server.Capture(pane.Ref, backend.ExtentAll) })
+}
+
+// runWorkspacePicker runs a picker on the session a runtime-session ID names.
+// The session is always named: with the identity variables gone there is no
+// "session this is typed in" to fall back to, and a picker never guesses.
+func runWorkspacePicker(name, raw string, load func() (*config.Config, error), pick func(pickerTarget, *config.Config) error) error {
+	scrubUtilityEnvironment()
+	id, err := runtimesession.ParseID(strings.TrimSpace(raw))
+	if err != nil {
+		return fmt.Errorf("%s view: %w", name, err)
+	}
+	cfg, err := load()
+	if err != nil {
+		return fmt.Errorf("load Agent Mux config: %w", err)
+	}
+	target, err := resolveNamedPickerTarget(name, string(id), "the workspace", cfg)
+	if err != nil {
+		return err
+	}
+	return pick(target, cfg)
 }
 
 // heldSessionPane finds the tmux pane of the session a runtime-session ID

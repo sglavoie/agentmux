@@ -138,3 +138,25 @@ func contains(list []string, s string) bool {
 	}
 	return false
 }
+
+// TestProject_ARuntimeSessionIsMutedByTheDaemonsReading: a tmux session has no
+// title or window to read a mute from, so the row carries the daemon's own
+// reading of its pane. A Kitty row keeps reading Kitty: the daemon's cache of
+// that window never mutes it here.
+func TestProject_ARuntimeSessionIsMutedByTheDaemonsReading(t *testing.T) {
+	in := mixedInput(protocol.CompanionSnapshotVersionRuntime)
+	if snap := Project(in); snap.Sessions[0].Muted || snap.Sessions[1].Muted {
+		t.Fatalf("muted with no mute anywhere: %+v", snap.Sessions)
+	}
+	for slot, state := range in.States {
+		state.Muted = true
+		in.States[slot] = state
+	}
+	snap := Project(in)
+	if !snap.Sessions[1].Muted || snap.Sessions[1].Runtime == nil || snap.Sessions[1].Runtime.SessionID != tmuxRS {
+		t.Fatalf("the tmux session is not muted: %+v", snap.Sessions[1])
+	}
+	if snap.Sessions[0].Muted {
+		t.Fatalf("the Kitty session took its mute from the daemon's cache instead of Kitty: %+v", snap.Sessions[0])
+	}
+}

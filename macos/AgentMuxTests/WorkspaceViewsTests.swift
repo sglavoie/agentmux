@@ -49,6 +49,21 @@ final class WorkspaceViewsModelTests: XCTestCase {
                      "a terminal beside a session is the operator's to open, not a request's")
     }
 
+    func testTheKeybindingReferenceAndThePickersAreTheOperatorsToOpen() {
+        XCTAssertEqual(WorkspaceUtilityView.keybindings.arguments, ["workspace-view", "keybindings"])
+        let icon = WorkspaceUtilityView.picker(.iconPicker, runtimeSessionID: F.runtimeID(2))
+        XCTAssertEqual(icon?.arguments, ["workspace-view", "icon-picker", F.runtimeID(2)])
+        XCTAssertEqual(icon?.aboutRuntimeSessionID, F.runtimeID(2))
+        let color = WorkspaceUtilityView.picker(.colorPicker, runtimeSessionID: F.runtimeID(2))
+        XCTAssertEqual(color?.arguments, ["workspace-view", "color-picker", F.runtimeID(2)])
+        XCTAssertNil(color?.besideRuntimeSessionID, "a picker is not listed under its session")
+        XCTAssertNil(WorkspaceUtilityView.picker(.shell, runtimeSessionID: F.runtimeID(2)))
+        for kind in ["keybindings", "icon-picker", "color-picker"] {
+            XCTAssertNil(WorkspaceUtilityView.from(WorkspaceViewRequest(kind: kind, runtimeSessionID: F.runtimeID(2))),
+                         "\(kind) is a key the operator presses, never a request")
+        }
+    }
+
     func testARequestThatNamesNoUsableTargetIsNotAView() {
         XCTAssertNil(WorkspaceUtilityView.from(WorkspaceViewRequest(kind: "session", runtimeSessionID: F.runtimeID(1))),
                      "a session is shown by its own native view, never as a utility")
@@ -277,6 +292,93 @@ final class WorkspaceViewsWindowTests: XCTestCase {
         XCTAssertEqual(app.madeViews.filter { $0 == pager }.count, 2)
         XCTAssertEqual(app.closedViews.filter { $0 == pager }.count, 1)
         XCTAssertEqual(app.made, [F.runtimeID(1)], "a pager reads the session's scrollback and attaches nothing")
+    }
+
+    func testAPickerOpensForTheShownSessionAndGoesBackWhenItEnds() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+
+        // Nothing to pick for: a view that is about no session, then a Kitty
+        // session, whose pickers are Kitty's.
+        workspace.showView("dashboard")
+        XCTAssertNil(workspace.shownSessionRow)
+        XCTAssertFalse(workspace.openPicker(.iconPicker))
+        workspace.select(AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4))
+        XCTAssertNotNil(workspace.shownSessionRow)
+        XCTAssertFalse(workspace.openPicker(.colorPicker))
+        XCTAssertEqual(app.madeViews, ["dashboard"])
+
+        workspace.select(.embedded(F.runtimeID(2)), focus: true)
+        XCTAssertTrue(workspace.openPicker(.colorPicker))
+        let picker = "color-picker:\(F.runtimeID(2))"
+        XCTAssertEqual(workspace.viewSelection, picker)
+        XCTAssertEqual(app.madeViews, ["dashboard", picker])
+        XCTAssertEqual(workspace.shownSessionRow?.embeddedRuntimeSessionID, F.runtimeID(2),
+                       "the session keys still act on the session a picker is about")
+        XCTAssertTrue(workspace.window.firstResponder === workspace.utilityTerminalView(for: picker))
+
+        // The pick is made and the picker exits: back on the session.
+        workspace.terminalEnded(try XCTUnwrap(workspace.utilityTerminalView(for: picker)))
+        XCTAssertNil(workspace.views.view(picker))
+        XCTAssertNil(workspace.viewSelection)
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(2)))
+
+        // From a terminal beside a session, the picker is that session's.
+        workspace.openTerminalBesideSession()
+        XCTAssertTrue(workspace.openPicker(.iconPicker))
+        XCTAssertEqual(workspace.viewSelection, "icon-picker:\(F.runtimeID(2))")
+        XCTAssertEqual(app.made, [F.runtimeID(2)], "a picker attaches to nothing")
+    }
+
+    func testCommandLGoesBetweenTheTwoPlacesLastShown() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        XCTAssertFalse(workspace.toggleRecentPlace(), "nowhere has been shown yet")
+
+        workspace.select(.embedded(F.runtimeID(1)), focus: true)
+        XCTAssertFalse(workspace.toggleRecentPlace(), "one place is not two")
+        workspace.showView("dashboard")
+        XCTAssertTrue(workspace.toggleRecentPlace())
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(1)))
+        XCTAssertNil(workspace.viewSelection)
+        XCTAssertTrue(workspace.window.firstResponder === workspace.terminalView(for: F.runtimeID(1)))
+        XCTAssertTrue(workspace.toggleRecentPlace())
+        XCTAssertEqual(workspace.viewSelection, "dashboard")
+
+        // The reference and the pickers are passed through: they are never
+        // one of the two places.
+        workspace.select(.embedded(F.runtimeID(2)), focus: true)
+        workspace.open(.keybindings)
+        workspace.closeSelectedView()
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(2)))
+        XCTAssertTrue(workspace.toggleRecentPlace())
+        XCTAssertEqual(workspace.viewSelection, "dashboard")
+
+        // A place that is gone is not somewhere to go back to.
+        workspace.open(WorkspaceViewRequest(kind: "shell", directory: "/work/api"))
+        workspace.select(.embedded(F.runtimeID(1)), focus: true)
+        workspace.closeView("shell:/work/api")
+        XCTAssertFalse(workspace.toggleRecentPlace())
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(1)))
+    }
+
+    func testF7AndF9StepFromSessionToSessionWithoutLeavingTheApp() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let rows = workspace.state.rows
+        workspace.select(rows[0].key, focus: true)
+        for expected in [1, 2, 0] {
+            workspace.selectNeighbor(1, sessionsOnly: true)
+            XCTAssertEqual(workspace.state.selection, rows[expected].key)
+            XCTAssertNil(workspace.viewSelection)
+        }
+        workspace.selectNeighbor(-1, sessionsOnly: true)
+        XCTAssertEqual(workspace.state.selection, rows[2].key, "before the first one is the last")
+        XCTAssertTrue(app.external.isEmpty, "a Kitty session is selected here, not raised in Kitty")
+
+        // The terminals under a session are passed over.
+        let embedded = try XCTUnwrap(rows.first { $0.embeddedRuntimeSessionID == F.runtimeID(1) })
+        workspace.select(embedded.key, focus: true)
+        workspace.openTerminalBesideSession()
+        workspace.selectNeighbor(-1, sessionsOnly: true)
+        XCTAssertEqual(workspace.state.selection, embedded.key, "up from a terminal is its own session")
     }
 
     func testTheCloseButtonClosesAnOpenedViewWhereverThePaneIs() throws {

@@ -91,6 +91,13 @@ which strips every session and Kitty variable before running anything. A
 utility view is never a session: it has no key, comes from no snapshot, and
 must never count toward attention.
 
+F1 to F11 do in the workspace what Kitty binds them to
+(`WorkspaceMenu.functionKeys`, the main menu's only keys with no modifier):
+the reference and the icon and color pickers are overlay views of their own
+kinds, and the keys about a session act on the one the pane is on, named to
+amx by runtime session. The reference F1 shows is `kittykeys.Workspace`;
+`TestWorkspaceFunctionKeysMatchTheApp` holds it to the menu.
+
 The workspace comes back where it was (`Model/WorkspaceRecovery.swift`): the
 app saves whether the window was open and which session or view its pane was
 on, and at launch `WorkspaceWindowController.restore(_:)` returns there once a

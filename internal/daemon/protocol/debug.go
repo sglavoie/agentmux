@@ -43,6 +43,10 @@ type WindowStateSnapshot struct {
 	// Absent for every seen window, which also preserves the former response
 	// shape for clients that do not group on it.
 	Unseen bool `json:"unseen,omitempty"`
+	// Muted is the daemon's cache of the session's mute: read from Kitty
+	// listings for a Kitty window and from the pane for a tmux session. Absent
+	// when not muted, which preserves the former response shape.
+	Muted bool `json:"muted,omitempty"`
 	// Reason names WHY a blocked window is blocked: the harness prompt kind a
 	// screen probe classified onto state.WindowState.PromptKind, projected here
 	// verbatim. It is a bare string rather than an enum for the same reason the

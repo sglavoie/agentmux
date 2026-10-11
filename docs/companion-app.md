@@ -229,9 +229,31 @@ Whatever has the keyboard decides where a key goes.
   its row does. A session embedded here is focused here either way. macOS
   takes ⌘⇧3, ⌘⇧4, and ⌘⇧5 for screenshots before any app sees them, unless
   those are turned off in System Settings › Keyboard › Keyboard Shortcuts.
+- **⌘L** goes back to the session or view shown before this one, and again
+  returns: the two most recently shown.
 - Every shortcut of the menu bar holds ⌘, so none is taken from a program,
-  with two exceptions: Shift+Page Up and Shift+Page Down. The global
-  shortcuts work whatever has the keyboard.
+  with two exceptions: Shift+Page Up and Shift+Page Down, and the function
+  keys below. The global shortcuts work whatever has the keyboard.
+
+**Function keys.** F1 to F11 do here what they do in Kitty, on the
+workspace's sessions instead of tabs (**Session › Function Keys**). The ones
+about a session act on the one shown, or on the one a terminal beside it, a
+pager, or a picker is about. F12 stays the key that detaches.
+
+| Key | What it does |
+| --- | --- |
+| F1 | Shows this list in the pane; `q` or Escape goes back |
+| F2 | The Overview |
+| F3 | Marks errors, failures, warnings, and deprecations in a session's history; again to return (see History) |
+| F4 | The next session needing attention |
+| F5 / F6 | Picks the session's harness icon, or its color; the pane goes back when the pick is made |
+| F7 / F9 | The previous or next session, passing over terminals and staying in the app |
+| F8 | Clears the session's state icon |
+| F10 | Mutes or unmutes the session's notifications |
+| F11 | Marks the session active (⚡) until its next real event |
+
+F5 and F6 are for sessions embedded here; a session that lives in Kitty has
+its pickers in Kitty. F8, F10, and F11 work for both.
 
 **History** belongs to the session, not to the window showing it, so it is
 all still there after the window was closed, the app was quit, or another
@@ -244,6 +266,7 @@ terminal attached. Nothing here needs a tmux key or prefix.
 | View › Scroll to Bottom | ⌘End | Back to the live screen |
 | Edit › Find… | ⌘F | Asks for text at the bottom of the terminal and jumps to the nearest match above |
 | Edit › Find Next / Find Previous | ⌘G / ⇧⌘G | The match before, or back toward the newest |
+| Session › Function Keys › Toggle Error and Warning Markers | F3 | Highlights every `error`, `failed`, `warning`, and `deprecated`, in any case, from the last one up; ⌘G steps to the one before, and F3 again returns to the live screen |
 
 Escape, `q`, or scrolling back down to the bottom also returns to the live
 screen. The wheel scrolls the same history.
@@ -252,10 +275,11 @@ An agent that draws its own full screen, as Claude Code, Codex, and Copilot
 do, keeps its transcript itself. There, paging and the wheel are handed to
 the agent, which scrolls its own transcript, and **Find** covers only what is
 on screen: use the agent's own search for the rest (in Claude Code, Control+O
-and then `/`; in Codex, F3).
+and then `/`; in Codex, F3). F3 is handed to such an agent as its own key
+rather than marking anything.
 
-In a utility view the paging items scroll that terminal's own buffer, and
-Find is not offered.
+In a utility view the paging items scroll that terminal's own buffer, Find is
+not offered, and F3 is the program's.
 
 **Selecting and copying.** Hold Shift and drag to select text in any
 terminal, then **Edit › Copy** (⌘C). In a session whose program does not use

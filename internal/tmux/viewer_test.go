@@ -146,6 +146,30 @@ func TestViewerKeysReachHistoryHeldByTheServer(t *testing.T) {
 	t.Logf("observed: page up/down, find, find next/previous, top and bottom moved through %s lines of tmux history; a replacement viewer found line 1", size)
 }
 
+// TestViewerMarkersFindWhatWentWrong: the marker key opens history on the
+// last line that reports an error, failure, warning, or deprecation, in any
+// case, and the same key again returns to the live screen.
+func TestViewerMarkersFindWhatWentWrong(t *testing.T) {
+	f := newFixture(t, Options{})
+	l := f.launch(t, "markers", []string{"/bin/sh", "-c",
+		`printf 'all good\nbuild FAILED here\nfine\nDEPRECATED: old flag\nstill fine\n'; exec cat`}, nil)
+	v := attachViewer(t, f, l.Pane)
+	v.wait("the output to be printed", func() bool {
+		return strings.Contains(f.tmux(t, "capture-pane", "-p", "-t", l.Pane.ID), "still fine")
+	})
+
+	v.ask(ViewerMarkers)
+	v.wait("the marker key to land on the last marked line", func() bool {
+		return v.inHistory() && strings.Contains(v.format("#{copy_cursor_line}"), "DEPRECATED")
+	})
+	v.ask(ViewerFindNext)
+	v.wait("find next to step to the marked line before", func() bool {
+		return strings.Contains(v.format("#{copy_cursor_line}"), "FAILED")
+	})
+	v.ask(ViewerMarkers)
+	v.wait("the marker key again to leave history", func() bool { return !v.inHistory() })
+}
+
 // TestViewerPagingReachesAFullScreenProgram: a program on the alternate
 // screen keeps its own history, so paging is its Page Up and Page Down rather
 // than a copy mode with nothing above the screen.
@@ -166,6 +190,17 @@ func TestViewerPagingReachesAFullScreenProgram(t *testing.T) {
 	})
 	if v.inHistory() {
 		t.Fatal("paging a full-screen program entered copy mode")
+	}
+
+	// The marker key is F3 in the app, and a full-screen program's F3 is its
+	// own (Codex searches its transcript with it).
+	v.ask(ViewerMarkers)
+	v.wait("the program to receive F3", func() bool {
+		data, _ := os.ReadFile(out)
+		return strings.HasSuffix(string(data), "\x1bOR") || strings.HasSuffix(string(data), "\x1b[13~")
+	})
+	if v.inHistory() {
+		t.Fatal("the marker key entered copy mode over a full-screen program")
 	}
 }
 

@@ -374,13 +374,19 @@ count.
 
 ### Mute lag
 
-The mute lives in Kitty: `amx mute-toggle` writes the window's `cc_mute` user
-var (and mirrors a glyph into the tab title), and the daemon's mute cache is
-recomputed from every Kitty listing. The maintenance loop lists Kitty every
+The mute lives in the terminal: `amx mute-toggle` writes the window's `cc_mute`
+user var (and mirrors a glyph into the tab title), and the daemon's mute cache
+is recomputed from every Kitty listing. The maintenance loop lists Kitty every
 render cadence (2s), and a hook reads the same cached listing, so a mute made
 from the CLI or the companion app reaches the notifier's mute gate and the
 companion snapshot within about 2s. A notification raised inside that window
 is not yet suppressed.
+
+A tmux session is muted the same way, by `amx mute-toggle --runtime-session`
+or the dashboard: the variable is on its pane, and the daemon reads it in the
+runtime reconciliation pass (`observeRuntimeMutes`), which is that session's
+only source of a mute. Its own hooks carry no Kitty snapshot and leave the
+cache alone. The lag is that pass's interval.
 
 A `mute_set` request that updates the cache under `stateMu` was evaluated and
 not added. The lag is bounded by a cadence the daemon already runs, and is

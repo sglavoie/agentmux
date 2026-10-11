@@ -17,7 +17,7 @@ extension Ghostty {
     /// order of the private tmux server's user keys (`internal/tmux`,
     /// `ViewerKey`), which `TestViewerKeysMatchTheApp` holds this file to.
     enum HistoryRequest: Int, CaseIterable {
-        case pageUp, pageDown, top, bottom, find, findNext, findPrevious
+        case pageUp, pageDown, top, bottom, find, findNext, findPrevious, markers
 
         /// What follows CSI in the escape sequence the server binds for this
         /// request. No keyboard produces it.
@@ -37,7 +37,7 @@ extension Ghostty {
                 case .bottom: return "scroll_to_bottom"
                 // Ghostty's search needs a field of the host's own, which
                 // the utility views do not have.
-                case .find, .findNext, .findPrevious: return nil
+                case .find, .findNext, .findPrevious, .markers: return nil
                 }
             }
         }
@@ -67,4 +67,9 @@ extension Ghostty.SurfaceView {
     @IBAction func findNext(_ sender: Any?) { perform(.findNext) }
 
     @IBAction func findPrevious(_ sender: Any?) { perform(.findPrevious) }
+
+    /// F3: highlights the errors, failures, warnings, and deprecations in a
+    /// session's history, or goes back to the live screen. A full-screen
+    /// agent gets its own F3 from the server instead.
+    @IBAction func toggleMarkers(_ sender: Any?) { perform(.markers) }
 }

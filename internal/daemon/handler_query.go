@@ -74,6 +74,7 @@ func (h *Handler) copyStateLocked(now int64) (map[int]protocol.WindowStateSnapsh
 			// daemon's publish path and focus observation are its only writers,
 			// so a query that derived it again would be a second opinion.
 			Unseen: st.Unseen,
+			Muted:  st.Muted,
 			// Same rule for the blocked reason, and the same reason for it.
 			// stampPromptKindLocked already clears the kind on every publish
 			// whose icon is outside the blocking class, so re-checking the icon

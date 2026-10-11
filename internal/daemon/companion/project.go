@@ -382,6 +382,9 @@ func runtimeSessions(in Input, runs map[int]string, base int) []candidate {
 			Runtime:  companionRuntime(in.Runtime[slot]),
 		}
 		applyState(&s, in.States[slot])
+		// A Kitty row reads its mute from its title and window; a session
+		// with no window has only the daemon's reading of its pane.
+		s.Muted = in.States[slot].Muted
 		if s.Conversation != nil {
 			s.Harness = display(s.Conversation.Harness)
 		}

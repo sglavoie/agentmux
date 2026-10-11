@@ -394,3 +394,46 @@ func TestReconcileReportsWhoIsViewedWithoutCountingItAsAChange(t *testing.T) {
 		t.Fatalf("viewed at %v; want the moment the terminal attached (after %v)", at, before)
 	}
 }
+
+// A pass says which live sessions are muted: the pane variable the operator's
+// mute writes, read with everything else. It is an observation, like who is
+// viewing, so a pass that found only a mute is still an empty one.
+func TestReconcileReportsWhichSessionsAreMuted(t *testing.T) {
+	f := tmuxtest.New(t)
+	start := time.Now().Add(-time.Minute)
+	quiet := launchAgent(t, f)
+	muted := register(t, f, quiet, start)
+	loud := register(t, f, launchAgent(t, f), start)
+	reconciler := tmux.NewReconciler(f.Registry, nil)
+
+	read := func() map[runtimesession.ID]bool {
+		t.Helper()
+		report, err := reconciler.Reconcile(time.Now())
+		if err != nil || !report.Empty() {
+			t.Fatalf("pass = %+v, %v; want no change", report, err)
+		}
+		mutes := map[runtimesession.ID]bool{}
+		for _, m := range report.Mutes {
+			mutes[m.ID] = m.Muted
+		}
+		if len(mutes) != 2 {
+			t.Fatalf("mutes = %+v; want both live sessions read", report.Mutes)
+		}
+		return mutes
+	}
+	if got := read(); got[muted.ID] || got[loud.ID] {
+		t.Fatalf("mutes before any mute = %v", got)
+	}
+	if err := f.Backend.SetMetadata(quiet.Pane, map[string]string{"cc_mute": "1"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); !got[muted.ID] || got[loud.ID] {
+		t.Fatalf("mutes after muting one = %v; want only it", got)
+	}
+	if err := f.Backend.SetMetadata(quiet.Pane, map[string]string{"cc_mute": ""}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); got[muted.ID] {
+		t.Fatalf("mutes after unmuting = %v", got)
+	}
+}

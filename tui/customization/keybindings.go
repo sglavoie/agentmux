@@ -14,6 +14,15 @@ type keybindingsModel struct {
 	width  int
 	height int
 	offset int
+	// actions is what the reference lists; nil is Kitty's own bindings.
+	actions []kittykeys.Action
+}
+
+func (m keybindingsModel) listed() []kittykeys.Action {
+	if m.actions != nil {
+		return m.actions
+	}
+	return kittykeys.Actions
 }
 
 func (m keybindingsModel) Init() tea.Cmd { return nil }
@@ -93,7 +102,7 @@ func (m keybindingsModel) bodyRows() []string {
 	// Group actions by section, preserving declaration order.
 	seen := make(map[string]bool)
 	var sections []string
-	for _, a := range kittykeys.Actions {
+	for _, a := range m.listed() {
 		if !seen[a.Section] {
 			seen[a.Section] = true
 			sections = append(sections, a.Section)
@@ -105,7 +114,7 @@ func (m keybindingsModel) bodyRows() []string {
 			logical = append(logical, "")
 		}
 		logical = append(logical, styleHeader.Render("  "+sec))
-		for _, a := range kittykeys.Actions {
+		for _, a := range m.listed() {
 			if a.Section != sec {
 				continue
 			}
@@ -174,8 +183,12 @@ func (m keybindingsModel) View() tea.View {
 
 // RunKeybindingsOverlay renders the keybinding reference and blocks until the
 // user dismisses it. Designed to run inside a Kitty overlay window.
-func RunKeybindingsOverlay() error {
-	p := tea.NewProgram(keybindingsModel{}, tea.WithoutSignalHandler())
+func RunKeybindingsOverlay() error { return RunKeybindingsReference(nil) }
+
+// RunKeybindingsReference renders a reference of actions, or of Kitty's own
+// bindings when actions is nil, and blocks until the user dismisses it.
+func RunKeybindingsReference(actions []kittykeys.Action) error {
+	p := tea.NewProgram(keybindingsModel{actions: actions}, tea.WithoutSignalHandler())
 	_, err := p.Run()
 	return err
 }

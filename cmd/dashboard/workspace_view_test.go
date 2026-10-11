@@ -289,3 +289,52 @@ func TestWorkspacePagerReadsOnlyTheNamedLiveSession(t *testing.T) {
 		t.Fatalf("the pager changed the session's record: %+v, %v", record, err)
 	}
 }
+
+// The workspace's F5 and F6 open a picker on the session it names, even when
+// several are running and the app inherited another session's identity: a
+// picker hosted there never falls back to "the session this is typed in".
+func TestWorkspacePickersEditOnlyTheNamedSession(t *testing.T) {
+	w := newPortableWorld(t, "api", "web")
+	borrowedIdentity(t)
+
+	if err := runWorkspaceView(t, "color-picker", string(w.ids["web"])); err != nil || len(w.colors) != 1 {
+		t.Fatalf("color picker: err=%v opened=%d", err, len(w.colors))
+	}
+	requireNoBorrowedIdentity(t, os.Environ())
+	if err := w.colors[0].Apply("red"); err != nil {
+		t.Fatal(err)
+	}
+	if got := w.sessions(); got["web"].Color != "red" || got["api"].Color != "" {
+		t.Fatalf("colors after picking red for web: web=%q api=%q", got["web"].Color, got["api"].Color)
+	}
+
+	if err := runWorkspaceView(t, "icon-picker", string(w.ids["api"])); err != nil || len(w.icons) != 1 {
+		t.Fatalf("icon picker: err=%v opened=%d", err, len(w.icons))
+	}
+
+	unknown, err := runtimesession.NewID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, id := range map[string]string{"an unknown session": string(unknown), "a malformed id": "%0"} {
+		if err := runWorkspaceView(t, "icon-picker", id); err == nil || len(w.icons) != 1 {
+			t.Errorf("icon picker opened for %s: err=%v opened=%d", name, err, len(w.icons))
+		}
+	}
+}
+
+// F1 in the workspace shows the workspace's own keys, not Kitty's.
+func TestWorkspaceKeybindingsViewListsTheWorkspaceKeys(t *testing.T) {
+	previous := workspaceViewKeys
+	t.Cleanup(func() { workspaceViewKeys = previous })
+	borrowedIdentity(t)
+	shown := 0
+	workspaceViewKeys = func() error {
+		shown++
+		requireNoBorrowedIdentity(t, os.Environ())
+		return nil
+	}
+	if err := runWorkspaceView(t, "keybindings"); err != nil || shown != 1 {
+		t.Fatalf("keybindings view: err=%v shown=%d", err, shown)
+	}
+}

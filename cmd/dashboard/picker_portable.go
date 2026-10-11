@@ -50,8 +50,12 @@ func portablePickerRequested(cmd *cobra.Command) bool {
 // them; it never guesses.
 func resolvePickerTarget(cmd *cobra.Command, cfg *config.Config) (pickerTarget, error) {
 	named, _ := cmd.Flags().GetString(pickerRuntimeSessionFlag)
-	named = strings.TrimSpace(named)
-	source := "--" + pickerRuntimeSessionFlag
+	return resolveNamedPickerTarget(cmd.Name(), strings.TrimSpace(named), "--"+pickerRuntimeSessionFlag, cfg)
+}
+
+// resolveNamedPickerTarget is resolvePickerTarget for the picker called
+// command, with the session named by source when named is not empty.
+func resolveNamedPickerTarget(command, named, source string, cfg *config.Config) (pickerTarget, error) {
 	if named == "" {
 		named, source = strings.TrimSpace(os.Getenv(runtimesession.EnvVar)), "$"+runtimesession.EnvVar
 	}
@@ -65,7 +69,7 @@ func resolvePickerTarget(cmd *cobra.Command, cfg *config.Config) (pickerTarget, 
 	}
 	terminal, err := openTmux()
 	if err != nil {
-		return pickerTarget{}, fmt.Errorf("%s edits a tmux session outside Kitty, and tmux is unavailable: %w", cmd.Name(), err)
+		return pickerTarget{}, fmt.Errorf("%s edits a tmux session outside Kitty, and tmux is unavailable: %w", command, err)
 	}
 	panes, err := terminal.Discover()
 	if err != nil {
@@ -121,6 +125,11 @@ func runPortableColorPicker(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
+	return pickColor(target, cfg)
+}
+
+// pickColor runs the color picker on a tmux session.
+func pickColor(target pickerTarget, cfg *config.Config) error {
 	defaultColor := "gray"
 	for _, profile := range cfg.Accounts {
 		if strings.EqualFold(profile.Name, target.running.EffectiveProfile()) && profile.Color != "" {
@@ -147,6 +156,11 @@ func runPortableIconPicker(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
+	return pickIcon(target, cfg)
+}
+
+// pickIcon runs the harness icon picker on a tmux session.
+func pickIcon(target pickerTarget, cfg *config.Config) error {
 	return runIconPickerOverlay(customization.IconContext{
 		CurrentTitle:  target.pane.GroupTitle,
 		HarnessEmojis: cfg.HarnessEmojis,

@@ -5,9 +5,10 @@ import AppKit
 /// encode the key for their program, so what is listed here is what the
 /// workspace keeps for itself; everything else reaches the agent.
 ///
-/// Every shortcut here holds ⌘, except Shift+Page Up and Shift+Page Down:
-/// keys with Control, Option, or no modifier at all are the focused
-/// program's. Where the keyboard goes then depends on what has it: a
+/// Every shortcut here holds ⌘, except Shift+Page Up and Shift+Page Down and
+/// the function keys F1 to F11, which do here what they do in Kitty
+/// (`functionKeys`): any other key with Control, Option, or no modifier at all
+/// is the focused program's. Where the keyboard goes then depends on what has it: a
 /// session's terminal gives it to the agent, the Dashboard's to the TUI, and
 /// the session list keeps the arrow keys and Return for itself.
 ///
@@ -15,8 +16,29 @@ import AppKit
 /// Dashboard and the Overview have ⌘D and ⌘O. Going to a session with ⌘ alone stays
 /// in the workspace; with Shift, a session that lives in Kitty comes forward
 /// there. ⌘] and ⌘[ stop at every session and every terminal under one; with
-/// Shift they go from session to session.
+/// Shift they go from session to session. ⌘L goes back to where the pane was
+/// before, and again returns.
 enum WorkspaceMenu {
+    /// What each function key does, in the order the menu lists them: the
+    /// keys Kitty binds for its tabs, acting on the workspace's sessions.
+    /// F1 shows the same list (`kittykeys.Workspace`), and
+    /// `TestWorkspaceFunctionKeysMatchTheApp` holds the two together. F3 has
+    /// no target: it goes to the terminal that has the keyboard.
+    @MainActor
+    static let functionKeys: [(number: Int, title: String, action: Selector)] = [
+        (1, "Keybinding Reference", #selector(AppDelegate.showKeybindings(_:))),
+        (2, "Overview", #selector(AppDelegate.openOverviewFromMenu(_:))),
+        (3, "Toggle Error and Warning Markers", #selector(Ghostty.SurfaceView.toggleMarkers(_:))),
+        (4, "Next Needing Attention", #selector(AppDelegate.nextAttention(_:))),
+        (5, "Set Session Icon…", #selector(AppDelegate.pickSessionIcon(_:))),
+        (6, "Set Session Color…", #selector(AppDelegate.pickSessionColor(_:))),
+        (7, "Previous Session", #selector(AppDelegate.focusPreviousSession(_:))),
+        (8, "Clear Session State", #selector(AppDelegate.clearSessionState(_:))),
+        (9, "Next Session", #selector(AppDelegate.focusNextSession(_:))),
+        (10, "Toggle Session Mute", #selector(AppDelegate.toggleSessionMute(_:))),
+        (11, "Mark Session Active", #selector(AppDelegate.markSessionActive(_:))),
+    ]
+
     /// The keys of the first sessions in the sidebar, in its order: ⌘1 is the
     /// first one listed and ⌘0 the tenth.
     static let sessionKeys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
@@ -74,6 +96,14 @@ enum WorkspaceMenu {
         session.addItem(.separator())
         session.addItem(item("Select Next Session", #selector(AppDelegate.selectNextSession(_:)), "]", target: target))
         session.addItem(item("Select Previous Session", #selector(AppDelegate.selectPreviousSession(_:)), "[", target: target))
+        session.addItem(item("Back to Last Shown", #selector(AppDelegate.toggleRecentPlace(_:)), "l", target: target))
+        session.addItem(.separator())
+        let keys = submenu("Function Keys", in: session)
+        for entry in functionKeys {
+            let own = entry.action != #selector(Ghostty.SurfaceView.toggleMarkers(_:))
+            keys.addItem(item(entry.title, entry.action, key(NSF1FunctionKey + entry.number - 1), mask: [],
+                              target: own ? target : nil))
+        }
         session.addItem(.separator())
         for (index, key) in sessionKeys.enumerated() {
             let place = item("Session \(index + 1)", #selector(AppDelegate.goToSession(_:)), key, target: target)

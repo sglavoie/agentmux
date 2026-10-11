@@ -251,7 +251,11 @@ func (h *Handler) handleHookEvent(req protocol.Request) protocol.Response {
 
 	// The source pane is the state target on this path, so record its snapshot
 	// mute now (notification suppression consults it inside handleStateUpdate).
-	h.setMutedFromSnapshot(ctx.req.WindowID, ctx.muted)
+	// A session with no Kitty window has no snapshot to read it from: its mute
+	// is the one observeRuntimeMutes last read from its pane.
+	if !isRuntimeSyntheticSlot(ctx.req.WindowID) {
+		h.setMutedFromSnapshot(ctx.req.WindowID, ctx.muted)
+	}
 
 	resetFlowDetected := (hookevent.PayloadHasResetFlow(ctx.req.Harness, eventOrAction, payload) ||
 		(ctx.req.PayloadEncoding == "json_compact" && ctx.req.ResetFlow)) && !lateCopilotStart

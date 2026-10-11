@@ -83,6 +83,7 @@ func (h *Handler) reconcileRuntimeSessions(now time.Time) {
 		slog.Debug("maintenance: runtime session reconciliation incomplete", "err", err)
 	}
 	h.observeRuntimeViewers(report.Viewed, finished)
+	h.observeRuntimeMutes(report.Mutes)
 	if !report.Empty() {
 		// The directory answers a known session from the version it loaded;
 		// what was just recorded has to be the version the restore and the
@@ -101,6 +102,32 @@ func (h *Handler) reconcileRuntimeSessions(now time.Time) {
 	}
 	for _, client := range report.Detached {
 		slog.Info("maintenance: detached a terminal competing with a session's owner", "client", client.Name, "session", client.Group.ID)
+	}
+}
+
+// observeRuntimeMutes is the mute observation of a session with no Kitty
+// window. A Kitty pane's mute is read from every Kitty listing
+// (setMutedFromSnapshot); a tmux session's is the same variable on its pane,
+// which the reconciliation pass has just read. It is the cache notification
+// suppression consults and the companion snapshot publishes, and like the
+// Kitty one it is never durable: the next pass reads it again.
+func (h *Handler) observeRuntimeMutes(mutes []tmux.Muted) {
+	if len(mutes) == 0 {
+		return
+	}
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	for _, observed := range mutes {
+		slot, ok := h.runtimeRoutes.byRuntime[string(observed.ID)]
+		if !ok || !isRuntimeSyntheticSlot(slot) {
+			continue
+		}
+		st, ok := h.windowStateLocked(slot)
+		if !ok || st.Muted == observed.Muted {
+			continue
+		}
+		st.Muted = observed.Muted
+		h.companionDirty()
 	}
 }
 

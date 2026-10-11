@@ -226,3 +226,20 @@ func TestKeybindingsFooterShowsNavigationAndCloseHints(t *testing.T) {
 		t.Fatalf("keybinding footer retains obsolete any-key hint:\n%s", view)
 	}
 }
+
+// The app's workspace shows the same reference with its own keys: what it
+// binds, in its own words, and none of Kitty's tab shortcuts.
+func TestKeybindingsReferenceListsTheWorkspaceKeys(t *testing.T) {
+	view := (keybindingsModel{actions: kittykeys.Workspace}).View().Content
+	flattened := strings.ReplaceAll(stripAnsi(view), "\n", "")
+	for _, action := range kittykeys.Workspace {
+		if !strings.Contains(flattened, action.Key) || !strings.Contains(flattened, action.Description) {
+			t.Errorf("workspace reference missing %s (%s):\n%s", action.Key, action.Description, view)
+		}
+	}
+	for _, kittyOnly := range []string{"ctrl+shift+d", "switch to tab", "overlay picker"} {
+		if strings.Contains(flattened, kittyOnly) {
+			t.Errorf("workspace reference still says %q", kittyOnly)
+		}
+	}
+}

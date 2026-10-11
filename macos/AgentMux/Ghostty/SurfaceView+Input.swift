@@ -433,6 +433,9 @@ extension Ghostty.SurfaceView: NSMenuItemValidation {
             return ghostty_surface_has_selection(surface)
         case #selector(find(_:)), #selector(findNext(_:)), #selector(findPrevious(_:)):
             return surface != nil && Ghostty.HistoryRequest.find.bindingAction(for: scrollback) != nil
+        case #selector(toggleMarkers(_:)):
+            // Disabled, F3 is the program's own key in a utility view.
+            return surface != nil && Ghostty.HistoryRequest.markers.bindingAction(for: scrollback) != nil
         default:
             return true
         }

@@ -176,6 +176,7 @@ final class GhosttyInteractionTests: XCTestCase {
             (#selector(Ghostty.SurfaceView.find(_:)), .find),
             (#selector(Ghostty.SurfaceView.findNext(_:)), .findNext),
             (#selector(Ghostty.SurfaceView.findPrevious(_:)), .findPrevious),
+            (#selector(Ghostty.SurfaceView.toggleMarkers(_:)), .markers),
         ] {
             let item = NSMenuItem(title: "", action: action, keyEquivalent: "")
             XCTAssertTrue(view.responds(to: action))
@@ -184,7 +185,42 @@ final class GhosttyInteractionTests: XCTestCase {
             sent += "\u{1b}[\(request.serverKey)"
             expect(sent, "\(request)")
         }
-        XCTAssertEqual(sent, "\u{1b}[5001~\u{1b}[5002~\u{1b}[5003~\u{1b}[5004~\u{1b}[5005~\u{1b}[5006~\u{1b}[5007~")
+        XCTAssertEqual(sent, "\u{1b}[5001~\u{1b}[5002~\u{1b}[5003~\u{1b}[5004~\u{1b}[5005~\u{1b}[5006~\u{1b}[5007~\u{1b}[5008~")
+    }
+
+    /// A function key the menu binds is not the surface's: it declines the
+    /// key so AppKit offers it to the main menu, and the program hears
+    /// nothing of it. F3 is the one that comes back to the terminal, as the
+    /// server's marker key on a session view; in a utility view it is the
+    /// program's own F3.
+    @MainActor
+    func testTheFunctionKeysGoToTheMenuNotTheProgram() throws {
+        let savedMenu = NSApp.mainMenu
+        let savedWindowsMenu = NSApp.windowsMenu
+        NSApp.mainMenu = WorkspaceMenu.make(target: try XCTUnwrap(NSApp.delegate as? AppDelegate))
+        defer {
+            NSApp.mainMenu = savedMenu
+            NSApp.windowsMenu = savedWindowsMenu
+        }
+        let menu = try XCTUnwrap(NSApp.mainMenu)
+        let codes: [UInt16] = [122, 120, 99, 118, 96, 97, 98, 100, 101, 109, 103]
+        for (index, code) in codes.enumerated() {
+            let event = TestKey.function(NSF1FunctionKey + index, keyCode: code).event()
+            XCTAssertFalse(view.performKeyEquivalent(with: event), "F\(index + 1) is left for the menu")
+            XCTAssertNotNil(Ghostty.MenuShortcut.item(in: menu, matching: event), "the menu owns F\(index + 1)")
+        }
+
+        // An offscreen test window is not NSApp's key window, so direct the
+        // marker item to the terminal it is exercising.
+        let markers = try XCTUnwrap(Ghostty.MenuShortcut.item(in: menu, matching: TestKey.function(NSF3FunctionKey, keyCode: 99).event()))
+        markers.target = view
+        XCTAssertFalse(view.validateMenuItem(markers), "a utility view has no server to ask")
+        press(TestKey.function(NSF3FunctionKey, keyCode: 99))
+        expect("\u{1b}OR", "in a utility view F3 is the program's")
+
+        view.scrollback = .server
+        XCTAssertTrue(menu.performKeyEquivalent(with: TestKey.function(NSF3FunctionKey, keyCode: 99).event()))
+        expect("\u{1b}OR\u{1b}[5008~", "on a session view F3 asks the server for its markers")
     }
 
     func testAUtilityViewScrollsItsOwnBufferAndSendsItsProgramNothing() {
@@ -193,7 +229,7 @@ final class GhosttyInteractionTests: XCTestCase {
             XCTAssertTrue(view.perform(request), "\(request) scrolls Ghostty's buffer")
         }
         for action in [#selector(Ghostty.SurfaceView.find(_:)), #selector(Ghostty.SurfaceView.findNext(_:)),
-                       #selector(Ghostty.SurfaceView.findPrevious(_:))] {
+                       #selector(Ghostty.SurfaceView.findPrevious(_:)), #selector(Ghostty.SurfaceView.toggleMarkers(_:))] {
             XCTAssertFalse(view.validateMenuItem(NSMenuItem(title: "", action: action, keyEquivalent: "")))
         }
         XCTAssertFalse(view.perform(.find))
@@ -243,8 +279,11 @@ final class GhosttyInteractionTests: XCTestCase {
 
     func testHistoryRequestsNameTheServersUserKeys() {
         XCTAssertEqual(Ghostty.HistoryRequest.allCases.map(\.serverKey),
-                       ["5001~", "5002~", "5003~", "5004~", "5005~", "5006~", "5007~"])
+                       ["5001~", "5002~", "5003~", "5004~", "5005~", "5006~", "5007~", "5008~"])
         XCTAssertEqual(Ghostty.HistoryRequest.find.bindingAction(for: .server), "csi:5005~")
+        XCTAssertEqual(Ghostty.HistoryRequest.markers.bindingAction(for: .server), "csi:5008~")
+        XCTAssertNil(Ghostty.HistoryRequest.markers.bindingAction(for: .terminal),
+                     "the markers are searched for in the server's history; a utility view has none")
         XCTAssertEqual(Ghostty.HistoryRequest.pageUp.bindingAction(for: .terminal), "scroll_page_up")
         XCTAssertNil(Ghostty.HistoryRequest.findNext.bindingAction(for: .terminal))
     }
@@ -349,8 +388,9 @@ final class GhosttyInteractionTests: XCTestCase {
 }
 
 /// Who owns a shortcut: the workspace's main menu, or the program in the
-/// focused terminal. Every menu shortcut holds ⌘ (or is Shift+Page Up/Down),
-/// so nothing an agent or the Dashboard binds is taken from it.
+/// focused terminal. Every menu shortcut holds ⌘, is Shift+Page Up/Down, or
+/// is one of the function keys Kitty binds too (F1 to F11), so nothing else
+/// an agent or the Dashboard binds is taken from it.
 @MainActor
 final class WorkspaceShortcutTests: XCTestCase {
     private var menu: NSMenu!
@@ -393,6 +433,18 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("\r", keyCode: 36), "New Terminal Below"),
             (.command("]", keyCode: 30), "Select Next Session"),
             (.command("[", keyCode: 33), "Select Previous Session"),
+            (.command("l", keyCode: 37), "Back to Last Shown"),
+            (.function(NSF1FunctionKey, keyCode: 122), "Keybinding Reference"),
+            (.function(NSF2FunctionKey, keyCode: 120), "Overview"),
+            (.function(NSF3FunctionKey, keyCode: 99), "Toggle Error and Warning Markers"),
+            (.function(NSF4FunctionKey, keyCode: 118), "Next Needing Attention"),
+            (.function(NSF5FunctionKey, keyCode: 96), "Set Session Icon…"),
+            (.function(NSF6FunctionKey, keyCode: 97), "Set Session Color…"),
+            (.function(NSF7FunctionKey, keyCode: 98), "Previous Session"),
+            (.function(NSF8FunctionKey, keyCode: 100), "Clear Session State"),
+            (.function(NSF9FunctionKey, keyCode: 101), "Next Session"),
+            (.function(NSF10FunctionKey, keyCode: 109), "Toggle Session Mute"),
+            (.function(NSF11FunctionKey, keyCode: 103), "Mark Session Active"),
             (.command("]", keyCode: 30, shifted: "}"), "Next Session in Kitty"),
             (.command("[", keyCode: 33, shifted: "{"), "Previous Session in Kitty"),
             (.command("1", keyCode: 18, shifted: "!"), "Session 1 in Kitty"),
@@ -433,7 +485,9 @@ final class WorkspaceShortcutTests: XCTestCase {
         XCTAssertEqual(listed, expected.count + 1, "a menu shortcut is missing from this test (Hide is the one not listed)")
     }
 
-    func testOnlyCommandAndTheTwoPagingKeysAreTheMenus() {
+    func testOnlyCommandThePagingKeysAndKittysFunctionKeysAreTheMenus() {
+        let functionKeys = Set(WorkspaceMenu.functionKeys.map(\.title))
+        XCTAssertEqual(WorkspaceMenu.functionKeys.map(\.number).sorted(), Array(1...11), "F12 detaches and stays tmux's")
         func check(_ menu: NSMenu) {
             for item in menu.items {
                 if let submenu = item.submenu { check(submenu); continue }
@@ -441,6 +495,9 @@ final class WorkspaceShortcutTests: XCTestCase {
                 let mask = item.keyEquivalentModifierMask
                 if mask.contains(.command) {
                     XCTAssertTrue(mask.isDisjoint(with: [.control, .option]), item.title)
+                } else if mask.isEmpty {
+                    XCTAssertTrue(functionKeys.contains(item.title), item.title)
+                    XCTAssertEqual(item.menu?.title, "Function Keys", item.title)
                 } else {
                     XCTAssertEqual(mask, .shift, item.title)
                     XCTAssertTrue(["Page Up", "Page Down"].contains(item.title), item.title)

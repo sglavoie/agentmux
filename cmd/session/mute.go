@@ -1,11 +1,15 @@
 package session
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/spf13/cobra"
 )
@@ -15,9 +19,10 @@ import (
 func MuteToggleCommand() *cobra.Command { return muteToggleCmd }
 
 var (
-	muteToggleWindowID int
-	muteToggleJSON     bool
-	muteToggleClient   = cli.NewKittyClient
+	muteToggleWindowID       int
+	muteToggleRuntimeSession string
+	muteToggleJSON           bool
+	muteToggleClient         = cli.NewKittyClient
 )
 
 var muteToggleCmd = &cobra.Command{
@@ -29,14 +34,23 @@ the 🔇 glyph appears or disappears immediately. Muted sessions suppress all
 macOS notifications originating from that window. If the active window is
 not a managed Agent Mux session, the command is a silent no-op.
 
+With --runtime-session the session is named by its runtime session instead,
+which is how one on the tmux backend is muted: it has no Kitty window, and
+no Kitty is consulted. A runtime session that is not running there is an
+error rather than a no-op, because it was named exactly.
+
 With --json it reports {window_id, muted, changed}: muted is the window's
-mute state after the command, and changed is false for the no-op.`,
+mute state after the command, and changed is false for the no-op. A session
+named by --runtime-session reports runtime_session_id as well, and a
+window_id of zero.`,
 	RunE: runMuteToggle,
 }
 
 func init() {
 	muteToggleCmd.Flags().IntVar(&muteToggleWindowID, "window-id", 0,
 		"Kitty window ID of the target tab (defaults to $KITTY_WINDOW_ID)")
+	muteToggleCmd.Flags().StringVar(&muteToggleRuntimeSession, "runtime-session", "",
+		"runtime session ID of a tmux session to mute instead of a Kitty tab")
 	muteToggleCmd.Flags().BoolVar(&muteToggleJSON, "json", false, "emit schema-v1 JSON")
 }
 
@@ -44,13 +58,47 @@ func init() {
 // window is left in; Changed is false when the command was a no-op because no
 // window was named or the window is not a managed session.
 type muteToggleResult struct {
-	WindowID int  `json:"window_id"`
-	Muted    bool `json:"muted"`
-	Changed  bool `json:"changed"`
+	WindowID         int    `json:"window_id"`
+	RuntimeSessionID string `json:"runtime_session_id,omitempty"`
+	Muted            bool   `json:"muted"`
+	Changed          bool   `json:"changed"`
+}
+
+// muteWriter writes a mute and the title glyph that mirrors it.
+type muteWriter interface {
+	backend.MetadataWriter
+	SetTitle(ref backend.Ref, title string) error
+}
+
+// muteTerminal is what muting a tmux session needs from its backend.
+type muteTerminal interface {
+	backend.Discoverer
+	muteWriter
 }
 
 func runMuteToggle(cmd *cobra.Command, _ []string) error {
-	result, err := muteToggle(muteToggleClient(), cli.WindowIDOrEnv(muteToggleWindowID))
+	var result muteToggleResult
+	var err error
+	if named := strings.TrimSpace(muteToggleRuntimeSession); named != "" {
+		id, parseErr := runtimesession.ParseID(named)
+		if parseErr != nil {
+			return cli.CommandFailure(cmd, muteToggleJSON, "invalid_arguments", parseErr)
+		}
+		opened, openErr := attachNewTmux()
+		if openErr != nil {
+			return cli.CommandFailure(cmd, muteToggleJSON, "backend_unavailable", fmt.Errorf("tmux backend unavailable: %w", openErr))
+		}
+		term, ok := opened.(muteTerminal)
+		if !ok {
+			return cli.CommandFailure(cmd, muteToggleJSON, "backend_unavailable", errors.New("tmux backend cannot mute sessions"))
+		}
+		result, err = muteToggleRuntime(term, id)
+		if errors.Is(err, errMuteNoSession) {
+			return cli.CommandFailure(cmd, muteToggleJSON, "not_found", err)
+		}
+	} else {
+		result, err = muteToggle(muteToggleClient(), cli.WindowIDOrEnv(muteToggleWindowID))
+	}
 	if err != nil && result.Changed && muteToggleJSON {
 		// The mute itself landed; only the title glyph did not. Report the
 		// durable change beside the nonzero exit rather than hiding it.
@@ -78,8 +126,34 @@ func muteToggle(client kitty.KittyClient, windowID int) (muteToggleResult, error
 	if !ok {
 		return result, nil
 	}
+	return applyMuteToggle(kitty.NewBackend(client), rs, result)
+}
+
+// errMuteNoSession reports that the runtime session named is not a running
+// tmux session.
+var errMuteNoSession = errors.New("no running tmux session")
+
+// muteToggleRuntime toggles the mute of the tmux session a runtime session
+// ID names. Only a pane that still carries that runtime session is touched.
+func muteToggleRuntime(term muteTerminal, id runtimesession.ID) (muteToggleResult, error) {
+	result := muteToggleResult{RuntimeSessionID: string(id)}
+	panes, err := term.Discover()
+	if err != nil {
+		return result, err
+	}
+	// Mute reads no configuration: the session is found by its tag alone.
+	for _, rs := range session.RunningSessionsFromPanes(runtimesession.BackendTmux, panes, nil) {
+		if rs.RuntimeSessionID == id {
+			return applyMuteToggle(term, rs, result)
+		}
+	}
+	return result, fmt.Errorf("%w is %s", errMuteNoSession, id)
+}
+
+// applyMuteToggle flips rs's mute on term and fills in result.
+func applyMuteToggle(term muteWriter, rs session.RunningSession, result muteToggleResult) (muteToggleResult, error) {
+	var err error
 	result.Muted = rs.Muted
-	term := kitty.NewBackend(client)
 	if rs.Muted {
 		err = session.Unmute(term, rs.PaneRef())
 	} else {
