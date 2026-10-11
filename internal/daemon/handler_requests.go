@@ -213,14 +213,31 @@ func (h *Handler) maybeNotify(windowID int, sessionTitle, account, action string
 	if h.notifier == nil {
 		return
 	}
-	h.notifier.MaybeNotifyTarget(h.notificationTarget(windowID, account), sessionTitle, action, pipeMode)
+	h.notifier.MaybeNotifyTarget(h.notificationTarget(windowID, account), h.notificationTitle(windowID, sessionTitle), action, pipeMode)
 }
 
 func (h *Handler) maybeNotifyTraced(windowID int, sessionTitle, account, action string, pipeMode bool, trace notification.NotificationTrace) {
 	if h.notifier == nil {
 		return
 	}
-	h.notifier.MaybeNotifyTracedTarget(h.notificationTarget(windowID, account), sessionTitle, action, pipeMode, trace)
+	h.notifier.MaybeNotifyTracedTarget(h.notificationTarget(windowID, account), h.notificationTitle(windowID, sessionTitle), action, pipeMode, trace)
+}
+
+// notificationTitle names the session a notification for slot is about. A
+// Kitty session is named by its tab title, which the caller read. A session
+// on another backend has no tab, so it is named by the project its runtime
+// label holds; with neither, the notifier falls back to the product name.
+func (h *Handler) notificationTitle(windowID int, sessionTitle string) string {
+	if sessionTitle != "" || windowID <= 0 {
+		return sessionTitle
+	}
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	binding, bound := h.runtimeRoutes.binding(windowID)
+	if !bound {
+		return ""
+	}
+	return h.runtimeLabels[binding.runtime].project
 }
 
 // notificationTarget names what a notification for slot is about and what a

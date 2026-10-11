@@ -87,6 +87,7 @@ func TestASLRunInTmuxSessionRoutesToItsRuntimeSlot(t *testing.T) {
 		h, directory, calls, _, projectDir := aslRuntimeFixture(t)
 		onTmux := newRuntimeID(t)
 		directory.put(onTmux, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%3")
+		directory.setProject(onTmux, "API")
 		statePath := filepath.Join(t.TempDir(), "state.json")
 
 		requireAccepted(t, h.Handle(aslRuntimeHook(t, onTmux, events.AgentSessionLoopStarted, hookevent.HookPayload{
@@ -123,6 +124,10 @@ func TestASLRunInTmuxSessionRoutesToItsRuntimeSlot(t *testing.T) {
 		got := calls.snapshot()
 		if len(got) != 1 || got[0].windowID != slot || got[0].subtitle != "User input requested" {
 			t.Fatalf("notifications = %+v; want exactly one for slot %d", got, slot)
+		}
+		// With no tab title to read, the notice is named by the session's project.
+		if got[0].title != "API" {
+			t.Fatalf("notification title = %q; want the session's project API", got[0].title)
 		}
 
 		// A redelivered handoff is the same question: no second notification.

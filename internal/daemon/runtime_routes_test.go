@@ -66,6 +66,14 @@ func (d *fakeRuntimeDirectory) put(id runtimesession.ID, state runtimesession.St
 	}
 }
 
+func (d *fakeRuntimeDirectory) setProject(id runtimesession.ID, project string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	record := d.records[id]
+	record.Project = project
+	d.records[id] = record
+}
+
 func (d *fakeRuntimeDirectory) setState(id runtimesession.ID, state runtimesession.State) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
