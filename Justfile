@@ -486,9 +486,18 @@ install-restart-smoke: install restart-verify
 # will run, and a bundled amx from another revision shows up as
 # companion_build_mismatch. Needs Xcode; without it, use install-restart-smoke.
 #
-# Update everything from this checkout: amx, Kitty config, menu bar app, daemon
-update: install mac-install restart-verify
+# It runs from any terminal: outside Kitty the restarted daemon keeps the
+# Kitty its predecessor read, and with none running it is ready without one.
+#
+# Update everything from this checkout: amx, Kitty config, hooks, menu bar app, daemon
+update: install sync-hooks mac-install restart-verify
     @echo "update: ok ($("{{prefix_bin}}/amx" --version))"
+
+# Hook files follow the installed amx's templates, so a new amx can leave an
+# installed one drifted, which strict doctor fails on.
+[private]
+sync-hooks:
+    "{{prefix_bin}}/amx" config hooks-sync
 
 # Restart the daemon onto the installed binary, wait for it to report ready,
 # and gate on strict doctor.

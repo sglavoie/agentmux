@@ -203,7 +203,11 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	// binding the public socket, so the first client request already sees
 	// restored state. A slow or wedged Kitty must not delay startup: past the
 	// budget the daemon comes up degraded and the maintenance loop reconciles.
-	if ready, reason := handler.restoreStateFromKittyBounded(time.Now(), initialSnapshotBudget); ready {
+	if !handler.kittyKnown() {
+		handler.MarkReadyWithoutKitty()
+		slog.Info("daemon: no Kitty socket in the environment; ready without a Kitty snapshot", "socket", socketPath)
+		recorder.record("daemon.snapshot", "success", "no_kitty", nil)
+	} else if ready, reason := handler.restoreStateFromKittyBounded(time.Now(), initialSnapshotBudget); ready {
 		handler.MarkReady()
 		slog.Info("daemon: initial snapshot restored", "socket", socketPath)
 		recorder.record("daemon.snapshot", "success", "restored", nil)

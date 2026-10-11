@@ -90,15 +90,18 @@ func TestJustInstallRestartSmokeGatesOnReadinessAndStrictDoctor(t *testing.T) {
 }
 
 // TestJustUpdateInstallsEverythingBeforeVerifying keeps `just update` in the
-// order that makes its doctor run meaningful: the binary and the app are both
-// installed before the daemon restarts onto them and strict doctor judges the
-// pair. It is an operator convenience, so it must stay out of the gates the way
+// order that makes its doctor run meaningful: the binary, the hook files it
+// writes, and the app are all installed before the daemon restarts onto them
+// and strict doctor judges them. It is an operator convenience, so it must stay out of the gates the way
 // every mac-* recipe does; TestMacAppRecipesStayOutOfTheGates covers that.
 func TestJustUpdateInstallsEverythingBeforeVerifying(t *testing.T) {
 	justfile := readJustfile(t)
 	justfileRecipe(t, justfile, "update")
-	if !strings.Contains(justfile, "\nupdate: install mac-install restart-verify\n") {
-		t.Error("update must depend on install, mac-install, then restart-verify")
+	if !strings.Contains(justfile, "\nupdate: install sync-hooks mac-install restart-verify\n") {
+		t.Error("update must depend on install, sync-hooks, mac-install, then restart-verify")
+	}
+	if !strings.Contains(justfileRecipe(t, justfile, "sync-hooks"), "config hooks-sync") {
+		t.Error("sync-hooks must run the installed amx's hooks-sync")
 	}
 }
 

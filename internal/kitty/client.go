@@ -88,6 +88,13 @@ func (c *SubprocessClient) WithSocket(socket string) *SubprocessClient {
 	return &cp
 }
 
+// Socket returns the remote-control endpoint this client targets, or "" when
+// it has none and `kitten @` would have to find Kitty through the controlling
+// terminal.
+func (c *SubprocessClient) Socket() string {
+	return c.socket
+}
+
 // SetListObserver installs a fail-open observer for list-health transitions.
 // The observer is shared with every WithSocket clone and is invoked outside
 // the coordinator's locks. Pass nil to remove it.

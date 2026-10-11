@@ -226,9 +226,14 @@ func (h *Handler) maintenanceTick(now time.Time) {
 	// fact — so no accepted hook state is rolled back while a live ASL lease, pipe
 	// child, subagent, or attention/error contribution is not silently dropped.
 	// runSnapshotTickWithCapture then enqueues the freshly restored windows for rendering.
-	recovering := false
+	//
+	// A daemon that started with no Kitty to read is ready from the start and
+	// owes the same restore to the first Kitty that answers it.
+	recovering := h.kittyRestorePending.Swap(false)
 	if ready, _ := h.Readiness(); !ready {
 		recovering = true
+	}
+	if recovering {
 		h.restoreFromUserVars(windows, now)
 	}
 	h.runSnapshotTickWithCapture(now, capture)
@@ -465,7 +470,36 @@ func (h *Handler) kittyListTarget() (kittyTitleClient, string) {
 	socket := h.lastKittyListenOn
 	client := h.kittyClient
 	h.stateMu.Unlock()
+	if socket == "" && !hasOwnKittyEndpoint(client) {
+		return nil, ""
+	}
 	return scopedKittyClient(client, socket), socket
+}
+
+// endpointKittyClient is a client that can say which endpoint it targets.
+type endpointKittyClient interface {
+	Socket() string
+}
+
+// hasOwnKittyEndpoint reports whether client can reach a Kitty without being
+// scoped to a socket first. A client started outside Kitty has no endpoint,
+// and the daemon has no controlling terminal for `kitten @` to fall back on,
+// so every list through it would fail the same way: there is no Kitty to ask
+// until a hook brings a socket. A client that cannot say is taken to have one.
+func hasOwnKittyEndpoint(client kittyTitleClient) bool {
+	if client == nil {
+		return false
+	}
+	if endpoint, ok := client.(endpointKittyClient); ok {
+		return endpoint.Socket() != ""
+	}
+	return true
+}
+
+// kittyKnown reports whether the daemon has a Kitty it could list.
+func (h *Handler) kittyKnown() bool {
+	client, _ := h.kittyListTarget()
+	return client != nil
 }
 
 // currentKittyListenOn returns the daemon's effective Kitty socket right now.

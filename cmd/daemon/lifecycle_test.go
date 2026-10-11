@@ -47,12 +47,18 @@ func resetDaemonLifecycleTestState(t *testing.T) {
 	oldStopOut := daemonStopCmd.OutOrStdout()
 	oldRestartOut := daemonRestartCmd.OutOrStdout()
 	oldWait, oldNow, oldNap := daemonRestartWait, daemonRestartNow, daemonRestartNap
+	oldGetenv, oldSetenv, oldAnswers := daemonRestartGetenv, daemonRestartSetenv, daemonRestartKittyAnswers
+	// No test restart reads or changes this process's Kitty.
+	daemonRestartGetenv = func(string) string { return "" }
+	daemonRestartSetenv = func(string, string) error { return nil }
+	daemonRestartKittyAnswers = func(string) bool { return false }
 	// A fake clock that each nap advances keeps the wait loop free of sleeps.
 	clock := time.Unix(0, 0)
 	daemonRestartNow = func() time.Time { return clock }
 	daemonRestartNap = func(d time.Duration) { clock = clock.Add(d) }
 	t.Cleanup(func() {
 		daemonRestartWait, daemonRestartNow, daemonRestartNap = oldWait, oldNow, oldNap
+		daemonRestartGetenv, daemonRestartSetenv, daemonRestartKittyAnswers = oldGetenv, oldSetenv, oldAnswers
 		newDaemonLifecycleClient = oldClient
 		daemonRestartBinary = oldBinary
 		daemonStopCmd.SetOut(oldStopOut)
@@ -156,5 +162,54 @@ func TestDaemonRestartFailsWhenTheNewDaemonNeverAnswers(t *testing.T) {
 	}
 	if out.Len() != 0 {
 		t.Fatalf("output = %q; want nothing claiming a restart", out.String())
+	}
+}
+
+// A restart typed outside Kitty hands the replacement the Kitty the running
+// daemon reads, unless this terminal names one itself or nothing listens
+// there any more.
+func TestDaemonRestartCarriesTheRunningDaemonsKittySocket(t *testing.T) {
+	const daemonSocket = "unix:/tmp/kitty-1111"
+	for _, tc := range []struct {
+		name     string
+		listenOn string
+		snapshot *protocol.KittySnapshot
+		answers  bool
+		want     string
+	}{
+		{name: "outside Kitty", snapshot: &protocol.KittySnapshot{Ready: true, Socket: daemonSocket}, answers: true, want: daemonSocket},
+		{name: "inside Kitty", listenOn: "unix:/tmp/kitty-2222", snapshot: &protocol.KittySnapshot{Ready: true, Socket: daemonSocket}, answers: true},
+		{name: "that Kitty is gone", snapshot: &protocol.KittySnapshot{Ready: true, Socket: daemonSocket}},
+		{name: "the daemon reads no Kitty", snapshot: &protocol.KittySnapshot{}, answers: true},
+		{name: "a daemon too old to say", answers: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetDaemonLifecycleTestState(t)
+			client := &fakeDaemonLifecycleClient{healths: []ipc.Health{{Alive: true, PID: 7, Ready: true, KittySnapshot: tc.snapshot}}}
+			newDaemonLifecycleClient = func() daemonLifecycleClient { return client }
+			daemonRestartGetenv = func(key string) string {
+				if key == "KITTY_LISTEN_ON" {
+					return tc.listenOn
+				}
+				return ""
+			}
+			daemonRestartKittyAnswers = func(string) bool { return tc.answers }
+			var carried string
+			daemonRestartSetenv = func(key, value string) error {
+				if key != "KITTY_LISTEN_ON" {
+					t.Errorf("restart set %s", key)
+				}
+				carried = value
+				return nil
+			}
+			daemonRestartCmd.SetOut(&bytes.Buffer{})
+
+			if err := daemonRestartCmd.RunE(daemonRestartCmd, nil); err != nil {
+				t.Fatalf("RunE: %v", err)
+			}
+			if carried != tc.want {
+				t.Errorf("carried socket = %q; want %q", carried, tc.want)
+			}
+		})
 	}
 }

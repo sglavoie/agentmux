@@ -204,8 +204,9 @@ func backendSummary(status cli.BackendStatus) string {
 
 // kittyNotInUse reports whether a Kitty that does not answer is simply a
 // Kitty that is not part of this installation: launches go to tmux, and this
-// process is not running in a Kitty window that could be asked. Anywhere else
-// a failed `kitten @ ls` stays the failure it has always been.
+// process is not running in a Kitty window that could be asked. Where
+// launches go to Kitty and neither this terminal nor the daemon names one,
+// runDoctor warns instead; a named Kitty that does not answer is a failure.
 func kittyNotInUse(status cli.BackendStatus) bool {
 	return status.LaunchBackend == config.LaunchBackendTmux && strings.TrimSpace(doctorGetenv("KITTY_LISTEN_ON")) == ""
 }

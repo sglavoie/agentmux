@@ -1,9 +1,13 @@
 package kitty
 
 import (
+	"errors"
+	"net"
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 )
 
 // NormalizeListenAddress converts a Kitty remote-control listen address into a
@@ -77,4 +81,24 @@ func normalizeFDListenAddress(addr, kittyPID string) string {
 // without a resolvable Kitty PID).
 func NormalizedListenAddressFromEnv() string {
 	return NormalizeListenAddress(os.Getenv("KITTY_LISTEN_ON"), os.Getenv("KITTY_PID"))
+}
+
+// ListenAddressAnswers reports whether something accepts connections at addr.
+// It is false only for an endpoint that is certainly gone: an address that is
+// not reusable, a socket file that no longer exists, or a refused connection.
+// A dial that fails any other way (a timeout, a permission error) is a Kitty
+// that may be slow rather than absent, so it counts as answering and the
+// caller's own `kitten @` is what reports the trouble.
+func ListenAddressAnswers(addr string, timeout time.Duration) bool {
+	addr = strings.TrimSpace(addr)
+	if !IsReusableListenAddress(addr) {
+		return false
+	}
+	network, endpoint, _ := strings.Cut(addr, ":")
+	conn, err := net.DialTimeout(network, endpoint, timeout)
+	if err == nil {
+		_ = conn.Close()
+		return true
+	}
+	return !errors.Is(err, syscall.ENOENT) && !errors.Is(err, syscall.ECONNREFUSED)
 }

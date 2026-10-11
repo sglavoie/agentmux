@@ -32,7 +32,7 @@ for you):
 
 ```sh
 git status --short        # expect nothing: install what is committed
-just update               # amx, the Kitty snippet, Agent Mux.app, daemon restart, strict doctor
+just update               # amx, the Kitty snippet, hooks, Agent Mux.app, daemon restart, strict doctor
 amx --version             # the candidate's revision
 amx backend status        # the tmux in use and where it came from
 amx doctor --strict

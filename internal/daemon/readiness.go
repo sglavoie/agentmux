@@ -11,6 +11,9 @@ import (
 // not block startup: it comes up degraded, serves immediately, and the
 // maintenance loop reconciles on its next successful tick. Readiness makes that
 // distinction observable instead of hiding it behind a log line.
+//
+// A daemon with no Kitty socket at all is a third case and is not degraded:
+// see MarkReadyWithoutKitty.
 
 // readinessState records whether the daemon reached a fully ready state and, if
 // not, the reason it started degraded. It is safe for concurrent use.
@@ -50,6 +53,17 @@ func (r *readinessState) snapshot() (ready bool, degraded string) {
 func (h *Handler) MarkReady() {
 	h.readiness.markReady()
 	h.companionDirty()
+}
+
+// MarkReadyWithoutKitty records that the daemon started with no Kitty to read:
+// no socket in its environment, so nothing to restore from and nothing that a
+// later tick could find wedged. That is how a daemon restarted from a terminal
+// outside Kitty looks, and it is ready for the sessions it does serve. The
+// durable restore stays owed to the first Kitty snapshot the maintenance loop
+// takes once a hook has brought a socket.
+func (h *Handler) MarkReadyWithoutKitty() {
+	h.kittyRestorePending.Store(true)
+	h.MarkReady()
 }
 
 // MarkDegraded records that the daemon started degraded with the given reason.

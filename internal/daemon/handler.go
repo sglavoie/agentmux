@@ -147,6 +147,10 @@ type Handler struct {
 
 	kittySockets      map[int]string
 	lastKittyListenOn string
+	// kittyRestorePending is set by a daemon that started with no Kitty to
+	// read and cleared by the maintenance tick that restores from the first
+	// snapshot.
+	kittyRestorePending atomic.Bool
 
 	// runtimeDirectory resolves the runtime session a managed hook names. It
 	// is installed once at startup by SetRuntimeSessionDirectory, before the

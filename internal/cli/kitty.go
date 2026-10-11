@@ -20,6 +20,12 @@ func NewKittyClient() kitty.KittyClient {
 	return kitty.NewClient(kitty.NewRealRunner())
 }
 
+// NewKittyClientAt is NewKittyClient for a named remote-control socket rather
+// than the one in this process's environment.
+func NewKittyClientAt(socket string) kitty.KittyClient {
+	return kitty.NewClientWithSocket(kitty.NewRealRunner(), socket)
+}
+
 // KittyWindowLister is the read-only slice of the Kitty client that the
 // diagnostic and export surfaces need: they only ever enumerate the window
 // tree, and taking the narrow contract is what lets their tests supply a

@@ -14,6 +14,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/process"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/spf13/cobra"
 )
 
@@ -40,6 +41,16 @@ var (
 	daemonRestartPoll = 50 * time.Millisecond
 	daemonRestartNow  = time.Now
 	daemonRestartNap  = time.Sleep
+)
+
+// The seams carryKittySocket reads and writes the environment through, and
+// the probe that says whether a Kitty still listens at a socket.
+var (
+	daemonRestartGetenv       = os.Getenv
+	daemonRestartSetenv       = os.Setenv
+	daemonRestartKittyAnswers = func(socket string) bool {
+		return kitty.ListenAddressAnswers(socket, 250*time.Millisecond)
+	}
 )
 
 var daemonStartCmd = &cobra.Command{
@@ -108,6 +119,7 @@ var daemonRestartCmd = &cobra.Command{
 		if err := cli.RefuseTransientBinary(amxBin, "restart the daemon"); err != nil {
 			return err
 		}
+		carryKittySocket(c)
 		if err := c.RestartDetached(amxBin); err != nil {
 			return err
 		}
@@ -121,6 +133,24 @@ var daemonRestartCmd = &cobra.Command{
 		_, err := fmt.Fprintf(cmd.OutOrStdout(), "daemon restarted (%s)\n", restartedDetail(health))
 		return err
 	},
+}
+
+// carryKittySocket hands the Kitty the running daemon reads to its
+// replacement when this command cannot name one itself. The new daemon learns
+// its Kitty from the environment it is spawned with, so a restart typed
+// outside Kitty (the desktop app's terminal, ssh, a tmux session) would
+// otherwise come back knowing none and leave every Kitty session unrestored
+// until its next hook. A socket nothing listens on any more is not carried:
+// the replacement would wait on a Kitty that is gone.
+func carryKittySocket(c daemonLifecycleClient) {
+	if kitty.NormalizeListenAddress(daemonRestartGetenv("KITTY_LISTEN_ON"), daemonRestartGetenv("KITTY_PID")) != "" {
+		return
+	}
+	snapshot := c.Health().KittySnapshot
+	if snapshot == nil || !kitty.IsReusableListenAddress(snapshot.Socket) || !daemonRestartKittyAnswers(snapshot.Socket) {
+		return
+	}
+	_ = daemonRestartSetenv("KITTY_LISTEN_ON", snapshot.Socket)
 }
 
 // waitForRestartedDaemon polls health until the spawned daemon answers or the

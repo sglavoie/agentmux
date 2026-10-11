@@ -17,6 +17,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/hooks"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/screenstate"
 )
 
@@ -752,6 +753,12 @@ func writeDoctorRenderer(out io.Writer, snapshot protocol.EventsExport, liveByID
 	}
 	drift := make([]string, 0)
 	for _, id := range ids {
+		// A session on another backend holds a slot only the daemon names. It
+		// is never a Kitty window and is rendered by no tab, so there is
+		// nothing in Kitty for its state to have drifted from.
+		if slot, ok := snapshot.RuntimeSlots[id]; ok && slot.Backend != string(runtimesession.BackendKitty) {
+			continue
+		}
 		renderer := snapshot.WindowMetadata[id].Renderer
 		live := liveByID[id]
 		if !live.Found {

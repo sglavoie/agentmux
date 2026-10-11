@@ -22,12 +22,16 @@ import (
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hooks"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
 func resetDoctorTestState(t *testing.T) {
 	t.Helper()
 	oldClient := newDoctorDaemonClient
 	oldKitty := newDoctorKitty
+	oldKittyAt := newDoctorKittyAt
+	// The daemon's Kitty is whatever fixture the test installs as its own.
+	newDoctorKittyAt = func(string) cli.KittyWindowLister { return newDoctorKitty() }
 	oldConfig := doctorLoadConfig
 	oldExecutable := doctorExecutable
 	oldDoctorLookPath := doctorLookPath
@@ -51,6 +55,7 @@ func resetDoctorTestState(t *testing.T) {
 		doctorLastASLBridgeFailure = oldBridgeFailure
 		newDoctorDaemonClient = oldClient
 		newDoctorKitty = oldKitty
+		newDoctorKittyAt = oldKittyAt
 		doctorLoadConfig = oldConfig
 		doctorExecutable = oldExecutable
 		doctorLookPath = oldDoctorLookPath
@@ -227,6 +232,32 @@ func TestDoctorRendererTreatsSharedTabAsConvergedWhenAnyPaneMatches(t *testing.T
 	}
 	if len(failures) != 0 {
 		t.Fatalf("shared-tab renderer failures = %v, want none", failures)
+	}
+}
+
+// A tmux session's slot is in no Kitty tree. With a Kitty answering, its state
+// must not read as a window that closed under the renderer.
+func TestDoctorRendererIgnoresSessionsOnOtherBackends(t *testing.T) {
+	const tmuxSlot, kittySlot, closedWindow = 1 << 40, 42, 43
+	working := protocol.WindowDebugMetadata{Renderer: protocol.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true}}
+	snapshot := protocol.EventsExport{
+		WindowMetadata: map[int]protocol.WindowDebugMetadata{tmuxSlot: working, kittySlot: working, closedWindow: working},
+		RuntimeSlots: map[int]protocol.RuntimeSlot{
+			tmuxSlot:  {RuntimeSessionID: "rs-tmux", Backend: string(runtimesession.BackendTmux)},
+			kittySlot: {RuntimeSessionID: "rs-kitty", Backend: string(runtimesession.BackendKitty)},
+		},
+	}
+
+	var out bytes.Buffer
+	var failures []string
+	if err := writeDoctorRenderer(&out, snapshot, map[int]protocol.WindowLiveMetadata{}, true, func(format string, args ...any) {
+		failures = append(failures, fmt.Sprintf(format, args...))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"renderer drift: window 42 is no longer live", "renderer drift: window 43 is no longer live"}
+	if strings.Join(failures, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("renderer failures = %q; want %q", failures, want)
 	}
 }
 

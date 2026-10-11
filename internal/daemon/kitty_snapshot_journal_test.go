@@ -260,6 +260,8 @@ func TestRunInstallsTheKittyListObserverBeforeTheFirstList(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(home) })
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
+	// A daemon with no socket has no Kitty to list and never asks.
+	t.Setenv("KITTY_LISTEN_ON", journalSecretSocket)
 	cfg := &config.Config{Defaults: config.Defaults{
 		GuardDuration: 1,
 		Diagnostics: config.DiagnosticsConfig{

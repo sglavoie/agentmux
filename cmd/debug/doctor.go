@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
@@ -68,6 +69,7 @@ const doctorReportSchemaVersion = 7
 var (
 	newDoctorDaemonClient = cli.NewDaemonExportClient
 	newDoctorKitty        = func() cli.KittyWindowLister { return cli.NewKittyClient() }
+	newDoctorKittyAt      = func(socket string) cli.KittyWindowLister { return cli.NewKittyClientAt(socket) }
 	doctorLoadConfig      = cli.LoadRunnableConfig
 	doctorExecutable      = os.Executable
 	doctorLookPath        = exec.LookPath
@@ -283,9 +285,22 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	// that does not answer means.
 	report.Backend = doctorBackendStatus()
 
+	// Outside a Kitty window this process has no socket of its own, so it asks
+	// the Kitty the daemon reads. With neither there is no Kitty to judge, and
+	// a `kitten @ ls` that cannot find one says nothing about its health.
 	var kittyErr error
-	windows, kittyErr = newDoctorKitty().ListWindows()
-	if kittyErr != nil && kittyNotInUse(report.Backend) {
+	lister := newDoctorKitty()
+	kittyNamed := strings.TrimSpace(doctorGetenv("KITTY_LISTEN_ON")) != ""
+	if !kittyNamed && health.KittySnapshot != nil && kitty.IsReusableListenAddress(health.KittySnapshot.Socket) {
+		lister, kittyNamed = newDoctorKittyAt(health.KittySnapshot.Socket), true
+	}
+	windows, kittyErr = lister.ListWindows()
+	if kittyErr != nil && !kittyNamed && report.Backend.LaunchBackend != config.LaunchBackendTmux {
+		if _, err := fmt.Fprintln(textOut, "kitty: not reachable from here (KITTY_LISTEN_ON is not set, and the daemon reads no Kitty)"); err != nil {
+			return err
+		}
+		addFinding(severityWarning, "kitty", "Kitty was not asked for its windows: this is not a Kitty window and the daemon reads no Kitty, while launches go to Kitty; run doctor in a Kitty window to check it, or set [defaults] launch_backend = \"tmux\"")
+	} else if kittyErr != nil && kittyNotInUse(report.Backend) {
 		// Launches go to tmux and this is not a Kitty window: there is no
 		// Kitty to ask, which is how a desktop-only installation looks.
 		if _, err := fmt.Fprintln(textOut, "kitty: not in use (launches go to tmux, and no Kitty is listening here)"); err != nil {
